@@ -151,7 +151,7 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 | 1.5 | ✅ | 日志系统 | zerolog 分级日志，轮转文件输出，敏感数据过滤 | `jiuwenswarm/common/utils.py` (logging setup) |
 | 1.6 | ✅ | 加密工具 | AES-256-GCM 加密/解密，CryptRegistry 注册表，CryptoProvider 接口，AesGcmProvider，NewDecryptFunc 桥接 config | `openjiuwen/core/common/security/crypt_utils.py` · `jiuwenswarm/common/security/base_crypto.py` |
 | 1.7 | ✅ | 工作区管理 | `~/.uapclaw` 路径解析，初始化，命名实例，增量复制，语言选择 | `jiuwenswarm/common/utils.py` (路径管理) · `jiuwenswarm/init_workspace.py` · `jiuwenswarm/instance_manager/` |
-| 1.8 | ☐ | 通用工具 | 端口等待，单例模式，连接池，后台任务 | `jiuwenswarm/common/utils.py` (port_wait) · `openjiuwen/core/common/utils/` |
+| 1.8 | ✅ | 通用工具 | 端口等待，单例模式，连接池，后台任务 | `jiuwenswarm/common/utils.py` (port_wait) · `openjiuwen/core/common/utils/` |
 | 1.9 | ✅ | 版本管理 | 版本号统一管理 | `jiuwenswarm/common/version.py` |
 | 1.10 | ☐ | WebSocket Origin 检查 | 安全校验 | `jiuwenswarm/common/security/ws_origin.py` |
 | 1.11 | ☐ | dotenv 早期解析 | `--dotenv`/`--name` 参数预解析 | `jiuwenswarm/common/dotenv_early.py` |
