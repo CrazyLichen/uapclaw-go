@@ -153,7 +153,7 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 | 1.7 | ✅ | 工作区管理 | `~/.uapclaw` 路径解析，初始化，命名实例，增量复制，语言选择 | `jiuwenswarm/common/utils.py` (路径管理) · `jiuwenswarm/init_workspace.py` · `jiuwenswarm/instance_manager/` |
 | 1.8 | ✅ | 通用工具 | 端口等待，单例模式，连接池，后台任务 | `jiuwenswarm/common/utils.py` (port_wait) · `openjiuwen/core/common/utils/` |
 | 1.9 | ✅ | 版本管理 | 版本号统一管理，ldflags 注入，BuildInfo()，预发布版本识别，GitHub Releases 版本源 | `jiuwenswarm/common/version.py` · `jiuwenswarm/common/version_source.py` |
-| 1.10 | ☐ | WebSocket Origin 检查 | 安全校验 | `jiuwenswarm/common/security/ws_origin.py` |
+| 1.10 | ✅ | WebSocket Origin 检查 | OriginChecker 校验器，gorilla/websocket 适配器，net/http 中间件适配器 | `jiuwenswarm/common/security/ws_origin.py` |
 | 1.11 | ☐ | dotenv 早期解析 | `--dotenv`/`--name` 参数预解析 | `jiuwenswarm/common/dotenv_early.py` |
 
 ---

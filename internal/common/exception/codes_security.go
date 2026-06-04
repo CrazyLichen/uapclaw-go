@@ -11,6 +11,10 @@ var (
 	StatusGuardrailBlocked = NewStatusCode(
 		"GUARDRAIL_BLOCKED", 190000,
 		"guardrail blocked: risk_type='{risk_type}', risk_level='{risk_level}', event='{event}'")
+	// StatusWsOriginDenied WebSocket Origin 校验拒绝
+	StatusWsOriginDenied = NewStatusCode(
+		"WS_ORIGIN_DENIED", 190001,
+		"websocket origin denied: origin='{origin}', allowed_hosts='{allowed_hosts}'")
 )
 
 // =============================================================================================================
