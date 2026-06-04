@@ -12,15 +12,25 @@ GOTEST=$(GOCMD) test
 GOFMT=gofmt
 GOLINT=golangci-lint
 
+# 版本信息（可从环境变量覆盖，正式构建时由 CI/CD 注入）
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# ldflags 构建参数，注入版本信息到 version 包
+LDFLAGS = -X github.com/uapclaw/uapclaw-go/internal/common/version.Version=$(VERSION) \
+          -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=$(GIT_COMMIT) \
+          -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=$(BUILD_DATE)
+
 # 构建所有二进制
 build:
-	@echo "Building $(BINARY_NAME)..."
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
-	$(GOBUILD) -o $(BUILD_DIR)/jiuwenbox ./cmd/jiuwenbox/
+	@echo "Building $(BINARY_NAME) (version=$(VERSION), commit=$(GIT_COMMIT))..."
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/jiuwenbox ./cmd/jiuwenbox/
 
 # 仅构建主程序
 build-cli:
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/
 
 # 运行测试
 test:
@@ -50,12 +60,12 @@ init:
 
 # 快速聊天模式
 chat:
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) chat
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) chat
 
 # HTTP 服务模式
 serve:
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) serve
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) serve
 
 # 完整模式
 app:
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) app
+	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/uapclaw/ && $(BUILD_DIR)/$(BINARY_NAME) app
