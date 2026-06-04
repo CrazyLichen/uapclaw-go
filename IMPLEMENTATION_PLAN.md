@@ -149,7 +149,7 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 | 1.3 | ✅ | 异常体系 | `BaseError`，`StatusCode` 枚举 | `openjiuwen/core/common/exception/base_error.py` · `codes.py` |
 | 1.4 | ✅ | YAML 配置管理 | 读写 config.yaml，`${VAR:-default}` 环境变量解析，fsnotify 热重载，DecryptFunc 钩子，专用分段方法，DeepMerge 迁移 | `jiuwenswarm/common/config.py` |
 | 1.5 | ✅ | 日志系统 | zerolog 分级日志，轮转文件输出，敏感数据过滤 | `jiuwenswarm/common/utils.py` (logging setup) |
-| 1.6 | ☐ | 加密工具 | AES 加密/解密 API Key | `jiuwenswarm/common/security/base_crypto.py` |
+| 1.6 | ✅ | 加密工具 | AES-256-GCM 加密/解密，CryptRegistry 注册表，CryptoProvider 接口，AesGcmProvider，NewDecryptFunc 桥接 config | `openjiuwen/core/common/security/crypt_utils.py` · `jiuwenswarm/common/security/base_crypto.py` |
 | 1.7 | ☐ | 工作区管理 | `~/.uapclaw` 路径解析，初始化，旧版迁移 | `jiuwenswarm/common/utils.py` (路径管理) · `jiuwenswarm/init_workspace.py` |
 | 1.8 | ☐ | 通用工具 | 端口等待，单例模式，连接池，后台任务 | `jiuwenswarm/common/utils.py` (port_wait) · `openjiuwen/core/common/utils/` |
 | 1.9 | ✅ | 版本管理 | 版本号统一管理 | `jiuwenswarm/common/version.py` |

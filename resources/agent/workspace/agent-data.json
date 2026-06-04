@@ -1,0 +1,39 @@
+{
+  "workspace": [
+    {
+      "name": "agent-data.json",
+      "path": "agent/workspace/agent-data.json",
+      "isMarkdown": false
+    },
+    {
+      "name": "AGENT.md",
+      "path": "agent/workspace/AGENT.md",
+      "isMarkdown": true
+    },
+    {
+      "name": "HEARTBEAT.md",
+      "path": "agent/workspace/HEARTBEAT.md",
+      "isMarkdown": true
+    },
+    {
+      "name": "IDENTITY.md",
+      "path": "agent/workspace/IDENTITY.md",
+      "isMarkdown": true
+    },
+    {
+      "name": "SOUL.md",
+      "path": "agent/workspace/SOUL.md",
+      "isMarkdown": true
+    },
+    {
+      "name": "USER.md",
+      "path": "agent/workspace/USER.md",
+      "isMarkdown": true
+    },
+    {
+      "name": "MEMORY.md",
+      "path": "agent/workspace/memory/MEMORY.md",
+      "isMarkdown": true
+    }
+  ]
+}
