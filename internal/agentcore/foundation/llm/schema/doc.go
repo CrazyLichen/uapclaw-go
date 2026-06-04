@@ -10,6 +10,11 @@
 //	  ├── AssistantMessage  — 助手消息（role="assistant"，含 tool_calls/usage_metadata/finish_reason 等）
 //	  └── ToolMessage       — 工具返回消息（role="tool"，含 tool_call_id）
 //
+// 流式消息块模型体系：
+//
+//	AssistantMessageChunk — 助手流式消息块（嵌入 AssistantMessage，Merge 方法增量合并）
+//	ToolMessageChunk      — 工具返回流式消息块（嵌入 ToolMessage，Merge 方法增量合并）
+//
 // 辅助模型：
 //
 //	ToolCall        — 工具调用信息（扁平格式，支持 OpenAI 嵌套格式双向转换）
@@ -27,15 +32,17 @@
 //	  message.go              — RoleType 枚举 + MessageContent + BaseMessage + UserMessage + SystemMessage
 //	  assistant_message.go    — AssistantMessage（自定义序列化）
 //	  tool_message.go         — ToolMessage
+//	  message_chunk.go        — AssistantMessageChunk + ToolMessageChunk（流式消息块）
 //	  tool_call_test.go       — ToolCall 测试
 //	  usage_metadata_test.go  — UsageMetadata 测试
 //	  message_test.go         — 消息基础类型测试
 //	  assistant_message_test.go — AssistantMessage 测试
 //	  tool_message_test.go    — ToolMessage 测试
+//	  message_chunk_test.go   — 流式消息块测试
 //
 // 对应 Python 代码路径：
 //
 //	openjiuwen/core/foundation/llm/schema/message.py      — BaseMessage/AssistantMessage/UserMessage/SystemMessage/ToolMessage/UsageMetadata
 //	openjiuwen/core/foundation/llm/schema/tool_call.py    — ToolCall
-//	openjiuwen/core/foundation/llm/schema/message_chunk.py — 流式消息块（2.3 节，本包暂不实现）
+//	openjiuwen/core/foundation/llm/schema/message_chunk.py — 流式消息块（2.3 节）
 package schema
