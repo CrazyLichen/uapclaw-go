@@ -164,8 +164,8 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
-| 2.1 | ☐ | 消息模型 | `BaseMessage`/`UserMessage`/`SystemMessage`/`AssistantMessage`/`ToolMessage` | `openjiuwen/core/foundation/llm/schema/message.py` |
-| 2.2 | ☐ | ToolCall 与 UsageMetadata | `ToolCall{ID, Type, Name, Arguments}`，`UsageMetadata{Tokens, Cost}` | `openjiuwen/core/foundation/llm/schema/tool_call.py` · `message.py` (UsageMetadata) |
+| 2.1 | ✅ | 消息模型 | `BaseMessage`/`UserMessage`/`SystemMessage`/`AssistantMessage`/`ToolMessage` | `openjiuwen/core/foundation/llm/schema/message.py` |
+| 2.2 | ✅ | ToolCall 与 UsageMetadata | `ToolCall{ID, Type, Name, Arguments}`，`UsageMetadata{Tokens, Cost}` | `openjiuwen/core/foundation/llm/schema/tool_call.py` · `message.py` (UsageMetadata) |
 | 2.3 | ☐ | 流式消息块 | `AssistantMessageChunk`，增量合并（tool_calls 参数拼接） | `openjiuwen/core/foundation/llm/schema/message_chunk.py` |
 | 2.4 | ☐ | 多模态生成响应 | `GenerationResponse`/`ImageGenerationResponse`/`AudioGenerationResponse`/`VideoGenerationResponse` | `openjiuwen/core/foundation/llm/schema/generation_response.py` |
 | 2.5 | ☐ | ProviderType / ModelClientConfig | `ProviderType` 枚举，`ModelClientConfig`，`ModelRequestConfig`，`BaseModelInfo` | `openjiuwen/core/foundation/llm/schema/config.py` · `mode_info.py` |
