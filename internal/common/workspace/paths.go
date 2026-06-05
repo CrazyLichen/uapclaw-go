@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -295,14 +297,14 @@ func getResolvedPaths() *ResolvedPaths {
 			resDir, err := ResourcesDir()
 			if err != nil {
 				// resources 也找不到，降级为用户目录（后续操作因目录不存在自然报错）
-				log.Warn().Err(err).Msg("未找到 resources 目录，降级为用户目录")
+				logger.Warn(logComponent).Err(err).Msg("未找到 resources 目录，降级为用户目录")
 				resolvedPaths = &ResolvedPaths{
 					ConfigDir:    userConfigDir,
 					WorkspaceDir: userWorkspaceDir,
 				}
 				return
 			}
-			log.Info().Str("resources", resDir).Msg("工作区未初始化，回退到 resources 目录")
+			logger.Info(logComponent).Str("resources", resDir).Msg("工作区未初始化，回退到 resources 目录")
 			resolvedPaths = &ResolvedPaths{
 				ConfigDir:    resDir,
 				WorkspaceDir: filepath.Join(resDir, "agent", "workspace"),

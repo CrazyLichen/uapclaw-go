@@ -11,9 +11,12 @@ logging:
   level: "info"
   format: "json"
   console_level: "info"
+  common: "info"
   gateway: "info"
   channel: "info"
   agent_server: "info"
+  permissions: "info"
+  agent_core: "info"
   full: "info"
 
 workspace:

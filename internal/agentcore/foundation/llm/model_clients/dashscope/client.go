@@ -13,6 +13,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent dashscope 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DashScopeModelClient 阿里云百炼 DashScope 模型客户端。
@@ -81,8 +86,7 @@ func (c *DashScopeModelClient) GenerateImage(
 	// 1. 参数验证
 	contentList, err := validateImageMessages(messages)
 	if err != nil {
-		log := logger.GetLogger(logger.ComponentCommon)
-		log.Error().
+		logger.Error(logComponent).
 			Str("model_provider", "DashScope").
 			Str("method", "generate_image").
 			Err(err).
@@ -111,8 +115,7 @@ func (c *DashScopeModelClient) GenerateImage(
 	}
 
 	// 4. 调用 DashScope 多模态 API
-	log := logger.GetLogger(logger.ComponentCommon)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Str("model_name", model).
 		Str("model_provider", "DashScope").
@@ -134,7 +137,7 @@ func (c *DashScopeModelClient) GenerateImage(
 	// 5. 解析响应 → 提取图片 URL
 	imageURLs, err := extractImageURLs(resp)
 	if err != nil {
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", model).
 			Str("model_provider", "DashScope").
@@ -144,7 +147,7 @@ func (c *DashScopeModelClient) GenerateImage(
 		return nil, err
 	}
 
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", model).
 		Str("model_provider", "DashScope").
@@ -176,8 +179,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 	// 1. 参数验证
 	text, err := validateSpeechMessages(messages)
 	if err != nil {
-		log := logger.GetLogger(logger.ComponentCommon)
-		log.Error().
+		logger.Error(logComponent).
 			Str("model_provider", "DashScope").
 			Str("method", "generate_speech").
 			Err(err).
@@ -217,8 +219,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 	}
 
 	// 4. 调用 DashScope 多模态 API
-	log := logger.GetLogger(logger.ComponentCommon)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Str("model_name", model).
 		Str("model_provider", "DashScope").
@@ -239,7 +240,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 	// 5. 解析响应 → 提取音频信息
 	audioURL, audioData, audioFormat, err := extractAudioInfo(resp)
 	if err != nil {
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", model).
 			Str("model_provider", "DashScope").
@@ -249,7 +250,7 @@ func (c *DashScopeModelClient) GenerateSpeech(
 		return nil, err
 	}
 
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", model).
 		Str("model_provider", "DashScope").
@@ -293,8 +294,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 	// 1. 参数验证
 	prompt, err := validateVideoMessages(messages)
 	if err != nil {
-		log := logger.GetLogger(logger.ComponentCommon)
-		log.Error().
+		logger.Error(logComponent).
 			Str("model_provider", "DashScope").
 			Str("method", "generate_video").
 			Err(err).
@@ -368,13 +368,12 @@ func (c *DashScopeModelClient) GenerateVideo(
 
 	// 6. 调用 DashScope 视频生成 API
 	// 对齐 Python: i2v 和 t2v 分开记录日志，分别输出 resolution/size 和 duration
-	log := logger.GetLogger(logger.ComponentCommon)
 	if isI2V {
 		resolutionOrSize := params.Resolution
 		if resolutionOrSize == "" {
 			resolutionOrSize = params.Size
 		}
-		log.Info().
+		logger.Info(logComponent).
 			Str("event_type", "LLM_CALL_START").
 			Str("model_name", model).
 			Str("model_provider", "DashScope").
@@ -387,7 +386,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 		if sizeOrResolution == "" {
 			sizeOrResolution = params.Resolution
 		}
-		log.Info().
+		logger.Info(logComponent).
 			Str("event_type", "LLM_CALL_START").
 			Str("model_name", model).
 			Str("model_provider", "DashScope").
@@ -409,7 +408,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 	// 7. 解析响应 → 提取视频信息
 	videoURL, videoDuration, videoResolution, err := extractVideoInfo(resp)
 	if err != nil {
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", model).
 			Str("model_provider", "DashScope").
@@ -424,7 +423,7 @@ func (c *DashScopeModelClient) GenerateVideo(
 	if len(videoURLSummary) > 100 {
 		videoURLSummary = videoURLSummary[:100] + "..."
 	}
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", model).
 		Str("model_provider", "DashScope").
@@ -456,8 +455,7 @@ func init() {
 	dashScopeFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
 		client, err := NewDashScopeModelClient(mc, cc)
 		if err != nil {
-			log := logger.GetLogger(logger.ComponentCommon)
-			log.Error().Err(err).Msg("创建 DashScope 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("创建 DashScope 客户端失败")
 			return nil
 		}
 		return client

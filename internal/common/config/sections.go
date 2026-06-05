@@ -36,6 +36,8 @@ type LoggingConfig struct {
 	Gateway      string `yaml:"gateway"`        // gateway.log 级别
 	Channel      string `yaml:"channel"`        // channel.log 级别
 	AgentServer  string `yaml:"agent_server"`   // agent_server.log 级别
+	Permissions  string `yaml:"permissions"`    // permissions.log 级别
+	AgentCore    string `yaml:"agent_core"`     // agent_core.log 级别（agentcore/*）
 	Full         string `yaml:"full"`           // full.log 级别
 }
 

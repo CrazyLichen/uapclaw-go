@@ -14,7 +14,7 @@ type Component int
 const (
 	// ComponentCommon 基础设施层日志 → common.log（config/workspace/dotenv/version 等公共包）
 	ComponentCommon Component = iota
-	// ComponentGateway Gateway 及其余日志 → gateway.log
+	// ComponentGateway Gateway 日志 → gateway.log
 	ComponentGateway
 	// ComponentChannel swarm/channel/* 日志 → channel.log
 	ComponentChannel
@@ -22,10 +22,12 @@ const (
 	ComponentAgentServer
 	// ComponentPermissions 安全/权限相关日志 → permissions.log + agent_server.log
 	ComponentPermissions
+	// ComponentAgentCore agentcore/* 日志 → agent_core.log
+	ComponentAgentCore
 )
 
 // componentStrings Component 枚举到字符串的映射。
-var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions"}
+var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions", "agent_core"}
 
 // String 返回组件的字符串表示。
 func (c Component) String() string {
@@ -72,6 +74,8 @@ func (c Component) LogFileName() string {
 		return "agent_server.log"
 	case ComponentPermissions:
 		return "permissions.log"
+	case ComponentAgentCore:
+		return "agent_core.log"
 	default:
 		return "gateway.log"
 	}
@@ -79,7 +83,7 @@ func (c Component) LogFileName() string {
 
 // allComponents 返回所有组件枚举值，用于遍历。
 func allComponents() []Component {
-	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions}
+	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions, ComponentAgentCore}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -17,6 +17,7 @@ func TestComponent_String(t *testing.T) {
 		{ComponentChannel, "channel"},
 		{ComponentAgentServer, "agent_server"},
 		{ComponentPermissions, "permissions"},
+		{ComponentAgentCore, "agent_core"},
 		{Component(99), "unknown"},
 	}
 	for _, tt := range tests {
@@ -52,6 +53,7 @@ func TestComponent_UnmarshalJSON(t *testing.T) {
 		{`"channel"`, ComponentChannel},
 		{`"agent_server"`, ComponentAgentServer},
 		{`"permissions"`, ComponentPermissions},
+		{`"agent_core"`, ComponentAgentCore},
 		{`"unknown"`, ComponentCommon},
 	}
 	for _, tt := range tests {
@@ -75,6 +77,7 @@ func TestComponent_LogFileName(t *testing.T) {
 		{ComponentChannel, "channel.log"},
 		{ComponentAgentServer, "agent_server.log"},
 		{ComponentPermissions, "permissions.log"},
+		{ComponentAgentCore, "agent_core.log"},
 		{Component(99), "gateway.log"},
 	}
 	for _, tt := range tests {
@@ -94,6 +97,7 @@ func TestComponentFromString(t *testing.T) {
 		{"channel", ComponentChannel},
 		{"agent_server", ComponentAgentServer},
 		{"permissions", ComponentPermissions},
+		{"agent_core", ComponentAgentCore},
 		{"unknown", ComponentCommon},
 		{"", ComponentCommon},
 	}
@@ -107,8 +111,8 @@ func TestComponentFromString(t *testing.T) {
 
 func TestAllComponents(t *testing.T) {
 	comps := allComponents()
-	if len(comps) != 5 {
-		t.Errorf("期望 5 个组件，实际 %d", len(comps))
+	if len(comps) != 6 {
+		t.Errorf("期望 6 个组件，实际 %d", len(comps))
 	}
 	// 确保顺序正确
 	if comps[0] != ComponentCommon {
@@ -116,5 +120,8 @@ func TestAllComponents(t *testing.T) {
 	}
 	if comps[4] != ComponentPermissions {
 		t.Errorf("期望 comps[4] = ComponentPermissions，实际 %v", comps[4])
+	}
+	if comps[5] != ComponentAgentCore {
+		t.Errorf("期望 comps[5] = ComponentAgentCore，实际 %v", comps[5])
 	}
 }

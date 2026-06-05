@@ -75,7 +75,7 @@ func TestGetLogger(t *testing.T) {
 
 	// 获取各组件 Logger
 	for _, comp := range allComponents() {
-		lg := GetLogger(comp)
+		lg := getLogger(comp)
 		if lg.GetLevel() == zerolog.Disabled {
 			t.Errorf("期望 %s Logger 已启用，实际 Disabled", comp)
 		}
@@ -86,7 +86,7 @@ func TestGetLogger_未初始化(t *testing.T) {
 	resetGlobal()
 
 	// 未初始化时返回 Nop Logger
-	lg := GetLogger(ComponentGateway)
+	lg := getLogger(ComponentGateway)
 	// 向 Nop Logger 写入应该不产生任何输出
 	lg.Info().Msg("不应出现")
 }
@@ -101,7 +101,7 @@ func TestGetLogger_写入日志(t *testing.T) {
 	}
 	defer Close()
 
-	lg := GetLogger(ComponentGateway)
+	lg := getLogger(ComponentGateway)
 	lg.Info().Msg("测试日志消息")
 
 	// 验证 full.log 已创建并包含内容
@@ -135,7 +135,7 @@ func TestGetLogger_敏感数据脱敏(t *testing.T) {
 	}
 	defer Close()
 
-	lg := GetLogger(ComponentChannel)
+	lg := getLogger(ComponentChannel)
 	lg.Info().Str("password", "secret123").Msg("登录请求")
 
 	// 验证 full.log 中的敏感数据已被脱敏
@@ -242,7 +242,7 @@ func TestSetup_日志级别过滤(t *testing.T) {
 	}
 	defer Close()
 
-	lg := GetLogger(ComponentGateway)
+	lg := getLogger(ComponentGateway)
 
 	// debug 和 info 级别应该被过滤
 	lg.Debug().Msg("debug消息_不应出现")
@@ -265,4 +265,51 @@ func TestSetup_日志级别过滤(t *testing.T) {
 	if !strings.Contains(content, "warn消息_应出现") {
 		t.Error("期望 warn 消息被保留")
 	}
+}
+
+func Test组件级日志函数(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	err := Setup(WithOutputDir(tmpDir), WithLogLevel("debug"))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	// 测试各组件级日志函数
+	Info(ComponentCommon).Str("key", "val").Msg("info测试")
+	Warn(ComponentGateway).Msg("warn测试")
+	Error(ComponentChannel).Msg("error测试")
+	Debug(ComponentCommon).Msg("debug测试")
+
+	// 验证 full.log 包含所有日志
+	fullLogPath := filepath.Join(tmpDir, "full.log")
+	data, err := os.ReadFile(fullLogPath)
+	if err != nil {
+		t.Fatalf("读取 full.log 失败: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "info测试") {
+		t.Error("期望 full.log 包含 'info测试'")
+	}
+	if !strings.Contains(content, "warn测试") {
+		t.Error("期望 full.log 包含 'warn测试'")
+	}
+	if !strings.Contains(content, "error测试") {
+		t.Error("期望 full.log 包含 'error测试'")
+	}
+	if !strings.Contains(content, "debug测试") {
+		t.Error("期望 full.log 包含 'debug测试'")
+	}
+}
+
+func Test组件级日志函数_未初始化(t *testing.T) {
+	resetGlobal()
+
+	// 未初始化时组件级函数应安全返回 Nop（不 panic、不输出）
+	Info(ComponentCommon).Msg("不应出现")
+	Warn(ComponentGateway).Msg("不应出现")
+	Error(ComponentChannel).Msg("不应出现")
+	Debug(ComponentCommon).Msg("不应出现")
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
@@ -70,18 +71,18 @@ func loadDotenvByPath(dotenvPath string) (string, error) {
 
 	// 检查文件存在
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		log.Warn().Str("path", absPath).Msg("--dotenv 文件不存在")
+		logger.Warn(logComponent).Str("path", absPath).Msg("--dotenv 文件不存在")
 		return "", fmt.Errorf("--dotenv 文件不存在: %s", absPath)
 	}
 
 	// 加载 .env 文件（override 模式）
 	if err := Load(absPath); err != nil {
-		log.Error().Str("path", absPath).Err(err).Msg("加载 .env 文件失败")
+		logger.Error(logComponent).Str("path", absPath).Err(err).Msg("加载 .env 文件失败")
 		return "", fmt.Errorf("加载 .env 文件失败: %w", err)
 	}
 
 	parsedDotenv = absPath
-	log.Info().Str("path", absPath).Msg("已加载 --dotenv 文件")
+	logger.Info(logComponent).Str("path", absPath).Msg("已加载 --dotenv 文件")
 	return absPath, nil
 }
 
@@ -95,24 +96,24 @@ func loadDotenvByPath(dotenvPath string) (string, error) {
 func loadBootstrapByName(name string) (string, error) {
 	// 验证实例名称
 	if err := workspace.ValidateInstanceName(name); err != nil {
-		log.Error().Str("name", name).Err(err).Msg("无效的实例名称")
+		logger.Error(logComponent).Str("name", name).Err(err).Msg("无效的实例名称")
 		return "", fmt.Errorf("无效的实例名称 %q: %w", name, err)
 	}
 
 	// 获取实例配置
 	config, err := workspace.GetInstanceConfig(name)
 	if err != nil {
-		log.Error().Str("name", name).Err(err).Msg("获取实例配置失败")
+		logger.Error(logComponent).Str("name", name).Err(err).Msg("获取实例配置失败")
 		return "", fmt.Errorf("获取实例配置失败: %w", err)
 	}
 	if config == nil {
-		log.Error().Str("name", name).Msg("实例在 instances.yaml 中未找到")
+		logger.Error(logComponent).Str("name", name).Msg("实例在 instances.yaml 中未找到")
 		return "", fmt.Errorf("实例 %q 在 instances.yaml 中未找到，请先运行 'uapclaw init --name %s' 创建", name, name)
 	}
 
 	// 检查工作区目录是否存在
 	if _, err := os.Stat(config.Workspace); os.IsNotExist(err) {
-		log.Error().Str("name", name).Str("workspace", config.Workspace).Msg("实例工作区目录不存在")
+		logger.Error(logComponent).Str("name", name).Str("workspace", config.Workspace).Msg("实例工作区目录不存在")
 		return "", fmt.Errorf("实例工作区目录不存在: %s，请先运行 'uapclaw init --name %s' 创建", config.Workspace, name)
 	}
 
@@ -122,7 +123,7 @@ func loadBootstrapByName(name string) (string, error) {
 		// 创建 bootstrap .env 文件
 		createdPath, err := workspace.CreateBootstrapEnvForName(name, config.Workspace)
 		if err != nil {
-			log.Error().Str("name", name).Err(err).Msg("创建 bootstrap .env 失败")
+			logger.Error(logComponent).Str("name", name).Err(err).Msg("创建 bootstrap .env 失败")
 			return "", fmt.Errorf("创建 bootstrap .env 失败: %w", err)
 		}
 		envPath = createdPath
@@ -130,12 +131,12 @@ func loadBootstrapByName(name string) (string, error) {
 
 	// 加载 .env 文件（override 模式）
 	if err := Load(envPath); err != nil {
-		log.Error().Str("name", name).Str("path", envPath).Err(err).Msg("加载 bootstrap .env 失败")
+		logger.Error(logComponent).Str("name", name).Str("path", envPath).Err(err).Msg("加载 bootstrap .env 失败")
 		return "", fmt.Errorf("加载 bootstrap .env 失败: %w", err)
 	}
 
 	parsedDotenv = envPath
-	log.Info().Str("name", name).Str("path", envPath).Msg("已加载实例 bootstrap .env")
+	logger.Info(logComponent).Str("name", name).Str("path", envPath).Msg("已加载实例 bootstrap .env")
 	return envPath, nil
 }
 

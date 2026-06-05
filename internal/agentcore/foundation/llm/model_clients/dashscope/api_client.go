@@ -94,8 +94,7 @@ func CallDashScopeAPI(
 	}
 
 	// 7. 发送请求
-	log := logger.GetLogger(logger.ComponentCommon)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Str("api_url", apiURL).
 		Str("model_provider", "DashScope").
@@ -134,7 +133,7 @@ func CallDashScopeAPI(
 			"DashScope API 调用失败. HTTP status: %d, Error code: %s, Error message: %s",
 			dashResp.StatusCode, dashResp.Code, dashResp.Message,
 		)
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_provider", "DashScope").
 			Int("status_code", dashResp.StatusCode).
@@ -147,7 +146,7 @@ func CallDashScopeAPI(
 		)
 	}
 
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_provider", "DashScope").
 		Int("status_code", dashResp.StatusCode).

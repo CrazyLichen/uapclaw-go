@@ -61,8 +61,7 @@ func (r *ClientRegistry) Register(name, clientType string, factory ClientFactory
 	defer r.mu.Unlock()
 
 	if _, exists := r.factories[fullName]; exists {
-		log := logger.GetLogger(logger.ComponentCommon)
-		log.Warn().
+		logger.Warn(logComponent).
 			Str("full_name", fullName).
 			Msg("Client type already registered, skipping")
 		return

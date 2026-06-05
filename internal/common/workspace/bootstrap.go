@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -61,7 +63,7 @@ func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 		return "", fmt.Errorf("写入 .env 失败: %w", err)
 	}
 
-	log.Info().Str("instance", config.Name).Str("path", envPath).Msg("已创建实例 bootstrap .env")
+	logger.Info(logComponent).Str("instance", config.Name).Str("path", envPath).Msg("已创建实例 bootstrap .env")
 	return envPath, nil
 }
 

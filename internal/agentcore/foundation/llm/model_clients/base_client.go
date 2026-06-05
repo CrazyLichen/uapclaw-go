@@ -45,6 +45,11 @@ type BaseModelClient interface {
 	GenerateVideo(ctx context.Context, messages []*llmschema.UserMessage, opts ...GenerateVideoOption) (*llmschema.VideoGenerationResponse, error)
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent model_clients 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。
@@ -296,7 +301,6 @@ func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, para
 	// 6. 日志记录
 	// 对齐 Python: 敏感模式（默认）不记录 messages/tools；非敏感模式记录。
 	// 环境变量 IS_SENSITIVE=false 时为非敏感模式，默认为敏感模式。
-	log := logger.GetLogger(logger.ComponentCommon)
 	isSensitive := true
 	if v := os.Getenv("IS_SENSITIVE"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -329,7 +333,7 @@ func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, para
 
 	if isSensitive {
 		// 敏感模式：不记录 messages/tools
-		log.Info().
+		logger.Info(logComponent).
 			Str("event_type", "LLM_CALL_START").
 			Str("model_name", model).
 			Str("model_provider", modelProvider).
@@ -343,7 +347,7 @@ func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, para
 			Msg("Before request chat model, LLM request params ready.")
 	} else {
 		// 非敏感模式：记录 messages/tools
-		log.Info().
+		logger.Info(logComponent).
 			Str("event_type", "LLM_CALL_START").
 			Str("model_name", model).
 			Str("model_provider", modelProvider).

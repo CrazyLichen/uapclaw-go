@@ -11,8 +11,8 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// log 全局日志实例。
-var log = logger.GetLogger(logger.ComponentCommon)
+// logComponent 日志组件标识。
+const logComponent = logger.ComponentCommon
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -69,7 +69,7 @@ func Load(path string) error {
 	kvs := Parse(string(data))
 	for k, v := range kvs {
 		if err := os.Setenv(k, v); err != nil {
-			log.Error().Str("key", k).Err(err).Msg("设置环境变量失败")
+			logger.Error(logComponent).Str("key", k).Err(err).Msg("设置环境变量失败")
 			return fmt.Errorf("设置环境变量 %s 失败: %w", k, err)
 		}
 	}

@@ -80,8 +80,7 @@ func ParseResponse(
 		modelName = modelConfig.ModelName
 	}
 	modelProvider := "" // ParseResponse 无法直接获取 model_provider，记录模型名即可
-	log := logger.GetLogger(logger.ComponentGateway)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", modelName).
 		Str("model_provider", modelProvider).
@@ -90,7 +89,7 @@ func ParseResponse(
 		Msg("Before parse content with parser.")
 
 	// 对齐 Python P8: 解析内容配置前记录
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", modelName).
 		Str("model_provider", modelProvider).
@@ -103,7 +102,7 @@ func ParseResponse(
 		if err == nil && parsed != nil {
 			parserContent = parsed
 			// 对齐 Python P9: 解析成功记录
-			log.Info().
+			logger.Info(logComponent).
 				Str("event_type", "LLM_CALL_END").
 				Str("model_name", modelName).
 				Str("model_provider", modelProvider).
@@ -112,7 +111,7 @@ func ParseResponse(
 				Msg("Parser parse success.")
 		} else if err != nil {
 			// 对齐 Python P10: 解析错误记录
-			log.Warn().
+			logger.Warn(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("model_name", modelName).
 				Str("model_provider", modelProvider).

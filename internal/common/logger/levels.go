@@ -85,6 +85,10 @@ type LoggingLevels struct {
 	Channel LogLevel
 	// AgentServer agent_server.log 级别
 	AgentServer LogLevel
+	// Permissions permissions.log 级别
+	Permissions LogLevel
+	// AgentCore agent_core.log 级别（agentcore/*）
+	AgentCore LogLevel
 	// Full full.log 级别
 	Full LogLevel
 }
@@ -142,6 +146,8 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	gateway := base
 	channel := base
 	agentServer := base
+	permissions := base
+	agentCore := base
 	full := base
 
 	if cfg != nil {
@@ -150,6 +156,8 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 		gateway = coerce(cfg.Gateway)
 		channel = coerce(cfg.Channel)
 		agentServer = coerce(cfg.AgentServer)
+		permissions = coerce(cfg.Permissions)
+		agentCore = coerce(cfg.AgentCore)
 		full = coerce(cfg.Full)
 	}
 
@@ -166,6 +174,8 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 		gateway = v
 		channel = v
 		agentServer = v
+		permissions = v
+		agentCore = v
 		full = v
 	}
 
@@ -180,6 +190,12 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	if agentServer < loggerLevel {
 		loggerLevel = agentServer
 	}
+	if permissions < loggerLevel {
+		loggerLevel = permissions
+	}
+	if agentCore < loggerLevel {
+		loggerLevel = agentCore
+	}
 	if full < loggerLevel {
 		loggerLevel = full
 	}
@@ -191,6 +207,8 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 		Gateway:     gateway,
 		Channel:     channel,
 		AgentServer: agentServer,
+		Permissions: permissions,
+		AgentCore:   agentCore,
 		Full:        full,
 	}
 }

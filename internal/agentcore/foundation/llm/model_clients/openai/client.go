@@ -13,6 +13,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent openai 包统一使用 AgentCore 组件标识记录日志。
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpenAIModelClient OpenAI 兼容协议的 LLM 模型客户端。
@@ -49,12 +54,11 @@ func NewOpenAIModelClient(
 	baseHeaders := SanitizeHeaders(clientConfig.CustomHeaders)
 
 	// 对齐 Python P1: 创建客户端前记录配置参数
-	log := logger.GetLogger(logger.ComponentGateway)
 	finalTimeout := clientConfig.Timeout
 	if finalTimeout <= 0 {
 		finalTimeout = 60.0
 	}
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Float64("timeout", finalTimeout).
 		Int("max_retries", clientConfig.MaxRetries).
@@ -117,8 +121,7 @@ func (c *OpenAIModelClient) Invoke(
 	}
 
 	// 7. 发送请求
-	log := logger.GetLogger(logger.ComponentGateway)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -128,7 +131,7 @@ func (c *OpenAIModelClient) Invoke(
 	resp, err := client.Do(req)
 	if err != nil {
 		// 对齐 Python P4: Invoke 错误记录完整上下文
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", reqParams["model"].(string)).
 			Str("model_provider", c.ClientConfig.ClientProvider).
@@ -156,7 +159,7 @@ func (c *OpenAIModelClient) Invoke(
 	}
 
 	// 对齐 Python P2: 收到响应记录完整上下文
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -169,7 +172,7 @@ func (c *OpenAIModelClient) Invoke(
 		Msg("OpenAI API response received.")
 
 	// 对齐 Python P3: 解析响应前记录 output_parser
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -183,7 +186,7 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, c.wrapError("invoke", err)
 	}
 
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -251,8 +254,7 @@ func (c *OpenAIModelClient) Stream(
 		return nil, c.wrapError("stream", err)
 	}
 
-	log := logger.GetLogger(logger.ComponentGateway)
-	log.Info().
+	logger.Info(logComponent).
 		Str("event_type", "LLM_CALL_START").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
@@ -263,7 +265,7 @@ func (c *OpenAIModelClient) Stream(
 	resp, err := client.Do(req)
 	if err != nil {
 		// 对齐 Python P5: Stream 错误记录完整上下文
-		log.Error().
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("model_name", reqParams["model"].(string)).
 			Str("model_provider", c.ClientConfig.ClientProvider).
@@ -302,7 +304,7 @@ func (c *OpenAIModelClient) Stream(
 			if err != nil {
 				// 流读取错误，记录日志但不中断（后续 chunk 不会被消费）
 				// 对齐 Python P5: Stream 错误记录完整上下文
-				log.Error().
+				logger.Error(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -320,7 +322,7 @@ func (c *OpenAIModelClient) Stream(
 			// 解析 JSON
 			var chunkResp ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				log.Warn().
+				logger.Warn(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -341,7 +343,7 @@ func (c *OpenAIModelClient) Stream(
 			select {
 			case chunkChan <- chunk:
 			case <-ctx.Done():
-				log.Warn().
+				logger.Warn(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
 					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
@@ -409,8 +411,7 @@ func init() {
 		if err != nil {
 			// 注册阶段无法返回 error，记录日志并返回 nil
 			// 实际使用时 CreateModelClient 会正常创建
-			log := logger.GetLogger(logger.ComponentCommon)
-			log.Error().Err(err).Msg("创建 OpenAI 客户端失败")
+			logger.Error(logComponent).Err(err).Msg("创建 OpenAI 客户端失败")
 			return nil
 		}
 		return client

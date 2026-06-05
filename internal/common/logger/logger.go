@@ -19,7 +19,7 @@ import (
 // 对应 Python: setup_logger() 返回的根 Logger
 //
 // 每个组件（Common/Gateway/Channel/AgentServer/Permissions）创建独立的 zerolog.Logger 实例，
-// 通过 GetLogger(component) 获取。每个 Logger 实例的 writer 同时写入：
+// 通过 Info/Warn/Error/Debug/Fatal 等组件级日志函数使用。每个 Logger 实例的 writer 同时写入：
 //   - 对应的组件日志文件（common.log/gateway.log/channel.log/agent_server.log/permissions.log）
 //   - full.log（全量汇总）
 //   - 控制台
@@ -163,27 +163,36 @@ func Setup(opts ...Option) error {
 	return setupErr
 }
 
-// GetLogger 获取指定组件的 Logger 实例。
-// 对应 Python: logging.getLogger(__name__)
-//
-// 用法：
-//
-//	var log = logger.GetLogger(logger.ComponentChannel)
-//	log.Info().Msg("消息内容")
-func GetLogger(component Component) zerolog.Logger {
-	globalMu.RLock()
-	defer globalMu.RUnlock()
+// ──────────────────────────── 组件级日志函数 ────────────────────────────
 
-	if global == nil {
-		// 未初始化时返回默认 Logger
-		return zerolog.Nop()
-	}
+// Info 输出 Info 级别日志。
+// 使用方式：logger.Info(logger.ComponentCommon).Str("key", "val").Msg("消息")
+func Info(component Component) *zerolog.Event {
+	return getLogger(component).Info()
+}
 
-	if lg, ok := global.componentLoggers[component]; ok {
-		return lg
-	}
+// Warn 输出 Warn 级别日志。
+// 使用方式：logger.Warn(logger.ComponentGateway).Err(err).Msg("警告")
+func Warn(component Component) *zerolog.Event {
+	return getLogger(component).Warn()
+}
 
-	return global.componentLoggers[ComponentCommon]
+// Error 输出 Error 级别日志。
+// 使用方式：logger.Error(logger.ComponentChannel).Err(err).Msg("失败")
+func Error(component Component) *zerolog.Event {
+	return getLogger(component).Error()
+}
+
+// Debug 输出 Debug 级别日志。
+// 使用方式：logger.Debug(logger.ComponentCommon).Str("key", "val").Msg("调试")
+func Debug(component Component) *zerolog.Event {
+	return getLogger(component).Debug()
+}
+
+// Fatal 输出 Fatal 级别日志并调用 os.Exit(1)。
+// 使用方式：logger.Fatal(logger.ComponentCommon).Err(err).Msg("致命错误")
+func Fatal(component Component) *zerolog.Event {
+	return getLogger(component).Fatal()
 }
 
 // Close 关闭所有日志 writer，释放文件句柄。
@@ -245,6 +254,29 @@ func OutputDir() string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getLogger 获取指定组件的 Logger 实例指针（非导出）。
+// 对应 Python: logging.getLogger(__name__)
+//
+// 外部包应使用 Info/Warn/Error/Debug/Fatal 等组件级日志函数，
+// 传入 Component 参数即可，无需直接获取 Logger 实例。
+func getLogger(component Component) *zerolog.Logger {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+
+	if global == nil {
+		// 未初始化时返回 Nop Logger 指针
+		nop := zerolog.Nop()
+		return &nop
+	}
+
+	if lg, ok := global.componentLoggers[component]; ok {
+		return &lg
+	}
+
+	lg := global.componentLoggers[ComponentCommon]
+	return &lg
+}
 
 // createComponentLogger 为指定组件创建 zerolog.Logger 实例。
 // 每个组件 Logger 的输出同时写入：组件日志文件 + full.log + 控制台。
@@ -325,6 +357,8 @@ func (l *Logger) componentLevel(comp Component) LogLevel {
 		return l.levels.Channel
 	case ComponentAgentServer, ComponentPermissions:
 		return l.levels.AgentServer
+	case ComponentAgentCore:
+		return l.levels.AgentCore
 	default:
 		return l.levels.Common
 	}

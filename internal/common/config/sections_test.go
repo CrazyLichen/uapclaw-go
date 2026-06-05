@@ -90,6 +90,9 @@ func TestGetLoggingConfig(t *testing.T) {
 	if logging.ConsoleLevel != "info" {
 		t.Errorf("期望 console_level = info，实际 %s", logging.ConsoleLevel)
 	}
+	if logging.Common != "info" {
+		t.Errorf("期望 common = info，实际 %s", logging.Common)
+	}
 	if logging.Gateway != "info" {
 		t.Errorf("期望 gateway = info，实际 %s", logging.Gateway)
 	}
@@ -98,6 +101,12 @@ func TestGetLoggingConfig(t *testing.T) {
 	}
 	if logging.AgentServer != "info" {
 		t.Errorf("期望 agent_server = info，实际 %s", logging.AgentServer)
+	}
+	if logging.Permissions != "info" {
+		t.Errorf("期望 permissions = info，实际 %s", logging.Permissions)
+	}
+	if logging.AgentCore != "info" {
+		t.Errorf("期望 agent_core = info，实际 %s", logging.AgentCore)
 	}
 	if logging.Full != "info" {
 		t.Errorf("期望 full = info，实际 %s", logging.Full)
@@ -118,9 +127,12 @@ func TestUpdateLoggingConfig(t *testing.T) {
 		Level:        "debug",
 		Format:       "text",
 		ConsoleLevel: "debug",
+		Common:       "debug",
 		Gateway:      "debug",
 		Channel:      "debug",
 		AgentServer:  "debug",
+		Permissions:  "debug",
+		AgentCore:    "debug",
 		Full:         "debug",
 	})
 	if err != nil {
