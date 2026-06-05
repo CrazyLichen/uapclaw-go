@@ -411,3 +411,123 @@ func TestDeepCopyMap(t *testing.T) {
 		t.Error("深拷贝应该不影响原始嵌套值")
 	}
 }
+
+// TestGet_数据未加载 测试 Load 未调用时 Get 返回 nil
+func TestGet_数据未加载(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New 失败: %v", err)
+	}
+
+	// 不调用 Load，直接 Get
+	val := cfg.Get("server.host")
+	if val != nil {
+		t.Errorf("未加载时 Get 应返回 nil，实际 %v", val)
+	}
+}
+
+// TestSet_未加载时自动初始化 测试 data/raw 为 nil 时 Set 正常工作
+func TestSet_未加载时自动初始化(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New 失败: %v", err)
+	}
+
+	// 不调用 Load，直接 Set
+	err = cfg.Set("server.host", "0.0.0.0")
+	if err != nil {
+		t.Fatalf("Set 失败: %v", err)
+	}
+
+	if cfg.Get("server.host") != "0.0.0.0" {
+		t.Errorf("期望 0.0.0.0，实际 %v", cfg.Get("server.host"))
+	}
+}
+
+// TestSet_覆盖非map值 测试路径中间节点是标量时被覆盖为 map
+func TestSet_覆盖非map值(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New 失败: %v", err)
+	}
+
+	// 先设置标量值
+	cfg.Save(map[string]any{"server": "scalar_value"})
+	cfg.Load()
+
+	// 设置嵌套路径（中间节点是标量，应被覆盖为 map）
+	err = cfg.Set("server.host", "0.0.0.0")
+	if err != nil {
+		t.Fatalf("Set 失败: %v", err)
+	}
+
+	if cfg.Get("server.host") != "0.0.0.0" {
+		t.Errorf("期望 0.0.0.0，实际 %v", cfg.Get("server.host"))
+	}
+}
+
+// TestRaw_文件不存在 测试 Raw 在文件不存在时返回空 map
+func TestRaw_文件不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "nonexistent.yaml")
+
+	cfg, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New 失败: %v", err)
+	}
+
+	raw, err := cfg.Raw()
+	if err != nil {
+		t.Fatalf("Raw 失败: %v", err)
+	}
+	if len(raw) != 0 {
+		t.Errorf("文件不存在时应返回空 map，实际 %v", raw)
+	}
+}
+
+// TestDeepCopySlice 测试 slice 深拷贝
+func TestDeepCopySlice(t *testing.T) {
+	original := []any{
+		1,
+		map[string]any{"key": "value"},
+		[]any{2, 3},
+	}
+
+	copied := deepCopySlice(original)
+
+	// 修改拷贝不影响原始
+	copied[0] = 100
+	copied[1].(map[string]any)["key"] = "modified"
+
+	if original[0] != 1 {
+		t.Error("深拷贝应不影响原始值")
+	}
+	if original[1].(map[string]any)["key"] != "value" {
+		t.Error("深拷贝应不影响原始嵌套 map")
+	}
+}
+
+// TestDeepCopyMap_nil 测试 nil map 深拷贝
+func TestDeepCopyMap_nil(t *testing.T) {
+	result := deepCopyMap(nil)
+	if result != nil {
+		t.Errorf("nil map 深拷贝应返回 nil，实际 %v", result)
+	}
+}
+
+// TestDeepCopySlice_nil 测试 nil slice 深拷贝
+func TestDeepCopySlice_nil(t *testing.T) {
+	result := deepCopySlice(nil)
+	if result != nil {
+		t.Errorf("nil slice 深拷贝应返回 nil，实际 %v", result)
+	}
+}

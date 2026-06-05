@@ -70,6 +70,40 @@ func TestRedactURLPassword_InvalidURL(t *testing.T) {
 	}
 }
 
+// TestRedactURLPassword_有查询和片段 测试 URL 有 query 和 fragment 时的脱敏
+func TestRedactURLPassword_有查询和片段(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "带 query",
+			url:  "redis://:secret@host:6379/0?timeout=5",
+			want: "redis://:***@host:6379/0?timeout=5",
+		},
+		{
+			name: "带 fragment",
+			url:  "redis://:secret@host:6379/0#section",
+			want: "redis://:***@host:6379/0#section",
+		},
+		{
+			name: "带 query 和 fragment",
+			url:  "redis://:secret@host:6379/0?timeout=5#section",
+			want: "redis://:***@host:6379/0?timeout=5#section",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RedactURLPassword(tt.url)
+			if got != tt.want {
+				t.Fatalf("RedactURLPassword(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSanitizeHeaders(t *testing.T) {
 	tests := []struct {
 		name    string

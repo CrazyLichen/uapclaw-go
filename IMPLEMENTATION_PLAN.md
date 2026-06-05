@@ -170,10 +170,11 @@ type AgentTransport interface {
 
 ### 规范 3：单元测试覆盖率与构建标签
 
-每个 Go 源码文件都必须配备对应的单元测试文件（`_test.go`），最大程度提升测试覆盖率。
+每个 Go 源码文件都必须配备对应的单元测试文件（`_test.go`），**整体测试覆盖率必须 ≥ 85%**。无法 mock 的外部依赖用 `//go:build` 标签隔离，被隔离的代码不纳入覆盖率计算基线。
 
 - 每个包必须有 `*_test.go` 文件
 - 导出函数必须有测试用例覆盖
+- **覆盖率目标：≥ 85%**（`go test -cover ./...`），未达标的包需补充测试
 - 可 mock 的必须 mock（`httptest`/接口注入/`t.TempDir()`），**禁止**用 build tag 逃避
 - 真实外部环境（LLM API/数据库/网络端口等）无法 mock 的，使用 `//go:build` 标签隔离
 
@@ -185,7 +186,27 @@ type AgentTransport interface {
 | `llm` | LLM API 真实调用 | `go test -tags=llm ./...` |
 | `e2e` | 端到端测试 | `go test -tags=e2e ./...` |
 
+**build tag 豁免规则（仅以下情况不计入覆盖率基线）：**
+
+1. 无法 mock 的真实外部服务：LLM API、第三方 SaaS、远程 RPC
+2. 依赖外部运行环境：数据库、消息队列、文件系统特定路径
+3. 硬件/OS 绑定：CGO 调用、系统调用、平台特定行为
+
 **测试函数命名：** `TestXxx` / `TestXxx_场景描述` / `TestXxx_真实调用`（集成测试统一后缀）
+
+**覆盖率检查命令：**
+
+```bash
+# 运行单元测试并查看覆盖率
+go test -cover ./...
+
+# 生成覆盖率详情
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+
+# 排除 build tag 隔离文件后计算覆盖率
+go test -cover -tags=!integration,!llm,!e2e ./...
+```
 
 详细规范见 `.codebuddy/rulers/go-code-conventions.md`。
 

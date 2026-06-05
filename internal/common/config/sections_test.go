@@ -209,3 +209,33 @@ func TestGetServerConfig_段不存在(t *testing.T) {
 		t.Error("期望返回错误，因为 server 段不存在")
 	}
 }
+
+// TestGetLoggingConfig_段不存在 测试 logging 段不存在时返回错误
+func TestGetLoggingConfig_段不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, _ := New(cfgPath)
+	cfg.Save(map[string]any{})
+	cfg.Load()
+
+	_, err := cfg.GetLoggingConfig()
+	if err == nil {
+		t.Error("期望返回错误，因为 logging 段不存在")
+	}
+}
+
+// TestGetWorkspaceConfig_段不存在 测试 workspace 段不存在时返回错误
+func TestGetWorkspaceConfig_段不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, _ := New(cfgPath)
+	cfg.Save(map[string]any{})
+	cfg.Load()
+
+	_, err := cfg.GetWorkspaceConfig()
+	if err == nil {
+		t.Error("期望返回错误，因为 workspace 段不存在")
+	}
+}

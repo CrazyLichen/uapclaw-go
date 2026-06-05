@@ -235,3 +235,63 @@ func TestMatchIgnorePattern(t *testing.T) {
 		})
 	}
 }
+
+// TestCopyDirWithDiff_含子目录 测试含子目录的递归复制
+func TestCopyDirWithDiff_含子目录(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "src")
+	dstDir := filepath.Join(tmpDir, "dst")
+
+	// 创建源目录结构（含子目录）
+	os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
+	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
+
+	var diff CopyDiffResult
+	if err := copyDirWithDiff(srcDir, dstDir, &diff, nil); err != nil {
+		t.Fatalf("copyDirWithDiff 失败: %v", err)
+	}
+
+	// 验证子目录文件被复制
+	assertFileExists(t, filepath.Join(dstDir, "sub", "b.txt"))
+	// 验证子目录被记录到 AddedDirs
+	if len(diff.AddedDirs) == 0 {
+		t.Error("应记录新增目录到 AddedDirs")
+	}
+}
+
+// TestCopyDirWithDiff_源目录不存在 测试源目录不存在时的错误
+func TestCopyDirWithDiff_源目录不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	var diff CopyDiffResult
+	err := copyDirWithDiff(filepath.Join(tmpDir, "nonexistent"), filepath.Join(tmpDir, "dst"), &diff, nil)
+	if err == nil {
+		t.Error("源目录不存在时应返回错误")
+	}
+}
+
+// TestCopyDirWithDiffIncremental_源目录不存在 测试源目录不存在时的错误
+func TestCopyDirWithDiffIncremental_源目录不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	var diff CopyDiffResult
+	err := copyDirWithDiffIncremental(filepath.Join(tmpDir, "nonexistent"), filepath.Join(tmpDir, "dst"), &diff, nil)
+	if err == nil {
+		t.Error("源目录不存在时应返回错误")
+	}
+}
+
+// TestCopyFileWithDiff_目标创建失败 测试目标目录无法创建时的错误
+func TestCopyFileWithDiff_目标创建失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "src.txt")
+	os.WriteFile(src, []byte("hello"), 0o644)
+
+	// 使用一个文件路径作为目标目录的父目录（导致 MkdirAll 失败）
+	dst := filepath.Join(tmpDir, "src.txt", "nested", "out.txt")
+
+	var diff CopyDiffResult
+	err := copyFileWithDiff(src, dst, &diff)
+	if err == nil {
+		t.Error("目标目录无法创建时应返回错误")
+	}
+}

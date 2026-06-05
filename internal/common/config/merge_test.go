@@ -266,6 +266,24 @@ func TestMapsEqual(t *testing.T) {
 			b:    map[string]any{"nested": map[string]any{"inner": "val"}},
 			want: true,
 		},
+		{
+			name: "嵌套不同",
+			a:    map[string]any{"nested": map[string]any{"inner": "val1"}},
+			b:    map[string]any{"nested": map[string]any{"inner": "val2"}},
+			want: false,
+		},
+		{
+			name: "键不存在",
+			a:    map[string]any{"key": "value"},
+			b:    map[string]any{"other": "value"},
+			want: false,
+		},
+		{
+			name: "int与float64比较",
+			a:    map[string]any{"port": 8080},
+			b:    map[string]any{"port": float64(8080)},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -274,5 +292,129 @@ func TestMapsEqual(t *testing.T) {
 				t.Errorf("mapsEqual() = %v，期望 %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestToFloat64 测试类型转换
+func TestToFloat64(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+		want  float64
+		ok    bool
+	}{
+		{"int", 42, 42, true},
+		{"int64", int64(42), 42, true},
+		{"float64", float64(3.14), 3.14, true},
+		{"string", "hello", 0, false},
+		{"bool", true, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := toFloat64(tt.input)
+			if ok != tt.ok {
+				t.Errorf("toFloat64(%v) ok = %v，期望 %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Errorf("toFloat64(%v) = %v，期望 %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMigrateFromTemplate_模板不存在 测试模板文件不存在时返回错误
+func TestMigrateFromTemplate_模板不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmplPath := filepath.Join(tmpDir, "nonexistent.yaml")
+	userPath := filepath.Join(tmpDir, "config.yaml")
+
+	_, err := MigrateFromTemplate(tmplPath, userPath)
+	if err == nil {
+		t.Error("模板不存在时应返回错误")
+	}
+}
+
+// TestMigrateFromTemplate_用户文件读取失败 测试用户文件无法读取时返回错误
+func TestMigrateFromTemplate_用户文件读取失败(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmplPath := filepath.Join(tmpDir, "template.yaml")
+
+	// 创建模板
+	os.WriteFile(tmplPath, []byte("key: value\n"), 0o644)
+
+	// 用户文件路径为一个目录（导致读取失败）
+	userPath := filepath.Join(tmpDir, "config.yaml")
+	os.MkdirAll(userPath, 0o755)
+
+	_, err := MigrateFromTemplate(tmplPath, userPath)
+	if err == nil {
+		t.Error("用户文件读取失败时应返回错误")
+	}
+}
+
+// TestDeepCopyValue 测试深拷贝各种类型
+func TestDeepCopyValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+	}{
+		{"map", map[string]any{"key": "value"}},
+		{"slice", []any{1, 2, 3}},
+		{"string", "hello"},
+		{"int", 42},
+		{"nil", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := deepCopyValue(tt.input)
+			// 验证不 panic 且值一致
+			if tt.input == nil {
+				if result != nil {
+					t.Error("nil 深拷贝应为 nil")
+				}
+				return
+			}
+			switch v := result.(type) {
+			case map[string]any:
+				original := tt.input.(map[string]any)
+				v["key"] = "modified"
+				if original["key"] == "modified" {
+					t.Error("map 深拷贝不应影响原始")
+				}
+			case []any:
+				original := tt.input.([]any)
+				v[0] = 999
+				if original[0] == 999 {
+					t.Error("slice 深拷贝不应影响原始")
+				}
+			default:
+				if result != tt.input {
+					t.Errorf("值类型期望 %v，实际 %v", tt.input, result)
+				}
+			}
+		})
+	}
+}
+
+// TestReadYAMLFile_空文件 测试读取空 YAML 文件
+func TestReadYAMLFile_空文件(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "empty.yaml")
+	os.WriteFile(path, []byte(""), 0o644)
+
+	data, err := readYAMLFile(path)
+	if err != nil {
+		t.Fatalf("readYAMLFile 失败: %v", err)
+	}
+	if len(data) != 0 {
+		t.Errorf("空文件应返回空 map，实际 %v", data)
+	}
+}
+
+// TestReadYAMLFile_不存在 测试读取不存在的文件
+func TestReadYAMLFile_不存在(t *testing.T) {
+	_, err := readYAMLFile("/nonexistent/path.yaml")
+	if err == nil {
+		t.Error("文件不存在时应返回错误")
 	}
 }

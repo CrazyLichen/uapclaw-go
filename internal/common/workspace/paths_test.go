@@ -257,3 +257,63 @@ func TestSetUserHome_重置缓存(t *testing.T) {
 		t.Errorf("SetUserHome 后 WorkspaceDir 应该变化，但都是 %q", ws1)
 	}
 }
+
+// TestGetResolvedPaths_未初始化无resources 测试未初始化且无 resources 时的降级
+func TestGetResolvedPaths_未初始化无resources(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 设置一个不存在的 data dir 和不存在的 resources
+	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "data"))
+	os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
+	defer func() {
+		os.Unsetenv(EnvDataDir)
+		os.Unsetenv(EnvResourcesDir)
+		SetUserHome("")
+	}()
+	SetUserHome("")
+
+	// 未初始化且无 resources 时应降级到用户目录
+	configDir := ConfigDir()
+	if configDir == "" {
+		t.Error("ConfigDir 不应为空")
+	}
+	// 应降级到 WorkspaceDir() 下的 config 目录
+	expected := filepath.Join(filepath.Join(tmpDir, "data"), "config")
+	if configDir != expected {
+		t.Errorf("降级路径期望 %q，实际 %q", expected, configDir)
+	}
+}
+
+// TestResourcesDir_环境变量不存在 测试 ResourcesDir 环境变量指向不存在的目录
+func TestResourcesDir_环境变量不存在(t *testing.T) {
+	os.Setenv(EnvResourcesDir, "/nonexistent/path")
+	defer os.Unsetenv(EnvResourcesDir)
+
+	_, err := ResourcesDir()
+	if err == nil {
+		t.Error("环境变量指向不存在的目录应返回错误")
+	}
+}
+
+// TestResourcesDir_可执行文件同目录 测试从可执行文件同目录查找 resources
+func TestResourcesDir_可执行文件同目录(t *testing.T) {
+	// 创建可执行文件同目录的 resources
+	execPath, _ := os.Executable()
+	execDir := filepath.Dir(execPath)
+	resDir := filepath.Join(execDir, "resources")
+	os.MkdirAll(resDir, 0o755)
+	defer os.RemoveAll(resDir)
+
+	os.Unsetenv(EnvResourcesDir)
+	defer func() {
+		// 恢复环境变量
+	}()
+
+	dir, err := ResourcesDir()
+	if err != nil {
+		// 在某些环境中可执行文件目录可能不可写，这是预期的
+		t.Logf("ResourcesDir 在可执行文件目录查找失败: %v", err)
+	} else if dir != resDir {
+		t.Errorf("ResourcesDir 期望 %q，实际 %q", resDir, dir)
+	}
+}

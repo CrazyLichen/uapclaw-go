@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,4 +81,81 @@ func TestSubcommands(t *testing.T) {
 			t.Errorf("子命令 %q 未注册", name)
 		}
 	}
+}
+
+// TestServeCmd_Execute 验证 serve 子命令执行输出
+func TestServeCmd_Execute(t *testing.T) {
+	buf := captureStdout(t, func() {
+		rootCmd := newRootCmd()
+		rootCmd.SetArgs([]string{"serve"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("执行 serve 失败: %v", err)
+		}
+	})
+
+	if !strings.Contains(buf, "尚未实现") {
+		t.Errorf("serve 输出未包含 '尚未实现', 实际输出: %s", buf)
+	}
+}
+
+// TestRunCmd_Execute 验证 run 子命令执行输出
+func TestRunCmd_Execute(t *testing.T) {
+	buf := captureStdout(t, func() {
+		rootCmd := newRootCmd()
+		rootCmd.SetArgs([]string{"run"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("执行 run 失败: %v", err)
+		}
+	})
+
+	if !strings.Contains(buf, "尚未实现") {
+		t.Errorf("run 输出未包含 '尚未实现', 实际输出: %s", buf)
+	}
+}
+
+// TestServeCmd_Info 验证 serve 命令的 Use/Short 字段
+func TestServeCmd_Info(t *testing.T) {
+	cmd := newServeCmd()
+
+	if cmd.Use != "serve" {
+		t.Errorf("serve 命令 Use 期望 'serve', 实际 '%s'", cmd.Use)
+	}
+	if cmd.Short != "启动沙箱 HTTP API 服务" {
+		t.Errorf("serve 命令 Short 期望 '启动沙箱 HTTP API 服务', 实际 '%s'", cmd.Short)
+	}
+}
+
+// TestRunCmd_Info 验证 run 命令的 Use/Short 字段
+func TestRunCmd_Info(t *testing.T) {
+	cmd := newRunCmd()
+
+	if cmd.Use != "run [命令]" {
+		t.Errorf("run 命令 Use 期望 'run [命令]', 实际 '%s'", cmd.Use)
+	}
+	if cmd.Short != "在沙箱中运行指定命令" {
+		t.Errorf("run 命令 Short 期望 '在沙箱中运行指定命令', 实际 '%s'", cmd.Short)
+	}
+}
+
+// captureStdout 捕获 os.Stdout 输出（fmt.Println 写入 os.Stdout，不经过 cobra SetOut）
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("创建 pipe 失败: %v", err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+
+	fn()
+	w.Close()
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("读取 pipe 失败: %v", err)
+	}
+	r.Close()
+
+	return buf.String()
 }

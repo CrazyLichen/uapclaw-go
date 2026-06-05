@@ -34,11 +34,11 @@ build-cli:
 
 # 运行测试
 test:
-	$(GOTEST) -v ./...
+	$(GOTEST) -v -tags test ./...
 
 # 运行测试（带覆盖率）
 test-cover:
-	$(GOTEST) -v -coverprofile=coverage.out ./...
+	$(GOTEST) -v -tags test -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 # 代码格式化

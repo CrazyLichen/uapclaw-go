@@ -361,6 +361,153 @@ func TestResourcePool_Release(t *testing.T) {
 	}
 }
 
+// TestRefCountedTransport_IsExpired 测试 Transport 过期检测
+func TestRefCountedTransport_IsExpired(t *testing.T) {
+	cfg := DefaultTransportConfig()
+	transport := NewRefCountedTransport(cfg)
+
+	// 刚创建不应过期
+	if transport.IsExpired() {
+		t.Error("新创建的 Transport 不应过期")
+	}
+
+	// 修改 TTL 使其过期
+	transport.config.TTL = 1 * time.Nanosecond
+	// 等待过期
+	time.Sleep(10 * time.Millisecond)
+	if !transport.IsExpired() {
+		t.Error("TTL 过期后应返回 true")
+	}
+}
+
+// TestRefCountedTransport_IsExpired_MaxIdle 测试最大空闲时间过期
+func TestRefCountedTransport_IsExpired_MaxIdle(t *testing.T) {
+	cfg := DefaultTransportConfig()
+	transport := NewRefCountedTransport(cfg)
+
+	// 修改 MaxIdleTime 使其过期
+	transport.config.MaxIdleTime = 1 * time.Nanosecond
+	transport.config.TTL = 0 // 禁用 TTL
+	time.Sleep(10 * time.Millisecond)
+	if !transport.IsExpired() {
+		t.Error("MaxIdleTime 过期后应返回 true")
+	}
+}
+
+// TestGetTransportPool 测试全局 TransportPool 单例
+func TestGetTransportPool(t *testing.T) {
+	pool := GetTransportPool()
+	if pool == nil {
+		t.Fatal("GetTransportPool() 不应返回 nil")
+	}
+}
+
+// TestTransportPool_ReleaseExpired 测试释放过期 Transport
+func TestTransportPool_ReleaseExpired(t *testing.T) {
+	pool := &TransportPool{
+		transports: make(map[string]*RefCountedTransport),
+		maxPool:    10,
+	}
+
+	cfg := DefaultTransportConfig()
+	cfg.TTL = 1 * time.Nanosecond
+	_, _ = pool.Acquire(cfg)
+
+	// 等待过期
+	time.Sleep(10 * time.Millisecond)
+
+	// 释放，过期时应删除
+	pool.Release(cfg)
+
+	// 验证已从池中移除
+	stats := pool.Stats()
+	if stats["total_transports"] != 0 {
+		t.Errorf("过期 Transport 应被移除，total_transports = %v", stats["total_transports"])
+	}
+}
+
+// TestTransportPool_EvictOldest 测试淘汰最久未用的空闲 Transport
+func TestTransportPool_EvictOldest(t *testing.T) {
+	pool := &TransportPool{
+		transports: make(map[string]*RefCountedTransport),
+		maxPool:    2,
+	}
+
+	// 创建两个 transport
+	cfg1 := DefaultTransportConfig()
+	cfg2 := DefaultTransportConfig()
+	cfg2.MaxIdleConns = 200
+	pool.Acquire(cfg1)
+	pool.Acquire(cfg2)
+
+	// 释放使其引用计数降为 0
+	pool.Release(cfg1)
+	pool.Release(cfg2)
+
+	// 超限时应淘汰最久未用的
+	cfg3 := DefaultTransportConfig()
+	cfg3.MaxIdleConns = 300
+	transport, err := pool.Acquire(cfg3)
+	if err != nil {
+		t.Fatalf("Acquire 失败: %v", err)
+	}
+	if transport == nil {
+		t.Fatal("Acquire 应返回 transport")
+	}
+}
+
+// TestTransportPool_AcquireClosedTransport 测试获取已关闭的 Transport 后创建新的
+func TestTransportPool_AcquireClosedTransport(t *testing.T) {
+	pool := &TransportPool{
+		transports: make(map[string]*RefCountedTransport),
+		maxPool:    10,
+	}
+
+	cfg := DefaultTransportConfig()
+	transport1, _ := pool.Acquire(cfg)
+	transport1.Close()
+
+	// 再次获取，因为已关闭，应创建新的
+	transport2, _ := pool.Acquire(cfg)
+	if transport2.IsClosed() {
+		t.Error("新获取的 Transport 不应是已关闭的")
+	}
+}
+
+// TestResourcePool_ReleaseToZero 测试释放到引用计数为 0 时从池中删除
+func TestResourcePool_ReleaseToZero(t *testing.T) {
+	pool := NewResourcePool[string](10,
+		func(key string, config any) (*string, error) {
+			v := "resource-" + key
+			return &v, nil
+		},
+		func(config any) string {
+			return config.(string)
+		},
+	)
+
+	pool.Acquire("key1") // ref=1
+	pool.Release("key1") // ref=0，应删除
+
+	// 再次获取应是新实例
+	r, _ := pool.Acquire("key1")
+	if r == nil {
+		t.Fatal("Acquire 应能重新创建资源")
+	}
+}
+
+// TestRefCountedResource_LastUsed_零值 测试 lastUsed 为 0 时返回 createdAt
+func TestRefCountedResource_LastUsed_零值(t *testing.T) {
+	var r RefCountedResource
+	r.InitRefCount()
+	r.lastUsed.Store(0) // 强制设为 0
+
+	lastUsed := r.LastUsed()
+	if !lastUsed.Equal(r.CreatedAt()) {
+		t.Error("lastUsed 为 0 时应返回 createdAt")
+	}
+}
+
 // ──────────────────────────── 集成测试 ────────────────────────────
 
 func TestTransportWithHTTPClient(t *testing.T) {

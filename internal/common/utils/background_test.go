@@ -409,3 +409,127 @@ func TestTaskManager_CancelAlreadyCompletedTask(t *testing.T) {
 		t.Fatal("Cancel() should return false for completed task")
 	}
 }
+
+// TestBackgroundTask_Name 测试 Name 方法
+func TestBackgroundTask_Name(t *testing.T) {
+	task := NewBackgroundTask("my-task", "group1", func(ctx context.Context) error {
+		return nil
+	})
+	if task.Name() != "my-task" {
+		t.Errorf("Name() = %q，期望 my-task", task.Name())
+	}
+}
+
+// TestBackgroundTask_Group 测试 Group 方法
+func TestBackgroundTask_Group(t *testing.T) {
+	task := NewBackgroundTask("test", "my-group", func(ctx context.Context) error {
+		return nil
+	})
+	if task.Group() != "my-group" {
+		t.Errorf("Group() = %q，期望 my-group", task.Group())
+	}
+}
+
+// TestGetTaskManager 测试全局 TaskManager 单例
+func TestGetTaskManager(t *testing.T) {
+	mgr := GetTaskManager()
+	if mgr == nil {
+		t.Fatal("GetTaskManager() 不应返回 nil")
+	}
+	// 再次获取应为同一实例
+	mgr2 := GetTaskManager()
+	if mgr != mgr2 {
+		t.Error("GetTaskManager() 应返回同一实例")
+	}
+}
+
+// TestTaskManager_CancelAll 测试取消所有运行中的任务
+func TestTaskManager_CancelAll(t *testing.T) {
+	mgr := newTestManager()
+
+	started1 := make(chan struct{})
+	started2 := make(chan struct{})
+
+	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		close(started1)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}, WithTaskGroup("workers"))
+
+	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		close(started2)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}, WithTaskGroup("other"))
+
+	<-started1
+	<-started2
+
+	count := mgr.CancelAll("cancel_all")
+	if count < 2 {
+		t.Fatalf("CancelAll() = %d，期望至少 2", count)
+	}
+}
+
+// TestTaskManager_Get 测试获取指定任务
+func TestTaskManager_Get(t *testing.T) {
+	mgr := newTestManager()
+
+	task, _ := mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		return "result", nil
+	})
+	task.Wait()
+
+	got, ok := mgr.Get(task.ID)
+	if !ok {
+		t.Fatal("Get() 应返回 true")
+	}
+	if got.ID != task.ID {
+		t.Error("Get() 应返回正确任务")
+	}
+
+	_, ok = mgr.Get("nonexistent")
+	if ok {
+		t.Error("Get() 对不存在的任务应返回 false")
+	}
+}
+
+// TestTaskManager_WaitAll 测试等待所有任务完成
+func TestTaskManager_WaitAll(t *testing.T) {
+	mgr := newTestManager()
+
+	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		time.Sleep(50 * time.Millisecond)
+		return 1, nil
+	})
+
+	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		time.Sleep(100 * time.Millisecond)
+		return 2, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	results := mgr.WaitAll(ctx)
+	if len(results) != 2 {
+		t.Fatalf("WaitAll() 返回 %d 个结果，期望 2", len(results))
+	}
+}
+
+// TestWithTaskMetadata 测试任务元数据选项
+func TestWithTaskMetadata(t *testing.T) {
+	mgr := newTestManager()
+
+	task, err := mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+		return "done", nil
+	}, WithTaskMetadata(map[string]any{"env": "test"}))
+	if err != nil {
+		t.Fatalf("CreateTask 失败: %v", err)
+	}
+	task.Wait()
+
+	if task.Metadata["env"] != "test" {
+		t.Errorf("Metadata['env'] 期望 test，实际 %v", task.Metadata["env"])
+	}
+}

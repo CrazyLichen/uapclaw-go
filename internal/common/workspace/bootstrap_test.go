@@ -113,3 +113,55 @@ func TestCreateBootstrapEnvForName(t *testing.T) {
 		t.Error("应包含 UAPCLAW_INSTANCE=alice")
 	}
 }
+
+// TestCreateBootstrapEnv_部分端口 测试部分端口缺失时不 panic
+func TestCreateBootstrapEnv_部分端口(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	config := &InstanceConfig{
+		Name:      "alice",
+		Workspace: filepath.Join(tmpDir, "alice"),
+		Ports: map[string]int{
+			"agent_server": 28092,
+			// 缺少 web, gateway, frontend 端口
+		},
+	}
+
+	envPath, err := CreateBootstrapEnv(config)
+	if err != nil {
+		t.Fatalf("CreateBootstrapEnv 失败: %v", err)
+	}
+
+	data, _ := os.ReadFile(envPath)
+	content := string(data)
+
+	// 存在的端口应写入
+	if !strings.Contains(content, "AGENT_SERVER_PORT=28092") {
+		t.Error("应包含 AGENT_SERVER_PORT=28092")
+	}
+	// 不存在的端口不应出现
+	if strings.Contains(content, "WEB_PORT=") {
+		t.Error("缺失的端口不应写入")
+	}
+}
+
+// TestCreateBootstrapEnvForName_不存在 测试按不存在的名称生成
+func TestCreateBootstrapEnvForName_不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	os.Setenv(EnvDataDir, tmpDir)
+	defer os.Unsetenv(EnvDataDir)
+	SetUserHome("")
+
+	// 不注册实例，直接创建
+	// GetInstanceIndex 会返回新序号
+	envPath, err := CreateBootstrapEnvForName("nonexistent", "/tmp/nonexistent")
+	if err != nil {
+		t.Fatalf("CreateBootstrapEnvForName 失败: %v", err)
+	}
+
+	// 验证文件存在
+	if _, err := os.Stat(envPath); err != nil {
+		t.Errorf("文件应存在: %v", err)
+	}
+}
