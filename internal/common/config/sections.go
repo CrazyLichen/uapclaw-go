@@ -32,6 +32,7 @@ type LoggingConfig struct {
 	Level        string `yaml:"level"`          // 基础级别，默认 INFO
 	Format       string `yaml:"format"`         // 输出格式：json / text
 	ConsoleLevel string `yaml:"console_level"`  // 控制台级别
+	Common       string `yaml:"common"`         // common.log 级别（基础设施层）
 	Gateway      string `yaml:"gateway"`        // gateway.log 级别
 	Channel      string `yaml:"channel"`        // channel.log 级别
 	AgentServer  string `yaml:"agent_server"`   // agent_server.log 级别

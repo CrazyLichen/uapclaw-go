@@ -12,6 +12,7 @@ func TestComponent_String(t *testing.T) {
 		component Component
 		expected  string
 	}{
+		{ComponentCommon, "common"},
 		{ComponentGateway, "gateway"},
 		{ComponentChannel, "channel"},
 		{ComponentAgentServer, "agent_server"},
@@ -46,11 +47,12 @@ func TestComponent_UnmarshalJSON(t *testing.T) {
 		input    string
 		expected Component
 	}{
+		{`"common"`, ComponentCommon},
 		{`"gateway"`, ComponentGateway},
 		{`"channel"`, ComponentChannel},
 		{`"agent_server"`, ComponentAgentServer},
 		{`"permissions"`, ComponentPermissions},
-		{`"unknown"`, ComponentGateway},
+		{`"unknown"`, ComponentCommon},
 	}
 	for _, tt := range tests {
 		var c Component
@@ -68,6 +70,7 @@ func TestComponent_LogFileName(t *testing.T) {
 		component Component
 		expected  string
 	}{
+		{ComponentCommon, "common.log"},
 		{ComponentGateway, "gateway.log"},
 		{ComponentChannel, "channel.log"},
 		{ComponentAgentServer, "agent_server.log"},
@@ -86,12 +89,13 @@ func TestComponentFromString(t *testing.T) {
 		name     string
 		expected Component
 	}{
+		{"common", ComponentCommon},
 		{"gateway", ComponentGateway},
 		{"channel", ComponentChannel},
 		{"agent_server", ComponentAgentServer},
 		{"permissions", ComponentPermissions},
-		{"unknown", ComponentGateway},
-		{"", ComponentGateway},
+		{"unknown", ComponentCommon},
+		{"", ComponentCommon},
 	}
 	for _, tt := range tests {
 		got := componentFromString(tt.name)
@@ -103,14 +107,14 @@ func TestComponentFromString(t *testing.T) {
 
 func TestAllComponents(t *testing.T) {
 	comps := allComponents()
-	if len(comps) != 4 {
-		t.Errorf("期望 4 个组件，实际 %d", len(comps))
+	if len(comps) != 5 {
+		t.Errorf("期望 5 个组件，实际 %d", len(comps))
 	}
 	// 确保顺序正确
-	if comps[0] != ComponentGateway {
-		t.Errorf("期望 comps[0] = ComponentGateway，实际 %v", comps[0])
+	if comps[0] != ComponentCommon {
+		t.Errorf("期望 comps[0] = ComponentCommon，实际 %v", comps[0])
 	}
-	if comps[3] != ComponentPermissions {
-		t.Errorf("期望 comps[3] = ComponentPermissions，实际 %v", comps[3])
+	if comps[4] != ComponentPermissions {
+		t.Errorf("期望 comps[4] = ComponentPermissions，实际 %v", comps[4])
 	}
 }

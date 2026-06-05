@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"sync"
 	"time"
@@ -74,6 +75,7 @@ func (r *Reloader) Start() error {
 
 	go r.watchLoop()
 
+	log.Printf("[config] 已启动配置热重载监听，目录: %s", dir)
 	return nil
 }
 
@@ -126,7 +128,8 @@ func (r *Reloader) watchLoop() {
 			if !ok {
 				return
 			}
-			// 忽略监听错误，继续运行
+			// 监听错误，记录日志但继续运行
+			log.Printf("[config] 文件监听错误，继续运行")
 		}
 	}
 }
@@ -134,8 +137,11 @@ func (r *Reloader) watchLoop() {
 // reload 执行配置重载并触发回调。
 func (r *Reloader) reload() {
 	if err := r.config.Reload(); err != nil {
+		log.Printf("[config] 配置热重载失败: %v", err)
 		return
 	}
+
+	log.Printf("[config] 配置热重载成功")
 
 	// 获取最新配置数据（深拷贝，避免外部修改影响内部状态）
 	r.config.mu.RLock()

@@ -18,9 +18,9 @@ import (
 // Logger 日志管理器（全局单例）。
 // 对应 Python: setup_logger() 返回的根 Logger
 //
-// 每个组件（Gateway/Channel/AgentServer/Permissions）创建独立的 zerolog.Logger 实例，
+// 每个组件（Common/Gateway/Channel/AgentServer/Permissions）创建独立的 zerolog.Logger 实例，
 // 通过 GetLogger(component) 获取。每个 Logger 实例的 writer 同时写入：
-//   - 对应的组件日志文件（gateway.log/channel.log/agent_server.log/permissions.log）
+//   - 对应的组件日志文件（common.log/gateway.log/channel.log/agent_server.log/permissions.log）
 //   - full.log（全量汇总）
 //   - 控制台
 type Logger struct {
@@ -183,7 +183,7 @@ func GetLogger(component Component) zerolog.Logger {
 		return lg
 	}
 
-	return global.componentLoggers[ComponentGateway]
+	return global.componentLoggers[ComponentCommon]
 }
 
 // Close 关闭所有日志 writer，释放文件句柄。
@@ -317,6 +317,8 @@ func (l *Logger) getOrCreateAgentServerWriter(
 // componentLevel 返回指定组件的日志级别。
 func (l *Logger) componentLevel(comp Component) LogLevel {
 	switch comp {
+	case ComponentCommon:
+		return l.levels.Common
 	case ComponentGateway:
 		return l.levels.Gateway
 	case ComponentChannel:
@@ -324,6 +326,6 @@ func (l *Logger) componentLevel(comp Component) LogLevel {
 	case ComponentAgentServer, ComponentPermissions:
 		return l.levels.AgentServer
 	default:
-		return l.levels.Gateway
+		return l.levels.Common
 	}
 }

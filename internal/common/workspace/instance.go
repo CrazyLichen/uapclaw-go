@@ -180,6 +180,7 @@ func LoadInstancesYAML() (map[string]any, error) {
 
 	var result map[string]any
 	if err := yaml.Unmarshal(data, &result); err != nil {
+		log.Warn().Str("path", path).Err(err).Msg("解析 instances.yaml 失败")
 		return nil, fmt.Errorf("解析 instances.yaml 失败: %w", err)
 	}
 
@@ -213,6 +214,7 @@ func SaveInstancesYAML(data map[string]any) error {
 		return fmt.Errorf("写入 instances.yaml 失败: %w", err)
 	}
 
+	log.Debug().Str("path", path).Msg("已保存 instances.yaml")
 	return nil
 }
 

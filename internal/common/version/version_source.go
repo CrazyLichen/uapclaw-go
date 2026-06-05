@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -49,6 +51,11 @@ const (
 	// githubAPIURL 默认 GitHub API 地址
 	githubAPIURL = "https://api.github.com/repos/%s/%s/releases/latest"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// log 全局日志实例。
+var log = logger.GetLogger(logger.ComponentCommon)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -102,6 +109,7 @@ func WithTimeout(timeout time.Duration) GitHubSourceOption {
 func (s *GitHubReleasesSource) FetchLatest(ctx context.Context) (*ReleaseInfo, error) {
 	data, err := s.fetchJSON(ctx)
 	if err != nil {
+		log.Warn().Str("owner", s.owner).Str("repo", s.repo).Err(err).Msg("获取 GitHub 发布信息失败")
 		return nil, fmt.Errorf("获取 GitHub 发布信息失败: %w", err)
 	}
 
@@ -141,6 +149,7 @@ func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]interf
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Warn().Int("status", resp.StatusCode).Str("url", s.apiURL).Msg("GitHub API 返回非 200 状态码")
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 

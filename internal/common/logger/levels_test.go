@@ -98,6 +98,9 @@ func TestResolveLoggingLevels_默认值(t *testing.T) {
 	if levels.Console != LogLevelInfo {
 		t.Errorf("期望 Console = info，实际 %s", levels.Console)
 	}
+	if levels.Common != LogLevelInfo {
+		t.Errorf("期望 Common = info，实际 %s", levels.Common)
+	}
 	if levels.Gateway != LogLevelInfo {
 		t.Errorf("期望 Gateway = info，实际 %s", levels.Gateway)
 	}
@@ -110,6 +113,7 @@ func TestResolveLoggingLevels_从配置解析(t *testing.T) {
 	cfg := &config.LoggingConfig{
 		Level:        "warn",
 		ConsoleLevel: "debug",
+		Common:       "debug",
 		Gateway:      "error",
 		Channel:      "info",
 		AgentServer:  "warn",
@@ -119,6 +123,9 @@ func TestResolveLoggingLevels_从配置解析(t *testing.T) {
 
 	if levels.Console != LogLevelDebug {
 		t.Errorf("期望 Console = debug，实际 %s", levels.Console)
+	}
+	if levels.Common != LogLevelDebug {
+		t.Errorf("期望 Common = debug，实际 %s", levels.Common)
 	}
 	if levels.Gateway != LogLevelError {
 		t.Errorf("期望 Gateway = error，实际 %s", levels.Gateway)
@@ -155,6 +162,7 @@ func TestResolveLoggingLevels_覆盖全部(t *testing.T) {
 	cfg := &config.LoggingConfig{
 		Level:        "warn",
 		ConsoleLevel: "error",
+		Common:       "error",
 		Gateway:      "error",
 	}
 	levels := ResolveLoggingLevels(cfg, "debug", "fatal")
@@ -162,6 +170,9 @@ func TestResolveLoggingLevels_覆盖全部(t *testing.T) {
 	// override 应覆盖所有通道
 	if levels.Console != LogLevelFatal {
 		t.Errorf("期望 Console = fatal，实际 %s", levels.Console)
+	}
+	if levels.Common != LogLevelFatal {
+		t.Errorf("期望 Common = fatal，实际 %s", levels.Common)
 	}
 	if levels.Gateway != LogLevelFatal {
 		t.Errorf("期望 Gateway = fatal，实际 %s", levels.Gateway)

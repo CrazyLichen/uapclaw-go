@@ -12,8 +12,10 @@ import (
 type Component int
 
 const (
-	// ComponentGateway 其余日志 → gateway.log
-	ComponentGateway Component = iota
+	// ComponentCommon 基础设施层日志 → common.log（config/workspace/dotenv/version 等公共包）
+	ComponentCommon Component = iota
+	// ComponentGateway Gateway 及其余日志 → gateway.log
+	ComponentGateway
 	// ComponentChannel swarm/channel/* 日志 → channel.log
 	ComponentChannel
 	// ComponentAgentServer swarm/server/* 日志 → agent_server.log
@@ -23,7 +25,7 @@ const (
 )
 
 // componentStrings Component 枚举到字符串的映射。
-var componentStrings = [...]string{"gateway", "channel", "agent_server", "permissions"}
+var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions"}
 
 // String 返回组件的字符串表示。
 func (c Component) String() string {
@@ -53,13 +55,15 @@ func (c *Component) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 	}
-	*c = ComponentGateway
+	*c = ComponentCommon
 	return nil
 }
 
 // LogFileName 返回组件对应的日志文件名。
 func (c Component) LogFileName() string {
 	switch c {
+	case ComponentCommon:
+		return "common.log"
 	case ComponentGateway:
 		return "gateway.log"
 	case ComponentChannel:
@@ -75,19 +79,19 @@ func (c Component) LogFileName() string {
 
 // allComponents 返回所有组件枚举值，用于遍历。
 func allComponents() []Component {
-	return []Component{ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions}
+	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// componentFromString 从字符串解析 Component，未匹配时返回 ComponentGateway。
+// componentFromString 从字符串解析 Component，未匹配时返回 ComponentCommon。
 func componentFromString(name string) Component {
 	for i, s := range componentStrings {
 		if s == name {
 			return Component(i)
 		}
 	}
-	return ComponentGateway
+	return ComponentCommon
 }
 
 // ensure Component implements required interfaces at compile time.

@@ -77,6 +77,8 @@ type LoggingLevels struct {
 	Logger LogLevel
 	// Console 控制台级别
 	Console LogLevel
+	// Common common.log 级别（基础设施层：config/workspace/dotenv/version）
+	Common LogLevel
 	// Gateway gateway.log 级别
 	Gateway LogLevel
 	// Channel channel.log 级别
@@ -136,6 +138,7 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	}
 
 	console := base
+	common := base
 	gateway := base
 	channel := base
 	agentServer := base
@@ -143,6 +146,7 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 
 	if cfg != nil {
 		console = coerce(cfg.ConsoleLevel)
+		common = coerce(cfg.Common)
 		gateway = coerce(cfg.Gateway)
 		channel = coerce(cfg.Channel)
 		agentServer = coerce(cfg.AgentServer)
@@ -158,6 +162,7 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	if override != "" {
 		v := ParseLogLevel(override, LogLevelInfo)
 		console = v
+		common = v
 		gateway = v
 		channel = v
 		agentServer = v
@@ -165,7 +170,10 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	}
 
 	// 根 Logger 级别取各文件级别的最小值，确保所有通道的日志都能通过
-	loggerLevel := gateway
+	loggerLevel := common
+	if gateway < loggerLevel {
+		loggerLevel = gateway
+	}
 	if channel < loggerLevel {
 		loggerLevel = channel
 	}
@@ -179,6 +187,7 @@ func ResolveLoggingLevels(cfg *config.LoggingConfig, envLevel string, override s
 	return LoggingLevels{
 		Logger:      loggerLevel,
 		Console:     console,
+		Common:      common,
 		Gateway:     gateway,
 		Channel:     channel,
 		AgentServer: agentServer,
