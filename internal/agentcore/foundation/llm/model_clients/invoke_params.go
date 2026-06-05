@@ -453,3 +453,31 @@ func WithVideoTimeout(t float64) GenerateVideoOption {
 func WithVideoExtra(extra map[string]any) GenerateVideoOption {
 	return func(p *GenerateVideoParams) { p.Extra = extra }
 }
+
+// ──── 类型转换方法 ────
+
+// ToInvokeParams 将 InvokeParams 转换为可用于 BuildRequestParams 的 InvokeParams 指针。
+//
+// InvokeParams 本身就是目标类型，直接返回指针。
+func (p *InvokeParams) ToInvokeParams() *InvokeParams {
+	return p
+}
+
+// ToStreamParams 将 StreamParams 转换为可用于 BuildRequestParams 的 InvokeParams。
+//
+// StreamParams 和 InvokeParams 字段完全相同，逐字段拷贝转换。
+func (p *StreamParams) ToStreamParams() *InvokeParams {
+	return &InvokeParams{
+		Tools:            p.Tools,
+		Temperature:      p.Temperature,
+		TopP:             p.TopP,
+		Model:            p.Model,
+		MaxTokens:        p.MaxTokens,
+		Stop:             p.Stop,
+		OutputParser:     p.OutputParser,
+		Timeout:          p.Timeout,
+		Extra:            p.Extra,
+		CustomHeaders:    p.CustomHeaders,
+		TracerRecordData: p.TracerRecordData,
+	}
+}
