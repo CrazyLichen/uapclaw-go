@@ -228,17 +228,17 @@ type AgentTransport interface {
 | 2.3 | ✅ | 流式消息块 | `AssistantMessageChunk`，增量合并（tool_calls 参数拼接） | `openjiuwen/core/foundation/llm/schema/message_chunk.py` |
 | 2.4 | ✅ | 多模态生成响应 | `GenerationResponse`/`ImageGenerationResponse`/`AudioGenerationResponse`/`VideoGenerationResponse` | `openjiuwen/core/foundation/llm/schema/generation_response.py` |
 | 2.5 | ✅ | ProviderType / ModelClientConfig | `ProviderType` 枚举，`ModelClientConfig`，`ModelRequestConfig`，`BaseModelInfo`，`ModelConfig` | `openjiuwen/core/foundation/llm/schema/config.py` · `mode_info.py` |
-| 2.6 | ☐ | BaseModelClient 接口 | `Invoke()→AssistantMessage`，`Stream()→chan AssistantMessageChunk`，`GenerateImage/Speech/Video` | `openjiuwen/core/foundation/llm/model_clients/base_model_client.py` |
-| 2.7 | ☐ | OpenAI 兼容客户端 | HTTP 调用（invoke + stream），SSE 解析 | `openjiuwen/core/foundation/llm/model_clients/openai_model_client.py` |
-| 2.8 | ☐ | DashScope 客户端 | 阿里云百炼适配 | `openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py` |
-| 2.9 | ☐ | DeepSeek 客户端 | DeepSeek API 适配 | `openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py` |
-| 2.10 | ☐ | SiliconFlow 客户端 | SiliconFlow 适配 | `openjiuwen/core/foundation/llm/model_clients/siliconflow_model_client.py` |
-| 2.11 | ☐ | InferenceAffinity 客户端 | InferenceAffinity 适配 | `openjiuwen/core/foundation/llm/model_clients/inference_affinity_model_client.py` |
-| 2.12 | ☐ | IntelliRouter 客户端 | IntelliRouter 适配 | `openjiuwen/core/foundation/llm/model_clients/intelli_router_model_client.py` |
+| 2.6 | ✅ | BaseModelClient 接口 | `Invoke()→AssistantMessage`，`Stream()→chan AssistantMessageChunk`，`GenerateImage/Speech/Video` | `openjiuwen/core/foundation/llm/model_clients/base_model_client.py` |
+| 2.7 | ☐ | OpenAI 兼容客户端 | HTTP 调用（invoke + stream），SSE 解析；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("OpenAI", "llm", ...)` + `Register("OpenRouter", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/openai_model_client.py` |
+| 2.8 | ☐ | DashScope 客户端 | 阿里云百炼适配；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("DashScope", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py` |
+| 2.9 | ☐ | DeepSeek 客户端 | DeepSeek API 适配；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("DeepSeek", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py` |
+| 2.10 | ☐ | SiliconFlow 客户端 | SiliconFlow 适配；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("SiliconFlow", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/siliconflow_model_client.py` |
+| 2.11 | ☐ | InferenceAffinity 客户端 | InferenceAffinity 适配；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("InferenceAffinity", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/inference_affinity_model_client.py` |
+| 2.12 | ☐ | IntelliRouter 客户端 | IntelliRouter 适配；⤵️ **2.6 回填点**：在 `init()` 中调用 `Register("intelli_router", "llm", ...)` | `openjiuwen/core/foundation/llm/model_clients/intelli_router_model_client.py` |
 | 2.13 | ☐ | Headers Helper | 模型请求头构建辅助 | `openjiuwen/core/foundation/llm/headers_helper.py` |
 | 2.14 | ☐ | Model 门面 | 统一入口，集成回调框架 | `openjiuwen/core/foundation/llm/model.py` |
 | 2.15 | ☐ | init_model 工厂 | 便捷创建 Model 实例 | `openjiuwen/core/foundation/llm/__init__.py` (init_model) |
-| 2.16 | ☐ | 输出解析器 | `JsonOutputParser`，`MarkdownOutputParser` | `openjiuwen/core/foundation/llm/output_parsers/output_parser.py` |
+| 2.16 | ☐ | 输出解析器 | `JsonOutputParser`，`MarkdownOutputParser`；⤵️ **2.6 回填点**：扩展 `model_clients.BaseOutputParser` 接口，添加完整方法 | `openjiuwen/core/foundation/llm/output_parsers/output_parser.py` |
 | 2.17 | ☐ | Prompt 模板系统 | 模板渲染，变量替换 | `openjiuwen/core/foundation/prompt/` |
 
 **验证点**：✅ 可通过单元测试调用 LLM，发送消息并收到流式响应
