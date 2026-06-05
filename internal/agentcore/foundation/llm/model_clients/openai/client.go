@@ -48,6 +48,18 @@ func NewOpenAIModelClient(
 	// 预构建配置级 headers
 	baseHeaders := SanitizeHeaders(clientConfig.CustomHeaders)
 
+	// 对齐 Python P1: 创建客户端前记录配置参数
+	log := logger.GetLogger(logger.ComponentGateway)
+	finalTimeout := clientConfig.Timeout
+	if finalTimeout <= 0 {
+		finalTimeout = 60.0
+	}
+	log.Info().
+		Str("event_type", "LLM_CALL_START").
+		Float64("timeout", finalTimeout).
+		Int("max_retries", clientConfig.MaxRetries).
+		Msg("Before create openai client, model client config params ready.")
+
 	return &OpenAIModelClient{
 		BaseClientEmbed: *embed,
 		baseHeaders:     baseHeaders,
@@ -115,6 +127,19 @@ func (c *OpenAIModelClient) Invoke(
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// 对齐 Python P4: Invoke 错误记录完整上下文
+		log.Error().
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("model_name", reqParams["model"].(string)).
+			Str("model_provider", c.ClientConfig.ClientProvider).
+			Any("messages", reqParams["messages"]).
+			Any("tools", reqParams["tools"]).
+			Any("temperature", reqParams["temperature"]).
+			Any("top_p", reqParams["top_p"]).
+			Any("max_tokens", reqParams["max_tokens"]).
+			Bool("is_stream", false).
+			Err(err).
+			Msg("OpenAI API async invoke error.")
 		return nil, c.wrapError("invoke", err)
 	}
 	defer resp.Body.Close()
@@ -130,12 +155,27 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, c.wrapError("invoke", fmt.Errorf("解析响应失败: %w", err))
 	}
 
+	// 对齐 Python P2: 收到响应记录完整上下文
+	log.Info().
+		Str("event_type", "LLM_CALL_END").
+		Str("model_name", reqParams["model"].(string)).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Any("messages", reqParams["messages"]).
+		Any("tools", reqParams["tools"]).
+		Any("temperature", reqParams["temperature"]).
+		Any("top_p", reqParams["top_p"]).
+		Any("max_tokens", reqParams["max_tokens"]).
+		Bool("is_stream", false).
+		Msg("OpenAI API response received.")
+
+	// 对齐 Python P3: 解析响应前记录 output_parser
 	log.Info().
 		Str("event_type", "LLM_CALL_END").
 		Str("model_name", reqParams["model"].(string)).
 		Str("model_provider", c.ClientConfig.ClientProvider).
 		Bool("is_stream", false).
-		Msg("OpenAI API response received")
+		Str("output_parser", fmt.Sprintf("%v", params.OutputParser)).
+		Msg("Before parse response with output parser.")
 
 	// 10. 转换为 AssistantMessage
 	assistantMsg, err := ParseResponse(&completionResp, c.ModelConfig, params.OutputParser)
@@ -222,6 +262,19 @@ func (c *OpenAIModelClient) Stream(
 	// 8. 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
+		// 对齐 Python P5: Stream 错误记录完整上下文
+		log.Error().
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("model_name", reqParams["model"].(string)).
+			Str("model_provider", c.ClientConfig.ClientProvider).
+			Any("messages", reqParams["messages"]).
+			Any("tools", reqParams["tools"]).
+			Any("temperature", reqParams["temperature"]).
+			Any("top_p", reqParams["top_p"]).
+			Any("max_tokens", reqParams["max_tokens"]).
+			Bool("is_stream", true).
+			Err(err).
+			Msg("OpenAI API async stream error.")
 		return nil, c.wrapError("stream", err)
 	}
 
@@ -248,12 +301,19 @@ func (c *OpenAIModelClient) Stream(
 			}
 			if err != nil {
 				// 流读取错误，记录日志但不中断（后续 chunk 不会被消费）
+				// 对齐 Python P5: Stream 错误记录完整上下文
 				log.Error().
 					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
+					Any("messages", reqParams["messages"]).
+					Any("tools", reqParams["tools"]).
+					Any("temperature", reqParams["temperature"]).
+					Any("top_p", reqParams["top_p"]).
+					Any("max_tokens", reqParams["max_tokens"]).
 					Bool("is_stream", true).
 					Err(err).
-					Msg("OpenAI API stream read error")
+					Msg("OpenAI API async stream error.")
 				return
 			}
 
@@ -262,6 +322,7 @@ func (c *OpenAIModelClient) Stream(
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
 				log.Warn().
 					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
 					Bool("is_stream", true).
 					Str("data", data).
@@ -282,6 +343,7 @@ func (c *OpenAIModelClient) Stream(
 			case <-ctx.Done():
 				log.Warn().
 					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", fmt.Sprintf("%v", reqParams["model"])).
 					Str("model_provider", c.ClientConfig.ClientProvider).
 					Bool("is_stream", true).
 					Msg("OpenAI API stream cancelled by context")

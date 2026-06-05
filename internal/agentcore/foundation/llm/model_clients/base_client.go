@@ -3,6 +3,8 @@ package model_clients
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -292,13 +294,69 @@ func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, para
 	}
 
 	// 6. 日志记录
+	// 对齐 Python: 敏感模式（默认）不记录 messages/tools；非敏感模式记录。
+	// 环境变量 IS_SENSITIVE=false 时为非敏感模式，默认为敏感模式。
 	log := logger.GetLogger(logger.ComponentCommon)
-	log.Info().
-		Str("event_type", "LLM_CALL_START").
-		Str("model_name", model).
-		Str("client_name", e.GetClientName()).
-		Bool("is_stream", stream).
-		Msg("LLM request params ready")
+	isSensitive := true
+	if v := os.Getenv("IS_SENSITIVE"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			isSensitive = b
+		}
+	}
+
+	// 提取需要记录的字段值
+	modelProvider := ""
+	if e.ClientConfig != nil {
+		modelProvider = e.ClientConfig.ClientProvider
+	}
+	temperature, _ := reqParams["temperature"]
+	topP, _ := reqParams["top_p"]
+	maxTokens, _ := reqParams["max_tokens"]
+	stop, _ := reqParams["stop"]
+
+	// 计算额外参数（排除基础参数）
+	extraParams := make(map[string]any)
+	baseKeys := map[string]bool{
+		"model": true, "messages": true, "stream": true,
+		"temperature": true, "top_p": true, "max_tokens": true, "stop": true,
+		"tools": true, "tool_choice": true,
+	}
+	for k, v := range reqParams {
+		if !baseKeys[k] {
+			extraParams[k] = v
+		}
+	}
+
+	if isSensitive {
+		// 敏感模式：不记录 messages/tools
+		log.Info().
+			Str("event_type", "LLM_CALL_START").
+			Str("model_name", model).
+			Str("model_provider", modelProvider).
+			Any("temperature", temperature).
+			Any("top_p", topP).
+			Any("max_tokens", maxTokens).
+			Bool("is_stream", stream).
+			Any("stop", stop).
+			Str("client_name", e.GetClientName()).
+			Any("extra_params", extraParams).
+			Msg("Before request chat model, LLM request params ready.")
+	} else {
+		// 非敏感模式：记录 messages/tools
+		log.Info().
+			Str("event_type", "LLM_CALL_START").
+			Str("model_name", model).
+			Str("model_provider", modelProvider).
+			Any("messages", messagesDict).
+			Any("tools", reqParams["tools"]).
+			Any("temperature", temperature).
+			Any("top_p", topP).
+			Any("max_tokens", maxTokens).
+			Bool("is_stream", stream).
+			Str("client_name", e.GetClientName()).
+			Any("extra_params", extraParams).
+			Msg("Before request chat model, LLM request params ready.")
+	}
 
 	return reqParams, nil
 }

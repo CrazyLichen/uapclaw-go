@@ -6,6 +6,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -72,10 +73,52 @@ func ParseResponse(
 
 	// 应用 output_parser（2.16 节后完整实现，当前仅做基础处理）
 	var parserContent any
+
+	// 对齐 Python P7: 解析内容前记录
+	modelName := ""
+	if modelConfig != nil {
+		modelName = modelConfig.ModelName
+	}
+	modelProvider := "" // ParseResponse 无法直接获取 model_provider，记录模型名即可
+	log := logger.GetLogger(logger.ComponentGateway)
+	log.Info().
+		Str("event_type", "LLM_CALL_END").
+		Str("model_name", modelName).
+		Str("model_provider", modelProvider).
+		Str("response_content", content).
+		Bool("is_stream", false).
+		Msg("Before parse content with parser.")
+
+	// 对齐 Python P8: 解析内容配置前记录
+	log.Info().
+		Str("event_type", "LLM_CALL_END").
+		Str("model_name", modelName).
+		Str("model_provider", modelProvider).
+		Bool("is_stream", false).
+		Str("parser", fmt.Sprintf("%v", parser)).
+		Msg("Before parse content with parser config.")
+
 	if parser != nil && content != "" {
 		parsed, err := parser.Parse(content)
 		if err == nil && parsed != nil {
 			parserContent = parsed
+			// 对齐 Python P9: 解析成功记录
+			log.Info().
+				Str("event_type", "LLM_CALL_END").
+				Str("model_name", modelName).
+				Str("model_provider", modelProvider).
+				Bool("is_stream", false).
+				Any("parser_content", parserContent).
+				Msg("Parser parse success.")
+		} else if err != nil {
+			// 对齐 Python P10: 解析错误记录
+			log.Warn().
+				Str("event_type", "LLM_CALL_ERROR").
+				Str("model_name", modelName).
+				Str("model_provider", modelProvider).
+				Bool("is_stream", false).
+				Err(err).
+				Msg("Parser parse error.")
 		}
 	}
 
