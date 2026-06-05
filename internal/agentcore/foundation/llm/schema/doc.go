@@ -15,6 +15,13 @@
 //	AssistantMessageChunk — 助手流式消息块（嵌入 AssistantMessage，Merge 方法增量合并）
 //	ToolMessageChunk      — 工具返回流式消息块（嵌入 ToolMessage，Merge 方法增量合并）
 //
+// 多模态生成响应体系：
+//
+//	GenerationResponse         — 多模态生成响应基类（Model 字段）
+//	  ├── ImageGenerationResponse   — 图片生成响应（images, images_base64, created）
+//	  ├── AudioGenerationResponse   — 音频生成响应（audio_url, audio_data, duration, format）
+//	  └── VideoGenerationResponse   — 视频生成响应（video_url, video_data, duration, resolution, format）
+//
 // 辅助模型：
 //
 //	ToolCall        — 工具调用信息（扁平格式，支持 OpenAI 嵌套格式双向转换）
@@ -33,16 +40,19 @@
 //	  assistant_message.go    — AssistantMessage（自定义序列化）
 //	  tool_message.go         — ToolMessage
 //	  message_chunk.go        — AssistantMessageChunk + ToolMessageChunk（流式消息块）
+//	  generation_response.go  — 多模态生成响应（图片/音频/视频）
 //	  tool_call_test.go       — ToolCall 测试
 //	  usage_metadata_test.go  — UsageMetadata 测试
 //	  message_test.go         — 消息基础类型测试
 //	  assistant_message_test.go — AssistantMessage 测试
 //	  tool_message_test.go    — ToolMessage 测试
 //	  message_chunk_test.go   — 流式消息块测试
+//	  generation_response_test.go — 多模态生成响应测试
 //
 // 对应 Python 代码路径：
 //
 //	openjiuwen/core/foundation/llm/schema/message.py      — BaseMessage/AssistantMessage/UserMessage/SystemMessage/ToolMessage/UsageMetadata
 //	openjiuwen/core/foundation/llm/schema/tool_call.py    — ToolCall
 //	openjiuwen/core/foundation/llm/schema/message_chunk.py — 流式消息块（2.3 节）
+//	openjiuwen/core/foundation/llm/schema/generation_response.py — 多模态生成响应（2.4 节）
 package schema
