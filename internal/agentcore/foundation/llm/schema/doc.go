@@ -22,6 +22,15 @@
 //	  ├── AudioGenerationResponse   — 音频生成响应（audio_url, audio_data, duration, format）
 //	  └── VideoGenerationResponse   — 视频生成响应（video_url, video_data, duration, resolution, format）
 //
+// 配置与模型信息体系：
+//
+//	ProviderType       — 模型服务提供商标识枚举（OpenAI/DashScope/DeepSeek 等 7 种）
+//	ModelClientConfig  — 模型客户端配置（provider/api_key/api_base/timeout 等，支持 Extra 字段）
+//	ModelRequestConfig — 模型请求配置（model/temperature/top_p 等，支持 Extra 字段）
+//	BaseModelInfo      — 模型基础信息（合并连接信息+请求参数，支持 model/stream 别名和 Extra 字段）
+//	ModelConfig        — 模型配置（组合 provider 名称和 BaseModelInfo）
+//	ProviderValidator  — 自定义 Provider 验器接口（预埋，后续领域注入）
+//
 // 辅助模型：
 //
 //	ToolCall        — 工具调用信息（扁平格式，支持 OpenAI 嵌套格式双向转换）
@@ -41,6 +50,8 @@
 //	  tool_message.go         — ToolMessage
 //	  message_chunk.go        — AssistantMessageChunk + ToolMessageChunk（流式消息块）
 //	  generation_response.go  — 多模态生成响应（图片/音频/视频）
+//	  config.go               — ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
+//	  model_info.go           — BaseModelInfo + ModelConfig
 //	  tool_call_test.go       — ToolCall 测试
 //	  usage_metadata_test.go  — UsageMetadata 测试
 //	  message_test.go         — 消息基础类型测试
@@ -48,6 +59,8 @@
 //	  tool_message_test.go    — ToolMessage 测试
 //	  message_chunk_test.go   — 流式消息块测试
 //	  generation_response_test.go — 多模态生成响应测试
+//	  config_test.go          — ProviderType/ModelClientConfig/ModelRequestConfig 测试
+//	  model_info_test.go      — BaseModelInfo/ModelConfig 测试
 //
 // 对应 Python 代码路径：
 //
@@ -55,4 +68,6 @@
 //	openjiuwen/core/foundation/llm/schema/tool_call.py    — ToolCall
 //	openjiuwen/core/foundation/llm/schema/message_chunk.py — 流式消息块（2.3 节）
 //	openjiuwen/core/foundation/llm/schema/generation_response.py — 多模态生成响应（2.4 节）
+//	openjiuwen/core/foundation/llm/schema/config.py       — ProviderType/ModelClientConfig/ModelRequestConfig（2.5 节）
+//	openjiuwen/core/foundation/llm/schema/mode_info.py    — BaseModelInfo/ModelConfig（2.5 节）
 package schema
