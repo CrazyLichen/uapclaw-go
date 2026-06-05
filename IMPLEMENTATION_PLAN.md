@@ -37,23 +37,82 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 ### 架构关系
 
 ```
-模式 A：AgentServer 独立运行（最简模式，无需 Gateway）
-  User → CLI Chat / HTTP API → swarm/chat → swarm/server → agentcore → LLM
+所有外部入口统一经过 Gateway，Gateway 与 AgentServer 之间始终使用 E2A 协议通信，
+区别仅在于传输层：进程内走 Go channel，跨进程走 WebSocket。
 
-模式 B：AgentServer + Gateway（完整模式）
-  IM 渠道 → swarm/gateway(WS) → swarm/server → agentcore → LLM
+单进程模式（chat / serve / acp / app）：
+  REPL/HTTP/stdio/IM → Gateway → E2A编码 → Go channel → E2A解码 → AgentServer → agentcore → LLM
+
+跨进程模式（agentserver + gateway 独立部署）：
+  IM/Web → Gateway → E2A编码 → WebSocket → E2A解码 → AgentServer → agentcore → LLM
 ```
+
+### Gateway-AgentServer 通信架构决策
+
+**决策：统一 E2A 协议 + 传输层切换**
+
+Gateway 与 AgentServer 之间，无论进程内还是跨进程，**统一经过 E2A 编解码**，仅传输层不同：
+
+| 场景 | E2A 协议 | 传输层 | Transport 实现 |
+|------|---------|--------|---------------|
+| 单进程（chat/serve/acp/app） | ✅ 必经 | Go channel | `ChannelTransport` |
+| 跨进程（gateway + agentserver 独立部署） | ✅ 必经 | WebSocket | `WebSocketTransport` |
+
+**Transport 抽象接口：**
+
+```go
+// AgentTransport Gateway → AgentServer 的传输抽象
+type AgentTransport interface {
+    Send(ctx context.Context, envelope *E2AEnvelope) error
+    Recv() (<-chan *E2AResponse, error)
+    Close() error
+}
+```
+
+**为什么统一走 E2A 而非进程内直连？**
+
+| 维度 | 进程内直连（不走 E2A） | 统一 E2A + 传输层切换 |
+|------|----------------------|---------------------|
+| AgentServer 入口 | 两套（直连 + E2A），需判断来源 | 一套，永远从 E2AEnvelope 解码 |
+| 行为一致性 | 需测试两条路径 | 天然一致，E2A 层保证 |
+| 调试/排障 | 进程内路径无 E2A 日志 | E2A 日志格式统一 |
+| 协议演进 | 需同步维护两套 | E2A 协议改一处即可 |
+| 进程内性能 | 零开销 | JSON 编解码微秒级（相对 LLM 调用毫秒~秒级可忽略） |
+
+**参考来源：**
+
+| 模式 | 参考项目 | 关键设计 |
+|------|---------|---------|
+| 进程内通信 | `/home/opensource/uapclaw-main/` (PicoClaw) | `pkg/bus/` 用 Go channel 做 MessageBus，Gateway 是组合根，AgentLoop 消费 inbound channel |
+| 跨进程通信 | `/home/opensource/jiuwenswarm-develop/jiuwenswarm/` (Python) | `common/e2a/` E2A 协议，`gateway/routing/agent_client.py` WS 客户端 |
+| E2A 协议 | `/home/opensource/jiuwenswarm-develop/jiuwenswarm/common/e2a/` | E2AEnvelope/E2AResponse/Wire Codec/Provenance 追踪 |
+| Channel 模式 | `/home/opensource/uapclaw-main/pkg/channels/` | BaseChannel → HandleMessageWithContext → bus.PublishInbound() |
+
+**受影响的实现章节：**
+
+- **10.2 E2A 协议**：E2A 编解码是核心，进程内外共用
+- **10.3 AgentServer**：只需一套 E2AEnvelope 解码入口，无需区分来源
+- **10.4 独立交互入口**：chat/serve/acp 作为"轻量 Channel"接入 Gateway，不再是"绕过 Gateway 直连 AgentServer"
+- **10.3.21-22 GatewayPush**：Transport 抽象层实现
+- **11.5 WebSocketAgentServerClient**：跨进程 Transport 的 WS 实现
+- **11.x Gateway 核心**：Gateway 统一路由所有入口（含 REPL/HTTP/stdio）
+- **12.7-12.9 CLI 入口**：命令区分的只是进程组合方式，不是通信路径
 
 ---
 
 ## 使用方式对比
 
-| 模式 | 启动命令 | 交互方式 | 依赖 |
-|------|---------|---------|------|
-| 最简模式 | `uapclaw chat` | CLI REPL 直接聊天 | swarm/chat + agentcore |
-| HTTP API 模式 | `uapclaw serve` | HTTP REST + SSE | swarm/chat + agentcore |
-| ACP 模式 | `uapclaw acp` | Stdio JSON-RPC | swarm/chat + agentcore |
-| 完整模式 | `uapclaw app` | Gateway + 所有 IM 渠道 | swarm + agentcore |
+| 模式 | 启动命令 | Gateway | AgentServer | Transport |
+|------|---------|---------|-------------|-----------|
+| CLI REPL | `uapclaw chat` | 进程内（REPL 作为 Channel） | 进程内 | ChannelTransport |
+| HTTP API | `uapclaw serve` | 进程内（HTTP 作为 Channel） | 进程内 | ChannelTransport |
+| ACP Stdio | `uapclaw acp` | 进程内（stdio 作为 Channel） | 进程内 | ChannelTransport |
+| 完整模式 | `uapclaw app` | 进程内（IM/Web 等全部 Channel） | 进程内 | ChannelTransport |
+| 独立 AgentServer | `uapclaw agentserver` | 无（等待外部 Gateway 连入） | 独立进程，监听 WS | — |
+| 独立 Gateway | `uapclaw gateway` | 独立进程 | 无（连接外部 AgentServer） | WebSocketTransport |
+| Web UI | `uapclaw web` | 进程内（Web Channel） | 进程内 | ChannelTransport |
+
+> 注意：chat/serve/acp/app 命令的区别仅在于"接入 Gateway 的 Channel 类型不同"，底层统一走 Gateway → E2A → AgentServer 路径。
 
 ---
 
@@ -61,11 +120,11 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 
 ```
 领域一 → 领域二 → 领域三 → 领域五(会话部分) → 领域六(ReAct Agent)
-→ 领域十(10.1 Schema + 10.3 AgentServer + 10.4 CLI聊天)
+→ 领域十(10.1 Schema + 10.2 E2A + 10.3 AgentServer + 10.4 CLI聊天)
 ```
 
-完成以上步骤后，用户即可运行 `uapclaw chat` 与 Agent 直接对话，实现零 Gateway 依赖的独立使用体验。
-注意：`uapclaw chat` 调用的是 `swarm/chat/repl`，REPL 内部调用 agentcore 的 Agent 能力。agentcore 本身不可独立运行。
+完成以上步骤后，用户即可运行 `uapclaw chat` 与 Agent 直接对话。
+`uapclaw chat` 内部流程：REPL → Gateway → E2A编码 → ChannelTransport → E2A解码 → AgentServer → agentcore → LLM。
 
 ---
 
@@ -526,7 +585,9 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 
 ## 领域十：AgentServer + 独立交互入口
 
-> 本领域的核心价值：让 AgentServer 无需 Gateway 即可独立使用
+> 本领域的核心价值：所有外部入口统一经过 Gateway，Gateway 与 AgentServer 之间始终走 E2A 协议
+>
+> chat/serve/acp 作为"轻量 Channel"接入 Gateway，而非绕过 Gateway 直连 AgentServer
 
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
@@ -579,7 +640,7 @@ jiuwenbox                  ← 沙箱（独立 cmd/jiuwenbox 入口）
 | 10.6.19-23 | ☐ | Swarm Team | TeamManager/Bootstrap/DistributedRuntime/A2X/TeamRails | `jiuwenswarm/agents/harness/team/` |
 | 10.6.24 | ☐ | Swarm 内置工具集 | 浏览器/MCP/搜索/视频/发文件/TODO/Cron/小艺电话 | `jiuwenswarm/agents/harness/common/tools/` |
 
-**验证点**：✅ 用户运行 `uapclaw chat` 即可直接与 Agent 对话，无需 Gateway
+**验证点**：✅ 用户运行 `uapclaw chat` 即可与 Agent 对话（REPL → Gateway → E2A → AgentServer）
 
 ---
 
