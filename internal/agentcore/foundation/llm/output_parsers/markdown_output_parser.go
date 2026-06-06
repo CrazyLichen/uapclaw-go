@@ -6,14 +6,14 @@ import (
 	"sort"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// logComponent markdown output_parser 包日志组件标识（AgentCore 层）。
+// mdLogComponent markdown output_parser 包日志组件标识（AgentCore 层）。
 const mdLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 正则 ────────────────────────────
@@ -66,11 +66,28 @@ func NewMarkdownOutputParser() *MarkdownOutputParser {
 // Parse 解析 LLM 输出中的 Markdown，返回结构化内容。
 //
 // 输入可以是 string 或 *AssistantMessage。
-// 解析成功返回 *MarkdownContent，解析失败返回 nil, nil。
+// 解析成功返回 *MarkdownContent，解析失败返回 nil, error。
+// 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
 //
 // 对应 Python: MarkdownOutputParser.parse()
-func (p *MarkdownOutputParser) Parse(input any) (any, error) {
-	text := ExtractText(input)
+func (p *MarkdownOutputParser) Parse(input any) (result any, err error) {
+	// 提前提取 text 和 modelName（供 defer 中日志使用）
+	text, modelName := ExtractText(input)
+
+	// 异常捕获：防止 extractAllElements / populateCategorizedLists 中的
+	// 类型断言或正则匹配异常导致 panic
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error(mdLogComponent).
+				Str("event_type", "LLM_CALL_ERROR").
+				Str("model_name", modelName).
+				Any("panic", r).
+				Msg("Markdown 解析过程中发生异常")
+			result = nil
+			err = fmt.Errorf("unexpected error during markdown parsing: %v", r)
+		}
+	}()
+
 	if text == "" {
 		return nil, nil
 	}
@@ -96,7 +113,8 @@ func (p *MarkdownOutputParser) Parse(input any) (any, error) {
 //
 // 对齐 Python: MarkdownOutputParser.stream_parse() — 全量重解析模式。
 // 每次 buffer 增长就对整个 buffer 重新提取所有元素。
-func (p *MarkdownOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+// chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
+func (p *MarkdownOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult, 8)
 
 	go func() {
@@ -104,13 +122,30 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMes
 
 		buffer := ""
 		lastParsedLength := 0
+		modelName := ""
 
 		for chunk := range chunks {
-			if chunk == nil {
+			content := ""
+			switch v := chunk.(type) {
+			case *llmschema.AssistantMessageChunk:
+				if v == nil {
+					continue
+				}
+				content = v.Content.Text()
+				if v.UsageMetadata != nil && v.UsageMetadata.ModelName != "" {
+					modelName = v.UsageMetadata.ModelName
+				}
+			case string:
+				content = v
+			default:
+				logger.Warn(mdLogComponent).
+					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", modelName).
+					Str("chunk_type", fmt.Sprintf("%T", chunk)).
+					Msg("不支持的 chunk 类型，已跳过")
 				continue
 			}
 
-			content := chunk.Content.Text()
 			if content != "" {
 				buffer += content
 			}
@@ -128,10 +163,21 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMes
 					Lists:      make([]string, 0),
 				}
 
-				p.extractAllElements(buffer, mdContent)
-				p.populateCategorizedLists(mdContent)
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							logger.Error(mdLogComponent).
+								Str("event_type", "LLM_CALL_ERROR").
+								Str("model_name", modelName).
+								Any("panic", r).
+								Msg("流式 Markdown 解析过程中发生异常，跳过当前 chunk")
+						}
+					}()
+					p.extractAllElements(buffer, mdContent)
+					p.populateCategorizedLists(mdContent)
+					out <- model_clients.StreamParsedResult{Content: mdContent}
+				}()
 
-				out <- model_clients.StreamParsedResult{Content: mdContent}
 				lastParsedLength = len(buffer)
 			}
 		}
@@ -149,10 +195,20 @@ func (p *MarkdownOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMes
 				Lists:      make([]string, 0),
 			}
 
-			p.extractAllElements(buffer, mdContent)
-			p.populateCategorizedLists(mdContent)
-
-			out <- model_clients.StreamParsedResult{Content: mdContent}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error(mdLogComponent).
+							Str("event_type", "LLM_CALL_ERROR").
+							Str("model_name", modelName).
+							Any("panic", r).
+							Msg("最终流式 Markdown 解析过程中发生异常，跳过残余 buffer")
+					}
+				}()
+				p.extractAllElements(buffer, mdContent)
+				p.populateCategorizedLists(mdContent)
+				out <- model_clients.StreamParsedResult{Content: mdContent}
+			}()
 		}
 	}()
 
@@ -245,6 +301,7 @@ func (p *MarkdownOutputParser) extractAllElements(text string, content *Markdown
 // populateCategorizedLists 按 type 分发到分类列表。
 //
 // 对齐 Python: MarkdownOutputParser._populate_categorized_lists()
+// 使用安全类型断言，避免 Content map 中值类型不匹配导致 panic。
 func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent) {
 	for _, elem := range content.Elements {
 		switch elem.Type {
@@ -255,39 +312,49 @@ func (p *MarkdownOutputParser) populateCategorizedLists(content *MarkdownContent
 			} else if lv, ok := elem.Content["level"].(string); ok {
 				levelStr = lv
 			}
+			title, _ := elem.Content["title"].(string)
 			content.Headers = append(content.Headers, map[string]string{
 				"level": levelStr,
-				"title": elem.Content["title"].(string),
+				"title": title,
 				"raw":   elem.Raw,
 			})
 		case MarkdownCodeBlockType:
+			language, _ := elem.Content["language"].(string)
+			code, _ := elem.Content["code"].(string)
 			content.CodeBlocks = append(content.CodeBlocks, map[string]string{
-				"language": elem.Content["language"].(string),
-				"code":     elem.Content["code"].(string),
+				"language": language,
+				"code":     code,
 				"raw":      elem.Raw,
 			})
 		case MarkdownInlineCodeType:
+			code, _ := elem.Content["code"].(string)
 			content.CodeBlocks = append(content.CodeBlocks, map[string]string{
 				"language": "inline",
-				"code":     elem.Content["code"].(string),
+				"code":     code,
 				"raw":      elem.Raw,
 			})
 		case MarkdownLinkType:
+			linkText, _ := elem.Content["text"].(string)
+			url, _ := elem.Content["url"].(string)
 			content.Links = append(content.Links, map[string]string{
-				"text": elem.Content["text"].(string),
-				"url":  elem.Content["url"].(string),
+				"text": linkText,
+				"url":  url,
 				"raw":  elem.Raw,
 			})
 		case MarkdownImageType:
+			alt, _ := elem.Content["alt"].(string)
+			url, _ := elem.Content["url"].(string)
 			content.Images = append(content.Images, map[string]string{
-				"alt": elem.Content["alt"].(string),
-				"url": elem.Content["url"].(string),
+				"alt": alt,
+				"url": url,
 				"raw": elem.Raw,
 			})
 		case MarkdownTableType:
-			content.Tables = append(content.Tables, elem.Content["table"].(string))
+			table, _ := elem.Content["table"].(string)
+			content.Tables = append(content.Tables, table)
 		case MarkdownListType:
-			content.Lists = append(content.Lists, elem.Content["list"].(string))
+			list, _ := elem.Content["list"].(string)
+			content.Lists = append(content.Lists, list)
 		}
 	}
 }

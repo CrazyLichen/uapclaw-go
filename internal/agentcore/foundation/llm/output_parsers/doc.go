@@ -9,7 +9,7 @@
 //
 //	BaseOutputParser（定义在 model_clients 包）
 //	  Parse(input any)       — 非流式解析，输入 string 或 *AssistantMessage
-//	  StreamParse(chunks)    — 流式解析，独立使用场景预留
+//	  StreamParse(chunks)    — 流式解析，chunks 支持 string 和 *AssistantMessageChunk
 //
 // # 使用方式
 //

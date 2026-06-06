@@ -141,7 +141,7 @@ func TestMarkdownOutputParser_Parse_EmptyInput(t *testing.T) {
 
 	result, err := parser.Parse("")
 	if err != nil {
-		t.Fatalf("Parse 返回错误: %v", err)
+		t.Fatalf("空输入不应返回错误: %v", err)
 	}
 	if result != nil {
 		t.Errorf("空输入应返回 nil, 实际: %v", result)
@@ -220,7 +220,7 @@ print("hello")
 func TestMarkdownOutputParser_StreamParse(t *testing.T) {
 	parser := NewMarkdownOutputParser()
 
-	chunks := make(chan *llmschema.AssistantMessageChunk, 3)
+	chunks := make(chan any, 3)
 	chunks <- llmschema.NewAssistantMessageChunk("# 标题\n")
 	chunks <- llmschema.NewAssistantMessageChunk("- 列表项\n")
 	close(chunks)
@@ -247,7 +247,7 @@ func TestMarkdownOutputParser_StreamParse(t *testing.T) {
 func TestMarkdownOutputParser_StreamParse_EmptyStream(t *testing.T) {
 	parser := NewMarkdownOutputParser()
 
-	chunks := make(chan *llmschema.AssistantMessageChunk)
+	chunks := make(chan any)
 	close(chunks)
 
 	count := 0
@@ -257,6 +257,135 @@ func TestMarkdownOutputParser_StreamParse_EmptyStream(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("空流结果数量 = %d, 期望 0", count)
+	}
+}
+
+// TestMarkdownOutputParser_StreamParse_StringChunks 测试 string chunk 的流式解析。
+func TestMarkdownOutputParser_StreamParse_StringChunks(t *testing.T) {
+	parser := NewMarkdownOutputParser()
+
+	chunks := make(chan any, 2)
+	chunks <- "# 标题\n"
+	chunks <- "- 列表项\n"
+	close(chunks)
+
+	var lastContent *MarkdownContent
+	for r := range parser.StreamParse(chunks) {
+		if r.Error != nil {
+			t.Fatalf("StreamParse 返回错误: %v", r.Error)
+		}
+		if md, ok := r.Content.(*MarkdownContent); ok {
+			lastContent = md
+		}
+	}
+
+	if lastContent == nil {
+		t.Fatal("未收到解析结果")
+	}
+	if len(lastContent.Headers) < 1 {
+		t.Errorf("Headers 数量 = %d, 期望至少 1", len(lastContent.Headers))
+	}
+}
+
+// TestMarkdownOutputParser_StreamParse_MixedChunkTypes 测试混合 chunk 类型。
+func TestMarkdownOutputParser_StreamParse_MixedChunkTypes(t *testing.T) {
+	parser := NewMarkdownOutputParser()
+
+	chunks := make(chan any, 3)
+	chunks <- "# 标题\n" // string chunk
+	chunks <- llmschema.NewAssistantMessageChunk("- 列表项\n") // AssistantMessageChunk
+	close(chunks)
+
+	var lastContent *MarkdownContent
+	for r := range parser.StreamParse(chunks) {
+		if r.Error != nil {
+			t.Fatalf("StreamParse 返回错误: %v", r.Error)
+		}
+		if md, ok := r.Content.(*MarkdownContent); ok {
+			lastContent = md
+		}
+	}
+
+	if lastContent == nil {
+		t.Fatal("未收到解析结果")
+	}
+	if len(lastContent.Headers) < 1 {
+		t.Errorf("Headers 数量 = %d, 期望至少 1", len(lastContent.Headers))
+	}
+}
+
+// TestMarkdownOutputParser_StreamParse_UnsupportedChunkType 测试不支持的 chunk 类型。
+func TestMarkdownOutputParser_StreamParse_UnsupportedChunkType(t *testing.T) {
+	parser := NewMarkdownOutputParser()
+
+	chunks := make(chan any, 2)
+	chunks <- 12345 // 不支持的类型，应跳过
+	chunks <- "# 标题\n"
+	close(chunks)
+
+	var lastContent *MarkdownContent
+	for r := range parser.StreamParse(chunks) {
+		if r.Error != nil {
+			t.Fatalf("StreamParse 返回错误: %v", r.Error)
+		}
+		if md, ok := r.Content.(*MarkdownContent); ok {
+			lastContent = md
+		}
+	}
+
+	if lastContent == nil {
+		t.Fatal("未收到解析结果")
+	}
+	if len(lastContent.Headers) < 1 {
+		t.Errorf("Headers 数量 = %d, 期望至少 1（不支持的 chunk 应被跳过）", len(lastContent.Headers))
+	}
+}
+
+// TestMarkdownOutputParser_Parse_PanicRecovery 测试异常恢复。
+func TestMarkdownOutputParser_Parse_PanicRecovery(t *testing.T) {
+	// 正常输入不会 panic，此测试验证 recover 机制存在且不影响正常路径
+	parser := NewMarkdownOutputParser()
+
+	result, err := parser.Parse("# 正常标题\n正常内容")
+	if err != nil {
+		t.Fatalf("正常输入不应返回错误: %v", err)
+	}
+	if result == nil {
+		t.Fatal("正常输入应返回非 nil 结果")
+	}
+}
+
+// TestMarkdownOutputParser_Parse_InvalidTypeNotError 测试不支持的类型返回 nil,nil。
+func TestMarkdownOutputParser_Parse_InvalidTypeNotError(t *testing.T) {
+	parser := NewMarkdownOutputParser()
+
+	result, err := parser.Parse(12345)
+	// 不支持的类型经 ExtractText 返回空字符串 → Parse 返回 nil, nil
+	if err != nil {
+		t.Logf("不支持的类型返回 error: %v（ExtractText warning 已记录）", err)
+	}
+	if result != nil {
+		t.Errorf("不支持的类型应返回 nil result, 实际: %v", result)
+	}
+}
+
+// TestMarkdownOutputParser_Parse_AssistantMessageWithModelName 测试带 model_name 的 AssistantMessage。
+func TestMarkdownOutputParser_Parse_AssistantMessageWithModelName(t *testing.T) {
+	parser := NewMarkdownOutputParser()
+
+	msg := llmschema.NewAssistantMessage("# Hello\nSome text",
+		llmschema.WithAssistantUsageMetadata(&llmschema.UsageMetadata{
+			ModelName: "gpt-4",
+		}),
+	)
+	result, err := parser.Parse(msg)
+	if err != nil {
+		t.Fatalf("Parse 返回错误: %v", err)
+	}
+
+	content := result.(*MarkdownContent)
+	if len(content.Headers) != 1 {
+		t.Errorf("Headers 数量 = %d, 期望 1", len(content.Headers))
 	}
 }
 

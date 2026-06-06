@@ -29,9 +29,10 @@ type BaseOutputParser interface {
 	// StreamParse 流式解析 LLM 输出。
 	//
 	// 对应 Python: BaseOutputParser.stream_parse()。
+	// chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 	// 注意：当前 model client 的 _astream_with_parser 路径不调用此方法，
 	// 而是反复调用 Parse()。此方法为独立流式解析场景预留。
-	StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan StreamParsedResult
+	StreamParse(chunks <-chan any) <-chan StreamParsedResult
 }
 
 // StreamParsedResult 流式解析结果。

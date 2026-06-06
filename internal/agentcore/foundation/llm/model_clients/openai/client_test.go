@@ -728,7 +728,7 @@ func (p *streamOutputParser) Parse(input any) (any, error) {
 	return map[string]any{"parsed": text}, nil
 }
 
-func (p *streamOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+func (p *streamOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult)
 	go func() { close(out) }()
 	return out
@@ -741,7 +741,7 @@ func (p *streamErrorOutputParser) Parse(_ any) (any, error) {
 	return nil, fmt.Errorf("stream parse error")
 }
 
-func (p *streamErrorOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+func (p *streamErrorOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult)
 	go func() { close(out) }()
 	return out

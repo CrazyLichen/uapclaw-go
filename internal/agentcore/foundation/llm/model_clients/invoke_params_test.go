@@ -463,7 +463,7 @@ func (p *testOutputParser) Parse(input any) (any, error) {
 	return input, nil
 }
 
-func (p *testOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan StreamParsedResult {
+func (p *testOutputParser) StreamParse(chunks <-chan any) <-chan StreamParsedResult {
 	out := make(chan StreamParsedResult)
 	go func() { close(out) }()
 	return out

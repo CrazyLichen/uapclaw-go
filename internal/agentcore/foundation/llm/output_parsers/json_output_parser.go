@@ -2,11 +2,12 @@ package output_parsers
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -40,11 +41,12 @@ func NewJsonOutputParser() *JsonOutputParser {
 // Parse 解析 LLM 输出中的 JSON。
 //
 // 输入可以是 string 或 *AssistantMessage（对齐 Python Union[str, AssistantMessage]）。
-// 解析成功返回 map/slice/基础类型，解析失败返回 nil, nil（不中断调用流程）。
+// 解析成功返回 map/slice/基础类型，解析失败返回 nil, error。
+// 空输入返回 nil, nil（语义：无内容可解析，不是错误）。
 //
 // 对应 Python: JsonOutputParser.parse()
 func (p *JsonOutputParser) Parse(input any) (any, error) {
-	text := ExtractText(input)
+	text, modelName := ExtractText(input)
 	if text == "" {
 		return nil, nil
 	}
@@ -61,12 +63,12 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 	// 解析 JSON
 	var parsed any
 	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
-		logger.Debug(logComponent).
+		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
+			Str("model_name", modelName).
 			Err(err).
-			Str("json_str", truncateForLog(jsonStr, 200)).
 			Msg("JSON 解析失败")
-		return nil, nil
+		return nil, fmt.Errorf("failed to decode JSON from LLM output: %w", err)
 	}
 
 	return parsed, nil
@@ -75,27 +77,44 @@ func (p *JsonOutputParser) Parse(input any) (any, error) {
 // StreamParse 流式解析 LLM 输出中的 JSON。
 //
 // 对齐 Python: JsonOutputParser.stream_parse()。
+// chunks 支持 string 和 *AssistantMessageChunk 两种类型（对齐 Python Union[str, AssistantMessageChunk]）。
 // 策略：
 //  1. 逐 chunk 累积 content 到 buffer
 //  2. 每个 chunk 后尝试两种解析：
 //     a. markdown 代码块匹配 → 提取 JSON → 成功则输出 + 截断 buffer
 //     b. buffer 以 { 开头且以 } 结尾 → 直接解析 → 成功则输出 + 清空 buffer
 //  3. 流结束后处理残余 buffer
-func (p *JsonOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult, 8)
 
 	go func() {
 		defer close(out)
 
 		buffer := ""
+		modelName := ""
 
 		for chunk := range chunks {
-			if chunk == nil {
+			content := ""
+			switch v := chunk.(type) {
+			case *llmschema.AssistantMessageChunk:
+				if v == nil {
+					continue
+				}
+				content = v.Content.Text()
+				if v.UsageMetadata != nil && v.UsageMetadata.ModelName != "" {
+					modelName = v.UsageMetadata.ModelName
+				}
+			case string:
+				content = v
+			default:
+				logger.Warn(logComponent).
+					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", modelName).
+					Str("chunk_type", fmt.Sprintf("%T", chunk)).
+					Msg("不支持的 chunk 类型，已跳过")
 				continue
 			}
 
-			// 累积 content
-			content := chunk.Content.Text()
 			if content != "" {
 				buffer += content
 			}
@@ -116,8 +135,9 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessage
 					}
 				} else {
 					// 代码块匹配但 JSON 解析失败，记录日志，继续累积
-					logger.Debug(logComponent).
+					logger.Error(logComponent).
 						Str("event_type", "LLM_CALL_ERROR").
+						Str("model_name", modelName).
 						Err(err).
 						Msg("流式 JSON 解析失败（代码块）")
 				}
@@ -133,8 +153,9 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessage
 					buffer = ""
 				} else {
 					// 直接 JSON 解析失败，清空 buffer
-					logger.Debug(logComponent).
+					logger.Error(logComponent).
 						Str("event_type", "LLM_CALL_ERROR").
+						Str("model_name", modelName).
 						Err(err).
 						Msg("流式 JSON 解析失败（直接）")
 					buffer = ""
@@ -157,8 +178,9 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessage
 			if err := json.Unmarshal([]byte(jsonStr), &parsed); err == nil {
 				out <- model_clients.StreamParsedResult{Content: parsed}
 			} else {
-				logger.Debug(logComponent).
+				logger.Warn(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
+					Str("model_name", modelName).
 					Err(err).
 					Msg("残余 buffer JSON 解析失败")
 			}

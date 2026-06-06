@@ -511,7 +511,7 @@ func (p *mockOutputParser) Parse(input any) (any, error) {
 	return map[string]any{"parsed": text}, nil
 }
 
-func (p *mockOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+func (p *mockOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult)
 	go func() { close(out) }()
 	return out
@@ -524,7 +524,7 @@ func (p *errorOutputParser) Parse(_ any) (any, error) {
 	return nil, fmt.Errorf("parse error")
 }
 
-func (p *errorOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+func (p *errorOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.StreamParsedResult {
 	out := make(chan model_clients.StreamParsedResult)
 	go func() { close(out) }()
 	return out
