@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -51,7 +52,7 @@ func NewOpenAIModelClient(
 	}
 
 	// 预构建配置级 headers
-	baseHeaders := SanitizeHeaders(clientConfig.CustomHeaders)
+	baseHeaders := headers_helper.BuildBaseHeaders(clientConfig.CustomHeaders)
 
 	// 对齐 Python P1: 创建客户端前记录配置参数
 	finalTimeout := clientConfig.Timeout
@@ -436,9 +437,7 @@ func init() {
 
 // buildEffectiveHeaders 合并配置级和请求级 headers。
 func (c *OpenAIModelClient) buildEffectiveHeaders(requestHeaders map[string]any) map[string]string {
-	// 清洗请求级 headers
-	reqHeaders := SanitizeHeaders(requestHeaders)
-	return MergeHeaders(c.baseHeaders, reqHeaders)
+	return headers_helper.MergeRequestHeaders(c.baseHeaders, requestHeaders)
 }
 
 // wrapError 包装错误为 MODEL_CALL_FAILED 异常。

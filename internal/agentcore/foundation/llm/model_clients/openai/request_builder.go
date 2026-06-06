@@ -15,80 +15,10 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// protectedHeaders 受保护请求头，不允许被自定义请求头覆盖。
-var protectedHeaders = map[string]bool{
-	"authorization": true,
-	"content-type":  true,
-	"host":          true,
-}
-
 // chatCompletionsPath Chat Completion API 路径
 const chatCompletionsPath = "/chat/completions"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// SanitizeHeaders 清洗请求头，移除受保护头部和空值。
-//
-// 对应 Python: openjiuwen/core/common/utils/header_utils.py (sanitize_headers)
-func SanitizeHeaders(headers map[string]any) map[string]string {
-	if len(headers) == 0 {
-		return nil
-	}
-	result := make(map[string]string, len(headers))
-	for key, val := range headers {
-		// 跳过受保护头部
-		if protectedHeaders[strings.ToLower(key)] {
-			continue
-		}
-		// 跳过空值
-		strVal := fmt.Sprintf("%v", val)
-		if strVal == "" {
-			continue
-		}
-		result[key] = strVal
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
-// MergeHeaders 合并配置级和请求级 headers（请求级优先）。
-//
-// 对应 Python: openjiuwen/core/foundation/llm/headers_helper.py (merge_request_headers)
-// 同名 key 大小写不敏感匹配，请求级覆盖配置级，保留首次出现的 key 大小写。
-func MergeHeaders(baseHeaders, requestHeaders map[string]string) map[string]string {
-	result := make(map[string]string, len(baseHeaders)+len(requestHeaders))
-
-	// 拷贝配置级 headers
-	for k, v := range baseHeaders {
-		result[k] = v
-	}
-
-	if len(requestHeaders) == 0 {
-		return result
-	}
-
-	// 构建大小写不敏感索引
-	normalizedToKey := make(map[string]string, len(result))
-	for key := range result {
-		normalizedToKey[strings.ToLower(key)] = key
-	}
-
-	// 合并请求级 headers
-	for key, val := range requestHeaders {
-		normKey := strings.ToLower(key)
-		if existingKey, ok := normalizedToKey[normKey]; ok {
-			// 同名覆盖，保留原始 key 大小写
-			result[existingKey] = val
-		} else {
-			result[key] = val
-			normalizedToKey[normKey] = key
-		}
-	}
-
-	return result
-}
 
 // AdjustParamsForOpenAI 对请求参数做 OpenAI 特有调整。
 //

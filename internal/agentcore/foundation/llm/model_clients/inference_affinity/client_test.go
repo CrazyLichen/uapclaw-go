@@ -7,8 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -496,137 +498,6 @@ func TestRelease_WithTools(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── sanitizeToolCalls 测试 ────────────────────────────
-
-func TestSanitizeToolCalls_StandardFields(t *testing.T) {
-	// 保留标准字段
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"tool_calls": []map[string]any{
-				{
-					"id":   "call_123",
-					"type": "function",
-					"function": map[string]any{
-						"name":      "get_weather",
-						"arguments": `{"city":"Beijing"}`,
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	tc, _ := messages[0]["tool_calls"].([]map[string]any)[0]["function"].(map[string]any)
-	if tc["name"] != "get_weather" {
-		t.Errorf("name = %v, 期望 get_weather", tc["name"])
-	}
-}
-
-func TestSanitizeToolCalls_ForceType(t *testing.T) {
-	// 强制 type="function"
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"tool_calls": []map[string]any{
-				{
-					"id":   "call_123",
-					"type": "invalid_type",
-					"function": map[string]any{
-						"name":      "test",
-						"arguments": "{}",
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	tc := messages[0]["tool_calls"].([]map[string]any)[0]
-	if tc["type"] != "function" {
-		t.Errorf("type = %v, 期望 function", tc["type"])
-	}
-}
-
-func TestSanitizeToolCalls_RemoveExtraFields(t *testing.T) {
-	// 移除非标准字段
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"tool_calls": []map[string]any{
-				{
-					"id":          "call_123",
-					"type":        "function",
-					"extra_field": "should_be_removed",
-					"function": map[string]any{
-						"name":      "test",
-						"arguments": "{}",
-						"extra":     "also_removed",
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	tc := messages[0]["tool_calls"].([]map[string]any)[0]
-	if _, exists := tc["extra_field"]; exists {
-		t.Error("extra_field 应被移除")
-	}
-	funcPart, _ := tc["function"].(map[string]any)
-	if _, exists := funcPart["extra"]; exists {
-		t.Error("function.extra 应被移除")
-	}
-}
-
-func TestSanitizeToolCalls_NonAssistantMessages(t *testing.T) {
-	// 跳过非 assistant 消息
-	messages := []map[string]any{
-		{"role": "user", "content": "hello"},
-		{"role": "system", "content": "you are helpful"},
-	}
-
-	sanitizeToolCalls(messages)
-
-	// 非 assistant 消息不应被修改
-	if messages[0]["role"] != "user" {
-		t.Error("user 消息不应被修改")
-	}
-	if messages[1]["role"] != "system" {
-		t.Error("system 消息不应被修改")
-	}
-}
-
-func TestSanitizeToolCalls_IndexPreserved(t *testing.T) {
-	// index 字段应保留
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"tool_calls": []map[string]any{
-				{
-					"id":    "call_123",
-					"type":  "function",
-					"index": 0,
-					"function": map[string]any{
-						"name":      "test",
-						"arguments": "{}",
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	tc := messages[0]["tool_calls"].([]map[string]any)[0]
-	if tc["index"] != 0 {
-		t.Errorf("index = %v, 期望 0", tc["index"])
-	}
-}
-
 // ──────────────────────────── GenerateImage/Speech/Video 不支持测试 ────────────────────────────
 
 func TestGenerateImage_NotSupported(t *testing.T) {
@@ -736,5 +607,770 @@ func TestReleaseParams_AllOpts(t *testing.T) {
 	}
 	if p.Model != "qwen-72b" {
 		t.Errorf("Model = %q, 期望 qwen-72b", p.Model)
+	}
+}
+
+// ──────────────────────────── sanitizeToolCalls 测试 ────────────────────────────
+
+func TestInferenceAffinity_SanitizeToolCalls_标准字段保留(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":   "call-123",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "get_weather",
+						"arguments": `{"city":"Beijing"}`,
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+
+	tc := toolCalls[0]
+	if tc["id"] != "call-123" {
+		t.Errorf("id = %v, 期望 call-123", tc["id"])
+	}
+	if tc["type"] != "function" {
+		t.Errorf("type = %v, 期望 function", tc["type"])
+	}
+	funcPart, _ := tc["function"].(map[string]any)
+	if funcPart["name"] != "get_weather" {
+		t.Errorf("function.name = %v, 期望 get_weather", funcPart["name"])
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_非标准字段移除(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":          "call-456",
+					"type":        "function",
+					"extra_field": "should_be_removed",
+					"function": map[string]any{
+						"name":       "search",
+						"arguments":  `{"q":"test"}`,
+						"extra_func": "should_be_removed",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	tc := toolCalls[0]
+
+	if _, exists := tc["extra_field"]; exists {
+		t.Error("tool_calls 顶层非标准字段 extra_field 应被移除")
+	}
+	funcPart, _ := tc["function"].(map[string]any)
+	if _, exists := funcPart["extra_func"]; exists {
+		t.Error("function 内非标准字段 extra_func 应被移除")
+	}
+	if funcPart["name"] != "search" {
+		t.Errorf("function.name = %v, 期望 search", funcPart["name"])
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_强制Type为Function(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	testCases := []struct {
+		name      string
+		inputType string
+	}{
+		{"空字符串", ""},
+		{"其他值", "tool"},
+		{"已正确", "function"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			messages := []map[string]any{
+				{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call-1",
+							"type": tc.inputType,
+							"function": map[string]any{
+								"name":      "test_func",
+								"arguments": "{}",
+							},
+						},
+					},
+				},
+			}
+
+			client.sanitizeToolCalls(messages)
+
+			toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+			result := toolCalls[0]
+			if result["type"] != "function" {
+				t.Errorf("type 输入 %q 后 = %v, 期望 function", tc.inputType, result["type"])
+			}
+		})
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_非Assistant消息不受影响(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{"role": "user", "content": "你好"},
+		{"role": "system", "content": "你是助手"},
+	}
+
+	origUser := messages[0]["content"]
+	origSystem := messages[1]["content"]
+
+	client.sanitizeToolCalls(messages)
+
+	if messages[0]["content"] != origUser {
+		t.Error("user 消息不应被修改")
+	}
+	if messages[1]["content"] != origSystem {
+		t.Error("system 消息不应被修改")
+	}
+	if _, exists := messages[0]["tool_calls"]; exists {
+		t.Error("user 消息不应被添加 tool_calls 字段")
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_无ToolCalls不受影响(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{"role": "assistant", "content": "你好！"},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	if _, exists := messages[0]["tool_calls"]; exists {
+		t.Error("没有 tool_calls 的 assistant 消息不应被添加 tool_calls 字段")
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_保留Index(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":    "call-1",
+					"type":  "function",
+					"index": float64(0),
+					"function": map[string]any{
+						"name":      "func_a",
+						"arguments": "{}",
+					},
+				},
+				map[string]any{
+					"id":    "call-2",
+					"type":  "function",
+					"index": float64(1),
+					"function": map[string]any{
+						"name":      "func_b",
+						"arguments": "{}",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 2 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 2", len(toolCalls))
+	}
+	if idx, ok := toolCalls[0]["index"]; !ok {
+		t.Error("第一个 tool_call 的 index 应被保留")
+	} else if idx != float64(0) {
+		t.Errorf("第一个 tool_call index = %v, 期望 0", idx)
+	}
+	if idx, ok := toolCalls[1]["index"]; !ok {
+		t.Error("第二个 tool_call 的 index 应被保留")
+	} else if idx != float64(1) {
+		t.Errorf("第二个 tool_call index = %v, 期望 1", idx)
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_FunctionNotMap(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []map[string]any{
+				{
+					"id":   "call-1",
+					"type": "function",
+					// function 缺失
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	tc := toolCalls[0]
+	funcPart, _ := tc["function"].(map[string]any)
+	if funcPart["name"] != "" {
+		t.Errorf("function.name = %v, 期望空字符串", funcPart["name"])
+	}
+	if funcPart["arguments"] != "" {
+		t.Errorf("function.arguments = %v, 期望空字符串", funcPart["arguments"])
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_ToolCallNotMap(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				"invalid_tool_call", // 非 map 类型，应被跳过
+				map[string]any{
+					"id":   "call-1",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "valid_func",
+						"arguments": "{}",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+	if funcPart, _ := toolCalls[0]["function"].(map[string]any); funcPart["name"] != "valid_func" {
+		t.Errorf("function.name = %v, 期望 valid_func", funcPart["name"])
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_MapStringAny格式(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []map[string]any{
+				{
+					"id":   "call-789",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "calc",
+						"arguments": `{"x":1}`,
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+	if toolCalls[0]["id"] != "call-789" {
+		t.Errorf("id = %v, 期望 call-789", toolCalls[0]["id"])
+	}
+}
+
+func TestInferenceAffinity_SanitizeToolCalls_空消息列表(t *testing.T) {
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	// 空消息列表不应 panic
+	client.sanitizeToolCalls(nil)
+	client.sanitizeToolCalls([]map[string]any{})
+}
+
+// ──────────────────────────── buildReleaseRequestBody 测试 ────────────────────────────
+
+func TestBuildReleaseRequestBody_模型名从ModelConfig获取(t *testing.T) {
+	// params.Model 为空时，应从 c.ModelConfig.ModelName 获取
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Model 为空，但 ModelConfig 有 ModelName
+	params := model_clients.NewReleaseParams(
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+		// 不传 WithReleaseModel，model 为空
+	)
+
+	body, err := client.buildReleaseRequestBody(params)
+	if err != nil {
+		t.Fatalf("buildReleaseRequestBody 返回错误: %v", err)
+	}
+	// 应从 ModelConfig 取到 "qwen-72b"
+	if body["model"] != "qwen-72b" {
+		t.Errorf("model = %v, 期望 qwen-72b", body["model"])
+	}
+}
+
+func TestBuildReleaseRequestBody_MessagesParam类型(t *testing.T) {
+	// params.Messages 为 MessagesParam 类型时，应正常转换
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msgs := model_clients.NewTextMessagesParam("hello")
+	params := model_clients.NewReleaseParams(
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+		model_clients.WithReleaseMessages(msgs),
+	)
+
+	body, err := client.buildReleaseRequestBody(params)
+	if err != nil {
+		t.Fatalf("buildReleaseRequestBody 返回错误: %v", err)
+	}
+	messagesDict, ok := body["messages"].([]map[string]any)
+	if !ok {
+		t.Fatalf("messages 类型错误, got %T", body["messages"])
+	}
+	if len(messagesDict) != 1 {
+		t.Errorf("messages 长度 = %d, 期望 1", len(messagesDict))
+	}
+}
+
+func TestBuildReleaseRequestBody_DictsMessages类型(t *testing.T) {
+	// params.Messages 为 []map[string]any 类型时，应直接使用
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dictMsgs := []map[string]any{
+		{"role": "user", "content": "hello"},
+	}
+	params := model_clients.NewReleaseParams(
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+		model_clients.WithReleaseMessages(dictMsgs),
+	)
+
+	body, err := client.buildReleaseRequestBody(params)
+	if err != nil {
+		t.Fatalf("buildReleaseRequestBody 返回错误: %v", err)
+	}
+	messagesDict, ok := body["messages"].([]map[string]any)
+	if !ok {
+		t.Fatalf("messages 类型错误, got %T", body["messages"])
+	}
+	if len(messagesDict) != 1 {
+		t.Errorf("messages 长度 = %d, 期望 1", len(messagesDict))
+	}
+}
+
+func TestBuildReleaseRequestBody_UnsupportedMessagesType(t *testing.T) {
+	// params.Messages 为不支持的类型时，应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := model_clients.NewReleaseParams(
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+		model_clients.WithReleaseMessages("invalid_type"), // string 不是支持的类型
+	)
+
+	_, err = client.buildReleaseRequestBody(params)
+	if err == nil {
+		t.Error("不支持的 messages 类型应返回错误")
+	}
+}
+
+func TestBuildReleaseRequestBody_无Messages(t *testing.T) {
+	// params.Messages 为 nil 时，不应报错
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := model_clients.NewReleaseParams(
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+	)
+
+	body, err := client.buildReleaseRequestBody(params)
+	if err != nil {
+		t.Fatalf("buildReleaseRequestBody 返回错误: %v", err)
+	}
+	// messages 应为空（nil 或空 slice 都算无消息）
+	messagesVal := body["messages"]
+	if messagesVal != nil {
+		if msgs, ok := messagesVal.([]map[string]any); !ok || len(msgs) != 0 {
+			t.Errorf("messages 应为空, got %v", messagesVal)
+		}
+	}
+}
+
+// ──────────────────────────── buildReleaseHTTPClient 测试 ────────────────────────────
+
+func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCert(t *testing.T) {
+	// VerifySSL=true 且 SSLCert 指向不存在的文件，应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+			llmschema.WithVerifySSL(true),
+			llmschema.WithSSLCert("/nonexistent/cert.pem"),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.buildReleaseHTTPClient(nil)
+	if err == nil {
+		t.Error("不存在的 SSL 证书文件应返回错误")
+	}
+	if !strings.Contains(err.Error(), "读取 SSL 证书失败") {
+		t.Errorf("错误信息 = %q, 应包含 '读取 SSL 证书失败'", err.Error())
+	}
+}
+
+func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCertContent(t *testing.T) {
+	// VerifySSL=true 且 SSLCert 指向无效证书内容，应返回解析错误
+	// 创建临时文件写入无效 PEM 内容
+	tmpFile, err := os.CreateTemp("", "cert-*.pem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("not a valid pem certificate")
+	tmpFile.Close()
+
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+			llmschema.WithVerifySSL(true),
+			llmschema.WithSSLCert(tmpFile.Name()),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.buildReleaseHTTPClient(nil)
+	if err == nil {
+		t.Error("无效的 SSL 证书内容应返回错误")
+	}
+	if !strings.Contains(err.Error(), "解析 SSL 证书失败") {
+		t.Errorf("错误信息 = %q, 应包含 '解析 SSL 证书失败'", err.Error())
+	}
+}
+
+func TestBuildReleaseHTTPClient_ConfigTimeout(t *testing.T) {
+	// ClientConfig.Timeout > 0 时应使用配置的超时时间
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+			llmschema.WithVerifySSL(false),
+			llmschema.WithTimeout(30.0),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpClient, err := client.buildReleaseHTTPClient(nil)
+	if err != nil {
+		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
+	}
+	// 超时时间应为 30 秒
+	expectedTimeout := time.Duration(30.0 * float64(time.Second))
+	if httpClient.Timeout != expectedTimeout {
+		t.Errorf("Timeout = %v, 期望 %v", httpClient.Timeout, expectedTimeout)
+	}
+}
+
+func TestBuildReleaseHTTPClient_CustomTimeout(t *testing.T) {
+	// 传入自定义 timeout 时应覆盖配置的超时时间
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+			llmschema.WithVerifySSL(false),
+			llmschema.WithTimeout(30.0),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	customTimeout := 120.0
+	httpClient, err := client.buildReleaseHTTPClient(&customTimeout)
+	if err != nil {
+		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
+	}
+	expectedTimeout := time.Duration(120.0 * float64(time.Second))
+	if httpClient.Timeout != expectedTimeout {
+		t.Errorf("Timeout = %v, 期望 %v", httpClient.Timeout, expectedTimeout)
+	}
+}
+
+func TestBuildReleaseHTTPClient_VerifySSLTrueNoCert(t *testing.T) {
+	// VerifySSL=true 且无 SSLCert 时，构造函数会要求 ssl_cert
+	// 无法创建 VerifySSL=true 且无 SSLCert 的客户端（构造函数会报错）
+	// 所以直接测试 buildReleaseHTTPClient 内部 VerifySSL=true + SSLCert="" 的路径
+	// 需要手动构造 ClientConfig 绕过构造函数校验
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 手动设置 VerifySSL=true 但 SSLCert 为空，模拟"验证但无证书文件"路径
+	// 这种情况下 buildReleaseHTTPClient 走到 else if SSLCert != "" 的 else 分支，
+	// 即使用默认 TLS 配置（transport 无 TLSClientConfig）
+	client.ClientConfig.VerifySSL = true
+	client.ClientConfig.SSLCert = ""
+
+	httpClient, err := client.buildReleaseHTTPClient(nil)
+	if err != nil {
+		t.Fatalf("buildReleaseHTTPClient 返回错误: %v", err)
+	}
+	if httpClient == nil {
+		t.Error("httpClient 不应为 nil")
+	}
+}
+
+// ──────────────────────────── sanitizeMessages 错误路径测试 ────────────────────────────
+
+func TestSanitizeMessages_EmptyMessagesError(t *testing.T) {
+	// 空消息应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.sanitizeMessages(model_clients.MessagesParam{})
+	if err == nil {
+		t.Error("空消息应返回错误")
+	}
+}
+
+// ──────────────────────────── Release 错误路径测试 ────────────────────────────
+
+func TestRelease_BuildBodyError(t *testing.T) {
+	// buildReleaseRequestBody 返回错误时，Release 应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 传入不支持的 messages 类型，使 buildReleaseRequestBody 报错
+	_, err = client.Release(
+		context.Background(),
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+		model_clients.WithReleaseMessages("invalid_type"),
+	)
+	if err == nil {
+		t.Error("buildReleaseRequestBody 错误时 Release 应返回错误")
+	}
+}
+
+func TestRelease_SSLCertError(t *testing.T) {
+	// buildReleaseHTTPClient 返回错误时，Release 应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		llmschema.NewModelClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1",
+			llmschema.WithVerifySSL(true),
+			llmschema.WithSSLCert("/nonexistent/cert.pem"),
+		),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Release(
+		context.Background(),
+		model_clients.WithReleaseSessionID("session-1"),
+		model_clients.WithReleaseMessagesIndex(0),
+	)
+	if err == nil {
+		t.Error("SSL 证书错误时 Release 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "构建 HTTP 客户端失败") {
+		t.Errorf("错误信息 = %q, 应包含 '构建 HTTP 客户端失败'", err.Error())
+	}
+}
+
+// ──────────────────────────── init 注册工厂错误路径测试 ────────────────────────────
+
+func TestInit_FactoryWithInvalidConfig(t *testing.T) {
+	// 验证 init 注册的工厂在配置无效时返回 nil
+	registry := model_clients.GetClientRegistry()
+
+	// 使用缺少 API Key 的配置，工厂应返回 nil
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-72b"))
+	cc := llmschema.NewModelClientConfig("InferenceAffinity", "", "https://vllm.example.com/v1",
+		llmschema.WithVerifySSL(false),
+	)
+	client, err := registry.GetClient("InferenceAffinity", "llm", mc, cc)
+	// GetClient 调用工厂，工厂内部 NewInferenceAffinityModelClient 失败时返回 nil
+	// 但 GetClient 自身可能返回不同错误形式
+	_ = err // 工厂返回 nil 后 GetClient 的具体行为取决于注册表实现
+	if client != nil {
+		t.Error("无效配置时工厂应返回 nil 客户端")
+	}
+}
+
+// ──────────────────────────── Invoke/Stream 错误路径测试 ────────────────────────────
+
+func TestInvoke_SanitizeMessagesError(t *testing.T) {
+	// sanitizeMessages 返回错误时，Invoke 应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 空消息会导致 sanitizeMessages 失败
+	_, err = client.Invoke(context.Background(), model_clients.MessagesParam{})
+	if err == nil {
+		t.Error("空消息时 Invoke 应返回错误")
+	}
+}
+
+func TestStream_SanitizeMessagesError(t *testing.T) {
+	// sanitizeMessages 返回错误时，Stream 应返回错误
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 空消息会导致 sanitizeMessages 失败
+	_, err = client.Stream(context.Background(), model_clients.MessagesParam{})
+	if err == nil {
+		t.Error("空消息时 Stream 应返回错误")
 	}
 }

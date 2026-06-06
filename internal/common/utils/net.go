@@ -1,10 +1,12 @@
 // utils 包提供通用工具函数。
 //
-// net.go 实现网络相关工具：本机 IP 获取、URL 密码脱敏、HTTP 头清洗。
+// net.go 实现网络相关工具：本机 IP 获取、URL 密码脱敏。
 // 对应 Python：
 //   - openjiuwen/core/common/utils/ip_utils.py
 //   - openjiuwen/core/common/utils/url_utils.py
-//   - openjiuwen/core/common/utils/header_utils.py
+//
+// HTTP 头清洗相关功能已迁移至：
+//   - internal/agentcore/foundation/llm/headers_helper/ (SanitizeHeaders, ProtectedHeaders 等)
 
 package utils
 
@@ -12,9 +14,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
-)
-
-// GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
+)// GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
 //
 // 对应 Python: get_local_ip()
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
@@ -100,49 +100,4 @@ func RedactURLPassword(rawURL string) string {
 	}
 
 	return buf.String()
-}
-
-// ProtectedHeaders 受保护的 HTTP 头名称（小写）。
-//
-// 这些头部由 HTTP 客户端/传输层自动管理，不应由用户手动设置。
-// 对应 Python: PROTECTED_HEADERS
-var ProtectedHeaders = map[string]bool{
-	"host":             true,
-	"content-length":   true,
-	"transfer-encoding": true,
-	"connection":       true,
-	"authorization":    true,
-}
-
-// SanitizeHeaders 清洗 HTTP 头，移除受保护键和空值。
-//
-// 对应 Python: sanitize_headers()
-// 处理规则：
-//  1. 跳过空键或空值
-//  2. 跳过受保护头部（见 ProtectedHeaders）
-//  3. 值规范化为字符串
-//  4. 跳过值为纯空白的条目
-func SanitizeHeaders(headers map[string]string) map[string]string {
-	if len(headers) == 0 {
-		return map[string]string{}
-	}
-
-	sanitized := make(map[string]string, len(headers))
-	for key, value := range headers {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-
-		if ProtectedHeaders[strings.ToLower(key)] {
-			continue
-		}
-
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-
-		sanitized[key] = value
-	}
-	return sanitized
 }

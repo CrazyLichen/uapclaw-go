@@ -105,231 +105,6 @@ func TestSiliconFlowModelClient_ImplementsBaseModelClient(t *testing.T) {
 	var _ model_clients.BaseModelClient = (*SiliconFlowModelClient)(nil)
 }
 
-// ──────────────────────────── sanitizeToolCalls 测试 ────────────────────────────
-
-func TestSanitizeToolCalls_标准字段保留(t *testing.T) {
-	// 标准的 tool_calls 字段应被保留
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"content": "",
-			"tool_calls": []any{
-				map[string]any{
-					"id":   "call-123",
-					"type": "function",
-					"function": map[string]any{
-						"name":      "get_weather",
-						"arguments": `{"city":"Beijing"}`,
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-	if len(toolCalls) != 1 {
-		t.Fatalf("tool_calls 长度 = %d, want 1", len(toolCalls))
-	}
-
-	tc := toolCalls[0]
-	// 验证标准字段保留
-	if tc["id"] != "call-123" {
-		t.Errorf("id = %v, want call-123", tc["id"])
-	}
-	if tc["type"] != "function" {
-		t.Errorf("type = %v, want function", tc["type"])
-	}
-	funcPart, _ := tc["function"].(map[string]any)
-	if funcPart["name"] != "get_weather" {
-		t.Errorf("function.name = %v, want get_weather", funcPart["name"])
-	}
-	if funcPart["arguments"] != `{"city":"Beijing"}` {
-		t.Errorf("function.arguments = %v, want {\"city\":\"Beijing\"}", funcPart["arguments"])
-	}
-}
-
-func TestSanitizeToolCalls_非标准字段移除(t *testing.T) {
-	// 含额外字段的 tool_calls 应被清洗
-	messages := []map[string]any{
-		{
-			"role": "assistant",
-			"content": "",
-			"tool_calls": []any{
-				map[string]any{
-					"id":              "call-456",
-					"type":            "function",
-					"extra_field":     "should_be_removed",   // 非标准字段
-					"debug_info":      "should_be_removed_2", // 非标准字段
-					"function": map[string]any{
-						"name":       "search",
-						"arguments":  `{"q":"test"}`,
-						"extra_func": "should_be_removed", // function 内非标准字段
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-	tc := toolCalls[0]
-
-	// 非标准字段应被移除
-	if _, exists := tc["extra_field"]; exists {
-		t.Error("tool_calls 顶层非标准字段 extra_field 应被移除")
-	}
-	if _, exists := tc["debug_info"]; exists {
-		t.Error("tool_calls 顶层非标准字段 debug_info 应被移除")
-	}
-
-	// function 内只保留 name 和 arguments
-	funcPart, _ := tc["function"].(map[string]any)
-	if _, exists := funcPart["extra_func"]; exists {
-		t.Error("function 内非标准字段 extra_func 应被移除")
-	}
-	if funcPart["name"] != "search" {
-		t.Errorf("function.name = %v, want search", funcPart["name"])
-	}
-	if funcPart["arguments"] != `{"q":"test"}` {
-		t.Errorf("function.arguments = %v, want {\"q\":\"test\"}", funcPart["arguments"])
-	}
-}
-
-func TestSanitizeToolCalls_强制Type为Function(t *testing.T) {
-	// type 字段应被强制为 "function"
-	testCases := []struct {
-		name     string
-		inputType string
-	}{
-		{"空字符串", ""},
-		{"其他值", "tool"},
-		{"已正确", "function"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			messages := []map[string]any{
-				{
-					"role":    "assistant",
-					"content": "",
-					"tool_calls": []any{
-						map[string]any{
-							"id":   "call-1",
-							"type": tc.inputType,
-							"function": map[string]any{
-								"name":      "test_func",
-								"arguments": "{}",
-							},
-						},
-					},
-				},
-			}
-
-			sanitizeToolCalls(messages)
-
-			toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-			result := toolCalls[0]
-			if result["type"] != "function" {
-				t.Errorf("type 输入 %q 后 = %v, want function", tc.inputType, result["type"])
-			}
-		})
-	}
-}
-
-func TestSanitizeToolCalls_非Assistant消息不受影响(t *testing.T) {
-	// user 和 system 消息不应被修改
-	messages := []map[string]any{
-		{"role": "user", "content": "你好"},
-		{"role": "system", "content": "你是助手"},
-	}
-
-	// 先保存原始内容
-	origUser := messages[0]["content"]
-	origSystem := messages[1]["content"]
-
-	sanitizeToolCalls(messages)
-
-	// 非 assistant 消息不应被修改
-	if messages[0]["content"] != origUser {
-		t.Error("user 消息不应被修改")
-	}
-	if messages[1]["content"] != origSystem {
-		t.Error("system 消息不应被修改")
-	}
-	// 不应有 tool_calls 字段被添加
-	if _, exists := messages[0]["tool_calls"]; exists {
-		t.Error("user 消息不应被添加 tool_calls 字段")
-	}
-}
-
-func TestSanitizeToolCalls_无ToolCalls不受影响(t *testing.T) {
-	// 没有 tool_calls 的 assistant 消息不应被修改
-	messages := []map[string]any{
-		{"role": "assistant", "content": "你好！"},
-	}
-
-	sanitizeToolCalls(messages)
-
-	// 不应有 tool_calls 字段被添加
-	if _, exists := messages[0]["tool_calls"]; exists {
-		t.Error("没有 tool_calls 的 assistant 消息不应被添加 tool_calls 字段")
-	}
-}
-
-func TestSanitizeToolCalls_保留Index(t *testing.T) {
-	// index 字段应被保留
-	messages := []map[string]any{
-		{
-			"role":    "assistant",
-			"content": "",
-			"tool_calls": []any{
-				map[string]any{
-					"id":    "call-1",
-					"type":  "function",
-					"index": float64(0),
-					"function": map[string]any{
-						"name":      "func_a",
-						"arguments": "{}",
-					},
-				},
-				map[string]any{
-					"id":    "call-2",
-					"type":  "function",
-					"index": float64(1),
-					"function": map[string]any{
-						"name":      "func_b",
-						"arguments": "{}",
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-	if len(toolCalls) != 2 {
-		t.Fatalf("tool_calls 长度 = %d, want 2", len(toolCalls))
-	}
-
-	tc0 := toolCalls[0]
-	if idx, ok := tc0["index"]; !ok {
-		t.Error("第一个 tool_call 的 index 应被保留")
-	} else if idx != float64(0) {
-		t.Errorf("第一个 tool_call index = %v, want 0", idx)
-	}
-
-	tc1 := toolCalls[1]
-	if idx, ok := tc1["index"]; !ok {
-		t.Error("第二个 tool_call 的 index 应被保留")
-	} else if idx != float64(1) {
-		t.Errorf("第二个 tool_call index = %v, want 1", idx)
-	}
-}
-
 // ──────────────────────────── sanitizeMessages 测试 ────────────────────────────
 
 func TestSanitizeMessages_DictsPassthrough(t *testing.T) {
@@ -505,68 +280,6 @@ func TestStream_SanitizeMessagesError(t *testing.T) {
 	_, err = client.Stream(context.Background(), msgs)
 	if err == nil {
 		t.Error("空消息时 Stream 应返回错误")
-	}
-}
-
-func TestSanitizeToolCalls_FunctionNotMap(t *testing.T) {
-	// function 不是 map[string]any 时应创建空 function
-	messages := []map[string]any{
-		{
-			"role":    "assistant",
-			"content": "",
-			"tool_calls": []map[string]any{
-				{
-					"id":   "call-1",
-					"type": "function",
-					// function 缺失
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-	tc := toolCalls[0]
-	funcPart, _ := tc["function"].(map[string]any)
-	// 应有空 function 对象
-	if funcPart["name"] != "" {
-		t.Errorf("function.name = %v, want 空字符串", funcPart["name"])
-	}
-	if funcPart["arguments"] != "" {
-		t.Errorf("function.arguments = %v, want 空字符串", funcPart["arguments"])
-	}
-}
-
-func TestSanitizeToolCalls_ToolCallNotMap(t *testing.T) {
-	// tool_call 不是 map[string]any 时应跳过
-	messages := []map[string]any{
-		{
-			"role":    "assistant",
-			"content": "",
-			"tool_calls": []any{
-				"invalid_tool_call", // 非 map 类型
-				map[string]any{
-					"id":   "call-1",
-					"type": "function",
-					"function": map[string]any{
-						"name":      "valid_func",
-						"arguments": "{}",
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeToolCalls(messages)
-
-	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
-	// 只应保留有效的 tool_call
-	if len(toolCalls) != 1 {
-		t.Fatalf("tool_calls 长度 = %d, want 1", len(toolCalls))
-	}
-	if funcPart, _ := toolCalls[0]["function"].(map[string]any); funcPart["name"] != "valid_func" {
-		t.Errorf("function.name = %v, want valid_func", funcPart["name"])
 	}
 }
 
@@ -1048,4 +761,381 @@ func TestInit_注册SiliconFlow(t *testing.T) {
 	if siliconFlowClient.GetClientName() != "SiliconFlow client" {
 		t.Errorf("ClientName = %q, want %q", siliconFlowClient.GetClientName(), "SiliconFlow client")
 	}
+}
+
+// ──────────────────────────── sanitizeToolCalls 测试 ────────────────────────────
+
+func TestSanitizeToolCalls_标准字段保留(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":   "call-123",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "get_weather",
+						"arguments": `{"city":"Beijing"}`,
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+
+	tc := toolCalls[0]
+	if tc["id"] != "call-123" {
+		t.Errorf("id = %v, 期望 call-123", tc["id"])
+	}
+	if tc["type"] != "function" {
+		t.Errorf("type = %v, 期望 function", tc["type"])
+	}
+	funcPart, _ := tc["function"].(map[string]any)
+	if funcPart["name"] != "get_weather" {
+		t.Errorf("function.name = %v, 期望 get_weather", funcPart["name"])
+	}
+	if funcPart["arguments"] != `{"city":"Beijing"}` {
+		t.Errorf("function.arguments = %v, 期望 {\"city\":\"Beijing\"}", funcPart["arguments"])
+	}
+}
+
+func TestSanitizeToolCalls_非标准字段移除(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":          "call-456",
+					"type":        "function",
+					"extra_field": "should_be_removed",
+					"debug_info":  "should_be_removed_2",
+					"function": map[string]any{
+						"name":       "search",
+						"arguments":  `{"q":"test"}`,
+						"extra_func": "should_be_removed",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	tc := toolCalls[0]
+
+	if _, exists := tc["extra_field"]; exists {
+		t.Error("tool_calls 顶层非标准字段 extra_field 应被移除")
+	}
+	if _, exists := tc["debug_info"]; exists {
+		t.Error("tool_calls 顶层非标准字段 debug_info 应被移除")
+	}
+	funcPart, _ := tc["function"].(map[string]any)
+	if _, exists := funcPart["extra_func"]; exists {
+		t.Error("function 内非标准字段 extra_func 应被移除")
+	}
+	if funcPart["name"] != "search" {
+		t.Errorf("function.name = %v, 期望 search", funcPart["name"])
+	}
+}
+
+func TestSanitizeToolCalls_强制Type为Function(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	testCases := []struct {
+		name      string
+		inputType string
+	}{
+		{"空字符串", ""},
+		{"其他值", "tool"},
+		{"已正确", "function"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			messages := []map[string]any{
+				{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call-1",
+							"type": tc.inputType,
+							"function": map[string]any{
+								"name":      "test_func",
+								"arguments": "{}",
+							},
+						},
+					},
+				},
+			}
+
+			client.sanitizeToolCalls(messages)
+
+			toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+			result := toolCalls[0]
+			if result["type"] != "function" {
+				t.Errorf("type 输入 %q 后 = %v, 期望 function", tc.inputType, result["type"])
+			}
+		})
+	}
+}
+
+func TestSanitizeToolCalls_非Assistant消息不受影响(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{"role": "user", "content": "你好"},
+		{"role": "system", "content": "你是助手"},
+	}
+
+	origUser := messages[0]["content"]
+	origSystem := messages[1]["content"]
+
+	client.sanitizeToolCalls(messages)
+
+	if messages[0]["content"] != origUser {
+		t.Error("user 消息不应被修改")
+	}
+	if messages[1]["content"] != origSystem {
+		t.Error("system 消息不应被修改")
+	}
+	if _, exists := messages[0]["tool_calls"]; exists {
+		t.Error("user 消息不应被添加 tool_calls 字段")
+	}
+}
+
+func TestSanitizeToolCalls_无ToolCalls不受影响(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{"role": "assistant", "content": "你好！"},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	if _, exists := messages[0]["tool_calls"]; exists {
+		t.Error("没有 tool_calls 的 assistant 消息不应被添加 tool_calls 字段")
+	}
+}
+
+func TestSanitizeToolCalls_保留Index(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				map[string]any{
+					"id":    "call-1",
+					"type":  "function",
+					"index": float64(0),
+					"function": map[string]any{
+						"name":      "func_a",
+						"arguments": "{}",
+					},
+				},
+				map[string]any{
+					"id":    "call-2",
+					"type":  "function",
+					"index": float64(1),
+					"function": map[string]any{
+						"name":      "func_b",
+						"arguments": "{}",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 2 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 2", len(toolCalls))
+	}
+	if idx, ok := toolCalls[0]["index"]; !ok {
+		t.Error("第一个 tool_call 的 index 应被保留")
+	} else if idx != float64(0) {
+		t.Errorf("第一个 tool_call index = %v, 期望 0", idx)
+	}
+	if idx, ok := toolCalls[1]["index"]; !ok {
+		t.Error("第二个 tool_call 的 index 应被保留")
+	} else if idx != float64(1) {
+		t.Errorf("第二个 tool_call index = %v, 期望 1", idx)
+	}
+}
+
+func TestSanitizeToolCalls_FunctionNotMap(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []map[string]any{
+				{
+					"id":   "call-1",
+					"type": "function",
+					// function 缺失
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	tc := toolCalls[0]
+	funcPart, _ := tc["function"].(map[string]any)
+	if funcPart["name"] != "" {
+		t.Errorf("function.name = %v, 期望空字符串", funcPart["name"])
+	}
+	if funcPart["arguments"] != "" {
+		t.Errorf("function.arguments = %v, 期望空字符串", funcPart["arguments"])
+	}
+}
+
+func TestSanitizeToolCalls_ToolCallNotMap(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []any{
+				"invalid_tool_call", // 非 map 类型，应被跳过
+				map[string]any{
+					"id":   "call-1",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "valid_func",
+						"arguments": "{}",
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+	if funcPart, _ := toolCalls[0]["function"].(map[string]any); funcPart["name"] != "valid_func" {
+		t.Errorf("function.name = %v, 期望 valid_func", funcPart["name"])
+	}
+}
+
+func TestSanitizeToolCalls_MapStringAny格式(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	messages := []map[string]any{
+		{
+			"role":    "assistant",
+			"content": "",
+			"tool_calls": []map[string]any{
+				{
+					"id":   "call-789",
+					"type": "function",
+					"function": map[string]any{
+						"name":      "calc",
+						"arguments": `{"x":1}`,
+					},
+				},
+			},
+		},
+	}
+
+	client.sanitizeToolCalls(messages)
+
+	toolCalls, _ := messages[0]["tool_calls"].([]map[string]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool_calls 长度 = %d, 期望 1", len(toolCalls))
+	}
+	if toolCalls[0]["id"] != "call-789" {
+		t.Errorf("id = %v, 期望 call-789", toolCalls[0]["id"])
+	}
+}
+
+func TestSanitizeToolCalls_空消息列表(t *testing.T) {
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	// 空消息列表不应 panic
+	client.sanitizeToolCalls(nil)
+	client.sanitizeToolCalls([]map[string]any{})
 }

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -298,7 +297,7 @@ func (c *InferenceAffinityModelClient) sanitizeMessages(
 	}
 
 	// 2. 对消息做 sanitize tool_calls
-	sanitizeToolCalls(result)
+	c.sanitizeToolCalls(result)
 
 	// 3. 包装为 Dicts 模式（直接透传，不二次转换）
 	return model_clients.NewDictsMessagesParam(result), nil
@@ -396,7 +395,7 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 			)
 		}
 		// 清洗 tool_calls
-		sanitizeToolCalls(messagesDict)
+		c.sanitizeToolCalls(messagesDict)
 	}
 
 	// 3. 构建请求体
@@ -467,17 +466,16 @@ func (c *InferenceAffinityModelClient) buildReleaseHTTPClient(
 
 // sanitizeToolCalls 清洗消息中的 tool_calls，只保留 OpenAI 标准字段。
 //
-// vLLM 后端对请求中的非标准字段严格，遇到不认识的字段会报错。
+// InferenceAffinity (vLLM) API 对请求中的非标准字段严格，遇到不认识的字段会报错。
 // 本函数对每个 assistant 消息的 tool_calls 做清洗：
 //   - 只保留标准字段：id、type、index、function.name、function.arguments
 //   - 强制 type 为 "function"（某些 LLM 返回的 type 可能为空或其他值）
 //   - 移除非标准扩展字段（LLM 返回的原始 tool_calls 可能包含额外字段）
 //
-// 逻辑与 siliconflow 包的 sanitizeToolCalls 完全相同，
-// 待 2.13 Headers Helper 实现时统一收敛。
+// 原地修改 messages 中的 tool_calls 字段。
 //
 // 对应 Python: InferenceAffinityModelClient._sanitize_tool_calls()
-func sanitizeToolCalls(messages []map[string]any) {
+func (c *InferenceAffinityModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {
 		// 仅处理 assistant 消息
 		if role, ok := msg["role"].(string); !ok || role != "assistant" {
@@ -485,6 +483,8 @@ func sanitizeToolCalls(messages []map[string]any) {
 		}
 
 		// 获取 tool_calls 列表（支持 []map[string]any 和 []any 两种类型）
+		// Go 中 map[string]any 存储的 slice 可能是 []map[string]any（如 ToOpenAIFormat 输出）
+		// 或 []any（如 JSON 反序列化或 Dicts 模式手动构造），两种都需要处理
 		var toolCalls []map[string]any
 		switch tc := msg["tool_calls"].(type) {
 		case []map[string]any:
@@ -496,15 +496,7 @@ func sanitizeToolCalls(messages []map[string]any) {
 				}
 			}
 		default:
-			rv := reflect.ValueOf(msg["tool_calls"])
-			if rv.Kind() != reflect.Slice || rv.IsNil() {
-				continue
-			}
-			for i := 0; i < rv.Len(); i++ {
-				if dict, ok := rv.Index(i).Interface().(map[string]any); ok {
-					toolCalls = append(toolCalls, dict)
-				}
-			}
+			continue
 		}
 		if len(toolCalls) == 0 {
 			continue
@@ -512,6 +504,11 @@ func sanitizeToolCalls(messages []map[string]any) {
 
 		cleaned := make([]map[string]any, 0, len(toolCalls))
 		for _, tcDict := range toolCalls {
+			// 跳过非 map 类型的 tool_call
+			if tcDict == nil {
+				continue
+			}
+
 			// 提取 function 部分
 			funcPart, _ := tcDict["function"].(map[string]any)
 			if funcPart == nil {

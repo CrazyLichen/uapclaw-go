@@ -2,7 +2,6 @@ package siliconflow
 
 import (
 	"context"
-	"reflect"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -197,7 +196,7 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 	}
 
 	// 2. 对消息做 sanitize tool_calls
-	sanitizeToolCalls(result)
+	c.sanitizeToolCalls(result)
 
 	// 3. 包装为 Dicts 模式（直接透传，不二次转换）
 	return model_clients.NewDictsMessagesParam(result), nil
@@ -211,8 +210,10 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 //   - 强制 type 为 "function"（某些 LLM 返回的 type 可能为空或其他值）
 //   - 移除非标准扩展字段（LLM 返回的原始 tool_calls 可能包含额外字段）
 //
+// 原地修改 messages 中的 tool_calls 字段。
+//
 // 对应 Python: SiliconFlowModelClient._sanitize_tool_calls()
-func sanitizeToolCalls(messages []map[string]any) {
+func (c *SiliconFlowModelClient) sanitizeToolCalls(messages []map[string]any) {
 	for _, msg := range messages {
 		// 仅处理 assistant 消息
 		if role, ok := msg["role"].(string); !ok || role != "assistant" {
@@ -227,23 +228,13 @@ func sanitizeToolCalls(messages []map[string]any) {
 		case []map[string]any:
 			toolCalls = tc
 		case []any:
-			// 将 []any 中的每个元素断言为 map[string]any
 			for _, item := range tc {
 				if dict, ok := item.(map[string]any); ok {
 					toolCalls = append(toolCalls, dict)
 				}
 			}
 		default:
-			// 使用反射处理其他 slice 类型（如 JSON 反序列化产生的类型）
-			rv := reflect.ValueOf(msg["tool_calls"])
-			if rv.Kind() != reflect.Slice || rv.IsNil() {
-				continue
-			}
-			for i := 0; i < rv.Len(); i++ {
-				if dict, ok := rv.Index(i).Interface().(map[string]any); ok {
-					toolCalls = append(toolCalls, dict)
-				}
-			}
+			continue
 		}
 		if len(toolCalls) == 0 {
 			continue
@@ -251,6 +242,11 @@ func sanitizeToolCalls(messages []map[string]any) {
 
 		cleaned := make([]map[string]any, 0, len(toolCalls))
 		for _, tcDict := range toolCalls {
+			// 跳过非 map 类型的 tool_call
+			if tcDict == nil {
+				continue
+			}
+
 			// 提取 function 部分
 			funcPart, _ := tcDict["function"].(map[string]any)
 			if funcPart == nil {
@@ -279,3 +275,4 @@ func sanitizeToolCalls(messages []map[string]any) {
 		msg["tool_calls"] = cleaned
 	}
 }
+
