@@ -7,8 +7,16 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "*.md"
+      - "resources/**"
+      - ".codebuddy/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "*.md"
+      - "resources/**"
+      - ".codebuddy/**"
 
 # 同一分支的并发运行只保留最新的，取消旧的
 concurrency:
