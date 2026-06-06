@@ -433,3 +433,55 @@ func TestExtractCostInfo_NoCost(t *testing.T) {
 		t.Errorf("无费用信息时所有值应为 0, got input=%f output=%f total=%f", inputCost, outputCost, totalCost)
 	}
 }
+
+// ──── WithSkipValidate 测试 ────
+
+// TestWithSkipValidate_SkipValidation 测试 WithSkipValidate 跳过校验。
+func TestWithSkipValidate_SkipValidation(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig()
+	// api_key 和 api_base 均为空，正常情况应报错
+	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
+		llmschema.WithVerifySSL(false),
+	)
+
+	// 不使用 WithSkipValidate 应报错
+	_, err := NewBaseClientEmbed(mc, cc)
+	if err == nil {
+		t.Error("缺少 api_key/api_base 应报错")
+	}
+
+	// 使用 WithSkipValidate 应跳过校验
+	e, err := NewBaseClientEmbed(mc, cc, WithSkipValidate())
+	if err != nil {
+		t.Errorf("WithSkipValidate 应跳过校验，但报错: %v", err)
+	}
+	if !e.skipValidate {
+		t.Error("skipValidate 应为 true")
+	}
+}
+
+// TestWithSkipValidate_ValidateConfigDirectly 测试 ValidateConfig 在 skipValidate 下的行为。
+func TestWithSkipValidate_ValidateConfigDirectly(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig()
+	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
+		llmschema.WithVerifySSL(false),
+	)
+
+	e := &BaseClientEmbed{
+		ModelConfig:  mc,
+		ClientConfig: cc,
+		clientName:   "TestSkipValidate",
+		skipValidate: true,
+	}
+
+	// skipValidate=true 时 ValidateConfig 应返回 nil
+	if err := e.ValidateConfig(); err != nil {
+		t.Errorf("skipValidate=true 时 ValidateConfig 不应报错: %v", err)
+	}
+
+	// skipValidate=false 时 ValidateConfig 应报错
+	e.skipValidate = false
+	if err := e.ValidateConfig(); err == nil {
+		t.Error("skipValidate=false 且 api_key/api_base 为空时应报错")
+	}
+}

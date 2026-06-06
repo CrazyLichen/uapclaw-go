@@ -75,6 +75,8 @@ type BaseClientEmbed struct {
 	ClientConfig *llmschema.ModelClientConfig
 	// clientName 客户端名称（子类通过 WithClientName 设置）
 	clientName string
+	// skipValidate 是否跳过 ValidateConfig 校验（IntelliRouter 不需要 api_key/api_base）
+	skipValidate bool
 }
 
 // BaseClientEmbedOption BaseClientEmbed 构造选项函数。
@@ -85,6 +87,17 @@ type BaseClientEmbedOption func(*BaseClientEmbed)
 // WithClientName 设置客户端名称（用于错误消息和日志）。
 func WithClientName(name string) BaseClientEmbedOption {
 	return func(e *BaseClientEmbed) { e.clientName = name }
+}
+
+// WithSkipValidate 跳过 ValidateConfig 校验。
+//
+// 适用场景：IntelliRouter 等客户端不需要 api_key/api_base
+//（在 deployment 级别配置，而非 ModelClientConfig 级别），
+// 使用此选项跳过 BaseClientEmbed 的标准校验。
+//
+// 对应 Python: IntelliRouterModelClient._validate_config() 覆写为空
+func WithSkipValidate() BaseClientEmbedOption {
+	return func(e *BaseClientEmbed) { e.skipValidate = true }
 }
 
 // NewBaseClientEmbed 创建 BaseClientEmbed 实例，并校验配置。
@@ -112,12 +125,18 @@ func NewBaseClientEmbed(
 // ValidateConfig 校验模型客户端配置参数。
 //
 // 校验规则：
+//   - skipValidate 为 true 时跳过所有校验
 //   - api_key: 必填
 //   - api_base: 必填
 //   - verify_ssl 为 true 时 ssl_cert 必填
 //
 // 对应 Python: BaseModelClient._validate_config()
 func (e *BaseClientEmbed) ValidateConfig() error {
+	// 跳过校验（IntelliRouter 等客户端不需要 api_key/api_base）
+	if e.skipValidate {
+		return nil
+	}
+
 	clientName := e.GetClientName()
 
 	if e.ClientConfig.APIKey == "" {
