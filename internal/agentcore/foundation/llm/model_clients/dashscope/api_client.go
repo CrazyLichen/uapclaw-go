@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -93,14 +93,11 @@ func CallDashScopeAPI(
 		)
 	}
 
-	// 7. 发送请求
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelProvider: "DashScope",
-		Extra: map[string]any{
-			"api_url": apiURL,
-		},
-	})
+	// 7. 发送请求（对齐 Python: DashScope 多模态 API 使用 logger，非回调）
+	logger.Info(logComponent).
+		Str("model_provider", "DashScope").
+		Str("api_url", apiURL).
+		Msg("DashScope API request started.")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -135,29 +132,22 @@ func CallDashScopeAPI(
 			"DashScope API 调用失败. HTTP status: %d, Error code: %s, Error message: %s",
 			dashResp.StatusCode, dashResp.Code, dashResp.Message,
 		)
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallError,
-			ModelProvider: "DashScope",
-			Error:         fmt.Errorf("%s", errMsg),
-			Extra: map[string]any{
-				"status_code": dashResp.StatusCode,
-				"code":        dashResp.Code,
-				"message":     dashResp.Message,
-			},
-		})
+		logger.Error(logComponent).
+			Str("model_provider", "DashScope").
+			Int("status_code", dashResp.StatusCode).
+			Str("code", dashResp.Code).
+			Str("message", dashResp.Message).
+			Msg("DashScope API call failed.")
 		return nil, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(errMsg),
 		)
 	}
 
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelProvider: "DashScope",
-		Extra: map[string]any{
-			"status_code": dashResp.StatusCode,
-		},
-	})
+	logger.Info(logComponent).
+		Str("model_provider", "DashScope").
+		Int("status_code", dashResp.StatusCode).
+		Msg("DashScope API response received.")
 
 	return &dashResp, nil
 }

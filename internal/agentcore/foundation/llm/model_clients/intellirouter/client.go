@@ -2,10 +2,12 @@ package intellirouter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -19,7 +21,9 @@ import (
 //
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
 // 覆写 Invoke/Stream，在调用时通过路由器选择部署端点，
-// 动态替换 api_key/api_base 为选中端点的配置，然后委托给 OpenAI 客户端。
+// 动态替换 api_key/api_base 为选中端点的配置。
+// Stream 独立实现（不委托 OpenAI.Stream），对齐 Python IntelliRouter 无 _astream_with_parser
+// （OutputParser 传 nil，不支持 parser）。
 //
 // Invoke 支持自动重试：失败时标记端点不健康并切换到下一个端点重试。
 // Stream 不做重试（流一旦开始无法重试）。
@@ -92,15 +96,13 @@ func NewIntelliRouterModelClient(
 	}
 	openaiClient.BaseClientEmbed = *embed
 
-	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
-		Event:     callback.LLMCallStarted,
-		ModelName: "IntelliRouter",
-		Extra: map[string]any{
-			"client_name":    "IntelliRouter client",
-			"num_deployments": len(irConfig.Deployments),
-			"strategy":       irConfig.Strategy,
-		},
-	})
+	// 对齐 Python: IntelliRouter 构造使用 llm_logger.info，非回调
+	logger.Info(logComponent).
+		Str("model_name", "IntelliRouter").
+		Str("client_name", "IntelliRouter client").
+		Int("num_deployments", len(irConfig.Deployments)).
+		Str("strategy", irConfig.Strategy).
+		Msg("IntelliRouter client created.")
 
 	return &IntelliRouterModelClient{
 		OpenAIModelClient: *openaiClient,
@@ -141,17 +143,14 @@ func (c *IntelliRouterModelClient) Invoke(
 		c.ClientConfig.APIKey = dep.APIKey
 		c.ClientConfig.APIBase = dep.APIBase
 
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallStarted,
-			ModelName:     modelName,
-			ModelProvider: "IntelliRouter",
-			IsStream:      false,
-			Extra: map[string]any{
-				"deployment_id": dep.ID,
-				"api_base":      dep.APIBase,
-				"attempt":       attempt,
-			},
-		})
+		// 对齐 Python: 路由选择是内部逻辑，使用日志记录，非回调
+		logger.Info(logComponent).
+			Str("model_name", modelName).
+			Str("model_provider", "IntelliRouter").
+			Str("deployment_id", dep.ID).
+			Str("api_base", dep.APIBase).
+			Int("attempt", attempt).
+			Msg("IntelliRouter invoking deployment.")
 
 		// 3. 委托给 OpenAI.Invoke()
 		start := time.Now()
@@ -160,17 +159,13 @@ func (c *IntelliRouterModelClient) Invoke(
 			c.router.RecordFailure(dep)
 			lastErr = err
 
-			callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-				Event:         callback.LLMCallError,
-				ModelName:     modelName,
-				ModelProvider: "IntelliRouter",
-				IsStream:      false,
-				Error:         err,
-				Extra: map[string]any{
-					"deployment_id": dep.ID,
-					"attempt":       attempt,
-				},
-			})
+			logger.Error(logComponent).
+				Str("model_name", modelName).
+				Str("model_provider", "IntelliRouter").
+				Str("deployment_id", dep.ID).
+				Int("attempt", attempt).
+				Err(err).
+				Msg("IntelliRouter deployment invoke failed.")
 
 			continue // 重试下一个 deployment
 		}
@@ -188,8 +183,14 @@ func (c *IntelliRouterModelClient) Invoke(
 
 // Stream 流式调用 IntelliRouter API。
 //
-// 覆写 OpenAI 客户端的 Stream，通过路由器选择部署端点，
-// 动态替换 api_key/api_base 后委托给 OpenAI.Stream()。
+// 独立实现 Stream，不委托给 OpenAI 客户端。
+// 对齐 Python IntelliRouterModelClient：IntelliRouter 没有 _astream_with_parser，
+// 因此不支持 OutputParser。使用自己的 convertChunk 只提取 content。
+//
+// 与 OpenAI 的行为差异（对齐 Python）：
+//   - convertChunk 只提取 content（不提取 reasoning_content / tool_calls / usage_metadata / finish_reason）
+//   - 不使用 OutputParser（对齐 Python IntelliRouter 无 _astream_with_parser）
+//
 // Stream 不做重试（流一旦开始无法重试）。
 //
 // 对应 Python: IntelliRouterModelClient.stream()
@@ -214,27 +215,138 @@ func (c *IntelliRouterModelClient) Stream(
 	c.ClientConfig.APIKey = dep.APIKey
 	c.ClientConfig.APIBase = dep.APIBase
 
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelName:     modelName,
-		ModelProvider: "IntelliRouter",
-		IsStream:      true,
-		Extra: map[string]any{
-			"deployment_id": dep.ID,
-			"api_base":      dep.APIBase,
-		},
-	})
+	// 对齐 Python: 路由选择是内部逻辑，使用日志记录，非回调
+	logger.Info(logComponent).
+		Str("model_name", modelName).
+		Str("model_provider", "IntelliRouter").
+		Str("deployment_id", dep.ID).
+		Str("api_base", dep.APIBase).
+		Msg("IntelliRouter streaming deployment.")
 
-	// 3. 委托给 OpenAI.Stream()
-	start := time.Now()
-	result, err := c.OpenAIModelClient.Stream(ctx, messages, opts...)
+	// 3. 构建请求参数
+	messagesDict, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
-		c.router.RecordFailure(dep)
+		return nil, err
+	}
+	reqParams, err := c.BuildRequestParams(ctx, messagesDict, params.ToStreamParams(), true)
+	if err != nil {
 		return nil, err
 	}
 
+	// 4. 设置 stream_options.include_usage = true
+	streamOptions, _ := reqParams["stream_options"].(map[string]any)
+	if streamOptions == nil {
+		streamOptions = make(map[string]any)
+	}
+	streamOptions["include_usage"] = true
+	reqParams["stream_options"] = streamOptions
+
+	// 5. OpenAI 特有参数调整
+	openai.AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
+
+	// 6. 合并 headers
+	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	if len(effectiveHeaders) > 0 {
+		reqParams["extra_headers"] = effectiveHeaders
+	}
+
+	// 7. 处理 extra_body
+	openai.HandleExtraBody(reqParams)
+
+	// 8. 构建 HTTP 请求
+	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
+	req, client, err := openai.BuildHTTPRequest(
+		ctx,
+		c.ClientConfig.APIBase,
+		c.ClientConfig.APIKey,
+		reqParams,
+		httpHeaders,
+		params.Timeout,
+		c.ClientConfig.VerifySSL,
+		c.ClientConfig.SSLCert,
+	)
+	if err != nil {
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 9. 发送请求
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		c.router.RecordFailure(dep)
+		// 对齐 Python: 路由层错误走日志，非回调
+		logger.Error(logComponent).
+			Str("model_name", modelName).
+			Str("model_provider", "IntelliRouter").
+			Str("deployment_id", dep.ID).
+			Err(err).
+			Msg("IntelliRouter stream request failed.")
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 10. 检查 HTTP 状态码
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		c.router.RecordFailure(dep)
+		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+	}
+
+	// 11. 创建 SSE 读取器和 chunk channel
+	sseReader := openai.NewSSEReader(resp.Body)
+	chunkChan := make(chan *llmschema.AssistantMessageChunk, 64)
+
+	// 12. 启动 goroutine 消费 SSE 流
+	//     对齐 Python：IntelliRouter 无 _astream_with_parser，不使用 OutputParser
+	//     使用自己的 convertChunk（只提取 content）
+	go func() {
+		defer close(chunkChan)
+		defer resp.Body.Close()
+
+		for {
+			data, err := sseReader.ReadEvent()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				// 对齐 Python: 路由层 SSE 错误走日志，非回调
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", "IntelliRouter").
+					Err(err).
+					Msg("IntelliRouter stream SSE read error.")
+				return
+			}
+
+			var chunkResp openai.ChatCompletionChunkResponse
+			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
+				// 对齐 Python: JSON 解析错误走日志，非回调
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", "IntelliRouter").
+					Err(err).
+					Msg("IntelliRouter stream JSON parse error.")
+				continue
+			}
+
+			chunk := c.convertChunk(&chunkResp)
+			if chunk == nil {
+				continue
+			}
+
+			select {
+			case chunkChan <- chunk:
+			case <-ctx.Done():
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", "IntelliRouter").
+					Msg("IntelliRouter stream context cancelled.")
+				return
+			}
+		}
+	}()
+
 	c.router.RecordSuccess(dep, time.Since(start))
-	return result, nil
+	return model_clients.NewStreamResult(chunkChan), nil
 }
 
 // GenerateImage 生成图片（当前不支持）。
@@ -293,6 +405,29 @@ func (c *IntelliRouterModelClient) Release(
 // 便捷方法，暴露内部路由器的统计信息供监控和调试使用。
 func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
 	return c.router.GetStats()
+}
+
+// convertChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
+//
+// 对齐 Python IntelliRouterModelClient._convert_chunk()：
+// 只提取 content，不提取 reasoning_content / tool_calls / usage_metadata / finish_reason。
+// IntelliRouter 不使用 OutputParser（无 _astream_with_parser）。
+func (c *IntelliRouterModelClient) convertChunk(
+	chunkResp *openai.ChatCompletionChunkResponse,
+) *llmschema.AssistantMessageChunk {
+	choices := chunkResp.Choices
+	if len(choices) == 0 {
+		return nil
+	}
+
+	delta := choices[0].Delta
+	content := ""
+	if delta != nil && delta.Content != nil {
+		content = *delta.Content
+	}
+
+	// 对齐 Python: 空 content 也返回 chunk（Python 原样返回 content="" 的 chunk）
+	return llmschema.NewAssistantMessageChunk(content)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

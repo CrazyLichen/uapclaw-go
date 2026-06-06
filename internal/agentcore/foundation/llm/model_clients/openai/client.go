@@ -55,19 +55,16 @@ func NewOpenAIModelClient(
 	// 预构建配置级 headers
 	baseHeaders := headers_helper.BuildBaseHeaders(clientConfig.CustomHeaders)
 
-	// 对齐 Python P1: 创建客户端前记录配置参数
+	// 对齐 Python: 创建客户端前记录配置参数（Python 使用 llm_logger.info，非回调）
 	finalTimeout := clientConfig.Timeout
 	if finalTimeout <= 0 {
 		finalTimeout = 60.0
 	}
-	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelProvider: clientConfig.ClientProvider,
-		Extra: map[string]any{
-			"timeout":     finalTimeout,
-			"max_retries": clientConfig.MaxRetries,
-		},
-	})
+	logger.Info(logComponent).
+		Str("model_provider", clientConfig.ClientProvider).
+		Float64("timeout", finalTimeout).
+		Int("max_retries", clientConfig.MaxRetries).
+		Msg("Before create openai client, model client config params ready.")
 
 	return &OpenAIModelClient{
 		BaseClientEmbed: *embed,
@@ -101,7 +98,7 @@ func (c *OpenAIModelClient) Invoke(
 	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
 
 	// 4. 合并 headers
-	effectiveHeaders := c.buildEffectiveHeaders(params.CustomHeaders)
+	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
@@ -110,7 +107,7 @@ func (c *OpenAIModelClient) Invoke(
 	HandleExtraBody(reqParams)
 
 	// 6. 构建 HTTP 请求
-	httpHeaders := extractHTTPHeaders(effectiveHeaders)
+	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
 	req, client, err := BuildHTTPRequest(
 		ctx,
 		c.ClientConfig.APIBase,
@@ -122,12 +119,12 @@ func (c *OpenAIModelClient) Invoke(
 		c.ClientConfig.SSLCert,
 	)
 	if err != nil {
-		return nil, c.wrapError("invoke", err)
+		return nil, c.WrapError("invoke", err)
 	}
 
-	// 7. 发送请求
+	// 7. 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
 	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
+		Event:         callback.LLMInput,
 		ModelName:     reqParams["model"].(string),
 		ModelProvider: c.ClientConfig.ClientProvider,
 		IsStream:      false,
@@ -143,50 +140,54 @@ func (c *OpenAIModelClient) Invoke(
 			IsStream:      false,
 			Error:         err,
 		})
-		return nil, c.wrapError("invoke", err)
+		return nil, c.WrapError("invoke", err)
 	}
 	defer resp.Body.Close()
 
 	// 8. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		return nil, c.handleHTTPError(resp)
+		return nil, c.HandleHTTPError(resp)
 	}
 
 	// 9. 解析响应
 	var completionResp ChatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&completionResp); err != nil {
-		return nil, c.wrapError("invoke", fmt.Errorf("解析响应失败: %w", err))
+		return nil, c.WrapError("invoke", fmt.Errorf("解析响应失败: %w", err))
 	}
 
-	// 对齐 Python P2: 收到响应记录完整上下文
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelName:     reqParams["model"].(string),
-		ModelProvider: c.ClientConfig.ClientProvider,
-		IsStream:      false,
-	})
+	// 对齐 Python: 收到响应记录完整上下文（Python 使用 llm_logger.info，非回调）
+	logger.Info(logComponent).
+		Str("model_name", reqParams["model"].(string)).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Bool("is_stream", false).
+		Msg("OpenAI API response received.")
 
-	// 对齐 Python P3: 解析响应前记录 output_parser
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelName:     reqParams["model"].(string),
-		ModelProvider: c.ClientConfig.ClientProvider,
-		IsStream:      false,
-		Extra:         map[string]any{"output_parser": fmt.Sprintf("%v", params.OutputParser)},
-	})
+	// 对齐 Python: 解析响应前记录 output_parser（Python 使用 llm_logger.info，非回调）
+	logger.Info(logComponent).
+		Str("model_name", reqParams["model"].(string)).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Bool("is_stream", false).
+		Str("output_parser", fmt.Sprintf("%v", params.OutputParser)).
+		Msg("Before parse response with output parser.")
 
 	// 10. 转换为 AssistantMessage
 	assistantMsg, err := ParseResponse(&completionResp, c.ModelConfig, params.OutputParser)
 	if err != nil {
-		return nil, c.wrapError("invoke", err)
+		return nil, c.WrapError("invoke", err)
 	}
 
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
+	// 触发 LLMOutput 回调（对齐 Python trigger(LLM_OUTPUT)）
+	outputData := &callback.LLMCallEventData{
+		Event:         callback.LLMOutput,
 		ModelName:     reqParams["model"].(string),
 		ModelProvider: c.ClientConfig.ClientProvider,
 		IsStream:      false,
-	})
+		Response:      assistantMsg,
+	}
+	if assistantMsg.UsageMetadata != nil {
+		outputData.Usage = assistantMsg.UsageMetadata
+	}
+	callback.GetCallbackFramework().Trigger(ctx, outputData)
 
 	return assistantMsg, nil
 }
@@ -225,7 +226,7 @@ func (c *OpenAIModelClient) Stream(
 	AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
 
 	// 5. 合并 headers
-	effectiveHeaders := c.buildEffectiveHeaders(params.CustomHeaders)
+	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
@@ -234,7 +235,7 @@ func (c *OpenAIModelClient) Stream(
 	HandleExtraBody(reqParams)
 
 	// 7. 构建 HTTP 请求
-	httpHeaders := extractHTTPHeaders(effectiveHeaders)
+	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
 	req, client, err := BuildHTTPRequest(
 		ctx,
 		c.ClientConfig.APIBase,
@@ -246,11 +247,12 @@ func (c *OpenAIModelClient) Stream(
 		c.ClientConfig.SSLCert,
 	)
 	if err != nil {
-		return nil, c.wrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
+	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
 	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
+		Event:         callback.LLMInput,
 		ModelName:     reqParams["model"].(string),
 		ModelProvider: c.ClientConfig.ClientProvider,
 		IsStream:      true,
@@ -267,36 +269,45 @@ func (c *OpenAIModelClient) Stream(
 			IsStream:      true,
 			Error:         err,
 		})
-		return nil, c.wrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 9. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, c.handleHTTPError(resp)
+		return nil, c.HandleHTTPError(resp)
 	}
 
 	// 10. 创建 SSE 读取器和 chunk channel
 	sseReader := NewSSEReader(resp.Body)
 	chunkChan := make(chan *llmschema.AssistantMessageChunk, 64)
 
-	// 11. 启动 goroutine 消费 SSE 流
+	// 11. 启动 goroutine 消费 SSE 流（对齐 Python _astream_with_parser）
+	modelName := fmt.Sprintf("%v", reqParams["model"])
 	go func() {
 		defer close(chunkChan)
 		defer resp.Body.Close()
 
+		// 对齐 Python _astream_with_parser: 累积内容缓冲区
+		accumulatedContent := ""
+
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
-				// 流正常结束
+				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMOutput,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+				})
 				return
 			}
 			if err != nil {
-				// 流读取错误，记录日志但不中断（后续 chunk 不会被消费）
 				// 对齐 Python P5: Stream 错误记录完整上下文
 				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
-					ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
 					IsStream:      true,
 					Error:         err,
@@ -307,13 +318,12 @@ func (c *OpenAIModelClient) Stream(
 			// 解析 JSON
 			var chunkResp ChatCompletionChunkResponse
 			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-					Event:         callback.LLMCallError,
-					ModelName:     fmt.Sprintf("%v", reqParams["model"]),
-					ModelProvider: c.ClientConfig.ClientProvider,
-					IsStream:      true,
-					Error:         err,
-				})
+				// 对齐 Python: JSON 解析错误走日志，非回调
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", c.ClientConfig.ClientProvider).
+					Err(err).
+					Msg("Stream parser attempt error.")
 				continue
 			}
 
@@ -323,13 +333,42 @@ func (c *OpenAIModelClient) Stream(
 				continue
 			}
 
+			// 对齐 Python _astream_with_parser: 应用 output_parser
+			if params.OutputParser != nil {
+				if chunk.Content.Text() != "" {
+					accumulatedContent += chunk.Content.Text()
+				}
+				if accumulatedContent != "" {
+					parsed, parseErr := params.OutputParser.Parse(accumulatedContent)
+					if parseErr == nil && parsed != nil {
+						chunk.ParserContent = parsed
+						accumulatedContent = "" // 清空缓冲区，增量输出
+					} else if parseErr != nil {
+						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						logger.Error(logComponent).
+							Str("model_name", modelName).
+							Str("model_provider", c.ClientConfig.ClientProvider).
+							Err(parseErr).
+							Msg("Stream parser attempt error.")
+					}
+				}
+			}
+
+			// 对齐 Python: 逐 chunk 触发 LLMResponseReceived 回调
+			callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				Event:         callback.LLMResponseReceived,
+				ModelName:     modelName,
+				ModelProvider: c.ClientConfig.ClientProvider,
+				IsStream:      true,
+			})
+
 			// 发送到 channel（支持 context 取消）
 			select {
 			case chunkChan <- chunk:
 			case <-ctx.Done():
 				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
-					ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
 					IsStream:      true,
 				})
@@ -418,13 +457,17 @@ func init() {
 	registry.Register("OpenRouter", "llm", openAIFactory)
 }
 
-// buildEffectiveHeaders 合并配置级和请求级 headers。
-func (c *OpenAIModelClient) buildEffectiveHeaders(requestHeaders map[string]any) map[string]string {
+// BuildEffectiveHeaders 合并配置级和请求级 headers。
+//
+// 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
+func (c *OpenAIModelClient) BuildEffectiveHeaders(requestHeaders map[string]any) map[string]string {
 	return headers_helper.MergeRequestHeaders(c.baseHeaders, requestHeaders)
 }
 
-// wrapError 包装错误为 MODEL_CALL_FAILED 异常。
-func (c *OpenAIModelClient) wrapError(method string, err error) error {
+// WrapError 包装错误为 MODEL_CALL_FAILED 异常。
+//
+// 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
+func (c *OpenAIModelClient) WrapError(method string, err error) error {
 	errDetail := fmt.Sprintf("%T: %v", err, err)
 	if err.Error() == "" {
 		errDetail = fmt.Sprintf("%T", err)
@@ -435,8 +478,10 @@ func (c *OpenAIModelClient) wrapError(method string, err error) error {
 	)
 }
 
-// handleHTTPError 处理非 200 HTTP 响应。
-func (c *OpenAIModelClient) handleHTTPError(resp *http.Response) error {
+// HandleHTTPError 处理非 200 HTTP 响应。
+//
+// 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
+func (c *OpenAIModelClient) HandleHTTPError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return exception.NewBaseError(
@@ -460,9 +505,11 @@ func (c *OpenAIModelClient) handleHTTPError(resp *http.Response) error {
 	)
 }
 
-// extractHTTPHeaders 从 effective headers 提取用于 HTTP 请求的头部。
+// ExtractHTTPHeaders 从 effective headers 提取用于 HTTP 请求的头部。
+//
 // extra_headers 是 OpenAI SDK 的概念，我们的 HTTP 请求直接设置头部。
-func extractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
+// 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
+func ExtractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
 	if len(effectiveHeaders) == 0 {
 		return nil
 	}

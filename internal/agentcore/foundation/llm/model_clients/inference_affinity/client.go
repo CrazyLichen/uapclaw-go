@@ -34,8 +34,9 @@ const releaseKVCachePath = "/release_kv_cache"
 // InferenceAffinityModelClient InferenceAffinity (vLLM) 模型客户端。
 //
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
-// 覆写 Invoke/Stream，在委托前对消息中的 tool_calls 做清洗（sanitize），
+// 覆写 Invoke/Stream，在调用前对消息中的 tool_calls 做清洗（sanitize），
 // 并注入 cache_sharing/cache_salt 参数以支持 vLLM KV Cache 共享。
+// Stream 独立实现（不委托 OpenAI.Stream），对齐 Python InferenceAffinityModelClient._astream_with_parser。
 //
 // InferenceAffinity API 兼容 OpenAI Chat Completion 协议，但有以下特殊要求：
 //   - tool_calls 中的 type 必须为 "function"，其他值会报错
@@ -112,10 +113,18 @@ func (c *InferenceAffinityModelClient) Invoke(
 
 // Stream 流式调用 InferenceAffinity API。
 //
-// 覆写 OpenAI 客户端的 Stream，在委托前对消息中的 tool_calls 做清洗，
-// 并注入 cache_sharing/cache_salt 参数。
+// 独立实现 Stream，不委托给 OpenAI 客户端。
+// 对齐 Python InferenceAffinityModelClient._astream_with_parser：
+// 使用自己的 parseStreamChunk 解析流式块。
 //
-// 对应 Python: InferenceAffinityModelClient.stream()
+// 与 OpenAI 的行为差异（对齐 Python）：
+//   - 不设置 stream_options.include_usage（InferenceAffinity API 无此参数）
+//   - 不保留无 choices 的 usage-only chunk（InferenceAffinity _parse_stream_chunk 会丢弃）
+//   - 不提取 prompt_token_ids / completion_token_ids / logprobs
+//   - usage 不包含费用信息（对齐 Python InferenceAffinity 不调用 _extract_cost_info）
+//   - 空 content + 空 reasoning_content + 空 tool_calls 时返回 nil（丢弃）
+//
+// 对应 Python: InferenceAffinityModelClient.stream() + InferenceAffinityModelClient._astream_with_parser()
 func (c *InferenceAffinityModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -129,11 +138,163 @@ func (c *InferenceAffinityModelClient) Stream(
 		return nil, err
 	}
 
-	// 2. 注入 cache 参数
+	// 2. 注入 cache 参数并重建 params（确保 cache_sharing/cache_salt 包含在请求体中）
 	cacheOpts := c.injectCacheStreamOptions(params.Extra, opts)
+	params = model_clients.NewStreamParams(cacheOpts...)
 
-	// 3. 委托给 OpenAI 客户端
-	return c.OpenAIModelClient.Stream(ctx, sanitizedMsgs, cacheOpts...)
+	// 3. 构建请求参数
+	messagesDict, err := c.ConvertMessagesToDict(sanitizedMsgs)
+	if err != nil {
+		return nil, err
+	}
+	reqParams, err := c.BuildRequestParams(ctx, messagesDict, params.ToStreamParams(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. InferenceAffinity 不需要 OpenAI 特有的参数调整（不调用 AdjustParamsForOpenAI）
+	// 5. InferenceAffinity 不设置 stream_options.include_usage（对齐 Python）
+
+	// 6. 合并 headers
+	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	if len(effectiveHeaders) > 0 {
+		reqParams["extra_headers"] = effectiveHeaders
+	}
+
+	// 7. 处理 extra_body
+	openai.HandleExtraBody(reqParams)
+
+	// 8. 构建 HTTP 请求
+	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
+	req, client, err := openai.BuildHTTPRequest(
+		ctx,
+		c.ClientConfig.APIBase,
+		c.ClientConfig.APIKey,
+		reqParams,
+		httpHeaders,
+		params.Timeout,
+		c.ClientConfig.VerifySSL,
+		c.ClientConfig.SSLCert,
+	)
+	if err != nil {
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMInput,
+		ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+		ModelProvider: c.ClientConfig.ClientProvider,
+		IsStream:      true,
+	})
+
+	// 9. 发送请求
+	resp, err := client.Do(req)
+	if err != nil {
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallError,
+			ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+			ModelProvider: c.ClientConfig.ClientProvider,
+			IsStream:      true,
+			Error:         err,
+		})
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 10. 检查 HTTP 状态码
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+	}
+
+	// 11. 创建 SSE 读取器和 chunk channel
+	sseReader := openai.NewSSEReader(resp.Body)
+	chunkChan := make(chan *llmschema.AssistantMessageChunk, 64)
+
+	// 12. 启动 goroutine 消费 SSE 流
+	//     使用自己的 parseStreamChunk（对齐 Python InferenceAffinityModelClient._parse_stream_chunk）
+	modelName := fmt.Sprintf("%v", reqParams["model"])
+	go func() {
+		defer close(chunkChan)
+		defer resp.Body.Close()
+
+		accumulatedContent := ""
+
+		for {
+			data, err := sseReader.ReadEvent()
+			if err == io.EOF {
+				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMOutput,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+				})
+				return
+			}
+			if err != nil {
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMCallError,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+					Error:         err,
+				})
+				return
+			}
+
+			var chunkResp openai.ChatCompletionChunkResponse
+			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
+				// 对齐 Python: JSON 解析错误走日志，非回调
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", c.ClientConfig.ClientProvider).
+					Err(err).
+					Msg("Stream parser attempt error.")
+				continue
+			}
+
+			chunk := c.parseStreamChunk(&chunkResp)
+			if chunk == nil {
+				continue
+			}
+
+			// 对齐 Python _astream_with_parser: 应用 output_parser
+			if params.OutputParser != nil {
+				if chunk.Content.Text() != "" {
+					accumulatedContent += chunk.Content.Text()
+				}
+				if accumulatedContent != "" {
+					parsed, parseErr := params.OutputParser.Parse(accumulatedContent)
+					if parseErr == nil && parsed != nil {
+						chunk.ParserContent = parsed
+						accumulatedContent = "" // 清空缓冲区，增量输出
+					} else if parseErr != nil {
+						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						logger.Error(logComponent).
+							Str("model_name", modelName).
+							Str("model_provider", c.ClientConfig.ClientProvider).
+							Err(parseErr).
+							Msg("Stream parser attempt error.")
+					}
+				}
+			}
+
+			select {
+			case chunkChan <- chunk:
+			case <-ctx.Done():
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMCallError,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+				})
+				return
+			}
+		}
+	}()
+
+	return model_clients.NewStreamResult(chunkChan), nil
 }
 
 // Release 释放 vLLM KV Cache。
@@ -174,28 +335,22 @@ func (c *InferenceAffinityModelClient) Release(
 		return false, fmt.Errorf("构建 HTTP 客户端失败: %w", err)
 	}
 
-	// 4. 发送请求
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelName:     params.Model,
-		ModelProvider: c.ClientConfig.ClientProvider,
-		Extra: map[string]any{
-			"session_id":              params.SessionID,
-			"messages_released_index": params.MessagesReleasedIndex,
-		},
-	})
+	// 4. 发送请求（对齐 Python: release 使用 llm_logger，非回调）
+	logger.Info(logComponent).
+		Str("model_name", params.Model).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Str("session_id", params.SessionID).
+		Int("messages_released_index", params.MessagesReleasedIndex).
+		Msg("Releasing KV cache.")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallError,
-			ModelName:     params.Model,
-			ModelProvider: c.ClientConfig.ClientProvider,
-			Error:         err,
-			Extra: map[string]any{
-				"session_id": params.SessionID,
-			},
-		})
+		logger.Error(logComponent).
+			Str("model_name", params.Model).
+			Str("model_provider", c.ClientConfig.ClientProvider).
+			Str("session_id", params.SessionID).
+			Err(err).
+			Msg("KV cache release request failed.")
 		return false, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("Release error: %s", err.Error())),
@@ -207,29 +362,22 @@ func (c *InferenceAffinityModelClient) Release(
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMResponseReceived,
-			ModelName:     params.Model,
-			ModelProvider: c.ClientConfig.ClientProvider,
-			Extra: map[string]any{
-				"session_id": params.SessionID,
-			},
-		})
+		logger.Info(logComponent).
+			Str("model_name", params.Model).
+			Str("model_provider", c.ClientConfig.ClientProvider).
+			Str("session_id", params.SessionID).
+			Msg("KV cache release successful.")
 		return true, nil
 	}
 
 	// 非 200 响应
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallError,
-		ModelName:     params.Model,
-		ModelProvider: c.ClientConfig.ClientProvider,
-		Error:         fmt.Errorf("KV cache release failed, HTTP status: %d", resp.StatusCode),
-		Extra: map[string]any{
-			"session_id":    params.SessionID,
-			"status_code":   resp.StatusCode,
-			"response_body": string(respBody),
-		},
-	})
+	logger.Error(logComponent).
+		Str("model_name", params.Model).
+		Str("model_provider", c.ClientConfig.ClientProvider).
+		Str("session_id", params.SessionID).
+		Int("status_code", resp.StatusCode).
+		Str("response_body", string(respBody)).
+		Msg("KV cache release failed.")
 	return false, nil
 }
 
@@ -287,6 +435,105 @@ func init() {
 	}
 
 	registry.Register("InferenceAffinity", "llm", inferenceAffinityFactory)
+}
+
+// parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
+//
+// 对齐 Python InferenceAffinityModelClient._parse_stream_chunk()，
+// 与 OpenAI 的 ParseStreamChunk 有以下差异：
+//   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
+//   - 不提取 prompt_token_ids / completion_token_ids / logprobs
+//   - usage 不包含费用信息（对齐 Python InferenceAffinity 不调用 _extract_cost_info）
+//   - 空 content + 空 reasoning_content + 空 tool_calls 时返回 nil（丢弃）
+func (c *InferenceAffinityModelClient) parseStreamChunk(
+	chunkResp *openai.ChatCompletionChunkResponse,
+) *llmschema.AssistantMessageChunk {
+	// 对齐 Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
+	if len(chunkResp.Choices) == 0 {
+		return nil
+	}
+
+	choice := chunkResp.Choices[0]
+	delta := choice.Delta
+
+	// 提取 content
+	content := ""
+	if delta != nil && delta.Content != nil {
+		content = *delta.Content
+	}
+
+	// 提取 reasoning_content
+	var reasoningContent string
+	if delta != nil && delta.ReasoningContent != nil {
+		reasoningContent = *delta.ReasoningContent
+	}
+
+	// 解析 tool_calls delta
+	var toolCalls []*llmschema.ToolCall
+	if delta != nil && len(delta.ToolCalls) > 0 {
+		for _, tcDelta := range delta.ToolCalls {
+			index := 0
+			if tcDelta.Index != nil {
+				index = *tcDelta.Index
+			}
+			toolCalls = append(toolCalls, llmschema.NewToolCall(
+				tcDelta.ID,
+				tcDelta.Function.Name,
+				tcDelta.Function.Arguments,
+				llmschema.WithToolCallIndex(index),
+				llmschema.WithToolCallType(tcDelta.Type),
+			))
+		}
+	}
+
+	// 提取 finish_reason
+	finishReason := llmschema.FinishReasonNull
+	if choice.FinishReason != nil && *choice.FinishReason != "" {
+		finishReason = *choice.FinishReason
+	}
+
+	// 对齐 Python InferenceAffinity: 空 content + 空 reasoning + 空 tool_calls → 丢弃
+	// 但如果有 finish_reason，仍需保留（Python 丢弃是已知行为，Go 保留 finish_reason）
+	if content == "" && reasoningContent == "" && len(toolCalls) == 0 && finishReason == llmschema.FinishReasonNull {
+		return nil
+	}
+
+	// 提取 usage（不含费用信息，对齐 Python InferenceAffinity 不调用 _extract_cost_info）
+	var usageMetadata *llmschema.UsageMetadata
+	if chunkResp.Usage != nil {
+		usageMetadata = buildInferenceAffinityUsageMetadata(chunkResp.Usage, c.ModelConfig.ModelName)
+	}
+
+	opts := []llmschema.AssistantMessageChunkOption{
+		llmschema.WithChunkFinishReason(finishReason),
+	}
+	if len(toolCalls) > 0 {
+		opts = append(opts, llmschema.WithChunkToolCalls(toolCalls))
+	}
+	if usageMetadata != nil {
+		opts = append(opts, llmschema.WithChunkUsageMetadata(usageMetadata))
+	}
+	if reasoningContent != "" {
+		opts = append(opts, llmschema.WithChunkReasoningContent(reasoningContent))
+	}
+
+	return llmschema.NewAssistantMessageChunk(content, opts...)
+}
+
+// buildInferenceAffinityUsageMetadata 构建 InferenceAffinity 的 usage 元数据。
+//
+// 对齐 Python InferenceAffinityModelClient: 仅包含 token 数，不包含费用信息，
+// 不包含 cache_tokens（对齐 Python InferenceAffinity._parse_stream_chunk 中的 usage 构建）。
+func buildInferenceAffinityUsageMetadata(
+	usage *openai.ResponseUsage,
+	modelName string,
+) *llmschema.UsageMetadata {
+	meta := llmschema.NewUsageMetadata()
+	meta.ModelName = modelName
+	meta.InputTokens = usage.PromptTokens
+	meta.OutputTokens = usage.CompletionTokens
+	meta.TotalTokens = usage.TotalTokens
+	return meta
 }
 
 // sanitizeMessages 对消息做预处理：先调用基类转换，再清洗 tool_calls。

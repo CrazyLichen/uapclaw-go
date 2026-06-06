@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -1138,4 +1139,243 @@ func TestSanitizeToolCalls_空消息列表(t *testing.T) {
 	// 空消息列表不应 panic
 	client.sanitizeToolCalls(nil)
 	client.sanitizeToolCalls([]map[string]any{})
+}
+
+// ──────────────────────────── Stream 回调对齐测试 ────────────────────────────
+
+// sfStreamOutputParser 成功解析的 mock parser
+type sfStreamOutputParser struct{}
+
+func (p *sfStreamOutputParser) Parse(input any) (any, error) {
+	text, _ := input.(string)
+	return map[string]any{"parsed": text}, nil
+}
+
+func (p *sfStreamOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+	out := make(chan model_clients.StreamParsedResult)
+	go func() { close(out) }()
+	return out
+}
+
+// sfStreamErrorOutputParser 总是返回错误的 mock parser
+type sfStreamErrorOutputParser struct{}
+
+func (p *sfStreamErrorOutputParser) Parse(_ any) (any, error) {
+	return nil, fmt.Errorf("stream parse error")
+}
+
+func (p *sfStreamErrorOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+	out := make(chan model_clients.StreamParsedResult)
+	go func() { close(out) }()
+	return out
+}
+
+func TestSiliconFlowModelClient_Stream_无效JSON走logger(t *testing.T) {
+	// SSE 流中包含无效 JSON 数据，应走 logger.Error 而非回调，继续读取后续数据
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: invalid-json`,
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	if final.Content.Text() != "OK" {
+		t.Errorf("Final Content = %q, 期望 %q", final.Content.Text(), "OK")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_OutputParser成功(t *testing.T) {
+	// Stream 带 OutputParser，验证 parser 成功路径
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg,
+		model_clients.WithStreamOutputParser(&sfStreamOutputParser{}),
+	)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	if final.ParserContent == nil {
+		t.Error("Final ParserContent 不应为 nil（OutputParser 成功路径）")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_OutputParser错误(t *testing.T) {
+	// Stream 带 OutputParser 解析失败，应走 logger.Error 而非回调
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg,
+		model_clients.WithStreamOutputParser(&sfStreamErrorOutputParser{}),
+	)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	// 验证流正常结束（parser 错误不应导致流崩溃）
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	// parser 错误时 ParserContent 应为 nil
+	if final.ParserContent != nil {
+		t.Error("Final ParserContent 应为 nil（OutputParser 失败路径）")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_SSE异常关闭(t *testing.T) {
+	// SSE 流异常关闭（无 [DONE]），验证不崩溃
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}`,
+		}
+		for _, chunk := range chunks {
+			fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+		// 不发送 [DONE]，直接关闭连接
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	// 验证流正常终止（不 panic）
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_Context取消(t *testing.T) {
+	// Stream 时 context 取消，验证触发 LLMCallError 回调
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+		// 持续发送数据
+		for i := 0; i < 100; i++ {
+			fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`)
+			flusher.Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(ctx, msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	// 读取一个 chunk 后取消 context
+	<-result.Chunks // 读一个
+	cancel()        // 取消
+
+	// 验证流正常终止（不 panic）
+	for range result.Chunks {
+	}
 }

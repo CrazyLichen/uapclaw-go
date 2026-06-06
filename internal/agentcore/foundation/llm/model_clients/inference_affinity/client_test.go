@@ -14,6 +14,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -1372,5 +1373,284 @@ func TestStream_SanitizeMessagesError(t *testing.T) {
 	_, err = client.Stream(context.Background(), model_clients.MessagesParam{})
 	if err == nil {
 		t.Error("空消息时 Stream 应返回错误")
+	}
+}
+
+// ──────────────────────────── parseStreamChunk 测试 ────────────────────────────
+
+func TestInferenceAffinity_ParseStreamChunk_基本内容(t *testing.T) {
+	// 验证基本 content 解析
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := "你好"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					Content: &content,
+				},
+				FinishReason: nil,
+			},
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("chunk 不应为 nil")
+	}
+	if chunk.Content.Text() != "你好" {
+		t.Errorf("Content = %q, 期望 %q", chunk.Content.Text(), "你好")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_无Choices返回Nil(t *testing.T) {
+	// 无 choices 时返回 nil（丢弃 usage-only chunk）
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 无 choices 但有 usage（OpenAI stream_options 场景）
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{},
+		Usage: &openai.ResponseUsage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk != nil {
+		t.Error("无 choices 时应返回 nil")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_空Delta返回Nil(t *testing.T) {
+	// 空 content + 空 reasoning + 空 tool_calls + 无 finish_reason → nil
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	finishNull := "null"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta:        &openai.ChunkDelta{},
+				FinishReason: &finishNull,
+			},
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk != nil {
+		t.Error("空 delta + finish_reason='null' 应返回 nil")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_有FinishReason保留(t *testing.T) {
+	// 空 content 但有 finish_reason="stop" → 保留
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	finishStop := "stop"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta:        &openai.ChunkDelta{},
+				FinishReason: &finishStop,
+			},
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("有 finish_reason='stop' 时 chunk 不应为 nil")
+	}
+	if chunk.FinishReason != "stop" {
+		t.Errorf("FinishReason = %q, 期望 %q", chunk.FinishReason, "stop")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_ReasoningContent(t *testing.T) {
+	// 验证 reasoning_content 解析
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reasoning := "让我思考一下"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					ReasoningContent: &reasoning,
+				},
+				FinishReason: nil,
+			},
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("有 reasoning_content 时 chunk 不应为 nil")
+	}
+	if chunk.ReasoningContent != "让我思考一下" {
+		t.Errorf("ReasoningContent = %q, 期望 %q", chunk.ReasoningContent, "让我思考一下")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_ToolCalls(t *testing.T) {
+	// 验证 tool_calls 解析
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx := 0
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					ToolCalls: []openai.ChunkToolCall{
+						{
+							ID:   "call_123",
+							Type: "function",
+							Function: openai.ChunkFunction{
+								Name:      "get_weather",
+								Arguments: `{"city":"Beijing"}`,
+							},
+							Index: &idx,
+						},
+					},
+				},
+				FinishReason: nil,
+			},
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("有 tool_calls 时 chunk 不应为 nil")
+	}
+	if len(chunk.ToolCalls) != 1 {
+		t.Fatalf("ToolCalls 数量 = %d, 期望 1", len(chunk.ToolCalls))
+	}
+	if chunk.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("ToolCall.Name = %q, 期望 %q", chunk.ToolCalls[0].Name, "get_weather")
+	}
+}
+
+func TestInferenceAffinity_ParseStreamChunk_Usage无费用(t *testing.T) {
+	// 验证 usage 不包含费用信息（与 SiliconFlow 的区别）
+	client, err := NewInferenceAffinityModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := "完成"
+	finishStop := "stop"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					Content: &content,
+				},
+				FinishReason: &finishStop,
+			},
+		},
+		Usage: &openai.ResponseUsage{
+			PromptTokens:     100,
+			CompletionTokens: 50,
+			TotalTokens:      150,
+		},
+	}
+
+	chunk := client.parseStreamChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("chunk 不应为 nil")
+	}
+	if chunk.UsageMetadata == nil {
+		t.Fatal("UsageMetadata 不应为 nil")
+	}
+	if chunk.UsageMetadata.InputTokens != 100 {
+		t.Errorf("InputTokens = %d, 期望 100", chunk.UsageMetadata.InputTokens)
+	}
+	if chunk.UsageMetadata.OutputTokens != 50 {
+		t.Errorf("OutputTokens = %d, 期望 50", chunk.UsageMetadata.OutputTokens)
+	}
+	// 对齐 Python InferenceAffinity: 不提取费用信息
+	if chunk.UsageMetadata.InputCost != 0 || chunk.UsageMetadata.OutputCost != 0 || chunk.UsageMetadata.TotalCost != 0 {
+		t.Error("InferenceAffinity usage 不应包含费用信息")
+	}
+}
+
+// ──────────────────────────── buildInferenceAffinityUsageMetadata 测试 ────────────────────────────
+
+func TestBuildInferenceAffinityUsageMetadata_基本字段(t *testing.T) {
+	usage := &openai.ResponseUsage{
+		PromptTokens:     10,
+		CompletionTokens: 20,
+		TotalTokens:      30,
+	}
+
+	meta := buildInferenceAffinityUsageMetadata(usage, "qwen-72b")
+	if meta.ModelName != "qwen-72b" {
+		t.Errorf("ModelName = %q, 期望 %q", meta.ModelName, "qwen-72b")
+	}
+	if meta.InputTokens != 10 {
+		t.Errorf("InputTokens = %d, 期望 10", meta.InputTokens)
+	}
+	if meta.OutputTokens != 20 {
+		t.Errorf("OutputTokens = %d, 期望 20", meta.OutputTokens)
+	}
+	if meta.TotalTokens != 30 {
+		t.Errorf("TotalTokens = %d, 期望 30", meta.TotalTokens)
+	}
+}
+
+func TestBuildInferenceAffinityUsageMetadata_无费用(t *testing.T) {
+	usage := &openai.ResponseUsage{
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+	}
+
+	meta := buildInferenceAffinityUsageMetadata(usage, "qwen-72b")
+	if meta.InputCost != 0 {
+		t.Errorf("InputCost = %f, 期望 0", meta.InputCost)
+	}
+	if meta.OutputCost != 0 {
+		t.Errorf("OutputCost = %f, 期望 0", meta.OutputCost)
+	}
+	if meta.TotalCost != 0 {
+		t.Errorf("TotalCost = %f, 期望 0", meta.TotalCost)
 	}
 }

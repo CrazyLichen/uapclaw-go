@@ -459,8 +459,14 @@ func TestToStreamParams(t *testing.T) {
 // testOutputParser 测试用 OutputParser
 type testOutputParser struct{}
 
-func (p *testOutputParser) Parse(text string) (any, error) {
-	return text, nil
+func (p *testOutputParser) Parse(input any) (any, error) {
+	return input, nil
+}
+
+func (p *testOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan StreamParsedResult {
+	out := make(chan StreamParsedResult)
+	go func() { close(out) }()
+	return out
 }
 
 // ──────────────────────────── BuildRequestParams 补充测试 ────────────────────────────

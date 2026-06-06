@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -505,13 +506,26 @@ func TestParseResponse_WithPromptTokenIDs(t *testing.T) {
 // mockOutputParser 成功解析的 mock parser
 type mockOutputParser struct{}
 
-func (p *mockOutputParser) Parse(text string) (any, error) {
+func (p *mockOutputParser) Parse(input any) (any, error) {
+	text, _ := input.(string)
 	return map[string]any{"parsed": text}, nil
+}
+
+func (p *mockOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+	out := make(chan model_clients.StreamParsedResult)
+	go func() { close(out) }()
+	return out
 }
 
 // errorOutputParser 总是返回错误的 mock parser
 type errorOutputParser struct{}
 
-func (p *errorOutputParser) Parse(_ string) (any, error) {
+func (p *errorOutputParser) Parse(_ any) (any, error) {
 	return nil, fmt.Errorf("parse error")
+}
+
+func (p *errorOutputParser) StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan model_clients.StreamParsedResult {
+	out := make(chan model_clients.StreamParsedResult)
+	go func() { close(out) }()
+	return out
 }

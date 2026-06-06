@@ -2,7 +2,12 @@ package siliconflow
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -20,7 +25,8 @@ const logComponent = logger.ComponentAgentCore
 // SiliconFlowModelClient SiliconFlow 模型客户端。
 //
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
-// 覆写 Invoke/Stream，在委托前对消息中的 tool_calls 做清洗（sanitize）。
+// 覆写 Invoke/Stream，在调用前对消息中的 tool_calls 做清洗（sanitize）。
+// Stream 独立实现（不委托 OpenAI.Stream），对齐 Python SiliconFlowModelClient._astream_with_parser。
 //
 // SiliconFlow API 兼容 OpenAI Chat Completion 协议，但对请求中的非标准字段严格：
 //   - tool_calls 中的 type 必须为 "function"，其他值会报错
@@ -90,23 +96,182 @@ func (c *SiliconFlowModelClient) Invoke(
 
 // Stream 流式调用 SiliconFlow API。
 //
-// 覆写 OpenAI 客户端的 Stream，在委托前对消息中的 tool_calls 做清洗。
-// 逻辑与 Invoke 一致，详见 Invoke 注释。
+// 独立实现 Stream，不委托给 OpenAI 客户端。
+// 对齐 Python SiliconFlowModelClient：使用自己的 parseStreamChunk 解析流式块。
 //
-// 对应 Python: SiliconFlowModelClient.stream()
+// 与 OpenAI 的行为差异（对齐 Python）：
+//   - 不设置 stream_options.include_usage（SiliconFlow API 无此参数）
+//   - 不保留无 choices 的 usage-only chunk（SiliconFlow _parse_stream_chunk 会丢弃）
+//   - 不提取 prompt_token_ids / completion_token_ids / logprobs
+//   - usage 包含费用信息（对齐 Python SiliconFlow 调用 _extract_cost_info）
+//
+// 对应 Python: SiliconFlowModelClient.stream() + SiliconFlowModelClient._astream_with_parser()
 func (c *SiliconFlowModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
 ) (*model_clients.StreamResult, error) {
+	params := model_clients.NewStreamParams(opts...)
+
 	// 1. 预处理消息：基类转换 + sanitize tool_calls
 	sanitizedMsgs, err := c.sanitizeMessages(messages)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 委托给 OpenAI 客户端
-	return c.OpenAIModelClient.Stream(ctx, sanitizedMsgs, opts...)
+	// 2. 构建请求参数
+	messagesDict, err := c.ConvertMessagesToDict(sanitizedMsgs)
+	if err != nil {
+		return nil, err
+	}
+	reqParams, err := c.BuildRequestParams(ctx, messagesDict, params.ToStreamParams(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. SiliconFlow 不需要 OpenAI 特有的参数调整（不调用 AdjustParamsForOpenAI）
+	// 4. SiliconFlow 不设置 stream_options.include_usage（对齐 Python）
+
+	// 5. 合并 headers
+	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	if len(effectiveHeaders) > 0 {
+		reqParams["extra_headers"] = effectiveHeaders
+	}
+
+	// 6. 处理 extra_body
+	openai.HandleExtraBody(reqParams)
+
+	// 7. 构建 HTTP 请求
+	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
+	req, client, err := openai.BuildHTTPRequest(
+		ctx,
+		c.ClientConfig.APIBase,
+		c.ClientConfig.APIKey,
+		reqParams,
+		httpHeaders,
+		params.Timeout,
+		c.ClientConfig.VerifySSL,
+		c.ClientConfig.SSLCert,
+	)
+	if err != nil {
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMInput,
+		ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+		ModelProvider: c.ClientConfig.ClientProvider,
+		IsStream:      true,
+	})
+
+	// 8. 发送请求
+	resp, err := client.Do(req)
+	if err != nil {
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallError,
+			ModelName:     fmt.Sprintf("%v", reqParams["model"]),
+			ModelProvider: c.ClientConfig.ClientProvider,
+			IsStream:      true,
+			Error:         err,
+		})
+		return nil, c.OpenAIModelClient.WrapError("stream", err)
+	}
+
+	// 9. 检查 HTTP 状态码
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+	}
+
+	// 10. 创建 SSE 读取器和 chunk channel
+	sseReader := openai.NewSSEReader(resp.Body)
+	chunkChan := make(chan *llmschema.AssistantMessageChunk, 64)
+
+	// 11. 启动 goroutine 消费 SSE 流
+	//     使用自己的 parseStreamChunk（对齐 Python SiliconFlowModelClient._parse_stream_chunk）
+	modelName := fmt.Sprintf("%v", reqParams["model"])
+	go func() {
+		defer close(chunkChan)
+		defer resp.Body.Close()
+
+		accumulatedContent := ""
+
+		for {
+			data, err := sseReader.ReadEvent()
+			if err == io.EOF {
+				// 对齐 Python: 流结束时触发 LLMOutput 回调
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMOutput,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+				})
+				return
+			}
+			if err != nil {
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMCallError,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+					Error:         err,
+				})
+				return
+			}
+
+			var chunkResp openai.ChatCompletionChunkResponse
+			if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
+				// 对齐 Python: JSON 解析错误走日志，非回调
+				logger.Error(logComponent).
+					Str("model_name", modelName).
+					Str("model_provider", c.ClientConfig.ClientProvider).
+					Err(err).
+					Msg("Stream parser attempt error.")
+				continue
+			}
+
+			chunk := c.parseStreamChunk(&chunkResp)
+			if chunk == nil {
+				continue
+			}
+
+			// 对齐 Python _astream_with_parser: 应用 output_parser
+			if params.OutputParser != nil {
+				if chunk.Content.Text() != "" {
+					accumulatedContent += chunk.Content.Text()
+				}
+				if accumulatedContent != "" {
+					parsed, parseErr := params.OutputParser.Parse(accumulatedContent)
+					if parseErr == nil && parsed != nil {
+						chunk.ParserContent = parsed
+						accumulatedContent = "" // 清空缓冲区，增量输出
+					} else if parseErr != nil {
+						// 对齐 Python: parser 错误走 llm_logger.debug，非回调
+						logger.Error(logComponent).
+							Str("model_name", modelName).
+							Str("model_provider", c.ClientConfig.ClientProvider).
+							Err(parseErr).
+							Msg("Stream parser attempt error.")
+					}
+				}
+			}
+
+			select {
+			case chunkChan <- chunk:
+			case <-ctx.Done():
+				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+					Event:         callback.LLMCallError,
+					ModelName:     modelName,
+					ModelProvider: c.ClientConfig.ClientProvider,
+					IsStream:      true,
+				})
+				return
+			}
+		}
+	}()
+
+	return model_clients.NewStreamResult(chunkChan), nil
 }
 
 // GenerateImage 生成图片（当前不支持）。
@@ -176,6 +341,128 @@ func init() {
 	}
 
 	registry.Register("SiliconFlow", "llm", siliconFlowFactory)
+}
+
+// parseStreamChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
+//
+// 对齐 Python SiliconFlowModelClient._parse_stream_chunk()，
+// 与 OpenAI 的 ParseStreamChunk 有以下差异：
+//   - 不保留无 choices 的 usage-only chunk（返回 nil，丢弃）
+//   - 不提取 prompt_token_ids / completion_token_ids / logprobs
+//   - usage 包含费用信息（对齐 Python SiliconFlow 调用 _extract_cost_info）
+//   - 空 content + 空 reasoning_content + 空 tool_calls 时返回 nil（丢弃）
+func (c *SiliconFlowModelClient) parseStreamChunk(
+	chunkResp *openai.ChatCompletionChunkResponse,
+) *llmschema.AssistantMessageChunk {
+	// 对齐 Python: 无 choices 时直接返回 nil（丢弃 usage-only chunk）
+	if len(chunkResp.Choices) == 0 {
+		return nil
+	}
+
+	choice := chunkResp.Choices[0]
+	delta := choice.Delta
+
+	// 提取 content
+	content := ""
+	if delta != nil && delta.Content != nil {
+		content = *delta.Content
+	}
+
+	// 提取 reasoning_content
+	var reasoningContent string
+	if delta != nil && delta.ReasoningContent != nil {
+		reasoningContent = *delta.ReasoningContent
+	}
+
+	// 解析 tool_calls delta
+	var toolCalls []*llmschema.ToolCall
+	if delta != nil && len(delta.ToolCalls) > 0 {
+		for _, tcDelta := range delta.ToolCalls {
+			index := 0
+			if tcDelta.Index != nil {
+				index = *tcDelta.Index
+			}
+			toolCalls = append(toolCalls, llmschema.NewToolCall(
+				tcDelta.ID,
+				tcDelta.Function.Name,
+				tcDelta.Function.Arguments,
+				llmschema.WithToolCallIndex(index),
+				llmschema.WithToolCallType(tcDelta.Type),
+			))
+		}
+	}
+
+	// 提取 finish_reason
+	finishReason := llmschema.FinishReasonNull
+	if choice.FinishReason != nil && *choice.FinishReason != "" {
+		finishReason = *choice.FinishReason
+	}
+
+	// 对齐 Python SiliconFlow: 空 content + 空 reasoning + 空 tool_calls → 丢弃
+	// 但如果有 finish_reason，仍需保留（Python 丢弃是已知行为，Go 保留 finish_reason）
+	if content == "" && reasoningContent == "" && len(toolCalls) == 0 && finishReason == llmschema.FinishReasonNull {
+		return nil
+	}
+
+	// 提取 usage（含费用信息，对齐 Python SiliconFlow 调用 _extract_cost_info）
+	var usageMetadata *llmschema.UsageMetadata
+	if chunkResp.Usage != nil {
+		usageMetadata = buildSiliconFlowUsageMetadata(chunkResp.Usage, c.ModelConfig.ModelName)
+	}
+
+	opts := []llmschema.AssistantMessageChunkOption{
+		llmschema.WithChunkFinishReason(finishReason),
+	}
+	if len(toolCalls) > 0 {
+		opts = append(opts, llmschema.WithChunkToolCalls(toolCalls))
+	}
+	if usageMetadata != nil {
+		opts = append(opts, llmschema.WithChunkUsageMetadata(usageMetadata))
+	}
+	if reasoningContent != "" {
+		opts = append(opts, llmschema.WithChunkReasoningContent(reasoningContent))
+	}
+
+	return llmschema.NewAssistantMessageChunk(content, opts...)
+}
+
+// buildSiliconFlowUsageMetadata 构建 SiliconFlow 的 usage 元数据。
+//
+// 对齐 Python SiliconFlowModelClient: 包含 token 数 + 费用信息（_extract_cost_info），
+// 不包含 cache_tokens。
+func buildSiliconFlowUsageMetadata(
+	usage *openai.ResponseUsage,
+	modelName string,
+) *llmschema.UsageMetadata {
+	meta := llmschema.NewUsageMetadata()
+	meta.ModelName = modelName
+	meta.InputTokens = usage.PromptTokens
+	meta.OutputTokens = usage.CompletionTokens
+	meta.TotalTokens = usage.TotalTokens
+
+	// 提取费用信息（对齐 Python SiliconFlow 调用 _extract_cost_info）
+	inputCost, outputCost, totalCost := extractCostFromUsage(usage)
+	meta.InputCost = inputCost
+	meta.OutputCost = outputCost
+	meta.TotalCost = totalCost
+
+	return meta
+}
+
+// extractCostFromUsage 从 ResponseUsage 提取费用信息。
+//
+// 复用 openai 包的 extractCostFromUsage。
+func extractCostFromUsage(usage *openai.ResponseUsage) (inputCost, outputCost, totalCost float64) {
+	// 将 Usage 转为 map 以复用 ExtractCostInfo
+	data, err := json.Marshal(usage)
+	if err != nil {
+		return 0, 0, 0
+	}
+	var usageMap map[string]any
+	if err := json.Unmarshal(data, &usageMap); err != nil {
+		return 0, 0, 0
+	}
+	return model_clients.ExtractCostInfo(usageMap)
 }
 
 // sanitizeMessages 对消息做预处理：先调用基类转换，再清洗 tool_calls。

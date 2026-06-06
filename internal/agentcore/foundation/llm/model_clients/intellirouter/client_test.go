@@ -12,6 +12,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -796,5 +797,152 @@ func TestInvoke_UpdatesAPIConfig(t *testing.T) {
 
 	if !strings.Contains(receivedKey, "sk-real-key") {
 		t.Errorf("请求应使用真实 API Key, 实际 Authorization = %q", receivedKey)
+	}
+}
+
+// ──── convertChunk 测试 ────
+
+// TestConvertChunk_基本内容 测试基本 content 解析。
+func TestConvertChunk_基本内容(t *testing.T) {
+	client := createTestClientWithServer(t,
+		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+		1,
+	)
+
+	content := "Hello"
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					Content: &content,
+				},
+			},
+		},
+	}
+
+	chunk := client.convertChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("chunk 不应为 nil")
+	}
+	if chunk.Content.Text() != "Hello" {
+		t.Errorf("Content = %q, 期望 %q", chunk.Content.Text(), "Hello")
+	}
+}
+
+// TestConvertChunk_只提取Content 测试只提取 content，不提取其他字段。
+func TestConvertChunk_只提取Content(t *testing.T) {
+	// 对齐 Python IntelliRouter._convert_chunk: 只提取 content
+	client := createTestClientWithServer(t,
+		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+		1,
+	)
+
+	content := "test"
+	reasoning := "reasoning"
+	finishStop := "stop"
+	idx := 0
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					Content:          &content,
+					ReasoningContent: &reasoning,
+					ToolCalls: []openai.ChunkToolCall{
+						{
+							ID:   "call_1",
+							Type: "function",
+							Function: openai.ChunkFunction{
+								Name:      "test_func",
+								Arguments: "{}",
+							},
+							Index: &idx,
+						},
+					},
+				},
+				FinishReason: &finishStop,
+			},
+		},
+		Usage: &openai.ResponseUsage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		},
+	}
+
+	chunk := client.convertChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("chunk 不应为 nil")
+	}
+	// Content 应被提取
+	if chunk.Content.Text() != "test" {
+		t.Errorf("Content = %q, 期望 %q", chunk.Content.Text(), "test")
+	}
+	// 其他字段不应被提取（对齐 Python IntelliRouter._convert_chunk）
+	if chunk.ReasoningContent != "" {
+		t.Errorf("ReasoningContent 应为空, 实际 %q", chunk.ReasoningContent)
+	}
+	if len(chunk.ToolCalls) != 0 {
+		t.Errorf("ToolCalls 应为空, 实际长度 %d", len(chunk.ToolCalls))
+	}
+	if chunk.UsageMetadata != nil {
+		t.Error("UsageMetadata 应为 nil")
+	}
+}
+
+// TestConvertChunk_无Choices返回Nil 测试无 choices 时返回 nil。
+func TestConvertChunk_无Choices返回Nil(t *testing.T) {
+	client := createTestClientWithServer(t,
+		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+		1,
+	)
+
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{},
+		Usage: &openai.ResponseUsage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		},
+	}
+
+	chunk := client.convertChunk(&chunkResp)
+	if chunk != nil {
+		t.Error("无 choices 时应返回 nil")
+	}
+}
+
+// TestConvertChunk_空Content 测试空 content 的 chunk。
+func TestConvertChunk_空Content(t *testing.T) {
+	// 对齐 Python: 空 content 也返回 chunk
+	client := createTestClientWithServer(t,
+		httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})),
+		1,
+	)
+
+	emptyContent := ""
+	chunkResp := openai.ChatCompletionChunkResponse{
+		Choices: []openai.ChunkChoice{
+			{
+				Delta: &openai.ChunkDelta{
+					Content: &emptyContent,
+				},
+			},
+		},
+	}
+
+	chunk := client.convertChunk(&chunkResp)
+	if chunk == nil {
+		t.Fatal("空 content 的 chunk 不应为 nil")
+	}
+	if chunk.Content.Text() != "" {
+		t.Errorf("Content = %q, 期望空字符串", chunk.Content.Text())
 	}
 }

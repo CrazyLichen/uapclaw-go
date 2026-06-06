@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -115,19 +114,15 @@ func (c *DashScopeModelClient) GenerateImage(
 		"parameters": buildImageParameters(params),
 	}
 
-	// 4. 调用 DashScope 多模态 API
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelName:     model,
-		ModelProvider: "DashScope",
-		IsStream:      false,
-		Extra: map[string]any{
-			"method": "generate_image",
-			"size":   params.Size,
-			"n":      params.N,
-			"seed":   params.Seed,
-		},
-	})
+	// 4. 调用 DashScope 多模态 API（对齐 Python: 多模态方法使用 logger，非回调）
+	logger.Info(logComponent).
+		Str("model_name", model).
+		Str("model_provider", "DashScope").
+		Str("method", "generate_image").
+		Str("size", params.Size).
+		Int("n", params.N).
+		Int("seed", params.Seed).
+		Msg("DashScope generate image started.")
 
 	resp, err := CallDashScopeAPI(
 		ctx, c.ClientConfig.APIBase, c.ClientConfig.APIKey,
@@ -141,28 +136,20 @@ func (c *DashScopeModelClient) GenerateImage(
 	// 5. 解析响应 → 提取图片 URL
 	imageURLs, err := extractImageURLs(resp)
 	if err != nil {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallError,
-			ModelName:     model,
-			ModelProvider: "DashScope",
-			IsStream:      false,
-			Error:         err,
-			Extra: map[string]any{
-				"method": "generate_image",
-			},
-		})
+		logger.Error(logComponent).
+			Str("model_name", model).
+			Str("model_provider", "DashScope").
+			Str("method", "generate_image").
+			Err(err).
+			Msg("DashScope generate image failed.")
 		return nil, err
 	}
 
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelName:     model,
-		ModelProvider: "DashScope",
-		IsStream:      false,
-		Extra: map[string]any{
-			"image_count": len(imageURLs),
-		},
-	})
+	logger.Info(logComponent).
+		Str("model_name", model).
+		Str("model_provider", "DashScope").
+		Int("image_count", len(imageURLs)).
+		Msg("DashScope generate image completed.")
 
 	return llmschema.NewImageGenerationResponse(
 		llmschema.WithImageModel(model),
@@ -228,18 +215,14 @@ func (c *DashScopeModelClient) GenerateSpeech(
 		}
 	}
 
-	// 4. 调用 DashScope 多模态 API
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMCallStarted,
-		ModelName:     model,
-		ModelProvider: "DashScope",
-		IsStream:      false,
-		Extra: map[string]any{
-			"method":        "generate_speech",
-			"voice":         params.Voice,
-			"language_type": params.LanguageType,
-		},
-	})
+	// 4. 调用 DashScope 多模态 API（对齐 Python: 多模态方法使用 logger，非回调）
+	logger.Info(logComponent).
+		Str("model_name", model).
+		Str("model_provider", "DashScope").
+		Str("method", "generate_speech").
+		Str("voice", params.Voice).
+		Str("language_type", params.LanguageType).
+		Msg("DashScope generate speech started.")
 
 	resp, err := CallDashScopeAPI(
 		ctx, c.ClientConfig.APIBase, c.ClientConfig.APIKey,
@@ -253,31 +236,23 @@ func (c *DashScopeModelClient) GenerateSpeech(
 	// 5. 解析响应 → 提取音频信息
 	audioURL, audioData, audioFormat, err := extractAudioInfo(resp)
 	if err != nil {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallError,
-			ModelName:     model,
-			ModelProvider: "DashScope",
-			IsStream:      false,
-			Error:         err,
-			Extra: map[string]any{
-				"method": "generate_speech",
-			},
-		})
+		logger.Error(logComponent).
+			Str("model_name", model).
+			Str("model_provider", "DashScope").
+			Str("method", "generate_speech").
+			Err(err).
+			Msg("DashScope generate speech failed.")
 		return nil, err
 	}
 
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelName:     model,
-		ModelProvider: "DashScope",
-		IsStream:      false,
-		Extra: map[string]any{
-			"method":      "generate_speech",
-			"format":      audioFormat,
-			"url_present": audioURL != "",
-			"data_present": len(audioData) > 0,
-		},
-	})
+	logger.Info(logComponent).
+		Str("model_name", model).
+		Str("model_provider", "DashScope").
+		Str("method", "generate_speech").
+		Str("format", audioFormat).
+		Bool("url_present", audioURL != "").
+		Bool("data_present", len(audioData) > 0).
+		Msg("DashScope generate speech completed.")
 
 	audioResp := llmschema.NewAudioGenerationResponse(
 		llmschema.WithAudioModel(model),
@@ -385,40 +360,31 @@ func (c *DashScopeModelClient) GenerateVideo(
 		"parameters": parameters,
 	}
 
-	// 6. 调用 DashScope 视频生成 API
-	// 对齐 Python: i2v 和 t2v 分开记录日志，分别输出 resolution/size 和 duration
+	// 6. 调用 DashScope 视频生成 API（对齐 Python: 多模态方法使用 logger，非回调）
 	if isI2V {
 		resolutionOrSize := params.Resolution
 		if resolutionOrSize == "" {
 			resolutionOrSize = params.Size
 		}
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallStarted,
-			ModelName:     model,
-			ModelProvider: "DashScope",
-			IsStream:      false,
-			Extra: map[string]any{
-				"method":     "generate_video_i2v",
-				"resolution": resolutionOrSize,
-				"duration":   params.Duration,
-			},
-		})
+		logger.Info(logComponent).
+			Str("model_name", model).
+			Str("model_provider", "DashScope").
+			Str("method", "generate_video_i2v").
+			Str("resolution", resolutionOrSize).
+			Int("duration", params.Duration).
+			Msg("DashScope generate video (i2v) started.")
 	} else {
 		sizeOrResolution := params.Size
 		if sizeOrResolution == "" {
 			sizeOrResolution = params.Resolution
 		}
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallStarted,
-			ModelName:     model,
-			ModelProvider: "DashScope",
-			IsStream:      false,
-			Extra: map[string]any{
-				"method":   "generate_video_t2v",
-				"size":     sizeOrResolution,
-				"duration": params.Duration,
-			},
-		})
+		logger.Info(logComponent).
+			Str("model_name", model).
+			Str("model_provider", "DashScope").
+			Str("method", "generate_video_t2v").
+			Str("size", sizeOrResolution).
+			Int("duration", params.Duration).
+			Msg("DashScope generate video (t2v) started.")
 	}
 
 	resp, err := CallDashScopeAPI(
@@ -433,16 +399,12 @@ func (c *DashScopeModelClient) GenerateVideo(
 	// 7. 解析响应 → 提取视频信息
 	videoURL, videoDuration, videoResolution, err := extractVideoInfo(resp)
 	if err != nil {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallError,
-			ModelName:     model,
-			ModelProvider: "DashScope",
-			IsStream:      false,
-			Error:         err,
-			Extra: map[string]any{
-				"method": "generate_video",
-			},
-		})
+		logger.Error(logComponent).
+			Str("model_name", model).
+			Str("model_provider", "DashScope").
+			Str("method", "generate_video").
+			Err(err).
+			Msg("DashScope generate video failed.")
 		return nil, err
 	}
 
@@ -451,16 +413,12 @@ func (c *DashScopeModelClient) GenerateVideo(
 	if len(videoURLSummary) > 100 {
 		videoURLSummary = videoURLSummary[:100] + "..."
 	}
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-		Event:         callback.LLMResponseReceived,
-		ModelName:     model,
-		ModelProvider: "DashScope",
-		IsStream:      false,
-		Extra: map[string]any{
-			"method":    "generate_video",
-			"video_url": videoURLSummary,
-		},
-	})
+	logger.Info(logComponent).
+		Str("model_name", model).
+		Str("model_provider", "DashScope").
+		Str("method", "generate_video").
+		Str("video_url", videoURLSummary).
+		Msg("DashScope generate video completed.")
 
 	videoResp := llmschema.NewVideoGenerationResponse(
 		llmschema.WithVideoModel(model),

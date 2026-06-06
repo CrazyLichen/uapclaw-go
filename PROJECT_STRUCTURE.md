@@ -82,7 +82,10 @@ uapclaw acp   → swarm/chat/acp_stdio → 调用 agentcore（SDK 库）
 │   │   │   ├── deepseek_client.go    # DeepSeek 客户端
 │   │   │   ├── siliconflow_client.go # SiliconFlow 客户端
 │   │   │   ├── headers.go            # Headers Helper
-│   │   │   ├── output_parser.go      # JsonOutputParser, MarkdownOutputParser
+│   │   │   ├── output_parsers/       # 输出解析器（2.16 节）
+│   │   │   │   ├── json_output_parser.go    # JsonOutputParser
+│   │   │   │   ├── markdown_output_parser.go # MarkdownOutputParser
+│   │   │   │   └── markdown_types.go        # MarkdownElement, MarkdownContent
 │   │   │   └── init.go               # init_model 工厂
 │   │   ├── prompt/
 │   │   │   ├── template.go           # Prompt 模板系统

@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -15,15 +14,32 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
-// BaseOutputParser LLM 输出解析器最小接口。
+// BaseOutputParser LLM 输出解析器接口。
 //
-// 2.6 节仅定义最小接口，2.16 节实现完整的 JsonOutputParser/MarkdownOutputParser。
-// 当前仅包含 Parse 方法，后续可扩展。
+// 2.6 节定义最小接口，2.16 节扩展完整方法（StreamParse + Parse 签名改为 any）。
 //
 // 对应 Python: openjiuwen/core/foundation/llm/output_parsers/output_parser.py (BaseOutputParser)
 type BaseOutputParser interface {
-	// Parse 解析 LLM 输出文本，返回结构化结果。
-	Parse(text string) (any, error)
+	// Parse 解析 LLM 输出，返回结构化结果。
+	//
+	// 输入可以是 string 或 *AssistantMessage（对齐 Python Union[str, AssistantMessage]），
+	// 实现时应通过类型断言处理。
+	Parse(input any) (any, error)
+
+	// StreamParse 流式解析 LLM 输出。
+	//
+	// 对应 Python: BaseOutputParser.stream_parse()。
+	// 注意：当前 model client 的 _astream_with_parser 路径不调用此方法，
+	// 而是反复调用 Parse()。此方法为独立流式解析场景预留。
+	StreamParse(chunks <-chan *llmschema.AssistantMessageChunk) <-chan StreamParsedResult
+}
+
+// StreamParsedResult 流式解析结果。
+type StreamParsedResult struct {
+	// Content 解析结果
+	Content any
+	// Error 解析错误
+	Error error
 }
 
 // BaseModelClient LLM 模型客户端接口，所有模型客户端实现必须满足此接口。
@@ -357,32 +373,53 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 		}
 	}
 
+	// 对齐 Python: _build_request_params 中使用 llm_logger.info（LogEventType.LLM_CALL_START），非回调
 	if isSensitive {
 		// 敏感模式：不记录 messages/tools
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallStarted,
-			ModelName:     model,
-			ModelProvider: modelProvider,
-			Temperature:   toFloat64Ptr(temperature),
-			TopP:          toFloat64Ptr(topP),
-			MaxTokens:     toIntPtr(maxTokens),
-			IsStream:      stream,
-			Extra:         map[string]any{"client_name": e.GetClientName(), "extra_params": extraParams, "stop": stop},
-		})
+		evt := logger.Info(logComponent).
+			Str("event_type", "llm_call_start").
+			Str("model_name", model).
+			Str("model_provider", modelProvider).
+			Bool("is_stream", stream).
+			Str("client_name", e.GetClientName())
+		if temperature != nil {
+			evt = evt.Any("temperature", temperature)
+		}
+		if topP != nil {
+			evt = evt.Any("top_p", topP)
+		}
+		if maxTokens != nil {
+			evt = evt.Any("max_tokens", maxTokens)
+		}
+		if stop != nil {
+			evt = evt.Any("stop", stop)
+		}
+		evt.Any("extra_params", extraParams).
+			Msg("Before request chat model, LLM request params ready.")
 	} else {
 		// 非敏感模式：记录 messages/tools
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMCallStarted,
-			ModelName:     model,
-			ModelProvider: modelProvider,
-			Messages:      messagesDict,
-			Tools:         reqParams["tools"],
-			Temperature:   toFloat64Ptr(temperature),
-			TopP:          toFloat64Ptr(topP),
-			MaxTokens:     toIntPtr(maxTokens),
-			IsStream:      stream,
-			Extra:         map[string]any{"client_name": e.GetClientName(), "extra_params": extraParams, "stop": stop},
-		})
+		evt := logger.Info(logComponent).
+			Str("event_type", "llm_call_start").
+			Str("model_name", model).
+			Str("model_provider", modelProvider).
+			Any("messages", messagesDict).
+			Any("tools", reqParams["tools"]).
+			Bool("is_stream", stream).
+			Str("client_name", e.GetClientName())
+		if temperature != nil {
+			evt = evt.Any("temperature", temperature)
+		}
+		if topP != nil {
+			evt = evt.Any("top_p", topP)
+		}
+		if maxTokens != nil {
+			evt = evt.Any("max_tokens", maxTokens)
+		}
+		if stop != nil {
+			evt = evt.Any("stop", stop)
+		}
+		evt.Any("extra_params", extraParams).
+			Msg("Before request chat model, LLM request params ready.")
 	}
 
 	return reqParams, nil
