@@ -52,8 +52,8 @@ func TestDeepMerge_用户有模板无_保留(t *testing.T) {
 func TestDeepMerge_递归合并嵌套map(t *testing.T) {
 	tmpl := map[string]any{
 		"server": map[string]any{
-			"host": "0.0.0.0",
-			"port": 8080,
+			"host":      "0.0.0.0",
+			"port":      8080,
 			"new_field": "value",
 		},
 	}
@@ -139,7 +139,7 @@ func TestMigrateFromTemplate_用户文件不存在(t *testing.T) {
 	userPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 创建模板
-	os.WriteFile(tmplPath, []byte("key: value\nnew_key: new_value\n"), 0o644)
+	_ = os.WriteFile(tmplPath, []byte("key: value\nnew_key: new_value\n"), 0o644)
 
 	changed, err := MigrateFromTemplate(tmplPath, userPath)
 	if err != nil {
@@ -165,10 +165,10 @@ func TestMigrateFromTemplate_新增配置项(t *testing.T) {
 	userPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 创建模板（含新字段）
-	os.WriteFile(tmplPath, []byte("key: value\nnew_key: new_value\n"), 0o644)
+	_ = os.WriteFile(tmplPath, []byte("key: value\nnew_key: new_value\n"), 0o644)
 
 	// 创建用户配置（缺少新字段）
-	os.WriteFile(userPath, []byte("key: user_value\n"), 0o644)
+	_ = os.WriteFile(userPath, []byte("key: user_value\n"), 0o644)
 
 	changed, err := MigrateFromTemplate(tmplPath, userPath)
 	if err != nil {
@@ -197,8 +197,8 @@ func TestMigrateFromTemplate_无需变更(t *testing.T) {
 	userPath := filepath.Join(tmpDir, "config.yaml")
 
 	content := "key: value\n"
-	os.WriteFile(tmplPath, []byte(content), 0o644)
-	os.WriteFile(userPath, []byte(content), 0o644)
+	_ = os.WriteFile(tmplPath, []byte(content), 0o644)
+	_ = os.WriteFile(userPath, []byte(content), 0o644)
 
 	changed, err := MigrateFromTemplate(tmplPath, userPath)
 	if err != nil {
@@ -215,9 +215,9 @@ func TestMigrateFromTemplate_保留用户自定义(t *testing.T) {
 	userPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 模板只有 key
-	os.WriteFile(tmplPath, []byte("key: value\n"), 0o644)
+	_ = os.WriteFile(tmplPath, []byte("key: value\n"), 0o644)
 	// 用户有 key 和 custom
-	os.WriteFile(userPath, []byte("key: user_value\ncustom: my_setting\n"), 0o644)
+	_ = os.WriteFile(userPath, []byte("key: user_value\ncustom: my_setting\n"), 0o644)
 
 	_, err := MigrateFromTemplate(tmplPath, userPath)
 	if err != nil {
@@ -340,11 +340,11 @@ func TestMigrateFromTemplate_用户文件读取失败(t *testing.T) {
 	tmplPath := filepath.Join(tmpDir, "template.yaml")
 
 	// 创建模板
-	os.WriteFile(tmplPath, []byte("key: value\n"), 0o644)
+	_ = os.WriteFile(tmplPath, []byte("key: value\n"), 0o644)
 
 	// 用户文件路径为一个目录（导致读取失败）
 	userPath := filepath.Join(tmpDir, "config.yaml")
-	os.MkdirAll(userPath, 0o755)
+	_ = os.MkdirAll(userPath, 0o755)
 
 	_, err := MigrateFromTemplate(tmplPath, userPath)
 	if err == nil {
@@ -400,7 +400,7 @@ func TestDeepCopyValue(t *testing.T) {
 func TestReadYAMLFile_空文件(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "empty.yaml")
-	os.WriteFile(path, []byte(""), 0o644)
+	_ = os.WriteFile(path, []byte(""), 0o644)
 
 	data, err := readYAMLFile(path)
 	if err != nil {

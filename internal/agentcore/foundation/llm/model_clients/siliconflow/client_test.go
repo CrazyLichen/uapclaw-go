@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -122,8 +123,8 @@ func TestSanitizeMessages_DictsPassthrough(t *testing.T) {
 		{"role": "user", "content": "你好"},
 		{"role": "assistant", "content": "", "tool_calls": []any{
 			map[string]any{
-				"id":   "call-1",
-				"type": "function",
+				"id":    "call-1",
+				"type":  "function",
 				"extra": "should_be_removed",
 				"function": map[string]any{
 					"name":       "test",
@@ -302,7 +303,7 @@ func TestSiliconFlowModelClient_Invoke_成功(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("你好！我是 SiliconFlow"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("你好！我是 SiliconFlow"))
 	}))
 	defer server.Close()
 
@@ -334,7 +335,7 @@ func TestSiliconFlowModelClient_Invoke_请求体含SanitizedToolCalls(t *testing
 		receivedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("好的"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("好的"))
 	}))
 	defer server.Close()
 
@@ -354,9 +355,9 @@ func TestSiliconFlowModelClient_Invoke_请求体含SanitizedToolCalls(t *testing
 			"content": "",
 			"tool_calls": []any{
 				map[string]any{
-					"id":         "call-1",
-					"type":       "", // 非标准 type，应被强制为 "function"
-					"extra":      "should_be_removed",
+					"id":    "call-1",
+					"type":  "", // 非标准 type，应被强制为 "function"
+					"extra": "should_be_removed",
 					"function": map[string]any{
 						"name":       "test_func",
 						"arguments":  "{}",
@@ -419,7 +420,7 @@ func TestSiliconFlowModelClient_Invoke_响应含ReasoningContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponseWithReasoning("答案是 42", "我需要计算一下..."))
+		_, _ = fmt.Fprint(w, mockCompletionResponseWithReasoning("答案是 42", "我需要计算一下..."))
 	}))
 	defer server.Close()
 
@@ -445,7 +446,7 @@ func TestSiliconFlowModelClient_Invoke_HTTP错误(t *testing.T) {
 	// 使用 httptest 返回 401，验证错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
 	}))
 	defer server.Close()
 
@@ -495,7 +496,7 @@ func TestSiliconFlowModelClient_Stream_成功(t *testing.T) {
 		}
 
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -546,7 +547,7 @@ func TestSiliconFlowModelClient_Stream_请求体含SanitizedToolCalls(t *testing
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -608,7 +609,7 @@ func TestSiliconFlowModelClient_Stream_HTTP错误(t *testing.T) {
 	// 使用 httptest 返回非 200，验证错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
 	}))
 	defer server.Close()
 
@@ -1183,7 +1184,7 @@ func TestSiliconFlowModelClient_Stream_无效JSON走logger(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -1224,7 +1225,7 @@ func TestSiliconFlowModelClient_Stream_OutputParser成功(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -1267,7 +1268,7 @@ func TestSiliconFlowModelClient_Stream_OutputParser错误(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -1311,7 +1312,7 @@ func TestSiliconFlowModelClient_Stream_SSE异常关闭(t *testing.T) {
 			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 		// 不发送 [DONE]，直接关闭连接
@@ -1347,11 +1348,11 @@ func TestSiliconFlowModelClient_Stream_Context取消(t *testing.T) {
 		flusher, _ := w.(http.Flusher)
 		// 持续发送数据
 		for i := 0; i < 100; i++ {
-			fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`)
 			flusher.Flush()
 			time.Sleep(10 * time.Millisecond)
 		}
-		fmt.Fprintf(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()
@@ -1377,5 +1378,181 @@ func TestSiliconFlowModelClient_Stream_Context取消(t *testing.T) {
 
 	// 验证流正常终止（不 panic）
 	for range result.Chunks {
+	}
+}
+
+// ──────────────────────────── parseStreamChunk 测试 ────────────────────────────
+
+func TestSiliconFlowModelClient_Stream_ReasoningContent(t *testing.T) {
+	// 流式响应包含 reasoning_content，验证正确解析
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"role":"assistant","content":"答案","reasoning_content":"思考过程"},"finish_reason":null}]}`,
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	if final.ReasoningContent != "思考过程" {
+		t.Errorf("ReasoningContent = %q, 期望 %q", final.ReasoningContent, "思考过程")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_ToolCallsDelta(t *testing.T) {
+	// 流式响应包含 tool_calls delta，验证正确解析
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}]}`,
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"Beijing\"}"}}]},"finish_reason":null}]}`,
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("北京天气")
+	result, err := client.Stream(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	if len(final.ToolCalls) == 0 {
+		t.Fatal("Final ToolCalls 不应为空")
+	}
+	if final.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("ToolCalls[0].Name = %q, 期望 %q", final.ToolCalls[0].Name, "get_weather")
+	}
+}
+
+func TestSiliconFlowModelClient_Stream_UsageOnlyChunk被丢弃(t *testing.T) {
+	// 流中包含无 choices 的 usage-only chunk（部分 API 实现），应被静默丢弃
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, _ := w.(http.Flusher)
+		chunks := []string{
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}`,
+			// 无 choices 的 usage-only chunk
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}`,
+			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"Qwen/Qwen2.5-7B-Instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		}
+		for _, chunk := range chunks {
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", server.URL),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	msg := model_clients.NewTextMessagesParam("Hi")
+	result, err := client.Stream(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+
+	final := result.Final()
+	if final == nil {
+		t.Fatal("Final 不应为 nil")
+	}
+	if final.Content.Text() != "Hi" {
+		t.Errorf("Content = %q, 期望 %q", final.Content.Text(), "Hi")
+	}
+}
+
+// ──────────────────────────── extractCostFromUsage 测试 ────────────────────────────
+
+func TestExtractCostFromUsage_含费用信息(t *testing.T) {
+	// usage 包含 cost 字段时正确提取
+	usage := &openai.ResponseUsage{
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+	}
+	// 通过 json 注入 cost 字段（ExtractCostInfo 查找 "cost" 键）
+	data, _ := json.Marshal(usage)
+	var usageMap map[string]any
+	_ = json.Unmarshal(data, &usageMap)
+	usageMap["cost"] = map[string]any{
+		"input_cost":  0.001,
+		"output_cost": 0.002,
+		"total_cost":  0.003,
+	}
+
+	inputCost, outputCost, totalCost := model_clients.ExtractCostInfo(usageMap)
+	if totalCost <= 0 {
+		t.Errorf("totalCost 应大于 0, 实际 %f (inputCost=%f, outputCost=%f)", totalCost, inputCost, outputCost)
+	}
+}
+
+func TestExtractCostFromUsage_无费用信息(t *testing.T) {
+	// usage 不含 cost 字段时返回 0
+	usage := &openai.ResponseUsage{
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+	}
+	data, _ := json.Marshal(usage)
+	var usageMap map[string]any
+	_ = json.Unmarshal(data, &usageMap)
+
+	inputCost, outputCost, totalCost := model_clients.ExtractCostInfo(usageMap)
+	if inputCost != 0 || outputCost != 0 || totalCost != 0 {
+		t.Errorf("无 cost 字段时应返回 0, 实际 inputCost=%f, outputCost=%f, totalCost=%f", inputCost, outputCost, totalCost)
 	}
 }

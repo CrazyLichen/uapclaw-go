@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -598,11 +598,11 @@ func validateVideoMessages(messages []*llmschema.UserMessage) (string, error) {
 // buildImageParameters 构建图片生成 API 的 parameters 部分。
 func buildImageParameters(params *model_clients.GenerateImageParams) map[string]any {
 	parameters := map[string]any{
-		"result_format":  "message",
-		"size":           params.Size,
-		"n":              params.N,
-		"prompt_extend":  params.PromptExtend,
-		"watermark":      params.Watermark,
+		"result_format": "message",
+		"size":          params.Size,
+		"n":             params.N,
+		"prompt_extend": params.PromptExtend,
+		"watermark":     params.Watermark,
 	}
 
 	if params.Seed > 0 {
@@ -723,7 +723,7 @@ func extractVideoInfo(resp *DashScopeResponse) (videoURL string, videoDuration f
 			case int:
 				videoDuration = float64(v)
 			case string:
-				fmt.Sscanf(v, "%f", &videoDuration)
+				_, _ = fmt.Sscanf(v, "%f", &videoDuration)
 			}
 			// 提取分辨率
 			if usage.Size != "" {

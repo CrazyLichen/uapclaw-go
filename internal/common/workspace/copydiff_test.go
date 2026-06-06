@@ -124,10 +124,10 @@ func TestCopyDirWithDiff_递归复制(t *testing.T) {
 	dstDir := filepath.Join(tmpDir, "dst")
 
 	// 创建源目录结构
-	os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
-	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
-	os.WriteFile(filepath.Join(srcDir, "skip_ZH.md"), []byte("zh"), 0o644)
+	_ = os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "skip_ZH.md"), []byte("zh"), 0o644)
 
 	var diff CopyDiffResult
 	ignorePatterns := []string{"*_ZH.md", "*_EN.md"}
@@ -156,13 +156,13 @@ func TestCopyDirWithDiffIncremental_增量复制(t *testing.T) {
 	dstDir := filepath.Join(tmpDir, "dst")
 
 	// 创建源目录
-	os.MkdirAll(srcDir, 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
-	os.WriteFile(filepath.Join(srcDir, "b.txt"), []byte("b"), 0o644)
+	_ = os.MkdirAll(srcDir, 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "b.txt"), []byte("b"), 0o644)
 
 	// 目标目录已有 a.txt
-	os.MkdirAll(dstDir, 0o755)
-	os.WriteFile(filepath.Join(dstDir, "a.txt"), []byte("old_a"), 0o644)
+	_ = os.MkdirAll(dstDir, 0o755)
+	_ = os.WriteFile(filepath.Join(dstDir, "a.txt"), []byte("old_a"), 0o644)
 
 	var diff CopyDiffResult
 	if err := copyDirWithDiffIncremental(srcDir, dstDir, &diff, nil); err != nil {
@@ -243,9 +243,9 @@ func TestCopyDirWithDiff_含子目录(t *testing.T) {
 	dstDir := filepath.Join(tmpDir, "dst")
 
 	// 创建源目录结构（含子目录）
-	os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
-	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
+	_ = os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
 
 	var diff CopyDiffResult
 	if err := copyDirWithDiff(srcDir, dstDir, &diff, nil); err != nil {
@@ -284,7 +284,7 @@ func TestCopyDirWithDiffIncremental_源目录不存在(t *testing.T) {
 func TestCopyFileWithDiff_目标创建失败(t *testing.T) {
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "src.txt")
-	os.WriteFile(src, []byte("hello"), 0o644)
+	_ = os.WriteFile(src, []byte("hello"), 0o644)
 
 	// 使用一个文件路径作为目标目录的父目录（导致 MkdirAll 失败）
 	dst := filepath.Join(tmpDir, "src.txt", "nested", "out.txt")

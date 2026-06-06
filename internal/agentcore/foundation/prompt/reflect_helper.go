@@ -14,7 +14,7 @@ func accessStructField(current any, field string) (any, error) {
 	rv := reflect.ValueOf(current)
 
 	// 解引用指针
-	for rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+	for rv.Kind() == reflect.Pointer || rv.Kind() == reflect.Interface {
 		if rv.IsNil() {
 			return nil, fmt.Errorf("nil pointer when accessing field %q", field)
 		}

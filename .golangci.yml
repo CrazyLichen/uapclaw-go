@@ -1,0 +1,36 @@
+# golangci-lint 配置
+# 启用核心 linter，确保代码质量
+
+version: "2"
+
+run:
+  # 单次运行超时时间
+  timeout: 5m
+  # Go 版本
+  go: "1.23"
+
+linters:
+  # 禁用所有默认 linter，只启用明确指定的
+  disable-all: true
+  enable:
+    - govet        # Go 编译器级别静态分析，捕获可疑代码结构
+    - errcheck     # 检查未处理的错误返回值
+    - staticcheck  # 增强版静态分析，捕获 bug 和性能问题
+
+linters-settings:
+  errcheck:
+    # 排除常见合理忽略的函数（fmt 系列返回值通常不需要检查）
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Fprint
+      - fmt.Printf
+      - fmt.Println
+      - fmt.Sprintf
+      - fmt.Sscanf
+
+issues:
+  # 不限制每类 linter 报告的问题数量
+  max-issues-per-linter: 0
+  # 不限制相同问题的报告数量
+  max-same-issues: 0

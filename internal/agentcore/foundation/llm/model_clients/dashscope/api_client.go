@@ -106,7 +106,7 @@ func CallDashScopeAPI(
 			exception.WithMsg(fmt.Sprintf("DashScope API 请求发送失败: %s", err)),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 8. 读取响应体
 	respBody, err := io.ReadAll(resp.Body)

@@ -386,11 +386,11 @@ func extractMultilineElements(text string, elements []*MarkdownElement) []*Markd
 			if len(tableLines) > 0 {
 				tableContent := strings.Join(tableLines, "\n")
 				elements = append(elements, &MarkdownElement{
-					Type:      MarkdownTableType,
-					Content:   map[string]any{"table": tableContent},
-					StartPos:  tableStartPos,
-					EndPos:    lineStartPos - 1,
-					Raw:       tableContent,
+					Type:     MarkdownTableType,
+					Content:  map[string]any{"table": tableContent},
+					StartPos: tableStartPos,
+					EndPos:   lineStartPos - 1,
+					Raw:      tableContent,
 				})
 				tableLines = nil
 			}
@@ -410,11 +410,11 @@ func extractMultilineElements(text string, elements []*MarkdownElement) []*Markd
 				listContent := strings.TrimSpace(strings.Join(listLines, "\n"))
 				if listContent != "" {
 					elements = append(elements, &MarkdownElement{
-						Type:      MarkdownListType,
-						Content:   map[string]any{"list": listContent},
-						StartPos:  listStartPos,
-						EndPos:    lineStartPos - 1,
-						Raw:       listContent,
+						Type:     MarkdownListType,
+						Content:  map[string]any{"list": listContent},
+						StartPos: listStartPos,
+						EndPos:   lineStartPos - 1,
+						Raw:      listContent,
 					})
 				}
 				listLines = nil
@@ -426,11 +426,11 @@ func extractMultilineElements(text string, elements []*MarkdownElement) []*Markd
 	if len(tableLines) > 0 {
 		tableContent := strings.Join(tableLines, "\n")
 		elements = append(elements, &MarkdownElement{
-			Type:      MarkdownTableType,
-			Content:   map[string]any{"table": tableContent},
-			StartPos:  tableStartPos,
-			EndPos:    len(text),
-			Raw:       tableContent,
+			Type:     MarkdownTableType,
+			Content:  map[string]any{"table": tableContent},
+			StartPos: tableStartPos,
+			EndPos:   len(text),
+			Raw:      tableContent,
 		})
 	}
 
@@ -439,11 +439,11 @@ func extractMultilineElements(text string, elements []*MarkdownElement) []*Markd
 		listContent := strings.TrimSpace(strings.Join(listLines, "\n"))
 		if listContent != "" {
 			elements = append(elements, &MarkdownElement{
-				Type:      MarkdownListType,
-				Content:   map[string]any{"list": listContent},
-				StartPos:  listStartPos,
-				EndPos:    len(text),
-				Raw:       listContent,
+				Type:     MarkdownListType,
+				Content:  map[string]any{"list": listContent},
+				StartPos: listStartPos,
+				EndPos:   len(text),
+				Raw:      listContent,
 			})
 		}
 	}

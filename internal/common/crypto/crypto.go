@@ -146,4 +146,3 @@ func NewDecryptFunc() func(envName, value string) (string, bool) {
 		return decrypted, true
 	}
 }
-

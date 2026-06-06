@@ -57,10 +57,10 @@ func TestFromModelClientConfig_WithDeployments(t *testing.T) {
 			"intelli_router_timeout":     45.0,
 			"intelli_router_strategy_kwargs": map[string]any{
 				"exploration_ratio": 0.15,
-				"w_health":         1.0,
-				"w_latency":        0.3,
+				"w_health":          1.0,
+				"w_latency":         0.3,
 			},
-			"intelli_router_enable_health_check":    true,
+			"intelli_router_enable_health_check":   true,
 			"intelli_router_health_check_interval": 120.0,
 		}),
 	)

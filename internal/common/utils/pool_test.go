@@ -248,7 +248,7 @@ func TestTransportPool_Release(t *testing.T) {
 	}
 
 	// 再获取一次
-	pool.Acquire(cfg)
+	_, _ = pool.Acquire(cfg)
 	if transport.RefCount() != 2 {
 		t.Fatalf("RefCount() = %d, want 2 after second Acquire", transport.RefCount())
 	}
@@ -270,8 +270,8 @@ func TestTransportPool_CloseAll(t *testing.T) {
 	cfg2 := DefaultTransportConfig()
 	cfg2.MaxIdleConns = 200
 
-	pool.Acquire(cfg1)
-	pool.Acquire(cfg2)
+	_, _ = pool.Acquire(cfg1)
+	_, _ = pool.Acquire(cfg2)
 
 	stats := pool.Stats()
 	total := stats["total_transports"].(int)
@@ -279,7 +279,7 @@ func TestTransportPool_CloseAll(t *testing.T) {
 		t.Fatalf("total_transports = %d, want 2", total)
 	}
 
-	pool.CloseAll()
+	_ = pool.CloseAll()
 
 	stats = pool.Stats()
 	total = stats["total_transports"].(int)
@@ -295,7 +295,7 @@ func TestTransportPool_Stats(t *testing.T) {
 	}
 
 	cfg := DefaultTransportConfig()
-	pool.Acquire(cfg)
+	_, _ = pool.Acquire(cfg)
 
 	stats := pool.Stats()
 	if stats["total_transports"] != 1 {
@@ -350,9 +350,9 @@ func TestResourcePool_Release(t *testing.T) {
 		},
 	)
 
-	pool.Acquire("key1")
-	pool.Acquire("key1") // ref=2
-	pool.Release("key1") // ref=1
+	_, _ = pool.Acquire("key1")
+	_, _ = pool.Acquire("key1") // ref=2
+	pool.Release("key1")        // ref=1
 
 	// 仍然可以获取
 	r, _ := pool.Acquire("key1")
@@ -437,8 +437,8 @@ func TestTransportPool_EvictOldest(t *testing.T) {
 	cfg1 := DefaultTransportConfig()
 	cfg2 := DefaultTransportConfig()
 	cfg2.MaxIdleConns = 200
-	pool.Acquire(cfg1)
-	pool.Acquire(cfg2)
+	_, _ = pool.Acquire(cfg1)
+	_, _ = pool.Acquire(cfg2)
 
 	// 释放使其引用计数降为 0
 	pool.Release(cfg1)
@@ -465,7 +465,7 @@ func TestTransportPool_AcquireClosedTransport(t *testing.T) {
 
 	cfg := DefaultTransportConfig()
 	transport1, _ := pool.Acquire(cfg)
-	transport1.Close()
+	_ = transport1.Close()
 
 	// 再次获取，因为已关闭，应创建新的
 	transport2, _ := pool.Acquire(cfg)
@@ -486,8 +486,8 @@ func TestResourcePool_ReleaseToZero(t *testing.T) {
 		},
 	)
 
-	pool.Acquire("key1") // ref=1
-	pool.Release("key1") // ref=0，应删除
+	_, _ = pool.Acquire("key1") // ref=1
+	pool.Release("key1")        // ref=0，应删除
 
 	// 再次获取应是新实例
 	r, _ := pool.Acquire("key1")
@@ -524,5 +524,5 @@ func TestTransportWithHTTPClient(t *testing.T) {
 		t.Fatal("client.Transport should not be nil")
 	}
 
-	transport.Close()
+	_ = transport.Close()
 }

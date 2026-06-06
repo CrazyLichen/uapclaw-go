@@ -2,7 +2,6 @@ package openai
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 )
@@ -93,6 +92,3 @@ func (r *SSEReader) ReadEvent() (string, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// errStreamAborted 流被外部取消的错误。
-var errStreamAborted = errors.New("stream aborted")

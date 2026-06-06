@@ -27,7 +27,7 @@
 // # 配置
 //
 // IntelliRouter 不需要 ModelClientConfig 级别的 api_key/api_base
-//（使用 WithSkipValidate 跳过校验），而是在每个 Deployment 中配置。
+// （使用 WithSkipValidate 跳过校验），而是在每个 Deployment 中配置。
 // 配置通过 ModelClientConfig.Extra 中的 intelli_router_* 前缀字段传递。
 //
 // # 注册

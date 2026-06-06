@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -47,11 +47,6 @@ func decodeRequestBody(t *testing.T, r *http.Request) map[string]any {
 // mockCompletionResponse 构造 OpenAI Chat Completion 响应 JSON
 func mockCompletionResponse(content string) string {
 	return fmt.Sprintf(`{"id":"chatcmpl-123","object":"chat.completion","created":1234567890,"model":"qwen-72b","choices":[{"index":0,"message":{"role":"assistant","content":%q},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`, content)
-}
-
-// mockCompletionResponseWithToolCalls 构造含 tool_calls 的响应
-func mockCompletionResponseWithToolCalls() string {
-	return `{"id":"chatcmpl-123","object":"chat.completion","created":1234567890,"model":"qwen-72b","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_abc","type":"function","index":0,"function":{"name":"get_weather","arguments":"{\"city\":\"Beijing\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`
 }
 
 // ──────────────────────────── NewInferenceAffinityModelClient 测试 ────────────────────────────
@@ -110,7 +105,7 @@ func TestInvoke_BasicCall(t *testing.T) {
 			t.Errorf("请求路径 = %q, 期望 /v1/chat/completions", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(mockCompletionResponse("你好！")))
+		_, _ = w.Write([]byte(mockCompletionResponse("你好！")))
 	}))
 	defer server.Close()
 
@@ -140,7 +135,7 @@ func TestInvoke_SanitizeToolCalls(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(mockCompletionResponse("ok")))
+		_, _ = w.Write([]byte(mockCompletionResponse("ok")))
 	}))
 	defer server.Close()
 
@@ -156,13 +151,13 @@ func TestInvoke_SanitizeToolCalls(t *testing.T) {
 	messages := model_clients.NewDictsMessagesParam([]map[string]any{
 		{"role": "user", "content": "hello"},
 		{
-			"role": "assistant",
+			"role":    "assistant",
 			"content": nil,
 			"tool_calls": []map[string]any{
 				{
-					"id":            "call_123",
-					"type":          "invalid_type", // 非标准 type，应被强制为 "function"
-					"extra_field":   "should_be_removed", // 非标准字段，应被移除
+					"id":          "call_123",
+					"type":        "invalid_type",      // 非标准 type，应被强制为 "function"
+					"extra_field": "should_be_removed", // 非标准字段，应被移除
 					"function": map[string]any{
 						"name":      "get_weather",
 						"arguments": "{\"city\":\"Beijing\"}",
@@ -210,7 +205,7 @@ func TestInvoke_WithCacheSharing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(mockCompletionResponse("ok")))
+		_, _ = w.Write([]byte(mockCompletionResponse("ok")))
 	}))
 	defer server.Close()
 
@@ -247,7 +242,7 @@ func TestInvoke_HTTPError(t *testing.T) {
 	// HTTP 错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error": "internal server error"}`))
+		_, _ = w.Write([]byte(`{"error": "internal server error"}`))
 	}))
 	defer server.Close()
 
@@ -272,10 +267,10 @@ func TestStream_BasicCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		// 发送流式数据
-		fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"你\"},\"finish_reason\":\"null\"}]}\n\n")
-		fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"好\"},\"finish_reason\":\"null\"}]}\n\n")
-		fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
-		fmt.Fprintf(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"你\"},\"finish_reason\":\"null\"}]}\n\n")
+		_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"好\"},\"finish_reason\":\"null\"}]}\n\n")
+		_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 	}))
 	defer server.Close()
 
@@ -314,8 +309,8 @@ func TestStream_WithCacheSharing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"null\"}]}\n\n")
-		fmt.Fprintf(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"qwen-72b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"null\"}]}\n\n")
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 	}))
 	defer server.Close()
 
@@ -372,7 +367,7 @@ func TestRelease_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status": "ok"}`))
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
 	}))
 	defer server.Close()
 
@@ -401,7 +396,7 @@ func TestRelease_HTTPError(t *testing.T) {
 	// 释放失败（非 200 响应）
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error": "internal error"}`))
+		_, _ = w.Write([]byte(`{"error": "internal error"}`))
 	}))
 	defer server.Close()
 
@@ -430,7 +425,7 @@ func TestRelease_NonJSONResponse(t *testing.T) {
 	// 非 JSON 响应仍返回 true（对齐 Python）
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`OK`))
+		_, _ = w.Write([]byte(`OK`))
 	}))
 	defer server.Close()
 
@@ -461,7 +456,7 @@ func TestRelease_WithTools(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedBody = decodeRequestBody(t, r)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "ok"}`))
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
 	}))
 	defer server.Close()
 
@@ -1153,9 +1148,9 @@ func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCertContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("not a valid pem certificate")
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("not a valid pem certificate")
+	_ = tmpFile.Close()
 
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),

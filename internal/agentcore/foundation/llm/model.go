@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -116,7 +116,7 @@ func (m *Model) Invoke(
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      false,
 		Extra: map[string]any{
-			"model_config":       m.ModelConfig,
+			"model_config":        m.ModelConfig,
 			"model_client_config": m.ClientConfig,
 		},
 	})
@@ -347,7 +347,7 @@ func (m *Model) resolveStreamModelName(paramModel string) string {
 
 // Format 实现 fmt.Formatter 接口，支持格式化输出 Model 信息。
 func (m *Model) Format(f fmt.State, _ rune) {
-	fmt.Fprintf(f, "Model(provider=%s, model=%s)",
+	_, _ = fmt.Fprintf(f, "Model(provider=%s, model=%s)",
 		m.ClientConfig.ClientProvider,
 		m.resolveModelName(""),
 	)

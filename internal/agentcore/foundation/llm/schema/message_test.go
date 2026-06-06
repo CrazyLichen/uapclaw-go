@@ -10,8 +10,8 @@ import (
 // TestRoleType_String 验证枚举字符串表示。
 func TestRoleType_String(t *testing.T) {
 	tests := []struct {
-		role    RoleType
-		want    string
+		role RoleType
+		want string
 	}{
 		{RoleTypeSystem, "system"},
 		{RoleTypeUser, "user"},

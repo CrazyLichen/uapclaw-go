@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 辅助函数 ────────────────────────────
@@ -587,7 +587,7 @@ func TestGenerateImage_RequestBodyFields(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -597,7 +597,7 @@ func TestGenerateImage_RequestBodyFields(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("一只猫")}
-	client.GenerateImage(context.Background(), msgs,
+	_, _ = client.GenerateImage(context.Background(), msgs,
 		model_clients.WithImageSize("1024*1024"),
 		model_clients.WithImageN(2),
 		model_clients.WithImageSeed(42),
@@ -674,7 +674,7 @@ func TestGenerateSpeech_RequestBodyFields(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -684,7 +684,7 @@ func TestGenerateSpeech_RequestBodyFields(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("你好世界")}
-	client.GenerateSpeech(context.Background(), msgs,
+	_, _ = client.GenerateSpeech(context.Background(), msgs,
 		model_clients.WithSpeechVoice("Serena"),
 		model_clients.WithSpeechLanguageType("Chinese"),
 	)
@@ -725,7 +725,7 @@ func TestGenerateVideo_RequestBodyFields_T2V(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -735,7 +735,7 @@ func TestGenerateVideo_RequestBodyFields_T2V(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("奔跑的猫")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoSize("1280*720"),
 		model_clients.WithVideoDuration(5),
 	)
@@ -771,7 +771,7 @@ func TestGenerateVideo_RequestBodyFields_I2V(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -781,7 +781,7 @@ func TestGenerateVideo_RequestBodyFields_I2V(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("让它动起来")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoImgURL("https://example.com/first-frame.jpg"),
 		model_clients.WithVideoResolution("1080P"),
 		model_clients.WithVideoNegativePrompt("blurry"),
@@ -817,7 +817,7 @@ func TestGenerateVideo_RequestBodyFields_WithSeed(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -827,7 +827,7 @@ func TestGenerateVideo_RequestBodyFields_WithSeed(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("测试视频")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoSeed(123),
 	)
 
@@ -853,7 +853,7 @@ func TestGenerateVideo_WithUsageInResponse(t *testing.T) {
 		usageBytes, _ := json.Marshal(usage)
 		resp.Usage = usageBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -893,7 +893,7 @@ func TestGenerateImage_MultiModalRequestBody(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -941,7 +941,7 @@ func TestGenerateImage_APIError(t *testing.T) {
 			Message:    "model is required",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -977,7 +977,7 @@ func TestGenerateImage_NoImagesInResponse(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1001,7 +1001,7 @@ func TestGenerateSpeech_NoAudioInResponse(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1025,7 +1025,7 @@ func TestGenerateVideo_NoVideoInResponse(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1069,7 +1069,7 @@ func TestGenerateVideo_I2V_WithSizeFallback(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1079,7 +1079,7 @@ func TestGenerateVideo_I2V_WithSizeFallback(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoImgURL("https://example.com/frame.jpg"),
 		model_clients.WithVideoSize("1280*720"),
 	)
@@ -1103,7 +1103,7 @@ func TestGenerateVideo_T2V_WithResolutionFallback(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1113,7 +1113,7 @@ func TestGenerateVideo_T2V_WithResolutionFallback(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoResolution("1080P"),
 	)
 
@@ -1136,7 +1136,7 @@ func TestGenerateVideo_WithAudioURL(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1146,7 +1146,7 @@ func TestGenerateVideo_WithAudioURL(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
-	client.GenerateVideo(context.Background(), msgs,
+	_, _ = client.GenerateVideo(context.Background(), msgs,
 		model_clients.WithVideoAudioURL("https://example.com/bgm.mp3"),
 	)
 
@@ -1169,7 +1169,7 @@ func TestGenerateSpeech_WithExtraParams(t *testing.T) {
 		outputBytes, _ := json.Marshal(output)
 		resp.Output = outputBytes
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -1179,7 +1179,7 @@ func TestGenerateSpeech_WithExtraParams(t *testing.T) {
 	)
 
 	msgs := []*llmschema.UserMessage{llmschema.NewUserMessage("test")}
-	client.GenerateSpeech(context.Background(), msgs,
+	_, _ = client.GenerateSpeech(context.Background(), msgs,
 		model_clients.WithSpeechExtra(map[string]any{"format": "wav", "sample_rate": 16000}),
 	)
 

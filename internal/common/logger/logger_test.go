@@ -30,7 +30,7 @@ func TestSetup_默认配置(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	// 验证全局 Logger 已初始化
 	globalMu.RLock()
@@ -52,7 +52,7 @@ func TestSetup_WithLogLevel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	levels := Levels()
 	if levels.Console != LogLevelDebug {
@@ -71,7 +71,7 @@ func TestGetLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	// 获取各组件 Logger
 	for _, comp := range allComponents() {
@@ -99,7 +99,7 @@ func TestGetLogger_写入日志(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	lg := getLogger(ComponentGateway)
 	lg.Info().Msg("测试日志消息")
@@ -133,7 +133,7 @@ func TestGetLogger_敏感数据脱敏(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	lg := getLogger(ComponentChannel)
 	lg.Info().Str("password", "secret123").Msg("登录请求")
@@ -194,7 +194,7 @@ func TestOutputDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	if got := OutputDir(); got != tmpDir {
 		t.Errorf("期望 OutputDir = %s，实际 %s", tmpDir, got)
@@ -224,7 +224,7 @@ func TestSetup_多次调用安全(t *testing.T) {
 	if err != nil {
 		t.Fatalf("第二次 Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	// 验证仍然使用第一次的 outputDir
 	if got := OutputDir(); got != tmpDir {
@@ -240,7 +240,7 @@ func TestSetup_日志级别过滤(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	lg := getLogger(ComponentGateway)
 
@@ -275,7 +275,7 @@ func Test组件级日志函数(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup 失败: %v", err)
 	}
-	defer Close()
+	defer func() { _ = Close() }()
 
 	// 测试各组件级日志函数
 	Info(ComponentCommon).Str("key", "val").Msg("info测试")

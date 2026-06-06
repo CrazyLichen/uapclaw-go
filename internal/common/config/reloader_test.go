@@ -15,13 +15,13 @@ func TestReloader_文件变更触发回调(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 创建初始配置
-	os.WriteFile(cfgPath, []byte("key: old\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: old\n"), 0o644)
 
 	cfg, err := New(cfgPath)
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	// 创建热重载器
 	reloader, err := NewReloader(cfg)
@@ -40,10 +40,10 @@ func TestReloader_文件变更触发回调(t *testing.T) {
 	if err := reloader.Start(); err != nil {
 		t.Fatalf("Start 失败: %v", err)
 	}
-	defer reloader.Stop()
+	defer func() { _ = reloader.Stop() }()
 
 	// 修改配置文件
-	os.WriteFile(cfgPath, []byte("key: new\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: new\n"), 0o644)
 
 	// 等待防抖 + 回调执行（防抖 500ms + 余量）
 	time.Sleep(1 * time.Second)
@@ -57,10 +57,10 @@ func TestReloader_防抖(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
-	os.WriteFile(cfgPath, []byte("key: initial\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: initial\n"), 0o644)
 
 	cfg, _ := New(cfgPath)
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	reloader, _ := NewReloader(cfg)
 	reloader.debounce = 200 * time.Millisecond // 短防抖方便测试
@@ -70,12 +70,12 @@ func TestReloader_防抖(t *testing.T) {
 		atomic.AddInt32(&reloadCount, 1)
 	})
 
-	reloader.Start()
-	defer reloader.Stop()
+	_ = reloader.Start()
+	defer func() { _ = reloader.Stop() }()
 
 	// 快速连续修改 3 次
 	for i := 0; i < 3; i++ {
-		os.WriteFile(cfgPath, []byte("key: updated\n"), 0o644)
+		_ = os.WriteFile(cfgPath, []byte("key: updated\n"), 0o644)
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -93,13 +93,13 @@ func TestReloader_Stop(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
-	os.WriteFile(cfgPath, []byte("key: value\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: value\n"), 0o644)
 
 	cfg, _ := New(cfgPath)
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	reloader, _ := NewReloader(cfg)
-	reloader.Start()
+	_ = reloader.Start()
 
 	// Stop 应该正常退出
 	if err := reloader.Stop(); err != nil {
@@ -111,10 +111,10 @@ func TestReloader_非目标文件不触发(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
-	os.WriteFile(cfgPath, []byte("key: value\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: value\n"), 0o644)
 
 	cfg, _ := New(cfgPath)
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	reloader, _ := NewReloader(cfg)
 	reloader.debounce = 100 * time.Millisecond
@@ -124,12 +124,12 @@ func TestReloader_非目标文件不触发(t *testing.T) {
 		atomic.AddInt32(&reloadCount, 1)
 	})
 
-	reloader.Start()
-	defer reloader.Stop()
+	_ = reloader.Start()
+	defer func() { _ = reloader.Stop() }()
 
 	// 修改同目录下的其他文件
 	otherFile := filepath.Join(tmpDir, "other.yaml")
-	os.WriteFile(otherFile, []byte("other: data\n"), 0o644)
+	_ = os.WriteFile(otherFile, []byte("other: data\n"), 0o644)
 
 	time.Sleep(300 * time.Millisecond)
 

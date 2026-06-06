@@ -1,7 +1,6 @@
 package output_parsers
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -305,15 +304,6 @@ func collectStreamResults(out <-chan StreamParsedResult) []any {
 		results = append(results, r.Content)
 	}
 	return results
-}
-
-// mustMarshalJSON 辅助函数，JSON 序列化失败时 panic。
-func mustMarshalJSON(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
 }
 
 // TestExtractText_ReturnsModelName 测试 ExtractText 从 AssistantMessage 提取 model_name。

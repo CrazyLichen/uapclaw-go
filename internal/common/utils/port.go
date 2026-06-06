@@ -96,7 +96,7 @@ func WaitForTCPPort(ctx context.Context, host string, port int, opts ...PortOpti
 
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), cfg.connectTimeout)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			if cfg.targetState == StateConnected {
 				return true
 			}

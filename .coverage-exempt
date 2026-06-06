@@ -1,0 +1,11 @@
+# 覆盖率豁免文件列表
+# 格式：每行一个相对于项目根目录的文件路径
+# 仅用于确实无法 mock 的外部依赖（如 CGO、文件系统特定路径、加密硬件等）
+# 豁免文件修改时仍会显示 📝 notice 提醒，但不会导致 CI 失败
+# 注意：能通过接口 mock / httptest / t.TempDir() 等方式测试的代码，不得加入此列表
+
+# crypto/aes_gcm.go — CGO 依赖 + 加密硬件绑定，无法在 CI 中 mock
+internal/common/crypto/aes_gcm.go
+
+# workspace/init.go — 依赖文件系统特定路径（~/.uapclaw/），init 阶段路径可能不存在
+internal/common/workspace/init.go

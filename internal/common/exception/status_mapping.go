@@ -27,18 +27,18 @@ type rangeRule struct {
 // manualOverrides 手动覆盖表：StatusCode.Name → ErrorCategory。
 // 对应 Python: _MANUAL_OVERRIDES_RAW
 var manualOverrides = map[string]ErrorCategory{
-	"CONTROLLER_INVOKE_LLM_FAILED":        ErrorCategoryFramework,
-	"TOOL_EXECUTION_ERROR":                ErrorCategoryExecution,
-	"TOOL_NOT_FOUND_ERROR":                ErrorCategoryValidation,
-	"AGENT_TEAM_EXECUTION_ERROR":          ErrorCategoryExecution,
-	"STORE_GRAPH_BACKEND_ALREADY_EXISTS":  ErrorCategoryValidation,
+	"CONTROLLER_INVOKE_LLM_FAILED":         ErrorCategoryFramework,
+	"TOOL_EXECUTION_ERROR":                 ErrorCategoryExecution,
+	"TOOL_NOT_FOUND_ERROR":                 ErrorCategoryValidation,
+	"AGENT_TEAM_EXECUTION_ERROR":           ErrorCategoryExecution,
+	"STORE_GRAPH_BACKEND_ALREADY_EXISTS":   ErrorCategoryValidation,
 	"STORE_GRAPH_PROTOCOL_NOT_IMPLEMENTED": ErrorCategoryValidation,
-	"STORE_GRAPH_BACKEND_NOT_FOUND":       ErrorCategoryValidation,
-	"AGENT_RL_PROXY_SERVER_START_FAILED":  ErrorCategoryFramework,
-	"AGENT_RL_PROCESSOR_NOT_FOUND":        ErrorCategoryValidation,
-	"AGENT_RL_REWARD_NOT_FOUND":           ErrorCategoryValidation,
-	"COMMON_ENCRYPTION_ERROR":             ErrorCategoryFramework,
-	"COMMON_DECRYPTION_ERROR":             ErrorCategoryFramework,
+	"STORE_GRAPH_BACKEND_NOT_FOUND":        ErrorCategoryValidation,
+	"AGENT_RL_PROXY_SERVER_START_FAILED":   ErrorCategoryFramework,
+	"AGENT_RL_PROCESSOR_NOT_FOUND":         ErrorCategoryValidation,
+	"AGENT_RL_REWARD_NOT_FOUND":            ErrorCategoryValidation,
+	"COMMON_ENCRYPTION_ERROR":              ErrorCategoryFramework,
+	"COMMON_DECRYPTION_ERROR":              ErrorCategoryFramework,
 }
 
 // keywordRules 关键字匹配规则（按优先级排列）。

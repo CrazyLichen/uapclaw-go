@@ -216,8 +216,8 @@ func NewGenerateSpeechParams(opts ...GenerateSpeechOption) *GenerateSpeechParams
 // NewGenerateVideoParams 创建 GenerateVideoParams（含默认值，通过 opts 覆盖）。
 func NewGenerateVideoParams(opts ...GenerateVideoOption) *GenerateVideoParams {
 	p := &GenerateVideoParams{
-		Duration:      5,
-		PromptExtend:  true,
+		Duration:     5,
+		PromptExtend: true,
 	}
 	for _, opt := range opts {
 		opt(p)

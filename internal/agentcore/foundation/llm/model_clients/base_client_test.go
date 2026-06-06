@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // newTestClientEmbed 创建测试用 BaseClientEmbed。

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -378,7 +378,7 @@ func TestDeepSeekModelClient_Invoke_成功(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("你好！我是 DeepSeek"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("你好！我是 DeepSeek"))
 	}))
 	defer server.Close()
 
@@ -410,7 +410,7 @@ func TestDeepSeekModelClient_Invoke_请求体含ReasoningContent(t *testing.T) {
 		receivedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("好的"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("好的"))
 	}))
 	defer server.Close()
 
@@ -461,7 +461,7 @@ func TestDeepSeekModelClient_Invoke_保留已有ReasoningContent(t *testing.T) {
 		receivedBody = decodeRequestBody(t, r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("继续"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("继续"))
 	}))
 	defer server.Close()
 
@@ -503,7 +503,7 @@ func TestDeepSeekModelClient_Invoke_响应含ReasoningContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponseWithReasoning("答案是 42", "我需要计算一下..."))
+		_, _ = fmt.Fprint(w, mockCompletionResponseWithReasoning("答案是 42", "我需要计算一下..."))
 	}))
 	defer server.Close()
 
@@ -529,7 +529,7 @@ func TestDeepSeekModelClient_Invoke_HTTP错误(t *testing.T) {
 	// 使用 httptest 返回 401，验证错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
 	}))
 	defer server.Close()
 
@@ -579,7 +579,7 @@ func TestDeepSeekModelClient_Stream_成功(t *testing.T) {
 		}
 
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -630,7 +630,7 @@ func TestDeepSeekModelClient_Stream_请求体含ReasoningContent(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -667,7 +667,7 @@ func TestDeepSeekModelClient_Stream_HTTP错误(t *testing.T) {
 	// 使用 httptest 返回非 200，验证错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
 	}))
 	defer server.Close()
 

@@ -26,9 +26,9 @@ type InitOption struct {
 //
 // 对应 Python: init_user_workspace 返回值
 type InitResult struct {
-	WorkspaceDir string        // 实际使用的工作区路径
+	WorkspaceDir string         // 实际使用的工作区路径
 	Diff         CopyDiffResult // 文件变更差异
-	Cancelled    bool          // 用户取消
+	Cancelled    bool           // 用户取消
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -247,9 +247,9 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 
 	// ----- 创建 agent 目录结构 -----
 	agentRoot := filepath.Join(workspaceDir, "agent")
-	os.MkdirAll(filepath.Join(agentRoot, ".checkpoint"), 0o755)
-	os.MkdirAll(filepath.Join(agentRoot, ".logs"), 0o755)
-	os.MkdirAll(filepath.Join(agentRoot, "sessions"), 0o755)
+	_ = os.MkdirAll(filepath.Join(agentRoot, ".checkpoint"), 0o755)
+	_ = os.MkdirAll(filepath.Join(agentRoot, ".logs"), 0o755)
+	_ = os.MkdirAll(filepath.Join(agentRoot, "sessions"), 0o755)
 
 	// ----- 复制 DeepAgent workspace 模板 -----
 	deepAgentWorkspace := filepath.Join(agentRoot, "workspace")
@@ -268,7 +268,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 			}
 		}
 	} else {
-		os.MkdirAll(deepAgentWorkspace, 0o755)
+		_ = os.MkdirAll(deepAgentWorkspace, 0o755)
 	}
 
 	// ----- 复制 memory 模板 -----
@@ -449,7 +449,7 @@ func setPreferredLanguage(configPath string, lang string) {
 		lines = append(lines, fmt.Sprintf("preferred_language: %s", lang))
 	}
 
-	os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0o644)
+	_ = os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
 // fileExists 检查文件是否存在。

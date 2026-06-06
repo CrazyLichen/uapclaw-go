@@ -107,7 +107,8 @@ func (s *Sanitizer) Sanitize(text string) string {
 	// 脱敏异常时返回原文
 	defer func() {
 		if r := recover(); r != nil {
-			// 静默恢复，返回原文
+			// 静默恢复，返回原文（recover 必须在 defer 中使用）
+			_ = r
 		}
 	}()
 

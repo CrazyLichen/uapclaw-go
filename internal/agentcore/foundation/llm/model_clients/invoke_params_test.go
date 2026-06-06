@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewInvokeParams_Defaults 测试 InvokeParams 默认值。
@@ -559,10 +559,10 @@ func TestBuildRequestParams_WithExtraInternalParams(t *testing.T) {
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams(
 		WithInvokeExtra(map[string]any{
-			"output_parser":       "should-be-filtered",
-			"tracer_record_data":  "should-be-filtered",
-			"custom_headers":      "should-be-filtered",
-			"valid_param":         "should-be-kept",
+			"output_parser":      "should-be-filtered",
+			"tracer_record_data": "should-be-filtered",
+			"custom_headers":     "should-be-filtered",
+			"valid_param":        "should-be-kept",
 		}),
 	)
 
@@ -665,9 +665,9 @@ func TestExtractCostInfo_CostObjectPromptCost(t *testing.T) {
 	// 测试 cost 对象中使用 prompt_cost / completion_cost 键名
 	obj := map[string]any{
 		"cost": map[string]any{
-			"prompt_cost":      0.02,
-			"completion_cost":  0.04,
-			"total_cost":       0.06,
+			"prompt_cost":     0.02,
+			"completion_cost": 0.04,
+			"total_cost":      0.06,
 		},
 	}
 	inputCost, outputCost, totalCost := ExtractCostInfo(obj)

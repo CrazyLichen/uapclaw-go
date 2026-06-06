@@ -29,8 +29,8 @@ func TestNew_指定路径(t *testing.T) {
 }
 
 func TestNew_环境变量覆盖路径(t *testing.T) {
-	os.Setenv(EnvConfigDir, "/custom/config/dir")
-	defer os.Unsetenv(EnvConfigDir)
+	_ = os.Setenv(EnvConfigDir, "/custom/config/dir")
+	defer func() { _ = os.Unsetenv(EnvConfigDir) }()
 
 	cfg, err := New("")
 	if err != nil {
@@ -81,14 +81,14 @@ func TestLoad_文件不存在(t *testing.T) {
 }
 
 func TestLoad_环境变量解析(t *testing.T) {
-	os.Setenv("DB_HOST", "db.example.com")
-	defer os.Unsetenv("DB_HOST")
-	os.Setenv("DB_PASSWORD", "secret123")
-	defer os.Unsetenv("DB_PASSWORD")
-	os.Setenv("MY_API_KEY", "sk-abc")
-	defer os.Unsetenv("MY_API_KEY")
-	os.Setenv("API_HOST", "api.example.com")
-	defer os.Unsetenv("API_HOST")
+	_ = os.Setenv("DB_HOST", "db.example.com")
+	defer func() { _ = os.Unsetenv("DB_HOST") }()
+	_ = os.Setenv("DB_PASSWORD", "secret123")
+	defer func() { _ = os.Unsetenv("DB_PASSWORD") }()
+	_ = os.Setenv("MY_API_KEY", "sk-abc")
+	defer func() { _ = os.Unsetenv("MY_API_KEY") }()
+	_ = os.Setenv("API_HOST", "api.example.com")
+	defer func() { _ = os.Unsetenv("API_HOST") }()
 
 	cfg, err := New("testdata/envvar_config.yaml")
 	if err != nil {
@@ -137,8 +137,8 @@ func TestLoad_环境变量默认值(t *testing.T) {
 }
 
 func TestLoad_DecryptFunc集成(t *testing.T) {
-	os.Setenv("MY_API_KEY", "encrypted_sk")
-	defer os.Unsetenv("MY_API_KEY")
+	_ = os.Setenv("MY_API_KEY", "encrypted_sk")
+	defer func() { _ = os.Unsetenv("MY_API_KEY") }()
 
 	decryptFn := func(envName, value string) (string, bool) {
 		return "decrypted_" + value, true
@@ -181,8 +181,8 @@ func TestLoad_NormalizeFunc(t *testing.T) {
 }
 
 func TestRaw_不含环境变量(t *testing.T) {
-	os.Setenv("DB_HOST", "db.example.com")
-	defer os.Unsetenv("DB_HOST")
+	_ = os.Setenv("DB_HOST", "db.example.com")
+	defer func() { _ = os.Unsetenv("DB_HOST") }()
 
 	cfg, err := New("testdata/envvar_config.yaml")
 	if err != nil {
@@ -336,7 +336,7 @@ func TestSet_更新值(t *testing.T) {
 
 	// 验证文件中的值
 	cfg2, _ := New(cfgPath)
-	cfg2.Load()
+	_, _ = cfg2.Load()
 	if cfg2.Get("server.host") != "0.0.0.0" {
 		t.Errorf("文件中期望 0.0.0.0，实际 %v", cfg2.Get("server.host"))
 	}
@@ -351,8 +351,8 @@ func TestSet_自动创建中间节点(t *testing.T) {
 		t.Fatalf("New 失败: %v", err)
 	}
 
-	cfg.Save(map[string]any{})
-	cfg.Load()
+	_ = cfg.Save(map[string]any{})
+	_, _ = cfg.Load()
 
 	err = cfg.Set("deep.nested.key", "value")
 	if err != nil {
@@ -373,10 +373,10 @@ func TestReload(t *testing.T) {
 		t.Fatalf("New 失败: %v", err)
 	}
 
-	cfg.Save(map[string]any{"key": "old"})
+	_ = cfg.Save(map[string]any{"key": "old"})
 
 	// 外部修改文件
-	os.WriteFile(cfgPath, []byte("key: new\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("key: new\n"), 0o644)
 
 	// 重新加载
 	err = cfg.Reload()
@@ -461,8 +461,8 @@ func TestSet_覆盖非map值(t *testing.T) {
 	}
 
 	// 先设置标量值
-	cfg.Save(map[string]any{"server": "scalar_value"})
-	cfg.Load()
+	_ = cfg.Save(map[string]any{"server": "scalar_value"})
+	_, _ = cfg.Load()
 
 	// 设置嵌套路径（中间节点是标量，应被覆盖为 map）
 	err = cfg.Set("server.host", "0.0.0.0")

@@ -7,9 +7,9 @@ import "testing"
 // TestReleaseAsset 验证 ReleaseAsset 结构体字段赋值
 func TestReleaseAsset(t *testing.T) {
 	asset := ReleaseAsset{
-		Name:         "uapclaw-0.2.0-linux-amd64.tar.gz",
-		DownloadURL:  "https://github.com/example/repo/releases/download/v0.2.0/uapclaw-0.2.0-linux-amd64.tar.gz",
-		Size:         1024000,
+		Name:        "uapclaw-0.2.0-linux-amd64.tar.gz",
+		DownloadURL: "https://github.com/example/repo/releases/download/v0.2.0/uapclaw-0.2.0-linux-amd64.tar.gz",
+		Size:        1024000,
 	}
 
 	if asset.Name != "uapclaw-0.2.0-linux-amd64.tar.gz" {
@@ -57,9 +57,9 @@ func TestReleaseInfo(t *testing.T) {
 // TestReleaseInfo_Prerelease 验证预发布版本标记
 func TestReleaseInfo_Prerelease(t *testing.T) {
 	info := ReleaseInfo{
-		Version:      "0.2.0-beta1",
-		SourceType:   "github",
-		Prerelease:   true,
+		Version:    "0.2.0-beta1",
+		SourceType: "github",
+		Prerelease: true,
 	}
 
 	if !info.Prerelease {

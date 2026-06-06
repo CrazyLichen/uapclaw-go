@@ -366,7 +366,7 @@ func TestValidateArgs(t *testing.T) {
 			schema: map[string]any{
 				"properties": map[string]any{
 					"config": map[string]any{
-						"type": "object",
+						"type":     "object",
 						"required": []any{"port"},
 						"properties": map[string]any{
 							"port": map[string]any{"type": "integer"},
@@ -382,7 +382,7 @@ func TestValidateArgs(t *testing.T) {
 			schema: map[string]any{
 				"properties": map[string]any{
 					"config": map[string]any{
-						"type": "object",
+						"type":     "object",
 						"required": []any{"port"},
 						"properties": map[string]any{
 							"port": map[string]any{"type": "integer"},

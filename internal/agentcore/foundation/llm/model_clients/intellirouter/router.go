@@ -131,14 +131,14 @@ type HealthCheckResult struct {
 // 对应 Python: intelli_router.health.checker.SDKHealthChecker
 // 后台定期检查端点可用性，加速恢复不健康的端点。
 type HealthChecker struct {
-	deployments    []*Deployment
-	checkInterval  time.Duration
-	checkTimeout   time.Duration
-	running        atomic.Bool
-	cancel         context.CancelFunc
-	lastCheckTime  time.Time
+	deployments      []*Deployment
+	checkInterval    time.Duration
+	checkTimeout     time.Duration
+	running          atomic.Bool
+	cancel           context.CancelFunc
+	lastCheckTime    time.Time
 	lastCheckResults map[string]HealthCheckResult
-	mu             sync.RWMutex
+	mu               sync.RWMutex
 }
 
 // SimpleShuffleStrategy 随机打乱策略。
@@ -194,23 +194,23 @@ type AdaptiveStrategy struct {
 	// WLatency 延迟权重
 	WLatency float64
 	// Session 亲和性相关
-	sessionTTL               float64 // Session 映射 TTL（秒），默认 1800（30分钟）
-	sessionCleanupInterval   float64 // Session 清理间隔（秒），默认 60
+	sessionTTL             float64 // Session 映射 TTL（秒），默认 1800（30分钟）
+	sessionCleanupInterval float64 // Session 清理间隔（秒），默认 60
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 默认策略参数
 const (
-	defaultTokenThreshold      = 1000.0
-	defaultRPMThreshold        = 10.0
-	defaultExplorationRatio    = 0.1
-	defaultWHealth             = 1.0
-	defaultWToken              = 0.5
-	defaultWRPM                = 0.3
-	defaultWLatency            = 0.2
-	defaultCooldownTime        = 60.0  // 冷却时间(秒)，对应 Python cooldown_time
-	defaultSessionTTL          = 1800.0 // Session TTL(秒)，30分钟
+	defaultTokenThreshold     = 1000.0
+	defaultRPMThreshold       = 10.0
+	defaultExplorationRatio   = 0.1
+	defaultWHealth            = 1.0
+	defaultWToken             = 0.5
+	defaultWRPM               = 0.3
+	defaultWLatency           = 0.2
+	defaultCooldownTime       = 60.0   // 冷却时间(秒)，对应 Python cooldown_time
+	defaultSessionTTL         = 1800.0 // Session TTL(秒)，30分钟
 	defaultSessionCleanup     = 60.0   // Session 清理间隔(秒)
 	defaultHealthCheckTimeout = 5.0    // 健康检查超时(秒)
 )
@@ -241,7 +241,7 @@ func NewDeployment(config DeploymentConfig) *Deployment {
 		Tags:       config.Tags,
 		Timeout:    config.Timeout,
 		VerifySSL:  config.VerifySSL,
-		healthy:    true,         // 默认健康
+		healthy:    true,        // 默认健康
 		avgLatency: math.Inf(1), // 默认 +inf，表示无延迟数据
 	}
 }
@@ -354,9 +354,9 @@ func NewHealthChecker(deployments []*Deployment, checkInterval, checkTimeout flo
 		checkTimeout = defaultHealthCheckTimeout
 	}
 	return &HealthChecker{
-		deployments:     deployments,
-		checkInterval:   time.Duration(checkInterval * float64(time.Second)),
-		checkTimeout:    time.Duration(checkTimeout * float64(time.Second)),
+		deployments:      deployments,
+		checkInterval:    time.Duration(checkInterval * float64(time.Second)),
+		checkTimeout:     time.Duration(checkTimeout * float64(time.Second)),
 		lastCheckResults: make(map[string]HealthCheckResult),
 	}
 }
@@ -479,7 +479,7 @@ func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
 		result.Error = fmt.Sprintf("请求失败: %v", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		result.IsHealthy = true
@@ -929,7 +929,7 @@ func (s *LowestLatencyStrategy) Select(deployments []*Deployment, _ string, _ *R
 	// 利用：选择延迟最低的端点
 	// 未被调用过的端点 avgLatency=+inf，自然不会被选为最低
 	var best *Deployment
-	var bestLatency float64 = math.Inf(1)
+	var bestLatency = math.Inf(1)
 
 	for _, dep := range deployments {
 		lat := dep.GetAvgLatency()

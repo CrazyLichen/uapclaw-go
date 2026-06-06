@@ -36,11 +36,19 @@ type InstanceStatus struct {
 }
 
 // instancesYAMLData instances.yaml 的顶层结构。
+//
+// 预留结构体，当前未直接使用（通过 map[string]any 操作 YAML 数据）。
+//
+//nolint:unused // 预留结构体，后续领域实现时启用
 type instancesYAMLData struct {
 	Instances map[string]*instanceEntry `yaml:"instances"`
 }
 
 // instanceEntry instances.yaml 中单个实例的条目。
+//
+// 预留结构体，当前未直接使用（通过 map[string]any 操作 YAML 数据）。
+//
+//nolint:unused // 预留结构体，后续领域实现时启用
 type instanceEntry struct {
 	Workspace string         `yaml:"workspace,omitempty"`
 	Ports     map[string]int `yaml:"ports,omitempty"`
@@ -419,7 +427,7 @@ func IsPortAvailable(host string, port int) bool {
 	if err != nil {
 		return false
 	}
-	listener.Close()
+	_ = listener.Close()
 	return true
 }
 

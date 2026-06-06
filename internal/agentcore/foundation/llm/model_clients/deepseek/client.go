@@ -3,9 +3,9 @@ package deepseek
 import (
 	"context"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -196,7 +196,7 @@ func (c *DeepSeekModelClient) enrichMessagesWithReasoningContent(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {
 	// 1. 先调用基类转换
-	result, err := c.OpenAIModelClient.ConvertMessagesToDict(messages)
+	result, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
 		return model_clients.MessagesParam{}, err
 	}

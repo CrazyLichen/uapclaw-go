@@ -8,9 +8,9 @@ import (
 	"net/http"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -142,7 +142,7 @@ func (c *OpenAIModelClient) Invoke(
 		})
 		return nil, c.WrapError("invoke", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 8. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
@@ -274,7 +274,7 @@ func (c *OpenAIModelClient) Stream(
 
 	// 9. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, c.HandleHTTPError(resp)
 	}
 
@@ -286,7 +286,7 @@ func (c *OpenAIModelClient) Stream(
 	modelName := fmt.Sprintf("%v", reqParams["model"])
 	go func() {
 		defer close(chunkChan)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// 对齐 Python _astream_with_parser: 累积内容缓冲区
 		accumulatedContent := ""

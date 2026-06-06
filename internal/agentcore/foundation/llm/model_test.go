@@ -3,12 +3,13 @@ package llm
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -33,18 +34,18 @@ func (r *eventRecorder) record(_ context.Context, data *LLMCallEventData) {
 
 // mockModelClient 模拟 BaseModelClient，用于测试 Model 门面
 type mockModelClient struct {
-	invokeResult   *llmschema.AssistantMessage
-	invokeErr      error
-	streamResult   *model_clients.StreamResult
-	streamErr      error
-	releaseResult  bool
-	releaseErr     error
-	genImageResult *llmschema.ImageGenerationResponse
-	genImageErr    error
+	invokeResult    *llmschema.AssistantMessage
+	invokeErr       error
+	streamResult    *model_clients.StreamResult
+	streamErr       error
+	releaseResult   bool
+	releaseErr      error
+	genImageResult  *llmschema.ImageGenerationResponse
+	genImageErr     error
 	genSpeechResult *llmschema.AudioGenerationResponse
-	genSpeechErr   error
-	genVideoResult *llmschema.VideoGenerationResponse
-	genVideoErr    error
+	genSpeechErr    error
+	genVideoResult  *llmschema.VideoGenerationResponse
+	genVideoErr     error
 }
 
 func (m *mockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
@@ -316,11 +317,11 @@ func TestNewModel_NilConfig_ReturnsCorrectError(t *testing.T) {
 // TestModel_Release 测试 Release 委托给底层客户端
 func TestModel_Release(t *testing.T) {
 	tests := []struct {
-		name      string
-		result    bool
-		err       error
-		wantBool  bool
-		wantErr   bool
+		name     string
+		result   bool
+		err      error
+		wantBool bool
+		wantErr  bool
 	}{
 		{
 			name:     "成功释放",
@@ -599,11 +600,14 @@ func TestModel_Stream_Error(t *testing.T) {
 func TestModel_Stream_OutputCallback(t *testing.T) {
 	fw := NewCallbackFramework()
 	var outputCalled int32
+	var outputDataMu sync.Mutex
 	var outputData *LLMCallEventData
 
 	fw.On(LLMStreamOutput, func(_ context.Context, data *LLMCallEventData) {
 		atomic.AddInt32(&outputCalled, 1)
+		outputDataMu.Lock()
 		outputData = data
+		outputDataMu.Unlock()
 		if data.Event != LLMStreamOutput {
 			t.Errorf("期望 LLMStreamOutput，实际 %s", data.Event)
 		}
@@ -645,9 +649,12 @@ func TestModel_Stream_OutputCallback(t *testing.T) {
 		t.Errorf("LLMStreamOutput 应被调用 1 次，实际 %d 次", outputCalled)
 	}
 
-	if outputData != nil && outputData.Usage != nil {
-		if outputData.Usage.InputTokens != 5 {
-			t.Errorf("Usage.InputTokens 期望 5，实际 %d", outputData.Usage.InputTokens)
+	outputDataMu.Lock()
+	data := outputData
+	outputDataMu.Unlock()
+	if data != nil && data.Usage != nil {
+		if data.Usage.InputTokens != 5 {
+			t.Errorf("Usage.InputTokens 期望 5，实际 %d", data.Usage.InputTokens)
 		}
 	}
 }

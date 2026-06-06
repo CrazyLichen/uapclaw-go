@@ -94,9 +94,6 @@ type VideoUsage struct {
 
 // DashScope 默认 API 域名
 const (
-	// defaultDashScopeHost DashScope 默认 API 主机地址
-	defaultDashScopeHost = "https://dashscope.aliyuncs.com"
-
 	// compatibleModeMarker OpenAI 兼容模式路径标识
 	compatibleModeMarker = "/compatible-mode/"
 )

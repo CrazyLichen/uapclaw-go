@@ -16,11 +16,11 @@ func TestInit_默认实例首次初始化(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -56,11 +56,11 @@ func TestInit_英文语言(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -92,13 +92,13 @@ func TestInit_命名实例(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvHome, tmpDir)
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvHome, tmpDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvHome)
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvHome)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -151,8 +151,8 @@ func TestPrepare_增量模式(t *testing.T) {
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
 	// 首次初始化
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	_, err := Prepare(InitOption{
 		Language:     "zh",
@@ -164,7 +164,7 @@ func TestPrepare_增量模式(t *testing.T) {
 
 	// 修改 AGENT.md
 	agentMD := filepath.Join(workspaceDir, "agent", "workspace", "AGENT.md")
-	os.WriteFile(agentMD, []byte("用户自定义内容"), 0o644)
+	_ = os.WriteFile(agentMD, []byte("用户自定义内容"), 0o644)
 
 	// 增量再次 Prepare（overwrite=false）
 	_, err = Prepare(InitOption{
@@ -188,7 +188,7 @@ func TestSetPreferredLanguage(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 初始内容
-	os.WriteFile(configPath, []byte("server:\n  host: localhost\n"), 0o644)
+	_ = os.WriteFile(configPath, []byte("server:\n  host: localhost\n"), 0o644)
 
 	setPreferredLanguage(configPath, "zh")
 
@@ -234,11 +234,11 @@ func TestInit_覆盖模式(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -261,8 +261,8 @@ func TestInit_自定义工作区路径(t *testing.T) {
 
 	customWorkspace := filepath.Join(tmpDir, "custom-ws")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	result, err := Init(InitOption{Language: "zh", WorkspaceDir: customWorkspace})
 	if err != nil {
@@ -282,8 +282,8 @@ func TestPrepare_覆盖模式(t *testing.T) {
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	// 首次初始化
 	_, err := Prepare(InitOption{
@@ -296,7 +296,7 @@ func TestPrepare_覆盖模式(t *testing.T) {
 
 	// 修改非多语言文件（如 USER.md，不受多语言忽略模式影响）
 	userMD := filepath.Join(workspaceDir, "agent", "workspace", "USER.md")
-	os.WriteFile(userMD, []byte("用户自定义内容"), 0o644)
+	_ = os.WriteFile(userMD, []byte("用户自定义内容"), 0o644)
 
 	// 覆盖模式再次 Prepare
 	diff, err := Prepare(InitOption{
@@ -325,8 +325,8 @@ func TestPrepare_无resources(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// 不设置 EnvResourcesDir，让它找不到 resources
-	os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	_, err := Prepare(InitOption{
 		Language:     "zh",
@@ -343,7 +343,7 @@ func TestFileExists(t *testing.T) {
 
 	// 文件存在
 	filePath := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(filePath, []byte("hello"), 0o644)
+	_ = os.WriteFile(filePath, []byte("hello"), 0o644)
 	if !fileExists(filePath) {
 		t.Error("存在的文件应返回 true")
 	}
@@ -404,7 +404,7 @@ func TestCopyDirWithDiff_空目录(t *testing.T) {
 	tmpDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, "empty_src")
 	dstDir := filepath.Join(tmpDir, "empty_dst")
-	os.MkdirAll(srcDir, 0o755)
+	_ = os.MkdirAll(srcDir, 0o755)
 
 	var diff CopyDiffResult
 	if err := copyDirWithDiff(srcDir, dstDir, &diff, nil); err != nil {
@@ -421,7 +421,7 @@ func TestSetPreferredLanguage_已有值(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	// 初始包含 preferred_language
-	os.WriteFile(configPath, []byte("preferred_language: zh\nserver:\n  host: localhost\n"), 0o644)
+	_ = os.WriteFile(configPath, []byte("preferred_language: zh\nserver:\n  host: localhost\n"), 0o644)
 
 	setPreferredLanguage(configPath, "en")
 
@@ -445,8 +445,8 @@ func TestSetPreferredLanguage_文件不存在(t *testing.T) {
 func TestResolvePreferredLanguage_从配置读取(t *testing.T) {
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
-	os.MkdirAll(configDir, 0o755)
-	os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("preferred_language: en\n"), 0o644)
+	_ = os.MkdirAll(configDir, 0o755)
+	_ = os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("preferred_language: en\n"), 0o644)
 
 	lang := resolvePreferredLanguage("", tmpDir)
 	if lang != "en" {
@@ -462,11 +462,11 @@ func TestInit_删除工作区失败(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvHome, tmpDir)
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvHome, tmpDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvHome)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvHome)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -519,11 +519,11 @@ func TestInit_覆盖模式目录已存在(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -542,7 +542,7 @@ func TestInit_覆盖模式目录已存在(t *testing.T) {
 	}
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
-	go func() { w.Close() }()
+	go func() { _ = w.Close() }()
 
 	// 覆盖模式初始化（非交互路径自动确认）
 	result, err := Init(InitOption{Overwrite: true, Language: "en"})
@@ -560,11 +560,11 @@ func TestInit_增量模式目录已存在(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -583,7 +583,7 @@ func TestInit_增量模式目录已存在(t *testing.T) {
 	}
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
-	go func() { w.Close() }()
+	go func() { _ = w.Close() }()
 
 	// 增量模式再次初始化（非交互路径自动确认）
 	result, err := Init(InitOption{Language: "en"})
@@ -601,11 +601,11 @@ func TestInit_非交互无语言参数(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -618,7 +618,7 @@ func TestInit_非交互无语言参数(t *testing.T) {
 	}
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
-	go func() { w.Close() }()
+	go func() { _ = w.Close() }()
 
 	// 不指定语言，非交互模式应使用默认 "zh"
 	result, err := Init(InitOption{})
@@ -636,11 +636,11 @@ func TestInit_非交互覆盖模式(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -659,7 +659,7 @@ func TestInit_非交互覆盖模式(t *testing.T) {
 	}
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
-	go func() { w.Close() }()
+	go func() { _ = w.Close() }()
 
 	// 不指定语言，覆盖模式，非交互路径
 	result, err := Init(InitOption{Overwrite: true})
@@ -674,11 +674,11 @@ func TestInit_非交互覆盖模式(t *testing.T) {
 // TestInit_无resources 测试 resources 目录不存在时 Init 返回错误
 func TestInit_无resources(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -697,8 +697,8 @@ func TestPrepare_英文语言(t *testing.T) {
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	diff, err := Prepare(InitOption{
 		Language:     "en",
@@ -726,11 +726,11 @@ func TestPrepare_无workspaceDir(t *testing.T) {
 	resDir := filepath.Join(tmpDir, "resources")
 	setupTestResources(t, resDir)
 
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
-	os.Setenv(EnvResourcesDir, resDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "workspace"))
+	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
-		os.Unsetenv(EnvDataDir)
-		os.Unsetenv(EnvResourcesDir)
+		_ = os.Unsetenv(EnvDataDir)
+		_ = os.Unsetenv(EnvResourcesDir)
 		SetUserHome("")
 	}()
 	SetUserHome("")
@@ -749,7 +749,7 @@ func TestCopyFileWithDiff_nilDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "src.txt")
 	dst := filepath.Join(tmpDir, "dst.txt")
-	os.WriteFile(src, []byte("hello"), 0o644)
+	_ = os.WriteFile(src, []byte("hello"), 0o644)
 
 	if err := copyFileWithDiff(src, dst, nil); err != nil {
 		t.Fatalf("copyFileWithDiff 失败: %v", err)
@@ -761,8 +761,8 @@ func TestCopyDirWithDiff_nilDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, "src")
 	dstDir := filepath.Join(tmpDir, "dst")
-	os.MkdirAll(srcDir, 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.MkdirAll(srcDir, 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
 
 	if err := copyDirWithDiff(srcDir, dstDir, nil, nil); err != nil {
 		t.Fatalf("copyDirWithDiff 失败: %v", err)
@@ -774,8 +774,8 @@ func TestCopyDirWithDiffIncremental_nilDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, "src")
 	dstDir := filepath.Join(tmpDir, "dst")
-	os.MkdirAll(srcDir, 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.MkdirAll(srcDir, 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
 
 	if err := copyDirWithDiffIncremental(srcDir, dstDir, nil, nil); err != nil {
 		t.Fatalf("copyDirWithDiffIncremental 失败: %v", err)
@@ -789,9 +789,9 @@ func TestCopyDirWithDiffIncremental_含子目录(t *testing.T) {
 	dstDir := filepath.Join(tmpDir, "dst")
 
 	// 创建源目录结构（含子目录）
-	os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
-	os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
-	os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
+	_ = os.MkdirAll(filepath.Join(srcDir, "sub"), 0o755)
+	_ = os.WriteFile(filepath.Join(srcDir, "a.txt"), []byte("a"), 0o644)
+	_ = os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("b"), 0o644)
 
 	var diff CopyDiffResult
 	if err := copyDirWithDiffIncremental(srcDir, dstDir, &diff, nil); err != nil {
@@ -810,14 +810,14 @@ func TestPrepare_无模板工作区(t *testing.T) {
 	tmpDir := t.TempDir()
 	resDir := filepath.Join(tmpDir, "resources")
 	// 只创建基础文件，不创建 agent/workspace 目录
-	os.MkdirAll(resDir, 0o755)
-	os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("server:\n  host: localhost\n"), 0o644)
-	os.WriteFile(filepath.Join(resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644)
+	_ = os.MkdirAll(resDir, 0o755)
+	_ = os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("server:\n  host: localhost\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644)
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	diff, err := Prepare(InitOption{
 		Language:     "zh",
@@ -846,8 +846,8 @@ func TestPrepare_已有配置文件不覆盖(t *testing.T) {
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	// 首次初始化
 	_, err := Prepare(InitOption{
@@ -860,7 +860,7 @@ func TestPrepare_已有配置文件不覆盖(t *testing.T) {
 
 	// 修改 .env 文件
 	envFile := filepath.Join(workspaceDir, "config", ".env")
-	os.WriteFile(envFile, []byte("CUSTOM=value\n"), 0o644)
+	_ = os.WriteFile(envFile, []byte("CUSTOM=value\n"), 0o644)
 
 	// 增量模式再次 Prepare
 	_, err = Prepare(InitOption{
@@ -886,8 +886,8 @@ func TestPrepare_覆盖模式覆盖配置文件(t *testing.T) {
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
 
-	os.Setenv(EnvResourcesDir, resDir)
-	defer os.Unsetenv(EnvResourcesDir)
+	_ = os.Setenv(EnvResourcesDir, resDir)
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
 
 	// 首次初始化
 	_, err := Prepare(InitOption{
@@ -900,7 +900,7 @@ func TestPrepare_覆盖模式覆盖配置文件(t *testing.T) {
 
 	// 修改配置文件
 	configYaml := filepath.Join(workspaceDir, "config", "config.yaml")
-	os.WriteFile(configYaml, []byte("custom: config\n"), 0o644)
+	_ = os.WriteFile(configYaml, []byte("custom: config\n"), 0o644)
 
 	// 覆盖模式
 	diff, err := Prepare(InitOption{
@@ -935,29 +935,29 @@ func setupTestResources(t *testing.T, resDir string) {
 		filepath.Join(resDir, "agent", "workspace", "memory"),
 	}
 	for _, d := range dirs {
-		os.MkdirAll(d, 0o755)
+		_ = os.MkdirAll(d, 0o755)
 	}
 
 	// config.yaml
-	os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("server:\n  host: localhost\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("server:\n  host: localhost\n"), 0o644)
 
 	// .env.template
-	os.WriteFile(filepath.Join(resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(resDir, ".env.template"), []byte("API_KEY=sk-test\n"), 0o644)
 
 	// 多语言文件
 	ws := filepath.Join(resDir, "agent", "workspace")
-	os.WriteFile(filepath.Join(ws, "AGENT_ZH.md"), []byte("# 智能体\n中文内容"), 0o644)
-	os.WriteFile(filepath.Join(ws, "AGENT_EN.md"), []byte("# AGENT\nEnglish content"), 0o644)
-	os.WriteFile(filepath.Join(ws, "HEARTBEAT_ZH.md"), []byte("心跳中文"), 0o644)
-	os.WriteFile(filepath.Join(ws, "HEARTBEAT_EN.md"), []byte("Heartbeat English"), 0o644)
-	os.WriteFile(filepath.Join(ws, "IDENTITY_ZH.md"), []byte("身份中文"), 0o644)
-	os.WriteFile(filepath.Join(ws, "IDENTITY_EN.md"), []byte("Identity English"), 0o644)
-	os.WriteFile(filepath.Join(ws, "SOUL_ZH.md"), []byte("灵魂中文"), 0o644)
-	os.WriteFile(filepath.Join(ws, "SOUL_EN.md"), []byte("Soul English"), 0o644)
-	os.WriteFile(filepath.Join(ws, "USER.md"), []byte("# User"), 0o644)
-	os.WriteFile(filepath.Join(ws, "agent-data.json"), []byte("{}"), 0o644)
-	os.WriteFile(filepath.Join(ws, "memory", "MEMORY_ZH.md"), []byte("记忆中文"), 0o644)
-	os.WriteFile(filepath.Join(ws, "memory", "MEMORY_EN.md"), []byte("Memory English"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "AGENT_ZH.md"), []byte("# 智能体\n中文内容"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "AGENT_EN.md"), []byte("# AGENT\nEnglish content"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "HEARTBEAT_ZH.md"), []byte("心跳中文"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "HEARTBEAT_EN.md"), []byte("Heartbeat English"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "IDENTITY_ZH.md"), []byte("身份中文"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "IDENTITY_EN.md"), []byte("Identity English"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "SOUL_ZH.md"), []byte("灵魂中文"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "SOUL_EN.md"), []byte("Soul English"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "USER.md"), []byte("# User"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "agent-data.json"), []byte("{}"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "memory", "MEMORY_ZH.md"), []byte("记忆中文"), 0o644)
+	_ = os.WriteFile(filepath.Join(ws, "memory", "MEMORY_EN.md"), []byte("Memory English"), 0o644)
 }
 
 // assertFileExists 断言文件存在

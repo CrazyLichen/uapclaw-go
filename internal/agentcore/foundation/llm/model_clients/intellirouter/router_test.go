@@ -29,12 +29,12 @@ func newTestDeployments() []*Deployment {
 // newTestRouter 创建测试用路由器。
 func newTestRouter(strategy string) *ReliableRouter {
 	return &ReliableRouter{
-		deployments:    newTestDeployments(),
-		strategy:       createStrategy(strategy, nil),
-		numRetries:     3,
-		timeout:        30.0,
-		sessionMap:     make(map[string]sessionEntry),
-		modelIndices:   make(map[string][]*Deployment),
+		deployments:  newTestDeployments(),
+		strategy:     createStrategy(strategy, nil),
+		numRetries:   3,
+		timeout:      30.0,
+		sessionMap:   make(map[string]sessionEntry),
+		modelIndices: make(map[string][]*Deployment),
 	}
 }
 
@@ -756,8 +756,8 @@ func TestCreateStrategy(t *testing.T) {
 func TestCreateStrategy_AdaptiveWithKwargs(t *testing.T) {
 	kwargs := map[string]any{
 		"exploration_ratio": 0.2,
-		"w_health":         2.0,
-		"w_latency":        0.5,
+		"w_health":          2.0,
+		"w_latency":         0.5,
 	}
 	s := createStrategy("adaptive", kwargs)
 	adp, ok := s.(*AdaptiveStrategy)

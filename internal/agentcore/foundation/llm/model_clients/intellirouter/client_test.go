@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -57,9 +57,9 @@ func createTestClientWithServer(t *testing.T, server *httptest.Server, numDeps i
 	cc := llmschema.NewModelClientConfig("intelli_router", "placeholder", "http://placeholder",
 		llmschema.WithVerifySSL(false),
 		llmschema.WithConfigExtra(map[string]any{
-			"intelli_router_deployments":    deployments,
-			"intelli_router_strategy":       "simple-shuffle",
-			"intelli_router_num_retries":    numDeps,
+			"intelli_router_deployments": deployments,
+			"intelli_router_strategy":    "simple-shuffle",
+			"intelli_router_num_retries": numDeps,
 		}),
 	)
 
@@ -116,7 +116,7 @@ func TestInvoke_Success(t *testing.T) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("Hello from IntelliRouter!"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("Hello from IntelliRouter!"))
 	}))
 	defer server.Close()
 
@@ -142,7 +142,7 @@ func TestInvoke_RetryOnFailure(t *testing.T) {
 	// 第一个服务器总是返回 500
 	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `internal server error`)
+		_, _ = fmt.Fprint(w, `internal server error`)
 	}))
 	defer failServer.Close()
 
@@ -150,7 +150,7 @@ func TestInvoke_RetryOnFailure(t *testing.T) {
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("Retry success!"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("Retry success!"))
 	}))
 	defer successServer.Close()
 
@@ -177,7 +177,7 @@ func TestInvoke_RetryOnFailure(t *testing.T) {
 func TestInvoke_AllEndpointsFail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `internal server error`)
+		_, _ = fmt.Fprint(w, `internal server error`)
 	}))
 	defer server.Close()
 
@@ -240,7 +240,7 @@ func TestInvoke_RecordSuccessOnSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer server.Close()
 
@@ -269,7 +269,7 @@ func TestInvoke_RecordSuccessOnSuccess(t *testing.T) {
 func TestInvoke_RecordFailureOnError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `error`)
+		_, _ = fmt.Fprint(w, `error`)
 	}))
 	defer server.Close()
 
@@ -292,7 +292,7 @@ func TestStream_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockSSEStreamResponse("Hello stream!"))
+		_, _ = fmt.Fprint(w, mockSSEStreamResponse("Hello stream!"))
 	}))
 	defer server.Close()
 
@@ -311,7 +311,7 @@ func TestStream_Success(t *testing.T) {
 func TestStream_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `internal server error`)
+		_, _ = fmt.Fprint(w, `internal server error`)
 	}))
 	defer server.Close()
 
@@ -328,7 +328,7 @@ func TestStream_RecordSuccessOnSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockSSEStreamResponse("stream ok"))
+		_, _ = fmt.Fprint(w, mockSSEStreamResponse("stream ok"))
 	}))
 	defer server.Close()
 
@@ -394,7 +394,7 @@ func TestHealthChecker_CheckAllWithServer(t *testing.T) {
 	// 正常服务器
 	okServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer okServer.Close()
 
@@ -427,7 +427,7 @@ func TestHealthChecker_CheckAllWithServer(t *testing.T) {
 func TestHealthChecker_GetLastResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer server.Close()
 
@@ -451,7 +451,7 @@ func TestHealthChecker_GetLastResults(t *testing.T) {
 func TestHealthChecker_HealthyRecovery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer server.Close()
 
@@ -475,7 +475,7 @@ func TestHealthChecker_HealthyRecovery(t *testing.T) {
 func TestReliableRouter_GetHealthCheckResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer server.Close()
 
@@ -596,7 +596,7 @@ func TestBytesReader(t *testing.T) {
 	}
 
 	// 再次读取应返回 EOF
-	n, err = br.Read(buf)
+	_, err = br.Read(buf)
 	if err == nil {
 		t.Error("读完后再读应返回错误")
 	}
@@ -761,7 +761,7 @@ func TestInvoke_UpdatesAPIConfig(t *testing.T) {
 		receivedKey = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockCompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockCompletionResponse("ok"))
 	}))
 	defer server.Close()
 

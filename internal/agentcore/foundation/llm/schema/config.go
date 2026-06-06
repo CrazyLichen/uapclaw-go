@@ -507,23 +507,23 @@ func init() {
 
 	// 初始化 ModelClientConfig 已知 JSON 键名集合
 	modelClientConfigKnownKeys = map[string]struct{}{
-		"client_id":      {},
+		"client_id":       {},
 		"client_provider": {},
-		"api_key":        {},
-		"api_base":       {},
-		"timeout":        {},
-		"max_retries":    {},
-		"verify_ssl":     {},
-		"ssl_cert":       {},
-		"custom_headers": {},
+		"api_key":         {},
+		"api_base":        {},
+		"timeout":         {},
+		"max_retries":     {},
+		"verify_ssl":      {},
+		"ssl_cert":        {},
+		"custom_headers":  {},
 	}
 
 	// 初始化 ModelRequestConfig 已知 JSON 键名集合
 	modelRequestConfigKnownKeys = map[string]struct{}{
-		"model":      {},
+		"model":       {},
 		"temperature": {},
-		"top_p":      {},
-		"max_tokens": {},
-		"stop":       {},
+		"top_p":       {},
+		"max_tokens":  {},
+		"stop":        {},
 	}
 }

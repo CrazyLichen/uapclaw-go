@@ -171,9 +171,8 @@ func TestAccessField_MapKeyNotFound(t *testing.T) {
 
 // testStruct 用于测试 reflect struct field 访问。
 type testStruct struct {
-	Name  string
-	Age   int
-	inner string // 未导出字段
+	Name string
+	Age  int
 }
 
 // TestAccessStructField_ExactMatch 验证精确匹配导出字段。

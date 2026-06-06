@@ -86,8 +86,8 @@ func TestComputeAutoPort(t *testing.T) {
 // TestInstancesYAMLPath 测试 instances.yaml 路径
 func TestInstancesYAMLPath(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	path := InstancesYAMLPath()
@@ -100,8 +100,8 @@ func TestInstancesYAMLPath(t *testing.T) {
 // TestInstancesDir 测试命名实例根目录
 func TestInstancesDir(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvHome, tmpDir)
-	defer os.Unsetenv(EnvHome)
+	_ = os.Setenv(EnvHome, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvHome) }()
 	SetUserHome("")
 
 	dir := InstancesDir()
@@ -114,8 +114,8 @@ func TestInstancesDir(t *testing.T) {
 // TestInstanceWorkspacePath 测试命名实例工作区路径
 func TestInstanceWorkspacePath(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvHome, tmpDir)
-	defer os.Unsetenv(EnvHome)
+	_ = os.Setenv(EnvHome, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvHome) }()
 	SetUserHome("")
 
 	path := InstanceWorkspacePath("alice")
@@ -128,8 +128,8 @@ func TestInstanceWorkspacePath(t *testing.T) {
 // TestLoadSaveInstancesYAML 测试 instances.yaml 读写
 func TestLoadSaveInstancesYAML(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 文件不存在时应返回空结构
@@ -174,8 +174,8 @@ func TestLoadSaveInstancesYAML(t *testing.T) {
 // TestUpdateInstancesYAML 测试更新实例条目
 func TestUpdateInstancesYAML(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	ports := CalculateInstancePorts(1)
@@ -200,13 +200,13 @@ func TestUpdateInstancesYAML(t *testing.T) {
 // TestGetInstanceIndex 测试获取实例序号
 func TestGetInstanceIndex(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 先添加两个实例
-	UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
-	UpdateInstancesYAML("bob", InstanceWorkspacePath("bob"), CalculateInstancePorts(2))
+	_ = UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
+	_ = UpdateInstancesYAML("bob", InstanceWorkspacePath("bob"), CalculateInstancePorts(2))
 
 	idx, err := GetInstanceIndex("alice")
 	if err != nil {
@@ -237,12 +237,12 @@ func TestGetInstanceIndex(t *testing.T) {
 // TestGetInstanceConfig 测试获取实例配置
 func TestGetInstanceConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 添加实例
-	UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
+	_ = UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
 
 	config, err := GetInstanceConfig("alice")
 	if err != nil {
@@ -271,12 +271,12 @@ func TestGetInstanceConfig(t *testing.T) {
 // TestLoadAllInstanceConfigs 测试加载所有实例配置
 func TestLoadAllInstanceConfigs(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
-	UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
-	UpdateInstancesYAML("bob", InstanceWorkspacePath("bob"), CalculateInstancePorts(2))
+	_ = UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
+	_ = UpdateInstancesYAML("bob", InstanceWorkspacePath("bob"), CalculateInstancePorts(2))
 
 	configs, err := LoadAllInstanceConfigs()
 	if err != nil {
@@ -309,7 +309,7 @@ func TestCheckPortConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("监听失败: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	occupiedPort := ln.Addr().(*net.TCPAddr).Port
 
@@ -385,7 +385,7 @@ func TestIsPortAvailable_端口被占用(t *testing.T) {
 	if err != nil {
 		t.Fatalf("监听失败: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	port := ln.Addr().(*net.TCPAddr).Port
 	if IsPortAvailable("127.0.0.1", port) {
@@ -396,8 +396,8 @@ func TestIsPortAvailable_端口被占用(t *testing.T) {
 // TestLoadAllInstanceConfigs_空 测试无实例时返回空 map
 func TestLoadAllInstanceConfigs_空(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	configs, err := LoadAllInstanceConfigs()
@@ -413,8 +413,8 @@ func TestLoadAllInstanceConfigs_空(t *testing.T) {
 func TestSaveInstancesYAML_创建目录(t *testing.T) {
 	tmpDir := t.TempDir()
 	// 将 instances.yaml 放在尚未存在的子目录中
-	os.Setenv(EnvDataDir, filepath.Join(tmpDir, "deep", "nested"))
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "deep", "nested"))
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	data := map[string]any{
@@ -428,8 +428,8 @@ func TestSaveInstancesYAML_创建目录(t *testing.T) {
 // TestGetInstanceConfig_不存在的实例 测试不存在的实例返回 nil
 func TestGetInstanceConfig_不存在的实例(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	config, err := GetInstanceConfig("nonexistent")
@@ -444,8 +444,8 @@ func TestGetInstanceConfig_不存在的实例(t *testing.T) {
 // TestUpdateInstancesYAML_自动计算端口 测试 ports 为 nil 时自动计算
 func TestUpdateInstancesYAML_自动计算端口(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// ports 传 nil，应自动计算
@@ -469,13 +469,13 @@ func TestUpdateInstancesYAML_自动计算端口(t *testing.T) {
 // TestLoadInstancesYAML_无效YAML 测试解析无效 YAML 文件时的错误
 func TestLoadInstancesYAML_无效YAML(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 创建无效 YAML 文件
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte(":\n  invalid: [yaml: content\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte(":\n  invalid: [yaml: content\n"), 0o644)
 
 	_, err := LoadInstancesYAML()
 	if err == nil {
@@ -486,12 +486,12 @@ func TestLoadInstancesYAML_无效YAML(t *testing.T) {
 // TestLoadInstancesYAML_空文件 测试空 YAML 文件
 func TestLoadInstancesYAML_空文件(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte(""), 0o644)
+	_ = os.WriteFile(yamlPath, []byte(""), 0o644)
 
 	data, err := LoadInstancesYAML()
 	if err != nil {
@@ -505,13 +505,13 @@ func TestLoadInstancesYAML_空文件(t *testing.T) {
 // TestGetInstanceIndex_instances不是map 测试 instances 字段不是 map 的情况
 func TestGetInstanceIndex_instances不是map(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 创建 instances 为非 map 的 YAML
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
 
 	idx, err := GetInstanceIndex("alice")
 	if err != nil {
@@ -525,12 +525,12 @@ func TestGetInstanceIndex_instances不是map(t *testing.T) {
 // TestGetInstanceConfig_instances不是map 测试 instances 不是 map 时返回 nil
 func TestGetInstanceConfig_instances不是map(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
 
 	config, err := GetInstanceConfig("alice")
 	if err != nil {
@@ -544,12 +544,12 @@ func TestGetInstanceConfig_instances不是map(t *testing.T) {
 // TestGetInstanceConfig_条目不是map 测试实例条目不是 map 时返回 nil
 func TestGetInstanceConfig_条目不是map(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances:\n  alice: \"not a map\"\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances:\n  alice: \"not a map\"\n"), 0o644)
 
 	config, err := GetInstanceConfig("alice")
 	if err != nil {
@@ -563,12 +563,12 @@ func TestGetInstanceConfig_条目不是map(t *testing.T) {
 // TestLoadAllInstanceConfigs_条目不是map 测试实例条目不是 map 时跳过
 func TestLoadAllInstanceConfigs_条目不是map(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances:\n  alice: \"not a map\"\n  bob:\n    workspace: /tmp/bob\n    ports:\n      agent_server: 28092\n      web: 29000\n      gateway: 29001\n      frontend: 6173\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances:\n  alice: \"not a map\"\n  bob:\n    workspace: /tmp/bob\n    ports:\n      agent_server: 28092\n      web: 29000\n      gateway: 29001\n      frontend: 6173\n"), 0o644)
 
 	configs, err := LoadAllInstanceConfigs()
 	if err != nil {
@@ -585,13 +585,13 @@ func TestLoadAllInstanceConfigs_条目不是map(t *testing.T) {
 // TestUpdateInstancesYAML_更新已有实例 测试更新已有实例条目
 func TestUpdateInstancesYAML_更新已有实例(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 先创建实例
 	ports1 := CalculateInstancePorts(1)
-	UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), ports1)
+	_ = UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), ports1)
 
 	// 更新同一个实例（ports 不为 nil，已在 instances 中）
 	ports2 := CalculateInstancePorts(2)
@@ -611,13 +611,13 @@ func TestUpdateInstancesYAML_更新已有实例(t *testing.T) {
 // TestUpdateInstancesYAML_instances不是map 测试 instances 字段不是 map 时重建
 func TestUpdateInstancesYAML_instances不是map(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 创建 instances 为非 map 的 YAML
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances: \"not a map\"\n"), 0o644)
 
 	// 应能正常更新（重建 instances 为 map）
 	ports := CalculateInstancePorts(1)
@@ -641,13 +641,13 @@ func TestUpdateInstancesYAML_instances不是map(t *testing.T) {
 // TestGetInstanceConfig_缺失端口 测试实例配置中缺失端口时自动填充
 func TestGetInstanceConfig_缺失端口(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 创建只有部分端口的实例
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances:\n  alice:\n    workspace: /tmp/alice\n    ports:\n      agent_server: 28092\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances:\n  alice:\n    workspace: /tmp/alice\n    ports:\n      agent_server: 28092\n"), 0o644)
 
 	config, err := GetInstanceConfig("alice")
 	if err != nil {
@@ -669,12 +669,12 @@ func TestGetInstanceConfig_缺失端口(t *testing.T) {
 // TestGetInstanceConfig_自定义workspace 测试实例配置中使用自定义 workspace
 func TestGetInstanceConfig_自定义workspace(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.WriteFile(yamlPath, []byte("instances:\n  alice:\n    workspace: /custom/path/alice\n    ports:\n      agent_server: 28092\n      web: 29000\n      gateway: 29001\n      frontend: 6173\n"), 0o644)
+	_ = os.WriteFile(yamlPath, []byte("instances:\n  alice:\n    workspace: /custom/path/alice\n    ports:\n      agent_server: 28092\n      web: 29000\n      gateway: 29001\n      frontend: 6173\n"), 0o644)
 
 	config, err := GetInstanceConfig("alice")
 	if err != nil {
@@ -697,13 +697,13 @@ func TestSaveInstancesYAML_写入失败(t *testing.T) {
 // TestLoadInstancesYAML_读取失败 测试 LoadInstancesYAML 读取非 YAML 文件的错误
 func TestLoadInstancesYAML_读取失败(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 创建一个目录为 instances.yaml（导致 ReadFile 失败）
 	yamlPath := filepath.Join(tmpDir, "instances.yaml")
-	os.MkdirAll(yamlPath, 0o755)
+	_ = os.MkdirAll(yamlPath, 0o755)
 
 	_, err := LoadInstancesYAML()
 	if err == nil {
@@ -714,12 +714,12 @@ func TestLoadInstancesYAML_读取失败(t *testing.T) {
 // TestGetInstanceIndex_新实例 测试不存在的实例返回新序号
 func TestGetInstanceIndex_新实例(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 添加一个实例
-	UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
+	_ = UpdateInstancesYAML("alice", InstanceWorkspacePath("alice"), CalculateInstancePorts(1))
 
 	// 查询不存在的实例
 	idx, err := GetInstanceIndex("bob")

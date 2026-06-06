@@ -156,7 +156,7 @@ func replaceMissingPlaceholders(s string) string {
 				key := s[i+1 : j]
 				// 仅处理合法的占位符名（字母/数字/下划线）
 				if isValidPlaceholderName(key) {
-					result.WriteString(fmt.Sprintf(missingKeyPlaceholder, key))
+					fmt.Fprintf(&result, missingKeyPlaceholder, key)
 					i = j + 1
 					continue
 				}
@@ -178,7 +178,7 @@ func isValidPlaceholderName(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
 			return false
 		}
 	}

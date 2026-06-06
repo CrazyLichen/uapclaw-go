@@ -97,8 +97,8 @@ func (c *AesGcmCrypt) Decrypt(key []byte, ciphertext string) (string, error) {
 	}
 
 	// 计算各部分的 hex 长度
-	nonceHexLen := NonceLength * 2  // 24
-	tagHexLen := TagLength * 2      // 32
+	nonceHexLen := NonceLength * 2    // 24
+	tagHexLen := TagLength * 2        // 32
 	minLen := nonceHexLen + tagHexLen // 56
 
 	if len(ciphertext) < minLen {

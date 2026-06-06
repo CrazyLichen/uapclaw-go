@@ -1,0 +1,305 @@
+# CI 自动化流水线
+# 触发条件：push 到 main 或 PR 到 main
+# 阶段：Lint → Test（覆盖率 ≥ 85% + 修改文件覆盖检查 + 回归检查）→ Build（Linux + Windows 双平台）
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支的并发运行只保留最新的，取消旧的
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────── Lint ────────────────────────────
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: 验证代码格式 (gofmt)
+        run: |
+          output=$(gofmt -l .)
+          if [ -n "$output" ]; then
+            echo "::error::以下文件格式不符合 gofmt："
+            echo "$output"
+            exit 1
+          fi
+          echo "✅ 所有文件格式符合 gofmt"
+
+      - name: 运行 golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.0
+
+  # ──────────────────────────── Test ────────────────────────────
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: 恢复覆盖率基线缓存
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: coverage-baseline.txt
+          key: coverage-baseline-pr-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-main-
+        continue-on-error: true
+
+      - name: 运行单元测试（带覆盖率）
+        run: go test -tags=test -race -coverprofile=coverage.out ./...
+
+      - name: 检查覆盖率阈值（≥ 85%）
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "📊 总覆盖率: ${COVERAGE}%"
+          PASS=$(echo "$COVERAGE >= 85" | bc -l)
+          if [ "$PASS" != "1" ]; then
+            echo "::error::覆盖率 ${COVERAGE}% 低于阈值 85%"
+            exit 1
+          fi
+          echo "✅ 覆盖率达标"
+
+      - name: 检查修改文件覆盖率
+        run: |
+          # 确定对比基准
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/main"
+          else
+            BASE_REF="HEAD~1"
+          fi
+
+          # 获取修改的 .go 源码文件（排除 _test.go 和 doc.go）
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACM $BASE_REF...HEAD -- '*.go' | grep -v '_test\.go$' | grep -v '/doc\.go$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "📋 没有检测到修改的源码文件，跳过覆盖率检查"
+            exit 0
+          fi
+
+          echo "📋 修改的源码文件："
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # 读取豁免文件列表（格式：每行一个相对路径，# 开头为注释）
+          EXEMPT_FILES=""
+          if [ -f .coverage-exempt ]; then
+            EXEMPT_FILES=$(grep -v '^#' .coverage-exempt | grep -v '^$' || true)
+            if [ -n "$EXEMPT_FILES" ]; then
+              echo "📋 豁免文件列表："
+              echo "$EXEMPT_FILES"
+              echo ""
+            fi
+          fi
+
+          # 从 coverage.out 计算每个修改文件的加权覆盖率
+          HAS_ERROR=false
+          echo "📊 修改文件覆盖率检查结果："
+          echo "| 文件 | 覆盖率 | 状态 |"
+          echo "|------|--------|------|"
+
+          for file in $CHANGED_FILES; do
+            # 检查是否在豁免列表中
+            IS_EXEMPT=false
+            if [ -n "$EXEMPT_FILES" ]; then
+              for exempt in $EXEMPT_FILES; do
+                if [ "$file" = "$exempt" ]; then
+                  IS_EXEMPT=true
+                  break
+                fi
+              done
+            fi
+
+            # 将文件路径转换为模块路径（coverage.out 中的格式）
+            mod_path="github.com/uapclaw/uapclaw-go/${file}"
+
+            # 从 coverage.out 提取该文件的覆盖数据
+            file_data=$(grep "^${mod_path}:" coverage.out || true)
+
+            if [ -z "$file_data" ]; then
+              echo "| \`${file}\` | N/A | ⏭️ 无可执行语句 |"
+              continue
+            fi
+
+            # 计算加权覆盖率：被执行语句数 / 总语句数
+            total_stmts=0
+            covered_stmts=0
+            while IFS= read -r line; do
+              # 解析格式: file:start.col,end.col numStmts count
+              stmts=$(echo "$line" | awk '{print $(NF-1)}')
+              count=$(echo "$line" | awk '{print $NF}')
+              total_stmts=$((total_stmts + stmts))
+              if [ "$count" -gt 0 ]; then
+                covered_stmts=$((covered_stmts + stmts))
+              fi
+            done <<< "$file_data"
+
+            if [ "$total_stmts" -eq 0 ]; then
+              echo "| \`${file}\` | N/A | ⏭️ 无可执行语句 |"
+              continue
+            fi
+
+            pct=$(echo "scale=1; $covered_stmts * 100 / $total_stmts" | bc)
+
+            if [ "$IS_EXEMPT" = true ]; then
+              echo "| \`${file}\` | ${pct}% | 📝 豁免（无法 mock 的外部依赖） |"
+              echo "::notice file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，但已在 .coverage-exempt 中豁免"
+            elif [ "$(echo "$pct < 85" | bc -l)" = "1" ]; then
+              echo "| \`${file}\` | ${pct}% | ❌ 覆盖率不足 |"
+              echo "::error file=${file}::修改文件的覆盖率 ${pct}% 低于 85%，请补充单元测试（如无法 mock，可在 .coverage-exempt 中豁免）"
+              HAS_ERROR=true
+            else
+              echo "| \`${file}\` | ${pct}% | ✅ |"
+            fi
+          done
+
+          if [ "$HAS_ERROR" = true ]; then
+            echo ""
+            echo "::error::存在覆盖率低于 85% 的修改文件，请补充单元测试（如无法 mock，可在 .coverage-exempt 中豁免）"
+            exit 1
+          fi
+
+      - name: 覆盖率回归检查
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ ! -f coverage-baseline.txt ]; then
+            echo "::warning::未找到 main 分支覆盖率基线（首次运行或缓存已过期），跳过回归检查"
+            exit 0
+          fi
+
+          BASELINE=$(cat coverage-baseline.txt)
+          CURRENT=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          DIFF=$(echo "scale=1; $BASELINE - $CURRENT" | bc)
+
+          echo "📊 覆盖率回归检查："
+          echo "  - main 基线覆盖率: ${BASELINE}%"
+          echo "  - 当前 PR 覆盖率:  ${CURRENT}%"
+          echo "  - 差值: ${DIFF}%"
+
+          if [ "$(echo "$DIFF > 1.5" | bc -l)" = "1" ]; then
+            echo "::error::覆盖率回归超过 1.5%（基线 ${BASELINE}% → 当前 ${CURRENT}%，下降 ${DIFF}%），请补充单元测试"
+            exit 1
+          elif [ "$(echo "$DIFF > 0" | bc -l)" = "1" ]; then
+            echo "::warning::覆盖率有所下降（基线 ${BASELINE}% → 当前 ${CURRENT}%，下降 ${DIFF}%），建议补充单元测试"
+          else
+            echo "✅ 覆盖率未下降"
+          fi
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+
+      - name: 保存覆盖率基线
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+          echo "$COVERAGE" > coverage-baseline.txt
+          echo "📊 已保存覆盖率基线: ${COVERAGE}%"
+
+      - name: 写入覆盖率基线缓存
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: coverage-baseline.txt
+          key: coverage-baseline-main-${{ github.sha }}
+
+  # ──────────────────────────── Build ────────────────────────────
+
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    needs: [lint, test]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            goos: linux
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+            goos: windows
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: 获取版本信息
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
+          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+          echo "date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+
+      - name: 构建 uapclaw
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p bin
+          go build \
+            -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
+              -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
+              -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
+            -o bin/ \
+            ./cmd/uapclaw/
+
+      - name: 构建 jiuwenbox
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p bin
+          go build \
+            -ldflags "-X github.com/uapclaw/uapclaw-go/internal/common/version.Version=${{ steps.version.outputs.version }} \
+              -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=${{ steps.version.outputs.commit }} \
+              -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=${{ steps.version.outputs.date }}" \
+            -o bin/ \
+            ./cmd/jiuwenbox/
+
+      - name: 验证构建产物
+        shell: bash
+        run: |
+          echo "📋 构建产物："
+          ls -la bin/ 2>/dev/null || dir bin\\

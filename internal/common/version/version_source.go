@@ -142,7 +142,7 @@ func (s *GitHubReleasesSource) fetchJSON(ctx context.Context) (map[string]interf
 	if err != nil {
 		return nil, fmt.Errorf("HTTP 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -194,9 +194,9 @@ func (s *GitHubReleasesSource) parseRelease(data map[string]interface{}) (*Relea
 			size, _ := assetMap["size"].(float64)
 
 			assets = append(assets, ReleaseAsset{
-				Name:         name,
-				DownloadURL:  downloadURL,
-				Size:         int64(size),
+				Name:        name,
+				DownloadURL: downloadURL,
+				Size:        int64(size),
 			})
 		}
 	}

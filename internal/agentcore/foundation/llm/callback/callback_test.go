@@ -107,16 +107,16 @@ func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
 	}
 }
 
-// TestCallbackFramework_TriggerNilContext 测试 nil context 不触发回调
-func TestCallbackFramework_TriggerNilContext(t *testing.T) {
+// TestCallbackFramework_TriggerContextTODO 测试 context.TODO() 正常触发回调
+func TestCallbackFramework_TriggerContextTODO(t *testing.T) {
 	fw := NewCallbackFramework()
 	mock := &mockCallback{}
 	fw.On(LLMCallStarted, mock.call)
 
-	fw.Trigger(nil, &LLMCallEventData{Event: LLMCallStarted})
+	fw.Trigger(context.TODO(), &LLMCallEventData{Event: LLMCallStarted})
 
-	if atomic.LoadInt32(&mock.called) != 0 {
-		t.Errorf("nil context 时期望回调不被调用，实际调用 %d 次", mock.called)
+	if atomic.LoadInt32(&mock.called) != 1 {
+		t.Errorf("context.TODO() 时期望回调被调用 1 次，实际调用 %d 次", mock.called)
 	}
 }
 

@@ -11,24 +11,24 @@ import (
 
 // testEnvPrefix 测试用环境变量前缀，避免与真实环境变量冲突
 const (
-	testEnableEnv  = "TEST_WS_ORIGIN_ENABLE"
-	testHostsEnv   = "TEST_WS_ORIGIN_HOSTS"
+	testEnableEnv = "TEST_WS_ORIGIN_ENABLE"
+	testHostsEnv  = "TEST_WS_ORIGIN_HOSTS"
 )
 
 // helper: 设置环境变量并在测试结束后恢复
 func setEnv(t *testing.T, key, value string) {
 	t.Helper()
 	orig := os.Getenv(key)
-	os.Setenv(key, value)
-	t.Cleanup(func() { os.Setenv(key, orig) })
+	_ = os.Setenv(key, value)
+	t.Cleanup(func() { _ = os.Setenv(key, orig) })
 }
 
 // helper: 清除环境变量并在测试结束后恢复
 func unsetEnv(t *testing.T, key string) {
 	t.Helper()
 	orig := os.Getenv(key)
-	os.Unsetenv(key)
-	t.Cleanup(func() { os.Setenv(key, orig) })
+	_ = os.Unsetenv(key)
+	t.Cleanup(func() { _ = os.Setenv(key, orig) })
 }
 
 // helper: 创建测试用校验器

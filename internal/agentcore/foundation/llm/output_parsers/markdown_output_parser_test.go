@@ -292,7 +292,7 @@ func TestMarkdownOutputParser_StreamParse_MixedChunkTypes(t *testing.T) {
 	parser := NewMarkdownOutputParser()
 
 	chunks := make(chan any, 3)
-	chunks <- "# 标题\n" // string chunk
+	chunks <- "# 标题\n"                                      // string chunk
 	chunks <- llmschema.NewAssistantMessageChunk("- 列表项\n") // AssistantMessageChunk
 	close(chunks)
 

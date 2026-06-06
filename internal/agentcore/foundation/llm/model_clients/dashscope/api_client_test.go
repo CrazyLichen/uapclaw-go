@@ -74,7 +74,7 @@ func TestCallDashScopeAPI_Success(t *testing.T) {
 			RequestID:  "req-123",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -113,7 +113,7 @@ func TestCallDashScopeAPI_ErrorResponse(t *testing.T) {
 			Message:    "服务内部错误",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -143,7 +143,7 @@ func TestCallDashScopeAPI_CompatibleModeBaseURL(t *testing.T) {
 		receivedPath = r.URL.Path
 		resp := DashScopeResponse{StatusCode: 200, RequestID: "req-001"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

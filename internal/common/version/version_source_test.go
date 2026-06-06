@@ -62,9 +62,9 @@ func TestGitHubReleasesSource_FetchLatest(t *testing.T) {
 		"draft":        false,
 		"assets": []interface{}{
 			map[string]interface{}{
-				"name":               "uapclaw-0.2.0-linux-amd64.tar.gz",
+				"name":                 "uapclaw-0.2.0-linux-amd64.tar.gz",
 				"browser_download_url": "https://github.com/openJiuwen/uapclaw/releases/download/v0.2.0/uapclaw-0.2.0-linux-amd64.tar.gz",
-				"size":               float64(1024000),
+				"size":                 float64(1024000),
 			},
 		},
 	}
@@ -79,7 +79,7 @@ func TestGitHubReleasesSource_FetchLatest(t *testing.T) {
 			t.Error("User-Agent 头不应为空")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 
@@ -124,7 +124,7 @@ func TestGitHubReleasesSource_FetchLatest_Prerelease(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 
@@ -154,7 +154,7 @@ func TestGitHubReleasesSource_FetchLatest_Draft(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 
@@ -180,7 +180,7 @@ func TestGitHubReleasesSource_FetchLatest_EmptyTag(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 
@@ -195,7 +195,7 @@ func TestGitHubReleasesSource_FetchLatest_EmptyTag(t *testing.T) {
 func TestGitHubReleasesSource_FetchLatest_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Not Found"))
+		_, _ = w.Write([]byte("Not Found"))
 	}))
 	defer server.Close()
 
@@ -232,14 +232,14 @@ func TestGitHubReleasesSource_FetchAssets(t *testing.T) {
 		"prerelease": false,
 		"assets": []interface{}{
 			map[string]interface{}{
-				"name":               "uapclaw-linux.tar.gz",
+				"name":                 "uapclaw-linux.tar.gz",
 				"browser_download_url": "https://example.com/linux",
-				"size":               float64(100),
+				"size":                 float64(100),
 			},
 			map[string]interface{}{
-				"name":               "uapclaw-darwin.tar.gz",
+				"name":                 "uapclaw-darwin.tar.gz",
 				"browser_download_url": "https://example.com/darwin",
-				"size":               float64(200),
+				"size":                 float64(200),
 			},
 		},
 	}
@@ -247,7 +247,7 @@ func TestGitHubReleasesSource_FetchAssets(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 
@@ -280,7 +280,7 @@ func TestGitHubReleasesSource_WithToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedToken = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(body)
+		_, _ = w.Write(body)
 	}))
 	defer server.Close()
 

@@ -8,9 +8,9 @@ import (
 	"net/http"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -133,7 +133,7 @@ func (c *SiliconFlowModelClient) Stream(
 	// 4. SiliconFlow 不设置 stream_options.include_usage（对齐 Python）
 
 	// 5. 合并 headers
-	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
@@ -154,7 +154,7 @@ func (c *SiliconFlowModelClient) Stream(
 		c.ClientConfig.SSLCert,
 	)
 	if err != nil {
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
@@ -175,13 +175,13 @@ func (c *SiliconFlowModelClient) Stream(
 			IsStream:      true,
 			Error:         err,
 		})
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 9. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+		_ = resp.Body.Close()
+		return nil, c.HandleHTTPError(resp)
 	}
 
 	// 10. 创建 SSE 读取器和 chunk channel
@@ -193,7 +193,7 @@ func (c *SiliconFlowModelClient) Stream(
 	modelName := fmt.Sprintf("%v", reqParams["model"])
 	go func() {
 		defer close(chunkChan)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		accumulatedContent := ""
 
@@ -477,7 +477,7 @@ func (c *SiliconFlowModelClient) sanitizeMessages(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {
 	// 1. 先调用基类转换
-	result, err := c.OpenAIModelClient.ConvertMessagesToDict(messages)
+	result, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
 		return model_clients.MessagesParam{}, err
 	}
@@ -562,4 +562,3 @@ func (c *SiliconFlowModelClient) sanitizeToolCalls(messages []map[string]any) {
 		msg["tool_calls"] = cleaned
 	}
 }
-

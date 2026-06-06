@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -165,7 +165,7 @@ func TestOpenAIModelClient_Invoke_成功(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockOpenAICompletionResponse("Hello!"))
+		_, _ = fmt.Fprint(w, mockOpenAICompletionResponse("Hello!"))
 	}))
 	defer server.Close()
 
@@ -189,7 +189,7 @@ func TestOpenAIModelClient_Invoke_成功(t *testing.T) {
 func TestOpenAIModelClient_Invoke_HTTP错误(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error","code":"invalid_api_key"}}`)
 	}))
 	defer server.Close()
 
@@ -217,7 +217,7 @@ func TestOpenAIModelClient_Invoke_HTTP错误(t *testing.T) {
 func TestOpenAIModelClient_Invoke_HTTP500(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `internal server error`)
+		_, _ = fmt.Fprint(w, `internal server error`)
 	}))
 	defer server.Close()
 
@@ -264,7 +264,7 @@ func TestOpenAIModelClient_Invoke_网络错误(t *testing.T) {
 func TestOpenAIModelClient_Invoke_无效JSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "this is not json")
+		_, _ = fmt.Fprint(w, "this is not json")
 	}))
 	defer server.Close()
 
@@ -304,7 +304,7 @@ func TestOpenAIModelClient_Stream_成功(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -335,7 +335,7 @@ func TestOpenAIModelClient_Stream_成功(t *testing.T) {
 func TestOpenAIModelClient_Stream_HTTP错误(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
 	}))
 	defer server.Close()
 
@@ -626,7 +626,7 @@ func TestOpenAIModelClient_Invoke_带自定义请求头(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedHeaders = r.Header.Clone()
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, mockOpenAICompletionResponse("ok"))
+		_, _ = fmt.Fprint(w, mockOpenAICompletionResponse("ok"))
 	}))
 	defer server.Close()
 
@@ -760,7 +760,7 @@ func TestOpenAIModelClient_Stream_无效JSON走logger(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -794,7 +794,7 @@ func TestOpenAIModelClient_Stream_OutputParser成功(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -830,7 +830,7 @@ func TestOpenAIModelClient_Stream_OutputParser错误(t *testing.T) {
 			`data: [DONE]`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 	}))
@@ -867,7 +867,7 @@ func TestOpenAIModelClient_Stream_SSE异常关闭(t *testing.T) {
 			`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}`,
 		}
 		for _, chunk := range chunks {
-			fmt.Fprintf(w, "%s\n\n", chunk)
+			_, _ = fmt.Fprintf(w, "%s\n\n", chunk)
 			flusher.Flush()
 		}
 		// 不发送 [DONE]，直接关闭连接
@@ -896,11 +896,11 @@ func TestOpenAIModelClient_Stream_Context取消(t *testing.T) {
 		flusher, _ := w.(http.Flusher)
 		// 持续发送数据
 		for i := 0; i < 100; i++ {
-			fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`)
 			flusher.Flush()
 			time.Sleep(10 * time.Millisecond)
 		}
-		fmt.Fprintf(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()

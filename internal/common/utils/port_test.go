@@ -14,7 +14,7 @@ func TestWaitForTCPPort_Connected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	port := ln.Addr().(*net.TCPAddr).Port
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -33,7 +33,7 @@ func TestWaitForTCPPort_Disconnected(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close() // 立即关闭，端口应该断开
+	_ = ln.Close() // 立即关闭，端口应该断开
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -99,7 +99,7 @@ func TestWaitForTCPPort_WaitForServerStartup(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 
 	// 在另一个 goroutine 中延迟启动服务器
 	go func() {
@@ -108,7 +108,7 @@ func TestWaitForTCPPort_WaitForServerStartup(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer serverLn.Close()
+		defer func() { _ = serverLn.Close() }()
 		// 保持服务器运行一段时间
 		time.Sleep(5 * time.Second)
 	}()

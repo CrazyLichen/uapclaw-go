@@ -12,7 +12,7 @@ func TestGetServerConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	server, err := cfg.GetServerConfig()
 	if err != nil {
@@ -38,13 +38,13 @@ func TestUpdateServerConfig(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{
+	_ = cfg.Save(map[string]any{
 		"server": map[string]any{
 			"agentserver": map[string]any{"host": "0.0.0.0", "port": 8765},
 			"gateway":     map[string]any{"host": "0.0.0.0", "port": 8766},
 		},
 	})
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	err := cfg.UpdateServerConfig(&ServerConfig{
 		AgentServer: AgentServerConfig{Host: "127.0.0.1", Port: 9999},
@@ -56,7 +56,7 @@ func TestUpdateServerConfig(t *testing.T) {
 
 	// 重新加载验证
 	cfg2, _ := New(cfgPath)
-	cfg2.Load()
+	_, _ = cfg2.Load()
 	server, err := cfg2.GetServerConfig()
 	if err != nil {
 		t.Fatalf("GetServerConfig 失败: %v", err)
@@ -74,7 +74,7 @@ func TestGetLoggingConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	logging, err := cfg.GetLoggingConfig()
 	if err != nil {
@@ -118,10 +118,10 @@ func TestUpdateLoggingConfig(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{
+	_ = cfg.Save(map[string]any{
 		"logging": map[string]any{"level": "info", "format": "json"},
 	})
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	err := cfg.UpdateLoggingConfig(&LoggingConfig{
 		Level:        "debug",
@@ -140,7 +140,7 @@ func TestUpdateLoggingConfig(t *testing.T) {
 	}
 
 	cfg2, _ := New(cfgPath)
-	cfg2.Load()
+	_, _ = cfg2.Load()
 	logging, err := cfg2.GetLoggingConfig()
 	if err != nil {
 		t.Fatalf("GetLoggingConfig 失败: %v", err)
@@ -158,7 +158,7 @@ func TestGetWorkspaceConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	workspace, err := cfg.GetWorkspaceConfig()
 	if err != nil {
@@ -175,10 +175,10 @@ func TestUpdateWorkspaceConfig(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{
+	_ = cfg.Save(map[string]any{
 		"workspace": map[string]any{"path": "~/.uapclaw"},
 	})
-	cfg.Load()
+	_, _ = cfg.Load()
 
 	err := cfg.UpdateWorkspaceConfig(&WorkspaceConfig{Path: "/custom/path"})
 	if err != nil {
@@ -186,7 +186,7 @@ func TestUpdateWorkspaceConfig(t *testing.T) {
 	}
 
 	cfg2, _ := New(cfgPath)
-	cfg2.Load()
+	_, _ = cfg2.Load()
 	workspace, err := cfg2.GetWorkspaceConfig()
 	if err != nil {
 		t.Fatalf("GetWorkspaceConfig 失败: %v", err)
@@ -201,8 +201,8 @@ func TestGetServerConfig_段不存在(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{})
-	cfg.Load()
+	_ = cfg.Save(map[string]any{})
+	_, _ = cfg.Load()
 
 	_, err := cfg.GetServerConfig()
 	if err == nil {
@@ -216,8 +216,8 @@ func TestGetLoggingConfig_段不存在(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{})
-	cfg.Load()
+	_ = cfg.Save(map[string]any{})
+	_, _ = cfg.Load()
 
 	_, err := cfg.GetLoggingConfig()
 	if err == nil {
@@ -231,8 +231,8 @@ func TestGetWorkspaceConfig_段不存在(t *testing.T) {
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 
 	cfg, _ := New(cfgPath)
-	cfg.Save(map[string]any{})
-	cfg.Load()
+	_ = cfg.Save(map[string]any{})
+	_, _ = cfg.Load()
 
 	_, err := cfg.GetWorkspaceConfig()
 	if err == nil {

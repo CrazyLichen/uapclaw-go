@@ -258,9 +258,9 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 // mergeToolCalls 合并两个 ToolCall 切片，增量拼接同一调用的片段。
 //
 // 判断"同一调用"的条件（满足以下全部）：
-//   1. left 的最后一个 ToolCall 与 incoming 的 ToolCall 的 id 相同，
-//      或者某一方 id 为空（流式中间 chunk 可能不携带 id）
-//   2. 两者的 type 均为 "function"
+//  1. left 的最后一个 ToolCall 与 incoming 的 ToolCall 的 id 相同，
+//     或者某一方 id 为空（流式中间 chunk 可能不携带 id）
+//  2. 两者的 type 均为 "function"
 //
 // 同一调用合并规则：
 //   - id: 取非空值

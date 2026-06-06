@@ -6,11 +6,11 @@ import (
 
 func TestGenerateKey(t *testing.T) {
 	tests := []struct {
-		name         string
-		apiKey       string
-		apiBase      string
-		provider     string
-		wantLen      int // SHA256 hex 长度固定 64
+		name     string
+		apiKey   string
+		apiBase  string
+		provider string
+		wantLen  int // SHA256 hex 长度固定 64
 	}{
 		{
 			name:     "basic",

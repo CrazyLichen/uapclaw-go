@@ -222,19 +222,19 @@ func TestTaskManager_CancelGroup(t *testing.T) {
 	started1 := make(chan struct{})
 	started2 := make(chan struct{})
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		close(started1)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}, WithTaskGroup("workers"))
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		close(started2)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}, WithTaskGroup("workers"))
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(5 * time.Second)
 		return "other", nil
 	}, WithTaskGroup("other"))
@@ -277,10 +277,10 @@ func TestTaskManager_RemoveCompleted(t *testing.T) {
 	task, _ := mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		return "done", nil
 	})
-	task.Wait()
+	_, _ = task.Wait()
 
 	// 创建一个运行中的任务
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(5 * time.Second)
 		return nil, nil
 	})
@@ -294,12 +294,12 @@ func TestTaskManager_RemoveCompleted(t *testing.T) {
 func TestTaskManager_WaitGroup(t *testing.T) {
 	mgr := newTestManager()
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(50 * time.Millisecond)
 		return 1, nil
 	}, WithTaskGroup("calc"))
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		return 2, nil
 	}, WithTaskGroup("calc"))
@@ -328,7 +328,7 @@ func TestTaskManager_CascadeCancel(t *testing.T) {
 
 	// 创建子任务
 	childStarted := make(chan struct{})
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		close(childStarted)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -351,7 +351,7 @@ func TestTaskManager_GetTaskTree(t *testing.T) {
 		return nil, nil
 	}, WithTaskName("parent"))
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(5 * time.Second)
 		return nil, nil
 	}, WithTaskName("child"), WithTaskParentID(parent.ID))
@@ -401,7 +401,7 @@ func TestTaskManager_CancelAlreadyCompletedTask(t *testing.T) {
 	task, _ := mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		return "done", nil
 	})
-	task.Wait()
+	_, _ = task.Wait()
 
 	// 尝试取消已完成的任务
 	result := mgr.Cancel(task.ID, "too_late")
@@ -450,13 +450,13 @@ func TestTaskManager_CancelAll(t *testing.T) {
 	started1 := make(chan struct{})
 	started2 := make(chan struct{})
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		close(started1)
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}, WithTaskGroup("workers"))
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		close(started2)
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -478,7 +478,7 @@ func TestTaskManager_Get(t *testing.T) {
 	task, _ := mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		return "result", nil
 	})
-	task.Wait()
+	_, _ = task.Wait()
 
 	got, ok := mgr.Get(task.ID)
 	if !ok {
@@ -498,12 +498,12 @@ func TestTaskManager_Get(t *testing.T) {
 func TestTaskManager_WaitAll(t *testing.T) {
 	mgr := newTestManager()
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(50 * time.Millisecond)
 		return 1, nil
 	})
 
-	mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
+	_, _ = mgr.CreateTask(context.Background(), func(ctx context.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		return 2, nil
 	})
@@ -527,7 +527,7 @@ func TestWithTaskMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTask 失败: %v", err)
 	}
-	task.Wait()
+	_, _ = task.Wait()
 
 	if task.Metadata["env"] != "test" {
 		t.Errorf("Metadata['env'] 期望 test，实际 %v", task.Metadata["env"])

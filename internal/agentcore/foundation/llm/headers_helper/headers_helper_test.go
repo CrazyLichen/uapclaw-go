@@ -31,12 +31,12 @@ func TestSanitizeHeaders_空输入(t *testing.T) {
 func TestSanitizeHeaders_受保护头部被过滤(t *testing.T) {
 	// 受保护头部应被过滤（与 Python 对齐的 5 项列表）
 	input := map[string]any{
-		"Authorization":    "Bearer token",
-		"Host":             "api.openai.com",
-		"Content-Length":   "100",
+		"Authorization":     "Bearer token",
+		"Host":              "api.openai.com",
+		"Content-Length":    "100",
 		"Transfer-Encoding": "chunked",
-		"Connection":       "keep-alive",
-		"X-Custom":         "value",
+		"Connection":        "keep-alive",
+		"X-Custom":          "value",
 	}
 	result := SanitizeHeaders(input)
 
@@ -186,9 +186,9 @@ func TestBuildBaseHeaders_Nil输入(t *testing.T) {
 func TestBuildBaseHeaders_正常输入(t *testing.T) {
 	// 正常输入应与 SanitizeHeaders 结果一致
 	input := map[string]any{
-		"X-Token":  "abc",
-		"X-Count":  42,
-		"Host":     "should-be-filtered",
+		"X-Token": "abc",
+		"X-Count": 42,
+		"Host":    "should-be-filtered",
 	}
 	result := BuildBaseHeaders(input)
 	if len(result) != 2 {
@@ -322,9 +322,9 @@ func TestMergeRequestHeaders_大小写不敏感覆盖(t *testing.T) {
 		"UserID":   "user-cfg",
 	}
 	result := MergeRequestHeaders(base, map[string]any{
-		"x-tenant":     "tenant-req",
-		"userid":       "user-req",
-		"Connection":   "blocked",
+		"x-tenant":      "tenant-req",
+		"userid":        "user-req",
+		"Connection":    "blocked",
 		"Authorization": "Bearer blocked",
 	})
 	// 保留 base 的 key 大小写，值被覆盖

@@ -15,8 +15,8 @@ func TestResolveEnvVars_字符串无环境变量(t *testing.T) {
 }
 
 func TestResolveEnvVars_字符串含环境变量(t *testing.T) {
-	os.Setenv("TEST_HOST", "localhost")
-	defer os.Unsetenv("TEST_HOST")
+	_ = os.Setenv("TEST_HOST", "localhost")
+	defer func() { _ = os.Unsetenv("TEST_HOST") }()
 
 	result := ResolveEnvVars("${TEST_HOST}", nil)
 	if result != "localhost" {
@@ -32,8 +32,8 @@ func TestResolveEnvVars_环境变量带默认值(t *testing.T) {
 	}
 
 	// 环境变量存在时使用环境变量
-	os.Setenv("SET_VAR", "actual")
-	defer os.Unsetenv("SET_VAR")
+	_ = os.Setenv("SET_VAR", "actual")
+	defer func() { _ = os.Unsetenv("SET_VAR") }()
 
 	result = ResolveEnvVars("${SET_VAR:-fallback}", nil)
 	if result != "actual" {
@@ -49,8 +49,8 @@ func TestResolveEnvVars_环境变量无默认值不存在(t *testing.T) {
 }
 
 func TestResolveEnvVars_环境变量存在但为空(t *testing.T) {
-	os.Setenv("EMPTY_VAR", "")
-	defer os.Unsetenv("EMPTY_VAR")
+	_ = os.Setenv("EMPTY_VAR", "")
+	defer func() { _ = os.Unsetenv("EMPTY_VAR") }()
 
 	// 空环境变量 + 有默认值 → 使用默认值
 	result := ResolveEnvVars("${EMPTY_VAR:-fallback}", nil)
@@ -66,10 +66,10 @@ func TestResolveEnvVars_环境变量存在但为空(t *testing.T) {
 }
 
 func TestResolveEnvVars_混合字符串(t *testing.T) {
-	os.Setenv("TEST_HOST", "localhost")
-	defer os.Unsetenv("TEST_HOST")
-	os.Setenv("TEST_PORT", "8080")
-	defer os.Unsetenv("TEST_PORT")
+	_ = os.Setenv("TEST_HOST", "localhost")
+	defer func() { _ = os.Unsetenv("TEST_HOST") }()
+	_ = os.Setenv("TEST_PORT", "8080")
+	defer func() { _ = os.Unsetenv("TEST_PORT") }()
 
 	result := ResolveEnvVars("http://${TEST_HOST}:${TEST_PORT}/api", nil)
 	if result != "http://localhost:8080/api" {
@@ -78,10 +78,10 @@ func TestResolveEnvVars_混合字符串(t *testing.T) {
 }
 
 func TestResolveEnvVars_字典递归解析(t *testing.T) {
-	os.Setenv("TEST_API_KEY", "sk-123")
-	defer os.Unsetenv("TEST_API_KEY")
-	os.Setenv("TEST_URL", "http://example.com")
-	defer os.Unsetenv("TEST_URL")
+	_ = os.Setenv("TEST_API_KEY", "sk-123")
+	defer func() { _ = os.Unsetenv("TEST_API_KEY") }()
+	_ = os.Setenv("TEST_URL", "http://example.com")
+	defer func() { _ = os.Unsetenv("TEST_URL") }()
 
 	input := map[string]any{
 		"url":     "${TEST_URL}",
@@ -109,8 +109,8 @@ func TestResolveEnvVars_字典递归解析(t *testing.T) {
 }
 
 func TestResolveEnvVars_切片递归解析(t *testing.T) {
-	os.Setenv("TEST_ITEM", "value")
-	defer os.Unsetenv("TEST_ITEM")
+	_ = os.Setenv("TEST_ITEM", "value")
+	defer func() { _ = os.Unsetenv("TEST_ITEM") }()
 
 	input := []any{"${TEST_ITEM}", "static", "${UNSET:-default}"}
 	result := ResolveEnvVars(input, nil)
@@ -150,10 +150,10 @@ func TestResolveEnvVars_非字符串类型原样返回(t *testing.T) {
 }
 
 func TestResolveEnvVars_DecryptFunc调用(t *testing.T) {
-	os.Setenv("MY_API_KEY", "encrypted_value")
-	defer os.Unsetenv("MY_API_KEY")
-	os.Setenv("NORMAL_VAR", "plain_value")
-	defer os.Unsetenv("NORMAL_VAR")
+	_ = os.Setenv("MY_API_KEY", "encrypted_value")
+	defer func() { _ = os.Unsetenv("MY_API_KEY") }()
+	_ = os.Setenv("NORMAL_VAR", "plain_value")
+	defer func() { _ = os.Unsetenv("NORMAL_VAR") }()
 
 	// 模拟解密函数：api_key 类变量返回解密值
 	decryptFn := func(envName, value string) (string, bool) {
@@ -164,8 +164,8 @@ func TestResolveEnvVars_DecryptFunc调用(t *testing.T) {
 	}
 
 	input := map[string]any{
-		"api_key":  "${MY_API_KEY}",
-		"normal":   "${NORMAL_VAR}",
+		"api_key": "${MY_API_KEY}",
+		"normal":  "${NORMAL_VAR}",
 	}
 
 	result := ResolveEnvVars(input, decryptFn)
@@ -182,8 +182,8 @@ func TestResolveEnvVars_DecryptFunc调用(t *testing.T) {
 }
 
 func TestResolveEnvVars_DecryptFunc为nil不解密(t *testing.T) {
-	os.Setenv("MY_TOKEN", "raw_token")
-	defer os.Unsetenv("MY_TOKEN")
+	_ = os.Setenv("MY_TOKEN", "raw_token")
+	defer func() { _ = os.Unsetenv("MY_TOKEN") }()
 
 	result := ResolveEnvVars("${MY_TOKEN}", nil)
 	if result != "raw_token" {
@@ -236,8 +236,8 @@ func TestResolvePath(t *testing.T) {
 }
 
 func TestResolveEnvVarString(t *testing.T) {
-	os.Setenv("TEST_HOST", "127.0.0.1")
-	defer os.Unsetenv("TEST_HOST")
+	_ = os.Setenv("TEST_HOST", "127.0.0.1")
+	defer func() { _ = os.Unsetenv("TEST_HOST") }()
 
 	result := ResolveEnvVarString("host=${TEST_HOST}", nil)
 	if result != "host=127.0.0.1" {

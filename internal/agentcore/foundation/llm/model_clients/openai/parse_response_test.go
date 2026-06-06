@@ -243,7 +243,7 @@ func TestParseResponse_UsageWithCostInfo(t *testing.T) {
 			PromptTokensDetails: &ResponsePromptTokensDetails{
 				CachedTokens: 30,
 			},
-			Cost:     0.05,
+			Cost:      0.05,
 			UsageCost: 0.05,
 		},
 	}
@@ -451,7 +451,7 @@ func TestParseResponse_WithLogprobs(t *testing.T) {
 				Logprobs: map[string]any{
 					"content": []any{
 						map[string]any{
-							"token":  "Hello",
+							"token":   "Hello",
 							"logprob": -0.5,
 						},
 					},

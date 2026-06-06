@@ -92,7 +92,7 @@ func TestMutexWriter_并发写入(t *testing.T) {
 
 	for i := 0; i < goroutines; i++ {
 		go func() {
-			mw.Write([]byte(msg))
+			_, _ = mw.Write([]byte(msg))
 			done <- struct{}{}
 		}()
 	}

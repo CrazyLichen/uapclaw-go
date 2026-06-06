@@ -10,14 +10,9 @@ package headers_helper
 import (
 	"fmt"
 	"strings"
-
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent headers_helper 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

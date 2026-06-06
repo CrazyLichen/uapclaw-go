@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -245,7 +245,7 @@ func (c *IntelliRouterModelClient) Stream(
 	openai.AdjustParamsForOpenAI(reqParams, c.ClientConfig.APIBase)
 
 	// 6. 合并 headers
-	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
@@ -266,7 +266,7 @@ func (c *IntelliRouterModelClient) Stream(
 		c.ClientConfig.SSLCert,
 	)
 	if err != nil {
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 9. 发送请求
@@ -281,14 +281,14 @@ func (c *IntelliRouterModelClient) Stream(
 			Str("deployment_id", dep.ID).
 			Err(err).
 			Msg("IntelliRouter stream request failed.")
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 10. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		c.router.RecordFailure(dep)
-		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+		return nil, c.HandleHTTPError(resp)
 	}
 
 	// 11. 创建 SSE 读取器和 chunk channel
@@ -300,7 +300,7 @@ func (c *IntelliRouterModelClient) Stream(
 	//     使用自己的 convertChunk（只提取 content）
 	go func() {
 		defer close(chunkChan)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		for {
 			data, err := sseReader.ReadEvent()

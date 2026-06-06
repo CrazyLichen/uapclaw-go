@@ -326,7 +326,7 @@ func (p *TransportPool) Release(config TransportConfig) {
 
 	if transport.DecRef() && transport.IsExpired() {
 		delete(p.transports, key)
-		transport.Close()
+		_ = transport.Close()
 	}
 }
 
@@ -337,7 +337,7 @@ func (p *TransportPool) CloseAll() error {
 	defer p.mu.Unlock()
 
 	for key, transport := range p.transports {
-		transport.Close()
+		_ = transport.Close()
 		delete(p.transports, key)
 	}
 	return nil
@@ -361,8 +361,8 @@ func (p *TransportPool) Stats() map[string]any {
 
 	return map[string]any{
 		"total_transports": len(p.transports),
-		"max_pools":       p.maxPool,
-		"transports":      transports,
+		"max_pools":        p.maxPool,
+		"transports":       transports,
 	}
 }
 
@@ -384,7 +384,7 @@ func (p *TransportPool) evictOldest() {
 
 	if oldestKey != "" {
 		transport := p.transports[oldestKey]
-		transport.Close()
+		_ = transport.Close()
 		delete(p.transports, oldestKey)
 	}
 }

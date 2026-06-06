@@ -6,10 +6,10 @@ import (
 	"os"
 	"strconv"
 
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -110,7 +110,7 @@ func WithClientName(name string) BaseClientEmbedOption {
 // WithSkipValidate 跳过 ValidateConfig 校验。
 //
 // 适用场景：IntelliRouter 等客户端不需要 api_key/api_base
-//（在 deployment 级别配置，而非 ModelClientConfig 级别），
+// （在 deployment 级别配置，而非 ModelClientConfig 级别），
 // 使用此选项跳过 BaseClientEmbed 的标准校验。
 //
 // 对应 Python: IntelliRouterModelClient._validate_config() 覆写为空
@@ -330,7 +330,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	if len(params.Extra) > 0 {
 		// 过滤内部参数
 		internalParams := map[string]bool{
-			"output_parser":       true,
+			"output_parser":      true,
 			"tracer_record_data": true,
 			"custom_headers":     true,
 		}
@@ -356,10 +356,10 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	if e.ClientConfig != nil {
 		modelProvider = e.ClientConfig.ClientProvider
 	}
-	temperature, _ := reqParams["temperature"]
-	topP, _ := reqParams["top_p"]
-	maxTokens, _ := reqParams["max_tokens"]
-	stop, _ := reqParams["stop"]
+	temperature := reqParams["temperature"]
+	topP := reqParams["top_p"]
+	maxTokens := reqParams["max_tokens"]
+	stop := reqParams["stop"]
 
 	// 计算额外参数（排除基础参数）
 	extraParams := make(map[string]any)
@@ -438,9 +438,9 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 // 返回：(inputCost, outputCost, totalCost)
 func ExtractCostInfo(obj map[string]any) (inputCost, outputCost, totalCost float64) {
 	// 尝试从 cost 或 usage_cost 提取
-	costInfo, _ := obj["cost"]
+	costInfo := obj["cost"]
 	if costInfo == nil {
-		costInfo, _ = obj["usage_cost"]
+		costInfo = obj["usage_cost"]
 	}
 
 	if costInfo != nil {
@@ -461,7 +461,7 @@ func ExtractCostInfo(obj map[string]any) (inputCost, outputCost, totalCost float
 
 	// cost_details 兜底
 	if inputCost == 0 && outputCost == 0 {
-		costDetails, _ := obj["cost_details"]
+		costDetails := obj["cost_details"]
 		if details, ok := costDetails.(map[string]any); ok {
 			inputCost = floatVal(details, "upstream_inference_prompt_cost")
 			outputCost = floatVal(details, "upstream_inference_completions_cost")
@@ -541,38 +541,4 @@ func floatVal(m map[string]any, keys ...string) float64 {
 		}
 	}
 	return 0
-}
-
-// toFloat64Ptr 将 any 类型转换为 *float64，用于 LLMCallEventData 中的可选浮点字段。
-func toFloat64Ptr(v any) *float64 {
-	if v == nil {
-		return nil
-	}
-	switch val := v.(type) {
-	case float64:
-		return &val
-	case int:
-		f := float64(val)
-		return &f
-	case *float64:
-		return val
-	}
-	return nil
-}
-
-// toIntPtr 将 any 类型转换为 *int，用于 LLMCallEventData 中的可选整数字段。
-func toIntPtr(v any) *int {
-	if v == nil {
-		return nil
-	}
-	switch val := v.(type) {
-	case int:
-		return &val
-	case float64:
-		i := int(val)
-		return &i
-	case *int:
-		return val
-	}
-	return nil
 }

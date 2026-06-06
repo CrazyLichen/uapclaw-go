@@ -258,7 +258,7 @@ func TestParseEarly_DotenvWithTilde(t *testing.T) {
 	if err := os.WriteFile(envPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("写入测试 .env 文件失败: %v", err)
 	}
-	defer os.Remove(envPath)
+	defer func() { _ = os.Remove(envPath) }()
 
 	origVal := os.Getenv("TEST_DOTENV_TILDE")
 	t.Cleanup(func() {

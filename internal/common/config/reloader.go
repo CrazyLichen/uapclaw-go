@@ -23,9 +23,9 @@ type Reloader struct {
 	config   *Config
 	mu       sync.Mutex
 	stopCh   chan struct{}
-	debounce time.Duration     // 防抖间隔
+	debounce time.Duration          // 防抖间隔
 	handlers []func(map[string]any) // 变更回调列表
-	done     chan struct{}     // 监听协程退出信号
+	done     chan struct{}          // 监听协程退出信号
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

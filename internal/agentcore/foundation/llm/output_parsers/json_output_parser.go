@@ -189,13 +189,3 @@ func (p *JsonOutputParser) StreamParse(chunks <-chan any) <-chan model_clients.S
 
 	return out
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// truncateForLog 截断长字符串用于日志输出。
-func truncateForLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}

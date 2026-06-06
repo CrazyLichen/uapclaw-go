@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -156,7 +156,7 @@ func (c *InferenceAffinityModelClient) Stream(
 	// 5. InferenceAffinity 不设置 stream_options.include_usage（对齐 Python）
 
 	// 6. 合并 headers
-	effectiveHeaders := c.OpenAIModelClient.BuildEffectiveHeaders(params.CustomHeaders)
+	effectiveHeaders := c.BuildEffectiveHeaders(params.CustomHeaders)
 	if len(effectiveHeaders) > 0 {
 		reqParams["extra_headers"] = effectiveHeaders
 	}
@@ -177,7 +177,7 @@ func (c *InferenceAffinityModelClient) Stream(
 		c.ClientConfig.SSLCert,
 	)
 	if err != nil {
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
@@ -198,13 +198,13 @@ func (c *InferenceAffinityModelClient) Stream(
 			IsStream:      true,
 			Error:         err,
 		})
-		return nil, c.OpenAIModelClient.WrapError("stream", err)
+		return nil, c.WrapError("stream", err)
 	}
 
 	// 10. 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, c.OpenAIModelClient.HandleHTTPError(resp)
+		_ = resp.Body.Close()
+		return nil, c.HandleHTTPError(resp)
 	}
 
 	// 11. 创建 SSE 读取器和 chunk channel
@@ -216,7 +216,7 @@ func (c *InferenceAffinityModelClient) Stream(
 	modelName := fmt.Sprintf("%v", reqParams["model"])
 	go func() {
 		defer close(chunkChan)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		accumulatedContent := ""
 
@@ -356,7 +356,7 @@ func (c *InferenceAffinityModelClient) Release(
 			exception.WithMsg(fmt.Sprintf("Release error: %s", err.Error())),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 5. 处理响应
 	respBody, _ := io.ReadAll(resp.Body)
@@ -548,7 +548,7 @@ func (c *InferenceAffinityModelClient) sanitizeMessages(
 	messages model_clients.MessagesParam,
 ) (model_clients.MessagesParam, error) {
 	// 1. 先调用基类转换
-	result, err := c.OpenAIModelClient.ConvertMessagesToDict(messages)
+	result, err := c.ConvertMessagesToDict(messages)
 	if err != nil {
 		return model_clients.MessagesParam{}, err
 	}
@@ -657,10 +657,10 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 
 	// 3. 构建请求体
 	releaseBody := map[string]any{
-		"model":                  model,
-		"cache_salt":             params.SessionID,
-		"cache_sharing":          true,
-		"messages":               messagesDict,
+		"model":                   model,
+		"cache_salt":              params.SessionID,
+		"cache_sharing":           true,
+		"messages":                messagesDict,
 		"messages_released_index": params.MessagesReleasedIndex,
 	}
 

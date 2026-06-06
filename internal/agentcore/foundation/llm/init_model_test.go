@@ -3,8 +3,8 @@ package llm
 import (
 	"testing"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -108,11 +108,6 @@ func TestInitModel_VerifySSLDefault(t *testing.T) {
 
 // ──────────────────────────── InitModel 集成测试 ────────────────────────────
 
-// testMockClient 用于 InitModel 测试的 mock 客户端
-type testMockClient struct {
-	mockModelClient // 嵌入已有 mock
-}
-
 // TestInitModel_Success 测试 InitModel 通过注册 provider 成功创建 Model
 func TestInitModel_Success(t *testing.T) {
 	const testProvider = "TestInitModelProvider"
@@ -122,7 +117,7 @@ func TestInitModel_Success(t *testing.T) {
 	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
 		return &mockModelClient{}
 	})
-	defer registry.Unregister(testProvider, "llm")
+	defer func() { _ = registry.Unregister(testProvider, "llm") }()
 
 	model, err := InitModel(testProvider, "gpt-4", "test-key", "http://localhost")
 	if err != nil {
@@ -147,7 +142,7 @@ func TestInitModel_WithOptions(t *testing.T) {
 	registry.Register(testProvider, "llm", func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
 		return &mockModelClient{}
 	})
-	defer registry.Unregister(testProvider, "llm")
+	defer func() { _ = registry.Unregister(testProvider, "llm") }()
 
 	model, err := InitModel(
 		testProvider, "gpt-4", "test-key", "http://localhost",

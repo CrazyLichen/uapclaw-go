@@ -14,8 +14,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
-)// GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
-//
+) // GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
 // 对应 Python: get_local_ip()
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
 // 不实际发送数据，仅利用 socket 获取本地地址。
@@ -25,7 +24,7 @@ func GetLocalIP() string {
 	if err != nil {
 		return "127.0.0.1"
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	addr, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok || addr.IP.IsLoopback() {

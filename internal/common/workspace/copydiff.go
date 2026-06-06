@@ -90,7 +90,7 @@ func copyFileWithDiff(src, dst string, diff *CopyDiffResult) error {
 	if err != nil {
 		return fmt.Errorf("打开源文件失败 %s: %w", src, err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	// 检查目标文件是否已存在
 	_, err = os.Stat(dst)
@@ -101,7 +101,7 @@ func copyFileWithDiff(src, dst string, diff *CopyDiffResult) error {
 	if err != nil {
 		return fmt.Errorf("创建目标文件失败 %s: %w", dst, err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	// 复制内容
 	if _, err := io.Copy(dstFile, srcFile); err != nil {

@@ -29,16 +29,16 @@ type ServerConfig struct {
 // LoggingConfig 日志配置，各通道可独立设置级别。
 // 对应 Python: config.yaml 的 logging 段
 type LoggingConfig struct {
-	Level        string `yaml:"level"`          // 基础级别，默认 INFO
-	Format       string `yaml:"format"`         // 输出格式：json / text
-	ConsoleLevel string `yaml:"console_level"`  // 控制台级别
-	Common       string `yaml:"common"`         // common.log 级别（基础设施层）
-	Gateway      string `yaml:"gateway"`        // gateway.log 级别
-	Channel      string `yaml:"channel"`        // channel.log 级别
-	AgentServer  string `yaml:"agent_server"`   // agent_server.log 级别
-	Permissions  string `yaml:"permissions"`    // permissions.log 级别
-	AgentCore    string `yaml:"agent_core"`     // agent_core.log 级别（agentcore/*）
-	Full         string `yaml:"full"`           // full.log 级别
+	Level        string `yaml:"level"`         // 基础级别，默认 INFO
+	Format       string `yaml:"format"`        // 输出格式：json / text
+	ConsoleLevel string `yaml:"console_level"` // 控制台级别
+	Common       string `yaml:"common"`        // common.log 级别（基础设施层）
+	Gateway      string `yaml:"gateway"`       // gateway.log 级别
+	Channel      string `yaml:"channel"`       // channel.log 级别
+	AgentServer  string `yaml:"agent_server"`  // agent_server.log 级别
+	Permissions  string `yaml:"permissions"`   // permissions.log 级别
+	AgentCore    string `yaml:"agent_core"`    // agent_core.log 级别（agentcore/*）
+	Full         string `yaml:"full"`          // full.log 级别
 }
 
 // WorkspaceConfig 工作区配置。

@@ -26,9 +26,9 @@ var parsedDotenv string
 // sync.Once 惰性求值。
 //
 // 优先级：
-//   1. dotenvPath 不为空：加载指定 .env 文件
-//   2. instanceName 不为空：按实例名加载 bootstrap .env
-//   3. 两者为空：不做任何操作
+//  1. dotenvPath 不为空：加载指定 .env 文件
+//  2. instanceName 不为空：按实例名加载 bootstrap .env
+//  3. 两者为空：不做任何操作
 //
 // 对应 Python: parse_dotenv_early(component_name)
 func ParseEarly(dotenvPath string, instanceName string) (string, error) {

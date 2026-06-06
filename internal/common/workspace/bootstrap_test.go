@@ -90,13 +90,13 @@ func TestCreateBootstrapEnv_nil配置(t *testing.T) {
 func TestCreateBootstrapEnvForName(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 先注册实例
 	workspacePath := InstanceWorkspacePath("alice")
-	UpdateInstancesYAML("alice", workspacePath, CalculateInstancePorts(1))
+	_ = UpdateInstancesYAML("alice", workspacePath, CalculateInstancePorts(1))
 
 	envPath, err := CreateBootstrapEnvForName("alice", workspacePath)
 	if err != nil {
@@ -149,8 +149,8 @@ func TestCreateBootstrapEnv_部分端口(t *testing.T) {
 func TestCreateBootstrapEnvForName_不存在(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	os.Setenv(EnvDataDir, tmpDir)
-	defer os.Unsetenv(EnvDataDir)
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
 	SetUserHome("")
 
 	// 不注册实例，直接创建

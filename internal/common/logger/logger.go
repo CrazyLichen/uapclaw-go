@@ -40,8 +40,8 @@ type Logger struct {
 	rotationCfg RotationConfig
 	// outputDir 日志输出目录
 	outputDir string
-	// mu 保护并发访问
-	mu sync.RWMutex
+	// mu 保护并发访问（预留，当前未使用）
+	_ sync.RWMutex
 }
 
 // Option 日志选项函数（Functional Options 模式，与项目约定一致）。
@@ -119,8 +119,8 @@ func Setup(opts ...Option) error {
 		if l.outputDir == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
-			setupErr = exception.NewBaseError(exception.StatusCommonLogPathInitFailed,
-				exception.WithMsg(fmt.Sprintf("获取用户主目录失败: %v", err)))
+				setupErr = exception.NewBaseError(exception.StatusCommonLogPathInitFailed,
+					exception.WithMsg(fmt.Sprintf("获取用户主目录失败: %v", err)))
 				return
 			}
 			l.outputDir = filepath.Join(home, ".uapclaw", "agent", ".logs")
@@ -305,8 +305,8 @@ func (l *Logger) createComponentLogger(
 
 	// 组装多目标 writer
 	var writers []io.Writer
-	writers = append(writers, sanitizedCompWriter) // 组件日志文件
-	writers = append(writers, sanitizedFullWriter)  // full.log
+	writers = append(writers, sanitizedCompWriter)    // 组件日志文件
+	writers = append(writers, sanitizedFullWriter)    // full.log
 	writers = append(writers, sanitizedConsoleWriter) // 控制台
 
 	// Permissions 组件额外写入 agent_server.log

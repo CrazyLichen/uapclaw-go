@@ -189,10 +189,7 @@ func TestAssembler_Assemble_MissingKeys(t *testing.T) {
 	// 不传任何 key——但 Assemble 会用占位符填充，不会报错
 	// 所以测试传入 extra key 触发 unexpected key 错误
 	_, err = asm.Assemble(map[string]any{"name": "Alice", "extra": "value"})
-	if err != nil {
-		// 这是预期的：extra key 不在 inputKeys 中被过滤掉了
-		// 实际上当前实现会过滤 extra key，不会报错
-	}
+	_ = err
 }
 
 // TestAssembler_Assemble_NilKwargs 验证 Assemble 传入 nil kwargs。

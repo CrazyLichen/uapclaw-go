@@ -149,13 +149,13 @@ func captureStdout(t *testing.T, fn func()) string {
 	defer func() { os.Stdout = old }()
 
 	fn()
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
 		t.Fatalf("读取 pipe 失败: %v", err)
 	}
-	r.Close()
+	_ = r.Close()
 
 	return buf.String()
 }
