@@ -84,6 +84,11 @@ func TestInitModelOption_Functions(t *testing.T) {
 	if cfg.customHeaders["X-Custom"] != "value" {
 		t.Errorf("WithInitCustomHeaders 期望 X-Custom=value，实际 %v", cfg.customHeaders)
 	}
+
+	WithInitSSLCert("/path/to/cert.pem")(cfg)
+	if cfg.sslCert != "/path/to/cert.pem" {
+		t.Errorf("WithInitSSLCert 期望 /path/to/cert.pem，实际 %s", cfg.sslCert)
+	}
 }
 
 // TestInitModel_VerifySSLDefault 测试 verify_ssl 默认值与 Python 一致
@@ -153,6 +158,7 @@ func TestInitModel_WithOptions(t *testing.T) {
 		WithInitMaxRetries(5),
 		WithInitVerifySSL(true),
 		WithInitCustomHeaders(map[string]string{"X-Custom": "value"}),
+		WithInitSSLCert("/path/to/cert.pem"),
 	)
 	if err != nil {
 		t.Fatalf("InitModel 不应返回错误: %v", err)
@@ -180,6 +186,9 @@ func TestInitModel_WithOptions(t *testing.T) {
 	if model.ClientConfig.CustomHeaders["X-Custom"] != "value" {
 		t.Errorf("CustomHeaders[X-Custom] 期望 value，实际 %v", model.ClientConfig.CustomHeaders["X-Custom"])
 	}
+	if model.ClientConfig.SSLCert != "/path/to/cert.pem" {
+		t.Errorf("SSLCert 期望 /path/to/cert.pem，实际 %s", model.ClientConfig.SSLCert)
+	}
 }
 
 // TestInitModel_UnsupportedProvider 测试 InitModel 使用未注册的 provider
@@ -195,5 +204,39 @@ func TestInitModel_EmptyProvider(t *testing.T) {
 	_, err := InitModel("", "model", "key", "http://localhost")
 	if err == nil {
 		t.Error("空 provider 应返回错误")
+	}
+}
+
+// TestInitModel_BlankImportRegistersProviders 测试 blank import 后真实 provider 可用
+//
+// model_clients_register.go 中 blank import 了所有 model_client 子包，
+// 触发各包的 init() 注册到 ClientRegistry。
+// 本测试验证注册表中包含所有内置 provider。
+func TestInitModel_BlankImportRegistersProviders(t *testing.T) {
+	registry := model_clients.GetClientRegistry()
+	clients := registry.ListClients()
+
+	// 期望的内置 provider 注册键名
+	expectedProviders := []string{
+		"llm_OpenAI",
+		"llm_OpenRouter",
+		"llm_DashScope",
+		"llm_DeepSeek",
+		"llm_SiliconFlow",
+		"llm_InferenceAffinity",
+		"llm_intelli_router",
+	}
+
+	for _, expected := range expectedProviders {
+		found := false
+		for _, name := range clients {
+			if name == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("注册表中未找到 %q，已注册: %v", expected, clients)
+		}
 	}
 }

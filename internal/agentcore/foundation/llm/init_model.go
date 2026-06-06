@@ -14,6 +14,7 @@ type initModelConfig struct {
 	timeout       float64
 	maxRetries    int
 	verifySSL     bool
+	sslCert       string
 	customHeaders map[string]string
 }
 
@@ -73,14 +74,21 @@ func InitModel(
 		customHeadersAny[k] = v
 	}
 
-	clientConfig := llmschema.NewModelClientConfig(
-		provider,
-		apiKey,
-		apiBase,
+	clientConfigOpts := []llmschema.ModelClientConfigOption{
 		llmschema.WithTimeout(cfg.timeout),
 		llmschema.WithMaxRetries(cfg.maxRetries),
 		llmschema.WithVerifySSL(cfg.verifySSL),
 		llmschema.WithCustomHeaders(customHeadersAny),
+	}
+	if cfg.sslCert != "" {
+		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(cfg.sslCert))
+	}
+
+	clientConfig := llmschema.NewModelClientConfig(
+		provider,
+		apiKey,
+		apiBase,
+		clientConfigOpts...,
 	)
 
 	// 构建 ModelRequestConfig
@@ -130,4 +138,13 @@ func WithInitVerifySSL(v bool) InitModelOption {
 // WithInitCustomHeaders 设置自定义请求头。
 func WithInitCustomHeaders(h map[string]string) InitModelOption {
 	return func(c *initModelConfig) { c.customHeaders = h }
+}
+
+// WithInitSSLCert 设置 SSL 证书文件路径。
+//
+// 对应 Python: ModelClientConfig.ssl_cert 字段。
+// Python init_model() 本身未暴露 ssl_cert 参数，但 ModelClientConfig 支持此字段。
+// Go 侧补充此选项以保持配置完整性。
+func WithInitSSLCert(cert string) InitModelOption {
+	return func(c *initModelConfig) { c.sslCert = cert }
 }
