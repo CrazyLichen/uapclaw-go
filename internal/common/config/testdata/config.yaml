@@ -1,0 +1,23 @@
+# 测试用配置文件
+server:
+  agentserver:
+    host: "0.0.0.0"
+    port: 8765
+  gateway:
+    host: "0.0.0.0"
+    port: 8766
+
+logging:
+  level: "info"
+  format: "json"
+  console_level: "info"
+  common: "info"
+  gateway: "info"
+  channel: "info"
+  agent_server: "info"
+  permissions: "info"
+  agent_core: "info"
+  full: "info"
+
+workspace:
+  path: "~/.uapclaw"

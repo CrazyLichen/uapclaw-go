@@ -1,0 +1,10 @@
+# 测试用环境变量配置
+database:
+  host: "${DB_HOST:-localhost}"
+  port: 5432
+  password: "${DB_PASSWORD}"
+
+services:
+  api:
+    url: "http://${API_HOST}:${API_PORT:-8080}/v1"
+    api_key: "${MY_API_KEY}"

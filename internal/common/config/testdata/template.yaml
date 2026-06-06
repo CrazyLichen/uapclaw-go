@@ -1,0 +1,20 @@
+# 模板配置（版本升级后的新结构）
+server:
+  agentserver:
+    host: "0.0.0.0"
+    port: 8765
+  gateway:
+    host: "0.0.0.0"
+    port: 8766
+
+logging:
+  level: "info"
+  format: "json"
+
+workspace:
+  path: "~/.uapclaw"
+
+# 新增配置段
+features:
+  hot_reload: true
+  max_retries: 3
