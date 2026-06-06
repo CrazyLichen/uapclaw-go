@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 设置 Go 环境
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
@@ -50,9 +50,9 @@ jobs:
           echo "✅ 所有文件格式符合 gofmt"
 
       - name: 运行 golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.0
+          version: v2.12
 
   # ──────────────────────────── Test ────────────────────────────
 
@@ -61,17 +61,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 设置 Go 环境
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
 
       - name: 恢复覆盖率基线缓存
         if: github.event_name == 'pull_request'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: coverage-baseline.txt
           key: coverage-baseline-pr-${{ github.sha }}
@@ -219,7 +219,7 @@ jobs:
           fi
 
       - name: 上传覆盖率报告
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.out
@@ -233,7 +233,7 @@ jobs:
 
       - name: 写入覆盖率基线缓存
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: coverage-baseline.txt
           key: coverage-baseline-main-${{ github.sha }}
@@ -259,10 +259,10 @@ jobs:
 
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 设置 Go 环境
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
