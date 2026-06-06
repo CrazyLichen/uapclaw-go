@@ -396,6 +396,19 @@ func (c *OpenAIModelClient) GenerateVideo(
 	)
 }
 
+// Release 释放模型缓存（当前不支持）。
+//
+// OpenAI API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
+func (c *OpenAIModelClient) Release(
+	_ context.Context,
+	_ ...model_clients.ReleaseOption,
+) (bool, error) {
+	return false, exception.NewBaseError(
+		exception.StatusModelCallFailed,
+		exception.WithMsg("OpenAI client does not support KV cache release"),
+	)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 OpenAI 和 OpenRouter 客户端到全局注册表。

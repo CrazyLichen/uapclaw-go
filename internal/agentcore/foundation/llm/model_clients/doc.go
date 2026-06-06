@@ -7,7 +7,7 @@
 //
 // 接口与基础实现：
 //
-//	BaseModelClient        — 模型客户端接口（Invoke/Stream/GenerateImage/Speech/Video）
+//	BaseModelClient        — 模型客户端接口（Invoke/Stream/GenerateImage/Speech/Video/Release）
 //	BaseOutputParser       — 输出解析器最小接口（2.16 节扩展）
 //	BaseClientEmbed        — 共享实现结构体（具体客户端嵌入复用）
 //
@@ -19,6 +19,7 @@
 //	GenerateImageParams    — 图片生成参数 + GenerateImageOption
 //	GenerateSpeechParams   — 语音生成参数 + GenerateSpeechOption
 //	GenerateVideoParams    — 视频生成参数 + GenerateVideoOption
+//	ReleaseParams          — 缓存释放参数 + ReleaseOption
 //	StreamResult           — 流式结果（Channel + Final 合并）
 //
 // 注册与工厂：

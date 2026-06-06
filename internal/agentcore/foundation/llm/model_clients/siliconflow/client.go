@@ -148,6 +148,19 @@ func (c *SiliconFlowModelClient) GenerateVideo(
 	)
 }
 
+// Release 释放模型缓存（当前不支持）。
+//
+// SiliconFlow API 不支持 KV Cache 释放，仅 InferenceAffinity (vLLM) 客户端支持。
+func (c *SiliconFlowModelClient) Release(
+	_ context.Context,
+	_ ...model_clients.ReleaseOption,
+) (bool, error) {
+	return false, exception.NewBaseError(
+		exception.StatusModelCallFailed,
+		exception.WithMsg("SiliconFlow client does not support KV cache release"),
+	)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 SiliconFlow 客户端到全局注册表（2.6 回填点）。

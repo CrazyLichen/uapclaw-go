@@ -25,6 +25,9 @@ func (m *mockModelClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserM
 func (m *mockModelClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
 	return nil, nil
 }
+func (m *mockModelClient) Release(_ context.Context, _ ...ReleaseOption) (bool, error) {
+	return false, nil
+}
 
 // mockFactory 创建 mockModelClient 的工厂函数。
 func mockFactory(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient {

@@ -43,6 +43,12 @@ type BaseModelClient interface {
 
 	// GenerateVideo 生成视频。
 	GenerateVideo(ctx context.Context, messages []*llmschema.UserMessage, opts ...GenerateVideoOption) (*llmschema.VideoGenerationResponse, error)
+
+	// Release 释放模型缓存或资源（如 vLLM KV Cache）。
+	//
+	// 对应 Python: InferenceAffinityModelClient.release()
+	// 仅 InferenceAffinity 客户端有实际实现，其他客户端返回不支持错误。
+	Release(ctx context.Context, opts ...ReleaseOption) (bool, error)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -87,6 +87,28 @@ func TestNewDashScopeModelClient_NoAPIBase(t *testing.T) {
 	}
 }
 
+func TestRelease_NotSupported(t *testing.T) {
+	// Release 应返回 false 和不支持错误
+	client, err := NewDashScopeModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("DashScope", "test-key", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	ok, err := client.Release(context.Background())
+	if ok {
+		t.Error("Release 应返回 false")
+	}
+	if err == nil {
+		t.Fatal("Release 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "does not support KV cache release") {
+		t.Errorf("错误消息应包含 'does not support KV cache release', got %q", err.Error())
+	}
+}
+
 // ──────────────────────────── 接口合规性测试 ────────────────────────────
 
 func TestDashScopeModelClient_ImplementsBaseModelClient(t *testing.T) {

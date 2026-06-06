@@ -132,6 +132,24 @@ type GenerateVideoParams struct {
 	Extra map[string]any
 }
 
+// ReleaseParams 释放模型缓存参数（如 vLLM KV Cache）。
+//
+// 对应 Python: InferenceAffinityModelClient.release() 的关键字参数
+type ReleaseParams struct {
+	// SessionID 缓存盐值，标识特定的缓存
+	SessionID string
+	// Messages 消息列表（支持 MessagesParam 或 []map[string]any）
+	Messages any
+	// MessagesReleasedIndex 消息释放索引（0-based）
+	MessagesReleasedIndex int
+	// Model 模型名称（默认使用 model_config.model_name）
+	Model string
+	// Tools 工具列表
+	Tools []*commonschema.ToolInfo
+	// ToolsReleasedIndex 工具释放索引（0-based，可选）
+	ToolsReleasedIndex *int
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InvokeOption 非流式调用选项函数。
@@ -148,6 +166,9 @@ type GenerateSpeechOption func(*GenerateSpeechParams)
 
 // GenerateVideoOption 视频生成选项函数。
 type GenerateVideoOption func(*GenerateVideoParams)
+
+// ReleaseOption 释放缓存选项函数。
+type ReleaseOption func(*ReleaseParams)
 
 // NewInvokeParams 创建 InvokeParams（默认零值，通过 opts 填充）。
 func NewInvokeParams(opts ...InvokeOption) *InvokeParams {
@@ -198,6 +219,15 @@ func NewGenerateVideoParams(opts ...GenerateVideoOption) *GenerateVideoParams {
 		Duration:      5,
 		PromptExtend:  true,
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// NewReleaseParams 创建 ReleaseParams（默认零值，通过 opts 填充）。
+func NewReleaseParams(opts ...ReleaseOption) *ReleaseParams {
+	p := &ReleaseParams{}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -452,6 +482,38 @@ func WithVideoTimeout(t float64) GenerateVideoOption {
 // WithVideoExtra 设置额外参数。
 func WithVideoExtra(extra map[string]any) GenerateVideoOption {
 	return func(p *GenerateVideoParams) { p.Extra = extra }
+}
+
+// ──── ReleaseOption 选项函数 ────
+
+// WithReleaseSessionID 设置缓存会话 ID。
+func WithReleaseSessionID(id string) ReleaseOption {
+	return func(p *ReleaseParams) { p.SessionID = id }
+}
+
+// WithReleaseMessages 设置消息列表。
+func WithReleaseMessages(msgs any) ReleaseOption {
+	return func(p *ReleaseParams) { p.Messages = msgs }
+}
+
+// WithReleaseMessagesIndex 设置消息释放索引（0-based）。
+func WithReleaseMessagesIndex(idx int) ReleaseOption {
+	return func(p *ReleaseParams) { p.MessagesReleasedIndex = idx }
+}
+
+// WithReleaseModel 设置模型名称。
+func WithReleaseModel(model string) ReleaseOption {
+	return func(p *ReleaseParams) { p.Model = model }
+}
+
+// WithReleaseTools 设置工具列表。
+func WithReleaseTools(tools ...*commonschema.ToolInfo) ReleaseOption {
+	return func(p *ReleaseParams) { p.Tools = tools }
+}
+
+// WithReleaseToolsIndex 设置工具释放索引（0-based）。
+func WithReleaseToolsIndex(idx int) ReleaseOption {
+	return func(p *ReleaseParams) { p.ToolsReleasedIndex = &idx }
 }
 
 // ──── 类型转换方法 ────

@@ -698,3 +698,60 @@ func TestConvertOneMessage_BaseMessageWithName(t *testing.T) {
 		t.Errorf("name = %v, 期望 user1", result["name"])
 	}
 }
+
+// ──────────────────────────── ReleaseParams 测试 ────────────────────────────
+
+func TestNewReleaseParams_Defaults(t *testing.T) {
+	// 测试 ReleaseParams 默认值
+	p := NewReleaseParams()
+	if p.SessionID != "" {
+		t.Error("默认 SessionID 应为空")
+	}
+	if p.Messages != nil {
+		t.Error("默认 Messages 应为 nil")
+	}
+	if p.MessagesReleasedIndex != 0 {
+		t.Error("默认 MessagesReleasedIndex 应为 0")
+	}
+	if p.Model != "" {
+		t.Error("默认 Model 应为空")
+	}
+	if len(p.Tools) != 0 {
+		t.Error("默认 Tools 应为空")
+	}
+	if p.ToolsReleasedIndex != nil {
+		t.Error("默认 ToolsReleasedIndex 应为 nil")
+	}
+}
+
+func TestNewReleaseParams_WithOpts(t *testing.T) {
+	// 测试 ReleaseParams 组合 Options
+	msgs := []map[string]any{{"role": "user", "content": "hello"}}
+	p := NewReleaseParams(
+		WithReleaseSessionID("session-123"),
+		WithReleaseMessages(msgs),
+		WithReleaseMessagesIndex(5),
+		WithReleaseModel("qwen-72b"),
+		WithReleaseTools(commonschema.NewToolInfo("test_tool", "测试工具", nil)),
+		WithReleaseToolsIndex(2),
+	)
+
+	if p.SessionID != "session-123" {
+		t.Errorf("SessionID = %q, 期望 %q", p.SessionID, "session-123")
+	}
+	if p.Messages == nil {
+		t.Error("Messages 不应为 nil")
+	}
+	if p.MessagesReleasedIndex != 5 {
+		t.Errorf("MessagesReleasedIndex = %d, 期望 5", p.MessagesReleasedIndex)
+	}
+	if p.Model != "qwen-72b" {
+		t.Errorf("Model = %q, 期望 %q", p.Model, "qwen-72b")
+	}
+	if len(p.Tools) != 1 {
+		t.Errorf("len(Tools) = %d, 期望 1", len(p.Tools))
+	}
+	if p.ToolsReleasedIndex == nil || *p.ToolsReleasedIndex != 2 {
+		t.Errorf("ToolsReleasedIndex = %v, 期望 2", p.ToolsReleasedIndex)
+	}
+}

@@ -923,6 +923,28 @@ func TestSiliconFlowModelClient_Stream_HTTP错误(t *testing.T) {
 	}
 }
 
+func TestRelease_NotSupported(t *testing.T) {
+	// Release 应返回 false 和不支持错误
+	client, err := NewSiliconFlowModelClient(
+		newTestModelConfig(),
+		newTestClientConfig("SiliconFlow", "test-key", "https://api.siliconflow.cn/v1"),
+	)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+
+	ok, err := client.Release(context.Background())
+	if ok {
+		t.Error("Release 应返回 false")
+	}
+	if err == nil {
+		t.Fatal("Release 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "does not support KV cache release") {
+		t.Errorf("错误消息应包含 'does not support KV cache release', got %q", err.Error())
+	}
+}
+
 // ──────────────────────────── 多模态不支持测试 ────────────────────────────
 
 func TestSiliconFlowModelClient_GenerateImage_NotSupported(t *testing.T) {
