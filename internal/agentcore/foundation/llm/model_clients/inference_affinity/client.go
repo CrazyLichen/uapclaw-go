@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -174,23 +175,27 @@ func (c *InferenceAffinityModelClient) Release(
 	}
 
 	// 4. 发送请求
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_START").
-		Str("model_name", params.Model).
-		Str("model_provider", c.ClientConfig.ClientProvider).
-		Str("session_id", params.SessionID).
-		Int("messages_released_index", params.MessagesReleasedIndex).
-		Msg("Before release KV cache, release request params ready.")
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMCallStarted,
+		ModelName:     params.Model,
+		ModelProvider: c.ClientConfig.ClientProvider,
+		Extra: map[string]any{
+			"session_id":              params.SessionID,
+			"messages_released_index": params.MessagesReleasedIndex,
+		},
+	})
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "LLM_CALL_ERROR").
-			Str("model_name", params.Model).
-			Str("model_provider", c.ClientConfig.ClientProvider).
-			Str("session_id", params.SessionID).
-			Err(err).
-			Msg("KV cache release error.")
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallError,
+			ModelName:     params.Model,
+			ModelProvider: c.ClientConfig.ClientProvider,
+			Error:         err,
+			Extra: map[string]any{
+				"session_id": params.SessionID,
+			},
+		})
 		return false, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(fmt.Sprintf("Release error: %s", err.Error())),
@@ -202,24 +207,29 @@ func (c *InferenceAffinityModelClient) Release(
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusOK {
-		logger.Info(logComponent).
-			Str("event_type", "LLM_CALL_END").
-			Str("model_name", params.Model).
-			Str("model_provider", c.ClientConfig.ClientProvider).
-			Str("session_id", params.SessionID).
-			Msg("KV cache release successful.")
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMResponseReceived,
+			ModelName:     params.Model,
+			ModelProvider: c.ClientConfig.ClientProvider,
+			Extra: map[string]any{
+				"session_id": params.SessionID,
+			},
+		})
 		return true, nil
 	}
 
 	// 非 200 响应
-	logger.Error(logComponent).
-		Str("event_type", "LLM_CALL_ERROR").
-		Str("model_name", params.Model).
-		Str("model_provider", c.ClientConfig.ClientProvider).
-		Str("session_id", params.SessionID).
-		Int("status_code", resp.StatusCode).
-		Str("response_body", string(respBody)).
-		Msg("KV cache release failed.")
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMCallError,
+		ModelName:     params.Model,
+		ModelProvider: c.ClientConfig.ClientProvider,
+		Error:         fmt.Errorf("KV cache release failed, HTTP status: %d", resp.StatusCode),
+		Extra: map[string]any{
+			"session_id":    params.SessionID,
+			"status_code":   resp.StatusCode,
+			"response_body": string(respBody),
+		},
+	})
 	return false, nil
 }
 

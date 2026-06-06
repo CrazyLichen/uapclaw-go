@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -702,10 +703,12 @@ func (r *ReliableRouter) UpdateDeployments(newDeployments []*Deployment) {
 		r.healthChecker.mu.Unlock()
 	}
 
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_START").
-		Int("num_deployments", len(newDeployments)).
-		Msg("IntelliRouter 部署列表已动态更新")
+	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+		Event: callback.LLMCallStarted,
+		Extra: map[string]any{
+			"num_deployments": len(newDeployments),
+		},
+	})
 }
 
 // GetStats 获取路由器统计信息。

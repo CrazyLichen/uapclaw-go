@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
@@ -91,12 +92,15 @@ func NewIntelliRouterModelClient(
 	}
 	openaiClient.BaseClientEmbed = *embed
 
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_START").
-		Str("client_name", "IntelliRouter client").
-		Int("num_deployments", len(irConfig.Deployments)).
-		Str("strategy", irConfig.Strategy).
-		Msg("IntelliRouter 客户端创建成功")
+	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+		Event:     callback.LLMCallStarted,
+		ModelName: "IntelliRouter",
+		Extra: map[string]any{
+			"client_name":    "IntelliRouter client",
+			"num_deployments": len(irConfig.Deployments),
+			"strategy":       irConfig.Strategy,
+		},
+	})
 
 	return &IntelliRouterModelClient{
 		OpenAIModelClient: *openaiClient,
@@ -137,13 +141,17 @@ func (c *IntelliRouterModelClient) Invoke(
 		c.ClientConfig.APIKey = dep.APIKey
 		c.ClientConfig.APIBase = dep.APIBase
 
-		logger.Info(logComponent).
-			Str("event_type", "LLM_CALL_START").
-			Str("model_name", modelName).
-			Str("deployment_id", dep.ID).
-			Str("api_base", dep.APIBase).
-			Int("attempt", attempt).
-			Msg("IntelliRouter 选择部署端点，准备调用")
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallStarted,
+			ModelName:     modelName,
+			ModelProvider: "IntelliRouter",
+			IsStream:      false,
+			Extra: map[string]any{
+				"deployment_id": dep.ID,
+				"api_base":      dep.APIBase,
+				"attempt":       attempt,
+			},
+		})
 
 		// 3. 委托给 OpenAI.Invoke()
 		start := time.Now()
@@ -152,13 +160,17 @@ func (c *IntelliRouterModelClient) Invoke(
 			c.router.RecordFailure(dep)
 			lastErr = err
 
-			logger.Warn(logComponent).
-				Str("event_type", "LLM_CALL_ERROR").
-				Str("model_name", modelName).
-				Str("deployment_id", dep.ID).
-				Int("attempt", attempt).
-				Err(err).
-				Msg("IntelliRouter 调用失败，尝试下一个端点")
+			callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				Event:         callback.LLMCallError,
+				ModelName:     modelName,
+				ModelProvider: "IntelliRouter",
+				IsStream:      false,
+				Error:         err,
+				Extra: map[string]any{
+					"deployment_id": dep.ID,
+					"attempt":       attempt,
+				},
+			})
 
 			continue // 重试下一个 deployment
 		}
@@ -202,13 +214,16 @@ func (c *IntelliRouterModelClient) Stream(
 	c.ClientConfig.APIKey = dep.APIKey
 	c.ClientConfig.APIBase = dep.APIBase
 
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_START").
-		Str("model_name", modelName).
-		Str("deployment_id", dep.ID).
-		Str("api_base", dep.APIBase).
-		Bool("is_stream", true).
-		Msg("IntelliRouter 选择部署端点，准备流式调用")
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMCallStarted,
+		ModelName:     modelName,
+		ModelProvider: "IntelliRouter",
+		IsStream:      true,
+		Extra: map[string]any{
+			"deployment_id": dep.ID,
+			"api_base":      dep.APIBase,
+		},
+	})
 
 	// 3. 委托给 OpenAI.Stream()
 	start := time.Now()

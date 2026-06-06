@@ -1,6 +1,7 @@
 package model_clients
 
 import (
+	"context"
 	"testing"
 
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -269,7 +270,7 @@ func TestBuildRequestParams_Basic(t *testing.T) {
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams()
 
-	result, err := e.BuildRequestParams(messagesDict, params, false)
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)
 	if err != nil {
 		t.Fatalf("BuildRequestParams 报错: %v", err)
 	}
@@ -292,7 +293,7 @@ func TestBuildRequestParams_WithTools(t *testing.T) {
 		WithTools(commonschema.NewToolInfo("get_weather", "获取天气", nil)),
 	)
 
-	result, err := e.BuildRequestParams(messagesDict, params, false)
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)
 	if err != nil {
 		t.Fatalf("BuildRequestParams 报错: %v", err)
 	}
@@ -310,7 +311,7 @@ func TestBuildRequestParams_OverrideModel(t *testing.T) {
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams(WithInvokeModel("gpt-3.5-turbo"))
 
-	result, err := e.BuildRequestParams(messagesDict, params, true)
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, true)
 	if err != nil {
 		t.Fatalf("BuildRequestParams 报错: %v", err)
 	}
@@ -333,7 +334,7 @@ func TestBuildRequestParams_NoModel(t *testing.T) {
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams() // Model 也为空
 
-	_, err = e.BuildRequestParams(messagesDict, params, false)
+	_, err = e.BuildRequestParams(context.Background(), messagesDict, params, false)
 	if err == nil {
 		t.Error("无模型名称应报错")
 	}
@@ -358,7 +359,7 @@ func TestBuildRequestParams_ExtraMerge(t *testing.T) {
 		WithInvokeExtra(map[string]any{"frequency_penalty": 0.5}),
 	)
 
-	result, err := e.BuildRequestParams(messagesDict, params, false)
+	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)
 	if err != nil {
 		t.Fatalf("BuildRequestParams 报错: %v", err)
 	}

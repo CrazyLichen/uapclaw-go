@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -246,7 +247,7 @@ func (e *BaseClientEmbed) ConvertToolsToDict(tools []*commonschema.ToolInfo) []m
 //
 // 优先级：方法参数 > model_config 默认值
 // 合并顺序：基础参数 → model_config.Extra → params.Extra
-func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, params *InvokeParams, stream bool) (map[string]any, error) {
+func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict []map[string]any, params *InvokeParams, stream bool) (map[string]any, error) {
 	// 1. 校验 model 非空
 	model := params.Model
 	if model == "" && e.ModelConfig != nil {
@@ -358,33 +359,30 @@ func (e *BaseClientEmbed) BuildRequestParams(messagesDict []map[string]any, para
 
 	if isSensitive {
 		// 敏感模式：不记录 messages/tools
-		logger.Info(logComponent).
-			Str("event_type", "LLM_CALL_START").
-			Str("model_name", model).
-			Str("model_provider", modelProvider).
-			Any("temperature", temperature).
-			Any("top_p", topP).
-			Any("max_tokens", maxTokens).
-			Bool("is_stream", stream).
-			Any("stop", stop).
-			Str("client_name", e.GetClientName()).
-			Any("extra_params", extraParams).
-			Msg("Before request chat model, LLM request params ready.")
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallStarted,
+			ModelName:     model,
+			ModelProvider: modelProvider,
+			Temperature:   toFloat64Ptr(temperature),
+			TopP:          toFloat64Ptr(topP),
+			MaxTokens:     toIntPtr(maxTokens),
+			IsStream:      stream,
+			Extra:         map[string]any{"client_name": e.GetClientName(), "extra_params": extraParams, "stop": stop},
+		})
 	} else {
 		// 非敏感模式：记录 messages/tools
-		logger.Info(logComponent).
-			Str("event_type", "LLM_CALL_START").
-			Str("model_name", model).
-			Str("model_provider", modelProvider).
-			Any("messages", messagesDict).
-			Any("tools", reqParams["tools"]).
-			Any("temperature", temperature).
-			Any("top_p", topP).
-			Any("max_tokens", maxTokens).
-			Bool("is_stream", stream).
-			Str("client_name", e.GetClientName()).
-			Any("extra_params", extraParams).
-			Msg("Before request chat model, LLM request params ready.")
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallStarted,
+			ModelName:     model,
+			ModelProvider: modelProvider,
+			Messages:      messagesDict,
+			Tools:         reqParams["tools"],
+			Temperature:   toFloat64Ptr(temperature),
+			TopP:          toFloat64Ptr(topP),
+			MaxTokens:     toIntPtr(maxTokens),
+			IsStream:      stream,
+			Extra:         map[string]any{"client_name": e.GetClientName(), "extra_params": extraParams, "stop": stop},
+		})
 	}
 
 	return reqParams, nil
@@ -505,4 +503,38 @@ func floatVal(m map[string]any, keys ...string) float64 {
 		}
 	}
 	return 0
+}
+
+// toFloat64Ptr 将 any 类型转换为 *float64，用于 LLMCallEventData 中的可选浮点字段。
+func toFloat64Ptr(v any) *float64 {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case float64:
+		return &val
+	case int:
+		f := float64(val)
+		return &f
+	case *float64:
+		return val
+	}
+	return nil
+}
+
+// toIntPtr 将 any 类型转换为 *int，用于 LLMCallEventData 中的可选整数字段。
+func toIntPtr(v any) *int {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case int:
+		return &val
+	case float64:
+		i := int(val)
+		return &i
+	case *int:
+		return val
+	}
+	return nil
 }

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -94,11 +94,13 @@ func CallDashScopeAPI(
 	}
 
 	// 7. 发送请求
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_START").
-		Str("api_url", apiURL).
-		Str("model_provider", "DashScope").
-		Msg("DashScope API request sent")
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMCallStarted,
+		ModelProvider: "DashScope",
+		Extra: map[string]any{
+			"api_url": apiURL,
+		},
+	})
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -133,24 +135,29 @@ func CallDashScopeAPI(
 			"DashScope API 调用失败. HTTP status: %d, Error code: %s, Error message: %s",
 			dashResp.StatusCode, dashResp.Code, dashResp.Message,
 		)
-		logger.Error(logComponent).
-			Str("event_type", "LLM_CALL_ERROR").
-			Str("model_provider", "DashScope").
-			Int("status_code", dashResp.StatusCode).
-			Str("code", dashResp.Code).
-			Str("message", dashResp.Message).
-			Msg(errMsg)
+		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			Event:         callback.LLMCallError,
+			ModelProvider: "DashScope",
+			Error:         fmt.Errorf("%s", errMsg),
+			Extra: map[string]any{
+				"status_code": dashResp.StatusCode,
+				"code":        dashResp.Code,
+				"message":     dashResp.Message,
+			},
+		})
 		return nil, exception.NewBaseError(
 			exception.StatusModelCallFailed,
 			exception.WithMsg(errMsg),
 		)
 	}
 
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_END").
-		Str("model_provider", "DashScope").
-		Int("status_code", dashResp.StatusCode).
-		Msg("DashScope API response received")
+	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		Event:         callback.LLMResponseReceived,
+		ModelProvider: "DashScope",
+		Extra: map[string]any{
+			"status_code": dashResp.StatusCode,
+		},
+	})
 
 	return &dashResp, nil
 }

@@ -24,7 +24,7 @@
 //
 //	Register("InferenceAffinity", "llm", ...)
 //
-// 后续领域（2.14 Model 门面或 CLI 入口）需 blank import 本包触发注册：
+// 使用 Model 门面或 CLI 入口时需 blank import 本包触发注册：
 //
 //	import _ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/inference_affinity"
 //

@@ -1,12 +1,13 @@
 package openai
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -80,44 +81,44 @@ func ParseResponse(
 		modelName = modelConfig.ModelName
 	}
 	modelProvider := "" // ParseResponse 无法直接获取 model_provider，记录模型名即可
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_END").
-		Str("model_name", modelName).
-		Str("model_provider", modelProvider).
-		Str("response_content", content).
-		Bool("is_stream", false).
-		Msg("Before parse content with parser.")
+	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+		Event:         callback.LLMResponseReceived,
+		ModelName:     modelName,
+		ModelProvider: modelProvider,
+		IsStream:      false,
+		Extra:         map[string]any{"response_content": content},
+	})
 
 	// 对齐 Python P8: 解析内容配置前记录
-	logger.Info(logComponent).
-		Str("event_type", "LLM_CALL_END").
-		Str("model_name", modelName).
-		Str("model_provider", modelProvider).
-		Bool("is_stream", false).
-		Str("parser", fmt.Sprintf("%v", parser)).
-		Msg("Before parse content with parser config.")
+	callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+		Event:         callback.LLMResponseReceived,
+		ModelName:     modelName,
+		ModelProvider: modelProvider,
+		IsStream:      false,
+		Extra:         map[string]any{"parser": fmt.Sprintf("%v", parser)},
+	})
 
 	if parser != nil && content != "" {
 		parsed, err := parser.Parse(content)
 		if err == nil && parsed != nil {
 			parserContent = parsed
 			// 对齐 Python P9: 解析成功记录
-			logger.Info(logComponent).
-				Str("event_type", "LLM_CALL_END").
-				Str("model_name", modelName).
-				Str("model_provider", modelProvider).
-				Bool("is_stream", false).
-				Any("parser_content", parserContent).
-				Msg("Parser parse success.")
+			callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+				Event:         callback.LLMResponseReceived,
+				ModelName:     modelName,
+				ModelProvider: modelProvider,
+				IsStream:      false,
+				Extra:         map[string]any{"parser_content": parserContent},
+			})
 		} else if err != nil {
 			// 对齐 Python P10: 解析错误记录
-			logger.Warn(logComponent).
-				Str("event_type", "LLM_CALL_ERROR").
-				Str("model_name", modelName).
-				Str("model_provider", modelProvider).
-				Bool("is_stream", false).
-				Err(err).
-				Msg("Parser parse error.")
+			callback.GetCallbackFramework().Trigger(context.Background(), &callback.LLMCallEventData{
+				Event:         callback.LLMCallError,
+				ModelName:     modelName,
+				ModelProvider: modelProvider,
+				IsStream:      false,
+				Error:         err,
+			})
 		}
 	}
 
