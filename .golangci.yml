@@ -16,8 +16,8 @@ linters:
     - govet        # Go 编译器级别静态分析，捕获可疑代码结构
     - errcheck     # 检查未处理的错误返回值
     - staticcheck  # 增强版静态分析，捕获 bug 和性能问题
-  # v2 中 linters-settings 改为 linters.properties
-  properties:
+  # 各 linter 的专属配置（v2 中替代 linters-settings）
+  settings:
     errcheck:
       # 排除常见合理忽略的函数（fmt 系列返回值通常不需要检查）
       exclude-functions:
@@ -28,8 +28,9 @@ linters:
         - fmt.Println
         - fmt.Sprintf
         - fmt.Sscanf
-  exclusions:
-    # 不限制每类 linter 报告的问题数量
-    max-issues-per-linter: 0
-    # 不限制相同问题的报告数量
-    max-same-issues: 0
+
+issues:
+  # 不限制每类 linter 报告的问题数量
+  max-issues-per-linter: 0
+  # 不限制相同问题的报告数量
+  max-same-issues: 0
