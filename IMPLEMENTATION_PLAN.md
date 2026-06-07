@@ -274,8 +274,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 |------|------|------|------|-----------------|
 | 3.1 | ✅ | Tool 接口与 ToolCard | `Tool{Card, Invoke, Stream}`，`ToolCard` 扩展 BaseCard | `openjiuwen/core/foundation/tool/base.py` |
 | 3.2 | ✅ | ToolInfo / McpToolInfo 模型 | 供 LLM function calling 消费的工具描述 | `openjiuwen/core/foundation/tool/schema.py` |
-| 3.3 | ☐ | LocalFunction | Go 函数包装为 Tool，参数 schema 自动提取 | `openjiuwen/core/foundation/tool/function/function.py` |
-| 3.4 | ☐ | @tool 装饰器等价 | Go 函数→Tool 注册便捷方式 | `openjiuwen/core/foundation/tool/tool.py` |
+| 3.3 | ✅ | LocalFunction | Go 函数包装为 Tool，参数 schema 自动提取 | `openjiuwen/core/foundation/tool/function/function.py` |
+| 3.4 | ✅ | @tool 装饰器等价 | Go 函数→Tool 注册便捷方式 | `openjiuwen/core/foundation/tool/tool.py` |
 | 3.5 | ☐ | MCPTool | MCP 协议工具（SSE/stdio/StreamableHTTP 客户端） | `openjiuwen/core/foundation/tool/mcp/base.py` |
 | 3.6 | ☐ | MCP 客户端 | SSE/stdio/OpenAPI/Playwright/StreamableHTTP | `openjiuwen/core/foundation/tool/mcp/client/` |
 | 3.7 | ☐ | McpServerConfig | MCP 服务器配置模型 | `openjiuwen/core/foundation/tool/mcp/base.py` (McpServerConfig) |
@@ -283,7 +283,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 3.9 | ☐ | API 参数映射 | 请求参数到 HTTP 各位置的映射 | `openjiuwen/core/foundation/tool/service_api/` (APIParamMapper) |
 | 3.10 | ☐ | Form Handler | 表单数据处理 | `openjiuwen/core/foundation/tool/form_handler/` |
 | 3.11 | ☐ | ToolAuth | 工具认证配置与结果 | `openjiuwen/core/foundation/tool/auth/auth.py` |
-| 3.12 | ☐ | Tool 工具函数 | Schema 转换等辅助 | `openjiuwen/core/foundation/tool/utils/` |
+| 3.12 | ✅ | Tool 工具函数 | Schema 转换等辅助（SchemaUtils 已在 3.3 中一并实现） | `openjiuwen/core/foundation/tool/utils/` |
 | 3.13 | ☐ | AbilityManager | 工具/Workflow/Agent 注册与调度，并行执行，JSON 参数修复 | `openjiuwen/core/single_agent/ability_manager.py` |
 
 **验证点**：✅ 注册 Go 函数为 Tool，LLM 可通过 function calling 调用

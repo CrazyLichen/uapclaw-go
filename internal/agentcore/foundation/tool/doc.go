@@ -1,5 +1,5 @@
-// Package tool 提供工具系统的核心抽象，包括 Tool 接口、ToolCard 配置卡片和
-// LifecycleTool 生命周期包装器。
+// Package tool 提供工具系统的核心抽象，包括 Tool 接口、ToolCard 配置卡片、
+// LifecycleTool 生命周期包装器和 LocalFunction 本地函数工具。
 //
 // Tool 是 Agent 调用外部能力的统一抽象。LLM 返回 ToolCall 后，
 // Agent 通过 Tool 接口执行工具调用并拿回结果。
@@ -10,9 +10,40 @@
 // 工具类型体系：
 //
 //	Tool 接口 — 统一抽象（Invoke/Stream/Card）
-//	  ├── LocalFunction   — 本地函数工具（后续 3.3 节）
-//	  ├── MCPTool         — MCP 协议远程工具（后续 3.5 节）
-//	  └── RestfulApi      — RESTful API 工具（后续 3.8 节）
+//	  ├── InvokeFunction[I,O] — 本地函数工具（Invoke 模式）
+//	  ├── StreamFunction[I,O] — 本地函数工具（Stream 模式）
+//	  ├── MapFunction         — 弱类型 map 降级工具
+//	  ├── MCPTool             — MCP 协议远程工具（后续 3.5 节）
+//	  └── RestfulApi          — RESTful API 工具（后续 3.8 节）
+//
+// 本地函数工具：
+//
+//	LocalFunction 将 Go 函数包装为 Tool，LLM 可通过 function calling 调用。
+//	用户定义强类型 Input/Output struct（带 json + jsonschema tag），
+//	通过 NewInvokeFunction/NewStreamFunction 注册为工具。
+//	Go 编译器自动推断泛型参数，schema 从 struct tag 反射提取。
+//	便捷函数 NewTool/NewStreamTool 对标 Python @tool 装饰器。
+//
+//	Schema 提取流程：
+//
+//	用户定义 SearchInput struct（带 json + jsonschema tag）
+//	    ↓
+//	StructSchemaExtractor.Extract() — 反射提取 []*schema.Param
+//	    ↓ json:"name" → Param.Name
+//	    ↓ jsonschema:"description=xxx,required" → Param.Description, Param.Required
+//	    ↓ jsonschema:"default=10" → Param.Default
+//	    ↓ 递归处理嵌套 struct（→ ParamTypeObject）和 slice（→ ParamTypeArray）
+//	ToolCard.InputParams → ToolCard.ToolInfo() → LLM function calling JSON Schema
+//
+//	调用流程：
+//
+//	LLM 返回 ToolCall.Arguments = map[string]any
+//	    ↓
+//	SchemaUtils.FormatWithSchema — 校验 + 填充默认值 + 移除 nil
+//	    ↓
+//	json.Marshal(map) → json.Unmarshal(&struct) — 类型转换
+//	    ↓
+//	调用用户函数 → struct → map → 返回
 //
 // Card 配置体系：
 //
@@ -32,10 +63,16 @@
 // 文件目录：
 //
 //	tool/
-//	├── doc.go                # 包文档
-//	├── base.go               # Tool 接口 + ToolCard + ToolOption + ToolCallOptions + StreamChunk
-//	├── tool_info.go          # ToolCard.ToolInfo() — Param→JSON Schema 转换
-//	└── lifecycle_tool.go     # LifecycleTool 包装器（回调生命周期）
+//	├── doc.go                        # 包文档
+//	├── base.go                       # Tool 接口 + ToolCard + ToolOption + ToolCallOptions + StreamChunk
+//	├── tool_info.go                  # ToolCard.ToolInfo() — Param→JSON Schema 转换
+//	├── lifecycle_tool.go             # LifecycleTool 包装器（回调生命周期）
+//	├── struct_schema_extractor.go    # StructSchemaExtractor — struct tag→[]*Param 反射提取器
+//	├── schema_utils.go               # SchemaUtils — 参数校验/格式化/RemoveNoneValues
+//	├── invoke_function.go            # InvokeFunction[I,O] — 泛型本地函数工具（Invoke 模式）
+//	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
+//	├── map_function.go               # MapFunction — 弱类型 map 降级工具
+//	└── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
 //
 // 对应 Python 代码：openjiuwen/core/foundation/tool/
 package tool
