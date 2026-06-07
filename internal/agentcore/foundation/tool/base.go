@@ -177,3 +177,12 @@ func (c *ToolCard) ToolInfo() *schema.ToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewToolInfo(c.Name, c.Description, parameters)
 }
+
+// AbilityName 实现 schema.Ability 接口。
+func (c *ToolCard) AbilityName() string { return c.Name }
+
+// AbilityID 实现 schema.Ability 接口。
+func (c *ToolCard) AbilityID() string { return c.ID }
+
+// AbilityKind 实现 schema.Ability 接口。
+func (c *ToolCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindTool }

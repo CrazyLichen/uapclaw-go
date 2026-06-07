@@ -225,3 +225,25 @@ func TestAgentCard_ToolInfo_无参数(t *testing.T) {
 		t.Errorf("无参数时 type 应为 object，实际 %v", info.Parameters)
 	}
 }
+
+func TestWorkflowCard_Ability(t *testing.T) {
+	card := NewWorkflowCard(WithName("wf"), WithDescription("工作流"))
+	if card.AbilityName() != "wf" {
+		t.Errorf("AbilityName = %q, want wf", card.AbilityName())
+	}
+	if card.AbilityKind() != AbilityKindWorkflow {
+		t.Errorf("AbilityKind = %v, want AbilityKindWorkflow", card.AbilityKind())
+	}
+	var _ Ability = card // 编译期接口检查
+}
+
+func TestAgentCard_Ability(t *testing.T) {
+	card := NewAgentCard(WithName("ag"), WithDescription("Agent"))
+	if card.AbilityName() != "ag" {
+		t.Errorf("AbilityName = %q, want ag", card.AbilityName())
+	}
+	if card.AbilityKind() != AbilityKindAgent {
+		t.Errorf("AbilityKind = %v, want AbilityKindAgent", card.AbilityKind())
+	}
+	var _ Ability = card // 编译期接口检查
+}

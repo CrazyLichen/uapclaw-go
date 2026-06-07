@@ -183,3 +183,12 @@ func (c *McpToolCard) ToolInfo() *schema.McpToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters)
 }
+
+// AbilityName 实现 schema.Ability 接口。
+func (c *McpServerConfig) AbilityName() string { return c.ServerName }
+
+// AbilityID 实现 schema.Ability 接口。
+func (c *McpServerConfig) AbilityID() string { return c.ServerID }
+
+// AbilityKind 实现 schema.Ability 接口。
+func (c *McpServerConfig) AbilityKind() schema.AbilityKind { return schema.AbilityKindMcpServer }
