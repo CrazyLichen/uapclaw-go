@@ -12,9 +12,9 @@ import (
 // fakeMcpClient 用于编译检查 McpClient 接口的模拟实现
 type fakeMcpClient struct{}
 
-func (f *fakeMcpClient) Connect(_ context.Context, _ ...ConnectOption) error  { return nil }
-func (f *fakeMcpClient) Disconnect(_ context.Context) error                    { return nil }
-func (f *fakeMcpClient) ListTools(_ context.Context) ([]*McpToolCard, error)   { return nil, nil }
+func (f *fakeMcpClient) Connect(_ context.Context, _ ...ConnectOption) error { return nil }
+func (f *fakeMcpClient) Disconnect(_ context.Context) error                  { return nil }
+func (f *fakeMcpClient) ListTools(_ context.Context) ([]*McpToolCard, error) { return nil, nil }
 func (f *fakeMcpClient) CallTool(_ context.Context, _ string, _ map[string]any) (any, error) {
 	return nil, nil
 }

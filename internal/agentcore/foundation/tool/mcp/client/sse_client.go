@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/auth"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -354,4 +354,3 @@ func (c *SseClient) Close() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-

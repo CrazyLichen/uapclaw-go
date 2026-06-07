@@ -33,20 +33,20 @@ type OpenApiClient struct {
 	config      *types.McpServerConfig
 	serverName  string
 	httpClient  *http.Client
-	tools       map[string]*openAPIToolInfo  // tool_name → 路由+参数信息
-	toolCards   []*types.McpToolCard          // Connect 时解析的工具列表
-	baseURL     string                        // OpenAPI spec 中的服务器地址
+	tools       map[string]*openAPIToolInfo // tool_name → 路由+参数信息
+	toolCards   []*types.McpToolCard        // Connect 时解析的工具列表
+	baseURL     string                      // OpenAPI spec 中的服务器地址
 	isConnected bool
 }
 
 // openAPIToolInfo OpenAPI 工具路由信息（非导出）。
 type openAPIToolInfo struct {
-	method       string                   // GET/POST/PUT/DELETE/PATCH
-	path         string                   // /api/v1/items
+	method       string // GET/POST/PUT/DELETE/PATCH
+	path         string // /api/v1/items
 	description  string
-	parameters   []openapiParameterInfo   // path/query/header/cookie 参数
-	requestBody  *openapiRequestBodyInfo  // 请求体信息
-	outputSchema map[string]any           // 输出 JSON Schema（从 responses 提取）
+	parameters   []openapiParameterInfo  // path/query/header/cookie 参数
+	requestBody  *openapiRequestBodyInfo // 请求体信息
+	outputSchema map[string]any          // 输出 JSON Schema（从 responses 提取）
 }
 
 // openapiParameterInfo OpenAPI 参数信息。
@@ -501,9 +501,9 @@ func extractOutputSchema(op *openapi3.Operation) map[string]any {
 	typeVal, _ := outputSchema["type"]
 	if typeVal != "object" {
 		wrapped := map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"result": outputSchema},
-			"required":   []string{"result"},
+			"type":                  "object",
+			"properties":            map[string]any{"result": outputSchema},
+			"required":              []string{"result"},
 			"x-fastmcp-wrap-result": true,
 		}
 		return wrapped

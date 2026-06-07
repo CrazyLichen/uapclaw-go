@@ -26,9 +26,9 @@ type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
 // 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
 // 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
 type CallbackFramework struct {
-	mu             sync.RWMutex
-	llmCallbacks   map[LLMCallEventType][]LLMCallbackFunc
-	toolCallbacks  map[ToolCallEventType][]ToolCallbackFunc
+	mu            sync.RWMutex
+	llmCallbacks  map[LLMCallEventType][]LLMCallbackFunc
+	toolCallbacks map[ToolCallEventType][]ToolCallbackFunc
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────

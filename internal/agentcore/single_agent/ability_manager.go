@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -30,7 +30,7 @@ type AbilityManager struct {
 	workflows     map[string]*schema.WorkflowCard
 	agents        map[string]*schema.AgentCard
 	mcpServers    map[string]*mcp.McpServerConfig
-	contextEngine ContextEngine   // ⤵️ 预留，领域五回填
+	contextEngine ContextEngine // ⤵️ 预留，领域五回填
 	resourceMgr   ResourceManager
 	rail          ToolRail // ⤵️ 预留，6.4-6.10 回填
 }

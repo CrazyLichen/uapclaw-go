@@ -454,10 +454,10 @@ func TestGetParametersByLocation(t *testing.T) {
 	inputSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"id":     map[string]any{"type": "integer", "location": "path", "description": "用户ID"},
-			"q":      map[string]any{"type": "string", "location": "query"},
-			"token":  map[string]any{"type": "string", "location": "header"},
-			"name":   map[string]any{"type": "string"}, // 无 location → 默认 body
+			"id":    map[string]any{"type": "integer", "location": "path", "description": "用户ID"},
+			"q":     map[string]any{"type": "string", "location": "query"},
+			"token": map[string]any{"type": "string", "location": "header"},
+			"name":  map[string]any{"type": "string"}, // 无 location → 默认 body
 		},
 		"required": []any{"id"},
 	}

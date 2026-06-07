@@ -3,12 +3,12 @@ package service_api
 import (
 	"compress/flate"
 	"compress/gzip"
+	zlib "compress/zlib"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
-	 zlib "compress/zlib"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -65,7 +65,7 @@ type DeflateDecompressor struct{}
 //
 // 对应 Python: ParserRegistry（Singleton 元类）
 type ParserRegistry struct {
-	parsers      []BaseResponseParser
+	parsers       []BaseResponseParser
 	decompressors map[string]BaseResponseDecompressor
 }
 

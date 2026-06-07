@@ -419,7 +419,7 @@ func TestOapiSchemaToMap_AnyOf(t *testing.T) {
 // TestOapiSchemaToMap_Nullable 测试 Nullable 字段转换。
 func TestOapiSchemaToMap_Nullable(t *testing.T) {
 	s := &openapi3.Schema{
-		Type:    &openapi3.Types{"string"},
+		Type:     &openapi3.Types{"string"},
 		Nullable: true,
 	}
 

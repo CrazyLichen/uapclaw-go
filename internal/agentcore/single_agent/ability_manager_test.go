@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -881,7 +881,7 @@ func TestAbilityManager_Execute_带Tag(t *testing.T) {
 func TestAbilityManager_ReorderTools_空参数(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("a", "A", nil, nil))
-	am.ReorderTools(nil)      // 不应 panic
+	am.ReorderTools(nil)        // 不应 panic
 	am.ReorderTools([]string{}) // 不应 panic
 }
 

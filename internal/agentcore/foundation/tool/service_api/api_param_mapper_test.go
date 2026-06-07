@@ -30,11 +30,11 @@ func TestAPIParamMapper_Map_基本映射(t *testing.T) {
 	schema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"id":     map[string]any{"type": "integer", "location": "path"},
-			"q":      map[string]any{"type": "string", "location": "query"},
-			"token":  map[string]any{"type": "string", "location": "header"},
-			"name":   map[string]any{"type": "string"}, // 无 location，走 defaultLocation
-			"file":   map[string]any{"type": "string", "location": "form", "form_handler_type": "file"},
+			"id":    map[string]any{"type": "integer", "location": "path"},
+			"q":     map[string]any{"type": "string", "location": "query"},
+			"token": map[string]any{"type": "string", "location": "header"},
+			"name":  map[string]any{"type": "string"}, // 无 location，走 defaultLocation
+			"file":  map[string]any{"type": "string", "location": "form", "form_handler_type": "file"},
 		},
 	}
 
@@ -91,14 +91,14 @@ func TestAPIParamMapper_Map_默认参数合并(t *testing.T) {
 
 	mapper := NewAPIParamMapper(
 		schema,
-		map[string]any{"q": "default_search", "page": "1"},  // defaultQueries
-		map[string]any{"X-Auth": "default_token"},            // defaultHeaders
-		map[string]any{"id": "0"},                            // defaultPaths
+		map[string]any{"q": "default_search", "page": "1"}, // defaultQueries
+		map[string]any{"X-Auth": "default_token"},          // defaultHeaders
+		map[string]any{"id": "0"},                          // defaultPaths
 	)
 
 	inputs := map[string]any{
-		"id":    42,
-		"q":     "search",   // 覆盖 defaultQueries["q"]
+		"id": 42,
+		"q":  "search", // 覆盖 defaultQueries["q"]
 		// token 不在 inputs 中，defaultHeaders["X-Auth"] 保留
 	}
 
