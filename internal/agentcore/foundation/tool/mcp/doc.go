@@ -26,6 +26,7 @@
 //	│   └── types.go         # McpServerConfig + McpToolCard + McpClient + ConnectOption
 //	└── client/
 //	    ├── doc.go                        # 客户端子包文档
+//	    ├── helpers.go                    # 共享辅助函数（结果转换、JSON Schema 解析）
 //	    ├── sse_client.go                 # SseClient 实现
 //	    ├── stdio_client.go               # StdioClient 实现
 //	    ├── streamable_http_client.go     # StreamableHttpClient 实现
