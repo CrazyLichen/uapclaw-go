@@ -272,8 +272,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
-| 3.1 | ☐ | Tool 接口与 ToolCard | `Tool{Card, Invoke, Stream}`，`ToolCard` 扩展 BaseCard | `openjiuwen/core/foundation/tool/base.py` |
-| 3.2 | ☐ | ToolInfo / McpToolInfo 模型 | 供 LLM function calling 消费的工具描述 | `openjiuwen/core/foundation/tool/schema.py` |
+| 3.1 | ✅ | Tool 接口与 ToolCard | `Tool{Card, Invoke, Stream}`，`ToolCard` 扩展 BaseCard | `openjiuwen/core/foundation/tool/base.py` |
+| 3.2 | ✅ | ToolInfo / McpToolInfo 模型 | 供 LLM function calling 消费的工具描述 | `openjiuwen/core/foundation/tool/schema.py` |
 | 3.3 | ☐ | LocalFunction | Go 函数包装为 Tool，参数 schema 自动提取 | `openjiuwen/core/foundation/tool/function/function.py` |
 | 3.4 | ☐ | @tool 装饰器等价 | Go 函数→Tool 注册便捷方式 | `openjiuwen/core/foundation/tool/tool.py` |
 | 3.5 | ☐ | MCPTool | MCP 协议工具（SSE/stdio/StreamableHTTP 客户端） | `openjiuwen/core/foundation/tool/mcp/base.py` |
