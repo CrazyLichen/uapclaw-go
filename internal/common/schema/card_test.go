@@ -73,19 +73,10 @@ func TestBaseCard_ToolInfo(t *testing.T) {
 		WithName("search"),
 		WithDescription("搜索工具"),
 	)
+	// BaseCard.ToolInfo() 返回 nil，子类应覆写此方法
 	info := card.ToolInfo()
-	if info.Type != "function" {
-		t.Errorf("期望 Type %q，实际 %q", "function", info.Type)
-	}
-	if info.Name != "search" {
-		t.Errorf("期望 Name %q，实际 %q", "search", info.Name)
-	}
-	if info.Description != "搜索工具" {
-		t.Errorf("期望 Description %q，实际 %q", "搜索工具", info.Description)
-	}
-	// 无参数时 Parameters 应为空 map 而非 nil
-	if len(info.Parameters) != 0 {
-		t.Errorf("期望 Parameters 为空 map，实际 %v", info.Parameters)
+	if info != nil {
+		t.Errorf("BaseCard.ToolInfo() 应返回 nil，实际 %v", info)
 	}
 }
 

@@ -60,11 +60,11 @@ func NewBaseCard(opts ...CardOption) *BaseCard {
 }
 
 // ToolInfo 返回工具描述信息，供 LLM function calling 消费。
-// 子类可嵌入 BaseCard 并覆写此方法以提供更丰富的参数信息。
+// BaseCard 默认返回 nil，子类（如 ToolCard、AgentCard）应覆写此方法。
 //
-// 对应 Python: BaseCard.tool_info()
+// 对应 Python: BaseCard.tool_info() — Python 中为空实现（...），子类各自覆写
 func (c *BaseCard) ToolInfo() *ToolInfo {
-	return NewToolInfo(c.Name, c.Description, nil)
+	return nil
 }
 
 // String 实现 fmt.Stringer 接口，返回简洁的身份描述。
