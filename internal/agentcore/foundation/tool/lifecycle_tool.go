@@ -3,7 +3,7 @@ package tool
 import (
 	"context"
 
-	toolschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/schema"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -16,13 +16,13 @@ import (
 // 对应 Python: _ToolMeta.__call__ 中的生命周期注入逻辑
 type LifecycleTool struct {
 	inner Tool
-	fw    *toolschema.ToolCallbackFramework
+	fw    *runnnercallback.CallbackFramework
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLifecycleTool 创建带生命周期回调的工具包装器。
-func NewLifecycleTool(inner Tool, fw *toolschema.ToolCallbackFramework) *LifecycleTool {
+func NewLifecycleTool(inner Tool, fw *runnnercallback.CallbackFramework) *LifecycleTool {
 	return &LifecycleTool{
 		inner: inner,
 		fw:    fw,
@@ -41,25 +41,25 @@ func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	card := t.inner.Card()
 
 	// 1. 触发 TOOL_CALL_STARTED
-	t.fw.Trigger(ctx, newStartedData(card, inputs))
+	t.fw.TriggerTool(ctx, newStartedData(card, inputs))
 
 	// 2. 触发 TOOL_INVOKE_INPUT（emit_before）
-	t.fw.Trigger(ctx, newInvokeInputData(card, inputs))
+	t.fw.TriggerTool(ctx, newInvokeInputData(card, inputs))
 
 	// 3. 执行内部 Tool
 	result, err := t.inner.Invoke(ctx, inputs, opts...)
 
 	if err != nil {
 		// 4. 触发 TOOL_CALL_ERROR
-		t.fw.Trigger(ctx, newErrorData(card, inputs, err))
+		t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
 		return nil, err
 	}
 
 	// 5. 触发 TOOL_INVOKE_OUTPUT（emit_after）
-	t.fw.Trigger(ctx, newInvokeOutputData(card, result))
+	t.fw.TriggerTool(ctx, newInvokeOutputData(card, result))
 
 	// 6. 触发 TOOL_CALL_FINISHED
-	t.fw.Trigger(ctx, newFinishedData(card, inputs, result))
+	t.fw.TriggerTool(ctx, newFinishedData(card, inputs, result))
 
 	return result, nil
 }
@@ -71,16 +71,16 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 	card := t.inner.Card()
 
 	// 1. 触发 TOOL_CALL_STARTED
-	t.fw.Trigger(ctx, newStartedData(card, inputs))
+	t.fw.TriggerTool(ctx, newStartedData(card, inputs))
 
 	// 2. 触发 TOOL_STREAM_INPUT（emit_before）
-	t.fw.Trigger(ctx, newStreamInputData(card, inputs))
+	t.fw.TriggerTool(ctx, newStreamInputData(card, inputs))
 
 	// 3. 执行内部 Tool
 	innerCh, err := t.inner.Stream(ctx, inputs, opts...)
 	if err != nil {
 		// 出错时触发 TOOL_CALL_ERROR
-		t.fw.Trigger(ctx, newErrorData(card, inputs, err))
+		t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
 		return nil, err
 	}
 
@@ -91,21 +91,21 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 		for chunk := range innerCh {
 			if chunk.Error != nil {
 				// 流出错
-				t.fw.Trigger(ctx, newErrorData(card, inputs, chunk.Error))
+				t.fw.TriggerTool(ctx, newErrorData(card, inputs, chunk.Error))
 				outCh <- chunk
 				return
 			}
 			if chunk.Done {
 				// 流正常结束
-				t.fw.Trigger(ctx, newStreamOutputData(card, nil))
-				t.fw.Trigger(ctx, newFinishedData(card, inputs, nil))
+				t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
+				t.fw.TriggerTool(ctx, newFinishedData(card, inputs, nil))
 				outCh <- chunk
 				return
 			}
 			// 正常数据块：触发 TOOL_RESULT_RECEIVED
-			t.fw.Trigger(ctx, newResultReceivedData(card, chunk.Data))
+			t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
 			// 触发 TOOL_STREAM_OUTPUT
-			t.fw.Trigger(ctx, newStreamOutputData(card, chunk.Data))
+			t.fw.TriggerTool(ctx, newStreamOutputData(card, chunk.Data))
 			outCh <- chunk
 		}
 	}()
@@ -116,59 +116,59 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newStartedData 创建 TOOL_CALL_STARTED 事件数据
-func newStartedData(card *ToolCard, inputs map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolCallStarted, &card.BaseCard)
+func newStartedData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallStarted, &card.BaseCard)
 	data.Inputs = inputs
 	return data
 }
 
 // newFinishedData 创建 TOOL_CALL_FINISHED 事件数据
-func newFinishedData(card *ToolCard, inputs map[string]any, result map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolCallFinished, &card.BaseCard)
+func newFinishedData(card *ToolCard, inputs map[string]any, result map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallFinished, &card.BaseCard)
 	data.Inputs = inputs
 	data.Result = result
 	return data
 }
 
 // newErrorData 创建 TOOL_CALL_ERROR 事件数据
-func newErrorData(card *ToolCard, inputs map[string]any, err error) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolCallError, &card.BaseCard)
+func newErrorData(card *ToolCard, inputs map[string]any, err error) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallError, &card.BaseCard)
 	data.Inputs = inputs
 	data.Error = err
 	return data
 }
 
 // newResultReceivedData 创建 TOOL_RESULT_RECEIVED 事件数据
-func newResultReceivedData(card *ToolCard, result map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolResultReceived, &card.BaseCard)
+func newResultReceivedData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolResultReceived, &card.BaseCard)
 	data.Result = result
 	return data
 }
 
 // newInvokeInputData 创建 TOOL_INVOKE_INPUT 事件数据
-func newInvokeInputData(card *ToolCard, inputs map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolInvokeInput, &card.BaseCard)
+func newInvokeInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeInput, &card.BaseCard)
 	data.Inputs = inputs
 	return data
 }
 
 // newInvokeOutputData 创建 TOOL_INVOKE_OUTPUT 事件数据
-func newInvokeOutputData(card *ToolCard, result map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolInvokeOutput, &card.BaseCard)
+func newInvokeOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeOutput, &card.BaseCard)
 	data.Result = result
 	return data
 }
 
 // newStreamInputData 创建 TOOL_STREAM_INPUT 事件数据
-func newStreamInputData(card *ToolCard, inputs map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolStreamInput, &card.BaseCard)
+func newStreamInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamInput, &card.BaseCard)
 	data.Inputs = inputs
 	return data
 }
 
 // newStreamOutputData 创建 TOOL_STREAM_OUTPUT 事件数据
-func newStreamOutputData(card *ToolCard, result map[string]any) *toolschema.ToolCallEventData {
-	data := toolschema.NewToolCallEventData(toolschema.ToolStreamOutput, &card.BaseCard)
+func newStreamOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamOutput, &card.BaseCard)
 	data.Result = result
 	return data
 }

@@ -23,7 +23,8 @@
 //
 // 回调生命周期：
 //
-//	LifecycleTool 包装器在 Invoke/Stream 调用前后自动触发以下事件：
+//	LifecycleTool 包装器在 Invoke/Stream 调用前后自动触发以下事件
+//	（事件定义在 agentcore/runner/callback/ 包中）：
 //	  TOOL_CALL_STARTED → TOOL_INVOKE_INPUT → [执行] → TOOL_INVOKE_OUTPUT → TOOL_CALL_FINISHED
 //	  异常时触发 TOOL_CALL_ERROR
 //	  Stream 模式额外触发 TOOL_RESULT_RECEIVED（逐 chunk）
@@ -34,9 +35,7 @@
 //	├── doc.go                # 包文档
 //	├── base.go               # Tool 接口 + ToolCard + ToolOption + ToolCallOptions + StreamChunk
 //	├── tool_info.go          # ToolCard.ToolInfo() — Param→JSON Schema 转换
-//	├── lifecycle_tool.go     # LifecycleTool 包装器（回调生命周期）
-//	└── schema/
-//	    └── tool_info.go      # ToolCallEventType + ToolCallEventData + ToolCallbackFramework
+//	└── lifecycle_tool.go     # LifecycleTool 包装器（回调生命周期）
 //
 // 对应 Python 代码：openjiuwen/core/foundation/tool/
 package tool
