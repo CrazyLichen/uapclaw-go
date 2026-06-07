@@ -15,11 +15,16 @@
 //	location 扩展属性（path/query/header/body/form），这在 Go 的 []*Param 结构化列表中无法表达。
 //	RestfulApiCard 覆写 ToolInfo() 方法，直接将 InputSchema 作为 parameters 传给 LLM。
 //
+//	Form 参数处理使用 form_handler 子包的策略模式：
+//	location=form 的参数通过 FormHandlerManager 获取对应处理器，
+//	由处理器将字段写入 multipart.Writer 构建 multipart/form-data 请求体。
+//	body_params 以 application/json content-type 追加到 multipart form 中。
+//
 // 文件目录：
 //
 //	service_api/
 //	├── doc.go                # 包文档
-//	├── restful_api.go        # RestfulApiCard + RestfulApi + URL/路径参数校验
+//	├── restful_api.go        # RestfulApiCard + RestfulApi + processFormData + prepareHeadersForFormData
 //	├── api_param_mapper.go   # APIParamLocation 枚举 + APIParamMapper
 //	└── response_parser.go    # BaseResponseParser + JSON/Text 解析器 + 解压器 + ParserRegistry
 //
