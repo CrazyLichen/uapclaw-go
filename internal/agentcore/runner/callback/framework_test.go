@@ -17,9 +17,10 @@ type mockLLMCallback struct {
 	last   *LLMCallEventData
 }
 
-func (m *mockLLMCallback) call(_ context.Context, data *LLMCallEventData) {
+func (m *mockLLMCallback) call(_ context.Context, data *LLMCallEventData) any {
 	atomic.AddInt32(&m.called, 1)
 	m.last = data
+	return nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -79,11 +80,13 @@ func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
 	fw := NewCallbackFramework()
 	var callOrder []string
 
-	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
 		callOrder = append(callOrder, "first")
+		return nil
 	})
-	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
 		callOrder = append(callOrder, "second")
+		return nil
 	})
 
 	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
@@ -194,8 +197,9 @@ func TestCallbackFramework_OffByPointer(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 
-	fn := func(_ context.Context, _ *LLMCallEventData) {
+	fn := func(_ context.Context, _ *LLMCallEventData) any {
 		atomic.AddInt32(&called, 1)
+		return nil
 	}
 
 	fw.OnLLM(LLMCallStarted, fn)
@@ -217,8 +221,9 @@ func TestCallbackFramework_TriggerErrorEvent(t *testing.T) {
 	fw := NewCallbackFramework()
 	var receivedErr error
 
-	fw.OnLLM(LLMCallError, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(LLMCallError, func(_ context.Context, data *LLMCallEventData) any {
 		receivedErr = data.Error
+		return nil
 	})
 
 	testErr := fmt.Errorf("test error")
@@ -229,5 +234,55 @@ func TestCallbackFramework_TriggerErrorEvent(t *testing.T) {
 
 	if receivedErr == nil || receivedErr.Error() != "test error" {
 		t.Errorf("期望收到 test error，实际 %v", receivedErr)
+	}
+}
+
+func TestCallbackFramework_TriggerToolWithResult(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
+		return "result1"
+	})
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
+		return 42
+	})
+
+	data := NewToolCallEventData(ToolCallStarted, nil)
+	results := fw.TriggerTool(context.Background(), data)
+
+	if len(results) != 2 {
+		t.Fatalf("期望 2 个返回值，实际 %d", len(results))
+	}
+	if results[0] != "result1" {
+		t.Errorf("results[0] = %v, want result1", results[0])
+	}
+	if results[1] != 42 {
+		t.Errorf("results[1] = %v, want 42", results[1])
+	}
+}
+
+func TestCallbackFramework_TriggerLLMWithResult(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		return "llm_result"
+	})
+
+	results := fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	// 第一个是默认注册的 LoggingLLMCallback 返回 nil，第二个是自定义回调
+	if len(results) < 2 {
+		t.Fatalf("期望至少 2 个返回值，实际 %d", len(results))
+	}
+	lastResult := results[len(results)-1]
+	if lastResult != "llm_result" {
+		t.Errorf("最后一个返回值 = %v, want llm_result", lastResult)
+	}
+}
+
+func TestCallbackFramework_TriggerToolNilContext(t *testing.T) {
+	fw := NewCallbackFramework()
+	results := fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil))
+	if results != nil {
+		t.Errorf("nil context 应返回 nil，实际 %v", results)
 	}
 }

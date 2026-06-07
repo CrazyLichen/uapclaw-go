@@ -13,7 +13,7 @@ import (
 //
 // 此回调保持与原有散落在各 model_client 中的 logger.Info/Error 行为一致，
 // 作为 CallbackFramework 的默认注册回调，确保不丢失任何日志。
-func LoggingLLMCallback(ctx context.Context, data *LLMCallEventData) {
+func LoggingLLMCallback(ctx context.Context, data *LLMCallEventData) any {
 	switch data.Event {
 	case LLMCallStarted, LLMInvokeInput, LLMStreamInput, LLMInput:
 		logLLMStart(ctx, data)
@@ -22,6 +22,7 @@ func LoggingLLMCallback(ctx context.Context, data *LLMCallEventData) {
 	case LLMResponseReceived, LLMInvokeOutput, LLMStreamOutput, LLMOutput:
 		logLLMEnd(ctx, data)
 	}
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

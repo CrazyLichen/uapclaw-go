@@ -51,17 +51,21 @@ func TestLifecycleTool_Invoke_成功(t *testing.T) {
 	fw := runnnercallback.NewCallbackFramework()
 	var started, invokeInput, invokeOutput, finished int32
 
-	fw.OnTool(runnnercallback.ToolCallStarted, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolCallStarted, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&started, 1)
+		return nil
 	})
-	fw.OnTool(runnnercallback.ToolInvokeInput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolInvokeInput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&invokeInput, 1)
+		return nil
 	})
-	fw.OnTool(runnnercallback.ToolInvokeOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolInvokeOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&invokeOutput, 1)
+		return nil
 	})
-	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&finished, 1)
+		return nil
 	})
 
 	lt := NewLifecycleTool(inner, fw)
@@ -98,11 +102,12 @@ func TestLifecycleTool_Invoke_错误(t *testing.T) {
 
 	fw := runnnercallback.NewCallbackFramework()
 	var errEvent int32
-	fw.OnTool(runnnercallback.ToolCallError, func(_ context.Context, data *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolCallError, func(_ context.Context, data *runnnercallback.ToolCallEventData) any {
 		if data.Error == nil {
 			t.Error("ToolCallError 事件缺少 Error")
 		}
 		atomic.AddInt32(&errEvent, 1)
+		return nil
 	})
 
 	lt := NewLifecycleTool(inner, fw)
@@ -132,14 +137,17 @@ func TestLifecycleTool_Stream_成功(t *testing.T) {
 
 	fw := runnnercallback.NewCallbackFramework()
 	var resultReceived, streamOutput, finished int32
-	fw.OnTool(runnnercallback.ToolResultReceived, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolResultReceived, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&resultReceived, 1)
+		return nil
 	})
-	fw.OnTool(runnnercallback.ToolStreamOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolStreamOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&streamOutput, 1)
+		return nil
 	})
-	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&finished, 1)
+		return nil
 	})
 
 	lt := NewLifecycleTool(inner, fw)
@@ -199,8 +207,9 @@ func TestLifecycleTool_Stream_中途出错(t *testing.T) {
 
 	fw := runnnercallback.NewCallbackFramework()
 	var errEvent int32
-	fw.OnTool(runnnercallback.ToolCallError, func(_ context.Context, _ *runnnercallback.ToolCallEventData) {
+	fw.OnTool(runnnercallback.ToolCallError, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
 		atomic.AddInt32(&errEvent, 1)
+		return nil
 	})
 
 	lt := NewLifecycleTool(inner, fw)

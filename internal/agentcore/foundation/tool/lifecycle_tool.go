@@ -41,25 +41,25 @@ func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 	card := t.inner.Card()
 
 	// 1. 触发 TOOL_CALL_STARTED
-	t.fw.TriggerTool(ctx, newStartedData(card, inputs))
+	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
 
 	// 2. 触发 TOOL_INVOKE_INPUT（emit_before）
-	t.fw.TriggerTool(ctx, newInvokeInputData(card, inputs))
+	_ = t.fw.TriggerTool(ctx, newInvokeInputData(card, inputs))
 
 	// 3. 执行内部 Tool
 	result, err := t.inner.Invoke(ctx, inputs, opts...)
 
 	if err != nil {
 		// 4. 触发 TOOL_CALL_ERROR
-		t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
+		_ = t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
 		return nil, err
 	}
 
 	// 5. 触发 TOOL_INVOKE_OUTPUT（emit_after）
-	t.fw.TriggerTool(ctx, newInvokeOutputData(card, result))
+	_ = t.fw.TriggerTool(ctx, newInvokeOutputData(card, result))
 
 	// 6. 触发 TOOL_CALL_FINISHED
-	t.fw.TriggerTool(ctx, newFinishedData(card, inputs, result))
+	_ = t.fw.TriggerTool(ctx, newFinishedData(card, inputs, result))
 
 	return result, nil
 }
@@ -71,16 +71,16 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 	card := t.inner.Card()
 
 	// 1. 触发 TOOL_CALL_STARTED
-	t.fw.TriggerTool(ctx, newStartedData(card, inputs))
+	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
 
 	// 2. 触发 TOOL_STREAM_INPUT（emit_before）
-	t.fw.TriggerTool(ctx, newStreamInputData(card, inputs))
+	_ = t.fw.TriggerTool(ctx, newStreamInputData(card, inputs))
 
 	// 3. 执行内部 Tool
 	innerCh, err := t.inner.Stream(ctx, inputs, opts...)
 	if err != nil {
 		// 出错时触发 TOOL_CALL_ERROR
-		t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
+		_ = t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
 		return nil, err
 	}
 
@@ -91,21 +91,21 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 		for chunk := range innerCh {
 			if chunk.Error != nil {
 				// 流出错
-				t.fw.TriggerTool(ctx, newErrorData(card, inputs, chunk.Error))
+				_ = t.fw.TriggerTool(ctx, newErrorData(card, inputs, chunk.Error))
 				outCh <- chunk
 				return
 			}
 			if chunk.Done {
 				// 流正常结束
-				t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
-				t.fw.TriggerTool(ctx, newFinishedData(card, inputs, nil))
+				_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
+				_ = t.fw.TriggerTool(ctx, newFinishedData(card, inputs, nil))
 				outCh <- chunk
 				return
 			}
 			// 正常数据块：触发 TOOL_RESULT_RECEIVED
-			t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
+			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
 			// 触发 TOOL_STREAM_OUTPUT
-			t.fw.TriggerTool(ctx, newStreamOutputData(card, chunk.Data))
+			_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, chunk.Data))
 			outCh <- chunk
 		}
 	}()

@@ -38,11 +38,12 @@ func TestCallbackFramework_OnTool和TriggerTool(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 
-	fw.OnTool(ToolCallStarted, func(_ context.Context, data *ToolCallEventData) {
+	fw.OnTool(ToolCallStarted, func(_ context.Context, data *ToolCallEventData) any {
 		if data.ToolName != "weather" {
 			t.Errorf("ToolName = %q, want weather", data.ToolName)
 		}
 		atomic.AddInt32(&called, 1)
+		return nil
 	})
 
 	card := commonschema.NewBaseCard(commonschema.WithName("weather"))
@@ -58,8 +59,9 @@ func TestCallbackFramework_OffTool(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 
-	fn := func(_ context.Context, _ *ToolCallEventData) {
+	fn := func(_ context.Context, _ *ToolCallEventData) any {
 		atomic.AddInt32(&called, 1)
+		return nil
 	}
 
 	fw.OnTool(ToolCallStarted, fn)
@@ -77,11 +79,13 @@ func TestCallbackFramework_多Tool回调按序执行(t *testing.T) {
 	fw := NewCallbackFramework()
 	var order []int
 
-	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) {
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
 		order = append(order, 1)
+		return nil
 	})
-	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) {
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
 		order = append(order, 2)
+		return nil
 	})
 
 	data := NewToolCallEventData(ToolCallStarted, nil)
@@ -95,8 +99,9 @@ func TestCallbackFramework_多Tool回调按序执行(t *testing.T) {
 func TestCallbackFramework_TriggerTool_NilContext(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
-	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) {
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
 		atomic.AddInt32(&called, 1)
+		return nil
 	})
 	fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil))
 	if atomic.LoadInt32(&called) != 0 {

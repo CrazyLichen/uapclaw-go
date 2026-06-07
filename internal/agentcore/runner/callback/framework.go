@@ -12,10 +12,10 @@ import (
 //
 // 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
 // 回调函数应为只读的（不应修改传入的数据），变换型回调在 6.24 节实现。
-type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData)
+type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
 
 // ToolCallbackFunc 工具回调函数类型。
-type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData)
+type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
 
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
@@ -102,23 +102,26 @@ func (fw *CallbackFramework) OffLLM(event LLMCallEventType, fn LLMCallbackFunc) 
 	}
 }
 
-// TriggerLLM 触发 LLM 事件，按注册顺序调用所有回调。
+// TriggerLLM 触发 LLM 事件，按注册顺序调用所有回调，返回所有回调结果。
 //
-// 若 ctx 为 nil 或 data 为 nil，直接返回不触发任何回调。
+// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
 //
-// 对应 Python: AsyncCallbackFramework.trigger(event, *args, **kwargs)
-func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventData) {
+// 对应 Python: AsyncCallbackFramework.trigger(event, *args, **kwargs) → List[Any]
+func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventData) []any {
 	if ctx == nil || data == nil {
-		return
+		return nil
 	}
 
 	fw.mu.RLock()
 	callbacks := fw.llmCallbacks[data.Event]
 	fw.mu.RUnlock()
 
+	results := make([]any, 0, len(callbacks))
 	for _, fn := range callbacks {
-		fn(ctx, data)
+		result := fn(ctx, data)
+		results = append(results, result)
 	}
+	return results
 }
 
 // OnTool 注册 Tool 事件回调函数。
@@ -146,19 +149,22 @@ func (fw *CallbackFramework) OffTool(event ToolCallEventType, fn ToolCallbackFun
 	}
 }
 
-// TriggerTool 触发 Tool 事件，按注册顺序调用所有回调。
-func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEventData) {
+// TriggerTool 触发 Tool 事件，按注册顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEventData) []any {
 	if ctx == nil || data == nil {
-		return
+		return nil
 	}
 
 	fw.mu.RLock()
 	callbacks := fw.toolCallbacks[data.Event]
 	fw.mu.RUnlock()
 
+	results := make([]any, 0, len(callbacks))
 	for _, fn := range callbacks {
-		fn(ctx, data)
+		result := fn(ctx, data)
+		results = append(results, result)
 	}
+	return results
 }
 
 // GetCallbacksForTest 返回指定 LLM 事件的回调列表，仅供测试使用。

@@ -111,7 +111,7 @@ func (m *Model) Invoke(
 	modelName := m.resolveModelName(params.Model)
 
 	// 1. 触发 callback.LLMInvokeInput 事件（调用前）
-	m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+	_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMInvokeInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
@@ -126,7 +126,7 @@ func (m *Model) Invoke(
 	result, err := m.client.Invoke(ctx, messages, opts...)
 	if err != nil {
 		// 触发 callback.LLMCallError 事件
-		m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
@@ -155,7 +155,7 @@ func (m *Model) Invoke(
 	if result != nil && result.UsageMetadata != nil {
 		eventData.Usage = result.UsageMetadata
 	}
-	m.callbackFramework.TriggerLLM(ctx, eventData)
+	_ = m.callbackFramework.TriggerLLM(ctx, eventData)
 
 	return result, nil
 }
@@ -177,7 +177,7 @@ func (m *Model) Stream(
 	modelName := m.resolveStreamModelName(params.Model)
 
 	// 1. 触发 callback.LLMStreamInput 事件（流开始前）
-	m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+	_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMStreamInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
@@ -192,7 +192,7 @@ func (m *Model) Stream(
 	result, err := m.client.Stream(ctx, messages, opts...)
 	if err != nil {
 		// 触发 callback.LLMCallError 事件
-		m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
@@ -216,7 +216,7 @@ func (m *Model) Stream(
 			usage = finalChunk.UsageMetadata
 		}
 
-		m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMStreamOutput,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,

@@ -27,10 +27,11 @@ func newEventRecorder() *eventRecorder {
 	}
 }
 
-func (r *eventRecorder) record(_ context.Context, data *callback.LLMCallEventData) {
+func (r *eventRecorder) record(_ context.Context, data *callback.LLMCallEventData) any {
 	r.mu <- struct{}{}
 	r.events = append(r.events, data.Event)
 	<-r.mu
+	return nil
 }
 
 // mockModelClient 模拟 BaseModelClient，用于测试 Model 门面
@@ -119,7 +120,7 @@ func TestModel_Invoke_Callbacks(t *testing.T) {
 	var invokeInputCalled int32
 	var invokeOutputCalled int32
 
-	fw.OnLLM(callback.LLMInvokeInput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMInvokeInput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&invokeInputCalled, 1)
 		if data.Event != callback.LLMInvokeInput {
 			t.Errorf("期望 callback.LLMInvokeInput，实际 %s", data.Event)
@@ -127,13 +128,15 @@ func TestModel_Invoke_Callbacks(t *testing.T) {
 		if data.IsStream {
 			t.Error("Invoke 事件 IsStream 应为 false")
 		}
+		return nil
 	})
 
-	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&invokeOutputCalled, 1)
 		if data.Event != callback.LLMInvokeOutput {
 			t.Errorf("期望 callback.LLMInvokeOutput，实际 %s", data.Event)
 		}
+		return nil
 	})
 
 	model := &Model{
@@ -162,11 +165,12 @@ func TestModel_Invoke_Error_Callbacks(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var errorCalled int32
 
-	fw.OnLLM(callback.LLMCallError, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMCallError, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&errorCalled, 1)
 		if data.Error == nil {
 			t.Error("callback.LLMCallError 事件应有 Error 字段")
 		}
+		return nil
 	})
 
 	model := &Model{
@@ -192,7 +196,7 @@ func TestModel_Stream_Callbacks(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var streamInputCalled int32
 
-	fw.OnLLM(callback.LLMStreamInput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMStreamInput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&streamInputCalled, 1)
 		if data.Event != callback.LLMStreamInput {
 			t.Errorf("期望 callback.LLMStreamInput，实际 %s", data.Event)
@@ -200,6 +204,7 @@ func TestModel_Stream_Callbacks(t *testing.T) {
 		if !data.IsStream {
 			t.Error("Stream 事件 IsStream 应为 true")
 		}
+		return nil
 	})
 
 	// 创建一个会关闭的 channel 模拟流式响应
@@ -505,8 +510,9 @@ func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var outputData *callback.LLMCallEventData
 
-	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		outputData = data
+		return nil
 	})
 
 	usage := &llmschema.UsageMetadata{InputTokens: 10, OutputTokens: 20, TotalTokens: 30}
@@ -539,8 +545,9 @@ func TestModel_Invoke_NoUsageMetadata(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var outputData *callback.LLMCallEventData
 
-	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMInvokeOutput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		outputData = data
+		return nil
 	})
 
 	result := llmschema.NewAssistantMessage("hello")
@@ -569,7 +576,7 @@ func TestModel_Stream_Error(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var errorCalled int32
 
-	fw.OnLLM(callback.LLMCallError, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMCallError, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&errorCalled, 1)
 		if data.Error == nil {
 			t.Error("callback.LLMCallError 事件应有 Error 字段")
@@ -577,6 +584,7 @@ func TestModel_Stream_Error(t *testing.T) {
 		if !data.IsStream {
 			t.Error("Stream 错误事件 IsStream 应为 true")
 		}
+		return nil
 	})
 
 	model := &Model{
@@ -604,7 +612,7 @@ func TestModel_Stream_OutputCallback(t *testing.T) {
 	var outputDataMu sync.Mutex
 	var outputData *callback.LLMCallEventData
 
-	fw.OnLLM(callback.LLMStreamOutput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMStreamOutput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		atomic.AddInt32(&outputCalled, 1)
 		outputDataMu.Lock()
 		outputData = data
@@ -615,6 +623,7 @@ func TestModel_Stream_OutputCallback(t *testing.T) {
 		if !data.IsStream {
 			t.Error("Stream 事件 IsStream 应为 true")
 		}
+		return nil
 	})
 
 	// 创建带 UsageMetadata 的流式结果
@@ -714,8 +723,9 @@ func TestModel_Invoke_ExtraData(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var inputData *callback.LLMCallEventData
 
-	fw.OnLLM(callback.LLMInvokeInput, func(_ context.Context, data *callback.LLMCallEventData) {
+	fw.OnLLM(callback.LLMInvokeInput, func(_ context.Context, data *callback.LLMCallEventData) any {
 		inputData = data
+		return nil
 	})
 
 	modelCfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model"))
