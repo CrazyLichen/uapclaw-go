@@ -1,6 +1,6 @@
 module github.com/uapclaw/uapclaw-go
 
-go 1.23
+go 1.25.5
 
 // 后续领域依赖（按需添加）
 //
@@ -52,9 +52,12 @@ require (
 )
 
 require (
+	github.com/getkin/kin-openapi v0.140.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/mark3labs/mcp-go v0.54.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 )

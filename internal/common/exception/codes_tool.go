@@ -84,6 +84,14 @@ var (
 	StatusToolMcpExecutionError = NewStatusCode(
 		"TOOL_MCP_EXECUTION_ERROR", 182301,
 		"execute {method} failed, error='{reason}', card={card}")
+	// StatusToolMcpClientTypeUnknown MCP 客户端类型未知
+	StatusToolMcpClientTypeUnknown = NewStatusCode(
+		"TOOL_MCP_CLIENT_TYPE_UNKNOWN", 182302,
+		"mcp client type is unknown, client_type={client_type}")
+	// StatusToolMcpNotConnected MCP 客户端未连接
+	StatusToolMcpNotConnected = NewStatusCode(
+		"TOOL_MCP_NOT_CONNECTED", 182303,
+		"mcp client is not connected, server_name={server_name}")
 )
 
 // =============================================================================================================
