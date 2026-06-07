@@ -13,7 +13,7 @@
 //	  ├── InvokeFunction[I,O] — 本地函数工具（Invoke 模式）
 //	  ├── StreamFunction[I,O] — 本地函数工具（Stream 模式）
 //	  ├── MapFunction         — 弱类型 map 降级工具
-//	  ├── MCPTool             — MCP 协议远程工具（后续 3.5 节）
+//	  ├── MCPTool             — MCP 协议远程工具（3.5 节）
 //	  └── RestfulApi          — RESTful API 工具（后续 3.8 节）
 //
 // 本地函数工具：
@@ -49,7 +49,7 @@
 //
 //	BaseCard (common/schema) — 数字名片基类
 //	  └── ToolCard — 工具配置卡片（InputParams + Properties）
-//	        ├── McpToolCard — MCP 工具卡片（后续 3.5 节）
+//	        ├── McpToolCard — MCP 工具卡片（3.5 节）
 //	        └── RestfulApiCard — RESTful API 工具卡片（后续 3.8 节）
 //
 // 回调生命周期：
@@ -72,7 +72,22 @@
 //	├── invoke_function.go            # InvokeFunction[I,O] — 泛型本地函数工具（Invoke 模式）
 //	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
 //	├── map_function.go               # MapFunction — 弱类型 map 降级工具
-//	└── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
+//	├── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
+//	└── mcp/
+//	    ├── doc.go                        # MCP 包文档
+//	    ├── base.go                       # MCPTool + ExtractMCPToolResultContent + 类型重导出
+//	    ├── client.go                     # NewMcpClient 工厂函数
+//	    ├── base_test.go                  # 基础类型单元测试
+//	    ├── client_test.go                # 工厂函数测试 + fakeMcpClient
+//	    ├── types/
+//	    │   └── types.go                  # 共享类型（McpServerConfig/McpToolCard/McpClient 接口等）
+//	    └── client/
+//	        ├── doc.go                    # 客户端子包文档
+//	        ├── sse_client.go             # SseClient 实现
+//	        ├── stdio_client.go           # StdioClient 实现
+//	        ├── streamable_http_client.go # StreamableHttpClient 实现
+//	        ├── openapi_client.go         # OpenApiClient 实现
+//	        └── playwright_client.go      # PlaywrightClient 实现
 //
 // 对应 Python 代码：openjiuwen/core/foundation/tool/
 package tool

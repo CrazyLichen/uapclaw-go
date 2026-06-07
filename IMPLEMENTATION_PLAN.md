@@ -276,9 +276,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 3.2 | ✅ | ToolInfo / McpToolInfo 模型 | 供 LLM function calling 消费的工具描述 | `openjiuwen/core/foundation/tool/schema.py` |
 | 3.3 | ✅ | LocalFunction | Go 函数包装为 Tool，参数 schema 自动提取 | `openjiuwen/core/foundation/tool/function/function.py` |
 | 3.4 | ✅ | @tool 装饰器等价 | Go 函数→Tool 注册便捷方式 | `openjiuwen/core/foundation/tool/tool.py` |
-| 3.5 | ☐ | MCPTool | MCP 协议工具（SSE/stdio/StreamableHTTP 客户端） | `openjiuwen/core/foundation/tool/mcp/base.py` |
-| 3.6 | ☐ | MCP 客户端 | SSE/stdio/OpenAPI/Playwright/StreamableHTTP | `openjiuwen/core/foundation/tool/mcp/client/` |
-| 3.7 | ☐ | McpServerConfig | MCP 服务器配置模型 | `openjiuwen/core/foundation/tool/mcp/base.py` (McpServerConfig) |
+| 3.5 | ✅ | MCPTool | MCP 协议工具（SSE/stdio/StreamableHTTP 客户端） | `openjiuwen/core/foundation/tool/mcp/base.py` |
+| 3.6 | ✅ | MCP 客户端 | SSE/stdio/OpenAPI/Playwright/StreamableHTTP | `openjiuwen/core/foundation/tool/mcp/client/` |
+| 3.7 | ✅ | McpServerConfig | MCP 服务器配置模型 | `openjiuwen/core/foundation/tool/mcp/base.py` (McpServerConfig) |
 | 3.8 | ☐ | RestfulApi | HTTP REST 工具，参数映射（path/query/header/body） | `openjiuwen/core/foundation/tool/service_api/restful_api.py` |
 | 3.9 | ☐ | API 参数映射 | 请求参数到 HTTP 各位置的映射 | `openjiuwen/core/foundation/tool/service_api/` (APIParamMapper) |
 | 3.10 | ☐ | Form Handler | 表单数据处理 | `openjiuwen/core/foundation/tool/form_handler/` |
