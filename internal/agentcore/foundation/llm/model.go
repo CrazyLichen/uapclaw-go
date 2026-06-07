@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -42,7 +43,7 @@ type Model struct {
 	// client 底层模型客户端
 	client model_clients.BaseModelClient
 	// callbackFramework 回调框架实例
-	callbackFramework *CallbackFramework
+	callbackFramework *runnnercallback.CallbackFramework
 }
 
 // ModelOption Model 构造选项函数。
@@ -80,7 +81,7 @@ func NewModel(
 		ModelConfig:       modelConfig,
 		ClientConfig:      clientConfig,
 		client:            client,
-		callbackFramework: GetCallbackFramework(),
+		callbackFramework: runnnercallback.GetCallbackFramework(),
 	}
 
 	// 应用选项
@@ -92,14 +93,14 @@ func NewModel(
 }
 
 // WithCallbackFramework 设置自定义回调框架实例。
-func WithCallbackFramework(fw *CallbackFramework) ModelOption {
+func WithCallbackFramework(fw *runnnercallback.CallbackFramework) ModelOption {
 	return func(m *Model) { m.callbackFramework = fw }
 }
 
 // Invoke 非流式调用 LLM。
 //
 // 对应 Python: Model.invoke()
-// 流程：Trigger(LLMInvokeInput) → client.Invoke → Trigger(LLMInvokeOutput)
+// 流程：Trigger(runnnercallback.LLMInvokeInput) → client.Invoke → Trigger(runnnercallback.LLMInvokeOutput)
 func (m *Model) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -109,9 +110,9 @@ func (m *Model) Invoke(
 	params := model_clients.NewInvokeParams(opts...)
 	modelName := m.resolveModelName(params.Model)
 
-	// 1. 触发 LLMInvokeInput 事件（调用前）
-	m.callbackFramework.Trigger(ctx, &LLMCallEventData{
-		Event:         LLMInvokeInput,
+	// 1. 触发 runnnercallback.LLMInvokeInput 事件（调用前）
+	m.callbackFramework.TriggerLLM(ctx, &runnnercallback.LLMCallEventData{
+		Event:         runnnercallback.LLMInvokeInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      false,
@@ -124,9 +125,9 @@ func (m *Model) Invoke(
 	// 2. 调用底层客户端
 	result, err := m.client.Invoke(ctx, messages, opts...)
 	if err != nil {
-		// 触发 LLMCallError 事件
-		m.callbackFramework.Trigger(ctx, &LLMCallEventData{
-			Event:         LLMCallError,
+		// 触发 runnnercallback.LLMCallError 事件
+		m.callbackFramework.TriggerLLM(ctx, &runnnercallback.LLMCallEventData{
+			Event:         runnnercallback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
 			IsStream:      false,
@@ -139,9 +140,9 @@ func (m *Model) Invoke(
 		return nil, err
 	}
 
-	// 3. 触发 LLMInvokeOutput 事件（调用后）
-	eventData := &LLMCallEventData{
-		Event:         LLMInvokeOutput,
+	// 3. 触发 runnnercallback.LLMInvokeOutput 事件（调用后）
+	eventData := &runnnercallback.LLMCallEventData{
+		Event:         runnnercallback.LLMInvokeOutput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      false,
@@ -154,7 +155,7 @@ func (m *Model) Invoke(
 	if result != nil && result.UsageMetadata != nil {
 		eventData.Usage = result.UsageMetadata
 	}
-	m.callbackFramework.Trigger(ctx, eventData)
+	m.callbackFramework.TriggerLLM(ctx, eventData)
 
 	return result, nil
 }
@@ -162,7 +163,7 @@ func (m *Model) Invoke(
 // Stream 流式调用 LLM。
 //
 // 对应 Python: Model.stream()
-// 流程：Trigger(LLMStreamInput) → client.Stream → Trigger(LLMStreamOutput)
+// 流程：Trigger(runnnercallback.LLMStreamInput) → client.Stream → Trigger(runnnercallback.LLMStreamOutput)
 //
 // 注意：2.14 节仅在流开始和流结束时触发事件，
 // 逐项触发（Python 的 emit_after + item_key="result"）在 6.24 节实现。
@@ -175,9 +176,9 @@ func (m *Model) Stream(
 	params := model_clients.NewStreamParams(opts...)
 	modelName := m.resolveStreamModelName(params.Model)
 
-	// 1. 触发 LLMStreamInput 事件（流开始前）
-	m.callbackFramework.Trigger(ctx, &LLMCallEventData{
-		Event:         LLMStreamInput,
+	// 1. 触发 runnnercallback.LLMStreamInput 事件（流开始前）
+	m.callbackFramework.TriggerLLM(ctx, &runnnercallback.LLMCallEventData{
+		Event:         runnnercallback.LLMStreamInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      true,
@@ -190,9 +191,9 @@ func (m *Model) Stream(
 	// 2. 调用底层客户端
 	result, err := m.client.Stream(ctx, messages, opts...)
 	if err != nil {
-		// 触发 LLMCallError 事件
-		m.callbackFramework.Trigger(ctx, &LLMCallEventData{
-			Event:         LLMCallError,
+		// 触发 runnnercallback.LLMCallError 事件
+		m.callbackFramework.TriggerLLM(ctx, &runnnercallback.LLMCallEventData{
+			Event:         runnnercallback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
 			IsStream:      true,
@@ -205,7 +206,7 @@ func (m *Model) Stream(
 		return nil, err
 	}
 
-	// 3. 启动后台 goroutine，流结束后触发 LLMStreamOutput 事件
+	// 3. 启动后台 goroutine，流结束后触发 runnnercallback.LLMStreamOutput 事件
 	go func() {
 		// Final() 阻塞等待流结束
 		finalChunk := result.Final()
@@ -215,8 +216,8 @@ func (m *Model) Stream(
 			usage = finalChunk.UsageMetadata
 		}
 
-		m.callbackFramework.Trigger(ctx, &LLMCallEventData{
-			Event:         LLMStreamOutput,
+		m.callbackFramework.TriggerLLM(ctx, &runnnercallback.LLMCallEventData{
+			Event:         runnnercallback.LLMStreamOutput,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
 			IsStream:      true,

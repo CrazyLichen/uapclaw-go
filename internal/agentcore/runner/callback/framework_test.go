@@ -50,8 +50,8 @@ func TestCallbackFramework_On_Off(t *testing.T) {
 	fw := NewCallbackFramework()
 	mock := &mockLLMCallback{}
 
-	fw.On(LLMCallStarted, mock.call)
-	fw.Trigger(context.Background(), &LLMCallEventData{
+	fw.OnLLM(LLMCallStarted, mock.call)
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{
 		Event:         LLMCallStarted,
 		ModelName:     "gpt-4",
 		ModelProvider: "OpenAI",
@@ -64,8 +64,8 @@ func TestCallbackFramework_On_Off(t *testing.T) {
 		t.Errorf("期望 ModelName=gpt-4，实际 %s", mock.last.ModelName)
 	}
 
-	fw.Off(LLMCallStarted, mock.call)
-	fw.Trigger(context.Background(), &LLMCallEventData{
+	fw.OffLLM(LLMCallStarted, mock.call)
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{
 		Event:     LLMCallStarted,
 		ModelName: "gpt-3.5",
 	})
@@ -79,14 +79,14 @@ func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
 	fw := NewCallbackFramework()
 	var callOrder []string
 
-	fw.On(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
 		callOrder = append(callOrder, "first")
 	})
-	fw.On(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) {
 		callOrder = append(callOrder, "second")
 	})
 
-	fw.Trigger(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
 
 	if len(callOrder) != 2 || callOrder[0] != "first" || callOrder[1] != "second" {
 		t.Errorf("期望调用顺序 [first, second]，实际 %v", callOrder)
@@ -96,9 +96,9 @@ func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
 func TestCallbackFramework_TriggerNilData(t *testing.T) {
 	fw := NewCallbackFramework()
 	mock := &mockLLMCallback{}
-	fw.On(LLMCallStarted, mock.call)
+	fw.OnLLM(LLMCallStarted, mock.call)
 
-	fw.Trigger(context.Background(), nil)
+	fw.TriggerLLM(context.Background(), nil)
 
 	if atomic.LoadInt32(&mock.called) != 0 {
 		t.Errorf("nil data 时期望回调不被调用，实际调用 %d 次", mock.called)
@@ -198,15 +198,15 @@ func TestCallbackFramework_OffByPointer(t *testing.T) {
 		atomic.AddInt32(&called, 1)
 	}
 
-	fw.On(LLMCallStarted, fn)
-	fw.Trigger(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	fw.OnLLM(LLMCallStarted, fn)
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
 
 	if atomic.LoadInt32(&called) != 1 {
 		t.Errorf("期望调用 1 次，实际 %d 次", called)
 	}
 
-	fw.Off(LLMCallStarted, fn)
-	fw.Trigger(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	fw.OffLLM(LLMCallStarted, fn)
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
 
 	if atomic.LoadInt32(&called) != 1 {
 		t.Errorf("注销后期望不再调用，实际调用 %d 次", called)
@@ -217,12 +217,12 @@ func TestCallbackFramework_TriggerErrorEvent(t *testing.T) {
 	fw := NewCallbackFramework()
 	var receivedErr error
 
-	fw.On(LLMCallError, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(LLMCallError, func(_ context.Context, data *LLMCallEventData) {
 		receivedErr = data.Error
 	})
 
 	testErr := fmt.Errorf("test error")
-	fw.Trigger(context.Background(), &LLMCallEventData{
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{
 		Event: LLMCallError,
 		Error: testErr,
 	})

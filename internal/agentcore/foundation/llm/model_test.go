@@ -10,13 +10,14 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // eventRecorder 记录触发的事件，用于测试 Model 的回调触发
 type eventRecorder struct {
-	events []LLMCallEventType
+	events []runnnercallback.LLMCallEventType
 	mu     chan struct{}
 }
 
@@ -26,7 +27,7 @@ func newEventRecorder() *eventRecorder {
 	}
 }
 
-func (r *eventRecorder) record(_ context.Context, data *LLMCallEventData) {
+func (r *eventRecorder) record(_ context.Context, data *runnnercallback.LLMCallEventData) {
 	r.mu <- struct{}{}
 	r.events = append(r.events, data.Event)
 	<-r.mu
@@ -91,9 +92,9 @@ func TestNewModel_NilConfig(t *testing.T) {
 
 // TestNewModel_WithCallbackFramework 测试自定义回调框架
 func TestNewModel_WithCallbackFramework(t *testing.T) {
-	customFW := NewCallbackFramework()
+	customFW := runnnercallback.NewCallbackFramework()
 	recorder := newEventRecorder()
-	customFW.On(LLMInvokeInput, recorder.record)
+	customFW.OnLLM(runnnercallback.LLMInvokeInput, recorder.record)
 
 	// 创建 Model（这会触发 CreateModelClient，需要注册的 provider）
 	// 由于无法轻易注册 mock client，这里只测试 WithCallbackFramework 选项
@@ -114,24 +115,24 @@ func TestNewModel_WithCallbackFramework(t *testing.T) {
 
 // TestModel_Invoke_Callbacks 测试 Invoke 触发回调事件
 func TestModel_Invoke_Callbacks(t *testing.T) {
-	fw := NewCallbackFramework()
+	fw := runnnercallback.NewCallbackFramework()
 	var invokeInputCalled int32
 	var invokeOutputCalled int32
 
-	fw.On(LLMInvokeInput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMInvokeInput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&invokeInputCalled, 1)
-		if data.Event != LLMInvokeInput {
-			t.Errorf("期望 LLMInvokeInput，实际 %s", data.Event)
+		if data.Event != runnnercallback.LLMInvokeInput {
+			t.Errorf("期望 runnnercallback.LLMInvokeInput，实际 %s", data.Event)
 		}
 		if data.IsStream {
 			t.Error("Invoke 事件 IsStream 应为 false")
 		}
 	})
 
-	fw.On(LLMInvokeOutput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMInvokeOutput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&invokeOutputCalled, 1)
-		if data.Event != LLMInvokeOutput {
-			t.Errorf("期望 LLMInvokeOutput，实际 %s", data.Event)
+		if data.Event != runnnercallback.LLMInvokeOutput {
+			t.Errorf("期望 runnnercallback.LLMInvokeOutput，实际 %s", data.Event)
 		}
 	})
 
@@ -149,22 +150,22 @@ func TestModel_Invoke_Callbacks(t *testing.T) {
 	}
 
 	if atomic.LoadInt32(&invokeInputCalled) != 1 {
-		t.Errorf("LLMInvokeInput 应被调用 1 次，实际 %d 次", invokeInputCalled)
+		t.Errorf("runnnercallback.LLMInvokeInput 应被调用 1 次，实际 %d 次", invokeInputCalled)
 	}
 	if atomic.LoadInt32(&invokeOutputCalled) != 1 {
-		t.Errorf("LLMInvokeOutput 应被调用 1 次，实际 %d 次", invokeOutputCalled)
+		t.Errorf("runnnercallback.LLMInvokeOutput 应被调用 1 次，实际 %d 次", invokeOutputCalled)
 	}
 }
 
-// TestModel_Invoke_Error_Callbacks 测试 Invoke 错误触发 LLMCallError 回调
+// TestModel_Invoke_Error_Callbacks 测试 Invoke 错误触发 runnnercallback.LLMCallError 回调
 func TestModel_Invoke_Error_Callbacks(t *testing.T) {
-	fw := NewCallbackFramework()
+	fw := runnnercallback.NewCallbackFramework()
 	var errorCalled int32
 
-	fw.On(LLMCallError, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMCallError, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&errorCalled, 1)
 		if data.Error == nil {
-			t.Error("LLMCallError 事件应有 Error 字段")
+			t.Error("runnnercallback.LLMCallError 事件应有 Error 字段")
 		}
 	})
 
@@ -182,19 +183,19 @@ func TestModel_Invoke_Error_Callbacks(t *testing.T) {
 	}
 
 	if atomic.LoadInt32(&errorCalled) != 1 {
-		t.Errorf("LLMCallError 应被调用 1 次，实际 %d 次", errorCalled)
+		t.Errorf("runnnercallback.LLMCallError 应被调用 1 次，实际 %d 次", errorCalled)
 	}
 }
 
 // TestModel_Stream_Callbacks 测试 Stream 触发回调事件
 func TestModel_Stream_Callbacks(t *testing.T) {
-	fw := NewCallbackFramework()
+	fw := runnnercallback.NewCallbackFramework()
 	var streamInputCalled int32
 
-	fw.On(LLMStreamInput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMStreamInput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&streamInputCalled, 1)
-		if data.Event != LLMStreamInput {
-			t.Errorf("期望 LLMStreamInput，实际 %s", data.Event)
+		if data.Event != runnnercallback.LLMStreamInput {
+			t.Errorf("期望 runnnercallback.LLMStreamInput，实际 %s", data.Event)
 		}
 		if !data.IsStream {
 			t.Error("Stream 事件 IsStream 应为 true")
@@ -220,7 +221,7 @@ func TestModel_Stream_Callbacks(t *testing.T) {
 	}
 
 	if atomic.LoadInt32(&streamInputCalled) != 1 {
-		t.Errorf("LLMStreamInput 应被调用 1 次，实际 %d 次", streamInputCalled)
+		t.Errorf("runnnercallback.LLMStreamInput 应被调用 1 次，实际 %d 次", streamInputCalled)
 	}
 
 	// 等待流结束
@@ -236,7 +237,7 @@ func TestModel_BuildKVCacheInvokeKwargs(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	// 无 session
@@ -272,7 +273,7 @@ func TestModel_GetClient(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            mockClient,
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	client := model.GetClient()
@@ -352,7 +353,7 @@ func TestModel_Release(t *testing.T) {
 				ModelConfig:       llmschema.NewModelRequestConfig(),
 				ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 				client:            &mockModelClient{releaseResult: tt.result, releaseErr: tt.err},
-				callbackFramework: NewCallbackFramework(),
+				callbackFramework: runnnercallback.NewCallbackFramework(),
 			}
 
 			got, err := model.Release(context.Background())
@@ -373,7 +374,7 @@ func TestModel_SupportsKVCacheRelease(t *testing.T) {
 			ModelConfig:       llmschema.NewModelRequestConfig(),
 			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{releaseResult: true, releaseErr: nil},
-			callbackFramework: NewCallbackFramework(),
+			callbackFramework: runnnercallback.NewCallbackFramework(),
 		}
 		if !model.SupportsKVCacheRelease() {
 			t.Error("SupportsKVCacheRelease 应返回 true")
@@ -385,7 +386,7 @@ func TestModel_SupportsKVCacheRelease(t *testing.T) {
 			ModelConfig:       llmschema.NewModelRequestConfig(),
 			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{releaseResult: false, releaseErr: fmt.Errorf("not supported")},
-			callbackFramework: NewCallbackFramework(),
+			callbackFramework: runnnercallback.NewCallbackFramework(),
 		}
 		if model.SupportsKVCacheRelease() {
 			t.Error("SupportsKVCacheRelease 应返回 false（客户端返回错误）")
@@ -401,7 +402,7 @@ func TestModel_SupportsKVCacheRelease(t *testing.T) {
 			ModelConfig:       llmschema.NewModelRequestConfig(),
 			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 			client:            &mockModelClient{releaseResult: false, releaseErr: nil},
-			callbackFramework: NewCallbackFramework(),
+			callbackFramework: runnnercallback.NewCallbackFramework(),
 		}
 		// 当前实现认为 err == nil 即为支持
 		if !model.SupportsKVCacheRelease() {
@@ -417,7 +418,7 @@ func TestModel_GenerateImage(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genImageResult: expectedResp},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	resp, err := model.GenerateImage(context.Background(), nil)
@@ -436,7 +437,7 @@ func TestModel_GenerateSpeech(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genSpeechResult: expectedResp},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	resp, err := model.GenerateSpeech(context.Background(), nil)
@@ -455,7 +456,7 @@ func TestModel_GenerateVideo(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{genVideoResult: expectedResp},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	resp, err := model.GenerateVideo(context.Background(), nil)
@@ -473,7 +474,7 @@ func TestModel_Format(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4")),
 		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
 		client:            &mockModelClient{},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	got := fmt.Sprintf("%v", model)
@@ -489,7 +490,7 @@ func TestModel_Format_NilModelConfig(t *testing.T) {
 		ModelConfig:       nil,
 		ClientConfig:      llmschema.NewModelClientConfig("TestProvider", "key", "http://localhost"),
 		client:            &mockModelClient{},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	got := fmt.Sprintf("%v", model)
@@ -501,10 +502,10 @@ func TestModel_Format_NilModelConfig(t *testing.T) {
 
 // TestModel_Invoke_WithUsageMetadata 测试 Invoke 回调中包含 UsageMetadata
 func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
-	fw := NewCallbackFramework()
-	var outputData *LLMCallEventData
+	fw := runnnercallback.NewCallbackFramework()
+	var outputData *runnnercallback.LLMCallEventData
 
-	fw.On(LLMInvokeOutput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMInvokeOutput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		outputData = data
 	})
 
@@ -526,7 +527,7 @@ func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
 	}
 
 	if outputData.Usage == nil {
-		t.Fatal("LLMInvokeOutput 事件应包含 Usage")
+		t.Fatal("runnnercallback.LLMInvokeOutput 事件应包含 Usage")
 	}
 	if outputData.Usage.InputTokens != 10 {
 		t.Errorf("Usage.InputTokens 期望 10，实际 %d", outputData.Usage.InputTokens)
@@ -535,10 +536,10 @@ func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
 
 // TestModel_Invoke_NoUsageMetadata 测试 Invoke 回调中无 UsageMetadata
 func TestModel_Invoke_NoUsageMetadata(t *testing.T) {
-	fw := NewCallbackFramework()
-	var outputData *LLMCallEventData
+	fw := runnnercallback.NewCallbackFramework()
+	var outputData *runnnercallback.LLMCallEventData
 
-	fw.On(LLMInvokeOutput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMInvokeOutput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		outputData = data
 	})
 
@@ -563,15 +564,15 @@ func TestModel_Invoke_NoUsageMetadata(t *testing.T) {
 	}
 }
 
-// TestModel_Stream_Error 测试 Stream 错误触发 LLMCallError
+// TestModel_Stream_Error 测试 Stream 错误触发 runnnercallback.LLMCallError
 func TestModel_Stream_Error(t *testing.T) {
-	fw := NewCallbackFramework()
+	fw := runnnercallback.NewCallbackFramework()
 	var errorCalled int32
 
-	fw.On(LLMCallError, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMCallError, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&errorCalled, 1)
 		if data.Error == nil {
-			t.Error("LLMCallError 事件应有 Error 字段")
+			t.Error("runnnercallback.LLMCallError 事件应有 Error 字段")
 		}
 		if !data.IsStream {
 			t.Error("Stream 错误事件 IsStream 应为 true")
@@ -592,24 +593,24 @@ func TestModel_Stream_Error(t *testing.T) {
 	}
 
 	if atomic.LoadInt32(&errorCalled) != 1 {
-		t.Errorf("LLMCallError 应被调用 1 次，实际 %d 次", errorCalled)
+		t.Errorf("runnnercallback.LLMCallError 应被调用 1 次，实际 %d 次", errorCalled)
 	}
 }
 
-// TestModel_Stream_OutputCallback 测试 Stream 完成后触发 LLMStreamOutput
+// TestModel_Stream_OutputCallback 测试 Stream 完成后触发 runnnercallback.LLMStreamOutput
 func TestModel_Stream_OutputCallback(t *testing.T) {
-	fw := NewCallbackFramework()
+	fw := runnnercallback.NewCallbackFramework()
 	var outputCalled int32
 	var outputDataMu sync.Mutex
-	var outputData *LLMCallEventData
+	var outputData *runnnercallback.LLMCallEventData
 
-	fw.On(LLMStreamOutput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMStreamOutput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		atomic.AddInt32(&outputCalled, 1)
 		outputDataMu.Lock()
 		outputData = data
 		outputDataMu.Unlock()
-		if data.Event != LLMStreamOutput {
-			t.Errorf("期望 LLMStreamOutput，实际 %s", data.Event)
+		if data.Event != runnnercallback.LLMStreamOutput {
+			t.Errorf("期望 runnnercallback.LLMStreamOutput，实际 %s", data.Event)
 		}
 		if !data.IsStream {
 			t.Error("Stream 事件 IsStream 应为 true")
@@ -646,7 +647,7 @@ func TestModel_Stream_OutputCallback(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	if atomic.LoadInt32(&outputCalled) != 1 {
-		t.Errorf("LLMStreamOutput 应被调用 1 次，实际 %d 次", outputCalled)
+		t.Errorf("runnnercallback.LLMStreamOutput 应被调用 1 次，实际 %d 次", outputCalled)
 	}
 
 	outputDataMu.Lock()
@@ -710,10 +711,10 @@ func TestModel_resolveStreamModelName(t *testing.T) {
 
 // TestModel_Invoke_ExtraData 测试 Invoke 回调中的 Extra 数据
 func TestModel_Invoke_ExtraData(t *testing.T) {
-	fw := NewCallbackFramework()
-	var inputData *LLMCallEventData
+	fw := runnnercallback.NewCallbackFramework()
+	var inputData *runnnercallback.LLMCallEventData
 
-	fw.On(LLMInvokeInput, func(_ context.Context, data *LLMCallEventData) {
+	fw.OnLLM(runnnercallback.LLMInvokeInput, func(_ context.Context, data *runnnercallback.LLMCallEventData) {
 		inputData = data
 	})
 
@@ -733,7 +734,7 @@ func TestModel_Invoke_ExtraData(t *testing.T) {
 	}
 
 	if inputData == nil {
-		t.Fatal("LLMInvokeInput 事件数据不应为 nil")
+		t.Fatal("runnnercallback.LLMInvokeInput 事件数据不应为 nil")
 	}
 	if inputData.Extra["model_config"] != modelCfg {
 		t.Error("Extra 应包含 model_config")
@@ -749,7 +750,7 @@ func TestModel_BuildKVCacheInvokeKwargs_SessionOnly(t *testing.T) {
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
 		client:            &mockModelClient{},
-		callbackFramework: NewCallbackFramework(),
+		callbackFramework: runnnercallback.NewCallbackFramework(),
 	}
 
 	session := &mockSession{id: "session-456"}

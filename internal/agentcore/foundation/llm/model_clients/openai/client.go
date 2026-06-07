@@ -7,10 +7,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/headers_helper"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -123,7 +123,7 @@ func (c *OpenAIModelClient) Invoke(
 	}
 
 	// 7. 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+	callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMInput,
 		ModelName:     reqParams["model"].(string),
 		ModelProvider: c.ClientConfig.ClientProvider,
@@ -133,7 +133,7 @@ func (c *OpenAIModelClient) Invoke(
 	resp, err := client.Do(req)
 	if err != nil {
 		// 对齐 Python P4: Invoke 错误记录完整上下文
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
 			ModelProvider: c.ClientConfig.ClientProvider,
@@ -187,7 +187,7 @@ func (c *OpenAIModelClient) Invoke(
 	if assistantMsg.UsageMetadata != nil {
 		outputData.Usage = assistantMsg.UsageMetadata
 	}
-	callback.GetCallbackFramework().Trigger(ctx, outputData)
+	callback.GetCallbackFramework().TriggerLLM(ctx, outputData)
 
 	return assistantMsg, nil
 }
@@ -251,7 +251,7 @@ func (c *OpenAIModelClient) Stream(
 	}
 
 	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+	callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMInput,
 		ModelName:     reqParams["model"].(string),
 		ModelProvider: c.ClientConfig.ClientProvider,
@@ -262,7 +262,7 @@ func (c *OpenAIModelClient) Stream(
 	resp, err := client.Do(req)
 	if err != nil {
 		// 对齐 Python P5: Stream 错误记录完整上下文
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     reqParams["model"].(string),
 			ModelProvider: c.ClientConfig.ClientProvider,
@@ -295,7 +295,7 @@ func (c *OpenAIModelClient) Stream(
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
 				// 对齐 Python: 流结束时触发 LLMOutput 回调
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
@@ -305,7 +305,7 @@ func (c *OpenAIModelClient) Stream(
 			}
 			if err != nil {
 				// 对齐 Python P5: Stream 错误记录完整上下文
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
@@ -355,7 +355,7 @@ func (c *OpenAIModelClient) Stream(
 			}
 
 			// 对齐 Python: 逐 chunk 触发 LLMResponseReceived 回调
-			callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+			callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 				Event:         callback.LLMResponseReceived,
 				ModelName:     modelName,
 				ModelProvider: c.ClientConfig.ClientProvider,
@@ -366,7 +366,7 @@ func (c *OpenAIModelClient) Stream(
 			select {
 			case chunkChan <- chunk:
 			case <-ctx.Done():
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,

@@ -20,7 +20,7 @@ type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData)
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
 // 统一管理 LLM 和 Tool 事件的注册与触发。
-// 2.14 节仅实现最小子集：On/Off/Trigger。
+// 2.14 节仅实现最小子集：OnLLM/OffLLM/TriggerLLM、OnTool/OffTool/TriggerTool。
 // 完整能力（过滤器/熔断器/链式执行/装饰器/transform_io）在 6.24 节实现。
 //
 // 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
@@ -159,21 +159,6 @@ func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEven
 	for _, fn := range callbacks {
 		fn(ctx, data)
 	}
-}
-
-// On 注册 LLM 事件回调函数（OnLLM 的便捷别名，保持向后兼容）。
-func (fw *CallbackFramework) On(event LLMCallEventType, fn LLMCallbackFunc) {
-	fw.OnLLM(event, fn)
-}
-
-// Off 注销 LLM 事件回调函数（OffLLM 的便捷别名，保持向后兼容）。
-func (fw *CallbackFramework) Off(event LLMCallEventType, fn LLMCallbackFunc) {
-	fw.OffLLM(event, fn)
-}
-
-// Trigger 触发 LLM 事件（TriggerLLM 的便捷别名，保持向后兼容）。
-func (fw *CallbackFramework) Trigger(ctx context.Context, data *LLMCallEventData) {
-	fw.TriggerLLM(ctx, data)
 }
 
 // GetCallbacksForTest 返回指定 LLM 事件的回调列表，仅供测试使用。

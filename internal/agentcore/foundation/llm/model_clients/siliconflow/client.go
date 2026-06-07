@@ -7,10 +7,10 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -158,7 +158,7 @@ func (c *SiliconFlowModelClient) Stream(
 	}
 
 	// 触发 LLMInput 回调（对齐 Python trigger(LLM_INPUT)）
-	callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+	callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMInput,
 		ModelName:     fmt.Sprintf("%v", reqParams["model"]),
 		ModelProvider: c.ClientConfig.ClientProvider,
@@ -168,7 +168,7 @@ func (c *SiliconFlowModelClient) Stream(
 	// 8. 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
-		callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+		callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     fmt.Sprintf("%v", reqParams["model"]),
 			ModelProvider: c.ClientConfig.ClientProvider,
@@ -201,7 +201,7 @@ func (c *SiliconFlowModelClient) Stream(
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
 				// 对齐 Python: 流结束时触发 LLMOutput 回调
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
@@ -210,7 +210,7 @@ func (c *SiliconFlowModelClient) Stream(
 				return
 			}
 			if err != nil {
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
@@ -260,7 +260,7 @@ func (c *SiliconFlowModelClient) Stream(
 			select {
 			case chunkChan <- chunk:
 			case <-ctx.Done():
-				callback.GetCallbackFramework().Trigger(ctx, &callback.LLMCallEventData{
+				callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMCallError,
 					ModelName:     modelName,
 					ModelProvider: c.ClientConfig.ClientProvider,
