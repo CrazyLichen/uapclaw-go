@@ -73,6 +73,9 @@
 //	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
 //	├── map_function.go               # MapFunction — 弱类型 map 降级工具
 //	├── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
+//	├── form_handler/
+//	│   ├── doc.go              # 表单处理器子包文档
+//	│   └── form_handler.go     # FormHandler 接口 + DefaultFormHandler + FormHandlerManager
 //	├── service_api/
 //	│   ├── doc.go                    # RESTful API 子包文档
 //	│   ├── restful_api.go            # RestfulApiCard + RestfulApi + URL/路径参数校验
