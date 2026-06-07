@@ -474,7 +474,7 @@ func TestRelease_WithTools(t *testing.T) {
 		model_clients.WithReleaseSessionID("session-tools"),
 		model_clients.WithReleaseMessagesIndex(3),
 		model_clients.WithReleaseTools(
-			commonschema.NewToolInfo("test_tool", "测试工具", map[string]any{}, nil),
+			commonschema.NewToolInfo("test_tool", "测试工具", map[string]any{}),
 		),
 		model_clients.WithReleaseToolsIndex(toolIdx),
 	)

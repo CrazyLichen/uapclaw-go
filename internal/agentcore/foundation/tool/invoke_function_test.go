@@ -147,7 +147,7 @@ func TestNewInvokeFunction_手动InputParams(t *testing.T) {
 func TestNewInvokeFunction_WithCard(t *testing.T) {
 	card := NewToolCard("custom", "自定义卡片", []*schema.Param{
 		schema.NewStringParam("q", "查询", true),
-	}, nil, nil)
+	}, nil)
 	fn, err := NewInvokeFunction("search", searchFunc, WithCard(card))
 	if err != nil {
 		t.Fatalf("NewInvokeFunction 失败: %v", err)

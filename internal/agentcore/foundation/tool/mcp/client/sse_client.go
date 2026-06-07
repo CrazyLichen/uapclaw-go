@@ -173,7 +173,6 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 			t.Description,
 			c.serverName,
 			nil, // InputParams 从 InputSchema 转换较复杂，此处暂留空
-			nil,
 			types.WithMcpToolCardServerID(c.config.ServerID),
 		))
 	}

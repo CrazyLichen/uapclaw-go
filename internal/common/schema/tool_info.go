@@ -20,13 +20,18 @@ type ToolInfo struct {
 	Description string `json:"description"`
 	// Parameters 参数定义，对应 JSON Schema 的 parameters 字段
 	Parameters map[string]any `json:"parameters"`
-	// OutputSchema 输出 JSON Schema，描述工具返回值的结构。
-	// 为 nil 表示无输出 schema 定义（LLM 无法预知返回结构）。
-	OutputSchema map[string]any `json:"output_schema,omitempty"`
 	// ServerName MCP 服务器名称，非空时表示 MCP 工具。
 	// 不发送给 LLM（omitempty），仅框架内部路由使用。
 	ServerName string `json:"server_name,omitempty"`
 }
+
+// McpToolInfo 是 ToolInfo 的类型别名，保持语义兼容。
+//
+// ServerName 非空时为 MCP 工具。类型别名保证 McpToolInfo 与 ToolInfo
+// 完全等价，可自由互换，统一了工具列表管理。
+//
+// 对应 Python: openjiuwen/core/foundation/tool/schema.py (McpToolInfo)
+type McpToolInfo = ToolInfo
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -39,16 +44,15 @@ func WithServerName(name string) ToolInfoOption {
 }
 
 // NewToolInfo 创建 ToolInfo 实例，Type 默认为 "function"。
-func NewToolInfo(name, description string, parameters, outputSchema map[string]any, opts ...ToolInfoOption) *ToolInfo {
+func NewToolInfo(name, description string, parameters map[string]any, opts ...ToolInfoOption) *ToolInfo {
 	if parameters == nil {
 		parameters = make(map[string]any)
 	}
 	ti := &ToolInfo{
-		Type:         "function",
-		Name:         name,
-		Description:  description,
-		Parameters:   parameters,
-		OutputSchema: outputSchema,
+		Type:        "function",
+		Name:        name,
+		Description: description,
+		Parameters:  parameters,
 	}
 	for _, opt := range opts {
 		opt(ti)
@@ -59,6 +63,6 @@ func NewToolInfo(name, description string, parameters, outputSchema map[string]a
 // NewMcpToolInfo 创建 MCP 工具描述信息（ToolInfo + ServerName）。
 //
 // 对应 Python: McpToolCard.tool_info() -> McpToolInfo
-func NewMcpToolInfo(name, description, serverName string, parameters, outputSchema map[string]any) *ToolInfo {
-	return NewToolInfo(name, description, parameters, outputSchema, WithServerName(serverName))
+func NewMcpToolInfo(name, description, serverName string, parameters map[string]any) *McpToolInfo {
+	return NewToolInfo(name, description, parameters, WithServerName(serverName))
 }

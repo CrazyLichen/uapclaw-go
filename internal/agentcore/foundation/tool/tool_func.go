@@ -104,7 +104,7 @@ func NewTool[I any, O any](fn func(context.Context, I) (O, error), opts ...ToolF
 	if cfg.card != nil {
 		card = cfg.card
 	} else {
-		card = NewToolCard(name, description, inputParams, nil, nil)
+		card = NewToolCard(name, description, inputParams, nil)
 	}
 
 	return &InvokeFunction[I, O]{card: card, fn: fn}, nil
@@ -161,7 +161,7 @@ func NewStreamTool[I any, O any](fn func(context.Context, I) (<-chan O, error), 
 	if cfg.card != nil {
 		card = cfg.card
 	} else {
-		card = NewToolCard(name, description, inputParams, nil, nil)
+		card = NewToolCard(name, description, inputParams, nil)
 	}
 
 	return &StreamFunction[I, O]{card: card, fn: fn}, nil

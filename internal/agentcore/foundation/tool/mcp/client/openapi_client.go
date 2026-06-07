@@ -377,7 +377,6 @@ func (c *OpenApiClient) registerOperation(method, path string, op *openapi3.Oper
 		description,
 		c.serverName,
 		inputParams,
-		outputSchema,
 		types.WithMcpToolCardServerID(c.config.ServerID),
 	)
 	c.toolCards = append(c.toolCards, card)

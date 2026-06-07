@@ -72,7 +72,7 @@ func NewStreamFunction[I any, O any](name string, fn func(context.Context, I) (<
 	if cfg.card != nil {
 		card = cfg.card
 	} else {
-		card = NewToolCard(name, description, inputParams, nil, nil)
+		card = NewToolCard(name, description, inputParams, nil)
 	}
 
 	return &StreamFunction[I, O]{card: card, fn: fn}, nil

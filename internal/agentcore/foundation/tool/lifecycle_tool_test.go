@@ -29,7 +29,7 @@ func (m *mockTool) Stream(ctx context.Context, inputs map[string]any, opts ...To
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestLifecycleTool_Card(t *testing.T) {
-	card := NewToolCard("test", "测试", nil, nil, nil)
+	card := NewToolCard("test", "测试", nil, nil)
 	inner := &mockTool{card: card}
 	fw := runnnercallback.NewCallbackFramework()
 	lt := NewLifecycleTool(inner, fw)
@@ -40,7 +40,7 @@ func TestLifecycleTool_Card(t *testing.T) {
 }
 
 func TestLifecycleTool_Invoke_成功(t *testing.T) {
-	card := NewToolCard("weather", "查询天气", nil, nil, nil)
+	card := NewToolCard("weather", "查询天气", nil, nil)
 	inner := &mockTool{
 		card: card,
 		invokeFn: func(_ context.Context, inputs map[string]any, _ ...ToolOption) (map[string]any, error) {
@@ -88,7 +88,7 @@ func TestLifecycleTool_Invoke_成功(t *testing.T) {
 }
 
 func TestLifecycleTool_Invoke_错误(t *testing.T) {
-	card := NewToolCard("bad_tool", "坏工具", nil, nil, nil)
+	card := NewToolCard("bad_tool", "坏工具", nil, nil)
 	inner := &mockTool{
 		card: card,
 		invokeFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (map[string]any, error) {
@@ -117,7 +117,7 @@ func TestLifecycleTool_Invoke_错误(t *testing.T) {
 }
 
 func TestLifecycleTool_Stream_成功(t *testing.T) {
-	card := NewToolCard("stream_tool", "流式工具", nil, nil, nil)
+	card := NewToolCard("stream_tool", "流式工具", nil, nil)
 	inner := &mockTool{
 		card: card,
 		streamFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (<-chan StreamChunk, error) {
@@ -168,7 +168,7 @@ func TestLifecycleTool_Stream_成功(t *testing.T) {
 }
 
 func TestLifecycleTool_Stream_不支持(t *testing.T) {
-	card := NewToolCard("no_stream", "不支持流式", nil, nil, nil)
+	card := NewToolCard("no_stream", "不支持流式", nil, nil)
 	inner := &mockTool{
 		card: card,
 		streamFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (<-chan StreamChunk, error) {
@@ -185,7 +185,7 @@ func TestLifecycleTool_Stream_不支持(t *testing.T) {
 }
 
 func TestLifecycleTool_Stream_中途出错(t *testing.T) {
-	card := NewToolCard("err_stream", "出错流式", nil, nil, nil)
+	card := NewToolCard("err_stream", "出错流式", nil, nil)
 	inner := &mockTool{
 		card: card,
 		streamFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (<-chan StreamChunk, error) {

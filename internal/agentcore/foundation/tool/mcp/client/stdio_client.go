@@ -168,7 +168,6 @@ func (c *StdioClient) ListTools(ctx context.Context) ([]*types.McpToolCard, erro
 			t.Description,
 			c.serverName,
 			inputParams,
-			nil,
 			types.WithMcpToolCardServerID(c.config.ServerID),
 		))
 	}

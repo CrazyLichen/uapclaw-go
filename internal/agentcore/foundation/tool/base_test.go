@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestNewToolCard(t *testing.T) {
-	card := NewToolCard("weather", "查询天气", nil, nil, nil)
+	card := NewToolCard("weather", "查询天气", nil, nil)
 	if card.Name != "weather" {
 		t.Errorf("Name = %q, want %q", card.Name, "weather")
 	}
@@ -37,7 +37,7 @@ func TestNewToolCard_带参数(t *testing.T) {
 		schema.NewStringParam("city", "城市名", true),
 	}
 	props := map[string]any{"source": "openweather"}
-	card := NewToolCard("weather", "查询天气", params, nil, props)
+	card := NewToolCard("weather", "查询天气", params, props)
 	if len(card.InputParams) != 1 {
 		t.Errorf("InputParams 长度 = %d, want 1", len(card.InputParams))
 	}
@@ -47,15 +47,15 @@ func TestNewToolCard_带参数(t *testing.T) {
 }
 
 func TestNewToolCard_ID自动生成(t *testing.T) {
-	card1 := NewToolCard("a", "", nil, nil, nil)
-	card2 := NewToolCard("b", "", nil, nil, nil)
+	card1 := NewToolCard("a", "", nil, nil)
+	card2 := NewToolCard("b", "", nil, nil)
 	if card1.ID == card2.ID {
 		t.Error("两个 ToolCard 的 ID 不应相同")
 	}
 }
 
 func TestToolCard_String(t *testing.T) {
-	card := NewToolCard("weather", "查询天气", nil, nil, nil)
+	card := NewToolCard("weather", "查询天气", nil, nil)
 	s := card.String()
 	if s != "id="+card.ID+",name=weather" {
 		t.Errorf("String() = %q, want %q", s, "id="+card.ID+",name=weather")
@@ -128,7 +128,7 @@ func TestValidateToolCard_空ID(t *testing.T) {
 }
 
 func TestValidateToolCard_合法(t *testing.T) {
-	card := NewToolCard("test", "测试", nil, nil, nil)
+	card := NewToolCard("test", "测试", nil, nil)
 	err := ValidateToolCard(card)
 	if err != nil {
 		t.Errorf("合法 ToolCard 不应返回错误: %v", err)

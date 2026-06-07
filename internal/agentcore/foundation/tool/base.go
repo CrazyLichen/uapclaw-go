@@ -17,9 +17,6 @@ type ToolCard struct {
 	schema.BaseCard
 	// InputParams 输入参数定义，用于校验和生成 ToolInfo 传给 LLM
 	InputParams []*schema.Param
-	// OutputSchema 输出 JSON Schema，描述工具返回值的结构。
-	// 为 nil 表示无输出 schema 定义。
-	OutputSchema map[string]any
 	// Properties 扩展属性
 	Properties map[string]any
 }
@@ -97,12 +94,11 @@ func NewToolCallOptions(opts ...ToolOption) *ToolCallOptions {
 // NewToolCard 创建 ToolCard 实例，自动生成 BaseCard。
 //
 // 对应 Python: ToolCard(input_params=..., properties=...)
-func NewToolCard(name, description string, inputParams []*schema.Param, outputSchema map[string]any, properties map[string]any) *ToolCard {
+func NewToolCard(name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
 	card := &ToolCard{
-		BaseCard:     *schema.NewBaseCard(schema.WithName(name), schema.WithDescription(description)),
-		InputParams:  inputParams,
-		OutputSchema: outputSchema,
-		Properties:   properties,
+		BaseCard:    *schema.NewBaseCard(schema.WithName(name), schema.WithDescription(description)),
+		InputParams: inputParams,
+		Properties:  properties,
 	}
 	if card.Properties == nil {
 		card.Properties = make(map[string]any)
@@ -179,5 +175,5 @@ func (c *ToolCard) String() string {
 // 对应 Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
 func (c *ToolCard) ToolInfo() *schema.ToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
-	return schema.NewToolInfo(c.Name, c.Description, parameters, c.OutputSchema)
+	return schema.NewToolInfo(c.Name, c.Description, parameters)
 }

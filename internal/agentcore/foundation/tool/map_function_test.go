@@ -13,7 +13,7 @@ import (
 func TestMapFunction_Invoke(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 
 	fn, err := NewMapFunction(card,
 		func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
@@ -38,7 +38,7 @@ func TestMapFunction_Invoke(t *testing.T) {
 func TestMapFunction_Stream(t *testing.T) {
 	card := NewToolCard("stream_echo", "流式回显", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 
 	fn, err := NewMapFunction(card,
 		nil,
@@ -73,7 +73,7 @@ func TestMapFunction_Stream(t *testing.T) {
 func TestMapFunction_InvokeNilFn(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 	fn, _ := NewMapFunction(card, nil,
 		func(ctx context.Context, inputs map[string]any) (<-chan map[string]any, error) {
 			ch := make(chan map[string]any, 1)
@@ -95,7 +95,7 @@ func TestMapFunction_InvokeNilFn(t *testing.T) {
 func TestMapFunction_StreamNilFn(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 	fn, _ := NewMapFunction(card,
 		func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
 			return map[string]any{"echo": inputs["message"]}, nil
@@ -113,7 +113,7 @@ func TestMapFunction_StreamNilFn(t *testing.T) {
 func TestMapFunction_Card(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 	fn, _ := NewMapFunction(card, nil, nil)
 	if fn.Card().Name != "echo" {
 		t.Errorf("Card Name: 期望 echo，实际 %q", fn.Card().Name)
@@ -132,7 +132,7 @@ func TestMapFunction_InvalidCard(t *testing.T) {
 func TestMapFunction_InvokeWithFormat(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
-	}, nil, nil)
+	}, nil)
 	fn, _ := NewMapFunction(card,
 		func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
 			return map[string]any{"echo": inputs["message"]}, nil

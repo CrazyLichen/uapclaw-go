@@ -88,7 +88,7 @@ func TestNewTool_WithToolInputParams(t *testing.T) {
 func TestNewTool_WithToolCard(t *testing.T) {
 	card := NewToolCard("my_tool", "自定义", []*schema.Param{
 		schema.NewStringParam("q", "查询", true),
-	}, nil, nil)
+	}, nil)
 	fn, err := NewTool(searchFunc, WithToolCard(card))
 	if err != nil {
 		t.Fatalf("NewTool 失败: %v", err)
