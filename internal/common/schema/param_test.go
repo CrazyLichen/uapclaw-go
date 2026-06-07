@@ -290,6 +290,85 @@ func TestParam_String(t *testing.T) {
 	}
 }
 
+func TestToJSONSchemaMap_空参数列表(t *testing.T) {
+	result := ToJSONSchemaMap(nil)
+	if result["type"] != "object" {
+		t.Errorf("type = %v, want object", result["type"])
+	}
+	props, ok := result["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("properties 类型不是 map[string]any")
+	}
+	if len(props) != 0 {
+		t.Errorf("properties 应为空，实际有 %d 项", len(props))
+	}
+	if _, hasRequired := result["required"]; hasRequired {
+		t.Error("空参数列表不应有 required 字段")
+	}
+}
+
+func TestToJSONSchemaMap_简单参数(t *testing.T) {
+	params := []*Param{
+		NewStringParam("city", "城市名", true),
+		NewIntegerParam("count", "数量", false),
+	}
+	result := ToJSONSchemaMap(params)
+
+	if result["type"] != "object" {
+		t.Errorf("type = %v, want object", result["type"])
+	}
+
+	props := result["properties"].(map[string]any)
+	citySchema := props["city"].(map[string]any)
+	if citySchema["type"] != "string" {
+		t.Errorf("city type = %v, want string", citySchema["type"])
+	}
+	if citySchema["description"] != "城市名" {
+		t.Errorf("city description = %v, want 城市名", citySchema["description"])
+	}
+
+	required := result["required"].([]string)
+	if len(required) != 1 || required[0] != "city" {
+		t.Errorf("required = %v, want [city]", required)
+	}
+}
+
+func TestToJSONSchemaMap_嵌套对象参数(t *testing.T) {
+	params := []*Param{
+		NewObjectParam("config", "配置", true, []*Param{
+			NewStringParam("host", "主机", true),
+			NewIntegerParam("port", "端口", false, 8080),
+		}),
+	}
+	result := ToJSONSchemaMap(params)
+	props := result["properties"].(map[string]any)
+	configSchema := props["config"].(map[string]any)
+	if configSchema["type"] != "object" {
+		t.Errorf("config type = %v, want object", configSchema["type"])
+	}
+	innerProps := configSchema["properties"].(map[string]any)
+	hostSchema := innerProps["host"].(map[string]any)
+	if hostSchema["type"] != "string" {
+		t.Errorf("host type = %v, want string", hostSchema["type"])
+	}
+}
+
+func TestToJSONSchemaMap_数组参数(t *testing.T) {
+	params := []*Param{
+		NewArrayParam("tags", "标签", false, NewStringParam("", "", false)),
+	}
+	result := ToJSONSchemaMap(params)
+	props := result["properties"].(map[string]any)
+	tagsSchema := props["tags"].(map[string]any)
+	if tagsSchema["type"] != "array" {
+		t.Errorf("tags type = %v, want array", tagsSchema["type"])
+	}
+	itemsSchema := tagsSchema["items"].(map[string]any)
+	if itemsSchema["type"] != "string" {
+		t.Errorf("items type = %v, want string", itemsSchema["type"])
+	}
+}
+
 func TestParam_NestedStructure(t *testing.T) {
 	// 构建一个嵌套对象参数：用户信息（包含字符串和整数属性）
 	userParam := NewObjectParam("user", "用户信息", true, []*Param{
