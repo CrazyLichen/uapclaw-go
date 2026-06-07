@@ -240,12 +240,84 @@ func (p *Param) Validate() error {
 	}
 }
 
+// ToJSONSchemaMap 将 []*Param 列表转换为 OpenAI function calling 格式的 JSON Schema parameters。
+//
+// 生成格式：
+//
+//	{
+//	  "type": "object",
+//	  "properties": { <每个 Param 的 JSON Schema> },
+//	  "required": [ <必填参数名列表> ]
+//	}
+//
+// 对应 Python: ToolInfo.parameters 从 ToolCard.input_params 自动生成的逻辑
+func ToJSONSchemaMap(params []*Param) map[string]any {
+	if len(params) == 0 {
+		return map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+		}
+	}
+
+	properties := make(map[string]any, len(params))
+	var required []string
+
+	for _, p := range params {
+		properties[p.Name] = paramToSchema(p)
+		if p.Required {
+			required = append(required, p.Name)
+		}
+	}
+
+	result := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	if len(required) > 0 {
+		result["required"] = required
+	}
+	return result
+}
+
 // String 实现 fmt.Stringer 接口，返回参数的简洁描述。
 func (p *Param) String() string {
 	return fmt.Sprintf("%s(%s, required=%v)", p.Name, p.Type, p.Required)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// paramToSchema 将单个 Param 转换为 JSON Schema 字典。
+func paramToSchema(p *Param) map[string]any {
+	s := map[string]any{
+		"type":        p.Type.String(),
+		"description": p.Description,
+	}
+	if p.Default != nil {
+		s["default"] = p.Default
+	}
+	switch p.Type {
+	case ParamTypeArray:
+		if p.Items != nil {
+			s["items"] = paramToSchema(p.Items)
+		}
+	case ParamTypeObject:
+		if len(p.Properties) > 0 {
+			objProps := make(map[string]any, len(p.Properties))
+			var objRequired []string
+			for _, prop := range p.Properties {
+				objProps[prop.Name] = paramToSchema(prop)
+				if prop.Required {
+					objRequired = append(objRequired, prop.Name)
+				}
+			}
+			s["properties"] = objProps
+			if len(objRequired) > 0 {
+				s["required"] = objRequired
+			}
+		}
+	}
+	return s
+}
 
 func init() {
 	// 初始化 paramTypeMap，用于 JSON 反序列化
