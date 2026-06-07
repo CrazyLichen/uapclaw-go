@@ -169,11 +169,9 @@ func TestNewCallbackFramework_LoggingCallback(t *testing.T) {
 	}
 
 	for _, event := range events {
-		fw.mu.RLock()
-		callbacks, ok := fw.callbacks[event]
-		fw.mu.RUnlock()
+		callbacks := fw.GetCallbacksForTest(event)
 
-		if !ok || len(callbacks) == 0 {
+		if len(callbacks) == 0 {
 			t.Errorf("事件 %s 应该有默认日志回调", event)
 		}
 	}
@@ -374,10 +372,9 @@ func TestLoggingCallback_AllFields(t *testing.T) {
 
 // TestCallbackFramework_Off_UnregisteredEvent 测试注销未注册事件的回调
 func TestCallbackFramework_Off_UnregisteredEvent(t *testing.T) {
+	// 使用 runtimneocallback 包的 NewCallbackFramework 创建空框架测试
+	// 此处仅测试 Off 在无回调时不 panic
 	fw := NewCallbackFramework()
-
-	// 创建干净框架，无 LoggingCallback
-	fw.callbacks = make(map[LLMCallEventType][]CallbackFunc)
 
 	// 注销不存在事件的回调不应 panic
 	fn := func(_ context.Context, _ *LLMCallEventData) {}
