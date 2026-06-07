@@ -3,6 +3,7 @@ package service_api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,9 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/auth"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/form_handler"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -420,15 +423,26 @@ func (r *RestfulApi) doRequest(
 		req.Header.Set(k, v)
 	}
 
-	// SSL 配置（⤵️ 3.11 回填回调触发，当前直接用环境变量）
-	// verifySwitch := os.Getenv(restfulSSLVerifyEnv)
-	// sslCert := os.Getenv(restfulSSLCertEnv)
+	// 触发 TOOL_AUTH 回调获取 SSL 配置（3.11 回填）
+	results := r.triggerAuth(ctx)
 
-	// 创建 HTTP 客户端（支持代理）
+	// 从 results 中提取 *auth.ToolAuthResult → tls_config
+	var tlsConfig *tls.Config
+	for _, item := range results {
+		if authResult, ok := item.(*auth.ToolAuthResult); ok && authResult.Success {
+			if tc, ok := authResult.AuthData["tls_config"].(*tls.Config); ok {
+				tlsConfig = tc
+				break
+			}
+		}
+	}
+
+	// 创建 HTTP 客户端（支持代理 + SSL）
 	client := &http.Client{
 		Timeout: time.Duration(timeout * float64(time.Second)),
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: tlsConfig,
 		},
 	}
 
@@ -710,4 +724,25 @@ func prepareHeadersForFormData(headers map[string]string) map[string]string {
 		processed[key] = value
 	}
 	return processed
+}
+
+// triggerAuth 触发 TOOL_AUTH 回调获取 SSL 配置。
+func (r *RestfulApi) triggerAuth(ctx context.Context) []any {
+	return callback.GetCallbackFramework().TriggerTool(ctx, &callback.ToolCallEventData{
+		Event:    callback.ToolAuth,
+		ToolName: r.card.Name,
+		ToolID:   r.card.ID,
+		Extra: map[string]any{
+			"auth_config": &auth.ToolAuthConfig{
+				AuthType: auth.AuthTypeSSL,
+				Config: map[string]any{
+					"verify_switch_env": restfulSSLVerifyEnv,
+					"ssl_cert_env":      restfulSSLCertEnv,
+					"url":               r.card.URL,
+				},
+				ToolType: "restful_api",
+				ToolID:   r.card.ID,
+			},
+		},
+	})
 }

@@ -7,7 +7,9 @@ import (
 	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/auth"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -57,6 +59,47 @@ func (c *SseClient) Connect(ctx context.Context, _ ...types.ConnectOption) error
 	var transportOpts []mcptransport.ClientOption
 	if len(c.config.AuthHeaders) > 0 {
 		transportOpts = append(transportOpts, mcptransport.WithHeaders(c.config.AuthHeaders))
+	}
+
+	// 触发 TOOL_AUTH 回调获取认证信息（3.11 回填）
+	results := callback.GetCallbackFramework().TriggerTool(ctx, &callback.ToolCallEventData{
+		Event:    callback.ToolAuth,
+		ToolName: c.serverName,
+		ToolID:   c.config.ServerID,
+		Extra: map[string]any{
+			"auth_config": &auth.ToolAuthConfig{
+				AuthType: auth.AuthTypeHeaderAndQuery,
+				Config: map[string]any{
+					"auth_headers":      c.config.AuthHeaders,
+					"auth_query_params": c.config.AuthQueryParams,
+				},
+				ToolType: c.serverName,
+				ToolID:   c.config.ServerID,
+			},
+		},
+	})
+
+	// 从 results 中提取 *auth.ToolAuthResult → auth_provider
+	var provider *auth.HeaderQueryProvider
+	for _, item := range results {
+		if authResult, ok := item.(*auth.ToolAuthResult); ok && authResult.Success {
+			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok {
+				provider = p
+				break
+			}
+		}
+	}
+
+	// 将 provider 的 headers 合并到 config.AuthHeaders，一次性传入 transport 选项
+	if provider != nil && len(provider.Headers) > 0 {
+		mergedHeaders := make(map[string]string)
+		for k, v := range c.config.AuthHeaders {
+			mergedHeaders[k] = v
+		}
+		for k, v := range provider.Headers {
+			mergedHeaders[k] = v
+		}
+		transportOpts = append(transportOpts, mcptransport.WithHeaders(mergedHeaders))
 	}
 
 	// 创建 SSE 客户端
