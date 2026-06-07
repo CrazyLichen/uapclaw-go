@@ -27,6 +27,18 @@ var (
 	StatusAgentPromptParamError = NewStatusCode(
 		"AGENT_PROMPT_PARAM_ERROR", 120004,
 		"agent prompt parameter error, reason: {error_msg}")
+	// StatusAbilityExecutionError 能力执行错误（AbilityManager 统一异常）
+	StatusAbilityExecutionError = NewStatusCode(
+		"ABILITY_EXECUTION_ERROR", 120005,
+		"ability execution error, reason: {error_msg}")
+	// StatusAbilityNotFound 能力未找到
+	StatusAbilityNotFound = NewStatusCode(
+		"ABILITY_NOT_FOUND", 120006,
+		"ability not found, name: {ability_name}")
+	// StatusAbilityMalformedArguments 工具参数 JSON 格式错误
+	StatusAbilityMalformedArguments = NewStatusCode(
+		"ABILITY_MALFORMED_ARGUMENTS", 120007,
+		"malformed tool arguments, tool: {tool_name}, reason: {error_msg}")
 )
 
 // =============================================================================================================
