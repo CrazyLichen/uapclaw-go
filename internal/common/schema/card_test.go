@@ -154,3 +154,74 @@ func TestBaseCard_JSONSerialization(t *testing.T) {
 func isHexChar(c rune) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
+
+func TestWorkflowCard_ToolInfo_有参数(t *testing.T) {
+	card := NewWorkflowCard(
+		WithName("my_workflow"),
+		WithDescription("我的工作流"),
+	)
+	card.Version = "1.0"
+	card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"query": map[string]any{"type": "string"}},
+	}
+	info := card.ToolInfo()
+	if info.Name != "my_workflow" {
+		t.Errorf("Name = %q, want my_workflow", info.Name)
+	}
+	if info.Description != "我的工作流" {
+		t.Errorf("Description = %q, want 我的工作流", info.Description)
+	}
+	if card.Version != "1.0" {
+		t.Errorf("Version = %q, want 1.0", card.Version)
+	}
+}
+
+func TestWorkflowCard_ToolInfo_无参数(t *testing.T) {
+	card := NewWorkflowCard(WithName("empty_wf"))
+	info := card.ToolInfo()
+	if info.Name != "empty_wf" {
+		t.Errorf("Name = %q, want empty_wf", info.Name)
+	}
+	props, ok := info.Parameters["properties"]
+	if ok {
+		// properties 存在时应为空 map
+		if m, ok2 := props.(map[string]any); ok2 && len(m) != 0 {
+			t.Errorf("无参数时 properties 应为空，实际 %v", m)
+		}
+	}
+	// 无参数时 InputParams 为 nil，ToolInfo 用 make(map[string]any)
+	// 所以 Parameters 是空 map，不含 properties 键也正常
+}
+
+func TestAgentCard_ToolInfo_有参数(t *testing.T) {
+	card := NewAgentCard(
+		WithName("sub_agent"),
+		WithDescription("子 Agent"),
+	)
+	card.InputParams = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"task": map[string]any{"type": "string"}},
+	}
+	card.InterfaceURL = "http://localhost:8080/a2a"
+	info := card.ToolInfo()
+	if info.Name != "sub_agent" {
+		t.Errorf("Name = %q, want sub_agent", info.Name)
+	}
+	if card.InterfaceURL != "http://localhost:8080/a2a" {
+		t.Errorf("InterfaceURL = %q, want http://localhost:8080/a2a", card.InterfaceURL)
+	}
+}
+
+func TestAgentCard_ToolInfo_无参数(t *testing.T) {
+	card := NewAgentCard(WithName("no_params_agent"))
+	info := card.ToolInfo()
+	if info.Name != "no_params_agent" {
+		t.Errorf("Name = %q, want no_params_agent", info.Name)
+	}
+	// InputParams 为 nil 时应返回空 object schema
+	typ, ok := info.Parameters["type"].(string)
+	if !ok || typ != "object" {
+		t.Errorf("无参数时 type 应为 object，实际 %v", info.Parameters)
+	}
+}

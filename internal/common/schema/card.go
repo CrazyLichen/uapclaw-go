@@ -79,6 +79,77 @@ func (c *BaseCard) GoString() string {
 	return fmt.Sprintf("BaseCard{ID:%q, Name:%q, Description:%q}", c.ID, c.Name, c.Description)
 }
 
+// NewWorkflowCard 创建 WorkflowCard 实例。
+//
+// 对应 Python: WorkflowCard(name=..., description=..., version=..., input_params=...)
+func NewWorkflowCard(opts ...CardOption) *WorkflowCard {
+	return &WorkflowCard{
+		BaseCard: *NewBaseCard(opts...),
+	}
+}
+
+// ToolInfo 返回工具描述信息，供 LLM function calling 消费。
+// WorkflowCard 的 InputParams 直接作为 JSON Schema parameters。
+//
+// 对应 Python: WorkflowCard.tool_info()
+func (c *WorkflowCard) ToolInfo() *ToolInfo {
+	params := c.InputParams
+	if params == nil {
+		params = make(map[string]any)
+	}
+	return NewToolInfo(c.Name, c.Description, params)
+}
+
+// NewAgentCard 创建 AgentCard 实例。
+//
+// 对应 Python: AgentCard(name=..., description=..., input_params=..., output_params=..., interface_url=...)
+func NewAgentCard(opts ...CardOption) *AgentCard {
+	return &AgentCard{
+		BaseCard: *NewBaseCard(opts...),
+	}
+}
+
+// ToolInfo 返回工具描述信息，供 LLM function calling 消费。
+// AgentCard 的 InputParams 直接作为 JSON Schema parameters；
+// InputParams 为 nil 时返回空 object schema。
+//
+// 对应 Python: AgentCard.tool_info()
+func (c *AgentCard) ToolInfo() *ToolInfo {
+	params := c.InputParams
+	if params == nil {
+		params = map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+			"required":   []string{},
+		}
+	}
+	return NewToolInfo(c.Name, c.Description, params)
+}
+
+// WorkflowCard 工作流配置卡片，嵌入 BaseCard，增加版本号和输入参数定义。
+//
+// 对应 Python: openjiuwen/core/workflow/base.py (WorkflowCard)
+type WorkflowCard struct {
+	BaseCard
+	// Version 工作流版本号
+	Version string `json:"version,omitempty"`
+	// InputParams 输入参数定义（JSON Schema 格式）
+	InputParams map[string]any `json:"input_params,omitempty"`
+}
+
+// AgentCard Agent 配置卡片，嵌入 BaseCard，增加输入/输出参数和接口 URL。
+//
+// 对应 Python: openjiuwen/core/single_agent/schema/agent_card.py (AgentCard)
+type AgentCard struct {
+	BaseCard
+	// InputParams 输入参数定义（JSON Schema 格式）
+	InputParams map[string]any `json:"input_params,omitempty"`
+	// OutputParams 输出参数定义（JSON Schema 格式）
+	OutputParams map[string]any `json:"output_params,omitempty"`
+	// InterfaceURL A2A JSON-RPC 基础 URL
+	InterfaceURL string `json:"interface_url,omitempty"`
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // formatUUIDHex 将 UUID 字符串中的连字符去除，返回 32 位 hex。
