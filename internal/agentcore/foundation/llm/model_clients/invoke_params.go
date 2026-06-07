@@ -10,8 +10,8 @@ import (
 //
 // 对应 Python: BaseModelClient.invoke() 的关键字参数
 type InvokeParams struct {
-	// Tools 工具列表
-	Tools []*commonschema.ToolInfo
+	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
+	Tools []commonschema.ToolInfoProvider
 	// Temperature 温度参数
 	Temperature *float64
 	// TopP Top-p 采样参数
@@ -38,8 +38,8 @@ type InvokeParams struct {
 //
 // 对应 Python: BaseModelClient.stream() 的关键字参数
 type StreamParams struct {
-	// Tools 工具列表
-	Tools []*commonschema.ToolInfo
+	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
+	Tools []commonschema.ToolInfoProvider
 	// Temperature 温度参数
 	Temperature *float64
 	// TopP Top-p 采样参数
@@ -144,8 +144,8 @@ type ReleaseParams struct {
 	MessagesReleasedIndex int
 	// Model 模型名称（默认使用 model_config.model_name）
 	Model string
-	// Tools 工具列表
-	Tools []*commonschema.ToolInfo
+	// Tools 工具列表（支持 ToolInfo 和 McpToolInfo）
+	Tools []commonschema.ToolInfoProvider
 	// ToolsReleasedIndex 工具释放索引（0-based，可选）
 	ToolsReleasedIndex *int
 }
@@ -237,7 +237,7 @@ func NewReleaseParams(opts ...ReleaseOption) *ReleaseParams {
 // ──── InvokeOption 选项函数 ────
 
 // WithTools 设置工具列表。
-func WithTools(tools ...*commonschema.ToolInfo) InvokeOption {
+func WithTools(tools ...commonschema.ToolInfoProvider) InvokeOption {
 	return func(p *InvokeParams) { p.Tools = tools }
 }
 
@@ -294,7 +294,7 @@ func WithInvokeTracerRecordData(d any) InvokeOption {
 // ──── StreamOption 选项函数 ────
 
 // WithStreamTools 设置工具列表。
-func WithStreamTools(tools ...*commonschema.ToolInfo) StreamOption {
+func WithStreamTools(tools ...commonschema.ToolInfoProvider) StreamOption {
 	return func(p *StreamParams) { p.Tools = tools }
 }
 
@@ -507,7 +507,7 @@ func WithReleaseModel(model string) ReleaseOption {
 }
 
 // WithReleaseTools 设置工具列表。
-func WithReleaseTools(tools ...*commonschema.ToolInfo) ReleaseOption {
+func WithReleaseTools(tools ...commonschema.ToolInfoProvider) ReleaseOption {
 	return func(p *ReleaseParams) { p.Tools = tools }
 }
 

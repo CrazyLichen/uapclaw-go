@@ -172,12 +172,14 @@ func NewMcpToolCard(name, description, serverName string, inputParams []*schema.
 	return card
 }
 
-// ToolInfo 返回 MCP 工具描述信息，覆写 ToolCard.ToolInfo() 增加 ServerName。
+// ToolInfo 返回 MCP 工具描述信息，覆写 ToolCard.ToolInfo() 返回 McpToolInfo。
 //
-// ServerName 非空标识此工具为 MCP 工具，AbilityManager 路由时据此判断。
+// McpToolInfo 嵌入 ToolInfo 并扩展 ServerName，标识此工具为 MCP 工具。
+// AbilityManager 路由时可根据 ServerName 非空判断为 MCP 工具，
+// 也可根据 tool_call.Name 在注册表中查找 Tool 实例。
 //
 // 对应 Python: McpToolCard.tool_info() -> McpToolInfo
-func (c *McpToolCard) ToolInfo() *schema.ToolInfo {
+func (c *McpToolCard) ToolInfo() *schema.McpToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters)
 }

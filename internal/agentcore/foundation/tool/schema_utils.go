@@ -90,6 +90,83 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 	return result, nil
 }
 
+// FormatWithSchemaMap 根据原始 JSON Schema map 格式化输入数据，填充默认值。
+//
+// 用于 RestfulApi 等 input_params 为原始 JSON Schema map 的场景。
+// schemaMap 格式为标准 JSON Schema：{"type":"object","properties":{...},"required":[...]}。
+//
+// 流程：RemoveNoneValues（可选）→ 校验必填字段（可选）→ 填充默认值
+//
+// 对应 Python: SchemaUtils.format_with_schema(schema=Dict[str,Any]) 走 JSON Schema dict 路径
+func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[string]any, opts ...FormatOption) (map[string]any, error) {
+	o := &formatOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if data == nil {
+		data = make(map[string]any)
+	}
+
+	// 1. 可选：移除 nil 值
+	if o.skipNoneValue {
+		data = su.RemoveNoneValues(data)
+		if data == nil {
+			data = make(map[string]any)
+		}
+	}
+
+	// 提取 properties 和 required
+	properties, _ := schemaMap["properties"].(map[string]any)
+	requiredFields, _ := schemaMap["required"].([]any)
+
+	// 2. 可选：校验必填字段
+	if !o.skipValidate {
+		for _, r := range requiredFields {
+			name, ok := r.(string)
+			if !ok {
+				continue
+			}
+			if _, exists := data[name]; !exists {
+				// 检查是否有默认值可填充
+				if prop, ok := properties[name].(map[string]any); ok {
+					if _, hasDefault := prop["default"]; hasDefault {
+						continue
+					}
+				}
+				return nil, exception.BuildError(
+					exception.StatusSchemaFormatInvalid,
+					exception.WithParam("param", name),
+					exception.WithParam("reason", "missing required param"),
+				)
+			}
+		}
+	}
+
+	// 3. 填充默认值
+	result := make(map[string]any, len(data))
+	for name, prop := range properties {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			continue
+		}
+		if val, exists := data[name]; exists {
+			result[name] = val
+		} else if defaultVal, hasDefault := propMap["default"]; hasDefault {
+			result[name] = defaultVal
+		}
+	}
+
+	// 4. 保留额外字段（不在 properties 中的）
+	for k, v := range data {
+		if _, ok := result[k]; !ok {
+			result[k] = v
+		}
+	}
+
+	return result, nil
+}
+
 // Validate 校验输入数据是否符合参数 schema。
 //
 // 检查必填字段是否存在、类型是否匹配。

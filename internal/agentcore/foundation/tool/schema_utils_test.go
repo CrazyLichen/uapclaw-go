@@ -309,3 +309,174 @@ func TestSchemaUtils_float64整数校验(t *testing.T) {
 		t.Error("25.5 不应为整数")
 	}
 }
+
+// ──────────────────────────── FormatWithSchemaMap 测试 ────────────────────────────
+
+// TestSchemaUtils_FormatWithSchemaMap_默认值填充 测试 JSON Schema map 默认值填充
+func TestSchemaUtils_FormatWithSchemaMap_默认值填充(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":  map[string]any{"type": "string", "description": "名称"},
+			"limit": map[string]any{"type": "integer", "description": "数量上限", "default": 10},
+		},
+		"required": []any{"name"},
+	}
+
+	data := map[string]any{"name": "Alice"}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(data, schemaMap)
+	if err != nil {
+		t.Fatalf("FormatWithSchemaMap 失败: %v", err)
+	}
+	if result["name"] != "Alice" {
+		t.Errorf("name: 期望 Alice，实际 %v", result["name"])
+	}
+	if result["limit"] != 10 {
+		t.Errorf("limit default: 期望 10，实际 %v", result["limit"])
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_必填缺失 测试 JSON Schema map 必填字段缺失
+func TestSchemaUtils_FormatWithSchemaMap_必填缺失(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "名称"},
+		},
+		"required": []any{"name"},
+	}
+
+	_, err := SchemaUtils{}.FormatWithSchemaMap(map[string]any{}, schemaMap)
+	if err == nil {
+		t.Error("缺少必填字段应返回错误")
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_必填但有默认值 测试必填字段有默认值时不报错
+func TestSchemaUtils_FormatWithSchemaMap_必填但有默认值(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "名称", "default": "unknown"},
+		},
+		"required": []any{"name"},
+	}
+
+	result, err := SchemaUtils{}.FormatWithSchemaMap(map[string]any{}, schemaMap)
+	if err != nil {
+		t.Fatalf("有默认值的必填字段不应报错: %v", err)
+	}
+	if result["name"] != "unknown" {
+		t.Errorf("name default: 期望 unknown，实际 %v", result["name"])
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_额外字段保留 测试额外字段保留
+func TestSchemaUtils_FormatWithSchemaMap_额外字段保留(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "名称"},
+		},
+	}
+
+	data := map[string]any{"name": "Alice", "extra": "value"}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(data, schemaMap)
+	if err != nil {
+		t.Fatalf("FormatWithSchemaMap 失败: %v", err)
+	}
+	if result["extra"] != "value" {
+		t.Errorf("额外字段应保留: extra=%v", result["extra"])
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_跳过校验 测试 skipValidate 选项
+func TestSchemaUtils_FormatWithSchemaMap_跳过校验(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "名称"},
+		},
+		"required": []any{"name"},
+	}
+
+	// 缺少必填字段但 skipValidate
+	result, err := SchemaUtils{}.FormatWithSchemaMap(map[string]any{}, schemaMap,
+		WithFormatSkipValidate(true),
+	)
+	if err != nil {
+		t.Fatalf("skipValidate 时不应报错: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("期望空 map，实际 %v", result)
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_skipNoneValue 测试 skipNoneValue 选项
+func TestSchemaUtils_FormatWithSchemaMap_skipNoneValue(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string", "description": "名称"},
+		},
+	}
+
+	data := map[string]any{"name": nil}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(data, schemaMap,
+		WithFormatSkipNoneValue(true),
+		WithFormatSkipValidate(true),
+	)
+	if err != nil {
+		t.Fatalf("FormatWithSchemaMap 失败: %v", err)
+	}
+	if _, ok := result["name"]; ok {
+		t.Error("nil 值应被移除")
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_nil输入 测试 nil 输入数据
+func TestSchemaUtils_FormatWithSchemaMap_nil输入(t *testing.T) {
+	schemaMap := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
+	}
+
+	result, err := SchemaUtils{}.FormatWithSchemaMap(nil, schemaMap)
+	if err != nil {
+		t.Fatalf("nil 数据不应报错: %v", err)
+	}
+	if result == nil {
+		t.Error("nil 输入应返回空 map")
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_输入覆盖默认值 测试输入值覆盖默认值
+func TestSchemaUtils_FormatWithSchemaMap_输入覆盖默认值(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"limit": map[string]any{"type": "integer", "description": "数量上限", "default": 10},
+		},
+	}
+
+	data := map[string]any{"limit": 20}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(data, schemaMap)
+	if err != nil {
+		t.Fatalf("FormatWithSchemaMap 失败: %v", err)
+	}
+	if result["limit"] != 20 {
+		t.Errorf("输入值应覆盖默认值: 期望 20，实际 %v", result["limit"])
+	}
+}
+
+// TestSchemaUtils_FormatWithSchemaMap_空schema 测试空 schema
+func TestSchemaUtils_FormatWithSchemaMap_空schema(t *testing.T) {
+	data := map[string]any{"key": "value"}
+	result, err := SchemaUtils{}.FormatWithSchemaMap(data, map[string]any{})
+	if err != nil {
+		t.Fatalf("空 schema 不应报错: %v", err)
+	}
+	if result["key"] != "value" {
+		t.Errorf("空 schema 下数据应原样返回: key=%v", result["key"])
+	}
+}

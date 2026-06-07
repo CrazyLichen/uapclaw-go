@@ -14,7 +14,7 @@
 //	  ├── StreamFunction[I,O] — 本地函数工具（Stream 模式）
 //	  ├── MapFunction         — 弱类型 map 降级工具
 //	  ├── MCPTool             — MCP 协议远程工具（3.5 节）
-//	  └── RestfulApi          — RESTful API 工具（后续 3.8 节）
+//	  └── RestfulApi          — RESTful API 工具（3.8 节，service_api 子包）
 //
 // 本地函数工具：
 //
@@ -50,7 +50,7 @@
 //	BaseCard (common/schema) — 数字名片基类
 //	  └── ToolCard — 工具配置卡片（InputParams + Properties）
 //	        ├── McpToolCard — MCP 工具卡片（3.5 节）
-//	        └── RestfulApiCard — RESTful API 工具卡片（后续 3.8 节）
+//	        └── RestfulApiCard — RESTful API 工具卡片（3.8 节，InputSchema 替代 InputParams）
 //
 // 回调生命周期：
 //
@@ -67,11 +67,17 @@
 //	├── base.go                       # Tool 接口 + ToolCard + ToolCard.ToolInfo() + ToolOption + ToolCallOptions + StreamChunk
 //	├── lifecycle_tool.go             # LifecycleTool 包装器（回调生命周期）
 //	├── struct_schema_extractor.go    # StructSchemaExtractor — struct tag→[]*Param 反射提取器
-//	├── schema_utils.go               # SchemaUtils — 参数校验/格式化/RemoveNoneValues
+//	├── schema_utils.go               # SchemaUtils — 参数校验/格式化/RemoveNoneValues/FormatWithSchemaMap
+//	├── tool_info.go                  # ToolCard.ToolInfo() — Param→JSON Schema 转换
 //	├── invoke_function.go            # InvokeFunction[I,O] — 泛型本地函数工具（Invoke 模式）
 //	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
 //	├── map_function.go               # MapFunction — 弱类型 map 降级工具
 //	├── tool_func.go                  # NewTool/NewStreamTool 便捷注册函数 + ToolFuncOption
+//	├── service_api/
+//	│   ├── doc.go                    # RESTful API 子包文档
+//	│   ├── restful_api.go            # RestfulApiCard + RestfulApi + URL/路径参数校验
+//	│   ├── api_param_mapper.go       # APIParamLocation 枚举 + APIParamMapper
+//	│   └── response_parser.go        # BaseResponseParser + JSON/Text 解析器 + 解压器 + ParserRegistry
 //	└── mcp/
 //	    ├── doc.go                        # MCP 包文档
 //	    ├── base.go                       # MCPTool + ExtractMCPToolResultContent + 类型重导出

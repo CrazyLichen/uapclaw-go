@@ -232,24 +232,27 @@ func (e *BaseClientEmbed) ConvertMessagesToDict(messages MessagesParam) ([]map[s
 // ConvertToolsToDict 将工具信息列表转换为 OpenAI API 格式。
 //
 // 对应 Python: BaseModelClient._convert_tools_to_dict()
+// 与 Python 一致：只提取 ToolInfo 公共字段（type/name/description/parameters），
+// McpToolInfo 的 ServerName 字段不发送给 LLM。
 //
 // 输出格式：[{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
-func (e *BaseClientEmbed) ConvertToolsToDict(tools []*commonschema.ToolInfo) []map[string]any {
+func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoProvider) []map[string]any {
 	if len(tools) == 0 {
 		return nil
 	}
 
 	result := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
-		parameters := tool.Parameters
+		info := tool.GetToolInfo()
+		parameters := info.Parameters
 		if parameters == nil {
 			parameters = make(map[string]any)
 		}
 		toolDict := map[string]any{
-			"type": tool.Type,
+			"type": info.Type,
 			"function": map[string]any{
-				"name":        tool.Name,
-				"description": tool.Description,
+				"name":        info.Name,
+				"description": info.Description,
 				"parameters":  parameters,
 			},
 		}

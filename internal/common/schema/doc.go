@@ -9,13 +9,14 @@
 //	├── doc.go         # 包文档
 //	├── card.go        # BaseCard 数字名片基类，所有 Card 类型均嵌入此结构体
 //	├── param.go       # Param / ParamType 参数定义模型，支持嵌套结构
-//	└── tool_info.go   # ToolInfo 工具描述信息 + McpToolInfo 类型别名（ServerName 区分本地/MCP 工具）
+//	└── tool_info.go   # ToolInfoProvider 接口 + ToolInfo 本地工具描述 + McpToolInfo MCP 工具描述
 //
 // 核心类型：
 //
 //   - BaseCard：数字名片基类，提供 ID/Name/Description 和 ToolInfo() 方法
 //   - Param / ParamType：参数定义模型，最终转换为 JSON Schema
-//   - ToolInfo / McpToolInfo：工具描述信息，供 LLM function calling 消费；McpToolInfo 为 ToolInfo 的类型别名，ServerName 非空时为 MCP 工具
+//   - ToolInfoProvider：工具信息提供者接口，LLM 层统一消费 ToolInfo 和 McpToolInfo
+//   - ToolInfo / McpToolInfo：工具描述信息；McpToolInfo 嵌入 ToolInfo 并扩展 ServerName
 //
 // 对应 Python 代码：openjiuwen/core/common/schema/
 package schema
