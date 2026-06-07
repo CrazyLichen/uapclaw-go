@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/form_handler"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -365,18 +369,14 @@ func (r *RestfulApi) doRequest(
 	var bodyReader io.Reader
 
 	if len(formParams) > 0 {
-		// ⤵️ 预留：form_params 暂 fallback 到 body（3.10 回填 processFormData）
-		// 将 form 参数合并到 body 中
-		merged := make(map[string]any)
-		for k, v := range bodyParams {
-			merged[k] = v
+		// 使用 FormHandlerManager 处理 form 参数，构建 multipart/form-data 请求体
+		formBody, formContentType, formErr := r.processFormData(ctx, formParams, bodyParams)
+		if formErr != nil {
+			return nil, formErr
 		}
-		for k, v := range formParams {
-			merged[k] = v
-		}
-		bodyBytes, _ := json.Marshal(merged)
-		bodyReader = bytes.NewReader(bodyBytes)
-		headerMap["Content-Type"] = "application/json"
+		bodyReader = bytes.NewReader(formBody)
+		headerMap = prepareHeadersForFormData(headerMap)
+		headerMap["Content-Type"] = formContentType
 	} else if r.card.Method == "GET" || r.card.Method == "HEAD" ||
 		r.card.Method == "OPTIONS" || r.card.Method == "DELETE" {
 		// GET/HEAD/OPTIONS/DELETE：body_params 已作为 query params 处理
@@ -618,4 +618,96 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 	}
 
 	return nil
+}
+
+// processFormData 使用 FormHandlerManager 处理表单参数，构建 multipart/form-data 请求体。
+//
+// 流程（对齐 Python RestfulApi._process_form_data）：
+//  1. 创建 bytes.Buffer + multipart.Writer
+//  2. 遍历 formParams，每个参数根据 form_handler_type 获取对应处理器
+//  3. 调用 handler.Handle() 将字段写入 multipart Writer
+//  4. 遍历 bodyParams，非 nil 值以 application/json content_type 写入
+//  5. 关闭 Writer，返回 buffer 字节和 multipart content-type（含 boundary）
+//
+// 对应 Python: RestfulApi._process_form_data()
+func (r *RestfulApi) processFormData(
+	ctx context.Context,
+	formParams map[string]any,
+	bodyParams map[string]any,
+) (bodyBytes []byte, contentType string, err error) {
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	mgr := form_handler.GetFormHandlerManager()
+
+	// 处理 form_params
+	for paramName, paramInfo := range formParams {
+		info, ok := paramInfo.(map[string]any)
+		if !ok {
+			continue
+		}
+		handlerType := "default"
+		if ht, ok := info["form_handler_type"].(string); ok && ht != "" {
+			handlerType = ht
+		}
+		value := info["value"]
+
+		handler := mgr.GetHandler(handlerType)
+		if handleErr := handler.Handle(ctx, writer, paramName, value); handleErr != nil {
+			return nil, "", exception.BuildError(
+				exception.StatusToolRestfulApiExecutionError,
+				exception.WithParam("method", r.card.Method),
+				exception.WithParam("reason", fmt.Sprintf("表单字段 %q 处理失败: %s", paramName, handleErr.Error())),
+				exception.WithCause(handleErr),
+			)
+		}
+	}
+
+	// 处理 body_params：以 application/json content-type 追加到 form
+	for paramName, paramValue := range bodyParams {
+		if paramValue == nil {
+			continue
+		}
+		jsonBytes, marshalErr := json.Marshal(paramValue)
+		if marshalErr != nil {
+			continue
+		}
+		part, createErr := writer.CreatePart(textproto.MIMEHeader{
+			"Content-Disposition": {fmt.Sprintf(`form-data; name="%s"`, paramName)},
+			"Content-Type":        {"application/json"},
+		})
+		if createErr != nil {
+			continue
+		}
+		if _, writeErr := part.Write(jsonBytes); writeErr != nil {
+			continue
+		}
+	}
+
+	// 关闭 Writer（必须，写入 terminating boundary）
+	writer.Close()
+
+	return buf.Bytes(), writer.FormDataContentType(), nil
+}
+
+// prepareHeadersForFormData 为 multipart/form-data 请求准备请求头。
+//
+// 移除手动设置的 Content-Type，因为 multipart.Writer 会自动生成
+// 包含 boundary 的正确 Content-Type。手动设置会导致请求失败。
+//
+// 对应 Python: RestfulApi._prepare_headers_for_form_data()
+func prepareHeadersForFormData(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return make(map[string]string)
+	}
+	processed := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if strings.ToLower(key) == "content-type" {
+			logger.Debug(logger.ComponentAgentCore).
+				Str("content_type", value).
+				Msg("multipart/form-data 请求移除手动设置的 Content-Type，将自动设置含 boundary 的正确值")
+			continue
+		}
+		processed[key] = value
+	}
+	return processed
 }
