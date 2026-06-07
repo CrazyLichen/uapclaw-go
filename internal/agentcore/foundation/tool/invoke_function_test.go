@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -139,5 +140,47 @@ func TestNewInvokeFunction_手动InputParams(t *testing.T) {
 	}
 	if fn.Card().InputParams[0].Name != "custom_query" {
 		t.Errorf("InputParams[0].Name: 期望 custom_query，实际 %q", fn.Card().InputParams[0].Name)
+	}
+}
+
+// TestNewInvokeFunction_WithCard 测试 WithCard 选项
+func TestNewInvokeFunction_WithCard(t *testing.T) {
+	card := NewToolCard("custom", "自定义卡片", []*schema.Param{
+		schema.NewStringParam("q", "查询", true),
+	}, nil)
+	fn, err := NewInvokeFunction("search", searchFunc, WithCard(card))
+	if err != nil {
+		t.Fatalf("NewInvokeFunction 失败: %v", err)
+	}
+	if fn.Card().Name != "custom" {
+		t.Errorf("Name: 期望 custom，实际 %q", fn.Card().Name)
+	}
+}
+
+// TestInvokeFunction_Invoke_函数返回错误 测试用户函数执行失败
+func TestInvokeFunction_Invoke_函数返回错误(t *testing.T) {
+	errFunc := func(ctx context.Context, input searchInput) (searchOutput, error) {
+		return searchOutput{}, fmt.Errorf("执行失败")
+	}
+	fn, _ := NewInvokeFunction("search", errFunc)
+	_, err := fn.Invoke(context.Background(), map[string]any{"query": "test"})
+	if err == nil {
+		t.Error("函数返回错误时 Invoke 应返回错误")
+	}
+}
+
+// TestInvokeFunction_Invoke_空输入参数 测试无 InputParams 时的直接调用
+func TestInvokeFunction_Invoke_空输入参数(t *testing.T) {
+	type emptyFuncInput struct{}
+	emptyFunc := func(ctx context.Context, input emptyFuncInput) (map[string]any, error) {
+		return map[string]any{"ok": true}, nil
+	}
+	fn, _ := NewInvokeFunction("empty", emptyFunc)
+	result, err := fn.Invoke(context.Background(), map[string]any{})
+	if err != nil {
+		t.Fatalf("Invoke 失败: %v", err)
+	}
+	if result["ok"] != true {
+		t.Errorf("ok: 期望 true，实际 %v", result["ok"])
 	}
 }

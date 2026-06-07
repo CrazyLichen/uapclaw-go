@@ -110,3 +110,45 @@ func TestMapFunction_StreamNilFn(t *testing.T) {
 		t.Error("streamFn 为 nil 时 Stream 应返回 ErrStreamNotSupported")
 	}
 }
+
+// TestMapFunction_Card 测试 Card 方法
+func TestMapFunction_Card(t *testing.T) {
+	card := NewToolCard("echo", "回显工具", []*schema.Param{
+		schema.NewStringParam("message", "消息", true),
+	}, nil)
+
+	fn, _ := NewMapFunction(card, nil, nil)
+	if fn.Card().Name != "echo" {
+		t.Errorf("Card Name: 期望 echo，实际 %q", fn.Card().Name)
+	}
+}
+
+// TestMapFunction_InvalidCard 测试无效卡片
+func TestMapFunction_InvalidCard(t *testing.T) {
+	_, err := NewMapFunction(nil, nil, nil)
+	if err == nil {
+		t.Error("nil card 应返回错误")
+	}
+}
+
+// TestMapFunction_InvokeWithFormat 测试 Invoke 的参数格式化
+func TestMapFunction_InvokeWithFormat(t *testing.T) {
+	card := NewToolCard("echo", "回显工具", []*schema.Param{
+		schema.NewStringParam("message", "消息", true),
+	}, nil)
+
+	fn, _ := NewMapFunction(card,
+		func(ctx context.Context, inputs map[string]any) (map[string]any, error) {
+			return map[string]any{"echo": inputs["message"]}, nil
+		},
+		nil,
+	)
+
+	result, err := fn.Invoke(context.Background(), map[string]any{"message": "hello"})
+	if err != nil {
+		t.Fatalf("Invoke 失败: %v", err)
+	}
+	if result["echo"] != "hello" {
+		t.Errorf("echo: 期望 hello，实际 %v", result["echo"])
+	}
+}

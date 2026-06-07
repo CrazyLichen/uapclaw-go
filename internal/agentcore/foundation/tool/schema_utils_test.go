@@ -175,6 +175,131 @@ func TestSchemaUtils_FormatWithSchema_额外字段保留(t *testing.T) {
 	}
 }
 
+// TestSchemaUtils_RemoveNoneValues_含数组 测试递归移除数组中的 nil 值
+func TestSchemaUtils_RemoveNoneValues_含数组(t *testing.T) {
+	input := map[string]any{
+		"items": []any{"a", nil, "b"},
+	}
+	result := SchemaUtils{}.RemoveNoneValues(input)
+	arr, ok := result["items"].([]any)
+	if !ok {
+		t.Fatalf("items 类型错误: %T", result["items"])
+	}
+	if len(arr) != 2 {
+		t.Errorf("期望 2 个元素，实际 %d", len(arr))
+	}
+}
+
+// TestSchemaUtils_RemoveNoneValues_嵌套数组 测试嵌套数组中的 nil
+func TestSchemaUtils_RemoveNoneValues_嵌套数组(t *testing.T) {
+	input := map[string]any{
+		"nested": []any{map[string]any{"x": 1, "y": nil}, nil},
+	}
+	result := SchemaUtils{}.RemoveNoneValues(input)
+	arr, ok := result["nested"].([]any)
+	if !ok {
+		t.Fatalf("nested 类型错误: %T", result["nested"])
+	}
+	if len(arr) != 1 {
+		t.Errorf("期望 1 个元素，实际 %d", len(arr))
+	}
+}
+
+// TestSchemaUtils_Validate_Array和Object类型 测试 Array/Object 类型校验
+func TestSchemaUtils_Validate_Array和Object类型(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewArrayParam("tags", "标签", true, schema.NewStringParam("tag", "标签项", true)),
+		schema.NewObjectParam("meta", "元数据", true, []*schema.Param{
+			schema.NewStringParam("key", "键", true),
+		}),
+	}
+
+	// 正确类型
+	err := SchemaUtils{}.Validate(map[string]any{
+		"tags": []any{"a", "b"},
+		"meta": map[string]any{"key": "value"},
+	}, params)
+	if err != nil {
+		t.Errorf("正确 Array/Object 类型应通过: %v", err)
+	}
+
+	// Array 类型不匹配
+	err = SchemaUtils{}.Validate(map[string]any{"tags": "not_array"}, params)
+	if err == nil {
+		t.Error("Array 位置传 string 应返回错误")
+	}
+
+	// Object 类型不匹配
+	err = SchemaUtils{}.Validate(map[string]any{"meta": "not_object"}, params)
+	if err == nil {
+		t.Error("Object 位置传 string 应返回错误")
+	}
+}
+
+// TestSchemaUtils_Validate_Number类型 测试 Number 类型校验
+func TestSchemaUtils_Validate_Number类型(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewNumberParam("score", "分数", true),
+	}
+
+	// float64 正确
+	err := SchemaUtils{}.Validate(map[string]any{"score": 99.5}, params)
+	if err != nil {
+		t.Errorf("float64 应通过 Number 校验: %v", err)
+	}
+
+	// string 不正确
+	err = SchemaUtils{}.Validate(map[string]any{"score": "bad"}, params)
+	if err == nil {
+		t.Error("string 不应通过 Number 校验")
+	}
+}
+
+// TestSchemaUtils_Validate_Integer非float64 测试 Integer 字段传入非 float64
+func TestSchemaUtils_Validate_Integer非float64(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewIntegerParam("age", "年龄", true),
+	}
+
+	// string 不应通过
+	err := SchemaUtils{}.Validate(map[string]any{"age": "not_int"}, params)
+	if err == nil {
+		t.Error("string 不应通过 Integer 校验")
+	}
+}
+
+// TestSchemaUtils_FormatWithSchema_跳过校验和NoneValues 测试 FormatWithSchema 选项
+func TestSchemaUtils_FormatWithSchema_跳过校验和NoneValues(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewStringParam("name", "名称", false),
+	}
+
+	// skipValidate + skipNoneValue
+	data := map[string]any{"name": nil}
+	result, err := SchemaUtils{}.FormatWithSchema(data, params,
+		WithFormatSkipNoneValue(true),
+		WithFormatSkipValidate(true),
+	)
+	if err != nil {
+		t.Fatalf("FormatWithSchema 失败: %v", err)
+	}
+	// nil 被移除，name 不在 result 中
+	if _, ok := result["name"]; ok {
+		t.Error("nil 值应被移除")
+	}
+}
+
+// TestSchemaUtils_Validate_nil数据 测试 nil 输入数据
+func TestSchemaUtils_Validate_nil数据(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewStringParam("name", "名称", false),
+	}
+	err := SchemaUtils{}.Validate(nil, params)
+	if err != nil {
+		t.Errorf("nil 数据不应报错（无非必填参数）: %v", err)
+	}
+}
+
 // TestSchemaUtils_float64整数校验 辅助测试
 func TestSchemaUtils_float64整数校验(t *testing.T) {
 	if math.Trunc(25.0) != 25.0 {

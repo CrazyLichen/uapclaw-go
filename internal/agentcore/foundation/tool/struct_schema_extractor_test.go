@@ -183,6 +183,84 @@ func TestStructSchemaExtractor_无jsonTag字段跳过(t *testing.T) {
 	}
 }
 
+// TestStructSchemaExtractor_指针类型 测试指针字段解引用
+func TestStructSchemaExtractor_指针类型(t *testing.T) {
+	type ptrInput struct {
+		Name *string `json:"name" jsonschema:"description=名称"`
+	}
+	typ := reflect.TypeOf(ptrInput{})
+	params, err := StructSchemaExtractor{}.Extract(typ)
+	if err != nil {
+		t.Fatalf("Extract 失败: %v", err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("期望 1 个参数，实际 %d", len(params))
+	}
+	if params[0].Type != schema.ParamTypeString {
+		t.Errorf("指针字段应解引用为 String，实际 %v", params[0].Type)
+	}
+}
+
+// TestStructSchemaExtractor_不支持的类型 测试不支持的类型返回错误
+func TestStructSchemaExtractor_不支持的类型(t *testing.T) {
+	type badInput struct {
+		Ch chan int `json:"ch" jsonschema:"description=通道"`
+	}
+	typ := reflect.TypeOf(badInput{})
+	_, err := StructSchemaExtractor{}.Extract(typ)
+	if err == nil {
+		t.Error("不支持的类型应返回错误")
+	}
+}
+
+// TestStructSchemaExtractor_非struct类型 测试非 struct 类型返回错误
+func TestStructSchemaExtractor_非struct类型(t *testing.T) {
+	typ := reflect.TypeOf("string")
+	_, err := StructSchemaExtractor{}.Extract(typ)
+	if err == nil {
+		t.Error("非 struct 类型应返回错误")
+	}
+}
+
+// TestStructSchemaExtractor_float默认值 测试 float 类型默认值
+func TestStructSchemaExtractor_float默认值(t *testing.T) {
+	type floatDefaultInput struct {
+		Rate float64 `json:"rate,omitempty" jsonschema:"description=比率,default=0.5"`
+	}
+	typ := reflect.TypeOf(floatDefaultInput{})
+	params, err := StructSchemaExtractor{}.Extract(typ)
+	if err != nil {
+		t.Fatalf("Extract 失败: %v", err)
+	}
+	if params[0].Default != 0.5 {
+		t.Errorf("Rate default: 期望 0.5，实际 %v", params[0].Default)
+	}
+}
+
+// TestStructSchemaExtractor_bool默认值 测试 bool 类型默认值
+func TestStructSchemaExtractor_bool默认值(t *testing.T) {
+	type boolDefaultInput struct {
+		Active bool `json:"active,omitempty" jsonschema:"description=激活,default=false"`
+	}
+	typ := reflect.TypeOf(boolDefaultInput{})
+	params, err := StructSchemaExtractor{}.Extract(typ)
+	if err != nil {
+		t.Fatalf("Extract 失败: %v", err)
+	}
+	if params[0].Default != false {
+		t.Errorf("Active default: 期望 false，实际 %v", params[0].Default)
+	}
+}
+
+// TestStructSchemaExtractor_ExtractDescription 测试描述提取（目前返回空字符串）
+func TestStructSchemaExtractor_ExtractDescription(t *testing.T) {
+	typ := reflect.TypeOf(basicTypesInput{})
+	desc := StructSchemaExtractor{}.ExtractDescription(typ)
+	if desc != "" {
+		t.Errorf("ExtractDescription 当前应返回空字符串，实际 %q", desc)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // assertParam 断言参数定义
