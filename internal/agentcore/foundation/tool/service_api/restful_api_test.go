@@ -140,7 +140,7 @@ func TestRestfulApi_Invoke_GET(t *testing.T) {
 			t.Errorf("query q: 期望 search，实际 %s", q.Get("q"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
 	}))
 	defer server.Close()
 
@@ -182,13 +182,13 @@ func TestRestfulApi_Invoke_POST(t *testing.T) {
 		}
 		// 读取 body
 		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		if body["name"] != "Alice" {
 			t.Errorf("body.name: 期望 Alice，实际 %v", body["name"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"id": 1, "name": body["name"]})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "name": body["name"]})
 	}))
 	defer server.Close()
 
@@ -220,7 +220,7 @@ func TestRestfulApi_Invoke_路径参数替换(t *testing.T) {
 			t.Errorf("Path: 期望 /users/42，实际 %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"id": 42})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 42})
 	}))
 	defer server.Close()
 
@@ -252,7 +252,7 @@ func TestRestfulApi_Invoke_Header参数(t *testing.T) {
 			t.Errorf("token header: 期望 secret123，实际 %s", r.Header.Get("token"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 	}))
 	defer server.Close()
 
@@ -280,7 +280,7 @@ func TestRestfulApi_Invoke_Query数组参数(t *testing.T) {
 			t.Errorf("ids 数量: 期望 3，实际 %d", len(ids))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"count": len(ids)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"count": len(ids)})
 	}))
 	defer server.Close()
 
@@ -423,7 +423,7 @@ func TestRestfulApi_Invoke_默认参数合并(t *testing.T) {
 			t.Errorf("query q: 期望 search，实际 %s", q.Get("q"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -516,7 +516,7 @@ func TestRestfulApi_Card(t *testing.T) {
 	api, _ := NewRestfulApi(card)
 	returnedCard := api.Card()
 	if returnedCard == nil {
-		t.Error("Card() 不应返回 nil")
+		t.Fatal("Card() 不应返回 nil")
 	}
 	if returnedCard.Name != "test-api" {
 		t.Errorf("Card().Name: 期望 test-api，实际 %s", returnedCard.Name)
@@ -550,7 +550,7 @@ func TestRestfulApi_Invoke_响应体超限(t *testing.T) {
 		w.Header().Set("Content-Type", "text/plain")
 		// 写 200 字节
 		for i := 0; i < 200; i++ {
-			w.Write([]byte("x"))
+			_, _ = w.Write([]byte("x"))
 		}
 	}))
 	defer server.Close()
@@ -584,7 +584,7 @@ func TestRestfulApi_Invoke_Form参数Multipart(t *testing.T) {
 			t.Errorf("form file: 期望 data.txt，实际 %s", r.FormValue("file"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 	}))
 	defer server.Close()
 
@@ -623,7 +623,7 @@ func TestRestfulApi_Invoke_Form参数含BodyParams(t *testing.T) {
 			t.Errorf("form file: 期望 data.txt，实际 %s", r.FormValue("file"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 	}))
 	defer server.Close()
 
@@ -678,7 +678,7 @@ func TestRestfulApi_Invoke_PATCH(t *testing.T) {
 			t.Errorf("Method: 期望 PATCH，实际 %s", r.Method)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"updated": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"updated": true})
 	}))
 	defer server.Close()
 
@@ -699,7 +699,7 @@ func TestRestfulApi_Invoke_PATCH(t *testing.T) {
 func TestRestfulApi_Invoke_响应解析失败(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write([]byte("binary data"))
+		_, _ = w.Write([]byte("binary data"))
 	}))
 	defer server.Close()
 
@@ -763,7 +763,7 @@ func TestRestfulApi_Invoke_自定义Header默认值(t *testing.T) {
 			t.Errorf("X-Api-Key: 期望 preset-key，实际 %s", r.Header.Get("X-Api-Key"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 	}))
 	defer server.Close()
 

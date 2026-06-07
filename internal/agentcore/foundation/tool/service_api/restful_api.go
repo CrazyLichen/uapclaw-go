@@ -217,7 +217,6 @@ func (r *RestfulApi) Card() *tool.ToolCard {
 // 对应 Python: RestfulApi.invoke()
 func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	callOpts := tool.NewToolCallOptions(opts...)
-	finalTimeout := r.card.Timeout
 
 	// 1. 格式化输入
 	if r.card.InputSchema != nil {
@@ -241,7 +240,7 @@ func (r *RestfulApi) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	mapResults := r.apiParamMapper.Map(inputs, defaultLocation)
 
 	// 3. 确定超时
-	finalTimeout = callOpts.Timeout
+	finalTimeout := callOpts.Timeout
 	if finalTimeout <= 0 {
 		finalTimeout = r.card.Timeout
 	}
@@ -469,7 +468,7 @@ func (r *RestfulApi) doRequest(
 			exception.WithCause(err),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 检查 HTTP 状态码
 	if raiseForStatus && resp.StatusCode >= 400 {
@@ -700,7 +699,7 @@ func (r *RestfulApi) processFormData(
 	}
 
 	// 关闭 Writer（必须，写入 terminating boundary）
-	writer.Close()
+	_ = writer.Close()
 
 	return buf.Bytes(), writer.FormDataContentType(), nil
 }

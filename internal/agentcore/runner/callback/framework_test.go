@@ -281,7 +281,7 @@ func TestCallbackFramework_触发LLM带结果(t *testing.T) {
 
 func TestCallbackFramework_触发Tool空上下文(t *testing.T) {
 	fw := NewCallbackFramework()
-	results := fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil))
+	results := fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil)) //nolint:staticcheck // SA1012: 专门测试 nil context 的防御逻辑
 	if results != nil {
 		t.Errorf("nil context 应返回 nil，实际 %v", results)
 	}

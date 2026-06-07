@@ -265,12 +265,12 @@ func (d GzipDecompressor) Decompress(data []byte) ([]byte, error) {
 	if err != nil {
 		// 尝试 zlib 解压作为备选
 		if r, zlibErr := zlib.NewReader(strings.NewReader(string(data))); zlibErr == nil {
-			defer r.Close()
+			defer func() { _ = r.Close() }()
 			return io.ReadAll(r)
 		}
 		return nil, fmt.Errorf("GZIP 解压失败: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	return io.ReadAll(reader)
 }
 
@@ -282,15 +282,15 @@ func (d DeflateDecompressor) CanDecompress(encoding string) bool {
 // Decompress 解压 Deflate 数据。
 func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
 	reader := flate.NewReader(strings.NewReader(string(data)))
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	result, err := io.ReadAll(reader)
 	if err != nil {
 		// 尝试无 header 模式
 		reader2 := flate.NewReader(strings.NewReader(string(data)))
-		defer reader2.Close()
+		defer func() { _ = reader2.Close() }()
 		result, err = io.ReadAll(reader2)
 		if err != nil {
-			return nil, fmt.Errorf("Deflate 解压失败: %w", err)
+			return nil, fmt.Errorf("deflate 解压失败: %w", err)
 		}
 	}
 	return result, nil

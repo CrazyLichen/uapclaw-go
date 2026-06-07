@@ -23,8 +23,8 @@ func TestGetSSLConfig_非HTTPS(t *testing.T) {
 }
 
 func TestGetSSLConfig_验证关闭(t *testing.T) {
-	os.Setenv("TEST_SSL_VERIFY_OFF", "false")
-	defer os.Unsetenv("TEST_SSL_VERIFY_OFF")
+	_ = os.Setenv("TEST_SSL_VERIFY_OFF", "false")
+	defer func() { _ = os.Unsetenv("TEST_SSL_VERIFY_OFF") }()
 
 	verify, certPath, err := GetSSLConfig("TEST_SSL_VERIFY_OFF", "SSL_CERT", []string{"false"}, true)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestGetSSLConfig_验证关闭(t *testing.T) {
 }
 
 func TestGetSSLConfig_验证开启无证书(t *testing.T) {
-	os.Unsetenv("TEST_SSL_CERT_MISSING")
+	_ = os.Unsetenv("TEST_SSL_CERT_MISSING")
 	verify, _, err := GetSSLConfig("TEST_SSL_VERIFY_MISSING", "TEST_SSL_CERT_MISSING", []string{"false"}, true)
 	if err == nil {
 		t.Fatal("verify=true 但无证书应报错")
@@ -57,9 +57,9 @@ func TestGetSSLConfig_验证开启有证书(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	os.Unsetenv("TEST_SSL_VERIFY_EMPTY")
-	os.Setenv("TEST_SSL_CERT_VALID", certFile)
-	defer os.Unsetenv("TEST_SSL_CERT_VALID")
+	_ = os.Unsetenv("TEST_SSL_VERIFY_EMPTY")
+	_ = os.Setenv("TEST_SSL_CERT_VALID", certFile)
+	defer func() { _ = os.Unsetenv("TEST_SSL_CERT_VALID") }()
 
 	verify, gotCertPath, err := GetSSLConfig("TEST_SSL_VERIFY_EMPTY", "TEST_SSL_CERT_VALID", []string{"false"}, true)
 	if err != nil {
@@ -87,8 +87,8 @@ func TestCreateStrictTLSConfig_无证书(t *testing.T) {
 }
 
 func TestCreateStrictTLSConfig_无效证书路径(t *testing.T) {
-	os.Setenv("SAFE_CERT_DIR", "/nonexistent")
-	defer os.Unsetenv("SAFE_CERT_DIR")
+	_ = os.Setenv("SAFE_CERT_DIR", "/nonexistent")
+	defer func() { _ = os.Unsetenv("SAFE_CERT_DIR") }()
 
 	_, err := CreateStrictTLSConfig("/nonexistent/cert.pem")
 	if err == nil {
@@ -97,8 +97,8 @@ func TestCreateStrictTLSConfig_无效证书路径(t *testing.T) {
 }
 
 func TestBoolEnv(t *testing.T) {
-	os.Setenv("TEST_BOOL_TRUE", "false")
-	defer os.Unsetenv("TEST_BOOL_TRUE")
+	_ = os.Setenv("TEST_BOOL_TRUE", "false")
+	defer func() { _ = os.Unsetenv("TEST_BOOL_TRUE") }()
 
 	if !boolEnv("TEST_BOOL_TRUE", []string{"false"}) {
 		t.Error("期望返回 true")

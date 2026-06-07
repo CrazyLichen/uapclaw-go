@@ -157,7 +157,7 @@ func TestGzipDecompressor(t *testing.T) {
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
 	_, _ = writer.Write([]byte("hello gzip"))
-	writer.Close()
+	_ = writer.Close()
 
 	decompressed, err := d.Decompress(buf.Bytes())
 	if err != nil {
@@ -182,8 +182,8 @@ func TestDeflateDecompressor(t *testing.T) {
 	// 压缩测试数据
 	var buf bytes.Buffer
 	writer, _ := flate.NewWriter(&buf, flate.DefaultCompression)
-	writer.Write([]byte("hello deflate"))
-	writer.Close()
+	_, _ = writer.Write([]byte("hello deflate"))
+	_ = writer.Close()
 
 	decompressed, err := d.Decompress(buf.Bytes())
 	if err != nil {
@@ -309,7 +309,7 @@ func TestParserRegistry_Parse_GzipJSON(t *testing.T) {
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
 	_, _ = writer.Write([]byte(`{"compressed": true}`))
-	writer.Close()
+	_ = writer.Close()
 
 	headers := map[string]string{
 		"Content-Type":     "application/json",

@@ -381,7 +381,9 @@ func TestOpenApiClient_重复连接重置状态(t *testing.T) {
 		"paths":   map[string]any{},
 	}
 	specJSON, _ := json.Marshal(spec)
-	os.WriteFile(specPath, specJSON, 0644)
+	if err := os.WriteFile(specPath, specJSON, 0644); err != nil {
+		t.Fatalf("写入 spec 文件失败: %v", err)
+	}
 
 	config := types.NewMcpServerConfig("test", specPath, "openapi")
 	client := NewOpenApiClient(config)
@@ -404,7 +406,9 @@ func TestOpenApiClient_CallTool工具不存在(t *testing.T) {
 		"paths":   map[string]any{},
 	}
 	specJSON, _ := json.Marshal(spec)
-	os.WriteFile(specPath, specJSON, 0644)
+	if err := os.WriteFile(specPath, specJSON, 0644); err != nil {
+		t.Fatalf("写入 spec 文件失败: %v", err)
+	}
 
 	config := types.NewMcpServerConfig("test", specPath, "openapi")
 	client := NewOpenApiClient(config)
@@ -422,16 +426,16 @@ func TestOpenApiClient_CallTool执行HTTP请求(t *testing.T) {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/items":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]map[string]any{
+			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"id": "1", "name": "item1"},
 			})
 		case r.Method == "POST" && r.URL.Path == "/items":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]any{"id": "2", "name": "new"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "2", "name": "new"})
 		case r.Method == "GET" && r.URL.Path == "/items/42":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"id": "42", "name": "item42"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "42", "name": "item42"})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -569,8 +573,8 @@ func TestOpenApiClient_多文件规格(t *testing.T) {
 	spec2JSON, _ := json.Marshal(spec2)
 	spec1Path := filepath.Join(tmpDir, "users.json")
 	spec2Path := filepath.Join(tmpDir, "orders.json")
-	os.WriteFile(spec1Path, spec1JSON, 0644)
-	os.WriteFile(spec2Path, spec2JSON, 0644)
+	require.NoError(t, os.WriteFile(spec1Path, spec1JSON, 0644))
+	require.NoError(t, os.WriteFile(spec2Path, spec2JSON, 0644))
 
 	combinedPath := fmt.Sprintf("%s,%s", spec1Path, spec2Path)
 	config := types.NewMcpServerConfig("multi-api", combinedPath, "openapi")

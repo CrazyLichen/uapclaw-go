@@ -38,8 +38,8 @@ func TestSSLAuthStrategy_Authenticate_非HTTPS(t *testing.T) {
 }
 
 func TestSSLAuthStrategy_Authenticate_验证关闭(t *testing.T) {
-	os.Setenv("TEST_AUTH_SSL_VERIFY_OFF", "false")
-	defer os.Unsetenv("TEST_AUTH_SSL_VERIFY_OFF")
+	_ = os.Setenv("TEST_AUTH_SSL_VERIFY_OFF", "false")
+	defer func() { _ = os.Unsetenv("TEST_AUTH_SSL_VERIFY_OFF") }()
 
 	strategy := &SSLAuthStrategy{}
 	result, err := strategy.Authenticate(context.Background(), &ToolAuthConfig{
@@ -67,8 +67,8 @@ func TestSSLAuthStrategy_Authenticate_验证关闭(t *testing.T) {
 }
 
 func TestSSLAuthStrategy_Authenticate_空URL(t *testing.T) {
-	os.Setenv("TEST_AUTH_SSL_VERIFY_EMPTY", "false")
-	defer os.Unsetenv("TEST_AUTH_SSL_VERIFY_EMPTY")
+	_ = os.Setenv("TEST_AUTH_SSL_VERIFY_EMPTY", "false")
+	defer func() { _ = os.Unsetenv("TEST_AUTH_SSL_VERIFY_EMPTY") }()
 
 	strategy := &SSLAuthStrategy{}
 	result, err := strategy.Authenticate(context.Background(), &ToolAuthConfig{

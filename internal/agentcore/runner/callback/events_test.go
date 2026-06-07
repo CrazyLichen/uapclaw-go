@@ -103,7 +103,7 @@ func TestCallbackFramework_TriggerTool_Nil上下文(t *testing.T) {
 		atomic.AddInt32(&called, 1)
 		return nil
 	})
-	fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil))
+	fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil)) //nolint:staticcheck // SA1012: 专门测试 nil context 的防御逻辑
 	if atomic.LoadInt32(&called) != 0 {
 		t.Error("nil context 不应触发回调")
 	}

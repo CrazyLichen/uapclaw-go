@@ -629,7 +629,7 @@ func prioritizePaidSearch(items []toolItem) []toolItem {
 	if len(items) == 0 {
 		return items
 	}
-	var paidIdx, freeIdx int = -1, -1
+	var paidIdx, freeIdx = -1, -1
 	for i, item := range items {
 		if item.name == "paid_search" {
 			paidIdx = i

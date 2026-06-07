@@ -224,7 +224,7 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 			exception.WithParam("reason", fmt.Sprintf("HTTP 请求失败: %v", err)),
 		)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 读取响应
 	respBody, err := io.ReadAll(resp.Body)
@@ -498,7 +498,7 @@ func extractOutputSchema(op *openapi3.Operation) map[string]any {
 	replaceSchemaRefs(outputSchema)
 
 	// 如果 schema type 不是 object，包装为 MCP 要求的 object 格式
-	typeVal, _ := outputSchema["type"]
+	typeVal := outputSchema["type"]
 	if typeVal != "object" {
 		wrapped := map[string]any{
 			"type":                  "object",

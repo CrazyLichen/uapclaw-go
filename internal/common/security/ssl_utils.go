@@ -135,7 +135,7 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 			exception.WithCause(err),
 		)
 	}
-	defer fd.Close()
+	defer func() { _ = fd.Close() }()
 
 	// 校验文件信息
 	stat, err := fd.Stat()

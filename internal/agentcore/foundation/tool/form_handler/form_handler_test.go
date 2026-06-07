@@ -21,7 +21,7 @@ func TestDefaultFormHandler_Handle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handle 失败: %v", err)
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	if !strings.Contains(buf.String(), "name") {
 		t.Error("输出应包含字段名 name")
@@ -41,7 +41,7 @@ func TestDefaultFormHandler_Handle_Nil值跳过(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handle nil 不应返回错误: %v", err)
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	// multipart.Writer 写了 boundary，但不应该有 nil_field 内容
 	if strings.Contains(buf.String(), "nil_field") {
@@ -72,7 +72,7 @@ func TestDefaultFormHandler_Handle_各种类型(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Handle 失败: %v", err)
 			}
-			writer.Close()
+			_ = writer.Close()
 
 			if !strings.Contains(buf.String(), tt.contains) {
 				t.Errorf("输出应包含 %q，实际: %s", tt.contains, buf.String())
