@@ -233,7 +233,7 @@ func TestNewStreamParams_WithOpts(t *testing.T) {
 	timeout := 60.0
 
 	p := NewStreamParams(
-		WithStreamTools(commonschema.NewToolInfo("test_tool", "测试工具", nil)),
+		WithStreamTools(commonschema.NewToolInfo("test_tool", "测试工具", nil, nil)),
 		WithStreamTemperature(temp),
 		WithStreamTopP(topP),
 		WithStreamModel("gpt-4"),
@@ -402,7 +402,7 @@ func TestToStreamParams(t *testing.T) {
 	timeout := 30.0
 
 	sp := NewStreamParams(
-		WithStreamTools(commonschema.NewToolInfo("test", "desc", nil)),
+		WithStreamTools(commonschema.NewToolInfo("test", "desc", nil, nil)),
 		WithStreamTemperature(temp),
 		WithStreamTopP(topP),
 		WithStreamModel("gpt-4"),
@@ -739,7 +739,7 @@ func TestNewReleaseParams_WithOpts(t *testing.T) {
 		WithReleaseMessages(msgs),
 		WithReleaseMessagesIndex(5),
 		WithReleaseModel("qwen-72b"),
-		WithReleaseTools(commonschema.NewToolInfo("test_tool", "测试工具", nil)),
+		WithReleaseTools(commonschema.NewToolInfo("test_tool", "测试工具", nil, nil)),
 		WithReleaseToolsIndex(2),
 	)
 

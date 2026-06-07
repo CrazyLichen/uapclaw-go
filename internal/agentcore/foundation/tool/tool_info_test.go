@@ -9,7 +9,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestToolCard_ToolInfo_无参数(t *testing.T) {
-	card := NewToolCard("test_tool", "测试工具", nil, nil)
+	card := NewToolCard("test_tool", "测试工具", nil, nil, nil)
 	info := card.ToolInfo()
 	if info.Type != "function" {
 		t.Errorf("Type = %q, want function", info.Type)
@@ -34,7 +34,7 @@ func TestToolCard_ToolInfo_带参数(t *testing.T) {
 		schema.NewStringParam("city", "城市名", true),
 		schema.NewIntegerParam("days", "预报天数", false),
 	}
-	card := NewToolCard("weather", "查询天气", params, nil)
+	card := NewToolCard("weather", "查询天气", params, nil, nil)
 	info := card.ToolInfo()
 
 	props := info.Parameters["properties"].(map[string]any)

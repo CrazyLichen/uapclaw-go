@@ -244,7 +244,7 @@ func TestConvertToolsToDict_ToolInfo(t *testing.T) {
 			"properties": map[string]any{
 				"city": map[string]any{"type": "string"},
 			},
-		}),
+		}, nil),
 	}
 	result := e.ConvertToolsToDict(tools)
 	if len(result) != 1 {
@@ -290,7 +290,7 @@ func TestBuildRequestParams_WithTools(t *testing.T) {
 	e := newTestClientEmbed()
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams(
-		WithTools(commonschema.NewToolInfo("get_weather", "获取天气", nil)),
+		WithTools(commonschema.NewToolInfo("get_weather", "获取天气", nil, nil)),
 	)
 
 	result, err := e.BuildRequestParams(context.Background(), messagesDict, params, false)

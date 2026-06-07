@@ -159,6 +159,7 @@ func (c *StreamableHttpClient) ListTools(ctx context.Context) ([]*types.McpToolC
 			tool.Description,
 			c.serverName,
 			inputParams,
+			nil,
 			types.WithMcpToolCardServerID(c.config.ServerID),
 		)
 		cards = append(cards, card)

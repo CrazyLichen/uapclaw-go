@@ -16,7 +16,7 @@ type testSubCard struct {
 
 // ToolInfo 覆写 BaseCard.ToolInfo()，模拟 ToolCard/AgentCard 的行为。
 func (c *testSubCard) ToolInfo() *ToolInfo {
-	return NewToolInfo(c.Name, c.Description, c.InputParams)
+	return NewToolInfo(c.Name, c.Description, c.InputParams, nil)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

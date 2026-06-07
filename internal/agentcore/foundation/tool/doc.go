@@ -64,8 +64,7 @@
 //
 //	tool/
 //	├── doc.go                        # 包文档
-//	├── base.go                       # Tool 接口 + ToolCard + ToolOption + ToolCallOptions + StreamChunk
-//	├── tool_info.go                  # ToolCard.ToolInfo() — Param→JSON Schema 转换
+//	├── base.go                       # Tool 接口 + ToolCard + ToolCard.ToolInfo() + ToolOption + ToolCallOptions + StreamChunk
 //	├── lifecycle_tool.go             # LifecycleTool 包装器（回调生命周期）
 //	├── struct_schema_extractor.go    # StructSchemaExtractor — struct tag→[]*Param 反射提取器
 //	├── schema_utils.go               # SchemaUtils — 参数校验/格式化/RemoveNoneValues

@@ -108,7 +108,7 @@ func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I) (O
 	if cfg.card != nil {
 		card = cfg.card
 	} else {
-		card = NewToolCard(name, description, inputParams, nil)
+		card = NewToolCard(name, description, inputParams, nil, nil)
 	}
 
 	return &InvokeFunction[I, O]{card: card, fn: fn}, nil

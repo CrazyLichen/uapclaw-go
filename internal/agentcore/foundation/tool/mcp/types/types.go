@@ -158,12 +158,17 @@ func WithMcpToolCardServerID(id string) McpToolCardOption {
 	return func(c *McpToolCard) { c.ServerID = id }
 }
 
+// WithMcpToolCardOutputSchema 设置 MCP 工具卡片的输出 Schema。
+func WithMcpToolCardOutputSchema(schema map[string]any) McpToolCardOption {
+	return func(c *McpToolCard) { c.OutputSchema = schema }
+}
+
 // NewMcpToolCard 创建 MCP 工具卡片。
 //
 // 对应 Python: McpToolCard(name=..., server_name=..., description=..., input_params=...)
-func NewMcpToolCard(name, description, serverName string, inputParams []*schema.Param, opts ...McpToolCardOption) *McpToolCard {
+func NewMcpToolCard(name, description, serverName string, inputParams []*schema.Param, outputSchema map[string]any, opts ...McpToolCardOption) *McpToolCard {
 	card := &McpToolCard{
-		ToolCard:   *tool.NewToolCard(name, description, inputParams, nil),
+		ToolCard:   *tool.NewToolCard(name, description, inputParams, outputSchema, nil),
 		ServerName: serverName,
 	}
 	for _, opt := range opts {
@@ -172,10 +177,12 @@ func NewMcpToolCard(name, description, serverName string, inputParams []*schema.
 	return card
 }
 
-// McpToolInfo 返回 MCP 工具描述信息，供 LLM function calling 消费。
+// ToolInfo 返回 MCP 工具描述信息，覆写 ToolCard.ToolInfo() 增加 ServerName。
+//
+// ServerName 非空标识此工具为 MCP 工具，AbilityManager 路由时据此判断。
 //
 // 对应 Python: McpToolCard.tool_info() -> McpToolInfo
-func (c *McpToolCard) McpToolInfo() *schema.McpToolInfo {
+func (c *McpToolCard) ToolInfo() *schema.ToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
-	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters)
+	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters, c.OutputSchema)
 }

@@ -61,7 +61,7 @@ func TestNewMcpToolCard_基本构造(t *testing.T) {
 	params := []*schema.Param{
 		{Name: "query", Type: schema.ParamTypeString, Required: true, Description: "搜索关键词"},
 	}
-	card := types.NewMcpToolCard("web_search", "搜索网页", "search-server", params)
+	card := types.NewMcpToolCard("web_search", "搜索网页", "search-server", params, nil)
 	assert.Equal(t, "web_search", card.Name)
 	assert.Equal(t, "搜索网页", card.Description)
 	assert.Equal(t, "search-server", card.ServerName)
@@ -69,12 +69,12 @@ func TestNewMcpToolCard_基本构造(t *testing.T) {
 	assert.Equal(t, params, card.InputParams)
 }
 
-func TestMcpToolCard_McpToolInfo(t *testing.T) {
+func TestMcpToolCard_ToolInfo(t *testing.T) {
 	params := []*schema.Param{
 		{Name: "query", Type: schema.ParamTypeString, Required: true, Description: "搜索关键词"},
 	}
-	card := types.NewMcpToolCard("web_search", "搜索网页", "search-server", params)
-	info := card.McpToolInfo()
+	card := types.NewMcpToolCard("web_search", "搜索网页", "search-server", params, nil)
+	info := card.ToolInfo()
 	assert.Equal(t, "web_search", info.Name)
 	assert.Equal(t, "搜索网页", info.Description)
 	assert.Equal(t, "search-server", info.ServerName)
@@ -83,7 +83,7 @@ func TestMcpToolCard_McpToolInfo(t *testing.T) {
 }
 
 func TestNewMcpToolCard_WithServerID(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil,
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil,
 		types.WithMcpToolCardServerID("my-server-id"),
 	)
 	assert.Equal(t, "my-server-id", card.ServerID)
@@ -144,20 +144,20 @@ func TestExtractMCPToolResultContent_取最后一个Content(t *testing.T) {
 }
 
 func TestNewMCPTool_客户端为nil时返回错误(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil)
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil)
 	_, err := NewMCPTool(nil, card)
 	assert.Error(t, err)
 }
 
 func TestMCPTool_Card(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil)
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil)
 	fake := &fakeMcpClient{}
 	mcpTool, _ := NewMCPTool(fake, card)
 	assert.NotNil(t, mcpTool.Card())
 }
 
 func TestMCPTool_Invoke_直接传参(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil) // InputParams 为 nil
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil) // InputParams 为 nil
 	fake := &fakeMcpClient{
 		callToolFunc: func(_ context.Context, toolName string, arguments map[string]any) (any, error) {
 			assert.Equal(t, "tool", toolName)
@@ -177,7 +177,7 @@ func TestMCPTool_Invoke_参数格式化(t *testing.T) {
 	params := []*schema.Param{
 		{Name: "query", Type: schema.ParamTypeString, Required: true},
 	}
-	card := types.NewMcpToolCard("tool", "desc", "server", params)
+	card := types.NewMcpToolCard("tool", "desc", "server", params, nil)
 	fake := &fakeMcpClient{
 		callToolFunc: func(_ context.Context, _ string, _ map[string]any) (any, error) {
 			return map[string]any{"content": []any{
@@ -192,7 +192,7 @@ func TestMCPTool_Invoke_参数格式化(t *testing.T) {
 }
 
 func TestMCPTool_Invoke_客户端调用失败(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil)
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil)
 	fake := &fakeMcpClient{
 		callToolFunc: func(_ context.Context, _ string, _ map[string]any) (any, error) {
 			return nil, fmt.Errorf("connection lost")
@@ -204,7 +204,7 @@ func TestMCPTool_Invoke_客户端调用失败(t *testing.T) {
 }
 
 func TestMCPTool_Stream_不支持(t *testing.T) {
-	card := types.NewMcpToolCard("tool", "desc", "server", nil)
+	card := types.NewMcpToolCard("tool", "desc", "server", nil, nil)
 	fake := &fakeMcpClient{}
 	mcpTool, _ := NewMCPTool(fake, card)
 	_, err := mcpTool.Stream(context.Background(), map[string]any{})
