@@ -80,6 +80,8 @@ const (
 	restfulSSLCertEnv = "RESTFUL_SSL_CERT"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // supportedMethods 支持的 HTTP 方法集合
 var supportedMethods = map[string]bool{
 	"GET": true, "POST": true, "PUT": true, "PATCH": true,

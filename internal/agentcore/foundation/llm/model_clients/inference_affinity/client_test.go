@@ -51,7 +51,7 @@ func mockCompletionResponse(content string) string {
 
 // ──────────────────────────── NewInferenceAffinityModelClient 测试 ────────────────────────────
 
-func TestNewInferenceAffinityModelClient_ValidConfig(t *testing.T) {
+func TestNewInferenceAffinityModelClient_有效配置(t *testing.T) {
 	// 有效配置创建客户端成功
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -68,7 +68,7 @@ func TestNewInferenceAffinityModelClient_ValidConfig(t *testing.T) {
 	}
 }
 
-func TestNewInferenceAffinityModelClient_NoAPIKey(t *testing.T) {
+func TestNewInferenceAffinityModelClient_无APIKey(t *testing.T) {
 	// 缺少 API Key 应失败
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -82,7 +82,7 @@ func TestNewInferenceAffinityModelClient_NoAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewInferenceAffinityModelClient_NoAPIBase(t *testing.T) {
+func TestNewInferenceAffinityModelClient_无APIBase(t *testing.T) {
 	// 缺少 API Base 应失败
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -98,7 +98,7 @@ func TestNewInferenceAffinityModelClient_NoAPIBase(t *testing.T) {
 
 // ──────────────────────────── Invoke 测试 ────────────────────────────
 
-func TestInvoke_BasicCall(t *testing.T) {
+func TestInvoke_基本调用(t *testing.T) {
 	// 基本调用
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -129,7 +129,7 @@ func TestInvoke_BasicCall(t *testing.T) {
 	}
 }
 
-func TestInvoke_SanitizeToolCalls(t *testing.T) {
+func TestInvoke_清洗ToolCalls(t *testing.T) {
 	// 验证 invoke 时 sanitize tool_calls
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +199,7 @@ func TestInvoke_SanitizeToolCalls(t *testing.T) {
 	}
 }
 
-func TestInvoke_WithCacheSharing(t *testing.T) {
+func TestInvoke_带缓存共享(t *testing.T) {
 	// 验证 cache_sharing/cache_salt 参数注入
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +238,7 @@ func TestInvoke_WithCacheSharing(t *testing.T) {
 	}
 }
 
-func TestInvoke_HTTPError(t *testing.T) {
+func TestInvoke_HTTP错误(t *testing.T) {
 	// HTTP 错误处理
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -262,7 +262,7 @@ func TestInvoke_HTTPError(t *testing.T) {
 
 // ──────────────────────────── Stream 测试 ────────────────────────────
 
-func TestStream_BasicCall(t *testing.T) {
+func TestStream_基本调用(t *testing.T) {
 	// 基本流式调用
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -303,7 +303,7 @@ func TestStream_BasicCall(t *testing.T) {
 	}
 }
 
-func TestStream_WithCacheSharing(t *testing.T) {
+func TestStream_带缓存共享(t *testing.T) {
 	// 验证流式调用中 cache 参数注入
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -348,7 +348,7 @@ func TestStream_WithCacheSharing(t *testing.T) {
 
 // ──────────────────────────── Release 测试 ────────────────────────────
 
-func TestRelease_Success(t *testing.T) {
+func TestRelease_成功(t *testing.T) {
 	// 成功释放 KV Cache
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/release_kv_cache" {
@@ -392,7 +392,7 @@ func TestRelease_Success(t *testing.T) {
 	}
 }
 
-func TestRelease_HTTPError(t *testing.T) {
+func TestRelease_HTTP错误(t *testing.T) {
 	// 释放失败（非 200 响应）
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -421,7 +421,7 @@ func TestRelease_HTTPError(t *testing.T) {
 	}
 }
 
-func TestRelease_NonJSONResponse(t *testing.T) {
+func TestRelease_非JSON响应(t *testing.T) {
 	// 非 JSON 响应仍返回 true（对齐 Python）
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -450,7 +450,7 @@ func TestRelease_NonJSONResponse(t *testing.T) {
 	}
 }
 
-func TestRelease_WithTools(t *testing.T) {
+func TestRelease_带工具(t *testing.T) {
 	// 含 tools 参数的 release
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -496,7 +496,7 @@ func TestRelease_WithTools(t *testing.T) {
 
 // ──────────────────────────── GenerateImage/Speech/Video 不支持测试 ────────────────────────────
 
-func TestGenerateImage_NotSupported(t *testing.T) {
+func TestGenerateImage_不支持(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -514,7 +514,7 @@ func TestGenerateImage_NotSupported(t *testing.T) {
 	}
 }
 
-func TestGenerateSpeech_NotSupported(t *testing.T) {
+func TestGenerateSpeech_不支持(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -532,7 +532,7 @@ func TestGenerateSpeech_NotSupported(t *testing.T) {
 	}
 }
 
-func TestGenerateVideo_NotSupported(t *testing.T) {
+func TestGenerateVideo_不支持(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -552,14 +552,14 @@ func TestGenerateVideo_NotSupported(t *testing.T) {
 
 // ──────────────────────────── 接口合规性测试 ────────────────────────────
 
-func TestInferenceAffinityModelClient_ImplementsBaseModelClient(t *testing.T) {
+func TestInferenceAffinityModelClient_实现BaseModelClient接口(t *testing.T) {
 	// 验证 InferenceAffinityModelClient 实现了 BaseModelClient 接口
 	var _ model_clients.BaseModelClient = (*InferenceAffinityModelClient)(nil)
 }
 
 // ──────────────────────────── 注册测试 ────────────────────────────
 
-func TestRegistryContainsInferenceAffinity(t *testing.T) {
+func TestRegistry包含InferenceAffinity(t *testing.T) {
 	// 验证 InferenceAffinity 已注册
 	registry := model_clients.GetClientRegistry()
 	clients := registry.ListClients()
@@ -577,7 +577,7 @@ func TestRegistryContainsInferenceAffinity(t *testing.T) {
 
 // ──────────────────────────── ReleaseParams 测试 ────────────────────────────
 
-func TestReleaseParams_DefaultValues(t *testing.T) {
+func TestReleaseParams_默认值(t *testing.T) {
 	// 测试 ReleaseParams 的默认值
 	p := model_clients.NewReleaseParams()
 	if p.SessionID != "" {
@@ -588,7 +588,7 @@ func TestReleaseParams_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestReleaseParams_AllOpts(t *testing.T) {
+func TestReleaseParams_全部选项(t *testing.T) {
 	// 测试 ReleaseParams 所有选项
 	p := model_clients.NewReleaseParams(
 		model_clients.WithReleaseSessionID("sess-1"),
@@ -851,7 +851,7 @@ func TestInferenceAffinity_SanitizeToolCalls_保留Index(t *testing.T) {
 	}
 }
 
-func TestInferenceAffinity_SanitizeToolCalls_FunctionNotMap(t *testing.T) {
+func TestInferenceAffinity_SanitizeToolCalls_Function不是Map(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -887,7 +887,7 @@ func TestInferenceAffinity_SanitizeToolCalls_FunctionNotMap(t *testing.T) {
 	}
 }
 
-func TestInferenceAffinity_SanitizeToolCalls_ToolCallNotMap(t *testing.T) {
+func TestInferenceAffinity_SanitizeToolCalls_ToolCall不是Map(t *testing.T) {
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -1067,7 +1067,7 @@ func TestBuildReleaseRequestBody_DictsMessages类型(t *testing.T) {
 	}
 }
 
-func TestBuildReleaseRequestBody_UnsupportedMessagesType(t *testing.T) {
+func TestBuildReleaseRequestBody_不支持的Messages类型(t *testing.T) {
 	// params.Messages 为不支持的类型时，应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1119,7 +1119,7 @@ func TestBuildReleaseRequestBody_无Messages(t *testing.T) {
 
 // ──────────────────────────── buildReleaseHTTPClient 测试 ────────────────────────────
 
-func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCert(t *testing.T) {
+func TestBuildReleaseHTTPClient_VerifySSL无效证书(t *testing.T) {
 	// VerifySSL=true 且 SSLCert 指向不存在的文件，应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1141,7 +1141,7 @@ func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCert(t *testing.T) {
 	}
 }
 
-func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCertContent(t *testing.T) {
+func TestBuildReleaseHTTPClient_VerifySSL无效证书内容(t *testing.T) {
 	// VerifySSL=true 且 SSLCert 指向无效证书内容，应返回解析错误
 	// 创建临时文件写入无效 PEM 内容
 	tmpFile, err := os.CreateTemp("", "cert-*.pem")
@@ -1172,7 +1172,7 @@ func TestBuildReleaseHTTPClient_VerifySSLWithInvalidCertContent(t *testing.T) {
 	}
 }
 
-func TestBuildReleaseHTTPClient_ConfigTimeout(t *testing.T) {
+func TestBuildReleaseHTTPClient_配置超时(t *testing.T) {
 	// ClientConfig.Timeout > 0 时应使用配置的超时时间
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1196,7 +1196,7 @@ func TestBuildReleaseHTTPClient_ConfigTimeout(t *testing.T) {
 	}
 }
 
-func TestBuildReleaseHTTPClient_CustomTimeout(t *testing.T) {
+func TestBuildReleaseHTTPClient_自定义超时(t *testing.T) {
 	// 传入自定义 timeout 时应覆盖配置的超时时间
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1220,7 +1220,7 @@ func TestBuildReleaseHTTPClient_CustomTimeout(t *testing.T) {
 	}
 }
 
-func TestBuildReleaseHTTPClient_VerifySSLTrueNoCert(t *testing.T) {
+func TestBuildReleaseHTTPClient_VerifySSLTrue无证书(t *testing.T) {
 	// VerifySSL=true 且无 SSLCert 时，构造函数会要求 ssl_cert
 	// 无法创建 VerifySSL=true 且无 SSLCert 的客户端（构造函数会报错）
 	// 所以直接测试 buildReleaseHTTPClient 内部 VerifySSL=true + SSLCert="" 的路径
@@ -1249,7 +1249,7 @@ func TestBuildReleaseHTTPClient_VerifySSLTrueNoCert(t *testing.T) {
 
 // ──────────────────────────── sanitizeMessages 错误路径测试 ────────────────────────────
 
-func TestSanitizeMessages_EmptyMessagesError(t *testing.T) {
+func TestSanitizeMessages_空消息错误(t *testing.T) {
 	// 空消息应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1267,7 +1267,7 @@ func TestSanitizeMessages_EmptyMessagesError(t *testing.T) {
 
 // ──────────────────────────── Release 错误路径测试 ────────────────────────────
 
-func TestRelease_BuildBodyError(t *testing.T) {
+func TestRelease_构建请求体错误(t *testing.T) {
 	// buildReleaseRequestBody 返回错误时，Release 应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1289,7 +1289,7 @@ func TestRelease_BuildBodyError(t *testing.T) {
 	}
 }
 
-func TestRelease_SSLCertError(t *testing.T) {
+func TestRelease_SSL证书错误(t *testing.T) {
 	// buildReleaseHTTPClient 返回错误时，Release 应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1317,7 +1317,7 @@ func TestRelease_SSLCertError(t *testing.T) {
 
 // ──────────────────────────── init 注册工厂错误路径测试 ────────────────────────────
 
-func TestInit_FactoryWithInvalidConfig(t *testing.T) {
+func TestInit_工厂无效配置(t *testing.T) {
 	// 验证 init 注册的工厂在配置无效时返回 nil
 	registry := model_clients.GetClientRegistry()
 
@@ -1337,7 +1337,7 @@ func TestInit_FactoryWithInvalidConfig(t *testing.T) {
 
 // ──────────────────────────── Invoke/Stream 错误路径测试 ────────────────────────────
 
-func TestInvoke_SanitizeMessagesError(t *testing.T) {
+func TestInvoke_SanitizeMessages错误(t *testing.T) {
 	// sanitizeMessages 返回错误时，Invoke 应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
@@ -1354,7 +1354,7 @@ func TestInvoke_SanitizeMessagesError(t *testing.T) {
 	}
 }
 
-func TestStream_SanitizeMessagesError(t *testing.T) {
+func TestStream_SanitizeMessages错误(t *testing.T) {
 	// sanitizeMessages 返回错误时，Stream 应返回错误
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),

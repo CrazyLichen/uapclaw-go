@@ -9,7 +9,7 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestGetSSLConfig_NonHTTPS(t *testing.T) {
+func TestGetSSLConfig_非HTTPS(t *testing.T) {
 	verify, certPath, err := GetSSLConfig("SSL_VERIFY", "SSL_CERT", []string{"false"}, false)
 	if err != nil {
 		t.Fatalf("非HTTPS 不应报错: %v", err)
@@ -22,7 +22,7 @@ func TestGetSSLConfig_NonHTTPS(t *testing.T) {
 	}
 }
 
-func TestGetSSLConfig_VerifyOff(t *testing.T) {
+func TestGetSSLConfig_验证关闭(t *testing.T) {
 	os.Setenv("TEST_SSL_VERIFY_OFF", "false")
 	defer os.Unsetenv("TEST_SSL_VERIFY_OFF")
 
@@ -38,7 +38,7 @@ func TestGetSSLConfig_VerifyOff(t *testing.T) {
 	}
 }
 
-func TestGetSSLConfig_VerifyOn_NoCert(t *testing.T) {
+func TestGetSSLConfig_验证开启无证书(t *testing.T) {
 	os.Unsetenv("TEST_SSL_CERT_MISSING")
 	verify, _, err := GetSSLConfig("TEST_SSL_VERIFY_MISSING", "TEST_SSL_CERT_MISSING", []string{"false"}, true)
 	if err == nil {
@@ -49,7 +49,7 @@ func TestGetSSLConfig_VerifyOn_NoCert(t *testing.T) {
 	}
 }
 
-func TestGetSSLConfig_VerifyOn_WithCert(t *testing.T) {
+func TestGetSSLConfig_验证开启有证书(t *testing.T) {
 	// 创建临时证书文件
 	tmpDir := t.TempDir()
 	certFile := filepath.Join(tmpDir, "ca.pem")
@@ -73,7 +73,7 @@ func TestGetSSLConfig_VerifyOn_WithCert(t *testing.T) {
 	}
 }
 
-func TestCreateStrictTLSConfig_NoCert(t *testing.T) {
+func TestCreateStrictTLSConfig_无证书(t *testing.T) {
 	cfg, err := CreateStrictTLSConfig("")
 	if err != nil {
 		t.Fatalf("无证书不应报错: %v", err)
@@ -86,7 +86,7 @@ func TestCreateStrictTLSConfig_NoCert(t *testing.T) {
 	}
 }
 
-func TestCreateStrictTLSConfig_InvalidCertPath(t *testing.T) {
+func TestCreateStrictTLSConfig_无效证书路径(t *testing.T) {
 	os.Setenv("SAFE_CERT_DIR", "/nonexistent")
 	defer os.Unsetenv("SAFE_CERT_DIR")
 

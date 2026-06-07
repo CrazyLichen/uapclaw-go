@@ -12,7 +12,7 @@ import (
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOutputParser LLM 输出解析器接口。
 //
@@ -69,13 +69,6 @@ type BaseModelClient interface {
 	Release(ctx context.Context, opts ...ReleaseOption) (bool, error)
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent model_clients 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。
 //
 // 对应 Python: BaseModelClient 中的具体方法（非抽象方法）
@@ -99,6 +92,11 @@ type BaseClientEmbed struct {
 
 // BaseClientEmbedOption BaseClientEmbed 构造选项函数。
 type BaseClientEmbedOption func(*BaseClientEmbed)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent model_clients 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

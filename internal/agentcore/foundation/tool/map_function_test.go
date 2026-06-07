@@ -70,7 +70,7 @@ func TestMapFunction_Stream(t *testing.T) {
 }
 
 // TestMapFunction_InvokeNilFn 测试 Invoke 函数为 nil 时返回错误
-func TestMapFunction_InvokeNilFn(t *testing.T) {
+func TestMapFunction_Invoke函数为空(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
 	}, nil)
@@ -92,7 +92,7 @@ func TestMapFunction_InvokeNilFn(t *testing.T) {
 }
 
 // TestMapFunction_StreamNilFn 测试 Stream 函数为 nil 时返回错误
-func TestMapFunction_StreamNilFn(t *testing.T) {
+func TestMapFunction_Stream函数为空(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
 	}, nil)
@@ -110,7 +110,7 @@ func TestMapFunction_StreamNilFn(t *testing.T) {
 }
 
 // TestMapFunction_Card 测试 Card 方法
-func TestMapFunction_Card(t *testing.T) {
+func TestMapFunction_Card方法(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
 	}, nil)
@@ -121,7 +121,7 @@ func TestMapFunction_Card(t *testing.T) {
 }
 
 // TestMapFunction_InvalidCard 测试无效卡片
-func TestMapFunction_InvalidCard(t *testing.T) {
+func TestMapFunction_无效卡片(t *testing.T) {
 	_, err := NewMapFunction(nil, nil, nil)
 	if err == nil {
 		t.Error("nil card 应返回错误")
@@ -129,7 +129,7 @@ func TestMapFunction_InvalidCard(t *testing.T) {
 }
 
 // TestMapFunction_InvokeWithFormat 测试 Invoke 的参数格式化
-func TestMapFunction_InvokeWithFormat(t *testing.T) {
+func TestMapFunction_Invoke带格式化(t *testing.T) {
 	card := NewToolCard("echo", "回显工具", []*schema.Param{
 		schema.NewStringParam("message", "消息", true),
 	}, nil)

@@ -25,7 +25,7 @@ func TestNewStringParam(t *testing.T) {
 	}
 }
 
-func TestNewStringParam_WithDefault(t *testing.T) {
+func TestNewStringParam_带默认值(t *testing.T) {
 	p := NewStringParam("city", "城市名", false, "Beijing")
 	if p.Default != "Beijing" {
 		t.Errorf("期望 Default %q，实际 %v", "Beijing", p.Default)
@@ -87,7 +87,7 @@ func TestNewObjectParam(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_ArrayWithoutItems(t *testing.T) {
+func TestParam_Validate_数组缺少Items(t *testing.T) {
 	p := &Param{
 		Name:        "tags",
 		Description: "标签列表",
@@ -100,7 +100,7 @@ func TestParam_Validate_ArrayWithoutItems(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_ArrayWithProperties(t *testing.T) {
+func TestParam_Validate_数组有Properties(t *testing.T) {
 	p := &Param{
 		Name:        "tags",
 		Description: "标签列表",
@@ -115,7 +115,7 @@ func TestParam_Validate_ArrayWithProperties(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_ObjectWithoutProperties(t *testing.T) {
+func TestParam_Validate_对象缺少Properties(t *testing.T) {
 	p := &Param{
 		Name:        "user",
 		Description: "用户信息",
@@ -128,7 +128,7 @@ func TestParam_Validate_ObjectWithoutProperties(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_ObjectWithItems(t *testing.T) {
+func TestParam_Validate_对象有Items(t *testing.T) {
 	p := &Param{
 		Name:        "user",
 		Description: "用户信息",
@@ -143,7 +143,7 @@ func TestParam_Validate_ObjectWithItems(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_SimpleWithItems(t *testing.T) {
+func TestParam_Validate_简单类型有Items(t *testing.T) {
 	p := &Param{
 		Name:        "city",
 		Description: "城市名",
@@ -157,7 +157,7 @@ func TestParam_Validate_SimpleWithItems(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_SimpleWithProperties(t *testing.T) {
+func TestParam_Validate_简单类型有Properties(t *testing.T) {
 	p := &Param{
 		Name:        "city",
 		Description: "城市名",
@@ -171,21 +171,21 @@ func TestParam_Validate_SimpleWithProperties(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_ValidSimple(t *testing.T) {
+func TestParam_Validate_合法简单类型(t *testing.T) {
 	p := NewStringParam("city", "城市名", true)
 	if err := p.Validate(); err != nil {
 		t.Errorf("合法的简单参数不应报错: %v", err)
 	}
 }
 
-func TestParam_Validate_ValidArray(t *testing.T) {
+func TestParam_Validate_合法数组(t *testing.T) {
 	p := NewArrayParam("tags", "标签列表", false, NewStringParam("tag", "标签", true))
 	if err := p.Validate(); err != nil {
 		t.Errorf("合法的数组参数不应报错: %v", err)
 	}
 }
 
-func TestParam_Validate_ValidObject(t *testing.T) {
+func TestParam_Validate_合法对象(t *testing.T) {
 	p := NewObjectParam("user", "用户信息", true, []*Param{
 		NewStringParam("name", "名称", true),
 		NewIntegerParam("age", "年龄", false),
@@ -195,7 +195,7 @@ func TestParam_Validate_ValidObject(t *testing.T) {
 	}
 }
 
-func TestParam_Validate_NestedObjectInArray(t *testing.T) {
+func TestParam_Validate_数组中嵌套对象(t *testing.T) {
 	// 数组元素为对象类型：嵌套验证
 	objItems := []*Param{
 		NewStringParam("name", "名称", true),
@@ -254,7 +254,7 @@ func TestParam_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestParam_UnmarshalJSON_UnknownType(t *testing.T) {
+func TestParam_UnmarshalJSON_未知类型(t *testing.T) {
 	jsonStr := `{"name":"x","description":"x","type":"unknown","required":true}`
 	var p Param
 	err := json.Unmarshal([]byte(jsonStr), &p)
@@ -263,7 +263,7 @@ func TestParam_UnmarshalJSON_UnknownType(t *testing.T) {
 	}
 }
 
-func TestParamType_String(t *testing.T) {
+func TestParamType_字符串(t *testing.T) {
 	tests := []struct {
 		pt       ParamType
 		expected string
@@ -282,7 +282,7 @@ func TestParamType_String(t *testing.T) {
 	}
 }
 
-func TestParam_String(t *testing.T) {
+func TestParam_字符串表示(t *testing.T) {
 	p := NewStringParam("city", "城市名", true)
 	s := p.String()
 	if s != "city(string, required=true)" {
@@ -369,7 +369,7 @@ func TestToJSONSchemaMap_数组参数(t *testing.T) {
 	}
 }
 
-func TestParam_NestedStructure(t *testing.T) {
+func TestParam_嵌套结构(t *testing.T) {
 	// 构建一个嵌套对象参数：用户信息（包含字符串和整数属性）
 	userParam := NewObjectParam("user", "用户信息", true, []*Param{
 		NewStringParam("username", "用户名", true),

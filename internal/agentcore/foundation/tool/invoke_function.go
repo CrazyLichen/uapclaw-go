@@ -22,19 +22,17 @@ type InvokeFunction[I any, O any] struct {
 	fn   func(context.Context, I) (O, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// LocalFuncOption 本地函数构造选项函数。
-type LocalFuncOption func(*localFuncConfig)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // localFuncConfig 内部配置。
 type localFuncConfig struct {
 	description string
 	inputParams []*schema.Param
 	card        *ToolCard
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// LocalFuncOption 本地函数构造选项函数。
+type LocalFuncOption func(*localFuncConfig)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

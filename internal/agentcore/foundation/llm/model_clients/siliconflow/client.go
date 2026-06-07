@@ -15,11 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent siliconflow 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SiliconFlowModelClient SiliconFlow 模型客户端。
@@ -37,6 +32,11 @@ const logComponent = logger.ComponentAgentCore
 type SiliconFlowModelClient struct {
 	openai.OpenAIModelClient
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent siliconflow 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

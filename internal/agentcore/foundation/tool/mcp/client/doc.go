@@ -18,7 +18,6 @@
 //	├── stdio_client.go               # StdioClient 实现
 //	├── streamable_http_client.go     # StreamableHttpClient 实现
 //	├── openapi_client.go             # OpenApiClient 实现（输出 Schema/描述增强/Schema 驱动请求）
-//	├── openapi_schema_test.go        # OpenApiClient 单元测试
 //	└── playwright_client.go          # PlaywrightClient 实现
 //
 // 对应 Python 代码：openjiuwen/core/foundation/tool/mcp/client/

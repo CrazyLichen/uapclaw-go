@@ -23,7 +23,7 @@ func (c *testSubCard) ToolInfo() *ToolInfo {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-func TestNewBaseCard_DefaultID(t *testing.T) {
+func TestNewBaseCard_默认ID(t *testing.T) {
 	card := NewBaseCard()
 	// ID 应为 32 位 hex（无连字符）
 	if len(card.ID) != 32 {
@@ -44,7 +44,7 @@ func TestNewBaseCard_DefaultID(t *testing.T) {
 	}
 }
 
-func TestNewBaseCard_WithOptions(t *testing.T) {
+func TestNewBaseCard_带选项(t *testing.T) {
 	card := NewBaseCard(
 		WithName("test-agent"),
 		WithDescription("测试 Agent"),
@@ -61,14 +61,14 @@ func TestNewBaseCard_WithOptions(t *testing.T) {
 	}
 }
 
-func TestNewBaseCard_WithID(t *testing.T) {
+func TestNewBaseCard_带ID(t *testing.T) {
 	card := NewBaseCard(WithID("custom-id-123"))
 	if card.ID != "custom-id-123" {
 		t.Errorf("期望 ID %q，实际 %q", "custom-id-123", card.ID)
 	}
 }
 
-func TestBaseCard_ToolInfo(t *testing.T) {
+func TestBaseCard_工具信息(t *testing.T) {
 	card := NewBaseCard(
 		WithName("search"),
 		WithDescription("搜索工具"),
@@ -80,7 +80,7 @@ func TestBaseCard_ToolInfo(t *testing.T) {
 	}
 }
 
-func TestBaseCard_String(t *testing.T) {
+func TestBaseCard_字符串表示(t *testing.T) {
 	card := NewBaseCard(WithName("my-tool"))
 	s := card.String()
 	if !strings.Contains(s, "id=") {
@@ -91,7 +91,7 @@ func TestBaseCard_String(t *testing.T) {
 	}
 }
 
-func TestBaseCard_Embedding(t *testing.T) {
+func TestBaseCard_嵌入(t *testing.T) {
 	// 验证子类嵌入 BaseCard 后可正常访问字段和覆写方法
 	sub := &testSubCard{
 		BaseCard: BaseCard{
@@ -117,7 +117,7 @@ func TestBaseCard_Embedding(t *testing.T) {
 	}
 }
 
-func TestNewBaseCard_IDUniqueness(t *testing.T) {
+func TestNewBaseCard_ID唯一性(t *testing.T) {
 	ids := make(map[string]bool, 100)
 	for i := 0; i < 100; i++ {
 		card := NewBaseCard()
@@ -128,7 +128,7 @@ func TestNewBaseCard_IDUniqueness(t *testing.T) {
 	}
 }
 
-func TestBaseCard_JSONSerialization(t *testing.T) {
+func TestBaseCard_JSON序列化(t *testing.T) {
 	card := NewBaseCard(
 		WithName("json-test"),
 		WithDescription("JSON 序列化测试"),
@@ -226,7 +226,7 @@ func TestAgentCard_ToolInfo_无参数(t *testing.T) {
 	}
 }
 
-func TestWorkflowCard_Ability(t *testing.T) {
+func TestWorkflowCard_能力(t *testing.T) {
 	card := NewWorkflowCard(WithName("wf"), WithDescription("工作流"))
 	if card.AbilityName() != "wf" {
 		t.Errorf("AbilityName = %q, want wf", card.AbilityName())
@@ -237,7 +237,7 @@ func TestWorkflowCard_Ability(t *testing.T) {
 	var _ Ability = card // 编译期接口检查
 }
 
-func TestAgentCard_Ability(t *testing.T) {
+func TestAgentCard_能力(t *testing.T) {
 	card := NewAgentCard(WithName("ag"), WithDescription("Agent"))
 	if card.AbilityName() != "ag" {
 		t.Errorf("AbilityName = %q, want ag", card.AbilityName())

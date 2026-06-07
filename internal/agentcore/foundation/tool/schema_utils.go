@@ -15,16 +15,16 @@ import (
 // 对应 Python: openjiuwen/core/common/utils/schema_utils.py (SchemaUtils)
 type SchemaUtils struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// FormatOption 格式化选项函数。
-type FormatOption func(*formatOptions)
-
 // formatOptions 格式化选项。
 type formatOptions struct {
 	skipNoneValue bool
 	skipValidate  bool
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// FormatOption 格式化选项函数。
+type FormatOption func(*formatOptions)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -11,7 +11,7 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestSSLAuthStrategy_Authenticate_NonHTTPS(t *testing.T) {
+func TestSSLAuthStrategy_Authenticate_非HTTPS(t *testing.T) {
 	strategy := &SSLAuthStrategy{}
 	result, err := strategy.Authenticate(context.Background(), &ToolAuthConfig{
 		AuthType: AuthTypeSSL,
@@ -37,7 +37,7 @@ func TestSSLAuthStrategy_Authenticate_NonHTTPS(t *testing.T) {
 	}
 }
 
-func TestSSLAuthStrategy_Authenticate_VerifyOff(t *testing.T) {
+func TestSSLAuthStrategy_Authenticate_验证关闭(t *testing.T) {
 	os.Setenv("TEST_AUTH_SSL_VERIFY_OFF", "false")
 	defer os.Unsetenv("TEST_AUTH_SSL_VERIFY_OFF")
 
@@ -66,7 +66,7 @@ func TestSSLAuthStrategy_Authenticate_VerifyOff(t *testing.T) {
 	}
 }
 
-func TestSSLAuthStrategy_Authenticate_EmptyURL(t *testing.T) {
+func TestSSLAuthStrategy_Authenticate_空URL(t *testing.T) {
 	os.Setenv("TEST_AUTH_SSL_VERIFY_EMPTY", "false")
 	defer os.Unsetenv("TEST_AUTH_SSL_VERIFY_EMPTY")
 
@@ -88,7 +88,7 @@ func TestSSLAuthStrategy_Authenticate_EmptyURL(t *testing.T) {
 	}
 }
 
-func TestHeaderQueryAuthStrategy_Authenticate(t *testing.T) {
+func TestHeaderQueryAuthStrategy_Authenticate_基本(t *testing.T) {
 	strategy := &HeaderQueryAuthStrategy{}
 	result, err := strategy.Authenticate(context.Background(), &ToolAuthConfig{
 		AuthType: AuthTypeHeaderAndQuery,
@@ -116,7 +116,7 @@ func TestHeaderQueryAuthStrategy_Authenticate(t *testing.T) {
 	}
 }
 
-func TestHeaderQueryAuthStrategy_Authenticate_Empty(t *testing.T) {
+func TestHeaderQueryAuthStrategy_Authenticate_空配置(t *testing.T) {
 	strategy := &HeaderQueryAuthStrategy{}
 	result, err := strategy.Authenticate(context.Background(), &ToolAuthConfig{
 		AuthType: AuthTypeHeaderAndQuery,
@@ -135,7 +135,7 @@ func TestHeaderQueryAuthStrategy_Authenticate_Empty(t *testing.T) {
 	}
 }
 
-func TestAuthStrategyRegistry_ExecuteAuth(t *testing.T) {
+func TestAuthStrategyRegistry_ExecuteAuth_基本(t *testing.T) {
 	registry := &AuthStrategyRegistry{
 		strategies: map[string]AuthStrategy{
 			AuthTypeSSL: &SSLAuthStrategy{},
@@ -158,7 +158,7 @@ func TestAuthStrategyRegistry_ExecuteAuth(t *testing.T) {
 	}
 }
 
-func TestAuthStrategyRegistry_ExecuteAuth_Unsupported(t *testing.T) {
+func TestAuthStrategyRegistry_ExecuteAuth_不支持的类型(t *testing.T) {
 	registry := &AuthStrategyRegistry{
 		strategies: map[string]AuthStrategy{},
 	}
@@ -177,7 +177,7 @@ func TestAuthStrategyRegistry_ExecuteAuth_Unsupported(t *testing.T) {
 	}
 }
 
-func TestRegisterAuthCallback(t *testing.T) {
+func TestRegisterAuthCallback_基本(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	RegisterAuthCallback(fw)
 

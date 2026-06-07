@@ -4,6 +4,25 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// APIParamMapper 将输入参数映射到 HTTP 请求的各位置（query/path/body/header/form）。
+//
+// 根据 JSON Schema 中每个参数的 location 字段决定其目标位置，
+// 并合并 Card 上预设的默认参数（queries/headers/paths）。
+//
+// 对应 Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamMapper)
+type APIParamMapper struct {
+	// schema 原始 JSON Schema map（从 RestfulApiCard.InputSchema 传入）
+	schema map[string]any
+	// defaultQueries 默认查询参数
+	defaultQueries map[string]any
+	// defaultHeaders 默认请求头参数
+	defaultHeaders map[string]any
+	// defaultPaths 默认路径参数
+	defaultPaths map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // APIParamLocation API 参数位置枚举，基于 OpenAPI 规范定义参数在 HTTP 请求中的位置。
@@ -40,25 +59,6 @@ func (l APIParamLocation) String() string {
 	default:
 		return "unknown"
 	}
-}
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// APIParamMapper 将输入参数映射到 HTTP 请求的各位置（query/path/body/header/form）。
-//
-// 根据 JSON Schema 中每个参数的 location 字段决定其目标位置，
-// 并合并 Card 上预设的默认参数（queries/headers/paths）。
-//
-// 对应 Python: openjiuwen/core/foundation/tool/service_api/api_param_mapper.py (APIParamMapper)
-type APIParamMapper struct {
-	// schema 原始 JSON Schema map（从 RestfulApiCard.InputSchema 传入）
-	schema map[string]any
-	// defaultQueries 默认查询参数
-	defaultQueries map[string]any
-	// defaultHeaders 默认请求头参数
-	defaultHeaders map[string]any
-	// defaultPaths 默认路径参数
-	defaultPaths map[string]any
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

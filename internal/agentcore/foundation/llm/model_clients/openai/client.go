@@ -15,11 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent openai 包统一使用 AgentCore 组件标识记录日志。
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // OpenAIModelClient OpenAI 兼容协议的 LLM 模型客户端。
@@ -33,6 +28,11 @@ type OpenAIModelClient struct {
 	// baseHeaders 预构建的配置级请求头
 	baseHeaders map[string]string
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent openai 包统一使用 AgentCore 组件标识记录日志。
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -8,8 +8,8 @@ import (
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// TestNewInvokeParams_Defaults 测试 InvokeParams 默认值。
-func TestNewInvokeParams_Defaults(t *testing.T) {
+// TestNewInvokeParams_默认值 测试 InvokeParams 默认值。
+func TestNewInvokeParams_默认值(t *testing.T) {
 	p := NewInvokeParams()
 	if p.Temperature != nil {
 		t.Error("默认 Temperature 应为 nil")
@@ -37,8 +37,8 @@ func TestNewInvokeParams_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewInvokeParams_WithOpts 测试 InvokeParams 组合 Options。
-func TestNewInvokeParams_WithOpts(t *testing.T) {
+// TestNewInvokeParams_组合选项 测试 InvokeParams 组合 Options。
+func TestNewInvokeParams_组合选项(t *testing.T) {
 	temp := 0.7
 	topP := 0.9
 	maxTokens := 1024
@@ -74,8 +74,8 @@ func TestNewInvokeParams_WithOpts(t *testing.T) {
 	}
 }
 
-// TestNewStreamParams_Defaults 测试 StreamParams 默认值。
-func TestNewStreamParams_Defaults(t *testing.T) {
+// TestNewStreamParams_默认值 测试 StreamParams 默认值。
+func TestNewStreamParams_默认值(t *testing.T) {
 	p := NewStreamParams()
 	if p.Temperature != nil {
 		t.Error("默认 Temperature 应为 nil")
@@ -85,8 +85,8 @@ func TestNewStreamParams_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewGenerateImageParams_Defaults 测试 GenerateImageParams 默认值。
-func TestNewGenerateImageParams_Defaults(t *testing.T) {
+// TestNewGenerateImageParams_默认值 测试 GenerateImageParams 默认值。
+func TestNewGenerateImageParams_默认值(t *testing.T) {
 	p := NewGenerateImageParams()
 	if p.Size != "1664*928" {
 		t.Errorf("Size = %q, 期望 %q", p.Size, "1664*928")
@@ -102,8 +102,8 @@ func TestNewGenerateImageParams_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewGenerateImageParams_WithOpts 测试 GenerateImageParams Options。
-func TestNewGenerateImageParams_WithOpts(t *testing.T) {
+// TestNewGenerateImageParams_组合选项 测试 GenerateImageParams Options。
+func TestNewGenerateImageParams_组合选项(t *testing.T) {
 	p := NewGenerateImageParams(
 		WithImageModel("dall-e-3"),
 		WithImageSize("1024*1024"),
@@ -124,8 +124,8 @@ func TestNewGenerateImageParams_WithOpts(t *testing.T) {
 	}
 }
 
-// TestNewGenerateSpeechParams_Defaults 测试 GenerateSpeechParams 默认值。
-func TestNewGenerateSpeechParams_Defaults(t *testing.T) {
+// TestNewGenerateSpeechParams_默认值 测试 GenerateSpeechParams 默认值。
+func TestNewGenerateSpeechParams_默认值(t *testing.T) {
 	p := NewGenerateSpeechParams()
 	if p.Voice != "Cherry" {
 		t.Errorf("Voice = %q, 期望 %q", p.Voice, "Cherry")
@@ -135,8 +135,8 @@ func TestNewGenerateSpeechParams_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewGenerateSpeechParams_WithOpts 测试 GenerateSpeechParams Options。
-func TestNewGenerateSpeechParams_WithOpts(t *testing.T) {
+// TestNewGenerateSpeechParams_组合选项 测试 GenerateSpeechParams Options。
+func TestNewGenerateSpeechParams_组合选项(t *testing.T) {
 	p := NewGenerateSpeechParams(
 		WithSpeechModel("tts-1"),
 		WithSpeechVoice("alloy"),
@@ -149,8 +149,8 @@ func TestNewGenerateSpeechParams_WithOpts(t *testing.T) {
 	}
 }
 
-// TestNewGenerateVideoParams_Defaults 测试 GenerateVideoParams 默认值。
-func TestNewGenerateVideoParams_Defaults(t *testing.T) {
+// TestNewGenerateVideoParams_默认值 测试 GenerateVideoParams 默认值。
+func TestNewGenerateVideoParams_默认值(t *testing.T) {
 	p := NewGenerateVideoParams()
 	if p.Duration != 5 {
 		t.Errorf("Duration = %d, 期望 5", p.Duration)
@@ -160,8 +160,8 @@ func TestNewGenerateVideoParams_Defaults(t *testing.T) {
 	}
 }
 
-// TestNewGenerateVideoParams_WithOpts 测试 GenerateVideoParams Options。
-func TestNewGenerateVideoParams_WithOpts(t *testing.T) {
+// TestNewGenerateVideoParams_组合选项 测试 GenerateVideoParams Options。
+func TestNewGenerateVideoParams_组合选项(t *testing.T) {
 	seed := 123
 	p := NewGenerateVideoParams(
 		WithVideoModel("video-gen"),
@@ -185,7 +185,7 @@ func TestNewGenerateVideoParams_WithOpts(t *testing.T) {
 
 // ──────────────────────────── 未覆盖的 Invoke Option 测试 ────────────────────────────
 
-func TestNewInvokeParams_WithOutputParser(t *testing.T) {
+func TestNewInvokeParams_带输出解析器(t *testing.T) {
 	parser := &testOutputParser{}
 	p := NewInvokeParams(WithInvokeOutputParser(parser))
 	if p.OutputParser == nil {
@@ -193,7 +193,7 @@ func TestNewInvokeParams_WithOutputParser(t *testing.T) {
 	}
 }
 
-func TestNewInvokeParams_WithCustomHeaders(t *testing.T) {
+func TestNewInvokeParams_带自定义请求头(t *testing.T) {
 	headers := map[string]any{"X-Custom": "val"}
 	p := NewInvokeParams(WithInvokeCustomHeaders(headers))
 	if p.CustomHeaders == nil {
@@ -204,7 +204,7 @@ func TestNewInvokeParams_WithCustomHeaders(t *testing.T) {
 	}
 }
 
-func TestNewInvokeParams_WithTracerRecordData(t *testing.T) {
+func TestNewInvokeParams_带追踪记录数据(t *testing.T) {
 	data := "trace-data"
 	p := NewInvokeParams(WithInvokeTracerRecordData(data))
 	if p.TracerRecordData != data {
@@ -212,7 +212,7 @@ func TestNewInvokeParams_WithTracerRecordData(t *testing.T) {
 	}
 }
 
-func TestNewInvokeParams_WithExtra(t *testing.T) {
+func TestNewInvokeParams_带额外参数(t *testing.T) {
 	extra := map[string]any{"top_k": 50}
 	p := NewInvokeParams(WithInvokeExtra(extra))
 	if p.Extra == nil {
@@ -225,7 +225,7 @@ func TestNewInvokeParams_WithExtra(t *testing.T) {
 
 // ──────────────────────────── Stream Option 测试 ────────────────────────────
 
-func TestNewStreamParams_WithOpts(t *testing.T) {
+func TestNewStreamParams_组合选项(t *testing.T) {
 	temp := 0.8
 	topP := 0.95
 	maxTokens := 2048
@@ -265,7 +265,7 @@ func TestNewStreamParams_WithOpts(t *testing.T) {
 	}
 }
 
-func TestNewStreamParams_WithOutputParser(t *testing.T) {
+func TestNewStreamParams_带输出解析器(t *testing.T) {
 	parser := &testOutputParser{}
 	p := NewStreamParams(WithStreamOutputParser(parser))
 	if p.OutputParser == nil {
@@ -273,7 +273,7 @@ func TestNewStreamParams_WithOutputParser(t *testing.T) {
 	}
 }
 
-func TestNewStreamParams_WithCustomHeaders(t *testing.T) {
+func TestNewStreamParams_带自定义请求头(t *testing.T) {
 	headers := map[string]any{"X-Stream": "val"}
 	p := NewStreamParams(WithStreamCustomHeaders(headers))
 	if p.CustomHeaders == nil {
@@ -281,7 +281,7 @@ func TestNewStreamParams_WithCustomHeaders(t *testing.T) {
 	}
 }
 
-func TestNewStreamParams_WithExtra(t *testing.T) {
+func TestNewStreamParams_带额外参数(t *testing.T) {
 	extra := map[string]any{"top_k": 50}
 	p := NewStreamParams(WithStreamExtra(extra))
 	if p.Extra == nil {
@@ -289,7 +289,7 @@ func TestNewStreamParams_WithExtra(t *testing.T) {
 	}
 }
 
-func TestNewStreamParams_WithTracerRecordData(t *testing.T) {
+func TestNewStreamParams_带追踪记录数据(t *testing.T) {
 	data := "trace-data"
 	p := NewStreamParams(WithStreamTracerRecordData(data))
 	if p.TracerRecordData != data {
@@ -299,7 +299,7 @@ func TestNewStreamParams_WithTracerRecordData(t *testing.T) {
 
 // ──────────────────────────── GenerateImage Option 补充测试 ────────────────────────────
 
-func TestNewGenerateImageParams_AllOpts(t *testing.T) {
+func TestNewGenerateImageParams_全部选项(t *testing.T) {
 	p := NewGenerateImageParams(
 		WithImageNegativePrompt("bad quality"),
 		WithImagePromptExtend(false),
@@ -326,7 +326,7 @@ func TestNewGenerateImageParams_AllOpts(t *testing.T) {
 
 // ──────────────────────────── GenerateSpeech Option 补充测试 ────────────────────────────
 
-func TestNewGenerateSpeechParams_AllOpts(t *testing.T) {
+func TestNewGenerateSpeechParams_全部选项(t *testing.T) {
 	p := NewGenerateSpeechParams(
 		WithSpeechLanguageType("Chinese"),
 		WithSpeechTimeout(30.0),
@@ -345,7 +345,7 @@ func TestNewGenerateSpeechParams_AllOpts(t *testing.T) {
 
 // ──────────────────────────── GenerateVideo Option 补充测试 ────────────────────────────
 
-func TestNewGenerateVideoParams_AllOpts(t *testing.T) {
+func TestNewGenerateVideoParams_全部选项(t *testing.T) {
 	p := NewGenerateVideoParams(
 		WithVideoAudioURL("https://example.com/audio.mp3"),
 		WithVideoSize("1280*720"),
@@ -471,7 +471,7 @@ func (p *testOutputParser) StreamParse(chunks <-chan any) <-chan StreamParsedRes
 
 // ──────────────────────────── BuildRequestParams 补充测试 ────────────────────────────
 
-func TestBuildRequestParams_WithModelConfigDefaults(t *testing.T) {
+func TestBuildRequestParams_模型配置默认参数(t *testing.T) {
 	// 测试 model_config 中的默认参数
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
@@ -501,7 +501,7 @@ func TestBuildRequestParams_WithModelConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestBuildRequestParams_ParamsOverrideModelConfig(t *testing.T) {
+func TestBuildRequestParams_参数覆盖模型配置(t *testing.T) {
 	// 测试方法参数覆盖 model_config 默认参数
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
@@ -527,7 +527,7 @@ func TestBuildRequestParams_ParamsOverrideModelConfig(t *testing.T) {
 	}
 }
 
-func TestBuildRequestParams_WithStopFromModelConfig(t *testing.T) {
+func TestBuildRequestParams_模型配置Stop参数(t *testing.T) {
 	// 测试 model_config 中的 stop 参数
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
@@ -553,7 +553,7 @@ func TestBuildRequestParams_WithStopFromModelConfig(t *testing.T) {
 	}
 }
 
-func TestBuildRequestParams_WithExtraInternalParams(t *testing.T) {
+func TestBuildRequestParams_额外内部参数过滤(t *testing.T) {
 	// 测试 Extra 中内部参数被过滤
 	e := newTestClientEmbed()
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
@@ -584,7 +584,7 @@ func TestBuildRequestParams_WithExtraInternalParams(t *testing.T) {
 	}
 }
 
-func TestBuildRequestParams_WithNilModelConfig(t *testing.T) {
+func TestBuildRequestParams_模型配置为空(t *testing.T) {
 	// 测试 ModelConfig 为 nil 时从 params 获取 model
 	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
@@ -608,7 +608,7 @@ func TestBuildRequestParams_WithNilModelConfig(t *testing.T) {
 
 // ──────────────────────────── ExtractCostInfo 补充测试 ────────────────────────────
 
-func TestExtractCostInfo_IntCost(t *testing.T) {
+func TestExtractCostInfo_整数费用(t *testing.T) {
 	// 测试 int 类型 cost
 	obj := map[string]any{"cost": 5}
 	_, _, totalCost := ExtractCostInfo(obj)
@@ -617,7 +617,7 @@ func TestExtractCostInfo_IntCost(t *testing.T) {
 	}
 }
 
-func TestExtractCostInfo_UsageCost(t *testing.T) {
+func TestExtractCostInfo_用量费用(t *testing.T) {
 	// 测试 usage_cost 字段
 	obj := map[string]any{"usage_cost": 0.08}
 	_, _, totalCost := ExtractCostInfo(obj)
@@ -626,7 +626,7 @@ func TestExtractCostInfo_UsageCost(t *testing.T) {
 	}
 }
 
-func TestExtractCostInfo_CostObjectWithoutTotal(t *testing.T) {
+func TestExtractCostInfo_费用对象无总费用自动求和(t *testing.T) {
 	// 测试 cost 对象无 total_cost 时自动求和
 	obj := map[string]any{
 		"cost": map[string]any{
@@ -646,7 +646,7 @@ func TestExtractCostInfo_CostObjectWithoutTotal(t *testing.T) {
 	}
 }
 
-func TestExtractCostInfo_CostDetailsWithTotal(t *testing.T) {
+func TestExtractCostInfo_费用详情含总费用(t *testing.T) {
 	// 测试 cost_details 含 upstream_inference_cost
 	obj := map[string]any{
 		"cost_details": map[string]any{
@@ -661,7 +661,7 @@ func TestExtractCostInfo_CostDetailsWithTotal(t *testing.T) {
 	}
 }
 
-func TestExtractCostInfo_CostObjectPromptCost(t *testing.T) {
+func TestExtractCostInfo_费用对象PromptCost(t *testing.T) {
 	// 测试 cost 对象中使用 prompt_cost / completion_cost 键名
 	obj := map[string]any{
 		"cost": map[string]any{
@@ -684,7 +684,7 @@ func TestExtractCostInfo_CostObjectPromptCost(t *testing.T) {
 
 // ──────────────────────────── convertOneMessage 补充测试 ────────────────────────────
 
-func TestConvertOneMessage_UnsupportedType(t *testing.T) {
+func TestConvertOneMessage_不支持的消息类型(t *testing.T) {
 	// 测试不支持的消息类型
 	e := newTestClientEmbed()
 	_, err := e.convertOneMessage("invalid message")
@@ -693,7 +693,7 @@ func TestConvertOneMessage_UnsupportedType(t *testing.T) {
 	}
 }
 
-func TestConvertOneMessage_BaseMessageWithName(t *testing.T) {
+func TestConvertOneMessage_带Name字段的消息(t *testing.T) {
 	// 测试带 Name 字段的消息
 	e := newTestClientEmbed()
 	msg := llmschema.NewUserMessage("hello", llmschema.WithMessageName("user1"))
@@ -708,7 +708,7 @@ func TestConvertOneMessage_BaseMessageWithName(t *testing.T) {
 
 // ──────────────────────────── ReleaseParams 测试 ────────────────────────────
 
-func TestNewReleaseParams_Defaults(t *testing.T) {
+func TestNewReleaseParams_默认值(t *testing.T) {
 	// 测试 ReleaseParams 默认值
 	p := NewReleaseParams()
 	if p.SessionID != "" {
@@ -731,7 +731,7 @@ func TestNewReleaseParams_Defaults(t *testing.T) {
 	}
 }
 
-func TestNewReleaseParams_WithOpts(t *testing.T) {
+func TestNewReleaseParams_组合选项(t *testing.T) {
 	// 测试 ReleaseParams 组合 Options
 	msgs := []map[string]any{{"role": "user", "content": "hello"}}
 	p := NewReleaseParams(

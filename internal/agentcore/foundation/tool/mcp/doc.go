@@ -19,8 +19,6 @@
 //	├── doc.go           # 包文档
 //	├── base.go          # 类型重导出 + MCPTool + ExtractMCPToolResultContent
 //	├── client.go        # NewMcpClient 工厂函数
-//	├── base_test.go     # 基础类型单元测试
-//	├── client_test.go   # 工厂函数测试 + fakeMcpClient
 //	├── types/
 //	│   ├── doc.go           # 共享类型子包文档
 //	│   └── types.go         # McpServerConfig + McpToolCard + McpClient + ConnectOption

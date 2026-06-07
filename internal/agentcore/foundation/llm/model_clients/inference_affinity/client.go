@@ -21,14 +21,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
-// releaseKVCachePath vLLM KV Cache 释放 API 路径。
-const releaseKVCachePath = "/release_kv_cache"
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InferenceAffinityModelClient InferenceAffinity (vLLM) 模型客户端。
@@ -49,6 +41,14 @@ const releaseKVCachePath = "/release_kv_cache"
 type InferenceAffinityModelClient struct {
 	openai.OpenAIModelClient
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
+
+// releaseKVCachePath vLLM KV Cache 释放 API 路径。
+const releaseKVCachePath = "/release_kv_cache"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

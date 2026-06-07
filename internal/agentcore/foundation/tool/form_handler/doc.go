@@ -19,8 +19,7 @@
 //
 //	form_handler/
 //	├── doc.go              # 包文档
-//	├── form_handler.go     # FormHandler 接口 + DefaultFormHandler + FormHandlerManager + 全局单例
-//	└── form_handler_test.go # 单元测试
+//	└── form_handler.go     # FormHandler 接口 + DefaultFormHandler + FormHandlerManager + 全局单例
 //
 // 对应 Python 代码：openjiuwen/core/foundation/tool/form_handler/
 package form_handler

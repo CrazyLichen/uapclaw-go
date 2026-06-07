@@ -25,7 +25,7 @@ func (m *mockLLMCallback) call(_ context.Context, data *LLMCallEventData) any {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestLLMCallEventTypeValues(t *testing.T) {
+func TestLLMCallEventType_值(t *testing.T) {
 	tests := []struct {
 		event    LLMCallEventType
 		expected string
@@ -47,7 +47,7 @@ func TestLLMCallEventTypeValues(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_On_Off(t *testing.T) {
+func TestCallbackFramework_注册和注销(t *testing.T) {
 	fw := NewCallbackFramework()
 	mock := &mockLLMCallback{}
 
@@ -76,7 +76,7 @@ func TestCallbackFramework_On_Off(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
+func TestCallbackFramework_多个回调(t *testing.T) {
 	fw := NewCallbackFramework()
 	var callOrder []string
 
@@ -96,7 +96,7 @@ func TestCallbackFramework_MultipleCallbacks(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerNilData(t *testing.T) {
+func TestCallbackFramework_触发Nil数据(t *testing.T) {
 	fw := NewCallbackFramework()
 	mock := &mockLLMCallback{}
 	fw.OnLLM(LLMCallStarted, mock.call)
@@ -108,7 +108,7 @@ func TestCallbackFramework_TriggerNilData(t *testing.T) {
 	}
 }
 
-func TestGetCallbackFramework(t *testing.T) {
+func TestGetCallbackFramework_全局实例(t *testing.T) {
 	fw1 := GetCallbackFramework()
 	fw2 := GetCallbackFramework()
 	if fw1 != fw2 {
@@ -116,7 +116,7 @@ func TestGetCallbackFramework(t *testing.T) {
 	}
 }
 
-func TestNewCallbackFramework_LoggingCallback(t *testing.T) {
+func TestNewCallbackFramework_日志回调(t *testing.T) {
 	fw := NewCallbackFramework()
 
 	events := []LLMCallEventType{
@@ -134,7 +134,7 @@ func TestNewCallbackFramework_LoggingCallback(t *testing.T) {
 	}
 }
 
-func TestLLMCallEventData(t *testing.T) {
+func TestLLMCallEventData_字段(t *testing.T) {
 	temp := 0.7
 	topP := 0.9
 	maxTokens := 100
@@ -171,7 +171,7 @@ func TestLLMCallEventData(t *testing.T) {
 	}
 }
 
-func TestLoggingLLMCallback(t *testing.T) {
+func TestLoggingLLMCallback_日志回调(t *testing.T) {
 	temp := 0.5
 	data := &LLMCallEventData{
 		Event:         LLMCallStarted,
@@ -193,7 +193,7 @@ func TestLoggingLLMCallback(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_OffByPointer(t *testing.T) {
+func TestCallbackFramework_按指针注销(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 
@@ -217,7 +217,7 @@ func TestCallbackFramework_OffByPointer(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerErrorEvent(t *testing.T) {
+func TestCallbackFramework_触发错误事件(t *testing.T) {
 	fw := NewCallbackFramework()
 	var receivedErr error
 
@@ -237,7 +237,7 @@ func TestCallbackFramework_TriggerErrorEvent(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerToolWithResult(t *testing.T) {
+func TestCallbackFramework_触发Tool带结果(t *testing.T) {
 	fw := NewCallbackFramework()
 
 	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
@@ -261,7 +261,7 @@ func TestCallbackFramework_TriggerToolWithResult(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerLLMWithResult(t *testing.T) {
+func TestCallbackFramework_触发LLM带结果(t *testing.T) {
 	fw := NewCallbackFramework()
 
 	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
@@ -279,7 +279,7 @@ func TestCallbackFramework_TriggerLLMWithResult(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerToolNilContext(t *testing.T) {
+func TestCallbackFramework_触发Tool空上下文(t *testing.T) {
 	fw := NewCallbackFramework()
 	results := fw.TriggerTool(nil, NewToolCallEventData(ToolCallStarted, nil))
 	if results != nil {

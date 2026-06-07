@@ -55,7 +55,7 @@ func TestCallbackFramework_OnTool和TriggerTool(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_OffTool(t *testing.T) {
+func TestCallbackFramework_注销Tool(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 
@@ -96,7 +96,7 @@ func TestCallbackFramework_多Tool回调按序执行(t *testing.T) {
 	}
 }
 
-func TestCallbackFramework_TriggerTool_NilContext(t *testing.T) {
+func TestCallbackFramework_TriggerTool_Nil上下文(t *testing.T) {
 	fw := NewCallbackFramework()
 	var called int32
 	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {

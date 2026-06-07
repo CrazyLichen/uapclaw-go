@@ -19,9 +19,6 @@
 //	├── events.go             # 事件类型定义（LLM + Tool）
 //	├── framework.go          # CallbackFramework 核心
 //	├── logging.go            # 默认日志回调
-//	├── events_test.go        # 事件类型测试
-//	├── framework_test.go     # CallbackFramework 测试
-//	└── logging_test.go       # 日志回调测试
 //
 // 对应 Python 代码：openjiuwen/core/runner/callback/
 package callback

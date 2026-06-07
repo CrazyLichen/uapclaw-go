@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolRail 工具调用生命周期钩子接口（3.13 只定义，6.4-6.10 实现）。
 type ToolRail interface {
@@ -19,8 +19,6 @@ type ToolRail interface {
 	// OnToolException 工具调用异常时触发
 	OnToolException(ctx context.Context, callCtx *ToolCallContext, err error) error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // AddAbilityResult 添加能力的返回结果。
 //

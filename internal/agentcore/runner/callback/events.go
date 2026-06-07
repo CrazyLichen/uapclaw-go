@@ -7,6 +7,60 @@ import (
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// LLMCallEventData LLM 调用事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
+type LLMCallEventData struct {
+	// Event 事件类型
+	Event LLMCallEventType
+	// ModelName 模型名称
+	ModelName string
+	// ModelProvider 模型服务商
+	ModelProvider string
+	// Messages 请求消息列表（敏感模式下为 nil）
+	Messages any
+	// Tools 请求工具列表（敏感模式下为 nil）
+	Tools any
+	// Temperature 采样温度
+	Temperature *float64
+	// TopP Top-p 采样参数
+	TopP *float64
+	// MaxTokens 最大 token 数
+	MaxTokens *int
+	// IsStream 是否流式调用
+	IsStream bool
+	// Response LLM 响应（*AssistantMessage 或 *AssistantMessageChunk）
+	Response any
+	// Usage 用量元数据
+	Usage *llmschema.UsageMetadata
+	// Error 错误信息
+	Error error
+	// Extra 额外数据（如 model_config, model_client_config, session_id 等）
+	Extra map[string]any
+}
+
+// ToolCallEventData 工具调用事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: _ToolMeta.__call__ 中 trigger 调用时的 kwargs 参数集合
+type ToolCallEventData struct {
+	// Event 事件类型
+	Event ToolCallEventType
+	// ToolName 工具名称
+	ToolName string
+	// ToolID 工具 ID
+	ToolID string
+	// Inputs 调用输入参数
+	Inputs map[string]any
+	// Result 调用结果（Finished/InvokeOutput/StreamOutput 时有值）
+	Result map[string]any
+	// Error 错误信息（Error 事件时有值）
+	Error error
+	// Extra 额外数据
+	Extra map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LLMCallEventType LLM 调用事件类型。
@@ -67,60 +121,6 @@ const (
 	// ToolAuth 工具认证事件
 	ToolAuth ToolCallEventType = "_framework:tool_auth"
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// LLMCallEventData LLM 调用事件数据，回调函数接收此结构获取上下文信息。
-//
-// 对应 Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
-type LLMCallEventData struct {
-	// Event 事件类型
-	Event LLMCallEventType
-	// ModelName 模型名称
-	ModelName string
-	// ModelProvider 模型服务商
-	ModelProvider string
-	// Messages 请求消息列表（敏感模式下为 nil）
-	Messages any
-	// Tools 请求工具列表（敏感模式下为 nil）
-	Tools any
-	// Temperature 采样温度
-	Temperature *float64
-	// TopP Top-p 采样参数
-	TopP *float64
-	// MaxTokens 最大 token 数
-	MaxTokens *int
-	// IsStream 是否流式调用
-	IsStream bool
-	// Response LLM 响应（*AssistantMessage 或 *AssistantMessageChunk）
-	Response any
-	// Usage 用量元数据
-	Usage *llmschema.UsageMetadata
-	// Error 错误信息
-	Error error
-	// Extra 额外数据（如 model_config, model_client_config, session_id 等）
-	Extra map[string]any
-}
-
-// ToolCallEventData 工具调用事件数据，回调函数接收此结构获取上下文信息。
-//
-// 对应 Python: _ToolMeta.__call__ 中 trigger 调用时的 kwargs 参数集合
-type ToolCallEventData struct {
-	// Event 事件类型
-	Event ToolCallEventType
-	// ToolName 工具名称
-	ToolName string
-	// ToolID 工具 ID
-	ToolID string
-	// Inputs 调用输入参数
-	Inputs map[string]any
-	// Result 调用结果（Finished/InvokeOutput/StreamOutput 时有值）
-	Result map[string]any
-	// Error 错误信息（Error 事件时有值）
-	Error error
-	// Extra 额外数据
-	Extra map[string]any
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

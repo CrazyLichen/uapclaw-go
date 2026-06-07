@@ -68,7 +68,6 @@
 //	├── lifecycle_tool.go             # LifecycleTool 包装器（回调生命周期）
 //	├── struct_schema_extractor.go    # StructSchemaExtractor — struct tag→[]*Param 反射提取器
 //	├── schema_utils.go               # SchemaUtils — 参数校验/格式化/RemoveNoneValues/FormatWithSchemaMap
-//	├── tool_info.go                  # ToolCard.ToolInfo() — Param→JSON Schema 转换
 //	├── invoke_function.go            # InvokeFunction[I,O] — 泛型本地函数工具（Invoke 模式）
 //	├── stream_function.go            # StreamFunction[I,O] — 泛型本地函数工具（Stream 模式）
 //	├── map_function.go               # MapFunction — 弱类型 map 降级工具
@@ -89,12 +88,11 @@
 //	    ├── doc.go                        # MCP 包文档
 //	    ├── base.go                       # MCPTool + ExtractMCPToolResultContent + 类型重导出
 //	    ├── client.go                     # NewMcpClient 工厂函数
-//	    ├── base_test.go                  # 基础类型单元测试
-//	    ├── client_test.go                # 工厂函数测试 + fakeMcpClient
 //	    ├── types/
 //	    │   └── types.go                  # 共享类型（McpServerConfig/McpToolCard/McpClient 接口等）
 //	    └── client/
 //	        ├── doc.go                    # 客户端子包文档
+//	        ├── helpers.go                # 共享辅助函数（结果转换、JSON Schema 解析）
 //	        ├── sse_client.go             # SseClient 实现
 //	        ├── stdio_client.go           # StdioClient 实现
 //	        ├── streamable_http_client.go # StreamableHttpClient 实现

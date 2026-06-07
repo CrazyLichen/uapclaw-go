@@ -24,16 +24,16 @@ func newTestClientEmbed() *BaseClientEmbed {
 
 // ──── ValidateConfig 测试 ────
 
-// TestValidateConfig_Success 测试正常配置校验。
-func TestValidateConfig_Success(t *testing.T) {
+// TestValidateConfig_成功 测试正常配置校验。
+func TestValidateConfig_成功(t *testing.T) {
 	e := newTestClientEmbed()
 	if err := e.ValidateConfig(); err != nil {
 		t.Errorf("正常配置校验不应报错: %v", err)
 	}
 }
 
-// TestValidateConfig_MissingAPIKey 测试缺少 API Key。
-func TestValidateConfig_MissingAPIKey(t *testing.T) {
+// TestValidateConfig_APIKey缺失 测试缺少 API Key。
+func TestValidateConfig_APIKey缺失(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	cc := llmschema.NewModelClientConfig("OpenAI", "", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
@@ -48,8 +48,8 @@ func TestValidateConfig_MissingAPIKey(t *testing.T) {
 	}
 }
 
-// TestValidateConfig_MissingAPIBase 测试缺少 API Base。
-func TestValidateConfig_MissingAPIBase(t *testing.T) {
+// TestValidateConfig_APIBase缺失 测试缺少 API Base。
+func TestValidateConfig_APIBase缺失(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "",
 		llmschema.WithVerifySSL(false),
@@ -60,8 +60,8 @@ func TestValidateConfig_MissingAPIBase(t *testing.T) {
 	}
 }
 
-// TestValidateConfig_VerifySSLWithoutCert 测试 verify_ssl=true 但无 ssl_cert。
-func TestValidateConfig_VerifySSLWithoutCert(t *testing.T) {
+// TestValidateConfig_验证SSL无证书 测试 verify_ssl=true 但无 ssl_cert。
+func TestValidateConfig_验证SSL无证书(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(true),
@@ -74,8 +74,8 @@ func TestValidateConfig_VerifySSLWithoutCert(t *testing.T) {
 
 // ──── ConvertMessagesToDict 测试 ────
 
-// TestConvertMessagesToDict_Text 测试纯文本输入。
-func TestConvertMessagesToDict_Text(t *testing.T) {
+// TestConvertMessagesToDict_文本消息 测试纯文本输入。
+func TestConvertMessagesToDict_文本消息(t *testing.T) {
 	e := newTestClientEmbed()
 	p := NewTextMessagesParam("你好")
 
@@ -94,8 +94,8 @@ func TestConvertMessagesToDict_Text(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_Dicts 测试 dict 列表输入（直接透传）。
-func TestConvertMessagesToDict_Dicts(t *testing.T) {
+// TestConvertMessagesToDict_字典消息 测试 dict 列表输入（直接透传）。
+func TestConvertMessagesToDict_字典消息(t *testing.T) {
 	e := newTestClientEmbed()
 	dicts := []map[string]any{
 		{"role": "user", "content": "hello"},
@@ -112,8 +112,8 @@ func TestConvertMessagesToDict_Dicts(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_Messages 测试消息列表输入。
-func TestConvertMessagesToDict_Messages(t *testing.T) {
+// TestConvertMessagesToDict_消息对象 测试消息列表输入。
+func TestConvertMessagesToDict_消息对象(t *testing.T) {
 	e := newTestClientEmbed()
 	p := NewMessagesParam(
 		llmschema.NewUserMessage("你好"),
@@ -135,8 +135,8 @@ func TestConvertMessagesToDict_Messages(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_AssistantMessageWithToolCalls 测试 AssistantMessage 带 tool_calls。
-func TestConvertMessagesToDict_AssistantMessageWithToolCalls(t *testing.T) {
+// TestConvertMessagesToDict_带ToolCalls的助手消息 测试 AssistantMessage 带 tool_calls。
+func TestConvertMessagesToDict_带ToolCalls的助手消息(t *testing.T) {
 	e := newTestClientEmbed()
 	assistantMsg := llmschema.NewAssistantMessage("", llmschema.WithToolCalls([]*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "get_weather", `{"city":"Beijing"}`),
@@ -171,8 +171,8 @@ func TestConvertMessagesToDict_AssistantMessageWithToolCalls(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_ToolMessage 测试 ToolMessage 带 tool_call_id。
-func TestConvertMessagesToDict_ToolMessage(t *testing.T) {
+// TestConvertMessagesToDict_工具消息 测试 ToolMessage 带 tool_call_id。
+func TestConvertMessagesToDict_工具消息(t *testing.T) {
 	e := newTestClientEmbed()
 	toolMsg := llmschema.NewToolMessage("call_1", `{"temp": 25}`)
 	p := NewMessagesParam(toolMsg)
@@ -189,8 +189,8 @@ func TestConvertMessagesToDict_ToolMessage(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_Empty 测试空消息输入。
-func TestConvertMessagesToDict_Empty(t *testing.T) {
+// TestConvertMessagesToDict_空消息 测试空消息输入。
+func TestConvertMessagesToDict_空消息(t *testing.T) {
 	e := newTestClientEmbed()
 	p := MessagesParam{}
 
@@ -200,8 +200,8 @@ func TestConvertMessagesToDict_Empty(t *testing.T) {
 	}
 }
 
-// TestConvertMessagesToDict_ReasoningContent 测试 AssistantMessage 带 reasoning_content。
-func TestConvertMessagesToDict_ReasoningContent(t *testing.T) {
+// TestConvertMessagesToDict_推理内容 测试 AssistantMessage 带 reasoning_content。
+func TestConvertMessagesToDict_推理内容(t *testing.T) {
 	e := newTestClientEmbed()
 	assistantMsg := llmschema.NewAssistantMessage("答案", llmschema.WithReasoningContent("思考过程..."))
 	p := NewMessagesParam(assistantMsg)
@@ -226,8 +226,8 @@ func TestConvertToolsToDict_Nil(t *testing.T) {
 	}
 }
 
-// TestConvertToolsToDict_Empty 测试空工具列表。
-func TestConvertToolsToDict_Empty(t *testing.T) {
+// TestConvertToolsToDict_空 测试空工具列表。
+func TestConvertToolsToDict_空(t *testing.T) {
 	e := newTestClientEmbed()
 	result := e.ConvertToolsToDict([]commonschema.ToolInfoProvider{})
 	if result != nil {
@@ -264,8 +264,8 @@ func TestConvertToolsToDict_ToolInfo(t *testing.T) {
 
 // ──── BuildRequestParams 测试 ────
 
-// TestBuildRequestParams_Basic 测试基础参数构建。
-func TestBuildRequestParams_Basic(t *testing.T) {
+// TestBuildRequestParams_基本 测试基础参数构建。
+func TestBuildRequestParams_基本(t *testing.T) {
 	e := newTestClientEmbed()
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams()
@@ -285,8 +285,8 @@ func TestBuildRequestParams_Basic(t *testing.T) {
 	}
 }
 
-// TestBuildRequestParams_WithTools 测试带工具的参数构建。
-func TestBuildRequestParams_WithTools(t *testing.T) {
+// TestBuildRequestParams_带工具 测试带工具的参数构建。
+func TestBuildRequestParams_带工具(t *testing.T) {
 	e := newTestClientEmbed()
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams(
@@ -305,8 +305,8 @@ func TestBuildRequestParams_WithTools(t *testing.T) {
 	}
 }
 
-// TestBuildRequestParams_OverrideModel 测试方法参数覆盖 model_config。
-func TestBuildRequestParams_OverrideModel(t *testing.T) {
+// TestBuildRequestParams_覆盖模型 测试方法参数覆盖 model_config。
+func TestBuildRequestParams_覆盖模型(t *testing.T) {
 	e := newTestClientEmbed()
 	messagesDict := []map[string]any{{"role": "user", "content": "hello"}}
 	params := NewInvokeParams(WithInvokeModel("gpt-3.5-turbo"))
@@ -320,8 +320,8 @@ func TestBuildRequestParams_OverrideModel(t *testing.T) {
 	}
 }
 
-// TestBuildRequestParams_NoModel 测试无模型名称报错。
-func TestBuildRequestParams_NoModel(t *testing.T) {
+// TestBuildRequestParams_无模型 测试无模型名称报错。
+func TestBuildRequestParams_无模型(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig() // ModelName 为空
 	cc := llmschema.NewModelClientConfig("OpenAI", "key", "https://api.openai.com/v1",
 		llmschema.WithVerifySSL(false),
@@ -340,8 +340,8 @@ func TestBuildRequestParams_NoModel(t *testing.T) {
 	}
 }
 
-// TestBuildRequestParams_ExtraMerge 测试 Extra 合并。
-func TestBuildRequestParams_ExtraMerge(t *testing.T) {
+// TestBuildRequestParams_额外参数合并 测试 Extra 合并。
+func TestBuildRequestParams_额外参数合并(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(
 		llmschema.WithModelName("gpt-4"),
 		llmschema.WithRequestExtra(map[string]any{"top_k": 50}),
@@ -373,8 +373,8 @@ func TestBuildRequestParams_ExtraMerge(t *testing.T) {
 
 // ──── ExtractCostInfo 测试 ────
 
-// TestExtractCostInfo_SimpleCost 测试简单数值 cost。
-func TestExtractCostInfo_SimpleCost(t *testing.T) {
+// TestExtractCostInfo_简单费用 测试简单数值 cost。
+func TestExtractCostInfo_简单费用(t *testing.T) {
 	obj := map[string]any{"cost": 0.05}
 	inputCost, outputCost, totalCost := ExtractCostInfo(obj)
 	if totalCost != 0.05 {
@@ -385,8 +385,8 @@ func TestExtractCostInfo_SimpleCost(t *testing.T) {
 	}
 }
 
-// TestExtractCostInfo_CostObject 测试 cost 对象。
-func TestExtractCostInfo_CostObject(t *testing.T) {
+// TestExtractCostInfo_费用对象 测试 cost 对象。
+func TestExtractCostInfo_费用对象(t *testing.T) {
 	obj := map[string]any{
 		"cost": map[string]any{
 			"input_cost":  0.01,
@@ -406,8 +406,8 @@ func TestExtractCostInfo_CostObject(t *testing.T) {
 	}
 }
 
-// TestExtractCostInfo_CostDetails 测试 cost_details 兜底。
-func TestExtractCostInfo_CostDetails(t *testing.T) {
+// TestExtractCostInfo_费用详情 测试 cost_details 兜底。
+func TestExtractCostInfo_费用详情(t *testing.T) {
 	obj := map[string]any{
 		"cost_details": map[string]any{
 			"upstream_inference_prompt_cost":      0.02,
@@ -426,8 +426,8 @@ func TestExtractCostInfo_CostDetails(t *testing.T) {
 	}
 }
 
-// TestExtractCostInfo_NoCost 测试无费用信息。
-func TestExtractCostInfo_NoCost(t *testing.T) {
+// TestExtractCostInfo_无费用 测试无费用信息。
+func TestExtractCostInfo_无费用(t *testing.T) {
 	obj := map[string]any{}
 	inputCost, outputCost, totalCost := ExtractCostInfo(obj)
 	if inputCost != 0 || outputCost != 0 || totalCost != 0 {
@@ -437,8 +437,8 @@ func TestExtractCostInfo_NoCost(t *testing.T) {
 
 // ──── WithSkipValidate 测试 ────
 
-// TestWithSkipValidate_SkipValidation 测试 WithSkipValidate 跳过校验。
-func TestWithSkipValidate_SkipValidation(t *testing.T) {
+// TestWithSkipValidate_跳过校验 测试 WithSkipValidate 跳过校验。
+func TestWithSkipValidate_跳过校验(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	// api_key 和 api_base 均为空，正常情况应报错
 	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
@@ -461,8 +461,8 @@ func TestWithSkipValidate_SkipValidation(t *testing.T) {
 	}
 }
 
-// TestWithSkipValidate_ValidateConfigDirectly 测试 ValidateConfig 在 skipValidate 下的行为。
-func TestWithSkipValidate_ValidateConfigDirectly(t *testing.T) {
+// TestWithSkipValidate_直接校验配置 测试 ValidateConfig 在 skipValidate 下的行为。
+func TestWithSkipValidate_直接校验配置(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig()
 	cc := llmschema.NewModelClientConfig("intelli_router", "", "",
 		llmschema.WithVerifySSL(false),

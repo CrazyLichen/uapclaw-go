@@ -71,7 +71,7 @@ func TestNewStreamTool_最简用法(t *testing.T) {
 }
 
 // TestNewTool_WithToolInputParams 测试 WithToolInputParams 选项
-func TestNewTool_WithToolInputParams(t *testing.T) {
+func TestNewTool_带自定义输入参数(t *testing.T) {
 	customParams := []*schema.Param{
 		schema.NewStringParam("q", "查询", true),
 	}
@@ -85,7 +85,7 @@ func TestNewTool_WithToolInputParams(t *testing.T) {
 }
 
 // TestNewTool_WithToolCard 测试 WithToolCard 选项
-func TestNewTool_WithToolCard(t *testing.T) {
+func TestNewTool_带自定义卡片(t *testing.T) {
 	card := NewToolCard("my_tool", "自定义", []*schema.Param{
 		schema.NewStringParam("q", "查询", true),
 	}, nil)

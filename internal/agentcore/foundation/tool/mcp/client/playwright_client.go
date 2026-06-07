@@ -24,6 +24,11 @@ type PlaywrightClient struct {
 	delegate   types.McpClient // SSE 或 Stdio 客户端
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期检查：PlaywrightClient 实现 McpClient 接口
+var _ types.McpClient = (*PlaywrightClient)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPlaywrightClient 创建 Playwright 客户端。
@@ -35,9 +40,6 @@ func NewPlaywrightClient(config *types.McpServerConfig) *PlaywrightClient {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// Compile-time check: PlaywrightClient implements McpClient.
-var _ types.McpClient = (*PlaywrightClient)(nil)
 
 // Connect 根据传输类型创建委托客户端并建立连接。
 func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {

@@ -43,6 +43,11 @@ const (
 	mcpClientVersion = "1.0.0"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期检查：SseClient 实现 McpClient 接口
+var _ types.McpClient = (*SseClient)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSseClient 创建 SSE 客户端。
@@ -349,7 +354,4 @@ func (c *SseClient) Close() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// Compile-time check: SseClient implements McpClient.
-var _ types.McpClient = (*SseClient)(nil)
 

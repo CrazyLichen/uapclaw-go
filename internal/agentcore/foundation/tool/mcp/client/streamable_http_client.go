@@ -26,6 +26,11 @@ type StreamableHttpClient struct {
 	isConnected bool
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期检查：StreamableHttpClient 实现 McpClient 接口
+var _ types.McpClient = (*StreamableHttpClient)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamableHttpClient 创建 Streamable HTTP 客户端。
@@ -37,9 +42,6 @@ func NewStreamableHttpClient(config *types.McpServerConfig) *StreamableHttpClien
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// Compile-time check: StreamableHttpClient implements McpClient.
-var _ types.McpClient = (*StreamableHttpClient)(nil)
 
 // Connect 建立 Streamable HTTP 连接。
 func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {

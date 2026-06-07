@@ -11,7 +11,7 @@ import (
 	 zlib "compress/zlib"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseResponseParser HTTP 响应解析器接口。
 //
@@ -32,8 +32,6 @@ type BaseResponseDecompressor interface {
 	// Decompress 解压数据
 	Decompress(data []byte) ([]byte, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // JsonResponseParser JSON 响应解析器。
 //

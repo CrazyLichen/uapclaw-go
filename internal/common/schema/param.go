@@ -6,38 +6,6 @@ import (
 	"strings"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ParamType 参数类型枚举，对应 JSON Schema 的基本类型。
-//
-// 对应 Python: openjiuwen/core/common/schema/param.py (ParamType)
-type ParamType int
-
-const (
-	// ParamTypeString 字符串类型
-	ParamTypeString ParamType = iota
-	// ParamTypeBoolean 布尔类型
-	ParamTypeBoolean
-	// ParamTypeInteger 整数类型
-	ParamTypeInteger
-	// ParamTypeNumber 浮点数类型
-	ParamTypeNumber
-	// ParamTypeArray 数组类型
-	ParamTypeArray
-	// ParamTypeObject 对象类型
-	ParamTypeObject
-)
-
-// paramTypeStrings ParamType 枚举值对应的字符串表示，与 Python 端保持一致。
-var paramTypeStrings = [...]string{
-	"string",
-	"boolean",
-	"integer",
-	"number",
-	"array",
-	"object",
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Param 参数定义模型，支持嵌套结构。
@@ -67,7 +35,39 @@ type Param struct {
 	Properties []*Param `json:"properties,omitempty"`
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ParamType 参数类型枚举，对应 JSON Schema 的基本类型。
+//
+// 对应 Python: openjiuwen/core/common/schema/param.py (ParamType)
+type ParamType int
+
+const (
+	// ParamTypeString 字符串类型
+	ParamTypeString ParamType = iota
+	// ParamTypeBoolean 布尔类型
+	ParamTypeBoolean
+	// ParamTypeInteger 整数类型
+	ParamTypeInteger
+	// ParamTypeNumber 浮点数类型
+	ParamTypeNumber
+	// ParamTypeArray 数组类型
+	ParamTypeArray
+	// ParamTypeObject 对象类型
+	ParamTypeObject
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// paramTypeStrings ParamType 枚举值对应的字符串表示，与 Python 端保持一致。
+var paramTypeStrings = [...]string{
+	"string",
+	"boolean",
+	"integer",
+	"number",
+	"array",
+	"object",
+}
 
 // paramTypeMap 字符串到 ParamType 的映射，用于 JSON 反序列化。
 var paramTypeMap map[string]ParamType

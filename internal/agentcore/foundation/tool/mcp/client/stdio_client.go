@@ -28,6 +28,11 @@ type StdioClient struct {
 	mcpClient *mcpclient.Client
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期检查：StdioClient 实现 McpClient 接口
+var _ types.McpClient = (*StdioClient)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStdioClient 创建 Stdio 客户端。
@@ -307,9 +312,6 @@ func (c *StdioClient) Close() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 编译期检查：StdioClient 实现 McpClient 接口
-var _ types.McpClient = (*StdioClient)(nil)
 
 // extractStringParam 从 Params 中提取字符串参数。
 func extractStringParam(params map[string]any, key string) string {

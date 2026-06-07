@@ -147,7 +147,7 @@ func TestExtractOutputSchema_201优先级(t *testing.T) {
 }
 
 // TestExtractOutputSchema_NilOperation 测试 nil operation 返回 nil。
-func TestExtractOutputSchema_NilOperation(t *testing.T) {
+func TestExtractOutputSchema_Nil操作(t *testing.T) {
 	result := extractOutputSchema(nil)
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
@@ -558,7 +558,7 @@ func TestReplaceSchemaRefs_嵌套替换(t *testing.T) {
 }
 
 // TestReplaceSchemaRefs_非ComponentsRef 测试非 #/components/schemas/ 前缀不替换。
-func TestReplaceSchemaRefs_非ComponentsRef(t *testing.T) {
+func TestReplaceSchemaRefs_非Components引用(t *testing.T) {
 	m := map[string]any{
 		"$ref": "#/other/path",
 	}

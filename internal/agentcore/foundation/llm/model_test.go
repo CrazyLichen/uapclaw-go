@@ -83,16 +83,16 @@ func (s *mockSession) GetSessionID() string { return s.id }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestNewModel_NilConfig 测试 nil 配置返回错误
-func TestNewModel_NilConfig(t *testing.T) {
+// TestNewModel_空配置 测试 nil 配置返回错误
+func TestNewModel_空配置(t *testing.T) {
 	_, err := NewModel(nil, nil)
 	if err == nil {
 		t.Error("nil 配置应返回错误")
 	}
 }
 
-// TestNewModel_WithCallbackFramework 测试自定义回调框架
-func TestNewModel_WithCallbackFramework(t *testing.T) {
+// TestNewModel_带回调框架 测试自定义回调框架
+func TestNewModel_带回调框架(t *testing.T) {
 	customFW := callback.NewCallbackFramework()
 	recorder := newEventRecorder()
 	customFW.OnLLM(callback.LLMInvokeInput, recorder.record)
@@ -114,8 +114,8 @@ func TestNewModel_WithCallbackFramework(t *testing.T) {
 	}
 }
 
-// TestModel_Invoke_Callbacks 测试 Invoke 触发回调事件
-func TestModel_Invoke_Callbacks(t *testing.T) {
+// TestModel_Invoke_回调事件 测试 Invoke 触发回调事件
+func TestModel_Invoke_回调事件(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var invokeInputCalled int32
 	var invokeOutputCalled int32
@@ -160,8 +160,8 @@ func TestModel_Invoke_Callbacks(t *testing.T) {
 	}
 }
 
-// TestModel_Invoke_Error_Callbacks 测试 Invoke 错误触发 callback.LLMCallError 回调
-func TestModel_Invoke_Error_Callbacks(t *testing.T) {
+// TestModel_Invoke_错误回调 测试 Invoke 错误触发 callback.LLMCallError 回调
+func TestModel_Invoke_错误回调(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var errorCalled int32
 
@@ -191,8 +191,8 @@ func TestModel_Invoke_Error_Callbacks(t *testing.T) {
 	}
 }
 
-// TestModel_Stream_Callbacks 测试 Stream 触发回调事件
-func TestModel_Stream_Callbacks(t *testing.T) {
+// TestModel_Stream_回调事件 测试 Stream 触发回调事件
+func TestModel_Stream_回调事件(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var streamInputCalled int32
 
@@ -236,8 +236,8 @@ func TestModel_Stream_Callbacks(t *testing.T) {
 	}
 }
 
-// TestModel_BuildKVCacheInvokeKwargs 测试 KV Cache 参数构建
-func TestModel_BuildKVCacheInvokeKwargs(t *testing.T) {
+// TestModel_BuildKVCacheInvokeKwargs_参数构建 测试 KV Cache 参数构建
+func TestModel_BuildKVCacheInvokeKwargs_参数构建(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
@@ -271,8 +271,8 @@ func TestModel_BuildKVCacheInvokeKwargs(t *testing.T) {
 	}
 }
 
-// TestModel_GetClient 测试获取底层客户端
-func TestModel_GetClient(t *testing.T) {
+// TestModel_GetClient_获取底层客户端 测试获取底层客户端
+func TestModel_GetClient_获取底层客户端(t *testing.T) {
 	mockClient := &mockModelClient{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
@@ -287,8 +287,8 @@ func TestModel_GetClient(t *testing.T) {
 	}
 }
 
-// TestModel_resolveModelName 测试模型名称解析
-func TestModel_resolveModelName(t *testing.T) {
+// TestModel_resolveModelName_模型名称解析 测试模型名称解析
+func TestModel_resolveModelName_模型名称解析(t *testing.T) {
 	model := &Model{
 		ModelConfig:  llmschema.NewModelRequestConfig(llmschema.WithModelName("default-model")),
 		ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
@@ -308,8 +308,8 @@ func TestModel_resolveModelName(t *testing.T) {
 
 // ──────────────────────────── 补充测试 ────────────────────────────
 
-// TestNewModel_NilConfig_ReturnsCorrectError 验证 nil 配置的错误码
-func TestNewModel_NilConfig_ReturnsCorrectError(t *testing.T) {
+// TestNewModel_空配置_返回正确错误 验证 nil 配置的错误码
+func TestNewModel_空配置_返回正确错误(t *testing.T) {
 	_, err := NewModel(nil, nil)
 	if err == nil {
 		t.Fatal("nil 配置应返回错误")
@@ -320,8 +320,8 @@ func TestNewModel_NilConfig_ReturnsCorrectError(t *testing.T) {
 	}
 }
 
-// TestModel_Release 测试 Release 委托给底层客户端
-func TestModel_Release(t *testing.T) {
+// TestModel_Release_委托测试 测试 Release 委托给底层客户端
+func TestModel_Release_委托测试(t *testing.T) {
 	tests := []struct {
 		name     string
 		result   bool
@@ -372,8 +372,8 @@ func TestModel_Release(t *testing.T) {
 	}
 }
 
-// TestModel_SupportsKVCacheRelease 测试 KV Cache 释放支持检查
-func TestModel_SupportsKVCacheRelease(t *testing.T) {
+// TestModel_SupportsKVCacheRelease_KV缓存释放支持 测试 KV Cache 释放支持检查
+func TestModel_SupportsKVCacheRelease_KV缓存释放支持(t *testing.T) {
 	t.Run("支持KV Cache Release", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
@@ -416,8 +416,8 @@ func TestModel_SupportsKVCacheRelease(t *testing.T) {
 	})
 }
 
-// TestModel_GenerateImage 测试图片生成委托
-func TestModel_GenerateImage(t *testing.T) {
+// TestModel_GenerateImage_图片生成委托 测试图片生成委托
+func TestModel_GenerateImage_图片生成委托(t *testing.T) {
 	expectedResp := &llmschema.ImageGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
@@ -435,8 +435,8 @@ func TestModel_GenerateImage(t *testing.T) {
 	}
 }
 
-// TestModel_GenerateSpeech 测试语音生成委托
-func TestModel_GenerateSpeech(t *testing.T) {
+// TestModel_GenerateSpeech_语音生成委托 测试语音生成委托
+func TestModel_GenerateSpeech_语音生成委托(t *testing.T) {
 	expectedResp := &llmschema.AudioGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
@@ -454,8 +454,8 @@ func TestModel_GenerateSpeech(t *testing.T) {
 	}
 }
 
-// TestModel_GenerateVideo 测试视频生成委托
-func TestModel_GenerateVideo(t *testing.T) {
+// TestModel_GenerateVideo_视频生成委托 测试视频生成委托
+func TestModel_GenerateVideo_视频生成委托(t *testing.T) {
 	expectedResp := &llmschema.VideoGenerationResponse{}
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
@@ -473,8 +473,8 @@ func TestModel_GenerateVideo(t *testing.T) {
 	}
 }
 
-// TestModel_Format 测试 fmt.Formatter 接口实现
-func TestModel_Format(t *testing.T) {
+// TestModel_Format_格式化输出 测试 fmt.Formatter 接口实现
+func TestModel_Format_格式化输出(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4")),
 		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
@@ -489,8 +489,8 @@ func TestModel_Format(t *testing.T) {
 	}
 }
 
-// TestModel_Format_NilModelConfig 测试 Format 在 ModelConfig 为 nil 时
-func TestModel_Format_NilModelConfig(t *testing.T) {
+// TestModel_Format_模型配置为空 测试 Format 在 ModelConfig 为 nil 时
+func TestModel_Format_模型配置为空(t *testing.T) {
 	model := &Model{
 		ModelConfig:       nil,
 		ClientConfig:      llmschema.NewModelClientConfig("TestProvider", "key", "http://localhost"),
@@ -505,8 +505,8 @@ func TestModel_Format_NilModelConfig(t *testing.T) {
 	}
 }
 
-// TestModel_Invoke_WithUsageMetadata 测试 Invoke 回调中包含 UsageMetadata
-func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
+// TestModel_Invoke_带用量元数据 测试 Invoke 回调中包含 UsageMetadata
+func TestModel_Invoke_带用量元数据(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var outputData *callback.LLMCallEventData
 
@@ -540,8 +540,8 @@ func TestModel_Invoke_WithUsageMetadata(t *testing.T) {
 	}
 }
 
-// TestModel_Invoke_NoUsageMetadata 测试 Invoke 回调中无 UsageMetadata
-func TestModel_Invoke_NoUsageMetadata(t *testing.T) {
+// TestModel_Invoke_无用量元数据 测试 Invoke 回调中无 UsageMetadata
+func TestModel_Invoke_无用量元数据(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var outputData *callback.LLMCallEventData
 
@@ -571,8 +571,8 @@ func TestModel_Invoke_NoUsageMetadata(t *testing.T) {
 	}
 }
 
-// TestModel_Stream_Error 测试 Stream 错误触发 callback.LLMCallError
-func TestModel_Stream_Error(t *testing.T) {
+// TestModel_Stream_错误 测试 Stream 错误触发 callback.LLMCallError
+func TestModel_Stream_错误(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var errorCalled int32
 
@@ -605,8 +605,8 @@ func TestModel_Stream_Error(t *testing.T) {
 	}
 }
 
-// TestModel_Stream_OutputCallback 测试 Stream 完成后触发 callback.LLMStreamOutput
-func TestModel_Stream_OutputCallback(t *testing.T) {
+// TestModel_Stream_输出回调 测试 Stream 完成后触发 callback.LLMStreamOutput
+func TestModel_Stream_输出回调(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var outputCalled int32
 	var outputDataMu sync.Mutex
@@ -669,8 +669,8 @@ func TestModel_Stream_OutputCallback(t *testing.T) {
 	}
 }
 
-// TestModel_resolveModelName_NilModelConfig 测试 ModelConfig 为 nil 时
-func TestModel_resolveModelName_NilModelConfig(t *testing.T) {
+// TestModel_resolveModelName_模型配置为空 测试 ModelConfig 为 nil 时
+func TestModel_resolveModelName_模型配置为空(t *testing.T) {
 	model := &Model{
 		ModelConfig:  nil,
 		ClientConfig: llmschema.NewModelClientConfig("test", "key", "http://localhost"),
@@ -682,8 +682,8 @@ func TestModel_resolveModelName_NilModelConfig(t *testing.T) {
 	}
 }
 
-// TestModel_resolveStreamModelName 测试流式模型名称解析
-func TestModel_resolveStreamModelName(t *testing.T) {
+// TestModel_resolveStreamModelName_流式模型名称解析 测试流式模型名称解析
+func TestModel_resolveStreamModelName_流式模型名称解析(t *testing.T) {
 	t.Run("参数优先", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:  llmschema.NewModelRequestConfig(llmschema.WithModelName("default-model")),
@@ -718,8 +718,8 @@ func TestModel_resolveStreamModelName(t *testing.T) {
 	})
 }
 
-// TestModel_Invoke_ExtraData 测试 Invoke 回调中的 Extra 数据
-func TestModel_Invoke_ExtraData(t *testing.T) {
+// TestModel_Invoke_额外数据 测试 Invoke 回调中的 Extra 数据
+func TestModel_Invoke_额外数据(t *testing.T) {
 	fw := callback.NewCallbackFramework()
 	var inputData *callback.LLMCallEventData
 
@@ -754,8 +754,8 @@ func TestModel_Invoke_ExtraData(t *testing.T) {
 	}
 }
 
-// TestModel_BuildKVCacheInvokeKwargs_SessionOnly 测试仅 session 不启用 cache
-func TestModel_BuildKVCacheInvokeKwargs_SessionOnly(t *testing.T) {
+// TestModel_BuildKVCacheInvokeKwargs_仅Session 测试仅 session 不启用 cache
+func TestModel_BuildKVCacheInvokeKwargs_仅Session(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),

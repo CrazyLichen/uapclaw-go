@@ -8,7 +8,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-func TestLoggingLLMCallback_AllFields(t *testing.T) {
+func TestLoggingLLMCallback_所有字段(t *testing.T) {
 	temp := 0.8
 	topP := 0.95
 	maxTokens := 4096

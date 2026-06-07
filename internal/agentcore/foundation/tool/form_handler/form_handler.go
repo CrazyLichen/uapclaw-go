@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // FormHandler 表单数据处理器接口。
 //
@@ -27,8 +27,6 @@ type FormHandler interface {
 	//   - value: 表单字段值
 	Handle(ctx context.Context, writer *multipart.Writer, formName string, value any) error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // DefaultFormHandler 默认表单处理器，将值转为字符串写入 multipart Writer。
 //

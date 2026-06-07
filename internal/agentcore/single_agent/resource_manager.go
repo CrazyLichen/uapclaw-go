@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ResourceManager 实例获取接口，AbilityManager 通过此接口获取 Tool/Workflow/Agent 实例。
 // 具体实现由领域六/九提供，3.13 阶段使用 NoopResourceManager。
@@ -52,8 +52,6 @@ type Session interface {
 	// UpdateState 更新会话状态
 	UpdateState(state map[string]any)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ResourceOptions 实例获取选项。
 type ResourceOptions struct {

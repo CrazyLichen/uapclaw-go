@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionLike 会话最小接口，用于 BuildKVCacheInvokeKwargs 获取 session_id。
 //
@@ -19,8 +19,6 @@ type SessionLike interface {
 	// GetSessionID 返回会话唯一标识。
 	GetSessionID() string
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // Model 统一 LLM 调用入口（门面模式）。
 //

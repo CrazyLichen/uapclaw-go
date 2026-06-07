@@ -10,7 +10,17 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 类型重导出 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// MCPTool MCP 协议工具，通过 McpClient 调用远程 MCP 服务器工具。
+//
+// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
+type MCPTool struct {
+	card      *McpToolCard
+	mcpClient McpClient
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
 //
 // 以下类型定义在 mcp/types 子包中，此处通过类型别名重导出，
 // 保持 mcp 包的公共 API 向后兼容。
@@ -42,11 +52,15 @@ type McpServerConfigOption = types.McpServerConfigOption
 // McpToolCardOption MCP 工具卡片选项函数。
 type McpToolCardOption = types.McpToolCardOption
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // 重导出常量
 const (
 	// NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。
 	NoTimeout = types.NoTimeout
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 重导出函数
 var (
@@ -71,16 +85,6 @@ var (
 	// NewMcpToolCard 创建 MCP 工具卡片。
 	NewMcpToolCard = types.NewMcpToolCard
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// MCPTool MCP 协议工具，通过 McpClient 调用远程 MCP 服务器工具。
-//
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
-type MCPTool struct {
-	card      *McpToolCard
-	mcpClient McpClient
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

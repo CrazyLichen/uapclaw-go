@@ -8,7 +8,7 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func TestNoopResourceManager_GetTool(t *testing.T) {
+func TestNoopResourceManager_获取工具(t *testing.T) {
 	mgr := &NoopResourceManager{}
 	_, err := mgr.GetTool("test_tool")
 	if err == nil {
@@ -23,7 +23,7 @@ func TestNoopResourceManager_GetTool(t *testing.T) {
 	}
 }
 
-func TestNoopResourceManager_GetWorkflow(t *testing.T) {
+func TestNoopResourceManager_获取工作流(t *testing.T) {
 	mgr := &NoopResourceManager{}
 	_, err := mgr.GetWorkflow("test_wf")
 	if err == nil {
@@ -31,7 +31,7 @@ func TestNoopResourceManager_GetWorkflow(t *testing.T) {
 	}
 }
 
-func TestNoopResourceManager_GetAgent(t *testing.T) {
+func TestNoopResourceManager_获取Agent(t *testing.T) {
 	mgr := &NoopResourceManager{}
 	_, err := mgr.GetAgent("test_agent")
 	if err == nil {
@@ -39,7 +39,7 @@ func TestNoopResourceManager_GetAgent(t *testing.T) {
 	}
 }
 
-func TestNoopResourceManager_GetMcpToolInfos(t *testing.T) {
+func TestNoopResourceManager_获取MCP工具信息(t *testing.T) {
 	mgr := &NoopResourceManager{}
 	infos, err := mgr.GetMcpToolInfos("server1")
 	if err != nil {
@@ -50,7 +50,7 @@ func TestNoopResourceManager_GetMcpToolInfos(t *testing.T) {
 	}
 }
 
-func TestNewResourceOptions(t *testing.T) {
+func TestNewResourceOptions_资源选项(t *testing.T) {
 	opts := NewResourceOptions(
 		WithResourceTag("my_tag"),
 	)

@@ -82,7 +82,7 @@ func NewOpenApiClient(config *types.McpServerConfig) *OpenApiClient {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// Compile-time check: OpenApiClient implements McpClient.
+// 编译期检查：OpenApiClient 实现 McpClient 接口
 var _ types.McpClient = (*OpenApiClient)(nil)
 
 // Connect 读取 OpenAPI 文件并解析工具列表。
