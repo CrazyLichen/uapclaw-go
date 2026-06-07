@@ -2,19 +2,26 @@ package client
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PlaywrightClient Playwright 浏览器工具的 MCP 客户端（SSE/stdio 双传输）。
+// PlaywrightClient Playwright 浏览器工具的 MCP 客户端（SSE/Stdio 双传输）。
+//
+// 根据 ServerPath 类型委托给 SseClient 或 StdioClient：
+//   - http:// 或 https:// 开头 → SseClient
+//   - 其他 → StdioClient
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/client/playwright_client.py (PlaywrightClient)
 type PlaywrightClient struct {
-	config      *types.McpServerConfig
-	serverName  string
-	isConnected bool
+	config     *types.McpServerConfig
+	serverName string
+	delegate   types.McpClient // SSE 或 Stdio 客户端
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -32,41 +39,95 @@ func NewPlaywrightClient(config *types.McpServerConfig) *PlaywrightClient {
 // Compile-time check: PlaywrightClient implements McpClient.
 var _ types.McpClient = (*PlaywrightClient)(nil)
 
-func (c *PlaywrightClient) Connect(_ context.Context, _ ...types.ConnectOption) error {
-	// TODO: 实现 Playwright 连接
+// Connect 根据传输类型创建委托客户端并建立连接。
+func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
+	if strings.HasPrefix(c.config.ServerPath, "http://") || strings.HasPrefix(c.config.ServerPath, "https://") {
+		logger.Info(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Str("server_path", c.config.ServerPath).
+			Msg("Playwright 选择 SSE 传输")
+		c.delegate = NewSseClient(c.config)
+	} else {
+		logger.Info(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Str("server_path", c.config.ServerPath).
+			Msg("Playwright 选择 Stdio 传输")
+		c.delegate = NewStdioClient(c.config)
+	}
+
+	if err := c.delegate.Connect(ctx, opts...); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Err(err).
+			Msg("Playwright 连接失败")
+		return err
+	}
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("server_name", c.serverName).
+		Msg("Playwright 客户端连接成功")
 	return nil
 }
 
-func (c *PlaywrightClient) Disconnect(_ context.Context) error {
-	// TODO: 实现 Playwright 断开连接
+// Disconnect 断开 Playwright 连接（委托给 delegate）。
+func (c *PlaywrightClient) Disconnect(ctx context.Context) error {
+	if c.delegate == nil {
+		return nil
+	}
+	if err := c.delegate.Disconnect(ctx); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Err(err).
+			Msg("Playwright 断开连接失败")
+		return err
+	}
+	logger.Info(logger.ComponentAgentCore).
+		Str("server_name", c.serverName).
+		Msg("Playwright 客户端已断开连接")
 	return nil
 }
 
-func (c *PlaywrightClient) ListTools(_ context.Context) ([]*types.McpToolCard, error) {
-	// TODO: 实现 Playwright 列出工具
-	return nil, nil
+// ListTools 列出 Playwright 服务器提供的工具（委托给 delegate）。
+func (c *PlaywrightClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
+	if c.delegate == nil {
+		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+	}
+	return c.delegate.ListTools(ctx)
 }
 
-func (c *PlaywrightClient) CallTool(_ context.Context, _ string, _ map[string]any) (any, error) {
-	// TODO: 实现 Playwright 调用工具
-	return nil, nil
+// CallTool 调用指定工具（委托给 delegate）。
+func (c *PlaywrightClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
+	if c.delegate == nil {
+		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+	}
+	return c.delegate.CallTool(ctx, toolName, arguments)
 }
 
-func (c *PlaywrightClient) GetToolInfo(_ context.Context, _ string) (*types.McpToolCard, error) {
-	// TODO: 实现 Playwright 获取工具信息
-	return nil, nil
+// GetToolInfo 获取指定工具信息（委托给 delegate）。
+func (c *PlaywrightClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	if c.delegate == nil {
+		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+	}
+	return c.delegate.GetToolInfo(ctx, toolName)
 }
 
-func (c *PlaywrightClient) ListResources(_ context.Context) ([]any, error) {
-	// TODO: 实现 Playwright 列出资源
-	return nil, nil
+// ListResources 列出资源（委托给 delegate）。
+func (c *PlaywrightClient) ListResources(ctx context.Context) ([]any, error) {
+	if c.delegate == nil {
+		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+	}
+	return c.delegate.ListResources(ctx)
 }
 
-func (c *PlaywrightClient) ReadResource(_ context.Context, _ string) (any, error) {
-	// TODO: 实现 Playwright 读取资源
-	return nil, nil
+// ReadResource 读取资源（委托给 delegate）。
+func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) (any, error) {
+	if c.delegate == nil {
+		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+	}
+	return c.delegate.ReadResource(ctx, uri)
 }
 
+// Close 关闭客户端（等价于 Disconnect）。
 func (c *PlaywrightClient) Close() error {
 	return c.Disconnect(context.Background())
 }
