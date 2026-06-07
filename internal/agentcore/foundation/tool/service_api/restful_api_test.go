@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -565,13 +566,64 @@ func TestRestfulApi_Invoke_响应体超限(t *testing.T) {
 	}
 }
 
-// TestRestfulApi_Invoke_Form参数Fallback 测试 form 参数 fallback 到 body
-func TestRestfulApi_Invoke_Form参数Fallback(t *testing.T) {
+// TestRestfulApi_Invoke_Form参数Multipart 测试 form 参数构建 multipart/form-data 请求
+func TestRestfulApi_Invoke_Form参数Multipart(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		// 验证 Content-Type 为 multipart/form-data
+		contentType := r.Header.Get("Content-Type")
+		if !strings.HasPrefix(contentType, "multipart/form-data") {
+			t.Errorf("Content-Type 应以 multipart/form-data 开头，实际: %s", contentType)
+		}
+		// 解析 multipart form
+		err := r.ParseMultipartForm(10 << 20)
+		if err != nil {
+			t.Fatalf("解析 multipart form 失败: %v", err)
+		}
+		// 验证 form 字段
+		if r.FormValue("file") != "data.txt" {
+			t.Errorf("form file: 期望 data.txt，实际 %s", r.FormValue("file"))
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(body)
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+	}))
+	defer server.Close()
+
+	inputSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"file": map[string]any{"type": "string", "location": "form"},
+		},
+	}
+	card, _ := NewRestfulApiCard("test-api", "测试API", server.URL+"/upload", "POST", inputSchema)
+	api, _ := NewRestfulApi(card)
+
+	result, err := api.Invoke(context.Background(), map[string]any{"file": "data.txt"})
+	if err != nil {
+		t.Fatalf("Invoke 失败: %v", err)
+	}
+	code, _ := result["code"].(int)
+	if code != 200 {
+		t.Errorf("code: 期望 200，实际 %d", code)
+	}
+}
+
+// TestRestfulApi_Invoke_Form参数含BodyParams 测试 form 参数 + body 参数组合
+func TestRestfulApi_Invoke_Form参数含BodyParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		contentType := r.Header.Get("Content-Type")
+		if !strings.HasPrefix(contentType, "multipart/form-data") {
+			t.Errorf("Content-Type 应以 multipart/form-data 开头，实际: %s", contentType)
+		}
+		err := r.ParseMultipartForm(10 << 20)
+		if err != nil {
+			t.Fatalf("解析 multipart form 失败: %v", err)
+		}
+		// 验证 form 字段
+		if r.FormValue("file") != "data.txt" {
+			t.Errorf("form file: 期望 data.txt，实际 %s", r.FormValue("file"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 	}))
 	defer server.Close()
 
@@ -579,7 +631,7 @@ func TestRestfulApi_Invoke_Form参数Fallback(t *testing.T) {
 		"type": "object",
 		"properties": map[string]any{
 			"file":    map[string]any{"type": "string", "location": "form"},
-			"comment": map[string]any{"type": "string"}, // body
+			"comment": map[string]any{"type": "string"}, // body 参数
 		},
 	}
 	card, _ := NewRestfulApiCard("test-api", "测试API", server.URL+"/upload", "POST", inputSchema)
@@ -729,5 +781,143 @@ func TestRestfulApi_Invoke_自定义Header默认值(t *testing.T) {
 	_, err := api.Invoke(context.Background(), map[string]any{})
 	if err != nil {
 		t.Fatalf("Invoke 失败: %v", err)
+	}
+}
+
+// TestPrepareHeadersForFormData_移除ContentType 测试手动 Content-Type 被移除
+func TestPrepareHeadersForFormData_移除ContentType(t *testing.T) {
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Authorization": "Bearer token",
+	}
+	result := prepareHeadersForFormData(headers)
+	if _, ok := result["Content-Type"]; ok {
+		t.Error("Content-Type 应被移除")
+	}
+	if result["Authorization"] != "Bearer token" {
+		t.Error("Authorization 应保留")
+	}
+}
+
+// TestPrepareHeadersForFormData_保留其他头 测试非 Content-Type 头保留
+func TestPrepareHeadersForFormData_保留其他头(t *testing.T) {
+	headers := map[string]string{
+		"X-Custom": "value",
+		"Accept":   "application/json",
+	}
+	result := prepareHeadersForFormData(headers)
+	if len(result) != 2 {
+		t.Errorf("期望 2 个头，实际 %d", len(result))
+	}
+	if result["X-Custom"] != "value" {
+		t.Error("X-Custom 应保留")
+	}
+	if result["Accept"] != "application/json" {
+		t.Error("Accept 应保留")
+	}
+}
+
+// TestPrepareHeadersForFormData_空头 测试空输入
+func TestPrepareHeadersForFormData_空头(t *testing.T) {
+	result := prepareHeadersForFormData(nil)
+	if result == nil {
+		t.Error("不应返回 nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("期望空 map，实际 %d 个元素", len(result))
+	}
+
+	result2 := prepareHeadersForFormData(map[string]string{})
+	if len(result2) != 0 {
+		t.Errorf("期望空 map，实际 %d 个元素", len(result2))
+	}
+}
+
+// TestPrepareHeadersForFormData_大小写不敏感 测试 Content-Type 大小写不敏感
+func TestPrepareHeadersForFormData_大小写不敏感(t *testing.T) {
+	headers := map[string]string{
+		"content-type": "text/plain",
+	}
+	result := prepareHeadersForFormData(headers)
+	if len(result) != 0 {
+		t.Errorf("content-type（任何大小写）都应被移除，实际 %d 个元素", len(result))
+	}
+}
+
+// TestProcessFormData_默认处理器 测试 processFormData 使用默认处理器
+func TestProcessFormData_默认处理器(t *testing.T) {
+	card, _ := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/upload", "POST", nil)
+	api, _ := NewRestfulApi(card)
+
+	formParams := map[string]any{
+		"file": map[string]any{
+			"form_handler_type": "default",
+			"value":             "data.txt",
+		},
+	}
+	bodyParams := map[string]any{}
+
+	bodyBytes, contentType, err := api.processFormData(context.Background(), formParams, bodyParams)
+	if err != nil {
+		t.Fatalf("processFormData 失败: %v", err)
+	}
+	if len(bodyBytes) == 0 {
+		t.Error("bodyBytes 不应为空")
+	}
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		t.Errorf("contentType 应以 multipart/form-data 开头，实际: %s", contentType)
+	}
+}
+
+// TestProcessFormData_BodyParams追加 测试 body_params 以 application/json 追加
+func TestProcessFormData_BodyParams追加(t *testing.T) {
+	card, _ := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/upload", "POST", nil)
+	api, _ := NewRestfulApi(card)
+
+	formParams := map[string]any{
+		"file": map[string]any{
+			"form_handler_type": "default",
+			"value":             "data.txt",
+		},
+	}
+	bodyParams := map[string]any{
+		"metadata": map[string]any{"key": "value"},
+	}
+
+	bodyBytes, _, err := api.processFormData(context.Background(), formParams, bodyParams)
+	if err != nil {
+		t.Fatalf("processFormData 失败: %v", err)
+	}
+	bodyStr := string(bodyBytes)
+	if !strings.Contains(bodyStr, "metadata") {
+		t.Error("输出应包含 body 参数 metadata")
+	}
+	if !strings.Contains(bodyStr, "application/json") {
+		t.Error("body 参数应以 application/json content-type 写入")
+	}
+}
+
+// TestProcessFormData_Nil值跳过 测试 body_params 中 nil 值不写入
+func TestProcessFormData_Nil值跳过(t *testing.T) {
+	card, _ := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/upload", "POST", nil)
+	api, _ := NewRestfulApi(card)
+
+	formParams := map[string]any{
+		"file": map[string]any{
+			"form_handler_type": "default",
+			"value":             "data.txt",
+		},
+	}
+	bodyParams := map[string]any{
+		"nil_field": nil,
+	}
+
+	bodyBytes, _, err := api.processFormData(context.Background(), formParams, bodyParams)
+	if err != nil {
+		t.Fatalf("processFormData 失败: %v", err)
+	}
+	bodyStr := string(bodyBytes)
+	if strings.Contains(bodyStr, "nil_field") {
+		t.Error("nil body 参数不应写入")
 	}
 }
