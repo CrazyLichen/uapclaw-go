@@ -284,7 +284,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 3.10 | ✅ | Form Handler | 表单数据处理 | `openjiuwen/core/foundation/tool/form_handler/` |
 | 3.11 | ✅ | ToolAuth | 工具认证配置与结果；✅ **产出**：`common/security/` 包（ssl_utils.go — GetSSLConfig + CreateStrictTLSConfig + secureLoadCert）、`tool/auth/` 包（auth.go — ToolAuthConfig + ToolAuthResult；auth_callback.go — AuthType + AuthStrategy + SSLAuthStrategy + HeaderQueryAuthStrategy + AuthStrategyRegistry + RegisterAuthCallback + HeaderQueryProvider）；CallbackFramework 签名改造（回调返回 any，Trigger 返回 []any）；RestfulApi/SseClient/StreamableHttpClient 回填 TOOL_AUTH 回调触发 | `openjiuwen/core/foundation/tool/auth/auth.py` |
 | 3.12 | ✅ | Tool 工具函数 | Schema 转换等辅助（SchemaUtils 已在 3.3 中一并实现） | `openjiuwen/core/foundation/tool/utils/` |
-| 3.13 | ☐ | AbilityManager | 工具/Workflow/Agent 注册与调度，并行执行，JSON 参数修复 | `openjiuwen/core/single_agent/ability_manager.py` |
+| 3.13 | ✅ | AbilityManager | 工具/Workflow/Agent 注册与调度，并行执行，JSON 参数修复 | `openjiuwen/core/single_agent/ability_manager.py` |
 
 **验证点**：✅ 注册 Go 函数为 Tool，LLM 可通过 function calling 调用
 
