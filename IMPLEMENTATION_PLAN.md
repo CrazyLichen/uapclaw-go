@@ -297,7 +297,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | 4.1 | ✅ | BaseKVStore 接口 | `Set/Get/Delete/GetByPrefix/BatchDelete/Pipeline` | `openjiuwen/core/foundation/store/base_kv_store.py` |
-| 4.2 | ☐ | InMemoryKVStore | 内存实现 | `openjiuwen/core/foundation/store/kv/in_memory_kv_store.py` |
+| 4.2 | ✅ | InMemoryKVStore | 内存实现 | `openjiuwen/core/foundation/store/kv/in_memory_kv_store.py` |
 | 4.3 | ☐ | ShelveStore | 文件存储 | `openjiuwen/core/foundation/store/kv/shelve_store.py` |
 | 4.4 | ☐ | DbBasedKVStore | 数据库 KV 存储 | `openjiuwen/core/foundation/store/kv/db_based_kv_store.py` |
 | 4.5 | ☐ | RedisStore | Redis 实现 | `openjiuwen/extensions/store/redis_store.py` |
