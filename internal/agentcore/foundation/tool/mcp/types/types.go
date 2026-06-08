@@ -143,13 +143,10 @@ func NewMcpServerConfig(name, serverPath, clientType string, opts ...McpServerCo
 		clientType = "sse"
 	}
 	c := &McpServerConfig{
-		ServerID:        strings.ReplaceAll(uuid.New().String(), "-", ""),
-		ServerName:      name,
-		ServerPath:      serverPath,
-		ClientType:      clientType,
-		Params:          make(map[string]any),
-		AuthHeaders:     make(map[string]string),
-		AuthQueryParams: make(map[string]string),
+		ServerID:   strings.ReplaceAll(uuid.New().String(), "-", ""),
+		ServerName: name,
+		ServerPath: serverPath,
+		ClientType: clientType,
 	}
 	for _, opt := range opts {
 		opt(c)

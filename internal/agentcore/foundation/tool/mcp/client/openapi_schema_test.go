@@ -613,12 +613,12 @@ func TestOapiMapToParam_简单类型(t *testing.T) {
 // TestOapiMapToParam_约束字段 测试约束字段转换。
 func TestOapiMapToParam_约束字段(t *testing.T) {
 	m := map[string]any{
-		"type":       "string",
-		"minLength":  float64(1),
-		"maxLength":  float64(100),
-		"pattern":    "^[a-z]+$",
-		"format":     "email",
-		"default":    "test@example.com",
+		"type":      "string",
+		"minLength": float64(1),
+		"maxLength": float64(100),
+		"pattern":   "^[a-z]+$",
+		"format":    "email",
+		"default":   "test@example.com",
 	}
 	p := oapiMapToParam("email", m, false)
 	if p.MinLength != 1 {

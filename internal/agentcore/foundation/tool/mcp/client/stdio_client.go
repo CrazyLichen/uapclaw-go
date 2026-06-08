@@ -7,8 +7,8 @@ import (
 	"os/exec"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
-	mcp "github.com/mark3labs/mcp-go/mcp"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
+	mcp "github.com/mark3labs/mcp-go/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
