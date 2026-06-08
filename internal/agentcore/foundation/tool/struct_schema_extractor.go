@@ -21,6 +21,11 @@ import (
 //   - openjiuwen/core/foundation/tool/utils/type_schema_extractor.py (TypeSchemaExtractor 注册表)
 type StructSchemaExtractor struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// schemaTagMap jsonschema tag 的键值对映射
+type schemaTagMap map[string]string
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Extract 从 Go struct 类型反射提取 []*schema.Param。
@@ -191,9 +196,6 @@ func parseJSONTag(tag string) (name string, omitempty bool) {
 	return
 }
 
-// schemaTagMap jsonschema tag 的键值对映射
-type schemaTagMap map[string]string
-
 // parseSchemaTag 解析 jsonschema tag，格式: "description=xxx,required,default=10"
 func parseSchemaTag(tag string) schemaTagMap {
 	m := make(schemaTagMap)
@@ -214,10 +216,12 @@ func parseSchemaTag(tag string) schemaTagMap {
 	return m
 }
 
+// get 获取指定键的值。
 func (m schemaTagMap) get(key string) string {
 	return m[key]
 }
 
+// getOk 获取指定键的值和是否存在。
 func (m schemaTagMap) getOk(key string) (string, bool) {
 	v, ok := m[key]
 	return v, ok

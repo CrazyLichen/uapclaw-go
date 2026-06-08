@@ -68,6 +68,11 @@ type Tool interface {
 	Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ToolOption 工具调用选项函数。
+type ToolOption func(*ToolCallOptions)
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ErrStreamNotSupported 工具不支持流式调用时返回的错误。
@@ -79,9 +84,6 @@ var ErrStreamNotSupported = exception.BuildError(
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ToolOption 工具调用选项函数。
-type ToolOption func(*ToolCallOptions)
 
 // WithSkipNoneValue 设置是否跳过 None 值。
 func WithSkipNoneValue(skip bool) ToolOption {

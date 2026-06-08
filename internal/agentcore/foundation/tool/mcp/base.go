@@ -8,8 +8,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -64,7 +64,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 重导出函数
+// 重导出变量和函数
 var (
 	// WithRetryTimes 设置重试次数。
 	WithRetryTimes = types.WithRetryTimes

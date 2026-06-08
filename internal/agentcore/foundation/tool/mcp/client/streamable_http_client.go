@@ -21,9 +21,13 @@ import (
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/client/streamable_http_client.py (StreamableHttpClient)
 type StreamableHttpClient struct {
-	config      *types.McpServerConfig
-	serverName  string
-	client      *mcpclient.Client
+	// config MCP 服务器配置
+	config *types.McpServerConfig
+	// serverName 服务器名称
+	serverName string
+	// client mcp-go 的客户端实例
+	client *mcpclient.Client
+	// isConnected 连接状态
 	isConnected bool
 }
 
@@ -41,8 +45,6 @@ func NewStreamableHttpClient(config *types.McpServerConfig) *StreamableHttpClien
 		serverName: config.ServerName,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Connect 建立 Streamable HTTP 连接。
 func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {

@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/security"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // AuthStrategy 认证策略接口，不同认证类型实现此接口。
 //
@@ -20,8 +20,6 @@ type AuthStrategy interface {
 	// Authenticate 执行认证，返回认证结果
 	Authenticate(ctx context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // SSLAuthStrategy SSL 认证策略。
 //
@@ -213,6 +211,7 @@ func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *Tool
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// init 注册默认认证策略。
 func init() {
 	globalRegistry.Register(AuthTypeSSL, &SSLAuthStrategy{})
 	globalRegistry.Register(AuthTypeHeaderAndQuery, &HeaderQueryAuthStrategy{})

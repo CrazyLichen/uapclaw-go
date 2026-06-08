@@ -71,10 +71,18 @@ type WorkflowOptions struct{}
 // AgentOptions Agent 调用选项（预留）。
 type AgentOptions struct{}
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ResourceOption 实例获取选项函数。
 type ResourceOption func(*ResourceOptions)
+
+// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
+type WorkflowOption func(*WorkflowOptions)
+
+// AgentOption Agent 调用选项函数（预留，领域六扩展）。
+type AgentOption func(*AgentOptions)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithResourceTag 设置资源标签。
 func WithResourceTag(tag string) ResourceOption {
@@ -95,18 +103,12 @@ func NewResourceOptions(opts ...ResourceOption) *ResourceOptions {
 	return o
 }
 
-// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
-type WorkflowOption func(*WorkflowOptions)
-
-// AgentOption Agent 调用选项函数（预留，领域六扩展）。
-type AgentOption func(*AgentOptions)
-
 // GetTool 实现 ResourceManager 接口，返回 NotFound 错误。
 func (n *NoopResourceManager) GetTool(toolID string, opts ...ResourceOption) (tool.Tool, error) {
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", toolID),
-		exception.WithMsg("tool not found in noop resource manager"),
+		exception.WithMsg("在空资源管理器中未找到工具"),
 	)
 }
 
@@ -115,7 +117,7 @@ func (n *NoopResourceManager) GetWorkflow(workflowID string, opts ...ResourceOpt
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", workflowID),
-		exception.WithMsg("workflow not found in noop resource manager"),
+		exception.WithMsg("在空资源管理器中未找到工作流"),
 	)
 }
 
@@ -124,7 +126,7 @@ func (n *NoopResourceManager) GetAgent(agentID string, opts ...ResourceOption) (
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", agentID),
-		exception.WithMsg("agent not found in noop resource manager"),
+		exception.WithMsg("在空资源管理器中未找到 Agent"),
 	)
 }
 

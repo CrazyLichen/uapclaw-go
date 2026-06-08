@@ -36,7 +36,7 @@ func GetSSLConfig(verifySwitchEnv, sslCertEnv string, triggerValue []string, url
 	if certPath == "" {
 		return false, "", exception.BuildError(
 			exception.StatusCommonSSLCertInvalid,
-			exception.WithParam("reason", fmt.Sprintf("when %s=true, must provide ssl cert %s", verifySwitchEnv, sslCertEnv)),
+			exception.WithParam("reason", fmt.Sprintf("当 %s=true 时，必须提供 SSL 证书环境变量 %s", verifySwitchEnv, sslCertEnv)),
 		)
 	}
 	return true, certPath, nil
@@ -109,7 +109,7 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if safeCertDir == "" {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "SAFE_CERT_DIR is not set"),
+			exception.WithParam("reason", "SAFE_CERT_DIR 环境变量未设置"),
 		)
 	}
 	safePrefix, err := resolvePath(safeCertDir)
@@ -123,7 +123,7 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if !strings.HasPrefix(realCertPath, safePrefix+string(os.PathSeparator)) {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "certificate path is outside the allowed directory"),
+			exception.WithParam("reason", "证书路径不在允许的目录范围内"),
 		)
 	}
 
@@ -132,7 +132,7 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if err != nil {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "failed to open certificate file"),
+			exception.WithParam("reason", "打开证书文件失败"),
 			exception.WithCause(err),
 		)
 	}
@@ -143,20 +143,20 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if err != nil {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "failed to stat certificate file"),
+			exception.WithParam("reason", "获取证书文件信息失败"),
 			exception.WithCause(err),
 		)
 	}
 	if !stat.Mode().IsRegular() {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "file path is invalid"),
+			exception.WithParam("reason", "文件路径无效"),
 		)
 	}
 	if stat.Size() == 0 || stat.Size() > 1024*1024 {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "file size is invalid"),
+			exception.WithParam("reason", "文件大小无效"),
 		)
 	}
 
@@ -165,14 +165,14 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if err != nil {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "failed to read certificate file"),
+			exception.WithParam("reason", "读取证书文件失败"),
 			exception.WithCause(err),
 		)
 	}
 	if len(caPEM) == 0 {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "file content is empty"),
+			exception.WithParam("reason", "文件内容为空"),
 		)
 	}
 
@@ -181,7 +181,7 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 	if !certPool.AppendCertsFromPEM(caPEM) {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
-			exception.WithParam("reason", "failed to parse certificate"),
+			exception.WithParam("reason", "解析证书失败"),
 		)
 	}
 	cfg.RootCAs = certPool

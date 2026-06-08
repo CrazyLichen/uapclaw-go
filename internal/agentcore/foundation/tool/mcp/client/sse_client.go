@@ -389,5 +389,3 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) (any, error) {
 func (c *SseClient) Close() error {
 	return c.Disconnect(context.Background())
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

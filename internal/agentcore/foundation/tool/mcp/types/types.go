@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
 //
@@ -32,8 +32,6 @@ type McpClient interface {
 	// Close 关闭客户端（等价于 Disconnect）
 	Close() error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ConnectOptions 连接选项。
 type ConnectOptions struct {
@@ -78,15 +76,23 @@ type McpToolCard struct {
 	ServerID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ConnectOption 连接选项函数。
+type ConnectOption func(*ConnectOptions)
+
+// McpServerConfigOption 配置选项函数。
+type McpServerConfigOption func(*McpServerConfig)
+
+// McpToolCardOption MCP 工具卡片选项函数。
+type McpToolCardOption func(*McpToolCard)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。
 const NoTimeout = -1
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ConnectOption 连接选项函数。
-type ConnectOption func(*ConnectOptions)
 
 // WithRetryTimes 设置重试次数。
 func WithRetryTimes(n int) ConnectOption {
@@ -108,9 +114,6 @@ func NewConnectOptions(opts ...ConnectOption) *ConnectOptions {
 	}
 	return o
 }
-
-// McpServerConfigOption 配置选项函数。
-type McpServerConfigOption func(*McpServerConfig)
 
 // WithServerID 设置服务器标识。
 func WithServerID(id string) McpServerConfigOption {
@@ -153,9 +156,6 @@ func NewMcpServerConfig(name, serverPath, clientType string, opts ...McpServerCo
 	}
 	return c
 }
-
-// McpToolCardOption MCP 工具卡片选项函数。
-type McpToolCardOption func(*McpToolCard)
 
 // WithMcpToolCardServerID 设置 MCP 工具卡片的服务器标识。
 func WithMcpToolCardServerID(id string) McpToolCardOption {

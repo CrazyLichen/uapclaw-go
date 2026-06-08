@@ -4,27 +4,6 @@ import "context"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PipelineResult Pipeline 操作的执行结果。
-//
-// 调用者根据 Op 字段判断应访问哪个字段：
-//   - Op 为 "set"：仅检查 Err 是否为 nil
-//   - Op 为 "get"：通过 Value 获取返回值（key 不存在时 Value 为 nil）
-//   - Op 为 "exists"：通过 Exists 获取布尔结果
-type PipelineResult struct {
-	// Op 操作类型："set"、"get"、"exists"
-	Op string
-	// Key 操作的键
-	Key string
-	// Value Get 操作返回的值，仅 Op 为 "get" 时有效
-	Value []byte
-	// Exists Exists 操作的结果，仅 Op 为 "exists" 时有效
-	Exists bool
-	// Err 操作执行错误，nil 表示成功
-	Err error
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // BaseKVStore 键值存储后端的抽象接口。
 //
 // 所有 KV 存储后端（内存、文件、数据库、Redis 等）必须实现此接口。
@@ -93,4 +72,23 @@ type KVPipeline interface {
 	// Execute 提交并执行管道中的所有操作，返回各操作的结果。
 	// 执行后管道被清空，可复用。
 	Execute(ctx context.Context) ([]PipelineResult, error)
+}
+
+// PipelineResult Pipeline 操作的执行结果。
+//
+// 调用者根据 Op 字段判断应访问哪个字段：
+//   - Op 为 "set"：仅检查 Err 是否为 nil
+//   - Op 为 "get"：通过 Value 获取返回值（key 不存在时 Value 为 nil）
+//   - Op 为 "exists"：通过 Exists 获取布尔结果
+type PipelineResult struct {
+	// Op 操作类型："set"、"get"、"exists"
+	Op string
+	// Key 操作的键
+	Key string
+	// Value Get 操作返回的值，仅 Op 为 "get" 时有效
+	Value []byte
+	// Exists Exists 操作的结果，仅 Op 为 "exists" 时有效
+	Exists bool
+	// Err 操作执行错误，nil 表示成功
+	Err error
 }
