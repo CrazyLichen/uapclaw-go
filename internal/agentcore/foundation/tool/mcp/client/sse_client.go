@@ -117,8 +117,35 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 		transportOpts = append(transportOpts, mcptransport.WithHeaders(mergedHeaders))
 	}
 
+	// 将 provider 的 QueryParams 合并到 ServerPath URL 中
+	// 对照 Python: AuthHeaderAndQueryProvider.async_auth_flow 中 copy_merge_params
+	effectivePath := c.config.ServerPath
+	if provider != nil && len(provider.QueryParams) > 0 {
+		mergedQueryParams := make(map[string]string)
+		for k, v := range c.config.AuthQueryParams {
+			mergedQueryParams[k] = v
+		}
+		for k, v := range provider.QueryParams {
+			mergedQueryParams[k] = v
+		}
+		var mergeErr error
+		effectivePath, mergeErr = mergeQueryParams(effectivePath, mergedQueryParams)
+		if mergeErr != nil {
+			return exception.BuildError(
+				exception.StatusToolMcpExecutionError,
+				exception.WithParam("method", "Connect"),
+				exception.WithParam("reason", fmt.Sprintf("合并查询参数失败: %v", mergeErr)),
+				exception.WithParam("card", c.serverName),
+			)
+		}
+		logger.Debug(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Int("query_param_count", len(mergedQueryParams)).
+			Msg("SSE 客户端注入认证查询参数")
+	}
+
 	// 创建 SSE 客户端
-	client, err := mcpclient.NewSSEMCPClient(c.config.ServerPath, transportOpts...)
+	client, err := mcpclient.NewSSEMCPClient(effectivePath, transportOpts...)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Err(err).

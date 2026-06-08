@@ -105,6 +105,40 @@ func TestNewRestfulApiCard_路径参数校验(t *testing.T) {
 	}
 }
 
+// TestNewRestfulApiCard_路径参数反向校验 测试 schema 中 location:path 的参数必须在 URL 中有占位符
+func TestNewRestfulApiCard_路径参数反向校验(t *testing.T) {
+	// schema 中标记了 location:path 但 URL 中没有对应占位符
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"id": map[string]any{"type": "integer", "location": "path"},
+		},
+	}
+	_, err := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/users", "GET", schema)
+	if err == nil {
+		t.Error("schema 标记 location:path 但 URL 无占位符应返回错误")
+	}
+}
+
+// TestNewRestfulApiCard_路径参数双向完全匹配 测试路径参数双向完全匹配
+func TestNewRestfulApiCard_路径参数双向完全匹配(t *testing.T) {
+	// URL 和 schema 中的路径参数完全匹配
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"userId": map[string]any{"type": "integer", "location": "path"},
+			"postId": map[string]any{"type": "integer", "location": "path"},
+		},
+	}
+	card, err := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/users/{userId}/posts/{postId}", "GET", schema)
+	if err != nil {
+		t.Fatalf("路径参数完全匹配应通过校验: %v", err)
+	}
+	if card == nil {
+		t.Error("card 不应为 nil")
+	}
+}
+
 // TestRestfulApiCard_ToolInfo 测试 ToolInfo 覆写
 func TestRestfulApiCard_ToolInfo(t *testing.T) {
 	inputSchema := map[string]any{

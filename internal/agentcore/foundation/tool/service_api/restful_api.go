@@ -455,6 +455,18 @@ func (r *RestfulApi) doRequest(
 		},
 	}
 
+	// 记录代理和 SSL 状态（对照 Python: tool_logger.info(f"Proxy enabled for {url}: {proxy is not None}")）
+	proxyEnabled := false
+	if proxyURL, _ := http.ProxyFromEnvironment(req); proxyURL != nil {
+		proxyEnabled = true
+	}
+	logger.Info(logger.ComponentAgentCore).
+		Str("method", r.card.Method).
+		Str("url", reqURL).
+		Bool("proxy_enabled", proxyEnabled).
+		Bool("tls_custom_config", tlsConfig != nil).
+		Msg("RestfulApi 发送请求")
+
 	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
@@ -585,21 +597,27 @@ func validateURL(rawURL string) error {
 
 // validatePathParams 校验 URL 中的路径参数占位符与 InputSchema 中 location:path 定义的匹配。
 //
+// 双向校验：
+//  1. URL 中的 {param} 占位符必须在 InputSchema 中有 location:path 定义
+//  2. InputSchema 中标记为 location:path 的参数必须在 URL 中有对应占位符
+//
 // 对应 Python: RestfulApiCard.model_post_init()
 func validatePathParams(apiURL string, inputSchema map[string]any) error {
 	// 提取 URL 中的路径参数名
 	urlPathParams := pathParamPattern.FindAllStringSubmatch(apiURL, -1)
-	if len(urlPathParams) == 0 {
-		return nil
-	}
 
 	urlPathParamSet := make(map[string]bool)
 	for _, match := range urlPathParams {
 		urlPathParamSet[match[1]] = true
 	}
 
-	// 检查 InputSchema 是否定义
-	if inputSchema == nil {
+	// 快速路径：URL 无路径参数且无 InputSchema，无需校验
+	if len(urlPathParamSet) == 0 && inputSchema == nil {
+		return nil
+	}
+
+	// 检查 InputSchema 是否定义（URL 有路径参数时必须提供）
+	if len(urlPathParamSet) > 0 && inputSchema == nil {
 		paramNames := make([]string, 0, len(urlPathParamSet))
 		for k := range urlPathParamSet {
 			paramNames = append(paramNames, k)
@@ -612,9 +630,8 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 		)
 	}
 
-	properties, _ := inputSchema["properties"].(map[string]any)
-
 	// 收集 schema 中标记为 path 的参数
+	properties, _ := inputSchema["properties"].(map[string]any)
 	schemaPathParams := make(map[string]bool)
 	for paramName, paramDef := range properties {
 		if paramMap, ok := paramDef.(map[string]any); ok {
@@ -624,7 +641,7 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 		}
 	}
 
-	// 检查 URL 中的路径参数是否都在 schema 中定义
+	// 正向校验：URL 中的路径参数是否都在 schema 中定义
 	missingInSchema := make([]string, 0)
 	for k := range urlPathParamSet {
 		if !schemaPathParams[k] {
@@ -637,6 +654,23 @@ func validatePathParams(apiURL string, inputSchema map[string]any) error {
 			exception.WithParam("reason", fmt.Sprintf(
 				"URL 包含路径参数 %v 但未在 input_params schema 中定义 location:path",
 				missingInSchema)),
+		)
+	}
+
+	// 反向校验：schema 中标记为 location:path 的参数必须在 URL 中有对应占位符
+	missingInURL := make([]string, 0)
+	for k := range schemaPathParams {
+		if !urlPathParamSet[k] {
+			missingInURL = append(missingInURL, k)
+		}
+	}
+	if len(missingInURL) > 0 {
+		return exception.BuildError(
+			exception.StatusToolRestfulApiCardConfigInvalid,
+			exception.WithParam("reason", fmt.Sprintf(
+				"input_params schema 中 %v 标记为 location:path 但 URL 中未包含对应占位符 {%s}",
+				missingInURL, strings.Join(missingInURL, "},{")),
+			),
 		)
 	}
 

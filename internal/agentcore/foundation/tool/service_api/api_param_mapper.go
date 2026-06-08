@@ -2,6 +2,8 @@ package service_api
 
 import (
 	"strings"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -147,6 +149,8 @@ func (m *APIParamMapper) Map(inputs map[string]any, defaultLocation APIParamLoca
 				}
 			}
 			if value != nil {
+				// FORM 参数仅当 value 非 nil 时才存储；与 query/header/body 的 v!="" 判断不同，
+				// 因为 form 参数的 value 可能是 0、false 等 falsy 但有意义的值，不应被过滤
 				result[APIParamLocationForm][paramName] = map[string]any{
 					"form_handler_type": formHandlerType,
 					"value":             value,
@@ -202,6 +206,9 @@ func parseAPIParamLocation(s string) (APIParamLocation, error) {
 	case "form":
 		return APIParamLocationForm, nil
 	default:
+		logger.Warn(logger.ComponentAgentCore).
+			Str("location", s).
+			Msg("未知的参数位置类型，fallback 到 body")
 		return APIParamLocationBody, nil // 未知值 fallback 到 body
 	}
 }

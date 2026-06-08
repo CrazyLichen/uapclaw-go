@@ -228,3 +228,41 @@ func TestAPIParamMapper_Map_未在inputs中的参数不映射(t *testing.T) {
 		t.Error("inputs 中不存在的参数不应出现在 body 中")
 	}
 }
+
+// ──────────────────────────── 非导出函数测试 ────────────────────────────
+
+// TestParseAPIParamLocation_未知位置 测试未知位置 fallback 到 body
+func TestParseAPIParamLocation_未知位置(t *testing.T) {
+	loc, err := parseAPIParamLocation("cookie")
+	if err != nil {
+		t.Errorf("未知位置不应返回错误: %v", err)
+	}
+	if loc != APIParamLocationBody {
+		t.Errorf("未知位置应 fallback 到 body，实际: %v", loc)
+	}
+}
+
+// TestParseAPIParamLocation_已知位置 测试已知位置正确解析
+func TestParseAPIParamLocation_已知位置(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected APIParamLocation
+	}{
+		{"query", APIParamLocationQuery},
+		{"path", APIParamLocationPath},
+		{"body", APIParamLocationBody},
+		{"header", APIParamLocationHeader},
+		{"form", APIParamLocationForm},
+		{"Query", APIParamLocationQuery},   // 大小写不敏感
+		{"HEADER", APIParamLocationHeader}, // 大小写不敏感
+	}
+	for _, tt := range tests {
+		loc, err := parseAPIParamLocation(tt.input)
+		if err != nil {
+			t.Errorf("parseAPIParamLocation(%q) 返回错误: %v", tt.input, err)
+		}
+		if loc != tt.expected {
+			t.Errorf("parseAPIParamLocation(%q) = %v, 期望 %v", tt.input, loc, tt.expected)
+		}
+	}
+}

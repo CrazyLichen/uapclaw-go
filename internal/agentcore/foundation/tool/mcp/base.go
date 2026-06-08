@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -127,15 +128,22 @@ func ExtractMCPToolResultContent(toolResult any) any {
 
 	// 检查 data 字段
 	if data, ok := item["data"]; ok {
-		// 检查是否为图片
+		// 检查是否为图片（兼容 mimeType 和 mime_type 两种键名，值做大小写不敏感比较）
 		mimeType, _ := item["mimeType"].(string)
+		if mimeType == "" {
+			mimeType, _ = item["mime_type"].(string)
+		}
+		mimeType = strings.ToLower(mimeType)
 		if strings.HasPrefix(mimeType, "image/") {
 			return fmt.Sprintf("[image content: %s, %d base64 chars]", mimeType, len(fmt.Sprintf("%v", data)))
 		}
 		return data
 	}
 
-	// 其他情况，尝试字符串化
+	// 其他情况，尝试 JSON 序列化（对齐 Python model_dump，输出结构化 JSON）
+	if jsonBytes, err := json.Marshal(item); err == nil {
+		return string(jsonBytes)
+	}
 	return fmt.Sprintf("%v", item)
 }
 

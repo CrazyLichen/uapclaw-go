@@ -3,9 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcp "github.com/mark3labs/mcp-go/mcp"
+	mcptransport "github.com/mark3labs/mcp-go/client/transport"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -46,23 +49,38 @@ func NewStdioClient(config *types.McpServerConfig) *StdioClient {
 // Connect 建立 Stdio 连接，启动子进程并初始化会话。
 // 从 config.Params 提取 command/args/env，创建子进程客户端并完成 MCP 握手。
 func (c *StdioClient) Connect(ctx context.Context, _ ...types.ConnectOption) error {
-	// 从 config.Params 提取 command、args、env
+	// 从 config.Params 提取 command、args、env、cwd
 	command := extractStringParam(c.config.Params, "command")
 	if command == "" {
 		command = c.config.ServerPath
 	}
 	args := extractStringSliceParam(c.config.Params, "args")
 	env := extractEnvSlice(c.config.Params)
+	cwd := extractStringParam(c.config.Params, "cwd")
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("server_name", c.serverName).
 		Str("command", command).
 		Strs("args", args).
 		Int("env_count", len(env)).
+		Str("cwd", cwd).
 		Msg("正在创建 Stdio MCP 客户端")
 
-	// 创建 Stdio MCP 客户端（NewStdioMCPClient 会自动启动传输层）
-	client, err := mcpclient.NewStdioMCPClient(command, env, args...)
+	// 统一使用 NewStdioMCPClientWithOptions 创建客户端
+	// 如果指定了 cwd，通过 WithCommandFunc 设置子进程工作目录
+	var stdioOpts []mcptransport.StdioOption
+	if cwd != "" {
+		stdioOpts = append(stdioOpts, mcptransport.WithCommandFunc(
+			func(_ context.Context, cmd string, env []string, args []string) (*exec.Cmd, error) {
+				c := exec.Command(cmd, args...)
+				c.Env = append(os.Environ(), env...)
+				c.Dir = cwd
+				return c, nil
+			},
+		))
+	}
+
+	client, err := mcpclient.NewStdioMCPClientWithOptions(command, env, args, stdioOpts...)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Err(err).

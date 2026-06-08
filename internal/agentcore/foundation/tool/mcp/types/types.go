@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -139,10 +140,13 @@ func NewMcpServerConfig(name, serverPath, clientType string, opts ...McpServerCo
 		clientType = "sse"
 	}
 	c := &McpServerConfig{
-		ServerID:   uuid.New().String(),
-		ServerName: name,
-		ServerPath: serverPath,
-		ClientType: clientType,
+		ServerID:        strings.ReplaceAll(uuid.New().String(), "-", ""),
+		ServerName:      name,
+		ServerPath:      serverPath,
+		ClientType:      clientType,
+		Params:          make(map[string]any),
+		AuthHeaders:     make(map[string]string),
+		AuthQueryParams: make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(c)

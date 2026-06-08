@@ -2,10 +2,10 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -92,7 +92,10 @@ func (c *PlaywrightClient) Disconnect(ctx context.Context) error {
 // ListTools 列出 Playwright 服务器提供的工具（委托给 delegate）。
 func (c *PlaywrightClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error) {
 	if c.delegate == nil {
-		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
 	}
 	return c.delegate.ListTools(ctx)
 }
@@ -100,7 +103,10 @@ func (c *PlaywrightClient) ListTools(ctx context.Context) ([]*types.McpToolCard,
 // CallTool 调用指定工具（委托给 delegate）。
 func (c *PlaywrightClient) CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error) {
 	if c.delegate == nil {
-		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
 	}
 	return c.delegate.CallTool(ctx, toolName, arguments)
 }
@@ -108,7 +114,10 @@ func (c *PlaywrightClient) CallTool(ctx context.Context, toolName string, argume
 // GetToolInfo 获取指定工具信息（委托给 delegate）。
 func (c *PlaywrightClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
 	if c.delegate == nil {
-		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
 	}
 	return c.delegate.GetToolInfo(ctx, toolName)
 }
@@ -116,7 +125,10 @@ func (c *PlaywrightClient) GetToolInfo(ctx context.Context, toolName string) (*t
 // ListResources 列出资源（委托给 delegate）。
 func (c *PlaywrightClient) ListResources(ctx context.Context) ([]any, error) {
 	if c.delegate == nil {
-		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
 	}
 	return c.delegate.ListResources(ctx)
 }
@@ -124,7 +136,10 @@ func (c *PlaywrightClient) ListResources(ctx context.Context) ([]any, error) {
 // ReadResource 读取资源（委托给 delegate）。
 func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) (any, error) {
 	if c.delegate == nil {
-		return nil, fmt.Errorf("playwright client not initialized for server %q", c.serverName)
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
 	}
 	return c.delegate.ReadResource(ctx, uri)
 }

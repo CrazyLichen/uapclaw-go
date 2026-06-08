@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
@@ -132,8 +133,16 @@ func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) err
 		}
 	}
 
-	// 创建 HTTP 客户端
-	c.httpClient = &http.Client{}
+	// 创建 HTTP 客户端（默认 60s 超时 + 环境代理 + 禁止自动重定向）
+	c.httpClient = &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	c.isConnected = true
 
 	logger.Info(logger.ComponentAgentCore).

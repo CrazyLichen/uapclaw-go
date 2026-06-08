@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/japanese"
@@ -382,6 +384,10 @@ func (r *ParserRegistry) applyDecompression(data []byte, contentEncoding string)
 			if decompressor.CanDecompress(enc) {
 				decompressed, err := decompressor.Decompress(data)
 				if err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("encoding", enc).
+						Err(err).
+						Msg("响应解压失败")
 					break
 				}
 				data = decompressed
