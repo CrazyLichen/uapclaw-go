@@ -94,6 +94,9 @@ func TestNewToolCallOptions_空选项(t *testing.T) {
 	if opts.Timeout != 0 {
 		t.Errorf("Timeout 默认应为 0, 实际 %f", opts.Timeout)
 	}
+	if !opts.RaiseForStatus {
+		t.Error("RaiseForStatus 默认应为 true")
+	}
 }
 
 func TestValidateToolCard_NilCard(t *testing.T) {

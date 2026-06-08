@@ -26,6 +26,7 @@ import (
 //
 // 对应 Python: openjiuwen/core/single_agent/ability_manager.py (AbilityManager)
 type AbilityManager struct {
+	mu            sync.RWMutex
 	tools         map[string]*tool.ToolCard
 	workflows     map[string]*schema.WorkflowCard
 	agents        map[string]*schema.AgentCard
@@ -69,6 +70,9 @@ func (am *AbilityManager) SetRail(rail ToolRail) {
 
 // Add 添加单个能力。重复 name 时保留已有的，记录 Warn 日志，返回 Added=false。
 func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	switch a := ability.(type) {
 	case *tool.ToolCard:
 		existing, ok := am.tools[a.Name]
@@ -146,6 +150,9 @@ func (am *AbilityManager) AddMany(abilities []schema.Ability) []AddAbilityResult
 // Remove 按名称移除能力，返回被移除的 Ability（未找到返回 nil）。
 // 移除 McpServer 时同时移除其关联工具。
 func (am *AbilityManager) Remove(name string) schema.Ability {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	if toolCard, ok := am.tools[name]; ok {
 		delete(am.tools, name)
 		return toolCard
@@ -184,6 +191,9 @@ func (am *AbilityManager) RemoveMany(names []string) []schema.Ability {
 
 // Get 按名称查询能力（依次查找 tools → workflows → agents → mcpServers）。
 func (am *AbilityManager) Get(name string) schema.Ability {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
 	if t, ok := am.tools[name]; ok {
 		return t
 	}
@@ -201,6 +211,9 @@ func (am *AbilityManager) Get(name string) schema.Ability {
 
 // List 列出所有已注册能力。
 func (am *AbilityManager) List() []schema.Ability {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
 	var abilities []schema.Ability
 	for _, t := range am.tools {
 		abilities = append(abilities, t)
@@ -219,6 +232,9 @@ func (am *AbilityManager) List() []schema.Ability {
 
 // ReorderTools 按给定名称顺序重排 tools 注册表。
 func (am *AbilityManager) ReorderTools(orderedNames []string) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	if len(orderedNames) == 0 || len(am.tools) == 0 {
 		return
 	}
@@ -245,7 +261,10 @@ func (am *AbilityManager) ReorderTools(orderedNames []string) {
 
 // ListToolInfo 获取 ToolInfo 列表供 LLM function calling 消费。
 // names 非空时只返回指定名称的工具；为空时返回全部。
-func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string) ([]*schema.ToolInfo, error) {
+func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]*schema.ToolInfo, error) {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
 	var toolInfos []*schema.ToolInfo
 
 	// 1. ToolCards → ToolInfo
@@ -319,8 +338,9 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string) ([]*
 }
 
 // Execute 并行执行多个 ToolCall，返回每个调用的结果。
-// 使用 WaitGroup + channel 收集，与 Python asyncio.gather(return_exceptions=True) 语义一致：
+// 使用 WaitGroup + 按 index 写切片，与 Python asyncio.gather(return_exceptions=True) 语义一致：
 // 所有任务都执行完毕，错误作为 ExecuteResult.Err 返回。
+// 结果顺序与输入 toolCalls 顺序一致。
 func (am *AbilityManager) Execute(
 	ctx context.Context,
 	toolCalls []*llmschema.ToolCall,
@@ -331,25 +351,20 @@ func (am *AbilityManager) Execute(
 		return nil
 	}
 
-	var wg sync.WaitGroup
-	resultCh := make(chan ExecuteResult, len(toolCalls))
+	am.mu.RLock()
+	results := make([]ExecuteResult, len(toolCalls))
 
-	for _, tc := range toolCalls {
+	var wg sync.WaitGroup
+	for i, tc := range toolCalls {
 		wg.Add(1)
-		go func(toolCall *llmschema.ToolCall) {
+		go func(idx int, toolCall *llmschema.ToolCall) {
 			defer wg.Done()
-			result := am.railedExecuteSingleToolCall(ctx, toolCall, session, tag)
-			resultCh <- result
-		}(tc)
+			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCall, session, tag)
+		}(i, tc)
 	}
+	am.mu.RUnlock()
 
 	wg.Wait()
-	close(resultCh)
-
-	results := make([]ExecuteResult, 0, len(toolCalls))
-	for r := range resultCh {
-		results = append(results, r)
-	}
 
 	// ⤵️ 预留：force_finish 信号传播（等 6.4-6.10 Rail 系统就绪后回填）
 

@@ -619,23 +619,23 @@ func TestGenerateToolName(t *testing.T) {
 // ──────────────────────────── getUniqueName 测试 ────────────────────────────
 
 func TestGetUniqueName(t *testing.T) {
-	// 重置全局状态
-	usedNames = make(map[string]int)
+	// 创建客户端实例并测试 getUniqueName 方法
+	c := NewOpenApiClient(&types.McpServerConfig{ServerName: "test"})
 
 	// 首次使用，原样返回
-	name1 := getUniqueName("listItems")
+	name1 := c.getUniqueName("listItems")
 	assert.Equal(t, "listItems", name1)
 
 	// 第二次使用，追加后缀
-	name2 := getUniqueName("listItems")
+	name2 := c.getUniqueName("listItems")
 	assert.Equal(t, "listItems_2", name2)
 
 	// 第三次使用，追加后缀
-	name3 := getUniqueName("listItems")
+	name3 := c.getUniqueName("listItems")
 	assert.Equal(t, "listItems_3", name3)
 
 	// 不同名称首次使用，原样返回
-	name4 := getUniqueName("createItem")
+	name4 := c.getUniqueName("createItem")
 	assert.Equal(t, "createItem", name4)
 }
 

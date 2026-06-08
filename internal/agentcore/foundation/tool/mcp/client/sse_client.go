@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
@@ -59,7 +60,16 @@ func NewSseClient(config *types.McpServerConfig) *SseClient {
 }
 
 // Connect 建立 SSE 连接，启动传输并初始化会话。
-func (c *SseClient) Connect(ctx context.Context, _ ...types.ConnectOption) error {
+func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
+	connectOpts := types.NewConnectOptions(opts...)
+
+	// 如果设置了超时，创建带超时的 context
+	if connectOpts.Timeout > 0 && connectOpts.Timeout != types.NoTimeout {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(connectOpts.Timeout*float64(time.Second)))
+		defer cancel()
+	}
+
 	// 构建传输选项
 	var transportOpts []mcptransport.ClientOption
 	if len(c.config.AuthHeaders) > 0 {

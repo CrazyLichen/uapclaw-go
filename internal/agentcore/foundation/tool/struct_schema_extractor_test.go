@@ -252,16 +252,62 @@ func TestStructSchemaExtractor_bool默认值(t *testing.T) {
 	}
 }
 
-// TestStructSchemaExtractor_ExtractDescription 测试描述提取（目前返回空字符串）
+// TestStructSchemaExtractor_ExtractDescription 测试描述提取
 func TestStructSchemaExtractor_ExtractDescription(t *testing.T) {
 	typ := reflect.TypeOf(basicTypesInput{})
 	desc := StructSchemaExtractor{}.ExtractDescription(typ)
-	if desc != "" {
-		t.Errorf("ExtractDescription 当前应返回空字符串，实际 %q", desc)
+	// basicTypesInput → humanize → "basic types input"
+	if desc == "" {
+		t.Error("ExtractDescription 应返回 humanize 后的名称，而非空字符串")
 	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestHumanizeName 测试变量名转人类可读描述
+func TestHumanizeName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// snake_case
+		{"search_query", "search query"},
+		{"user_name", "user name"},
+		{"", ""},
+		// camelCase / PascalCase
+		{"userName", "user name"},
+		{"SearchQuery", "search query"},
+		{"XMLParser", "xml parser"},
+		// Python _humanize_name 行为：缩写替换在 .lower() 之后也被转小写
+		// 与 Python 保持一致，输出全小写
+		{"user_id", "user id"},
+		{"api_url", "api url"},
+		{"html_content", "html content"},
+	}
+	for _, tt := range tests {
+		result := humanizeName(tt.input)
+		if result != tt.expected {
+			t.Errorf("humanizeName(%q) = %q, 期望 %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// TestResolveDescription 测试描述优先级（tag 优先，缺失时 humanize）
+func TestResolveDescription(t *testing.T) {
+	// 有 description tag 时优先使用
+	tags := parseSchemaTag("description=自定义描述")
+	result := resolveDescription("search_query", tags)
+	if result != "自定义描述" {
+		t.Errorf("有 description tag 时应使用 tag 值，实际 %q", result)
+	}
+
+	// 无 description tag 时 humanize
+	tags2 := parseSchemaTag("required")
+	result2 := resolveDescription("search_query", tags2)
+	if result2 != "search query" {
+		t.Errorf("无 description tag 时应 humanize，实际 %q", result2)
+	}
+}
 
 // assertParam 断言参数定义
 func assertParam(t *testing.T, p *schema.Param, name string, typ schema.ParamType, desc string, required bool) {

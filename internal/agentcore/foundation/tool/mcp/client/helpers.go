@@ -132,13 +132,19 @@ func jsonSchemaPropToParam(name string, prop any, required bool) *commonschema.P
 
 	switch typeStr {
 	case "string":
-		return commonschema.NewStringParam(name, desc, required)
+		p := commonschema.NewStringParam(name, desc, required)
+		applyStringConstraints(p, propMap)
+		return p
 	case "boolean":
 		return commonschema.NewBooleanParam(name, desc, required)
 	case "integer":
-		return commonschema.NewIntegerParam(name, desc, required)
+		p := commonschema.NewIntegerParam(name, desc, required)
+		applyNumericConstraints(p, propMap)
+		return p
 	case "number":
-		return commonschema.NewNumberParam(name, desc, required)
+		p := commonschema.NewNumberParam(name, desc, required)
+		applyNumericConstraints(p, propMap)
+		return p
 	case "array":
 		var items *commonschema.Param
 		if itemsRaw, ok := propMap["items"]; ok {
@@ -169,6 +175,37 @@ func jsonSchemaPropToParam(name string, prop any, required bool) *commonschema.P
 		}
 		return commonschema.NewObjectParam(name, desc, required, properties)
 	default:
-		return commonschema.NewStringParam(name, desc, required)
+		p := commonschema.NewStringParam(name, desc, required)
+		applyStringConstraints(p, propMap)
+		return p
+	}
+}
+
+// applyStringConstraints 从 JSON Schema propMap 提取字符串约束字段到 Param。
+func applyStringConstraints(p *commonschema.Param, propMap map[string]any) {
+	if v, ok := propMap["minLength"].(float64); ok && v > 0 {
+		p.MinLength = int(v)
+	}
+	if v, ok := propMap["maxLength"].(float64); ok && v > 0 {
+		p.MaxLength = int(v)
+	}
+	if v, ok := propMap["pattern"].(string); ok {
+		p.Pattern = v
+	}
+	if v, ok := propMap["format"].(string); ok {
+		p.Format = v
+	}
+}
+
+// applyNumericConstraints 从 JSON Schema propMap 提取数值约束字段到 Param。
+func applyNumericConstraints(p *commonschema.Param, propMap map[string]any) {
+	if v, ok := propMap["minimum"].(float64); ok {
+		p.Minimum = v
+	}
+	if v, ok := propMap["maximum"].(float64); ok {
+		p.Maximum = v
+	}
+	if v, ok := propMap["format"].(string); ok {
+		p.Format = v
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -75,6 +76,11 @@ func NewStreamFunction[I any, O any](name string, fn func(context.Context, I) (<
 		card = NewToolCard(name, description, inputParams, nil)
 	}
 
+	// 校验 ToolCard 合法性
+	if err := ValidateToolCard(card); err != nil {
+		return nil, err
+	}
+
 	return &StreamFunction[I, O]{card: card, fn: fn}, nil
 }
 
@@ -94,6 +100,15 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 
 	// 1. 参数格式化
 	if f.card.InputParams != nil {
+		// 触发 TOOL_PARSE_STARTED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseStarted,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+			Extra:    map[string]any{"schema": f.card.InputParams},
+		})
+
 		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
 			WithFormatSkipNoneValue(o.SkipNoneValue),
 			WithFormatSkipValidate(o.SkipInputsValidate),
@@ -102,6 +117,14 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 			return nil, err
 		}
 		inputs = formatted
+
+		// 触发 TOOL_PARSE_FINISHED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseFinished,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+		})
 	}
 
 	// 2. map → struct

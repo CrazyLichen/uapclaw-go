@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -55,6 +56,15 @@ func (f *MapFunction) Invoke(ctx context.Context, inputs map[string]any, opts ..
 
 	// 参数格式化
 	if f.card.InputParams != nil {
+		// 触发 TOOL_PARSE_STARTED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseStarted,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+			Extra:    map[string]any{"schema": f.card.InputParams},
+		})
+
 		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
 			WithFormatSkipNoneValue(o.SkipNoneValue),
 			WithFormatSkipValidate(o.SkipInputsValidate),
@@ -63,6 +73,14 @@ func (f *MapFunction) Invoke(ctx context.Context, inputs map[string]any, opts ..
 			return nil, err
 		}
 		inputs = formatted
+
+		// 触发 TOOL_PARSE_FINISHED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseFinished,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+		})
 	}
 
 	result, err := f.invokeFn(ctx, inputs)
@@ -86,6 +104,15 @@ func (f *MapFunction) Stream(ctx context.Context, inputs map[string]any, opts ..
 
 	// 参数格式化
 	if f.card.InputParams != nil {
+		// 触发 TOOL_PARSE_STARTED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseStarted,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+			Extra:    map[string]any{"schema": f.card.InputParams},
+		})
+
 		formatted, err := SchemaUtils{}.FormatWithSchema(inputs, f.card.InputParams,
 			WithFormatSkipNoneValue(o.SkipNoneValue),
 			WithFormatSkipValidate(o.SkipInputsValidate),
@@ -94,6 +121,14 @@ func (f *MapFunction) Stream(ctx context.Context, inputs map[string]any, opts ..
 			return nil, err
 		}
 		inputs = formatted
+
+		// 触发 TOOL_PARSE_FINISHED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseFinished,
+			ToolName: f.card.Name,
+			ToolID:   f.card.ID,
+			Inputs:   inputs,
+		})
 	}
 
 	innerCh, err := f.streamFn(ctx, inputs)

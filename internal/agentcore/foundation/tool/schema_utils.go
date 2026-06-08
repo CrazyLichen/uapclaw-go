@@ -3,6 +3,7 @@ package tool
 import (
 	"fmt"
 	"math"
+	"regexp"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -204,6 +205,10 @@ func (su SchemaUtils) Validate(data map[string]any, params []*schema.Param) erro
 		if err := validateParamType(key, val, p); err != nil {
 			return err
 		}
+		// 3. 检查约束条件
+		if err := validateParamConstraints(key, val, p); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -308,6 +313,84 @@ func validateParamType(key string, val any, p *schema.Param) error {
 		}
 	}
 	return nil
+}
+
+// validateParamConstraints 校验值是否符合参数约束条件（minLength/maxLength/pattern/minimum/maximum）
+func validateParamConstraints(key string, val any, p *schema.Param) error {
+	switch p.Type {
+	case schema.ParamTypeString:
+		s, ok := val.(string)
+		if !ok {
+			return nil // 类型不匹配已在 validateParamType 中处理
+		}
+		if p.MinLength > 0 && len(s) < p.MinLength {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("string length %d < minLength %d", len(s), p.MinLength)),
+			)
+		}
+		if p.MaxLength > 0 && len(s) > p.MaxLength {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("string length %d > maxLength %d", len(s), p.MaxLength)),
+			)
+		}
+		if p.Pattern != "" {
+			matched, err := regexp.MatchString(p.Pattern, s)
+			if err != nil {
+				return exception.BuildError(
+					exception.StatusSchemaValidateInvalid,
+					exception.WithParam("param", key),
+					exception.WithParam("reason", fmt.Sprintf("invalid pattern %q: %v", p.Pattern, err)),
+				)
+			}
+			if !matched {
+				return exception.BuildError(
+					exception.StatusSchemaValidateInvalid,
+					exception.WithParam("param", key),
+					exception.WithParam("reason", fmt.Sprintf("string %q does not match pattern %q", s, p.Pattern)),
+				)
+			}
+		}
+	case schema.ParamTypeInteger, schema.ParamTypeNumber:
+		f, ok := toFloat64(val)
+		if !ok {
+			return nil // 类型不匹配已在 validateParamType 中处理
+		}
+		if p.Minimum != 0 && f < p.Minimum {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("value %v < minimum %v", f, p.Minimum)),
+			)
+		}
+		if p.Maximum != 0 && f > p.Maximum {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("value %v > maximum %v", f, p.Maximum)),
+			)
+		}
+	}
+	return nil
+}
+
+// toFloat64 将数值类型转换为 float64
+func toFloat64(val any) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }
 
 // removeNoneFromArray 递归移除数组中的 nil 值

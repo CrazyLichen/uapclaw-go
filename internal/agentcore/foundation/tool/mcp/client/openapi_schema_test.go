@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── extractOutputSchema 测试 ────────────────────────────
@@ -34,7 +35,7 @@ func TestExtractOutputSchema_成功响应(t *testing.T) {
 		),
 	}
 
-	result := extractOutputSchema(op)
+	result := extractOutputSchema(op, nil, "")
 	if result == nil {
 		t.Fatal("期望非 nil 输出 schema")
 	}
@@ -75,7 +76,7 @@ func TestExtractOutputSchema_非Object类型包装(t *testing.T) {
 		),
 	}
 
-	result := extractOutputSchema(op)
+	result := extractOutputSchema(op, nil, "")
 	if result == nil {
 		t.Fatal("期望非 nil 输出 schema")
 	}
@@ -102,7 +103,7 @@ func TestExtractOutputSchema_无响应定义(t *testing.T) {
 		Responses: openapi3.NewResponses(),
 	}
 
-	result := extractOutputSchema(op)
+	result := extractOutputSchema(op, nil, "")
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
@@ -133,7 +134,7 @@ func TestExtractOutputSchema_201优先级(t *testing.T) {
 		),
 	}
 
-	result := extractOutputSchema(op)
+	result := extractOutputSchema(op, nil, "")
 	if result == nil {
 		t.Fatal("期望非 nil 输出 schema")
 	}
@@ -148,7 +149,7 @@ func TestExtractOutputSchema_201优先级(t *testing.T) {
 
 // TestExtractOutputSchema_NilOperation 测试 nil operation 返回 nil。
 func TestExtractOutputSchema_Nil操作(t *testing.T) {
-	result := extractOutputSchema(nil)
+	result := extractOutputSchema(nil, nil, "")
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
@@ -584,4 +585,365 @@ func anySubstr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ──────────────────────────── oapiMapToParam 测试 ────────────────────────────
+
+// TestOapiMapToParam_简单类型 测试简单类型的转换。
+func TestOapiMapToParam_简单类型(t *testing.T) {
+	m := map[string]any{
+		"type":        "string",
+		"description": "用户名",
+	}
+	p := oapiMapToParam("username", m, true)
+	if p.Name != "username" {
+		t.Errorf("期望 Name=username，实际 %s", p.Name)
+	}
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望 Type=string，实际 %v", p.Type)
+	}
+	if p.Description != "用户名" {
+		t.Errorf("期望 Description=用户名，实际 %s", p.Description)
+	}
+	if !p.Required {
+		t.Error("期望 Required=true")
+	}
+}
+
+// TestOapiMapToParam_约束字段 测试约束字段转换。
+func TestOapiMapToParam_约束字段(t *testing.T) {
+	m := map[string]any{
+		"type":       "string",
+		"minLength":  float64(1),
+		"maxLength":  float64(100),
+		"pattern":    "^[a-z]+$",
+		"format":     "email",
+		"default":    "test@example.com",
+	}
+	p := oapiMapToParam("email", m, false)
+	if p.MinLength != 1 {
+		t.Errorf("期望 MinLength=1，实际 %d", p.MinLength)
+	}
+	if p.MaxLength != 100 {
+		t.Errorf("期望 MaxLength=100，实际 %d", p.MaxLength)
+	}
+	if p.Pattern != "^[a-z]+$" {
+		t.Errorf("期望 Pattern=^[a-z]+$，实际 %s", p.Pattern)
+	}
+	if p.Format != "email" {
+		t.Errorf("期望 Format=email，实际 %s", p.Format)
+	}
+	if p.Default != "test@example.com" {
+		t.Errorf("期望 Default=test@example.com，实际 %v", p.Default)
+	}
+}
+
+// TestOapiMapToParam_NumericConstraints 测试数值约束转换。
+func TestOapiMapToParam_数值约束(t *testing.T) {
+	m := map[string]any{
+		"type":    "integer",
+		"minimum": float64(0),
+		"maximum": float64(100),
+	}
+	p := oapiMapToParam("score", m, true)
+	if p.Minimum != 0 {
+		t.Errorf("期望 Minimum=0，实际 %v", p.Minimum)
+	}
+	if p.Maximum != 100 {
+		t.Errorf("期望 Maximum=100，实际 %v", p.Maximum)
+	}
+}
+
+// TestOapiMapToParam_Nullable 测试 Nullable 转换。
+func TestOapiMapToParam_Nullable(t *testing.T) {
+	m := map[string]any{
+		"type":     "string",
+		"nullable": true,
+	}
+	p := oapiMapToParam("name", m, false)
+	if !p.Nullable {
+		t.Error("期望 Nullable=true")
+	}
+}
+
+// TestOapiMapToParam_NullableType数组 测试 oapiSchemaToMap 输出的 type 数组格式解析。
+func TestOapiMapToParam_NullableType数组(t *testing.T) {
+	// oapiSchemaToMap 输出格式：type: ["string", "null"]
+	m := map[string]any{
+		"type": []string{"string", "null"},
+	}
+	p := oapiMapToParam("name", m, false)
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望 Type=string，实际 %v", p.Type)
+	}
+	if !p.Nullable {
+		t.Error("期望 Nullable=true（从 type 数组推断）")
+	}
+}
+
+// TestOapiMapToParam_Enum 测试 Enum 转换。
+func TestOapiMapToParam_Enum(t *testing.T) {
+	m := map[string]any{
+		"type": "string",
+		"enum": []any{"active", "inactive", "pending"},
+	}
+	p := oapiMapToParam("status", m, true)
+	if len(p.Enum) != 3 {
+		t.Fatalf("期望 3 个 enum 值，实际 %d", len(p.Enum))
+	}
+	if p.Enum[0] != "active" {
+		t.Errorf("期望 Enum[0]=active，实际 %s", p.Enum[0])
+	}
+}
+
+// TestOapiMapToParam_嵌套Object 测试嵌套对象递归转换。
+func TestOapiMapToParam_嵌套Object(t *testing.T) {
+	m := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"host": map[string]any{"type": "string", "description": "主机地址"},
+			"port": map[string]any{"type": "integer", "description": "端口号"},
+		},
+		"required": []any{"host"},
+	}
+	p := oapiMapToParam("config", m, true)
+	if p.Type != schema.ParamTypeObject {
+		t.Errorf("期望 Type=object，实际 %v", p.Type)
+	}
+	if len(p.Properties) != 2 {
+		t.Fatalf("期望 2 个 Properties，实际 %d", len(p.Properties))
+	}
+	// 验证 host 属性
+	var hostProp *schema.Param
+	for _, prop := range p.Properties {
+		if prop.Name == "host" {
+			hostProp = prop
+			break
+		}
+	}
+	if hostProp == nil {
+		t.Fatal("未找到 host 属性")
+	}
+	if hostProp.Type != schema.ParamTypeString {
+		t.Errorf("host.Type 期望 string，实际 %v", hostProp.Type)
+	}
+	if !hostProp.Required {
+		t.Error("host 期望 Required=true")
+	}
+}
+
+// TestOapiMapToParam_嵌套Array 测试数组类型递归转换。
+func TestOapiMapToParam_嵌套Array(t *testing.T) {
+	m := map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "string",
+		},
+	}
+	p := oapiMapToParam("tags", m, false)
+	if p.Type != schema.ParamTypeArray {
+		t.Errorf("期望 Type=array，实际 %v", p.Type)
+	}
+	if p.Items == nil {
+		t.Fatal("期望 Items 非 nil")
+	}
+	if p.Items.Type != schema.ParamTypeString {
+		t.Errorf("Items.Type 期望 string，实际 %v", p.Items.Type)
+	}
+}
+
+// TestOapiMapToParam_AnyOf 测试 anyOf 组合转换。
+func TestOapiMapToParam_AnyOf(t *testing.T) {
+	m := map[string]any{
+		"type": "string",
+		"anyOf": []any{
+			map[string]any{"type": "string"},
+			map[string]any{"type": "integer"},
+		},
+	}
+	p := oapiMapToParam("value", m, false)
+	if len(p.AnyOf) != 2 {
+		t.Fatalf("期望 2 个 AnyOf，实际 %d", len(p.AnyOf))
+	}
+	if p.AnyOf[0].Type != schema.ParamTypeString {
+		t.Errorf("AnyOf[0].Type 期望 string，实际 %v", p.AnyOf[0].Type)
+	}
+}
+
+// TestOapiMapToParam_AllOf 测试 allOf 组合转换。
+func TestOapiMapToParam_AllOf(t *testing.T) {
+	m := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+		"allOf": []any{
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id": map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+	p := oapiMapToParam("combined", m, true)
+	if len(p.AllOf) != 1 {
+		t.Fatalf("期望 1 个 AllOf，实际 %d", len(p.AllOf))
+	}
+}
+
+// TestOapiMapToParam_OneOf 测试 oneOf 组合转换。
+func TestOapiMapToParam_OneOf(t *testing.T) {
+	m := map[string]any{
+		"type": "string",
+		"oneOf": []any{
+			map[string]any{"type": "string", "enum": []any{"a", "b"}},
+			map[string]any{"type": "integer"},
+		},
+	}
+	p := oapiMapToParam("choice", m, false)
+	if len(p.OneOf) != 2 {
+		t.Fatalf("期望 2 个 OneOf，实际 %d", len(p.OneOf))
+	}
+}
+
+// TestOapiMapToParam_NilMap 测试 nil map 返回默认 Param。
+func TestOapiMapToParam_NilMap(t *testing.T) {
+	p := oapiMapToParam("empty", nil, false)
+	if p.Name != "empty" {
+		t.Errorf("期望 Name=empty，实际 %s", p.Name)
+	}
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望默认 Type=string，实际 %v", p.Type)
+	}
+}
+
+// TestOapiMapToParam_OpenAPI特有字段丢弃 测试 OpenAPI 特有字段不存入 Param。
+func TestOapiMapToParam_OpenAPI特有字段丢弃(t *testing.T) {
+	m := map[string]any{
+		"type":          "string",
+		"discriminator": map[string]any{"propertyName": "type"},
+		"readOnly":      true,
+		"writeOnly":     false,
+		"xml":           map[string]any{"name": "user"},
+		"externalDocs":  map[string]any{"url": "https://example.com"},
+		"deprecated":    true,
+	}
+	p := oapiMapToParam("field", m, true)
+	// 这些字段不在 Param 中，只要不 panic 就算通过
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望 Type=string，实际 %v", p.Type)
+	}
+}
+
+// TestOapiMapToParam_深层嵌套 测试多层嵌套递归。
+func TestOapiMapToParam_深层嵌套(t *testing.T) {
+	m := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"address": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"city": map[string]any{
+						"type":        "string",
+						"description": "城市",
+						"nullable":    true,
+					},
+					"zip": map[string]any{
+						"type":      "string",
+						"pattern":   "^\\d{6}$",
+						"minLength": float64(6),
+						"maxLength": float64(6),
+					},
+				},
+				"required": []any{"zip"},
+			},
+		},
+		"required": []any{"address"},
+	}
+	p := oapiMapToParam("user", m, true)
+
+	// 第一层：user → address
+	var addrProp *schema.Param
+	for _, prop := range p.Properties {
+		if prop.Name == "address" {
+			addrProp = prop
+			break
+		}
+	}
+	if addrProp == nil {
+		t.Fatal("未找到 address 属性")
+	}
+	if addrProp.Type != schema.ParamTypeObject {
+		t.Fatalf("address.Type 期望 object，实际 %v", addrProp.Type)
+	}
+
+	// 第二层：address → city/zip
+	var cityProp, zipProp *schema.Param
+	for _, prop := range addrProp.Properties {
+		switch prop.Name {
+		case "city":
+			cityProp = prop
+		case "zip":
+			zipProp = prop
+		}
+	}
+	if cityProp == nil {
+		t.Fatal("未找到 city 属性")
+	}
+	if !cityProp.Nullable {
+		t.Error("city 期望 Nullable=true")
+	}
+	if zipProp == nil {
+		t.Fatal("未找到 zip 属性")
+	}
+	if zipProp.Pattern != "^\\d{6}$" {
+		t.Errorf("zip.Pattern 期望 ^\\d{6}$，实际 %s", zipProp.Pattern)
+	}
+	if zipProp.MinLength != 6 {
+		t.Errorf("zip.MinLength 期望 6，实际 %d", zipProp.MinLength)
+	}
+}
+
+// TestOapiSchemaToMap_然后OapiMapToParam_完整流程 测试 oapiSchemaToMap 输出经 oapiMapToParam 转换后保持完整信息。
+func TestOapiSchemaToMap_然后OapiMapToParam_完整流程(t *testing.T) {
+	// 构造一个含 Nullable 的 OpenAPI schema
+	oapiSchema := &openapi3.Schema{
+		Type:     &openapi3.Types{"string"},
+		Nullable: true,
+		Format:   "email",
+	}
+
+	// oapiSchemaToMap 转换
+	mapResult := oapiSchemaToMap(oapiSchema)
+
+	// oapiMapToParam 从 map 转换为 Param
+	p := oapiMapToParam("email_field", mapResult, false)
+
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望 Type=string，实际 %v", p.Type)
+	}
+	if !p.Nullable {
+		t.Error("期望 Nullable=true（从 oapiSchemaToMap 输出的 type 数组推断）")
+	}
+	if p.Format != "email" {
+		t.Errorf("期望 Format=email，实际 %s", p.Format)
+	}
+
+	// 验证 ToJSONSchemaMap 输出
+	schemaResult := schema.ToJSONSchemaMap([]*schema.Param{p})
+	props := schemaResult["properties"].(map[string]any)
+	emailSchema := props["email_field"].(map[string]any)
+
+	// Nullable 输出应为 type 数组
+	typeVal, ok := emailSchema["type"].([]string)
+	if !ok {
+		t.Fatalf("期望 type 为 []string，实际 %T", emailSchema["type"])
+	}
+	if len(typeVal) != 2 || typeVal[0] != "string" || typeVal[1] != "null" {
+		t.Errorf("期望 type [string null]，实际 %v", typeVal)
+	}
+	if emailSchema["format"] != "email" {
+		t.Errorf("期望 format=email，实际 %v", emailSchema["format"])
+	}
 }

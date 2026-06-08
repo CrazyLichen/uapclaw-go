@@ -1,6 +1,7 @@
 package service_api
 
 import (
+	"bytes"
 	"compress/flate"
 	"compress/gzip"
 	zlib "compress/zlib"
@@ -9,6 +10,14 @@ import (
 	"io"
 	"strings"
 	"sync"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/korean"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
+	"golang.org/x/text/encoding/unicode"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -203,6 +212,20 @@ func (p JsonResponseParser) Parse(data []byte, headers map[string]string) (any, 
 // CanParse 判断文本解析器是否能解析此 content-type。
 func (p TextResponseParser) CanParse(contentType string, statusCode int, headers map[string]string) bool {
 	if contentType == "" {
+		// 无 Content-Type 但状态码 200，检查 Accept 头
+		if statusCode == 200 && headers != nil {
+			accept := ""
+			for k, v := range headers {
+				if strings.EqualFold(k, "Accept") {
+					accept = v
+					break
+				}
+			}
+			lowerAccept := strings.ToLower(accept)
+			if strings.Contains(lowerAccept, "text/") || strings.Contains(lowerAccept, "html") || strings.Contains(lowerAccept, "xml") {
+				return true
+			}
+		}
 		return false
 	}
 
@@ -260,18 +283,31 @@ func (d GzipDecompressor) CanDecompress(encoding string) bool {
 }
 
 // Decompress 解压 GZIP 数据。
+//
+// 对照 Python: response_parser.py GzipDecompressor.decompress
+// 三级尝试：1) 标准 GZIP → 2) zlib with gzip header → 3) raw deflate
 func (d GzipDecompressor) Decompress(data []byte) ([]byte, error) {
-	reader, err := gzip.NewReader(strings.NewReader(string(data)))
-	if err != nil {
-		// 尝试 zlib 解压作为备选
-		if r, zlibErr := zlib.NewReader(strings.NewReader(string(data))); zlibErr == nil {
-			defer func() { _ = r.Close() }()
-			return io.ReadAll(r)
-		}
-		return nil, fmt.Errorf("GZIP 解压失败: %w", err)
+	// 第一级：标准 GZIP 解压
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err == nil {
+		defer func() { _ = reader.Close() }()
+		return io.ReadAll(reader)
 	}
-	defer func() { _ = reader.Close() }()
-	return io.ReadAll(reader)
+
+	// 第二级：zlib with gzip header 解压
+	if r, zlibErr := zlib.NewReader(bytes.NewReader(data)); zlibErr == nil {
+		defer func() { _ = r.Close() }()
+		if result, readErr := io.ReadAll(r); readErr == nil {
+			return result, nil
+		}
+	}
+
+	// 第三级：raw deflate（无 zlib header）
+	if result, rawErr := decompressRawDeflate(data); rawErr == nil {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("GZIP 解压失败: %w", err)
 }
 
 // CanDecompress 判断是否支持 Deflate 解压。
@@ -280,23 +316,46 @@ func (d DeflateDecompressor) CanDecompress(encoding string) bool {
 }
 
 // Decompress 解压 Deflate 数据。
+//
+// 对照 Python: response_parser.py DeflateDecompressor.decompress
+// 两级尝试：1) zlib 格式（带 header）→ 2) raw deflate（无 header）
 func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
-	reader := flate.NewReader(strings.NewReader(string(data)))
-	defer func() { _ = reader.Close() }()
+	// 第一级：zlib 格式（带 header），flate.NewReader 默认期望 zlib 格式
+	reader := flate.NewReader(bytes.NewReader(data))
 	result, err := io.ReadAll(reader)
-	if err != nil {
-		// 尝试无 header 模式
-		reader2 := flate.NewReader(strings.NewReader(string(data)))
-		defer func() { _ = reader2.Close() }()
-		result, err = io.ReadAll(reader2)
-		if err != nil {
-			return nil, fmt.Errorf("deflate 解压失败: %w", err)
-		}
+	_ = reader.Close()
+	if err == nil {
+		return result, nil
 	}
-	return result, nil
+
+	// 第二级：raw deflate（无 zlib header）
+	if rawResult, rawErr := decompressRawDeflate(data); rawErr == nil {
+		return rawResult, nil
+	}
+
+	return nil, fmt.Errorf("deflate 解压失败: %w", err)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// decompressRawDeflate 解压 raw deflate 数据（无 zlib header）。
+//
+// 对应 Python: zlib.decompress(data, -zlib.MAX_WBITS)
+// Go 标准库的 flate.NewReader 期望 zlib 格式（带 header），无法直接处理 raw deflate。
+// 此函数通过 flate.Resetter 接口关闭 zlib header 检测，实现 raw deflate 解压。
+func decompressRawDeflate(data []byte) ([]byte, error) {
+	reader := flate.NewReader(bytes.NewReader(data))
+	defer func() { _ = reader.Close() }()
+
+	// 通过 Resetter 接口重置为 raw deflate 模式（无 header）
+	if resetter, ok := reader.(flate.Resetter); ok {
+		if err := resetter.Reset(bytes.NewReader(data), nil); err != nil {
+			return nil, err
+		}
+	}
+
+	return io.ReadAll(reader)
+}
 
 // registerDefaults 注册默认解析器和解压器。
 func (r *ParserRegistry) registerDefaults() {
@@ -364,13 +423,22 @@ func decodeBytes(data []byte, headers map[string]string) (string, error) {
 		encoding = "utf-8"
 	}
 
-	// 简化：Go 标准库的 string(data) 假定 UTF-8
-	// 对于非 UTF-8 编码，需要引入 golang.org/x/text/encoding 包
-	// 当前仅支持 UTF-8 和 ASCII 兼容编码
-	if strings.ToLower(encoding) == "utf-8" || strings.ToLower(encoding) == "us-ascii" {
+	// UTF-8 / ASCII 直接转换
+	encLower := strings.ToLower(encoding)
+	if encLower == "utf-8" || encLower == "us-ascii" {
 		return string(data), nil
 	}
-	// 非 UTF-8 编码回退到 UTF-8 尝试
+
+	// 非 UTF-8 编码使用 golang.org/x/text/encoding 解码
+	enc := getEncoder(encLower)
+	if enc != nil {
+		decoded, err := enc.NewDecoder().Bytes(data)
+		if err == nil {
+			return string(decoded), nil
+		}
+		// 解码失败回退到 UTF-8 尝试
+	}
+
 	return string(data), nil
 }
 
@@ -381,4 +449,45 @@ func toLowerHeaders(headers map[string]string) map[string]string {
 		result[strings.ToLower(k)] = v
 	}
 	return result
+}
+
+// getEncoder 根据编码名称返回对应的编码器（encoding.Encoding）。
+func getEncoder(name string) encoding.Encoding {
+	// 去除 BOM 标记和别名归一化
+	name = strings.TrimSuffix(name, "-bom")
+	switch name {
+	// 中文编码
+	case "gbk", "gb2312", "gb18030":
+		return simplifiedchinese.GBK
+	case "big5":
+		return traditionalchinese.Big5
+	// 日文编码
+	case "shift_jis", "shift-jis", "sjis":
+		return japanese.ShiftJIS
+	case "euc-jp":
+		return japanese.EUCJP
+	case "iso-2022-jp":
+		return japanese.ISO2022JP
+	// 韩文编码
+	case "euc-kr":
+		return korean.EUCKR
+	// 西文编码
+	case "iso-8859-1", "latin1":
+		return charmap.ISO8859_1
+	case "iso-8859-2":
+		return charmap.ISO8859_2
+	case "iso-8859-5":
+		return charmap.ISO8859_5
+	case "windows-1252", "cp1252":
+		return charmap.Windows1252
+	// UTF-16
+	case "utf-16":
+		return unicode.UTF16(unicode.LittleEndian, unicode.UseBOM)
+	case "utf-16le":
+		return unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	case "utf-16be":
+		return unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
+	default:
+		return nil
+	}
 }

@@ -92,7 +92,7 @@ func NewHeaderQueryProvider(headers, queryParams map[string]string) *HeaderQuery
 // 处理器从 ToolCallEventData.Extra["auth_config"] 读取 *ToolAuthConfig，
 // 调用 AuthStrategyRegistry.ExecuteAuth() 执行认证，返回 *ToolAuthResult。
 func RegisterAuthCallback(fw *callback.CallbackFramework) {
-	fw.OnTool(callback.ToolAuth, func(_ context.Context, data *callback.ToolCallEventData) any {
+	fw.OnTool(callback.ToolAuth, func(ctx context.Context, data *callback.ToolCallEventData) any {
 		authConfig, ok := data.Extra["auth_config"].(*ToolAuthConfig)
 		if !ok {
 			return &ToolAuthResult{
@@ -101,7 +101,7 @@ func RegisterAuthCallback(fw *callback.CallbackFramework) {
 				Message:  "auth_config not found or invalid type in Extra",
 			}
 		}
-		result, err := globalRegistry.ExecuteAuth(context.Background(), authConfig)
+		result, err := globalRegistry.ExecuteAuth(ctx, authConfig)
 		if err != nil {
 			return &ToolAuthResult{
 				Success:  false,
@@ -126,6 +126,14 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 
 	verifySwitchEnv, _ := authConfig.Config["verify_switch_env"].(string)
 	sslCertEnv, _ := authConfig.Config["ssl_cert_env"].(string)
+
+	// 默认环境变量名，与 Python 对齐：config.get("verify_switch_env", "SSL_VERIFY")
+	if verifySwitchEnv == "" {
+		verifySwitchEnv = "SSL_VERIFY"
+	}
+	if sslCertEnv == "" {
+		sslCertEnv = "SSL_CERT"
+	}
 
 	verify, certPath, err := security.GetSSLConfig(verifySwitchEnv, sslCertEnv, []string{"false"}, urlIsHTTPS)
 	if err != nil {
@@ -165,8 +173,8 @@ func (s *SSLAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthCo
 func (s *HeaderQueryAuthStrategy) Authenticate(_ context.Context, authConfig *ToolAuthConfig) (*ToolAuthResult, error) {
 	var provider *HeaderQueryProvider
 	if authConfig.Config["auth_headers"] != nil || authConfig.Config["auth_query_params"] != nil {
-		headers, _ := authConfig.Config["auth_headers"].(map[string]string)
-		queryParams, _ := authConfig.Config["auth_query_params"].(map[string]string)
+		headers := toStringMap(authConfig.Config["auth_headers"])
+		queryParams := toStringMap(authConfig.Config["auth_query_params"])
 		provider = NewHeaderQueryProvider(headers, queryParams)
 		logger.Info(logger.ComponentAgentCore).
 			Str("auth_type", AuthTypeHeaderAndQuery).
@@ -208,4 +216,29 @@ func (r *AuthStrategyRegistry) ExecuteAuth(ctx context.Context, authConfig *Tool
 func init() {
 	globalRegistry.Register(AuthTypeSSL, &SSLAuthStrategy{})
 	globalRegistry.Register(AuthTypeHeaderAndQuery, &HeaderQueryAuthStrategy{})
+}
+
+// toStringMap 安全地将 any 转换为 map[string]string。
+// 支持 map[string]string 和 map[string]any 两种类型。
+func toStringMap(v any) map[string]string {
+	if v == nil {
+		return nil
+	}
+	// 直接匹配 map[string]string
+	if m, ok := v.(map[string]string); ok {
+		return m
+	}
+	// 匹配 map[string]any 并转换
+	if m, ok := v.(map[string]any); ok {
+		result := make(map[string]string, len(m))
+		for k, val := range m {
+			if s, ok := val.(string); ok {
+				result[k] = s
+			} else {
+				result[k] = fmt.Sprintf("%v", val)
+			}
+		}
+		return result
+	}
+	return nil
 }

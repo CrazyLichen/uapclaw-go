@@ -44,18 +44,19 @@ go 1.25.5
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/getkin/kin-openapi v0.140.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.54.1
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/text v0.14.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/getkin/kin-openapi v0.140.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
@@ -70,5 +71,4 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
 )

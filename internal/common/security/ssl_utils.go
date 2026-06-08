@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,8 +160,8 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 		)
 	}
 
-	// 读取证书内容
-	caPEM, err := os.ReadFile(certPath)
+	// 从已校验的 fd 读取证书内容（防止 TOCTOU：避免重新打开文件）
+	caPEM, err := io.ReadAll(fd)
 	if err != nil {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,

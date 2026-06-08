@@ -29,10 +29,32 @@ type Param struct {
 	Required bool `json:"required"`
 	// Default 默认值（可选），实际类型取决于 Type
 	Default any `json:"default,omitempty"`
+	// Enum 枚举值列表（可选），限制参数只能取这些值
+	Enum []string `json:"enum,omitempty"`
+	// MinLength 字符串最小长度（可选，仅 String 类型）
+	MinLength int `json:"minLength,omitempty"`
+	// MaxLength 字符串最大长度（可选，仅 String 类型）
+	MaxLength int `json:"maxLength,omitempty"`
+	// Pattern 正则校验模式（可选，仅 String 类型）
+	Pattern string `json:"pattern,omitempty"`
+	// Minimum 数值最小值（可选，仅 Integer/Number 类型）
+	Minimum float64 `json:"minimum,omitempty"`
+	// Maximum 数值最大值（可选，仅 Integer/Number 类型）
+	Maximum float64 `json:"maximum,omitempty"`
+	// Format 格式标识（可选，如 email/uri/date-time 等）
+	Format string `json:"format,omitempty"`
+	// Nullable 是否可为 null（可选），输出 JSON Schema 时将 type 扩展为数组含 "null"
+	Nullable bool `json:"nullable,omitempty"`
 	// Items 数组元素类型定义（仅 Array 类型使用）
 	Items *Param `json:"items,omitempty"`
 	// Properties 对象属性列表（仅 Object 类型使用）
 	Properties []*Param `json:"properties,omitempty"`
+	// AnyOf 多子 schema 至少匹配一个（JSON Schema 标准关键字）
+	AnyOf []*Param `json:"anyOf,omitempty"`
+	// AllOf 多子 schema 全部匹配（JSON Schema 标准关键字）
+	AllOf []*Param `json:"allOf,omitempty"`
+	// OneOf 多子 schema 恰好匹配一个（JSON Schema 标准关键字）
+	OneOf []*Param `json:"oneOf,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -200,6 +222,7 @@ func (t *ParamType) UnmarshalJSON(data []byte) error {
 //   - Array 类型必须有 Items，不能有 Properties
 //   - Object 类型必须有 Properties，不能有 Items
 //   - 其他类型不能有 Items 或 Properties
+//   - AnyOf/AllOf/OneOf 可与任意类型共存（JSON Schema 标准）
 //
 // 对应 Python: Param.validate_type_specific_fields()
 func (p *Param) Validate() error {
@@ -212,7 +235,9 @@ func (p *Param) Validate() error {
 			return fmt.Errorf("Param %q: Array 类型不应有 properties 字段", p.Name)
 		}
 		// 递归验证 items
-		return p.Items.Validate()
+		if err := p.Items.Validate(); err != nil {
+			return err
+		}
 
 	case ParamTypeObject:
 		if len(p.Properties) == 0 {
@@ -227,7 +252,6 @@ func (p *Param) Validate() error {
 				return err
 			}
 		}
-		return nil
 
 	default:
 		if p.Items != nil {
@@ -236,8 +260,26 @@ func (p *Param) Validate() error {
 		if len(p.Properties) > 0 {
 			return fmt.Errorf("Param %q: %s 类型不应有 properties 字段", p.Name, p.Type)
 		}
-		return nil
 	}
+
+	// 递归验证组合 Schema
+	for _, sub := range p.AnyOf {
+		if err := sub.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, sub := range p.AllOf {
+		if err := sub.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, sub := range p.OneOf {
+		if err := sub.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ToJSONSchemaMap 将 []*Param 列表转换为 OpenAI function calling 格式的 JSON Schema parameters。
@@ -288,12 +330,42 @@ func (p *Param) String() string {
 
 // paramToSchema 将单个 Param 转换为 JSON Schema 字典。
 func paramToSchema(p *Param) map[string]any {
-	s := map[string]any{
-		"type":        p.Type.String(),
-		"description": p.Description,
+	s := map[string]any{}
+
+	// type：Nullable=true 时输出 ["xxx", "null"]，否则输出字符串
+	if p.Nullable {
+		s["type"] = []string{p.Type.String(), "null"}
+	} else {
+		s["type"] = p.Type.String()
+	}
+
+	if p.Description != "" {
+		s["description"] = p.Description
 	}
 	if p.Default != nil {
 		s["default"] = p.Default
+	}
+	if len(p.Enum) > 0 {
+		s["enum"] = p.Enum
+	}
+	// 输出约束字段（零值跳过，不输出）
+	if p.MinLength > 0 {
+		s["minLength"] = p.MinLength
+	}
+	if p.MaxLength > 0 {
+		s["maxLength"] = p.MaxLength
+	}
+	if p.Pattern != "" {
+		s["pattern"] = p.Pattern
+	}
+	if p.Minimum != 0 {
+		s["minimum"] = p.Minimum
+	}
+	if p.Maximum != 0 {
+		s["maximum"] = p.Maximum
+	}
+	if p.Format != "" {
+		s["format"] = p.Format
 	}
 	switch p.Type {
 	case ParamTypeArray:
@@ -315,6 +387,28 @@ func paramToSchema(p *Param) map[string]any {
 				s["required"] = objRequired
 			}
 		}
+	}
+	// 输出组合 Schema 关键字（JSON Schema 标准）
+	if len(p.AnyOf) > 0 {
+		items := make([]any, 0, len(p.AnyOf))
+		for _, sub := range p.AnyOf {
+			items = append(items, paramToSchema(sub))
+		}
+		s["anyOf"] = items
+	}
+	if len(p.AllOf) > 0 {
+		items := make([]any, 0, len(p.AllOf))
+		for _, sub := range p.AllOf {
+			items = append(items, paramToSchema(sub))
+		}
+		s["allOf"] = items
+	}
+	if len(p.OneOf) > 0 {
+		items := make([]any, 0, len(p.OneOf))
+		for _, sub := range p.OneOf {
+			items = append(items, paramToSchema(sub))
+		}
+		s["oneOf"] = items
 	}
 	return s
 }

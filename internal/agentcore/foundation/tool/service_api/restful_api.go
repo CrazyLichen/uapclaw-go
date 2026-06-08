@@ -164,6 +164,11 @@ func NewRestfulApiCard(
 		opt(card)
 	}
 
+	// 校验 Timeout 范围（Python 限定 1.0-300.0）
+	if card.Timeout < 1.0 || card.Timeout > 300.0 {
+		return nil, fmt.Errorf("timeout %.1f 超出范围 [1.0, 300.0]", card.Timeout)
+	}
+
 	// 校验 URL 路径参数与 InputSchema 的匹配
 	if err := validatePathParams(card.URL, card.InputSchema); err != nil {
 		return nil, err
@@ -438,12 +443,15 @@ func (r *RestfulApi) doRequest(
 		}
 	}
 
-	// 创建 HTTP 客户端（支持代理 + SSL）
+	// 创建 HTTP 客户端（支持代理 + SSL，禁止自动重定向）
 	client := &http.Client{
 		Timeout: time.Duration(timeout * float64(time.Second)),
 		Transport: &http.Transport{
 			Proxy:           http.ProxyFromEnvironment,
 			TLSClientConfig: tlsConfig,
+		},
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
 	}
 

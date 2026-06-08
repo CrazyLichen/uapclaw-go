@@ -14,6 +14,12 @@ import (
 // 注册到 AbilityManager 时自动包装，对调用方透明。
 //
 // 对应 Python: _ToolMeta.__call__ 中的生命周期注入逻辑
+//
+// ⤵️ 预留：transform_io 机制（回调函数修改工具调用输入/输出）。
+// Python 的 CallbackFramework 支持 transform_io，允许回调在调用前后修改 IO 数据。
+// 当前 Go 实现只触发事件通知，不支持回调修改数据。
+// 实现 transform_io 需要 CallbackFramework 架构改造（回调签名支持返回修改后数据），
+// 标记为后续改进，参见 docs/review/2025-07-10-tool-system.md S11。
 type LifecycleTool struct {
 	inner Tool
 	fw    *runnnercallback.CallbackFramework

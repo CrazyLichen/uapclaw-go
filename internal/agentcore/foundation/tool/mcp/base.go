@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	runnnercallback "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -170,7 +171,14 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 	arguments := inputs
 	if t.card.InputParams != nil {
 		callOpts := tool.NewToolCallOptions(opts...)
-		// ⤵️ 预留：触发 TOOL_PARSE_STARTED 事件（等回调系统就绪后回填）
+		// 触发 TOOL_PARSE_STARTED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseStarted,
+			ToolName: t.card.Name,
+			ToolID:   t.card.ID,
+			Inputs:   inputs,
+			Extra:    map[string]any{"schema": t.card.InputParams},
+		})
 		formatted, err := tool.SchemaUtils{}.FormatWithSchema(
 			inputs, t.card.InputParams,
 			tool.WithFormatSkipValidate(callOpts.SkipInputsValidate),
@@ -185,7 +193,13 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 				arguments = make(map[string]any)
 			}
 		}
-		// ⤵️ 预留：触发 TOOL_PARSE_FINISHED 事件（等回调系统就绪后回填）
+		// 触发 TOOL_PARSE_FINISHED 事件
+		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
+			Event:    runnnercallback.ToolParseFinished,
+			ToolName: t.card.Name,
+			ToolID:   t.card.ID,
+			Inputs:   arguments,
+		})
 	}
 
 	result, err := t.mcpClient.CallTool(ctx, t.card.Name, arguments)

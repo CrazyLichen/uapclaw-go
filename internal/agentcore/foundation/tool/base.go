@@ -109,8 +109,11 @@ func WithRaiseForStatus(raise bool) ToolOption {
 }
 
 // NewToolCallOptions 从选项列表构造 ToolCallOptions。
+// 默认值：RaiseForStatus=true（与 Python raise_for_status=True 对齐）。
 func NewToolCallOptions(opts ...ToolOption) *ToolCallOptions {
-	o := &ToolCallOptions{}
+	o := &ToolCallOptions{
+		RaiseForStatus: true,
+	}
 	for _, opt := range opts {
 		opt(o)
 	}

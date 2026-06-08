@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
@@ -45,7 +46,14 @@ func NewStreamableHttpClient(config *types.McpServerConfig) *StreamableHttpClien
 
 // Connect 建立 Streamable HTTP 连接。
 func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
-	_ = types.NewConnectOptions(opts...)
+	connectOpts := types.NewConnectOptions(opts...)
+
+	// 如果设置了超时，创建带超时的 context
+	if connectOpts.Timeout > 0 && connectOpts.Timeout != types.NoTimeout {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(connectOpts.Timeout*float64(time.Second)))
+		defer cancel()
+	}
 
 	// 构建 transport 选项
 	transportOpts := make([]mcptransport.StreamableHTTPCOption, 0)

@@ -406,3 +406,162 @@ func TestParam_嵌套结构(t *testing.T) {
 		t.Errorf("Properties[1].Type 期望 %v，实际 %v", ParamTypeInteger, decoded.Properties[1].Type)
 	}
 }
+
+func TestParam_Nullable输出Type数组(t *testing.T) {
+	p := &Param{
+		Name:        "email",
+		Type:        ParamTypeString,
+		Description: "邮箱地址",
+		Required:    false,
+		Nullable:    true,
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	emailSchema := props["email"].(map[string]any)
+
+	// Nullable=true 时 type 应输出 ["string", "null"]
+	typeVal, ok := emailSchema["type"].([]string)
+	if !ok {
+		t.Fatalf("期望 type 为 []string，实际 %T", emailSchema["type"])
+	}
+	if len(typeVal) != 2 || typeVal[0] != "string" || typeVal[1] != "null" {
+		t.Errorf("期望 type [string null]，实际 %v", typeVal)
+	}
+}
+
+func TestParam_Nullable为false输出Type字符串(t *testing.T) {
+	p := NewStringParam("name", "名称", true)
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	nameSchema := props["name"].(map[string]any)
+
+	// Nullable=false（默认）时 type 应输出字符串
+	typeStr, ok := nameSchema["type"].(string)
+	if !ok {
+		t.Fatalf("期望 type 为 string，实际 %T", nameSchema["type"])
+	}
+	if typeStr != "string" {
+		t.Errorf("期望 type string，实际 %v", typeStr)
+	}
+}
+
+func TestParam_AnyOf输出(t *testing.T) {
+	p := &Param{
+		Name:        "value",
+		Type:        ParamTypeString,
+		Description: "可以是字符串或整数",
+		Required:    false,
+		AnyOf: []*Param{
+			{Type: ParamTypeString},
+			{Type: ParamTypeInteger},
+		},
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	valueSchema := props["value"].(map[string]any)
+
+	anyOf, ok := valueSchema["anyOf"].([]any)
+	if !ok {
+		t.Fatalf("期望 anyOf 为 []any，实际 %T", valueSchema["anyOf"])
+	}
+	if len(anyOf) != 2 {
+		t.Fatalf("期望 anyOf 有 2 项，实际 %d", len(anyOf))
+	}
+	first := anyOf[0].(map[string]any)
+	if first["type"] != "string" {
+		t.Errorf("anyOf[0].type 期望 string，实际 %v", first["type"])
+	}
+	second := anyOf[1].(map[string]any)
+	if second["type"] != "integer" {
+		t.Errorf("anyOf[1].type 期望 integer，实际 %v", second["type"])
+	}
+}
+
+func TestParam_AllOf输出(t *testing.T) {
+	p := &Param{
+		Name:        "combined",
+		Type:        ParamTypeObject,
+		Description: "合并对象",
+		Required:    true,
+		Properties: []*Param{
+			NewStringParam("name", "名称", true),
+		},
+		AllOf: []*Param{
+			{
+				Type: ParamTypeObject,
+				Properties: []*Param{
+					NewStringParam("id", "标识", true),
+				},
+			},
+		},
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	combinedSchema := props["combined"].(map[string]any)
+
+	allOf, ok := combinedSchema["allOf"].([]any)
+	if !ok {
+		t.Fatalf("期望 allOf 为 []any，实际 %T", combinedSchema["allOf"])
+	}
+	if len(allOf) != 1 {
+		t.Fatalf("期望 allOf 有 1 项，实际 %d", len(allOf))
+	}
+}
+
+func TestParam_OneOf输出(t *testing.T) {
+	p := &Param{
+		Name:        "choice",
+		Type:        ParamTypeString,
+		Description: "选择",
+		Required:    false,
+		OneOf: []*Param{
+			{Type: ParamTypeString, Enum: []string{"a", "b"}},
+			{Type: ParamTypeInteger},
+		},
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	choiceSchema := props["choice"].(map[string]any)
+
+	oneOf, ok := choiceSchema["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("期望 oneOf 为 []any，实际 %T", choiceSchema["oneOf"])
+	}
+	if len(oneOf) != 2 {
+		t.Fatalf("期望 oneOf 有 2 项，实际 %d", len(oneOf))
+	}
+}
+
+func TestParam_Validate_组合Schema递归验证(t *testing.T) {
+	// Array 类型带合法 AnyOf
+	p := &Param{
+		Name:        "data",
+		Type:        ParamTypeString,
+		Description: "数据",
+		Required:    true,
+		AnyOf: []*Param{
+			NewStringParam("", "", false),
+			NewIntegerParam("", "", false),
+		},
+	}
+	if err := p.Validate(); err != nil {
+		t.Errorf("带 AnyOf 的合法参数不应报错: %v", err)
+	}
+}
+
+func TestParam_Validate_组合Schema内嵌无效类型(t *testing.T) {
+	// AllOf 内含无效的 Array（缺少 Items）
+	p := &Param{
+		Name:        "data",
+		Type:        ParamTypeString,
+		Description: "数据",
+		Required:    true,
+		AllOf: []*Param{
+			{Type: ParamTypeArray}, // 缺少 Items，应该校验失败
+		},
+	}
+	err := p.Validate()
+	if err == nil {
+		t.Error("AllOf 内含无效子 schema 应返回错误")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"unicode"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -77,7 +78,7 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 		param := &schema.Param{
 			Name:        jsonName,
 			Type:        paramType,
-			Description: schemaTags.get("description"),
+			Description: resolveDescription(jsonName, schemaTags),
 		}
 
 		// 确定 Required
@@ -86,6 +87,39 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 		// 设置默认值
 		if def, ok := schemaTags.getOk("default"); ok {
 			param.Default = convertDefaultValue(def, paramType)
+		}
+
+		// 设置枚举值（jsonschema:"enum=a|b|c" → Enum: ["a", "b", "c"]）
+		if enumStr, ok := schemaTags.getOk("enum"); ok {
+			param.Enum = strings.Split(enumStr, "|")
+		}
+
+		// 设置约束字段
+		if v, ok := schemaTags.getOk("minLength"); ok {
+			if n, err := fmt.Sscanf(v, "%d", &param.MinLength); err == nil && n == 1 {
+				// 解析成功
+			}
+		}
+		if v, ok := schemaTags.getOk("maxLength"); ok {
+			if n, err := fmt.Sscanf(v, "%d", &param.MaxLength); err == nil && n == 1 {
+				// 解析成功
+			}
+		}
+		if v, ok := schemaTags.getOk("pattern"); ok {
+			param.Pattern = v
+		}
+		if v, ok := schemaTags.getOk("minimum"); ok {
+			if n, err := fmt.Sscanf(v, "%f", &param.Minimum); err == nil && n == 1 {
+				// 解析成功
+			}
+		}
+		if v, ok := schemaTags.getOk("maximum"); ok {
+			if n, err := fmt.Sscanf(v, "%f", &param.Maximum); err == nil && n == 1 {
+				// 解析成功
+			}
+		}
+		if v, ok := schemaTags.getOk("format"); ok {
+			param.Format = v
 		}
 
 		// 递归处理嵌套 struct
@@ -128,9 +162,16 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 }
 
 // ExtractDescription 从 struct 提取工具描述。
-// 目前简单返回空字符串，后续可通过注释解析增强。
+// Go 无法在运行时获取注释/docstring，因此使用 humanize 将 struct 名转为可读描述。
+// 对应 Python: CallableSchemaExtractor.extract_function_description()
 func (StructSchemaExtractor) ExtractDescription(typ reflect.Type) string {
-	return ""
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return ""
+	}
+	return humanizeName(typ.Name())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -252,4 +293,57 @@ func convertDefaultValue(val string, typ schema.ParamType) any {
 	default:
 		return val
 	}
+}
+
+// resolveDescription 确定参数描述。
+// 优先使用 jsonschema:"description=xxx" tag，缺失时使用 humanize 从参数名生成。
+// 对应 Python: CallableSchemaExtractor 中 description = cls._humanize_name(param_name)
+func resolveDescription(jsonName string, tags schemaTagMap) string {
+	if desc := tags.get("description"); desc != "" {
+		return desc
+	}
+	return humanizeName(jsonName)
+}
+
+// humanizeName 将变量名转换为人类可读的描述文本。
+// snake_case → "search query"，camelCase/PascalCase → "user name"。
+// 对应 Python: CallableSchemaExtractor._humanize_name()
+func humanizeName(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	// 处理 snake_case
+	if strings.Contains(name, "_") {
+		words := strings.Split(name, "_")
+		var parts []string
+		for _, w := range words {
+			if w != "" {
+				parts = append(parts, w)
+			}
+		}
+		return strings.ToLower(strings.Join(parts, " "))
+	}
+
+	// 处理 camelCase / PascalCase
+	var result []rune
+	runes := []rune(name)
+	for i, char := range runes {
+		if i == 0 {
+			result = append(result, unicode.ToLower(char))
+			continue
+		}
+		if unicode.IsUpper(char) {
+			prevLower := i > 0 && unicode.IsLower(runes[i-1])
+			nextLower := i < len(runes)-1 && unicode.IsLower(runes[i+1])
+			if prevLower || nextLower {
+				result = append(result, ' ')
+			}
+			result = append(result, unicode.ToLower(char))
+		} else {
+			result = append(result, char)
+		}
+	}
+
+	return string(result)
 }
