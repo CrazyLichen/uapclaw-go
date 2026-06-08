@@ -58,3 +58,20 @@ func TestNewResourceOptions_资源选项(t *testing.T) {
 		t.Errorf("Tag = %q, want my_tag", opts.Tag)
 	}
 }
+
+// TestWithResourceSession 验证 WithResourceSession 设置 Session。
+func TestWithResourceSession(t *testing.T) {
+	session := &mockSession{}
+	opts := NewResourceOptions(WithResourceSession(session))
+	if opts.Session != session {
+		t.Error("WithResourceSession 未正确设置 Session")
+	}
+}
+
+// mockSession 用于测试的模拟 Session。
+type mockSession struct{}
+
+func (m *mockSession) GetSessionID() string             { return "test-session" }
+func (m *mockSession) CreateWorkflowSession() Session   { return m }
+func (m *mockSession) GetState(key string) any          { return nil }
+func (m *mockSession) UpdateState(state map[string]any) {}

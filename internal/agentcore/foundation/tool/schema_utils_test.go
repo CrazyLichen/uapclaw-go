@@ -480,3 +480,32 @@ func TestSchemaUtils_FormatWithSchemaMap_空schema(t *testing.T) {
 		t.Errorf("空 schema 下数据应原样返回: key=%v", result["key"])
 	}
 }
+
+// ──────────────────────────── toFloat64 测试 ────────────────────────────
+
+// TestToFloat64 验证各种数值类型转 float64。
+func TestToFloat64(t *testing.T) {
+	tests := []struct {
+		name   string
+		val    any
+		want   float64
+		wantOK bool
+	}{
+		{"float64", float64(3.14), 3.14, true},
+		{"int", int(42), 42.0, true},
+		{"int64", int64(100), 100.0, true},
+		{"int32", int32(7), 7.0, true},
+		{"string", "not_a_number", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := toFloat64(tt.val)
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if ok && math.Abs(got-tt.want) > 1e-9 {
+				t.Errorf("got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

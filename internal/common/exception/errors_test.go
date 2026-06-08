@@ -315,3 +315,30 @@ func TestBaseError_Code_DelegatesToStatus(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestBaseError_Cause 验证 Cause() 返回原始错误。
+func TestBaseError_Cause(t *testing.T) {
+	inner := fmt.Errorf("root cause")
+	err := NewBaseError(StatusError, WithCause(inner))
+	if got := err.Cause(); got != inner {
+		t.Errorf("Cause() = %v, want %v", got, inner)
+	}
+}
+
+// TestBaseError_Cause_Nil 验证无 cause 时 Cause() 返回 nil。
+func TestBaseError_Cause_Nil(t *testing.T) {
+	err := NewBaseError(StatusError)
+	if got := err.Cause(); got != nil {
+		t.Errorf("无 cause 时 Cause() 应为 nil，实际 %v", got)
+	}
+}
+
+// TestErrorCategory_String_越界 验证越界 ErrorCategory.String() 格式化输出。
+func TestErrorCategory_String_越界(t *testing.T) {
+	cat := ErrorCategory(99)
+	got := cat.String()
+	want := "ErrorCategory(99)"
+	if got != want {
+		t.Errorf("ErrorCategory(99).String() = %q, want %q", got, want)
+	}
+}

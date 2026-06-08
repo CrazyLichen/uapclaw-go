@@ -333,3 +333,62 @@ func TestAssistantMessage_MultiModalContent(t *testing.T) {
 		t.Errorf("Parts() 长度 = %d, want 1", len(restored.Content.Parts()))
 	}
 }
+
+// TestAssistantMessage_WithParserContent 验证 WithParserContent 设置 ParserContent。
+func TestAssistantMessage_WithParserContent(t *testing.T) {
+	msg := NewAssistantMessage("test", WithParserContent(map[string]any{"key": "value"}))
+	if msg.ParserContent == nil {
+		t.Fatal("ParserContent 不应为 nil")
+	}
+	pc, ok := msg.ParserContent.(map[string]any)
+	if !ok {
+		t.Fatalf("ParserContent 类型应为 map[string]any，实际 %T", msg.ParserContent)
+	}
+	if pc["key"] != "value" {
+		t.Errorf("ParserContent[key] = %v, want %q", pc["key"], "value")
+	}
+}
+
+// TestAssistantMessage_WithPromptTokenIDs 验证 WithPromptTokenIDs 设置 PromptTokenIDs。
+func TestAssistantMessage_WithPromptTokenIDs(t *testing.T) {
+	ids := []int{1, 2, 3}
+	msg := NewAssistantMessage("test", WithPromptTokenIDs(ids))
+	if len(msg.PromptTokenIDs) != 3 {
+		t.Fatalf("PromptTokenIDs 长度 = %d, want 3", len(msg.PromptTokenIDs))
+	}
+	for i, id := range msg.PromptTokenIDs {
+		if id != ids[i] {
+			t.Errorf("PromptTokenIDs[%d] = %d, want %d", i, id, ids[i])
+		}
+	}
+}
+
+// TestAssistantMessage_WithCompletionTokenIDs 验证 WithCompletionTokenIDs 设置 CompletionTokenIDs。
+func TestAssistantMessage_WithCompletionTokenIDs(t *testing.T) {
+	ids := []int{4, 5, 6, 7}
+	msg := NewAssistantMessage("test", WithCompletionTokenIDs(ids))
+	if len(msg.CompletionTokenIDs) != 4 {
+		t.Fatalf("CompletionTokenIDs 长度 = %d, want 4", len(msg.CompletionTokenIDs))
+	}
+	for i, id := range msg.CompletionTokenIDs {
+		if id != ids[i] {
+			t.Errorf("CompletionTokenIDs[%d] = %d, want %d", i, id, ids[i])
+		}
+	}
+}
+
+// TestAssistantMessage_WithLogprobs 验证 WithLogprobs 设置 Logprobs。
+func TestAssistantMessage_WithLogprobs(t *testing.T) {
+	logprobs := map[string]any{"top_logprobs": []any{"a", "b"}}
+	msg := NewAssistantMessage("test", WithLogprobs(logprobs))
+	if msg.Logprobs == nil {
+		t.Fatal("Logprobs 不应为 nil")
+	}
+	lp, ok := msg.Logprobs.(map[string]any)
+	if !ok {
+		t.Fatalf("Logprobs 类型应为 map[string]any，实际 %T", msg.Logprobs)
+	}
+	if _, exists := lp["top_logprobs"]; !exists {
+		t.Error("Logprobs 应包含 top_logprobs 字段")
+	}
+}

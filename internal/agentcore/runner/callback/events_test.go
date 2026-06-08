@@ -132,3 +132,27 @@ func TestNewToolCallEventData_NilCard(t *testing.T) {
 		t.Errorf("ToolName 应为空，实际 %q", data.ToolName)
 	}
 }
+
+// TestToolCallEventType_String 验证 ToolCallEventType.String() 返回字符串值。
+func TestToolCallEventType_String(t *testing.T) {
+	if got := ToolCallStarted.String(); got != string(ToolCallStarted) {
+		t.Errorf("ToolCallStarted.String() = %q, want %q", got, string(ToolCallStarted))
+	}
+}
+
+// TestLLMCallEventType_String 验证 LLMCallEventType.String() 返回字符串值。
+func TestLLMCallEventType_String(t *testing.T) {
+	if got := LLMCallStarted.String(); got != string(LLMCallStarted) {
+		t.Errorf("LLMCallStarted.String() = %q, want %q", got, string(LLMCallStarted))
+	}
+}
+
+// TestToolCallEventData_String 验证 ToolCallEventData.String() 返回简洁描述。
+func TestToolCallEventData_String(t *testing.T) {
+	card := commonschema.NewBaseCard(commonschema.WithName("test"), commonschema.WithID("id123"))
+	data := NewToolCallEventData(ToolCallStarted, card)
+	got := data.String()
+	if got == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}

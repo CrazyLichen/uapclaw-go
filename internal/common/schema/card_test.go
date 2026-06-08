@@ -247,3 +247,52 @@ func TestAgentCard_能力(t *testing.T) {
 	}
 	var _ Ability = card // 编译期接口检查
 }
+
+// TestWorkflowCard_AbilityID 验证 WorkflowCard.AbilityID() 返回 card.ID。
+func TestWorkflowCard_AbilityID(t *testing.T) {
+	card := NewWorkflowCard(WithName("wf"))
+	if got := card.AbilityID(); got != card.ID {
+		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
+	}
+}
+
+// TestAgentCard_AbilityID 验证 AgentCard.AbilityID() 返回 card.ID。
+func TestAgentCard_AbilityID(t *testing.T) {
+	card := NewAgentCard(WithName("ag"))
+	if got := card.AbilityID(); got != card.ID {
+		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
+	}
+}
+
+// TestBaseCard_GoString 验证 GoString 输出格式。
+func TestBaseCard_GoString(t *testing.T) {
+	card := NewBaseCard(WithName("test"), WithDescription("描述"))
+	got := card.GoString()
+	if !strings.Contains(got, "BaseCard{") {
+		t.Errorf("GoString() 缺少 BaseCard{: %s", got)
+	}
+	if !strings.Contains(got, `Name:"test"`) {
+		t.Errorf("GoString() 缺少 Name 字段: %s", got)
+	}
+	if !strings.Contains(got, `Description:"描述"`) {
+		t.Errorf("GoString() 缺少 Description 字段: %s", got)
+	}
+}
+
+// TestAbilityKind_String 验证 AbilityKind.String() 各枚举值。
+func TestAbilityKind_String(t *testing.T) {
+	tests := []struct {
+		kind AbilityKind
+		want string
+	}{
+		{AbilityKindTool, "tool"},
+		{AbilityKindWorkflow, "workflow"},
+		{AbilityKindAgent, "agent"},
+		{AbilityKindMcpServer, "mcp_server"},
+	}
+	for _, tt := range tests {
+		if got := tt.kind.String(); got != tt.want {
+			t.Errorf("AbilityKind(%d).String() = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+}

@@ -344,6 +344,25 @@ func TestSystemMessage_JSONRoundTrip(t *testing.T) {
 	}
 }
 
+// TestMessageContent_String 验证纯文本和多模态 String() 返回值。
+func TestMessageContent_String(t *testing.T) {
+	// 纯文本 String() 返回文本
+	textContent := NewTextContent("你好世界")
+	if got := textContent.String(); got != "你好世界" {
+		t.Errorf("纯文本 String() = %q, want %q", got, "你好世界")
+	}
+
+	// 多模态 String() 返回 JSON 数组字符串
+	multiContent := NewMultiModalContent(
+		ContentPart{Type: "text", Text: "hi"},
+	)
+	got := multiContent.String()
+	expected := `[{"type":"text","text":"hi"}]`
+	if got != expected {
+		t.Errorf("多模态 String() = %q, want %q", got, expected)
+	}
+}
+
 // TestBaseMessage_EmptyContent 验证空内容消息的序列化。
 func TestBaseMessage_EmptyContent(t *testing.T) {
 	msg := NewUserMessage("")

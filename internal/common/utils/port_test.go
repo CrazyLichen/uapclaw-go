@@ -145,3 +145,12 @@ func TestWaitForPIDExit_ContextCancelled(t *testing.T) {
 		t.Fatal("WaitForPIDExit should return error when context cancelled for running process")
 	}
 }
+
+// TestWithConnectTimeout 验证 WithConnectTimeout 设置连接超时。
+func TestWithConnectTimeout(t *testing.T) {
+	cfg := defaultPortConfig()
+	WithConnectTimeout(5 * time.Second)(cfg)
+	if cfg.connectTimeout != 5*time.Second {
+		t.Errorf("connectTimeout = %v, want 5s", cfg.connectTimeout)
+	}
+}

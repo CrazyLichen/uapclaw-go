@@ -174,3 +174,35 @@ func TestStreamChunk_错误标记(t *testing.T) {
 		t.Error("Error 不应为 nil")
 	}
 }
+
+// TestWithSkipInputsValidate 验证 WithSkipInputsValidate 设置 SkipInputsValidate 为 true。
+func TestWithSkipInputsValidate(t *testing.T) {
+	opts := NewToolCallOptions(WithSkipInputsValidate(true))
+	if !opts.SkipInputsValidate {
+		t.Error("SkipInputsValidate 应为 true")
+	}
+}
+
+// TestToolCard_AbilityName 验证 ToolCard.AbilityName() 返回 card.Name。
+func TestToolCard_AbilityName(t *testing.T) {
+	card := NewToolCard("weather", "查询天气", nil, nil)
+	if got := card.AbilityName(); got != "weather" {
+		t.Errorf("AbilityName() = %q, want %q", got, "weather")
+	}
+}
+
+// TestToolCard_AbilityID 验证 ToolCard.AbilityID() 返回 card.ID。
+func TestToolCard_AbilityID(t *testing.T) {
+	card := NewToolCard("weather", "查询天气", nil, nil)
+	if got := card.AbilityID(); got != card.ID {
+		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
+	}
+}
+
+// TestToolCard_AbilityKind 验证 ToolCard.AbilityKind() 返回 schema.AbilityKindTool。
+func TestToolCard_AbilityKind(t *testing.T) {
+	card := NewToolCard("weather", "查询天气", nil, nil)
+	if got := card.AbilityKind(); got != schema.AbilityKindTool {
+		t.Errorf("AbilityKind() = %v, want %v", got, schema.AbilityKindTool)
+	}
+}

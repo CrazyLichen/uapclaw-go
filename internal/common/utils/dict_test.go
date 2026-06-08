@@ -482,3 +482,45 @@ func leafNodesToMap(nodes []LeafNode) map[string]any {
 	}
 	return m
 }
+
+// ──────────────────────────── checkEnum 测试 ────────────────────────────
+
+// TestCheckEnum_无枚举定义 验证无 enum 字段时直接通过。
+func TestCheckEnum_无枚举定义(t *testing.T) {
+	err := checkEnum("key", "val", map[string]any{})
+	if err != nil {
+		t.Errorf("无 enum 字段不应报错: %v", err)
+	}
+}
+
+// TestCheckEnum_值在枚举中 验证值匹配枚举中的某项。
+func TestCheckEnum_值在枚举中(t *testing.T) {
+	schema := map[string]any{"enum": []any{"a", "b", "c"}}
+	if err := checkEnum("key", "a", schema); err != nil {
+		t.Errorf("值在枚举中不应报错: %v", err)
+	}
+}
+
+// TestCheckEnum_值不在枚举中 验证值不匹配任何枚举项时报错。
+func TestCheckEnum_值不在枚举中(t *testing.T) {
+	schema := map[string]any{"enum": []any{"a", "b", "c"}}
+	if err := checkEnum("key", "d", schema); err == nil {
+		t.Error("值不在枚举中应报错")
+	}
+}
+
+// TestCheckEnum_字符串枚举 验证 []string 类型枚举匹配。
+func TestCheckEnum_字符串枚举(t *testing.T) {
+	schema := map[string]any{"enum": []string{"x", "y"}}
+	if err := checkEnum("key", "x", schema); err != nil {
+		t.Errorf("字符串枚举匹配不应报错: %v", err)
+	}
+}
+
+// TestCheckEnum_非标准枚举类型 验证其他类型枚举直接通过。
+func TestCheckEnum_非标准枚举类型(t *testing.T) {
+	schema := map[string]any{"enum": "not-a-slice"}
+	if err := checkEnum("key", "val", schema); err != nil {
+		t.Errorf("非标准枚举类型不应报错: %v", err)
+	}
+}

@@ -358,6 +358,22 @@ func Test全局注册表_AesGcm已注册(t *testing.T) {
 	}
 }
 
+// Test全局注册表_Unregister 验证全局 Unregister 函数。
+func Test全局注册表_Unregister(t *testing.T) {
+	// 先注册一个临时算法
+	_ = Register("temp_algo", &AesGcmCrypt{})
+	_, ok := Get("temp_algo")
+	if !ok {
+		t.Fatal("注册后应能获取")
+	}
+	// 注销
+	Unregister("temp_algo")
+	_, ok = Get("temp_algo")
+	if ok {
+		t.Error("注销后不应能获取")
+	}
+}
+
 // ─── AesGcmProvider 测试 ───
 
 func TestAesGcmProvider_加密解密(t *testing.T) {

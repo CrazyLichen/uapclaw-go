@@ -101,27 +101,23 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 
 		// 设置约束字段
 		if v, ok := schemaTags.getOk("minLength"); ok {
-			if n, err := fmt.Sscanf(v, "%d", &param.MinLength); err == nil && n == 1 {
-				// 解析成功
-			}
+			n, _ := fmt.Sscanf(v, "%d", &param.MinLength)
+			_ = n // Sscanf 已通过指针写入 param.MinLength
 		}
 		if v, ok := schemaTags.getOk("maxLength"); ok {
-			if n, err := fmt.Sscanf(v, "%d", &param.MaxLength); err == nil && n == 1 {
-				// 解析成功
-			}
+			n, _ := fmt.Sscanf(v, "%d", &param.MaxLength)
+			_ = n // Sscanf 已通过指针写入 param.MaxLength
 		}
 		if v, ok := schemaTags.getOk("pattern"); ok {
 			param.Pattern = v
 		}
 		if v, ok := schemaTags.getOk("minimum"); ok {
-			if n, err := fmt.Sscanf(v, "%f", &param.Minimum); err == nil && n == 1 {
-				// 解析成功
-			}
+			n, _ := fmt.Sscanf(v, "%f", &param.Minimum)
+			_ = n // Sscanf 已通过指针写入 param.Minimum
 		}
 		if v, ok := schemaTags.getOk("maximum"); ok {
-			if n, err := fmt.Sscanf(v, "%f", &param.Maximum); err == nil && n == 1 {
-				// 解析成功
-			}
+			n, _ := fmt.Sscanf(v, "%f", &param.Maximum)
+			_ = n // Sscanf 已通过指针写入 param.Maximum
 		}
 		if v, ok := schemaTags.getOk("format"); ok {
 			param.Format = v
