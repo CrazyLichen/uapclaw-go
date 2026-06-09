@@ -175,6 +175,9 @@ func (c *StdioClient) Disconnect(_ context.Context) error {
 	}
 	c.isConnected = false
 	c.mcpClient = nil
+	logger.Info(logger.ComponentAgentCore).
+		Str("server_name", c.serverName).
+		Msg("Stdio 客户端已断开连接")
 	return nil
 }
 

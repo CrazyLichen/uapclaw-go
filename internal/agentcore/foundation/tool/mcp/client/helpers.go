@@ -137,23 +137,30 @@ func jsonSchemaPropToParam(name string, prop any, required bool) *commonschema.P
 	case "string":
 		p := commonschema.NewStringParam(name, desc, required)
 		applyStringConstraints(p, propMap)
+		applyCommonFields(p, propMap)
 		return p
 	case "boolean":
-		return commonschema.NewBooleanParam(name, desc, required)
+		p := commonschema.NewBooleanParam(name, desc, required)
+		applyCommonFields(p, propMap)
+		return p
 	case "integer":
 		p := commonschema.NewIntegerParam(name, desc, required)
 		applyNumericConstraints(p, propMap)
+		applyCommonFields(p, propMap)
 		return p
 	case "number":
 		p := commonschema.NewNumberParam(name, desc, required)
 		applyNumericConstraints(p, propMap)
+		applyCommonFields(p, propMap)
 		return p
 	case "array":
 		var items *commonschema.Param
 		if itemsRaw, ok := propMap["items"]; ok {
 			items = jsonSchemaPropToParam("items", itemsRaw, false)
 		}
-		return commonschema.NewArrayParam(name, desc, required, items)
+		p := commonschema.NewArrayParam(name, desc, required, items)
+		applyCommonFields(p, propMap)
+		return p
 	case "object":
 		var properties []*commonschema.Param
 		if propsRaw, ok := propMap["properties"]; ok {
@@ -176,12 +183,55 @@ func jsonSchemaPropToParam(name string, prop any, required bool) *commonschema.P
 				}
 			}
 		}
-		return commonschema.NewObjectParam(name, desc, required, properties)
+		p := commonschema.NewObjectParam(name, desc, required, properties)
+		applyCommonFields(p, propMap)
+		return p
 	default:
 		p := commonschema.NewStringParam(name, desc, required)
 		applyStringConstraints(p, propMap)
+		applyCommonFields(p, propMap)
 		return p
 	}
+}
+
+// applyCommonFields 从 JSON Schema propMap 提取通用字段（enum/default/nullable/anyOf/allOf/oneOf）到 Param。
+func applyCommonFields(p *commonschema.Param, propMap map[string]any) {
+	// 提取 enum
+	if v, ok := propMap["enum"].([]any); ok {
+		p.Enum = v
+	}
+	// 提取 default
+	if v, ok := propMap["default"]; ok {
+		p.Default = v
+	}
+	// 提取 nullable
+	if v, ok := propMap["nullable"].(bool); ok {
+		p.Nullable = v
+	}
+	// 提取 anyOf，递归转换为 []*Param
+	if v, ok := propMap["anyOf"].([]any); ok {
+		p.AnyOf = convertSchemaArray(v)
+	}
+	// 提取 allOf，递归转换为 []*Param
+	if v, ok := propMap["allOf"].([]any); ok {
+		p.AllOf = convertSchemaArray(v)
+	}
+	// 提取 oneOf，递归转换为 []*Param
+	if v, ok := propMap["oneOf"].([]any); ok {
+		p.OneOf = convertSchemaArray(v)
+	}
+}
+
+// convertSchemaArray 将 []any（JSON Schema 子 schema 列表）递归转换为 []*Param。
+func convertSchemaArray(arr []any) []*commonschema.Param {
+	result := make([]*commonschema.Param, 0, len(arr))
+	for _, item := range arr {
+		p := jsonSchemaPropToParam("", item, false)
+		if p != nil {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 // applyStringConstraints 从 JSON Schema propMap 提取字符串约束字段到 Param。

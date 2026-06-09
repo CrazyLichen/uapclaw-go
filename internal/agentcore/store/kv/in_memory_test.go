@@ -200,6 +200,74 @@ func TestInMemoryKVStore_ExclusiveSet_已过期允许覆盖(t *testing.T) {
 	}
 }
 
+// TestInMemoryKVStore_ExclusiveSet_负数expiry 验证 expiry < 0 时等价于 0（永不过期）。
+func TestInMemoryKVStore_ExclusiveSet_负数expiry(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	ok, err := store.ExclusiveSet(ctx, "key1", []byte("value1"), -5)
+	if err != nil {
+		t.Fatalf("ExclusiveSet 返回错误: %v", err)
+	}
+	if !ok {
+		t.Error("ExclusiveSet 返回 false, 期望 true")
+	}
+
+	// 验证 key 存在
+	val, _ := store.Get(ctx, "key1")
+	if string(val) != "value1" {
+		t.Errorf("Get 返回 %q, 期望 %q", string(val), "value1")
+	}
+
+	// 验证 expiryTs 为 0（永不过期）
+	store.mu.RLock()
+	e, found := store.store["key1"]
+	store.mu.RUnlock()
+	if !found {
+		t.Fatal("store 中未找到 key1")
+	}
+	if e.expiryTs != 0 {
+		t.Errorf("expiryTs = %d, 期望 0（负数 expiry 应等价于 0）", e.expiryTs)
+	}
+}
+
+// TestInMemoryKVStore_ExclusiveSet_expiry为零 验证 expiry=0 时永不过期。
+func TestInMemoryKVStore_ExclusiveSet_expiry为零(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	ok, err := store.ExclusiveSet(ctx, "key1", []byte("value1"), 0)
+	if err != nil {
+		t.Fatalf("ExclusiveSet 返回错误: %v", err)
+	}
+	if !ok {
+		t.Error("ExclusiveSet 返回 false, 期望 true")
+	}
+
+	// 验证 key 存在
+	val, _ := store.Get(ctx, "key1")
+	if string(val) != "value1" {
+		t.Errorf("Get 返回 %q, 期望 %q", string(val), "value1")
+	}
+
+	// 验证 expiryTs 为 0（永不过期）
+	store.mu.RLock()
+	e, found := store.store["key1"]
+	store.mu.RUnlock()
+	if !found {
+		t.Fatal("store 中未找到 key1")
+	}
+	if e.expiryTs != 0 {
+		t.Errorf("expiryTs = %d, 期望 0（expiry=0 表示永不过期）", e.expiryTs)
+	}
+
+	// 验证再次 ExclusiveSet 同一 key 会被拒绝（未过期）
+	ok2, _ := store.ExclusiveSet(ctx, "key1", []byte("value2"), 0)
+	if ok2 {
+		t.Error("expiry=0 的 key 应永不过期，第二次 ExclusiveSet 应返回 false")
+	}
+}
+
 // TestInMemoryKVStore_ExclusiveSet_带expiry 验证带过期时间的设置。
 func TestInMemoryKVStore_ExclusiveSet_带expiry(t *testing.T) {
 	store := NewInMemoryKVStore()
@@ -290,6 +358,29 @@ func TestInMemoryKVStore_GetByPrefix_正常(t *testing.T) {
 	}
 }
 
+// TestInMemoryKVStore_GetByPrefix_空前缀 验证空前缀匹配所有 key。
+func TestInMemoryKVStore_GetByPrefix_空前缀(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "user:1", []byte("alice"))
+	_ = store.Set(ctx, "item:1", []byte("book"))
+
+	result, err := store.GetByPrefix(ctx, "")
+	if err != nil {
+		t.Fatalf("GetByPrefix 返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("GetByPrefix 返回 %d 条, 期望 2 条（空前缀匹配所有 key）", len(result))
+	}
+	if string(result["user:1"]) != "alice" {
+		t.Errorf("user:1 = %q, 期望 %q", string(result["user:1"]), "alice")
+	}
+	if string(result["item:1"]) != "book" {
+		t.Errorf("item:1 = %q, 期望 %q", string(result["item:1"]), "book")
+	}
+}
+
 // TestInMemoryKVStore_GetByPrefix_无匹配 验证无匹配前缀返回空 map。
 func TestInMemoryKVStore_GetByPrefix_无匹配(t *testing.T) {
 	store := NewInMemoryKVStore()
@@ -329,6 +420,25 @@ func TestInMemoryKVStore_GetByPrefix_含过期key(t *testing.T) {
 }
 
 // ──── DeleteByPrefix 测试 ────
+
+// TestInMemoryKVStore_DeleteByPrefix_无匹配 验证无匹配前缀不报错。
+func TestInMemoryKVStore_DeleteByPrefix_无匹配(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "user:1", []byte("alice"))
+
+	err := store.DeleteByPrefix(ctx, "item:", 0)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix 返回错误: %v", err)
+	}
+
+	// 验证原有 key 未受影响
+	exists, _ := store.Exists(ctx, "user:1")
+	if !exists {
+		t.Error("user:1 不应被删除")
+	}
+}
 
 // TestInMemoryKVStore_DeleteByPrefix_一次性 验证 batchSize=0 时一次性删除。
 func TestInMemoryKVStore_DeleteByPrefix_一次性(t *testing.T) {
@@ -397,6 +507,20 @@ func TestInMemoryKVStore_MGet_正常(t *testing.T) {
 	}
 	if string(values[1]) != "v2" {
 		t.Errorf("values[1] = %q, 期望 %q", string(values[1]), "v2")
+	}
+}
+
+// TestInMemoryKVStore_MGet_空列表 验证传入空 key 列表时返回空切片。
+func TestInMemoryKVStore_MGet_空列表(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	values, err := store.MGet(ctx, []string{})
+	if err != nil {
+		t.Fatalf("MGet 返回错误: %v", err)
+	}
+	if len(values) != 0 {
+		t.Errorf("MGet 返回 %d 条, 期望 0 条", len(values))
 	}
 }
 

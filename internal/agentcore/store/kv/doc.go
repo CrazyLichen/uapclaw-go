@@ -19,4 +19,12 @@
 //
 //	InMemoryKVStore 对应: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 //	FileKVStore 对应:     openjiuwen/core/foundation/store/kv/shelve_store.py
+//
+// 核心类型/接口索引：
+//
+//	BaseKVStore      — KV 存储基础接口，定义 Get/Set/Delete 等单键操作
+//	KVPipeline       — 批量操作接口，支持 Set/Get/Exists 管道和 Execute 提交
+//	PipelineResult   — 管道操作结果，包含 Op/Key/Value/Exists/Err 字段
+//	InMemoryKVStore  — 内存实现，并发安全，支持惰性过期检查
+//	FileKVStore      — 文件持久化实现（bbolt），对应 Python ShelveStore
 package kv

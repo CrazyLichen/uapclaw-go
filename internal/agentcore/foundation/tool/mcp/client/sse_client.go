@@ -279,6 +279,9 @@ func (c *SseClient) Disconnect(_ context.Context) error {
 	}
 	c.isConnected = false
 	c.mcpClient = nil
+	logger.Info(logger.ComponentAgentCore).
+		Str("server_name", c.serverName).
+		Msg("SSE 客户端已断开连接")
 	return nil
 }
 

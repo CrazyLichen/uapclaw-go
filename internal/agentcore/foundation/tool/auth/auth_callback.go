@@ -93,6 +93,10 @@ func RegisterAuthCallback(fw *callback.CallbackFramework) {
 	fw.OnTool(callback.ToolAuth, func(ctx context.Context, data *callback.ToolCallEventData) any {
 		authConfig, ok := data.Extra["auth_config"].(*ToolAuthConfig)
 		if !ok {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("tool_name", data.ToolName).
+				Str("tool_id", data.ToolID).
+				Msg("auth_config 未找到或类型不匹配，跳过认证处理")
 			return &ToolAuthResult{
 				Success:  false,
 				AuthData: map[string]any{},

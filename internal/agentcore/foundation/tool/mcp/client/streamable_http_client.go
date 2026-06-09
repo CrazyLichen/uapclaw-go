@@ -332,6 +332,12 @@ func (c *StreamableHttpClient) CallTool(ctx context.Context, toolName string, ar
 
 // GetToolInfo 获取指定工具信息。
 func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string) (*types.McpToolCard, error) {
+	if !c.isConnected || c.client == nil {
+		return nil, exception.BuildError(
+			exception.StatusToolMcpNotConnected,
+			exception.WithParam("server_name", c.serverName),
+		)
+	}
 	tools, err := c.ListTools(ctx)
 	if err != nil {
 		return nil, err

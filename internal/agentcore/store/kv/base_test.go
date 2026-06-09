@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // fakeKVStore 用于验证 BaseKVStore 接口可被实现。
 type fakeKVStore struct{}
 
@@ -66,6 +68,8 @@ func (f *fakeKVPipeline) Exists(_ context.Context, _ string) error {
 func (f *fakeKVPipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 	return nil, nil
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──── 接口编译验证测试 ────
 

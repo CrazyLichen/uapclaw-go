@@ -212,7 +212,9 @@ func structToMap(v any) (map[string]any, error) {
 	}
 	var result map[string]any
 	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		// 非 struct 输出，包装为 {"result": v}
+		// 非 object 输出包装为 {"result": v}
+		// 与 Python 的差异：Python LocalFunction 直接返回原始值（其 Tool 接口不限制返回类型），
+		// Go 的 Tool 接口要求返回 map[string]any，非 object 返回值必须包装为 {"result": v} 以满足接口约束。
 		return map[string]any{"result": v}, nil
 	}
 	return result, nil

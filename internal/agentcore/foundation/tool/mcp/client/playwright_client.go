@@ -50,10 +50,10 @@ func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOpt
 			Msg("Playwright 选择 SSE 传输")
 		c.delegate = NewSseClient(c.config)
 	} else {
-		logger.Info(logger.ComponentAgentCore).
+		logger.Warn(logger.ComponentAgentCore).
 			Str("server_name", c.serverName).
 			Str("server_path", c.config.ServerPath).
-			Msg("Playwright 选择 Stdio 传输")
+			Msg("ServerPath 不是 HTTP URL，将回退使用 Stdio 传输")
 		c.delegate = NewStdioClient(c.config)
 	}
 
