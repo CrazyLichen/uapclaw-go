@@ -83,3 +83,27 @@ func TestIndexType_所有枚举值(t *testing.T) {
 		}
 	}
 }
+
+// ──── VectorField 构造测试 ────
+
+// TestNewVectorField_基本创建 验证基本创建
+func TestNewVectorField_基本创建(t *testing.T) {
+	vf := NewVectorField(DatabaseTypeMilvus, IndexTypeHNSW, "embedding")
+	if vf.DatabaseType != DatabaseTypeMilvus {
+		t.Errorf("DatabaseType = %v, 期望 %v", vf.DatabaseType, DatabaseTypeMilvus)
+	}
+	if vf.IndexType != IndexTypeHNSW {
+		t.Errorf("IndexType = %v, 期望 %v", vf.IndexType, IndexTypeHNSW)
+	}
+	if vf.VectorFieldName != "embedding" {
+		t.Errorf("VectorFieldName = %q, 期望 %q", vf.VectorFieldName, "embedding")
+	}
+}
+
+// TestVectorField_Validate_基类默认 验证基类 Validate 返回 nil
+func TestVectorField_Validate_基类默认(t *testing.T) {
+	vf := NewVectorField(DatabaseTypeMilvus, IndexTypeAUTO, "embedding")
+	if err := vf.Validate(); err != nil {
+		t.Errorf("基类 Validate() 应返回 nil, 实际: %v", err)
+	}
+}

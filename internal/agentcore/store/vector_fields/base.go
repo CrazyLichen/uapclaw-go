@@ -78,3 +78,55 @@ func (it IndexType) String() string {
 	}
 	return fmt.Sprintf("UNKNOWN(%d)", it)
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// StageConstruct 构建阶段（建索引时的参数）
+	StageConstruct = "construct"
+	// StageSearch 搜索阶段（查询时的参数）
+	StageSearch = "search"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// VectorField 向量索引配置基类。
+//
+// 子类通过嵌入 VectorField 并在字段上添加 `vf:"construct"` 或 `vf:"search"`
+// 结构体标签来标记字段所属阶段。ToDict(stage) 通过反射读取标签，
+// 只输出匹配阶段的字段。
+//
+// 内部字段（DatabaseType、IndexType、VectorFieldName）用 `vf:"-"` 标记，
+// 始终被过滤，不会出现在 ToDict 输出中。
+//
+// 对应 Python: vector_fields/base.py (VectorField)
+type VectorField struct {
+	// DatabaseType 向量数据库类型
+	DatabaseType DatabaseType `vf:"-"`
+	// IndexType 索引类型
+	IndexType IndexType `vf:"-"`
+	// VectorFieldName 向量字段名
+	VectorFieldName string `vf:"-"`
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewVectorField 创建向量索引配置基类实例。
+//
+// 对应 Python: VectorField(vector_field=..., database_type=..., index_type=...)
+func NewVectorField(dbType DatabaseType, indexType IndexType, fieldName string) *VectorField {
+	return &VectorField{
+		DatabaseType:    dbType,
+		IndexType:       indexType,
+		VectorFieldName: fieldName,
+	}
+}
+
+// Validate 校验配置参数，子类可覆盖实现自定义校验逻辑。
+//
+// 基类默认返回 nil。对应 Python: VectorField 子类的 @model_validator 逻辑。
+func (vf *VectorField) Validate() error {
+	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
