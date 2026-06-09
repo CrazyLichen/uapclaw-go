@@ -2,6 +2,7 @@ package vector_fields
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -130,6 +131,27 @@ func (vf *VectorField) Validate() error {
 	return nil
 }
 
+// ToDict 将向量索引配置转为字典格式，只输出指定阶段的字段。
+//
+// v 参数为指向 VectorField 或其子类实例的指针。
+// 通过反射读取 vf 结构体标签，过滤规则：
+//   - vf:"-" 或无标签 → 跳过（内部字段）
+//   - vf 标签 stage 与参数不匹配 → 跳过
+//   - vf 标签 stage 匹配 → 检查零值和 Extra 合并
+//   - 无 keepzero 修饰且为零值 → 跳过
+//   - 字段名以 Extra 开头且类型为 map[string]any → 展开合并到结果
+//
+// 对应 Python: VectorField.to_dict(stage)
+func ToDict(v any, stage string) map[string]any {
+	result := make(map[string]any)
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	collectFields(rv, stage, result)
+	return result
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseVFTag 解析 vf 结构体标签，返回 stage 和是否 keepzero。
@@ -152,4 +174,51 @@ func parseVFTag(tag string) (stage string, keepZero bool) {
 		}
 	}
 	return stage, keepZero
+}
+
+// collectFields 递归收集匹配 stage 的字段到 result 中。
+// 处理嵌入结构体的提升字段，跳过嵌入字段本身。
+func collectFields(v reflect.Value, stage string, result map[string]any) {
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		fieldValue := v.Field(i)
+
+		// 匿名嵌入字段：递归处理其子字段
+		if field.Anonymous && fieldValue.Kind() == reflect.Struct {
+			collectFields(fieldValue, stage, result)
+			continue
+		}
+
+		// 解析 vf 标签
+		tagStr, ok := field.Tag.Lookup("vf")
+		if !ok {
+			continue // 无 vf 标签，当作内部字段跳过
+		}
+		fieldStage, keepZero := parseVFTag(tagStr)
+
+		// 过滤内部字段和阶段不匹配的字段
+		if fieldStage == "-" || fieldStage != stage {
+			continue
+		}
+
+		// Extra 字段合并逻辑：字段名以 Extra 开头且类型为 map[string]any
+		if strings.HasPrefix(field.Name, "Extra") && fieldValue.Type() == reflect.TypeOf(map[string]any{}) {
+			if fieldValue.IsNil() {
+				continue
+			}
+			extraMap := fieldValue.Interface().(map[string]any)
+			for k, v := range extraMap {
+				result[k] = v
+			}
+			continue
+		}
+
+		// 零值过滤（除非 keepzero）
+		if !keepZero && fieldValue.IsZero() {
+			continue
+		}
+
+		result[field.Name] = fieldValue.Interface()
+	}
 }
