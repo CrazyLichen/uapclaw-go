@@ -6,7 +6,7 @@
 // 核心设计：
 //   - 子类通过嵌入 VectorField 并在字段上添加 `vf:"construct"` 或 `vf:"search"` 标签
 //     来标记字段所属阶段
-//   - ToDict(stage) 通过反射读取标签，只输出匹配阶段的字段
+//   - ToDict(v, stage) 通过反射读取标签，只输出匹配阶段的字段
 //   - 内部字段用 `vf:"-"` 标记，始终过滤
 //   - 支持 `vf:"construct,keepzero"` 修饰符保留零值
 //   - 支持 Extra 字段合并（字段名以 Extra 开头且类型为 map[string]any）
@@ -28,5 +28,6 @@
 //
 //	DatabaseType    — 向量数据库类型枚举（Milvus, Chroma, PG, Gauss, ES）
 //	IndexType       — 索引类型枚举（AUTO, HNSW, FLAT, IVF, SCANN, IVFFlat）
-//	VectorField     — 向量索引配置基类，提供 ToDict(stage) 和 Validate() 方法
+//	VectorField     — 向量索引配置基类，提供 Validate() 方法
+//	ToDict(v,stage) — 包级函数，通过反射将 VectorField 或子类转为指定阶段的字典
 package vector_fields
