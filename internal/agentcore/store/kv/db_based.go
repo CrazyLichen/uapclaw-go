@@ -48,6 +48,8 @@ type DbBasedKVStore struct {
 	tableCreated atomic.Bool
 	// tableOnce 慢路径建表，保证只执行一次
 	tableOnce sync.Once
+	// tableReady 建表完成信号，用于阻塞等待建表完成
+	tableReady chan struct{}
 }
 
 // dbBasedPipeline 数据库 Pipeline 实现。
@@ -75,7 +77,8 @@ const (
 // 对齐 Python: DbBasedKVStore(engine: AsyncEngine)
 func NewDbBasedKVStore(db *gorm.DB) *DbBasedKVStore {
 	return &DbBasedKVStore{
-		db: db,
+		db:         db,
+		tableReady: make(chan struct{}),
 	}
 }
 
@@ -442,6 +445,7 @@ func (p *dbBasedPipeline) Execute(ctx context.Context) ([]PipelineResult, error)
 
 // ensureTable 惰性建表。
 // 快速路径：atomic.Bool 无锁检查；慢路径：sync.Once 保证只建一次。
+// tableReady channel 保证建表完成后其他 goroutine 才继续。
 // 对齐 Python: _create_table_if_not_exist()
 func (s *DbBasedKVStore) ensureTable() {
 	if s.tableCreated.Load() {
@@ -450,7 +454,11 @@ func (s *DbBasedKVStore) ensureTable() {
 	s.tableOnce.Do(func() {
 		s.db.AutoMigrate(&KVStoreRow{})
 		s.tableCreated.Store(true)
+		close(s.tableReady)
 	})
+	if !s.tableCreated.Load() {
+		<-s.tableReady
+	}
 }
 
 // encodeExclusiveValue 将 value 和 expireAt 编码为 exclusive JSON 格式的 []byte。
