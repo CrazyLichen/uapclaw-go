@@ -170,7 +170,8 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 			milvusField = milvusField.WithIsAutoID(true)
 		}
 
-		if milvusType == entity.FieldTypeFloatVector {
+		switch milvusType {
+		case entity.FieldTypeFloatVector:
 			vectorFieldName = field.Name
 			vectorDim = field.Dim
 			if vectorDim == 0 {
@@ -179,7 +180,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 				)
 			}
 			milvusField = milvusField.WithDim(int64(vectorDim))
-		} else if milvusType == entity.FieldTypeVarChar {
+		case entity.FieldTypeVarChar:
 			maxLen := field.MaxLength
 			if maxLen == 0 {
 				maxLen = defaultMaxLength

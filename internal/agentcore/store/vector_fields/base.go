@@ -148,7 +148,7 @@ func (vf *VectorField) Validate() error {
 func ToDict(v any, stage string) map[string]any {
 	result := make(map[string]any)
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	collectFields(rv, stage, result)
