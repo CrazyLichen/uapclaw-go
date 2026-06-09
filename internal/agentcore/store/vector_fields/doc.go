@@ -1,0 +1,32 @@
+// Package vector_fields 提供向量索引配置的通用框架。
+//
+// 本包定义了 VectorField 基类及其配套的枚举类型（DatabaseType、IndexType），
+// 通过 vf 结构体标签实现 stage 过滤机制，支持子类扩展。
+//
+// 核心设计：
+//   - 子类通过嵌入 VectorField 并在字段上添加 `vf:"construct"` 或 `vf:"search"` 标签
+//     来标记字段所属阶段
+//   - ToDict(stage) 通过反射读取标签，只输出匹配阶段的字段
+//   - 内部字段用 `vf:"-"` 标记，始终过滤
+//   - 支持 `vf:"construct,keepzero"` 修饰符保留零值
+//   - 支持 Extra 字段合并（字段名以 Extra 开头且类型为 map[string]any）
+//
+// 与 vector 包的关系：
+//   - vector 包定义 FieldSchema/CollectionSchema（数据描述层）
+//   - vector_fields 包定义 VectorField 层次结构（索引配置层）
+//   - 两者互不导入，后续 Store 实现同时导入两者
+//
+// 文件目录：
+//
+//	vector_fields/
+//	├── doc.go        # 包文档
+//	└── base.go       # VectorField 基类 + DatabaseType/IndexType 枚举 + vf 标签反射机制
+//
+// 对应 Python 代码：openjiuwen/core/foundation/store/vector_fields/
+//
+// 核心类型/接口索引：
+//
+//	DatabaseType    — 向量数据库类型枚举（Milvus, Chroma, PG, Gauss, ES）
+//	IndexType       — 索引类型枚举（AUTO, HNSW, FLAT, IVF, SCANN, IVFFlat）
+//	VectorField     — 向量索引配置基类，提供 ToDict(stage) 和 Validate() 方法
+package vector_fields
