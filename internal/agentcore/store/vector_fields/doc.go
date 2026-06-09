@@ -1,7 +1,9 @@
-// Package vector_fields 提供向量索引配置的通用框架。
+// Package vector_fields 提供向量索引配置的通用框架和 Milvus 索引子类型。
 //
 // 本包定义了 VectorField 基类及其配套的枚举类型（DatabaseType、IndexType），
 // 通过 vf 结构体标签实现 stage 过滤机制，支持子类扩展。
+// 同时提供 Milvus 特有的索引子类型（AUTO/FLAT/HNSW/IVF/SCANN），
+// 各子类型通过 vf 标签区分 construct 和 search 阶段的参数。
 //
 // 核心设计：
 //   - 子类通过嵌入 VectorField 并在字段上添加 `vf:"construct"` 或 `vf:"search"` 标签
@@ -14,13 +16,14 @@
 // 与 vector 包的关系：
 //   - vector 包定义 FieldSchema/CollectionSchema（数据描述层）
 //   - vector_fields 包定义 VectorField 层次结构（索引配置层）
-//   - 两者互不导入，后续 Store 实现同时导入两者
+//   - 两者互不导入，Store 实现同时导入两者
 //
 // 文件目录：
 //
 //	vector_fields/
-//	├── doc.go        # 包文档
-//	└── base.go       # VectorField 基类 + DatabaseType/IndexType 枚举 + vf 标签反射机制
+//	├── doc.go              # 包文档
+//	├── base.go             # VectorField 基类 + DatabaseType/IndexType 枚举 + vf 标签反射机制
+//	└── milvus_fields.go    # Milvus 索引子类型（AUTO/FLAT/HNSW/IVF/SCANN）
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/vector_fields/
 //
@@ -30,4 +33,9 @@
 //	IndexType       — 索引类型枚举（AUTO, HNSW, FLAT, IVF, SCANN, IVFFlat）
 //	VectorField     — 向量索引配置基类，提供 Validate() 方法
 //	ToDict(v,stage) — 包级函数，通过反射将 VectorField 或子类转为指定阶段的字典
+//	MilvusAUTO      — Milvus AUTOINDEX 配置
+//	MilvusFLAT      — Milvus FLAT 索引配置
+//	MilvusHNSW      — Milvus HNSW 索引配置（M, EfConstruction, EfSearchFactor）
+//	MilvusIVF       — Milvus IVF 索引配置（Nlist, Nprobe）
+//	MilvusSCANN     — Milvus SCANN 索引配置（Nlist, Nprobe, WithRawData, ReorderK）
 package vector_fields

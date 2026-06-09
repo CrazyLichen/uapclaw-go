@@ -38,6 +38,15 @@ func (f *fakeVectorStore) DeleteDocsByFilters(_ context.Context, _ string, _ map
 func (f *fakeVectorStore) ListCollectionNames(_ context.Context) ([]string, error) {
 	return nil, nil
 }
+func (f *fakeVectorStore) UpdateSchema(_ context.Context, _ string, _ []any, _ ...Option) error {
+	return nil
+}
+func (f *fakeVectorStore) UpdateCollectionMetadata(_ context.Context, _ string, _ map[string]any, _ ...Option) error {
+	return nil
+}
+func (f *fakeVectorStore) GetCollectionMetadata(_ context.Context, _ string, _ ...Option) (map[string]any, error) {
+	return nil, nil
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

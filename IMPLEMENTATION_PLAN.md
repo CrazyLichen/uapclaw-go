@@ -303,7 +303,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.5 | ✅ | RedisStore | Redis 实现 | `openjiuwen/extensions/store/redis_store.py` |
 | 4.6 | ✅ | BaseVectorStore 接口 | `CreateCollection/AddDocs/Search/DeleteDocs` | `openjiuwen/core/foundation/store/base_vector_store.py` |
 | 4.7 | ✅ | CollectionSchema / FieldSchema / VectorField 基类 | 向量集合 Schema 定义 + 索引配置基类与 vf 标签反射机制 | `openjiuwen/core/foundation/store/vector_fields/` |
-| 4.8 | ☐ | MilvusVectorStore | Milvus 实现 | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
+| 4.8 | ✅ | MilvusVectorStore | Milvus 实现（含 Milvus 索引子类型、距离转换；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
 | 4.9 | ☐ | ChromaVectorStore | ChromaDB 实现 | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
 | 4.10 | ☐ | GaussVectorStore | GaussDB 向量实现 | `openjiuwen/extensions/store/gauss_vector_store.py` |
 | 4.11 | ☐ | ESVectorStore | Elasticsearch 向量实现 | `openjiuwen/extensions/store/es_vector_store.py` |
@@ -450,8 +450,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 7.19 | ☐ | MemoryAnalyzer / Refiner | 记忆精炼 | `openjiuwen/core/memory/process/refine/` |
 | 7.20 | ☐ | Dreaming Orchestrator | 后台记忆整理编排器 | `openjiuwen/core/memory/dreaming/orchestrator.py` |
 | 7.21 | ☐ | MigrationPlan | 迁移计划 | `openjiuwen/core/memory/migration/migration_plan.py` |
-| 7.22 | ☐ | Migration Operations | 迁移操作注册表 | `openjiuwen/core/memory/migration/operation/` |
-| 7.23 | ☐ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器 | `openjiuwen/core/memory/migration/migrator/` |
+| 7.22 | ☐ | Migration Operations | 迁移操作注册表（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/operation/` |
+| 7.23 | ☐ | Migration Migrators | KV/SQL/Vector/Index/Message 迁移器（⤴️ 需回填 MilvusVectorStore.UpdateSchema） | `openjiuwen/core/memory/migration/migrator/` |
 | 7.24 | ☐ | Memory Codec | 记忆编解码 | `openjiuwen/core/memory/codec/` |
 | 7.25 | ☐ | Memory Common | 记忆公共工具 | `openjiuwen/core/memory/common/` |
 | 7.26 | ☐ | Memory Prompts | 记忆提示词 | `openjiuwen/core/memory/prompts/` |

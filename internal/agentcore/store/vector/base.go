@@ -120,6 +120,22 @@ type BaseVectorStore interface {
 	//
 	// 对应 Python: BaseVectorStore.list_collection_names()
 	ListCollectionNames(ctx context.Context) ([]string, error)
+
+	// UpdateSchema 执行 schema 迁移操作。
+	// ⤵️ 预留：实际迁移逻辑待 7.22/7.23 实现后回填。
+	//
+	// 对应 Python: BaseVectorStore.update_schema(collection_name, operations)
+	UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error
+
+	// UpdateCollectionMetadata 更新集合元数据。
+	//
+	// 对应 Python: BaseVectorStore.update_collection_metadata(collection_name, metadata)
+	UpdateCollectionMetadata(ctx context.Context, collectionName string, metadata map[string]any, opts ...Option) error
+
+	// GetCollectionMetadata 获取集合元数据。
+	//
+	// 对应 Python: BaseVectorStore.get_collection_metadata(collection_name)
+	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -248,6 +264,8 @@ type Options struct {
 	MetricType string
 	// OutputFields 搜索结果中需要返回的字段列表
 	OutputFields []string
+	// VectorField 向量索引配置，用于 CreateCollection 时指定索引参数
+	VectorField any
 }
 
 // WithDistanceMetric 设置距离度量方式
@@ -268,6 +286,11 @@ func WithMetricType(metricType string) Option {
 // WithOutputFields 设置搜索结果中需要返回的字段
 func WithOutputFields(fields ...string) Option {
 	return func(o *Options) { o.OutputFields = fields }
+}
+
+// WithVectorField 设置向量索引配置
+func WithVectorField(vf any) Option {
+	return func(o *Options) { o.VectorField = vf }
 }
 
 // newOptions 从选项列表构造 Options
