@@ -26,19 +26,29 @@ import (
 //
 // 对应 Python: openjiuwen/core/single_agent/ability_manager.py (AbilityManager)
 type AbilityManager struct {
-	mu            sync.RWMutex
-	tools         map[string]*tool.ToolCard
-	workflows     map[string]*schema.WorkflowCard
-	agents        map[string]*schema.AgentCard
-	mcpServers    map[string]*mcp.McpServerConfig
-	contextEngine ContextEngine // ⤵️ 预留，领域五回填
-	resourceMgr   ResourceManager
-	rail          ToolRail // ⤵️ 预留，6.4-6.10 回填
+	// mu 读写锁
+	mu sync.RWMutex
+	// tools 工具注册表
+	tools map[string]*tool.ToolCard
+	// workflows 工作流注册表
+	workflows map[string]*schema.WorkflowCard
+	// agents Agent 注册表
+	agents map[string]*schema.AgentCard
+	// mcpServers MCP 服务器注册表
+	mcpServers map[string]*mcp.McpServerConfig
+	// contextEngine 上下文引擎 ⤵️ 预留，领域五回填
+	contextEngine ContextEngine
+	// resourceMgr 资源管理器
+	resourceMgr ResourceManager
+	// rail 工具调用生命周期钩子 ⤵️ 预留，6.4-6.10 回填
+	rail ToolRail
 }
 
 // toolItem 内部辅助类型，用于 prioritizePaidSearch 的输入。
 type toolItem struct {
+	// name 工具名称
 	name string
+	// card 工具卡片
 	card *tool.ToolCard
 }
 

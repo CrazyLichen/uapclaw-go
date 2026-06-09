@@ -20,8 +20,9 @@
 //	├── db_based.go      # DbBasedKVStore 数据库实现（GORM）+ dbBasedPipeline
 //	└── redis.go         # RedisStore Redis 实现 + redisPipeline + Option
 //
-// 对应 Python 代码：openjiuwen/core/foundation/store/base_kv_store.py
+// 对应 Python 代码：
 //
+//	openjiuwen/core/foundation/store/base_kv_store.py
 //	InMemoryKVStore 对应: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 //	FileKVStore 对应:     openjiuwen/core/foundation/store/kv/shelve_store.py
 //	DbBasedKVStore 对应:  openjiuwen/core/foundation/store/kv/db_based_kv_store.py

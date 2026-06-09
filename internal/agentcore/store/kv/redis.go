@@ -47,12 +47,22 @@ type pipelineOp struct {
 	existsCmd *redis.IntCmd
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Option RedisStore 的函数式选项
+type Option func(*RedisStore)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时校验 RedisStore 满足 BaseKVStore 接口
+var _ BaseKVStore = (*RedisStore)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -77,9 +87,6 @@ func NewRedisStore(client redis.Cmdable, opts ...Option) *RedisStore {
 
 	return s
 }
-
-// Option RedisStore 的函数式选项
-type Option func(*RedisStore)
 
 // WithClusterClient 手动设置 Cluster 客户端引用。
 // 当 Cmdable 接口的底层类型无法被断言为 *redis.ClusterClient 时使用
@@ -581,6 +588,3 @@ func (s *RedisStore) mGetFallback(ctx context.Context, keys []string) ([][]byte,
 	}
 	return result, nil
 }
-
-// 编译时校验 RedisStore 满足 BaseKVStore 接口
-var _ BaseKVStore = (*RedisStore)(nil)

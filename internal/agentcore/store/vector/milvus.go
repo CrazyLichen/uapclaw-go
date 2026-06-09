@@ -15,21 +15,26 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/vector_fields"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// defaultDistanceMetric 默认距离度量方式
-	defaultDistanceMetric = "COSINE"
-	// defaultBatchSize 默认批量插入大小
-	defaultBatchSize = 128
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
-var logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// milvusClient Milvus 客户端操作接口（用于解耦和测试）。
+// 生产代码使用真实 client.Client，测试代码注入 fakeMilvusClient。
+type milvusClient interface {
+	CreateCollection(ctx context.Context, schema *entity.Schema, shardsNum int32, opts ...client.CreateCollectionOption) error
+	DropCollection(ctx context.Context, collName string, opts ...client.DropCollectionOption) error
+	HasCollection(ctx context.Context, collName string) (bool, error)
+	DescribeCollection(ctx context.Context, collName string) (*entity.Collection, error)
+	Insert(ctx context.Context, collName string, partitionName string, columns ...entity.Column) (entity.Column, error)
+	Search(ctx context.Context, collName string, partitions []string, expr string, outputFields []string, vectors []entity.Vector, vectorField string, metricType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+	Delete(ctx context.Context, collName string, partitionName string, expr string) error
+	ListCollections(ctx context.Context, opts ...client.ListCollectionOption) ([]*entity.Collection, error)
+	LoadCollection(ctx context.Context, collName string, async bool, opts ...client.LoadCollectionOption) error
+	AlterCollection(ctx context.Context, collName string, attrs ...entity.CollectionAttribute) error
+	Flush(ctx context.Context, collName string, async bool, opts ...client.FlushOption) error
+	CreateIndex(ctx context.Context, collName string, fieldName string, idx entity.Index, async bool, opts ...client.IndexOption) error
+	DescribeIndex(ctx context.Context, collName string, fieldName string, opts ...client.IndexOption) ([]entity.Index, error)
+	Close() error
+}
 
 // collMeta 集合元数据缓存
 type collMeta struct {
@@ -50,34 +55,37 @@ type collMeta struct {
 //
 // 对应 Python: vector/milvus_vector_store.py (MilvusVectorStore)
 type MilvusVectorStore struct {
-	client             milvusClient
-	milvusURI          string
-	milvusToken        string
-	dbName             string
+	// client Milvus 客户端实例
+	client milvusClient
+	// milvusURI Milvus 服务地址
+	milvusURI string
+	// milvusToken Milvus 认证令牌
+	milvusToken string
+	// dbName 数据库名称
+	dbName string
+	// collectionMetadata 集合元数据缓存
 	collectionMetadata map[string]*collMeta
-	collectionsLoaded  map[string]bool
-	mu                 sync.RWMutex
-	createClient       func(ctx context.Context, uri, token, dbName string) (milvusClient, error)
+	// collectionsLoaded 集合加载状态缓存
+	collectionsLoaded map[string]bool
+	// mu 读写锁，保护客户端和缓存
+	mu sync.RWMutex
+	// createClient 客户端创建函数，用于依赖注入和测试
+	createClient func(ctx context.Context, uri, token, dbName string) (milvusClient, error)
 }
 
-// milvusClient Milvus 客户端操作接口（用于解耦和测试）。
-// 生产代码使用真实 client.Client，测试代码注入 fakeMilvusClient。
-type milvusClient interface {
-	CreateCollection(ctx context.Context, schema *entity.Schema, shardsNum int32, opts ...client.CreateCollectionOption) error
-	DropCollection(ctx context.Context, collName string, opts ...client.DropCollectionOption) error
-	HasCollection(ctx context.Context, collName string) (bool, error)
-	DescribeCollection(ctx context.Context, collName string) (*entity.Collection, error)
-	Insert(ctx context.Context, collName string, partitionName string, columns ...entity.Column) (entity.Column, error)
-	Search(ctx context.Context, collName string, partitions []string, expr string, outputFields []string, vectors []entity.Vector, vectorField string, metricType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	Delete(ctx context.Context, collName string, partitionName string, expr string) error
-	ListCollections(ctx context.Context, opts ...client.ListCollectionOption) ([]*entity.Collection, error)
-	LoadCollection(ctx context.Context, collName string, async bool, opts ...client.LoadCollectionOption) error
-	AlterCollection(ctx context.Context, collName string, attrs ...entity.CollectionAttribute) error
-	Flush(ctx context.Context, collName string, async bool, opts ...client.FlushOption) error
-	CreateIndex(ctx context.Context, collName string, fieldName string, idx entity.Index, async bool, opts ...client.IndexOption) error
-	DescribeIndex(ctx context.Context, collName string, fieldName string, opts ...client.IndexOption) ([]entity.Index, error)
-	Close() error
-}
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultDistanceMetric 默认距离度量方式
+	defaultDistanceMetric = "COSINE"
+	// defaultBatchSize 默认批量插入大小
+	defaultBatchSize = 128
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
+var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

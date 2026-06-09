@@ -82,6 +82,8 @@ const (
 	ParamTypeObject
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // paramTypeStrings ParamType 枚举值对应的字符串表示，与 Python 端保持一致。
@@ -490,6 +492,7 @@ func paramToSchema(p *Param) map[string]any {
 	return s
 }
 
+// init 初始化 paramTypeMap 映射表
 func init() {
 	// 初始化 paramTypeMap，用于 JSON 反序列化
 	paramTypeMap = make(map[string]ParamType, len(paramTypeStrings))

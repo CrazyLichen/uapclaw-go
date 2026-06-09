@@ -13,7 +13,11 @@
 //	├── utils.go      # 距离/相似度转换函数（L2/余弦/IP）
 //	└── milvus.go     # MilvusVectorStore 结构体 + BaseVectorStore 接口实现
 //
-// 对应 Python 代码：openjiuwen/core/foundation/store/base_vector_store.py
+// 对应 Python 代码：
+//
+//	openjiuwen/core/foundation/store/base_vector_store.py
+//	openjiuwen/core/foundation/store/vector/milvus_vector_store.py
+//	openjiuwen/core/foundation/store/vector/utils.py
 //
 // 核心类型/接口索引：
 //
@@ -24,7 +28,4 @@
 //	BaseVectorStore     — 向量存储基础接口，定义集合 CRUD、向量搜索和元数据操作
 //	MilvusVectorStore   — Milvus 向量存储实现，包含完整 CRUD 和搜索功能
 //	Option              — 操作可选参数的函数选项模式
-//	ConvertL2Squared    — L2 平方距离转换为归一化相似度
-//	ConvertCosineSimilarity — 余弦相似度转换为归一化相似度
-//	ConvertIPSimilarity — 内积转换为归一化相似度
 package vector

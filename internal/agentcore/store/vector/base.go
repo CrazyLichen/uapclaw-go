@@ -138,6 +138,20 @@ type BaseVectorStore interface {
 	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
 }
 
+// Options 向量存储操作的可选参数集合
+type Options struct {
+	// DistanceMetric 距离度量方式（如 "COSINE"、"L2"、"IP"）
+	DistanceMetric string
+	// BatchSize 批量操作的批次大小
+	BatchSize int
+	// MetricType 搜索时的距离度量类型
+	MetricType string
+	// OutputFields 搜索结果中需要返回的字段列表
+	OutputFields []string
+	// VectorField 向量索引配置，用于 CreateCollection 时指定索引参数
+	VectorField any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // VectorDataType 向量存储支持的字段数据类型。
@@ -170,6 +184,22 @@ const (
 	VectorDataTypeArray
 )
 
+// FieldOption FieldSchema 构造选项
+type FieldOption func(*FieldSchema)
+
+// CollectionOption CollectionSchema 构造选项
+type CollectionOption func(*CollectionSchema)
+
+// Option 向量存储操作的通用可选参数
+type Option func(*Options)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// defaultMaxLength VARCHAR 字段默认最大长度，对齐 Python FieldSchema.max_length 默认值
+const defaultMaxLength = 65535
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // vectorDataTypeStrings VectorDataType 枚举值对应的字符串表示，与 Python VectorDataType 枚举值保持一致。
 var vectorDataTypeStrings = [...]string{
 	"VARCHAR",
@@ -185,6 +215,8 @@ var vectorDataTypeStrings = [...]string{
 	"ARRAY",
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // String 返回 VectorDataType 的字符串表示，与 Python 枚举值一致。
 func (dt VectorDataType) String() string {
 	if dt >= 0 && int(dt) < len(vectorDataTypeStrings) {
@@ -192,11 +224,6 @@ func (dt VectorDataType) String() string {
 	}
 	return fmt.Sprintf("UNKNOWN(%d)", dt)
 }
-
-// ──────────────────────────── 函数选项 ────────────────────────────
-
-// FieldOption FieldSchema 构造选项
-type FieldOption func(*FieldSchema)
 
 // WithPrimary 设置为主键字段
 func WithPrimary() FieldOption {
@@ -238,9 +265,6 @@ func WithDefaultValue(val any) FieldOption {
 	return func(f *FieldSchema) { f.DefaultValue = val }
 }
 
-// CollectionOption CollectionSchema 构造选项
-type CollectionOption func(*CollectionSchema)
-
 // WithCollectionDescription 设置集合描述
 func WithCollectionDescription(desc string) CollectionOption {
 	return func(s *CollectionSchema) { s.Description = desc }
@@ -249,23 +273,6 @@ func WithCollectionDescription(desc string) CollectionOption {
 // WithEnableDynamicField 启用动态字段
 func WithEnableDynamicField() CollectionOption {
 	return func(s *CollectionSchema) { s.EnableDynamicField = true }
-}
-
-// Option 向量存储操作的通用可选参数
-type Option func(*Options)
-
-// Options 向量存储操作的可选参数集合
-type Options struct {
-	// DistanceMetric 距离度量方式（如 "COSINE"、"L2"、"IP"）
-	DistanceMetric string
-	// BatchSize 批量操作的批次大小
-	BatchSize int
-	// MetricType 搜索时的距离度量类型
-	MetricType string
-	// OutputFields 搜索结果中需要返回的字段列表
-	OutputFields []string
-	// VectorField 向量索引配置，用于 CreateCollection 时指定索引参数
-	VectorField any
 }
 
 // WithDistanceMetric 设置距离度量方式
@@ -292,24 +299,6 @@ func WithOutputFields(fields ...string) Option {
 func WithVectorField(vf any) Option {
 	return func(o *Options) { o.VectorField = vf }
 }
-
-// newOptions 从选项列表构造 Options
-func newOptions(opts ...Option) Options {
-	var o Options
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return o
-}
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// defaultMaxLength VARCHAR 字段默认最大长度，对齐 Python FieldSchema.max_length 默认值
-const defaultMaxLength = 65535
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewFieldSchema 创建并校验 FieldSchema。
 //
@@ -657,6 +646,15 @@ func CollectionFromDict(data map[string]any) (*CollectionSchema, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newOptions 从选项列表构造 Options
+func newOptions(opts ...Option) Options {
+	var o Options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
 
 // vectorDataTypeFromString 从字符串解析 VectorDataType，不区分大小写。
 func vectorDataTypeFromString(s string) VectorDataType {

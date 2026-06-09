@@ -441,6 +441,11 @@ func (p *dbBasedPipeline) Execute(ctx context.Context) ([]PipelineResult, error)
 	return setResults, nil
 }
 
+// TableName 返回表名，实现 GORM Tabler 接口。
+func (KVStoreRow) TableName() string {
+	return "kv_store"
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureTable 惰性建表。
@@ -499,9 +504,4 @@ func upsertStatement(db *gorm.DB, row *KVStoreRow) *gorm.DB {
 		Columns:   []clause.Column{{Name: "key"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
 	}).Create(row)
-}
-
-// TableName 返回表名，实现 GORM Tabler 接口。
-func (KVStoreRow) TableName() string {
-	return "kv_store"
 }

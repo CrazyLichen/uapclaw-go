@@ -41,18 +41,6 @@ type MilvusHNSW struct {
 	EfSearchFactor float64 `vf:"search"`
 }
 
-// baseIVF IVF 系列索引的公共基类（非导出）。
-// IVF 使用 k-means 将向量空间划分为簇，搜索时只查最相关的簇。
-//
-// 对应 Python: vector_fields/milvus_fields.py (_BaseIVF)
-type baseIVF struct {
-	VectorField
-	// Nlist 构建索引时创建的簇数
-	Nlist int `vf:"construct"`
-	// Nprobe 搜索时查询的簇数，必须 <= Nlist
-	Nprobe int `vf:"search"`
-}
-
 // MilvusIVF Milvus IVF 索引配置。
 // 支持多种量化变体：FLAT、SQ8、PQ、RABITQ。
 //
@@ -72,6 +60,18 @@ type MilvusSCANN struct {
 	WithRawData bool `vf:"construct,keepzero"`
 	// ReorderK 搜索时使用高精度向量重排序的结果数，仅 WithRawData=True 时有效
 	ReorderK int `vf:"search"`
+}
+
+// baseIVF IVF 系列索引的公共基类（非导出）。
+// IVF 使用 k-means 将向量空间划分为簇，搜索时只查最相关的簇。
+//
+// 对应 Python: vector_fields/milvus_fields.py (_BaseIVF)
+type baseIVF struct {
+	VectorField
+	// Nlist 构建索引时创建的簇数
+	Nlist int `vf:"construct"`
+	// Nprobe 搜索时查询的簇数，必须 <= Nlist
+	Nprobe int `vf:"search"`
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
