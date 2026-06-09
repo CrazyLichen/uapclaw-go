@@ -341,7 +341,7 @@ func TestDbBasedKVStore_ExclusiveSet_手动修改过期时间(t *testing.T) {
 	var row KVStoreRow
 	store.db.Where("key = ?", "key1").First(&row)
 	var ev exclusiveValue
-	json.Unmarshal(row.Value, &ev)
+	_ = json.Unmarshal(row.Value, &ev)
 	ev.ExclusiveExpiry = 1 // 1970-01-01，已过期
 	newValue, _ := json.Marshal(ev)
 	store.db.Model(&KVStoreRow{}).Where("key = ?", "key1").Update("value", newValue)
@@ -879,7 +879,7 @@ func TestDbBasedKVStore_Exists_错误路径(t *testing.T) {
 
 	// 关闭底层 SQL 连接模拟数据库错误
 	sqlDB, _ := db.DB()
-	sqlDB.Close()
+	_ = sqlDB.Close()
 
 	_, err = store.Exists(ctx, "key1")
 	if err == nil {

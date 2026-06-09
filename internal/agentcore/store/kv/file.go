@@ -72,7 +72,7 @@ func NewFileKVStore(dbPath string) (*FileKVStore, error) {
 		}
 		return nil
 	}); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 

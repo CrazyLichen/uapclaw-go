@@ -457,7 +457,10 @@ func (s *DbBasedKVStore) ensureTable() {
 		return
 	}
 	s.tableOnce.Do(func() {
-		s.db.AutoMigrate(&KVStoreRow{})
+		if err := s.db.AutoMigrate(&KVStoreRow{}); err != nil {
+			close(s.tableReady)
+			return
+		}
 		s.tableCreated.Store(true)
 		close(s.tableReady)
 	})

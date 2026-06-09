@@ -20,7 +20,7 @@ func newTestFileKVStore(t *testing.T) *FileKVStore {
 	if err != nil {
 		t.Fatalf("NewFileKVStore 返回错误: %v", err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
 
@@ -45,7 +45,7 @@ func TestNewFileKVStore_自动创建父目录(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileKVStore 返回错误: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// 验证数据库文件存在
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -776,7 +776,7 @@ func TestFileKVStore_并发安全(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileKVStore 返回错误: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -857,7 +857,7 @@ func TestFileKVStore_数据持久化(t *testing.T) {
 	if err != nil {
 		t.Fatalf("第二次 NewFileKVStore 返回错误: %v", err)
 	}
-	defer store2.Close()
+	defer func() { _ = store2.Close() }()
 
 	val, err := store2.Get(ctx, "key1")
 	if err != nil {

@@ -74,7 +74,7 @@ func TestNewRedisStore_WithClusterClient(t *testing.T) {
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
-	defer fakeCluster.Close()
+	defer func() { _ = fakeCluster.Close() }()
 
 	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
 	if !store.isCluster() {
@@ -745,7 +745,7 @@ func TestNewRedisStore_ClusterClient类型断言(t *testing.T) {
 	clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
-	defer clusterClient.Close()
+	defer func() { _ = clusterClient.Close() }()
 
 	store := NewRedisStore(clusterClient)
 	if !store.isCluster() {
@@ -770,7 +770,7 @@ func TestRedisStore_GetByPrefix_Cluster模式(t *testing.T) {
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
-	defer fakeCluster.Close()
+	defer func() { _ = fakeCluster.Close() }()
 
 	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
 	ctx := context.Background()
@@ -807,7 +807,7 @@ func TestRedisStore_DeleteByPrefix_Cluster模式(t *testing.T) {
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
-	defer fakeCluster.Close()
+	defer func() { _ = fakeCluster.Close() }()
 
 	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
 	ctx := context.Background()
@@ -846,7 +846,7 @@ func TestRedisStore_DeleteByPrefix_Cluster分批(t *testing.T) {
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
-	defer fakeCluster.Close()
+	defer func() { _ = fakeCluster.Close() }()
 
 	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
 	ctx := context.Background()
