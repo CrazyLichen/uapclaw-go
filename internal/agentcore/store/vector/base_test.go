@@ -693,8 +693,8 @@ func TestCollectionSchema_序列化往返(t *testing.T) {
 	)
 	idField, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary(), WithMaxLength(256))
 	embedField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(768))
-	original.AddField(idField)
-	original.AddField(embedField)
+	_, _ = original.AddField(idField)
+	_, _ = original.AddField(embedField)
 
 	dict := original.ToDict()
 	restored, err := CollectionFromDict(dict)
