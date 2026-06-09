@@ -576,22 +576,62 @@ func extractOutputSchema(op *openapi3.Operation, schemaDefinitions map[string]ma
 		outputSchema = wrapped
 	}
 
-	// 附加 $defs：收集所有引用到的 schema 定义
-	if len(schemaDefinitions) > 0 {
-		defs := make(map[string]any, len(schemaDefinitions))
-		for name, def := range schemaDefinitions {
-			copied := deepCopyMap(def)
-			replaceSchemaRefs(copied)
-			// OpenAPI → JSON Schema 转换
-			if openAPIVersion != "" && strings.HasPrefix(openAPIVersion, "3") {
-				copied = convertOpenAPISchemaToJSONSchema(copied, openAPIVersion)
+	// 附加 $defs：只收集 outputSchema 中被 $ref 引用到的 schema 定义
+	referencedDefs := make(map[string]bool)
+	collectReferencedDefs(outputSchema, referencedDefs)
+
+	// 递归展开：被引用的定义内部可能引用其他定义，需要从 schemaDefinitions 中查找并补充
+	// 使用迭代方式直到没有新增引用
+	prevCount := 0
+	for len(referencedDefs) > prevCount {
+		prevCount = len(referencedDefs)
+		for name := range referencedDefs {
+			if def, exists := schemaDefinitions[name]; exists {
+				collectReferencedDefs(def, referencedDefs)
 			}
-			defs[name] = copied
+		}
+	}
+
+	if len(referencedDefs) > 0 {
+		defs := make(map[string]any, len(referencedDefs))
+		for name := range referencedDefs {
+			if def, exists := schemaDefinitions[name]; exists {
+				copied := deepCopyMap(def)
+				replaceSchemaRefs(copied)
+				// OpenAPI → JSON Schema 转换
+				if openAPIVersion != "" && strings.HasPrefix(openAPIVersion, "3") {
+					copied = convertOpenAPISchemaToJSONSchema(copied, openAPIVersion)
+				}
+				defs[name] = copied
+			}
 		}
 		outputSchema["$defs"] = defs
 	}
 
 	return outputSchema
+}
+
+// collectReferencedDefs 递归收集 schema 中所有被 $ref 引用的定义名称。
+//
+// 扫描 map 中所有 "$ref" 字段，提取 "#/$defs/Xxx" 格式的定义名称，
+// 并递归处理嵌套的 map 和 slice 中的引用。
+func collectReferencedDefs(m map[string]any, collected map[string]bool) {
+	for key, val := range m {
+		if key == "$ref" {
+			if refStr, ok := val.(string); ok && strings.HasPrefix(refStr, "#/$defs/") {
+				defName := strings.TrimPrefix(refStr, "#/$defs/")
+				collected[defName] = true
+			}
+		} else if nested, ok := val.(map[string]any); ok {
+			collectReferencedDefs(nested, collected)
+		} else if arr, ok := val.([]any); ok {
+			for _, item := range arr {
+				if nested, ok := item.(map[string]any); ok {
+					collectReferencedDefs(nested, collected)
+				}
+			}
+		}
+	}
 }
 
 // replaceSchemaRefs 递归替换 map 中的 $ref 引用。

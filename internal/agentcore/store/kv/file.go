@@ -353,8 +353,9 @@ func encodeFileEntry(value []byte, expiryAt int64) ([]byte, error) {
 }
 
 // Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
-func (p *filePipeline) Set(_ context.Context, key string, value []byte) error {
-	p.ops = append(p.ops, operation{op: "set", key: key, value: value})
+// expiry 为过期秒数，0 表示不过期。
+func (p *filePipeline) Set(_ context.Context, key string, value []byte, expiry int) error {
+	p.ops = append(p.ops, operation{op: "set", key: key, value: value, expiry: expiry})
 	return nil
 }
 
@@ -391,7 +392,11 @@ func (p *filePipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 		for _, op := range ops {
 			switch op.op {
 			case "set":
-				data, err := encodeFileEntry(op.value, 0)
+				var expiryAt int64
+				if op.expiry > 0 {
+					expiryAt = time.Now().Unix() + int64(op.expiry)
+				}
+				data, err := encodeFileEntry(op.value, expiryAt)
 				if err != nil {
 					results = append(results, PipelineResult{Op: "set", Key: op.key, Err: err})
 					continue

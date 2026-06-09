@@ -670,7 +670,7 @@ func TestFileKVStore_Pipeline_混合操作(t *testing.T) {
 
 	// 创建 Pipeline 并执行混合操作
 	pipe := store.Pipeline(ctx)
-	_ = pipe.Set(ctx, "new_key", []byte("new_value"))
+	_ = pipe.Set(ctx, "new_key", []byte("new_value"), 0)
 	_ = pipe.Get(ctx, "existing")
 	_ = pipe.Exists(ctx, "nonexistent")
 
@@ -722,7 +722,7 @@ func TestFileKVStore_Pipeline_复用(t *testing.T) {
 	pipe := store.Pipeline(ctx)
 
 	// 第一次使用
-	_ = pipe.Set(ctx, "k1", []byte("v1"))
+	_ = pipe.Set(ctx, "k1", []byte("v1"), 0)
 	results1, err := pipe.Execute(ctx)
 	if err != nil {
 		t.Fatalf("第一次 Execute 返回错误: %v", err)
@@ -732,7 +732,7 @@ func TestFileKVStore_Pipeline_复用(t *testing.T) {
 	}
 
 	// 第二次使用（复用同一个 Pipeline）
-	_ = pipe.Set(ctx, "k2", []byte("v2"))
+	_ = pipe.Set(ctx, "k2", []byte("v2"), 0)
 	_ = pipe.Get(ctx, "k1")
 	results2, err := pipe.Execute(ctx)
 	if err != nil {

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"math"
 	"testing"
 
 	mcp "github.com/mark3labs/mcp-go/mcp"
@@ -487,7 +488,7 @@ func TestApplyNumericConstraints_完整约束(t *testing.T) {
 		"format":  "int32",
 	}
 	applyNumericConstraints(p, propMap)
-	assert.Equal(t, float64(0), p.Minimum)
+	assert.Equal(t, float64(0), p.Minimum)  // minimum=0 是合法值，应被设置
 	assert.Equal(t, float64(100), p.Maximum)
 	assert.Equal(t, "int32", p.Format)
 }
@@ -496,8 +497,8 @@ func TestApplyNumericConstraints_完整约束(t *testing.T) {
 func TestApplyNumericConstraints_空Map(t *testing.T) {
 	p := commonschema.NewIntegerParam("score", "分数", true)
 	applyNumericConstraints(p, map[string]any{})
-	assert.Equal(t, float64(0), p.Minimum)
-	assert.Equal(t, float64(0), p.Maximum)
+	assert.True(t, math.IsNaN(p.Minimum), "Minimum 应为 NaN（未设置）")
+	assert.True(t, math.IsNaN(p.Maximum), "Maximum 应为 NaN（未设置）")
 	assert.Equal(t, "", p.Format)
 }
 
@@ -510,8 +511,8 @@ func TestApplyNumericConstraints_类型不匹配(t *testing.T) {
 		"format":  123,
 	}
 	applyNumericConstraints(p, propMap)
-	assert.Equal(t, float64(0), p.Minimum)
-	assert.Equal(t, float64(0), p.Maximum)
+	assert.True(t, math.IsNaN(p.Minimum), "Minimum 应为 NaN（类型不匹配，未设置）")
+	assert.True(t, math.IsNaN(p.Maximum), "Maximum 应保持 NaN（int(50) 不会匹配 float64 断言）")
 	assert.Equal(t, "", p.Format)
 }
 

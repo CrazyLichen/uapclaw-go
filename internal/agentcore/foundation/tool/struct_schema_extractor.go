@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"unicode"
@@ -84,6 +85,8 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 			Name:        jsonName,
 			Type:        paramType,
 			Description: resolveDescription(jsonName, schemaTags),
+			Minimum:     math.NaN(),
+			Maximum:     math.NaN(),
 		}
 
 		// 确定 Required

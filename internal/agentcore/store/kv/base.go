@@ -53,7 +53,7 @@ type BaseKVStore interface {
 // 使用方式：
 //
 //	p := store.Pipeline(ctx)
-//	p.Set(ctx, "k1", []byte("v1"))
+//	p.Set(ctx, "k1", []byte("v1"), 0)  // 第4参数为过期秒数，0 表示不过期
 //	p.Get(ctx, "k2")
 //	p.Exists(ctx, "k3")
 //	results, err := p.Execute(ctx)
@@ -61,7 +61,9 @@ type BaseKVStore interface {
 // 对应 Python: openjiuwen/core/foundation/store/base_kv_store.py (BasedKVStorePipeline)
 type KVPipeline interface {
 	// Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
-	Set(ctx context.Context, key string, value []byte) error
+	// expiry 为过期秒数，0 表示不过期。
+	// 对应 Python: BasedKVStorePipeline.set(key, value, ttl=None)
+	Set(ctx context.Context, key string, value []byte, expiry int) error
 
 	// Get 向管道中添加一个 Get 操作（仅记录，不立即执行）。
 	Get(ctx context.Context, key string) error

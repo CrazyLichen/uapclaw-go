@@ -3,6 +3,7 @@ package schema
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -38,9 +39,11 @@ type Param struct {
 	// Pattern 正则校验模式（可选，仅 String 类型）
 	Pattern string `json:"pattern,omitempty"`
 	// Minimum 数值最小值（可选，仅 Integer/Number 类型）
-	Minimum float64 `json:"minimum,omitempty"`
+	// 使用 NaN 作为无效值标记，math.IsNaN(Minimum) 表示未设置，0 是合法约束值
+	Minimum float64 `json:"-"`
 	// Maximum 数值最大值（可选，仅 Integer/Number 类型）
-	Maximum float64 `json:"maximum,omitempty"`
+	// 使用 NaN 作为无效值标记，math.IsNaN(Maximum) 表示未设置，0 是合法约束值
+	Maximum float64 `json:"-"`
 	// Format 格式标识（可选，如 email/uri/date-time 等）
 	Format string `json:"format,omitempty"`
 	// Nullable 是否可为 null（可选），输出 JSON Schema 时将 type 扩展为数组含 "null"
@@ -133,6 +136,8 @@ func NewIntegerParam(name, description string, required bool, defaultVal ...int)
 		Description: description,
 		Type:        ParamTypeInteger,
 		Required:    required,
+		Minimum:     math.NaN(),
+		Maximum:     math.NaN(),
 	}
 	if len(defaultVal) > 0 {
 		p.Default = defaultVal[0]
@@ -147,6 +152,8 @@ func NewNumberParam(name, description string, required bool, defaultVal ...float
 		Description: description,
 		Type:        ParamTypeNumber,
 		Required:    required,
+		Minimum:     math.NaN(),
+		Maximum:     math.NaN(),
 	}
 	if len(defaultVal) > 0 {
 		p.Default = defaultVal[0]
@@ -326,6 +333,76 @@ func (p *Param) String() string {
 	return fmt.Sprintf("%s(%s, required=%v)", p.Name, p.Type, p.Required)
 }
 
+// MarshalJSON 实现 json.Marshaler 接口，处理 NaN 值的 Minimum/Maximum。
+// NaN 表示未设置，不输出到 JSON；非 NaN（包括 0）正常输出。
+func (p *Param) MarshalJSON() ([]byte, error) {
+	// 使用别名避免递归调用 MarshalJSON
+	type ParamAlias Param
+	alias := ParamAlias(*p)
+
+	// 先序列化基本字段
+	data, err := json.Marshal(map[string]any{
+		"name":        alias.Name,
+		"description": alias.Description,
+		"type":        alias.Type,
+		"required":    alias.Required,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+
+	// 可选字段
+	if alias.Default != nil {
+		m["default"] = alias.Default
+	}
+	if len(alias.Enum) > 0 {
+		m["enum"] = alias.Enum
+	}
+	if alias.MinLength > 0 {
+		m["minLength"] = alias.MinLength
+	}
+	if alias.MaxLength > 0 {
+		m["maxLength"] = alias.MaxLength
+	}
+	if alias.Pattern != "" {
+		m["pattern"] = alias.Pattern
+	}
+	if !math.IsNaN(alias.Minimum) {
+		m["minimum"] = alias.Minimum
+	}
+	if !math.IsNaN(alias.Maximum) {
+		m["maximum"] = alias.Maximum
+	}
+	if alias.Format != "" {
+		m["format"] = alias.Format
+	}
+	if alias.Nullable {
+		m["nullable"] = alias.Nullable
+	}
+	if alias.Items != nil {
+		m["items"] = alias.Items
+	}
+	if len(alias.Properties) > 0 {
+		m["properties"] = alias.Properties
+	}
+	if len(alias.AnyOf) > 0 {
+		m["anyOf"] = alias.AnyOf
+	}
+	if len(alias.AllOf) > 0 {
+		m["allOf"] = alias.AllOf
+	}
+	if len(alias.OneOf) > 0 {
+		m["oneOf"] = alias.OneOf
+	}
+
+	return json.Marshal(m)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // paramToSchema 将单个 Param 转换为 JSON Schema 字典。
@@ -348,7 +425,7 @@ func paramToSchema(p *Param) map[string]any {
 	if len(p.Enum) > 0 {
 		s["enum"] = p.Enum
 	}
-	// 输出约束字段（零值跳过，不输出）
+	// 输出约束字段（NaN 表示未设置，不输出；0 是合法值需输出）
 	if p.MinLength > 0 {
 		s["minLength"] = p.MinLength
 	}
@@ -358,10 +435,10 @@ func paramToSchema(p *Param) map[string]any {
 	if p.Pattern != "" {
 		s["pattern"] = p.Pattern
 	}
-	if p.Minimum != 0 {
+	if !math.IsNaN(p.Minimum) {
 		s["minimum"] = p.Minimum
 	}
-	if p.Maximum != 0 {
+	if !math.IsNaN(p.Maximum) {
 		s["maximum"] = p.Maximum
 	}
 	if p.Format != "" {

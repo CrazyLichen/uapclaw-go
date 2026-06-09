@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -94,15 +96,45 @@ func (c *SseClient) Connect(ctx context.Context, opts ...types.ConnectOption) er
 		},
 	})
 
-	// 从 results 中提取 *auth.ToolAuthResult → auth_provider
+	// 从 results 中提取 *auth.ToolAuthResult → auth_provider 和 tls_config
 	var provider *auth.HeaderQueryProvider
+	var tlsConfig *tls.Config
 	for _, item := range results {
 		if authResult, ok := item.(*auth.ToolAuthResult); ok && authResult.Success {
-			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok {
+			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok && provider == nil {
 				provider = p
-				break
+			}
+			if tc, ok := authResult.AuthData["tls_config"].(*tls.Config); ok && tc != nil && tlsConfig == nil {
+				tlsConfig = tc
 			}
 		}
+	}
+
+	// 判断是否需要构建自定义 HTTP 客户端（TLS 配置和超时合并到同一个客户端）
+	hasTimeout := connectOpts.Timeout > 0 && connectOpts.Timeout != types.NoTimeout
+	if tlsConfig != nil {
+		// 有 TLS 配置，构建自定义 HTTP 客户端
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: tlsConfig,
+			},
+		}
+		if hasTimeout {
+			// 同时有超时，设置到 HTTP 客户端
+			httpClient.Timeout = time.Duration(connectOpts.Timeout * float64(time.Second))
+		}
+		transportOpts = append(transportOpts, mcptransport.WithHTTPClient(httpClient))
+		// TLS 场景下也传递 endpoint/response timeout，让传输层内部超时逻辑生效
+		if hasTimeout {
+			timeoutDur := time.Duration(connectOpts.Timeout * float64(time.Second))
+			transportOpts = append(transportOpts, mcptransport.WithEndpointTimeout(timeoutDur))
+			transportOpts = append(transportOpts, mcptransport.WithResponseTimeout(timeoutDur))
+		}
+	} else if hasTimeout {
+		// 仅超时，无 TLS，使用 endpoint/response timeout 传递到传输层
+		timeoutDur := time.Duration(connectOpts.Timeout * float64(time.Second))
+		transportOpts = append(transportOpts, mcptransport.WithEndpointTimeout(timeoutDur))
+		transportOpts = append(transportOpts, mcptransport.WithResponseTimeout(timeoutDur))
 	}
 
 	// 将 provider 的 headers 合并到 config.AuthHeaders，一次性传入 transport 选项
@@ -257,7 +289,7 @@ func (c *SseClient) ListTools(ctx context.Context) ([]*types.McpToolCard, error)
 			t.Name,
 			t.Description,
 			c.serverName,
-			nil, // InputParams 从 InputSchema 转换较复杂，此处暂留空
+			jsonSchemaToParams(t.InputSchema),
 			types.WithMcpToolCardServerID(c.config.ServerID),
 		))
 	}

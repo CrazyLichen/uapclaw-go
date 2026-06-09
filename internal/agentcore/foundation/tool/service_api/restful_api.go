@@ -343,6 +343,16 @@ func (r *RestfulApi) doRequest(
 		reqURL = strings.ReplaceAll(reqURL, "{"+k+"}", fmt.Sprintf("%v", v))
 	}
 
+	// 检查是否有未替换的路径参数占位符，对齐 Python: str.format(**path_params) 会抛 KeyError
+	if unmatched := findUnmatchedPathParams(reqURL); len(unmatched) > 0 {
+		return nil, exception.BuildError(
+			exception.StatusToolRestfulApiExecutionError,
+			exception.WithParam("method", "doRequest"),
+			exception.WithParam("reason", fmt.Sprintf("路径参数未替换: %v", unmatched)),
+			exception.WithParam("url", r.card.URL),
+		)
+	}
+
 	// 拼接 query 参数
 	queryParams := mapResults[APIParamLocationQuery]
 	if len(queryParams) > 0 {
@@ -788,4 +798,16 @@ func (r *RestfulApi) triggerAuth(ctx context.Context) []any {
 			},
 		},
 	})
+}
+
+// findUnmatchedPathParams 查找 URL 中未被替换的路径参数占位符。
+func findUnmatchedPathParams(urlStr string) []string {
+	matches := pathParamPattern.FindAllStringSubmatch(urlStr, -1)
+	var result []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			result = append(result, m[1])
+		}
+	}
+	return result
 }

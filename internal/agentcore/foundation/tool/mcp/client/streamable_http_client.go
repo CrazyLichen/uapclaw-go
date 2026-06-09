@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -62,6 +64,7 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	if len(c.config.AuthHeaders) > 0 {
 		transportOpts = append(transportOpts, mcptransport.WithHTTPHeaders(c.config.AuthHeaders))
 	}
+
 	// 触发 TOOL_AUTH 回调获取认证信息（3.11 回填）
 	results := callback.GetCallbackFramework().TriggerTool(ctx, &callback.ToolCallEventData{
 		Event:    callback.ToolAuth,
@@ -80,15 +83,33 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 		},
 	})
 
-	// 从 results 中提取 *auth.ToolAuthResult → auth_provider
+	// 从 results 中提取 *auth.ToolAuthResult → auth_provider 和 tls_config
 	var provider *auth.HeaderQueryProvider
+	var tlsConfig *tls.Config
 	for _, item := range results {
 		if authResult, ok := item.(*auth.ToolAuthResult); ok && authResult.Success {
-			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok {
+			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok && provider == nil {
 				provider = p
-				break
+			}
+			if tc, ok := authResult.AuthData["tls_config"].(*tls.Config); ok && tc != nil && tlsConfig == nil {
+				tlsConfig = tc
 			}
 		}
+	}
+
+	// 如果有 TLS 配置，构建自定义 HTTP 客户端
+	if tlsConfig != nil {
+		transportOpts = append(transportOpts, mcptransport.WithHTTPBasicClient(&http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: tlsConfig,
+			},
+		}))
+	}
+
+	// 如果设置了超时，传递到传输层
+	if connectOpts.Timeout > 0 && connectOpts.Timeout != types.NoTimeout {
+		timeoutDur := time.Duration(connectOpts.Timeout * float64(time.Second))
+		transportOpts = append(transportOpts, mcptransport.WithHTTPTimeout(timeoutDur))
 	}
 
 	// 将 provider 的 headers 合并到 config.AuthHeaders，一次性传入 transport 选项

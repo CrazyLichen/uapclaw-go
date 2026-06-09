@@ -176,14 +176,14 @@ func TestInMemoryKVStore_ExclusiveSet_已过期允许覆盖(t *testing.T) {
 	store := NewInMemoryKVStore()
 	ctx := context.Background()
 
-	// 设置 2 秒后过期的 key
-	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 2)
+	// 设置 1 秒后过期的 key
+	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 1)
 	if !ok {
 		t.Fatal("首次 ExclusiveSet 应返回 true")
 	}
 
-	// 等待过期
-	time.Sleep(2100 * time.Millisecond)
+	// 等待过期（Unix 秒级精度，需要等待超过 1 秒才能保证 now > expiryTs）
+	time.Sleep(2 * time.Second)
 
 	// 已过期的 key 允许覆盖
 	ok, err := store.ExclusiveSet(ctx, "key1", []byte("value2"), 0)
@@ -233,12 +233,12 @@ func TestInMemoryKVStore_Exists_已过期(t *testing.T) {
 	store := NewInMemoryKVStore()
 	ctx := context.Background()
 
-	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 2)
+	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 1)
 	if !ok {
 		t.Fatal("ExclusiveSet 应返回 true")
 	}
 
-	time.Sleep(2100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	exists, _ := store.Exists(ctx, "key1")
 	if exists {
@@ -251,12 +251,12 @@ func TestInMemoryKVStore_Get_已过期(t *testing.T) {
 	store := NewInMemoryKVStore()
 	ctx := context.Background()
 
-	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 2)
+	ok, _ := store.ExclusiveSet(ctx, "key1", []byte("value1"), 1)
 	if !ok {
 		t.Fatal("ExclusiveSet 应返回 true")
 	}
 
-	time.Sleep(2100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	val, _ := store.Get(ctx, "key1")
 	if val != nil {
@@ -312,12 +312,12 @@ func TestInMemoryKVStore_GetByPrefix_含过期key(t *testing.T) {
 	ctx := context.Background()
 
 	_ = store.Set(ctx, "user:1", []byte("alice"))
-	ok, _ := store.ExclusiveSet(ctx, "user:2", []byte("bob"), 2)
+	ok, _ := store.ExclusiveSet(ctx, "user:2", []byte("bob"), 1)
 	if !ok {
 		t.Fatal("ExclusiveSet 应返回 true")
 	}
 
-	time.Sleep(2100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	result, _ := store.GetByPrefix(ctx, "user:")
 	if len(result) != 1 {
@@ -425,12 +425,12 @@ func TestInMemoryKVStore_MGet_含过期(t *testing.T) {
 	ctx := context.Background()
 
 	_ = store.Set(ctx, "k1", []byte("v1"))
-	ok, _ := store.ExclusiveSet(ctx, "k2", []byte("v2"), 2)
+	ok, _ := store.ExclusiveSet(ctx, "k2", []byte("v2"), 1)
 	if !ok {
 		t.Fatal("ExclusiveSet 应返回 true")
 	}
 
-	time.Sleep(2100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	values, _ := store.MGet(ctx, []string{"k1", "k2"})
 	if string(values[0]) != "v1" {
@@ -529,7 +529,7 @@ func TestInMemoryKVStore_Pipeline_混合操作(t *testing.T) {
 
 	// 创建 Pipeline 并执行混合操作
 	pipe := store.Pipeline(ctx)
-	_ = pipe.Set(ctx, "new_key", []byte("new_value"))
+	_ = pipe.Set(ctx, "new_key", []byte("new_value"), 0)
 	_ = pipe.Get(ctx, "existing")
 	_ = pipe.Exists(ctx, "nonexistent")
 
@@ -572,7 +572,7 @@ func TestInMemoryKVStore_Pipeline_复用(t *testing.T) {
 	pipe := store.Pipeline(ctx)
 
 	// 第一次使用
-	_ = pipe.Set(ctx, "k1", []byte("v1"))
+	_ = pipe.Set(ctx, "k1", []byte("v1"), 0)
 	results1, err := pipe.Execute(ctx)
 	if err != nil {
 		t.Fatalf("第一次 Execute 返回错误: %v", err)
@@ -582,7 +582,7 @@ func TestInMemoryKVStore_Pipeline_复用(t *testing.T) {
 	}
 
 	// 第二次使用（复用同一个 Pipeline）
-	_ = pipe.Set(ctx, "k2", []byte("v2"))
+	_ = pipe.Set(ctx, "k2", []byte("v2"), 0)
 	_ = pipe.Get(ctx, "k1")
 	results2, err := pipe.Execute(ctx)
 	if err != nil {

@@ -140,8 +140,19 @@ func ExtractMCPToolResultContent(toolResult any) any {
 		return data
 	}
 
-	// 其他情况，尝试 JSON 序列化（对齐 Python model_dump，输出结构化 JSON）
-	if jsonBytes, err := json.Marshal(item); err == nil {
+	// 其他情况，对齐 Python model_dump(exclude_none=True) + popped("data")
+	// 移除 data 字段后序列化，排除空值
+	cleaned := make(map[string]any)
+	for k, v := range item {
+		if k == "data" {
+			continue // 移除 data 字段，对齐 Python: dumped.pop("data", None)
+		}
+		if v == nil {
+			continue // 排除空值，对齐 Python: exclude_none=True
+		}
+		cleaned[k] = v
+	}
+	if jsonBytes, err := json.Marshal(cleaned); err == nil {
 		return string(jsonBytes)
 	}
 	return fmt.Sprintf("%v", item)
@@ -179,6 +190,8 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 	arguments := inputs
 	if t.card.InputParams != nil {
 		callOpts := tool.NewToolCallOptions(opts...)
+		// MCPTool 默认移除 None 值参数，对齐 Python: skip_none_value = kwargs.get("skip_none_value", True)
+		callOpts.SkipNoneValue = true
 		// 触发 TOOL_PARSE_STARTED 事件
 		runnnercallback.GetCallbackFramework().TriggerTool(ctx, &runnnercallback.ToolCallEventData{
 			Event:    runnnercallback.ToolParseStarted,

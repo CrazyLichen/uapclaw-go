@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -563,5 +564,70 @@ func TestParam_Validate_组合Schema内嵌无效类型(t *testing.T) {
 	err := p.Validate()
 	if err == nil {
 		t.Error("AllOf 内含无效子 schema 应返回错误")
+	}
+}
+
+// TestParam_Minimum零值可输出 验证 Minimum=0 能正确输出到 JSON Schema。
+func TestParam_Minimum零值可输出(t *testing.T) {
+	p := NewNumberParam("score", "分数", true)
+	p.Minimum = 0
+	p.Maximum = 100
+
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	scoreSchema := props["score"].(map[string]any)
+
+	// Minimum=0 应输出到 JSON Schema
+	if minVal, ok := scoreSchema["minimum"]; !ok {
+		t.Error("Minimum=0 未输出到 JSON Schema")
+	} else if minVal != float64(0) {
+		t.Errorf("minimum = %v, 期望 0", minVal)
+	}
+
+	// Maximum=100 应正常输出
+	if maxVal, ok := scoreSchema["maximum"]; !ok {
+		t.Error("Maximum=100 未输出到 JSON Schema")
+	} else if maxVal != float64(100) {
+		t.Errorf("maximum = %v, 期望 100", maxVal)
+	}
+}
+
+// TestParam_MinimumNaN不输出 验证 Minimum 为 NaN 时不输出到 JSON Schema。
+func TestParam_MinimumNaN不输出(t *testing.T) {
+	p := NewIntegerParam("count", "数量", true)
+	// NewIntegerParam 默认 Minimum=NaN
+
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	countSchema := props["count"].(map[string]any)
+
+	// NaN 的 Minimum 不应输出
+	if _, ok := countSchema["minimum"]; ok {
+		t.Error("NaN 的 Minimum 不应输出到 JSON Schema")
+	}
+	if _, ok := countSchema["maximum"]; ok {
+		t.Error("NaN 的 Maximum 不应输出到 JSON Schema")
+	}
+}
+
+// TestNewIntegerParam_MinimumMaximum默认NaN 验证工厂方法初始化 NaN。
+func TestNewIntegerParam_MinimumMaximum默认NaN(t *testing.T) {
+	p := NewIntegerParam("x", "x", false)
+	if !math.IsNaN(p.Minimum) {
+		t.Errorf("NewIntegerParam Minimum = %v, 期望 NaN", p.Minimum)
+	}
+	if !math.IsNaN(p.Maximum) {
+		t.Errorf("NewIntegerParam Maximum = %v, 期望 NaN", p.Maximum)
+	}
+}
+
+// TestNewNumberParam_MinimumMaximum默认NaN 验证工厂方法初始化 NaN。
+func TestNewNumberParam_MinimumMaximum默认NaN(t *testing.T) {
+	p := NewNumberParam("x", "x", false)
+	if !math.IsNaN(p.Minimum) {
+		t.Errorf("NewNumberParam Minimum = %v, 期望 NaN", p.Minimum)
+	}
+	if !math.IsNaN(p.Maximum) {
+		t.Errorf("NewNumberParam Maximum = %v, 期望 NaN", p.Maximum)
 	}
 }

@@ -359,14 +359,14 @@ func validateParamConstraints(key string, val any, p *schema.Param) error {
 		if !ok {
 			return nil // 类型不匹配已在 validateParamType 中处理
 		}
-		if p.Minimum != 0 && f < p.Minimum {
+		if !math.IsNaN(p.Minimum) && f < p.Minimum {
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,
 				exception.WithParam("param", key),
 				exception.WithParam("reason", fmt.Sprintf("value %v < minimum %v", f, p.Minimum)),
 			)
 		}
-		if p.Maximum != 0 && f > p.Maximum {
+		if !math.IsNaN(p.Maximum) && f > p.Maximum {
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,
 				exception.WithParam("param", key),

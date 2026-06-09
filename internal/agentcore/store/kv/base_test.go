@@ -51,7 +51,7 @@ func (f *fakeKVStore) Pipeline(_ context.Context) KVPipeline {
 // fakeKVPipeline 用于验证 KVPipeline 接口可被实现。
 type fakeKVPipeline struct{}
 
-func (f *fakeKVPipeline) Set(_ context.Context, _ string, _ []byte) error {
+func (f *fakeKVPipeline) Set(_ context.Context, _ string, _ []byte, _ int) error {
 	return nil
 }
 

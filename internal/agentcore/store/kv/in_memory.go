@@ -25,9 +25,12 @@ type operation struct {
 	key string
 	// value Set 操作的值，仅 op 为 "set" 时有效
 	value []byte
+	// expiry Set 操作的过期秒数，0 表示不过期
+	// 对应 Python: BasedKVStorePipeline.set(key, value, ttl=None)
+	expiry int
 }
 
-// InMemoryKVStore 基于 内存的键值存储实现。
+// InMemoryKVStore 基于内存的键值存储实现。
 //
 // 对应 Python: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 type InMemoryKVStore struct {
@@ -92,8 +95,8 @@ func (s *InMemoryKVStore) ExclusiveSet(_ context.Context, key string, value []by
 	defer s.mu.Unlock()
 	now := time.Now().Unix()
 	if e, ok := s.store[key]; ok {
-		if e.expiryTs != 0 && now >= e.expiryTs {
-			// 已过期：允许覆盖
+		if e.expiryTs != 0 && now > e.expiryTs {
+		// 已过期：允许覆盖（对齐 Python: current_time > expiry_ts）
 		} else {
 			// 未过期：拒绝
 			return false, nil
@@ -204,11 +207,16 @@ func (s *InMemoryKVStore) Pipeline(_ context.Context) KVPipeline {
 		exec: func(ops []operation) ([]PipelineResult, error) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			now := time.Now().Unix()
 			results := make([]PipelineResult, 0, len(ops))
 			for _, op := range ops {
 				switch op.op {
 				case "set":
-					s.store[op.key] = entry{value: op.value, expiryTs: 0}
+					var expiryTs int64
+					if op.expiry > 0 {
+						expiryTs = now + int64(op.expiry)
+					}
+					s.store[op.key] = entry{value: op.value, expiryTs: expiryTs}
 					results = append(results, PipelineResult{Op: "set", Key: op.key})
 				case "get":
 					v := s.getWithoutLock(op.key)
@@ -233,16 +241,18 @@ func (s *InMemoryKVStore) getWithoutLock(key string) []byte {
 	if !ok {
 		return nil
 	}
-	if e.expiryTs != 0 && time.Now().Unix() >= e.expiryTs {
+	if e.expiryTs != 0 && time.Now().Unix() > e.expiryTs {
 		// 已过期：返回 nil，但不删除（允许 ExclusiveSet 覆盖）
+		// 对齐 Python: current_time > expiry_ts（严格大于才算过期）
 		return nil
 	}
 	return e.value
 }
 
 // Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
-func (p *inMemoryPipeline) Set(_ context.Context, key string, value []byte) error {
-	p.ops = append(p.ops, operation{op: "set", key: key, value: value})
+// expiry 为过期秒数，0 表示不过期。
+func (p *inMemoryPipeline) Set(_ context.Context, key string, value []byte, expiry int) error {
+	p.ops = append(p.ops, operation{op: "set", key: key, value: value, expiry: expiry})
 	return nil
 }
 
