@@ -483,7 +483,7 @@ func TestCollectionSchema_AddField_重复名字(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	field1, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
 	field2, _ := NewFieldSchema("id", VectorDataTypeVarchar)
-	schema.AddField(field1)
+	_, _ = schema.AddField(field1)
 	_, err := schema.AddField(field2)
 	if err == nil {
 		t.Error("重复字段名应返回错误")
@@ -495,7 +495,7 @@ func TestCollectionSchema_AddField_重复主键(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	pk1, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
 	pk2, _ := NewFieldSchema("id2", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(pk1)
+	_, _ = schema.AddField(pk1)
 	_, err := schema.AddField(pk2)
 	if err == nil {
 		t.Error("第二个主键应返回错误")
@@ -506,7 +506,7 @@ func TestCollectionSchema_AddField_重复主键(t *testing.T) {
 func TestCollectionSchema_RemoveField(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	schema.RemoveField("id")
 	if schema.HasField("id") {
 		t.Error("移除后 HasField 应返回 false")
@@ -518,8 +518,8 @@ func TestCollectionSchema_RemoveField_链式(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	f1, _ := NewFieldSchema("a", VectorDataTypeVarchar)
 	f2, _ := NewFieldSchema("b", VectorDataTypeVarchar)
-	schema.AddField(f1)
-	schema.AddField(f2)
+	_, _ = schema.AddField(f1)
+	_, _ = schema.AddField(f2)
 	result := schema.RemoveField("a")
 	if result != schema {
 		t.Error("RemoveField 应返回自身")
@@ -533,7 +533,7 @@ func TestCollectionSchema_RemoveField_链式(t *testing.T) {
 func TestCollectionSchema_GetField(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(768))
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	got := schema.GetField("embedding")
 	if got == nil {
 		t.Fatal("GetField 返回 nil")
@@ -555,7 +555,7 @@ func TestCollectionSchema_GetField_不存在(t *testing.T) {
 func TestCollectionSchema_GetPrimaryKeyField(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	pk := schema.GetPrimaryKeyField()
 	if pk == nil {
 		t.Fatal("主键字段不应为 nil")
@@ -578,8 +578,8 @@ func TestCollectionSchema_GetVectorFields(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	idField, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
 	embedField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(768))
-	schema.AddField(idField)
-	schema.AddField(embedField)
+	_, _ = schema.AddField(idField)
+	_, _ = schema.AddField(embedField)
 	vf := schema.GetVectorFields()
 	if len(vf) != 1 {
 		t.Fatalf("向量字段数量 = %d, 期望 1", len(vf))
@@ -603,7 +603,7 @@ func TestCollectionSchema_初始带主键冲突(t *testing.T) {
 func TestCollectionSchema_Fields(t *testing.T) {
 	schema, _ := NewCollectionSchema()
 	f1, _ := NewFieldSchema("a", VectorDataTypeVarchar)
-	schema.AddField(f1)
+	_, _ = schema.AddField(f1)
 	fields := schema.Fields()
 	if len(fields) != 1 {
 		t.Errorf("Fields() 长度 = %d, 期望 1", len(fields))
@@ -625,8 +625,8 @@ func TestCollectionSchema_ToDict(t *testing.T) {
 	)
 	idField, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary(), WithMaxLength(256))
 	embedField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(768))
-	schema.AddField(idField)
-	schema.AddField(embedField)
+	_, _ = schema.AddField(idField)
+	_, _ = schema.AddField(embedField)
 
 	got := schema.ToDict()
 	if got["description"] != "测试" {

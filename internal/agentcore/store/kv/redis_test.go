@@ -766,7 +766,7 @@ func TestRedisStore_GetByPrefix_Cluster模式(t *testing.T) {
 
 	// 使用 WithClusterClient 手动设置 Cluster 模式
 	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer standaloneClient.Close()
+	defer func() { _ = standaloneClient.Close() }()
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
@@ -803,7 +803,7 @@ func TestRedisStore_DeleteByPrefix_Cluster模式(t *testing.T) {
 	defer mr.Close()
 
 	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer standaloneClient.Close()
+	defer func() { _ = standaloneClient.Close() }()
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
@@ -842,7 +842,7 @@ func TestRedisStore_DeleteByPrefix_Cluster分批(t *testing.T) {
 	defer mr.Close()
 
 	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer standaloneClient.Close()
+	defer func() { _ = standaloneClient.Close() }()
 	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{mr.Addr()},
 	})
