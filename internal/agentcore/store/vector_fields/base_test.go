@@ -107,3 +107,34 @@ func TestVectorField_Validate_基类默认(t *testing.T) {
 		t.Errorf("基类 Validate() 应返回 nil, 实际: %v", err)
 	}
 }
+
+// ──── parseVFTag 标签解析测试 ────
+
+// TestParseVFTag_各格式 验证各种标签格式的解析结果
+func TestParseVFTag_各格式(t *testing.T) {
+	tests := []struct {
+		name         string
+		tag          string
+		wantStage    string
+		wantKeepZero bool
+	}{
+		{"construct", "construct", "construct", false},
+		{"search", "search", "search", false},
+		{"dash", "-", "-", false},
+		{"construct_keepzero", "construct,keepzero", "construct", true},
+		{"search_keepzero", "search,keepzero", "search", true},
+		{"空字符串", "", "", false},
+		{"unknown", "unknown", "unknown", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stage, keepZero := parseVFTag(tt.tag)
+			if stage != tt.wantStage {
+				t.Errorf("stage = %q, 期望 %q", stage, tt.wantStage)
+			}
+			if keepZero != tt.wantKeepZero {
+				t.Errorf("keepZero = %v, 期望 %v", keepZero, tt.wantKeepZero)
+			}
+		})
+	}
+}

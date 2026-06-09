@@ -2,6 +2,7 @@ package vector_fields
 
 import (
 	"fmt"
+	"strings"
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -130,3 +131,25 @@ func (vf *VectorField) Validate() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// parseVFTag 解析 vf 结构体标签，返回 stage 和是否 keepzero。
+//
+// 标签格式："<stage>" 或 "<stage>,keepzero"
+// 示例："construct" → ("construct", false)
+//
+//	"search,keepzero" → ("search", true)
+//	"-" → ("-", false)
+//	"" → ("", false)
+func parseVFTag(tag string) (stage string, keepZero bool) {
+	if tag == "" {
+		return "", false
+	}
+	parts := strings.Split(tag, ",")
+	stage = parts[0]
+	for _, p := range parts[1:] {
+		if strings.TrimSpace(p) == "keepzero" {
+			keepZero = true
+		}
+	}
+	return stage, keepZero
+}
