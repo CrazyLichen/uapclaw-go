@@ -5,7 +5,8 @@
 // InMemoryKVStore 提供基于内存的并发安全实现，支持惰性过期检查。
 // FileKVStore 提供基于 bbolt 的文件持久化实现，对应 Python ShelveStore，
 // 严格复刻其语义（包括已知的值解包不一致和过期语义不一致）。
-// 其他后端实现（数据库、Redis 等）将在后续版本中提供。
+// DbBasedKVStore 提供基于 GORM 的数据库持久化实现，支持 SQLite/MySQL/PostgreSQL，
+// 对应 Python DbBasedKVStore。
 //
 // 文件目录：
 //
@@ -13,12 +14,14 @@
 //	├── doc.go           # 包文档
 //	├── base.go          # BaseKVStore 接口 + KVPipeline 接口 + PipelineResult 结构体
 //	├── in_memory.go     # InMemoryKVStore 内存实现 + inMemoryPipeline
-//	└── file.go          # FileKVStore 文件持久化实现 + filePipeline
+//	├── file.go          # FileKVStore 文件持久化实现 + filePipeline
+//	└── db_based.go      # DbBasedKVStore 数据库实现（GORM）+ dbBasedPipeline
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/base_kv_store.py
 //
 //	InMemoryKVStore 对应: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 //	FileKVStore 对应:     openjiuwen/core/foundation/store/kv/shelve_store.py
+//	DbBasedKVStore 对应:  openjiuwen/core/foundation/store/kv/db_based_kv_store.py
 //
 // 核心类型/接口索引：
 //
@@ -27,4 +30,5 @@
 //	PipelineResult   — 管道操作结果，包含 Op/Key/Value/Exists/Err 字段
 //	InMemoryKVStore  — 内存实现，并发安全，支持惰性过期检查
 //	FileKVStore      — 文件持久化实现（bbolt），对应 Python ShelveStore
+//	DbBasedKVStore   — 数据库持久化实现（GORM），支持 SQLite/MySQL/PostgreSQL
 package kv
