@@ -906,3 +906,210 @@ func TestFileKVStore_Close后操作(t *testing.T) {
 func TestFileKVStore_接口满足(t *testing.T) {
 	var _ BaseKVStore = (*FileKVStore)(nil)
 }
+
+// ──── NewFileKVStore 错误路径测试 ────
+
+// TestNewFileKVStore_创建目录失败 验证无法创建目录时返回错误。
+func TestNewFileKVStore_创建目录失败(t *testing.T) {
+	// 使用 /proc 下无法创建子目录的路径
+	_, err := NewFileKVStore("/proc/impossible/path/test.db")
+	if err == nil {
+		t.Error("无法创建目录时应返回错误")
+	}
+}
+
+// ──── Set 序列化错误测试 ────
+
+// TestFileKVStore_Set_正常覆盖 验证 Set 正常覆盖已有值后可读取。
+func TestFileKVStore_Set_正常覆盖(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "key1", []byte("old"))
+	_ = store.Set(ctx, "key1", []byte("new"))
+
+	val, _ := store.Get(ctx, "key1")
+	if string(val) != "new" {
+		t.Errorf("覆盖后 Get 返回 %q, 期望 %q", string(val), "new")
+	}
+}
+
+// ──── ExclusiveSet 反序列化错误测试 ────
+
+// TestFileKVStore_ExclusiveSet_损坏数据允许覆盖 验证已有值反序列化失败时返回错误。
+func TestFileKVStore_ExclusiveSet_损坏数据允许覆盖(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	// 手动写入无效 JSON 数据
+	err := store.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(store.bucketName))
+		return b.Put([]byte("bad_key"), []byte("not valid json"))
+	})
+	if err != nil {
+		t.Fatalf("写入测试数据失败: %v", err)
+	}
+
+	// ExclusiveSet 应返回错误（无法反序列化已有值）
+	_, err = store.ExclusiveSet(ctx, "bad_key", []byte("new_value"), 0)
+	if err == nil {
+		t.Error("损坏数据时 ExclusiveSet 应返回反序列化错误")
+	}
+}
+
+// ──── Get 反序列化/解码错误测试 ────
+
+// TestFileKVStore_Get_损坏数据 验证 Get 遇到损坏数据时返回错误。
+func TestFileKVStore_Get_损坏数据(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	// 手动写入无效 JSON 数据
+	err := store.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(store.bucketName))
+		return b.Put([]byte("bad_key"), []byte("not valid json"))
+	})
+	if err != nil {
+		t.Fatalf("写入测试数据失败: %v", err)
+	}
+
+	_, err = store.Get(ctx, "bad_key")
+	if err == nil {
+		t.Error("Get 损坏数据应返回反序列化错误")
+	}
+}
+
+// ──── Pipeline 带 expiry 的 Set 测试 ────
+
+// TestFileKVStore_Pipeline_Set带过期 验证 Pipeline Set 带 expiry 写入。
+func TestFileKVStore_Pipeline_Set带过期(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Set(ctx, "expire_key", []byte("expire_value"), 60)
+	_ = pipe.Set(ctx, "no_expire_key", []byte("no_expire_value"), 0)
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("期望 2 个结果，实际 %d", len(results))
+	}
+	if results[0].Err != nil {
+		t.Errorf("Set expire_key 出错: %v", results[0].Err)
+	}
+	if results[1].Err != nil {
+		t.Errorf("Set no_expire_key 出错: %v", results[1].Err)
+	}
+
+	// 验证数据实际写入
+	val, _ := store.Get(ctx, "expire_key")
+	if string(val) != "expire_value" {
+		t.Errorf("expire_key = %q, 期望 %q", string(val), "expire_value")
+	}
+	val, _ = store.Get(ctx, "no_expire_key")
+	if string(val) != "no_expire_value" {
+		t.Errorf("no_expire_key = %q, 期望 %q", string(val), "no_expire_value")
+	}
+
+	// 验证带过期的 key 内部有过期时间戳
+	err = store.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(store.bucketName))
+		raw := b.Get([]byte("expire_key"))
+		var entry fileEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return err
+		}
+		if entry.ExpiryAt == 0 {
+			t.Error("带过期的 key ExpiryAt 不应为 0")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("读取内部数据失败: %v", err)
+	}
+}
+
+// TestFileKVStore_Pipeline_Get不存在 验证 Pipeline Get 不存在的 key 返回 nil。
+func TestFileKVStore_Pipeline_Get不存在(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Get(ctx, "nonexistent_key")
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(results))
+	}
+	if results[0].Value != nil {
+		t.Errorf("不存在的 key Value 应为 nil, 实际 %v", results[0].Value)
+	}
+}
+
+// TestFileKVStore_Pipeline_Exists存在 验证 Pipeline Exists 对存在的 key 返回 true。
+func TestFileKVStore_Pipeline_Exists存在(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "existing_key", []byte("value"))
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Exists(ctx, "existing_key")
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(results))
+	}
+	if !results[0].Exists {
+		t.Error("存在的 key Exists 应为 true")
+	}
+}
+
+// ──── DeleteByPrefix 负数 batchSize 测试 ────
+
+// TestFileKVStore_DeleteByPrefix_负数batchSize 验证 batchSize<0 时一次性删除。
+func TestFileKVStore_DeleteByPrefix_负数batchSize(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "user:1", []byte("alice"))
+	_ = store.Set(ctx, "user:2", []byte("bob"))
+
+	err := store.DeleteByPrefix(ctx, "user:", -1)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix 返回错误: %v", err)
+	}
+
+	exists, _ := store.Exists(ctx, "user:1")
+	if exists {
+		t.Error("负数 batchSize 删除后 user:1 仍存在")
+	}
+}
+
+// ──── BatchDelete 负数 batchSize 测试 ────
+
+// TestFileKVStore_BatchDelete_负数batchSize 验证 batchSize<0 时一次性删除。
+func TestFileKVStore_BatchDelete_负数batchSize(t *testing.T) {
+	store := newTestFileKVStore(t)
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "k1", []byte("v1"))
+	_ = store.Set(ctx, "k2", []byte("v2"))
+
+	deleted, err := store.BatchDelete(ctx, []string{"k1", "k2"}, -1)
+	if err != nil {
+		t.Fatalf("BatchDelete 返回错误: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("BatchDelete 返回 %d, 期望 2", deleted)
+	}
+}

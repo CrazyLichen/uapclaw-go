@@ -730,3 +730,204 @@ func TestRedisStore_MGet失败回退(t *testing.T) {
 		t.Fatalf("期望 2 个结果，实际 %d", len(result))
 	}
 }
+
+// ──── Cluster 模式测试 ────
+
+// TestNewRedisStore_ClusterClient类型断言 验证传入 *redis.ClusterClient 时自动设置 clusterClient。
+func TestNewRedisStore_ClusterClient类型断言(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("启动 miniredis 失败: %v", err)
+	}
+	defer mr.Close()
+
+	// 传入 *redis.ClusterClient，应自动检测为 Cluster 模式
+	clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{mr.Addr()},
+	})
+	defer clusterClient.Close()
+
+	store := NewRedisStore(clusterClient)
+	if !store.isCluster() {
+		t.Fatal("传入 ClusterClient 应被检测为 Cluster 模式")
+	}
+	if store.clusterClient == nil {
+		t.Fatal("clusterClient 不应为 nil")
+	}
+}
+
+// TestRedisStore_GetByPrefix_Cluster模式 验证 Cluster 模式下的 GetByPrefix。
+func TestRedisStore_GetByPrefix_Cluster模式(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("启动 miniredis 失败: %v", err)
+	}
+	defer mr.Close()
+
+	// 使用 WithClusterClient 手动设置 Cluster 模式
+	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer standaloneClient.Close()
+	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{mr.Addr()},
+	})
+	defer fakeCluster.Close()
+
+	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "prefix:key1", []byte("value1"))
+	_ = store.Set(ctx, "prefix:key2", []byte("value2"))
+	_ = store.Set(ctx, "other:key3", []byte("value3"))
+
+	result, err := store.GetByPrefix(ctx, "prefix:")
+	if err != nil {
+		t.Fatalf("GetByPrefix Cluster 模式返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("期望 2 个结果，实际 %d", len(result))
+	}
+	if string(result["prefix:key1"]) != "value1" {
+		t.Errorf("prefix:key1 期望 value1，实际 %s", result["prefix:key1"])
+	}
+	if string(result["prefix:key2"]) != "value2" {
+		t.Errorf("prefix:key2 期望 value2，实际 %s", result["prefix:key2"])
+	}
+}
+
+// TestRedisStore_DeleteByPrefix_Cluster模式 验证 Cluster 模式下的 DeleteByPrefix。
+func TestRedisStore_DeleteByPrefix_Cluster模式(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("启动 miniredis 失败: %v", err)
+	}
+	defer mr.Close()
+
+	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer standaloneClient.Close()
+	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{mr.Addr()},
+	})
+	defer fakeCluster.Close()
+
+	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "prefix:key1", []byte("value1"))
+	_ = store.Set(ctx, "prefix:key2", []byte("value2"))
+	_ = store.Set(ctx, "other:key3", []byte("value3"))
+
+	err = store.DeleteByPrefix(ctx, "prefix:", 0)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix Cluster 模式返回错误: %v", err)
+	}
+
+	// 验证 prefix: 开头的 key 已删除
+	val, _ := store.Get(ctx, "prefix:key1")
+	if val != nil {
+		t.Error("prefix:key1 应已删除")
+	}
+	// 验证 other: 开头的 key 仍存在
+	val, _ = store.Get(ctx, "other:key3")
+	if string(val) != "value3" {
+		t.Error("other:key3 应未被删除")
+	}
+}
+
+// TestRedisStore_DeleteByPrefix_Cluster分批 验证 Cluster 模式下分批删除。
+func TestRedisStore_DeleteByPrefix_Cluster分批(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("启动 miniredis 失败: %v", err)
+	}
+	defer mr.Close()
+
+	standaloneClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer standaloneClient.Close()
+	fakeCluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{mr.Addr()},
+	})
+	defer fakeCluster.Close()
+
+	store := NewRedisStore(standaloneClient, WithClusterClient(fakeCluster))
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ {
+		_ = store.Set(ctx, fmt.Sprintf("prefix:key%d", i), []byte(fmt.Sprintf("value%d", i)))
+	}
+
+	err = store.DeleteByPrefix(ctx, "prefix:", 2)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix Cluster 分批返回错误: %v", err)
+	}
+
+	result, _ := store.GetByPrefix(ctx, "prefix:")
+	if len(result) != 0 {
+		t.Errorf("期望 0 个结果，实际 %d", len(result))
+	}
+}
+
+// TestRedisStore_Pipeline_Get不存在 验证 Pipeline Get 不存在的 key 返回 nil（覆盖 redis.Nil 分支）。
+func TestRedisStore_Pipeline_Get不存在(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Get(ctx, "nonexistent_key")
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(results))
+	}
+	if results[0].Op != "get" {
+		t.Errorf("Op = %q, 期望 %q", results[0].Op, "get")
+	}
+	if results[0].Value != nil {
+		t.Errorf("不存在的 key Value 应为 nil, 实际 %v", results[0].Value)
+	}
+	if results[0].Err != nil {
+		t.Errorf("不存在的 key Err 应为 nil, 实际 %v", results[0].Err)
+	}
+}
+
+// TestRedisStore_Pipeline_Exists存在 验证 Pipeline Exists 对存在的 key 返回 true。
+func TestRedisStore_Pipeline_Exists存在(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "existing_key", []byte("value"))
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Exists(ctx, "existing_key")
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(results))
+	}
+	if !results[0].Exists {
+		t.Error("存在的 key Exists 应为 true")
+	}
+}
+
+// TestRedisStore_RefreshTTL_失败静默 验证 RefreshTTL 失败时静默忽略。
+func TestRedisStore_RefreshTTL_失败静默(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "key1", []byte("value1"))
+
+	// 关闭 miniredis 模拟连接失败
+	mr.Close()
+
+	err := store.RefreshTTL(ctx, []string{"key1"}, 10)
+	if err != nil {
+		t.Fatalf("RefreshTTL 失败时应返回 nil: %v", err)
+	}
+}

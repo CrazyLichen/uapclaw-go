@@ -96,7 +96,7 @@ func (s *InMemoryKVStore) ExclusiveSet(_ context.Context, key string, value []by
 	now := time.Now().Unix()
 	if e, ok := s.store[key]; ok {
 		if e.expiryTs != 0 && now > e.expiryTs {
-		// 已过期：允许覆盖（对齐 Python: current_time > expiry_ts）
+			// 已过期：允许覆盖（对齐 Python: current_time > expiry_ts）
 		} else {
 			// 未过期：拒绝
 			return false, nil

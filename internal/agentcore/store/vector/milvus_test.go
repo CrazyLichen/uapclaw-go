@@ -895,10 +895,10 @@ func containsHelper(s, sub string) bool {
 // fakeMilvusClientWithSearch 支持自定义搜索结果的 fake 客户端
 type fakeMilvusClientWithSearch struct {
 	*fakeMilvusClient
-	searchResults []client.SearchResult
-	searchErr    error
-	describeIdx  []entity.Index
-	describeIdxErr error
+	searchResults   []client.SearchResult
+	searchErr       error
+	describeIdx     []entity.Index
+	describeIdxErr  error
 	describeCollErr error
 }
 
@@ -1191,8 +1191,8 @@ func TestMilvusVectorStore_GetCollectionMetadata_缓存未命中DescribeCollErro
 	fakeBase.collections["test_coll"] = true
 
 	fake := &fakeMilvusClientWithSearch{
-		fakeMilvusClient:  fakeBase,
-		describeCollErr:   fmt.Errorf("describe failed"),
+		fakeMilvusClient: fakeBase,
+		describeCollErr:  fmt.Errorf("describe failed"),
 	}
 	s.client = fake
 

@@ -780,3 +780,230 @@ func TestDbBasedKVStore_并发安全(t *testing.T) {
 
 	wg.Wait()
 }
+
+// ──── decodeExclusiveValue 边界测试 ────
+
+// TestDecodeExclusiveValue_无效JSON 验证非 JSON 数据返回 false。
+func TestDecodeExclusiveValue_无效JSON(t *testing.T) {
+	data := []byte("not json at all")
+	decoded, ok := decodeExclusiveValue(data)
+	if ok {
+		t.Error("无效 JSON 应返回 false")
+	}
+	if decoded != nil {
+		t.Errorf("decoded 应为 nil, 实际 %v", decoded)
+	}
+}
+
+// TestDecodeExclusiveValue_空字段 验证 exclusive_value 和 exclusive_expiry 均为零值时返回 false。
+func TestDecodeExclusiveValue_空字段(t *testing.T) {
+	data, _ := json.Marshal(exclusiveValue{ExclusiveValue: "", ExclusiveExpiry: 0})
+	decoded, ok := decodeExclusiveValue(data)
+	if ok {
+		t.Error("空 exclusive 字段应返回 false")
+	}
+	if decoded != nil {
+		t.Errorf("decoded 应为 nil, 实际 %v", decoded)
+	}
+}
+
+// TestDecodeExclusiveValue_无效Base64 验证有效 JSON 但 Base64 解码失败时返回 false。
+func TestDecodeExclusiveValue_无效Base64(t *testing.T) {
+	data, _ := json.Marshal(exclusiveValue{ExclusiveValue: "!!!invalid-base64!!!", ExclusiveExpiry: 0})
+	decoded, ok := decodeExclusiveValue(data)
+	if ok {
+		t.Error("无效 Base64 应返回 false")
+	}
+	if decoded != nil {
+		t.Errorf("decoded 应为 nil, 实际 %v", decoded)
+	}
+}
+
+// TestDecodeExclusiveValue_正常解码 验证正常 exclusive JSON 解码成功。
+func TestDecodeExclusiveValue_正常解码(t *testing.T) {
+	encoded, _ := encodeExclusiveValue([]byte("hello"), 1234567890)
+	decoded, ok := decodeExclusiveValue(encoded)
+	if !ok {
+		t.Fatal("正常 exclusive JSON 应返回 true")
+	}
+	if string(decoded) != "hello" {
+		t.Errorf("decoded = %q, 期望 %q", string(decoded), "hello")
+	}
+}
+
+// ──── GetByPrefix 解码 exclusive 值测试 ────
+
+// TestDbBasedKVStore_GetByPrefix_含Exclusive值 验证 GetByPrefix 解包 exclusive JSON 值。
+func TestDbBasedKVStore_GetByPrefix_含Exclusive值(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+	ctx := context.Background()
+
+	// 通过 ExclusiveSet 存入带 exclusive 格式的值
+	ok, _ := store.ExclusiveSet(ctx, "user:1", []byte("alice"), 0)
+	if !ok {
+		t.Fatal("ExclusiveSet 应返回 true")
+	}
+	// 普通方式存入非 exclusive 格式的值
+	_ = store.Set(ctx, "user:2", []byte("bob"))
+
+	result, err := store.GetByPrefix(ctx, "user:")
+	if err != nil {
+		t.Fatalf("GetByPrefix 返回错误: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("GetByPrefix 返回 %d 条, 期望 2 条", len(result))
+	}
+	// exclusive 值应被解包
+	if string(result["user:1"]) != "alice" {
+		t.Errorf("user:1 = %q, 期望 %q", string(result["user:1"]), "alice")
+	}
+	// 普通值应原样返回
+	if string(result["user:2"]) != "bob" {
+		t.Errorf("user:2 = %q, 期望 %q", string(result["user:2"]), "bob")
+	}
+}
+
+// ──── Exists 错误路径测试 ────
+
+// TestDbBasedKVStore_Exists_错误路径 验证 Exists 数据库错误时返回 error。
+func TestDbBasedKVStore_Exists_错误路径(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("打开数据库失败: %v", err)
+	}
+	store := NewDbBasedKVStore(db)
+	ctx := context.Background()
+
+	// 先正常建表使用
+	_ = store.Set(ctx, "key1", []byte("value1"))
+
+	// 关闭底层 SQL 连接模拟数据库错误
+	sqlDB, _ := db.DB()
+	sqlDB.Close()
+
+	_, err = store.Exists(ctx, "key1")
+	if err == nil {
+		t.Error("数据库关闭后 Exists 应返回错误")
+	}
+}
+
+// ──── MGet 解码 exclusive 值测试 ────
+
+// TestDbBasedKVStore_MGet_含Exclusive值 验证 MGet 解包 exclusive JSON 值。
+func TestDbBasedKVStore_MGet_含Exclusive值(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+	ctx := context.Background()
+
+	// 通过 ExclusiveSet 存入
+	ok, _ := store.ExclusiveSet(ctx, "k1", []byte("v1"), 0)
+	if !ok {
+		t.Fatal("ExclusiveSet 应返回 true")
+	}
+	// 普通方式存入
+	_ = store.Set(ctx, "k2", []byte("v2"))
+
+	values, err := store.MGet(ctx, []string{"k1", "k2"})
+	if err != nil {
+		t.Fatalf("MGet 返回错误: %v", err)
+	}
+	if len(values) != 2 {
+		t.Fatalf("MGet 返回 %d 条, 期望 2 条", len(values))
+	}
+	if string(values[0]) != "v1" {
+		t.Errorf("k1 = %q, 期望 %q", string(values[0]), "v1")
+	}
+	if string(values[1]) != "v2" {
+		t.Errorf("k2 = %q, 期望 %q", string(values[1]), "v2")
+	}
+}
+
+// ──── Pipeline set 错误处理测试 ────
+
+// TestDbBasedKVStore_Pipeline_含过期Set 验证 Pipeline set 带 expiry 的操作。
+func TestDbBasedKVStore_Pipeline_含过期Set(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Set(ctx, "key1", []byte("value1"), 60)
+	_ = pipe.Set(ctx, "key2", []byte("value2"), 0)
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("期望 2 个结果，实际 %d", len(results))
+	}
+	if results[0].Err != nil {
+		t.Errorf("Set key1 出错: %v", results[0].Err)
+	}
+	if results[1].Err != nil {
+		t.Errorf("Set key2 出错: %v", results[1].Err)
+	}
+
+	// 验证数据实际写入
+	val, _ := store.Get(ctx, "key1")
+	if string(val) != "value1" {
+		t.Errorf("key1 = %q, 期望 %q", string(val), "value1")
+	}
+	val, _ = store.Get(ctx, "key2")
+	if string(val) != "value2" {
+		t.Errorf("key2 = %q, 期望 %q", string(val), "value2")
+	}
+}
+
+// ──── ensureTable 并发测试 ────
+
+// TestDbBasedKVStore_ensureTable_并发 验证并发调用 ensureTable 不会 panic。
+func TestDbBasedKVStore_ensureTable_并发(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			store.ensureTable()
+		}()
+	}
+
+	wg.Wait()
+
+	// 验证建表完成标志已设置
+	if !store.tableCreated.Load() {
+		t.Error("并发 ensureTable 后 tableCreated 应为 true")
+	}
+}
+
+// ──── ExclusiveSet 非 exclusive 值被拒绝测试 ────
+
+// TestDbBasedKVStore_ExclusiveSet_非Exclusive值被拒绝 验证 JSON 解析失败时视为未过期。
+func TestDbBasedKVStore_ExclusiveSet_非Exclusive值被拒绝(t *testing.T) {
+	store := newTestDbBasedKVStore(t)
+	ctx := context.Background()
+
+	// 先用普通 Set 存入一个非 exclusive JSON 格式的值
+	_ = store.Set(ctx, "key1", []byte("plain_value"))
+
+	// ExclusiveSet 时，已有值无法解析为 exclusive JSON，应视为未过期
+	ok, err := store.ExclusiveSet(ctx, "key1", []byte("new_value"), 0)
+	if err != nil {
+		t.Fatalf("ExclusiveSet 返回错误: %v", err)
+	}
+	if ok {
+		t.Error("非 exclusive 格式的已有值应被视为未过期，ExclusiveSet 应返回 false")
+	}
+}
+
+// ──── KVStoreRow.TableName 测试 ────
+
+// TestKVStoreRow_TableName 验证 TableName 返回正确表名。
+func TestKVStoreRow_TableName(t *testing.T) {
+	row := KVStoreRow{}
+	if row.TableName() != "kv_store" {
+		t.Errorf("TableName = %q, 期望 %q", row.TableName(), "kv_store")
+	}
+}

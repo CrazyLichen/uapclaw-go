@@ -488,7 +488,7 @@ func TestApplyNumericConstraints_完整约束(t *testing.T) {
 		"format":  "int32",
 	}
 	applyNumericConstraints(p, propMap)
-	assert.Equal(t, float64(0), p.Minimum)  // minimum=0 是合法值，应被设置
+	assert.Equal(t, float64(0), p.Minimum) // minimum=0 是合法值，应被设置
 	assert.Equal(t, float64(100), p.Maximum)
 	assert.Equal(t, "int32", p.Format)
 }

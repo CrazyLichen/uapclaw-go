@@ -292,7 +292,7 @@ func TestToDict_ExtraNil和空(t *testing.T) {
 		ExtraConstruct: nil,
 		ExtraSearch:    map[string]any{},
 	}
-	got := ToDict(vf,  StageConstruct)
+	got := ToDict(vf, StageConstruct)
 	if got["ConstructParam"] != 30 {
 		t.Errorf("ConstructParam = %v, 期望 30", got["ConstructParam"])
 	}
@@ -300,7 +300,7 @@ func TestToDict_ExtraNil和空(t *testing.T) {
 	if _, ok := got["ExtraConstruct"]; ok {
 		t.Error("nil ExtraConstruct 不应作为 key 出现")
 	}
-	got = ToDict(vf,  StageSearch)
+	got = ToDict(vf, StageSearch)
 	// KeepZeroParam 有 keepzero 标记，零值也会输出
 	if _, ok := got["KeepZeroParam"]; !ok {
 		t.Error("KeepZeroParam 有 keepzero 标记，零值也应输出")

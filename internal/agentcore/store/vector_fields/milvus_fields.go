@@ -97,7 +97,7 @@ func NewMilvusFLAT(fieldName string) *MilvusFLAT {
 func NewMilvusHNSW(fieldName string, m, efConstruction int, efSearchFactor float64) *MilvusHNSW {
 	return &MilvusHNSW{
 		VectorField:    *NewVectorField(DatabaseTypeMilvus, IndexTypeHNSW, fieldName),
-		M:             m,
+		M:              m,
 		EfConstruction: efConstruction,
 		EfSearchFactor: efSearchFactor,
 	}

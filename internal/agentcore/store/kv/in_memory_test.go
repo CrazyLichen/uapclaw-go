@@ -803,3 +803,110 @@ func TestInMemoryKVStore_并发安全(t *testing.T) {
 func TestInMemoryKVStore_接口满足(t *testing.T) {
 	var _ BaseKVStore = (*InMemoryKVStore)(nil)
 }
+
+// ──── Pipeline 带 expiry Set 测试 ────
+
+// TestInMemoryKVStore_Pipeline_Set带过期 验证 Pipeline Set 带 expiry 写入。
+func TestInMemoryKVStore_Pipeline_Set带过期(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Set(ctx, "expire_key", []byte("expire_value"), 60)
+	_ = pipe.Set(ctx, "no_expire_key", []byte("no_expire_value"), 0)
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("期望 2 个结果，实际 %d", len(results))
+	}
+
+	// 验证数据实际写入
+	val, _ := store.Get(ctx, "expire_key")
+	if string(val) != "expire_value" {
+		t.Errorf("expire_key = %q, 期望 %q", string(val), "expire_value")
+	}
+	val, _ = store.Get(ctx, "no_expire_key")
+	if string(val) != "no_expire_value" {
+		t.Errorf("no_expire_key = %q, 期望 %q", string(val), "no_expire_value")
+	}
+
+	// 验证带过期的 key 内部有过期时间戳
+	store.mu.RLock()
+	e, ok := store.store["expire_key"]
+	store.mu.RUnlock()
+	if !ok {
+		t.Fatal("store 中未找到 expire_key")
+	}
+	if e.expiryTs == 0 {
+		t.Error("带过期的 key expiryTs 不应为 0")
+	}
+
+	store.mu.RLock()
+	e2, ok := store.store["no_expire_key"]
+	store.mu.RUnlock()
+	if !ok {
+		t.Fatal("store 中未找到 no_expire_key")
+	}
+	if e2.expiryTs != 0 {
+		t.Errorf("不带过期的 key expiryTs 应为 0, 实际 %d", e2.expiryTs)
+	}
+}
+
+// TestInMemoryKVStore_Pipeline_Get不存在 验证 Pipeline Get 不存在的 key 返回 nil。
+func TestInMemoryKVStore_Pipeline_Get不存在(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	pipe := store.Pipeline(ctx)
+	_ = pipe.Get(ctx, "nonexistent_key")
+
+	results, err := pipe.Execute(ctx)
+	if err != nil {
+		t.Fatalf("Pipeline Execute 返回错误: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("期望 1 个结果，实际 %d", len(results))
+	}
+	if results[0].Value != nil {
+		t.Errorf("不存在的 key Value 应为 nil, 实际 %v", results[0].Value)
+	}
+}
+
+// TestInMemoryKVStore_DeleteByPrefix_负数batchSize 验证 batchSize<0 时一次性删除。
+func TestInMemoryKVStore_DeleteByPrefix_负数batchSize(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "user:1", []byte("alice"))
+	_ = store.Set(ctx, "user:2", []byte("bob"))
+
+	err := store.DeleteByPrefix(ctx, "user:", -1)
+	if err != nil {
+		t.Fatalf("DeleteByPrefix 返回错误: %v", err)
+	}
+
+	exists, _ := store.Exists(ctx, "user:1")
+	if exists {
+		t.Error("负数 batchSize 删除后 user:1 仍存在")
+	}
+}
+
+// TestInMemoryKVStore_BatchDelete_负数batchSize 验证 batchSize<0 时一次性删除。
+func TestInMemoryKVStore_BatchDelete_负数batchSize(t *testing.T) {
+	store := NewInMemoryKVStore()
+	ctx := context.Background()
+
+	_ = store.Set(ctx, "k1", []byte("v1"))
+	_ = store.Set(ctx, "k2", []byte("v2"))
+
+	deleted, err := store.BatchDelete(ctx, []string{"k1", "k2"}, -1)
+	if err != nil {
+		t.Fatalf("BatchDelete 返回错误: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("BatchDelete 返回 %d, 期望 2", deleted)
+	}
+}

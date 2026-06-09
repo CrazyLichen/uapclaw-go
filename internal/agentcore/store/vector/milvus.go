@@ -10,9 +10,9 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/vector_fields"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
