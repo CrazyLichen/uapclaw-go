@@ -7,6 +7,8 @@
 // 严格复刻其语义（包括已知的值解包不一致和过期语义不一致）。
 // DbBasedKVStore 提供基于 GORM 的数据库持久化实现，支持 SQLite/MySQL/PostgreSQL，
 // 对应 Python DbBasedKVStore。
+// RedisStore 提供基于 go-redis 的 Redis 实现，支持 Standalone 和 Cluster 两种模式，
+// 对应 Python RedisStore。
 //
 // 文件目录：
 //
@@ -15,13 +17,15 @@
 //	├── base.go          # BaseKVStore 接口 + KVPipeline 接口 + PipelineResult 结构体
 //	├── in_memory.go     # InMemoryKVStore 内存实现 + inMemoryPipeline
 //	├── file.go          # FileKVStore 文件持久化实现 + filePipeline
-//	└── db_based.go      # DbBasedKVStore 数据库实现（GORM）+ dbBasedPipeline
+//	├── db_based.go      # DbBasedKVStore 数据库实现（GORM）+ dbBasedPipeline
+//	└── redis.go         # RedisStore Redis 实现 + redisPipeline + Option
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/base_kv_store.py
 //
 //	InMemoryKVStore 对应: openjiuwen/core/foundation/store/kv/in_memory_kv_store.py
 //	FileKVStore 对应:     openjiuwen/core/foundation/store/kv/shelve_store.py
 //	DbBasedKVStore 对应:  openjiuwen/core/foundation/store/kv/db_based_kv_store.py
+//	RedisStore 对应:      openjiuwen/extensions/store/kv/redis_store.py
 //
 // 核心类型/接口索引：
 //
@@ -31,4 +35,5 @@
 //	InMemoryKVStore  — 内存实现，并发安全，支持惰性过期检查
 //	FileKVStore      — 文件持久化实现（bbolt），对应 Python ShelveStore
 //	DbBasedKVStore   — 数据库持久化实现（GORM），支持 SQLite/MySQL/PostgreSQL
+//	RedisStore       — Redis 实现（go-redis），支持 Standalone 和 Cluster 模式
 package kv
