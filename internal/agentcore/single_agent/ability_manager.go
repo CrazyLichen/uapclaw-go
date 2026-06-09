@@ -474,6 +474,10 @@ func (am *AbilityManager) executeTool(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
+	// TODO: 后续需用 NewLifecycleTool(t, fw) 包装，使所有 Tool 调用自动走
+	// LifecycleTool 的回调链（TOOL_CALL_STARTED / TOOL_CALL_FINISHED 等），
+	// 与 Python 的 LifecycleTool 机制对齐。当前直接调用 t.Invoke() 缺失生命周期回调。
+
 	result, err := t.Invoke(ctx, toolArgs)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).

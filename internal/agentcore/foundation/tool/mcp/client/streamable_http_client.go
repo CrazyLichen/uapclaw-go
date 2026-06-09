@@ -84,17 +84,34 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 	})
 
 	// 从 results 中提取 *auth.ToolAuthResult → auth_provider 和 tls_config
+	// 对照 Python: 逆序遍历，取最后一个 Success=true 的结果
 	var provider *auth.HeaderQueryProvider
 	var tlsConfig *tls.Config
-	for _, item := range results {
-		if authResult, ok := item.(*auth.ToolAuthResult); ok && authResult.Success {
-			if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok && provider == nil {
-				provider = p
-			}
-			if tc, ok := authResult.AuthData["tls_config"].(*tls.Config); ok && tc != nil && tlsConfig == nil {
-				tlsConfig = tc
-			}
+	var authSuccessCount int
+	var authFailCount int
+	for i := len(results) - 1; i >= 0; i-- {
+		authResult, ok := results[i].(*auth.ToolAuthResult)
+		if !ok {
+			continue
 		}
+		if !authResult.Success {
+			authFailCount++
+			continue
+		}
+		authSuccessCount++
+		if p, ok := authResult.AuthData["auth_provider"].(*auth.HeaderQueryProvider); ok && provider == nil {
+			provider = p
+		}
+		if tc, ok := authResult.AuthData["tls_config"].(*tls.Config); ok && tc != nil && tlsConfig == nil {
+			tlsConfig = tc
+		}
+	}
+	// 所有认证结果均失败时记录 Warn 日志
+	if authSuccessCount == 0 && authFailCount > 0 {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("server_name", c.serverName).
+			Int("auth_fail_count", authFailCount).
+			Msg("StreamableHTTP 客户端所有认证结果均失败，将以无认证模式连接")
 	}
 
 	// 如果有 TLS 配置，构建自定义 HTTP 客户端
@@ -174,6 +191,8 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 			Str("server_path", c.config.ServerPath).
 			Err(err).
 			Msg("StreamableHTTP 启动连接失败")
+		// 启动失败时关闭底层连接，防止资源泄漏
+		_ = mcpCli.Close()
 		return exception.BuildError(
 			exception.StatusToolMcpNotConnected,
 			exception.WithParam("server_name", c.serverName),
@@ -216,6 +235,9 @@ func (c *StreamableHttpClient) Connect(ctx context.Context, opts ...types.Connec
 
 // Disconnect 断开 Streamable HTTP 连接。
 func (c *StreamableHttpClient) Disconnect(_ context.Context) error {
+	if !c.isConnected {
+		return nil
+	}
 	if c.client != nil {
 		if err := c.client.Close(); err != nil {
 			logger.Error(logger.ComponentAgentCore).
@@ -327,7 +349,12 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 		Str("server_name", c.serverName).
 		Str("tool_name", toolName).
 		Msg("StreamableHTTP 未找到工具")
-	return nil, fmt.Errorf("tool %q not found in server %q", toolName, c.serverName)
+	return nil, exception.BuildError(
+		exception.StatusToolMcpExecutionError,
+		exception.WithParam("method", "GetToolInfo"),
+		exception.WithParam("reason", fmt.Sprintf("tool %q not found in server %q", toolName, c.serverName)),
+		exception.WithParam("card", c.serverName),
+	)
 }
 
 // ListResources 列出 MCP 服务器提供的资源。

@@ -149,8 +149,9 @@ func (m *APIParamMapper) Map(inputs map[string]any, defaultLocation APIParamLoca
 				}
 			}
 			if value != nil {
-				// FORM 参数仅当 value 非 nil 时才存储；与 query/header/body 的 v!="" 判断不同，
-				// 因为 form 参数的 value 可能是 0、false 等 falsy 但有意义的值，不应被过滤
+				// FORM 参数仅当 value 非 nil 时才存储。
+				// 与 Python 差异说明：Python 使用 `if value` 跳过 falsy 值（空字符串 ""、数字 0、布尔 False），
+				// 但这些零值在 Go 中是有意义的合法值，Go 的 nil 检查更准确地保留了这些零值。
 				result[APIParamLocationForm][paramName] = map[string]any{
 					"form_handler_type": formHandlerType,
 					"value":             value,

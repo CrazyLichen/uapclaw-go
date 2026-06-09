@@ -25,14 +25,14 @@ type BaseKVStore interface {
 	// Exists 检查 key 是否存在。
 	Exists(ctx context.Context, key string) (bool, error)
 
-	// Delete 删除指定 key，key 不存在时不执行操作。
+	// Delete 删除指定 key。key 不存在时返回 nil（不报错），与 Python 行为一致。
 	Delete(ctx context.Context, key string) error
 
 	// GetByPrefix 获取所有以 prefix 开头的键值对。
 	GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error)
 
 	// DeleteByPrefix 删除所有以 prefix 开头的键值对。
-	// batchSize 为每批删除的数量，0 表示一次性删除。
+	// batchSize 为每批删除的数量，0 或负数表示一次性删除（等价于 Python batch_size <= 0）。
 	DeleteByPrefix(ctx context.Context, prefix string, batchSize int) error
 
 	// MGet 批量获取多个 key 的值。
@@ -40,7 +40,7 @@ type BaseKVStore interface {
 	MGet(ctx context.Context, keys []string) ([][]byte, error)
 
 	// BatchDelete 批量删除多个 key，返回成功删除的数量。
-	// batchSize 为每批删除的数量，0 表示一次性删除。
+	// batchSize 为每批删除的数量，0 或负数表示一次性删除（等价于 Python batch_size <= 0）。
 	BatchDelete(ctx context.Context, keys []string, batchSize int) (int, error)
 
 	// Pipeline 创建批量操作管道，用于减少网络往返。

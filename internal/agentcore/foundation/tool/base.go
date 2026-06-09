@@ -61,7 +61,7 @@ type Tool interface {
 	// Card 返回工具的配置卡片
 	Card() *ToolCard
 	// Invoke 一次性执行工具，返回完整结果。
-	// 不支持 Stream 的工具在 Stream 方法中返回 ErrStreamNotSupported。
+	// 不支持 Invoke 的工具在 Invoke 方法中返回 ErrInvokeNotSupported。
 	Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error)
 	// Stream 流式执行工具，逐步返回结果块。
 	// 不支持 Stream 的工具返回 ErrStreamNotSupported 错误。
@@ -80,6 +80,12 @@ type ToolOption func(*ToolCallOptions)
 // 对应 Python: TOOL_STREAM_NOT_SUPPORTED (182010)
 var ErrStreamNotSupported = exception.BuildError(
 	exception.StatusToolStreamNotSupported,
+	exception.WithParam("card", ""),
+)
+
+// ErrInvokeNotSupported 工具不支持 Invoke 调用时返回的错误。
+var ErrInvokeNotSupported = exception.BuildError(
+	exception.StatusToolInvokeNotSupported,
 	exception.WithParam("card", ""),
 )
 
@@ -141,6 +147,14 @@ func NewToolCard(name, description string, inputParams []*schema.Param, properti
 func NewErrStreamNotSupported(card string) *exception.BaseError {
 	return exception.BuildError(
 		exception.StatusToolStreamNotSupported,
+		exception.WithParam("card", card),
+	)
+}
+
+// NewErrInvokeNotSupported 创建带 card 信息的 Invoke 不支持错误。
+func NewErrInvokeNotSupported(card string) *exception.BaseError {
+	return exception.BuildError(
+		exception.StatusToolInvokeNotSupported,
 		exception.WithParam("card", card),
 	)
 }

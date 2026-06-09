@@ -79,7 +79,7 @@ func (s *InMemoryKVStore) Exists(_ context.Context, key string) (bool, error) {
 	return s.getWithoutLock(key) != nil, nil
 }
 
-// Delete 删除指定 key，key 不存在时不执行操作。
+// Delete 删除指定 key。key 不存在时返回 nil（不报错），与 Python 行为一致。
 func (s *InMemoryKVStore) Delete(_ context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,7 +126,7 @@ func (s *InMemoryKVStore) GetByPrefix(_ context.Context, prefix string) (map[str
 }
 
 // DeleteByPrefix 删除所有以 prefix 开头的键值对。
-// batchSize 为每批删除的数量，0 表示一次性删除。
+// batchSize 为每批删除的数量，0 或负数表示一次性删除（等价于 Python batch_size <= 0）。
 func (s *InMemoryKVStore) DeleteByPrefix(_ context.Context, prefix string, batchSize int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -167,7 +167,7 @@ func (s *InMemoryKVStore) MGet(_ context.Context, keys []string) ([][]byte, erro
 }
 
 // BatchDelete 批量删除多个 key，返回成功删除的数量。
-// batchSize 为每批删除的数量，0 表示一次性删除。
+// batchSize 为每批删除的数量，0 或负数表示一次性删除（等价于 Python batch_size <= 0）。
 func (s *InMemoryKVStore) BatchDelete(_ context.Context, keys []string, batchSize int) (int, error) {
 	if len(keys) == 0 {
 		return 0, nil

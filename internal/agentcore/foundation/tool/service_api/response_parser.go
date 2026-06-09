@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
-	zlib "compress/zlib"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -305,9 +305,16 @@ func (d GzipDecompressor) Decompress(data []byte) ([]byte, error) {
 	}
 
 	// 第三级：raw deflate（无 zlib header）
+	// 对照 Python: zlib.decompress(data, -zlib.MAX_WBITS)
+	// 实际触发场景极少，服务器几乎都使用 gzip/zlib 格式
 	if result, rawErr := decompressRawDeflate(data); rawErr == nil {
 		return result, nil
 	}
+
+	logger.Warn(logger.ComponentAgentCore).
+		Str("encoding", "gzip").
+		Int("data_size", len(data)).
+		Msg("GZIP 三级解压均失败（gzip → zlib → raw deflate）")
 
 	return nil, fmt.Errorf("GZIP 解压失败: %w", err)
 }
@@ -321,21 +328,39 @@ func (d DeflateDecompressor) CanDecompress(encoding string) bool {
 //
 // 对照 Python: response_parser.py DeflateDecompressor.decompress
 // 两级尝试：1) zlib 格式（带 header）→ 2) raw deflate（无 header）
+//
+// Go 标准库关键区别：
+//   - compress/zlib.NewReader = zlib 格式（2字节 header + raw deflate + 4字节 adler32 checksum）
+//     等价于 Python zlib.decompress(data)
+//   - compress/flate.NewReader = raw deflate（无 header）
+//     等价于 Python zlib.decompress(data, -MAX_WBITS)
 func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
-	// 第一级：zlib 格式（带 header），flate.NewReader 默认期望 zlib 格式
-	reader := flate.NewReader(bytes.NewReader(data))
-	result, err := io.ReadAll(reader)
-	_ = reader.Close()
+	// 第一级：zlib 格式（带 header）
+	// 对照 Python: zlib.decompress(data)
+	reader, err := zlib.NewReader(bytes.NewReader(data))
 	if err == nil {
-		return result, nil
+		result, readErr := io.ReadAll(reader)
+		_ = reader.Close()
+		if readErr == nil {
+			return result, nil
+		}
 	}
 
 	// 第二级：raw deflate（无 zlib header）
-	if rawResult, rawErr := decompressRawDeflate(data); rawErr == nil {
-		return rawResult, nil
+	// 对照 Python: zlib.decompress(data, -zlib.MAX_WBITS)
+	rawReader := flate.NewReader(bytes.NewReader(data))
+	result, rawErr := io.ReadAll(rawReader)
+	_ = rawReader.Close()
+	if rawErr == nil {
+		return result, nil
 	}
 
-	return nil, fmt.Errorf("deflate 解压失败: %w", err)
+	logger.Warn(logger.ComponentAgentCore).
+		Str("encoding", "deflate").
+		Int("data_size", len(data)).
+		Msg("deflate 两级解压均失败（zlib → raw deflate）")
+
+	return nil, fmt.Errorf("deflate 解压失败: %w", rawErr)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -343,19 +368,13 @@ func (d DeflateDecompressor) Decompress(data []byte) ([]byte, error) {
 // decompressRawDeflate 解压 raw deflate 数据（无 zlib header）。
 //
 // 对应 Python: zlib.decompress(data, -zlib.MAX_WBITS)
-// Go 标准库的 flate.NewReader 期望 zlib 格式（带 header），无法直接处理 raw deflate。
-// 此函数通过 flate.Resetter 接口关闭 zlib header 检测，实现 raw deflate 解压。
+//
+// Go 标准库的 compress/flate.NewReader 创建的读取器就是 raw deflate 模式
+// （与 Python 的 zlib.decompress(data, -zlib.MAX_WBITS) 等价），
+// 而 compress/zlib 是在 raw deflate 之外包装了 zlib header 的读取器。
 func decompressRawDeflate(data []byte) ([]byte, error) {
 	reader := flate.NewReader(bytes.NewReader(data))
 	defer func() { _ = reader.Close() }()
-
-	// 通过 Resetter 接口重置为 raw deflate 模式（无 header）
-	if resetter, ok := reader.(flate.Resetter); ok {
-		if err := resetter.Reset(bytes.NewReader(data), nil); err != nil {
-			return nil, err
-		}
-	}
-
 	return io.ReadAll(reader)
 }
 

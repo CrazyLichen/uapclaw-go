@@ -49,7 +49,7 @@ func (f *MapFunction) Card() *ToolCard {
 // Invoke 执行弱类型函数调用，直接透传 map。
 func (f *MapFunction) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
 	if f.invokeFn == nil {
-		return nil, NewErrStreamNotSupported(f.card.String())
+		return nil, NewErrInvokeNotSupported(f.card.String())
 	}
 
 	o := NewToolCallOptions(opts...)

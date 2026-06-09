@@ -516,7 +516,7 @@ func TestParam_OneOf输出(t *testing.T) {
 		Description: "选择",
 		Required:    false,
 		OneOf: []*Param{
-			{Type: ParamTypeString, Enum: []string{"a", "b"}},
+			{Type: ParamTypeString, Enum: []any{"a", "b"}},
 			{Type: ParamTypeInteger},
 		},
 	}

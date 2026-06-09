@@ -71,6 +71,6 @@ func TestStreamFunction_Invoke_不支持(t *testing.T) {
 	fn, _ := NewStreamFunction("stream_search", streamSearchFunc)
 	_, err := fn.Invoke(context.Background(), map[string]any{"query": "test"})
 	if err == nil {
-		t.Error("Stream 模式 Invoke 应返回 ErrStreamNotSupported")
+		t.Error("Stream 模式 Invoke 应返回 ErrInvokeNotSupported")
 	}
 }

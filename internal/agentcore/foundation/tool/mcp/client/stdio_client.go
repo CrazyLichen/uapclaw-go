@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
@@ -48,7 +49,21 @@ func NewStdioClient(config *types.McpServerConfig) *StdioClient {
 
 // Connect 建立 Stdio 连接，启动子进程并初始化会话。
 // 从 config.Params 提取 command/args/env，创建子进程客户端并完成 MCP 握手。
-func (c *StdioClient) Connect(ctx context.Context, _ ...types.ConnectOption) error {
+//
+// 与 Python 的差异：Python 支持 encoding_error_handler 参数指定子进程 stdin/stdout 的
+// 编码错误处理策略，Go 不需要此参数。Go 的 stdin/stdout 是字节流，JSON 编解码在
+// json.Unmarshal/json.Marshal 层统一处理 UTF-8，不涉及 Python 的 str↔bytes 编码转换问题。
+// 支持 ConnectOption 中的 Timeout 参数，设置超时后 Start 和 Initialize 均受其约束。
+func (c *StdioClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
+	connectOpts := types.NewConnectOptions(opts...)
+
+	// 如果设置了超时，创建带超时的 context
+	if connectOpts.Timeout > 0 && connectOpts.Timeout != types.NoTimeout {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(connectOpts.Timeout*float64(time.Second)))
+		defer cancel()
+	}
+
 	// 从 config.Params 提取 command、args、env、cwd
 	command := extractStringParam(c.config.Params, "command")
 	if command == "" {
@@ -146,6 +161,9 @@ func (c *StdioClient) Connect(ctx context.Context, _ ...types.ConnectOption) err
 
 // Disconnect 断开 Stdio 连接。
 func (c *StdioClient) Disconnect(_ context.Context) error {
+	if !c.isConnected {
+		return nil
+	}
 	if c.mcpClient != nil {
 		if err := c.mcpClient.Close(); err != nil {
 			logger.Error(logger.ComponentAgentCore).

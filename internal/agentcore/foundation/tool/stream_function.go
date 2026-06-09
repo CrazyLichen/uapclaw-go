@@ -89,9 +89,9 @@ func (f *StreamFunction[I, O]) Card() *ToolCard {
 	return f.card
 }
 
-// Invoke 不支持一次性调用，返回 ErrStreamNotSupported。
+// Invoke 不支持一次性调用，返回 ErrInvokeNotSupported。
 func (f *StreamFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
-	return nil, NewErrStreamNotSupported(f.card.String())
+	return nil, NewErrInvokeNotSupported(f.card.String())
 }
 
 // Stream 流式执行工具调用：校验输入 → 格式化 → map→struct → 调用用户流式函数 → 逐 chunk 转换。

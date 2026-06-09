@@ -30,8 +30,8 @@ type Param struct {
 	Required bool `json:"required"`
 	// Default 默认值（可选），实际类型取决于 Type
 	Default any `json:"default,omitempty"`
-	// Enum 枚举值列表（可选），限制参数只能取这些值
-	Enum []string `json:"enum,omitempty"`
+	// Enum 枚举值列表（可选），限制参数只能取这些值，元素类型取决于 Type（string/number/integer/boolean/null）
+	Enum []any `json:"enum,omitempty"`
 	// MinLength 字符串最小长度（可选，仅 String 类型）
 	MinLength int `json:"minLength,omitempty"`
 	// MaxLength 字符串最大长度（可选，仅 String 类型）

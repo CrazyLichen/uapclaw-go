@@ -270,16 +270,21 @@ func TestHumanizeName(t *testing.T) {
 		input    string
 		expected string
 	}{
-		// snake_case
+		// snake_case：全小写
 		{"search_query", "search query"},
 		{"user_name", "user name"},
 		{"", ""},
-		// camelCase / PascalCase
+		// camelCase / PascalCase：缩写转大写
 		{"userName", "user name"},
 		{"SearchQuery", "search query"},
-		{"XMLParser", "xml parser"},
-		// Python _humanize_name 行为：缩写替换在 .lower() 之后也被转小写
-		// 与 Python 保持一致，输出全小写
+		{"XMLParser", "XML parser"},
+		{"userId", "user ID"},
+		{"apiUrl", "API URL"},
+		{"httpClient", "HTTP client"},
+		{"httpsProxy", "HTTPS proxy"},
+		{"jsonData", "JSON data"},
+		{"osVersion", "OS version"},
+		// snake_case：保持小写
 		{"user_id", "user id"},
 		{"api_url", "api url"},
 		{"html_content", "html content"},

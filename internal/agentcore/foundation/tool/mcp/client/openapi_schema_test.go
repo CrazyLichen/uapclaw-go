@@ -692,7 +692,7 @@ func TestOapiMapToParam_Enum(t *testing.T) {
 		t.Fatalf("期望 3 个 enum 值，实际 %d", len(p.Enum))
 	}
 	if p.Enum[0] != "active" {
-		t.Errorf("期望 Enum[0]=active，实际 %s", p.Enum[0])
+		t.Errorf("期望 Enum[0]=active，实际 %v", p.Enum[0])
 	}
 }
 

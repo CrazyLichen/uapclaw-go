@@ -87,7 +87,7 @@ func TestMapFunction_Invoke函数为空(t *testing.T) {
 
 	_, err := fn.Invoke(context.Background(), map[string]any{"message": "hello"})
 	if err == nil {
-		t.Error("invokeFn 为 nil 时 Invoke 应返回 ErrStreamNotSupported")
+		t.Error("invokeFn 为 nil 时 Invoke 应返回 ErrInvokeNotSupported")
 	}
 }
 

@@ -279,6 +279,10 @@ func (c *OpenApiClient) CallTool(_ context.Context, toolName string, arguments m
 			// 非 object 类型的响应：
 			// - textContent 保持原始值（不双重编码）
 			// - structuredContent 放包装后的结构化数据
+			//
+			// 与 Python 的差异：Python 将 wrapped 结果作为 structured_content 返回，
+			// content 仍是原始文本；Go 先 wrap 为 {"result": ...} 再序列化放入 text。
+			// 当前保留 Go 行为，后续如需对齐 Python 可调整。
 			var parsed any
 			if json.Unmarshal(respBody, &parsed) == nil {
 				structuredContent = map[string]any{"result": parsed}
@@ -638,6 +642,8 @@ func collectReferencedDefs(m map[string]any, collected map[string]bool) {
 //
 // 将 #/components/schemas/Xxx 替换为 #/$defs/Xxx（JSON Schema 格式）。
 // 处理 properties、items、anyOf/allOf/oneOf、additionalProperties 中的嵌套 $ref。
+// additionalProperties 为 map[string]any 时由通用 map 递归分支处理；
+// 为 bool（true）时无需替换，直接跳过。
 func replaceSchemaRefs(m map[string]any) {
 	for key, val := range m {
 		if key == "$ref" {
@@ -651,10 +657,6 @@ func replaceSchemaRefs(m map[string]any) {
 				if nested, ok := item.(map[string]any); ok {
 					replaceSchemaRefs(nested)
 				}
-			}
-		} else if key == "additionalProperties" {
-			if nested, ok := val.(map[string]any); ok {
-				replaceSchemaRefs(nested)
 			}
 		}
 	}
@@ -1071,16 +1073,8 @@ func oapiMapToParam(name string, schemaMap map[string]any, required bool) *schem
 	}
 
 	// Enum
-	if enumVals, ok := schemaMap["enum"].([]any); ok {
-		enums := make([]string, 0, len(enumVals))
-		for _, v := range enumVals {
-			if s, ok := v.(string); ok {
-				enums = append(enums, s)
-			}
-		}
-		if len(enums) > 0 {
-			p.Enum = enums
-		}
+	if enumVals, ok := schemaMap["enum"].([]any); ok && len(enumVals) > 0 {
+		p.Enum = enumVals
 	}
 
 	// 约束字段
@@ -1280,6 +1274,15 @@ func loadOpenAPISpec(filePath string) (*openapi3.T, error) {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("获取绝对路径失败: %w", err)
+	}
+
+	// 检查符号链接（安全防护，对齐 Python: path.is_symlink() 检查）
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("拒绝加载符号链接文件: %s", absPath)
 	}
 
 	// 检查文件是否存在

@@ -20,12 +20,47 @@ import (
 // 对应 Python:
 //   - openjiuwen/core/foundation/tool/utils/callable_schema_extractor.py (CallableSchemaExtractor)
 //   - openjiuwen/core/foundation/tool/utils/type_schema_extractor.py (TypeSchemaExtractor 注册表)
+//
+// TODO: 当前仅支持 struct 反射提取，Python 有 12 种 TypeSchemaExtractor
+// （Optional/Union/Literal/List/Dict/Tuple/Set/Enum/Any/Date/Datetime/TypedDict），
+// 后续可添加 TypeSchemaExtractor 注册表机制，按类型选择提取器，
+// 支持 Optional → Nullable、Union → anyOf、Literal → enum 等高级类型的 Schema 生成。
 type StructSchemaExtractor struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // schemaTagMap jsonschema tag 的键值对映射
 type schemaTagMap map[string]string
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// commonAbbreviations 常见缩写列表，humanizeName 时转大写处理。
+// 对应 Python: CallableSchemaExtractor._humanize_name() 中的 abbreviations 列表。
+var commonAbbreviations = map[string]string{
+	"id":    "ID",
+	"url":   "URL",
+	"uri":   "URI",
+	"api":   "API",
+	"ip":    "IP",
+	"tcp":   "TCP",
+	"udp":   "UDP",
+	"http":  "HTTP",
+	"https": "HTTPS",
+	"ssl":   "SSL",
+	"tls":   "TLS",
+	"dns":   "DNS",
+	"ssh":   "SSH",
+	"sql":   "SQL",
+	"json":  "JSON",
+	"xml":   "XML",
+	"html":  "HTML",
+	"css":   "CSS",
+	"cpu":   "CPU",
+	"gpu":   "GPU",
+	"ram":   "RAM",
+	"io":    "IO",
+	"os":    "OS",
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -99,7 +134,12 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 
 		// 设置枚举值（jsonschema:"enum=a|b|c" → Enum: ["a", "b", "c"]）
 		if enumStr, ok := schemaTags.getOk("enum"); ok {
-			param.Enum = strings.Split(enumStr, "|")
+			parts := strings.Split(enumStr, "|")
+			enumAny := make([]any, len(parts))
+			for i, p := range parts {
+				enumAny[i] = p
+			}
+			param.Enum = enumAny
 		}
 
 		// 设置约束字段
@@ -167,6 +207,12 @@ func (StructSchemaExtractor) Extract(typ reflect.Type) ([]*schema.Param, error) 
 
 // ExtractDescription 从 struct 提取工具描述。
 // Go 无法在运行时获取注释/docstring，因此使用 humanize 将 struct 名转为可读描述。
+//
+// 与 Python 的差异：Python 的 CallableSchemaExtractor.extract_function_description() 会自动
+// 从函数名提取描述（如 do_something → "do something"），而 Go 没有运行时函数名访问能力，
+// 要求通过 jsonschema:"description=..." tag 显式指定描述。当未指定 description tag 时，
+// 本方法使用 humanizeName 从 struct 名生成描述作为回退。
+//
 // 对应 Python: CallableSchemaExtractor.extract_function_description()
 func (StructSchemaExtractor) ExtractDescription(typ reflect.Type) string {
 	if typ.Kind() == reflect.Pointer {
@@ -310,6 +356,7 @@ func resolveDescription(jsonName string, tags schemaTagMap) string {
 
 // humanizeName 将变量名转换为人类可读的描述文本。
 // snake_case → "search query"，camelCase/PascalCase → "user name"。
+// 对常见缩写（id, url, api 等）转大写，与 Python _humanize_name 行为一致。
 // 对应 Python: CallableSchemaExtractor._humanize_name()
 func humanizeName(name string) string {
 	if name == "" {
@@ -322,31 +369,55 @@ func humanizeName(name string) string {
 		var parts []string
 		for _, w := range words {
 			if w != "" {
-				parts = append(parts, w)
+				parts = append(parts, strings.ToLower(w))
 			}
 		}
-		return strings.ToLower(strings.Join(parts, " "))
+		return strings.Join(parts, " ")
 	}
 
-	// 处理 camelCase / PascalCase
-	var result []rune
+	// 处理 camelCase / PascalCase：拆分单词后再处理缩写
+	words := splitCamelWords(name)
+	var parts []string
+	for _, w := range words {
+		lower := strings.ToLower(w)
+		if upper, ok := commonAbbreviations[lower]; ok {
+			parts = append(parts, upper)
+		} else {
+			parts = append(parts, lower)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// splitCamelWords 将 camelCase/PascalCase 名称拆分为单词列表。
+// 例如："userId" → ["user", "Id"]，"XMLParser" → ["XML", "Parser"]，"HTTPSUrl" → ["HTTPS", "Url"]。
+func splitCamelWords(name string) []string {
+	var words []string
+	var current []rune
 	runes := []rune(name)
+
 	for i, char := range runes {
 		if i == 0 {
-			result = append(result, unicode.ToLower(char))
+			current = append(current, char)
 			continue
 		}
 		if unicode.IsUpper(char) {
 			prevLower := i > 0 && unicode.IsLower(runes[i-1])
 			nextLower := i < len(runes)-1 && unicode.IsLower(runes[i+1])
 			if prevLower || nextLower {
-				result = append(result, ' ')
+				if len(current) > 0 {
+					words = append(words, string(current))
+				}
+				current = []rune{char}
+			} else {
+				current = append(current, char)
 			}
-			result = append(result, unicode.ToLower(char))
 		} else {
-			result = append(result, char)
+			current = append(current, char)
 		}
 	}
-
-	return string(result)
+	if len(current) > 0 {
+		words = append(words, string(current))
+	}
+	return words
 }

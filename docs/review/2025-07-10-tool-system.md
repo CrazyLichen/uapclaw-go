@@ -1,255 +1,278 @@
 # 代码审查报告 — 2025-07-10
 
-> 审查范围：最近24小时（59个提交）完成的代码，集中在 **领域三：工具系统** 的全量实现（3.1-3.13），以及少量领域一（SslUtils）和领域二（CallbackFramework 回调签名改造）的修改。
+> 审查范围：最近24小时提交（10个commit），涉及 **领域四（存储层 4.1-4.2）** 和 **领域三（工具系统评审修复增强）**
 >
-> **修复状态**：S1-S8、S10 已修复 ✅，S9 排除（需确认），S11 标记为后续改进 ⤵️。G1-G23 全部处理完毕：G1-G10、G12-G21、G23 已修复 ✅，G11、G22 延后 ⤵️
+> **严重问题修复状态**：S1-S2、S4-S11 已修复 ✅，S3 保留当前策略
+
+---
+
+## 📊 审查概览
+
+| 领域 | 章节 | 涉及文件数 | 严重 | 一般 | 提示 |
+|------|------|-----------|------|------|------|
+| 领域四：存储层 | 4.1 BaseKVStore 接口 | 3 | 1 | 2 | 3 |
+| 领域四：存储层 | 4.2 InMemoryKVStore | 2 | 0 | 3 | 5 |
+| 领域三：工具系统 | Param JSON Schema | 2 | 1 | 1 | 1 |
+| 领域三：工具系统 | struct_schema_extractor | 1 | 0 | 2 | 1 |
+| 领域三：工具系统 | MCP 客户端 | 6 | 4 | 6 | 3 |
+| 领域三：工具系统 | OpenAPI 客户端 | 1 | 1 | 1 | 0 |
+| 领域三：工具系统 | RestfulApi | 1 | 2 | 2 | 1 |
+| 领域三：工具系统 | ResponseParser | 1 | 0 | 1 | 1 |
+| 领域三：工具系统 | MCP Base/Types | 2 | 2 | 0 | 1 |
+| 领域三：工具系统 | Auth 回调 | 1 | 0 | 2 | 1 |
+| **合计** | | **20** | **11** | **20** | **18** |
 
 ---
 
 ## 🔴 严重问题（11项）
 
-### S1. AbilityManager 无并发安全保护
-- **位置**：`internal/agentcore/single_agent/ability_manager.go`
-- **问题**：`tools/workflows/agents/mcpServers` 使用 `map`，无 `sync.RWMutex` 保护。`Execute` 方法已使用 goroutine 并行执行，若与 `Add`/`Remove`/`List` 并发调用会导致 **map 并发读写 panic**。Python 也有类似问题（非线程安全），但 Go 的 goroutine 并发场景下更易触发。
-- **修复方案**：加 `sync.RWMutex` 保护所有 map 操作。写操作（Add/Remove/ReorderTools）加写锁，读操作（Get/List/ListToolInfo/Execute）加读锁。
+### S1. 【存储层】KVPipeline.Set 缺少 expiry 参数 ✅ 已修复
+- **位置**：`internal/agentcore/store/kv/base.go`
+- **问题**：Python `BasedKVStorePipeline.set(key, value, ttl=None)` 支持可选 TTL，Go `KVPipeline.Set(ctx, key, value)` 无 TTL 参数
+- **影响**：通过 Pipeline 批量设置带过期时间的 key 无法实现，而 `BaseKVStore.ExclusiveSet` 支持 expiry，接口能力不对称
+- **修复**：添加 `expiry int` 参数，InMemoryKVStore 和 FileKVStore 的 Pipeline 同步更新
 
-### S2. Execute 结果顺序不确定
-- **位置**：`ability_manager.go` 第349-353行
-- **问题**：Go 的 `Execute` 方法从 channel 收集结果，不保证结果顺序与输入 `toolCalls` 顺序一致。Python `asyncio.gather` **保证**结果顺序与输入一致。调用方无法按顺序对应结果和 ToolCall。
-- **修复方案**：改为按 index 收集结果到切片中，使用 `results[index]` 而非 channel append。
+### S2. 【存储层】InMemoryKVStore 过期比较运算符不一致 > vs >= ✅ 已修复
+- **位置**：`internal/agentcore/store/kv/in_memory.go:95, 236`
+- **问题**：Python 用 `time.time() > expiry_ts`（严格大于），Go 用 `time.Now().Unix() >= e.expiryTs`（大于等于）
+- **影响**：在 `current_time == expiry_ts` 边界条件下，Go 认为 key 已过期，Python 认为未过期
+- **修复**：将 `>=` 改为 `>`，对齐 Python 语义
 
-### S3. DeflateDecompressor 的 fallback 逻辑无效
-- **位置**：`internal/agentcore/foundation/tool/service_api/response_parser.go` 第283-297行
-- **问题**：两次尝试使用**完全相同的方式**（`flate.NewReader`），第二次不会产生不同结果。Python 的第二次使用 `-zlib.MAX_WBITS` 切换到 raw deflate 模式。Go 对 raw deflate 格式的响应**无法正确解压**。
-- **修复方案**：第二次尝试应使用 `compress/flate` 包的 raw deflate 模式（无 zlib header）。同时将 `strings.NewReader(string(data))` 改为 `bytes.NewReader(data)`。
+### S3. 【存储层】InMemoryKVStore expiry=0 语义不一致 — 保留当前策略
+- **位置**：`internal/agentcore/store/kv/in_memory.go:90-96`
+- **问题**：Python `exclusive_set(key, value, expiry=0)` → `int(current_time + 0)` 设置立即过期；Go `ExclusiveSet(ctx, key, value, 0)` → `expiry > 0` 为 false，永不过期
+- **影响**：边界行为差异，Python 中 expiry=0 等价"立即过期"，Go 中等价"永不过期"
+- **决策**：保留 Go 行为（expiry=0 表示永不过期），语义更清晰
 
-### S4. RestfulApi raise_for_status 默认值与 Python 不一致
-- **位置**：`service_api/restful_api.go` 第253行
-- **问题**：Go 默认 `false`（不抛异常），Python 默认 `True`（抛异常）。**Go 默认不抛异常**，可能导致 HTTP 错误被静默吞掉。
-- **修复方案**：修改 `ToolCallOptions.RaiseForStatus` 默认值为 `true`，与 Python 对齐。
+### S4. 【工具系统】Param.Minimum=0 无法输出到 JSON Schema ✅ 已修复
+- **位置**：`internal/common/schema/param.go`
+- **问题**：`paramToSchema` 中 `if p.Minimum != 0` 零值跳过逻辑，导致 `minimum: 0`（合法约束）永远不输出；同理 Maximum
+- **影响**：当业务需要约束 `minimum: 0` 时（如非负数校验），JSON Schema 中会缺失该约束
+- **修复**：使用 NaN 作为无效值标记，`math.IsNaN(p.Minimum)` 判断是否设置，自定义 `MarshalJSON` 处理 NaN 序列化
 
-### S5. RestfulApi 缺少 allow_redirects=False
-- **位置**：`service_api/restful_api.go` 第442-448行
-- **问题**：Python 使用 `allow_redirects=False` 禁止自动重定向，Go 的 `http.Client` 默认会自动跟随重定向（最多10次）。行为不一致，影响请求行为和返回状态码。
-- **修复方案**：设置 `client.CheckRedirect` 返回 `http.ErrUseLastResponse` 禁止自动重定向。
+### S5. 【工具系统】OpenAPI 客户端 $defs 收集策略过于激进 ✅ 已修复
+- **位置**：`internal/agentcore/foundation/tool/mcp/client/openapi_client.go:580-593`
+- **问题**：将 `components.Schemas` 中所有定义附加到 `$defs`，Python 只收集被 `$ref` 引用的定义
+- **影响**：输出大量未使用 `$defs`，增加 LLM token 开销，可能超出 function calling 上下文窗口
+- **修复**：添加 `collectReferencedDefs` 函数，递归收集 `$ref` 引用的定义
 
-### S6. OpenApiClient extractOutputSchema 未包含 $defs 定义
-- **位置**：`mcp/client/openapi_client.go`
-- **问题**：Python 会将引用到的 schema 定义加入 `$defs`（包括传递依赖），Go 只做了 `$ref` 替换但没有收集和附加 `$defs`。output schema 中如果有 `$ref`，**LLM 无法解析引用的定义**。
-- **修复方案**：在 `extractOutputSchema` 中递归收集 `$ref` 引用的定义，并附加到输出的 `$defs` 字段。
+### S6. 【工具系统】SseClient.ListTools 未转换 InputSchema（传 nil） ✅ 已修复
+- **位置**：`internal/agentcore/foundation/tool/mcp/client/sse_client.go:260`
+- **问题**：`nil, // InputParams 从 InputSchema 转换较复杂，此处暂留空`，而 StdioClient 和 StreamableHttpClient 都调用了 `jsonSchemaToParams(t.InputSchema)`
+- **影响**：通过 SSE 连接的 MCP 工具将没有参数描述，LLM 无法正确传参
+- **修复**：调用 `jsonSchemaToParams(t.InputSchema)` 替换 nil
 
-### S7. OpenApiClient 参数名冲突时缺少 __location 后缀处理
-- **位置**：`mcp/client/openapi_client.go`
-- **问题**：fastmcp 的 `_combine_schemas_and_map_params` 检测参数名在 path/query/header 和 body 中的冲突，冲突时加 `__location` 后缀（如 `id__path`）。Go 完全没有处理此场景——如果 path 参数 `id` 和 body 属性 `id` 同名，**参数分发会混乱**。
-- **修复方案**：在 `buildInputParams` 和 `buildRequestFromSchema` 中添加冲突检测和 `__location` 后缀逻辑。
+### S7. 【工具系统】MCPTool.Invoke 的 skip_none_value 默认值与 Python 不一致 ✅ 已修复
+- **位置**：`internal/agentcore/foundation/tool/mcp/base.go:181-199`
+- **问题**：Python 中 `skip_none_value` 默认 True，Go 中 `SkipNoneValue` 默认 False（零值）
+- **影响**：Go 端 MCP 工具调用默认不移除 None 值参数，Python 默认移除，可能导致 LLM 传入的 null 值被发送到 MCP 服务器
+- **修复**：`callOpts.SkipNoneValue = true` 设为默认值
 
-### S8. OpenApiClient HTTP 4xx/5xx 错误响应未处理
-- **位置**：`mcp/client/openapi_client.go`
-- **问题**：Python 的 `OpenAPITool.run` 在收到 4xx/5xx 时抛出详细错误信息（含状态码、原因、响应体）。Go 的 `CallTool` 直接读取响应体并返回，即使 HTTP 状态码是 4xx/5xx，也原样返回响应体文本。**调用方无法区分成功和失败的 API 调用**。
-- **修复方案**：在 `CallTool` 中检查 HTTP 状态码，4xx/5xx 时返回结构化错误而非原始文本。
+### S8. 【工具系统】ExtractMCPToolResultContent 未移除 data 字段 ✅ 已修复
+- **位置**：`internal/agentcore/foundation/tool/mcp/base.go:103-148`
+- **问题**：Python 在 `model_dump` 分支中 `dumped.pop("data", None)` 移除 data 字段并排除空值；Go 的 JSON 序列化分支没有移除 data 字段，也不排除空值
+- **影响**：MCP 工具返回结果可能包含冗余的 data 字段和空值，增加 LLM token 消耗
+- **修复**：序列化前构建 `cleaned` map，跳过 "data" key 和 nil 值
 
-### S9. SseClient.ListTools 的 InputParams 为 nil
-- **位置**：`mcp/client/sse_client.go` 第223行
-- **问题**：SseClient 创建 McpToolCard 时传 `nil` 作为 inputParams（注释"暂留空"），但同包的 StdioClient 和 StreamableHttpClient 已使用 `jsonSchemaToParams(tool.InputSchema)` 转换。通过 SSE 获取的 MCPTool **无法正确格式化调用参数**。
-- **修复方案**：调用 `jsonSchemaToParams(tool.InputSchema)` 替换 `nil`，与 StdioClient/StreamableHttpClient 保持一致。
+### S9. 【工具系统】RestfulApi path 参数替换无法检测未替换占位符 ✅ 已修复
+- **位置**：`internal/agentcore/foundation/tool/service_api/restful_api.go:343`
+- **问题**：使用 `strings.ReplaceAll` 做简单替换，Python 使用 `str.format(**path_params)` 会检测未匹配的占位符并抛 KeyError
+- **影响**：URL 中遗漏替换的 `{xxx}` 占位符不会被检测，可能导致请求发送到错误地址
+- **修复**：添加 `findUnmatchedPathParams` 函数，替换后检测残留 `{xxx}` 占位符
 
-### S10. enum tag 解析声明了但未实现
-- **位置**：`internal/agentcore/foundation/tool/struct_schema_extractor.go`
-- **问题**：注释声称支持 `jsonschema:"enum=a|b|c"`，`parseSchemaTag` 也会解析出 enum 值，但 `Extract()` 方法不读取它；`Param` 结构体也没有 `Enum` 字段；`paramToSchema()` 也不输出 enum。**这是一个声明了但未实现的特性**。
-- **修复方案**：1) `Param` 结构体添加 `Enum []string` 字段；2) `Extract()` 中读取 `schemaTags["enum"]` 并解析；3) `paramToSchema()` 中输出 `"enum": [...]`；4) `ToJSONSchemaMap()` 中处理 Enum 字段。
+### S10. 【工具系统】HTTP 客户端未将 timeout 传递到传输层 ✅ 已修复
+- **位置**：`sse_client.go`, `streamable_http_client.go`
+- **问题**：Python 将 timeout 直接传给底层传输函数，Go 仅用 context 超时
+- **影响**：SSE/StreamableHTTP 的底层 HTTP 请求可能使用默认超时，长连接场景行为不一致
+- **修复**：SSE 使用 `WithEndpointTimeout`/`WithResponseTimeout`，StreamableHTTP 使用 `WithHTTPTimeout`
 
-### S11. transform_io 机制未实现（标记为后续改进）
-- **位置**：`internal/agentcore/foundation/tool/lifecycle_tool.go`
-- **问题**：Python 中 `emit_before/emit_after` + `transform_io` 是 CallbackFramework 的核心能力，允许回调函数在调用前后修改输入输出数据。Go 的 LifecycleTool 只触发事件通知，**不支持回调函数修改数据**。Go 无法实现 Python 中通过回调修改工具调用输入/输出的能力。
-- **状态**：⤵️ 标记为后续改进。涉及 CallbackFramework 架构改造，改动面较大。已在 `lifecycle_tool.go` 注释中标注。
+### S11. 【工具系统】SSL 认证结果在 MCP 客户端中未被消费 ✅ 已修复
+- **位置**：`sse_client.go`, `streamable_http_client.go`
+- **问题**：SSL 认证返回 `{"tls_config": *tls.Config}`，但 SSE/StreamableHTTP 客户端 Connect 完全不处理 TLS 配置
+- **影响**：通过 MCP 客户端连接 HTTPS 服务器时，自定义 SSL 证书/不验证等配置不会生效
+- **修复**：SSE 使用 `WithHTTPClient`，StreamableHTTP 使用 `WithHTTPBasicClient` 传入带 TLS 配置的 HTTP 客户端
 
 ---
 
-## 🟡 一般问题（23项）
+## 🟡 一般问题（20项）
 
-### G1. 函数描述自动提取未实现
-- **位置**：`struct_schema_extractor.go` `ExtractDescription()` 始终返回空字符串
-- **影响**：通过 `NewTool`/`NewStreamTool` 注册的工具如果 struct 没有 `jsonschema:"description=..."` tag，描述退回到函数名，**严重影响 LLM 工具选择质量**。
+### G1. 【存储层】InMemoryKVStore GetByPrefix 对过期 key 的处理与 Python 不一致
+- **位置**：`in_memory.go` `GetByPrefix`
+- **问题**：Python 的 `get_by_prefix` 包含 `{"expired_key": None}`，Go 不包含已过期 key
+- **影响**：Go 行为更合理但与 Python 不一致
+- **方案**：保留 Go 行为，添加注释说明差异
 
-### G2. _humanize_name 自动参数描述缺失
+### G2. 【存储层】Delete 注释不够精确
+- **位置**：`base.go` `Delete`
+- **问题**：Go `Delete(ctx, key) error` 返回 error，注释说"key 不存在时不执行操作"，但实现者可能误将"key 不存在"当作错误返回
+- **方案**：精简注释，明确 key 不存在时应返回 nil（不报错）
+
+### G3. 【存储层】DeleteByPrefix/BatchDelete 的 batchSize 负数语义未定义
+- **位置**：`in_memory.go`
+- **问题**：Python 明确 `batch_size <= 0` 一次性删除，Go 只在 0 时走一次性删除，负数语义未注释
+- **方案**：补充注释，负数等价于 0（一次性删除）
+
+### G4. 【工具系统】Param.Enum 仅支持 []string
+- **位置**：`internal/common/schema/param.go`
+- **问题**：JSON Schema enum 可含整数/布尔等混合类型，Go 限制为字符串
+- **方案**：改为 `[]any`，openapi_client 直接赋值 `schemaMap["enum"].([]any)`，struct_schema_extractor 转换 `[]string` → `[]any`
+
+### G5. 【工具系统】humanizeName 缺失缩写大写逻辑
+- **位置**：`struct_schema_extractor.go:311-349`
+- **问题**：Python 有 `abbreviations = ['id', 'url', 'uri', ...]` 缩写转大写逻辑，Go 完全缺失
+- **影响**：`userId` → Python 输出 "user ID"，Go 输出 "user Id"
+- **方案**：添加缩写列表和大写转换逻辑
+
+### G6. 【工具系统】缺失 TypeSchemaExtractor 注册表机制
 - **位置**：`struct_schema_extractor.go`
-- **影响**：Python 自动为参数名生成人类可读描述（如 `search_query` → "search query"），Go 中字段无 description tag 时为空。
+- **问题**：Python 有12种类型提取器（Optional/Union/Literal/List/Dict 等），Go 只支持基本 struct 反射
+- **影响**：Go struct tag 能覆盖大部分场景，高级类型（Optional、Union）无法自动提取
+- **方案**：暂缓，记录 TODO。当前 struct tag 机制已满足主要需求
 
-### G3. InvokeFunction/StreamFunction 构造时未校验 card
-- **位置**：`invoke_function.go`/`stream_function.go`
-- **影响**：可以创建 card.ID 为空的实例，Python 的 `Tool.__init__` 强制校验。`ValidateToolCard` 只在 `MapFunction.NewMapFunction` 中调用。
+### G7. 【工具系统】auth_provider 提取方向不一致
+- **位置**：`sse_client.go`, `streamable_http_client.go`
+- **问题**：Go 正序取第一个 `Success=true` 的结果，Python 逆序取最后一个；多个回调处理器时行为可能不同
+- **方案**：修改为逆序遍历，对齐 Python 行为
 
-### G4. SchemaUtils 校验能力弱
-- **位置**：`schema_utils.go` `Validate()`
-- **影响**：Go 只检查必填字段和类型匹配，不做完整的 JSON Schema 校验（如 minLength/maxLength/pattern/minimum/maximum 等约束）。Python 使用 `jsonschema` 库提供完整校验。
+### G8. 【工具系统】Connect 失败时 Start 阶段未清理客户端
+- **位置**：`sse_client.go`, `streamable_http_client.go`
+- **问题**：Start 失败时直接返回错误，未调用 `Close()`，底层连接可能泄漏
+- **方案**：Start 失败时调用 `c.Close()` 清理资源
 
-### G5. TOOL_PARSE_STARTED/FINISHED 事件未触发
-- **位置**：`invoke_function.go`/`stream_function.go`/`restful_api.go`/`mcp/base.go`
-- **影响**：Go 回调系统已定义了这些事件类型，但 InvokeFunction/StreamFunction/MCPTool/RestfulApi 中没有触发。
-
-### G6. RestfulApi timeout 缺少范围校验
-- **位置**：`restful_api.go` 构造函数
-- **影响**：Python 限定 `1.0-300.0`，Go 未做范围校验，允许设置 0、负数或超过300的值。
-
-### G7. GzipDecompressor 缺少第三级 raw deflate fallback
-- **位置**：`response_parser.go` 第263-275行
-- **影响**：Python 有3级尝试（gzip → zlib with gzip header → raw deflate），Go 只有2级。与 S3 同根源问题。
-
-### G8. GzipDecompressor/DeflateDecompressor 使用 strings.NewReader(string(data)) 代替 bytes.NewReader(data)
-- **位置**：`response_parser.go` 第264、267、284、289行
-- **影响**：不必要的 `[]byte` → `string` → `strings.Reader` 转换，涉及内存拷贝。应使用 `bytes.NewReader(data)`。
-
-### G9. TextResponseParser 缺少空 Content-Type 时 Accept 头 fallback
-- **位置**：`response_parser.go` 第204-206行
-- **影响**：Go 直接返回 `false`，Python 检查 Accept 头判断是否为文本响应。
-
-### G10. 非 UTF-8 编码支持不完整
-- **位置**：`response_parser.go` `decodeBytes()` 第354-375行
-- **影响**：注释中标注需要引入 `golang.org/x/text/encoding`，但实际所有非 UTF-8 编码都回退到 UTF-8 尝试，可能导致乱码。
-
-### G11. MCP 客户端 QueryParams 未注入
-- **位置**：`mcp/client/sse_client.go`/`streamable_http_client.go`
-- **影响**：SseClient/StreamableHttpClient 的 TOOL_AUTH 回填只处理了 Headers，没有将 `provider.QueryParams` 注入到 MCP 传输连接的 URL 中。Python 通过 `httpx.Auth.async_auth_flow` 自动注入。
-
-### G12. SSE/StreamableHTTP 客户端忽略 timeout 参数
-- **位置**：`sse_client.go`/`streamable_http_client.go`
-- **影响**：Python 传入 timeout 到底层客户端，Go 构造了 ConnectOption 但未使用 Timeout 值。
-
-### G13. OpenApiClient usedNames 全局变量导致并发问题
-- **位置**：`openapi_client.go` 第70行
-- **影响**：Python 的 `_used_names` 是实例属性（`defaultdict(int)`），Go 是包级全局变量，多实例并发 Connect 会导致数据竞争。
-
-### G14. OpenApiClient 未调用 OpenAPI → JSON Schema 转换
-- **位置**：`openapi_client.go`
-- **影响**：Python 对 OpenAPI 3.x 调用 `convert_openapi_schema_to_json_schema` 处理 nullable/oneOf/anyOf 等 OpenAPI 特有构造。Go 只简单处理了 Nullable。
-
-### G15. OpenApiClient $ref 替换未处理 additionalProperties 中的引用
-- **位置**：`openapi_client.go` `replaceSchemaRefs`
-- **影响**：Python 的 `_replace_ref_with_defs` 处理了 `additionalProperties` 中的 `$ref`，Go 未处理。
-
-### G16. OpenApiClient 缺少 deepObject 风格参数序列化
-- **位置**：`openapi_client.go`
-- **影响**：Python 有 `format_deep_object_parameter` 处理 OpenAPI deepObject style 参数（`param[key]=value` 格式），Go 完全没有实现。
-
-### G17. OpenApiClient 非 object 响应的 wrap 逻辑导致双重编码
-- **位置**：`openapi_client.go` `CallTool`
-- **影响**：Go 先 wrap 再序列化为字符串放入 text，Python 将 wrapped 结果作为 `structured_content` 返回，`content` 仍是原始文本。Go 的 LLM 看到的是双重编码字符串。
-
-### G18. RegisterAuthCallback 使用 context.Background()
-- **位置**：`tool/auth/auth_callback.go` 第104行
-- **影响**：应该使用回调函数传入的 `ctx` 参数，否则无法传播取消/超时信号。
-
-### G19. SSLAuthStrategy 缺少默认环境变量名
-- **位置**：`tool/auth/auth_callback.go` 第127-128行
-- **影响**：Python 硬编码了 `"SSL_VERIFY"` 和 `"SSL_CERT"` 作为默认值（`config.get("verify_switch_env", "SSL_VERIFY")`），Go 直接从 config 读取无默认值。
-
-### G20. secureLoadCert TOCTOU 安全问题
-- **位置**：`common/security/ssl_utils.go` 第130+163行
-- **影响**：先用 `os.OpenFile` 做安全校验，后又用 `os.ReadFile(certPath)` 重新读取，两次打开之间文件可能被替换。Python 使用 `os.fdopen(fd)` 从已校验的 fd 读取，避免了此问题。
-
-### G21. HeaderQueryAuthStrategy 类型断言不安全
-- **位置**：`tool/auth/auth_callback.go` 第168-169行
-- **影响**：`authConfig.Config["auth_headers"].(map[string]string)` 断言在值为 `map[string]any` 时会失败，需要增加类型转换逻辑。
-
-### G22. Workflow/Agent 执行中缺少 session/context 传递
-- **位置**：`ability_manager.go` `executeWorkflow`/`executeAgent`
-- **影响**：Python 的 `_run_workflow` 从 session 创建 `workflow_session`，从 `context_engine` 创建 `workflow_context`；Agent 执行生成 `child_session_id`，创建子会话。Go 只做了 `wf.Execute(ctx, toolArgs)`/`ag.Invoke(ctx, toolArgs)`，无 session 处理。（已标注 ⤵️ 预留回填）
-
-### G23. AbilityManager ListToolInfo 缺少 mcpServerName 参数
-- **位置**：`ability_manager.go` `ListToolInfo`
-- **影响**：Python 支持 `mcp_server_name` 过滤特定 MCP 服务器的工具，Go 未实现此参数。
-
----
-
-## 🔵 提示问题（15项）
-
-### T1. McpServerConfig.ServerID 格式与 Python 不一致
-- **位置**：`mcp/types/types.go` 第142行
-- **影响**：Python `uuid4().hex` 生成32位无连字符hex，Go `uuid.New().String()` 生成36位带连字符UUID。
-
-### T2. ExtractMCPToolResultContent 未兼容 mime_type 字段名
-- **位置**：`mcp/base.go` 第130行
-- **影响**：Python 同时检查 `mimeType` 和 `mime_type`，Go 只检查 `mimeType`。
-
-### T3. ExtractMCPToolResultContent 缺少 model_dump 回退逻辑
-- **位置**：`mcp/base.go` 第137-138行
-- **影响**：Go 直接 `fmt.Sprintf("%v", item)` 返回 Go 默认格式化字符串，非结构化 JSON。
-
-### T4. McpServerConfig.Params 默认 nil vs Python 空 dict
-- **位置**：`mcp/types/types.go`
-- **影响**：Go 的 nil map 读取安全但写入会 panic。
-
-### T5. auth_provider 提取方向不一致
-- **位置**：`sse_client.go`/`streamable_http_client.go`
-- **影响**：Python `_extract_auth_provider` 从后往前遍历取最后一个，Go 从前往后取第一个。通常只有一个结果，影响较小。
-
-### T6. PlaywrightClient 错误类型与其他客户端不一致
-- **位置**：`playwright_client.go`
-- **影响**：其他客户端使用 `exception.BuildError`，PlaywrightClient 使用 `fmt.Errorf`。
-
-### T7. StdioClient 缺少 encoding_error_handler 和 cwd 参数
+### G9. 【工具系统】StdioClient 缺少 encoding_error_handler 支持
 - **位置**：`stdio_client.go`
-- **影响**：Python 支持这两个参数，Go 未实现。
+- **问题**：Python 支持 `encoding_error_handler=handler`，Go 完全忽略此参数
+- **方案**：暂缓，记录 TODO。Go 的 encoding 处理与 Python 不同，实际影响较小
 
-### T8. OpenApiClient loadOpenAPISpec 未检查符号链接
+### G10. 【工具系统】Disconnect 缺少幂等保护
+- **位置**：`stdio_client.go`, `playwright_client.go`
+- **问题**：Python 有 `_is_disconnected` 判断，Go 重复调用 `Disconnect()` 可能导致二次关闭错误
+- **方案**：添加 `disconnected` 标志位，`Disconnect` 首次调用后设为 true，重复调用直接返回
+
+### G11. 【工具系统】认证失败（Success=false）被静默忽略
+- **位置**：`sse_client.go`, `streamable_http_client.go`
+- **问题**：SSE/StreamableHTTP 客户端不检查 `authResult.Success`，认证失败时 provider 为 nil，静默无认证
+- **方案**：检查 `authResult.Success`，失败时记录 Warn 日志
+
+### G12. 【工具系统】StdioClient 不支持 Timeout
+- **位置**：`stdio_client.go`
+- **问题**：Python `connect(timeout=...)` 支持超时参数，Go 显式忽略 ConnectOption
+- **方案**：添加 TODO 注释，暂缓实现
+
+### G13. 【工具系统】loadOpenAPISpec 缺失符号链接安全检查
 - **位置**：`openapi_client.go`
-- **影响**：Python 明确拒绝符号链接，Go 未做此安全检查。
+- **问题**：Python 检查 `path.is_symlink()` 并拒绝符号链接，Go 无此安全检查
+- **方案**：添加符号链接检测，使用 `os.Lstat` 检查
 
-### T9. APIParamMapper Map() 默认 location fallback 逻辑不一致
-- **位置**：`api_param_mapper.go` 第130行
-- **影响**：Go 直接使用 defaultLocation，Python 有非 BODY → QUERY 的 fallback。当前不会触发，但防御性不足。
+### G14. 【工具系统】decompressRawDeflate 实现可能有误
+- **位置**：`response_parser.go:349-360`
+- **问题**：Python 用 `zlib.decompress(data, -zlib.MAX_WBITS)` 处理 raw deflate，Go 用 `flate.NewReader`（zlib 格式），Reset 不改变 zlib/raw 模式，可能无法正确处理 raw deflate 数据
+- **方案**：引入第三方库支持 raw deflate；但 Python 端 `_apply_decompression` 是死代码，实际影响极小。记录 TODO
 
-### T10. FORM 参数 falsy 值判断不一致
-- **位置**：`api_param_mapper.go` 第149行
-- **影响**：Python `if value:` 对 0/""/False 不存储，Go `if value != nil` 会存储。Go 更正确但不兼容。
-
-### T11. RestfulApi 路径参数校验缺少反向警告
-- **位置**：`restful_api.go` 第581-636行
-- **影响**：Go 未检查"schema 中标记为 path 但 URL 中未使用"的参数，Python 有此警告。
-
-### T12. OpenApiClient 缺少 HTTP 请求 timeout 和代理支持
-- **位置**：`openapi_client.go`
-- **影响**：对比 service_api 包已支持 timeout 和 ProxyFromEnvironment。
-
-### T13. auto_extract=False 选项缺失
-- **位置**：`tool_func.go`
-- **影响**：Python 的 `@tool(auto_extract=False)` 允许禁用自动 schema 提取，Go 无此选项。
-
-### T14. 解压失败时缺少日志
-- **位置**：`response_parser.go` `applyDecompression`
-- **影响**：Python 记录 `logger.error`，Go 静默 `break`。
-
-### T15. 缺少代理启用的日志记录
+### G15. 【工具系统】validateURL 缺失 SSRF 防护
 - **位置**：`restful_api.go`
-- **影响**：Python 记录 `tool_logger.info(f"Proxy enabled for {url}: ...")`，Go 使用 `http.ProxyFromEnvironment` 但无日志。
+- **问题**：Python 使用 `UrlUtils.check_url_is_valid` 含 SSRF 防护，Go 只做基本 URL 解析
+- **方案**：暂缓，记录 TODO。SSRF 防护需要较完整的实现，属于安全增强
+
+### G16. 【工具系统】响应头只取第一个值
+- **位置**：`restful_api.go:537`
+- **问题**：`respHeaders[k] = v[0]`，多值头（如 Set-Cookie）信息丢失
+- **方案**：改为 `strings.Join(v, ", ")` 合并所有值
+
+### G17. 【工具系统】FORM 参数 value 判断 nil vs Python truthy
+- **位置**：`api_param_mapper.go:151`
+- **问题**：Python `if value` 跳过空字符串/0/False，Go `if value != nil` 包含零值，语义不一致
+- **方案**：保留 Go 行为（更正确），添加注释说明差异
+
+### G18. 【工具系统】MapFunction.Invoke 返回错误语义不准确
+- **位置**：`map_function.go`
+- **问题**：`invokeFn` 为 nil 时返回 `ErrStreamNotSupported`，应为"不支持 Invoke"
+- **方案**：添加专用错误 `ErrInvokeNotSupported`
+
+### G19. 【工具系统】StreamableHttpClient 部分方法返回裸 error
+- **位置**：`streamable_http_client.go`
+- **问题**：SseClient 使用 `exception.BuildError()` 包装错误，StreamableHttpClient 直接返回裸 error，格式不统一
+- **方案**：统一使用 `exception.BuildError()` 包装错误
+
+### G20. 【工具系统】InvokeFunction/MapFunction 缺失 TOOL_CALL_STARTED/FINISHED 生命周期回调
+- **位置**：`invoke_function.go`, `map_function.go`
+- **问题**：Python 通过 `_ToolMeta` 自动包装完整生命周期回调链，Go 版本需要手动包装 `LifecycleTool`
+- **方案**：在 InvokeFunction/MapFunction 的 Invoke/Stream 方法中触发 TOOL_CALL_STARTED/FINISHED 事件
 
 ---
 
-## 📊 统计汇总
+## 🔵 提示问题（18项）
 
-| 严重程度 | 数量 | 主要分布 |
-|---------|------|---------|
-| 🔴 严重 | 11 | AbilityManager并发安全、OpenApiClient核心功能缺失、RestfulApi行为不一致、解压逻辑bug |
-| 🟡 一般 | 23 | Schema提取缺失、MCP客户端功能遗漏、ToolAuth缺陷、OpenApiClient兼容问题 |
-| 🔵 提示 | 15 | UUID格式、字段命名兼容、参数默认值、日志缺失 |
+### T1. 注释多余空格
+- **位置**：`in_memory.go:30`
+- **问题**：`基于 内存` → `基于内存`
 
-### 按模块分布
+### T2. kv/doc.go 缺少核心类型/接口索引段
+- **位置**：`kv/doc.go`
 
-| 模块 | 严重 | 一般 | 提示 |
-|------|------|------|------|
-| AbilityManager | 2 | 2 | 0 |
-| OpenApiClient | 3 | 4 | 2 |
-| SseClient | 1 | 2 | 1 |
-| RestfulApi | 2 | 4 | 2 |
-| ResponseParser | 1 | 3 | 1 |
-| Tool基础（3.1-3.4） | 2 | 3 | 1 |
-| ToolAuth/SslUtils | 0 | 4 | 0 |
-| 其他MCP客户端 | 0 | 1 | 8 |
+### T3. kv/doc.go Python 代码路径缩进不一致
+- **位置**：`kv/doc.go:15-17`
 
-### 优先修复建议（Top 5）
+### T4. base_test.go 缺少声明分隔注释
+- **位置**：`base_test.go`
 
-1. **S1 AbilityManager 并发安全** — 加 `sync.RWMutex` 保护 map 操作
-2. **S9 SseClient InputParams 为 nil** — 调用 `jsonSchemaToParams`，最小改动最大收益
-3. **S3 DeflateDecompressor fallback 无效** — 第二次尝试应使用 raw deflate 模式
-4. **S4 raise_for_status 默认值** — 修改为默认 true，与 Python 对齐
-5. **S8 OpenApiClient HTTP 错误未处理** — 4xx/5xx 应返回结构化错误
+### T5. jsonSchemaPropToParam 缺失 default/enum/nullable/anyOf/allOf/oneOf 处理
+- **位置**：`helpers.go`
+
+### T6. jsonSchemaPropToParam 缺失 enum 处理
+- **位置**：`helpers.go`
+
+### T7. decodeBytes 解码失败静默回退 UTF-8
+- **位置**：`response_parser.go`
+- **问题**：可能导致乱码不报错
+
+### T8. SSL 认证 key 名称需与 auth_callback 实现对齐
+- **位置**：`restful_api.go`
+
+### T9. ToolCard.input_params 只支持 []*Param
+- **位置**：`base.go`
+- **问题**：Python 还支持 BaseModel
+
+### T10. structToMap 对非对象输出包装为 {"result": v}
+- **位置**：`invoke_function.go`
+- **问题**：Python 不包装
+
+### T11. 缺失 docstring 解析
+- **位置**：`struct_schema_extractor.go`
+- **问题**：Go 语言限制，合理降级
+
+### T12. Disconnect 成功时缺少 Info 日志
+- **位置**：`sse_client.go`/`stdio_client.go`
+
+### T13. 不校验无效 ServerPath 类型
+- **位置**：`playwright_client.go`
+- **问题**：静默走 Stdio
+
+### T14. GetToolInfo 未显式检查连接状态
+- **位置**：`streamable_http_client.go`
+
+### T15. RegisterAuthCallback 认证配置错误时无日志
+- **位置**：`auth_callback.go`
+
+### T16. 缺少 ExclusiveSet 负数 expiry 等8个边界测试场景
+- **位置**：`in_memory_test.go`
+
+### T17. 过期 key 永不清理（内存泄漏）
+- **位置**：`in_memory.go`
+- **问题**：Python 原始设计同样存在此问题
+
+### T18. DeleteByPrefix/BatchDelete 分批删除在内存实现中无实际意义
+- **位置**：`in_memory.go`
+- **问题**：整个操作在同一锁下
+
+---
+
+## 📋 建议优先修复顺序
+
+1. **S6**（SseClient.ListTools InputSchema 传 nil） — 功能性缺陷，直接影响 MCP SSE 工具可用性
+2. **S7**（skip_none_value 默认值不一致） — 影响所有 MCP 工具调用行为
+3. **S4**（Param.Minimum=0 无法输出） — JSON Schema 语义完整性缺陷
+4. **S2+S3**（InMemoryKVStore 过期语义不一致） — 存储层基础行为差异
+5. **S9**（RestfulApi 未替换占位符检测） — 可能导致请求发送到错误地址
+6. **S5**（$defs 收集过于激进） — 可能导致 token 超限
+7. **S10+S11**（MCP 客户端 timeout 和 SSL 未传递） — 安全和可靠性问题
