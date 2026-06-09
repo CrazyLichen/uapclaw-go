@@ -302,7 +302,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.4 | ✅ | DbBasedKVStore | 数据库 KV 存储 | `openjiuwen/core/foundation/store/kv/db_based_kv_store.py` |
 | 4.5 | ✅ | RedisStore | Redis 实现 | `openjiuwen/extensions/store/redis_store.py` |
 | 4.6 | ✅ | BaseVectorStore 接口 | `CreateCollection/AddDocs/Search/DeleteDocs` | `openjiuwen/core/foundation/store/base_vector_store.py` |
-| 4.7 | ✅ | CollectionSchema / FieldSchema | 向量集合 Schema 定义 | `openjiuwen/core/foundation/store/vector_fields/` |
+| 4.7 | ✅ | CollectionSchema / FieldSchema / VectorField 基类 | 向量集合 Schema 定义 + 索引配置基类与 vf 标签反射机制 | `openjiuwen/core/foundation/store/vector_fields/` |
 | 4.8 | ☐ | MilvusVectorStore | Milvus 实现 | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
 | 4.9 | ☐ | ChromaVectorStore | ChromaDB 实现 | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
 | 4.10 | ☐ | GaussVectorStore | GaussDB 向量实现 | `openjiuwen/extensions/store/gauss_vector_store.py` |
