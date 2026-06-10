@@ -41,6 +41,8 @@ const (
 	DatabaseTypeChroma
 	// DatabaseTypePG PostgreSQL + pgvector 向量数据库
 	DatabaseTypePG
+	// DatabaseTypeGauss GaussDB 向量数据库
+	DatabaseTypeGauss
 )
 
 // IndexType 向量索引类型。
@@ -59,6 +61,8 @@ const (
 	IndexTypeIVF
 	// IndexTypeSCANN SCANN 索引
 	IndexTypeSCANN
+	// IndexTypeDiskANN DiskANN 索引（GaussDB 专用）
+	IndexTypeDiskANN
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -78,6 +82,7 @@ var (
 		"milvus",
 		"chroma",
 		"pg",
+		"gauss",
 	}
 	// indexTypeStrings IndexType 枚举值对应的字符串表示，与 Python 枚举值保持一致。
 	indexTypeStrings = [...]string{
@@ -86,6 +91,7 @@ var (
 		"flat",
 		"ivf",
 		"scann",
+		"diskann",
 	}
 )
 
