@@ -48,6 +48,8 @@ type collMeta struct {
 	SchemaVersion string
 	// PKType 主键字段类型（用于 DeleteDocsByIDs 生成正确的过滤表达式）
 	PKType entity.FieldType
+	// FieldNames 集合的所有字段名列表（用于 Search outputFields 自动推断）
+	FieldNames []string
 }
 
 // MilvusVectorStore 基于 Milvus 的向量存储实现。
@@ -202,7 +204,11 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	// 创建集合
-	if err := c.CreateCollection(ctx, milvusSchema, 1); err != nil {
+	shardsNum := o.ShardsNum
+	if shardsNum <= 0 {
+		shardsNum = 1
+	}
+	if err := c.CreateCollection(ctx, milvusSchema, shardsNum); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建集合失败")
 		return err
 	}
@@ -217,6 +223,22 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		return err
 	}
 
+	// 为标量字段创建 INVERTED 索引，对齐 Python: create_collection 中的 add_index(INVERTED)
+	for _, field := range schema.Fields() {
+		if field.IsPrimary {
+			continue
+		}
+		milvusType, _ := mapFieldType(field.DType)
+		switch milvusType {
+		case entity.FieldTypeVarChar, entity.FieldTypeInt64, entity.FieldTypeInt32:
+			invertedIdx := entity.NewGenericIndex(field.Name, "INVERTED", map[string]string{})
+			if err := c.CreateIndex(ctx, collectionName, field.Name, invertedIdx, false); err != nil {
+				logger.Warn(logComponent).Err(err).Str("field", field.Name).
+					Msg("创建 INVERTED 索引失败，非致命错误")
+			}
+		}
+	}
+
 	// 加载集合
 	if err := c.LoadCollection(ctx, collectionName, false); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("加载集合失败")
@@ -224,12 +246,17 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	// 缓存集合元数据
+	fieldNames := make([]string, 0, len(schema.Fields()))
+	for _, f := range schema.Fields() {
+		fieldNames = append(fieldNames, f.Name)
+	}
 	s.mu.Lock()
 	s.collectionMetadata[collectionName] = &collMeta{
 		DistanceMetric: distanceMetric,
 		VectorField:    vectorFieldName,
 		VectorDim:      vectorDim,
 		PKType:         pkType,
+		FieldNames:     fieldNames,
 	}
 	s.collectionsLoaded[collectionName] = true
 	s.mu.Unlock()
@@ -437,11 +464,15 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 	}
 	vectors := []entity.Vector{entity.FloatVector(vecFloat32)}
 
-	// 确定输出字段
+	// 确定输出字段：未指定时从集合元数据自动推断
+	// 对齐 Python: if not search_output_fields: describe_collection 获取字段列表
 	outputFields := o.OutputFields
+	if len(outputFields) == 0 {
+		outputFields = s.getOutputFields(collectionName)
+	}
 
 	// 构建搜索参数
-	sp, err := s.buildSearchParams(o)
+	sp, err := s.buildSearchParams(o, topK)
 	if err != nil {
 		return nil, err
 	}
@@ -621,8 +652,40 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 		)
 	}
 
+	// 校验 schema_version：必须是数字类型且 >= 0
+	// 对齐 Python: if not isinstance(version, int) or version < 0: raise error
+	if v, ok := metadata["schema_version"]; ok {
+		var version int
+		switch sv := v.(type) {
+		case int:
+			version = sv
+		case int64:
+			version = int(sv)
+		case float64:
+			version = int(sv)
+		case string:
+			parsed, err := strconv.Atoi(sv)
+			if err != nil {
+				return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+					exception.WithParam("error_msg", fmt.Sprintf("schema_version must be non-negative int, got: %v", v)),
+				)
+			}
+			version = parsed
+		default:
+			return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("schema_version must be non-negative int, got: %v", v)),
+			)
+		}
+		if version < 0 {
+			return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("schema_version must be non-negative, got: %d", version)),
+			)
+		}
+	}
+
 	// SDK 的 AlterCollection 使用 CollectionAttribute，仅支持预定义属性（TTL 等）
-	// 自定义属性（如 schema_version）目前无法通过 SDK 设置，仅更新本地缓存
+	// 自定义属性（如 schema_version）目前无法通过 SDK 写入 Milvus，仅更新本地缓存
+	// 但通过 DescribeCollection.Properties 可以读取 Milvus 中已有的 schema_version
 	logger.Info(logComponent).Str("collection_name", collectionName).
 		Interface("metadata", metadata).Msg("更新集合元数据（仅本地缓存）")
 
@@ -677,11 +740,13 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		}, nil
 	}
 
-	// 提取向量字段名和主键类型
+	// 提取向量字段名、主键类型和字段名列表
 	var vectorFieldName string
 	var vectorDim int
 	var pkType entity.FieldType
+	fieldNames := make([]string, 0, len(collInfo.Schema.Fields))
 	for _, f := range collInfo.Schema.Fields {
+		fieldNames = append(fieldNames, f.Name)
 		if f.PrimaryKey {
 			pkType = f.DataType
 		}
@@ -695,11 +760,17 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		}
 	}
 
+	// 从 Milvus collection properties 读取 schema_version
+	schemaVersion := "0"
+	if v, ok := collInfo.Properties["schema_version"]; ok {
+		schemaVersion = v
+	}
+
 	metadata := map[string]any{
 		"distance_metric": defaultDistanceMetric,
 		"vector_field":    vectorFieldName,
 		"vector_dim":      vectorDim,
-		"schema_version":  "0",
+		"schema_version":  schemaVersion,
 	}
 
 	// 尝试获取索引信息以确定度量类型
@@ -723,8 +794,9 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		DistanceMetric: dm,
 		VectorField:    vectorFieldName,
 		VectorDim:      vectorDim,
-		SchemaVersion:  "0",
+		SchemaVersion:  schemaVersion,
 		PKType:         pkType,
+		FieldNames:     fieldNames,
 	}
 	s.mu.Unlock()
 
@@ -866,6 +938,19 @@ func (s *MilvusVectorStore) getPKType(collectionName string) entity.FieldType {
 	return entity.FieldTypeVarChar
 }
 
+// getOutputFields 获取集合的输出字段列表，用于 Search 时自动推断 outputFields。
+// 对齐 Python: describe_collection 获取字段名列表。
+func (s *MilvusVectorStore) getOutputFields(collectionName string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if meta, ok := s.collectionMetadata[collectionName]; ok {
+		if len(meta.FieldNames) > 0 {
+			return meta.FieldNames
+		}
+	}
+	return nil
+}
+
 // mapFieldType 将 VectorDataType 映射为 Milvus DataType。
 //
 // 对应 Python: MilvusVectorStore._map_field_type(field_type)
@@ -985,11 +1070,13 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 }
 
 // buildSearchParams 根据配置构建搜索参数。
-func (s *MilvusVectorStore) buildSearchParams(o Options) (entity.SearchParam, error) {
+// topK 用于 HNSW 的 ef 计算：ef = topK * EfSearchFactor，对齐 Python 行为。
+func (s *MilvusVectorStore) buildSearchParams(o Options, topK int) (entity.SearchParam, error) {
 	if o.VectorField != nil {
 		switch vf := o.VectorField.(type) {
 		case *vector_fields.MilvusHNSW:
-			ef := int(vf.EfSearchFactor)
+			// ef = topK * EfSearchFactor，对齐 Python: ef = top_k * ef_search_factor
+			ef := topK * int(vf.EfSearchFactor)
 			if ef <= 0 {
 				ef = 64
 			}
@@ -1129,6 +1216,38 @@ func inferColumn(fieldName string, values []any) entity.Column {
 				}
 			}
 			return entity.NewColumnInt64(fieldName, ints)
+		case bool:
+			bools := make([]bool, 0, len(values))
+			for _, val := range values {
+				if b, ok := val.(bool); ok {
+					bools = append(bools, b)
+				} else {
+					bools = append(bools, false)
+				}
+			}
+			return entity.NewColumnBool(fieldName, bools)
+		case float64:
+			// float64 标量（注意：[]float64 是向量，已在上面处理）
+			doubles := make([]float64, 0, len(values))
+			for _, val := range values {
+				if f, ok := val.(float64); ok {
+					doubles = append(doubles, f)
+				} else {
+					doubles = append(doubles, 0)
+				}
+			}
+			return entity.NewColumnDouble(fieldName, doubles)
+		case float32:
+			// float32 标量（注意：[]float32 是向量，已在上面处理）
+			floats := make([]float32, 0, len(values))
+			for _, val := range values {
+				if f, ok := val.(float32); ok {
+					floats = append(floats, f)
+				} else {
+					floats = append(floats, 0)
+				}
+			}
+			return entity.NewColumnFloat(fieldName, floats)
 		}
 	}
 	return nil

@@ -150,6 +150,8 @@ type Options struct {
 	OutputFields []string
 	// VectorField 向量索引配置，用于 CreateCollection 时指定索引参数
 	VectorField any
+	// ShardsNum 创建集合时的分片数，默认 1，对齐 Python: create_collection 的 shards_num
+	ShardsNum int32
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -298,6 +300,12 @@ func WithOutputFields(fields ...string) Option {
 // WithVectorField 设置向量索引配置
 func WithVectorField(vf any) Option {
 	return func(o *Options) { o.VectorField = vf }
+}
+
+// WithShardsNum 设置创建集合时的分片数，默认 1。
+// 大数据量场景可增加分片数提升写入吞吐。
+func WithShardsNum(n int32) Option {
+	return func(o *Options) { o.ShardsNum = n }
 }
 
 // NewFieldSchema 创建并校验 FieldSchema。

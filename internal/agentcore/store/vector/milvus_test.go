@@ -673,7 +673,7 @@ func TestBuildSearchParams(t *testing.T) {
 	s := newTestStore()
 
 	// 默认参数
-	sp, err := s.buildSearchParams(Options{})
+	sp, err := s.buildSearchParams(Options{}, 10)
 	if err != nil {
 		t.Fatalf("buildSearchParams() error = %v", err)
 	}
@@ -682,21 +682,21 @@ func TestBuildSearchParams(t *testing.T) {
 	}
 
 	// HNSW 搜索参数
-	hnswSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0)})
+	hnswSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusHNSW("embedding", 30, 360, 2.0)}, 10)
 	if err != nil {
 		t.Fatalf("buildSearchParams(HNSW) error = %v", err)
 	}
 	_ = hnswSp
 
 	// IVF 搜索参数
-	ivfSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusIVF("embedding", 128, 8)})
+	ivfSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusIVF("embedding", 128, 8)}, 10)
 	if err != nil {
 		t.Fatalf("buildSearchParams(IVF) error = %v", err)
 	}
 	_ = ivfSp
 
 	// SCANN 搜索参数
-	scannSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusSCANN("embedding", 128, 8, true, 200)})
+	scannSp, err := s.buildSearchParams(Options{VectorField: vector_fields.NewMilvusSCANN("embedding", 128, 8, true, 200)}, 10)
 	if err != nil {
 		t.Fatalf("buildSearchParams(SCANN) error = %v", err)
 	}
@@ -1417,7 +1417,7 @@ func TestBuildSearchParams_HNSW零EfFactor(t *testing.T) {
 	s := newTestStore()
 	// EfSearchFactor 为 0，应使用默认值 64
 	hnsw := vector_fields.NewMilvusHNSW("embedding", 30, 360, 0)
-	sp, err := s.buildSearchParams(Options{VectorField: hnsw})
+	sp, err := s.buildSearchParams(Options{VectorField: hnsw}, 10)
 	if err != nil {
 		t.Fatalf("buildSearchParams(HNSW ef=0) error = %v", err)
 	}

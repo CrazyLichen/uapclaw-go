@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -316,6 +317,9 @@ func (s *RedisStore) Pipeline(_ context.Context) KVPipeline {
 // 失败时静默忽略（仅记录 Warn 日志），对齐 Python 行为。
 //
 // 对齐 Python: RedisStore.refresh_ttl(keys, ttl_seconds)
+// RefreshTTL 批量刷新键的 TTL。
+// 注意：与 GetByPrefix/DeleteByPrefix 不同，此方法不使用 ForEachMaster，
+// 因为 keys 是用户显式传入的，Pipeline 会根据 key 的 hash slot 自动路由到对应节点。
 func (s *RedisStore) RefreshTTL(ctx context.Context, keys []string, ttlSeconds int) error {
 	if len(keys) == 0 || ttlSeconds <= 0 {
 		return nil
@@ -418,22 +422,33 @@ func (s *RedisStore) isCluster() bool {
 func (s *RedisStore) getByPrefixStandalone(ctx context.Context, prefix string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
 	pattern := prefix + "*"
+	var keys []string
 	var cursor uint64
 	for {
-		var keys []string
-		keys, cursor = s.client.Scan(ctx, cursor, pattern, 100).Val()
-		for _, key := range keys {
-			val, err := s.client.Get(ctx, key).Bytes()
-			if err == redis.Nil {
-				continue // key 在 SCAN 和 GET 之间被删除
-			}
-			if err != nil {
-				return nil, err
-			}
-			result[key] = val
+		batch, scanCursor, err := s.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, fmt.Errorf("SCAN 失败: %w", err)
 		}
+		cursor = scanCursor
+		keys = append(keys, batch...)
 		if cursor == 0 {
 			break
+		}
+	}
+	if len(keys) == 0 {
+		return result, nil
+	}
+	// 使用 MGet 批量获取，避免 N+1 网络往返
+	vals, err := s.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+	for i, val := range vals {
+		if val == nil {
+			continue
+		}
+		if str, ok := val.(string); ok {
+			result[keys[i]] = []byte(str)
 		}
 	}
 	logger.Debug(logComponent).
@@ -485,37 +500,45 @@ func (s *RedisStore) getByPrefixCluster(ctx context.Context, prefix string) (map
 }
 
 // deleteByPrefixStandalone Standalone 模式下按前缀删除键值对。
+// 流式分批：SCAN 过程中边收集边删除，避免大量 key 占用内存。
+// 对齐 Python: scan_iter 边收集边删除的行为。
 func (s *RedisStore) deleteByPrefixStandalone(ctx context.Context, prefix string, batchSize int) error {
 	pattern := prefix + "*"
 	var keys []string
 	var cursor uint64
+	totalDeleted := 0
 	for {
-		var batch []string
-		batch, cursor = s.client.Scan(ctx, cursor, pattern, 100).Val()
+		batch, scanCursor, err := s.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("SCAN 失败: %w", err)
+		}
+		cursor = scanCursor
 		keys = append(keys, batch...)
+		// 达到批次大小时立即删除，释放内存
+		if batchSize > 0 && len(keys) >= batchSize {
+			if err := s.client.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+			totalDeleted += len(keys)
+			keys = keys[:0]
+		}
 		if cursor == 0 {
 			break
 		}
 	}
-	if len(keys) == 0 {
-		return nil
-	}
-	if batchSize <= 0 {
-		return s.client.Del(ctx, keys...).Err()
-	}
-	for i := 0; i < len(keys); i += batchSize {
-		end := i + batchSize
-		if end > len(keys) {
-			end = len(keys)
-		}
-		if err := s.client.Del(ctx, keys[i:end]...).Err(); err != nil {
+	// 删除剩余的 keys
+	if len(keys) > 0 {
+		if err := s.client.Del(ctx, keys...).Err(); err != nil {
 			return err
 		}
+		totalDeleted += len(keys)
 	}
-	logger.Debug(logComponent).
-		Str("prefix", prefix).
-		Int("count", len(keys)).
-		Msg("按前缀删除键值对")
+	if totalDeleted > 0 {
+		logger.Debug(logComponent).
+			Str("prefix", prefix).
+			Int("count", totalDeleted).
+			Msg("按前缀删除键值对")
+	}
 	return nil
 }
 

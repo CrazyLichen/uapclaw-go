@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -50,6 +52,8 @@ type DbBasedKVStore struct {
 	tableOnce sync.Once
 	// tableReady 建表完成信号，用于阻塞等待建表完成
 	tableReady chan struct{}
+	// tableErr 建表失败时保存的错误
+	tableErr error
 }
 
 // dbBasedPipeline 数据库 Pipeline 实现。
@@ -200,7 +204,7 @@ func (s *DbBasedKVStore) ExclusiveSet(ctx context.Context, key string, value []b
 func (s *DbBasedKVStore) GetByPrefix(ctx context.Context, prefix string) (map[string][]byte, error) {
 	s.ensureTable()
 	var rows []KVStoreRow
-	err := s.db.WithContext(ctx).Where("key LIKE ?", prefix+"%").Find(&rows).Error
+	err := s.db.WithContext(ctx).Where("key LIKE ? ESCAPE '\\'", escapeLikePrefix(prefix)+"%").Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -224,12 +228,12 @@ func (s *DbBasedKVStore) DeleteByPrefix(ctx context.Context, prefix string, batc
 	db := s.db.WithContext(ctx)
 
 	if batchSize <= 0 {
-		return db.Where("key LIKE ?", prefix+"%").Delete(&KVStoreRow{}).Error
+		return db.Where("key LIKE ? ESCAPE '\\'", escapeLikePrefix(prefix)+"%").Delete(&KVStoreRow{}).Error
 	}
 
 	// 分批删除：先查询匹配的 key，再按批次删除
 	var keys []string
-	if err := db.Model(&KVStoreRow{}).Where("key LIKE ?", prefix+"%").Pluck("key", &keys).Error; err != nil {
+	if err := db.Model(&KVStoreRow{}).Where("key LIKE ? ESCAPE '\\'", escapeLikePrefix(prefix)+"%").Pluck("key", &keys).Error; err != nil {
 		return err
 	}
 
@@ -388,8 +392,7 @@ func (p *dbBasedPipeline) Execute(ctx context.Context) ([]PipelineResult, error)
 				Value: op.value,
 			}
 			if err := upsertStatement(tx, row).Error; err != nil {
-				setResults = append(setResults, PipelineResult{Op: "set", Key: op.key, Err: err})
-				continue
+				return fmt.Errorf("pipeline set 失败 key=%s: %w", op.key, err)
 			}
 			setResults = append(setResults, PipelineResult{Op: "set", Key: op.key})
 		}
@@ -470,6 +473,8 @@ func (s *DbBasedKVStore) ensureTable() {
 	}
 	s.tableOnce.Do(func() {
 		if err := s.db.AutoMigrate(&KVStoreRow{}); err != nil {
+			logger.Error(logComponent).Err(err).Msg("建表失败")
+			s.tableErr = err
 			close(s.tableReady)
 			return
 		}
@@ -478,6 +483,10 @@ func (s *DbBasedKVStore) ensureTable() {
 	})
 	if !s.tableCreated.Load() {
 		<-s.tableReady
+	}
+	// 建表失败时返回错误，让调用方感知
+	if s.tableErr != nil {
+		return
 	}
 }
 
@@ -519,4 +528,14 @@ func upsertStatement(db *gorm.DB, row *KVStoreRow) *gorm.DB {
 		Columns:   []clause.Column{{Name: "key"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
 	}).Create(row)
+}
+
+// escapeLikePrefix 转义 LIKE 模式中的通配符（%、_、\），
+// 防止 prefix 参数中的特殊字符产生非预期匹配。
+// 对齐 Python: startswith() 不存在通配符问题。
+func escapeLikePrefix(prefix string) string {
+	s := strings.ReplaceAll(prefix, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
