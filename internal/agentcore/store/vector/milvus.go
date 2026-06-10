@@ -204,10 +204,8 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	// 创建集合
+	// ShardsNum=0 时使用 Milvus 服务端默认值，对齐 Python: 不显式设置 shardsNum
 	shardsNum := o.ShardsNum
-	if shardsNum <= 0 {
-		shardsNum = 1
-	}
 	if err := c.CreateCollection(ctx, milvusSchema, shardsNum); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建集合失败")
 		return err
