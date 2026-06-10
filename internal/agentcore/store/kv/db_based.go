@@ -135,30 +135,11 @@ func (s *DbBasedKVStore) Delete(ctx context.Context, key string) error {
 // ExclusiveSet 原子性地设置键值对，仅当 key 不存在或已过期时成功。
 // expiry 为过期秒数，0 表示不过期。
 // 返回 true 表示设置成功，false 表示 key 已存在且未过期。
-// 依赖数据库主键唯一性保证原子性，不加应用层锁。
+// 在同一个数据库事务中完成查询和写入，避免 TOCTOU 竞态条件。
 // 对齐 Python: DbBasedKVStore.exclusive_set(key, value, expiry)
 func (s *DbBasedKVStore) ExclusiveSet(ctx context.Context, key string, value []byte, expiry int) (bool, error) {
 	s.ensureTable()
 	now := time.Now().Unix()
-
-	// 查询已有记录
-	var row KVStoreRow
-	err := s.db.WithContext(ctx).Where("key = ?", key).First(&row).Error
-	if err == nil {
-		// key 已存在，检查是否过期
-		var ev exclusiveValue
-		if err := json.Unmarshal(row.Value, &ev); err != nil {
-			// 无法解析为 exclusive JSON，视为未过期
-			return false, nil
-		}
-		if ev.ExclusiveExpiry == 0 || ev.ExclusiveExpiry > now {
-			// 未过期：ExpiryAt==0 表示永不过期；ExpiryAt > now 表示尚未到期
-			return false, nil
-		}
-		// 已过期，允许覆盖（继续执行写入）
-	} else if err != gorm.ErrRecordNotFound {
-		return false, err
-	}
 
 	// 计算过期时间戳
 	var expireAt int64
@@ -172,15 +153,46 @@ func (s *DbBasedKVStore) ExclusiveSet(ctx context.Context, key string, value []b
 		return false, fmt.Errorf("编码 exclusive 值失败: %w", err)
 	}
 
-	// upsert 写入
 	newRow := &KVStoreRow{
 		Key:   key,
 		Value: encodedValue,
 	}
-	if err := upsertStatement(s.db.WithContext(ctx), newRow).Error; err != nil {
+
+	// 在同一事务中完成查询和写入，避免并发竞态
+	var setOK bool
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 查询已有记录
+		var row KVStoreRow
+		err := tx.Where("key = ?", key).First(&row).Error
+		if err == nil {
+			// key 已存在，检查是否过期
+			var ev exclusiveValue
+			if err := json.Unmarshal(row.Value, &ev); err != nil {
+				// 无法解析为 exclusive JSON，视为未过期
+				setOK = false
+				return nil
+			}
+			if ev.ExclusiveExpiry == 0 || ev.ExclusiveExpiry > now {
+				// 未过期：ExpiryAt==0 表示永不过期；ExpiryAt > now 表示尚未到期
+				setOK = false
+				return nil
+			}
+			// 已过期，允许覆盖（继续执行写入）
+		} else if err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		// upsert 写入
+		if err := upsertStatement(tx, newRow).Error; err != nil {
+			return err
+		}
+		setOK = true
+		return nil
+	})
+	if err != nil {
 		return false, err
 	}
-	return true, nil
+	return setOK, nil
 }
 
 // GetByPrefix 获取所有以 prefix 开头的键值对。

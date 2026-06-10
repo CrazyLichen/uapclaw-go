@@ -455,7 +455,7 @@ func (s *RedisStore) getByPrefixCluster(ctx context.Context, prefix string) (map
 				return err
 			}
 			for _, key := range keys {
-				val, err := s.client.Get(ctx, key).Bytes()
+				val, err := master.Get(ctx, key).Bytes()
 				if err == redis.Nil {
 					continue
 				}
@@ -539,14 +539,14 @@ func (s *RedisStore) deleteByPrefixCluster(ctx context.Context, prefix string, b
 			return nil
 		}
 		if batchSize <= 0 {
-			return s.client.Del(ctx, keys...).Err()
+			return master.Del(ctx, keys...).Err()
 		}
 		for i := 0; i < len(keys); i += batchSize {
 			end := i + batchSize
 			if end > len(keys) {
 				end = len(keys)
 			}
-			if err := s.client.Del(ctx, keys[i:end]...).Err(); err != nil {
+			if err := master.Del(ctx, keys[i:end]...).Err(); err != nil {
 				return err
 			}
 		}

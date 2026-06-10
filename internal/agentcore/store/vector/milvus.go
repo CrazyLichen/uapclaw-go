@@ -46,6 +46,8 @@ type collMeta struct {
 	VectorDim int
 	// SchemaVersion schema 版本
 	SchemaVersion string
+	// PKType 主键字段类型（用于 DeleteDocsByIDs 生成正确的过滤表达式）
+	PKType entity.FieldType
 }
 
 // MilvusVectorStore 基于 Milvus 的向量存储实现。
@@ -155,6 +157,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 
 	var vectorFieldName string
 	var vectorDim int
+	var pkType entity.FieldType
 
 	for _, field := range schema.Fields() {
 		milvusType, err := mapFieldType(field.DType)
@@ -165,6 +168,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		milvusField := entity.NewField().WithName(field.Name).WithDataType(milvusType)
 		if field.IsPrimary {
 			milvusField = milvusField.WithIsPrimaryKey(true)
+			pkType = milvusType
 		}
 		if field.AutoID {
 			milvusField = milvusField.WithIsAutoID(true)
@@ -225,6 +229,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		DistanceMetric: distanceMetric,
 		VectorField:    vectorFieldName,
 		VectorDim:      vectorDim,
+		PKType:         pkType,
 	}
 	s.collectionsLoaded[collectionName] = true
 	s.mu.Unlock()
@@ -461,7 +466,14 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 
 			fields := make(map[string]any)
 			for _, col := range result.Fields {
-				fields[col.Name()] = col.FieldData()
+				val, err := col.Get(j)
+				if err != nil {
+					logger.Warn(logComponent).Err(err).
+						Str("field", col.Name()).Int("row", j).
+						Msg("提取搜索结果字段值失败")
+					continue
+				}
+				fields[col.Name()] = val
 			}
 
 			searchResults = append(searchResults, VectorSearchResult{
@@ -494,8 +506,11 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 		return err
 	}
 
-	// 构建 ID 过滤表达式
-	expr := fmt.Sprintf("id in [%s]", joinIDs(ids))
+	// 根据 ID 列表和主键类型构建过滤表达式
+	// INT64 主键：id in [1, 2, 3]（无引号）
+	// VARCHAR 主键：id in ["a", "b", "c"]（有引号）
+	// 对齐 Python: client.delete(ids=ids)，SDK 自动处理类型
+	expr := buildDeleteExpr(ids, s.getPKType(collectionName))
 
 	if err := c.Delete(ctx, collectionName, "", expr); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
@@ -662,18 +677,21 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		}, nil
 	}
 
-	// 提取向量字段名
+	// 提取向量字段名和主键类型
 	var vectorFieldName string
 	var vectorDim int
+	var pkType entity.FieldType
 	for _, f := range collInfo.Schema.Fields {
-		if f.DataType == entity.FieldTypeFloatVector {
+		if f.PrimaryKey {
+			pkType = f.DataType
+		}
+		if f.DataType == entity.FieldTypeFloatVector && vectorFieldName == "" {
 			vectorFieldName = f.Name
 			if dimStr, ok := f.TypeParams["dim"]; ok {
 				if d, err := strconv.Atoi(dimStr); err == nil {
 					vectorDim = d
 				}
 			}
-			break
 		}
 	}
 
@@ -706,6 +724,7 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		VectorField:    vectorFieldName,
 		VectorDim:      vectorDim,
 		SchemaVersion:  "0",
+		PKType:         pkType,
 	}
 	s.mu.Unlock()
 
@@ -808,13 +827,43 @@ func buildFilterExpr(filters map[string]any) string {
 	return strings.Join(parts, " && ")
 }
 
-// joinIDs 将 ID 列表拼接为 Milvus 表达式中的 ID 字符串。
+// joinIDs 将 ID 列表拼接为 Milvus 表达式中带引号的 ID 字符串（用于 VARCHAR 主键）。
 func joinIDs(ids []string) string {
 	quoted := make([]string, len(ids))
 	for i, id := range ids {
 		quoted[i] = fmt.Sprintf(`"%s"`, id)
 	}
 	return strings.Join(quoted, ", ")
+}
+
+// joinIDsNoQuote 将 ID 列表拼接为 Milvus 表达式中不带引号的 ID 字符串（用于 INT64 主键）。
+func joinIDsNoQuote(ids []string) string {
+	return strings.Join(ids, ", ")
+}
+
+// buildDeleteExpr 根据主键类型构建删除表达式。
+// INT64 主键生成 id in [1, 2, 3]，VARCHAR 主键生成 id in ["a", "b", "c"]。
+// 对齐 Python: SDK PKs2Expr 自动根据主键类型选择格式。
+func buildDeleteExpr(ids []string, pkType entity.FieldType) string {
+	switch pkType {
+	case entity.FieldTypeInt64, entity.FieldTypeInt32, entity.FieldTypeInt16, entity.FieldTypeInt8:
+		return fmt.Sprintf("id in [%s]", joinIDsNoQuote(ids))
+	default:
+		// VARCHAR 及其他类型，默认加引号
+		return fmt.Sprintf("id in [%s]", joinIDs(ids))
+	}
+}
+
+// getPKType 获取集合的主键字段类型，优先从缓存获取。
+func (s *MilvusVectorStore) getPKType(collectionName string) entity.FieldType {
+	s.mu.RLock()
+	if meta, ok := s.collectionMetadata[collectionName]; ok {
+		s.mu.RUnlock()
+		return meta.PKType
+	}
+	s.mu.RUnlock()
+	// 缓存未命中时默认 VARCHAR（加引号更安全）
+	return entity.FieldTypeVarChar
 }
 
 // mapFieldType 将 VectorDataType 映射为 Milvus DataType。
@@ -922,8 +971,12 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 			return entity.NewIndexHNSW(metricType, vf.M, vf.EfConstruction)
 		case *vector_fields.MilvusIVF:
 			return entity.NewIndexIvfFlat(metricType, vf.Nlist)
-		case *vector_fields.MilvusSCANN:
-			return entity.NewIndexIvfFlat(metricType, vf.Nlist)
+	case *vector_fields.MilvusSCANN:
+		idx, err := entity.NewIndexSCANN(metricType, vf.Nlist, vf.WithRawData)
+		if err != nil {
+			return nil, fmt.Errorf("创建 SCANN 索引失败: %w", err)
+		}
+		return idx, nil
 		}
 	}
 
@@ -943,8 +996,16 @@ func (s *MilvusVectorStore) buildSearchParams(o Options) (entity.SearchParam, er
 			return entity.NewIndexHNSWSearchParam(ef)
 		case *vector_fields.MilvusIVF:
 			return entity.NewIndexIvfSQ8SearchParam(vf.Nprobe)
-		case *vector_fields.MilvusSCANN:
-			return entity.NewIndexIvfSQ8SearchParam(vf.Nprobe)
+	case *vector_fields.MilvusSCANN:
+		reorderK := vf.ReorderK
+		if reorderK <= 0 {
+			reorderK = 1
+		}
+		sp, err := entity.NewIndexSCANNSearchParam(vf.Nprobe, reorderK)
+		if err != nil {
+			return nil, fmt.Errorf("创建 SCANN 搜索参数失败: %w", err)
+		}
+		return sp, nil
 		}
 	}
 	// 默认搜索参数
