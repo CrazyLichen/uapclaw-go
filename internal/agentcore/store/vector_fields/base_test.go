@@ -16,8 +16,6 @@ func TestDatabaseType_String(t *testing.T) {
 		{DatabaseTypeMilvus, "milvus"},
 		{DatabaseTypeChroma, "chroma"},
 		{DatabaseTypePG, "pg"},
-		{DatabaseTypeGauss, "gauss"},
-		{DatabaseTypeES, "es"},
 	}
 	for _, tt := range tests {
 		if got := tt.dt.String(); got != tt.expected {
@@ -36,7 +34,7 @@ func TestDatabaseType_无效值(t *testing.T) {
 
 // TestDatabaseType_所有枚举值 验证所有枚举值在有效范围内
 func TestDatabaseType_所有枚举值(t *testing.T) {
-	for i := DatabaseTypeMilvus; i <= DatabaseTypeES; i++ {
+	for i := DatabaseTypeMilvus; i <= DatabaseTypePG; i++ {
 		s := i.String()
 		if s == "" || s == fmt.Sprintf("UNKNOWN(%d)", i) {
 			t.Errorf("DatabaseType(%d) 缺少字符串表示", i)
@@ -57,7 +55,6 @@ func TestIndexType_String(t *testing.T) {
 		{IndexTypeFLAT, "flat"},
 		{IndexTypeIVF, "ivf"},
 		{IndexTypeSCANN, "scann"},
-		{IndexTypeIVFFlat, "ivfflat"},
 	}
 	for _, tt := range tests {
 		if got := tt.it.String(); got != tt.expected {
@@ -76,7 +73,7 @@ func TestIndexType_无效值(t *testing.T) {
 
 // TestIndexType_所有枚举值 验证所有枚举值在有效范围内
 func TestIndexType_所有枚举值(t *testing.T) {
-	for i := IndexTypeAUTO; i <= IndexTypeIVFFlat; i++ {
+	for i := IndexTypeAUTO; i <= IndexTypeSCANN; i++ {
 		s := i.String()
 		if s == "" || s == fmt.Sprintf("UNKNOWN(%d)", i) {
 			t.Errorf("IndexType(%d) 缺少字符串表示", i)

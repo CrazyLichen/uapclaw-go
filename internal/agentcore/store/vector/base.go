@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -144,13 +145,11 @@ type Options struct {
 	DistanceMetric string
 	// BatchSize 批量操作的批次大小
 	BatchSize int
-	// MetricType 搜索时的距离度量类型
-	MetricType string
 	// OutputFields 搜索结果中需要返回的字段列表
 	OutputFields []string
 	// VectorField 向量索引配置，用于 CreateCollection 时指定索引参数
 	VectorField any
-	// ShardsNum 创建集合时的分片数，默认 1，对齐 Python: create_collection 的 shards_num
+	// ShardsNum 创建集合时的分片数，0 表示使用服务端默认值，对齐 Python: create_collection 的 shards_num
 	ShardsNum int32
 }
 
@@ -285,11 +284,6 @@ func WithDistanceMetric(metric string) Option {
 // WithBatchSize 设置批量操作的批次大小
 func WithBatchSize(size int) Option {
 	return func(o *Options) { o.BatchSize = size }
-}
-
-// WithMetricType 设置搜索时的距离度量类型
-func WithMetricType(metricType string) Option {
-	return func(o *Options) { o.MetricType = metricType }
 }
 
 // WithOutputFields 设置搜索结果中需要返回的字段
@@ -672,5 +666,11 @@ func vectorDataTypeFromString(s string) VectorDataType {
 			return VectorDataType(i)
 		}
 	}
-	return VectorDataTypeVarchar // 默认值，对齐 Python from_dict 的 fallback
+	// 未知类型回退 VARCHAR，与 Python from_dict 的 fallback 一致
+	// 但 Python 的 VectorDataType("UNKNOWN") 会抛 ValueError，这里加警告日志
+	logger.Warn(logComponent).
+		Str("type", s).
+		Str("fallback", "VARCHAR").
+		Msg("未知的向量字段类型，回退为 VARCHAR")
+	return VectorDataTypeVarchar
 }

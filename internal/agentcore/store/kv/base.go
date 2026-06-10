@@ -61,18 +61,21 @@ type BaseKVStore interface {
 // 对应 Python: openjiuwen/core/foundation/store/base_kv_store.py (BasedKVStorePipeline)
 type KVPipeline interface {
 	// Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
-	// expiry 为过期秒数，0 表示不过期。
+	// expiry 为过期秒数，0 表示不过期。当前 expiry 未实际生效，与 Python 行为一致。
+	// 注意：此方法永远返回 nil error，因为仅做 append 操作。
 	// 对应 Python: BasedKVStorePipeline.set(key, value, ttl=None)
 	Set(ctx context.Context, key string, value []byte, expiry int) error
 
 	// Get 向管道中添加一个 Get 操作（仅记录，不立即执行）。
+	// 注意：此方法永远返回 nil error，因为仅做 append 操作。
 	Get(ctx context.Context, key string) error
 
 	// Exists 向管道中添加一个 Exists 操作（仅记录，不立即执行）。
+	// 注意：此方法永远返回 nil error，因为仅做 append 操作。
 	Exists(ctx context.Context, key string) error
 
 	// Execute 提交并执行管道中的所有操作，返回各操作的结果。
-	// 执行后管道被清空，可复用。
+	// Execute 后管道被清空，不可对同一 Pipeline 再次调用 Execute。
 	Execute(ctx context.Context) ([]PipelineResult, error)
 }
 

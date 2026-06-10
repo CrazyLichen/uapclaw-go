@@ -29,6 +29,8 @@ type MilvusFLAT struct {
 // MilvusHNSW Milvus HNSW 索引配置。
 // HNSW 构建多层图结构进行近似最近邻搜索，搜索性能和精度优秀。
 // 支持可选量化变体（SQ/PQ/PRQ）以降低内存占用。
+// TODO: 补充 variant（SQ/PQ/PRQ）、extra_construct、extra_search 字段，
+// 以及 validate_extra_args 量化参数校验逻辑，对齐 Python MilvusHNSW。
 //
 // 对应 Python: vector_fields/milvus_fields.py (MilvusHNSW)
 type MilvusHNSW struct {
@@ -43,6 +45,8 @@ type MilvusHNSW struct {
 
 // MilvusIVF Milvus IVF 索引配置。
 // 支持多种量化变体：FLAT、SQ8、PQ、RABITQ。
+// TODO: 补充 variant（FLAT/SQ8/PQ/RABITQ）、extra_construct、extra_search 字段，
+// 以及 validate_extra_args 量化参数校验逻辑，对齐 Python MilvusIVF。
 //
 // 对应 Python: vector_fields/milvus_fields.py (MilvusIVF)
 type MilvusIVF struct {

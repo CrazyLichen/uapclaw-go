@@ -762,7 +762,6 @@ func TestOptions_全部选项(t *testing.T) {
 	o := newOptions(
 		WithDistanceMetric("COSINE"),
 		WithBatchSize(100),
-		WithMetricType("L2"),
 		WithOutputFields("id", "text"),
 	)
 	if o.DistanceMetric != "COSINE" {
@@ -770,9 +769,6 @@ func TestOptions_全部选项(t *testing.T) {
 	}
 	if o.BatchSize != 100 {
 		t.Errorf("BatchSize = %d, 期望 %d", o.BatchSize, 100)
-	}
-	if o.MetricType != "L2" {
-		t.Errorf("MetricType = %q, 期望 %q", o.MetricType, "L2")
 	}
 	if len(o.OutputFields) != 2 {
 		t.Errorf("OutputFields 长度 = %d, 期望 2", len(o.OutputFields))
@@ -787,9 +783,6 @@ func TestOptions_空选项(t *testing.T) {
 	}
 	if o.BatchSize != 0 {
 		t.Errorf("BatchSize = %d, 期望 0", o.BatchSize)
-	}
-	if o.MetricType != "" {
-		t.Errorf("MetricType = %q, 期望空字符串", o.MetricType)
 	}
 	if o.OutputFields != nil {
 		t.Errorf("OutputFields = %v, 期望 nil", o.OutputFields)

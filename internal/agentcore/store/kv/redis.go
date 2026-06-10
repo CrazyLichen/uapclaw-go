@@ -237,12 +237,14 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 		return s.mGetFallback(ctx, keys)
 	}
 
-	// 转换结果为 [][]byte
+	// 转换结果为 [][]byte，同时统计找到的数量
 	result := make([][]byte, len(keys))
+	foundCount := 0
 	for i, val := range vals {
 		if val == nil {
 			continue
 		}
+		foundCount++
 		switch v := val.(type) {
 		case string:
 			result[i] = []byte(v)
@@ -252,6 +254,7 @@ func (s *RedisStore) MGet(ctx context.Context, keys []string) ([][]byte, error) 
 	}
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
+		Int("found_count", foundCount).
 		Msg("批量获取 keys")
 	return result, nil
 }
@@ -293,7 +296,12 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 			return totalDeleted, err
 		}
 		totalDeleted += int(n)
-	}
+		logger.Debug(logComponent).
+			Int("batch", i/batchSize+1).
+			Int("batch_size", end-i).
+			Int64("deleted_in_batch", n).
+			Msg("分批删除进度")
+		}
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
 		Int("deleted", totalDeleted).
@@ -304,6 +312,7 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 // Pipeline 创建批量操作管道，用于减少网络往返。
 // 包装 go-redis 原生 Pipeliner 为 KVPipeline 接口。
 // 对齐 Python: RedisStore.pipeline()
+// Pipeline 创建批量操作管道。Pipeline 为一次性使用，Execute 后不可再次调用。
 func (s *RedisStore) Pipeline(_ context.Context) KVPipeline {
 	return &redisPipeline{
 		pipe: s.client.Pipeline(),

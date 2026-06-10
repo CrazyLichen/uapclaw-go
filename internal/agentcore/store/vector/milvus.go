@@ -420,6 +420,10 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 				Int("batch_start", i).Int("batch_size", len(batch)).Msg("插入文档批次失败")
 			return err
 		}
+		// 对齐 Python: logger.debug(f"Added {processed}/{total} documents")
+		logger.Debug(logComponent).Str("collection_name", collectionName).
+			Int("added", end).Int("total", total).
+			Msg("添加文档进度")
 	}
 
 	// 刷新确保持久化
@@ -723,6 +727,8 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 	s.mu.RUnlock()
 
 	// 缓存未命中，从 Milvus 获取
+	// 对齐 Python: logger.debug(f"Cache miss for '{collection_name}' metadata")
+	logger.Debug(logComponent).Str("collection_name", collectionName).Msg("集合元数据缓存未命中")
 	c, err := s.getClient(ctx)
 	if err != nil {
 		return nil, err
@@ -1072,6 +1078,14 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 func (s *MilvusVectorStore) buildSearchParams(o Options, topK int) (entity.SearchParam, error) {
 	if o.VectorField != nil {
 		switch vf := o.VectorField.(type) {
+		case *vector_fields.MilvusAUTO:
+			_ = vf
+			// AUTOINDEX 使用 FLAT 搜索参数，Milvus 服务端自动选择最优参数
+			return entity.NewIndexFlatSearchParam()
+		case *vector_fields.MilvusFLAT:
+			_ = vf
+			// FLAT 索引使用暴力搜索，无需特殊参数
+			return entity.NewIndexFlatSearchParam()
 		case *vector_fields.MilvusHNSW:
 			// ef = topK * EfSearchFactor，对齐 Python: ef = top_k * ef_search_factor
 			ef := topK * int(vf.EfSearchFactor)
@@ -1081,7 +1095,7 @@ func (s *MilvusVectorStore) buildSearchParams(o Options, topK int) (entity.Searc
 			return entity.NewIndexHNSWSearchParam(ef)
 		case *vector_fields.MilvusIVF:
 			return entity.NewIndexIvfSQ8SearchParam(vf.Nprobe)
-	case *vector_fields.MilvusSCANN:
+		case *vector_fields.MilvusSCANN:
 		reorderK := vf.ReorderK
 		if reorderK <= 0 {
 			reorderK = 1
