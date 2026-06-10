@@ -88,15 +88,32 @@ func (r *fakeRows) Scan(dest ...any) error {
 	row := r.rows[r.idx-1]
 	for i, d := range dest {
 		if i < len(row) {
+			val := row[i]
+			// 支持 *int 指针类型
 			switch dp := d.(type) {
 			case *string:
-				*dp = fmt.Sprintf("%v", row[i])
+				if val != nil {
+					*dp = fmt.Sprintf("%v", val)
+				}
 			case *bool:
-				*dp = row[i].(bool)
+				if val != nil {
+					*dp = val.(bool)
+				}
 			case *int:
-				*dp = row[i].(int)
+				if val != nil {
+					*dp = val.(int)
+				}
 			case *float64:
-				*dp = row[i].(float64)
+				if val != nil {
+					*dp = val.(float64)
+				}
+			case **int:
+				// 支持 *int 的指针（用于 nullable 列如 charMaxLen, numPrec）
+				if val != nil {
+					v := val.(int)
+					*dp = &v
+				}
+				// val == nil 时保持 *dp = nil
 			default:
 				return fmt.Errorf("unsupported scan type: %T", d)
 			}
@@ -623,5 +640,289 @@ func TestGaussBuildCreateTableSQL_标识符转义(t *testing.T) {
 	// pgx Identifier.Sanitize 会将表名加双引号
 	if !strings.Contains(sql, `"my-collection"`) {
 		t.Errorf("SQL 应包含转义表名, got: %s", sql)
+	}
+}
+
+// ─── GetSchema 测试 ───
+
+func TestGaussVectorStore_GetSchema(t *testing.T) {
+	s := newTestGaussStore()
+	fake := s.pool.(*fakeDBClient)
+
+	// 模拟 information_schema.columns 返回三行
+	// 列格式：column_name, data_type, character_maximum_length, numeric_precision
+	fake.queryFn = func(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+		return &fakeRows{
+			rows: [][]any{
+				{"id", "varchar", 256, nil},
+				{"embedding", "floatvector", nil, 128},
+				{"text", "varchar", 65535, nil},
+			},
+		}, nil
+	}
+	// 让 CollectionExists 返回 true
+	fake.queryRowFn = func(ctx context.Context, sql string, args ...any) pgx.Row {
+		return &fakeRow{vals: []any{true}, err: nil}
+	}
+
+	ctx := context.Background()
+
+	// 先缓存元数据（包含 vector_dim）
+	s.mu.Lock()
+	s.collectionMetadata["test_coll"] = &gaussCollMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      128,
+		SchemaVersion:  "1",
+	}
+	s.mu.Unlock()
+
+	schema, err := s.GetSchema(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("GetSchema() error = %v", err)
+	}
+	if schema == nil {
+		t.Fatal("GetSchema() 返回 nil")
+	}
+}
+
+// ─── Search 测试 ───
+
+func TestGaussVectorStore_Search(t *testing.T) {
+	s := newTestGaussStore()
+
+	// 先缓存元数据
+	s.mu.Lock()
+	s.collectionMetadata["test_coll"] = &gaussCollMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      3,
+	}
+	s.mu.Unlock()
+
+	ctx := context.Background()
+
+	results, err := s.Search(ctx, "test_coll", []float64{0.1, 0.2, 0.3}, "embedding", 5, nil)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	// fakeRows 默认无数据，结果应为空
+	if len(results) != 0 {
+		t.Errorf("Search() 结果数 = %v, want 0（fake 无数据）", len(results))
+	}
+}
+
+func TestGaussVectorStore_Search_带过滤(t *testing.T) {
+	s := newTestGaussStore()
+
+	s.mu.Lock()
+	s.collectionMetadata["test_coll"] = &gaussCollMeta{
+		DistanceMetric: "COSINE",
+		VectorField:    "embedding",
+		VectorDim:      3,
+	}
+	s.mu.Unlock()
+
+	ctx := context.Background()
+
+	results, err := s.Search(ctx, "test_coll", []float64{0.1, 0.2, 0.3}, "embedding", 5, map[string]any{"status": "active"})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Search() 结果数 = %v, want 0", len(results))
+	}
+}
+
+// ─── getOrInitCollMeta 测试 ───
+
+func TestGaussVectorStore_getOrInitCollMeta(t *testing.T) {
+	s := NewGaussVectorStore("postgres://localhost/test")
+
+	// 无缓存时应初始化默认元数据
+	meta := s.getOrInitCollMeta("new_coll", "embedding")
+	if meta.DistanceMetric != "COSINE" {
+		t.Errorf("DistanceMetric = %v, want COSINE", meta.DistanceMetric)
+	}
+	if meta.VectorField != "embedding" {
+		t.Errorf("VectorField = %v, want embedding", meta.VectorField)
+	}
+}
+
+// ─── getClient 惰性创建测试 ───
+
+func TestGaussVectorStore_getClient_惰性创建(t *testing.T) {
+	s := NewGaussVectorStore("postgres://localhost/test")
+	fake := newFakeDBClient()
+	s.createPool = func(ctx context.Context, connString string) (dbClient, error) {
+		return fake, nil
+	}
+
+	// pool 应为 nil
+	if s.pool != nil {
+		t.Error("初始 pool 应为 nil")
+	}
+
+	ctx := context.Background()
+	client, err := s.getClient(ctx)
+	if err != nil {
+		t.Fatalf("getClient() error = %v", err)
+	}
+	if client == nil {
+		t.Error("getClient() 返回 nil")
+	}
+	if s.pool == nil {
+		t.Error("getClient() 后 pool 不应为 nil")
+	}
+}
+
+// ─── resolveDiskANNConfig 测试 ───
+
+func TestGaussVectorStore_resolveDiskANNConfig_默认(t *testing.T) {
+	s := NewGaussVectorStore("postgres://localhost/test")
+	o := Options{}
+	diskann := s.resolveDiskANNConfig("embedding", o)
+	if diskann.VectorFieldName != "embedding" {
+		t.Errorf("VectorFieldName = %v, want embedding", diskann.VectorFieldName)
+	}
+}
+
+func TestGaussVectorStore_resolveDiskANNConfig_自定义(t *testing.T) {
+	s := NewGaussVectorStore("postgres://localhost/test")
+	custom := vector_fields.NewGaussDiskANN("my_vec")
+	custom.PGNseg = 256
+	o := Options{VectorField: custom}
+	diskann := s.resolveDiskANNConfig("embedding", o)
+	if diskann.PGNseg != 256 {
+		t.Errorf("PGNseg = %v, want 256", diskann.PGNseg)
+	}
+}
+
+// ─── mapDistanceMetricToPG 测试 ───
+
+func TestMapDistanceMetricToPG(t *testing.T) {
+	if mapDistanceMetricToPG("L2") != gaussMetricL2 {
+		t.Error("L2 应映射为 l2")
+	}
+	if mapDistanceMetricToPG("COSINE") != gaussMetricCosine {
+		t.Error("COSINE 应映射为 cosine")
+	}
+	if mapDistanceMetricToPG("UNKNOWN") != gaussMetricCosine {
+		t.Error("未知度量应 fallback 为 cosine")
+	}
+}
+
+// ─── gaussConvertValue 测试 ───
+
+func TestGaussConvertValue(t *testing.T) {
+	if gaussConvertValue([]byte("hello")) != "hello" {
+		t.Error("[]byte 应转为 string")
+	}
+	if gaussConvertValue(float32(1.5)) != float64(1.5) {
+		t.Error("float32 应转为 float64")
+	}
+	if gaussConvertValue(int32(42)) != int64(42) {
+		t.Error("int32 应转为 int64")
+	}
+	if gaussConvertValue(int16(10)) != int64(10) {
+		t.Error("int16 应转为 int64")
+	}
+	if gaussConvertValue("str") != "str" {
+		t.Error("string 应保持不变")
+	}
+}
+
+// ─── gaussNormalizeScore 默认度量测试 ───
+
+func TestGaussNormalizeScore_默认(t *testing.T) {
+	// 未知度量应 fallback 为 COSINE
+	score := gaussNormalizeScore(0, "UNKNOWN")
+	if score != 1.0 {
+		t.Errorf("gaussNormalizeScore(0, UNKNOWN) = %v, want 1.0 (fallback COSINE)", score)
+	}
+}
+
+// ─── GetCollectionMetadata 回查测试 ───
+
+func TestGaussVectorStore_GetCollectionMetadata_数据库回查(t *testing.T) {
+	s := newTestGaussStore()
+	fake := s.pool.(*fakeDBClient)
+	fake.queryRowFn = func(ctx context.Context, sql string, args ...any) pgx.Row {
+		return &fakeRow{vals: []any{"embedding", "floatvector"}, err: nil}
+	}
+	ctx := context.Background()
+
+	meta, err := s.GetCollectionMetadata(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("GetCollectionMetadata() error = %v", err)
+	}
+	if meta["vector_field"] != "embedding" {
+		t.Errorf("vector_field = %v, want embedding", meta["vector_field"])
+	}
+}
+
+// ─── getClient 创建失败测试 ───
+
+func TestGaussVectorStore_getClient_创建失败(t *testing.T) {
+	s := NewGaussVectorStore("invalid-conn-string")
+	s.createPool = func(ctx context.Context, connString string) (dbClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+	ctx := context.Background()
+
+	_, err := s.getClient(ctx)
+	if err == nil {
+		t.Error("连接失败时应返回错误")
+	}
+}
+
+// ─── AddDocs 分批测试 ───
+
+func TestGaussVectorStore_AddDocs_分批(t *testing.T) {
+	s := newTestGaussStore()
+	ctx := context.Background()
+
+	// 3 个文档，batch_size=2，应分 2 批
+	docs := []map[string]any{
+		{"id": "doc1", "text": "a", "embedding": []float64{0.1}},
+		{"id": "doc2", "text": "b", "embedding": []float64{0.2}},
+		{"id": "doc3", "text": "c", "embedding": []float64{0.3}},
+	}
+
+	err := s.AddDocs(ctx, "test_coll", docs, WithBatchSize(2))
+	if err != nil {
+		t.Fatalf("AddDocs() error = %v", err)
+	}
+}
+
+// ─── DeleteDocsByIDs 错误路径测试 ───
+
+func TestGaussVectorStore_DeleteDocsByIDs_执行失败(t *testing.T) {
+	s := newTestGaussStore()
+	fake := s.pool.(*fakeDBClient)
+	fake.execFn = func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+		return pgconn.NewCommandTag(""), fmt.Errorf("执行失败")
+	}
+	ctx := context.Background()
+
+	err := s.DeleteDocsByIDs(ctx, "test_coll", []string{"id1"})
+	if err == nil {
+		t.Error("执行失败时应返回错误")
+	}
+}
+
+// ─── DeleteDocsByFilters 错误路径测试 ───
+
+func TestGaussVectorStore_DeleteDocsByFilters_执行失败(t *testing.T) {
+	s := newTestGaussStore()
+	fake := s.pool.(*fakeDBClient)
+	fake.execFn = func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+		return pgconn.NewCommandTag(""), fmt.Errorf("执行失败")
+	}
+	ctx := context.Background()
+
+	err := s.DeleteDocsByFilters(ctx, "test_coll", map[string]any{"status": "active"})
+	if err == nil {
+		t.Error("执行失败时应返回错误")
 	}
 }
