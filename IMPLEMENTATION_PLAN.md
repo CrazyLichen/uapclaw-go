@@ -304,7 +304,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.6 | ✅ | BaseVectorStore 接口 | `CreateCollection/AddDocs/Search/DeleteDocs` | `openjiuwen/core/foundation/store/base_vector_store.py` |
 | 4.7 | ✅ | CollectionSchema / FieldSchema / VectorField 基类 | 向量集合 Schema 定义 + 索引配置基类与 vf 标签反射机制 | `openjiuwen/core/foundation/store/vector_fields/` |
 | 4.8 | ✅ | MilvusVectorStore | Milvus 实现（含 Milvus 索引子类型、距离转换；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/core/foundation/store/vector/milvus_vector_store.py` |
-| 4.9 | ☐ | ChromaVectorStore | ChromaDB 实现 | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
+| 4.9 | ✅ | ChromaVectorStore | ChromaDB 实现（含 PersistentClient、fieldMapping、距离转换；UpdateSchema 待 7.22/7.23 回填） | `openjiuwen/core/foundation/store/vector/chroma_vector_store.py` |
 | 4.10 | ☐ | GaussVectorStore | GaussDB 向量实现 | `openjiuwen/extensions/store/gauss_vector_store.py` |
 | 4.11 | ☐ | ESVectorStore | Elasticsearch 向量实现 | `openjiuwen/extensions/store/es_vector_store.py` |
 | 4.12 | ☐ | BaseDbStore 接口 | SQL 数据库抽象 | `openjiuwen/core/foundation/store/base_db_store.py` |
