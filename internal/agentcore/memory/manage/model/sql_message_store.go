@@ -15,13 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// DefaultTableName 默认消息表名
-	DefaultTableName = "user_message"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SqlMessageStore BaseMessageStore 的 SQL 实现。
@@ -39,6 +32,13 @@ type SqlMessageStore struct {
 	// metaMgr schema 版本管理器
 	metaMgr *migrator.MemoryMetaManager
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// DefaultTableName 默认消息表名
+	DefaultTableName = "user_message"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

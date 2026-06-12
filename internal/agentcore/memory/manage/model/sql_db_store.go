@@ -13,13 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件
-	logComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SqlDbStore 基于 BaseDbStore 的通用 SQL CRUD 封装。
@@ -37,6 +30,13 @@ type SqlDbStore struct {
 	// tableCache 表列名缓存（表名 → 列名列表）
 	tableCache sync.Map
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

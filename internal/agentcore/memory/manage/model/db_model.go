@@ -24,9 +24,6 @@ type UserMessage struct {
 	Timestamp string `gorm:"size:32"`
 }
 
-// TableName 指定表名。
-func (UserMessage) TableName() string { return "user_message" }
-
 // ScopeUserMapping 作用域用户映射表模型。
 //
 // 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (ScopeUserMapping)
@@ -36,9 +33,6 @@ type ScopeUserMapping struct {
 	// ScopeID 作用域 ID
 	ScopeID string `gorm:"primaryKey;size:64;not null"`
 }
-
-// TableName 指定表名。
-func (ScopeUserMapping) TableName() string { return "scope_user_mapping" }
 
 // MemoryMeta 记忆元数据表模型，用于 schema 版本管理。
 //
@@ -50,11 +44,17 @@ type MemoryMeta struct {
 	SchemaVersion string `gorm:"size:64;not null"`
 }
 
-// TableName 指定表名。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// TableName 指定 UserMessage 表名。
+func (UserMessage) TableName() string { return "user_message" }
+
+// TableName 指定 ScopeUserMapping 表名。
+func (ScopeUserMapping) TableName() string { return "scope_user_mapping" }
+
+// TableName 指定 MemoryMeta 表名。
 // 使用 memory_meta 作为表名，避免与字段 TblName 冲突。
 func (MemoryMeta) TableName() string { return "memory_meta" }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateTables 创建所有记忆表。
 // 使用 GORM AutoMigrate 自动建表，对齐 Python 的 create_tables()。

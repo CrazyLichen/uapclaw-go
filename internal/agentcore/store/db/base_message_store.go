@@ -9,67 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// MessageMetadata 消息元数据。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_message_store.py (MessageMetadata)
-type MessageMetadata struct {
-	// MessageID 消息唯一标识
-	MessageID string
-	// UserID 用户 ID
-	UserID string
-	// ScopeID 作用域 ID
-	ScopeID string
-	// SessionID 会话 ID
-	SessionID string
-	// Timestamp 时间戳（数据库存 string，Go 用 time.Time，读取时转换）
-	Timestamp time.Time
-	// MessageType 消息类型
-	MessageType string
-}
-
-// MessageAdd 添加消息的入参。
-//
-// 对应 Python: message_add 字典
-type MessageAdd struct {
-	// Message 消息对象
-	Message *schema.BaseMessage
-	// UserID 用户 ID
-	UserID string
-	// ScopeID 作用域 ID
-	ScopeID string
-	// SessionID 会话 ID
-	SessionID string
-	// Timestamp 时间戳（零值时自动生成当前时间）
-	Timestamp time.Time
-}
-
-// MessageFilter 消息查询过滤条件。
-//
-// 对应 Python: message_filter 字典
-// 修正：实现 StartTime/EndTime 过滤，跳过 MessageType（数据库表无对应列）
-type MessageFilter struct {
-	// UserID 用户 ID
-	UserID string
-	// ScopeID 作用域 ID
-	ScopeID string
-	// SessionID 会话 ID
-	SessionID string
-	// StartTime 起始时间（nil 表示不限制）
-	StartTime *time.Time
-	// EndTime 结束时间（nil 表示不限制）
-	EndTime *time.Time
-}
-
-// MessageAndMeta 消息+元数据组合（用于 GetMessages 返回）。
-type MessageAndMeta struct {
-	// Message 消息对象
-	Message *schema.BaseMessage
-	// Metadata 消息元数据
-	Metadata *MessageMetadata
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // BaseMessageStore 消息持久化接口。
 //
 // 所有消息存储后端必须实现此接口。
@@ -127,4 +66,63 @@ type BaseMessageStore interface {
 	//
 	// 对应 Python: BaseMessageStore.set_schema_version(version)
 	SetSchemaVersion(ctx context.Context, version int32) error
+}
+
+// MessageMetadata 消息元数据。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_message_store.py (MessageMetadata)
+type MessageMetadata struct {
+	// MessageID 消息唯一标识
+	MessageID string
+	// UserID 用户 ID
+	UserID string
+	// ScopeID 作用域 ID
+	ScopeID string
+	// SessionID 会话 ID
+	SessionID string
+	// Timestamp 时间戳（数据库存 string，Go 用 time.Time，读取时转换）
+	Timestamp time.Time
+	// MessageType 消息类型
+	MessageType string
+}
+
+// MessageAdd 添加消息的入参。
+//
+// 对应 Python: message_add 字典
+type MessageAdd struct {
+	// Message 消息对象
+	Message *schema.BaseMessage
+	// UserID 用户 ID
+	UserID string
+	// ScopeID 作用域 ID
+	ScopeID string
+	// SessionID 会话 ID
+	SessionID string
+	// Timestamp 时间戳（零值时自动生成当前时间）
+	Timestamp time.Time
+}
+
+// MessageFilter 消息查询过滤条件。
+//
+// 对应 Python: message_filter 字典
+// 修正：实现 StartTime/EndTime 过滤，跳过 MessageType（数据库表无对应列）
+type MessageFilter struct {
+	// UserID 用户 ID
+	UserID string
+	// ScopeID 作用域 ID
+	ScopeID string
+	// SessionID 会话 ID
+	SessionID string
+	// StartTime 起始时间（nil 表示不限制）
+	StartTime *time.Time
+	// EndTime 结束时间（nil 表示不限制）
+	EndTime *time.Time
+}
+
+// MessageAndMeta 消息+元数据组合（用于 GetMessages 返回）。
+type MessageAndMeta struct {
+	// Message 消息对象
+	Message *schema.BaseMessage
+	// Metadata 消息元数据
+	Metadata *MessageMetadata
 }

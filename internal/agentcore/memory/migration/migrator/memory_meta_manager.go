@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // SqlDbQuerier SqlDbStore 的最小接口，用于解耦 migrator 和 model 包。
 // model.SqlDbStore 隐式实现此接口。
@@ -18,8 +18,6 @@ type SqlDbQuerier interface {
 	// Delete 条件删除
 	Delete(ctx context.Context, table string, conditions map[string]any) error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // MemoryMetaManager 内存元数据管理器，基于 SqlDbQuerier 操作 memory_meta 表。
 //
