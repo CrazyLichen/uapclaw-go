@@ -205,10 +205,10 @@ func (s *ChromaVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	metadataMap := map[string]interface{}{
-		chromaMetadataKeySchema:        string(schemaJSON),
-		chromaMetadataKeyFieldMapping:  string(fmJSON),
+		chromaMetadataKeySchema:         string(schemaJSON),
+		chromaMetadataKeyFieldMapping:   string(fmJSON),
 		chromaMetadataKeyDistanceMetric: distanceMetric,
-		chromaMetadataKeyVectorField:   vectorField.Name,
+		chromaMetadataKeyVectorField:    vectorField.Name,
 	}
 	collectionMetadata := chromav2.NewMetadataFromMap(metadataMap)
 

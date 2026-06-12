@@ -27,21 +27,21 @@ func newFakeChromaCollection(name string, meta chromav2.CollectionMetadata) *fak
 	}
 }
 
-func (f *fakeChromaCollection) Name() string                                       { return f.name }
-func (f *fakeChromaCollection) ID() string                                         { return f.name }
-func (f *fakeChromaCollection) Tenant() chromav2.Tenant                            { return chromav2.NewDefaultTenant() }
-func (f *fakeChromaCollection) Database() chromav2.Database                        { return chromav2.NewDefaultDatabase() }
-func (f *fakeChromaCollection) Metadata() chromav2.CollectionMetadata              { return f.metadata }
-func (f *fakeChromaCollection) Dimension() int                                     { return 128 }
-func (f *fakeChromaCollection) Configuration() chromav2.CollectionConfiguration    { return nil }
-func (f *fakeChromaCollection) Schema() *chromav2.Schema                           { return nil }
-func (f *fakeChromaCollection) Count(ctx context.Context) (int, error)             { return len(f.docs), nil }
+func (f *fakeChromaCollection) Name() string                                         { return f.name }
+func (f *fakeChromaCollection) ID() string                                           { return f.name }
+func (f *fakeChromaCollection) Tenant() chromav2.Tenant                              { return chromav2.NewDefaultTenant() }
+func (f *fakeChromaCollection) Database() chromav2.Database                          { return chromav2.NewDefaultDatabase() }
+func (f *fakeChromaCollection) Metadata() chromav2.CollectionMetadata                { return f.metadata }
+func (f *fakeChromaCollection) Dimension() int                                       { return 128 }
+func (f *fakeChromaCollection) Configuration() chromav2.CollectionConfiguration      { return nil }
+func (f *fakeChromaCollection) Schema() *chromav2.Schema                             { return nil }
+func (f *fakeChromaCollection) Count(ctx context.Context) (int, error)               { return len(f.docs), nil }
 func (f *fakeChromaCollection) ModifyName(ctx context.Context, newName string) error { return nil }
-func (f *fakeChromaCollection) Close() error                                       { return nil }
+func (f *fakeChromaCollection) Close() error                                         { return nil }
 func (f *fakeChromaCollection) Fork(ctx context.Context, newName string) (chromav2.Collection, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (f *fakeChromaCollection) ForkCount(ctx context.Context) (int, error)   { return 0, nil }
+func (f *fakeChromaCollection) ForkCount(ctx context.Context) (int, error) { return 0, nil }
 func (f *fakeChromaCollection) IndexingStatus(ctx context.Context) (*chromav2.IndexingStatus, error) {
 	return nil, nil
 }
@@ -170,9 +170,9 @@ func newFakeChromaClient() *fakeChromaClient {
 	}
 }
 
-func (f *fakeChromaClient) PreFlight(ctx context.Context) error                     { return nil }
-func (f *fakeChromaClient) Heartbeat(ctx context.Context) error                     { return nil }
-func (f *fakeChromaClient) GetVersion(ctx context.Context) (string, error)          { return "0.4.0", nil }
+func (f *fakeChromaClient) PreFlight(ctx context.Context) error            { return nil }
+func (f *fakeChromaClient) Heartbeat(ctx context.Context) error            { return nil }
+func (f *fakeChromaClient) GetVersion(ctx context.Context) (string, error) { return "0.4.0", nil }
 func (f *fakeChromaClient) GetIdentity(ctx context.Context) (chromav2.Identity, error) {
 	return chromav2.Identity{}, nil
 }
@@ -193,10 +193,12 @@ func (f *fakeChromaClient) GetDatabase(ctx context.Context, db chromav2.Database
 func (f *fakeChromaClient) CreateDatabase(ctx context.Context, db chromav2.Database) (chromav2.Database, error) {
 	return chromav2.NewDefaultDatabase(), nil
 }
-func (f *fakeChromaClient) DeleteDatabase(ctx context.Context, db chromav2.Database) error { return nil }
-func (f *fakeChromaClient) CurrentTenant() chromav2.Tenant                             { return chromav2.NewDefaultTenant() }
-func (f *fakeChromaClient) CurrentDatabase() chromav2.Database                         { return chromav2.NewDefaultDatabase() }
-func (f *fakeChromaClient) Reset(ctx context.Context) error                            { return nil }
+func (f *fakeChromaClient) DeleteDatabase(ctx context.Context, db chromav2.Database) error {
+	return nil
+}
+func (f *fakeChromaClient) CurrentTenant() chromav2.Tenant     { return chromav2.NewDefaultTenant() }
+func (f *fakeChromaClient) CurrentDatabase() chromav2.Database { return chromav2.NewDefaultDatabase() }
+func (f *fakeChromaClient) Reset(ctx context.Context) error    { return nil }
 
 func (f *fakeChromaClient) CreateCollection(ctx context.Context, name string, options ...chromav2.CreateCollectionOption) (chromav2.Collection, error) {
 	op, err := chromav2.NewCreateCollectionOp(name, options...)

@@ -1060,12 +1060,12 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 			return entity.NewIndexHNSW(metricType, vf.M, vf.EfConstruction)
 		case *vector_fields.MilvusIVF:
 			return entity.NewIndexIvfFlat(metricType, vf.Nlist)
-	case *vector_fields.MilvusSCANN:
-		idx, err := entity.NewIndexSCANN(metricType, vf.Nlist, vf.WithRawData)
-		if err != nil {
-			return nil, fmt.Errorf("创建 SCANN 索引失败: %w", err)
-		}
-		return idx, nil
+		case *vector_fields.MilvusSCANN:
+			idx, err := entity.NewIndexSCANN(metricType, vf.Nlist, vf.WithRawData)
+			if err != nil {
+				return nil, fmt.Errorf("创建 SCANN 索引失败: %w", err)
+			}
+			return idx, nil
 		}
 	}
 
@@ -1096,15 +1096,15 @@ func (s *MilvusVectorStore) buildSearchParams(o Options, topK int) (entity.Searc
 		case *vector_fields.MilvusIVF:
 			return entity.NewIndexIvfSQ8SearchParam(vf.Nprobe)
 		case *vector_fields.MilvusSCANN:
-		reorderK := vf.ReorderK
-		if reorderK <= 0 {
-			reorderK = 1
-		}
-		sp, err := entity.NewIndexSCANNSearchParam(vf.Nprobe, reorderK)
-		if err != nil {
-			return nil, fmt.Errorf("创建 SCANN 搜索参数失败: %w", err)
-		}
-		return sp, nil
+			reorderK := vf.ReorderK
+			if reorderK <= 0 {
+				reorderK = 1
+			}
+			sp, err := entity.NewIndexSCANNSearchParam(vf.Nprobe, reorderK)
+			if err != nil {
+				return nil, fmt.Errorf("创建 SCANN 搜索参数失败: %w", err)
+			}
+			return sp, nil
 		}
 	}
 	// 默认搜索参数

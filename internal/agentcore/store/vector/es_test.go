@@ -1773,9 +1773,9 @@ func TestEsBuildMappings_带ESVectorField配置(t *testing.T) {
 	vf.NumCandidates = 200
 	vf.ExtraConstruct = map[string]any{"m": 16, "ef_construction": 200}
 	config := map[string]any{
-		"field_name":     "embedding",
-		"num_candidates": 200,
-		"m":              16,
+		"field_name":      "embedding",
+		"num_candidates":  200,
+		"m":               16,
 		"ef_construction": 200,
 	}
 	mapping := esBuildMappings(schema, "COSINE", config)

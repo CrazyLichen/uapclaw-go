@@ -17,9 +17,9 @@ import (
 
 // fakeDBClient 用于测试的数据库客户端模拟
 type fakeDBClient struct {
-	execFn     func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	queryFn    func(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	queryRowFn func(ctx context.Context, sql string, args ...any) pgx.Row
+	execFn      func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	queryFn     func(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	queryRowFn  func(ctx context.Context, sql string, args ...any) pgx.Row
 	closeCalled atomic.Bool
 }
 
@@ -70,9 +70,9 @@ func (f *fakeDBClient) Close() {
 
 // fakeRows 实现 pgx.Rows 接口
 
-func (r *fakeRows) Close()                        { r.closed = true }
-func (r *fakeRows) Err() error                    { return nil }
-func (r *fakeRows) CommandTag() pgconn.CommandTag { return pgconn.NewCommandTag("") }
+func (r *fakeRows) Close()                                       { r.closed = true }
+func (r *fakeRows) Err() error                                   { return nil }
+func (r *fakeRows) CommandTag() pgconn.CommandTag                { return pgconn.NewCommandTag("") }
 func (r *fakeRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
 func (r *fakeRows) Next() bool {
 	if r.idx < len(r.rows) {
@@ -122,8 +122,8 @@ func (r *fakeRows) Scan(dest ...any) error {
 	return nil
 }
 func (r *fakeRows) Values() ([]any, error) { return nil, nil }
-func (r *fakeRows) RawValues() [][]byte     { return nil }
-func (r *fakeRows) Conn() *pgx.Conn { return nil }
+func (r *fakeRows) RawValues() [][]byte    { return nil }
+func (r *fakeRows) Conn() *pgx.Conn        { return nil }
 
 // fakeRow 实现 pgx.Row 接口
 

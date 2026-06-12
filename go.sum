@@ -27,7 +27,7 @@ github.com/alicebob/miniredis/v2 v2.38.0 h1:nZAzCR+Lj+Vxk4ZXzm2NuKq2O33RXj1XxJ2e
 github.com/alicebob/miniredis/v2 v2.38.0/go.mod h1:TcL7YfarKPGDAthEtl5NBeHZfeUQj6OXMm/+iu5cLMM=
 github.com/amikos-tech/chroma-go v0.4.1 h1:WIcFTSjRgnVTYKWhgZYKaEUOjK6+BpGfVQRqdMIAfrw=
 github.com/amikos-tech/chroma-go v0.4.1/go.mod h1:q2kwMTUpWUP7ME3d7RjmVQlmBcJx9BKrrH7UhT91DRY=
-github.com/amikos-tech/chroma-go-local v0.3.4 h1:NUCaw0R+nNWd9h004MYCGY1LZGO7JjUWzXeYRbw1xSg=
+github.com/amikos-tech/chroma-go-local v0.3.4 h1:7yFDZuu9qRtRd/w6sZZqWwk/j1dcw3+Ly8MBuf3H+KI=
 github.com/amikos-tech/chroma-go-local v0.3.4/go.mod h1:U37BtxfJldfcpiya6nelgy+SdMesYOVub9kcnRknTrk=
 github.com/amikos-tech/pure-onnx v0.0.1 h1:FGMe+NyPOAlaMce+QFn2o+PkREXtHztAHgU1BOIqwz4=
 github.com/amikos-tech/pure-onnx v0.0.1/go.mod h1:pTYlj5NC8Q5vyhB0tYWliJOCPUuoIWm/8qsyit/84Y4=

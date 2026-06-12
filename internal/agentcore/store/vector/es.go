@@ -91,11 +91,11 @@ func WithESIndexPrefix(prefix string) ESOption {
 // 客户端惰性创建，初始化时不需要 ES 可用。
 func NewESVectorStore(addresses []string, username, password string, opts ...ESOption) *ESVectorStore {
 	s := &ESVectorStore{
-		addresses:      addresses,
-		username:       username,
-		password:       password,
-		indexPrefix:    esDefaultIndexPrefix,
-		metadataCache:  make(map[string]map[string]any),
+		addresses:     addresses,
+		username:      username,
+		password:      password,
+		indexPrefix:   esDefaultIndexPrefix,
+		metadataCache: make(map[string]map[string]any),
 		createClient: func(addrs []string, user, pass string) (esClient, error) {
 			cfg := elasticsearch8.Config{
 				Addresses: addrs,

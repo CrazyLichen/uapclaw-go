@@ -301,7 +301,7 @@ func (s *RedisStore) BatchDelete(ctx context.Context, keys []string, batchSize i
 			Int("batch_size", end-i).
 			Int64("deleted_in_batch", n).
 			Msg("分批删除进度")
-		}
+	}
 	logger.Debug(logComponent).
 		Int("key_count", len(keys)).
 		Int("deleted", totalDeleted).
