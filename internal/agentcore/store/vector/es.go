@@ -22,7 +22,7 @@ import (
 
 // esClient ES 客户端抽象接口，用于解耦和测试 mock。
 type esClient interface {
-	Do(req esapi.Request) (*esapi.Response, error)
+	Do(ctx context.Context, req esapi.Request) (*esapi.Response, error)
 	Close()
 }
 
@@ -185,7 +185,7 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 		Index: indexName,
 		Body:  bytes.NewReader(mappingBytes),
 	}
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
@@ -197,6 +197,14 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
+		// 并发创建时可能因索引已存在返回 resource_already_exists_exception，静默返回（对齐 Python 实现）
+		if strings.Contains(string(body), "resource_already_exists_exception") {
+			logger.Warn(esLogComponent).
+				Str("collection_name", collectionName).
+				Str("status", resp.Status()).
+				Msg("集合已存在（并发创建），跳过")
+			return nil
+		}
 		logger.Error(esLogComponent).
 			Str("collection_name", collectionName).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -269,7 +277,7 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 	}
 
 	req := esapi.IndicesDeleteRequest{Index: []string{indexName}}
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
@@ -532,8 +540,12 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 		}
 
 		// 提取分数
-		rawScore, _ := hit["_score"].(float64)
-		score := esNormalizeScore(rawScore, distanceMetric)
+		// ES k-NN 的 _score 已经是 [0,1] 归一化的相似度分数，直接使用原始值。
+		// COSINE: _score = (1 + cosine) / 2 ∈ (0,1]
+		// L2: _score = 1 / (1 + dist²) ∈ (0,1]
+		// DOT_PRODUCT: _score = (1 + dp) / 2 ∈ [0,1]
+		// 注意：不可再做 esNormalizeScore 转换，否则双重归一化且公式不匹配。
+		score, _ := hit["_score"].(float64)
 
 		// 提取字段
 		fields := make(map[string]any)
@@ -789,8 +801,9 @@ func (s *ESVectorStore) GetCollectionMetadata(ctx context.Context, collectionNam
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Do 实现 esClient 接口，将请求转发到内部客户端。
-func (w *esClientWrapper) Do(req esapi.Request) (*esapi.Response, error) {
-	return req.Do(context.Background(), w.inner)
+// 使用传入的 ctx 而非 context.Background()，确保请求级超时和取消信号生效。
+func (w *esClientWrapper) Do(ctx context.Context, req esapi.Request) (*esapi.Response, error) {
+	return req.Do(ctx, w.inner)
 }
 
 // Close 实现 esClient 接口，关闭内部客户端。
@@ -1132,7 +1145,7 @@ func esStoreMetadata(ctx context.Context, c esClient, indexName string, metadata
 		Refresh:    "true",
 	}
 
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		return fmt.Errorf("存储元数据失败: %w", err)
 	}
@@ -1189,7 +1202,7 @@ func (s *ESVectorStore) esLoadMetadata(ctx context.Context, c esClient, indexNam
 
 // esDoRequest 执行 ES 请求并解析响应体。
 func esDoRequest(ctx context.Context, c esClient, req esapi.Request) (map[string]any, error) {
-	resp, err := c.Do(req)
+	resp, err := c.Do(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("ES 请求失败: %w", err)
 	}
@@ -1215,7 +1228,7 @@ func esDoRequest(ctx context.Context, c esClient, req esapi.Request) (map[string
 // esIndicesExists 检查 ES 索引是否存在。
 func (s *ESVectorStore) esIndicesExists(ctx context.Context, c esClient, indexName string) (bool, error) {
 	req := esapi.IndicesExistsRequest{Index: []string{indexName}}
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		return false, fmt.Errorf("检查索引是否存在失败: %w", err)
 	}
@@ -1234,7 +1247,7 @@ func (s *ESVectorStore) esIndicesExists(ctx context.Context, c esClient, indexNa
 // esIndicesRefresh 刷新 ES 索引。
 func (s *ESVectorStore) esIndicesRefresh(ctx context.Context, c esClient, indexName string) error {
 	req := esapi.IndicesRefreshRequest{Index: []string{indexName}}
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		return fmt.Errorf("刷新索引失败: %w", err)
 	}
@@ -1333,7 +1346,7 @@ func esListIndices(ctx context.Context, c esClient, indexPrefix string) ([]strin
 		Index: []string{indexPrefix + "__*"},
 	}
 
-	resp, err := c.Do(&req)
+	resp, err := c.Do(ctx, &req)
 	if err != nil {
 		return nil, fmt.Errorf("列出索引失败: %w", err)
 	}

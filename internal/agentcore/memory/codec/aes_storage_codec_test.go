@@ -116,7 +116,7 @@ func TestAesStorageCodec_Decode_空key_passthrough(t *testing.T) {
 	}
 }
 
-// TestAesStorageCodec_Decode_解密失败 验证篡改密文时返回 error（严格模式）
+// TestAesStorageCodec_Decode_解密失败 验证篡改密文时返回原文（容错模式，对齐 Python 行为）
 func TestAesStorageCodec_Decode_解密失败(t *testing.T) {
 	key := make([]byte, 32)
 	for i := range key {
@@ -124,9 +124,12 @@ func TestAesStorageCodec_Decode_解密失败(t *testing.T) {
 	}
 	c, _ := NewAesStorageCodec(key)
 
-	_, err := c.Decode("invalid_ciphertext_data")
-	if err == nil {
-		t.Error("篡改密文时应返回 error（严格模式）")
+	result, err := c.Decode("invalid_ciphertext_data")
+	if err != nil {
+		t.Errorf("容错模式下解密失败不应返回 error: %v", err)
+	}
+	if result != "invalid_ciphertext_data" {
+		t.Errorf("容错模式下解密失败应返回原文, got %q", result)
 	}
 }
 

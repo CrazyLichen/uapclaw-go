@@ -20,7 +20,7 @@ import (
 // SqlMessageStore BaseMessageStore 的 SQL 实现。
 //
 // 基于 SqlDbStore 执行数据库操作，使用 AesStorageCodec 加密消息内容。
-// 严格模式：key 为空时 passthrough 不加密，key 非空时加解密失败返回 error。
+// 容错模式：key 为空时 passthrough 不加密，key 非空时加解密失败返回原文（对齐 Python 行为）。
 // 对应 Python: openjiuwen/core/memory/manage/mem_model/sql_message_store.py (SqlMessageStore)
 type SqlMessageStore struct {
 	// codec AES 存储编解码器
@@ -83,18 +83,8 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 	}
 	messageID := generateMessageID(contentStr, timestamp)
 
-	// 加密内容
-	encrypted, err := s.codec.Encode(contentStr)
-	if err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "STORE_MESSAGE_ERROR").
-			Str("method", "AddMessage").
-			Err(err).
-			Msg("加密消息内容失败")
-		return "", exception.BuildError(exception.StatusStoreMessageAddExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("encode content failed: %s", err.Error())),
-		)
-	}
+	// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
+	encrypted, _ := s.codec.Encode(contentStr)
 
 	// 组装数据行
 	data := map[string]any{
@@ -136,19 +126,8 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 		}
 		messageID := generateMessageID(contentStr, timestamp)
 
-		// 加密内容
-		encrypted, err := s.codec.Encode(contentStr)
-		if err != nil {
-			logger.Error(logComponent).
-				Str("event_type", "STORE_MESSAGE_ERROR").
-				Str("method", "AddMessages").
-				Str("message_id", messageID).
-				Err(err).
-				Msg("加密消息内容失败")
-			return nil, exception.BuildError(exception.StatusStoreMessageAddExecutionError,
-				exception.WithParam("error_msg", fmt.Sprintf("encode content failed: %s", err.Error())),
-			)
-		}
+		// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
+		encrypted, _ := s.codec.Encode(contentStr)
 
 		data := map[string]any{
 			"message_id": messageID,
@@ -251,18 +230,8 @@ func (s *SqlMessageStore) UpdateMessage(ctx context.Context, messageID string, c
 		return err
 	}
 
-	encrypted, err := s.codec.Encode(contentStr)
-	if err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "STORE_MESSAGE_ERROR").
-			Str("method", "UpdateMessage").
-			Str("message_id", messageID).
-			Err(err).
-			Msg("加密消息内容失败")
-		return exception.BuildError(exception.StatusStoreMessageUpdateExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("encode content failed: %s", err.Error())),
-		)
-	}
+	// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
+	encrypted, _ := s.codec.Encode(contentStr)
 
 	return s.sqlDbStore.Update(ctx, s.tableName,
 		map[string]any{"message_id": messageID},
@@ -307,7 +276,7 @@ func (s *SqlMessageStore) DeleteMessages(ctx context.Context, filter *storedb.Me
 }
 
 // CountMessages 统计匹配消息数量。
-// 使用 SQL COUNT，而非取回全部数据后 len()。
+// 修正 Python 缺陷：支持 StartTime/EndTime 时间范围过滤（Python 定义了但未实现）。
 //
 // 对应 Python: SqlMessageStore.count_messages(message_filter)
 func (s *SqlMessageStore) CountMessages(ctx context.Context, filter *storedb.MessageFilter) (int64, error) {
@@ -322,16 +291,22 @@ func (s *SqlMessageStore) CountMessages(ctx context.Context, filter *storedb.Mes
 		conditions["session_id"] = filter.SessionID
 	}
 
+	// 有时间范围条件时走 CountWithTimeRange，否则走普通 Count
+	if filter.StartTime != nil || filter.EndTime != nil {
+		return s.sqlDbStore.CountWithTimeRange(ctx, s.tableName, conditions, filter.StartTime, filter.EndTime)
+	}
 	return s.sqlDbStore.Count(ctx, s.tableName, conditions)
 }
 
 // GetSchemaVersion 获取当前 schema 版本号。
+// 返回 -1 表示版本未设置（对齐 Python 返回 None 的语义），
+// 0 表示无迁移操作，1+ 表示实际版本号。
 //
-// 对应 Python: SqlMessageStore.get_schema_version()
+// 对应 Python: SqlMessageStore.get_schema_version() -> int | None
 func (s *SqlMessageStore) GetSchemaVersion(ctx context.Context) (int32, error) {
 	results, err := s.metaMgr.GetByTableName(ctx, s.tableName)
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 	if len(results) > 0 {
 		versionStr, ok := results[0]["schema_version"]
@@ -342,7 +317,7 @@ func (s *SqlMessageStore) GetSchemaVersion(ctx context.Context) (int32, error) {
 			}
 		}
 	}
-	return 0, nil
+	return -1, nil
 }
 
 // SetSchemaVersion 设置 schema 版本号。
@@ -358,8 +333,10 @@ func (s *SqlMessageStore) SetSchemaVersion(ctx context.Context, version int32) e
 // 格式: msg_{sha256(content_json+timestamp)[:16]}_{timestamp_ms}
 //
 // 对应 Python: SqlMessageStore._generate_message_id(message, timestamp)
+// 时间格式使用 "2006-01-02 15:04:05-07:00" 与 Python 的 timestamp.__str__() 对齐，
+// 确保相同数据在 Go/Python 生成相同的 message_id。
 func generateMessageID(content string, timestamp time.Time) string {
-	messageHash := sha256.Sum256([]byte(fmt.Sprintf("%s%v", content, timestamp)))
+	messageHash := sha256.Sum256([]byte(fmt.Sprintf("%s%s", content, timestamp.Format("2006-01-02 15:04:05-07:00"))))
 	return fmt.Sprintf("msg_%x_%d", messageHash[:8], timestamp.UnixMilli())
 }
 
@@ -403,15 +380,12 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (*schema.BaseM
 		return s, nil
 	}
 
-	// 解密 content
+	// 解密 content（容错模式：解密失败时返回原文，与 Python 对齐）
 	contentStr, err := getStr("content")
 	if err != nil {
 		return nil, nil, err
 	}
-	decrypted, err := s.codec.Decode(contentStr)
-	if err != nil {
-		return nil, nil, err
-	}
+	decrypted, _ := s.codec.Decode(contentStr)
 
 	// 反序列化 content
 	content, err := unmarshalContent(decrypted)
@@ -437,7 +411,12 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (*schema.BaseM
 	if err != nil {
 		return nil, nil, err
 	}
-	timestamp, _ := time.Parse(time.RFC3339, timestampStr)
+	timestamp, parseErr := time.Parse(time.RFC3339, timestampStr)
+	if parseErr != nil {
+		logger.Warn(logComponent).Err(parseErr).
+			Str("timestamp_str", timestampStr).
+			Msg("解析 timestamp 失败，使用零值")
+	}
 
 	// 解析其他字段
 	messageID, err := getStr("message_id")

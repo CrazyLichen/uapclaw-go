@@ -262,6 +262,39 @@ func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[str
 	return count, nil
 }
 
+// CountWithTimeRange 统计满足条件且在时间范围内的记录数。
+// 在 Count 基础上增加 StartTime/EndTime 范围过滤。
+// 修正 Python 缺陷：Python 的 count_messages 不支持时间范围过滤。
+//
+// 对应 Python: Python 中无此方法（Go 新增）
+func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, conditions map[string]any, startTime *time.Time, endTime *time.Time) (int64, error) {
+	query := s.db.Table(table)
+	// 等值过滤
+	for col, val := range conditions {
+		query = query.Where(fmt.Sprintf("%s = ?", col), val)
+	}
+	// 时间范围过滤
+	if startTime != nil {
+		query = query.Where("timestamp >= ?", startTime.Format(time.RFC3339))
+	}
+	if endTime != nil {
+		query = query.Where("timestamp <= ?", endTime.Format(time.RFC3339))
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "MEMORY_RETRIEVE").
+			Str("table_name", table).
+			Err(err).
+			Msg("带时间范围的计数查询失败")
+		return 0, exception.BuildError(exception.StatusStoreMessageCountExecutionError,
+			exception.WithParam("error_msg", fmt.Sprintf("count_with_time_range failed for table %s: %s", table, err.Error())),
+		)
+	}
+	return count, nil
+}
+
 // GetWithSortAndTimeRange 过滤+排序+分页+时间范围查询。
 // 在 GetWithSort 基础上增加 StartTime/EndTime 范围过滤。
 // 修正 Python 缺陷：Python 定义了 start_time/end_time 但未实现。
@@ -442,10 +475,11 @@ func (s *SqlDbStore) Get(ctx context.Context, table string, conditions map[strin
 }
 
 // DeleteTable 删除整张表（DROP TABLE）。
+// 使用 GORM Migrator().DropTable() 替代字符串拼接，防止 SQL 注入。
 //
 // 对应 Python: SqlDbStore.delete_table(table_name)
 func (s *SqlDbStore) DeleteTable(ctx context.Context, tableName string) error {
-	if err := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)).Error; err != nil {
+	if err := s.db.Migrator().DropTable(tableName); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "MEMORY_DELETE").
 			Str("table_name", tableName).

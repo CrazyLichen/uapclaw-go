@@ -58,8 +58,10 @@ type BaseMessageStore interface {
 	CountMessages(ctx context.Context, filter *MessageFilter) (int64, error)
 
 	// GetSchemaVersion 获取当前 schema 版本号。
+	// 返回 -1 表示版本未设置（对齐 Python 返回 None 的语义），
+	// 0 表示无迁移操作，1+ 表示实际版本号。
 	//
-	// 对应 Python: BaseMessageStore.get_schema_version()
+	// 对应 Python: BaseMessageStore.get_schema_version() -> int | None
 	GetSchemaVersion(ctx context.Context) (int32, error)
 
 	// SetSchemaVersion 设置 schema 版本号。

@@ -1298,8 +1298,8 @@ func newFakeESClient(server *httptest.Server) *fakeESClient {
 }
 
 // Do 实现 esClient 接口，将 esapi.Request 通过 Transport 转发到 httptest 服务器
-func (c *fakeESClient) Do(req esapi.Request) (*esapi.Response, error) {
-	resp, err := req.Do(context.Background(), c)
+func (c *fakeESClient) Do(ctx context.Context, req esapi.Request) (*esapi.Response, error) {
+	resp, err := req.Do(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -1634,9 +1634,11 @@ func TestESVectorStore_Search_L2距离(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数 = %v, want 1", len(results))
 	}
-	// L2 距离 1.5 的归一化分数应 < 1.0
-	if results[0].Score >= 1.0 || results[0].Score < 0 {
-		t.Errorf("L2 归一化分数 = %v, 应在 [0, 1) 范围内", results[0].Score)
+	// ES k-NN 的 _score 已经是归一化的相似度分数，直接返回原始值
+	// _score = 1.5 不是 ES k-NN 的合法值（应为 (0,1]），
+	// 但此处验证 Go 不再做额外归一化，直接返回原始 _score
+	if results[0].Score != 1.5 {
+		t.Errorf("L2 分数 = %v, want 1.5（ES 原始 _score，不做归一化）", results[0].Score)
 	}
 }
 
