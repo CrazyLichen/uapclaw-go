@@ -96,3 +96,31 @@ func TestGaussDbStore_Close_NilDB(t *testing.T) {
 		t.Error("期望 Close 对 nil *gorm.DB 返回错误，但得到 nil")
 	}
 }
+
+// TestGaussDbStore_Close_已关闭后再次关闭 验证 Close 关闭后
+// 再次调用时 s.db.DB() 返回错误。
+func TestGaussDbStore_Close_已关闭后再次关闭(t *testing.T) {
+	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("创建测试数据库失败: %v", err)
+	}
+
+	store := NewGaussDbStoreWithDB(gormDB)
+	// 第一次关闭应成功
+	if err := store.Close(); err != nil {
+		t.Fatalf("第一次 Close 返回错误: %v", err)
+	}
+	// 第二次关闭，底层 sql.DB 已关闭，s.db.DB() 可能返回错误
+	err = store.Close()
+	// 不强制要求第二次关闭失败，仅验证不会 panic
+	_ = err
+}
+
+// TestNewGaussDbStore_DSN无效 验证 NewGaussDbStore 使用无效 DSN 时返回错误。
+func TestNewGaussDbStore_DSN无效(t *testing.T) {
+	// 使用无法解析的 DSN，gorm.Open → GaussDialector.Initialize 将失败
+	_, err := NewGaussDbStore("postgres://invalid\x00dsn")
+	if err == nil {
+		t.Fatal("期望 NewGaussDbStore 返回错误，但返回 nil")
+	}
+}

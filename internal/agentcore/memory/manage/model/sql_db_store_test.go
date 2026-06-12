@@ -397,11 +397,11 @@ func TestSqlDbStore_BatchGet(t *testing.T) {
 	}
 
 	// 写入两条不同用户的消息
-	store.Write(context.Background(), "user_message", map[string]any{
+	_ = store.Write(context.Background(), "user_message", map[string]any{
 		"message_id": "msg_bg_1", "user_id": "user1", "scope_id": "scope1",
 		"content": "hello1", "role": "user", "timestamp": "2024-01-01T00:00:00Z",
 	})
-	store.Write(context.Background(), "user_message", map[string]any{
+	_ = store.Write(context.Background(), "user_message", map[string]any{
 		"message_id": "msg_bg_2", "user_id": "user2", "scope_id": "scope1",
 		"content": "hello2", "role": "user", "timestamp": "2024-01-02T00:00:00Z",
 	})
@@ -425,7 +425,7 @@ func TestSqlDbStore_Get(t *testing.T) {
 		t.Fatalf("CreateTables 失败: %v", err)
 	}
 
-	store.Write(context.Background(), "user_message", map[string]any{
+	_ = store.Write(context.Background(), "user_message", map[string]any{
 		"message_id": "msg_get_1", "user_id": "user1", "scope_id": "scope1",
 		"content": "hello", "role": "user", "timestamp": "2024-01-01T00:00:00Z",
 	})

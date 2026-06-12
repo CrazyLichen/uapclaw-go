@@ -152,22 +152,22 @@ func (b *testBuilder) WriteString(s string) (int, error) {
 }
 
 func (b *testBuilder) WriteQuoted(field interface{}) {
-	b.writer.WriteString(`"`)
-	b.writer.WriteString(field.(string))
-	b.writer.WriteString(`"`)
+	_, _ = b.writer.WriteString(`"`)
+	_, _ = b.writer.WriteString(field.(string))
+	_, _ = b.writer.WriteString(`"`)
 }
 
 func (b *testBuilder) AddVar(writer clause.Writer, vars ...interface{}) {
 	for i, v := range vars {
 		if i > 0 {
-			writer.WriteByte(',')
+			_ = writer.WriteByte(',')
 		}
-		writer.WriteByte('$')
+		_ = writer.WriteByte('$')
 		switch val := v.(type) {
 		case int:
-			writer.WriteString(string(rune('0' + val)))
+			_, _ = writer.WriteString(string(rune('0' + val)))
 		case string:
-			writer.WriteString(val)
+			_, _ = writer.WriteString(val)
 		}
 	}
 }

@@ -17,8 +17,8 @@ func gaussLockingClauseBuilder(c clause.Clause, builder clause.Builder) {
 	if locking, ok := c.Expression.(clause.Locking); ok {
 		// 对标 Python: GaussCompiler.for_update_clause() 始终返回 " FOR UPDATE"
 		// 忽略 locking.Table 和 locking.Options
-		builder.WriteString("FOR ")
-		builder.WriteString(locking.Strength)
+	_, _ = builder.WriteString("FOR ")
+	_, _ = builder.WriteString(locking.Strength)
 		return
 	}
 	// 非 Locking 表达式，回退到默认构建

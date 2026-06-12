@@ -193,7 +193,7 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 			Msg("创建集合失败")
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
