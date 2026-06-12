@@ -151,6 +151,8 @@ type Options struct {
 	VectorField any
 	// ShardsNum 创建集合时的分片数，0 表示使用服务端默认值，对齐 Python: create_collection 的 shards_num
 	ShardsNum int32
+	// NumCandidates ES k-NN 搜索候选集大小，0 表示使用默认值 max(topK*10, 100)
+	NumCandidates int
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -300,6 +302,12 @@ func WithVectorField(vf any) Option {
 // 大数据量场景可增加分片数提升写入吞吐。
 func WithShardsNum(n int32) Option {
 	return func(o *Options) { o.ShardsNum = n }
+}
+
+// WithNumCandidates 设置 ES k-NN 搜索候选集大小。
+// 候选集越大搜索越精确但越慢，0 表示使用默认值 max(topK*10, 100)。
+func WithNumCandidates(n int) Option {
+	return func(o *Options) { o.NumCandidates = n }
 }
 
 // NewFieldSchema 创建并校验 FieldSchema。

@@ -43,6 +43,8 @@ const (
 	DatabaseTypePG
 	// DatabaseTypeGauss GaussDB 向量数据库
 	DatabaseTypeGauss
+	// DatabaseTypeES Elasticsearch 向量数据库
+	DatabaseTypeES
 )
 
 // IndexType 向量索引类型。
@@ -83,6 +85,7 @@ var (
 		"chroma",
 		"pg",
 		"gauss",
+		"es",
 	}
 	// indexTypeStrings IndexType 枚举值对应的字符串表示，与 Python 枚举值保持一致。
 	indexTypeStrings = [...]string{
