@@ -161,6 +161,37 @@ var (
 )
 
 // =============================================================================================================
+// 187. Foundation — Store Message 187000–187999
+// =============================================================================================================
+
+var (
+	// StatusStoreMessageGetExecutionError 消息获取执行错误
+	StatusStoreMessageGetExecutionError = NewStatusCode(
+		"STORE_MESSAGE_GET_EXECUTION_ERROR", 187000,
+		"store message get execution error, reason: {error_msg}")
+	// StatusStoreMessageAddExecutionError 消息添加执行错误
+	StatusStoreMessageAddExecutionError = NewStatusCode(
+		"STORE_MESSAGE_ADD_EXECUTION_ERROR", 187001,
+		"store message add execution error, reason: {error_msg}")
+	// StatusStoreMessageUpdateExecutionError 消息更新执行错误
+	StatusStoreMessageUpdateExecutionError = NewStatusCode(
+		"STORE_MESSAGE_UPDATE_EXECUTION_ERROR", 187002,
+		"store message update execution error, reason: {error_msg}")
+	// StatusStoreMessageDeleteExecutionError 消息删除执行错误
+	StatusStoreMessageDeleteExecutionError = NewStatusCode(
+		"STORE_MESSAGE_DELETE_EXECUTION_ERROR", 187003,
+		"store message delete execution error, reason: {error_msg}")
+	// StatusStoreMessageNotFound 消息不存在
+	StatusStoreMessageNotFound = NewStatusCode(
+		"STORE_MESSAGE_NOT_FOUND", 187004,
+		"store message not found, message_id={message_id}")
+	// StatusStoreMessageCountExecutionError 消息计数执行错误
+	StatusStoreMessageCountExecutionError = NewStatusCode(
+		"STORE_MESSAGE_COUNT_EXECUTION_ERROR", 187005,
+		"store message count execution error, reason: {error_msg}")
+)
+
+// =============================================================================================================
 // 188. Foundation — Common 188000–188999
 // =============================================================================================================
 

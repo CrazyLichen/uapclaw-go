@@ -8,9 +8,10 @@
 // 文件目录：
 //
 //	db/
-//	├── doc.go          # 包文档
-//	├── base.go         # BaseDbStore 接口定义
-//	├── default.go      # DefaultDbStore 默认实现
+//	├── doc.go                    # 包文档
+//	├── base.go                   # BaseDbStore 接口定义
+//	├── base_message_store.go     # BaseMessageStore 接口及辅助类型
+//	├── default.go                # DefaultDbStore 默认实现
 //	└── gaussdb/        # GaussDB 数据库扩展
 //	    ├── doc.go      # 包文档
 //	    ├── clause.go   # GaussDB LOCKING 子句构建器
@@ -25,7 +26,12 @@
 //
 // 核心类型/接口索引：
 //
-//	BaseDbStore    — SQL 数据库连接抽象接口，通过 GetDB 返回 *gorm.DB 实例
-//	DefaultDbStore — BaseDbStore 的默认实现，直接持有并返回 *gorm.DB
-//	GaussDbStore   — BaseDbStore 的 GaussDB 实现，提供 GaussDB 特有方言适配（在 gaussdb 子包中）
+//	BaseDbStore        — SQL 数据库连接抽象接口，通过 GetDB 返回 *gorm.DB 实例
+//	DefaultDbStore     — BaseDbStore 的默认实现，直接持有并返回 *gorm.DB
+//	GaussDbStore       — BaseDbStore 的 GaussDB 实现，提供 GaussDB 特有方言适配（在 gaussdb 子包中）
+//	BaseMessageStore   — 消息持久化接口，定义消息的 CRUD、计数和 schema 版本管理
+//	MessageMetadata    — 消息元数据（message_id, user_id, scope_id, session_id, timestamp, message_type）
+//	MessageAdd         — 添加消息的入参
+//	MessageFilter      — 消息查询过滤条件
+//	MessageAndMeta     — 消息+元数据组合
 package db

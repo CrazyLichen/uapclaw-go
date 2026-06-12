@@ -310,8 +310,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.12 | ✅ | BaseDbStore 接口 | SQL 数据库抽象 | `openjiuwen/core/foundation/store/base_db_store.py` |
 | 4.13 | ✅ | DefaultDbStore | 默认数据库实现 | `openjiuwen/core/foundation/store/db/default_db_store.py` |
 | 4.14 | ✅ | GaussDbStore | GaussDB 数据库实现 | `openjiuwen/extensions/store/gauss_db_store.py` |
-| 4.15 | ☐ | BaseMessageStore 接口 | 消息持久化 | `openjiuwen/core/foundation/store/base_message_store.py` |
-| 4.16 | ☐ | SqlMessageStore | SQL 消息存储 | `openjiuwen/core/memory/manage/` (SqlMessageStore) |
+| 4.15 | ✅ | BaseMessageStore 接口 | 消息持久化 | `openjiuwen/core/foundation/store/base_message_store.py` |
+| 4.16 | ✅ | SqlMessageStore | SQL 消息存储 | `openjiuwen/core/memory/manage/` (SqlMessageStore) |
 | 4.17 | ☐ | BaseMemoryIndex 接口 | 记忆索引 | `openjiuwen/core/foundation/store/base_memory_index.py` |
 | 4.18 | ☐ | SimpleMemoryIndex | 简单记忆索引实现 | `openjiuwen/core/foundation/store/index/simple_memory_index.py` |
 | 4.19 | ☐ | Embedding 接口 | `EmbedQuery/EmbedDocuments/Dimension` | `openjiuwen/core/foundation/store/base_embedding.py` |
