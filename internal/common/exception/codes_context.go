@@ -342,6 +342,10 @@ var (
 	StatusMemoryMigrateMemoryExecutionError = NewStatusCode(
 		"MEMORY_MIGRATE_MEMORY_EXECUTION_ERROR", 158010,
 		"failed to migrate memory, reason: {error_msg}")
+	// StatusMemoryBackupNotFound 备份不存在
+	StatusMemoryBackupNotFound = NewStatusCode(
+		"MEMORY_BACKUP_NOT_FOUND", 158011,
+		"backup not found, backup_id: {backup_id}")
 )
 
 // =============================================================================================================
