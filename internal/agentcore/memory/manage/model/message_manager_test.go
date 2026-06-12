@@ -236,7 +236,7 @@ func TestMessageManager_GetByID_存在(t *testing.T) {
 		t.Fatalf("GetByID 失败: %v", err)
 	}
 	if result == nil {
-		t.Error("结果不应为 nil")
+		t.Fatal("结果不应为 nil")
 	}
 	if result.Message.Content.Text() != "hello" {
 		t.Errorf("Content = %q, want %q", result.Message.Content.Text(), "hello")

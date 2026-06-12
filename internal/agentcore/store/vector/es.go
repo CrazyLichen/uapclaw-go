@@ -963,15 +963,13 @@ func esBuildMappings(schema *CollectionSchema, distanceMetric string, vectorFiel
 			fieldMapping["similarity"] = similarity
 			// 将 ESVectorField 的 construct 阶段参数写入 mapping
 			// 支持 HNSW 参数：m、ef_construction 等
-			if vectorFieldConfig != nil {
-				for k, v := range vectorFieldConfig {
-					switch k {
-					case "field_name", "num_candidates":
-						// 跳过非 mapping 参数
-						continue
-					default:
-						fieldMapping[k] = v
-					}
+			for k, v := range vectorFieldConfig {
+				switch k {
+				case "field_name", "num_candidates":
+					// 跳过非 mapping 参数
+					continue
+				default:
+					fieldMapping[k] = v
 				}
 			}
 		}
