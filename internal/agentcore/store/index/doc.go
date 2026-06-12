@@ -11,11 +11,14 @@
 //	index/
 //	├── doc.go           # 包文档
 //	├── base.go          # StorageCodec + MemoryDoc + MemorySearchResult + UserScope + BaseMemoryIndex + MemoryIndexBase
-//	└── base_test.go     # 单元测试
+//	├── base_test.go     # 基类单元测试
+//	├── simple.go        # SimpleMemoryIndex 简单记忆索引实现
+//	└── simple_test.go   # SimpleMemoryIndex 单元测试
 //
 // 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/store/base_memory_index.py
+//	openjiuwen/core/foundation/store/index/simple_memory_index.py
 //
 // 核心类型/接口索引：
 //
@@ -25,4 +28,5 @@
 //	UserScope           — 用户-作用域对，ListUserScopes 返回值
 //	BaseMemoryIndex     — 记忆索引抽象接口（16 个方法）
 //	MemoryIndexBase     — 默认实现基类，提供 7 个非抽象方法的通用行为
+//	SimpleMemoryIndex   — 简单记忆索引，KV + Vector 双存储实现
 package index
