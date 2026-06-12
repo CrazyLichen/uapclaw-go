@@ -148,7 +148,7 @@ func TestGaussDialector_Initialize_正常初始化(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	// 创建 GaussDialector，注入 sqlite 的 *sql.DB 作为 Conn
 	dialector := GaussDialector{
@@ -195,7 +195,7 @@ func TestGaussDialector_Initialize_ClauseBuilders已存在(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	dialector := GaussDialector{
 		Dialector: postgres.Dialector{
@@ -241,7 +241,7 @@ func TestGaussDialector_Initialize_LOCKING子句构建器(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	dialector := GaussDialector{
 		Dialector: postgres.Dialector{
@@ -298,7 +298,7 @@ func TestGaussDialector_Initialize_序列化器注册(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	dialector := GaussDialector{
 		Dialector: postgres.Dialector{
@@ -361,7 +361,7 @@ func TestGaussDialector_Migrator_返回GaussMigrator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	dialector := GaussDialector{
 		Dialector: postgres.Dialector{

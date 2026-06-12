@@ -277,7 +277,7 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 			Msg("删除集合失败")
 		return fmt.Errorf("DeleteCollection: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
@@ -1138,7 +1138,7 @@ func esStoreMetadata(ctx context.Context, c esClient, indexName string, metadata
 	if err != nil {
 		return fmt.Errorf("存储元数据失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
@@ -1195,7 +1195,7 @@ func esDoRequest(ctx context.Context, c esClient, req esapi.Request) (map[string
 	if err != nil {
 		return nil, fmt.Errorf("ES 请求失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -1221,7 +1221,7 @@ func (s *ESVectorStore) esIndicesExists(ctx context.Context, c esClient, indexNa
 	if err != nil {
 		return false, fmt.Errorf("检查索引是否存在失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -1240,7 +1240,7 @@ func (s *ESVectorStore) esIndicesRefresh(ctx context.Context, c esClient, indexN
 	if err != nil {
 		return fmt.Errorf("刷新索引失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.IsError() {
 		body, _ := io.ReadAll(resp.Body)
@@ -1339,7 +1339,7 @@ func esListIndices(ctx context.Context, c esClient, indexPrefix string) ([]strin
 	if err != nil {
 		return nil, fmt.Errorf("列出索引失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
