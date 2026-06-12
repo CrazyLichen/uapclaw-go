@@ -54,11 +54,11 @@ func TestPGVectorField_Validate_HNSW正常(t *testing.T) {
 
 func TestPGVectorField_Validate_HNSW参数无效(t *testing.T) {
 	tests := []struct {
-		name          string
-		m             int
+		name           string
+		m              int
 		efConstruction int
-		efSearch      int
-		wantErr       bool
+		efSearch       int
+		wantErr        bool
 	}{
 		{"M太小", 1, 64, 40, true},
 		{"M太大", 2001, 64, 40, true},

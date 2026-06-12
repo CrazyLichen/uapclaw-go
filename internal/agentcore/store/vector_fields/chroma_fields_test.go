@@ -35,11 +35,11 @@ func TestChromaVectorField_Validate_正常(t *testing.T) {
 
 func TestChromaVectorField_Validate_参数无效(t *testing.T) {
 	tests := []struct {
-		name         string
-		maxNeighbors int
+		name           string
+		maxNeighbors   int
 		efConstruction int
-		efSearch     float64
-		wantErr      bool
+		efSearch       float64
+		wantErr        bool
 	}{
 		{"MaxNeighbors太小", 1, 100, 10.0, true},
 		{"MaxNeighbors太大", 2049, 100, 10.0, true},
