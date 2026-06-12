@@ -4,6 +4,7 @@
 // 通过 vf 结构体标签实现 stage 过滤机制，支持子类扩展。
 // 提供 Milvus 特有的索引子类型（AUTO/FLAT/HNSW/IVF/SCANN），
 // 以及 Chroma 和 PGVector 的索引子类型，以及 GaussDB 的 DiskANN 索引子类型，
+// 以及 Elasticsearch 的 k-NN 索引子类型，
 // 各子类型通过 vf 标签区分 construct 和 search 阶段的参数。
 //
 // 核心设计：
@@ -28,12 +29,13 @@
 //	├── chroma_fields.go    # Chroma 索引子类型（HNSW 配置）
 //	└── pg_fields.go        # PGVector 索引子类型（HNSW/IVFFlat 配置）
 //	└── gauss_fields.go    # GaussDB DiskANN 索引子类型
+//	└── es_fields.go      # Elasticsearch HNSW/k-NN 索引子类型
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/vector_fields/
 //
 // 核心类型/接口索引：
 //
-//	DatabaseType    — 向量数据库类型枚举（Milvus, Chroma, PG, Gauss）
+//	DatabaseType    — 向量数据库类型枚举（Milvus, Chroma, PG, Gauss, ES）
 //	IndexType       — 索引类型枚举（AUTO, HNSW, FLAT, IVF, SCANN, DiskANN）
 //	VectorField     — 向量索引配置基类，提供 Validate() 方法
 //	ToDict(v,stage) — 包级函数，通过反射将 VectorField 或子类转为指定阶段的字典
@@ -45,4 +47,5 @@
 //	ChromaVectorField — Chroma HNSW 索引配置（MaxNeighbors, EfConstruction, EfSearch）
 //	PGVectorField   — PGVector 索引配置（HNSW/IVFFlat，M, EfConstruction, EfSearch, Lists, Probes）
 //	GaussDiskANN    — GaussDB DiskANN 索引配置（EnablePQ, PGNseg, PGNclus, NumParallels, QuantizationType, SubgraphCount）
+//	ESVectorField   — Elasticsearch k-NN 索引配置（NumCandidates, ExtraConstruct, ExtraSearch）
 package vector_fields
