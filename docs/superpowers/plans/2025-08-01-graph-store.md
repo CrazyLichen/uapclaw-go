@@ -6,7 +6,7 @@
 
 **Architecture:** graph/ 包定义接口和模型，milvus/ 子包实现 Milvus 后端。MilvusGraphStore 通过嵌入 graphWriter + graphSearcher 拆分读写/搜索职责。混合搜索使用 Milvus HybridSearch API（3通道：name_embedding + content_embedding + content_bm25），BFS 扩展通过 UUID 关系链广度遍历实现。
 
-**Tech Stack:** Go 1.21+, milvus-sdk-go/v2 (v2.4.2), 项目内 embedding/reranker/vector_fields 接口
+**Tech Stack:** Go 1.25.5, `github.com/milvus-io/milvus/client/v2`（新 SDK，支持 BM25 Function）, 项目内 embedding/reranker/vector_fields 接口
 
 **Design Spec:** `docs/superpowers/specs/2025-08-01-graph-store-design.md`
 
@@ -37,6 +37,116 @@
 | `milvus/milvus.go` | MilvusGraphStore 主结构体 + 接口委托 |
 | `milvus/milvus_test.go` | 主结构体测试 |
 | `milvus/milvus_integration_test.go` | 集成测试 (build tag: integration) |
+
+**SDK 迁移文件（前置任务）**：
+
+| File | Responsibility |
+|------|---------------|
+| `go.mod` | 替换旧 SDK 依赖 |
+| `vector/milvus.go` | 迁移到新 SDK API |
+| `vector/milvus_test.go` | 更新 fake client 实现 |
+
+---
+
+### Task 0: Milvus SDK 迁移（前置任务）
+
+**Files:**
+- Modify: `go.mod`
+- Modify: `internal/agentcore/store/vector/milvus.go`
+- Modify: `internal/agentcore/store/vector/milvus_test.go`
+
+**背景**：旧 SDK `github.com/milvus-io/milvus-sdk-go/v2@v2.4.2` 已归档且不支持 BM25 Function。统一迁移到新 SDK `github.com/milvus-io/milvus/client/v2`，Graph Store 和 Vector Store 共用。
+
+**关键 API 映射**：
+
+| 旧 SDK | 新 SDK |
+|--------|--------|
+| `client.NewClient(ctx, client.Config{...})` | `milvusclient.New(ctx, milvusclient.Config{...})` |
+| `client.CreateCollectionOption` | `milvusclient.CreateCollectionOption`（Builder 模式） |
+| `client.SearchResult` | `milvusclient.ResultSet` |
+| `client.SearchQueryOptionFunc` | `milvusclient.SearchOption`（Builder 模式） |
+| `client.ANNSearchRequest` | `milvusclient.AnnRequest` |
+| `client.NewWeightedReranker(weights)` | `milvusclient.NewWeightedReranker(weights)` |
+| `client.NewRRFReranker()` | `milvusclient.NewRRFReranker()` |
+| `entity.NewSchema()` + `.WithField()` | `milvusclient.NewSchema()` + `.WithField()` |
+| `entity.NewField()` + `.WithDataType()` | `milvusclient.NewField()` + `.WithDataType()` |
+| `entity.NewColumnFloatVector(name, dim, data)` | column 包构造 |
+| `entity.NewColumnVarChar(name, data)` | column 包构造 |
+
+- [ ] **Step 1: 更新 go.mod**
+
+```bash
+cd /home/opensource/uap-claw-go
+# 移除旧 SDK
+go mod edit -droprequire github.com/milvus-io/milvus-sdk-go/v2
+# 添加新 SDK（使用 v2.5.x 兼容 Go 1.25）
+go mod edit -require github.com/milvus-io/milvus/client/v2@latest
+go mod tidy
+```
+
+- [ ] **Step 2: 迁移 vector/milvus.go**
+
+更新 import：
+```go
+// 旧
+"github.com/milvus-io/milvus-sdk-go/v2/client"
+"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+// 新
+milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+"github.com/milvus-io/milvus/client/v2/entity"
+"github.com/milvus-io/milvus/client/v2/index"
+```
+
+重写 `milvusClient` 接口（新 SDK Builder 模式）：
+- 每个方法接收 Option 对象而非位置参数
+- 返回类型从 `entity.Column` 改为 `ResultSet`
+- Search 返回 `[]ResultSet`
+- 新增 HybridSearch 方法
+
+重写 `defaultCreateClient`：
+```go
+func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+    return milvusclient.New(ctx, milvusclient.Config{
+        Address: uri,
+        APIKey:  token,
+        DBName:  dbName,
+    })
+}
+```
+
+更新所有 helper 函数：
+- `mapFieldType` / `mapMilvusTypeToOurType`：`entity.FieldType` 映射
+- `mapMetricType`：`entity.MetricType` 映射
+- `buildIndexParams`：使用新 `index` 包
+- `buildSearchParams`：使用新 `index` 包
+- `docsToColumns` / `inferColumn`：使用新 `column` 包
+
+- [ ] **Step 3: 迁移 vector/milvus_test.go**
+
+- 更新 `fakeMilvusClient` 及所有变体（约10个）的接口实现
+- 更新 test helper 中的 SDK 类型引用
+
+- [ ] **Step 4: 运行测试确认通过**
+
+Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/vector/ -v`
+
+Expected: ALL PASS
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add go.mod go.sum internal/agentcore/store/vector/milvus.go internal/agentcore/store/vector/milvus_test.go
+git commit -m "refactor(store/vector): migrate Milvus SDK from milvus-sdk-go/v2 to milvus/client/v2"
+```
+
+**SDK 迁移文件（前置任务）**：
+
+| File | Responsibility |
+|------|---------------|
+| `go.mod` | 替换旧 SDK 依赖 |
+| `vector/milvus.go` | 迁移到新 SDK API |
+| `vector/milvus_test.go` | 更新 fake client 实现 |
 
 ---
 
