@@ -319,7 +319,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.21 | ✅ | DashScopeEmbedding | DashScope 向量嵌入（HTTP 直接调用 + 多模态） | `openjiuwen/core/retrieval/embedding/dashscope_embedding.py` |
 | 4.22 | ✅ | APIEmbedding / VLLMEmbedding | API 通用 HTTP 客户端 + VLLM 多模态嵌入 | `openjiuwen/core/retrieval/embedding/api_embedding.py` + `vllm_embedding.py` |
 | 4.23 | ✅ | Reranker 接口 | `Rerank/RerankSync` | `openjiuwen/core/foundation/store/base_reranker.py` |
-| 4.24 | ☐ | StandardReranker / ChatReranker | 标准和对话式重排序 | `openjiuwen/core/foundation/store/` |
+| 4.24 | ✅ | StandardReranker / ChatReranker | 标准和对话式重排序 | `openjiuwen/core/retrieval/reranker/` |
 | 4.25 | ☐ | DashScopeReranker / AliyunReranker | 云服务重排序 | `openjiuwen/extensions/store/` |
 | 4.26 | ☐ | Graph Store | 图存储 | `openjiuwen/core/foundation/store/graph/` |
 | 4.27 | ☐ | Object Store | 对象存储 (OBS/S3) | `openjiuwen/core/foundation/store/object/` |
