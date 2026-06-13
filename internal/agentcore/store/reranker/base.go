@@ -86,8 +86,8 @@ const (
 	defaultTemperature float64 = 0.95
 	// defaultTopP 默认 Top-P 采样参数
 	defaultTopP float64 = 0.1
-	// defaultInstruct 默认指令文本
-	defaultInstruct = "Given a search query, retrieve relevant candidates that answer the query."
+	// DefaultInstruct 默认指令文本
+	DefaultInstruct = "Given a search query, retrieve relevant candidates that answer the query."
 	// queryTemplate 查询模板，包含指令和查询
 	queryTemplate = "<Instruct>: {instruct}\n<Query>: {query}\n"
 )
@@ -143,12 +143,12 @@ func ValidateConfig(config *RerankerConfig) error {
 // InstructEnabled = &false → 不使用指令
 func ResolveInstruct(query string, opt *RerankOption) string {
 	if opt == nil {
-		return FormatQuery(query, defaultInstruct)
+		return FormatQuery(query, DefaultInstruct)
 	}
 	if opt.InstructEnabled != nil && !*opt.InstructEnabled {
 		return query
 	}
-	instruct := defaultInstruct
+	instruct := DefaultInstruct
 	if opt.CustomInstruct != "" {
 		instruct = opt.CustomInstruct
 	}

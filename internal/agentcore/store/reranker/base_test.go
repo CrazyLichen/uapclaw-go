@@ -166,8 +166,8 @@ func TestRerankOption_默认指令(t *testing.T) {
 	if query == "搜索查询" {
 		t.Error("默认应使用指令模板，查询不应等于原始值")
 	}
-	if !contains(query, defaultInstruct) {
-		t.Errorf("查询应包含默认指令 %q, 实际: %q", defaultInstruct, query)
+	if !contains(query, DefaultInstruct) {
+		t.Errorf("查询应包含默认指令 %q, 实际: %q", DefaultInstruct, query)
 	}
 	if !contains(query, "搜索查询") {
 		t.Errorf("查询应包含原始查询文本, 实际: %q", query)
@@ -181,7 +181,7 @@ func TestRerankOption_自定义指令(t *testing.T) {
 	if !contains(query, customInstruct) {
 		t.Errorf("查询应包含自定义指令 %q, 实际: %q", customInstruct, query)
 	}
-	if contains(query, defaultInstruct) {
+	if contains(query, DefaultInstruct) {
 		t.Error("使用自定义指令时不应包含默认指令")
 	}
 }
@@ -199,7 +199,7 @@ func TestRerankOption_启用指令无自定义(t *testing.T) {
 	enabled := true
 	opt := &RerankOption{InstructEnabled: &enabled}
 	query := ResolveInstruct("搜索查询", opt)
-	if !contains(query, defaultInstruct) {
+	if !contains(query, DefaultInstruct) {
 		t.Errorf("启用指令但无自定义时应使用默认指令, 实际: %q", query)
 	}
 }
