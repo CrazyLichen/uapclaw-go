@@ -12,7 +12,8 @@
 //	├── schema.go           # 集合 Schema 和索引构建
 //	├── milvus_writer.go    # graphWriter 写入逻辑
 //	├── milvus_searcher.go  # graphSearcher 搜索逻辑
-//	└── milvus.go           # MilvusGraphStore 主结构体 + 接口委托 + lazy init
+//	├── milvus.go           # MilvusGraphStore 主结构体 + 接口委托 + lazy init + init() 注册
+//	└── adapter.go          # milvusClientGraphAdapter SDK 客户端适配器
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/graph/milvus/
 package milvus

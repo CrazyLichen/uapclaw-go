@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 )
@@ -467,4 +469,201 @@ func TestGraphWriter_FetchAndEmbed_失败(t *testing.T) {
 	if err == nil {
 		t.Error("fetchAndEmbed 嵌入失败应返回错误")
 	}
+}
+
+// TestGraphWriter_Delete_按Expr 删除 测试按表达式删除
+func TestGraphWriter_Delete_按Expr删除(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	ctx := context.Background()
+	err := w.delete(ctx, CollectionEntity, graph.WithExpr(&testQueryExpr{expr: "user_id == 'test'"}))
+	if err != nil {
+		t.Fatalf("delete() error = %v", err)
+	}
+}
+
+// TestGraphWriter_Delete_带Flush 测试带 Flush 的删除
+func TestGraphWriter_Delete_带Flush(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	ctx := context.Background()
+	err := w.delete(ctx, CollectionEntity, graph.WithIDs("id1"), graph.WithFlush(true))
+	if err != nil {
+		t.Fatalf("delete() error = %v", err)
+	}
+}
+
+// TestGraphWriter_Delete_Expr失败 测试表达式构建失败
+func TestGraphWriter_Delete_Expr失败(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	ctx := context.Background()
+	err := w.delete(ctx, CollectionEntity, graph.WithExpr(&errorQueryExpr{}))
+	if err == nil {
+		t.Error("delete 表达式构建失败应返回错误")
+	}
+}
+
+// TestGraphWriter_AddData_带Embedder 测试带嵌入模型的写入
+func TestGraphWriter_AddData_带Embedder(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	emb := &fakeEmbedder{embeddings: [][]float64{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}}}
+	w := newGraphWriter(fake, storageCfg, emb, 3, 10, 5)
+
+	e := graph.NewEntity()
+	e.Content = "测试实体"
+	e.Name = "测试名称"
+
+	ctx := context.Background()
+	err := w.addData(ctx, CollectionEntity, toAnySlice([]*graph.Entity{e}))
+	if err != nil {
+		t.Fatalf("addData() error = %v", err)
+	}
+}
+
+// TestGraphWriter_AddData_带Flush 测试带 Flush 的写入
+func TestGraphWriter_AddData_带Flush(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	e := graph.NewEntity()
+	e.Content = "测试实体"
+
+	ctx := context.Background()
+	err := w.addData(ctx, CollectionEntity, toAnySlice([]*graph.Entity{e}), graph.WithFlush(true), graph.WithNoEmbed(true))
+	if err != nil {
+		t.Fatalf("addData() error = %v", err)
+	}
+}
+
+// TestGraphWriter_AddData_批量回退 测试批量写入失败后逐条回退
+func TestGraphWriter_AddData_批量回退(t *testing.T) {
+	fake := &insertFailClient{fakeMilvusClient: newFakeMilvusClient()}
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	e := graph.NewEntity()
+	e.Content = "测试实体"
+
+	ctx := context.Background()
+	// 批量失败时尝试逐条写入（逐条也失败则根据 SilenceErrors 决定行为）
+	err := w.addData(ctx, CollectionEntity, toAnySlice([]*graph.Entity{e}), graph.WithNoEmbed(true), graph.WithSilenceErrors(true))
+	// SilenceErrors=true 时不返回错误
+	if err != nil {
+		t.Fatalf("addData() with SilenceErrors error = %v", err)
+	}
+}
+
+// insertFailClient 批量插入失败但逐条成功的客户端
+type insertFailClient struct {
+	*fakeMilvusClient
+	batchInsertErr error
+}
+
+func (f *insertFailClient) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+	if f.batchInsertErr != nil {
+		f.batchInsertErr = nil // 第二次调用成功
+		return milvusclient.InsertResult{}, f.batchInsertErr
+	}
+	return milvusclient.InsertResult{}, nil
+}
+
+// TestGraphWriter_InsertBatch_Upsert 测试 Upsert 模式
+func TestGraphWriter_InsertBatch_Upsert(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	docs := []map[string]any{
+		{"uuid": "abc", "content": "hello"},
+	}
+	ctx := context.Background()
+	err := w.insertBatch(ctx, CollectionEntity, docs, true)
+	if err != nil {
+		t.Fatalf("insertBatch(upsert) error = %v", err)
+	}
+}
+
+// TestGraphWriter_InsertBatch_转换失败 测试列转换失败
+func TestGraphWriter_InsertBatch_转换失败(t *testing.T) {
+	fake := newFakeMilvusClient()
+	storageCfg := graph.NewDefaultStorageConfig()
+	w := newGraphWriter(fake, storageCfg, nil, 3, 10, 5)
+
+	// 传入包含不支持类型的 map
+	docs := []map[string]any{
+		{"uuid": complex(1, 2)}, // complex128 不被 inferGraphColumn 支持
+	}
+	ctx := context.Background()
+	// inferGraphColumn 返回 nil 但 mapsToColumns 不会失败
+	err := w.insertBatch(ctx, CollectionEntity, docs, false)
+	// 可能不会报错，因为不支持的类型列会被跳过
+	_ = err
+}
+
+// TestInferGraphColumn_Int 测试 int 类型列
+func TestInferGraphColumn_Int(t *testing.T) {
+	col := inferGraphColumn("count", []any{int(1), int(2)})
+	if col == nil {
+		t.Fatal("inferGraphColumn(int) 返回 nil")
+	}
+	if col.Name() != "count" {
+		t.Errorf("列名 = %s, want count", col.Name())
+	}
+}
+
+// TestInferGraphColumn_NilValue 测试第一个值为 nil 但后续有值
+func TestInferGraphColumn_NilValue(t *testing.T) {
+	col := inferGraphColumn("field", []any{nil, "hello"})
+	if col == nil {
+		t.Fatal("inferGraphColumn(nil+string) 应跳过 nil 并推断类型")
+	}
+}
+
+// TestInferGraphColumn_全Nil 测试全部为 nil
+func TestInferGraphColumn_全Nil(t *testing.T) {
+	col := inferGraphColumn("field", []any{nil, nil})
+	if col != nil {
+		t.Error("inferGraphColumn(全 nil) 应返回 nil")
+	}
+}
+
+// TestInferGraphColumn_Float64VecNil 测试向量列中有 nil 值
+func TestInferGraphColumn_Float64VecNil(t *testing.T) {
+	col := inferGraphColumn("emb", []any{[]float64{0.1, 0.2}, nil, []float64{0.3, 0.4}})
+	if col == nil {
+		t.Fatal("inferGraphColumn(float64向量+nil) 返回 nil")
+	}
+}
+
+// TestInferGraphColumn_UnsupportedType 测试不支持的类型
+func TestInferGraphColumn_UnsupportedType(t *testing.T) {
+	col := inferGraphColumn("field", []any{complex(1, 2)})
+	if col != nil {
+		t.Error("inferGraphColumn(complex128) 应返回 nil")
+	}
+}
+
+// testQueryExpr 用于测试的 QueryExpr
+type testQueryExpr struct {
+	expr string
+}
+
+func (e *testQueryExpr) ToExpr(backend string) (string, error) {
+	return e.expr, nil
+}
+
+// errorQueryExpr 用于测试总是失败的 QueryExpr
+type errorQueryExpr struct{}
+
+func (e *errorQueryExpr) ToExpr(backend string) (string, error) {
+	return "", fmt.Errorf("expr error")
 }

@@ -1,0 +1,111 @@
+package milvus
+
+import (
+	"context"
+
+	"github.com/milvus-io/milvus/client/v2/entity"
+	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// milvusClientGraphAdapter 适配器，包装真实 Milvus SDK 客户端。
+// 将 SDK 的异步 Task 返回值转换为同步 error 返回值。
+// 仅在集成测试中覆盖（需要真实 Milvus 服务器）。
+type milvusClientGraphAdapter struct {
+	client *milvusclient.Client
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultCreateGraphClient 默认客户端创建函数。
+// 仅在集成测试中覆盖。
+func defaultCreateGraphClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+		Address: uri,
+		APIKey:  token,
+		DBName:  dbName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &milvusClientGraphAdapter{client: c}, nil
+}
+
+func (a *milvusClientGraphAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
+	return a.client.CreateCollection(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error {
+	return a.client.DropCollection(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error) {
+	return a.client.HasCollection(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error) {
+	return a.client.DescribeCollection(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error) {
+	return a.client.Insert(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) Upsert(ctx context.Context, option milvusclient.UpsertOption, callOptions ...interface{}) (milvusclient.UpsertResult, error) {
+	return a.client.Upsert(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+	return a.client.Search(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) HybridSearch(ctx context.Context, option milvusclient.HybridSearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error) {
+	return a.client.HybridSearch(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) Query(ctx context.Context, option milvusclient.QueryOption, callOptions ...interface{}) (milvusclient.ResultSet, error) {
+	return a.client.Query(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error) {
+	return a.client.Delete(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error) {
+	return a.client.ListCollections(ctx, option)
+}
+
+func (a *milvusClientGraphAdapter) LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error {
+	task, err := a.client.LoadCollection(ctx, option)
+	if err != nil {
+		return err
+	}
+	return task.Await(ctx)
+}
+
+func (a *milvusClientGraphAdapter) Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error {
+	task, err := a.client.Flush(ctx, option)
+	if err != nil {
+		return err
+	}
+	if task != nil {
+		return task.Await(ctx)
+	}
+	return nil
+}
+
+func (a *milvusClientGraphAdapter) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
+	task, err := a.client.CreateIndex(ctx, option)
+	if err != nil {
+		return err
+	}
+	if task != nil {
+		return task.Await(ctx)
+	}
+	return nil
+}
+
+func (a *milvusClientGraphAdapter) Close(ctx context.Context) error {
+	return a.client.Close(ctx)
+}
