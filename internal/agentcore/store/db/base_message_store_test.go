@@ -63,10 +63,11 @@ func TestBaseMessageStore_接口契约(t *testing.T) {
 // TestMessageFilter_字段验证 验证 MessageFilter 字段可正确设置
 func TestMessageFilter_字段验证(t *testing.T) {
 	now := time.Now()
+	sessionID := "session1"
 	filter := &MessageFilter{
 		UserID:    "user1",
 		ScopeID:   "scope1",
-		SessionID: "session1",
+		SessionID: &sessionID,
 		StartTime: &now,
 		EndTime:   &now,
 	}

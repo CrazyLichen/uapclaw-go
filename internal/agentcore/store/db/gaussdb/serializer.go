@@ -18,6 +18,11 @@ import (
 // 确保所有绑定到 string 列的非 string 值在进入驱动前被转换为 string。
 // 特别处理 time.Time → "2006-01-02 15:04:05.000000" 格式，
 // 对标 Python 的 datetime.strftime('%Y-%m-%d %H:%M:%S.%f')。
+//
+// 跳过 parent_processor 说明：
+// Python 在类型转换后还会调用 String.bind_processor 的返回值（parent_processor），
+// 但在 PostgreSQL 方言下 parent_processor 是空操作（直接返回原值），
+// 因此 Go 跳过此步骤不会影响当前行为。若未来方言行为变化需重新评估。
 type gaussStringSerializer struct{}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

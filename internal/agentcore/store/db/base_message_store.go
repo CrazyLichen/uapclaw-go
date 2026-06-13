@@ -2,12 +2,19 @@ package db
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// ErrMessageNotFound 消息不存在错误。
+// UpdateMessage/DeleteMessageByID 在目标消息不存在时返回此错误，
+// 供调用者区分"消息不存在但不算错误"和"数据库访问异常"。
+// 对齐 Python 返回 bool（False 表示不存在/未执行）的语义。
+var ErrMessageNotFound = errors.New("message not found")
 
 // BaseMessageStore 消息持久化接口。
 //
@@ -107,14 +114,21 @@ type MessageAdd struct {
 // MessageFilter 消息查询过滤条件。
 //
 // 对应 Python: message_filter 字典
-// 修正：实现 StartTime/EndTime 过滤，跳过 MessageType（数据库表无对应列）
+// 修正：实现 StartTime/EndTime 过滤。
+// MessageType：Python 接口定义了此字段，但实际 SQL 表无对应列，暂未实现过滤。
+// 如果未来数据库表增加 message_type 列，需要补回过滤逻辑。
+// SessionID 使用 *string 指针类型：nil 表示查找 NULL 值，空字符串表示不加过滤，非空表示精确匹配。
 type MessageFilter struct {
 	// UserID 用户 ID
 	UserID string
 	// ScopeID 作用域 ID
 	ScopeID string
-	// SessionID 会话 ID
-	SessionID string
+	// SessionID 会话 ID（nil 表示不加过滤，空字符串指针表示查找 IS NULL，非空指针表示精确匹配）
+	// 对齐 Python 行为差异：Python session_id=None 时走 WHERE session_id IS NULL，
+	// Go 中需要显式设置 &"" 来表达 IS NULL 语义，nil 表示不加过滤。
+	SessionID *string
+	// MessageType 消息类型（暂未实现过滤，Python 接口定义了此字段但 SQL 表无对应列）
+	MessageType string
 	// StartTime 起始时间（nil 表示不限制）
 	StartTime *time.Time
 	// EndTime 结束时间（nil 表示不限制）

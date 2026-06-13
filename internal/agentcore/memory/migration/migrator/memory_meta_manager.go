@@ -64,6 +64,7 @@ func (m *MemoryMetaManager) Add(ctx context.Context, tableName string, schemaVer
 }
 
 // GetByTableName 按 table_name 查询 schema 版本记录。
+// 无结果时统一返回 (nil, nil)，对齐 Python 返回 None 的语义。
 //
 // 对应 Python: MemoryMetaManager.get_by_table_name(table_name)
 func (m *MemoryMetaManager) GetByTableName(ctx context.Context, tableName string) ([]map[string]any, error) {
@@ -71,6 +72,9 @@ func (m *MemoryMetaManager) GetByTableName(ctx context.Context, tableName string
 		map[string]any{"table_name": []string{tableName}}, nil)
 	if err != nil {
 		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, nil
 	}
 	return results, nil
 }

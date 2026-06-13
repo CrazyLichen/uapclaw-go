@@ -75,6 +75,18 @@ func (s *SqlDbStore) Write(ctx context.Context, table string, data map[string]an
 //
 // 对应 Python: SqlDbStore.condition_get(table, conditions, columns)
 func (s *SqlDbStore) ConditionGet(ctx context.Context, table string, conditions map[string]any, columns []string) ([]map[string]any, error) {
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
+	}
+	if err := validateColumnNames(columns); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
+	}
+
 	query := s.db.Table(table)
 	// 选择指定列
 	if len(columns) > 0 {
@@ -111,6 +123,13 @@ func (s *SqlDbStore) ConditionGet(ctx context.Context, table string, conditions 
 //
 // 对应 Python: SqlDbStore.get_with_sort(table, filters, sort_by, order, limit)
 func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[string]any, sortBy string, order string, limit int) ([]map[string]any, error) {
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(filters); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
+	}
+
 	// 排序列校验
 	if sortBy != "" {
 		colNames, err := s.GetTable(ctx, table)
@@ -132,10 +151,8 @@ func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[
 	}
 
 	query := s.db.Table(table)
-	// 等值过滤
-	for col, val := range filters {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
-	}
+	// 等值过滤（支持 nil 值表示 IS NULL）
+	query = applyConditions(query, filters)
 	// 排序
 	if sortBy != "" {
 		dir := "ASC"
@@ -168,15 +185,15 @@ func (s *SqlDbStore) GetWithSort(ctx context.Context, table string, filters map[
 //
 // 对应 Python: SqlDbStore.update(table, conditions, data)
 func (s *SqlDbStore) Update(ctx context.Context, table string, conditions map[string]any, data map[string]any) error {
-	query := s.db.Table(table)
-	for col, val := range conditions {
-		switch v := val.(type) {
-		case []any:
-			query = query.Where(fmt.Sprintf("%s IN ?", col), v)
-		default:
-			query = query.Where(fmt.Sprintf("%s = ?", col), v)
-		}
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return exception.BuildError(exception.StatusStoreMessageUpdateExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+
+	query := s.db.Table(table)
+	query = applyConditions(query, conditions)
 
 	if err := query.Updates(data).Error; err != nil {
 		logger.Error(logComponent).
@@ -196,15 +213,15 @@ func (s *SqlDbStore) Update(ctx context.Context, table string, conditions map[st
 //
 // 对应 Python: SqlDbStore.delete(table, conditions)
 func (s *SqlDbStore) Delete(ctx context.Context, table string, conditions map[string]any) error {
-	query := s.db.Table(table)
-	for col, val := range conditions {
-		switch v := val.(type) {
-		case []any:
-			query = query.Where(fmt.Sprintf("%s IN ?", col), v)
-		default:
-			query = query.Where(fmt.Sprintf("%s = ?", col), v)
-		}
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return exception.BuildError(exception.StatusStoreMessageDeleteExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+
+	query := s.db.Table(table)
+	query = applyConditions(query, conditions)
 
 	if err := query.Delete(nil).Error; err != nil {
 		logger.Error(logComponent).
@@ -223,10 +240,15 @@ func (s *SqlDbStore) Delete(ctx context.Context, table string, conditions map[st
 //
 // 对应 Python: SqlDbStore.exist(table, conditions)
 func (s *SqlDbStore) Exist(ctx context.Context, table string, conditions map[string]any) (bool, error) {
-	query := s.db.Table(table)
-	for col, val := range conditions {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return false, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+
+	query := s.db.Table(table)
+	query = applyConditions(query, conditions)
 
 	var count int64
 	if err := query.Limit(1).Count(&count).Error; err != nil {
@@ -243,10 +265,15 @@ func (s *SqlDbStore) Exist(ctx context.Context, table string, conditions map[str
 // 对应 Python: Python 中无此方法（count_messages 用 get_with_sort + len 实现）
 // Go 新增：替代 Python 的低效计数方式
 func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[string]any) (int64, error) {
-	query := s.db.Table(table)
-	for col, val := range conditions {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return 0, exception.BuildError(exception.StatusStoreMessageCountExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+
+	query := s.db.Table(table)
+	query = applyConditions(query, conditions)
 
 	var count int64
 	if err := query.Count(&count).Error; err != nil {
@@ -268,11 +295,16 @@ func (s *SqlDbStore) Count(ctx context.Context, table string, conditions map[str
 //
 // 对应 Python: Python 中无此方法（Go 新增）
 func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, conditions map[string]any, startTime *time.Time, endTime *time.Time) (int64, error) {
-	query := s.db.Table(table)
-	// 等值过滤
-	for col, val := range conditions {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return 0, exception.BuildError(exception.StatusStoreMessageCountExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+
+	query := s.db.Table(table)
+	// 等值过滤（支持 nil 值表示 IS NULL）
+	query = applyConditions(query, conditions)
 	// 时间范围过滤
 	if startTime != nil {
 		query = query.Where("timestamp >= ?", startTime.Format(time.RFC3339))
@@ -301,11 +333,23 @@ func (s *SqlDbStore) CountWithTimeRange(ctx context.Context, table string, condi
 //
 // 对应 Python: SqlDbStore.get_with_sort（Go 扩展了时间范围查询）
 func (s *SqlDbStore) GetWithSortAndTimeRange(ctx context.Context, table string, filters map[string]any, sortBy string, order string, limit int, startTime *time.Time, endTime *time.Time) ([]map[string]any, error) {
-	query := s.db.Table(table)
-	// 等值过滤
-	for col, val := range filters {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(filters); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
 	}
+	if sortBy != "" {
+		if err := validateColumnName(sortBy); err != nil {
+			return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+				exception.WithParam("error_msg", err.Error()),
+			)
+		}
+	}
+
+	query := s.db.Table(table)
+	// 等值过滤（支持 nil 值表示 IS NULL）
+	query = applyConditions(query, filters)
 	// 时间范围过滤
 	if startTime != nil {
 		query = query.Where("timestamp >= ?", startTime.Format(time.RFC3339))
@@ -405,6 +449,15 @@ func (s *SqlDbStore) InvalidateTableCache(tableName string) {
 //
 // 对应 Python: SqlDbStore.batch_get(table, conditions_list)
 func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList []map[string]any) ([]map[string]any, error) {
+	// 校验列名，防止 SQL 注入
+	for _, cond := range conditionsList {
+		if err := validateConditionColumns(cond); err != nil {
+			return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+				exception.WithParam("error_msg", err.Error()),
+			)
+		}
+	}
+
 	query := s.db.Table(table)
 
 	if len(conditionsList) > 0 {
@@ -448,13 +501,23 @@ func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList 
 //
 // 对应 Python: SqlDbStore.get(table, record_id, columns)
 func (s *SqlDbStore) Get(ctx context.Context, table string, conditions map[string]any, columns []string) (map[string]any, error) {
+	// 校验列名，防止 SQL 注入
+	if err := validateConditionColumns(conditions); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
+	}
+	if err := validateColumnNames(columns); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
+			exception.WithParam("error_msg", err.Error()),
+		)
+	}
+
 	query := s.db.Table(table)
 	if len(columns) > 0 {
 		query = query.Select(columns)
 	}
-	for col, val := range conditions {
-		query = query.Where(fmt.Sprintf("%s = ?", col), val)
-	}
+	query = applyConditions(query, conditions)
 	query = query.Limit(1)
 
 	var results []map[string]any
@@ -495,6 +558,69 @@ func (s *SqlDbStore) DeleteTable(ctx context.Context, tableName string) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// validateColumnName 校验列名是否合法，防止 SQL 注入。
+// 列名只允许字母、数字和下划线，且必须以字母开头。
+func validateColumnName(col string) error {
+	if col == "" {
+		return fmt.Errorf("列名不能为空")
+	}
+	// 列名只允许字母、数字和下划线
+	for i, r := range col {
+		if r == '_' {
+			continue
+		}
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
+			continue
+		}
+		if r >= '0' && r <= '9' {
+			if i == 0 {
+				return fmt.Errorf("列名 %q 不能以数字开头", col)
+			}
+			continue
+		}
+		return fmt.Errorf("列名 %q 包含非法字符 %q", col, r)
+	}
+	return nil
+}
+
+// validateColumnNames 批量校验列名，遇到非法列名时返回第一个错误。
+func validateColumnNames(columns []string) error {
+	for _, col := range columns {
+		if err := validateColumnName(col); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateConditionColumns 校验条件 map 中的列名合法性。
+func validateConditionColumns(conditions map[string]any) error {
+	for col := range conditions {
+		if err := validateColumnName(col); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyConditions 将条件 map 应用到 GORM 查询。
+// 支持 nil 值表示 IS NULL，切片值表示 IN，其他值表示等值匹配。
+func applyConditions(query *gorm.DB, conditions map[string]any) *gorm.DB {
+	for col, val := range conditions {
+		if val == nil {
+			query = query.Where(fmt.Sprintf("%s IS NULL", col))
+			continue
+		}
+		switch v := val.(type) {
+		case []any:
+			query = query.Where(fmt.Sprintf("%s IN ?", col), v)
+		default:
+			query = query.Where(fmt.Sprintf("%s = ?", col), v)
+		}
+	}
+	return query
+}
 
 // joinWithAnd 用 AND 连接字符串切片
 func joinWithAnd(parts []string) string {

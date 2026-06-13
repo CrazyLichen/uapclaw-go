@@ -596,6 +596,14 @@ func (s *SimpleMemoryIndex) ListUserScopes(ctx context.Context) ([]UserScope, er
 	return scopes, nil
 }
 
+// CleanupBackup 清理备份。
+// 覆盖 MemoryIndexBase 的默认实现，对齐 Python cleanup_backup。
+// Python 中此方法为 @abstractmethod，子类必须实现；
+// Go 的基类提供了默认实现（只删内存 map），此覆盖确保语义显式化。
+func (s *SimpleMemoryIndex) CleanupBackup(ctx context.Context, backupID string) error {
+	return s.MemoryIndexBase.CleanupBackup(ctx, backupID)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // kvMemKey 构建记忆文档的 KV 键：UMD/{userID}/{scopeID}/{memID}

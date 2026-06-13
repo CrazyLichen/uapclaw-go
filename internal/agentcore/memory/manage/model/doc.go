@@ -8,11 +8,13 @@
 // 文件目录：
 //
 //	model/
-//	├── doc.go                 # 包文档
-//	├── db_model.go            # 数据库模型（UserMessage、ScopeUserMapping、MemoryMeta）
-//	├── sql_db_store.go        # SqlDbStore 通用 SQL CRUD 层
-//	├── sql_message_store.go   # SqlMessageStore 消息存储实现
-//	└── message_manager.go     # MessageManager 消息管理器
+//	├── doc.go                          # 包文档
+//	├── db_model.go                     # 数据库模型（UserMessage、ScopeUserMapping、MemoryMeta）+ CreateTables
+//	├── sql_db_store.go                 # SqlDbStore 通用 SQL CRUD 层
+//	├── sql_message_store.go            # SqlMessageStore 消息存储实现
+//	├── message_manager.go              # MessageManager 消息管理器
+//	├── scope_user_mapping_manager.go   # ScopeUserMappingManager 作用域用户映射管理器
+//	└── data_id_manager.go              # DataIdManager 唯一 ID 生成器
 //
 // 对应 Python 代码：
 //
@@ -25,10 +27,12 @@
 //
 // 核心类型/接口索引：
 //
-//	UserMessage      — 用户消息表 GORM 模型
-//	ScopeUserMapping — 作用域用户映射表 GORM 模型
-//	MemoryMeta       — 记忆元数据表 GORM 模型
-//	SqlDbStore       — 通用 SQL CRUD 层，封装 GORM 通用操作
-//	SqlMessageStore  — BaseMessageStore 的 SQL 实现
-//	MessageManager   — 消息管理器，BaseMessageStore 的上层封装
+//	UserMessage              — 用户消息表 GORM 模型
+//	ScopeUserMapping         — 作用域用户映射表 GORM 模型
+//	MemoryMeta               — 记忆元数据表 GORM 模型
+//	SqlDbStore               — 通用 SQL CRUD 层，封装 GORM 通用操作
+//	SqlMessageStore          — BaseMessageStore 的 SQL 实现
+//	MessageManager           — 消息管理器，BaseMessageStore 的上层封装
+//	ScopeUserMappingManager  — 作用域用户映射管理器，管理 scope_user_mapping 表
+//	DataIdManager            — 唯一 ID 生成器，12字节=6时间+3随机+3哈希
 package model

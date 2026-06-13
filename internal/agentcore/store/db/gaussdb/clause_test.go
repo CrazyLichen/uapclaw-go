@@ -74,7 +74,8 @@ func TestGaussLockingClauseBuilder_ForUpdateSkipLocked(t *testing.T) {
 	}
 }
 
-// TestGaussLockingClauseBuilder_ForShare 验证 FOR SHARE 输出正确。
+// TestGaussLockingClauseBuilder_ForShare 验证 GaussDB 不支持 FOR SHARE，始终输出 FOR UPDATE。
+// GaussDB 仅支持 FOR UPDATE，对齐 Python 硬编码 " FOR UPDATE" 的行为。
 func TestGaussLockingClauseBuilder_ForShare(t *testing.T) {
 	var buf bytes.Buffer
 	builder := &testBuilder{writer: &buf}
@@ -89,7 +90,7 @@ func TestGaussLockingClauseBuilder_ForShare(t *testing.T) {
 	gaussLockingClauseBuilder(c, builder)
 
 	got := buf.String()
-	want := "FOR SHARE"
+	want := "FOR UPDATE"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

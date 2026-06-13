@@ -7,7 +7,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/db"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // mockMessageStore 用于测试的 BaseMessageStore mock
@@ -53,8 +52,7 @@ func (m *mockMessageStore) GetMessageByID(_ context.Context, messageID string) (
 	if item, ok := m.messages[messageID]; ok {
 		return item.Message, item.Metadata, nil
 	}
-	return nil, nil, exception.BuildError(exception.StatusStoreMessageNotFound,
-		exception.WithParam("message_id", messageID))
+	return nil, nil, db.ErrMessageNotFound
 }
 
 func (m *mockMessageStore) GetMessages(_ context.Context, filter *db.MessageFilter, limit int, orderBy string, orderDirection string) ([]*db.MessageAndMeta, error) {

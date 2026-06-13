@@ -189,7 +189,7 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_CREATE_ERROR").
 			Msg("创建集合失败")
 		return fmt.Errorf("CreateCollection: %w", err)
 	}
@@ -207,7 +207,7 @@ func (s *ESVectorStore) CreateCollection(ctx context.Context, collectionName str
 		}
 		logger.Error(esLogComponent).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_CREATE_ERROR").
 			Str("status", resp.Status()).
 			Str("response", string(body)).
 			Msg("创建集合失败")
@@ -281,7 +281,7 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_DELETE_ERROR").
 			Msg("删除集合失败")
 		return fmt.Errorf("DeleteCollection: %w", err)
 	}
@@ -291,7 +291,7 @@ func (s *ESVectorStore) DeleteCollection(ctx context.Context, collectionName str
 		body, _ := io.ReadAll(resp.Body)
 		logger.Error(esLogComponent).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_DELETE_ERROR").
 			Str("status", resp.Status()).
 			Str("response", string(body)).
 			Msg("删除集合失败")
@@ -403,7 +403,7 @@ func (s *ESVectorStore) AddDocs(ctx context.Context, collectionName string, docs
 				Str("collection_name", collectionName).
 				Int("doc_count", len(docs)).
 				Int("batch_size", batchSize).
-				Str("event_type", "LLM_CALL_ERROR").
+				Str("event_type", "STORE_WRITE_ERROR").
 				Msg("插入文档失败")
 			return fmt.Errorf("AddDocs: %w", err)
 		}
@@ -498,6 +498,10 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 	}
 
 	// 添加输出字段，排除 _meta
+	// 注意：Go 使用 _source.includes 限定返回字段，使 output_fields 参数真正生效。
+	// Python 的 output_fields 参数未实际生效——即使传了 output_fields，Python 也只设
+	// excludes=["_meta"] 而不设 includes，导致始终返回所有字段（排除 _meta）。
+	// Go 的白名单语义更合理，此处保持 Go 行为。
 	if len(o.OutputFields) > 0 {
 		searchBody["_source"] = map[string]any{
 			"includes": o.OutputFields,
@@ -523,7 +527,7 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_SEARCH_ERROR").
 			Msg("搜索失败")
 		return nil, fmt.Errorf("Search: %w", err)
 	}
@@ -582,7 +586,7 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 }
 
 // DeleteDocsByIDs 按 ID 删除文档。
-// 构建 NDJSON bulk delete 请求。
+// 构建 NDJSON bulk delete 请求，按 batch_size 分批删除。
 //
 // 对应 Python: ESVectorStore.delete_docs_by_ids()
 func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName string, ids []string, opts ...Option) error {
@@ -595,29 +599,46 @@ func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName stri
 		return err
 	}
 
+	o := newOptions(opts...)
+	batchSize := o.BatchSize
+	if batchSize <= 0 {
+		batchSize = esDefaultBatchSize
+	}
+
 	indexName := s.esIndexName(collectionName)
 
-	body := esBuildBulkDeleteBody(ids, indexName)
-	if body == nil {
-		return nil
-	}
+	// 分批删除，对齐 Python 按 batch_size 分批的行为
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[i:end]
 
-	req := esapi.BulkRequest{Body: body}
-	respBody, err := esDoRequest(ctx, c, &req)
-	if err != nil {
-		logger.Error(esLogComponent).Err(err).
-			Str("collection_name", collectionName).
-			Int("id_count", len(ids)).
-			Str("event_type", "LLM_CALL_ERROR").
-			Msg("按 ID 删除文档失败")
-		return fmt.Errorf("DeleteDocsByIDs: %w", err)
-	}
+		body := esBuildBulkDeleteBody(batch, indexName)
+		if body == nil {
+			continue
+		}
 
-	if errs, ok := respBody["errors"].(bool); ok && errs {
-		logger.Warn(esLogComponent).
-			Str("collection_name", collectionName).
-			Interface("response", respBody).
-			Msg("批量删除部分文档失败")
+		req := esapi.BulkRequest{Body: body}
+		respBody, err := esDoRequest(ctx, c, &req)
+		if err != nil {
+			logger.Error(esLogComponent).Err(err).
+				Str("collection_name", collectionName).
+				Int("batch_start", i).
+				Int("batch_size", len(batch)).
+				Str("event_type", "STORE_DELETE_ERROR").
+				Msg("按 ID 删除文档批次失败")
+			return fmt.Errorf("DeleteDocsByIDs batch %d-%d: %w", i, end, err)
+		}
+
+		if errs, ok := respBody["errors"].(bool); ok && errs {
+			logger.Warn(esLogComponent).
+				Str("collection_name", collectionName).
+				Int("batch_start", i).
+				Interface("response", respBody).
+				Msg("批量删除部分文档失败")
+		}
 	}
 
 	// 刷新索引
@@ -630,6 +651,7 @@ func (s *ESVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName stri
 	logger.Info(esLogComponent).
 		Str("collection_name", collectionName).
 		Int("id_count", len(ids)).
+		Int("batch_size", batchSize).
 		Msg("按 ID 删除文档成功")
 
 	return nil
@@ -675,7 +697,7 @@ func (s *ESVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName 
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_DELETE_ERROR").
 			Msg("按过滤条件删除文档失败")
 		return fmt.Errorf("DeleteDocsByFilters: %w", err)
 	}
@@ -753,7 +775,7 @@ func (s *ESVectorStore) UpdateCollectionMetadata(ctx context.Context, collection
 	if err := esStoreMetadata(ctx, c, indexName, existing); err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("collection_name", collectionName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_UPDATE_ERROR").
 			Msg("更新集合元数据失败")
 		return fmt.Errorf("UpdateCollectionMetadata: %w", err)
 	}
@@ -933,8 +955,12 @@ func esMapTypeToOurType(esType string) VectorDataType {
 		return VectorDataTypeVarchar
 	case "long":
 		return VectorDataTypeInt64
-	case "integer", "short", "byte":
+	case "integer":
 		return VectorDataTypeInt32
+	case "short":
+		return VectorDataTypeInt16
+	case "byte":
+		return VectorDataTypeInt8
 	case "float":
 		return VectorDataTypeFloat
 	case "double":
@@ -1268,7 +1294,7 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 	if err != nil {
 		logger.Error(esLogComponent).Err(err).
 			Str("index_name", indexName).
-			Str("event_type", "LLM_CALL_ERROR").
+			Str("event_type", "STORE_SEARCH_ERROR").
 			Msg("获取 ES mapping 失败")
 		return nil, fmt.Errorf("esBuildSchemaFromMapping: %w", err)
 	}

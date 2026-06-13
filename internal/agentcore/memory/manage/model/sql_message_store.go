@@ -162,9 +162,7 @@ func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) 
 	}
 
 	if len(results) == 0 {
-		return nil, nil, exception.BuildError(exception.StatusStoreMessageNotFound,
-			exception.WithParam("message_id", messageID),
-		)
+		return nil, nil, storedb.ErrMessageNotFound
 	}
 
 	return s.rowToMessageAndMeta(results[0])
@@ -190,9 +188,16 @@ func (s *SqlMessageStore) GetMessages(ctx context.Context, filter *storedb.Messa
 	if filter.ScopeID != "" {
 		filters["scope_id"] = filter.ScopeID
 	}
-	if filter.SessionID != "" {
-		filters["session_id"] = filter.SessionID
+	// SessionID：nil 不加过滤，&"" 表示查找 IS NULL，&"value" 表示精确匹配
+	if filter.SessionID != nil {
+		if *filter.SessionID == "" {
+			// 空字符串指针 → 查找 session_id IS NULL（对齐 Python session_id=None）
+			filters["session_id"] = nil
+		} else {
+			filters["session_id"] = *filter.SessionID
+		}
 	}
+	// filter.SessionID == nil → 不加过滤
 
 	// 使用带时间范围查询的方法
 	rows, err := s.sqlDbStore.GetWithSortAndTimeRange(ctx, s.tableName,
@@ -264,8 +269,13 @@ func (s *SqlMessageStore) DeleteMessages(ctx context.Context, filter *storedb.Me
 	if filter.ScopeID != "" {
 		conditions["scope_id"] = filter.ScopeID
 	}
-	if filter.SessionID != "" {
-		conditions["session_id"] = filter.SessionID
+	// SessionID：nil 不加过滤，&"" 表示查找 IS NULL，&"value" 表示精确匹配
+	if filter.SessionID != nil {
+		if *filter.SessionID == "" {
+			conditions["session_id"] = nil
+		} else {
+			conditions["session_id"] = *filter.SessionID
+		}
 	}
 
 	if err := s.sqlDbStore.Delete(ctx, s.tableName, conditions); err != nil {
@@ -287,8 +297,13 @@ func (s *SqlMessageStore) CountMessages(ctx context.Context, filter *storedb.Mes
 	if filter.ScopeID != "" {
 		conditions["scope_id"] = filter.ScopeID
 	}
-	if filter.SessionID != "" {
-		conditions["session_id"] = filter.SessionID
+	// SessionID：nil 不加过滤，&"" 表示查找 IS NULL，&"value" 表示精确匹配
+	if filter.SessionID != nil {
+		if *filter.SessionID == "" {
+			conditions["session_id"] = nil
+		} else {
+			conditions["session_id"] = *filter.SessionID
+		}
 	}
 
 	// 有时间范围条件时走 CountWithTimeRange，否则走普通 Count

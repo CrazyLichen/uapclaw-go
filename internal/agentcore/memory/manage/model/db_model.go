@@ -60,6 +60,7 @@ func (MemoryMeta) TableName() string { return "memory_meta" }
 // 使用 GORM AutoMigrate 自动建表，对齐 Python 的 create_tables()。
 //
 // 对应 Python: openjiuwen/core/memory/manage/mem_model/db_model.py (create_tables)
+// TODO: 待实现旧表迁移检测（group_id 列检测+DROP 重建）和版本初始化逻辑
 func CreateTables(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&UserMessage{},

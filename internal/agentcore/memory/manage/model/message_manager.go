@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -100,7 +101,7 @@ func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string,
 	filter := &db.MessageFilter{
 		UserID:    userID,
 		ScopeID:   scopeID,
-		SessionID: sessionID,
+		SessionID: &sessionID,
 	}
 
 	// 倒序获取
@@ -118,12 +119,17 @@ func (m *MessageManager) Get(ctx context.Context, userID string, scopeID string,
 }
 
 // GetByID 按 ID 获取消息，不存在时返回 nil。
+// 修正：正确传播 error，只在"未找到"时返回 (nil, nil)。
 //
 // 对应 Python: MessageManager.get_by_id(msg_id)
 func (m *MessageManager) GetByID(ctx context.Context, msgID string) (*db.MessageAndMeta, error) {
 	msg, meta, err := m.store.GetMessageByID(ctx, msgID)
 	if err != nil {
-		return nil, nil
+		// 消息不存在返回 nil, nil；其他错误正常传播
+		if errors.Is(err, db.ErrMessageNotFound) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return &db.MessageAndMeta{Message: msg, Metadata: meta}, nil
 }

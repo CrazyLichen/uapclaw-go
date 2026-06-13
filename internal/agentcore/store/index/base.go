@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -128,9 +129,12 @@ type backupData struct {
 // 嵌入此结构体后，实现类只需实现核心抽象方法即可满足 BaseMemoryIndex 接口。
 // 默认提供 ListMemories / GetSchemaVersion / UpdateSchemaVersion /
 // CreateBackup / RestoreBackup / CleanupBackup / ListUserScopes 的通用行为。
+// backups map 和 schemaVersion 字段通过 sync.RWMutex 保护并发安全。
 //
 // 对应 Python: BaseMemoryIndex 中的非抽象方法默认实现
 type MemoryIndexBase struct {
+	// mu 保护 backups 和 schemaVersion 的并发访问
+	mu sync.RWMutex
 	// schemaVersion schema 版本号
 	schemaVersion int
 	// backups 备份数据（内存中的简单实现）
@@ -168,16 +172,22 @@ func (b *MemoryIndexBase) ListMemories(_ context.Context, _ string, _ string, _ 
 
 // GetSchemaVersion 获取当前 schema 版本号，未设置时返回 0。
 func (b *MemoryIndexBase) GetSchemaVersion() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.schemaVersion
 }
 
 // UpdateSchemaVersion 更新 schema 版本号。
 func (b *MemoryIndexBase) UpdateSchemaVersion(version int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.schemaVersion = version
 }
 
 // CreateBackup 创建当前数据的备份，返回备份标识。
 func (b *MemoryIndexBase) CreateBackup(_ context.Context) (string, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	bid := uuid.New().String()
 	b.backups[bid] = &backupData{SchemaVersion: b.schemaVersion}
 	return bid, nil
@@ -185,6 +195,8 @@ func (b *MemoryIndexBase) CreateBackup(_ context.Context) (string, error) {
 
 // RestoreBackup 从备份恢复数据。备份不存在时返回 StatusMemoryBackupNotFound 错误。
 func (b *MemoryIndexBase) RestoreBackup(_ context.Context, backupID string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	data, ok := b.backups[backupID]
 	if !ok {
 		return exception.BuildError(exception.StatusMemoryBackupNotFound,
@@ -196,13 +208,18 @@ func (b *MemoryIndexBase) RestoreBackup(_ context.Context, backupID string) erro
 }
 
 // CleanupBackup 清理备份。
+// Python 中此方法为 @abstractmethod，子类必须实现。Go 提供了默认实现（从内存 map 中删除），
+// 子类应覆盖此方法以确保外部存储中的备份数据也被正确清理。
 func (b *MemoryIndexBase) CleanupBackup(_ context.Context, backupID string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	delete(b.backups, backupID)
 	return nil
 }
 
 // ListUserScopes 列出索引中所有 (userID, scopeID) 对（默认实现：返回空结果）。
-// 具体实现类应覆盖此方法以提供真正的数据扫描。
+// Python 中此方法为 @abstractmethod，子类必须实现。Go 提供了默认空实现，
+// 子类应覆盖此方法以提供真正的数据扫描。
 func (b *MemoryIndexBase) ListUserScopes(_ context.Context) ([]UserScope, error) {
 	return nil, nil
 }
