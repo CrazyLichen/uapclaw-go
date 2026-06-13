@@ -58,9 +58,9 @@ type UserScope struct {
 // 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (StorageCodec)
 type StorageCodec interface {
 	// Encode 对文本进行编码（如加密）
-	Encode(text string) string
+	Encode(text string) (string, error)
 	// Decode 对数据进行解码（如解密）
-	Decode(data string) string
+	Decode(data string) (string, error)
 }
 
 // BaseMemoryIndex 记忆索引抽象接口，定义记忆文档的存储和检索操作。
