@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 )
 
@@ -161,7 +162,7 @@ func TestOpenAIEmbedding_EmbedMultimodal(t *testing.T) {
 		APIKey:    "sk-test",
 	})
 
-	doc := NewMultimodalDocument().AddField(ModalityText, "描述文本")
+	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "描述文本")
 	vec, err := client.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)

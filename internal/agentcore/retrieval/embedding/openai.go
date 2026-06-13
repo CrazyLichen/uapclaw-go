@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -216,7 +217,7 @@ func (o *OpenAIEmbedding) EmbedDocuments(ctx context.Context, texts []string, op
 }
 
 // EmbedMultimodal 将多模态文档转换为向量。
-func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
+func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
 	if doc == nil {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,

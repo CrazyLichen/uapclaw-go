@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 )
 
@@ -116,9 +117,9 @@ func TestDashscopeEmbedding_EmbedMultimodal(t *testing.T) {
 		APIKey:    "sk-test",
 	})
 
-	doc := NewMultimodalDocument().
-		AddField(ModalityText, "描述").
-		AddField(ModalityImage, "https://example.com/img.png")
+	doc := common.NewMultimodalDocument().
+		AddField(common.ModalityText, "描述").
+		AddField(common.ModalityImage, "https://example.com/img.png")
 	vec, err := client.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)

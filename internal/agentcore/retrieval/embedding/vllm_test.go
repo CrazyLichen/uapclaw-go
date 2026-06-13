@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 )
 
@@ -106,9 +107,9 @@ func TestVLLMEmbedding_EmbedMultimodal(t *testing.T) {
 	})
 	vllm := NewVLLMEmbedding(openAI)
 
-	doc := NewMultimodalDocument().
-		AddField(ModalityText, "描述").
-		AddField(ModalityImage, "https://example.com/img.png")
+	doc := common.NewMultimodalDocument().
+		AddField(common.ModalityText, "描述").
+		AddField(common.ModalityImage, "https://example.com/img.png")
 	vec, err := vllm.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)
@@ -146,7 +147,7 @@ func TestVLLMEmbedding_EmbedMultimodal_自定义指令(t *testing.T) {
 	})
 	vllm := NewVLLMEmbedding(openAI)
 
-	doc := NewMultimodalDocument().AddField(ModalityText, "测试")
+	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "测试")
 	vec, err := vllm.EmbedMultimodal(context.Background(), doc, MultimodalOption{Instruction: "自定义指令"})
 	require.NoError(t, err)
 	assert.Len(t, vec, 2)
@@ -166,7 +167,7 @@ func TestVLLMEmbedding_接口约束(t *testing.T) {
 }
 
 func TestParseMultimodalInput(t *testing.T) {
-	doc := NewMultimodalDocument().AddField(ModalityText, "描述").AddField(ModalityImage, "https://example.com/img.png")
+	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "描述").AddField(common.ModalityImage, "https://example.com/img.png")
 	messages := parseMultimodalInput(doc, "测试指令")
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "system", messages[0]["role"])

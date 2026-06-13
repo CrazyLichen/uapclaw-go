@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -60,7 +61,7 @@ func (v *VLLMEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts
 //
 // 注入 instruction → 构造 messages → 委托 OpenAI SDK 调用。
 // 对应 Python: VLLMEmbedding.embed_multimodal
-func (v *VLLMEmbedding) EmbedMultimodal(ctx context.Context, doc *MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
+func (v *VLLMEmbedding) EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error) {
 	if doc == nil {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
@@ -194,7 +195,7 @@ func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt i
 
 // parseMultimodalInput 解析多模态输入，构造 kwargs。
 // 对应 Python: VLLMEmbedding.parse_multimodal_input
-func parseMultimodalInput(doc *MultimodalDocument, instruction string) []map[string]any {
+func parseMultimodalInput(doc *common.MultimodalDocument, instruction string) []map[string]any {
 	if doc == nil {
 		return nil
 	}

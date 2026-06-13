@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -419,6 +420,19 @@ func ApplyEmbedOptions(opts []embedding.EmbedOption, defaultBatchSize int) (int,
 		}
 	}
 	return batchSize, cb
+}
+
+// MultimodalOption 多模态嵌入的可选参数。
+type MultimodalOption struct {
+	// Instruction 多模态嵌入指令（VLLM 使用）
+	Instruction string
+}
+
+// MultimodalEmbedder 多模态嵌入接口，支持文本+图片+音频+视频。
+type MultimodalEmbedder interface {
+	embedding.BaseEmbedding
+	// EmbedMultimodal 将多模态文档转换为向量。
+	EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
