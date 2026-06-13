@@ -73,7 +73,7 @@
 | `entity.NewColumnFloatVector(name, dim, data)` | column 包构造 |
 | `entity.NewColumnVarChar(name, data)` | column 包构造 |
 
-- [ ] **Step 1: 更新 go.mod**
+- [x] **Step 1: 更新 go.mod**
 
 ```bash
 cd /home/opensource/uap-claw-go
@@ -84,7 +84,7 @@ go mod edit -require github.com/milvus-io/milvus/client/v2@latest
 go mod tidy
 ```
 
-- [ ] **Step 2: 迁移 vector/milvus.go**
+- [x] **Step 2: 迁移 vector/milvus.go**
 
 更新 import：
 ```go
@@ -122,18 +122,18 @@ func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvus
 - `buildSearchParams`：使用新 `index` 包
 - `docsToColumns` / `inferColumn`：使用新 `column` 包
 
-- [ ] **Step 3: 迁移 vector/milvus_test.go**
+- [x] **Step 3: 迁移 vector/milvus_test.go**
 
 - 更新 `fakeMilvusClient` 及所有变体（约10个）的接口实现
 - 更新 test helper 中的 SDK 类型引用
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/vector/ -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add go.mod go.sum internal/agentcore/store/vector/milvus.go internal/agentcore/store/vector/milvus_test.go
@@ -156,7 +156,7 @@ git commit -m "refactor(store/vector): migrate Milvus SDK from milvus-sdk-go/v2 
 - Create: `internal/agentcore/store/graph/graph_object.go`
 - Test: `internal/agentcore/store/graph/graph_object_test.go`
 
-- [ ] **Step 1: 创建 graph_object.go — BaseGraphObject 和 EmbedTask**
+- [x] **Step 1: 创建 graph_object.go — BaseGraphObject 和 EmbedTask**
 
 ```go
 package graph
@@ -259,7 +259,7 @@ func uniqueSortedStrings(ss []string) []string {
 }
 ```
 
-- [ ] **Step 2: 添加 NamedGraphObject**
+- [x] **Step 2: 添加 NamedGraphObject**
 
 在 `graph_object.go` 结构体区块的 BaseGraphObject 之后添加：
 
@@ -299,7 +299,7 @@ func (n *NamedGraphObject) ToMap() map[string]any {
 }
 ```
 
-- [ ] **Step 3: 添加 Entity**
+- [x] **Step 3: 添加 Entity**
 
 ```go
 // Entity 实体（知识图谱节点）
@@ -341,7 +341,7 @@ func (e *Entity) ToMap() map[string]any {
 }
 ```
 
-- [ ] **Step 4: 添加 Relation 和 Episode**
+- [x] **Step 4: 添加 Relation 和 Episode**
 
 ```go
 // Relation 关系（知识图谱边）
@@ -445,7 +445,7 @@ func (p *Episode) ToMap() map[string]any {
 }
 ```
 
-- [ ] **Step 5: 创建 graph_object_test.go**
+- [x] **Step 5: 创建 graph_object_test.go**
 
 ```go
 package graph
@@ -609,13 +609,13 @@ func TestUniqueSortedStrings(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6: 运行测试确认通过**
+- [x] **Step 6: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/ -run "TestNewBaseGraphObject|TestBaseGraphObject_EmbedTasks|TestBaseGraphObject_ToMap|TestEntity_EmbedTasks|TestEntity_ToMap|TestRelation_ToMap|TestRelation_UpdateConnectedEntities|TestEpisode_ToMap|TestUniqueSortedStrings" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/graph_object.go internal/agentcore/store/graph/graph_object_test.go
@@ -630,7 +630,7 @@ git commit -m "feat(store/graph): add graph object models — BaseGraphObject, E
 - Create: `internal/agentcore/store/graph/utils.go`
 - Test: `internal/agentcore/store/graph/utils_test.go`
 
-- [ ] **Step 1: 创建 utils.go**
+- [x] **Step 1: 创建 utils.go**
 
 ```go
 package graph
@@ -751,7 +751,7 @@ func stringsToAny(ss []string) []any {
 
 注意：`EnsureUniqueUUIDs` 依赖 `BaseGraphStore` 接口和 `WithIDs`/`WithOutputFields` 选项，这些在 Task 5 中定义。此文件可以先创建（不包含 `EnsureUniqueUUIDs`），在 Task 5 完成后再补充。
 
-- [ ] **Step 2: 创建 utils_test.go**
+- [x] **Step 2: 创建 utils_test.go**
 
 ```go
 package graph
@@ -911,13 +911,13 @@ func TestLoadTZOffset(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/ -run "TestGetUUID|TestGetCurrentUTCTimestamp|TestBatched|TestFormatTimestampISO|TestISO2Timestamp|TestLoadStoredTimeFromDB|TestStoreTZOffset|TestLoadTZOffset" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/utils.go internal/agentcore/store/graph/utils_test.go
@@ -932,7 +932,7 @@ git commit -m "feat(store/graph): add utility functions — UUID, timestamp, bat
 - Create: `internal/agentcore/store/graph/config.go`
 - Test: `internal/agentcore/store/graph/config_test.go`
 
-- [ ] **Step 1: 创建 config.go**
+- [x] **Step 1: 创建 config.go**
 
 ```go
 package graph
@@ -1119,7 +1119,7 @@ func (c *GraphConfig) Validate() error {
 }
 ```
 
-- [ ] **Step 2: 创建 config_test.go**
+- [x] **Step 2: 创建 config_test.go**
 
 ```go
 package graph
@@ -1221,13 +1221,13 @@ func TestGraphConfig_Validate_EmbedBatchSize无效(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/ -run "TestNewGraphConfig|TestNewDefaultStorageConfig|TestNewDefaultIndexConfig|TestGraphConfig_Validate" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/config.go internal/agentcore/store/graph/config_test.go
@@ -1242,7 +1242,7 @@ git commit -m "feat(store/graph): add configuration types — GraphConfig, Stora
 - Create: `internal/agentcore/store/graph/ranking.go`
 - Test: `internal/agentcore/store/graph/ranking_test.go`
 
-- [ ] **Step 1: 创建 ranking.go**
+- [x] **Step 1: 创建 ranking.go**
 
 ```go
 package graph
@@ -1416,7 +1416,7 @@ func boolToInt(b bool) int {
 }
 ```
 
-- [ ] **Step 2: 创建 ranking_test.go**
+- [x] **Step 2: 创建 ranking_test.go**
 
 ```go
 package graph
@@ -1546,13 +1546,13 @@ func TestRankerRegistry_RegisterAndGet(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/ -run "TestWeightedRankConfig|TestRRFRankConfig|TestRankerRegistry" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/ranking.go internal/agentcore/store/graph/ranking_test.go
@@ -1567,7 +1567,7 @@ git commit -m "feat(store/graph): add ranking strategies — WeightedRankConfig,
 - Create: `internal/agentcore/store/graph/base.go`
 - Test: `internal/agentcore/store/graph/base_test.go`
 
-- [ ] **Step 1: 创建 base.go — 接口、选项、常量、工厂、QueryExpr**
+- [x] **Step 1: 创建 base.go — 接口、选项、常量、工厂、QueryExpr**
 
 ```go
 package graph
@@ -1808,11 +1808,11 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 }
 ```
 
-- [ ] **Step 2: 补充 utils.go 中的 EnsureUniqueUUIDs**
+- [x] **Step 2: 补充 utils.go 中的 EnsureUniqueUUIDs**
 
 在 utils.go 的 import 中添加 `"context"` 和 `"strings"`（如缺少），确保 `EnsureUniqueUUIDs` 函数可以编译。
 
-- [ ] **Step 3: 创建 base_test.go**
+- [x] **Step 3: 创建 base_test.go**
 
 ```go
 package graph
@@ -1963,13 +1963,13 @@ func TestNewOptions(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/ -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/base.go internal/agentcore/store/graph/base_test.go internal/agentcore/store/graph/utils.go
@@ -1983,7 +1983,7 @@ git commit -m "feat(store/graph): add BaseGraphStore interface, Options, factory
 **Files:**
 - Create: `internal/agentcore/store/graph/doc.go`
 
-- [ ] **Step 1: 创建 doc.go**
+- [x] **Step 1: 创建 doc.go**
 
 ```go
 // Package graph 提供知识图谱图存储的接口定义和核心数据模型。
@@ -2019,7 +2019,7 @@ git commit -m "feat(store/graph): add BaseGraphStore interface, Options, factory
 package graph
 ```
 
-- [ ] **Step 2: 提交**
+- [x] **Step 2: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/doc.go
@@ -2034,7 +2034,7 @@ git commit -m "feat(store/graph): add package doc.go"
 - Create: `internal/agentcore/store/graph/milvus/schema.go`
 - Test: `internal/agentcore/store/graph/milvus/schema_test.go`
 
-- [ ] **Step 1: 创建 milvus/schema.go**
+- [x] **Step 1: 创建 milvus/schema.go**
 
 此文件实现三个集合的 Schema 构建和索引创建。对照 Python 的 `generate_milvus_schema.py`。
 
@@ -2055,7 +2055,7 @@ git commit -m "feat(store/graph): add package doc.go"
 - `buildIndexParams(indexCfg, collection) ([]entity.Index, []string, error)`
 - `addCommonFields(schema *entity.Schema, storageCfg *GraphStoreStorageConfig, embedDim int)`
 
-- [ ] **Step 2: 创建 milvus/schema_test.go**
+- [x] **Step 2: 创建 milvus/schema_test.go**
 
 测试内容：
 - `TestBuildEntitySchema_字段完整性`
@@ -2064,13 +2064,13 @@ git commit -m "feat(store/graph): add package doc.go"
 - `TestBuildIndexParams_Entity三索引`
 - `TestBuildIndexParams_Relation双索引`
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/milvus/ -run "TestBuild.*Schema|TestBuildIndexParams" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/milvus/schema.go internal/agentcore/store/graph/milvus/schema_test.go
@@ -2085,7 +2085,7 @@ git commit -m "feat(store/graph/milvus): add collection schema and index buildin
 - Create: `internal/agentcore/store/graph/milvus/milvus_writer.go`
 - Test: `internal/agentcore/store/graph/milvus/milvus_writer_test.go`
 
-- [ ] **Step 1: 创建 milvus_writer.go**
+- [x] **Step 1: 创建 milvus_writer.go**
 
 实现 `graphWriter` 结构体和写入逻辑：
 
@@ -2117,7 +2117,7 @@ type graphWriter struct {
 5. flush → client.Flush
 6. 批量插入失败 → 逐条回退
 
-- [ ] **Step 2: 创建 milvus_writer_test.go**
+- [x] **Step 2: 创建 milvus_writer_test.go**
 
 测试内容：
 - `TestGraphWriter_AddEntity_基本写入`
@@ -2130,13 +2130,13 @@ type graphWriter struct {
 
 需要 fake 组件：`fakeMilvusClient`, `fakeEmbedder`
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/milvus/ -run "TestGraphWriter" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/milvus/milvus_writer.go internal/agentcore/store/graph/milvus/milvus_writer_test.go
@@ -2151,7 +2151,7 @@ git commit -m "feat(store/graph/milvus): add graphWriter — entity/relation/epi
 - Create: `internal/agentcore/store/graph/milvus/milvus_searcher.go`
 - Test: `internal/agentcore/store/graph/milvus/milvus_searcher_test.go`
 
-- [ ] **Step 1: 创建 milvus_searcher.go**
+- [x] **Step 1: 创建 milvus_searcher.go**
 
 实现 `graphSearcher` 结构体和搜索逻辑：
 
@@ -2202,7 +2202,7 @@ sparseEmb := entity.NewSparseEmbedding(dimValues, scoreValues)
 req := client.NewANNSearchRequest(fieldName, entity.IP, expr, []entity.Vector{sparseEmb}, searchParam, limit)
 ```
 
-- [ ] **Step 2: 创建 milvus_searcher_test.go**
+- [x] **Step 2: 创建 milvus_searcher_test.go**
 
 测试内容：
 - `TestGraphSearcher_Search_单集合无BFS`
@@ -2219,13 +2219,13 @@ req := client.NewANNSearchRequest(fieldName, entity.IP, expr, []entity.Vector{sp
 
 需要 fake 组件：`fakeMilvusClientWithSearch`, `fakeEmbedder`, `fakeReranker`
 
-- [ ] **Step 3: 运行测试确认通过**
+- [x] **Step 3: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/milvus/ -run "TestGraphSearcher|TestBuildSearch|TestGetRanker" -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/milvus/milvus_searcher.go internal/agentcore/store/graph/milvus/milvus_searcher_test.go
@@ -2241,7 +2241,7 @@ git commit -m "feat(store/graph/milvus): add graphSearcher — hybrid search, BF
 - Create: `internal/agentcore/store/graph/milvus/doc.go`
 - Test: `internal/agentcore/store/graph/milvus/milvus_test.go`
 
-- [ ] **Step 1: 创建 milvus.go — MilvusGraphStore 主结构体**
+- [x] **Step 1: 创建 milvus.go — MilvusGraphStore 主结构体**
 
 ```go
 package milvus
@@ -2335,7 +2335,7 @@ func init() {
 
 同时定义 `milvusClient` 私有接口（与 vector 包模式一致）。
 
-- [ ] **Step 2: 创建 milvus/doc.go**
+- [x] **Step 2: 创建 milvus/doc.go**
 
 ```go
 // Package milvus 提供 Graph Store 的 Milvus 后端实现。
@@ -2359,7 +2359,7 @@ func init() {
 package milvus
 ```
 
-- [ ] **Step 3: 创建 milvus_test.go**
+- [x] **Step 3: 创建 milvus_test.go**
 
 测试内容：
 - `TestNewMilvusGraphStore_创建`
@@ -2369,13 +2369,13 @@ package milvus
 - `TestMilvusGraphStore_Rebuild`
 - `TestMilvusGraphStore_编译时接口检查`
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/milvus/ -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/milvus/milvus.go internal/agentcore/store/graph/milvus/doc.go internal/agentcore/store/graph/milvus/milvus_test.go
@@ -2389,7 +2389,7 @@ git commit -m "feat(store/graph/milvus): add MilvusGraphStore — main struct, l
 **Files:**
 - Create: `internal/agentcore/store/graph/milvus/milvus_integration_test.go`
 
-- [ ] **Step 1: 创建集成测试占位**
+- [x] **Step 1: 创建集成测试占位**
 
 ```go
 //go:build integration
@@ -2403,19 +2403,19 @@ func TestMilvusGraphStore_真实调用(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行全量单元测试**
+- [x] **Step 2: 运行全量单元测试**
 
 Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/store/graph/... -v`
 
 Expected: ALL PASS
 
-- [ ] **Step 3: 运行覆盖率检查**
+- [x] **Step 3: 运行覆盖率检查**
 
 Run: `cd /home/opensource/uap-claw-go && go test -cover ./internal/agentcore/store/graph/...`
 
 Expected: 覆盖率 ≥ 85%
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/agentcore/store/graph/milvus/milvus_integration_test.go
@@ -2429,11 +2429,11 @@ git commit -m "feat(store/graph/milvus): add integration test placeholder"
 **Files:**
 - Modify: `IMPLEMENTATION_PLAN.md`
 
-- [ ] **Step 1: 更新 4.26 状态为 ✅**
+- [x] **Step 1: 更新 4.26 状态为 ✅**
 
 将 `| 4.26 | ☐ | Graph Store |` 更新为 `| 4.26 | ✅ | Graph Store |`
 
-- [ ] **Step 2: 提交**
+- [x] **Step 2: 提交**
 
 ```bash
 git add IMPLEMENTATION_PLAN.md
