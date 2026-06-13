@@ -2,6 +2,8 @@ package codec
 
 import (
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 )
 
 // TestNewAesStorageCodec_空key 验证空 key 创建 passthrough 模式
@@ -155,4 +157,10 @@ func TestAesStorageCodec_Encode_多模态内容(t *testing.T) {
 	if decrypted != multimodal {
 		t.Errorf("解密结果不匹配, got %q", decrypted)
 	}
+}
+
+// TestAesStorageCodec_满足StorageCodec接口 验证 AesStorageCodec 满足 StorageCodec 接口
+func TestAesStorageCodec_满足StorageCodec接口(t *testing.T) {
+	// 验证 AesStorageCodec 满足 StorageCodec 接口
+	var _ index.StorageCodec = (*AesStorageCodec)(nil)
 }
