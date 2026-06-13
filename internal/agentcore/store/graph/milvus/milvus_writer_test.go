@@ -657,13 +657,13 @@ type testQueryExpr struct {
 	expr string
 }
 
-func (e *testQueryExpr) ToExpr(backend string) (string, error) {
+func (e *testQueryExpr) ToExpr(backend string) (any, error) {
 	return e.expr, nil
 }
 
 // errorQueryExpr 用于测试总是失败的 QueryExpr
 type errorQueryExpr struct{}
 
-func (e *errorQueryExpr) ToExpr(backend string) (string, error) {
+func (e *errorQueryExpr) ToExpr(backend string) (any, error) {
 	return "", fmt.Errorf("expr error")
 }

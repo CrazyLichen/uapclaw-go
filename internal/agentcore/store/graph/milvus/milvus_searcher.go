@@ -175,10 +175,15 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 		}
 		expr = buildIDFilterExpr(ids)
 	} else if o.FilterExpr != nil {
-		expr, err = o.FilterExpr.ToExpr("milvus")
-		if err != nil {
-			return nil, fmt.Errorf("构建过滤表达式失败: %w", err)
+		exprVal, exprErr := o.FilterExpr.ToExpr("milvus")
+		if exprErr != nil {
+			return nil, fmt.Errorf("构建过滤表达式失败: %w", exprErr)
 		}
+		strExpr, ok := exprVal.(string)
+		if !ok {
+			return nil, fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+		}
+		expr = strExpr
 	}
 
 	// 构建输出字段
@@ -568,9 +573,11 @@ func buildSearchFilterExpr(o graph.Options) string {
 		return buildIDFilterExpr(ids)
 	}
 	if o.FilterExpr != nil {
-		expr, err := o.FilterExpr.ToExpr("milvus")
-		if err == nil && expr != "" {
-			return expr
+		exprVal, err := o.FilterExpr.ToExpr("milvus")
+		if err == nil {
+			if strExpr, ok := exprVal.(string); ok && strExpr != "" {
+				return strExpr
+			}
 		}
 	}
 	return ""

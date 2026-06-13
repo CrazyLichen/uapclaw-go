@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -45,11 +46,6 @@ type BaseGraphStore interface {
 	AttachEmbedder(embedder embedding.BaseEmbedding)
 }
 
-// QueryExpr 查询过滤表达式接口（最小定义，4.28 完善后替换）
-type QueryExpr interface {
-	// ToExpr 将过滤表达式转换为后端特定格式
-	ToExpr(backend string) (string, error)
-}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -62,7 +58,7 @@ type Options struct {
 
 	// 查询选项
 	IDs           []any
-	Expr          QueryExpr
+	Expr          query.QueryExpr
 	SilenceErrors bool
 
 	// 搜索选项
@@ -72,7 +68,7 @@ type Options struct {
 	Reranker       reranker.BaseReranker
 	BFSDepth       int
 	BFSK           int
-	FilterExpr     QueryExpr
+	FilterExpr     query.QueryExpr
 	OutputFields   []string
 	QueryEmbedding []float64
 	Language       string
@@ -144,7 +140,7 @@ func WithIDs(ids ...any) Option {
 }
 
 // WithExpr 按过滤表达式查询/删除
-func WithExpr(expr QueryExpr) Option {
+func WithExpr(expr query.QueryExpr) Option {
 	return func(o *Options) { o.Expr = expr }
 }
 
@@ -179,7 +175,7 @@ func WithBFS(depth, k int) Option {
 }
 
 // WithFilterExpr 设置搜索过滤表达式
-func WithFilterExpr(expr QueryExpr) Option {
+func WithFilterExpr(expr query.QueryExpr) Option {
 	return func(o *Options) { o.FilterExpr = expr }
 }
 

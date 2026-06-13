@@ -9,7 +9,7 @@
 //
 //	graph/
 //	├── doc.go           # 包文档
-//	├── base.go          # BaseGraphStore 接口 / Options / Option / QueryExpr / 常量 / 工厂
+//	├── base.go          # BaseGraphStore 接口 / Options / Option / 常量 / 工厂
 //	├── graph_object.go  # BaseGraphObject / NamedGraphObject / Entity / Relation / Episode / EmbedTask
 //	├── config.go        # GraphConfig / GraphStoreStorageConfig / GraphStoreIndexConfig / BM25Config
 //	├── ranking.go       # BaseRankConfig / WeightedRankConfig / RRFRankConfig / RankerRegistry

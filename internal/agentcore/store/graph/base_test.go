@@ -300,7 +300,7 @@ func TestEnsureUniqueUUIDs_去重(t *testing.T) {
 // fakeQueryExpr 用于测试的模拟查询表达式
 type fakeQueryExpr struct{}
 
-func (f *fakeQueryExpr) ToExpr(backend string) (string, error) { return "", nil }
+func (f *fakeQueryExpr) ToExpr(backend string) (any, error) { return "", nil }
 
 // fakeReranker 用于测试的模拟重排序器
 type fakeReranker struct{}

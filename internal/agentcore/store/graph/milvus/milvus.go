@@ -160,7 +160,6 @@ func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ..
 
 	o := applyGraphOptions(opts...)
 	expr := ""
-	var err error
 	if len(o.IDs) > 0 {
 		ids := make([]string, 0, len(o.IDs))
 		for _, id := range o.IDs {
@@ -168,10 +167,15 @@ func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ..
 		}
 		expr = buildIDFilterExpr(ids)
 	} else if o.Expr != nil {
-		expr, err = o.Expr.ToExpr("milvus")
-		if err != nil {
-			return nil, fmt.Errorf("构建查询表达式失败: %w", err)
+		exprVal, exprErr := o.Expr.ToExpr("milvus")
+		if exprErr != nil {
+			return nil, fmt.Errorf("构建查询表达式失败: %w", exprErr)
 		}
+		strExpr, ok := exprVal.(string)
+		if !ok {
+			return nil, fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+		}
+		expr = strExpr
 	}
 
 	outputFields := o.OutputFields

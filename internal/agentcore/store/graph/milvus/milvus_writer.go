@@ -95,7 +95,6 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 	}
 
 	var expr string
-	var err error
 	if len(o.IDs) > 0 {
 		ids := make([]string, 0, len(o.IDs))
 		for _, id := range o.IDs {
@@ -103,10 +102,15 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 		}
 		expr = buildIDFilterExpr(ids)
 	} else if o.Expr != nil {
-		expr, err = o.Expr.ToExpr("milvus")
-		if err != nil {
-			return fmt.Errorf("构建删除表达式失败: %w", err)
+		exprVal, exprErr := o.Expr.ToExpr("milvus")
+		if exprErr != nil {
+			return fmt.Errorf("构建删除表达式失败: %w", exprErr)
 		}
+		strExpr, ok := exprVal.(string)
+		if !ok {
+			return fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+		}
+		expr = strExpr
 	}
 
 	if expr == "" {
