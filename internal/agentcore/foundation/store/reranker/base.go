@@ -120,8 +120,6 @@ func DocID(doc any) string {
 	return ""
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ValidateConfig 校验 RerankerConfig 字段。
 func ValidateConfig(config *RerankerConfig) error {
 	if config.APIBase == "" {
@@ -172,3 +170,5 @@ func ReplacePlaceholder(s, old, new string) string {
 	}
 	return s
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

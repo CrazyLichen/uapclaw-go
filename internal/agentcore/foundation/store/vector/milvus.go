@@ -78,6 +78,8 @@ type MilvusVectorStore struct {
 	createClient func(ctx context.Context, uri, token, dbName string) (milvusClient, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

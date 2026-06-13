@@ -7,8 +7,7 @@
 //
 //	utils/
 //	├── doc.go              # 包文档
-//	├── api_requests.go     # HTTP 重试请求工具
-//	└── api_requests_test.go # 单元测试
+//	└── api_requests.go     # HTTP 重试请求工具
 //
 // 对应 Python 代码：
 //

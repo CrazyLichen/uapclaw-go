@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // chromaOperatorMap Chroma 比较运算符映射
 //
@@ -17,6 +17,20 @@ var chromaOperatorMap = map[string]string{
 	">=": "$gte",
 	"<":  "$lt",
 	"<=": "$lte",
+}
+
+// chromaDef Chroma 查询语言定义
+//
+// 对应 Python: chroma_def
+var chromaDef = QueryLanguageDefinition{
+	Comparison:  chromaComparisonFilter,
+	Range:       chromaRangeFilter,
+	Arithmetic:  chromaArithmeticFilter,
+	Null:        chromaNullFilter,
+	JSONFilter:  chromaJSONFilter,
+	Array:       chromaArrayFilter,
+	Logical:     chromaLogicalFilter,
+	TextMatch:   chromaTextMatchFilter,
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -182,22 +196,6 @@ func chromaTextMatchFilter(expr QueryExpr) (any, error) {
 	}, nil
 }
 
-// chromaDef Chroma 查询语言定义
-//
-// 对应 Python: chroma_def
-var chromaDef = QueryLanguageDefinition{
-	Comparison:  chromaComparisonFilter,
-	Range:       chromaRangeFilter,
-	Arithmetic:  chromaArithmeticFilter,
-	Null:        chromaNullFilter,
-	JSONFilter:  chromaJSONFilter,
-	Array:       chromaArrayFilter,
-	Logical:     chromaLogicalFilter,
-	TextMatch:   chromaTextMatchFilter,
-}
-
-// ──────────────────────────── 辅助函数 ────────────────────────────
-
 // combineFilters 组合两个过滤字典
 func combineFilters(left, right map[string]any, op string) map[string]any {
 	if len(left) > 0 && len(right) > 0 {
@@ -223,6 +221,7 @@ func toMapAny(v any) map[string]any {
 	return map[string]any{}
 }
 
+// init 注册 Chroma 查询语言
 func init() {
 	_ = RegisterDatabaseQueryLanguage("chroma", chromaDef, false)
 }

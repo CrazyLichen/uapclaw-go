@@ -51,14 +51,13 @@ const (
 	defaultRetryWait = 100 * time.Millisecond
 )
 
-// 审查内容检测关键词，对齐 Python
-var censorshipKeywords = []string{"safety", "violation", "policy", "inspection", "appropriate"}
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// logComponent 日志组件常量
 	logComponent = logger.ComponentAgentCore
+	// censorshipKeywords 审查内容检测关键词，对齐 Python
+	censorshipKeywords = []string{"safety", "violation", "policy", "inspection", "appropriate"}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -26,10 +26,10 @@ const (
 	defaultM             = 32
 	defaultEfConstruction = 256
 	defaultEfSearch      = 64
-)
 
-// 日志组件
-const logComponent = logger.ComponentAgentCore
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

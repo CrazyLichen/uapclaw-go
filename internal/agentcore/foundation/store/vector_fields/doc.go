@@ -27,9 +27,9 @@
 //	├── base.go             # VectorField 基类 + DatabaseType/IndexType 枚举 + vf 标签反射机制
 //	├── milvus_fields.go    # Milvus 索引子类型（AUTO/FLAT/HNSW/IVF/SCANN）
 //	├── chroma_fields.go    # Chroma 索引子类型（HNSW 配置）
-//	└── pg_fields.go        # PGVector 索引子类型（HNSW/IVFFlat 配置）
-//	└── gauss_fields.go    # GaussDB DiskANN 索引子类型
-//	└── es_fields.go      # Elasticsearch HNSW/k-NN 索引子类型
+//	├── pg_fields.go        # PGVector 索引子类型（HNSW/IVFFlat 配置）
+//	├── gauss_fields.go     # GaussDB DiskANN 索引子类型
+//	└── es_fields.go        # Elasticsearch HNSW/k-NN 索引子类型
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/vector_fields/
 //

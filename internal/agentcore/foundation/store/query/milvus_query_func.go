@@ -5,6 +5,22 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// milvusDef Milvus 查询语言定义
+//
+// 对应 Python: milvus_def
+var milvusDef = QueryLanguageDefinition{
+	Comparison:  milvusComparisonFilter,
+	Range:       milvusRangeFilter,
+	Arithmetic:  milvusArithmeticFilter,
+	Null:        milvusNullFilter,
+	JSONFilter:  milvusJSONFilter,
+	Array:       milvusArrayFilter,
+	Logical:     milvusLogicalFilter,
+	TextMatch:   milvusTextMatchFilter,
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // milvusComparisonFilter 将比较表达式转换为 Milvus 过滤字符串
@@ -163,22 +179,6 @@ func milvusTextMatchFilter(expr QueryExpr) (any, error) {
 	}
 }
 
-// milvusDef Milvus 查询语言定义
-//
-// 对应 Python: milvus_def
-var milvusDef = QueryLanguageDefinition{
-	Comparison:  milvusComparisonFilter,
-	Range:       milvusRangeFilter,
-	Arithmetic:  milvusArithmeticFilter,
-	Null:        milvusNullFilter,
-	JSONFilter:  milvusJSONFilter,
-	Array:       milvusArrayFilter,
-	Logical:     milvusLogicalFilter,
-	TextMatch:   milvusTextMatchFilter,
-}
-
-// ──────────────────────────── 辅助函数 ────────────────────────────
-
 // toSlice 尝试将 any 转为 []any 切片
 func toSlice(v any) ([]any, bool) {
 	switch val := v.(type) {
@@ -217,6 +217,7 @@ func allStrings(values []any) bool {
 	return true
 }
 
+// init 注册 Milvus 查询语言
 func init() {
 	_ = RegisterDatabaseQueryLanguage("milvus", milvusDef, false)
 }

@@ -5,46 +5,6 @@ import (
 	"fmt"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ErrorCategory 错误类别枚举，表达控制流语义。
-//
-// 选择 ErrorCategory = 选择控制语义（retry? abort? terminate gracefully?）。
-// 选 StatusCode = 选错误身份（哪个模块、哪种失败）。两者正交。
-//
-// 对应 Python: BaseError 子类层级（FrameworkError/ValidationError/ExecutionError/Termination）
-type ErrorCategory int
-
-const (
-	// ErrorCategoryFramework 基础设施/依赖故障，必须终止（fatal=True, recoverable=False）
-	ErrorCategoryFramework ErrorCategory = iota
-	// ErrorCategoryValidation 输入/约束错误，重试无意义（fatal=False, recoverable=False）
-	ErrorCategoryValidation
-	// ErrorCategoryExecution 执行期错误，可重试/重规划（fatal=False, recoverable=True）
-	ErrorCategoryExecution
-	// ErrorCategoryTermination 正常控制流终止，非错误（fatal=False, recoverable=False）
-	ErrorCategoryTermination
-)
-
-// errorCategoryStrings ErrorCategory 枚举值对应的字符串表示，与 Python 子类名保持一致。
-var errorCategoryStrings = [...]string{
-	"FrameworkError",
-	"ValidationError",
-	"ExecutionError",
-	"Termination",
-}
-
-// errorCategoryAttrs ErrorCategory 对应的 fatal/recoverable 属性。
-var errorCategoryAttrs = [...]struct {
-	Fatal       bool
-	Recoverable bool
-}{
-	{Fatal: true, Recoverable: false},  // Framework
-	{Fatal: false, Recoverable: false}, // Validation
-	{Fatal: false, Recoverable: true},  // Execution
-	{Fatal: false, Recoverable: false}, // Termination
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseError 统一异常基类，实现 error 接口。
@@ -72,11 +32,6 @@ type BaseError struct {
 	cause error
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ErrorOption BaseError 构造选项函数。
-type ErrorOption func(*baseErrorBuilder)
-
 // baseErrorBuilder 内部构造器，收集可选参数。
 type baseErrorBuilder struct {
 	msg     string
@@ -84,6 +39,55 @@ type baseErrorBuilder struct {
 	cause   error
 	params  map[string]any
 }
+
+// ErrorOption BaseError 构造选项函数。
+type ErrorOption func(*baseErrorBuilder)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ErrorCategory 错误类别枚举，表达控制流语义。
+//
+// 选择 ErrorCategory = 选择控制语义（retry? abort? terminate gracefully?）。
+// 选 StatusCode = 选错误身份（哪个模块、哪种失败）。两者正交。
+//
+// 对应 Python: BaseError 子类层级（FrameworkError/ValidationError/ExecutionError/Termination）
+type ErrorCategory int
+
+const (
+	// ErrorCategoryFramework 基础设施/依赖故障，必须终止（fatal=True, recoverable=False）
+	ErrorCategoryFramework ErrorCategory = iota
+	// ErrorCategoryValidation 输入/约束错误，重试无意义（fatal=False, recoverable=False）
+	ErrorCategoryValidation
+	// ErrorCategoryExecution 执行期错误，可重试/重规划（fatal=False, recoverable=True）
+	ErrorCategoryExecution
+	// ErrorCategoryTermination 正常控制流终止，非错误（fatal=False, recoverable=False）
+	ErrorCategoryTermination
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// errorCategoryStrings ErrorCategory 枚举值对应的字符串表示，与 Python 子类名保持一致。
+var errorCategoryStrings = [...]string{
+	"FrameworkError",
+	"ValidationError",
+	"ExecutionError",
+	"Termination",
+}
+
+// errorCategoryAttrs ErrorCategory 对应的 fatal/recoverable 属性。
+var errorCategoryAttrs = [...]struct {
+	Fatal       bool
+	Recoverable bool
+}{
+	{Fatal: true, Recoverable: false},  // Framework
+	{Fatal: false, Recoverable: false}, // Validation
+	{Fatal: false, Recoverable: true},  // Execution
+	{Fatal: false, Recoverable: false}, // Termination
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithMsg 设置自定义消息（覆盖模板渲染结果）。
 func WithMsg(msg string) ErrorOption {
@@ -260,8 +264,6 @@ func (c ErrorCategory) String() string {
 func (c ErrorCategory) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.String())
 }
-
-// ──────────────────────────── 工厂函数 ────────────────────────────
 
 // BuildError 构建异常实例但不抛出，用于延迟抛出或包装到 Result 中。
 //

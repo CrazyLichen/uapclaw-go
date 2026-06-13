@@ -7,7 +7,7 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // milvusClient Milvus 客户端接口，用于测试 mock 和生产适配。
 // 使用 ...interface{} 作为 callOptions 参数，避免在接口中导入 gRPC。

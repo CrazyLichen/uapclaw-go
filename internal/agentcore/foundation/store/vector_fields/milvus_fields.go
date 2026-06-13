@@ -111,17 +111,17 @@ func NewMilvusHNSW(fieldName string, m, efConstruction int, efSearchFactor float
 func (h *MilvusHNSW) Validate() error {
 	if h.M < 2 || h.M > 2048 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("HNSW M must be in range [2, 2048], got %d", h.M)),
+			exception.WithParam("error_msg", fmt.Sprintf("HNSW M 必须在范围 [2, 2048] 内，当前值: %d", h.M)),
 		)
 	}
 	if h.EfConstruction < 1 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("HNSW EfConstruction must be >= 1, got %d", h.EfConstruction)),
+			exception.WithParam("error_msg", fmt.Sprintf("HNSW EfConstruction 必须 >= 1，当前值: %d", h.EfConstruction)),
 		)
 	}
 	if h.EfSearchFactor <= 0 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("HNSW EfSearchFactor must be > 0, got %f", h.EfSearchFactor)),
+			exception.WithParam("error_msg", fmt.Sprintf("HNSW EfSearchFactor 必须 > 0，当前值: %f", h.EfSearchFactor)),
 		)
 	}
 	return nil
@@ -144,17 +144,17 @@ func NewMilvusIVF(fieldName string, nlist, nprobe int) *MilvusIVF {
 func (iv *MilvusIVF) Validate() error {
 	if iv.Nlist < 1 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("IVF Nlist must be >= 1, got %d", iv.Nlist)),
+			exception.WithParam("error_msg", fmt.Sprintf("IVF Nlist 必须 >= 1，当前值: %d", iv.Nlist)),
 		)
 	}
 	if iv.Nprobe < 1 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("IVF Nprobe must be >= 1, got %d", iv.Nprobe)),
+			exception.WithParam("error_msg", fmt.Sprintf("IVF Nprobe 必须 >= 1，当前值: %d", iv.Nprobe)),
 		)
 	}
 	if iv.Nprobe > iv.Nlist {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("IVF Nprobe must be <= Nlist, got nprobe=%d, nlist=%d", iv.Nprobe, iv.Nlist)),
+			exception.WithParam("error_msg", fmt.Sprintf("IVF Nprobe 必须 <= Nlist，当前值: nprobe=%d, nlist=%d", iv.Nprobe, iv.Nlist)),
 		)
 	}
 	return nil
@@ -182,22 +182,22 @@ func (s *MilvusSCANN) Validate() error {
 	// 先校验 IVF 基类参数
 	if s.Nlist < 1 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nlist must be >= 1, got %d", s.Nlist)),
+			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nlist 必须 >= 1，当前值: %d", s.Nlist)),
 		)
 	}
 	if s.Nprobe < 1 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nprobe must be >= 1, got %d", s.Nprobe)),
+			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nprobe 必须 >= 1，当前值: %d", s.Nprobe)),
 		)
 	}
 	if s.Nprobe > s.Nlist {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nprobe must be <= Nlist, got nprobe=%d, nlist=%d", s.Nprobe, s.Nlist)),
+			exception.WithParam("error_msg", fmt.Sprintf("SCANN Nprobe 必须 <= Nlist，当前值: nprobe=%d, nlist=%d", s.Nprobe, s.Nlist)),
 		)
 	}
 	if s.ReorderK < 0 {
 		return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("SCANN ReorderK must be >= 0, got %d", s.ReorderK)),
+			exception.WithParam("error_msg", fmt.Sprintf("SCANN ReorderK 必须 >= 0，当前值: %d", s.ReorderK)),
 		)
 	}
 	return nil

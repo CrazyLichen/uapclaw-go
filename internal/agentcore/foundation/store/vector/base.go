@@ -155,6 +155,15 @@ type Options struct {
 	NumCandidates int
 }
 
+// FieldOption FieldSchema 构造选项
+type FieldOption func(*FieldSchema)
+
+// CollectionOption CollectionSchema 构造选项
+type CollectionOption func(*CollectionSchema)
+
+// Option 向量存储操作的通用可选参数
+type Option func(*Options)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // VectorDataType 向量存储支持的字段数据类型。
@@ -186,15 +195,6 @@ const (
 	// VectorDataTypeArray 数组
 	VectorDataTypeArray
 )
-
-// FieldOption FieldSchema 构造选项
-type FieldOption func(*FieldSchema)
-
-// CollectionOption CollectionSchema 构造选项
-type CollectionOption func(*CollectionSchema)
-
-// Option 向量存储操作的通用可选参数
-type Option func(*Options)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

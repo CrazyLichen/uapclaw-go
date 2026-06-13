@@ -9,8 +9,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// QueryLanguageDefinition 数据库查询语言定义
-//
+// QueryLanguageDefinition 数据库查询语言定义//
 // 每个数据库后端需注册一个 QueryLanguageDefinition 实例，
 // 包含 8 个转换回调函数，分别处理不同类型的查询表达式。
 // 对应 Python: QueryLanguageDefinition
@@ -32,6 +31,10 @@ type QueryLanguageDefinition struct {
 	// TextMatch 文本匹配表达式转换
 	TextMatch func(QueryExpr) (any, error)
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

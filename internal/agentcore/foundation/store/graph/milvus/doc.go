@@ -16,4 +16,17 @@
 //	└── adapter.go          # milvusClientGraphAdapter SDK 客户端适配器
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/graph/milvus/
+//
+// 核心类型索引：
+//
+//   - MilvusGraphStore — Milvus 图存储主结构体，实现 graph.BaseGraphStore 接口
+//   - milvusClient — Milvus 客户端接口（非导出），用于测试 mock 和生产适配
+//   - graphWriter — 图写入器（非导出），负责 Entity/Relation/Episode 的 CRUD 写入
+//   - graphSearcher — 图搜索器（非导出），负责混合搜索和 BFS 图扩展
+//   - milvusClientGraphAdapter — SDK 客户端适配器（非导出），包装真实 Milvus SDK 客户端
+//
+// 导出函数索引：
+//
+//   - NewMilvusGraphStore — 创建 Milvus 图存储实例
+//   - EnsureCollections — 确保三个图集合存在
 package milvus

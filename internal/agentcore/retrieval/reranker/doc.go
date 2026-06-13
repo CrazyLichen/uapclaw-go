@@ -13,11 +13,7 @@
 //	├── reranker_base.go      # RerankerBase 基类 + 通用方法
 //	├── standard.go           # StandardReranker 标准重排序客户端
 //	├── chat.go               # ChatReranker 对话式重排序客户端
-//	├── dashscope.go          # DashScopeReranker 云服务重排序客户端
-//	├── reranker_base_test.go # 基类单元测试
-//	├── standard_test.go      # StandardReranker 单元测试
-//	├── chat_test.go          # ChatReranker 单元测试
-//	└── dashscope_test.go     # DashScopeReranker 单元测试
+//	└── dashscope.go          # DashScopeReranker 云服务重排序客户端
 //
 // 对应 Python 代码：
 //

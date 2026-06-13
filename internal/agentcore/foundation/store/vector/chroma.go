@@ -14,6 +14,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // chromaWhereFilter 适配器，将 WhereClause 包装为 WhereFilter 接口。
 // ChromaDB SDK v2 的 WhereClause 和 WhereFilter 是不同的接口，
 // WithWhere 需要 WhereFilter，而 EqString/And 等返回 WhereClause，
@@ -54,7 +56,9 @@ func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // chromaFieldMapping Chroma 集合的字段映射缓存。
 //
@@ -110,6 +114,8 @@ const (
 	// chromaDefaultBatchSize ChromaDB 默认批量插入大小
 	chromaDefaultBatchSize = 100
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

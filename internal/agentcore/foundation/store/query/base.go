@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // QueryExpr 查询过滤表达式接口
 //
@@ -19,8 +19,6 @@ type QueryExpr interface {
 	// ToExpr 将过滤表达式转换为后端特定格式
 	ToExpr(backend string) (any, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ComparisonExpr 比较表达式（==, !=, >, <, >=, <=）
 //
@@ -159,16 +157,6 @@ func SanitizeStr(value any) string {
 	return `"` + s + `"`
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// raiseQueryError 构造查询错误
-//
-// 对应 Python: raise_query_error()
-func raiseQueryError(reason string) error {
-	return exception.BuildError(exception.StatusRetrievalVectorStoreQueryInvalid,
-		exception.WithParam("error_msg", reason))
-}
-
 // ToExpr 实现 QueryExpr 接口 — CustomExpr
 func (e *CustomExpr) ToExpr(_ string) (any, error) {
 	return e.Expr, nil
@@ -244,4 +232,14 @@ func (e *MatchExpr) ToExpr(backend string) (any, error) {
 	}
 	def, _ := getQueryLanguageDefinition(backend)
 	return def.TextMatch(e)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// raiseQueryError 构造查询错误
+//
+// 对应 Python: raise_query_error()
+func raiseQueryError(reason string) error {
+	return exception.BuildError(exception.StatusRetrievalVectorStoreQueryInvalid,
+		exception.WithParam("error_msg", reason))
 }

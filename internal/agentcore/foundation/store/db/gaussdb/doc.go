@@ -13,11 +13,11 @@
 //
 //	gaussdb/
 //	├── doc.go          # 包文档
+//	├── dialector.go    # GaussDB 方言定义
+//	├── store.go        # GaussDbStore 存储实现
 //	├── clause.go       # GaussDB LOCKING 子句构建器
 //	├── serializer.go   # GaussDB 字符串序列化器
-//	├── migrator.go     # GaussDB 迁移器
-//	├── dialector.go    # GaussDB 方言定义
-//	└── store.go        # GaussDbStore 存储实现
+//	└── migrator.go     # GaussDB 迁移器
 //
 // 对应 Python 代码：
 //

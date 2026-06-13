@@ -12,17 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 初始化 ────────────────────────────
-
-// init 注册 milvus 后端到全局工厂
-func init() {
-	if err := graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig) (graph.BaseGraphStore, error) {
-		return NewMilvusGraphStore(cfg), nil
-	}); err != nil {
-		logger.Error(logComponent).Err(err).Msg("注册 milvus 图存储后端失败")
-	}
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MilvusGraphStore Milvus 图存储实现。
@@ -47,6 +36,11 @@ type MilvusGraphStore struct {
 	initialized bool
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时检查接口实现
+var _ graph.BaseGraphStore = (*MilvusGraphStore)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMilvusGraphStore 创建 Milvus 图存储实例。
@@ -57,9 +51,6 @@ func NewMilvusGraphStore(config *graph.GraphConfig) *MilvusGraphStore {
 	}
 	return s
 }
-
-// 编译时检查接口实现
-var _ graph.BaseGraphStore = (*MilvusGraphStore)(nil)
 
 // Config 获取图存储配置
 func (s *MilvusGraphStore) Config() *graph.GraphConfig {
@@ -323,4 +314,13 @@ func (s *MilvusGraphStore) ensureInit(ctx context.Context) error {
 
 	logger.Info(logComponent).Msg("Milvus 图存储初始化完成")
 	return nil
+}
+
+// init 注册 milvus 后端到全局工厂
+func init() {
+	if err := graph.RegisterBackend("milvus", func(cfg *graph.GraphConfig) (graph.BaseGraphStore, error) {
+		return NewMilvusGraphStore(cfg), nil
+	}); err != nil {
+		logger.Error(logComponent).Err(err).Msg("注册 milvus 图存储后端失败")
+	}
 }

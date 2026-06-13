@@ -144,6 +144,8 @@ func (r *StandardReranker) RerankDocsSync(ctx context.Context, query string, doc
 	return r.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // assembleParams 组装请求参数，将文档和查询合并为完整的请求参数。
 // 覆盖基类方法，增加输入类型校验。
 // 对齐 Python: StandardReranker._assemble_params
@@ -175,8 +177,6 @@ func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranke
 
 	return headers, params, docIDs
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveOption 从可变参数中解析 RerankOption
 func resolveOption(opts ...reranker.RerankOption) *reranker.RerankOption {
@@ -254,8 +254,8 @@ func formatAPIBase(apiBase, endPoint string) string {
 	return strings.TrimSuffix(apiBase, endPoint)
 }
 
-// ensure compile-time interface compliance
+// 确保编译时接口合规
 var _ reranker.BaseReranker = (*StandardReranker)(nil)
 
-// suppress unused import warning
+// 抑制未使用导入警告
 var _ = fmt.Sprintf

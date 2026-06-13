@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseGraphStore 图存储基础接口
 //
@@ -46,8 +46,8 @@ type BaseGraphStore interface {
 	AttachEmbedder(embedder embedding.BaseEmbedding)
 }
 
-
-// ──────────────────────────── 结构体 ────────────────────────────
+// Option 函数式选项
+type Option func(*Options)
 
 // Options 图存储操作选项
 type Options struct {
@@ -106,18 +106,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// Option 函数式选项
-type Option func(*Options)
-
-// newOptions 应用选项
-func newOptions(opts ...Option) Options {
-	var o Options
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return o
-}
 
 // WithFlush 设置写入后刷盘
 func WithFlush(flush bool) Option {
@@ -229,4 +217,15 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 			exception.WithParam("name", name))
 	}
 	return constructor(config)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newOptions 应用选项
+func newOptions(opts ...Option) Options {
+	var o Options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
 }

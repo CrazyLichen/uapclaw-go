@@ -14,6 +14,19 @@ import (
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// milvusClientAdapter 适配器，将 milvusclient.Client 适配到 milvusClient 接口。
+//
+// 新 SDK 的 Client 方法签名使用具体 Option 类型而非接口，
+// 需要适配层来桥接测试和生产的接口统一。
+//
+// 注意：适配器方法直接委托给真实 SDK Client，无法在单元测试中覆盖，
+// 需通过集成测试（go test -tags=integration）验证。
+type milvusClientAdapter struct {
+	client *milvusclient.Client
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。
@@ -30,17 +43,6 @@ func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvus
 		return nil, err
 	}
 	return &milvusClientAdapter{client: c}, nil
-}
-
-// milvusClientAdapter 适配器，将 milvusclient.Client 适配到 milvusClient 接口。
-//
-// 新 SDK 的 Client 方法签名使用具体 Option 类型而非接口，
-// 需要适配层来桥接测试和生产的接口统一。
-//
-// 注意：适配器方法直接委托给真实 SDK Client，无法在单元测试中覆盖，
-// 需通过集成测试（go test -tags=integration）验证。
-type milvusClientAdapter struct {
-	client *milvusclient.Client
 }
 
 func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {

@@ -7,8 +7,7 @@
 //
 //	common/
 //	├── doc.go           # 包文档
-//	├── document.go      # MultimodalDocument 多模态文档模型
-//	└── document_test.go # MultimodalDocument 单元测试
+//	└── document.go      # MultimodalDocument 多模态文档模型
 //
 // 对应 Python 代码：
 //

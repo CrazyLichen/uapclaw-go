@@ -313,8 +313,8 @@ func (r *DashScopeReranker) requestParams(query string, documents any, topN int,
 	return params
 }
 
-// ensure compile-time interface compliance
+// 确保编译时接口合规
 var _ reranker.BaseReranker = (*DashScopeReranker)(nil)
 
-// suppress unused import warning
+// 抑制未使用导入警告
 var _ = fmt.Sprintf

@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseObjectStorage 对象存储客户端接口
 //
@@ -30,8 +30,6 @@ type BaseObjectStorage interface {
 	// 不传 WithMaxObjects 时默认返回最多 100 个对象
 	ListObjects(ctx context.Context, bucketName string, objectPrefix string, opts ...ListOption) ([]map[string]any, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ObjectStorageConfig 对象存储配置
 //
@@ -59,6 +57,9 @@ type ListOptions struct {
 	MaxObjects int
 }
 
+// ListOption 列表查询选项
+type ListOption func(*ListOptions)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -74,9 +75,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ListOption 列表查询选项
-type ListOption func(*ListOptions)
 
 // WithMaxObjects 设置最大返回对象数，默认 100
 func WithMaxObjects(n int) ListOption {

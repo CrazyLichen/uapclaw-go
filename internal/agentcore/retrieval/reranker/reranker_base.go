@@ -63,19 +63,6 @@ func NewRerankerBaseWithDefaults(config reranker.RerankerConfig) *RerankerBase {
 	return NewRerankerBase(config, defaultMaxRetries, defaultRetryWait)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// buildDefaultHeaders 构建默认请求头。
-func buildDefaultHeaders(apiKey string) map[string]string {
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
-	if apiKey != "" {
-		headers["Authorization"] = fmt.Sprintf("Bearer %s", apiKey)
-	}
-	return headers
-}
-
 // Config 返回重排序模型配置。
 func (b *RerankerBase) Config() reranker.RerankerConfig {
 	return b.config
@@ -89,6 +76,19 @@ func (b *RerankerBase) MaxRetries() int {
 // RetryWait 返回重试等待时间。
 func (b *RerankerBase) RetryWait() time.Duration {
 	return b.retryWait
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildDefaultHeaders 构建默认请求头。
+func buildDefaultHeaders(apiKey string) map[string]string {
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	if apiKey != "" {
+		headers["Authorization"] = fmt.Sprintf("Bearer %s", apiKey)
+	}
+	return headers
 }
 
 // requestHeaders 返回默认请求头，子类可覆盖。

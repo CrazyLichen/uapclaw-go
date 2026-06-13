@@ -4,6 +4,18 @@ import "sync"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// BaseRankConfig 排序基础配置接口
+type BaseRankConfig interface {
+	// Name 排序策略名称
+	Name() string
+	// HigherIsBetter 分数越高是否越好
+	HigherIsBetter() bool
+	// IsActive 各通道开关 [name_dense, content_dense, content_sparse]
+	IsActive() [3]int
+	// Args 返回构建排序器所需的位置参数和关键字参数
+	Args() ([]any, map[string]any)
+}
+
 // WeightedRankConfig 加权排序配置
 type WeightedRankConfig struct {
 	// NameDense 名称向量权重
@@ -30,20 +42,6 @@ type RRFRankConfig struct {
 type RankerRegistry struct {
 	mu       sync.RWMutex
 	backends map[string]map[string]any
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// BaseRankConfig 排序基础配置接口
-type BaseRankConfig interface {
-	// Name 排序策略名称
-	Name() string
-	// HigherIsBetter 分数越高是否越好
-	HigherIsBetter() bool
-	// IsActive 各通道开关 [name_dense, content_dense, content_sparse]
-	IsActive() [3]int
-	// Args 返回构建排序器所需的位置参数和关键字参数
-	Args() ([]any, map[string]any)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

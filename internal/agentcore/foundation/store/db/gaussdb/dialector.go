@@ -56,8 +56,6 @@ func GaussNew(config postgres.Config) gorm.Dialector {
 	return GaussDialector{Dialector: postgres.Dialector{Config: &config}}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Name 返回方言名称 "gaussdb"。
 // 对标 Python: GaussDialectAsyncpg.name = 'gaussdb'
 // 注意：必须使用值接收者，否则嵌入的 postgres.Dialector.Name() 会被优先调用。
@@ -129,3 +127,5 @@ func (dialector GaussDialector) Migrator(db *gorm.DB) gorm.Migrator {
 		},
 	}}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -62,6 +62,8 @@ type ESVectorStore struct {
 // ESOption ESVectorStore 构造选项
 type ESOption func(*ESVectorStore)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
