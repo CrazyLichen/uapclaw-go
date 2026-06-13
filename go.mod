@@ -19,7 +19,7 @@ go 1.25.8
 // - github.com/mattn/go-sqlite3       SQLite
 // - github.com/jackc/pgx/v5          PostgreSQL
 // - github.com/redis/go-redis/v9     Redis
-// - github.com/milvus-io/milvus-sdk-go/v2  Milvus
+// - github.com/milvus-io/milvus/client/v2  Milvus
 //
 // 领域五：会话与上下文
 // - github.com/pkoukk/tiktoken-go    Tiktoken
@@ -52,7 +52,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/mark3labs/mcp-go v0.54.1
-	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/milvus-io/milvus/client/v2 v2.6.5
 	github.com/redis/go-redis/v9 v9.20.0
 	github.com/rs/zerolog v1.35.1
