@@ -136,16 +136,16 @@ func newFakeCodec() *fakeCodec {
 	}
 }
 
-func (f *fakeCodec) Encode(text string) string {
+func (f *fakeCodec) Encode(text string) (string, error) {
 	encoded := "enc:" + text
 	f.encoded[encoded] = text
-	return encoded
+	return encoded, nil
 }
 
-func (f *fakeCodec) Decode(data string) string {
+func (f *fakeCodec) Decode(data string) (string, error) {
 	decoded := strings.TrimPrefix(data, "enc:")
 	f.decoded[data] = decoded
-	return decoded
+	return decoded, nil
 }
 
 func TestStorageCodec_接口约束(t *testing.T) {
@@ -156,8 +156,8 @@ func TestStorageCodec_接口约束(t *testing.T) {
 func TestStorageCodec_EncodeDecode(t *testing.T) {
 	codec := newFakeCodec()
 	original := "敏感数据"
-	encoded := codec.Encode(original)
-	decoded := codec.Decode(encoded)
+	encoded, _ := codec.Encode(original)
+	decoded, _ := codec.Decode(encoded)
 
 	if decoded != original {
 		t.Errorf("编解码往返失败: 期望 %q, 实际 %q", original, decoded)
