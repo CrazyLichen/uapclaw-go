@@ -8,6 +8,7 @@
 //
 //	milvus/
 //	├── doc.go              # 包文档
+//	├── client.go           # milvusClient 接口定义
 //	├── schema.go           # 集合 Schema 和索引构建
 //	├── milvus_writer.go    # graphWriter 写入逻辑
 //	├── milvus_searcher.go  # graphSearcher 搜索逻辑
