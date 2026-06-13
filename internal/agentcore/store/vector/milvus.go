@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/milvus-io/milvus-sdk-go/v2/client"
-	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/column"
+	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/index"
+	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/vector_fields"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -18,22 +20,21 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // milvusClient Milvus 客户端操作接口（用于解耦和测试）。
-// 生产代码使用真实 client.Client，测试代码注入 fakeMilvusClient。
+// 生产代码使用真实 milvusclient.Client，测试代码注入 fakeMilvusClient。
 type milvusClient interface {
-	CreateCollection(ctx context.Context, schema *entity.Schema, shardsNum int32, opts ...client.CreateCollectionOption) error
-	DropCollection(ctx context.Context, collName string, opts ...client.DropCollectionOption) error
-	HasCollection(ctx context.Context, collName string) (bool, error)
-	DescribeCollection(ctx context.Context, collName string) (*entity.Collection, error)
-	Insert(ctx context.Context, collName string, partitionName string, columns ...entity.Column) (entity.Column, error)
-	Search(ctx context.Context, collName string, partitions []string, expr string, outputFields []string, vectors []entity.Vector, vectorField string, metricType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	Delete(ctx context.Context, collName string, partitionName string, expr string) error
-	ListCollections(ctx context.Context, opts ...client.ListCollectionOption) ([]*entity.Collection, error)
-	LoadCollection(ctx context.Context, collName string, async bool, opts ...client.LoadCollectionOption) error
-	AlterCollection(ctx context.Context, collName string, attrs ...entity.CollectionAttribute) error
-	Flush(ctx context.Context, collName string, async bool, opts ...client.FlushOption) error
-	CreateIndex(ctx context.Context, collName string, fieldName string, idx entity.Index, async bool, opts ...client.IndexOption) error
-	DescribeIndex(ctx context.Context, collName string, fieldName string, opts ...client.IndexOption) ([]entity.Index, error)
-	Close() error
+	CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error
+	DropCollection(ctx context.Context, option milvusclient.DropCollectionOption, callOptions ...interface{}) error
+	HasCollection(ctx context.Context, option milvusclient.HasCollectionOption, callOptions ...interface{}) (bool, error)
+	DescribeCollection(ctx context.Context, option milvusclient.DescribeCollectionOption, callOptions ...interface{}) (*entity.Collection, error)
+	Insert(ctx context.Context, option milvusclient.InsertOption, callOptions ...interface{}) (milvusclient.InsertResult, error)
+	Search(ctx context.Context, option milvusclient.SearchOption, callOptions ...interface{}) ([]milvusclient.ResultSet, error)
+	Delete(ctx context.Context, option milvusclient.DeleteOption, callOptions ...interface{}) (milvusclient.DeleteResult, error)
+	ListCollections(ctx context.Context, option milvusclient.ListCollectionOption, callOptions ...interface{}) ([]string, error)
+	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error
+	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error
+	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error
+	DescribeIndex(ctx context.Context, option milvusclient.DescribeIndexOption, callOptions ...interface{}) (milvusclient.IndexDescription, error)
+	Close(ctx context.Context) error
 }
 
 // collMeta 集合元数据缓存
@@ -54,7 +55,7 @@ type collMeta struct {
 
 // MilvusVectorStore 基于 Milvus 的向量存储实现。
 //
-// 实现 BaseVectorStore 接口，使用 milvus-sdk-go/v2 作为客户端。
+// 实现 BaseVectorStore 接口，使用 milvus/client/v2 作为客户端。
 // 客户端惰性创建，初始化时不需要 Milvus 可用。
 //
 // 对应 Python: vector/milvus_vector_store.py (MilvusVectorStore)
@@ -118,7 +119,7 @@ func (s *MilvusVectorStore) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.client != nil {
-		_ = s.client.Close()
+		_ = s.client.Close(context.Background())
 		s.client = nil
 		logger.Info(logComponent).Str("action", "close").Msg("Milvus 客户端连接已关闭")
 	}
@@ -136,7 +137,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	// 检查集合是否已存在
-	has, err := c.HasCollection(ctx, collectionName)
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 	if err != nil {
 		return err
 	}
@@ -203,21 +204,22 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		)
 	}
 
-	// 创建集合
-	// ShardsNum=0 时使用 Milvus 服务端默认值，对齐 Python: 不显式设置 shardsNum
-	shardsNum := o.ShardsNum
-	if err := c.CreateCollection(ctx, milvusSchema, shardsNum); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建集合失败")
-		return err
-	}
-
-	// 创建向量索引
+	// 构建向量索引
 	idx, err := s.buildIndexParams(vectorFieldName, distanceMetric, o)
 	if err != nil {
 		return err
 	}
-	if err := c.CreateIndex(ctx, collectionName, vectorFieldName, idx, false); err != nil {
-		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建索引失败")
+
+	// 创建集合（使用 Schema 模式 + WithIndexOptions）
+	createOpt := milvusclient.NewCreateCollectionOption(collectionName, milvusSchema).
+		WithIndexOptions(milvusclient.NewCreateIndexOption(collectionName, vectorFieldName, idx))
+
+	if o.ShardsNum > 0 {
+		createOpt.WithShardNum(int32(o.ShardsNum))
+	}
+
+	if err := c.CreateCollection(ctx, createOpt); err != nil {
+		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("创建集合失败")
 		return err
 	}
 
@@ -229,8 +231,9 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 		milvusType, _ := mapFieldType(field.DType)
 		switch milvusType {
 		case entity.FieldTypeVarChar, entity.FieldTypeInt64, entity.FieldTypeInt32:
-			invertedIdx := entity.NewGenericIndex(field.Name, "INVERTED", map[string]string{})
-			if err := c.CreateIndex(ctx, collectionName, field.Name, invertedIdx, false); err != nil {
+			invertedIdx := index.NewInvertedIndex()
+			createIdxOpt := milvusclient.NewCreateIndexOption(collectionName, field.Name, invertedIdx)
+			if err := c.CreateIndex(ctx, createIdxOpt); err != nil {
 				logger.Warn(logComponent).Err(err).Str("field", field.Name).
 					Msg("创建 INVERTED 索引失败，非致命错误")
 			}
@@ -238,7 +241,7 @@ func (s *MilvusVectorStore) CreateCollection(ctx context.Context, collectionName
 	}
 
 	// 加载集合
-	if err := c.LoadCollection(ctx, collectionName, false); err != nil {
+	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("加载集合失败")
 		return err
 	}
@@ -274,7 +277,7 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 		return err
 	}
 
-	has, err := c.HasCollection(ctx, collectionName)
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 	if err != nil {
 		return err
 	}
@@ -283,7 +286,7 @@ func (s *MilvusVectorStore) DeleteCollection(ctx context.Context, collectionName
 		return nil
 	}
 
-	if err := c.DropCollection(ctx, collectionName); err != nil {
+	if err := c.DropCollection(ctx, milvusclient.NewDropCollectionOption(collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("删除集合失败")
 		return err
 	}
@@ -306,7 +309,7 @@ func (s *MilvusVectorStore) CollectionExists(ctx context.Context, collectionName
 	if err != nil {
 		return false, err
 	}
-	return c.HasCollection(ctx, collectionName)
+	return c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 }
 
 // GetSchema 获取集合的 Schema。
@@ -318,7 +321,7 @@ func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string
 		return nil, err
 	}
 
-	has, err := c.HasCollection(ctx, collectionName)
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +331,7 @@ func (s *MilvusVectorStore) GetSchema(ctx context.Context, collectionName string
 		)
 	}
 
-	collInfo, err := c.DescribeCollection(ctx, collectionName)
+	collInfo, err := c.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(collectionName))
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("获取集合 Schema 失败")
 		return nil, err
@@ -408,13 +411,15 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 		}
 		batch := docs[i:end]
 
-		// 将 map 转为 entity.Column 列表
+		// 将 map 转为 column 列表
 		columns, err := s.docsToColumns(batch)
 		if err != nil {
 			return err
 		}
 
-		_, err = c.Insert(ctx, collectionName, "", columns...)
+		// 使用 ColumnBasedInsertOption
+		insertOpt := milvusclient.NewColumnBasedInsertOption(collectionName).WithColumns(columns...)
+		_, err = c.Insert(ctx, insertOpt)
 		if err != nil {
 			logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
 				Int("batch_start", i).Int("batch_size", len(batch)).Msg("插入文档批次失败")
@@ -427,7 +432,7 @@ func (s *MilvusVectorStore) AddDocs(ctx context.Context, collectionName string, 
 	}
 
 	// 刷新确保持久化
-	if err := c.Flush(ctx, collectionName, false); err != nil {
+	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
 	}
 
@@ -473,13 +478,27 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 		outputFields = s.getOutputFields(collectionName)
 	}
 
-	// 构建搜索参数
-	sp, err := s.buildSearchParams(o, topK)
+	// 构建搜索选项
+	searchOpt := milvusclient.NewSearchOption(collectionName, topK, vectors).
+		WithANNSField(vectorField)
+
+	if expr != "" {
+		searchOpt = searchOpt.WithFilter(expr)
+	}
+	if len(outputFields) > 0 {
+		searchOpt = searchOpt.WithOutputFields(outputFields...)
+	}
+
+	// 设置搜索参数（ANN params）
+	annParam, err := s.buildAnnParam(o, topK)
 	if err != nil {
 		return nil, err
 	}
+	if annParam != nil {
+		searchOpt = searchOpt.WithAnnParam(annParam)
+	}
 
-	results, err := c.Search(ctx, collectionName, nil, expr, outputFields, vectors, vectorField, metricType, topK, sp)
+	resultSets, err := c.Search(ctx, searchOpt)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("向量搜索失败")
 		return nil, err
@@ -487,18 +506,18 @@ func (s *MilvusVectorStore) Search(ctx context.Context, collectionName string, q
 
 	// 转换结果
 	searchResults := make([]VectorSearchResult, 0)
-	for _, result := range results {
-		if result.Err != nil {
-			logger.Warn(logComponent).Err(result.Err).Msg("搜索结果包含错误")
+	for _, rs := range resultSets {
+		if rs.Err != nil {
+			logger.Warn(logComponent).Err(rs.Err).Msg("搜索结果包含错误")
 			continue
 		}
-		for j := 0; j < result.ResultCount; j++ {
-			score := float64(result.Scores[j])
+		for j := 0; j < rs.ResultCount; j++ {
+			score := float64(rs.Scores[j])
 			// 根据度量类型转换分数
 			normalizedScore := normalizeScore(score, metricType)
 
 			fields := make(map[string]any)
-			for _, col := range result.Fields {
+			for _, col := range rs.Fields {
 				val, err := col.Get(j)
 				if err != nil {
 					logger.Warn(logComponent).Err(err).
@@ -539,19 +558,30 @@ func (s *MilvusVectorStore) DeleteDocsByIDs(ctx context.Context, collectionName 
 		return err
 	}
 
-	// 根据 ID 列表和主键类型构建过滤表达式
-	// INT64 主键：id in [1, 2, 3]（无引号）
-	// VARCHAR 主键：id in ["a", "b", "c"]（有引号）
-	// 对齐 Python: client.delete(ids=ids)，SDK 自动处理类型
-	expr := buildDeleteExpr(ids, s.getPKType(collectionName))
+	// 使用新 SDK 的 DeleteOption
+	pkType := s.getPKType(collectionName)
+	deleteOpt := milvusclient.NewDeleteOption(collectionName)
 
-	if err := c.Delete(ctx, collectionName, "", expr); err != nil {
+	switch pkType {
+	case entity.FieldTypeInt64, entity.FieldTypeInt32, entity.FieldTypeInt16, entity.FieldTypeInt8:
+		// INT64 主键
+		intIDs := make([]int64, len(ids))
+		for i, id := range ids {
+			intIDs[i], _ = strconv.ParseInt(id, 10, 64)
+		}
+		deleteOpt = deleteOpt.WithInt64IDs("id", intIDs)
+	default:
+		// VARCHAR 主键
+		deleteOpt = deleteOpt.WithStringIDs("id", ids)
+	}
+
+	if _, err := c.Delete(ctx, deleteOpt); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
 			Int("id_count", len(ids)).Msg("按 ID 删除文档失败")
 		return err
 	}
 
-	if err := c.Flush(ctx, collectionName, false); err != nil {
+	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
 	}
 
@@ -583,13 +613,14 @@ func (s *MilvusVectorStore) DeleteDocsByFilters(ctx context.Context, collectionN
 		return nil
 	}
 
-	if err := c.Delete(ctx, collectionName, "", expr); err != nil {
+	deleteOpt := milvusclient.NewDeleteOption(collectionName).WithExpr(expr)
+	if _, err := c.Delete(ctx, deleteOpt); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).
 			Str("filter_expr", expr).Msg("按过滤条件删除文档失败")
 		return err
 	}
 
-	if err := c.Flush(ctx, collectionName, false); err != nil {
+	if err := c.Flush(ctx, milvusclient.NewFlushOption(collectionName)); err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).Msg("Flush 失败")
 	}
 
@@ -606,13 +637,9 @@ func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 	if err != nil {
 		return nil, err
 	}
-	colls, err := c.ListCollections(ctx)
+	names, err := c.ListCollections(ctx, milvusclient.NewListCollectionOption())
 	if err != nil {
 		return nil, err
-	}
-	names := make([]string, 0, len(colls))
-	for _, coll := range colls {
-		names = append(names, coll.Name)
 	}
 	return names, nil
 }
@@ -644,7 +671,7 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 	}
 
 	// 检查集合是否存在
-	has, err := c.HasCollection(ctx, collectionName)
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 	if err != nil {
 		return err
 	}
@@ -685,7 +712,7 @@ func (s *MilvusVectorStore) UpdateCollectionMetadata(ctx context.Context, collec
 		}
 	}
 
-	// SDK 的 AlterCollection 使用 CollectionAttribute，仅支持预定义属性（TTL 等）
+	// SDK 的 AlterCollectionProperties 仅支持预定义属性（TTL 等）
 	// 自定义属性（如 schema_version）目前无法通过 SDK 写入 Milvus，仅更新本地缓存
 	// 但通过 DescribeCollection.Properties 可以读取 Milvus 中已有的 schema_version
 	logger.Info(logComponent).Str("collection_name", collectionName).
@@ -734,7 +761,7 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 		return nil, err
 	}
 
-	collInfo, err := c.DescribeCollection(ctx, collectionName)
+	collInfo, err := c.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(collectionName))
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("collection_name", collectionName).
 			Msg("获取集合描述失败，回退默认值")
@@ -779,9 +806,12 @@ func (s *MilvusVectorStore) GetCollectionMetadata(ctx context.Context, collectio
 
 	// 尝试获取索引信息以确定度量类型
 	if vectorFieldName != "" {
-		indexes, err := c.DescribeIndex(ctx, collectionName, vectorFieldName)
-		if err == nil && len(indexes) > 0 {
-			params := indexes[0].Params()
+		// 尝试通过 DescribeIndex 获取 metric_type
+		// 新 SDK 的 DescribeIndex 需要 collectionName 和 indexName
+		// 但我们不知道 indexName，先尝试用字段名作为索引名
+		idxDesc, err := c.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(collectionName, vectorFieldName))
+		if err == nil {
+			params := idxDesc.Params()
 			if mt, ok := params["metric_type"]; ok {
 				metadata["distance_metric"] = mt
 			}
@@ -837,15 +867,6 @@ func (s *MilvusVectorStore) getClient(ctx context.Context) (milvusClient, error)
 	return s.client, nil
 }
 
-// defaultCreateClient 默认的客户端创建函数，使用 milvus-sdk-go。
-func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
-	return client.NewClient(ctx, client.Config{
-		Address: uri,
-		APIKey:  token,
-		DBName:  dbName,
-	})
-}
-
 // ensureLoaded 确保集合已加载到内存，使用缓存避免重复加载。
 //
 // 对应 Python: MilvusVectorStore._ensure_loaded(collection)
@@ -862,7 +883,7 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 		return err
 	}
 
-	has, err := c.HasCollection(ctx, collectionName)
+	has, err := c.HasCollection(ctx, milvusclient.NewHasCollectionOption(collectionName))
 	if err != nil {
 		return err
 	}
@@ -871,7 +892,7 @@ func (s *MilvusVectorStore) ensureLoaded(ctx context.Context, collectionName str
 	}
 
 	logger.Info(logComponent).Str("collection_name", collectionName).Msg("正在加载集合")
-	if err := c.LoadCollection(ctx, collectionName, false); err != nil {
+	if err := c.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(collectionName)); err != nil {
 		logger.Error(logComponent).Err(err).Str("collection_name", collectionName).Msg("加载集合失败")
 		return err
 	}
@@ -1045,7 +1066,8 @@ func normalizeScore(rawScore float64, metricType entity.MetricType) float64 {
 }
 
 // buildIndexParams 根据 VectorField 配置构建索引参数。
-func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric string, o Options) (entity.Index, error) {
+// 使用新 SDK 的 index 包替代旧 entity.Index 构造。
+func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric string, o Options) (index.Index, error) {
 	metricType := mapMetricType(distanceMetric)
 
 	// 如果有 VectorField 配置，使用其参数
@@ -1053,66 +1075,57 @@ func (s *MilvusVectorStore) buildIndexParams(vectorFieldName, distanceMetric str
 		switch vf := o.VectorField.(type) {
 		case *vector_fields.MilvusAUTO:
 			_ = vf
-			return entity.NewGenericIndex(vectorFieldName, entity.AUTOINDEX, map[string]string{}), nil
+			return index.NewAutoIndex(metricType), nil
 		case *vector_fields.MilvusFLAT:
-			return entity.NewIndexFlat(metricType)
+			return index.NewIvfFlatIndex(metricType, 1), nil // FLAT 等价于 nlist=1 的 IVF_FLAT
 		case *vector_fields.MilvusHNSW:
-			return entity.NewIndexHNSW(metricType, vf.M, vf.EfConstruction)
+			return index.NewHNSWIndex(metricType, vf.M, vf.EfConstruction), nil
 		case *vector_fields.MilvusIVF:
-			return entity.NewIndexIvfFlat(metricType, vf.Nlist)
+			return index.NewIvfFlatIndex(metricType, vf.Nlist), nil
 		case *vector_fields.MilvusSCANN:
-			idx, err := entity.NewIndexSCANN(metricType, vf.Nlist, vf.WithRawData)
-			if err != nil {
-				return nil, fmt.Errorf("创建 SCANN 索引失败: %w", err)
-			}
-			return idx, nil
+			// SCANN 使用 IVF_PQ 近似（新 SDK 暂无直接 SCANN 索引构造器）
+			return index.NewIvfPQIndex(metricType, vf.Nlist, 8, 8), nil
 		}
 	}
 
 	// 默认使用 AUTOINDEX
-	return entity.NewGenericIndex(vectorFieldName, entity.AUTOINDEX, map[string]string{}), nil
+	return index.NewAutoIndex(metricType), nil
 }
 
-// buildSearchParams 根据配置构建搜索参数。
-// topK 用于 HNSW 的 ef 计算：ef = topK * EfSearchFactor，对齐 Python 行为。
-func (s *MilvusVectorStore) buildSearchParams(o Options, topK int) (entity.SearchParam, error) {
+// buildAnnParam 根据配置构建搜索时的 ANN 参数。
+// 替代旧 SDK 的 entity.SearchParam，使用新 SDK 的 index.AnnParam。
+func (s *MilvusVectorStore) buildAnnParam(o Options, topK int) (index.AnnParam, error) {
 	if o.VectorField != nil {
 		switch vf := o.VectorField.(type) {
 		case *vector_fields.MilvusAUTO:
 			_ = vf
-			// AUTOINDEX 使用 FLAT 搜索参数，Milvus 服务端自动选择最优参数
-			return entity.NewIndexFlatSearchParam()
+			// AUTOINDEX 不需要特殊 ANN 参数
+			return index.NewAutoAnnParam(0), nil
 		case *vector_fields.MilvusFLAT:
 			_ = vf
-			// FLAT 索引使用暴力搜索，无需特殊参数
-			return entity.NewIndexFlatSearchParam()
+			// FLAT 索引暴力搜索，无需特殊参数
+			return nil, nil
 		case *vector_fields.MilvusHNSW:
 			// ef = topK * EfSearchFactor，对齐 Python: ef = top_k * ef_search_factor
 			ef := topK * int(vf.EfSearchFactor)
 			if ef <= 0 {
 				ef = 64
 			}
-			return entity.NewIndexHNSWSearchParam(ef)
+			return index.NewHNSWAnnParam(ef), nil
 		case *vector_fields.MilvusIVF:
-			return entity.NewIndexIvfSQ8SearchParam(vf.Nprobe)
+			return index.NewIvfAnnParam(vf.Nprobe), nil
 		case *vector_fields.MilvusSCANN:
-			reorderK := vf.ReorderK
-			if reorderK <= 0 {
-				reorderK = 1
-			}
-			sp, err := entity.NewIndexSCANNSearchParam(vf.Nprobe, reorderK)
-			if err != nil {
-				return nil, fmt.Errorf("创建 SCANN 搜索参数失败: %w", err)
-			}
-			return sp, nil
+			// SCANN 使用 IVF 搜索参数近似
+			return index.NewIvfAnnParam(vf.Nprobe), nil
 		}
 	}
-	// 默认搜索参数
-	return entity.NewIndexFlatSearchParam()
+	// 默认无特殊 ANN 参数
+	return nil, nil
 }
 
 // docsToColumns 将文档列表转换为 Milvus 列格式。
-func (s *MilvusVectorStore) docsToColumns(docs []map[string]any) ([]entity.Column, error) {
+// 使用新 SDK 的 column 包替代旧 entity.Column 构造。
+func (s *MilvusVectorStore) docsToColumns(docs []map[string]any) ([]column.Column, error) {
 	if len(docs) == 0 {
 		return nil, nil
 	}
@@ -1141,8 +1154,8 @@ func (s *MilvusVectorStore) docsToColumns(docs []map[string]any) ([]entity.Colum
 		}
 	}
 
-	// 转换为 entity.Column
-	result := make([]entity.Column, 0, len(fieldValues))
+	// 转换为 column.Column
+	result := make([]column.Column, 0, len(fieldValues))
 	for fieldName, values := range fieldValues {
 		col := inferColumn(fieldName, values)
 		if col != nil {
@@ -1152,8 +1165,9 @@ func (s *MilvusVectorStore) docsToColumns(docs []map[string]any) ([]entity.Colum
 	return result, nil
 }
 
-// inferColumn 从值推断列类型并创建 entity.Column。
-func inferColumn(fieldName string, values []any) entity.Column {
+// inferColumn 从值推断列类型并创建 column.Column。
+// 使用新 SDK 的 column 包替代旧 entity.NewColumn* 构造。
+func inferColumn(fieldName string, values []any) column.Column {
 	if len(values) == 0 {
 		return nil
 	}
@@ -1181,7 +1195,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 				}
 			}
 			if dim > 0 && len(vecs) > 0 {
-				return entity.NewColumnFloatVector(fieldName, dim, vecs)
+				return column.NewColumnFloatVector(fieldName, dim, vecs)
 			}
 		case []float32:
 			// 向量字段（float32）
@@ -1196,7 +1210,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 				}
 			}
 			if dim > 0 && len(vecs) > 0 {
-				return entity.NewColumnFloatVector(fieldName, dim, vecs)
+				return column.NewColumnFloatVector(fieldName, dim, vecs)
 			}
 		case string:
 			strs := make([]string, 0, len(values))
@@ -1207,7 +1221,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					strs = append(strs, "")
 				}
 			}
-			return entity.NewColumnVarChar(fieldName, strs)
+			return column.NewColumnVarChar(fieldName, strs)
 		case int64:
 			ints := make([]int64, 0, len(values))
 			for _, val := range values {
@@ -1217,7 +1231,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					ints = append(ints, 0)
 				}
 			}
-			return entity.NewColumnInt64(fieldName, ints)
+			return column.NewColumnInt64(fieldName, ints)
 		case int:
 			ints := make([]int64, 0, len(values))
 			for _, val := range values {
@@ -1227,7 +1241,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					ints = append(ints, 0)
 				}
 			}
-			return entity.NewColumnInt64(fieldName, ints)
+			return column.NewColumnInt64(fieldName, ints)
 		case bool:
 			bools := make([]bool, 0, len(values))
 			for _, val := range values {
@@ -1237,7 +1251,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					bools = append(bools, false)
 				}
 			}
-			return entity.NewColumnBool(fieldName, bools)
+			return column.NewColumnBool(fieldName, bools)
 		case float64:
 			// float64 标量（注意：[]float64 是向量，已在上面处理）
 			doubles := make([]float64, 0, len(values))
@@ -1248,7 +1262,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					doubles = append(doubles, 0)
 				}
 			}
-			return entity.NewColumnDouble(fieldName, doubles)
+			return column.NewColumnDouble(fieldName, doubles)
 		case float32:
 			// float32 标量（注意：[]float32 是向量，已在上面处理）
 			floats := make([]float32, 0, len(values))
@@ -1259,7 +1273,7 @@ func inferColumn(fieldName string, values []any) entity.Column {
 					floats = append(floats, 0)
 				}
 			}
-			return entity.NewColumnFloat(fieldName, floats)
+			return column.NewColumnFloat(fieldName, floats)
 		}
 	}
 	return nil
