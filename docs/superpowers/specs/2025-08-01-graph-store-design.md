@@ -20,6 +20,7 @@
 | Relations/LHS/RHS 类型 | 纯 `[]string`/`string`（仅 UUID） | Python 混合对象+UUID 是动态类型便利，Go 强类型下存入 Milvus 时都序列化为 UUID 字符串，无需存对象 |
 | ContentBM25 类型 | `map[uint32]float32` | Milvus 稀疏向量用 {dim_id: value} 表示，Go 用 map 更自然 |
 | 时区偏移类型 | `int8` | 偏移范围 -96~+96（15分钟粒度），int8 足够 |
+| BM25 稀疏向量 | 外部计算 + 手动写入，非 SDK BM25 Function | Go SDK v2.4.2（最新且已归档）不支持 BM25 Function；写入时由调用方计算 BM25 稀疏向量填入 ContentBM25 字段，搜索时作为稀疏向量通道参与 HybridSearch |
 
 ## 文件结构与产出清单
 
@@ -392,7 +393,7 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 - obj_type (VARCHAR, whitespace analyzer)
 - language (VARCHAR)
 - metadata (JSON)
-- content (VARCHAR, BM25 analyzer) + content_embedding (FLOAT_VECTOR) + content_bm25 (SPARSE_FLOAT_VECTOR, BM25 function)
+- content (VARCHAR) + content_embedding (FLOAT_VECTOR) + content_bm25 (SPARSE_FLOAT_VECTOR，手动写入稀疏向量)
 
 **Entity 特有字段**：
 - name (VARCHAR, ICU analyzer) + name_embedding (FLOAT_VECTOR)
@@ -470,9 +471,14 @@ type graphSearcher struct {
    - content_embedding + query_vector → AnnSearchRequest
    - content_bm25 + query_text → AnnSearchRequest(BM25搜索)
 3. getRankerAndRequests：
-   - Entity: 3通道全活跃
-   - Relation/Episode: name_dense 强制为0，仅2通道
-4. client.HybridSearch() → 解析返回结果
+   - Entity: 3通道全活跃（若 ContentBM25 不为空则3通道，否则2通道）
+   - Relation/Episode: name_dense 强制为0，仅2通道（同理 BM25 通道视数据而定）
+4. client.HybridSearch()（SDK 方法：`client.Reranker` + `client.ANNSearchRequest`）→ 解析返回结果
+
+**BM25 通道限制**：Go SDK v2.4.2 不支持 BM25 Function（SDK 已归档，不会新增此功能）。当前实现：
+- 写入时：调用方需自行计算 BM25 稀疏向量并填入 `ContentBM25` 字段
+- 搜索时：若 `ContentBM25` 数据存在，作为稀疏向量通道参与 HybridSearch；否则仅使用 dense 向量通道
+- 未来：如需自动 BM25，可在上层（GraphMemory）集成外部 BM25 计算库
 
 #### 5.4 milvus.go — 主结构体
 
@@ -498,20 +504,20 @@ type MilvusGraphStore struct {
 
 ```go
 type milvusClient interface {
-    CreateCollection(ctx context.Context, collSchema *entity.Schema, shardsNum int32, opts ...milvusClientOption) error
-    DropCollection(ctx context.Context, collectionName string) error
+    CreateCollection(ctx context.Context, collSchema *entity.Schema, shardsNum int32, opts ...client.CreateCollectionOption) error
+    DropCollection(ctx context.Context, collectionName string, opts ...client.DropCollectionOption) error
     HasCollection(ctx context.Context, collectionName string) (bool, error)
     DescribeCollection(ctx context.Context, collectionName string) (*entity.Collection, error)
-    Insert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) ([]string, error)
-    Upsert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) ([]string, error)
+    Insert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) (entity.Column, error)
+    Upsert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) (entity.Column, error)
     Delete(ctx context.Context, collectionName string, partitionName string, expr string) error
-    Flush(ctx context.Context, collectionName string, async bool) error
-    Query(ctx context.Context, collectionName string, partitions []string, expr string, outputFields []string, opts ...milvus.QueryOption) ([]entity.Column, error)
-    HybridSearch(ctx context.Context, collectionName string, partitions []string, limit int, ranker client.Ranker, subSearches []*client.AnnSearchRequest, opts ...client.HybridSearchOption) ([]entity.Column, error)
-    CreateIndex(ctx context.Context, collectionName string, fieldName string, idx entity.Index, async bool) error
+    Flush(ctx context.Context, collectionName string, async bool, opts ...client.FlushOption) error
+    Query(ctx context.Context, collectionName string, partitions []string, expr string, outputFields []string, opts ...client.SearchQueryOptionFunc) ([]entity.Column, error)
+    HybridSearch(ctx context.Context, collName string, partitions []string, limit int, outputFields []string, reranker client.Reranker, subRequests []*client.ANNSearchRequest, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+    CreateIndex(ctx context.Context, collectionName string, fieldName string, idx entity.Index, async bool, opts ...client.IndexOption) error
     DropIndex(ctx context.Context, collectionName string, fieldName string) error
-    DescribeIndex(ctx context.Context, collectionName string, fieldName string) ([]entity.Index, error)
-    LoadCollection(ctx context.Context, collectionName string, async bool) error
+    DescribeIndex(ctx context.Context, collectionName string, fieldName string, opts ...client.IndexOption) ([]entity.Index, error)
+    LoadCollection(ctx context.Context, collectionName string, async bool, opts ...client.LoadCollectionOption) error
     GetCollectionStats(ctx context.Context, collectionName string) (map[string]string, error)
     Close() error
 }
