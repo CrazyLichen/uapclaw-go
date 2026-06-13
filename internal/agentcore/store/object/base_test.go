@@ -11,18 +11,18 @@ import (
 
 func TestWithMaxObjects(t *testing.T) {
 	opts := NewListOptions(WithMaxObjects(50))
-	assert.Equal(t, 50, opts.maxObjects)
+	assert.Equal(t, 50, opts.MaxObjects)
 }
 
 func TestListOptions_Default(t *testing.T) {
 	opts := NewListOptions()
-	assert.Equal(t, 100, opts.maxObjects)
+	assert.Equal(t, 100, opts.MaxObjects)
 }
 
 func TestListOptions_Multiple(t *testing.T) {
 	opts := NewListOptions(WithMaxObjects(200), WithMaxObjects(300))
 	// 最后一个 WithMaxObjects 生效
-	assert.Equal(t, 300, opts.maxObjects)
+	assert.Equal(t, 300, opts.MaxObjects)
 }
 
 // ──────────────────────────── ObjectStorageConfig 测试 ────────────────────────────

@@ -53,10 +53,10 @@ type ObjectStorageConfig struct {
 	RegionName string
 }
 
-// listOptions 列表查询内部选项
-type listOptions struct {
-	// maxObjects 最大返回对象数
-	maxObjects int
+// ListOptions 列表查询选项
+type ListOptions struct {
+	// MaxObjects 最大返回对象数
+	MaxObjects int
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -76,19 +76,19 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ListOption 列表查询选项
-type ListOption func(*listOptions)
+type ListOption func(*ListOptions)
 
 // WithMaxObjects 设置最大返回对象数，默认 100
 func WithMaxObjects(n int) ListOption {
-	return func(o *listOptions) {
-		o.maxObjects = n
+	return func(o *ListOptions) {
+		o.MaxObjects = n
 	}
 }
 
 // NewListOptions 应用选项并返回默认值
-func NewListOptions(opts ...ListOption) listOptions {
-	o := listOptions{
-		maxObjects: defaultMaxObjects,
+func NewListOptions(opts ...ListOption) ListOptions {
+	o := ListOptions{
+		MaxObjects: defaultMaxObjects,
 	}
 	for _, opt := range opts {
 		opt(&o)
