@@ -7,8 +7,8 @@ import (
 
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
-	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

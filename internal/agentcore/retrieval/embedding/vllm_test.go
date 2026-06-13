@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
 
 func TestVLLMEmbedding_EmbedQuery(t *testing.T) {

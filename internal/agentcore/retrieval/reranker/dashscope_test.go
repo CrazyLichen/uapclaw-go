@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

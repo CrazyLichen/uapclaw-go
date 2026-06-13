@@ -184,9 +184,9 @@ func TestNewEmbeddingHTTPClient_HTTPS(t *testing.T) {
 
 func TestResolveBatchSize(t *testing.T) {
 	assert.Equal(t, 4, ResolveBatchSize(4, 8))
-	assert.Equal(t, 8, ResolveBatchSize(0, 8))    // 0 用默认
-	assert.Equal(t, 8, ResolveBatchSize(16, 8))    // 不超过 max
-	assert.Equal(t, 1, ResolveBatchSize(0, 0))     // 都为 0 时回退 1
+	assert.Equal(t, 8, ResolveBatchSize(0, 8))  // 0 用默认
+	assert.Equal(t, 8, ResolveBatchSize(16, 8)) // 不超过 max
+	assert.Equal(t, 1, ResolveBatchSize(0, 0))  // 都为 0 时回退 1
 }
 
 func TestApplyEmbedOptions(t *testing.T) {

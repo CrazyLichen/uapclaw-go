@@ -23,9 +23,9 @@ const (
 	CollectionEpisode = "episode"
 
 	// 默认索引参数
-	defaultM             = 32
+	defaultM              = 32
 	defaultEfConstruction = 256
-	defaultEfSearch      = 64
+	defaultEfSearch       = 64
 
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore

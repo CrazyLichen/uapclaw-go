@@ -94,8 +94,8 @@ func (d *MultimodalDocument) Content() []map[string]any {
 			})
 		case ModalityImage, ModalityVideo:
 			content = append(content, map[string]any{
-				"type":                         fmt.Sprintf("%s_url", f.Kind),
-				fmt.Sprintf("%s_url", f.Kind):  map[string]any{"url": f.Data},
+				"type":                        fmt.Sprintf("%s_url", f.Kind),
+				fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
 			})
 		case ModalityAudio:
 			re := regexp.MustCompile(`data:audio/(.+?);base64,`)

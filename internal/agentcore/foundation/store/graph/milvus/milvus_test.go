@@ -6,33 +6,33 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/milvus-io/milvus/client/v2/entity"
 	"github.com/milvus-io/milvus/client/v2/column"
+	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
 
-	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
+	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeGraphStoreClient 用于 MilvusGraphStore 测试的完整 Milvus 客户端模拟
 type fakeGraphStoreClient struct {
-	mu             sync.RWMutex
-	collections    map[string]bool
-	insertCount    int
-	upsertCount    int
-	deleteCount    int
-	queryResult    milvusclient.ResultSet
-	queryErr       error
-	searchResults  []milvusclient.ResultSet
-	searchErr      error
-	closeErr       error
-	loadErr        error
-	flushErr       error
-	createCollErr  error
-	dropCollErr    error
-	hasCollErr     error
+	mu            sync.RWMutex
+	collections   map[string]bool
+	insertCount   int
+	upsertCount   int
+	deleteCount   int
+	queryResult   milvusclient.ResultSet
+	queryErr      error
+	searchResults []milvusclient.ResultSet
+	searchErr     error
+	closeErr      error
+	loadErr       error
+	flushErr      error
+	createCollErr error
+	dropCollErr   error
+	hasCollErr    error
 }
 
 func newFakeGraphStoreClient() *fakeGraphStoreClient {

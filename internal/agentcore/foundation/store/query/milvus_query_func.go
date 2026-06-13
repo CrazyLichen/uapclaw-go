@@ -11,14 +11,14 @@ import (
 //
 // 对应 Python: milvus_def
 var milvusDef = QueryLanguageDefinition{
-	Comparison:  milvusComparisonFilter,
-	Range:       milvusRangeFilter,
-	Arithmetic:  milvusArithmeticFilter,
-	Null:        milvusNullFilter,
-	JSONFilter:  milvusJSONFilter,
-	Array:       milvusArrayFilter,
-	Logical:     milvusLogicalFilter,
-	TextMatch:   milvusTextMatchFilter,
+	Comparison: milvusComparisonFilter,
+	Range:      milvusRangeFilter,
+	Arithmetic: milvusArithmeticFilter,
+	Null:       milvusNullFilter,
+	JSONFilter: milvusJSONFilter,
+	Array:      milvusArrayFilter,
+	Logical:    milvusLogicalFilter,
+	TextMatch:  milvusTextMatchFilter,
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

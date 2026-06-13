@@ -23,14 +23,14 @@ var chromaOperatorMap = map[string]string{
 //
 // 对应 Python: chroma_def
 var chromaDef = QueryLanguageDefinition{
-	Comparison:  chromaComparisonFilter,
-	Range:       chromaRangeFilter,
-	Arithmetic:  chromaArithmeticFilter,
-	Null:        chromaNullFilter,
-	JSONFilter:  chromaJSONFilter,
-	Array:       chromaArrayFilter,
-	Logical:     chromaLogicalFilter,
-	TextMatch:   chromaTextMatchFilter,
+	Comparison: chromaComparisonFilter,
+	Range:      chromaRangeFilter,
+	Arithmetic: chromaArithmeticFilter,
+	Null:       chromaNullFilter,
+	JSONFilter: chromaJSONFilter,
+	Array:      chromaArrayFilter,
+	Logical:    chromaLogicalFilter,
+	TextMatch:  chromaTextMatchFilter,
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

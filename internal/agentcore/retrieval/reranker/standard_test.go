@@ -170,9 +170,9 @@ func TestStandardReranker_Rerank_ExtraBody合并(t *testing.T) {
 	defer server.Close()
 
 	config := reranker.RerankerConfig{
-		APIBase:    server.URL,
-		ModelName:  "rerank-model",
-		ExtraBody:  map[string]any{"custom_field": "custom_value"},
+		APIBase:   server.URL,
+		ModelName: "rerank-model",
+		ExtraBody: map[string]any{"custom_field": "custom_value"},
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 

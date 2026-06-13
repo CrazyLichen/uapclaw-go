@@ -41,8 +41,8 @@ type fakeEmbedding struct {
 
 // 编译时接口检查
 var (
-	_ kv.BaseKVStore       = &fakeKVStore{}
-	_ vector.BaseVectorStore = &fakeVectorStore{}
+	_ kv.BaseKVStore          = &fakeKVStore{}
+	_ vector.BaseVectorStore  = &fakeVectorStore{}
 	_ embedding.BaseEmbedding = &fakeEmbedding{}
 )
 
@@ -483,11 +483,11 @@ func TestKVHelper_RemoveID_不存在(t *testing.T) {
 
 func TestKVHelper_KVDataToMemoryDoc_多种时间戳格式(t *testing.T) {
 	tests := []struct {
-		name       string
-		data       map[string]any
-		wantMem    string
-		wantType   string
-		checkTime  func(t *testing.T, ts time.Time)
+		name      string
+		data      map[string]any
+		wantMem   string
+		wantType  string
+		checkTime func(t *testing.T, ts time.Time)
 	}{
 		{
 			name: "旧格式时间戳（连字符分隔时分秒）",

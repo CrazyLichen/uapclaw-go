@@ -78,10 +78,10 @@ func NewWeightedRankConfig() *WeightedRankConfig {
 // NewRRFRankConfig 创建带默认值的RRF排序配置
 func NewRRFRankConfig() *RRFRankConfig {
 	return &RRFRankConfig{
-		K:              DefaultRRFK,
-		NameDense:      true,
-		ContentDense:   true,
-		ContentSparse:  true,
+		K:             DefaultRRFK,
+		NameDense:     true,
+		ContentDense:  true,
+		ContentSparse: true,
 	}
 }
 

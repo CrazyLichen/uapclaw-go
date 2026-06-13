@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 

@@ -18,9 +18,9 @@ import (
 type fakeSearcherClient struct {
 	*fakeMilvusClient
 	searchResults []milvusclient.ResultSet
-	searchErr    error
-	queryResult  milvusclient.ResultSet
-	queryErr     error
+	searchErr     error
+	queryResult   milvusclient.ResultSet
+	queryErr      error
 }
 
 func newFakeSearcherClient() *fakeSearcherClient {
@@ -754,9 +754,9 @@ func TestBuildReranker_未知类型(t *testing.T) {
 // fakeRankConfig 用于测试的未知 RankConfig
 type fakeRankConfig struct{}
 
-func (f *fakeRankConfig) Name() string             { return "fake" }
-func (f *fakeRankConfig) HigherIsBetter() bool      { return true }
-func (f *fakeRankConfig) IsActive() [3]int          { return [3]int{1, 1, 1} }
+func (f *fakeRankConfig) Name() string                  { return "fake" }
+func (f *fakeRankConfig) HigherIsBetter() bool          { return true }
+func (f *fakeRankConfig) IsActive() [3]int              { return [3]int{1, 1, 1} }
 func (f *fakeRankConfig) Args() ([]any, map[string]any) { return nil, nil }
 
 func TestBuildReranker_Weighted_通道不匹配(t *testing.T) {

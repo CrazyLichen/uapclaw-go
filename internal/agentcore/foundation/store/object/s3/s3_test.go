@@ -17,9 +17,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	objectpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	objectpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/object"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

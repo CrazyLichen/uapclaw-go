@@ -114,8 +114,8 @@ func TestChatReranker_Rerank_yes概率计算(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// yes 的 logprob 很高（接近 0），no 的 logprob 很低
 		resp := makeChatCompletionResponse([]map[string]any{
-			{"token": "yes", "logprob": -0.01},  // exp(-0.01) ≈ 0.990
-			{"token": "no", "logprob": -5.0},    // exp(-5.0) ≈ 0.0067
+			{"token": "yes", "logprob": -0.01}, // exp(-0.01) ≈ 0.990
+			{"token": "no", "logprob": -5.0},   // exp(-5.0) ≈ 0.0067
 		})
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(resp)

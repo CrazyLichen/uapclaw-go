@@ -1,12 +1,12 @@
 package embedding
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"math"
-	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"

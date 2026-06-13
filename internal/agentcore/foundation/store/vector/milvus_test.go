@@ -1076,14 +1076,14 @@ func TestMilvusVectorStore_GetCollectionMetadata_缓存未命中DescribeSuccess(
 // fakeMilvusClientWithErrors 支持模拟各种错误的 fake 客户端
 type fakeMilvusClientWithErrors struct {
 	*fakeMilvusClient
-	createCollErr  error
-	insertErr      error
-	deleteErr      error
-	loadErr        error
-	flushErr       error
-	hasCollResult  bool
-	hasCollErr     error
-	dropCollErr    error
+	createCollErr   error
+	insertErr       error
+	deleteErr       error
+	loadErr         error
+	flushErr        error
+	hasCollResult   bool
+	hasCollErr      error
+	dropCollErr     error
 	describeCollErr error
 }
 
@@ -1615,13 +1615,13 @@ func TestMilvusVectorStore_GetSchema_成功(t *testing.T) {
 	fake.collections["test_coll"] = true
 	fake.describeCollResult = &entity.Collection{
 		Schema: &entity.Schema{
-			CollectionName:   "test_coll",
-			Description:      "测试集合",
+			CollectionName:     "test_coll",
+			Description:        "测试集合",
 			EnableDynamicField: true,
 			Fields: []*entity.Field{
 				{
-					Name:      "id",
-					DataType:  entity.FieldTypeVarChar,
+					Name:       "id",
+					DataType:   entity.FieldTypeVarChar,
 					PrimaryKey: true,
 					TypeParams: map[string]string{"max_length": "256"},
 				},
