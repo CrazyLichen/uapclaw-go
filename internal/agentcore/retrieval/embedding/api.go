@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
@@ -44,6 +45,8 @@ type APIEmbedding struct {
 	extraParams map[string]any
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
+	// mu 保护 dimension 字段的互斥锁
+	mu sync.Mutex
 	// httpClient HTTP 客户端
 	httpClient *http.Client
 }
@@ -188,19 +191,28 @@ func (a *APIEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts 
 
 // Dimension 返回嵌入向量维度。
 func (a *APIEmbedding) Dimension() int {
+	a.mu.Lock()
 	if a.dimension > 0 {
-		return a.dimension
+		dim := a.dimension
+		a.mu.Unlock()
+		return dim
 	}
+	a.mu.Unlock()
+
 	// 发送探测请求
 	vec, err := a.EmbedQuery(context.Background(), "test")
 	if err != nil {
 		return 0
 	}
+
+	a.mu.Lock()
 	a.dimension = len(vec)
+	a.mu.Unlock()
+
 	logger.Debug(logComponent).
-		Int("dimension", a.dimension).
+		Int("dimension", len(vec)).
 		Msg("探测到嵌入向量维度")
-	return a.dimension
+	return len(vec)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -260,7 +272,7 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 				Msg("嵌入 HTTP 请求失败")
 			return nil, err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -294,12 +306,14 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 		}
 
 		// 自动探测并缓存 dimension
+		a.mu.Lock()
 		if a.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
 			a.dimension = len(embeddings[0])
 			logger.Debug(logComponent).
 				Int("dimension", a.dimension).
 				Msg("探测到嵌入向量维度")
 		}
+		a.mu.Unlock()
 
 		return embeddings, nil
 	}, apiIsRetryable)

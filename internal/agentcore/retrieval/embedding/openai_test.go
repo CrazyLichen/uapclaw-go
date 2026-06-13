@@ -121,7 +121,7 @@ func TestOpenAIEmbedding_Dimension(t *testing.T) {
 func TestOpenAIEmbedding_Matryoshka维度(t *testing.T) {
 	var receivedBody map[string]json.RawMessage
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, `{
@@ -263,7 +263,7 @@ func TestOpenAIEmbedding_ExtraHeaders(t *testing.T) {
 func TestOpenAIEmbedding_ExtraParams(t *testing.T) {
 	var receivedBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, `{"data": [{"embedding": [0.1], "index": 0}], "model": "test", "object": "list", "usage": {"prompt_tokens": 1, "total_tokens": 1}}`)

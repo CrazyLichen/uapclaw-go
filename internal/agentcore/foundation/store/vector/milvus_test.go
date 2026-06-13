@@ -1381,9 +1381,9 @@ func TestMilvusVectorStore_CreateCollection_成功创建(t *testing.T) {
 	ctx := context.Background()
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	vecField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(128))
-	schema.AddField(vecField)
+	_, _ = schema.AddField(vecField)
 
 	err := s.CreateCollection(ctx, "test_coll", schema)
 	if err != nil {
@@ -1403,9 +1403,9 @@ func TestMilvusVectorStore_CreateCollection_集合已存在(t *testing.T) {
 	ctx := context.Background()
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	vecField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(128))
-	schema.AddField(vecField)
+	_, _ = schema.AddField(vecField)
 
 	err := s.CreateCollection(ctx, "test_coll", schema)
 	if err != nil {
@@ -1424,9 +1424,9 @@ func TestMilvusVectorStore_CreateCollection_Int64主键(t *testing.T) {
 	ctx := context.Background()
 	schema, _ := NewCollectionSchema()
 	pkField, _ := NewFieldSchema("id", VectorDataTypeInt64, WithPrimary())
-	schema.AddField(pkField)
+	_, _ = schema.AddField(pkField)
 	vecField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(64))
-	schema.AddField(vecField)
+	_, _ = schema.AddField(vecField)
 
 	err := s.CreateCollection(ctx, "test_coll_int64", schema)
 	if err != nil {
@@ -1806,9 +1806,9 @@ func TestMilvusVectorStore_CreateCollection_CreateError(t *testing.T) {
 	ctx := context.Background()
 	schema, _ := NewCollectionSchema()
 	field, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
-	schema.AddField(field)
+	_, _ = schema.AddField(field)
 	vecField, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(128))
-	schema.AddField(vecField)
+	_, _ = schema.AddField(vecField)
 
 	err := s.CreateCollection(ctx, "test_coll", schema)
 	if err == nil {

@@ -257,7 +257,7 @@ func isRetryableStatus(statusCode int) bool {
 
 // readResponseBody 读取 HTTP 响应体。
 func readResponseBody(resp *http.Response) ([]byte, error) {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var buf bytes.Buffer
 	_, err := buf.ReadFrom(resp.Body)
 	if err != nil {

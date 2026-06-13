@@ -112,7 +112,7 @@ func (h *mockS3Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			w.Header().Set("Content-Type", "application/xml")
-			xml.NewEncoder(w).Encode(result)
+			_ = xml.NewEncoder(w).Encode(result)
 		} else {
 			// GetObject
 			key := parts[1]
@@ -122,7 +122,7 @@ func (h *mockS3Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
-			w.Write(content)
+			_, _ = w.Write(content)
 		}
 
 	case http.MethodDelete:
@@ -168,7 +168,7 @@ type errorResult struct {
 func writeS3Error(w http.ResponseWriter, code, message string) {
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Header().Set("Content-Type", "application/xml")
-	xml.NewEncoder(w).Encode(errorResult{Code: code, Message: message})
+	_ = xml.NewEncoder(w).Encode(errorResult{Code: code, Message: message})
 }
 
 // ──────────────────────────── CreateBucket 测试 ────────────────────────────
@@ -423,15 +423,15 @@ func TestNewS3Client_缺少SecretAccessKey(t *testing.T) {
 }
 
 func TestNewS3Client_环境变量兜底(t *testing.T) {
-	os.Setenv("OBS_SERVER", "https://obs.env.example.com")
-	os.Setenv("OBS_ACCESS_KEY_ID", "env-ak")
-	os.Setenv("OBS_SECRET_ACCESS_KEY", "env-sk")
-	os.Setenv("OBS_REGION", "cn-north-4")
+	require.NoError(t, os.Setenv("OBS_SERVER", "https://obs.env.example.com"))
+	require.NoError(t, os.Setenv("OBS_ACCESS_KEY_ID", "env-ak"))
+	require.NoError(t, os.Setenv("OBS_SECRET_ACCESS_KEY", "env-sk"))
+	require.NoError(t, os.Setenv("OBS_REGION", "cn-north-4"))
 	defer func() {
-		os.Unsetenv("OBS_SERVER")
-		os.Unsetenv("OBS_ACCESS_KEY_ID")
-		os.Unsetenv("OBS_SECRET_ACCESS_KEY")
-		os.Unsetenv("OBS_REGION")
+		require.NoError(t, os.Unsetenv("OBS_SERVER"))
+		require.NoError(t, os.Unsetenv("OBS_ACCESS_KEY_ID"))
+		require.NoError(t, os.Unsetenv("OBS_SECRET_ACCESS_KEY"))
+		require.NoError(t, os.Unsetenv("OBS_REGION"))
 	}()
 
 	// 配置全部为空，应从环境变量读取

@@ -78,7 +78,7 @@ func TestChatReranker_Rerank_正常解析(t *testing.T) {
 			{"token": "No", "logprob": -2.3},
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -118,7 +118,7 @@ func TestChatReranker_Rerank_yes概率计算(t *testing.T) {
 			{"token": "no", "logprob": -5.0},   // exp(-5.0) ≈ 0.0067
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -169,7 +169,7 @@ func TestChatReranker_Rerank_logprobs不支持(t *testing.T) {
 			},
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -200,7 +200,7 @@ func TestChatReranker_Rerank_总概率为零(t *testing.T) {
 			{"token": "perhaps", "logprob": -1.0},
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -229,7 +229,7 @@ func TestChatReranker_RerankSync_同步调用(t *testing.T) {
 			{"token": "no", "logprob": -1.5},
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -257,7 +257,7 @@ func TestChatReranker_TestCompatibility_成功(t *testing.T) {
 			{"token": "yes", "logprob": -0.1},
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -304,7 +304,7 @@ func TestChatReranker_RerankDocs_Document输入(t *testing.T) {
 			{"token": "yes", "logprob": -0.1},
 		})
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

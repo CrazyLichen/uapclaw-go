@@ -65,7 +65,7 @@ func TestStandardReranker_Rerank_正常(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.95},
 				map[string]any{"index": float64(1), "relevance_score": 0.5},
@@ -98,7 +98,7 @@ func TestStandardReranker_Rerank_正常(t *testing.T) {
 func TestStandardReranker_RerankDocs_Document输入(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.88},
 			},
@@ -126,9 +126,9 @@ func TestStandardReranker_Rerank_Instruct选项(t *testing.T) {
 	var receivedBody map[string]any
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.9},
 			},
@@ -159,9 +159,9 @@ func TestStandardReranker_Rerank_ExtraBody合并(t *testing.T) {
 	var receivedBody map[string]any
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.9},
 			},
@@ -195,7 +195,7 @@ func TestStandardReranker_Rerank_API调用失败重试(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.9},
 			},
@@ -221,7 +221,7 @@ func TestStandardReranker_Rerank_API调用失败重试(t *testing.T) {
 func TestStandardReranker_RerankSync_同步调用(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.8},
 			},
@@ -247,7 +247,7 @@ func TestStandardReranker_RerankSync_同步调用(t *testing.T) {
 func TestStandardReranker_Rerank_空结果(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{},
 		})
 	}))
@@ -275,7 +275,7 @@ func TestStandardReranker_ExtraHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"results": []any{
 				map[string]any{"index": float64(0), "relevance_score": 0.9},
 			},

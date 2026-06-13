@@ -15,7 +15,7 @@ import (
 func TestRequestWithRetry_成功响应(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -40,7 +40,7 @@ func TestRequestWithRetry_重试429成功(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -64,7 +64,7 @@ func TestRequestWithRetry_重试500成功(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -87,7 +87,7 @@ func TestRequestWithRetry_重试503成功(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -105,7 +105,7 @@ func TestRequestWithRetry_400不重试(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{"error": "bad request"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "bad request"})
 	}))
 	defer server.Close()
 
@@ -123,7 +123,7 @@ func TestRequestWithRetry_400不重试(t *testing.T) {
 func TestRequestWithRetry_400审查内容检测(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"message": "Content violates safety policy"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"message": "Content violates safety policy"}})
 	}))
 	defer server.Close()
 
@@ -174,7 +174,7 @@ func TestRequestWithRetry_网络错误(t *testing.T) {
 func TestRequestWithRetrySync_同步调用(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []any{}})
 	}))
 	defer server.Close()
 
@@ -238,9 +238,9 @@ func TestRequestWithRetry_请求体和头(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedContentType = r.Header.Get("Content-Type")
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 	}))
 	defer server.Close()
 

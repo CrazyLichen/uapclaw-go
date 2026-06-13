@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── ListOption 测试 ────────────────────────────
@@ -29,15 +30,15 @@ func TestListOptions_Multiple(t *testing.T) {
 
 func TestObjectStorageConfig_EnvFallback(t *testing.T) {
 	// 设置环境变量
-	os.Setenv("OBS_SERVER", "https://obs.example.com")
-	os.Setenv("OBS_ACCESS_KEY_ID", "test-ak")
-	os.Setenv("OBS_SECRET_ACCESS_KEY", "test-sk")
-	os.Setenv("OBS_REGION", "cn-north-4")
+	require.NoError(t, os.Setenv("OBS_SERVER", "https://obs.example.com"))
+	require.NoError(t, os.Setenv("OBS_ACCESS_KEY_ID", "test-ak"))
+	require.NoError(t, os.Setenv("OBS_SECRET_ACCESS_KEY", "test-sk"))
+	require.NoError(t, os.Setenv("OBS_REGION", "cn-north-4"))
 	defer func() {
-		os.Unsetenv("OBS_SERVER")
-		os.Unsetenv("OBS_ACCESS_KEY_ID")
-		os.Unsetenv("OBS_SECRET_ACCESS_KEY")
-		os.Unsetenv("OBS_REGION")
+		require.NoError(t, os.Unsetenv("OBS_SERVER"))
+		require.NoError(t, os.Unsetenv("OBS_ACCESS_KEY_ID"))
+		require.NoError(t, os.Unsetenv("OBS_SECRET_ACCESS_KEY"))
+		require.NoError(t, os.Unsetenv("OBS_REGION"))
 	}()
 
 	cfg := ObjectStorageConfig{}
@@ -50,8 +51,8 @@ func TestObjectStorageConfig_EnvFallback(t *testing.T) {
 }
 
 func TestObjectStorageConfig_StructOverEnv(t *testing.T) {
-	os.Setenv("OBS_SERVER", "https://env.example.com")
-	defer os.Unsetenv("OBS_SERVER")
+	require.NoError(t, os.Setenv("OBS_SERVER", "https://env.example.com"))
+	defer func() { require.NoError(t, os.Unsetenv("OBS_SERVER")) }()
 
 	cfg := ObjectStorageConfig{
 		Server: "https://struct.example.com",
@@ -63,11 +64,11 @@ func TestObjectStorageConfig_StructOverEnv(t *testing.T) {
 }
 
 func TestObjectStorageConfig_PartialEnvFallback(t *testing.T) {
-	os.Setenv("OBS_SERVER", "https://env.example.com")
-	os.Setenv("OBS_REGION", "cn-south-1")
+	require.NoError(t, os.Setenv("OBS_SERVER", "https://env.example.com"))
+	require.NoError(t, os.Setenv("OBS_REGION", "cn-south-1"))
 	defer func() {
-		os.Unsetenv("OBS_SERVER")
-		os.Unsetenv("OBS_REGION")
+		require.NoError(t, os.Unsetenv("OBS_SERVER"))
+		require.NoError(t, os.Unsetenv("OBS_REGION"))
 	}()
 
 	cfg := ObjectStorageConfig{
@@ -83,10 +84,10 @@ func TestObjectStorageConfig_PartialEnvFallback(t *testing.T) {
 
 func TestObjectStorageConfig_NoEnvSet(t *testing.T) {
 	// 确保环境变量不存在
-	os.Unsetenv("OBS_SERVER")
-	os.Unsetenv("OBS_ACCESS_KEY_ID")
-	os.Unsetenv("OBS_SECRET_ACCESS_KEY")
-	os.Unsetenv("OBS_REGION")
+	require.NoError(t, os.Unsetenv("OBS_SERVER"))
+	require.NoError(t, os.Unsetenv("OBS_ACCESS_KEY_ID"))
+	require.NoError(t, os.Unsetenv("OBS_SECRET_ACCESS_KEY"))
+	require.NoError(t, os.Unsetenv("OBS_REGION"))
 
 	cfg := ObjectStorageConfig{}
 	cfg.ApplyEnvFallback()

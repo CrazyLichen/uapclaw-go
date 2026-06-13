@@ -282,7 +282,7 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input []map[string]an
 				Msg("DashScope 嵌入请求失败")
 			return nil, err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {

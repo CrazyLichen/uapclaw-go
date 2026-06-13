@@ -181,7 +181,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", fmt.Sprintf("open file failed: %v", err)))
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileInfo, _ := file.Stat()
 	_, err = c.client.PutObject(ctx, &s3.PutObjectInput{
@@ -234,7 +234,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", err.Error()))
 	}
-	defer result.Body.Close()
+	defer func() { _ = result.Body.Close() }()
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -251,7 +251,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 			exception.WithParam("bucket_name", bucketName),
 			exception.WithParam("error_msg", fmt.Sprintf("create file failed: %v", err)))
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// 将响应体写入本地文件
 	_, err = file.ReadFrom(result.Body)
