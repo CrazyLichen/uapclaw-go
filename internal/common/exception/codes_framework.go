@@ -158,6 +158,34 @@ var (
 	StatusStoreGraphCollectionNotSupported = NewStatusCode(
 		"STORE_GRAPH_COLLECTION_NOT_SUPPORTED", 186009,
 		"store graph_collection not supported, collection={collection}")
+	// StatusStoreObjectBucketCreateFailed 对象存储桶创建失败
+	StatusStoreObjectBucketCreateFailed = NewStatusCode(
+		"STORE_OBJECT_BUCKET_CREATE_FAILED", 186010,
+		"store object bucket create failed, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectBucketDeleteFailed 对象存储桶删除失败
+	StatusStoreObjectBucketDeleteFailed = NewStatusCode(
+		"STORE_OBJECT_BUCKET_DELETE_FAILED", 186011,
+		"store object bucket delete failed, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectUploadFailed 对象上传失败
+	StatusStoreObjectUploadFailed = NewStatusCode(
+		"STORE_OBJECT_UPLOAD_FAILED", 186012,
+		"store object upload failed, object={object_name}, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectDownloadFailed 对象下载失败
+	StatusStoreObjectDownloadFailed = NewStatusCode(
+		"STORE_OBJECT_DOWNLOAD_FAILED", 186013,
+		"store object download failed, object={object_name}, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectDeleteFailed 对象删除失败
+	StatusStoreObjectDeleteFailed = NewStatusCode(
+		"STORE_OBJECT_DELETE_FAILED", 186014,
+		"store object delete failed, object={object_name}, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectListFailed 对象列表查询失败
+	StatusStoreObjectListFailed = NewStatusCode(
+		"STORE_OBJECT_LIST_FAILED", 186015,
+		"store object list failed, bucket={bucket_name}, reason: {error_msg}")
+	// StatusStoreObjectConfigInvalid 对象存储配置无效
+	StatusStoreObjectConfigInvalid = NewStatusCode(
+		"STORE_OBJECT_CONFIG_INVALID", 186016,
+		"store object config is invalid, reason: {error_msg}")
 )
 
 // =============================================================================================================
