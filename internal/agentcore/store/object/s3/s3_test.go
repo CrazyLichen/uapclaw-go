@@ -386,3 +386,71 @@ func TestS3Client_ListObjects_失败(t *testing.T) {
 	_, err := client.ListObjects(context.Background(), "nonexistent-bucket", "")
 	assert.Error(t, err)
 }
+
+// ──────────────────────────── NewS3Client 测试 ────────────────────────────
+
+func TestNewS3Client_缺少Server(t *testing.T) {
+	cfg := S3ClientConfig{
+		ObjectStorageConfig: objectpkg.ObjectStorageConfig{
+			AccessKeyID:     "ak",
+			SecretAccessKey: "sk",
+		},
+	}
+	_, err := NewS3Client(cfg)
+	assert.Error(t, err)
+}
+
+func TestNewS3Client_缺少AccessKeyID(t *testing.T) {
+	cfg := S3ClientConfig{
+		ObjectStorageConfig: objectpkg.ObjectStorageConfig{
+			Server:          "https://obs.example.com",
+			SecretAccessKey: "sk",
+		},
+	}
+	_, err := NewS3Client(cfg)
+	assert.Error(t, err)
+}
+
+func TestNewS3Client_缺少SecretAccessKey(t *testing.T) {
+	cfg := S3ClientConfig{
+		ObjectStorageConfig: objectpkg.ObjectStorageConfig{
+			Server:      "https://obs.example.com",
+			AccessKeyID: "ak",
+		},
+	}
+	_, err := NewS3Client(cfg)
+	assert.Error(t, err)
+}
+
+func TestNewS3Client_环境变量兜底(t *testing.T) {
+	os.Setenv("OBS_SERVER", "https://obs.env.example.com")
+	os.Setenv("OBS_ACCESS_KEY_ID", "env-ak")
+	os.Setenv("OBS_SECRET_ACCESS_KEY", "env-sk")
+	os.Setenv("OBS_REGION", "cn-north-4")
+	defer func() {
+		os.Unsetenv("OBS_SERVER")
+		os.Unsetenv("OBS_ACCESS_KEY_ID")
+		os.Unsetenv("OBS_SECRET_ACCESS_KEY")
+		os.Unsetenv("OBS_REGION")
+	}()
+
+	// 配置全部为空，应从环境变量读取
+	cfg := S3ClientConfig{}
+	client, err := NewS3Client(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+}
+
+func TestNewS3Client_成功(t *testing.T) {
+	cfg := S3ClientConfig{
+		ObjectStorageConfig: objectpkg.ObjectStorageConfig{
+			Server:          "https://obs.example.com",
+			AccessKeyID:     "test-ak",
+			SecretAccessKey: "test-sk",
+			RegionName:      "us-east-1",
+		},
+	}
+	client, err := NewS3Client(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+}
