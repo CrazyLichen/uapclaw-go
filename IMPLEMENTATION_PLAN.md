@@ -322,7 +322,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.24 | ✅ | StandardReranker / ChatReranker | 标准和对话式重排序 | `openjiuwen/core/retrieval/reranker/` |
 | 4.25 | ✅ | DashScopeReranker | 云服务重排序（支持多模态） | `openjiuwen/core/retrieval/reranker/dashscope_reranker.py` |
 | 4.26 | ✅ | Graph Store | 图存储 | `openjiuwen/core/foundation/store/graph/` |
-| 4.27 | ☐ | Object Store | 对象存储 (OBS/S3) | `openjiuwen/core/foundation/store/object/` |
+| 4.27 | ✅ | Object Store | 对象存储 (OBS/S3) | `openjiuwen/core/foundation/store/object/` |
 | 4.28 | ☐ | Query Builder | 查询构建器 | `openjiuwen/core/foundation/store/query/` |
 | 4.29 | ☐ | StorageCodec | 存储编解码协议 | `openjiuwen/core/foundation/store/` (StorageCodec) |
 
