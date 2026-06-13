@@ -1,7 +1,6 @@
-package embedding
+package common
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"mime"
@@ -10,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -50,19 +48,6 @@ type MultimodalDocument struct {
 	fields []ModalityField
 }
 
-// MultimodalOption 多模态嵌入的可选参数。
-type MultimodalOption struct {
-	// Instruction 多模态嵌入指令（VLLM 使用）
-	Instruction string
-}
-
-// MultimodalEmbedder 多模态嵌入接口，支持文本+图片+音频+视频。
-type MultimodalEmbedder interface {
-	embedding.BaseEmbedding
-	// EmbedMultimodal 将多模态文档转换为向量。
-	EmbedMultimodal(ctx context.Context, doc *MultimodalDocument, opts ...MultimodalOption) ([]float64, error)
-}
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -96,10 +81,6 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, filePath .
 }
 
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
-//
-// 输出格式：
-//
-//	[{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {"url": "..."}}]
 //
 // 对应 Python: MultimodalDocument.content
 func (d *MultimodalDocument) Content() []map[string]any {
@@ -135,8 +116,6 @@ func (d *MultimodalDocument) Content() []map[string]any {
 }
 
 // DashscopeInput 返回 DashScope 格式的输入字典。
-//
-// 输出格式：{"text": "...", "image": "...", "video": "..."}
 //
 // 对应 Python: MultimodalDocument.dashscope_input
 func (d *MultimodalDocument) DashscopeInput() map[string]any {
@@ -270,7 +249,7 @@ func loadFromFile(kind ModalityKind, path string) (ModalityKind, string) {
 		))
 	}
 
-	// 文本模态直接读取文件内容，不需要 MIME 类型
+	// 文本模态直接读取文件内容
 	if kind == ModalityText {
 		content, err := os.ReadFile(path)
 		if err != nil {
