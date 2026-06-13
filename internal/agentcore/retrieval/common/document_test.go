@@ -126,3 +126,74 @@ func TestMultimodalDocument_AddField_无效模态(t *testing.T) {
 		NewMultimodalDocument().AddField(ModalityKind("invalid"), "data")
 	})
 }
+
+func TestMultimodalDocument_AddField_从文件加载图片(t *testing.T) {
+	// 测试视频 URL 模式（无需文件系统 MIME 支持）
+	doc := NewMultimodalDocument().AddField(ModalityVideo, "https://example.com/video.mp4")
+	assert.Len(t, doc.Fields(), 1)
+	assert.Equal(t, ModalityVideo, doc.Fields()[0].Kind)
+	assert.Contains(t, doc.Fields()[0].Data, "https://example.com/video.mp4")
+}
+
+func TestMultimodalDocument_AddField_空Data和空路径(t *testing.T) {
+	assert.Panics(t, func() {
+		NewMultimodalDocument().AddField(ModalityImage, "")
+	})
+}
+
+func TestMultimodalDocument_AddField_同时提供Data和路径(t *testing.T) {
+	tmpDir := t.TempDir()
+	txtFile := filepath.Join(tmpDir, "test.txt")
+	_ = os.WriteFile(txtFile, []byte("内容"), 0644)
+
+	assert.Panics(t, func() {
+		NewMultimodalDocument().AddField(ModalityText, "data", txtFile)
+	})
+}
+
+func TestMultimodalDocument_AddField_图片Base64(t *testing.T) {
+	doc := NewMultimodalDocument().AddField(ModalityImage, "data:image/png;base64,iVBORw0KGgo=")
+	assert.Len(t, doc.Fields(), 1)
+	assert.Equal(t, ModalityImage, doc.Fields()[0].Kind)
+}
+
+func TestMultimodalDocument_DashscopeInput_重复模态字段(t *testing.T) {
+	assert.Panics(t, func() {
+		doc := NewMultimodalDocument().
+			AddField(ModalityText, "文本1").
+			AddField(ModalityText, "文本2")
+		doc.DashscopeInput()
+	})
+}
+
+func TestMultimodalDocument_DashscopeInput_base64视频不支持(t *testing.T) {
+	assert.Panics(t, func() {
+		doc := NewMultimodalDocument().AddField(ModalityVideo, "data:video/mp4;base64,AAAA")
+		doc.DashscopeInput()
+	})
+}
+
+func TestMultimodalDocument_AddField_从文件加载不存在的文件(t *testing.T) {
+	assert.Panics(t, func() {
+		NewMultimodalDocument().AddField(ModalityImage, "", "/nonexistent/path/test.png")
+	})
+}
+
+func TestLoadFromFile_路径是目录(t *testing.T) {
+	tmpDir := t.TempDir()
+	assert.Panics(t, func() {
+		NewMultimodalDocument().AddField(ModalityImage, "", tmpDir)
+	})
+}
+
+func TestMultimodalDocument_AddField_视频URL(t *testing.T) {
+	doc := NewMultimodalDocument().AddField(ModalityVideo, "https://example.com/video.mp4")
+	assert.Len(t, doc.Fields(), 1)
+	assert.Equal(t, ModalityVideo, doc.Fields()[0].Kind)
+}
+
+func TestMultimodalDocument_AddField_无效图片Data(t *testing.T) {
+	assert.Panics(t, func() {
+		NewMultimodalDocument().AddField(ModalityImage, "not-a-url-or-base64")
+	})
+}
