@@ -4,6 +4,14 @@ import "context"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Callback 嵌入进度回调接口。
+//
+// 对齐 Python: BaseCallback
+type Callback interface {
+	// OnBatchComplete 一批嵌入完成时回调。
+	OnBatchComplete(startIdx, endIdx int, batch []string)
+}
+
 // BaseEmbedding 向量嵌入模型的抽象接口。
 //
 // 提供文本到向量的转换能力，供记忆索引等组件进行语义搜索。
@@ -15,7 +23,7 @@ type BaseEmbedding interface {
 	EmbedQuery(ctx context.Context, text string) ([]float64, error)
 
 	// EmbedDocuments 将多条文档文本批量转换为向量。
-	EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error)
+	EmbedDocuments(ctx context.Context, texts []string, opts ...EmbedOption) ([][]float64, error)
 
 	// Dimension 返回嵌入向量的维度。
 	Dimension() int
@@ -24,6 +32,18 @@ type BaseEmbedding interface {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 配置结构体 ────────────────────────────
+
+// EmbedOption 批量嵌入的可选参数。
+//
+// 对齐 Python: embed_documents(batch_size=, callback_cls=)
+type EmbedOption struct {
+	// BatchSize 批大小，0 表示使用默认值
+	BatchSize int
+	// Callback 进度回调，nil 表示不回调
+	Callback Callback
+}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

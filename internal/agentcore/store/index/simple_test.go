@@ -287,7 +287,7 @@ func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string) ([]float64, e
 	return vec, nil
 }
 
-func (f *fakeEmbedding) EmbedDocuments(_ context.Context, texts []string) ([][]float64, error) {
+func (f *fakeEmbedding) EmbedDocuments(_ context.Context, texts []string, _ ...embedding.EmbedOption) ([][]float64, error) {
 	result := make([][]float64, len(texts))
 	for i, text := range texts {
 		vec, _ := f.EmbedQuery(context.Background(), text)
@@ -1731,7 +1731,7 @@ type failingEmbedding struct {
 
 var _ embedding.BaseEmbedding = &failingEmbedding{}
 
-func (f *failingEmbedding) EmbedDocuments(ctx context.Context, texts []string) ([][]float64, error) {
+func (f *failingEmbedding) EmbedDocuments(ctx context.Context, texts []string, _ ...embedding.EmbedOption) ([][]float64, error) {
 	if f.failEmbedDocuments {
 		return nil, fmt.Errorf("EmbedDocuments 注入错误")
 	}

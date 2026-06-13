@@ -22,7 +22,7 @@ func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string) ([]float64, e
 	return vec, nil
 }
 
-func (f *fakeEmbedding) EmbedDocuments(_ context.Context, texts []string) ([][]float64, error) {
+func (f *fakeEmbedding) EmbedDocuments(_ context.Context, texts []string, _ ...EmbedOption) ([][]float64, error) {
 	result := make([][]float64, len(texts))
 	for i, text := range texts {
 		vec := make([]float64, f.dimension)
