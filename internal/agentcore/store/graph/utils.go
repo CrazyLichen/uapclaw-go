@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -65,6 +66,30 @@ func LoadStoredTimeFromDB(timestamp int64, offset int8) (*time.Time, error) {
 	tz := loadTZOffset(offset)
 	t := time.Unix(timestamp, 0).In(tz)
 	return &t, nil
+}
+
+// EnsureUniqueUUIDs 去重UUID：查询集合中已存在的UUID，返回不存在的新UUID列表
+func EnsureUniqueUUIDs(ctx context.Context, store BaseGraphStore, ids []string, collection string, skip bool) ([]string, error) {
+	if skip || len(ids) == 0 {
+		return ids, nil
+	}
+	existing, err := store.Query(ctx, collection, WithIDs(stringsToAny(ids)...), WithOutputFields("uuid"))
+	if err != nil {
+		return nil, err
+	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, row := range existing {
+		if uuid, ok := row["uuid"].(string); ok {
+			existingSet[uuid] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, found := existingSet[id]; !found {
+			result = append(result, id)
+		}
+	}
+	return result, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
