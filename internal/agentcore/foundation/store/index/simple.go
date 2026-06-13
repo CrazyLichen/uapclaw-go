@@ -158,11 +158,15 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 		for _, doc := range docs {
 			kvKey := kvMemKey(userID, scopeID, doc.ID)
 			kvData := memoryDocToKVData(doc, userID, scopeID)
-			if s.codec != nil {
-				if mem, ok := kvData["mem"].(string); ok {
-					kvData["mem"] = s.codec.Encode(mem)
+		if s.codec != nil {
+			if mem, ok := kvData["mem"].(string); ok {
+				encoded, err := s.codec.Encode(mem)
+				if err != nil {
+					return fmt.Errorf("编码记忆文本失败: %w", err)
 				}
+				kvData["mem"] = encoded
 			}
+		}
 			data, err := json.Marshal(kvData)
 			if err != nil {
 				return fmt.Errorf("序列化 KV 数据失败: %w", err)
@@ -287,7 +291,11 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			}
 			if s.codec != nil {
 				if mem, ok := data["mem"].(string); ok {
-					data["mem"] = s.codec.Decode(mem)
+					decMem, err := s.codec.Decode(mem)
+					if err != nil {
+						continue
+					}
+					data["mem"] = decMem
 				}
 			}
 			doc := kvDataToMemoryDoc(data, mid)
@@ -489,7 +497,11 @@ func (s *SimpleMemoryIndex) GetByID(ctx context.Context, userID string, scopeID 
 	}
 	if s.codec != nil {
 		if mem, ok := data["mem"].(string); ok {
-			data["mem"] = s.codec.Decode(mem)
+			decoded, err := s.codec.Decode(mem)
+			if err != nil {
+				return nil, fmt.Errorf("解码记忆文本失败: %w", err)
+			}
+			data["mem"] = decoded
 		}
 	}
 	return kvDataToMemoryDoc(data, memID), nil
@@ -535,7 +547,11 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 		}
 		if s.codec != nil {
 			if mem, ok := data["mem"].(string); ok {
-				data["mem"] = s.codec.Decode(mem)
+				decMem, err := s.codec.Decode(mem)
+				if err != nil {
+					continue
+				}
+				data["mem"] = decMem
 			}
 		}
 		doc := kvDataToMemoryDoc(data, mid)
