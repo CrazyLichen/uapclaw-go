@@ -277,8 +277,8 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 		}
 
 		for i, mid := range hitIDs {
-			decoded := readKVValue(values[i])
-			if decoded == "" {
+			decoded, ok := readKVValue(values[i])
+			if !ok || decoded == "" {
 				continue
 			}
 			var data map[string]any
@@ -504,7 +504,7 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 	if err != nil {
 		return nil, fmt.Errorf("获取 ID 追踪键失败: %w", err)
 	}
-	val := readKVValue(raw)
+	val, _ := readKVValue(raw)
 	if val == "" {
 		return nil, nil
 	}
@@ -525,8 +525,8 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 
 	var docs []*MemoryDoc
 	for i, mid := range allIDs {
-		decoded := readKVValue(values[i])
-		if decoded == "" {
+		decoded, ok := readKVValue(values[i])
+		if !ok || decoded == "" {
 			continue
 		}
 		var data map[string]any
@@ -653,12 +653,14 @@ func removeID(raw string, memID string) string {
 	return raw
 }
 
-// readKVValue 将 KV 存储的 []byte 值解码为字符串，nil 返回空字符串。
-func readKVValue(raw []byte) string {
+// readKVValue 将 KV 存储的 []byte 值解码为字符串。
+// 返回 (值, 是否存在)：raw 为 nil 时返回 ("", false)，否则返回 (string(raw), true)。
+// 对齐 Python _read_kv_value 中 raw is None → None 的语义区分。
+func readKVValue(raw []byte) (string, bool) {
 	if raw == nil {
-		return ""
+		return "", false
 	}
-	return string(raw)
+	return string(raw), true
 }
 
 // writeKVValue 将字符串编码为 []byte 写入 KV 存储。
@@ -675,7 +677,7 @@ func (s *SimpleMemoryIndex) addIDToTracking(ctx context.Context, userID, scopeID
 	if err != nil {
 		return fmt.Errorf("获取全局 ID 追踪键失败: %w", err)
 	}
-	val := readKVValue(raw)
+	val, _ := readKVValue(raw)
 	ids := parseAllIDs(val)
 	found := false
 	for _, id := range ids {
@@ -696,7 +698,7 @@ func (s *SimpleMemoryIndex) addIDToTracking(ctx context.Context, userID, scopeID
 	if err != nil {
 		return fmt.Errorf("获取类型 ID 追踪键失败: %w", err)
 	}
-	tval := readKVValue(traw)
+	tval, _ := readKVValue(traw)
 	tids := parseAllIDs(tval)
 	tfound := false
 	for _, id := range tids {
@@ -724,7 +726,7 @@ func (s *SimpleMemoryIndex) removeIDFromTracking(ctx context.Context, userID, sc
 	if err != nil {
 		return fmt.Errorf("获取全局 ID 追踪键失败: %w", err)
 	}
-	val := readKVValue(raw)
+	val, _ := readKVValue(raw)
 	newVal := removeID(val, memID)
 	if newVal != "" {
 		if err := s.kvStore.Set(ctx, key, writeKVValue(newVal)); err != nil {
@@ -746,7 +748,7 @@ func (s *SimpleMemoryIndex) removeIDFromTracking(ctx context.Context, userID, sc
 	if err != nil {
 		return fmt.Errorf("获取类型 ID 追踪键失败: %w", err)
 	}
-	tval := readKVValue(traw)
+	tval, _ := readKVValue(traw)
 	newTVal := removeID(tval, memID)
 	if newTVal != "" {
 		if err := s.kvStore.Set(ctx, tkey, writeKVValue(newTVal)); err != nil {

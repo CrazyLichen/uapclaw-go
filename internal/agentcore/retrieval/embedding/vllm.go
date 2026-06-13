@@ -109,7 +109,7 @@ func (v *VLLMEmbedding) callWithMessages(ctx context.Context, messages []map[str
 		params := openai.EmbeddingNewParams{
 			Model: v.openAI.config.ModelName,
 			Input: openai.EmbeddingNewParamsInputUnion{
-				OfString: param.Opt[string]{Value: ""}, // vLLM 需要 input 字段但值可为空
+				OfString: param.Null[string](), // 对齐 Python input=None，vLLM 多模态模式下 input 由 messages 提供
 			},
 		}
 

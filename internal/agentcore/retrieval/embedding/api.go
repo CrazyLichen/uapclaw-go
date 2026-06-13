@@ -39,6 +39,9 @@ type APIEmbedding struct {
 	limiter chan struct{}
 	// headers 请求头
 	headers map[string]string
+	// extraParams 额外请求参数，合并到 API payload 中。
+	// 对齐 Python **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
+	extraParams map[string]any
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
 	// httpClient HTTP 客户端
@@ -85,6 +88,19 @@ func WithAPIExtraHeaders(headers map[string]string) APIEmbeddingOption {
 // WithAPIHTTPClient 设置自定义 HTTP 客户端。
 func WithAPIHTTPClient(client *http.Client) APIEmbeddingOption {
 	return func(a *APIEmbedding) { a.httpClient = client }
+}
+
+// WithAPIExtraParams 设置额外请求参数，合并到 API payload 中。
+// 对齐 Python **kwargs 透传机制，支持 encoding_format、dimensions、user 等参数。
+func WithAPIExtraParams(params map[string]any) APIEmbeddingOption {
+	return func(a *APIEmbedding) {
+		if a.extraParams == nil {
+			a.extraParams = make(map[string]any)
+		}
+		for k, v := range params {
+			a.extraParams[k] = v
+		}
+	}
 }
 
 // NewAPIEmbedding 创建通用 HTTP 嵌入客户端。
@@ -189,12 +205,28 @@ func (a *APIEmbedding) Dimension() int {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// apiIsRetryable 判断 APIEmbedding 错误是否可重试。
+// 4xx 客户端错误不可重试，其他错误（5xx、网络错误等）可重试。
+func apiIsRetryable(err error) bool {
+	if baseErr, ok := err.(*exception.BaseError); ok {
+		// 检查是否为 4xx 客户端错误（由 getEmbeddings 中标记的 Validation 类别）
+		if !baseErr.IsRecoverable() {
+			return false
+		}
+	}
+	return true
+}
+
 // getEmbeddings 发送 HTTP POST 请求获取嵌入向量。
 func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([][]float64, error) {
-	return RetryWithBackoff(ctx, a.maxRetries, func(attempt int) ([][]float64, error) {
+	return retryWithBackoffGeneric(ctx, a.maxRetries, func(attempt int) ([][]float64, error) {
 		payload := map[string]interface{}{
 			"model": a.config.ModelName,
 			"input": input,
+		}
+		// 合并额外参数，对齐 Python **kwargs 透传
+		for k, v := range a.extraParams {
+			payload[k] = v
 		}
 
 		body, err := json.Marshal(payload)
@@ -221,6 +253,7 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 		if err != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "embedding_request_failed").
+				Str("model_provider", a.config.ModelName).
 				Int("attempt", attempt+1).
 				Int("max_retries", a.maxRetries).
 				Err(err).
@@ -238,10 +271,21 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, exception.BuildError(
+			// 4xx 客户端错误不可重试（对齐 Python 只重试网络错误的行为）
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				return nil, exception.ValidateError(
+					exception.StatusRetrievalEmbeddingRequestCallFailed,
+					exception.WithParam("error_msg", fmt.Sprintf("HTTP 客户端错误 %d: %s", resp.StatusCode, string(respBody))),
+				)
+			}
+			// 5xx 服务端错误可重试，使用 Execution 类别确保可重试
+			err := exception.BuildError(
 				exception.StatusRetrievalEmbeddingRequestCallFailed,
-				exception.WithParam("error_msg", fmt.Sprintf("HTTP 状态码 %d: %s", resp.StatusCode, string(respBody))),
+				exception.WithParam("error_msg", fmt.Sprintf("HTTP 服务端错误 %d: %s", resp.StatusCode, string(respBody))),
 			)
+			// 强制设置为 Execution 类别，避免 keyword 规则将 "CALL" 匹配为 Framework
+			err.SetCategory(exception.ErrorCategoryExecution)
+			return nil, err
 		}
 
 		embeddings, err := ParseEmbeddingResponse(respBody)
@@ -258,5 +302,5 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 		}
 
 		return embeddings, nil
-	})
+	}, apiIsRetryable)
 }

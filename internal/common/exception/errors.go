@@ -165,6 +165,11 @@ func (e *BaseError) Status() StatusCode { return e.status }
 // Category 返回错误类别。
 func (e *BaseError) Category() ErrorCategory { return e.category }
 
+// SetCategory 设置错误类别。
+// 通常由 ResolveCategory 自动决定，此方法用于需要覆盖自动解析结果的场景
+// （如 HTTP 5xx 错误需要强制为 Execution 类别以确保可重试）。
+func (e *BaseError) SetCategory(c ErrorCategory) { e.category = c }
+
 // Code 返回整数错误码，委托给 StatusCode.Code()。
 //
 // 对应 Python: BaseError.code

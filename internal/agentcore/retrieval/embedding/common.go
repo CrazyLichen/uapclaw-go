@@ -278,10 +278,31 @@ func ParseEmbeddingResponse(body []byte) ([][]float64, error) {
 // RetryWithBackoff 通用重试 + 指数退避。
 //
 // fn 参数 attempt 从 0 开始。maxRetries 为最大重试次数（即最多调用 fn maxRetries 次）。
+// 如果 fn 返回的 error 是 *exception.BaseError 且 IsRecoverable() == false，则立即退出不重试。
+// 对齐 Python 行为：只重试可恢复错误（网络错误/5xx），不重试客户端错误（4xx/输入错误）。
 func RetryWithBackoff(
 	ctx context.Context,
 	maxRetries int,
 	fn func(attempt int) ([][]float64, error),
+) ([][]float64, error) {
+	return retryWithBackoffGeneric(ctx, maxRetries, fn, defaultIsRetryable)
+}
+
+// defaultIsRetryable 默认的可重试判断逻辑。
+// *exception.BaseError 且 IsRecoverable()==false 的错误不重试，其他都重试。
+func defaultIsRetryable(err error) bool {
+	if baseErr, ok := err.(*exception.BaseError); ok && !baseErr.IsRecoverable() {
+		return false
+	}
+	return true
+}
+
+// retryWithBackoffGeneric 通用重试 + 指数退避（带自定义可重试判断）。
+func retryWithBackoffGeneric(
+	ctx context.Context,
+	maxRetries int,
+	fn func(attempt int) ([][]float64, error),
+	isRetryable func(error) bool,
 ) ([][]float64, error) {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -296,6 +317,11 @@ func RetryWithBackoff(
 			return result, nil
 		}
 		lastErr = err
+
+		// 检查是否可重试
+		if !isRetryable(err) {
+			return nil, err
+		}
 
 		if attempt < maxRetries-1 {
 			logger.Warn(logComponent).

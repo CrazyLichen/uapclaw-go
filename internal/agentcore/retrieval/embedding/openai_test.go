@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
@@ -231,4 +232,90 @@ func TestOpenAIEmbedding_维度参数(t *testing.T) {
 	opt := param.Opt[int64]{Value: dim}
 	assert.True(t, opt.Valid())
 	assert.Equal(t, int64(256), opt.Value)
+}
+
+// TestOpenAIEmbedding_ExtraHeaders 验证额外请求头透传给 SDK
+func TestOpenAIEmbedding_ExtraHeaders(t *testing.T) {
+	var receivedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, `{"data": [{"embedding": [0.1], "index": 0}], "model": "test", "object": "list", "usage": {"prompt_tokens": 1, "total_tokens": 1}}`)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+		APIKey:    "sk-test",
+	}, WithOpenAIExtraHeaders(map[string]string{
+		"X-Custom-Auth": "custom-token",
+	}))
+
+	_, err := client.EmbedQuery(context.Background(), "hello")
+	require.NoError(t, err)
+	assert.Equal(t, "custom-token", receivedHeaders.Get("X-Custom-Auth"))
+}
+
+// TestOpenAIEmbedding_ExtraParams 验证额外参数透传给 SDK
+func TestOpenAIEmbedding_ExtraParams(t *testing.T) {
+	var receivedBody map[string]interface{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, `{"data": [{"embedding": [0.1], "index": 0}], "model": "test", "object": "list", "usage": {"prompt_tokens": 1, "total_tokens": 1}}`)
+	}))
+	defer server.Close()
+
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "text-embedding-3-small",
+		BaseURL:   server.URL,
+		APIKey:    "sk-test",
+	}, WithOpenAIExtraParams(map[string]any{
+		"encoding_format": "base64",
+	}))
+
+	_, err := client.EmbedQuery(context.Background(), "hello")
+	require.NoError(t, err)
+	assert.Equal(t, "base64", receivedBody["encoding_format"])
+}
+
+// TestOpenAIEmbedding_Option函数 验证各 Option 函数正常工作
+func TestOpenAIEmbedding_Option函数(t *testing.T) {
+	server := newOpenAITestServer(`{
+		"data": [{"embedding": [0.1], "index": 0}],
+		"model": "test", "object": "list",
+		"usage": {"prompt_tokens": 1, "total_tokens": 1}
+	}`)
+	defer server.Close()
+
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+		APIKey:    "sk-test",
+	},
+		WithOpenAITimeout(5*time.Second),
+		WithOpenAIMaxRetries(1),
+		WithOpenAIMaxBatchSize(2),
+		WithOpenAIMaxConcurrent(5),
+		WithOpenAIDimension(256),
+		WithOpenAIExtraHeaders(map[string]string{"X-Test": "val"}),
+		WithOpenAIExtraParams(map[string]any{"encoding_format": "base64"}),
+	)
+
+	assert.Equal(t, 5*time.Second, client.timeout)
+	assert.Equal(t, 1, client.maxRetries)
+	assert.Equal(t, 2, client.maxBatchSize)
+	assert.True(t, client.matryoshkaDimension)
+	assert.Equal(t, 256, client.dimension)
+	assert.NotNil(t, client.extraHeaders)
+	assert.Equal(t, "val", client.extraHeaders["X-Test"])
+	assert.NotNil(t, client.extraParams)
+	assert.Equal(t, "base64", client.extraParams["encoding_format"])
+
+	vec, err := client.EmbedQuery(context.Background(), "hello")
+	require.NoError(t, err)
+	assert.NotEmpty(t, vec)
 }

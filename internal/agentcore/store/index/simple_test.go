@@ -659,32 +659,39 @@ func TestEnsureCollection_懒创建(t *testing.T) {
 
 func TestReadKVValue(t *testing.T) {
 	tests := []struct {
-		name  string
-		input []byte
-		want  string
+		name      string
+		input     []byte
+		wantVal   string
+		wantExist bool
 	}{
 		{
-			name:  "正常字节数据",
-			input: []byte("hello"),
-			want:  "hello",
+			name:      "正常字节数据",
+			input:     []byte("hello"),
+			wantVal:   "hello",
+			wantExist: true,
 		},
 		{
-			name:  "nil 输入返回空字符串",
-			input: nil,
-			want:  "",
+			name:      "nil 输入返回空字符串且不存在",
+			input:     nil,
+			wantVal:   "",
+			wantExist: false,
 		},
 		{
-			name:  "空字节数据",
-			input: []byte{},
-			want:  "",
+			name:      "空字节数据返回空字符串但存在",
+			input:     []byte{},
+			wantVal:   "",
+			wantExist: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := readKVValue(tt.input)
-			if got != tt.want {
-				t.Errorf("readKVValue: 期望 %q, 实际 %q", tt.want, got)
+			gotVal, gotExist := readKVValue(tt.input)
+			if gotVal != tt.wantVal {
+				t.Errorf("readKVValue 值: 期望 %q, 实际 %q", tt.wantVal, gotVal)
+			}
+			if gotExist != tt.wantExist {
+				t.Errorf("readKVValue 存在: 期望 %v, 实际 %v", tt.wantExist, gotExist)
 			}
 		})
 	}
@@ -722,7 +729,7 @@ func TestAddMemories_正常添加(t *testing.T) {
 
 	// 验证 ID 追踪
 	idsRaw, _ := idx.kvStore.Get(ctx, kvIDsKey("user1", "scope1", ""))
-	idsVal := readKVValue(idsRaw)
+	idsVal, _ := readKVValue(idsRaw)
 	ids := parseAllIDs(idsVal)
 	found := false
 	for _, id := range ids {

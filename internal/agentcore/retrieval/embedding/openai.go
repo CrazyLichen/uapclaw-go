@@ -42,6 +42,13 @@ type OpenAIEmbedding struct {
 	dimension int
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
+	// extraHeaders 额外请求头，透传给 OpenAI SDK
+	extraHeaders map[string]string
+	// extraParams 额外请求参数，通过 option.WithJSONSet 透传给 SDK。
+	// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数。
+	extraParams map[string]any
+	// httpClient 自定义 HTTP 客户端（可选）
+	httpClient *http.Client
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -80,14 +87,36 @@ func WithOpenAIDimension(dim int) OpenAIEmbeddingOption {
 	}
 }
 
+// WithOpenAIExtraHeaders 设置额外请求头，透传给 OpenAI SDK。
+// 对齐 Python OpenAIEmbedding 中的 default_headers=self._headers。
+func WithOpenAIExtraHeaders(headers map[string]string) OpenAIEmbeddingOption {
+	return func(o *OpenAIEmbedding) {
+		if o.extraHeaders == nil {
+			o.extraHeaders = make(map[string]string)
+		}
+		for k, v := range headers {
+			o.extraHeaders[k] = v
+		}
+	}
+}
+
 // WithOpenAIHTTPClient 设置自定义 HTTP 客户端。
 func WithOpenAIHTTPClient(client *http.Client) OpenAIEmbeddingOption {
 	return func(o *OpenAIEmbedding) {
-		opts := []option.RequestOption{
-			option.WithHTTPClient(client),
+		o.httpClient = client
+	}
+}
+
+// WithOpenAIExtraParams 设置额外请求参数，通过 option.WithJSONSet 透传给 SDK。
+// 对齐 Python **kwargs 透传机制，支持 encoding_format、user 等参数。
+func WithOpenAIExtraParams(params map[string]any) OpenAIEmbeddingOption {
+	return func(o *OpenAIEmbedding) {
+		if o.extraParams == nil {
+			o.extraParams = make(map[string]any)
 		}
-		cl := openai.NewClient(opts...)
-		o.client = cl
+		for k, v := range params {
+			o.extraParams[k] = v
+		}
 	}
 }
 
@@ -99,6 +128,11 @@ func NewOpenAIEmbedding(config EmbeddingConfig, opts ...OpenAIEmbeddingOption) *
 		maxRetries:   defaultMaxRetries,
 		maxBatchSize: defaultMaxBatchSize,
 		limiter:      make(chan struct{}, defaultMaxConcurrent),
+	}
+
+	// 先应用 Option，确保 extraHeaders / httpClient 等字段在构造 SDK 客户端之前就位
+	for _, opt := range opts {
+		opt(o)
 	}
 
 	// 处理 API URL：移除末尾 / 和 /embeddings
@@ -113,11 +147,16 @@ func NewOpenAIEmbedding(config EmbeddingConfig, opts ...OpenAIEmbeddingOption) *
 	if config.APIKey != "" {
 		clientOpts = append(clientOpts, option.WithAPIKey(config.APIKey))
 	}
+	// 透传 extra_headers 给 SDK，对齐 Python default_headers=self._headers
+	for k, v := range o.extraHeaders {
+		clientOpts = append(clientOpts, option.WithHeader(k, v))
+	}
+	// 透传自定义 HTTP 客户端
+	if o.httpClient != nil {
+		clientOpts = append(clientOpts, option.WithHTTPClient(o.httpClient))
+	}
 
 	o.client = openai.NewClient(clientOpts...)
-	for _, opt := range opts {
-		opt(o)
-	}
 
 	return o
 }
@@ -236,7 +275,13 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 			params.Dimensions = param.Opt[int64]{Value: int64(o.dimension)}
 		}
 
-		resp, err := o.client.Embeddings.New(ctx, params)
+		// 构建额外参数选项，对齐 Python **kwargs 透传
+		var extraOpts []option.RequestOption
+		for k, v := range o.extraParams {
+			extraOpts = append(extraOpts, option.WithJSONSet(k, v))
+		}
+
+		resp, err := o.client.Embeddings.New(ctx, params, extraOpts...)
 		if err != nil {
 			logger.Warn(logComponent).
 				Str("event_type", "embedding_request_failed").
