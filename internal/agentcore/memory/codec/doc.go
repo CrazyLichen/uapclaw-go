@@ -18,5 +18,5 @@
 //
 // 核心类型/接口索引：
 //
-//	AesStorageCodec — AES-256-GCM 存储编解码器，key 为空时 passthrough，key 非空时严格模式
+//	AesStorageCodec — AES-256-GCM 存储编解码器，实现 index.StorageCodec 接口，key 为空时 passthrough
 package codec

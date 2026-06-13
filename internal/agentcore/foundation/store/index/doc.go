@@ -22,7 +22,7 @@
 //
 // 核心类型/接口索引：
 //
-//	StorageCodec        — 存储编解码器接口，用于对记忆文本加解密
+//	StorageCodec        — 存储编解码器接口，Encode/Decode 返回 (string, error)，AesStorageCodec 满足此接口
 //	MemoryDoc           — 记忆文档数据模型（ID/Text/Type/Timestamp/Fields）
 //	MemorySearchResult  — 搜索结果，包含 MemoryDoc 和相关度分数
 //	UserScope           — 用户-作用域对，ListUserScopes 返回值
