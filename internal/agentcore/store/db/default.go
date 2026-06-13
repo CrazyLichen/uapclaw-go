@@ -22,8 +22,11 @@ type DefaultDbStore struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDefaultDbStore 创建 DefaultDbStore 实例。
-// 调用方应确保传入有效的 *gorm.DB 实例。
+// 传入 nil *gorm.DB 时 panic，避免后续 GetDB 返回 nil 引发难以排查的问题。
 func NewDefaultDbStore(db *gorm.DB) *DefaultDbStore {
+	if db == nil {
+		panic("NewDefaultDbStore: db 不能为 nil")
+	}
 	return &DefaultDbStore{db: db}
 }
 

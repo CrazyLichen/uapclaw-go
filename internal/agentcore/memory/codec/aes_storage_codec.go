@@ -31,6 +31,10 @@ const (
 
 // NewAesStorageCodec 创建存储编解码器。
 // key 为 nil/空 → passthrough 模式；key 非空 → 必须为 32 字节，否则返回 error。
+//
+// 注意：Python 不校验 key 长度，Go 校验 key 必须 32 字节。Go 更安全——
+// AES-256 本身要求 32 字节密钥，Python 不校验是缺陷。
+// 此处保持 Go 严格校验。
 func NewAesStorageCodec(key []byte) (*AesStorageCodec, error) {
 	if len(key) == 0 {
 		return &AesStorageCodec{key: nil, provider: nil}, nil

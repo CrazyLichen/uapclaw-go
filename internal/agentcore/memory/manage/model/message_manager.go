@@ -126,7 +126,8 @@ func (m *MessageManager) GetByID(ctx context.Context, msgID string) (*db.Message
 	msg, meta, err := m.store.GetMessageByID(ctx, msgID)
 	if err != nil {
 		// 消息不存在返回 nil, nil；其他错误正常传播
-		if errors.Is(err, db.ErrMessageNotFound) {
+		var baseErr *exception.BaseError
+		if errors.As(err, &baseErr) && baseErr.Status() == exception.StatusStoreMessageNotFound {
 			return nil, nil
 		}
 		return nil, err

@@ -105,7 +105,11 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 }
 
 // AddMessages 批量添加消息，返回 ID 列表。
-// 使用 CreateBatch 一次 GORM Create 插入所有行。
+// 使用 CreateBatch 一次 GORM Create 插入所有行（一个事务）。
+//
+// 注意：Python 逐条调用 add_message（每条独立事务），Go 使用批量事务。
+// Go 方式更优（原子性更好、性能更高）：要么全写入要么全不写。
+// Python 逐条方式可能导致部分成功部分失败，Go 不存在此问题。
 //
 // 对应 Python: SqlMessageStore.add_messages(message_adds)
 func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*storedb.MessageAdd) ([]string, error) {
@@ -162,7 +166,9 @@ func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) 
 	}
 
 	if len(results) == 0 {
-		return nil, nil, storedb.ErrMessageNotFound
+		return nil, nil, exception.BuildError(exception.StatusStoreMessageNotFound,
+			exception.WithParam("message_id", messageID),
+		)
 	}
 
 	return s.rowToMessageAndMeta(results[0])
@@ -174,10 +180,13 @@ func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) 
 // 对应 Python: SqlMessageStore.get_messages(message_filter, limit, order_by, order_direction)
 func (s *SqlMessageStore) GetMessages(ctx context.Context, filter *storedb.MessageFilter, limit int, orderBy string, orderDirection string) ([]*storedb.MessageAndMeta, error) {
 	if limit <= 0 {
-		limit = 10
+		limit = storedb.DefaultMessageLimit
 	}
 	if orderBy == "" {
-		orderBy = "timestamp"
+		orderBy = storedb.DefaultMessageOrderBy
+	}
+	if orderDirection == "" {
+		orderDirection = storedb.DefaultMessageOrderDirection
 	}
 
 	// 构建等值过滤条件

@@ -22,10 +22,13 @@ type MemoryDoc struct {
 	Text string `json:"text"`
 	// Type 类型/分类
 	Type string `json:"type"`
-	// Timestamp 时间戳
+	// Timestamp 时间戳（零值 time.Time{} 表示未设置，由实现层填充当前时间；
+	// Python 创建时自动填充当前时间，Go 的 time.Time 零值为 0001-01-01）
 	Timestamp time.Time `json:"timestamp"`
-	// Fields 扩展字段
-	Fields map[string]any `json:"fields,omitempty"`
+	// Fields 扩展字段（移除 omitempty：Python 默认 {} 空字典，Go 零值为 nil，
+	// omitempty 时 nil 不输出字段而 {} 输出 "fields":{}，行为不一致。
+	// 移除 omitempty 后 nil 输出 "fields":null，与 Python 行为更接近）
+	Fields map[string]any `json:"fields"`
 }
 
 // MemorySearchResult 记忆搜索结果，包含匹配文档和相关度分数。
@@ -144,14 +147,14 @@ type MemoryIndexBase struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// defaultTopK Search 默认返回结果数量
+	// defaultTopK Search 默认返回结果数量（被 simple.go 等实现类引用）
 	defaultTopK = 10
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// logComponent 日志组件常量，store 属于基础设施层
+	// logComponent 日志组件常量，store 属于基础设施层（被 simple.go 等实现类引用）
 	logComponent = logger.ComponentCommon
 )
 
@@ -199,6 +202,10 @@ func (b *MemoryIndexBase) RestoreBackup(_ context.Context, backupID string) erro
 	defer b.mu.Unlock()
 	data, ok := b.backups[backupID]
 	if !ok {
+		logger.Error(logComponent).
+			Str("backup_id", backupID).
+			Str("event_type", "MEMORY_BACKUP_ERROR").
+			Msg("备份不存在，恢复失败")
 		return exception.BuildError(exception.StatusMemoryBackupNotFound,
 			exception.WithParam("backup_id", backupID),
 		)

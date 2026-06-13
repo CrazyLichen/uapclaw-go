@@ -31,8 +31,7 @@ type SimpleMemoryIndex struct {
 	kvStore kv.BaseKVStore
 	// vectorStore 向量存储后端
 	vectorStore vector.BaseVectorStore
-	// embeddingModel 嵌入模型
-	// ⤵️ 预留：4.19-4.22 实现后可注入具体实现
+	// embeddingModel 嵌入模型（具体实现见 retrieval/embedding 包）
 	embeddingModel embedding.BaseEmbedding
 	// createdCollections 已创建的向量集合缓存
 	createdCollections map[string]bool

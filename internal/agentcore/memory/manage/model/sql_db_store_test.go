@@ -418,20 +418,28 @@ func TestSqlDbStore_BatchGet(t *testing.T) {
 	}
 }
 
-// TestSqlDbStore_Get 按条件查询单条
+// TestSqlDbStore_Get 按 ID 查询单条
+// Python 硬编码 WHERE id = record_id，此处使用带 id 列的临时表测试
 func TestSqlDbStore_Get(t *testing.T) {
 	store, gormDB := newTestSqlDbStore(t)
 	if err := CreateTables(gormDB); err != nil {
 		t.Fatalf("CreateTables 失败: %v", err)
 	}
 
-	_ = store.Write(context.Background(), "user_message", map[string]any{
-		"message_id": "msg_get_1", "user_id": "user1", "scope_id": "scope1",
-		"content": "hello", "role": "user", "timestamp": "2024-01-01T00:00:00Z",
+	// 创建带 id 列的临时表（对齐 Python get 方法的 WHERE id = record_id）
+	type TestRecord struct {
+		ID      string `gorm:"primaryKey;size:64"`
+		Content string `gorm:"size:256"`
+	}
+	if err := gormDB.AutoMigrate(&TestRecord{}); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+
+	_ = store.Write(context.Background(), "test_records", map[string]any{
+		"id": "rec_1", "content": "hello",
 	})
 
-	result, err := store.Get(context.Background(), "user_message",
-		map[string]any{"message_id": "msg_get_1"}, nil)
+	result, err := store.Get(context.Background(), "test_records", "rec_1", nil)
 	if err != nil {
 		t.Fatalf("Get 失败: %v", err)
 	}
@@ -447,8 +455,16 @@ func TestSqlDbStore_Get_不存在(t *testing.T) {
 		t.Fatalf("CreateTables 失败: %v", err)
 	}
 
-	result, err := store.Get(context.Background(), "user_message",
-		map[string]any{"message_id": "nonexistent"}, nil)
+	// 创建带 id 列的临时表
+	type TestRecord struct {
+		ID      string `gorm:"primaryKey;size:64"`
+		Content string `gorm:"size:256"`
+	}
+	if err := gormDB.AutoMigrate(&TestRecord{}); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+
+	result, err := store.Get(context.Background(), "test_records", "nonexistent", nil)
 	if err != nil {
 		t.Fatalf("Get 不应报错: %v", err)
 	}

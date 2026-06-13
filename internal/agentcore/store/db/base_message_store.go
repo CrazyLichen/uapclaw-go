@@ -2,19 +2,12 @@ package db
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ErrMessageNotFound 消息不存在错误。
-// UpdateMessage/DeleteMessageByID 在目标消息不存在时返回此错误，
-// 供调用者区分"消息不存在但不算错误"和"数据库访问异常"。
-// 对齐 Python 返回 bool（False 表示不存在/未执行）的语义。
-var ErrMessageNotFound = errors.New("message not found")
 
 // BaseMessageStore 消息持久化接口。
 //
@@ -38,7 +31,8 @@ type BaseMessageStore interface {
 	GetMessageByID(ctx context.Context, messageID string) (*schema.BaseMessage, *MessageMetadata, error)
 
 	// GetMessages 按条件过滤查询消息。
-	// 修正：实现 StartTime/EndTime 过滤（跳过 MessageType）。
+	// limit 为 0 时使用默认值 DefaultMessageLimit，orderBy 为空时使用 DefaultMessageOrderBy，
+	// orderDirection 为空时使用 DefaultMessageOrderDirection。
 	//
 	// 对应 Python: BaseMessageStore.get_messages(message_filter, limit, order_by, order_direction)
 	GetMessages(ctx context.Context, filter *MessageFilter, limit int, orderBy string, orderDirection string) ([]*MessageAndMeta, error)
@@ -142,3 +136,14 @@ type MessageAndMeta struct {
 	// Metadata 消息元数据
 	Metadata *MessageMetadata
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// DefaultMessageLimit GetMessages 默认返回条数，对齐 Python limit=10
+	DefaultMessageLimit = 10
+	// DefaultMessageOrderBy GetMessages 默认排序字段，对齐 Python order_by="timestamp"
+	DefaultMessageOrderBy = "timestamp"
+	// DefaultMessageOrderDirection GetMessages 默认排序方向，对齐 Python order_direction="desc"
+	DefaultMessageOrderDirection = "desc"
+)

@@ -711,9 +711,12 @@ func (s *ESVectorStore) DeleteDocsByFilters(ctx context.Context, collectionName 
 }
 
 // ListCollectionNames 列出所有集合名称。
-// 通过 ES _cat/indices API 获取匹配 indexPrefix 的索引列表。
+// 通过 ES indices.get API 获取匹配 indexPrefix 的索引列表。
 //
 // 对应 Python: ESVectorStore.list_collection_names()
+//
+// 注意：Python 异常时返回空列表 []，Go 返回 error。Go 更严格但行为不同，
+// 此处保持 Go 返回 error 的方式，调用方必须处理异常情况。
 func (s *ESVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
 	c, err := s.getClient()
 	if err != nil {
@@ -1315,10 +1318,17 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 		return nil, fmt.Errorf("esBuildSchemaFromMapping: 索引 %s 的 properties 字段缺失", indexName)
 	}
 
-	schema, err := NewCollectionSchema()
+	schema, err := NewCollectionSchema(
+		WithCollectionDescription(fmt.Sprintf("Collection '%s'", indexName)),
+	)
 	if err != nil {
 		return nil, err
 	}
+
+	// Python 通过 kwargs.get("primary_key_field", "id") 参数标记主键字段，
+	// Go 的 esBuildSchemaFromMapping 不接受 primary_key_field 参数，
+	// 默认将名为 "id" 的字段标记为主键（与 Python 默认值一致）。
+	const defaultPrimaryKeyField = "id"
 
 	for fieldName, fieldDefAny := range properties {
 		// 跳过 _meta 内部字段
@@ -1353,6 +1363,10 @@ func (s *ESVectorStore) esBuildSchemaFromMapping(ctx context.Context, c esClient
 				Str("es_type", esType).
 				Msg("从 mapping 构建字段失败，跳过")
 			continue
+		}
+		// 标记主键字段（Python 通过 primary_key_field 参数标记，Go 默认 "id"）
+		if fieldName == defaultPrimaryKeyField {
+			f.IsPrimary = true
 		}
 		if _, err := schema.AddField(f); err != nil {
 			logger.Warn(esLogComponent).Err(err).

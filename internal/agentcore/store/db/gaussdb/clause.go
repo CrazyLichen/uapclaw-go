@@ -18,6 +18,8 @@ func gaussLockingClauseBuilder(c clause.Clause, builder clause.Builder) {
 	if _, ok := c.Expression.(clause.Locking); ok {
 		// 对标 Python: GaussCompiler.for_update_clause() 始终返回 " FOR UPDATE"
 		// 忽略 locking.Strength / locking.Table / locking.Options
+		// 注意：Python 返回 " FOR UPDATE"（前有空格），Go 返回 "FOR UPDATE"（前无空格），
+		// 但 GORM ClauseBuilder 调用前自行添加空格，因此不影响最终输出。
 		_, _ = builder.WriteString("FOR UPDATE")
 		return
 	}

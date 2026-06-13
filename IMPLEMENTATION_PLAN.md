@@ -313,11 +313,11 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 4.15 | ✅ | BaseMessageStore 接口 | 消息持久化 | `openjiuwen/core/foundation/store/base_message_store.py` |
 | 4.16 | ✅ | SqlMessageStore | SQL 消息存储 | `openjiuwen/core/memory/manage/` (SqlMessageStore) |
 | 4.17 | ✅ | BaseMemoryIndex 接口 | 记忆索引 | `openjiuwen/core/foundation/store/base_memory_index.py` |
-| 4.18 | ✅ | SimpleMemoryIndex | 简单记忆索引实现 ⤵️ 预留：依赖 BaseEmbedding 接口（4.19 定义），4.19-4.22 实现后回填 | `openjiuwen/core/foundation/store/index/simple_memory_index.py` |
-| 4.19 | ☐ | Embedding 接口 | `EmbedQuery/EmbedDocuments/Dimension` ⤴️ 需回填：4.18 已前置定义 BaseEmbedding 接口，4.19 实现时需在此接口基础上扩展 | `openjiuwen/core/foundation/store/base_embedding.py` |
-| 4.20 | ☐ | OpenAIEmbedding | OpenAI 向量嵌入 | `openjiuwen/core/foundation/store/` (OpenAIEmbedding) |
-| 4.21 | ☐ | DashScopeEmbedding | DashScope 向量嵌入 | `openjiuwen/core/foundation/store/` (DashScopeEmbedding) |
-| 4.22 | ☐ | APIEmbedding / VLLMEmbedding | API 和 VLLM 嵌入 | `openjiuwen/core/foundation/store/` |
+| 4.18 | ✅ | SimpleMemoryIndex | 简单记忆索引实现 | `openjiuwen/core/foundation/store/index/simple_memory_index.py` |
+| 4.19 | ✅ | Embedding 接口 | `EmbedQuery/EmbedDocuments/Dimension` + EmbedOption/Callback + MultimodalEmbedder | `openjiuwen/core/foundation/store/base_embedding.py` |
+| 4.20 | ✅ | OpenAIEmbedding | OpenAI 向量嵌入（openai-go SDK + 多模态） | `openjiuwen/core/retrieval/embedding/openai_embedding.py` |
+| 4.21 | ✅ | DashScopeEmbedding | DashScope 向量嵌入（HTTP 直接调用 + 多模态） | `openjiuwen/core/retrieval/embedding/dashscope_embedding.py` |
+| 4.22 | ✅ | APIEmbedding / VLLMEmbedding | API 通用 HTTP 客户端 + VLLM 多模态嵌入 | `openjiuwen/core/retrieval/embedding/api_embedding.py` + `vllm_embedding.py` |
 | 4.23 | ☐ | Reranker 接口 | `Rerank/RerankSync` | `openjiuwen/core/foundation/store/base_reranker.py` |
 | 4.24 | ☐ | StandardReranker / ChatReranker | 标准和对话式重排序 | `openjiuwen/core/foundation/store/` |
 | 4.25 | ☐ | DashScopeReranker / AliyunReranker | 云服务重排序 | `openjiuwen/extensions/store/` |

@@ -44,6 +44,7 @@ func NewMemoryMetaManager(db SqlDbQuerier) *MemoryMetaManager {
 // 若记录已存在则跳过（幂等）。
 //
 // 对应 Python: MemoryMetaManager.add(table_name, schema_version)
+// 注意：Python 支持 **kwargs，Go 不支持。但 Python 实际也未使用 kwargs，因此无需映射。
 func (m *MemoryMetaManager) Add(ctx context.Context, tableName string, schemaVersion string) error {
 	if tableName == "" || schemaVersion == "" {
 		return nil

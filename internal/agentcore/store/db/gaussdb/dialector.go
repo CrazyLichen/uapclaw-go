@@ -24,6 +24,14 @@ import (
 //
 // 注意：postgres.Dialector 的所有方法均使用值接收者，
 // 因此 GaussDialector 的覆写方法也必须使用值接收者。
+//
+// Python 独有概念（GORM 无对应，已跳过）：
+//   - driver = 'async_gaussdb'：Python 显式声明驱动名，Go 使用 pgx 驱动替代，
+//     通过 Name() 返回 "gaussdb" 标识方言
+//   - supports_statement_cache / use_insertmanyvalues：SQLAlchemy 连接池配置项，
+//     GORM 无对应概念，由底层 pgx 驱动自行管理
+//   - _get_server_version_info：Python 检测数据库版本用于条件性 SQL 生成，
+//     GORM 无版本检测机制，依赖 postgres.Dialector 的默认行为
 type GaussDialector struct {
 	postgres.Dialector // 值嵌入；所有方法使用值接收者，与 postgres.Dialector 一致
 }

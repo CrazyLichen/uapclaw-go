@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -217,4 +218,55 @@ func TestAPIEmbedding_服务端错误(t *testing.T) {
 func TestAPIEmbedding_接口约束(t *testing.T) {
 	// 验证 APIEmbedding 满足 BaseEmbedding 接口
 	var _ embedding.BaseEmbedding = &APIEmbedding{}
+}
+
+func TestAPIEmbedding_Option函数(t *testing.T) {
+	server := newTestAPIServer(`{"data": [{"embedding": [0.1], "index": 0}]}`)
+	defer server.Close()
+
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+	},
+		WithAPITimeout(10*time.Second),
+		WithAPIMaxRetries(1),
+		WithAPIMaxBatchSize(2),
+		WithAPIMaxConcurrent(5),
+		WithAPIExtraHeaders(map[string]string{"X-Custom": "test"}),
+	)
+
+	vec, err := client.EmbedQuery(context.Background(), "hello")
+	require.NoError(t, err)
+	assert.NotEmpty(t, vec)
+}
+
+func TestAPIEmbedding_EmbedDocuments_批处理(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, `{"data": [{"embedding": [0.1, 0.2], "index": 0}]}`)
+	}))
+	defer server.Close()
+
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+	}, WithAPIMaxBatchSize(1))
+
+	vecs, err := client.EmbedDocuments(context.Background(), []string{"a", "b", "c"})
+	require.NoError(t, err)
+	assert.Len(t, vecs, 3)
+	assert.Equal(t, 3, callCount) // 每个文本一个批次
+}
+
+func TestAPIEmbedding_EmbedDocuments_含空文本(t *testing.T) {
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   "http://localhost",
+	})
+
+	_, err := client.EmbedDocuments(context.Background(), []string{"hello", ""})
+	assert.Error(t, err)
 }

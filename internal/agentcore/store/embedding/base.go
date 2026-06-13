@@ -15,7 +15,7 @@ type Callback interface {
 // BaseEmbedding 向量嵌入模型的抽象接口。
 //
 // 提供文本到向量的转换能力，供记忆索引等组件进行语义搜索。
-// ⤵️ 预留：4.19-4.22 补充具体实现（OpenAI/DashScope/VLLM/API）
+// 具体实现见 internal/agentcore/retrieval/embedding/ 包。
 //
 // 对应 Python: openjiuwen/core/foundation/store/base_embedding.py (Embedding)
 type BaseEmbedding interface {

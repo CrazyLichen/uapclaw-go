@@ -44,7 +44,7 @@ func TestMemoryDoc_JSON序列化(t *testing.T) {
 	}
 }
 
-func TestMemoryDoc_Fields为nil时omitempty(t *testing.T) {
+func TestMemoryDoc_Fields为nil时输出Null(t *testing.T) {
 	doc := &MemoryDoc{
 		ID:   "mem-002",
 		Text: "测试",
@@ -56,13 +56,17 @@ func TestMemoryDoc_Fields为nil时omitempty(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 
-	// Fields 为 nil 时，omitempty 应省略 fields 字段
+	// Fields 为 nil 时，移除 omitempty 后输出 "fields":null（对齐 Python 空字典行为）
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("反序列化到 map 失败: %v", err)
 	}
-	if _, ok := raw["fields"]; ok {
-		t.Error("Fields 为 nil 时 JSON 中不应包含 fields 字段")
+	fieldsVal, ok := raw["fields"]
+	if !ok {
+		t.Error("Fields 为 nil 时 JSON 中应包含 fields 字段（值为 null）")
+	}
+	if fieldsVal != nil {
+		t.Errorf("Fields 为 nil 时 JSON 中 fields 应为 null，实际为 %v", fieldsVal)
 	}
 }
 

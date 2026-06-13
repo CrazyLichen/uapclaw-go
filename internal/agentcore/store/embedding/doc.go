@@ -9,7 +9,6 @@
 //	├── doc.go           # 包文档
 //	├── base.go          # BaseEmbedding 接口、EmbedOption、Callback 定义
 //	└── base_test.go     # 单元测试
-//	⤵️ 预留：4.19-4.22 实现后回填具体实现文件条目
 //
 // 对应 Python 代码：
 //

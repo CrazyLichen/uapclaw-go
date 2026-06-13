@@ -494,19 +494,13 @@ func (s *SqlDbStore) BatchGet(ctx context.Context, table string, conditionsList 
 	return results, nil
 }
 
-// Get 按条件查询单条记录（limit 1）。
-// Python 硬编码 WHERE id = record_id，Go 改为通用 conditions 参数，
-// 避免硬编码主键列名（不同表的主键不同）。
+// Get 按 ID 查询单条记录（limit 1）。
+// Python 硬编码 WHERE id = record_id，Go 也改为硬编码 id 查询，与 Python 对齐。
 // columns 指定需要返回的列，为空时返回所有列。
 //
 // 对应 Python: SqlDbStore.get(table, record_id, columns)
-func (s *SqlDbStore) Get(ctx context.Context, table string, conditions map[string]any, columns []string) (map[string]any, error) {
+func (s *SqlDbStore) Get(ctx context.Context, table string, recordID string, columns []string) (map[string]any, error) {
 	// 校验列名，防止 SQL 注入
-	if err := validateConditionColumns(conditions); err != nil {
-		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
-			exception.WithParam("error_msg", err.Error()),
-		)
-	}
 	if err := validateColumnNames(columns); err != nil {
 		return nil, exception.BuildError(exception.StatusStoreMessageGetExecutionError,
 			exception.WithParam("error_msg", err.Error()),
@@ -517,8 +511,7 @@ func (s *SqlDbStore) Get(ctx context.Context, table string, conditions map[strin
 	if len(columns) > 0 {
 		query = query.Select(columns)
 	}
-	query = applyConditions(query, conditions)
-	query = query.Limit(1)
+	query = query.Where("id = ?", recordID).Limit(1)
 
 	var results []map[string]any
 	if err := query.Find(&results).Error; err != nil {

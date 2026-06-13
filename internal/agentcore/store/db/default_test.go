@@ -8,14 +8,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// ──────────────────────────── 编译验证 ────────────────────────────
+// ──────────────────── 编译验证 ────────────────────
 
 // TestDefaultDbStore_接口满足 编译期验证 *DefaultDbStore 满足 BaseDbStore 接口。
 func TestDefaultDbStore_接口满足(t *testing.T) {
 	var _ BaseDbStore = (*DefaultDbStore)(nil)
 }
 
-// ──────────────────────────── 构造函数测试 ────────────────────────────
+// ──────────────────── 构造函数测试 ────────────────────
 
 // TestNewDefaultDbStore 验证构造函数返回非 nil 实例。
 func TestNewDefaultDbStore(t *testing.T) {
@@ -30,15 +30,18 @@ func TestNewDefaultDbStore(t *testing.T) {
 	}
 }
 
-// TestNewDefaultDbStore_NilDB 验证传入 nil *gorm.DB 时构造函数不会 panic。
+// TestNewDefaultDbStore_NilDB 验证传入 nil *gorm.DB 时构造函数 panic。
 func TestNewDefaultDbStore_NilDB(t *testing.T) {
-	store := NewDefaultDbStore(nil)
-	if store == nil {
-		t.Fatal("NewDefaultDbStore(nil) 返回 nil")
-	}
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("NewDefaultDbStore(nil) 应 panic，但未 panic")
+		}
+	}()
+	_ = NewDefaultDbStore(nil)
 }
 
-// ──────────────────────────── GetDB 测试 ────────────────────────────
+// ──────────────────── GetDB 测试 ────────────────────
 
 // TestDefaultDbStore_GetDB 验证 GetDB 返回正确的 *gorm.DB 实例。
 func TestDefaultDbStore_GetDB(t *testing.T) {
@@ -51,15 +54,6 @@ func TestDefaultDbStore_GetDB(t *testing.T) {
 	result := store.GetDB(context.Background())
 	if result != db {
 		t.Error("GetDB 返回的 *gorm.DB 与构造时传入的不一致")
-	}
-}
-
-// TestDefaultDbStore_GetDB_NilDB 验证持有 nil *gorm.DB 时 GetDB 返回 nil。
-func TestDefaultDbStore_GetDB_NilDB(t *testing.T) {
-	store := NewDefaultDbStore(nil)
-	result := store.GetDB(context.Background())
-	if result != nil {
-		t.Errorf("GetDB 返回 %v, 期望 nil", result)
 	}
 }
 
