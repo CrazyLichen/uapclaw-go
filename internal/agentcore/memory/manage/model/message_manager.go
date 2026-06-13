@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/db"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 

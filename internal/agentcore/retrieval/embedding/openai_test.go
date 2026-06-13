@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 )
 
 // newOpenAITestServer 创建模拟 OpenAI API 的测试 HTTP 服务

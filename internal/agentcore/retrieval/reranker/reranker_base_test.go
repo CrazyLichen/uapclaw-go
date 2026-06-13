@@ -3,7 +3,7 @@ package reranker
 import (
 	"testing"
 
-	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/store/reranker"
+	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 )
 
 // ──────────────────────────── NewRerankerBase 测试 ────────────────────────────

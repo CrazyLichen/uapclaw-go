@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/db"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 )
 
 // newTestSqlMessageStore 创建测试用的 SqlMessageStore 实例

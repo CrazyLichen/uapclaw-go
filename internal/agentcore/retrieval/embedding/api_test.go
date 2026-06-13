@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 )
 
 // newTestAPIServer 创建返回指定嵌入响应的测试 HTTP 服务

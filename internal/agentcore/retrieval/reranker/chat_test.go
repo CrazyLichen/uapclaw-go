@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/store/reranker"
+	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 )
 
 // ──────────────────────────── 构造函数测试 ────────────────────────────

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/store/reranker"
+	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"

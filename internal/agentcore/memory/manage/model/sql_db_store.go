@@ -8,7 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/db"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )

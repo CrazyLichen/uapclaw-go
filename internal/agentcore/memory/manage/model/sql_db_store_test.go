@@ -9,7 +9,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/db"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 )
 
 // newTestSqlDbStore 创建测试用的 SqlDbStore 实例

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/store/embedding"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 )
 
 func TestValidateEmbedDocs_空列表(t *testing.T) {
