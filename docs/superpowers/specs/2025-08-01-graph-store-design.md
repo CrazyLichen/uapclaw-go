@@ -20,7 +20,8 @@
 | Relations/LHS/RHS 类型 | 纯 `[]string`/`string`（仅 UUID） | Python 混合对象+UUID 是动态类型便利，Go 强类型下存入 Milvus 时都序列化为 UUID 字符串，无需存对象 |
 | ContentBM25 类型 | `map[uint32]float32` | Milvus 稀疏向量用 {dim_id: value} 表示，Go 用 map 更自然 |
 | 时区偏移类型 | `int8` | 偏移范围 -96~+96（15分钟粒度），int8 足够 |
-| BM25 稀疏向量 | 外部计算 + 手动写入，非 SDK BM25 Function | Go SDK v2.4.2（最新且已归档）不支持 BM25 Function；写入时由调用方计算 BM25 稀疏向量填入 ContentBM25 字段，搜索时作为稀疏向量通道参与 HybridSearch |
+| BM25 稀疏向量 | 使用新 SDK 的 BM25 Function（与 Python 一致） | 统一迁移到新 Milvus Go SDK `github.com/milvus-io/milvus/client/v2`，该 SDK 支持 `entity.FunctionTypeBM25`，可自动从文本生成 BM25 稀疏向量，与 Python 行为完全一致 |
+| Milvus SDK | 统一迁移到 `github.com/milvus-io/milvus/client/v2` | 旧 SDK `milvus-sdk-go/v2@v2.4.2` 已归档且不支持 BM25 Function；新 SDK 活跃维护、支持 BM25、API 更现代；Graph Store + Vector Store 一并迁移，避免两个 SDK 共存的依赖冲突 |
 
 ## 文件结构与产出清单
 
@@ -43,12 +44,20 @@
 | `milvus/milvus.go` | MilvusGraphStore 主结构体 + 接口实现委托 + lazy init | `graph/milvus/milvus_support.py`（构造 + 生命周期部分） |
 | `milvus/milvus_writer.go` | graphWriter（addEntity/addRelation/addEpisode/delete） | `graph/milvus/milvus_support.py`（_add_data 部分） |
 | `milvus/milvus_searcher.go` | graphSearcher（hybrid_search/BFS/rerank） | `graph/milvus/milvus_support.py`（搜索部分） |
-| `milvus/schema.go` | generateSchemaAndIndex（三集合 schema + 索引构建） | `graph/milvus/generate_milvus_schema.py` |
+| `milvus/schema.go` | generateSchemaAndIndex（三集合 schema + BM25 Function + 索引构建） | `graph/milvus/generate_milvus_schema.py` |
 | `milvus/milvus_test.go` | 主结构体 + 生命周期测试 | — |
 | `milvus/milvus_writer_test.go` | 写入逻辑测试 | — |
 | `milvus/milvus_searcher_test.go` | 搜索逻辑测试 | — |
 | `milvus/schema_test.go` | Schema 构建测试 | — |
 | `milvus/milvus_integration_test.go` | 集成测试（build tag: integration） | — |
+
+### 修改文件（SDK 迁移）
+
+| 文件 | 变更 |
+|------|------|
+| `go.mod` | 替换 `milvus-sdk-go/v2@v2.4.2` → `milvus-io/milvus/client/v2` |
+| `vector/milvus.go` | 重写 milvusClient 接口、SDK 类型映射、构造函数（新 SDK Builder API） |
+| `vector/milvus_test.go` | 更新所有 fake client 接口实现 |
 
 ### 更新文件
 
@@ -393,7 +402,7 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 - obj_type (VARCHAR, whitespace analyzer)
 - language (VARCHAR)
 - metadata (JSON)
-- content (VARCHAR) + content_embedding (FLOAT_VECTOR) + content_bm25 (SPARSE_FLOAT_VECTOR，手动写入稀疏向量)
+- content (VARCHAR, BM25 analyzer) + content_embedding (FLOAT_VECTOR) + content_bm25 (SPARSE_FLOAT_VECTOR, BM25 Function 自动生成)
 
 **Entity 特有字段**：
 - name (VARCHAR, ICU analyzer) + name_embedding (FLOAT_VECTOR)
@@ -471,14 +480,11 @@ type graphSearcher struct {
    - content_embedding + query_vector → AnnSearchRequest
    - content_bm25 + query_text → AnnSearchRequest(BM25搜索)
 3. getRankerAndRequests：
-   - Entity: 3通道全活跃（若 ContentBM25 不为空则3通道，否则2通道）
-   - Relation/Episode: name_dense 强制为0，仅2通道（同理 BM25 通道视数据而定）
-4. client.HybridSearch()（SDK 方法：`client.Reranker` + `client.ANNSearchRequest`）→ 解析返回结果
+   - Entity: 3通道全活跃
+   - Relation/Episode: name_dense 强制为0，仅2通道
+4. client.HybridSearch()（SDK 方法：`Reranker` + `AnnRequest`）→ 解析返回结果
 
-**BM25 通道限制**：Go SDK v2.4.2 不支持 BM25 Function（SDK 已归档，不会新增此功能）。当前实现：
-- 写入时：调用方需自行计算 BM25 稀疏向量并填入 `ContentBM25` 字段
-- 搜索时：若 `ContentBM25` 数据存在，作为稀疏向量通道参与 HybridSearch；否则仅使用 dense 向量通道
-- 未来：如需自动 BM25，可在上层（GraphMemory）集成外部 BM25 计算库
+**BM25 实现方式**：使用新 SDK 的 `entity.FunctionTypeBM25`，在创建集合时定义 BM25 Function 自动将 content 文本转为稀疏向量。写入时只需提供 content 文本，Milvus 服务端自动计算 BM25 稀疏向量并填入 content_bm25 字段。搜索时 BM25 通道直接使用文本查询，无需客户端侧计算。
 
 #### 5.4 milvus.go — 主结构体
 
@@ -504,24 +510,28 @@ type MilvusGraphStore struct {
 
 ```go
 type milvusClient interface {
-    CreateCollection(ctx context.Context, collSchema *entity.Schema, shardsNum int32, opts ...client.CreateCollectionOption) error
-    DropCollection(ctx context.Context, collectionName string, opts ...client.DropCollectionOption) error
-    HasCollection(ctx context.Context, collectionName string) (bool, error)
-    DescribeCollection(ctx context.Context, collectionName string) (*entity.Collection, error)
-    Insert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) (entity.Column, error)
-    Upsert(ctx context.Context, collectionName string, partitionName string, columns ...entity.Column) (entity.Column, error)
-    Delete(ctx context.Context, collectionName string, partitionName string, expr string) error
-    Flush(ctx context.Context, collectionName string, async bool, opts ...client.FlushOption) error
-    Query(ctx context.Context, collectionName string, partitions []string, expr string, outputFields []string, opts ...client.SearchQueryOptionFunc) ([]entity.Column, error)
-    HybridSearch(ctx context.Context, collName string, partitions []string, limit int, outputFields []string, reranker client.Reranker, subRequests []*client.ANNSearchRequest, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-    CreateIndex(ctx context.Context, collectionName string, fieldName string, idx entity.Index, async bool, opts ...client.IndexOption) error
-    DropIndex(ctx context.Context, collectionName string, fieldName string) error
-    DescribeIndex(ctx context.Context, collectionName string, fieldName string, opts ...client.IndexOption) ([]entity.Index, error)
-    LoadCollection(ctx context.Context, collectionName string, async bool, opts ...client.LoadCollectionOption) error
-    GetCollectionStats(ctx context.Context, collectionName string) (map[string]string, error)
+    CreateCollection(ctx context.Context, option CreateCollectionOption, callOptions ...grpc.CallOption) error
+    DropCollection(ctx context.Context, option DropCollectionOption, callOptions ...grpc.CallOption) error
+    HasCollection(ctx context.Context, option HasCollectionOption, callOptions ...grpc.CallOption) (bool, error)
+    DescribeCollection(ctx context.Context, option DescribeCollectionOption, callOptions ...grpc.CallOption) (*entity.Collection, error)
+    Insert(ctx context.Context, option InsertOption, callOptions ...grpc.CallOption) (ResultSet, error)
+    Upsert(ctx context.Context, option UpsertOption, callOptions ...grpc.CallOption) (ResultSet, error)
+    Delete(ctx context.Context, option DeleteOption, callOptions ...grpc.CallOption) error
+    Flush(ctx context.Context, option FlushOption, callOptions ...grpc.CallOption) error
+    Query(ctx context.Context, option QueryOption, callOptions ...grpc.CallOption) (ResultSet, error)
+    HybridSearch(ctx context.Context, option HybridSearchOption, callOptions ...grpc.CallOption) ([]ResultSet, error)
+    CreateIndex(ctx context.Context, option CreateIndexOption, callOptions ...grpc.CallOption) error
+    DropIndex(ctx context.Context, option DropIndexOption, callOptions ...grpc.CallOption) error
+    DescribeIndex(ctx context.Context, option DescribeIndexOption, callOptions ...grpc.CallOption) ([]entity.Index, error)
+    LoadCollection(ctx context.Context, option LoadCollectionOption, callOptions ...grpc.CallOption) error
+    GetCollectionStats(ctx context.Context, option GetCollectionStatsOption, callOptions ...grpc.CallOption) (map[string]string, error)
     Close() error
 }
 ```
+
+**注意**：以上接口方法签名基于新 SDK `github.com/milvus-io/milvus/client/v2/milvusclient` 的 Builder 模式。
+每个方法接收一个 Option 对象而非位置参数，与旧 SDK 的 `opts ...OptionFunc` 模式不同。
+具体 Option 类型（`CreateCollectionOption`、`HybridSearchOption` 等）由新 SDK 的 `milvusclient` 包提供。
 
 ### 6. 工具函数（utils.go）
 
@@ -583,7 +593,24 @@ graph 包依赖：
 - `internal/agentcore/store/vector_fields` — VectorField 索引配置
 - `internal/common/exception` — 错误码（186003-186009 已定义）
 - `internal/common/logger` — 日志组件
-- `github.com/milvus-io/milvus-sdk-go/v2` — Milvus Go SDK（已有依赖）
+- `github.com/milvus-io/milvus/client/v2` — 新 Milvus Go SDK（替代已归档的 milvus-sdk-go/v2）
+
+### 8.1 SDK 迁移（前置任务）
+
+Graph Store 实现前，需先完成 Milvus SDK 迁移（4.8 MilvusVectorStore 从旧 SDK 迁移到新 SDK）：
+
+**迁移范围**：
+- `go.mod`：替换 `milvus-sdk-go/v2@v2.4.2` → `milvus-io/milvus/client/v2`
+- `vector/milvus.go`（1267 行）：重写 milvusClient 接口 + 所有 SDK 类型映射 + 构造函数
+- `vector/milvus_test.go`（1929 行）：更新所有 fake client 的接口实现
+
+**关键 API 变化**：
+- 旧：`client.NewClient(ctx, client.Config{...})` → 新：`milvusclient.New(ctx, milvusclient.Config{...})`
+- 旧：位置参数 + `opts ...OptionFunc` → 新：Option Builder 链式调用
+- 旧：`client.ANNSearchRequest` → 新：`milvusclient.AnnRequest`
+- 旧：`client.Reranker` → 新：`milvusclient.Reranker`
+- 旧：`client.SearchResult` → 新：`milvusclient.ResultSet`
+- 新增：`entity.Function` + `entity.FunctionTypeBM25` 支持
 
 ### 9. 日志同步
 
