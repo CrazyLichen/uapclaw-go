@@ -122,8 +122,8 @@ func DocID(doc any) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// validateConfig 校验 RerankerConfig 字段。
-func validateConfig(config *RerankerConfig) error {
+// ValidateConfig 校验 RerankerConfig 字段。
+func ValidateConfig(config *RerankerConfig) error {
 	if config.APIBase == "" {
 		return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
 			exception.WithParam("error_msg", "APIBase is required"),
@@ -137,13 +137,13 @@ func validateConfig(config *RerankerConfig) error {
 	return nil
 }
 
-// resolveInstruct 解析 instruct 选项，返回最终的查询字符串。
+// ResolveInstruct 解析 instruct 选项，返回最终的查询字符串。
 // InstructEnabled = nil 或 &true + CustomInstruct = "" → 使用默认指令
 // InstructEnabled = &true + CustomInstruct != "" → 使用自定义指令
 // InstructEnabled = &false → 不使用指令
-func resolveInstruct(query string, opt *RerankOption) string {
+func ResolveInstruct(query string, opt *RerankOption) string {
 	if opt == nil {
-		return formatQuery(query, defaultInstruct)
+		return FormatQuery(query, defaultInstruct)
 	}
 	if opt.InstructEnabled != nil && !*opt.InstructEnabled {
 		return query
@@ -152,19 +152,19 @@ func resolveInstruct(query string, opt *RerankOption) string {
 	if opt.CustomInstruct != "" {
 		instruct = opt.CustomInstruct
 	}
-	return formatQuery(query, instruct)
+	return FormatQuery(query, instruct)
 }
 
-// formatQuery 使用模板格式化查询字符串。
-func formatQuery(query, instruct string) string {
+// FormatQuery 使用模板格式化查询字符串。
+func FormatQuery(query, instruct string) string {
 	result := queryTemplate
-	result = replacePlaceholder(result, "{instruct}", instruct)
-	result = replacePlaceholder(result, "{query}", query)
+	result = ReplacePlaceholder(result, "{instruct}", instruct)
+	result = ReplacePlaceholder(result, "{query}", query)
 	return result
 }
 
-// replacePlaceholder 替换字符串中的占位符。
-func replacePlaceholder(s, old, new string) string {
+// ReplacePlaceholder 替换字符串中的占位符。
+func ReplacePlaceholder(s, old, new string) string {
 	for i := 0; i < len(s)-len(old)+1; i++ {
 		if s[i:i+len(old)] == old {
 			return s[:i] + new + s[i+len(old):]

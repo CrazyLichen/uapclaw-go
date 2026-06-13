@@ -4,21 +4,22 @@ import (
 	"fmt"
 	"time"
 
+	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// rerankerBase 重排序模型的默认实现基类。
+// RerankerBase 重排序模型的默认实现基类。
 //
 // 嵌入此结构体后，实现类只需实现核心的 Rerank/RerankDocs 等方法即可满足 BaseReranker 接口。
-// 默认提供 requestHeaders / requestParams / parseResponse / extractDocIDs 等通用方法，
+// 默认提供 requestHeaders / requestParams / parseResponse / assembleParams 等通用方法，
 // 子类可按需覆盖。
 //
 // 对应 Python: Reranker ABC 中的 _request_headers / _request_params / _parse_response
-type rerankerBase struct {
+type RerankerBase struct {
 	// config 重排序模型配置
-	config RerankerConfig
+	config reranker.RerankerConfig
 	// headers 默认请求头
 	headers map[string]string
 	// maxRetries 最大重试次数
@@ -27,7 +28,7 @@ type rerankerBase struct {
 	retryWait time.Duration
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -48,9 +49,8 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRerankerBase 创建重排序基类实例。
-// 对内使用（供同包或通过桥接函数供实现包使用），导出以便跨包访问。
-func NewRerankerBase(config RerankerConfig, maxRetries int, retryWait time.Duration) *rerankerBase {
-	return &rerankerBase{
+func NewRerankerBase(config reranker.RerankerConfig, maxRetries int, retryWait time.Duration) *RerankerBase {
+	return &RerankerBase{
 		config:     config,
 		headers:    buildDefaultHeaders(config.APIKey),
 		maxRetries: maxRetries,
@@ -58,12 +58,12 @@ func NewRerankerBase(config RerankerConfig, maxRetries int, retryWait time.Durat
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// newRerankerBaseWithDefaults 使用默认值创建重排序基类实例。
-func newRerankerBaseWithDefaults(config RerankerConfig) *rerankerBase {
+// NewRerankerBaseWithDefaults 使用默认值创建重排序基类实例。
+func NewRerankerBaseWithDefaults(config reranker.RerankerConfig) *RerankerBase {
 	return NewRerankerBase(config, defaultMaxRetries, defaultRetryWait)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildDefaultHeaders 构建默认请求头。
 func buildDefaultHeaders(apiKey string) map[string]string {
@@ -76,14 +76,29 @@ func buildDefaultHeaders(apiKey string) map[string]string {
 	return headers
 }
 
+// Config 返回重排序模型配置。
+func (b *RerankerBase) Config() reranker.RerankerConfig {
+	return b.config
+}
+
+// MaxRetries 返回最大重试次数。
+func (b *RerankerBase) MaxRetries() int {
+	return b.maxRetries
+}
+
+// RetryWait 返回重试等待时间。
+func (b *RerankerBase) RetryWait() time.Duration {
+	return b.retryWait
+}
+
 // requestHeaders 返回默认请求头，子类可覆盖。
-func (b *rerankerBase) requestHeaders() map[string]string {
+func (b *RerankerBase) requestHeaders() map[string]string {
 	return b.headers
 }
 
 // requestParams 构建请求参数（StandardReranker 风格）。
 // 子类应覆盖此方法以适配不同 API 格式（如 DashScope、ChatReranker）。
-func (b *rerankerBase) requestParams(query string, documents []string, topN int, opt *RerankOption) map[string]any {
+func (b *RerankerBase) requestParams(query string, documents []string, topN int, opt *reranker.RerankOption) map[string]any {
 	params := map[string]any{
 		"model":            b.config.ModelName,
 		"return_documents": false,
@@ -107,7 +122,7 @@ func (b *rerankerBase) requestParams(query string, documents []string, topN int,
 // parseResponse 解析 API 响应为文档-分数映射。
 // 默认实现 StandardReranker 风格：从 results[index].relevance_score 提取分数。
 // 子类可覆盖以适配不同响应格式。
-func (b *rerankerBase) parseResponse(responseData map[string]any, docIDs []string) map[string]float64 {
+func (b *RerankerBase) parseResponse(responseData map[string]any, docIDs []string) map[string]float64 {
 	result := make(map[string]float64, len(docIDs))
 	// 初始化所有文档分数为 0
 	for _, id := range docIDs {
@@ -143,20 +158,20 @@ func (b *rerankerBase) parseResponse(responseData map[string]any, docIDs []strin
 
 // extractDocIDs 从文档列表提取 ID 列表。
 // 字符串直接作为 ID，*Document 使用其 ID 字段。
-func (b *rerankerBase) extractDocIDs(docs []any) []string {
+func (b *RerankerBase) extractDocIDs(docs []any) []string {
 	ids := make([]string, len(docs))
 	for i, doc := range docs {
-		ids[i] = DocID(doc)
+		ids[i] = reranker.DocID(doc)
 	}
 	return ids
 }
 
 // extractTexts 从文档列表提取文本列表。
 // 字符串直接使用，*Document 使用其 Text 字段。
-func (b *rerankerBase) extractTexts(docs []any) []string {
+func (b *RerankerBase) extractTexts(docs []any) []string {
 	texts := make([]string, len(docs))
 	for i, doc := range docs {
-		if d, ok := doc.(*Document); ok {
+		if d, ok := doc.(*reranker.Document); ok {
 			texts[i] = d.Text
 		} else if s, ok := doc.(string); ok {
 			texts[i] = s
@@ -166,7 +181,7 @@ func (b *rerankerBase) extractTexts(docs []any) []string {
 }
 
 // resolveTopN 解析 TopN 选项，0 或未设置时使用文档总数。
-func (b *rerankerBase) resolveTopN(opt *RerankOption, docCount int) int {
+func (b *RerankerBase) resolveTopN(opt *reranker.RerankOption, docCount int) int {
 	if opt != nil && opt.TopN > 0 {
 		return opt.TopN
 	}
@@ -174,12 +189,12 @@ func (b *rerankerBase) resolveTopN(opt *RerankOption, docCount int) int {
 }
 
 // assembleParams 组装请求参数，将文档和查询合并为完整的请求参数。
-// 返回请求头和请求参数。
-func (b *rerankerBase) assembleParams(query string, docs []any, opt *RerankOption) (map[string]string, map[string]any) {
+// 返回请求头、请求参数和文档 ID 列表。
+func (b *RerankerBase) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string) {
 	docIDs := b.extractDocIDs(docs)
 	texts := b.extractTexts(docs)
 	topN := b.resolveTopN(opt, len(docs))
-	resolvedQuery := resolveInstruct(query, opt)
+	resolvedQuery := reranker.ResolveInstruct(query, opt)
 
 	headers := b.requestHeaders()
 	params := b.requestParams(resolvedQuery, texts, topN, opt)
@@ -188,6 +203,5 @@ func (b *rerankerBase) assembleParams(query string, docs []any, opt *RerankOptio
 	params["documents"] = texts
 	params["top_n"] = topN
 
-	_ = docIDs // docIDs 由调用方用于 parseResponse
-	return headers, params
+	return headers, params, docIDs
 }
