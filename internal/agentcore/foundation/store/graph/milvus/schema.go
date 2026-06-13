@@ -248,9 +248,10 @@ func buildIndexOptions(indexCfg *graph.GraphStoreIndexConfig, collection string,
 
 	// 标量字段索引（inverted index）
 	scalarFields := []string{"uuid", "created_at", "user_id", "obj_type"}
-	if collection == CollectionRelation {
+	switch collection {
+	case CollectionRelation:
 		scalarFields = append(scalarFields, "lhs", "rhs", "valid_since", "valid_until")
-	} else if collection == CollectionEpisode {
+	case CollectionEpisode:
 		scalarFields = append(scalarFields, "valid_since")
 	}
 	for _, field := range scalarFields {
@@ -316,7 +317,7 @@ func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageC
 			WithDim(int64(embedDim)),
 	)
 	// content_bm25 — sparse 向量（由 BM25 Function 自动生成）
-	schema = schema.WithField(
+	schema.WithField(
 		entity.NewField().WithName("content_bm25").
 			WithDataType(entity.FieldTypeSparseVector),
 	)

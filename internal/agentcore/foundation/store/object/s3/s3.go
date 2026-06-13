@@ -63,7 +63,7 @@ const (
 //  4. 创建 S3 客户端，设置签名版本 v4、PayloadSigningEnabled: false
 func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	// 环境变量兜底
-	cfg.ObjectStorageConfig.ApplyEnvFallback()
+	cfg.ApplyEnvFallback()
 
 	// 校验必填配置
 	if cfg.Server == "" {

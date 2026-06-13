@@ -108,7 +108,7 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 		}
 		strExpr, ok := exprVal.(string)
 		if !ok {
-			return fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+			return fmt.Errorf("milvus 后端应返回 string 类型的表达式")
 		}
 		expr = strExpr
 	}

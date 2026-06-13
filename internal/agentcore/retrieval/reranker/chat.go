@@ -104,9 +104,7 @@ func (c *ChatReranker) TestCompatibility(ctx context.Context) (bool, error) {
 // 对齐 Python: ChatReranker._assemble_params
 func (c *ChatReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string) {
 	if len(docs) != 1 {
-		// 严格限制 size=1
-		// 注意：这里返回错误的方式是通过 panic 或特殊返回，
-		// 但为了保持与基类签名一致，我们在 doRerank 中做校验
+		// 严格限制 size=1，校验在 doRerank 中执行
 	}
 
 	docIDs := make([]string, len(docs))

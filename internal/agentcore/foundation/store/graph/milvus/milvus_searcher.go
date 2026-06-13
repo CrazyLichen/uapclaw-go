@@ -181,7 +181,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 		}
 		strExpr, ok := exprVal.(string)
 		if !ok {
-			return nil, fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+			return nil, fmt.Errorf("milvus 后端应返回 string 类型的表达式")
 		}
 		expr = strExpr
 	}
@@ -190,11 +190,12 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	outputFields := o.OutputFields
 	if len(outputFields) == 0 {
 		outputFields = []string{"uuid", "content", "obj_type", "user_id"}
-		if collection == CollectionEntity {
+		switch collection {
+		case CollectionEntity:
 			outputFields = append(outputFields, "name", "relations", "episodes")
-		} else if collection == CollectionRelation {
+		case CollectionRelation:
 			outputFields = append(outputFields, "name", "lhs", "rhs", "valid_since", "valid_until")
-		} else if collection == CollectionEpisode {
+		case CollectionEpisode:
 			outputFields = append(outputFields, "entities", "valid_since")
 		}
 	}
@@ -239,10 +240,8 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 
 	// 构建 HybridSearch 选项
 	searchOpt := milvusclient.NewHybridSearchOption(collection, k, annRequests...).
-		WithOutputFields(outputFields...)
-	if reranker != nil {
-		searchOpt = searchOpt.WithReranker(reranker)
-	}
+		WithOutputFields(outputFields...).
+		WithReranker(reranker)
 
 	// 执行搜索
 	resultSets, err := s.client.HybridSearch(ctx, searchOpt)

@@ -124,7 +124,7 @@ func (s *MilvusGraphStore) AddEntity(ctx context.Context, entities []*graph.Enti
 	if err := s.ensureInit(ctx); err != nil {
 		return err
 	}
-	return s.graphWriter.addEntity(ctx, entities, opts...)
+	return s.addEntity(ctx, entities, opts...)
 }
 
 // AddRelation 添加关系。
@@ -132,7 +132,7 @@ func (s *MilvusGraphStore) AddRelation(ctx context.Context, relations []*graph.R
 	if err := s.ensureInit(ctx); err != nil {
 		return err
 	}
-	return s.graphWriter.addRelation(ctx, relations, opts...)
+	return s.addRelation(ctx, relations, opts...)
 }
 
 // AddEpisode 添加片段。
@@ -140,7 +140,7 @@ func (s *MilvusGraphStore) AddEpisode(ctx context.Context, episodes []*graph.Epi
 	if err := s.ensureInit(ctx); err != nil {
 		return err
 	}
-	return s.graphWriter.addEpisode(ctx, episodes, opts...)
+	return s.addEpisode(ctx, episodes, opts...)
 }
 
 // Query 按ID或过滤表达式查询数据。
@@ -164,7 +164,7 @@ func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ..
 		}
 		strExpr, ok := exprVal.(string)
 		if !ok {
-			return nil, fmt.Errorf("Milvus 后端应返回 string 类型的表达式")
+			return nil, fmt.Errorf("milvus 后端应返回 string 类型的表达式")
 		}
 		expr = strExpr
 	}
@@ -191,7 +191,7 @@ func (s *MilvusGraphStore) Delete(ctx context.Context, collection string, opts .
 	if err := s.ensureInit(ctx); err != nil {
 		return err
 	}
-	return s.graphWriter.delete(ctx, collection, opts...)
+	return s.delete(ctx, collection, opts...)
 }
 
 // IsEmpty 检查集合是否为空。
@@ -213,7 +213,7 @@ func (s *MilvusGraphStore) Search(ctx context.Context, query string, opts ...gra
 	if err := s.ensureInit(ctx); err != nil {
 		return nil, err
 	}
-	return s.graphSearcher.search(ctx, query, opts...)
+	return s.search(ctx, query, opts...)
 }
 
 // AttachEmbedder 绑定嵌入模型。

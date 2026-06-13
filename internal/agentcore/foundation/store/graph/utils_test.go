@@ -12,7 +12,7 @@ func TestGetUUID_格式(t *testing.T) {
 		t.Errorf("UUID 长度应为 32，实际为 %d", len(uuid))
 	}
 	for _, c := range uuid {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("UUID 应为十六进制，发现字符 %c", c)
 			break
 		}
