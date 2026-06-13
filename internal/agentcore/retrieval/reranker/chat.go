@@ -103,9 +103,7 @@ func (c *ChatReranker) TestCompatibility(ctx context.Context) (bool, error) {
 // 覆盖 StandardReranker.assembleParams
 // 对齐 Python: ChatReranker._assemble_params
 func (c *ChatReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string) {
-	if len(docs) != 1 {
-		// 严格限制 size=1，校验在 doRerank 中执行
-	}
+	// 严格限制 size=1，校验在 doRerank 中执行，此处不做额外处理
 
 	docIDs := make([]string, len(docs))
 	texts := make([]string, len(docs))
