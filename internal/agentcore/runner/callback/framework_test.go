@@ -357,8 +357,8 @@ func TestCallbackFramework_TriggerSession_Nil上下文(t *testing.T) {
 		return nil
 	})
 
-	// context.TODO() 替代 nil context
-	results := fw.TriggerSession(context.TODO(), &SessionCallEventData{Event: AgentSessionCreated})
+	// 测试 nil context 场景，使用 //nolint 抑制 SA1012 警告
+	results := fw.TriggerSession(nil, &SessionCallEventData{Event: AgentSessionCreated}) //nolint:staticcheck // 测试 nil context 行为
 	if results != nil {
 		t.Errorf("nil context 期望 nil，实际 %v", results)
 	}
