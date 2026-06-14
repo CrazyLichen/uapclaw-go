@@ -10,16 +10,16 @@ import (
 
 // fakeBaseSession 用于测试的最小 baseSession 实现
 type fakeBaseSession struct {
-	stateValue state.State
-	swMgrValue any
-	cpValue    any
+	stateValue  state.State
+	swMgrValue  any
+	cpValue     any
 	execIDValue string
 }
 
-func (f *fakeBaseSession) State() state.State              { return f.stateValue }
-func (f *fakeBaseSession) StreamWriterManager() any         { return f.swMgrValue }
-func (f *fakeBaseSession) Checkpointer() any                { return f.cpValue }
-func (f *fakeBaseSession) ExecutableID() string             { return f.execIDValue }
+func (f *fakeBaseSession) State() state.State       { return f.stateValue }
+func (f *fakeBaseSession) StreamWriterManager() any { return f.swMgrValue }
+func (f *fakeBaseSession) Checkpointer() any        { return f.cpValue }
+func (f *fakeBaseSession) ExecutableID() string     { return f.execIDValue }
 
 // newFakeBaseSession 创建测试用 fake session
 func newFakeBaseSession() *fakeBaseSession {

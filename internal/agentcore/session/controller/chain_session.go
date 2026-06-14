@@ -16,29 +16,29 @@ import (
 // 每个实例代表一个具体的对话会话，维护与其他会话的下游调用关系以实现单向数据可见性。
 // 对应 Python: openjiuwen/core/session/session_controller/chain_session.py (ChainSession)
 type ChainSession struct {
-	mu                sync.Mutex
+	mu sync.Mutex
 	// AgentID 所属 Agent 标识
-	AgentID           string
+	AgentID string
 	// SessionScope 会话作用域
-	SessionScope      SessionScope
+	SessionScope SessionScope
 	// SessionID 会话唯一标识
-	SessionID         string
+	SessionID string
 	// DataContainer 数据容器
-	DataContainer     DataContainer
+	DataContainer DataContainer
 	// sessionDir 会话存储目录
-	sessionDir        string
+	sessionDir string
 	// dataContainerType 数据容器类型
 	dataContainerType string
 	// downstreamPolicies 下游关系映射：[agentID, sessionID] → SharingPolicy
 	downstreamPolicies map[[2]string]SharingPolicy
 	// createdAt 创建时间戳
-	createdAt         float64
+	createdAt float64
 	// updatedAt 更新时间戳
-	updatedAt         float64
+	updatedAt float64
 	// version 版本号
-	version           int
+	version int
 	// isActive 是否活跃
-	isActive          bool
+	isActive bool
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

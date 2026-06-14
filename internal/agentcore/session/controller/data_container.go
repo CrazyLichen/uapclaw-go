@@ -95,7 +95,7 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	factoryOnce    sync.Once
+	factoryOnce     sync.Once
 	factoryInstance *DataContainerFactory
 )
 

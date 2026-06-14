@@ -158,15 +158,15 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 		for _, doc := range docs {
 			kvKey := kvMemKey(userID, scopeID, doc.ID)
 			kvData := memoryDocToKVData(doc, userID, scopeID)
-		if s.codec != nil {
-			if mem, ok := kvData["mem"].(string); ok {
-				encoded, err := s.codec.Encode(mem)
-				if err != nil {
-					return fmt.Errorf("编码记忆文本失败: %w", err)
+			if s.codec != nil {
+				if mem, ok := kvData["mem"].(string); ok {
+					encoded, err := s.codec.Encode(mem)
+					if err != nil {
+						return fmt.Errorf("编码记忆文本失败: %w", err)
+					}
+					kvData["mem"] = encoded
 				}
-				kvData["mem"] = encoded
 			}
-		}
 			data, err := json.Marshal(kvData)
 			if err != nil {
 				return fmt.Errorf("序列化 KV 数据失败: %w", err)

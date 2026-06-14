@@ -27,11 +27,11 @@ type GlobalSessionConfig struct {
 // 提供跨 Agent 批量异步加载/刷盘操作。
 // 对应 Python: openjiuwen/core/session/session_controller/global_controller.py (GlobalSessionController)
 type GlobalSessionController struct {
-	mu                sync.Mutex
+	mu sync.Mutex
 	// BasePath 存储根目录
-	BasePath          string
+	BasePath string
 	// Controllers Agent 控制器映射：agentID → SessionController
-	Controllers       map[string]*SessionController
+	Controllers map[string]*SessionController
 	// dataContainerType 数据容器类型
 	dataContainerType string
 }

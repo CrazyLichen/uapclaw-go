@@ -250,10 +250,10 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 			mainWorkflowID:       nodeSession.MainWorkflowID(),
 			skipTrace:            false, // SubWorkflowSession 不传递 skipTrace
 		},
-		actorManager:         actorManager,
+		actorManager:          actorManager,
 		workflowNestingDepth2: nodeSession.WorkflowNestingDepth() + 1,
-		workflowID2:          workflowID,
-		mainWorkflowID2:      nodeSession.MainWorkflowID(),
+		workflowID2:           workflowID,
+		mainWorkflowID2:       nodeSession.MainWorkflowID(),
 	}
 }
 

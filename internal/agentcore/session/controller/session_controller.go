@@ -17,19 +17,19 @@ import (
 // 以及维护 sessions.json 元数据文件和会话对象缓存。
 // 对应 Python: openjiuwen/core/session/session_controller/session_controller.py (SessionController)
 type SessionController struct {
-	mu                sync.Mutex
+	mu sync.Mutex
 	// AgentID 所属 Agent 标识
-	AgentID           string
+	AgentID string
 	// rootPath 存储根目录
-	rootPath          string
+	rootPath string
 	// BasePath 会话存储目录（rootPath/agentID/sessions）
-	BasePath          string
+	BasePath string
 	// dataContainerType 数据容器类型
 	dataContainerType string
 	// SessionCache 会话对象缓存：sessionID → ChainSession
-	SessionCache      map[string]*ChainSession
+	SessionCache map[string]*ChainSession
 	// MetaMap 元数据映射：SessionScope → ScopeSessionsMeta
-	MetaMap           map[SessionScope]*ScopeSessionsMeta
+	MetaMap map[SessionScope]*ScopeSessionsMeta
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
