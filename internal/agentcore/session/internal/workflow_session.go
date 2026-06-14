@@ -300,11 +300,9 @@ func (s *WorkflowSession) ActorManager() any {
 }
 
 // Close 关闭会话。如果 actorManager 不为 nil，调用其 Shutdown。
+// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
+// 待 actorManager 接口确定后回填 Shutdown 逻辑
 func (s *WorkflowSession) Close() error {
-	if s.actorManager != nil {
-		// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
-		// 空分支保留：待 actorManager 接口确定后回填 Shutdown 逻辑
-	}
 	return nil
 }
 
@@ -477,11 +475,9 @@ func (s *SubWorkflowSession) SetActorManager(mgr any) {
 }
 
 // Close 关闭子工作流会话。如果 actorManager 不为 nil，调用其 Shutdown。
+// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
+// 待 actorManager 接口确定后回填 Shutdown 逻辑
 func (s *SubWorkflowSession) Close() error {
-	if s.actorManager != nil {
-		// ⤵️ 后续回填：actorManager 类型从 any → ActorManager 后调用 Shutdown()
-		// 空分支保留：待 actorManager 接口确定后回填 Shutdown 逻辑
-	}
 	return nil
 }
 
