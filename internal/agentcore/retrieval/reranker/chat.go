@@ -194,7 +194,12 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 	// 获取 logprobs
 	logprobsData, ok := choice["logprobs"].(map[string]any)
 	if !ok || logprobsData == nil {
-		// logprobs 不支持：返回错误，对齐 Python: raise build_error
+		// logprobs 不支持：记录 Error 日志并返回错误，对齐 Python: raise build_error
+		logger.Error(logComponent).
+			Str("event_type", "llm_call_error").
+			Str("method", "ChatReranker.parseResponse").
+			Str("model_provider", c.config.ModelName).
+			Msg("服务不支持 logprobs，ChatReranker 无法工作")
 		return nil, exception.BuildError(
 			exception.StatusRetrievalRerankerRequestCallFailed,
 			exception.WithParam("error_msg", "the service does not support logprobs for chat reranker to function"),

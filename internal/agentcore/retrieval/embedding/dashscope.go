@@ -57,6 +57,7 @@ type dashscopeResponse struct {
 	StatusCode int    `json:"status_code"`
 	Code       string `json:"code"`
 	Message    string `json:"message"`
+	RequestID  string `json:"request_id"`
 	Output     struct {
 		Embeddings []struct {
 			Embedding []float64 `json:"embedding"`
@@ -409,6 +410,7 @@ func (ds *DashscopeEmbedding) handleDashscopeAPIResp(body []byte, attempt int) (
 		logger.Warn(logComponent).
 			Str("event_type", "embedding_request_failed").
 			Str("model_provider", "dashscope").
+			Str("request_id", resp.RequestID).
 			Int("attempt", attempt+1).
 			Int("max_retries", ds.maxRetries).
 			Str("error_msg", errMsg).

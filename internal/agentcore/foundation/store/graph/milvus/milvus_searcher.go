@@ -163,6 +163,13 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 	bfsOpts := o
 	bfsOpts.QueryEmbedding = queryEmb
 
+	// 当前轮的搜索过滤表达式
+	// 对齐 Python: expr 初始为 filter_expr，后续由扩展 UUID 构建
+	var currentExpr querypkg.QueryExpr
+	if o.FilterExpr != nil {
+		currentExpr = o.FilterExpr
+	}
+
 	for i := 0; i <= bfsDepth; i++ {
 		isExpansionRound := i < bfsDepth
 
@@ -170,24 +177,8 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 		searchOpts := bfsOpts
 		searchOpts.Reranker = nil
 		searchOpts.K = k
-
-		// 构建 expr：有新 UUID 时按 UUID 过滤
-		if len(uuids) > 0 {
-			uuidSlice := uuidSetToSlice(uuids)
-			if collection == CollectionEntity {
-				searchOpts.IDs = stringsToAny(uuidSlice)
-			} else {
-				// Relation: 按 lhs/rhs 过滤，对齐 Python
-				searchOpts.IDs = nil
-				uuidsAny := stringsToAny(uuidSlice)
-				lhsExpr := querypkg.InList("lhs", uuidsAny)
-				rhsExpr := querypkg.InList("rhs", uuidsAny)
-				searchOpts.FilterExpr = querypkg.Or(lhsExpr, rhsExpr)
-				if o.FilterExpr != nil {
-					searchOpts.FilterExpr = querypkg.And(o.FilterExpr, searchOpts.FilterExpr)
-				}
-			}
-		}
+		searchOpts.IDs = nil
+		searchOpts.FilterExpr = currentExpr
 
 		// 执行搜索
 		res, err := s.rawHybridSearch(ctx, query, collection, k, searchOpts)
@@ -196,10 +187,12 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 			break
 		}
 
-		// 收集新 UUID 和结果
+		// 收集当前轮搜索结果（对齐 Python: new_results = {doc["uuid"]: doc}）
+		newResults := make(map[string]map[string]any)
 		newUUIDs := make(map[string]struct{})
 		for _, doc := range res {
 			if uuid, ok := doc["uuid"].(string); ok && uuid != "" {
+				newResults[uuid] = doc
 				if _, exists := uuids[uuid]; !exists {
 					newUUIDs[uuid] = struct{}{}
 				}
@@ -207,25 +200,20 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 			}
 		}
 
-		// 将新发现的 UUID 加入总集合
-		for uuid := range newUUIDs {
-			uuids[uuid] = struct{}{}
-		}
-
-		// 图扩展
+		// 图扩展（对齐 Python: expansion_fn(filter_expr, new_uuids, lookup=new_results)）
 		if isExpansionRound && len(newUUIDs) > 0 {
 			var expanded map[string]struct{}
 			if collection == CollectionEntity {
-				expanded, err = s.expandEntities(ctx, newUUIDs)
+				expanded, err = s.expandEntities(ctx, newUUIDs, o.FilterExpr)
 			} else {
-				expanded, err = s.expandRelations(ctx, newUUIDs, allResults)
+				expanded, err = s.expandRelations(ctx, newUUIDs, newResults, o.FilterExpr)
 			}
 			if err != nil {
 				logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 扩展失败")
 				break
 			}
 
-			// 过滤掉已知的 UUID
+			// 过滤掉已知的 UUID（对齐 Python: .difference(uuids)）
 			newExpanded := make(map[string]struct{})
 			for uuid := range expanded {
 				if _, exists := uuids[uuid]; !exists {
@@ -237,14 +225,28 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 				break
 			}
 
-			// bfs_k 裁剪：按 distance 排序只保留 top-k，对齐 Python
-			if bfsK < len(newExpanded) {
-				newExpanded = s.topKByDistance(newExpanded, allResults, bfsK, isSimilarity)
-			}
-
-			// 更新下一轮搜索的 UUID 集合
+			// 将扩展后的 UUID 加入总集合（对齐 Python: uuids.update(new_uuids)）
 			for uuid := range newExpanded {
 				uuids[uuid] = struct{}{}
+			}
+
+			// bfs_k 裁剪：按 distance 排序只保留 top-k，对齐 Python
+			if bfsK < len(newExpanded) {
+				newExpanded = s.topKByDistance(newExpanded, newResults, bfsK, isSimilarity)
+			}
+
+			// 对齐 Python: 下一轮的 expr 由扩展后的 UUID 构建（而非所有累积 UUID）
+			expandedSlice := uuidSetToSlice(newExpanded)
+			expandedAny := stringsToAny(expandedSlice)
+			if collection == CollectionEntity {
+				currentExpr = querypkg.InList("uuid", expandedAny)
+			} else {
+				lhsExpr := querypkg.InList("lhs", expandedAny)
+				rhsExpr := querypkg.InList("rhs", expandedAny)
+				currentExpr = querypkg.Or(lhsExpr, rhsExpr)
+			}
+			if o.FilterExpr != nil {
+				currentExpr = querypkg.And(o.FilterExpr, currentExpr)
 			}
 		}
 	}
@@ -458,9 +460,9 @@ func autoBalanceWeights(numChannels int) []float64 {
 }
 
 // expandEntities 通过 BFS 扩展实体 UUID 集合。
-// 对齐 Python: _expand_entities — 通过 Relation 集合的 lhs/rhs 字段扩展，
-// 而非通过 Entity 集合的 relations 字段。
-func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]struct{}) (map[string]struct{}, error) {
+// 对齐 Python: _expand_entities — 通过 Relation 集合的 lhs/rhs 字段扩展。
+// filterExpr 用于将原始过滤条件与扩展表达式合并。
+func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]struct{}, filterExpr querypkg.QueryExpr) (map[string]struct{}, error) {
 	if len(uuidSet) == 0 {
 		return nil, nil
 	}
@@ -472,6 +474,16 @@ func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]s
 	lhsExpr := buildIDFilterExprWithField(ids, "lhs")
 	rhsExpr := buildIDFilterExprWithField(ids, "rhs")
 	combinedExpr := fmt.Sprintf("(%s) or (%s)", lhsExpr, rhsExpr)
+
+	// 对齐 Python: 如果有 filterExpr，将原始过滤条件合并
+	if filterExpr != nil {
+		exprVal, err := filterExpr.ToExpr("milvus")
+		if err == nil {
+			if strExpr, ok := exprVal.(string); ok && strExpr != "" {
+				combinedExpr = fmt.Sprintf("(%s) and (%s)", combinedExpr, strExpr)
+			}
+		}
+	}
 
 	queryOpt := milvusclient.NewQueryOption(CollectionRelation).WithFilter(combinedExpr).
 		WithOutputFields("lhs", "rhs")
@@ -497,7 +509,8 @@ func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]s
 // expandRelations 通过 BFS 扩展关系 UUID 集合。
 // 对齐 Python: _expand_relations — 先从 lookup 取 lhs/rhs 实体 UUID，
 // 再查 Entity 集合的 relations 字段获取关联的关系 UUID。
-func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]struct{}, lookup map[string]map[string]any) (map[string]struct{}, error) {
+// filterExpr 用于将原始过滤条件与扩展表达式合并。
+func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]struct{}, lookup map[string]map[string]any, filterExpr querypkg.QueryExpr) (map[string]struct{}, error) {
 	if len(uuidSet) == 0 {
 		return nil, nil
 	}
@@ -522,6 +535,16 @@ func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]
 	// 查询 Entity 集合的 relations 字段，对齐 Python
 	ids := uuidSetToSlice(nodeUUIDs)
 	expr := buildIDFilterExpr(ids)
+
+	// 对齐 Python: 如果有 filterExpr，将原始过滤条件合并
+	if filterExpr != nil {
+		exprVal, err := filterExpr.ToExpr("milvus")
+		if err == nil {
+			if strExpr, ok := exprVal.(string); ok && strExpr != "" {
+				expr = fmt.Sprintf("(%s) and (%s)", expr, strExpr)
+			}
+		}
+	}
 
 	queryOpt := milvusclient.NewQueryOption(CollectionEntity).WithFilter(expr).
 		WithOutputFields("uuid", "relations")
@@ -610,104 +633,100 @@ func buildIDFilterExprWithField(ids []string, field string) string {
 // 对齐 Python: MilvusGraphStore._combined_rerank
 // 核心逻辑：利用关系信息增强实体排序 — 遍历每个 Entity 的 relations，
 // 将关联 Relation 的 content 拼接到 Entity 的 content 中再 rerank。
+// 注意：Python 只对 Entity 做增强 + rerank，不对其余集合做 rerank。
 func (s *graphSearcher) combinedRerank(ctx context.Context, query string, results map[string][]map[string]any, o graph.Options) (map[string][]map[string]any, error) {
 	if o.Reranker == nil {
 		return results, nil
 	}
 
 	// 关系增强：对齐 Python _combined_rerank 中的实体内容增强逻辑
-	if entities, ok := results[CollectionEntity]; ok && len(entities) > 0 {
-		relations := results[CollectionRelation]
-		relUUIDs := make(map[string]map[string]any)
-		for _, rel := range relations {
-			if uuid, ok := rel["uuid"].(string); ok {
-				relUUIDs[uuid] = rel
-			}
+	entities := results[CollectionEntity]
+	relations := results[CollectionRelation]
+
+	if len(entities) == 0 {
+		return results, nil
+	}
+
+	// 构建 Relation UUID 映射，对齐 Python: rel_uuids = {rel["uuid"]: rel}
+	relUUIDs := make(map[string]map[string]any)
+	for _, rel := range relations {
+		if uuid, ok := rel["uuid"].(string); ok {
+			relUUIDs[uuid] = rel
 		}
+	}
 
-		// 遍历每个 Entity，将关联 Relation 的 content 拼接到 Entity 的 content 中
-		for _, ent := range entities {
-			// 保存原始 content
-			originalContent, _ := ent["content"].(string)
-			ent["original_content"] = originalContent
+	// 遍历每个 Entity，将关联 Relation 的 content 拼接到 Entity 的 content 中
+	// 对齐 Python: 对每个 entity 保存 original_content，拼接关联 Relation 的 content
+	for _, ent := range entities {
+		// 保存原始 content，对齐 Python: ent["original_content"] = ent.get("content", "")
+		originalContent, _ := ent["content"].(string)
+		ent["original_content"] = originalContent
 
-			// 收集关联 Relation 的 (content, distance)
-			type relContent struct {
-				content  string
-				distance float64
-			}
-			var relatedContent []relContent
+		// 收集关联 Relation 的 (content, distance)
+		type relContent struct {
+			content  string
+			distance float64
+		}
+		var relatedContent []relContent
 
-			if relIDs, ok := ent["relations"].([]string); ok {
-				for _, relID := range relIDs {
-					if rel, ok := relUUIDs[relID]; ok {
-						content, _ := rel["content"].(string)
-						distance, _ := rel["distance"].(float64)
-						if content != "" {
-							relatedContent = append(relatedContent, relContent{content: content, distance: distance})
-						}
+		if relIDs, ok := ent["relations"].([]string); ok {
+			for _, relID := range relIDs {
+				if rel, ok := relUUIDs[relID]; ok {
+					content, _ := rel["content"].(string)
+					distance, _ := rel["distance"].(float64)
+					if content != "" {
+						relatedContent = append(relatedContent, relContent{content: content, distance: distance})
 					}
 				}
 			}
+		}
 
-			// 按 distance 降序排序，对齐 Python: content.sort(key=lambda rel: rel[1], reverse=True)
-			sort.Slice(relatedContent, func(i, j int) bool {
-				return relatedContent[i].distance > relatedContent[j].distance
-			})
+		// 按 distance 降序排序，对齐 Python: content.sort(key=lambda rel: rel[1], reverse=True)
+		sort.Slice(relatedContent, func(i, j int) bool {
+			return relatedContent[i].distance > relatedContent[j].distance
+		})
 
-			// 拼接内容，对齐 Python: [原始content, 分隔线, ...关联Relation的content]
-			if len(relatedContent) > 0 {
-				var parts []string
-				parts = append(parts, originalContent)
-				parts = append(parts, "----------")
-				for _, rc := range relatedContent {
-					parts = append(parts, rc.content)
-				}
-				ent["content"] = strings.Join(parts, "\n - ")
+		// 拼接内容，对齐 Python: [原始content, 分隔线, ...关联Relation的content]
+		// Python: content = [(original_content, -1), ("-" * 10, -1)] + content
+		// Python: ent["content"] = "\n - ".join(line for line, _ in content)
+		mentions := len(relatedContent)
+		if mentions > 0 {
+			var parts []string
+			parts = append(parts, originalContent)
+			parts = append(parts, "----------")
+			for _, rc := range relatedContent {
+				parts = append(parts, rc.content)
 			}
+			ent["content"] = strings.Join(parts, "\n - ")
 		}
 	}
 
-	// 对每个集合的结果进行 rerank
-	reranked := make(map[string][]map[string]any)
-	for coll, items := range results {
-		if len(items) == 0 {
-			reranked[coll] = items
-			continue
+	// 对齐 Python: 只对 Entity 做 rerank，不对其余集合做 rerank
+	documents := make([]string, len(entities))
+	for i, ent := range entities {
+		if content, ok := ent["content"].(string); ok {
+			documents[i] = content
 		}
+	}
 
-		// 构造文档列表
-		documents := make([]string, len(items))
-		for i, item := range items {
-			if content, ok := item["content"].(string); ok {
-				documents[i] = content
-			}
-		}
-
-		// 调用 reranker
-		scoreMap, err := o.Reranker.Rerank(ctx, query, documents)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("重排序失败，使用原始顺序")
-			reranked[coll] = items
-			continue
-		}
-
-		// 按 reranker 分数排序
+	scoreMap, err := o.Reranker.Rerank(ctx, query, documents)
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("collection", CollectionEntity).Msg("重排序失败，使用原始顺序")
+	} else {
+		// 按 reranker 分数排序并过滤
 		minScore := o.MinScore
-		reranked[coll] = filterByScore(items, scoreMap, minScore)
+		results[CollectionEntity] = filterByScore(entities, scoreMap, minScore)
 	}
 
 	// 恢复 Entity 的原始 content，对齐 Python: ent["content"] = ent["original_content"]
-	if entities, ok := reranked[CollectionEntity]; ok {
-		for _, ent := range entities {
-			if originalContent, ok := ent["original_content"].(string); ok {
-				ent["content"] = originalContent
-				delete(ent, "original_content")
-			}
+	for _, ent := range results[CollectionEntity] {
+		if originalContent, ok := ent["original_content"].(string); ok {
+			ent["content"] = originalContent
+			delete(ent, "original_content")
 		}
 	}
 
-	return reranked, nil
+	return results, nil
 }
 
 // filterByScore 按分数过滤和排序结果。

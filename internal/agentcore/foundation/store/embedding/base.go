@@ -30,15 +30,18 @@ type BaseEmbedding interface {
 	Dimension() int
 }
 
-// EmbedOption 批量嵌入的可选参数。
-//
-// 对齐 Python: embed_documents(batch_size=, callback_cls=)
-type EmbedOption struct {
+// EmbedOptions 批量嵌入的内部选项结构。
+type EmbedOptions struct {
 	// BatchSize 批大小，0 表示使用默认值
 	BatchSize int
 	// Callback 进度回调，nil 表示不回调
 	Callback Callback
 }
+
+// EmbedOption 函数选项模式，用于配置 EmbedOptions。
+//
+// 对齐 Python: embed_documents(batch_size=, callback_cls=)
+type EmbedOption func(*EmbedOptions)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -47,5 +50,28 @@ type EmbedOption struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithBatchSize 设置批大小的 EmbedOption。
+func WithBatchSize(n int) EmbedOption {
+	return func(o *EmbedOptions) {
+		o.BatchSize = n
+	}
+}
+
+// WithCallback 设置进度回调的 EmbedOption。
+func WithCallback(cb Callback) EmbedOption {
+	return func(o *EmbedOptions) {
+		o.Callback = cb
+	}
+}
+
+// NewEmbedOptions 从可变参数构建 EmbedOptions。
+func NewEmbedOptions(opts ...EmbedOption) EmbedOptions {
+	o := EmbedOptions{}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

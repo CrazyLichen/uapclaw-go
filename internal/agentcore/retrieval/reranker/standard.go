@@ -8,6 +8,7 @@ import (
 	"time"
 
 	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -256,6 +257,11 @@ func validateStandardConfig(docs []any) error {
 		switch doc.(type) {
 		case string:
 		case *reranker.Document:
+		case *common.MultimodalDocument:
+			// 多模态文档不支持重排序，记录 warning 日志
+			logger.Warn(logComponent).
+				Str("event_type", "reranker_multimodal_unsupported").
+				Msg("Reranker 收到多模态重排序请求，不支持")
 		default:
 			return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
 				exception.WithParam("error_msg", "input to reranker must be either list[str | Document]"),

@@ -584,7 +584,7 @@ func TestGraphSearcher_ExpandEntities(t *testing.T) {
 
 	ctx := context.Background()
 	uuidSet := map[string]struct{}{"id1": {}}
-	expanded, err := s.expandEntities(ctx, uuidSet)
+	expanded, err := s.expandEntities(ctx, uuidSet, nil)
 	if err != nil {
 		t.Fatalf("expandEntities() error = %v", err)
 	}
@@ -606,7 +606,7 @@ func TestGraphSearcher_ExpandEntities_空集合(t *testing.T) {
 	s := newGraphSearcher(fake, nil, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
 	ctx := context.Background()
-	expanded, err := s.expandEntities(ctx, nil)
+	expanded, err := s.expandEntities(ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("expandEntities() error = %v", err)
 	}
@@ -623,7 +623,7 @@ func TestGraphSearcher_ExpandEntities_Query失败(t *testing.T) {
 
 	ctx := context.Background()
 	uuidSet := map[string]struct{}{"id1": {}}
-	_, err := s.expandEntities(ctx, uuidSet)
+	_, err := s.expandEntities(ctx, uuidSet, nil)
 	if err == nil {
 		t.Error("expandEntities Query 失败应返回错误")
 	}
@@ -647,7 +647,7 @@ func TestGraphSearcher_ExpandRelations(t *testing.T) {
 	lookup := map[string]map[string]any{
 		"id1": {"uuid": "id1", "lhs": "e1", "rhs": "e2"},
 	}
-	expanded, err := s.expandRelations(ctx, uuidSet, lookup)
+	expanded, err := s.expandRelations(ctx, uuidSet, lookup, nil)
 	if err != nil {
 		t.Fatalf("expandRelations() error = %v", err)
 	}
@@ -668,7 +668,7 @@ func TestGraphSearcher_ExpandRelations_空集合(t *testing.T) {
 	s := newGraphSearcher(fake, nil, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
 	ctx := context.Background()
-	expanded, err := s.expandRelations(ctx, nil, nil)
+	expanded, err := s.expandRelations(ctx, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("expandRelations() error = %v", err)
 	}
@@ -688,7 +688,7 @@ func TestGraphSearcher_ExpandRelations_Query失败(t *testing.T) {
 	lookup := map[string]map[string]any{
 		"id1": {"uuid": "id1", "lhs": "e1", "rhs": "e2"},
 	}
-	_, err := s.expandRelations(ctx, uuidSet, lookup)
+	_, err := s.expandRelations(ctx, uuidSet, lookup, nil)
 	if err == nil {
 		t.Error("expandRelations Query 失败应返回错误")
 	}

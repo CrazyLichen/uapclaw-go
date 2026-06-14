@@ -190,24 +190,25 @@ func (a *APIEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts 
 }
 
 // Dimension 返回嵌入向量维度。
+// 将检查-探测-写入放在同一个锁保护范围内，确保原子性。
 func (a *APIEmbedding) Dimension() int {
 	a.mu.Lock()
-	if a.dimension > 0 {
-		dim := a.dimension
-		a.mu.Unlock()
-		return dim
-	}
-	a.mu.Unlock()
+	defer a.mu.Unlock()
 
-	// 发送探测请求
+	if a.dimension > 0 {
+		return a.dimension
+	}
+
+	// 临时释放锁发送探测请求
+	a.mu.Unlock()
 	vec, err := a.EmbedQuery(context.Background(), "test")
+	a.mu.Lock()
+
 	if err != nil {
 		return 0
 	}
 
-	a.mu.Lock()
 	a.dimension = len(vec)
-	a.mu.Unlock()
 
 	logger.Debug(logComponent).
 		Int("dimension", len(vec)).
@@ -230,9 +231,9 @@ func apiIsRetryable(err error) bool {
 }
 
 // getEmbeddings 发送 HTTP POST 请求获取嵌入向量。
-func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([][]float64, error) {
+func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float64, error) {
 	return retryWithBackoffGeneric(ctx, a.maxRetries, func(attempt int) ([][]float64, error) {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"model": a.config.ModelName,
 			"input": input,
 		}

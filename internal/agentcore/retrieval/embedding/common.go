@@ -252,6 +252,13 @@ func ParseEmbeddingResponse(body []byte) ([][]float64, error) {
 
 		var embeddings [][]float64
 		for _, item := range dataItems {
+			// embedding 字段缺失时报错
+			if len(item.Embedding) == 0 {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingResponseInvalid,
+					exception.WithParam("error_msg", fmt.Sprintf("data[%d] 缺少 embedding 字段", item.Index)),
+				)
+			}
 			// 尝试解析为 float64 数组
 			var flat []float64
 			if err := json.Unmarshal(item.Embedding, &flat); err == nil {
@@ -365,18 +372,24 @@ func retryWithBackoffGeneric(
 // NewEmbeddingHTTPClient 创建嵌入客户端的 HTTP Client。
 //
 // 根据 EMBEDDING_SSL_VERIFY / EMBEDDING_SSL_CERT 环境变量配置 TLS。
-func NewEmbeddingHTTPClient(apiURL string) *http.Client {
+// timeout 为 0 时使用默认超时 defaultTimeout。
+func NewEmbeddingHTTPClient(apiURL string, timeout ...time.Duration) *http.Client {
+	reqTimeout := defaultTimeout
+	if len(timeout) > 0 && timeout[0] > 0 {
+		reqTimeout = timeout[0]
+	}
+
 	isHTTPS := strings.HasPrefix(apiURL, "https://")
 
 	if !isHTTPS {
-		return &http.Client{Timeout: defaultTimeout}
+		return &http.Client{Timeout: reqTimeout}
 	}
 
 	// 检查是否跳过验证
 	verifySwitch := strings.ToLower(strings.TrimSpace(os.Getenv(envEmbeddingSSLVerify)))
 	if verifySwitch == "false" {
 		return &http.Client{
-			Timeout: defaultTimeout,
+			Timeout: reqTimeout,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
@@ -392,17 +405,17 @@ func NewEmbeddingHTTPClient(apiURL string) *http.Client {
 				Str("cert_path", certPath).
 				Err(err).
 				Msg("加载 SSL 证书失败，使用默认 TLS 配置")
-			return &http.Client{Timeout: defaultTimeout}
+			return &http.Client{Timeout: reqTimeout}
 		}
 		return &http.Client{
-			Timeout: defaultTimeout,
+			Timeout: reqTimeout,
 			Transport: &http.Transport{
 				TLSClientConfig: tlsCfg,
 			},
 		}
 	}
 
-	return &http.Client{Timeout: defaultTimeout}
+	return &http.Client{Timeout: reqTimeout}
 }
 
 // ResolveBatchSize 解析批大小，尊重调用方传入值但不超过 maxBatchSize。
@@ -422,17 +435,12 @@ func ResolveBatchSize(callerBatchSize, maxBatchSize int) int {
 
 // ApplyEmbedOptions 解析 EmbedOption 列表，返回批大小和回调。
 func ApplyEmbedOptions(opts []embedding.EmbedOption, defaultBatchSize int) (int, embedding.Callback) {
-	batchSize := defaultBatchSize
-	var cb embedding.Callback
-	for _, opt := range opts {
-		if opt.BatchSize > 0 {
-			batchSize = opt.BatchSize
-		}
-		if opt.Callback != nil {
-			cb = opt.Callback
-		}
+	o := embedding.NewEmbedOptions(opts...)
+	batchSize := o.BatchSize
+	if batchSize <= 0 {
+		batchSize = defaultBatchSize
 	}
-	return batchSize, cb
+	return batchSize, o.Callback
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

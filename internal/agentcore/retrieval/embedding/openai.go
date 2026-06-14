@@ -244,6 +244,7 @@ func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.Multi
 }
 
 // Dimension 返回嵌入向量维度。
+// 使用带超时的 context 避免意外阻塞，对齐 T-04 修复。
 func (o *OpenAIEmbedding) Dimension() int {
 	o.dimMu.Lock()
 	if o.dimension > 0 {
@@ -253,7 +254,10 @@ func (o *OpenAIEmbedding) Dimension() int {
 	}
 	o.dimMu.Unlock()
 
-	vec, err := o.EmbedQuery(context.Background(), "test")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	vec, err := o.EmbedQuery(ctx, "test")
 	if err != nil {
 		return 0
 	}
@@ -298,6 +302,7 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 			logger.Warn(logComponent).
 				Str("event_type", "embedding_request_failed").
 				Str("model_provider", "openai").
+				Str("model_name", o.config.ModelName).
 				Int("attempt", attempt+1).
 				Int("max_retries", o.maxRetries).
 				Err(err).
