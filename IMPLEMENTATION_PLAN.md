@@ -337,14 +337,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **5.x 会话系统** | — | | | |
-| 5.1 | ✅ | State 体系 | `ReadableStateLike`/`RecoverableStateLike`/`StateLike`/`CommitStateLike` | `openjiuwen/core/session/state/base.py` |
+| 5.1 | ✅ | State 体系 | `ReadableStateLike`/`RecoverableStateLike`/`StateLike`/`CommitStateLike`；⤵️ Agent State StateCollection 待 5.3 回填；⤵️ Workflow State StateCollection/CommitState/InMemoryState 待 5.4 回填；⤵️ SessionController scope 待 5.6 回填；⤵️ Checkpointer 持久化待 5.8 回填 | `openjiuwen/core/session/state/base.py` |
 | 5.2 | ☐ | BaseSession 接口 | `Config/State/SessionID/Close` | `openjiuwen/core/session/session.py` |
-| 5.3 | ☐ | AgentSession | `PreRun→Invoke/Stream→PostRun`，状态持久化 | `openjiuwen/core/session/agent.py` |
-| 5.4 | ☐ | WorkflowSession | 从 AgentSession 创建 | `openjiuwen/core/session/workflow.py` |
+| 5.3 | ☐ | AgentSession | `PreRun→Invoke/Stream→PostRun`，状态持久化；⤴️ 需回填 5.1 Agent State StateCollection | `openjiuwen/core/session/agent.py` |
+| 5.4 | ☐ | WorkflowSession | 从 AgentSession 创建；⤴️ 需回填 5.1 Workflow State StateCollection/CommitState/InMemoryState | `openjiuwen/core/session/workflow.py` |
 | 5.5 | ☐ | SessionNode | 会话节点 | `openjiuwen/core/session/node.py` |
-| 5.6 | ☐ | SessionController | 会话控制器 | `openjiuwen/core/session/session_controller/` |
+| 5.6 | ☐ | SessionController | 会话控制器；⤴️ 需回填 5.1 SessionController scope | `openjiuwen/core/session/session_controller/` |
 | 5.7 | ☐ | Interaction | 交互管理 | `openjiuwen/core/session/interaction/` |
-| 5.8 | ☐ | Checkpointer 接口 + 工厂 | `CheckpointerFactory`，InMemory 实现 | `openjiuwen/core/session/checkpointer/base.py` · `factory.py` |
+| 5.8 | ☐ | Checkpointer 接口 + 工厂 | `CheckpointerFactory`，InMemory 实现；⤴️ 需回填 5.1 Checkpointer 持久化 | `openjiuwen/core/session/checkpointer/base.py` · `factory.py` |
 | 5.9 | ☐ | RedisCheckpointer | Redis 实现 | `openjiuwen/extensions/checkpointer/redis_checkpointer.py` |
 | 5.10 | ☐ | StreamWriter | `StreamMode` 枚举，`OutputSchema/TraceSchema/CustomSchema` | `openjiuwen/core/session/stream/` |
 | 5.11 | ☐ | Session Tracer | 会话追踪 | `openjiuwen/core/session/tracer/` |
