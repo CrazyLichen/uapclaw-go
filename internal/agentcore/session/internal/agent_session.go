@@ -155,6 +155,11 @@ func (s *AgentSession) Close() error {
 	return nil
 }
 
+// ExecutableID 返回空字符串（Agent 无可执行路径 ID，仅工作流节点有此概念）
+func (s *AgentSession) ExecutableID() string {
+	return ""
+}
+
 // Card 获取 Agent 身份元数据
 func (s *AgentSession) Card() any {
 	return s.card

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -25,8 +26,7 @@ type NodeSessionFacade struct {
 	// 流式模式下 Interact() 返回错误，因为 GraphInterrupt 无法在 async generator 中恢复
 	streamMode bool
 	// interaction 交互实例（懒初始化）
-	// ⤵️ 5.7 回填：any → WorkflowInteraction
-	interaction any
+	interaction *interaction.WorkflowInteraction
 	// description 组件描述，格式: [wf_id=xxx,comp_id=xxx]
 	description string
 }
@@ -173,9 +173,10 @@ func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error
 		return nil, fmt.Errorf("interact when streaming process(transform or collect) is not supported, comp_id=%s, workflow=%s",
 			f.GetComponentID(), f.GetWorkflowID())
 	}
-	// ⤵️ 5.7 回填：if f.interaction == nil { f.interaction = NewWorkflowInteraction(f.inner) }
-	// ⤵️ 5.7 回填：return f.interaction.WaitUserInputs(ctx, value)
-	return nil, nil
+	if f.interaction == nil {
+		f.interaction = interaction.NewWorkflowInteraction(f.inner)
+	}
+	return f.interaction.WaitUserInputs(ctx, value)
 }
 
 // ──────────────────────────── 流写入方法（桩实现） ────────────────────────────

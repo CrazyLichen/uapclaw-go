@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -31,8 +32,7 @@ type Session struct {
 	// closeStreamOnPostRun PostRun 时是否自动关闭流
 	closeStreamOnPostRun bool
 	// interaction 交互实例（懒初始化）
-	// ⤵️ 5.9 回填：any → SimpleAgentInteraction
-	interaction any
+	interaction *interaction.SimpleAgentInteraction
 	// sourceMetadata 流数据来源元数据
 	sourceMetadata map[string]any
 }
@@ -254,9 +254,12 @@ func (s *Session) Commit(ctx context.Context) error {
 // ──────────────────────────── 交互方法（桩实现） ────────────────────────────
 
 // Interact 请求用户输入。
-// ⤵️ 5.9 回填：SimpleAgentInteraction 实现后填充真实逻辑
+// 对应 Python: Session.interact(value)
 func (s *Session) Interact(value any) error {
-	return nil
+	if s.interaction == nil {
+		s.interaction = interaction.NewSimpleAgentInteraction(s.inner)
+	}
+	return s.interaction.WaitUserInputs(context.Background(), value)
 }
 
 // ──────────────────────────── 子会话方法（桩实现） ────────────────────────────
