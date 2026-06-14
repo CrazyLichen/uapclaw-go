@@ -49,7 +49,14 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 		SessionCache:      make(map[string]*ChainSession),
 		MetaMap:           make(map[SessionScope]*ScopeSessionsMeta),
 	}
-	os.MkdirAll(sc.BasePath, 0o755)
+	if err := os.MkdirAll(sc.BasePath, 0o755); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "new_session_controller").
+			Str("agent_id", agentID).
+			Str("base_path", sc.BasePath).
+			Err(err).
+			Msg("创建会话目录失败")
+	}
 	return sc
 }
 
@@ -287,8 +294,11 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 	}
 
 	// 创建新会话
+	// 创建会话目录
 	sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sessionID)
-	os.MkdirAll(sessionDir, 0o755)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		return false, nil, fmt.Errorf("创建会话目录失败: %w", err)
+	}
 
 	// 创建数据容器
 	container, err := GetFactory().Create(sc.dataContainerType, opts...)
@@ -309,8 +319,23 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 	sc.SessionCache[sessionID] = session
 
 	// 保存到磁盘
-	session.Flush()
-	sc.writeMetaFile()
+	if err := session.Flush(); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Str("action", "create_if_not_exists_flush").
+			Str("agent_id", sc.AgentID).
+			Str("session_id", sessionID).
+			Err(err).
+			Msg("创建会话后刷写失败")
+		return false, nil, fmt.Errorf("创建会话后刷写失败: %w", err)
+	}
+	if err := sc.writeMetaFile(); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Str("action", "create_if_not_exists_write_meta").
+			Str("agent_id", sc.AgentID).
+			Err(err).
+			Msg("创建会话后写入元数据失败")
+		return false, nil, fmt.Errorf("创建会话后写入元数据失败: %w", err)
+	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "session_created").
@@ -397,8 +422,23 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 	if scopeMeta, ok := sc.MetaMap[targetScope]; ok {
 		scopeMeta.ActivateSession(sessionID)
 		session.SetIsActive(true)
-		session.Flush()
-		sc.writeMetaFile()
+		if err := session.Flush(); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("action", "activate_session_flush").
+				Str("agent_id", sc.AgentID).
+				Str("session_id", sessionID).
+				Err(err).
+				Msg("激活会话后刷写失败")
+			return fmt.Errorf("激活会话后刷写失败: %w", err)
+		}
+		if err := sc.writeMetaFile(); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("action", "activate_session_write_meta").
+				Str("agent_id", sc.AgentID).
+				Err(err).
+				Msg("激活会话后写入元数据失败")
+			return fmt.Errorf("激活会话后写入元数据失败: %w", err)
+		}
 
 		logger.Info(logger.ComponentAgentCore).
 			Str("action", "session_activated").
@@ -463,7 +503,14 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 
 		// 删除磁盘数据
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sm.SessionID)
-		os.RemoveAll(sessionDir)
+		if err := os.RemoveAll(sessionDir); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "cleanup_inactive_remove").
+				Str("agent_id", sc.AgentID).
+				Str("session_id", sm.SessionID).
+				Err(err).
+				Msg("删除非活跃会话目录失败")
+		}
 
 		// 从元数据移除
 		scopeMeta.RemoveSession(sm.SessionID)
@@ -471,7 +518,14 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 	}
 
 	if len(cleaned) > 0 {
-		sc.writeMetaFile()
+		if err := sc.writeMetaFile(); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("action", "cleanup_inactive_write_meta").
+				Str("agent_id", sc.AgentID).
+				Err(err).
+				Msg("清理非活跃会话后写入元数据失败")
+			return nil, fmt.Errorf("清理非活跃会话后写入元数据失败: %w", err)
+		}
 	}
 
 	logger.Info(logger.ComponentAgentCore).
@@ -515,7 +569,14 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 
 		// 删除磁盘数据
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sessionID)
-		os.RemoveAll(sessionDir)
+		if err := os.RemoveAll(sessionDir); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "remove_session_remove").
+				Str("agent_id", sc.AgentID).
+				Str("session_id", sessionID).
+				Err(err).
+				Msg("删除会话目录失败")
+		}
 
 		// 从元数据移除
 		removedMeta := scopeMeta.RemoveSession(sessionID)
@@ -525,7 +586,13 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 	}
 
 	if len(removed) > 0 {
-		sc.writeMetaFile()
+		if err := sc.writeMetaFile(); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "remove_session_write_meta").
+				Str("agent_id", sc.AgentID).
+				Err(err).
+				Msg("删除会话后写入元数据失败")
+		}
 	}
 
 	return removed
@@ -545,7 +612,14 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 	for _, sm := range scopeMeta.Sessions {
 		delete(sc.SessionCache, sm.SessionID)
 		sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sm.SessionID)
-		os.RemoveAll(sessionDir)
+		if err := os.RemoveAll(sessionDir); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "remove_scope_sessions_remove").
+				Str("agent_id", sc.AgentID).
+				Str("session_id", sm.SessionID).
+				Err(err).
+				Msg("删除作用域会话目录失败")
+		}
 		removed = append(removed, sm)
 	}
 
@@ -555,7 +629,13 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 		delete(sc.MetaMap, sessionScope)
 	}
 
-	sc.writeMetaFile()
+	if err := sc.writeMetaFile(); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "remove_scope_sessions_write_meta").
+			Str("agent_id", sc.AgentID).
+			Err(err).
+			Msg("删除作用域会话后写入元数据失败")
+	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "remove_scope_sessions").
@@ -574,7 +654,14 @@ func (sc *SessionController) RemoveAll() {
 
 	sc.SessionCache = make(map[string]*ChainSession)
 	sc.MetaMap = make(map[SessionScope]*ScopeSessionsMeta)
-	os.RemoveAll(sc.BasePath)
+	if err := os.RemoveAll(sc.BasePath); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "remove_all").
+			Str("agent_id", sc.AgentID).
+			Str("base_path", sc.BasePath).
+			Err(err).
+			Msg("删除所有会话数据失败")
+	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "remove_all").
@@ -638,7 +725,9 @@ func (sc *SessionController) writeMetaFile() error {
 	}
 
 	metaFile := SessionPaths{}.MetaFile(sc.rootPath, sc.AgentID)
-	os.MkdirAll(filepath.Dir(metaFile), 0o755)
+	if err := os.MkdirAll(filepath.Dir(metaFile), 0o755); err != nil {
+		return fmt.Errorf("创建元数据目录失败: %w", err)
+	}
 
 	data, err := json.MarshalIndent(metaData, "", "  ")
 	if err != nil {

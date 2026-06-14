@@ -489,7 +489,8 @@ func TestGetDirectSessionData(t *testing.T) {
 	instance.mu.Unlock()
 
 	// 先创建会话
-	CreateDirectSession("a1", "u1", "s1")
+	_, _, err := CreateDirectSession("a1", "u1", "s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	// 获取会话数据
 	data := GetDirectSessionData("a1", "u1")
@@ -513,7 +514,8 @@ func TestUpdateDirectSessionData(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("a1", "u1", "s1")
+	_, _, err := CreateDirectSession("a1", "u1", "s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	// 更新会话数据
 	ok := UpdateDirectSessionData("a1", "u1", map[string]any{"key": "val"})
@@ -538,8 +540,10 @@ func TestAddDirectSessionDownstream(t *testing.T) {
 	instance.mu.Unlock()
 
 	// 创建两个 Agent 的会话
-	CreateDirectSession("caller-agent", "u1", "caller-s1")
-	CreateDirectSession("target-agent", "u2", "target-s1")
+	_, _, err := CreateDirectSession("caller-agent", "u1", "caller-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
+	_, _, err = CreateDirectSession("target-agent", "u2", "target-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	ok := AddDirectSessionDownstream("caller-agent", "u1", "target-agent", "u2", SharingPolicy{Permission: PermissionRead})
 	assert.True(t, ok, "添加下游关系应成功")
@@ -556,7 +560,8 @@ func TestAddDirectSessionDownstream_调用方Agent不存在(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("target-agent", "u2", "target-s1")
+	_, _, err := CreateDirectSession("target-agent", "u2", "target-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	ok := AddDirectSessionDownstream("nonexistent", "u1", "target-agent", "u2", SharingPolicy{Permission: PermissionRead})
 	assert.False(t, ok, "调用方 Agent 不存在时应返回 false")
@@ -573,7 +578,8 @@ func TestAddDirectSessionDownstream_目标Agent不存在(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("caller-agent", "u1", "caller-s1")
+	_, _, err := CreateDirectSession("caller-agent", "u1", "caller-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	ok := AddDirectSessionDownstream("caller-agent", "u1", "nonexistent", "u2", SharingPolicy{Permission: PermissionRead})
 	assert.False(t, ok, "目标 Agent 不存在时应返回 false")
@@ -590,8 +596,10 @@ func TestAddDirectSessionDownstream_调用方会话不存在(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("caller-agent", "u1", "caller-s1")
-	CreateDirectSession("target-agent", "u2", "target-s1")
+	_, _, err := CreateDirectSession("caller-agent", "u1", "caller-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
+	_, _, err = CreateDirectSession("target-agent", "u2", "target-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	// 使用不存在的用户 ID，无法找到活跃会话
 	ok := AddDirectSessionDownstream("caller-agent", "nonexistent-user", "target-agent", "u2", SharingPolicy{Permission: PermissionRead})
@@ -609,8 +617,10 @@ func TestAddDirectSessionDownstream_目标会话不存在(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("caller-agent", "u1", "caller-s1")
-	CreateDirectSession("target-agent", "u2", "target-s1")
+	_, _, err := CreateDirectSession("caller-agent", "u1", "caller-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
+	_, _, err = CreateDirectSession("target-agent", "u2", "target-s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	// 使用不存在的目标用户 ID
 	ok := AddDirectSessionDownstream("caller-agent", "u1", "target-agent", "nonexistent-user", SharingPolicy{Permission: PermissionRead})
@@ -628,7 +638,8 @@ func TestCleanupUserSessions(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("a1", "u1", "s1")
+	_, _, err := CreateDirectSession("a1", "u1", "s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	results, err := CleanupUserSessions("a1", "u1")
 	assert.NoError(t, err, "CleanupUserSessions 不应返回错误")
@@ -652,7 +663,8 @@ func TestGetUserSessionHistory(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("a1", "u1", "s1")
+	_, _, err := CreateDirectSession("a1", "u1", "s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
 	sessions := GetUserSessionHistory("a1", "u1")
 	assert.NotNil(t, sessions, "已注册的 Agent 应返回会话列表")
@@ -673,9 +685,10 @@ func TestFlushUserSession(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	CreateDirectSession("a1", "u1", "s1")
+	_, _, err := CreateDirectSession("a1", "u1", "s1")
+	require.NoError(t, err, "CreateDirectSession 应成功")
 
-	err := FlushUserSession("a1", "u1")
+	err = FlushUserSession("a1", "u1")
 	assert.NoError(t, err, "FlushUserSession 应成功")
 
 	// 清理

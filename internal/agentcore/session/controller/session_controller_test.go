@@ -43,7 +43,8 @@ func TestSessionController_CreateIfNotExists_已有active(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	isNew, session, err := sc.CreateIfNotExists(scope, "s2")
 	if err != nil {
@@ -62,9 +63,10 @@ func TestSessionController_CreateIfNotExists_sessionID重复(t *testing.T) {
 	sc := NewSessionController("a1", tmpDir)
 	scope1 := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
 	scope2 := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u2"}}
-	sc.CreateIfNotExists(scope1, "s1")
+	_, _, err := sc.CreateIfNotExists(scope1, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
-	_, _, err := sc.CreateIfNotExists(scope2, "s1")
+	_, _, err = sc.CreateIfNotExists(scope2, "s1")
 	if err == nil {
 		t.Error("sessionID 重复应返回错误")
 	}
@@ -74,7 +76,8 @@ func TestSessionController_GetScopeActiveSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	session := sc.GetScopeActiveSession(scope)
 	if session == nil {
@@ -99,7 +102,8 @@ func TestSessionController_GetScopeSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	sessions := sc.GetScopeSessions(scope)
 	if len(sessions) != 1 {
@@ -119,14 +123,16 @@ func TestSessionController_ActivateSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// 手动添加第二个会话
 	scope2 := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u2"}}
-	sc.CreateIfNotExists(scope2, "s2")
+	_, _, err = sc.CreateIfNotExists(scope2, "s2")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// 激活 s2（不同 scope 下的）
-	err := sc.ActivateSession("s2")
+	err = sc.ActivateSession("s2")
 	if err != nil {
 		t.Fatalf("ActivateSession() 返回错误: %v", err)
 	}
@@ -144,14 +150,15 @@ func TestSessionController_ActivateSession_从元数据加载(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// Flush 后从缓存移除
 	require.NoError(t, sc.Flush())
 	delete(sc.SessionCache, "s1")
 
 	// 通过元数据激活（应触发从元数据加载）
-	err := sc.ActivateSession("s1")
+	err = sc.ActivateSession("s1")
 	require.NoError(t, err, "从元数据激活会话应成功")
 }
 
@@ -159,7 +166,8 @@ func TestSessionController_GetScopeMeta(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	meta := sc.GetScopeMeta(scope)
 	if meta.ActiveSession != "s1" {
@@ -180,7 +188,8 @@ func TestSessionController_ListMetas(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	metas := sc.ListMetas()
 	if len(metas) != 1 {
@@ -192,7 +201,8 @@ func TestSessionController_FlushAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// Flush
 	if err := sc.Flush(); err != nil {
@@ -224,9 +234,10 @@ func TestSessionController_FlushSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
-	err := sc.FlushSession("s1")
+	err = sc.FlushSession("s1")
 	assert.NoError(t, err, "FlushSession 应成功")
 }
 
@@ -241,9 +252,10 @@ func TestSessionController_FlushScope(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
-	err := sc.FlushScope(scope)
+	err = sc.FlushScope(scope)
 	assert.NoError(t, err, "FlushScope 应成功")
 }
 
@@ -251,12 +263,13 @@ func TestSessionController_LoadScope(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 	require.NoError(t, sc.Flush())
 
 	// 新控制器加载指定作用域
 	sc2 := NewSessionController("a1", tmpDir)
-	err := sc2.LoadScope(scope, true)
+	err = sc2.LoadScope(scope, true)
 	assert.NoError(t, err, "LoadScope 应成功")
 }
 
@@ -275,8 +288,8 @@ func TestSessionController_Load_元数据文件损坏(t *testing.T) {
 
 	// 创建损坏的元数据文件
 	metaFile := SessionPaths{}.MetaFile(tmpDir, "a1")
-	os.MkdirAll(filepath.Dir(metaFile), 0o755)
-	os.WriteFile(metaFile, []byte("invalid json {{{"), 0o644)
+	require.NoError(t, os.MkdirAll(filepath.Dir(metaFile), 0o755))
+	require.NoError(t, os.WriteFile(metaFile, []byte("invalid json {{{"), 0o644))
 
 	sc2 := NewSessionController("a1", tmpDir)
 	err := sc2.Load(true)
@@ -287,7 +300,8 @@ func TestSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// 手动添加非活跃会话
 	scopeMeta := sc.MetaMap[scope]
@@ -297,7 +311,7 @@ func TestSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 
 	// 手动创建 session 目录
 	sessionDir := SessionPaths{}.SessionDir(tmpDir, "a1", "s2")
-	os.MkdirAll(sessionDir, 0o755)
+	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 
 	results, err := sc.CleanupScopeInactiveSessions(scope)
 	if err != nil {
@@ -326,7 +340,8 @@ func TestSessionController_RemoveSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	removed := sc.RemoveSession("s1", nil)
 	if len(removed) != 1 {
@@ -344,7 +359,8 @@ func TestSessionController_RemoveSession_指定作用域(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	scopePtr := &scope
 	removed := sc.RemoveSession("s1", scopePtr)
@@ -355,7 +371,8 @@ func TestSessionController_RemoveScopeSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	removed := sc.RemoveScopeSessions(scope)
 	if len(removed) != 1 {
@@ -375,7 +392,8 @@ func TestSessionController_RemoveAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	sc.CreateIfNotExists(scope, "s1")
+	_, _, err := sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	sc.RemoveAll()
 	if len(sc.SessionCache) != 0 {
