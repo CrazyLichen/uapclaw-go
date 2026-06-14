@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -240,19 +241,23 @@ func TestNodeSessionFacade_Interact_流式模式返回错误(t *testing.T) {
 	}
 }
 
-// TestNodeSessionFacade_Interact_非流式模式 测试非流式模式下 Interact 桩返回 nil
-func TestNodeSessionFacade_Interact_非流式模式(t *testing.T) {
+// TestNodeSessionFacade_Interact_非流式模式触发GraphInterrupt 测试非流式模式下 Interact 触发 GraphInterrupt
+func TestNodeSessionFacade_Interact_非流式模式触发GraphInterrupt(t *testing.T) {
 	ws := internal.NewWorkflowSession()
 	ns := internal.NewNodeSession(ws, "node1", "Test", false)
 	facade := NewNodeSessionFacade(ns, false) // streamMode=false
 
-	result, err := facade.Interact(context.Background(), "question")
-	if err != nil {
-		t.Errorf("非流式模式下 Interact 桩应返回 nil 错误，实际=%v", err)
-	}
-	if result != nil {
-		t.Errorf("Interact 桩应返回 nil 结果，实际=%v", result)
-	}
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("非流式模式下 Interact 应触发 GraphInterrupt")
+		}
+		if _, ok := r.(*interaction.GraphInterrupt); !ok {
+			t.Fatalf("期望 *interaction.GraphInterrupt，得到 %T", r)
+		}
+	}()
+
+	facade.Interact(context.Background(), "question")
 }
 
 // ──────────────────────────── 流写入方法测试 ────────────────────────────

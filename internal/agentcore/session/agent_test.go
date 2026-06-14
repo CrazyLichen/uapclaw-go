@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -152,9 +153,19 @@ func TestSession_桩方法返回Nil(t *testing.T) {
 	if err := s.CloseStream(); err != nil {
 		t.Errorf("CloseStream 桩应返回 nil，实际 %v", err)
 	}
-	if err := s.Interact(nil); err != nil {
-		t.Errorf("Interact 桩应返回 nil，实际 %v", err)
-	}
+	// Interact 现在触发 SimpleAgentInteraction，会 panic AgentInterrupt
+	func() {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Error("Interact 应触发 AgentInterrupt panic")
+			}
+			if _, ok := r.(*interaction.AgentInterrupt); !ok {
+				t.Errorf("期望 *interaction.AgentInterrupt，得到 %T", r)
+			}
+		}()
+		s.Interact(nil)
+	}()
 	if ws := s.CreateWorkflowSession(); ws == nil {
 		t.Error("CreateWorkflowSession 应返回非 nil 的 WorkflowSession")
 	}
