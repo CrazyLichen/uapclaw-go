@@ -1,0 +1,118 @@
+package internal
+
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+)
+
+// TestNewAgentSession 测试构造函数
+func TestNewAgentSession(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s == nil {
+		t.Fatal("NewAgentSession 返回 nil")
+	}
+	if s.SessionID() != "test-id" {
+		t.Errorf("SessionID 期望 test-id，实际 %s", s.SessionID())
+	}
+}
+
+// TestAgentSession_接口实现 测试满足 BaseSession 接口
+func TestAgentSession_接口实现(t *testing.T) {
+	var _ session.BaseSession = NewAgentSession("test")
+}
+
+// TestAgentSession_默认字段为Nil 测试未传选项时字段返回 nil
+func TestAgentSession_默认字段为Nil(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s.Config() != nil {
+		t.Error("默认 Config 应为 nil")
+	}
+	if s.Tracer() != nil {
+		t.Error("默认 Tracer 应为 nil")
+	}
+	if s.StreamWriterManager() != nil {
+		t.Error("默认 StreamWriterManager 应为 nil")
+	}
+	if s.Checkpointer() != nil {
+		t.Error("默认 Checkpointer 应为 nil")
+	}
+	if s.ActorManager() != nil {
+		t.Error("默认 ActorManager 应为 nil")
+	}
+}
+
+// TestAgentSession_State不为Nil 测试默认创建 AgentStateCollection
+func TestAgentSession_State不为Nil(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s.State() == nil {
+		t.Error("State 不应为 nil")
+	}
+	// 验证 State 是 AgentStateCollection
+	coll, ok := s.State().(*state.AgentStateCollection)
+	if !ok {
+		t.Errorf("State 期望 *AgentStateCollection，实际 %T", s.State())
+	}
+	if coll == nil {
+		t.Error("AgentStateCollection 不应为 nil")
+	}
+}
+
+// TestAgentSession_选项注入 测试通过选项注入组件
+func TestAgentSession_选项注入(t *testing.T) {
+	config := map[string]any{"key": "value"}
+	s := NewAgentSession("test-id",
+		WithConfig(config),
+		WithCard("test-card"),
+	)
+
+	if s.Config() == nil {
+		t.Error("Config 不应为 nil")
+	}
+	if s.Card() == nil {
+		t.Error("Card 不应为 nil")
+	}
+}
+
+// TestAgentSession_ActorManager返回Nil 测试 ActorManager 始终返回 nil
+func TestAgentSession_ActorManager返回Nil(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s.ActorManager() != nil {
+		t.Error("ActorManager 应始终返回 nil")
+	}
+}
+
+// TestAgentSession_Close返回Nil 测试 Close 始终返回 nil
+func TestAgentSession_Close返回Nil(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if err := s.Close(); err != nil {
+		t.Errorf("Close 应返回 nil，实际 %v", err)
+	}
+}
+
+// TestAgentSession_Card 测试 Card 方法
+func TestAgentSession_Card(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s.Card() != nil {
+		t.Error("默认 Card 应为 nil")
+	}
+
+	s2 := NewAgentSession("test-id", WithCard("my-card"))
+	if s2.Card() != "my-card" {
+		t.Errorf("Card 期望 my-card，实际 %v", s2.Card())
+	}
+}
+
+// TestAgentSession_AgentSpan 测试 AgentSpan 方法
+func TestAgentSession_AgentSpan(t *testing.T) {
+	s := NewAgentSession("test-id")
+	if s.AgentSpan() != nil {
+		t.Error("默认 AgentSpan 应为 nil")
+	}
+
+	s2 := NewAgentSession("test-id", WithAgentSpan("my-span"))
+	if s2.AgentSpan() != "my-span" {
+		t.Errorf("AgentSpan 期望 my-span，实际 %v", s2.AgentSpan())
+	}
+}
