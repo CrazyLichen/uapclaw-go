@@ -343,12 +343,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 5.4 | ✅ | WorkflowSession | 从 AgentSession 创建；✅ 已回填 Workflow State StateCollection/CommitState/InMemoryState；✅ 已实现内部 WorkflowSession/NodeSession/SubWorkflowSession；✅ 已实现外部 WorkflowSession 门面；✅ 已回填 AgentSession.CreateWorkflowSession()；⤵️ Config 返回类型待 5.12 回填；⤵️ Tracer 返回类型待 5.11 回填；⤵️ StreamWriterManager 返回类型待 5.10 回填；⤵️ Checkpointer 返回类型待 5.8 回填；⤵️ ActorManager 返回类型待后续回填 | `openjiuwen/core/session/workflow.py` |
 | 5.5 | ✅ | SessionNode | ✅ NodeSessionFacade 门面（18 个方法）；✅ Session.GetState 改为 StateKey；✅ AgentStateCollection.GetGlobal/GetAgent 改为 StateKey；✅ 删除 WorkflowSession 多余状态方法；⤵️ 5.7 回填 Interaction；⤵️ 5.10 回填 StreamWriter；⤵️ 5.11 回填 Tracer；⤵️ 5.12 回填 Config | `openjiuwen/core/session/node.py` |
 | 5.6 | ☐ | SessionController | 会话控制器；⤴️ 需回填 5.1 SessionController scope | `openjiuwen/core/session/session_controller/` |
-| 5.7 | ☐ | Interaction | 交互管理 | `openjiuwen/core/session/interaction/` |
+| 5.7 | ☐ | Interaction | 交互管理；⤴️ 需回填 5.5 NodeSessionFacade.Interact() | `openjiuwen/core/session/interaction/` |
 | 5.8 | ☐ | Checkpointer 接口 + 工厂 | `CheckpointerFactory`，InMemory 实现；⤴️ 需回填 5.1 Checkpointer 持久化；⤴️ 需回填 5.2/5.3/5.4 Checkpointer 返回类型 | `openjiuwen/core/session/checkpointer/base.py` · `factory.py` |
 | 5.9 | ☐ | RedisCheckpointer | Redis 实现 | `openjiuwen/extensions/checkpointer/redis_checkpointer.py` |
-| 5.10 | ☐ | StreamWriter | `StreamMode` 枚举，`OutputSchema/TraceSchema/CustomSchema`；⤴️ 需回填 5.2/5.3/5.4 StreamWriterManager 返回类型 | `openjiuwen/core/session/stream/` |
-| 5.11 | ☐ | Session Tracer | 会话追踪；⤴️ 需回填 5.2/5.3/5.4 Tracer 返回类型 | `openjiuwen/core/session/tracer/` |
-| 5.12 | ☐ | Session Config | 会话配置；⤴️ 需回填 5.2/5.3/5.4 Config 返回类型 | `openjiuwen/core/session/config/` |
+| 5.10 | ☐ | StreamWriter | `StreamMode` 枚举，`OutputSchema/TraceSchema/CustomSchema`；⤴️ 需回填 5.2/5.3/5.4 StreamWriterManager 返回类型；⤴️ 需回填 5.5 NodeSessionFacade.WriteStream/WriteCustomStream() | `openjiuwen/core/session/stream/` |
+| 5.11 | ☐ | Session Tracer | 会话追踪；⤴️ 需回填 5.2/5.3/5.4 Tracer 返回类型；⤴️ 需回填 5.5 NodeSessionFacade.Trace/TraceError() | `openjiuwen/core/session/tracer/` |
+| 5.12 | ☐ | Session Config | 会话配置；⤴️ 需回填 5.2/5.3/5.4 Config 返回类型；⤴️ 需回填 5.5 NodeSessionFacade.GetEnv/GetNodeConfig() | `openjiuwen/core/session/config/` |
 | 5.13 | ☐ | Session Constants | 会话常量 | `openjiuwen/core/session/constants.py` |
 | 5.14 | ☐ | Session Utils | 会话工具函数 | `openjiuwen/core/session/utils.py` |
 | **5.x 上下文引擎** | — | | | |
