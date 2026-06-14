@@ -44,6 +44,11 @@ func ListKey(keys []any) StateKey {
 
 // ──────────────────────────── StateKey 方法 ────────────────────────────
 
+// IsZero 判断 StateKey 是否为零值（未设置）
+func (k StateKey) IsZero() bool {
+	return k.value == nil
+}
+
 // Type 返回 StateKey 的类型
 func (k StateKey) Type() StateKeyType {
 	return k.keyType
