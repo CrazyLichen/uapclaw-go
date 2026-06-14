@@ -3,7 +3,6 @@ package internal
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -16,11 +15,6 @@ func TestNewAgentSession(t *testing.T) {
 	if s.SessionID() != "test-id" {
 		t.Errorf("SessionID 期望 test-id，实际 %s", s.SessionID())
 	}
-}
-
-// TestAgentSession_接口实现 测试满足 BaseSession 接口
-func TestAgentSession_接口实现(t *testing.T) {
-	var _ session.BaseSession = NewAgentSession("test")
 }
 
 // TestAgentSession_默认字段为Nil 测试未传选项时字段返回 nil
@@ -114,5 +108,38 @@ func TestAgentSession_AgentSpan(t *testing.T) {
 	s2 := NewAgentSession("test-id", WithAgentSpan("my-span"))
 	if s2.AgentSpan() != "my-span" {
 		t.Errorf("AgentSpan 期望 my-span，实际 %v", s2.AgentSpan())
+	}
+}
+
+// TestAgentSession_WithTracer 测试 WithTracer 选项
+func TestAgentSession_WithTracer(t *testing.T) {
+	s := NewAgentSession("test-id", WithTracer("my-tracer"))
+	if s.Tracer() != "my-tracer" {
+		t.Errorf("Tracer 期望 my-tracer，实际 %v", s.Tracer())
+	}
+}
+
+// TestAgentSession_WithStreamWriterManager 测试 WithStreamWriterManager 选项
+func TestAgentSession_WithStreamWriterManager(t *testing.T) {
+	s := NewAgentSession("test-id", WithStreamWriterManager("my-swm"))
+	if s.StreamWriterManager() != "my-swm" {
+		t.Errorf("StreamWriterManager 期望 my-swm，实际 %v", s.StreamWriterManager())
+	}
+}
+
+// TestAgentSession_WithCheckpointer 测试 WithCheckpointer 选项
+func TestAgentSession_WithCheckpointer(t *testing.T) {
+	s := NewAgentSession("test-id", WithCheckpointer("my-cp"))
+	if s.Checkpointer() != "my-cp" {
+		t.Errorf("Checkpointer 期望 my-cp，实际 %v", s.Checkpointer())
+	}
+}
+
+// TestAgentSession_WithState 测试 WithState 选项
+func TestAgentSession_WithState(t *testing.T) {
+	customState := state.NewInMemoryState()
+	s := NewAgentSession("test-id", WithState(customState))
+	if s.State() != customState {
+		t.Errorf("State 期望 customState 实例，实际 %v", s.State())
 	}
 }

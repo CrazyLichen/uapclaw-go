@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -164,4 +165,10 @@ func TestProxySession_NilStub时Panic(t *testing.T) {
 			tt.fn()
 		})
 	}
+}
+
+// TestAgentSession_接口实现 在 session 包中验证 AgentSession 满足 BaseSession 接口
+// （internal 包不能导入 session 包，否则循环依赖）
+func TestAgentSession_接口实现(t *testing.T) {
+	var _ BaseSession = internal.NewAgentSession("test")
 }
