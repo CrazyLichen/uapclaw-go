@@ -1,5 +1,14 @@
 package state
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// StateKey 状态访问键，封装 string/map/slice 三态
+// 内部用 value 字段存储实际值，keyType 标识具体类型
+type StateKey struct {
+	keyType StateKeyType
+	value   any // 存储 string / map[string]any / []any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // StateKeyType 标识 StateKey 的类型
@@ -13,15 +22,6 @@ const (
 	// StateKeyList list schema 类型
 	StateKeyList
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// StateKey 状态访问键，封装 string/map/slice 三态
-// 内部用 value 字段存储实际值，keyType 标识具体类型
-type StateKey struct {
-	keyType StateKeyType
-	value   any // 存储 string / map[string]any / []any
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

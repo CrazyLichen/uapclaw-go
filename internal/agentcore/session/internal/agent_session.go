@@ -113,8 +113,6 @@ func WithAgentSpan(span any) AgentSessionOption {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Config 获取会话配置
 func (s *AgentSession) Config() any {
 	return s.config
@@ -164,3 +162,5 @@ func (s *AgentSession) Card() any {
 func (s *AgentSession) AgentSpan() any {
 	return s.agentSpan
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

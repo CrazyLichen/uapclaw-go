@@ -42,6 +42,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 确保编译时接口合规
+var _ reranker.BaseReranker = (*StandardReranker)(nil)
+
+// 抑制未使用导入警告
+var _ = fmt.Sprintf
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithMaxRetries 设置最大重试次数
@@ -275,9 +281,3 @@ func validateStandardConfig(docs []any) error {
 func formatAPIBase(apiBase, endPoint string) string {
 	return strings.TrimSuffix(apiBase, endPoint)
 }
-
-// 确保编译时接口合规
-var _ reranker.BaseReranker = (*StandardReranker)(nil)
-
-// 抑制未使用导入警告
-var _ = fmt.Sprintf

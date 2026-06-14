@@ -68,6 +68,16 @@ type dashscopeResponse struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// dashscopeInputMode DashScope API 输入模式
+type dashscopeInputMode int
+
+const (
+	// dashscopeInputTexts 纯文本模式，input 使用 {"texts": [...]} 格式
+	dashscopeInputTexts dashscopeInputMode = iota
+	// dashscopeInputMultimodal 多模态模式，input 使用 [{...}] 格式
+	dashscopeInputMultimodal
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -146,16 +156,6 @@ func NewDashscopeEmbedding(config EmbeddingConfig, opts ...DashscopeEmbeddingOpt
 
 	return ds
 }
-
-// dashscopeInputMode DashScope API 输入模式
-type dashscopeInputMode int
-
-const (
-	// dashscopeInputTexts 纯文本模式，input 使用 {"texts": [...]} 格式
-	dashscopeInputTexts dashscopeInputMode = iota
-	// dashscopeInputMultimodal 多模态模式，input 使用 [{...}] 格式
-	dashscopeInputMultimodal
-)
 
 // EmbedQuery 将单条查询文本转换为向量。
 func (ds *DashscopeEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {

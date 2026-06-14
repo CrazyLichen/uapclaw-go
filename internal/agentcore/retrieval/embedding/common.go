@@ -48,6 +48,9 @@ type MultimodalEmbedder interface {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// EmbeddingTask 嵌入任务函数类型。
+type EmbeddingTask func() ([][]float64, error)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -125,9 +128,6 @@ func BatchTexts(texts []string, batchSize int) [][]string {
 	}
 	return batches
 }
-
-// EmbeddingTask 嵌入任务函数类型。
-type EmbeddingTask func() ([][]float64, error)
 
 // ExecuteWithConcurrency 通用并发执行框架。
 //

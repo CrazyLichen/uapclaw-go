@@ -9,8 +9,7 @@
 //
 //	codec/
 //	├── doc.go                  # 包文档
-//	├── aes_storage_codec.go    # AES-256-GCM 存储编解码器
-//	└── aes_storage_codec_test.go
+//	└── aes_storage_codec.go    # AES-256-GCM 存储编解码器
 //
 // 对应 Python 代码：
 //

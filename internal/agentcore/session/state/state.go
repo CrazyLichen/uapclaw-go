@@ -1,6 +1,6 @@
 package state
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ReadableState 只读状态访问接口
 type ReadableState interface {
@@ -17,9 +17,6 @@ type RecoverableState interface {
 	// SetState 从快照恢复状态
 	SetState(state map[string]any)
 }
-
-// Transformer 状态转换函数，接受只读状态视图返回任意值
-type Transformer func(readable ReadableState) any
 
 // State 可读写状态接口，组合只读和可恢复能力
 type State interface {
@@ -46,6 +43,11 @@ type CommitState interface {
 	// SetUpdates 设置暂存更新
 	SetUpdates(updates map[string][]map[string]any)
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Transformer 状态转换函数，接受只读状态视图返回任意值
+type Transformer func(readable ReadableState) any
 
 // ──────────────────────────── 常量 ────────────────────────────
 

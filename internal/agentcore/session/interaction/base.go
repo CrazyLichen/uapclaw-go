@@ -5,7 +5,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // baseSession 交互所需的会话最小接口。
 // WorkflowInteraction/AgentInteraction 通过此接口委托给内部会话实例，
@@ -44,8 +44,6 @@ type InteractionOutputWriterProvider interface {
 type InteractionOutputWriter interface {
 	WriteInteraction(outputType string, index int, payload any) error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // Interrupt 图中断信号
 type Interrupt struct {

@@ -46,6 +46,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 确保编译时接口合规
+var _ reranker.BaseReranker = (*DashScopeReranker)(nil)
+
+// 抑制未使用导入警告
+var _ = fmt.Sprintf
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithDashScopeMaxRetries 设置最大重试次数。
@@ -344,9 +350,3 @@ func (r *DashScopeReranker) requestParams(query any, documents any, topN int, op
 
 	return params
 }
-
-// 确保编译时接口合规
-var _ reranker.BaseReranker = (*DashScopeReranker)(nil)
-
-// 抑制未使用导入警告
-var _ = fmt.Sprintf

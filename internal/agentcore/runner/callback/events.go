@@ -61,6 +61,22 @@ type ToolCallEventData struct {
 	Extra map[string]any
 }
 
+// SessionCallEventData Session 调用事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
+type SessionCallEventData struct {
+	// Event 事件类型
+	Event SessionCallEventType
+	// SessionID 会话标识
+	SessionID string
+	// Card Agent 身份元数据
+	Card any
+	// Session 会话实例
+	Session any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LLMCallEventType LLM 调用事件类型。
@@ -133,22 +149,6 @@ const (
 	// AgentSessionCreated Agent 会话创建事件
 	AgentSessionCreated SessionCallEventType = "_framework:agent_session_created"
 )
-
-// SessionCallEventData Session 调用事件数据，回调函数接收此结构获取上下文信息。
-//
-// 对应 Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
-type SessionCallEventData struct {
-	// Event 事件类型
-	Event SessionCallEventType
-	// SessionID 会话标识
-	SessionID string
-	// Card Agent 身份元数据
-	Card any
-	// Session 会话实例
-	Session any
-	// Extra 额外数据
-	Extra map[string]any
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

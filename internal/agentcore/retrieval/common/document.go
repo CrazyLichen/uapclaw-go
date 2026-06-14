@@ -16,20 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ModalityKind 内容模态类型。
-type ModalityKind string
-
-const (
-	// ModalityText 文本模态
-	ModalityText ModalityKind = "text"
-	// ModalityImage 图片模态
-	ModalityImage ModalityKind = "image"
-	// ModalityAudio 音频模态
-	ModalityAudio ModalityKind = "audio"
-	// ModalityVideo 视频模态
-	ModalityVideo ModalityKind = "video"
-)
-
 // ModalityField 单个模态字段。
 type ModalityField struct {
 	// Kind 模态类型
@@ -66,29 +52,24 @@ type addFieldOptions struct {
 	dataID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ModalityKind 内容模态类型。
+type ModalityKind string
+
+const (
+	// ModalityText 文本模态
+	ModalityText ModalityKind = "text"
+	// ModalityImage 图片模态
+	ModalityImage ModalityKind = "image"
+	// ModalityAudio 音频模态
+	ModalityAudio ModalityKind = "audio"
+	// ModalityVideo 视频模态
+	ModalityVideo ModalityKind = "video"
+)
+
 // AddFieldOption AddField 可选参数函数
 type AddFieldOption func(*addFieldOptions)
-
-// defaultAddFieldOptions 返回默认的 AddField 选项
-func defaultAddFieldOptions() addFieldOptions {
-	return addFieldOptions{}
-}
-
-// FieldFilePath 设置文件路径选项
-func FieldFilePath(path string) AddFieldOption {
-	return func(o *addFieldOptions) {
-		o.filePath = path
-	}
-}
-
-// FieldDataID 设置自定义数据 ID 选项
-func FieldDataID(id string) AddFieldOption {
-	return func(o *addFieldOptions) {
-		o.dataID = id
-	}
-}
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -108,6 +89,20 @@ var (
 // NewMultimodalDocument 创建空的多模态文档。
 func NewMultimodalDocument() *MultimodalDocument {
 	return &MultimodalDocument{}
+}
+
+// FieldFilePath 设置文件路径选项
+func FieldFilePath(path string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.filePath = path
+	}
+}
+
+// FieldDataID 设置自定义数据 ID 选项
+func FieldDataID(id string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.dataID = id
+	}
 }
 
 // AddField 添加模态字段，支持链式调用。
@@ -269,6 +264,11 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultAddFieldOptions 返回默认的 AddField 选项
+func defaultAddFieldOptions() addFieldOptions {
+	return addFieldOptions{}
+}
 
 // loadMultimodalData 加载多模态数据。
 //

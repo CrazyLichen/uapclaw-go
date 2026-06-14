@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // DataContainer 数据容器接口，封装会话核心业务数据，提供统一的访问、更新和序列化接口。
 // 对应 Python: openjiuwen/core/session/session_controller/data_container.py (DataContainer)
@@ -47,7 +47,11 @@ const (
 	PermissionRead Permission = iota + 1
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ContainerLoader 从序列化数据重建 DataContainer 的函数类型
+type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
+
+// ContainerOption DataContainer 创建选项
+type ContainerOption func(DataContainer)
 
 // SharingPolicy 下游会话共享策略，定义调用者可以访问被调用者数据的权限级别和字段范围。
 // 对应 Python: openjiuwen/core/session/session_controller/data_container.py (SharingPolicy)
@@ -94,14 +98,6 @@ var (
 	factoryOnce    sync.Once
 	factoryInstance *DataContainerFactory
 )
-
-// ──────────────────────────── 函数类型 ────────────────────────────
-
-// ContainerLoader 从序列化数据重建 DataContainer 的函数类型
-type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
-
-// ContainerOption DataContainer 创建选项
-type ContainerOption func(DataContainer)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -1,6 +1,17 @@
 package state
 
-// ──────────────────────────── 深拷贝 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// regexMaxLength 正则匹配最大长度
+	regexMaxLength = 1000
+	// nestedPathSplit 嵌套路径分隔符
+	nestedPathSplit = "."
+	// nestedPathListSplit 列表索引开始符
+	nestedPathListSplit = "["
+)
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // deepCopyMap 深拷贝 map[string]any
 func deepCopyMap(src map[string]any) map[string]any {
@@ -37,19 +48,6 @@ func deepCopyValue(val any) any {
 		return v // string/int/float/bool/nil 等原始值直接返回
 	}
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// regexMaxLength 正则匹配最大长度
-	regexMaxLength = 1000
-	// nestedPathSplit 嵌套路径分隔符
-	nestedPathSplit = "."
-	// nestedPathListSplit 列表索引开始符
-	nestedPathListSplit = "["
-)
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // splitNestedPath 拆分嵌套路径
 // 例: "a_1.b.c[1].d" → ["a_1", "b", "c", 1, "d"]
@@ -295,8 +293,6 @@ func deleteByKey(key any, source map[string]any) {
 	delete(source, keyStr)
 }
 
-// ──────────────────────────── 内部辅助函数 ────────────────────────────
-
 // getValueByNestedPathMap 与 getValueByNestedPath 类似，但返回 map[string]any
 // 用于 getBySchema 中根据前缀定位
 func getValueByNestedPathMap(nestedKey string, source map[string]any) map[string]any {
@@ -452,8 +448,6 @@ func parseListIndexes(part string) []any {
 	}
 	return result
 }
-
-// ──────────────────────────── 暂存更新工具 ────────────────────────────
 
 // deepCopyUpdates 深拷贝暂存更新数据
 func deepCopyUpdates(updates map[string][]map[string]any) map[string][]map[string]any {

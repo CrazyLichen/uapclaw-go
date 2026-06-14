@@ -8,18 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// LLMCallbackFunc LLM 回调函数类型。
-//
-// 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
-// 回调函数应为只读的（不应修改传入的数据），变换型回调在 6.24 节实现。
-type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
-
-// ToolCallbackFunc 工具回调函数类型。
-type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
-
-// SessionCallbackFunc Session 回调函数类型。
-type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
-
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
 // 统一管理 LLM、Tool 和 Session 事件的注册与触发。
@@ -35,6 +23,22 @@ type CallbackFramework struct {
 	toolCallbacks    map[ToolCallEventType][]ToolCallbackFunc
 	sessionCallbacks map[SessionCallEventType][]SessionCallbackFunc
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// LLMCallbackFunc LLM 回调函数类型。
+//
+// 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
+// 回调函数应为只读的（不应修改传入的数据），变换型回调在 6.24 节实现。
+type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
+
+// ToolCallbackFunc 工具回调函数类型。
+type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
+
+// SessionCallbackFunc Session 回调函数类型。
+type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
