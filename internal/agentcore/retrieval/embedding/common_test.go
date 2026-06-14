@@ -234,9 +234,9 @@ func TestCreateTLSConfigWithCert_文件不存在(t *testing.T) {
 func TestCreateTLSConfigWithCert_无效证书(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "cert-*.pem")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
-	tmpFile.WriteString("not a valid certificate")
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_, _ = tmpFile.WriteString("not a valid certificate")
+	require.NoError(t, tmpFile.Close())
 
 	_, err2 := createTLSConfigWithCert(tmpFile.Name())
 	require.Error(t, err2)

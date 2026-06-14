@@ -93,7 +93,8 @@ func TestGlobalSessionController_FlushAgent(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 
 	if err := g.FlushAgent("a1"); err != nil {
 		t.Fatalf("FlushAgent() 返回错误: %v", err)
@@ -113,25 +114,28 @@ func TestGlobalSessionController_FlushSession(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 
-	err := g.FlushSession("s1")
+	err = g.FlushSession("s1")
 	assert.NoError(t, err, "FlushSession 应成功")
 }
 
 func TestGlobalSessionController_FlushSession_未找到(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := newTestGlobalController(tmpDir)
-	g.CreateIfNotExistsAgent("a1")
+	_, _, err := g.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
 
-	err := g.FlushSession("nonexistent")
+	err = g.FlushSession("nonexistent")
 	assert.NoError(t, err, "未找到的 session 应返回 nil")
 }
 
 func TestGlobalSessionController_FlushAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := newTestGlobalController(tmpDir)
-	g.CreateIfNotExistsAgent("a1")
+	_, _, err := g.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
 
 	if err := g.FlushAll(); err != nil {
 		t.Fatalf("FlushAll() 返回错误: %v", err)
@@ -143,9 +147,10 @@ func TestGlobalSessionController_FlushScope(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 
-	err := g.FlushScope(scope)
+	err = g.FlushScope(scope)
 	assert.NoError(t, err, "FlushScope 应成功")
 }
 
@@ -154,13 +159,15 @@ func TestGlobalSessionController_LoadScope(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 	require.NoError(t, g.FlushAgent("a1"))
 
 	// 新控制器加载作用域
 	g2 := newTestGlobalController(tmpDir)
-	g2.CreateIfNotExistsAgent("a1")
-	err := g2.LoadScope(scope, true)
+	_, _, err = g2.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
+	err = g2.LoadScope(scope, true)
 	assert.NoError(t, err, "LoadScope 应成功")
 }
 
@@ -169,12 +176,13 @@ func TestGlobalSessionController_LoadAll(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 	require.NoError(t, g.FlushAgent("a1"))
 
 	// 新控制器加载全部
 	g2 := newTestGlobalController(tmpDir)
-	err := g2.LoadAll(true)
+	err = g2.LoadAll(true)
 	assert.NoError(t, err, "LoadAll 应成功")
 }
 
@@ -187,7 +195,8 @@ func TestGlobalSessionController_LoadAll_目录不存在(t *testing.T) {
 func TestGlobalSessionController_RemoveAgent(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := newTestGlobalController(tmpDir)
-	g.CreateIfNotExistsAgent("a1")
+	_, _, err := g.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
 
 	removed, err := g.RemoveAgent("a1")
 	if err != nil {
@@ -212,7 +221,8 @@ func TestGlobalSessionController_RemoveAgent_未找到(t *testing.T) {
 func TestGlobalSessionController_RemoveAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := newTestGlobalController(tmpDir)
-	g.CreateIfNotExistsAgent("a1")
+	_, _, err := g.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
 
 	g.RemoveAll()
 	if len(g.Controllers) != 0 {
@@ -225,8 +235,9 @@ func TestGlobalSessionController_LoadAgent(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 新控制器加载
 	g2 := newTestGlobalController(tmpDir)
@@ -242,13 +253,14 @@ func TestGlobalSessionController_CleanupOrphanFiles_dryRun(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 创建一个孤立目录
 	orphanDir := SessionPaths{}.SessionDir(tmpDir, "a1", "orphan-session")
-	os.MkdirAll(orphanDir, 0o755)
-	os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644)
+	require.NoError(t, os.MkdirAll(orphanDir, 0o755))
+	require.NoError(t, os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644))
 
 	result := g.CleanupOrphanFiles("a1", true)
 	if len(result["a1"]) != 1 {
@@ -269,13 +281,14 @@ func TestGlobalSessionController_CleanupOrphanFiles_删除(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 创建一个孤立目录
 	orphanDir := SessionPaths{}.SessionDir(tmpDir, "a1", "orphan-session")
-	os.MkdirAll(orphanDir, 0o755)
-	os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644)
+	require.NoError(t, os.MkdirAll(orphanDir, 0o755))
+	require.NoError(t, os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644))
 
 	result := g.CleanupOrphanFiles("a1", false)
 	if len(result["a1"]) != 1 {
@@ -293,13 +306,14 @@ func TestGlobalSessionController_CleanupOrphanFiles_空AgentID扫描全部(t *te
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 创建孤立目录
 	orphanDir := SessionPaths{}.SessionDir(tmpDir, "a1", "orphan-session")
-	os.MkdirAll(orphanDir, 0o755)
-	os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644)
+	require.NoError(t, os.MkdirAll(orphanDir, 0o755))
+	require.NoError(t, os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644))
 
 	// 空 agentID 应扫描所有 Agent
 	result := g.CleanupOrphanFiles("", true)
@@ -314,13 +328,13 @@ func TestGlobalSessionController_CleanupOrphanFiles_未注册Agent的磁盘目�
 	agentDir := SessionPaths{}.AgentDir(tmpDir, "disk-only-agent")
 	sessionsDir := SessionPaths{}.SessionsDir(tmpDir, "disk-only-agent")
 	orphanDir := SessionPaths{}.SessionDir(tmpDir, "disk-only-agent", "orphan1")
-	os.MkdirAll(orphanDir, 0o755)
-	os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644)
+	require.NoError(t, os.MkdirAll(orphanDir, 0o755))
+	require.NoError(t, os.WriteFile(SessionPaths{}.StateFile(orphanDir), []byte("{}"), 0o644))
 	// 写一个空的 sessions.json
-	os.MkdirAll(sessionsDir, 0o755)
+	require.NoError(t, os.MkdirAll(sessionsDir, 0o755))
 	// 需要在 AgentDir 下创建 sessions.json 的上级目录
 	metaFile := SessionPaths{}.MetaFile(tmpDir, "disk-only-agent")
-	os.MkdirAll(filepath.Dir(metaFile), 0o755)
+	require.NoError(t, os.MkdirAll(filepath.Dir(metaFile), 0o755))
 	_ = agentDir
 
 	result := g.CleanupOrphanFiles("disk-only-agent", true)
@@ -332,12 +346,13 @@ func TestGlobalSessionController_CleanupOrphanFiles_downstreams目录跳过(t *t
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 创建 downstreams 目录（应被跳过）
 	dsDir := filepath.Join(SessionPaths{}.SessionsDir(tmpDir, "a1"), "downstreams")
-	os.MkdirAll(dsDir, 0o755)
+	require.NoError(t, os.MkdirAll(dsDir, 0o755))
 
 	result := g.CleanupOrphanFiles("a1", true)
 	// downstreams 目录应被跳过，不算作孤立目录
@@ -355,12 +370,13 @@ func TestGlobalSessionController_CleanupOrphanFiles_无stateFile跳过(t *testin
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
-	g.FlushAgent("a1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
+	require.NoError(t, g.FlushAgent("a1"))
 
 	// 创建一个没有 state.data 的子目录（不应被识别为孤立会话）
 	emptyDir := SessionPaths{}.SessionDir(tmpDir, "a1", "empty-dir")
-	os.MkdirAll(emptyDir, 0o755)
+	require.NoError(t, os.MkdirAll(emptyDir, 0o755))
 	// 不写 state.data
 
 	result := g.CleanupOrphanFiles("a1", true)
@@ -377,7 +393,8 @@ func TestGlobalSessionController_CleanupAgentInactiveSessions(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 
 	// 手动添加一个非活跃会话
 	scopeMeta := controller.MetaMap[scope]
@@ -402,7 +419,8 @@ func TestGlobalSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	g := newTestGlobalController(tmpDir)
 	_, controller, _ := g.CreateIfNotExistsAgent("a1")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "s1")
+	_, _, err := controller.CreateIfNotExists(scope, "s1")
+	require.NoError(t, err)
 
 	// 手动添加非活跃会话
 	scopeMeta := controller.MetaMap[scope]
@@ -694,7 +712,8 @@ func TestVisualizeCallChain(t *testing.T) {
 	session.AddDownstream("a2", "s2", SharingPolicy{Permission: PermissionRead})
 
 	// 手动注册 a2 控制器
-	instance.CreateIfNotExistsAgent("a2")
+	_, _, err := instance.CreateIfNotExistsAgent("a2")
+	require.NoError(t, err)
 
 	result := VisualizeCallChain("a1", "s1", 3)
 	if !contains(result, "调用链") {
@@ -718,7 +737,8 @@ func TestVisualizeCallChain_会话未找到(t *testing.T) {
 	instance.Controllers = make(map[string]*SessionController)
 	instance.mu.Unlock()
 
-	instance.CreateIfNotExistsAgent("a1")
+	_, _, err := instance.CreateIfNotExistsAgent("a1")
+	require.NoError(t, err)
 
 	result := VisualizeCallChain("a1", "nonexistent-session", 3)
 	assert.Contains(t, result, "未在", "会话未找到时应包含提示")
@@ -743,7 +763,8 @@ func TestVisualizeCallChain_带FieldScopes(t *testing.T) {
 		FieldScopes: map[string]struct{}{"name": {}, "age": {}},
 	})
 
-	instance.CreateIfNotExistsAgent("a2")
+	_, _, err := instance.CreateIfNotExistsAgent("a2")
+	require.NoError(t, err)
 
 	result := VisualizeCallChain("a1", "s1", 3)
 	assert.Contains(t, result, "字段范围", "应包含字段范围信息")
@@ -765,7 +786,8 @@ func TestOnAgentSessionCreated_正常注入(t *testing.T) {
 
 	_, controller, _ := instance.CreateIfNotExistsAgent("test-agent")
 	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
-	controller.CreateIfNotExists(scope, "test-session")
+	_, _, err := controller.CreateIfNotExists(scope, "test-session")
+	require.NoError(t, err)
 
 	// 获取会话并注入 StateAccessor
 	session := controller.SessionCache["test-session"]

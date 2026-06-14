@@ -402,7 +402,7 @@ func TestChainSession_Load_stateData损坏(t *testing.T) {
 	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 
 	// 写损坏的 state.data
-	os.WriteFile(filepath.Join(sessionDir, "state.data"), []byte("invalid json {{{"), 0o644)
+	require.NoError(t, os.WriteFile(filepath.Join(sessionDir, "state.data"), []byte("invalid json {{{"), 0o644))
 
 	cs := NewChainSession("a1", SessionScope{Scope: MainScope{}}, "s1", newFakeDataContainer(), sessionDir)
 	err := cs.Load()
