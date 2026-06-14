@@ -1,6 +1,10 @@
 package state
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -78,7 +82,13 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 		// 提交全部
 		for key, updates := range s.updates {
 			for _, update := range updates {
-				s.state.Update(update)
+				if err := s.state.Update(update); err != nil {
+					logger.Error(logger.ComponentAgentCore).
+						Err(err).
+						Str("action", "commit").
+						Str("node_id", key).
+						Msg("提交更新到底层 state 失败")
+				}
 			}
 			s.updates[key] = nil
 		}
@@ -91,7 +101,13 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 				continue
 			}
 			for _, update := range nodeUpdates {
-				s.state.Update(update)
+				if err := s.state.Update(update); err != nil {
+					logger.Error(logger.ComponentAgentCore).
+						Err(err).
+						Str("action", "commit").
+						Str("node_id", id).
+						Msg("提交更新到底层 state 失败")
+				}
 			}
 			s.updates[id] = nil
 		}

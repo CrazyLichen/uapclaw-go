@@ -152,7 +152,7 @@ func TestProxySession_NilStub时Panic(t *testing.T) {
 		{"SessionID", func() { p.SessionID() }},
 		{"Checkpointer", func() { p.Checkpointer() }},
 		{"ActorManager", func() { p.ActorManager() }},
-		{"Close", func() { p.Close() }},
+		{"Close", func() { _ = p.Close() }},
 	}
 
 	for _, tt := range panicTests {

@@ -96,7 +96,13 @@ func (f *NodeSessionFacade) GetSessionID() string {
 // 对应 Python: Session.update_state(data)
 func (f *NodeSessionFacade) UpdateState(data map[string]any) {
 	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		cs.Update(data)
+		if err := cs.Update(data); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Err(err).
+				Str("action", "update_state").
+				Str("node_id", f.GetComponentID()).
+				Msg("更新组件状态失败")
+		}
 	}
 }
 

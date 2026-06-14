@@ -103,7 +103,7 @@ func TestWorkflowInteraction_WaitUserInputs_队列空时触发GraphInterrupt(t *
 		}
 	}()
 
-	wi.WaitUserInputs(context.Background(), "question")
+	_, _ = wi.WaitUserInputs(context.Background(), "question")
 }
 
 // TestWorkflowInteraction_UserLatestInput_有缓存 测试缓存命中直接返回
@@ -133,7 +133,7 @@ func TestWorkflowInteraction_UserLatestInput_有缓存(t *testing.T) {
 			t.Fatalf("期望 *GraphInterrupt，得到 %T", r)
 		}
 	}()
-	wi.UserLatestInput(context.Background(), "value2")
+	_, _ = wi.UserLatestInput(context.Background(), "value2")
 }
 
 // TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt 测试无缓存中断
@@ -162,7 +162,7 @@ func TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt(t *te
 		}
 	}()
 
-	wi.UserLatestInput(context.Background(), "value")
+	_, _ = wi.UserLatestInput(context.Background(), "value")
 }
 
 // TestWorkflowInteraction_有StreamWriter 测试 StreamWriterManager 存在时写入交互输出
@@ -174,13 +174,13 @@ func TestWorkflowInteraction_有StreamWriter(t *testing.T) {
 	wi := NewWorkflowInteraction(session)
 
 	defer func() {
-		recover()
+		_ = recover()
 		if !writer.written {
 			t.Error("StreamWriterManager 存在时应写入交互输出")
 		}
 	}()
 
-	wi.WaitUserInputs(context.Background(), "question")
+	_, _ = wi.WaitUserInputs(context.Background(), "question")
 }
 
 // ──────────────────────────── SimpleAgentInteraction 测试 ────────────────────────────
@@ -215,7 +215,7 @@ func TestSimpleAgentInteraction_WaitUserInputs_触发AgentInterrupt(t *testing.T
 		}
 	}()
 
-	sai.WaitUserInputs(context.Background(), "test_msg")
+	_ = sai.WaitUserInputs(context.Background(), "test_msg")
 }
 
 // TestSimpleAgentInteraction_WaitUserInputs_有Checkpointer 测试 checkpointer 被调用
@@ -226,13 +226,13 @@ func TestSimpleAgentInteraction_WaitUserInputs_有Checkpointer(t *testing.T) {
 	sai := NewSimpleAgentInteraction(session)
 
 	defer func() {
-		recover()
+		_ = recover()
 		if !cp.interrupted {
 			t.Error("checkpointer.InterruptAgentExecute 应被调用")
 		}
 	}()
 
-	sai.WaitUserInputs(context.Background(), "msg")
+	_ = sai.WaitUserInputs(context.Background(), "msg")
 }
 
 // ──────────────────────────── AgentInteraction 测试 ────────────────────────────
@@ -289,7 +289,7 @@ func TestAgentInteraction_WaitUserInputs_队列空时触发AgentInterrupt(t *tes
 		}
 	}()
 
-	ai.WaitUserInputs(context.Background(), "value")
+	_, _ = ai.WaitUserInputs(context.Background(), "value")
 }
 
 // TestAgentInteraction_WaitUserInputs_有StreamWriter 测试流输出写入
@@ -302,13 +302,13 @@ func TestAgentInteraction_WaitUserInputs_有StreamWriter(t *testing.T) {
 	ai := NewAgentInteraction(session)
 
 	defer func() {
-		recover()
+		_ = recover()
 		if !writer.written {
 			t.Error("StreamWriterManager 存在时应写入交互输出")
 		}
 	}()
 
-	ai.WaitUserInputs(context.Background(), "value")
+	_, _ = ai.WaitUserInputs(context.Background(), "value")
 }
 
 // ──────────────────────────── 依赖接口类型断言测试 ────────────────────────────

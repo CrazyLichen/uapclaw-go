@@ -257,7 +257,7 @@ func TestNodeSessionFacade_Interact_非流式模式触发GraphInterrupt(t *testi
 		}
 	}()
 
-	facade.Interact(context.Background(), "question")
+	_, _ = facade.Interact(context.Background(), "question")
 }
 
 // ──────────────────────────── 流写入方法测试 ────────────────────────────

@@ -148,7 +148,12 @@ func (b *BaseInteraction) initInteractiveInputs() {
 			if cs, ok := st.(*state.WorkflowCommitState); ok {
 				cs.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
 			} else {
-				st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs})
+				if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+					logger.Error(logger.ComponentAgentCore).
+						Err(err).
+						Str("action", "init_interactive_inputs").
+						Msg("更新交互输入到 session state 失败")
+				}
 			}
 		}
 		if len(b.interactiveInputs) > 0 {
@@ -170,7 +175,12 @@ func (b *BaseInteraction) initInteractiveInputs() {
 		if cs, ok := st.(*state.WorkflowCommitState); ok {
 			cs.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
 		} else {
-			st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs})
+			if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+				logger.Error(logger.ComponentAgentCore).
+					Err(err).
+					Str("action", "init_interactive_inputs").
+					Msg("写回交互输入到 session state 失败")
+			}
 		}
 		b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 	}

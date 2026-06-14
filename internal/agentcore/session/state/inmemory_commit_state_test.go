@@ -2,6 +2,8 @@ package state
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewInMemoryCommitState_默认 验证默认构造创建非 nil 实例。
@@ -15,7 +17,7 @@ func TestNewInMemoryCommitState_默认(t *testing.T) {
 // TestNewInMemoryCommitState_传入State 验证传入底层 State 构造。
 func TestNewInMemoryCommitState_传入State(t *testing.T) {
 	inner := NewInMemoryState()
-	inner.Update(map[string]any{"a": 1})
+	require.NoError(t, inner.Update(map[string]any{"a": 1}))
 	cs := NewInMemoryCommitState(inner)
 	result := cs.Get(StringKey("a"))
 	if result != 1 {
@@ -129,9 +131,9 @@ func TestInMemoryCommitState_SetUpdates_nil(t *testing.T) {
 // TestInMemoryCommitState_GetByPrefix 验证委托给底层 state 的 GetByPrefix。
 func TestInMemoryCommitState_GetByPrefix(t *testing.T) {
 	inner := NewInMemoryState()
-	inner.Update(map[string]any{
+	require.NoError(t, inner.Update(map[string]any{
 		"node1": map[string]any{"name": "alice"},
-	})
+	}))
 	cs := NewInMemoryCommitState(inner)
 	result := cs.GetByPrefix(StringKey("name"), "node1")
 	if result != "alice" {
@@ -142,7 +144,7 @@ func TestInMemoryCommitState_GetByPrefix(t *testing.T) {
 // TestInMemoryCommitState_GetByTransformer 验证委托给底层 state 的 GetByTransformer。
 func TestInMemoryCommitState_GetByTransformer(t *testing.T) {
 	inner := NewInMemoryState()
-	inner.Update(map[string]any{"a": 1})
+	require.NoError(t, inner.Update(map[string]any{"a": 1}))
 	cs := NewInMemoryCommitState(inner)
 	result := cs.GetByTransformer(func(r ReadableState) any {
 		return r.Get(StringKey("a"))
@@ -155,7 +157,7 @@ func TestInMemoryCommitState_GetByTransformer(t *testing.T) {
 // TestInMemoryCommitState_GetState 验证委托给底层 state 的 GetState。
 func TestInMemoryCommitState_GetState(t *testing.T) {
 	inner := NewInMemoryState()
-	inner.Update(map[string]any{"a": 1})
+	require.NoError(t, inner.Update(map[string]any{"a": 1}))
 	cs := NewInMemoryCommitState(inner)
 	state := cs.GetState()
 	if state["a"] != 1 {
@@ -166,7 +168,7 @@ func TestInMemoryCommitState_GetState(t *testing.T) {
 // TestInMemoryCommitState_SetState 验证委托给底层 state 的 SetState。
 func TestInMemoryCommitState_SetState(t *testing.T) {
 	inner := NewInMemoryState()
-	inner.Update(map[string]any{"a": 1})
+	require.NoError(t, inner.Update(map[string]any{"a": 1}))
 	cs := NewInMemoryCommitState(inner)
 	cs.SetState(map[string]any{"b": 2})
 	if cs.Get(StringKey("a")) != nil {

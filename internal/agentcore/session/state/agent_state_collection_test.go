@@ -2,6 +2,8 @@ package state
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewAgentStateCollection 测试构造函数
@@ -68,7 +70,7 @@ func TestAgentStateCollection_UpdateGlobal(t *testing.T) {
 // TestAgentStateCollection_Get_零值Key返回完整Agent状态 测试零值 key 返回完整 Agent 状态
 func TestAgentStateCollection_Get_零值Key返回完整Agent状态(t *testing.T) {
 	coll := NewAgentStateCollection()
-	coll.Update(map[string]any{"x": "y"})
+	require.NoError(t, coll.Update(map[string]any{"x": "y"}))
 
 	result := coll.GetAgent(StateKey{})
 	m, ok := result.(map[string]any)
@@ -83,7 +85,7 @@ func TestAgentStateCollection_Get_零值Key返回完整Agent状态(t *testing.T)
 // TestAgentStateCollection_Get_有Key返回对应值 测试有 key 返回对应值
 func TestAgentStateCollection_Get_有Key返回对应值(t *testing.T) {
 	coll := NewAgentStateCollection()
-	coll.Update(map[string]any{"x": "y"})
+	require.NoError(t, coll.Update(map[string]any{"x": "y"}))
 
 	result := coll.GetAgent(StringKey("x"))
 	if result != "y" {
@@ -94,8 +96,8 @@ func TestAgentStateCollection_Get_有Key返回对应值(t *testing.T) {
 // TestAgentStateCollection_Update 测试更新 Agent 状态
 func TestAgentStateCollection_Update(t *testing.T) {
 	coll := NewAgentStateCollection()
-	coll.Update(map[string]any{"a": 1})
-	coll.Update(map[string]any{"b": 2})
+	require.NoError(t, coll.Update(map[string]any{"a": 1}))
+	require.NoError(t, coll.Update(map[string]any{"b": 2}))
 
 	if coll.GetAgent(StringKey("a")) != 1 {
 		t.Errorf("期望 a=1，实际 %v", coll.GetAgent(StringKey("a")))
@@ -109,7 +111,7 @@ func TestAgentStateCollection_Update(t *testing.T) {
 func TestAgentStateCollection_GetState(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"g": 1})
-	coll.Update(map[string]any{"a": 2})
+	require.NoError(t, coll.Update(map[string]any{"a": 2}))
 
 	st := coll.GetState()
 	gs, ok := st[GlobalStateKey]
@@ -135,7 +137,7 @@ func TestAgentStateCollection_GetState(t *testing.T) {
 func TestAgentStateCollection_SetState(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"g": 1})
-	coll.Update(map[string]any{"a": 2})
+	require.NoError(t, coll.Update(map[string]any{"a": 2}))
 
 	snapshot := coll.GetState()
 
@@ -155,7 +157,7 @@ func TestAgentStateCollection_SetState(t *testing.T) {
 func TestAgentStateCollection_Dump(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"g": 1})
-	coll.Update(map[string]any{"a": 2})
+	require.NoError(t, coll.Update(map[string]any{"a": 2}))
 
 	dump := coll.Dump()
 	if _, ok := dump[GlobalStateKey]; !ok {
@@ -170,7 +172,7 @@ func TestAgentStateCollection_Dump(t *testing.T) {
 func TestAgentStateCollection_状态隔离(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"key": "global_val"})
-	coll.Update(map[string]any{"key": "agent_val"})
+	require.NoError(t, coll.Update(map[string]any{"key": "agent_val"}))
 
 	if coll.GetGlobal(StringKey("key")) != "global_val" {
 		t.Errorf("全局状态期望 global_val，实际 %v", coll.GetGlobal(StringKey("key")))
@@ -183,7 +185,7 @@ func TestAgentStateCollection_状态隔离(t *testing.T) {
 // TestAgentStateCollection_GetByPrefix 测试前缀查询
 func TestAgentStateCollection_GetByPrefix(t *testing.T) {
 	coll := NewAgentStateCollection()
-	coll.Update(map[string]any{"nested": map[string]any{"child": "value"}})
+	require.NoError(t, coll.Update(map[string]any{"nested": map[string]any{"child": "value"}}))
 
 	result := coll.GetByPrefix(StringKey("child"), "nested")
 	if result != "value" {
@@ -194,7 +196,7 @@ func TestAgentStateCollection_GetByPrefix(t *testing.T) {
 // TestAgentStateCollection_GetByTransformer 测试转换函数
 func TestAgentStateCollection_GetByTransformer(t *testing.T) {
 	coll := NewAgentStateCollection()
-	coll.Update(map[string]any{"x": 42})
+	require.NoError(t, coll.Update(map[string]any{"x": 42}))
 
 	result := coll.GetByTransformer(func(r ReadableState) any {
 		return r.Get(StringKey("x"))
