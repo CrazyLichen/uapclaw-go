@@ -115,7 +115,7 @@ func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Opt
 	// 收集结果：搜索失败的集合初始化空切片，对齐 Python: output_dict[col] = []
 	for sr := range resultCh {
 		if sr.err != nil {
-			logger.Warn(logComponent).Err(sr.err).Str("collection", sr.collection).Msg("搜索集合失败")
+			logger.Warn(logComponent).Err(sr.err).Str("collection", sr.collection).Str("query", query).Msg("搜索集合失败")
 			results[sr.collection] = []map[string]any{}
 		} else {
 			results[sr.collection] = sr.result

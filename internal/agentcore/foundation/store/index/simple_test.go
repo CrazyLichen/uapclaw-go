@@ -302,6 +302,10 @@ func (f *fakeEmbedding) Dimension() int {
 	return f.dim
 }
 
+func (f *fakeEmbedding) DimensionWithContext(_ context.Context) (int, error) {
+	return f.dim, nil
+}
+
 // newTestIndex 创建用于测试的 SimpleMemoryIndex
 func newTestIndex() *SimpleMemoryIndex {
 	return NewSimpleMemoryIndex(newFakeKVStore(), newFakeVectorStore(), newFakeEmbedding())
@@ -860,10 +864,11 @@ func TestSearch_EmbeddingModel为nil时返回空(t *testing.T) {
 
 	results, err := idx.Search(ctx, "user1", "scope1", "查询", nil, 5)
 	if err != nil {
-		t.Fatalf("嵌入模型为 nil 时应返回 nil, nil, 实际 err=%v", err)
+		t.Fatalf("嵌入模型为 nil 时应返回空切片, nil, 实际 err=%v", err)
 	}
-	if results != nil {
-		t.Errorf("嵌入模型为 nil 时应返回 nil 结果, 实际 %v", results)
+	// 对齐 T-30 修复：Search 无结果时返回空切片而非 nil
+	if len(results) != 0 {
+		t.Errorf("嵌入模型为 nil 时应返回空切片, 实际 %v", results)
 	}
 }
 
@@ -1215,8 +1220,9 @@ func TestListMemories_无数据(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMemories 失败: %v", err)
 	}
-	if result != nil {
-		t.Errorf("无数据时应返回 nil, 实际 %v", result)
+	// 对齐 T-30 修复：无数据时返回空切片而非 nil
+	if len(result) != 0 {
+		t.Errorf("无数据时应返回空切片, 实际 %v", result)
 	}
 }
 
@@ -1517,13 +1523,13 @@ func TestListMemories_分页(t *testing.T) {
 		t.Errorf("分页应返回 2 条, 实际 %d", len(result))
 	}
 
-	// offset 超出范围应返回 nil
+	// offset 超出范围应返回空切片（对齐 T-30 修复）
 	result2, err := idx.ListMemories(ctx, "user1", "scope1", 100, 10, nil)
 	if err != nil {
 		t.Fatalf("ListMemories 失败: %v", err)
 	}
-	if result2 != nil {
-		t.Errorf("超出范围的分页应返回 nil, 实际 %v", result2)
+	if len(result2) != 0 {
+		t.Errorf("超出范围的分页应返回空切片, 实际 %v", result2)
 	}
 }
 
@@ -1751,6 +1757,10 @@ func (f *failingEmbedding) EmbedQuery(ctx context.Context, text string, opts ...
 
 func (f *failingEmbedding) Dimension() int {
 	return f.fakeEmbedding.Dimension()
+}
+
+func (f *failingEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
+	return f.fakeEmbedding.DimensionWithContext(ctx)
 }
 
 // ──────────────────────────── addIDToTracking 错误分支测试 ────────────────────────────
@@ -2002,10 +2012,10 @@ func TestDeleteByUser_DeleteCollection失败(t *testing.T) {
 	failVS := &failingVectorStore{fakeVectorStore: vs, failDeleteCollection: true}
 	idx.vectorStore = failVS
 
-	// DeleteByUser 不应返回错误（DeleteCollection 失败仅记录日志继续）
+	// 对齐 G-27/G-28 修复：DeleteCollection 失败时现在应返回错误（而非静默忽略）
 	err := idx.DeleteByUser(ctx, "user1")
-	if err != nil {
-		t.Errorf("DeleteCollection 失败时 DeleteByUser 不应返回错误, 实际 %v", err)
+	if err == nil {
+		t.Error("DeleteCollection 失败时 DeleteByUser 应返回错误")
 	}
 }
 
@@ -2026,7 +2036,7 @@ func TestDeleteByUserAndScope_ListCollectionNames失败(t *testing.T) {
 	}
 }
 
-// TestDeleteByUserAndScope_DeleteCollection失败 验证 DeleteCollection 失败时不返回错误（仅记录日志继续）
+// TestDeleteByUserAndScope_DeleteCollection失败 验证 DeleteCollection 失败时返回错误（对齐 G-27/G-28 修复）
 func TestDeleteByUserAndScope_DeleteCollection失败(t *testing.T) {
 	vs := newFakeVectorStore()
 	kvs := newFakeKVStore()
@@ -2043,10 +2053,10 @@ func TestDeleteByUserAndScope_DeleteCollection失败(t *testing.T) {
 	failVS := &failingVectorStore{fakeVectorStore: vs, failDeleteCollection: true}
 	idx.vectorStore = failVS
 
-	// DeleteCollection 失败仅记录日志，不返回错误
+	// 对齐 G-27/G-28 修复：DeleteCollection 失败时现在应返回错误（而非静默忽略）
 	err := idx.DeleteByUserAndScope(ctx, "user1", "scope1")
-	if err != nil {
-		t.Errorf("DeleteCollection 失败时 DeleteByUserAndScope 不应返回错误, 实际 %v", err)
+	if err == nil {
+		t.Error("DeleteCollection 失败时 DeleteByUserAndScope 应返回错误")
 	}
 }
 

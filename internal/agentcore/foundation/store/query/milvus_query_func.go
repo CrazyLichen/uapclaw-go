@@ -66,6 +66,15 @@ func milvusRangeFilter(expr QueryExpr) (any, error) {
 			return nil, raiseQueryError("Milvus's like operator uses % for wildcard matching")
 		}
 		return fmt.Sprintf("%s like %s", e.Field, SanitizeStr(s)), nil
+	case "wildcard":
+		// Milvus 不支持 "wildcard" 操作符，映射为 "like"：将 * 转换为 %
+		s, ok := e.Value.(string)
+		if !ok {
+			return nil, raiseQueryError("wildcard operator requires a string value")
+		}
+		// 将通配符 * 转换为 Milvus 的 %
+		likePattern := strings.ReplaceAll(s, "*", "%")
+		return fmt.Sprintf("%s like %s", e.Field, SanitizeStr(likePattern)), nil
 	default:
 		return nil, raiseQueryError(fmt.Sprintf("Unsupported range operator: %s", e.Operator))
 	}
@@ -219,5 +228,7 @@ func allStrings(values []any) bool {
 
 // init 注册 Milvus 查询语言
 func init() {
-	_ = RegisterDatabaseQueryLanguage("milvus", milvusDef, false)
+	if err := RegisterDatabaseQueryLanguage("milvus", milvusDef, false); err != nil {
+		panic(fmt.Sprintf("注册 Milvus 查询语言失败: %v", err))
+	}
 }

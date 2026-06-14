@@ -107,7 +107,7 @@ func (f *fakeMilvusClient) Close(ctx context.Context) error {
 
 func TestBuildEntitySchema_字段完整性(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildEntitySchema(storageCfg, 512)
+	schema, err := buildEntitySchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildEntitySchema() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestBuildEntitySchema_字段完整性(t *testing.T) {
 
 func TestBuildRelationSchema_字段完整性(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildRelationSchema(storageCfg, 512)
+	schema, err := buildRelationSchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildRelationSchema() error = %v", err)
 	}
@@ -160,7 +160,7 @@ func TestBuildRelationSchema_字段完整性(t *testing.T) {
 
 func TestBuildEpisodeSchema_字段完整性(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildEpisodeSchema(storageCfg, 512)
+	schema, err := buildEpisodeSchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildEpisodeSchema() error = %v", err)
 	}
@@ -186,7 +186,7 @@ func TestBuildEpisodeSchema_字段完整性(t *testing.T) {
 
 func TestBuildEntitySchema_BM25Function(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildEntitySchema(storageCfg, 512)
+	schema, err := buildEntitySchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildEntitySchema() error = %v", err)
 	}
@@ -209,7 +209,7 @@ func TestBuildEntitySchema_BM25Function(t *testing.T) {
 
 func TestBuildRelationSchema_BM25Function(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildRelationSchema(storageCfg, 512)
+	schema, err := buildRelationSchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildRelationSchema() error = %v", err)
 	}
@@ -231,7 +231,7 @@ func TestBuildRelationSchema_BM25Function(t *testing.T) {
 
 func TestBuildEpisodeSchema_BM25Function(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, err := buildEpisodeSchema(storageCfg, 512)
+	schema, err := buildEpisodeSchema(storageCfg, nil, 512)
 	if err != nil {
 		t.Fatalf("buildEpisodeSchema() error = %v", err)
 	}
@@ -255,7 +255,7 @@ func TestBuildEntitySchema_无NameEmbedding(t *testing.T) {
 	// Relation 和 Episode 没有 name_embedding，只有 Entity 有
 	storageCfg := graph.NewDefaultStorageConfig()
 
-	entitySchema, _ := buildEntitySchema(storageCfg, 512)
+	entitySchema, _ := buildEntitySchema(storageCfg, nil, 512)
 	hasNameEmb := false
 	for _, f := range entitySchema.Fields {
 		if f.Name == "name_embedding" {
@@ -267,7 +267,7 @@ func TestBuildEntitySchema_无NameEmbedding(t *testing.T) {
 		t.Error("Entity Schema 应包含 name_embedding 字段")
 	}
 
-	relationSchema, _ := buildRelationSchema(storageCfg, 512)
+	relationSchema, _ := buildRelationSchema(storageCfg, nil, 512)
 	for _, f := range relationSchema.Fields {
 		if f.Name == "name_embedding" {
 			t.Error("Relation Schema 不应包含 name_embedding 字段")
@@ -275,7 +275,7 @@ func TestBuildEntitySchema_无NameEmbedding(t *testing.T) {
 		}
 	}
 
-	episodeSchema, _ := buildEpisodeSchema(storageCfg, 512)
+	episodeSchema, _ := buildEpisodeSchema(storageCfg, nil, 512)
 	for _, f := range episodeSchema.Fields {
 		if f.Name == "name_embedding" {
 			t.Error("Episode Schema 不应包含 name_embedding 字段")
@@ -335,7 +335,7 @@ func TestEnsureCollections_部分已存在(t *testing.T) {
 
 func TestBuildIndexOptions_Entity三索引(t *testing.T) {
 	indexCfg := graph.NewDefaultIndexConfig()
-	schema, _ := buildEntitySchema(graph.NewDefaultStorageConfig(), 512)
+	schema, _ := buildEntitySchema(graph.NewDefaultStorageConfig(), nil, 512)
 
 	opts, err := buildIndexOptions(indexCfg, CollectionEntity, schema)
 	if err != nil {
@@ -349,7 +349,7 @@ func TestBuildIndexOptions_Entity三索引(t *testing.T) {
 
 func TestBuildIndexOptions_Relation双索引(t *testing.T) {
 	indexCfg := graph.NewDefaultIndexConfig()
-	schema, _ := buildRelationSchema(graph.NewDefaultStorageConfig(), 512)
+	schema, _ := buildRelationSchema(graph.NewDefaultStorageConfig(), nil, 512)
 
 	opts, err := buildIndexOptions(indexCfg, CollectionRelation, schema)
 	if err != nil {
@@ -404,7 +404,7 @@ func TestMapDistanceMetric(t *testing.T) {
 
 func TestBuildEntitySchema_UUID主键(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, _ := buildEntitySchema(storageCfg, 512)
+	schema, _ := buildEntitySchema(storageCfg, nil, 512)
 
 	var pkField *entity.Field
 	for _, f := range schema.Fields {
@@ -426,7 +426,7 @@ func TestBuildEntitySchema_UUID主键(t *testing.T) {
 
 func TestBuildEntitySchema_Array字段类型(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, _ := buildEntitySchema(storageCfg, 512)
+	schema, _ := buildEntitySchema(storageCfg, nil, 512)
 
 	fieldMap := make(map[string]*entity.Field)
 	for _, f := range schema.Fields {
@@ -460,7 +460,7 @@ func TestBuildEntitySchema_Array字段类型(t *testing.T) {
 
 func TestBuildEpisodeSchema_Array字段类型(t *testing.T) {
 	storageCfg := graph.NewDefaultStorageConfig()
-	schema, _ := buildEpisodeSchema(storageCfg, 512)
+	schema, _ := buildEpisodeSchema(storageCfg, nil, 512)
 
 	fieldMap := make(map[string]*entity.Field)
 	for _, f := range schema.Fields {

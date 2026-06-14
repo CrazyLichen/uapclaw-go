@@ -48,6 +48,10 @@ func (f *fakeEmbedder) Dimension() int {
 	return 3
 }
 
+func (f *fakeEmbedder) DimensionWithContext(_ context.Context) (int, error) {
+	return 3, nil
+}
+
 // fakeWriterClient 扩展 fakeMilvusClient，跟踪写入操作
 type fakeWriterClient struct {
 	*fakeMilvusClient

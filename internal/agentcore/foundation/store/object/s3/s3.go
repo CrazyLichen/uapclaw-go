@@ -48,8 +48,8 @@ type S3Client struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// logComponent 对象存储日志组件
-	logComponent = logger.ComponentCommon
+	// logComponent 对象存储日志组件，agentcore 下的包应使用 ComponentAgentCore
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -139,12 +139,17 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 //
 // 对应 Python: AioBotoClient.create_bucket
 func (c *S3Client) CreateBucket(ctx context.Context, bucketName string, location string) error {
-	_, err := c.client.CreateBucket(ctx, &s3.CreateBucketInput{
+	input := &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
-		CreateBucketConfiguration: &types.CreateBucketConfiguration{
+	}
+	// AWS S3 在 us-east-1 或空位置时不应传 CreateBucketConfiguration，
+	// 否则会报 IllegalLocationConstraintException，对齐 T-21 修复。
+	if location != "" && location != "us-east-1" {
+		input.CreateBucketConfiguration = &types.CreateBucketConfiguration{
 			LocationConstraint: types.BucketLocationConstraint(location),
-		},
-	})
+		}
+	}
+	_, err := c.client.CreateBucket(ctx, input)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -389,6 +394,12 @@ func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPre
 			"StorageClass": string(obj.StorageClass),
 		}
 		objects = append(objects, m)
+		// 逐对象 Debug 日志，对齐 Python: logger.debug for each object
+		logger.Debug(logComponent).
+			Str("bucket_name", bucketName).
+			Str("key", aws.ToString(obj.Key)).
+			Int64("size", aws.ToInt64(obj.Size)).
+			Msg("列出对象")
 	}
 
 	logger.Info(logComponent).

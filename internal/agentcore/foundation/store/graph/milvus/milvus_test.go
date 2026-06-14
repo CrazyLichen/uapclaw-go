@@ -970,6 +970,10 @@ func (f *fakeGraphSearchEmbedder) Dimension() int {
 	return 3
 }
 
+func (f *fakeGraphSearchEmbedder) DimensionWithContext(_ context.Context) (int, error) {
+	return f.Dimension(), nil
+}
+
 // TestMilvusGraphStore_Rebuild_获取客户端失败
 func TestMilvusGraphStore_Rebuild_获取客户端失败(t *testing.T) {
 	cfg := graph.NewGraphConfig("invalid-uri")

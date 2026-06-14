@@ -404,15 +404,16 @@ func TestFilterByScore(t *testing.T) {
 		{"content": "world", "uuid": "2"},
 		{"content": "foo", "uuid": "3"},
 	}
+	// 对齐 G-23 修复：scoreMap 使用 uuid 作为 key
 	scoreMap := map[string]float64{
-		"hello": 0.9,
-		"world": 0.5,
-		"foo":   0.1,
+		"1": 0.9,
+		"2": 0.5,
+		"3": 0.1,
 	}
 
 	result := filterByScore(items, scoreMap, 0.3)
 	if len(result) != 2 {
-		t.Errorf("filterByScore(minScore=0.3) 应返回2条，实际 %d", len(result))
+		t.Fatalf("filterByScore(minScore=0.3) 应返回2条，实际 %d", len(result))
 	}
 	// 应按分数降序排列
 	if result[0]["content"] != "hello" {
@@ -894,10 +895,11 @@ func TestGraphSearcher_CombinedRerank_基本(t *testing.T) {
 	indexCfg := graph.NewDefaultIndexConfig()
 	s := newGraphSearcher(fake, nil, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
+	// 对齐 G-23 修复：scoreMap 使用 uuid 作为 key
 	reranker := &fakeReranker{
 		scoreMap: map[string]float64{
-			"hello": 0.9,
-			"world": 0.5,
+			"1": 0.9,
+			"2": 0.5,
 		},
 	}
 
@@ -997,10 +999,11 @@ func TestGraphSearcher_CombinedRerank_带MinScore(t *testing.T) {
 	indexCfg := graph.NewDefaultIndexConfig()
 	s := newGraphSearcher(fake, nil, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
+	// 对齐 G-23 修复：scoreMap 使用 uuid 作为 key
 	reranker := &fakeReranker{
 		scoreMap: map[string]float64{
-			"hello": 0.9,
-			"world": 0.3,
+			"1": 0.9,
+			"2": 0.3,
 		},
 	}
 

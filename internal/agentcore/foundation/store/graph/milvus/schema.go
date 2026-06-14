@@ -41,7 +41,7 @@ const (
 func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) error {
 	collections := []struct {
 		name      string
-		buildFunc func(*graph.GraphStoreStorageConfig, int) (*entity.Schema, error)
+		buildFunc func(*graph.GraphStoreStorageConfig, *graph.GraphStoreIndexConfig, int) (*entity.Schema, error)
 	}{
 		{CollectionEntity, buildEntitySchema},
 		{CollectionRelation, buildRelationSchema},
@@ -58,7 +58,7 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 			continue
 		}
 
-		schema, err := coll.buildFunc(storageCfg, embedDim)
+		schema, err := coll.buildFunc(storageCfg, indexCfg, embedDim)
 		if err != nil {
 			return fmt.Errorf("构建集合 %s Schema 失败: %w", coll.name, err)
 		}
@@ -87,7 +87,7 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 // buildEntitySchema 构建 Entity 集合的 Schema。
 //
 // Entity 集合包含通用字段 + name/name_embedding + attributes + relations + episodes
-func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) (*entity.Schema, error) {
+func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionEntity).
 		WithDescription("知识图谱实体集合").
 		WithDynamicFieldEnabled(true)
@@ -98,7 +98,9 @@ func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) 
 	schema = schema.WithField(
 		entity.NewField().WithName("name").
 			WithDataType(entity.FieldTypeVarChar).
-			WithMaxLength(int64(storageCfg.Name)),
+			WithMaxLength(int64(storageCfg.Name)).
+			WithEnableAnalyzer(true).
+			WithEnableMatch(true),
 	)
 	schema = schema.WithField(
 		entity.NewField().WithName("name_embedding").
@@ -124,13 +126,16 @@ func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) 
 			WithMaxCapacity(int64(storageCfg.Episodes)),
 	)
 
-	// 添加 BM25 Function
-	schema = schema.WithFunction(
-		entity.NewFunction().WithName("content_bm25_fn").
-			WithType(entity.FunctionTypeBM25).
-			WithInputFields("content").
-			WithOutputFields("content_bm25"),
-	)
+	// 添加 BM25 Function，传入 b/k1 参数对齐 Python
+	bm25Fn := entity.NewFunction().WithName("content_bm25_fn").
+		WithType(entity.FunctionTypeBM25).
+		WithInputFields("content").
+		WithOutputFields("content_bm25")
+	if indexCfg != nil && indexCfg.BM25Config != nil {
+		bm25Fn = bm25Fn.WithParam("bm25_b", indexCfg.BM25Config.B).
+			WithParam("bm25_k1", indexCfg.BM25Config.K1)
+	}
+	schema = schema.WithFunction(bm25Fn)
 
 	return schema, nil
 }
@@ -138,7 +143,7 @@ func buildEntitySchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) 
 // buildRelationSchema 构建 Relation 集合的 Schema。
 //
 // Relation 集合包含通用字段 + name + lhs/rhs + valid_since/valid_until + offset_since/offset_until
-func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) (*entity.Schema, error) {
+func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionRelation).
 		WithDescription("知识图谱关系集合").
 		WithDynamicFieldEnabled(true)
@@ -178,13 +183,16 @@ func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int
 			WithDataType(entity.FieldTypeInt8),
 	)
 
-	// 添加 BM25 Function
-	schema = schema.WithFunction(
-		entity.NewFunction().WithName("content_bm25_fn").
-			WithType(entity.FunctionTypeBM25).
-			WithInputFields("content").
-			WithOutputFields("content_bm25"),
-	)
+	// 添加 BM25 Function，传入 b/k1 参数对齐 Python
+	bm25Fn := entity.NewFunction().WithName("content_bm25_fn").
+		WithType(entity.FunctionTypeBM25).
+		WithInputFields("content").
+		WithOutputFields("content_bm25")
+	if indexCfg != nil && indexCfg.BM25Config != nil {
+		bm25Fn = bm25Fn.WithParam("bm25_b", indexCfg.BM25Config.B).
+			WithParam("bm25_k1", indexCfg.BM25Config.K1)
+	}
+	schema = schema.WithFunction(bm25Fn)
 
 	return schema, nil
 }
@@ -192,7 +200,7 @@ func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int
 // buildEpisodeSchema 构建 Episode 集合的 Schema。
 //
 // Episode 集合包含通用字段 + valid_since + entities
-func buildEpisodeSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int) (*entity.Schema, error) {
+func buildEpisodeSchema(storageCfg *graph.GraphStoreStorageConfig, indexCfg *graph.GraphStoreIndexConfig, embedDim int) (*entity.Schema, error) {
 	schema := entity.NewSchema().WithName(CollectionEpisode).
 		WithDescription("知识图谱片段集合").
 		WithDynamicFieldEnabled(true)
@@ -212,13 +220,16 @@ func buildEpisodeSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int)
 			WithMaxCapacity(int64(storageCfg.Entities)),
 	)
 
-	// 添加 BM25 Function
-	schema = schema.WithFunction(
-		entity.NewFunction().WithName("content_bm25_fn").
-			WithType(entity.FunctionTypeBM25).
-			WithInputFields("content").
-			WithOutputFields("content_bm25"),
-	)
+	// 添加 BM25 Function，传入 b/k1 参数对齐 Python
+	bm25Fn := entity.NewFunction().WithName("content_bm25_fn").
+		WithType(entity.FunctionTypeBM25).
+		WithInputFields("content").
+		WithOutputFields("content_bm25")
+	if indexCfg != nil && indexCfg.BM25Config != nil {
+		bm25Fn = bm25Fn.WithParam("bm25_b", indexCfg.BM25Config.B).
+			WithParam("bm25_k1", indexCfg.BM25Config.K1)
+	}
+	schema = schema.WithFunction(bm25Fn)
 
 	return schema, nil
 }
@@ -291,7 +302,9 @@ func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageC
 	schema = schema.WithField(
 		entity.NewField().WithName("obj_type").
 			WithDataType(entity.FieldTypeVarChar).
-			WithMaxLength(int64(storageCfg.ObjType)),
+			WithMaxLength(int64(storageCfg.ObjType)).
+			WithEnableAnalyzer(true).
+			WithEnableMatch(true),
 	)
 	// language
 	schema = schema.WithField(

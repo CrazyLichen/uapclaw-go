@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/milvus-io/milvus/client/v2/column"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
@@ -142,6 +143,7 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 //
 // 对应 Python: MilvusGraphStore._add_data
 func (w *graphWriter) addData(ctx context.Context, collection string, objects []any, opts ...graph.Option) error {
+	start := time.Now()
 	if len(objects) == 0 {
 		return nil
 	}
@@ -177,7 +179,7 @@ func (w *graphWriter) addData(ctx context.Context, collection string, objects []
 		if err := w.insertBatch(ctx, collection, batch, o.Upsert); err != nil {
 			// 批量失败，尝试逐条回退
 			logger.Warn(logComponent).Err(err).Str("collection", collection).
-				Int("batch", i).Msg("批量写入失败，尝试逐条写入")
+				Int("batch", i).Int("batch_size", len(batch)).Msg("批量写入失败，尝试逐条写入")
 			for _, item := range batch {
 				if err := w.insertBatch(ctx, collection, []map[string]any{item}, o.Upsert); err != nil {
 					if o.SilenceErrors {
@@ -198,7 +200,9 @@ func (w *graphWriter) addData(ctx context.Context, collection string, objects []
 	}
 
 	logger.Info(logComponent).Str("collection", collection).
-		Int("count", len(objects)).Msg("成功写入图数据")
+		Int("count", len(objects)).
+		Dur("duration", time.Since(start)).
+		Msg("成功写入图数据")
 	return nil
 }
 

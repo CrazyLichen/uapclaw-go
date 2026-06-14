@@ -264,6 +264,34 @@ func (ds *DashscopeEmbedding) Dimension() int {
 	return len(vec)
 }
 
+// DimensionWithContext 返回嵌入向量维度，支持 context 取消。
+// 对齐 T-04 修复：替代 Dimension() 的 context.Background() 阻塞问题。
+func (ds *DashscopeEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
+	ds.dimMu.Lock()
+	if ds.dimension > 0 {
+		dim := ds.dimension
+		ds.dimMu.Unlock()
+		return dim, nil
+	}
+	ds.dimMu.Unlock()
+
+	vec, err := ds.EmbedQuery(ctx, "test")
+	if err != nil {
+		return 0, fmt.Errorf("探测嵌入向量维度失败: %w", err)
+	}
+	dim := len(vec)
+	if !ds.matryoshkaDimension {
+		ds.dimMu.Lock()
+		ds.dimension = dim
+		ds.dimMu.Unlock()
+	}
+	logger.Debug(logComponent).
+		Int("dimension", dim).
+		Bool("matryoshka", ds.matryoshkaDimension).
+		Msg("探测到嵌入向量维度")
+	return dim, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callAPI 调用 DashScope Embeddings API。

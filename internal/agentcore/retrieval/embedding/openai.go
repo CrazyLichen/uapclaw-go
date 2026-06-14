@@ -43,8 +43,8 @@ type OpenAIEmbedding struct {
 	limiter chan struct{}
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
-	// dimMu 保护 dimension 字段的互斥锁
-	dimMu sync.Mutex
+	// dimOnce 保证维度探测只执行一次，消除 TOCTOU 竞态，对齐 T-04 修复。
+	dimOnce sync.Once
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
 	// extraHeaders 额外请求头，透传给 OpenAI SDK
@@ -229,10 +229,23 @@ func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.Multi
 		)
 	}
 
-	// OpenAI 多模态嵌入：将 content 作为 input 传入
+	// OpenAI 多模态嵌入：将 content 中的文本作为 input 传入
 	// 目前 OpenAI embedding 不直接支持多模态 content，这里以文本回退
 	// 后续如果 OpenAI 支持多模态嵌入 API，可以改为传 doc.Content()
+	// 对齐 G-25 修复：AddField(ModalityText,...) 不再更新 doc.Text，
+	// 因此需要从 Content() 中提取文本字段作为回退。
 	text := doc.Text
+	if text == "" {
+		// 从 Content() 中提取文本字段
+		for _, item := range doc.Content() {
+			if t, ok := item["type"].(string); ok && t == "text" {
+				if txt, ok := item["text"].(string); ok && txt != "" {
+					text = txt
+					break
+				}
+			}
+		}
+	}
 	if text == "" {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
@@ -244,34 +257,71 @@ func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.Multi
 }
 
 // Dimension 返回嵌入向量维度。
-// 使用带超时的 context 避免意外阻塞，对齐 T-04 修复。
+// 使用 sync.Once 保证探测只执行一次，消除 TOCTOU 竞态，对齐 T-04 修复。
+// 注意：此方法使用 context.Background() 创建 30s 超时，无法受调用方取消控制。
+// 推荐使用 DimensionWithContext 以获得 context 控制。
 func (o *OpenAIEmbedding) Dimension() int {
-	o.dimMu.Lock()
-	if o.dimension > 0 {
-		dim := o.dimension
-		o.dimMu.Unlock()
-		return dim
-	}
-	o.dimMu.Unlock()
+	o.dimOnce.Do(func() {
+		if o.dimension > 0 {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+		vec, err := o.EmbedQuery(ctx, "test")
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("model_provider", "openai").
+				Str("model_name", o.config.ModelName).
+				Err(err).
+				Msg("探测嵌入向量维度失败")
+			return
+		}
 
-	vec, err := o.EmbedQuery(ctx, "test")
-	if err != nil {
-		return 0
-	}
+		if !o.matryoshkaDimension {
+			o.dimension = len(vec)
+		}
+		logger.Debug(logComponent).
+			Int("dimension", len(vec)).
+			Bool("matryoshka", o.matryoshkaDimension).
+			Msg("探测到嵌入向量维度")
+	})
+	return o.dimension
+}
 
-	if !o.matryoshkaDimension {
-		o.dimMu.Lock()
-		o.dimension = len(vec)
-		o.dimMu.Unlock()
+// DimensionWithContext 返回嵌入向量维度，支持 context 取消。
+// 对齐 T-04 修复：替代 Dimension() 的 context.Background() 阻塞问题。
+// 当 ctx 被取消时返回 ctx.Err()。
+func (o *OpenAIEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
+	o.dimOnce.Do(func() {
+		if o.dimension > 0 {
+			return
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		vec, err := o.EmbedQuery(probeCtx, "test")
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("model_provider", "openai").
+				Str("model_name", o.config.ModelName).
+				Err(err).
+				Msg("探测嵌入向量维度失败")
+			return
+		}
+
+		if !o.matryoshkaDimension {
+			o.dimension = len(vec)
+		}
+		logger.Debug(logComponent).
+			Int("dimension", len(vec)).
+			Bool("matryoshka", o.matryoshkaDimension).
+			Msg("探测到嵌入向量维度")
+	})
+	if o.dimension == 0 {
+		return 0, fmt.Errorf("探测嵌入向量维度失败")
 	}
-	logger.Debug(logComponent).
-		Int("dimension", len(vec)).
-		Bool("matryoshka", o.matryoshkaDimension).
-		Msg("探测到嵌入向量维度")
-	return len(vec)
+	return o.dimension, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -320,14 +370,12 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 
 		// 自动探测 dimension
 		if !o.matryoshkaDimension {
-			o.dimMu.Lock()
 			if o.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
 				o.dimension = len(embeddings[0])
 				logger.Debug(logComponent).
 					Int("dimension", o.dimension).
 					Msg("探测到嵌入向量维度")
 			}
-			o.dimMu.Unlock()
 		}
 
 		return embeddings, nil

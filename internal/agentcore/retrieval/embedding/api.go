@@ -45,8 +45,8 @@ type APIEmbedding struct {
 	extraParams map[string]any
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
-	// mu 保护 dimension 字段的互斥锁
-	mu sync.Mutex
+	// dimOnce 保证维度探测只执行一次
+	dimOnce sync.Once
 	// httpClient HTTP 客户端
 	httpClient *http.Client
 }
@@ -127,9 +127,9 @@ func NewAPIEmbedding(config EmbeddingConfig, opts ...APIEmbeddingOption) *APIEmb
 		opt(a)
 	}
 
-	// HTTP 客户端
+	// HTTP 客户端：使用配置中的 timeout 创建，避免 WithAPITimeout 成为死字段
 	if a.httpClient == nil {
-		a.httpClient = NewEmbeddingHTTPClient(config.BaseURL)
+		a.httpClient = NewEmbeddingHTTPClient(config.BaseURL, a.timeout)
 	}
 
 	return a
@@ -190,30 +190,59 @@ func (a *APIEmbedding) EmbedDocuments(ctx context.Context, texts []string, opts 
 }
 
 // Dimension 返回嵌入向量维度。
-// 将检查-探测-写入放在同一个锁保护范围内，确保原子性。
+// 使用 sync.Once 保证探测只执行一次，消除 TOCTOU 竞态，对齐 T-01 修复。
+// 注意：此方法使用 context.Background() 创建 30s 超时，无法受调用方取消控制。
+// 推荐使用 DimensionWithContext 以获得 context 控制。
 func (a *APIEmbedding) Dimension() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.dimOnce.Do(func() {
+		if a.dimension > 0 {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		vec, err := a.EmbedQuery(ctx, "test")
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("model_provider", a.config.ModelName).
+				Err(err).
+				Msg("探测嵌入向量维度失败")
+			return
+		}
+		a.dimension = len(vec)
+		logger.Debug(logComponent).
+			Int("dimension", len(vec)).
+			Msg("探测到嵌入向量维度")
+	})
+	return a.dimension
+}
 
-	if a.dimension > 0 {
-		return a.dimension
+// DimensionWithContext 返回嵌入向量维度，支持 context 取消。
+// 对齐 T-04 修复：替代 Dimension() 的 context.Background() 阻塞问题。
+// 当 ctx 被取消时返回 ctx.Err()。
+func (a *APIEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
+	a.dimOnce.Do(func() {
+		if a.dimension > 0 {
+			return
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		vec, err := a.EmbedQuery(probeCtx, "test")
+		if err != nil {
+			logger.Warn(logComponent).
+				Str("model_provider", a.config.ModelName).
+				Err(err).
+				Msg("探测嵌入向量维度失败")
+			return
+		}
+		a.dimension = len(vec)
+		logger.Debug(logComponent).
+			Int("dimension", len(vec)).
+			Msg("探测到嵌入向量维度")
+	})
+	if a.dimension == 0 {
+		return 0, fmt.Errorf("探测嵌入向量维度失败")
 	}
-
-	// 临时释放锁发送探测请求
-	a.mu.Unlock()
-	vec, err := a.EmbedQuery(context.Background(), "test")
-	a.mu.Lock()
-
-	if err != nil {
-		return 0
-	}
-
-	a.dimension = len(vec)
-
-	logger.Debug(logComponent).
-		Int("dimension", len(vec)).
-		Msg("探测到嵌入向量维度")
-	return len(vec)
+	return a.dimension, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -231,7 +260,18 @@ func apiIsRetryable(err error) bool {
 }
 
 // getEmbeddings 发送 HTTP POST 请求获取嵌入向量。
+// input 仅接受 string（单条查询）或 []string（批量文档），其他类型返回错误。
 func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float64, error) {
+	// 类型断言校验，对齐 T-02 修复：确保编译期可追溯的调用路径传入正确类型
+	switch input.(type) {
+	case string, []string:
+		// 合法类型
+	default:
+		return nil, exception.BuildError(
+			exception.StatusRetrievalEmbeddingInputInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("getEmbeddings input 类型不支持: %T，仅支持 string 或 []string", input)),
+		)
+	}
 	return retryWithBackoffGeneric(ctx, a.maxRetries, func(attempt int) ([][]float64, error) {
 		payload := map[string]any{
 			"model": a.config.ModelName,
@@ -307,14 +347,12 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float6
 		}
 
 		// 自动探测并缓存 dimension
-		a.mu.Lock()
 		if a.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
 			a.dimension = len(embeddings[0])
 			logger.Debug(logComponent).
 				Int("dimension", a.dimension).
 				Msg("探测到嵌入向量维度")
 		}
-		a.mu.Unlock()
 
 		return embeddings, nil
 	}, apiIsRetryable)

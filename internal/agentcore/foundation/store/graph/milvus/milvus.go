@@ -59,6 +59,10 @@ func (s *MilvusGraphStore) Config() *graph.GraphConfig {
 
 // Rebuild 重建所有集合和索引。
 // 对齐 Python: 先尝试 LoadCollection，加载成功则直接返回；加载失败则删数据库再重建。
+//
+// 注意（T-20）：此操作先删除旧数据再重建，如果重建失败旧数据已丢失。
+// Milvus 不支持集合原子重命名，无法实现"备份旧集合 → 建新集合 → 删备份"的事务性回滚。
+// 重建前会记录即将删除的集合信息，以便手动恢复参考。
 func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 	client, err := s.getClient(ctx)
 	if err != nil {
@@ -76,6 +80,14 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 	if loadOK {
 		logger.Info(logComponent).Msg("集合加载成功，跳过重建")
 		return nil
+	}
+
+	// 记录即将删除的集合信息，便于手动恢复参考（对齐 T-20 修复）
+	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
+		has, err := client.HasCollection(ctx, milvusclient.NewHasCollectionOption(coll))
+		if err == nil && has {
+			logger.Warn(logComponent).Str("collection", coll).Msg("即将删除集合，重建失败时旧数据将丢失")
+		}
 	}
 
 	// 加载失败，删数据库再重建，对齐 Python: drop database
@@ -97,6 +109,7 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 
 	// 重新创建集合
 	if err := EnsureCollections(ctx, client, s.config.StorageConfig, s.config.IndexConfig, s.config.EmbedDim); err != nil {
+		logger.Error(logComponent).Err(err).Msg("重建集合失败，旧数据已丢失，请手动恢复")
 		return fmt.Errorf("重建集合失败: %w", err)
 	}
 
@@ -137,7 +150,7 @@ func (s *MilvusGraphStore) Close() error {
 
 	if s.client != nil {
 		if err := s.client.Close(context.Background()); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("关闭 Milvus 连接失败")
+			logger.Error(logComponent).Err(err).Msg("关闭 Milvus 连接失败")
 			return err
 		}
 		s.client = nil

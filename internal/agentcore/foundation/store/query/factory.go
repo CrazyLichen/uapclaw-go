@@ -56,9 +56,14 @@ func InList(field string, values []any) QueryExpr {
 
 // WildcardMatch 创建通配符匹配范围表达式
 //
-// 对应 Python: wildcard_match()
-func WildcardMatch(field string, pattern string) *RangeExpr {
-	return &RangeExpr{Field: field, Operator: "wildcard", Value: pattern}
+// 对应 Python: wildcard_match(field, pattern, operator="wildcard")
+// operator 参数默认为 "wildcard"，对齐 Python 签名。
+func WildcardMatch(field string, pattern string, operator ...string) *RangeExpr {
+	op := "wildcard"
+	if len(operator) > 0 && operator[0] != "" {
+		op = operator[0]
+	}
+	return &RangeExpr{Field: field, Operator: op, Value: pattern}
 }
 
 // IsNull 创建 IS NULL 表达式
@@ -150,9 +155,5 @@ func Not(expr QueryExpr) *LogicalExpr {
 	return &LogicalExpr{Operator: "not", Left: expr, Right: nil}
 }
 
-// Xor 创建逻辑异或表达式
-//
-// 对应 Python: expr1 ^ expr2
-func Xor(left, right QueryExpr) *LogicalExpr {
-	return &LogicalExpr{Operator: "xor", Left: left, Right: right}
-}
+// 注意（T-24）：已移除 Xor() 函数。Milvus 和 Chroma 后端均不支持 xor 操作符，
+// 提供 Xor() 会误导用户以为该操作可用。如需使用，请直接构造 LogicalExpr 并自行处理错误。

@@ -38,6 +38,10 @@ func (f *fakeEmbedding) Dimension() int {
 	return f.dimension
 }
 
+func (f *fakeEmbedding) DimensionWithContext(_ context.Context) (int, error) {
+	return f.dimension, nil
+}
+
 func TestBaseEmbedding_接口约束(t *testing.T) {
 	// 验证 fakeEmbedding 满足 BaseEmbedding 接口
 	var _ BaseEmbedding = &fakeEmbedding{}

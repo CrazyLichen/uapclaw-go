@@ -349,6 +349,7 @@ func retryWithBackoffGeneric(
 				Str("event_type", "embedding_retry").
 				Int("attempt", attempt+1).
 				Int("max_retries", maxRetries).
+				Str("error_msg", err.Error()).
 				Err(err).
 				Msg("嵌入请求失败，准备重试")
 

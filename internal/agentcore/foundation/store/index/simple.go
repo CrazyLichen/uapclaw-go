@@ -200,7 +200,7 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			Str("event_type", "memory_retrieve").
 			Str("scope_id", scopeID).
 			Msg("嵌入模型未初始化")
-		return nil, nil
+		return []*MemorySearchResult{}, nil
 	}
 
 	if topK <= 0 {
@@ -235,7 +235,8 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 		}
 	}
 
-	var results []*MemorySearchResult
+	// 对齐 T-30 修复：初始化为空切片而非 nil，确保 JSON 序列化为 [] 而非 null，对齐 Python 返回 []
+	results := make([]*MemorySearchResult, 0)
 	for _, mt := range types {
 		col := getCollectionName(userID, scopeID, mt)
 		exists, err := s.vectorStore.CollectionExists(ctx, col)
@@ -518,12 +519,12 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 	}
 	val, _ := readKVValue(raw)
 	if val == "" {
-		return nil, nil
+		return []*MemoryDoc{}, nil
 	}
 
 	allIDs := parseAllIDs(val)
 	if len(allIDs) == 0 {
-		return nil, nil
+		return []*MemoryDoc{}, nil
 	}
 
 	keys := make([]string, len(allIDs))
@@ -578,7 +579,7 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 
 	// 分页
 	if offset >= len(docs) {
-		return nil, nil
+		return []*MemoryDoc{}, nil
 	}
 	end := offset + limit
 	if end > len(docs) {

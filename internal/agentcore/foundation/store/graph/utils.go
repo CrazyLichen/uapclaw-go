@@ -68,27 +68,43 @@ func LoadStoredTimeFromDB(timestamp int64, offset int8) (*time.Time, error) {
 	return &t, nil
 }
 
-// EnsureUniqueUUIDs 去重UUID：查询集合中已存在的UUID，返回不存在的新UUID列表
+// EnsureUniqueUUIDs 去重UUID：查询集合中已存在的UUID，对重复的UUID重新生成，循环直到全部唯一。
+// 对齐 Python 行为：检测到重复时重新生成 UUID 而非仅过滤。
 func EnsureUniqueUUIDs(ctx context.Context, store BaseGraphStore, ids []string, collection string, skip bool) ([]string, error) {
 	if skip || len(ids) == 0 {
 		return ids, nil
 	}
-	existing, err := store.Query(ctx, collection, WithIDs(stringsToAny(ids)...), WithOutputFields("uuid"))
-	if err != nil {
-		return nil, err
-	}
-	existingSet := make(map[string]struct{}, len(existing))
-	for _, row := range existing {
-		if uuid, ok := row["uuid"].(string); ok {
-			existingSet[uuid] = struct{}{}
+
+	// 循环去重：查询已存在的 UUID，对重复的重新生成，直到全部唯一
+	result := make([]string, len(ids))
+	copy(result, ids)
+
+	for {
+		existing, err := store.Query(ctx, collection, WithIDs(stringsToAny(result)...), WithOutputFields("uuid"))
+		if err != nil {
+			return nil, err
+		}
+		existingSet := make(map[string]struct{}, len(existing))
+		for _, row := range existing {
+			if uuid, ok := row["uuid"].(string); ok {
+				existingSet[uuid] = struct{}{}
+			}
+		}
+
+		// 检查是否有重复，如有则重新生成
+		hasDuplicate := false
+		for i, id := range result {
+			if _, found := existingSet[id]; found {
+				result[i] = GetUUID()
+				hasDuplicate = true
+			}
+		}
+
+		if !hasDuplicate {
+			break
 		}
 	}
-	result := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if _, found := existingSet[id]; !found {
-			result = append(result, id)
-		}
-	}
+
 	return result, nil
 }
 

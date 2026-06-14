@@ -70,8 +70,8 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
-	// logComponent 对象存储日志组件
-	logComponent = logger.ComponentCommon
+	// logComponent 对象存储日志组件，agentcore 下的包应使用 ComponentAgentCore
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

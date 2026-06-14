@@ -275,13 +275,18 @@ func TestEnsureUniqueUUIDs_空列表(t *testing.T) {
 }
 
 // TestEnsureUniqueUUIDs_去重 测试UUID去重
+// 新逻辑：对已存在的UUID重新生成，循环直到全部唯一
 func TestEnsureUniqueUUIDs_去重(t *testing.T) {
+	// 模拟集合中已有 "a" 和 "c"
+	existingSet := map[string]bool{"a": true, "c": true}
 	store := &fakeGraphStore{
 		query: func(ctx context.Context, collection string, opts ...Option) ([]map[string]any, error) {
-			return []map[string]any{
-				{"uuid": "a"},
-				{"uuid": "c"},
-			}, nil
+			// 模拟查询：只返回实际存在于集合中的 UUID
+			var results []map[string]any
+			for k := range existingSet {
+				results = append(results, map[string]any{"uuid": k})
+			}
+			return results, nil
 		},
 	}
 	ids := []string{"a", "b", "c", "d"}
@@ -289,11 +294,17 @@ func TestEnsureUniqueUUIDs_去重(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不应报错: %v", err)
 	}
-	if len(result) != 2 {
-		t.Fatalf("去重后应为 2 个，实际为 %d", len(result))
+	// 新逻辑：对重复的 a/c 重新生成 UUID，输出仍为 4 个
+	if len(result) != 4 {
+		t.Fatalf("去重后应为 4 个（重复的被重新生成），实际为 %d", len(result))
 	}
-	if result[0] != "b" || result[1] != "d" {
-		t.Errorf("去重结果不正确: %v", result)
+	// b 和 d 不在已有集合中，应保持不变
+	if result[1] != "b" || result[3] != "d" {
+		t.Errorf("非重复 UUID 应保持不变: %v", result)
+	}
+	// a 和 c 被替换为新 UUID，不应等于原来的值
+	if result[0] == "a" || result[2] == "c" {
+		t.Errorf("重复 UUID 应被重新生成: %v", result)
 	}
 }
 

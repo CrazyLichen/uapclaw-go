@@ -93,7 +93,7 @@ func TestAPIEmbedding_EmbedDocuments_回调(t *testing.T) {
 	}, WithAPIMaxBatchSize(1))
 
 	cb := NewNoopCallback()
-	vecs, err := client.EmbedDocuments(context.Background(), []string{"a"}, embedding.EmbedOption{Callback: cb})
+	vecs, err := client.EmbedDocuments(context.Background(), []string{"a"}, embedding.WithCallback(cb))
 	require.NoError(t, err)
 	assert.Len(t, vecs, 1)
 	assert.Equal(t, 1, cb.CallCounter())

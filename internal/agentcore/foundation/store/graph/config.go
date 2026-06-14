@@ -29,6 +29,8 @@ type GraphConfig struct {
 	EmbedDim int `json:"embed_dim"`
 	// EmbedBatchSize 嵌入批大小
 	EmbedBatchSize int `json:"embed_batch_size"`
+	// EmbeddingModel 嵌入模型名称，对齐 Python embedding_model 字段
+	EmbeddingModel string `json:"embedding_model,omitempty"`
 	// StorageConfig 存储限制配置
 	StorageConfig *GraphStoreStorageConfig `json:"db_storage_config"`
 	// IndexConfig 索引配置

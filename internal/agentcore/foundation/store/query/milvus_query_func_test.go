@@ -120,8 +120,8 @@ func TestMilvusArithmetic(t *testing.T) {
 		t.Fatalf("不应返回错误: %v", err)
 	}
 	str := result.(string)
-	if str != "price + 10> 100" {
-		t.Errorf("结果 = %q, want %q", str, "price + 10> 100")
+	if str != "price + 10 > 100" {
+		t.Errorf("结果 = %q, want %q", str, "price + 10 > 100")
 	}
 }
 
@@ -427,12 +427,18 @@ func TestMilvusArray_无索引_数值(t *testing.T) {
 	}
 }
 
-// TestMilvusRange_Wildcard_不支持 测试 Milvus 不支持 wildcard 操作符
-func TestMilvusRange_Wildcard_不支持(t *testing.T) {
+// TestMilvusRange_Wildcard_映射为like 测试 Milvus 将 wildcard 映射为 like 操作符
+// wildcard 中的 * 自动转换为 Milvus 的 % 通配符，对齐 T-25 修复。
+func TestMilvusRange_Wildcard_映射为like(t *testing.T) {
 	setupMilvusTest(t)
 	expr := WildcardMatch("name", "test*")
-	_, err := expr.ToExpr("milvus")
-	if err == nil {
-		t.Error("Milvus 不支持 wildcard 操作符应返回错误")
+	result, err := expr.ToExpr("milvus")
+	if err != nil {
+		t.Errorf("wildcard 应映射为 like，不应报错: %v", err)
+	}
+	got := result.(string)
+	want := `name like "test%"`
+	if got != want {
+		t.Errorf("wildcard 映射结果 = %q, want %q", got, want)
 	}
 }

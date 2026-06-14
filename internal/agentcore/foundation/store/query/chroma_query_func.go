@@ -228,5 +228,7 @@ func toMapAny(v any) map[string]any {
 
 // init 注册 Chroma 查询语言
 func init() {
-	_ = RegisterDatabaseQueryLanguage("chroma", chromaDef, false)
+	if err := RegisterDatabaseQueryLanguage("chroma", chromaDef, false); err != nil {
+		panic(fmt.Sprintf("注册 Chroma 查询语言失败: %v", err))
+	}
 }

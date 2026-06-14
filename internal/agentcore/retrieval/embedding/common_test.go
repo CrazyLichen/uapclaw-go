@@ -196,7 +196,8 @@ func TestApplyEmbedOptions(t *testing.T) {
 
 	cb2 := NewNoopCallback()
 	batchSize, cb = ApplyEmbedOptions([]embedding.EmbedOption{
-		{BatchSize: 4, Callback: cb2},
+		embedding.WithBatchSize(4),
+		embedding.WithCallback(cb2),
 	}, 8)
 	assert.Equal(t, 4, batchSize)
 	assert.Equal(t, cb2, cb)

@@ -217,13 +217,18 @@ func TestNot(t *testing.T) {
 	}
 }
 
-// TestXor 测试 Xor 组合函数
-func TestXor(t *testing.T) {
-	left := Eq("a", 1)
-	right := Gt("b", 2)
-	le := Xor(left, right)
+// TestXorRemoved 验证 Xor 函数已移除（T-24 修复）
+// Milvus 和 Chroma 均不支持 xor，提供 Xor() 会误导用户
+func TestXorRemoved(t *testing.T) {
+	// 直接构造 LogicalExpr 仍可用，但后端 ToExpr 会返回不支持错误
+	le := &LogicalExpr{Operator: "xor", Left: Eq("a", 1), Right: Gt("b", 2)}
 	if le.Operator != "xor" {
-		t.Errorf("Xor 运算符应为 xor，实际 %q", le.Operator)
+		t.Errorf("xor 运算符应为 xor，实际 %q", le.Operator)
+	}
+	// 验证 Milvus 后端会返回错误
+	_, err := le.ToExpr("milvus")
+	if err == nil {
+		t.Error("期望 Milvus 后端对 xor 返回错误，但未报错")
 	}
 }
 

@@ -7,9 +7,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -46,6 +48,14 @@ type MultimodalDocument struct {
 	Text string
 	// fields 有序模态字段列表
 	fields []ModalityField
+	// contentCache Content() 方法的缓存结果，对齐 Python @cached_property
+	contentCache []map[string]any
+	// contentOnce 保证 Content() 只计算一次
+	contentOnce sync.Once
+	// dashscopeCache DashscopeInput() 方法的缓存结果，对齐 Python @cached_property
+	dashscopeCache map[string]any
+	// dashscopeOnce 保证 DashscopeInput() 只计算一次
+	dashscopeOnce sync.Once
 }
 
 // addFieldOptions AddField 的可选参数
@@ -83,6 +93,15 @@ func FieldDataID(id string) AddFieldOption {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// audioBase64Pattern 音频 base64 正则，提取格式类型。
+	// 提取为包级变量避免每次调用 Content() 时重复编译，对齐 T-28 修复。
+	audioBase64Pattern = regexp.MustCompile(`data:audio/(.+?);base64,`)
+
+	// logComponent 日志组件
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -133,87 +152,103 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...Ad
 }
 
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
+// 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
 //
 // 对应 Python: MultimodalDocument.content
 func (d *MultimodalDocument) Content() []map[string]any {
-	var content []map[string]any
-	for _, f := range d.fields {
-		switch f.Kind {
-		case ModalityText:
-			content = append(content, map[string]any{
-				"type": "text",
-				"text": f.Data,
-			})
-		case ModalityImage, ModalityVideo:
-			content = append(content, map[string]any{
-				"type":                        fmt.Sprintf("%s_url", f.Kind),
-				fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
-			})
-		case ModalityAudio:
-			re := regexp.MustCompile(`data:audio/(.+?);base64,`)
-			matches := re.FindStringSubmatch(f.Data)
-			if len(matches) < 2 {
-				continue
+	d.contentOnce.Do(func() {
+		var content []map[string]any
+		for _, f := range d.fields {
+			switch f.Kind {
+			case ModalityText:
+				content = append(content, map[string]any{
+					"type": "text",
+					"text": f.Data,
+				})
+			case ModalityImage, ModalityVideo:
+				content = append(content, map[string]any{
+					"type":                        fmt.Sprintf("%s_url", f.Kind),
+					fmt.Sprintf("%s_url", f.Kind): map[string]any{"url": f.Data},
+				})
+			case ModalityAudio:
+				matches := audioBase64Pattern.FindStringSubmatch(f.Data)
+				if len(matches) < 2 {
+					// 音频字段格式不匹配时记录警告，对齐 T-27 修复
+					logger.Warn(logComponent).
+						Str("modality", "audio").
+						Str("data_prefix", truncatePrefix(f.Data, 50)).
+						Msg("音频字段不匹配 base64 格式，已跳过")
+					continue
+				}
+				content = append(content, map[string]any{
+					"type":        "input_audio",
+					"input_audio": map[string]any{"data": f.Data, "format": matches[1]},
+				})
 			}
-			content = append(content, map[string]any{
-				"type":        "input_audio",
-				"input_audio": map[string]any{"data": f.Data, "format": matches[1]},
-			})
+			if f.ID != "" && len(content) > 0 {
+				content[len(content)-1]["uuid"] = f.ID
+			}
 		}
-		if f.ID != "" {
-			content[len(content)-1]["uuid"] = f.ID
-		}
-	}
-	return content
+		d.contentCache = content
+	})
+	return d.contentCache
 }
 
 // DashscopeInput 返回 DashScope 格式的输入字典。
+// 使用 sync.Once 缓存结果，避免重复计算，对齐 Python @cached_property。
 //
 // 对应 Python: MultimodalDocument.dashscope_input
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
 func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
-	content := make(map[string]any)
-	var images []string
-	hasField := make(map[ModalityKind]bool)
+	var cacheErr error
+	d.dashscopeOnce.Do(func() {
+		content := make(map[string]any)
+		var images []string
+		hasField := make(map[ModalityKind]bool)
 
-	for _, f := range d.fields {
-		if hasField[f.Kind] {
-			return nil, exception.BuildError(
-				exception.StatusRetrievalEmbeddingInputInvalid,
-				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
-			)
-		}
-
-		switch f.Kind {
-		case ModalityText:
-			hasField[f.Kind] = true
-			content["text"] = f.Data
-		case ModalityImage:
-			images = append(images, f.Data)
-		case ModalityVideo:
-			if strings.HasPrefix(f.Data, "data:video/") {
-				return nil, exception.BuildError(
+		for _, f := range d.fields {
+			if hasField[f.Kind] {
+				cacheErr = exception.BuildError(
 					exception.StatusRetrievalEmbeddingInputInvalid,
-					exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
+					exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
 				)
+				return
 			}
-			hasField[f.Kind] = true
-			content["video"] = f.Data
-		default:
-			return nil, exception.BuildError(
-				exception.StatusRetrievalEmbeddingInputInvalid,
-				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
-			)
+
+			switch f.Kind {
+			case ModalityText:
+				hasField[f.Kind] = true
+				content["text"] = f.Data
+			case ModalityImage:
+				images = append(images, f.Data)
+			case ModalityVideo:
+				if strings.HasPrefix(f.Data, "data:video/") {
+					cacheErr = exception.BuildError(
+						exception.StatusRetrievalEmbeddingInputInvalid,
+						exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
+					)
+					return
+				}
+				hasField[f.Kind] = true
+				content["video"] = f.Data
+			default:
+				cacheErr = exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
+				)
+				return
+			}
 		}
-	}
 
-	if len(images) == 1 {
-		content["image"] = images[0]
-	} else if len(images) > 1 {
-		content["multi_images"] = images
-	}
+		if len(images) == 1 {
+			content["image"] = images[0]
+		} else if len(images) > 1 {
+			content["multi_images"] = images
+		}
 
-	return content, nil
+		d.dashscopeCache = content
+	})
+	return d.dashscopeCache, cacheErr
 }
 
 // Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
@@ -333,4 +368,12 @@ func loadFromFile(kind ModalityKind, path string) (ModalityKind, string, error) 
 
 	b64Str := base64.StdEncoding.EncodeToString(raw)
 	return kind, fmt.Sprintf("data:%s;base64,%s", mimeType, b64Str), nil
+}
+
+// truncatePrefix 截取字符串前 n 个字符，用于日志输出避免过长。
+func truncatePrefix(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }

@@ -247,7 +247,21 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 			docIDs[i] = d.ID
 			texts = append(texts, d.Text)
 		case *common.MultimodalDocument:
-			docIDs[i] = d.Text
+			// 对齐 G-25 修复：AddField(ModalityText,...) 不再更新 d.Text，
+			// 需要从 Content() 中提取文本作为 docID
+			docID := ""
+			for _, item := range d.Content() {
+				if t, ok := item["type"].(string); ok && t == "text" {
+					if txt, ok := item["text"].(string); ok && txt != "" {
+						docID = txt
+						break
+					}
+				}
+			}
+			if docID == "" {
+				docID = fmt.Sprintf("multimodal_%d", i)
+			}
+			docIDs[i] = docID
 			dsInput, dsErr := d.DashscopeInput()
 			if dsErr != nil {
 				return nil, nil, nil, dsErr

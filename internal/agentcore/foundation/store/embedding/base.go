@@ -28,6 +28,12 @@ type BaseEmbedding interface {
 
 	// Dimension 返回嵌入向量的维度。
 	Dimension() int
+
+	// DimensionWithContext 返回嵌入向量的维度，支持 context 取消。
+	// 对齐 T-04 修复：Dimension() 使用 context.Background() 可能意外阻塞，
+	// 此方法允许调用方传入 context 控制超时和取消。
+	// 默认实现调用 Dimension()，需要 context 控制的实现应覆盖此方法。
+	DimensionWithContext(ctx context.Context) (int, error)
 }
 
 // EmbedOptions 批量嵌入的内部选项结构。

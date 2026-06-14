@@ -101,6 +101,12 @@ func (v *VLLMEmbedding) Dimension() int {
 	return v.openAI.Dimension()
 }
 
+// DimensionWithContext 返回嵌入向量维度，支持 context 取消，委托给 OpenAIEmbedding。
+// 对齐 T-04 修复。
+func (v *VLLMEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
+	return v.openAI.DimensionWithContext(ctx)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callWithMessages 使用 extra_body.messages 调用 vLLM 多模态嵌入 API。
