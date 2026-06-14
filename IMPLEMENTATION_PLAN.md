@@ -337,7 +337,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **5.x 会话系统** | — | | | |
-| 5.1 | ☐ | State 体系 | `ReadableStateLike`/`RecoverableStateLike`/`StateLike`/`CommitStateLike` | `openjiuwen/core/session/state/base.py` |
+| 5.1 | ✅ | State 体系 | `ReadableStateLike`/`RecoverableStateLike`/`StateLike`/`CommitStateLike` | `openjiuwen/core/session/state/base.py` |
 | 5.2 | ☐ | BaseSession 接口 | `Config/State/SessionID/Close` | `openjiuwen/core/session/session.py` |
 | 5.3 | ☐ | AgentSession | `PreRun→Invoke/Stream→PostRun`，状态持久化 | `openjiuwen/core/session/agent.py` |
 | 5.4 | ☐ | WorkflowSession | 从 AgentSession 创建 | `openjiuwen/core/session/workflow.py` |
