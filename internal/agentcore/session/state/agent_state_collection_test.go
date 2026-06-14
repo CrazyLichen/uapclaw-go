@@ -12,12 +12,12 @@ func TestNewAgentStateCollection(t *testing.T) {
 	}
 }
 
-// TestAgentStateCollection_GetGlobal_空Key返回完整全局状态 测试空 key 返回完整全局状态
-func TestAgentStateCollection_GetGlobal_空Key返回完整全局状态(t *testing.T) {
+// TestAgentStateCollection_GetGlobal_零值Key返回完整全局状态 测试零值 key 返回完整全局状态
+func TestAgentStateCollection_GetGlobal_零值Key返回完整全局状态(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"foo": "bar", "baz": 123})
 
-	result := coll.GetGlobal("")
+	result := coll.GetGlobal(StateKey{})
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("期望 map[string]any，实际 %T", result)
@@ -35,7 +35,7 @@ func TestAgentStateCollection_GetGlobal_有Key返回对应值(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"foo": "bar"})
 
-	result := coll.GetGlobal("foo")
+	result := coll.GetGlobal(StringKey("foo"))
 	if result != "bar" {
 		t.Errorf("期望 bar，实际 %v", result)
 	}
@@ -44,7 +44,7 @@ func TestAgentStateCollection_GetGlobal_有Key返回对应值(t *testing.T) {
 // TestAgentStateCollection_GetGlobal_不存在的Key返回Nil 测试不存在的 key 返回 nil
 func TestAgentStateCollection_GetGlobal_不存在的Key返回Nil(t *testing.T) {
 	coll := NewAgentStateCollection()
-	result := coll.GetGlobal("nonexistent")
+	result := coll.GetGlobal(StringKey("nonexistent"))
 	if result != nil {
 		t.Errorf("期望 nil，实际 %v", result)
 	}
@@ -57,20 +57,20 @@ func TestAgentStateCollection_UpdateGlobal(t *testing.T) {
 	coll.UpdateGlobal(map[string]any{"b": 2})
 
 	// a 仍存在，b 新增
-	if coll.GetGlobal("a") != 1 {
-		t.Errorf("期望 a=1，实际 %v", coll.GetGlobal("a"))
+	if coll.GetGlobal(StringKey("a")) != 1 {
+		t.Errorf("期望 a=1，实际 %v", coll.GetGlobal(StringKey("a")))
 	}
-	if coll.GetGlobal("b") != 2 {
-		t.Errorf("期望 b=2，实际 %v", coll.GetGlobal("b"))
+	if coll.GetGlobal(StringKey("b")) != 2 {
+		t.Errorf("期望 b=2，实际 %v", coll.GetGlobal(StringKey("b")))
 	}
 }
 
-// TestAgentStateCollection_Get_空Key返回完整Agent状态 测试空 key 返回完整 Agent 状态
-func TestAgentStateCollection_Get_空Key返回完整Agent状态(t *testing.T) {
+// TestAgentStateCollection_Get_零值Key返回完整Agent状态 测试零值 key 返回完整 Agent 状态
+func TestAgentStateCollection_Get_零值Key返回完整Agent状态(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.Update(map[string]any{"x": "y"})
 
-	result := coll.GetAgent("")
+	result := coll.GetAgent(StateKey{})
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("期望 map[string]any，实际 %T", result)
@@ -85,7 +85,7 @@ func TestAgentStateCollection_Get_有Key返回对应值(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.Update(map[string]any{"x": "y"})
 
-	result := coll.GetAgent("x")
+	result := coll.GetAgent(StringKey("x"))
 	if result != "y" {
 		t.Errorf("期望 y，实际 %v", result)
 	}
@@ -97,11 +97,11 @@ func TestAgentStateCollection_Update(t *testing.T) {
 	coll.Update(map[string]any{"a": 1})
 	coll.Update(map[string]any{"b": 2})
 
-	if coll.GetAgent("a") != 1 {
-		t.Errorf("期望 a=1，实际 %v", coll.GetAgent("a"))
+	if coll.GetAgent(StringKey("a")) != 1 {
+		t.Errorf("期望 a=1，实际 %v", coll.GetAgent(StringKey("a")))
 	}
-	if coll.GetAgent("b") != 2 {
-		t.Errorf("期望 b=2，实际 %v", coll.GetAgent("b"))
+	if coll.GetAgent(StringKey("b")) != 2 {
+		t.Errorf("期望 b=2，实际 %v", coll.GetAgent(StringKey("b")))
 	}
 }
 
@@ -143,11 +143,11 @@ func TestAgentStateCollection_SetState(t *testing.T) {
 	coll2 := NewAgentStateCollection()
 	coll2.SetState(snapshot)
 
-	if coll2.GetGlobal("g") != 1 {
-		t.Errorf("恢复后期望 g=1，实际 %v", coll2.GetGlobal("g"))
+	if coll2.GetGlobal(StringKey("g")) != 1 {
+		t.Errorf("恢复后期望 g=1，实际 %v", coll2.GetGlobal(StringKey("g")))
 	}
-	if coll2.GetAgent("a") != 2 {
-		t.Errorf("恢复后期望 a=2，实际 %v", coll2.GetAgent("a"))
+	if coll2.GetAgent(StringKey("a")) != 2 {
+		t.Errorf("恢复后期望 a=2，实际 %v", coll2.GetAgent(StringKey("a")))
 	}
 }
 
@@ -172,11 +172,11 @@ func TestAgentStateCollection_状态隔离(t *testing.T) {
 	coll.UpdateGlobal(map[string]any{"key": "global_val"})
 	coll.Update(map[string]any{"key": "agent_val"})
 
-	if coll.GetGlobal("key") != "global_val" {
-		t.Errorf("全局状态期望 global_val，实际 %v", coll.GetGlobal("key"))
+	if coll.GetGlobal(StringKey("key")) != "global_val" {
+		t.Errorf("全局状态期望 global_val，实际 %v", coll.GetGlobal(StringKey("key")))
 	}
-	if coll.GetAgent("key") != "agent_val" {
-		t.Errorf("Agent 状态期望 agent_val，实际 %v", coll.GetAgent("key"))
+	if coll.GetAgent(StringKey("key")) != "agent_val" {
+		t.Errorf("Agent 状态期望 agent_val，实际 %v", coll.GetAgent(StringKey("key")))
 	}
 }
 

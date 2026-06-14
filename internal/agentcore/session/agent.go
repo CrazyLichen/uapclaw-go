@@ -144,11 +144,11 @@ func (s *Session) UpdateState(data map[string]any) {
 }
 
 // GetState 获取全局状态值，委托到 inner.State() 的 AgentStateCollection
-func (s *Session) GetState(key string) any {
+func (s *Session) GetState(key state.StateKey) (any, error) {
 	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
-		return coll.GetGlobal(key)
+		return coll.GetGlobal(key), nil
 	}
-	return nil
+	return nil, nil
 }
 
 // DumpState 导出完整状态快照，委托到 inner.State() 的 AgentStateCollection

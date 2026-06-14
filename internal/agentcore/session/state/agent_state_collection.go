@@ -30,12 +30,12 @@ func NewAgentStateCollection() *AgentStateCollection {
 
 // ──────────────────────────── AgentStateCollection 方法 ────────────────────────────
 
-// GetGlobal 从全局状态获取值。key 为空时返回完整全局状态。
-func (s *AgentStateCollection) GetGlobal(key string) any {
-	if key == "" {
+// GetGlobal 从全局状态获取值。key 为零值时返回完整全局状态。
+func (s *AgentStateCollection) GetGlobal(key StateKey) any {
+	if key.IsZero() {
 		return s.globalState.GetState()
 	}
-	return s.globalState.Get(StringKey(key))
+	return s.globalState.Get(key)
 }
 
 // UpdateGlobal 更新全局状态。
@@ -43,12 +43,12 @@ func (s *AgentStateCollection) UpdateGlobal(data map[string]any) {
 	_ = s.globalState.Update(data)
 }
 
-// GetAgent 从 Agent 状态获取值。key 为空时返回完整 Agent 状态。
-func (s *AgentStateCollection) GetAgent(key string) any {
-	if key == "" {
+// GetAgent 从 Agent 状态获取值。key 为零值时返回完整 Agent 状态。
+func (s *AgentStateCollection) GetAgent(key StateKey) any {
+	if key.IsZero() {
 		return s.agentState.GetState()
 	}
-	return s.agentState.Get(StringKey(key))
+	return s.agentState.Get(key)
 }
 
 // Update 更新 Agent 状态。

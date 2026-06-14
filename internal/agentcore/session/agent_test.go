@@ -116,7 +116,10 @@ func TestSession_GetState(t *testing.T) {
 	s := NewSession()
 	s.UpdateState(map[string]any{"key": "value"})
 
-	result := s.GetState("key")
+	result, err := s.GetState(state.StringKey("key"))
+	if err != nil {
+		t.Errorf("GetState 不应返回错误：%v", err)
+	}
 	if result != "value" {
 		t.Errorf("期望 value，实际 %v", result)
 	}
@@ -260,20 +263,23 @@ func TestSession_CreateWorkflowSession_GlobalState共享(t *testing.T) {
 	// 创建 WorkflowSession
 	ws := s.CreateWorkflowSession()
 
-	// WorkflowSession 应能读取 AgentSession 写入的 globalState
-	result := ws.GetState("agent_key")
-	if result != "agent_val" {
-		t.Errorf("期望 WorkflowSession 读取共享 globalState='agent_val'，实际=%v", result)
-	}
-
-	// WorkflowSession 更新 globalState 并提交
-	ws.UpdateState(map[string]any{"wf_key": "wf_val"})
+	// 通过内部层验证 WorkflowSession 能读取 AgentSession 写入的 globalState
 	if cs, ok := ws.Inner().State().(*state.WorkflowCommitState); ok {
+		result := cs.GetGlobal(state.StringKey("agent_key"))
+		if result != "agent_val" {
+			t.Errorf("期望 WorkflowSession 读取共享 globalState='agent_val'，实际=%v", result)
+		}
+
+		// WorkflowSession 更新 globalState 并提交
+		cs.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 		cs.Commit()
 	}
 
 	// AgentSession 也应能读到 WorkflowSession 的更新
-	result = s.GetState("wf_key")
+	result, err := s.GetState(state.StringKey("wf_key"))
+	if err != nil {
+		t.Errorf("GetState 不应返回错误：%v", err)
+	}
 	if result != "wf_val" {
 		t.Errorf("期望 AgentSession 读取共享 globalState='wf_val'，实际=%v", result)
 	}
