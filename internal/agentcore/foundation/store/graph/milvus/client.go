@@ -26,5 +26,7 @@ type milvusClient interface {
 	LoadCollection(ctx context.Context, option milvusclient.LoadCollectionOption, callOptions ...interface{}) error
 	Flush(ctx context.Context, option milvusclient.FlushOption, callOptions ...interface{}) error
 	CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error
+	DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error
+	Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error)
 	Close(ctx context.Context) error
 }

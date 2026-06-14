@@ -91,6 +91,14 @@ func (f *fakeMilvusClient) CreateIndex(ctx context.Context, option milvusclient.
 	return nil
 }
 
+func (f *fakeMilvusClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+	return nil
+}
+
+func (f *fakeMilvusClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+	return 1, nil
+}
+
 func (f *fakeMilvusClient) Close(ctx context.Context) error {
 	return nil
 }

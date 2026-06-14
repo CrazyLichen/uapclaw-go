@@ -29,6 +29,7 @@ func TestNewChatReranker_正常创建(t *testing.T) {
 		APIBase:   "https://api.example.com",
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, err := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 	if err != nil {
@@ -86,6 +87,7 @@ func TestChatReranker_Rerank_正常解析(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -126,6 +128,7 @@ func TestChatReranker_Rerank_yes概率计算(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -147,6 +150,7 @@ func TestChatReranker_Rerank_多文档报错(t *testing.T) {
 		APIBase:   "https://api.example.com",
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -177,6 +181,7 @@ func TestChatReranker_Rerank_logprobs不支持(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -203,6 +208,7 @@ func TestChatReranker_Rerank_总概率为零(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -232,6 +238,7 @@ func TestChatReranker_RerankSync_同步调用(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -260,6 +267,7 @@ func TestChatReranker_TestCompatibility_成功(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -282,6 +290,7 @@ func TestChatReranker_TestCompatibility_失败(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -307,6 +316,7 @@ func TestChatReranker_RerankDocs_Document输入(t *testing.T) {
 		APIBase:   server.URL,
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -325,6 +335,7 @@ func TestChatReranker_RerankDocs_多文档报错(t *testing.T) {
 		APIBase:   "https://api.example.com",
 		YesNoIDs:  [2]int{1234, 5678},
 		ModelName: "chat-model",
+		Timeout:   10,
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 

@@ -706,9 +706,14 @@ func TestGraphSearcher_SearchAll_搜索失败继续(t *testing.T) {
 	if err != nil {
 		t.Fatalf("searchAll() error = %v", err)
 	}
-	// 搜索失败应跳过，不返回错误
-	if len(results) != 0 {
-		t.Errorf("searchAll 搜索失败应返回空结果，实际 %d", len(results))
+	// 搜索失败应初始化空切片，对齐 Python: output_dict[col] = []
+	if len(results) != 3 {
+		t.Errorf("searchAll 搜索失败应返回3个集合（含空切片），实际 %d", len(results))
+	}
+	for coll, items := range results {
+		if len(items) != 0 {
+			t.Errorf("集合 %s 搜索失败应为空切片，实际 %d 条", coll, len(items))
+		}
 	}
 }
 

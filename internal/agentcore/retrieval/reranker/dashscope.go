@@ -80,8 +80,9 @@ func NewDashScopeReranker(config reranker.RerankerConfig, opts ...DashScopeReran
 		return nil, err
 	}
 
-	// 去除 APIBase 尾部的端点后缀
-	apiBase := strings.TrimSuffix(config.APIBase, dashScopeEndPoint)
+	// 去除 APIBase 尾部斜杠和端点后缀（对齐 Python removesuffix("/") + removesuffix(self.end_point)）
+	apiBase := strings.TrimSuffix(config.APIBase, "/")
+	apiBase = strings.TrimSuffix(apiBase, dashScopeEndPoint)
 
 	base := NewRerankerBase(config, defaultMaxRetries, defaultRetryWait)
 
@@ -225,6 +226,18 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 	multimodalInputs := make([]map[string]any, 0, len(docs))
 	hasMultimodal := false
 
+	// 处理多模态查询
+	var resolvedQuery any = query
+	if opt != nil && opt.MultimodalQuery != nil {
+		if md, ok := opt.MultimodalQuery.(*common.MultimodalDocument); ok {
+			dsInput, dsErr := md.DashscopeInput()
+			if dsErr != nil {
+				return nil, nil, nil, dsErr
+			}
+			resolvedQuery = dsInput
+		}
+	}
+
 	for i, doc := range docs {
 		switch d := doc.(type) {
 		case string:
@@ -274,15 +287,16 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 		documents = texts
 	}
 
-	params := r.requestParams(query, documents, topN, opt)
+	params := r.requestParams(resolvedQuery, documents, topN, opt)
 
 	return headers, params, docIDs, nil
 }
 
 // requestParams 构造 DashScope 专用请求参数。
 // 覆盖基类方法，使用 DashScope 的 {model, input, parameters} 格式。
+// query 参数支持 string 和 map[string]any（多模态查询），对齐 Python。
 // 对齐 Python: DashscopeReranker._request_params
-func (r *DashScopeReranker) requestParams(query string, documents any, topN int, opt *reranker.RerankOption) map[string]any {
+func (r *DashScopeReranker) requestParams(query any, documents any, topN int, opt *reranker.RerankOption) map[string]any {
 	parameters := map[string]any{
 		"return_documents": false,
 		"top_n":            topN,
@@ -302,15 +316,15 @@ func (r *DashScopeReranker) requestParams(query string, documents any, topN int,
 		"parameters": parameters,
 	}
 
-	// 合并 ExtraBody
+	// 合并 ExtraBody 到 parameters 内（对齐 Python kwargs 合并到 parameters）
 	for k, v := range r.config.ExtraBody {
-		params[k] = v
+		parameters[k] = v
 	}
 
-	// 合并 ExtraParams
+	// 合并 ExtraParams 到 parameters 内
 	if opt != nil && opt.ExtraParams != nil {
 		for k, v := range opt.ExtraParams {
-			params[k] = v
+			parameters[k] = v
 		}
 	}
 

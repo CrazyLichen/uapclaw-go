@@ -89,29 +89,30 @@ func ArrayIndex(field string, index int, operator string, value any) *ArrayExpr 
 	return &ArrayExpr{Field: field, Index: &index, Operator: operator, Value: value}
 }
 
-// FilterUser 创建用户 ID 过滤表达式
+// FilterUser 创建单用户 ID 过滤表达式
 //
-// users 可为 string 或 []string，userIDField 为字段名，默认 "user_id"。
-// 对应 Python: filter_user()
-func FilterUser(users any, userIDField string) QueryExpr {
+// userID 为单个用户 ID，userIDField 为字段名，默认 "user_id"。
+// 对应 Python: filter_user(str)
+func FilterUser(userID string, userIDField string) QueryExpr {
 	if userIDField == "" {
 		userIDField = "user_id"
 	}
+	return Eq(userIDField, userID)
+}
 
-	var userIDs []any
-	switch v := users.(type) {
-	case string:
-		userIDs = []any{v}
-	case []string:
-		userIDs = make([]any, len(v))
-		for i, s := range v {
-			userIDs[i] = s
-		}
-	default:
-		userIDs = []any{users}
+// FilterUsers 创建多用户 ID 过滤表达式
+//
+// userIDs 为用户 ID 列表，userIDField 为字段名，默认 "user_id"。
+// 对应 Python: filter_user(List[str])
+func FilterUsers(userIDs []string, userIDField string) QueryExpr {
+	if userIDField == "" {
+		userIDField = "user_id"
 	}
-
-	return InList(userIDField, userIDs)
+	userIDAny := make([]any, len(userIDs))
+	for i, s := range userIDs {
+		userIDAny[i] = s
+	}
+	return InList(userIDField, userIDAny)
 }
 
 // ChainFilters 用 AND 链接多个表达式，空输入返回 nil

@@ -48,6 +48,36 @@ type MultimodalDocument struct {
 	fields []ModalityField
 }
 
+// addFieldOptions AddField 的可选参数
+type addFieldOptions struct {
+	// filePath 文件路径（与 data 二选一）
+	filePath string
+	// dataID 自定义数据 ID（仅非文本模态有效，长度 ≤ 32）
+	dataID string
+}
+
+// AddFieldOption AddField 可选参数函数
+type AddFieldOption func(*addFieldOptions)
+
+// defaultAddFieldOptions 返回默认的 AddField 选项
+func defaultAddFieldOptions() addFieldOptions {
+	return addFieldOptions{}
+}
+
+// FieldFilePath 设置文件路径选项
+func FieldFilePath(path string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.filePath = path
+	}
+}
+
+// FieldDataID 设置自定义数据 ID 选项
+func FieldDataID(id string) AddFieldOption {
+	return func(o *addFieldOptions) {
+		o.dataID = id
+	}
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -64,23 +94,41 @@ func NewMultimodalDocument() *MultimodalDocument {
 // AddField 添加模态字段，支持链式调用。
 //
 // kind: 模态类型；data: 文本内容/URL/base64（kind 为 text 时必传）；
-// filePath: 文件路径（与 data 二选一，最多传一个）。
+// opts: 可选参数，支持 FieldFilePath(string) 和 FieldDataID(string)。
 //
 // 对应 Python: MultimodalDocument.add_field()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
-func (d *MultimodalDocument) AddField(kind ModalityKind, data string, filePath ...string) (*MultimodalDocument, error) {
-	k, resolvedData, err := loadMultimodalData(kind, data, filePath...)
+// 注意：与 Python 对齐，add_field 不会更新 text 字段，text 始终保持默认空字符串。
+func (d *MultimodalDocument) AddField(kind ModalityKind, data string, opts ...AddFieldOption) (*MultimodalDocument, error) {
+	o := defaultAddFieldOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	var fp string
+	if o.filePath != "" {
+		fp = o.filePath
+	}
+
+	k, resolvedData, err := loadMultimodalData(kind, data, fp)
 	if err != nil {
 		return nil, err
 	}
 	dataID := ""
 	if kind != ModalityText {
-		dataID = strings.ReplaceAll(uuid.NewString(), "-", "")
+		if o.dataID != "" {
+			if len(o.dataID) > 32 {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", fmt.Sprintf("data_id 长度不能超过 32，当前长度: %d", len(o.dataID))),
+				)
+			}
+			dataID = o.dataID
+		} else {
+			dataID = strings.ReplaceAll(uuid.NewString(), "-", "")
+		}
 	}
 	d.fields = append(d.fields, ModalityField{Kind: k, Data: resolvedData, ID: dataID})
-	if kind == ModalityText {
-		d.Text = resolvedData
-	}
 	return d, nil
 }
 
@@ -191,7 +239,7 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 //
 // 对应 Python: _load_multimodal_data()
 // 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
-func loadMultimodalData(kind ModalityKind, data string, filePath ...string) (ModalityKind, string, error) {
+func loadMultimodalData(kind ModalityKind, data string, filePath string) (ModalityKind, string, error) {
 	validKinds := map[ModalityKind]bool{
 		ModalityText:  true,
 		ModalityImage: true,
@@ -206,14 +254,14 @@ func loadMultimodalData(kind ModalityKind, data string, filePath ...string) (Mod
 	}
 
 	// 文件路径模式
-	if len(filePath) > 0 && filePath[0] != "" {
+	if filePath != "" {
 		if data != "" {
 			return "", "", exception.BuildError(
 				exception.StatusRetrievalEmbeddingInputInvalid,
 				exception.WithParam("error_msg", "不能同时提供 data 和 filePath"),
 			)
 		}
-		return loadFromFile(kind, filePath[0])
+		return loadFromFile(kind, filePath)
 	}
 
 	// data 模式

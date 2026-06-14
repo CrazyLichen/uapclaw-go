@@ -76,7 +76,7 @@ func milvusRangeFilter(expr QueryExpr) (any, error) {
 // 对应 Python: milvus_arithmetic_filter()
 func milvusArithmeticFilter(expr QueryExpr) (any, error) {
 	e := expr.(*ArithmeticExpr)
-	return fmt.Sprintf("%s %s %v%s %v",
+	return fmt.Sprintf("%s %s %v %s %v",
 		e.Field, e.ArithmeticOperator, e.ArithmeticValue,
 		e.ComparisonOperator, e.ComparisonValue), nil
 }

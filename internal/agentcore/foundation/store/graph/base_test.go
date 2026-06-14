@@ -42,7 +42,7 @@ func (f *fakeGraphStore) IsEmpty(ctx context.Context, collection string) (bool, 
 func (f *fakeGraphStore) Search(ctx context.Context, query string, opts ...Option) (map[string][]map[string]any, error) {
 	return nil, nil
 }
-func (f *fakeGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) {}
+func (f *fakeGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) error { return nil }
 
 // TestRegisterBackend_正常注册 测试正常注册
 func TestRegisterBackend_正常注册(t *testing.T) {

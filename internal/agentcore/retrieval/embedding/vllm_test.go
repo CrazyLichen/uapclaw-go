@@ -167,19 +167,3 @@ func TestVLLMEmbedding_接口约束(t *testing.T) {
 	// 验证 VLLMEmbedding 满足 MultimodalEmbedder 接口
 	var _ MultimodalEmbedder = vllm
 }
-
-func TestParseMultimodalInput(t *testing.T) {
-	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述")
-	require.NoError(t, addErr)
-	doc, addErr = doc.AddField(common.ModalityImage, "https://example.com/img.png")
-	require.NoError(t, addErr)
-	messages := parseMultimodalInput(doc, "测试指令")
-	assert.Len(t, messages, 2)
-	assert.Equal(t, "system", messages[0]["role"])
-	assert.Equal(t, "user", messages[1]["role"])
-}
-
-func TestParseMultimodalInput_nil文档(t *testing.T) {
-	messages := parseMultimodalInput(nil, "测试指令")
-	assert.Nil(t, messages)
-}

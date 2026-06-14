@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
@@ -40,8 +41,13 @@ type DashscopeEmbedding struct {
 	limiter chan struct{}
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
+	// dimMu 保护 dimension 字段的互斥锁
+	dimMu sync.Mutex
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
+	// extraHeaders 额外请求头，合并到 HTTP 请求中
+	// 对齐 Python DashScopeEmbedding 构造函数的 extra_headers 参数
+	extraHeaders map[string]string
 	// httpClient HTTP 客户端
 	httpClient *http.Client
 }
@@ -105,6 +111,19 @@ func WithDashscopeHTTPClient(client *http.Client) DashscopeEmbeddingOption {
 	return func(ds *DashscopeEmbedding) { ds.httpClient = client }
 }
 
+// WithDashscopeExtraHeaders 设置额外请求头，合并到 HTTP 请求中。
+// 对齐 Python DashScopeEmbedding 构造函数的 extra_headers 参数。
+func WithDashscopeExtraHeaders(headers map[string]string) DashscopeEmbeddingOption {
+	return func(ds *DashscopeEmbedding) {
+		if ds.extraHeaders == nil {
+			ds.extraHeaders = make(map[string]string)
+		}
+		for k, v := range headers {
+			ds.extraHeaders[k] = v
+		}
+	}
+}
+
 // NewDashscopeEmbedding 创建 DashScope 向量嵌入客户端。
 func NewDashscopeEmbedding(config EmbeddingConfig, opts ...DashscopeEmbeddingOption) *DashscopeEmbedding {
 	ds := &DashscopeEmbedding{
@@ -127,8 +146,18 @@ func NewDashscopeEmbedding(config EmbeddingConfig, opts ...DashscopeEmbeddingOpt
 	return ds
 }
 
+// dashscopeInputMode DashScope API 输入模式
+type dashscopeInputMode int
+
+const (
+	// dashscopeInputTexts 纯文本模式，input 使用 {"texts": [...]} 格式
+	dashscopeInputTexts dashscopeInputMode = iota
+	// dashscopeInputMultimodal 多模态模式，input 使用 [{...}] 格式
+	dashscopeInputMultimodal
+)
+
 // EmbedQuery 将单条查询文本转换为向量。
-func (ds *DashscopeEmbedding) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
+func (ds *DashscopeEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
@@ -136,7 +165,7 @@ func (ds *DashscopeEmbedding) EmbedQuery(ctx context.Context, text string) ([]fl
 		)
 	}
 
-	embeddings, err := ds.callAPI(ctx, []map[string]any{{"text": text}})
+	embeddings, err := ds.callAPI(ctx, []string{text}, dashscopeInputTexts)
 	if err != nil {
 		return nil, err
 	}
@@ -165,13 +194,7 @@ func (ds *DashscopeEmbedding) EmbedDocuments(ctx context.Context, texts []string
 		batch := batch
 		i := i
 		tasks[i] = func() ([][]float64, error) {
-			// 转换为 DashScope 输入格式
-			input := make([]map[string]any, len(batch))
-			for j, text := range batch {
-				input[j] = map[string]any{"text": text}
-			}
-
-			result, err := ds.callAPI(ctx, input)
+			result, err := ds.callAPI(ctx, batch, dashscopeInputTexts)
 			if err != nil {
 				return nil, err
 			}
@@ -201,7 +224,7 @@ func (ds *DashscopeEmbedding) EmbedMultimodal(ctx context.Context, doc *common.M
 		return nil, err
 	}
 	input := []map[string]any{dsInput}
-	embeddings, err := ds.callAPI(ctx, input)
+	embeddings, err := ds.callAPI(ctx, input, dashscopeInputMultimodal)
 	if err != nil {
 		return nil, err
 	}
@@ -216,16 +239,22 @@ func (ds *DashscopeEmbedding) EmbedMultimodal(ctx context.Context, doc *common.M
 
 // Dimension 返回嵌入向量维度。
 func (ds *DashscopeEmbedding) Dimension() int {
+	ds.dimMu.Lock()
 	if ds.dimension > 0 {
-		return ds.dimension
+		dim := ds.dimension
+		ds.dimMu.Unlock()
+		return dim
 	}
+	ds.dimMu.Unlock()
 
 	vec, err := ds.EmbedQuery(context.Background(), "test")
 	if err != nil {
 		return 0
 	}
 	if !ds.matryoshkaDimension {
+		ds.dimMu.Lock()
 		ds.dimension = len(vec)
+		ds.dimMu.Unlock()
 	}
 	logger.Debug(logComponent).
 		Int("dimension", len(vec)).
@@ -237,11 +266,36 @@ func (ds *DashscopeEmbedding) Dimension() int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // callAPI 调用 DashScope Embeddings API。
-func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input []map[string]any) ([][]float64, error) {
+// textInput 用于纯文本模式，multimodalInput 用于多模态模式。
+// mode 决定 input 字段的格式：纯文本用 {"texts": [...]}，多模态用 [{...}]。
+func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input interface{}, mode dashscopeInputMode) ([][]float64, error) {
 	return RetryWithBackoff(ctx, ds.maxRetries, func(attempt int) ([][]float64, error) {
+		// 根据 mode 构造 input 字段
+		var payloadInput interface{}
+		switch mode {
+		case dashscopeInputTexts:
+			// 纯文本模式：input 使用 {"texts": [...]} 格式
+			texts, ok := input.([]string)
+			if !ok {
+				return nil, exception.BuildError(
+					exception.StatusRetrievalEmbeddingInputInvalid,
+					exception.WithParam("error_msg", "纯文本模式需要 []string 输入"),
+				)
+			}
+			payloadInput = map[string]any{"texts": texts}
+		case dashscopeInputMultimodal:
+			// 多模态模式：input 使用 [{...}] 格式
+			payloadInput = input
+		default:
+			return nil, exception.BuildError(
+				exception.StatusRetrievalEmbeddingInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("不支持的输入模式: %d", mode)),
+			)
+		}
+
 		payload := map[string]any{
 			"model": ds.config.ModelName,
-			"input": input,
+			"input": payloadInput,
 		}
 
 		// Matryoshka 维度截断
@@ -273,6 +327,10 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input []map[string]an
 		req.Header.Set("Content-Type", "application/json")
 		if ds.config.APIKey != "" {
 			req.Header.Set("Authorization", "Bearer "+ds.config.APIKey)
+		}
+		// 合并 extra_headers，对齐 Python extra_headers 参数
+		for k, v := range ds.extraHeaders {
+			req.Header.Set(k, v)
 		}
 
 		resp, err := ds.httpClient.Do(req)
@@ -320,11 +378,15 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input []map[string]an
 		}
 
 		// 自动探测 dimension
-		if !ds.matryoshkaDimension && ds.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
-			ds.dimension = len(embeddings[0])
-			logger.Debug(logComponent).
-				Int("dimension", ds.dimension).
-				Msg("探测到嵌入向量维度")
+		if !ds.matryoshkaDimension {
+			ds.dimMu.Lock()
+			if ds.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
+				ds.dimension = len(embeddings[0])
+				logger.Debug(logComponent).
+					Int("dimension", ds.dimension).
+					Msg("探测到嵌入向量维度")
+			}
+			ds.dimMu.Unlock()
 		}
 
 		return embeddings, nil

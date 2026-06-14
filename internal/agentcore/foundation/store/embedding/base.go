@@ -20,7 +20,8 @@ type Callback interface {
 // 对应 Python: openjiuwen/core/foundation/store/base_embedding.py (Embedding)
 type BaseEmbedding interface {
 	// EmbedQuery 将单条查询文本转换为向量。
-	EmbedQuery(ctx context.Context, text string) ([]float64, error)
+	// 对齐 Python: embed_query(self, text, **kwargs)，opts 透传额外参数。
+	EmbedQuery(ctx context.Context, text string, opts ...EmbedOption) ([]float64, error)
 
 	// EmbedDocuments 将多条文档文本批量转换为向量。
 	EmbedDocuments(ctx context.Context, texts []string, opts ...EmbedOption) ([][]float64, error)

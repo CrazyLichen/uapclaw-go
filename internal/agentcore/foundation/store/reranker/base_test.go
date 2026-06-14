@@ -137,7 +137,7 @@ func TestDocID_其他类型(t *testing.T) {
 // ──────────────────────────── RerankerConfig 测试 ────────────────────────────
 
 func TestRerankerConfig_校验通过(t *testing.T) {
-	config := &RerankerConfig{APIBase: "https://api.example.com"}
+	config := &RerankerConfig{APIBase: "https://api.example.com", Timeout: 10}
 	if err := ValidateConfig(config); err != nil {
 		t.Errorf("有效配置校验应通过, 实际错误: %v", err)
 	}
@@ -156,6 +156,14 @@ func TestRerankerConfig_Timeout为负数(t *testing.T) {
 	err := ValidateConfig(config)
 	if err == nil {
 		t.Fatal("Timeout 为负数时应返回错误")
+	}
+}
+
+func TestRerankerConfig_Timeout为零(t *testing.T) {
+	config := &RerankerConfig{APIBase: "https://api.example.com", Timeout: 0}
+	err := ValidateConfig(config)
+	if err == nil {
+		t.Fatal("Timeout 为零时应返回错误")
 	}
 }
 

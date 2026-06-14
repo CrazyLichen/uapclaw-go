@@ -171,11 +171,11 @@ func buildRelationSchema(storageCfg *graph.GraphStoreStorageConfig, embedDim int
 	)
 	schema = schema.WithField(
 		entity.NewField().WithName("offset_since").
-			WithDataType(entity.FieldTypeInt32),
+			WithDataType(entity.FieldTypeInt8),
 	)
 	schema = schema.WithField(
 		entity.NewField().WithName("offset_until").
-			WithDataType(entity.FieldTypeInt32),
+			WithDataType(entity.FieldTypeInt8),
 	)
 
 	// 添加 BM25 Function

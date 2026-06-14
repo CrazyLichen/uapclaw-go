@@ -58,21 +58,39 @@ func (s *MilvusGraphStore) Config() *graph.GraphConfig {
 }
 
 // Rebuild 重建所有集合和索引。
+// 对齐 Python: 先尝试 LoadCollection，加载成功则直接返回；加载失败则删数据库再重建。
 func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 	client, err := s.getClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	// 删除旧集合
+	// 对齐 Python: 先尝试 load_collection，如果成功则不需要 rebuild
+	loadOK := true
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
-		has, err := client.HasCollection(ctx, milvusclient.NewHasCollectionOption(coll))
-		if err != nil {
-			return fmt.Errorf("检查集合 %s 失败: %w", coll, err)
+		if err := client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(coll)); err != nil {
+			loadOK = false
+			break
 		}
-		if has {
-			if err := client.DropCollection(ctx, milvusclient.NewDropCollectionOption(coll)); err != nil {
-				return fmt.Errorf("删除集合 %s 失败: %w", coll, err)
+	}
+	if loadOK {
+		logger.Info(logComponent).Msg("集合加载成功，跳过重建")
+		return nil
+	}
+
+	// 加载失败，删数据库再重建，对齐 Python: drop database
+	if err := client.DropDatabase(ctx, milvusclient.NewDropDatabaseOption(s.config.Name)); err != nil {
+		logger.Warn(logComponent).Err(err).Str("db_name", s.config.Name).Msg("删除数据库失败，回退到删除集合")
+		// 回退到删除集合
+		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
+			has, err := client.HasCollection(ctx, milvusclient.NewHasCollectionOption(coll))
+			if err != nil {
+				return fmt.Errorf("检查集合 %s 失败: %w", coll, err)
+			}
+			if has {
+				if err := client.DropCollection(ctx, milvusclient.NewDropCollectionOption(coll)); err != nil {
+					return fmt.Errorf("删除集合 %s 失败: %w", coll, err)
+				}
 			}
 		}
 	}
@@ -86,7 +104,8 @@ func (s *MilvusGraphStore) Rebuild(ctx context.Context) error {
 	return nil
 }
 
-// Refresh 刷新数据（flush + compact）
+// Refresh 刷新数据（flush + 可选 compact）。
+// 对齐 Python: flush + 可选 compact。
 func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) error {
 	client, err := s.getClient(ctx)
 	if err != nil {
@@ -96,6 +115,15 @@ func (s *MilvusGraphStore) Refresh(ctx context.Context, opts ...graph.Option) er
 	for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
 		if err := client.Flush(ctx, milvusclient.NewFlushOption(coll)); err != nil {
 			logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Flush 失败")
+		}
+	}
+
+	// 对齐 Python: 可选 compact 操作
+	if s.config.EnableCompact {
+		for _, coll := range []string{CollectionEntity, CollectionRelation, CollectionEpisode} {
+			if _, err := client.Compact(ctx, milvusclient.NewCompactOption(coll)); err != nil {
+				logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("Compact 失败")
+			}
 		}
 	}
 
@@ -144,6 +172,7 @@ func (s *MilvusGraphStore) AddEpisode(ctx context.Context, episodes []*graph.Epi
 }
 
 // Query 按ID或过滤表达式查询数据。
+// 对齐 Python: IDs 和 Expr 都为空且无 limit 时报错。
 func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ...graph.Option) ([]map[string]any, error) {
 	if err := s.ensureInit(ctx); err != nil {
 		return nil, err
@@ -167,6 +196,11 @@ func (s *MilvusGraphStore) Query(ctx context.Context, collection string, opts ..
 			return nil, fmt.Errorf("milvus 后端应返回 string 类型的表达式")
 		}
 		expr = strExpr
+	}
+
+	// 对齐 Python: expr 和 ids 都为 None 且没有 limit 时报错
+	if expr == "" && o.K == 0 {
+		return nil, fmt.Errorf("查询必须提供 IDs 或过滤表达式")
 	}
 
 	outputFields := o.OutputFields
@@ -217,9 +251,15 @@ func (s *MilvusGraphStore) Search(ctx context.Context, query string, opts ...gra
 }
 
 // AttachEmbedder 绑定嵌入模型。
-func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) {
+// 对齐 Python: 校验 embed_dim 与 embedder.dimension 是否一致，不一致则返回错误。
+func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// 校验嵌入维度，对齐 Python: if config.embed_dim != embedder.dimension
+	if s.config.EmbedDim != embedder.Dimension() {
+		return fmt.Errorf("嵌入维度不匹配: 配置 EmbedDim=%d, embedder.Dimension=%d", s.config.EmbedDim, embedder.Dimension())
+	}
 
 	if s.graphWriter != nil {
 		s.graphWriter.embedder = embedder
@@ -228,7 +268,8 @@ func (s *MilvusGraphStore) AttachEmbedder(embedder embedding.BaseEmbedding) {
 		s.graphSearcher.embedder = embedder
 	}
 
-	logger.Info(logComponent).Msg("已绑定嵌入模型")
+	logger.Info(logComponent).Int("embed_dim", s.config.EmbedDim).Msg("已绑定嵌入模型")
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

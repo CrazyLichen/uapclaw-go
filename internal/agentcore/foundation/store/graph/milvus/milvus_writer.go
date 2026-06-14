@@ -2,6 +2,7 @@ package milvus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -85,13 +86,11 @@ func (w *graphWriter) addEpisode(ctx context.Context, episodes []*graph.Episode,
 }
 
 // delete 按条件删除图数据。
-//
-// 对应 Python: MilvusGraphStore.delete
+// 对齐 Python: ids 和 expr 都为 None 时报错。
 func (w *graphWriter) delete(ctx context.Context, collection string, opts ...graph.Option) error {
 	o := applyGraphOptions(opts...)
 	if len(o.IDs) == 0 && o.Expr == nil {
-		logger.Warn(logComponent).Str("collection", collection).Msg("未提供删除条件")
-		return nil
+		return fmt.Errorf("删除必须提供 IDs 或过滤表达式")
 	}
 
 	var expr string
@@ -488,6 +487,22 @@ func inferGraphColumn(fieldName string, values []any) column.Column {
 				}
 			}
 			return column.NewColumnVarCharArray(fieldName, arr)
+		case map[string]any:
+			// JSON 类型（如 metadata/attributes），对齐 Python: DataType.JSON
+			jsonBytes := make([][]byte, 0, len(values))
+			for _, val := range values {
+				if m, ok := val.(map[string]any); ok {
+					b, err := json.Marshal(m)
+					if err != nil {
+						jsonBytes = append(jsonBytes, []byte("{}"))
+					} else {
+						jsonBytes = append(jsonBytes, b)
+					}
+				} else {
+					jsonBytes = append(jsonBytes, []byte("{}"))
+				}
+			}
+			return column.NewColumnJSONBytes(fieldName, jsonBytes)
 		}
 	}
 	return nil

@@ -119,25 +119,25 @@ func TestArrayIndex(t *testing.T) {
 // TestFilterUser_单用户 测试单用户过滤
 func TestFilterUser_单用户(t *testing.T) {
 	expr := FilterUser("user123", "")
-	// 单用户 → InList 单值 → 退化为 ComparisonExpr
+	// 单用户 → Eq → ComparisonExpr
 	ce, ok := expr.(*ComparisonExpr)
 	if !ok {
-		t.Fatal("FilterUser 单用户应退化为 *ComparisonExpr")
+		t.Fatal("FilterUser 单用户应返回 *ComparisonExpr")
 	}
 	if ce.Field != "user_id" || ce.Value != "user123" {
 		t.Errorf("FilterUser 字段不正确: %+v", ce)
 	}
 }
 
-// TestFilterUser_多用户 测试多用户过滤
-func TestFilterUser_多用户(t *testing.T) {
-	expr := FilterUser([]string{"user1", "user2"}, "")
+// TestFilterUsers_多用户 测试多用户过滤
+func TestFilterUsers_多用户(t *testing.T) {
+	expr := FilterUsers([]string{"user1", "user2"}, "")
 	re, ok := expr.(*RangeExpr)
 	if !ok {
-		t.Fatal("FilterUser 多用户应返回 *RangeExpr")
+		t.Fatal("FilterUsers 多用户应返回 *RangeExpr")
 	}
 	if re.Operator != "in" {
-		t.Errorf("FilterUser 运算符应为 in，实际 %q", re.Operator)
+		t.Errorf("FilterUsers 运算符应为 in，实际 %q", re.Operator)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestFilterUser_自定义字段(t *testing.T) {
 	expr := FilterUser("user123", "owner")
 	ce, ok := expr.(*ComparisonExpr)
 	if !ok {
-		t.Fatal("FilterUser 应退化为 *ComparisonExpr")
+		t.Fatal("FilterUser 应返回 *ComparisonExpr")
 	}
 	if ce.Field != "owner" {
 		t.Errorf("FilterUser 字段应为 owner，实际 %q", ce.Field)
@@ -227,15 +227,27 @@ func TestXor(t *testing.T) {
 	}
 }
 
-// TestFilterUser_非字符串非切片 测试 FilterUser 使用非 string 非 []string 类型
-func TestFilterUser_非字符串非切片(t *testing.T) {
-	expr := FilterUser(42, "")
+// TestFilterUsers_自定义字段 测试多用户自定义字段名
+func TestFilterUsers_自定义字段(t *testing.T) {
+	expr := FilterUsers([]string{"user1", "user2"}, "owner")
+	re, ok := expr.(*RangeExpr)
+	if !ok {
+		t.Fatal("FilterUsers 应返回 *RangeExpr")
+	}
+	if re.Field != "owner" {
+		t.Errorf("FilterUsers 字段应为 owner，实际 %q", re.Field)
+	}
+}
+
+// TestFilterUsers_单用户 测试单用户列表退化为等值比较
+func TestFilterUsers_单用户(t *testing.T) {
+	expr := FilterUsers([]string{"user123"}, "")
 	ce, ok := expr.(*ComparisonExpr)
 	if !ok {
-		t.Fatal("FilterUser 非字符串非切片应退化为 *ComparisonExpr")
+		t.Fatal("FilterUsers 单用户应退化为 *ComparisonExpr")
 	}
-	if ce.Value != 42 {
-		t.Errorf("FilterUser 字段不正确: %+v", ce)
+	if ce.Field != "user_id" || ce.Value != "user123" {
+		t.Errorf("FilterUsers 单用户字段不正确: %+v", ce)
 	}
 }
 

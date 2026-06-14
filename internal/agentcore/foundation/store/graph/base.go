@@ -42,8 +42,8 @@ type BaseGraphStore interface {
 	// Search 混合搜索，支持 BFS 图扩展和可选 reranking
 	Search(ctx context.Context, query string, opts ...Option) (map[string][]map[string]any, error)
 
-	// AttachEmbedder 绑定嵌入模型
-	AttachEmbedder(embedder embedding.BaseEmbedding)
+	// AttachEmbedder 绑定嵌入模型，校验嵌入维度是否匹配
+	AttachEmbedder(embedder embedding.BaseEmbedding) error
 }
 
 // Option 函数式选项

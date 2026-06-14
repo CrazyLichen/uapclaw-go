@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -48,8 +47,8 @@ func NewVLLMEmbedding(openAI *OpenAIEmbedding) *VLLMEmbedding {
 }
 
 // EmbedQuery 将单条查询文本转换为向量，委托给 OpenAIEmbedding。
-func (v *VLLMEmbedding) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
-	return v.openAI.EmbedQuery(ctx, text)
+func (v *VLLMEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
+	return v.openAI.EmbedQuery(ctx, text, opts...)
 }
 
 // EmbedDocuments 将多条文档文本批量转换为向量，委托给 OpenAIEmbedding。
@@ -161,6 +160,7 @@ func (v *VLLMEmbedding) callWithMessages(ctx context.Context, messages []map[str
 }
 
 // retryVLLMWithBackoff VLLM 专用重试 + 指数退避（返回单条向量）。
+// 对齐 Python: 只重试可恢复错误（5xx/网络错误/429），不重试客户端错误（4xx）。
 func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt int) ([]float64, error)) ([]float64, error) {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -175,6 +175,11 @@ func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt i
 			return result, nil
 		}
 		lastErr = err
+
+		// 检查是否可重试：4xx 客户端错误不可重试（429 除外），5xx 和网络错误可重试
+		if !vllmIsRetryable(err) {
+			return nil, err
+		}
 
 		if attempt < maxRetries-1 {
 			logger.Warn(logComponent).
@@ -193,30 +198,11 @@ func retryVLLMWithBackoff(ctx context.Context, maxRetries int, fn func(attempt i
 	)
 }
 
-// parseMultimodalInput 解析多模态输入，构造 kwargs。
-// 对应 Python: VLLMEmbedding.parse_multimodal_input
-func parseMultimodalInput(doc *common.MultimodalDocument, instruction string) []map[string]any {
-	if doc == nil {
-		return nil
+// vllmIsRetryable 判断 VLLM 错误是否可重试。
+// 4xx 客户端错误不可重试（429 Rate Limit 除外），5xx 服务端错误和网络错误可重试。
+func vllmIsRetryable(err error) bool {
+	if baseErr, ok := err.(*exception.BaseError); ok && !baseErr.IsRecoverable() {
+		return false
 	}
-
-	if strings.TrimSpace(instruction) == "" {
-		instruction = defaultInstruction
-	}
-
-	content := doc.Content()
-	messages := []map[string]any{
-		{
-			"role": "system",
-			"content": []map[string]any{
-				{"type": "text", "text": instruction},
-			},
-		},
-		{
-			"role":    "user",
-			"content": content,
-		},
-	}
-
-	return messages
+	return true
 }

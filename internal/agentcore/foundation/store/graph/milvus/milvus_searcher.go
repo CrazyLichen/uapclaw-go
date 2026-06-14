@@ -9,6 +9,7 @@ import (
 
 	"github.com/milvus-io/milvus/client/v2/entity"
 	milvusclient "github.com/milvus-io/milvus/client/v2/milvusclient"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
@@ -79,20 +80,46 @@ func (s *graphSearcher) search(ctx context.Context, query string, opts ...graph.
 }
 
 // searchAll 并发搜索三集合，然后合并结果。
+// 对齐 Python: asyncio.create_task + as_completed 并发搜索三集合。
+// 搜索失败的集合仍会在 results 中初始化空切片，与 Python 对齐。
 //
 // 对应 Python: MilvusGraphStore._search_all
 func (s *graphSearcher) searchAll(ctx context.Context, query string, o graph.Options) (map[string][]map[string]any, error) {
 	collections := []string{CollectionEntity, CollectionRelation, CollectionEpisode}
 	results := make(map[string][]map[string]any)
 
-	// 逐个搜索（Go 的 goroutine 需要 errgroup 等额外依赖，这里简化为串行）
+	// 使用 errgroup 并发搜索三集合，对齐 Python asyncio.create_task
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	// 收集并发搜索结果
+	type searchResult struct {
+		collection string
+		result     []map[string]any
+		err        error
+	}
+	resultCh := make(chan searchResult, len(collections))
+
 	for _, coll := range collections {
-		result, err := s.searchSingle(ctx, query, coll, o)
-		if err != nil {
-			logger.Warn(logComponent).Err(err).Str("collection", coll).Msg("搜索集合失败")
-			continue
+		coll := coll // 捕获循环变量
+		eg.Go(func() error {
+			result, err := s.searchSingle(egCtx, query, coll, o)
+			resultCh <- searchResult{collection: coll, result: result, err: err}
+			return nil // 不向 errgroup 传播错误，单独处理每个集合的结果
+		})
+	}
+
+	// 等待所有搜索完成
+	_ = eg.Wait()
+	close(resultCh)
+
+	// 收集结果：搜索失败的集合初始化空切片，对齐 Python: output_dict[col] = []
+	for sr := range resultCh {
+		if sr.err != nil {
+			logger.Warn(logComponent).Err(sr.err).Str("collection", sr.collection).Msg("搜索集合失败")
+			results[sr.collection] = []map[string]any{}
+		} else {
+			results[sr.collection] = sr.result
 		}
-		results[coll] = result
 	}
 
 	// combinedRerank（如果配置了 reranker）
@@ -301,6 +328,11 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	}
 
 	// 构建 3 路 AnnRequest
+	// 对齐 Python: 每个 AnnSearchRequest 的 limit=min(k*3, 20)
+	searchLimit := k * 3
+	if searchLimit > 20 {
+		searchLimit = 20
+	}
 	var annRequests []*milvusclient.AnnRequest
 
 	// 通道1: content_embedding (dense)
@@ -309,7 +341,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 		vecFloat32[i] = float32(v)
 	}
 	vectors := []entity.Vector{entity.FloatVector(vecFloat32)}
-	contentReq := milvusclient.NewAnnRequest("content_embedding", k, vectors...)
+	contentReq := milvusclient.NewAnnRequest("content_embedding", searchLimit, vectors...)
 	if expr != "" {
 		contentReq = contentReq.WithFilter(expr)
 	}
@@ -317,7 +349,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 
 	// 通道2: name_embedding (dense, 仅 Entity 集合)
 	if collection == CollectionEntity {
-		nameReq := milvusclient.NewAnnRequest("name_embedding", k, vectors...)
+		nameReq := milvusclient.NewAnnRequest("name_embedding", searchLimit, vectors...)
 		if expr != "" {
 			nameReq = nameReq.WithFilter(expr)
 		}
@@ -327,7 +359,7 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	// 通道3: content_bm25 (sparse, 使用查询文本)
 	// BM25 搜索：使用查询文本作为输入，Milvus BM25 Function 需要文本输入来生成分词稀疏向量
 	// 对齐 Python: sparse_req = AnnRequest("content_bm25", limit, [query])
-	sparseReq := milvusclient.NewAnnRequest("content_bm25", k, entity.Text(query))
+	sparseReq := milvusclient.NewAnnRequest("content_bm25", searchLimit, entity.Text(query))
 	if expr != "" {
 		sparseReq = sparseReq.WithFilter(expr)
 	}
@@ -678,7 +710,8 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 	return reranked, nil
 }
 
-// filterByScore 按分数过滤和排序结果
+// filterByScore 按分数过滤和排序结果。
+// 对齐 Python: 使用 uuid 字段作为 scoreMap 的 key，避免相同 content 导致冲突。
 func filterByScore(items []map[string]any, scoreMap map[string]float64, minScore float64) []map[string]any {
 	type scoredItem struct {
 		item  map[string]any
@@ -687,9 +720,12 @@ func filterByScore(items []map[string]any, scoreMap map[string]float64, minScore
 
 	var scored []scoredItem
 	for _, item := range items {
-		// 获取文档内容作为 scoreMap 的 key
+		// 使用 uuid 作为 scoreMap 的 key，对齐 Python
 		key := ""
-		if content, ok := item["content"].(string); ok {
+		if uuid, ok := item["uuid"].(string); ok && uuid != "" {
+			key = uuid
+		} else if content, ok := item["content"].(string); ok {
+			// 回退到 content 作为 key
 			key = content
 		}
 		if score, ok := scoreMap[key]; ok && score >= minScore {

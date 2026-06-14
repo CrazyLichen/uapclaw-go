@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,9 @@ func newTestS3Client(handler http.Handler) (*S3Client, *httptest.Server) {
 		o.UsePathStyle = true // 测试时使用路径风格
 	})
 
-	return &S3Client{client: client}, server
+	uploader := manager.NewUploader(client)
+
+	return &S3Client{client: client, uploader: uploader}, server
 }
 
 // mockS3Handler 模拟 S3 API 的 HTTP 处理器

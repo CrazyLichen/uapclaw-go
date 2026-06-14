@@ -136,7 +136,7 @@ func NewAPIEmbedding(config EmbeddingConfig, opts ...APIEmbeddingOption) *APIEmb
 }
 
 // EmbedQuery 将单条查询文本转换为向量。
-func (a *APIEmbedding) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
+func (a *APIEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,

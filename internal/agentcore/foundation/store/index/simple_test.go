@@ -275,7 +275,7 @@ func newFakeEmbedding() *fakeEmbedding {
 	return &fakeEmbedding{dim: 4}
 }
 
-func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string) ([]float64, error) {
+func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string, _ ...embedding.EmbedOption) ([]float64, error) {
 	vec := make([]float64, f.dim)
 	for i := range vec {
 		vec[i] = float64(i+1) * 0.1
@@ -1745,8 +1745,8 @@ func (f *failingEmbedding) EmbedDocuments(ctx context.Context, texts []string, _
 	return f.fakeEmbedding.EmbedDocuments(ctx, texts)
 }
 
-func (f *failingEmbedding) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
-	return f.fakeEmbedding.EmbedQuery(ctx, text)
+func (f *failingEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
+	return f.fakeEmbedding.EmbedQuery(ctx, text, opts...)
 }
 
 func (f *failingEmbedding) Dimension() int {

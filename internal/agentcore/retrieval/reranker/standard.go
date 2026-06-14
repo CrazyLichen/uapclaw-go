@@ -80,8 +80,9 @@ func NewStandardReranker(config reranker.RerankerConfig, opts ...StandardReranke
 		return nil, err
 	}
 
-	// 去除 APIBase 尾部的端点后缀
-	apiBase := strings.TrimSuffix(config.APIBase, standardEndPoint)
+	// 去除 APIBase 尾部斜杠和端点后缀（对齐 Python removesuffix("/") + removesuffix(self.end_point)）
+	apiBase := strings.TrimSuffix(config.APIBase, "/")
+	apiBase = strings.TrimSuffix(apiBase, standardEndPoint)
 
 	base := NewRerankerBase(config, defaultMaxRetries, defaultRetryWait)
 
@@ -149,7 +150,7 @@ func (r *StandardReranker) RerankDocsSync(ctx context.Context, query string, doc
 // assembleParams 组装请求参数，将文档和查询合并为完整的请求参数。
 // 覆盖基类方法，增加输入类型校验。
 // 对齐 Python: StandardReranker._assemble_params
-func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string) {
+func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranker.RerankOption) (map[string]string, map[string]any, []string, error) {
 	// 校验输入类型：必须是 []string 或 []*Document
 	docIDs := make([]string, len(docs))
 	texts := make([]string, len(docs))
@@ -162,7 +163,10 @@ func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranke
 			docIDs[i] = d.ID
 			texts[i] = d.Text
 		default:
-			// 不支持的类型，跳过
+			return nil, nil, nil, exception.BuildError(
+				exception.StatusRetrievalRerankerInputInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("unsupported document type: %T", doc)),
+			)
 		}
 	}
 
@@ -175,7 +179,7 @@ func (r *StandardReranker) assembleParams(query string, docs []any, opt *reranke
 	params["documents"] = texts
 	params["top_n"] = topN
 
-	return headers, params, docIDs
+	return headers, params, docIDs, nil
 }
 
 // resolveOption 从可变参数中解析 RerankOption
@@ -188,7 +192,13 @@ func resolveOption(opts ...reranker.RerankOption) *reranker.RerankOption {
 
 // doRerank 执行异步重排序
 func (r *StandardReranker) doRerank(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
-	headers, params, docIDs := r.assembleParams(query, docs, opt)
+	if err := validateStandardConfig(docs); err != nil {
+		return nil, err
+	}
+	headers, params, docIDs, err := r.assembleParams(query, docs, opt)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := utils.RetryConfig{
 		MaxRetries: r.maxRetries,
@@ -212,7 +222,13 @@ func (r *StandardReranker) doRerank(ctx context.Context, query string, docs []an
 
 // doRerankSync 执行同步重排序
 func (r *StandardReranker) doRerankSync(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
-	headers, params, docIDs := r.assembleParams(query, docs, opt)
+	if err := validateStandardConfig(docs); err != nil {
+		return nil, err
+	}
+	headers, params, docIDs, err := r.assembleParams(query, docs, opt)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := utils.RetryConfig{
 		MaxRetries: r.maxRetries,

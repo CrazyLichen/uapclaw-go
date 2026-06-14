@@ -24,6 +24,7 @@ func TestNewStandardReranker_配置校验(t *testing.T) {
 func TestNewStandardReranker_APIBase去除rerank后缀(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase: "https://api.example.com/rerank",
+		Timeout: 10,
 	}
 	r, err := NewStandardReranker(config)
 	if err != nil {
@@ -37,6 +38,7 @@ func TestNewStandardReranker_APIBase去除rerank后缀(t *testing.T) {
 func TestNewStandardReranker_APIBase无后缀(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase: "https://api.example.com",
+		Timeout: 10,
 	}
 	r, err := NewStandardReranker(config)
 	if err != nil {
@@ -77,6 +79,7 @@ func TestStandardReranker_Rerank_正常(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, err := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 	if err != nil {
@@ -109,6 +112,7 @@ func TestStandardReranker_RerankDocs_Document输入(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -139,6 +143,7 @@ func TestStandardReranker_Rerank_Instruct选项(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -172,6 +177,7 @@ func TestStandardReranker_Rerank_ExtraBody合并(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 		ExtraBody: map[string]any{"custom_field": "custom_value"},
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
@@ -206,6 +212,7 @@ func TestStandardReranker_Rerank_API调用失败重试(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(3), WithRetryWait(10*time.Millisecond))
 
@@ -232,6 +239,7 @@ func TestStandardReranker_RerankSync_同步调用(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -256,6 +264,7 @@ func TestStandardReranker_Rerank_空结果(t *testing.T) {
 	config := reranker.RerankerConfig{
 		APIBase:   server.URL,
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -287,6 +296,7 @@ func TestStandardReranker_ExtraHeaders(t *testing.T) {
 		APIBase:   server.URL,
 		APIKey:    "my-api-key",
 		ModelName: "rerank-model",
+		Timeout:   10,
 	}
 	r, _ := NewStandardReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
@@ -304,6 +314,7 @@ func TestNewStandardReranker_自定义HTTPClient(t *testing.T) {
 	customClient := &http.Client{Timeout: 30 * time.Second}
 	config := reranker.RerankerConfig{
 		APIBase: "https://api.example.com",
+		Timeout: 10,
 	}
 	r, err := NewStandardReranker(config, WithHTTPClient(customClient))
 	if err != nil {

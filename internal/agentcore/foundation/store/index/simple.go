@@ -373,7 +373,7 @@ func (s *SimpleMemoryIndex) DeleteMemories(ctx context.Context, userID string, s
 	for _, col := range cols {
 		if err := s.vectorStore.DeleteDocsByIDs(ctx, col, ids); err != nil {
 			logger.Error(logComponent).Str("collection", col).Err(err).Msg("从向量存储删除文档失败")
-			// 向量删除失败不阻断，记录日志继续
+			return fmt.Errorf("从向量存储删除文档失败: %w", err)
 		}
 	}
 
@@ -399,7 +399,7 @@ func (s *SimpleMemoryIndex) DeleteByUser(ctx context.Context, userID string) err
 		if strings.HasPrefix(col, marker) {
 			if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
 				logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
-				continue
+				return fmt.Errorf("删除向量集合失败: %w", err)
 			}
 			s.mu.Lock()
 			delete(s.createdCollections, col)
@@ -442,7 +442,7 @@ func (s *SimpleMemoryIndex) DeleteByScope(ctx context.Context, scopeID string) e
 		if strings.HasPrefix(col, "uid_") && strings.Contains(col, scopeMarker) {
 			if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
 				logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
-				continue
+				return fmt.Errorf("删除向量集合失败: %w", err)
 			}
 			s.mu.Lock()
 			delete(s.createdCollections, col)
@@ -470,7 +470,7 @@ func (s *SimpleMemoryIndex) DeleteByUserAndScope(ctx context.Context, userID str
 	for _, col := range cols {
 		if err := s.vectorStore.DeleteCollection(ctx, col); err != nil {
 			logger.Error(logComponent).Str("collection", col).Err(err).Msg("删除向量集合失败")
-			continue
+			return fmt.Errorf("删除向量集合失败: %w", err)
 		}
 		s.mu.Lock()
 		delete(s.createdCollections, col)

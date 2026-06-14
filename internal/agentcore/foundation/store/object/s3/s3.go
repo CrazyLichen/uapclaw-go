@@ -8,8 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	objectpkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/object"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -24,9 +26,8 @@ import (
 type S3ClientConfig struct {
 	// ObjectStorageConfig 基础对象存储配置
 	objectpkg.ObjectStorageConfig
-	// SignatureVersion 签名版本，默认 "v4"
-	SignatureVersion string
 	// PayloadSigningEnabled 是否签名 payload，默认 false
+	// 对应 Python payload_signing_enabled=False，当为 false 时不签名请求体
 	PayloadSigningEnabled bool
 }
 
@@ -34,11 +35,14 @@ type S3ClientConfig struct {
 //
 // 支持华为云 OBS 以及任何 S3 兼容的对象存储服务。
 // 客户端为长生命周期，并发安全，底层连接池自动管理。
+// 使用分段上传（Multipart Upload）支持大文件上传。
 //
 // 对应 Python: openjiuwen/core/foundation/store/object/aioboto_storage_client.py
 type S3Client struct {
 	// client S3 服务客户端
 	client *s3.Client
+	// uploader 分段上传管理器
+	uploader *manager.Uploader
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -62,6 +66,7 @@ const (
 //  3. 构建 AWS 静态凭证
 //  4. 加载 AWS 配置并自定义 endpoint（指向 Server URL）
 //  5. 创建 S3 客户端，设置签名版本 v4、PayloadSigningEnabled: false
+//  6. 创建分段上传管理器
 func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	// 环境变量兜底
 	cfg.ApplyEnvFallback()
@@ -98,19 +103,36 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 			exception.WithParam("error_msg", fmt.Sprintf("load aws config failed: %v", err)))
 	}
 
-	// 创建 S3 客户端，自定义 endpoint
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+	// 构建 S3 客户端选项
+	var clientOpts []func(*s3.Options)
+	clientOpts = append(clientOpts, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(cfg.Server)
 		o.UsePathStyle = false // 虚拟主机风格寻址，对应 Python addressing_style="virtual"
 		o.EndpointOptions.DisableHTTPS = false
 	})
 
+	// G-29: 实现 payload_signing_enabled=False
+	// 当 PayloadSigningEnabled 为 false 时，使用 UNSIGNED-PAYLOAD 签名
+	// 对齐 Python: Config(s3={"payload_signing_enabled": False})
+	if !cfg.PayloadSigningEnabled {
+		clientOpts = append(clientOpts, s3.WithAPIOptions(
+			v4.SwapComputePayloadSHA256ForUnsignedPayloadMiddleware,
+		))
+	}
+
+	// 创建 S3 客户端
+	client := s3.NewFromConfig(awsCfg, clientOpts...)
+
+	// 创建分段上传管理器，对应 Python upload_fileobj 自动分段上传
+	uploader := manager.NewUploader(client)
+
 	logger.Info(logComponent).
 		Str("server", cfg.Server).
 		Str("region", cfg.RegionName).
+		Bool("payload_signing_enabled", cfg.PayloadSigningEnabled).
 		Msg("S3 客户端初始化成功")
 
-	return &S3Client{client: client}, nil
+	return &S3Client{client: client, uploader: uploader}, nil
 }
 
 // CreateBucket 创建新的对象存储桶
@@ -170,6 +192,8 @@ func (c *S3Client) DeleteBucket(ctx context.Context, bucketName string) error {
 
 // UploadFile 上传本地文件到对象存储桶
 //
+// 使用分段上传（Multipart Upload），大文件自动分片，对应 Python upload_fileobj。
+//
 // 对应 Python: AioBotoClient.upload_file
 func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName string, filePath string) error {
 	file, err := os.Open(filePath)
@@ -189,8 +213,25 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 	}
 	defer func() { _ = file.Close() }()
 
-	fileInfo, _ := file.Stat()
-	_, err = c.client.PutObject(ctx, &s3.PutObjectInput{
+	// G-31: 检查 file.Stat() 错误，避免 fileInfo 为 nil 时 panic
+	fileInfo, err := file.Stat()
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", "OBJECT_STORE_ERROR").
+			Str("method", "UploadFile").
+			Str("object_name", objectName).
+			Str("bucket_name", bucketName).
+			Str("file_path", filePath).
+			Msg("获取文件信息失败")
+		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
+			exception.WithParam("object_name", objectName),
+			exception.WithParam("bucket_name", bucketName),
+			exception.WithParam("error_msg", fmt.Sprintf("stat file failed: %v", err)))
+	}
+
+	// G-30: 使用分段上传替代 PutObject，大文件自动分片
+	_, err = c.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(bucketName),
 		Key:           aws.String(objectName),
 		Body:          file,
@@ -215,6 +256,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 		Str("object_name", objectName).
 		Str("file_path", filePath).
 		Str("bucket_name", bucketName).
+		Int64("file_size", fileInfo.Size()).
 		Msg("文件上传成功")
 	return nil
 }

@@ -53,6 +53,9 @@ type RerankOption struct {
 	TopN int
 	// ExtraParams 额外请求参数
 	ExtraParams map[string]any
+	// MultimodalQuery 多模态查询文档，用于 DashScope 等支持多模态查询的重排序器
+	// 类型为 *common.MultimodalDocument，使用 any 避免循环依赖
+	MultimodalQuery any
 }
 
 // BaseReranker 重排序模型抽象接口，定义文档相关性重排序操作。
@@ -127,7 +130,7 @@ func ValidateConfig(config *RerankerConfig) error {
 			exception.WithParam("error_msg", "APIBase is required"),
 		)
 	}
-	if config.Timeout < 0 {
+	if config.Timeout <= 0 {
 		return exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
 			exception.WithParam("error_msg", "Timeout must be greater than 0"),
 		)

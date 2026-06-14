@@ -33,6 +33,8 @@ type fakeGraphStoreClient struct {
 	createCollErr error
 	dropCollErr   error
 	hasCollErr    error
+	dropDBErr     error
+	compactErr    error
 }
 
 func newFakeGraphStoreClient() *fakeGraphStoreClient {
@@ -130,6 +132,17 @@ func (f *fakeGraphStoreClient) Flush(ctx context.Context, option milvusclient.Fl
 
 func (f *fakeGraphStoreClient) CreateIndex(ctx context.Context, option milvusclient.CreateIndexOption, callOptions ...interface{}) error {
 	return nil
+}
+
+func (f *fakeGraphStoreClient) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+	return f.dropDBErr
+}
+
+func (f *fakeGraphStoreClient) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+	if f.compactErr != nil {
+		return 0, f.compactErr
+	}
+	return 1, nil
 }
 
 func (f *fakeGraphStoreClient) Close(ctx context.Context) error {
@@ -357,11 +370,10 @@ func TestMilvusGraphStore_Query_空选项(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	results, err := s.Query(ctx, CollectionEntity)
-	if err != nil {
-		t.Fatalf("Query() error = %v", err)
+	_, err := s.Query(ctx, CollectionEntity)
+	if err == nil {
+		t.Error("Query 无 IDs 和 Expr 应返回错误")
 	}
-	_ = results
 }
 
 func TestMilvusGraphStore_IsEmpty(t *testing.T) {
@@ -453,7 +465,10 @@ func TestMilvusGraphStore_AttachEmbedder(t *testing.T) {
 	_ = s.ensureInit(ctx)
 
 	emb := &fakeEmbedder{}
-	s.AttachEmbedder(emb)
+	err := s.AttachEmbedder(emb)
+	if err != nil {
+		t.Fatalf("AttachEmbedder() error = %v", err)
+	}
 
 	if s.graphWriter.embedder != emb {
 		t.Error("graphWriter.embedder 应被设置")
@@ -465,11 +480,15 @@ func TestMilvusGraphStore_AttachEmbedder(t *testing.T) {
 
 func TestMilvusGraphStore_AttachEmbedder_未初始化(t *testing.T) {
 	cfg := graph.NewGraphConfig("localhost:19530")
+	cfg.EmbedDim = 3
 	s := NewMilvusGraphStore(cfg)
 
 	emb := &fakeEmbedder{}
 	// 未初始化时 AttachEmbedder 不应 panic
-	s.AttachEmbedder(emb)
+	err := s.AttachEmbedder(emb)
+	if err != nil {
+		t.Fatalf("AttachEmbedder 未初始化不应返回错误, error = %v", err)
+	}
 }
 
 func TestMilvusGraphStore_Close(t *testing.T) {
@@ -555,8 +574,28 @@ func TestMilvusGraphStore_Refresh_Flush失败(t *testing.T) {
 
 func TestMilvusGraphStore_Rebuild(t *testing.T) {
 	fake := newFakeGraphStoreClient()
+	// loadErr 为 nil 时 LoadCollection 成功，Rebuild 跳过重建
 	cfg := graph.NewGraphConfig("localhost:19530")
 	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
+	s := NewMilvusGraphStore(cfg)
+	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+		return fake, nil
+	}
+
+	ctx := context.Background()
+	err := s.Rebuild(ctx)
+	if err != nil {
+		t.Fatalf("Rebuild() error = %v", err)
+	}
+}
+
+func TestMilvusGraphStore_Rebuild_需要重建(t *testing.T) {
+	fake := newFakeGraphStoreClient()
+	fake.loadErr = fmt.Errorf("collection not loaded")
+	cfg := graph.NewGraphConfig("localhost:19530")
+	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
 	s := NewMilvusGraphStore(cfg)
 	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
 		return fake, nil
@@ -576,6 +615,7 @@ func TestMilvusGraphStore_Rebuild_集合已存在(t *testing.T) {
 	fake.collections[CollectionEpisode] = true
 	cfg := graph.NewGraphConfig("localhost:19530")
 	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
 	s := NewMilvusGraphStore(cfg)
 	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
 		return fake, nil
@@ -590,9 +630,11 @@ func TestMilvusGraphStore_Rebuild_集合已存在(t *testing.T) {
 
 func TestMilvusGraphStore_Rebuild_HasCollection失败(t *testing.T) {
 	fake := newFakeGraphStoreClient()
+	fake.loadErr = fmt.Errorf("load failed")
 	fake.hasCollErr = fmt.Errorf("has collection error")
 	cfg := graph.NewGraphConfig("localhost:19530")
 	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
 	s := NewMilvusGraphStore(cfg)
 	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
 		return fake, nil
@@ -607,10 +649,13 @@ func TestMilvusGraphStore_Rebuild_HasCollection失败(t *testing.T) {
 
 func TestMilvusGraphStore_Rebuild_DropCollection失败(t *testing.T) {
 	fake := newFakeGraphStoreClient()
+	fake.loadErr = fmt.Errorf("load failed")
+	fake.dropDBErr = fmt.Errorf("drop db error")
 	fake.collections[CollectionEntity] = true
 	fake.dropCollErr = fmt.Errorf("drop error")
 	cfg := graph.NewGraphConfig("localhost:19530")
 	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
 	s := NewMilvusGraphStore(cfg)
 	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
 		return fake, nil
@@ -625,9 +670,12 @@ func TestMilvusGraphStore_Rebuild_DropCollection失败(t *testing.T) {
 
 func TestMilvusGraphStore_Rebuild_CreateCollection失败(t *testing.T) {
 	fake := newFakeGraphStoreClient()
+	fake.loadErr = fmt.Errorf("load failed")
+	fake.dropDBErr = fmt.Errorf("drop db error")
 	fake.createCollErr = fmt.Errorf("create error")
 	cfg := graph.NewGraphConfig("localhost:19530")
 	cfg.EmbedDim = 3
+	cfg.Name = "test_db"
 	s := NewMilvusGraphStore(cfg)
 	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
 		return fake, nil
@@ -692,7 +740,7 @@ func TestMilvusGraphStore_Query_带OutputFields(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	results, err := s.Query(ctx, CollectionEntity, graph.WithOutputFields("uuid", "content"))
+	results, err := s.Query(ctx, CollectionEntity, graph.WithIDs("abc"), graph.WithOutputFields("uuid", "content"))
 	if err != nil {
 		t.Fatalf("Query() error = %v", err)
 	}
@@ -850,7 +898,10 @@ func TestMilvusGraphStore_AttachEmbedder_初始化后(t *testing.T) {
 	_ = s.ensureInit(ctx)
 
 	emb := &fakeEmbedder{}
-	s.AttachEmbedder(emb)
+	err := s.AttachEmbedder(emb)
+	if err != nil {
+		t.Fatalf("AttachEmbedder() error = %v", err)
+	}
 
 	// 验证 writer 和 searcher 都获得了 embedder
 	if s.graphWriter.embedder == nil {
@@ -861,13 +912,33 @@ func TestMilvusGraphStore_AttachEmbedder_初始化后(t *testing.T) {
 	}
 }
 
+// TestMilvusGraphStore_AttachEmbedder_维度不匹配 测试嵌入维度不匹配
+func TestMilvusGraphStore_AttachEmbedder_维度不匹配(t *testing.T) {
+	fake := newFakeGraphStoreClient()
+	cfg := graph.NewGraphConfig("localhost:19530")
+	cfg.EmbedDim = 128 // 配置维度为 128
+	s := NewMilvusGraphStore(cfg)
+	s.createClient = func(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+		return fake, nil
+	}
+
+	ctx := context.Background()
+	_ = s.ensureInit(ctx)
+
+	emb := &fakeEmbedder{} // Dimension() 返回 3
+	err := s.AttachEmbedder(emb)
+	if err == nil {
+		t.Error("AttachEmbedder 维度不匹配应返回错误")
+	}
+}
+
 // fakeGraphSearchEmbedder 用于搜索测试的 embedder
 type fakeGraphSearchEmbedder struct {
 	emb []float64
 	err error
 }
 
-func (f *fakeGraphSearchEmbedder) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
+func (f *fakeGraphSearchEmbedder) EmbedQuery(ctx context.Context, text string, _ ...embedding.EmbedOption) ([]float64, error) {
 	if f.err != nil {
 		return nil, f.err
 	}

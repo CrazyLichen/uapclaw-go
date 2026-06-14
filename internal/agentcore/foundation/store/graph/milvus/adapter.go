@@ -120,6 +120,16 @@ func (a *milvusClientGraphAdapter) CreateIndex(ctx context.Context, option milvu
 	return nil
 }
 
+// DropDatabase 删除数据库
+func (a *milvusClientGraphAdapter) DropDatabase(ctx context.Context, option milvusclient.DropDatabaseOption, callOptions ...interface{}) error {
+	return a.client.DropDatabase(ctx, option)
+}
+
+// Compact 压缩集合数据
+func (a *milvusClientGraphAdapter) Compact(ctx context.Context, option milvusclient.CompactOption, callOptions ...interface{}) (int64, error) {
+	return a.client.Compact(ctx, option)
+}
+
 // Close 关闭客户端连接
 func (a *milvusClientGraphAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)

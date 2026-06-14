@@ -35,6 +35,8 @@ type GraphConfig struct {
 	IndexConfig *GraphStoreIndexConfig `json:"db_embed_config"`
 	// RequestMaxRetries 请求最大重试次数
 	RequestMaxRetries int `json:"request_max_retries"`
+	// EnableCompact 是否在 Refresh 时执行 Compact（默认 false）
+	EnableCompact bool `json:"enable_compact"`
 }
 
 // GraphStoreStorageConfig 图存储字段长度限制配置

@@ -163,6 +163,13 @@ func (c *ChatReranker) requestParams(query string, documents []string, topN int,
 		params[k] = v
 	}
 
+	// 合并 ExtraParams
+	if opt != nil && opt.ExtraParams != nil {
+		for k, v := range opt.ExtraParams {
+			params[k] = v
+		}
+	}
+
 	return params
 }
 

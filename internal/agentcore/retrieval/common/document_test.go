@@ -18,7 +18,8 @@ func TestNewMultimodalDocument(t *testing.T) {
 func TestMultimodalDocument_AddField_文本(t *testing.T) {
 	doc, err := NewMultimodalDocument().AddField(ModalityText, "你好世界")
 	assert.NoError(t, err)
-	assert.Equal(t, "你好世界", doc.Text)
+	// G-25: AddField 不再更新 d.Text，与 Python 对齐
+	assert.Equal(t, "", doc.Text)
 	assert.Len(t, doc.Fields(), 1)
 	assert.Equal(t, ModalityText, doc.Fields()[0].Kind)
 	assert.Equal(t, "你好世界", doc.Fields()[0].Data)
@@ -131,9 +132,13 @@ func TestMultimodalDocument_AddField_从文件加载(t *testing.T) {
 	err := os.WriteFile(txtFile, []byte("文件内容"), 0644)
 	assert.NoError(t, err)
 
-	doc, err := NewMultimodalDocument().AddField(ModalityText, "", txtFile)
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "", FieldFilePath(txtFile))
 	assert.NoError(t, err)
-	assert.Equal(t, "文件内容", doc.Text)
+	// G-25: AddField 不再更新 d.Text
+	assert.Equal(t, "", doc.Text)
+	// 但字段数据应正确加载
+	assert.Len(t, doc.Fields(), 1)
+	assert.Equal(t, "文件内容", doc.Fields()[0].Data)
 }
 
 func TestMultimodalDocument_AddField_无效模态(t *testing.T) {
@@ -160,7 +165,7 @@ func TestMultimodalDocument_AddField_同时提供Data和路径(t *testing.T) {
 	txtFile := filepath.Join(tmpDir, "test.txt")
 	_ = os.WriteFile(txtFile, []byte("内容"), 0644)
 
-	_, err := NewMultimodalDocument().AddField(ModalityText, "data", txtFile)
+	_, err := NewMultimodalDocument().AddField(ModalityText, "data", FieldFilePath(txtFile))
 	assert.Error(t, err)
 }
 
@@ -188,13 +193,13 @@ func TestMultimodalDocument_DashscopeInput_base64视频不支持(t *testing.T) {
 }
 
 func TestMultimodalDocument_AddField_从文件加载不存在的文件(t *testing.T) {
-	_, err := NewMultimodalDocument().AddField(ModalityImage, "", "/nonexistent/path/test.png")
+	_, err := NewMultimodalDocument().AddField(ModalityImage, "", FieldFilePath("/nonexistent/path/test.png"))
 	assert.Error(t, err)
 }
 
 func TestLoadFromFile_路径是目录(t *testing.T) {
 	tmpDir := t.TempDir()
-	_, err := NewMultimodalDocument().AddField(ModalityImage, "", tmpDir)
+	_, err := NewMultimodalDocument().AddField(ModalityImage, "", FieldFilePath(tmpDir))
 	assert.Error(t, err)
 }
 
@@ -208,4 +213,35 @@ func TestMultimodalDocument_AddField_视频URL(t *testing.T) {
 func TestMultimodalDocument_AddField_无效图片Data(t *testing.T) {
 	_, err := NewMultimodalDocument().AddField(ModalityImage, "not-a-url-or-base64")
 	assert.Error(t, err)
+}
+
+// G-26: 测试自定义 dataID
+func TestMultimodalDocument_AddField_自定义DataID(t *testing.T) {
+	doc, err := NewMultimodalDocument().AddField(ModalityImage, "https://example.com/img.png", FieldDataID("custom-id-123"))
+	assert.NoError(t, err)
+	assert.Len(t, doc.Fields(), 1)
+	assert.Equal(t, "custom-id-123", doc.Fields()[0].ID)
+}
+
+func TestMultimodalDocument_AddField_自定义DataID超长(t *testing.T) {
+	longID := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" // 43 chars
+	_, err := NewMultimodalDocument().AddField(ModalityImage, "https://example.com/img.png", FieldDataID(longID))
+	assert.Error(t, err)
+}
+
+func TestMultimodalDocument_AddField_自定义DataID文本模态忽略(t *testing.T) {
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "hello", FieldDataID("ignored-id"))
+	assert.NoError(t, err)
+	assert.Equal(t, "", doc.Fields()[0].ID) // 文本模态始终无 ID
+}
+
+func TestMultimodalDocument_AddField_文件路径和DataID组合(t *testing.T) {
+	tmpDir := t.TempDir()
+	txtFile := filepath.Join(tmpDir, "test.txt")
+	err := os.WriteFile(txtFile, []byte("内容"), 0644)
+	assert.NoError(t, err)
+
+	doc, err := NewMultimodalDocument().AddField(ModalityText, "", FieldFilePath(txtFile))
+	assert.NoError(t, err)
+	assert.Equal(t, "内容", doc.Fields()[0].Data)
 }

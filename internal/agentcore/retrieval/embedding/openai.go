@@ -2,9 +2,11 @@ package embedding
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -41,6 +43,8 @@ type OpenAIEmbedding struct {
 	limiter chan struct{}
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
+	// dimMu 保护 dimension 字段的互斥锁
+	dimMu sync.Mutex
 	// matryoshkaDimension 是否启用 Matryoshka 维度截断
 	matryoshkaDimension bool
 	// extraHeaders 额外请求头，透传给 OpenAI SDK
@@ -163,7 +167,7 @@ func NewOpenAIEmbedding(config EmbeddingConfig, opts ...OpenAIEmbeddingOption) *
 }
 
 // EmbedQuery 将单条查询文本转换为向量。
-func (o *OpenAIEmbedding) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
+func (o *OpenAIEmbedding) EmbedQuery(ctx context.Context, text string, opts ...embedding.EmbedOption) ([]float64, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
@@ -241,16 +245,23 @@ func (o *OpenAIEmbedding) EmbedMultimodal(ctx context.Context, doc *common.Multi
 
 // Dimension 返回嵌入向量维度。
 func (o *OpenAIEmbedding) Dimension() int {
+	o.dimMu.Lock()
 	if o.dimension > 0 {
-		return o.dimension
+		dim := o.dimension
+		o.dimMu.Unlock()
+		return dim
 	}
+	o.dimMu.Unlock()
 
 	vec, err := o.EmbedQuery(context.Background(), "test")
 	if err != nil {
 		return 0
 	}
+
 	if !o.matryoshkaDimension {
+		o.dimMu.Lock()
 		o.dimension = len(vec)
+		o.dimMu.Unlock()
 	}
 	logger.Debug(logComponent).
 		Int("dimension", len(vec)).
@@ -303,11 +314,15 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 		}
 
 		// 自动探测 dimension
-		if !o.matryoshkaDimension && o.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
-			o.dimension = len(embeddings[0])
-			logger.Debug(logComponent).
-				Int("dimension", o.dimension).
-				Msg("探测到嵌入向量维度")
+		if !o.matryoshkaDimension {
+			o.dimMu.Lock()
+			if o.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
+				o.dimension = len(embeddings[0])
+				logger.Debug(logComponent).
+					Int("dimension", o.dimension).
+					Msg("探测到嵌入向量维度")
+			}
+			o.dimMu.Unlock()
 		}
 
 		return embeddings, nil
@@ -315,8 +330,8 @@ func (o *OpenAIEmbedding) callAPI(ctx context.Context, texts []string) ([][]floa
 }
 
 // parseOpenAIResponse 解析 OpenAI SDK 响应对象。
-// 当前 SDK 直接返回 []Embedding，embedding 已是 []float64，无需 base64 解析。
-// 此函数保留用于日志和验证。
+// 支持 base64 编码的 embedding 数据，对齐 Python encoding_format=base64。
+// 当 SDK 的 Embedding 字段为空时，尝试从 JSON 原始数据解码 base64 字符串。
 func parseOpenAIResponse(data []openai.Embedding) ([][]float64, error) {
 	if len(data) == 0 {
 		return nil, exception.BuildError(
@@ -328,7 +343,20 @@ func parseOpenAIResponse(data []openai.Embedding) ([][]float64, error) {
 	embeddings := make([][]float64, len(data))
 	for _, item := range data {
 		if int(item.Index) < len(embeddings) {
-			embeddings[item.Index] = item.Embedding
+			// 优先使用 SDK 已解码的 []float64
+			if len(item.Embedding) > 0 {
+				embeddings[item.Index] = item.Embedding
+			} else {
+				// SDK 未解码时（encoding_format=base64），尝试从 RawJSON 解码
+				vec, err := decodeBase64FromRawJSON(item.RawJSON())
+				if err != nil {
+					return nil, exception.BuildError(
+						exception.StatusRetrievalEmbeddingResponseInvalid,
+						exception.WithParam("error_msg", fmt.Sprintf("base64 解码嵌入数据失败(index=%d): %s", item.Index, err)),
+					)
+				}
+				embeddings[item.Index] = vec
+			}
 		}
 	}
 
@@ -347,4 +375,28 @@ func parseOpenAIResponse(data []openai.Embedding) ([][]float64, error) {
 	}
 
 	return embeddings, nil
+}
+
+// decodeBase64FromRawJSON 从 JSON 原始数据中提取 base64 编码的嵌入向量并解码。
+// 对齐 Python: encoding_format=base64 时 API 返回 embedding 为 base64 字符串。
+func decodeBase64FromRawJSON(rawJSON string) ([]float64, error) {
+	var raw struct {
+		Embedding json.RawMessage `json:"embedding"`
+	}
+	if err := json.Unmarshal([]byte(rawJSON), &raw); err != nil {
+		return nil, fmt.Errorf("解析原始 JSON 失败: %w", err)
+	}
+	if len(raw.Embedding) == 0 {
+		return nil, fmt.Errorf("embedding 字段为空")
+	}
+	// 尝试解析为 base64 字符串
+	var b64Str string
+	if err := json.Unmarshal(raw.Embedding, &b64Str); err != nil {
+		return nil, fmt.Errorf("embedding 不是 base64 字符串: %w", err)
+	}
+	vec, err := ParseBase64Embedding(b64Str)
+	if err != nil {
+		return nil, fmt.Errorf("base64 解码失败: %w", err)
+	}
+	return vec, nil
 }

@@ -14,7 +14,7 @@ func newFakeEmbedding(dim int) *fakeEmbedding {
 	return &fakeEmbedding{dimension: dim}
 }
 
-func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string) ([]float64, error) {
+func (f *fakeEmbedding) EmbedQuery(_ context.Context, text string, _ ...EmbedOption) ([]float64, error) {
 	vec := make([]float64, f.dimension)
 	for i := range vec {
 		vec[i] = float64(len(text) + i)

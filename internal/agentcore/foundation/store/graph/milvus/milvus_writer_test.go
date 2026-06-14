@@ -19,7 +19,7 @@ type fakeEmbedder struct {
 	err        error
 }
 
-func (f *fakeEmbedder) EmbedQuery(ctx context.Context, text string) ([]float64, error) {
+func (f *fakeEmbedder) EmbedQuery(ctx context.Context, text string, _ ...embedding.EmbedOption) ([]float64, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -203,8 +203,8 @@ func TestGraphWriter_Delete_空条件(t *testing.T) {
 
 	ctx := context.Background()
 	err := w.delete(ctx, CollectionEntity)
-	if err != nil {
-		t.Fatalf("delete() 空条件应返回 nil, error = %v", err)
+	if err == nil {
+		t.Error("delete() 空条件应返回错误")
 	}
 }
 
