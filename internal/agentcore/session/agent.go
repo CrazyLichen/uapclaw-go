@@ -262,9 +262,34 @@ func (s *Session) Interact(value any) error {
 // ──────────────────────────── 子会话方法（桩实现） ────────────────────────────
 
 // CreateWorkflowSession 创建子 WorkflowSession。
-// ⤵️ 5.5 回填：WorkflowSession 实现后填充真实逻辑
-func (s *Session) CreateWorkflowSession() any {
-	return nil
+//
+// 从 AgentSession 的 AgentStateCollection 获取 globalState，
+// 包装为 WorkflowCommitState 与 AgentSession 共享全局状态。
+// WorkflowSession 的 globalState 更新 commit 后 AgentSession 也能读到。
+//
+// 对应 Python: Session.create_workflow_session()
+func (s *Session) CreateWorkflowSession() *WorkflowSession {
+	// 取出 AgentStateCollection 的 globalState（*InMemoryState 实例）
+	var workflowState *state.WorkflowCommitState
+	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
+		// 用 globalState 包装为 InMemoryCommitState，与 AgentSession 共享同一个底层实例
+		sharedGlobalState := state.NewInMemoryCommitState(coll.GlobalState())
+		workflowState = state.NewInMemoryWorkflowState(sharedGlobalState)
+	} else {
+		workflowState = state.NewInMemoryWorkflowState()
+	}
+
+	inner := internal.NewWorkflowSession(
+		internal.WithWorkflowParent(s.inner),
+		internal.WithWorkflowSessionID(s.inner.SessionID()),
+		internal.WithWorkflowState(workflowState),
+	)
+
+	return NewWorkflowSession(
+		WithWorkflowSessionInner(inner),
+		WithWorkflowSessionParent(s.inner),
+		WithWorkflowSessionSessionID(s.inner.SessionID()),
+	)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

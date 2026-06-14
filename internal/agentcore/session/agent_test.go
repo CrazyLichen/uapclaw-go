@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // TestNewSession 测试构造函数
@@ -224,5 +225,56 @@ func TestSession_WithCard(t *testing.T) {
 	s := NewSession(WithCard(card))
 	if s.card == nil {
 		t.Error("WithCard 后 card 不应为 nil")
+	}
+}
+
+// ──────────────────────────── CreateWorkflowSession 测试 ────────────────────────────
+
+// TestSession_CreateWorkflowSession 测试创建成功返回非 nil
+func TestSession_CreateWorkflowSession(t *testing.T) {
+	s := NewSession()
+	ws := s.CreateWorkflowSession()
+
+	if ws == nil {
+		t.Fatal("CreateWorkflowSession 返回 nil")
+	}
+}
+
+// TestSession_CreateWorkflowSession_SessionID共享 测试共享 sessionID
+func TestSession_CreateWorkflowSession_SessionID共享(t *testing.T) {
+	s := NewSession(WithSessionID("shared-id"))
+	ws := s.CreateWorkflowSession()
+
+	if ws.GetSessionID() != "shared-id" {
+		t.Errorf("期望 WorkflowSession 共享 sessionID='shared-id'，实际=%s", ws.GetSessionID())
+	}
+}
+
+// TestSession_CreateWorkflowSession_GlobalState共享 测试 globalState 共享
+func TestSession_CreateWorkflowSession_GlobalState共享(t *testing.T) {
+	s := NewSession()
+
+	// AgentSession 写入全局状态
+	s.UpdateState(map[string]any{"agent_key": "agent_val"})
+
+	// 创建 WorkflowSession
+	ws := s.CreateWorkflowSession()
+
+	// WorkflowSession 应能读取 AgentSession 写入的 globalState
+	result := ws.GetState("agent_key")
+	if result != "agent_val" {
+		t.Errorf("期望 WorkflowSession 读取共享 globalState='agent_val'，实际=%v", result)
+	}
+
+	// WorkflowSession 更新 globalState 并提交
+	ws.UpdateState(map[string]any{"wf_key": "wf_val"})
+	if cs, ok := ws.Inner().State().(*state.WorkflowCommitState); ok {
+		cs.Commit()
+	}
+
+	// AgentSession 也应能读到 WorkflowSession 的更新
+	result = s.GetState("wf_key")
+	if result != "wf_val" {
+		t.Errorf("期望 AgentSession 读取共享 globalState='wf_val'，实际=%v", result)
 	}
 }
