@@ -1,0 +1,205 @@
+package interaction
+
+import (
+	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// InteractionOutput 交互输出数据，标识一次交互的节点和值。
+// 对应 Python: openjiuwen/core/session/interaction/interaction.py (InteractionOutput)
+type InteractionOutput struct {
+	// ID 节点/可执行 ID
+	ID string
+	// Value 交互携带的值
+	Value any
+}
+
+// WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。
+// 对应 Python: openjiuwen/core/session/interaction/interaction.py (WorkflowInteraction)
+type WorkflowInteraction struct {
+	// BaseInteraction 嵌入交互基类
+	*BaseInteraction
+	// nodeID 节点 ID（从 session.ExecutableID() 获取）
+	nodeID string
+}
+
+// SimpleAgentInteraction 简单 Agent 交互，不管理输入队列。
+// 仅保存检查点并触发 AgentInterrupt，无流输出。
+// 对应 Python: openjiuwen/core/session/interaction/interaction.py (SimpleAgentInteraction)
+type SimpleAgentInteraction struct {
+	// session Agent 内部会话
+	session baseSession
+}
+
+// AgentInteraction 完整 Agent 交互，管理输入队列 + checkpointer + stream 输出。
+// 对应 Python: openjiuwen/core/session/interaction/interaction.py (AgentInteraction)
+type AgentInteraction struct {
+	// BaseInteraction 嵌入交互基类
+	*BaseInteraction
+	// session Agent 内部会话
+	session baseSession
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewWorkflowInteraction 创建工作流交互实例。
+// 构造时从 workflow_state 读取并清除 INTERACTIVE_INPUT，作为 defaultInput 传入 BaseInteraction。
+// 对应 Python: WorkflowInteraction.__init__(session)
+func NewWorkflowInteraction(session baseSession) *WorkflowInteraction {
+	nodeID := session.ExecutableID()
+
+	// 从 workflow_state 读取 INTERACTIVE_INPUT
+	var workflowInteractiveInput any
+	if st, ok := session.State().(*state.WorkflowCommitState); ok {
+		workflowInteractiveInput = st.GetWorkflowState(state.StringKey(InteractiveInputKey))
+		if workflowInteractiveInput != nil {
+			// 清除 workflow_state 中的 INTERACTIVE_INPUT
+			st.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: nil})
+		}
+	}
+
+	// 构造 BaseInteraction，workflowInteractiveInput 作为 defaultInput
+	bi := NewBaseInteraction(session, workflowInteractiveInput)
+
+	return &WorkflowInteraction{
+		BaseInteraction: bi,
+		nodeID:          nodeID,
+	}
+}
+
+// NewSimpleAgentInteraction 创建简单 Agent 交互实例。
+// 对应 Python: SimpleAgentInteraction.__init__(session)
+func NewSimpleAgentInteraction(session baseSession) *SimpleAgentInteraction {
+	return &SimpleAgentInteraction{session: session}
+}
+
+// NewAgentInteraction 创建完整 Agent 交互实例。
+// 对应 Python: AgentInteraction.__init__(session)
+func NewAgentInteraction(session baseSession) *AgentInteraction {
+	bi := NewBaseInteraction(session)
+	return &AgentInteraction{
+		BaseInteraction: bi,
+		session:         session,
+	}
+}
+
+// ──────────────────────────── WorkflowInteraction 方法 ────────────────────────────
+
+// WaitUserInputs 等待用户输入。
+// 1. 优先从输入队列获取（恢复场景）
+// 2. 队列为空时：提交检查点 → 写流输出 → panic GraphInterrupt
+// 对应 Python: WorkflowInteraction.wait_user_inputs(value)
+func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (any, error) {
+	res := w.getNextInteractiveInput()
+	if res != nil {
+		return res, nil
+	}
+
+	// 队列为空，需要中断等待用户输入
+	commitCMP(w.session)
+
+	payload := InteractionOutput{ID: w.nodeID, Value: value}
+	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("action", "workflow_interaction_interrupt").
+		Str("node_id", w.nodeID).
+		Int("index", w.idx).
+		Msg("工作流交互中断：等待用户输入")
+
+	PanicGraphInterrupt(Interrupt{
+		Value: map[string]any{
+			"type":    InteractionType,
+			"index":   w.idx,
+			"payload": payload,
+		},
+	})
+	return nil, nil // 不可达，panic 后不会执行
+}
+
+// UserLatestInput 获取最近一次用户输入。
+// 1. 有缓存输入时直接返回并清空
+// 2. 无缓存时：写流输出 → panic GraphInterrupt(resumable=true)
+// 对应 Python: WorkflowInteraction.user_latest_input(value)
+func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (any, error) {
+	if w.latestInteractiveInput != nil {
+		res := w.latestInteractiveInput
+		w.latestInteractiveInput = nil
+		return res, nil
+	}
+
+	// 无缓存，需要中断
+	payload := &InteractionOutput{ID: w.nodeID, Value: value}
+	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("action", "workflow_latest_input_interrupt").
+		Str("node_id", w.nodeID).
+		Int("index", w.idx).
+		Msg("工作流最新输入中断：等待用户输入")
+
+	PanicGraphInterrupt(Interrupt{
+		Value: map[string]any{
+			"type":    InteractionType,
+			"index":   w.idx,
+			"payload": payload,
+		},
+		Resumable: true,
+		NS:        w.nodeID,
+	})
+	return nil, nil // 不可达
+}
+
+// ──────────────────────────── SimpleAgentInteraction 方法 ────────────────────────────
+
+// WaitUserInputs 等待用户输入（简单模式）。
+// 保存检查点后触发 AgentInterrupt，无输入队列和流输出。
+// 对应 Python: SimpleAgentInteraction.wait_user_inputs(message)
+func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any) error {
+	_ = interruptAgentExecute(s.session)
+
+	msg := ""
+	if m, ok := message.(string); ok {
+		msg = m
+	}
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("action", "simple_agent_interaction_interrupt").
+		Str("message", msg).
+		Msg("简单 Agent 交互中断")
+
+	PanicAgentInterrupt(msg)
+	return nil // 不可达
+}
+
+// ──────────────────────────── AgentInteraction 方法 ────────────────────────────
+
+// WaitUserInputs 等待用户输入（完整 Agent 模式）。
+// 1. 优先从输入队列获取（恢复场景）
+// 2. 队列为空时：保存检查点 → 写流输出 → panic AgentInterrupt
+// 对应 Python: AgentInteraction.wait_user_inputs(value)
+func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, error) {
+	inputs := a.getNextInteractiveInput()
+	if inputs != nil {
+		return inputs, nil
+	}
+
+	// 队列为空，需要中断
+	_ = interruptAgentExecute(a.session)
+
+	payload := InteractionOutput{ID: a.session.ExecutableID(), Value: value}
+	_ = writeInteractionOutput(a.session, InteractionType, a.idx, payload)
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("action", "agent_interaction_interrupt").
+		Str("executable_id", a.session.ExecutableID()).
+		Int("index", a.idx).
+		Msg("Agent 交互中断：等待用户输入")
+
+	PanicAgentInterrupt("")
+	return nil, nil // 不可达
+}
