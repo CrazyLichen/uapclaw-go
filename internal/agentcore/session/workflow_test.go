@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // TestNewWorkflowSessionFacade 测试基本构造
@@ -57,36 +56,6 @@ func TestWorkflowSessionFacade_SetGetWorkflowCard(t *testing.T) {
 	}
 }
 
-// TestWorkflowSessionFacade_UpdateState_GetState 测试通过 WorkflowCommitState 读写状态
-func TestWorkflowSessionFacade_UpdateState_GetState(t *testing.T) {
-	inner := internal.NewWorkflowSession()
-	ws := NewWorkflowSession(WithWorkflowSessionInner(inner))
-
-	// 更新状态
-	ws.UpdateState(map[string]any{"key1": "value1"})
-
-	// 提交后可读
-	if cs, ok := inner.State().(*state.WorkflowCommitState); ok {
-		cs.Commit()
-	}
-
-	result := ws.GetState("key1")
-	if result != "value1" {
-		t.Errorf("期望 GetState='value1'，实际=%v", result)
-	}
-}
-
-// TestWorkflowSessionFacade_DumpState 测试导出完整快照
-func TestWorkflowSessionFacade_DumpState(t *testing.T) {
-	inner := internal.NewWorkflowSession()
-	ws := NewWorkflowSession(WithWorkflowSessionInner(inner))
-
-	dump := ws.DumpState()
-	if dump == nil {
-		t.Error("期望 DumpState 非 nil")
-	}
-}
-
 // TestWorkflowSessionFacade_Close 测试委托 inner.Close()
 func TestWorkflowSessionFacade_Close(t *testing.T) {
 	inner := internal.NewWorkflowSession()
@@ -108,16 +77,6 @@ func TestWorkflowSessionFacade_Inner为nil时防御(t *testing.T) {
 	}
 	if ws.GetParent() != nil {
 		t.Error("期望 inner 为 nil 时 GetParent 返回 nil")
-	}
-	if ws.State() != nil {
-		t.Error("期望 inner 为 nil 时 State 返回 nil")
-	}
-	ws.UpdateState(map[string]any{"key": "val"}) // 不 panic
-	if ws.GetState("key") != nil {
-		t.Error("期望 inner 为 nil 时 GetState 返回 nil")
-	}
-	if ws.DumpState() != nil {
-		t.Error("期望 inner 为 nil 时 DumpState 返回 nil")
 	}
 	if ws.Close() != nil {
 		t.Error("期望 inner 为 nil 时 Close 返回 nil")

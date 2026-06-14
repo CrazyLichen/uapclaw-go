@@ -2,7 +2,6 @@ package session
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -110,46 +109,6 @@ func (ws *WorkflowSession) SetWorkflowCard(card any) {
 // GetWorkflowCard 返回工作流卡片
 func (ws *WorkflowSession) GetWorkflowCard() any {
 	return ws.workflowCard
-}
-
-// State 返回会话状态
-func (ws *WorkflowSession) State() state.State {
-	if ws.inner == nil {
-		return nil
-	}
-	return ws.inner.State()
-}
-
-// UpdateState 更新全局状态，委托到 inner.State() 的 WorkflowCommitState
-func (ws *WorkflowSession) UpdateState(data map[string]any) {
-	if ws.inner == nil {
-		return
-	}
-	if cs, ok := ws.inner.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(data)
-	}
-}
-
-// GetState 获取全局状态值，委托到 inner.State() 的 WorkflowCommitState
-func (ws *WorkflowSession) GetState(key string) any {
-	if ws.inner == nil {
-		return nil
-	}
-	if cs, ok := ws.inner.State().(*state.WorkflowCommitState); ok {
-		return cs.GetGlobal(state.StringKey(key))
-	}
-	return nil
-}
-
-// DumpState 导出完整状态快照，委托到 inner.State() 的 WorkflowCommitState
-func (ws *WorkflowSession) DumpState() map[string]any {
-	if ws.inner == nil {
-		return nil
-	}
-	if cs, ok := ws.inner.State().(*state.WorkflowCommitState); ok {
-		return cs.Dump()
-	}
-	return nil
 }
 
 // Close 关闭会话，委托 inner.Close()
