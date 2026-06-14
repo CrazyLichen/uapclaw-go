@@ -80,8 +80,6 @@ jobs:
         continue-on-error: true
 
       - name: 运行单元测试（带覆盖率）
-        env:
-          GONOSUMCHECK: github.com/amikos-tech/chroma-go-local
         run: go test -tags=test -race -coverprofile=coverage.out ./...
 
       - name: 检查覆盖率阈值（≥ 85%）
@@ -285,7 +283,6 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.arch }}
-          GONOSUMCHECK: github.com/amikos-tech/chroma-go-local
         run: |
           mkdir -p bin
           go build \
@@ -300,7 +297,6 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.arch }}
-          GONOSUMCHECK: github.com/amikos-tech/chroma-go-local
         run: |
           mkdir -p bin
           go build \

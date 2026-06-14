@@ -7,7 +7,7 @@ run:
   # 单次运行超时时间
   timeout: 5m
   # Go 版本
-  go: "1.23"
+  go: "1.25"
 
 linters:
   # 禁用所有默认 linter，只启用明确指定的（v2 中替代 disable-all: true）
