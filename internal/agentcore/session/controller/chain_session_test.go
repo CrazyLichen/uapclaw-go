@@ -447,7 +447,7 @@ func TestChainSession_Load_无下划线link文件(t *testing.T) {
 // failingDumpContainer 测试用的 DataContainer 实现，Dump 总是失败
 type failingDumpContainer struct{}
 
-func (f *failingDumpContainer) Get(key any) map[string]any { return nil }
+func (f *failingDumpContainer) Get(key any) map[string]any      { return nil }
 func (f *failingDumpContainer) Update(data map[string]any) bool { return false }
 func (f *failingDumpContainer) Dump() (any, error) {
 	return nil, assert.AnError
