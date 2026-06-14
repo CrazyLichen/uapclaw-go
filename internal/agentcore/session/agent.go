@@ -251,9 +251,10 @@ func (s *Session) Commit(ctx context.Context) error {
 	return nil
 }
 
-// ──────────────────────────── 交互方法（桩实现） ────────────────────────────
+// ──────────────────────────── 交互方法 ────────────────────────────
 
 // Interact 请求用户输入。
+// ✅ 5.7 已回填：SimpleAgentInteraction 实现后填充真实逻辑
 // 对应 Python: Session.interact(value)
 func (s *Session) Interact(value any) error {
 	if s.interaction == nil {

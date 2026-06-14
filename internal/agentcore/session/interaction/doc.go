@@ -14,12 +14,13 @@
 // 依赖接口（暂放本包，后续迁移）：
 //   - InteractionCheckpointer → 5.8 时迁移到 session 包
 //   - InteractionOutputWriter / InteractionOutputWriterProvider → 5.10 时迁移到 session/stream 包
+//   - ExecutableIDProvider → NodeSession 天然满足，AgentSession 不满足（Python 同理）
 //
 // 文件目录：
 //
 //	interaction/
 //	├── doc.go                # 包文档
-//	├── base.go               # baseSession 接口 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量 + 依赖接口
+//	├── base.go               # baseSession 接口 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量 + 依赖接口 + ExecutableIDProvider
 //	├── interaction.go        # WorkflowInteraction + SimpleAgentInteraction + AgentInteraction + InteractionOutput
 //	└── interactive_input.go  # InteractiveInput 用户输入容器
 //

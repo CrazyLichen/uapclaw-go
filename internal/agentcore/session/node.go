@@ -159,14 +159,14 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 	return nil
 }
 
-// ──────────────────────────── 交互方法（桩实现） ────────────────────────────
+// ──────────────────────────── 交互方法 ────────────────────────────
 
 // Interact 请求用户输入。
 //
 // 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
 // async generator 中恢复执行。这是工作流引擎的硬限制，不是设计偏好。
 //
-// ⤵️ 5.7 回填：WorkflowInteraction 实现后填充真实逻辑
+// ✅ 5.7 已回填：WorkflowInteraction 实现后填充真实逻辑
 // 对应 Python: Session.interact(value)
 func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error) {
 	if f.streamMode {

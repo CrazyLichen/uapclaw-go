@@ -11,11 +11,19 @@ import (
 // WorkflowInteraction/AgentInteraction 通过此接口委托给内部会话实例，
 // 避免 interaction 子包反向导入 session 父包。
 // *internal.NodeSession / *internal.AgentSession 天然实现此接口（Go 隐式接口满足）。
+// 注意：Python 的 BaseSession 也没有 executable_id()，executable_id 只在 NodeSession 上。
+// WorkflowInteraction/AgentInteraction 所需的 nodeID 通过类型断言 ExecutableIDProvider 获取。
 type baseSession interface {
 	State() state.State
-	ExecutableID() string
 	StreamWriterManager() any
 	Checkpointer() any
+}
+
+// ExecutableIDProvider 提供可执行路径 ID 的接口。
+// NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
+// 通过类型断言延迟绑定：WorkflowInteraction/AgentInteraction 运行时断言获取 nodeID。
+type ExecutableIDProvider interface {
+	ExecutableID() string
 }
 
 // InteractionCheckpointer 交互所需的检查点器接口。
@@ -233,4 +241,14 @@ func commitCMP(session baseSession) {
 	if cs, ok := st.(*state.WorkflowCommitState); ok {
 		cs.CommitCmp()
 	}
+}
+
+// getExecutableID 通过类型断言从 session 获取可执行路径 ID。
+// NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
+// 断言失败时返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
+func getExecutableID(session baseSession) string {
+	if provider, ok := session.(ExecutableIDProvider); ok {
+		return provider.ExecutableID()
+	}
+	return ""
 }

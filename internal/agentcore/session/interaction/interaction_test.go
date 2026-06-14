@@ -63,9 +63,6 @@ func TestNewWorkflowInteraction(t *testing.T) {
 	if wi == nil {
 		t.Fatal("NewWorkflowInteraction 返回 nil")
 	}
-	if wi.nodeID != "test.exec.id" {
-		t.Errorf("nodeID 期望 'test.exec.id'，实际=%s", wi.nodeID)
-	}
 }
 
 // TestWorkflowInteraction_WaitUserInputs_队列有输入 测试恢复场景直接返回
@@ -142,6 +139,7 @@ func TestWorkflowInteraction_UserLatestInput_有缓存(t *testing.T) {
 // TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt 测试无缓存中断
 func TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt(t *testing.T) {
 	session := newFakeBaseSession()
+	session.execIDValue = "test.exec.id"
 	wi := NewWorkflowInteraction(session)
 
 	defer func() {
@@ -350,5 +348,27 @@ func TestWriteInteractionOutput_类型不满足接口(t *testing.T) {
 	err := writeInteractionOutput(session, InteractionType, 0, "payload")
 	if err != nil {
 		t.Errorf("类型不满足接口时应返回 nil，实际=%v", err)
+	}
+}
+
+// ──────────────────────────── ExecutableIDProvider 类型断言测试 ────────────────────────────
+
+// TestGetExecutableID_session满足接口 测试 session 满足 ExecutableIDProvider 时返回 nodeID
+func TestGetExecutableID_session满足接口(t *testing.T) {
+	session := newFakeBaseSession()
+	session.execIDValue = "node1.sub"
+	id := getExecutableID(session)
+	if id != "node1.sub" {
+		t.Errorf("期望 'node1.sub'，实际=%s", id)
+	}
+}
+
+// TestGetExecutableID_execID为空 测试 ExecutableID 为空字符串
+func TestGetExecutableID_execID为空(t *testing.T) {
+	session := newFakeBaseSession()
+	// fakeBaseSession 默认 execIDValue 为 ""，但满足 ExecutableIDProvider 接口
+	id := getExecutableID(session)
+	if id != "" {
+		t.Errorf("期望空字符串，实际=%s", id)
 	}
 }

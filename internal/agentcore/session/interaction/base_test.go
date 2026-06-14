@@ -10,22 +10,21 @@ import (
 
 // fakeBaseSession 用于测试的最小 baseSession 实现
 type fakeBaseSession struct {
-	stateValue  state.State
+	stateValue state.State
+	swMgrValue any
+	cpValue    any
 	execIDValue string
-	swMgrValue  any
-	cpValue     any
 }
 
-func (f *fakeBaseSession) State() state.State       { return f.stateValue }
-func (f *fakeBaseSession) ExecutableID() string     { return f.execIDValue }
-func (f *fakeBaseSession) StreamWriterManager() any { return f.swMgrValue }
-func (f *fakeBaseSession) Checkpointer() any        { return f.cpValue }
+func (f *fakeBaseSession) State() state.State              { return f.stateValue }
+func (f *fakeBaseSession) StreamWriterManager() any         { return f.swMgrValue }
+func (f *fakeBaseSession) Checkpointer() any                { return f.cpValue }
+func (f *fakeBaseSession) ExecutableID() string             { return f.execIDValue }
 
 // newFakeBaseSession 创建测试用 fake session
 func newFakeBaseSession() *fakeBaseSession {
 	return &fakeBaseSession{
-		stateValue:  state.NewInMemoryWorkflowState(),
-		execIDValue: "test.exec.id",
+		stateValue: state.NewInMemoryWorkflowState(),
 	}
 }
 
@@ -178,4 +177,26 @@ func TestCommitCMP_非WorkflowCommitState(t *testing.T) {
 
 	// 不应 panic
 	commitCMP(session)
+}
+
+// ──────────────────────────── getExecutableID 测试 ────────────────────────────
+
+// fakeSessionWithoutExecID 不实现 ExecutableIDProvider 的 session
+type fakeSessionWithoutExecID struct {
+	stateValue state.State
+	swMgrValue any
+	cpValue    any
+}
+
+func (f *fakeSessionWithoutExecID) State() state.State       { return f.stateValue }
+func (f *fakeSessionWithoutExecID) StreamWriterManager() any { return f.swMgrValue }
+func (f *fakeSessionWithoutExecID) Checkpointer() any        { return f.cpValue }
+
+// TestGetExecutableID_不满足接口 测试 session 不满足 ExecutableIDProvider 时返回空字符串
+func TestGetExecutableID_不满足接口(t *testing.T) {
+	session := &fakeSessionWithoutExecID{stateValue: state.NewInMemoryWorkflowState()}
+	id := getExecutableID(session)
+	if id != "" {
+		t.Errorf("不满足 ExecutableIDProvider 时应返回空字符串，实际=%s", id)
+	}
 }

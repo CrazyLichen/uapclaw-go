@@ -23,8 +23,6 @@ type InteractionOutput struct {
 type WorkflowInteraction struct {
 	// BaseInteraction 嵌入交互基类
 	*BaseInteraction
-	// nodeID 节点 ID（从 session.ExecutableID() 获取）
-	nodeID string
 }
 
 // SimpleAgentInteraction 简单 Agent 交互，不管理输入队列。
@@ -47,11 +45,10 @@ type AgentInteraction struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowInteraction 创建工作流交互实例。
+// nodeID 通过类型断言 ExecutableIDProvider 从 session 获取（Python 中 executable_id 只在 NodeSession 上有）。
 // 构造时从 workflow_state 读取并清除 INTERACTIVE_INPUT，作为 defaultInput 传入 BaseInteraction。
 // 对应 Python: WorkflowInteraction.__init__(session)
 func NewWorkflowInteraction(session baseSession) *WorkflowInteraction {
-	nodeID := session.ExecutableID()
-
 	// 从 workflow_state 读取 INTERACTIVE_INPUT
 	var workflowInteractiveInput any
 	if st, ok := session.State().(*state.WorkflowCommitState); ok {
@@ -67,7 +64,6 @@ func NewWorkflowInteraction(session baseSession) *WorkflowInteraction {
 
 	return &WorkflowInteraction{
 		BaseInteraction: bi,
-		nodeID:          nodeID,
 	}
 }
 
@@ -78,6 +74,7 @@ func NewSimpleAgentInteraction(session baseSession) *SimpleAgentInteraction {
 }
 
 // NewAgentInteraction 创建完整 Agent 交互实例。
+// nodeID 通过类型断言 ExecutableIDProvider 从 session 获取（Python 中 executable_id 只在 NodeSession 上有）。
 // 对应 Python: AgentInteraction.__init__(session)
 func NewAgentInteraction(session baseSession) *AgentInteraction {
 	bi := NewBaseInteraction(session)
@@ -102,12 +99,13 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 	// 队列为空，需要中断等待用户输入
 	commitCMP(w.session)
 
-	payload := InteractionOutput{ID: w.nodeID, Value: value}
+	nodeID := getExecutableID(w.session)
+	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "workflow_interaction_interrupt").
-		Str("node_id", w.nodeID).
+		Str("node_id", nodeID).
 		Int("index", w.idx).
 		Msg("工作流交互中断：等待用户输入")
 
@@ -133,12 +131,13 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 	}
 
 	// 无缓存，需要中断
-	payload := &InteractionOutput{ID: w.nodeID, Value: value}
+	nodeID := getExecutableID(w.session)
+	payload := &InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "workflow_latest_input_interrupt").
-		Str("node_id", w.nodeID).
+		Str("node_id", nodeID).
 		Int("index", w.idx).
 		Msg("工作流最新输入中断：等待用户输入")
 
@@ -149,7 +148,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 			"payload": payload,
 		},
 		Resumable: true,
-		NS:        w.nodeID,
+		NS:        nodeID,
 	})
 	return nil, nil // 不可达
 }
@@ -191,12 +190,13 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 	// 队列为空，需要中断
 	_ = interruptAgentExecute(a.session)
 
-	payload := InteractionOutput{ID: a.session.ExecutableID(), Value: value}
+	nodeID := getExecutableID(a.session)
+	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(a.session, InteractionType, a.idx, payload)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "agent_interaction_interrupt").
-		Str("executable_id", a.session.ExecutableID()).
+		Str("executable_id", nodeID).
 		Int("index", a.idx).
 		Msg("Agent 交互中断：等待用户输入")
 
