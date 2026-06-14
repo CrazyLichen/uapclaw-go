@@ -249,7 +249,7 @@ func (g *GlobalSessionController) CleanupAgentInactiveSessions(agentID string) (
 
 	controller, ok := g.Controllers[agentID]
 	if !ok {
-		return nil, fmt.Errorf("Agent %q 未找到", agentID)
+		return nil, fmt.Errorf("agent %q 未找到", agentID)
 	}
 
 	cleanedSessions := make(map[string][]CleanupResult)
@@ -506,7 +506,7 @@ func FlushUserSession(agentID, userID string) error {
 	sessionScope := SessionScopeFactory{}.CreateDirect(userID)
 	controller := instance.GetAgent(agentID)
 	if controller == nil {
-		return fmt.Errorf("Agent %q 未找到", agentID)
+		return fmt.Errorf("agent %q 未找到", agentID)
 	}
 	return controller.FlushScope(sessionScope)
 }

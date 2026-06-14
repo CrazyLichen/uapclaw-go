@@ -34,3 +34,11 @@ issues:
   max-issues-per-linter: 0
   # 不限制相同问题的报告数量
   max-same-issues: 0
+  # 排除规则
+  exclude-rules:
+    # S3 包使用 manager.Uploader 系列 API，当前 AWS SDK v2 尚未提供完整替代方案
+    # 待 transfermanager 成熟后迁移，届时移除此排除规则
+    - path: internal/agentcore/foundation/store/object/s3/
+      linters:
+        - staticcheck
+      text: "SA1019"
