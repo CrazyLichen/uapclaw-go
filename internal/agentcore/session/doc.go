@@ -20,6 +20,11 @@
 //	├── agent.go            # Session 公开会话（Agent 场景）
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
 //	├── node.go             # NodeSessionFacade 公开会话（工作流组件场景）
+//	├── interaction/        # 交互管理
+//	│   ├── doc.go                           # interaction 包文档
+//	│   ├── base.go                          # baseSession 接口 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量
+//	│   ├── interaction.go                   # WorkflowInteraction + SimpleAgentInteraction + AgentInteraction + InteractionOutput
+//	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── state/              # 状态接口与内存实现
 //	│   ├── doc.go                           # state 包文档
 //	│   ├── state.go                         # 4 层接口 + 常量
@@ -45,4 +50,10 @@
 //	Session           — Agent 公开会话，用户面向 API
 //	WorkflowSession   — Workflow 公开会话，用户面向 API
 //	NodeSessionFacade — 工作流节点会话门面，组件开发者面向 API
+//	WorkflowInteraction   — 工作流交互，通过 GraphInterrupt 暂停图执行
+//	SimpleAgentInteraction — 简单 Agent 交互，无输入队列
+//	AgentInteraction      — 完整 Agent 交互，含输入队列 + 检查点 + 流输出
+//	InteractiveInput      — 用户交互输入容器
+//	GraphInterrupt        — 图级中断异常
+//	AgentInterrupt        — Agent 中断异常
 package session
