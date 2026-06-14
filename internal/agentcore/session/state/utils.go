@@ -452,3 +452,21 @@ func parseListIndexes(part string) []any {
 	}
 	return result
 }
+
+// ──────────────────────────── 暂存更新工具 ────────────────────────────
+
+// deepCopyUpdates 深拷贝暂存更新数据
+func deepCopyUpdates(updates map[string][]map[string]any) map[string][]map[string]any {
+	if updates == nil {
+		return nil
+	}
+	result := make(map[string][]map[string]any, len(updates))
+	for key, list := range updates {
+		copied := make([]map[string]any, len(list))
+		for i, u := range list {
+			copied[i] = deepCopyMap(u)
+		}
+		result[key] = copied
+	}
+	return result
+}
