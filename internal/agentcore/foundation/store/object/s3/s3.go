@@ -58,12 +58,18 @@ const (
 //
 // 初始化流程：
 //  1. 环境变量兜底：配置字段为空时从 OBS_SERVER / OBS_ACCESS_KEY_ID / OBS_SECRET_ACCESS_KEY / OBS_REGION 读取
-//  2. 构建 AWS 静态凭证
-//  3. 加载 AWS 配置并自定义 endpoint（指向 Server URL）
-//  4. 创建 S3 客户端，设置签名版本 v4、PayloadSigningEnabled: false
+//  2. 设置 AWS 校验和环境变量（对齐 Python: AWS_REQUEST_CHECKSUM_CALCULATION / AWS_RESPONSE_CHECKSUM_VALIDATION）
+//  3. 构建 AWS 静态凭证
+//  4. 加载 AWS 配置并自定义 endpoint（指向 Server URL）
+//  5. 创建 S3 客户端，设置签名版本 v4、PayloadSigningEnabled: false
 func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	// 环境变量兜底
 	cfg.ApplyEnvFallback()
+
+	// 设置 AWS 校验和环境变量，对齐 Python: os.environ["AWS_REQUEST_CHECKSUM_CALCULATION"] = "WHEN_REQUIRED"
+	// 兼容新版 SDK 校验和计算行为变更，避免与 OBS/新版 S3 服务交互时 checksum 校验失败
+	os.Setenv("AWS_REQUEST_CHECKSUM_CALCULATION", "WHEN_REQUIRED")
+	os.Setenv("AWS_RESPONSE_CHECKSUM_VALIDATION", "WHEN_REQUIRED")
 
 	// 校验必填配置
 	if cfg.Server == "" {

@@ -551,7 +551,7 @@ func TestGraphSearcher_SearchSingle_BFS_Relation(t *testing.T) {
 	_ = result
 }
 
-func TestGraphSearcher_SearchSingle_BFS第一轮失败(t *testing.T) {
+func TestGraphSearcher_SearchSingle_BFS搜索失败返回空结果(t *testing.T) {
 	fake := newFakeSearcherClient()
 	fake.searchErr = fmt.Errorf("search error")
 
@@ -559,20 +559,24 @@ func TestGraphSearcher_SearchSingle_BFS第一轮失败(t *testing.T) {
 	s := newGraphSearcher(fake, &fakeGraphSearchEmbedder{emb: []float64{0.1, 0.2, 0.3}}, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
 	ctx := context.Background()
-	_, err := s.searchSingle(ctx, "test", CollectionEntity, graph.Options{BFSDepth: 1, BFSK: 5})
-	if err == nil {
-		t.Error("searchSingle BFS 第一轮失败应返回错误")
+	result, err := s.searchSingle(ctx, "test", CollectionEntity, graph.Options{BFSDepth: 1, BFSK: 5})
+	// BFS 搜索失败时 break 返回空结果，不报错（对齐 Python 尽力而为行为）
+	if err != nil {
+		t.Fatalf("searchSingle BFS 搜索失败不应返回错误，实际: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("searchSingle BFS 搜索失败应返回空结果，实际 %d 条", len(result))
 	}
 }
 
 func TestGraphSearcher_ExpandEntities(t *testing.T) {
 	fake := newFakeSearcherClient()
-	relationCol := column.NewColumnVarCharArray("relations", [][]string{{"r1", "r2"}})
-	episodeCol := column.NewColumnVarCharArray("episodes", [][]string{{"e1"}})
-	uuidCol := column.NewColumnVarChar("uuid", []string{"id1"})
+	// 对齐 Python: _expand_entities 查询 Relation 集合的 lhs/rhs 字段
+	lhsCol := column.NewColumnVarChar("lhs", []string{"e1"})
+	rhsCol := column.NewColumnVarChar("rhs", []string{"e2"})
 	fake.queryResult = milvusclient.ResultSet{
 		ResultCount: 1,
-		Fields:      []column.Column{uuidCol, relationCol, episodeCol},
+		Fields:      []column.Column{lhsCol, rhsCol},
 	}
 
 	indexCfg := graph.NewDefaultIndexConfig()
@@ -584,9 +588,15 @@ func TestGraphSearcher_ExpandEntities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expandEntities() error = %v", err)
 	}
-	// relations 和 episodes 中的 UUID 应被扩展
-	if len(expanded) != 3 {
-		t.Errorf("expandEntities 应扩展3个UUID，实际 %d", len(expanded))
+	// lhs 和 rhs 中的 UUID 应被扩展
+	if len(expanded) != 2 {
+		t.Errorf("expandEntities 应扩展2个UUID，实际 %d", len(expanded))
+	}
+	if _, ok := expanded["e1"]; !ok {
+		t.Error("expandEntities 应包含 e1")
+	}
+	if _, ok := expanded["e2"]; !ok {
+		t.Error("expandEntities 应包含 e2")
 	}
 }
 
@@ -621,12 +631,12 @@ func TestGraphSearcher_ExpandEntities_Query失败(t *testing.T) {
 
 func TestGraphSearcher_ExpandRelations(t *testing.T) {
 	fake := newFakeSearcherClient()
-	lhsCol := column.NewColumnVarChar("lhs", []string{"e1"})
-	rhsCol := column.NewColumnVarChar("rhs", []string{"e2"})
-	uuidCol := column.NewColumnVarChar("uuid", []string{"id1"})
+	// 对齐 Python: _expand_relations 查询 Entity 集合的 relations 字段
+	relationCol := column.NewColumnVarCharArray("relations", [][]string{{"r1", "r2"}})
+	uuidCol := column.NewColumnVarChar("uuid", []string{"e1"})
 	fake.queryResult = milvusclient.ResultSet{
 		ResultCount: 1,
-		Fields:      []column.Column{uuidCol, lhsCol, rhsCol},
+		Fields:      []column.Column{uuidCol, relationCol},
 	}
 
 	indexCfg := graph.NewDefaultIndexConfig()
@@ -634,18 +644,21 @@ func TestGraphSearcher_ExpandRelations(t *testing.T) {
 
 	ctx := context.Background()
 	uuidSet := map[string]struct{}{"id1": {}}
-	expanded, err := s.expandRelations(ctx, uuidSet)
+	lookup := map[string]map[string]any{
+		"id1": {"uuid": "id1", "lhs": "e1", "rhs": "e2"},
+	}
+	expanded, err := s.expandRelations(ctx, uuidSet, lookup)
 	if err != nil {
 		t.Fatalf("expandRelations() error = %v", err)
 	}
 	if len(expanded) != 2 {
 		t.Errorf("expandRelations 应扩展2个UUID，实际 %d", len(expanded))
 	}
-	if _, ok := expanded["e1"]; !ok {
-		t.Error("expandRelations 应包含 e1")
+	if _, ok := expanded["r1"]; !ok {
+		t.Error("expandRelations 应包含 r1")
 	}
-	if _, ok := expanded["e2"]; !ok {
-		t.Error("expandRelations 应包含 e2")
+	if _, ok := expanded["r2"]; !ok {
+		t.Error("expandRelations 应包含 r2")
 	}
 }
 
@@ -655,7 +668,7 @@ func TestGraphSearcher_ExpandRelations_空集合(t *testing.T) {
 	s := newGraphSearcher(fake, nil, indexCfg, graph.GlobalRankerRegistry, "cosine")
 
 	ctx := context.Background()
-	expanded, err := s.expandRelations(ctx, nil)
+	expanded, err := s.expandRelations(ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("expandRelations() error = %v", err)
 	}
@@ -672,7 +685,10 @@ func TestGraphSearcher_ExpandRelations_Query失败(t *testing.T) {
 
 	ctx := context.Background()
 	uuidSet := map[string]struct{}{"id1": {}}
-	_, err := s.expandRelations(ctx, uuidSet)
+	lookup := map[string]map[string]any{
+		"id1": {"uuid": "id1", "lhs": "e1", "rhs": "e2"},
+	}
+	_, err := s.expandRelations(ctx, uuidSet, lookup)
 	if err == nil {
 		t.Error("expandRelations Query 失败应返回错误")
 	}

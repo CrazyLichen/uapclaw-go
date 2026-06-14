@@ -119,7 +119,7 @@ func (c *ChatReranker) assembleParams(query string, docs []any, opt *reranker.Re
 	}
 
 	headers := c.requestHeaders()
-	params := c.requestParams("", texts, 1, opt)
+	params := c.requestParams(query, texts, 1, opt)
 
 	return headers, params, docIDs
 }
@@ -169,46 +169,46 @@ func (c *ChatReranker) requestParams(query string, documents []string, topN int,
 // parseResponse 解析 chat completion 响应中的 logprobs，计算相关性分数。
 // 覆盖 RerankerBase.parseResponse
 // 对齐 Python: ChatReranker._parse_response
-func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []string) map[string]float64 {
+// 修改：当 logprobs 不支持时返回 error，而非静默返回 0.0
+func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []string) (map[string]float64, error) {
 	yesScores := []float64{0}
 	noScores := []float64{0}
 
 	// 从 choices[0] 获取 choice
 	choices, ok := responseData["choices"].([]any)
 	if !ok || len(choices) == 0 {
-		return map[string]float64{firstDocID(docIDs): 0.0}
+		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	choice, ok := choices[0].(map[string]any)
 	if !ok {
-		return map[string]float64{firstDocID(docIDs): 0.0}
+		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
 	// 获取 logprobs
 	logprobsData, ok := choice["logprobs"].(map[string]any)
 	if !ok || logprobsData == nil {
-		// logprobs 不支持
-		_ = exception.BuildError(
+		// logprobs 不支持：返回错误，对齐 Python: raise build_error
+		return nil, exception.BuildError(
 			exception.StatusRetrievalRerankerRequestCallFailed,
 			exception.WithParam("error_msg", "the service does not support logprobs for chat reranker to function"),
 		)
-		return map[string]float64{firstDocID(docIDs): 0.0}
 	}
 
 	// 获取 content（优先）或 logprobs 本身
 	content, ok := logprobsData["content"].([]any)
 	if !ok || len(content) == 0 {
 		// 尝试直接从 logprobs 获取
-		return map[string]float64{firstDocID(docIDs): 0.0}
+		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
 	// 获取 top_logprobs
 	topLogprobs, ok := content[0].(map[string]any)
 	if !ok {
-		return map[string]float64{firstDocID(docIDs): 0.0}
+		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	topLogprobsList, ok := topLogprobs["top_logprobs"].([]any)
 	if !ok || len(topLogprobsList) == 0 {
-		return map[string]float64{firstDocID(docIDs): 0.0}
+		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
 	// 遍历 top_logprobs
@@ -235,13 +235,13 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 
 	docID := firstDocID(docIDs)
 	if totalProb == 0 {
-		return map[string]float64{docID: 0.0}
+		return map[string]float64{docID: 0.0}, nil
 	}
 
-	return map[string]float64{docID: confidence / totalProb}
+	return map[string]float64{docID: confidence / totalProb}, nil
 }
 
-// doRerank �行异步重排序，增加 size=1 校验
+// doRerank 执行异步重排序，增加 size=1 校验
 func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
 	if len(docs) != 1 {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
@@ -268,7 +268,7 @@ func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, o
 		return nil, err
 	}
 
-	return c.parseResponse(result, docIDs), nil
+	return c.parseResponse(result, docIDs)
 }
 
 // doRerankSync 执行同步重排序，增加 size=1 校验
@@ -298,7 +298,7 @@ func (c *ChatReranker) doRerankSync(ctx context.Context, query string, docs []an
 		return nil, err
 	}
 
-	return c.parseResponse(result, docIDs), nil
+	return c.parseResponse(result, docIDs)
 }
 
 // Rerank 覆盖 StandardReranker.Rerank，增加 size=1 校验

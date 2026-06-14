@@ -196,7 +196,11 @@ func (ds *DashscopeEmbedding) EmbedMultimodal(ctx context.Context, doc *common.M
 		)
 	}
 
-	input := []map[string]any{doc.DashscopeInput()}
+	dsInput, err := doc.DashscopeInput()
+	if err != nil {
+		return nil, err
+	}
+	input := []map[string]any{dsInput}
 	embeddings, err := ds.callAPI(ctx, input)
 	if err != nil {
 		return nil, err
@@ -292,11 +296,22 @@ func (ds *DashscopeEmbedding) callAPI(ctx context.Context, input []map[string]an
 			)
 		}
 
+		// 对齐 Python: 所有 HTTP 错误（含 5xx）都可重试
 		if resp.StatusCode != http.StatusOK {
-			return nil, exception.BuildError(
+			// 4xx 客户端错误（不含 429）不可重试
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+				return nil, exception.ValidateError(
+					exception.StatusRetrievalEmbeddingRequestCallFailed,
+					exception.WithParam("error_msg", fmt.Sprintf("HTTP 客户端错误 %d: %s", resp.StatusCode, string(respBody))),
+				)
+			}
+			// 5xx 服务端错误和 429 限流错误可重试，使用 Execution 类别确保可重试
+			apiErr := exception.BuildError(
 				exception.StatusRetrievalEmbeddingRequestCallFailed,
 				exception.WithParam("error_msg", fmt.Sprintf("HTTP 状态码 %d: %s", resp.StatusCode, string(respBody))),
 			)
+			apiErr.SetCategory(exception.ErrorCategoryExecution)
+			return nil, apiErr
 		}
 
 		embeddings, err := ds.handleDashscopeAPIResp(respBody, attempt)
@@ -327,21 +342,23 @@ func (ds *DashscopeEmbedding) handleDashscopeAPIResp(body []byte, attempt int) (
 	}
 
 	if resp.StatusCode != 200 {
-		if attempt >= ds.maxRetries-1 {
-			errMsg := fmt.Sprintf("DashScope 请求失败。HTTP 状态: %d, 错误码: %s, 错误消息: %s",
-				resp.StatusCode, resp.Code, resp.Message)
-			logger.Warn(logComponent).
-				Str("event_type", "embedding_request_failed").
-				Int("attempt", attempt+1).
-				Int("max_retries", ds.maxRetries).
-				Str("error_msg", errMsg).
-				Msg("DashScope 嵌入请求失败")
-			return nil, exception.BuildError(
-				exception.StatusRetrievalEmbeddingRequestCallFailed,
-				exception.WithParam("error_msg", errMsg),
-			)
-		}
-		return nil, nil // 返回 nil 让 RetryWithBackoff 重试
+		errMsg := fmt.Sprintf("DashScope 请求失败。HTTP 状态: %d, 错误码: %s, 错误消息: %s",
+			resp.StatusCode, resp.Code, resp.Message)
+		logger.Warn(logComponent).
+			Str("event_type", "embedding_request_failed").
+			Str("model_provider", "dashscope").
+			Int("attempt", attempt+1).
+			Int("max_retries", ds.maxRetries).
+			Str("error_msg", errMsg).
+			Msg("DashScope 嵌入请求失败")
+		// 返回可重试错误，让 RetryWithBackoff 正确重试
+		// 对齐 Python: 所有 DashScope API 错误都可重试
+		err := exception.BuildError(
+			exception.StatusRetrievalEmbeddingRequestCallFailed,
+			exception.WithParam("error_msg", errMsg),
+		)
+		err.SetCategory(exception.ErrorCategoryExecution)
+		return nil, err
 	}
 
 	if len(resp.Output.Embeddings) == 0 {

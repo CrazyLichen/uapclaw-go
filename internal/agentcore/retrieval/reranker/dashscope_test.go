@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	reranker "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/reranker"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
 )
@@ -165,12 +167,13 @@ func TestDashScopeReranker_RerankMultimodal(t *testing.T) {
 	defer server.Close()
 
 	r := newTestDashScopeReranker(server.URL)
-	docs := []*common.MultimodalDocument{
-		common.NewMultimodalDocument().AddField(common.ModalityText, "多模态文档1"),
-		common.NewMultimodalDocument().
-			AddField(common.ModalityText, "图文文档").
-			AddField(common.ModalityImage, "https://example.com/img.png"),
-	}
+	doc1, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "多模态文档1")
+	require.NoError(t, addErr)
+	doc2, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "图文文档")
+	require.NoError(t, addErr)
+	doc2, addErr = doc2.AddField(common.ModalityImage, "https://example.com/img.png")
+	require.NoError(t, addErr)
+	docs := []*common.MultimodalDocument{doc1, doc2}
 	result, err := r.RerankMultimodal(context.Background(), "测试查询", docs)
 	if err != nil {
 		t.Fatalf("RerankMultimodal 返回错误: %v", err)
@@ -299,9 +302,10 @@ func TestDashScopeReranker_assembleParams_混合文档类型(t *testing.T) {
 	}
 	r, _ := NewDashScopeReranker(config)
 
-	mmDoc := common.NewMultimodalDocument().
-		AddField(common.ModalityText, "多模态文档").
-		AddField(common.ModalityImage, "https://example.com/img.png")
+	mmDoc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "多模态文档")
+	require.NoError(t, addErr)
+	mmDoc, addErr = mmDoc.AddField(common.ModalityImage, "https://example.com/img.png")
+	require.NoError(t, addErr)
 	plainDoc := reranker.NewDocument("纯文本文档")
 
 	docs := []any{"字符串文档", plainDoc, mmDoc}

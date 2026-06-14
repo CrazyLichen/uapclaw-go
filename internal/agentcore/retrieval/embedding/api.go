@@ -283,14 +283,14 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input interface{}) ([]
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			// 4xx 客户端错误不可重试（对齐 Python 只重试网络错误的行为）
-			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			// 4xx 客户端错误不可重试（429 Rate Limit 除外，对齐 Python 行为）
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
 				return nil, exception.ValidateError(
 					exception.StatusRetrievalEmbeddingRequestCallFailed,
 					exception.WithParam("error_msg", fmt.Sprintf("HTTP 客户端错误 %d: %s", resp.StatusCode, string(respBody))),
 				)
 			}
-			// 5xx 服务端错误可重试，使用 Execution 类别确保可重试
+			// 5xx 服务端错误和 429 限流错误可重试，使用 Execution 类别确保可重试
 			err := exception.BuildError(
 				exception.StatusRetrievalEmbeddingRequestCallFailed,
 				exception.WithParam("error_msg", fmt.Sprintf("HTTP 服务端错误 %d: %s", resp.StatusCode, string(respBody))),

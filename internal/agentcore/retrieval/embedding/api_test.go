@@ -414,9 +414,9 @@ func TestAPIEmbedding_ExtraParams覆盖(t *testing.T) {
 	assert.Equal(t, "test-user", receivedBody["user"])
 }
 
-// TestAPIEmbedding_4xx不同状态码 验证各种 4xx 错误均不重试
+// TestAPIEmbedding_4xx不同状态码 验证各种 4xx 错误不重试（429 除外）
 func TestAPIEmbedding_4xx不同状态码(t *testing.T) {
-	for _, code := range []int{400, 401, 403, 404, 429} {
+	for _, code := range []int{400, 401, 403, 404} {
 		t.Run(fmt.Sprintf("HTTP_%d", code), func(t *testing.T) {
 			callCount := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -436,4 +436,24 @@ func TestAPIEmbedding_4xx不同状态码(t *testing.T) {
 			assert.Equal(t, 1, callCount, "HTTP %d 不应重试", code)
 		})
 	}
+}
+
+// TestAPIEmbedding_429可重试 验证 HTTP 429 Rate Limit 可重试（对齐 Python）
+func TestAPIEmbedding_429可重试(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = fmt.Fprint(w, `{"error": "rate limit"}`)
+	}))
+	defer server.Close()
+
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+	}, WithAPIMaxRetries(3))
+
+	_, err := client.EmbedQuery(context.Background(), "hello")
+	assert.Error(t, err)
+	assert.Equal(t, 3, callCount, "HTTP 429 应可重试")
 }

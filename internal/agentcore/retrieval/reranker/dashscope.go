@@ -235,7 +235,11 @@ func (r *DashScopeReranker) assembleParams(query string, docs []any, opt *rerank
 			texts = append(texts, d.Text)
 		case *common.MultimodalDocument:
 			docIDs[i] = d.Text
-			multimodalInputs = append(multimodalInputs, d.DashscopeInput())
+			dsInput, dsErr := d.DashscopeInput()
+			if dsErr != nil {
+				return nil, nil, nil, dsErr
+			}
+			multimodalInputs = append(multimodalInputs, dsInput)
 			hasMultimodal = true
 		default:
 			return nil, nil, nil, exception.ValidateError(

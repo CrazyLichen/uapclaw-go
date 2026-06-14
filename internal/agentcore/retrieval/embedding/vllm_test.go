@@ -107,9 +107,10 @@ func TestVLLMEmbedding_EmbedMultimodal(t *testing.T) {
 	})
 	vllm := NewVLLMEmbedding(openAI)
 
-	doc := common.NewMultimodalDocument().
-		AddField(common.ModalityText, "描述").
-		AddField(common.ModalityImage, "https://example.com/img.png")
+	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述")
+	require.NoError(t, addErr)
+	doc, addErr = doc.AddField(common.ModalityImage, "https://example.com/img.png")
+	require.NoError(t, addErr)
 	vec, err := vllm.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)
@@ -147,7 +148,8 @@ func TestVLLMEmbedding_EmbedMultimodal_自定义指令(t *testing.T) {
 	})
 	vllm := NewVLLMEmbedding(openAI)
 
-	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "测试")
+	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "测试")
+	require.NoError(t, addErr)
 	vec, err := vllm.EmbedMultimodal(context.Background(), doc, MultimodalOption{Instruction: "自定义指令"})
 	require.NoError(t, err)
 	assert.Len(t, vec, 2)
@@ -167,7 +169,10 @@ func TestVLLMEmbedding_接口约束(t *testing.T) {
 }
 
 func TestParseMultimodalInput(t *testing.T) {
-	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "描述").AddField(common.ModalityImage, "https://example.com/img.png")
+	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述")
+	require.NoError(t, addErr)
+	doc, addErr = doc.AddField(common.ModalityImage, "https://example.com/img.png")
+	require.NoError(t, addErr)
 	messages := parseMultimodalInput(doc, "测试指令")
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "system", messages[0]["role"])

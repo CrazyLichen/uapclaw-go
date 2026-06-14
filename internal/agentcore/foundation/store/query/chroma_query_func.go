@@ -130,6 +130,11 @@ func chromaArrayFilter(_ QueryExpr) (any, error) {
 func chromaLogicalFilter(expr QueryExpr) (any, error) {
 	e := expr.(*LogicalExpr)
 
+	// 对齐 Python: "not" 操作符不被 Chroma 支持
+	if strings.ToLower(e.Operator) == "not" {
+		return nil, raiseQueryError("Unsupported logical operator: not")
+	}
+
 	if e.Right == nil {
 		return nil, raiseQueryError(fmt.Sprintf("%s operator requires both left and right operands", strings.ToLower(e.Operator)))
 	}

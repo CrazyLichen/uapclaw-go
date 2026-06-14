@@ -162,7 +162,8 @@ func TestOpenAIEmbedding_EmbedMultimodal(t *testing.T) {
 		APIKey:    "sk-test",
 	})
 
-	doc := common.NewMultimodalDocument().AddField(common.ModalityText, "描述文本")
+	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述文本")
+	require.NoError(t, addErr)
 	vec, err := client.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)

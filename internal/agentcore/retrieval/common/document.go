@@ -67,8 +67,12 @@ func NewMultimodalDocument() *MultimodalDocument {
 // filePath: 文件路径（与 data 二选一，最多传一个）。
 //
 // 对应 Python: MultimodalDocument.add_field()
-func (d *MultimodalDocument) AddField(kind ModalityKind, data string, filePath ...string) *MultimodalDocument {
-	k, resolvedData := loadMultimodalData(kind, data, filePath...)
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+func (d *MultimodalDocument) AddField(kind ModalityKind, data string, filePath ...string) (*MultimodalDocument, error) {
+	k, resolvedData, err := loadMultimodalData(kind, data, filePath...)
+	if err != nil {
+		return nil, err
+	}
 	dataID := ""
 	if kind != ModalityText {
 		dataID = strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -77,7 +81,7 @@ func (d *MultimodalDocument) AddField(kind ModalityKind, data string, filePath .
 	if kind == ModalityText {
 		d.Text = resolvedData
 	}
-	return d
+	return d, nil
 }
 
 // Content 返回 OpenAI/vLLM 格式的结构化内容列表。
@@ -118,17 +122,18 @@ func (d *MultimodalDocument) Content() []map[string]any {
 // DashscopeInput 返回 DashScope 格式的输入字典。
 //
 // 对应 Python: MultimodalDocument.dashscope_input
-func (d *MultimodalDocument) DashscopeInput() map[string]any {
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+func (d *MultimodalDocument) DashscopeInput() (map[string]any, error) {
 	content := make(map[string]any)
 	var images []string
 	hasField := make(map[ModalityKind]bool)
 
 	for _, f := range d.fields {
 		if hasField[f.Kind] {
-			panic(exception.BuildError(
+			return nil, exception.BuildError(
 				exception.StatusRetrievalEmbeddingInputInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持多个相同模态字段: %s", f.Kind)),
-			))
+			)
 		}
 
 		switch f.Kind {
@@ -139,18 +144,18 @@ func (d *MultimodalDocument) DashscopeInput() map[string]any {
 			images = append(images, f.Data)
 		case ModalityVideo:
 			if strings.HasPrefix(f.Data, "data:video/") {
-				panic(exception.BuildError(
+				return nil, exception.BuildError(
 					exception.StatusRetrievalEmbeddingInputInvalid,
 					exception.WithParam("error_msg", "Dashscope 格式不支持 base64 视频输入，仅支持 URL"),
-				))
+				)
 			}
 			hasField[f.Kind] = true
 			content["video"] = f.Data
 		default:
-			panic(exception.BuildError(
+			return nil, exception.BuildError(
 				exception.StatusRetrievalEmbeddingInputInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("Dashscope 格式不支持模态类型: %s", f.Kind)),
-			))
+			)
 		}
 	}
 
@@ -160,7 +165,7 @@ func (d *MultimodalDocument) DashscopeInput() map[string]any {
 		content["multi_images"] = images
 	}
 
-	return content
+	return content, nil
 }
 
 // Strip 兼容 Python 的 strip() 语义，无字段时返回 nil。
@@ -185,7 +190,8 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 // loadMultimodalData 加载多模态数据。
 //
 // 对应 Python: _load_multimodal_data()
-func loadMultimodalData(kind ModalityKind, data string, filePath ...string) (ModalityKind, string) {
+// 注意：验证错误返回 error 而非 panic，对齐 Python 的 ValidationError 行为。
+func loadMultimodalData(kind ModalityKind, data string, filePath ...string) (ModalityKind, string, error) {
 	validKinds := map[ModalityKind]bool{
 		ModalityText:  true,
 		ModalityImage: true,
@@ -193,90 +199,90 @@ func loadMultimodalData(kind ModalityKind, data string, filePath ...string) (Mod
 		ModalityVideo: true,
 	}
 	if !validKinds[kind] {
-		panic(exception.BuildError(
+		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("未知的模态类型: %s", kind)),
-		))
+		)
 	}
 
 	// 文件路径模式
 	if len(filePath) > 0 && filePath[0] != "" {
 		if data != "" {
-			panic(exception.BuildError(
+			return "", "", exception.BuildError(
 				exception.StatusRetrievalEmbeddingInputInvalid,
 				exception.WithParam("error_msg", "不能同时提供 data 和 filePath"),
-			))
+			)
 		}
 		return loadFromFile(kind, filePath[0])
 	}
 
 	// data 模式
 	if data == "" {
-		panic(exception.BuildError(
+		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("必须提供 %s 类型的数据或文件路径", kind)),
-		))
+		)
 	}
 
 	if kind == ModalityText {
-		return kind, data
+		return kind, data, nil
 	}
 
 	// 检查 base64 前缀
 	kindPrefix := fmt.Sprintf("data:%s/", kind)
 	if strings.HasPrefix(data, kindPrefix) {
-		return kind, data
+		return kind, data, nil
 	}
 
 	// URL 模式（音频只接受 base64）
 	if kind != ModalityAudio && strings.HasPrefix(data, "http") && strings.Contains(data, "://") {
-		return kind, data
+		return kind, data, nil
 	}
 
-	panic(exception.BuildError(
+	return "", "", exception.BuildError(
 		exception.StatusRetrievalEmbeddingInputInvalid,
 		exception.WithParam("error_msg", fmt.Sprintf("无效的 %s 数据，应为 URL 或以 'data:%s/' 开头的 base64", kind, kind)),
-	))
+	)
 }
 
 // loadFromFile 从文件路径加载数据为 base64。
-func loadFromFile(kind ModalityKind, path string) (ModalityKind, string) {
+func loadFromFile(kind ModalityKind, path string) (ModalityKind, string, error) {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
-		panic(exception.BuildError(
+		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("无法打开 %s 文件: %s", kind, path)),
-		))
+		)
 	}
 
 	// 文本模态直接读取文件内容
 	if kind == ModalityText {
 		content, err := os.ReadFile(path)
 		if err != nil {
-			panic(exception.BuildError(
+			return "", "", exception.BuildError(
 				exception.StatusRetrievalEmbeddingInputInvalid,
 				exception.WithParam("error_msg", fmt.Sprintf("读取文本文件失败: %s", err)),
-			))
+			)
 		}
-		return kind, string(content)
+		return kind, string(content), nil
 	}
 
 	mimeType := mime.TypeByExtension(path)
 	if mimeType == "" || !strings.Contains(mimeType, "/") {
-		panic(exception.BuildError(
+		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("无法确定 %s 文件的 MIME 类型: %s", kind, path)),
-		))
+		)
 	}
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		panic(exception.BuildError(
+		return "", "", exception.BuildError(
 			exception.StatusRetrievalEmbeddingInputInvalid,
 			exception.WithParam("error_msg", fmt.Sprintf("读取 %s 文件失败: %s", kind, err)),
-		))
+		)
 	}
 
 	b64Str := base64.StdEncoding.EncodeToString(raw)
-	return kind, fmt.Sprintf("data:%s;base64,%s", mimeType, b64Str)
+	return kind, fmt.Sprintf("data:%s;base64,%s", mimeType, b64Str), nil
 }

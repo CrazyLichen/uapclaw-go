@@ -189,6 +189,11 @@ func NewRelation() *Relation {
 }
 
 // EmbedTasks Relation 覆写：返回 content + name 两个嵌入任务
+// 注意：Relation Schema 中没有 name_embedding 向量字段，name_embedding 任务计算后
+// 不会被写入 Milvus（ToMap() 在 name_embedding==nil 时不序列化）。
+// 此处保留 name_embedding 任务以与 Python 实现保持一致（Python 的 NamedGraphObject.embed_tasks
+// 也返回 name_embedding，ToMap() 中通过 if v is not None 过滤）。
+// 如果后续需要优化，可移除 name_embedding 任务以避免无用的 Embedding API 调用。
 func (r *Relation) EmbedTasks() []EmbedTask {
 	return []EmbedTask{
 		{Object: r, FieldName: "content_embedding", Text: r.Content},

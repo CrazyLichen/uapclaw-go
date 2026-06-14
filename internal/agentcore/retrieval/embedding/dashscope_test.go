@@ -117,9 +117,10 @@ func TestDashscopeEmbedding_EmbedMultimodal(t *testing.T) {
 		APIKey:    "sk-test",
 	})
 
-	doc := common.NewMultimodalDocument().
-		AddField(common.ModalityText, "描述").
-		AddField(common.ModalityImage, "https://example.com/img.png")
+	doc, addErr := common.NewMultimodalDocument().AddField(common.ModalityText, "描述")
+	require.NoError(t, addErr)
+	doc, addErr = doc.AddField(common.ModalityImage, "https://example.com/img.png")
+	require.NoError(t, addErr)
 	vec, err := client.EmbedMultimodal(context.Background(), doc)
 	require.NoError(t, err)
 	assert.Len(t, vec, 3)

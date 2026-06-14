@@ -180,15 +180,10 @@ func TestChatReranker_Rerank_logprobs不支持(t *testing.T) {
 	}
 	c, _ := NewChatReranker(config, WithMaxRetries(1), WithRetryWait(10*time.Millisecond))
 
-	result, err := c.Rerank(context.Background(), "查询", []string{"文档"})
-	if err != nil {
-		t.Fatalf("Rerank 失败: %v", err)
-	}
-	// 无 logprobs 时返回 0.0
-	for _, score := range result {
-		if score != 0.0 {
-			t.Errorf("无 logprobs 时分数应为 0, 实际 %f", score)
-		}
+	_, err := c.Rerank(context.Background(), "查询", []string{"文档"})
+	// logprobs 不支持时现在应返回错误（对齐 Python: raise build_error）
+	if err == nil {
+		t.Fatal("logprobs 不支持时应返回错误")
 	}
 }
 

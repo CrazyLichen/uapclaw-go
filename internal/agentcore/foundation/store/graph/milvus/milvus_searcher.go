@@ -3,6 +3,8 @@ package milvus
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 
 	"github.com/milvus-io/milvus/client/v2/entity"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	graph "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/graph"
+	querypkg "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/query"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -115,45 +118,142 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 	}
 
 	// 无 BFS：直接搜索
-	if bfsDepth <= 0 {
+	if bfsDepth <= 0 || (collection != CollectionEntity && collection != CollectionRelation) {
 		return s.rawHybridSearch(ctx, query, collection, k, o)
 	}
 
-	// 有 BFS：
-	// 1. 第1轮搜索获取初始 UUID
-	firstResults, err := s.rawHybridSearch(ctx, query, collection, bfsK, o)
+	// 有 BFS：对齐 Python 实现
+	// Python: 每轮搜索用 skip_ranking=True（不做 rerank），最后统一排序
+	uuids := make(map[string]struct{})
+	allResults := make(map[string]map[string]any) // uuid -> result
+	isSimilarity := s.metric == "IP" || s.metric == "COSINE"
+
+	// 获取查询向量（所有轮次共用）
+	queryEmb, err := s.queryEmbedding(ctx, query, o)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("获取查询向量失败: %w", err)
 	}
+	bfsOpts := o
+	bfsOpts.QueryEmbedding = queryEmb
 
-	uuidSet := extractUUIDs(firstResults)
+	for i := 0; i <= bfsDepth; i++ {
+		isExpansionRound := i < bfsDepth
 
-	// 2. BFS 扩展循环
-	for i := 0; i < bfsDepth; i++ {
-		var expanded map[string]struct{}
-		if collection == CollectionEntity {
-			expanded, err = s.expandEntities(ctx, uuidSet)
-		} else {
-			expanded, err = s.expandRelations(ctx, uuidSet)
+		// 构建搜索选项：每轮搜索用 skip_ranking=True（不传 reranker），对齐 Python
+		searchOpts := bfsOpts
+		searchOpts.Reranker = nil
+		searchOpts.K = k
+
+		// 构建 expr：有新 UUID 时按 UUID 过滤
+		if len(uuids) > 0 {
+			uuidSlice := uuidSetToSlice(uuids)
+			if collection == CollectionEntity {
+				searchOpts.IDs = stringsToAny(uuidSlice)
+			} else {
+				// Relation: 按 lhs/rhs 过滤，对齐 Python
+				searchOpts.IDs = nil
+				uuidsAny := stringsToAny(uuidSlice)
+				lhsExpr := querypkg.InList("lhs", uuidsAny)
+				rhsExpr := querypkg.InList("rhs", uuidsAny)
+				searchOpts.FilterExpr = querypkg.Or(lhsExpr, rhsExpr)
+				if o.FilterExpr != nil {
+					searchOpts.FilterExpr = querypkg.And(o.FilterExpr, searchOpts.FilterExpr)
+				}
+			}
 		}
+
+		// 执行搜索
+		res, err := s.rawHybridSearch(ctx, query, collection, k, searchOpts)
 		if err != nil {
-			logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 扩展失败")
+			logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 搜索失败")
 			break
 		}
-		for uuid := range expanded {
-			uuidSet[uuid] = struct{}{}
+
+		// 收集新 UUID 和结果
+		newUUIDs := make(map[string]struct{})
+		for _, doc := range res {
+			if uuid, ok := doc["uuid"].(string); ok && uuid != "" {
+				if _, exists := uuids[uuid]; !exists {
+					newUUIDs[uuid] = struct{}{}
+				}
+				allResults[uuid] = doc
+			}
+		}
+
+		// 将新发现的 UUID 加入总集合
+		for uuid := range newUUIDs {
+			uuids[uuid] = struct{}{}
+		}
+
+		// 图扩展
+		if isExpansionRound && len(newUUIDs) > 0 {
+			var expanded map[string]struct{}
+			if collection == CollectionEntity {
+				expanded, err = s.expandEntities(ctx, newUUIDs)
+			} else {
+				expanded, err = s.expandRelations(ctx, newUUIDs, allResults)
+			}
+			if err != nil {
+				logger.Warn(logComponent).Err(err).Int("bfs_round", i+1).Msg("BFS 扩展失败")
+				break
+			}
+
+			// 过滤掉已知的 UUID
+			newExpanded := make(map[string]struct{})
+			for uuid := range expanded {
+				if _, exists := uuids[uuid]; !exists {
+					newExpanded[uuid] = struct{}{}
+				}
+			}
+
+			if len(newExpanded) == 0 {
+				break
+			}
+
+			// bfs_k 裁剪：按 distance 排序只保留 top-k，对齐 Python
+			if bfsK < len(newExpanded) {
+				newExpanded = s.topKByDistance(newExpanded, allResults, bfsK, isSimilarity)
+			}
+
+			// 更新下一轮搜索的 UUID 集合
+			for uuid := range newExpanded {
+				uuids[uuid] = struct{}{}
+			}
 		}
 	}
 
-	// 3. 最终搜索（带扩展后的 UUID 过滤）
-	if len(uuidSet) > 0 {
-		uuids := uuidSetToSlice(uuidSet)
-		bfsOpts := o
-		bfsOpts.IDs = stringsToAny(uuids)
-		return s.rawHybridSearch(ctx, query, collection, k, bfsOpts)
+	// 最后统一排序（对齐 Python: _rank_results）
+	candidates := make([]map[string]any, 0, len(allResults))
+	for _, doc := range allResults {
+		candidates = append(candidates, doc)
 	}
 
-	return firstResults, nil
+	// 按 distance 排序
+	sortByDistance(candidates, isSimilarity)
+
+	// 截取 top-k
+	if len(candidates) > k {
+		candidates = candidates[:k]
+	}
+
+	// 如果配置了 reranker，做最终排序
+	if o.Reranker != nil && len(candidates) > 0 {
+		documents := make([]string, len(candidates))
+		for i, item := range candidates {
+			if content, ok := item["content"].(string); ok {
+				documents[i] = content
+			}
+		}
+		scoreMap, err := o.Reranker.Rerank(ctx, query, documents)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("BFS 最终重排序失败，使用距离排序")
+			return candidates, nil
+		}
+		minScore := o.MinScore
+		candidates = filterByScore(candidates, scoreMap, minScore)
+	}
+
+	return candidates, nil
 }
 
 // rawHybridSearch 原始混合搜索（3通道：name_embedding + content_embedding + content_bm25）。
@@ -225,8 +325,9 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	}
 
 	// 通道3: content_bm25 (sparse, 使用查询文本)
-	// BM25 搜索：使用查询文本作为稀疏向量输入
-	sparseReq := milvusclient.NewAnnRequest("content_bm25", k, vectors...)
+	// BM25 搜索：使用查询文本作为输入，Milvus BM25 Function 需要文本输入来生成分词稀疏向量
+	// 对齐 Python: sparse_req = AnnRequest("content_bm25", limit, [query])
+	sparseReq := milvusclient.NewAnnRequest("content_bm25", k, entity.Text(query))
 	if expr != "" {
 		sparseReq = sparseReq.WithFilter(expr)
 	}
@@ -325,7 +426,8 @@ func autoBalanceWeights(numChannels int) []float64 {
 }
 
 // expandEntities 通过 BFS 扩展实体 UUID 集合。
-// 从已有实体出发，通过 relations 字段找到关联的实体 UUID。
+// 对齐 Python: _expand_entities — 通过 Relation 集合的 lhs/rhs 字段扩展，
+// 而非通过 Entity 集合的 relations 字段。
 func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]struct{}) (map[string]struct{}, error) {
 	if len(uuidSet) == 0 {
 		return nil, nil
@@ -333,53 +435,21 @@ func (s *graphSearcher) expandEntities(ctx context.Context, uuidSet map[string]s
 
 	expanded := make(map[string]struct{})
 	ids := uuidSetToSlice(uuidSet)
-	expr := buildIDFilterExpr(ids)
 
-	// 查询实体的 relations 和 episodes 字段
-	queryOpt := milvusclient.NewQueryOption(CollectionEntity).WithFilter(expr).
-		WithOutputFields("uuid", "relations", "episodes")
+	// 对齐 Python: 在 Relation 集合中按 lhs/rhs 查找关联实体
+	lhsExpr := buildIDFilterExprWithField(ids, "lhs")
+	rhsExpr := buildIDFilterExprWithField(ids, "rhs")
+	combinedExpr := fmt.Sprintf("(%s) or (%s)", lhsExpr, rhsExpr)
+
+	queryOpt := milvusclient.NewQueryOption(CollectionRelation).WithFilter(combinedExpr).
+		WithOutputFields("lhs", "rhs")
 
 	resultSet, err := s.client.Query(ctx, queryOpt)
 	if err != nil {
 		return nil, fmt.Errorf("BFS 扩展实体查询失败: %w", err)
 	}
 
-	// 解析查询结果
-	for _, row := range resultSetToMaps(resultSet) {
-		if relations, ok := row["relations"].([]string); ok {
-			for _, r := range relations {
-				expanded[r] = struct{}{}
-			}
-		}
-		if episodes, ok := row["episodes"].([]string); ok {
-			for _, e := range episodes {
-				expanded[e] = struct{}{}
-			}
-		}
-	}
-
-	return expanded, nil
-}
-
-// expandRelations 通过 BFS 扩展关系 UUID 集合。
-// 从已有关系出发，通过 lhs/rhs 找到关联的实体 UUID。
-func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]struct{}) (map[string]struct{}, error) {
-	if len(uuidSet) == 0 {
-		return nil, nil
-	}
-
-	expanded := make(map[string]struct{})
-	ids := uuidSetToSlice(uuidSet)
-	expr := buildIDFilterExpr(ids)
-
-	queryOpt := milvusclient.NewQueryOption(CollectionRelation).WithFilter(expr).
-		WithOutputFields("uuid", "lhs", "rhs")
-
-	resultSet, err := s.client.Query(ctx, queryOpt)
-	if err != nil {
-		return nil, fmt.Errorf("BFS 扩展关系查询失败: %w", err)
-	}
-
+	// 解析查询结果，收集 lhs/rhs 对应的实体 UUID
 	for _, row := range resultSetToMaps(resultSet) {
 		if lhs, ok := row["lhs"].(string); ok && lhs != "" {
 			expanded[lhs] = struct{}{}
@@ -392,12 +462,178 @@ func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]
 	return expanded, nil
 }
 
+// expandRelations 通过 BFS 扩展关系 UUID 集合。
+// 对齐 Python: _expand_relations — 先从 lookup 取 lhs/rhs 实体 UUID，
+// 再查 Entity 集合的 relations 字段获取关联的关系 UUID。
+func (s *graphSearcher) expandRelations(ctx context.Context, uuidSet map[string]struct{}, lookup map[string]map[string]any) (map[string]struct{}, error) {
+	if len(uuidSet) == 0 {
+		return nil, nil
+	}
+
+	// 从 lookup 中提取 lhs/rhs 实体 UUID，对齐 Python
+	nodeUUIDs := make(map[string]struct{})
+	for uuid := range uuidSet {
+		if relation, ok := lookup[uuid]; ok {
+			if lhs, ok := relation["lhs"].(string); ok && lhs != "" {
+				nodeUUIDs[lhs] = struct{}{}
+			}
+			if rhs, ok := relation["rhs"].(string); ok && rhs != "" {
+				nodeUUIDs[rhs] = struct{}{}
+			}
+		}
+	}
+
+	if len(nodeUUIDs) == 0 {
+		return nil, nil
+	}
+
+	// 查询 Entity 集合的 relations 字段，对齐 Python
+	ids := uuidSetToSlice(nodeUUIDs)
+	expr := buildIDFilterExpr(ids)
+
+	queryOpt := milvusclient.NewQueryOption(CollectionEntity).WithFilter(expr).
+		WithOutputFields("uuid", "relations")
+
+	resultSet, err := s.client.Query(ctx, queryOpt)
+	if err != nil {
+		return nil, fmt.Errorf("BFS 扩展关系查询失败: %w", err)
+	}
+
+	expanded := make(map[string]struct{})
+	for _, row := range resultSetToMaps(resultSet) {
+		if relations, ok := row["relations"].([]string); ok {
+			for _, r := range relations {
+				expanded[r] = struct{}{}
+			}
+		}
+	}
+
+	return expanded, nil
+}
+
+// topKByDistance 按 distance 字段保留 top-k 个 UUID，对齐 Python bfs_k 裁剪逻辑。
+// isSimilarity=true 时 distance 越大越相关（降序），false 时 distance 越小越相关（升序）。
+func (s *graphSearcher) topKByDistance(uuids map[string]struct{}, lookup map[string]map[string]any, k int, isSimilarity bool) map[string]struct{} {
+	type uuidDist struct {
+		uuid     string
+		distance float64
+	}
+
+	items := make([]uuidDist, 0, len(uuids))
+	for uuid := range uuids {
+		dist := math.Inf(-1) // 默认最小值
+		if doc, ok := lookup[uuid]; ok {
+			if d, ok := doc["distance"].(float64); ok {
+				dist = d
+			}
+		}
+		items = append(items, uuidDist{uuid: uuid, distance: dist})
+	}
+
+	if isSimilarity {
+		// 相似度度量：降序排列，取前 k
+		sort.Slice(items, func(i, j int) bool { return items[i].distance > items[j].distance })
+	} else {
+		// 距离度量：升序排列，取前 k
+		sort.Slice(items, func(i, j int) bool { return items[i].distance < items[j].distance })
+	}
+
+	if k > len(items) {
+		k = len(items)
+	}
+	result := make(map[string]struct{}, k)
+	for i := 0; i < k; i++ {
+		result[items[i].uuid] = struct{}{}
+	}
+	return result
+}
+
+// sortByDistance 按 distance 字段对搜索结果排序。
+// isSimilarity=true 时降序（越大约相关），false 时升序（越小越相关）。
+func sortByDistance(results []map[string]any, isSimilarity bool) {
+	sort.Slice(results, func(i, j int) bool {
+		di, _ := results[i]["distance"].(float64)
+		dj, _ := results[j]["distance"].(float64)
+		if isSimilarity {
+			return di > dj
+		}
+		return di < dj
+	})
+}
+
+// buildIDFilterExprWithField 构建指定字段的 UUID 过滤表达式。
+// 例如 buildIDFilterExprWithField(ids, "lhs") 生成 "lhs in ["id1","id2"]"
+func buildIDFilterExprWithField(ids []string, field string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = fmt.Sprintf(`"%s"`, id)
+	}
+	return fmt.Sprintf(`%s in [%s]`, field, strings.Join(quoted, ", "))
+}
+
 // combinedRerank 跨集合增强重排序。
-//
-// 对应 Python: MilvusGraphStore._combined_rerank
+// 对齐 Python: MilvusGraphStore._combined_rerank
+// 核心逻辑：利用关系信息增强实体排序 — 遍历每个 Entity 的 relations，
+// 将关联 Relation 的 content 拼接到 Entity 的 content 中再 rerank。
 func (s *graphSearcher) combinedRerank(ctx context.Context, query string, results map[string][]map[string]any, o graph.Options) (map[string][]map[string]any, error) {
 	if o.Reranker == nil {
 		return results, nil
+	}
+
+	// 关系增强：对齐 Python _combined_rerank 中的实体内容增强逻辑
+	if entities, ok := results[CollectionEntity]; ok && len(entities) > 0 {
+		relations := results[CollectionRelation]
+		relUUIDs := make(map[string]map[string]any)
+		for _, rel := range relations {
+			if uuid, ok := rel["uuid"].(string); ok {
+				relUUIDs[uuid] = rel
+			}
+		}
+
+		// 遍历每个 Entity，将关联 Relation 的 content 拼接到 Entity 的 content 中
+		for _, ent := range entities {
+			// 保存原始 content
+			originalContent, _ := ent["content"].(string)
+			ent["original_content"] = originalContent
+
+			// 收集关联 Relation 的 (content, distance)
+			type relContent struct {
+				content  string
+				distance float64
+			}
+			var relatedContent []relContent
+
+			if relIDs, ok := ent["relations"].([]string); ok {
+				for _, relID := range relIDs {
+					if rel, ok := relUUIDs[relID]; ok {
+						content, _ := rel["content"].(string)
+						distance, _ := rel["distance"].(float64)
+						if content != "" {
+							relatedContent = append(relatedContent, relContent{content: content, distance: distance})
+						}
+					}
+				}
+			}
+
+			// 按 distance 降序排序，对齐 Python: content.sort(key=lambda rel: rel[1], reverse=True)
+			sort.Slice(relatedContent, func(i, j int) bool {
+				return relatedContent[i].distance > relatedContent[j].distance
+			})
+
+			// 拼接内容，对齐 Python: [原始content, 分隔线, ...关联Relation的content]
+			if len(relatedContent) > 0 {
+				var parts []string
+				parts = append(parts, originalContent)
+				parts = append(parts, "----------")
+				for _, rc := range relatedContent {
+					parts = append(parts, rc.content)
+				}
+				ent["content"] = strings.Join(parts, "\n - ")
+			}
+		}
 	}
 
 	// 对每个集合的结果进行 rerank
@@ -427,6 +663,16 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 		// 按 reranker 分数排序
 		minScore := o.MinScore
 		reranked[coll] = filterByScore(items, scoreMap, minScore)
+	}
+
+	// 恢复 Entity 的原始 content，对齐 Python: ent["content"] = ent["original_content"]
+	if entities, ok := reranked[CollectionEntity]; ok {
+		for _, ent := range entities {
+			if originalContent, ok := ent["original_content"].(string); ok {
+				ent["content"] = originalContent
+				delete(ent, "original_content")
+			}
+		}
 	}
 
 	return reranked, nil
