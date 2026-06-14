@@ -152,8 +152,8 @@ func TestSession_桩方法返回Nil(t *testing.T) {
 	if err := s.Interact(nil); err != nil {
 		t.Errorf("Interact 桩应返回 nil，实际 %v", err)
 	}
-	if result := s.CreateWorkflowSession(); result != nil {
-		t.Errorf("CreateWorkflowSession 桩应返回 nil，实际 %v", result)
+	if ws := s.CreateWorkflowSession(); ws == nil {
+		t.Error("CreateWorkflowSession 应返回非 nil 的 WorkflowSession")
 	}
 }
 
