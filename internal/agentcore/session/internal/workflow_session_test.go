@@ -1,0 +1,387 @@
+package internal
+
+import (
+	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+)
+
+// ──────────────────────────── WorkflowSession 测试 ────────────────────────────
+
+// TestNewWorkflowSession_有parent 测试有 parent 时继承 sessionID/config/tracer
+func TestNewWorkflowSession_有parent(t *testing.T) {
+	parent := NewAgentSession("parent-123",
+		WithConfig("test_config"),
+		WithTracer("test_tracer"),
+	)
+
+	ws := NewWorkflowSession(WithWorkflowParent(parent))
+
+	if ws.SessionID() != "parent-123" {
+		t.Errorf("期望继承 parent sessionID='parent-123'，实际=%s", ws.SessionID())
+	}
+	if ws.Config() != "test_config" {
+		t.Errorf("期望继承 parent config='test_config'，实际=%v", ws.Config())
+	}
+	if ws.Tracer() != "test_tracer" {
+		t.Errorf("期望继承 parent tracer='test_tracer'，实际=%v", ws.Tracer())
+	}
+}
+
+// TestNewWorkflowSession_无parent 测试无 parent 时自动生成 UUID
+func TestNewWorkflowSession_无parent(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	if ws.SessionID() == "" {
+		t.Error("期望自动生成 sessionID，实际为空")
+	}
+	if ws.Config() != nil {
+		t.Errorf("期望无 parent 时 config 为 nil，实际=%v", ws.Config())
+	}
+}
+
+// TestWorkflowSession_BaseSession接口 测试 BaseSession 8 个方法
+func TestWorkflowSession_BaseSession接口(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	// 验证实现了 baseSession 接口
+	var _ baseSession = ws
+
+	if ws.Config() != nil {
+		t.Error("默认 config 应为 nil")
+	}
+	if ws.State() == nil {
+		t.Error("默认 state 不应为 nil")
+	}
+	if ws.Tracer() != nil {
+		t.Error("默认 tracer 应为 nil")
+	}
+	if ws.StreamWriterManager() != nil {
+		t.Error("默认 streamWriterManager 应为 nil")
+	}
+	if ws.SessionID() == "" {
+		t.Error("默认 sessionID 不应为空")
+	}
+	if ws.Checkpointer() != nil {
+		t.Error("默认 checkpointer 应为 nil")
+	}
+	if ws.ActorManager() != nil {
+		t.Error("默认 actorManager 应为 nil")
+	}
+}
+
+// TestWorkflowSession_SetStreamWriterManager_幂等 测试幂等注入
+func TestWorkflowSession_SetStreamWriterManager_幂等(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	ws.SetStreamWriterManager("first_mgr")
+	if ws.StreamWriterManager() != "first_mgr" {
+		t.Errorf("期望 streamWriterManager='first_mgr'，实际=%v", ws.StreamWriterManager())
+	}
+
+	// 二次设置不应覆盖
+	ws.SetStreamWriterManager("second_mgr")
+	if ws.StreamWriterManager() != "first_mgr" {
+		t.Errorf("幂等保护：期望 streamWriterManager='first_mgr'，实际=%v", ws.StreamWriterManager())
+	}
+}
+
+// TestWorkflowSession_SetTracer_非幂等 测试非幂等设置
+func TestWorkflowSession_SetTracer_非幂等(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	ws.SetTracer("first_tracer")
+	if ws.Tracer() != "first_tracer" {
+		t.Errorf("期望 tracer='first_tracer'，实际=%v", ws.Tracer())
+	}
+
+	// 二次设置应覆盖
+	ws.SetTracer("second_tracer")
+	if ws.Tracer() != "second_tracer" {
+		t.Errorf("非幂等：期望 tracer='second_tracer'，实际=%v", ws.Tracer())
+	}
+}
+
+// TestWorkflowSession_SetActorManager_幂等 测试幂等注入
+func TestWorkflowSession_SetActorManager_幂等(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	ws.SetActorManager("first_mgr")
+	if ws.ActorManager() != "first_mgr" {
+		t.Errorf("期望 actorManager='first_mgr'，实际=%v", ws.ActorManager())
+	}
+
+	// 二次设置不应覆盖
+	ws.SetActorManager("second_mgr")
+	if ws.ActorManager() != "first_mgr" {
+		t.Errorf("幂等保护：期望 actorManager='first_mgr'，实际=%v", ws.ActorManager())
+	}
+}
+
+// TestWorkflowSession_Checkpointer_委托parent 测试委托给 parent
+func TestWorkflowSession_Checkpointer_委托parent(t *testing.T) {
+	parent := NewAgentSession("parent-id",
+		WithCheckpointer("parent_checkpointer"),
+	)
+
+	ws := NewWorkflowSession(WithWorkflowParent(parent))
+
+	if ws.Checkpointer() != "parent_checkpointer" {
+		t.Errorf("期望委托 parent checkpointer='parent_checkpointer'，实际=%v", ws.Checkpointer())
+	}
+}
+
+// TestWorkflowSession_Checkpointer_无parent 测试无 parent 返回 nil
+func TestWorkflowSession_Checkpointer_无parent(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	if ws.Checkpointer() != nil {
+		t.Errorf("期望无 parent 时 checkpointer 为 nil，实际=%v", ws.Checkpointer())
+	}
+}
+
+// TestWorkflowSession_WorkflowNestingDepth 测试固定返回 0
+func TestWorkflowSession_WorkflowNestingDepth(t *testing.T) {
+	ws := NewWorkflowSession()
+	if ws.WorkflowNestingDepth() != 0 {
+		t.Errorf("期望 WorkflowNestingDepth=0，实际=%d", ws.WorkflowNestingDepth())
+	}
+}
+
+// TestWorkflowSession_Close 测试关闭
+func TestWorkflowSession_Close(t *testing.T) {
+	ws := NewWorkflowSession()
+	err := ws.Close()
+	if err != nil {
+		t.Errorf("期望 Close 返回 nil，实际=%v", err)
+	}
+}
+
+// ──────────────────────────── NodeSession 测试 ────────────────────────────
+
+// TestNewNodeSession 测试 executableID 计算
+func TestNewNodeSession(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf-1"))
+
+	ns := NewNodeSession(ws, "llm_node", "LLM", false)
+
+	if ns.NodeID() != "llm_node" {
+		t.Errorf("期望 nodeID='llm_node'，实际=%s", ns.NodeID())
+	}
+	if ns.NodeType() != "LLM" {
+		t.Errorf("期望 nodeType='LLM'，实际=%s", ns.NodeType())
+	}
+	// parentID 应为空（WorkflowSession 不是 NodeSession）
+	if ns.ParentID() != "" {
+		t.Errorf("期望 parentID=''（从 WorkflowSession 创建），实际=%s", ns.ParentID())
+	}
+	// executableID 应为 nodeID 本身（因为 parentID 为空）
+	if ns.ExecutableID() != "llm_node" {
+		t.Errorf("期望 executableID='llm_node'，实际=%s", ns.ExecutableID())
+	}
+	// 应继承 workflowID
+	if ns.WorkflowID() != "wf-1" {
+		t.Errorf("期望继承 workflowID='wf-1'，实际=%s", ns.WorkflowID())
+	}
+}
+
+// TestNewNodeSession_嵌套路径 测试从 NodeSession 创建时取 executableID
+func TestNewNodeSession_嵌套路径(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf-1"))
+
+	// 第一层节点
+	ns1 := NewNodeSession(ws, "start", "Start", false)
+	if ns1.ExecutableID() != "start" {
+		t.Errorf("期望第一层 executableID='start'，实际=%s", ns1.ExecutableID())
+	}
+
+	// 第二层节点（从 NodeSession 创建）
+	ns2 := NewNodeSession(ns1, "llm_node", "LLM", false)
+	if ns2.ParentID() != "start" {
+		t.Errorf("期望第二层 parentID='start'，实际=%s", ns2.ParentID())
+	}
+	if ns2.ExecutableID() != "start.llm_node" {
+		t.Errorf("期望第二层 executableID='start.llm_node'，实际=%s", ns2.ExecutableID())
+	}
+}
+
+// TestNodeSession_BaseSession接口 测试委托方法
+func TestNodeSession_BaseSession接口(t *testing.T) {
+	parent := NewAgentSession("parent-123",
+		WithConfig("test_config"),
+		WithTracer("test_tracer"),
+	)
+
+	ns := NewNodeSession(parent, "node1", "Test", false)
+
+	// 委托方法
+	if ns.SessionID() != "parent-123" {
+		t.Errorf("期望委托 SessionID='parent-123'，实际=%s", ns.SessionID())
+	}
+	if ns.Config() != "test_config" {
+		t.Errorf("期望委托 Config='test_config'，实际=%v", ns.Config())
+	}
+	if ns.Tracer() != "test_tracer" {
+		t.Errorf("期望委托 Tracer='test_tracer'，实际=%v", ns.Tracer())
+	}
+}
+
+// TestNodeSession_State_节点专属视图 测试 State() 返回节点专属视图
+func TestNodeSession_State_节点专属视图(t *testing.T) {
+	ws := NewWorkflowSession()
+
+	// 向 WorkflowSession 的 globalState 写入数据
+	if cs, ok := ws.State().(*state.WorkflowCommitState); ok {
+		cs.UpdateGlobal(map[string]any{"shared_key": "shared_val"})
+		cs.Commit()
+	}
+
+	ns := NewNodeSession(ws, "node1", "Test", false)
+
+	// 节点视图应能读取共享的 globalState
+	if cs, ok := ns.State().(*state.WorkflowCommitState); ok {
+		result := cs.GetGlobal(state.StringKey("shared_key"))
+		if result != "shared_val" {
+			t.Errorf("期望节点视图共享 globalState，获取 'shared_val'，实际=%v", result)
+		}
+	} else {
+		t.Error("节点 State 应为 *WorkflowCommitState")
+	}
+
+	// 节点视图的 nodeID 应为 executableID（通过 WorkflowCommitState 的 nodeID 字段验证）
+	// 由于 nodeID 是未导出字段，通过行为间接验证
+	if cs, ok := ns.State().(*state.WorkflowCommitState); ok {
+		// 通过 UpdateGlobal 间接验证 nodeID：UpdateGlobal 会以 nodeID 为键暂存
+		cs.UpdateGlobal(map[string]any{"test_key": "test_val"})
+		updates := cs.GetUpdates()
+		globalUpdates, ok := updates[state.GlobalStateUpdatesKey]
+		if !ok {
+			t.Fatal("GetUpdates 缺少 global_state_updates")
+		}
+		updatesMap, ok := globalUpdates.(map[string][]map[string]any)
+		if !ok {
+			t.Fatalf("期望 globalStateUpdates 为 map[string][]map[string]any，实际=%T", globalUpdates)
+		}
+		if len(updatesMap["node1"]) == 0 {
+			t.Error("期望 globalStateUpdates 有 node1 的更新，验证 nodeID='node1'")
+		}
+	}
+}
+
+// TestNodeSession_Close_空实现 测试 Close 不影响底层
+func TestNodeSession_Close_空实现(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", false)
+
+	err := ns.Close()
+	if err != nil {
+		t.Errorf("期望 Close 返回 nil，实际=%v", err)
+	}
+
+	// 底层 WorkflowSession 不受影响
+	if ws.SessionID() == "" {
+		t.Error("底层 WorkflowSession 不应受 NodeSession.Close() 影响")
+	}
+}
+
+// ──────────────────────────── SubWorkflowSession 测试 ────────────────────────────
+
+// TestNewSubWorkflowSession 测试嵌套深度 +1
+func TestNewSubWorkflowSession(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("main_wf"))
+	ns := NewNodeSession(ws, "sub_wf_node", "SubWorkflow", false)
+
+	sub := NewSubWorkflowSession(ns, "child_wf", "sub_actor")
+
+	if sub.WorkflowID() != "child_wf" {
+		t.Errorf("期望 WorkflowID='child_wf'，实际=%s", sub.WorkflowID())
+	}
+	if sub.WorkflowNestingDepth() != 1 {
+		t.Errorf("期望 WorkflowNestingDepth=1，实际=%d", sub.WorkflowNestingDepth())
+	}
+}
+
+// TestSubWorkflowSession_ActorManager 测试返回自己的 actorManager
+func TestSubWorkflowSession_ActorManager(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+
+	sub := NewSubWorkflowSession(ns, "child_wf", "my_actor")
+
+	if sub.ActorManager() != "my_actor" {
+		t.Errorf("期望 ActorManager='my_actor'，实际=%v", sub.ActorManager())
+	}
+}
+
+// TestSubWorkflowSession_SetActorManager_幂等 测试幂等注入
+func TestSubWorkflowSession_SetActorManager_幂等(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+
+	sub := NewSubWorkflowSession(ns, "child_wf", "first_actor")
+
+	// 二次设置不应覆盖
+	sub.SetActorManager("second_actor")
+	if sub.ActorManager() != "first_actor" {
+		t.Errorf("幂等保护：期望 ActorManager='first_actor'，实际=%v", sub.ActorManager())
+	}
+}
+
+// TestSubWorkflowSession_WorkflowID 测试返回子工作流 ID
+func TestSubWorkflowSession_WorkflowID(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("main_wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+
+	sub := NewSubWorkflowSession(ns, "child_wf", nil)
+
+	if sub.WorkflowID() != "child_wf" {
+		t.Errorf("期望 WorkflowID='child_wf'，实际=%s", sub.WorkflowID())
+	}
+}
+
+// TestSubWorkflowSession_WorkflowNestingDepth 测试嵌套深度
+func TestSubWorkflowSession_WorkflowNestingDepth(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+
+	sub := NewSubWorkflowSession(ns, "child_wf", nil)
+
+	// WorkflowSession 的深度为 0，NodeSession 继承为 0，SubWorkflow 应为 0+1=1
+	if sub.WorkflowNestingDepth() != 1 {
+		t.Errorf("期望 WorkflowNestingDepth=1，实际=%d", sub.WorkflowNestingDepth())
+	}
+}
+
+// ──────────────────────────── 辅助函数测试 ────────────────────────────
+
+// TestCreateParentID 测试计算父节点 ID
+func TestCreateParentID(t *testing.T) {
+	// 非 NodeSession 应返回空字符串
+	ws := NewWorkflowSession()
+	result := createParentID(ws)
+	if result != "" {
+		t.Errorf("期望 WorkflowSession 的 parentID=''，实际=%s", result)
+	}
+
+	// NodeSession 应返回 executableID
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	result = createParentID(ns)
+	if result != "node1" {
+		t.Errorf("期望 NodeSession 的 parentID='node1'，实际=%s", result)
+	}
+}
+
+// TestCreateExecutableID 测试计算可执行路径 ID
+func TestCreateExecutableID(t *testing.T) {
+	// parentID 为空
+	result := createExecutableID("node1", "")
+	if result != "node1" {
+		t.Errorf("期望 'node1'，实际=%s", result)
+	}
+
+	// parentID 非空
+	result = createExecutableID("node1", "parent")
+	if result != "parent.node1" {
+		t.Errorf("期望 'parent.node1'，实际=%s", result)
+	}
+}
