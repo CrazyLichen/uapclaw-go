@@ -73,8 +73,14 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 
 	// 设置 AWS 校验和环境变量，对齐 Python: os.environ["AWS_REQUEST_CHECKSUM_CALCULATION"] = "WHEN_REQUIRED"
 	// 兼容新版 SDK 校验和计算行为变更，避免与 OBS/新版 S3 服务交互时 checksum 校验失败
-	os.Setenv("AWS_REQUEST_CHECKSUM_CALCULATION", "WHEN_REQUIRED")
-	os.Setenv("AWS_RESPONSE_CHECKSUM_VALIDATION", "WHEN_REQUIRED")
+	if err := os.Setenv("AWS_REQUEST_CHECKSUM_CALCULATION", "WHEN_REQUIRED"); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("set env AWS_REQUEST_CHECKSUM_CALCULATION failed: %v", err)))
+	}
+	if err := os.Setenv("AWS_RESPONSE_CHECKSUM_VALIDATION", "WHEN_REQUIRED"); err != nil {
+		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("set env AWS_RESPONSE_CHECKSUM_VALIDATION failed: %v", err)))
+	}
 
 	// 校验必填配置
 	if cfg.Server == "" {

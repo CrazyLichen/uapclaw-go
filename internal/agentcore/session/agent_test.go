@@ -164,7 +164,7 @@ func TestSession_桩方法返回Nil(t *testing.T) {
 				t.Errorf("期望 *interaction.AgentInterrupt，得到 %T", r)
 			}
 		}()
-		s.Interact(nil)
+		_ = s.Interact(nil)
 	}()
 	if ws := s.CreateWorkflowSession(); ws == nil {
 		t.Error("CreateWorkflowSession 应返回非 nil 的 WorkflowSession")

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── fakeDataContainer ────────────────────────────
@@ -178,7 +180,7 @@ func TestChainSession_SetIsActive(t *testing.T) {
 func TestChainSession_FlushAndLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionDir := filepath.Join(tmpDir, "s1")
-	os.MkdirAll(sessionDir, 0o755)
+	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 
 	dc := newFakeDataContainer()
 	cs := NewChainSession("a1", SessionScope{Scope: MainScope{}}, "s1", dc, sessionDir)
@@ -222,14 +224,14 @@ func TestChainSession_FlushAndLoad(t *testing.T) {
 func TestChainSession_Flush_删除下游关系(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionDir := filepath.Join(tmpDir, "s1")
-	os.MkdirAll(sessionDir, 0o755)
+	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 
 	dc := newFakeDataContainer()
 	cs := NewChainSession("a1", SessionScope{Scope: MainScope{}}, "s1", dc, sessionDir)
 	meta := CreateNewSessionMeta("s1", "agent")
 	cs.UpdateFromMeta(meta)
 	cs.AddDownstream("a2", "s2", SharingPolicy{Permission: PermissionRead})
-	cs.Flush()
+	require.NoError(t, cs.Flush())
 
 	// 删除下游关系再 Flush
 	cs.RemoveDownstream("a2", "s2")
@@ -247,9 +249,9 @@ func TestChainSession_Flush_删除下游关系(t *testing.T) {
 func TestChainSession_Load_跳过removed标记(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessionDir := filepath.Join(tmpDir, "s1")
-	os.MkdirAll(sessionDir, 0o755)
+	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 	downstreamsDir := filepath.Join(sessionDir, "downstreams")
-	os.MkdirAll(downstreamsDir, 0o755)
+	require.NoError(t, os.MkdirAll(downstreamsDir, 0o755))
 
 	// 创建一个 removed:true 的 .link 文件
 	linkData := map[string]any{
@@ -257,7 +259,7 @@ func TestChainSession_Load_跳过removed标记(t *testing.T) {
 		"removed":    true,
 	}
 	linkBytes, _ := json.MarshalIndent(linkData, "", "  ")
-	os.WriteFile(filepath.Join(downstreamsDir, "a2_s2.link"), linkBytes, 0o644)
+	require.NoError(t, os.WriteFile(filepath.Join(downstreamsDir, "a2_s2.link"), linkBytes, 0o644))
 
 	// 也写一个 state.data
 	stateData := map[string]any{
@@ -270,7 +272,7 @@ func TestChainSession_Load_跳过removed标记(t *testing.T) {
 		"data": map[string]any{},
 	}
 	stateBytes, _ := json.MarshalIndent(stateData, "", "  ")
-	os.WriteFile(filepath.Join(sessionDir, "state.data"), stateBytes, 0o644)
+	require.NoError(t, os.WriteFile(filepath.Join(sessionDir, "state.data"), stateBytes, 0o644))
 
 	cs := NewChainSession("a1", SessionScope{Scope: MainScope{}}, "s1", newFakeDataContainer(), sessionDir)
 	if err := cs.Load(); err != nil {

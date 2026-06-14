@@ -45,8 +45,10 @@ type APIEmbedding struct {
 	extraParams map[string]any
 	// dimension 缓存的向量维度（0 表示未探测）
 	dimension int
-	// dimOnce 保证维度探测只执行一次
+	// dimOnce 保证 Dimension() 方法探测只执行一次
 	dimOnce sync.Once
+	// autoDimOnce 保证 getEmbeddings 中自动探测只执行一次，避免并发批处理时数据竞态
+	autoDimOnce sync.Once
 	// httpClient HTTP 客户端
 	httpClient *http.Client
 }
@@ -346,13 +348,15 @@ func (a *APIEmbedding) getEmbeddings(ctx context.Context, input any) ([][]float6
 			return nil, err
 		}
 
-		// 自动探测并缓存 dimension
-		if a.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
-			a.dimension = len(embeddings[0])
-			logger.Debug(logComponent).
-				Int("dimension", a.dimension).
-				Msg("探测到嵌入向量维度")
-		}
+		// 使用 autoDimOnce 保护 dimension 写入，避免并发批处理时的数据竞态
+		a.autoDimOnce.Do(func() {
+			if a.dimension == 0 && len(embeddings) > 0 && len(embeddings[0]) > 0 {
+				a.dimension = len(embeddings[0])
+				logger.Debug(logComponent).
+					Int("dimension", a.dimension).
+					Msg("探测到嵌入向量维度")
+			}
+		})
 
 		return embeddings, nil
 	}, apiIsRetryable)
