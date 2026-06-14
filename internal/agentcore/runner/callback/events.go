@@ -122,6 +122,34 @@ const (
 	ToolAuth ToolCallEventType = "_framework:tool_auth"
 )
 
+// SessionCallEventType Session 调用事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (SessionEvents)
+type SessionCallEventType string
+
+const (
+	// SessionCreated 会话创建事件
+	SessionCreated SessionCallEventType = "_framework:session_created"
+	// AgentSessionCreated Agent 会话创建事件
+	AgentSessionCreated SessionCallEventType = "_framework:agent_session_created"
+)
+
+// SessionCallEventData Session 调用事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/session/agent.py 中 trigger(SessionEvents.AGENT_SESSION_CREATED, ...) 的 kwargs
+type SessionCallEventData struct {
+	// Event 事件类型
+	Event SessionCallEventType
+	// SessionID 会话标识
+	SessionID string
+	// Card Agent 身份元数据
+	Card any
+	// Session 会话实例
+	Session any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolCallEventData 创建工具调用事件数据。
@@ -149,4 +177,14 @@ func (t LLMCallEventType) String() string {
 // String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
 func (d *ToolCallEventData) String() string {
 	return fmt.Sprintf("ToolCallEventData{Event:%s, ToolName:%s, ToolID:%s}", d.Event, d.ToolName, d.ToolID)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t SessionCallEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *SessionCallEventData) String() string {
+	return fmt.Sprintf("SessionCallEventData{Event:%s, SessionID:%s}", d.Event, d.SessionID)
 }

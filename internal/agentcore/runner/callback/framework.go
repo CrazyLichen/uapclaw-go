@@ -17,18 +17,23 @@ type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
 // ToolCallbackFunc 工具回调函数类型。
 type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
 
+// SessionCallbackFunc Session 回调函数类型。
+type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
+
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
-// 统一管理 LLM 和 Tool 事件的注册与触发。
+// 统一管理 LLM、Tool 和 Session 事件的注册与触发。
 // 2.14 节仅实现最小子集：OnLLM/OffLLM/TriggerLLM、OnTool/OffTool/TriggerTool。
+// 5.3 节扩展：OnSession/OffSession/TriggerSession。
 // 完整能力（过滤器/熔断器/链式执行/装饰器/transform_io）在 6.24 节实现。
 //
 // 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
 // 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
 type CallbackFramework struct {
-	mu            sync.RWMutex
-	llmCallbacks  map[LLMCallEventType][]LLMCallbackFunc
-	toolCallbacks map[ToolCallEventType][]ToolCallbackFunc
+	mu               sync.RWMutex
+	llmCallbacks     map[LLMCallEventType][]LLMCallbackFunc
+	toolCallbacks    map[ToolCallEventType][]ToolCallbackFunc
+	sessionCallbacks map[SessionCallEventType][]SessionCallbackFunc
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -45,8 +50,9 @@ var globalCallbackFramework = NewCallbackFramework()
 // 默认注册 LLM 日志回调，保持与原有日志行为一致。
 func NewCallbackFramework() *CallbackFramework {
 	fw := &CallbackFramework{
-		llmCallbacks:  make(map[LLMCallEventType][]LLMCallbackFunc),
-		toolCallbacks: make(map[ToolCallEventType][]ToolCallbackFunc),
+		llmCallbacks:     make(map[LLMCallEventType][]LLMCallbackFunc),
+		toolCallbacks:    make(map[ToolCallEventType][]ToolCallbackFunc),
+		sessionCallbacks: make(map[SessionCallEventType][]SessionCallbackFunc),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -157,6 +163,49 @@ func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEven
 
 	fw.mu.RLock()
 	callbacks := fw.toolCallbacks[data.Event]
+	fw.mu.RUnlock()
+
+	results := make([]any, 0, len(callbacks))
+	for _, fn := range callbacks {
+		result := fn(ctx, data)
+		results = append(results, result)
+	}
+	return results
+}
+
+// OnSession 注册 Session 事件回调函数。
+func (fw *CallbackFramework) OnSession(event SessionCallEventType, fn SessionCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.sessionCallbacks[event] = append(fw.sessionCallbacks[event], fn)
+}
+
+// OffSession 注销 Session 事件回调函数。
+func (fw *CallbackFramework) OffSession(event SessionCallEventType, fn SessionCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.sessionCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, cb := range callbacks {
+		if fmt.Sprintf("%p", cb) == fmt.Sprintf("%p", fn) {
+			fw.sessionCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerSession 触发 Session 事件，按注册顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCallEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	fw.mu.RLock()
+	callbacks := fw.sessionCallbacks[data.Event]
 	fw.mu.RUnlock()
 
 	results := make([]any, 0, len(callbacks))

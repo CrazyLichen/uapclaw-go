@@ -286,3 +286,117 @@ func TestCallbackFramework_触发Tool空上下文(t *testing.T) {
 		t.Errorf("nil context 应返回 nil，实际 %v", results)
 	}
 }
+
+// TestCallbackFramework_OnSession和TriggerSession 测试注册+触发 Session 回调
+func TestCallbackFramework_OnSession和TriggerSession(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *SessionCallEventData
+
+	fn := func(ctx context.Context, data *SessionCallEventData) any {
+		called = true
+		receivedData = data
+		return "result"
+	}
+
+	fw.OnSession(AgentSessionCreated, fn)
+	results := fw.TriggerSession(context.Background(), &SessionCallEventData{
+		Event:     AgentSessionCreated,
+		SessionID: "test-session",
+	})
+
+	if !called {
+		t.Error("回调未被调用")
+	}
+	if receivedData.SessionID != "test-session" {
+		t.Errorf("SessionID 期望 test-session，实际 %s", receivedData.SessionID)
+	}
+	if len(results) != 1 || results[0] != "result" {
+		t.Errorf("结果期望 [result]，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_OffSession 测试注销 Session 回调
+func TestCallbackFramework_OffSession(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+
+	fn := func(ctx context.Context, data *SessionCallEventData) any {
+		called = true
+		return nil
+	}
+
+	fw.OnSession(AgentSessionCreated, fn)
+	fw.OffSession(AgentSessionCreated, fn)
+	fw.TriggerSession(context.Background(), &SessionCallEventData{
+		Event: AgentSessionCreated,
+	})
+
+	if called {
+		t.Error("注销后回调不应被调用")
+	}
+}
+
+// TestCallbackFramework_TriggerSession_无回调时返回空 测试无回调时返回空切片
+func TestCallbackFramework_TriggerSession_无回调时返回空(t *testing.T) {
+	fw := NewCallbackFramework()
+	results := fw.TriggerSession(context.Background(), &SessionCallEventData{
+		Event: AgentSessionCreated,
+	})
+	if len(results) != 0 {
+		t.Errorf("无回调时期望空切片，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_TriggerSession_Nil上下文 测试 nil context 或 nil data
+func TestCallbackFramework_TriggerSession_Nil上下文(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	fw.OnSession(AgentSessionCreated, func(ctx context.Context, data *SessionCallEventData) any {
+		called = true
+		return nil
+	})
+
+	// nil context
+	results := fw.TriggerSession(nil, &SessionCallEventData{Event: AgentSessionCreated})
+	if results != nil {
+		t.Errorf("nil context 期望 nil，实际 %v", results)
+	}
+
+	// nil data
+	results = fw.TriggerSession(context.Background(), nil)
+	if results != nil {
+		t.Errorf("nil data 期望 nil，实际 %v", results)
+	}
+
+	if called {
+		t.Error("nil 参数时回调不应被调用")
+	}
+}
+
+// TestCallbackFramework_Session事件与LLMTool隔离 测试 Session 回调不影响 LLM/Tool
+func TestCallbackFramework_Session事件与LLMTool隔离(t *testing.T) {
+	fw := NewCallbackFramework()
+	var llmCalled, toolCalled bool
+
+	fw.OnSession(AgentSessionCreated, func(ctx context.Context, data *SessionCallEventData) any {
+		return nil
+	})
+	fw.OnLLM(LLMCallStarted, func(ctx context.Context, data *LLMCallEventData) any {
+		llmCalled = true
+		return nil
+	})
+	fw.OnTool(ToolCallStarted, func(ctx context.Context, data *ToolCallEventData) any {
+		toolCalled = true
+		return nil
+	})
+
+	// 触发 Session 事件，不应触发 LLM/Tool 回调
+	fw.TriggerSession(context.Background(), &SessionCallEventData{Event: AgentSessionCreated})
+	if llmCalled {
+		t.Error("Session 事件不应触发 LLM 回调")
+	}
+	if toolCalled {
+		t.Error("Session 事件不应触发 Tool 回调")
+	}
+}

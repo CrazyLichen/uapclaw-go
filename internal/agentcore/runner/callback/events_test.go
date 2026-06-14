@@ -156,3 +156,32 @@ func TestToolCallEventData_String(t *testing.T) {
 		t.Error("String() 不应返回空字符串")
 	}
 }
+
+// TestSessionCallEventType_字符串值 测试 Session 事件类型字符串值
+func TestSessionCallEventType_字符串值(t *testing.T) {
+	if SessionCreated != "_framework:session_created" {
+		t.Errorf("SessionCreated 期望 _framework:session_created，实际 %s", SessionCreated)
+	}
+	if AgentSessionCreated != "_framework:agent_session_created" {
+		t.Errorf("AgentSessionCreated 期望 _framework:agent_session_created，实际 %s", AgentSessionCreated)
+	}
+}
+
+// TestSessionCallEventType_String 测试 String 方法
+func TestSessionCallEventType_String(t *testing.T) {
+	if SessionCreated.String() != "_framework:session_created" {
+		t.Errorf("String() 期望 _framework:session_created，实际 %s", SessionCreated.String())
+	}
+}
+
+// TestSessionCallEventData_String 测试 String 方法
+func TestSessionCallEventData_String(t *testing.T) {
+	data := &SessionCallEventData{
+		Event:     AgentSessionCreated,
+		SessionID: "test-123",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
