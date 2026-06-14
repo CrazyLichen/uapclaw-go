@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/embedding"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/retrieval/common"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 func TestVLLMEmbedding_EmbedQuery(t *testing.T) {
@@ -166,4 +167,43 @@ func TestVLLMEmbedding_接口约束(t *testing.T) {
 	var _ embedding.BaseEmbedding = vllm
 	// 验证 VLLMEmbedding 满足 MultimodalEmbedder 接口
 	var _ MultimodalEmbedder = vllm
+}
+
+// TestVLLMEmbedding_DimensionWithContext 验证 DimensionWithContext 正常工作
+func TestVLLMEmbedding_DimensionWithContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, `{
+			"data": [{"embedding": [0.1, 0.2, 0.3, 0.4], "index": 0}],
+			"model": "Qwen3-VL-Embedding",
+			"object": "list",
+			"usage": {"prompt_tokens": 5, "total_tokens": 5}
+		}`)
+	}))
+	defer server.Close()
+
+	openAI := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "Qwen3-VL-Embedding",
+		BaseURL:   server.URL,
+		APIKey:    "sk-test",
+	})
+	vllm := NewVLLMEmbedding(openAI)
+
+	dim, err := vllm.DimensionWithContext(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 4, dim)
+}
+
+// TestVllmIsRetryable 验证 vllmIsRetryable 判断逻辑
+func TestVllmIsRetryable(t *testing.T) {
+	// 普通 error 可重试
+	assert.True(t, vllmIsRetryable(fmt.Errorf("网络错误")))
+
+	// 不可恢复的 BaseError 不可重试
+	nonRecoverable := exception.BuildError(
+		exception.StatusRetrievalEmbeddingInputInvalid,
+		exception.WithParam("error_msg", "客户端错误"),
+	)
+	assert.False(t, vllmIsRetryable(nonRecoverable))
 }

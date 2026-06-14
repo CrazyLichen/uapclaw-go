@@ -457,3 +457,32 @@ func TestAPIEmbedding_429可重试(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 3, callCount, "HTTP 429 应可重试")
 }
+
+// TestAPIEmbedding_DimensionWithContext 验证 DimensionWithContext 正常工作
+func TestAPIEmbedding_DimensionWithContext(t *testing.T) {
+	server := newTestAPIServer(`{"data": [{"embedding": [0.1, 0.2, 0.3, 0.4], "index": 0}]}`)
+	defer server.Close()
+
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   server.URL,
+		APIKey:    "test-key",
+	})
+
+	dim, err := client.DimensionWithContext(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 4, dim)
+}
+
+// TestAPIEmbedding_DimensionWithContext_已有维度 验证维度缓存
+func TestAPIEmbedding_DimensionWithContext_已有维度(t *testing.T) {
+	client := NewAPIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   "http://localhost",
+	})
+	client.dimension = 128
+
+	dim, err := client.DimensionWithContext(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 128, dim)
+}

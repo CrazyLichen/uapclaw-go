@@ -2,8 +2,11 @@ package embedding
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -282,6 +285,87 @@ func TestOpenAIEmbedding_ExtraParams(t *testing.T) {
 	_, err := client.EmbedQuery(context.Background(), "hello")
 	require.NoError(t, err)
 	assert.Equal(t, "base64", receivedBody["encoding_format"])
+}
+
+// TestOpenAIEmbedding_WithOpenAIHTTPClient 验证自定义 HTTP 客户端 Option
+func TestOpenAIEmbedding_WithOpenAIHTTPClient(t *testing.T) {
+	customClient := &http.Client{Timeout: 5 * time.Second}
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   "http://localhost",
+		APIKey:    "sk-test",
+	}, WithOpenAIHTTPClient(customClient))
+
+	assert.Equal(t, customClient, client.httpClient)
+}
+
+// TestOpenAIEmbedding_DimensionWithContext 验证 DimensionWithContext 正常工作
+func TestOpenAIEmbedding_DimensionWithContext(t *testing.T) {
+	server := newOpenAITestServer(`{
+		"data": [{"embedding": [0.1, 0.2, 0.3, 0.4], "index": 0}],
+		"model": "test", "object": "list",
+		"usage": {"prompt_tokens": 1, "total_tokens": 1}
+	}`)
+	defer server.Close()
+
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "text-embedding-3-small",
+		BaseURL:   server.URL,
+		APIKey:    "sk-test",
+	})
+
+	dim, err := client.DimensionWithContext(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 4, dim)
+}
+
+// TestOpenAIEmbedding_DimensionWithContext_已有维度 验证维度缓存
+func TestOpenAIEmbedding_DimensionWithContext_已有维度(t *testing.T) {
+	client := NewOpenAIEmbedding(EmbeddingConfig{
+		ModelName: "test-model",
+		BaseURL:   "http://localhost",
+		APIKey:    "sk-test",
+	}, WithOpenAIDimension(128))
+
+	dim, err := client.DimensionWithContext(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 128, dim)
+}
+
+// TestDecodeBase64FromRawJSON 验证 base64 嵌入向量解码
+func TestDecodeBase64FromRawJSON(t *testing.T) {
+	// 构造 base64 编码的 float32 向量 [0.1, 0.2]
+	vec := []float32{0.1, 0.2}
+	buf := make([]byte, len(vec)*4)
+	for i, v := range vec {
+		bits := math.Float32bits(v)
+		binary.LittleEndian.PutUint32(buf[i*4:], bits)
+	}
+	b64Str := base64.StdEncoding.EncodeToString(buf)
+
+	rawJSON := fmt.Sprintf(`{"embedding": %q}`, b64Str)
+	result, err := decodeBase64FromRawJSON(rawJSON)
+	require.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.InDelta(t, 0.1, result[0], 0.01)
+}
+
+// TestDecodeBase64FromRawJSON_无效JSON 验证无效 JSON 报错
+func TestDecodeBase64FromRawJSON_无效JSON(t *testing.T) {
+	_, err := decodeBase64FromRawJSON("invalid json{{{")
+	require.Error(t, err)
+}
+
+// TestDecodeBase64FromRawJSON_空embedding 验证空 embedding 报错
+func TestDecodeBase64FromRawJSON_空embedding(t *testing.T) {
+	_, err := decodeBase64FromRawJSON(`{}`)
+	require.Error(t, err)
+}
+
+// TestDecodeBase64FromRawJSON_非base64字符串 验证非 base64 字符串报错
+func TestDecodeBase64FromRawJSON_非base64字符串(t *testing.T) {
+	_, err := decodeBase64FromRawJSON(`{"embedding": [1, 2, 3]}`)
+	require.Error(t, err)
 }
 
 // TestOpenAIEmbedding_Option函数 验证各 Option 函数正常工作

@@ -81,7 +81,9 @@ func (g *GlobalSessionController) LoadScope(sessionScope SessionScope, loadActiv
 	defer g.mu.Unlock()
 
 	for _, controller := range g.Controllers {
-		controller.LoadScope(sessionScope, loadActiveOnly)
+		if err := controller.LoadScope(sessionScope, loadActiveOnly); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -99,7 +101,9 @@ func (g *GlobalSessionController) LoadAll(loadActiveOnly bool) error {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				controller := g.getOrCreateController(entry.Name())
-				controller.Load(loadActiveOnly)
+				if err := controller.Load(loadActiveOnly); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -143,7 +147,9 @@ func (g *GlobalSessionController) FlushScope(sessionScope SessionScope) error {
 	defer g.mu.Unlock()
 
 	for _, controller := range g.Controllers {
-		controller.FlushScope(sessionScope)
+		if err := controller.FlushScope(sessionScope); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -179,7 +185,9 @@ func (g *GlobalSessionController) CreateIfNotExistsAgent(agentID string) (bool, 
 		return false, controller, nil
 	}
 
-	g.ensureBasePath()
+	if err := g.ensureBasePath(); err != nil {
+		return false, nil, err
+	}
 	controller := NewSessionController(agentID, g.BasePath, g.dataContainerType)
 	if err := controller.Load(true); err != nil {
 		return false, nil, err
@@ -202,7 +210,14 @@ func (g *GlobalSessionController) RemoveAgent(agentID string) (bool, error) {
 	delete(g.Controllers, agentID)
 
 	agentDir := SessionPaths{}.AgentDir(g.BasePath, agentID)
-	os.RemoveAll(agentDir)
+	if err := os.RemoveAll(agentDir); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "remove_agent_dir").
+			Str("agent_id", agentID).
+			Str("path", agentDir).
+			Err(err).
+			Msg("删除 Agent 目录失败")
+	}
 
 	return true, nil
 }
@@ -216,7 +231,13 @@ func (g *GlobalSessionController) RemoveAll() {
 		controller.RemoveAll()
 	}
 	g.Controllers = make(map[string]*SessionController)
-	os.RemoveAll(g.BasePath)
+	if err := os.RemoveAll(g.BasePath); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "remove_all_dirs").
+			Str("path", g.BasePath).
+			Err(err).
+			Msg("删除存储根目录失败")
+	}
 }
 
 // ──────────────────────────── 批量清理方法 ────────────────────────────
@@ -345,7 +366,14 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 			if !dryRun {
 				for _, dirName := range orphanDirs {
 					orphanDir := SessionPaths{}.SessionDir(g.BasePath, currentAgentID, dirName)
-					os.RemoveAll(orphanDir)
+					if err := os.RemoveAll(orphanDir); err != nil {
+						logger.Warn(logger.ComponentAgentCore).
+							Str("action", "cleanup_orphan_dir").
+							Str("agent_id", currentAgentID).
+							Str("path", orphanDir).
+							Err(err).
+							Msg("删除孤立目录失败")
+					}
 				}
 				logger.Info(logger.ComponentAgentCore).
 					Str("action", "cleanup_orphan_files").
@@ -439,7 +467,14 @@ func AddDirectSessionDownstream(callerAgentID, callerUserID, targetAgentID, targ
 	}
 
 	callerSession.AddDownstream(targetAgentID, targetSession.SessionID, policy)
-	callerSession.Flush()
+	if err := callerSession.Flush(); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "add_downstream_flush").
+			Str("caller_agent_id", callerAgentID).
+			Str("session_id", callerSession.SessionID).
+			Err(err).
+			Msg("刷盘调用方会话失败")
+	}
 	return true
 }
 
@@ -585,10 +620,18 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureBasePath 确保存储根目录存在
-func (g *GlobalSessionController) ensureBasePath() {
+func (g *GlobalSessionController) ensureBasePath() error {
 	if g.BasePath != "" {
-		os.MkdirAll(g.BasePath, 0o755)
+		if err := os.MkdirAll(g.BasePath, 0o755); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "ensure_base_path").
+				Str("path", g.BasePath).
+				Err(err).
+				Msg("创建存储根目录失败")
+			return err
+		}
 	}
+	return nil
 }
 
 // truncateID 截断 ID 用于显示，最多 8 个字符
@@ -604,7 +647,13 @@ func (g *GlobalSessionController) getOrCreateController(agentID string) *Session
 	if controller, ok := g.Controllers[agentID]; ok {
 		return controller
 	}
-	g.ensureBasePath()
+	if err := g.ensureBasePath(); err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "get_or_create_controller").
+			Str("agent_id", agentID).
+			Err(err).
+			Msg("创建存储根目录失败，继续使用空路径")
+	}
 	controller := NewSessionController(agentID, g.BasePath, g.dataContainerType)
 	g.Controllers[agentID] = controller
 	return controller

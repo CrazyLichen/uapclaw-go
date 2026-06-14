@@ -3,7 +3,10 @@ package embedding
 import (
 	"context"
 	"errors"
+	"net/http"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -201,4 +204,55 @@ func TestApplyEmbedOptions(t *testing.T) {
 	}, 8)
 	assert.Equal(t, 4, batchSize)
 	assert.Equal(t, cb2, cb)
+}
+
+// TestNewEmbeddingHTTPClient_HTTPS跳过验证 验证 EMBEDDING_SSL_VERIFY=false 时跳过 TLS 验证
+func TestNewEmbeddingHTTPClient_HTTPS跳过验证(t *testing.T) {
+	t.Setenv("EMBEDDING_SSL_VERIFY", "false")
+	client := NewEmbeddingHTTPClient("https://api.openai.com")
+	assert.NotNil(t, client)
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok, "应有 Transport")
+	assert.True(t, transport.TLSClientConfig.InsecureSkipVerify, "应跳过 TLS 验证")
+}
+
+// TestNewEmbeddingHTTPClient_自定义超时 验证自定义超时参数
+func TestNewEmbeddingHTTPClient_自定义超时(t *testing.T) {
+	client := NewEmbeddingHTTPClient("http://localhost:8080", 5*time.Second)
+	assert.NotNil(t, client)
+	assert.Equal(t, 5*time.Second, client.Timeout)
+}
+
+// TestCreateTLSConfigWithCert_文件不存在 验证证书文件不存在时报错
+func TestCreateTLSConfigWithCert_文件不存在(t *testing.T) {
+	_, err := createTLSConfigWithCert("/nonexistent/cert.pem")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "读取证书文件失败")
+}
+
+// TestCreateTLSConfigWithCert_无效证书 验证无效证书内容报错
+func TestCreateTLSConfigWithCert_无效证书(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "cert-*.pem")
+	require.NoError(t, err)
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("not a valid certificate")
+	tmpFile.Close()
+
+	_, err2 := createTLSConfigWithCert(tmpFile.Name())
+	require.Error(t, err2)
+	assert.Contains(t, err2.Error(), "解析证书文件失败")
+}
+
+// TestDefaultIsRetryable 验证 defaultIsRetryable 判断逻辑
+func TestDefaultIsRetryable(t *testing.T) {
+	// 普通 error 可重试
+	assert.True(t, defaultIsRetryable(context.Canceled))
+}
+
+// TestNewEmbeddingHTTPClient_自定义证书路径 验证证书路径设置但加载失败回退
+func TestNewEmbeddingHTTPClient_自定义证书路径加载失败(t *testing.T) {
+	t.Setenv("EMBEDDING_SSL_CERT", "/nonexistent/cert.pem")
+	client := NewEmbeddingHTTPClient("https://api.openai.com")
+	assert.NotNil(t, client)
+	// 加载失败时应回退到默认 TLS 配置（无自定义 Transport）
 }

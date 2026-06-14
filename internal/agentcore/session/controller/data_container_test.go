@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -158,6 +160,28 @@ func TestAgentSessionContainer_Get(t *testing.T) {
 	if got["foo"] != "bar" {
 		t.Errorf("Get(nil)[foo] = %v, want %q", got["foo"], "bar")
 	}
+}
+
+func TestAgentSessionContainer_Get_带StateKey(t *testing.T) {
+	c := NewAgentSessionContainer()
+	sa := newFakeStateAccessor()
+	sa.state["key1"] = "value1"
+	c.SetSession(sa)
+
+	// 使用 StateKey 参数
+	got := c.Get(state.StringKey("key1"))
+	assert.NotNil(t, got, "使用 StateKey 参数应返回非 nil")
+}
+
+func TestAgentSessionContainer_Get_非StateKey参数(t *testing.T) {
+	c := NewAgentSessionContainer()
+	sa := newFakeStateAccessor()
+	sa.state["key1"] = "value1"
+	c.SetSession(sa)
+
+	// 使用非 StateKey 类型的 key 参数，应走 DumpState 路径
+	got := c.Get("not-a-state-key")
+	assert.NotNil(t, got, "使用非 StateKey 参数应返回 DumpState 结果")
 }
 
 func TestAgentSessionContainer_Dump(t *testing.T) {

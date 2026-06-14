@@ -2,7 +2,11 @@ package controller
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewSessionController(t *testing.T) {
@@ -103,6 +107,14 @@ func TestSessionController_GetScopeSessions(t *testing.T) {
 	}
 }
 
+func TestSessionController_GetScopeSessions_无作用域(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "nonexistent"}}
+	sessions := sc.GetScopeSessions(scope)
+	assert.Nil(t, sessions, "无作用域时应返回 nil")
+}
+
 func TestSessionController_ActivateSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
@@ -120,6 +132,29 @@ func TestSessionController_ActivateSession(t *testing.T) {
 	}
 }
 
+func TestSessionController_ActivateSession_未找到(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	err := sc.ActivateSession("nonexistent")
+	require.Error(t, err, "未找到的会话应返回错误")
+	assert.Contains(t, err.Error(), "未找到", "错误信息应包含 '未找到'")
+}
+
+func TestSessionController_ActivateSession_从元数据加载(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+	sc.CreateIfNotExists(scope, "s1")
+
+	// Flush 后从缓存移除
+	require.NoError(t, sc.Flush())
+	delete(sc.SessionCache, "s1")
+
+	// 通过元数据激活（应触发从元数据加载）
+	err := sc.ActivateSession("s1")
+	require.NoError(t, err, "从元数据激活会话应成功")
+}
+
 func TestSessionController_GetScopeMeta(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
@@ -130,6 +165,15 @@ func TestSessionController_GetScopeMeta(t *testing.T) {
 	if meta.ActiveSession != "s1" {
 		t.Errorf("ActiveSession = %q, want %q", meta.ActiveSession, "s1")
 	}
+}
+
+func TestSessionController_GetScopeMeta_未注册作用域(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "nonexistent"}}
+	meta := sc.GetScopeMeta(scope)
+	// 未注册作用域应返回空的 ScopeSessionsMeta
+	assert.Empty(t, meta.ActiveSession, "未注册作用域应返回空 ActiveSession")
 }
 
 func TestSessionController_ListMetas(t *testing.T) {
@@ -176,6 +220,69 @@ func TestSessionController_FlushAndLoad(t *testing.T) {
 	}
 }
 
+func TestSessionController_FlushSession(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+	sc.CreateIfNotExists(scope, "s1")
+
+	err := sc.FlushSession("s1")
+	assert.NoError(t, err, "FlushSession 应成功")
+}
+
+func TestSessionController_FlushSession_未找到(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	err := sc.FlushSession("nonexistent")
+	assert.NoError(t, err, "未找到的 session 应返回 nil")
+}
+
+func TestSessionController_FlushScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+	sc.CreateIfNotExists(scope, "s1")
+
+	err := sc.FlushScope(scope)
+	assert.NoError(t, err, "FlushScope 应成功")
+}
+
+func TestSessionController_LoadScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+	sc.CreateIfNotExists(scope, "s1")
+	require.NoError(t, sc.Flush())
+
+	// 新控制器加载指定作用域
+	sc2 := NewSessionController("a1", tmpDir)
+	err := sc2.LoadScope(scope, true)
+	assert.NoError(t, err, "LoadScope 应成功")
+}
+
+func TestSessionController_LoadScope_元数据不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+
+	// 未 Flush 过，元数据文件不存在
+	err := sc.LoadScope(scope, true)
+	assert.NoError(t, err, "元数据文件不存在时 LoadScope 应返回 nil")
+}
+
+func TestSessionController_Load_元数据文件损坏(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建损坏的元数据文件
+	metaFile := SessionPaths{}.MetaFile(tmpDir, "a1")
+	os.MkdirAll(filepath.Dir(metaFile), 0o755)
+	os.WriteFile(metaFile, []byte("invalid json {{{"), 0o644)
+
+	sc2 := NewSessionController("a1", tmpDir)
+	err := sc2.Load(true)
+	require.Error(t, err, "损坏的元数据文件应返回错误")
+}
+
 func TestSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
@@ -207,6 +314,14 @@ func TestSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	}
 }
 
+func TestSessionController_CleanupScopeInactiveSessions_未找到作用域(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "nonexistent"}}
+	_, err := sc.CleanupScopeInactiveSessions(scope)
+	require.Error(t, err, "未找到的作用域应返回错误")
+}
+
 func TestSessionController_RemoveSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
@@ -225,6 +340,17 @@ func TestSessionController_RemoveSession(t *testing.T) {
 	}
 }
 
+func TestSessionController_RemoveSession_指定作用域(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "u1"}}
+	sc.CreateIfNotExists(scope, "s1")
+
+	scopePtr := &scope
+	removed := sc.RemoveSession("s1", scopePtr)
+	assert.Len(t, removed, 1, "指定作用域删除应返回 1 个结果")
+}
+
 func TestSessionController_RemoveScopeSessions(t *testing.T) {
 	tmpDir := t.TempDir()
 	sc := NewSessionController("a1", tmpDir)
@@ -235,6 +361,14 @@ func TestSessionController_RemoveScopeSessions(t *testing.T) {
 	if len(removed) != 1 {
 		t.Fatalf("删除结果长度 = %d, want 1", len(removed))
 	}
+}
+
+func TestSessionController_RemoveScopeSessions_未找到作用域(t *testing.T) {
+	tmpDir := t.TempDir()
+	sc := NewSessionController("a1", tmpDir)
+	scope := SessionScope{Scope: MainScope{}, Subject: DirectSubject{UserID: "nonexistent"}}
+	removed := sc.RemoveScopeSessions(scope)
+	assert.Nil(t, removed, "未找到的作用域应返回 nil")
 }
 
 func TestSessionController_RemoveAll(t *testing.T) {
