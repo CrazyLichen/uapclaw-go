@@ -2,24 +2,49 @@ package state
 
 import "testing"
 
-// Test接口满足_ReadableState 验证 InMemoryState 满足 ReadableState 接口。
-func Test接口满足_ReadableState(t *testing.T) {
-	var _ ReadableState = (*InMemoryState)(nil)
+// Test接口满足_ReadableStateLike 验证 InMemoryStateLike 满足 ReadableStateLike 接口。
+func Test接口满足_ReadableStateLike(t *testing.T) {
+	var _ ReadableStateLike = (*InMemoryStateLike)(nil)
 }
 
-// Test接口满足_RecoverableState 验证 InMemoryState 满足 RecoverableState 接口。
-func Test接口满足_RecoverableState(t *testing.T) {
-	var _ RecoverableState = (*InMemoryState)(nil)
+// Test接口满足_RecoverableStateLike 验证 InMemoryStateLike 满足 RecoverableStateLike 接口。
+func Test接口满足_RecoverableStateLike(t *testing.T) {
+	var _ RecoverableStateLike = (*InMemoryStateLike)(nil)
 }
 
-// Test接口满足_State 验证 InMemoryState 满足 State 接口。
-func Test接口满足_State(t *testing.T) {
-	var _ State = (*InMemoryState)(nil)
+// Test接口满足_StateLike 验证 InMemoryStateLike 满足 StateLike 接口。
+func Test接口满足_StateLike(t *testing.T) {
+	var _ StateLike = (*InMemoryStateLike)(nil)
 }
 
-// Test接口满足_CommitState 验证 InMemoryCommitState 满足 CommitState 接口。
-func Test接口满足_CommitState(t *testing.T) {
-	var _ CommitState = (*InMemoryCommitState)(nil)
+// Test接口满足_CommitStateLike 验证 InMemoryCommitState 满足 CommitStateLike 接口。
+func Test接口满足_CommitStateLike(t *testing.T) {
+	var _ CommitStateLike = (*InMemoryCommitState)(nil)
+}
+
+// Test接口满足_SessionState_InMemoryStateLike 验证 InMemoryStateLike 满足 SessionState 接口。
+func Test接口满足_SessionState_InMemoryStateLike(t *testing.T) {
+	var _ SessionState = (*InMemoryStateLike)(nil)
+}
+
+// Test接口满足_SessionState_InMemoryCommitState 验证 InMemoryCommitState 满足 SessionState 接口。
+func Test接口满足_SessionState_InMemoryCommitState(t *testing.T) {
+	var _ SessionState = (*InMemoryCommitState)(nil)
+}
+
+// Test接口满足_SessionState_AgentStateCollection 验证 AgentStateCollection 满足 SessionState 接口。
+func Test接口满足_SessionState_AgentStateCollection(t *testing.T) {
+	var _ SessionState = (*AgentStateCollection)(nil)
+}
+
+// Test接口满足_SessionState_WorkflowStateCollection 验证 WorkflowStateCollection 满足 SessionState 接口。
+func Test接口满足_SessionState_WorkflowStateCollection(t *testing.T) {
+	var _ SessionState = (*WorkflowStateCollection)(nil)
+}
+
+// Test接口满足_SessionState_WorkflowCommitState 验证 WorkflowCommitState 满足 SessionState 接口。
+func Test接口满足_SessionState_WorkflowCommitState(t *testing.T) {
+	var _ SessionState = (*WorkflowCommitState)(nil)
 }
 
 // Test常量值 验证常量值与 Python 一致。

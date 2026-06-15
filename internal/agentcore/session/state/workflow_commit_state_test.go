@@ -18,7 +18,9 @@ func TestGetWorkflowState(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 写入并提交
-	cs.workflowState.UpdateByID(DefaultWorkflowID, map[string]any{"wf_key": "wf_val"})
+	if err := cs.workflowState.UpdateByID(DefaultWorkflowID, map[string]any{"wf_key": "wf_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.workflowState.Commit()
 
 	result := cs.GetWorkflowState(StringKey("wf_key"))
@@ -79,7 +81,9 @@ func TestGetInputs(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 写入父节点输出到 ioState
-	cs.ioState.UpdateByID("parent_node", map[string]any{"parent_node": map[string]any{"input_key": "input_val"}})
+	if err := cs.ioState.UpdateByID("parent_node", map[string]any{"parent_node": map[string]any{"input_key": "input_val"}}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.ioState.Commit("parent_node")
 
 	// 创建子节点视图
@@ -118,7 +122,9 @@ func TestGetInputsByTransformer(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 写入数据
-	cs.ioState.UpdateByID(DefaultNodeID, map[string]any{"key1": "val1"})
+	if err := cs.ioState.UpdateByID(DefaultNodeID, map[string]any{"key1": "val1"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.ioState.Commit(DefaultNodeID)
 
 	// 通过 transformer 获取
@@ -181,10 +187,18 @@ func TestCommit_全量提交(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 暂存更新
-	cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"})
-	cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"})
-	cs.ioState.UpdateByID(DefaultNodeID, map[string]any{"i_key": "i_val"})
-	cs.workflowState.UpdateByID(DefaultWorkflowID, map[string]any{"w_key": "w_val"})
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.ioState.UpdateByID(DefaultNodeID, map[string]any{"i_key": "i_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.workflowState.UpdateByID(DefaultWorkflowID, map[string]any{"w_key": "w_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 提交
 	cs.Commit()
@@ -209,11 +223,15 @@ func TestRollback(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 暂存更新
-	cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"})
-	cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"})
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 回滚
-	cs.Rollback()
+	cs.Rollback("node1")
 
 	// 验证全部已回滚
 	if cs.globalState.Get(StringKey("g_key")) != nil {
@@ -229,7 +247,9 @@ func TestCreateNodeState(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 写入数据到 globalState
-	cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"shared_key": "shared_val"})
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"shared_key": "shared_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.globalState.Commit(DefaultNodeID)
 
 	// 创建节点视图
@@ -273,8 +293,12 @@ func TestSetState_从快照恢复(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 写入数据
-	cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"})
-	cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"})
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit()
 
 	// 导出快照
@@ -301,8 +325,12 @@ func TestGetUpdates_SetUpdates(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	// 暂存更新
-	cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"})
-	cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"})
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 获取暂存更新
 	updates := cs.GetUpdates()
