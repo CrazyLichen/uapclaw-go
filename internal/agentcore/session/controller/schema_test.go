@@ -178,16 +178,15 @@ func TestScopeSessionsMeta_SortSessions(t *testing.T) {
 	m := newTestScopeSessionsMeta()
 	meta1 := CreateNewSessionMeta("sess1", "agent")
 	meta1.IsActive = false
+	meta1.UpdatedAt = 1000.0
 	m.AddSession(meta1)
 	meta2 := CreateNewSessionMeta("sess2", "agent")
 	meta2.IsActive = false
+	meta2.UpdatedAt = 2000.0
 	m.AddSession(meta2)
-	// 手动设置时间戳模拟不同更新时间
-	m.Sessions[0].UpdatedAt = 1000.0
-	m.Sessions[1].UpdatedAt = 2000.0
 	m.SortSessions()
 	if m.Sessions[0].SessionID != "sess2" {
-		t.Errorf("排序后第一个应为 updated_at 更大的 sess2")
+		t.Errorf("排序后第一个应为 updated_at 更大的 sess2，实际为 %s", m.Sessions[0].SessionID)
 	}
 }
 
