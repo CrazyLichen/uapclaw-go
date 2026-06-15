@@ -82,3 +82,45 @@ func TestWorkflowSessionFacade_Inner为nil时防御(t *testing.T) {
 		t.Error("期望 inner 为 nil 时 Close 返回 nil")
 	}
 }
+
+// TestWithWorkflowSessionSessionID_inner为nil时创建 测试 WithWorkflowSessionSessionID 在 inner 为 nil 时自动创建
+func TestWithWorkflowSessionSessionID_inner为nil时创建(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowSessionSessionID("auto-id"))
+	if ws.inner == nil {
+		t.Fatal("WithWorkflowSessionSessionID 在 inner 为 nil 时应自动创建 inner")
+	}
+	if ws.inner.SessionID() != "auto-id" {
+		t.Errorf("期望 inner.SessionID()='auto-id'，实际=%s", ws.inner.SessionID())
+	}
+}
+
+// TestWithWorkflowSessionSessionID_inner已存在时跳过 测试 inner 已设置时不覆盖
+func TestWithWorkflowSessionSessionID_inner已存在时跳过(t *testing.T) {
+	inner := internal.NewWorkflowSession(internal.WithWorkflowSessionID("original-id"))
+	ws := NewWorkflowSession(
+		WithWorkflowSessionInner(inner),
+		WithWorkflowSessionSessionID("new-id"), // 应因 inner 已存在而跳过
+	)
+	if ws.inner.SessionID() != "original-id" {
+		t.Errorf("inner 已存在时不应覆盖，期望='original-id'，实际=%s", ws.inner.SessionID())
+	}
+}
+
+// TestWithWorkflowSessionParent 测试 WithWorkflowSessionParent 选项设置 envs
+func TestWithWorkflowSessionParent(t *testing.T) {
+	parent := internal.NewAgentSession("parent-123")
+	ws := NewWorkflowSession(WithWorkflowSessionParent(parent))
+	if ws.envs == nil {
+		t.Error("WithWorkflowSessionParent 应设置 envs")
+	}
+}
+
+// TestWorkflowSessionFacade_Inner 测试 Inner() 方法返回内部实例
+func TestWorkflowSessionFacade_Inner(t *testing.T) {
+	inner := internal.NewWorkflowSession()
+	ws := NewWorkflowSession(WithWorkflowSessionInner(inner))
+
+	if ws.Inner() != inner {
+		t.Error("Inner() 应返回注入的内部实例")
+	}
+}

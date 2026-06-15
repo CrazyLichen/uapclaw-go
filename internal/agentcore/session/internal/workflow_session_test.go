@@ -385,3 +385,150 @@ func TestCreateExecutableID(t *testing.T) {
 		t.Errorf("期望 'parent.node1'，实际=%s", result)
 	}
 }
+
+// ──────────────────────────── WorkflowSession 未覆盖方法测试 ────────────────────────────
+
+// TestWithWorkflowSessionID 测试 WithWorkflowSessionID 选项
+func TestWithWorkflowSessionID(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowSessionID("custom-id"))
+	if ws.SessionID() != "custom-id" {
+		t.Errorf("期望 sessionID='custom-id'，实际=%s", ws.SessionID())
+	}
+}
+
+// TestWithWorkflowState 测试 WithWorkflowState 选项
+func TestWithWorkflowState(t *testing.T) {
+	customState := state.NewInMemoryWorkflowState()
+	ws := NewWorkflowSession(WithWorkflowState(customState))
+	if ws.State() != customState {
+		t.Error("期望使用自定义 state 实例")
+	}
+}
+
+// TestWorkflowSession_SetWorkflowID 测试设置工作流 ID
+func TestWorkflowSession_SetWorkflowID(t *testing.T) {
+	ws := NewWorkflowSession()
+	ws.SetWorkflowID("new-wf-id")
+	if ws.WorkflowID() != "new-wf-id" {
+		t.Errorf("期望 WorkflowID='new-wf-id'，实际=%s", ws.WorkflowID())
+	}
+}
+
+// TestWorkflowSession_MainWorkflowID 测试 MainWorkflowID 等于 WorkflowID
+func TestWorkflowSession_MainWorkflowID(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf-main"))
+	if ws.MainWorkflowID() != "wf-main" {
+		t.Errorf("期望 MainWorkflowID='wf-main'，实际=%s", ws.MainWorkflowID())
+	}
+}
+
+// TestWorkflowSession_Parent 测试 Parent 返回父会话
+func TestWorkflowSession_Parent(t *testing.T) {
+	parent := NewAgentSession("parent-id")
+	ws := NewWorkflowSession(WithWorkflowParent(parent))
+	if ws.Parent() == nil {
+		t.Error("期望 Parent 返回非 nil")
+	}
+}
+
+// TestWorkflowSession_Parent为nil 测试无 parent 时 Parent 返回 nil
+func TestWorkflowSession_Parent为nil(t *testing.T) {
+	ws := NewWorkflowSession()
+	if ws.Parent() != nil {
+		t.Error("无 parent 时 Parent 应返回 nil")
+	}
+}
+
+// TestWorkflowSession_SkipTrace 测试 NodeSession 的 SkipTrace 方法
+func TestWorkflowSession_SkipTrace(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", true)
+	if !ns.SkipTrace() {
+		t.Error("skipTrace=true 时 SkipTrace 应返回 true")
+	}
+
+	ns2 := NewNodeSession(ws, "node2", "Test", false)
+	if ns2.SkipTrace() {
+		t.Error("skipTrace=false 时 SkipTrace 应返回 false")
+	}
+}
+
+// TestNodeSession_NodeConfig 测试 NodeConfig 桩方法
+func TestNodeSession_NodeConfig(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	if ns.NodeConfig() != nil {
+		t.Errorf("NodeConfig 桩应返回 nil，实际=%v", ns.NodeConfig())
+	}
+}
+
+// TestNodeSession_StreamWriterManager 测试委托给父会话
+func TestNodeSession_StreamWriterManager(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	if ns.StreamWriterManager() != nil {
+		t.Error("默认 StreamWriterManager 应为 nil")
+	}
+}
+
+// TestNodeSession_Checkpointer 测试委托给父会话
+func TestNodeSession_Checkpointer(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	if ns.Checkpointer() != nil {
+		t.Error("默认 Checkpointer 应为 nil")
+	}
+}
+
+// TestNodeSession_ActorManager 测试委托给父会话
+func TestNodeSession_ActorManager(t *testing.T) {
+	ws := NewWorkflowSession()
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	if ns.ActorManager() != nil {
+		t.Error("默认 ActorManager 应为 nil")
+	}
+}
+
+// TestNodeSession_MainWorkflowID 测试主工作流 ID
+func TestNodeSession_MainWorkflowID(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("main-wf"))
+	ns := NewNodeSession(ws, "node1", "Test", false)
+	if ns.MainWorkflowID() != "main-wf" {
+		t.Errorf("期望 MainWorkflowID='main-wf'，实际=%s", ns.MainWorkflowID())
+	}
+}
+
+// TestWorkflowSession_SetActorManager_二次设置 测试 SubWorkflowSession 的 SetActorManager 幂等
+func TestWorkflowSession_SetActorManager_二次设置(t *testing.T) {
+	ws := NewWorkflowSession()
+	// 先设置
+	ws.SetActorManager("first")
+	// 二次设置不应覆盖
+	ws.SetActorManager("second")
+	if ws.ActorManager() != "first" {
+		t.Errorf("幂等保护：期望 ActorManager='first'，实际=%v", ws.ActorManager())
+	}
+}
+
+// TestSubWorkflowSession_Close 测试 SubWorkflowSession 关闭
+func TestSubWorkflowSession_Close(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+	sub := NewSubWorkflowSession(ns, "child_wf", nil)
+
+	err := sub.Close()
+	if err != nil {
+		t.Errorf("期望 Close 返回 nil，实际=%v", err)
+	}
+}
+
+// TestSubWorkflowSession_MainWorkflowID 测试主工作流 ID
+func TestSubWorkflowSession_MainWorkflowID(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowID("main_wf"))
+	ns := NewNodeSession(ws, "sub_node", "Sub", false)
+	sub := NewSubWorkflowSession(ns, "child_wf", nil)
+
+	if sub.MainWorkflowID() != "main_wf" {
+		t.Errorf("期望 MainWorkflowID='main_wf'，实际=%s", sub.MainWorkflowID())
+	}
+}

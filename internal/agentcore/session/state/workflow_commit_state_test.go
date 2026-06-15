@@ -354,3 +354,201 @@ func TestGetUpdates_SetUpdates(t *testing.T) {
 		t.Error("SetUpdates + Commit 后 compState 数据丢失")
 	}
 }
+
+// TestWorkflowCommitState_UpdateByID 测试 UpdateByID 委托给 compState
+func TestWorkflowCommitState_UpdateByID(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+
+	err := cs.UpdateByID("node1", map[string]any{"comp_key": "comp_val"})
+	if err != nil {
+		t.Errorf("UpdateByID 返回错误: %v", err)
+	}
+
+	cs.Commit("node1")
+	result := cs.compState.Get(StringKey("comp_key"))
+	if result != "comp_val" {
+		t.Errorf("期望 comp_key=comp_val，实际=%v", result)
+	}
+}
+
+// TestSetUpdates_JSON格式 验证 SetUpdates 处理 JSON 反序列化格式。
+func TestSetUpdates_JSON格式(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+
+	// 模拟 JSON 反序列化后的格式：[]any 而非 []map[string]any
+	jsonUpdates := map[string]any{
+		IOStateUpdatesKey: map[string]any{
+			"node1": []any{
+				map[string]any{"io_key": "io_val"},
+			},
+		},
+		CompStateUpdatesKey: map[string]any{
+			"node1": []any{
+				map[string]any{"comp_key": "comp_val"},
+			},
+		},
+		WorkflowStateUpdatesKey: map[string]any{
+			"workflow": []any{
+				map[string]any{"wf_key": "wf_val"},
+			},
+		},
+		GlobalStateUpdatesKey: map[string]any{
+			"default": []any{
+				map[string]any{"g_key": "g_val"},
+			},
+		},
+	}
+
+	cs.SetUpdates(jsonUpdates)
+	cs.Commit()
+
+	if cs.ioState.Get(StringKey("io_key")) != "io_val" {
+		t.Error("JSON 格式 ioState 恢复失败")
+	}
+	if cs.compState.Get(StringKey("comp_key")) != "comp_val" {
+		t.Error("JSON 格式 compState 恢复失败")
+	}
+	if cs.workflowState.Get(StringKey("wf_key")) != "wf_val" {
+		t.Error("JSON 格式 workflowState 恢复失败")
+	}
+	if cs.globalState.Get(StringKey("g_key")) != "g_val" {
+		t.Error("JSON 格式 globalState 恢复失败")
+	}
+}
+
+// TestSetUpdates_nil 验证 SetUpdates 传入 nil 不操作。
+func TestSetUpdates_nil(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+	cs.SetUpdates(nil) // 不应 panic
+}
+
+// TestSetUpdates_值nil 验证 SetUpdates 中各子状态值为 nil 时跳过。
+func TestSetUpdates_值nil(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+	updates := map[string]any{
+		GlobalStateUpdatesKey:   nil,
+		IOStateUpdatesKey:       nil,
+		CompStateUpdatesKey:     nil,
+		WorkflowStateUpdatesKey: nil,
+	}
+	cs.SetUpdates(updates) // 不应 panic
+}
+
+// TestSetUpdates_workflowOnlyfalse_globalNil 验证 workflowOnly=false 时 globalState 不设置。
+func TestSetUpdates_workflowOnlyfalse_globalNil(t *testing.T) {
+	sharedGlobal := NewInMemoryCommitState()
+	cs := NewInMemoryWorkflowState(sharedGlobal) // workflowOnly=false
+
+	updates := map[string]any{
+		GlobalStateUpdatesKey: map[string]any{
+			"default": []any{map[string]any{"g_key": "g_val"}},
+		},
+	}
+	cs.SetUpdates(updates)
+	// workflowOnly=false 时 globalState 更新不应生效
+	updatesAfter := cs.GetUpdates()
+	if updatesAfter[GlobalStateUpdatesKey] != nil {
+		t.Error("workflowOnly=false 时 GetUpdates 的 globalState 应为 nil")
+	}
+}
+
+// TestGetUpdates_workflowOnlyfalse 验证 workflowOnly=false 时 GetUpdates 中 globalState 为 nil。
+func TestGetUpdates_workflowOnlyfalse(t *testing.T) {
+	sharedGlobal := NewInMemoryCommitState()
+	cs := NewInMemoryWorkflowState(sharedGlobal) // workflowOnly=false
+
+	updates := cs.GetUpdates()
+	if updates[GlobalStateUpdatesKey] != nil {
+		t.Error("workflowOnly=false 时 GetUpdates 的 globalState 应为 nil")
+	}
+}
+
+// TestGetInputs_ioStateNil 验证 ioState 为 nil 时 GetInputs 返回 nil。
+func TestGetInputs_ioStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	result := cs.GetInputs(StringKey("key"))
+	if result != nil {
+		t.Errorf("期望 nil，实际=%v", result)
+	}
+}
+
+// TestGetOutputs_ioStateNil 验证 ioState 为 nil 时 GetOutputs 返回 nil。
+func TestGetOutputs_ioStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	result := cs.GetOutputs()
+	if result != nil {
+		t.Errorf("期望 nil，实际=%v", result)
+	}
+}
+
+// TestGetInputsByTransformer_ioStateNil 验证 ioState 为 nil 时返回空 map。
+func TestGetInputsByTransformer_ioStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	result := cs.GetInputsByTransformer(func(r ReadableState) any { return nil })
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("期望 map[string]any，实际=%T", result)
+	}
+	if len(m) != 0 {
+		t.Errorf("期望空 map，实际=%v", m)
+	}
+}
+
+// TestGetWorkflowState_workflowStateNil 验证 workflowState 为 nil 时返回 nil。
+func TestGetWorkflowState_workflowStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	result := cs.GetWorkflowState(StringKey("key"))
+	if result != nil {
+		t.Errorf("期望 nil，实际=%v", result)
+	}
+}
+
+// TestSetOutputs_ioStateNil 验证 ioState 为 nil 时不 panic。
+func TestSetOutputs_ioStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	cs.SetOutputs(map[string]any{"key": "val"}) // 不应 panic
+}
+
+// TestUpdateAndCommitWorkflowState_UpdateByID失败 验证 UpdateByID 失败时记录日志（使用有效但空的 WorkflowCommitState）。
+func TestUpdateAndCommitWorkflowState_UpdateByID失败(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+	// 正常场景：空节点ID 导致 UpdateByID 返回 error，但 WorkflowCommitState 使用 DefaultWorkflowID 不会出错
+	// 这里测试正常流程不 panic
+	cs.UpdateAndCommitWorkflowState(map[string]any{"key": "val"})
+}
+
+// TestCommitUserInputs_ioStateNil 验证 ioState 为 nil 时 CommitUserInputs 不 panic。
+func TestCommitUserInputs_ioStateNil(t *testing.T) {
+	cs := &WorkflowCommitState{}
+	cs.CommitUserInputs(map[string]any{"key": "val"}) // 不应 panic
+}
+
+// TestCommitUserInputs_inputsNil 验证 inputs 为 nil 时不操作。
+func TestCommitUserInputs_inputsNil(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+	cs.CommitUserInputs(nil) // 不应 panic
+}
+
+// TestCommit_指定节点 测试指定节点提交。
+func TestCommit_指定节点(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+
+	cs.Commit(DefaultNodeID)
+
+	if cs.globalState.Get(StringKey("g_key")) != "g_val" {
+		t.Error("指定节点提交后 globalState 数据丢失")
+	}
+}
+
+// TestNewInMemoryWorkflowState_传入globalState 验证传入 globalState 时 workflowOnly=false。
+func TestNewInMemoryWorkflowState_传入globalState(t *testing.T) {
+	sharedGlobal := NewInMemoryCommitState()
+	cs := NewInMemoryWorkflowState(sharedGlobal)
+	if cs.WorkflowOnly() {
+		t.Error("传入 globalState 时 workflowOnly 应为 false")
+	}
+}

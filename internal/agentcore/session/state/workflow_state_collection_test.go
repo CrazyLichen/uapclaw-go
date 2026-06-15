@@ -289,3 +289,43 @@ func TestNil防御(t *testing.T) {
 		t.Errorf("期望 compState 为 nil 时 Update 返回 nil，实际=%v", err)
 	}
 }
+
+// TestGetByTransformer_组件状态 测试 GetByTransformer 方法
+func TestGetByTransformer_组件状态(t *testing.T) {
+	ioState := NewInMemoryCommitState()
+	globalState := NewInMemoryCommitState()
+	compState := NewInMemoryCommitState()
+	workflowState := NewInMemoryCommitState()
+
+	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "", "node1")
+
+	// compState 非 nil 时委托
+	if err := compState.UpdateByID("node1", map[string]any{"x": 42}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	compState.Commit("node1")
+	result := sc.GetByTransformer(func(r ReadableState) any {
+		return r.Get(StringKey("x"))
+	})
+	if result != 42 {
+		t.Errorf("期望 42，实际=%v", result)
+	}
+
+	// compState 为 nil 时返回 nil
+	sc2 := &WorkflowStateCollection{}
+	result = sc2.GetByTransformer(func(r ReadableState) any {
+		return r.Get(StringKey("x"))
+	})
+	if result != nil {
+		t.Errorf("期望 nil，实际=%v", result)
+	}
+}
+
+// TestGet_零值Key_compStateNil 测试 compState 为 nil 时零值 key 返回 nil
+func TestGet_零值Key_compStateNil(t *testing.T) {
+	scNil := &WorkflowStateCollection{}
+	result := scNil.Get(StateKey{})
+	if result != nil {
+		t.Errorf("期望 nil，实际=%v", result)
+	}
+}

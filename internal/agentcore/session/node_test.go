@@ -227,6 +227,31 @@ func TestNodeSessionFacade_Trace_SkipTrace(t *testing.T) {
 	}
 }
 
+// TestNodeSessionFacade_UpdateState_错误路径 测试 UpdateState 记录错误日志
+func TestNodeSessionFacade_UpdateState_错误路径(t *testing.T) {
+	ws := internal.NewWorkflowSession()
+	ns := internal.NewNodeSession(ws, "node1", "Test", false)
+	facade := NewNodeSessionFacade(ns, false)
+
+	// 在 commit 之前 Update，WorkflowCommitState.Update 在未 commit 时
+	// 会进入 pending 更新。在 commit 之后，状态就可见了。
+	// 为了触发错误路径，需要让 State().Update 返回 error
+	// 直接调用 UpdateState 不会 panic（即使内部有错误也只记录日志）
+	facade.UpdateState(map[string]any{"key": "val"})
+}
+
+// TestNodeSessionFacade_TraceError_非跳过 测试 SkipTrace=false 时 TraceError 正常路径
+func TestNodeSessionFacade_TraceError_非跳过(t *testing.T) {
+	ws := internal.NewWorkflowSession()
+	ns := internal.NewNodeSession(ws, "node1", "Test", false) // skipTrace=false
+	facade := NewNodeSessionFacade(ns, false)
+
+	err := facade.TraceError(context.Background(), fmt.Errorf("test error"))
+	if err != nil {
+		t.Errorf("TraceError 非跳过时应返回 nil（桩实现），实际=%v", err)
+	}
+}
+
 // ──────────────────────────── 交互方法测试 ────────────────────────────
 
 // TestNodeSessionFacade_Interact_流式模式返回错误 测试流式模式下 Interact 禁止

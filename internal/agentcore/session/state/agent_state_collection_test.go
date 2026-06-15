@@ -231,3 +231,19 @@ func TestAgentStateCollection_GlobalState返回内部引用(t *testing.T) {
 		t.Errorf("期望 g=1，实际 %v", val)
 	}
 }
+
+// TestAgentStateCollection_UpdateTrace_空实现 验证 Agent 层 UpdateTrace 是空实现。
+func TestAgentStateCollection_UpdateTrace_空实现(t *testing.T) {
+	coll := NewAgentStateCollection()
+	coll.UpdateTrace("span_data") // 不应 panic
+}
+
+// TestAgentStateCollection_Get_委托agentState 验证 Get 委托到 agentState。
+func TestAgentStateCollection_Get_委托agentState(t *testing.T) {
+	coll := NewAgentStateCollection()
+	require.NoError(t, coll.Update(map[string]any{"x": "y"}))
+	result := coll.Get(StringKey("x"))
+	if result != "y" {
+		t.Errorf("期望 y，实际 %v", result)
+	}
+}

@@ -231,3 +231,39 @@ func TestInMemoryState_完整读写流程(t *testing.T) {
 		t.Errorf("恢复后 user.name = %v, 期望 alice", s2.Get(StringKey("user.name")))
 	}
 }
+
+// TestInMemoryState_GetGlobal_返回nil 验证 GetGlobal 返回 nil。
+func TestInMemoryState_GetGlobal_返回nil(t *testing.T) {
+	s := NewInMemoryState()
+	result := s.GetGlobal(StringKey("key"))
+	if result != nil {
+		t.Errorf("GetGlobal 应返回 nil，实际=%v", result)
+	}
+}
+
+// TestInMemoryState_UpdateGlobal_空操作 验证 UpdateGlobal 不影响内部状态。
+func TestInMemoryState_UpdateGlobal_空操作(t *testing.T) {
+	s := NewInMemoryState()
+	require.NoError(t, s.Update(map[string]any{"a": 1}))
+	s.UpdateGlobal(map[string]any{"a": 2})
+	// UpdateGlobal 是空操作，不应影响内部状态
+	if s.Get(StringKey("a")) != 1 {
+		t.Errorf("UpdateGlobal 不应影响内部状态，实际=%v", s.Get(StringKey("a")))
+	}
+}
+
+// TestInMemoryState_UpdateTrace_空操作 验证 UpdateTrace 不影响内部状态。
+func TestInMemoryState_UpdateTrace_空操作(t *testing.T) {
+	s := NewInMemoryState()
+	s.UpdateTrace("span_data") // 不应 panic
+}
+
+// TestInMemoryState_Dump_委托GetState 验证 Dump 返回与 GetState 相同的快照。
+func TestInMemoryState_Dump_委托GetState(t *testing.T) {
+	s := NewInMemoryState()
+	require.NoError(t, s.Update(map[string]any{"a": 1}))
+	dump := s.Dump()
+	if dump["a"] != 1 {
+		t.Errorf("Dump()[\"a\"] = %v, 期望 1", dump["a"])
+	}
+}

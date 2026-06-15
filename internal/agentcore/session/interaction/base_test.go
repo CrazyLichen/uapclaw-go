@@ -3,6 +3,7 @@ package interaction
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -68,7 +69,7 @@ func TestNewBaseInteraction_从SessionState读取输入(t *testing.T) {
 	session := newFakeBaseSession()
 	// 预设 session state 中的输入（写入组件级状态并提交）
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.Update(map[string]any{InteractiveInputKey: []any{"existing_input"}})
+		require.NoError(t, cs.Update(map[string]any{InteractiveInputKey: []any{"existing_input"}}))
 		cs.Commit()
 	}
 

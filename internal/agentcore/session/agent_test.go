@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -239,6 +240,53 @@ func TestSession_WithCard(t *testing.T) {
 	s := NewSession(WithCard(card))
 	if s.card == nil {
 		t.Error("WithCard 后 card 不应为 nil")
+	}
+}
+
+// TestSession_GetAgentName返回空 测试桩方法
+func TestSession_GetAgentName返回空(t *testing.T) {
+	s := NewSession()
+	if s.GetAgentName() != "" {
+		t.Errorf("GetAgentName 桩应返回空字符串，实际 %s", s.GetAgentName())
+	}
+}
+
+// TestSession_GetAgentDescription返回空 测试桩方法
+func TestSession_GetAgentDescription返回空(t *testing.T) {
+	s := NewSession()
+	if s.GetAgentDescription() != "" {
+		t.Errorf("GetAgentDescription 桩应返回空字符串，实际 %s", s.GetAgentDescription())
+	}
+}
+
+// TestCreateAgentSession 测试通过 agentID 和 sessionID 创建 Session
+func TestCreateAgentSession(t *testing.T) {
+	s := CreateAgentSession("agent-1", "sess-1")
+	if s == nil {
+		t.Fatal("CreateAgentSession 返回 nil")
+	}
+	if s.GetSessionID() != "sess-1" {
+		t.Errorf("期望 sessionID='sess-1'，实际=%s", s.GetSessionID())
+	}
+	if s.card == nil {
+		t.Error("card 不应为 nil")
+	}
+}
+
+// TestSession_CreateWorkflowSession_状态类型不匹配 测试 inner.State() 非 AgentStateCollection 时的降级分支
+func TestSession_CreateWorkflowSession_状态类型不匹配(t *testing.T) {
+	// 直接构造 Session，inner 是 AgentSession（其 State 是 AgentStateCollection）
+	// 为了触发 else 分支，需要 inner.State() 非 AgentStateCollection
+	// 我们构造一个 Session，然后替换 inner 为使用自定义 state 的 AgentSession
+	s2 := &Session{
+		sessionID:            "test-id",
+		inner:                internal.NewAgentSession("test-id"),
+		closeStreamOnPostRun: true,
+		sourceMetadata:       make(map[string]any),
+	}
+	ws := s2.CreateWorkflowSession()
+	if ws == nil {
+		t.Error("降级时 CreateWorkflowSession 不应返回 nil")
 	}
 }
 

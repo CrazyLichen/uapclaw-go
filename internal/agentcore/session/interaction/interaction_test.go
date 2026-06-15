@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -71,7 +72,7 @@ func TestWorkflowInteraction_WaitUserInputs_队列有输入(t *testing.T) {
 	session := newFakeBaseSession()
 	// 预设输入到 session state（组件级状态并提交）
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.Update(map[string]any{InteractiveInputKey: []any{"user_answer"}})
+		require.NoError(t, cs.Update(map[string]any{InteractiveInputKey: []any{"user_answer"}}))
 		cs.Commit()
 	}
 
@@ -112,7 +113,7 @@ func TestWorkflowInteraction_WaitUserInputs_队列空时触发GraphInterrupt(t *
 func TestWorkflowInteraction_UserLatestInput_有缓存(t *testing.T) {
 	session := newFakeBaseSession()
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.Update(map[string]any{InteractiveInputKey: []any{"latest_input"}})
+		require.NoError(t, cs.Update(map[string]any{InteractiveInputKey: []any{"latest_input"}}))
 		cs.Commit()
 	}
 
@@ -254,7 +255,7 @@ func TestNewAgentInteraction(t *testing.T) {
 func TestAgentInteraction_WaitUserInputs_队列有输入(t *testing.T) {
 	session := newFakeBaseSession()
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.Update(map[string]any{InteractiveInputKey: []any{"agent_answer"}})
+		require.NoError(t, cs.Update(map[string]any{InteractiveInputKey: []any{"agent_answer"}}))
 		cs.Commit()
 	}
 
