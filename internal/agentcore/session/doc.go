@@ -8,7 +8,7 @@
 // NodeSessionFacade 是工作流组件场景下的公开会话，包装内部层 NodeSession，提供
 // 身份查询、状态读写、追踪、交互、流写入、环境变量等组件开发者面向 API。
 //
-// 本包依赖 state 子包提供的状态接口（State/CommitState 等），Config/Tracer/
+// 本包依赖 state 子包提供的双层状态接口（StateLike/CommitStateLike 底层 + SessionState 上层），Config/Tracer/
 // StreamWriterManager/Checkpointer/ActorManager 等依赖类型暂用 any 占位，
 // 待后续步骤（5.8/5.10/5.11/5.12）回填具体类型。
 //
@@ -27,13 +27,13 @@
 //	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── state/              # 状态接口与内存实现
 //	│   ├── doc.go                           # state 包文档
-//	│   ├── state.go                         # 4 层接口 + 常量
+//	│   ├── state.go                         # 双层接口 + 常量 + 兼容别名
 //	│   ├── key.go                           # StateKey 类型
 //	│   ├── agent_state_collection.go        # Agent 状态集合
 //	│   ├── workflow_state_collection.go     # Workflow 四区状态集合
 //	│   ├── workflow_commit_state.go         # Workflow 可提交状态
 //	│   ├── workflow_inmemory_state.go       # InMemoryWorkflowState 构造器
-//	│   ├── inmemory_state.go                # InMemoryState
+//	│   ├── inmemory_state.go                # InMemoryStateLike
 //	│   ├── inmemory_commit_state.go         # InMemoryCommitState
 //	│   └── utils.go                         # 工具函数
 //	└── internal/           # 内部会话实现
