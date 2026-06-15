@@ -63,17 +63,13 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 // ──────────────────────────── 持久化方法 ────────────────────────────
 
 // Flush 持久化所有变更到磁盘
+// 对齐 Python：整个 flush 过程持锁，避免释放锁期间数据不一致
 func (sc *SessionController) Flush() error {
 	sc.mu.Lock()
-	// 收集需要 flush 的 session 列表
-	sessions := make([]*ChainSession, 0, len(sc.SessionCache))
-	for _, s := range sc.SessionCache {
-		sessions = append(sessions, s)
-	}
-	sc.mu.Unlock()
+	defer sc.mu.Unlock()
 
-	// 并行 flush 所有 session
-	for _, s := range sessions {
+	// 收集并逐个 flush（持锁状态下，对齐 Python 行为）
+	for _, s := range sc.SessionCache {
 		if err := s.Flush(); err != nil {
 			logger.Error(logger.ComponentAgentCore).
 				Str("action", "session_controller_flush").
@@ -85,18 +81,16 @@ func (sc *SessionController) Flush() error {
 		}
 	}
 
-	// 写元数据文件
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
 	return sc.writeMetaFile()
 }
 
 // FlushSession 持久化指定会话到磁盘
+// 对齐 Python：整个 flush 过程持锁
 func (sc *SessionController) FlushSession(sessionID string) error {
 	sc.mu.Lock()
-	session, ok := sc.SessionCache[sessionID]
-	sc.mu.Unlock()
+	defer sc.mu.Unlock()
 
+	session, ok := sc.SessionCache[sessionID]
 	if !ok {
 		return nil
 	}
@@ -105,31 +99,24 @@ func (sc *SessionController) FlushSession(sessionID string) error {
 		return err
 	}
 
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
 	return sc.writeMetaFile()
 }
 
 // FlushScope 持久化指定作用域的会话到磁盘
+// 对齐 Python：整个 flush 过程持锁
 func (sc *SessionController) FlushScope(sessionScope SessionScope) error {
 	sc.mu.Lock()
-	sessions := make([]*ChainSession, 0)
+	defer sc.mu.Unlock()
+
 	for id, s := range sc.SessionCache {
 		if s.SessionScope.String() == sessionScope.String() {
-			sessions = append(sessions, s)
+			if err := s.Flush(); err != nil {
+				return err
+			}
 			_ = id
 		}
 	}
-	sc.mu.Unlock()
 
-	for _, s := range sessions {
-		if err := s.Flush(); err != nil {
-			return err
-		}
-	}
-
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
 	return sc.writeMetaFile()
 }
 
@@ -183,11 +170,23 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 		// 加载会话数据
 		if loadActiveOnly {
 			if scopeMeta.ActiveSession != "" {
-				sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession)
+				if err := sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession); err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("action", "session_controller_load").
+						Str("session_id", scopeMeta.ActiveSession).
+						Err(err).
+						Msg("加载活跃会话失败，跳过")
+				}
 			}
 		} else {
 			for _, sm := range scopeMeta.Sessions {
-				sc.loadSession(scopeKey.SessionScope, sm.SessionID)
+				if err := sc.loadSession(scopeKey.SessionScope, sm.SessionID); err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("action", "session_controller_load").
+						Str("session_id", sm.SessionID).
+						Err(err).
+						Msg("加载会话失败，跳过")
+				}
 			}
 		}
 	}
@@ -240,11 +239,23 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 
 		if loadActiveOnly {
 			if scopeMeta.ActiveSession != "" {
-				sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession)
+				if err := sc.loadSession(scopeKey.SessionScope, scopeMeta.ActiveSession); err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("action", "load_scope").
+						Str("session_id", scopeMeta.ActiveSession).
+						Err(err).
+						Msg("加载活跃会话失败，跳过")
+				}
 			}
 		} else {
 			for _, sm := range scopeMeta.Sessions {
-				sc.loadSession(scopeKey.SessionScope, sm.SessionID)
+				if err := sc.loadSession(scopeKey.SessionScope, sm.SessionID); err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("action", "load_scope").
+						Str("session_id", sm.SessionID).
+						Err(err).
+						Msg("加载会话失败，跳过")
+				}
 			}
 		}
 		break
@@ -286,7 +297,9 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 	if activeSession != nil {
 		// 返回已有活跃会话
 		if _, ok := sc.SessionCache[activeSession.SessionID]; !ok {
-			sc.loadSession(sessionScope, activeSession.SessionID)
+			if err := sc.loadSession(sessionScope, activeSession.SessionID); err != nil {
+				return false, nil, err
+			}
 		}
 		if s, ok := sc.SessionCache[activeSession.SessionID]; ok {
 			return false, s, nil
@@ -360,7 +373,14 @@ func (sc *SessionController) GetScopeActiveSession(sessionScope SessionScope) *C
 
 	session, ok := sc.SessionCache[scopeMeta.ActiveSession]
 	if !ok {
-		sc.loadSession(sessionScope, scopeMeta.ActiveSession)
+		if err := sc.loadSession(sessionScope, scopeMeta.ActiveSession); err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "get_scope_active_session").
+				Str("session_id", scopeMeta.ActiveSession).
+				Err(err).
+				Msg("加载活跃会话失败")
+			return nil
+		}
 		session = sc.SessionCache[scopeMeta.ActiveSession]
 	}
 	return session
@@ -411,7 +431,13 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 					continue
 				}
 				targetScope = parsedScope
-				sc.loadSession(parsedScope, sessionID)
+				if err := sc.loadSession(parsedScope, sessionID); err != nil {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("action", "activate_session").
+						Str("session_id", sessionID).
+						Err(err).
+						Msg("加载会话失败")
+				}
 				session = sc.SessionCache[sessionID]
 				break
 			}
@@ -633,9 +659,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 
 	scopeMeta.Sessions = nil
 	scopeMeta.ActiveSession = ""
-	if len(scopeMeta.Sessions) == 0 {
-		delete(sc.MetaMap, sessionScope.String())
-	}
+	delete(sc.MetaMap, sessionScope.String())
 
 	if err := sc.writeMetaFile(); err != nil {
 		logger.Warn(logger.ComponentAgentCore).
@@ -680,9 +704,10 @@ func (sc *SessionController) RemoveAll() {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadSession 加载指定会话到缓存
-func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID string) {
+// 返回 error 让调用方感知加载失败
+func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID string) error {
 	if _, ok := sc.SessionCache[sessionID]; ok {
-		return
+		return nil
 	}
 
 	// 确定数据容器类型
@@ -701,7 +726,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 			Str("session_id", sessionID).
 			Err(err).
 			Msg("加载数据容器失败")
-		return
+		return fmt.Errorf("加载数据容器失败: %w", err)
 	}
 
 	sessionDir := SessionPaths{}.SessionDir(sc.rootPath, sc.AgentID, sessionID)
@@ -712,7 +737,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 			Str("session_id", sessionID).
 			Err(err).
 			Msg("加载会话失败")
-		return
+		return fmt.Errorf("加载会话失败: %w", err)
 	}
 
 	sc.SessionCache[sessionID] = session
@@ -722,6 +747,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 		Str("session_id", sessionID).
 		Str("container_type", dct).
 		Msg("加载会话到缓存")
+	return nil
 }
 
 // writeMetaFile 写入元数据文件

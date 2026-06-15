@@ -216,6 +216,117 @@ func getValueByNestedPath(nestedKey string, source map[string]any) any {
 	return nil
 }
 
+// safeExtendContainer 安全地扩展列表容器到 targetIndex 位置。
+// 对齐 Python _safe_extend_container。
+// 中间位置用 nil 填充，目标位置放空字典（isFinal=true）或空列表（isFinal=false）。
+// 有上限保护（索引 [0,10000]、扩展量 ≤ 10000）。
+func safeExtendContainer(container []any, targetIndex int, isFinal bool) ([]any, bool) {
+	if targetIndex < 0 || targetIndex > 10000 {
+		return container, false
+	}
+	currentLen := len(container)
+	if targetIndex < currentLen {
+		return container, true
+	}
+	expansionNeeded := targetIndex - currentLen + 1
+	if expansionNeeded > 10000 {
+		return container, false
+	}
+	// 填充中间位置
+	for i := currentLen; i < targetIndex; i++ {
+		container = append(container, nil)
+	}
+	// 目标位置
+	if isFinal {
+		container = append(container, map[string]any{})
+	} else {
+		container = append(container, []any{})
+	}
+	return container, true
+}
+
+// rootToIndex 通过纯索引路径导航嵌套列表结构。
+// 对齐 Python root_to_index。
+// 返回 (调整后的最终索引, 最终容器列表)。
+// 嵌套深度上限 10，索引范围 [0,10000]，支持负索引自动调整。
+func rootToIndex(indexes []int, source []any, createIfAbsent bool) (int, []any) {
+	if source == nil || len(indexes) == 0 {
+		return -1, nil
+	}
+	if len(indexes) > 10 {
+		return -1, nil
+	}
+
+	current := source
+
+	// 处理中间索引
+	for i := 0; i < len(indexes)-1; i++ {
+		idx := indexes[i]
+		// 处理负索引
+		if idx < 0 {
+			idx = len(current) + idx
+			if idx < 0 {
+				return -1, nil
+			}
+		} else if idx > 10000 {
+			return -1, nil
+		}
+		// 越界扩展
+		if idx >= len(current) {
+			if !createIfAbsent {
+				return -1, nil
+			}
+			var ok bool
+			current, ok = safeExtendContainer(current, idx, false)
+			if !ok {
+				return -1, nil
+			}
+		}
+		// 安全访问
+		if idx >= len(current) {
+			return -1, nil
+		}
+		next, ok := current[idx].([]any)
+		if !ok {
+			if current[idx] != nil {
+				return -1, nil
+			}
+			// nil 位置自动创建列表
+			if !createIfAbsent {
+				return -1, nil
+			}
+			next = []any{}
+			current[idx] = next
+		}
+		current = next
+	}
+
+	// 处理最终索引
+	finalIdx := indexes[len(indexes)-1]
+	if finalIdx < 0 {
+		finalIdx = len(current) + finalIdx
+		if finalIdx < 0 {
+			return -1, nil
+		}
+	} else if finalIdx > 10000 {
+		return -1, nil
+	}
+	if finalIdx >= len(current) {
+		if !createIfAbsent {
+			return -1, nil
+		}
+		var ok bool
+		current, ok = safeExtendContainer(current, finalIdx, true)
+		if !ok {
+			return -1, nil
+		}
+	}
+	if finalIdx < 0 || finalIdx >= len(current) {
+		return -1, nil
+	}
+	return finalIdx, current
+}
+
 // rootToPath 沿嵌套路径导航到最终容器
 // 返回 (最终key, 最终容器)
 // 最终容器可能是 map[string]any 或 []any，对应最终 key 为 string 或 int
@@ -228,6 +339,9 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 	}
 
 	var current any = source
+	// 父容器追踪栈，用于列表 append 后回写
+	parents := make([]parentEntry, 0, len(paths))
+
 	for i, path := range paths {
 		isLast := i == len(paths)-1
 		switch p := path.(type) {
@@ -256,8 +370,10 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 			// 支持中间节点为 map 或 list
 			switch next := m[p].(type) {
 			case map[string]any:
+				parents = append(parents, parentEntry{m: m, mKey: p, isMap: true})
 				current = next
 			case []any:
+				parents = append(parents, parentEntry{m: m, mKey: p, isMap: true})
 				current = next
 			default:
 				if !create {
@@ -265,6 +381,7 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 				}
 				next = map[string]any{}
 				m[p] = next
+				parents = append(parents, parentEntry{m: m, mKey: p, isMap: true})
 				current = next
 			}
 		case int:
@@ -284,20 +401,13 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 				if !create {
 					return nil, nil
 				}
-				for len(list) <= idx {
-					list = append(list, nil)
+				var ok2 bool
+				list, ok2 = safeExtendContainer(list, idx, isLast)
+				if !ok2 {
+					return nil, nil
 				}
 				// 回写到父容器（append 可能换了底层数组）
-				if i >= 1 {
-					if prevStr, ok := paths[i-1].(string); ok {
-						if parentMap, ok2 := current.([]any); !ok2 {
-							// current 已经是 []any，需要回写到持有它的 map
-						} else {
-							_ = prevStr
-							_ = parentMap
-						}
-					}
-				}
+				writeBackList(parents, list)
 			}
 			if isLast {
 				return idx, list
@@ -305,10 +415,33 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 			if idx >= len(list) {
 				return nil, nil
 			}
+			parents = append(parents, parentEntry{l: list, lIdx: idx, isMap: false})
 			current = list[idx]
 		}
 	}
 	return nil, nil
+}
+
+// parentEntry 父容器追踪条目，用于列表 append 后回写。
+type parentEntry struct {
+	m    map[string]any // 父 map（如果父容器是 map）
+	mKey string         // 在父 map 中的键
+	l    []any          // 父 list（如果父容器是 list）
+	lIdx int            // 在父 list 中的索引
+	isMap bool          // 父容器是 map 还是 list
+}
+
+// writeBackList 将 append 后可能更换底层数组的 list 回写到父容器。
+func writeBackList(parents []parentEntry, list []any) {
+	if len(parents) == 0 {
+		return
+	}
+	parent := parents[len(parents)-1]
+	if parent.isMap {
+		parent.m[parent.mKey] = list
+	} else {
+		parent.l[parent.lIdx] = list
+	}
 }
 
 // expandNestedStructure 将嵌套 key 的字典展开为嵌套结构
@@ -575,4 +708,33 @@ func deepCopyUpdates(updates map[string][]map[string]any) map[string][]map[strin
 		result[key] = copied
 	}
 	return result
+}
+
+// convertUpdatesFromJSON 将 JSON 反序列化后的 updates 数据转换为 map[string][]map[string]any。
+//
+// JSON 反序列化会将 []map[string]any 变为 []any（每个元素是 map[string]any），
+// 导致类型断言 gs.(map[string][]map[string]any) 失败。此函数递归处理，
+// 将 map[string]any 中值为 []any 的字段转换为 []map[string]any。
+func convertUpdatesFromJSON(raw any) (map[string][]map[string]any, bool) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	result := make(map[string][]map[string]any, len(m))
+	for key, val := range m {
+		slice, ok := val.([]any)
+		if !ok {
+			return nil, false
+		}
+		maps := make([]map[string]any, len(slice))
+		for i, item := range slice {
+			itemMap, ok := item.(map[string]any)
+			if !ok {
+				return nil, false
+			}
+			maps[i] = itemMap
+		}
+		result[key] = maps
+	}
+	return result, true
 }

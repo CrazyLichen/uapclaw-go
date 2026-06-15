@@ -5,10 +5,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -44,7 +46,16 @@ type Session struct {
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+func init() {
+	// 注册 Session 创建函数到 controller 包，解决循环依赖
+	controller.RegisterSessionCreator(func(agentID, sessionID string) controller.StateAccessor {
+		return CreateAgentSession(agentID, sessionID)
+	})
+}
 
 // NewSession 创建公开层 Session 实例。
 //
@@ -308,4 +319,14 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+// CreateAgentSession 创建 Agent 会话实例。
+// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session()
+// 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
+func CreateAgentSession(agentID, sessionID string) *Session {
+	card := &schema.AgentCard{
+		BaseCard: schema.BaseCard{ID: agentID},
+	}
+	return NewSession(WithSessionID(sessionID), WithCard(card))
 }

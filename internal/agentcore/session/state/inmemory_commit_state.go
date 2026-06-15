@@ -98,7 +98,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(nodeID) == 0 {
-		// 提交全部
+		// 提交全部：逐个应用更新到底层 state，然后清空整个暂存
 		for key, updates := range s.updates {
 			for _, update := range updates {
 				if err := s.state.Update(update); err != nil {
@@ -109,7 +109,6 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 						Msg("提交更新到底层 state 失败")
 				}
 			}
-			s.updates[key] = nil
 		}
 		s.updates = make(map[string][]map[string]any)
 	} else {

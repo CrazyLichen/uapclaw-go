@@ -81,8 +81,10 @@ func (s *SimpleMemoryIndex) SetEmbeddingModel(model embedding.BaseEmbedding) {
 }
 
 // SetStorageCodec 设置存储编解码器。
-// 对齐 Python set_storage_codec。
+// 对齐 Python set_storage_codec。加写锁保护并发安全。
 func (s *SimpleMemoryIndex) SetStorageCodec(codec StorageCodec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.codec = codec
 }
 
@@ -92,6 +94,11 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 	if len(memories) == 0 {
 		return nil
 	}
+
+	// 缓存 codec，避免并发读写竞争
+	s.mu.RLock()
+	codec := s.codec
+	s.mu.RUnlock()
 
 	// 按 memType 分组
 	byType := make(map[string][]*MemoryDoc)
@@ -158,9 +165,9 @@ func (s *SimpleMemoryIndex) AddMemories(ctx context.Context, userID string, scop
 		for _, doc := range docs {
 			kvKey := kvMemKey(userID, scopeID, doc.ID)
 			kvData := memoryDocToKVData(doc, userID, scopeID)
-			if s.codec != nil {
+			if codec != nil {
 				if mem, ok := kvData["mem"].(string); ok {
-					encoded, err := s.codec.Encode(mem)
+					encoded, err := codec.Encode(mem)
 					if err != nil {
 						return fmt.Errorf("编码记忆文本失败: %w", err)
 					}
@@ -202,6 +209,11 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			Msg("嵌入模型未初始化")
 		return []*MemorySearchResult{}, nil
 	}
+
+	// 缓存 codec，避免并发读写竞争
+	s.mu.RLock()
+	codec := s.codec
+	s.mu.RUnlock()
 
 	if topK <= 0 {
 		topK = defaultTopK
@@ -290,10 +302,14 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			if err := json.Unmarshal([]byte(decoded), &data); err != nil {
 				continue
 			}
-			if s.codec != nil {
+			if codec != nil {
 				if mem, ok := data["mem"].(string); ok {
-					decMem, err := s.codec.Decode(mem)
+					decMem, err := codec.Decode(mem)
 					if err != nil {
+						logger.Warn(logComponent).
+							Err(err).
+							Str("memory_id", mid).
+							Msg("解码记忆文本失败，跳过")
 						continue
 					}
 					data["mem"] = decMem
@@ -496,9 +512,15 @@ func (s *SimpleMemoryIndex) GetByID(ctx context.Context, userID string, scopeID 
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, fmt.Errorf("解析 KV 数据失败: %w", err)
 	}
-	if s.codec != nil {
+
+	// 缓存 codec
+	s.mu.RLock()
+	codec := s.codec
+	s.mu.RUnlock()
+
+	if codec != nil {
 		if mem, ok := data["mem"].(string); ok {
-			decoded, err := s.codec.Decode(mem)
+			decoded, err := codec.Decode(mem)
 			if err != nil {
 				return nil, fmt.Errorf("解码记忆文本失败: %w", err)
 			}
@@ -512,6 +534,11 @@ func (s *SimpleMemoryIndex) GetByID(ctx context.Context, userID string, scopeID 
 // 覆盖 MemoryIndexBase 的空实现。
 // 对齐 Python list_memories：ID 追踪 → KV 批量获取 → 过滤 → 排序 → 分页。
 func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, scopeID string, offset int, limit int, memTypes []string) ([]*MemoryDoc, error) {
+	// 缓存 codec，避免并发读写竞争
+	s.mu.RLock()
+	codec := s.codec
+	s.mu.RUnlock()
+
 	idsKey := kvIDsKey(userID, scopeID, "")
 	raw, err := s.kvStore.Get(ctx, idsKey)
 	if err != nil {
@@ -546,10 +573,14 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 		if err := json.Unmarshal([]byte(decoded), &data); err != nil {
 			continue
 		}
-		if s.codec != nil {
+		if codec != nil {
 			if mem, ok := data["mem"].(string); ok {
-				decMem, err := s.codec.Decode(mem)
+				decMem, err := codec.Decode(mem)
 				if err != nil {
+					logger.Warn(logComponent).
+						Err(err).
+						Str("memory_id", mid).
+						Msg("解码记忆文本失败，跳过")
 					continue
 				}
 				data["mem"] = decMem

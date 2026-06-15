@@ -17,9 +17,10 @@
 //	session/
 //	├── doc.go              # 包文档
 //	├── session.go          # BaseSession 接口 + ProxySession 实现
-//	├── agent.go            # Session 公开会话（Agent 场景）
+//	├── agent.go            # Session 公开会话（Agent 场景）+ CreateAgentSession
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
 //	├── node.go             # NodeSessionFacade 公开会话（工作流组件场景）
+//	├── wrapper.go          # RouterSessionFacade 路由会话门面（禁写壳）
 //	├── interaction/        # 交互管理
 //	│   ├── doc.go                           # interaction 包文档
 //	│   ├── base.go                          # baseSession 接口 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量
@@ -41,15 +42,16 @@
 //	    ├── agent_session.go      # AgentSession
 //	    └── workflow_session.go   # WorkflowSession/NodeSession/SubWorkflowSession
 //
-// 对应 Python 代码：openjiuwen/core/session/agent.py + openjiuwen/core/session/session.py + openjiuwen/core/session/workflow.py + openjiuwen/core/session/node.py
+// 对应 Python 代码：openjiuwen/core/session/agent.py + openjiuwen/core/session/session.py + openjiuwen/core/session/workflow.py + openjiuwen/core/session/node.py + openjiuwen/core/session/internal/wrapper.py
 //
 // 核心类型/接口索引：
 //
-//	BaseSession       — 会话基类接口，所有会话类型的核心抽象
-//	ProxySession      — 代理会话，将调用委托给内部 stub
-//	Session           — Agent 公开会话，用户面向 API
-//	WorkflowSession   — Workflow 公开会话，用户面向 API
-//	NodeSessionFacade — 工作流节点会话门面，组件开发者面向 API
+//	BaseSession          — 会话基类接口，所有会话类型的核心抽象
+//	ProxySession         — 代理会话，将调用委托给内部 stub
+//	Session              — Agent 公开会话，用户面向 API
+//	WorkflowSession      — Workflow 公开会话，用户面向 API
+//	NodeSessionFacade    — 工作流节点会话门面，组件开发者面向 API
+//	RouterSessionFacade  — 路由会话门面，禁写壳（路由函数场景）
 //	WorkflowInteraction   — 工作流交互，通过 GraphInterrupt 暂停图执行
 //	SimpleAgentInteraction — 简单 Agent 交互，无输入队列
 //	AgentInteraction      — 完整 Agent 交互，含输入队列 + 检查点 + 流输出

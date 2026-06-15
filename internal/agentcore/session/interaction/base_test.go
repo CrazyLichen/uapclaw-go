@@ -63,11 +63,12 @@ func TestNewBaseInteraction_有默认输入(t *testing.T) {
 }
 
 // TestNewBaseInteraction_从SessionState读取输入 测试从 session state 合并已有输入
+// 对齐 Python：state().get() 读取 agent_state/comp_state（非 global_state）
 func TestNewBaseInteraction_从SessionState读取输入(t *testing.T) {
 	session := newFakeBaseSession()
-	// 预设 session state 中的输入（写入全局状态并提交）
+	// 预设 session state 中的输入（写入组件级状态并提交）
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(map[string]any{InteractiveInputKey: []any{"existing_input"}})
+		cs.Update(map[string]any{InteractiveInputKey: []any{"existing_input"}})
 		cs.Commit()
 	}
 

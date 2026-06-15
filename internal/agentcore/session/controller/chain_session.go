@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -100,13 +101,29 @@ func (cs *ChainSession) Load() error {
 	}
 
 	// 恢复数据容器
-	// ⤵️ 后续回填：AgentSessionContainer.load 委托给 StateAccessor，当前简化处理
+	if dataRaw, ok := stateData["data"]; ok && dataRaw != nil {
+		container, err := GetFactory().Load(cs.dataContainerType, cs.AgentID, cs.SessionID, dataRaw)
+		if err != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("action", "chain_session_load").
+				Str("session_id", cs.SessionID).
+				Err(err).
+				Msg("加载数据容器失败，使用空容器")
+		} else {
+			cs.DataContainer = container
+		}
+	}
 
 	// 加载下游关系
 	downstreamsDir := SessionPaths{}.DownstreamsDir(cs.sessionDir)
 	entries, err := os.ReadDir(downstreamsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// 下游目录不存在不是错误，只跳过下游加载
+			logger.Debug(logger.ComponentAgentCore).
+				Str("action", "chain_session_load").
+				Str("session_id", cs.SessionID).
+				Msg("下游目录不存在，跳过下游加载")
 			return nil
 		}
 		return err
@@ -264,8 +281,13 @@ func (cs *ChainSession) Flush() error {
 			},
 			"created_at": cs.updatedAt,
 		}
-		linkBytes, _ := json.MarshalIndent(linkData, "", "  ")
-		_ = os.WriteFile(linkPath, linkBytes, 0o644)
+		linkBytes, err := json.MarshalIndent(linkData, "", "  ")
+		if err != nil {
+			return fmt.Errorf("序列化下游关系失败: %w", err)
+		}
+		if err := os.WriteFile(linkPath, linkBytes, 0o644); err != nil {
+			return fmt.Errorf("写入下游关系文件失败: %w", err)
+		}
 	}
 
 	// 清理已删除的下游关系

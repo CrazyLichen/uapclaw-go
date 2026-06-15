@@ -66,11 +66,12 @@ func TestNewWorkflowInteraction(t *testing.T) {
 }
 
 // TestWorkflowInteraction_WaitUserInputs_队列有输入 测试恢复场景直接返回
+// 对齐 Python：state().get() 读取 agent_state/comp_state（非 global_state）
 func TestWorkflowInteraction_WaitUserInputs_队列有输入(t *testing.T) {
 	session := newFakeBaseSession()
-	// 预设输入到 session state（全局状态并提交）
+	// 预设输入到 session state（组件级状态并提交）
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(map[string]any{InteractiveInputKey: []any{"user_answer"}})
+		cs.Update(map[string]any{InteractiveInputKey: []any{"user_answer"}})
 		cs.Commit()
 	}
 
@@ -107,10 +108,11 @@ func TestWorkflowInteraction_WaitUserInputs_队列空时触发GraphInterrupt(t *
 }
 
 // TestWorkflowInteraction_UserLatestInput_有缓存 测试缓存命中直接返回
+// 对齐 Python：state().get() 读取 agent_state/comp_state（非 global_state）
 func TestWorkflowInteraction_UserLatestInput_有缓存(t *testing.T) {
 	session := newFakeBaseSession()
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(map[string]any{InteractiveInputKey: []any{"latest_input"}})
+		cs.Update(map[string]any{InteractiveInputKey: []any{"latest_input"}})
 		cs.Commit()
 	}
 
@@ -248,10 +250,11 @@ func TestNewAgentInteraction(t *testing.T) {
 }
 
 // TestAgentInteraction_WaitUserInputs_队列有输入 测试恢复场景直接返回
+// 对齐 Python：state().get() 读取 agent_state/comp_state（非 global_state）
 func TestAgentInteraction_WaitUserInputs_队列有输入(t *testing.T) {
 	session := newFakeBaseSession()
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(map[string]any{InteractiveInputKey: []any{"agent_answer"}})
+		cs.Update(map[string]any{InteractiveInputKey: []any{"agent_answer"}})
 		cs.Commit()
 	}
 

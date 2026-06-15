@@ -126,23 +126,27 @@ func PanicAgentInterrupt(msg string) {
 
 // initInteractiveInputs 从 session state 读取已有的交互输入，合并到输入队列。
 // 对应 Python: BaseInteraction._init_interactive_inputs()
-// Python 中 session.state().get(INTERACTIVE_INPUT) 查询的是全局状态，
-// Go 侧对应 SessionState.GetGlobal()。
+// Python 中 session.state().get(INTERACTIVE_INPUT) 查询的是 agent_state，
+// Go 侧对应 SessionState.Get()（AgentStateCollection 中委托到 agentState，
+// WorkflowStateCollection 中委托到 compState）。
 func (b *BaseInteraction) initInteractiveInputs() {
 	st := b.session.State()
 	if st == nil {
 		return
 	}
 
-	// 从全局状态读取交互输入
-	existing := st.GetGlobal(state.StringKey(InteractiveInputKey))
+	// 从组件级/agent 级状态读取交互输入（对齐 Python state().get()）
+	existing := st.Get(state.StringKey(InteractiveInputKey))
 
 	if existing == nil {
 		// 无已有输入，仅更新 session state
 		if len(b.interactiveInputs) > 0 {
-			st.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
-		}
-		if len(b.interactiveInputs) > 0 {
+			if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+				logger.Error(logger.ComponentAgentCore).
+					Err(err).
+					Str("action", "init_interactive_inputs").
+					Msg("更新交互输入到 session state 失败")
+			}
 			b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 		}
 		return
@@ -158,7 +162,12 @@ func (b *BaseInteraction) initInteractiveInputs() {
 	}
 	// 写回 session state
 	if len(b.interactiveInputs) > 0 {
-		st.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
+		if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Err(err).
+				Str("action", "init_interactive_inputs").
+				Msg("写回交互输入到 session state 失败")
+		}
 		b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 	}
 }

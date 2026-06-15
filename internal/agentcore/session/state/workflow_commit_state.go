@@ -189,6 +189,9 @@ func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) *Workflow
 // GetUpdates 获取所有暂存更新。
 // workflowOnly 控制是否包含 global_state_updates。
 // 返回格式：{key: updates_dict, ...}
+// 返回类型为 map[string]any（聚合视图），与 SetUpdates 输入类型一致。
+// 内部子状态使用 map[string][]map[string]any，此处通过 deepCopyUpdates 拷贝后
+// 作为 any 放入结果。WorkflowCommitState 不实现 CommitStateLike，此类型差异是有意设计。
 func (s *WorkflowCommitState) GetUpdates() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -206,6 +209,11 @@ func (s *WorkflowCommitState) GetUpdates() map[string]any {
 }
 
 // SetUpdates 设置暂存更新。
+// 数据可能来自 JSON 反序列化（[]map[string]any → []any），通过 convertUpdatesFromJSON 处理。
+// GetUpdates 返回 map[string]any（聚合视图），SetUpdates 接收同样的 map[string]any，
+// 内部子状态使用 map[string][]map[string]any。WorkflowCommitState 不实现 CommitStateLike，
+// GetUpdates/SetUpdates 的类型差异是有意设计（对齐 Python CommitState 继承 StateCollection
+// 而非 CommitStateLike 的设计）。
 func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -215,20 +223,28 @@ func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 	if gs, ok := updates[GlobalStateUpdatesKey]; ok && gs != nil && s.workflowOnly {
 		if m, ok := gs.(map[string][]map[string]any); ok {
 			s.globalState.SetUpdates(m)
+		} else if m, ok := convertUpdatesFromJSON(gs); ok {
+			s.globalState.SetUpdates(m)
 		}
 	}
 	if io, ok := updates[IOStateUpdatesKey]; ok && io != nil {
 		if m, ok := io.(map[string][]map[string]any); ok {
+			s.ioState.SetUpdates(m)
+		} else if m, ok := convertUpdatesFromJSON(io); ok {
 			s.ioState.SetUpdates(m)
 		}
 	}
 	if comp, ok := updates[CompStateUpdatesKey]; ok && comp != nil {
 		if m, ok := comp.(map[string][]map[string]any); ok {
 			s.compState.SetUpdates(m)
+		} else if m, ok := convertUpdatesFromJSON(comp); ok {
+			s.compState.SetUpdates(m)
 		}
 	}
 	if wf, ok := updates[WorkflowStateUpdatesKey]; ok && wf != nil {
 		if m, ok := wf.(map[string][]map[string]any); ok {
+			s.workflowState.SetUpdates(m)
+		} else if m, ok := convertUpdatesFromJSON(wf); ok {
 			s.workflowState.SetUpdates(m)
 		}
 	}

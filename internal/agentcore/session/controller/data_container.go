@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -97,6 +98,11 @@ const (
 var (
 	factoryOnce     sync.Once
 	factoryInstance *DataContainerFactory
+
+	// sessionCreator 从序列化数据重建 Session 的函数。
+	// 由 session 包在 init 时通过 RegisterSessionCreator 注册，
+	// 解决 controller → session 的循环依赖问题。
+	sessionCreator func(agentID, sessionID string) StateAccessor
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -111,16 +117,37 @@ func GetFactory() *DataContainerFactory {
 	return factoryInstance
 }
 
+// RegisterSessionCreator 注册 Session 创建函数。
+// 由 session 包在 init 时调用，将 CreateAgentSession 注入到 controller 包，
+// 解决 controller → session 的循环依赖。
+func RegisterSessionCreator(creator func(agentID, sessionID string) StateAccessor) {
+	sessionCreator = creator
+}
+
 // NewAgentSessionContainer 创建默认数据容器实例
 func NewAgentSessionContainer() *AgentSessionContainer {
 	return &AgentSessionContainer{}
 }
 
 // LoadAgentSessionContainer 从序列化数据重建 AgentSessionContainer。
-// 当前为简化实现，返回空的 AgentSessionContainer。
-// ⤵️ 后续回填：需要 create_agent_session 等价函数后完善
+// 对齐 Python AgentSessionContainer.load()：创建新 Session 并执行 PreRun，
+// AGENT_SESSION_CREATED 回调会将 Session 注入到 DataContainer。
 func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
-	return NewAgentSessionContainer(), nil
+	container := NewAgentSessionContainer()
+	if sessionCreator != nil {
+		sa := sessionCreator(agentID, sessionID)
+		container.SetSession(sa)
+		// PreRun 触发 AGENT_SESSION_CREATED 回调，回调中会注入 Session
+		if err := sa.PreRun(context.Background()); err != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("action", "load_agent_session_container").
+				Str("session_id", sessionID).
+				Err(err).
+				Msg("PreRun 失败")
+			// PreRun 失败不阻止容器创建，但记录错误
+		}
+	}
+	return container, nil
 }
 
 // ──────────────────────────── DataContainerFactory 方法 ────────────────────────────
