@@ -6,7 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // baseSession 会话基类接口（internal 包内部使用）。
 // 与 baseSession 定义一致，用于避免 internal 包对 session 包的循环导入。
@@ -21,8 +21,6 @@ type baseSession interface {
 	ActorManager() any
 	Close() error
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // WorkflowSession 工作流级内部会话，实现 BaseSession 接口。
 //
@@ -257,8 +255,6 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 	}
 }
 
-// ──────────────────────────── WorkflowSession 方法 ────────────────────────────
-
 // Config 获取会话配置
 func (s *WorkflowSession) Config() any {
 	return s.config
@@ -350,8 +346,6 @@ func (s *WorkflowSession) Parent() baseSession {
 	return s.parent
 }
 
-// ──────────────────────────── NodeSession 方法 ────────────────────────────
-
 // NodeID 返回节点 ID
 func (n *NodeSession) NodeID() string {
 	return n.nodeID
@@ -403,8 +397,6 @@ func (n *NodeSession) NodeConfig() any {
 	return nil
 }
 
-// ──────────────────────────── NodeSession BaseSession 接口实现 ────────────────────────────
-
 // Config 委托给父 session
 func (n *NodeSession) Config() any {
 	return n.delegate.Config()
@@ -444,8 +436,6 @@ func (n *NodeSession) ActorManager() any {
 func (n *NodeSession) Close() error {
 	return nil
 }
-
-// ──────────────────────────── SubWorkflowSession 方法 ────────────────────────────
 
 // WorkflowID 返回子工作流 ID（覆写 NodeSession）
 func (s *SubWorkflowSession) WorkflowID() string {

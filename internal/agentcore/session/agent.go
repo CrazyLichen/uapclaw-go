@@ -50,13 +50,6 @@ type SessionOption func(*Session)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func init() {
-	// 注册 Session 创建函数到 controller 包，解决循环依赖
-	controller.RegisterSessionCreator(func(agentID, sessionID string) controller.StateAccessor {
-		return CreateAgentSession(agentID, sessionID)
-	})
-}
-
 // NewSession 创建公开层 Session 实例。
 //
 // 若未指定 sessionID，自动生成 UUID。
@@ -112,8 +105,6 @@ func WithSourceMetadata(meta map[string]any) SessionOption {
 	}
 }
 
-// ──────────────────────────── 身份/配置方法 ────────────────────────────
-
 // GetSessionID 返回会话唯一标识
 func (s *Session) GetSessionID() string {
 	return s.sessionID
@@ -149,8 +140,6 @@ func (s *Session) GetAgentDescription() string {
 	return ""
 }
 
-// ──────────────────────────── 状态读写方法 ────────────────────────────
-
 // UpdateState 更新全局状态，委托到 inner.State() 的 SessionState
 func (s *Session) UpdateState(data map[string]any) {
 	s.inner.State().UpdateGlobal(data)
@@ -165,8 +154,6 @@ func (s *Session) GetState(key state.StateKey) (any, error) {
 func (s *Session) DumpState() map[string]any {
 	return s.inner.State().Dump()
 }
-
-// ──────────────────────────── 流操作方法（桩实现） ────────────────────────────
 
 // WriteStream 写入标准输出流。
 // ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
@@ -191,8 +178,6 @@ func (s *Session) StreamIterator() <-chan any {
 func (s *Session) CloseStream() error {
 	return nil
 }
-
-// ──────────────────────────── 生命周期方法 ────────────────────────────
 
 // PreRun 会话预运行：触发 AGENT_SESSION_CREATED 回调 + 检查点预执行。
 //
@@ -258,8 +243,6 @@ func (s *Session) Commit(ctx context.Context) error {
 	return nil
 }
 
-// ──────────────────────────── 交互方法 ────────────────────────────
-
 // Interact 请求用户输入。
 // ✅ 5.7 已回填：SimpleAgentInteraction 实现后填充真实逻辑
 // 对应 Python: Session.interact(value)
@@ -269,8 +252,6 @@ func (s *Session) Interact(value any) error {
 	}
 	return s.interaction.WaitUserInputs(context.Background(), value)
 }
-
-// ──────────────────────────── 子会话方法（桩实现） ────────────────────────────
 
 // CreateWorkflowSession 创建子 WorkflowSession。
 //
@@ -304,6 +285,13 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func init() {
+	// 注册 Session 创建函数到 controller 包，解决循环依赖
+	controller.RegisterSessionCreator(func(agentID, sessionID string) controller.StateAccessor {
+		return CreateAgentSession(agentID, sessionID)
+	})
+}
 
 // tagStreamPayload 为流数据添加来源元数据。
 // 对应 Python: Session._tag_stream_payload()

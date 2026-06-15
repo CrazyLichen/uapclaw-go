@@ -57,8 +57,6 @@ func NewWorkflowStateCollection(ioState, globalState, compState, workflowState C
 	}
 }
 
-// ──────────────────────────── WorkflowStateCollection 方法 ────────────────────────────
-
 // GetGlobal 从全局状态获取值。
 // 三级回退查询：globalState → ioState[parentID] → ioState[nodeID]。
 func (s *WorkflowStateCollection) GetGlobal(key StateKey) any {
@@ -121,8 +119,6 @@ func (s *WorkflowStateCollection) Dump() map[string]any {
 		"trace_state":           s.traceState,
 	}
 }
-
-// ──────────────────────────── SessionState 接口实现 ────────────────────────────
 
 // Get 根据 StateKey 获取组件状态值。
 // key 为 nil 时返回当前节点的全部 comp_state；否则按 nodeID 前缀查找。

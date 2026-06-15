@@ -13,10 +13,15 @@ type InMemoryStateLike struct {
 	state map[string]any
 }
 
-// ──────────────────────────── 向后兼容别名 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // InMemoryState 保持向后兼容，后续版本移除
 type InMemoryState = InMemoryStateLike
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// NewInMemoryState 保持向后兼容，后续版本移除
+var NewInMemoryState = NewInMemoryStateLike
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -26,11 +31,6 @@ func NewInMemoryStateLike() *InMemoryStateLike {
 		state: make(map[string]any),
 	}
 }
-
-// NewInMemoryState 保持向后兼容，后续版本移除
-var NewInMemoryState = NewInMemoryStateLike
-
-// ──────────────────────────── StateLike 接口实现 ────────────────────────────
 
 // Get 根据 key 获取状态值（深拷贝返回）
 func (s *InMemoryStateLike) Get(key StateKey) any {
@@ -76,8 +76,6 @@ func (s *InMemoryStateLike) SetState(state map[string]any) {
 		s.state = state
 	}
 }
-
-// ──────────────────────────── SessionState 默认实现 ────────────────────────────
 
 // GetGlobal 单存储单元无全局概念，返回 nil
 func (s *InMemoryStateLike) GetGlobal(key StateKey) any { return nil }

@@ -18,14 +18,18 @@ type RouterSessionFacade struct {
 	inner *NodeSessionFacade
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRouterSessionFacade 创建路由会话门面实例。
 func NewRouterSessionFacade(inner *NodeSessionFacade) *RouterSessionFacade {
 	return &RouterSessionFacade{inner: inner}
 }
-
-// ──────────────────────────── 身份方法 ────────────────────────────
 
 // GetWorkflowID 返回工作流 ID（只读，允许）
 func (r *RouterSessionFacade) GetWorkflowID() string {
@@ -57,8 +61,6 @@ func (r *RouterSessionFacade) GetSessionID() string {
 	return r.inner.GetSessionID()
 }
 
-// ──────────────────────────── 状态方法 ────────────────────────────
-
 // GetState 获取组件状态值（只读，允许）
 // 对齐 Python RouterSession.get_state：继承 StateSession 的读取能力
 func (r *RouterSessionFacade) GetState(key state.StateKey) (any, error) {
@@ -88,8 +90,6 @@ func (r *RouterSessionFacade) DumpState() map[string]any {
 	return r.inner.DumpState()
 }
 
-// ──────────────────────────── 追踪方法 ────────────────────────────
-
 // Trace 记录组件追踪数据（路由场景保留追踪能力）
 // 对齐 Python RouterSession.trace: await TracerWorkflowUtils.trace(self._inner, data)
 func (r *RouterSessionFacade) Trace(ctx context.Context, data map[string]any) error {
@@ -102,16 +102,12 @@ func (r *RouterSessionFacade) TraceError(ctx context.Context, err error) error {
 	return r.inner.TraceError(ctx, err)
 }
 
-// ──────────────────────────── 交互方法 ────────────────────────────
-
 // Interact 请求用户输入 — 禁止操作
 // 对齐 Python RouterSession.interact: pass
 func (r *RouterSessionFacade) Interact(ctx context.Context, value any) (any, error) {
 	// 路由场景禁止交互，静默返回 nil
 	return nil, nil
 }
-
-// ──────────────────────────── 流写入方法 ────────────────────────────
 
 // WriteStream 写入标准输出流 — 禁止操作
 // 对齐 Python RouterSession.write_stream: pass
@@ -127,8 +123,6 @@ func (r *RouterSessionFacade) WriteCustomStream(ctx context.Context, data any) e
 	return nil
 }
 
-// ──────────────────────────── 环境/配置方法 ────────────────────────────
-
 // GetEnv 获取环境变量值 — 禁止操作
 // 对齐 Python RouterSession.get_env: pass
 func (r *RouterSessionFacade) GetEnv(key string) any {
@@ -142,3 +136,5 @@ func (r *RouterSessionFacade) GetNodeConfig() any {
 	// 路由场景禁止读取配置，返回 nil
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

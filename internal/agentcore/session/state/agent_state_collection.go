@@ -37,8 +37,6 @@ func NewAgentStateCollection() *AgentStateCollection {
 	}
 }
 
-// ──────────────────────────── SessionState 接口实现 ────────────────────────────
-
 // GetGlobal 从全局状态获取值。key 为零值时返回完整全局状态。
 func (s *AgentStateCollection) GetGlobal(key StateKey) any {
 	s.mu.RLock()
@@ -116,8 +114,6 @@ func (s *AgentStateCollection) SetState(st map[string]any) {
 	}
 }
 
-// ──────────────────────────── ReadableStateLike 接口实现 ────────────────────────────
-
 // GetByPrefix 根据 key 和嵌套前缀获取状态值。委托到 agentState。
 func (s *AgentStateCollection) GetByPrefix(key StateKey, nestedPrefix string) any {
 	s.mu.RLock()
@@ -131,8 +127,6 @@ func (s *AgentStateCollection) GetByTransformer(transformer Transformer) any {
 	defer s.mu.RUnlock()
 	return s.agentState.GetByTransformer(transformer)
 }
-
-// ──────────────────────────── Agent 层特有方法 ────────────────────────────
 
 // GetAgent 从 Agent 状态获取值。key 为零值时返回完整 Agent 状态。
 func (s *AgentStateCollection) GetAgent(key StateKey) any {

@@ -2,7 +2,7 @@ package session
 
 import "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
 // 对应 Python: openjiuwen/core/session/session.py BaseSession
@@ -35,8 +35,6 @@ type BaseSession interface {
 	Close() error
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ProxySession 代理会话，将所有 BaseSession 方法委托给内部 stub。
 // 对应 Python: openjiuwen/core/session/session.py ProxySession
 //
@@ -50,6 +48,12 @@ type ProxySession struct {
 	stub BaseSession
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProxySession 创建代理会话实例（stub 为 nil）。
@@ -57,8 +61,6 @@ type ProxySession struct {
 func NewProxySession() *ProxySession {
 	return &ProxySession{}
 }
-
-// ──────────────────────────── ProxySession 方法 ────────────────────────────
 
 // SetSession 设置被代理的底层会话
 func (p *ProxySession) SetSession(stub BaseSession) {

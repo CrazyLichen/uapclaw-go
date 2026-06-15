@@ -103,6 +103,42 @@ func (c *ChatReranker) TestCompatibility(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// Rerank 覆盖 StandardReranker.Rerank，增加 size=1 校验
+func (c *ChatReranker) Rerank(ctx context.Context, query string, docs []string, opts ...reranker.RerankOption) (map[string]float64, error) {
+	docsAny := make([]any, len(docs))
+	for i, d := range docs {
+		docsAny[i] = d
+	}
+	return c.doRerank(ctx, query, docsAny, resolveOption(opts...))
+}
+
+// RerankDocs 覆盖 StandardReranker.RerankDocs
+func (c *ChatReranker) RerankDocs(ctx context.Context, query string, docs []*reranker.Document, opts ...reranker.RerankOption) (map[string]float64, error) {
+	docsAny := make([]any, len(docs))
+	for i, d := range docs {
+		docsAny[i] = d
+	}
+	return c.doRerank(ctx, query, docsAny, resolveOption(opts...))
+}
+
+// RerankSync 覆盖 StandardReranker.RerankSync
+func (c *ChatReranker) RerankSync(ctx context.Context, query string, docs []string, opts ...reranker.RerankOption) (map[string]float64, error) {
+	docsAny := make([]any, len(docs))
+	for i, d := range docs {
+		docsAny[i] = d
+	}
+	return c.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
+}
+
+// RerankDocsSync 覆盖 StandardReranker.RerankDocsSync
+func (c *ChatReranker) RerankDocsSync(ctx context.Context, query string, docs []*reranker.Document, opts ...reranker.RerankOption) (map[string]float64, error) {
+	docsAny := make([]any, len(docs))
+	for i, d := range docs {
+		docsAny[i] = d
+	}
+	return c.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // assembleParams 组装请求参数，严格限制 size=1。
@@ -317,42 +353,6 @@ func (c *ChatReranker) doRerankSync(ctx context.Context, query string, docs []an
 	}
 
 	return c.parseResponse(result, docIDs)
-}
-
-// Rerank 覆盖 StandardReranker.Rerank，增加 size=1 校验
-func (c *ChatReranker) Rerank(ctx context.Context, query string, docs []string, opts ...reranker.RerankOption) (map[string]float64, error) {
-	docsAny := make([]any, len(docs))
-	for i, d := range docs {
-		docsAny[i] = d
-	}
-	return c.doRerank(ctx, query, docsAny, resolveOption(opts...))
-}
-
-// RerankDocs 覆盖 StandardReranker.RerankDocs
-func (c *ChatReranker) RerankDocs(ctx context.Context, query string, docs []*reranker.Document, opts ...reranker.RerankOption) (map[string]float64, error) {
-	docsAny := make([]any, len(docs))
-	for i, d := range docs {
-		docsAny[i] = d
-	}
-	return c.doRerank(ctx, query, docsAny, resolveOption(opts...))
-}
-
-// RerankSync 覆盖 StandardReranker.RerankSync
-func (c *ChatReranker) RerankSync(ctx context.Context, query string, docs []string, opts ...reranker.RerankOption) (map[string]float64, error) {
-	docsAny := make([]any, len(docs))
-	for i, d := range docs {
-		docsAny[i] = d
-	}
-	return c.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
-}
-
-// RerankDocsSync 覆盖 StandardReranker.RerankDocsSync
-func (c *ChatReranker) RerankDocsSync(ctx context.Context, query string, docs []*reranker.Document, opts ...reranker.RerankOption) (map[string]float64, error) {
-	docsAny := make([]any, len(docs))
-	for i, d := range docs {
-		docsAny[i] = d
-	}
-	return c.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
 }
 
 // firstDocID 返回第一个文档 ID，用于 ChatReranker 结果

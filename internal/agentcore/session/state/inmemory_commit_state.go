@@ -37,8 +37,6 @@ func NewInMemoryCommitState(state ...StateLike) *InMemoryCommitState {
 	}
 }
 
-// ──────────────────────────── InMemoryCommitState 方法 ────────────────────────────
-
 // Get 委托给底层 state
 func (s *InMemoryCommitState) Get(key StateKey) any {
 	s.mu.RLock()
@@ -164,8 +162,6 @@ func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 		s.updates = updates
 	}
 }
-
-// ──────────────────────────── SessionState 默认实现 ────────────────────────────
 
 // GetGlobal 单存储单元无全局概念，返回 nil
 func (s *InMemoryCommitState) GetGlobal(key StateKey) any { return nil }

@@ -96,8 +96,6 @@ func NewAgentInteraction(session baseSession) *AgentInteraction {
 	}
 }
 
-// ──────────────────────────── WorkflowInteraction 方法 ────────────────────────────
-
 // WaitUserInputs 等待用户输入。
 // 1. 优先从输入队列获取（恢复场景）
 // 2. 队列为空时：提交检查点 → 写流输出 → panic GraphInterrupt
@@ -165,8 +163,6 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 	return nil, nil // 不可达
 }
 
-// ──────────────────────────── SimpleAgentInteraction 方法 ────────────────────────────
-
 // WaitUserInputs 等待用户输入（简单模式）。
 // 保存检查点后触发 AgentInterrupt，无输入队列和流输出。
 // 对应 Python: SimpleAgentInteraction.wait_user_inputs(message)
@@ -186,8 +182,6 @@ func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any
 	PanicAgentInterrupt(msg)
 	return nil // 不可达
 }
-
-// ──────────────────────────── AgentInteraction 方法 ────────────────────────────
 
 // WaitUserInputs 等待用户输入（完整 Agent 模式）。
 // 1. 优先从输入队列获取（恢复场景）

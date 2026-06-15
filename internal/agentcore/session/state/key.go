@@ -42,8 +42,6 @@ func ListKey(keys []any) StateKey {
 	return StateKey{keyType: StateKeyList, value: deepCopySlice(keys)}
 }
 
-// ──────────────────────────── StateKey 方法 ────────────────────────────
-
 // IsZero 判断 StateKey 是否为零值（未设置）
 func (k StateKey) IsZero() bool {
 	return k.value == nil

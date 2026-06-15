@@ -36,6 +36,10 @@ type GlobalSessionController struct {
 	dataContainerType string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -56,7 +60,6 @@ func GetGlobalSessionController() *GlobalSessionController {
 	return globalController
 }
 
-// ──────────────────────────── 配置方法 ────────────────────────────
 
 // SetConfig 设置全局会话控制器配置
 func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
@@ -65,7 +68,6 @@ func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
 	g.BasePath = config.BasePath
 }
 
-// ──────────────────────────── 批量加载方法 ────────────────────────────
 
 // LoadAgent 加载指定 Agent 的会话数据
 func (g *GlobalSessionController) LoadAgent(agentID string, loadActiveOnly bool) error {
@@ -110,7 +112,6 @@ func (g *GlobalSessionController) LoadAll(loadActiveOnly bool) error {
 	return nil
 }
 
-// ──────────────────────────── 批量刷盘方法 ────────────────────────────
 
 // FlushAgent 刷盘指定 Agent 的会话数据
 func (g *GlobalSessionController) FlushAgent(agentID string) error {
@@ -167,7 +168,6 @@ func (g *GlobalSessionController) FlushAll() error {
 	return nil
 }
 
-// ──────────────────────────── Agent 管理方法 ────────────────────────────
 
 // GetAgent 获取指定 Agent 的会话控制器（不执行加载）
 func (g *GlobalSessionController) GetAgent(agentID string) *SessionController {
@@ -240,7 +240,6 @@ func (g *GlobalSessionController) RemoveAll() {
 	}
 }
 
-// ──────────────────────────── 批量清理方法 ────────────────────────────
 
 // CleanupAgentInactiveSessions 清理指定 Agent 的非活跃会话
 func (g *GlobalSessionController) CleanupAgentInactiveSessions(agentID string) (map[string][]CleanupResult, error) {
@@ -391,7 +390,6 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 	return result
 }
 
-// ──────────────────────────── 便捷方法（包级函数） ────────────────────────────
 
 // CreateDirectSession 便捷方法：创建私聊会话
 func CreateDirectSession(agentID, userID, sessionID string, opts ...ContainerOption) (bool, *ChainSession, error) {
@@ -577,7 +575,6 @@ func VisualizeCallChain(agentID, sessionID string, depth int) string {
 	return strings.Join(lines, "\n")
 }
 
-// ──────────────────────────── 回调函数 ────────────────────────────
 
 // onAgentSessionCreated AGENT_SESSION_CREATED 回调：
 // 将 ChainSession 的 DataContainer.session 注入真实 Session 实例

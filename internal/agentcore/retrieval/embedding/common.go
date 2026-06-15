@@ -309,67 +309,6 @@ func RetryWithBackoff(
 	return retryWithBackoffGeneric(ctx, maxRetries, fn, defaultIsRetryable)
 }
 
-// defaultIsRetryable 默认的可重试判断逻辑。
-// *exception.BaseError 且 IsRecoverable()==false 的错误不重试，其他都重试。
-func defaultIsRetryable(err error) bool {
-	if baseErr, ok := err.(*exception.BaseError); ok && !baseErr.IsRecoverable() {
-		return false
-	}
-	return true
-}
-
-// retryWithBackoffGeneric 通用重试 + 指数退避（带自定义可重试判断）。
-func retryWithBackoffGeneric(
-	ctx context.Context,
-	maxRetries int,
-	fn func(attempt int) ([][]float64, error),
-	isRetryable func(error) bool,
-) ([][]float64, error) {
-	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		result, err := fn(attempt)
-		if err == nil {
-			return result, nil
-		}
-		lastErr = err
-
-		// 检查是否可重试
-		if !isRetryable(err) {
-			return nil, err
-		}
-
-		if attempt < maxRetries-1 {
-			logger.Warn(logComponent).
-				Str("event_type", "embedding_retry").
-				Int("attempt", attempt+1).
-				Int("max_retries", maxRetries).
-				Str("error_msg", err.Error()).
-				Err(err).
-				Msg("嵌入请求失败，准备重试")
-
-			// 指数退避：100ms, 200ms, 400ms...
-			backoff := time.Duration(math.Pow(2, float64(attempt))) * 100 * time.Millisecond
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-	}
-
-	return nil, exception.BuildError(
-		exception.StatusRetrievalEmbeddingRequestCallFailed,
-		exception.WithParam("error_msg", fmt.Sprintf("重试 %d 次后仍失败: %s", maxRetries, lastErr)),
-		exception.WithCause(lastErr),
-	)
-}
-
 // NewEmbeddingHTTPClient 创建嵌入客户端的 HTTP Client。
 //
 // 根据 EMBEDDING_SSL_VERIFY / EMBEDDING_SSL_CERT 环境变量配置 TLS。
@@ -445,6 +384,67 @@ func ApplyEmbedOptions(opts []embedding.EmbedOption, defaultBatchSize int) (int,
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultIsRetryable 默认的可重试判断逻辑。
+// *exception.BaseError 且 IsRecoverable()==false 的错误不重试，其他都重试。
+func defaultIsRetryable(err error) bool {
+	if baseErr, ok := err.(*exception.BaseError); ok && !baseErr.IsRecoverable() {
+		return false
+	}
+	return true
+}
+
+// retryWithBackoffGeneric 通用重试 + 指数退避（带自定义可重试判断）。
+func retryWithBackoffGeneric(
+	ctx context.Context,
+	maxRetries int,
+	fn func(attempt int) ([][]float64, error),
+	isRetryable func(error) bool,
+) ([][]float64, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		result, err := fn(attempt)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+
+		// 检查是否可重试
+		if !isRetryable(err) {
+			return nil, err
+		}
+
+		if attempt < maxRetries-1 {
+			logger.Warn(logComponent).
+				Str("event_type", "embedding_retry").
+				Int("attempt", attempt+1).
+				Int("max_retries", maxRetries).
+				Str("error_msg", err.Error()).
+				Err(err).
+				Msg("嵌入请求失败，准备重试")
+
+			// 指数退避：100ms, 200ms, 400ms...
+			backoff := time.Duration(math.Pow(2, float64(attempt))) * 100 * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+	}
+
+	return nil, exception.BuildError(
+		exception.StatusRetrievalEmbeddingRequestCallFailed,
+		exception.WithParam("error_msg", fmt.Sprintf("重试 %d 次后仍失败: %s", maxRetries, lastErr)),
+		exception.WithCause(lastErr),
+	)
+}
 
 // createTLSConfigWithCert 使用自定义证书创建 TLS 配置。
 func createTLSConfigWithCert(certPath string) (*tls.Config, error) {

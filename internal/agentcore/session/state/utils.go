@@ -1,5 +1,18 @@
 package state
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// parentEntry 父容器追踪条目，用于列表 append 后回写。
+type parentEntry struct {
+	m    map[string]any // 父 map（如果父容器是 map）
+	mKey string         // 在父 map 中的键
+	l    []any          // 父 list（如果父容器是 list）
+	lIdx int            // 在父 list 中的索引
+	isMap bool          // 父容器是 map 还是 list
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -420,15 +433,6 @@ func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool
 		}
 	}
 	return nil, nil
-}
-
-// parentEntry 父容器追踪条目，用于列表 append 后回写。
-type parentEntry struct {
-	m    map[string]any // 父 map（如果父容器是 map）
-	mKey string         // 在父 map 中的键
-	l    []any          // 父 list（如果父容器是 list）
-	lIdx int            // 在父 list 中的索引
-	isMap bool          // 父容器是 map 还是 list
 }
 
 // writeBackList 将 append 后可能更换底层数组的 list 回写到父容器。

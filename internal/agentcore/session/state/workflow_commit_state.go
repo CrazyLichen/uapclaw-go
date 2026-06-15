@@ -35,8 +35,6 @@ func NewWorkflowCommitState(ioState, globalState, compState, workflowState Commi
 	}
 }
 
-// ──────────────────────────── WorkflowCommitState 特有方法 ────────────────────────────
-
 // GetWorkflowState 从工作流状态获取值。
 func (s *WorkflowCommitState) GetWorkflowState(key StateKey) any {
 	s.mu.RLock()
@@ -256,8 +254,6 @@ func (s *WorkflowCommitState) WorkflowOnly() bool {
 	defer s.mu.RUnlock()
 	return s.workflowOnly
 }
-
-// ──────────────────────────── RecoverableStateLike 覆写 ────────────────────────────
 
 // GetState 导出状态快照（覆写 WorkflowStateCollection.GetState）。
 // workflowOnly 控制是否包含 global_state。

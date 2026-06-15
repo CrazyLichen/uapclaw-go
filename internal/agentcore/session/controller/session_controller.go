@@ -32,6 +32,12 @@ type SessionController struct {
 	MetaMap map[string]*ScopeSessionsMeta
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionController 创建单 Agent 会话管理器。
@@ -60,7 +66,6 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 	return sc
 }
 
-// ──────────────────────────── 持久化方法 ────────────────────────────
 
 // Flush 持久化所有变更到磁盘
 // 对齐 Python：整个 flush 过程持锁，避免释放锁期间数据不一致
@@ -264,7 +269,6 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 	return nil
 }
 
-// ──────────────────────────── 会话管理方法 ────────────────────────────
 
 // CreateIfNotExists 在指定作用域内获取或创建会话。
 // 若该 SessionScope 已有活跃会话则直接返回（is_new=false），
@@ -506,7 +510,6 @@ func (sc *SessionController) ListMetas() map[string]ScopeSessionsMeta {
 	return result
 }
 
-// ──────────────────────────── 清理方法 ────────────────────────────
 
 // CleanupScopeInactiveSessions 清理指定作用域下的非活跃会话
 func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionScope) ([]CleanupResult, error) {

@@ -37,23 +37,6 @@ type StateAccessor interface {
 	PreRun(ctx context.Context, inputs ...map[string]any) error
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// Permission 数据访问权限枚举。
-// 对应 Python: openjiuwen/core/session/session_controller/data_container.py (Permission)
-type Permission int
-
-const (
-	// PermissionRead 只读权限
-	PermissionRead Permission = iota + 1
-)
-
-// ContainerLoader 从序列化数据重建 DataContainer 的函数类型
-type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
-
-// ContainerOption DataContainer 创建选项
-type ContainerOption func(DataContainer)
-
 // SharingPolicy 下游会话共享策略，定义调用者可以访问被调用者数据的权限级别和字段范围。
 // 对应 Python: openjiuwen/core/session/session_controller/data_container.py (SharingPolicy)
 type SharingPolicy struct {
@@ -85,6 +68,23 @@ type DataContainerFactory struct {
 	mu      sync.RWMutex
 	entries map[string]factoryEntry
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Permission 数据访问权限枚举。
+// 对应 Python: openjiuwen/core/session/session_controller/data_container.py (Permission)
+type Permission int
+
+const (
+	// PermissionRead 只读权限
+	PermissionRead Permission = iota + 1
+)
+
+// ContainerLoader 从序列化数据重建 DataContainer 的函数类型
+type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
+
+// ContainerOption DataContainer 创建选项
+type ContainerOption func(DataContainer)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -150,8 +150,6 @@ func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataC
 	return container, nil
 }
 
-// ──────────────────────────── DataContainerFactory 方法 ────────────────────────────
-
 // Register 注册数据容器类型
 func (f *DataContainerFactory) Register(containerType string, loader ContainerLoader, constructor func(opts ...ContainerOption) DataContainer) {
 	f.mu.Lock()
@@ -198,8 +196,6 @@ func (f *DataContainerFactory) ListTypes() []string {
 	defer f.mu.RUnlock()
 	return f.listTypesLocked()
 }
-
-// ──────────────────────────── AgentSessionContainer 方法 ────────────────────────────
 
 // Get 获取数据，委托给 StateAccessor
 func (c *AgentSessionContainer) Get(key any) map[string]any {

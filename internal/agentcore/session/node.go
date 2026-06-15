@@ -31,6 +31,12 @@ type NodeSessionFacade struct {
 	description string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewNodeSessionFacade 创建工作流节点会话门面实例。
@@ -51,8 +57,6 @@ func NewNodeSessionFacade(inner *internal.NodeSession, streamMode bool) *NodeSes
 		description: desc,
 	}
 }
-
-// ──────────────────────────── 身份方法 ────────────────────────────
 
 // GetWorkflowID 返回工作流 ID
 // 对应 Python: Session.get_workflow_id()
@@ -90,8 +94,6 @@ func (f *NodeSessionFacade) GetSessionID() string {
 	return f.inner.SessionID()
 }
 
-// ──────────────────────────── 状态方法 ────────────────────────────
-
 // UpdateState 更新组件状态，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.update_state(data)
 func (f *NodeSessionFacade) UpdateState(data map[string]any) {
@@ -128,8 +130,6 @@ func (f *NodeSessionFacade) DumpState() map[string]any {
 	return f.inner.State().Dump()
 }
 
-// ──────────────────────────── 追踪方法（桩实现） ────────────────────────────
-
 // Trace 记录组件追踪数据。
 // ⤵️ 5.11 回填：TracerWorkflowUtils 实现后填充真实逻辑
 // 对应 Python: Session.trace(data)
@@ -152,8 +152,6 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 	return nil
 }
 
-// ──────────────────────────── 交互方法 ────────────────────────────
-
 // Interact 请求用户输入。
 //
 // 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
@@ -172,8 +170,6 @@ func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error
 	return f.interaction.WaitUserInputs(ctx, value)
 }
 
-// ──────────────────────────── 流写入方法（桩实现） ────────────────────────────
-
 // WriteStream 写入标准输出流。
 // ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
 // 对应 Python: Session.write_stream(data)
@@ -190,8 +186,6 @@ func (f *NodeSessionFacade) WriteCustomStream(ctx context.Context, data any) err
 	return nil
 }
 
-// ──────────────────────────── 环境/配置方法（桩实现） ────────────────────────────
-
 // GetEnv 获取环境变量值。
 // ⤵️ 5.12 回填：Config 返回真实类型后实现 get_env
 // 对应 Python: Session.get_env(key)
@@ -207,3 +201,5 @@ func (f *NodeSessionFacade) GetNodeConfig() any {
 	// ⤵️ 5.12 回填：return f.inner.NodeConfig()
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -71,15 +71,13 @@ type SessionState interface {
 	Dump() map[string]any
 }
 
-// ──────────────────────────── 向后兼容别名 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // 以下别名保持向后兼容，后续版本移除
 type ReadableState = ReadableStateLike
 type RecoverableState = RecoverableStateLike
 type State = StateLike
 type CommitState = CommitStateLike
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // Transformer 状态转换函数，接受只读状态视图返回任意值
 type Transformer func(readable ReadableStateLike) any
