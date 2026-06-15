@@ -4,11 +4,11 @@ package state
 
 // parentEntry 父容器追踪条目，用于列表 append 后回写。
 type parentEntry struct {
-	m    map[string]any // 父 map（如果父容器是 map）
-	mKey string         // 在父 map 中的键
-	l    []any          // 父 list（如果父容器是 list）
-	lIdx int            // 在父 list 中的索引
-	isMap bool          // 父容器是 map 还是 list
+	m     map[string]any // 父 map（如果父容器是 map）
+	mKey  string         // 在父 map 中的键
+	l     []any          // 父 list（如果父容器是 list）
+	lIdx  int            // 在父 list 中的索引
+	isMap bool           // 父容器是 map 还是 list
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

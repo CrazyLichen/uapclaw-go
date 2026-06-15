@@ -64,7 +64,6 @@ func NewChainSession(agentID string, sessionScope SessionScope, sessionID string
 	}
 }
 
-
 // Load 从磁盘加载会话数据和下游关系。
 // 1. 读取 state.data → 恢复 meta + data container
 // 2. 扫描 downstreams/*.link → 恢复下游关系
@@ -324,7 +323,6 @@ func (cs *ChainSession) Flush() error {
 	return nil
 }
 
-
 // AddDownstream 添加下游会话（被调用者），表示当前会话可以单向读取目标会话的数据
 func (cs *ChainSession) AddDownstream(targetAgent, targetSession string, policy SharingPolicy) {
 	cs.mu.Lock()
@@ -397,7 +395,6 @@ func (cs *ChainSession) RemoveAllDownstreams() {
 		Msg("清空所有下游关系")
 }
 
-
 // GetData 获取当前会话的完整数据
 func (cs *ChainSession) GetData() map[string]any {
 	cs.mu.Lock()
@@ -434,7 +431,6 @@ func (cs *ChainSession) CanSee(targetAgent, targetSession string) bool {
 	_, ok := cs.downstreamPolicies[[2]string{targetAgent, targetSession}]
 	return ok
 }
-
 
 // ToSessionMeta 转换为 SessionMeta 元数据对象
 func (cs *ChainSession) ToSessionMeta() SessionMeta {

@@ -19,11 +19,11 @@ import (
 // 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
 type CallbackFramework struct {
 	// mu 并发读写锁
-	mu               sync.RWMutex
+	mu sync.RWMutex
 	// llmCallbacks LLM 回调函数注册表
-	llmCallbacks     map[LLMCallEventType][]LLMCallbackFunc
+	llmCallbacks map[LLMCallEventType][]LLMCallbackFunc
 	// toolCallbacks 工具回调函数注册表
-	toolCallbacks    map[ToolCallEventType][]ToolCallbackFunc
+	toolCallbacks map[ToolCallEventType][]ToolCallbackFunc
 	// sessionCallbacks 会话回调函数注册表
 	sessionCallbacks map[SessionCallEventType][]SessionCallbackFunc
 }

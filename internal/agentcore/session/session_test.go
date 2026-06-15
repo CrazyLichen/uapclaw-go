@@ -38,14 +38,14 @@ type mockStub struct {
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() any              { return m.configVal }
+func (m *mockStub) Config() any               { return m.configVal }
 func (m *mockStub) State() state.SessionState { return m.stateVal }
-func (m *mockStub) Tracer() any              { return m.tracerVal }
-func (m *mockStub) StreamWriterManager() any { return m.streamWriterManagerVal }
-func (m *mockStub) SessionID() string        { return m.sessionIDVal }
-func (m *mockStub) Checkpointer() any        { return m.checkpointerVal }
-func (m *mockStub) ActorManager() any        { return m.actorManagerVal }
-func (m *mockStub) Close() error             { m.closeCalled = true; return m.closeErr }
+func (m *mockStub) Tracer() any               { return m.tracerVal }
+func (m *mockStub) StreamWriterManager() any  { return m.streamWriterManagerVal }
+func (m *mockStub) SessionID() string         { return m.sessionIDVal }
+func (m *mockStub) Checkpointer() any         { return m.checkpointerVal }
+func (m *mockStub) ActorManager() any         { return m.actorManagerVal }
+func (m *mockStub) Close() error              { m.closeCalled = true; return m.closeErr }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

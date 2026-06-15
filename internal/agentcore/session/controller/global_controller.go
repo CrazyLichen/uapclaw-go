@@ -60,14 +60,12 @@ func GetGlobalSessionController() *GlobalSessionController {
 	return globalController
 }
 
-
 // SetConfig 设置全局会话控制器配置
 func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.BasePath = config.BasePath
 }
-
 
 // LoadAgent 加载指定 Agent 的会话数据
 func (g *GlobalSessionController) LoadAgent(agentID string, loadActiveOnly bool) error {
@@ -111,7 +109,6 @@ func (g *GlobalSessionController) LoadAll(loadActiveOnly bool) error {
 	}
 	return nil
 }
-
 
 // FlushAgent 刷盘指定 Agent 的会话数据
 func (g *GlobalSessionController) FlushAgent(agentID string) error {
@@ -167,7 +164,6 @@ func (g *GlobalSessionController) FlushAll() error {
 	}
 	return nil
 }
-
 
 // GetAgent 获取指定 Agent 的会话控制器（不执行加载）
 func (g *GlobalSessionController) GetAgent(agentID string) *SessionController {
@@ -239,7 +235,6 @@ func (g *GlobalSessionController) RemoveAll() {
 			Msg("删除存储根目录失败")
 	}
 }
-
 
 // CleanupAgentInactiveSessions 清理指定 Agent 的非活跃会话
 func (g *GlobalSessionController) CleanupAgentInactiveSessions(agentID string) (map[string][]CleanupResult, error) {
@@ -389,7 +384,6 @@ func (g *GlobalSessionController) CleanupOrphanFiles(agentID string, dryRun bool
 
 	return result
 }
-
 
 // CreateDirectSession 便捷方法：创建私聊会话
 func CreateDirectSession(agentID, userID, sessionID string, opts ...ContainerOption) (bool, *ChainSession, error) {
@@ -574,7 +568,6 @@ func VisualizeCallChain(agentID, sessionID string, depth int) string {
 	buildTree(session, "", 1)
 	return strings.Join(lines, "\n")
 }
-
 
 // onAgentSessionCreated AGENT_SESSION_CREATED 回调：
 // 将 ChainSession 的 DataContainer.session 注入真实 Session 实例
