@@ -5,6 +5,7 @@
 > 修复时间：2026-06-15
 > Python 参考项目：`/home/opensource/agent-core/openjiuwen/` + `/home/opensource/jiuwenswarm-develop/jiuwenswarm/`
 > 严重问题状态：✅ 全部已修复
+> 一般问题状态：🟡 部分已修复（G-02/G-03/G-07/G-09/G-16/G-21/G-22 已通过 State 双层体系重构修复）
 
 ---
 
