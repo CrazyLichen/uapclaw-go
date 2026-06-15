@@ -7,11 +7,9 @@ import "github.com/uapclaw/uapclaw-go/internal/common/logger"
 // WorkflowCommitState 工作流可提交状态。
 //
 // 在 WorkflowStateCollection 基础上增加 commit/rollback/IO 操作和节点状态创建能力。
-// 实现 State 接口。
-//
-// 注意：由于 Go 接口方法签名冲突（CommitState.Commit(nodeID...string) 与 WorkflowCommitState.Commit() 无参），
-// WorkflowCommitState 不直接实现 CommitState 接口，而是提供 CommitCommitState/RollbackNode 方法。
-// 这与 Python 设计一致：Python 中 CommitState 继承 StateCollection 继承 State。
+// 实现 SessionState 接口。不实现 CommitStateLike 接口（与 Python 一致，
+// CommitState 继承 StateCollection 继承 State，不是 CommitStateLike 的子类），
+// GetUpdates/SetUpdates 返回聚合视图 map[string]any 而非 map[string][]map[string]any。
 //
 // 对应 Python: openjiuwen/core/session/state/workflow_state.py (CommitState)
 type WorkflowCommitState struct {
@@ -24,7 +22,7 @@ type WorkflowCommitState struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowCommitState 创建工作流可提交状态实例。
-func NewWorkflowCommitState(ioState, globalState, compState, workflowState CommitState, traceState map[string]any, parentID, nodeID string, workflowOnly bool) *WorkflowCommitState {
+func NewWorkflowCommitState(ioState, globalState, compState, workflowState CommitStateLike, traceState map[string]any, parentID, nodeID string, workflowOnly bool) *WorkflowCommitState {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_workflow_commit_state").
 		Str("parent_id", parentID).
@@ -37,10 +35,12 @@ func NewWorkflowCommitState(ioState, globalState, compState, workflowState Commi
 	}
 }
 
-// ──────────────────────────── WorkflowCommitState 方法 ────────────────────────────
+// ──────────────────────────── WorkflowCommitState 特有方法 ────────────────────────────
 
 // GetWorkflowState 从工作流状态获取值。
 func (s *WorkflowCommitState) GetWorkflowState(key StateKey) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.workflowState == nil || key.IsZero() {
 		return nil
 	}
@@ -49,22 +49,32 @@ func (s *WorkflowCommitState) GetWorkflowState(key StateKey) any {
 
 // UpdateAndCommitWorkflowState 立即更新并提交工作流状态。
 func (s *WorkflowCommitState) UpdateAndCommitWorkflowState(data map[string]any) {
-	s.workflowState.UpdateByID(DefaultWorkflowID, data)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.workflowState.UpdateByID(DefaultWorkflowID, data); err != nil {
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "update_and_commit_workflow_state").Str("node_id", DefaultWorkflowID).Msg("UpdateByID 失败")
+	}
 	s.workflowState.Commit()
 }
 
 // SetOutputs 向 io_state 写入当前节点的输出。
 // data 被包裹在 {nodeID: data} 中。
 func (s *WorkflowCommitState) SetOutputs(data map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.ioState == nil || data == nil {
 		return
 	}
-	s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: data})
+	if err := s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: data}); err != nil {
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "set_outputs").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+	}
 }
 
 // GetInputs 从 io_state 查询父节点的输出（即当前节点输入）。
 // schema 为零值时返回当前节点全部 IO 数据；否则按 parentID 前缀查找。
 func (s *WorkflowCommitState) GetInputs(schema StateKey) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.ioState == nil {
 		return nil
 	}
@@ -77,6 +87,8 @@ func (s *WorkflowCommitState) GetInputs(schema StateKey) any {
 // GetOutputs 从 io_state 查询指定节点的输出。
 // nodeID 为空时使用当前 nodeID。
 func (s *WorkflowCommitState) GetOutputs(nodeID ...string) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.ioState == nil {
 		return nil
 	}
@@ -89,6 +101,8 @@ func (s *WorkflowCommitState) GetOutputs(nodeID ...string) any {
 
 // GetInputsByTransformer 通过转换函数获取输入。
 func (s *WorkflowCommitState) GetInputsByTransformer(transformer Transformer) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.ioState == nil {
 		return map[string]any{}
 	}
@@ -98,37 +112,59 @@ func (s *WorkflowCommitState) GetInputsByTransformer(transformer Transformer) an
 // CommitUserInputs 同时写入 io_state 和 global_state 并立即提交。
 // 默认节点的 io_state data 不包裹在 {nodeID: data} 中。
 func (s *WorkflowCommitState) CommitUserInputs(inputs map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.ioState == nil || inputs == nil {
 		return
 	}
 	if s.nodeID != DefaultNodeID {
-		s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: inputs})
+		if err := s.ioState.UpdateByID(s.nodeID, map[string]any{s.nodeID: inputs}); err != nil {
+			logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		}
 	} else {
-		s.ioState.UpdateByID(s.nodeID, inputs)
+		if err := s.ioState.UpdateByID(s.nodeID, inputs); err != nil {
+			logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "commit_user_inputs_io").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+		}
 	}
-	s.globalState.UpdateByID(s.nodeID, inputs)
+	if err := s.globalState.UpdateByID(s.nodeID, inputs); err != nil {
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "commit_user_inputs_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+	}
 	s.Commit()
 }
 
-// Commit 提交全部四个子状态。
-func (s *WorkflowCommitState) Commit() {
-	s.ioState.Commit()
-	s.compState.Commit()
-	s.globalState.Commit()
-	s.workflowState.Commit()
+// Commit 提交全部（或指定节点）的四个子状态暂存更新。
+// 不传 nodeID 则提交全部；传参则提交指定节点。
+func (s *WorkflowCommitState) Commit(nodeID ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ioState.Commit(nodeID...)
+	s.compState.Commit(nodeID...)
+	s.globalState.Commit(nodeID...)
+	s.workflowState.Commit(nodeID...)
 }
 
-// Rollback 回滚全部四个子状态的当前节点更新。
-func (s *WorkflowCommitState) Rollback() {
-	s.compState.Rollback(s.nodeID)
-	s.ioState.Rollback(s.nodeID)
-	s.globalState.Rollback(s.nodeID)
-	s.workflowState.Rollback(s.nodeID)
+// Rollback 回滚指定节点的四个子状态暂存更新。
+func (s *WorkflowCommitState) Rollback(nodeID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compState.Rollback(nodeID)
+	s.ioState.Rollback(nodeID)
+	s.globalState.Rollback(nodeID)
+	s.workflowState.Rollback(nodeID)
+}
+
+// UpdateByID 委托给 compState。
+func (s *WorkflowCommitState) UpdateByID(nodeID string, data map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.compState.UpdateByID(nodeID, data)
 }
 
 // CreateNodeState 创建节点专属状态视图。
 // 共享底层四个子状态对象，切换 nodeID/parentID。
 func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) *WorkflowCommitState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "create_node_state").
 		Str("node_id", nodeID).
@@ -146,34 +182,12 @@ func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) *Workflow
 	)
 }
 
-// ──────────────────────────── CommitState 兼容方法 ────────────────────────────
-
-// UpdateByID 委托给 compState。
-func (s *WorkflowCommitState) UpdateByID(nodeID string, data map[string]any) {
-	s.compState.UpdateByID(nodeID, data)
-}
-
-// CommitCommitState 提交指定节点的暂存更新。
-// 注意：此方法与 WorkflowCommitState.Commit() 不同，后者提交全部四个子状态。
-func (s *WorkflowCommitState) CommitCommitState(nodeID ...string) {
-	s.ioState.Commit(nodeID...)
-	s.compState.Commit(nodeID...)
-	s.globalState.Commit(nodeID...)
-	s.workflowState.Commit(nodeID...)
-}
-
-// RollbackNode 回滚指定节点的暂存更新。
-func (s *WorkflowCommitState) RollbackNode(nodeID string) {
-	s.compState.Rollback(nodeID)
-	s.ioState.Rollback(nodeID)
-	s.globalState.Rollback(nodeID)
-	s.workflowState.Rollback(nodeID)
-}
-
 // GetUpdates 获取所有暂存更新。
 // workflowOnly 控制是否包含 global_state_updates。
-// 返回格式：{key: {node_id: [update_dict_1, ...], ...}, ...}
+// 返回格式：{key: updates_dict, ...}
 func (s *WorkflowCommitState) GetUpdates() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	result := map[string]any{
 		IOStateUpdatesKey:       deepCopyUpdates(s.ioState.GetUpdates()),
 		CompStateUpdatesKey:     deepCopyUpdates(s.compState.GetUpdates()),
@@ -189,6 +203,8 @@ func (s *WorkflowCommitState) GetUpdates() map[string]any {
 
 // SetUpdates 设置暂存更新。
 func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if updates == nil {
 		return
 	}
@@ -216,14 +232,18 @@ func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 
 // WorkflowOnly 返回是否仅工作流模式。
 func (s *WorkflowCommitState) WorkflowOnly() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.workflowOnly
 }
 
-// ──────────────────────────── RecoverableState 覆写 ────────────────────────────
+// ──────────────────────────── RecoverableStateLike 覆写 ────────────────────────────
 
 // GetState 导出状态快照（覆写 WorkflowStateCollection.GetState）。
 // workflowOnly 控制是否包含 global_state。
 func (s *WorkflowCommitState) GetState() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	result := map[string]any{
 		IOStateKey:       s.ioState.GetState(),
 		CompStateKey:     s.compState.GetState(),
@@ -239,6 +259,8 @@ func (s *WorkflowCommitState) GetState() map[string]any {
 
 // SetState 从快照恢复状态（覆写 WorkflowStateCollection.SetState）。
 func (s *WorkflowCommitState) SetState(st map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if st == nil {
 		return
 	}
