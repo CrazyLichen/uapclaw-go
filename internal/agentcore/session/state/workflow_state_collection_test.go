@@ -33,7 +33,9 @@ func TestGetGlobal_三级回退(t *testing.T) {
 	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "parent1", "node1")
 
 	// 1. globalState 有值
-	globalState.UpdateByID("default", map[string]any{"key1": "from_global"})
+	if err := globalState.UpdateByID("default", map[string]any{"key1": "from_global"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	globalState.Commit("default")
 	result := sc.GetGlobal(StringKey("key1"))
 	if result != "from_global" {
@@ -41,7 +43,9 @@ func TestGetGlobal_三级回退(t *testing.T) {
 	}
 
 	// 2. globalState 无值，回退到 ioState[parentID]
-	ioState.UpdateByID("default", map[string]any{"parent1": map[string]any{"key2": "from_io_parent"}})
+	if err := ioState.UpdateByID("default", map[string]any{"parent1": map[string]any{"key2": "from_io_parent"}}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	ioState.Commit("default")
 	sc2 := NewWorkflowStateCollection(ioState, NewInMemoryCommitState(), compState, workflowState, nil, "parent1", "node1")
 	result = sc2.GetGlobal(StringKey("key2"))
@@ -50,7 +54,9 @@ func TestGetGlobal_三级回退(t *testing.T) {
 	}
 
 	// 3. globalState 和 ioState[parentID] 都无值，回退到 ioState[nodeID]
-	ioState.UpdateByID("default2", map[string]any{"node1": map[string]any{"key3": "from_io_node"}})
+	if err := ioState.UpdateByID("default2", map[string]any{"node1": map[string]any{"key3": "from_io_node"}}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	ioState.Commit("default2")
 	sc3 := NewWorkflowStateCollection(ioState, NewInMemoryCommitState(), compState, workflowState, nil, "parent1", "node1")
 	result = sc3.GetGlobal(StringKey("key3"))
@@ -113,8 +119,12 @@ func TestCommitCmp(t *testing.T) {
 	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "", "node1")
 
 	// 暂存更新
-	compState.UpdateByID("node1", map[string]any{"comp_key": "comp_val"})
-	ioState.UpdateByID("node1", map[string]any{"io_key": "io_val"})
+	if err := compState.UpdateByID("node1", map[string]any{"comp_key": "comp_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := ioState.UpdateByID("node1", map[string]any{"io_key": "io_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 提交
 	sc.CommitCmp()
@@ -142,7 +152,9 @@ func TestGet_组件状态(t *testing.T) {
 	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "", "node1")
 
 	// key 为 nil 时返回 compState(nodeID)
-	compState.UpdateByID("node1", map[string]any{"node1": map[string]any{"data": "value"}})
+	if err := compState.UpdateByID("node1", map[string]any{"node1": map[string]any{"data": "value"}}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	compState.Commit("node1")
 	result := sc.Get(StateKey{})
 	if result == nil {
@@ -220,7 +232,9 @@ func TestGetState_SetState(t *testing.T) {
 	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "", "node1")
 
 	// 写入数据
-	compState.UpdateByID("node1", map[string]any{"key1": "value1"})
+	if err := compState.UpdateByID("node1", map[string]any{"key1": "value1"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	compState.Commit("node1")
 
 	// 导出快照

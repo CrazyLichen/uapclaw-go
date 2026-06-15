@@ -92,53 +92,40 @@ func (f *NodeSessionFacade) GetSessionID() string {
 
 // ──────────────────────────── 状态方法 ────────────────────────────
 
-// UpdateState 更新组件状态，委托到 inner.State() 的 WorkflowCommitState。
+// UpdateState 更新组件状态，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.update_state(data)
 func (f *NodeSessionFacade) UpdateState(data map[string]any) {
-	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		if err := cs.Update(data); err != nil {
-			logger.Error(logger.ComponentAgentCore).
-				Err(err).
-				Str("action", "update_state").
-				Str("node_id", f.GetComponentID()).
-				Msg("更新组件状态失败")
-		}
+	if err := f.inner.State().Update(data); err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Err(err).
+			Str("action", "update_state").
+			Str("node_id", f.GetComponentID()).
+			Msg("更新组件状态失败")
 	}
 }
 
-// GetState 获取组件状态值，委托到 inner.State() 的 WorkflowCommitState。
+// GetState 获取组件状态值，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.get_state(key)
 func (f *NodeSessionFacade) GetState(key state.StateKey) (any, error) {
-	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		return cs.Get(key), nil
-	}
-	return nil, nil
+	return f.inner.State().Get(key), nil
 }
 
-// UpdateGlobalState 更新全局状态，委托到 inner.State() 的 WorkflowCommitState。
+// UpdateGlobalState 更新全局状态，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.update_global_state(data)
 func (f *NodeSessionFacade) UpdateGlobalState(data map[string]any) {
-	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		cs.UpdateGlobal(data)
-	}
+	f.inner.State().UpdateGlobal(data)
 }
 
-// GetGlobalState 获取全局状态值，委托到 inner.State() 的 WorkflowCommitState。
+// GetGlobalState 获取全局状态值，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.get_global_state(key)
 func (f *NodeSessionFacade) GetGlobalState(key state.StateKey) (any, error) {
-	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		return cs.GetGlobal(key), nil
-	}
-	return nil, nil
+	return f.inner.State().GetGlobal(key), nil
 }
 
-// DumpState 导出完整状态快照，委托到 inner.State() 的 WorkflowCommitState。
+// DumpState 导出完整状态快照，委托到 inner.State() 的 SessionState。
 // 对应 Python: Session.dump_state()
 func (f *NodeSessionFacade) DumpState() map[string]any {
-	if cs, ok := f.inner.State().(*state.WorkflowCommitState); ok {
-		return cs.Dump()
-	}
-	return nil
+	return f.inner.State().Dump()
 }
 
 // ──────────────────────────── 追踪方法（桩实现） ────────────────────────────

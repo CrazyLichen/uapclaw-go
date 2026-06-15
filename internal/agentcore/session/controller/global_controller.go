@@ -255,7 +255,11 @@ func (g *GlobalSessionController) CleanupAgentInactiveSessions(agentID string) (
 	cleanedSessions := make(map[string][]CleanupResult)
 	scopeMetas := controller.ListMetas()
 
-	for sessionScope := range scopeMetas {
+	for scopeKeyStr := range scopeMetas {
+		sessionScope, err := ParseSessionScope(scopeKeyStr)
+		if err != nil {
+			continue
+		}
 		scopeCleaned, err := controller.CleanupScopeInactiveSessions(sessionScope)
 		if err != nil {
 			continue
@@ -276,7 +280,7 @@ func (g *GlobalSessionController) CleanupScopeInactiveSessions(sessionScope Sess
 	cleanedSessions := make(map[string][]SessionMeta)
 	for agentID, controller := range g.Controllers {
 		scopeMetas := controller.ListMetas()
-		if _, ok := scopeMetas[sessionScope]; ok {
+		if _, ok := scopeMetas[sessionScope.String()]; ok {
 			results, err := controller.CleanupScopeInactiveSessions(sessionScope)
 			if err != nil {
 				continue

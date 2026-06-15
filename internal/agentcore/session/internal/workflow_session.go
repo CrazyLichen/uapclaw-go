@@ -13,7 +13,7 @@ import (
 // WorkflowSession、NodeSession、SubWorkflowSession 均实现此接口。
 type baseSession interface {
 	Config() any
-	State() state.State
+	State() state.SessionState
 	Tracer() any
 	StreamWriterManager() any
 	SessionID() string
@@ -42,7 +42,7 @@ type WorkflowSession struct {
 	// ⤵️ 5.11 回填：any → Tracer
 	tracer any
 	// st 状态对象（WorkflowCommitState）
-	st state.State
+	st state.SessionState
 	// streamWriterManager 流写入管理器
 	// ⤵️ 5.10 回填：any → StreamWriterManager
 	streamWriterManager any
@@ -71,7 +71,7 @@ type NodeSession struct {
 	// parentID 父节点 executable_id
 	parentID string
 	// nodeState 节点专属状态视图
-	nodeState state.State
+	nodeState state.SessionState
 	// workflowID 从父 session 继承的工作流 ID
 	workflowID string
 	// workflowNestingDepth 从父 session 继承的工作流嵌套深度
@@ -163,7 +163,7 @@ func WithWorkflowSessionID(id string) WorkflowSessionOption {
 }
 
 // WithWorkflowState 设置状态的选项
-func WithWorkflowState(st state.State) WorkflowSessionOption {
+func WithWorkflowState(st state.SessionState) WorkflowSessionOption {
 	return func(s *WorkflowSession) {
 		s.st = st
 	}
@@ -191,7 +191,7 @@ func NewNodeSession(parent baseSession, nodeID, nodeType string, skipTrace bool)
 	executableID := createExecutableID(nodeID, parentID)
 
 	// 从 parent 的 state 创建节点专属状态视图
-	var nodeState state.State
+	var nodeState state.SessionState
 	if cs, ok := parent.State().(*state.WorkflowCommitState); ok {
 		nodeState = cs.CreateNodeState(executableID, parentID)
 	} else {
@@ -230,7 +230,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 	executableID := createExecutableID(nodeSession.NodeID(), parentID)
 
 	// 从 parent 的 state 创建节点专属状态视图
-	var nodeState state.State
+	var nodeState state.SessionState
 	if cs, ok := parentSession.State().(*state.WorkflowCommitState); ok {
 		nodeState = cs.CreateNodeState(executableID, parentID)
 	} else {
@@ -265,7 +265,7 @@ func (s *WorkflowSession) Config() any {
 }
 
 // State 获取会话状态
-func (s *WorkflowSession) State() state.State {
+func (s *WorkflowSession) State() state.SessionState {
 	return s.st
 }
 
@@ -411,7 +411,7 @@ func (n *NodeSession) Config() any {
 }
 
 // State 返回节点专属状态视图
-func (n *NodeSession) State() state.State {
+func (n *NodeSession) State() state.SessionState {
 	return n.nodeState
 }
 

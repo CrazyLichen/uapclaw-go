@@ -20,7 +20,7 @@ type AgentSession struct {
 	// ⤵️ 5.12 回填：any → SessionConfig
 	config any
 	// state 会话状态（AgentStateCollection）
-	state state.State
+	state state.SessionState
 	// tracer 追踪器
 	// ⤵️ 5.11 回填：any → Tracer
 	tracer any
@@ -72,7 +72,7 @@ func WithConfig(config any) AgentSessionOption {
 }
 
 // WithState 设置会话状态的选项
-func WithState(st state.State) AgentSessionOption {
+func WithState(st state.SessionState) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.state = st
 	}
@@ -119,7 +119,7 @@ func (s *AgentSession) Config() any {
 }
 
 // State 获取会话状态
-func (s *AgentSession) State() state.State {
+func (s *AgentSession) State() state.SessionState {
 	return s.state
 }
 

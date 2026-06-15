@@ -397,7 +397,7 @@ func TestGlobalSessionController_CleanupAgentInactiveSessions(t *testing.T) {
 	require.NoError(t, err)
 
 	// 手动添加一个非活跃会话
-	scopeMeta := controller.MetaMap[scope]
+	scopeMeta := controller.MetaMap[scope.String()]
 	meta2 := CreateNewSessionMeta("s2", "agent")
 	meta2.IsActive = false
 	scopeMeta.AddSession(meta2)
@@ -423,7 +423,7 @@ func TestGlobalSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	require.NoError(t, err)
 
 	// 手动添加非活跃会话
-	scopeMeta := controller.MetaMap[scope]
+	scopeMeta := controller.MetaMap[scope.String()]
 	meta2 := CreateNewSessionMeta("s2", "agent")
 	meta2.IsActive = false
 	scopeMeta.AddSession(meta2)

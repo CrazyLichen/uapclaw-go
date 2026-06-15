@@ -20,6 +20,8 @@ import (
 //
 // 对应 Python: openjiuwen/core/session/agent.py (Session)
 type Session struct {
+	// sessionID 会话唯一标识，Session 自身持有，不依赖 inner
+	sessionID string
 	// inner 内部 AgentSession 实例
 	inner *internal.AgentSession
 	// card Agent 身份元数据
@@ -48,31 +50,33 @@ type SessionOption func(*Session)
 //
 // 若未指定 sessionID，自动生成 UUID。
 // 可通过选项函数注入各组件和配置。
+// 选项应用完后统一创建一次内部 AgentSession，避免重复创建。
 //
 // 对应 Python: openjiuwen/core/session/agent.py create_agent_session()
 func NewSession(opts ...SessionOption) *Session {
-	sessionID := uuid.New().String()
-
-	logger.Info(logger.ComponentAgentCore).
-		Str("action", "new_session").
-		Str("session_id", sessionID).
-		Msg("创建公开层 Session")
-
 	s := &Session{
-		inner:                internal.NewAgentSession(sessionID),
+		sessionID:            uuid.New().String(),
 		closeStreamOnPostRun: true,
 		sourceMetadata:       make(map[string]any),
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
+	// 统一用最终确定的 sessionID 创建一次 AgentSession
+	s.inner = internal.NewAgentSession(s.sessionID)
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("action", "new_session").
+		Str("session_id", s.sessionID).
+		Msg("创建公开层 Session")
+
 	return s
 }
 
 // WithSessionID 设置会话 ID 的选项
 func WithSessionID(id string) SessionOption {
 	return func(s *Session) {
-		s.inner = internal.NewAgentSession(id)
+		s.sessionID = id
 	}
 }
 
@@ -101,7 +105,7 @@ func WithSourceMetadata(meta map[string]any) SessionOption {
 
 // GetSessionID 返回会话唯一标识
 func (s *Session) GetSessionID() string {
-	return s.inner.SessionID()
+	return s.sessionID
 }
 
 // GetEnv 获取环境变量值
@@ -136,27 +140,19 @@ func (s *Session) GetAgentDescription() string {
 
 // ──────────────────────────── 状态读写方法 ────────────────────────────
 
-// UpdateState 更新全局状态，委托到 inner.State() 的 AgentStateCollection
+// UpdateState 更新全局状态，委托到 inner.State() 的 SessionState
 func (s *Session) UpdateState(data map[string]any) {
-	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
-		coll.UpdateGlobal(data)
-	}
+	s.inner.State().UpdateGlobal(data)
 }
 
-// GetState 获取全局状态值，委托到 inner.State() 的 AgentStateCollection
+// GetState 获取全局状态值，委托到 inner.State() 的 SessionState
 func (s *Session) GetState(key state.StateKey) (any, error) {
-	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
-		return coll.GetGlobal(key), nil
-	}
-	return nil, nil
+	return s.inner.State().GetGlobal(key), nil
 }
 
-// DumpState 导出完整状态快照，委托到 inner.State() 的 AgentStateCollection
+// DumpState 导出完整状态快照，委托到 inner.State() 的 SessionState
 func (s *Session) DumpState() map[string]any {
-	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
-		return coll.Dump()
-	}
-	return nil
+	return s.inner.State().Dump()
 }
 
 // ──────────────────────────── 流操作方法（桩实现） ────────────────────────────

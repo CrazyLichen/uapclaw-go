@@ -42,8 +42,8 @@ func TestInMemoryState_Get_mapSchema(t *testing.T) {
 		"user": map[string]any{"name": "alice", "age": 30},
 	}))
 	result := s.Get(SchemaKey(map[string]any{
-		"name": "user.name",
-		"age":  "user.age",
+		"name": "${user.name}",
+		"age":  "${user.age}",
 	}))
 	m := result.(map[string]any)
 	if m["name"] != "alice" {
@@ -57,7 +57,7 @@ func TestInMemoryState_Get_listSchema(t *testing.T) {
 	require.NoError(t, s.Update(map[string]any{
 		"user": map[string]any{"name": "alice", "age": 30},
 	}))
-	result := s.Get(ListKey([]any{"user.name", "user.age"}))
+	result := s.Get(ListKey([]any{"${user.name}", "${user.age}"}))
 	l := result.([]any)
 	if l[0] != "alice" {
 		t.Errorf("result[0] = %v, 期望 alice", l[0])
@@ -210,8 +210,8 @@ func TestInMemoryState_完整读写流程(t *testing.T) {
 
 	// 批量 schema 读取
 	result := s.Get(SchemaKey(map[string]any{
-		"userName": "user.name",
-		"userAge":  "user.age",
+		"userName": "${user.name}",
+		"userAge":  "${user.age}",
 	}))
 	m := result.(map[string]any)
 	if m["userName"] != "alice" {

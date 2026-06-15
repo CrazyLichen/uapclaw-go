@@ -10,13 +10,13 @@ import (
 
 // fakeBaseSession 用于测试的最小 baseSession 实现
 type fakeBaseSession struct {
-	stateValue  state.State
+	stateValue  state.SessionState
 	swMgrValue  any
 	cpValue     any
 	execIDValue string
 }
 
-func (f *fakeBaseSession) State() state.State       { return f.stateValue }
+func (f *fakeBaseSession) State() state.SessionState       { return f.stateValue }
 func (f *fakeBaseSession) StreamWriterManager() any { return f.swMgrValue }
 func (f *fakeBaseSession) Checkpointer() any        { return f.cpValue }
 func (f *fakeBaseSession) ExecutableID() string     { return f.execIDValue }
@@ -183,12 +183,12 @@ func TestCommitCMP_非WorkflowCommitState(t *testing.T) {
 
 // fakeSessionWithoutExecID 不实现 ExecutableIDProvider 的 session
 type fakeSessionWithoutExecID struct {
-	stateValue state.State
+	stateValue state.SessionState
 	swMgrValue any
 	cpValue    any
 }
 
-func (f *fakeSessionWithoutExecID) State() state.State       { return f.stateValue }
+func (f *fakeSessionWithoutExecID) State() state.SessionState       { return f.stateValue }
 func (f *fakeSessionWithoutExecID) StreamWriterManager() any { return f.swMgrValue }
 func (f *fakeSessionWithoutExecID) Checkpointer() any        { return f.cpValue }
 

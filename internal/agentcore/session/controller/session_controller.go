@@ -28,8 +28,8 @@ type SessionController struct {
 	dataContainerType string
 	// SessionCache 会话对象缓存：sessionID → ChainSession
 	SessionCache map[string]*ChainSession
-	// MetaMap 元数据映射：SessionScope → ScopeSessionsMeta
-	MetaMap map[SessionScope]*ScopeSessionsMeta
+	// MetaMap 元数据映射：SessionScope.String() → ScopeSessionsMeta
+	MetaMap map[string]*ScopeSessionsMeta
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -47,7 +47,7 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 		BasePath:          SessionPaths{}.SessionsDir(basePath, agentID),
 		dataContainerType: dct,
 		SessionCache:      make(map[string]*ChainSession),
-		MetaMap:           make(map[SessionScope]*ScopeSessionsMeta),
+		MetaMap:           make(map[string]*ScopeSessionsMeta),
 	}
 	if err := os.MkdirAll(sc.BasePath, 0o755); err != nil {
 		logger.Warn(logger.ComponentAgentCore).
@@ -153,7 +153,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 	}
 
 	// 清空当前元数据
-	sc.MetaMap = make(map[SessionScope]*ScopeSessionsMeta)
+	sc.MetaMap = make(map[string]*ScopeSessionsMeta)
 
 	for scopeKeyStr, scopeMetaData := range metaData {
 		scopeKey, err := ParseSessionScopeKey(scopeKeyStr)
@@ -178,7 +178,7 @@ func (sc *SessionController) Load(loadActiveOnly bool) error {
 			continue
 		}
 
-		sc.MetaMap[scopeKey.SessionScope] = &scopeMeta
+		sc.MetaMap[scopeKey.SessionScope.String()] = &scopeMeta
 
 		// 加载会话数据
 		if loadActiveOnly {
@@ -236,7 +236,7 @@ func (sc *SessionController) LoadScope(sessionScope SessionScope, loadActiveOnly
 			continue
 		}
 
-		sc.MetaMap[scopeKey.SessionScope] = &scopeMeta
+		sc.MetaMap[scopeKey.SessionScope.String()] = &scopeMeta
 
 		if loadActiveOnly {
 			if scopeMeta.ActiveSession != "" {
@@ -273,13 +273,13 @@ func (sc *SessionController) CreateIfNotExists(sessionScope SessionScope, sessio
 	}
 
 	// 获取或创建 SessionScope 元数据
-	if _, ok := sc.MetaMap[sessionScope]; !ok {
+	if _, ok := sc.MetaMap[sessionScope.String()]; !ok {
 		scopeKey := SessionScopeKey{AgentID: sc.AgentID, SessionScope: sessionScope}
-		sc.MetaMap[sessionScope] = &ScopeSessionsMeta{
+		sc.MetaMap[sessionScope.String()] = &ScopeSessionsMeta{
 			SessionScopeKey: scopeKey.String(),
 		}
 	}
-	scopeMeta := sc.MetaMap[sessionScope]
+	scopeMeta := sc.MetaMap[sessionScope.String()]
 
 	// 检查是否已有活跃会话
 	activeSession := scopeMeta.GetActiveSession()
@@ -353,7 +353,7 @@ func (sc *SessionController) GetScopeActiveSession(sessionScope SessionScope) *C
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	scopeMeta, ok := sc.MetaMap[sessionScope]
+	scopeMeta, ok := sc.MetaMap[sessionScope.String()]
 	if !ok || scopeMeta.ActiveSession == "" {
 		return nil
 	}
@@ -371,7 +371,7 @@ func (sc *SessionController) GetScopeSessions(sessionScope SessionScope) []*Chai
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	scopeMeta, ok := sc.MetaMap[sessionScope]
+	scopeMeta, ok := sc.MetaMap[sessionScope.String()]
 	if !ok {
 		return nil
 	}
@@ -404,10 +404,14 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 
 	if session == nil {
 		// 尝试从元数据查找
-		for scope, scopeMeta := range sc.MetaMap {
+		for scopeKey, scopeMeta := range sc.MetaMap {
 			if sm := scopeMeta.GetSession(sessionID); sm != nil {
-				targetScope = scope
-				sc.loadSession(scope, sessionID)
+				parsedScope, err := ParseSessionScope(scopeKey)
+				if err != nil {
+					continue
+				}
+				targetScope = parsedScope
+				sc.loadSession(parsedScope, sessionID)
 				session = sc.SessionCache[sessionID]
 				break
 			}
@@ -419,7 +423,7 @@ func (sc *SessionController) ActivateSession(sessionID string) error {
 	}
 
 	// 激活会话
-	if scopeMeta, ok := sc.MetaMap[targetScope]; ok {
+	if scopeMeta, ok := sc.MetaMap[targetScope.String()]; ok {
 		scopeMeta.ActivateSession(sessionID)
 		session.SetIsActive(true)
 		if err := session.Flush(); err != nil {
@@ -455,7 +459,7 @@ func (sc *SessionController) GetScopeMeta(sessionScope SessionScope) ScopeSessio
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	if scopeMeta, ok := sc.MetaMap[sessionScope]; ok {
+	if scopeMeta, ok := sc.MetaMap[sessionScope.String()]; ok {
 		return *scopeMeta
 	}
 	scopeKey := SessionScopeKey{AgentID: sc.AgentID, SessionScope: sessionScope}
@@ -465,11 +469,11 @@ func (sc *SessionController) GetScopeMeta(sessionScope SessionScope) ScopeSessio
 }
 
 // ListMetas 获取所有已知作用域的元数据映射副本
-func (sc *SessionController) ListMetas() map[SessionScope]ScopeSessionsMeta {
+func (sc *SessionController) ListMetas() map[string]ScopeSessionsMeta {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	result := make(map[SessionScope]ScopeSessionsMeta, len(sc.MetaMap))
+	result := make(map[string]ScopeSessionsMeta, len(sc.MetaMap))
 	for scope, meta := range sc.MetaMap {
 		result[scope] = *meta
 	}
@@ -483,7 +487,7 @@ func (sc *SessionController) CleanupScopeInactiveSessions(sessionScope SessionSc
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	scopeMeta, ok := sc.MetaMap[sessionScope]
+	scopeMeta, ok := sc.MetaMap[sessionScope.String()]
 	if !ok {
 		return nil, fmt.Errorf("会话作用域 %s 未找到", sessionScope.String())
 	}
@@ -549,13 +553,17 @@ func (sc *SessionController) RemoveSession(sessionID string, sessionScope *Sessi
 	if sessionScope != nil {
 		scopesToSearch = []SessionScope{*sessionScope}
 	} else {
-		for scope := range sc.MetaMap {
-			scopesToSearch = append(scopesToSearch, scope)
+		for scopeKey := range sc.MetaMap {
+			parsedScope, err := ParseSessionScope(scopeKey)
+			if err != nil {
+				continue
+			}
+			scopesToSearch = append(scopesToSearch, parsedScope)
 		}
 	}
 
 	for _, scope := range scopesToSearch {
-		scopeMeta, ok := sc.MetaMap[scope]
+		scopeMeta, ok := sc.MetaMap[scope.String()]
 		if !ok {
 			continue
 		}
@@ -603,7 +611,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	scopeMeta, ok := sc.MetaMap[sessionScope]
+	scopeMeta, ok := sc.MetaMap[sessionScope.String()]
 	if !ok {
 		return nil
 	}
@@ -626,7 +634,7 @@ func (sc *SessionController) RemoveScopeSessions(sessionScope SessionScope) []Se
 	scopeMeta.Sessions = nil
 	scopeMeta.ActiveSession = ""
 	if len(scopeMeta.Sessions) == 0 {
-		delete(sc.MetaMap, sessionScope)
+		delete(sc.MetaMap, sessionScope.String())
 	}
 
 	if err := sc.writeMetaFile(); err != nil {
@@ -653,7 +661,7 @@ func (sc *SessionController) RemoveAll() {
 	defer sc.mu.Unlock()
 
 	sc.SessionCache = make(map[string]*ChainSession)
-	sc.MetaMap = make(map[SessionScope]*ScopeSessionsMeta)
+	sc.MetaMap = make(map[string]*ScopeSessionsMeta)
 	if err := os.RemoveAll(sc.BasePath); err != nil {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("action", "remove_all").
@@ -679,7 +687,7 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 
 	// 确定数据容器类型
 	dct := sc.dataContainerType
-	if scopeMeta, ok := sc.MetaMap[sessionScope]; ok {
+	if scopeMeta, ok := sc.MetaMap[sessionScope.String()]; ok {
 		if sm := scopeMeta.GetSession(sessionID); sm != nil && sm.DataContainerType != "" {
 			dct = sm.DataContainerType
 		}
@@ -719,9 +727,9 @@ func (sc *SessionController) loadSession(sessionScope SessionScope, sessionID st
 // writeMetaFile 写入元数据文件
 func (sc *SessionController) writeMetaFile() error {
 	metaData := make(map[string]any)
-	for sessionScope, scopeMeta := range sc.MetaMap {
-		scopeKey := SessionScopeKey{AgentID: sc.AgentID, SessionScope: sessionScope}
-		metaData[scopeKey.String()] = scopeMeta
+	for _, scopeMeta := range sc.MetaMap {
+		// 使用 ScopeSessionsMeta 中存储的 SessionScopeKey 作为 JSON 的 key
+		metaData[scopeMeta.SessionScopeKey] = scopeMeta
 	}
 
 	metaFile := SessionPaths{}.MetaFile(sc.rootPath, sc.AgentID)

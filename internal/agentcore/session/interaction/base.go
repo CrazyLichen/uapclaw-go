@@ -14,7 +14,7 @@ import (
 // 注意：Python 的 BaseSession 也没有 executable_id()，executable_id 只在 NodeSession 上。
 // WorkflowInteraction/AgentInteraction 所需的 nodeID 通过类型断言 ExecutableIDProvider 获取。
 type baseSession interface {
-	State() state.State
+	State() state.SessionState
 	StreamWriterManager() any
 	Checkpointer() any
 }
@@ -127,7 +127,7 @@ func PanicAgentInterrupt(msg string) {
 // initInteractiveInputs 从 session state 读取已有的交互输入，合并到输入队列。
 // 对应 Python: BaseInteraction._init_interactive_inputs()
 // Python 中 session.state().get(INTERACTIVE_INPUT) 查询的是全局状态，
-// Go 侧对应 WorkflowCommitState.GetGlobal()。
+// Go 侧对应 SessionState.GetGlobal()。
 func (b *BaseInteraction) initInteractiveInputs() {
 	st := b.session.State()
 	if st == nil {
@@ -135,26 +135,12 @@ func (b *BaseInteraction) initInteractiveInputs() {
 	}
 
 	// 从全局状态读取交互输入
-	var existing any
-	if cs, ok := st.(*state.WorkflowCommitState); ok {
-		existing = cs.GetGlobal(state.StringKey(InteractiveInputKey))
-	} else {
-		existing = st.Get(state.StringKey(InteractiveInputKey))
-	}
+	existing := st.GetGlobal(state.StringKey(InteractiveInputKey))
 
 	if existing == nil {
 		// 无已有输入，仅更新 session state
 		if len(b.interactiveInputs) > 0 {
-			if cs, ok := st.(*state.WorkflowCommitState); ok {
-				cs.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
-			} else {
-				if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
-					logger.Error(logger.ComponentAgentCore).
-						Err(err).
-						Str("action", "init_interactive_inputs").
-						Msg("更新交互输入到 session state 失败")
-				}
-			}
+			st.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
 		}
 		if len(b.interactiveInputs) > 0 {
 			b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
@@ -172,16 +158,7 @@ func (b *BaseInteraction) initInteractiveInputs() {
 	}
 	// 写回 session state
 	if len(b.interactiveInputs) > 0 {
-		if cs, ok := st.(*state.WorkflowCommitState); ok {
-			cs.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
-		} else {
-			if err := st.Update(map[string]any{InteractiveInputKey: b.interactiveInputs}); err != nil {
-				logger.Error(logger.ComponentAgentCore).
-					Err(err).
-					Str("action", "init_interactive_inputs").
-					Msg("写回交互输入到 session state 失败")
-			}
-		}
+		st.UpdateGlobal(map[string]any{InteractiveInputKey: b.interactiveInputs})
 		b.latestInteractiveInput = b.interactiveInputs[len(b.interactiveInputs)-1]
 	}
 }

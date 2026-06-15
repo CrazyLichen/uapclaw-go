@@ -129,7 +129,11 @@ func (s *WorkflowCommitState) CommitUserInputs(inputs map[string]any) {
 	if err := s.globalState.UpdateByID(s.nodeID, inputs); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "commit_user_inputs_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
 	}
-	s.Commit()
+	// 直接调用子状态 Commit，避免通过 s.Commit() 再次获取锁导致死锁
+	s.ioState.Commit()
+	s.compState.Commit()
+	s.globalState.Commit()
+	s.workflowState.Commit()
 }
 
 // Commit 提交全部（或指定节点）的四个子状态暂存更新。

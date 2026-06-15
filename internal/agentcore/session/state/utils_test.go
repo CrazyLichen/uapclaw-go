@@ -306,8 +306,8 @@ func TestGetBySchema_mapSchema(t *testing.T) {
 		"user": map[string]any{"name": "alice", "age": 30},
 	}
 	schema := SchemaKey(map[string]any{
-		"name": "user.name",
-		"age":  "user.age",
+		"name": "${user.name}",
+		"age":  "${user.age}",
 	})
 	result := getBySchema(schema, data)
 	m, ok := result.(map[string]any)
@@ -327,7 +327,7 @@ func TestGetBySchema_listSchema(t *testing.T) {
 	data := map[string]any{
 		"user": map[string]any{"name": "alice", "age": 30},
 	}
-	schema := ListKey([]any{"user.name", "user.age"})
+	schema := ListKey([]any{"${user.name}", "${user.age}"})
 	result := getBySchema(schema, data)
 	l, ok := result.([]any)
 	if !ok {
@@ -420,8 +420,12 @@ func TestRootToPath_扁平key(t *testing.T) {
 	if key != "a" {
 		t.Errorf("rootToPath key = %v, 期望 \"a\"", key)
 	}
-	if container["a"] != 1 {
-		t.Errorf("rootToPath container[\"a\"] = %v, 期望 1", container["a"])
+	containerMap, ok := container.(map[string]any)
+	if !ok {
+		t.Fatalf("container 类型断言失败，实际=%T", container)
+	}
+	if containerMap["a"] != 1 {
+		t.Errorf("rootToPath container[\"a\"] = %v, 期望 1", containerMap["a"])
 	}
 }
 
@@ -434,8 +438,12 @@ func TestRootToPath_嵌套路径(t *testing.T) {
 	if key != "b" {
 		t.Errorf("rootToPath key = %v, 期望 \"b\"", key)
 	}
-	if container["b"] != 1 {
-		t.Errorf("rootToPath container[\"b\"] = %v, 期望 1", container["b"])
+	containerMap, ok := container.(map[string]any)
+	if !ok {
+		t.Fatalf("container 类型断言失败，实际=%T", container)
+	}
+	if containerMap["b"] != 1 {
+		t.Errorf("rootToPath container[\"b\"] = %v, 期望 1", containerMap["b"])
 	}
 }
 
@@ -451,8 +459,11 @@ func TestRootToPath_不存在(t *testing.T) {
 	}
 	if container != nil {
 		// 容器中不存在 "missing"，但 container 本身不为 nil
-		if _, exists := container["missing"]; exists {
-			t.Error("container 中不应存在 \"missing\"")
+		containerMap, ok := container.(map[string]any)
+		if ok {
+			if _, exists := containerMap["missing"]; exists {
+				t.Error("container 中不应存在 \"missing\"")
+			}
 		}
 	}
 }
@@ -514,4 +525,166 @@ func TestDeleteByKey_存在(t *testing.T) {
 func TestDeleteByKey_不存在(t *testing.T) {
 	source := map[string]any{}
 	deleteByKey("missing", source) // 不应 panic
+}
+
+// ──── getBySchema 默认值保留测试 ────
+
+// TestGetBySchema_mapSchema_普通字符串默认值 验证 map schema 中普通字符串被保留为默认值。
+func TestGetBySchema_mapSchema_普通字符串默认值(t *testing.T) {
+	data := map[string]any{
+		"user": map[string]any{"name": "alice"},
+	}
+	schema := SchemaKey(map[string]any{
+		"greeting": "hello",
+		"label":    "default_value",
+	})
+	result := getBySchema(schema, data)
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("getBySchema 返回类型 %T, 期望 map[string]any", result)
+	}
+	if m["greeting"] != "hello" {
+		t.Errorf("result[\"greeting\"] = %v, 期望 hello", m["greeting"])
+	}
+	if m["label"] != "default_value" {
+		t.Errorf("result[\"label\"] = %v, 期望 default_value", m["label"])
+	}
+}
+
+// TestGetBySchema_listSchema_普通字符串默认值 验证 list schema 中普通字符串被保留为默认值。
+func TestGetBySchema_listSchema_普通字符串默认值(t *testing.T) {
+	data := map[string]any{
+		"user": map[string]any{"name": "alice"},
+	}
+	schema := ListKey([]any{"hello", "world"})
+	result := getBySchema(schema, data)
+	l, ok := result.([]any)
+	if !ok {
+		t.Fatalf("getBySchema 返回类型 %T, 期望 []any", result)
+	}
+	if l[0] != "hello" {
+		t.Errorf("result[0] = %v, 期望 hello", l[0])
+	}
+	if l[1] != "world" {
+		t.Errorf("result[1] = %v, 期望 world", l[1])
+	}
+}
+
+// TestGetBySchema_mapSchema_混合引用路径和默认值 验证 map schema 中引用路径取值，普通字符串保留默认值。
+func TestGetBySchema_mapSchema_混合引用路径和默认值(t *testing.T) {
+	data := map[string]any{
+		"user": map[string]any{"name": "alice", "age": 30},
+	}
+	schema := SchemaKey(map[string]any{
+		"userName": "${user.name}",
+		"greeting": "hello",
+		"userAge":  "${user.age}",
+		"label":    "default",
+	})
+	result := getBySchema(schema, data)
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("getBySchema 返回类型 %T, 期望 map[string]any", result)
+	}
+	if m["userName"] != "alice" {
+		t.Errorf("result[\"userName\"] = %v, 期望 alice", m["userName"])
+	}
+	if m["greeting"] != "hello" {
+		t.Errorf("result[\"greeting\"] = %v, 期望 hello", m["greeting"])
+	}
+	if m["userAge"] != 30 {
+		t.Errorf("result[\"userAge\"] = %v, 期望 30", m["userAge"])
+	}
+	if m["label"] != "default" {
+		t.Errorf("result[\"label\"] = %v, 期望 default", m["label"])
+	}
+}
+
+// ──── getValueByNestedPath 负数索引测试 ────
+
+// TestGetValueByNestedPath_负数索引 验证负数索引从列表末尾读取。
+func TestGetValueByNestedPath_负数索引(t *testing.T) {
+	data := map[string]any{
+		"items": []any{"a", "b", "c"},
+	}
+	result := getValueByNestedPath("items[-1]", data)
+	if result != "c" {
+		t.Errorf("getValueByNestedPath(\"items[-1]\") = %v, 期望 c", result)
+	}
+}
+
+// TestGetValueByNestedPath_负数索引_越界 验证负数索引越界返回 nil。
+func TestGetValueByNestedPath_负数索引_越界(t *testing.T) {
+	data := map[string]any{
+		"items": []any{"a"},
+	}
+	result := getValueByNestedPath("items[-2]", data)
+	if result != nil {
+		t.Errorf("getValueByNestedPath(\"items[-2]\") = %v, 期望 nil", result)
+	}
+}
+
+// ──── rootToPath list 索引路径测试 ────
+
+// TestRootToPath_list索引路径 验证 list 索引作为最终 key 导航到列表元素容器。
+// rootToPath 不支持中间遍历列表，仅支持 map 内 list 作为最终值。
+// 即 "items" 路径最终到达 map，而 [1] 索引作为最终 key 返回 (1, list)。
+func TestRootToPath_list索引路径(t *testing.T) {
+	source := map[string]any{
+		"items": []any{"a", "b", "c"},
+	}
+	// rootToPath("items[1]") 会先拆分为 ["items", 1]
+	// 但 rootToPath 不支持中间遍历 list，需要直接访问
+	// 使用 items[1] 路径测试
+	key, container := rootToPath("items[1]", source)
+	if key != 1 {
+		t.Errorf("rootToPath key = %v, 期望 1", key)
+	}
+	list, ok := container.([]any)
+	if !ok {
+		t.Fatalf("container 类型断言失败，实际=%T", container)
+	}
+	if list[1] != "b" {
+		t.Errorf("rootToPath container[1] = %v, 期望 b", list[1])
+	}
+}
+
+// TestRootToPath_list负数索引路径 验证 list 负数索引路径导航。
+func TestRootToPath_list负数索引路径(t *testing.T) {
+	source := map[string]any{
+		"items": []any{"a", "b", "c"},
+	}
+	key, container := rootToPath("items[-1]", source)
+	if key != 2 {
+		t.Errorf("rootToPath key = %v, 期望 2 (负数索引 -1 解析为 len-1=2)", key)
+	}
+	list, ok := container.([]any)
+	if !ok {
+		t.Fatalf("container 类型断言失败，实际=%T", container)
+	}
+	if list[2] != "c" {
+		t.Errorf("rootToPath container[2] = %v, 期望 c", list[2])
+	}
+}
+
+// TestRootToPath_嵌套list索引路径 验证嵌套结构中的 list 索引路径导航。
+// rootToPath 不支持中间遍历 list，此测试验证 map.list[index] 模式。
+func TestRootToPath_嵌套list索引路径(t *testing.T) {
+	source := map[string]any{
+		"users": []any{
+			map[string]any{"name": "alice"},
+			map[string]any{"name": "bob"},
+		},
+	}
+	key, container := rootToPath("users[1].name", source)
+	if key != "name" {
+		t.Errorf("rootToPath key = %v, 期望 \"name\"", key)
+	}
+	containerMap, ok := container.(map[string]any)
+	if !ok {
+		t.Fatalf("container 类型断言失败，实际=%T", container)
+	}
+	if containerMap["name"] != "bob" {
+		t.Errorf("rootToPath container[\"name\"] = %v, 期望 bob", containerMap["name"])
+	}
 }

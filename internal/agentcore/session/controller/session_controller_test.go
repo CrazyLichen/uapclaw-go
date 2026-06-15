@@ -304,7 +304,7 @@ func TestSessionController_CleanupScopeInactiveSessions(t *testing.T) {
 	require.NoError(t, err, "CreateIfNotExists 应成功")
 
 	// 手动添加非活跃会话
-	scopeMeta := sc.MetaMap[scope]
+	scopeMeta := sc.MetaMap[scope.String()]
 	meta2 := CreateNewSessionMeta("s2", "agent")
 	meta2.IsActive = false
 	scopeMeta.AddSession(meta2)

@@ -37,7 +37,9 @@ func TestInMemoryCommitState_Update_禁止(t *testing.T) {
 // TestInMemoryCommitState_UpdateByID_基本 验证按节点 ID 暂存更新。
 func TestInMemoryCommitState_UpdateByID_基本(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	// 暂存更新不影响底层 state
 	result := cs.Get(StringKey("a"))
 	if result != nil {
@@ -45,10 +47,21 @@ func TestInMemoryCommitState_UpdateByID_基本(t *testing.T) {
 	}
 }
 
+// TestInMemoryCommitState_UpdateByID_空nodeID 验证空 nodeID 返回错误。
+func TestInMemoryCommitState_UpdateByID_空nodeID(t *testing.T) {
+	cs := NewInMemoryCommitState()
+	err := cs.UpdateByID("", map[string]any{"a": 1})
+	if err == nil {
+		t.Error("空 nodeID 应返回错误")
+	}
+}
+
 // TestInMemoryCommitState_Commit_指定节点 验证提交指定节点的暂存更新。
 func TestInMemoryCommitState_Commit_指定节点(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit("node1")
 	result := cs.Get(StringKey("a"))
 	if result != 1 {
@@ -59,8 +72,12 @@ func TestInMemoryCommitState_Commit_指定节点(t *testing.T) {
 // TestInMemoryCommitState_Commit_全部 验证不传 nodeID 提交全部暂存。
 func TestInMemoryCommitState_Commit_全部(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
-	cs.UpdateByID("node2", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.UpdateByID("node2", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit()
 	if cs.Get(StringKey("a")) != 1 {
 		t.Errorf("全部 Commit 后 Get(\"a\") = %v, 期望 1", cs.Get(StringKey("a")))
@@ -73,7 +90,9 @@ func TestInMemoryCommitState_Commit_全部(t *testing.T) {
 // TestInMemoryCommitState_Commit_清空暂存 验证 commit 后暂存被清空。
 func TestInMemoryCommitState_Commit_清空暂存(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit("node1")
 	updates := cs.GetUpdates()
 	if len(updates["node1"]) != 0 {
@@ -84,7 +103,9 @@ func TestInMemoryCommitState_Commit_清空暂存(t *testing.T) {
 // TestInMemoryCommitState_Rollback 验证回滚丢弃暂存更新。
 func TestInMemoryCommitState_Rollback(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Rollback("node1")
 	// commit 不应生效
 	cs.Commit("node1")
@@ -97,8 +118,12 @@ func TestInMemoryCommitState_Rollback(t *testing.T) {
 // TestInMemoryCommitState_GetUpdates 验证获取暂存更新。
 func TestInMemoryCommitState_GetUpdates(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
-	cs.UpdateByID("node1", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.UpdateByID("node1", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	updates := cs.GetUpdates()
 	if len(updates["node1"]) != 2 {
 		t.Errorf("GetUpdates 长度 = %d, 期望 2", len(updates["node1"]))
@@ -121,7 +146,9 @@ func TestInMemoryCommitState_SetUpdates(t *testing.T) {
 // TestInMemoryCommitState_SetUpdates_nil 验证传入 nil 不影响暂存。
 func TestInMemoryCommitState_SetUpdates_nil(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.SetUpdates(nil)
 	if len(cs.GetUpdates()) == 0 {
 		t.Error("SetUpdates(nil) 不应清空已有暂存")
@@ -187,8 +214,12 @@ func TestInMemoryCommitState_接口满足(t *testing.T) {
 // TestInMemoryCommitState_多次UpdateByID 验证同一节点多次 UpdateByID 累积。
 func TestInMemoryCommitState_多次UpdateByID(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
-	cs.UpdateByID("node1", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.UpdateByID("node1", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit("node1")
 	if cs.Get(StringKey("a")) != 1 {
 		t.Errorf("Get(\"a\") = %v, 期望 1", cs.Get(StringKey("a")))
@@ -203,7 +234,9 @@ func TestInMemoryCommitState_完整事务流程(t *testing.T) {
 	cs := NewInMemoryCommitState()
 
 	// 暂存更新
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 验证未提交
 	if cs.Get(StringKey("a")) != nil {
@@ -217,7 +250,9 @@ func TestInMemoryCommitState_完整事务流程(t *testing.T) {
 	}
 
 	// 再次暂存并回滚
-	cs.UpdateByID("node1", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Rollback("node1")
 	cs.Commit("node1") // 回滚后 commit 无数据
 	if cs.Get(StringKey("b")) != nil {
@@ -229,7 +264,9 @@ func TestInMemoryCommitState_完整事务流程(t *testing.T) {
 func TestInMemoryCommitState_UpdateByID_深拷贝(t *testing.T) {
 	cs := NewInMemoryCommitState()
 	data := map[string]any{"a": 1}
-	cs.UpdateByID("node1", data)
+	if err := cs.UpdateByID("node1", data); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	data["a"] = 2
 	cs.Commit("node1")
 	if cs.Get(StringKey("a")) != 1 {
@@ -246,7 +283,9 @@ func TestInMemoryCommitState_Commit_无暂存(t *testing.T) {
 // TestInMemoryCommitState_GetUpdates_深拷贝 验证 GetUpdates 返回的不是内部引用。
 func TestInMemoryCommitState_GetUpdates_深拷贝(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	updates := cs.GetUpdates()
 	// 修改返回值不应影响内部
 	if len(updates["node1"]) > 0 {
@@ -261,8 +300,12 @@ func TestInMemoryCommitState_GetUpdates_深拷贝(t *testing.T) {
 // TestInMemoryCommitState_Rollback_不影响其他节点 验证回滚一个节点不影响其他节点。
 func TestInMemoryCommitState_Rollback_不影响其他节点(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
-	cs.UpdateByID("node2", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.UpdateByID("node2", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Rollback("node1")
 	cs.Commit("node2")
 	if cs.Get(StringKey("b")) != 2 {
@@ -273,8 +316,12 @@ func TestInMemoryCommitState_Rollback_不影响其他节点(t *testing.T) {
 // TestInMemoryCommitState_多节点提交 验证分别提交多个节点。
 func TestInMemoryCommitState_多节点提交(t *testing.T) {
 	cs := NewInMemoryCommitState()
-	cs.UpdateByID("node1", map[string]any{"a": 1})
-	cs.UpdateByID("node2", map[string]any{"b": 2})
+	if err := cs.UpdateByID("node1", map[string]any{"a": 1}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.UpdateByID("node2", map[string]any{"b": 2}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 	cs.Commit("node1")
 	if cs.Get(StringKey("a")) != 1 {
 		t.Errorf("node1 commit 后 Get(\"a\") = %v, 期望 1", cs.Get(StringKey("a")))

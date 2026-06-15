@@ -16,7 +16,7 @@ type BaseSession interface {
 	// ⤵️ 5.12 回填：返回类型从 any 改为 SessionConfig
 	Config() any
 	// State 获取会话状态
-	State() state.State
+	State() state.SessionState
 	// Tracer 获取会话追踪器
 	// ⤵️ 5.11 回填：返回类型从 any 改为 Tracer
 	Tracer() any
@@ -71,7 +71,7 @@ func (p *ProxySession) Config() any {
 }
 
 // State 获取底层会话的状态
-func (p *ProxySession) State() state.State {
+func (p *ProxySession) State() state.SessionState {
 	return p.stub.State()
 }
 

@@ -18,6 +18,18 @@ type InteractionOutput struct {
 	Value any
 }
 
+// InteractionOutputSchema 交互中断信号的结构化输出。
+// 对应 Python: OutputSchema(type=INTERACTION, index=idx, payload=payload)
+// 替代之前使用 map[string]any 的方式，提供类型安全
+type InteractionOutputSchema struct {
+	// Type 输出类型（如 "interaction"）
+	Type string `json:"type"`
+	// Index 交互序号
+	Index int `json:"index"`
+	// Payload 交互负载
+	Payload any `json:"payload"`
+}
+
 // WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。
 // 对应 Python: openjiuwen/core/session/interaction/interaction.py (WorkflowInteraction)
 type WorkflowInteraction struct {
@@ -110,10 +122,10 @@ func (w *WorkflowInteraction) WaitUserInputs(ctx context.Context, value any) (an
 		Msg("工作流交互中断：等待用户输入")
 
 	PanicGraphInterrupt(Interrupt{
-		Value: map[string]any{
-			"type":    InteractionType,
-			"index":   w.idx,
-			"payload": payload,
+		Value: InteractionOutputSchema{
+			Type:    InteractionType,
+			Index:   w.idx,
+			Payload: payload,
 		},
 	})
 	return nil, nil // 不可达，panic 后不会执行
@@ -142,10 +154,10 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 		Msg("工作流最新输入中断：等待用户输入")
 
 	PanicGraphInterrupt(Interrupt{
-		Value: map[string]any{
-			"type":    InteractionType,
-			"index":   w.idx,
-			"payload": payload,
+		Value: InteractionOutputSchema{
+			Type:    InteractionType,
+			Index:   w.idx,
+			Payload: payload,
 		},
 		Resumable: true,
 		NS:        nodeID,

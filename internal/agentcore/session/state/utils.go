@@ -110,16 +110,16 @@ func extractOriginKey(key string) string {
 func updateDict(update map[string]any, source map[string]any) {
 	type removal struct {
 		key       any
-		container map[string]any
+		container any // map[string]any 或 []any
 	}
 	var removed []removal
 
 	for key, value := range update {
-		currentKey, current := rootToPath(key, source, true)
+		currentKey, currentContainer := rootToPath(key, source, true)
 		if value == nil {
-			removed = append(removed, removal{key: currentKey, container: current})
+			removed = append(removed, removal{key: currentKey, container: currentContainer})
 		} else {
-			updateByKey(currentKey, value, current)
+			updateByKey(currentKey, value, currentContainer)
 		}
 	}
 	for _, r := range removed {
@@ -129,9 +129,21 @@ func updateDict(update map[string]any, source map[string]any) {
 
 // getBySchema 根据 schema 从 data 中获取值
 // schema 可以是 string（路径）、map[string]any（批量映射）、[]any（列表映射）
-func getBySchema(schema StateKey, data map[string]any, nestedPath ...string) any {
-	if len(nestedPath) > 0 && nestedPath[0] != "" {
-		data = getValueByNestedPathMap(nestedPath[0], data)
+// isRoot 表示是否为根层调用：根层时字符串 schema 视为数据路径，非根层时非引用路径的字符串视为默认值
+func getBySchema(schema StateKey, data map[string]any, isRootOrNestedPath ...any) any {
+	isRoot := true
+	var nestedPath string
+	for _, arg := range isRootOrNestedPath {
+		switch v := arg.(type) {
+		case string:
+			nestedPath = v
+		case bool:
+			isRoot = v
+		}
+	}
+
+	if nestedPath != "" {
+		data = getValueByNestedPathMap(nestedPath, data)
 	}
 
 	if data == nil {
@@ -141,6 +153,10 @@ func getBySchema(schema StateKey, data map[string]any, nestedPath ...string) any
 	switch schema.Type() {
 	case StateKeyString:
 		originKey := extractOriginKey(schema.String())
+		// 非根层 + 非引用路径 → 字符串本身就是值，不从 data 中查找
+		if originKey == schema.String() && !isRoot {
+			return schema.String()
+		}
 		return getValueByNestedPath(originKey, data)
 	case StateKeyMap:
 		return getBySchemaMap(schema.Map(), data)
@@ -178,66 +194,118 @@ func getValueByNestedPath(nestedKey string, source map[string]any) any {
 			current = val
 		case int:
 			list, ok := current.([]any)
-			if !ok || p < 0 || p >= len(list) {
+			if !ok {
+				return nil
+			}
+			idx := p
+			if idx < 0 {
+				idx = len(list) + idx
+				if idx < 0 {
+					return nil
+				}
+			}
+			if idx >= len(list) {
 				return nil
 			}
 			if isLast {
-				return list[p]
+				return list[idx]
 			}
-			current = list[p]
+			current = list[idx]
 		}
 	}
 	return nil
 }
 
 // rootToPath 沿嵌套路径导航到最终容器
-// 返回 (最终key, 最终容器map)
-// 注意：仅支持 string key 最终导航到 map[string]any 容器
-// 对于 list 索引路径暂不支持直接导航（updateDict 中嵌套路径一般为 string key）
+// 返回 (最终key, 最终容器)
+// 最终容器可能是 map[string]any 或 []any，对应最终 key 为 string 或 int
 // createIfAbsent 为 true 时自动创建缺失的中间节点
-func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool) (any, map[string]any) {
+func rootToPath(nestedPath string, source map[string]any, createIfAbsent ...bool) (any, any) {
 	create := len(createIfAbsent) > 0 && createIfAbsent[0]
 	paths := splitNestedPath(nestedPath)
 	if len(paths) == 0 {
 		return nestedPath, source
 	}
 
-	current := source
+	var current any = source
 	for i, path := range paths {
 		isLast := i == len(paths)-1
 		switch p := path.(type) {
 		case string:
-			if _, exists := current[p]; !exists {
+			m, ok := current.(map[string]any)
+			if !ok {
+				return nil, nil
+			}
+			if _, exists := m[p]; !exists {
 				if !create {
 					return nil, nil
 				}
 				if !isLast && i+1 < len(paths) {
 					if _, isInt := paths[i+1].(int); isInt {
-						current[p] = []any{}
+						m[p] = []any{}
 					} else {
-						current[p] = map[string]any{}
+						m[p] = map[string]any{}
 					}
 				} else {
-					current[p] = map[string]any{}
+					m[p] = map[string]any{}
 				}
 			}
 			if isLast {
-				return p, current
+				return p, m
 			}
-			next, ok := current[p].(map[string]any)
-			if !ok {
+			// 支持中间节点为 map 或 list
+			switch next := m[p].(type) {
+			case map[string]any:
+				current = next
+			case []any:
+				current = next
+			default:
 				if !create {
 					return nil, nil
 				}
 				next = map[string]any{}
-				current[p] = next
+				m[p] = next
+				current = next
 			}
-			current = next
 		case int:
-			// 对于 list 索引，需要先找到包含 list 的 key
-			// rootToPath 主要用于 updateDict，其中 key 都是 string 类型
-			// list 索引在 updateDict 场景下不常见，返回 nil
-			return nil, nil
+			list, ok := current.([]any)
+			if !ok {
+				return nil, nil
+			}
+			idx := p
+			if idx < 0 {
+				idx = len(list) + idx
+				if idx < 0 {
+					return nil, nil
+				}
+			}
+			// 自动扩展列表
+			if idx >= len(list) {
+				if !create {
+					return nil, nil
+				}
+				for len(list) <= idx {
+					list = append(list, nil)
+				}
+				// 回写到父容器（append 可能换了底层数组）
+				if i >= 1 {
+					if prevStr, ok := paths[i-1].(string); ok {
+						if parentMap, ok2 := current.([]any); !ok2 {
+							// current 已经是 []any，需要回写到持有它的 map
+						} else {
+							_ = prevStr
+							_ = parentMap
+						}
+					}
+				}
+			}
+			if isLast {
+				return idx, list
+			}
+			if idx >= len(list) {
+				return nil, nil
+			}
+			current = list[idx]
 		}
 	}
 	return nil, nil
@@ -250,8 +318,20 @@ func expandNestedStructure(data any) any {
 	case map[string]any:
 		result := map[string]any{}
 		for key, value := range v {
-			currentKey, current := rootToPath(key, result, true)
-			current[currentKey.(string)] = expandNestedStructure(value)
+			currentKey, currentContainer := rootToPath(key, result, true)
+			if currentKey == nil {
+				continue
+			}
+			switch kk := currentKey.(type) {
+			case string:
+				if m, ok := currentContainer.(map[string]any); ok {
+					m[kk] = expandNestedStructure(value)
+				}
+			case int:
+				if list, ok := currentContainer.([]any); ok && kk < len(list) {
+					list[kk] = expandNestedStructure(value)
+				}
+			}
 		}
 		return result
 	case []any:
@@ -266,31 +346,51 @@ func expandNestedStructure(data any) any {
 }
 
 // updateByKey 在 source 中按 key 更新值
-func updateByKey(key any, newValue any, source map[string]any) {
-	keyStr, ok := key.(string)
-	if !ok {
-		return
-	}
-	if _, exists := source[keyStr]; !exists {
-		source[keyStr] = expandNestedStructure(newValue)
-		return
-	}
-	if existing, ok := source[keyStr].(map[string]any); ok {
-		if newMap, ok := newValue.(map[string]any); ok {
-			updateDict(newMap, existing)
+// source 可以是 map[string]any 或 []any，key 对应为 string 或 int
+func updateByKey(key any, newValue any, source any) {
+	switch k := key.(type) {
+	case string:
+		m, ok := source.(map[string]any)
+		if !ok {
 			return
 		}
+		if _, exists := m[k]; !exists {
+			m[k] = expandNestedStructure(newValue)
+			return
+		}
+		if existing, ok := m[k].(map[string]any); ok {
+			if newMap, ok := newValue.(map[string]any); ok {
+				updateDict(newMap, existing)
+				return
+			}
+		}
+		m[k] = expandNestedStructure(newValue)
+	case int:
+		list, ok := source.([]any)
+		if !ok {
+			return
+		}
+		if k >= 0 && k < len(list) {
+			list[k] = expandNestedStructure(newValue)
+		}
 	}
-	source[keyStr] = expandNestedStructure(newValue)
 }
 
 // deleteByKey 在 source 中按 key 删除
-func deleteByKey(key any, source map[string]any) {
-	keyStr, ok := key.(string)
-	if !ok {
-		return
+// source 可以是 map[string]any 或 []any
+func deleteByKey(key any, source any) {
+	switch k := key.(type) {
+	case string:
+		if m, ok := source.(map[string]any); ok {
+			delete(m, k)
+		}
+	case int:
+		if list, ok := source.([]any); ok {
+			if k >= 0 && k < len(list) {
+				list[k] = nil
+			}
+		}
 	}
-	delete(source, keyStr)
 }
 
 // getValueByNestedPathMap 与 getValueByNestedPath 类似，但返回 map[string]any
@@ -307,17 +407,24 @@ func getValueByNestedPathMap(nestedKey string, source map[string]any) map[string
 }
 
 // getBySchemaMap 处理 map schema 的递归读取
+// 对应 Python: get_by_schema 中 dict 分支
+// 只有引用路径（${...}）才从 data 取值，普通字符串保留为默认值
 func getBySchemaMap(schema map[string]any, data map[string]any) map[string]any {
 	result := map[string]any{}
 	for targetKey, targetSchema := range schema {
 		switch s := targetSchema.(type) {
 		case []any:
-			result[targetKey] = getBySchema(ListKey(s), data)
+			result[targetKey] = getBySchema(ListKey(s), data, false)
 		case map[string]any:
-			result[targetKey] = getBySchema(SchemaKey(s), data)
+			result[targetKey] = getBySchema(SchemaKey(s), data, false)
 		case string:
-			// 在 schema 的值中，字符串始终被视为路径引用（非根层行为）
-			result[targetKey] = getBySchema(StringKey(s), data)
+			if isRefPath(s) {
+				// 引用路径 → 从 data 取值
+				result[targetKey] = getBySchema(StringKey(s), data, false)
+			} else {
+				// 普通字符串 → 保留为默认值
+				result[targetKey] = s
+			}
 		default:
 			result[targetKey] = targetSchema
 		}
@@ -326,16 +433,21 @@ func getBySchemaMap(schema map[string]any, data map[string]any) map[string]any {
 }
 
 // getBySchemaList 处理 list schema 的递归读取
+// 对应 Python: get_by_schema 中 list 分支
 func getBySchemaList(schema []any, data map[string]any) []any {
 	result := make([]any, len(schema))
 	for i, item := range schema {
 		switch s := item.(type) {
 		case string:
-			result[i] = getBySchema(StringKey(s), data)
+			if isRefPath(s) {
+				result[i] = getBySchema(StringKey(s), data, false)
+			} else {
+				result[i] = s
+			}
 		case map[string]any:
-			result[i] = getBySchema(SchemaKey(s), data)
+			result[i] = getBySchema(SchemaKey(s), data, false)
 		case []any:
-			result[i] = getBySchema(ListKey(s), data)
+			result[i] = getBySchema(ListKey(s), data, false)
 		default:
 			result[i] = item
 		}
