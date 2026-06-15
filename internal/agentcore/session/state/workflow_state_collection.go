@@ -1,6 +1,10 @@
 package state
 
-import "github.com/uapclaw/uapclaw-go/internal/common/logger"
+import (
+	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -8,18 +12,20 @@ import "github.com/uapclaw/uapclaw-go/internal/common/logger"
 //
 // 组合 io_state/global_state/comp_state/workflow_state 四个可提交区域，
 // 提供三级回退查询（global_state → io_state[parentID] → io_state[nodeID]）。
-// 实现 State 接口。
+// 实现 SessionState 接口。
 //
 // 对应 Python: openjiuwen/core/session/state/workflow_state.py (StateCollection)
 type WorkflowStateCollection struct {
+	// mu 并发读写锁
+	mu sync.RWMutex
 	// ioState 输入输出状态
-	ioState CommitState
+	ioState CommitStateLike
 	// globalState 全局状态（从 AgentSession 共享）
-	globalState CommitState
+	globalState CommitStateLike
 	// compState 组件状态
-	compState CommitState
+	compState CommitStateLike
 	// workflowState 工作流状态
-	workflowState CommitState
+	workflowState CommitStateLike
 	// traceState 追踪状态（按 nodeID 存 span）
 	traceState map[string]any
 	// parentID 父节点 ID
@@ -31,7 +37,7 @@ type WorkflowStateCollection struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowStateCollection 创建工作流状态集合实例。
-func NewWorkflowStateCollection(ioState, globalState, compState, workflowState CommitState, traceState map[string]any, parentID, nodeID string) *WorkflowStateCollection {
+func NewWorkflowStateCollection(ioState, globalState, compState, workflowState CommitStateLike, traceState map[string]any, parentID, nodeID string) *WorkflowStateCollection {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_workflow_state_collection").
 		Str("parent_id", parentID).
@@ -56,6 +62,8 @@ func NewWorkflowStateCollection(ioState, globalState, compState, workflowState C
 // GetGlobal 从全局状态获取值。
 // 三级回退查询：globalState → ioState[parentID] → ioState[nodeID]。
 func (s *WorkflowStateCollection) GetGlobal(key StateKey) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.globalState == nil || key.IsZero() {
 		return nil
 	}
@@ -72,25 +80,35 @@ func (s *WorkflowStateCollection) GetGlobal(key StateKey) any {
 
 // UpdateGlobal 更新全局状态，以当前 nodeID 为键暂存更新。
 func (s *WorkflowStateCollection) UpdateGlobal(data map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.globalState == nil || data == nil {
 		return
 	}
-	s.globalState.UpdateByID(s.nodeID, data)
+	if err := s.globalState.UpdateByID(s.nodeID, data); err != nil {
+		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "update_global").Str("node_id", s.nodeID).Msg("UpdateByID 失败")
+	}
 }
 
 // UpdateTrace 更新追踪状态。
 func (s *WorkflowStateCollection) UpdateTrace(span any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.traceState[s.nodeID] = span
 }
 
 // CommitCmp 提交当前节点的 comp_state 和 io_state。
 func (s *WorkflowStateCollection) CommitCmp() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.compState.Commit(s.nodeID)
 	s.ioState.Commit(s.nodeID)
 }
 
 // Dump 导出完整状态快照。
 func (s *WorkflowStateCollection) Dump() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return map[string]any{
 		IOStateKey:              s.ioState.GetState(),
 		IOStateUpdatesKey:       s.ioState.GetUpdates(),
@@ -104,11 +122,13 @@ func (s *WorkflowStateCollection) Dump() map[string]any {
 	}
 }
 
-// ──────────────────────────── State 接口实现 ────────────────────────────
+// ──────────────────────────── SessionState 接口实现 ────────────────────────────
 
 // Get 根据 StateKey 获取组件状态值。
 // key 为 nil 时返回当前节点的全部 comp_state；否则按 nodeID 前缀查找。
 func (s *WorkflowStateCollection) Get(key StateKey) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.compState == nil {
 		return nil
 	}
@@ -120,6 +140,8 @@ func (s *WorkflowStateCollection) Get(key StateKey) any {
 
 // GetByPrefix 根据 key 和嵌套前缀获取组件状态值。
 func (s *WorkflowStateCollection) GetByPrefix(key StateKey, nestedPrefix string) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.compState == nil {
 		return nil
 	}
@@ -128,6 +150,8 @@ func (s *WorkflowStateCollection) GetByPrefix(key StateKey, nestedPrefix string)
 
 // GetByTransformer 通过转换函数获取组件状态值。
 func (s *WorkflowStateCollection) GetByTransformer(transformer Transformer) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.compState == nil {
 		return nil
 	}
@@ -137,16 +161,22 @@ func (s *WorkflowStateCollection) GetByTransformer(transformer Transformer) any 
 // Update 更新组件状态，以当前 nodeID 为键暂存更新。
 // data 被包裹在 {nodeID: data} 中。
 func (s *WorkflowStateCollection) Update(data map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.compState == nil {
 		return nil
 	}
-	s.compState.UpdateByID(s.nodeID, map[string]any{s.nodeID: data})
+	if err := s.compState.UpdateByID(s.nodeID, map[string]any{s.nodeID: data}); err != nil {
+		return err
+	}
 	return nil
 }
 
 // GetState 导出状态快照（用于检查点恢复）。
 // 注意：此方法仅返回 io/comp/workflow 三个状态，global_state 由 WorkflowCommitState 管理。
 func (s *WorkflowStateCollection) GetState() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return map[string]any{
 		IOStateKey:       s.ioState.GetState(),
 		CompStateKey:     s.compState.GetState(),
@@ -156,6 +186,8 @@ func (s *WorkflowStateCollection) GetState() map[string]any {
 
 // SetState 从快照恢复状态。
 func (s *WorkflowStateCollection) SetState(st map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if st == nil {
 		return
 	}
