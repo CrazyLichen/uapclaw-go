@@ -2,17 +2,20 @@ package state
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// InMemoryCommitState CommitState 接口的内存实现
-// 对应 Python 的 InMemoryCommitState
+// InMemoryCommitState CommitStateLike 接口的内存实现
+// 对应 Python: InMemoryCommitState(CommitStateLike)
 type InMemoryCommitState struct {
-	// state 底层状态（默认 InMemoryState）
-	state State
+	// mu 并发读写锁
+	mu sync.RWMutex
+	// state 底层状态（默认 InMemoryStateLike）
+	state StateLike
 	// updates 按 nodeID 缓存的待提交更新
 	updates map[string][]map[string]any
 }
@@ -20,9 +23,9 @@ type InMemoryCommitState struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryCommitState 创建内存事务状态实例
-// 可选传入底层 State，默认创建新的 InMemoryState
-func NewInMemoryCommitState(state ...State) *InMemoryCommitState {
-	var s State
+// 可选传入底层 StateLike，默认创建新的 InMemoryStateLike
+func NewInMemoryCommitState(state ...StateLike) *InMemoryCommitState {
+	var s StateLike
 	if len(state) > 0 && state[0] != nil {
 		s = state[0]
 	} else {
@@ -38,26 +41,36 @@ func NewInMemoryCommitState(state ...State) *InMemoryCommitState {
 
 // Get 委托给底层 state
 func (s *InMemoryCommitState) Get(key StateKey) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.state.Get(key)
 }
 
 // GetByPrefix 委托给底层 state
 func (s *InMemoryCommitState) GetByPrefix(key StateKey, nestedPrefix string) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.state.GetByPrefix(key, nestedPrefix)
 }
 
 // GetByTransformer 委托给底层 state
 func (s *InMemoryCommitState) GetByTransformer(transformer Transformer) any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.state.GetByTransformer(transformer)
 }
 
 // GetState 委托给底层 state
 func (s *InMemoryCommitState) GetState() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.state.GetState()
 }
 
 // SetState 委托给底层 state
 func (s *InMemoryCommitState) SetState(state map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.state.SetState(state)
 }
 
@@ -68,16 +81,22 @@ func (s *InMemoryCommitState) Update(data map[string]any) error {
 }
 
 // UpdateByID 按节点 ID 暂存更新（深拷贝 data）
-func (s *InMemoryCommitState) UpdateByID(nodeID string, data map[string]any) {
+// nodeID 为空字符串时返回 error，对齐 Python 中 node_id is None 抛异常的行为
+func (s *InMemoryCommitState) UpdateByID(nodeID string, data map[string]any) error {
 	if nodeID == "" {
-		return
+		return fmt.Errorf("不能使用空 nodeID 更新状态")
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.updates[nodeID] = append(s.updates[nodeID], deepCopyMap(data))
+	return nil
 }
 
 // Commit 提交暂存更新到底层 state
 // 不传 nodeID 则提交所有节点的暂存
 func (s *InMemoryCommitState) Commit(nodeID ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(nodeID) == 0 {
 		// 提交全部
 		for key, updates := range s.updates {
@@ -116,11 +135,15 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 
 // Rollback 丢弃指定节点的暂存更新
 func (s *InMemoryCommitState) Rollback(nodeID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.updates[nodeID] = nil
 }
 
 // GetUpdates 获取所有暂存更新
 func (s *InMemoryCommitState) GetUpdates() map[string][]map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	result := make(map[string][]map[string]any, len(s.updates))
 	for key, updates := range s.updates {
 		if len(updates) > 0 {
@@ -136,7 +159,23 @@ func (s *InMemoryCommitState) GetUpdates() map[string][]map[string]any {
 
 // SetUpdates 设置暂存更新
 func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if updates != nil {
 		s.updates = updates
 	}
 }
+
+// ──────────────────────────── SessionState 默认实现 ────────────────────────────
+
+// GetGlobal 单存储单元无全局概念，返回 nil
+func (s *InMemoryCommitState) GetGlobal(key StateKey) any { return nil }
+
+// UpdateGlobal 单存储单元无全局概念，空操作
+func (s *InMemoryCommitState) UpdateGlobal(data map[string]any) {}
+
+// UpdateTrace 单存储单元无追踪概念，空操作
+func (s *InMemoryCommitState) UpdateTrace(span any) {}
+
+// Dump 导出完整状态，委托 GetState
+func (s *InMemoryCommitState) Dump() map[string]any { return s.GetState() }
