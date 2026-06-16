@@ -51,6 +51,7 @@ func (s *WorkflowCommitState) UpdateAndCommitWorkflowState(data map[string]any) 
 	defer s.mu.Unlock()
 	if err := s.workflowState.UpdateByID(DefaultWorkflowID, data); err != nil {
 		logger.Error(logger.ComponentAgentCore).Err(err).Str("action", "update_and_commit_workflow_state").Str("node_id", DefaultWorkflowID).Msg("UpdateByID 失败")
+		return
 	}
 	s.workflowState.Commit()
 }
@@ -134,25 +135,24 @@ func (s *WorkflowCommitState) CommitUserInputs(inputs map[string]any) {
 	s.workflowState.Commit()
 }
 
-// Commit 提交全部（或指定节点）的四个子状态暂存更新。
-// 不传 nodeID 则提交全部；传参则提交指定节点。
-func (s *WorkflowCommitState) Commit(nodeID ...string) {
+// Commit 提交全部四个子状态的暂存更新（无参数，对齐 Python CommitState.commit()）。
+func (s *WorkflowCommitState) Commit() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ioState.Commit(nodeID...)
-	s.compState.Commit(nodeID...)
-	s.globalState.Commit(nodeID...)
-	s.workflowState.Commit(nodeID...)
+	s.ioState.Commit()
+	s.compState.Commit()
+	s.globalState.Commit()
+	s.workflowState.Commit()
 }
 
-// Rollback 回滚指定节点的四个子状态暂存更新。
-func (s *WorkflowCommitState) Rollback(nodeID string) {
+// Rollback 回滚当前节点的四个子状态暂存更新（无参数，对齐 Python CommitState.rollback()）。
+func (s *WorkflowCommitState) Rollback() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.compState.Rollback(nodeID)
-	s.ioState.Rollback(nodeID)
-	s.globalState.Rollback(nodeID)
-	s.workflowState.Rollback(nodeID)
+	s.compState.Rollback(s.nodeID)
+	s.ioState.Rollback(s.nodeID)
+	s.globalState.Rollback(s.nodeID)
+	s.workflowState.Rollback(s.nodeID)
 }
 
 // UpdateByID 委托给 compState。
@@ -164,7 +164,7 @@ func (s *WorkflowCommitState) UpdateByID(nodeID string, data map[string]any) err
 
 // CreateNodeState 创建节点专属状态视图。
 // 共享底层四个子状态对象，切换 nodeID/parentID。
-func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) *WorkflowCommitState {
+func (s *WorkflowCommitState) CreateNodeState(nodeID, parentID string) SessionState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	logger.Info(logger.ComponentAgentCore).

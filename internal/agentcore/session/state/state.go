@@ -52,9 +52,10 @@ type CommitStateLike interface {
 // SessionState 会话状态接口，面向会话调用方的统一抽象
 // 对应 Python: State(RecoverableStateLike)
 //
-// 提供 GetGlobal/UpdateGlobal/UpdateTrace/Dump 等方法，
-// 由 AgentStateCollection 和 WorkflowStateCollection 实现。
-// 消费方通过此接口多态调用，无需类型断言。
+// 提供基础的状态读写能力：GetGlobal/UpdateGlobal/UpdateTrace/Update/Get/Dump。
+// Workflow 专属方法（CommitCmp/CreateNodeState/Rollback 等）定义在独立的 WorkflowState
+// 接口中，消费方通过类型断言 `if ws, ok := st.(WorkflowState); ok` 判断是否支持。
+// 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
 type SessionState interface {
 	RecoverableStateLike
 	// GetGlobal 从全局状态获取值
@@ -69,6 +70,50 @@ type SessionState interface {
 	Get(key StateKey) any
 	// Dump 导出完整状态快照
 	Dump() map[string]any
+}
+
+// WorkflowState 工作流状态接口，定义 Workflow 专属的提交/回滚/IO 操作。
+// 对应 Python: CommitState（继承自 StateCollection 继承自 State）。
+//
+// Python 中通过继承链直接调用，Go 中通过类型断言获取：
+//
+//	if ws, ok := session.State().(state.WorkflowState); ok {
+//	    ws.CommitCmp()
+//	} else {
+//	    // 对齐 Python AttributeError — Log Error + Panic
+//	}
+//
+// 只有 WorkflowCommitState 实现此接口；
+// AgentStateCollection/InMemoryStateLike/InMemoryCommitState/WorkflowStateCollection 不实现。
+type WorkflowState interface {
+	// CommitCmp 提交当前节点的 comp_state 和 io_state 暂存更新
+	// 对齐 Python StateCollection.commit_cmp()
+	CommitCmp()
+	// CreateNodeState 创建节点专属状态视图
+	// 对齐 Python CommitState.create_node_state()
+	CreateNodeState(executableID, parentID string) SessionState
+	// GetWorkflowState 从工作流状态获取值
+	// 对齐 Python CommitState.get_workflow_state()
+	GetWorkflowState(key StateKey) any
+	// UpdateAndCommitWorkflowState 立即更新并提交工作流状态
+	// 对齐 Python CommitState.update_and_commit_workflow_state()
+	UpdateAndCommitWorkflowState(data map[string]any)
+	// Commit 提交所有子状态的全部暂存（无参数，对齐 Python CommitState.commit()）
+	Commit()
+	// Rollback 回滚当前节点的暂存更新（无参数，对齐 Python CommitState.rollback()）
+	Rollback()
+	// GetInputs 从 io_state 查询输入
+	// 对齐 Python CommitState.get_inputs()
+	GetInputs(schema StateKey) any
+	// GetInputsByTransformer 通过转换函数获取输入
+	// 对齐 Python CommitState.get_inputs_by_transformer()
+	GetInputsByTransformer(transformer Transformer) any
+	// SetOutputs 向 io_state 写入当前节点的输出
+	// 对齐 Python CommitState.set_outputs()
+	SetOutputs(data map[string]any)
+	// GetOutputs 从 io_state 查询指定节点的输出
+	// 对齐 Python CommitState.get_outputs()
+	GetOutputs(nodeID ...string) any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

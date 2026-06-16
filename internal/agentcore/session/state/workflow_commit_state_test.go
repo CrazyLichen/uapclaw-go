@@ -89,14 +89,20 @@ func TestGetInputs(t *testing.T) {
 	// 创建子节点视图
 	childState := cs.CreateNodeState("child_node", "parent_node")
 
+	// 类型断言获取 WorkflowState
+	childWS, ok := childState.(WorkflowState)
+	if !ok {
+		t.Fatalf("childState 应实现 WorkflowState 接口")
+	}
+
 	// schema 非空时按 parentID 前缀查找
-	result := childState.GetInputs(StringKey("input_key"))
+	result := childWS.GetInputs(StringKey("input_key"))
 	if result != "input_val" {
 		t.Errorf("期望从父节点输出获取 'input_val'，实际=%v", result)
 	}
 
 	// schema 为零值时返回当前节点全部 IO 数据
-	result = childState.GetInputs(StateKey{})
+	result = childWS.GetInputs(StateKey{})
 	_ = result // 可能返回 nil 因为 child_node 没有 IO 数据
 }
 
@@ -218,7 +224,7 @@ func TestCommit_全量提交(t *testing.T) {
 	}
 }
 
-// TestRollback 测试回滚
+// TestRollback 测试回滚当前节点
 func TestRollback(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
@@ -230,8 +236,8 @@ func TestRollback(t *testing.T) {
 		t.Fatalf("UpdateByID 失败: %v", err)
 	}
 
-	// 回滚
-	cs.Rollback("node1")
+	// 回滚当前节点
+	cs.Rollback()
 
 	// 验证全部已回滚
 	if cs.globalState.Get(StringKey("g_key")) != nil {
@@ -262,8 +268,10 @@ func TestCreateNodeState(t *testing.T) {
 	}
 
 	// 节点视图的 nodeID 应为 "node_A"
-	if nodeState.nodeID != "node_A" {
-		t.Errorf("期望 nodeID='node_A'，实际=%s", nodeState.nodeID)
+	if wcs, ok := nodeState.(*WorkflowCommitState); ok {
+		if wcs.nodeID != "node_A" {
+			t.Errorf("期望 nodeID='node_A'，实际=%s", wcs.nodeID)
+		}
 	}
 }
 
@@ -364,7 +372,8 @@ func TestWorkflowCommitState_UpdateByID(t *testing.T) {
 		t.Errorf("UpdateByID 返回错误: %v", err)
 	}
 
-	cs.Commit("node1")
+	// 通过底层子状态按节点提交
+	cs.compState.Commit("node1")
 	result := cs.compState.Get(StringKey("comp_key"))
 	if result != "comp_val" {
 		t.Errorf("期望 comp_key=comp_val，实际=%v", result)
@@ -529,18 +538,19 @@ func TestCommitUserInputs_inputsNil(t *testing.T) {
 	cs.CommitUserInputs(nil) // 不应 panic
 }
 
-// TestCommit_指定节点 测试指定节点提交。
-func TestCommit_指定节点(t *testing.T) {
+// TestCommit_指定节点暂存 测试只暂存特定节点后提交全部。
+// WorkflowCommitState.Commit() 无参提交全部子状态（对齐 Python CommitState.commit()）。
+func TestCommit_指定节点暂存(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
 	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
 		t.Fatalf("UpdateByID 失败: %v", err)
 	}
 
-	cs.Commit(DefaultNodeID)
+	cs.Commit()
 
 	if cs.globalState.Get(StringKey("g_key")) != "g_val" {
-		t.Error("指定节点提交后 globalState 数据丢失")
+		t.Error("提交后 globalState 数据丢失")
 	}
 }
 

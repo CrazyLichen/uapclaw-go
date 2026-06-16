@@ -1,6 +1,8 @@
 package interaction
 
 import (
+	"fmt"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -230,11 +232,19 @@ func writeInteractionOutput(session baseSession, outputType string, index int, p
 
 // commitCMP 提交检查点状态。
 // 对应 Python: session.state().commit_cmp()
+// Python 中通过继承链直接调用，Go 中通过类型断言 WorkflowState 获取。
+// 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
 func commitCMP(session baseSession) {
 	st := session.State()
-	if cs, ok := st.(*state.WorkflowCommitState); ok {
-		cs.CommitCmp()
+	if ws, ok := st.(state.WorkflowState); ok {
+		ws.CommitCmp()
+		return
 	}
+	logger.Error(logger.ComponentAgentCore).
+		Str("action", "commit_cmp").
+		Str("state_type", fmt.Sprintf("%T", st)).
+		Msg("当前状态不支持 CommitCmp，对齐 Python AttributeError")
+	panic(fmt.Sprintf("当前状态 %T 不支持 CommitCmp（未实现 WorkflowState 接口），对齐 Python AttributeError", st))
 }
 
 // getExecutableID 通过类型断言从 session 获取可执行路径 ID。

@@ -100,8 +100,8 @@ func TestNodeSessionFacade_GetExecutableID(t *testing.T) {
 
 // TestNodeSessionFacade_GetSessionID 测试返回会话 ID
 func TestNodeSessionFacade_GetSessionID(t *testing.T) {
-	parent := internal.NewAgentSession("sess-123")
-	ns := internal.NewNodeSession(parent, "node1", "Test", false)
+	ws := internal.NewWorkflowSession(internal.WithWorkflowSessionID("sess-123"))
+	ns := internal.NewNodeSession(ws, "node1", "Test", false)
 	facade := NewNodeSessionFacade(ns, false)
 
 	if facade.GetSessionID() != "sess-123" {

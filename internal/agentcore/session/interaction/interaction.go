@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -60,15 +61,24 @@ type AgentInteraction struct {
 // nodeID 通过类型断言 ExecutableIDProvider 从 session 获取（Python 中 executable_id 只在 NodeSession 上有）。
 // 构造时从 workflow_state 读取并清除 INTERACTIVE_INPUT，作为 defaultInput 传入 BaseInteraction。
 // 对应 Python: WorkflowInteraction.__init__(session)
+// 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
 func NewWorkflowInteraction(session baseSession) *WorkflowInteraction {
+	// 类型断言获取 WorkflowState
+	ws, ok := session.State().(state.WorkflowState)
+	if !ok {
+		logger.Error(logger.ComponentAgentCore).
+			Str("action", "new_workflow_interaction").
+			Str("state_type", fmt.Sprintf("%T", session.State())).
+			Msg("当前状态不支持 Workflow 操作，对齐 Python AttributeError")
+		panic(fmt.Sprintf("当前状态 %T 不支持 Workflow 操作（未实现 WorkflowState 接口），对齐 Python AttributeError", session.State()))
+	}
+
 	// 从 workflow_state 读取 INTERACTIVE_INPUT
 	var workflowInteractiveInput any
-	if st, ok := session.State().(*state.WorkflowCommitState); ok {
-		workflowInteractiveInput = st.GetWorkflowState(state.StringKey(InteractiveInputKey))
-		if workflowInteractiveInput != nil {
-			// 清除 workflow_state 中的 INTERACTIVE_INPUT
-			st.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: nil})
-		}
+	workflowInteractiveInput = ws.GetWorkflowState(state.StringKey(InteractiveInputKey))
+	if workflowInteractiveInput != nil {
+		// 清除 workflow_state 中的 INTERACTIVE_INPUT
+		ws.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: nil})
 	}
 
 	// 构造 BaseInteraction，workflowInteractiveInput 作为 defaultInput

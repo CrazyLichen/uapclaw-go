@@ -173,11 +173,15 @@ func TestCommitCMP_WorkflowCommitState(t *testing.T) {
 	commitCMP(session)
 }
 
-// TestCommitCMP_非WorkflowCommitState 测试非 WorkflowCommitState 不 panic
+// TestCommitCMP_非WorkflowCommitState 测试非 WorkflowCommitState 会 panic（对齐 Python AttributeError）
 func TestCommitCMP_非WorkflowCommitState(t *testing.T) {
 	session := &fakeBaseSession{stateValue: state.NewInMemoryState()}
 
-	// 不应 panic
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("期望 panic（对齐 Python AttributeError），实际未 panic")
+		}
+	}()
 	commitCMP(session)
 }
 

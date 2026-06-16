@@ -70,8 +70,8 @@ func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
 // LoadAgent 加载指定 Agent 的会话数据
 func (g *GlobalSessionController) LoadAgent(agentID string, loadActiveOnly bool) error {
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	controller := g.getOrCreateController(agentID)
-	g.mu.Unlock()
 	return controller.Load(loadActiveOnly)
 }
 
@@ -113,9 +113,8 @@ func (g *GlobalSessionController) LoadAll(loadActiveOnly bool) error {
 // FlushAgent 刷盘指定 Agent 的会话数据
 func (g *GlobalSessionController) FlushAgent(agentID string) error {
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	controller, ok := g.Controllers[agentID]
-	g.mu.Unlock()
-
 	if !ok {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("action", "flush_agent").

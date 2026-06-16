@@ -125,7 +125,7 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 						Msg("提交更新到底层 state 失败")
 				}
 			}
-			s.updates[id] = nil
+			s.updates[id] = make([]map[string]any, 0)
 		}
 	}
 }
@@ -134,22 +134,20 @@ func (s *InMemoryCommitState) Commit(nodeID ...string) {
 func (s *InMemoryCommitState) Rollback(nodeID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.updates[nodeID] = nil
+	s.updates[nodeID] = make([]map[string]any, 0)
 }
 
-// GetUpdates 获取所有暂存更新
+// GetUpdates 获取所有暂存更新（深拷贝返回，对齐 Python get_updates 返回完整 key 集合）
 func (s *InMemoryCommitState) GetUpdates() map[string][]map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make(map[string][]map[string]any, len(s.updates))
 	for key, updates := range s.updates {
-		if len(updates) > 0 {
-			copied := make([]map[string]any, len(updates))
-			for i, u := range updates {
-				copied[i] = deepCopyMap(u)
-			}
-			result[key] = copied
+		copied := make([]map[string]any, len(updates))
+		for i, u := range updates {
+			copied[i] = deepCopyMap(u)
 		}
+		result[key] = copied
 	}
 	return result
 }

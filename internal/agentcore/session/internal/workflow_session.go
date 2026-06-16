@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -178,6 +180,7 @@ func WithWorkflowID(id string) WorkflowSessionOption {
 //
 // 从 parent session 的 state 创建节点专属状态视图（共享底层状态，切换 nodeID/parentID）。
 // executableID = parentID + "." + nodeID（parentID 为空时退化为 nodeID）。
+// 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
 func NewNodeSession(parent baseSession, nodeID, nodeType string, skipTrace bool) *NodeSession {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_node_session").
@@ -188,14 +191,17 @@ func NewNodeSession(parent baseSession, nodeID, nodeType string, skipTrace bool)
 	parentID := createParentID(parent)
 	executableID := createExecutableID(nodeID, parentID)
 
-	// 从 parent 的 state 创建节点专属状态视图
+	// 类型断言获取 WorkflowState，创建节点专属状态视图
 	var nodeState state.SessionState
-	if cs, ok := parent.State().(*state.WorkflowCommitState); ok {
-		nodeState = cs.CreateNodeState(executableID, parentID)
-	} else {
-		// 降级：无法创建节点视图时直接使用 parent 的 state
-		nodeState = parent.State()
+	ws, ok := parent.State().(state.WorkflowState)
+	if !ok {
+		logger.Error(logger.ComponentAgentCore).
+			Str("action", "create_node_session").
+			Str("state_type", fmt.Sprintf("%T", parent.State())).
+			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")
+		panic(fmt.Sprintf("当前状态 %T 不支持 CreateNodeState（未实现 WorkflowState 接口），对齐 Python AttributeError", parent.State()))
 	}
+	nodeState = ws.CreateNodeState(executableID, parentID)
 
 	return &NodeSession{
 		delegate:             parent,
@@ -216,6 +222,7 @@ func NewNodeSession(parent baseSession, nodeID, nodeType string, skipTrace bool)
 // 嵌套深度 = 传入 NodeSession 的深度 + 1。
 // 构造时以传入 NodeSession 的 parent() 作为父级 session，
 // 使用原 NodeSession 的 nodeID 和 nodeType。
+// 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
 func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorManager any) *SubWorkflowSession {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_sub_workflow_session").
@@ -227,13 +234,17 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 	parentID := createParentID(parentSession)
 	executableID := createExecutableID(nodeSession.NodeID(), parentID)
 
-	// 从 parent 的 state 创建节点专属状态视图
+	// 类型断言获取 WorkflowState，创建节点专属状态视图
 	var nodeState state.SessionState
-	if cs, ok := parentSession.State().(*state.WorkflowCommitState); ok {
-		nodeState = cs.CreateNodeState(executableID, parentID)
-	} else {
-		nodeState = parentSession.State()
+	ws, ok := parentSession.State().(state.WorkflowState)
+	if !ok {
+		logger.Error(logger.ComponentAgentCore).
+			Str("action", "create_sub_workflow_session").
+			Str("state_type", fmt.Sprintf("%T", parentSession.State())).
+			Msg("当前状态不支持 CreateNodeState，对齐 Python AttributeError")
+		panic(fmt.Sprintf("当前状态 %T 不支持 CreateNodeState（未实现 WorkflowState 接口），对齐 Python AttributeError", parentSession.State()))
 	}
+	nodeState = ws.CreateNodeState(executableID, parentID)
 
 	return &SubWorkflowSession{
 		NodeSession: NodeSession{

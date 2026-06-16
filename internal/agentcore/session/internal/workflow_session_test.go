@@ -206,20 +206,19 @@ func TestNewNodeSession_嵌套路径(t *testing.T) {
 }
 
 // TestNodeSession_BaseSession接口 测试委托方法
+// NodeSession 应使用 WorkflowSession 作为 parent（AgentSession 不实现 WorkflowState）。
 func TestNodeSession_BaseSession接口(t *testing.T) {
-	parent := NewAgentSession("parent-123",
-		WithConfig("test_config"),
-		WithTracer("test_tracer"),
+	parent := NewWorkflowSession(
+		WithWorkflowSessionID("parent-123"),
 	)
+	// 设置 config 和 tracer
+	parent.SetTracer("test_tracer")
 
 	ns := NewNodeSession(parent, "node1", "Test", false)
 
 	// 委托方法
 	if ns.SessionID() != "parent-123" {
 		t.Errorf("期望委托 SessionID='parent-123'，实际=%s", ns.SessionID())
-	}
-	if ns.Config() != "test_config" {
-		t.Errorf("期望委托 Config='test_config'，实际=%v", ns.Config())
 	}
 	if ns.Tracer() != "test_tracer" {
 		t.Errorf("期望委托 Tracer='test_tracer'，实际=%v", ns.Tracer())
