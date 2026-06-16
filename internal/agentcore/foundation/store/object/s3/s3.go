@@ -75,25 +75,25 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	// 兼容新版 SDK 校验和计算行为变更，避免与 OBS/新版 S3 服务交互时 checksum 校验失败
 	if err := os.Setenv("AWS_REQUEST_CHECKSUM_CALCULATION", "WHEN_REQUIRED"); err != nil {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("set env AWS_REQUEST_CHECKSUM_CALCULATION failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("设置环境变量 AWS_REQUEST_CHECKSUM_CALCULATION 失败: %v", err)))
 	}
 	if err := os.Setenv("AWS_RESPONSE_CHECKSUM_VALIDATION", "WHEN_REQUIRED"); err != nil {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("set env AWS_RESPONSE_CHECKSUM_VALIDATION failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("设置环境变量 AWS_RESPONSE_CHECKSUM_VALIDATION 失败: %v", err)))
 	}
 
 	// 校验必填配置
 	if cfg.Server == "" {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", "server endpoint is required"))
+			exception.WithParam("error_msg", "服务端点（server endpoint）不能为空"))
 	}
 	if cfg.AccessKeyID == "" {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", "access_key_id is required"))
+			exception.WithParam("error_msg", "access_key_id 不能为空"))
 	}
 	if cfg.SecretAccessKey == "" {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", "secret_access_key is required"))
+			exception.WithParam("error_msg", "secret_access_key 不能为空"))
 	}
 
 	// 构建 AWS 静态凭证
@@ -106,7 +106,7 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	)
 	if err != nil {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", fmt.Sprintf("load aws config failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("加载 AWS 配置失败: %v", err)))
 	}
 
 	// 构建 S3 客户端选项
@@ -220,7 +220,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
-			exception.WithParam("error_msg", fmt.Sprintf("open file failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("打开文件失败: %v", err)))
 	}
 	defer func() { _ = file.Close() }()
 
@@ -238,7 +238,7 @@ func (c *S3Client) UploadFile(ctx context.Context, bucketName string, objectName
 		return exception.BuildError(exception.StatusStoreObjectUploadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
-			exception.WithParam("error_msg", fmt.Sprintf("stat file failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("获取文件信息失败: %v", err)))
 	}
 
 	// G-30: 使用分段上传替代 PutObject，大文件自动分片
@@ -308,7 +308,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 		return exception.BuildError(exception.StatusStoreObjectDownloadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
-			exception.WithParam("error_msg", fmt.Sprintf("create file failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("创建文件失败: %v", err)))
 	}
 	defer func() { _ = file.Close() }()
 
@@ -326,7 +326,7 @@ func (c *S3Client) DownloadFile(ctx context.Context, bucketName string, objectNa
 		return exception.BuildError(exception.StatusStoreObjectDownloadFailed,
 			exception.WithParam("object_name", objectName),
 			exception.WithParam("bucket_name", bucketName),
-			exception.WithParam("error_msg", fmt.Sprintf("write file failed: %v", err)))
+			exception.WithParam("error_msg", fmt.Sprintf("写入文件失败: %v", err)))
 	}
 
 	logger.Info(logComponent).

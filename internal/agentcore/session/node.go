@@ -161,7 +161,7 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 // 对应 Python: Session.interact(value)
 func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error) {
 	if f.streamMode {
-		return nil, fmt.Errorf("interact when streaming process(transform or collect) is not supported, comp_id=%s, workflow=%s",
+		return nil, fmt.Errorf("流式处理（transform 或 collect）期间不支持交互, comp_id=%s, workflow=%s",
 			f.GetComponentID(), f.GetWorkflowID())
 	}
 	if f.interaction == nil {

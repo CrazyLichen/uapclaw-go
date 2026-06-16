@@ -5,8 +5,10 @@ package state
 // StateKey 状态访问键，封装 string/map/slice 三态
 // 内部用 value 字段存储实际值，keyType 标识具体类型
 type StateKey struct {
+	// keyType 状态键类型
 	keyType StateKeyType
-	value   any // 存储 string / map[string]any / []any
+	// value 存储实际值（string / map[string]any / []any）
+	value any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

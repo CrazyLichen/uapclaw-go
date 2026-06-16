@@ -46,6 +46,8 @@ type Session struct {
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -284,6 +286,16 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 	)
 }
 
+// CreateAgentSession 创建 Agent 会话实例。
+// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session()
+// 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
+func CreateAgentSession(agentID, sessionID string) *Session {
+	card := &schema.AgentCard{
+		BaseCard: schema.BaseCard{ID: agentID},
+	}
+	return NewSession(WithSessionID(sessionID), WithCard(card))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() {
@@ -307,14 +319,4 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-// CreateAgentSession 创建 Agent 会话实例。
-// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session()
-// 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
-func CreateAgentSession(agentID, sessionID string) *Session {
-	card := &schema.AgentCard{
-		BaseCard: schema.BaseCard{ID: agentID},
-	}
-	return NewSession(WithSessionID(sessionID), WithCard(card))
 }

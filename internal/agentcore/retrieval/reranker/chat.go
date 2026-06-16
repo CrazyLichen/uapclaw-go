@@ -68,7 +68,7 @@ func NewChatReranker(config reranker.RerankerConfig, opts ...StandardRerankerOpt
 	// 校验 YesNoIDs
 	if config.YesNoIDs == [2]int{} {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", `chat reranker require "yes_no_ids" to be specified in RerankerConfig`),
+			exception.WithParam("error_msg", `ChatReranker 要求在 RerankerConfig 中指定 "yes_no_ids"`),
 		)
 	}
 
@@ -244,7 +244,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 			Msg("服务不支持 logprobs，ChatReranker 无法工作")
 		return nil, exception.BuildError(
 			exception.StatusRetrievalRerankerRequestCallFailed,
-			exception.WithParam("error_msg", "the service does not support logprobs for chat reranker to function"),
+			exception.WithParam("error_msg", "服务不支持 logprobs，ChatReranker 无法工作"),
 		)
 	}
 
@@ -299,7 +299,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
 	if len(docs) != 1 {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "input to chat reranker must be a list[str | Document] of size 1"),
+			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的 list[str | Document]"),
 		)
 	}
 
@@ -329,7 +329,7 @@ func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, o
 func (c *ChatReranker) doRerankSync(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
 	if len(docs) != 1 {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "input to chat reranker must be a list[str | Document] of size 1"),
+			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的 list[str | Document]"),
 		)
 	}
 
