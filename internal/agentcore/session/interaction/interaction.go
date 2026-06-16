@@ -80,8 +80,7 @@ func NewWorkflowInteraction(session baseSession) *WorkflowInteraction {
 	}
 
 	// 从 workflow_state 读取 INTERACTIVE_INPUT
-	var workflowInteractiveInput any
-	workflowInteractiveInput = ws.GetWorkflowState(state.StringKey(InteractiveInputKey))
+	workflowInteractiveInput := ws.GetWorkflowState(state.StringKey(InteractiveInputKey))
 	if workflowInteractiveInput != nil {
 		// 清除 workflow_state 中的 INTERACTIVE_INPUT
 		ws.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: nil})
