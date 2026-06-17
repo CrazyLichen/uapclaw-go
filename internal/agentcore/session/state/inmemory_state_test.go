@@ -9,15 +9,15 @@ import (
 
 // TestNewInMemoryState 验证构造函数创建非 nil 实例。
 func TestNewInMemoryState(t *testing.T) {
-	s := NewInMemoryState()
+	s := NewInMemoryStateLike()
 	if s == nil {
-		t.Fatal("NewInMemoryState 返回 nil")
+		t.Fatal("NewInMemoryStateLike 返回 nil")
 	}
 }
 
-// TestInMemoryState_Get_字符串key 验证字符串 key 读取。
-func TestInMemoryState_Get_字符串key(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_字符串key 验证字符串 key 读取。
+func TestInMemoryStateLike_Get_字符串key(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"name": "alice"}))
 	result := s.Get(StringKey("name"))
 	if result != "alice" {
@@ -25,9 +25,9 @@ func TestInMemoryState_Get_字符串key(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Get_嵌套路径 验证嵌套路径读取。
-func TestInMemoryState_Get_嵌套路径(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_嵌套路径 验证嵌套路径读取。
+func TestInMemoryStateLike_Get_嵌套路径(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"user": map[string]any{"name": "alice"}}))
 	result := s.Get(StringKey("user.name"))
 	if result != "alice" {
@@ -35,9 +35,9 @@ func TestInMemoryState_Get_嵌套路径(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Get_mapSchema 验证 map schema 批量读取。
-func TestInMemoryState_Get_mapSchema(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_mapSchema 验证 map schema 批量读取。
+func TestInMemoryStateLike_Get_mapSchema(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{
 		"user": map[string]any{"name": "alice", "age": 30},
 	}))
@@ -51,9 +51,9 @@ func TestInMemoryState_Get_mapSchema(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Get_listSchema 验证 list schema 批量读取。
-func TestInMemoryState_Get_listSchema(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_listSchema 验证 list schema 批量读取。
+func TestInMemoryStateLike_Get_listSchema(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{
 		"user": map[string]any{"name": "alice", "age": 30},
 	}))
@@ -64,9 +64,9 @@ func TestInMemoryState_Get_listSchema(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Get_深拷贝 验证 Get 返回深拷贝，修改返回值不影响内部。
-func TestInMemoryState_Get_深拷贝(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_深拷贝 验证 Get 返回深拷贝，修改返回值不影响内部。
+func TestInMemoryStateLike_Get_深拷贝(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"user": map[string]any{"name": "alice"}}))
 	result := s.Get(StringKey("user"))
 	result.(map[string]any)["name"] = "bob"
@@ -77,18 +77,18 @@ func TestInMemoryState_Get_深拷贝(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Get_不存在 验证不存在的 key 返回 nil。
-func TestInMemoryState_Get_不存在(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Get_不存在 验证不存在的 key 返回 nil。
+func TestInMemoryStateLike_Get_不存在(t *testing.T) {
+	s := NewInMemoryStateLike()
 	result := s.Get(StringKey("missing"))
 	if result != nil {
 		t.Errorf("Get(不存在的 key) = %v, 期望 nil", result)
 	}
 }
 
-// TestInMemoryState_GetByPrefix 验证带前缀读取。
-func TestInMemoryState_GetByPrefix(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_GetByPrefix 验证带前缀读取。
+func TestInMemoryStateLike_GetByPrefix(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{
 		"node1": map[string]any{"name": "alice"},
 	}))
@@ -98,18 +98,18 @@ func TestInMemoryState_GetByPrefix(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Update 验证 Update 更新状态。
-func TestInMemoryState_Update(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Update 验证 Update 更新状态。
+func TestInMemoryStateLike_Update(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	if s.Get(StringKey("a")) != 1 {
 		t.Errorf("Update 后 Get = %v, 期望 1", s.Get(StringKey("a")))
 	}
 }
 
-// TestInMemoryState_Update_深拷贝输入 验证 Update 深拷贝输入数据。
-func TestInMemoryState_Update_深拷贝输入(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Update_深拷贝输入 验证 Update 深拷贝输入数据。
+func TestInMemoryStateLike_Update_深拷贝输入(t *testing.T) {
+	s := NewInMemoryStateLike()
 	data := map[string]any{"a": 1}
 	require.NoError(t, s.Update(data))
 	data["a"] = 2
@@ -118,9 +118,9 @@ func TestInMemoryState_Update_深拷贝输入(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_Update_覆盖 验证 Update 覆盖已有值。
-func TestInMemoryState_Update_覆盖(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Update_覆盖 验证 Update 覆盖已有值。
+func TestInMemoryStateLike_Update_覆盖(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	require.NoError(t, s.Update(map[string]any{"a": 2}))
 	if s.Get(StringKey("a")) != 2 {
@@ -128,11 +128,11 @@ func TestInMemoryState_Update_覆盖(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_GetByTransformer 验证通过转换函数获取值。
-func TestInMemoryState_GetByTransformer(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_GetByTransformer 验证通过转换函数获取值。
+func TestInMemoryStateLike_GetByTransformer(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1, "b": 2}))
-	result := s.GetByTransformer(func(r ReadableState) any {
+	result := s.GetByTransformer(func(r ReadableStateLike) any {
 		return r.Get(StringKey("a"))
 	})
 	if result != 1 {
@@ -140,9 +140,9 @@ func TestInMemoryState_GetByTransformer(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_GetState 验证 GetState 返回完整快照。
-func TestInMemoryState_GetState(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_GetState 验证 GetState 返回完整快照。
+func TestInMemoryStateLike_GetState(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	state := s.GetState()
 	if state["a"] != 1 {
@@ -150,9 +150,9 @@ func TestInMemoryState_GetState(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_GetState_深拷贝 验证 GetState 返回深拷贝。
-func TestInMemoryState_GetState_深拷贝(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_GetState_深拷贝 验证 GetState 返回深拷贝。
+func TestInMemoryStateLike_GetState_深拷贝(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	state := s.GetState()
 	state["a"] = 2
@@ -161,9 +161,9 @@ func TestInMemoryState_GetState_深拷贝(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_SetState 验证 SetState 从快照恢复状态。
-func TestInMemoryState_SetState(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_SetState 验证 SetState 从快照恢复状态。
+func TestInMemoryStateLike_SetState(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	s.SetState(map[string]any{"b": 2})
 	if s.Get(StringKey("a")) != nil {
@@ -174,9 +174,9 @@ func TestInMemoryState_SetState(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_SetState_nil 验证 SetState 传入 nil 不影响当前状态。
-func TestInMemoryState_SetState_nil(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_SetState_nil 验证 SetState 传入 nil 不影响当前状态。
+func TestInMemoryStateLike_SetState_nil(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	s.SetState(nil)
 	if s.Get(StringKey("a")) != 1 {
@@ -184,14 +184,14 @@ func TestInMemoryState_SetState_nil(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_接口满足 验证 InMemoryState 满足 State 接口。
-func TestInMemoryState_接口满足(t *testing.T) {
-	var _ State = (*InMemoryState)(nil)
+// TestInMemoryStateLike_接口满足 验证 InMemoryStateLike 满足 StateLike 接口。
+func TestInMemoryStateLike_接口满足(t *testing.T) {
+	var _ StateLike = (*InMemoryStateLike)(nil)
 }
 
-// TestInMemoryState_完整读写流程 验证完整的读写流程。
-func TestInMemoryState_完整读写流程(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_完整读写流程 验证完整的读写流程。
+func TestInMemoryStateLike_完整读写流程(t *testing.T) {
+	s := NewInMemoryStateLike()
 
 	// 初始写入
 	require.NoError(t, s.Update(map[string]any{
@@ -225,25 +225,25 @@ func TestInMemoryState_完整读写流程(t *testing.T) {
 	}
 
 	// 快照恢复
-	s2 := NewInMemoryState()
+	s2 := NewInMemoryStateLike()
 	s2.SetState(snapshot)
 	if s2.Get(StringKey("user.name")) != "alice" {
 		t.Errorf("恢复后 user.name = %v, 期望 alice", s2.Get(StringKey("user.name")))
 	}
 }
 
-// TestInMemoryState_GetGlobal_返回nil 验证 GetGlobal 返回 nil。
-func TestInMemoryState_GetGlobal_返回nil(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_GetGlobal_返回nil 验证 GetGlobal 返回 nil。
+func TestInMemoryStateLike_GetGlobal_返回nil(t *testing.T) {
+	s := NewInMemoryStateLike()
 	result := s.GetGlobal(StringKey("key"))
 	if result != nil {
 		t.Errorf("GetGlobal 应返回 nil，实际=%v", result)
 	}
 }
 
-// TestInMemoryState_UpdateGlobal_空操作 验证 UpdateGlobal 不影响内部状态。
-func TestInMemoryState_UpdateGlobal_空操作(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_UpdateGlobal_空操作 验证 UpdateGlobal 不影响内部状态。
+func TestInMemoryStateLike_UpdateGlobal_空操作(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	s.UpdateGlobal(map[string]any{"a": 2})
 	// UpdateGlobal 是空操作，不应影响内部状态
@@ -252,15 +252,15 @@ func TestInMemoryState_UpdateGlobal_空操作(t *testing.T) {
 	}
 }
 
-// TestInMemoryState_UpdateTrace_空操作 验证 UpdateTrace 不影响内部状态。
-func TestInMemoryState_UpdateTrace_空操作(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_UpdateTrace_空操作 验证 UpdateTrace 不影响内部状态。
+func TestInMemoryStateLike_UpdateTrace_空操作(t *testing.T) {
+	s := NewInMemoryStateLike()
 	s.UpdateTrace("span_data") // 不应 panic
 }
 
-// TestInMemoryState_Dump_委托GetState 验证 Dump 返回与 GetState 相同的快照。
-func TestInMemoryState_Dump_委托GetState(t *testing.T) {
-	s := NewInMemoryState()
+// TestInMemoryStateLike_Dump_委托GetState 验证 Dump 返回与 GetState 相同的快照。
+func TestInMemoryStateLike_Dump_委托GetState(t *testing.T) {
+	s := NewInMemoryStateLike()
 	require.NoError(t, s.Update(map[string]any{"a": 1}))
 	dump := s.Dump()
 	if dump["a"] != 1 {

@@ -17,13 +17,7 @@ type InMemoryStateLike struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// InMemoryState 保持向后兼容，后续版本移除
-type InMemoryState = InMemoryStateLike
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// NewInMemoryState 保持向后兼容，后续版本移除
-var NewInMemoryState = NewInMemoryStateLike
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

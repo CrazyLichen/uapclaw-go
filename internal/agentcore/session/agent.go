@@ -263,7 +263,7 @@ func (s *Session) Interact(value any) error {
 //
 // 对应 Python: Session.create_workflow_session()
 func (s *Session) CreateWorkflowSession() *WorkflowSession {
-	// 取出 AgentStateCollection 的 globalState（*InMemoryState 实例）
+	// 取出 AgentStateCollection 的 globalState（*InMemoryStateLike 实例）
 	var workflowState *state.WorkflowCommitState
 	if coll, ok := s.inner.State().(*state.AgentStateCollection); ok {
 		// 用 globalState 包装为 InMemoryCommitState，与 AgentSession 共享同一个底层实例

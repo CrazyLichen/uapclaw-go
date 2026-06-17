@@ -81,7 +81,7 @@ func (s *AgentStateCollection) Dump() map[string]any {
 	return map[string]any{
 		GlobalStateKey: s.globalState.GetState(),
 		AgentStateKey:  s.agentState.GetState(),
-		"trace_state":  s.traceState,
+		TraceStateKey:  s.traceState,
 	}
 }
 

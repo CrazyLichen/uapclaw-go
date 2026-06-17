@@ -198,7 +198,7 @@ func TestAgentStateCollection_GetByTransformer(t *testing.T) {
 	coll := NewAgentStateCollection()
 	require.NoError(t, coll.Update(map[string]any{"x": 42}))
 
-	result := coll.GetByTransformer(func(r ReadableState) any {
+	result := coll.GetByTransformer(func(r ReadableStateLike) any {
 		return r.Get(StringKey("x"))
 	})
 	if result != 42 {
@@ -206,9 +206,9 @@ func TestAgentStateCollection_GetByTransformer(t *testing.T) {
 	}
 }
 
-// TestAgentStateCollection_实现State接口 测试 AgentStateCollection 满足 State 接口
-func TestAgentStateCollection_实现State接口(t *testing.T) {
-	var _ State = NewAgentStateCollection()
+// TestAgentStateCollection_实现SessionState接口 测试 AgentStateCollection 满足 SessionState 接口
+func TestAgentStateCollection_实现SessionState接口(t *testing.T) {
+	var _ SessionState = NewAgentStateCollection()
 }
 
 // TestAgentStateCollection_SetState_Nil测试 测试 nil 输入不 panic

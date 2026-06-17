@@ -62,7 +62,7 @@ func TestProxySession_SetSession(t *testing.T) {
 // TestProxySession_委托全部方法 验证 ProxySession 的 8 个方法全部委托给 stub。
 func TestProxySession_委托全部方法(t *testing.T) {
 	// 准备 mock 数据
-	expectedState := state.NewInMemoryState()
+	expectedState := state.NewInMemoryStateLike()
 	stub := &mockStub{
 		configVal:              "config-value",
 		stateVal:               expectedState,

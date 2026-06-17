@@ -137,7 +137,7 @@ func TestAgentSession_WithCheckpointer(t *testing.T) {
 
 // TestAgentSession_WithState 测试 WithState 选项
 func TestAgentSession_WithState(t *testing.T) {
-	customState := state.NewInMemoryState()
+	customState := state.NewInMemoryStateLike()
 	s := NewAgentSession("test-id", WithState(customState))
 	if s.State() != customState {
 		t.Errorf("State 期望 customState 实例，实际 %v", s.State())

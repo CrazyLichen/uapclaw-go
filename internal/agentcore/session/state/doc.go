@@ -11,15 +11,12 @@
 //     由 AgentStateCollection 和 WorkflowStateCollection 实现。
 //     消费方通过此接口多态调用，无需类型断言。
 //
-// 向后兼容别名：ReadableState/RecoverableState/State/CommitState/InMemoryState
-// 仍可用，后续版本移除。
-//
 // 文件目录：
 //
 //	state/
 //	├── doc.go                           # 包文档
 //	├── key.go                           # StateKey 类型 + StateKeyType 枚举 + 构造函数
-//	├── state.go                         # 双层接口 + Transformer 类型 + 常量 + 兼容别名
+//	├── state.go                         # 双层接口 + Transformer 类型 + 常量
 //	├── agent_state_collection.go        # Agent 状态集合（组合 global + agent state + trace）
 //	├── workflow_state_collection.go     # Workflow 四区状态集合（io/global/comp/workflow）
 //	├── workflow_commit_state.go         # Workflow 可提交状态（commit/rollback/IO 操作）
@@ -47,5 +44,5 @@
 //	AgentStateCollection     — Agent 会话状态集合，组合 globalState + agentState + traceState
 //	WorkflowStateCollection  — Workflow 四区状态集合，组合 io/global/comp/workflow
 //	WorkflowCommitState      — Workflow 可提交状态，增加 commit/rollback/IO 操作
-//	StateKey                 — 状态访问键，封装 string/map/slice 三态
+//	StateKey                 — 状态访问键，封装 string/map/slice/all 四态
 package state

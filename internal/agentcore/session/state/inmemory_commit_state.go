@@ -29,7 +29,7 @@ func NewInMemoryCommitState(state ...StateLike) *InMemoryCommitState {
 	if len(state) > 0 && state[0] != nil {
 		s = state[0]
 	} else {
-		s = NewInMemoryState()
+		s = NewInMemoryStateLike()
 	}
 	return &InMemoryCommitState{
 		state:   s,

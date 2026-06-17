@@ -118,7 +118,7 @@ func (s *WorkflowStateCollection) Dump() map[string]any {
 		CompStateUpdatesKey:     s.compState.GetUpdates(),
 		WorkflowStateKey:        s.workflowState.GetState(),
 		WorkflowStateUpdatesKey: s.workflowState.GetUpdates(),
-		"trace_state":           s.traceState,
+		TraceStateKey:           s.traceState,
 	}
 }
 

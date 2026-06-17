@@ -119,9 +119,15 @@ func (sc *SessionController) FlushSession(sessionID string) error {
 
 // FlushScope 持久化指定作用域的会话到磁盘。
 // 对齐 Python asyncio.gather：在锁内并发 Flush 匹配 scope 的 session。
+// T-08 修复：scope 不存在时快速返回，对齐 Python flush_scope 的快速返回检查。
 func (sc *SessionController) FlushScope(sessionScope SessionScope) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+
+	// T-08 修复：对齐 Python flush_scope 中 if session_scope not in self.meta_map: return True
+	if _, ok := sc.MetaMap[sessionScope.String()]; !ok {
+		return nil
+	}
 
 	// 对齐 Python asyncio.gather：并发 Flush 匹配 scope 的 session
 	eg := &errgroup.Group{}

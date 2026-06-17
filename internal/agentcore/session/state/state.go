@@ -118,20 +118,6 @@ type WorkflowState interface {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// 以下别名保持向后兼容，后续版本移除
-
-// ReadableState 只读状态访问接口别名（向后兼容）
-type ReadableState = ReadableStateLike
-
-// RecoverableState 可恢复状态接口别名（向后兼容）
-type RecoverableState = RecoverableStateLike
-
-// State 可读写状态接口别名（向后兼容）
-type State = StateLike
-
-// CommitState 事务性状态接口别名（向后兼容）
-type CommitState = CommitStateLike
-
 // Transformer 状态转换函数，接受只读状态视图返回任意值
 type Transformer func(readable ReadableStateLike) any
 
@@ -160,4 +146,7 @@ const (
 	CompStateUpdatesKey = "comp_state_updates"
 	// WorkflowStateUpdatesKey 工作流状态更新键
 	WorkflowStateUpdatesKey = "workflow_state_updates"
+	// TraceStateKey 追踪状态键
+	// T-03/T-04 修复：提取为常量，替换 Dump 中的硬编码 "trace_state"
+	TraceStateKey = "trace_state"
 )

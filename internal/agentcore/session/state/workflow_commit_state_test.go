@@ -134,7 +134,7 @@ func TestGetInputsByTransformer(t *testing.T) {
 	cs.ioState.Commit(DefaultNodeID)
 
 	// 通过 transformer 获取
-	result := cs.GetInputsByTransformer(func(r ReadableState) any {
+	result := cs.GetInputsByTransformer(func(r ReadableStateLike) any {
 		return r.Get(StringKey("key1"))
 	})
 	if result != "val1" {
@@ -493,7 +493,7 @@ func TestGetOutputs_ioStateNil(t *testing.T) {
 // TestGetInputsByTransformer_ioStateNil 验证 ioState 为 nil 时返回空 map。
 func TestGetInputsByTransformer_ioStateNil(t *testing.T) {
 	cs := &WorkflowCommitState{}
-	result := cs.GetInputsByTransformer(func(r ReadableState) any { return nil })
+	result := cs.GetInputsByTransformer(func(r ReadableStateLike) any { return nil })
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("期望 map[string]any，实际=%T", result)
