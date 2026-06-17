@@ -222,14 +222,17 @@ func TestDump(t *testing.T) {
 	}
 }
 
-// TestGetState_SetState 测试持久化恢复循环
+// TestGetState_SetState 通过 WorkflowCommitState 验证状态快照保存和恢复。
+// WorkflowStateCollection 不再直接实现 GetState/SetState（对齐 Python StateCollection 不覆写这两个方法），
+// 由 WorkflowCommitState 覆写提供。
 func TestGetState_SetState(t *testing.T) {
 	ioState := NewInMemoryCommitState()
 	globalState := NewInMemoryCommitState()
 	compState := NewInMemoryCommitState()
 	workflowState := NewInMemoryCommitState()
 
-	sc := NewWorkflowStateCollection(ioState, globalState, compState, workflowState, nil, "", "node1")
+	// 使用 WorkflowCommitState（覆写了 GetState/SetState）
+	wcs := NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "", "node1", true)
 
 	// 写入数据
 	if err := compState.UpdateByID("node1", map[string]any{"key1": "value1"}); err != nil {
@@ -238,15 +241,15 @@ func TestGetState_SetState(t *testing.T) {
 	compState.Commit("node1")
 
 	// 导出快照
-	snapshot := sc.GetState()
+	snapshot := wcs.GetState()
 
 	// 创建新实例并恢复
 	ioState2 := NewInMemoryCommitState()
 	globalState2 := NewInMemoryCommitState()
 	compState2 := NewInMemoryCommitState()
 	workflowState2 := NewInMemoryCommitState()
-	sc2 := NewWorkflowStateCollection(ioState2, globalState2, compState2, workflowState2, nil, "", "node1")
-	sc2.SetState(snapshot)
+	wcs2 := NewWorkflowCommitState(ioState2, globalState2, compState2, workflowState2, nil, "", "node1", true)
+	wcs2.SetState(snapshot)
 
 	// 验证恢复后的 compState
 	result := compState2.Get(StringKey("key1"))
@@ -255,7 +258,7 @@ func TestGetState_SetState(t *testing.T) {
 	}
 
 	// SetState(nil) 不 panic
-	sc2.SetState(nil)
+	wcs2.SetState(nil)
 }
 
 // TestNil防御 测试 nil 防御

@@ -21,14 +21,16 @@ type InteractionOutput struct {
 
 // InteractionOutputSchema 交互中断信号的结构化输出。
 // 对应 Python: OutputSchema(type=INTERACTION, index=idx, payload=payload)
-// 替代之前使用 map[string]any 的方式，提供类型安全
+// 替代之前使用 map[string]any 的方式，提供类型安全。
+// Payload 统一为 InteractionOutput 类型（Python 中 wait_user_inputs 用 InteractionOutput，
+// user_latest_input 用 tuple，Go 统一为 InteractionOutput 更一致且类型安全）。
 type InteractionOutputSchema struct {
 	// Type 输出类型（如 "interaction"）
 	Type string `json:"type"`
 	// Index 交互序号
 	Index int `json:"index"`
 	// Payload 交互负载
-	Payload any `json:"payload"`
+	Payload InteractionOutput `json:"payload"`
 }
 
 // WorkflowInteraction 工作流交互，通过 GraphInterrupt 暂停工作流图执行。
@@ -49,10 +51,8 @@ type SimpleAgentInteraction struct {
 // AgentInteraction 完整 Agent 交互，管理输入队列 + checkpointer + stream 输出。
 // 对应 Python: openjiuwen/core/session/interaction/interaction.py (AgentInteraction)
 type AgentInteraction struct {
-	// BaseInteraction 嵌入交互基类
+	// BaseInteraction 嵌入交互基类（内含 session 字段）
 	*BaseInteraction
-	// session Agent 内部会话
-	session baseSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -107,7 +107,6 @@ func NewAgentInteraction(session baseSession) *AgentInteraction {
 	bi := NewBaseInteraction(session)
 	return &AgentInteraction{
 		BaseInteraction: bi,
-		session:         session,
 	}
 }
 
@@ -157,7 +156,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 
 	// 无缓存，需要中断
 	nodeID := getExecutableID(w.session)
-	payload := &InteractionOutput{ID: nodeID, Value: value}
+	payload := InteractionOutput{ID: nodeID, Value: value}
 	_ = writeInteractionOutput(w.session, InteractionType, w.idx, payload)
 
 	logger.Info(logger.ComponentAgentCore).
@@ -181,20 +180,18 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 // WaitUserInputs 等待用户输入（简单模式）。
 // 保存检查点后触发 AgentInterrupt，无输入队列和流输出。
 // 对应 Python: SimpleAgentInteraction.wait_user_inputs(message)
+// 如果检查点中断失败，返回错误（对齐 Python await checkpointer 失败时抛异常的行为）。
 func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any) error {
-	_ = interruptAgentExecute(s.session)
-
-	msg := ""
-	if m, ok := message.(string); ok {
-		msg = m
+	if err := interruptAgentExecute(s.session); err != nil {
+		return fmt.Errorf("检查点中断 Agent 执行失败: %w", err)
 	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "simple_agent_interaction_interrupt").
-		Str("message", msg).
+		Str("message", fmt.Sprintf("%v", message)).
 		Msg("简单 Agent 交互中断")
 
-	PanicAgentInterrupt(msg)
+	PanicAgentInterrupt(message)
 	return nil // 不可达
 }
 
@@ -202,6 +199,7 @@ func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any
 // 1. 优先从输入队列获取（恢复场景）
 // 2. 队列为空时：保存检查点 → 写流输出 → panic AgentInterrupt
 // 对应 Python: AgentInteraction.wait_user_inputs(value)
+// 如果检查点中断失败，返回错误（对齐 Python await checkpointer 失败时抛异常的行为）。
 func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, error) {
 	inputs := a.getNextInteractiveInput()
 	if inputs != nil {
@@ -209,7 +207,9 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 	}
 
 	// 队列为空，需要中断
-	_ = interruptAgentExecute(a.session)
+	if err := interruptAgentExecute(a.session); err != nil {
+		return nil, fmt.Errorf("检查点中断 Agent 执行失败: %w", err)
+	}
 
 	nodeID := getExecutableID(a.session)
 	payload := InteractionOutput{ID: nodeID, Value: value}
@@ -221,6 +221,6 @@ func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, 
 		Int("index", a.idx).
 		Msg("Agent 交互中断：等待用户输入")
 
-	PanicAgentInterrupt("")
+	PanicAgentInterrupt(nil)
 	return nil, nil // 不可达
 }

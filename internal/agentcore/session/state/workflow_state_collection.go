@@ -169,39 +169,6 @@ func (s *WorkflowStateCollection) Update(data map[string]any) error {
 	}
 	return nil
 }
+// GetState / SetState 不在此实现（Python 的 StateCollection 也不覆写这两个方法）。
+// 由 WorkflowCommitState 覆写，因为 CommitState 需要按 workflowOnly 条件控制 global_state 的包含。
 
-// GetState 导出状态快照（用于检查点恢复）。
-// 注意：此方法仅返回 io/comp/workflow 三个状态，global_state 由 WorkflowCommitState 管理。
-func (s *WorkflowStateCollection) GetState() map[string]any {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return map[string]any{
-		IOStateKey:       s.ioState.GetState(),
-		CompStateKey:     s.compState.GetState(),
-		WorkflowStateKey: s.workflowState.GetState(),
-	}
-}
-
-// SetState 从快照恢复状态。
-func (s *WorkflowStateCollection) SetState(st map[string]any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if st == nil {
-		return
-	}
-	if io, ok := st[IOStateKey]; ok {
-		if m, ok := io.(map[string]any); ok {
-			s.ioState.SetState(m)
-		}
-	}
-	if comp, ok := st[CompStateKey]; ok {
-		if m, ok := comp.(map[string]any); ok {
-			s.compState.SetState(m)
-		}
-	}
-	if wf, ok := st[WorkflowStateKey]; ok {
-		if m, ok := wf.(map[string]any); ok {
-			s.workflowState.SetState(m)
-		}
-	}
-}

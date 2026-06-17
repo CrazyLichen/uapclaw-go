@@ -156,10 +156,32 @@ func TestPanicAgentInterrupt(t *testing.T) {
 			t.Fatalf("期望 *AgentInterrupt，得到 %T", r)
 		}
 		if ai.Message != "test_msg" {
-			t.Errorf("Message 期望 'test_msg'，实际=%s", ai.Message)
+			t.Errorf("Message 期望 'test_msg'，实际=%v", ai.Message)
 		}
 	}()
 	PanicAgentInterrupt("test_msg")
+}
+
+// TestPanicAgentInterrupt_非string消息 测试 AgentInterrupt 接受任意类型消息
+func TestPanicAgentInterrupt_非string消息(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("期望 panic AgentInterrupt，但未发生")
+		}
+		ai, ok := r.(*AgentInterrupt)
+		if !ok {
+			t.Fatalf("期望 *AgentInterrupt，得到 %T", r)
+		}
+		msgMap, ok := ai.Message.(map[string]any)
+		if !ok {
+			t.Fatalf("期望 Message 为 map[string]any，得到 %T", ai.Message)
+		}
+		if msgMap["key"] != "value" {
+			t.Errorf("期望 msgMap['key']='value'，实际=%v", msgMap["key"])
+		}
+	}()
+	PanicAgentInterrupt(map[string]any{"key": "value"})
 }
 
 // ──────────────────────────── commitCMP 测试 ────────────────────────────
@@ -175,7 +197,7 @@ func TestCommitCMP_WorkflowCommitState(t *testing.T) {
 
 // TestCommitCMP_非WorkflowCommitState 测试非 WorkflowCommitState 会 panic（对齐 Python AttributeError）
 func TestCommitCMP_非WorkflowCommitState(t *testing.T) {
-	session := &fakeBaseSession{stateValue: state.NewInMemoryState()}
+	session := &fakeBaseSession{stateValue: state.NewInMemoryStateLike()}
 
 	defer func() {
 		if r := recover(); r == nil {

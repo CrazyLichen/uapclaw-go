@@ -248,11 +248,11 @@ func (s *Session) Commit(ctx context.Context) error {
 // Interact 请求用户输入。
 // ✅ 5.7 已回填：SimpleAgentInteraction 实现后填充真实逻辑
 // 对应 Python: Session.interact(value)
-func (s *Session) Interact(value any) error {
+func (s *Session) Interact(ctx context.Context, value any) error {
 	if s.interaction == nil {
 		s.interaction = interaction.NewSimpleAgentInteraction(s.inner)
 	}
-	return s.interaction.WaitUserInputs(context.Background(), value)
+	return s.interaction.WaitUserInputs(ctx, value)
 }
 
 // CreateWorkflowSession 创建子 WorkflowSession。

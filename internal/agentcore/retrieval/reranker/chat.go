@@ -2,7 +2,6 @@ package reranker
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strings"
 
@@ -50,7 +49,6 @@ const (
 var _ reranker.BaseReranker = (*ChatReranker)(nil)
 
 // 抑制未使用导入警告
-var _ = fmt.Sprintf
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -226,10 +224,18 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 	// 从 choices[0] 获取 choice
 	choices, ok := responseData["choices"].([]any)
 	if !ok || len(choices) == 0 {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "响应中无 choices").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	choice, ok := choices[0].(map[string]any)
 	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "choices[0] 类型断言失败").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
@@ -251,17 +257,28 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 	// 获取 content（优先）或 logprobs 本身
 	content, ok := logprobsData["content"].([]any)
 	if !ok || len(content) == 0 {
-		// 尝试直接从 logprobs 获取
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "logprobs 中无 content").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
 	// 获取 top_logprobs
 	topLogprobs, ok := content[0].(map[string]any)
 	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "content[0] 类型断言失败").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 	topLogprobsList, ok := topLogprobs["top_logprobs"].([]any)
 	if !ok || len(topLogprobsList) == 0 {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "无 top_logprobs").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{firstDocID(docIDs): 0.0}, nil
 	}
 
@@ -289,6 +306,10 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 
 	docID := firstDocID(docIDs)
 	if totalProb == 0 {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_reranker_parse_degrade").
+			Str("reason", "yes/no 概率均为零").
+			Msg("parseResponse 降级：返回默认分数")
 		return map[string]float64{docID: 0.0}, nil
 	}
 

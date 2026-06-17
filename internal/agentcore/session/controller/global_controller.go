@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"golang.org/x/sync/errgroup"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -34,6 +35,8 @@ type GlobalSessionController struct {
 	Controllers map[string]*SessionController
 	// dataContainerType 数据容器类型
 	dataContainerType string
+	// enableSessionController 是否启用 Session 控制器回调注册（对齐 Python enable_session_controller 开关）
+	enableSessionController bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -53,8 +56,9 @@ var (
 func GetGlobalSessionController() *GlobalSessionController {
 	globalControllerOnce.Do(func() {
 		globalController = &GlobalSessionController{
-			BasePath:    "./agents",
-			Controllers: make(map[string]*SessionController),
+			BasePath:               "./agents",
+			Controllers:            make(map[string]*SessionController),
+			enableSessionController: true,
 		}
 	})
 	return globalController
@@ -65,6 +69,15 @@ func (g *GlobalSessionController) SetConfig(config GlobalSessionConfig) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.BasePath = config.BasePath
+}
+
+// SetEnabled 设置是否启用 Session 控制器。
+// 对齐 Python: runner_config.enable_session_controller 开关。
+// 默认 true（启用），设为 false 后 onAgentSessionCreated 回调不再注册 session。
+func (g *GlobalSessionController) SetEnabled(enabled bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.enableSessionController = enabled
 }
 
 // LoadAgent 加载指定 Agent 的会话数据
@@ -125,17 +138,21 @@ func (g *GlobalSessionController) FlushAgent(agentID string) error {
 	return controller.Flush()
 }
 
-// FlushSession 刷盘指定会话数据
+// FlushSession 刷盘指定会话数据（跨所有 Agent 并发执行，对齐 Python asyncio.gather 行为）。
 func (g *GlobalSessionController) FlushSession(sessionID string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	eg, _ := errgroup.WithContext(context.Background())
 	for _, controller := range g.Controllers {
 		if _, ok := controller.SessionCache[sessionID]; ok {
-			return controller.FlushSession(sessionID)
+			ctrl := controller // 捕获循环变量
+			eg.Go(func() error {
+				return ctrl.FlushSession(sessionID)
+			})
 		}
 	}
-	return nil
+	return eg.Wait()
 }
 
 // FlushScope 刷盘指定作用域的会话数据（跨所有 Agent）
@@ -569,8 +586,14 @@ func VisualizeCallChain(agentID, sessionID string, depth int) string {
 }
 
 // onAgentSessionCreated AGENT_SESSION_CREATED 回调：
-// 将 ChainSession 的 DataContainer.session 注入真实 Session 实例
+// 将 ChainSession 的 DataContainer.session 注入真实 Session 实例。
+// enableSessionController 为 false 时跳过注册（对齐 Python runner_config.enable_session_controller 开关）。
 func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventData) any {
+	instance := GetGlobalSessionController()
+	if !instance.enableSessionController {
+		return nil
+	}
+
 	if data.SessionID == "" || data.Card == nil || data.Session == nil {
 		return nil
 	}
@@ -581,7 +604,6 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 		return nil
 	}
 
-	instance := GetGlobalSessionController()
 	controller := instance.GetAgent(card.ID)
 	if controller == nil {
 		return nil

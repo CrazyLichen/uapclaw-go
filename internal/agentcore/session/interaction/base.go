@@ -67,9 +67,10 @@ type GraphInterrupt struct {
 
 // AgentInterrupt Agent 中断异常，通过 panic 传播。
 // 对应 Python: openjiuwen/core/session/interaction/base.py (AgentInterrupt)
+// Message 类型为 any（对齐 Python AgentInterrupt(message) 不限制参数类型）。
 type AgentInterrupt struct {
-	// Message 中断消息
-	Message string
+	// Message 中断消息（可以是 string、dict 等任意类型，对齐 Python 行为）
+	Message any
 }
 
 // BaseInteraction 交互基类，管理交互输入队列。
@@ -124,7 +125,7 @@ func PanicGraphInterrupt(interrupts ...Interrupt) {
 
 // PanicAgentInterrupt 触发 Agent 中断 panic。
 // 对应 Python: raise AgentInterrupt(message)
-func PanicAgentInterrupt(msg string) {
+func PanicAgentInterrupt(msg any) {
 	panic(&AgentInterrupt{Message: msg})
 }
 

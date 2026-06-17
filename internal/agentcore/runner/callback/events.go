@@ -180,6 +180,9 @@ func (t LLMCallEventType) String() string {
 
 // String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
 func (d *ToolCallEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
 	return fmt.Sprintf("ToolCallEventData{事件:%s, 工具名:%s, 工具ID:%s}", d.Event, d.ToolName, d.ToolID)
 }
 
@@ -190,5 +193,16 @@ func (t SessionCallEventType) String() string {
 
 // String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
 func (d *SessionCallEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
 	return fmt.Sprintf("SessionCallEventData{事件:%s, 会话ID:%s}", d.Event, d.SessionID)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *LLMCallEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("LLMCallEventData{事件:%s, 模型名:%s, 服务商:%s}", d.Event, d.ModelName, d.ModelProvider)
 }

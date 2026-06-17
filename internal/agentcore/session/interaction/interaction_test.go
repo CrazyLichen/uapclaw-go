@@ -285,8 +285,8 @@ func TestAgentInteraction_WaitUserInputs_队列空时触发AgentInterrupt(t *tes
 		if !ok {
 			t.Fatalf("期望 *AgentInterrupt，得到 %T", r)
 		}
-		if ai2.Message != "" {
-			t.Errorf("AgentInteraction 的 AgentInterrupt.Message 应为空，实际=%s", ai2.Message)
+		if ai2.Message != nil {
+			t.Errorf("AgentInteraction 的 AgentInterrupt.Message 应为 nil，实际=%v", ai2.Message)
 		}
 		if !cp.interrupted {
 			t.Error("checkpointer.InterruptAgentExecute 应被调用")

@@ -42,9 +42,12 @@ func Test接口满足_SessionState_AgentStateCollection(t *testing.T) {
 	var _ SessionState = (*AgentStateCollection)(nil)
 }
 
-// Test接口满足_SessionState_WorkflowStateCollection 验证 WorkflowStateCollection 满足 SessionState 接口。
+// Test接口满足_SessionState_WorkflowStateCollection 验证 WorkflowStateCollection 不再直接实现 SessionState。
+// GetState/SetState 由 WorkflowCommitState 覆写提供（对齐 Python StateCollection 不覆写 get_state/set_state）。
 func Test接口满足_SessionState_WorkflowStateCollection(t *testing.T) {
-	var _ SessionState = (*WorkflowStateCollection)(nil)
+	// WorkflowStateCollection 不满足 SessionState（缺少 GetState/SetState），
+	// WorkflowCommitState 满足 SessionState（覆写了 GetState/SetState）。
+	// 这是正确的设计：Python 的 StateCollection 也不实现 get_state/set_state。
 }
 
 // Test接口满足_SessionState_WorkflowCommitState 验证 WorkflowCommitState 满足 SessionState 接口。

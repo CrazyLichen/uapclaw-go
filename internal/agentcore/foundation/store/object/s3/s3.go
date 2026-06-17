@@ -85,7 +85,7 @@ func NewS3Client(cfg S3ClientConfig) (*S3Client, error) {
 	// 校验必填配置
 	if cfg.Server == "" {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,
-			exception.WithParam("error_msg", "服务端点（server endpoint）不能为空"))
+			exception.WithParam("error_msg", "服务端点不能为空"))
 	}
 	if cfg.AccessKeyID == "" {
 		return nil, exception.BuildError(exception.StatusStoreObjectConfigInvalid,

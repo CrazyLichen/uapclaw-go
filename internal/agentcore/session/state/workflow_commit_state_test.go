@@ -116,11 +116,13 @@ func TestGetOutputs(t *testing.T) {
 
 	// 使用当前 nodeID
 	result := cs.GetOutputs()
-	_ = result
+	if result == nil {
+		t.Error("GetOutputs 不应返回 nil")
+	}
 
-	// 指定 nodeID
+	// 指定无数据的 nodeID 返回 nil 是正确的
 	result = cs.GetOutputs("other_node")
-	_ = result
+	// other_node 没有写入数据，返回 nil 符合预期
 }
 
 // TestGetInputsByTransformer 测试通过 transformer 获取输入
@@ -224,27 +226,39 @@ func TestCommit_全量提交(t *testing.T) {
 	}
 }
 
-// TestRollback 测试回滚当前节点
+// TestRollback 测试回滚当前节点（验证全部四个子状态均被回滚）
 func TestRollback(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
 
-	// 暂存更新
+	// 暂存更新到全部四个子状态
 	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"g_key": "g_val"}); err != nil {
 		t.Fatalf("UpdateByID 失败: %v", err)
 	}
 	if err := cs.compState.UpdateByID(DefaultNodeID, map[string]any{"c_key": "c_val"}); err != nil {
 		t.Fatalf("UpdateByID 失败: %v", err)
 	}
+	if err := cs.ioState.UpdateByID(DefaultNodeID, map[string]any{"i_key": "i_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
+	if err := cs.workflowState.UpdateByID(DefaultNodeID, map[string]any{"w_key": "w_val"}); err != nil {
+		t.Fatalf("UpdateByID 失败: %v", err)
+	}
 
 	// 回滚当前节点
 	cs.Rollback()
 
-	// 验证全部已回滚
+	// 验证全部四个子状态均已回滚
 	if cs.globalState.Get(StringKey("g_key")) != nil {
 		t.Error("globalState 未回滚")
 	}
 	if cs.compState.Get(StringKey("c_key")) != nil {
 		t.Error("compState 未回滚")
+	}
+	if cs.ioState.Get(StringKey("i_key")) != nil {
+		t.Error("ioState 未回滚")
+	}
+	if cs.workflowState.Get(StringKey("w_key")) != nil {
+		t.Error("workflowState 未回滚")
 	}
 }
 
@@ -518,12 +532,13 @@ func TestSetOutputs_ioStateNil(t *testing.T) {
 	cs.SetOutputs(map[string]any{"key": "val"}) // 不应 panic
 }
 
-// TestUpdateAndCommitWorkflowState_UpdateByID失败 验证 UpdateByID 失败时记录日志（使用有效但空的 WorkflowCommitState）。
-func TestUpdateAndCommitWorkflowState_UpdateByID失败(t *testing.T) {
+// TestUpdateAndCommitWorkflowState_正常流程 验证 UpdateAndCommitWorkflowState 正常执行不 panic。
+// 注：原 "UpdateByID失败" 测试名不副实（DefaultWorkflowID 不会导致 UpdateByID 失败），
+// 已更正为正常流程测试。
+func TestUpdateAndCommitWorkflowState_正常流程(t *testing.T) {
 	cs := NewInMemoryWorkflowState()
-	// 正常场景：空节点ID 导致 UpdateByID 返回 error，但 WorkflowCommitState 使用 DefaultWorkflowID 不会出错
-	// 这里测试正常流程不 panic
 	cs.UpdateAndCommitWorkflowState(map[string]any{"key": "val"})
+	// 正常流程不 panic 即通过
 }
 
 // TestCommitUserInputs_ioStateNil 验证 ioState 为 nil 时 CommitUserInputs 不 panic。
