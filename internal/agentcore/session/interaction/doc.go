@@ -12,7 +12,6 @@
 //     交互实例从输入队列自动消费，无需再次中断
 //
 // 依赖接口（暂放本包，后续迁移）：
-//   - InteractionCheckpointer → 5.8 时迁移到 session 包
 //   - InteractionOutputWriter / InteractionOutputWriterProvider → 5.10 时迁移到 session/stream 包
 //   - ExecutableIDProvider → NodeSession 天然满足，AgentSession 不满足（Python 同理）
 //

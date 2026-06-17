@@ -63,8 +63,8 @@ func TestWorkflowSession_BaseSession接口(t *testing.T) {
 	if ws.SessionID() == "" {
 		t.Error("默认 sessionID 不应为空")
 	}
-	if ws.Checkpointer() != nil {
-		t.Error("默认 checkpointer 应为 nil")
+	if ws.Checkpointer() == nil {
+		t.Error("无 parent 时应从工厂获取检查点器，不应为 nil")
 	}
 	if ws.ActorManager() != nil {
 		t.Error("默认 actorManager 应为 nil")
@@ -121,23 +121,25 @@ func TestWorkflowSession_SetActorManager_幂等(t *testing.T) {
 
 // TestWorkflowSession_Checkpointer_委托parent 测试委托给 parent
 func TestWorkflowSession_Checkpointer_委托parent(t *testing.T) {
+	parentCP := &testMockCP{}
 	parent := NewAgentSession("parent-id",
-		WithCheckpointer("parent_checkpointer"),
+		WithCheckpointer(parentCP),
 	)
 
 	ws := NewWorkflowSession(WithWorkflowParent(parent))
 
-	if ws.Checkpointer() != "parent_checkpointer" {
-		t.Errorf("期望委托 parent checkpointer='parent_checkpointer'，实际=%v", ws.Checkpointer())
+	if ws.Checkpointer() != parentCP {
+		t.Errorf("期望委托 parent checkpointer，实际=%v", ws.Checkpointer())
 	}
 }
 
-// TestWorkflowSession_Checkpointer_无parent 测试无 parent 返回 nil
+// TestWorkflowSession_Checkpointer_无parent 测试无 parent 时从工厂获取
 func TestWorkflowSession_Checkpointer_无parent(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	if ws.Checkpointer() != nil {
-		t.Errorf("期望无 parent 时 checkpointer 为 nil，实际=%v", ws.Checkpointer())
+	// 无 parent 时从工厂获取，应返回 defaultInMemoryCheckpointer
+	if ws.Checkpointer() == nil {
+		t.Error("无 parent 时应从工厂获取检查点器，不应为 nil")
 	}
 }
 
@@ -475,8 +477,8 @@ func TestNodeSession_StreamWriterManager(t *testing.T) {
 func TestNodeSession_Checkpointer(t *testing.T) {
 	ws := NewWorkflowSession()
 	ns := NewNodeSession(ws, "node1", "Test", false)
-	if ns.Checkpointer() != nil {
-		t.Error("默认 Checkpointer 应为 nil")
+	if ns.Checkpointer() == nil {
+		t.Error("NodeSession 应委托给父会话的 Checkpointer，不应为 nil")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -19,7 +20,7 @@ type baseSession interface {
 	Tracer() any
 	StreamWriterManager() any
 	SessionID() string
-	Checkpointer() any
+	Checkpointer() checkpointer.Checkpointer
 	ActorManager() any
 	Close() error
 }
@@ -297,12 +298,11 @@ func (s *WorkflowSession) SessionID() string {
 
 // Checkpointer 获取检查点管理器。
 // 有 parent 则委托给 parent；无 parent 则从工厂获取（懒加载）。
-func (s *WorkflowSession) Checkpointer() any {
+func (s *WorkflowSession) Checkpointer() checkpointer.Checkpointer {
 	if s.parent != nil {
 		return s.parent.Checkpointer()
 	}
-	// ⤵️ 5.8 回填：CheckpointerFactory 实现后从工厂获取
-	return nil
+	return checkpointer.GetCheckpointer()
 }
 
 // ActorManager 获取 Actor 管理器
@@ -438,7 +438,7 @@ func (n *NodeSession) SessionID() string {
 }
 
 // Checkpointer 委托给父 session
-func (n *NodeSession) Checkpointer() any {
+func (n *NodeSession) Checkpointer() checkpointer.Checkpointer {
 	return n.delegate.Checkpointer()
 }
 

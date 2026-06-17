@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -28,8 +29,7 @@ type AgentSession struct {
 	// ⤵️ 5.10 回填：any → StreamWriterManager
 	streamWriterManager any
 	// checkpointer 检查点器
-	// ⤵️ 5.8 回填：any → Checkpointer
-	checkpointer any
+	checkpointer checkpointer.Checkpointer
 	// agentSpan Agent 追踪跨度
 	agentSpan any
 	// card Agent 身份元数据
@@ -93,7 +93,7 @@ func WithStreamWriterManager(mgr any) AgentSessionOption {
 }
 
 // WithCheckpointer 设置检查点器的选项
-func WithCheckpointer(cp any) AgentSessionOption {
+func WithCheckpointer(cp checkpointer.Checkpointer) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.checkpointer = cp
 	}
@@ -139,7 +139,7 @@ func (s *AgentSession) SessionID() string {
 }
 
 // Checkpointer 获取检查点管理器
-func (s *AgentSession) Checkpointer() any {
+func (s *AgentSession) Checkpointer() checkpointer.Checkpointer {
 	return s.checkpointer
 }
 

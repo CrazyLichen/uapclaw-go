@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
@@ -200,8 +201,16 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	})
 
 	// 检查点预执行
-	// ⤵️ 5.8 回填：Checkpointer 实现后调用 pre_agent_execute
-	// 当前 checkpointer 为 nil，跳过
+	if cp := s.inner.Checkpointer(); cp != nil {
+		var inputVal any
+		if len(inputs) > 0 {
+			inputVal = inputs[0]
+		}
+		cps := &agentCheckpointerSession{inner: s.inner}
+		if err := cp.PreAgentExecute(ctx, cps, inputVal); err != nil {
+			return err
+		}
+	}
 
 	s.preRunDone = true
 	logger.Info(logger.ComponentAgentCore).
@@ -238,10 +247,12 @@ func (s *Session) PostRun(ctx context.Context) error {
 }
 
 // Commit 提交当前状态到检查点（不关闭流）。
-// ⤵️ 5.8 回填：Checkpointer 实现后调用 post_agent_execute
 // 对应 Python: Session.commit()
 func (s *Session) Commit(ctx context.Context) error {
-	// 当前 checkpointer 为 nil，跳过
+	if cp := s.inner.Checkpointer(); cp != nil {
+		cps := &agentCheckpointerSession{inner: s.inner}
+		return cp.PostAgentExecute(ctx, cps)
+	}
 	return nil
 }
 
@@ -319,4 +330,36 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
+}
+
+// ──────────────────────────── 非导出类型 ────────────────────────────
+
+// agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
+// AgentSession.Config() 返回 any（5.12 回填后改为 SessionConfig），
+// 但 CheckpointerSession.Config() 期望 CheckpointerConfig。
+// 此适配器将 any 配置通过类型断言转换为 CheckpointerConfig。
+type agentCheckpointerSession struct {
+	inner *internal.AgentSession
+}
+
+func (a *agentCheckpointerSession) SessionID() string                         { return a.inner.SessionID() }
+func (a *agentCheckpointerSession) WorkflowID() string                        { return "" }
+func (a *agentCheckpointerSession) State() state.SessionState                 { return a.inner.State() }
+func (a *agentCheckpointerSession) Parent() checkpointer.CheckpointerSession  { return nil }
+func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
+	if cfg, ok := a.inner.Config().(checkpointer.CheckpointerConfig); ok {
+		return cfg
+	}
+	return nil
+}
+
+// AgentID 返回 Agent ID，满足 AgentIDProvider 接口。
+func (a *agentCheckpointerSession) AgentID() string {
+	// AgentSession 没有直接的 AgentID 方法，从 Card 中获取
+	if card := a.inner.Card(); card != nil {
+		if ac, ok := card.(*schema.AgentCard); ok {
+			return ac.AbilityID()
+		}
+	}
+	return ""
 }

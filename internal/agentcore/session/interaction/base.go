@@ -1,8 +1,10 @@
 package interaction
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -18,7 +20,7 @@ import (
 type baseSession interface {
 	State() state.SessionState
 	StreamWriterManager() any
-	Checkpointer() any
+	Checkpointer() checkpointer.Checkpointer
 }
 
 // ExecutableIDProvider 提供可执行路径 ID 的接口。
@@ -26,13 +28,6 @@ type baseSession interface {
 // 通过类型断言延迟绑定：WorkflowInteraction/AgentInteraction 运行时断言获取 nodeID。
 type ExecutableIDProvider interface {
 	ExecutableID() string
-}
-
-// InteractionCheckpointer 交互所需的检查点器接口。
-// 5.8 实现后，session 包的 Checkpointer 类型天然满足此接口，届时迁移到 session 包。
-type InteractionCheckpointer interface {
-	// InterruptAgentExecute 中断 Agent 执行并保存检查点
-	InterruptAgentExecute(session any) error
 }
 
 // InteractionOutputWriterProvider 交互所需的输出写入器提供者接口。
@@ -194,24 +189,36 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 	return nil
 }
 
+// CheckpointerSessionProvider 提供 CheckpointerSession 的接口。
+// 通过类型断言延迟绑定：完整会话类型（AgentSession/WorkflowSession）天然实现此接口。
+type CheckpointerSessionProvider interface {
+	checkpointer.CheckpointerSession
+}
+
 // interruptAgentExecute 调用检查点器的中断方法。
-// 通过类型断言延迟绑定，5.8 实现后自动生效。
 func interruptAgentExecute(session baseSession) error {
 	cp := session.Checkpointer()
 	if cp == nil {
 		return nil
 	}
-	if interrupter, ok := cp.(InteractionCheckpointer); ok {
-		err := interrupter.InterruptAgentExecute(session)
-		if err != nil {
-			logger.Error(logger.ComponentAgentCore).
-				Err(err).
-				Str("event_type", "LLM_CALL_ERROR").
-				Msg("检查点中断 Agent 执行失败")
-		}
-		return err
+	// 类型断言获取 CheckpointerSession，完整会话类型天然实现此接口
+	cps, ok := session.(checkpointer.CheckpointerSession)
+	if !ok {
+		logger.Warn(logger.ComponentAgentCore).
+			Str("action", "interrupt_agent_execute").
+			Str("session_type", fmt.Sprintf("%T", session)).
+			Msg("session 不满足 CheckpointerSession 接口，跳过中断检查点")
+		return nil
 	}
-	return nil
+	ctx := context.Background()
+	err := cp.InterruptAgentExecute(ctx, cps)
+	if err != nil {
+		logger.Error(logger.ComponentAgentCore).
+			Err(err).
+			Str("event_type", "LLM_CALL_ERROR").
+			Msg("检查点中断 Agent 执行失败")
+	}
+	return err
 }
 
 // writeInteractionOutput 写入交互输出到流。

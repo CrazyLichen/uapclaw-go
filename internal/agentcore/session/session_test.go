@@ -1,9 +1,11 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -32,20 +34,51 @@ type mockStub struct {
 	tracerVal              any
 	streamWriterManagerVal any
 	sessionIDVal           string
-	checkpointerVal        any
+	checkpointerVal        checkpointer.Checkpointer
 	actorManagerVal        any
 	closeErr               error
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() any               { return m.configVal }
-func (m *mockStub) State() state.SessionState { return m.stateVal }
-func (m *mockStub) Tracer() any               { return m.tracerVal }
-func (m *mockStub) StreamWriterManager() any  { return m.streamWriterManagerVal }
-func (m *mockStub) SessionID() string         { return m.sessionIDVal }
-func (m *mockStub) Checkpointer() any         { return m.checkpointerVal }
-func (m *mockStub) ActorManager() any         { return m.actorManagerVal }
-func (m *mockStub) Close() error              { m.closeCalled = true; return m.closeErr }
+func (m *mockStub) Config() any                             { return m.configVal }
+func (m *mockStub) State() state.SessionState               { return m.stateVal }
+func (m *mockStub) Tracer() any                             { return m.tracerVal }
+func (m *mockStub) StreamWriterManager() any                { return m.streamWriterManagerVal }
+func (m *mockStub) SessionID() string                       { return m.sessionIDVal }
+func (m *mockStub) Checkpointer() checkpointer.Checkpointer { return m.checkpointerVal }
+func (m *mockStub) ActorManager() any                       { return m.actorManagerVal }
+func (m *mockStub) Close() error                            { m.closeCalled = true; return m.closeErr }
+
+// testMockCheckpointer 用于 session_test 的模拟检查点器
+type testMockCheckpointer struct{}
+
+func (m *testMockCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
+func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+	return nil
+}
+func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string) error { return nil }
+func (m *testMockCheckpointer) GraphStore() any                                     { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -63,13 +96,14 @@ func TestProxySession_SetSession(t *testing.T) {
 func TestProxySession_委托全部方法(t *testing.T) {
 	// 准备 mock 数据
 	expectedState := state.NewInMemoryStateLike()
+	mockCP := &testMockCheckpointer{}
 	stub := &mockStub{
 		configVal:              "config-value",
 		stateVal:               expectedState,
 		tracerVal:              "tracer-value",
 		streamWriterManagerVal: "swm-value",
 		sessionIDVal:           "session-123",
-		checkpointerVal:        "checkpointer-value",
+		checkpointerVal:        mockCP,
 		actorManagerVal:        "actor-value",
 		closeErr:               nil,
 	}
@@ -103,8 +137,8 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	}
 
 	// 验证 Checkpointer 委托
-	if got := p.Checkpointer(); got != "checkpointer-value" {
-		t.Errorf("Checkpointer() = %v, 期望 %v", got, "checkpointer-value")
+	if got := p.Checkpointer(); got != mockCP {
+		t.Errorf("Checkpointer() = %v, 期望 %v", got, mockCP)
 	}
 
 	// 验证 ActorManager 委托

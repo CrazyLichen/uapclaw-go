@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -16,10 +17,34 @@ type fakeCheckpointer struct {
 	interrupted  bool
 }
 
-func (f *fakeCheckpointer) InterruptAgentExecute(session any) error {
+func (f *fakeCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
+func (f *fakeCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (f *fakeCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+	return nil
+}
+func (f *fakeCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (f *fakeCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (f *fakeCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
 	f.interrupted = true
 	return f.interruptErr
 }
+func (f *fakeCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (f *fakeCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string) error { return nil }
+func (f *fakeCheckpointer) GraphStore() any                                     { return nil }
 
 // fakeOutputWriter 测试用输出写入器
 type fakeOutputWriter struct {
@@ -326,13 +351,13 @@ func TestInterruptAgentExecute_checkpointer为nil(t *testing.T) {
 	}
 }
 
-// TestInterruptAgentExecute_类型不满足接口 测试 checkpointer 不满足接口时返回 nil
-func TestInterruptAgentExecute_类型不满足接口(t *testing.T) {
+// TestInterruptAgentExecute_无Checkpointer 测试无 checkpointer 时返回 nil
+func TestInterruptAgentExecute_无Checkpointer(t *testing.T) {
 	session := newFakeBaseSession()
-	session.cpValue = "not_a_checkpointer"
+	session.cpValue = nil
 	err := interruptAgentExecute(session)
 	if err != nil {
-		t.Errorf("类型不满足接口时应返回 nil，实际=%v", err)
+		t.Errorf("无 checkpointer 时应返回 nil，实际=%v", err)
 	}
 }
 

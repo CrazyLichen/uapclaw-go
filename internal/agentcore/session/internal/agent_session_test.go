@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -127,11 +129,43 @@ func TestAgentSession_WithStreamWriterManager(t *testing.T) {
 	}
 }
 
+// testMockCP 用于 agent_session_test 的模拟检查点器
+type testMockCP struct{}
+
+func (m *testMockCP) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
+func (m *testMockCP) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCP) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+	return nil
+}
+func (m *testMockCP) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCP) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (m *testMockCP) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCP) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCP) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (m *testMockCP) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (m *testMockCP) Release(ctx context.Context, sessionID string) error { return nil }
+func (m *testMockCP) GraphStore() any                                     { return nil }
+
 // TestAgentSession_WithCheckpointer 测试 WithCheckpointer 选项
 func TestAgentSession_WithCheckpointer(t *testing.T) {
-	s := NewAgentSession("test-id", WithCheckpointer("my-cp"))
-	if s.Checkpointer() != "my-cp" {
-		t.Errorf("Checkpointer 期望 my-cp，实际 %v", s.Checkpointer())
+	mockCP := &testMockCP{}
+	s := NewAgentSession("test-id", WithCheckpointer(mockCP))
+	if s.Checkpointer() != mockCP {
+		t.Errorf("Checkpointer 期望 mockCP，实际 %v", s.Checkpointer())
 	}
 }
 

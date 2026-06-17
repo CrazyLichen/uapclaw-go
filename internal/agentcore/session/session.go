@@ -1,6 +1,9 @@
 package session
 
-import "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -26,8 +29,7 @@ type BaseSession interface {
 	// SessionID 获取会话唯一标识
 	SessionID() string
 	// Checkpointer 获取检查点管理器
-	// ⤵️ 5.8 回填：返回类型从 any 改为 Checkpointer
-	Checkpointer() any
+	Checkpointer() checkpointer.Checkpointer
 	// ActorManager 获取 Actor 管理器（可选，默认返回 nil）
 	// ⤵️ 后续回填：返回类型从 any 改为 ActorManager
 	ActorManager() any
@@ -93,7 +95,7 @@ func (p *ProxySession) SessionID() string {
 }
 
 // Checkpointer 获取底层会话的检查点管理器
-func (p *ProxySession) Checkpointer() any {
+func (p *ProxySession) Checkpointer() checkpointer.Checkpointer {
 	return p.stub.Checkpointer()
 }
 
