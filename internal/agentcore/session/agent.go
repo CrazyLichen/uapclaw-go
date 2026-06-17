@@ -335,9 +335,10 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 // ──────────────────────────── 非导出类型 ────────────────────────────
 
 // agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
-// AgentSession.Config() 返回 any（5.12 回填后改为 SessionConfig），
-// 但 CheckpointerSession.Config() 期望 CheckpointerConfig。
-// 此适配器将 any 配置通过类型断言转换为 CheckpointerConfig。
+// ⤵️ 5.12 回填：card 具体化为 *schema.AgentCard + AgentSession 添加 AgentID() 后，
+// 此适配器应重构或删除。方案：AgentSession 加 AgentID()/WorkflowID("")/Parent(nil) 方法
+// 直接满足 CheckpointerSession；Config() 返回 SessionConfig 满足 CheckpointerConfig 接口。
+// 届时 PreRun/Commit 可直接传 AgentSession 给 Checkpointer，无需适配。
 type agentCheckpointerSession struct {
 	inner *internal.AgentSession
 }
@@ -346,6 +347,7 @@ func (a *agentCheckpointerSession) SessionID() string                         { 
 func (a *agentCheckpointerSession) WorkflowID() string                        { return "" }
 func (a *agentCheckpointerSession) State() state.SessionState                 { return a.inner.State() }
 func (a *agentCheckpointerSession) Parent() checkpointer.CheckpointerSession  { return nil }
+// ⤵️ 5.12 回填：Config() 返回类型从 any → SessionConfig 后，直接返回即可，无需类型断言
 func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
 	if cfg, ok := a.inner.Config().(checkpointer.CheckpointerConfig); ok {
 		return cfg
@@ -354,6 +356,7 @@ func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
 }
 
 // AgentID 返回 Agent ID，满足 AgentIDProvider 接口。
+// ⤵️ 5.12 回填：AgentSession 自身添加 AgentID() 方法后，此方法可删除
 func (a *agentCheckpointerSession) AgentID() string {
 	// AgentSession 没有直接的 AgentID 方法，从 Card 中获取
 	if card := a.inner.Card(); card != nil {

@@ -8,9 +8,10 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// CheckpointerConfigStruct 检查点器配置结构体。
+// CheckpointerFactoryConfig 检查点器工厂配置结构体，用于工厂创建检查点器实例。
 // 对应 Python: openjiuwen/core/session/checkpointer/checkpointer.py (CheckpointerConfig)
-type CheckpointerConfigStruct struct {
+// 注意：与 CheckpointerConfig 接口（GetEnv）不同，此结构体仅用于工厂创建参数。
+type CheckpointerFactoryConfig struct {
 	// Type 检查点器类型（如 "in_memory"、"redis"）
 	Type string
 	// Conf 检查点器额外配置
@@ -74,7 +75,7 @@ func (f *CheckpointerFactory) Register(name string, provider CheckpointerProvide
 
 // Create 根据配置创建检查点器实例。
 // 对应 Python: CheckpointerFactory.create(checkpointer_conf)
-func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerConfigStruct) (Checkpointer, error) {
+func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerFactoryConfig) (Checkpointer, error) {
 	f.mu.RLock()
 	provider, exists := f.registry[conf.Type]
 	f.mu.RUnlock()
@@ -162,7 +163,7 @@ func SetCheckpointer(storeType string, cp Checkpointer) {
 }
 
 // CreateCheckpointer 从全局工厂创建检查点器。
-func CreateCheckpointer(ctx context.Context, conf CheckpointerConfigStruct) (Checkpointer, error) {
+func CreateCheckpointer(ctx context.Context, conf CheckpointerFactoryConfig) (Checkpointer, error) {
 	return defaultFactory.Create(ctx, conf)
 }
 

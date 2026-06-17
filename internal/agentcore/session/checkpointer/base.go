@@ -55,6 +55,10 @@ type Storage interface {
 // AgentID/TeamID 通过 AgentIDProvider/TeamIDProvider 类型断言获取。
 // WorkflowState 的扩展方法（GetUpdates/SetUpdates/Commit 等）通过
 // 类型断言为 state.WorkflowState 接口获取（比断言具体类型更优雅）。
+//
+// ⤵️ 5.12 回填：Config() 返回类型从 CheckpointerConfig 改为 SessionConfig（5.12 定义），
+// SessionConfig 将满足 CheckpointerConfig 接口。同时 AgentSession 添加 AgentID()/
+// WorkflowID("")/Parent(nil) 方法后可直接满足此接口，消除 agentCheckpointerSession 适配器。
 type CheckpointerSession interface {
 	// SessionID 获取会话唯一标识
 	SessionID() string
@@ -63,12 +67,15 @@ type CheckpointerSession interface {
 	// State 获取会话状态
 	State() state.SessionState
 	// Config 获取会话配置
+	// ⤵️ 5.12 回填：返回类型从 CheckpointerConfig 改为 SessionConfig
 	Config() CheckpointerConfig
 	// Parent 获取父会话
 	Parent() CheckpointerSession
 }
 
 // CheckpointerConfig Checkpointer 所需的配置最小接口。
+// ⤵️ 5.12 回填：此接口可被 SessionConfig 替代或作为 SessionConfig 的子集，
+// 届时 CheckpointerSession.Config() 直接返回 SessionConfig
 type CheckpointerConfig interface {
 	// GetEnv 获取环境变量值
 	GetEnv(key string, defaultValue ...any) any

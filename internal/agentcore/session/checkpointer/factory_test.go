@@ -38,7 +38,7 @@ func TestCheckpointerFactory_Create_inMemory(t *testing.T) {
 	f := NewCheckpointerFactory()
 	ctx := context.Background()
 
-	cp, err := f.Create(ctx, CheckpointerConfigStruct{Type: "in_memory"})
+	cp, err := f.Create(ctx, CheckpointerFactoryConfig{Type: "in_memory"})
 	if err != nil {
 		t.Fatalf("Create 返回错误：%v", err)
 	}
@@ -52,7 +52,7 @@ func TestCheckpointerFactory_Create_未知类型(t *testing.T) {
 	f := NewCheckpointerFactory()
 	ctx := context.Background()
 
-	_, err := f.Create(ctx, CheckpointerConfigStruct{Type: "unknown"})
+	_, err := f.Create(ctx, CheckpointerFactoryConfig{Type: "unknown"})
 	if err == nil {
 		t.Error("未知类型应返回错误")
 	}
@@ -179,7 +179,7 @@ func TestSetCheckpointer(t *testing.T) {
 // TestCreateCheckpointer 测试全局创建检查点器
 func TestCreateCheckpointer(t *testing.T) {
 	ctx := context.Background()
-	cp, err := CreateCheckpointer(ctx, CheckpointerConfigStruct{Type: "in_memory"})
+	cp, err := CreateCheckpointer(ctx, CheckpointerFactoryConfig{Type: "in_memory"})
 	if err != nil {
 		t.Fatalf("CreateCheckpointer 返回错误：%v", err)
 	}
@@ -219,11 +219,11 @@ func TestInMemoryProvider_Create(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CheckpointerConfigStruct 测试 ────────────────────────────
+// ──────────────────────────── CheckpointerFactoryConfig 测试 ────────────────────────────
 
-// TestCheckpointerConfigStruct 测试配置结构体
-func TestCheckpointerConfigStruct(t *testing.T) {
-	conf := CheckpointerConfigStruct{
+// TestCheckpointerFactoryConfig 测试配置结构体
+func TestCheckpointerFactoryConfig(t *testing.T) {
+	conf := CheckpointerFactoryConfig{
 		Type: "in_memory",
 		Conf: map[string]any{"key": "value"},
 	}

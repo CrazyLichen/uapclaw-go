@@ -33,7 +33,8 @@ type AgentSession struct {
 	// agentSpan Agent 追踪跨度
 	agentSpan any
 	// card Agent 身份元数据
-	// ⤵️ 后续回填：any → *schema.AgentCard
+	// ⤵️ 5.12 回填：any → *schema.AgentCard；同时添加 AgentID() 方法（从 card.AbilityID() 取值），
+	// 使 AgentSession 直接满足 checkpointer.AgentIDProvider 接口，消除 agentCheckpointerSession 适配器中的类型断言
 	card any
 }
 
