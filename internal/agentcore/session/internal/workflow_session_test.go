@@ -439,8 +439,8 @@ func TestWorkflowSession_Parent为nil(t *testing.T) {
 	}
 }
 
-// TestWorkflowSession_SkipTrace 测试 NodeSession 的 SkipTrace 方法
-func TestWorkflowSession_SkipTrace(t *testing.T) {
+// TestNodeSession_SkipTrace 测试 NodeSession 的 SkipTrace 方法
+func TestNodeSession_SkipTrace(t *testing.T) {
 	ws := NewWorkflowSession()
 	ns := NewNodeSession(ws, "node1", "Test", true)
 	if !ns.SkipTrace() {

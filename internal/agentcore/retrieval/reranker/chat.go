@@ -320,7 +320,7 @@ func (c *ChatReranker) parseResponse(responseData map[string]any, docIDs []strin
 func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
 	if len(docs) != 1 {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的 list[str | Document]"),
+			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的字符串或 Document 切片"),
 		)
 	}
 
@@ -350,7 +350,7 @@ func (c *ChatReranker) doRerank(ctx context.Context, query string, docs []any, o
 func (c *ChatReranker) doRerankSync(ctx context.Context, query string, docs []any, opt *reranker.RerankOption) (map[string]float64, error) {
 	if len(docs) != 1 {
 		return nil, exception.ValidateError(exception.StatusRetrievalRerankerInputInvalid,
-			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的 list[str | Document]"),
+			exception.WithParam("error_msg", "ChatReranker 输入必须是长度为 1 的字符串或 Document 切片"),
 		)
 	}
 

@@ -292,83 +292,103 @@ if !ok {
 
 ### 🔵 提示（10 项）
 
-#### T1. `latestInteractiveInput` 命名单数 vs Python 复数 `_latest_interactive_inputs`
+#### T1. `latestInteractiveInput` 命名单数 vs Python 复数 `_latest_interactive_inputs` ✅ 保持现状
 
 **位置**: `interaction/base.go` 第81行
 
 **描述**: Python 用复数命名，Go 用单数。Go 的命名在语义上更准确（实际存储单个值），但与 Python 源码不一致。
 
+**处理**: 保持现状，Go 单数命名更准确描述实际语义。
+
 ---
 
-#### T2. `Interrupt` 结构体多了 `Resumable`/`NS` 字段
+#### T2. `Interrupt` 结构体多了 `Resumable`/`NS` 字段 ✅ 保持现状
 
 **位置**: `interaction/base.go` 第51-58行
 
 **描述**: Python 的 `Interrupt` 类只有 `value` 字段，通过动态属性机制使用 `resumable` 和 `ns`。Go 显式定义了这些字段，是更安全的做法。
 
+**处理**: 保持现状，Go 显式字段是正确的适配选择，提供编译时类型保障。
+
 ---
 
-#### T3. `InteractiveInput.Update` 中 Python 允许空字符串 node_id，Go 拒绝
+#### T3. `InteractiveInput.Update` 中 Python 允许空字符串 node_id，Go 拒绝 ✅ 保持现状
 
 **位置**: `interaction/interactive_input.go` 第56行
 
 **描述**: Go 的防御性更强，但行为不完全一致。正常使用不会传入空字符串。
 
+**处理**: 保持现状，Go 防御性更强是好事。
+
 ---
 
-#### T4. `getExecutableID` 断言失败返回空字符串，Python 会抛 AttributeError
+#### T4. `getExecutableID` 断言失败返回空字符串，Python 会抛 AttributeError ✅ 已修复
 
-**位置**: `interaction/base.go` 第257-262行
+**位置**: `interaction/base.go` 第258-267行
 
 **描述**: Go 的静默返回比 Python 的异常更安全，但可能隐藏配置错误。
 
+**修复**: 断言失败时添加 Warn 日志，使问题可观测而不中断执行。
+
 ---
 
-#### T5. `ToolCallEventData.String()` 和 `SessionCallEventData.String()` 无 nil 防御
+#### T5. `ToolCallEventData.String()` 和 `SessionCallEventData.String()` 无 nil 防御 ✅ 已修复（S5 修复中一并完成）
 
 **位置**: `runner/callback/events.go` 第182-194行
 
 **描述**: 指针方法 `func (d *ToolCallEventData) String()` 如果 `d` 为 nil 会 panic。建议添加 `if d == nil { return "nil" }`。
 
+**修复**: 已在 S5 修复中添加 nil 防御。
+
 ---
 
-#### T6. `chat.go` 错误消息中使用 Python 类型注解语法
+#### T6. `chat.go` 错误消息中使用 Python 类型注解语法 ✅ 已修复
 
-**位置**: `retrieval/reranker/chat.go` 第302行、第332行
+**位置**: `retrieval/reranker/chat.go` 第323行
 
 **描述**: `"ChatReranker 输入必须是长度为 1 的 list[str | Document]"` 使用了 Python 类型注解语法。建议改为更 Go 风格的描述。
 
+**修复**: 改为 `"ChatReranker 输入必须是长度为 1 的字符串或 Document 切片"`。
+
 ---
 
-#### T7. `s3.go` 中 `os.Setenv` 并发不安全
+#### T7. `s3.go` 中 `os.Setenv` 并发不安全 ✅ 已补充注释
 
 **位置**: `foundation/store/object/s3/s3.go` 第76-83行
 
 **描述**: `os.Setenv` 修改全局环境变量，在并发场景下不安全。虽然对齐了 Python 行为，但建议在注释中说明风险。
 
+**修复**: 添加注释说明并发风险，后续重构应改为注入配置。
+
 ---
 
-#### T8. `TestWorkflowSession_SkipTrace` 测试名称与实际测试对象不符
+#### T8. `TestWorkflowSession_SkipTrace` 测试名称与实际测试对象不符 ✅ 已修复
 
-**位置**: `internal/workflow_session_test.go` 第442-453行
+**位置**: `internal/workflow_session_test.go` 第442行
 
 **描述**: 测试名称是 "WorkflowSession" 但实际测试的是 `NodeSession.SkipTrace()`。建议改为 `TestNodeSession_SkipTrace`。
 
+**修复**: 改名为 `TestNodeSession_SkipTrace`。
+
 ---
 
-#### T9. `DumpState` 测试只验证 `!= nil`，未验证内容正确性
+#### T9. `DumpState` 测试只验证 `!= nil`，未验证内容正确性 ✅ 已修复
 
-**位置**: `node_test.go` 第161-170行
+**位置**: `node_test.go` 第160-173行
 
 **描述**: 应至少检查返回 map 中包含预期的 key（如 IOStateKey、CompStateKey 等）。
 
+**修复**: 补充对 IOStateKey、CompStateKey、GlobalStateKey、WorkflowStateKey 的断言。
+
 ---
 
-#### T10. 缺少 `CreateNodeState` 返回的子视图隔离性测试
+#### T10. 缺少 `CreateNodeState` 返回的子视图隔离性测试 ✅ 已修复
 
 **位置**: `state/workflow_commit_state_test.go`
 
 **描述**: 只测试了子视图能读取父视图的 globalState，没有测试子视图的修改是否隔离。
+
+**修复**: 新增 `TestCreateNodeState_子视图隔离性` 测试，验证两个子视图各自 UpdateByID 后数据隔离，以及共享 globalState。
 
 ---
 

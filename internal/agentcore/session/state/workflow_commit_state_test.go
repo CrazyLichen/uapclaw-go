@@ -289,6 +289,59 @@ func TestCreateNodeState(t *testing.T) {
 	}
 }
 
+// TestCreateNodeState_子视图隔离性 测试不同子视图之间的数据隔离。
+// 各子视图通过 UpdateByID 写入 compState 时应按各自 nodeID 隔离，互不影响。
+func TestCreateNodeState_子视图隔离性(t *testing.T) {
+	cs := NewInMemoryWorkflowState()
+
+	// 创建两个节点视图（返回 SessionState 接口，需断言为 *WorkflowCommitState）
+	nodeA := cs.CreateNodeState("node_A", "")
+	nodeB := cs.CreateNodeState("node_B", "")
+	wcsA, ok := nodeA.(*WorkflowCommitState)
+	if !ok {
+		t.Fatal("nodeA 类型断言为 *WorkflowCommitState 失败")
+	}
+	wcsB, ok := nodeB.(*WorkflowCommitState)
+	if !ok {
+		t.Fatal("nodeB 类型断言为 *WorkflowCommitState 失败")
+	}
+
+	// node_A 写入 compState
+	if err := wcsA.UpdateByID("node_A", map[string]any{"a_key": "a_val"}); err != nil {
+		t.Fatalf("node_A UpdateByID 失败: %v", err)
+	}
+	// node_B 写入 compState
+	if err := wcsB.UpdateByID("node_B", map[string]any{"b_key": "b_val"}); err != nil {
+		t.Fatalf("node_B UpdateByID 失败: %v", err)
+	}
+
+	// 提交两个节点的更新
+	cs.compState.Commit("node_A")
+	cs.compState.Commit("node_B")
+
+	// node_A 应能读到自己的数据
+	if v := cs.compState.Get(StringKey("a_key")); v != "a_val" {
+		t.Errorf("期望 a_key=a_val，实际=%v", v)
+	}
+	// node_B 应能读到自己的数据
+	if v := cs.compState.Get(StringKey("b_key")); v != "b_val" {
+		t.Errorf("期望 b_key=b_val，实际=%v", v)
+	}
+
+	// 两个子视图共享 globalState
+	if err := cs.globalState.UpdateByID(DefaultNodeID, map[string]any{"shared_key": "shared_val"}); err != nil {
+		t.Fatalf("globalState UpdateByID 失败: %v", err)
+	}
+	cs.globalState.Commit(DefaultNodeID)
+
+	if v := wcsA.GetGlobal(StringKey("shared_key")); v != "shared_val" {
+		t.Errorf("node_A 应共享 globalState，期望 shared_val，实际=%v", v)
+	}
+	if v := wcsB.GetGlobal(StringKey("shared_key")); v != "shared_val" {
+		t.Errorf("node_B 应共享 globalState，期望 shared_val，实际=%v", v)
+	}
+}
+
 // TestGetState_workflowOnly_true 测试 workflowOnly=true 时的 GetState
 func TestGetState_workflowOnly_true(t *testing.T) {
 	cs := NewInMemoryWorkflowState() // 默认 workflowOnly=true

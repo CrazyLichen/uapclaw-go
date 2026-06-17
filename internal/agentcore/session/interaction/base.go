@@ -254,10 +254,14 @@ func commitCMP(session baseSession) {
 
 // getExecutableID 通过类型断言从 session 获取可执行路径 ID。
 // NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
-// 断言失败时返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
+// 断言失败时记录 Warn 日志并返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
 func getExecutableID(session baseSession) string {
 	if provider, ok := session.(ExecutableIDProvider); ok {
 		return provider.ExecutableID()
 	}
+	logger.Warn(logger.ComponentAgentCore).
+		Str("action", "get_executable_id").
+		Str("session_type", fmt.Sprintf("%T", session)).
+		Msg("session 不满足 ExecutableIDProvider 接口，返回空字符串")
 	return ""
 }

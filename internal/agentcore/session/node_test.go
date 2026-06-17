@@ -165,7 +165,13 @@ func TestNodeSessionFacade_DumpState(t *testing.T) {
 
 	dump := facade.DumpState()
 	if dump == nil {
-		t.Error("DumpState 不应返回 nil")
+		t.Fatal("DumpState 不应返回 nil")
+	}
+	// 验证返回的快照包含核心状态 key
+	for _, key := range []string{state.IOStateKey, state.CompStateKey, state.GlobalStateKey, state.WorkflowStateKey} {
+		if _, ok := dump[key]; !ok {
+			t.Errorf("DumpState 返回的快照应包含 key=%s", key)
+		}
 	}
 }
 
