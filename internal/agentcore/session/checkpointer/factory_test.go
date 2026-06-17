@@ -2,6 +2,7 @@ package checkpointer
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -19,6 +20,10 @@ func TestNewCheckpointerFactory(t *testing.T) {
 	// 验证 in_memory provider 已注册
 	if _, ok := f.registry["in_memory"]; !ok {
 		t.Error("in_memory provider 未自动注册")
+	}
+	// 验证 persistence provider 已注册
+	if _, ok := f.registry["persistence"]; !ok {
+		t.Error("persistence provider 未自动注册")
 	}
 }
 
@@ -216,6 +221,66 @@ func TestInMemoryProvider_Create(t *testing.T) {
 	}
 	if cp != defaultInMemoryCheckpointer {
 		t.Error("应返回 defaultInMemoryCheckpointer")
+	}
+}
+
+// ──────────────────────────── persistenceProvider 测试 ────────────────────────────
+
+// TestPersistenceProvider_Create_默认路径 测试使用默认路径创建
+func TestPersistenceProvider_Create_默认路径(t *testing.T) {
+	provider := &persistenceProvider{}
+	ctx := context.Background()
+
+	cp, err := provider.Create(ctx, nil)
+	if err != nil {
+		t.Fatalf("Create 返回错误：%v", err)
+	}
+	if cp == nil {
+		t.Fatal("Create 返回 nil")
+	}
+	// 验证返回的是 *PersistenceCheckpointer 类型
+	if _, ok := cp.(*PersistenceCheckpointer); !ok {
+		t.Errorf("期望 *PersistenceCheckpointer，实际 %T", cp)
+	}
+	// 清理临时文件
+	_ = os.Remove("checkpointer.db")
+}
+
+// TestPersistenceProvider_Create_自定义路径 测试使用自定义 db_path 创建
+func TestPersistenceProvider_Create_自定义路径(t *testing.T) {
+	provider := &persistenceProvider{}
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test_checkpoint"
+
+	cp, err := provider.Create(ctx, map[string]any{"db_path": dbPath})
+	if err != nil {
+		t.Fatalf("Create 返回错误：%v", err)
+	}
+	if cp == nil {
+		t.Fatal("Create 返回 nil")
+	}
+	// 验证文件已创建（带 .db 后缀）
+	if _, statErr := os.Stat(dbPath + ".db"); statErr != nil {
+		t.Errorf("数据库文件未创建: %v", statErr)
+	}
+}
+
+// TestCheckpointerFactory_Create_persistence 测试从工厂创建 persistence 类型
+func TestCheckpointerFactory_Create_persistence(t *testing.T) {
+	f := NewCheckpointerFactory()
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	cp, err := f.Create(ctx, CheckpointerFactoryConfig{
+		Type: "persistence",
+		Conf: map[string]any{"db_path": tmpDir + "/factory_test"},
+	})
+	if err != nil {
+		t.Fatalf("Create 返回错误：%v", err)
+	}
+	if cp == nil {
+		t.Fatal("Create 返回 nil")
 	}
 }
 

@@ -55,13 +55,14 @@ var defaultInMemoryCheckpointer Checkpointer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewCheckpointerFactory 创建检查点器工厂，自动注册 in_memory Provider。
+// NewCheckpointerFactory 创建检查点器工厂，自动注册 in_memory 和 persistence Provider。
 func NewCheckpointerFactory() *CheckpointerFactory {
 	f := &CheckpointerFactory{
 		registry:           make(map[string]CheckpointerProvider),
 		typeCheckpointers: make(map[string]Checkpointer),
 	}
 	f.Register("in_memory", &inMemoryProvider{})
+	f.Register("persistence", &persistenceProvider{})
 	return f
 }
 
