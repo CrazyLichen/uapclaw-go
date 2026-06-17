@@ -45,7 +45,9 @@ type Storage interface {
 	// Recover 恢复会话状态
 	Recover(ctx context.Context, session CheckpointerSession, inputs any) error
 	// Clear 清除会话数据
-	Clear(ctx context.Context, entityID string) error
+	// entityID 为实体标识（Agent 的 agentID / Workflow 的 workflowID）
+	// sessionID 为会话标识，Persistence 版用于构建 KV key，InMemory 版忽略
+	Clear(ctx context.Context, entityID, sessionID string) error
 	// Exists 检查状态是否存在
 	Exists(ctx context.Context, session CheckpointerSession) (bool, error)
 }

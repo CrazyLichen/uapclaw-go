@@ -476,7 +476,7 @@ func TestAgentStorage_Clear(t *testing.T) {
 	}
 
 	// 清除
-	if err := storage.Clear(ctx, "agent1"); err != nil {
+	if err := storage.Clear(ctx, "agent1", "sess1"); err != nil {
 		t.Fatalf("Clear 返回错误：%v", err)
 	}
 
@@ -601,7 +601,7 @@ func TestAgentTeamStorage_Clear(t *testing.T) {
 		t.Fatalf("Save 返回错误：%v", err)
 	}
 
-	if err := storage.Clear(ctx, "team1"); err != nil {
+	if err := storage.Clear(ctx, "team1", "sess1"); err != nil {
 		t.Fatalf("Clear 返回错误：%v", err)
 	}
 
@@ -678,7 +678,7 @@ func TestWorkflowStorage_Clear(t *testing.T) {
 		t.Fatalf("Save 返回错误：%v", err)
 	}
 
-	if err := storage.Clear(ctx, "wf1"); err != nil {
+	if err := storage.Clear(ctx, "wf1", "sess1"); err != nil {
 		t.Fatalf("Clear 返回错误：%v", err)
 	}
 

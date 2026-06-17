@@ -231,7 +231,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 				}()
 
 				// 无论 graph store 是否成功，都清除 workflow store
-				if err := workflowStore.Clear(ctx, workflowID); err != nil {
+				if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
 					return err
 				}
 				return nil
@@ -720,7 +720,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 		}
 		cp.mu.Unlock()
 
-		if err := workflowStore.Clear(ctx, workflowID); err != nil {
+		if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
 			if !isSucceed {
 				logger.Error(logComponent).Err(err).
 					Str("action", "inner_clear_workflow_session").
@@ -822,7 +822,7 @@ func (s *AgentStorage) Recover(ctx context.Context, session CheckpointerSession,
 }
 
 // Clear 清除 Agent 状态。
-func (s *AgentStorage) Clear(ctx context.Context, entityID string) error {
+func (s *AgentStorage) Clear(ctx context.Context, entityID, _ string) error {
 	s.deleteBlob(entityID)
 	return nil
 }
@@ -886,7 +886,7 @@ func (s *AgentTeamStorage) Recover(ctx context.Context, session CheckpointerSess
 }
 
 // Clear 清除 AgentTeam 状态。
-func (s *AgentTeamStorage) Clear(ctx context.Context, entityID string) error {
+func (s *AgentTeamStorage) Clear(ctx context.Context, entityID, _ string) error {
 	s.deleteBlob(entityID)
 	return nil
 }
@@ -990,7 +990,7 @@ func (ws *WorkflowStorage) Recover(ctx context.Context, session CheckpointerSess
 
 // Clear 清除工作流状态。
 // 对应 Python: WorkflowStorage.clear()
-func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID string) error {
+func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID, _ string) error {
 	ws.mu.Lock()
 	delete(ws.stateBlobs, workflowID)
 	delete(ws.stateUpdatesBlobs, workflowID)
