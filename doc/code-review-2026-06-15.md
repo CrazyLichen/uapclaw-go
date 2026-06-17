@@ -6,6 +6,7 @@
 > Python 参考项目：`/home/opensource/agent-core/openjiuwen/` + `/home/opensource/jiuwenswarm-develop/jiuwenswarm/`
 > 严重问题状态：✅ 全部已修复
 > 一般问题状态：🟡 部分已修复（G-01/G-02/G-03/G-07/G-09/G-10/G-11/G-12/G-13/G-15/G-16/G-17/G-18/G-19/G-20/G-21/G-22 已修复；G-04/G-05 等待 5.12 SessionConfig；G-08 已文档化；G-14 等待 5.13+ Callback 框架）
+> 提示问题状态：🟡 部分已修复（T-01/T-02/T-03/T-06/T-16 已修复；T-09/T-10 已修复；T-11/T-13 部分修复）
 
 ---
 

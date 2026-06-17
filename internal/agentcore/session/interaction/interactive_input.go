@@ -45,7 +45,8 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 // ──────────────────────────── InteractiveInput 方法 ────────────────────────────
 
 // Update 添加节点绑定的输入。
-// RawInputs 已设置时返回错误（互斥约束），nodeID 或 value 为 nil 时返回错误。
+// RawInputs 已设置时返回错误（互斥约束），value 为 nil 时返回错误。
+// 注意：与 Python 对齐，nodeID 允许空字符串（Python 只拒绝 node_id is None，不拒绝 ""）。
 // 对应 Python: InteractiveInput.update(node_id, value)
 func (i *InteractiveInput) Update(nodeID string, value any) error {
 	if i.RawInputs != nil {
@@ -53,9 +54,9 @@ func (i *InteractiveInput) Update(nodeID string, value any) error {
 			exception.WithParam("reason", "raw_inputs existed, update is invalid"),
 		)
 	}
-	if nodeID == "" || value == nil {
+	if value == nil {
 		return exception.RaiseError(exception.StatusInteractionInputInvalid,
-			exception.WithParam("reason", "value is none or node_id is none"),
+			exception.WithParam("reason", "value is none"),
 		)
 	}
 	i.UserInputs[nodeID] = value

@@ -54,13 +54,15 @@ type UserScope struct {
 // StorageCodec 存储编解码器接口，用于对记忆文本进行加解密。
 //
 // 实现示例：AES 编解码器，对记忆文本进行加密存储和解密读取。
+// 方法永远返回 string，不返回 error（对齐 Python Protocol 签名：encode/decode → str）。
+// 加解密失败时由实现方自行记录日志并返回原文（容错模式）。
 //
 // 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (StorageCodec)
 type StorageCodec interface {
-	// Encode 对文本进行编码（如加密）
-	Encode(text string) (string, error)
-	// Decode 对数据进行解码（如解密）
-	Decode(data string) (string, error)
+	// Encode 对文本进行编码（如加密），失败时返回原文
+	Encode(text string) string
+	// Decode 对数据进行解码（如解密），失败时返回原文
+	Decode(data string) string
 }
 
 // BaseMemoryIndex 记忆索引抽象接口，定义记忆文档的存储和检索操作。

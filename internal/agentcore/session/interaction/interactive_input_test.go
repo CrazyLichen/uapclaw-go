@@ -62,12 +62,15 @@ func TestInteractiveInput_Update_RawInputs已存在(t *testing.T) {
 	}
 }
 
-// TestInteractiveInput_Update_nodeID为空 测试 nodeID 为空时返回错误
+// TestInteractiveInput_Update_nodeID为空 测试 nodeID 为空字符串时允许通过（对齐 Python：只拒绝 None，不拒绝 ""）
 func TestInteractiveInput_Update_nodeID为空(t *testing.T) {
 	input, _ := NewInteractiveInput()
 	err := input.Update("", "value1")
-	if err == nil {
-		t.Fatal("nodeID 为空时 Update 应返回错误")
+	if err != nil {
+		t.Fatalf("nodeID 为空字符串时 Update 不应返回错误（对齐 Python）： %v", err)
+	}
+	if input.UserInputs[""] != "value1" {
+		t.Errorf("UserInputs[''] 期望 'value1'，实际=%v", input.UserInputs[""])
 	}
 }
 

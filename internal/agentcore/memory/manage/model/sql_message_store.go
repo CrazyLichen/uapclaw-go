@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/index"
 	storedb "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/db"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/codec"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/memory/migration/migrator"
@@ -23,8 +24,8 @@ import (
 // 容错模式：key 为空时 passthrough 不加密，key 非空时加解密失败返回原文（对齐 Python 行为）。
 // 对应 Python: openjiuwen/core/memory/manage/mem_model/sql_message_store.py (SqlMessageStore)
 type SqlMessageStore struct {
-	// codec AES 存储编解码器
-	codec *codec.AesStorageCodec
+	// codec 存储编解码器（接口类型，支持注入 mock 或其他实现）
+	codec index.StorageCodec
 	// sqlDbStore 通用 SQL CRUD 层
 	sqlDbStore *SqlDbStore
 	// tableName 消息表名
@@ -88,7 +89,7 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 	messageID := generateMessageID(contentStr, timestamp)
 
 	// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
-	encrypted, _ := s.codec.Encode(contentStr)
+	encrypted := s.codec.Encode(contentStr)
 
 	// 组装数据行
 	data := map[string]any{
@@ -135,7 +136,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 		messageID := generateMessageID(contentStr, timestamp)
 
 		// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
-		encrypted, _ := s.codec.Encode(contentStr)
+		encrypted := s.codec.Encode(contentStr)
 
 		data := map[string]any{
 			"message_id": messageID,
@@ -249,7 +250,7 @@ func (s *SqlMessageStore) UpdateMessage(ctx context.Context, messageID string, c
 	}
 
 	// 加密内容（容错模式：加密失败时返回原文，与 Python 对齐）
-	encrypted, _ := s.codec.Encode(contentStr)
+	encrypted := s.codec.Encode(contentStr)
 
 	return s.sqlDbStore.Update(ctx, s.tableName,
 		map[string]any{"message_id": messageID},
@@ -413,7 +414,7 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (*schema.BaseM
 	if err != nil {
 		return nil, nil, err
 	}
-	decrypted, _ := s.codec.Decode(contentStr)
+	decrypted := s.codec.Decode(contentStr)
 
 	// 反序列化 content
 	content, err := unmarshalContent(decrypted)

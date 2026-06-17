@@ -21,7 +21,7 @@
 | 5 | 同步/异步 | 全部加 `ctx context.Context` | 为 5.9 Redis 预留，接口一次定义好 |
 | 6 | Storage 层 | 保留 Storage 接口 | 与 Python 一致，三种实现复用 Storage 抽象 |
 | 7 | 序列化 | Serializer 接口 + 默认 JSON | 与 Python 的 Serializer 抽象对应，5.9 复用无重构 |
-| 8 | State 接口 | `state.State` + 类型断言 | Python 也没有统一接口，AgentStateCollection/WorkflowCommitState 方法集不同，与 Python 动态调用等价 |
+| 8 | State 接口 | `state.SessionState` + 类型断言 | Python 也没有统一接口，AgentStateCollection/WorkflowCommitState 方法集不同；WorkflowState 独立接口已拆分，WorkflowStorage 断言 `state.WorkflowState` 接口而非具体类型 |
 
 ## 包结构与文件目录
 
@@ -81,11 +81,11 @@ type Storage interface {
 // AgentSession/WorkflowSession/NodeSession 天然满足此接口。
 // AgentID/TeamID 通过 AgentIDProvider/TeamIDProvider 类型断言获取。
 // WorkflowState 的扩展方法（GetUpdates/SetUpdates/Commit 等）通过
-// 类型断言为 *state.WorkflowCommitState 获取。
+// 类型断言为 state.WorkflowState 接口获取（比断言具体类型更优雅）。
 type CheckpointerSession interface {
     SessionID() string
     WorkflowID() string
-    State() state.State
+    State() state.SessionState
     Config() CheckpointerConfig
     Parent() CheckpointerSession
 }
@@ -228,8 +228,8 @@ type AgentStorage struct {
 ```
 
 - `GetEntityID` → `GetAgentID(session)` 类型断言
-- `GetStateToSave` → `session.State().GetState()` （state.State 接口自带）
-- `RestoreState` → `session.State().SetState(state)` （state.State 接口自带）
+- `GetStateToSave` → `session.State().GetState()` （SessionState 接口自带）
+- `RestoreState` → `session.State().SetState(state)` （SessionState 接口自带）
 
 #### AgentTeamStorage
 
@@ -240,8 +240,8 @@ type AgentTeamStorage struct {
 ```
 
 - `GetEntityID` → `GetTeamID(session)` 类型断言
-- `GetStateToSave` → 断言 `*state.AgentStateCollection` 调用 `GetGlobal(state.StringKey(""))`
-- `RestoreState` → 断言 `*state.AgentStateCollection` 调用 `GlobalState().SetState(state)`
+- `GetStateToSave` → 断言 `*state.AgentStateCollection` 调用 `GetGlobal(state.AllStateKey)`
+- `RestoreState` → 断言 `*state.AgentStateCollection` 调用 `GlobalState().SetState(state)`（GlobalState 返回 `*InMemoryStateLike`）
 
 #### WorkflowStorage（独立，不嵌入 baseSingleStateStorage）
 
@@ -253,9 +253,10 @@ type WorkflowStorage struct {
 }
 ```
 
-- `Save` → 断言 `*state.WorkflowCommitState`，调用 `GetState()` + `GetUpdates()`
-- `Recover` → 断言 `*state.WorkflowCommitState`，调用 `SetState()` + 处理 InteractiveInput + `SetUpdates()`
+- `Save` → 断言 `state.WorkflowState`，调用 `GetState()` + `GetUpdates()`
+- `Recover` → 断言 `state.WorkflowState`，调用 `SetState()` + 处理 InteractiveInput + `SetUpdates()`
 - InteractiveInput 处理需要调用 `UpdateAndCommitWorkflowState` / `Commit` / `Update`
+- 注意：断言 `state.WorkflowState` 接口而非 `*state.WorkflowCommitState` 具体类型，更解耦
 
 ## CheckpointerFactory + Config（factory.go）
 

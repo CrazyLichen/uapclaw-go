@@ -8,6 +8,16 @@
 
 **Tech Stack:** Go 1.22+, encoding/json, github.com/uapclaw/uapclaw-go/internal/agentcore/session/state
 
+**重要：State 体系变更说明**
+
+state 包近期有重大重构，本计划已同步更新以下变化：
+1. 顶层接口从 `state.State` 改为 `state.SessionState`
+2. 新增 `state.WorkflowState` 独立接口（WorkflowCommitState 实现此接口）
+3. `StateKey` 哨兵值：`StringKey("")` 零值判断 → `AllStateKey` 哨兵值
+4. `InMemoryState` 改名为 `InMemoryStateLike`
+5. `AgentStateCollection.GlobalState()` 返回 `*InMemoryStateLike`
+6. WorkflowStorage 断言 `state.WorkflowState` 接口而非 `*WorkflowCommitState` 具体类型
+
 ---
 
 ### Task 1: 创建 checkpointer 包骨架（doc.go + base.go 接口）
@@ -104,14 +114,14 @@ type Storage interface {
 // AgentSession/WorkflowSession/NodeSession 天然满足此接口。
 // AgentID/TeamID 通过 AgentIDProvider/TeamIDProvider 类型断言获取。
 // WorkflowState 的扩展方法（GetUpdates/SetUpdates/Commit 等）通过
-// 类型断言为 *state.WorkflowCommitState 获取。
+// 类型断言为 state.WorkflowState 接口获取（比断言具体类型更优雅）。
 type CheckpointerSession interface {
 	// SessionID 获取会话唯一标识
 	SessionID() string
 	// WorkflowID 获取工作流 ID
 	WorkflowID() string
 	// State 获取会话状态
-	State() state.State
+	State() state.SessionState
 	// Config 获取会话配置
 	Config() CheckpointerConfig
 	// Parent 获取父会话
@@ -317,7 +327,7 @@ type testSession struct {
 
 func (s *testSession) SessionID() string                   { return s.sessionID }
 func (s *testSession) WorkflowID() string                  { return s.workflowID }
-func (s *testSession) State() state.State                  { return nil }
+func (s *testSession) State() state.SessionState           { return nil }
 func (s *testSession) Config() CheckpointerConfig          { return nil }
 func (s *testSession) Parent() CheckpointerSession         { return nil }
 
@@ -565,11 +575,11 @@ git commit -m "feat(checkpointer): 实现 Serializer 接口和 JSONSerializer"
 对照 Python `inmemory.py` 逐方法实现。注意：
 - 所有方法加 `ctx context.Context`
 - Graph Store 相关逻辑留空（`⤵️ 8.7 回填`）
-- `AgentStorage.GetStateToSave` → `session.State().GetState()`（state.State 接口自带 GetState）
-- `AgentStorage.RestoreState` → `session.State().SetState(state)`（state.State 接口自带 SetState）
-- `AgentTeamStorage.GetStateToSave` → 断言 `*state.AgentStateCollection` 调用 `GetGlobal(state.StringKey(""))`
-- `AgentTeamStorage.RestoreState` → 断言 `*state.AgentStateCollection` 调用 `GlobalState().SetState(state)`
-- `WorkflowStorage.Save/Recover` → 断言 `*state.WorkflowCommitState` 调用 `GetUpdates/SetUpdates/Commit/UpdateAndCommitWorkflowState`
+- `AgentStorage.GetStateToSave` → `session.State().GetState()`（SessionState 接口自带 GetState）
+- `AgentStorage.RestoreState` → `session.State().SetState(state)`（SessionState 接口自带 SetState）
+- `AgentTeamStorage.GetStateToSave` → 断言 `*state.AgentStateCollection` 调用 `GetGlobal(state.AllStateKey)`（使用 AllStateKey 哨兵值，对齐 Python `get_global(None)`）
+- `AgentTeamStorage.RestoreState` → 断言 `*state.AgentStateCollection` 调用 `GlobalState().SetState(state)`（GlobalState 返回 `*InMemoryStateLike`）
+- `WorkflowStorage.Save/Recover` → 断言 `state.WorkflowState` 接口（而非 `*state.WorkflowCommitState` 具体类型），调用 `GetUpdates/SetUpdates/Commit/UpdateAndCommitWorkflowState`
 - 日志按项目规则 3 对齐 Python 调用点
 - `PreWorkflowExecute` 中的 `FORCE_DEL_WORKFLOW_STATE_KEY` 使用 interaction 包中已有的常量 `InteractiveInputKey` 同级定义，或从 session/constants（5.13 才实现）暂定义为包内常量
 
@@ -668,7 +678,8 @@ git commit -m "feat(checkpointer): 实现 CheckpointerFactory、CheckpointerProv
 2. `internal.baseSession` 接口 `Checkpointer() any` → `Checkpointer() checkpointer.Checkpointer`
 3. `WorkflowSession.Checkpointer()` 无 parent 时从工厂获取：`return checkpointer.GetCheckpointer()`
 4. `NodeSession.Checkpointer() any` → `Checkpointer() checkpointer.Checkpointer`
-5. 删除 `⤵️ 5.8 回填` 注释
+5. 注意 `State()` 返回类型已是 `state.SessionState`，无需修改
+6. 删除 `⤵️ 5.8 回填` 注释
 
 - [ ] **Step 3: 修改 agent_session_test.go**
 
