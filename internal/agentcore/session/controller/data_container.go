@@ -65,7 +65,9 @@ type factoryEntry struct {
 // DataContainerFactory 数据容器工厂，通过类型名注册和创建 DataContainer 实例。
 // 对应 Python: openjiuwen/core/session/session_controller/data_container.py (DataContainerFactory)
 type DataContainerFactory struct {
-	mu      sync.RWMutex
+	// mu 并发读写锁
+	mu sync.RWMutex
+	// entries 已注册的工厂条目
 	entries map[string]factoryEntry
 }
 

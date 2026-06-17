@@ -42,6 +42,12 @@ type InteractionOutputWriter interface {
 	WriteInteraction(outputType string, index int, payload any) error
 }
 
+// CheckpointerSessionProvider 提供 CheckpointerSession 的接口。
+// 通过类型断言延迟绑定：完整会话类型（AgentSession/WorkflowSession）天然实现此接口。
+type CheckpointerSessionProvider interface {
+	checkpointer.CheckpointerSession
+}
+
 // Interrupt 图中断信号
 type Interrupt struct {
 	// Value 中断携带的值（OutputSchema 类型）
@@ -187,12 +193,6 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 		return res
 	}
 	return nil
-}
-
-// CheckpointerSessionProvider 提供 CheckpointerSession 的接口。
-// 通过类型断言延迟绑定：完整会话类型（AgentSession/WorkflowSession）天然实现此接口。
-type CheckpointerSessionProvider interface {
-	checkpointer.CheckpointerSession
 }
 
 // interruptAgentExecute 调用检查点器的中断方法。

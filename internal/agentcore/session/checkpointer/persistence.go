@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // EntityHooks 单实体状态存储的钩子接口。
 // 对应 Python: BaseSingleStateStorage 的 _get_entity_id/_get_state_to_save/_restore_state
@@ -27,8 +27,6 @@ type EntityHooks interface {
 	// RestoreState 将恢复的状态设置回 session
 	RestoreState(session CheckpointerSession, savedState any)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // basePersistenceStorage 持久化单实体状态存储基类。
 // 持有 BaseKVStore + Serializer + EntityHooks，
@@ -198,7 +196,7 @@ func pipelineExistsResult(results []kv.PipelineResult, idx int) (bool, error) {
 	return results[idx].Exists, nil
 }
 
-// ──────────────────────────── agentEntityHooks 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // GetEntityID 实现 EntityHooks 接口。
 func (h *agentEntityHooks) GetEntityID(session CheckpointerSession) string {
@@ -223,7 +221,7 @@ func (h *agentEntityHooks) RestoreState(session CheckpointerSession, savedState 
 	}
 }
 
-// ──────────────────────────── agentTeamEntityHooks 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEntityID 实现 EntityHooks 接口。
 func (h *agentTeamEntityHooks) GetEntityID(session CheckpointerSession) string {
@@ -253,7 +251,7 @@ func (h *agentTeamEntityHooks) RestoreState(session CheckpointerSession, savedSt
 	}
 }
 
-// ──────────────────────────── basePersistenceStorage 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Save 保存会话状态到 KVStore。
 // 对应 Python: BaseSingleStateStorage.save()
@@ -434,7 +432,7 @@ func (s *basePersistenceStorage) entityTitleLabel() string {
 	return strings.ToUpper(s.entityLabel[:1]) + s.entityLabel[1:]
 }
 
-// ──────────────────────────── PersistenceWorkflowStorage 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存工作流状态到 KVStore。
 // 对应 Python: WorkflowStorage.save()
@@ -622,7 +620,7 @@ func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session Checkp
 	return exists0 && exists1, nil
 }
 
-// ──────────────────────────── PersistenceWorkflowStorage 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // serializeState 序列化状态，返回 serdeTuple。
 func (ws *PersistenceWorkflowStorage) serializeState(st any) *serdeTuple {
@@ -658,7 +656,7 @@ func (ws *PersistenceWorkflowStorage) recoverFromInputs(session CheckpointerSess
 	}
 }
 
-// ──────────────────────────── PersistenceCheckpointer 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetThreadID 获取线程 ID（session_id:workflow_id）。
 func (cp *PersistenceCheckpointer) GetThreadID(session CheckpointerSession) string {
@@ -861,7 +859,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 				return nil
 			}
 		}
-		return fmt.Errorf("checkpointer pre workflow execution error: session_id=%s, workflow=%s, reason=workflow state exists but non-interactive input and cleanup is disabled",
+		return fmt.Errorf("检查点器工作流执行前错误: session_id=%s, workflow=%s, 原因=工作流状态已存在但非交互输入且未启用清理",
 			sessionID, workflowID)
 	}
 	return nil
@@ -978,7 +976,7 @@ func (cp *PersistenceCheckpointer) GraphStore() any {
 	return cp.graphStore
 }
 
-// ──────────────────────────── persistenceProvider 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Create 创建 Persistence 检查点器。
 // 对应 Python: PersistenceCheckpointerProvider.create()

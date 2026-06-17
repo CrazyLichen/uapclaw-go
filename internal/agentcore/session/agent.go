@@ -41,6 +41,14 @@ type Session struct {
 	sourceMetadata map[string]any
 }
 
+// agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
+// AgentSession 已有 AgentID() 方法（满足 AgentIDProvider），
+// 但仍缺少 WorkflowID()/Parent()/Config() 的正确返回类型，
+// 因此暂保留此适配器。⤵️ 5.12 回填：Config() 返回 SessionConfig 后可消除此适配器。
+type agentCheckpointerSession struct {
+	inner *internal.AgentSession
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // SessionOption Session 构造选项函数类型
@@ -340,16 +348,6 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-// ──────────────────────────── 非导出类型 ────────────────────────────
-
-// agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
-// AgentSession 已有 AgentID() 方法（满足 AgentIDProvider），
-// 但仍缺少 WorkflowID()/Parent()/Config() 的正确返回类型，
-// 因此暂保留此适配器。⤵️ 5.12 回填：Config() 返回 SessionConfig 后可消除此适配器。
-type agentCheckpointerSession struct {
-	inner *internal.AgentSession
 }
 
 func (a *agentCheckpointerSession) SessionID() string                         { return a.inner.SessionID() }

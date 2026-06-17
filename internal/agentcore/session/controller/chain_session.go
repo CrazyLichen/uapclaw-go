@@ -17,6 +17,7 @@ import (
 // 每个实例代表一个具体的对话会话，维护与其他会话的下游调用关系以实现单向数据可见性。
 // 对应 Python: openjiuwen/core/session/session_controller/chain_session.py (ChainSession)
 type ChainSession struct {
+	// mu 并发互斥锁
 	mu sync.Mutex
 	// AgentID 所属 Agent 标识
 	AgentID string

@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
 // 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
@@ -94,6 +94,8 @@ type AgentIDProvider interface {
 type TeamIDProvider interface {
 	TeamID() string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

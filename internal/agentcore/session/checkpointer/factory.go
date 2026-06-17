@@ -8,6 +8,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// CheckpointerProvider 检查点器提供者接口。
+// 对应 Python: openjiuwen/core/session/checkpointer/checkpointer.py (CheckpointerProvider)
+type CheckpointerProvider interface {
+	// Create 创建检查点器实例
+	Create(ctx context.Context, conf map[string]any) (Checkpointer, error)
+}
+
 // CheckpointerFactoryConfig 检查点器工厂配置结构体，用于工厂创建检查点器实例。
 // 对应 Python: openjiuwen/core/session/checkpointer/checkpointer.py (CheckpointerConfig)
 // 注意：与 CheckpointerConfig 接口（GetEnv）不同，此结构体仅用于工厂创建参数。
@@ -31,18 +38,13 @@ type CheckpointerFactory struct {
 	typeCheckpointers map[string]Checkpointer
 }
 
-// ──────────────────────────── 接口 ────────────────────────────
-
-// CheckpointerProvider 检查点器提供者接口。
-// 对应 Python: openjiuwen/core/session/checkpointer/checkpointer.py (CheckpointerProvider)
-type CheckpointerProvider interface {
-	// Create 创建检查点器实例
-	Create(ctx context.Context, conf map[string]any) (Checkpointer, error)
-}
-
 // inMemoryProvider InMemory 检查点器提供者。
 // 对应 Python: InMemoryCheckpointerProvider
 type inMemoryProvider struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -134,14 +136,12 @@ func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) Checkpointer 
 	return defaultInMemoryCheckpointer
 }
 
-// ──────────────────────────── inMemoryProvider 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Create 创建 InMemory 检查点器。
 func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
 	return defaultInMemoryCheckpointer, nil
 }
-
-// ──────────────────────────── 包级便捷函数 ────────────────────────────
 
 func init() {
 	defaultInMemoryCheckpointer = NewInMemoryCheckpointer()

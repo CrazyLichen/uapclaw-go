@@ -9,29 +9,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// ForceDelWorkflowStateKey 强制删除工作流状态的环境变量键。
-	// 对应 Python: openjiuwen/core/session/constants.py (FORCE_DEL_WORKFLOW_STATE_KEY)
-	// 5.13 实现 session/constants 包后，此常量应迁移到该包中。
-	ForceDelWorkflowStateKey = "_force_del_workflow_state"
-
-	// InteractiveInputKey 交互输入在 session state 中的键。
-	// 对应 Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
-	// 此常量与 interaction 包中的 InteractiveInputKey 值一致，
-	// 5.13 实现 session/constants 包后，两处引用应统一到该包中。
-	InteractiveInputKey = "__interactive_input__"
-
-	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
-	emptyFormatTag = "empty"
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件标识
-var logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // InMemoryCheckpointer 内存检查点器，所有状态存储在进程内存中。
@@ -97,6 +74,31 @@ type WorkflowStorage struct {
 	stateUpdatesBlobs map[string]serdeTuple
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// ForceDelWorkflowStateKey 强制删除工作流状态的环境变量键。
+	// 对应 Python: openjiuwen/core/session/constants.py (FORCE_DEL_WORKFLOW_STATE_KEY)
+	// 5.13 实现 session/constants 包后，此常量应迁移到该包中。
+	ForceDelWorkflowStateKey = "_force_del_workflow_state"
+
+	// InteractiveInputKey 交互输入在 session state 中的键。
+	// 对应 Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
+	// 此常量与 interaction 包中的 InteractiveInputKey 值一致，
+	// 5.13 实现 session/constants 包后，两处引用应统一到该包中。
+	InteractiveInputKey = "__interactive_input__"
+
+	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
+	emptyFormatTag = "empty"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent 日志组件标识
+var logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryCheckpointer 创建内存检查点器实例。
@@ -142,7 +144,7 @@ func newWorkflowStorage() *WorkflowStorage {
 	}
 }
 
-// ──────────────────────────── InMemoryCheckpointer 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetThreadID 获取线程 ID（session_id:workflow_id）。
 func (cp *InMemoryCheckpointer) GetThreadID(session CheckpointerSession) string {
@@ -237,7 +239,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 				return nil
 			}
 		}
-		return fmt.Errorf("checkpointer pre workflow execution error: session_id=%s, workflow=%s, reason=workflow state exists but non-interactive input and cleanup is disabled",
+		return fmt.Errorf("检查点器工作流执行前错误: session_id=%s, workflow=%s, 原因=工作流状态已存在但非交互输入且未启用清理",
 			sessionID, workflowID)
 	}
 	return nil
@@ -255,9 +257,9 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 
 	if exception != nil {
 		if workflowStore == nil {
-			return fmt.Errorf("checkpointer post workflow execution error: workflow=%s, reason=workflow store not found", workflowID)
-		}
-		if err := cp.innerSaveWorkflowCheckpoint(ctx, workflowID, sessionID, session, fmt.Sprintf("workflow exception %v", exception)); err != nil {
+		return fmt.Errorf("检查点器工作流执行后错误: workflow=%s, 原因=工作流存储未找到", workflowID)
+	}
+	if err := cp.innerSaveWorkflowCheckpoint(ctx, workflowID, sessionID, session, fmt.Sprintf("workflow exception %v", exception)); err != nil {
 			return err
 		}
 		return exception
@@ -302,7 +304,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 	} else {
 		// 工作流中断，保存检查点
 		if workflowStore == nil {
-			return fmt.Errorf("checkpointer post workflow execution error: workflow=%s, reason=workflow store not found", workflowID)
+			return fmt.Errorf("检查点器工作流执行后错误: workflow=%s, 原因=工作流存储未找到", workflowID)
 		}
 		if err := cp.innerSaveWorkflowCheckpoint(ctx, workflowID, sessionID, session, "workflow interruption"); err != nil {
 			return err
@@ -438,7 +440,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 	cp.mu.RUnlock()
 
 	if agentStore == nil {
-		return fmt.Errorf("checkpointer interrupt agent error: agent=%s, reason=agent store not found", agentID)
+		return fmt.Errorf("检查点器中断 Agent 错误: agent=%s, 原因=Agent 存储未找到", agentID)
 	}
 
 	logger.Info(logComponent).
@@ -481,7 +483,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session Ch
 	cp.mu.RUnlock()
 
 	if agentStore == nil {
-		return fmt.Errorf("checkpointer post agent execution error: agent=%s, reason=agent store not found", agentID)
+		return fmt.Errorf("检查点器 Agent 执行后错误: agent=%s, 原因=Agent 存储未找到", agentID)
 	}
 
 	logger.Info(logComponent).
@@ -524,7 +526,7 @@ func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, sessio
 	cp.mu.RUnlock()
 
 	if teamStore == nil {
-		return fmt.Errorf("checkpointer post agent execution error: agent=%s, reason=agent team store not found", teamID)
+		return fmt.Errorf("检查点器 Agent 执行后错误: agent=%s, 原因=AgentTeam 存储未找到", teamID)
 	}
 
 	logger.Info(logComponent).
@@ -644,7 +646,7 @@ func (cp *InMemoryCheckpointer) GraphStore() any {
 	return cp.graphStore
 }
 
-// ──────────────────────────── InMemoryCheckpointer 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // innerSaveWorkflowCheckpoint 内部方法：保存工作流检查点。
 // 对应 Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
@@ -747,7 +749,7 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 	return nil
 }
 
-// ──────────────────────────── baseSingleStateStorage 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setBlob 设置序列化数据。
 func (s *baseSingleStateStorage) setBlob(entityID, formatTag string, data []byte) {
@@ -779,7 +781,7 @@ func (s *baseSingleStateStorage) hasBlob(entityID string) bool {
 	return exists
 }
 
-// ──────────────────────────── AgentStorage 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存 Agent 状态。
 // 对应 Python: AgentStorage.save() → BaseSingleStateStorage.save()
@@ -833,7 +835,7 @@ func (s *AgentStorage) Exists(ctx context.Context, session CheckpointerSession) 
 	return s.hasBlob(entityID), nil
 }
 
-// ──────────────────────────── AgentTeamStorage 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存 AgentTeam 状态。
 // 对应 Python: AgentTeamStorage.save() → BaseSingleStateStorage.save()
@@ -897,7 +899,7 @@ func (s *AgentTeamStorage) Exists(ctx context.Context, session CheckpointerSessi
 	return s.hasBlob(entityID), nil
 }
 
-// ──────────────────────────── WorkflowStorage 方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存工作流状态和更新。
 // 对应 Python: WorkflowStorage.save()
@@ -1011,7 +1013,7 @@ func (ws *WorkflowStorage) Exists(ctx context.Context, session CheckpointerSessi
 	return false, nil
 }
 
-// ──────────────────────────── WorkflowStorage 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // recoverFromInputs 从交互输入恢复工作流状态。
 // 对应 Python: WorkflowStorage.recover() 中 inputs 处理逻辑

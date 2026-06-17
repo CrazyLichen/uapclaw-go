@@ -24,6 +24,15 @@ type AesStorageCodec struct {
 	key []byte
 }
 
+// keyedProvider 持有密钥的加密提供者适配器。
+// 将 BaseCrypt（密钥由调用方传入）适配为 CryptoProvider（密钥内部持有）。
+type keyedProvider struct {
+	// key 加密密钥
+	key []byte
+	// crypt 加密算法实例
+	crypt crypto.BaseCrypt
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -131,13 +140,6 @@ func (c *AesStorageCodec) getProvider() crypto.CryptoProvider {
 		return nil
 	}
 	return &keyedProvider{key: c.key, crypt: crypt}
-}
-
-// keyedProvider 持有密钥的加密提供者适配器。
-// 将 BaseCrypt（密钥由调用方传入）适配为 CryptoProvider（密钥内部持有）。
-type keyedProvider struct {
-	key   []byte
-	crypt crypto.BaseCrypt
 }
 
 // Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥

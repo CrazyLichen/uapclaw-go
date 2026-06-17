@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // Serializer 类型化序列化器接口。
 // 对应 Python: openjiuwen/core/graph/store/serde.py (Serializer)
@@ -17,8 +17,6 @@ type Serializer interface {
 	// LoadsTyped 反序列化对象，根据格式标签和字节流恢复
 	LoadsTyped(formatTag string, data []byte) (any, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // serdeTuple 序列化元组，对应 Python 的 tuple[str, bytes]
 type serdeTuple struct {
@@ -39,7 +37,7 @@ func NewJSONSerializer() *JSONSerializer {
 	return &JSONSerializer{}
 }
 
-// ──────────────────────────── JSONSerializer 方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // DumpsTyped 序列化为 JSON，返回 ("json", jsonBytes)
 func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {

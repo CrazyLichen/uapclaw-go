@@ -48,8 +48,6 @@ const (
 // 确保编译时接口合规
 var _ reranker.BaseReranker = (*ChatReranker)(nil)
 
-// 抑制未使用导入警告
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewChatReranker 创建 Chat 重排序客户端。

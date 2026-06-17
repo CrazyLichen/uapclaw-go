@@ -19,6 +19,7 @@ import (
 // 以及维护 sessions.json 元数据文件和会话对象缓存。
 // 对应 Python: openjiuwen/core/session/session_controller/session_controller.py (SessionController)
 type SessionController struct {
+	// mu 并发互斥锁
 	mu sync.Mutex
 	// AgentID 所属 Agent 标识
 	AgentID string
