@@ -212,13 +212,16 @@ func (s *WorkflowCommitState) GetUpdates() map[string]any {
 // 内部子状态使用 map[string][]map[string]any。WorkflowCommitState 不实现 CommitStateLike，
 // GetUpdates/SetUpdates 的类型差异是有意设计（对齐 Python CommitState 继承 StateCollection
 // 而非 CommitStateLike 的设计）。
+// G-01 修复：global_updates 不再检查 workflowOnly，对齐 Python set_updates 行为。
 func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if updates == nil {
 		return
 	}
-	if gs, ok := updates[GlobalStateUpdatesKey]; ok && gs != nil && s.workflowOnly {
+	// G-01 修复：移除 s.workflowOnly 检查，对齐 Python set_updates 中
+	// global_updates 不做 workflow_only 检查的行为
+	if gs, ok := updates[GlobalStateUpdatesKey]; ok && gs != nil {
 		if m, ok := gs.(map[string][]map[string]any); ok {
 			s.globalState.SetUpdates(m)
 		} else if m, ok := convertUpdatesFromJSON(gs); ok {
@@ -274,28 +277,32 @@ func (s *WorkflowCommitState) GetState() map[string]any {
 }
 
 // SetState 从快照恢复状态（覆写 WorkflowStateCollection.SetState）。
+// G-03 修复：无条件调用子状态的 SetState，由底层 InMemoryStateLike.SetState
+// 的 if state 保护来跳过 nil/空值，对齐 Python 的 set_state 行为。
 func (s *WorkflowCommitState) SetState(st map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if st == nil {
 		return
 	}
+	// globalState 仍需检查非 nil（Python 中有 if global_state is not None 保护）
 	if gs, ok := st[GlobalStateKey]; ok && gs != nil {
 		if m, ok := gs.(map[string]any); ok {
 			s.globalState.SetState(m)
 		}
 	}
-	if io, ok := st[IOStateKey]; ok && io != nil {
+	// G-03 修复：无条件调用子状态 SetState，由底层 if state 保护
+	if io, ok := st[IOStateKey]; ok {
 		if m, ok := io.(map[string]any); ok {
 			s.ioState.SetState(m)
 		}
 	}
-	if comp, ok := st[CompStateKey]; ok && comp != nil {
+	if comp, ok := st[CompStateKey]; ok {
 		if m, ok := comp.(map[string]any); ok {
 			s.compState.SetState(m)
 		}
 	}
-	if wf, ok := st[WorkflowStateKey]; ok && wf != nil {
+	if wf, ok := st[WorkflowStateKey]; ok {
 		if m, ok := wf.(map[string]any); ok {
 			s.workflowState.SetState(m)
 		}

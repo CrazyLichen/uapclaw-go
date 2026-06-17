@@ -15,11 +15,11 @@ func TestNewAgentStateCollection(t *testing.T) {
 }
 
 // TestAgentStateCollection_GetGlobal_零值Key返回完整全局状态 测试零值 key 返回完整全局状态
-func TestAgentStateCollection_GetGlobal_零值Key返回完整全局状态(t *testing.T) {
+func TestAgentStateCollection_GetGlobal_AllStateKey返回完整全局状态(t *testing.T) {
 	coll := NewAgentStateCollection()
 	coll.UpdateGlobal(map[string]any{"foo": "bar", "baz": 123})
 
-	result := coll.GetGlobal(StateKey{})
+	result := coll.GetGlobal(AllStateKey)
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("期望 map[string]any，实际 %T", result)
@@ -67,12 +67,12 @@ func TestAgentStateCollection_UpdateGlobal(t *testing.T) {
 	}
 }
 
-// TestAgentStateCollection_Get_零值Key返回完整Agent状态 测试零值 key 返回完整 Agent 状态
-func TestAgentStateCollection_Get_零值Key返回完整Agent状态(t *testing.T) {
+// TestAgentStateCollection_Get_AllStateKey返回完整Agent状态 测试 AllStateKey 返回完整 Agent 状态
+func TestAgentStateCollection_Get_AllStateKey返回完整Agent状态(t *testing.T) {
 	coll := NewAgentStateCollection()
 	require.NoError(t, coll.Update(map[string]any{"x": "y"}))
 
-	result := coll.GetAgent(StateKey{})
+	result := coll.GetAgent(AllStateKey)
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("期望 map[string]any，实际 %T", result)

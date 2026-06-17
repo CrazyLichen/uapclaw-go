@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -66,23 +68,32 @@ func NewSessionController(agentID string, basePath string, dataContainerType ...
 	return sc
 }
 
-// Flush 持久化所有变更到磁盘
-// 对齐 Python：整个 flush 过程持锁，避免释放锁期间数据不一致
+// Flush 持久化所有变更到磁盘。
+// 对齐 Python asyncio.gather：在锁内并发 Flush 所有 session，
+// 每个 ChainSession 有自己的 mu 保护，并发安全。
 func (sc *SessionController) Flush() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	// 收集并逐个 flush（持锁状态下，对齐 Python 行为）
+	// 对齐 Python asyncio.gather：并发 Flush 所有 session
+	eg := &errgroup.Group{}
 	for _, s := range sc.SessionCache {
-		if err := s.Flush(); err != nil {
-			logger.Error(logger.ComponentAgentCore).
-				Str("action", "session_controller_flush").
-				Str("agent_id", sc.AgentID).
-				Str("session_id", s.SessionID).
-				Err(err).
-				Msg("刷写会话失败")
-			return err
-		}
+		s := s
+		eg.Go(func() error {
+			if err := s.Flush(); err != nil {
+				logger.Error(logger.ComponentAgentCore).
+					Str("action", "session_controller_flush").
+					Str("agent_id", sc.AgentID).
+					Str("session_id", s.SessionID).
+					Err(err).
+					Msg("刷写会话失败")
+				return err
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	return sc.writeMetaFile()
@@ -106,19 +117,24 @@ func (sc *SessionController) FlushSession(sessionID string) error {
 	return sc.writeMetaFile()
 }
 
-// FlushScope 持久化指定作用域的会话到磁盘
-// 对齐 Python：整个 flush 过程持锁
+// FlushScope 持久化指定作用域的会话到磁盘。
+// 对齐 Python asyncio.gather：在锁内并发 Flush 匹配 scope 的 session。
 func (sc *SessionController) FlushScope(sessionScope SessionScope) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
-	for id, s := range sc.SessionCache {
+	// 对齐 Python asyncio.gather：并发 Flush 匹配 scope 的 session
+	eg := &errgroup.Group{}
+	for _, s := range sc.SessionCache {
+		s := s
 		if s.SessionScope.String() == sessionScope.String() {
-			if err := s.Flush(); err != nil {
-				return err
-			}
-			_ = id
+			eg.Go(func() error {
+				return s.Flush()
+			})
 		}
+	}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	return sc.writeMetaFile()

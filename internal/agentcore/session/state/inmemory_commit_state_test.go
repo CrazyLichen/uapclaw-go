@@ -336,43 +336,6 @@ func TestInMemoryCommitState_多节点提交(t *testing.T) {
 	}
 }
 
-// TestInMemoryCommitState_GetGlobal_返回nil 验证 GetGlobal 返回 nil。
-func TestInMemoryCommitState_GetGlobal_返回nil(t *testing.T) {
-	cs := NewInMemoryCommitState()
-	result := cs.GetGlobal(StringKey("key"))
-	if result != nil {
-		t.Errorf("GetGlobal 应返回 nil，实际=%v", result)
-	}
-}
-
-// TestInMemoryCommitState_UpdateGlobal_空操作 验证 UpdateGlobal 不影响内部状态。
-func TestInMemoryCommitState_UpdateGlobal_空操作(t *testing.T) {
-	cs := NewInMemoryCommitState()
-	if err := cs.UpdateByID("n1", map[string]any{"a": 1}); err != nil {
-		t.Fatalf("UpdateByID 失败: %v", err)
-	}
-	cs.Commit("n1")
-	cs.UpdateGlobal(map[string]any{"a": 2})
-	if cs.Get(StringKey("a")) != 1 {
-		t.Errorf("UpdateGlobal 不应影响内部状态")
-	}
-}
-
-// TestInMemoryCommitState_UpdateTrace_空操作 验证 UpdateTrace 不影响内部状态。
-func TestInMemoryCommitState_UpdateTrace_空操作(t *testing.T) {
-	cs := NewInMemoryCommitState()
-	cs.UpdateTrace("span_data") // 不应 panic
-}
-
-// TestInMemoryCommitState_Dump_委托GetState 验证 Dump 返回与 GetState 相同的快照。
-func TestInMemoryCommitState_Dump_委托GetState(t *testing.T) {
-	cs := NewInMemoryCommitState()
-	if err := cs.UpdateByID("n1", map[string]any{"a": 1}); err != nil {
-		t.Fatalf("UpdateByID 失败: %v", err)
-	}
-	cs.Commit("n1")
-	dump := cs.Dump()
-	if dump["a"] != 1 {
-		t.Errorf("Dump()[\"a\"] = %v, 期望 1", dump["a"])
-	}
-}
+// G-15 修复：以下测试已删除，因为 InMemoryCommitState 不再实现 SessionState 接口。
+// GetGlobal/UpdateGlobal/UpdateTrace/Dump 空实现方法已移除。
+// InMemoryCommitState 只是 CommitStateLike，不应是 SessionState。

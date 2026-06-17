@@ -2,12 +2,12 @@ package state
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// StateKey 状态访问键，封装 string/map/slice 三态
+// StateKey 状态访问键，封装 string/map/slice/all 四态
 // 内部用 value 字段存储实际值，keyType 标识具体类型
 type StateKey struct {
 	// keyType 状态键类型
 	keyType StateKeyType
-	// value 存储实际值（string / map[string]any / []any）
+	// value 存储实际值（string / map[string]any / []any / allStateKeySentinel）
 	value any
 }
 
@@ -23,7 +23,24 @@ const (
 	StateKeyMap
 	// StateKeyList list schema 类型
 	StateKeyList
+	// StateKeyAll 全部状态哨兵类型（用于 GetGlobal/GetAgent 返回完整快照）
+	// G-02 修复：新增类型，对齐 Python key=None 语义
+	StateKeyAll
 )
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// G-02 修复：定义 AllStateKey 哨兵值，用于 GetGlobal/GetAgent 中表示"获取全部全局状态"。
+// Python 中 key=None 表示获取全部，Go 中用哨兵值替代零值判断，
+// 避免零值 StateKey（含 StringKey("")）与"获取全部"语义混淆。
+
+// allStateKeySentinel AllStateKey 的内部哨兵值
+var allStateKeySentinel = struct{}{}
+
+// AllStateKey 表示获取全部全局状态的哨兵 StateKey。
+// 用于 AgentStateCollection.GetGlobal / GetAgent 和 WorkflowStateCollection.GetGlobal。
+// 对齐 Python 中 key=None 返回完整全局状态的语义。
+var AllStateKey = StateKey{keyType: StateKeyAll, value: allStateKeySentinel}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -47,6 +64,12 @@ func ListKey(keys []any) StateKey {
 // IsZero 判断 StateKey 是否为零值（未设置）
 func (k StateKey) IsZero() bool {
 	return k.value == nil
+}
+
+// IsAll 判断 StateKey 是否为 AllStateKey（获取全部全局状态的哨兵值）
+// G-02 修复：替代之前的零值判断，语义更清晰
+func (k StateKey) IsAll() bool {
+	return k.keyType == StateKeyAll
 }
 
 // Type 返回 StateKey 的类型

@@ -300,6 +300,11 @@ func (s *SimpleMemoryIndex) Search(ctx context.Context, userID string, scopeID s
 			}
 			var data map[string]any
 			if err := json.Unmarshal([]byte(decoded), &data); err != nil {
+				// G-10 修复：补充 Warn 日志，记录 decode 失败的 memory_id
+				logger.Warn(logComponent).
+					Err(err).
+					Str("memory_id", mid).
+					Msg("JSON 解码记忆数据失败，跳过")
 				continue
 			}
 			if codec != nil {
@@ -571,6 +576,11 @@ func (s *SimpleMemoryIndex) ListMemories(ctx context.Context, userID string, sco
 		}
 		var data map[string]any
 		if err := json.Unmarshal([]byte(decoded), &data); err != nil {
+			// G-10 修复：补充 Warn 日志，记录 decode 失败的 memory_id
+			logger.Warn(logComponent).
+				Err(err).
+				Str("memory_id", mid).
+				Msg("JSON 解码记忆数据失败，跳过")
 			continue
 		}
 		if codec != nil {

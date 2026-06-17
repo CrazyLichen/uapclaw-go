@@ -132,19 +132,21 @@ func NewAgentSessionContainer() *AgentSessionContainer {
 // LoadAgentSessionContainer 从序列化数据重建 AgentSessionContainer。
 // 对齐 Python AgentSessionContainer.load()：创建新 Session 并执行 PreRun，
 // AGENT_SESSION_CREATED 回调会将 Session 注入到 DataContainer。
+// G-08 修复：PreRun 失败时返回 error，对齐 Python（异常传播阻止 load）。
 func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
 	container := NewAgentSessionContainer()
 	if sessionCreator != nil {
 		sa := sessionCreator(agentID, sessionID)
 		container.SetSession(sa)
 		// PreRun 触发 AGENT_SESSION_CREATED 回调，回调中会注入 Session
+		// G-08 修复：PreRun 失败时返回 error，阻止部分初始化的容器被使用
 		if err := sa.PreRun(context.Background()); err != nil {
 			logger.Error(logger.ComponentAgentCore).
 				Str("action", "load_agent_session_container").
 				Str("session_id", sessionID).
 				Err(err).
 				Msg("PreRun 失败")
-			// PreRun 失败不阻止容器创建，但记录错误
+			return nil, fmt.Errorf("PreRun 失败: %w", err)
 		}
 	}
 	return container, nil

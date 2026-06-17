@@ -152,23 +152,14 @@ func (s *InMemoryCommitState) GetUpdates() map[string][]map[string]any {
 	return result
 }
 
-// SetUpdates 设置暂存更新
+// SetUpdates 设置暂存更新（深拷贝传入数据，与 GetUpdates 深拷贝返回对称）
+// G-06 修复：加深拷贝，防止调用方保留引用修改内部状态。
+// Python 不深拷贝是因为单线程 asyncio 无竞态，Go 有 goroutine 并发风险。
 func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if updates != nil {
-		s.updates = updates
+		s.updates = deepCopyUpdates(updates)
 	}
 }
 
-// GetGlobal 单存储单元无全局概念，返回 nil
-func (s *InMemoryCommitState) GetGlobal(key StateKey) any { return nil }
-
-// UpdateGlobal 单存储单元无全局概念，空操作
-func (s *InMemoryCommitState) UpdateGlobal(data map[string]any) {}
-
-// UpdateTrace 单存储单元无追踪概念，空操作
-func (s *InMemoryCommitState) UpdateTrace(span any) {}
-
-// Dump 导出完整状态，委托 GetState
-func (s *InMemoryCommitState) Dump() map[string]any { return s.GetState() }

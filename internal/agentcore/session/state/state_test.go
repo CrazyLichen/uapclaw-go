@@ -27,9 +27,14 @@ func Test接口满足_SessionState_InMemoryStateLike(t *testing.T) {
 	var _ SessionState = (*InMemoryStateLike)(nil)
 }
 
-// Test接口满足_SessionState_InMemoryCommitState 验证 InMemoryCommitState 满足 SessionState 接口。
+// Test接口满足_SessionState_InMemoryCommitState 验证 InMemoryCommitState 不再满足 SessionState 接口。
+// G-15 修复：移除了 GetGlobal/UpdateGlobal/UpdateTrace/Dump 空实现，
+// InMemoryCommitState 只是 CommitStateLike，不应是 SessionState。
 func Test接口满足_SessionState_InMemoryCommitState(t *testing.T) {
-	var _ SessionState = (*InMemoryCommitState)(nil)
+	// InMemoryCommitState 不应满足 SessionState 接口
+	// 以下编译断言确认：如果误加回空实现，编译会通过，此测试提醒不应这样做
+	// var _ SessionState = (*InMemoryCommitState)(nil) // 已删除，不应满足
+	var _ CommitStateLike = (*InMemoryCommitState)(nil) // 只满足 CommitStateLike
 }
 
 // Test接口满足_SessionState_AgentStateCollection 验证 AgentStateCollection 满足 SessionState 接口。

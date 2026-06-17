@@ -25,7 +25,7 @@
 //	├── workflow_commit_state.go         # Workflow 可提交状态（commit/rollback/IO 操作）
 //	├── workflow_inmemory_state.go       # InMemoryWorkflowState 便捷构造器
 //	├── inmemory_state.go                # InMemoryStateLike 实现 StateLike + SessionState 接口
-//	├── inmemory_commit_state.go         # InMemoryCommitState 实现 CommitStateLike + SessionState 接口
+//	├── inmemory_commit_state.go         # InMemoryCommitState 实现 CommitStateLike 接口（不实现 SessionState）
 //	└── utils.go                         # 深拷贝 / 嵌套路径解析 / 状态读写工具函数
 //
 // 对应 Python 代码：openjiuwen/core/session/state/base.py + openjiuwen/core/session/state/agent_state.py + openjiuwen/core/session/state/workflow_state.py + openjiuwen/core/session/utils.py
@@ -43,7 +43,7 @@
 //
 //	具体实现：
 //	InMemoryStateLike        — StateLike + SessionState 接口的内存实现
-//	InMemoryCommitState      — CommitStateLike + SessionState 接口的内存实现
+//	InMemoryCommitState      — CommitStateLike 接口的内存实现（不实现 SessionState）
 //	AgentStateCollection     — Agent 会话状态集合，组合 globalState + agentState + traceState
 //	WorkflowStateCollection  — Workflow 四区状态集合，组合 io/global/comp/workflow
 //	WorkflowCommitState      — Workflow 可提交状态，增加 commit/rollback/IO 操作

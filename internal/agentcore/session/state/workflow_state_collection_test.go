@@ -268,10 +268,16 @@ func TestNil防御(t *testing.T) {
 		t.Errorf("期望 globalState 为 nil 时返回 nil，实际=%v", result)
 	}
 
-	// key 为 nil 时返回 nil
+	// key 为 AllStateKey 时返回 nil（Workflow 层无"获取全部"语义）
+	result = sc.GetGlobal(AllStateKey)
+	if result != nil {
+		t.Errorf("期望 AllStateKey 时返回 nil，实际=%v", result)
+	}
+
+	// key 为零值时返回 nil
 	result = sc.GetGlobal(StateKey{})
 	if result != nil {
-		t.Errorf("期望 key 为 nil 时返回 nil，实际=%v", result)
+		t.Errorf("期望零值 key 时返回 nil，实际=%v", result)
 	}
 
 	// UpdateGlobal data 为 nil 时不 panic

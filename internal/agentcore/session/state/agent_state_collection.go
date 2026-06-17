@@ -37,11 +37,12 @@ func NewAgentStateCollection() *AgentStateCollection {
 	}
 }
 
-// GetGlobal 从全局状态获取值。key 为零值时返回完整全局状态。
+// GetGlobal 从全局状态获取值。key 为 AllStateKey 时返回完整全局状态。
+// G-02 修复：使用 AllStateKey 哨兵值替代零值判断，对齐 Python key=None 语义。
 func (s *AgentStateCollection) GetGlobal(key StateKey) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if key.IsZero() {
+	if key.IsAll() {
 		return s.globalState.GetState()
 	}
 	return s.globalState.Get(key)
@@ -128,11 +129,12 @@ func (s *AgentStateCollection) GetByTransformer(transformer Transformer) any {
 	return s.agentState.GetByTransformer(transformer)
 }
 
-// GetAgent 从 Agent 状态获取值。key 为零值时返回完整 Agent 状态。
+// GetAgent 从 Agent 状态获取值。key 为 AllStateKey 时返回完整 Agent 状态。
+// G-02 修复：使用 AllStateKey 哨兵值替代零值判断，对齐 Python key=None 语义。
 func (s *AgentStateCollection) GetAgent(key StateKey) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if key.IsZero() {
+	if key.IsAll() {
 		return s.agentState.GetState()
 	}
 	return s.agentState.Get(key)

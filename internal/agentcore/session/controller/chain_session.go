@@ -105,8 +105,10 @@ func (cs *ChainSession) Load() error {
 	}
 
 	// 恢复数据容器
-	if dataRaw, ok := stateData["data"]; ok && dataRaw != nil {
-		container, err := GetFactory().Load(cs.dataContainerType, cs.AgentID, cs.SessionID, dataRaw)
+	// G-07 修复：对齐 Python 的 'data' in state_data 行为，
+	// data key 存在（即使值为 null）就调用 Load，由底层决定如何处理 nil。
+	if _, ok := stateData["data"]; ok {
+		container, err := GetFactory().Load(cs.dataContainerType, cs.AgentID, cs.SessionID, stateData["data"])
 		if err != nil {
 			logger.Warn(logger.ComponentAgentCore).
 				Str("action", "chain_session_load").

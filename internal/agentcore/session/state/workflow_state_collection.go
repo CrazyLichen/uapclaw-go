@@ -59,10 +59,12 @@ func NewWorkflowStateCollection(ioState, globalState, compState, workflowState C
 
 // GetGlobal 从全局状态获取值。
 // 三级回退查询：globalState → ioState[parentID] → ioState[nodeID]。
+// G-02 修复：key 为 AllStateKey 时返回 nil（Workflow 层无"获取全部"语义，对齐 Python），
+// key 为零值时也返回 nil（不再触发"获取全部"逻辑）。
 func (s *WorkflowStateCollection) GetGlobal(key StateKey) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.globalState == nil || key.IsZero() {
+	if s.globalState == nil || key.IsAll() || key.IsZero() {
 		return nil
 	}
 	result := s.globalState.Get(key)
