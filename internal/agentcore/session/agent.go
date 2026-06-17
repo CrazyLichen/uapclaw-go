@@ -28,8 +28,7 @@ type Session struct {
 	// inner 内部 AgentSession 实例
 	inner *internal.AgentSession
 	// card Agent 身份元数据
-	// ⤵️ 后续回填：any → *schema.AgentCard
-	card any
+	card *schema.AgentCard
 	// preRunDone PreRun 是否已执行
 	preRunDone bool
 	// postRunDone PostRun 是否已执行
@@ -88,7 +87,7 @@ func WithSessionID(id string) SessionOption {
 }
 
 // WithCard 设置 Agent 身份元数据的选项
-func WithCard(card any) SessionOption {
+func WithCard(card *schema.AgentCard) SessionOption {
 	return func(s *Session) {
 		s.card = card
 	}
@@ -126,20 +125,27 @@ func (s *Session) GetEnvs() map[string]any {
 }
 
 // GetAgentID 返回 Agent ID
-// ⤵️ 后续回填：card 类型从 any → *schema.AgentCard 后实现
+// 对应 Python: AgentSession.agent_id()
 func (s *Session) GetAgentID() string {
+	if s.card != nil {
+		return s.card.AbilityID()
+	}
 	return ""
 }
 
 // GetAgentName 返回 Agent 名称
-// ⤵️ 后续回填：card 类型从 any → *schema.AgentCard 后实现
 func (s *Session) GetAgentName() string {
+	if s.card != nil {
+		return s.card.Name
+	}
 	return ""
 }
 
 // GetAgentDescription 返回 Agent 描述
-// ⤵️ 后续回填：card 类型从 any → *schema.AgentCard 后实现
 func (s *Session) GetAgentDescription() string {
+	if s.card != nil {
+		return s.card.Description
+	}
 	return ""
 }
 
@@ -193,10 +199,14 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 	}
 
 	// 触发 AgentSessionCreated 回调
+	var cardValue any
+	if s.card != nil {
+		cardValue = s.card
+	}
 	callback.GetCallbackFramework().TriggerSession(ctx, &callback.SessionCallEventData{
 		Event:     callback.AgentSessionCreated,
 		SessionID: s.GetSessionID(),
-		Card:      s.card,
+		Card:      cardValue,
 		Session:   s,
 	})
 
@@ -335,10 +345,9 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 // ──────────────────────────── 非导出类型 ────────────────────────────
 
 // agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
-// ⤵️ 5.12 回填：card 具体化为 *schema.AgentCard + AgentSession 添加 AgentID() 后，
-// 此适配器应重构或删除。方案：AgentSession 加 AgentID()/WorkflowID("")/Parent(nil) 方法
-// 直接满足 CheckpointerSession；Config() 返回 SessionConfig 满足 CheckpointerConfig 接口。
-// 届时 PreRun/Commit 可直接传 AgentSession 给 Checkpointer，无需适配。
+// AgentSession 已有 AgentID() 方法（满足 AgentIDProvider），
+// 但仍缺少 WorkflowID()/Parent()/Config() 的正确返回类型，
+// 因此暂保留此适配器。⤵️ 5.12 回填：Config() 返回 SessionConfig 后可消除此适配器。
 type agentCheckpointerSession struct {
 	inner *internal.AgentSession
 }
@@ -356,13 +365,7 @@ func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
 }
 
 // AgentID 返回 Agent ID，满足 AgentIDProvider 接口。
-// ⤵️ 5.12 回填：AgentSession 自身添加 AgentID() 方法后，此方法可删除
+// 直接委托给 AgentSession.AgentID()（从 card.AbilityID() 取值）。
 func (a *agentCheckpointerSession) AgentID() string {
-	// AgentSession 没有直接的 AgentID 方法，从 Card 中获取
-	if card := a.inner.Card(); card != nil {
-		if ac, ok := card.(*schema.AgentCard); ok {
-			return ac.AbilityID()
-		}
-	}
-	return ""
+	return a.inner.AgentID()
 }

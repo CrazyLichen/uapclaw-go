@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewAgentSession 测试构造函数
@@ -58,9 +59,10 @@ func TestAgentSession_State不为Nil(t *testing.T) {
 // TestAgentSession_选项注入 测试通过选项注入组件
 func TestAgentSession_选项注入(t *testing.T) {
 	config := map[string]any{"key": "value"}
+	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
 	s := NewAgentSession("test-id",
 		WithConfig(config),
-		WithCard("test-card"),
+		WithCard(card),
 	)
 
 	if s.Config() == nil {
@@ -68,6 +70,9 @@ func TestAgentSession_选项注入(t *testing.T) {
 	}
 	if s.Card() == nil {
 		t.Error("Card 不应为 nil")
+	}
+	if s.AgentID() != "test-agent" {
+		t.Errorf("AgentID 期望 test-agent，实际 %s", s.AgentID())
 	}
 }
 
@@ -93,10 +98,17 @@ func TestAgentSession_Card(t *testing.T) {
 	if s.Card() != nil {
 		t.Error("默认 Card 应为 nil")
 	}
+	if s.AgentID() != "" {
+		t.Errorf("无 Card 时 AgentID 应返回空字符串，实际 %s", s.AgentID())
+	}
 
-	s2 := NewAgentSession("test-id", WithCard("my-card"))
-	if s2.Card() != "my-card" {
-		t.Errorf("Card 期望 my-card，实际 %v", s2.Card())
+	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "my-agent"}}
+	s2 := NewAgentSession("test-id", WithCard(card))
+	if s2.Card() != card {
+		t.Errorf("Card 期望 %v，实际 %v", card, s2.Card())
+	}
+	if s2.AgentID() != "my-agent" {
+		t.Errorf("AgentID 期望 my-agent，实际 %s", s2.AgentID())
 	}
 }
 

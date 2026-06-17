@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewSession 测试构造函数
@@ -236,26 +237,47 @@ func TestSession_GetAgentID返回空(t *testing.T) {
 
 // TestSession_WithCard 测试 WithCard 选项
 func TestSession_WithCard(t *testing.T) {
-	card := map[string]any{"id": "agent-1"}
+	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
 	s := NewSession(WithCard(card))
 	if s.card == nil {
 		t.Error("WithCard 后 card 不应为 nil")
 	}
-}
-
-// TestSession_GetAgentName返回空 测试桩方法
-func TestSession_GetAgentName返回空(t *testing.T) {
-	s := NewSession()
-	if s.GetAgentName() != "" {
-		t.Errorf("GetAgentName 桩应返回空字符串，实际 %s", s.GetAgentName())
+	if s.GetAgentID() != "agent-1" {
+		t.Errorf("GetAgentID 期望 agent-1，实际 %s", s.GetAgentID())
 	}
 }
 
-// TestSession_GetAgentDescription返回空 测试桩方法
+// TestSession_GetAgentName返回空 测试无 card 时返回空
+func TestSession_GetAgentName返回空(t *testing.T) {
+	s := NewSession()
+	if s.GetAgentName() != "" {
+		t.Errorf("无 card 时 GetAgentName 应返回空字符串，实际 %s", s.GetAgentName())
+	}
+}
+
+// TestSession_GetAgentName有Card 测试有 card 时返回名称
+func TestSession_GetAgentName有Card(t *testing.T) {
+	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Name: "测试Agent"}}
+	s := NewSession(WithCard(card))
+	if s.GetAgentName() != "测试Agent" {
+		t.Errorf("GetAgentName 期望 测试Agent，实际 %s", s.GetAgentName())
+	}
+}
+
+// TestSession_GetAgentDescription返回空 测试无 card 时返回空
 func TestSession_GetAgentDescription返回空(t *testing.T) {
 	s := NewSession()
 	if s.GetAgentDescription() != "" {
-		t.Errorf("GetAgentDescription 桩应返回空字符串，实际 %s", s.GetAgentDescription())
+		t.Errorf("无 card 时 GetAgentDescription 应返回空字符串，实际 %s", s.GetAgentDescription())
+	}
+}
+
+// TestSession_GetAgentDescription有Card 测试有 card 时返回描述
+func TestSession_GetAgentDescription有Card(t *testing.T) {
+	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Description: "测试描述"}}
+	s := NewSession(WithCard(card))
+	if s.GetAgentDescription() != "测试描述" {
+		t.Errorf("GetAgentDescription 期望 测试描述，实际 %s", s.GetAgentDescription())
 	}
 }
 

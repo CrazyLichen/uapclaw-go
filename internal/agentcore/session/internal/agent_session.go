@@ -4,6 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -33,9 +34,7 @@ type AgentSession struct {
 	// agentSpan Agent 追踪跨度
 	agentSpan any
 	// card Agent 身份元数据
-	// ⤵️ 5.12 回填：any → *schema.AgentCard；同时添加 AgentID() 方法（从 card.AbilityID() 取值），
-	// 使 AgentSession 直接满足 checkpointer.AgentIDProvider 接口，消除 agentCheckpointerSession 适配器中的类型断言
-	card any
+	card *schema.AgentCard
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -101,7 +100,7 @@ func WithCheckpointer(cp checkpointer.Checkpointer) AgentSessionOption {
 }
 
 // WithCard 设置 Agent 身份元数据的选项
-func WithCard(card any) AgentSessionOption {
+func WithCard(card *schema.AgentCard) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.card = card
 	}
@@ -155,8 +154,19 @@ func (s *AgentSession) Close() error {
 }
 
 // Card 获取 Agent 身份元数据
-func (s *AgentSession) Card() any {
+func (s *AgentSession) Card() *schema.AgentCard {
 	return s.card
+}
+
+// AgentID 获取 Agent ID，满足 checkpointer.AgentIDProvider 接口。
+// 对应 Python: AgentSession.agent_id()
+// 优先从 config.get_agent_config().id 取，fallback 从 card.AbilityID() 取。
+// 当前 config 为 any（⤵️ 5.12 回填），仅从 card 取值。
+func (s *AgentSession) AgentID() string {
+	if s.card != nil {
+		return s.card.AbilityID()
+	}
+	return ""
 }
 
 // AgentSpan 获取 Agent 追踪跨度
