@@ -95,7 +95,9 @@ func TestPersistenceCheckpointer_Agent完整流程(t *testing.T) {
 
 	// 1. 保存阶段
 	st1 := state.NewAgentStateCollection()
-	st1.Update(map[string]any{"key1": "value1"})
+	if err := st1.Update(map[string]any{"key1": "value1"}); err != nil {
+		t.Fatalf("st1.Update 返回错误：%v", err)
+	}
 	session1 := &testAgentSession{
 		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
 		agentID:     "agent1",
@@ -216,7 +218,9 @@ func TestPersistenceCheckpointer_InterruptAgentExecute(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	st.Update(map[string]any{"interrupt_key": "interrupt_val"})
+	if err := st.Update(map[string]any{"interrupt_key": "interrupt_val"}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	if err := cp.InterruptAgentExecute(ctx, session); err != nil {
 		t.Fatalf("InterruptAgentExecute 返回错误：%v", err)
 	}
@@ -457,7 +461,9 @@ func TestPersistenceCheckpointer_SessionExists_有数据(t *testing.T) {
 		st:          st,
 		config:      &testConfig{},
 	}
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	if err := cp.PostAgentExecute(ctx, session); err != nil {
 		t.Fatalf("PostAgentExecute 返回错误：%v", err)
 	}
@@ -502,7 +508,9 @@ func TestPersistenceCheckpointer_Release(t *testing.T) {
 		st:          st,
 		config:      &testConfig{},
 	}
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	if err := cp.PostAgentExecute(ctx, session); err != nil {
 		t.Fatalf("PostAgentExecute 返回错误：%v", err)
 	}
@@ -609,7 +617,9 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 
 	// Agent1 保存
 	st1 := state.NewAgentStateCollection()
-	st1.Update(map[string]any{"agent1_key": "agent1_val"})
+	if err := st1.Update(map[string]any{"agent1_key": "agent1_val"}); err != nil {
+		t.Fatalf("st1.Update 返回错误：%v", err)
+	}
 	session1 := &testAgentSession{
 		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
 		agentID:     "agent1",
@@ -622,7 +632,9 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 
 	// Agent2 保存
 	st2 := state.NewAgentStateCollection()
-	st2.Update(map[string]any{"agent2_key": "agent2_val"})
+	if err := st2.Update(map[string]any{"agent2_key": "agent2_val"}); err != nil {
+		t.Fatalf("st2.Update 返回错误：%v", err)
+	}
 	session2 := &testAgentSession{
 		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
 		agentID:     "agent2",
@@ -763,7 +775,9 @@ func TestAgentEntityHooks_GetEntityID(t *testing.T) {
 func TestAgentEntityHooks_GetStateToSave(t *testing.T) {
 	h := &agentEntityHooks{}
 	st := state.NewAgentStateCollection()
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	session := &testAgentSession{
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
@@ -1065,7 +1079,9 @@ func TestBasePersistenceStorage_Clear(t *testing.T) {
 
 	// 先保存
 	st := state.NewAgentStateCollection()
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	session := &testAgentSession{
 		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
 		agentID:     "agent1",
@@ -1105,7 +1121,9 @@ func TestBasePersistenceStorage_Exists(t *testing.T) {
 	}
 
 	// 保存后存在
-	session.st.Update(map[string]any{"key": "value"})
+	if err := session.st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("session.st.Update 返回错误：%v", err)
+	}
 	if err := agentStorage.Save(ctx, session); err != nil {
 		t.Fatalf("Save 返回错误：%v", err)
 	}
@@ -1126,7 +1144,9 @@ func TestBasePersistenceStorage_Save_序列化失败(t *testing.T) {
 
 	// 使用不可序列化的值（channel 不能 JSON 序列化）
 	st := state.NewAgentStateCollection()
-	st.Update(map[string]any{"ch": make(chan int)})
+	if err := st.Update(map[string]any{"ch": make(chan int)}); err != nil {
+		t.Fatalf("st.Update 返回错误：%v", err)
+	}
 	session := &testAgentSession{
 		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
 		agentID:     "agent1",
