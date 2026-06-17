@@ -365,7 +365,11 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session Che
 	// 如果有交互输入，设置到 session state
 	if inputs != nil {
 		if st := session.State(); st != nil {
-			st.Update(map[string]any{InteractiveInputKey: []any{inputs}})
+			if err := st.Update(map[string]any{InteractiveInputKey: []any{inputs}}); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", session.SessionID()).
+					Msg("设置交互输入到 session state 失败")
+			}
 		}
 	}
 	return nil
@@ -1027,7 +1031,11 @@ func (ws *WorkflowStorage) recoverFromInputs(session CheckpointerSession, inputs
 	if !ok || wfState == nil {
 		// 非 WorkflowState 类型，直接更新 session state
 		if inputMap, ok := inputs.(map[string]any); ok {
-			session.State().Update(inputMap)
+			if err := session.State().Update(inputMap); err != nil {
+				logger.Warn(logComponent).Err(err).
+					Str("session_id", session.SessionID()).
+					Msg("从交互输入恢复 session state 失败")
+			}
 		}
 		return
 	}

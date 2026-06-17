@@ -147,7 +147,9 @@ func TestInMemoryCheckpointer_PostAgentExecute(t *testing.T) {
 	}
 
 	// 更新状态后保存
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 	err := cp.PostAgentExecute(ctx, session)
 	if err != nil {
 		t.Fatalf("PostAgentExecute 返回错误：%v", err)
@@ -172,7 +174,9 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 	}
 
 	// 更新状态
-	st.Update(map[string]any{"test_key": "test_value"})
+	if err := st.Update(map[string]any{"test_key": "test_value"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 
 	// Post 保存
 	if err := cp.PostAgentExecute(ctx, session); err != nil {
@@ -433,7 +437,9 @@ func TestAgentStorage_SaveRecover(t *testing.T) {
 	ctx := context.Background()
 
 	// 更新状态
-	st.Update(map[string]any{"key1": "value1"})
+	if err := st.Update(map[string]any{"key1": "value1"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 
 	// 保存
 	if err := storage.Save(ctx, session); err != nil {
@@ -633,7 +639,9 @@ func TestWorkflowStorage_SaveRecover(t *testing.T) {
 	ctx := context.Background()
 
 	// 更新工作流状态
-	wcs.Update(map[string]any{"comp_key": "comp_value"})
+	if err := wcs.Update(map[string]any{"comp_key": "comp_value"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 
 	// 保存
 	if err := storage.Save(ctx, session); err != nil {
@@ -1146,7 +1154,9 @@ func TestWorkflowStorage_SaveRecover_带更新(t *testing.T) {
 	ctx := context.Background()
 
 	// 更新工作流状态
-	wcs.Update(map[string]any{"comp_key": "comp_value"})
+	if err := wcs.Update(map[string]any{"comp_key": "comp_value"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 
 	// 保存
 	if err := storage.Save(ctx, session); err != nil {

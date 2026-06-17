@@ -79,7 +79,9 @@ func TestPersistenceCheckpointer_PostAgentExecute(t *testing.T) {
 
 	ctx := context.Background()
 	// 保存状态
-	st.Update(map[string]any{"key": "value"})
+	if err := st.Update(map[string]any{"key": "value"}); err != nil {
+		t.Fatalf("Update 返回错误：%v", err)
+	}
 	if err := cp.PostAgentExecute(ctx, session); err != nil {
 		t.Fatalf("PostAgentExecute 返回错误：%v", err)
 	}
