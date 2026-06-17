@@ -55,13 +55,13 @@ type InMemoryCheckpointer struct {
 // baseSingleStateStorage 单实体状态存储基类，提供基于 serde 的序列化存储。
 // 对应 Python: openjiuwen/core/session/checkpointer/inmemory.py (BaseSingleStateStorage)
 //
-// ⤵️ 5.9 回填：重构为接口注入钩子模式（模拟 Python 模板方法）。
-// Python 中 BaseSingleStateStorage 定义了 save/recover/clear/exists 固定骨架，
+// 设计说明：Python 中 BaseSingleStateStorage 定义了 save/recover/clear/exists 固定骨架，
 // 子类只需实现 _get_entity_id/_get_state_to_save/_restore_state 三个钩子方法。
 // Go 的 struct embedding 不支持虚方法分派（嵌入方法永远调基类版本），
 // 当前子类直接实现全部接口方法 + 基类仅提供 setBlob/getBlob 等辅助方法。
-// 5.9 实现时应改为：baseSingleStateStorage 持有 entityHooks 接口，
-// 构造时注入（如 NewAgentStorage(base, hooks)），骨架方法通过 hooks 调用子类实现。
+// 5.9 PersistenceCheckpointer 的 Storage 体系应采用接口注入钩子模式
+// （baseSingleStateStorage 持有 entityHooks 接口，构造时注入），与 Python 模板方法对齐。
+// 本 InMemory 版的 Storage 是独立实现，5.9 不需要回填此处。
 type baseSingleStateStorage struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
