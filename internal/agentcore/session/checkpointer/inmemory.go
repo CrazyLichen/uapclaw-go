@@ -591,11 +591,9 @@ func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string) e
 		Msg("开始清除会话的所有工作流检查点")
 
 	// 清除 workflow 相关的 graph store 和 workflow store
-	if workflowIDs != nil {
-		for wid := range workflowIDs {
-			// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, wid)
-			_ = wid // 占位
-		}
+	for wid := range workflowIDs {
+		// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, wid)
+		_ = wid // 占位
 	}
 	delete(cp.sessionToWorkflowIDs, sessionID)
 

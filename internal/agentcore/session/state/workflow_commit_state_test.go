@@ -121,7 +121,7 @@ func TestGetOutputs(t *testing.T) {
 	}
 
 	// 指定无数据的 nodeID 返回 nil 是正确的
-	result = cs.GetOutputs("other_node")
+	_ = cs.GetOutputs("other_node")
 	// other_node 没有写入数据，返回 nil 符合预期
 }
 
