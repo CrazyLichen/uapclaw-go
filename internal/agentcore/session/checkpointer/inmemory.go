@@ -257,9 +257,9 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 
 	if exception != nil {
 		if workflowStore == nil {
-		return fmt.Errorf("检查点器工作流执行后错误: workflow=%s, 原因=工作流存储未找到", workflowID)
-	}
-	if err := cp.innerSaveWorkflowCheckpoint(ctx, workflowID, sessionID, session, fmt.Sprintf("workflow exception %v", exception)); err != nil {
+			return fmt.Errorf("检查点器工作流执行后错误: workflow=%s, 原因=工作流存储未找到", workflowID)
+		}
+		if err := cp.innerSaveWorkflowCheckpoint(ctx, workflowID, sessionID, session, fmt.Sprintf("workflow exception %v", exception)); err != nil {
 			return err
 		}
 		return exception

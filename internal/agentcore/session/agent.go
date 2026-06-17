@@ -350,10 +350,11 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 	return result
 }
 
-func (a *agentCheckpointerSession) SessionID() string                         { return a.inner.SessionID() }
-func (a *agentCheckpointerSession) WorkflowID() string                        { return "" }
-func (a *agentCheckpointerSession) State() state.SessionState                 { return a.inner.State() }
-func (a *agentCheckpointerSession) Parent() checkpointer.CheckpointerSession  { return nil }
+func (a *agentCheckpointerSession) SessionID() string                        { return a.inner.SessionID() }
+func (a *agentCheckpointerSession) WorkflowID() string                       { return "" }
+func (a *agentCheckpointerSession) State() state.SessionState                { return a.inner.State() }
+func (a *agentCheckpointerSession) Parent() checkpointer.CheckpointerSession { return nil }
+
 // ⤵️ 5.12 回填：Config() 返回类型从 any → SessionConfig 后，直接返回即可，无需类型断言
 func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
 	if cfg, ok := a.inner.Config().(checkpointer.CheckpointerConfig); ok {

@@ -57,8 +57,8 @@ var (
 func GetGlobalSessionController() *GlobalSessionController {
 	globalControllerOnce.Do(func() {
 		globalController = &GlobalSessionController{
-			BasePath:               "./agents",
-			Controllers:            make(map[string]*SessionController),
+			BasePath:                "./agents",
+			Controllers:             make(map[string]*SessionController),
 			enableSessionController: true,
 		}
 	})

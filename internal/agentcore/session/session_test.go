@@ -52,7 +52,9 @@ func (m *mockStub) Close() error                            { m.closeCalled = tr
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
 
-func (m *testMockCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
+func (m *testMockCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string {
+	return ""
+}
 func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
 	return nil
 }

@@ -22,14 +22,14 @@ type fakeBaseSession struct {
 	parent      checkpointer.CheckpointerSession
 }
 
-func (f *fakeBaseSession) State() state.SessionState                    { return f.stateValue }
-func (f *fakeBaseSession) StreamWriterManager() any                     { return f.swMgrValue }
-func (f *fakeBaseSession) Checkpointer() checkpointer.Checkpointer     { return f.cpValue }
-func (f *fakeBaseSession) ExecutableID() string                        { return f.execIDValue }
-func (f *fakeBaseSession) SessionID() string                           { return f.sessionID }
-func (f *fakeBaseSession) WorkflowID() string                          { return f.workflowID }
-func (f *fakeBaseSession) Config() checkpointer.CheckpointerConfig     { return f.config }
-func (f *fakeBaseSession) Parent() checkpointer.CheckpointerSession    { return f.parent }
+func (f *fakeBaseSession) State() state.SessionState                { return f.stateValue }
+func (f *fakeBaseSession) StreamWriterManager() any                 { return f.swMgrValue }
+func (f *fakeBaseSession) Checkpointer() checkpointer.Checkpointer  { return f.cpValue }
+func (f *fakeBaseSession) ExecutableID() string                     { return f.execIDValue }
+func (f *fakeBaseSession) SessionID() string                        { return f.sessionID }
+func (f *fakeBaseSession) WorkflowID() string                       { return f.workflowID }
+func (f *fakeBaseSession) Config() checkpointer.CheckpointerConfig  { return f.config }
+func (f *fakeBaseSession) Parent() checkpointer.CheckpointerSession { return f.parent }
 
 // newFakeBaseSession 创建测试用 fake session
 func newFakeBaseSession() *fakeBaseSession {
@@ -225,8 +225,8 @@ type fakeSessionWithoutExecID struct {
 	cpValue    checkpointer.Checkpointer
 }
 
-func (f *fakeSessionWithoutExecID) State() state.SessionState                { return f.stateValue }
-func (f *fakeSessionWithoutExecID) StreamWriterManager() any                 { return f.swMgrValue }
+func (f *fakeSessionWithoutExecID) State() state.SessionState               { return f.stateValue }
+func (f *fakeSessionWithoutExecID) StreamWriterManager() any                { return f.swMgrValue }
 func (f *fakeSessionWithoutExecID) Checkpointer() checkpointer.Checkpointer { return f.cpValue }
 
 // TestGetExecutableID_不满足接口 测试 session 不满足 ExecutableIDProvider 时返回空字符串

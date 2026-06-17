@@ -169,6 +169,6 @@ func (s *WorkflowStateCollection) Update(data map[string]any) error {
 	}
 	return nil
 }
+
 // GetState / SetState 不在此实现（Python 的 StateCollection 也不覆写这两个方法）。
 // 由 WorkflowCommitState 覆写，因为 CommitState 需要按 workflowOnly 条件控制 global_state 的包含。
-

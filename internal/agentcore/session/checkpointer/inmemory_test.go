@@ -40,10 +40,10 @@ type testAgentSession struct {
 	parent  CheckpointerSession
 }
 
-func (s *testAgentSession) AgentID() string                   { return s.agentID }
-func (s *testAgentSession) State() state.SessionState         { return s.st }
-func (s *testAgentSession) Config() CheckpointerConfig        { return s.config }
-func (s *testAgentSession) Parent() CheckpointerSession       { return s.parent }
+func (s *testAgentSession) AgentID() string             { return s.agentID }
+func (s *testAgentSession) State() state.SessionState   { return s.st }
+func (s *testAgentSession) Config() CheckpointerConfig  { return s.config }
+func (s *testAgentSession) Parent() CheckpointerSession { return s.parent }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
@@ -54,10 +54,10 @@ type testTeamSession struct {
 	parent CheckpointerSession
 }
 
-func (s *testTeamSession) TeamID() string                     { return s.teamID }
-func (s *testTeamSession) State() state.SessionState          { return s.st }
-func (s *testTeamSession) Config() CheckpointerConfig         { return s.config }
-func (s *testTeamSession) Parent() CheckpointerSession        { return s.parent }
+func (s *testTeamSession) TeamID() string              { return s.teamID }
+func (s *testTeamSession) State() state.SessionState   { return s.st }
+func (s *testTeamSession) Config() CheckpointerConfig  { return s.config }
+func (s *testTeamSession) Parent() CheckpointerSession { return s.parent }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
 type testWorkflowSession struct {
@@ -67,9 +67,9 @@ type testWorkflowSession struct {
 	parent CheckpointerSession
 }
 
-func (s *testWorkflowSession) State() state.SessionState      { return s.st }
-func (s *testWorkflowSession) Config() CheckpointerConfig     { return s.config }
-func (s *testWorkflowSession) Parent() CheckpointerSession    { return s.parent }
+func (s *testWorkflowSession) State() state.SessionState   { return s.st }
+func (s *testWorkflowSession) Config() CheckpointerConfig  { return s.config }
+func (s *testWorkflowSession) Parent() CheckpointerSession { return s.parent }
 
 // ──────────────────────────── NewInMemoryCheckpointer 测试 ────────────────────────────
 

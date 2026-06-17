@@ -162,4 +162,3 @@ func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 		s.updates = deepCopyUpdates(updates)
 	}
 }
-
