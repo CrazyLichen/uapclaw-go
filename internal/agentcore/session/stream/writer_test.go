@@ -42,7 +42,7 @@ func TestOutputWriter_WriteAfterClose(t *testing.T) {
 	ctx := context.Background()
 	w := NewOutputStreamWriter(emitter)
 
-	emitter.Close(ctx)
+	_ = emitter.Close(ctx)
 
 	schema := OutputSchema{Type: "message", Index: 0, Payload: "hello"}
 	if err := w.Write(ctx, schema); err != nil {

@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── fake 实现 ────────────────────────────
@@ -27,7 +28,7 @@ func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer            { re
 func (f *fakeBaseSession) ExecutableID() string                             { return f.execIDValue }
 func (f *fakeBaseSession) SessionID() string                                { return f.sessionID }
 func (f *fakeBaseSession) Config() any                                      { return f.config }
-func (f *fakeBaseSession) Tracer() any                                      { return nil }
+func (f *fakeBaseSession) Tracer() *tracer.Tracer                           { return nil }
 func (f *fakeBaseSession) ActorManager() any                                { return nil }
 func (f *fakeBaseSession) Close() error                                     { return nil }
 
@@ -234,7 +235,7 @@ func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterMan
 func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { return f.cpValue }
 func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
 func (f *fakeSessionWithoutExecID) Config() any                           { return f.cfgValue }
-func (f *fakeSessionWithoutExecID) Tracer() any                           { return nil }
+func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                { return nil }
 func (f *fakeSessionWithoutExecID) ActorManager() any                     { return nil }
 func (f *fakeSessionWithoutExecID) Close() error                          { return nil }
 

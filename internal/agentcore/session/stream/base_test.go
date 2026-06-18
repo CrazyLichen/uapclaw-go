@@ -46,7 +46,7 @@ func TestCustomSchema_SchemaType(t *testing.T) {
 
 // TestSchema 接口多态测试
 func TestSchema(t *testing.T) {
-	var schemas []Schema = []Schema{
+	var schemas = []Schema{
 		OutputSchema{Type: "message", Index: 0, Payload: "hello"},
 		TraceSchema{Type: "step", Payload: "data"},
 		CustomSchema{Type: "event", Data: map[string]any{"k": "v"}},

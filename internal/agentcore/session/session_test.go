@@ -104,7 +104,7 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	stub := &mockStub{
 		configVal:              "config-value",
 		stateVal:               expectedState,
-		tracerVal:              "tracer-value",
+		tracerVal:              nil,
 		streamWriterManagerVal: expectedSWM,
 		sessionIDVal:           "session-123",
 		checkpointerVal:        mockCP,

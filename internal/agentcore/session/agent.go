@@ -327,7 +327,7 @@ func (s *Session) CloseStream() error {
 		return nil
 	}
 	// 关闭 emitter，发送 END_FRAME
-	mgr.StreamEmitter().Close(ctx)
+	_ = mgr.StreamEmitter().Close(ctx)
 	return nil
 }
 

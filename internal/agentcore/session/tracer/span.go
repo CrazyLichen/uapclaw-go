@@ -255,7 +255,7 @@ func (m *SpanManager) refreshSpanRecord(invokeID string, baseSpan interface{}) {
 // extractBaseSpan 从 TraceAgentSpan/TraceWorkflowSpan 提取 *Span 指针
 func extractBaseSpan(v interface{}) *Span {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	// 尝试直接断言 *Span
@@ -264,7 +264,7 @@ func extractBaseSpan(v interface{}) *Span {
 	}
 	// 通过反射获取嵌入的 Span 字段
 	sf := rv.FieldByName("Span")
-	if sf.IsValid() && sf.Kind() == reflect.Ptr {
+	if sf.IsValid() && sf.Kind() == reflect.Pointer {
 		if s, ok := sf.Interface().(*Span); ok {
 			return s
 		}
@@ -291,7 +291,7 @@ func setFieldValue(fieldVal reflect.Value, fieldType reflect.Type, value any) er
 	}
 
 	// 指针类型字段
-	if fieldType.Kind() == reflect.Ptr {
+	if fieldType.Kind() == reflect.Pointer {
 		// value 为 nil 时不设置
 		if vVal.IsZero() {
 			return nil

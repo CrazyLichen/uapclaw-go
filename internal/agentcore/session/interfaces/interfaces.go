@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -34,8 +35,7 @@ type BaseSession interface {
 	// State 获取会话状态
 	State() state.SessionState
 	// Tracer 获取会话追踪器
-	// ⤵️ 5.11 回填：返回类型从 any 改为 Tracer
-	Tracer() any
+	Tracer() *tracer.Tracer
 	// StreamWriterManager 获取流写入管理器
 	// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
 	StreamWriterManager() *stream.StreamWriterManager

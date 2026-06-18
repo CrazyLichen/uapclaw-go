@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -41,7 +40,11 @@ type TraceWorkflowHandler struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
+// interaction.GraphInterrupt 隐式满足此接口。
+type graphInterrupter interface {
+	isGraphInterrupt()
+}
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -272,7 +275,7 @@ func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, on
 				"error_code": e.Code(),
 				"message":    e.Message(),
 			}
-		case *interaction.GraphInterrupt:
+		case graphInterrupter:
 			span.Status = string(NodeStatusInterrupted)
 		case error:
 			errMsg := exception.StatusWorkflowExecutionError.RenderMessage(
@@ -531,8 +534,8 @@ func (h *TraceAgentHandler) getTracerAgentSpan(invokeID string) *TraceAgentSpan 
 	}
 	// 尝试从 SpanManager 获取
 	if h.spanManager.GetSpan(invokeID) != nil {
-		// SpanManager 中存在，但 agentSpans 中没有，说明是外部创建的
-		// 无法还原具体类型，创建新的
+		// SpanManager 中存在但 agentSpans 中没有，说明是外部创建的
+		// 无法还原具体类型，需要创建新的 TraceAgentSpan
 	}
 	var parentSpan *TraceAgentSpan
 	lastSpan := h.spanManager.LastSpan()

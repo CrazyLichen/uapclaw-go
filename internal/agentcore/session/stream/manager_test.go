@@ -62,7 +62,7 @@ func TestStreamWriterManager_WriteAndRead(t *testing.T) {
 	}
 
 	// 关闭后消费端应退出
-	emitter.Close(ctx)
+	_ = emitter.Close(ctx)
 
 	select {
 	case _, ok := <-outCh:
@@ -145,7 +145,7 @@ func TestStreamWriterManager_CustomStream(t *testing.T) {
 		t.Fatal("读取超时")
 	}
 
-	emitter.Close(ctx)
+	_ = emitter.Close(ctx)
 }
 
 // TestStreamWriterManager_InteractionOutputWriter 测试交互输出写入器接口

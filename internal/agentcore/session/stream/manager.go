@@ -146,7 +146,7 @@ func (m *StreamWriterManager) RemoveWriter(key StreamMode) error {
 // 对应 Python: StreamWriterManager.stream_output()
 // 内部启动 goroutine 从 emitter 的队列读取数据，转发到输出 channel。
 func (m *StreamWriterManager) StreamOutput() <-chan any {
-	out := make(chan any, 0)
+	out := make(chan any)
 
 	go func() {
 		defer close(out)

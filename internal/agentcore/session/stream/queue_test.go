@@ -96,8 +96,8 @@ func TestStreamQueue_Ch(t *testing.T) {
 	q := NewStreamQueue(10)
 	ctx := context.Background()
 
-	q.Send(ctx, "data1")
-	q.Send(ctx, endFrame{})
+	_ = q.Send(ctx, "data1")
+	_ = q.Send(ctx, endFrame{})
 
 	ch := q.Ch()
 	data := <-ch
