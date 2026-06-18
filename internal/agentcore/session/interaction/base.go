@@ -1,7 +1,6 @@
 package interaction
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
@@ -12,15 +11,16 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // baseSession 交互所需的会话最小接口。
-// WorkflowInteraction/AgentInteraction 通过此接口委托给内部会话实例，
-// 避免 interaction 子包反向导入 session 父包。
+// 嵌入 checkpointer.CheckpointerSession（SessionID/State/Config/Checkpointer），
+// 确保 session 可以直接传给 checkpointer 的 InterruptAgentExecute 等方法，
+// 对齐 Python: interaction 直接将 session 传给 checkpointer，无需二次断言。
+// 额外包含 StreamWriterManager，用于交互输出写入流。
 // *internal.NodeSession / *internal.AgentSession 天然实现此接口（Go 隐式接口满足）。
 // 注意：Python 的 BaseSession 也没有 executable_id()，executable_id 只在 NodeSession 上。
 // WorkflowInteraction/AgentInteraction 所需的 nodeID 通过类型断言 ExecutableIDProvider 获取。
 type baseSession interface {
-	State() state.SessionState
+	checkpointer.CheckpointerSession
 	StreamWriterManager() any
-	Checkpointer() checkpointer.Checkpointer
 }
 
 // ExecutableIDProvider 提供可执行路径 ID 的接口。
@@ -40,12 +40,6 @@ type InteractionOutputWriterProvider interface {
 // 5.10 实现后，session/stream 包的 OutputWriter 类型天然满足此接口，届时迁移到 session/stream 包。
 type InteractionOutputWriter interface {
 	WriteInteraction(outputType string, index int, payload any) error
-}
-
-// CheckpointerSessionProvider 提供 CheckpointerSession 的接口。
-// 通过类型断言延迟绑定：完整会话类型（AgentSession/WorkflowSession）天然实现此接口。
-type CheckpointerSessionProvider interface {
-	checkpointer.CheckpointerSession
 }
 
 // Interrupt 图中断信号
@@ -193,32 +187,6 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 		return res
 	}
 	return nil
-}
-
-// interruptAgentExecute 调用检查点器的中断方法。
-func interruptAgentExecute(session baseSession) error {
-	cp := session.Checkpointer()
-	if cp == nil {
-		return nil
-	}
-	// 类型断言获取 CheckpointerSession，完整会话类型天然实现此接口
-	cps, ok := session.(checkpointer.CheckpointerSession)
-	if !ok {
-		logger.Warn(logger.ComponentAgentCore).
-			Str("action", "interrupt_agent_execute").
-			Str("session_type", fmt.Sprintf("%T", session)).
-			Msg("session 不满足 CheckpointerSession 接口，跳过中断检查点")
-		return nil
-	}
-	ctx := context.Background()
-	err := cp.InterruptAgentExecute(ctx, cps)
-	if err != nil {
-		logger.Error(logger.ComponentAgentCore).
-			Err(err).
-			Str("event_type", "LLM_CALL_ERROR").
-			Msg("检查点中断 Agent 执行失败")
-	}
-	return err
 }
 
 // writeInteractionOutput 写入交互输出到流。

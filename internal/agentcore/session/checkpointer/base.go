@@ -12,8 +12,6 @@ import (
 // Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
 // 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
 type Checkpointer interface {
-	// GetThreadID 获取线程 ID（session_id:workflow_id）
-	GetThreadID(session CheckpointerSession) string
 	// PreWorkflowExecute 工作流执行前
 	PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error
 	// PostWorkflowExecute 工作流执行后
@@ -30,8 +28,10 @@ type Checkpointer interface {
 	PostAgentTeamExecute(ctx context.Context, session CheckpointerSession) error
 	// SessionExists 检查会话是否存在
 	SessionExists(ctx context.Context, sessionID string) (bool, error)
-	// Release 释放会话资源
-	Release(ctx context.Context, sessionID string) error
+	// Release 释放会话资源。
+	// agentID 可选参数：提供时仅释放指定 Agent 的检查点（支持多个，循环清除），否则释放整个 session。
+	// 对齐 Python: release(session_id, agent_id=None)，Go 扩展支持批量 agentID。
+	Release(ctx context.Context, sessionID string, agentID ...string) error
 	// GraphStore 获取图状态存储
 	// ⤵️ 8.7 回填：Graph Store 实现后返回 Store 实例
 	GraphStore() any
@@ -53,32 +53,43 @@ type Storage interface {
 }
 
 // CheckpointerSession Checkpointer 所需的会话最小接口。
+// 对齐 Python BaseSession：只包含 Checkpointer 实际使用的 BaseSession 方法子集。
 // AgentSession/WorkflowSession/NodeSession 天然满足此接口。
 // AgentID/TeamID 通过 AgentIDProvider/TeamIDProvider 类型断言获取。
-// WorkflowState 的扩展方法（GetUpdates/SetUpdates/Commit 等）通过
-// 类型断言为 state.WorkflowState 接口获取（比断言具体类型更优雅）。
-//
-// ⤵️ 5.12 回填：Config() 返回类型从 CheckpointerConfig 改为 SessionConfig（5.12 定义），
-// SessionConfig 将满足 CheckpointerConfig 接口。同时 AgentSession 添加 AgentID()/
-// WorkflowID("")/Parent(nil) 方法后可直接满足此接口，消除 agentCheckpointerSession 适配器。
+// WorkflowID 通过 WorkflowIDProvider 类型断言获取（WorkflowSession/NodeSession 满足）。
+// Parent 通过 ParentProvider 类型断言获取（WorkflowSession/NodeSession 满足）。
+// Config 返回 any，需要 GetEnv 时通过 CheckpointerConfigProvider 类型断言获取。
+// ⤵️ 5.12 回填：Config() 返回类型改为 SessionConfig 后 CheckpointerConfigProvider 可移除。
 type CheckpointerSession interface {
 	// SessionID 获取会话唯一标识
 	SessionID() string
-	// WorkflowID 获取工作流 ID
-	WorkflowID() string
 	// State 获取会话状态
 	State() state.SessionState
 	// Config 获取会话配置
-	// ⤵️ 5.12 回填：返回类型从 CheckpointerConfig 改为 SessionConfig
-	Config() CheckpointerConfig
-	// Parent 获取父会话
+	// ⤵️ 5.12 回填：返回类型从 any 改为 SessionConfig
+	Config() any
+	// Checkpointer 获取检查点管理器
+	Checkpointer() Checkpointer
+}
+
+// WorkflowIDProvider 提供 WorkflowID 的接口（通过类型断言获取）。
+// WorkflowSession/NodeSession 天然满足此接口。
+// 对齐 Python: hasattr(session, "workflow_id") 检测。
+type WorkflowIDProvider interface {
+	WorkflowID() string
+}
+
+// ParentProvider 提供 Parent 的接口（通过类型断言获取）。
+// WorkflowSession/NodeSession 天然满足此接口，AgentSession 不满足。
+// 对齐 Python: isinstance(session.parent(), AgentSession) 检测。
+type ParentProvider interface {
 	Parent() CheckpointerSession
 }
 
-// CheckpointerConfig Checkpointer 所需的配置最小接口。
-// ⤵️ 5.12 回填：此接口可被 SessionConfig 替代或作为 SessionConfig 的子集，
-// 届时 CheckpointerSession.Config() 直接返回 SessionConfig
-type CheckpointerConfig interface {
+// CheckpointerConfigProvider 提供 GetEnv 方法的接口（通过类型断言获取）。
+// 用于 session.Config() 返回 any 后，需要调用 GetEnv 的场景。
+// ⤵️ 5.12 回填：Config() 返回 SessionConfig 后此接口可移除。
+type CheckpointerConfigProvider interface {
 	// GetEnv 获取环境变量值
 	GetEnv(key string, defaultValue ...any) any
 }
@@ -113,9 +124,9 @@ const (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetThreadID 获取线程 ID（session_id:workflow_id）。
-// 对应 Python: Checkpointer.get_thread_id()
+// 对应 Python: Checkpointer.get_thread_id()（@staticmethod）
 func GetThreadID(session CheckpointerSession) string {
-	return session.SessionID() + ":" + session.WorkflowID()
+	return session.SessionID() + ":" + getWorkflowID(session)
 }
 
 // BuildKey 用 ":" 连接各部分，构建存储键。
@@ -132,20 +143,45 @@ func BuildKeyWithNamespace(sessionID, namespace, entityID string, suffixes ...st
 	return BuildKey(parts...)
 }
 
-// GetAgentID 类型断言获取 Agent ID，不存在返回空字符串。
+// GetAgentID 类型断言获取 Agent ID，不存在返回 "Na"。
 // 对应 Python: session.agent_id() if hasattr(session, "agent_id") else "Na"
 func GetAgentID(session CheckpointerSession) string {
 	if provider, ok := session.(AgentIDProvider); ok {
-		return provider.AgentID()
+		if id := provider.AgentID(); id != "" {
+			return id
+		}
 	}
-	return ""
+	return "Na"
 }
 
-// GetTeamID 类型断言获取 Team ID，不存在返回空字符串。
+// GetTeamID 类型断言获取 Team ID，不存在返回 "Na"。
 // 对应 Python: session.team_id() if hasattr(session, "team_id") else "Na"
 func GetTeamID(session CheckpointerSession) string {
 	if provider, ok := session.(TeamIDProvider); ok {
-		return provider.TeamID()
+		if id := provider.TeamID(); id != "" {
+			return id
+		}
+	}
+	return "Na"
+}
+
+// GetConfigEnv 从 session.Config() 断言为 CheckpointerConfigProvider 后调用 GetEnv。
+// 返回环境变量值和是否可用。
+// ⤵️ 5.12 回填：Config() 返回 SessionConfig 后可直接调用 Config().GetEnv()。
+func GetConfigEnv(session CheckpointerSession, key string, defaultValue ...any) (any, bool) {
+	if cfg, ok := session.Config().(CheckpointerConfigProvider); ok {
+		return cfg.GetEnv(key, defaultValue...), true
+	}
+	return nil, false
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getWorkflowID 从 session 获取 WorkflowID，不存在返回空字符串。
+// 对齐 Python: hasattr(session, "workflow_id") 检测。
+func getWorkflowID(session CheckpointerSession) string {
+	if ws, ok := session.(WorkflowIDProvider); ok {
+		return ws.WorkflowID()
 	}
 	return ""
 }

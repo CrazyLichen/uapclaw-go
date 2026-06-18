@@ -5,11 +5,44 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
+
+// noOpCheckpointer 空操作检查点器，用于不需要真实检查点逻辑的测试
+type noOpCheckpointer struct{}
+
+func (n *noOpCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (n *noOpCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+	return nil
+}
+func (n *noOpCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (n *noOpCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+	return nil
+}
+func (n *noOpCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (n *noOpCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (n *noOpCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+	return nil
+}
+func (n *noOpCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	return false, nil
+}
+func (n *noOpCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (n *noOpCheckpointer) GraphStore() any { return nil }
 
 // TestNewSession 测试构造函数
 func TestNewSession(t *testing.T) {
@@ -60,7 +93,7 @@ func TestSession_PreRun(t *testing.T) {
 
 // TestSession_PreRun_幂等 测试重复调用只执行一次
 func TestSession_PreRun_幂等(t *testing.T) {
-	s := NewSession(WithSessionID("test-idempotent"))
+	s := NewSession(WithSessionID("test-idempotent"), WithCheckpointer(&noOpCheckpointer{}))
 
 	err := s.PreRun(context.Background())
 	if err != nil {
@@ -76,7 +109,7 @@ func TestSession_PreRun_幂等(t *testing.T) {
 
 // TestSession_PostRun 测试 PostRun 流程
 func TestSession_PostRun(t *testing.T) {
-	s := NewSession()
+	s := NewSession(WithCheckpointer(&noOpCheckpointer{}))
 	err := s.PostRun(context.Background())
 	if err != nil {
 		t.Errorf("PostRun 不应返回错误：%v", err)
@@ -85,7 +118,7 @@ func TestSession_PostRun(t *testing.T) {
 
 // TestSession_PostRun_幂等 测试重复调用只执行一次
 func TestSession_PostRun_幂等(t *testing.T) {
-	s := NewSession()
+	s := NewSession(WithCheckpointer(&noOpCheckpointer{}))
 	_ = s.PostRun(context.Background())
 	_ = s.PostRun(context.Background())
 	// 不应 panic 或重复关闭
@@ -93,7 +126,7 @@ func TestSession_PostRun_幂等(t *testing.T) {
 
 // TestSession_Commit 测试提交检查点
 func TestSession_Commit(t *testing.T) {
-	s := NewSession()
+	s := NewSession(WithCheckpointer(&noOpCheckpointer{}))
 	err := s.Commit(context.Background())
 	if err != nil {
 		t.Errorf("Commit 不应返回错误：%v", err)
@@ -141,7 +174,7 @@ func TestSession_DumpState(t *testing.T) {
 
 // TestSession_桩方法返回Nil 测试桩方法不返回错误
 func TestSession_桩方法返回Nil(t *testing.T) {
-	s := NewSession()
+	s := NewSession(WithCheckpointer(&noOpCheckpointer{}))
 
 	if err := s.WriteStream(nil); err != nil {
 		t.Errorf("WriteStream 桩应返回 nil，实际 %v", err)
@@ -211,19 +244,44 @@ func TestSession_tagStreamPayload(t *testing.T) {
 	}
 }
 
-// TestSession_GetEnv返回Nil 测试桩方法 GetEnv
-func TestSession_GetEnv返回Nil(t *testing.T) {
+// TestSession_GetEnv无匹配Key 测试无匹配 key 时返回 nil
+func TestSession_GetEnv无匹配Key(t *testing.T) {
 	s := NewSession()
 	if s.GetEnv("any_key") != nil {
-		t.Error("GetEnv 桩应返回 nil")
+		t.Error("GetEnv 无匹配 key 应返回 nil")
 	}
 }
 
-// TestSession_GetEnvs返回Nil 测试桩方法 GetEnvs
-func TestSession_GetEnvs返回Nil(t *testing.T) {
+// TestSession_GetEnv有Envs 测试有 envs 时 GetEnv 正确返回值
+func TestSession_GetEnv有Envs(t *testing.T) {
+	s := NewSession(WithEnvs(map[string]any{"my_key": "my_val"}))
+	if s.GetEnv("my_key") != "my_val" {
+		t.Errorf("GetEnv 期望 my_val，实际 %v", s.GetEnv("my_key"))
+	}
+	if s.GetEnv("missing_key") != nil {
+		t.Error("GetEnv 无匹配 key 应返回 nil")
+	}
+}
+
+// TestSession_GetEnvDefaultValue 测试 GetEnv 默认值
+func TestSession_GetEnvDefaultValue(t *testing.T) {
 	s := NewSession()
-	if s.GetEnvs() != nil {
-		t.Error("GetEnvs 桩应返回 nil")
+	defaultVal := s.GetEnv("missing_key", "default")
+	if defaultVal != "default" {
+		t.Errorf("GetEnv 默认值期望 'default'，实际 %v", defaultVal)
+	}
+}
+
+// TestSession_GetEnvs返回空Map 测试无 envs 时返回空 map（非 nil）
+// 对齐 Python: Session.__init__() 总是创建 Config()，get_envs() 返回空 dict
+func TestSession_GetEnvs返回空Map(t *testing.T) {
+	s := NewSession()
+	envs := s.GetEnvs()
+	if envs == nil {
+		t.Error("GetEnvs 不应返回 nil，应返回空 map")
+	}
+	if len(envs) != 0 {
+		t.Errorf("无 envs 时应返回空 map，实际 %v", envs)
 	}
 }
 
@@ -244,6 +302,39 @@ func TestSession_WithCard(t *testing.T) {
 	}
 	if s.GetAgentID() != "agent-1" {
 		t.Errorf("GetAgentID 期望 agent-1，实际 %s", s.GetAgentID())
+	}
+}
+
+// TestSession_WithEnvs 测试 WithEnvs 选项
+func TestSession_WithEnvs(t *testing.T) {
+	envs := map[string]any{"key1": "val1", "key2": 42}
+	s := NewSession(WithEnvs(envs))
+
+	// GetEnv 应从 envs 中读取
+	if s.GetEnv("key1") != "val1" {
+		t.Errorf("GetEnv('key1') 期望 val1，实际 %v", s.GetEnv("key1"))
+	}
+	if s.GetEnv("key2") != 42 {
+		t.Errorf("GetEnv('key2') 期望 42，实际 %v", s.GetEnv("key2"))
+	}
+
+	// GetEnvs 应返回完整 envs
+	allEnvs := s.GetEnvs()
+	if allEnvs == nil {
+		t.Fatal("GetEnvs 不应返回 nil")
+	}
+	if allEnvs["key1"] != "val1" {
+		t.Errorf("GetEnvs()['key1'] 期望 val1，实际 %v", allEnvs["key1"])
+	}
+}
+
+// TestSession_WithStreamWriterManager 测试 WithStreamWriterManager 选项
+func TestSession_WithStreamWriterManager(t *testing.T) {
+	swm := "fake-swm"
+	s := NewSession(WithStreamWriterManager(swm))
+	// 验证 swm 传入了 inner
+	if s.inner.StreamWriterManager() != swm {
+		t.Errorf("inner.StreamWriterManager 期望 %v，实际 %v", swm, s.inner.StreamWriterManager())
 	}
 }
 

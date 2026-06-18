@@ -305,7 +305,6 @@ func TestCheckpointerFactoryConfig(t *testing.T) {
 // mockCheckpointer 用于测试的模拟检查点器
 type mockCheckpointer struct{}
 
-func (m *mockCheckpointer) GetThreadID(session CheckpointerSession) string { return "" }
 func (m *mockCheckpointer) PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
 	return nil
 }
@@ -330,8 +329,10 @@ func (m *mockCheckpointer) PostAgentTeamExecute(ctx context.Context, session Che
 func (m *mockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (m *mockCheckpointer) Release(ctx context.Context, sessionID string) error { return nil }
-func (m *mockCheckpointer) GraphStore() any                                     { return nil }
+func (m *mockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (m *mockCheckpointer) GraphStore() any { return nil }
 
 // mockProvider 用于测试的模拟 Provider
 type mockProvider struct{}

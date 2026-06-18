@@ -29,6 +29,15 @@ type Session struct {
 	inner *internal.AgentSession
 	// card Agent 身份元数据
 	card *schema.AgentCard
+	// envs 环境变量（通过 WithEnvs 设置）
+	// 对齐 Python: Session.__init__(envs=dict)
+	envs map[string]any
+	// checkpointerOverride 检查点器覆盖（通过 WithCheckpointer option 设置）
+	checkpointerOverride checkpointer.Checkpointer
+	// streamWriterManagerOverride 流写入管理器覆盖（通过 WithStreamWriterManager 设置）
+	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
+	// ⤵️ 5.10 回填：any → StreamWriterManager
+	streamWriterManagerOverride any
 	// preRunDone PreRun 是否已执行
 	preRunDone bool
 	// postRunDone PostRun 是否已执行
@@ -39,14 +48,6 @@ type Session struct {
 	interaction *interaction.SimpleAgentInteraction
 	// sourceMetadata 流数据来源元数据
 	sourceMetadata map[string]any
-}
-
-// agentCheckpointerSession 将 AgentSession 适配为 CheckpointerSession。
-// AgentSession 已有 AgentID() 方法（满足 AgentIDProvider），
-// 但仍缺少 WorkflowID()/Parent()/Config() 的正确返回类型，
-// 因此暂保留此适配器。⤵️ 5.12 回填：Config() 返回 SessionConfig 后可消除此适配器。
-type agentCheckpointerSession struct {
-	inner *internal.AgentSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -62,9 +63,15 @@ type SessionOption func(*Session)
 
 // NewSession 创建公开层 Session 实例。
 //
-// 若未指定 sessionID，自动生成 UUID。
-// 可通过选项函数注入各组件和配置。
-// 选项应用完后统一创建一次内部 AgentSession，避免重复创建。
+// 默认行为（对齐 Python Session.__init__）：
+//   - sessionID: 若未指定，自动生成 UUID
+//   - config: 创建默认 Config 并设置 envs，传入 inner
+//     ⤵️ 5.12 回填：创建真实 SessionConfig 实例，当前用 map[string]any 占位
+//   - checkpointer: 若未通过 WithCheckpointer 设置，使用 checkpointer.GetCheckpointer()
+//   - streamWriterManager: 若未通过 WithStreamWriterManager 设置，传 nil 给 inner
+//     （inner 会自动创建默认实例，⤵️ 5.10 回填）
+//   - closeStreamOnPostRun: 默认 true
+//   - sourceMetadata: 默认空 map
 //
 // 对应 Python: openjiuwen/core/session/agent.py create_agent_session()
 func NewSession(opts ...SessionOption) *Session {
@@ -72,12 +79,37 @@ func NewSession(opts ...SessionOption) *Session {
 		sessionID:            uuid.New().String(),
 		closeStreamOnPostRun: true,
 		sourceMetadata:       make(map[string]any),
+		envs:                 make(map[string]any),
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
-	// 统一用最终确定的 sessionID 创建一次 AgentSession
-	s.inner = internal.NewAgentSession(s.sessionID)
+
+	// 统一用最终确定的 sessionID 创建一次 AgentSession，
+	// 同时注入各组件，对齐 Python AgentSession 的默认行为
+
+	// 1. config：外层创建 Config + set_envs，传给 inner
+	//    Python: config = Config(); config.set_envs(envs); self._inner = AgentSession(config=config)
+	//    ⤵️ 5.12 回填：创建真实 SessionConfig 实例
+	config := any(s.envs) // 当前用 envs map 占位，5.12 回填为 NewSessionConfig() + SetEnvs()
+
+	// 2. checkpointer：未设置时从全局工厂获取
+	//    Python: checkpointer = CheckpointerFactory.get_checkpointer()
+	cp := s.checkpointerOverride
+	if cp == nil {
+		cp = checkpointer.GetCheckpointer()
+	}
+
+	// 3. streamWriterManager：外层透传给 inner
+	//    Python: self._inner = AgentSession(stream_writer_manager=stream_writer_manager)
+	//    未设置时传 nil，由 inner 自动创建默认实例（⤵️ 5.10 回填）
+
+	s.inner = internal.NewAgentSession(s.sessionID,
+		internal.WithConfig(config),
+		internal.WithCard(s.card),
+		internal.WithCheckpointer(cp),
+		internal.WithStreamWriterManager(s.streamWriterManagerOverride),
+	)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_session").
@@ -101,6 +133,33 @@ func WithCard(card *schema.AgentCard) SessionOption {
 	}
 }
 
+// WithEnvs 设置环境变量的选项。
+// 外层 NewSession 会创建默认 Config 并将 envs 写入，再传给 inner。
+// 对齐 Python: Session.__init__(envs=dict[str, Any]=None) → config.set_envs(envs)
+func WithEnvs(envs map[string]any) SessionOption {
+	return func(s *Session) {
+		s.envs = envs
+	}
+}
+
+// WithCheckpointer 设置检查点器的选项。
+// 若不设置，NewSession 默认注入 checkpointer.GetCheckpointer()。
+func WithCheckpointer(cp checkpointer.Checkpointer) SessionOption {
+	return func(s *Session) {
+		// 存到临时字段，在 NewSession 创建 inner 时使用
+		s.checkpointerOverride = cp
+	}
+}
+
+// WithStreamWriterManager 设置流写入管理器的选项。
+// 外层透传给 inner，由 inner 自动创建默认实例（⤵️ 5.10 回填）。
+// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
+func WithStreamWriterManager(mgr any) SessionOption {
+	return func(s *Session) {
+		s.streamWriterManagerOverride = mgr
+	}
+}
+
 // WithCloseStreamOnPostRun 设置 PostRun 时是否自动关闭流的选项
 func WithCloseStreamOnPostRun(v bool) SessionOption {
 	return func(s *Session) {
@@ -120,15 +179,40 @@ func (s *Session) GetSessionID() string {
 	return s.sessionID
 }
 
-// GetEnv 获取环境变量值
-// ⤵️ 5.12 回填：Config() 返回真实类型后实现
+// GetEnv 获取环境变量值。
+// 委托到 inner.Config()，若 config 为 nil 或未实现 GetEnv 方法则返回 defaultValue。
+// ⤵️ 5.12 回填：Config() 返回真实类型后直接调用 config.GetEnv()
+// 对齐 Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
 func (s *Session) GetEnv(key string, defaultValue ...any) any {
+	cfg := s.inner.Config()
+	if cfg == nil {
+		return nil
+	}
+	// 当前 config 为 map[string]any 占位，直接从 map 读取
+	if m, ok := cfg.(map[string]any); ok {
+		if v, exists := m[key]; exists {
+			return v
+		}
+	}
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
 	return nil
 }
 
-// GetEnvs 获取所有环境变量
-// ⤵️ 5.12 回填：Config() 返回真实类型后实现
+// GetEnvs 获取所有环境变量。
+// 委托到 inner.Config()。
+// ⤵️ 5.12 回填：Config() 返回真实类型后直接调用 config.GetEnvs()
+// 对齐 Python: Session.get_envs() → self._inner.config().get_envs()
 func (s *Session) GetEnvs() map[string]any {
+	cfg := s.inner.Config()
+	if cfg == nil {
+		return nil
+	}
+	// 当前 config 为 map[string]any 占位，直接返回
+	if m, ok := cfg.(map[string]any); ok {
+		return m
+	}
 	return nil
 }
 
@@ -224,8 +308,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 		if len(inputs) > 0 {
 			inputVal = inputs[0]
 		}
-		cps := &agentCheckpointerSession{inner: s.inner}
-		if err := cp.PreAgentExecute(ctx, cps, inputVal); err != nil {
+		if err := cp.PreAgentExecute(ctx, s.inner, inputVal); err != nil {
 			return err
 		}
 	}
@@ -268,8 +351,7 @@ func (s *Session) PostRun(ctx context.Context) error {
 // 对应 Python: Session.commit()
 func (s *Session) Commit(ctx context.Context) error {
 	if cp := s.inner.Checkpointer(); cp != nil {
-		cps := &agentCheckpointerSession{inner: s.inner}
-		return cp.PostAgentExecute(ctx, cps)
+		return cp.PostAgentExecute(ctx, s.inner)
 	}
 	return nil
 }
@@ -348,23 +430,4 @@ func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
 		result[k] = v
 	}
 	return result
-}
-
-func (a *agentCheckpointerSession) SessionID() string                        { return a.inner.SessionID() }
-func (a *agentCheckpointerSession) WorkflowID() string                       { return "" }
-func (a *agentCheckpointerSession) State() state.SessionState                { return a.inner.State() }
-func (a *agentCheckpointerSession) Parent() checkpointer.CheckpointerSession { return nil }
-
-// ⤵️ 5.12 回填：Config() 返回类型从 any → SessionConfig 后，直接返回即可，无需类型断言
-func (a *agentCheckpointerSession) Config() checkpointer.CheckpointerConfig {
-	if cfg, ok := a.inner.Config().(checkpointer.CheckpointerConfig); ok {
-		return cfg
-	}
-	return nil
-}
-
-// AgentID 返回 Agent ID，满足 AgentIDProvider 接口。
-// 直接委托给 AgentSession.AgentID()（从 card.AbilityID() 取值）。
-func (a *agentCheckpointerSession) AgentID() string {
-	return a.inner.AgentID()
 }

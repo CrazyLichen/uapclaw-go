@@ -52,9 +52,6 @@ func (m *mockStub) Close() error                            { m.closeCalled = tr
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
 
-func (m *testMockCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string {
-	return ""
-}
 func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
 	return nil
 }
@@ -79,7 +76,7 @@ func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session
 func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string) error { return nil }
+func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
 func (m *testMockCheckpointer) GraphStore() any                                     { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

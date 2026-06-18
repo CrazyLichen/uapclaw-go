@@ -37,13 +37,12 @@ type testAgentSession struct {
 	agentID string
 	config  *testConfig
 	st      state.SessionState
-	parent  CheckpointerSession
 }
 
-func (s *testAgentSession) AgentID() string             { return s.agentID }
-func (s *testAgentSession) State() state.SessionState   { return s.st }
-func (s *testAgentSession) Config() CheckpointerConfig  { return s.config }
-func (s *testAgentSession) Parent() CheckpointerSession { return s.parent }
+func (s *testAgentSession) AgentID() string              { return s.agentID }
+func (s *testAgentSession) State() state.SessionState    { return s.st }
+func (s *testAgentSession) Config() any                  { return s.config }
+func (s *testAgentSession) Checkpointer() Checkpointer   { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
@@ -51,25 +50,25 @@ type testTeamSession struct {
 	teamID string
 	config *testConfig
 	st     state.SessionState
-	parent CheckpointerSession
 }
 
 func (s *testTeamSession) TeamID() string              { return s.teamID }
 func (s *testTeamSession) State() state.SessionState   { return s.st }
-func (s *testTeamSession) Config() CheckpointerConfig  { return s.config }
-func (s *testTeamSession) Parent() CheckpointerSession { return s.parent }
+func (s *testTeamSession) Config() any                 { return s.config }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
 type testWorkflowSession struct {
 	testSession
-	config *testConfig
-	st     state.SessionState
-	parent CheckpointerSession
+	config     *testConfig
+	st         state.SessionState
+	workflowID string
+	parent     CheckpointerSession
 }
 
-func (s *testWorkflowSession) State() state.SessionState   { return s.st }
-func (s *testWorkflowSession) Config() CheckpointerConfig  { return s.config }
-func (s *testWorkflowSession) Parent() CheckpointerSession { return s.parent }
+func (s *testWorkflowSession) State() state.SessionState    { return s.st }
+func (s *testWorkflowSession) Config() any                  { return s.config }
+func (s *testWorkflowSession) WorkflowID() string            { return s.workflowID }
+func (s *testWorkflowSession) Parent() CheckpointerSession   { return s.parent }
 
 // ──────────────────────────── NewInMemoryCheckpointer 测试 ────────────────────────────
 
@@ -93,25 +92,13 @@ func TestNewInMemoryCheckpointer(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetThreadID 测试 ────────────────────────────
-
-// TestInMemoryCheckpointer_GetThreadID 测试委托到包级 GetThreadID
-func TestInMemoryCheckpointer_GetThreadID(t *testing.T) {
-	cp := NewInMemoryCheckpointer()
-	session := &testSession{sessionID: "sess1", workflowID: "wf1"}
-	got := cp.GetThreadID(session)
-	if got != "sess1:wf1" {
-		t.Errorf("GetThreadID = %s，期望 'sess1:wf1'", got)
-	}
-}
-
 // ──────────────────────────── PreAgentExecute / PostAgentExecute 测试 ────────────────────────────
 
 // TestInMemoryCheckpointer_PreAgentExecute 测试 Agent 执行前恢复状态
 func TestInMemoryCheckpointer_PreAgentExecute(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -134,7 +121,7 @@ func TestInMemoryCheckpointer_PostAgentExecute(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -161,7 +148,7 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -186,7 +173,7 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 	// 创建新 session，恢复状态
 	st2 := state.NewAgentStateCollection()
 	session2 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
 		config:      &testConfig{},
@@ -206,7 +193,7 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 func TestInMemoryCheckpointer_PostAgentExecute_无Store(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -226,7 +213,7 @@ func TestInMemoryCheckpointer_InterruptAgentExecute(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -249,7 +236,7 @@ func TestInMemoryCheckpointer_InterruptAgentExecute(t *testing.T) {
 func TestInMemoryCheckpointer_InterruptAgentExecute_无Store(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -268,7 +255,7 @@ func TestInMemoryCheckpointer_InterruptAgentExecute_无Store(t *testing.T) {
 func TestInMemoryCheckpointer_PreAgentTeamExecute(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -291,7 +278,7 @@ func TestInMemoryCheckpointer_PostAgentTeamExecute(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -314,7 +301,7 @@ func TestInMemoryCheckpointer_PostAgentTeamExecute(t *testing.T) {
 func TestInMemoryCheckpointer_PostAgentTeamExecute_无Store(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -334,7 +321,7 @@ func TestInMemoryCheckpointer_SessionExists_存在(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -375,7 +362,7 @@ func TestInMemoryCheckpointer_Release(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -428,7 +415,7 @@ func TestAgentStorage_SaveRecover(t *testing.T) {
 	storage := newAgentStorage()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -449,7 +436,7 @@ func TestAgentStorage_SaveRecover(t *testing.T) {
 	// 创建新 session，恢复
 	st2 := state.NewAgentStateCollection()
 	session2 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
 		config:      &testConfig{},
@@ -470,7 +457,7 @@ func TestAgentStorage_Clear(t *testing.T) {
 	storage := newAgentStorage()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -501,7 +488,7 @@ func TestAgentStorage_Exists(t *testing.T) {
 	storage := newAgentStorage()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -536,7 +523,7 @@ func TestAgentStorage_Recover_无数据(t *testing.T) {
 	storage := newAgentStorage()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -556,7 +543,7 @@ func TestAgentTeamStorage_SaveRecover(t *testing.T) {
 	storage := newAgentTeamStorage()
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -575,7 +562,7 @@ func TestAgentTeamStorage_SaveRecover(t *testing.T) {
 	// 创建新 session，恢复
 	st2 := state.NewAgentStateCollection()
 	session2 := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st2,
 		config:      &testConfig{},
@@ -596,7 +583,7 @@ func TestAgentTeamStorage_Clear(t *testing.T) {
 	storage := newAgentTeamStorage()
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -631,7 +618,8 @@ func TestWorkflowStorage_SaveRecover(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -655,7 +643,8 @@ func TestWorkflowStorage_SaveRecover(t *testing.T) {
 	workflowState2 := state.NewInMemoryCommitState()
 	wcs2 := state.NewWorkflowCommitState(ioState2, globalState2, compState2, workflowState2, nil, "parent1", "node1", true)
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs2,
 	}
@@ -676,7 +665,8 @@ func TestWorkflowStorage_Clear(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -707,7 +697,8 @@ func TestWorkflowStorage_Exists_未保存(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -729,7 +720,7 @@ func TestInMemoryCheckpointer_PreAgentExecute_带Inputs(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -753,7 +744,7 @@ func TestInMemoryCheckpointer_PreAgentTeamExecute_带Inputs(t *testing.T) {
 	cp := NewInMemoryCheckpointer()
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -779,7 +770,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_交互输入(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -810,7 +802,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_空输入无状态(t *testing.T
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -835,7 +828,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -864,7 +858,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_异常(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -948,7 +943,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_有状态非交互输入(t *tes
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -981,7 +977,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
 		st:          wcs,
 	}
@@ -1015,7 +1012,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1044,14 +1042,15 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成AgentSession(t *te
 
 	// 创建一个 parent session 满足 AgentIDProvider
 	parentSession := &testAgentSession{
-		testSession: testSession{sessionID: "parent-sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "parent-sess1"},
 		agentID:     "parent-agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
 	}
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 		parent:      parentSession,
@@ -1093,19 +1092,20 @@ func TestInMemoryCheckpointer_Release_全量释放(t *testing.T) {
 	teamSt := state.NewAgentStateCollection()
 
 	agentSession := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          agentSt,
 		config:      &testConfig{},
 	}
 	teamSession := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          teamSt,
 		config:      &testConfig{},
 	}
 	workflowSession := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1146,7 +1146,8 @@ func TestWorkflowStorage_SaveRecover_带更新(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1170,7 +1171,8 @@ func TestWorkflowStorage_SaveRecover_带更新(t *testing.T) {
 	workflowState2 := state.NewInMemoryCommitState()
 	wcs2 := state.NewWorkflowCommitState(ioState2, globalState2, compState2, workflowState2, nil, "parent1", "node1", true)
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs2,
 	}
@@ -1191,7 +1193,8 @@ func TestWorkflowStorage_Recover_带交互输入(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1210,7 +1213,8 @@ func TestWorkflowStorage_Recover_带交互输入(t *testing.T) {
 	workflowState2 := state.NewInMemoryCommitState()
 	wcs2 := state.NewWorkflowCommitState(ioState2, globalState2, compState2, workflowState2, nil, "parent1", "node1", true)
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs2,
 	}
@@ -1231,7 +1235,8 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1250,7 +1255,8 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 	workflowState2 := state.NewInMemoryCommitState()
 	wcs2 := state.NewWorkflowCommitState(ioState2, globalState2, compState2, workflowState2, nil, "parent1", "node1", true)
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs2,
 	}
@@ -1268,7 +1274,7 @@ func TestAgentTeamStorage_Exists(t *testing.T) {
 	storage := newAgentTeamStorage()
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -1311,7 +1317,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_空Map输入(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1335,7 +1342,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_无Store(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "nonexist", workflowID: "wf1"},
+		testSession: testSession{sessionID: "nonexist"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}
@@ -1359,7 +1367,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断无Store(t *testing.T) {
 	wcs := state.NewWorkflowCommitState(ioState, globalState, compState, workflowState, nil, "parent1", "node1", true)
 
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "nonexist", workflowID: "wf1"},
+		testSession: testSession{sessionID: "nonexist"},
+		workflowID:  "wf1",
 		config:      &testConfig{},
 		st:          wcs,
 	}

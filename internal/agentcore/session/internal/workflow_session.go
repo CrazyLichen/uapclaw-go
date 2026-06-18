@@ -116,9 +116,9 @@ type WorkflowSessionOption func(*WorkflowSession)
 
 // NewWorkflowSession 创建内部 WorkflowSession 实例。
 //
-// 默认行为：
+// 默认行为（对齐 Python WorkflowSession.__init__）：
 //   - 有 parent 时：sessionID 继承 parent、config 继承 parent、tracer 继承 parent
-//   - 无 parent 时：sessionID 自动生成 UUID、config 新建、tracer 为 nil
+//   - 无 parent 时：sessionID 自动生成 UUID、config 新建默认 Config（⤵️ 5.12 回填）、tracer 为 nil
 //   - state 默认创建 InMemoryWorkflowState（workflowOnly=true）
 //   - streamWriterManager 和 actorManager 初始为 nil，需外部注入
 func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
@@ -133,11 +133,16 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 		opt(s)
 	}
 
-	// 处理默认值
+	// 处理默认值（对齐 Python WorkflowSession.__init__）
 	if s.parent == nil {
 		if s.sessionID == "" {
 			s.sessionID = uuid.New().String()
 		}
+		// Python: self._config = Config()
+		// ⤵️ 5.12 回填：无 parent 时创建默认 SessionConfig
+		// if s.config == nil {
+		// 	s.config = NewSessionConfig()
+		// }
 	} else {
 		if s.sessionID == "" {
 			s.sessionID = s.parent.SessionID()

@@ -71,7 +71,10 @@ func TestBuildKeyWithNamespace_有后缀(t *testing.T) {
 
 // TestGetThreadID 测试线程 ID 构建
 func TestGetThreadID(t *testing.T) {
-	session := &testSession{sessionID: "sess1", workflowID: "wf1"}
+	session := &testSessionWithWorkflowID{
+		testSession: testSession{sessionID: "sess1"},
+		workflowID:  "wf1",
+	}
 	got := GetThreadID(session)
 	if got != "sess1:wf1" {
 		t.Errorf("GetThreadID = %s，期望 'sess1:wf1'", got)
@@ -94,10 +97,10 @@ func TestGetAgentID_满足接口(t *testing.T) {
 
 // TestGetAgentID_不满足接口 测试 session 不满足 AgentIDProvider 返回空字符串
 func TestGetAgentID_不满足接口(t *testing.T) {
-	session := &testSession{sessionID: "s1", workflowID: "wf1"}
+	session := &testSession{sessionID: "s1"}
 	got := GetAgentID(session)
-	if got != "" {
-		t.Errorf("不满足接口时应返回空字符串，实际=%s", got)
+	if got != "Na" {
+		t.Errorf("不满足接口时应返回 Na，实际=%s", got)
 	}
 }
 
@@ -115,10 +118,10 @@ func TestGetTeamID_满足接口(t *testing.T) {
 
 // TestGetTeamID_不满足接口 测试 session 不满足 TeamIDProvider 返回空字符串
 func TestGetTeamID_不满足接口(t *testing.T) {
-	session := &testSession{sessionID: "s1", workflowID: "wf1"}
+	session := &testSession{sessionID: "s1"}
 	got := GetTeamID(session)
-	if got != "" {
-		t.Errorf("不满足接口时应返回空字符串，实际=%s", got)
+	if got != "Na" {
+		t.Errorf("不满足接口时应返回 Na，实际=%s", got)
 	}
 }
 
@@ -126,15 +129,21 @@ func TestGetTeamID_不满足接口(t *testing.T) {
 
 // testSession 最小 CheckpointerSession 实现
 type testSession struct {
-	sessionID  string
+	sessionID string
+}
+
+func (s *testSession) SessionID() string         { return s.sessionID }
+func (s *testSession) State() state.SessionState  { return nil }
+func (s *testSession) Config() any                { return nil }
+func (s *testSession) Checkpointer() Checkpointer { return nil }
+
+// testSessionWithWorkflowID 满足 WorkflowIDProvider 的 session
+type testSessionWithWorkflowID struct {
+	testSession
 	workflowID string
 }
 
-func (s *testSession) SessionID() string           { return s.sessionID }
-func (s *testSession) WorkflowID() string          { return s.workflowID }
-func (s *testSession) State() state.SessionState   { return nil }
-func (s *testSession) Config() CheckpointerConfig  { return nil }
-func (s *testSession) Parent() CheckpointerSession { return nil }
+func (s *testSessionWithWorkflowID) WorkflowID() string { return s.workflowID }
 
 // testSessionWithAgentID 实现 AgentIDProvider 的 session
 type testSessionWithAgentID struct {

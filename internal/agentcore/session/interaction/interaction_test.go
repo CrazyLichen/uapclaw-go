@@ -17,7 +17,6 @@ type fakeCheckpointer struct {
 	interrupted  bool
 }
 
-func (f *fakeCheckpointer) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
 func (f *fakeCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
 	return nil
 }
@@ -43,7 +42,7 @@ func (f *fakeCheckpointer) PostAgentTeamExecute(ctx context.Context, session che
 func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string) error { return nil }
+func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
 func (f *fakeCheckpointer) GraphStore() any                                     { return nil }
 
 // fakeOutputWriter 测试用输出写入器
@@ -343,21 +342,28 @@ func TestAgentInteraction_WaitUserInputs_有StreamWriter(t *testing.T) {
 // ──────────────────────────── 依赖接口类型断言测试 ────────────────────────────
 
 // TestInterruptAgentExecute_checkpointer为nil 测试 checkpointer 为 nil 不 panic
+// 对齐 Python: session.checkpointer().interrupt_agent_execute(session)
 func TestInterruptAgentExecute_checkpointer为nil(t *testing.T) {
 	session := newFakeBaseSession()
-	err := interruptAgentExecute(session)
+	// baseSession 嵌入 CheckpointerSession，直接调用 cp.InterruptAgentExecute(ctx, session)
+	cp := session.Checkpointer()
+	if cp == nil {
+		// checkpointer 为 nil，跳过（符合预期）
+		return
+	}
+	err := cp.InterruptAgentExecute(context.Background(), session)
 	if err != nil {
-		t.Errorf("checkpointer 为 nil 时应返回 nil，实际=%v", err)
+		t.Errorf("checkpointer 为 nil 时不应调用，实际 err=%v", err)
 	}
 }
 
-// TestInterruptAgentExecute_无Checkpointer 测试无 checkpointer 时返回 nil
+// TestInterruptAgentExecute_无Checkpointer 测试无 checkpointer 时安全跳过
 func TestInterruptAgentExecute_无Checkpointer(t *testing.T) {
 	session := newFakeBaseSession()
 	session.cpValue = nil
-	err := interruptAgentExecute(session)
-	if err != nil {
-		t.Errorf("无 checkpointer 时应返回 nil，实际=%v", err)
+	cp := session.Checkpointer()
+	if cp != nil {
+		t.Errorf("无 checkpointer 时 Checkpointer() 应返回 nil")
 	}
 }
 

@@ -146,16 +146,11 @@ func newWorkflowStorage() *WorkflowStorage {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GetThreadID 获取线程 ID（session_id:workflow_id）。
-func (cp *InMemoryCheckpointer) GetThreadID(session CheckpointerSession) string {
-	return GetThreadID(session)
-}
-
 // PreWorkflowExecute 工作流执行前保存检查点。
 // 对应 Python: InMemoryCheckpointer.pre_workflow_execute()
 func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
 	sessionID := session.SessionID()
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 
 	cp.mu.Lock()
 	isNewWorkflowStore := sessionID != "" && cp.workflowStores[sessionID] == nil
@@ -217,8 +212,8 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			return nil
 		}
 		// 检查是否强制删除工作流状态
-		if session.Config() != nil {
-			if forceDel, _ := session.Config().GetEnv(ForceDelWorkflowStateKey, false).(bool); forceDel {
+		if forceDel, ok := GetConfigEnv(session, ForceDelWorkflowStateKey, false); ok {
+			if forceDelBool, _ := forceDel.(bool); forceDelBool {
 				logger.Info(logComponent).
 					Str("action", "pre_workflow_execute").
 					Str("event_type", "checkpoint_clear").
@@ -249,7 +244,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 // 对应 Python: InMemoryCheckpointer.post_workflow_execute()
 func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session CheckpointerSession, result any, exception error) error {
 	sessionID := session.SessionID()
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 
 	cp.mu.RLock()
 	workflowStore := cp.workflowStores[sessionID]
@@ -284,9 +279,11 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 		// 如果不是 AgentSession 的子会话，移除 workflow store
 		cp.mu.Lock()
 		isAgentSession := false
-		if parent := session.Parent(); parent != nil {
-			if _, ok := parent.(AgentIDProvider); ok {
-				isAgentSession = true
+		if pp, ok := session.(ParentProvider); ok {
+			if parent := pp.Parent(); parent != nil {
+				if _, ok := parent.(AgentIDProvider); ok {
+					isAgentSession = true
+				}
 			}
 		}
 		if !isAgentSession {
@@ -575,8 +572,22 @@ func (cp *InMemoryCheckpointer) SessionExists(ctx context.Context, sessionID str
 
 // Release 释放会话资源。
 // 对应 Python: InMemoryCheckpointer.release()
-// agentID 非空时仅释放指定 Agent 的状态；为空时释放整个会话的全部状态。
-func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string) error {
+// agentID 非空时仅释放指定 Agent 的状态（支持多个，循环清除）；为空时释放整个会话的全部状态。
+func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	if len(agentID) > 0 {
+		// 循环清除每个指定 Agent 的检查点
+		agentStore, ok := cp.agentStores[sessionID]
+		if !ok {
+			return nil
+		}
+		var firstErr error
+		for _, aid := range agentID {
+			if err := agentStore.Clear(ctx, aid, sessionID); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
+	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -906,7 +917,7 @@ func (s *AgentTeamStorage) Exists(ctx context.Context, session CheckpointerSessi
 // Save 保存工作流状态和更新。
 // 对应 Python: WorkflowStorage.save()
 func (ws *WorkflowStorage) Save(ctx context.Context, session CheckpointerSession) error {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 
 	// 通过类型断言获取 WorkflowState 接口
 	wfState, ok := session.State().(state.WorkflowState)
@@ -951,7 +962,7 @@ func (ws *WorkflowStorage) Save(ctx context.Context, session CheckpointerSession
 // Recover 恢复工作流状态。
 // 对应 Python: WorkflowStorage.recover()
 func (ws *WorkflowStorage) Recover(ctx context.Context, session CheckpointerSession, inputs any) error {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 
 	// 恢复主状态
 	ws.mu.RLock()
@@ -1005,7 +1016,7 @@ func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID, _ string) erro
 // Exists 检查工作流状态是否存在。
 // 对应 Python: WorkflowStorage.exists()
 func (ws *WorkflowStorage) Exists(ctx context.Context, session CheckpointerSession) (bool, error) {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 	ws.mu.RLock()
 	stateBlob, exists := ws.stateBlobs[workflowID]
 	ws.mu.RUnlock()

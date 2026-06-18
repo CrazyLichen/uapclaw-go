@@ -32,19 +32,6 @@ func TestNewPersistenceCheckpointer(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── GetThreadID 测试 ────────────────────────────
-
-// TestPersistenceCheckpointer_GetThreadID 测试委托到包级 GetThreadID
-func TestPersistenceCheckpointer_GetThreadID(t *testing.T) {
-	store := kv.NewInMemoryKVStore()
-	cp := NewPersistenceCheckpointer(store)
-	session := &testSession{sessionID: "sess1", workflowID: "wf1"}
-	got := cp.GetThreadID(session)
-	if got != "sess1:wf1" {
-		t.Errorf("GetThreadID = %s，期望 'sess1:wf1'", got)
-	}
-}
-
 // ──────────────────────────── PreAgentExecute / PostAgentExecute 测试 ────────────────────────────
 
 // TestPersistenceCheckpointer_PreAgentExecute 测试 Agent 执行前恢复状态
@@ -52,7 +39,7 @@ func TestPersistenceCheckpointer_PreAgentExecute(t *testing.T) {
 	store := kv.NewInMemoryKVStore()
 	cp := NewPersistenceCheckpointer(store)
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -71,7 +58,7 @@ func TestPersistenceCheckpointer_PostAgentExecute(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -99,7 +86,7 @@ func TestPersistenceCheckpointer_Agent完整流程(t *testing.T) {
 		t.Fatalf("st1.Update 返回错误：%v", err)
 	}
 	session1 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1,
 		config:      &testConfig{},
@@ -111,7 +98,7 @@ func TestPersistenceCheckpointer_Agent完整流程(t *testing.T) {
 	// 2. 恢复阶段
 	st2 := state.NewAgentStateCollection()
 	session2 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
 		config:      &testConfig{},
@@ -134,7 +121,7 @@ func TestPersistenceCheckpointer_PreAgentTeamExecute(t *testing.T) {
 	store := kv.NewInMemoryKVStore()
 	cp := NewPersistenceCheckpointer(store)
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -152,7 +139,7 @@ func TestPersistenceCheckpointer_PostAgentTeamExecute(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -175,7 +162,7 @@ func TestPersistenceCheckpointer_AgentTeam完整流程(t *testing.T) {
 	st1 := state.NewAgentStateCollection()
 	st1.UpdateGlobal(map[string]any{"global_key": "global_val"})
 	session1 := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st1,
 		config:      &testConfig{},
@@ -187,7 +174,7 @@ func TestPersistenceCheckpointer_AgentTeam完整流程(t *testing.T) {
 	// 2. 恢复阶段
 	st2 := state.NewAgentStateCollection()
 	session2 := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st2,
 		config:      &testConfig{},
@@ -211,7 +198,7 @@ func TestPersistenceCheckpointer_InterruptAgentExecute(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -228,7 +215,7 @@ func TestPersistenceCheckpointer_InterruptAgentExecute(t *testing.T) {
 	// 验证中断后状态可恢复
 	st2 := state.NewAgentStateCollection()
 	session2 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
 		config:      &testConfig{},
@@ -259,7 +246,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_新会话(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	wcs := newTestWorkflowCommitState()
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -278,7 +265,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_中断保存(t *testing.T) 
 	wcs := newTestWorkflowCommitState()
 	wcs.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -297,7 +284,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_正常完成清除(t *testi
 	cp := NewPersistenceCheckpointer(store)
 	wcs := newTestWorkflowCommitState()
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -323,7 +310,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_异常保存(t *testing.T) 
 	wcs := newTestWorkflowCommitState()
 	wcs.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -345,7 +332,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 	wcs1 := newTestWorkflowCommitState()
 	wcs1.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session1 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
 		config:      &testConfig{},
 	}
@@ -358,7 +345,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 	// 2. 恢复阶段（交互输入）
 	wcs2 := newTestWorkflowCommitState()
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
 		config:      &testConfig{},
 	}
@@ -378,7 +365,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	wcs1 := newTestWorkflowCommitState()
 	wcs1.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session1 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
 		config:      &testConfig{},
 	}
@@ -390,7 +377,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	// ForceDelWorkflowStateKey=true，应清除后正常返回
 	wcs2 := newTestWorkflowCommitState()
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
 		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
 	}
@@ -409,7 +396,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_状态存在非交互输入(
 	wcs1 := newTestWorkflowCommitState()
 	wcs1.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session1 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
 		config:      &testConfig{},
 	}
@@ -421,7 +408,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_状态存在非交互输入(
 	// 非交互输入 + 无 ForceDel → 应报错
 	wcs2 := newTestWorkflowCommitState()
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
 		config:      &testConfig{},
 	}
@@ -456,7 +443,7 @@ func TestPersistenceCheckpointer_SessionExists_有数据(t *testing.T) {
 	// 先保存一些状态
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -503,7 +490,7 @@ func TestPersistenceCheckpointer_Release(t *testing.T) {
 	// 先保存一些状态
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -565,7 +552,7 @@ func TestPersistenceCheckpointer_PreAgentExecute_交互输入(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -589,7 +576,7 @@ func TestPersistenceCheckpointer_PreAgentTeamExecute_交互输入(t *testing.T) 
 	cp := NewPersistenceCheckpointer(store)
 	st := state.NewAgentStateCollection()
 	session := &testTeamSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
 		config:      &testConfig{},
@@ -621,7 +608,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 		t.Fatalf("st1.Update 返回错误：%v", err)
 	}
 	session1 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1,
 		config:      &testConfig{},
@@ -636,7 +623,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 		t.Fatalf("st2.Update 返回错误：%v", err)
 	}
 	session2 := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent2",
 		st:          st2,
 		config:      &testConfig{},
@@ -648,7 +635,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 	// 恢复 Agent1
 	st1r := state.NewAgentStateCollection()
 	session1r := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1r,
 		config:      &testConfig{},
@@ -966,7 +953,7 @@ func TestPersistenceWorkflowStorage_SaveAndRecover(t *testing.T) {
 	wcs := newTestWorkflowCommitState()
 	wcs.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -979,7 +966,7 @@ func TestPersistenceWorkflowStorage_SaveAndRecover(t *testing.T) {
 	// 恢复
 	wcs2 := newTestWorkflowCommitState()
 	session2 := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
 		config:      &testConfig{},
 	}
@@ -997,7 +984,7 @@ func TestPersistenceWorkflowStorage_Clear(t *testing.T) {
 	wcs := newTestWorkflowCommitState()
 	wcs.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -1019,7 +1006,7 @@ func TestPersistenceWorkflowStorage_Exists(t *testing.T) {
 
 	wcs := newTestWorkflowCommitState()
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -1083,7 +1070,7 @@ func TestBasePersistenceStorage_Clear(t *testing.T) {
 		t.Fatalf("st.Update 返回错误：%v", err)
 	}
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -1105,7 +1092,7 @@ func TestBasePersistenceStorage_Exists(t *testing.T) {
 	ctx := context.Background()
 
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -1148,7 +1135,7 @@ func TestBasePersistenceStorage_Save_序列化失败(t *testing.T) {
 		t.Fatalf("st.Update 返回错误：%v", err)
 	}
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -1169,7 +1156,7 @@ func TestBasePersistenceStorage_Recover_空数据(t *testing.T) {
 	// 无保存数据时恢复
 	st := state.NewAgentStateCollection()
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
 		config:      &testConfig{},
@@ -1238,7 +1225,7 @@ func TestPersistenceCheckpointer_PreAgentExecute_恢复失败(t *testing.T) {
 	store := &errorKVStore{}
 	cp := NewPersistenceCheckpointer(store)
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -1256,7 +1243,7 @@ func TestPersistenceCheckpointer_PostAgentExecute_保存失败(t *testing.T) {
 	store := &errorKVStore{}
 	cp := NewPersistenceCheckpointer(store)
 	session := &testAgentSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
 		config:      &testConfig{},
@@ -1275,7 +1262,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_恢复失败(t *testing.T) {
 	cp := NewPersistenceCheckpointer(store)
 	wcs := newTestWorkflowCommitState()
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}
@@ -1294,7 +1281,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_保存失败(t *testing.T) 
 	cp := NewPersistenceCheckpointer(store)
 	wcs := newTestWorkflowCommitState()
 	session := &testWorkflowSession{
-		testSession: testSession{sessionID: "sess1", workflowID: "wf1"},
+		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
 		config:      &testConfig{},
 	}

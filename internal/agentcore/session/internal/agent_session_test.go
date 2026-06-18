@@ -20,7 +20,8 @@ func TestNewAgentSession(t *testing.T) {
 	}
 }
 
-// TestAgentSession_默认字段为Nil 测试未传选项时字段返回 nil
+// TestAgentSession_默认字段为Nil 测试未传选项时部分字段返回 nil。
+// checkpointer 不再为 nil：对齐 Python，nil 时自动从全局工厂获取默认 InMemoryCheckpointer。
 func TestAgentSession_默认字段为Nil(t *testing.T) {
 	s := NewAgentSession("test-id")
 	if s.Config() != nil {
@@ -32,8 +33,9 @@ func TestAgentSession_默认字段为Nil(t *testing.T) {
 	if s.StreamWriterManager() != nil {
 		t.Error("默认 StreamWriterManager 应为 nil")
 	}
-	if s.Checkpointer() != nil {
-		t.Error("默认 Checkpointer 应为 nil")
+	// checkpointer 不再为 nil，对齐 Python：CheckpointerFactory.get_checkpointer()
+	if s.Checkpointer() == nil {
+		t.Error("默认 Checkpointer 不应为 nil（对齐 Python 自动获取）")
 	}
 	if s.ActorManager() != nil {
 		t.Error("默认 ActorManager 应为 nil")
@@ -144,7 +146,6 @@ func TestAgentSession_WithStreamWriterManager(t *testing.T) {
 // testMockCP 用于 agent_session_test 的模拟检查点器
 type testMockCP struct{}
 
-func (m *testMockCP) GetThreadID(session checkpointer.CheckpointerSession) string { return "" }
 func (m *testMockCP) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
 	return nil
 }
@@ -169,7 +170,7 @@ func (m *testMockCP) PostAgentTeamExecute(ctx context.Context, session checkpoin
 func (m *testMockCP) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (m *testMockCP) Release(ctx context.Context, sessionID string) error { return nil }
+func (m *testMockCP) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
 func (m *testMockCP) GraphStore() any                                     { return nil }
 
 // TestAgentSession_WithCheckpointer 测试 WithCheckpointer 选项

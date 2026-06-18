@@ -437,7 +437,7 @@ func (s *basePersistenceStorage) entityTitleLabel() string {
 // Save 保存工作流状态到 KVStore。
 // 对应 Python: WorkflowStorage.save()
 func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session CheckpointerSession) error {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
 	pipeline := ws.kvStore.Pipeline(ctx)
 	hasOperations := false
@@ -501,7 +501,7 @@ func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session Checkpoi
 // Recover 从 KVStore 恢复工作流状态。
 // 对应 Python: WorkflowStorage.recover()
 func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session CheckpointerSession, inputs any) error {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
 
 	pipeline := ws.kvStore.Pipeline(ctx)
@@ -599,7 +599,7 @@ func (ws *PersistenceWorkflowStorage) Clear(ctx context.Context, workflowID, ses
 
 // Exists 检查工作流状态是否存在。
 func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session CheckpointerSession) (bool, error) {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
 
 	pipeline := ws.kvStore.Pipeline(ctx)
@@ -661,11 +661,6 @@ func (ws *PersistenceWorkflowStorage) recoverFromInputs(session CheckpointerSess
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// GetThreadID 获取线程 ID（session_id:workflow_id）。
-func (cp *PersistenceCheckpointer) GetThreadID(session CheckpointerSession) string {
-	return GetThreadID(session)
-}
 
 // PreAgentExecute Agent 执行前恢复状态。
 // 对应 Python: PersistenceCheckpointer.pre_agent_execute()
@@ -820,7 +815,7 @@ func (cp *PersistenceCheckpointer) PostAgentTeamExecute(ctx context.Context, ses
 // PreWorkflowExecute 工作流执行前处理检查点。
 // 对应 Python: PersistenceCheckpointer.pre_workflow_execute()
 func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
 
 	logger.Info(logComponent).
@@ -849,8 +844,8 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 			return nil
 		}
 		// 检查是否强制删除工作流状态
-		if session.Config() != nil {
-			if forceDel, _ := session.Config().GetEnv(ForceDelWorkflowStateKey, false).(bool); forceDel {
+		if forceDel, ok := GetConfigEnv(session, ForceDelWorkflowStateKey, false); ok {
+			if forceDelBool, _ := forceDel.(bool); forceDelBool {
 				logger.Info(logComponent).
 					Str("action", "pre_workflow_execute").
 					Str("event_type", "checkpoint_clear").
@@ -877,7 +872,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 // 对应 Python: PersistenceCheckpointer.post_workflow_execute()
 func (cp *PersistenceCheckpointer) PostWorkflowExecute(ctx context.Context, session CheckpointerSession, result any, exception error) error {
 	sessionID := session.SessionID()
-	workflowID := session.WorkflowID()
+	workflowID := getWorkflowID(session)
 
 	if exception != nil {
 		logger.Info(logComponent).
@@ -947,7 +942,18 @@ func (cp *PersistenceCheckpointer) SessionExists(ctx context.Context, sessionID 
 
 // Release 释放会话资源。
 // 对应 Python: PersistenceCheckpointer.release()
-func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string) error {
+// agentID 非空时仅释放指定 Agent 的持久化检查点（支持多个，循环清除）；为空时释放整个会话。
+func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	if len(agentID) > 0 {
+		// 循环清除每个指定 Agent 的持久化检查点
+		var firstErr error
+		for _, aid := range agentID {
+			if err := cp.agentStorage.Clear(ctx, aid, sessionID); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
+	}
 	if cp.kvStore == nil {
 		logger.Warn(logComponent).
 			Str("event_type", "checkpoint_error").

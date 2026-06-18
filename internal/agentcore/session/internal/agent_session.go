@@ -50,8 +50,13 @@ type AgentSessionOption func(*AgentSession)
 
 // NewAgentSession 创建内部 AgentSession 实例。
 //
-// 默认创建 AgentStateCollection 作为状态存储。
-// 可通过选项函数注入各基础设施组件。
+// 默认行为（对齐 Python AgentSession.__init__）：
+//   - state: 自动创建 AgentStateCollection（Python: StateCollection()）
+//   - config: 不自动创建，由外层 Session 传入（Python: 外层总创建 Config()）
+//   - checkpointer: nil 时从全局工厂获取（Python: CheckpointerFactory.get_checkpointer()）
+//   - streamWriterManager: nil 时留空（⤵️ 5.10 回填：自动创建 StreamWriterManager(StreamEmitter())）
+//   - tracer: nil 时留空（⤵️ 5.11 回填：自动创建 Tracer() + init(swm)）
+//   - agentSpan: nil 时留空（⤵️ 5.11 回填：自动创建 tracer.create_agent_span()）
 func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_agent_session").
@@ -65,6 +70,37 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	// 默认值处理（对齐 Python AgentSession.__init__）：
+
+	// checkpointer: nil 时从全局工厂获取
+	// Python: self._checkpointer = CheckpointerFactory.get_checkpointer() if checkpointer is None else checkpointer
+	if s.checkpointer == nil {
+		s.checkpointer = checkpointer.GetCheckpointer()
+	}
+
+	// streamWriterManager: nil 时自动创建默认实例
+	// Python: self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
+	// ⤵️ 5.10 回填：StreamWriterManager 包实现后，取消下面的注释
+	// if s.streamWriterManager == nil {
+	// 	s.streamWriterManager = stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	// }
+
+	// tracer: nil 时自动创建并初始化
+	// Python: tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
+	// ⤵️ 5.11 回填：Tracer 包实现后，取消下面的注释
+	// if s.tracer == nil {
+	// 	s.tracer = tracer.NewTracer()
+	// 	s.tracer.Init(s.streamWriterManager)
+	// }
+
+	// agentSpan: 从 tracer 创建
+	// Python: self._agent_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
+	// ⤵️ 5.11 回填：Tracer 包实现后，取消下面的注释
+	// if s.agentSpan == nil && s.tracer != nil {
+	// 	s.agentSpan = s.tracer.CreateAgentSpan()
+	// }
+
 	return s
 }
 
@@ -163,10 +199,29 @@ func (s *AgentSession) Card() *schema.AgentCard {
 }
 
 // AgentID 获取 Agent ID，满足 checkpointer.AgentIDProvider 接口。
-// 对应 Python: AgentSession.agent_id()
-// 优先从 config.get_agent_config().id 取，fallback 从 card.AbilityID() 取。
-// 当前 config 为 any（⤵️ 5.12 回填），仅从 card 取值。
+//
+// 优先级链（对齐 Python AgentSession.agent_id()）：
+//  1. config.get_agent_config().id（⤵️ 5.12 回填：config 类型确定后实现）
+//  2. card.AbilityID()（当前走此分支）
+//
+// Python 原始逻辑：
+//
+//	def agent_id(self):
+//	    agent_config = self._config.get_agent_config()
+//	    if agent_config is not None:
+//	        return agent_config.id
+//	    return self._card.id
 func (s *AgentSession) AgentID() string {
+	// ⤵️ 5.12 回填：从 config 获取 agent_config.id
+	// if s.config != nil {
+	//     if agentConfig, ok := s.config.(AgentConfigProvider); ok {
+	//         if ac := agentConfig.GetAgentConfig(); ac != nil {
+	//             if id := ac.ID(); id != "" {
+	//                 return id
+	//             }
+	//         }
+	//     }
+	// }
 	if s.card != nil {
 		return s.card.AbilityID()
 	}
