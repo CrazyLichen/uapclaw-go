@@ -11,13 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// triggerCall 记录一次 TriggerWorkflow 调用
-type triggerCall struct {
-	Event        TraceEvent
-	ParentNodeID string
-	Params       *TriggerParams
-}
-
 // fakeWorkflowSession 实现 BaseWorkflowSession 接口，用于测试
 type fakeWorkflowSession struct {
 	tracer       *Tracer
@@ -50,7 +43,11 @@ func (f *fakeSessionState) GetGlobal(key state.StateKey) any {
 	if f.data == nil {
 		return nil
 	}
-	return f.data[string(key)]
+	// 仅支持字符串类型键
+	if key.Type() == state.StateKeyString {
+		return f.data[key.String()]
+	}
+	return nil
 }
 func (f *fakeSessionState) SetGlobal(map[string]any)         {}
 func (f *fakeSessionState) UpdateGlobal(map[string]any)      {}
@@ -71,11 +68,12 @@ func newTestTracer() *Tracer {
 }
 
 // newFakeSession 创建测试用 fakeWorkflowSession
+// parentID 使用 "" 以对齐 Tracer.Init() 默认注册的 WorkflowSpanManagerDict[""] 键
 func newFakeSession() *fakeWorkflowSession {
 	return &fakeWorkflowSession{
 		tracer:       newTestTracer(),
 		executableID: "exec-001",
-		parentID:     "parent-001",
+		parentID:     "",
 		workflowID:   "wf-001",
 		nodeID:       "node-001",
 		nodeType:     "LLM",
@@ -90,10 +88,7 @@ func TestTracerWorkflowUtils_TraceWorkflowStart(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 	inputs := map[string]any{"query": "hello"}
 
-	err := utils.TraceWorkflowStart(context.Background(), session, inputs)
-	if err != nil {
-		t.Fatalf("TraceWorkflowStart 返回错误: %v", err)
-	}
+	utils.TraceWorkflowStart(context.Background(), session, inputs)
 
 	// 验证 span 已创建：WorkflowSpanManagerDict[""] 中应有 session.WorkflowID() 对应的 span
 	span := session.Tracer().GetWorkflowSpan(session.WorkflowID(), "")
@@ -115,11 +110,8 @@ func TestTracerWorkflowUtils_TraceWorkflowDone(t *testing.T) {
 	outputs := map[string]any{"result": "done"}
 
 	// 先触发 start 以创建 span
-	_ = utils.TraceWorkflowStart(context.Background(), session, nil)
-	err := utils.TraceWorkflowDone(context.Background(), session, outputs)
-	if err != nil {
-		t.Fatalf("TraceWorkflowDone 返回错误: %v", err)
-	}
+	utils.TraceWorkflowStart(context.Background(), session, nil)
+	utils.TraceWorkflowDone(context.Background(), session, outputs)
 
 	span := session.Tracer().GetWorkflowSpan(session.WorkflowID(), "")
 	if span == nil {
@@ -136,10 +128,7 @@ func TestTracerWorkflowUtils_TraceComponentBegin(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 	sourceIDs := []string{"src-001", "src-002"}
 
-	err := utils.TraceComponentBegin(context.Background(), session, sourceIDs)
-	if err != nil {
-		t.Fatalf("TraceComponentBegin 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, sourceIDs)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -160,11 +149,8 @@ func TestTracerWorkflowUtils_TraceComponentInputs(t *testing.T) {
 	inputs := map[string]any{"prompt": "test"}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
-	err := utils.TraceComponentInputs(context.Background(), session, inputs, true)
-	if err != nil {
-		t.Fatalf("TraceComponentInputs 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentInputs(context.Background(), session, inputs, true)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -182,11 +168,8 @@ func TestTracerWorkflowUtils_TraceComponentOutputs(t *testing.T) {
 	outputs := map[string]any{"answer": "result"}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
-	err := utils.TraceComponentOutputs(context.Background(), session, outputs)
-	if err != nil {
-		t.Fatalf("TraceComponentOutputs 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentOutputs(context.Background(), session, outputs)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -203,7 +186,7 @@ func TestTracerWorkflowUtils_TraceComponentDone(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil)
 
 	// 验证 span 存在
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -211,10 +194,7 @@ func TestTracerWorkflowUtils_TraceComponentDone(t *testing.T) {
 		t.Fatal("TraceComponentBegin 后 span 不应为 nil")
 	}
 
-	err := utils.TraceComponentDone(context.Background(), session)
-	if err != nil {
-		t.Fatalf("TraceComponentDone 返回错误: %v", err)
-	}
+	utils.TraceComponentDone(context.Background(), session)
 
 	// PopWorkflowSpan 后 span 应被移除
 	span = session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
@@ -230,11 +210,8 @@ func TestTracerWorkflowUtils_Trace(t *testing.T) {
 	data := map[string]any{"step": "processing"}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
-	err := utils.Trace(context.Background(), session, data)
-	if err != nil {
-		t.Fatalf("Trace 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.Trace(context.Background(), session, data)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -252,11 +229,8 @@ func TestTracerWorkflowUtils_TraceError(t *testing.T) {
 	testErr := errors.New("something went wrong")
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
-	err := utils.TraceError(context.Background(), session, testErr)
-	if err != nil {
-		t.Fatalf("TraceError 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceError(context.Background(), session, testErr)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
@@ -281,40 +255,18 @@ func TestTracerWorkflowUtils_Tracer为nil_静默返回(t *testing.T) {
 	}
 	utils := TracerWorkflowUtils{}
 
-	// 所有方法在 Tracer 为 nil 时都应静默返回 nil
-	if err := utils.TraceWorkflowStart(context.Background(), session, nil); err != nil {
-		t.Errorf("TraceWorkflowStart 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentBegin(context.Background(), session, nil); err != nil {
-		t.Errorf("TraceComponentBegin 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentInputs(context.Background(), session, nil, true); err != nil {
-		t.Errorf("TraceComponentInputs 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentOutputs(context.Background(), session, nil); err != nil {
-		t.Errorf("TraceComponentOutputs 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentDone(context.Background(), session); err != nil {
-		t.Errorf("TraceComponentDone 应返回 nil，实际: %v", err)
-	}
-	if err := utils.Trace(context.Background(), session, nil); err != nil {
-		t.Errorf("Trace 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceError(context.Background(), session, errors.New("err")); err != nil {
-		t.Errorf("TraceError 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceWorkflowDone(context.Background(), session, nil); err != nil {
-		t.Errorf("TraceWorkflowDone 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentStreamInput(context.Background(), session, nil, true); err != nil {
-		t.Errorf("TraceComponentStreamInput 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentStreamOutput(context.Background(), session, nil); err != nil {
-		t.Errorf("TraceComponentStreamOutput 应返回 nil，实际: %v", err)
-	}
-	if err := utils.TraceComponentInteractiveInputs(context.Background(), session, nil, true); err != nil {
-		t.Errorf("TraceComponentInteractiveInputs 应返回 nil，实际: %v", err)
-	}
+	// 所有方法在 Tracer 为 nil 时都应静默返回，不 panic
+	utils.TraceWorkflowStart(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentInputs(context.Background(), session, nil, true)
+	utils.TraceComponentOutputs(context.Background(), session, nil)
+	utils.TraceComponentDone(context.Background(), session)
+	utils.Trace(context.Background(), session, nil)
+	utils.TraceError(context.Background(), session, errors.New("err"))
+	utils.TraceWorkflowDone(context.Background(), session, nil)
+	utils.TraceComponentStreamInput(context.Background(), session, nil, true)
+	utils.TraceComponentStreamOutput(context.Background(), session, nil)
+	utils.TraceComponentInteractiveInputs(context.Background(), session, nil, true)
 }
 
 // TestTracerWorkflowUtils_TraceComponentStreamInput 测试追踪组件流式输入
@@ -323,13 +275,10 @@ func TestTracerWorkflowUtils_TraceComponentStreamInput(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil)
 
 	// chunk 为 string 时应跳过
-	err := utils.TraceComponentStreamInput(context.Background(), session, "string chunk", true)
-	if err != nil {
-		t.Fatalf("TraceComponentStreamInput (string) 返回错误: %v", err)
-	}
+	utils.TraceComponentStreamInput(context.Background(), session, "string chunk", true)
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
 		t.Fatal("span 不应为 nil")
@@ -340,10 +289,7 @@ func TestTracerWorkflowUtils_TraceComponentStreamInput(t *testing.T) {
 
 	// chunk 为 map[string]any 时应正常处理
 	chunk := map[string]any{"token": "hello"}
-	err = utils.TraceComponentStreamInput(context.Background(), session, chunk, true)
-	if err != nil {
-		t.Fatalf("TraceComponentStreamInput (map) 返回错误: %v", err)
-	}
+	utils.TraceComponentStreamInput(context.Background(), session, chunk, true)
 	span = session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if len(span.StreamInputs) == 0 {
 		t.Error("chunk 为 map 时 StreamInputs 不应为空")
@@ -356,13 +302,10 @@ func TestTracerWorkflowUtils_TraceComponentStreamOutput(t *testing.T) {
 	utils := TracerWorkflowUtils{}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentBegin(context.Background(), session, nil)
 
 	// chunk 为 string 时应跳过
-	err := utils.TraceComponentStreamOutput(context.Background(), session, "string chunk")
-	if err != nil {
-		t.Fatalf("TraceComponentStreamOutput (string) 返回错误: %v", err)
-	}
+	utils.TraceComponentStreamOutput(context.Background(), session, "string chunk")
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
 		t.Fatal("span 不应为 nil")
@@ -373,10 +316,7 @@ func TestTracerWorkflowUtils_TraceComponentStreamOutput(t *testing.T) {
 
 	// chunk 为 map[string]any 时应正常处理
 	chunk := map[string]any{"token": "world"}
-	err = utils.TraceComponentStreamOutput(context.Background(), session, chunk)
-	if err != nil {
-		t.Fatalf("TraceComponentStreamOutput (map) 返回错误: %v", err)
-	}
+	utils.TraceComponentStreamOutput(context.Background(), session, chunk)
 	span = session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if len(span.StreamOutputs) == 0 {
 		t.Error("chunk 为 map 时 StreamOutputs 不应为空")
@@ -390,11 +330,8 @@ func TestTracerWorkflowUtils_TraceComponentInteractiveInputs(t *testing.T) {
 	inputs := map[string]any{"user_input": "confirm"}
 
 	// 先触发 begin 以创建 span
-	_ = utils.TraceComponentBegin(context.Background(), session, nil)
-	err := utils.TraceComponentInteractiveInputs(context.Background(), session, inputs, true)
-	if err != nil {
-		t.Fatalf("TraceComponentInteractiveInputs 返回错误: %v", err)
-	}
+	utils.TraceComponentBegin(context.Background(), session, nil)
+	utils.TraceComponentInteractiveInputs(context.Background(), session, inputs, true)
 
 	span := session.Tracer().GetWorkflowSpan(session.ExecutableID(), session.ParentID())
 	if span == nil {
