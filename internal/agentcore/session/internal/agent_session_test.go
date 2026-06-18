@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -24,13 +25,16 @@ func TestNewAgentSession(t *testing.T) {
 // TestAgentSession_默认字段为Nil 测试未传选项时部分字段返回 nil。
 // checkpointer 不再为 nil：对齐 Python，nil 时自动从全局工厂获取默认 InMemoryCheckpointer。
 // streamWriterManager 不再为 nil：对齐 Python，nil 时自动创建 StreamWriterManager(StreamEmitter())。
+// tracer 不再为 nil：对齐 Python，nil 时自动创建 Tracer() 并 Init(swm)。
+// agentSpan 不再为 nil：对齐 Python，nil 时从 tracer.AgentSpanManager.CreateAgentSpan() 创建。
 func TestAgentSession_默认字段为Nil(t *testing.T) {
 	s := NewAgentSession("test-id")
 	if s.Config() != nil {
 		t.Error("默认 Config 应为 nil")
 	}
-	if s.Tracer() != nil {
-		t.Error("默认 Tracer 应为 nil")
+	// ✅ 5.11 已回填：Tracer 默认自动创建，不再为 nil
+	if s.Tracer() == nil {
+		t.Error("默认 Tracer 不应为 nil（对齐 Python 自动创建）")
 	}
 	if s.StreamWriterManager() == nil {
 		t.Error("默认 StreamWriterManager 不应为 nil（对齐 Python 自动创建）")
@@ -41,6 +45,10 @@ func TestAgentSession_默认字段为Nil(t *testing.T) {
 	}
 	if s.ActorManager() != nil {
 		t.Error("默认 ActorManager 应为 nil")
+	}
+	// ✅ 5.11 已回填：AgentSpan 默认自动创建，不再为 nil
+	if s.AgentSpan() == nil {
+		t.Error("默认 AgentSpan 不应为 nil（对齐 Python 自动创建）")
 	}
 }
 
@@ -117,23 +125,30 @@ func TestAgentSession_Card(t *testing.T) {
 }
 
 // TestAgentSession_AgentSpan 测试 AgentSpan 方法
+// ✅ 5.11 已回填：AgentSpan 类型改为 *tracer.TraceAgentSpan
 func TestAgentSession_AgentSpan(t *testing.T) {
 	s := NewAgentSession("test-id")
-	if s.AgentSpan() != nil {
-		t.Error("默认 AgentSpan 应为 nil")
+	// 默认自动创建，不再为 nil
+	if s.AgentSpan() == nil {
+		t.Error("默认 AgentSpan 不应为 nil（对齐 Python 自动创建）")
 	}
 
-	s2 := NewAgentSession("test-id", WithAgentSpan("my-span"))
-	if s2.AgentSpan() != "my-span" {
-		t.Errorf("AgentSpan 期望 my-span，实际 %v", s2.AgentSpan())
+	// 通过 WithAgentSpan 注入自定义 span
+	customTracer := tracer.NewTracer()
+	customSpan := customTracer.AgentSpanManager.CreateAgentSpan()
+	s2 := NewAgentSession("test-id", WithAgentSpan(customSpan))
+	if s2.AgentSpan() != customSpan {
+		t.Errorf("AgentSpan 期望 customSpan，实际 %v", s2.AgentSpan())
 	}
 }
 
 // TestAgentSession_WithTracer 测试 WithTracer 选项
+// ✅ 5.11 已回填：WithTracer 参数类型改为 *tracer.Tracer
 func TestAgentSession_WithTracer(t *testing.T) {
-	s := NewAgentSession("test-id", WithTracer("my-tracer"))
-	if s.Tracer() != "my-tracer" {
-		t.Errorf("Tracer 期望 my-tracer，实际 %v", s.Tracer())
+	customTracer := tracer.NewTracer()
+	s := NewAgentSession("test-id", WithTracer(customTracer))
+	if s.Tracer() != customTracer {
+		t.Errorf("Tracer 期望 customTracer，实际 %v", s.Tracer())
 	}
 }
 

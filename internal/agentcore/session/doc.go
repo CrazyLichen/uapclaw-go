@@ -8,8 +8,9 @@
 // NodeSessionFacade 是工作流组件场景下的公开会话，包装内部层 NodeSession，提供
 // 身份查询、状态读写、追踪、交互、流写入、环境变量等组件开发者面向 API。
 //
-// 本包依赖 state 子包提供的双层状态接口（StateLike/CommitStateLike 底层 + SessionState 上层），Config/Tracer/
-// ActorManager 等依赖类型暂用 any 占位，待后续步骤（5.11/5.12）回填具体类型。
+// 本包依赖 state 子包提供的双层状态接口（StateLike/CommitStateLike 底层 + SessionState 上层），Config/
+// ActorManager 等依赖类型暂用 any 占位，待后续步骤（5.12）回填具体类型。
+// Tracer 已于 5.11 回填为 *tracer.Tracer，AgentSpan 已于 5.11 回填为 *tracer.TraceAgentSpan。
 // StreamWriterManager 已于 5.10 回填为 *stream.StreamWriterManager。
 //
 // 文件目录：
@@ -40,6 +41,14 @@
 //	│   ├── inmemory_state.go                # InMemoryStateLike
 //	│   ├── inmemory_commit_state.go         # InMemoryCommitState
 //	│   └── utils.go                         # 工具函数
+//	├── tracer/             # 会话追踪
+//	│   ├── doc.go                           # tracer 包文档
+//	│   ├── data.go                          # InvokeType/NodeStatus/TraceEvent 枚举
+//	│   ├── span.go                          # Span/TraceAgentSpan/TraceWorkflowSpan/SpanManager
+//	│   ├── tracer.go                        # Tracer 核心 + TriggerParams
+//	│   ├── handler.go                       # TraceAgentHandler/TraceWorkflowHandler
+//	│   ├── decorator.go                     # TracedModelClient/TracedTool/TracedWorkflow
+//	│   └── workflow.go                      # TracerWorkflowUtils + BaseWorkflowSession
 //	└── internal/           # 内部会话实现
 //	    ├── doc.go                # internal 包文档
 //	    ├── agent_session.go      # AgentSession

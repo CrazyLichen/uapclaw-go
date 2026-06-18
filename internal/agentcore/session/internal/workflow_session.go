@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -28,8 +29,8 @@ type WorkflowSession struct {
 	// ⤵️ 5.12 回填：any → SessionConfig
 	config any
 	// tracer 追踪器
-	// ⤵️ 5.11 回填：any → Tracer
-	tracer any
+	// ✅ 5.11 已回填：any → *tracer.Tracer
+	tracer *tracer.Tracer
 	// st 状态对象（WorkflowCommitState）
 	st state.SessionState
 	// streamWriterManager 流写入管理器
@@ -275,7 +276,8 @@ func (s *WorkflowSession) State() state.SessionState {
 }
 
 // Tracer 获取追踪器
-func (s *WorkflowSession) Tracer() any {
+// ✅ 5.11 已回填：返回类型从 any 改为 *tracer.Tracer
+func (s *WorkflowSession) Tracer() *tracer.Tracer {
 	return s.tracer
 }
 
@@ -320,8 +322,9 @@ func (s *WorkflowSession) SetStreamWriterManager(mgr *stream.StreamWriterManager
 }
 
 // SetTracer 设置追踪器（无幂等保护，与 Python 一致）。
-func (s *WorkflowSession) SetTracer(tracer any) {
-	s.tracer = tracer
+// ✅ 5.11 已回填：参数类型从 any 改为 *tracer.Tracer
+func (s *WorkflowSession) SetTracer(t *tracer.Tracer) {
+	s.tracer = t
 }
 
 // SetActorManager 幂等注入 Actor 管理器。已设置则不覆盖。
@@ -418,7 +421,8 @@ func (n *NodeSession) State() state.SessionState {
 }
 
 // Tracer 委托给父 session
-func (n *NodeSession) Tracer() any {
+// ✅ 5.11 已回填：返回类型从 any 改为 *tracer.Tracer
+func (n *NodeSession) Tracer() *tracer.Tracer {
 	return n.delegate.Tracer()
 }
 

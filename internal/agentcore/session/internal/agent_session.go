@@ -4,6 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -25,15 +26,16 @@ type AgentSession struct {
 	// state 会话状态（AgentStateCollection）
 	state state.SessionState
 	// tracer 追踪器
-	// ⤵️ 5.11 回填：any → Tracer
-	tracer any
+	// ✅ 5.11 已回填：any → *tracer.Tracer
+	tracer *tracer.Tracer
 	// streamWriterManager 流写入管理器
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
 	streamWriterManager *stream.StreamWriterManager
 	// checkpointer 检查点器
 	checkpointer checkpointer.Checkpointer
 	// agentSpan Agent 追踪跨度
-	agentSpan any
+	// ✅ 5.11 已回填：any → *tracer.TraceAgentSpan
+	agentSpan *tracer.TraceAgentSpan
 	// card Agent 身份元数据
 	card *schema.AgentCard
 }
@@ -89,18 +91,18 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 
 	// tracer: nil 时自动创建并初始化
 	// Python: tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
-	// ⤵️ 5.11 回填：Tracer 包实现后，取消下面的注释
-	// if s.tracer == nil {
-	// 	s.tracer = tracer.NewTracer()
-	// 	s.tracer.Init(s.streamWriterManager)
-	// }
+	// ✅ 5.11 已回填：Tracer 包实现后，自动创建并初始化
+	if s.tracer == nil {
+		s.tracer = tracer.NewTracer()
+		s.tracer.Init(s.streamWriterManager)
+	}
 
 	// agentSpan: 从 tracer 创建
 	// Python: self._agent_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
-	// ⤵️ 5.11 回填：Tracer 包实现后，取消下面的注释
-	// if s.agentSpan == nil && s.tracer != nil {
-	// 	s.agentSpan = s.tracer.CreateAgentSpan()
-	// }
+	// ✅ 5.11 已回填：Tracer 包实现后，自动创建
+	if s.agentSpan == nil && s.tracer != nil {
+		s.agentSpan = s.tracer.AgentSpanManager.CreateAgentSpan()
+	}
 
 	return s
 }
@@ -120,9 +122,10 @@ func WithState(st state.SessionState) AgentSessionOption {
 }
 
 // WithTracer 设置追踪器的选项
-func WithTracer(tracer any) AgentSessionOption {
+// ✅ 5.11 已回填：参数类型从 any 改为 *tracer.Tracer
+func WithTracer(t *tracer.Tracer) AgentSessionOption {
 	return func(s *AgentSession) {
-		s.tracer = tracer
+		s.tracer = t
 	}
 }
 
@@ -149,7 +152,8 @@ func WithCard(card *schema.AgentCard) AgentSessionOption {
 }
 
 // WithAgentSpan 设置 Agent 追踪跨度的选项
-func WithAgentSpan(span any) AgentSessionOption {
+// ✅ 5.11 已回填：参数类型从 any 改为 *tracer.TraceAgentSpan
+func WithAgentSpan(span *tracer.TraceAgentSpan) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.agentSpan = span
 	}
@@ -166,7 +170,8 @@ func (s *AgentSession) State() state.SessionState {
 }
 
 // Tracer 获取追踪器
-func (s *AgentSession) Tracer() any {
+// ✅ 5.11 已回填：返回类型从 any 改为 *tracer.Tracer
+func (s *AgentSession) Tracer() *tracer.Tracer {
 	return s.tracer
 }
 
@@ -232,7 +237,8 @@ func (s *AgentSession) AgentID() string {
 }
 
 // AgentSpan 获取 Agent 追踪跨度
-func (s *AgentSession) AgentSpan() any {
+// ✅ 5.11 已回填：返回类型从 any 改为 *tracer.TraceAgentSpan
+func (s *AgentSession) AgentSpan() *tracer.TraceAgentSpan {
 	return s.agentSpan
 }
 

@@ -7,15 +7,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── WorkflowSession 测试 ────────────────────────────
 
 // TestNewWorkflowSession_有parent 测试有 parent 时继承 sessionID/config/tracer
+// ✅ 5.11 已回填：Tracer 类型改为 *tracer.Tracer
 func TestNewWorkflowSession_有parent(t *testing.T) {
+	customTracer := tracer.NewTracer()
 	parent := NewAgentSession("parent-123",
 		WithConfig("test_config"),
-		WithTracer("test_tracer"),
+		WithTracer(customTracer),
 	)
 
 	ws := NewWorkflowSession(WithWorkflowParent(parent))
@@ -26,8 +29,8 @@ func TestNewWorkflowSession_有parent(t *testing.T) {
 	if ws.Config() != "test_config" {
 		t.Errorf("期望继承 parent config='test_config'，实际=%v", ws.Config())
 	}
-	if ws.Tracer() != "test_tracer" {
-		t.Errorf("期望继承 parent tracer='test_tracer'，实际=%v", ws.Tracer())
+	if ws.Tracer() != customTracer {
+		t.Errorf("期望继承 parent tracer=customTracer，实际=%v", ws.Tracer())
 	}
 }
 
@@ -92,18 +95,21 @@ func TestWorkflowSession_SetStreamWriterManager_幂等(t *testing.T) {
 }
 
 // TestWorkflowSession_SetTracer_非幂等 测试非幂等设置
+// ✅ 5.11 已回填：SetTracer 参数类型改为 *tracer.Tracer
 func TestWorkflowSession_SetTracer_非幂等(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	ws.SetTracer("first_tracer")
-	if ws.Tracer() != "first_tracer" {
-		t.Errorf("期望 tracer='first_tracer'，实际=%v", ws.Tracer())
+	firstTracer := tracer.NewTracer()
+	ws.SetTracer(firstTracer)
+	if ws.Tracer() != firstTracer {
+		t.Errorf("期望 tracer=firstTracer，实际=%v", ws.Tracer())
 	}
 
 	// 二次设置应覆盖
-	ws.SetTracer("second_tracer")
-	if ws.Tracer() != "second_tracer" {
-		t.Errorf("非幂等：期望 tracer='second_tracer'，实际=%v", ws.Tracer())
+	secondTracer := tracer.NewTracer()
+	ws.SetTracer(secondTracer)
+	if ws.Tracer() != secondTracer {
+		t.Errorf("非幂等：期望 tracer=secondTracer，实际=%v", ws.Tracer())
 	}
 }
 
@@ -214,12 +220,14 @@ func TestNewNodeSession_嵌套路径(t *testing.T) {
 
 // TestNodeSession_BaseSession接口 测试委托方法
 // NodeSession 应使用 WorkflowSession 作为 parent（AgentSession 不实现 WorkflowState）。
+// ✅ 5.11 已回填：Tracer 类型改为 *tracer.Tracer
 func TestNodeSession_BaseSession接口(t *testing.T) {
 	parent := NewWorkflowSession(
 		WithWorkflowSessionID("parent-123"),
 	)
-	// 设置 config 和 tracer
-	parent.SetTracer("test_tracer")
+	// 设置 tracer
+	testTracer := tracer.NewTracer()
+	parent.SetTracer(testTracer)
 
 	ns := NewNodeSession(parent, "node1", "Test", false)
 
@@ -227,8 +235,8 @@ func TestNodeSession_BaseSession接口(t *testing.T) {
 	if ns.SessionID() != "parent-123" {
 		t.Errorf("期望委托 SessionID='parent-123'，实际=%s", ns.SessionID())
 	}
-	if ns.Tracer() != "test_tracer" {
-		t.Errorf("期望委托 Tracer='test_tracer'，实际=%v", ns.Tracer())
+	if ns.Tracer() != testTracer {
+		t.Errorf("期望委托 Tracer=testTracer，实际=%v", ns.Tracer())
 	}
 }
 

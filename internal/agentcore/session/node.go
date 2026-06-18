@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -131,24 +132,32 @@ func (f *NodeSessionFacade) DumpState() map[string]any {
 }
 
 // Trace 记录组件追踪数据。
-// ⤵️ 5.11 回填：TracerWorkflowUtils 实现后填充真实逻辑
+// ✅ 5.11 已回填：使用 TracerWorkflowUtils.Trace 实现真实逻辑
 // 对应 Python: Session.trace(data)
 func (f *NodeSessionFacade) Trace(ctx context.Context, data map[string]any) error {
 	if f.inner.SkipTrace() {
 		return nil
 	}
-	// ⤵️ 5.11 回填：await TracerWorkflowUtils.trace(f.inner, data)
+	innerTracer := f.inner.Tracer()
+	if innerTracer == nil {
+		return nil
+	}
+	tracer.TracerWorkflowUtils{}.Trace(ctx, f.inner, data)
 	return nil
 }
 
 // TraceError 记录组件错误追踪。
-// ⤵️ 5.11 回填：TracerWorkflowUtils 实现后填充真实逻辑
+// ✅ 5.11 已回填：使用 TracerWorkflowUtils.TraceError 实现真实逻辑
 // 对应 Python: Session.trace_error(error)
 func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 	if f.inner.SkipTrace() {
 		return nil
 	}
-	// ⤵️ 5.11 回填：await TracerWorkflowUtils.trace_error(f.inner, err)
+	innerTracer := f.inner.Tracer()
+	if innerTracer == nil {
+		return nil
+	}
+	tracer.TracerWorkflowUtils{}.TraceError(ctx, f.inner, err)
 	return nil
 }
 

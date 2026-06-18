@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -33,7 +34,7 @@ func TestNewProxySession(t *testing.T) {
 type mockStub struct {
 	configVal              any
 	stateVal               state.SessionState
-	tracerVal              any
+	tracerVal              *tracer.Tracer
 	streamWriterManagerVal *stream.StreamWriterManager
 	sessionIDVal           string
 	checkpointerVal        checkpointer.Checkpointer
@@ -44,7 +45,7 @@ type mockStub struct {
 
 func (m *mockStub) Config() any                                      { return m.configVal }
 func (m *mockStub) State() state.SessionState                        { return m.stateVal }
-func (m *mockStub) Tracer() any                                      { return m.tracerVal }
+func (m *mockStub) Tracer() *tracer.Tracer                           { return m.tracerVal }
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
 func (m *mockStub) Checkpointer() checkpointer.Checkpointer          { return m.checkpointerVal }
@@ -101,10 +102,11 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	expectedState := state.NewInMemoryStateLike()
 	mockCP := &testMockCheckpointer{}
 	expectedSWM := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	expectedTracer := tracer.NewTracer()
 	stub := &mockStub{
 		configVal:              "config-value",
 		stateVal:               expectedState,
-		tracerVal:              nil,
+		tracerVal:              expectedTracer,
 		streamWriterManagerVal: expectedSWM,
 		sessionIDVal:           "session-123",
 		checkpointerVal:        mockCP,
@@ -126,8 +128,8 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	}
 
 	// 验证 Tracer 委托
-	if got := p.Tracer(); got != "tracer-value" {
-		t.Errorf("Tracer() = %v, 期望 %v", got, "tracer-value")
+	if got := p.Tracer(); got != expectedTracer {
+		t.Errorf("Tracer() = %v, 期望 %v", got, expectedTracer)
 	}
 
 	// 验证 StreamWriterManager 委托

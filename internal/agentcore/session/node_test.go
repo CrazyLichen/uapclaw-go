@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── 构造函数测试 ────────────────────────────
@@ -197,27 +198,29 @@ func TestNodeSessionFacade_GetState_SchemaKey(t *testing.T) {
 
 // ──────────────────────────── 追踪方法测试 ────────────────────────────
 
-// TestNodeSessionFacade_Trace_桩 测试 Trace 桩方法
-func TestNodeSessionFacade_Trace_桩(t *testing.T) {
+// TestNodeSessionFacade_Trace_无Tracer 测试无 Tracer 时 Trace 返回 nil
+// ✅ 5.11 已回填：Trace 使用 TracerWorkflowUtils.Trace 真实逻辑
+func TestNodeSessionFacade_Trace_无Tracer(t *testing.T) {
 	ws := internal.NewWorkflowSession()
 	ns := internal.NewNodeSession(ws, "node1", "Test", false)
 	facade := NewNodeSessionFacade(ns, false)
 
 	err := facade.Trace(context.Background(), map[string]any{"data": "test"})
 	if err != nil {
-		t.Errorf("Trace 桩应返回 nil，实际=%v", err)
+		t.Errorf("Trace 无 Tracer 时应返回 nil，实际=%v", err)
 	}
 }
 
-// TestNodeSessionFacade_TraceError_桩 测试 TraceError 桩方法
-func TestNodeSessionFacade_TraceError_桩(t *testing.T) {
+// TestNodeSessionFacade_TraceError_无Tracer 测试无 Tracer 时 TraceError 返回 nil
+// ✅ 5.11 已回填：TraceError 使用 TracerWorkflowUtils.TraceError 真实逻辑
+func TestNodeSessionFacade_TraceError_无Tracer(t *testing.T) {
 	ws := internal.NewWorkflowSession()
 	ns := internal.NewNodeSession(ws, "node1", "Test", false)
 	facade := NewNodeSessionFacade(ns, false)
 
 	err := facade.TraceError(context.Background(), fmt.Errorf("test error"))
 	if err != nil {
-		t.Errorf("TraceError 桩应返回 nil，实际=%v", err)
+		t.Errorf("TraceError 无 Tracer 时应返回 nil，实际=%v", err)
 	}
 }
 
@@ -255,7 +258,8 @@ func TestNodeSessionFacade_UpdateState_错误路径(t *testing.T) {
 	facade.UpdateState(map[string]any{"key": "val"})
 }
 
-// TestNodeSessionFacade_TraceError_非跳过 测试 SkipTrace=false 时 TraceError 正常路径
+// TestNodeSessionFacade_TraceError_非跳过 测试 SkipTrace=false 且无 Tracer 时 TraceError 返回 nil
+// ✅ 5.11 已回填：TraceError 使用 TracerWorkflowUtils.TraceError 真实逻辑
 func TestNodeSessionFacade_TraceError_非跳过(t *testing.T) {
 	ws := internal.NewWorkflowSession()
 	ns := internal.NewNodeSession(ws, "node1", "Test", false) // skipTrace=false
@@ -263,7 +267,96 @@ func TestNodeSessionFacade_TraceError_非跳过(t *testing.T) {
 
 	err := facade.TraceError(context.Background(), fmt.Errorf("test error"))
 	if err != nil {
-		t.Errorf("TraceError 非跳过时应返回 nil（桩实现），实际=%v", err)
+		t.Errorf("TraceError 无 Tracer 时应返回 nil，实际=%v", err)
+	}
+}
+
+// TestNodeSessionFacade_Trace_走真实逻辑 测试 SkipTrace=false 且 tracer 非 nil 时，
+// Trace 调用 TracerWorkflowUtils.Trace，验证 span 收到 OnInvokeData
+func TestNodeSessionFacade_Trace_走真实逻辑(t *testing.T) {
+	// 创建 AgentSession（自动创建 Tracer + StreamWriterManager）
+	agentSession := internal.NewAgentSession("test-session")
+
+	// 创建 WorkflowSession，以 AgentSession 为父级，继承 Tracer
+	ws := internal.NewWorkflowSession(
+		internal.WithWorkflowParent(agentSession),
+		internal.WithWorkflowID("wf-trace-test"),
+	)
+
+	// 创建 NodeSession（skipTrace=false）
+	ns := internal.NewNodeSession(ws, "llm_node", "LLM", false)
+	facade := NewNodeSessionFacade(ns, false)
+
+	// 先触发 TraceComponentBegin 创建 span，否则 Trace 写入的 span 不存在
+	tUtils := tracer.TracerWorkflowUtils{}
+	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+
+	// 调用 Trace
+	traceData := map[string]any{"step": "processing", "token_count": 42}
+	err := facade.Trace(context.Background(), traceData)
+	if err != nil {
+		t.Errorf("Trace 应返回 nil，实际=%v", err)
+	}
+
+	// 验证 span 已收到 OnInvokeData
+	span := agentSession.Tracer().GetWorkflowSpan(ns.ExecutableID(), ns.ParentID())
+	if span == nil {
+		t.Fatal("Trace 后应存在 workflow span")
+	}
+	if len(span.OnInvokeData) == 0 {
+		t.Error("span.OnInvokeData 为空，期望非空")
+	}
+	if len(span.OnInvokeData) > 0 {
+		data := span.OnInvokeData[0]
+		if v, ok := data["step"]; !ok || v != "processing" {
+			t.Errorf("span.OnInvokeData[0]['step'] 期望='processing'，实际=%v", v)
+		}
+		if v, ok := data["token_count"]; !ok || v != 42 {
+			t.Errorf("span.OnInvokeData[0]['token_count'] 期望=42，实际=%v", v)
+		}
+	}
+}
+
+// TestNodeSessionFacade_TraceError_走真实逻辑 测试 SkipTrace=false 且 tracer 非 nil 时，
+// TraceError 调用 TracerWorkflowUtils.TraceError，验证 span 收到 Error
+func TestNodeSessionFacade_TraceError_走真实逻辑(t *testing.T) {
+	// 创建 AgentSession（自动创建 Tracer + StreamWriterManager）
+	agentSession := internal.NewAgentSession("test-session-err")
+
+	// 创建 WorkflowSession，以 AgentSession 为父级，继承 Tracer
+	ws := internal.NewWorkflowSession(
+		internal.WithWorkflowParent(agentSession),
+		internal.WithWorkflowID("wf-traceerr-test"),
+	)
+
+	// 创建 NodeSession（skipTrace=false）
+	ns := internal.NewNodeSession(ws, "llm_node", "LLM", false)
+	facade := NewNodeSessionFacade(ns, false)
+
+	// 先触发 TraceComponentBegin 创建 span
+	tUtils := tracer.TracerWorkflowUtils{}
+	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+
+	// 调用 TraceError
+	testErr := fmt.Errorf("something went wrong")
+	err := facade.TraceError(context.Background(), testErr)
+	if err != nil {
+		t.Errorf("TraceError 应返回 nil，实际=%v", err)
+	}
+
+	// 验证 span 已收到 Error
+	span := agentSession.Tracer().GetWorkflowSpan(ns.ExecutableID(), ns.ParentID())
+	if span == nil {
+		t.Fatal("TraceError 后应存在 workflow span")
+	}
+	if len(span.Error) == 0 {
+		t.Error("span.Error 为空，期望非空")
+	}
+	// 验证 Error 内容包含错误信息（OnInvoke 将 error 转换为 map[string]any）
+	if errMsg, ok := span.Error["message"]; !ok {
+		t.Error("span.Error 应包含 'message' 键")
+	} else if msg, _ := errMsg.(string); msg == "" {
+		t.Error("span.Error['message'] 不应为空字符串")
 	}
 }
 

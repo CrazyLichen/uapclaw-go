@@ -6,11 +6,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// tracerSession 追踪装饰所需的会话接口，避免 tracer → internal 循环依赖。
+// internal.AgentSession 天然满足此接口。
+type tracerSession interface {
+	// Tracer 获取追踪器
+	Tracer() *Tracer
+	// AgentSpan 获取 Agent 追踪跨度
+	AgentSpan() *TraceAgentSpan
+}
 
 // TracedModelClient 追踪装饰的模型客户端，包装 BaseModelClient 并在 Invoke/Stream 调用时触发追踪事件。
 // 实现 model_clients.BaseModelClient 接口。
@@ -185,34 +192,20 @@ func (t *TracedTool) Card() *tool.ToolCard {
 
 // DecorateModelWithTrace 为模型客户端添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 model。
-func DecorateModelWithTrace(model model_clients.BaseModelClient, session *internal.AgentSession) model_clients.BaseModelClient {
+func DecorateModelWithTrace(model model_clients.BaseModelClient, session tracerSession) model_clients.BaseModelClient {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return model
 	}
-	tracer, ok := tracerVal.(*Tracer)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("action", "decorate_model_with_trace").
-			Msg("session.Tracer() 类型不是 *Tracer，跳过装饰")
-		return model
-	}
 
-	agentSpanVal := session.AgentSpan()
-	if agentSpanVal == nil {
-		return model
-	}
-	agentSpan, ok := agentSpanVal.(*TraceAgentSpan)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("action", "decorate_model_with_trace").
-			Msg("session.AgentSpan() 类型不是 *TraceAgentSpan，跳过装饰")
+	agentSpan := session.AgentSpan()
+	if agentSpan == nil {
 		return model
 	}
 
 	return &TracedModelClient{
 		inner:     model,
-		tracer:    tracer,
+		tracer:    tracerVal,
 		agentSpan: agentSpan,
 		instanceInfo: map[string]any{
 			"class_name": "BaseModelClient",
@@ -222,34 +215,20 @@ func DecorateModelWithTrace(model model_clients.BaseModelClient, session *intern
 
 // DecorateToolWithTrace 为工具添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 tool。
-func DecorateToolWithTrace(t tool.Tool, session *internal.AgentSession) tool.Tool {
+func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return t
 	}
-	tracer, ok := tracerVal.(*Tracer)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("action", "decorate_tool_with_trace").
-			Msg("session.Tracer() 类型不是 *Tracer，跳过装饰")
-		return t
-	}
 
-	agentSpanVal := session.AgentSpan()
-	if agentSpanVal == nil {
-		return t
-	}
-	agentSpan, ok := agentSpanVal.(*TraceAgentSpan)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("action", "decorate_tool_with_trace").
-			Msg("session.AgentSpan() 类型不是 *TraceAgentSpan，跳过装饰")
+	agentSpan := session.AgentSpan()
+	if agentSpan == nil {
 		return t
 	}
 
 	return &TracedTool{
 		inner:     t,
-		tracer:    tracer,
+		tracer:    tracerVal,
 		agentSpan: agentSpan,
 		instanceInfo: map[string]any{
 			"class_name": "Tool",
@@ -260,28 +239,20 @@ func DecorateToolWithTrace(t tool.Tool, session *internal.AgentSession) tool.Too
 // DecorateWorkflowWithTrace 为工作流添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 w。
 // ⤵️ 领域6 定义具体 WorkflowInterface 后替换返回类型。
-func DecorateWorkflowWithTrace(w any, session *internal.AgentSession) any {
+func DecorateWorkflowWithTrace(w any, session tracerSession) any {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return w
 	}
-	tracer, ok := tracerVal.(*Tracer)
-	if !ok {
-		return w
-	}
 
-	agentSpanVal := session.AgentSpan()
-	if agentSpanVal == nil {
-		return w
-	}
-	agentSpan, ok := agentSpanVal.(*TraceAgentSpan)
-	if !ok {
+	agentSpan := session.AgentSpan()
+	if agentSpan == nil {
 		return w
 	}
 
 	return &TracedWorkflow{
 		inner:        w,
-		tracer:       tracer,
+		tracer:       tracerVal,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "Workflow"},
 	}

@@ -221,6 +221,117 @@ func TestSession_CloseStreamOnPostRun(t *testing.T) {
 	}
 }
 
+// TestSession_tagStreamPayload_OutputSchema 测试 OutputSchema 类型的流数据元数据标签
+func TestSession_tagStreamPayload_OutputSchema(t *testing.T) {
+	s := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
+
+	// OutputSchema + map payload
+	os1 := stream.OutputSchema{Type: "message", Index: 0, Payload: map[string]any{"text": "hello"}}
+	result1 := s.tagStreamPayload(os1).(stream.OutputSchema)
+	payload1 := result1.Payload.(map[string]any)
+	if payload1["text"] != "hello" {
+		t.Errorf("OutputSchema payload text 期望 hello，实际 %v", payload1["text"])
+	}
+	if payload1["source"] != "team-1" {
+		t.Errorf("OutputSchema payload source 期望 team-1，实际 %v", payload1["source"])
+	}
+
+	// OutputSchema + 非 map payload（字符串）
+	os2 := stream.OutputSchema{Type: "message", Index: 0, Payload: "raw_text"}
+	result2 := s.tagStreamPayload(os2).(stream.OutputSchema)
+	payload2 := result2.Payload.(map[string]any)
+	if payload2["value"] != "raw_text" {
+		t.Errorf("非 map payload 应包装到 value 键，实际 %v", payload2["value"])
+	}
+	if payload2["source"] != "team-1" {
+		t.Errorf("非 map payload source 期望 team-1，实际 %v", payload2["source"])
+	}
+
+	// 非 map/OutputSchema 类型（如 string），原样返回
+	s2 := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
+	result3 := s2.tagStreamPayload("just_string")
+	if result3 != "just_string" {
+		t.Errorf("其他类型应原样返回，实际 %v", result3)
+	}
+}
+
+// TestSession_normalizeOutputStream 各种类型 测试不同输入类型的归一化
+func TestSession_normalizeOutputStream_各种类型(t *testing.T) {
+	s := NewSession()
+
+	// case stream.OutputSchema：直接返回
+	os := stream.OutputSchema{Type: "message", Index: 1, Payload: "test"}
+	result := s.normalizeOutputStream(os)
+	if result.Type != "message" || result.Index != 1 {
+		t.Errorf("OutputSchema 应原样返回，实际 type=%s index=%d", result.Type, result.Index)
+	}
+
+	// case map[string]any 包含完整 OutputSchema 字段
+	fullMap := map[string]any{
+		"type":    "custom",
+		"index":   2,
+		"payload": map[string]any{"data": "value"},
+	}
+	result2 := s.normalizeOutputStream(fullMap)
+	if result2.Type != "custom" || result2.Index != 2 {
+		t.Errorf("完整 map 应解析为 OutputSchema，实际 type=%s index=%d", result2.Type, result2.Index)
+	}
+
+	// case map[string]any 缺少字段：走默认构造
+	partialMap := map[string]any{
+		"type": "custom",
+	}
+	result3 := s.normalizeOutputStream(partialMap)
+	if result3.Type != "message" {
+		t.Errorf("不完整 map 应走默认构造，实际 type=%s", result3.Type)
+	}
+
+	// 其他类型（如 string）：走默认构造
+	result4 := s.normalizeOutputStream("plain_string")
+	if result4.Type != "message" || result4.Payload != "plain_string" {
+		t.Errorf("其他类型应走默认构造，实际 type=%s payload=%v", result4.Type, result4.Payload)
+	}
+}
+
+// TestSession_WriteCustomStream_map数据 测试 WriteCustomStream 传入 map 数据
+func TestSession_WriteCustomStream_map数据(t *testing.T) {
+	s := NewSession()
+	// 传入 map 数据，走 map 分支
+	err := s.WriteCustomStream(map[string]any{"key": "value"})
+	if err != nil {
+		t.Errorf("WriteCustomStream map 数据不应返回错误，实际=%v", err)
+	}
+}
+
+// TestSession_WriteStream_OutputSchema 测试 WriteStream 传入 OutputSchema
+func TestSession_WriteStream_OutputSchema(t *testing.T) {
+	s := NewSession()
+	os := stream.OutputSchema{Type: "message", Index: 0, Payload: "test"}
+	err := s.WriteStream(os)
+	if err != nil {
+		t.Errorf("WriteStream OutputSchema 不应返回错误，实际=%v", err)
+	}
+}
+
+// TestSession_GetEnvs_nilConfig 测试 config 为 nil 时 GetEnvs 返回 nil
+func TestSession_GetEnvs_nilConfig(t *testing.T) {
+	// 构造一个 inner config 为 nil 的 Session
+	s := &Session{
+		sessionID:            "test-nil-cfg",
+		inner:                internal.NewAgentSession("test-nil-cfg"),
+		closeStreamOnPostRun: true,
+		sourceMetadata:       make(map[string]any),
+	}
+	envs := s.GetEnvs()
+	// AgentSession 默认 config 为 nil，但 NewSession 会在构造时设置 envs map
+	// 直接构造的 Session 没有 envs，所以 GetEnvs 走 cfg nil 分支
+	// 实际上 inner.Config() 在 AgentSession 中也是 nil（没有通过 WithConfig 设置）
+	// 所以 GetEnvs 应返回 nil
+	if envs != nil {
+		t.Errorf("config 为 nil 时 GetEnvs 应返回 nil，实际=%v", envs)
+	}
+}
+
 // TestSession_tagStreamPayload 测试流数据元数据标签
 func TestSession_tagStreamPayload(t *testing.T) {
 	// 无元数据时原样返回
