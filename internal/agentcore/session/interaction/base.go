@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -15,17 +16,13 @@ import (
 // 对齐 Python: hasattr(session, "executable_id") 检测。
 type ExecutableIDProvider = interfaces.ExecutableIDProvider
 
-// InteractionOutputWriterProvider 交互所需的输出写入器提供者接口。
-// 5.10 实现后，session/stream 包的 StreamWriterManager 类型天然满足此接口，届时迁移到 session/stream 包。
-type InteractionOutputWriterProvider interface {
-	GetOutputWriter() InteractionOutputWriter
-}
+// InteractionOutputWriterProvider 交互所需的输出写入器提供者，类型别名指向 stream 包。
+// ✅ 5.10 已回填：从 stream 包导入
+type InteractionOutputWriterProvider = stream.InteractionOutputWriterProvider
 
-// InteractionOutputWriter 交互输出写入器接口。
-// 5.10 实现后，session/stream 包的 OutputWriter 类型天然满足此接口，届时迁移到 session/stream 包。
-type InteractionOutputWriter interface {
-	WriteInteraction(outputType string, index int, payload any) error
-}
+// InteractionOutputWriter 交互输出写入器，类型别名指向 stream 包。
+// ✅ 5.10 已回填：从 stream 包导入
+type InteractionOutputWriter = stream.InteractionOutputWriter
 
 // Interrupt 图中断信号
 type Interrupt struct {
@@ -175,24 +172,24 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 }
 
 // writeInteractionOutput 写入交互输出到流。
-// 通过类型断言延迟绑定，5.10 实现后自动生效。
+// ✅ 5.10 已回填：StreamWriterManager 类型确定后直接调用
 func writeInteractionOutput(session interfaces.BaseSession, outputType string, index int, payload any) error {
 	mgr := session.StreamWriterManager()
 	if mgr == nil {
 		return nil
 	}
-	if provider, ok := mgr.(InteractionOutputWriterProvider); ok {
-		writer := provider.GetOutputWriter()
-		err := writer.WriteInteraction(outputType, index, payload)
-		if err != nil {
-			logger.Warn(logger.ComponentAgentCore).
-				Err(err).
-				Str("output_type", outputType).
-				Msg("交互输出写入流失败")
-		}
-		return err
+	writer := mgr.GetInteractionOutputWriter()
+	if writer == nil {
+		return nil
 	}
-	return nil
+	err := writer.WriteInteraction(outputType, index, payload)
+	if err != nil {
+		logger.Warn(logger.ComponentAgentCore).
+			Err(err).
+			Str("output_type", outputType).
+			Msg("交互输出写入流失败")
+	}
+	return err
 }
 
 // commitCMP 提交检查点状态。

@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -32,8 +33,8 @@ type WorkflowSession struct {
 	// st 状态对象（WorkflowCommitState）
 	st state.SessionState
 	// streamWriterManager 流写入管理器
-	// ⤵️ 5.10 回填：any → StreamWriterManager
-	streamWriterManager any
+	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
+	streamWriterManager *stream.StreamWriterManager
 	// actorManager Actor 管理器
 	// ⤵️ 后续回填：any → ActorManager
 	actorManager any
@@ -279,7 +280,8 @@ func (s *WorkflowSession) Tracer() any {
 }
 
 // StreamWriterManager 获取流写入管理器
-func (s *WorkflowSession) StreamWriterManager() any {
+// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
+func (s *WorkflowSession) StreamWriterManager() *stream.StreamWriterManager {
 	return s.streamWriterManager
 }
 
@@ -310,7 +312,8 @@ func (s *WorkflowSession) Close() error {
 }
 
 // SetStreamWriterManager 幂等注入流写入管理器。已设置则不覆盖。
-func (s *WorkflowSession) SetStreamWriterManager(mgr any) {
+// ✅ 5.10 已回填：参数类型从 any 改为 *stream.StreamWriterManager
+func (s *WorkflowSession) SetStreamWriterManager(mgr *stream.StreamWriterManager) {
 	if s.streamWriterManager == nil {
 		s.streamWriterManager = mgr
 	}
@@ -420,7 +423,8 @@ func (n *NodeSession) Tracer() any {
 }
 
 // StreamWriterManager 委托给父 session
-func (n *NodeSession) StreamWriterManager() any {
+// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
+func (n *NodeSession) StreamWriterManager() *stream.StreamWriterManager {
 	return n.delegate.StreamWriterManager()
 }
 

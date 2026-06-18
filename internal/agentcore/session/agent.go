@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -36,8 +37,8 @@ type Session struct {
 	checkpointerOverride checkpointer.Checkpointer
 	// streamWriterManagerOverride 流写入管理器覆盖（通过 WithStreamWriterManager 设置）
 	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
-	// ⤵️ 5.10 回填：any → StreamWriterManager
-	streamWriterManagerOverride any
+	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
+	streamWriterManagerOverride *stream.StreamWriterManager
 	// preRunDone PreRun 是否已执行
 	preRunDone bool
 	// postRunDone PostRun 是否已执行
@@ -68,8 +69,8 @@ type SessionOption func(*Session)
 //   - config: 创建默认 Config 并设置 envs，传入 inner
 //     ⤵️ 5.12 回填：创建真实 SessionConfig 实例，当前用 map[string]any 占位
 //   - checkpointer: 若未通过 WithCheckpointer 设置，使用 checkpointer.GetCheckpointer()
-//   - streamWriterManager: 若未通过 WithStreamWriterManager 设置，传 nil 给 inner
-//     （inner 会自动创建默认实例，⤵️ 5.10 回填）
+	//   - streamWriterManager: 若未通过 WithStreamWriterManager 设置，传 nil 给 inner
+	//     （inner 会自动创建默认实例，✅ 5.10 已回填）
 //   - closeStreamOnPostRun: 默认 true
 //   - sourceMetadata: 默认空 map
 //
@@ -102,7 +103,7 @@ func NewSession(opts ...SessionOption) *Session {
 
 	// 3. streamWriterManager：外层透传给 inner
 	//    Python: self._inner = AgentSession(stream_writer_manager=stream_writer_manager)
-	//    未设置时传 nil，由 inner 自动创建默认实例（⤵️ 5.10 回填）
+	//    未设置时传 nil，由 inner 自动创建默认实例（✅ 5.10 已回填）
 
 	s.inner = internal.NewAgentSession(s.sessionID,
 		internal.WithConfig(config),
@@ -152,9 +153,10 @@ func WithCheckpointer(cp checkpointer.Checkpointer) SessionOption {
 }
 
 // WithStreamWriterManager 设置流写入管理器的选项。
-// 外层透传给 inner，由 inner 自动创建默认实例（⤵️ 5.10 回填）。
+// 外层透传给 inner，由 inner 自动创建默认实例。
 // 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
-func WithStreamWriterManager(mgr any) SessionOption {
+// ✅ 5.10 已回填：参数类型从 any 改为 *stream.StreamWriterManager
+func WithStreamWriterManager(mgr *stream.StreamWriterManager) SessionOption {
 	return func(s *Session) {
 		s.streamWriterManagerOverride = mgr
 	}
@@ -257,26 +259,75 @@ func (s *Session) DumpState() map[string]any {
 }
 
 // WriteStream 写入标准输出流。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
+// 对应 Python: Session.write_stream(data)
+// data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 func (s *Session) WriteStream(data any) error {
-	return nil
+	ctx := context.Background()
+	streamData := s.normalizeOutputStream(s.tagStreamPayload(data))
+
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetOutputWriter()
+	if writer == nil {
+		return nil
+	}
+	return writer.Write(ctx, streamData)
 }
 
 // WriteCustomStream 写入自定义流。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
+// 对应 Python: Session.write_custom_stream(data)
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 func (s *Session) WriteCustomStream(data any) error {
-	return nil
+	ctx := context.Background()
+	streamData := s.tagStreamPayload(data)
+
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetCustomWriter()
+	if writer == nil {
+		return nil
+	}
+	// 构造 CustomSchema
+	var dataMap map[string]any
+	if m, ok := streamData.(map[string]any); ok {
+		dataMap = m
+	} else {
+		dataMap = map[string]any{"value": streamData}
+	}
+	schema := stream.CustomSchema{Type: "custom", Data: dataMap}
+	return writer.Write(ctx, schema)
 }
 
 // StreamIterator 返回流迭代 channel。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
+// 对应 Python: Session.stream_iterator()
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
 func (s *Session) StreamIterator() <-chan any {
-	return nil
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		ch := make(chan any)
+		close(ch)
+		return ch
+	}
+	return mgr.StreamOutput()
 }
 
-// CloseStream 关闭流发射器并注销回调。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
+// CloseStream 关闭流发射器。
+// 对应 Python: Session.close_stream()
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
+// ⤵️ R6 后续回填：callback_framework 需要支持 unregister_event 后补充回调注销
 func (s *Session) CloseStream() error {
+	ctx := context.Background()
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	// 关闭 emitter，发送 END_FRAME
+	mgr.StreamEmitter().Close(ctx)
 	return nil
 }
 
@@ -426,17 +477,70 @@ func init() {
 }
 
 // tagStreamPayload 为流数据添加来源元数据。
-// 对应 Python: Session._tag_stream_payload()
-func (s *Session) tagStreamPayload(data map[string]any) map[string]any {
+// 对应 Python: Session._tag_stream_payload(data)
+// ✅ 5.10 已回填：支持 any 类型和 OutputSchema
+func (s *Session) tagStreamPayload(data any) any {
 	if len(s.sourceMetadata) == 0 {
 		return data
 	}
-	result := make(map[string]any, len(data)+len(s.sourceMetadata))
-	for k, v := range data {
-		result[k] = v
+	switch v := data.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(v)+len(s.sourceMetadata))
+		for k, val := range v {
+			result[k] = val
+		}
+		for k, val := range s.sourceMetadata {
+			result[k] = val
+		}
+		return result
+	case stream.OutputSchema:
+		payload := v.Payload
+		if payloadMap, ok := payload.(map[string]any); ok {
+			newPayload := make(map[string]any, len(payloadMap)+len(s.sourceMetadata))
+			for k, val := range payloadMap {
+				newPayload[k] = val
+			}
+			for k, val := range s.sourceMetadata {
+				newPayload[k] = val
+			}
+			payload = newPayload
+		} else {
+			newPayload := make(map[string]any, 1+len(s.sourceMetadata))
+			newPayload["value"] = payload
+			for k, val := range s.sourceMetadata {
+				newPayload[k] = val
+			}
+			payload = newPayload
+		}
+		return stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload}
+	default:
+		return data
 	}
-	for k, v := range s.sourceMetadata {
-		result[k] = v
+}
+
+// normalizeOutputStream 将流数据统一转为 OutputSchema。
+// 对应 Python: Session._normalize_output_stream(data)
+// ✅ 5.10 已回填：R1 回填
+func (s *Session) normalizeOutputStream(data any) stream.OutputSchema {
+	switch v := data.(type) {
+	case stream.OutputSchema:
+		return v
+	case map[string]any:
+		// 检查是否包含完整 OutputSchema 字段
+		if _, hasType := v["type"]; hasType {
+			if _, hasIndex := v["index"]; hasIndex {
+				if _, hasPayload := v["payload"]; hasPayload {
+					index, _ := v["index"].(int)
+					typeStr, _ := v["type"].(string)
+					return stream.OutputSchema{
+						Type:    typeStr,
+						Index:   index,
+						Payload: v["payload"],
+					}
+				}
+			}
+		}
 	}
-	return result
+	// 默认构造
+	return stream.OutputSchema{Type: "message", Index: 0, Payload: data}
 }

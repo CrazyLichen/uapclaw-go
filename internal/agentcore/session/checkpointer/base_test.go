@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 命名空间常量测试 ────────────────────────────
@@ -136,7 +137,7 @@ func (s *testSession) SessionID() string         { return s.sessionID }
 func (s *testSession) State() state.SessionState  { return nil }
 func (s *testSession) Config() any                { return nil }
 func (s *testSession) Tracer() any                { return nil }
-func (s *testSession) StreamWriterManager() any     { return nil }
+func (s *testSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
 func (s *testSession) ActorManager() any            { return nil }
 func (s *testSession) Close() error                 { return nil }
 func (s *testSession) Checkpointer() Checkpointer { return nil }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -22,6 +23,7 @@ func TestNewAgentSession(t *testing.T) {
 
 // TestAgentSession_默认字段为Nil 测试未传选项时部分字段返回 nil。
 // checkpointer 不再为 nil：对齐 Python，nil 时自动从全局工厂获取默认 InMemoryCheckpointer。
+// streamWriterManager 不再为 nil：对齐 Python，nil 时自动创建 StreamWriterManager(StreamEmitter())。
 func TestAgentSession_默认字段为Nil(t *testing.T) {
 	s := NewAgentSession("test-id")
 	if s.Config() != nil {
@@ -30,8 +32,8 @@ func TestAgentSession_默认字段为Nil(t *testing.T) {
 	if s.Tracer() != nil {
 		t.Error("默认 Tracer 应为 nil")
 	}
-	if s.StreamWriterManager() != nil {
-		t.Error("默认 StreamWriterManager 应为 nil")
+	if s.StreamWriterManager() == nil {
+		t.Error("默认 StreamWriterManager 不应为 nil（对齐 Python 自动创建）")
 	}
 	// checkpointer 不再为 nil，对齐 Python：CheckpointerFactory.get_checkpointer()
 	if s.Checkpointer() == nil {
@@ -137,9 +139,10 @@ func TestAgentSession_WithTracer(t *testing.T) {
 
 // TestAgentSession_WithStreamWriterManager 测试 WithStreamWriterManager 选项
 func TestAgentSession_WithStreamWriterManager(t *testing.T) {
-	s := NewAgentSession("test-id", WithStreamWriterManager("my-swm"))
-	if s.StreamWriterManager() != "my-swm" {
-		t.Errorf("StreamWriterManager 期望 my-swm，实际 %v", s.StreamWriterManager())
+	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	s := NewAgentSession("test-id", WithStreamWriterManager(swm))
+	if s.StreamWriterManager() != swm {
+		t.Errorf("StreamWriterManager 期望 swm，实际 %v", s.StreamWriterManager())
 	}
 }
 

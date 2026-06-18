@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -33,7 +34,7 @@ type mockStub struct {
 	configVal              any
 	stateVal               state.SessionState
 	tracerVal              any
-	streamWriterManagerVal any
+	streamWriterManagerVal *stream.StreamWriterManager
 	sessionIDVal           string
 	checkpointerVal        checkpointer.Checkpointer
 	actorManagerVal        any
@@ -41,14 +42,14 @@ type mockStub struct {
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() any                             { return m.configVal }
-func (m *mockStub) State() state.SessionState               { return m.stateVal }
-func (m *mockStub) Tracer() any                             { return m.tracerVal }
-func (m *mockStub) StreamWriterManager() any                { return m.streamWriterManagerVal }
-func (m *mockStub) SessionID() string                       { return m.sessionIDVal }
-func (m *mockStub) Checkpointer() checkpointer.Checkpointer { return m.checkpointerVal }
-func (m *mockStub) ActorManager() any                       { return m.actorManagerVal }
-func (m *mockStub) Close() error                            { m.closeCalled = true; return m.closeErr }
+func (m *mockStub) Config() any                                        { return m.configVal }
+func (m *mockStub) State() state.SessionState                          { return m.stateVal }
+func (m *mockStub) Tracer() any                                        { return m.tracerVal }
+func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager   { return m.streamWriterManagerVal }
+func (m *mockStub) SessionID() string                                  { return m.sessionIDVal }
+func (m *mockStub) Checkpointer() checkpointer.Checkpointer            { return m.checkpointerVal }
+func (m *mockStub) ActorManager() any                                  { return m.actorManagerVal }
+func (m *mockStub) Close() error                                       { m.closeCalled = true; return m.closeErr }
 
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
@@ -97,11 +98,12 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	// 准备 mock 数据
 	expectedState := state.NewInMemoryStateLike()
 	mockCP := &testMockCheckpointer{}
+	expectedSWM := stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	stub := &mockStub{
 		configVal:              "config-value",
 		stateVal:               expectedState,
 		tracerVal:              "tracer-value",
-		streamWriterManagerVal: "swm-value",
+		streamWriterManagerVal: expectedSWM,
 		sessionIDVal:           "session-123",
 		checkpointerVal:        mockCP,
 		actorManagerVal:        "actor-value",
@@ -127,8 +129,8 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	}
 
 	// 验证 StreamWriterManager 委托
-	if got := p.StreamWriterManager(); got != "swm-value" {
-		t.Errorf("StreamWriterManager() = %v, 期望 %v", got, "swm-value")
+	if got := p.StreamWriterManager(); got != expectedSWM {
+		t.Errorf("StreamWriterManager() = %v, 期望 %v", got, expectedSWM)
 	}
 
 	// 验证 SessionID 委托

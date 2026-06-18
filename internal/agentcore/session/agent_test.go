@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -182,8 +183,9 @@ func TestSession_桩方法返回Nil(t *testing.T) {
 	if err := s.WriteCustomStream(nil); err != nil {
 		t.Errorf("WriteCustomStream 桩应返回 nil，实际 %v", err)
 	}
-	if ch := s.StreamIterator(); ch != nil {
-		t.Errorf("StreamIterator 桩应返回 nil，实际 %v", ch)
+	// StreamIterator 不再返回 nil：默认 StreamWriterManager 自动创建
+	if ch := s.StreamIterator(); ch == nil {
+		t.Error("StreamIterator 应返回非 nil channel（有默认 StreamWriterManager）")
 	}
 	if err := s.CloseStream(); err != nil {
 		t.Errorf("CloseStream 桩应返回 nil，实际 %v", err)
@@ -224,7 +226,7 @@ func TestSession_tagStreamPayload(t *testing.T) {
 	// 无元数据时原样返回
 	s1 := NewSession()
 	data := map[string]any{"key": "value"}
-	result := s1.tagStreamPayload(data)
+	result := s1.tagStreamPayload(data).(map[string]any)
 	if result["key"] != "value" {
 		t.Errorf("无元数据时 key 期望 value，实际 %v", result["key"])
 	}
@@ -235,7 +237,7 @@ func TestSession_tagStreamPayload(t *testing.T) {
 	// 有元数据时合并
 	s2 := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
 	data2 := map[string]any{"key": "value"}
-	result2 := s2.tagStreamPayload(data2)
+	result2 := s2.tagStreamPayload(data2).(map[string]any)
 	if result2["key"] != "value" {
 		t.Errorf("有元数据时 key 期望 value，实际 %v", result2["key"])
 	}
@@ -330,7 +332,7 @@ func TestSession_WithEnvs(t *testing.T) {
 
 // TestSession_WithStreamWriterManager 测试 WithStreamWriterManager 选项
 func TestSession_WithStreamWriterManager(t *testing.T) {
-	swm := "fake-swm"
+	swm := stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	s := NewSession(WithStreamWriterManager(swm))
 	// 验证 swm 传入了 inner
 	if s.inner.StreamWriterManager() != swm {

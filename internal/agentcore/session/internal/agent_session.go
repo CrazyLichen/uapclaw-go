@@ -3,6 +3,7 @@ package internal
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -27,8 +28,8 @@ type AgentSession struct {
 	// ⤵️ 5.11 回填：any → Tracer
 	tracer any
 	// streamWriterManager 流写入管理器
-	// ⤵️ 5.10 回填：any → StreamWriterManager
-	streamWriterManager any
+	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
+	streamWriterManager *stream.StreamWriterManager
 	// checkpointer 检查点器
 	checkpointer checkpointer.Checkpointer
 	// agentSpan Agent 追踪跨度
@@ -81,10 +82,10 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 
 	// streamWriterManager: nil 时自动创建默认实例
 	// Python: self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
-	// ⤵️ 5.10 回填：StreamWriterManager 包实现后，取消下面的注释
-	// if s.streamWriterManager == nil {
-	// 	s.streamWriterManager = stream.NewStreamWriterManager(stream.NewStreamEmitter())
-	// }
+	// ✅ 5.10 已回填：StreamWriterManager 包实现后，取消注释
+	if s.streamWriterManager == nil {
+		s.streamWriterManager = stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	}
 
 	// tracer: nil 时自动创建并初始化
 	// Python: tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
@@ -126,7 +127,8 @@ func WithTracer(tracer any) AgentSessionOption {
 }
 
 // WithStreamWriterManager 设置流写入管理器的选项
-func WithStreamWriterManager(mgr any) AgentSessionOption {
+// ✅ 5.10 已回填：参数类型从 any 改为 *stream.StreamWriterManager
+func WithStreamWriterManager(mgr *stream.StreamWriterManager) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.streamWriterManager = mgr
 	}
@@ -169,7 +171,8 @@ func (s *AgentSession) Tracer() any {
 }
 
 // StreamWriterManager 获取流写入管理器
-func (s *AgentSession) StreamWriterManager() any {
+// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
+func (s *AgentSession) StreamWriterManager() *stream.StreamWriterManager {
 	return s.streamWriterManager
 }
 

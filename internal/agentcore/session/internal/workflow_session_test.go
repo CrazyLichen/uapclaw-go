@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── WorkflowSession 测试 ────────────────────────────
@@ -76,15 +77,17 @@ func TestWorkflowSession_BaseSession接口(t *testing.T) {
 func TestWorkflowSession_SetStreamWriterManager_幂等(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	ws.SetStreamWriterManager("first_mgr")
-	if ws.StreamWriterManager() != "first_mgr" {
-		t.Errorf("期望 streamWriterManager='first_mgr'，实际=%v", ws.StreamWriterManager())
+	firstMgr := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	ws.SetStreamWriterManager(firstMgr)
+	if ws.StreamWriterManager() != firstMgr {
+		t.Errorf("期望 streamWriterManager=firstMgr，实际=%v", ws.StreamWriterManager())
 	}
 
 	// 二次设置不应覆盖
-	ws.SetStreamWriterManager("second_mgr")
-	if ws.StreamWriterManager() != "first_mgr" {
-		t.Errorf("幂等保护：期望 streamWriterManager='first_mgr'，实际=%v", ws.StreamWriterManager())
+	secondMgr := stream.NewStreamWriterManager(stream.NewStreamEmitter())
+	ws.SetStreamWriterManager(secondMgr)
+	if ws.StreamWriterManager() != firstMgr {
+		t.Errorf("幂等保护：期望 streamWriterManager=firstMgr，实际=%v", ws.StreamWriterManager())
 	}
 }
 

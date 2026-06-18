@@ -9,8 +9,8 @@
 // 身份查询、状态读写、追踪、交互、流写入、环境变量等组件开发者面向 API。
 //
 // 本包依赖 state 子包提供的双层状态接口（StateLike/CommitStateLike 底层 + SessionState 上层），Config/Tracer/
-// StreamWriterManager/Checkpointer/ActorManager 等依赖类型暂用 any 占位，
-// 待后续步骤（5.8/5.10/5.11/5.12）回填具体类型。
+// ActorManager 等依赖类型暂用 any 占位，待后续步骤（5.11/5.12）回填具体类型。
+// StreamWriterManager 已于 5.10 回填为 *stream.StreamWriterManager。
 //
 // 文件目录：
 //

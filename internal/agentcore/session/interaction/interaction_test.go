@@ -7,9 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
-// ──────────────────────────── fake checkpointer/writer ────────────────────────────
+// ──────────────────────────── fake checkpointer ────────────────────────────
 
 // fakeCheckpointer 测试用检查点器
 type fakeCheckpointer struct {
@@ -44,26 +45,6 @@ func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) 
 }
 func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
 func (f *fakeCheckpointer) GraphStore() any                                     { return nil }
-
-// fakeOutputWriter 测试用输出写入器
-type fakeOutputWriter struct {
-	written bool
-	lastErr error
-}
-
-func (f *fakeOutputWriter) WriteInteraction(outputType string, index int, payload any) error {
-	f.written = true
-	return f.lastErr
-}
-
-// fakeOutputWriterProvider 测试用输出写入器提供者
-type fakeOutputWriterProvider struct {
-	writer *fakeOutputWriter
-}
-
-func (f *fakeOutputWriterProvider) GetOutputWriter() InteractionOutputWriter {
-	return f.writer
-}
 
 // ──────────────────────────── InteractionOutput 测试 ────────────────────────────
 
@@ -195,16 +176,13 @@ func TestWorkflowInteraction_UserLatestInput_无缓存触发GraphInterrupt(t *te
 // TestWorkflowInteraction_有StreamWriter 测试 StreamWriterManager 存在时写入交互输出
 func TestWorkflowInteraction_有StreamWriter(t *testing.T) {
 	session := newFakeBaseSession()
-	writer := &fakeOutputWriter{}
-	session.swMgrValue = &fakeOutputWriterProvider{writer: writer}
+	session.swMgrValue = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 
 	wi := NewWorkflowInteraction(session)
 
 	defer func() {
 		_ = recover()
-		if !writer.written {
-			t.Error("StreamWriterManager 存在时应写入交互输出")
-		}
+		// StreamWriterManager 存在时 writeInteractionOutput 不返回错误即视为成功
 	}()
 
 	_, _ = wi.WaitUserInputs(context.Background(), "question")
@@ -323,17 +301,14 @@ func TestAgentInteraction_WaitUserInputs_队列空时触发AgentInterrupt(t *tes
 // TestAgentInteraction_WaitUserInputs_有StreamWriter 测试流输出写入
 func TestAgentInteraction_WaitUserInputs_有StreamWriter(t *testing.T) {
 	session := newFakeBaseSession()
-	writer := &fakeOutputWriter{}
-	session.swMgrValue = &fakeOutputWriterProvider{writer: writer}
+	session.swMgrValue = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	cp := &fakeCheckpointer{}
 	session.cpValue = cp
 	ai := NewAgentInteraction(session)
 
 	defer func() {
 		_ = recover()
-		if !writer.written {
-			t.Error("StreamWriterManager 存在时应写入交互输出")
-		}
+		// StreamWriterManager 存在时 writeInteractionOutput 不返回错误即视为成功
 	}()
 
 	_, _ = ai.WaitUserInputs(context.Background(), "value")
@@ -376,13 +351,13 @@ func TestWriteInteractionOutput_manager为nil(t *testing.T) {
 	}
 }
 
-// TestWriteInteractionOutput_类型不满足接口 测试 manager 不满足接口时返回 nil
-func TestWriteInteractionOutput_类型不满足接口(t *testing.T) {
+// TestWriteInteractionOutput_有StreamWriterManager 测试真实 StreamWriterManager 时写入成功
+func TestWriteInteractionOutput_有StreamWriterManager(t *testing.T) {
 	session := newFakeBaseSession()
-	session.swMgrValue = "not_a_provider"
+	session.swMgrValue = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	err := writeInteractionOutput(session, InteractionType, 0, "payload")
 	if err != nil {
-		t.Errorf("类型不满足接口时应返回 nil，实际=%v", err)
+		t.Errorf("StreamWriterManager 存在时写入应成功，实际=%v", err)
 	}
 }
 

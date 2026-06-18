@@ -4,6 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -63,7 +64,8 @@ func (p *ProxySession) Tracer() any {
 }
 
 // StreamWriterManager 获取底层会话的流写入管理器
-func (p *ProxySession) StreamWriterManager() any {
+// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
+func (p *ProxySession) StreamWriterManager() *stream.StreamWriterManager {
 	return p.stub.StreamWriterManager()
 }
 
