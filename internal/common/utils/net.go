@@ -13,8 +13,13 @@ package utils
 import (
 	"net"
 	"net/url"
+	"regexp"
 	"strings"
-) // GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
+)
+
+// urlPattern 匹配以 scheme:// 开头的 URL 字符串。
+// 对应 Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`) // GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
 // 对应 Python: get_local_ip()
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
 // 不实际发送数据，仅利用 socket 获取本地地址。
@@ -99,4 +104,36 @@ func RedactURLPassword(rawURL string) string {
 	}
 
 	return buf.String()
+}
+
+// RedactURLInValue 递归脱敏值中的 URL 密码，用于安全日志输出。
+//
+// 对应 Python: _redact_url_in_value(value)
+// 递归遍历 map[string]any、[]any 和 string 类型：
+//   - string: 若匹配 URL 模式则脱敏密码
+//   - map: 递归处理每个值
+//   - slice: 递归处理每个元素
+//   - 其他类型: 原样返回
+func RedactURLInValue(value any) any {
+	switch v := value.(type) {
+	case string:
+		if urlPattern.MatchString(v) {
+			return RedactURLPassword(v)
+		}
+		return v
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for k, val := range v {
+			result[k] = RedactURLInValue(val)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = RedactURLInValue(item)
+		}
+		return result
+	default:
+		return value
+	}
 }

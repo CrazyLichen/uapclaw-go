@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -62,13 +64,13 @@ type testWorkflowSession struct {
 	config     *testConfig
 	st         state.SessionState
 	workflowID string
-	parent     CheckpointerSession
+	parent     interfaces.BaseSession
 }
 
 func (s *testWorkflowSession) State() state.SessionState    { return s.st }
 func (s *testWorkflowSession) Config() any                  { return s.config }
 func (s *testWorkflowSession) WorkflowID() string            { return s.workflowID }
-func (s *testWorkflowSession) Parent() CheckpointerSession   { return s.parent }
+func (s *testWorkflowSession) Parent() interfaces.BaseSession   { return s.parent }
 
 // ──────────────────────────── NewInMemoryCheckpointer 测试 ────────────────────────────
 
@@ -777,7 +779,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_交互输入(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := cp.PreWorkflowExecute(ctx, session, map[string]any{"input_key": "input_value"})
+	ii, _ := interaction.NewInteractiveInput()
+	err := cp.PreWorkflowExecute(ctx, session, ii)
 	if err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
@@ -836,7 +839,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成(t *testing.T) {
 
 	ctx := context.Background()
 	// 先 Pre
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
 
@@ -866,7 +870,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_异常(t *testing.T) {
 
 	ctx := context.Background()
 	// 先 Pre
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
 
@@ -897,18 +902,20 @@ func TestInteractiveInputKey(t *testing.T) {
 // ──────────────────────────── isInteractiveInput 测试 ────────────────────────────
 
 // TestIsInteractiveInput 测试交互输入判断
+// 对齐 Python: isinstance(inputs, InteractiveInput)
 func TestIsInteractiveInput(t *testing.T) {
 	if isInteractiveInput(nil) {
 		t.Error("nil 不应视为交互输入")
 	}
-	if isInteractiveInput(map[string]any{}) {
-		t.Error("空 map 不应视为交互输入")
+	if isInteractiveInput("some_input") {
+		t.Error("字符串不应视为交互输入")
 	}
-	if !isInteractiveInput("some_input") {
-		t.Error("非 nil 字符串应视为交互输入")
+	if isInteractiveInput(map[string]any{"key": "val"}) {
+		t.Error("map 不应视为交互输入")
 	}
-	if !isInteractiveInput(map[string]any{"key": "val"}) {
-		t.Error("非空 map 应视为交互输入")
+	ii, _ := interaction.NewInteractiveInput()
+	if !isInteractiveInput(ii) {
+		t.Error("*InteractiveInput 应视为交互输入")
 	}
 }
 
@@ -951,7 +958,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_有状态非交互输入(t *tes
 
 	ctx := context.Background()
 	// 先保存一次状态
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("第一次 PreWorkflowExecute 返回错误：%v", err)
 	}
 	// 保存检查点
@@ -985,7 +993,8 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 
 	ctx := context.Background()
 	// 先保存一次状态
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("第一次 PreWorkflowExecute 返回错误：%v", err)
 	}
 	if err := cp.innerSaveWorkflowCheckpoint(ctx, "wf1", "sess1", session, "test save"); err != nil {
@@ -1019,7 +1028,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
 
@@ -1057,7 +1067,8 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成AgentSession(t *te
 	}
 
 	ctx := context.Background()
-	if err := cp.PreWorkflowExecute(ctx, session, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, session, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
 
@@ -1117,7 +1128,8 @@ func TestInMemoryCheckpointer_Release_全量释放(t *testing.T) {
 	if err := cp.PreAgentTeamExecute(ctx, teamSession, nil); err != nil {
 		t.Fatalf("PreAgentTeamExecute 返回错误：%v", err)
 	}
-	if err := cp.PreWorkflowExecute(ctx, workflowSession, map[string]any{"key": "val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := cp.PreWorkflowExecute(ctx, workflowSession, ii); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
 
@@ -1218,13 +1230,13 @@ func TestWorkflowStorage_Recover_带交互输入(t *testing.T) {
 		config:      &testConfig{},
 		st:          wcs2,
 	}
-
-	if err := storage.Recover(ctx, session2, map[string]any{"input_key": "input_val"}); err != nil {
+	ii, _ := interaction.NewInteractiveInput()
+	if err := storage.Recover(ctx, session2, ii); err != nil {
 		t.Fatalf("带交互输入 Recover 返回错误：%v", err)
 	}
 }
 
-// TestWorkflowStorage_Recover_单个输入 测试恢复时单个输入值
+// TestWorkflowStorage_Recover_单个输入 测试恢复时 InteractiveInput.RawInputs 路径
 func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 	storage := newWorkflowStorage()
 
@@ -1248,7 +1260,7 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 		t.Fatalf("Save 返回错误：%v", err)
 	}
 
-	// 用单个输入值恢复
+	// 用 InteractiveInput.RawInputs 恢复
 	ioState2 := state.NewInMemoryCommitState()
 	globalState2 := state.NewInMemoryCommitState()
 	compState2 := state.NewInMemoryCommitState()
@@ -1261,9 +1273,9 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 		st:          wcs2,
 	}
 
-	// 传入非 map 输入（走 else 分支）
-	if err := storage.Recover(ctx, session2, "simple_input"); err != nil {
-		t.Fatalf("单个输入值 Recover 返回错误：%v", err)
+	ii, _ := interaction.NewInteractiveInput("simple_input")
+	if err := storage.Recover(ctx, session2, ii); err != nil {
+		t.Fatalf("RawInputs 恢复返回错误：%v", err)
 	}
 }
 
@@ -1324,7 +1336,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_空Map输入(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// 空 map 不视为交互输入
+	// 空 map 不是 *InteractiveInput，不视为交互输入
 	err := cp.PreWorkflowExecute(ctx, session, map[string]any{})
 	if err != nil {
 		t.Fatalf("空 map 输入不应返回错误：%v", err)

@@ -3,7 +3,10 @@ package checkpointer
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
 
 // ──────────────────────────── CheckpointerFactory 测试 ────────────────────────────
@@ -300,30 +303,105 @@ func TestCheckpointerFactoryConfig(t *testing.T) {
 	}
 }
 
+// TestCheckpointerFactory_Create_空配置默认值 测试空配置时默认回退到 in_memory
+// 对应 Python: CheckpointerConfig(type="in_memory", conf={}) 默认值
+func TestCheckpointerFactory_Create_空配置默认值(t *testing.T) {
+	f := NewCheckpointerFactory()
+	ctx := context.Background()
+
+	// 传零值配置，应默认回退到 in_memory
+	cp, err := f.Create(ctx, CheckpointerFactoryConfig{})
+	if err != nil {
+		t.Fatalf("空配置应回退到 in_memory，不应返回错误：%v", err)
+	}
+	if cp == nil {
+		t.Fatal("空配置创建应返回非 nil 检查点器")
+	}
+}
+
+// TestCheckpointerFactoryConfig_String 测试 String() 脱敏
+func TestCheckpointerFactoryConfig_String(t *testing.T) {
+	tests := []struct {
+		name string
+		conf CheckpointerFactoryConfig
+		want string
+	}{
+		{
+			name: "无密码 URL 不脱敏",
+			conf: CheckpointerFactoryConfig{
+				Type: "in_memory",
+				Conf: map[string]any{"host": "localhost"},
+			},
+			want: `type="in_memory" conf=map[host:localhost]`,
+		},
+		{
+			name: "含密码 URL 脱敏",
+			conf: CheckpointerFactoryConfig{
+				Type: "persistence",
+				Conf: map[string]any{
+					"db_url": "postgresql://admin:secret@db:5432/app",
+				},
+			},
+			want: `type="persistence" conf=map[db_url:postgresql://admin:***@db:5432/app]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.conf.String()
+			if got != tt.want {
+				t.Fatalf("String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCheckpointerFactoryConfig_String_密码不泄露 测试 String() 不会泄露明文密码
+func TestCheckpointerFactoryConfig_String_密码不泄露(t *testing.T) {
+	conf := CheckpointerFactoryConfig{
+		Type: "persistence",
+		Conf: map[string]any{
+			"db_url": "redis://:mysecretpassword@redis-host:6379/0",
+		},
+	}
+	s := conf.String()
+	if contains(s, "mysecretpassword") {
+		t.Errorf("String() 泄露了明文密码：%s", s)
+	}
+	if !contains(s, "***") {
+		t.Errorf("String() 应包含脱敏标记 ***：%s", s)
+	}
+}
+
+// contains 检查字符串是否包含子串
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
 // ──────────────────────────── 测试辅助类型 ────────────────────────────
 
 // mockCheckpointer 用于测试的模拟检查点器
 type mockCheckpointer struct{}
 
-func (m *mockCheckpointer) PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (m *mockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) PostWorkflowExecute(ctx context.Context, session CheckpointerSession, result any, exception error) error {
+func (m *mockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
 	return nil
 }
-func (m *mockCheckpointer) PreAgentExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (m *mockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) PreAgentTeamExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (m *mockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) InterruptAgentExecute(ctx context.Context, session CheckpointerSession) error {
+func (m *mockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (m *mockCheckpointer) PostAgentExecute(ctx context.Context, session CheckpointerSession) error {
+func (m *mockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (m *mockCheckpointer) PostAgentTeamExecute(ctx context.Context, session CheckpointerSession) error {
+func (m *mockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
 func (m *mockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {

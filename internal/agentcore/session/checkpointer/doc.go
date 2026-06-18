@@ -10,7 +10,7 @@
 //
 //	checkpointer/
 //	├── doc.go              # 包文档
-//	├── base.go             # Checkpointer/Storage 接口、命名空间常量、Key 构建函数
+//	├── base.go             # 接口类型别名（→ interfaces 包）、命名空间常量、Key 构建函数
 //	├── serializer.go       # Serializer 接口、JSONSerializer 实现
 //	├── inmemory.go         # InMemoryCheckpointer、AgentStorage/AgentTeamStorage/WorkflowStorage
 //	├── persistence.go      # PersistenceCheckpointer、EntityHooks、持久化存储实现

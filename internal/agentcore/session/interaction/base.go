@@ -3,32 +3,17 @@ package interaction
 import (
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// baseSession 交互所需的会话最小接口。
-// 嵌入 checkpointer.CheckpointerSession（SessionID/State/Config/Checkpointer），
-// 确保 session 可以直接传给 checkpointer 的 InterruptAgentExecute 等方法，
-// 对齐 Python: interaction 直接将 session 传给 checkpointer，无需二次断言。
-// 额外包含 StreamWriterManager，用于交互输出写入流。
-// *internal.NodeSession / *internal.AgentSession 天然实现此接口（Go 隐式接口满足）。
-// 注意：Python 的 BaseSession 也没有 executable_id()，executable_id 只在 NodeSession 上。
-// WorkflowInteraction/AgentInteraction 所需的 nodeID 通过类型断言 ExecutableIDProvider 获取。
-type baseSession interface {
-	checkpointer.CheckpointerSession
-	StreamWriterManager() any
-}
-
-// ExecutableIDProvider 提供可执行路径 ID 的接口。
+// ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
 // NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
-// 通过类型断言延迟绑定：WorkflowInteraction/AgentInteraction 运行时断言获取 nodeID。
-type ExecutableIDProvider interface {
-	ExecutableID() string
-}
+// 对齐 Python: hasattr(session, "executable_id") 检测。
+type ExecutableIDProvider = interfaces.ExecutableIDProvider
 
 // InteractionOutputWriterProvider 交互所需的输出写入器提供者接口。
 // 5.10 实现后，session/stream 包的 StreamWriterManager 类型天然满足此接口，届时迁移到 session/stream 包。
@@ -78,7 +63,7 @@ type BaseInteraction struct {
 	// idx 当前输入队列消费索引
 	idx int
 	// session 基础会话
-	session baseSession
+	session interfaces.BaseSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -101,7 +86,7 @@ const (
 // NewBaseInteraction 创建交互基类实例。
 // defaultInput 为可选的默认输入，会被追加到从 session state 读取的输入队列之后。
 // 对应 Python: BaseInteraction.__init__(session, default_input)
-func NewBaseInteraction(session baseSession, defaultInput ...any) *BaseInteraction {
+func NewBaseInteraction(session interfaces.BaseSession, defaultInput ...any) *BaseInteraction {
 	bi := &BaseInteraction{
 		session: session,
 	}
@@ -191,7 +176,7 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 
 // writeInteractionOutput 写入交互输出到流。
 // 通过类型断言延迟绑定，5.10 实现后自动生效。
-func writeInteractionOutput(session baseSession, outputType string, index int, payload any) error {
+func writeInteractionOutput(session interfaces.BaseSession, outputType string, index int, payload any) error {
 	mgr := session.StreamWriterManager()
 	if mgr == nil {
 		return nil
@@ -214,7 +199,7 @@ func writeInteractionOutput(session baseSession, outputType string, index int, p
 // 对应 Python: session.state().commit_cmp()
 // Python 中通过继承链直接调用，Go 中通过类型断言 WorkflowState 获取。
 // 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
-func commitCMP(session baseSession) {
+func commitCMP(session interfaces.BaseSession) {
 	st := session.State()
 	if ws, ok := st.(state.WorkflowState); ok {
 		ws.CommitCmp()
@@ -230,7 +215,7 @@ func commitCMP(session baseSession) {
 // getExecutableID 通过类型断言从 session 获取可执行路径 ID。
 // NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
 // 断言失败时记录 Warn 日志并返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
-func getExecutableID(session baseSession) string {
+func getExecutableID(session interfaces.BaseSession) string {
 	if provider, ok := session.(ExecutableIDProvider); ok {
 		return provider.ExecutableID()
 	}

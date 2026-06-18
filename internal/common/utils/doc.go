@@ -9,7 +9,7 @@
 //	├── doc.go            # 包文档
 //	├── singleton.go      # 泛型单例：Singleton[T]
 //	├── hash.go           # 哈希工具：SHA256 密钥生成
-//	├── net.go            # 网络工具：本机 IP + URL 脱敏 + HTTP 头清洗
+//	├── net.go            # 网络工具：本机 IP + URL 脱敏 + 递归值脱敏
 //	├── dict.go           # 字典工具：嵌套字典操作 + RemoveZeroValues + ValidateArgs
 //	├── port.go           # 端口等待：WaitForTCPPort + WaitForPIDExit
 //	├── background.go     # 后台任务：BackgroundTask + Task + TaskManager

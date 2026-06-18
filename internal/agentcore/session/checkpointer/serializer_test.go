@@ -102,3 +102,16 @@ func TestJSONSerializer_往返测试(t *testing.T) {
 		t.Error("往返后丢失数据")
 	}
 }
+
+// TestJSONSerializer_LoadsTyped_nil输入 测试 nil 输入返回 nil
+// 对应 Python: JsonSerializer.loads_typed() 中 if data is None: return None
+func TestJSONSerializer_LoadsTyped_nil输入(t *testing.T) {
+	s := NewJSONSerializer()
+	result, err := s.LoadsTyped("json", nil)
+	if err != nil {
+		t.Fatalf("nil 输入不应返回错误：%v", err)
+	}
+	if result != nil {
+		t.Errorf("nil 输入应返回 nil，实际=%v", result)
+	}
+}

@@ -327,6 +327,7 @@ func (s *Session) PreRun(ctx context.Context, inputs ...map[string]any) error {
 // 幂等：多次调用只执行一次。
 //
 // 对应 Python: Session.post_run()
+// Python 中 commit() 内部 post_agent_execute 抛异常时会向上传播，Go 同样返回 Commit 错误。
 func (s *Session) PostRun(ctx context.Context) error {
 	if s.postRunDone {
 		return nil
@@ -336,7 +337,15 @@ func (s *Session) PostRun(ctx context.Context) error {
 		_ = s.CloseStream()
 	}
 
-	_ = s.Commit(ctx)
+	// G-08 修复：不再吞掉 Commit 错误，对齐 Python 异常传播行为
+	if err := s.Commit(ctx); err != nil {
+		s.postRunDone = true
+		logger.Error(logger.ComponentAgentCore).Err(err).
+			Str("action", "session_post_run").
+			Str("session_id", s.GetSessionID()).
+			Msg("Session PostRun Commit 失败")
+		return err
+	}
 
 	s.postRunDone = true
 	logger.Info(logger.ComponentAgentCore).

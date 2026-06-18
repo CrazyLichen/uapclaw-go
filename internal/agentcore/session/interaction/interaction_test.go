@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -17,26 +17,26 @@ type fakeCheckpointer struct {
 	interrupted  bool
 }
 
-func (f *fakeCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (f *fakeCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (f *fakeCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+func (f *fakeCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
 	return nil
 }
-func (f *fakeCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (f *fakeCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (f *fakeCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (f *fakeCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (f *fakeCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (f *fakeCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	f.interrupted = true
 	return f.interruptErr
 }
-func (f *fakeCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (f *fakeCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (f *fakeCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (f *fakeCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
 func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
@@ -345,7 +345,7 @@ func TestAgentInteraction_WaitUserInputs_有StreamWriter(t *testing.T) {
 // 对齐 Python: session.checkpointer().interrupt_agent_execute(session)
 func TestInterruptAgentExecute_checkpointer为nil(t *testing.T) {
 	session := newFakeBaseSession()
-	// baseSession 嵌入 CheckpointerSession，直接调用 cp.InterruptAgentExecute(ctx, session)
+	// interfaces.BaseSession 嵌入 CheckpointerSession，直接调用 cp.InterruptAgentExecute(ctx, session)
 	cp := session.Checkpointer()
 	if cp == nil {
 		// checkpointer 为 nil，跳过（符合预期）

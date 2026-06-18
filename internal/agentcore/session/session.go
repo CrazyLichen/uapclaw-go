@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -10,32 +11,9 @@ import (
 // BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
 // 对应 Python: openjiuwen/core/session/session.py BaseSession
 //
-// 8 个方法按职责分三类：
-//   - 身份与配置：SessionID、Config
-//   - 核心能力：State、Tracer、StreamWriterManager、Checkpointer、ActorManager
-//   - 生命周期：Close
-type BaseSession interface {
-	// Config 获取会话配置
-	// ⤵️ 5.12 回填：返回类型从 any 改为 SessionConfig
-	Config() any
-	// State 获取会话状态
-	State() state.SessionState
-	// Tracer 获取会话追踪器
-	// ⤵️ 5.11 回填：返回类型从 any 改为 Tracer
-	Tracer() any
-	// StreamWriterManager 获取流写入管理器
-	// ⤵️ 5.10 回填：返回类型从 any 改为 StreamWriterManager
-	StreamWriterManager() any
-	// SessionID 获取会话唯一标识
-	SessionID() string
-	// Checkpointer 获取检查点管理器
-	Checkpointer() checkpointer.Checkpointer
-	// ActorManager 获取 Actor 管理器（可选，默认返回 nil）
-	// ⤵️ 后续回填：返回类型从 any 改为 ActorManager
-	ActorManager() any
-	// Close 关闭会话，释放资源
-	Close() error
-}
+// 类型别名指向 interfaces.BaseSession，消除重复定义。
+// 外部代码仍可通过 session.BaseSession 引用，零破坏性迁移。
+type BaseSession = interfaces.BaseSession
 
 // ProxySession 代理会话，将所有 BaseSession 方法委托给内部 stub。
 // 对应 Python: openjiuwen/core/session/session.py ProxySession

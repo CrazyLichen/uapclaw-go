@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -15,25 +15,25 @@ import (
 // noOpCheckpointer 空操作检查点器，用于不需要真实检查点逻辑的测试
 type noOpCheckpointer struct{}
 
-func (n *noOpCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (n *noOpCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+func (n *noOpCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
 	return nil
 }
-func (n *noOpCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (n *noOpCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (n *noOpCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (n *noOpCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (n *noOpCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (n *noOpCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
 func (n *noOpCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {

@@ -1,6 +1,6 @@
 // Package session 提供会话管理的抽象接口、代理实现和 Agent/Workflow/Node 公开会话。
 //
-// 本包定义 BaseSession 接口，作为所有会话类型的统一抽象。ProxySession 实现代理模式。
+// 本包通过类型别名引用 interfaces.BaseSession 作为所有会话类型的统一抽象。ProxySession 实现代理模式。
 // Session 是 Agent 场景下的公开会话，组合内部层 AgentSession，提供 PreRun/PostRun
 // 生命周期、状态读写、流写入等用户面向 API。
 // WorkflowSession 是工作流场景下的公开会话，组合内部层 WorkflowSession，提供
@@ -16,14 +16,17 @@
 //
 //	session/
 //	├── doc.go              # 包文档
-//	├── session.go          # BaseSession 接口 + ProxySession 实现
+//	├── session.go          # BaseSession 类型别名 + ProxySession 实现
+//	├── interfaces/         # 统一接口定义
+//	│   ├── doc.go                           # interfaces 包文档
+//	│   └── interfaces.go                    # BaseSession/Checkpointer/Storage/*Provider 接口
 //	├── agent.go            # Session 公开会话（Agent 场景）+ CreateAgentSession
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
 //	├── node.go             # NodeSessionFacade 公开会话（工作流组件场景）
 //	├── wrapper.go          # RouterSessionFacade 路由会话门面（禁写壳）
 //	├── interaction/        # 交互管理
 //	│   ├── doc.go                           # interaction 包文档
-//	│   ├── base.go                          # baseSession 接口 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量
+//	│   ├── base.go                          # ExecutableIDProvider 类型别名 + BaseInteraction + GraphInterrupt/Interrupt + AgentInterrupt + 常量
 //	│   ├── interaction.go                   # WorkflowInteraction + SimpleAgentInteraction + AgentInteraction + InteractionOutput
 //	│   └── interactive_input.go             # InteractiveInput 用户输入容器
 //	├── state/              # 状态接口与内存实现

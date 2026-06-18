@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -148,7 +150,7 @@ func newWorkflowStorage() *WorkflowStorage {
 
 // PreWorkflowExecute 工作流执行前保存检查点。
 // 对应 Python: InMemoryCheckpointer.pre_workflow_execute()
-func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
 
@@ -242,7 +244,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 
 // PostWorkflowExecute 工作流执行后处理检查点。
 // 对应 Python: InMemoryCheckpointer.post_workflow_execute()
-func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session CheckpointerSession, result any, exception error) error {
+func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
 	sessionID := session.SessionID()
 	workflowID := getWorkflowID(session)
 
@@ -276,17 +278,15 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 			}
 		}()
 
-		// 如果不是 AgentSession 的子会话，移除 workflow store
+		// 如果没有父会话，移除 workflow store
+		// 对齐 Python: if not isinstance(session.parent(), AgentSession)
+		// 有 parent → 保留 store；无 parent → 删除 store
 		cp.mu.Lock()
-		isAgentSession := false
-		if pp, ok := session.(ParentProvider); ok {
-			if parent := pp.Parent(); parent != nil {
-				if _, ok := parent.(AgentIDProvider); ok {
-					isAgentSession = true
-				}
-			}
+		hasParent := false
+		if pp, ok := session.(ParentProvider); ok && pp.Parent() != nil {
+			hasParent = true
 		}
-		if !isAgentSession {
+		if !hasParent {
 			delete(cp.workflowStores, sessionID)
 			delete(cp.sessionToWorkflowIDs, sessionID)
 			logger.Info(logComponent).
@@ -312,7 +312,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 
 // PreAgentExecute Agent 执行前恢复状态。
 // 对应 Python: InMemoryCheckpointer.pre_agent_execute()
-func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
 
@@ -374,7 +374,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session Che
 
 // PreAgentTeamExecute AgentTeam 执行前恢复状态。
 // 对应 Python: InMemoryCheckpointer.pre_agent_team_execute()
-func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
 
@@ -432,7 +432,7 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 
 // InterruptAgentExecute Agent 中断时保存检查点。
 // 对应 Python: InMemoryCheckpointer.interrupt_agent_execute()
-func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, session CheckpointerSession) error {
+func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
 
@@ -475,7 +475,7 @@ func (cp *InMemoryCheckpointer) InterruptAgentExecute(ctx context.Context, sessi
 
 // PostAgentExecute Agent 执行后保存检查点。
 // 对应 Python: InMemoryCheckpointer.post_agent_execute()
-func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session CheckpointerSession) error {
+func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	agentID := GetAgentID(session)
 	sessionID := session.SessionID()
 
@@ -518,7 +518,7 @@ func (cp *InMemoryCheckpointer) PostAgentExecute(ctx context.Context, session Ch
 
 // PostAgentTeamExecute AgentTeam 执行后保存检查点。
 // 对应 Python: InMemoryCheckpointer.post_agent_team_execute()
-func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, session CheckpointerSession) error {
+func (cp *InMemoryCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
 	teamID := GetTeamID(session)
 	sessionID := session.SessionID()
 
@@ -663,7 +663,7 @@ func (cp *InMemoryCheckpointer) GraphStore() any {
 
 // innerSaveWorkflowCheckpoint 内部方法：保存工作流检查点。
 // 对应 Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
-func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context, workflowID, sessionID string, session CheckpointerSession, reason string) error {
+func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context, workflowID, sessionID string, session interfaces.BaseSession, reason string) error {
 	cp.mu.RLock()
 	workflowStore := cp.workflowStores[sessionID]
 	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
@@ -798,7 +798,7 @@ func (s *baseSingleStateStorage) hasBlob(entityID string) bool {
 
 // Save 保存 Agent 状态。
 // 对应 Python: AgentStorage.save() → BaseSingleStateStorage.save()
-func (s *AgentStorage) Save(ctx context.Context, session CheckpointerSession) error {
+func (s *AgentStorage) Save(ctx context.Context, session interfaces.BaseSession) error {
 	entityID := GetAgentID(session)
 	if session.State() == nil {
 		return nil
@@ -817,7 +817,7 @@ func (s *AgentStorage) Save(ctx context.Context, session CheckpointerSession) er
 
 // Recover 恢复 Agent 状态。
 // 对应 Python: AgentStorage.recover() → BaseSingleStateStorage.recover()
-func (s *AgentStorage) Recover(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (s *AgentStorage) Recover(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	entityID := GetAgentID(session)
 	stateBlob, exists := s.getBlob(entityID)
 	if !exists {
@@ -843,7 +843,7 @@ func (s *AgentStorage) Clear(ctx context.Context, entityID, _ string) error {
 }
 
 // Exists 检查 Agent 状态是否存在。
-func (s *AgentStorage) Exists(ctx context.Context, session CheckpointerSession) (bool, error) {
+func (s *AgentStorage) Exists(ctx context.Context, session interfaces.BaseSession) (bool, error) {
 	entityID := GetAgentID(session)
 	return s.hasBlob(entityID), nil
 }
@@ -852,19 +852,13 @@ func (s *AgentStorage) Exists(ctx context.Context, session CheckpointerSession) 
 
 // Save 保存 AgentTeam 状态。
 // 对应 Python: AgentTeamStorage.save() → BaseSingleStateStorage.save()
-func (s *AgentTeamStorage) Save(ctx context.Context, session CheckpointerSession) error {
+func (s *AgentTeamStorage) Save(ctx context.Context, session interfaces.BaseSession) error {
 	entityID := GetTeamID(session)
 	if session.State() == nil {
 		return nil
 	}
-	// 对齐 Python: session.state().get_global(None)
-	// 通过类型断言获取 *state.AgentStateCollection，使用 GetState 保存完整状态
-	var stateToSave any
-	if asc, ok := session.State().(*state.AgentStateCollection); ok {
-		stateToSave = asc.GetState()
-	} else {
-		stateToSave = session.State().GetGlobal(state.AllStateKey)
-	}
+	// 对齐 Python: session.state().get_global(None) → 只保存 globalState
+	stateToSave := session.State().GetGlobal(state.AllStateKey)
 	if stateToSave == nil {
 		return nil
 	}
@@ -878,7 +872,7 @@ func (s *AgentTeamStorage) Save(ctx context.Context, session CheckpointerSession
 
 // Recover 恢复 AgentTeam 状态。
 // 对应 Python: AgentTeamStorage.recover() → BaseSingleStateStorage.recover()
-func (s *AgentTeamStorage) Recover(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (s *AgentTeamStorage) Recover(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	entityID := GetTeamID(session)
 	stateBlob, exists := s.getBlob(entityID)
 	if !exists {
@@ -891,11 +885,9 @@ func (s *AgentTeamStorage) Recover(ctx context.Context, session CheckpointerSess
 	if session.State() == nil || loadedState == nil {
 		return nil
 	}
-	// 对齐 Python: session.state().global_state.set_state(state)
-	if asc, ok := session.State().(*state.AgentStateCollection); ok {
-		if st, ok := loadedState.(map[string]any); ok {
-			asc.SetState(st)
-		}
+	// 对齐 Python: session.state().global_state.set_state(state) → 只恢复 globalState
+	if st, ok := loadedState.(map[string]any); ok {
+		session.State().SetGlobal(st)
 	}
 	return nil
 }
@@ -907,7 +899,7 @@ func (s *AgentTeamStorage) Clear(ctx context.Context, entityID, _ string) error 
 }
 
 // Exists 检查 AgentTeam 状态是否存在。
-func (s *AgentTeamStorage) Exists(ctx context.Context, session CheckpointerSession) (bool, error) {
+func (s *AgentTeamStorage) Exists(ctx context.Context, session interfaces.BaseSession) (bool, error) {
 	entityID := GetTeamID(session)
 	return s.hasBlob(entityID), nil
 }
@@ -916,7 +908,7 @@ func (s *AgentTeamStorage) Exists(ctx context.Context, session CheckpointerSessi
 
 // Save 保存工作流状态和更新。
 // 对应 Python: WorkflowStorage.save()
-func (ws *WorkflowStorage) Save(ctx context.Context, session CheckpointerSession) error {
+func (ws *WorkflowStorage) Save(ctx context.Context, session interfaces.BaseSession) error {
 	workflowID := getWorkflowID(session)
 
 	// 通过类型断言获取 WorkflowState 接口
@@ -961,7 +953,7 @@ func (ws *WorkflowStorage) Save(ctx context.Context, session CheckpointerSession
 
 // Recover 恢复工作流状态。
 // 对应 Python: WorkflowStorage.recover()
-func (ws *WorkflowStorage) Recover(ctx context.Context, session CheckpointerSession, inputs any) error {
+func (ws *WorkflowStorage) Recover(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	workflowID := getWorkflowID(session)
 
 	// 恢复主状态
@@ -979,9 +971,11 @@ func (ws *WorkflowStorage) Recover(ctx context.Context, session CheckpointerSess
 		}
 	}
 
-	// 处理交互输入恢复
-	// 对应 Python: if inputs.raw_inputs is not None / else 处理 user_inputs
-	ws.recoverFromInputs(session, inputs)
+	// 处理交互输入
+	// 对齐 Python: if inputs is not None: self._process_interactive_inputs(session, inputs)
+	if ii, ok := inputs.(*interaction.InteractiveInput); ok {
+		ws.processInteractiveInputs(session, ii)
+	}
 
 	// 恢复状态更新
 	// GetUpdates/SetUpdates 在 WorkflowCommitState 上，需要类型断言
@@ -1015,7 +1009,7 @@ func (ws *WorkflowStorage) Clear(ctx context.Context, workflowID, _ string) erro
 
 // Exists 检查工作流状态是否存在。
 // 对应 Python: WorkflowStorage.exists()
-func (ws *WorkflowStorage) Exists(ctx context.Context, session CheckpointerSession) (bool, error) {
+func (ws *WorkflowStorage) Exists(ctx context.Context, session interfaces.BaseSession) (bool, error) {
 	workflowID := getWorkflowID(session)
 	ws.mu.RLock()
 	stateBlob, exists := ws.stateBlobs[workflowID]
@@ -1028,52 +1022,54 @@ func (ws *WorkflowStorage) Exists(ctx context.Context, session CheckpointerSessi
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// recoverFromInputs 从交互输入恢复工作流状态。
-// 对应 Python: WorkflowStorage.recover() 中 inputs 处理逻辑
-func (ws *WorkflowStorage) recoverFromInputs(session CheckpointerSession, inputs any) {
-	if inputs == nil {
-		return
-	}
-
-	// 通过类型断言获取 WorkflowState 接口
-	wfState, ok := session.State().(state.WorkflowState)
-	if !ok || wfState == nil {
-		// 非 WorkflowState 类型，直接更新 session state
-		if inputMap, ok := inputs.(map[string]any); ok {
-			if err := session.State().Update(inputMap); err != nil {
-				logger.Warn(logComponent).Err(err).
-					Str("session_id", session.SessionID()).
-					Msg("从交互输入恢复 session state 失败")
-			}
+// processInteractiveInputs 处理交互输入并更新工作流状态。
+// 对齐 Python: _process_interactive_inputs(session, inputs)
+func (ws *WorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
+	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
+	if inputs.RawInputs != nil {
+		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
+			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
 		}
 		return
 	}
 
-	// 简化版：将 inputs 作为交互输入处理
-	// Python 中区分 raw_inputs 和 user_inputs，Go 版本统一处理
-	// 对齐 Python: session.state().update_and_commit_workflow_state({INTERACTIVE_INPUT: inputs.raw_inputs})
-	if inputMap, ok := inputs.(map[string]any); ok {
-		wfState.UpdateAndCommitWorkflowState(inputMap)
-	} else {
-		// 单个输入值，包装为交互输入
-		wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: []any{inputs}})
+	// 对齐 Python: if not inputs.user_inputs: return
+	if len(inputs.UserInputs) == 0 {
+		return
 	}
+
+	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
+	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
+	// session 是 WorkflowSession，parentID=""，executableID=nodeID。
+	wfState, ok := session.State().(state.WorkflowState)
+	if !ok || wfState == nil {
+		logger.Warn(logComponent).
+			Str("session_id", session.SessionID()).
+			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
+		return
+	}
+
+	for nodeID, value := range inputs.UserInputs {
+		nodeState := wfState.CreateNodeState(nodeID, "")
+		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
+		} else {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
+		}
+	}
+	wfState.Commit()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// isInteractiveInput 判断输入是否为交互输入（非 nil 且非空 map）。
-// Python 中通过 isinstance(inputs, InteractiveInput) 判断，
-// Go 中简化为判断非 nil。
+// isInteractiveInput 判断输入是否为交互输入。
+// 对齐 Python: isinstance(inputs, InteractiveInput)
 func isInteractiveInput(inputs any) bool {
 	if inputs == nil {
 		return false
 	}
-	// 空 map 也视为非交互输入
-	if m, ok := inputs.(map[string]any); ok && len(m) == 0 {
-		return false
-	}
-	return true
+	_, ok := inputs.(*interaction.InteractiveInput)
+	return ok
 }
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。

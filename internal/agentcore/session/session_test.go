@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
@@ -52,25 +53,25 @@ func (m *mockStub) Close() error                            { m.closeCalled = tr
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
 
-func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session checkpointer.CheckpointerSession, result any, exception error) error {
+func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
 	return nil
 }
-func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) PreAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession, inputs any) error {
+func (m *testMockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) InterruptAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (m *testMockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostAgentExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (m *testMockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session checkpointer.CheckpointerSession) error {
+func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
 	return nil
 }
 func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -45,8 +46,8 @@ func TestNewWorkflowSession_无parent(t *testing.T) {
 func TestWorkflowSession_BaseSession接口(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	// 验证实现了 baseSession 接口
-	var _ baseSession = ws
+	// 验证实现了 interfaces.BaseSession 接口
+	var _ interfaces.BaseSession = ws
 
 	if ws.Config() != nil {
 		t.Error("默认 config 应为 nil")

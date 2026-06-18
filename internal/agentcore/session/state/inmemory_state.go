@@ -76,6 +76,9 @@ func (s *InMemoryStateLike) SetState(state map[string]any) {
 // GetGlobal 单存储单元无全局概念，返回 nil
 func (s *InMemoryStateLike) GetGlobal(key StateKey) any { return nil }
 
+// SetGlobal 单存储单元无全局概念，空操作
+func (s *InMemoryStateLike) SetGlobal(state map[string]any) {}
+
 // UpdateGlobal 单存储单元无全局概念，空操作
 func (s *InMemoryStateLike) UpdateGlobal(data map[string]any) {}
 

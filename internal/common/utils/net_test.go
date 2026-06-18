@@ -103,3 +103,98 @@ func TestRedactURLPassword_有查询和片段(t *testing.T) {
 		})
 	}
 }
+
+// TestRedactURLInValue 测试递归脱敏值中的 URL 密码
+func TestRedactURLInValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+		want  any
+	}{
+		{
+			name:  "非 URL 字符串",
+			input: "hello world",
+			want:  "hello world",
+		},
+		{
+			name:  "URL 字符串脱敏",
+			input: "redis://:secret@host:6379/0",
+			want:  "redis://:***@host:6379/0",
+		},
+		{
+			name:  "整数原样返回",
+			input: 42,
+			want:  42,
+		},
+		{
+			name:  "nil 原样返回",
+			input: nil,
+			want:  nil,
+		},
+		{
+			name: "map 递归脱敏",
+			input: map[string]any{
+				"db_url": "postgresql://admin:p4ss@db.host:5432/mydb",
+				"name":   "test",
+			},
+			want: map[string]any{
+				"db_url": "postgresql://admin:***@db.host:5432/mydb",
+				"name":   "test",
+			},
+		},
+		{
+			name:  "slice 递归脱敏",
+			input: []any{"redis://:pw@host:6379/0", "plain text"},
+			want:  []any{"redis://:***@host:6379/0", "plain text"},
+		},
+		{
+			name: "嵌套 map+slice",
+			input: map[string]any{
+				"urls": []any{"mysql://root:123@db:3306/app"},
+			},
+			want: map[string]any{
+				"urls": []any{"mysql://root:***@db:3306/app"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RedactURLInValue(tt.input)
+			if !equalAny(got, tt.want) {
+				t.Fatalf("RedactURLInValue(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// equalAny 深度比较任意类型值
+func equalAny(a, b any) bool {
+	switch av := a.(type) {
+	case map[string]any:
+		bv, ok := b.(map[string]any)
+		if !ok || len(av) != len(bv) {
+			return false
+		}
+		for k, v := range av {
+			bval, exists := bv[k]
+			if !exists || !equalAny(v, bval) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		bv, ok := b.([]any)
+		if !ok || len(av) != len(bv) {
+			return false
+		}
+		for i := range av {
+			if !equalAny(av[i], bv[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return a == b
+	}
+}

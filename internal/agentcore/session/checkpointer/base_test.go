@@ -127,7 +127,7 @@ func TestGetTeamID_不满足接口(t *testing.T) {
 
 // ──────────────────────────── 测试辅助类型 ────────────────────────────
 
-// testSession 最小 CheckpointerSession 实现
+// testSession 最小 interfaces.BaseSession 实现
 type testSession struct {
 	sessionID string
 }
@@ -135,6 +135,10 @@ type testSession struct {
 func (s *testSession) SessionID() string         { return s.sessionID }
 func (s *testSession) State() state.SessionState  { return nil }
 func (s *testSession) Config() any                { return nil }
+func (s *testSession) Tracer() any                { return nil }
+func (s *testSession) StreamWriterManager() any     { return nil }
+func (s *testSession) ActorManager() any            { return nil }
+func (s *testSession) Close() error                 { return nil }
 func (s *testSession) Checkpointer() Checkpointer { return nil }
 
 // testSessionWithWorkflowID 满足 WorkflowIDProvider 的 session

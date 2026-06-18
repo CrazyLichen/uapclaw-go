@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -68,6 +70,14 @@ func NewCheckpointerFactory() *CheckpointerFactory {
 	return f
 }
 
+// String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
+// 对应 Python: CheckpointerConfig.__str__()
+// 递归脱敏 Conf 中的 URL 密码，防止日志泄露数据库连接字符串。
+func (c CheckpointerFactoryConfig) String() string {
+	redactedConf := utils.RedactURLInValue(c.Conf)
+	return fmt.Sprintf("type=%q conf=%v", c.Type, redactedConf)
+}
+
 // Register 注册检查点器 Provider。
 // 对应 Python: CheckpointerFactory.register(name)
 func (f *CheckpointerFactory) Register(name string, provider CheckpointerProvider) {
@@ -78,7 +88,17 @@ func (f *CheckpointerFactory) Register(name string, provider CheckpointerProvide
 
 // Create 根据配置创建检查点器实例。
 // 对应 Python: CheckpointerFactory.create(checkpointer_conf)
+// Python CheckpointerConfig.type 默认值为 "in_memory"，此处对齐：
+// 若 conf.Type 为空则回退到 "in_memory"。
 func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerFactoryConfig) (Checkpointer, error) {
+	// 对齐 Python CheckpointerConfig 的默认值
+	if conf.Type == "" {
+		conf.Type = "in_memory"
+	}
+	if conf.Conf == nil {
+		conf.Conf = make(map[string]any)
+	}
+
 	f.mu.RLock()
 	provider, exists := f.registry[conf.Type]
 	f.mu.RUnlock()

@@ -60,6 +60,9 @@ type SessionState interface {
 	RecoverableStateLike
 	// GetGlobal 从全局状态获取值
 	GetGlobal(key StateKey) any
+	// SetGlobal 从快照恢复全局状态
+	// 对齐 Python: session.state().global_state.set_state(state)
+	SetGlobal(state map[string]any)
 	// UpdateGlobal 更新全局状态
 	UpdateGlobal(data map[string]any)
 	// UpdateTrace 更新追踪状态

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -349,7 +350,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 		st:          wcs2,
 		config:      &testConfig{},
 	}
-	inputs := map[string]any{"user_input": "hello"}
+	inputs, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session2, inputs); err != nil {
 		t.Fatalf("PreWorkflowExecute 返回错误：%v", err)
 	}
@@ -1175,7 +1176,7 @@ func TestBasePersistenceStorage_entityTitleLabel_空标签(t *testing.T) {
 }
 
 // TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection 测试 AgentTeam 钩子
-// 使用 *AgentStateCollection 类型的状态
+// 对齐 Python: AgentTeamStorage._get_state_to_save → session.state().get_global(None) → 只保存 globalState
 func TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection(t *testing.T) {
 	h := &agentTeamEntityHooks{}
 	st := state.NewAgentStateCollection()
@@ -1186,7 +1187,7 @@ func TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection(t *testing.T) 
 		st:          st,
 	}
 
-	// *AgentStateCollection 走 GetState 分支
+	// GetGlobal(AllStateKey) 只返回 globalState dict，不含 agent_state
 	savedState := h.GetStateToSave(session)
 	if savedState == nil {
 		t.Fatal("GetStateToSave 返回 nil")
@@ -1195,13 +1196,20 @@ func TestAgentTeamEntityHooks_GetStateToSave_AgentStateCollection(t *testing.T) 
 	if !ok {
 		t.Fatalf("GetStateToSave 期望 map[string]any，实际 %T", savedState)
 	}
-	// GetState() 返回 {"global_state": ..., "agent_state": ...}
-	if _, hasGlobal := m["global_state"]; !hasGlobal {
-		t.Error("GetStateToSave 结果应包含 'global_state' 键")
+	// GetGlobal(AllStateKey) 返回纯 globalState dict，应包含写入的 key
+	if val, hasKey := m["global_key"]; !hasKey {
+		t.Error("GetStateToSave 结果应包含 'global_key' 键")
+	} else if val != "global_val" {
+		t.Errorf("global_key 期望 'global_val'，实际 %v", val)
+	}
+	// 不应包含 agent_state（与旧行为不同，旧行为走 GetState() 返回完整状态）
+	if _, hasAgent := m["agent_state"]; hasAgent {
+		t.Error("GetStateToSave 结果不应包含 'agent_state' 键（只保存 globalState）")
 	}
 }
 
 // TestAgentTeamEntityHooks_RestoreState_AgentStateCollection 测试 AgentTeam 恢复到 *AgentStateCollection
+// 对齐 Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
 func TestAgentTeamEntityHooks_RestoreState_AgentStateCollection(t *testing.T) {
 	h := &agentTeamEntityHooks{}
 	st := state.NewAgentStateCollection()
@@ -1211,10 +1219,14 @@ func TestAgentTeamEntityHooks_RestoreState_AgentStateCollection(t *testing.T) {
 		st:          st,
 	}
 
-	// 恢复到 *AgentStateCollection，使用 global_state/agent_state 格式
-	h.RestoreState(session, map[string]any{
-		"global_state": map[string]any{"global_key": "restored_val"},
-	})
+	// SetGlobal 只恢复 globalState，传入纯 dict（非 {global_state:..., agent_state:...} 格式）
+	h.RestoreState(session, map[string]any{"global_key": "restored_val"})
+
+	// 验证 globalState 已恢复
+	got := st.GetGlobal(state.StringKey("global_key"))
+	if got != "restored_val" {
+		t.Errorf("global_key 期望 'restored_val'，实际 %v", got)
+	}
 }
 
 // ──────────────────────────── PreAgentExecute 错误路径测试 ────────────────────────────
@@ -1269,7 +1281,8 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_恢复失败(t *testing.T) {
 
 	ctx := context.Background()
 	// 交互输入走 Recover 路径
-	err := cp.PreWorkflowExecute(ctx, session, "user_input")
+	ii, _ := interaction.NewInteractiveInput()
+	err := cp.PreWorkflowExecute(ctx, session, ii)
 	if err == nil {
 		t.Error("恢复失败时应返回错误")
 	}
@@ -1338,4 +1351,43 @@ func (p *errorPipeline) Get(_ context.Context, _ string) error                  
 func (p *errorPipeline) Exists(_ context.Context, _ string) error               { return nil }
 func (p *errorPipeline) Execute(_ context.Context) ([]kv.PipelineResult, error) {
 	return nil, fmt.Errorf("injected pipeline error")
+}
+
+// ──────────────────────────── T-06: PreWorkflowExecute workflowID 空值防御测试 ────────────────────────────
+
+// TestPreWorkflowExecute_workflowID为空_强制删除 测试 workflowID 为空时跳过清理
+// 对应 Python: if workflow_id is None: logger.warning(...) return
+func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
+	store := kv.NewInMemoryKVStore()
+	cp := NewPersistenceCheckpointer(store)
+	ctx := context.Background()
+
+	// 先用有 workflowID 的 session 保存工作流状态（确保状态存在）
+	wcs1 := newTestWorkflowCommitState()
+	wcs1.UpdateGlobal(map[string]any{"wf_key": "wf_val"})
+	session1 := &testWorkflowSession{
+		testSession: testSession{sessionID: "sess-empty-wf"},
+		st:          wcs1,
+		config:      &testConfig{},
+		workflowID:  "wf-1",
+	}
+	result := map[string]any{"__interrupt__": "need_input"}
+	if err := cp.PostWorkflowExecute(ctx, session1, result, nil); err != nil {
+		t.Fatalf("PostWorkflowExecute 保存失败：%v", err)
+	}
+
+	// 再用空 workflowID + ForceDel=true 的 session 尝试强制删除
+	// 空 workflowID → Exists 返回 false → 直接 return nil（不进入强制删除分支）
+	// 所以这个测试验证空 workflowID 不会导致异常
+	wcs2 := newTestWorkflowCommitState()
+	session2 := &testWorkflowSession{
+		testSession: testSession{sessionID: "sess-empty-wf"},
+		st:          wcs2,
+		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
+		workflowID:  "", // 空 workflowID
+	}
+	err := cp.PreWorkflowExecute(ctx, session2, nil)
+	if err != nil {
+		t.Fatalf("空 workflowID 不应返回错误：%v", err)
+	}
 }

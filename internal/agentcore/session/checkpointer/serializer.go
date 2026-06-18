@@ -50,7 +50,11 @@ func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {
 
 // LoadsTyped 从 JSON 反序列化，仅处理格式标签为 "json" 的数据。
 // 其他格式标签返回 (nil, nil)。
+// 对应 Python: JsonSerializer.loads_typed() 中 if data is None: return None
 func (s *JSONSerializer) LoadsTyped(formatTag string, data []byte) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
 	if formatTag != "json" {
 		return nil, nil
 	}

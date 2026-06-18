@@ -55,6 +55,17 @@ func (s *AgentStateCollection) UpdateGlobal(data map[string]any) {
 	_ = s.globalState.Update(data)
 }
 
+// SetGlobal 从快照恢复全局状态。
+// 对齐 Python: session.state().global_state.set_state(state)
+func (s *AgentStateCollection) SetGlobal(st map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st == nil {
+		return
+	}
+	s.globalState.SetState(st)
+}
+
 // UpdateTrace 更新追踪状态。Agent 层为空实现，与 Python 一致。
 func (s *AgentStateCollection) UpdateTrace(span any) {
 	// Agent 层的 trace 是空实现，与 Python 一致

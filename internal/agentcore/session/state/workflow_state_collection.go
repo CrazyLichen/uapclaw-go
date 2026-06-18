@@ -90,6 +90,17 @@ func (s *WorkflowStateCollection) UpdateGlobal(data map[string]any) {
 	}
 }
 
+// SetGlobal 从快照恢复全局状态。
+// 对齐 Python: session.state().global_state.set_state(state)
+func (s *WorkflowStateCollection) SetGlobal(st map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.globalState == nil || st == nil {
+		return
+	}
+	s.globalState.SetState(st)
+}
+
 // UpdateTrace 更新追踪状态。
 func (s *WorkflowStateCollection) UpdateTrace(span any) {
 	s.mu.Lock()
