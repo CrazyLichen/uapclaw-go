@@ -43,8 +43,10 @@ func (f *fakeCheckpointer) PostAgentTeamExecute(ctx context.Context, session int
 func (f *fakeCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
-func (f *fakeCheckpointer) GraphStore() any                                     { return nil }
+func (f *fakeCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (f *fakeCheckpointer) GraphStore() any { return nil }
 
 // ──────────────────────────── InteractionOutput 测试 ────────────────────────────
 

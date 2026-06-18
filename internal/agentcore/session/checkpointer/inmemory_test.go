@@ -41,10 +41,10 @@ type testAgentSession struct {
 	st      state.SessionState
 }
 
-func (s *testAgentSession) AgentID() string              { return s.agentID }
-func (s *testAgentSession) State() state.SessionState    { return s.st }
-func (s *testAgentSession) Config() any                  { return s.config }
-func (s *testAgentSession) Checkpointer() Checkpointer   { return nil }
+func (s *testAgentSession) AgentID() string            { return s.agentID }
+func (s *testAgentSession) State() state.SessionState  { return s.st }
+func (s *testAgentSession) Config() any                { return s.config }
+func (s *testAgentSession) Checkpointer() Checkpointer { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
@@ -54,9 +54,9 @@ type testTeamSession struct {
 	st     state.SessionState
 }
 
-func (s *testTeamSession) TeamID() string              { return s.teamID }
-func (s *testTeamSession) State() state.SessionState   { return s.st }
-func (s *testTeamSession) Config() any                 { return s.config }
+func (s *testTeamSession) TeamID() string            { return s.teamID }
+func (s *testTeamSession) State() state.SessionState { return s.st }
+func (s *testTeamSession) Config() any               { return s.config }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
 type testWorkflowSession struct {
@@ -67,10 +67,10 @@ type testWorkflowSession struct {
 	parent     interfaces.BaseSession
 }
 
-func (s *testWorkflowSession) State() state.SessionState    { return s.st }
-func (s *testWorkflowSession) Config() any                  { return s.config }
-func (s *testWorkflowSession) WorkflowID() string            { return s.workflowID }
-func (s *testWorkflowSession) Parent() interfaces.BaseSession   { return s.parent }
+func (s *testWorkflowSession) State() state.SessionState      { return s.st }
+func (s *testWorkflowSession) Config() any                    { return s.config }
+func (s *testWorkflowSession) WorkflowID() string             { return s.workflowID }
+func (s *testWorkflowSession) Parent() interfaces.BaseSession { return s.parent }
 
 // ──────────────────────────── NewInMemoryCheckpointer 测试 ────────────────────────────
 

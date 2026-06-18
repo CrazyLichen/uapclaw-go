@@ -21,15 +21,15 @@ type fakeBaseSession struct {
 	config      any
 }
 
-func (f *fakeBaseSession) State() state.SessionState                          { return f.stateValue }
-func (f *fakeBaseSession) StreamWriterManager() *stream.StreamWriterManager   { return f.swMgrValue }
-func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer              { return f.cpValue }
-func (f *fakeBaseSession) ExecutableID() string                               { return f.execIDValue }
-func (f *fakeBaseSession) SessionID() string                                  { return f.sessionID }
-func (f *fakeBaseSession) Config() any                                        { return f.config }
-func (f *fakeBaseSession) Tracer() any                                         { return nil }
-func (f *fakeBaseSession) ActorManager() any                                   { return nil }
-func (f *fakeBaseSession) Close() error                                        { return nil }
+func (f *fakeBaseSession) State() state.SessionState                        { return f.stateValue }
+func (f *fakeBaseSession) StreamWriterManager() *stream.StreamWriterManager { return f.swMgrValue }
+func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer            { return f.cpValue }
+func (f *fakeBaseSession) ExecutableID() string                             { return f.execIDValue }
+func (f *fakeBaseSession) SessionID() string                                { return f.sessionID }
+func (f *fakeBaseSession) Config() any                                      { return f.config }
+func (f *fakeBaseSession) Tracer() any                                      { return nil }
+func (f *fakeBaseSession) ActorManager() any                                { return nil }
+func (f *fakeBaseSession) Close() error                                     { return nil }
 
 // newFakeBaseSession 创建测试用 fake session
 func newFakeBaseSession() *fakeBaseSession {
@@ -227,14 +227,16 @@ type fakeSessionWithoutExecID struct {
 	cfgValue   any
 }
 
-func (f *fakeSessionWithoutExecID) State() state.SessionState                          { return f.stateValue }
-func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterManager   { return f.swMgrValue }
-func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer              { return f.cpValue }
-func (f *fakeSessionWithoutExecID) SessionID() string                                   { return f.sidValue }
-func (f *fakeSessionWithoutExecID) Config() any                                         { return f.cfgValue }
-func (f *fakeSessionWithoutExecID) Tracer() any                                          { return nil }
-func (f *fakeSessionWithoutExecID) ActorManager() any                                    { return nil }
-func (f *fakeSessionWithoutExecID) Close() error                                         { return nil }
+func (f *fakeSessionWithoutExecID) State() state.SessionState { return f.stateValue }
+func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterManager {
+	return f.swMgrValue
+}
+func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { return f.cpValue }
+func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
+func (f *fakeSessionWithoutExecID) Config() any                           { return f.cfgValue }
+func (f *fakeSessionWithoutExecID) Tracer() any                           { return nil }
+func (f *fakeSessionWithoutExecID) ActorManager() any                     { return nil }
+func (f *fakeSessionWithoutExecID) Close() error                          { return nil }
 
 // TestGetExecutableID_不满足接口 测试 session 不满足 ExecutableIDProvider 时返回空字符串
 func TestGetExecutableID_不满足接口(t *testing.T) {

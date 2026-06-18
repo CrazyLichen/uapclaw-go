@@ -42,14 +42,14 @@ type mockStub struct {
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() any                                        { return m.configVal }
-func (m *mockStub) State() state.SessionState                          { return m.stateVal }
-func (m *mockStub) Tracer() any                                        { return m.tracerVal }
-func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager   { return m.streamWriterManagerVal }
-func (m *mockStub) SessionID() string                                  { return m.sessionIDVal }
-func (m *mockStub) Checkpointer() checkpointer.Checkpointer            { return m.checkpointerVal }
-func (m *mockStub) ActorManager() any                                  { return m.actorManagerVal }
-func (m *mockStub) Close() error                                       { m.closeCalled = true; return m.closeErr }
+func (m *mockStub) Config() any                                      { return m.configVal }
+func (m *mockStub) State() state.SessionState                        { return m.stateVal }
+func (m *mockStub) Tracer() any                                      { return m.tracerVal }
+func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
+func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
+func (m *mockStub) Checkpointer() checkpointer.Checkpointer          { return m.checkpointerVal }
+func (m *mockStub) ActorManager() any                                { return m.actorManagerVal }
+func (m *mockStub) Close() error                                     { m.closeCalled = true; return m.closeErr }
 
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
@@ -78,8 +78,10 @@ func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session
 func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
 	return false, nil
 }
-func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error { return nil }
-func (m *testMockCheckpointer) GraphStore() any                                     { return nil }
+func (m *testMockCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
+	return nil
+}
+func (m *testMockCheckpointer) GraphStore() any { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

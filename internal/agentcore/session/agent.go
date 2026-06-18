@@ -69,8 +69,8 @@ type SessionOption func(*Session)
 //   - config: 创建默认 Config 并设置 envs，传入 inner
 //     ⤵️ 5.12 回填：创建真实 SessionConfig 实例，当前用 map[string]any 占位
 //   - checkpointer: 若未通过 WithCheckpointer 设置，使用 checkpointer.GetCheckpointer()
-	//   - streamWriterManager: 若未通过 WithStreamWriterManager 设置，传 nil 给 inner
-	//     （inner 会自动创建默认实例，✅ 5.10 已回填）
+//   - streamWriterManager: 若未通过 WithStreamWriterManager 设置，传 nil 给 inner
+//     （inner 会自动创建默认实例，✅ 5.10 已回填）
 //   - closeStreamOnPostRun: 默认 true
 //   - sourceMetadata: 默认空 map
 //
