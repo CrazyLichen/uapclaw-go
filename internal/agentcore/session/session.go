@@ -9,13 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
-// 对应 Python: openjiuwen/core/session/session.py BaseSession
-//
-// 类型别名指向 interfaces.BaseSession，消除重复定义。
-// 外部代码仍可通过 session.BaseSession 引用，零破坏性迁移。
-type BaseSession = interfaces.BaseSession
-
 // ProxySession 代理会话，将所有 BaseSession 方法委托给内部 stub。
 // 对应 Python: openjiuwen/core/session/session.py ProxySession
 //
@@ -28,6 +21,15 @@ type ProxySession struct {
 	// stub 被代理的底层会话
 	stub BaseSession
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
+// 对应 Python: openjiuwen/core/session/session.py BaseSession
+//
+// 类型别名指向 interfaces.BaseSession，消除重复定义。
+// 外部代码仍可通过 session.BaseSession 引用，零破坏性迁移。
+type BaseSession = interfaces.BaseSession
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

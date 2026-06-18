@@ -14,12 +14,7 @@
 //	├── serializer.go       # Serializer 接口、JSONSerializer 实现
 //	├── inmemory.go         # InMemoryCheckpointer、AgentStorage/AgentTeamStorage/WorkflowStorage
 //	├── persistence.go      # PersistenceCheckpointer、EntityHooks、持久化存储实现
-//	├── factory.go          # CheckpointerFactory、CheckpointerProvider、CheckpointerConfig
-//	├── base_test.go        # 基础接口和常量测试
-//	├── serializer_test.go  # Serializer 测试
-//	├── inmemory_test.go    # InMemoryCheckpointer 测试
-//	├── persistence_test.go # PersistenceCheckpointer 测试
-//	└── factory_test.go     # CheckpointerFactory 测试
+//	└── factory.go          # CheckpointerFactory、CheckpointerProvider、CheckpointerConfig
 //
 // 对应 Python 代码：openjiuwen/core/session/checkpointer/
 package checkpointer

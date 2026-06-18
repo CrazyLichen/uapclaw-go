@@ -37,6 +37,8 @@ const (
 	defaultMaxSendRetries = 5
 	// defaultCloseTimeout 关闭超时，对应 Python DEFAULT_CLOSE_TIMEOUT = 5.0
 	defaultCloseTimeout = 5 * time.Second
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -47,9 +49,6 @@ var (
 	// ErrQueueSendRetryExhausted 发送重试耗尽
 	ErrQueueSendRetryExhausted = errors.New("stream queue send retry exhausted")
 )
-
-// logComponent 日志组件标识
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

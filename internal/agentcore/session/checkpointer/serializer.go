@@ -37,8 +37,6 @@ func NewJSONSerializer() *JSONSerializer {
 	return &JSONSerializer{}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // DumpsTyped 序列化为 JSON，返回 ("json", jsonBytes)
 func (s *JSONSerializer) DumpsTyped(obj any) (string, []byte, error) {
 	data, err := json.Marshal(obj)
@@ -64,3 +62,5 @@ func (s *JSONSerializer) LoadsTyped(formatTag string, data []byte) (any, error) 
 	}
 	return result, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

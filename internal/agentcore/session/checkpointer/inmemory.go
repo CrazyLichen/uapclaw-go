@@ -117,37 +117,6 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 	}
 }
 
-// newAgentStorage 创建 Agent 状态存储。
-func newAgentStorage() *AgentStorage {
-	return &AgentStorage{
-		baseSingleStateStorage: baseSingleStateStorage{
-			stateBlobs: make(map[string]serdeTuple),
-			serde:      NewJSONSerializer(),
-		},
-	}
-}
-
-// newAgentTeamStorage 创建 AgentTeam 状态存储。
-func newAgentTeamStorage() *AgentTeamStorage {
-	return &AgentTeamStorage{
-		baseSingleStateStorage: baseSingleStateStorage{
-			stateBlobs: make(map[string]serdeTuple),
-			serde:      NewJSONSerializer(),
-		},
-	}
-}
-
-// newWorkflowStorage 创建 Workflow 状态存储。
-func newWorkflowStorage() *WorkflowStorage {
-	return &WorkflowStorage{
-		serde:             NewJSONSerializer(),
-		stateBlobs:        make(map[string]serdeTuple),
-		stateUpdatesBlobs: make(map[string]serdeTuple),
-	}
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // PreWorkflowExecute 工作流执行前保存检查点。
 // 对应 Python: InMemoryCheckpointer.pre_workflow_execute()
 func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
@@ -659,143 +628,6 @@ func (cp *InMemoryCheckpointer) GraphStore() any {
 	return cp.graphStore
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// innerSaveWorkflowCheckpoint 内部方法：保存工作流检查点。
-// 对应 Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
-func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context, workflowID, sessionID string, session interfaces.BaseSession, reason string) error {
-	cp.mu.RLock()
-	workflowStore := cp.workflowStores[sessionID]
-	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
-	cp.mu.RUnlock()
-
-	logger.Info(logComponent).
-		Str("action", "inner_save_workflow_checkpoint").
-		Str("event_type", "checkpoint_save").
-		Str("session_id", sessionID).
-		Str("workflow_id", workflowID).
-		Str("reason", reason).
-		Str("storage_type", "inmemory").
-		Msg("开始保存工作流检查点")
-
-	if err := workflowStore.Save(ctx, session); err != nil {
-		logger.Error(logComponent).Err(err).
-			Str("session_id", sessionID).
-			Str("workflow_id", workflowID).
-			Msg("保存工作流检查点失败")
-		return err
-	}
-
-	// 记录 workflow ID
-	cp.mu.Lock()
-	if workflowIDs != nil {
-		workflowIDs[workflowID] = true
-	}
-	cp.mu.Unlock()
-
-	logger.Info(logComponent).
-		Str("action", "inner_save_workflow_checkpoint").
-		Str("event_type", "checkpoint_save").
-		Str("session_id", sessionID).
-		Str("workflow_id", workflowID).
-		Str("reason", reason).
-		Str("storage_type", "inmemory").
-		Msg("成功保存工作流检查点")
-	return nil
-}
-
-// innerClearWorkflowSession 内部方法：清除工作流会话。
-// 对应 Python: InMemoryCheckpointer._inner_clear_workflow_session()
-func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, workflowID, sessionID string, reason string) error {
-	cp.mu.RLock()
-	workflowStore := cp.workflowStores[sessionID]
-	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
-	cp.mu.RUnlock()
-
-	logger.Info(logComponent).
-		Str("action", "inner_clear_workflow_session").
-		Str("event_type", "checkpoint_clear").
-		Str("session_id", sessionID).
-		Str("workflow_id", workflowID).
-		Str("reason", reason).
-		Str("storage_type", "inmemory").
-		Msg("开始清除工作流所有检查点")
-
-	isSucceed := false
-
-	// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
-	// 暂时标记为成功（因为没有 graph store 操作）
-	isSucceed = true
-
-	// 清除 workflow store
-	if workflowStore != nil {
-		cp.mu.Lock()
-		if workflowIDs != nil {
-			delete(workflowIDs, workflowID)
-		}
-		cp.mu.Unlock()
-
-		if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
-			if !isSucceed {
-				logger.Error(logComponent).Err(err).
-					Str("action", "inner_clear_workflow_session").
-					Str("event_type", "checkpoint_clear").
-					Str("session_id", sessionID).
-					Str("workflow_id", workflowID).
-					Str("storage_type", "inmemory").
-					Msg("清除工作流检查点失败")
-			}
-			return err
-		}
-	}
-
-	if isSucceed {
-		logger.Info(logComponent).
-			Str("action", "inner_clear_workflow_session").
-			Str("event_type", "checkpoint_clear").
-			Str("session_id", sessionID).
-			Str("workflow_id", workflowID).
-			Str("reason", reason).
-			Str("storage_type", "inmemory").
-			Msg("成功清除工作流所有检查点")
-	}
-	return nil
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// setBlob 设置序列化数据。
-func (s *baseSingleStateStorage) setBlob(entityID, formatTag string, data []byte) {
-	s.mu.Lock()
-	s.stateBlobs[entityID] = serdeTuple{FormatTag: formatTag, Data: data}
-	s.mu.Unlock()
-}
-
-// getBlob 获取序列化数据。
-func (s *baseSingleStateStorage) getBlob(entityID string) (serdeTuple, bool) {
-	s.mu.RLock()
-	blob, exists := s.stateBlobs[entityID]
-	s.mu.RUnlock()
-	return blob, exists
-}
-
-// deleteBlob 删除序列化数据。
-func (s *baseSingleStateStorage) deleteBlob(entityID string) {
-	s.mu.Lock()
-	delete(s.stateBlobs, entityID)
-	s.mu.Unlock()
-}
-
-// hasBlob 检查序列化数据是否存在。
-func (s *baseSingleStateStorage) hasBlob(entityID string) bool {
-	s.mu.RLock()
-	_, exists := s.stateBlobs[entityID]
-	s.mu.RUnlock()
-	return exists
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Save 保存 Agent 状态。
 // 对应 Python: AgentStorage.save() → BaseSingleStateStorage.save()
 func (s *AgentStorage) Save(ctx context.Context, session interfaces.BaseSession) error {
@@ -847,8 +679,6 @@ func (s *AgentStorage) Exists(ctx context.Context, session interfaces.BaseSessio
 	entityID := GetAgentID(session)
 	return s.hasBlob(entityID), nil
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存 AgentTeam 状态。
 // 对应 Python: AgentTeamStorage.save() → BaseSingleStateStorage.save()
@@ -903,8 +733,6 @@ func (s *AgentTeamStorage) Exists(ctx context.Context, session interfaces.BaseSe
 	entityID := GetTeamID(session)
 	return s.hasBlob(entityID), nil
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存工作流状态和更新。
 // 对应 Python: WorkflowStorage.save()
@@ -1022,6 +850,166 @@ func (ws *WorkflowStorage) Exists(ctx context.Context, session interfaces.BaseSe
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// newAgentStorage 创建 Agent 状态存储。
+func newAgentStorage() *AgentStorage {
+	return &AgentStorage{
+		baseSingleStateStorage: baseSingleStateStorage{
+			stateBlobs: make(map[string]serdeTuple),
+			serde:      NewJSONSerializer(),
+		},
+	}
+}
+
+// newAgentTeamStorage 创建 AgentTeam 状态存储。
+func newAgentTeamStorage() *AgentTeamStorage {
+	return &AgentTeamStorage{
+		baseSingleStateStorage: baseSingleStateStorage{
+			stateBlobs: make(map[string]serdeTuple),
+			serde:      NewJSONSerializer(),
+		},
+	}
+}
+
+// newWorkflowStorage 创建 Workflow 状态存储。
+func newWorkflowStorage() *WorkflowStorage {
+	return &WorkflowStorage{
+		serde:             NewJSONSerializer(),
+		stateBlobs:        make(map[string]serdeTuple),
+		stateUpdatesBlobs: make(map[string]serdeTuple),
+	}
+}
+
+// innerSaveWorkflowCheckpoint 内部方法：保存工作流检查点。
+// 对应 Python: InMemoryCheckpointer._inner_save_workflow_checkpoint()
+func (cp *InMemoryCheckpointer) innerSaveWorkflowCheckpoint(ctx context.Context, workflowID, sessionID string, session interfaces.BaseSession, reason string) error {
+	cp.mu.RLock()
+	workflowStore := cp.workflowStores[sessionID]
+	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
+	cp.mu.RUnlock()
+
+	logger.Info(logComponent).
+		Str("action", "inner_save_workflow_checkpoint").
+		Str("event_type", "checkpoint_save").
+		Str("session_id", sessionID).
+		Str("workflow_id", workflowID).
+		Str("reason", reason).
+		Str("storage_type", "inmemory").
+		Msg("开始保存工作流检查点")
+
+	if err := workflowStore.Save(ctx, session); err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Msg("保存工作流检查点失败")
+		return err
+	}
+
+	// 记录 workflow ID
+	cp.mu.Lock()
+	if workflowIDs != nil {
+		workflowIDs[workflowID] = true
+	}
+	cp.mu.Unlock()
+
+	logger.Info(logComponent).
+		Str("action", "inner_save_workflow_checkpoint").
+		Str("event_type", "checkpoint_save").
+		Str("session_id", sessionID).
+		Str("workflow_id", workflowID).
+		Str("reason", reason).
+		Str("storage_type", "inmemory").
+		Msg("成功保存工作流检查点")
+	return nil
+}
+
+// innerClearWorkflowSession 内部方法：清除工作流会话。
+// 对应 Python: InMemoryCheckpointer._inner_clear_workflow_session()
+func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, workflowID, sessionID string, reason string) error {
+	cp.mu.RLock()
+	workflowStore := cp.workflowStores[sessionID]
+	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
+	cp.mu.RUnlock()
+
+	logger.Info(logComponent).
+		Str("action", "inner_clear_workflow_session").
+		Str("event_type", "checkpoint_clear").
+		Str("session_id", sessionID).
+		Str("workflow_id", workflowID).
+		Str("reason", reason).
+		Str("storage_type", "inmemory").
+		Msg("开始清除工作流所有检查点")
+
+	isSucceed := false
+
+	// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	// 暂时标记为成功（因为没有 graph store 操作）
+	isSucceed = true
+
+	// 清除 workflow store
+	if workflowStore != nil {
+		cp.mu.Lock()
+		if workflowIDs != nil {
+			delete(workflowIDs, workflowID)
+		}
+		cp.mu.Unlock()
+
+		if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
+			if !isSucceed {
+				logger.Error(logComponent).Err(err).
+					Str("action", "inner_clear_workflow_session").
+					Str("event_type", "checkpoint_clear").
+					Str("session_id", sessionID).
+					Str("workflow_id", workflowID).
+					Str("storage_type", "inmemory").
+					Msg("清除工作流检查点失败")
+			}
+			return err
+		}
+	}
+
+	if isSucceed {
+		logger.Info(logComponent).
+			Str("action", "inner_clear_workflow_session").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Str("reason", reason).
+			Str("storage_type", "inmemory").
+			Msg("成功清除工作流所有检查点")
+	}
+	return nil
+}
+
+// setBlob 设置序列化数据。
+func (s *baseSingleStateStorage) setBlob(entityID, formatTag string, data []byte) {
+	s.mu.Lock()
+	s.stateBlobs[entityID] = serdeTuple{FormatTag: formatTag, Data: data}
+	s.mu.Unlock()
+}
+
+// getBlob 获取序列化数据。
+func (s *baseSingleStateStorage) getBlob(entityID string) (serdeTuple, bool) {
+	s.mu.RLock()
+	blob, exists := s.stateBlobs[entityID]
+	s.mu.RUnlock()
+	return blob, exists
+}
+
+// deleteBlob 删除序列化数据。
+func (s *baseSingleStateStorage) deleteBlob(entityID string) {
+	s.mu.Lock()
+	delete(s.stateBlobs, entityID)
+	s.mu.Unlock()
+}
+
+// hasBlob 检查序列化数据是否存在。
+func (s *baseSingleStateStorage) hasBlob(entityID string) bool {
+	s.mu.RLock()
+	_, exists := s.stateBlobs[entityID]
+	s.mu.RUnlock()
+	return exists
+}
+
 // processInteractiveInputs 处理交互输入并更新工作流状态。
 // 对齐 Python: _process_interactive_inputs(session, inputs)
 func (ws *WorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
@@ -1059,8 +1047,6 @@ func (ws *WorkflowStorage) processInteractiveInputs(session interfaces.BaseSessi
 	}
 	wfState.Commit()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isInteractiveInput 判断输入是否为交互输入。
 // 对齐 Python: isinstance(inputs, InteractiveInput)

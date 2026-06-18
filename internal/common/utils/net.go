@@ -17,9 +17,15 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // urlPattern 匹配以 scheme:// 开头的 URL 字符串。
 // 对应 Python: _URL_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
-var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`) // GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
+var urlPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*://`)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// GetLocalIP 获取本机可用 IPv4 地址（排除 127.0.0.1）。
 // 对应 Python: get_local_ip()
 // 通过向公共 DNS（8.8.8.8:80）发起 UDP 连接来检测出口 IP，
 // 不实际发送数据，仅利用 socket 获取本地地址。
@@ -137,3 +143,5 @@ func RedactURLInValue(value any) any {
 		return value
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

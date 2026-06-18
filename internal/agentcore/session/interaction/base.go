@@ -11,19 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
-// NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
-// 对齐 Python: hasattr(session, "executable_id") 检测。
-type ExecutableIDProvider = interfaces.ExecutableIDProvider
-
-// InteractionOutputWriterProvider 交互所需的输出写入器提供者，类型别名指向 stream 包。
-// ✅ 5.10 已回填：从 stream 包导入
-type InteractionOutputWriterProvider = stream.InteractionOutputWriterProvider
-
-// InteractionOutputWriter 交互输出写入器，类型别名指向 stream 包。
-// ✅ 5.10 已回填：从 stream 包导入
-type InteractionOutputWriter = stream.InteractionOutputWriter
-
 // Interrupt 图中断信号
 type Interrupt struct {
 	// Value 中断携带的值（OutputSchema 类型）
@@ -64,6 +51,19 @@ type BaseInteraction struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
+// NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
+// 对齐 Python: hasattr(session, "executable_id") 检测。
+type ExecutableIDProvider = interfaces.ExecutableIDProvider
+
+// InteractionOutputWriterProvider 交互所需的输出写入器提供者，类型别名指向 stream 包。
+// ✅ 5.10 已回填：从 stream 包导入
+type InteractionOutputWriterProvider = stream.InteractionOutputWriterProvider
+
+// InteractionOutputWriter 交互输出写入器，类型别名指向 stream 包。
+// ✅ 5.10 已回填：从 stream 包导入
+type InteractionOutputWriter = stream.InteractionOutputWriter
 
 // ──────────────────────────── 常量 ────────────────────────────
 

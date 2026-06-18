@@ -101,6 +101,8 @@ type PersistenceCheckpointer struct {
 // 对应 Python: PersistenceCheckpointerProvider
 type persistenceProvider struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -119,6 +121,8 @@ const (
 	wfKeyNums = 4
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPersistenceCheckpointer 创建持久化检查点器实例。
@@ -135,70 +139,6 @@ func NewPersistenceCheckpointer(kvStore kv.BaseKVStore) *PersistenceCheckpointer
 		graphStore:       nil, // ⤵️ 8.7 回填
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// newPersistenceAgentStorage 创建 Agent 持久化状态存储。
-func newPersistenceAgentStorage(kvStore kv.BaseKVStore) *PersistenceAgentStorage {
-	return &PersistenceAgentStorage{
-		basePersistenceStorage: basePersistenceStorage{
-			kvStore:          kvStore,
-			serde:            NewJSONSerializer(),
-			namespace:        SessionNamespaceAgent,
-			entityLabel:      "agent",
-			stateBlobsKey:    "agent_state_blobs",
-			stateDumpTypeKey: "agent_state_blobs_dump_type",
-			hooks:            &agentEntityHooks{},
-		},
-	}
-}
-
-// newPersistenceAgentTeamStorage 创建 AgentTeam 持久化状态存储。
-func newPersistenceAgentTeamStorage(kvStore kv.BaseKVStore) *PersistenceAgentTeamStorage {
-	return &PersistenceAgentTeamStorage{
-		basePersistenceStorage: basePersistenceStorage{
-			kvStore:          kvStore,
-			serde:            NewJSONSerializer(),
-			namespace:        SessionNamespaceAgentTeam,
-			entityLabel:      "agent_team",
-			stateBlobsKey:    "agent_team_state_blobs",
-			stateDumpTypeKey: "agent_team_state_blobs_dump_type",
-			hooks:            &agentTeamEntityHooks{},
-		},
-	}
-}
-
-// newPersistenceWorkflowStorage 创建 Workflow 持久化状态存储。
-func newPersistenceWorkflowStorage(kvStore kv.BaseKVStore) *PersistenceWorkflowStorage {
-	return &PersistenceWorkflowStorage{
-		kvStore: kvStore,
-		serde:   NewJSONSerializer(),
-	}
-}
-
-// pipelineGetResult 从 Pipeline 结果中获取 Get 操作的值。
-func pipelineGetResult(results []kv.PipelineResult, idx int) ([]byte, error) {
-	if idx >= len(results) {
-		return nil, nil
-	}
-	if results[idx].Err != nil {
-		return nil, results[idx].Err
-	}
-	return results[idx].Value, nil
-}
-
-// pipelineExistsResult 从 Pipeline 结果中获取 Exists 操作的布尔值。
-func pipelineExistsResult(results []kv.PipelineResult, idx int) (bool, error) {
-	if idx >= len(results) {
-		return false, nil
-	}
-	if results[idx].Err != nil {
-		return false, results[idx].Err
-	}
-	return results[idx].Exists, nil
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // GetEntityID 实现 EntityHooks 接口。
 func (h *agentEntityHooks) GetEntityID(session interfaces.BaseSession) string {
@@ -222,8 +162,6 @@ func (h *agentEntityHooks) RestoreState(session interfaces.BaseSession, savedSta
 		session.State().SetState(st)
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetEntityID 实现 EntityHooks 接口。
 func (h *agentTeamEntityHooks) GetEntityID(session interfaces.BaseSession) string {
@@ -249,8 +187,6 @@ func (h *agentTeamEntityHooks) RestoreState(session interfaces.BaseSession, save
 		session.State().SetGlobal(st)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Save 保存会话状态到 KVStore。
 // 对应 Python: BaseSingleStateStorage.save()
@@ -383,57 +319,6 @@ func (s *basePersistenceStorage) Exists(ctx context.Context, session interfaces.
 	exists1, _ := pipelineExistsResult(results, 1)
 	return exists0 && exists1, nil
 }
-
-// buildStateKeys 构建 KV 存储键。
-func (s *basePersistenceStorage) buildStateKeys(sessionID, entityID string) (string, string) {
-	dumpTypeKey := BuildKeyWithNamespace(sessionID, s.namespace, entityID, s.stateDumpTypeKey)
-	blobKey := BuildKeyWithNamespace(sessionID, s.namespace, entityID, s.stateBlobsKey)
-	return dumpTypeKey, blobKey
-}
-
-// serializeState 序列化状态，返回 serdeTuple。
-func (s *basePersistenceStorage) serializeState(st any) *serdeTuple {
-	formatTag, data, err := s.serde.DumpsTyped(st)
-	if err != nil {
-		return nil
-	}
-	return &serdeTuple{FormatTag: formatTag, Data: data}
-}
-
-// deserializeState 反序列化状态。
-func (s *basePersistenceStorage) deserializeState(dumpTypeBytes []byte, blob []byte) any {
-	if dumpTypeBytes == nil || blob == nil {
-		return nil
-	}
-	dumpType := string(dumpTypeBytes)
-	st, err := s.serde.LoadsTyped(dumpType, blob)
-	if err != nil {
-		logger.Error(logComponent).Err(err).
-			Str("event_type", "checkpoint_error").
-			Str("metadata_operation", "deserialize").
-			Msg("反序列化状态失败")
-		return nil
-	}
-	return st
-}
-
-// entityLogExtraKey 返回日志字段键名（"agent_id" 或 "workflow_id"）。
-func (s *basePersistenceStorage) entityLogExtraKey() string {
-	if s.entityLabel == "agent" {
-		return "agent_id"
-	}
-	return "workflow_id"
-}
-
-// entityTitleLabel 返回首字母大写的实体标签（"Agent" / "Agent_team"），用于日志。
-func (s *basePersistenceStorage) entityTitleLabel() string {
-	if len(s.entityLabel) == 0 {
-		return ""
-	}
-	return strings.ToUpper(s.entityLabel[:1]) + s.entityLabel[1:]
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Save 保存工作流状态到 KVStore。
 // 对应 Python: WorkflowStorage.save()
@@ -624,56 +509,6 @@ func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session interf
 	exists1, _ := pipelineExistsResult(results, 1)
 	return exists0 && exists1, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// serializeState 序列化状态，返回 serdeTuple。
-func (ws *PersistenceWorkflowStorage) serializeState(st any) *serdeTuple {
-	formatTag, data, err := ws.serde.DumpsTyped(st)
-	if err != nil {
-		return nil
-	}
-	return &serdeTuple{FormatTag: formatTag, Data: data}
-}
-
-// processInteractiveInputs 处理交互输入并更新工作流状态。
-// 对齐 Python: _process_interactive_inputs(session, inputs)
-func (ws *PersistenceWorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
-	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
-	if inputs.RawInputs != nil {
-		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
-			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
-		}
-		return
-	}
-
-	// 对齐 Python: if not inputs.user_inputs: return
-	if len(inputs.UserInputs) == 0 {
-		return
-	}
-
-	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
-	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
-	wfState, ok := session.State().(state.WorkflowState)
-	if !ok || wfState == nil {
-		logger.Warn(logComponent).
-			Str("session_id", session.SessionID()).
-			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
-		return
-	}
-
-	for nodeID, value := range inputs.UserInputs {
-		nodeState := wfState.CreateNodeState(nodeID, "")
-		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
-		} else {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
-		}
-	}
-	wfState.Commit()
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // PreAgentExecute Agent 执行前恢复状态。
 // 对应 Python: PersistenceCheckpointer.pre_agent_execute()
@@ -1014,6 +849,161 @@ func (cp *PersistenceCheckpointer) GraphStore() any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newPersistenceAgentStorage 创建 Agent 持久化状态存储。
+func newPersistenceAgentStorage(kvStore kv.BaseKVStore) *PersistenceAgentStorage {
+	return &PersistenceAgentStorage{
+		basePersistenceStorage: basePersistenceStorage{
+			kvStore:          kvStore,
+			serde:            NewJSONSerializer(),
+			namespace:        SessionNamespaceAgent,
+			entityLabel:      "agent",
+			stateBlobsKey:    "agent_state_blobs",
+			stateDumpTypeKey: "agent_state_blobs_dump_type",
+			hooks:            &agentEntityHooks{},
+		},
+	}
+}
+
+// newPersistenceAgentTeamStorage 创建 AgentTeam 持久化状态存储。
+func newPersistenceAgentTeamStorage(kvStore kv.BaseKVStore) *PersistenceAgentTeamStorage {
+	return &PersistenceAgentTeamStorage{
+		basePersistenceStorage: basePersistenceStorage{
+			kvStore:          kvStore,
+			serde:            NewJSONSerializer(),
+			namespace:        SessionNamespaceAgentTeam,
+			entityLabel:      "agent_team",
+			stateBlobsKey:    "agent_team_state_blobs",
+			stateDumpTypeKey: "agent_team_state_blobs_dump_type",
+			hooks:            &agentTeamEntityHooks{},
+		},
+	}
+}
+
+// newPersistenceWorkflowStorage 创建 Workflow 持久化状态存储。
+func newPersistenceWorkflowStorage(kvStore kv.BaseKVStore) *PersistenceWorkflowStorage {
+	return &PersistenceWorkflowStorage{
+		kvStore: kvStore,
+		serde:   NewJSONSerializer(),
+	}
+}
+
+// pipelineGetResult 从 Pipeline 结果中获取 Get 操作的值。
+func pipelineGetResult(results []kv.PipelineResult, idx int) ([]byte, error) {
+	if idx >= len(results) {
+		return nil, nil
+	}
+	if results[idx].Err != nil {
+		return nil, results[idx].Err
+	}
+	return results[idx].Value, nil
+}
+
+// pipelineExistsResult 从 Pipeline 结果中获取 Exists 操作的布尔值。
+func pipelineExistsResult(results []kv.PipelineResult, idx int) (bool, error) {
+	if idx >= len(results) {
+		return false, nil
+	}
+	if results[idx].Err != nil {
+		return false, results[idx].Err
+	}
+	return results[idx].Exists, nil
+}
+
+// buildStateKeys 构建 KV 存储键。
+func (s *basePersistenceStorage) buildStateKeys(sessionID, entityID string) (string, string) {
+	dumpTypeKey := BuildKeyWithNamespace(sessionID, s.namespace, entityID, s.stateDumpTypeKey)
+	blobKey := BuildKeyWithNamespace(sessionID, s.namespace, entityID, s.stateBlobsKey)
+	return dumpTypeKey, blobKey
+}
+
+// serializeState 序列化状态，返回 serdeTuple。
+func (s *basePersistenceStorage) serializeState(st any) *serdeTuple {
+	formatTag, data, err := s.serde.DumpsTyped(st)
+	if err != nil {
+		return nil
+	}
+	return &serdeTuple{FormatTag: formatTag, Data: data}
+}
+
+// deserializeState 反序列化状态。
+func (s *basePersistenceStorage) deserializeState(dumpTypeBytes []byte, blob []byte) any {
+	if dumpTypeBytes == nil || blob == nil {
+		return nil
+	}
+	dumpType := string(dumpTypeBytes)
+	st, err := s.serde.LoadsTyped(dumpType, blob)
+	if err != nil {
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "checkpoint_error").
+			Str("metadata_operation", "deserialize").
+			Msg("反序列化状态失败")
+		return nil
+	}
+	return st
+}
+
+// entityLogExtraKey 返回日志字段键名（"agent_id" 或 "workflow_id"）。
+func (s *basePersistenceStorage) entityLogExtraKey() string {
+	if s.entityLabel == "agent" {
+		return "agent_id"
+	}
+	return "workflow_id"
+}
+
+// entityTitleLabel 返回首字母大写的实体标签（"Agent" / "Agent_team"），用于日志。
+func (s *basePersistenceStorage) entityTitleLabel() string {
+	if len(s.entityLabel) == 0 {
+		return ""
+	}
+	return strings.ToUpper(s.entityLabel[:1]) + s.entityLabel[1:]
+}
+
+// serializeState 序列化状态，返回 serdeTuple。
+func (ws *PersistenceWorkflowStorage) serializeState(st any) *serdeTuple {
+	formatTag, data, err := ws.serde.DumpsTyped(st)
+	if err != nil {
+		return nil
+	}
+	return &serdeTuple{FormatTag: formatTag, Data: data}
+}
+
+// processInteractiveInputs 处理交互输入并更新工作流状态。
+// 对齐 Python: _process_interactive_inputs(session, inputs)
+func (ws *PersistenceWorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
+	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
+	if inputs.RawInputs != nil {
+		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
+			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
+		}
+		return
+	}
+
+	// 对齐 Python: if not inputs.user_inputs: return
+	if len(inputs.UserInputs) == 0 {
+		return
+	}
+
+	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
+	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
+	wfState, ok := session.State().(state.WorkflowState)
+	if !ok || wfState == nil {
+		logger.Warn(logComponent).
+			Str("session_id", session.SessionID()).
+			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
+		return
+	}
+
+	for nodeID, value := range inputs.UserInputs {
+		nodeState := wfState.CreateNodeState(nodeID, "")
+		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
+		} else {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
+		}
+	}
+	wfState.Commit()
+}
 
 // Create 创建 Persistence 检查点器。
 // 对应 Python: PersistenceCheckpointerProvider.create()

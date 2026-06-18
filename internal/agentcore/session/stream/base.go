@@ -19,9 +19,6 @@ type OutputSchema struct {
 	Payload any
 }
 
-// SchemaType 实现 Schema 接口
-func (s OutputSchema) SchemaType() string { return s.Type }
-
 // TraceSchema 追踪流数据，对应 Python TraceSchema。
 // 图执行产生的追踪数据，无 Index 字段。
 type TraceSchema struct {
@@ -31,9 +28,6 @@ type TraceSchema struct {
 	Payload any
 }
 
-// SchemaType 实现 Schema 接口
-func (s TraceSchema) SchemaType() string { return s.Type }
-
 // CustomSchema 自定义流数据，对应 Python CustomSchema。
 // 用户自定义流数据，Data 字段允许任意键值对。
 type CustomSchema struct {
@@ -42,9 +36,6 @@ type CustomSchema struct {
 	// Data 任意键值载荷
 	Data map[string]any
 }
-
-// SchemaType 实现 Schema 接口
-func (s CustomSchema) SchemaType() string { return s.Type }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -59,6 +50,17 @@ const (
 	// StreamModeCustom 自定义流
 	StreamModeCustom
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SchemaType 实现 Schema 接口
+func (s OutputSchema) SchemaType() string { return s.Type }
+
+// SchemaType 实现 Schema 接口
+func (s TraceSchema) SchemaType() string { return s.Type }
+
+// SchemaType 实现 Schema 接口
+func (s CustomSchema) SchemaType() string { return s.Type }
 
 // String 返回流模式的字符串表示
 func (m StreamMode) String() string {

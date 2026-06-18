@@ -156,18 +156,6 @@ func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) Checkpointer 
 	return defaultInMemoryCheckpointer
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// Create 创建 InMemory 检查点器。
-func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
-	return defaultInMemoryCheckpointer, nil
-}
-
-func init() {
-	defaultInMemoryCheckpointer = NewInMemoryCheckpointer()
-	defaultFactory = NewCheckpointerFactory()
-}
-
 // GetCheckpointer 从全局工厂获取检查点器实例。
 func GetCheckpointer(storeType ...string) Checkpointer {
 	return defaultFactory.GetCheckpointer(storeType...)
@@ -191,4 +179,16 @@ func CreateCheckpointer(ctx context.Context, conf CheckpointerFactoryConfig) (Ch
 // RegisterCheckpointer 向全局工厂注册 Provider。
 func RegisterCheckpointer(name string, provider CheckpointerProvider) {
 	defaultFactory.Register(name, provider)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// Create 创建 InMemory 检查点器。
+func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
+	return defaultInMemoryCheckpointer, nil
+}
+
+func init() {
+	defaultInMemoryCheckpointer = NewInMemoryCheckpointer()
+	defaultFactory = NewCheckpointerFactory()
 }

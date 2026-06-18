@@ -586,6 +586,8 @@ func VisualizeCallChain(agentID, sessionID string, depth int) string {
 	return strings.Join(lines, "\n")
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // onAgentSessionCreated AGENT_SESSION_CREATED 回调：
 // 将 ChainSession 的 DataContainer.session 注入真实 Session 实例。
 // enableSessionController 为 false 时跳过注册（对齐 Python runner_config.enable_session_controller 开关）。
@@ -632,8 +634,6 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 // ⤵️ 5.13+ 回填：等 AgentTeamEvents 定义后注册 P2P/PubSub 回调
 // callback.GetCallbackFramework().OnTeamEvent(callback.AgentP2PReceived, onAgentP2PReceived)
 // callback.GetCallbackFramework().OnTeamEvent(callback.AgentPubsubReceived, onAgentPubsubReceived)
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureBasePath 确保存储根目录存在
 func (g *GlobalSessionController) ensureBasePath() error {
