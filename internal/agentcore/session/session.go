@@ -5,6 +5,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,8 +31,6 @@ type ProxySession struct {
 // 类型别名指向 interfaces.BaseSession，消除重复定义。
 // 外部代码仍可通过 session.BaseSession 引用，零破坏性迁移。
 type BaseSession = interfaces.BaseSession
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -61,12 +60,11 @@ func (p *ProxySession) State() state.SessionState {
 }
 
 // Tracer 获取底层会话的追踪器
-func (p *ProxySession) Tracer() any {
+func (p *ProxySession) Tracer() *tracer.Tracer {
 	return p.stub.Tracer()
 }
 
 // StreamWriterManager 获取底层会话的流写入管理器
-// ✅ 5.10 已回填：返回类型从 any 改为 *stream.StreamWriterManager
 func (p *ProxySession) StreamWriterManager() *stream.StreamWriterManager {
 	return p.stub.StreamWriterManager()
 }

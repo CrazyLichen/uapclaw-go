@@ -8,7 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -38,6 +37,15 @@ type fakeTool struct {
 	invokeErr error
 	// card 工具卡片
 	card *tool.ToolCard
+}
+
+// fakeAgentSession 用于测试的模拟会话，实现 AgentSessionProvider 接口
+// 替代 session/internal 包的真实 AgentSession，避免循环依赖
+type fakeAgentSession struct {
+	// tracer 追踪器
+	tracer *Tracer
+	// agentSpan Agent 追踪跨度
+	agentSpan *TraceAgentSpan
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -93,6 +101,16 @@ func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 // Card 实现 tool.Tool 接口
 func (f *fakeTool) Card() *tool.ToolCard {
 	return f.card
+}
+
+// Tracer 实现 AgentSessionProvider 接口
+func (f *fakeAgentSession) Tracer() *Tracer {
+	return f.tracer
+}
+
+// AgentSpan 实现 AgentSessionProvider 接口
+func (f *fakeAgentSession) AgentSpan() *TraceAgentSpan {
+	return f.agentSpan
 }
 
 // TestTracedModelClient_Invoke_成功 测试 Invoke 成功时触发 TraceLLMStart 和 TraceLLMEnd 事件
@@ -266,10 +284,10 @@ func TestDecorateModelWithTrace_有Tracer(t *testing.T) {
 	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeModelClient{}
-	session := internal.NewAgentSession("test-session",
-		internal.WithTracer(tracer),
-		internal.WithAgentSpan(agentSpan),
-	)
+	session := &fakeAgentSession{
+		tracer:    tracer,
+		agentSpan: agentSpan,
+	}
 
 	decorated := DecorateModelWithTrace(inner, session)
 
@@ -291,7 +309,7 @@ func TestDecorateModelWithTrace_有Tracer(t *testing.T) {
 // TestDecorateModelWithTrace_无Tracer 测试无 Tracer 时返回原始 model
 func TestDecorateModelWithTrace_无Tracer(t *testing.T) {
 	inner := &fakeModelClient{}
-	session := internal.NewAgentSession("test-session")
+	session := &fakeAgentSession{}
 
 	decorated := DecorateModelWithTrace(inner, session)
 
@@ -304,9 +322,9 @@ func TestDecorateModelWithTrace_无Tracer(t *testing.T) {
 func TestDecorateModelWithTrace_无AgentSpan(t *testing.T) {
 	tracer := NewTracer()
 	inner := &fakeModelClient{}
-	session := internal.NewAgentSession("test-session",
-		internal.WithTracer(tracer),
-	)
+	session := &fakeAgentSession{
+		tracer: tracer,
+	}
 
 	decorated := DecorateModelWithTrace(inner, session)
 
@@ -321,10 +339,10 @@ func TestDecorateToolWithTrace_有Tracer(t *testing.T) {
 	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeTool{}
-	session := internal.NewAgentSession("test-session",
-		internal.WithTracer(tracer),
-		internal.WithAgentSpan(agentSpan),
-	)
+	session := &fakeAgentSession{
+		tracer:    tracer,
+		agentSpan: agentSpan,
+	}
 
 	decorated := DecorateToolWithTrace(inner, session)
 
@@ -346,7 +364,7 @@ func TestDecorateToolWithTrace_有Tracer(t *testing.T) {
 // TestDecorateToolWithTrace_无Tracer 测试无 Tracer 时返回原始 tool
 func TestDecorateToolWithTrace_无Tracer(t *testing.T) {
 	inner := &fakeTool{}
-	session := internal.NewAgentSession("test-session")
+	session := &fakeAgentSession{}
 
 	decorated := DecorateToolWithTrace(inner, session)
 
@@ -361,10 +379,10 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
 
 	innerWorkflow := "fake_workflow"
-	session := internal.NewAgentSession("test-session",
-		internal.WithTracer(tracer),
-		internal.WithAgentSpan(agentSpan),
-	)
+	session := &fakeAgentSession{
+		tracer:    tracer,
+		agentSpan: agentSpan,
+	}
 
 	decorated := DecorateWorkflowWithTrace(innerWorkflow, session)
 
@@ -383,7 +401,7 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 // TestDecorateWorkflowWithTrace_无Tracer 测试无 Tracer 时返回原始 w
 func TestDecorateWorkflowWithTrace_无Tracer(t *testing.T) {
 	innerWorkflow := "fake_workflow"
-	session := internal.NewAgentSession("test-session")
+	session := &fakeAgentSession{}
 
 	decorated := DecorateWorkflowWithTrace(innerWorkflow, session)
 
