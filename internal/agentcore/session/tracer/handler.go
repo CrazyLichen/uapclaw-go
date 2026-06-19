@@ -38,13 +38,13 @@ type TraceWorkflowHandler struct {
 	workflowSpans map[string]*TraceWorkflowSpan
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
 // interaction.GraphInterrupt 隐式满足此接口。
 type graphInterrupter interface {
 	isGraphInterrupt()
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -380,7 +380,12 @@ func (h *TraceWorkflowHandler) OnInteract(ctx context.Context, invokeID string, 
 func (h *TraceWorkflowHandler) FormatData(span *Span) map[string]any {
 	wfSpan := h.getTracerWorkflowSpan(span.InvokeID)
 	if wfSpan.Status != string(NodeStatusInterrupted) {
-		wfSpan.Status = string(h.GetNodeStatus(&wfSpan.Span))
+		status := h.GetNodeStatus(&wfSpan.Span)
+		// Python getattr(span, "inner_error", None) 检查：有 inner_error 时也应返回 ERROR
+		if wfSpan.InnerError != nil {
+			status = NodeStatusError
+		}
+		wfSpan.Status = string(status)
 	}
 	result := buildWorkflowPayload(wfSpan)
 	return map[string]any{
@@ -433,6 +438,9 @@ func (h *traceBaseHandler) GetElapsedTime(start, end time.Time) string {
 }
 
 // GetNodeStatus 根据 Span 状态判断节点状态，对应 Python _get_node_status。
+// 注意：Python 还检查 inner_error（getattr(span, "inner_error", None)），
+// 但 Go 的 GetNodeStatus 接收 *Span 基础类型无法访问 TraceWorkflowSpan.InnerError。
+// Workflow 调用方应使用 GetWorkflowNodeStatus 补充 InnerError 检查。
 func (h *traceBaseHandler) GetNodeStatus(span *Span) NodeStatus {
 	if span.Error != nil {
 		return NodeStatusError
@@ -566,13 +574,24 @@ func (h *TraceWorkflowHandler) getTracerWorkflowSpan(invokeID string) *TraceWork
 	return span
 }
 
+// deleteWorkflowSpan 从缓存中删除工作流追踪跨度，避免内存泄漏。
+// 由 Tracer.PopWorkflowSpan 调用，与 SpanManager.PopSpan 配合使用。
+func (h *TraceWorkflowHandler) deleteWorkflowSpan(invokeID string) {
+	delete(h.workflowSpans, invokeID)
+}
+
 // sendData 发送数据，exclude 指定需要排除的字段名，对应 Python _send_data
 func (h *TraceWorkflowHandler) sendData(span *TraceWorkflowSpan, exclude map[string]bool) error {
 	if h.streamWriter == nil {
 		return nil
 	}
 	if span.Status != string(NodeStatusInterrupted) {
-		span.Status = string(h.GetNodeStatus(&span.Span))
+		status := h.GetNodeStatus(&span.Span)
+		// Python getattr(span, "inner_error", None) 检查
+		if span.InnerError != nil {
+			status = NodeStatusError
+		}
+		span.Status = string(status)
 	}
 	payload := buildWorkflowPayloadWithExclude(span, exclude)
 	data := map[string]any{

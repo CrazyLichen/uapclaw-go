@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -35,10 +37,23 @@ type InteractionOutputWriter interface {
 type StreamWriterManager struct {
 	// emitter 流发射器
 	emitter *StreamEmitter
+	// writersMu 保护 writers map 的读写锁
+	writersMu sync.RWMutex
 	// writers 流写入器集合
 	writers map[StreamMode]StreamWriter
 	// defaultModes 默认模式列表（不允许移除默认 Writer）
 	defaultModes []StreamMode
+}
+
+// StreamOutputOption StreamOutput 的可选配置
+type StreamOutputOption func(*streamOutputConfig)
+
+// streamOutputConfig StreamOutput 内部配置
+type streamOutputConfig struct {
+	// firstFrameTimeout 首帧超时，对应 Python first_frame_timeout
+	firstFrameTimeout time.Duration
+	// timeout 帧间隔超时，对应 Python timeout
+	timeout time.Duration
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -86,13 +101,17 @@ func (m *StreamWriterManager) AddWriter(key StreamMode, writer StreamWriter) err
 			exception.WithParam("mode", key.String()),
 		)
 	}
+	m.writersMu.Lock()
 	m.writers[key] = writer
+	m.writersMu.Unlock()
 	return nil
 }
 
 // GetWriter 按模式获取写入器。
 // 对应 Python: StreamWriterManager.get_writer(key)
 func (m *StreamWriterManager) GetWriter(key StreamMode) StreamWriter {
+	m.writersMu.RLock()
+	defer m.writersMu.RUnlock()
 	return m.writers[key]
 }
 
@@ -138,21 +157,64 @@ func (m *StreamWriterManager) RemoveWriter(key StreamMode) error {
 			)
 		}
 	}
+	m.writersMu.Lock()
 	delete(m.writers, key)
+	m.writersMu.Unlock()
 	return nil
 }
 
+// defaultStreamOutputConfig 默认配置（无超时限制，对齐 Python 默认行为）
+func defaultStreamOutputConfig() streamOutputConfig {
+	return streamOutputConfig{}
+}
+
+// WithFirstFrameTimeout 设置首帧超时
+func WithFirstFrameTimeout(d time.Duration) StreamOutputOption {
+	return func(c *streamOutputConfig) {
+		c.firstFrameTimeout = d
+	}
+}
+
+// WithFrameTimeout 设置帧间隔超时
+func WithFrameTimeout(d time.Duration) StreamOutputOption {
+	return func(c *streamOutputConfig) {
+		c.timeout = d
+	}
+}
+
 // StreamOutput 返回流输出 channel，消费端通过 range 读取。
-// 对应 Python: StreamWriterManager.stream_output()
+// 对应 Python: StreamWriterManager.stream_output(first_frame_timeout, timeout)
 // 内部启动 goroutine 从 emitter 的队列读取数据，转发到输出 channel。
-func (m *StreamWriterManager) StreamOutput() <-chan any {
+// 首帧超时和帧间隔超时对齐 Python 的 first_frame_timeout / timeout 参数。
+func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan any {
+	cfg := defaultStreamOutputConfig()
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	out := make(chan any)
 
 	go func() {
 		defer close(out)
 		queue := m.emitter.StreamQueue()
+
+		// 首帧超时上下文
+		var ctx context.Context
+		var cancel context.CancelFunc
+		if cfg.firstFrameTimeout > 0 {
+			ctx, cancel = context.WithTimeout(context.Background(), cfg.firstFrameTimeout)
+		} else {
+			ctx, cancel = context.WithCancel(context.Background())
+		}
+
+		firstFrame := true
 		for {
-			ctx := context.Background()
+			// 帧间隔超时：首帧后切换为帧间隔超时
+			if !firstFrame && cfg.timeout > 0 {
+				cancel()
+				ctx, cancel = context.WithTimeout(context.Background(), cfg.timeout)
+			}
+
 			data, err := queue.Receive(ctx)
 			if err != nil {
 				// 队列关闭或超时
@@ -160,14 +222,21 @@ func (m *StreamWriterManager) StreamOutput() <-chan any {
 					Str("event_type", "SESSION_STREAM_CHUNK").
 					Str("status", "queue_closed").
 					Msg("流输出队列已关闭")
+				cancel()
 				return
 			}
 
-			// 收到 endFrame 哨兵 → 关闭输出 channel
+			firstFrame = false
+
+			// 收到 endFrame 哨兵 → 关闭底层队列 → 关闭输出 channel
+			// 对齐 Python: stream_output 收到 END_FRAME 后调用 queue.close()（need_close=True）
 			if _, ok := data.(endFrame); ok {
 				logger.Debug(logComponent).
 					Str("event_type", "SESSION_STREAM_CHUNK").
-					Msg("收到 END_FRAME，流输出结束")
+					Msg("收到 END_FRAME，关闭流队列并结束流输出")
+				// 消费端关闭队列，对齐 Python need_close=True 语义
+				_ = queue.Close(ctx)
+				cancel()
 				return
 			}
 

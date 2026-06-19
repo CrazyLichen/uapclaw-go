@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
-
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -94,9 +93,19 @@ type TraceWorkflowSpan struct {
 type SpanManager struct {
 	traceID      string
 	parentID     string
+	mu           sync.RWMutex
 	order        []string
 	sessionSpans map[string]*Span
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -116,6 +125,8 @@ func NewSpanManager(traceID string, parentID ...string) *SpanManager {
 
 // GetSpan 根据调用标识获取 Span
 func (m *SpanManager) GetSpan(invokeID string) *Span {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, id := range m.order {
 		if id == invokeID {
 			return m.sessionSpans[invokeID]
@@ -126,6 +137,8 @@ func (m *SpanManager) GetSpan(invokeID string) *Span {
 
 // PopSpan 移除指定调用标识的 Span
 func (m *SpanManager) PopSpan(invokeID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i, id := range m.order {
 		if id == invokeID {
 			m.order = append(m.order[:i], m.order[i+1:]...)
@@ -137,6 +150,9 @@ func (m *SpanManager) PopSpan(invokeID string) {
 
 // CreateAgentSpan 创建 Agent 追踪跨度，自动生成 UUID 作为 invokeID
 func (m *SpanManager) CreateAgentSpan(parentSpan ...*TraceAgentSpan) *TraceAgentSpan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	invokeID := uuid.New().String()
 	span := &TraceAgentSpan{
 		Span: Span{
@@ -149,15 +165,18 @@ func (m *SpanManager) CreateAgentSpan(parentSpan ...*TraceAgentSpan) *TraceAgent
 	if len(parentSpan) > 0 && parentSpan[0] != nil {
 		span.ParentInvokeID = parentSpan[0].InvokeID
 		parentSpan[0].AppendChildInvokeID(invokeID)
-		m.refreshSpanRecord(parentSpan[0].InvokeID, parentSpan[0])
+		m.refreshSpanRecordLocked(parentSpan[0].InvokeID, parentSpan[0])
 	}
 
-	m.refreshSpanRecord(invokeID, &span.Span)
+	m.refreshSpanRecordLocked(invokeID, &span.Span)
 	return span
 }
 
 // CreateWorkflowSpan 创建工作流追踪跨度
 func (m *SpanManager) CreateWorkflowSpan(invokeID string, parentSpan ...*TraceWorkflowSpan) *TraceWorkflowSpan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	span := &TraceWorkflowSpan{
 		Span: Span{
 			TraceID:  m.traceID,
@@ -171,21 +190,25 @@ func (m *SpanManager) CreateWorkflowSpan(invokeID string, parentSpan ...*TraceWo
 	if len(parentSpan) > 0 && parentSpan[0] != nil {
 		span.ParentInvokeID = parentSpan[0].InvokeID
 		parentSpan[0].AppendChildInvokeID(invokeID)
-		m.refreshSpanRecord(parentSpan[0].InvokeID, parentSpan[0])
+		m.refreshSpanRecordLocked(parentSpan[0].InvokeID, parentSpan[0])
 	}
 
-	m.refreshSpanRecord(invokeID, &span.Span)
+	m.refreshSpanRecordLocked(invokeID, &span.Span)
 	return span
 }
 
 // UpdateSpan 更新 Span 字段值
 func (m *SpanManager) UpdateSpan(span *Span, data map[string]any) {
 	span.Update(data)
-	m.refreshSpanRecord(span.InvokeID, span)
+	m.mu.Lock()
+	m.refreshSpanRecordLocked(span.InvokeID, span)
+	m.mu.Unlock()
 }
 
 // LastSpan 获取最后一个 Span
 func (m *SpanManager) LastSpan() *Span {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if len(m.order) == 0 {
 		return nil
 	}
@@ -233,8 +256,8 @@ func (s *TraceWorkflowSpan) AppendStreamInputs(chunk any) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// refreshSpanRecord 刷新 Span 记录
-func (m *SpanManager) refreshSpanRecord(invokeID string, baseSpan interface{}) {
+// refreshSpanRecordLocked 刷新 Span 记录（调用方已持锁）
+func (m *SpanManager) refreshSpanRecordLocked(invokeID string, baseSpan interface{}) {
 	span := extractBaseSpan(baseSpan)
 	if span == nil {
 		return

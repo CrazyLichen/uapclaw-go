@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -20,10 +21,11 @@ type endFrame struct{}
 type StreamQueue struct {
 	// ch 内部缓冲 channel
 	ch chan any
-	// mu 保护 closed 字段
-	mu sync.RWMutex
-	// closed 队列是否已关闭
-	closed bool
+	// closed 队列是否已关闭（原子操作，读多写少场景替代 RWMutex）
+	// 对齐 Python AsyncStreamQueue._closed，closed=true 后不再接受新 Send
+	closed atomic.Bool
+	// chCloseOnce 保证 channel 只 close 一次
+	chCloseOnce sync.Once
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -61,18 +63,25 @@ func NewStreamQueue(maxSize int) *StreamQueue {
 }
 
 // Send 带超时的发送，对齐 Python AsyncStreamQueue.send()。
-// 通过 select + ctx.Done() 实现超时，失败时重试 maxRetries 次。
-func (q *StreamQueue) Send(ctx context.Context, data any, attemptTimeout ...time.Duration) error {
+// closed 后直接返回 ErrQueueClosed；使用 recover 捕获 closed 检查与 close(ch) 之间的窗口 panic。
+func (q *StreamQueue) Send(ctx context.Context, data any, attemptTimeout ...time.Duration) (err error) {
+	// recover 兜底：closed.Load() 返回 false 后、ch<- 之前，Close 可能已 close(ch)
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "SESSION_STREAM_ERROR").
+				Msg("Send 检测到 channel 已关闭，返回 ErrQueueClosed")
+			err = ErrQueueClosed
+		}
+	}()
+
 	timeout := defaultSendAttemptTimeout
 	if len(attemptTimeout) > 0 {
 		timeout = attemptTimeout[0]
 	}
 	maxRetries := defaultMaxSendRetries
 
-	q.mu.RLock()
-	isClosed := q.closed
-	q.mu.RUnlock()
-	if isClosed {
+	if q.closed.Load() {
 		logger.Error(logComponent).
 			Str("event_type", "SESSION_STREAM_ERROR").
 			Msg("StreamQueue 已关闭，无法发送数据")
@@ -111,14 +120,13 @@ func (q *StreamQueue) Send(ctx context.Context, data any, attemptTimeout ...time
 
 // Receive 带超时的接收，对齐 Python AsyncStreamQueue.receive()。
 // timeout <= 0 表示无限等待。
+//
+// 与 Python 的关键差异：Python receive 在 _closed=True 时直接抛 RuntimeError，
+// 但 Python 的 close() 先 queue.join() 等消费端排空才设 _closed。
+// Go 的 close(ch) 不会等消费端排空，所以 Receive 必须支持从已关闭 channel 读取残留数据：
+//   - closed 后仍从 channel 读取，直到 channel 为空且已关闭（ok=false）时返回 ErrQueueClosed
+//   - 超时时检查 closed 状态：closed 返回 ErrQueueClosed，否则返回 context 错误
 func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (any, error) {
-	q.mu.RLock()
-	isClosed := q.closed
-	q.mu.RUnlock()
-	if isClosed {
-		return nil, ErrQueueClosed
-	}
-
 	var recvCtx context.Context
 	var cancel context.CancelFunc
 	if len(timeout) > 0 && timeout[0] > 0 {
@@ -131,6 +139,7 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (an
 	select {
 	case data, ok := <-q.ch:
 		if !ok {
+			// channel 已关闭且为空，所有数据已消费完毕
 			return nil, ErrQueueClosed
 		}
 		logger.Debug(logComponent).
@@ -138,66 +147,40 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (an
 			Msg("流数据接收成功")
 		return data, nil
 	case <-recvCtx.Done():
+		// 超时：区分 closed 和正常超时
+		if q.closed.Load() {
+			return nil, ErrQueueClosed
+		}
 		return nil, recvCtx.Err()
 	}
 }
 
-// Close 优雅关闭队列，对齐 Python AsyncStreamQueue.close()。
-// 发送哨兵值后等待队列排空（或超时后强制清空）。
+// Close 关闭队列，对齐 Python AsyncStreamQueue.close()。
+//
+// 流程：设 closed=true → close(ch)
+//
+// ⚠️ Close 不发送 endFrame 哨兵！endFrame 由 StreamEmitter.Close() 负责发送。
+// 这对齐了 Python 的两阶段关闭语义：
+//   1. 生产端：StreamEmitter.close() → emitter._closed=True + queue.send(END_FRAME)
+//   2. 消费端：stream_output() 收到 END_FRAME → queue.close()
+//
+// Python 的 queue.close() 只做 _closed=True + queue.join() 等排空，
+// Go 用 close(ch) 替代 queue.join()——close(ch) 后消费端仍可读残留数据直到 ok=false。
+//
+// 使用 sync.Once 保证 close(ch) 只执行一次，天然幂等。
 func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error {
-	q.mu.Lock()
-	if q.closed {
-		q.mu.Unlock()
+	if q.closed.Load() {
 		return nil
 	}
-	q.closed = true
-	q.mu.Unlock()
+	q.closed.Store(true)
 
-	closeTimeout := defaultCloseTimeout
-	if len(timeout) > 0 {
-		closeTimeout = timeout[0]
-	}
-
-	// 发送结束哨兵
-	select {
-	case q.ch <- endFrame{}:
-	default:
-		logger.Warn(logComponent).
-			Msg("StreamQueue 关闭时无法发送 endFrame，channel 可能已满")
-	}
-
-	// 等待队列排空或超时
-	closeCtx, cancel := context.WithTimeout(ctx, closeTimeout)
-	defer cancel()
-
-	// 启动 goroutine 消费剩余数据以排空队列
-	drained := make(chan struct{})
-	go func() {
-		defer close(drained)
-		for {
-			select {
-			case _, ok := <-q.ch:
-				if !ok {
-					return
-				}
-			default:
-				return
-			}
-		}
-	}()
-
-	select {
-	case <-drained:
+	// close(ch)：消费端仍可读取残留数据，直到 ok=false
+	// 对齐 Python queue.close() 的 _closed=True + queue.join() 语义
+	q.chCloseOnce.Do(func() {
 		close(q.ch)
-		return nil
-	case <-closeCtx.Done():
-		logger.Error(logComponent).
-			Str("event_type", "SESSION_STREAM_ERROR").
-			Dur("timeout", closeTimeout).
-			Msg("StreamQueue 关闭超时，强制清空")
-		q.forceClear()
-		return nil
-	}
+	})
+
+	return nil
 }
 
 // Ch 返回只读 channel，供消费端 range 读取。
@@ -207,27 +190,7 @@ func (q *StreamQueue) Ch() <-chan any {
 
 // IsClosed 查询关闭状态
 func (q *StreamQueue) IsClosed() bool {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	return q.closed
+	return q.closed.Load()
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// forceClear 强制清空队列，对齐 Python AsyncStreamQueue._force_clear()
-func (q *StreamQueue) forceClear() {
-	clearedItems := 0
-	for {
-		select {
-		case <-q.ch:
-			clearedItems++
-		default:
-			close(q.ch)
-			logger.Info(logComponent).
-				Str("event_type", "SESSION_STREAM_CHUNK").
-				Int("cleared_items", clearedItems).
-				Msg("StreamQueue 强制清空完成")
-			return
-		}
-	}
-}
