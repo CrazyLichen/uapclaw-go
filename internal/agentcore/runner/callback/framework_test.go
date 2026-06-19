@@ -400,3 +400,182 @@ func TestCallbackFramework_Session事件与LLMTool隔离(t *testing.T) {
 		t.Error("Session 事件不应触发 Tool 回调")
 	}
 }
+
+// ──────────────────────────── 自定义事件测试 ────────────────────────────
+
+// TestCallbackFramework_OnCustom和TriggerCustom 测试注册+触发自定义事件回调
+func TestCallbackFramework_OnCustom和TriggerCustom(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData map[string]any
+
+	fn := func(_ context.Context, data map[string]any) any {
+		called = true
+		receivedData = data
+		return "custom_result"
+	}
+
+	fw.OnCustom("abc-123write_stream", fn)
+	results := fw.TriggerCustom(context.Background(), "abc-123write_stream", map[string]any{
+		"data": "hello",
+	})
+
+	if !called {
+		t.Error("回调未被调用")
+	}
+	if receivedData["data"] != "hello" {
+		t.Errorf("data 期望 hello，实际 %v", receivedData["data"])
+	}
+	if len(results) != 1 || results[0] != "custom_result" {
+		t.Errorf("结果期望 [custom_result]，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_OffCustom 测试按指针注销自定义事件回调
+func TestCallbackFramework_OffCustom(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+
+	fn := func(_ context.Context, data map[string]any) any {
+		called = true
+		return nil
+	}
+
+	fw.OnCustom("test-event", fn)
+	fw.OffCustom("test-event", fn)
+	fw.TriggerCustom(context.Background(), "test-event", nil)
+
+	if called {
+		t.Error("注销后回调不应被调用")
+	}
+}
+
+// TestCallbackFramework_OffAllCustom 测试清除某事件的全部回调
+func TestCallbackFramework_OffAllCustom(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callCount int32
+
+	fn1 := func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callCount, 1)
+		return nil
+	}
+	fn2 := func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callCount, 1)
+		return nil
+	}
+
+	// 注册两个回调到同一事件
+	fw.OnCustom("session-Awrite_stream", fn1)
+	fw.OnCustom("session-Awrite_stream", fn2)
+
+	// 触发：两个回调都应被调用
+	fw.TriggerCustom(context.Background(), "session-Awrite_stream", nil)
+	if atomic.LoadInt32(&callCount) != 2 {
+		t.Errorf("期望调用 2 次，实际 %d 次", callCount)
+	}
+
+	// OffAllCustom 清除全部
+	fw.OffAllCustom("session-Awrite_stream")
+
+	// 再次触发：不应有回调被调用
+	atomic.StoreInt32(&callCount, 0)
+	fw.TriggerCustom(context.Background(), "session-Awrite_stream", nil)
+	if atomic.LoadInt32(&callCount) != 0 {
+		t.Errorf("OffAllCustom 后期望无回调被调用，实际 %d 次", callCount)
+	}
+}
+
+// TestCallbackFramework_OffAllCustom_PerSession隔离 测试不同 session 事件名互不影响
+func TestCallbackFramework_OffAllCustom_PerSession隔离(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callA, callB int32
+
+	fw.OnCustom("session-Awrite_stream", func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callA, 1)
+		return nil
+	})
+	fw.OnCustom("session-Bwrite_stream", func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callB, 1)
+		return nil
+	})
+
+	// 清除 session-A 的回调
+	fw.OffAllCustom("session-Awrite_stream")
+
+	// session-A 回调不应被触发
+	fw.TriggerCustom(context.Background(), "session-Awrite_stream", nil)
+	if atomic.LoadInt32(&callA) != 0 {
+		t.Error("session-A 回调不应被触发")
+	}
+
+	// session-B 回调应正常触发
+	fw.TriggerCustom(context.Background(), "session-Bwrite_stream", nil)
+	if atomic.LoadInt32(&callB) != 1 {
+		t.Error("session-B 回调应被触发 1 次")
+	}
+}
+
+// TestCallbackFramework_TriggerCustom_Nil上下文 测试 nil context 防御
+func TestCallbackFramework_TriggerCustom_Nil上下文(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	fw.OnCustom("test", func(_ context.Context, data map[string]any) any {
+		called = true
+		return nil
+	})
+
+	results := fw.TriggerCustom(nil, "test", map[string]any{"data": "hello"}) //nolint:staticcheck // 测试 nil context 行为
+	if results != nil {
+		t.Errorf("nil context 期望 nil，实际 %v", results)
+	}
+	if called {
+		t.Error("nil context 时回调不应被调用")
+	}
+}
+
+// TestCallbackFramework_TriggerCustom_无回调 测试无注册回调时返回空切片
+func TestCallbackFramework_TriggerCustom_无回调(t *testing.T) {
+	fw := NewCallbackFramework()
+	results := fw.TriggerCustom(context.Background(), "nonexistent", nil)
+	if len(results) != 0 {
+		t.Errorf("无回调时期望空切片，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_自定义事件与LLMToolSession隔离 测试自定义事件不影响其他域
+func TestCallbackFramework_自定义事件与LLMToolSession隔离(t *testing.T) {
+	fw := NewCallbackFramework()
+	var llmCalled, toolCalled, sessionCalled, customCalled bool
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		llmCalled = true
+		return nil
+	})
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any {
+		toolCalled = true
+		return nil
+	})
+	fw.OnSession(AgentSessionCreated, func(_ context.Context, _ *SessionCallEventData) any {
+		sessionCalled = true
+		return nil
+	})
+	fw.OnCustom("custom-event", func(_ context.Context, _ map[string]any) any {
+		customCalled = true
+		return nil
+	})
+
+	// 触发自定义事件，不应触发其他域
+	fw.TriggerCustom(context.Background(), "custom-event", nil)
+	if customCalled != true {
+		t.Error("自定义回调应被调用")
+	}
+	if llmCalled {
+		t.Error("自定义事件不应触发 LLM 回调")
+	}
+	if toolCalled {
+		t.Error("自定义事件不应触发 Tool 回调")
+	}
+	if sessionCalled {
+		t.Error("自定义事件不应触发 Session 回调")
+	}
+}

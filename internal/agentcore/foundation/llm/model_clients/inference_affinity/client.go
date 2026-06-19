@@ -164,6 +164,12 @@ func (c *InferenceAffinityModelClient) Stream(
 	// 7. 处理 extra_body
 	openai.HandleExtraBody(reqParams)
 
+	// 7.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
+	// 请求发送前调用 tracer_record_data 回调，记录请求参数
+	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
+		fn(map[string]any{"llm_params": reqParams})
+	}
+
 	// 8. 构建 HTTP 请求
 	httpHeaders := openai.ExtractHTTPHeaders(effectiveHeaders)
 	req, client, err := openai.BuildHTTPRequest(

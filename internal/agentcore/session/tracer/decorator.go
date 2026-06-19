@@ -72,8 +72,9 @@ type TracedWorkflow struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Invoke 非流式调用 LLM，在调用前后触发追踪事件。
-// 流程：CreateAgentSpan(agentSpan) → TriggerAgent(TraceLLMStart) → inner.Invoke → TriggerAgent(TraceLLMEnd/Error)
+// Invoke 非流式调用 LLM，在调用前后触发追踪事件，并通过 tracer_record_data 回调记录中间过程。
+// 流程：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Invoke → TriggerAgent(TraceLLMEnd/Error)
+// 对齐 Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
 func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
 	c.tracer.TriggerAgent(ctx, TraceLLMStart, &TriggerParams{
@@ -81,6 +82,19 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 		Inputs:       messages,
 		InstanceInfo: c.instanceInfo,
 	})
+
+	// 创建 tracer_record_data 回调闭包，对齐 Python:
+	//   async def tracer_record_data(**kw):
+	//       await tracer.trigger("tracer_agent", f"on_{invoke_type.value}_request", span=span, **kw)
+	// 底层模型客户端在请求发送前和响应解析后调用此回调，触发 TraceLLMRequest 事件。
+	spanPtr := &span.Span
+	tracerRecordData := func(data map[string]any) {
+		c.tracer.TriggerAgent(ctx, TraceLLMRequest, &TriggerParams{
+			Span:         spanPtr,
+			OnInvokeData: data,
+		})
+	}
+	opts = append(opts, model_clients.WithInvokeTracerRecordData(tracerRecordData))
 
 	result, err := c.inner.Invoke(ctx, messages, opts...)
 	if err != nil {
@@ -98,8 +112,9 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 	return result, nil
 }
 
-// Stream 流式调用 LLM，在调用前后触发追踪事件，收集流式结果后触发结束事件。
-// 流程：CreateAgentSpan(agentSpan) → TriggerAgent(TraceLLMStart) → inner.Stream → Final() 收集结果 → TriggerAgent(TraceLLMEnd/Error)
+// Stream 流式调用 LLM，在调用前后触发追踪事件，并通过 tracer_record_data 回调记录中间过程。
+// 流程：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Stream → Final() 收集结果 → TriggerAgent(TraceLLMEnd/Error)
+// 对齐 Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
 func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
 	c.tracer.TriggerAgent(ctx, TraceLLMStart, &TriggerParams{
@@ -107,6 +122,16 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 		Inputs:       messages,
 		InstanceInfo: c.instanceInfo,
 	})
+
+	// 创建 tracer_record_data 回调闭包，对齐 Python 同 Invoke
+	spanPtr := &span.Span
+	tracerRecordData := func(data map[string]any) {
+		c.tracer.TriggerAgent(ctx, TraceLLMRequest, &TriggerParams{
+			Span:         spanPtr,
+			OnInvokeData: data,
+		})
+	}
+	opts = append(opts, model_clients.WithStreamTracerRecordData(tracerRecordData))
 
 	streamResult, err := c.inner.Stream(ctx, messages, opts...)
 	if err != nil {
@@ -192,6 +217,8 @@ func (t *TracedTool) Card() *tool.ToolCard {
 
 // DecorateModelWithTrace 为模型客户端添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 model。
+// instanceInfo 中 class_name 从模型配置获取（对齐 Python model.config.model_config.model_name），
+// type 固定为 "llm"（对齐 Python decorate_model_with_trace）。
 func DecorateModelWithTrace(model model_clients.BaseModelClient, session tracerSession) model_clients.BaseModelClient {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
@@ -203,18 +230,29 @@ func DecorateModelWithTrace(model model_clients.BaseModelClient, session tracerS
 		return model
 	}
 
+	// 尝试获取模型名称，对齐 Python model.config.model_config.model_name
+	className := "BaseModelClient"
+	if provider, ok := model.(ModelConfigProvider); ok {
+		if name := provider.GetModelName(); name != "" {
+			className = name
+		}
+	}
+
 	return &TracedModelClient{
 		inner:     model,
 		tracer:    tracerVal,
 		agentSpan: agentSpan,
 		instanceInfo: map[string]any{
-			"class_name": "BaseModelClient",
+			"class_name": className,
+			"type":       "llm",
 		},
 	}
 }
 
 // DecorateToolWithTrace 为工具添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 tool。
+// instanceInfo 中 class_name 从 tool.Card().Name 获取（对齐 Python tool.card.name），
+// type 固定为 "tool"（对齐 Python decorate_tool_with_trace）。
 func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
@@ -226,12 +264,19 @@ func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 		return t
 	}
 
+	// 从 tool.Card().Name 获取工具名称，对齐 Python tool.card.name
+	className := "Tool"
+	if card := t.Card(); card != nil && card.Name != "" {
+		className = card.Name
+	}
+
 	return &TracedTool{
 		inner:     t,
 		tracer:    tracerVal,
 		agentSpan: agentSpan,
 		instanceInfo: map[string]any{
-			"class_name": "Tool",
+			"class_name": className,
+			"type":       "tool",
 		},
 	}
 }
@@ -254,8 +299,16 @@ func DecorateWorkflowWithTrace(w any, session tracerSession) any {
 		inner:        w,
 		tracer:       tracerVal,
 		agentSpan:    agentSpan,
-		instanceInfo: map[string]any{"class_name": "Workflow"},
+		instanceInfo: map[string]any{"class_name": "Workflow", "type": "workflow"},
 	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
+// 对齐 Python model.config.model_config.model_name 访问方式。
+// 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
+type ModelConfigProvider interface {
+	// GetModelName 获取模型名称
+	GetModelName() string
+}

@@ -51,7 +51,9 @@ func TestStreamQueue_SendAfterClose(t *testing.T) {
 	}
 }
 
-// TestStreamQueue_ReceiveAfterClose 测试关闭后接收返回错误
+// TestStreamQueue_ReceiveAfterClose 测试关闭后接收行为
+// Close 只做 closed=true + close(ch)，不发送 endFrame（endFrame 由 Emitter 负责）。
+// Close 后 channel 为空且已关闭，Receive 返回 ErrQueueClosed。
 func TestStreamQueue_ReceiveAfterClose(t *testing.T) {
 	q := NewStreamQueue(10)
 	ctx := context.Background()
@@ -60,9 +62,49 @@ func TestStreamQueue_ReceiveAfterClose(t *testing.T) {
 		t.Fatalf("Close 失败: %v", err)
 	}
 
+	// Close 后 channel 为空且已关闭，Receive 直接返回 ErrQueueClosed
 	_, err := q.Receive(ctx)
-	if err == nil {
-		t.Error("关闭后 Receive 应返回错误")
+	if err != ErrQueueClosed {
+		t.Errorf("Close 后 Receive 应返回 ErrQueueClosed，实际 err=%v", err)
+	}
+}
+
+// TestStreamQueue_ReceiveResidualDataAfterClose 测试关闭后读取残留数据
+// 对齐 Python：消费端收到 END_FRAME 后调 queue.close()，此时 channel 中可能有残留数据。
+// Go 的 close(ch) 后仍可读取残留数据，直到 ok=false 返回 ErrQueueClosed。
+func TestStreamQueue_ReceiveResidualDataAfterClose(t *testing.T) {
+	q := NewStreamQueue(10)
+	ctx := context.Background()
+
+	// 先发送数据
+	_ = q.Send(ctx, "data1")
+	_ = q.Send(ctx, "data2")
+
+	// Close 后 channel 中仍有残留数据
+	_ = q.Close(ctx)
+
+	// 第一次 Receive 读到残留 data1
+	data, err := q.Receive(ctx)
+	if err != nil {
+		t.Fatalf("第一次 Receive 应读到残留数据，实际 err=%v", err)
+	}
+	if data != "data1" {
+		t.Errorf("第一次 Receive 数据 = %v, want %q", data, "data1")
+	}
+
+	// 第二次 Receive 读到残留 data2
+	data, err = q.Receive(ctx)
+	if err != nil {
+		t.Fatalf("第二次 Receive 应读到残留数据，实际 err=%v", err)
+	}
+	if data != "data2" {
+		t.Errorf("第二次 Receive 数据 = %v, want %q", data, "data2")
+	}
+
+	// 第三次 Receive：channel 为空且已关闭，返回 ErrQueueClosed
+	_, err = q.Receive(ctx)
+	if err != ErrQueueClosed {
+		t.Errorf("残留数据读完后 Receive 应返回 ErrQueueClosed，实际 err=%v", err)
 	}
 }
 

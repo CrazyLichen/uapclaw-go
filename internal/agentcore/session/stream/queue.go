@@ -161,8 +161,8 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (an
 //
 // ⚠️ Close 不发送 endFrame 哨兵！endFrame 由 StreamEmitter.Close() 负责发送。
 // 这对齐了 Python 的两阶段关闭语义：
-//   1. 生产端：StreamEmitter.close() → emitter._closed=True + queue.send(END_FRAME)
-//   2. 消费端：stream_output() 收到 END_FRAME → queue.close()
+//  1. 生产端：StreamEmitter.close() → emitter._closed=True + queue.send(END_FRAME)
+//  2. 消费端：stream_output() 收到 END_FRAME → queue.close()
 //
 // Python 的 queue.close() 只做 _closed=True + queue.join() 等排空，
 // Go 用 close(ch) 替代 queue.join()——close(ch) 后消费端仍可读残留数据直到 ok=false。

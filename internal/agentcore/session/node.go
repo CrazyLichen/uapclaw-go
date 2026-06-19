@@ -180,19 +180,40 @@ func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error
 }
 
 // WriteStream 写入标准输出流。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
-// 对应 Python: Session.write_stream(data)
+// 对应 Python: Session.write_stream(data) → self._stream_writer().write(data)
+// Python Node 层直接传 data 给 writer（writer 内部 Pydantic model_validate 校验），
+// Go 没有 Pydantic，由 normalizeOutputStream 替代校验和转换逻辑：
+//   - OutputSchema → 直接使用
+//   - dict 含 type/index/payload → 构造 OutputSchema
+//   - 其他 → OutputSchema{Type:"message", Index:0, Payload:data}
 func (f *NodeSessionFacade) WriteStream(ctx context.Context, data any) error {
-	// ⤵️ 5.10 回填：writer := f.streamWriter(); if writer != nil { return writer.Write(ctx, data) }
-	return nil
+	mgr := f.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetOutputWriter()
+	if writer == nil {
+		return nil
+	}
+	schema := normalizeOutputStream(data)
+	return writer.Write(ctx, schema)
 }
 
 // WriteCustomStream 写入自定义流。
-// ⤵️ 5.10 回填：StreamWriterManager 实现后填充真实逻辑
-// 对应 Python: Session.write_custom_stream(data)
+// 对应 Python: Session.write_custom_stream(data) → self._custom_writer().write(data)
+// Python CustomStreamWriter 内部 CustomSchema.model_validate(data) 校验，
+// Go 由 normalizeCustomStream 替代：dict → CustomSchema，其他 → 包装为 CustomSchema。
 func (f *NodeSessionFacade) WriteCustomStream(ctx context.Context, data any) error {
-	// ⤵️ 5.10 回填：writer := f.customWriter(); if writer != nil { return writer.Write(ctx, data) }
-	return nil
+	mgr := f.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetCustomWriter()
+	if writer == nil {
+		return nil
+	}
+	schema := normalizeCustomStream(data)
+	return writer.Write(ctx, schema)
 }
 
 // GetEnv 获取环境变量值。

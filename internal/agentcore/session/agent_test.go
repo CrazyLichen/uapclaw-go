@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -255,13 +256,11 @@ func TestSession_tagStreamPayload_OutputSchema(t *testing.T) {
 	}
 }
 
-// TestSession_normalizeOutputStream 各种类型 测试不同输入类型的归一化
-func TestSession_normalizeOutputStream_各种类型(t *testing.T) {
-	s := NewSession()
-
+// TestNormalizeOutputStream 各种类型 测试不同输入类型的归一化
+func TestNormalizeOutputStream_各种类型(t *testing.T) {
 	// case stream.OutputSchema：直接返回
 	os := stream.OutputSchema{Type: "message", Index: 1, Payload: "test"}
-	result := s.normalizeOutputStream(os)
+	result := normalizeOutputStream(os)
 	if result.Type != "message" || result.Index != 1 {
 		t.Errorf("OutputSchema 应原样返回，实际 type=%s index=%d", result.Type, result.Index)
 	}
@@ -272,7 +271,7 @@ func TestSession_normalizeOutputStream_各种类型(t *testing.T) {
 		"index":   2,
 		"payload": map[string]any{"data": "value"},
 	}
-	result2 := s.normalizeOutputStream(fullMap)
+	result2 := normalizeOutputStream(fullMap)
 	if result2.Type != "custom" || result2.Index != 2 {
 		t.Errorf("完整 map 应解析为 OutputSchema，实际 type=%s index=%d", result2.Type, result2.Index)
 	}
@@ -281,13 +280,13 @@ func TestSession_normalizeOutputStream_各种类型(t *testing.T) {
 	partialMap := map[string]any{
 		"type": "custom",
 	}
-	result3 := s.normalizeOutputStream(partialMap)
+	result3 := normalizeOutputStream(partialMap)
 	if result3.Type != "message" {
 		t.Errorf("不完整 map 应走默认构造，实际 type=%s", result3.Type)
 	}
 
 	// 其他类型（如 string）：走默认构造
-	result4 := s.normalizeOutputStream("plain_string")
+	result4 := normalizeOutputStream("plain_string")
 	if result4.Type != "message" || result4.Payload != "plain_string" {
 		t.Errorf("其他类型应走默认构造，实际 type=%s payload=%v", result4.Type, result4.Payload)
 	}
@@ -567,5 +566,145 @@ func TestSession_CreateWorkflowSession_GlobalState共享(t *testing.T) {
 	}
 	if result != "wf_val" {
 		t.Errorf("期望 AgentSession 读取共享 globalState='wf_val'，实际=%v", result)
+	}
+}
+
+// ──────────────────────────── Stream 回调测试（SW-31/32/33） ────────────────────────────
+
+// TestSession_WriteStream_触发CustomCallback 测试 WriteStream 触发自定义 StreamWrite 回调
+func TestSession_WriteStream_触发CustomCallback(t *testing.T) {
+	s := NewSession(WithSessionID("sw31-test"))
+
+	var triggered bool
+	var receivedData map[string]any
+	fn := func(_ context.Context, data map[string]any) any {
+		triggered = true
+		receivedData = data
+		return nil
+	}
+
+	// 注册回调到 per-session 事件名
+	fw := callback.GetCallbackFramework()
+	fw.OnCustom("sw31-testwrite_stream", fn)
+	defer fw.OffAllCustom("sw31-testwrite_stream")
+
+	_ = s.WriteStream(map[string]any{"text": "hello"})
+
+	if !triggered {
+		t.Error("WriteStream 应触发自定义 StreamWrite 回调")
+	}
+	if receivedData == nil {
+		t.Fatal("回调数据不应为 nil")
+	}
+	// data 经过 normalizeOutputStream 处理，变为 OutputSchema
+	if _, ok := receivedData["data"]; !ok {
+		t.Error("回调数据应包含 data 键")
+	}
+}
+
+// TestSession_WriteCustomStream_触发CustomCallback 测试 WriteCustomStream 触发自定义 StreamWrite 回调
+func TestSession_WriteCustomStream_触发CustomCallback(t *testing.T) {
+	s := NewSession(WithSessionID("sw32-test"))
+
+	var triggered bool
+	var receivedData map[string]any
+	fn := func(_ context.Context, data map[string]any) any {
+		triggered = true
+		receivedData = data
+		return nil
+	}
+
+	fw := callback.GetCallbackFramework()
+	fw.OnCustom("sw32-testwrite_stream", fn)
+	defer fw.OffAllCustom("sw32-testwrite_stream")
+
+	_ = s.WriteCustomStream(map[string]any{"key": "value"})
+
+	if !triggered {
+		t.Error("WriteCustomStream 应触发自定义 StreamWrite 回调")
+	}
+	if receivedData == nil {
+		t.Fatal("回调数据不应为 nil")
+	}
+	if _, ok := receivedData["data"]; !ok {
+		t.Error("回调数据应包含 data 键")
+	}
+}
+
+// TestSession_CloseStream_注销CustomCallback 测试 CloseStream 注销自定义 StreamWrite 回调
+func TestSession_CloseStream_注销CustomCallback(t *testing.T) {
+	s := NewSession(WithSessionID("sw33-test"))
+
+	var callCount int32
+	fn := func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callCount, 1)
+		return nil
+	}
+
+	fw := callback.GetCallbackFramework()
+	fw.OnCustom("sw33-testwrite_stream", fn)
+
+	// WriteStream 应触发回调
+	_ = s.WriteStream("data1")
+	if atomic.LoadInt32(&callCount) != 1 {
+		t.Errorf("WriteStream 后期望调用 1 次，实际 %d 次", callCount)
+	}
+
+	// CloseStream 应注销回调
+	_ = s.CloseStream()
+
+	// 再次 WriteStream 不应触发回调（回调已被 OffAllCustom 清除）
+	// 注意：CloseStream 已关闭 emitter，WriteStream 的 writer.Write 会返回错误或丢弃
+	// 但 TriggerCustom 仍会执行，只是回调已不在注册表中
+	atomic.StoreInt32(&callCount, 0)
+	fw.TriggerCustom(context.Background(), "sw33-testwrite_stream", map[string]any{"data": "test"})
+	if atomic.LoadInt32(&callCount) != 0 {
+		t.Error("CloseStream 后回调应被注销，不应再被触发")
+	}
+}
+
+// TestSession_Stream回调_PerSession隔离 测试不同 session 的回调互不影响
+func TestSession_Stream回调_PerSession隔离(t *testing.T) {
+	s1 := NewSession(WithSessionID("isolation-A"))
+	s2 := NewSession(WithSessionID("isolation-B"))
+
+	var callA, callB int32
+	fnA := func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callA, 1)
+		return nil
+	}
+	fnB := func(_ context.Context, data map[string]any) any {
+		atomic.AddInt32(&callB, 1)
+		return nil
+	}
+
+	fw := callback.GetCallbackFramework()
+	fw.OnCustom("isolation-Awrite_stream", fnA)
+	fw.OnCustom("isolation-Bwrite_stream", fnB)
+	defer func() {
+		fw.OffAllCustom("isolation-Awrite_stream")
+		fw.OffAllCustom("isolation-Bwrite_stream")
+	}()
+
+	// s1 写入只触发 session-A 回调
+	_ = s1.WriteStream("data-A")
+	if atomic.LoadInt32(&callA) != 1 || atomic.LoadInt32(&callB) != 0 {
+		t.Errorf("s1 WriteStream: 期望 callA=1 callB=0，实际 callA=%d callB=%d", callA, callB)
+	}
+
+	// s2 写入只触发 session-B 回调
+	_ = s2.WriteStream("data-B")
+	if atomic.LoadInt32(&callA) != 1 || atomic.LoadInt32(&callB) != 1 {
+		t.Errorf("s2 WriteStream: 期望 callA=1 callB=1，实际 callA=%d callB=%d", callA, callB)
+	}
+
+	// CloseStream s1 只清除 session-A 回调
+	_ = s1.CloseStream()
+
+	// s2 回调应仍有效
+	atomic.StoreInt32(&callB, 0)
+	_ = s2.WriteStream("data-B2")
+	if atomic.LoadInt32(&callB) != 1 {
+		t.Error("s1 CloseStream 后 s2 回调应仍有效")
 	}
 }

@@ -183,6 +183,18 @@ func (e *BaseClientEmbed) GetClientName() string {
 	return e.clientName
 }
 
+// GetModelName 获取模型名称，供 tracer decorator 获取 instanceInfo 中的 class_name。
+// 优先使用 ModelConfig.ModelName，为空时降级为 clientName。
+func (e *BaseClientEmbed) GetModelName() string {
+	if e.ModelConfig != nil && e.ModelConfig.ModelName != "" {
+		return e.ModelConfig.ModelName
+	}
+	if e.clientName != "" {
+		return e.clientName
+	}
+	return "BaseModelClient"
+}
+
 // ConvertMessagesToDict 将消息参数转换为 OpenAI API 格式的 dict 列表。
 //
 // 对应 Python: BaseModelClient._convert_messages_to_dict()

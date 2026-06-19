@@ -457,3 +457,194 @@ func TestTracedTool_Stream_直接委托(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// tracerRecordDataCapturingClient 捕获 Invoke/Stream 选项中 TracerRecordData 回调的模拟客户端
+type tracerRecordDataCapturingClient struct {
+	// invokeResult Invoke 返回的结果
+	invokeResult *llmschema.AssistantMessage
+	// invokeErr Invoke 返回的错误
+	invokeErr error
+	// capturedInvokeRecordData 捕获到的 Invoke TracerRecordData 回调
+	capturedInvokeRecordData any
+	// capturedStreamRecordData 捕获到的 Stream TracerRecordData 回调
+	capturedStreamRecordData any
+	// streamResult Stream 返回的结果
+	streamResult *model_clients.StreamResult
+	// streamErr Stream 返回的错误
+	streamErr error
+}
+
+// Invoke 实现 model_clients.BaseModelClient 接口，捕获 TracerRecordData 回调
+func (c *tracerRecordDataCapturingClient) Invoke(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
+	params := model_clients.NewInvokeParams(opts...)
+	c.capturedInvokeRecordData = params.TracerRecordData
+	return c.invokeResult, c.invokeErr
+}
+
+// Stream 实现 model_clients.BaseModelClient 接口，捕获 TracerRecordData 回调
+func (c *tracerRecordDataCapturingClient) Stream(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+	params := model_clients.NewStreamParams(opts...)
+	c.capturedStreamRecordData = params.TracerRecordData
+	return c.streamResult, c.streamErr
+}
+
+// GenerateImage 实现 model_clients.BaseModelClient 接口
+func (c *tracerRecordDataCapturingClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
+	return nil, nil
+}
+
+// GenerateSpeech 实现 model_clients.BaseModelClient 接口
+func (c *tracerRecordDataCapturingClient) GenerateSpeech(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateSpeechOption) (*llmschema.AudioGenerationResponse, error) {
+	return nil, nil
+}
+
+// GenerateVideo 实现 model_clients.BaseModelClient 接口
+func (c *tracerRecordDataCapturingClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateVideoOption) (*llmschema.VideoGenerationResponse, error) {
+	return nil, nil
+}
+
+// Release 实现 model_clients.BaseModelClient 接口
+func (c *tracerRecordDataCapturingClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
+	return false, nil
+}
+
+// TestTracedModelClient_Invoke_注入TracerRecordData 测试 Invoke 将 tracer_record_data 回调注入到 opts
+// 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
+func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	inner := &tracerRecordDataCapturingClient{
+		invokeResult: &llmschema.AssistantMessage{
+			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("测试")},
+		},
+	}
+
+	client := &TracedModelClient{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
+	}
+
+	_, err := client.Invoke(context.Background(), model_clients.NewTextMessagesParam("你好"))
+	if err != nil {
+		t.Fatalf("期望无错误，实际: %v", err)
+	}
+
+	// 验证回调被注入
+	if inner.capturedInvokeRecordData == nil {
+		t.Fatal("期望 TracerRecordData 被注入，实际为 nil")
+	}
+
+	// 验证回调类型正确且可调用
+	fn, ok := inner.capturedInvokeRecordData.(func(map[string]any))
+	if !ok {
+		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedInvokeRecordData)
+	}
+
+	// 调用回调不应 panic
+	fn(map[string]any{"llm_params": map[string]any{"model": "test"}})
+}
+
+// TestTracedModelClient_Stream_注入TracerRecordData 测试 Stream 将 tracer_record_data 回调注入到 opts
+// 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
+func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	chunkChan := make(chan *llmschema.AssistantMessageChunk, 1)
+	chunkChan <- &llmschema.AssistantMessageChunk{
+		AssistantMessage: llmschema.AssistantMessage{
+			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("chunk")},
+		},
+	}
+	close(chunkChan)
+
+	inner := &tracerRecordDataCapturingClient{
+		streamResult: model_clients.NewStreamResult(chunkChan),
+	}
+
+	client := &TracedModelClient{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
+	}
+
+	_, err := client.Stream(context.Background(), model_clients.NewTextMessagesParam("你好"))
+	if err != nil {
+		t.Fatalf("期望无错误，实际: %v", err)
+	}
+
+	// 验证回调被注入
+	if inner.capturedStreamRecordData == nil {
+		t.Fatal("期望 TracerRecordData 被注入，实际为 nil")
+	}
+
+	// 验证回调类型正确且可调用
+	fn, ok := inner.capturedStreamRecordData.(func(map[string]any))
+	if !ok {
+		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedStreamRecordData)
+	}
+
+	// 调用回调不应 panic
+	fn(map[string]any{"llm_params": map[string]any{"model": "test"}})
+}
+
+// TestTracedModelClient_Invoke_回调触发TraceLLMRequest 测试底层客户端调用回调时 TraceLLMRequest 事件被触发
+// 对齐 Python: tracer.trigger("tracer_agent", "on_llm_request", span=span, **kw)
+func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	// 手动创建 handler 并注册 TraceLLMRequest 事件分派（模拟 buildAgentDispatch 的对应条目）
+	handler := NewTraceAgentHandler(nil, tracer.AgentSpanManager)
+	tracer.agentHandler = handler
+	tracer.agentDispatch[TraceLLMRequest] = func(ctx context.Context, p *TriggerParams) {
+		span := tracer.getOrCreateAgentSpan(p)
+		_ = handler.OnLLMRequest(ctx, span, p.OnInvokeData)
+	}
+
+	inner := &tracerRecordDataCapturingClient{
+		invokeResult: &llmschema.AssistantMessage{
+			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("测试")},
+		},
+	}
+
+	client := &TracedModelClient{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
+	}
+
+	_, err := client.Invoke(context.Background(), model_clients.NewTextMessagesParam("你好"))
+	if err != nil {
+		t.Fatalf("期望无错误，实际: %v", err)
+	}
+
+	// 手动调用捕获的回调，模拟底层客户端调用
+	fn, ok := inner.capturedInvokeRecordData.(func(map[string]any))
+	if !ok {
+		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedInvokeRecordData)
+	}
+	fn(map[string]any{"llm_params": map[string]any{"model": "qwen-max"}})
+
+	// 验证 OnInvokeData 被填充（TraceLLMRequest → OnLLMRequest → updateRunningTraceData）
+	lastSpan := tracer.AgentSpanManager.LastSpan()
+	if lastSpan == nil {
+		t.Fatal("期望存在 span，实际为 nil")
+	}
+	if len(lastSpan.OnInvokeData) == 0 {
+		t.Fatal("期望 OnInvokeData 非空（回调应追加数据），实际为空")
+	}
+	lastData := lastSpan.OnInvokeData[len(lastSpan.OnInvokeData)-1]
+	if llmParams, ok := lastData["llm_params"].(map[string]any); ok {
+		if llmParams["model"] != "qwen-max" {
+			t.Fatalf("期望 llm_params.model=qwen-max，实际: %v", llmParams["model"])
+		}
+	} else {
+		t.Fatalf("期望 lastData 包含 llm_params，实际: %v", lastData)
+	}
+}

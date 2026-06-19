@@ -262,9 +262,17 @@ func (s *Session) DumpState() map[string]any {
 // 对应 Python: Session.write_stream(data)
 // data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
+// ✅ SW-31 已回填：触发自定义 StreamWrite 回调
 func (s *Session) WriteStream(data any) error {
 	ctx := context.Background()
-	streamData := s.normalizeOutputStream(s.tagStreamPayload(data))
+	streamData := normalizeOutputStream(s.tagStreamPayload(data))
+
+	// ⤴️ SW-31 回填：触发自定义 StreamWrite 事件
+	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	callback.GetCallbackFramework().TriggerCustom(ctx,
+		s.GetSessionID()+"write_stream",
+		map[string]any{"data": streamData},
+	)
 
 	mgr := s.inner.StreamWriterManager()
 	if mgr == nil {
@@ -280,9 +288,17 @@ func (s *Session) WriteStream(data any) error {
 // WriteCustomStream 写入自定义流。
 // 对应 Python: Session.write_custom_stream(data)
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
+// ✅ SW-32 已回填：触发自定义 StreamWrite 回调
 func (s *Session) WriteCustomStream(data any) error {
 	ctx := context.Background()
 	streamData := s.tagStreamPayload(data)
+
+	// ⤴️ SW-32 回填：触发自定义 StreamWrite 事件
+	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	callback.GetCallbackFramework().TriggerCustom(ctx,
+		s.GetSessionID()+"write_stream",
+		map[string]any{"data": streamData},
+	)
 
 	mgr := s.inner.StreamWriterManager()
 	if mgr == nil {
@@ -292,14 +308,7 @@ func (s *Session) WriteCustomStream(data any) error {
 	if writer == nil {
 		return nil
 	}
-	// 构造 CustomSchema
-	var dataMap map[string]any
-	if m, ok := streamData.(map[string]any); ok {
-		dataMap = m
-	} else {
-		dataMap = map[string]any{"value": streamData}
-	}
-	schema := stream.CustomSchema{Type: "custom", Data: dataMap}
+	schema := normalizeCustomStream(streamData)
 	return writer.Write(ctx, schema)
 }
 
@@ -319,7 +328,7 @@ func (s *Session) StreamIterator() <-chan any {
 // CloseStream 关闭流发射器。
 // 对应 Python: Session.close_stream()
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
-// ⤵️ R6 后续回填：callback_framework 需要支持 unregister_event 后补充回调注销
+// ✅ SW-33 已回填：注销该 session 的 StreamWrite 全部回调
 func (s *Session) CloseStream() error {
 	ctx := context.Background()
 	mgr := s.inner.StreamWriterManager()
@@ -328,6 +337,10 @@ func (s *Session) CloseStream() error {
 	}
 	// 关闭 emitter，发送 END_FRAME
 	_ = mgr.StreamEmitter().Close(ctx)
+
+	// ⤴️ SW-33 回填：注销该 session 的 StreamWrite 全部回调
+	// 对应 Python: await Runner.callback_framework.unregister_event(event=self._session_id + "write_stream")
+	callback.GetCallbackFramework().OffAllCustom(s.GetSessionID() + "write_stream")
 	return nil
 }
 
@@ -521,7 +534,12 @@ func (s *Session) tagStreamPayload(data any) any {
 // normalizeOutputStream 将流数据统一转为 OutputSchema。
 // 对应 Python: Session._normalize_output_stream(data)
 // ✅ 5.10 已回填：R1 回填
-func (s *Session) normalizeOutputStream(data any) stream.OutputSchema {
+//
+// 转换逻辑对齐 Python:
+//   - OutputSchema → 直接返回
+//   - dict 含 type/index/payload → 构造 OutputSchema（对齐 Pydantic model_validate）
+//   - 其他 → OutputSchema{Type:"message", Index:0, Payload:data}
+func normalizeOutputStream(data any) stream.OutputSchema {
 	switch v := data.(type) {
 	case stream.OutputSchema:
 		return v
@@ -543,4 +561,22 @@ func (s *Session) normalizeOutputStream(data any) stream.OutputSchema {
 	}
 	// 默认构造
 	return stream.OutputSchema{Type: "message", Index: 0, Payload: data}
+}
+
+// normalizeCustomStream 将流数据统一转为 CustomSchema。
+// 对应 Python: CustomStreamWriter.write(data) → CustomSchema.model_validate(data)
+//
+// 转换逻辑对齐 Python:
+//   - CustomSchema → 直接返回
+//   - dict → CustomSchema{Type:"custom", Data:dict}
+//   - 其他 → CustomSchema{Type:"custom", Data:{"value": data}}
+func normalizeCustomStream(data any) stream.CustomSchema {
+	switch v := data.(type) {
+	case stream.CustomSchema:
+		return v
+	case map[string]any:
+		return stream.CustomSchema{Type: "custom", Data: v}
+	default:
+		return stream.CustomSchema{Type: "custom", Data: map[string]any{"value": data}}
+	}
 }

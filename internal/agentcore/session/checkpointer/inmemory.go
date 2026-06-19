@@ -545,7 +545,9 @@ func (cp *InMemoryCheckpointer) SessionExists(ctx context.Context, sessionID str
 func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	if len(agentID) > 0 {
 		// 循环清除每个指定 Agent 的检查点
+		cp.mu.RLock()
 		agentStore, ok := cp.agentStores[sessionID]
+		cp.mu.RUnlock()
 		if !ok {
 			return nil
 		}

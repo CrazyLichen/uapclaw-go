@@ -37,6 +37,16 @@ type TracerWorkflowUtils struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
+// （openjiuwen/core/common/constants/constant.py）
+// 循环组件（8.20）执行时将 loop_node_id 写入 state.GetGlobal(loopID)，
+// 此处读取以判断当前组件是否处于循环中。
+const loopID = "__sys_loop_id"
+
+// loopIndexSuffix 循环索引的后缀，对应 Python INDEX = "index" + NESTED_PATH_SPLIT = "."
+// 完整 key 为 loopID_value + "." + "index"，如 "loop_node_1.index"
+const loopIndexSuffix = ".index"
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -141,8 +151,11 @@ func (TracerWorkflowUtils) TraceWorkflowDone(ctx context.Context, session BaseWo
 }
 
 // TraceComponentDone 追踪组件完成，对应 Python TracerWorkflowUtils.trace_component_done。
-// 调用 TriggerWorkflow(TraceWFCallDone, ...)，然后 PopWorkflowSpan。
-// 循环组件的 PopWorkflowSpan 处理暂用 TODO 标注，后续回填。
+// TraceComponentDone 组件执行完成追踪，对应 Python TracerWorkflowUtils.trace_component_done。
+// 调用 TriggerWorkflow(TraceWFCallDone, ...)。
+// Python 中 loop_id 非 None 时才执行 pop_workflow_span，非循环组件不 pop。
+// 当前循环组件（8.20）未实现，loop_id 暂时为空，不执行 PopWorkflowSpan。
+// 8.20 实现后，循环组件在 state 中写入 LOOP_ID，此处读取到非空值后执行 PopWorkflowSpan。
 func (TracerWorkflowUtils) TraceComponentDone(ctx context.Context, session BaseWorkflowSession) {
 	if session.Tracer() == nil {
 		return
@@ -153,10 +166,11 @@ func (TracerWorkflowUtils) TraceComponentDone(ctx context.Context, session BaseW
 		InvokeID: executableID,
 	})
 
-	// TODO: 循环组件的 PopWorkflowSpan 处理，需从 state.GetGlobal(LOOP_ID) 获取 loop_id，
-	// 当 loop_id 非空时执行 PopWorkflowSpan。后续回填。
-
-	session.Tracer().PopWorkflowSpan(executableID, parentID)
+	// 对齐 Python: loop_id = state.get_global(LOOP_ID); if loop_id is None: return
+	// 循环组件未实现前（8.20），state.GetGlobal(loopID) 返回 nil，不执行 PopWorkflowSpan。
+	// 8.20 实现后，循环组件在 state 中写入 loopID，此处读取到非空值后执行 PopWorkflowSpan。
+	// ⤵️ 8.20 回填：从 state.GetGlobal(loopID) 获取 loop_id，
+	// 当 loop_id 非空时执行 PopWorkflowSpan。
 }
 
 // Trace 追踪运行时数据，对应 Python TracerWorkflowUtils.trace。
@@ -201,10 +215,12 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 
 // getWorkflowMetadata 获取工作流元数据，对应 Python TracerWorkflowUtils._get_workflow_metadata。
 // 返回 workflow_id/workflow_version/workflow_name。
+// ⤵️ 5.12 回填：workflow_version/workflow_name 当前硬编码为空字符串，
+// Python 从 session.config().get_workflow_config(executable_id).card 提取 version 和 name，
+// Go 中 Config() 返回 any，无法调用 get_workflow_config。
+// 5.12 SessionConfig 回填后，从 config 获取 WorkflowCard 提取 version 和 name。
 func getWorkflowMetadata(session BaseWorkflowSession) map[string]any {
 	workflowID := session.WorkflowID()
-	// Python 中从 config 获取 workflow_config.card 提取 version 和 name，
-	// Go 中 Config() 返回 any，暂时只填充基础字段，后续回填 config 解析逻辑。
 	return map[string]any{
 		"workflow_id":      workflowID,
 		"workflow_version": "",
@@ -214,7 +230,13 @@ func getWorkflowMetadata(session BaseWorkflowSession) map[string]any {
 
 // getComponentMetadata 获取组件元数据，对应 Python TracerWorkflowUtils._get_component_metadata。
 // 返回 component_id/component_name/component_type/workflow_id。
-// loop_node_id/loop_index 部分用 TODO 标注后续回填。
+// 当循环组件写入 LOOP_ID 后，额外返回 loop_node_id/loop_index。
+// 对齐 Python:
+//
+//	loop_id = state.get_global(LOOP_ID)
+//	if loop_id is None: return component_metadata
+//	index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
+//	component_metadata.update({"loop_node_id": loop_id, "loop_index": index})
 func getComponentMetadata(session BaseWorkflowSession) map[string]any {
 	metadata := map[string]any{
 		"component_id":   session.NodeID(),
@@ -223,9 +245,19 @@ func getComponentMetadata(session BaseWorkflowSession) map[string]any {
 		"workflow_id":    session.WorkflowID(),
 	}
 
-	// TODO: 循环组件的 loop_node_id/loop_index 逻辑，
-	// 需从 state.GetGlobal(LOOP_ID) 获取 loop_id，
-	// 当 loop_id 非空时追加 loop_node_id 和 loop_index 字段。后续回填。
+	// 对齐 Python: loop_id = state.get_global(LOOP_ID)
+	if session.State() != nil {
+		loopIDVal := session.State().GetGlobal(state.StringKey(loopID))
+		if loopIDVal != nil {
+			if loopIDStr, ok := loopIDVal.(string); ok && loopIDStr != "" {
+				// 对齐 Python: index = state.get_global(loop_id + NESTED_PATH_SPLIT + INDEX)
+				indexKey := loopIDStr + loopIndexSuffix
+				indexVal := session.State().GetGlobal(state.StringKey(indexKey))
+				metadata["loop_node_id"] = loopIDStr
+				metadata["loop_index"] = indexVal
+			}
+		}
+	}
 
 	return metadata
 }

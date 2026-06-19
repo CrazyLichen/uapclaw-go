@@ -108,6 +108,8 @@ type persistenceProvider struct{}
 const (
 	// keyNums 单实体存储的 key 数量（dumpType + blob）
 	keyNums = 2
+	// wfKeyNums 工作流存储的 key 数量（state×2 + updates×2），对齐 Python _KEY_NUMS = 4
+	wfKeyNums = 4
 
 	// wfStateBlobs 工作流状态数据键后缀
 	wfStateBlobs = "workflow_state_blobs"
@@ -117,8 +119,6 @@ const (
 	wfUpdateBlobs = "workflow_update_blobs"
 	// wfUpdateBlobsDumpType 工作流更新类型键后缀
 	wfUpdateBlobsDumpType = "workflow_update_blobs_dump_type"
-	// wfKeyNums 工作流存储的 key 数量（state_dump_type + state_blob + update_dump_type + update_blob）
-	wfKeyNums = 4
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -495,16 +495,22 @@ func (ws *PersistenceWorkflowStorage) Exists(ctx context.Context, session interf
 	pipeline := ws.kvStore.Pipeline(ctx)
 	stateDumpTypeKey := BuildKeyWithNamespace(sessionID, SessionNamespaceWorkflow, workflowID, wfStateBlobsDumpType)
 	stateBlobKey := BuildKeyWithNamespace(sessionID, SessionNamespaceWorkflow, workflowID, wfStateBlobs)
+	updateDumpTypeKey := BuildKeyWithNamespace(sessionID, SessionNamespaceWorkflow, workflowID, wfUpdateBlobsDumpType)
+	updateBlobKey := BuildKeyWithNamespace(sessionID, SessionNamespaceWorkflow, workflowID, wfUpdateBlobs)
 	_ = pipeline.Exists(ctx, stateDumpTypeKey)
 	_ = pipeline.Exists(ctx, stateBlobKey)
+	_ = pipeline.Exists(ctx, updateDumpTypeKey)
+	_ = pipeline.Exists(ctx, updateBlobKey)
 	results, err := pipeline.Execute(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	if len(results) != keyNums {
+	// 对齐 Python _KEY_NUMS = 4（state×2 + updates×2）
+	if len(results) != wfKeyNums {
 		return false, nil
 	}
+	// Python: 只要求 state key 存在，updates key 为可选
 	exists0, _ := pipelineExistsResult(results, 0)
 	exists1, _ := pipelineExistsResult(results, 1)
 	return exists0 && exists1, nil

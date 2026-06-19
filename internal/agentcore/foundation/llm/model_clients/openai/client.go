@@ -106,6 +106,12 @@ func (c *OpenAIModelClient) Invoke(
 	// 5. 处理 extra_body
 	HandleExtraBody(reqParams)
 
+	// 5.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
+	// 请求发送前调用 tracer_record_data 回调，记录请求参数
+	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
+		fn(map[string]any{"llm_params": reqParams})
+	}
+
 	// 6. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)
 	req, client, err := BuildHTTPRequest(
@@ -176,6 +182,12 @@ func (c *OpenAIModelClient) Invoke(
 		return nil, c.WrapError("invoke", err)
 	}
 
+	// 10.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=assistant_message)
+	// 响应解析后调用 tracer_record_data 回调，记录响应结果
+	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
+		fn(map[string]any{"llm_response": assistantMsg})
+	}
+
 	// 触发 LLMOutput 回调（对齐 Python trigger(LLM_OUTPUT)）
 	outputData := &callback.LLMCallEventData{
 		Event:         callback.LLMOutput,
@@ -233,6 +245,12 @@ func (c *OpenAIModelClient) Stream(
 
 	// 6. 处理 extra_body
 	HandleExtraBody(reqParams)
+
+	// 6.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
+	// 请求发送前调用 tracer_record_data 回调，记录请求参数
+	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
+		fn(map[string]any{"llm_params": reqParams})
+	}
 
 	// 7. 构建 HTTP 请求
 	httpHeaders := ExtractHTTPHeaders(effectiveHeaders)

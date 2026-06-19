@@ -2,6 +2,7 @@ package tracer
 
 import (
 	"context"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -43,6 +44,8 @@ type TriggerParams struct {
 type Tracer struct {
 	// traceID 追踪标识
 	traceID string
+	// mu 保护 workflow 相关 map 的读写锁
+	mu sync.RWMutex
 	// AgentSpanManager Agent 追踪跨度管理器
 	AgentSpanManager *SpanManager
 	// WorkflowSpanManagerDict 工作流追踪跨度管理器字典，parentID → SpanManager
@@ -107,7 +110,9 @@ func (t *Tracer) Init(swm *stream.StreamWriterManager) {
 // TriggerAgent 触发 Agent 追踪事件，通过 agentDispatch 分发到对应 handler 方法。
 // 对应 Python Tracer.trigger("tracer_agent", event_name, ...)。
 func (t *Tracer) TriggerAgent(ctx context.Context, event TraceEvent, params *TriggerParams) {
+	t.mu.RLock()
 	handler, ok := t.agentDispatch[event]
+	t.mu.RUnlock()
 	if !ok {
 		logger.Warn(logComponent).
 			Str("event", string(event)).
@@ -120,7 +125,9 @@ func (t *Tracer) TriggerAgent(ctx context.Context, event TraceEvent, params *Tri
 // TriggerWorkflow 触发工作流追踪事件，按 parentNodeID 查找 workflowDispatch 分发。
 // 对应 Python Tracer.trigger("tracer_workflow", event_name, parent_node_id=..., ...)。
 func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNodeID string, params *TriggerParams) {
+	t.mu.RLock()
 	dispatch, ok := t.workflowDispatch[parentNodeID]
+	t.mu.RUnlock()
 	if !ok {
 		logger.Warn(logComponent).
 			Str("event", string(event)).
@@ -142,6 +149,9 @@ func (t *Tracer) TriggerWorkflow(ctx context.Context, event TraceEvent, parentNo
 // RegisterWorkflowSpanManager 注册新的 Workflow SpanManager，创建对应 Handler 并扩展分发表。
 // 对应 Python Tracer.register_workflow_span_manager(parent_node_id)。
 func (t *Tracer) RegisterWorkflowSpanManager(parentNodeID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	spanManager := NewSpanManager(t.traceID, parentNodeID)
 	t.WorkflowSpanManagerDict[parentNodeID] = spanManager
 
@@ -155,16 +165,19 @@ func (t *Tracer) RegisterWorkflowSpanManager(parentNodeID string) {
 
 // GetWorkflowSpan 获取工作流追踪跨度，对应 Python Tracer.get_workflow_span。
 func (t *Tracer) GetWorkflowSpan(invokeID, parentNodeID string) *TraceWorkflowSpan {
+	t.mu.RLock()
 	spanManager, ok := t.WorkflowSpanManagerDict[parentNodeID]
 	if !ok {
+		t.mu.RUnlock()
 		return nil
 	}
+	handler := t.workflowHandlers[parentNodeID]
+	t.mu.RUnlock()
+
 	baseSpan := spanManager.GetSpan(invokeID)
 	if baseSpan == nil {
 		return nil
 	}
-	// 通过 handler 的 workflowSpans 缓存获取具体类型
-	handler := t.workflowHandlers[parentNodeID]
 	if handler == nil {
 		return nil
 	}
@@ -172,12 +185,23 @@ func (t *Tracer) GetWorkflowSpan(invokeID, parentNodeID string) *TraceWorkflowSp
 }
 
 // PopWorkflowSpan 移除工作流追踪跨度，对应 Python Tracer.pop_workflow_span。
+// 同时从 SpanManager 和 handler.workflowSpans 缓存中删除，避免内存泄漏。
 func (t *Tracer) PopWorkflowSpan(invokeID, parentNodeID string) {
+	t.mu.RLock()
 	spanManager, ok := t.WorkflowSpanManagerDict[parentNodeID]
 	if !ok {
+		t.mu.RUnlock()
 		return
 	}
+	handler := t.workflowHandlers[parentNodeID]
+	t.mu.RUnlock()
+
 	spanManager.PopSpan(invokeID)
+
+	// 从 handler 的 workflowSpans 缓存中删除，避免内存泄漏
+	if handler != nil {
+		handler.deleteWorkflowSpan(invokeID)
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

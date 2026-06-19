@@ -10,13 +10,21 @@ import (
 
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
-// 统一管理 LLM、Tool 和 Session 事件的注册与触发。
+// 统一管理 LLM、Tool、Session 和自定义事件的注册与触发。
 // 2.14 节仅实现最小子集：OnLLM/OffLLM/TriggerLLM、OnTool/OffTool/TriggerTool。
 // 5.3 节扩展：OnSession/OffSession/TriggerSession。
+// SW-31/32/33 扩展：OnCustom/OffCustom/OffAllCustom/TriggerCustom，支持动态事件名。
 // 完整能力（过滤器/熔断器/链式执行/装饰器/transform_io）在 6.24 节实现。
 //
 // 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
 // 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
+//
+// 自定义事件域与 LLM/Tool/Session 域的设计差异：
+//   - LLM/Tool/Session 域使用预定义枚举事件名和固定数据结构，适合框架内部生命周期事件
+//   - 自定义域使用自由字符串事件名和 map[string]any 数据，对应 Python 的 trigger(event, **kwargs)
+//   - Python 的 AsyncCallbackFramework 只有一个 _callbacks: Dict[str, List]，
+//     所有事件（包括 "abc-123write_stream" 这类动态事件名）共用同一注册表。
+//     Go 将其拆分为四个独立 map，自定义域承载动态事件名场景。
 type CallbackFramework struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -26,6 +34,12 @@ type CallbackFramework struct {
 	toolCallbacks map[ToolCallEventType][]ToolCallbackFunc
 	// sessionCallbacks 会话回调函数注册表
 	sessionCallbacks map[SessionCallEventType][]SessionCallbackFunc
+	// customCallbacks 自定义事件回调函数注册表
+	//
+	// 对应 Python: AsyncCallbackFramework._callbacks 中的动态事件名条目。
+	// Python 用 session_id + "write_stream" 构造 per-session 事件名，
+	// Go 在此 map 中以相同方式存储，实现 per-session 隔离。
+	customCallbacks map[string][]CustomCallbackFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -41,6 +55,14 @@ type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
 
 // SessionCallbackFunc Session 回调函数类型。
 type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
+
+// CustomCallbackFunc 自定义事件回调函数类型。
+//
+// 对应 Python: AsyncCallbackFramework.on(event, callback) 中的 callback。
+// Python 的回调通过 **kwargs 接收参数，Go 使用 map[string]any 传递。
+// 事件名由调用方自由构造（如 sessionID + "write_stream"），
+// 不受预定义枚举约束，适合 per-session 隔离等动态场景。
+type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -61,6 +83,7 @@ func NewCallbackFramework() *CallbackFramework {
 		llmCallbacks:     make(map[LLMCallEventType][]LLMCallbackFunc),
 		toolCallbacks:    make(map[ToolCallEventType][]ToolCallbackFunc),
 		sessionCallbacks: make(map[SessionCallEventType][]SessionCallbackFunc),
+		customCallbacks:  make(map[string][]CustomCallbackFunc),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -214,6 +237,76 @@ func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCa
 
 	fw.mu.RLock()
 	callbacks := fw.sessionCallbacks[data.Event]
+	fw.mu.RUnlock()
+
+	results := make([]any, 0, len(callbacks))
+	for _, fn := range callbacks {
+		result := fn(ctx, data)
+		results = append(results, result)
+	}
+	return results
+}
+
+// OnCustom 注册自定义事件回调函数。
+//
+// 同一事件可注册多个回调，按注册顺序执行。
+// 事件名为自由字符串，不受预定义枚举约束。
+//
+// 对应 Python: AsyncCallbackFramework.on(event, callback)
+func (fw *CallbackFramework) OnCustom(event string, fn CustomCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.customCallbacks[event] = append(fw.customCallbacks[event], fn)
+}
+
+// OffCustom 注销自定义事件的单个回调函数。
+//
+// 移除指定事件中与 fn 匹配的回调（按指针匹配）。
+// 若事件下无匹配回调，不做任何操作。
+//
+// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
+func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.customCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, cb := range callbacks {
+		if fmt.Sprintf("%p", cb) == fmt.Sprintf("%p", fn) {
+			fw.customCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// OffAllCustom 注销指定自定义事件的全部回调。
+//
+// 清除该事件名下的所有回调函数，常用于 session 结束时清理 per-session 回调。
+// 与 OffCustom 不同：OffCustom 按指针移除单个回调，OffAllCustom 清除整个事件。
+//
+// 对应 Python: AsyncCallbackFramework.unregister_event(event)
+func (fw *CallbackFramework) OffAllCustom(event string) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	delete(fw.customCallbacks, event)
+}
+
+// TriggerCustom 触发自定义事件，按注册顺序调用所有回调，返回所有回调结果。
+//
+// 若 ctx 为 nil，直接返回 nil。
+// data 通过 map[string]any 传递，对应 Python 的 **kwargs。
+//
+// 对应 Python: await trigger(event, **kwargs)
+func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, data map[string]any) []any {
+	if ctx == nil {
+		return nil
+	}
+
+	fw.mu.RLock()
+	callbacks := fw.customCallbacks[event]
 	fw.mu.RUnlock()
 
 	results := make([]any, 0, len(callbacks))
