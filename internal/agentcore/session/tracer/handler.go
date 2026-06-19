@@ -540,11 +540,8 @@ func (h *TraceAgentHandler) getTracerAgentSpan(invokeID string) *TraceAgentSpan 
 	if span, ok := h.agentSpans[invokeID]; ok {
 		return span
 	}
-	// 尝试从 SpanManager 获取
-	if h.spanManager.GetSpan(invokeID) != nil {
-		// SpanManager 中存在但 agentSpans 中没有，说明是外部创建的
-		// 无法还原具体类型，需要创建新的 TraceAgentSpan
-	}
+	// SpanManager 中存在但 agentSpans 中没有时，说明是外部创建的，
+	// 无法还原具体类型，仍需创建新的 TraceAgentSpan
 	var parentSpan *TraceAgentSpan
 	lastSpan := h.spanManager.LastSpan()
 	if lastSpan != nil {
