@@ -2,6 +2,8 @@ package state
 
 import (
 	"sync"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,14 +34,14 @@ func NewInMemoryStateLike() *InMemoryStateLike {
 func (s *InMemoryStateLike) Get(key StateKey) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return deepCopyValue(getBySchema(key, s.state))
+	return utils.DeepCopyValue(getBySchema(key, s.state))
 }
 
 // GetByPrefix 根据 key 和嵌套前缀获取状态值（深拷贝返回）
 func (s *InMemoryStateLike) GetByPrefix(key StateKey, nestedPrefix string) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return deepCopyValue(getBySchema(key, s.state, nestedPrefix))
+	return utils.DeepCopyValue(getBySchema(key, s.state, nestedPrefix))
 }
 
 // GetByTransformer 通过转换函数获取状态值
@@ -53,7 +55,7 @@ func (s *InMemoryStateLike) GetByTransformer(transformer Transformer) any {
 func (s *InMemoryStateLike) Update(data map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	updateDict(deepCopyMap(data), s.state)
+	utils.UpdateDict(utils.DeepCopyMap(data), s.state)
 	return nil
 }
 
@@ -61,7 +63,7 @@ func (s *InMemoryStateLike) Update(data map[string]any) error {
 func (s *InMemoryStateLike) GetState() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return deepCopyMap(s.state)
+	return utils.DeepCopyMap(s.state)
 }
 
 // SetState 从快照恢复状态

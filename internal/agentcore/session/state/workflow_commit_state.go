@@ -1,6 +1,9 @@
 package state
 
-import "github.com/uapclaw/uapclaw-go/internal/common/logger"
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -194,12 +197,12 @@ func (s *WorkflowCommitState) GetUpdates() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := map[string]any{
-		IOStateUpdatesKey:       deepCopyUpdates(s.ioState.GetUpdates()),
-		CompStateUpdatesKey:     deepCopyUpdates(s.compState.GetUpdates()),
-		WorkflowStateUpdatesKey: deepCopyUpdates(s.workflowState.GetUpdates()),
+		IOStateUpdatesKey:       utils.DeepCopyUpdates(s.ioState.GetUpdates()),
+		CompStateUpdatesKey:     utils.DeepCopyUpdates(s.compState.GetUpdates()),
+		WorkflowStateUpdatesKey: utils.DeepCopyUpdates(s.workflowState.GetUpdates()),
 	}
 	if s.workflowOnly {
-		result[GlobalStateUpdatesKey] = deepCopyUpdates(s.globalState.GetUpdates())
+		result[GlobalStateUpdatesKey] = utils.DeepCopyUpdates(s.globalState.GetUpdates())
 	} else {
 		result[GlobalStateUpdatesKey] = nil
 	}
@@ -224,28 +227,28 @@ func (s *WorkflowCommitState) SetUpdates(updates map[string]any) {
 	if gs, ok := updates[GlobalStateUpdatesKey]; ok && gs != nil {
 		if m, ok := gs.(map[string][]map[string]any); ok {
 			s.globalState.SetUpdates(m)
-		} else if m, ok := convertUpdatesFromJSON(gs); ok {
+		} else if m, ok := utils.ConvertUpdatesFromJSON(gs); ok {
 			s.globalState.SetUpdates(m)
 		}
 	}
 	if io, ok := updates[IOStateUpdatesKey]; ok && io != nil {
 		if m, ok := io.(map[string][]map[string]any); ok {
 			s.ioState.SetUpdates(m)
-		} else if m, ok := convertUpdatesFromJSON(io); ok {
+		} else if m, ok := utils.ConvertUpdatesFromJSON(io); ok {
 			s.ioState.SetUpdates(m)
 		}
 	}
 	if comp, ok := updates[CompStateUpdatesKey]; ok && comp != nil {
 		if m, ok := comp.(map[string][]map[string]any); ok {
 			s.compState.SetUpdates(m)
-		} else if m, ok := convertUpdatesFromJSON(comp); ok {
+		} else if m, ok := utils.ConvertUpdatesFromJSON(comp); ok {
 			s.compState.SetUpdates(m)
 		}
 	}
 	if wf, ok := updates[WorkflowStateUpdatesKey]; ok && wf != nil {
 		if m, ok := wf.(map[string][]map[string]any); ok {
 			s.workflowState.SetUpdates(m)
-		} else if m, ok := convertUpdatesFromJSON(wf); ok {
+		} else if m, ok := utils.ConvertUpdatesFromJSON(wf); ok {
 			s.workflowState.SetUpdates(m)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -86,7 +87,7 @@ func (s *InMemoryCommitState) UpdateByID(nodeID string, data map[string]any) err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.updates[nodeID] = append(s.updates[nodeID], deepCopyMap(data))
+	s.updates[nodeID] = append(s.updates[nodeID], utils.DeepCopyMap(data))
 	return nil
 }
 
@@ -145,7 +146,7 @@ func (s *InMemoryCommitState) GetUpdates() map[string][]map[string]any {
 	for key, updates := range s.updates {
 		copied := make([]map[string]any, len(updates))
 		for i, u := range updates {
-			copied[i] = deepCopyMap(u)
+			copied[i] = utils.DeepCopyMap(u)
 		}
 		result[key] = copied
 	}
@@ -159,6 +160,6 @@ func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if updates != nil {
-		s.updates = deepCopyUpdates(updates)
+		s.updates = utils.DeepCopyUpdates(updates)
 	}
 }

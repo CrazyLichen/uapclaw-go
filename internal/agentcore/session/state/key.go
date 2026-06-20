@@ -1,5 +1,9 @@
 package state
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/utils"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StateKey 状态访问键，封装 string/map/slice/all 四态
@@ -54,13 +58,13 @@ func StringKey(path string) StateKey {
 // SchemaKey 创建 map schema 键，用于批量按 schema 读取
 // 构造时深拷贝传入的 map，防止外部修改
 func SchemaKey(schema map[string]any) StateKey {
-	return StateKey{keyType: StateKeyMap, value: deepCopyMap(schema)}
+	return StateKey{keyType: StateKeyMap, value: utils.DeepCopyMap(schema)}
 }
 
 // ListKey 创建 list schema 键，用于按列表 schema 读取
 // 构造时深拷贝传入的 slice，防止外部修改
 func ListKey(keys []any) StateKey {
-	return StateKey{keyType: StateKeyList, value: deepCopySlice(keys)}
+	return StateKey{keyType: StateKeyList, value: utils.DeepCopySlice(keys)}
 }
 
 // IsZero 判断 StateKey 是否为零值（未设置）
@@ -90,7 +94,7 @@ func (k StateKey) String() string {
 // Map 返回 map 值的深拷贝，仅当 Type 为 StateKeyMap 时有效，否则返回 nil
 func (k StateKey) Map() map[string]any {
 	if k.keyType == StateKeyMap {
-		return deepCopyMap(k.value.(map[string]any))
+		return utils.DeepCopyMap(k.value.(map[string]any))
 	}
 	return nil
 }
@@ -98,7 +102,7 @@ func (k StateKey) Map() map[string]any {
 // List 返回 slice 值的深拷贝，仅当 Type 为 StateKeyList 时有效，否则返回 nil
 func (k StateKey) List() []any {
 	if k.keyType == StateKeyList {
-		return deepCopySlice(k.value.([]any))
+		return utils.DeepCopySlice(k.value.([]any))
 	}
 	return nil
 }
