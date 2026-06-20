@@ -354,7 +354,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **5.x 上下文引擎** | — | | | |
 | 5.15 | ✅ | ModelContext 接口 | `GetMessages/SetMessages/GetContextWindow/Statistic` | `openjiuwen/core/context_engine/base.py` |
 | 5.16 | ✅ | ContextWindow / ContextStats | 上下文窗口与统计；✅ Statistic 改为值类型（与 Python ContextStats() 默认实例对齐）；✅ NewContextWindow 构造函数（空切片+零值初始化）；✅ StatMessages/StatTools/StatContextWindow 预留方法签名；⤵️ 5.31 回填统计计算逻辑 | `openjiuwen/core/context_engine/base.py` (ContextWindow/ContextStats) |
-| 5.17 | ☐ | ContextEngineConfig | 上下文引擎配置 | `openjiuwen/core/context_engine/schema/config.py` |
+| 5.17 | ✅ | ContextEngineConfig | 上下文引擎配置；✅ 纯结构体+Validate()校验；✅ NewContextEngineConfig()构造函数初始化空map；✅ schema/子包与Python对齐 | `openjiuwen/core/context_engine/schema/config.py` |
 | 5.18 | ☐ | Offload 消息模型 | OffloadUserMessage/AssistantMessage/SystemMessage/ToolMessage | `openjiuwen/core/context_engine/schema/messages.py` |
 | 5.19 | ☐ | ContextEvent | 上下文事件 | `openjiuwen/core/context_engine/schema/` |
 | 5.20 | ☐ | TokenCounter | Tiktoken Go 实现 | `openjiuwen/core/context_engine/token/` |

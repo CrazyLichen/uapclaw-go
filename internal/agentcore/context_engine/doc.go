@@ -13,6 +13,9 @@
 //	│                   # NewContextWindow 构造函数 + StatMessages/StatTools/StatContextWindow 预留方法
 //	│                   # ContextEngine 方法直接使用 *session.Session（循环依赖已通过 single_agent/interfaces 解决）
 //	│                   # ⤵️ StatMessages/StatTools/StatContextWindow 实际逻辑待 5.31 回填
+//	├── schema/
+//	│   ├── doc.go       # Schema 子包文档
+//	│   └── config.go    # ContextEngineConfig 上下文引擎配置
 //	└── token/
 //	    ├── doc.go       # Token 子包文档
 //	    └── base.go      # TokenCounter 接口定义
