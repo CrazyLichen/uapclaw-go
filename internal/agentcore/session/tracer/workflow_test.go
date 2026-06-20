@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
@@ -20,7 +21,7 @@ type fakeWorkflowSession struct {
 	nodeID       string
 	nodeType     string
 	sessionState state.SessionState
-	config       any
+	config       config.SessionConfig
 }
 
 // fakeSessionState 实现 state.SessionState 接口，用于测试
@@ -37,7 +38,7 @@ func (f *fakeWorkflowSession) WorkflowID() string        { return f.workflowID }
 func (f *fakeWorkflowSession) NodeID() string            { return f.nodeID }
 func (f *fakeWorkflowSession) NodeType() string          { return f.nodeType }
 func (f *fakeWorkflowSession) State() state.SessionState { return f.sessionState }
-func (f *fakeWorkflowSession) Config() any { return f.config }
+func (f *fakeWorkflowSession) Config() config.SessionConfig { return f.config }
 
 func (f *fakeSessionState) GetGlobal(key state.StateKey) any {
 	if f.data == nil {

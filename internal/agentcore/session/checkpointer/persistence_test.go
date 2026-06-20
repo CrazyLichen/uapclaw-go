@@ -9,7 +9,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -383,7 +382,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
-		config: func() interfaces.SessionConfig {
+		config: func() config.SessionConfig {
 			cfg := config.NewSessionConfig(context.Background())
 			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
 			return cfg
@@ -1434,7 +1433,7 @@ func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess-empty-wf"},
 		st:          wcs2,
-		config: func() interfaces.SessionConfig {
+		config: func() config.SessionConfig {
 			cfg := config.NewSessionConfig(context.Background())
 			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
 			return cfg

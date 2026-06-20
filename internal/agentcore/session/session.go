@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -50,7 +51,7 @@ func (p *ProxySession) SetSession(stub BaseSession) {
 }
 
 // Config 获取底层会话的配置
-func (p *ProxySession) Config() interfaces.SessionConfig {
+func (p *ProxySession) Config() config.SessionConfig {
 	return p.stub.Config()
 }
 

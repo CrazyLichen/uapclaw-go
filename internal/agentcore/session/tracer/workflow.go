@@ -3,6 +3,7 @@ package tracer
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -10,10 +11,6 @@ import (
 
 // BaseWorkflowSession 工作流会话最小接口，避免依赖具体实现。
 // 对应 Python TracerWorkflowUtils 中 session 参数的隐式接口（tracer/executable_id/parent_id/workflow_id/node_id/node_type/state/config）。
-//
-// Config() 返回 any 而非 interfaces.SessionConfig，因为 tracer 与 interfaces 存在循环依赖
-//（interfaces 导入 tracer 用于 BaseSession.Tracer() 返回类型）。
-// getWorkflowMetadata 内部通过类型断言将 any 转为 SessionConfig 使用。
 type BaseWorkflowSession interface {
 	// Tracer 返回追踪器
 	Tracer() *Tracer
@@ -30,7 +27,7 @@ type BaseWorkflowSession interface {
 	// State 返回会话状态
 	State() state.SessionState
 	// Config 返回配置
-	Config() any
+	Config() config.SessionConfig
 }
 
 // TracerWorkflowUtils 工作流追踪工具集，对应 Python TracerWorkflowUtils。
@@ -234,18 +231,8 @@ func getWorkflowMetadata(session BaseWorkflowSession) map[string]any {
 		"workflow_name":    "",
 	}
 
-	cfgAny := session.Config()
-	if cfgAny == nil {
-		return metadata
-	}
-	// 类型断言为 SessionConfig（interfaces.SessionConfig），
-	// 由于 tracer 与 interfaces 存在循环依赖，不能直接导入 interfaces 包，
-	// 此处通过定义本地 sessionConfig 最小接口实现类型安全断言。
-	type sessionConfig interface {
-		GetWorkflowConfig(workflowID string) any
-	}
-	cfg, ok := cfgAny.(sessionConfig)
-	if !ok {
+	cfg := session.Config()
+	if cfg == nil {
 		return metadata
 	}
 	wfc := cfg.GetWorkflowConfig(workflowID)

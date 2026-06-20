@@ -69,26 +69,36 @@ func TestNewSessionConfig_GetEnvs深拷贝(t *testing.T) {
 }
 
 // TestNewSessionConfig_WorkflowConfig 测试工作流配置的存取
+// ⤵️ 8.15 回填：WorkflowConfig 实现后 AddWorkflowConfig 参数从 any 改为具体类型
 func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 	cfg := NewSessionConfig(context.Background())
 
 	// 无配置时返回 nil
 	assert.Nil(t, cfg.GetWorkflowConfig("wf1"))
 
-	// 添加 nil WorkflowConfigProvider 跳过
+	// 添加 nil 跳过
 	cfg.AddWorkflowConfig("wf1", nil)
 	assert.Nil(t, cfg.GetWorkflowConfig("wf1"))
 
 	// 空字符串 workflowID 跳过
-	cfg.AddWorkflowConfig("", nil)
+	cfg.AddWorkflowConfig("", "some_config")
+
+	// 添加有效配置
+	cfg.AddWorkflowConfig("wf1", "test_workflow_config")
+	assert.Equal(t, "test_workflow_config", cfg.GetWorkflowConfig("wf1"))
 }
 
 // TestNewSessionConfig_AgentConfig 测试 Agent 配置的存取
+// ⤵️ 6.3 回填：AgentConfig 实现后 SetAgentConfig/GetAgentConfig 参数从 any 改为具体类型
 func TestNewSessionConfig_AgentConfig(t *testing.T) {
 	cfg := NewSessionConfig(context.Background())
 
 	// 无配置时返回 nil
 	assert.Nil(t, cfg.GetAgentConfig())
+
+	// 设置 Agent 配置
+	cfg.SetAgentConfig("test_agent_config")
+	assert.Equal(t, "test_agent_config", cfg.GetAgentConfig())
 }
 
 // TestNewSessionConfig_ContextEnvs 测试 context 注入环境变量

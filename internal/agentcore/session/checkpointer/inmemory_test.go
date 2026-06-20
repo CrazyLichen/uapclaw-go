@@ -18,38 +18,38 @@ import (
 type testAgentSession struct {
 	testSession
 	agentID string
-	config  interfaces.SessionConfig
+	config  config.SessionConfig
 	st      state.SessionState
 }
 
 func (s *testAgentSession) AgentID() string            { return s.agentID }
 func (s *testAgentSession) State() state.SessionState  { return s.st }
-func (s *testAgentSession) Config() interfaces.SessionConfig { return s.config }
+func (s *testAgentSession) Config() config.SessionConfig { return s.config }
 func (s *testAgentSession) Checkpointer() Checkpointer { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
 	testSession
 	teamID string
-	config interfaces.SessionConfig
+	config config.SessionConfig
 	st     state.SessionState
 }
 
 func (s *testTeamSession) TeamID() string            { return s.teamID }
 func (s *testTeamSession) State() state.SessionState { return s.st }
-func (s *testTeamSession) Config() interfaces.SessionConfig { return s.config }
+func (s *testTeamSession) Config() config.SessionConfig { return s.config }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
 type testWorkflowSession struct {
 	testSession
-	config     interfaces.SessionConfig
+	config     config.SessionConfig
 	st         state.SessionState
 	workflowID string
 	parent     interfaces.BaseSession
 }
 
 func (s *testWorkflowSession) State() state.SessionState      { return s.st }
-func (s *testWorkflowSession) Config() interfaces.SessionConfig { return s.config }
+func (s *testWorkflowSession) Config() config.SessionConfig { return s.config }
 func (s *testWorkflowSession) WorkflowID() string             { return s.workflowID }
 func (s *testWorkflowSession) Parent() interfaces.BaseSession { return s.parent }
 
@@ -968,7 +968,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config: func() interfaces.SessionConfig {
+		config: func() config.SessionConfig {
 			cfg := config.NewSessionConfig(context.Background())
 			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
 			return cfg

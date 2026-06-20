@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,6 +25,34 @@ type BuiltinConfigLoader interface {
 	LoadBuiltinConfigs(envs map[string]any)
 }
 
+// SessionConfig 会话配置接口。
+// 对应 Python: openjiuwen/core/session/config/base.py (Config)
+//
+// 定义在 config 包而非 interfaces 包，避免 tracer↔interfaces 循环依赖：
+// interfaces 导入 tracer（BaseSession.Tracer() 返回 *tracer.Tracer），
+// 如果 SessionConfig 在 interfaces 中，tracer 引用 SessionConfig 会产生循环。
+// 移到 config 包后，依赖方向为 interfaces→config、tracer→config，无循环。
+type SessionConfig interface {
+	// GetEnv 获取环境变量值
+	GetEnv(key string, defaultValue ...any) any
+	// GetEnvs 获取所有环境变量（深拷贝）
+	GetEnvs() map[string]any
+	// SetEnvs 合并环境变量
+	SetEnvs(envs map[string]any)
+	// GetWorkflowConfig 按 workflowID 获取工作流配置。
+	// ⤵️ 8.15 回填：WorkflowConfig 实现后返回类型从 any 改为 WorkflowConfig
+	GetWorkflowConfig(workflowID string) any
+	// GetAgentConfig 获取 Agent 配置。
+	// ⤵️ 6.3 回填：AgentConfig 实现后返回类型从 any 改为 AgentConfig
+	GetAgentConfig() any
+	// SetAgentConfig 设置 Agent 配置。
+	// ⤵️ 6.3 回填：AgentConfig 实现后参数类型从 any 改为 AgentConfig
+	SetAgentConfig(agentConfig any)
+	// AddWorkflowConfig 添加工作流配置。
+	// ⤵️ 8.15 回填：WorkflowConfig 实现后参数类型从 any 改为 WorkflowConfig
+	AddWorkflowConfig(workflowID string, workflowConfig any)
+}
+
 // defaultSessionConfig SessionConfig 的默认实现。
 // 对应 Python: openjiuwen/core/session/config/base.py (Config)
 type defaultSessionConfig struct {
@@ -34,9 +61,11 @@ type defaultSessionConfig struct {
 	// callbackMetadata 回调元数据（预留，后续回调系统实现时回填）
 	callbackMetadata map[string]MetadataLike
 	// workflowConfigs 按 workflowID 索引的工作流配置
-	workflowConfigs map[string]interfaces.WorkflowConfigProvider
+	// ⤵️ 8.15 回填：map[string]any → map[string]WorkflowConfig
+	workflowConfigs map[string]any
 	// agentConfig Agent 配置
-	agentConfig interfaces.AgentConfigProvider
+	// ⤵️ 6.3 回填：any → AgentConfig
+	agentConfig any
 	// loader 内置配置加载钩子
 	loader BuiltinConfigLoader
 }
@@ -47,7 +76,7 @@ type defaultBuiltinConfigLoader struct{}
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 defaultSessionConfig 实现 SessionConfig 接口
-var _ interfaces.SessionConfig = (*defaultSessionConfig)(nil)
+var _ SessionConfig = (*defaultSessionConfig)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -62,7 +91,7 @@ func NewSessionConfigWithLoader(ctx context.Context, loader BuiltinConfigLoader)
 	cfg := &defaultSessionConfig{
 		env:              make(map[string]any),
 		callbackMetadata: make(map[string]MetadataLike),
-		workflowConfigs:  make(map[string]interfaces.WorkflowConfigProvider),
+		workflowConfigs:  make(map[string]any),
 		loader:           loader,
 	}
 	cfg.loadEnvs(ctx)
@@ -104,7 +133,7 @@ func (c *defaultSessionConfig) SetEnvs(envs map[string]any) {
 
 // GetWorkflowConfig 按 workflowID 获取工作流配置。
 // 对应 Python: Config.get_workflow_config(workflow_id)
-func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) interfaces.WorkflowConfigProvider {
+func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) any {
 	if workflowID == "" {
 		return nil
 	}
@@ -113,19 +142,19 @@ func (c *defaultSessionConfig) GetWorkflowConfig(workflowID string) interfaces.W
 
 // GetAgentConfig 获取 Agent 配置。
 // 对应 Python: Config.get_agent_config()
-func (c *defaultSessionConfig) GetAgentConfig() interfaces.AgentConfigProvider {
+func (c *defaultSessionConfig) GetAgentConfig() any {
 	return c.agentConfig
 }
 
 // SetAgentConfig 设置 Agent 配置。
 // 对应 Python: Config.set_agent_config(agent_config)
-func (c *defaultSessionConfig) SetAgentConfig(agentConfig interfaces.AgentConfigProvider) {
+func (c *defaultSessionConfig) SetAgentConfig(agentConfig any) {
 	c.agentConfig = agentConfig
 }
 
 // AddWorkflowConfig 添加工作流配置。
 // 对应 Python: Config.add_workflow_config(workflow_id, workflow_config)
-func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConfig interfaces.WorkflowConfigProvider) {
+func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConfig any) {
 	if workflowID == "" {
 		return
 	}

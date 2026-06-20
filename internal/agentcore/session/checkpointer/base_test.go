@@ -3,7 +3,7 @@ package checkpointer
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
@@ -137,7 +137,7 @@ type testSession struct {
 
 func (s *testSession) SessionID() string                                { return s.sessionID }
 func (s *testSession) State() state.SessionState                        { return nil }
-func (s *testSession) Config() interfaces.SessionConfig                 { return nil }
+func (s *testSession) Config() config.SessionConfig                 { return nil }
 func (s *testSession) Tracer() *tracer.Tracer                           { return nil }
 func (s *testSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
 func (s *testSession) ActorManager() any                                { return nil }

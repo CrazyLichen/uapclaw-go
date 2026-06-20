@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -19,7 +20,7 @@ type fakeBaseSession struct {
 	cpValue     interfaces.Checkpointer
 	execIDValue string
 	sessionID   string
-	config      interfaces.SessionConfig
+	config      config.SessionConfig
 }
 
 func (f *fakeBaseSession) State() state.SessionState                        { return f.stateValue }
@@ -27,7 +28,7 @@ func (f *fakeBaseSession) StreamWriterManager() *stream.StreamWriterManager { re
 func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer            { return f.cpValue }
 func (f *fakeBaseSession) ExecutableID() string                             { return f.execIDValue }
 func (f *fakeBaseSession) SessionID() string                                { return f.sessionID }
-func (f *fakeBaseSession) Config() interfaces.SessionConfig                 { return f.config }
+func (f *fakeBaseSession) Config() config.SessionConfig                 { return f.config }
 func (f *fakeBaseSession) Tracer() *tracer.Tracer                           { return nil }
 func (f *fakeBaseSession) ActorManager() any                                { return nil }
 func (f *fakeBaseSession) Close() error                                     { return nil }
@@ -225,7 +226,7 @@ type fakeSessionWithoutExecID struct {
 	swMgrValue *stream.StreamWriterManager
 	cpValue    interfaces.Checkpointer
 	sidValue   string
-	cfgValue   interfaces.SessionConfig
+	cfgValue   config.SessionConfig
 }
 
 func (f *fakeSessionWithoutExecID) State() state.SessionState { return f.stateValue }
@@ -234,7 +235,7 @@ func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterMan
 }
 func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { return f.cpValue }
 func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
-func (f *fakeSessionWithoutExecID) Config() interfaces.SessionConfig        { return f.cfgValue }
+func (f *fakeSessionWithoutExecID) Config() config.SessionConfig        { return f.cfgValue }
 func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                { return nil }
 func (f *fakeSessionWithoutExecID) ActorManager() any                     { return nil }
 func (f *fakeSessionWithoutExecID) Close() error                          { return nil }

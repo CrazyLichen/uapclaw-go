@@ -2,7 +2,7 @@ package internal
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
@@ -22,7 +22,7 @@ type AgentSession struct {
 	// sessionID 会话唯一标识
 	sessionID string
 	// config 会话配置
-	config interfaces.SessionConfig
+	config config.SessionConfig
 	// state 会话状态（AgentStateCollection）
 	state state.SessionState
 	// tracer 追踪器
@@ -108,7 +108,7 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 }
 
 // WithConfig 设置会话配置的选项
-func WithConfig(config interfaces.SessionConfig) AgentSessionOption {
+func WithConfig(config config.SessionConfig) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.config = config
 	}
@@ -160,7 +160,7 @@ func WithAgentSpan(span *tracer.TraceAgentSpan) AgentSessionOption {
 }
 
 // Config 获取会话配置
-func (s *AgentSession) Config() interfaces.SessionConfig {
+func (s *AgentSession) Config() config.SessionConfig {
 	return s.config
 }
 
@@ -222,8 +222,14 @@ func (s *AgentSession) Card() *schema.AgentCard {
 func (s *AgentSession) AgentID() string {
 	if s.config != nil {
 		if ac := s.config.GetAgentConfig(); ac != nil {
-			if id := ac.ID(); id != "" {
-				return id
+			// ⤵️ 6.3 回填：AgentConfig 实现后 GetAgentConfig 返回具体类型，直接调用 .ID()
+			type agentConfigIDProvider interface {
+				ID() string
+			}
+			if provider, ok := ac.(agentConfigIDProvider); ok {
+				if id := provider.ID(); id != "" {
+					return id
+				}
 			}
 		}
 	}

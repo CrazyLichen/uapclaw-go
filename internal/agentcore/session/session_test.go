@@ -33,7 +33,7 @@ func TestNewProxySession(t *testing.T) {
 
 // mockStub 用于测试的 BaseSession 模拟实现
 type mockStub struct {
-	configVal              interfaces.SessionConfig
+	configVal              config.SessionConfig
 	stateVal               state.SessionState
 	tracerVal              *tracer.Tracer
 	streamWriterManagerVal *stream.StreamWriterManager
@@ -44,7 +44,7 @@ type mockStub struct {
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() interfaces.SessionConfig                     { return m.configVal }
+func (m *mockStub) Config() config.SessionConfig                     { return m.configVal }
 func (m *mockStub) State() state.SessionState                            { return m.stateVal }
 func (m *mockStub) Tracer() *tracer.Tracer                           { return m.tracerVal }
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }

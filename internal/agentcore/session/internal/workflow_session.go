@@ -28,7 +28,7 @@ type WorkflowSession struct {
 	// parent 父会话（通常是 AgentSession）
 	parent interfaces.BaseSession
 	// config 会话配置
-	config interfaces.SessionConfig
+	config config.SessionConfig
 	// tracer 追踪器
 	// ✅ 5.11 已回填：any → *tracer.Tracer
 	tracer *tracer.Tracer
@@ -266,7 +266,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 }
 
 // Config 获取会话配置
-func (s *WorkflowSession) Config() interfaces.SessionConfig {
+func (s *WorkflowSession) Config() config.SessionConfig {
 	return s.config
 }
 
@@ -420,7 +420,7 @@ func (n *NodeSession) NodeConfig() any {
 }
 
 // Config 委托给父 session
-func (n *NodeSession) Config() interfaces.SessionConfig {
+func (n *NodeSession) Config() config.SessionConfig {
 	return n.delegate.Config()
 }
 
