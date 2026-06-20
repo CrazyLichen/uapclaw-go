@@ -22,10 +22,10 @@ type testAgentSession struct {
 	st      state.SessionState
 }
 
-func (s *testAgentSession) AgentID() string            { return s.agentID }
-func (s *testAgentSession) State() state.SessionState  { return s.st }
+func (s *testAgentSession) AgentID() string              { return s.agentID }
+func (s *testAgentSession) State() state.SessionState    { return s.st }
 func (s *testAgentSession) Config() config.SessionConfig { return s.config }
-func (s *testAgentSession) Checkpointer() Checkpointer { return nil }
+func (s *testAgentSession) Checkpointer() Checkpointer   { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
@@ -35,8 +35,8 @@ type testTeamSession struct {
 	st     state.SessionState
 }
 
-func (s *testTeamSession) TeamID() string            { return s.teamID }
-func (s *testTeamSession) State() state.SessionState { return s.st }
+func (s *testTeamSession) TeamID() string               { return s.teamID }
+func (s *testTeamSession) State() state.SessionState    { return s.st }
 func (s *testTeamSession) Config() config.SessionConfig { return s.config }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
@@ -49,7 +49,7 @@ type testWorkflowSession struct {
 }
 
 func (s *testWorkflowSession) State() state.SessionState      { return s.st }
-func (s *testWorkflowSession) Config() config.SessionConfig { return s.config }
+func (s *testWorkflowSession) Config() config.SessionConfig   { return s.config }
 func (s *testWorkflowSession) WorkflowID() string             { return s.workflowID }
 func (s *testWorkflowSession) Parent() interfaces.BaseSession { return s.parent }
 
@@ -973,7 +973,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
 			return cfg
 		}(),
-		st:          wcs,
+		st: wcs,
 	}
 
 	ctx := context.Background()

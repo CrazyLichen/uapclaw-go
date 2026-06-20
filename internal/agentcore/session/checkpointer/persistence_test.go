@@ -1438,7 +1438,7 @@ func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
 			return cfg
 		}(),
-		workflowID:  "", // 空 workflowID
+		workflowID: "", // 空 workflowID
 	}
 	err := cp.PreWorkflowExecute(ctx, session2, nil)
 	if err != nil {

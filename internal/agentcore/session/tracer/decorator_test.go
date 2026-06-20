@@ -470,7 +470,7 @@ func TestTracedWorkflow_Invoke_成功(t *testing.T) {
 	expectedResult := map[string]any{"output": "done"}
 	inner := &fakeWorkflow{
 		invokeResult: expectedResult,
-		card:          schema.NewWorkflowCard(schema.WithName("wf-1")),
+		card:         schema.NewWorkflowCard(schema.WithName("wf-1")),
 	}
 
 	tracedWf := &TracedWorkflow{

@@ -163,24 +163,24 @@ func TestContextEngineConfig_Validate_负数失败(t *testing.T) {
 		field  string
 	}{
 		{
-			name: "MaxContextMessageNum 为负",
+			name:   "MaxContextMessageNum 为负",
 			config: ContextEngineConfig{MaxContextMessageNum: -1, ModelContextWindowTokens: map[string]int{}},
-			field: "max_context_message_num",
+			field:  "max_context_message_num",
 		},
 		{
-			name: "DefaultWindowMessageNum 为负",
+			name:   "DefaultWindowMessageNum 为负",
 			config: ContextEngineConfig{DefaultWindowMessageNum: -1, ModelContextWindowTokens: map[string]int{}},
-			field: "default_window_message_num",
+			field:  "default_window_message_num",
 		},
 		{
-			name: "DefaultWindowRoundNum 为负",
+			name:   "DefaultWindowRoundNum 为负",
 			config: ContextEngineConfig{DefaultWindowRoundNum: -1, ModelContextWindowTokens: map[string]int{}},
-			field: "default_window_round_num",
+			field:  "default_window_round_num",
 		},
 		{
-			name: "ContextWindowTokens 为负",
+			name:   "ContextWindowTokens 为负",
 			config: ContextEngineConfig{ContextWindowTokens: -1, ModelContextWindowTokens: map[string]int{}},
-			field: "context_window_tokens",
+			field:  "context_window_tokens",
 		},
 	}
 	for _, tt := range tests {

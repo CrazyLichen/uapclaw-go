@@ -28,7 +28,7 @@ func (f *fakeBaseSession) StreamWriterManager() *stream.StreamWriterManager { re
 func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer            { return f.cpValue }
 func (f *fakeBaseSession) ExecutableID() string                             { return f.execIDValue }
 func (f *fakeBaseSession) SessionID() string                                { return f.sessionID }
-func (f *fakeBaseSession) Config() config.SessionConfig                 { return f.config }
+func (f *fakeBaseSession) Config() config.SessionConfig                     { return f.config }
 func (f *fakeBaseSession) Tracer() *tracer.Tracer                           { return nil }
 func (f *fakeBaseSession) ActorManager() any                                { return nil }
 func (f *fakeBaseSession) Close() error                                     { return nil }
@@ -235,7 +235,7 @@ func (f *fakeSessionWithoutExecID) StreamWriterManager() *stream.StreamWriterMan
 }
 func (f *fakeSessionWithoutExecID) Checkpointer() interfaces.Checkpointer { return f.cpValue }
 func (f *fakeSessionWithoutExecID) SessionID() string                     { return f.sidValue }
-func (f *fakeSessionWithoutExecID) Config() config.SessionConfig        { return f.cfgValue }
+func (f *fakeSessionWithoutExecID) Config() config.SessionConfig          { return f.cfgValue }
 func (f *fakeSessionWithoutExecID) Tracer() *tracer.Tracer                { return nil }
 func (f *fakeSessionWithoutExecID) ActorManager() any                     { return nil }
 func (f *fakeSessionWithoutExecID) Close() error                          { return nil }

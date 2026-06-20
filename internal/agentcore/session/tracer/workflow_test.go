@@ -31,13 +31,13 @@ type fakeSessionState struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (f *fakeWorkflowSession) Tracer() *Tracer           { return f.tracer }
-func (f *fakeWorkflowSession) ExecutableID() string      { return f.executableID }
-func (f *fakeWorkflowSession) ParentID() string          { return f.parentID }
-func (f *fakeWorkflowSession) WorkflowID() string        { return f.workflowID }
-func (f *fakeWorkflowSession) NodeID() string            { return f.nodeID }
-func (f *fakeWorkflowSession) NodeType() string          { return f.nodeType }
-func (f *fakeWorkflowSession) State() state.SessionState { return f.sessionState }
+func (f *fakeWorkflowSession) Tracer() *Tracer              { return f.tracer }
+func (f *fakeWorkflowSession) ExecutableID() string         { return f.executableID }
+func (f *fakeWorkflowSession) ParentID() string             { return f.parentID }
+func (f *fakeWorkflowSession) WorkflowID() string           { return f.workflowID }
+func (f *fakeWorkflowSession) NodeID() string               { return f.nodeID }
+func (f *fakeWorkflowSession) NodeType() string             { return f.nodeType }
+func (f *fakeWorkflowSession) State() state.SessionState    { return f.sessionState }
 func (f *fakeWorkflowSession) Config() config.SessionConfig { return f.config }
 
 func (f *fakeSessionState) GetGlobal(key state.StateKey) any {

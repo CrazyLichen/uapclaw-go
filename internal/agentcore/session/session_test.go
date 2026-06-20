@@ -45,7 +45,7 @@ type mockStub struct {
 }
 
 func (m *mockStub) Config() config.SessionConfig                     { return m.configVal }
-func (m *mockStub) State() state.SessionState                            { return m.stateVal }
+func (m *mockStub) State() state.SessionState                        { return m.stateVal }
 func (m *mockStub) Tracer() *tracer.Tracer                           { return m.tracerVal }
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
