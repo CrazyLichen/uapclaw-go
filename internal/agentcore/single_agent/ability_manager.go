@@ -10,6 +10,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -355,7 +356,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 func (am *AbilityManager) Execute(
 	ctx context.Context,
 	toolCalls []*llmschema.ToolCall,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) []ExecuteResult {
 	if len(toolCalls) == 0 {
@@ -389,7 +390,7 @@ func (am *AbilityManager) Execute(
 func (am *AbilityManager) railedExecuteSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	// ⤵️ 预留：BeforeToolCall Rail 钩子
@@ -408,7 +409,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	toolName := toolCall.Name
@@ -459,7 +460,7 @@ func (am *AbilityManager) executeTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	toolCard := am.tools[toolName]
@@ -516,7 +517,7 @@ func (am *AbilityManager) executeWorkflow(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	wfCard := am.workflows[toolName]
@@ -564,7 +565,7 @@ func (am *AbilityManager) executeAgent(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	agentCard := am.agents[toolName]
@@ -612,7 +613,7 @@ func (am *AbilityManager) executeFallbackTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess context_engine.ContextSession,
+	sess *session.Session,
 	tag string,
 ) ExecuteResult {
 	var opts []ResourceOption

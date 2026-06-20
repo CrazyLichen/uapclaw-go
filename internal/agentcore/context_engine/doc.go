@@ -10,6 +10,7 @@
 //	context_engine/
 //	├── doc.go           # 包文档
 //	├── base.go          # ModelContext 接口 + ContextStats + ContextWindow + ContextEngine 接口
+//	│                   # ContextEngine 方法直接使用 *session.Session（循环依赖已通过 single_agent/interfaces 解决）
 //	└── token/
 //	    ├── doc.go       # Token 子包文档
 //	    └── base.go      # TokenCounter 接口定义

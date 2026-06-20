@@ -6,6 +6,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -53,22 +54,6 @@ type ModelContext interface {
 	ReloaderTool() tool.Tool
 }
 
-// ContextSession 上下文引擎消费的会话接口。
-//
-// 定义 ContextEngine 所需的最小会话能力：获取会话 ID、读写状态。
-// *session.Session 隐式满足此接口，无需适配器。
-//
-// 对应 Python: openjiuwen/core/session/agent.py (Session) 中
-// ContextEngine 实际使用的 get_session_id/get_state/update_state 方法
-type ContextSession interface {
-	// GetSessionID 获取会话唯一标识
-	GetSessionID() string
-	// GetState 获取全局状态值
-	GetState(key string) (any, error)
-	// UpdateState 更新全局状态
-	UpdateState(data map[string]any)
-}
-
 // ContextEngine 上下文引擎门面接口。
 //
 // 管理上下文池、处理器注册、会话状态持久化。
@@ -77,15 +62,15 @@ type ContextSession interface {
 // 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
 	// CreateContext 创建上下文
-	CreateContext(ctx context.Context, contextID string, sess ContextSession) (ModelContext, error)
+	CreateContext(ctx context.Context, contextID string, sess *session.Session) (ModelContext, error)
 	// GetContext 获取上下文
 	GetContext(contextID string, sessionID string) ModelContext
 	// CompressContext 压缩上下文
-	CompressContext(ctx context.Context, contextID string, sess ContextSession) (string, error)
+	CompressContext(ctx context.Context, contextID string, sess *session.Session) (string, error)
 	// ClearContext 清空上下文
 	ClearContext(ctx context.Context, contextID string, sessionID string) error
 	// SaveContexts 保存上下文状态
-	SaveContexts(ctx context.Context, sess ContextSession, contextIDs []string) error
+	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) error
 	// RegisterProcessor 注册处理器
 	RegisterProcessor(processorType string, processor any)
 }
@@ -132,8 +117,8 @@ type ContextWindow struct {
 	ContextMessages []*llm_schema.BaseMessage `json:"context_messages"`
 	// Tools 工具定义
 	Tools []*schema.ToolInfo `json:"tools"`
-	// Statistic 统计信息
-	Statistic *ContextStats `json:"statistic"`
+	// Statistic 统计信息（值类型，零值始终可用，与 Python ContextStats() 默认实例对齐）
+	Statistic ContextStats `json:"statistic"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -159,6 +144,76 @@ func (w *ContextWindow) GetMessages() []*llm_schema.BaseMessage {
 // 对应 Python: ContextWindow.get_tools()
 func (w *ContextWindow) GetTools() []*schema.ToolInfo {
 	return w.Tools
+}
+
+// NewContextWindow 创建上下文窗口实例，所有字段初始化为零值。
+//
+// Statistic 字段初始化为 ContextStats 零值（与 Python ContextStats() 默认实例对齐），
+// 消息和工具切片初始化为空切片（避免 JSON 序列化为 null）。
+//
+// 对应 Python: ContextWindow() 默认构造
+func NewContextWindow() *ContextWindow {
+	return &ContextWindow{
+		SystemMessages:  make([]*llm_schema.BaseMessage, 0),
+		ContextMessages: make([]*llm_schema.BaseMessage, 0),
+		Tools:           make([]*schema.ToolInfo, 0),
+		Statistic:       ContextStats{},
+	}
+}
+
+// StatMessages 统计消息数量和 token 数，填充 ContextStats 各字段。
+//
+// 统计逻辑：
+//   - 按角色计数消息数（system/user/assistant/tool）
+//   - 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens 作为 total_tokens
+//   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/4）
+//
+// 对应 Python: Context._stat_messages(stat, messages)
+//
+// ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
+func (s *ContextStats) StatMessages(messages []*llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
+	// ⤵️ 待 5.31 回填：按角色计数 + token 计算
+	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_messages)
+	//
+	// 实现要点：
+	//   1. s.TotalMessages = len(messages)
+	//   2. 按角色计数：s.SystemMessages / s.UserMessages / s.AssistantMessages / s.ToolMessages
+	//   3. token 计算优先级：
+	//      a) 最后一条 AssistantMessage 的 usage_metadata.total_tokens → 直接赋值 s.TotalTokens 并返回
+	//      b) 逐条调用 tokenCounter.CountMessages 或 fallback len(content)/4
+	//   4. s.TotalDialogues 由 StatContextWindow 统一计算（依赖 ContextUtils.find_all_dialogue_round）
+}
+
+// StatTools 统计工具数量和 token 数，填充 ContextStats 的 Tools/ToolTokens 字段。
+//
+// 对应 Python: Context._stat_tools(stat, tools)
+//
+// ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
+func (s *ContextStats) StatTools(tools []*schema.ToolInfo, tokenCounter token.TokenCounter) {
+	// ⤵️ 待 5.31 回填：工具计数 + token 计算
+	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_tools)
+	//
+	// 实现要点：
+	//   1. s.Tools = len(tools)
+	//   2. 逐条计算工具 token：tokenCounter.CountTools 或 fallback len(name+description+parameters)/4
+	//   3. s.ToolTokens = 各工具 token 之和
+	//   4. s.TotalTokens += s.ToolTokens
+}
+
+// StatContextWindow 统计 ContextWindow 的完整统计信息。
+//
+// 内部调用 StatMessages + StatTools + 计算对话轮次，填充 window.Statistic 各字段。
+// 对应 Python: Context._stat_context_window(window)
+//
+// ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
+func StatContextWindow(window *ContextWindow, tokenCounter token.TokenCounter) {
+	// ⤵️ 待 5.31 回填：统计窗口消息 + 工具 + 对话轮次
+	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_context_window)
+	//
+	// 实现要点：
+	//   1. window.Statistic.StatMessages(window.GetMessages(), tokenCounter)
+	//   2. window.Statistic.StatTools(window.GetTools(), tokenCounter)
+	//   3. window.Statistic.TotalDialogues = 计算对话轮次（依赖 ContextUtils.FindAllDialogueRound）
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

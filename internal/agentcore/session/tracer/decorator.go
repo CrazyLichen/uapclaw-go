@@ -7,7 +7,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -53,13 +53,13 @@ type TracedTool struct {
 }
 
 // TracedWorkflow 追踪装饰的工作流，包装 Workflow 并在 Invoke/Stream 调用时触发追踪事件。
-// 实现 single_agent.Workflow 接口。
+// 实现 sainterfaces.Workflow 接口。
 //
 // 对应 Python: decorate_workflow_with_trace 返回的 _TraceProxy (openjiuwen/core/session/tracer/decorator.py)
 // Python 同时包装 invoke 和 stream，Go 当前包装 Invoke，Stream 在领域八扩展时回填。
 type TracedWorkflow struct {
 	// inner 被装饰的原始工作流实例
-	inner single_agent.Workflow
+	inner sainterfaces.Workflow
 	// tracer 追踪器
 	tracer *Tracer
 	// agentSpan Agent 追踪跨度
@@ -223,7 +223,7 @@ func (t *TracedTool) Card() *tool.ToolCard {
 // 流程：CreateAgentSpan → TriggerAgent(TraceWorkflowStart) → inner.Invoke → TriggerAgent(TraceWorkflowEnd/Error)
 //
 // 对应 Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
-func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...single_agent.WorkflowOption) (any, error) {
+func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (any, error) {
 	span := w.tracer.AgentSpanManager.CreateAgentSpan(w.agentSpan)
 	w.tracer.TriggerAgent(ctx, TraceWorkflowStart, &TriggerParams{
 		Span:         &span.Span,
@@ -249,7 +249,7 @@ func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts
 
 // Stream 流式执行工作流，直接委托 inner。
 // ⤵️ 领域八回填：流式 trace 包装逻辑，对齐 Python decorate_workflow_with_trace 中的 stream 包装。
-func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts ...single_agent.WorkflowOption) (<-chan stream.Schema, error) {
+func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	return w.inner.Stream(ctx, inputs, opts...)
 }
 
@@ -331,7 +331,7 @@ func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 // instanceInfo 中 class_name 和 metadata 从 workflow.Card() 获取
 // （对齐 Python workflow.card.name / workflow.card.id 等），
 // type 固定为 "workflow"（对齐 Python decorate_workflow_with_trace）。
-func DecorateWorkflowWithTrace(w single_agent.Workflow, session tracerSession) single_agent.Workflow {
+func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session tracerSession) sainterfaces.Workflow {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return w

@@ -12,7 +12,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeWorkflowSession 实现 BaseWorkflowSession 接口，用于测试
+// fakeWorkflowSession 实现 WorkflowNodeSession 接口，用于测试
 type fakeWorkflowSession struct {
 	tracer       *Tracer
 	executableID string

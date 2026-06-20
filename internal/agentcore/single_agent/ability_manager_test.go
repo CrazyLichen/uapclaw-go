@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -32,15 +33,15 @@ func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 // fakeResourceManager 用于测试的模拟资源管理器
 type fakeResourceManager struct {
 	tools     map[string]tool.Tool
-	workflows map[string]Workflow
-	agents    map[string]Agent
+	workflows map[string]interfaces.Workflow
+	agents    map[string]interfaces.Agent
 }
 
 func newFakeResourceManager() *fakeResourceManager {
 	return &fakeResourceManager{
 		tools:     make(map[string]tool.Tool),
-		workflows: make(map[string]Workflow),
-		agents:    make(map[string]Agent),
+		workflows: make(map[string]interfaces.Workflow),
+		agents:    make(map[string]interfaces.Agent),
 	}
 }
 
@@ -52,7 +53,7 @@ func (f *fakeResourceManager) GetTool(toolID string, _ ...ResourceOption) (tool.
 	return t, nil
 }
 
-func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption) (Workflow, error) {
+func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption) (interfaces.Workflow, error) {
 	w, ok := f.workflows[workflowID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", workflowID))
@@ -60,7 +61,7 @@ func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption
 	return w, nil
 }
 
-func (f *fakeResourceManager) GetAgent(agentID string, _ ...ResourceOption) (Agent, error) {
+func (f *fakeResourceManager) GetAgent(agentID string, _ ...ResourceOption) (interfaces.Agent, error) {
 	a, ok := f.agents[agentID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", agentID))
@@ -454,11 +455,11 @@ type fakeWorkflow struct {
 	card   *schema.WorkflowCard
 }
 
-func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...WorkflowOption) (any, error) {
+func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.WorkflowOption) (any, error) {
 	return f.result, f.err
 }
 
-func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...WorkflowOption) (<-chan stream.Schema, error) {
+func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...interfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	ch := make(chan stream.Schema)
 	close(ch)
 	return ch, nil
@@ -474,7 +475,7 @@ type fakeAgent struct {
 	err    error
 }
 
-func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...AgentOption) (any, error) {
+func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (any, error) {
 	return f.result, f.err
 }
 

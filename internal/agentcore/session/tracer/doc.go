@@ -19,7 +19,7 @@
 //	├── span.go          # Span/TraceAgentSpan/TraceWorkflowSpan 结构体 + SpanManager 管理器
 //	├── handler.go       # TraceAgentHandler/TraceWorkflowHandler 追踪处理器
 //	├── tracer.go        # Tracer 追踪器 + TriggerParams + 事件分发表
-//	├── workflow.go      # BaseWorkflowSession 接口 + TracerWorkflowUtils 工作流追踪工具集
+//	├── workflow.go      # WorkflowNodeSession 接口 + TracerWorkflowUtils 工作流追踪工具集
 //	└── decorator.go     # TracedModelClient/TracedTool/TracedWorkflow 装饰器 + Decorate*WithTrace 工厂函数
 //
 // 对应 Python 代码：openjiuwen/core/session/tracer/span.py + openjiuwen/core/session/tracer/data.py + openjiuwen/core/session/tracer/handler.py + openjiuwen/core/session/tracer/tracer.py + openjiuwen/core/session/tracer/workflow_tracer.py

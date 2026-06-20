@@ -64,7 +64,7 @@
 //	│   ├── tracer.go                        # Tracer 核心 + TriggerParams
 //	│   ├── handler.go                       # TraceAgentHandler/TraceWorkflowHandler
 //	│   ├── decorator.go                     # TracedModelClient/TracedTool/TracedWorkflow
-//	│   └── workflow.go                      # TracerWorkflowUtils + BaseWorkflowSession
+//	│   └── workflow.go                      # TracerWorkflowUtils + WorkflowNodeSession
 //	└── internal/           # 内部会话实现
 //	    ├── doc.go                # internal 包文档
 //	    ├── agent_session.go      # AgentSession

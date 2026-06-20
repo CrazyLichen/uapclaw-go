@@ -9,7 +9,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -115,7 +115,7 @@ func (f *fakeAgentSession) AgentSpan() *TraceAgentSpan {
 	return f.agentSpan
 }
 
-// fakeWorkflow 用于测试的模拟工作流，实现 single_agent.Workflow 接口
+// fakeWorkflow 用于测试的模拟工作流，实现 sainterfaces.Workflow 接口
 type fakeWorkflow struct {
 	// invokeResult Invoke 返回的结果
 	invokeResult any
@@ -125,19 +125,19 @@ type fakeWorkflow struct {
 	card *schema.WorkflowCard
 }
 
-// Invoke 实现 single_agent.Workflow 接口
-func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...single_agent.WorkflowOption) (any, error) {
+// Invoke 实现 sainterfaces.Workflow 接口
+func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (any, error) {
 	return f.invokeResult, f.invokeErr
 }
 
-// Stream 实现 single_agent.Workflow 接口
-func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...single_agent.WorkflowOption) (<-chan stream.Schema, error) {
+// Stream 实现 sainterfaces.Workflow 接口
+func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...sainterfaces.WorkflowOption) (<-chan stream.Schema, error) {
 	ch := make(chan stream.Schema)
 	close(ch)
 	return ch, nil
 }
 
-// Card 实现 single_agent.Workflow 接口
+// Card 实现 sainterfaces.Workflow 接口
 func (f *fakeWorkflow) Card() *schema.WorkflowCard {
 	return f.card
 }
