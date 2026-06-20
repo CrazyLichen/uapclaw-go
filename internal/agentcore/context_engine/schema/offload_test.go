@@ -128,11 +128,11 @@ func TestOffloadUserMessage_JSONRoundTrip(t *testing.T) {
 	if restored.GetContent().Text() != "截断内容" {
 		t.Errorf("Content = %q, want %q", restored.GetContent().Text(), "截断内容")
 	}
-	if restored.OffloadInfo.OffloadHandle != "handle-abc" {
-		t.Errorf("OffloadHandle = %q, want %q", restored.OffloadInfo.OffloadHandle, "handle-abc")
+	if restored.OffloadHandle != "handle-abc" {
+		t.Errorf("OffloadHandle = %q, want %q", restored.OffloadHandle, "handle-abc")
 	}
-	if restored.OffloadInfo.OffloadType != "in_memory" {
-		t.Errorf("OffloadType = %q, want %q", restored.OffloadInfo.OffloadType, "in_memory")
+	if restored.OffloadType != "in_memory" {
+		t.Errorf("OffloadType = %q, want %q", restored.OffloadType, "in_memory")
 	}
 	if restored.GetName() != "test_user" {
 		t.Errorf("Name = %q, want %q", restored.GetName(), "test_user")
@@ -157,8 +157,8 @@ func TestOffloadToolMessage_JSONRoundTrip(t *testing.T) {
 	if restored.ToolCallID != "call_001" {
 		t.Errorf("ToolCallID = %q, want %q", restored.ToolCallID, "call_001")
 	}
-	if restored.OffloadInfo.OffloadType != "filesystem" {
-		t.Errorf("OffloadType = %q, want %q", restored.OffloadInfo.OffloadType, "filesystem")
+	if restored.OffloadType != "filesystem" {
+		t.Errorf("OffloadType = %q, want %q", restored.OffloadType, "filesystem")
 	}
 }
 
@@ -197,8 +197,8 @@ func TestOffloadAssistantMessage_JSONRoundTrip(t *testing.T) {
 	if restored.GetRole() != llm_schema.RoleTypeAssistant {
 		t.Errorf("Role = %v, want %v", restored.GetRole(), llm_schema.RoleTypeAssistant)
 	}
-	if restored.OffloadInfo.OffloadHandle != "handle-asst" {
-		t.Errorf("OffloadHandle = %q, want %q", restored.OffloadInfo.OffloadHandle, "handle-asst")
+	if restored.OffloadHandle != "handle-asst" {
+		t.Errorf("OffloadHandle = %q, want %q", restored.OffloadHandle, "handle-asst")
 	}
 	if len(restored.ToolCalls) != 1 {
 		t.Errorf("ToolCalls 长度 = %d, want 1", len(restored.ToolCalls))
@@ -245,7 +245,7 @@ func TestUnmarshalOffloadMessage_不支持的角色(t *testing.T) {
 // TestOffloadInfo_Metadata 验证 OffloadInfo 附加元数据
 func TestOffloadInfo_Metadata(t *testing.T) {
 	msg := NewOffloadUserMessage("content", "handle", "in_memory")
-	msg.OffloadInfo.Metadata = map[string]any{
+	msg.Metadata = map[string]any{
 		"original_tokens": 1500,
 		"timestamp":       "2025-01-01T00:00:00Z",
 	}

@@ -330,7 +330,6 @@ func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, on
 			// TraceWorkflowSpan 没有 ElapsedTime 字段，计算仅用于 UpdateSpan 更新
 			elapsed := h.GetElapsedTime(*span.StartTime, now)
 			h.spanManager.UpdateSpan(&span.Span, map[string]any{"elapsed_time": elapsed})
-		} else {
 		}
 		h.spanManager.UpdateSpan(&span.Span, map[string]any{})
 	} else {

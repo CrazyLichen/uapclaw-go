@@ -227,7 +227,7 @@ func TestTraceAgentHandler_updateStartTraceData_Marshal失败(t *testing.T) {
 		"ch":         make(chan int), // chan 不可被 json.Marshal
 	}
 
-	h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
+	_ = h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
 
 	// 序列化失败后应直接返回，不应设置任何字段
 	if span.InvokeType != "" {
@@ -852,7 +852,7 @@ func TestUpdateStartTraceData_MetaData序列化(t *testing.T) {
 		"tools":      []string{"tool1", "tool2"},
 	}
 
-	h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
+	_ = h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
 
 	if span.MetaData == nil {
 		t.Fatal("MetaData 不应为 nil")
@@ -1420,7 +1420,7 @@ func TestTraceAgentHandler_updateStartTraceData_无ClassName(t *testing.T) {
 	instanceInfo := map[string]any{
 		"model": "qwen-max",
 	}
-	h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
+	_ = h.updateStartTraceData(span, string(InvokeTypeLLM), "inputs", instanceInfo)
 
 	if span.Name != "" {
 		t.Errorf("无 class_name 时 Name 应为空，实际 = %q", span.Name)

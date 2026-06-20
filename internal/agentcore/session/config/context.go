@@ -10,10 +10,11 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// envsContextKey 请求级环境变量的 context key
-	envsContextKey = "session_envs"
-)
+// envsContextKeyType 请求级环境变量的 context key 类型
+type envsContextKeyType struct{}
+
+// envsContextKey 请求级环境变量的 context key
+var envsContextKey envsContextKeyType
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
