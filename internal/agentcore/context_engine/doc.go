@@ -12,6 +12,7 @@
 //	├── base.go          # ModelContext 接口 + ContextStats + ContextWindow + ContextEngine 接口
 //	│                   # NewContextWindow 构造函数 + StatMessages/StatTools/StatContextWindow 预留方法
 //	│                   # ContextEngine 方法直接使用 *session.Session（循环依赖已通过 single_agent/interfaces 解决）
+//	│                   # 消息类型使用 []llm_schema.BaseMessage（接口类型，非指针切片）
 //	│                   # ⤵️ StatMessages/StatTools/StatContextWindow 实际逻辑待 5.31 回填
 //	├── schema/
 //	│   ├── doc.go       # Schema 子包文档

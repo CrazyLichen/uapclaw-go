@@ -31,8 +31,8 @@
 //	ScopeUserMapping         — 作用域用户映射表 GORM 模型
 //	MemoryMeta               — 记忆元数据表 GORM 模型
 //	SqlDbStore               — 通用 SQL CRUD 层，封装 GORM 通用操作
-//	SqlMessageStore          — BaseMessageStore 的 SQL 实现
-//	MessageManager           — 消息管理器，BaseMessageStore 的上层封装
+//	SqlMessageStore          — BaseMessageStore 的 SQL 实现，存储和读取 schema.BaseMessage 接口类型消息
+//	MessageManager           — 消息管理器，BaseMessageStore 的上层封装，提供 schema.BaseMessage 接口类型的消息管理
 //	ScopeUserMappingManager  — 作用域用户映射管理器，管理 scope_user_mapping 表
 //	DataIdManager            — 唯一 ID 生成器，12字节=6时间+3随机+3哈希
 package model

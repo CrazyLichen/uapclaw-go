@@ -30,7 +30,7 @@
 //
 // 消息列表模板：
 //
-//	tmpl := prompt.NewPromptTemplate("", []*schema.BaseMessage{
+//	tmpl := prompt.NewPromptTemplate("", []schema.BaseMessage{
 //	    schema.NewSystemMessage("You are a {{domain}} expert."),
 //	    schema.NewUserMessage("Hi, {{name}}!"),
 //	})

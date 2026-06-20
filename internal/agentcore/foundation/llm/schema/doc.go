@@ -4,11 +4,15 @@
 //
 // 消息模型体系：
 //
-//	BaseMessage — 消息基类（role, content, name, metadata）
-//	  ├── UserMessage       — 用户消息（role="user"）
-//	  ├── SystemMessage     — 系统消息（role="system"）
-//	  ├── AssistantMessage  — 助手消息（role="assistant"，含 tool_calls/usage_metadata/finish_reason 等）
-//	  └── ToolMessage       — 工具返回消息（role="tool"，含 tool_call_id）
+//	BaseMessage — 消息接口（定义 getter/setter 协议，role/content/name/metadata 等字段的读写方法）
+//	  ├── DefaultMessage      — BaseMessage 的默认实现（嵌入结构体的基础构件）
+//	  │     ├── UserMessage       — 用户消息（role="user"）
+//	  │     └── SystemMessage     — 系统消息（role="system"）
+//	  └── 扩展实现（嵌入 DefaultMessage + 额外字段）
+//	        ├── AssistantMessage  — 助手消息（含 tool_calls/usage_metadata/finish_reason 等，自定义序列化）
+//	        └── ToolMessage       — 工具返回消息（含 tool_call_id）
+//
+//	UnmarshalMessage — 通用消息反序列化工厂，根据 role 字段自动还原为对应子类型
 //
 // 流式消息块模型体系：
 //
@@ -45,9 +49,10 @@
 //	  doc.go                  — 包文档（本文件）
 //	  tool_call.go            — ToolCall 结构体 + OpenAI 格式转换
 //	  usage_metadata.go       — UsageMetadata 结构体
-//	  message.go              — RoleType 枚举 + MessageContent + BaseMessage + UserMessage + SystemMessage
-//	  assistant_message.go    — AssistantMessage（自定义序列化）
-//	  tool_message.go         — ToolMessage
+//	  message.go              — RoleType 枚举 + MessageContent + BaseMessage 接口 + DefaultMessage 默认实现 + UserMessage + SystemMessage
+//	  assistant_message.go    — AssistantMessage（嵌入 DefaultMessage + 扩展字段，自定义序列化）
+//	  tool_message.go         — ToolMessage（嵌入 DefaultMessage + 扩展字段）
+//	  message_factory.go      — UnmarshalMessage 通用消息反序列化工厂
 //	  message_chunk.go        — AssistantMessageChunk + ToolMessageChunk（流式消息块）
 //	  generation_response.go  — 多模态生成响应（图片/音频/视频）
 //	  config.go               — ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
