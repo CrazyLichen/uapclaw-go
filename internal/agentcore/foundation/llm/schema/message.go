@@ -310,6 +310,49 @@ func NewSystemMessage(content string, opts ...MessageOption) *SystemMessage {
 	return &SystemMessage{DefaultMessage: *msg}
 }
 
+// UnmarshalMessage 从 JSON 反序列化为对应消息类型。
+// 根据 role 字段自动分派：
+//   - "user" → *UserMessage
+//   - "system" → *SystemMessage
+//   - "assistant" → *AssistantMessage
+//   - "tool" → *ToolMessage
+func UnmarshalMessage(data []byte) (BaseMessage, error) {
+	var peek struct {
+		Role string `json:"role"`
+	}
+	if err := json.Unmarshal(data, &peek); err != nil {
+		return nil, fmt.Errorf("UnmarshalMessage 解析 role 失败: %w", err)
+	}
+	switch peek.Role {
+	case "user":
+		var m UserMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("UnmarshalMessage 反序列化 UserMessage 失败: %w", err)
+		}
+		return &m, nil
+	case "system":
+		var m SystemMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("UnmarshalMessage 反序列化 SystemMessage 失败: %w", err)
+		}
+		return &m, nil
+	case "assistant":
+		var m AssistantMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("UnmarshalMessage 反序列化 AssistantMessage 失败: %w", err)
+		}
+		return &m, nil
+	case "tool":
+		var m ToolMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("UnmarshalMessage 反序列化 ToolMessage 失败: %w", err)
+		}
+		return &m, nil
+	default:
+		return nil, fmt.Errorf("UnmarshalMessage 不支持的角色: %q", peek.Role)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 初始化 roleTypeMap，用于 JSON 反序列化
