@@ -1,0 +1,31 @@
+package config
+
+import (
+	"context"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// envsContextKey 请求级环境变量的 context key
+	envsContextKey = "session_envs"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithEnvs 将请求级环境变量注入到 context 中。
+// 优先级：os.Getenv > context.Value > 内置默认值。
+// 对应 Python: workflow_session_vars (contextvars.ContextVar)
+func WithEnvs(ctx context.Context, envs map[string]any) context.Context {
+	return context.WithValue(ctx, envsContextKey, envs)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getEnvsFromContext 从 context 中获取请求级环境变量
+func getEnvsFromContext(ctx context.Context) map[string]any {
+	if envs, ok := ctx.Value(envsContextKey).(map[string]any); ok {
+		return envs
+	}
+	return nil
+}

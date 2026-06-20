@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -12,63 +14,42 @@ import (
 
 // ──────────────────────────── 测试辅助类型 ────────────────────────────
 
-// testConfig 测试用 CheckpointerConfig 实现
-type testConfig struct {
-	envMap map[string]any
-}
-
-func (c *testConfig) GetEnv(key string, defaultValue ...any) any {
-	if c.envMap == nil {
-		if len(defaultValue) > 0 {
-			return defaultValue[0]
-		}
-		return nil
-	}
-	if v, ok := c.envMap[key]; ok {
-		return v
-	}
-	if len(defaultValue) > 0 {
-		return defaultValue[0]
-	}
-	return nil
-}
-
 // testAgentSession Agent 会话测试实现
 type testAgentSession struct {
 	testSession
 	agentID string
-	config  *testConfig
+	config  interfaces.SessionConfig
 	st      state.SessionState
 }
 
 func (s *testAgentSession) AgentID() string            { return s.agentID }
 func (s *testAgentSession) State() state.SessionState  { return s.st }
-func (s *testAgentSession) Config() any                { return s.config }
+func (s *testAgentSession) Config() interfaces.SessionConfig { return s.config }
 func (s *testAgentSession) Checkpointer() Checkpointer { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {
 	testSession
 	teamID string
-	config *testConfig
+	config interfaces.SessionConfig
 	st     state.SessionState
 }
 
 func (s *testTeamSession) TeamID() string            { return s.teamID }
 func (s *testTeamSession) State() state.SessionState { return s.st }
-func (s *testTeamSession) Config() any               { return s.config }
+func (s *testTeamSession) Config() interfaces.SessionConfig { return s.config }
 
 // testWorkflowSession Workflow 会话测试实现（含 WorkflowState）
 type testWorkflowSession struct {
 	testSession
-	config     *testConfig
+	config     interfaces.SessionConfig
 	st         state.SessionState
 	workflowID string
 	parent     interfaces.BaseSession
 }
 
 func (s *testWorkflowSession) State() state.SessionState      { return s.st }
-func (s *testWorkflowSession) Config() any                    { return s.config }
+func (s *testWorkflowSession) Config() interfaces.SessionConfig { return s.config }
 func (s *testWorkflowSession) WorkflowID() string             { return s.workflowID }
 func (s *testWorkflowSession) Parent() interfaces.BaseSession { return s.parent }
 
@@ -103,7 +84,7 @@ func TestInMemoryCheckpointer_PreAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -126,7 +107,7 @@ func TestInMemoryCheckpointer_PostAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -153,7 +134,7 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -178,7 +159,7 @@ func TestInMemoryCheckpointer_PrePostAgentExecute_状态恢复(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreAgentExecute(ctx, session2, nil); err != nil {
 		t.Fatalf("第二次 PreAgentExecute 返回错误：%v", err)
@@ -198,7 +179,7 @@ func TestInMemoryCheckpointer_PostAgentExecute_无Store(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -218,7 +199,7 @@ func TestInMemoryCheckpointer_InterruptAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -241,7 +222,7 @@ func TestInMemoryCheckpointer_InterruptAgentExecute_无Store(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -260,7 +241,7 @@ func TestInMemoryCheckpointer_PreAgentTeamExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -283,7 +264,7 @@ func TestInMemoryCheckpointer_PostAgentTeamExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -306,7 +287,7 @@ func TestInMemoryCheckpointer_PostAgentTeamExecute_无Store(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -326,7 +307,7 @@ func TestInMemoryCheckpointer_SessionExists_存在(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -367,7 +348,7 @@ func TestInMemoryCheckpointer_Release(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -420,7 +401,7 @@ func TestAgentStorage_SaveRecover(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -441,7 +422,7 @@ func TestAgentStorage_SaveRecover(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := storage.Recover(ctx, session2, nil); err != nil {
 		t.Fatalf("Recover 返回错误：%v", err)
@@ -462,7 +443,7 @@ func TestAgentStorage_Clear(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -493,7 +474,7 @@ func TestAgentStorage_Exists(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -528,7 +509,7 @@ func TestAgentStorage_Recover_无数据(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -548,7 +529,7 @@ func TestAgentTeamStorage_SaveRecover(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -567,7 +548,7 @@ func TestAgentTeamStorage_SaveRecover(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := storage.Recover(ctx, session2, nil); err != nil {
 		t.Fatalf("Recover 返回错误：%v", err)
@@ -588,7 +569,7 @@ func TestAgentTeamStorage_Clear(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -622,7 +603,7 @@ func TestWorkflowStorage_SaveRecover(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -647,7 +628,7 @@ func TestWorkflowStorage_SaveRecover(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs2,
 	}
 
@@ -669,7 +650,7 @@ func TestWorkflowStorage_Clear(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -701,7 +682,7 @@ func TestWorkflowStorage_Exists_未保存(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -725,7 +706,7 @@ func TestInMemoryCheckpointer_PreAgentExecute_带Inputs(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -735,7 +716,7 @@ func TestInMemoryCheckpointer_PreAgentExecute_带Inputs(t *testing.T) {
 	}
 
 	// 验证交互输入已设置到 state
-	inputs := st.Get(state.StringKey(InteractiveInputKey))
+	inputs := st.Get(state.StringKey(constants.InteractiveInputKey))
 	if inputs == nil {
 		t.Error("交互输入应已设置到 state")
 	}
@@ -749,7 +730,7 @@ func TestInMemoryCheckpointer_PreAgentTeamExecute_带Inputs(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -774,7 +755,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_交互输入(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -807,7 +788,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_空输入无状态(t *testing.T
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -833,7 +814,7 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -864,7 +845,7 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_异常(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -887,15 +868,15 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_异常(t *testing.T) {
 
 // TestForceDelWorkflowStateKey 测试常量值
 func TestForceDelWorkflowStateKey(t *testing.T) {
-	if ForceDelWorkflowStateKey != "_force_del_workflow_state" {
-		t.Errorf("ForceDelWorkflowStateKey 期望 '_force_del_workflow_state'，实际=%s", ForceDelWorkflowStateKey)
+	if constants.ForceDelWorkflowStateKey != "_force_del_workflow_state" {
+		t.Errorf("ForceDelWorkflowStateKey 期望 '_force_del_workflow_state'，实际=%s", constants.ForceDelWorkflowStateKey)
 	}
 }
 
 // TestInteractiveInputKey 测试常量值
 func TestInteractiveInputKey(t *testing.T) {
-	if InteractiveInputKey != "__interactive_input__" {
-		t.Errorf("InteractiveInputKey 期望 '__interactive_input__'，实际=%s", InteractiveInputKey)
+	if constants.InteractiveInputKey != "__interactive_input__" {
+		t.Errorf("InteractiveInputKey 期望 '__interactive_input__'，实际=%s", constants.InteractiveInputKey)
 	}
 }
 
@@ -952,7 +933,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_有状态非交互输入(t *tes
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -987,7 +968,11 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
+		config: func() interfaces.SessionConfig {
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
+			return cfg
+		}(),
 		st:          wcs,
 	}
 
@@ -1023,7 +1008,7 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1055,13 +1040,13 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_正常完成AgentSession(t *te
 		testSession: testSession{sessionID: "parent-sess1"},
 		agentID:     "parent-agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 		parent:      parentSession,
 	}
@@ -1106,18 +1091,18 @@ func TestInMemoryCheckpointer_Release_全量释放(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          agentSt,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	teamSession := &testTeamSession{
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          teamSt,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	workflowSession := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1160,7 +1145,7 @@ func TestWorkflowStorage_SaveRecover_带更新(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1185,7 +1170,7 @@ func TestWorkflowStorage_SaveRecover_带更新(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs2,
 	}
 
@@ -1207,7 +1192,7 @@ func TestWorkflowStorage_Recover_带交互输入(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1227,7 +1212,7 @@ func TestWorkflowStorage_Recover_带交互输入(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs2,
 	}
 	ii, _ := interaction.NewInteractiveInput()
@@ -1249,7 +1234,7 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1269,7 +1254,7 @@ func TestWorkflowStorage_Recover_单个输入(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs2,
 	}
 
@@ -1289,7 +1274,7 @@ func TestAgentTeamStorage_Exists(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -1331,7 +1316,7 @@ func TestInMemoryCheckpointer_PreWorkflowExecute_空Map输入(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1356,7 +1341,7 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_无Store(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "nonexist"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 
@@ -1381,7 +1366,7 @@ func TestInMemoryCheckpointer_PostWorkflowExecute_中断无Store(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "nonexist"},
 		workflowID:  "wf1",
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		st:          wcs,
 	}
 

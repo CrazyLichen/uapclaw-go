@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -70,10 +71,10 @@ func TestAgentSession_State不为Nil(t *testing.T) {
 
 // TestAgentSession_选项注入 测试通过选项注入组件
 func TestAgentSession_选项注入(t *testing.T) {
-	config := map[string]any{"key": "value"}
+	cfg := config.NewSessionConfig(context.Background())
 	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
 	s := NewAgentSession("test-id",
-		WithConfig(config),
+		WithConfig(cfg),
 		WithCard(card),
 	)
 

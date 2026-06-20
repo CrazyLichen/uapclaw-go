@@ -142,7 +142,7 @@ func (f *NodeSessionFacade) Trace(ctx context.Context, data map[string]any) erro
 	if innerTracer == nil {
 		return nil
 	}
-	tracer.TracerWorkflowUtils{}.Trace(ctx, f.inner, data)
+	tracer.TracerWorkflowUtils{}.Trace(ctx, &tracerSessionAdapter{inner: f.inner}, data)
 	return nil
 }
 
@@ -157,7 +157,7 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 	if innerTracer == nil {
 		return nil
 	}
-	tracer.TracerWorkflowUtils{}.TraceError(ctx, f.inner, err)
+	tracer.TracerWorkflowUtils{}.TraceError(ctx, &tracerSessionAdapter{inner: f.inner}, err)
 	return nil
 }
 
@@ -217,19 +217,38 @@ func (f *NodeSessionFacade) WriteCustomStream(ctx context.Context, data any) err
 }
 
 // GetEnv 获取环境变量值。
-// ⤵️ 5.12 回填：Config 返回真实类型后实现 get_env
 // 对应 Python: Session.get_env(key)
 func (f *NodeSessionFacade) GetEnv(key string) any {
-	// ⤵️ 5.12 回填：return f.inner.Config().GetEnv(key)
-	return nil
+	cfg := f.inner.Config()
+	if cfg == nil {
+		return nil
+	}
+	return cfg.GetEnv(key)
 }
 
 // GetNodeConfig 获取节点级配置。
-// ⤵️ 5.12 回填：Config 返回真实类型后实现 get_node_config
 // 对应 Python: Session.get_node_config()
 func (f *NodeSessionFacade) GetNodeConfig() any {
-	// ⤵️ 5.12 回填：return f.inner.NodeConfig()
-	return nil
+	return f.inner.NodeConfig()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// tracerSessionAdapter 适配 internal.NodeSession 到 tracer.BaseWorkflowSession。
+// 由于 NodeSession.Config() 返回 interfaces.SessionConfig（非 any），
+// 而 BaseWorkflowSession.Config() 返回 any（避免 tracer↔interfaces 循环依赖），
+// 需要适配器做方法签名转换。
+type tracerSessionAdapter struct {
+	inner *internal.NodeSession
+}
+
+func (a *tracerSessionAdapter) Tracer() *tracer.Tracer      { return a.inner.Tracer() }
+func (a *tracerSessionAdapter) ExecutableID() string        { return a.inner.ExecutableID() }
+func (a *tracerSessionAdapter) ParentID() string            { return a.inner.ParentID() }
+func (a *tracerSessionAdapter) WorkflowID() string          { return a.inner.WorkflowID() }
+func (a *tracerSessionAdapter) NodeID() string              { return a.inner.NodeID() }
+func (a *tracerSessionAdapter) NodeType() string            { return a.inner.NodeType() }
+func (a *tracerSessionAdapter) State() state.SessionState   { return a.inner.State() }
+func (a *tracerSessionAdapter) Config() any                  { return a.inner.Config() }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

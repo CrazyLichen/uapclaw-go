@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -81,17 +82,6 @@ type WorkflowStorage struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// ForceDelWorkflowStateKey 强制删除工作流状态的环境变量键。
-	// 对应 Python: openjiuwen/core/session/constants.py (FORCE_DEL_WORKFLOW_STATE_KEY)
-	// 5.13 实现 session/constants 包后，此常量应迁移到该包中。
-	ForceDelWorkflowStateKey = "_force_del_workflow_state"
-
-	// InteractiveInputKey 交互输入在 session state 中的键。
-	// 对应 Python: openjiuwen/core/common/constants/constant.py (INTERACTIVE_INPUT)
-	// 此常量与 interaction 包中的 InteractiveInputKey 值一致，
-	// 5.13 实现 session/constants 包后，两处引用应统一到该包中。
-	InteractiveInputKey = "__interactive_input__"
-
 	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
 	emptyFormatTag = "empty"
 )
@@ -183,7 +173,7 @@ func (cp *InMemoryCheckpointer) PreWorkflowExecute(ctx context.Context, session 
 			return nil
 		}
 		// 检查是否强制删除工作流状态
-		if forceDel, ok := GetConfigEnv(session, ForceDelWorkflowStateKey, false); ok {
+		if forceDel, ok := GetConfigEnv(session, constants.ForceDelWorkflowStateKey, false); ok {
 			if forceDelBool, _ := forceDel.(bool); forceDelBool {
 				logger.Info(logComponent).
 					Str("action", "pre_workflow_execute").
@@ -330,7 +320,7 @@ func (cp *InMemoryCheckpointer) PreAgentExecute(ctx context.Context, session int
 	// 如果有交互输入，设置到 session state
 	if inputs != nil {
 		if st := session.State(); st != nil {
-			if err := st.Update(map[string]any{InteractiveInputKey: []any{inputs}}); err != nil {
+			if err := st.Update(map[string]any{constants.InteractiveInputKey: []any{inputs}}); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("session_id", session.SessionID()).
 					Msg("设置交互输入到 session state 失败")
@@ -392,7 +382,7 @@ func (cp *InMemoryCheckpointer) PreAgentTeamExecute(ctx context.Context, session
 	// 如果有交互输入，更新全局状态
 	if inputs != nil {
 		if st := session.State(); st != nil {
-			st.UpdateGlobal(map[string]any{InteractiveInputKey: []any{inputs}})
+			st.UpdateGlobal(map[string]any{constants.InteractiveInputKey: []any{inputs}})
 		}
 	}
 	return nil

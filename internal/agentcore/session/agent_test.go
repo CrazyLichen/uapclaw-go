@@ -409,16 +409,18 @@ func TestSession_GetEnvDefaultValue(t *testing.T) {
 	}
 }
 
-// TestSession_GetEnvs返回空Map 测试无 envs 时返回空 map（非 nil）
-// 对齐 Python: Session.__init__() 总是创建 Config()，get_envs() 返回空 dict
-func TestSession_GetEnvs返回空Map(t *testing.T) {
+// TestSession_GetEnvs返回内置默认值 测试 GetEnvs 返回包含内置默认值的 map（非 nil）
+// 5.12 回填后，NewSessionConfig 自动加载内置超时配置，GetEnvs 返回非空 map。
+// 对齐 Python: Session.__init__() 总是创建 Config()，get_envs() 返回内置默认值字典
+func TestSession_GetEnvs返回内置默认值(t *testing.T) {
 	s := NewSession()
 	envs := s.GetEnvs()
 	if envs == nil {
-		t.Error("GetEnvs 不应返回 nil，应返回空 map")
+		t.Error("GetEnvs 不应返回 nil")
 	}
-	if len(envs) != 0 {
-		t.Errorf("无 envs 时应返回空 map，实际 %v", envs)
+	// 验证内置默认值存在
+	if _, ok := envs["_execute_timeout"]; !ok {
+		t.Error("GetEnvs 应包含内置默认配置键 _execute_timeout")
 	}
 }
 

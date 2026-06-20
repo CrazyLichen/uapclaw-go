@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -32,7 +33,7 @@ func TestNewProxySession(t *testing.T) {
 
 // mockStub 用于测试的 BaseSession 模拟实现
 type mockStub struct {
-	configVal              any
+	configVal              interfaces.SessionConfig
 	stateVal               state.SessionState
 	tracerVal              *tracer.Tracer
 	streamWriterManagerVal *stream.StreamWriterManager
@@ -43,8 +44,8 @@ type mockStub struct {
 	closeCalled            bool
 }
 
-func (m *mockStub) Config() any                                      { return m.configVal }
-func (m *mockStub) State() state.SessionState                        { return m.stateVal }
+func (m *mockStub) Config() interfaces.SessionConfig                     { return m.configVal }
+func (m *mockStub) State() state.SessionState                            { return m.stateVal }
 func (m *mockStub) Tracer() *tracer.Tracer                           { return m.tracerVal }
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
@@ -103,8 +104,9 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	mockCP := &testMockCheckpointer{}
 	expectedSWM := stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	expectedTracer := tracer.NewTracer()
+	expectedConfig := config.NewSessionConfig(context.Background())
 	stub := &mockStub{
-		configVal:              "config-value",
+		configVal:              expectedConfig,
 		stateVal:               expectedState,
 		tracerVal:              expectedTracer,
 		streamWriterManagerVal: expectedSWM,
@@ -118,8 +120,8 @@ func TestProxySession_委托全部方法(t *testing.T) {
 	p.SetSession(stub)
 
 	// 验证 Config 委托
-	if got := p.Config(); got != "config-value" {
-		t.Errorf("Config() = %v, 期望 %v", got, "config-value")
+	if got := p.Config(); got != expectedConfig {
+		t.Errorf("Config() = %v, 期望 %v", got, expectedConfig)
 	}
 
 	// 验证 State 委托

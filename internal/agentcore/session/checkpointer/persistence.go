@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -565,7 +566,7 @@ func (cp *PersistenceCheckpointer) PreAgentExecute(ctx context.Context, session 
 	// 如果有交互输入，设置到 session state
 	if inputs != nil {
 		if st := session.State(); st != nil {
-			if err := st.Update(map[string]any{InteractiveInputKey: []any{inputs}}); err != nil {
+			if err := st.Update(map[string]any{constants.InteractiveInputKey: []any{inputs}}); err != nil {
 				logger.Warn(logComponent).Err(err).
 					Str("session_id", session.SessionID()).
 					Msg("设置交互输入到 session state 失败")
@@ -600,7 +601,7 @@ func (cp *PersistenceCheckpointer) PreAgentTeamExecute(ctx context.Context, sess
 	// 如果有交互输入，更新全局状态
 	if inputs != nil {
 		if st := session.State(); st != nil {
-			st.UpdateGlobal(map[string]any{InteractiveInputKey: []any{inputs}})
+			st.UpdateGlobal(map[string]any{constants.InteractiveInputKey: []any{inputs}})
 		}
 	}
 	return nil
@@ -722,7 +723,7 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 			return nil
 		}
 		// 检查是否强制删除工作流状态
-		if forceDel, ok := GetConfigEnv(session, ForceDelWorkflowStateKey, false); ok {
+		if forceDel, ok := GetConfigEnv(session, constants.ForceDelWorkflowStateKey, false); ok {
 			if forceDelBool, _ := forceDel.(bool); forceDelBool {
 				logger.Info(logComponent).
 					Str("action", "pre_workflow_execute").

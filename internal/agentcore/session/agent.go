@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
@@ -89,10 +90,12 @@ func NewSession(opts ...SessionOption) *Session {
 	// 统一用最终确定的 sessionID 创建一次 AgentSession，
 	// 同时注入各组件，对齐 Python AgentSession 的默认行为
 
-	// 1. config：外层创建 Config + set_envs，传给 inner
+	// 1. config：外层创建 SessionConfig + SetEnvs，传给 inner
 	//    Python: config = Config(); config.set_envs(envs); self._inner = AgentSession(config=config)
-	//    ⤵️ 5.12 回填：创建真实 SessionConfig 实例
-	config := any(s.envs) // 当前用 envs map 占位，5.12 回填为 NewSessionConfig() + SetEnvs()
+	cfg := config.NewSessionConfig(context.Background())
+	if len(s.envs) > 0 {
+		cfg.SetEnvs(s.envs)
+	}
 
 	// 2. checkpointer：未设置时从全局工厂获取
 	//    Python: checkpointer = CheckpointerFactory.get_checkpointer()
@@ -106,7 +109,7 @@ func NewSession(opts ...SessionOption) *Session {
 	//    未设置时传 nil，由 inner 自动创建默认实例（✅ 5.10 已回填）
 
 	s.inner = internal.NewAgentSession(s.sessionID,
-		internal.WithConfig(config),
+		internal.WithConfig(cfg),
 		internal.WithCard(s.card),
 		internal.WithCheckpointer(cp),
 		internal.WithStreamWriterManager(s.streamWriterManagerOverride),
@@ -182,40 +185,23 @@ func (s *Session) GetSessionID() string {
 }
 
 // GetEnv 获取环境变量值。
-// 委托到 inner.Config()，若 config 为 nil 或未实现 GetEnv 方法则返回 defaultValue。
-// ⤵️ 5.12 回填：Config() 返回真实类型后直接调用 config.GetEnv()
-// 对齐 Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
+// 对应 Python: Session.get_env(key, default) → self._inner.config().get_env(key, default)
 func (s *Session) GetEnv(key string, defaultValue ...any) any {
 	cfg := s.inner.Config()
 	if cfg == nil {
 		return nil
 	}
-	// 当前 config 为 map[string]any 占位，直接从 map 读取
-	if m, ok := cfg.(map[string]any); ok {
-		if v, exists := m[key]; exists {
-			return v
-		}
-	}
-	if len(defaultValue) > 0 {
-		return defaultValue[0]
-	}
-	return nil
+	return cfg.GetEnv(key, defaultValue...)
 }
 
 // GetEnvs 获取所有环境变量。
-// 委托到 inner.Config()。
-// ⤵️ 5.12 回填：Config() 返回真实类型后直接调用 config.GetEnvs()
-// 对齐 Python: Session.get_envs() → self._inner.config().get_envs()
+// 对应 Python: Session.get_envs() → self._inner.config().get_envs()
 func (s *Session) GetEnvs() map[string]any {
 	cfg := s.inner.Config()
 	if cfg == nil {
 		return nil
 	}
-	// 当前 config 为 map[string]any 占位，直接返回
-	if m, ok := cfg.(map[string]any); ok {
-		return m
-	}
-	return nil
+	return cfg.GetEnvs()
 }
 
 // GetAgentID 返回 Agent ID

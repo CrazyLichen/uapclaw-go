@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -43,7 +46,7 @@ func TestPersistenceCheckpointer_PreAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -62,7 +65,7 @@ func TestPersistenceCheckpointer_PostAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -90,7 +93,7 @@ func TestPersistenceCheckpointer_Agent完整流程(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PostAgentExecute(ctx, session1); err != nil {
 		t.Fatalf("PostAgentExecute 返回错误：%v", err)
@@ -102,7 +105,7 @@ func TestPersistenceCheckpointer_Agent完整流程(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreAgentExecute(ctx, session2, nil); err != nil {
 		t.Fatalf("PreAgentExecute 返回错误：%v", err)
@@ -125,7 +128,7 @@ func TestPersistenceCheckpointer_PreAgentTeamExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -143,7 +146,7 @@ func TestPersistenceCheckpointer_PostAgentTeamExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -166,7 +169,7 @@ func TestPersistenceCheckpointer_AgentTeam完整流程(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PostAgentTeamExecute(ctx, session1); err != nil {
 		t.Fatalf("PostAgentTeamExecute 返回错误：%v", err)
@@ -178,7 +181,7 @@ func TestPersistenceCheckpointer_AgentTeam完整流程(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreAgentTeamExecute(ctx, session2, nil); err != nil {
 		t.Fatalf("PreAgentTeamExecute 返回错误：%v", err)
@@ -202,7 +205,7 @@ func TestPersistenceCheckpointer_InterruptAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -219,7 +222,7 @@ func TestPersistenceCheckpointer_InterruptAgentExecute(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreAgentExecute(ctx, session2, nil); err != nil {
 		t.Fatalf("PreAgentExecute 返回错误：%v", err)
@@ -249,7 +252,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_新会话(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -268,7 +271,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_中断保存(t *testing.T) 
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -287,7 +290,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_正常完成清除(t *testi
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -313,7 +316,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_异常保存(t *testing.T) 
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -335,7 +338,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 	session1 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	// 中断保存
 	result := map[string]any{"__interrupt__": "need_input"}
@@ -348,7 +351,7 @@ func TestPersistenceCheckpointer_Workflow完整流程(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	inputs, _ := interaction.NewInteractiveInput()
 	if err := cp.PreWorkflowExecute(ctx, session2, inputs); err != nil {
@@ -368,7 +371,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	session1 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	result := map[string]any{"__interrupt__": "need_input"}
 	if err := cp.PostWorkflowExecute(ctx, session1, result, nil); err != nil {
@@ -380,7 +383,11 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_强制删除(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
-		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
+		config: func() interfaces.SessionConfig {
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
+			return cfg
+		}(),
 	}
 	if err := cp.PreWorkflowExecute(ctx, session2, nil); err != nil {
 		t.Fatalf("PreWorkflowExecute 强制删除失败：%v", err)
@@ -399,7 +406,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_状态存在非交互输入(
 	session1 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	result := map[string]any{"__interrupt__": "need_input"}
 	if err := cp.PostWorkflowExecute(ctx, session1, result, nil); err != nil {
@@ -411,7 +418,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_状态存在非交互输入(
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreWorkflowExecute(ctx, session2, nil); err == nil {
 		t.Error("状态存在且非交互输入时应返回错误")
@@ -447,7 +454,7 @@ func TestPersistenceCheckpointer_SessionExists_有数据(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := st.Update(map[string]any{"key": "value"}); err != nil {
 		t.Fatalf("st.Update 返回错误：%v", err)
@@ -494,7 +501,7 @@ func TestPersistenceCheckpointer_Release(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := st.Update(map[string]any{"key": "value"}); err != nil {
 		t.Fatalf("st.Update 返回错误：%v", err)
@@ -556,7 +563,7 @@ func TestPersistenceCheckpointer_PreAgentExecute_交互输入(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -565,7 +572,7 @@ func TestPersistenceCheckpointer_PreAgentExecute_交互输入(t *testing.T) {
 	}
 
 	// 验证交互输入已设置到状态
-	inputs := st.Get(state.StringKey(InteractiveInputKey))
+	inputs := st.Get(state.StringKey(constants.InteractiveInputKey))
 	if inputs == nil {
 		t.Error("交互输入未设置到状态")
 	}
@@ -580,7 +587,7 @@ func TestPersistenceCheckpointer_PreAgentTeamExecute_交互输入(t *testing.T) 
 		testSession: testSession{sessionID: "sess1"},
 		teamID:      "team1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -589,7 +596,7 @@ func TestPersistenceCheckpointer_PreAgentTeamExecute_交互输入(t *testing.T) 
 	}
 
 	// 验证交互输入已设置到全局状态
-	inputs := st.GetGlobal(state.StringKey(InteractiveInputKey))
+	inputs := st.GetGlobal(state.StringKey(constants.InteractiveInputKey))
 	if inputs == nil {
 		t.Error("交互输入未设置到全局状态")
 	}
@@ -612,7 +619,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PostAgentExecute(ctx, session1); err != nil {
 		t.Fatalf("PostAgentExecute agent1 返回错误：%v", err)
@@ -627,7 +634,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent2",
 		st:          st2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PostAgentExecute(ctx, session2); err != nil {
 		t.Fatalf("PostAgentExecute agent2 返回错误：%v", err)
@@ -639,7 +646,7 @@ func TestPersistenceCheckpointer_多Agent隔离(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st1r,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := cp.PreAgentExecute(ctx, session1r, nil); err != nil {
 		t.Fatalf("PreAgentExecute agent1 返回错误：%v", err)
@@ -998,7 +1005,7 @@ func TestPersistenceWorkflowStorage_SaveAndRecover(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	// 保存
@@ -1011,7 +1018,7 @@ func TestPersistenceWorkflowStorage_SaveAndRecover(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs2,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := ws.Recover(ctx, session2, nil); err != nil {
 		t.Fatalf("Recover 返回错误：%v", err)
@@ -1029,7 +1036,7 @@ func TestPersistenceWorkflowStorage_Clear(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	// 保存后清除
@@ -1051,7 +1058,7 @@ func TestPersistenceWorkflowStorage_Exists(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	// 未保存时不存在
@@ -1116,7 +1123,7 @@ func TestBasePersistenceStorage_Clear(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := agentStorage.Save(ctx, session); err != nil {
 		t.Fatalf("Save 返回错误：%v", err)
@@ -1138,7 +1145,7 @@ func TestBasePersistenceStorage_Exists(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	// 未保存时不存在
@@ -1181,7 +1188,7 @@ func TestBasePersistenceStorage_Save_序列化失败(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	// 序列化失败，Save 应返回 nil（不报错，仅日志警告）
@@ -1202,7 +1209,7 @@ func TestBasePersistenceStorage_Recover_空数据(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          st,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 	if err := agentStorage.Recover(ctx, session, nil); err != nil {
 		t.Fatalf("Recover 返回错误：%v", err)
@@ -1284,7 +1291,7 @@ func TestPersistenceCheckpointer_PreAgentExecute_恢复失败(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -1302,7 +1309,7 @@ func TestPersistenceCheckpointer_PostAgentExecute_保存失败(t *testing.T) {
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          state.NewAgentStateCollection(),
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -1320,7 +1327,7 @@ func TestPersistenceCheckpointer_PreWorkflowExecute_恢复失败(t *testing.T) {
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -1340,7 +1347,7 @@ func TestPersistenceCheckpointer_PostWorkflowExecute_保存失败(t *testing.T) 
 	session := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess1"},
 		st:          wcs,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 	}
 
 	ctx := context.Background()
@@ -1412,7 +1419,7 @@ func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 	session1 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess-empty-wf"},
 		st:          wcs1,
-		config:      &testConfig{},
+		config:      config.NewSessionConfig(context.Background()),
 		workflowID:  "wf-1",
 	}
 	result := map[string]any{"__interrupt__": "need_input"}
@@ -1427,7 +1434,11 @@ func TestPreWorkflowExecute_workflowID为空_强制删除(t *testing.T) {
 	session2 := &testWorkflowSession{
 		testSession: testSession{sessionID: "sess-empty-wf"},
 		st:          wcs2,
-		config:      &testConfig{envMap: map[string]any{ForceDelWorkflowStateKey: true}},
+		config: func() interfaces.SessionConfig {
+			cfg := config.NewSessionConfig(context.Background())
+			cfg.SetEnvs(map[string]any{constants.ForceDelWorkflowStateKey: true})
+			return cfg
+		}(),
 		workflowID:  "", // 空 workflowID
 	}
 	err := cp.PreWorkflowExecute(ctx, session2, nil)

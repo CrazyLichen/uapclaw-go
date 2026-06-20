@@ -37,7 +37,7 @@ func (f *fakeWorkflowSession) WorkflowID() string        { return f.workflowID }
 func (f *fakeWorkflowSession) NodeID() string            { return f.nodeID }
 func (f *fakeWorkflowSession) NodeType() string          { return f.nodeType }
 func (f *fakeWorkflowSession) State() state.SessionState { return f.sessionState }
-func (f *fakeWorkflowSession) Config() any               { return f.config }
+func (f *fakeWorkflowSession) Config() any { return f.config }
 
 func (f *fakeSessionState) GetGlobal(key state.StateKey) any {
 	if f.data == nil {

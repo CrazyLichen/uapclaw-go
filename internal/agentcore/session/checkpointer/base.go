@@ -3,6 +3,7 @@ package checkpointer
 import (
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -28,9 +29,6 @@ type (
 	// ParentProvider 提供 Parent 的接口（通过类型断言获取）。
 	// 对齐 Python: isinstance(session.parent(), AgentSession) 检测。
 	ParentProvider = interfaces.ParentProvider
-	// CheckpointerConfigProvider 提供 GetEnv 方法的接口（通过类型断言获取）。
-	// ⤵️ 5.12 回填：Config() 返回 SessionConfig 后此接口可移除。
-	CheckpointerConfigProvider = interfaces.CheckpointerConfigProvider
 	// AgentIDProvider 提供 Agent ID 的接口（通过类型断言获取）。
 	// 对齐 Python: hasattr(session, "agent_id") 检测。
 	AgentIDProvider = interfaces.AgentIDProvider
@@ -96,14 +94,14 @@ func GetTeamID(session interfaces.BaseSession) string {
 	return "Na"
 }
 
-// GetConfigEnv 从 session.Config() 断言为 CheckpointerConfigProvider 后调用 GetEnv。
+// GetConfigEnv 从 session.Config() 获取环境变量值。
 // 返回环境变量值和是否可用。
-// ⤵️ 5.12 回填：Config() 返回 SessionConfig 后可直接调用 Config().GetEnv()。
 func GetConfigEnv(session interfaces.BaseSession, key string, defaultValue ...any) (any, bool) {
-	if cfg, ok := session.Config().(CheckpointerConfigProvider); ok {
-		return cfg.GetEnv(key, defaultValue...), true
+	cfg := session.Config()
+	if cfg == nil {
+		return nil, false
 	}
-	return nil, false
+	return cfg.GetEnv(key, defaultValue...), true
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -124,7 +122,7 @@ func processInteractiveInputs(session interfaces.BaseSession, inputs *interactio
 	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
 	if inputs.RawInputs != nil {
 		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
-			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
+			wfState.UpdateAndCommitWorkflowState(map[string]any{constants.InteractiveInputKey: inputs.RawInputs})
 		}
 		return
 	}
@@ -146,10 +144,10 @@ func processInteractiveInputs(session interfaces.BaseSession, inputs *interactio
 
 	for nodeID, value := range inputs.UserInputs {
 		nodeState := wfState.CreateNodeState(nodeID, "")
-		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
+		if list, ok := nodeState.Get(state.StringKey(constants.InteractiveInputKey)).([]any); ok {
+			_ = nodeState.Update(map[string]any{constants.InteractiveInputKey: append(list, value)})
 		} else {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
+			_ = nodeState.Update(map[string]any{constants.InteractiveInputKey: []any{value}})
 		}
 	}
 	wfState.Commit()

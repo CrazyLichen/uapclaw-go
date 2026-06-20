@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -16,8 +18,9 @@ import (
 // ✅ 5.11 已回填：Tracer 类型改为 *tracer.Tracer
 func TestNewWorkflowSession_有parent(t *testing.T) {
 	customTracer := tracer.NewTracer()
+	testCfg := config.NewSessionConfig(context.Background())
 	parent := NewAgentSession("parent-123",
-		WithConfig("test_config"),
+		WithConfig(testCfg),
 		WithTracer(customTracer),
 	)
 
@@ -26,8 +29,8 @@ func TestNewWorkflowSession_有parent(t *testing.T) {
 	if ws.SessionID() != "parent-123" {
 		t.Errorf("期望继承 parent sessionID='parent-123'，实际=%s", ws.SessionID())
 	}
-	if ws.Config() != "test_config" {
-		t.Errorf("期望继承 parent config='test_config'，实际=%v", ws.Config())
+	if ws.Config() != testCfg {
+		t.Errorf("期望继承 parent config=testCfg，实际=%v", ws.Config())
 	}
 	if ws.Tracer() != customTracer {
 		t.Errorf("期望继承 parent tracer=customTracer，实际=%v", ws.Tracer())
@@ -41,8 +44,8 @@ func TestNewWorkflowSession_无parent(t *testing.T) {
 	if ws.SessionID() == "" {
 		t.Error("期望自动生成 sessionID，实际为空")
 	}
-	if ws.Config() != nil {
-		t.Errorf("期望无 parent 时 config 为 nil，实际=%v", ws.Config())
+	if ws.Config() == nil {
+		t.Errorf("期望无 parent 时 config 自动创建默认实例，实际为 nil")
 	}
 }
 
@@ -53,8 +56,8 @@ func TestWorkflowSession_BaseSession接口(t *testing.T) {
 	// 验证实现了 interfaces.BaseSession 接口
 	var _ interfaces.BaseSession = ws
 
-	if ws.Config() != nil {
-		t.Error("默认 config 应为 nil")
+	if ws.Config() == nil {
+		t.Error("默认 config 应自动创建（对齐 Python Config()）")
 	}
 	if ws.State() == nil {
 		t.Error("默认 state 不应为 nil")

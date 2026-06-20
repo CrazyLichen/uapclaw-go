@@ -50,7 +50,7 @@ func (p *ProxySession) SetSession(stub BaseSession) {
 }
 
 // Config 获取底层会话的配置
-func (p *ProxySession) Config() any {
+func (p *ProxySession) Config() interfaces.SessionConfig {
 	return p.stub.Config()
 }
 

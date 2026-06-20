@@ -11,7 +11,23 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 )
 
-// ──────────────────────────── 构造函数测试 ────────────────────────────
+// ──────────────────────────── 测试辅助类型 ────────────────────────────
+
+// testTracerSessionAdapter 适配 *internal.NodeSession 到 tracer.BaseWorkflowSession。
+// internal.NodeSession.Config() 返回 interfaces.SessionConfig（非 any），
+// 而 tracer.BaseWorkflowSession.Config() 返回 any，需要适配器做签名转换。
+type testTracerSessionAdapter struct {
+	inner *internal.NodeSession
+}
+
+func (a *testTracerSessionAdapter) Tracer() *tracer.Tracer    { return a.inner.Tracer() }
+func (a *testTracerSessionAdapter) ExecutableID() string      { return a.inner.ExecutableID() }
+func (a *testTracerSessionAdapter) ParentID() string          { return a.inner.ParentID() }
+func (a *testTracerSessionAdapter) WorkflowID() string        { return a.inner.WorkflowID() }
+func (a *testTracerSessionAdapter) NodeID() string            { return a.inner.NodeID() }
+func (a *testTracerSessionAdapter) NodeType() string          { return a.inner.NodeType() }
+func (a *testTracerSessionAdapter) State() state.SessionState { return a.inner.State() }
+func (a *testTracerSessionAdapter) Config() any               { return a.inner.Config() }
 
 // TestNewNodeSessionFacade 测试构造函数
 func TestNewNodeSessionFacade(t *testing.T) {
@@ -289,7 +305,7 @@ func TestNodeSessionFacade_Trace_走真实逻辑(t *testing.T) {
 
 	// 先触发 TraceComponentBegin 创建 span，否则 Trace 写入的 span 不存在
 	tUtils := tracer.TracerWorkflowUtils{}
-	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+	tUtils.TraceComponentBegin(context.Background(), &testTracerSessionAdapter{inner: ns}, nil)
 
 	// 调用 Trace
 	traceData := map[string]any{"step": "processing", "token_count": 42}
@@ -335,7 +351,7 @@ func TestNodeSessionFacade_TraceError_走真实逻辑(t *testing.T) {
 
 	// 先触发 TraceComponentBegin 创建 span
 	tUtils := tracer.TracerWorkflowUtils{}
-	tUtils.TraceComponentBegin(context.Background(), ns, nil)
+	tUtils.TraceComponentBegin(context.Background(), &testTracerSessionAdapter{inner: ns}, nil)
 
 	// 调用 TraceError
 	testErr := fmt.Errorf("something went wrong")

@@ -1,10 +1,12 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -26,8 +28,7 @@ type WorkflowSession struct {
 	// parent 父会话（通常是 AgentSession）
 	parent interfaces.BaseSession
 	// config 会话配置
-	// ⤵️ 5.12 回填：any → SessionConfig
-	config any
+	config interfaces.SessionConfig
 	// tracer 追踪器
 	// ✅ 5.11 已回填：any → *tracer.Tracer
 	tracer *tracer.Tracer
@@ -128,10 +129,9 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 			s.sessionID = uuid.New().String()
 		}
 		// Python: self._config = Config()
-		// ⤵️ 5.12 回填：无 parent 时创建默认 SessionConfig
-		// if s.config == nil {
-		// 	s.config = NewSessionConfig()
-		// }
+		if s.config == nil {
+			s.config = config.NewSessionConfig(context.Background())
+		}
 	} else {
 		if s.sessionID == "" {
 			s.sessionID = s.parent.SessionID()
@@ -266,7 +266,7 @@ func NewSubWorkflowSession(nodeSession *NodeSession, workflowID string, actorMan
 }
 
 // Config 获取会话配置
-func (s *WorkflowSession) Config() any {
+func (s *WorkflowSession) Config() interfaces.SessionConfig {
 	return s.config
 }
 
@@ -405,13 +405,22 @@ func (n *NodeSession) Parent() interfaces.BaseSession {
 }
 
 // NodeConfig 获取节点级配置。
-// ⤵️ 5.12 回填：Config 返回真实类型后实现 get_workflow_config
+// 对应 Python: NodeSession.node_config() → config.get_workflow_config(workflow_id).spec.comp_configs.get(node_id)
 func (n *NodeSession) NodeConfig() any {
+	cfg := n.delegate.Config()
+	if cfg == nil {
+		return nil
+	}
+	wfc := cfg.GetWorkflowConfig(n.workflowID)
+	if wfc == nil {
+		return nil
+	}
+	// ⤵️ 8.15 回填：WorkflowConfig 实现后，从 spec.comp_configs 获取 nodeID 对应的配置
 	return nil
 }
 
 // Config 委托给父 session
-func (n *NodeSession) Config() any {
+func (n *NodeSession) Config() interfaces.SessionConfig {
 	return n.delegate.Config()
 }
 

@@ -10,6 +10,36 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SessionConfig 会话配置接口。
+// 对应 Python: openjiuwen/core/session/config/base.py (Config)
+type SessionConfig interface {
+	// GetEnv 获取环境变量值
+	GetEnv(key string, defaultValue ...any) any
+	// GetEnvs 获取所有环境变量（深拷贝）
+	GetEnvs() map[string]any
+	// SetEnvs 合并环境变量
+	SetEnvs(envs map[string]any)
+	// GetWorkflowConfig 按 workflowID 获取工作流配置
+	GetWorkflowConfig(workflowID string) WorkflowConfigProvider
+	// GetAgentConfig 获取 Agent 配置
+	GetAgentConfig() AgentConfigProvider
+	// SetAgentConfig 设置 Agent 配置
+	SetAgentConfig(agentConfig AgentConfigProvider)
+	// AddWorkflowConfig 添加工作流配置
+	AddWorkflowConfig(workflowID string, workflowConfig WorkflowConfigProvider)
+}
+
+// WorkflowConfigProvider 工作流配置提供者接口。
+// ⤵️ 8.15 回填：WorkflowConfig 实现后替换为具体类型
+type WorkflowConfigProvider interface{}
+
+// AgentConfigProvider Agent 配置提供者接口。
+// ⤵️ 6.3 回填：AgentConfig 实现后替换为具体类型
+type AgentConfigProvider interface {
+	// ID 获取 Agent ID
+	ID() string
+}
+
 // BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
 // 对应 Python: openjiuwen/core/session/session.py BaseSession(ABC)
 //
@@ -30,8 +60,7 @@ import (
 //	ExecutableID → ExecutableIDProvider   (Python: hasattr(session, "executable_id"))
 type BaseSession interface {
 	// Config 获取会话配置
-	// ⤵️ 5.12 回填：返回类型从 any 改为 SessionConfig
-	Config() any
+	Config() SessionConfig
 	// State 获取会话状态
 	State() state.SessionState
 	// Tracer 获取会话追踪器
@@ -125,14 +154,6 @@ type WorkflowIDProvider interface {
 // 对应 Python: isinstance(session.parent(), AgentSession) 检测。
 type ParentProvider interface {
 	Parent() BaseSession
-}
-
-// CheckpointerConfigProvider 提供 GetEnv 方法的接口（通过类型断言获取）。
-// 用于 session.Config() 返回 any 后，需要调用 GetEnv 的场景。
-// ⤵️ 5.12 回填：Config() 返回 SessionConfig 后此接口可移除。
-type CheckpointerConfigProvider interface {
-	// GetEnv 获取环境变量值
-	GetEnv(key string, defaultValue ...any) any
 }
 
 // ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。

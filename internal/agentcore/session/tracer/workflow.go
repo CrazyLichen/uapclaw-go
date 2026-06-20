@@ -10,6 +10,10 @@ import (
 
 // BaseWorkflowSession 工作流会话最小接口，避免依赖具体实现。
 // 对应 Python TracerWorkflowUtils 中 session 参数的隐式接口（tracer/executable_id/parent_id/workflow_id/node_id/node_type/state/config）。
+//
+// Config() 返回 any 而非 interfaces.SessionConfig，因为 tracer 与 interfaces 存在循环依赖
+//（interfaces 导入 tracer 用于 BaseSession.Tracer() 返回类型）。
+// getWorkflowMetadata 内部通过类型断言将 any 转为 SessionConfig 使用。
 type BaseWorkflowSession interface {
 	// Tracer 返回追踪器
 	Tracer() *Tracer
@@ -222,14 +226,34 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 // ⤵️ 5.12 回填：workflow_version/workflow_name 当前硬编码为空字符串，
 // Python 从 session.config().get_workflow_config(executable_id).card 提取 version 和 name，
 // Go 中 Config() 返回 any，无法调用 get_workflow_config。
-// 5.12 SessionConfig 回填后，从 config 获取 WorkflowCard 提取 version 和 name。
 func getWorkflowMetadata(session BaseWorkflowSession) map[string]any {
 	workflowID := session.WorkflowID()
-	return map[string]any{
+	metadata := map[string]any{
 		"workflow_id":      workflowID,
 		"workflow_version": "",
 		"workflow_name":    "",
 	}
+
+	cfgAny := session.Config()
+	if cfgAny == nil {
+		return metadata
+	}
+	// 类型断言为 SessionConfig（interfaces.SessionConfig），
+	// 由于 tracer 与 interfaces 存在循环依赖，不能直接导入 interfaces 包，
+	// 此处通过定义本地 sessionConfig 最小接口实现类型安全断言。
+	type sessionConfig interface {
+		GetWorkflowConfig(workflowID string) any
+	}
+	cfg, ok := cfgAny.(sessionConfig)
+	if !ok {
+		return metadata
+	}
+	wfc := cfg.GetWorkflowConfig(workflowID)
+	if wfc == nil {
+		return metadata
+	}
+	// ⤵️ 8.15 回填：WorkflowConfig 实现后，从 wfc 提取 card.version 和 card.name
+	return metadata
 }
 
 // getComponentMetadata 获取组件元数据，对应 Python TracerWorkflowUtils._get_component_metadata。

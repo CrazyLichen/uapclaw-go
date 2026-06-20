@@ -51,8 +51,9 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 func WithWorkflowSessionParent(parent BaseSession) WorkflowSessionOption {
 	return func(ws *WorkflowSession) {
 		var envs map[string]any
-		// ⤵️ 5.12 回填：Config 返回真实类型后从 config 获取 envs
-		_ = parent
+		if parent != nil && parent.Config() != nil {
+			envs = parent.Config().GetEnvs()
+		}
 		if envs == nil {
 			envs = make(map[string]any)
 		}
