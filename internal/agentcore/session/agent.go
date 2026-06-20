@@ -36,10 +36,10 @@ type Session struct {
 	envs map[string]any
 	// checkpointerOverride 检查点器覆盖（通过 WithCheckpointer option 设置）
 	checkpointerOverride checkpointer.Checkpointer
-	// streamWriterManagerOverride 流写入管理器覆盖（通过 WithStreamWriterManager 设置）
+	// streamWriterManager 流写入管理器（通过 WithStreamWriterManager 设置）
 	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
-	streamWriterManagerOverride *stream.StreamWriterManager
+	streamWriterManager *stream.StreamWriterManager
 	// preRunDone PreRun 是否已执行
 	preRunDone bool
 	// postRunDone PostRun 是否已执行
@@ -112,7 +112,7 @@ func NewSession(opts ...SessionOption) *Session {
 		internal.WithConfig(cfg),
 		internal.WithCard(s.card),
 		internal.WithCheckpointer(cp),
-		internal.WithStreamWriterManager(s.streamWriterManagerOverride),
+		internal.WithStreamWriterManager(s.streamWriterManager),
 	)
 
 	logger.Info(logger.ComponentAgentCore).
@@ -161,7 +161,7 @@ func WithCheckpointer(cp checkpointer.Checkpointer) SessionOption {
 // ✅ 5.10 已回填：参数类型从 any 改为 *stream.StreamWriterManager
 func WithStreamWriterManager(mgr *stream.StreamWriterManager) SessionOption {
 	return func(s *Session) {
-		s.streamWriterManagerOverride = mgr
+		s.streamWriterManager = mgr
 	}
 }
 

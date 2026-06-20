@@ -8,5 +8,5 @@
 //
 //	interfaces/
 //	├── doc.go           # 包文档
-//	└── workflow.go      # Workflow/Agent 接口及选项类型
+//	└── interface.go     # Workflow/Agent 接口及选项类型
 package interfaces

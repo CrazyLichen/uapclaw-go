@@ -17,7 +17,7 @@
 //	├── ability_manager.go     # AbilityManager 核心结构 + 注册/查询/执行
 //	└── interfaces/
 //	    ├── doc.go             # 子包文档
-//	    └── workflow.go        # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	    └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/ability_manager.py
 package single_agent

@@ -1,6 +1,7 @@
 package context_engine
 
 import (
+	"encoding/json"
 	"testing"
 
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -11,7 +12,7 @@ import (
 
 // TestContextWindow_GetMessages_空窗口 测试空窗口的 GetMessages
 func TestContextWindow_GetMessages_空窗口(t *testing.T) {
-	w := &ContextWindow{}
+	w := NewContextWindow()
 	msgs := w.GetMessages()
 	if len(msgs) != 0 {
 		t.Errorf("空窗口应返回 0 条消息，实际 %d", len(msgs))
@@ -59,10 +60,10 @@ func TestContextWindow_GetMessages_仅系统消息(t *testing.T) {
 
 // TestContextWindow_GetTools_空工具 测试空工具列表
 func TestContextWindow_GetTools_空工具(t *testing.T) {
-	w := &ContextWindow{}
+	w := NewContextWindow()
 	tools := w.GetTools()
-	if tools != nil {
-		t.Errorf("空窗口应返回 nil 工具列表，实际 %v", tools)
+	if len(tools) != 0 {
+		t.Errorf("空窗口应返回 0 个工具，实际 %d", len(tools))
 	}
 }
 
@@ -101,18 +102,138 @@ func TestContextStats_零值(t *testing.T) {
 	}
 }
 
-// TestContextWindow_Statistic为Nil 测试 Statistic 为 nil 时 GetMessages 不受影响
-func TestContextWindow_Statistic为Nil(t *testing.T) {
+// TestContextStats_字段完整性 测试 ContextStats 所有 13 个字段零值
+func TestContextStats_字段完整性(t *testing.T) {
+	var stats ContextStats
+	// 消息计数字段
+	if stats.TotalMessages != 0 {
+		t.Errorf("TotalMessages 应为 0，实际 %d", stats.TotalMessages)
+	}
+	if stats.SystemMessages != 0 {
+		t.Errorf("SystemMessages 应为 0，实际 %d", stats.SystemMessages)
+	}
+	if stats.UserMessages != 0 {
+		t.Errorf("UserMessages 应为 0，实际 %d", stats.UserMessages)
+	}
+	if stats.AssistantMessages != 0 {
+		t.Errorf("AssistantMessages 应为 0，实际 %d", stats.AssistantMessages)
+	}
+	if stats.ToolMessages != 0 {
+		t.Errorf("ToolMessages 应为 0，实际 %d", stats.ToolMessages)
+	}
+	if stats.Tools != 0 {
+		t.Errorf("Tools 应为 0，实际 %d", stats.Tools)
+	}
+	// Token 计数字段
+	if stats.TotalTokens != 0 {
+		t.Errorf("TotalTokens 应为 0，实际 %d", stats.TotalTokens)
+	}
+	if stats.SystemMessageTokens != 0 {
+		t.Errorf("SystemMessageTokens 应为 0，实际 %d", stats.SystemMessageTokens)
+	}
+	if stats.UserMessageTokens != 0 {
+		t.Errorf("UserMessageTokens 应为 0，实际 %d", stats.UserMessageTokens)
+	}
+	if stats.AssistantMessageTokens != 0 {
+		t.Errorf("AssistantMessageTokens 应为 0，实际 %d", stats.AssistantMessageTokens)
+	}
+	if stats.ToolMessageTokens != 0 {
+		t.Errorf("ToolMessageTokens 应为 0，实际 %d", stats.ToolMessageTokens)
+	}
+	if stats.ToolTokens != 0 {
+		t.Errorf("ToolTokens 应为 0，实际 %d", stats.ToolTokens)
+	}
+	// 对话轮次
+	if stats.TotalDialogues != 0 {
+		t.Errorf("TotalDialogues 应为 0，实际 %d", stats.TotalDialogues)
+	}
+}
+
+// TestContextWindow_Statistic零值 测试 Statistic 为值类型零值时可直接访问
+func TestContextWindow_Statistic零值(t *testing.T) {
 	w := &ContextWindow{
 		SystemMessages:  []*llm_schema.BaseMessage{llm_schema.NewBaseMessage(llm_schema.RoleTypeSystem, "hi")},
 		ContextMessages: []*llm_schema.BaseMessage{llm_schema.NewBaseMessage(llm_schema.RoleTypeUser, "hello")},
 	}
 
-	if w.Statistic != nil {
-		t.Error("Statistic 应为 nil")
+	// Statistic 是值类型，零值始终可访问，无需 nil 检查
+	if w.Statistic.TotalMessages != 0 {
+		t.Errorf("Statistic.TotalMessages 零值应为 0，实际 %d", w.Statistic.TotalMessages)
+	}
+	if w.Statistic.TotalTokens != 0 {
+		t.Errorf("Statistic.TotalTokens 零值应为 0，实际 %d", w.Statistic.TotalTokens)
 	}
 	msgs := w.GetMessages()
 	if len(msgs) != 2 {
-		t.Errorf("即使 Statistic 为 nil，GetMessages 也应返回 2 条消息，实际 %d", len(msgs))
+		t.Errorf("GetMessages 应返回 2 条消息，实际 %d", len(msgs))
+	}
+}
+
+// TestNewContextWindow 测试 NewContextWindow 构造函数
+func TestNewContextWindow(t *testing.T) {
+	w := NewContextWindow()
+
+	// 消息和工具切片应初始化为空切片（非 nil），避免 JSON 序列化为 null
+	if w.SystemMessages == nil {
+		t.Error("SystemMessages 应为空切片，不应为 nil")
+	}
+	if len(w.SystemMessages) != 0 {
+		t.Errorf("SystemMessages 长度应为 0，实际 %d", len(w.SystemMessages))
+	}
+	if w.ContextMessages == nil {
+		t.Error("ContextMessages 应为空切片，不应为 nil")
+	}
+	if len(w.ContextMessages) != 0 {
+		t.Errorf("ContextMessages 长度应为 0，实际 %d", len(w.ContextMessages))
+	}
+	if w.Tools == nil {
+		t.Error("Tools 应为空切片，不应为 nil")
+	}
+	if len(w.Tools) != 0 {
+		t.Errorf("Tools 长度应为 0，实际 %d", len(w.Tools))
+	}
+
+	// Statistic 应为零值 ContextStats
+	if w.Statistic.TotalMessages != 0 {
+		t.Errorf("Statistic.TotalMessages 应为 0，实际 %d", w.Statistic.TotalMessages)
+	}
+	if w.Statistic.TotalTokens != 0 {
+		t.Errorf("Statistic.TotalTokens 应为 0，实际 %d", w.Statistic.TotalTokens)
+	}
+}
+
+// TestNewContextWindow_JSON序列化 测试 NewContextWindow 的 JSON 序列化
+func TestNewContextWindow_JSON序列化(t *testing.T) {
+	w := NewContextWindow()
+
+	data, err := json.Marshal(w)
+	if err != nil {
+		t.Fatalf("JSON 序列化失败: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("JSON 反序列化失败: %v", err)
+	}
+
+	// statistic 应为对象而非 null（与 Python ContextStats() 默认实例对齐）
+	stat, ok := parsed["statistic"]
+	if !ok {
+		t.Error("JSON 中应包含 statistic 字段")
+	}
+	statMap, ok := stat.(map[string]any)
+	if !ok {
+		t.Errorf("statistic 应为对象，实际类型 %T", stat)
+	}
+	if statMap["total_messages"] != float64(0) {
+		t.Errorf("statistic.total_messages 应为 0，实际 %v", statMap["total_messages"])
+	}
+
+	// system_messages 应为空数组而非 null
+	if sysMsgs, ok := parsed["system_messages"]; ok {
+		arr, ok := sysMsgs.([]any)
+		if !ok || len(arr) != 0 {
+			t.Errorf("system_messages 应为空数组，实际 %v", sysMsgs)
+		}
 	}
 }
