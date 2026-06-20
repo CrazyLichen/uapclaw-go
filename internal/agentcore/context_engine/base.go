@@ -6,7 +6,6 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -54,6 +53,22 @@ type ModelContext interface {
 	ReloaderTool() tool.Tool
 }
 
+// ContextSession 上下文引擎消费的会话接口。
+//
+// 定义 ContextEngine 所需的最小会话能力：获取会话 ID、读写状态。
+// *session.Session 隐式满足此接口，无需适配器。
+//
+// 对应 Python: openjiuwen/core/session/agent.py (Session) 中
+// ContextEngine 实际使用的 get_session_id/get_state/update_state 方法
+type ContextSession interface {
+	// GetSessionID 获取会话唯一标识
+	GetSessionID() string
+	// GetState 获取全局状态值
+	GetState(key string) (any, error)
+	// UpdateState 更新全局状态
+	UpdateState(data map[string]any)
+}
+
 // ContextEngine 上下文引擎门面接口。
 //
 // 管理上下文池、处理器注册、会话状态持久化。
@@ -62,15 +77,15 @@ type ModelContext interface {
 // 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
 	// CreateContext 创建上下文
-	CreateContext(ctx context.Context, contextID string, sess *session.Session) (ModelContext, error)
+	CreateContext(ctx context.Context, contextID string, sess ContextSession) (ModelContext, error)
 	// GetContext 获取上下文
 	GetContext(contextID string, sessionID string) ModelContext
 	// CompressContext 压缩上下文
-	CompressContext(ctx context.Context, contextID string, sess *session.Session) (string, error)
+	CompressContext(ctx context.Context, contextID string, sess ContextSession) (string, error)
 	// ClearContext 清空上下文
 	ClearContext(ctx context.Context, contextID string, sessionID string) error
 	// SaveContexts 保存上下文状态
-	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) error
+	SaveContexts(ctx context.Context, sess ContextSession, contextIDs []string) error
 	// RegisterProcessor 注册处理器
 	RegisterProcessor(processorType string, processor any)
 }

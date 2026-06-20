@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
@@ -36,8 +37,8 @@ type AbilityManager struct {
 	agents map[string]*schema.AgentCard
 	// mcpServers MCP 服务器注册表
 	mcpServers map[string]*mcp.McpServerConfig
-	// contextEngine 上下文引擎 ⤵️ 预留，领域五回填
-	contextEngine ContextEngine
+	// contextEngine 上下文引擎
+	contextEngine context_engine.ContextEngine
 	// resourceMgr 资源管理器
 	resourceMgr ResourceManager
 	// rail 工具调用生命周期钩子 ⤵️ 预留，6.4-6.10 回填
@@ -69,7 +70,7 @@ func NewAbilityManager(resourceMgr ResourceManager) *AbilityManager {
 }
 
 // SetContextEngine 设置上下文引擎。
-func (am *AbilityManager) SetContextEngine(ce ContextEngine) {
+func (am *AbilityManager) SetContextEngine(ce context_engine.ContextEngine) {
 	am.contextEngine = ce
 }
 
@@ -354,7 +355,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 func (am *AbilityManager) Execute(
 	ctx context.Context,
 	toolCalls []*llmschema.ToolCall,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) []ExecuteResult {
 	if len(toolCalls) == 0 {
@@ -369,7 +370,7 @@ func (am *AbilityManager) Execute(
 		wg.Add(1)
 		go func(idx int, toolCall *llmschema.ToolCall) {
 			defer wg.Done()
-			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCall, session, tag)
+			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCall, sess, tag)
 		}(i, tc)
 	}
 	am.mu.RUnlock()
@@ -388,13 +389,13 @@ func (am *AbilityManager) Execute(
 func (am *AbilityManager) railedExecuteSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	// ⤵️ 预留：BeforeToolCall Rail 钩子
 	// if am.rail != nil { ... }
 
-	result := am.executeSingleToolCall(ctx, toolCall, session, tag)
+	result := am.executeSingleToolCall(ctx, toolCall, sess, tag)
 
 	// ⤵️ 预留：AfterToolCall Rail 钩子
 	// if am.rail != nil { ... }
@@ -407,7 +408,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	toolName := toolCall.Name
@@ -430,13 +431,13 @@ func (am *AbilityManager) executeSingleToolCall(
 
 	// 路由分发
 	if _, ok := am.tools[toolName]; ok {
-		return am.executeTool(ctx, toolCall, toolName, toolArgs, session, tag)
+		return am.executeTool(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.workflows[toolName]; ok {
-		return am.executeWorkflow(ctx, toolCall, toolName, toolArgs, session, tag)
+		return am.executeWorkflow(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.agents[toolName]; ok {
-		return am.executeAgent(ctx, toolCall, toolName, toolArgs, session, tag)
+		return am.executeAgent(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.mcpServers[toolName]; ok {
 		execErr := NewAbilityExecutionError(
@@ -449,7 +450,7 @@ func (am *AbilityManager) executeSingleToolCall(
 	}
 
 	// 兜底：尝试从 ResourceManager 按 name 获取 Tool
-	return am.executeFallbackTool(ctx, toolCall, toolName, toolArgs, session, tag)
+	return am.executeFallbackTool(ctx, toolCall, toolName, toolArgs, sess, tag)
 }
 
 // executeTool 执行 Tool 类型能力。
@@ -458,7 +459,7 @@ func (am *AbilityManager) executeTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	toolCard := am.tools[toolName]
@@ -515,7 +516,7 @@ func (am *AbilityManager) executeWorkflow(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	wfCard := am.workflows[toolName]
@@ -563,7 +564,7 @@ func (am *AbilityManager) executeAgent(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	agentCard := am.agents[toolName]
@@ -611,7 +612,7 @@ func (am *AbilityManager) executeFallbackTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	session Session,
+	sess context_engine.ContextSession,
 	tag string,
 ) ExecuteResult {
 	var opts []ResourceOption

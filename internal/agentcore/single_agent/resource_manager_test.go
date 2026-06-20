@@ -3,6 +3,7 @@ package single_agent
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -61,17 +62,19 @@ func TestNewResourceOptions_资源选项(t *testing.T) {
 
 // TestWithResourceSession 验证 WithResourceSession 设置 Session。
 func TestWithResourceSession(t *testing.T) {
-	session := &mockSession{}
-	opts := NewResourceOptions(WithResourceSession(session))
-	if opts.Session != session {
+	sess := &mockContextSession{}
+	opts := NewResourceOptions(WithResourceSession(sess))
+	if opts.Session != sess {
 		t.Error("WithResourceSession 未正确设置 Session")
 	}
 }
 
-// mockSession 用于测试的模拟 Session。
-type mockSession struct{}
+// mockContextSession 用于测试的模拟 ContextSession。
+type mockContextSession struct{}
 
-func (m *mockSession) GetSessionID() string             { return "test-session" }
-func (m *mockSession) CreateWorkflowSession() Session   { return m }
-func (m *mockSession) GetState(key string) any          { return nil }
-func (m *mockSession) UpdateState(state map[string]any) {}
+func (m *mockContextSession) GetSessionID() string                    { return "test-session" }
+func (m *mockContextSession) GetState(key string) (any, error)        { return nil, nil }
+func (m *mockContextSession) UpdateState(state map[string]any)        {}
+
+// 确认 mockContextSession 实现 context_engine.ContextSession 接口
+var _ context_engine.ContextSession = (*mockContextSession)(nil)

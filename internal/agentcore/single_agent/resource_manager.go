@@ -3,6 +3,7 @@ package single_agent
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -53,30 +54,13 @@ type Agent interface {
 	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
 }
 
-// ContextEngine 上下文引擎接口（预留，领域五回填）。
-type ContextEngine interface {
-	// CreateContext 创建上下文
-	CreateContext(ctx context.Context, contextID string, session Session) (any, error)
-}
-
-// Session 会话接口（预留，领域五回填）。
-type Session interface {
-	// GetSessionID 获取会话 ID
-	GetSessionID() string
-	// CreateWorkflowSession 创建工作流子会话 ⤵️ 预留
-	CreateWorkflowSession() Session
-	// GetState 获取会话状态
-	GetState(key string) any
-	// UpdateState 更新会话状态
-	UpdateState(state map[string]any)
-}
 
 // ResourceOptions 实例获取选项。
 type ResourceOptions struct {
 	// Tag 资源标签
 	Tag string
-	// Session 会话实例 ⤵️ 预留
-	Session Session
+	// Session 会话实例
+	Session context_engine.ContextSession
 }
 
 // NoopResourceManager ResourceManager 的空实现，3.13 阶段使用。
@@ -112,8 +96,8 @@ func WithResourceTag(tag string) ResourceOption {
 }
 
 // WithResourceSession 设置会话实例。
-func WithResourceSession(session Session) ResourceOption {
-	return func(o *ResourceOptions) { o.Session = session }
+func WithResourceSession(sess context_engine.ContextSession) ResourceOption {
+	return func(o *ResourceOptions) { o.Session = sess }
 }
 
 // NewResourceOptions 从选项列表构造 ResourceOptions。
