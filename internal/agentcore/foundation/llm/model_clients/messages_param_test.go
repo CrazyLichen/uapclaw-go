@@ -178,8 +178,8 @@ func TestToBaseMessage(t *testing.T) {
 		t.Error("toBaseMessage(*SystemMessage) 应成功")
 	}
 
-	// *BaseMessage
-	bm, ok = toBaseMessage(llmschema.NewBaseMessage(llmschema.RoleTypeUser, "direct"))
+	// *DefaultMessage
+	bm, ok = toBaseMessage(llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "direct"))
 	if !ok || bm == nil {
 		t.Error("toBaseMessage(*BaseMessage) 应成功")
 	}

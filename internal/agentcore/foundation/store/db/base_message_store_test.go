@@ -23,7 +23,7 @@ func (f *fakeMessageStore) AddMessages(_ context.Context, adds []*MessageAdd) ([
 	return ids, nil
 }
 
-func (f *fakeMessageStore) GetMessageByID(_ context.Context, _ string) (*schema.BaseMessage, *MessageMetadata, error) {
+func (f *fakeMessageStore) GetMessageByID(_ context.Context, _ string) (schema.BaseMessage, *MessageMetadata, error) {
 	return nil, nil, nil
 }
 
@@ -81,7 +81,7 @@ func TestMessageFilter_字段验证(t *testing.T) {
 
 // TestMessageAdd_字段验证 验证 MessageAdd 字段可正确设置
 func TestMessageAdd_字段验证(t *testing.T) {
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "hello")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "hello")
 	add := &MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -89,8 +89,8 @@ func TestMessageAdd_字段验证(t *testing.T) {
 		SessionID: "session1",
 		Timestamp: time.Now(),
 	}
-	if add.Message.Role != schema.RoleTypeUser {
-		t.Errorf("Message.Role = %v, want %v", add.Message.Role, schema.RoleTypeUser)
+	if add.Message.GetRole() != schema.RoleTypeUser {
+		t.Errorf("Message.Role = %v, want %v", add.Message.GetRole(), schema.RoleTypeUser)
 	}
 }
 

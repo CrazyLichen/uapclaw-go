@@ -8,15 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// MetadataLike 回调元数据结构体。
-// 对应 Python: openjiuwen/core/session/config/base.py (MetadataLike TypedDict)
-type MetadataLike struct {
-	// Name 名称
-	Name string
-	// Event 事件
-	Event string
-}
-
 // BuiltinConfigLoader 内置配置加载钩子接口。
 // 对应 Python: Config._load_builtin_configs_
 // Go 不支持虚方法分派，通过接口注入实现模板方法模式（同 5.9 EntityHooks 模式）。
@@ -53,6 +44,15 @@ type SessionConfig interface {
 	AddWorkflowConfig(workflowID string, workflowConfig any)
 }
 
+// MetadataLike 回调元数据结构体。
+// 对应 Python: openjiuwen/core/session/config/base.py (MetadataLike TypedDict)
+type MetadataLike struct {
+	// Name 名称
+	Name string
+	// Event 事件
+	Event string
+}
+
 // defaultSessionConfig SessionConfig 的默认实现。
 // 对应 Python: openjiuwen/core/session/config/base.py (Config)
 type defaultSessionConfig struct {
@@ -72,6 +72,10 @@ type defaultSessionConfig struct {
 
 // defaultBuiltinConfigLoader 默认内置配置加载器
 type defaultBuiltinConfigLoader struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

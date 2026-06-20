@@ -104,21 +104,9 @@ func (p MessagesParam) Dicts() []map[string]any {
 	return p.dicts
 }
 
-// toBaseMessage 从任意消息类型提取 *BaseMessage。
-// 支持 *UserMessage, *SystemMessage, *AssistantMessage, *ToolMessage 及 *BaseMessage。
-func toBaseMessage(msg any) (*llmschema.BaseMessage, bool) {
-	switch m := msg.(type) {
-	case *llmschema.UserMessage:
-		return &m.BaseMessage, true
-	case *llmschema.SystemMessage:
-		return &m.BaseMessage, true
-	case *llmschema.AssistantMessage:
-		return &m.BaseMessage, true
-	case *llmschema.ToolMessage:
-		return &m.BaseMessage, true
-	case *llmschema.BaseMessage:
-		return m, true
-	default:
-		return nil, false
-	}
+// toBaseMessage 从任意消息类型提取 BaseMessage 接口。
+// 所有消息类型都实现了 BaseMessage 接口，直接做类型断言即可。
+func toBaseMessage(msg any) (llmschema.BaseMessage, bool) {
+	m, ok := msg.(llmschema.BaseMessage)
+	return m, ok
 }

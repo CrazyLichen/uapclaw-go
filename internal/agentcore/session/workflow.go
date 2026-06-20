@@ -28,6 +28,10 @@ type WorkflowSession struct {
 // WorkflowSessionOption WorkflowSession 构造选项函数类型
 type WorkflowSessionOption func(*WorkflowSession)
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowSession 创建公开层 WorkflowSession 实例。
@@ -79,7 +83,7 @@ func WithWorkflowSessionInner(inner *internal.WorkflowSession) WorkflowSessionOp
 	}
 }
 
-// ──────────────────────────── WorkflowSession 方法 ────────────────────────────
+// ──────────────────────────── 导出函数（续）────────────────────────────
 
 // GetSessionID 返回会话唯一标识
 func (ws *WorkflowSession) GetSessionID() string {

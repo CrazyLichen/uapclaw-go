@@ -9,28 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// WorkflowOptions 工作流执行选项（预留）。
-type WorkflowOptions struct{}
-
-// AgentOptions Agent 调用选项（预留）。
-type AgentOptions struct{}
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
-type WorkflowOption func(*WorkflowOptions)
-
-// AgentOption Agent 调用选项函数（预留，领域六扩展）。
-type AgentOption func(*AgentOptions)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Workflow 工作流执行接口（最小定义，领域八扩展）。
 //
 // 对应 Python: openjiuwen/core/workflow/workflow.py (Workflow)
@@ -59,3 +37,25 @@ type Agent interface {
 	// Invoke 调用 Agent
 	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
 }
+
+// WorkflowOptions 工作流执行选项（预留）。
+type WorkflowOptions struct{}
+
+// AgentOptions Agent 调用选项（预留）。
+type AgentOptions struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
+type WorkflowOption func(*WorkflowOptions)
+
+// AgentOption Agent 调用选项函数（预留，领域六扩展）。
+type AgentOption func(*AgentOptions)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -20,7 +20,7 @@ import (
 type PromptTemplate struct {
 	// Name 模板名称
 	Name string
-	// Content 模板内容，支持 string 或 []*schema.BaseMessage
+	// Content 模板内容，支持 string 或 []schema.BaseMessage
 	Content any
 	// PlaceholderPrefix 占位符前缀，默认 "{{"
 	PlaceholderPrefix string
@@ -125,8 +125,8 @@ func (t *PromptTemplate) Format(keywords map[string]any) (*PromptTemplate, error
 // 逻辑：
 //   - 空内容 → []
 //   - string → [UserMessage]
-//   - []*schema.BaseMessage → 深拷贝后返回
-func (t *PromptTemplate) ToMessages() ([]*schema.BaseMessage, error) {
+//   - []schema.BaseMessage → 深拷贝后返回
+func (t *PromptTemplate) ToMessages() ([]schema.BaseMessage, error) {
 	if isNilOrEmpty(t.Content) {
 		return nil, nil
 	}
@@ -134,9 +134,9 @@ func (t *PromptTemplate) ToMessages() ([]*schema.BaseMessage, error) {
 	switch content := t.Content.(type) {
 	case string:
 		um := schema.NewUserMessage(content)
-		return []*schema.BaseMessage{&um.BaseMessage}, nil
+		return []schema.BaseMessage{um}, nil
 
-	case []*schema.BaseMessage:
+	case []schema.BaseMessage:
 		// 验证类型
 		for _, msg := range content {
 			if msg == nil {
@@ -197,7 +197,7 @@ func (t *PromptTemplate) deepCopyContent() (any, error) {
 	case string:
 		// string 是值类型，直接返回
 		return content, nil
-	case []*schema.BaseMessage:
+	case []schema.BaseMessage:
 		return deepCopyMessages(content)
 	default:
 		return t.Content, nil

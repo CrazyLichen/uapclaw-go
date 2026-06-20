@@ -21,40 +21,40 @@ func TestContextWindow_GetMessages_空窗口(t *testing.T) {
 
 // TestContextWindow_GetMessages_合并系统消息和上下文消息 测试消息合并
 func TestContextWindow_GetMessages_合并系统消息和上下文消息(t *testing.T) {
-	sysMsg := llm_schema.NewBaseMessage(llm_schema.RoleTypeSystem, "系统提示")
-	userMsg := llm_schema.NewBaseMessage(llm_schema.RoleTypeUser, "用户输入")
+	sysMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "系统提示")
+	userMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeUser, "用户输入")
 
 	w := &ContextWindow{
-		SystemMessages:  []*llm_schema.BaseMessage{sysMsg},
-		ContextMessages: []*llm_schema.BaseMessage{userMsg},
+		SystemMessages:  []llm_schema.BaseMessage{sysMsg},
+		ContextMessages: []llm_schema.BaseMessage{userMsg},
 	}
 
 	msgs := w.GetMessages()
 	if len(msgs) != 2 {
 		t.Fatalf("应返回 2 条消息，实际 %d", len(msgs))
 	}
-	if msgs[0].Role != llm_schema.RoleTypeSystem {
-		t.Errorf("第 1 条消息角色应为 system，实际 %v", msgs[0].Role)
+	if msgs[0].GetRole() != llm_schema.RoleTypeSystem {
+		t.Errorf("第 1 条消息角色应为 system，实际 %v", msgs[0].GetRole())
 	}
-	if msgs[1].Role != llm_schema.RoleTypeUser {
-		t.Errorf("第 2 条消息角色应为 user，实际 %v", msgs[1].Role)
+	if msgs[1].GetRole() != llm_schema.RoleTypeUser {
+		t.Errorf("第 2 条消息角色应为 user，实际 %v", msgs[1].GetRole())
 	}
 }
 
 // TestContextWindow_GetMessages_仅系统消息 测试只有系统消息的情况
 func TestContextWindow_GetMessages_仅系统消息(t *testing.T) {
-	sysMsg := llm_schema.NewBaseMessage(llm_schema.RoleTypeSystem, "系统提示")
+	sysMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "系统提示")
 
 	w := &ContextWindow{
-		SystemMessages: []*llm_schema.BaseMessage{sysMsg},
+		SystemMessages: []llm_schema.BaseMessage{sysMsg},
 	}
 
 	msgs := w.GetMessages()
 	if len(msgs) != 1 {
 		t.Fatalf("应返回 1 条消息，实际 %d", len(msgs))
 	}
-	if msgs[0].Role != llm_schema.RoleTypeSystem {
-		t.Errorf("消息角色应为 system，实际 %v", msgs[0].Role)
+	if msgs[0].GetRole() != llm_schema.RoleTypeSystem {
+		t.Errorf("消息角色应为 system，实际 %v", msgs[0].GetRole())
 	}
 }
 
@@ -152,8 +152,8 @@ func TestContextStats_字段完整性(t *testing.T) {
 // TestContextWindow_Statistic零值 测试 Statistic 为值类型零值时可直接访问
 func TestContextWindow_Statistic零值(t *testing.T) {
 	w := &ContextWindow{
-		SystemMessages:  []*llm_schema.BaseMessage{llm_schema.NewBaseMessage(llm_schema.RoleTypeSystem, "hi")},
-		ContextMessages: []*llm_schema.BaseMessage{llm_schema.NewBaseMessage(llm_schema.RoleTypeUser, "hello")},
+		SystemMessages:  []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "hi")},
+		ContextMessages: []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeUser, "hello")},
 	}
 
 	// Statistic 是值类型，零值始终可访问，无需 nil 检查

@@ -149,7 +149,7 @@ func TestTracedModelClient_Invoke_成功(t *testing.T) {
 
 	inner := &fakeModelClient{
 		invokeResult: &llmschema.AssistantMessage{
-			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("测试响应")},
+			DefaultMessage: llmschema.DefaultMessage{Content: llmschema.NewTextContent("测试响应")},
 		},
 	}
 
@@ -683,7 +683,7 @@ func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 
 	inner := &tracerRecordDataCapturingClient{
 		invokeResult: &llmschema.AssistantMessage{
-			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("测试")},
+			DefaultMessage: llmschema.DefaultMessage{Content: llmschema.NewTextContent("测试")},
 		},
 	}
 
@@ -723,7 +723,7 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 	chunkChan := make(chan *llmschema.AssistantMessageChunk, 1)
 	chunkChan <- &llmschema.AssistantMessageChunk{
 		AssistantMessage: llmschema.AssistantMessage{
-			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("chunk")},
+			DefaultMessage: llmschema.DefaultMessage{Content: llmschema.NewTextContent("chunk")},
 		},
 	}
 	close(chunkChan)
@@ -775,7 +775,7 @@ func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 
 	inner := &tracerRecordDataCapturingClient{
 		invokeResult: &llmschema.AssistantMessage{
-			BaseMessage: llmschema.BaseMessage{Content: llmschema.NewTextContent("测试")},
+			DefaultMessage: llmschema.DefaultMessage{Content: llmschema.NewTextContent("测试")},
 		},
 	}
 

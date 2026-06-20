@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseMessage 消息基类接口，所有消息类型均实现此接口。
 //
@@ -36,34 +36,6 @@ type BaseMessage interface {
 	// SetMetadata 设置附加元数据
 	SetMetadata(metadata map[string]any)
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// RoleType 消息角色类型枚举，标识消息发送者的身份。
-//
-// 对应 Python: BaseMessage.role 字段的字符串值
-type RoleType int
-
-const (
-	// RoleTypeSystem 系统消息
-	RoleTypeSystem RoleType = iota
-	// RoleTypeUser 用户消息
-	RoleTypeUser
-	// RoleTypeAssistant 助手消息
-	RoleTypeAssistant
-	// RoleTypeTool 工具返回消息
-	RoleTypeTool
-)
-
-// roleTypeStrings RoleType 枚举值对应的字符串表示，与 Python 端保持一致。
-var roleTypeStrings = [...]string{
-	"system",
-	"user",
-	"assistant",
-	"tool",
-}
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ImageURL 图片 URL 信息，用于多模态消息中的图片分片。
 //
@@ -127,6 +99,58 @@ type DefaultMessage struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// UserMessage 用户消息，role 固定为 "user"。
+//
+// 对应 Python: UserMessage(BaseMessage)
+type UserMessage struct {
+	DefaultMessage
+}
+
+// SystemMessage 系统消息，role 固定为 "system"。
+//
+// 对应 Python: SystemMessage(BaseMessage)
+type SystemMessage struct {
+	DefaultMessage
+}
+
+// MessageOption DefaultMessage 构造选项函数。
+type MessageOption func(*DefaultMessage)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// RoleType 消息角色类型枚举，标识消息发送者的身份。
+//
+// 对应 Python: BaseMessage.role 字段的字符串值
+type RoleType int
+
+const (
+	// RoleTypeSystem 系统消息
+	RoleTypeSystem RoleType = iota
+	// RoleTypeUser 用户消息
+	RoleTypeUser
+	// RoleTypeAssistant 助手消息
+	RoleTypeAssistant
+	// RoleTypeTool 工具返回消息
+	RoleTypeTool
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// roleTypeStrings RoleType 枚举值对应的字符串表示，与 Python 端保持一致。
+var roleTypeStrings = [...]string{
+	"system",
+	"user",
+	"assistant",
+	"tool",
+}
+
+// roleTypeMap 字符串到 RoleType 的映射，用于 JSON 反序列化。
+var roleTypeMap map[string]RoleType
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // GetRole 返回消息角色
 func (m *DefaultMessage) GetRole() RoleType { return m.Role }
 
@@ -150,27 +174,6 @@ func (m *DefaultMessage) GetMetadata() map[string]any { return m.Metadata }
 
 // SetMetadata 设置附加元数据
 func (m *DefaultMessage) SetMetadata(metadata map[string]any) { m.Metadata = metadata }
-
-// UserMessage 用户消息，role 固定为 "user"。
-//
-// 对应 Python: UserMessage(BaseMessage)
-type UserMessage struct {
-	DefaultMessage
-}
-
-// SystemMessage 系统消息，role 固定为 "system"。
-//
-// 对应 Python: SystemMessage(BaseMessage)
-type SystemMessage struct {
-	DefaultMessage
-}
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// roleTypeMap 字符串到 RoleType 的映射，用于 JSON 反序列化。
-var roleTypeMap map[string]RoleType
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 实现 fmt.Stringer 接口，返回 RoleType 的字符串表示。
 func (r RoleType) String() string {
@@ -262,9 +265,6 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("MessageContent 反序列化失败: 既不是字符串也不是内容分片数组")
 }
 
-// MessageOption DefaultMessage 构造选项函数。
-type MessageOption func(*DefaultMessage)
-
 // WithMessageName 设置消息发送者名称。
 func WithMessageName(name string) MessageOption {
 	return func(m *DefaultMessage) { m.Name = name }
@@ -312,8 +312,8 @@ func NewSystemMessage(content string, opts ...MessageOption) *SystemMessage {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// init 初始化 roleTypeMap，用于 JSON 反序列化
 func init() {
-	// 初始化 roleTypeMap，用于 JSON 反序列化
 	roleTypeMap = make(map[string]RoleType, len(roleTypeStrings))
 	for i, s := range roleTypeStrings {
 		roleTypeMap[s] = RoleType(i)

@@ -55,7 +55,7 @@ func TestGenerateMessageID_格式(t *testing.T) {
 func TestSqlMessageStore_AddMessage(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "hello")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "hello")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -78,7 +78,7 @@ func TestSqlMessageStore_GetMessageByID(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "hello")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "hello")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -96,8 +96,8 @@ func TestSqlMessageStore_GetMessageByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessageByID 失败: %v", err)
 	}
-	if gotMsg.Content.Text() != "hello" {
-		t.Errorf("Content = %q, want %q", gotMsg.Content.Text(), "hello")
+	if gotMsg.GetContent().Text() != "hello" {
+		t.Errorf("Content = %q, want %q", gotMsg.GetContent().Text(), "hello")
 	}
 	if gotMeta.UserID != "user1" {
 		t.Errorf("UserID = %q, want %q", gotMeta.UserID, "user1")
@@ -123,7 +123,7 @@ func TestSqlMessageStore_AddMessages(t *testing.T) {
 
 	adds := make([]*db.MessageAdd, 3)
 	for i := 0; i < 3; i++ {
-		msg := schema.NewBaseMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
+		msg := schema.NewDefaultMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
 		adds[i] = &db.MessageAdd{
 			Message:   msg,
 			UserID:    "user1",
@@ -147,7 +147,7 @@ func TestSqlMessageStore_GetMessages(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "hello")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "hello")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -170,8 +170,8 @@ func TestSqlMessageStore_GetMessages(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("GetMessages 返回 %d 条, 期望 1 条", len(results))
 	}
-	if results[0].Message.Content.Text() != "hello" {
-		t.Errorf("Content = %q, want %q", results[0].Message.Content.Text(), "hello")
+	if results[0].Message.GetContent().Text() != "hello" {
+		t.Errorf("Content = %q, want %q", results[0].Message.GetContent().Text(), "hello")
 	}
 }
 
@@ -181,7 +181,7 @@ func TestSqlMessageStore_GetMessages_时间范围(t *testing.T) {
 
 	for i := 1; i <= 3; i++ {
 		ts := time.Date(2024, 1, i, 0, 0, 0, 0, time.UTC)
-		msg := schema.NewBaseMessage(schema.RoleTypeUser, fmt.Sprintf("msg_day_%d", i))
+		msg := schema.NewDefaultMessage(schema.RoleTypeUser, fmt.Sprintf("msg_day_%d", i))
 		add := &db.MessageAdd{
 			Message:   msg,
 			UserID:    "user1",
@@ -215,7 +215,7 @@ func TestSqlMessageStore_UpdateMessage(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "old_content")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "old_content")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -235,8 +235,8 @@ func TestSqlMessageStore_UpdateMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessageByID 失败: %v", err)
 	}
-	if gotMsg.Content.Text() != "new_content" {
-		t.Errorf("Content = %q, want %q", gotMsg.Content.Text(), "new_content")
+	if gotMsg.GetContent().Text() != "new_content" {
+		t.Errorf("Content = %q, want %q", gotMsg.GetContent().Text(), "new_content")
 	}
 }
 
@@ -245,7 +245,7 @@ func TestSqlMessageStore_DeleteMessageByID(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "to_delete")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "to_delete")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -273,7 +273,7 @@ func TestSqlMessageStore_DeleteMessages(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		ts := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
-		msg := schema.NewBaseMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
+		msg := schema.NewDefaultMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
 		add := &db.MessageAdd{
 			Message:   msg,
 			UserID:    "user1",
@@ -301,7 +301,7 @@ func TestSqlMessageStore_CountMessages(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		ts := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC)
-		msg := schema.NewBaseMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
+		msg := schema.NewDefaultMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
 		add := &db.MessageAdd{
 			Message:   msg,
 			UserID:    "user1",
@@ -375,7 +375,7 @@ func TestSqlMessageStore_加解密往返(t *testing.T) {
 	}
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "secret message")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "secret message")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -393,8 +393,8 @@ func TestSqlMessageStore_加解密往返(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessageByID 失败: %v", err)
 	}
-	if gotMsg.Content.Text() != "secret message" {
-		t.Errorf("Content = %q, want %q (解密后应还原原文)", gotMsg.Content.Text(), "secret message")
+	if gotMsg.GetContent().Text() != "secret message" {
+		t.Errorf("Content = %q, want %q (解密后应还原原文)", gotMsg.GetContent().Text(), "secret message")
 	}
 }
 
@@ -402,7 +402,7 @@ func TestSqlMessageStore_加解密往返(t *testing.T) {
 func TestSqlMessageStore_自动时间戳(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "auto_ts")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "auto_ts")
 	add := &db.MessageAdd{
 		Message: msg,
 		UserID:  "user1",
@@ -439,7 +439,7 @@ func TestSqlMessageStore_AddMessages_自动时间戳(t *testing.T) {
 
 	adds := make([]*db.MessageAdd, 2)
 	for i := 0; i < 2; i++ {
-		msg := schema.NewBaseMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
+		msg := schema.NewDefaultMessage(schema.RoleTypeUser, fmt.Sprintf("msg_%d", i))
 		adds[i] = &db.MessageAdd{
 			Message: msg,
 			UserID:  "user1",
@@ -484,7 +484,7 @@ func TestSqlMessageStore_GetMessages_空过滤(t *testing.T) {
 
 	// 添加消息
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "hello")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "hello")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -542,8 +542,7 @@ func TestSqlMessageStore_多模态消息存储(t *testing.T) {
 	// 创建多模态消息
 	textPart := schema.ContentPart{Type: "text", Text: "hello"}
 	imagePart := schema.ContentPart{Type: "image_url", ImageURL: &schema.ImageURL{URL: "https://example.com/img.png"}}
-	content := schema.NewMultiModalContent(textPart, imagePart)
-	msg := &schema.BaseMessage{Role: schema.RoleTypeUser, Content: content}
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "", schema.WithMultiModalContent(textPart, imagePart))
 
 	add := &db.MessageAdd{
 		Message:   msg,
@@ -563,10 +562,10 @@ func TestSqlMessageStore_多模态消息存储(t *testing.T) {
 		t.Fatalf("GetMessageByID 失败: %v", err)
 	}
 
-	if gotMsg.Content.IsText() {
+	if gotMsg.GetContent().IsText() {
 		t.Error("多模态消息不应是纯文本")
 	}
-	parts := gotMsg.Content.Parts()
+	parts := gotMsg.GetContent().Parts()
 	if len(parts) != 2 {
 		t.Errorf("多模态消息应有 2 个分片, got %d", len(parts))
 	}
@@ -583,7 +582,7 @@ func TestSqlMessageStore_多模态消息更新(t *testing.T) {
 	store, _, _ := newTestSqlMessageStore(t)
 
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	msg := schema.NewBaseMessage(schema.RoleTypeUser, "old_text")
+	msg := schema.NewDefaultMessage(schema.RoleTypeUser, "old_text")
 	add := &db.MessageAdd{
 		Message:   msg,
 		UserID:    "user1",
@@ -603,10 +602,10 @@ func TestSqlMessageStore_多模态消息更新(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessageByID 失败: %v", err)
 	}
-	if gotMsg.Content.IsText() {
+	if gotMsg.GetContent().IsText() {
 		t.Error("更新后应为多模态内容")
 	}
-	if gotMsg.Content.Parts()[0].Text != "new_text" {
-		t.Errorf("更新后文本 = %q, want %q", gotMsg.Content.Parts()[0].Text, "new_text")
+	if gotMsg.GetContent().Parts()[0].Text != "new_text" {
+		t.Errorf("更新后文本 = %q, want %q", gotMsg.GetContent().Parts()[0].Text, "new_text")
 	}
 }

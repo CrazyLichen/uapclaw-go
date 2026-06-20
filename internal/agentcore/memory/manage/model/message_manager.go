@@ -75,7 +75,7 @@ func (m *MessageManager) Add(ctx context.Context, req *MessageAddRequest) (strin
 
 	// 解析 role
 	role := roleTypeFromString(req.Role)
-	message := schema.NewBaseMessage(role, req.Content)
+	message := schema.NewDefaultMessage(role, req.Content)
 
 	timestamp := req.Timestamp
 	if timestamp.IsZero() {

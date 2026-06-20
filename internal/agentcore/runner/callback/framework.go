@@ -42,8 +42,6 @@ type CallbackFramework struct {
 	customCallbacks map[string][]CustomCallbackFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // LLMCallbackFunc LLM 回调函数类型。
 //
 // 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
@@ -63,6 +61,8 @@ type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) a
 // 事件名由调用方自由构造（如 sessionID + "write_stream"），
 // 不受预定义枚举约束，适合 per-session 隔离等动态场景。
 type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

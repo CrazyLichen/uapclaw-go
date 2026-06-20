@@ -19,7 +19,7 @@ import (
 //   - 验证外部传入的变量定义
 //   - 执行变量求值和模板渲染
 type PromptAssembler struct {
-	templateContent any                 // string 或 []*schema.BaseMessage
+	templateContent any                 // string 或 []schema.BaseMessage
 	prefix          string              // 占位符前缀
 	suffix          string              // 占位符后缀
 	formatters      []Variable          // 与 templateContent 片段一一对应，nil 表示跳过
@@ -52,7 +52,7 @@ func WithAssemblerVariable(name string, variable Variable) AssemblerOption {
 // NewPromptAssembler 创建模板装配器。
 //
 // 参数：
-//   - content: 模板内容，string 或 []*schema.BaseMessage
+//   - content: 模板内容，string 或 []schema.BaseMessage
 //   - opts: 可选配置
 //
 // 对应 Python: PromptAssembler(prompt_template_content=..., placeholder_prefix=..., placeholder_suffix=..., **variables)
@@ -144,15 +144,15 @@ func (a *PromptAssembler) buildFormatterList() error {
 		}
 		a.formatters = []Variable{tv}
 
-	case []*schema.BaseMessage:
+	case []schema.BaseMessage:
 		a.formatters = make([]Variable, len(content))
 		for i, msg := range content {
 			if msg == nil {
 				a.formatters[i] = nil
 				continue
 			}
-			if msg.Content.IsText() {
-				tv, err := NewTextableVariable(msg.Content.Text(), innerVarName,
+			if msg.GetContent().IsText() {
+				tv, err := NewTextableVariable(msg.GetContent().Text(), innerVarName,
 					WithPrefix(a.prefix), WithSuffix(a.suffix))
 				if err != nil {
 					return err
@@ -160,7 +160,7 @@ func (a *PromptAssembler) buildFormatterList() error {
 				a.formatters[i] = tv
 			} else {
 				// 多模态内容：ContentPart → map[string]any
-				data := contentPartsToAny(msg.Content.Parts())
+				data := contentPartsToAny(msg.GetContent().Parts())
 				if len(data) == 0 {
 					a.formatters[i] = nil
 					continue
@@ -312,7 +312,7 @@ func (a *PromptAssembler) format() any {
 		}
 		return a.templateContent
 
-	case []*schema.BaseMessage:
+	case []schema.BaseMessage:
 		for idx, formatter := range a.formatters {
 			if formatter == nil {
 				continue
@@ -329,21 +329,21 @@ func (a *PromptAssembler) format() any {
 }
 
 // assignMessageContent 将 Variable 求值结果回填到 Message 的 content。
-func (a *PromptAssembler) assignMessageContent(msg *schema.BaseMessage, result any) {
+func (a *PromptAssembler) assignMessageContent(msg schema.BaseMessage, result any) {
 	switch val := result.(type) {
 	case string:
-		msg.Content = schema.NewTextContent(val)
+		msg.SetContent(schema.NewTextContent(val))
 	case []any:
 		// 将 []any 转回 []ContentPart
 		parts := anyToContentParts(val)
-		msg.Content = schema.NewMultiModalContent(parts...)
+		msg.SetContent(schema.NewMultiModalContent(parts...))
 	case map[string]any:
 		// 单个 dict 作为多模态内容的一个 part
 		parts := anyToContentParts([]any{val})
-		msg.Content = schema.NewMultiModalContent(parts...)
+		msg.SetContent(schema.NewMultiModalContent(parts...))
 	default:
 		// 其他类型，转为字符串
-		msg.Content = schema.NewTextContent(fmt.Sprintf("%v", val))
+		msg.SetContent(schema.NewTextContent(fmt.Sprintf("%v", val)))
 	}
 }
 
@@ -402,25 +402,29 @@ func anyToContentParts(items []any) []schema.ContentPart {
 	return parts
 }
 
-// deepCopyMessages 深拷贝 []*schema.BaseMessage 列表。
+// deepCopyMessages 深拷贝 []schema.BaseMessage 列表。
 // 使用 JSON 序列化/反序列化实现深拷贝。
-func deepCopyMessages(msgs []*schema.BaseMessage) ([]*schema.BaseMessage, error) {
+func deepCopyMessages(msgs []schema.BaseMessage) ([]schema.BaseMessage, error) {
 	if len(msgs) == 0 {
 		return nil, nil
 	}
-	data, err := json.Marshal(msgs)
-	if err != nil {
-		return nil, exception.NewBaseError(
-			exception.StatusPromptTemplateRuntimeError,
-			exception.WithMsg(fmt.Sprintf("failed to deep copy messages: %s", err.Error())),
-		)
-	}
-	var result []*schema.BaseMessage
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, exception.NewBaseError(
-			exception.StatusPromptTemplateRuntimeError,
-			exception.WithMsg(fmt.Sprintf("failed to deep copy messages: %s", err.Error())),
-		)
+	result := make([]schema.BaseMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return nil, exception.NewBaseError(
+				exception.StatusPromptTemplateRuntimeError,
+				exception.WithMsg(fmt.Sprintf("failed to deep copy messages: %s", err.Error())),
+			)
+		}
+		var dm schema.DefaultMessage
+		if err := json.Unmarshal(data, &dm); err != nil {
+			return nil, exception.NewBaseError(
+				exception.StatusPromptTemplateRuntimeError,
+				exception.WithMsg(fmt.Sprintf("failed to deep copy messages: %s", err.Error())),
+			)
+		}
+		result = append(result, &dm)
 	}
 	return result, nil
 }

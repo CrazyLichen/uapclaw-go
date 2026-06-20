@@ -82,7 +82,7 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 	}
 
 	// 序列化并生成消息 ID
-	contentStr, err := marshalContent(message.Content)
+	contentStr, err := marshalContent(message.GetContent())
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +97,7 @@ func (s *SqlMessageStore) AddMessage(ctx context.Context, messageAdd *storedb.Me
 		"user_id":    messageAdd.UserID,
 		"session_id": messageAdd.SessionID,
 		"scope_id":   messageAdd.ScopeID,
-		"role":       message.Role.String(),
+		"role":       message.GetRole().String(),
 		"content":    encrypted,
 		"timestamp":  timestamp.Format(time.RFC3339),
 	}
@@ -129,7 +129,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 		}
 
 		// 序列化并生成消息 ID
-		contentStr, err := marshalContent(message.Content)
+		contentStr, err := marshalContent(message.GetContent())
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +143,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 			"user_id":    messageAdd.UserID,
 			"session_id": messageAdd.SessionID,
 			"scope_id":   messageAdd.ScopeID,
-			"role":       message.Role.String(),
+			"role":       message.GetRole().String(),
 			"content":    encrypted,
 			"timestamp":  timestamp.Format(time.RFC3339),
 		}
@@ -163,7 +163,7 @@ func (s *SqlMessageStore) AddMessages(ctx context.Context, messageAdds []*stored
 // GetMessageByID 按 ID 获取消息，不存在时返回错误。
 //
 // 对应 Python: SqlMessageStore.get_message_by_id(message_id)
-func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) (*schema.BaseMessage, *storedb.MessageMetadata, error) {
+func (s *SqlMessageStore) GetMessageByID(ctx context.Context, messageID string) (schema.BaseMessage, *storedb.MessageMetadata, error) {
 	results, err := s.sqlDbStore.ConditionGet(ctx, s.tableName,
 		map[string]any{"message_id": []string{messageID}}, nil)
 	if err != nil {
@@ -395,7 +395,7 @@ func unmarshalContent(data string) (schema.MessageContent, error) {
 
 // rowToMessageAndMeta 将数据库行转换为 BaseMessage 和 MessageMetadata。
 // 使用安全类型断言，断言失败时返回 error。
-func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (*schema.BaseMessage, *storedb.MessageMetadata, error) {
+func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (schema.BaseMessage, *storedb.MessageMetadata, error) {
 	// 安全类型断言辅助
 	getStr := func(key string) (string, error) {
 		v, ok := row[key]
@@ -429,11 +429,9 @@ func (s *SqlMessageStore) rowToMessageAndMeta(row map[string]any) (*schema.BaseM
 	}
 	role := roleTypeFromString(roleStr)
 
-	// 构造 BaseMessage
-	msg := &schema.BaseMessage{
-		Role:    role,
-		Content: content,
-	}
+	// 构造 DefaultMessage（BaseMessage 接口的默认实现）
+	msg := schema.NewDefaultMessage(role, "")
+	msg.SetContent(content)
 
 	// 解析 timestamp
 	timestampStr, err := getStr("timestamp")

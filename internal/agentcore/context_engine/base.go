@@ -26,21 +26,21 @@ type ModelContext interface {
 	// GetMessages 获取消息列表
 	// size 限制返回数量，nil 表示不限制
 	// withHistory 控制是否包含历史消息
-	GetMessages(size *int, withHistory bool) []*llm_schema.BaseMessage
+	GetMessages(size *int, withHistory bool) []llm_schema.BaseMessage
 	// SetMessages 替换消息列表
 	// withHistory 控制是否替换历史消息
-	SetMessages(messages []*llm_schema.BaseMessage, withHistory bool)
+	SetMessages(messages []llm_schema.BaseMessage, withHistory bool)
 	// PopMessages 从尾部弹出消息
 	// withHistory 控制是否从历史消息中弹出
-	PopMessages(size int, withHistory bool) []*llm_schema.BaseMessage
+	PopMessages(size int, withHistory bool) []llm_schema.BaseMessage
 	// ClearMessages 清空消息
 	// withHistory 控制是否清空历史消息
 	ClearMessages(ctx context.Context, withHistory bool) error
 	// AddMessages 添加消息
 	// message 接受 *BaseMessage（单条）或 []*BaseMessage（列表）
-	AddMessages(ctx context.Context, message any) ([]*llm_schema.BaseMessage, error)
+	AddMessages(ctx context.Context, message any) ([]llm_schema.BaseMessage, error)
 	// GetContextWindow 构建上下文窗口供模型推理使用
-	GetContextWindow(ctx context.Context, systemMessages []*llm_schema.BaseMessage,
+	GetContextWindow(ctx context.Context, systemMessages []llm_schema.BaseMessage,
 		tools []*schema.ToolInfo, windowSize *int, dialogueRound *int) (*ContextWindow, error)
 	// Statistic 计算上下文统计信息
 	Statistic() *ContextStats
@@ -112,9 +112,9 @@ type ContextStats struct {
 // 对应 Python: openjiuwen/core/context_engine/base.py (ContextWindow)
 type ContextWindow struct {
 	// SystemMessages 系统消息
-	SystemMessages []*llm_schema.BaseMessage `json:"system_messages"`
+	SystemMessages []llm_schema.BaseMessage `json:"system_messages"`
 	// ContextMessages 上下文消息
-	ContextMessages []*llm_schema.BaseMessage `json:"context_messages"`
+	ContextMessages []llm_schema.BaseMessage `json:"context_messages"`
 	// Tools 工具定义
 	Tools []*schema.ToolInfo `json:"tools"`
 	// Statistic 统计信息（值类型，零值始终可用，与 Python ContextStats() 默认实例对齐）
@@ -132,8 +132,8 @@ type ContextWindow struct {
 // GetMessages 合并系统消息和上下文消息，返回完整消息列表。
 //
 // 对应 Python: ContextWindow.get_messages()
-func (w *ContextWindow) GetMessages() []*llm_schema.BaseMessage {
-	result := make([]*llm_schema.BaseMessage, 0, len(w.SystemMessages)+len(w.ContextMessages))
+func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
+	result := make([]llm_schema.BaseMessage, 0, len(w.SystemMessages)+len(w.ContextMessages))
 	result = append(result, w.SystemMessages...)
 	result = append(result, w.ContextMessages...)
 	return result
@@ -154,8 +154,8 @@ func (w *ContextWindow) GetTools() []*schema.ToolInfo {
 // 对应 Python: ContextWindow() 默认构造
 func NewContextWindow() *ContextWindow {
 	return &ContextWindow{
-		SystemMessages:  make([]*llm_schema.BaseMessage, 0),
-		ContextMessages: make([]*llm_schema.BaseMessage, 0),
+		SystemMessages:  make([]llm_schema.BaseMessage, 0),
+		ContextMessages: make([]llm_schema.BaseMessage, 0),
 		Tools:           make([]*schema.ToolInfo, 0),
 		Statistic:       ContextStats{},
 	}
@@ -171,7 +171,7 @@ func NewContextWindow() *ContextWindow {
 // 对应 Python: Context._stat_messages(stat, messages)
 //
 // ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
-func (s *ContextStats) StatMessages(messages []*llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
+func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
 	// ⤵️ 待 5.31 回填：按角色计数 + token 计算
 	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_messages)
 	//

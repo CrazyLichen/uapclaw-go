@@ -28,7 +28,7 @@ func TestPromptTemplate_Format_StringTemplate(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
 	}
-	content := msgs[0].Content.Text()
+	content := msgs[0].GetContent().Text()
 	if !contains(content, "精通数学领域的问答助手") {
 		t.Errorf("内容不包含期望文本: %s", content)
 	}
@@ -81,8 +81,8 @@ func TestPromptTemplate_Format_PartialFill(t *testing.T) {
 // TestPromptTemplate_Format_MessageTemplate 验证消息列表模板。
 func TestPromptTemplate_Format_MessageTemplate(t *testing.T) {
 	um := schema.NewUserMessage("Hello {{name}}!")
-	am := schema.NewBaseMessage(schema.RoleTypeAssistant, "I'm your assistant for {{domain}}.")
-	template := []*schema.BaseMessage{&um.BaseMessage, am}
+	am := schema.NewDefaultMessage(schema.RoleTypeAssistant, "I'm your assistant for {{domain}}.")
+	template := []schema.BaseMessage{um, am}
 
 	tmpl := NewPromptTemplate("", template)
 
@@ -102,11 +102,11 @@ func TestPromptTemplate_Format_MessageTemplate(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("len(msgs) = %d, want 2", len(msgs))
 	}
-	if msgs[0].Content.Text() != "Hello Alice!" {
-		t.Errorf("msgs[0] = %q, want 'Hello Alice!'", msgs[0].Content.Text())
+	if msgs[0].GetContent().Text() != "Hello Alice!" {
+		t.Errorf("msgs[0] = %q, want 'Hello Alice!'", msgs[0].GetContent().Text())
 	}
-	if msgs[1].Content.Text() != "I'm your assistant for AI." {
-		t.Errorf("msgs[1] = %q, want 'I'm your assistant for AI.'", msgs[1].Content.Text())
+	if msgs[1].GetContent().Text() != "I'm your assistant for AI." {
+		t.Errorf("msgs[1] = %q, want 'I'm your assistant for AI.'", msgs[1].GetContent().Text())
 	}
 }
 
@@ -178,18 +178,18 @@ func TestPromptTemplate_ToMessages_String(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
 	}
-	if msgs[0].Role != schema.RoleTypeUser {
-		t.Errorf("Role = %v, want RoleTypeUser", msgs[0].Role)
+	if msgs[0].GetRole() != schema.RoleTypeUser {
+		t.Errorf("Role = %v, want RoleTypeUser", msgs[0].GetRole())
 	}
-	if msgs[0].Content.Text() != "Hello world" {
-		t.Errorf("Content = %q, want 'Hello world'", msgs[0].Content.Text())
+	if msgs[0].GetContent().Text() != "Hello world" {
+		t.Errorf("Content = %q, want 'Hello world'", msgs[0].GetContent().Text())
 	}
 }
 
 // TestPromptTemplate_ToMessages_MessageList 验证消息列表深拷贝。
 func TestPromptTemplate_ToMessages_MessageList(t *testing.T) {
 	um := schema.NewUserMessage("original")
-	template := []*schema.BaseMessage{&um.BaseMessage}
+	template := []schema.BaseMessage{um}
 
 	tmpl := NewPromptTemplate("", template)
 	msgs, err := tmpl.ToMessages()
@@ -201,8 +201,8 @@ func TestPromptTemplate_ToMessages_MessageList(t *testing.T) {
 	}
 
 	// 修改返回的 msgs 不应影响原始模板
-	msgs[0].Content = schema.NewTextContent("modified")
-	if tmpl.Content.([]*schema.BaseMessage)[0].Content.Text() != "original" {
+	msgs[0].SetContent(schema.NewTextContent("modified"))
+	if tmpl.Content.([]schema.BaseMessage)[0].GetContent().Text() != "original" {
 		t.Errorf("深拷贝失败：原始内容被修改")
 	}
 }
@@ -230,7 +230,7 @@ func TestPromptTemplate_Format_MultiModalMessage(t *testing.T) {
 		schema.ContentPart{Type: "text", Text: "Describe this: {{query}}"},
 		schema.ContentPart{Type: "image_url", ImageURL: &schema.ImageURL{URL: "{{image_url}}"}},
 	))
-	template := []*schema.BaseMessage{&sm.BaseMessage, &um.BaseMessage}
+	template := []schema.BaseMessage{&sm.DefaultMessage, &um.DefaultMessage}
 
 	tmpl := NewPromptTemplate("", template)
 
@@ -252,15 +252,15 @@ func TestPromptTemplate_Format_MultiModalMessage(t *testing.T) {
 	}
 
 	// 系统消息不变
-	if msgs[0].Content.Text() != "You are a helper." {
-		t.Errorf("系统消息 = %q, want 'You are a helper.'", msgs[0].Content.Text())
+	if msgs[0].GetContent().Text() != "You are a helper." {
+		t.Errorf("系统消息 = %q, want 'You are a helper.'", msgs[0].GetContent().Text())
 	}
 
 	// 用户消息：多模态内容
-	if msgs[1].Content.IsText() {
+	if msgs[1].GetContent().IsText() {
 		t.Fatalf("用户消息应为多模态")
 	}
-	parts := msgs[1].Content.Parts()
+	parts := msgs[1].GetContent().Parts()
 	if len(parts) != 2 {
 		t.Fatalf("len(parts) = %d, want 2", len(parts))
 	}

@@ -28,7 +28,7 @@ type BaseMessageStore interface {
 	// GetMessageByID 按 ID 获取消息，不存在时返回错误。
 	//
 	// 对应 Python: BaseMessageStore.get_message_by_id(message_id)
-	GetMessageByID(ctx context.Context, messageID string) (*schema.BaseMessage, *MessageMetadata, error)
+	GetMessageByID(ctx context.Context, messageID string) (schema.BaseMessage, *MessageMetadata, error)
 
 	// GetMessages 按条件过滤查询消息。
 	// limit 为 0 时使用默认值 DefaultMessageLimit，orderBy 为空时使用 DefaultMessageOrderBy，
@@ -94,7 +94,7 @@ type MessageMetadata struct {
 // 对应 Python: message_add 字典
 type MessageAdd struct {
 	// Message 消息对象
-	Message *schema.BaseMessage
+	Message schema.BaseMessage
 	// UserID 用户 ID
 	UserID string
 	// ScopeID 作用域 ID
@@ -132,7 +132,7 @@ type MessageFilter struct {
 // MessageAndMeta 消息+元数据组合（用于 GetMessages 返回）。
 type MessageAndMeta struct {
 	// Message 消息对象
-	Message *schema.BaseMessage
+	Message schema.BaseMessage
 	// Metadata 消息元数据
 	Metadata *MessageMetadata
 }

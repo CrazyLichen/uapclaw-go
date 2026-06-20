@@ -40,8 +40,6 @@ type AgentSession struct {
 	card *schema.AgentCard
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentSessionOption AgentSession 构造选项函数类型
 type AgentSessionOption func(*AgentSession)
 

@@ -34,7 +34,7 @@ func (m *mockMessageStore) AddMessage(_ context.Context, messageAdd *db.MessageA
 			ScopeID:     messageAdd.ScopeID,
 			SessionID:   messageAdd.SessionID,
 			Timestamp:   messageAdd.Timestamp,
-			MessageType: messageAdd.Message.Role.String(),
+			MessageType: messageAdd.Message.GetRole().String(),
 		},
 	}
 	return id, nil
@@ -49,7 +49,7 @@ func (m *mockMessageStore) AddMessages(_ context.Context, adds []*db.MessageAdd)
 	return ids, nil
 }
 
-func (m *mockMessageStore) GetMessageByID(_ context.Context, messageID string) (*schema.BaseMessage, *db.MessageMetadata, error) {
+func (m *mockMessageStore) GetMessageByID(_ context.Context, messageID string) (schema.BaseMessage, *db.MessageMetadata, error) {
 	if item, ok := m.messages[messageID]; ok {
 		return item.Message, item.Metadata, nil
 	}
@@ -239,8 +239,8 @@ func TestMessageManager_GetByID_存在(t *testing.T) {
 	if result == nil {
 		t.Fatal("结果不应为 nil")
 	}
-	if result.Message.Content.Text() != "hello" {
-		t.Errorf("Content = %q, want %q", result.Message.Content.Text(), "hello")
+	if result.Message.GetContent().Text() != "hello" {
+		t.Errorf("Content = %q, want %q", result.Message.GetContent().Text(), "hello")
 	}
 }
 

@@ -509,12 +509,12 @@ func (e *BaseClientEmbed) convertOneMessage(msg any) (map[string]any, error) {
 	}
 
 	msgDict := map[string]any{
-		"role":    baseMsg.Role.String(),
-		"content": baseMsg.Content,
+		"role":    baseMsg.GetRole().String(),
+		"content": baseMsg.GetContent(),
 	}
 
-	if baseMsg.Name != "" {
-		msgDict["name"] = baseMsg.Name
+	if baseMsg.GetName() != "" {
+		msgDict["name"] = baseMsg.GetName()
 	}
 
 	// AssistantMessage 特有字段

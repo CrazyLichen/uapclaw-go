@@ -52,8 +52,6 @@ type Session struct {
 	sourceMetadata map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 

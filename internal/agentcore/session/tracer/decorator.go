@@ -68,6 +68,14 @@ type TracedWorkflow struct {
 	instanceInfo map[string]any
 }
 
+// ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
+// 对齐 Python model.config.model_config.model_name 访问方式。
+// 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
+type ModelConfigProvider interface {
+	// GetModelName 获取模型名称
+	GetModelName() string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -372,11 +380,3 @@ func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session tracerSession) s
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
-// 对齐 Python model.config.model_config.model_name 访问方式。
-// 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
-type ModelConfigProvider interface {
-	// GetModelName 获取模型名称
-	GetModelName() string
-}

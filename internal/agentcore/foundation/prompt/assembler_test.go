@@ -82,10 +82,10 @@ func TestAssembler_StringTemplate_CurlyBrace(t *testing.T) {
 // TestAssembler_MessageTemplate 验证 BaseMessage 类型模板。
 func TestAssembler_MessageTemplate(t *testing.T) {
 	um := schema.NewUserMessage("Hi, {{user_inputs}}")
-	am := schema.NewBaseMessage(schema.RoleTypeAssistant, "")
-	tm := schema.NewBaseMessage(schema.RoleTypeTool, "")
+	am := schema.NewDefaultMessage(schema.RoleTypeAssistant, "")
+	tm := schema.NewDefaultMessage(schema.RoleTypeTool, "")
 
-	template := []*schema.BaseMessage{&um.BaseMessage, am, tm}
+	template := []schema.BaseMessage{um, am, tm}
 
 	asm, err := NewPromptAssembler(
 		template,
@@ -105,15 +105,15 @@ func TestAssembler_MessageTemplate(t *testing.T) {
 		t.Fatalf("Assemble 失败: %v", err)
 	}
 
-	msgs, ok := result.([]*schema.BaseMessage)
+	msgs, ok := result.([]schema.BaseMessage)
 	if !ok {
 		t.Fatalf("结果类型错误: %T", result)
 	}
 	if len(msgs) != 3 {
 		t.Fatalf("len(msgs) = %d, want 3", len(msgs))
 	}
-	if msgs[0].Content.Text() != "Hi, 张三" {
-		t.Errorf("msgs[0].Content = %q, want 'Hi, 张三'", msgs[0].Content.Text())
+	if msgs[0].GetContent().Text() != "Hi, 张三" {
+		t.Errorf("msgs[0].Content = %q, want 'Hi, 张三'", msgs[0].GetContent().Text())
 	}
 }
 
@@ -215,7 +215,7 @@ func TestAssembler_MultiModalMessage(t *testing.T) {
 		schema.ContentPart{Type: "image_url", ImageURL: &schema.ImageURL{URL: "{{url}}"}},
 	))
 
-	template := []*schema.BaseMessage{&um.BaseMessage}
+	template := []schema.BaseMessage{&um.DefaultMessage}
 
 	asm, err := NewPromptAssembler(template)
 	if err != nil {
@@ -230,11 +230,11 @@ func TestAssembler_MultiModalMessage(t *testing.T) {
 		t.Fatalf("Assemble 失败: %v", err)
 	}
 
-	msgs := result.([]*schema.BaseMessage)
-	if msgs[0].Content.IsText() {
+	msgs := result.([]schema.BaseMessage)
+	if msgs[0].GetContent().IsText() {
 		t.Fatalf("应为多模态内容")
 	}
-	parts := msgs[0].Content.Parts()
+	parts := msgs[0].GetContent().Parts()
 	if parts[0].Text != "Describe this: a cat" {
 		t.Errorf("text = %q, want 'Describe this: a cat'", parts[0].Text)
 	}
@@ -246,7 +246,7 @@ func TestAssembler_MultiModalMessage(t *testing.T) {
 // TestAssembler_NilMessageInList 验证消息列表中 nil 消息的处理。
 func TestAssembler_NilMessageInList(t *testing.T) {
 	um := schema.NewUserMessage("Hello {{name}}")
-	template := []*schema.BaseMessage{nil, &um.BaseMessage}
+	template := []schema.BaseMessage{nil, um}
 
 	asm, err := NewPromptAssembler(template)
 	if err != nil {
@@ -258,24 +258,24 @@ func TestAssembler_NilMessageInList(t *testing.T) {
 		t.Fatalf("Assemble 失败: %v", err)
 	}
 
-	msgs := result.([]*schema.BaseMessage)
+	msgs := result.([]schema.BaseMessage)
 	if len(msgs) != 2 {
 		t.Fatalf("len(msgs) = %d, want 2", len(msgs))
 	}
-	if msgs[1].Content.Text() != "Hello World" {
-		t.Errorf("msgs[1] = %q, want 'Hello World'", msgs[1].Content.Text())
+	if msgs[1].GetContent().Text() != "Hello World" {
+		t.Errorf("msgs[1] = %q, want 'Hello World'", msgs[1].GetContent().Text())
 	}
 }
 
 // TestAssembler_EmptyMultiModalContent 验证多模态消息空 content 的处理。
 func TestAssembler_EmptyMultiModalContent(t *testing.T) {
 	// ToolMessage 的 content 为空列表
-	tm := schema.NewBaseMessage(schema.RoleTypeTool, "")
+	tm := schema.NewDefaultMessage(schema.RoleTypeTool, "")
 	// 手动设置空多模态内容
-	tm.Content = schema.NewMultiModalContent()
+	tm.SetContent(schema.NewMultiModalContent())
 
 	um := schema.NewUserMessage("Hi {{name}}")
-	template := []*schema.BaseMessage{&um.BaseMessage, tm}
+	template := []schema.BaseMessage{&um.DefaultMessage, tm}
 
 	asm, err := NewPromptAssembler(template)
 	if err != nil {
@@ -287,9 +287,9 @@ func TestAssembler_EmptyMultiModalContent(t *testing.T) {
 		t.Fatalf("Assemble 失败: %v", err)
 	}
 
-	msgs := result.([]*schema.BaseMessage)
-	if msgs[0].Content.Text() != "Hi Alice" {
-		t.Errorf("msgs[0] = %q, want 'Hi Alice'", msgs[0].Content.Text())
+	msgs := result.([]schema.BaseMessage)
+	if msgs[0].GetContent().Text() != "Hi Alice" {
+		t.Errorf("msgs[0] = %q, want 'Hi Alice'", msgs[0].GetContent().Text())
 	}
 }
 

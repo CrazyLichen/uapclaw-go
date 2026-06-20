@@ -164,11 +164,6 @@ func (m *StreamWriterManager) RemoveWriter(key StreamMode) error {
 	return nil
 }
 
-// defaultStreamOutputConfig 默认配置（无超时限制，对齐 Python 默认行为）
-func defaultStreamOutputConfig() streamOutputConfig {
-	return streamOutputConfig{}
-}
-
 // WithFirstFrameTimeout 设置首帧超时
 func WithFirstFrameTimeout(d time.Duration) StreamOutputOption {
 	return func(c *streamOutputConfig) {
@@ -249,6 +244,11 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan Sc
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultStreamOutputConfig 默认配置（无超时限制，对齐 Python 默认行为）
+func defaultStreamOutputConfig() streamOutputConfig {
+	return streamOutputConfig{}
+}
 
 // addDefaultWriters 注册默认 Writer，对齐 Python StreamWriterManager._add_default_writers()
 func (m *StreamWriterManager) addDefaultWriters() {
