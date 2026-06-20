@@ -34,8 +34,8 @@ type Session struct {
 	// envs 环境变量（通过 WithEnvs 设置）
 	// 对齐 Python: Session.__init__(envs=dict)
 	envs map[string]any
-	// checkpointerOverride 检查点器覆盖（通过 WithCheckpointer option 设置）
-	checkpointerOverride checkpointer.Checkpointer
+	// checkpointer 检查点器（通过 WithCheckpointer option 设置）
+	checkpointer checkpointer.Checkpointer
 	// streamWriterManager 流写入管理器（通过 WithStreamWriterManager 设置）
 	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
@@ -99,7 +99,7 @@ func NewSession(opts ...SessionOption) *Session {
 
 	// 2. checkpointer：未设置时从全局工厂获取
 	//    Python: checkpointer = CheckpointerFactory.get_checkpointer()
-	cp := s.checkpointerOverride
+	cp := s.checkpointer
 	if cp == nil {
 		cp = checkpointer.GetCheckpointer()
 	}
@@ -151,7 +151,7 @@ func WithEnvs(envs map[string]any) SessionOption {
 func WithCheckpointer(cp checkpointer.Checkpointer) SessionOption {
 	return func(s *Session) {
 		// 存到临时字段，在 NewSession 创建 inner 时使用
-		s.checkpointerOverride = cp
+		s.checkpointer = cp
 	}
 }
 
