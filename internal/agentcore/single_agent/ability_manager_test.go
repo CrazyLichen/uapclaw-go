@@ -7,6 +7,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -450,10 +451,21 @@ func isAbilityExecutionError(err error, target **AbilityExecutionError) bool {
 type fakeWorkflow struct {
 	result any
 	err    error
+	card   *schema.WorkflowCard
 }
 
-func (f *fakeWorkflow) Execute(_ context.Context, _ map[string]any, _ ...WorkflowOption) (any, error) {
+func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...WorkflowOption) (any, error) {
 	return f.result, f.err
+}
+
+func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...WorkflowOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+
+func (f *fakeWorkflow) Card() *schema.WorkflowCard {
+	return f.card
 }
 
 // fakeAgent 用于测试的模拟 Agent

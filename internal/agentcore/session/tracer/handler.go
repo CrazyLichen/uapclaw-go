@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -28,6 +29,8 @@ type TraceAgentHandler struct {
 	traceBaseHandler
 	// agentSpans Agent 追踪跨度缓存，invokeID → *TraceAgentSpan
 	agentSpans map[string]*TraceAgentSpan
+	// agentMu 保护 agentSpans 的读写锁
+	agentMu sync.RWMutex
 }
 
 // TraceWorkflowHandler 工作流追踪处理器，对应 Python TraceWorkflowHandler。
@@ -36,6 +39,8 @@ type TraceWorkflowHandler struct {
 	traceBaseHandler
 	// workflowSpans 工作流追踪跨度缓存，invokeID → *TraceWorkflowSpan
 	workflowSpans map[string]*TraceWorkflowSpan
+	// workflowMu 保护 workflowSpans 的读写锁
+	workflowMu sync.RWMutex
 }
 
 // graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
@@ -74,7 +79,9 @@ func NewTraceWorkflowHandler(streamWriter stream.StreamWriter, spanManager *Span
 
 // OnChainStart 链式调用开始
 func (h *TraceAgentHandler) OnChainStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypeChain), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypeChain), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -92,7 +99,9 @@ func (h *TraceAgentHandler) OnChainError(ctx context.Context, span *TraceAgentSp
 
 // OnLLMStart LLM 调用开始
 func (h *TraceAgentHandler) OnLLMStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypeLLM), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypeLLM), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -116,7 +125,9 @@ func (h *TraceAgentHandler) OnLLMError(ctx context.Context, span *TraceAgentSpan
 
 // OnPromptStart 提示词调用开始
 func (h *TraceAgentHandler) OnPromptStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypePrompt), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypePrompt), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -134,7 +145,9 @@ func (h *TraceAgentHandler) OnPromptError(ctx context.Context, span *TraceAgentS
 
 // OnPluginStart 插件调用开始
 func (h *TraceAgentHandler) OnPluginStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypePlugin), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypePlugin), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -152,7 +165,9 @@ func (h *TraceAgentHandler) OnPluginError(ctx context.Context, span *TraceAgentS
 
 // OnRetrieverStart 检索调用开始
 func (h *TraceAgentHandler) OnRetrieverStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypeRetriever), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypeRetriever), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -170,7 +185,9 @@ func (h *TraceAgentHandler) OnRetrieverError(ctx context.Context, span *TraceAge
 
 // OnEvaluatorStart 评估调用开始
 func (h *TraceAgentHandler) OnEvaluatorStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypeEvaluator), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypeEvaluator), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -188,7 +205,9 @@ func (h *TraceAgentHandler) OnEvaluatorError(ctx context.Context, span *TraceAge
 
 // OnWorkflowStart 工作流调用开始
 func (h *TraceAgentHandler) OnWorkflowStart(ctx context.Context, span *TraceAgentSpan, inputs any, instanceInfo map[string]any) error {
-	h.updateStartTraceData(span, string(InvokeTypeWorkflow), inputs, instanceInfo)
+	if err := h.updateStartTraceData(span, string(InvokeTypeWorkflow), inputs, instanceInfo); err != nil {
+		return err
+	}
 	return h.EmitStreamWriter(ctx, &span.Span)
 }
 
@@ -211,7 +230,7 @@ func (h *TraceAgentHandler) FormatData(span *Span) map[string]any {
 		agentSpan.Status = string(h.GetNodeStatus(&agentSpan.Span))
 	}
 	return map[string]any{
-		"type":    "tracer_agent",
+		"type":    string(TracerHandlerAgent),
 		"payload": agentSpan,
 	}
 }
@@ -247,13 +266,14 @@ func (h *TraceWorkflowHandler) OnPreInvoke(ctx context.Context, invokeID string,
 	return nil
 }
 
-// OnPreStream 组件预流式
+// OnPreStream 组件预流式，对应 Python TraceWorkflowHandler.on_pre_stream。
+// 对齐 Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加到 streamInputs。
+// Python 入口层 dict(chunk) 保证类型，Go 用类型断言替代。
 func (h *TraceWorkflowHandler) OnPreStream(ctx context.Context, invokeID string, chunk any, needSend bool) error {
 	span := h.getTracerWorkflowSpan(invokeID)
-	if chunk != nil {
-		if m, ok := chunk.(map[string]any); ok {
-			span.AppendStreamInputs(m)
-		}
+	// 对齐 Python: if chunk and isinstance(chunk, dict) — 非空 dict 才追加
+	if m, ok := chunk.(map[string]any); ok && len(m) > 0 {
+		span.AppendStreamInputs(m)
 	}
 	h.spanManager.UpdateSpan(&span.Span, map[string]any{})
 	if needSend {
@@ -304,8 +324,11 @@ func (h *TraceWorkflowHandler) OnInvoke(ctx context.Context, invokeID string, on
 
 		span.EndTime = &now
 		if span.StartTime != nil {
+			// 对齐 Python: elapsed_time = self._get_elapsed_time(span.start_time, end_time)
+			// TraceWorkflowSpan 没有 ElapsedTime 字段，计算仅用于 UpdateSpan 更新
 			elapsed := h.GetElapsedTime(*span.StartTime, now)
-			_ = elapsed
+			h.spanManager.UpdateSpan(&span.Span, map[string]any{"elapsed_time": elapsed})
+		} else {
 		}
 		h.spanManager.UpdateSpan(&span.Span, map[string]any{})
 	} else {
@@ -356,6 +379,8 @@ func (h *TraceWorkflowHandler) OnCallDone(ctx context.Context, invokeID string, 
 	if outputs != nil {
 		span.Outputs = outputs
 	}
+	// 对齐 Python: self._span_manager.update_span(span, update_data)
+	// 空 map 传入用于刷新 span 在 SpanManager 中的记录（确保 sessionSpans 映射存在）
 	h.spanManager.UpdateSpan(&span.Span, map[string]any{})
 	writeErr := h.EmitStreamWriter(ctx, &span.Span)
 	if span.ComponentType == "End" && span.EndTime != nil {
@@ -389,7 +414,7 @@ func (h *TraceWorkflowHandler) FormatData(span *Span) map[string]any {
 	}
 	result := buildWorkflowPayload(wfSpan)
 	return map[string]any{
-		"type":    "tracer_workflow",
+		"type":    string(TracerHandlerWorkflow),
 		"payload": result,
 	}
 }
@@ -459,8 +484,9 @@ func (h *traceBaseHandler) GetNodeStatus(span *Span) NodeStatus {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// updateStartTraceData 更新开始追踪数据，对应 Python _update_start_trace_data
-func (h *TraceAgentHandler) updateStartTraceData(span *TraceAgentSpan, invokeType string, inputs any, instanceInfo map[string]any) {
+// updateStartTraceData 更新开始追踪数据，对应 Python _update_start_trace_data。
+// 返回 error 表示序列化失败，调用方应阻止后续 EmitStreamWriter（对齐 Python 异常中断流程）。
+func (h *TraceAgentHandler) updateStartTraceData(span *TraceAgentSpan, invokeType string, inputs any, instanceInfo map[string]any) error {
 	metaDataBytes, err := json.Marshal(instanceInfo)
 	if err != nil {
 		logger.Error(logComponent).
@@ -468,7 +494,7 @@ func (h *TraceAgentHandler) updateStartTraceData(span *TraceAgentSpan, invokeTyp
 			Str("error", err.Error()).
 			Any("instance_info", instanceInfo).
 			Msg("元数据处理失败")
-		return
+		return err
 	}
 	var metaDataMap map[string]any
 	if jsonErr := json.Unmarshal(metaDataBytes, &metaDataMap); jsonErr != nil {
@@ -486,6 +512,7 @@ func (h *TraceAgentHandler) updateStartTraceData(span *TraceAgentSpan, invokeTyp
 	span.MetaData = metaDataMap
 
 	h.spanManager.UpdateSpan(&span.Span, map[string]any{})
+	return nil
 }
 
 // updateEndTraceData 更新结束追踪数据，对应 Python _update_end_trace_data
@@ -537,44 +564,60 @@ func (h *TraceAgentHandler) updateRunningTraceData(span *TraceAgentSpan, data ma
 
 // getTracerAgentSpan 获取或创建 Agent 追踪跨度，对应 Python _get_tracer_agent_span
 func (h *TraceAgentHandler) getTracerAgentSpan(invokeID string) *TraceAgentSpan {
+	h.agentMu.RLock()
 	if span, ok := h.agentSpans[invokeID]; ok {
+		h.agentMu.RUnlock()
 		return span
 	}
+	h.agentMu.RUnlock()
 	// SpanManager 中存在但 agentSpans 中没有时，说明是外部创建的，
 	// 无法还原具体类型，仍需创建新的 TraceAgentSpan
 	var parentSpan *TraceAgentSpan
 	lastSpan := h.spanManager.LastSpan()
 	if lastSpan != nil {
+		h.agentMu.RLock()
 		if p, ok := h.agentSpans[lastSpan.InvokeID]; ok {
 			parentSpan = p
 		}
+		h.agentMu.RUnlock()
 	}
 	span := h.spanManager.CreateAgentSpan(parentSpan)
+	h.agentMu.Lock()
 	h.agentSpans[span.InvokeID] = span
+	h.agentMu.Unlock()
 	return span
 }
 
 // getTracerWorkflowSpan 获取或创建工作流追踪跨度，对应 Python _get_tracer_workflow_span
 func (h *TraceWorkflowHandler) getTracerWorkflowSpan(invokeID string) *TraceWorkflowSpan {
+	h.workflowMu.RLock()
 	if span, ok := h.workflowSpans[invokeID]; ok {
+		h.workflowMu.RUnlock()
 		return span
 	}
+	h.workflowMu.RUnlock()
 	var parentSpan *TraceWorkflowSpan
 	lastSpan := h.spanManager.LastSpan()
 	if lastSpan != nil {
+		h.workflowMu.RLock()
 		if p, ok := h.workflowSpans[lastSpan.InvokeID]; ok {
 			parentSpan = p
 		}
+		h.workflowMu.RUnlock()
 	}
 	span := h.spanManager.CreateWorkflowSpan(invokeID, parentSpan)
+	h.workflowMu.Lock()
 	h.workflowSpans[invokeID] = span
+	h.workflowMu.Unlock()
 	return span
 }
 
 // deleteWorkflowSpan 从缓存中删除工作流追踪跨度，避免内存泄漏。
 // 由 Tracer.PopWorkflowSpan 调用，与 SpanManager.PopSpan 配合使用。
 func (h *TraceWorkflowHandler) deleteWorkflowSpan(invokeID string) {
+	h.workflowMu.Lock()
 	delete(h.workflowSpans, invokeID)
+	h.workflowMu.Unlock()
 }
 
 // sendData 发送数据，exclude 指定需要排除的字段名，对应 Python _send_data
@@ -592,7 +635,7 @@ func (h *TraceWorkflowHandler) sendData(span *TraceWorkflowSpan, exclude map[str
 	}
 	payload := buildWorkflowPayloadWithExclude(span, exclude)
 	data := map[string]any{
-		"type":    "tracer_workflow",
+		"type":    string(TracerHandlerWorkflow),
 		"payload": payload,
 	}
 	if writeErr := h.streamWriter.Write(context.Background(), stream.TraceSchema{
@@ -655,22 +698,17 @@ func setWorkflowMetadata(span *TraceWorkflowSpan, metadata map[string]any) {
 	}
 }
 
-// buildWorkflowPayload 构建工作流 payload，排除 ChildInvokesID 和 LLMInvokeData
+// buildWorkflowPayload 构建工作流 payload，排除 ChildInvokesID 和 LLMInvokeData。
+// 对齐 Python: span.model_dump(exclude_none=True, by_alias=True, exclude={"child_invokes_id", "llm_invoke_data"})
+// Python 的 exclude_none 只排除 None 值，空字符串 "" 和空列表 [] 会保留。
+// Go 端对齐：nil 指针不输出，字符串/切片始终输出（即使为空/零值）。
 func buildWorkflowPayload(span *TraceWorkflowSpan) map[string]any {
 	result := map[string]any{}
 
-	if span.TraceID != "" {
-		result["traceId"] = span.TraceID
-	}
-	if span.InvokeID != "" {
-		result["invokeId"] = span.InvokeID
-	}
-	if span.ParentInvokeID != "" {
-		result["parentInvokeId"] = span.ParentInvokeID
-	}
-	if span.Status != "" {
-		result["status"] = span.Status
-	}
+	result["traceId"] = span.TraceID
+	result["invokeId"] = span.InvokeID
+	result["parentInvokeId"] = span.ParentInvokeID
+	result["status"] = span.Status
 	if span.StartTime != nil {
 		result["startTime"] = span.StartTime
 	}
@@ -686,48 +724,22 @@ func buildWorkflowPayload(span *TraceWorkflowSpan) map[string]any {
 	if span.Error != nil {
 		result["error"] = span.Error
 	}
-	if len(span.OnInvokeData) > 0 {
-		result["onInvokeData"] = span.OnInvokeData
-	}
-	if span.ExecutionID != "" {
-		result["executionId"] = span.ExecutionID
-	}
-	if len(span.SourceIDs) > 0 {
-		result["sourceIds"] = span.SourceIDs
-	}
-	if span.WorkflowID != "" {
-		result["workflowId"] = span.WorkflowID
-	}
-	if span.WorkflowVersion != "" {
-		result["workflowVersion"] = span.WorkflowVersion
-	}
-	if span.WorkflowName != "" {
-		result["workflowName"] = span.WorkflowName
-	}
-	if span.ComponentID != "" {
-		result["componentId"] = span.ComponentID
-	}
-	if span.ComponentName != "" {
-		result["componentName"] = span.ComponentName
-	}
-	if span.ComponentType != "" {
-		result["componentType"] = span.ComponentType
-	}
-	if span.LoopNodeID != "" {
-		result["loopNodeId"] = span.LoopNodeID
-	}
+	result["onInvokeData"] = span.OnInvokeData
+	result["executionId"] = span.ExecutionID
+	result["sourceIds"] = span.SourceIDs
+	result["workflowId"] = span.WorkflowID
+	result["workflowVersion"] = span.WorkflowVersion
+	result["workflowName"] = span.WorkflowName
+	result["componentId"] = span.ComponentID
+	result["componentName"] = span.ComponentName
+	result["componentType"] = span.ComponentType
+	result["loopNodeId"] = span.LoopNodeID
 	if span.LoopIndex != nil {
 		result["loopIndex"] = *span.LoopIndex
 	}
-	if span.ParentNodeID != "" {
-		result["parentNodeId"] = span.ParentNodeID
-	}
-	if len(span.StreamInputs) > 0 {
-		result["streamInputs"] = span.StreamInputs
-	}
-	if len(span.StreamOutputs) > 0 {
-		result["streamOutputs"] = span.StreamOutputs
-	}
+	result["parentNodeId"] = span.ParentNodeID
+	result["streamInputs"] = span.StreamInputs
+	result["streamOutputs"] = span.StreamOutputs
 	if span.InteractiveInputs != nil {
 		result["interactiveInputs"] = span.InteractiveInputs
 	}

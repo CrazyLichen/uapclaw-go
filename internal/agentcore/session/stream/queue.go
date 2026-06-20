@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,15 +13,16 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// endFrame 流结束哨兵类型，消费端收到后退出迭代。
-// 对应 Python: StreamEmitter.END_FRAME = "all streaming outputs finish"
-type endFrame struct{}
-
 // StreamQueue 流队列，封装 buffered channel + 超时控制。
 // 对应 Python: AsyncStreamQueue
+//
+// 与 Python 的关键设计差异：
+// Python 使用 END_FRAME 哨兵通知消费端流结束，Go 直接使用 close(ch) 信号。
+// Go 的 close(ch) 语义保证消费端可读取残留数据直到 ok=false，
+// 等价于 Python 的 END_FRAME + queue.join() 两阶段关闭，但更简洁可靠。
 type StreamQueue struct {
-	// ch 内部缓冲 channel
-	ch chan any
+	// ch 内部缓冲 channel，只传输 Schema 数据
+	ch chan Schema
 	// closed 队列是否已关闭（原子操作，读多写少场景替代 RWMutex）
 	// 对齐 Python AsyncStreamQueue._closed，closed=true 后不再接受新 Send
 	closed atomic.Bool
@@ -39,6 +41,9 @@ const (
 	defaultMaxSendRetries = 5
 	// defaultCloseTimeout 关闭超时，对应 Python DEFAULT_CLOSE_TIMEOUT = 5.0
 	defaultCloseTimeout = 5 * time.Second
+	// DefaultReceiveTimeout 默认接收超时，对应 Python DEFAULT_RECEIVE_TIMEOUT = -1（无限等待）。
+	// 值 <= 0 表示无限等待，与 Python 语义一致。
+	DefaultReceiveTimeout time.Duration = -1
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
@@ -56,15 +61,19 @@ var (
 
 // NewStreamQueue 创建流队列，maxSize 为缓冲区大小（0 为无缓冲）。
 // 对应 Python: AsyncStreamQueue(maxsize=0)
+// maxSize 为负数时 panic，对齐 Python asyncio.Queue 负数 maxsize 抛 ValueError。
 func NewStreamQueue(maxSize int) *StreamQueue {
+	if maxSize < 0 {
+		panic(fmt.Sprintf("StreamQueue maxSize 不能为负数: %d", maxSize))
+	}
 	return &StreamQueue{
-		ch: make(chan any, maxSize),
+		ch: make(chan Schema, maxSize),
 	}
 }
 
 // Send 带超时的发送，对齐 Python AsyncStreamQueue.send()。
 // closed 后直接返回 ErrQueueClosed；使用 recover 捕获 closed 检查与 close(ch) 之间的窗口 panic。
-func (q *StreamQueue) Send(ctx context.Context, data any, attemptTimeout ...time.Duration) (err error) {
+func (q *StreamQueue) Send(ctx context.Context, data Schema, attemptTimeout ...time.Duration) (err error) {
 	// recover 兜底：closed.Load() 返回 false 后、ch<- 之前，Close 可能已 close(ch)
 	defer func() {
 		if r := recover(); r != nil {
@@ -126,7 +135,7 @@ func (q *StreamQueue) Send(ctx context.Context, data any, attemptTimeout ...time
 // Go 的 close(ch) 不会等消费端排空，所以 Receive 必须支持从已关闭 channel 读取残留数据：
 //   - closed 后仍从 channel 读取，直到 channel 为空且已关闭（ok=false）时返回 ErrQueueClosed
 //   - 超时时检查 closed 状态：closed 返回 ErrQueueClosed，否则返回 context 错误
-func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (any, error) {
+func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (Schema, error) {
 	var recvCtx context.Context
 	var cancel context.CancelFunc
 	if len(timeout) > 0 && timeout[0] > 0 {
@@ -159,15 +168,8 @@ func (q *StreamQueue) Receive(ctx context.Context, timeout ...time.Duration) (an
 //
 // 流程：设 closed=true → close(ch)
 //
-// ⚠️ Close 不发送 endFrame 哨兵！endFrame 由 StreamEmitter.Close() 负责发送。
-// 这对齐了 Python 的两阶段关闭语义：
-//  1. 生产端：StreamEmitter.close() → emitter._closed=True + queue.send(END_FRAME)
-//  2. 消费端：stream_output() 收到 END_FRAME → queue.close()
-//
-// Python 的 queue.close() 只做 _closed=True + queue.join() 等排空，
-// Go 用 close(ch) 替代 queue.join()——close(ch) 后消费端仍可读残留数据直到 ok=false。
-//
 // 使用 sync.Once 保证 close(ch) 只执行一次，天然幂等。
+// 关闭后消费端仍可读取残留数据直到 ok=false（Go channel 语义保证）。
 func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error {
 	if q.closed.Load() {
 		return nil
@@ -175,7 +177,6 @@ func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error
 	q.closed.Store(true)
 
 	// close(ch)：消费端仍可读取残留数据，直到 ok=false
-	// 对齐 Python queue.close() 的 _closed=True + queue.join() 语义
 	q.chCloseOnce.Do(func() {
 		close(q.ch)
 	})
@@ -184,13 +185,20 @@ func (q *StreamQueue) Close(ctx context.Context, timeout ...time.Duration) error
 }
 
 // Ch 返回只读 channel，供消费端 range 读取。
-func (q *StreamQueue) Ch() <-chan any {
+func (q *StreamQueue) Ch() <-chan Schema {
 	return q.ch
 }
 
 // IsClosed 查询关闭状态
 func (q *StreamQueue) IsClosed() bool {
 	return q.closed.Load()
+}
+
+// IsEndOfStream 判断 Receive 返回的错误是否表示流正常结束。
+// 对应 Python: data == StreamEmitter.END_FRAME
+// Go 用 close(ch) 替代 END_FRAME 哨兵，流结束通过 ErrQueueClosed 标识。
+func IsEndOfStream(err error) bool {
+	return errors.Is(err, ErrQueueClosed)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

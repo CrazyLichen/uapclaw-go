@@ -71,11 +71,11 @@ func NewCheckpointerFactory() *CheckpointerFactory {
 }
 
 // String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
-// 对应 Python: CheckpointerConfig.__str__()
+// 对应 Python: CheckpointerConfig.__repr__()
 // 递归脱敏 Conf 中的 URL 密码，防止日志泄露数据库连接字符串。
 func (c CheckpointerFactoryConfig) String() string {
 	redactedConf := utils.RedactURLInValue(c.Conf)
-	return fmt.Sprintf("type=%q conf=%v", c.Type, redactedConf)
+	return fmt.Sprintf("CheckpointerConfig(type=%q, conf=%v)", c.Type, redactedConf)
 }
 
 // Register 注册检查点器 Provider。
@@ -129,10 +129,12 @@ func (f *CheckpointerFactory) SetCheckpointer(storeType string, cp Checkpointer)
 // 对应 Python: CheckpointerFactory.get_checkpointer(store_type)
 //
 // 优先级：
-// 1. 指定 storeType 时，先查 typeCheckpointers 缓存
+// 1. 指定 storeType 时（非空字符串），先查 typeCheckpointers 缓存
 // 2. storeType 为 "in_memory" 时，返回 defaultInMemoryCheckpointer
 // 3. 返回 defaultCheckpointer
 // 4. defaultCheckpointer 未设置时，返回 defaultInMemoryCheckpointer
+//
+// 空字符串与不传参数等价（对齐 Python 行为），不会触发类型缓存查找。
 func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) Checkpointer {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

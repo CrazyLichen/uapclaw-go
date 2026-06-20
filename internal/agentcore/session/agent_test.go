@@ -248,11 +248,36 @@ func TestSession_tagStreamPayload_OutputSchema(t *testing.T) {
 		t.Errorf("非 map payload source 期望 team-1，实际 %v", payload2["source"])
 	}
 
-	// 非 map/OutputSchema 类型（如 string），原样返回
+	// 非 map/OutputSchema/CustomSchema 类型（如 string），原样返回
 	s2 := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
 	result3 := s2.tagStreamPayload("just_string")
 	if result3 != "just_string" {
 		t.Errorf("其他类型应原样返回，实际 %v", result3)
+	}
+}
+
+// TestSession_tagStreamPayload_CustomSchema 测试 CustomSchema 类型的流数据元数据标签
+func TestSession_tagStreamPayload_CustomSchema(t *testing.T) {
+	s := NewSession(WithSourceMetadata(map[string]any{"source": "team-1"}))
+
+	// CustomSchema：metadata 应合并进 Data 字段
+	cs := stream.CustomSchema{Type: "event", Data: map[string]any{"key": "val"}}
+	result := s.tagStreamPayload(cs).(stream.CustomSchema)
+	if result.Type != "event" {
+		t.Errorf("CustomSchema Type 期望 event，实际 %v", result.Type)
+	}
+	if result.Data["key"] != "val" {
+		t.Errorf("CustomSchema Data key 期望 val，实际 %v", result.Data["key"])
+	}
+	if result.Data["source"] != "team-1" {
+		t.Errorf("CustomSchema Data source 期望 team-1，实际 %v", result.Data["source"])
+	}
+
+	// CustomSchema 空 Data：metadata 仍应合并
+	cs2 := stream.CustomSchema{Type: "empty", Data: nil}
+	result2 := s.tagStreamPayload(cs2).(stream.CustomSchema)
+	if result2.Data["source"] != "team-1" {
+		t.Errorf("CustomSchema 空 Data 合并后 source 期望 team-1，实际 %v", result2.Data["source"])
 	}
 }
 

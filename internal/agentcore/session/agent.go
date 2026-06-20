@@ -315,10 +315,10 @@ func (s *Session) WriteCustomStream(data any) error {
 // StreamIterator 返回流迭代 channel。
 // 对应 Python: Session.stream_iterator()
 // ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
-func (s *Session) StreamIterator() <-chan any {
+func (s *Session) StreamIterator() <-chan stream.Schema {
 	mgr := s.inner.StreamWriterManager()
 	if mgr == nil {
-		ch := make(chan any)
+		ch := make(chan stream.Schema)
 		close(ch)
 		return ch
 	}
@@ -491,7 +491,7 @@ func init() {
 
 // tagStreamPayload 为流数据添加来源元数据。
 // 对应 Python: Session._tag_stream_payload(data)
-// ✅ 5.10 已回填：支持 any 类型和 OutputSchema
+// ✅ 5.10 已回填：支持 map[string]any、OutputSchema 和 CustomSchema
 func (s *Session) tagStreamPayload(data any) any {
 	if len(s.sourceMetadata) == 0 {
 		return data
@@ -526,6 +526,16 @@ func (s *Session) tagStreamPayload(data any) any {
 			payload = newPayload
 		}
 		return stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload}
+	case stream.CustomSchema:
+		// 对齐 Python：CustomSchema 的 extra="allow" 语义下，metadata 合并进 Data 字段
+		newData := make(map[string]any, len(v.Data)+len(s.sourceMetadata))
+		for k, val := range v.Data {
+			newData[k] = val
+		}
+		for k, val := range s.sourceMetadata {
+			newData[k] = val
+		}
+		return stream.CustomSchema{Type: v.Type, Data: newData}
 	default:
 		return data
 	}

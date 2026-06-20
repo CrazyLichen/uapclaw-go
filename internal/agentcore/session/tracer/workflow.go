@@ -187,8 +187,12 @@ func (TracerWorkflowUtils) Trace(ctx context.Context, session BaseWorkflowSessio
 
 // TraceError 追踪错误，对应 Python TracerWorkflowUtils.trace_error。
 // 调用 TriggerWorkflow(TraceWFInvoke, ..., exception=err)。
+// err 为 nil 时静默返回，防御性避免空错误触发追踪事件。
 func (TracerWorkflowUtils) TraceError(ctx context.Context, session BaseWorkflowSession, err error) {
 	if session.Tracer() == nil {
+		return
+	}
+	if err == nil {
 		return
 	}
 	session.Tracer().TriggerWorkflow(ctx, TraceWFInvoke, session.ParentID(), &TriggerParams{

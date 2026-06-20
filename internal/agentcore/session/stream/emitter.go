@@ -54,8 +54,15 @@ func (e *StreamEmitter) Emit(ctx context.Context, data Schema) error {
 	return e.queue.Send(ctx, data)
 }
 
-// Close 关闭发射器，发送 endFrame 哨兵。
+// Close 关闭发射器，单阶段关闭语义。
 // 对应 Python: StreamEmitter.close()
+//
+// 与 Python 的差异：
+// Python: emitter._closed=True + queue.send(END_FRAME)，消费端收到 END_FRAME 后调 queue.close()
+// Go: emitter.closed=True + queue.Close()，消费端通过 Receive() 返回 ErrQueueClosed 感知流结束
+//
+// Go 的 close(ch) 保证消费端可读残留数据直到 ok=false，等价于 Python 两阶段关闭，
+// 但消除了 END_FRAME 丢失导致消费端永不退出的风险。
 func (e *StreamEmitter) Close(ctx context.Context) error {
 	e.mu.Lock()
 	if e.closed {
@@ -65,11 +72,11 @@ func (e *StreamEmitter) Close(ctx context.Context) error {
 	e.closed = true
 	e.mu.Unlock()
 
-	// 发送哨兵到队列
-	if err := e.queue.Send(ctx, endFrame{}); err != nil {
+	// 直接关闭队列，消费端通过 Receive() 返回 ErrQueueClosed 感知流结束
+	if err := e.queue.Close(ctx); err != nil {
 		logger.Warn(logComponent).
 			Err(err).
-			Msg("StreamEmitter 关闭时发送 endFrame 失败")
+			Msg("StreamEmitter 关闭队列失败")
 	}
 	return nil
 }

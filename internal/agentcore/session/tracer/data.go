@@ -38,6 +38,17 @@ const (
 	NodeStatusError NodeStatus = "error"
 )
 
+// TracerHandlerName 追踪处理器名称枚举，对应 Python TracerHandlerName。
+// 用于标识触发事件的处理器类型，替代硬编码字符串。
+type TracerHandlerName string
+
+const (
+	// TracerHandlerAgent Agent 追踪处理器名称
+	TracerHandlerAgent TracerHandlerName = "tracer_agent"
+	// TracerHandlerWorkflow 工作流追踪处理器名称
+	TracerHandlerWorkflow TracerHandlerName = "tracer_workflow"
+)
+
 // TraceEvent 追踪事件枚举，替代 Python 的字符串反射分发。
 type TraceEvent string
 

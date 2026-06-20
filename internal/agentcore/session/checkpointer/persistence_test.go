@@ -812,9 +812,11 @@ func TestAgentEntityHooks_RestoreState(t *testing.T) {
 	}
 
 	// SetState 需要 {"global_state": {...}, "agent_state": {...}} 格式
-	h.RestoreState(session, map[string]any{
+	if err := h.RestoreState(session, map[string]any{
 		"agent_state": map[string]any{"key": "restored"},
-	})
+	}); err != nil {
+		t.Fatalf("RestoreState 返回错误: %v", err)
+	}
 	got := st.Get(state.StringKey("key"))
 	if got != "restored" {
 		t.Errorf("RestoreState 后 key = %v，期望 'restored'", got)
@@ -831,16 +833,36 @@ func TestAgentEntityHooks_RestoreState_nil(t *testing.T) {
 		st:          st,
 	}
 
-	// nil savedState → 不应 panic
-	h.RestoreState(session, nil)
+	// nil savedState → 不应 panic，不应返回 error
+	if err := h.RestoreState(session, nil); err != nil {
+		t.Errorf("nil savedState 不应返回错误: %v", err)
+	}
 
-	// nil session state → 不应 panic
+	// nil session state → 不应 panic，不应返回 error
 	session2 := &testAgentSession{
 		testSession: testSession{sessionID: "sess1"},
 		agentID:     "agent1",
 		st:          nil,
 	}
-	h.RestoreState(session2, map[string]any{"key": "value"})
+	if err := h.RestoreState(session2, map[string]any{"key": "value"}); err != nil {
+		t.Errorf("nil session state 不应返回错误: %v", err)
+	}
+}
+
+// TestAgentEntityHooks_RestoreState_类型错误 测试 Agent 钩子 savedState 类型断言失败
+func TestAgentEntityHooks_RestoreState_类型错误(t *testing.T) {
+	h := &agentEntityHooks{}
+	st := state.NewAgentStateCollection()
+	session := &testAgentSession{
+		testSession: testSession{sessionID: "sess1"},
+		agentID:     "agent1",
+		st:          st,
+	}
+
+	// 非 map[string]any 类型应返回 error
+	if err := h.RestoreState(session, "invalid type"); err == nil {
+		t.Error("savedState 类型错误时应返回 error，但返回 nil")
+	}
 }
 
 // TestAgentTeamEntityHooks_GetEntityID 测试 AgentTeam 钩子获取实体 ID
@@ -883,7 +905,9 @@ func TestAgentTeamEntityHooks_RestoreState(t *testing.T) {
 		st:          st,
 	}
 
-	h.RestoreState(session, map[string]any{"global": map[string]any{"global_key": "restored_val"}})
+	if err := h.RestoreState(session, map[string]any{"global": map[string]any{"global_key": "restored_val"}}); err != nil {
+		t.Fatalf("RestoreState 返回错误: %v", err)
+	}
 }
 
 // TestAgentTeamEntityHooks_RestoreState_nilState 测试 AgentTeam 钩子 nil 输入
@@ -896,8 +920,26 @@ func TestAgentTeamEntityHooks_RestoreState_nilState(t *testing.T) {
 		st:          st,
 	}
 
-	// nil savedState → 不应 panic
-	h.RestoreState(session, nil)
+	// nil savedState → 不应 panic，不应返回 error
+	if err := h.RestoreState(session, nil); err != nil {
+		t.Errorf("nil savedState 不应返回错误: %v", err)
+	}
+}
+
+// TestAgentTeamEntityHooks_RestoreState_类型错误 测试 AgentTeam 钩子 savedState 类型断言失败
+func TestAgentTeamEntityHooks_RestoreState_类型错误(t *testing.T) {
+	h := &agentTeamEntityHooks{}
+	st := state.NewAgentStateCollection()
+	session := &testTeamSession{
+		testSession: testSession{sessionID: "sess1"},
+		teamID:      "team1",
+		st:          st,
+	}
+
+	// 非 map[string]any 类型应返回 error
+	if err := h.RestoreState(session, 12345); err == nil {
+		t.Error("savedState 类型错误时应返回 error，但返回 nil")
+	}
 }
 
 // ──────────────────────────── basePersistenceStorage 辅助方法测试 ────────────────────────────
@@ -1220,7 +1262,9 @@ func TestAgentTeamEntityHooks_RestoreState_AgentStateCollection(t *testing.T) {
 	}
 
 	// SetGlobal 只恢复 globalState，传入纯 dict（非 {global_state:..., agent_state:...} 格式）
-	h.RestoreState(session, map[string]any{"global_key": "restored_val"})
+	if err := h.RestoreState(session, map[string]any{"global_key": "restored_val"}); err != nil {
+		t.Fatalf("RestoreState 返回错误: %v", err)
+	}
 
 	// 验证 globalState 已恢复
 	got := st.GetGlobal(state.StringKey("global_key"))

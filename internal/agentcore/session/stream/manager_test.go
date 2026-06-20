@@ -95,7 +95,7 @@ func TestStreamWriterManager_AddAndRemoveCustomWriter(t *testing.T) {
 	emitter := NewStreamEmitter()
 	mgr := NewStreamWriterManager(emitter)
 
-	customMode := StreamMode(10)
+	customMode := NewStreamMode("my_custom", "自定义模式")
 	customWriter := NewOutputStreamWriter(emitter)
 
 	if err := mgr.AddWriter(customMode, customWriter); err != nil {
@@ -117,7 +117,8 @@ func TestStreamWriterManager_AddNilWriter(t *testing.T) {
 	emitter := NewStreamEmitter()
 	mgr := NewStreamWriterManager(emitter)
 
-	if err := mgr.AddWriter(StreamMode(10), nil); err == nil {
+	customMode := NewStreamMode("nil_test", "测试 nil")
+	if err := mgr.AddWriter(customMode, nil); err == nil {
 		t.Error("添加 nil writer 应返回错误")
 	}
 }

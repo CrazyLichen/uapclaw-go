@@ -536,7 +536,7 @@ func (am *AbilityManager) executeWorkflow(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
-	result, err := wf.Execute(ctx, toolArgs)
+	result, err := wf.Invoke(ctx, toolArgs)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("workflow_name", toolName).

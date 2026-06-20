@@ -26,8 +26,8 @@ type EntityHooks interface {
 	GetEntityID(session interfaces.BaseSession) string
 	// GetStateToSave 获取需要保存的状态
 	GetStateToSave(session interfaces.BaseSession) any
-	// RestoreState 将恢复的状态设置回 session
-	RestoreState(session interfaces.BaseSession, savedState any)
+	// RestoreState 将恢复的状态设置回 session，返回 error 对齐 Python _restore_state 的异常传播
+	RestoreState(session interfaces.BaseSession, savedState any) error
 }
 
 // basePersistenceStorage 持久化单实体状态存储基类。
@@ -154,13 +154,18 @@ func (h *agentEntityHooks) GetStateToSave(session interfaces.BaseSession) any {
 }
 
 // RestoreState 实现 EntityHooks 接口。
-func (h *agentEntityHooks) RestoreState(session interfaces.BaseSession, savedState any) {
+// 对齐 Python: AgentStorage._restore_state → session.state().set_state(state)
+// 返回 error 对齐 Python 的 try/except + raise 异常传播
+func (h *agentEntityHooks) RestoreState(session interfaces.BaseSession, savedState any) error {
 	if session.State() == nil || savedState == nil {
-		return
+		return nil
 	}
-	if st, ok := savedState.(map[string]any); ok {
-		session.State().SetState(st)
+	st, ok := savedState.(map[string]any)
+	if !ok {
+		return fmt.Errorf("恢复 Agent 状态失败: savedState 类型错误，期望 map[string]any，实际 %T", savedState)
 	}
+	session.State().SetState(st)
+	return nil
 }
 
 // GetEntityID 实现 EntityHooks 接口。
@@ -179,13 +184,17 @@ func (h *agentTeamEntityHooks) GetStateToSave(session interfaces.BaseSession) an
 
 // RestoreState 实现 EntityHooks 接口。
 // 对齐 Python: AgentTeamStorage._restore_state → session.state().global_state.set_state(state)
-func (h *agentTeamEntityHooks) RestoreState(session interfaces.BaseSession, savedState any) {
+// 返回 error 对齐 Python 的 try/except + raise 异常传播
+func (h *agentTeamEntityHooks) RestoreState(session interfaces.BaseSession, savedState any) error {
 	if session.State() == nil || savedState == nil {
-		return
+		return nil
 	}
-	if st, ok := savedState.(map[string]any); ok {
-		session.State().SetGlobal(st)
+	st, ok := savedState.(map[string]any)
+	if !ok {
+		return fmt.Errorf("恢复 AgentTeam 状态失败: savedState 类型错误，期望 map[string]any，实际 %T", savedState)
 	}
+	session.State().SetGlobal(st)
+	return nil
 }
 
 // Save 保存会话状态到 KVStore。
@@ -270,7 +279,16 @@ func (s *basePersistenceStorage) Recover(ctx context.Context, session interfaces
 		return nil
 	}
 
-	s.hooks.RestoreState(session, loadedState)
+	if err := s.hooks.RestoreState(session, loadedState); err != nil {
+		// 对齐 Python: except Exception as e: session_logger.error(...) + raise
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "checkpoint_restore").
+			Str("session_id", sessionID).
+			Str(s.entityLogExtraKey(), entityID).
+			Str("storage_type", "persistence").
+			Msgf("设置 %s 状态失败", s.entityLabel)
+		return err
+	}
 	logger.Debug(logComponent).
 		Str("event_type", "checkpoint_restore").
 		Str("session_id", sessionID).
@@ -325,6 +343,12 @@ func (s *basePersistenceStorage) Exists(ctx context.Context, session interfaces.
 func (ws *PersistenceWorkflowStorage) Save(ctx context.Context, session interfaces.BaseSession) error {
 	workflowID := getWorkflowID(session)
 	sessionID := session.SessionID()
+
+	// 防御性检查：session.State() 为 nil 时直接返回，避免后续操作 panic
+	if session.State() == nil {
+		return nil
+	}
+
 	pipeline := ws.kvStore.Pipeline(ctx)
 	hasOperations := false
 
@@ -429,7 +453,7 @@ func (ws *PersistenceWorkflowStorage) Recover(ctx context.Context, session inter
 				Str("metadata_operation", "deserialize_state").
 				Msg("反序列化工作流状态失败")
 		} else if loadedState != nil {
-			if st, ok := loadedState.(map[string]any); ok {
+			if st, ok := loadedState.(map[string]any); ok && session.State() != nil {
 				session.State().SetState(st)
 			}
 		}
@@ -674,11 +698,11 @@ func (cp *PersistenceCheckpointer) PreWorkflowExecute(ctx context.Context, sessi
 
 	logger.Info(logComponent).
 		Str("action", "pre_workflow_execute").
-		Str("event_type", "checkpoint_restore").
+		Str("event_type", "checkpoint_process").
 		Str("session_id", sessionID).
 		Str("workflow_id", workflowID).
 		Str("storage_type", "persistence").
-		Msg("开始恢复工作流会话")
+		Msg("开始处理工作流执行前检查点")
 
 	if isInteractiveInput(inputs) {
 		if err := cp.workflowStorage.Recover(ctx, session, inputs); err != nil {
@@ -810,6 +834,13 @@ func (cp *PersistenceCheckpointer) SessionExists(ctx context.Context, sessionID 
 func (cp *PersistenceCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	if len(agentID) > 0 {
 		// 循环清除每个指定 Agent 的持久化检查点
+		logger.Info(logComponent).
+			Str("action", "release").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("storage_type", "persistence").
+			Strs("agent_ids", agentID).
+			Msg("开始清除指定 Agent 的检查点")
 		var firstErr error
 		for _, aid := range agentID {
 			if err := cp.agentStorage.Clear(ctx, aid, sessionID); err != nil && firstErr == nil {
@@ -975,40 +1006,9 @@ func (ws *PersistenceWorkflowStorage) serializeState(st any) *serdeTuple {
 }
 
 // processInteractiveInputs 处理交互输入并更新工作流状态。
-// 对齐 Python: _process_interactive_inputs(session, inputs)
+// 委托给公共函数 processInteractiveInputs，消除代码重复（CP-25）。
 func (ws *PersistenceWorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
-	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
-	if inputs.RawInputs != nil {
-		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
-			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
-		}
-		return
-	}
-
-	// 对齐 Python: if not inputs.user_inputs: return
-	if len(inputs.UserInputs) == 0 {
-		return
-	}
-
-	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
-	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
-	wfState, ok := session.State().(state.WorkflowState)
-	if !ok || wfState == nil {
-		logger.Warn(logComponent).
-			Str("session_id", session.SessionID()).
-			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
-		return
-	}
-
-	for nodeID, value := range inputs.UserInputs {
-		nodeState := wfState.CreateNodeState(nodeID, "")
-		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
-		} else {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
-		}
-	}
-	wfState.Commit()
+	processInteractiveInputs(session, inputs)
 }
 
 // Create 创建 Persistence 检查点器。

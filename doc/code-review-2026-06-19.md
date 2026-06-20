@@ -307,15 +307,15 @@
 
 | 编号 | 问题描述 | Go 位置 |
 |------|---------|---------|
-| SW-05 | WriteCustomStream 硬编码 Type="custom"，Python 由传入数据决定 | `session/agent.go:302` |
-| SW-11 | 缺少 maxSize 参数校验（负数会 panic） | `stream/queue.go:57-61` |
-| SW-12 | 缺少 DEFAULT_RECEIVE_TIMEOUT 常量 | `stream/queue.go:33-42` |
-| SW-16 | 未暴露 END_FRAME 常量/判断函数 | `stream/queue.go:15-16` |
-| SW-18 | StreamWriter 无泛型约束（Python Generic[T,S]） | `stream/writer.go:13-17` |
-| SW-20 | 三个 Writer 的 Write 实现相同，无 Schema 类型匹配校验 | `stream/writer.go:55-67` |
-| SW-27 | writers map 无并发保护（与 SW-37 同源） | `stream/manager.go:39` |
-| SW-30 | tagStreamPayload 未处理 CustomSchema 类型 | `session/agent.go:482-519` |
-| SW-39 | StreamEmitter closed TOCTOU 竞态 | `stream/emitter.go:43-55` |
+| SW-05 | ~~WriteCustomStream 硬编码 Type="custom"~~ 已关闭：Type="custom" 是 SW-03 设计选择的必然结果，用户数据收敛在 Data 字段，非独立问题 | `session/agent.go:302` |
+| SW-11 | ~~缺少 maxSize 参数校验~~ ✅ 已修复：NewStreamQueue 负数 maxSize 时 panic，对齐 Python ValueError | `stream/queue.go:60-63` |
+| SW-12 | ~~缺少 DEFAULT_RECEIVE_TIMEOUT 常量~~ ✅ 已修复：补充 DefaultReceiveTimeout = -1，对齐 Python DEFAULT_RECEIVE_TIMEOUT | `stream/queue.go:42-44` |
+| SW-16 | ~~未暴露 END_FRAME 常量/判断函数~~ ✅ 已修复：新增 IsEndOfStream(err) 函数，对齐 Python END_FRAME 判断 | `stream/queue.go:195-199` |
+| SW-18 | ~~StreamWriter 无泛型约束~~ 已关闭：Go 用 Schema 接口替代泛型，Write 参数已是 Schema 类型，非 any | `stream/writer.go:13-17` |
+| SW-20 | ~~三个 Writer 无 Schema 类型校验~~ ✅ 已修复：各 Writer 增加类型断言，不匹配返回校验错误 | `stream/writer.go:55-88` |
+| SW-27 | ~~writers map 无并发保护~~ 已关闭：与 SW-37 同源，SW-37（严重）已修复，writersMu 已存在 | `stream/manager.go:39` |
+| SW-30 | ~~tagStreamPayload 未处理 CustomSchema~~ ✅ 已修复：增加 CustomSchema 分支，metadata 合并进 Data 字段 | `session/agent.go:495-536` |
+| SW-39 | ~~StreamEmitter closed TOCTOU 竞态~~ 已关闭：Send 的 recover 兜底，行为等价，不修 | `stream/emitter.go:43-55` |
 
 ### 4.2 Tracer 模块（4 个提示）
 
@@ -323,23 +323,23 @@
 |------|---------|---------|
 | TR-03 | updateEndTraceData 赋值方式更直接清晰（记录） | `tracer/span.go:484-492` |
 | TR-15 | _should_decorate 命名对齐正确（记录） | `tracer/decorator.go:195-198` |
-| TR-20 | TraceError 未检查 error nil（防御性编程） | `tracer/workflow.go:176-184` |
+| TR-20 | ~~TraceError 未检查 error nil~~ ✅ 已修复：err 为 nil 时静默返回，防御性编程 | `tracer/workflow.go:188-200` |
 | TR-22 | TraceEvent 枚举数量验证正确（记录） | `tracer/data.go:44-110` |
-| TR-30 | Span/TraceAgentSpan/TraceWorkflowSpan 本身不是并发安全的 | `tracer/span.go:18-41` |
+| TR-30 | ~~Span 本身不是并发安全的~~ 已关闭：与 Python 端一致，靠调用时序串行保证安全，当前无实际风险 | `tracer/span.go:18-41` |
 | TR-33 | 日志组件使用正确（记录） | `tracer/handler.go:13` |
 
 ### 4.3 Checkpointer 模块（7 个提示）
 
 | 编号 | 问题描述 | Go 位置 |
 |------|---------|---------|
-| CP-13 | PostWorkflowExecute 清理与删除不在同一锁区间 | `checkpointer/inmemory.go:240-269` |
-| CP-14 | GetCheckpointer 空字符串处理差异 | `checkpointer/factory.go:136-157` |
-| CP-15 | Persistence PreWorkflowExecute 日志消息有误导 | `checkpointer/persistence.go:664-727` |
-| CP-16 | String() 格式与 Python 不同 | `checkpointer/factory.go:76-79` |
-| CP-17 | pickle vs json 序列化能力差异（已知） | `checkpointer/inmemory.go:858` |
-| CP-22 | LoadsTyped 未处理空字节数组 | `checkpointer/serializer.go:52-58` |
-| CP-23 | graphStore 为 any 缺类型安全（已标注 ⤵️ 8.7 回填） | `checkpointer/inmemory.go:31` |
-| CP-24 | Recover updates 后是否需要 commit 取决于 SetUpdates 实现 | `checkpointer/inmemory.go:810-825` |
+| CP-13 | ~~PostWorkflowExecute 清理与删除不在同一锁区间~~ ✅ 已修复：合并到同一锁区间，使用 innerClearWorkflowSessionLocked | `checkpointer/inmemory.go:238-269` |
+| CP-14 | ~~GetCheckpointer 空字符串处理差异~~ 已关闭：当前行为与 Python 一致，补充注释说明 | `checkpointer/factory.go:136-157` |
+| CP-15 | ~~PreWorkflowExecute 日志消息有误导~~ ✅ 已修复：日志改为"开始处理工作流执行前检查点"，event_type 改为 checkpoint_process | `checkpointer/persistence.go:699-705` |
+| CP-16 | ~~String() 格式与 Python 不同~~ ✅ 已修复：对齐 Python __repr__ 格式 CheckpointerConfig(type=..., conf=...) | `checkpointer/factory.go:76-79` |
+| CP-17 | pickle vs json 序列化能力差异（已知，不修） | `checkpointer/inmemory.go:858` |
+| CP-22 | ~~LoadsTyped 未处理空字节数组~~ ✅ 已修复：增加 len(data)==0 判断，对齐 Python data is None | `checkpointer/serializer.go:52-54` |
+| CP-23 | graphStore 为 any 缺类型安全（已标注 ⤵️ 8.7 回填，不修） | `checkpointer/inmemory.go:31` |
+| CP-24 | ~~Recover updates 后是否需要 commit~~ 已关闭：对齐 Python set_updates 后无需额外 commit，补充注释说明 | `checkpointer/inmemory.go:816-818` |
 
 ---
 

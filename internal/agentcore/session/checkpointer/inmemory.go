@@ -237,20 +237,19 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 
 	if !isInterrupted {
 		// 工作流正常完成，清除检查点
-		func() {
-			// 清除工作流会话
-			if err := cp.innerClearWorkflowSession(ctx, workflowID, sessionID, "workflow execute completion"); err != nil {
-				logger.Error(logComponent).Err(err).
-					Str("session_id", sessionID).
-					Str("workflow_id", workflowID).
-					Msg("清除工作流会话失败")
-			}
-		}()
+		// 清理和删除在同一锁区间内完成，避免中间状态被并发访问
+		cp.mu.Lock()
+		// 清除工作流会话（使用不加锁版本，因为外层已持锁）
+		if err := cp.innerClearWorkflowSessionLocked(ctx, workflowID, sessionID, "workflow execute completion"); err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("session_id", sessionID).
+				Str("workflow_id", workflowID).
+				Msg("清除工作流会话失败")
+		}
 
 		// 如果没有父会话，移除 workflow store
 		// 对齐 Python: if not isinstance(session.parent(), AgentSession)
 		// 有 parent → 保留 store；无 parent → 删除 store
-		cp.mu.Lock()
 		hasParent := false
 		if pp, ok := session.(ParentProvider); ok && pp.Parent() != nil {
 			hasParent = true
@@ -545,6 +544,13 @@ func (cp *InMemoryCheckpointer) SessionExists(ctx context.Context, sessionID str
 func (cp *InMemoryCheckpointer) Release(ctx context.Context, sessionID string, agentID ...string) error {
 	if len(agentID) > 0 {
 		// 循环清除每个指定 Agent 的检查点
+		logger.Info(logComponent).
+			Str("action", "release").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("storage_type", "inmemory").
+			Strs("agent_ids", agentID).
+			Msg("开始清除指定 Agent 的检查点")
 		cp.mu.RLock()
 		agentStore, ok := cp.agentStores[sessionID]
 		cp.mu.RUnlock()
@@ -809,6 +815,8 @@ func (ws *WorkflowStorage) Recover(ctx context.Context, session interfaces.BaseS
 
 	// 恢复状态更新
 	// GetUpdates/SetUpdates 在 WorkflowCommitState 上，需要类型断言
+	// 对齐 Python: session.state().set_updates(state_updates) 后无需额外 commit，
+	// updates 会在下次 workflow 执行时通过 commit 合并到 state。
 	if commitState, ok := session.State().(*state.WorkflowCommitState); ok {
 		ws.mu.RLock()
 		updatesBlob, updatesExists := ws.stateUpdatesBlobs[workflowID]
@@ -982,6 +990,59 @@ func (cp *InMemoryCheckpointer) innerClearWorkflowSession(ctx context.Context, w
 	return nil
 }
 
+// innerClearWorkflowSessionLocked 清除工作流会话（不加锁版本，调用方已持锁）。
+// 用于 PostWorkflowExecute 中清理与删除需要在同一锁区间完成的场景。
+func (cp *InMemoryCheckpointer) innerClearWorkflowSessionLocked(ctx context.Context, workflowID, sessionID string, reason string) error {
+	workflowStore := cp.workflowStores[sessionID]
+	workflowIDs := cp.sessionToWorkflowIDs[sessionID]
+
+	logger.Info(logComponent).
+		Str("action", "inner_clear_workflow_session").
+		Str("event_type", "checkpoint_clear").
+		Str("session_id", sessionID).
+		Str("workflow_id", workflowID).
+		Str("reason", reason).
+		Str("storage_type", "inmemory").
+		Msg("开始清除工作流所有检查点")
+
+	isSucceed := false
+
+	// ⤵️ 8.7 回填：Graph Store 实现后添加 graphStore.Delete(sessionID, workflowID)
+	isSucceed = true
+
+	// 清除 workflow store（不需要再加锁，调用方已持锁）
+	if workflowStore != nil {
+		if workflowIDs != nil {
+			delete(workflowIDs, workflowID)
+		}
+		// workflowStore.Clear 自身有独立的锁保护
+		if err := workflowStore.Clear(ctx, workflowID, sessionID); err != nil {
+			if !isSucceed {
+				logger.Error(logComponent).Err(err).
+					Str("action", "inner_clear_workflow_session").
+					Str("event_type", "checkpoint_clear").
+					Str("session_id", sessionID).
+					Str("workflow_id", workflowID).
+					Str("storage_type", "inmemory").
+					Msg("清除工作流检查点失败")
+			}
+			return err
+		}
+	}
+
+	if isSucceed {
+		logger.Info(logComponent).
+			Str("action", "inner_clear_workflow_session").
+			Str("event_type", "checkpoint_clear").
+			Str("session_id", sessionID).
+			Str("workflow_id", workflowID).
+			Str("reason", reason).
+			Str("storage_type", "inmemory").
+			Msg("成功清除工作流所有检查点")
+	}
+	return nil
+}
+
 // setBlob 设置序列化数据。
 func (s *baseSingleStateStorage) setBlob(entityID, formatTag string, data []byte) {
 	s.mu.Lock()
@@ -1013,41 +1074,9 @@ func (s *baseSingleStateStorage) hasBlob(entityID string) bool {
 }
 
 // processInteractiveInputs 处理交互输入并更新工作流状态。
-// 对齐 Python: _process_interactive_inputs(session, inputs)
+// 委托给公共函数 processInteractiveInputs，消除代码重复（CP-25）。
 func (ws *WorkflowStorage) processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
-	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
-	if inputs.RawInputs != nil {
-		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
-			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
-		}
-		return
-	}
-
-	// 对齐 Python: if not inputs.user_inputs: return
-	if len(inputs.UserInputs) == 0 {
-		return
-	}
-
-	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
-	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
-	// session 是 WorkflowSession，parentID=""，executableID=nodeID。
-	wfState, ok := session.State().(state.WorkflowState)
-	if !ok || wfState == nil {
-		logger.Warn(logComponent).
-			Str("session_id", session.SessionID()).
-			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
-		return
-	}
-
-	for nodeID, value := range inputs.UserInputs {
-		nodeState := wfState.CreateNodeState(nodeID, "")
-		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
-		} else {
-			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
-		}
-	}
-	wfState.Commit()
+	processInteractiveInputs(session, inputs)
 }
 
 // isInteractiveInput 判断输入是否为交互输入。

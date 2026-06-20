@@ -77,22 +77,39 @@ func TestStreamEmitter_CloseIdempotent(t *testing.T) {
 	}
 }
 
-// TestStreamEmitter_CloseSendsEndFrame 测试关闭时发送 endFrame
-func TestStreamEmitter_CloseSendsEndFrame(t *testing.T) {
+// TestStreamEmitter_CloseClosesQueue 测试关闭时关闭队列
+// Emitter.Close() 应直接关闭底层队列，消费端通过 ErrQueueClosed 感知流结束。
+func TestStreamEmitter_CloseClosesQueue(t *testing.T) {
 	e := NewStreamEmitter()
 	ctx := context.Background()
 
+	// 写入数据
+	schema := OutputSchema{Type: "message", Index: 0, Payload: "hello"}
+	_ = e.Emit(ctx, schema)
+
+	// 关闭 emitter
 	if err := e.Close(ctx); err != nil {
 		t.Fatalf("Close 失败: %v", err)
 	}
 
-	// 队列中应有 endFrame
+	// 队列应已关闭
+	if !e.StreamQueue().IsClosed() {
+		t.Error("Close 后队列应为关闭状态")
+	}
+
+	// 但仍可读取残留数据
 	data, err := e.StreamQueue().Receive(ctx)
 	if err != nil {
-		t.Fatalf("Receive 失败: %v", err)
+		t.Fatalf("应能读到残留数据，实际 err=%v", err)
 	}
-	if _, ok := data.(endFrame); !ok {
-		t.Error("Close 后队列中应有 endFrame 哨兵")
+	if out, ok := data.(OutputSchema); !ok || out.Type != "message" {
+		t.Errorf("残留数据 = %v, want OutputSchema{Type:message}", data)
+	}
+
+	// 再读返回 ErrQueueClosed
+	_, err = e.StreamQueue().Receive(ctx)
+	if err != ErrQueueClosed {
+		t.Errorf("残留数据读完后应返回 ErrQueueClosed，实际 err=%v", err)
 	}
 }
 

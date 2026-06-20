@@ -3,7 +3,6 @@ package tracer
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -231,7 +230,7 @@ func (s *Span) Update(data map[string]any) {
 			continue
 		}
 		if err := setFieldValue(fieldVal, field.Type, value); err != nil {
-			logger.Debug(logComponent).
+			logger.Warn(logComponent).
 				Str("field", key).
 				Err(err).
 				Msg("Span.Update 设置字段失败")
@@ -376,16 +375,4 @@ func setFieldValue(fieldVal reflect.Value, fieldType reflect.Type, value any) er
 	}
 
 	return fmt.Errorf("无法将 %v 转换为 %v", vVal.Type(), fieldType)
-}
-
-// fieldToSnakeCase 将 Go 驼峰字段名转换为 Python snake_case 属性名
-func fieldToSnakeCase(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if i > 0 && 'A' <= r && r <= 'Z' {
-			b.WriteByte('_')
-		}
-		b.WriteRune(r | 0x20) // 转小写
-	}
-	return b.String()
 }

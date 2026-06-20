@@ -767,6 +767,59 @@ func TestTraceWorkflowHandler_OnPreStream(t *testing.T) {
 	}
 }
 
+// TestTraceWorkflowHandler_OnPreStream_空Dict不追加 测试空 dict 不追加到 StreamInputs
+// 对齐 Python: if chunk and isinstance(chunk, dict) — 空 dict 为 falsy，不追加
+func TestTraceWorkflowHandler_OnPreStream_空Dict不追加(t *testing.T) {
+	h, _ := newTestWorkflowHandler()
+
+	_ = h.getTracerWorkflowSpan("invoke-1")
+
+	// 空 dict 不应追加
+	err := h.OnPreStream(context.Background(), "invoke-1", map[string]any{}, true)
+	if err != nil {
+		t.Fatalf("OnPreStream 返回错误: %v", err)
+	}
+
+	span := h.workflowSpans["invoke-1"]
+	if len(span.StreamInputs) != 0 {
+		t.Errorf("空 dict 时 StreamInputs 长度 = %d, want 0", len(span.StreamInputs))
+	}
+}
+
+// TestTraceWorkflowHandler_OnPreStream_Nil不追加 测试 nil chunk 不追加到 StreamInputs
+func TestTraceWorkflowHandler_OnPreStream_Nil不追加(t *testing.T) {
+	h, _ := newTestWorkflowHandler()
+
+	_ = h.getTracerWorkflowSpan("invoke-1")
+
+	err := h.OnPreStream(context.Background(), "invoke-1", nil, false)
+	if err != nil {
+		t.Fatalf("OnPreStream 返回错误: %v", err)
+	}
+
+	span := h.workflowSpans["invoke-1"]
+	if len(span.StreamInputs) != 0 {
+		t.Errorf("nil chunk 时 StreamInputs 长度 = %d, want 0", len(span.StreamInputs))
+	}
+}
+
+// TestTraceWorkflowHandler_OnPreStream_字符串不追加 测试 string chunk 不追加到 StreamInputs
+func TestTraceWorkflowHandler_OnPreStream_字符串不追加(t *testing.T) {
+	h, _ := newTestWorkflowHandler()
+
+	_ = h.getTracerWorkflowSpan("invoke-1")
+
+	err := h.OnPreStream(context.Background(), "invoke-1", "string chunk", false)
+	if err != nil {
+		t.Fatalf("OnPreStream 返回错误: %v", err)
+	}
+
+	span := h.workflowSpans["invoke-1"]
+	if len(span.StreamInputs) != 0 {
+		t.Errorf("string chunk 时 StreamInputs 长度 = %d, want 0", len(span.StreamInputs))
+	}
+}
+
 // TestTraceWorkflowHandler_OnPostInvoke_End组件更新Inputs 测试 End/Message 组件更新 Inputs
 func TestTraceWorkflowHandler_OnPostInvoke_End组件更新Inputs(t *testing.T) {
 	h, _ := newTestWorkflowHandler()

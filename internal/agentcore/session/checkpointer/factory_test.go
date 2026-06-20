@@ -332,7 +332,7 @@ func TestCheckpointerFactoryConfig_String(t *testing.T) {
 				Type: "in_memory",
 				Conf: map[string]any{"host": "localhost"},
 			},
-			want: `type="in_memory" conf=map[host:localhost]`,
+			want: `CheckpointerConfig(type="in_memory", conf=map[host:localhost])`,
 		},
 		{
 			name: "含密码 URL 脱敏",
@@ -342,7 +342,7 @@ func TestCheckpointerFactoryConfig_String(t *testing.T) {
 					"db_url": "postgresql://admin:secret@db:5432/app",
 				},
 			},
-			want: `type="persistence" conf=map[db_url:postgresql://admin:***@db:5432/app]`,
+			want: `CheckpointerConfig(type="persistence", conf=map[db_url:postgresql://admin:***@db:5432/app])`,
 		},
 	}
 

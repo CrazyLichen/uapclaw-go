@@ -8,6 +8,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -111,6 +113,33 @@ func (f *fakeAgentSession) Tracer() *Tracer {
 // AgentSpan 实现 AgentSessionProvider 接口
 func (f *fakeAgentSession) AgentSpan() *TraceAgentSpan {
 	return f.agentSpan
+}
+
+// fakeWorkflow 用于测试的模拟工作流，实现 single_agent.Workflow 接口
+type fakeWorkflow struct {
+	// invokeResult Invoke 返回的结果
+	invokeResult any
+	// invokeErr Invoke 返回的错误
+	invokeErr error
+	// card 工作流卡片
+	card *schema.WorkflowCard
+}
+
+// Invoke 实现 single_agent.Workflow 接口
+func (f *fakeWorkflow) Invoke(_ context.Context, _ map[string]any, _ ...single_agent.WorkflowOption) (any, error) {
+	return f.invokeResult, f.invokeErr
+}
+
+// Stream 实现 single_agent.Workflow 接口
+func (f *fakeWorkflow) Stream(_ context.Context, _ map[string]any, _ ...single_agent.WorkflowOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+
+// Card 实现 single_agent.Workflow 接口
+func (f *fakeWorkflow) Card() *schema.WorkflowCard {
+	return f.card
 }
 
 // TestTracedModelClient_Invoke_成功 测试 Invoke 成功时触发 TraceLLMStart 和 TraceLLMEnd 事件
@@ -378,7 +407,13 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	tracer := NewTracer()
 	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
 
-	innerWorkflow := "fake_workflow"
+	innerWorkflow := &fakeWorkflow{
+		card: schema.NewWorkflowCard(
+			schema.WithName("测试工作流"),
+			schema.WithDescription("测试描述"),
+		),
+	}
+	innerWorkflow.card.Version = "1.0"
 	session := &fakeAgentSession{
 		tracer:    tracer,
 		agentSpan: agentSpan,
@@ -396,17 +431,149 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	if tracedWf.tracer != tracer {
 		t.Fatal("期望 TracedWorkflow.tracer 等于 session 的 tracer")
 	}
+	// 验证 instanceInfo 包含 metadata
+	if tracedWf.instanceInfo["class_name"] != "测试工作流" {
+		t.Errorf("期望 class_name=测试工作流，实际: %v", tracedWf.instanceInfo["class_name"])
+	}
+	if tracedWf.instanceInfo["type"] != "workflow" {
+		t.Errorf("期望 type=workflow，实际: %v", tracedWf.instanceInfo["type"])
+	}
+	metadata, ok := tracedWf.instanceInfo["metadata"].(map[string]any)
+	if !ok {
+		t.Fatal("期望 metadata 为 map[string]any")
+	}
+	if metadata["name"] != "测试工作流" {
+		t.Errorf("期望 metadata.name=测试工作流，实际: %v", metadata["name"])
+	}
+	if metadata["version"] != "1.0" {
+		t.Errorf("期望 metadata.version=1.0，实际: %v", metadata["version"])
+	}
 }
 
 // TestDecorateWorkflowWithTrace_无Tracer 测试无 Tracer 时返回原始 w
 func TestDecorateWorkflowWithTrace_无Tracer(t *testing.T) {
-	innerWorkflow := "fake_workflow"
+	innerWorkflow := &fakeWorkflow{}
 	session := &fakeAgentSession{}
 
 	decorated := DecorateWorkflowWithTrace(innerWorkflow, session)
 
 	if decorated != innerWorkflow {
 		t.Fatal("期望返回原始 w（无 Tracer 时不装饰）")
+	}
+}
+
+// TestTracedWorkflow_Invoke_成功 测试 Invoke 成功时触发 TraceWorkflowStart 和 TraceWorkflowEnd
+func TestTracedWorkflow_Invoke_成功(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	expectedResult := map[string]any{"output": "done"}
+	inner := &fakeWorkflow{
+		invokeResult: expectedResult,
+		card:          schema.NewWorkflowCard(schema.WithName("wf-1")),
+	}
+
+	tracedWf := &TracedWorkflow{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "wf-1", "type": "workflow"},
+	}
+
+	result, err := tracedWf.Invoke(context.Background(), map[string]any{"input": "test"})
+	if err != nil {
+		t.Fatalf("期望无错误，实际: %v", err)
+	}
+	if result.(map[string]any)["output"] != "done" {
+		t.Errorf("期望 output=done，实际: %v", result)
+	}
+}
+
+// TestTracedWorkflow_Invoke_失败 测试 Invoke 失败时触发 TraceWorkflowStart 和 TraceWorkflowError
+func TestTracedWorkflow_Invoke_失败(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	inner := &fakeWorkflow{
+		invokeErr: errors.New("工作流执行失败"),
+		card:      schema.NewWorkflowCard(schema.WithName("wf-1")),
+	}
+
+	tracedWf := &TracedWorkflow{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "wf-1", "type": "workflow"},
+	}
+
+	result, err := tracedWf.Invoke(context.Background(), map[string]any{"input": "test"})
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
+	}
+	if result != nil {
+		t.Fatalf("期望 result 为 nil，实际: %v", result)
+	}
+	if err.Error() != "工作流执行失败" {
+		t.Fatalf("期望错误消息 '工作流执行失败'，实际: %s", err.Error())
+	}
+}
+
+// TestTracedWorkflow_Card_委托 测试 Card 方法直接委托 inner
+func TestTracedWorkflow_Card_委托(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	expectedCard := schema.NewWorkflowCard(
+		schema.WithName("my-workflow"),
+		schema.WithDescription("我的工作流"),
+	)
+	expectedCard.Version = "2.0"
+
+	inner := &fakeWorkflow{
+		card: expectedCard,
+	}
+
+	tracedWf := &TracedWorkflow{
+		inner:        inner,
+		tracer:       tracer,
+		agentSpan:    agentSpan,
+		instanceInfo: map[string]any{"class_name": "my-workflow", "type": "workflow"},
+	}
+
+	card := tracedWf.Card()
+	if card != expectedCard {
+		t.Fatal("期望返回 inner 的 Card 结果")
+	}
+	if card.Name != "my-workflow" {
+		t.Fatalf("期望 Name=my-workflow，实际: %s", card.Name)
+	}
+	if card.Version != "2.0" {
+		t.Fatalf("期望 Version=2.0，实际: %s", card.Version)
+	}
+}
+
+// TestDecorateWorkflowWithTrace_无Card 测试 Card 为 nil 时 class_name 使用默认值
+func TestDecorateWorkflowWithTrace_无Card(t *testing.T) {
+	tracer := NewTracer()
+	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+
+	innerWorkflow := &fakeWorkflow{card: nil}
+	session := &fakeAgentSession{
+		tracer:    tracer,
+		agentSpan: agentSpan,
+	}
+
+	decorated := DecorateWorkflowWithTrace(innerWorkflow, session)
+
+	tracedWf, ok := decorated.(*TracedWorkflow)
+	if !ok {
+		t.Fatal("期望返回 *TracedWorkflow 类型")
+	}
+	if tracedWf.instanceInfo["class_name"] != "Workflow" {
+		t.Errorf("期望 class_name=Workflow（默认值），实际: %v", tracedWf.instanceInfo["class_name"])
+	}
+	if _, hasMetadata := tracedWf.instanceInfo["metadata"]; hasMetadata {
+		t.Error("Card 为 nil 时不应包含 metadata")
 	}
 }
 

@@ -22,18 +22,18 @@ func TestStreamQueue_SendReceive(t *testing.T) {
 	q := NewStreamQueue(10)
 	ctx := context.Background()
 
-	// 发送
-	if err := q.Send(ctx, "hello"); err != nil {
+	schema := OutputSchema{Type: "message", Index: 0, Payload: "hello"}
+	if err := q.Send(ctx, schema); err != nil {
 		t.Fatalf("Send 失败: %v", err)
 	}
 
-	// 接收
 	data, err := q.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Receive 失败: %v", err)
 	}
-	if data != "hello" {
-		t.Errorf("Receive 数据 = %v, want %q", data, "hello")
+	out, ok := data.(OutputSchema)
+	if !ok || out.Type != "message" {
+		t.Errorf("Receive 数据 = %v, want OutputSchema{Type:message}", data)
 	}
 }
 
@@ -46,13 +46,13 @@ func TestStreamQueue_SendAfterClose(t *testing.T) {
 		t.Fatalf("Close 失败: %v", err)
 	}
 
-	if err := q.Send(ctx, "data"); err == nil {
+	schema := OutputSchema{Type: "message", Index: 0, Payload: "data"}
+	if err := q.Send(ctx, schema); err == nil {
 		t.Error("关闭后 Send 应返回错误")
 	}
 }
 
 // TestStreamQueue_ReceiveAfterClose 测试关闭后接收行为
-// Close 只做 closed=true + close(ch)，不发送 endFrame（endFrame 由 Emitter 负责）。
 // Close 后 channel 为空且已关闭，Receive 返回 ErrQueueClosed。
 func TestStreamQueue_ReceiveAfterClose(t *testing.T) {
 	q := NewStreamQueue(10)
@@ -70,15 +70,14 @@ func TestStreamQueue_ReceiveAfterClose(t *testing.T) {
 }
 
 // TestStreamQueue_ReceiveResidualDataAfterClose 测试关闭后读取残留数据
-// 对齐 Python：消费端收到 END_FRAME 后调 queue.close()，此时 channel 中可能有残留数据。
 // Go 的 close(ch) 后仍可读取残留数据，直到 ok=false 返回 ErrQueueClosed。
 func TestStreamQueue_ReceiveResidualDataAfterClose(t *testing.T) {
 	q := NewStreamQueue(10)
 	ctx := context.Background()
 
 	// 先发送数据
-	_ = q.Send(ctx, "data1")
-	_ = q.Send(ctx, "data2")
+	_ = q.Send(ctx, OutputSchema{Type: "data1", Index: 0, Payload: "first"})
+	_ = q.Send(ctx, OutputSchema{Type: "data2", Index: 1, Payload: "second"})
 
 	// Close 后 channel 中仍有残留数据
 	_ = q.Close(ctx)
@@ -88,8 +87,8 @@ func TestStreamQueue_ReceiveResidualDataAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("第一次 Receive 应读到残留数据，实际 err=%v", err)
 	}
-	if data != "data1" {
-		t.Errorf("第一次 Receive 数据 = %v, want %q", data, "data1")
+	if out, ok := data.(OutputSchema); !ok || out.Type != "data1" {
+		t.Errorf("第一次 Receive 数据 = %v, want OutputSchema{Type:data1}", data)
 	}
 
 	// 第二次 Receive 读到残留 data2
@@ -97,8 +96,8 @@ func TestStreamQueue_ReceiveResidualDataAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("第二次 Receive 应读到残留数据，实际 err=%v", err)
 	}
-	if data != "data2" {
-		t.Errorf("第二次 Receive 数据 = %v, want %q", data, "data2")
+	if out, ok := data.(OutputSchema); !ok || out.Type != "data2" {
+		t.Errorf("第二次 Receive 数据 = %v, want OutputSchema{Type:data2}", data)
 	}
 
 	// 第三次 Receive：channel 为空且已关闭，返回 ErrQueueClosed
@@ -138,17 +137,13 @@ func TestStreamQueue_Ch(t *testing.T) {
 	q := NewStreamQueue(10)
 	ctx := context.Background()
 
-	_ = q.Send(ctx, "data1")
-	_ = q.Send(ctx, endFrame{})
+	schema := OutputSchema{Type: "data1", Index: 0, Payload: "hello"}
+	_ = q.Send(ctx, schema)
 
 	ch := q.Ch()
 	data := <-ch
-	if data != "data1" {
-		t.Errorf("Ch 接收数据 = %v, want %q", data, "data1")
-	}
-	frame := <-ch
-	if _, ok := frame.(endFrame); !ok {
-		t.Error("应收到 endFrame 哨兵")
+	if out, ok := data.(OutputSchema); !ok || out.Type != "data1" {
+		t.Errorf("Ch 接收数据 = %v, want OutputSchema{Type:data1}", data)
 	}
 }
 
@@ -158,7 +153,8 @@ func TestStreamQueue_SendWithContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立即取消
 
-	err := q.Send(ctx, "data", 50*time.Millisecond)
+	schema := OutputSchema{Type: "message", Index: 0, Payload: "data"}
+	err := q.Send(ctx, schema, 50*time.Millisecond)
 	if err == nil {
 		t.Error("上下文取消后 Send 应返回错误")
 	}

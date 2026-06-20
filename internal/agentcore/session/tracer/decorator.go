@@ -6,6 +6,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -49,13 +52,14 @@ type TracedTool struct {
 	instanceInfo map[string]any
 }
 
-// TracedWorkflow 追踪装饰的工作流占位结构体。
-// ⤵️ 领域6 定义具体 WorkflowInterface 后替换 inner 类型并补充方法实现。
+// TracedWorkflow 追踪装饰的工作流，包装 Workflow 并在 Invoke/Stream 调用时触发追踪事件。
+// 实现 single_agent.Workflow 接口。
 //
-// 对应 Python: TracedWorkflow (openjiuwen/core/session/tracer/decorator.py)
+// 对应 Python: decorate_workflow_with_trace 返回的 _TraceProxy (openjiuwen/core/session/tracer/decorator.py)
+// Python 同时包装 invoke 和 stream，Go 当前包装 Invoke，Stream 在领域八扩展时回填。
 type TracedWorkflow struct {
 	// inner 被装饰的原始工作流实例
-	inner any
+	inner single_agent.Workflow
 	// tracer 追踪器
 	tracer *Tracer
 	// agentSpan Agent 追踪跨度
@@ -215,6 +219,47 @@ func (t *TracedTool) Card() *tool.ToolCard {
 	return t.inner.Card()
 }
 
+// Invoke 非流式执行工作流，在调用前后触发追踪事件。
+// 流程：CreateAgentSpan → TriggerAgent(TraceWorkflowStart) → inner.Invoke → TriggerAgent(TraceWorkflowEnd/Error)
+//
+// 对应 Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
+func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...single_agent.WorkflowOption) (any, error) {
+	span := w.tracer.AgentSpanManager.CreateAgentSpan(w.agentSpan)
+	w.tracer.TriggerAgent(ctx, TraceWorkflowStart, &TriggerParams{
+		Span:         &span.Span,
+		Inputs:       inputs,
+		InstanceInfo: w.instanceInfo,
+	})
+
+	result, err := w.inner.Invoke(ctx, inputs, opts...)
+	if err != nil {
+		w.tracer.TriggerAgent(ctx, TraceWorkflowError, &TriggerParams{
+			Span:  &span.Span,
+			Error: err,
+		})
+		return nil, err
+	}
+
+	w.tracer.TriggerAgent(ctx, TraceWorkflowEnd, &TriggerParams{
+		Span:    &span.Span,
+		Outputs: result,
+	})
+	return result, nil
+}
+
+// Stream 流式执行工作流，直接委托 inner。
+// ⤵️ 领域八回填：流式 trace 包装逻辑，对齐 Python decorate_workflow_with_trace 中的 stream 包装。
+func (w *TracedWorkflow) Stream(ctx context.Context, inputs map[string]any, opts ...single_agent.WorkflowOption) (<-chan stream.Schema, error) {
+	return w.inner.Stream(ctx, inputs, opts...)
+}
+
+// Card 返回工作流配置卡片，直接委托 inner。
+//
+// 对应 Python: workflow.card 属性
+func (w *TracedWorkflow) Card() *schema.WorkflowCard {
+	return w.inner.Card()
+}
+
 // DecorateModelWithTrace 为模型客户端添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 model。
 // instanceInfo 中 class_name 从模型配置获取（对齐 Python model.config.model_config.model_name），
@@ -283,8 +328,10 @@ func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 
 // DecorateWorkflowWithTrace 为工作流添加追踪装饰。
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 w。
-// ⤵️ 领域6 定义具体 WorkflowInterface 后替换返回类型。
-func DecorateWorkflowWithTrace(w any, session tracerSession) any {
+// instanceInfo 中 class_name 和 metadata 从 workflow.Card() 获取
+// （对齐 Python workflow.card.name / workflow.card.id 等），
+// type 固定为 "workflow"（对齐 Python decorate_workflow_with_trace）。
+func DecorateWorkflowWithTrace(w single_agent.Workflow, session tracerSession) single_agent.Workflow {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return w
@@ -295,11 +342,32 @@ func DecorateWorkflowWithTrace(w any, session tracerSession) any {
 		return w
 	}
 
+	// 从 workflow.Card() 提取元数据，对齐 Python:
+	//   metadata = dict(id=workflow.card.id, name=workflow.card.name,
+	//                   description=workflow.card.description,
+	//                   version=workflow.card.version)
+	//   instance_info = {"class_name": workflow.card.name, "type": "workflow", "metadata": metadata}
+	className := "Workflow"
+	instanceInfo := map[string]any{"class_name": className, "type": "workflow"}
+
+	if card := w.Card(); card != nil {
+		if card.Name != "" {
+			className = card.Name
+		}
+		instanceInfo["class_name"] = className
+		instanceInfo["metadata"] = map[string]any{
+			"id":          card.ID,
+			"name":        card.Name,
+			"description": card.Description,
+			"version":     card.Version,
+		}
+	}
+
 	return &TracedWorkflow{
 		inner:        w,
 		tracer:       tracerVal,
 		agentSpan:    agentSpan,
-		instanceInfo: map[string]any{"class_name": "Workflow", "type": "workflow"},
+		instanceInfo: instanceInfo,
 	}
 }
 

@@ -3,7 +3,10 @@ package checkpointer
 import (
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -112,4 +115,42 @@ func getWorkflowID(session interfaces.BaseSession) string {
 		return ws.WorkflowID()
 	}
 	return ""
+}
+
+// processInteractiveInputs 处理交互输入并更新工作流状态。
+// 对齐 Python: _process_interactive_inputs(session, inputs)。
+// 提取为公共函数，InMemory 和 Persistence 版本共用，消除代码重复（CP-25）。
+func processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
+	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
+	if inputs.RawInputs != nil {
+		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {
+			wfState.UpdateAndCommitWorkflowState(map[string]any{InteractiveInputKey: inputs.RawInputs})
+		}
+		return
+	}
+
+	// 对齐 Python: if not inputs.user_inputs: return
+	if len(inputs.UserInputs) == 0 {
+		return
+	}
+
+	// 对齐 Python: for node_id, value → NodeSession(session, node_id) → append INTERACTIVE_INPUT
+	// 不导入 internal 包（会循环依赖），用 WorkflowState.CreateNodeState 等价替代。
+	wfState, ok := session.State().(state.WorkflowState)
+	if !ok || wfState == nil {
+		logger.Warn(logComponent).
+			Str("session_id", session.SessionID()).
+			Msg("session.State() 不是 WorkflowState，跳过 user_inputs 处理")
+		return
+	}
+
+	for nodeID, value := range inputs.UserInputs {
+		nodeState := wfState.CreateNodeState(nodeID, "")
+		if list, ok := nodeState.Get(state.StringKey(InteractiveInputKey)).([]any); ok {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: append(list, value)})
+		} else {
+			_ = nodeState.Update(map[string]any{InteractiveInputKey: []any{value}})
+		}
+	}
+	wfState.Commit()
 }

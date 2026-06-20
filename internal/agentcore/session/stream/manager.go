@@ -33,14 +33,15 @@ type InteractionOutputWriter interface {
 }
 
 // StreamWriterManager 流写入器管理器，对应 Python StreamWriterManager。
-// 持有 StreamEmitter 和 map[StreamMode]StreamWriter，统一管理 Writer 集合和消费端。
+// 持有 StreamEmitter 和 map[string]StreamWriter（key 为 StreamMode.Mode()），
+// 统一管理 Writer 集合和消费端。
 type StreamWriterManager struct {
 	// emitter 流发射器
 	emitter *StreamEmitter
 	// writersMu 保护 writers map 的读写锁
 	writersMu sync.RWMutex
-	// writers 流写入器集合
-	writers map[StreamMode]StreamWriter
+	// writers 流写入器集合，key 为 StreamMode.Mode()（即模式标识字符串）
+	writers map[string]StreamWriter
 	// defaultModes 默认模式列表（不允许移除默认 Writer）
 	defaultModes []StreamMode
 }
@@ -79,7 +80,7 @@ func NewStreamWriterManager(emitter *StreamEmitter, modes ...StreamMode) *Stream
 
 	mgr := &StreamWriterManager{
 		emitter:      emitter,
-		writers:      make(map[StreamMode]StreamWriter),
+		writers:      make(map[string]StreamWriter),
 		defaultModes: defaultModes,
 	}
 	mgr.addDefaultWriters()
@@ -98,11 +99,11 @@ func (m *StreamWriterManager) AddWriter(key StreamMode, writer StreamWriter) err
 	if writer == nil {
 		return exception.NewBaseError(exception.StatusStreamWriterManagerAddWriterError,
 			exception.WithMsg("writer 不能为 nil"),
-			exception.WithParam("mode", key.String()),
+			exception.WithParam("mode", key.Mode()),
 		)
 	}
 	m.writersMu.Lock()
-	m.writers[key] = writer
+	m.writers[key.Mode()] = writer
 	m.writersMu.Unlock()
 	return nil
 }
@@ -112,7 +113,7 @@ func (m *StreamWriterManager) AddWriter(key StreamMode, writer StreamWriter) err
 func (m *StreamWriterManager) GetWriter(key StreamMode) StreamWriter {
 	m.writersMu.RLock()
 	defer m.writersMu.RUnlock()
-	return m.writers[key]
+	return m.writers[key.Mode()]
 }
 
 // GetOutputWriter 获取标准输出流写入器
@@ -150,15 +151,15 @@ func (m *StreamWriterManager) GetInteractionOutputWriter() InteractionOutputWrit
 // 对应 Python: StreamWriterManager.remove_writer(key)
 func (m *StreamWriterManager) RemoveWriter(key StreamMode) error {
 	for _, mode := range m.defaultModes {
-		if mode == key {
+		if mode.Mode() == key.Mode() {
 			return exception.NewBaseError(exception.StatusStreamWriterManagerRemoveWriterError,
 				exception.WithMsg("不允许移除默认 Writer"),
-				exception.WithParam("mode", key.String()),
+				exception.WithParam("mode", key.Mode()),
 			)
 		}
 	}
 	m.writersMu.Lock()
-	delete(m.writers, key)
+	delete(m.writers, key.Mode())
 	m.writersMu.Unlock()
 	return nil
 }
@@ -184,15 +185,16 @@ func WithFrameTimeout(d time.Duration) StreamOutputOption {
 
 // StreamOutput 返回流输出 channel，消费端通过 range 读取。
 // 对应 Python: StreamWriterManager.stream_output(first_frame_timeout, timeout)
-// 内部启动 goroutine 从 emitter 的队列读取数据，转发到输出 channel。
-// 首帧超时和帧间隔超时对齐 Python 的 first_frame_timeout / timeout 参数。
-func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan any {
+// 内部启动 goroutine 从 emitter 的队列读取 Schema 数据，转发到输出 channel。
+// 流结束信号：Emitter.Close() 会调 queue.Close()，消费端通过 Receive() 返回
+// ErrQueueClosed 感知流结束，等价于 Python 的 END_FRAME 哨兵机制。
+func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan Schema {
 	cfg := defaultStreamOutputConfig()
 	for _, o := range opts {
 		o(&cfg)
 	}
 
-	out := make(chan any)
+	out := make(chan Schema)
 
 	go func() {
 		defer close(out)
@@ -217,7 +219,7 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan an
 
 			data, err := queue.Receive(ctx)
 			if err != nil {
-				// 队列关闭或超时
+				// ErrQueueClosed 表示流正常结束，其他错误（超时等）也终止
 				logger.Debug(logComponent).
 					Str("event_type", "SESSION_STREAM_CHUNK").
 					Str("status", "queue_closed").
@@ -227,18 +229,6 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan an
 			}
 
 			firstFrame = false
-
-			// 收到 endFrame 哨兵 → 关闭底层队列 → 关闭输出 channel
-			// 对齐 Python: stream_output 收到 END_FRAME 后调用 queue.close()（need_close=True）
-			if _, ok := data.(endFrame); ok {
-				logger.Debug(logComponent).
-					Str("event_type", "SESSION_STREAM_CHUNK").
-					Msg("收到 END_FRAME，关闭流队列并结束流输出")
-				// 消费端关闭队列，对齐 Python need_close=True 语义
-				_ = queue.Close(ctx)
-				cancel()
-				return
-			}
 
 			if data != nil {
 				logger.Debug(logComponent).
@@ -263,17 +253,17 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan an
 // addDefaultWriters 注册默认 Writer，对齐 Python StreamWriterManager._add_default_writers()
 func (m *StreamWriterManager) addDefaultWriters() {
 	for _, mode := range m.defaultModes {
-		switch mode {
-		case StreamModeOutput:
-			m.writers[mode] = NewOutputStreamWriter(m.emitter)
-		case StreamModeTrace:
-			m.writers[mode] = NewTraceStreamWriter(m.emitter)
-		case StreamModeCustom:
-			m.writers[mode] = NewCustomStreamWriter(m.emitter)
+		switch mode.Mode() {
+		case StreamModeOutput.Mode():
+			m.writers[mode.Mode()] = NewOutputStreamWriter(m.emitter)
+		case StreamModeTrace.Mode():
+			m.writers[mode.Mode()] = NewTraceStreamWriter(m.emitter)
+		case StreamModeCustom.Mode():
+			m.writers[mode.Mode()] = NewCustomStreamWriter(m.emitter)
 		default:
 			panic(exception.NewBaseError(exception.StatusStreamWriterManagerAddWriterError,
 				exception.WithMsg("默认模式必须为 OUTPUT/TRACE/CUSTOM"),
-				exception.WithParam("mode", mode.String()),
+				exception.WithParam("mode", mode.Mode()),
 			))
 		}
 	}
