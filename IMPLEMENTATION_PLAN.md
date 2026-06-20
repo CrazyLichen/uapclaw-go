@@ -352,8 +352,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 5.13 | ✅ | Session Constants | ✅ 配置键名常量（9 个）；✅ 环境变量键名常量（7 个）；✅ 默认值常量（对齐 Python）；✅ EnvConfigKeys 映射表 + EnvConfigTypes 类型映射；✅ BuiltinDefaults() 函数；✅ InteractiveInputKey/ForceDelWorkflowStateKey 从 checkpointer 迁移 | `openjiuwen/core/session/constants.py` |
 | 5.14 | ✅ | Session Utils | ✅ 新建 session/utils 独立子包（path/ref/dict/container/string/constants 六文件）；✅ 纯工具函数从 state/utils.go 迁出并导出（20个函数+3个常量）；✅ getBySchema 等 StateKey 依赖函数保留在 state 包；✅ state 包其他文件回填改用 utils 导出函数；✅ 测试迁移（utils 包 89.5% 覆盖率）；✅ create_wrapper_class 不实现（Python 死代码）；✅ EndFrame 标记 ⤵️ 延后到 8.x stream_actor | `openjiuwen/core/session/utils.py` |
 | **5.x 上下文引擎** | — | | | |
-| 5.15 | ☐ | ModelContext 接口 | `GetMessages/SetMessages/GetContextWindow/Statistic` | `openjiuwen/core/context_engine/base.py` |
-| 5.16 | ☐ | ContextWindow / ContextStats | 上下文窗口与统计 | `openjiuwen/core/context_engine/base.py` (ContextWindow/ContextStats) |
+| 5.15 | ✅ | ModelContext 接口 | `GetMessages/SetMessages/GetContextWindow/Statistic` | `openjiuwen/core/context_engine/base.py` |
+| 5.16 | ✅ | ContextWindow / ContextStats | 上下文窗口与统计 | `openjiuwen/core/context_engine/base.py` (ContextWindow/ContextStats) |
 | 5.17 | ☐ | ContextEngineConfig | 上下文引擎配置 | `openjiuwen/core/context_engine/schema/config.py` |
 | 5.18 | ☐ | Offload 消息模型 | OffloadUserMessage/AssistantMessage/SystemMessage/ToolMessage | `openjiuwen/core/context_engine/schema/messages.py` |
 | 5.19 | ☐ | ContextEvent | 上下文事件 | `openjiuwen/core/context_engine/schema/` |
