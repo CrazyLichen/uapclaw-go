@@ -246,7 +246,9 @@ GetMessages(size *int, withHistory bool) []BaseMessage
 func UnmarshalOffloadMessage(data []byte) (Offloadable, error)
 
 // UnmarshalMessage 从 JSON 反序列化为对应消息类型。
-// 根据 role + offload_type/offload_handle 存在与否决定返回普通消息或 Offload 消息。
+// 仅处理 4 种基本消息类型（User/System/Assistant/Tool），不含 Offload 感知。
+// Offload 反序列化请使用 UnmarshalOffloadMessage。
+// 原因：UnmarshalMessage 位于 llm/schema 包，不能导入 context_engine/schema（循环依赖）。
 func UnmarshalMessage(data []byte) (BaseMessage, error)
 ```
 
@@ -254,13 +256,13 @@ func UnmarshalMessage(data []byte) (BaseMessage, error)
 
 | 函数 | 等价 Python | 用途 |
 |------|------------|------|
-| `NewBaseMessage(role, content, ...opts)` | `BaseMessage(role=..., content=...)` | 创建 DefaultMessage |
+| `NewDefaultMessage(role, content, ...opts)` | `BaseMessage(role=..., content=...)` | 创建 DefaultMessage |
 | `NewUserMessage(content, ...opts)` | `UserMessage(content=...)` | 不变 |
 | `NewAssistantMessage(content, ...opts)` | `AssistantMessage(content=...)` | 不变 |
 | `NewOffloadMessage(role, content, handle, offloadType, ...opts)` | `create_offload_message()` | 工厂函数 |
 | `IsOffloaded(msg BaseMessage) bool` | `isinstance(msg, OffloadMixin)` | 防重复卸载 |
 | `UnmarshalOffloadMessage(data)` | Pydantic 自动 | Offload 专用反序列化 |
-| `UnmarshalMessage(data)` | Pydantic 自动 | 通用消息反序列化 |
+| `UnmarshalMessage(data)` | Pydantic 自动 | 基本消息反序列化（不含 Offload 感知，避免循环依赖） |
 
 ## 六、MessageOption 调整
 
