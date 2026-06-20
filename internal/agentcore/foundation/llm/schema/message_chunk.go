@@ -78,7 +78,7 @@ func WithChunkLogprobs(logprobs any) AssistantMessageChunkOption {
 func NewAssistantMessageChunk(content string, opts ...AssistantMessageChunkOption) *AssistantMessageChunk {
 	chunk := &AssistantMessageChunk{
 		AssistantMessage: AssistantMessage{
-			BaseMessage: BaseMessage{
+			DefaultMessage: DefaultMessage{
 				Role:    RoleTypeAssistant,
 				Content: NewTextContent(content),
 			},
@@ -100,7 +100,7 @@ type ToolMessageChunkOption func(*ToolMessageChunk)
 func NewToolMessageChunk(toolCallID, content string, opts ...ToolMessageChunkOption) *ToolMessageChunk {
 	chunk := &ToolMessageChunk{
 		ToolMessage: ToolMessage{
-			BaseMessage: BaseMessage{
+			DefaultMessage: DefaultMessage{
 				Role:    RoleTypeTool,
 				Content: NewTextContent(content),
 			},
@@ -188,7 +188,7 @@ func (c *AssistantMessageChunk) Merge(other *AssistantMessageChunk) *AssistantMe
 
 	return &AssistantMessageChunk{
 		AssistantMessage: AssistantMessage{
-			BaseMessage: BaseMessage{
+			DefaultMessage: DefaultMessage{
 				Role:     c.Role,
 				Content:  mergedContent,
 				Name:     mergedName,
@@ -244,7 +244,7 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 
 	return &ToolMessageChunk{
 		ToolMessage: ToolMessage{
-			BaseMessage: BaseMessage{
+			DefaultMessage: DefaultMessage{
 				Role:    c.Role,
 				Content: NewTextContent(mergedContent),
 			},

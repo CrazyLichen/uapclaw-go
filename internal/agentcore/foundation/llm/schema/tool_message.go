@@ -8,7 +8,7 @@ package schema
 //
 // 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (ToolMessage)
 type ToolMessage struct {
-	BaseMessage
+	DefaultMessage
 	// ToolCallID 关联的工具调用 ID，对应 ToolCall.ID
 	ToolCallID string `json:"tool_call_id"`
 }
@@ -19,9 +19,9 @@ type ToolMessage struct {
 //
 // 对应 Python: ToolMessage(tool_call_id=..., content=...)
 func NewToolMessage(toolCallID, content string, opts ...MessageOption) *ToolMessage {
-	msg := NewBaseMessage(RoleTypeTool, content, opts...)
+	msg := NewDefaultMessage(RoleTypeTool, content, opts...)
 	return &ToolMessage{
-		BaseMessage: *msg,
-		ToolCallID:  toolCallID,
+		DefaultMessage: *msg,
+		ToolCallID:     toolCallID,
 	}
 }

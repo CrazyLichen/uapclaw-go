@@ -26,7 +26,7 @@ const FinishReasonNull = "null"
 //
 // 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (AssistantMessage)
 type AssistantMessage struct {
-	BaseMessage
+	DefaultMessage
 	// ToolCalls 工具调用列表（扁平格式）
 	ToolCalls []*ToolCall `json:"tool_calls,omitempty"`
 	// UsageMetadata 用量元数据
@@ -95,7 +95,7 @@ func WithLogprobs(logprobs any) AssistantMessageOption {
 // 对应 Python: AssistantMessage(content=..., tool_calls=..., ...)
 func NewAssistantMessage(content string, opts ...AssistantMessageOption) *AssistantMessage {
 	msg := &AssistantMessage{
-		BaseMessage: BaseMessage{
+		DefaultMessage: DefaultMessage{
 			Role:    RoleTypeAssistant,
 			Content: NewTextContent(content),
 		},

@@ -6,6 +6,37 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 接口 ────────────────────────────
+
+// BaseMessage 消息基类接口，所有消息类型均实现此接口。
+//
+// 对应 Python: BaseMessage (Pydantic BaseModel)，作为所有消息类型的基类。
+// Go 端使用接口替代 Python 的类继承，实现统一的多态访问。
+//
+// 接口包含 getter + setter，支持消息创建后的字段修改
+// （与当前代码中 msg.Content = ... 的直接赋值行为一致）。
+// 具体类型仍可直接通过字段名访问（如 msg.Role），通过接口访问时使用 getter/setter。
+//
+// 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (BaseMessage)
+type BaseMessage interface {
+	// GetRole 获取消息角色
+	GetRole() RoleType
+	// SetRole 设置消息角色
+	SetRole(role RoleType)
+	// GetContent 获取消息内容
+	GetContent() MessageContent
+	// SetContent 设置消息内容
+	SetContent(content MessageContent)
+	// GetName 获取消息发送者名称
+	GetName() string
+	// SetName 设置消息发送者名称
+	SetName(name string)
+	// GetMetadata 获取附加元数据
+	GetMetadata() map[string]any
+	// SetMetadata 设置附加元数据
+	SetMetadata(metadata map[string]any)
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RoleType 消息角色类型枚举，标识消息发送者的身份。
@@ -79,10 +110,13 @@ type MessageContent struct {
 	parts []ContentPart
 }
 
-// BaseMessage 消息基类，所有消息类型均嵌入此结构体。
+// DefaultMessage BaseMessage 接口的默认实现，提供 Role/Content/Name/Metadata 四个基础字段。
 //
-// 对应 Python: openjiuwen/core/foundation/llm/schema/message.py (BaseMessage)
-type BaseMessage struct {
+// 其他消息类型（UserMessage/SystemMessage/AssistantMessage/ToolMessage）
+// 通过嵌入 DefaultMessage 复用基础字段和 BaseMessage 接口实现。
+//
+// 对应 Python: BaseMessage(role=..., content=..., name=..., metadata=...)
+type DefaultMessage struct {
 	// Role 消息角色
 	Role RoleType `json:"role"`
 	// Content 消息内容
@@ -93,18 +127,42 @@ type BaseMessage struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// GetRole 返回消息角色
+func (m *DefaultMessage) GetRole() RoleType { return m.Role }
+
+// SetRole 设置消息角色
+func (m *DefaultMessage) SetRole(role RoleType) { m.Role = role }
+
+// GetContent 返回消息内容
+func (m *DefaultMessage) GetContent() MessageContent { return m.Content }
+
+// SetContent 设置消息内容
+func (m *DefaultMessage) SetContent(content MessageContent) { m.Content = content }
+
+// GetName 返回消息发送者名称
+func (m *DefaultMessage) GetName() string { return m.Name }
+
+// SetName 设置消息发送者名称
+func (m *DefaultMessage) SetName(name string) { m.Name = name }
+
+// GetMetadata 返回附加元数据
+func (m *DefaultMessage) GetMetadata() map[string]any { return m.Metadata }
+
+// SetMetadata 设置附加元数据
+func (m *DefaultMessage) SetMetadata(metadata map[string]any) { m.Metadata = metadata }
+
 // UserMessage 用户消息，role 固定为 "user"。
 //
 // 对应 Python: UserMessage(BaseMessage)
 type UserMessage struct {
-	BaseMessage
+	DefaultMessage
 }
 
 // SystemMessage 系统消息，role 固定为 "system"。
 //
 // 对应 Python: SystemMessage(BaseMessage)
 type SystemMessage struct {
-	BaseMessage
+	DefaultMessage
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -204,29 +262,29 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("MessageContent 反序列化失败: 既不是字符串也不是内容分片数组")
 }
 
-// MessageOption BaseMessage 构造选项函数。
-type MessageOption func(*BaseMessage)
+// MessageOption DefaultMessage 构造选项函数。
+type MessageOption func(*DefaultMessage)
 
 // WithMessageName 设置消息发送者名称。
 func WithMessageName(name string) MessageOption {
-	return func(m *BaseMessage) { m.Name = name }
+	return func(m *DefaultMessage) { m.Name = name }
 }
 
 // WithMetadata 设置附加元数据。
 func WithMetadata(metadata map[string]any) MessageOption {
-	return func(m *BaseMessage) { m.Metadata = metadata }
+	return func(m *DefaultMessage) { m.Metadata = metadata }
 }
 
 // WithMultiModalContent 设置多模态内容。
 func WithMultiModalContent(parts ...ContentPart) MessageOption {
-	return func(m *BaseMessage) { m.Content = NewMultiModalContent(parts...) }
+	return func(m *DefaultMessage) { m.Content = NewMultiModalContent(parts...) }
 }
 
-// NewBaseMessage 创建 BaseMessage 实例。
+// NewDefaultMessage 创建 DefaultMessage 实例。
 //
 // 对应 Python: BaseMessage(role=..., content=..., name=..., metadata=...)
-func NewBaseMessage(role RoleType, content string, opts ...MessageOption) *BaseMessage {
-	msg := &BaseMessage{
+func NewDefaultMessage(role RoleType, content string, opts ...MessageOption) *DefaultMessage {
+	msg := &DefaultMessage{
 		Role:    role,
 		Content: NewTextContent(content),
 	}
@@ -240,16 +298,16 @@ func NewBaseMessage(role RoleType, content string, opts ...MessageOption) *BaseM
 //
 // 对应 Python: UserMessage(content=...)
 func NewUserMessage(content string, opts ...MessageOption) *UserMessage {
-	msg := NewBaseMessage(RoleTypeUser, content, opts...)
-	return &UserMessage{BaseMessage: *msg}
+	msg := NewDefaultMessage(RoleTypeUser, content, opts...)
+	return &UserMessage{DefaultMessage: *msg}
 }
 
 // NewSystemMessage 创建系统消息，role 固定为 "system"。
 //
 // 对应 Python: SystemMessage(content=...)
 func NewSystemMessage(content string, opts ...MessageOption) *SystemMessage {
-	msg := NewBaseMessage(RoleTypeSystem, content, opts...)
-	return &SystemMessage{BaseMessage: *msg}
+	msg := NewDefaultMessage(RoleTypeSystem, content, opts...)
+	return &SystemMessage{DefaultMessage: *msg}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

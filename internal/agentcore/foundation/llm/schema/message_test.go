@@ -221,11 +221,11 @@ func TestMessageContent_RoundTrip_MultiModal(t *testing.T) {
 	}
 }
 
-// ────────────────────── BaseMessage 测试 ──────────────────────
+// ────────────────────── DefaultMessage 测试 ──────────────────────
 
-// TestNewBaseMessage 验证构造函数 + 选项。
-func TestNewBaseMessage(t *testing.T) {
-	msg := NewBaseMessage(RoleTypeUser, "hello",
+// TestNewDefaultMessage 验证构造函数 + 选项。
+func TestNewDefaultMessage(t *testing.T) {
+	msg := NewDefaultMessage(RoleTypeUser, "hello",
 		WithMessageName("alice"),
 		WithMetadata(map[string]any{"key": "value"}),
 	)
@@ -243,9 +243,9 @@ func TestNewBaseMessage(t *testing.T) {
 	}
 }
 
-// TestNewBaseMessage_WithMultiModalContent 验证多模态选项。
-func TestNewBaseMessage_WithMultiModalContent(t *testing.T) {
-	msg := NewBaseMessage(RoleTypeUser, "",
+// TestNewDefaultMessage_WithMultiModalContent 验证多模态选项。
+func TestNewDefaultMessage_WithMultiModalContent(t *testing.T) {
+	msg := NewDefaultMessage(RoleTypeUser, "",
 		WithMultiModalContent(
 			ContentPart{Type: "text", Text: "看图"},
 			ContentPart{Type: "image_url", ImageURL: &ImageURL{URL: "https://example.com/a.png"}},
@@ -281,9 +281,9 @@ func TestNewSystemMessage(t *testing.T) {
 	}
 }
 
-// TestBaseMessage_JSONRoundTrip 验证 BaseMessage 完整序列化/反序列化。
-func TestBaseMessage_JSONRoundTrip(t *testing.T) {
-	original := NewBaseMessage(RoleTypeUser, "测试消息",
+// TestDefaultMessage_JSONRoundTrip 验证 DefaultMessage 完整序列化/反序列化。
+func TestDefaultMessage_JSONRoundTrip(t *testing.T) {
+	original := NewDefaultMessage(RoleTypeUser, "测试消息",
 		WithMessageName("test_user"),
 		WithMetadata(map[string]any{"session": "123"}),
 	)
@@ -292,7 +292,7 @@ func TestBaseMessage_JSONRoundTrip(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 
-	var restored BaseMessage
+	var restored DefaultMessage
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatalf("反序列化失败: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestMessageContent_String(t *testing.T) {
 	}
 }
 
-// TestBaseMessage_EmptyContent 验证空内容消息的序列化。
+// TestDefaultMessage_EmptyContent 验证空内容消息的序列化。
 func TestBaseMessage_EmptyContent(t *testing.T) {
 	msg := NewUserMessage("")
 	data, err := json.Marshal(msg)
