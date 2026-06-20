@@ -23,7 +23,7 @@
 //	├── workflow_inmemory_state.go       # InMemoryWorkflowState 便捷构造器
 //	├── inmemory_state.go                # InMemoryStateLike 实现 StateLike + SessionState 接口
 //	├── inmemory_commit_state.go         # InMemoryCommitState 实现 CommitStateLike 接口（不实现 SessionState）
-//	└── utils.go                         # 深拷贝 / 嵌套路径解析 / 状态读写工具函数
+//	└── utils.go                         # getBySchema 等 StateKey 依赖函数（纯工具函数已迁至 session/utils 包）
 //
 // 对应 Python 代码：openjiuwen/core/session/state/base.py + openjiuwen/core/session/state/agent_state.py + openjiuwen/core/session/state/workflow_state.py + openjiuwen/core/session/utils.py
 //

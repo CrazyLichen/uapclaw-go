@@ -48,7 +48,15 @@
 //	│   ├── workflow_inmemory_state.go       # InMemoryWorkflowState 构造器
 //	│   ├── inmemory_state.go                # InMemoryStateLike
 //	│   ├── inmemory_commit_state.go         # InMemoryCommitState
-//	│   └── utils.go                         # 工具函数
+//	│   └── utils.go                         # getBySchema 等 StateKey 依赖函数
+//	├── utils/              # 通用工具函数（嵌套路径/引用路径/字典/容器操作）
+//	│   ├── doc.go                           # utils 包文档
+//	│   ├── path.go                          # SplitNestedPath/GetValueByNestedPath/RootToPath/RootToIndex
+//	│   ├── ref.go                           # IsRefPath/ExtractOriginKey
+//	│   ├── dict.go                          # UpdateDict/UpdateByKey/DeleteByKey/ExpandNestedStructure
+//	│   ├── container.go                     # SafeExtendContainer/DeepCopyMap/Slice/Value/Updates/ConvertUpdatesFromJSON
+//	│   ├── string.go                        # ContainsChar/ContainsSubstring/SplitString/ParseListIndexes
+//	│   └── constants.go                     # RegexMaxLength/NestedPathSplit/NestedPathListSplit
 //	├── tracer/             # 会话追踪
 //	│   ├── doc.go                           # tracer 包文档
 //	│   ├── data.go                          # InvokeType/NodeStatus/TraceEvent 枚举
