@@ -75,9 +75,9 @@ type OffloadToolMessage struct {
 
 // GetOffloadInfo 实现 Offloadable 接口
 func (m *OffloadUserMessage) GetOffloadInfo() OffloadInfo      { return m.OffloadInfo }
-func (m *OffloadAssistantMessage) GetOffloadInfo() OffloadInfo  { return m.OffloadInfo }
-func (m *OffloadSystemMessage) GetOffloadInfo() OffloadInfo     { return m.OffloadInfo }
-func (m *OffloadToolMessage) GetOffloadInfo() OffloadInfo       { return m.OffloadInfo }
+func (m *OffloadAssistantMessage) GetOffloadInfo() OffloadInfo { return m.OffloadInfo }
+func (m *OffloadSystemMessage) GetOffloadInfo() OffloadInfo    { return m.OffloadInfo }
+func (m *OffloadToolMessage) GetOffloadInfo() OffloadInfo      { return m.OffloadInfo }
 
 // NewOffloadUserMessage 创建卸载的用户消息
 func NewOffloadUserMessage(content, handle, offloadType string, opts ...llm_schema.MessageOption) *OffloadUserMessage {
