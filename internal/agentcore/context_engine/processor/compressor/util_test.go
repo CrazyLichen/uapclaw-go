@@ -1,4 +1,4 @@
-package context_utils
+package compressor
 
 import (
 	"testing"

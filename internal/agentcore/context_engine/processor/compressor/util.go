@@ -1,4 +1,4 @@
-package context_utils
+package compressor
 
 import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"

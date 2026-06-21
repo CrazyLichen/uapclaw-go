@@ -1,13 +1,13 @@
-package processor
+package compressor
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
-	context_utils "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context_utils"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -39,7 +39,7 @@ type MicroCompactProcessorConfig struct {
 //
 // 对应 Python: openjiuwen/core/context_engine/processor/compressor/micro_compact_processor.py (MicroCompactProcessor)
 type MicroCompactProcessor struct {
-	*BaseProcessor
+	*processor.BaseProcessor
 	// mcpConfig 微压缩处理器具体配置
 	mcpConfig *MicroCompactProcessorConfig
 }
@@ -85,7 +85,7 @@ func NewMicroCompactProcessor(config *MicroCompactProcessorConfig) (*MicroCompac
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	bp := NewBaseProcessor(config)
+	bp := processor.NewBaseProcessor(config)
 	return &MicroCompactProcessor{
 		BaseProcessor: bp,
 		mcpConfig:     config,
@@ -153,7 +153,7 @@ func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.Mode
 	// 收集被清除消息对应的工具名集合
 	clearedTools := make(map[string]bool)
 	for _, index := range modifiedIndices {
-		toolName := context_utils.ResolveToolNameFromMessage(allMessages[index], allMessages)
+		toolName := ResolveToolNameFromMessage(allMessages[index], allMessages)
 		if toolName != "" {
 			clearedTools[toolName] = true
 		}
@@ -206,7 +206,7 @@ func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm
 		if tm.GetContent().Text() == mcp.mcpConfig.ClearedMarker {
 			continue
 		}
-		toolName := context_utils.ResolveToolNameFromMessage(message, messages)
+		toolName := ResolveToolNameFromMessage(message, messages)
 		if toolName == "" {
 			continue
 		}

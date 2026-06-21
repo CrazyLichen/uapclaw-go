@@ -1,4 +1,4 @@
-package processor
+package compressor
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -82,6 +83,14 @@ func (d *dynamicFakeTokenCounter) CountTools(_ []*schema.ToolInfo, _ string) (in
 	return 0, d.err
 }
 
+// testConfig 测试用 ProcessorConfig 实现（从 processor 包重新定义，因原 testConfig 不可跨包访问）
+type testConfig struct {
+	Name string
+}
+
+func (c *testConfig) ProcessorType() string { return c.Name }
+func (c *testConfig) Validate() error      { return nil }
+
 // validDialogueCompressorConfig 创建合法的 DialogueCompressorConfig
 func validDialogueCompressorConfig() *DialogueCompressorConfig {
 	return &DialogueCompressorConfig{
@@ -101,7 +110,7 @@ func newTestDialogueCompressor(cfg *DialogueCompressorConfig) *DialogueCompresso
 	if cfg == nil {
 		cfg = validDialogueCompressorConfig()
 	}
-	bp := NewBaseProcessor(cfg)
+	bp := processor.NewBaseProcessor(cfg)
 	compressedPrompt := cfg.CustomCompressionPrompt
 	if compressedPrompt == "" {
 		compressedPrompt = defaultCompressionPrompt
@@ -924,7 +933,7 @@ func TestExtractCompactSummaryFromReplacements(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	dc := newTestDialogueCompressor(cfg)
 
-	replacements := []Replacement{
+	replacements := []processor.Replacement{
 		{
 			StartIdx: 1,
 			EndIdx:   3,
@@ -958,7 +967,7 @@ func TestExtractCompactSummaryFromReplacements_无记忆块(t *testing.T) {
 	cfg := validDialogueCompressorConfig()
 	dc := newTestDialogueCompressor(cfg)
 
-	replacements := []Replacement{
+	replacements := []processor.Replacement{
 		{
 			StartIdx: 1,
 			EndIdx:   3,
@@ -1306,4 +1315,3 @@ func TestEstimateContentTokens_NilContent(t *testing.T) {
 		t.Errorf("nil 内容应返回非负数，实际: %d", tokens)
 	}
 }
-

@@ -1,4 +1,4 @@
-package processor
+package compressor
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/output_parsers"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -75,7 +76,7 @@ type dialogueRound struct {
 //
 // 对应 Python: openjiuwen/core/context_engine/processor/compressor/dialogue_compressor.py (DialogueCompressor)
 type DialogueCompressor struct {
-	*BaseProcessor
+	*processor.BaseProcessor
 	// model 压缩用 LLM 实例
 	model *llm.Model
 	// tokenThreshold Token 触发阈值
@@ -178,7 +179,7 @@ func NewDialogueCompressor(config *DialogueCompressorConfig, opts ...DialogueCom
 		return nil, err
 	}
 
-	bp := NewBaseProcessor(config)
+	bp := processor.NewBaseProcessor(config)
 
 	compressedPrompt := config.CustomCompressionPrompt
 	if compressedPrompt == "" {
@@ -307,7 +308,7 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 
 	replacements, modifiedIndices := dc.BuildJSONReplacements(ctx, mc, targets, response.ParserContent)
 	if len(replacements) > 0 {
-		updatedMessages := ReplaceMessages(allMessages, replacements)
+		updatedMessages := processor.ReplaceMessages(allMessages, replacements)
 		event := &iface.ContextEvent{
 			EventType:        dc.ProcessorType(),
 			MessagesToModify: modifiedIndices,
@@ -321,11 +322,11 @@ func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelC
 	if !IsValidBlocksPayload(response.ParserContent) {
 		fallback := dc.BuildFallbackReplacement(ctx, mc, targets, response.Content.Text())
 		if fallback != nil {
-			updatedMessages := ReplaceMessages(allMessages, []Replacement{*fallback})
+			updatedMessages := processor.ReplaceMessages(allMessages, []processor.Replacement{*fallback})
 			event := &iface.ContextEvent{
 				EventType:        dc.ProcessorType(),
 				MessagesToModify: buildRangeIndices(fallback.StartIdx, fallback.EndIdx),
-				CompactSummary:   dc.ExtractCompactSummaryFromReplacements([]Replacement{*fallback}),
+				CompactSummary:   dc.ExtractCompactSummaryFromReplacements([]processor.Replacement{*fallback}),
 				CompressionUsage: dc.CurrentCompressionUsage(),
 			}
 			mc.SetMessages(updatedMessages, true)
@@ -464,7 +465,7 @@ func (dc *DialogueCompressor) InvokeMultiBlockCompression(ctx context.Context, c
 // BuildJSONReplacements 从 LLM 返回的 ParserContent 解析 JSON 构建替换列表。
 //
 // 对应 Python: DialogueCompressor._build_json_replacements()
-func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc iface.ModelContext, targets []compressTarget, parserContent any) ([]Replacement, []int) {
+func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc iface.ModelContext, targets []compressTarget, parserContent any) ([]processor.Replacement, []int) {
 	if !IsValidBlocksPayload(parserContent) {
 		return nil, nil
 	}
@@ -500,7 +501,7 @@ func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc ifac
 		blockMap[blockID] = summary
 	}
 
-	var replacements []Replacement
+	var replacements []processor.Replacement
 	var modifiedIndices []int
 
 	for _, target := range targets {
@@ -516,7 +517,7 @@ func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc ifac
 			continue
 		}
 
-		replacements = append(replacements, Replacement{
+		replacements = append(replacements, processor.Replacement{
 			StartIdx: target.startIDx,
 			EndIdx:   target.endIDx,
 			Messages: replacementMessages,
@@ -532,7 +533,7 @@ func (dc *DialogueCompressor) BuildJSONReplacements(ctx context.Context, mc ifac
 // BuildFallbackReplacement 构建降级替换（JSON 解析失败时用 LLM 原始输出整段替换）。
 //
 // 对应 Python: DialogueCompressor._build_fallback_replacement()
-func (dc *DialogueCompressor) BuildFallbackReplacement(ctx context.Context, mc iface.ModelContext, targets []compressTarget, summary string) *Replacement {
+func (dc *DialogueCompressor) BuildFallbackReplacement(ctx context.Context, mc iface.ModelContext, targets []compressTarget, summary string) *processor.Replacement {
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
 		return nil
@@ -558,7 +559,7 @@ func (dc *DialogueCompressor) BuildFallbackReplacement(ctx context.Context, mc i
 		return nil
 	}
 
-	return &Replacement{
+	return &processor.Replacement{
 		StartIdx: startIDx,
 		EndIdx:   endIDx,
 		Messages: replacementMessages,
@@ -724,7 +725,7 @@ func EstimateContentTokens(content any) int {
 // ExtractCompactSummaryFromReplacements 从替换列表提取压缩摘要文本。
 //
 // 对应 Python: DialogueCompressor._extract_compact_summary_from_replacements()
-func (dc *DialogueCompressor) ExtractCompactSummaryFromReplacements(replacements []Replacement) string {
+func (dc *DialogueCompressor) ExtractCompactSummaryFromReplacements(replacements []processor.Replacement) string {
 	var parts []string
 	for _, r := range replacements {
 		for _, msg := range r.Messages {

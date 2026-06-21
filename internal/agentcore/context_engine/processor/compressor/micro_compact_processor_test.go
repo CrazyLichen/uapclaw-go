@@ -1,4 +1,4 @@
-package processor
+package compressor
 
 import (
 	"context"

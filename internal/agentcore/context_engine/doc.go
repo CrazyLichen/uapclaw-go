@@ -27,19 +27,20 @@
 //	│   ├── context_state.go    # 压缩状态模型（ContextCompressionState + 辅助类型 + CompressionStatus/Phase）
 //	│   └── offload.go          # Offload 消息模型
 //	├── processor/
-//	│   ├── doc.go                    # Processor 子包文档
-//	│   ├── base.go                   # BaseProcessor 结构体 + 构造函数
-//	│   ├── hooks.go                  # 钩子默认实现 + ProcessorType + IsAPIRound
-//	│   ├── state.go                  # SaveState/LoadState 默认实现
-//	│   ├── offload.go                # OffloadMessages 方法族 + offload 常量
-//	│   ├── usage.go                  # CompressionUsage 追踪方法族
-//	│   ├── round.go                  # GroupCompletedAPIRounds 函数
-//	│   ├── replace.go                # Replacement 结构体 + ReplaceMessages 通用替换函数
-//	│   ├── dialogue_compressor.go    # DialogueCompressor 对话压缩器 + DialogueCompressorConfig
-//	│   └── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器
-//	├── context_utils/
-//	│   ├── doc.go           # 工具辅助子包文档
-//	│   └── resolve.go       # 工具名解析函数（ResolveToolNameFromMessage 等）
+//	│   ├── doc.go              # Processor 子包文档
+//	│   ├── base.go             # BaseProcessor 结构体 + 构造函数
+//	│   ├── hooks.go            # 钩子默认实现 + ProcessorType + IsAPIRound
+//	│   ├── state.go            # SaveState/LoadState 默认实现
+//	│   ├── offload.go          # OffloadMessages 方法族 + offload 常量
+//	│   ├── usage.go            # CompressionUsage 追踪方法族
+//	│   ├── round.go            # GroupCompletedAPIRounds 函数
+//	│   ├── replace.go          # Replacement 结构体 + ReplaceMessages 通用替换函数
+//	│   └── compressor/         # 压缩处理器子包
+//	│       ├── doc.go                     # 子包文档
+//	│       ├── util.go                    # 包级共享函数
+//	│       ├── dialogue_compressor.go     # DialogueCompressor 对话压缩器
+//	│       ├── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器
+//	│       └── full_compact_processor.go  # FullCompactProcessor 全量压缩处理器
 //	└── token/
 //	    ├── doc.go              # Token 子包文档
 //	    ├── base.go             # TokenCounter 接口定义
