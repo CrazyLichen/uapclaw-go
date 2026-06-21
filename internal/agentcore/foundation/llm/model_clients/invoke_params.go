@@ -150,7 +150,7 @@ type ReleaseParams struct {
 	ToolsReleasedIndex *int
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // InvokeOption 非流式调用选项函数。
 type InvokeOption func(*InvokeParams)
@@ -169,6 +169,12 @@ type GenerateVideoOption func(*GenerateVideoParams)
 
 // ReleaseOption 释放缓存选项函数。
 type ReleaseOption func(*ReleaseParams)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInvokeParams 创建 InvokeParams（默认零值，通过 opts 填充）。
 func NewInvokeParams(opts ...InvokeOption) *InvokeParams {
@@ -234,8 +240,6 @@ func NewReleaseParams(opts ...ReleaseOption) *ReleaseParams {
 	return p
 }
 
-// ──── InvokeOption 选项函数 ────
-
 // WithTools 设置工具列表。
 func WithTools(tools ...commonschema.ToolInfoProvider) InvokeOption {
 	return func(p *InvokeParams) { p.Tools = tools }
@@ -290,8 +294,6 @@ func WithInvokeCustomHeaders(h map[string]string) InvokeOption {
 func WithInvokeTracerRecordData(d func(map[string]any)) InvokeOption {
 	return func(p *InvokeParams) { p.TracerRecordData = d }
 }
-
-// ──── StreamOption 选项函数 ────
 
 // WithStreamTools 设置工具列表。
 func WithStreamTools(tools ...commonschema.ToolInfoProvider) StreamOption {
@@ -348,8 +350,6 @@ func WithStreamTracerRecordData(d func(map[string]any)) StreamOption {
 	return func(p *StreamParams) { p.TracerRecordData = d }
 }
 
-// ──── GenerateImageOption 选项函数 ────
-
 // WithImageModel 设置图片生成模型名称。
 func WithImageModel(m string) GenerateImageOption {
 	return func(p *GenerateImageParams) { p.Model = m }
@@ -395,8 +395,6 @@ func WithImageExtra(extra map[string]any) GenerateImageOption {
 	return func(p *GenerateImageParams) { p.Extra = extra }
 }
 
-// ──── GenerateSpeechOption 选项函数 ────
-
 // WithSpeechModel 设置语音生成模型名称。
 func WithSpeechModel(m string) GenerateSpeechOption {
 	return func(p *GenerateSpeechParams) { p.Model = m }
@@ -421,8 +419,6 @@ func WithSpeechTimeout(t float64) GenerateSpeechOption {
 func WithSpeechExtra(extra map[string]any) GenerateSpeechOption {
 	return func(p *GenerateSpeechParams) { p.Extra = extra }
 }
-
-// ──── GenerateVideoOption 选项函数 ────
 
 // WithVideoImgURL 设置首帧图片 URL。
 func WithVideoImgURL(url string) GenerateVideoOption {
@@ -484,8 +480,6 @@ func WithVideoExtra(extra map[string]any) GenerateVideoOption {
 	return func(p *GenerateVideoParams) { p.Extra = extra }
 }
 
-// ──── ReleaseOption 选项函数 ────
-
 // WithReleaseSessionID 设置缓存会话 ID。
 func WithReleaseSessionID(id string) ReleaseOption {
 	return func(p *ReleaseParams) { p.SessionID = id }
@@ -516,8 +510,6 @@ func WithReleaseToolsIndex(idx int) ReleaseOption {
 	return func(p *ReleaseParams) { p.ToolsReleasedIndex = &idx }
 }
 
-// ──── 类型转换方法 ────
-
 // ToInvokeParams 将 InvokeParams 转换为可用于 BuildRequestParams 的 InvokeParams 指针。
 //
 // InvokeParams 本身就是目标类型，直接返回指针。
@@ -543,3 +535,5 @@ func (p *StreamParams) ToStreamParams() *InvokeParams {
 		TracerRecordData: p.TracerRecordData,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

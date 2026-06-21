@@ -84,6 +84,8 @@ type CurrentRoundCompressor struct {
 	cleanPrompt string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // CurrentRoundCompressorOption CurrentRoundCompressor 构造选项函数。
 type CurrentRoundCompressorOption func(*CurrentRoundCompressor)
 

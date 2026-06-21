@@ -117,10 +117,10 @@ type RoundLevelCompressor struct {
 	compressionMarker string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // RoundLevelCompressorOption RoundLevelCompressor 构造选项函数。
 type RoundLevelCompressorOption func(*RoundLevelCompressor)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

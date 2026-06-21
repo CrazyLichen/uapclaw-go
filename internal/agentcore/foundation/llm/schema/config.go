@@ -49,6 +49,8 @@ var providerTypeStrings = [...]string{
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ProviderValidator 自定义 Provider 验证器接口。
+
+// ProviderValidator 自定义 Provider 验证器接口。
 //
 // 当 ProviderType 枚举无法匹配时，通过此接口查询外部注册的 provider。
 // 后续领域（2.6+ 实现 ClientRegistry 后）注入具体实现，

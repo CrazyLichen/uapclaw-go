@@ -37,10 +37,10 @@ type AssistantMessage struct {
 	Logprobs any `json:"logprobs,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // AssistantMessageOption AssistantMessage 构造选项函数。
 type AssistantMessageOption func(*AssistantMessage)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

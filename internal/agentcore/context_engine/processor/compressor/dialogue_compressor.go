@@ -92,6 +92,8 @@ type DialogueCompressor struct {
 	compressedPrompt string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // DialogueCompressorOption DialogueCompressor 构造选项函数。
 type DialogueCompressorOption func(*DialogueCompressor)
 

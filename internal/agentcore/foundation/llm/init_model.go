@@ -18,6 +18,11 @@ type initModelConfig struct {
 	customHeaders map[string]string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// InitModelOption InitModel 工厂选项函数。
+type InitModelOption func(*initModelConfig)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 默认值与 Python init_model() 保持一致
@@ -29,10 +34,9 @@ const (
 	defaultInitVerifySSL   = false
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
-// InitModelOption InitModel 工厂选项函数。
-type InitModelOption func(*initModelConfig)
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitModel 便捷创建 Model 实例的工厂函数。
 //
@@ -143,3 +147,5 @@ func WithInitCustomHeaders(h map[string]string) InitModelOption {
 func WithInitSSLCert(cert string) InitModelOption {
 	return func(c *initModelConfig) { c.sslCert = cert }
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

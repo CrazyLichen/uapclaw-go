@@ -80,8 +80,12 @@ type FullCompactProcessor struct {
 	reinjector *FullCompactStateReinjector
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // FullCompactProcessorOption FullCompactProcessor 构造选项函数。
 type FullCompactProcessorOption func(*FullCompactProcessor)
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ReinjectedStateBuilderSpec 重新注入状态构建器规格。
 //

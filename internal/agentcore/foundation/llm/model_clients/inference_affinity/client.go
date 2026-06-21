@@ -42,6 +42,8 @@ type InferenceAffinityModelClient struct {
 	openai.OpenAIModelClient
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。
@@ -49,6 +51,8 @@ const logComponent = logger.ComponentAgentCore
 
 // releaseKVCachePath vLLM KV Cache 释放 API 路径。
 const releaseKVCachePath = "/release_kv_cache"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

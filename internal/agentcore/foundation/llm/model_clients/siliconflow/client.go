@@ -33,10 +33,14 @@ type SiliconFlowModelClient struct {
 	openai.OpenAIModelClient
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent siliconflow 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
