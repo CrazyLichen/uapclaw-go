@@ -23,6 +23,7 @@
 //	├── round.go                  # GroupCompletedAPIRounds 包级导出函数
 //	├── replace.go                # Replacement 结构体 + ReplaceMessages 通用替换函数
 //	└── dialogue_compressor.go    # DialogueCompressor 对话压缩器 + DialogueCompressorConfig + init() 自动注册
+//	└── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器 + MicroCompactProcessorConfig + init() 自动注册
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/
 package processor

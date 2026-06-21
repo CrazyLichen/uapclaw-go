@@ -35,7 +35,11 @@
 //	│   ├── usage.go                  # CompressionUsage 追踪方法族
 //	│   ├── round.go                  # GroupCompletedAPIRounds 函数
 //	│   ├── replace.go                # Replacement 结构体 + ReplaceMessages 通用替换函数
-//	│   └── dialogue_compressor.go    # DialogueCompressor 对话压缩器 + DialogueCompressorConfig
+//	│   ├── dialogue_compressor.go    # DialogueCompressor 对话压缩器 + DialogueCompressorConfig
+//	│   └── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器
+//	├── context_utils/
+//	│   ├── doc.go           # 工具辅助子包文档
+//	│   └── resolve.go       # 工具名解析函数（ResolveToolNameFromMessage 等）
 //	└── token/
 //	    ├── doc.go              # Token 子包文档
 //	    ├── base.go             # TokenCounter 接口定义
