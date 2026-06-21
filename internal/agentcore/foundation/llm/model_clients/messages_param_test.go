@@ -152,41 +152,5 @@ func TestMessagesParam_EmptyText(t *testing.T) {
 	}
 }
 
-// TestToBaseMessage 测试 toBaseMessage 辅助函数。
-func TestToBaseMessage(t *testing.T) {
-	// *UserMessage
-	bm, ok := toBaseMessage(llmschema.NewUserMessage("hello"))
-	if !ok || bm == nil {
-		t.Error("toBaseMessage(*UserMessage) 应成功")
-	}
-
-	// *AssistantMessage
-	bm, ok = toBaseMessage(llmschema.NewAssistantMessage("hi"))
-	if !ok || bm == nil {
-		t.Error("toBaseMessage(*AssistantMessage) 应成功")
-	}
-
-	// *ToolMessage
-	bm, ok = toBaseMessage(llmschema.NewToolMessage("id1", "result"))
-	if !ok || bm == nil {
-		t.Error("toBaseMessage(*ToolMessage) 应成功")
-	}
-
-	// *SystemMessage
-	bm, ok = toBaseMessage(llmschema.NewSystemMessage("system"))
-	if !ok || bm == nil {
-		t.Error("toBaseMessage(*SystemMessage) 应成功")
-	}
-
-	// *DefaultMessage
-	bm, ok = toBaseMessage(llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "direct"))
-	if !ok || bm == nil {
-		t.Error("toBaseMessage(*BaseMessage) 应成功")
-	}
-
-	// 不支持的类型
-	bm, ok = toBaseMessage("invalid")
-	if ok || bm != nil {
-		t.Error("toBaseMessage(string) 应失败")
-	}
-}
+// TestToBaseMessage 已移除：convertOneMessage 参数改为 llmschema.BaseMessage，
+// 不再需要 toBaseMessage 辅助函数，且 NewMessagesParam 只接受 BaseMessage 类型。

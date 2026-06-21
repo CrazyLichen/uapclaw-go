@@ -194,7 +194,7 @@ func TestNewInvokeParams_带输出解析器(t *testing.T) {
 }
 
 func TestNewInvokeParams_带自定义请求头(t *testing.T) {
-	headers := map[string]any{"X-Custom": "val"}
+	headers := map[string]string{"X-Custom": "val"}
 	p := NewInvokeParams(WithInvokeCustomHeaders(headers))
 	if p.CustomHeaders == nil {
 		t.Error("CustomHeaders 不应为 nil")
@@ -205,10 +205,16 @@ func TestNewInvokeParams_带自定义请求头(t *testing.T) {
 }
 
 func TestNewInvokeParams_带追踪记录数据(t *testing.T) {
-	data := "trace-data"
+	var captured map[string]any
+	data := func(m map[string]any) { captured = m }
 	p := NewInvokeParams(WithInvokeTracerRecordData(data))
-	if p.TracerRecordData != data {
-		t.Errorf("TracerRecordData = %v, 期望 %v", p.TracerRecordData, data)
+	if p.TracerRecordData == nil {
+		t.Fatal("TracerRecordData 不应为 nil")
+	}
+	// 调用回调验证可正常执行
+	p.TracerRecordData(map[string]any{"key": "value"})
+	if captured == nil || captured["key"] != "value" {
+		t.Errorf("TracerRecordData 回调未正确执行, captured = %v", captured)
 	}
 }
 
@@ -274,7 +280,7 @@ func TestNewStreamParams_带输出解析器(t *testing.T) {
 }
 
 func TestNewStreamParams_带自定义请求头(t *testing.T) {
-	headers := map[string]any{"X-Stream": "val"}
+	headers := map[string]string{"X-Stream": "val"}
 	p := NewStreamParams(WithStreamCustomHeaders(headers))
 	if p.CustomHeaders == nil {
 		t.Error("CustomHeaders 不应为 nil")
@@ -290,10 +296,16 @@ func TestNewStreamParams_带额外参数(t *testing.T) {
 }
 
 func TestNewStreamParams_带追踪记录数据(t *testing.T) {
-	data := "trace-data"
+	var captured map[string]any
+	data := func(m map[string]any) { captured = m }
 	p := NewStreamParams(WithStreamTracerRecordData(data))
-	if p.TracerRecordData != data {
-		t.Errorf("TracerRecordData = %v, 期望 %v", p.TracerRecordData, data)
+	if p.TracerRecordData == nil {
+		t.Fatal("TracerRecordData 不应为 nil")
+	}
+	// 调用回调验证可正常执行
+	p.TracerRecordData(map[string]any{"key": "value"})
+	if captured == nil || captured["key"] != "value" {
+		t.Errorf("TracerRecordData 回调未正确执行, captured = %v", captured)
 	}
 }
 
@@ -411,8 +423,8 @@ func TestToStreamParams(t *testing.T) {
 		WithStreamOutputParser(&testOutputParser{}),
 		WithStreamTimeout(timeout),
 		WithStreamExtra(map[string]any{"top_k": 50}),
-		WithStreamCustomHeaders(map[string]any{"X-H": "v"}),
-		WithStreamTracerRecordData("trace"),
+		WithStreamCustomHeaders(map[string]string{"X-H": "v"}),
+		WithStreamTracerRecordData(func(m map[string]any) {}),
 	)
 
 	result := sp.ToStreamParams()
@@ -449,8 +461,8 @@ func TestToStreamParams(t *testing.T) {
 	if result.CustomHeaders["X-H"] != "v" {
 		t.Errorf("CustomHeaders[X-H] = %v, 期望 v", result.CustomHeaders["X-H"])
 	}
-	if result.TracerRecordData != "trace" {
-		t.Errorf("TracerRecordData = %v, 期望 trace", result.TracerRecordData)
+	if result.TracerRecordData == nil {
+		t.Error("TracerRecordData 不应为 nil")
 	}
 }
 
@@ -684,14 +696,8 @@ func TestExtractCostInfo_费用对象PromptCost(t *testing.T) {
 
 // ──────────────────────────── convertOneMessage 补充测试 ────────────────────────────
 
-func TestConvertOneMessage_不支持的消息类型(t *testing.T) {
-	// 测试不支持的消息类型
-	e := newTestClientEmbed()
-	_, err := e.convertOneMessage("invalid message")
-	if err == nil {
-		t.Error("不支持的消息类型应返回错误")
-	}
-}
+// convertOneMessage 参数改为 llmschema.BaseMessage 后，无法传入非消息类型触发错误。
+// 原测试已移除，convertOneMessage 对所有 BaseMessage 均正常处理。
 
 func TestConvertOneMessage_带Name字段的消息(t *testing.T) {
 	// 测试带 Name 字段的消息
@@ -714,8 +720,8 @@ func TestNewReleaseParams_默认值(t *testing.T) {
 	if p.SessionID != "" {
 		t.Error("默认 SessionID 应为空")
 	}
-	if p.Messages != nil {
-		t.Error("默认 Messages 应为 nil")
+	if !p.Messages.IsEmpty() {
+		t.Error("默认 Messages 应为空")
 	}
 	if p.MessagesReleasedIndex != 0 {
 		t.Error("默认 MessagesReleasedIndex 应为 0")
@@ -733,7 +739,7 @@ func TestNewReleaseParams_默认值(t *testing.T) {
 
 func TestNewReleaseParams_组合选项(t *testing.T) {
 	// 测试 ReleaseParams 组合 Options
-	msgs := []map[string]any{{"role": "user", "content": "hello"}}
+	msgs := NewDictsMessagesParam([]map[string]any{{"role": "user", "content": "hello"}})
 	p := NewReleaseParams(
 		WithReleaseSessionID("session-123"),
 		WithReleaseMessages(msgs),
@@ -746,8 +752,8 @@ func TestNewReleaseParams_组合选项(t *testing.T) {
 	if p.SessionID != "session-123" {
 		t.Errorf("SessionID = %q, 期望 %q", p.SessionID, "session-123")
 	}
-	if p.Messages == nil {
-		t.Error("Messages 不应为 nil")
+	if p.Messages.IsEmpty() {
+		t.Error("Messages 不应为空")
 	}
 	if p.MessagesReleasedIndex != 5 {
 		t.Errorf("MessagesReleasedIndex = %d, 期望 5", p.MessagesReleasedIndex)

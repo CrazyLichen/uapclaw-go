@@ -19,7 +19,7 @@ func TestSanitizeHeaders_Nil输入(t *testing.T) {
 
 func TestSanitizeHeaders_空输入(t *testing.T) {
 	// 空字典应返回空 map
-	result := SanitizeHeaders(map[string]any{})
+	result := SanitizeHeaders(map[string]string{})
 	if result == nil {
 		t.Error("SanitizeHeaders(empty) 不应返回 nil，应返回空 map")
 	}
@@ -30,7 +30,7 @@ func TestSanitizeHeaders_空输入(t *testing.T) {
 
 func TestSanitizeHeaders_受保护头部被过滤(t *testing.T) {
 	// 受保护头部应被过滤（与 Python 对齐的 5 项列表）
-	input := map[string]any{
+	input := map[string]string{
 		"Authorization":     "Bearer token",
 		"Host":              "api.openai.com",
 		"Content-Length":    "100",
@@ -56,7 +56,7 @@ func TestSanitizeHeaders_受保护头部被过滤(t *testing.T) {
 
 func TestSanitizeHeaders_ContentType不受保护(t *testing.T) {
 	// content-type 不属于受保护头部（与 Python 对齐）
-	input := map[string]any{
+	input := map[string]string{
 		"Content-Type": "application/json",
 	}
 	result := SanitizeHeaders(input)
@@ -66,10 +66,10 @@ func TestSanitizeHeaders_ContentType不受保护(t *testing.T) {
 }
 
 func TestSanitizeHeaders_正常头部(t *testing.T) {
-	// 正常头部应被保留，值转为字符串
-	input := map[string]any{
+	// 正常头部应被保留
+	input := map[string]string{
 		"X-Request-ID":  "abc-123",
-		"X-Retry-Count": 3,
+		"X-Retry-Count": "3",
 	}
 	result := SanitizeHeaders(input)
 	if len(result) != 2 {
@@ -85,7 +85,7 @@ func TestSanitizeHeaders_正常头部(t *testing.T) {
 
 func TestSanitizeHeaders_空值被过滤(t *testing.T) {
 	// 空值头部应被过滤
-	input := map[string]any{
+	input := map[string]string{
 		"X-Empty": "",
 		"X-Valid": "ok",
 	}
@@ -98,24 +98,9 @@ func TestSanitizeHeaders_空值被过滤(t *testing.T) {
 	}
 }
 
-func TestSanitizeHeaders_Nil值被过滤(t *testing.T) {
-	// nil 值头部应被过滤
-	input := map[string]any{
-		"X-None":  nil,
-		"X-Valid": "ok",
-	}
-	result := SanitizeHeaders(input)
-	if _, ok := result["X-None"]; ok {
-		t.Error("nil 值头部应被过滤")
-	}
-	if result["X-Valid"] != "ok" {
-		t.Errorf("X-Valid = %q, 期望 %q", result["X-Valid"], "ok")
-	}
-}
-
 func TestSanitizeHeaders_空白键被过滤(t *testing.T) {
 	// 空白键头部应被过滤
-	input := map[string]any{
+	input := map[string]string{
 		"":        "empty-key",
 		"  ":      "whitespace-key",
 		"X-Valid": "ok",
@@ -131,7 +116,7 @@ func TestSanitizeHeaders_空白键被过滤(t *testing.T) {
 
 func TestSanitizeHeaders_纯空白值被过滤(t *testing.T) {
 	// 仅含空白的值应被过滤
-	input := map[string]any{
+	input := map[string]string{
 		"X-Space": "  ",
 		"X-Valid": "ok",
 	}
@@ -146,7 +131,7 @@ func TestSanitizeHeaders_纯空白值被过滤(t *testing.T) {
 
 func TestSanitizeHeaders_全部被过滤返回空map(t *testing.T) {
 	// 所有头部都被过滤时应返回空 map（不是 nil）
-	input := map[string]any{
+	input := map[string]string{
 		"Authorization": "Bearer token",
 		"Host":          "api.openai.com",
 	}
@@ -161,7 +146,7 @@ func TestSanitizeHeaders_全部被过滤返回空map(t *testing.T) {
 
 func TestSanitizeHeaders_键首尾空白被去除(t *testing.T) {
 	// 键首尾空白应被去除
-	input := map[string]any{
+	input := map[string]string{
 		"  X-Trimmed  ": "value",
 	}
 	result := SanitizeHeaders(input)
@@ -185,9 +170,9 @@ func TestBuildBaseHeaders_Nil输入(t *testing.T) {
 
 func TestBuildBaseHeaders_正常输入(t *testing.T) {
 	// 正常输入应与 SanitizeHeaders 结果一致
-	input := map[string]any{
+	input := map[string]string{
 		"X-Token": "abc",
-		"X-Count": 42,
+		"X-Count": "42",
 		"Host":    "should-be-filtered",
 	}
 	result := BuildBaseHeaders(input)
@@ -295,7 +280,7 @@ func TestMergeRequestHeaders_配置级和请求级(t *testing.T) {
 	base := map[string]string{
 		"X-Base": "base-val",
 	}
-	result := MergeRequestHeaders(base, map[string]any{"X-Request": "req-val"})
+	result := MergeRequestHeaders(base, map[string]string{"X-Request": "req-val"})
 	if result["X-Base"] != "base-val" {
 		t.Errorf("X-Base = %q, 期望 %q", result["X-Base"], "base-val")
 	}
@@ -309,7 +294,7 @@ func TestMergeRequestHeaders_请求级覆盖配置级(t *testing.T) {
 	base := map[string]string{
 		"X-Token": "base-token",
 	}
-	result := MergeRequestHeaders(base, map[string]any{"X-Token": "req-token"})
+	result := MergeRequestHeaders(base, map[string]string{"X-Token": "req-token"})
 	if result["X-Token"] != "req-token" {
 		t.Errorf("X-Token = %q, 期望 %q", result["X-Token"], "req-token")
 	}
@@ -321,7 +306,7 @@ func TestMergeRequestHeaders_大小写不敏感覆盖(t *testing.T) {
 		"X-Tenant": "tenant-cfg",
 		"UserID":   "user-cfg",
 	}
-	result := MergeRequestHeaders(base, map[string]any{
+	result := MergeRequestHeaders(base, map[string]string{
 		"x-tenant":      "tenant-req",
 		"userid":        "user-req",
 		"Connection":    "blocked",
@@ -359,7 +344,7 @@ func TestMergeRequestHeaders_Nil请求头(t *testing.T) {
 
 func TestMergeRequestHeaders_空配置头(t *testing.T) {
 	// 空 base，只有请求头
-	result := MergeRequestHeaders(nil, map[string]any{"X-Request": "req-val"})
+	result := MergeRequestHeaders(nil, map[string]string{"X-Request": "req-val"})
 	if result["X-Request"] != "req-val" {
 		t.Errorf("X-Request = %q, 期望 %q", result["X-Request"], "req-val")
 	}
@@ -370,7 +355,7 @@ func TestMergeRequestHeaders_不修改原始base(t *testing.T) {
 	base := map[string]string{
 		"X-Base": "base-val",
 	}
-	_ = MergeRequestHeaders(base, map[string]any{"X-New": "new-val"})
+	_ = MergeRequestHeaders(base, map[string]string{"X-New": "new-val"})
 	if _, ok := base["X-New"]; ok {
 		t.Error("MergeRequestHeaders 不应修改原始 base")
 	}

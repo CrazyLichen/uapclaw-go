@@ -166,8 +166,8 @@ func (c *InferenceAffinityModelClient) Stream(
 
 	// 7.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
 	// 请求发送前调用 tracer_record_data 回调，记录请求参数
-	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
-		fn(map[string]any{"llm_params": reqParams})
+	if params.TracerRecordData != nil {
+		params.TracerRecordData(map[string]any{"llm_params": reqParams})
 	}
 
 	// 8. 构建 HTTP 请求
@@ -641,22 +641,12 @@ func (c *InferenceAffinityModelClient) buildReleaseRequestBody(
 
 	// 2. 转换并清洗消息
 	var messagesDict []map[string]any
-	if params.Messages != nil {
-		switch msgs := params.Messages.(type) {
-		case model_clients.MessagesParam:
-			converted, err := c.ConvertMessagesToDict(msgs)
-			if err != nil {
-				return nil, err
-			}
-			messagesDict = converted
-		case []map[string]any:
-			messagesDict = msgs
-		default:
-			return nil, exception.NewBaseError(
-				exception.NewStatusCode("MODEL_INVOKE_PARAM_ERROR", 181004, ""),
-				exception.WithMsg(fmt.Sprintf("unsupported messages type for release: %T", params.Messages)),
-			)
+	if !params.Messages.IsEmpty() {
+		converted, err := c.ConvertMessagesToDict(params.Messages)
+		if err != nil {
+			return nil, err
 		}
+		messagesDict = converted
 		// 清洗 tool_calls
 		c.sanitizeToolCalls(messagesDict)
 	}

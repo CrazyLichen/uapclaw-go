@@ -364,14 +364,14 @@ func TestBuildEffectiveHeaders(t *testing.T) {
 		newTestModelConfig(),
 		llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 			llmschema.WithVerifySSL(false),
-			llmschema.WithCustomHeaders(map[string]any{"X-Base": "base-val"}),
+			llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
 		),
 	)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)
 	}
 
-	result := client.BuildEffectiveHeaders(map[string]any{"X-Request": "req-val"})
+	result := client.BuildEffectiveHeaders(map[string]string{"X-Request": "req-val"})
 	if result["X-Base"] != "base-val" {
 		t.Errorf("X-Base = %q, 期望 %q", result["X-Base"], "base-val")
 	}
@@ -385,7 +385,7 @@ func TestBuildEffectiveHeaders_空请求头(t *testing.T) {
 		newTestModelConfig(),
 		llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
 			llmschema.WithVerifySSL(false),
-			llmschema.WithCustomHeaders(map[string]any{"X-Base": "base-val"}),
+			llmschema.WithCustomHeaders(map[string]string{"X-Base": "base-val"}),
 		),
 	)
 	if err != nil {
@@ -410,7 +410,7 @@ func TestBuildEffectiveHeaders_空配置头(t *testing.T) {
 		t.Fatalf("创建客户端失败: %v", err)
 	}
 
-	result := client.BuildEffectiveHeaders(map[string]any{"X-Request": "req-val"})
+	result := client.BuildEffectiveHeaders(map[string]string{"X-Request": "req-val"})
 	if result["X-Request"] != "req-val" {
 		t.Errorf("X-Request = %q, 期望 %q", result["X-Request"], "req-val")
 	}
@@ -633,7 +633,7 @@ func TestOpenAIModelClient_Invoke_带自定义请求头(t *testing.T) {
 	client := newTestClientWithServer(server, map[string]string{"X-Custom": "custom-val"})
 	msg := model_clients.NewTextMessagesParam("Hi")
 	result, err := client.Invoke(context.Background(), msg,
-		model_clients.WithInvokeCustomHeaders(map[string]any{"X-Request": "req-val"}),
+		model_clients.WithInvokeCustomHeaders(map[string]string{"X-Request": "req-val"}),
 	)
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)

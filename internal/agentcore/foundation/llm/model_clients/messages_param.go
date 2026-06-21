@@ -14,7 +14,7 @@ import (
 //
 //	IsText     → 纯文本，自动包装为一条 UserMessage
 //	IsMessages → 消息列表，转换为 OpenAI dict 格式
-//	              支持的具体类型：*UserMessage, *SystemMessage, *AssistantMessage, *ToolMessage
+//	              通过 BaseMessage 接口统一承载，消费端按需做具体类型断言
 //	IsDicts    → 已是 OpenAI dict 格式，直接透传（零转换开销）
 //
 // 对应 Python: openjiuwen/core/foundation/llm/model_clients/base_model_client.py
@@ -23,9 +23,8 @@ type MessagesParam struct {
 	// text 纯文本（对应 Python str 输入，自动包装为一条 UserMessage）
 	text string
 	// messages 消息列表（对应 Python List[BaseMessage] 输入）
-	// 保留具体类型（*UserMessage, *AssistantMessage, *ToolMessage 等），
-	// 以便 ConvertMessagesToDict 通过类型断言提取特有字段（tool_calls, tool_call_id）。
-	messages []any
+	// 通过 BaseMessage 接口承载，消费端通过类型断言提取特有字段（tool_calls, tool_call_id）。
+	messages []llmschema.BaseMessage
 	// dicts 已是 OpenAI dict 格式的列表（对应 Python List[dict] 输入，直接透传）
 	dicts []map[string]any
 }
@@ -42,14 +41,13 @@ func NewTextMessagesParam(text string) MessagesParam {
 
 // NewMessagesParam 创建消息列表参数。
 //
-// 接受的具体类型：*UserMessage, *SystemMessage, *AssistantMessage, *ToolMessage。
-// 保留具体类型信息，以便后续 ConvertMessagesToDict 正确提取特有字段。
-// 传入的 nil 值会被自动过滤。
+// 接受 BaseMessage 接口类型的消息，包括 *UserMessage, *SystemMessage,
+// *AssistantMessage, *ToolMessage 等。传入的 nil 值会被自动过滤。
 //
 // 对应 Python: messages=[UserMessage("你好"), AssistantMessage("hi")]
-func NewMessagesParam(messages ...any) MessagesParam {
-	// 过滤 nil 值：variadic 调用 NewMessagesParam(nil) 会产生 []any{nil}
-	filtered := make([]any, 0, len(messages))
+func NewMessagesParam(messages ...llmschema.BaseMessage) MessagesParam {
+	// 过滤 nil 值：variadic 调用 NewMessagesParam(nil) 会产生含 nil 的切片
+	filtered := make([]llmschema.BaseMessage, 0, len(messages))
 	for _, m := range messages {
 		if m != nil {
 			filtered = append(filtered, m)
@@ -93,20 +91,13 @@ func (p MessagesParam) Text() string {
 
 // Messages 返回消息列表（IsMessages 为 true 时有效）。
 //
-// 列表元素的具体类型可能是 *UserMessage, *SystemMessage, *AssistantMessage, *ToolMessage。
-// 使用方应通过类型断言访问具体类型。
-func (p MessagesParam) Messages() []any {
+// 列表元素通过 BaseMessage 接口返回，消费端按需做具体类型断言
+// （如 msg.(*AssistantMessage) 访问 ToolCalls）。
+func (p MessagesParam) Messages() []llmschema.BaseMessage {
 	return p.messages
 }
 
 // Dicts 返回 dict 列表（IsDicts 为 true 时有效）。
 func (p MessagesParam) Dicts() []map[string]any {
 	return p.dicts
-}
-
-// toBaseMessage 从任意消息类型提取 BaseMessage 接口。
-// 所有消息类型都实现了 BaseMessage 接口，直接做类型断言即可。
-func toBaseMessage(msg any) (llmschema.BaseMessage, bool) {
-	m, ok := msg.(llmschema.BaseMessage)
-	return m, ok
 }

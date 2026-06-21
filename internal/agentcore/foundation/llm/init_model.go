@@ -69,16 +69,11 @@ func InitModel(
 	}
 
 	// 构建 ModelClientConfig
-	customHeadersAny := make(map[string]any, len(cfg.customHeaders))
-	for k, v := range cfg.customHeaders {
-		customHeadersAny[k] = v
-	}
-
 	clientConfigOpts := []llmschema.ModelClientConfigOption{
 		llmschema.WithTimeout(cfg.timeout),
 		llmschema.WithMaxRetries(cfg.maxRetries),
 		llmschema.WithVerifySSL(cfg.verifySSL),
-		llmschema.WithCustomHeaders(customHeadersAny),
+		llmschema.WithCustomHeaders(cfg.customHeaders),
 	}
 	if cfg.sslCert != "" {
 		clientConfigOpts = append(clientConfigOpts, llmschema.WithSSLCert(cfg.sslCert))

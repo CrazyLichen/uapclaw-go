@@ -8,7 +8,6 @@
 package headers_helper
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -32,21 +31,19 @@ var ProtectedHeaders = map[string]bool{
 
 // SanitizeHeaders 清洗 HTTP 头，移除受保护头部和空值。
 //
-// 接受 map[string]any 输入（来自 ModelClientConfig.CustomHeaders
-// 和 InvokeParams.CustomHeaders），转换为 map[string]string 输出。
+// 接受 map[string]string 输入（来自 ModelClientConfig.CustomHeaders
+// 和 InvokeParams.CustomHeaders），返回清洗后的 map[string]string。
 //
 // 处理规则（对齐 Python: sanitize_headers()）：
 //  1. 去除空键；去除键首尾空白后跳过空白键
-//  2. 跳过 nil 值
-//  3. 值规范化为字符串（fmt.Sprintf("%v", val)）
-//  4. 跳过值为纯空白的条目
-//  5. 阻止受保护头部（host, content-length, transfer-encoding, connection, authorization）
+//  2. 跳过空值
+//  3. 阻止受保护头部（host, content-length, transfer-encoding, connection, authorization）
 //
 // 空输入或全部被过滤时返回空 map（map[string]string{}），不返回 nil。
 // 这与 Python 的行为一致（返回空 dict），也避免调用方 nil 检查。
 //
 // 对应 Python: openjiuwen/core/common/utils/header_utils.py (sanitize_headers)
-func SanitizeHeaders(headers map[string]any) map[string]string {
+func SanitizeHeaders(headers map[string]string) map[string]string {
 	if len(headers) == 0 {
 		return map[string]string{}
 	}
@@ -69,18 +66,12 @@ func SanitizeHeaders(headers map[string]any) map[string]string {
 			continue
 		}
 
-		// 跳过 nil 值
-		if val == nil {
+		// 跳过空值
+		if strings.TrimSpace(val) == "" {
 			continue
 		}
 
-		// 值规范化为字符串
-		strVal := fmt.Sprintf("%v", val)
-		if strings.TrimSpace(strVal) == "" {
-			continue
-		}
-
-		sanitized[key] = strVal
+		sanitized[key] = val
 	}
 
 	return sanitized
@@ -99,7 +90,7 @@ func IsProtectedHeader(name string) bool {
 // 在客户端构造时调用，将用户配置的 CustomHeaders 清洗后作为 baseHeaders 存储。
 //
 // 对应 Python: build_base_headers()
-func BuildBaseHeaders(customHeaders map[string]any) map[string]string {
+func BuildBaseHeaders(customHeaders map[string]string) map[string]string {
 	return SanitizeHeaders(customHeaders)
 }
 
@@ -143,7 +134,7 @@ func MergeHeadersCaseInsensitive(baseHeaders map[string]string, newHeaders map[s
 // 请求级优先，同名 key 大小写不敏感匹配，保留首次出现的 key 大小写。
 //
 // 对应 Python: merge_request_headers()
-func MergeRequestHeaders(baseHeaders map[string]string, requestCustomHeaders map[string]any) map[string]string {
+func MergeRequestHeaders(baseHeaders map[string]string, requestCustomHeaders map[string]string) map[string]string {
 	// 拷贝 base
 	result := make(map[string]string, len(baseHeaders))
 	for k, v := range baseHeaders {

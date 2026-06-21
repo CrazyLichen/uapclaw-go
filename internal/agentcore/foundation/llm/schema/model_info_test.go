@@ -48,7 +48,7 @@ func TestNewBaseModelInfo_WithOptions(t *testing.T) {
 		WithTopPForInfo(0.9),
 		WithStreaming(true),
 		WithTimeoutForInfo(30),
-		WithCustomHeadersForInfo(map[string]any{"X-Custom": "val"}),
+		WithCustomHeadersForInfo(map[string]string{"X-Custom": "val"}),
 		WithInfoExtra(map[string]any{"extra_field": "extra_val"}),
 	)
 	if info.APIKey != "sk-xxx" {

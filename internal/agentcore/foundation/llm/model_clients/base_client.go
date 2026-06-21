@@ -498,23 +498,14 @@ func ExtractCostInfo(obj map[string]any) (inputCost, outputCost, totalCost float
 //   - *AssistantMessage → 追加 tool_calls（OpenAI 嵌套格式）+ reasoning_content
 //   - *ToolMessage → 追加 tool_call_id
 //   - 其他 → 仅 role + content
-func (e *BaseClientEmbed) convertOneMessage(msg any) (map[string]any, error) {
-	// 先提取 BaseMessage（所有消息类型都嵌入它）
-	baseMsg, ok := toBaseMessage(msg)
-	if !ok {
-		return nil, exception.NewBaseError(
-			exception.NewStatusCode("MODEL_INVOKE_PARAM_ERROR", 181004, ""),
-			exception.WithMsg(fmt.Sprintf("unsupported message type: %T", msg)),
-		)
-	}
-
+func (e *BaseClientEmbed) convertOneMessage(msg llmschema.BaseMessage) (map[string]any, error) {
 	msgDict := map[string]any{
-		"role":    baseMsg.GetRole().String(),
-		"content": baseMsg.GetContent(),
+		"role":    msg.GetRole().String(),
+		"content": msg.GetContent(),
 	}
 
-	if baseMsg.GetName() != "" {
-		msgDict["name"] = baseMsg.GetName()
+	if msg.GetName() != "" {
+		msgDict["name"] = msg.GetName()
 	}
 
 	// AssistantMessage 特有字段

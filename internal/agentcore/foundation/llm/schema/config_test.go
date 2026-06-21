@@ -269,7 +269,7 @@ func TestNewModelClientConfig_WithOptions(t *testing.T) {
 		WithMaxRetries(5),
 		WithVerifySSL(false),
 		WithSSLCert("/path/to/cert.pem"),
-		WithCustomHeaders(map[string]any{"X-Custom": "value"}),
+		WithCustomHeaders(map[string]string{"X-Custom": "value"}),
 		WithConfigExtra(map[string]any{"extra_field": "extra_value"}),
 	)
 	if cfg.ClientID != "custom-id" {

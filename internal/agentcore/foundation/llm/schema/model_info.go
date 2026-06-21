@@ -34,7 +34,7 @@ type BaseModelInfo struct {
 	// Timeout 请求超时时间（秒），必须 > 0，默认 60
 	Timeout int `json:"timeout"`
 	// CustomHeaders 开发者自定义请求头
-	CustomHeaders map[string]any `json:"custom_headers,omitempty"`
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
 }
@@ -90,7 +90,7 @@ func WithTimeoutForInfo(timeout int) BaseModelInfoOption {
 }
 
 // WithCustomHeadersForInfo 设置自定义请求头。
-func WithCustomHeadersForInfo(headers map[string]any) BaseModelInfoOption {
+func WithCustomHeadersForInfo(headers map[string]string) BaseModelInfoOption {
 	return func(info *BaseModelInfo) { info.CustomHeaders = headers }
 }
 

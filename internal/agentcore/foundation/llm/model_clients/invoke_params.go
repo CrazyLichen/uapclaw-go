@@ -29,9 +29,9 @@ type InvokeParams struct {
 	// Extra 额外参数（对应 Python **kwargs）
 	Extra map[string]any
 	// CustomHeaders 请求级自定义请求头
-	CustomHeaders map[string]any
+	CustomHeaders map[string]string
 	// TracerRecordData 追踪记录回调（内部使用）
-	TracerRecordData any
+	TracerRecordData func(map[string]any)
 }
 
 // StreamParams 流式调用的完整参数。
@@ -57,9 +57,9 @@ type StreamParams struct {
 	// Extra 额外参数（对应 Python **kwargs）
 	Extra map[string]any
 	// CustomHeaders 请求级自定义请求头
-	CustomHeaders map[string]any
+	CustomHeaders map[string]string
 	// TracerRecordData 追踪记录回调（内部使用）
-	TracerRecordData any
+	TracerRecordData func(map[string]any)
 }
 
 // GenerateImageParams 图片生成参数。
@@ -138,8 +138,8 @@ type GenerateVideoParams struct {
 type ReleaseParams struct {
 	// SessionID 缓存盐值，标识特定的缓存
 	SessionID string
-	// Messages 消息列表（支持 MessagesParam 或 []map[string]any）
-	Messages any
+	// Messages 消息列表（使用 MessagesParam 统一封装）
+	Messages MessagesParam
 	// MessagesReleasedIndex 消息释放索引（0-based）
 	MessagesReleasedIndex int
 	// Model 模型名称（默认使用 model_config.model_name）
@@ -282,12 +282,12 @@ func WithInvokeExtra(extra map[string]any) InvokeOption {
 }
 
 // WithInvokeCustomHeaders 设置请求级自定义请求头。
-func WithInvokeCustomHeaders(h map[string]any) InvokeOption {
+func WithInvokeCustomHeaders(h map[string]string) InvokeOption {
 	return func(p *InvokeParams) { p.CustomHeaders = h }
 }
 
 // WithInvokeTracerRecordData 设置追踪记录回调。
-func WithInvokeTracerRecordData(d any) InvokeOption {
+func WithInvokeTracerRecordData(d func(map[string]any)) InvokeOption {
 	return func(p *InvokeParams) { p.TracerRecordData = d }
 }
 
@@ -339,12 +339,12 @@ func WithStreamExtra(extra map[string]any) StreamOption {
 }
 
 // WithStreamCustomHeaders 设置请求级自定义请求头。
-func WithStreamCustomHeaders(h map[string]any) StreamOption {
+func WithStreamCustomHeaders(h map[string]string) StreamOption {
 	return func(p *StreamParams) { p.CustomHeaders = h }
 }
 
 // WithStreamTracerRecordData 设置追踪记录回调。
-func WithStreamTracerRecordData(d any) StreamOption {
+func WithStreamTracerRecordData(d func(map[string]any)) StreamOption {
 	return func(p *StreamParams) { p.TracerRecordData = d }
 }
 
@@ -492,7 +492,7 @@ func WithReleaseSessionID(id string) ReleaseOption {
 }
 
 // WithReleaseMessages 设置消息列表。
-func WithReleaseMessages(msgs any) ReleaseOption {
+func WithReleaseMessages(msgs MessagesParam) ReleaseOption {
 	return func(p *ReleaseParams) { p.Messages = msgs }
 }
 

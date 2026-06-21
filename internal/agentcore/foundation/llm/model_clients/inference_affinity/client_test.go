@@ -1036,7 +1036,7 @@ func TestBuildReleaseRequestBody_MessagesParam类型(t *testing.T) {
 }
 
 func TestBuildReleaseRequestBody_DictsMessages类型(t *testing.T) {
-	// params.Messages 为 []map[string]any 类型时，应直接使用
+	// params.Messages 为 NewDictsMessagesParam 类型时，应直接使用
 	client, err := NewInferenceAffinityModelClient(
 		newTestModelConfig(),
 		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
@@ -1045,9 +1045,9 @@ func TestBuildReleaseRequestBody_DictsMessages类型(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dictMsgs := []map[string]any{
+	dictMsgs := model_clients.NewDictsMessagesParam([]map[string]any{
 		{"role": "user", "content": "hello"},
-	}
+	})
 	params := model_clients.NewReleaseParams(
 		model_clients.WithReleaseSessionID("session-1"),
 		model_clients.WithReleaseMessagesIndex(0),
@@ -1064,28 +1064,6 @@ func TestBuildReleaseRequestBody_DictsMessages类型(t *testing.T) {
 	}
 	if len(messagesDict) != 1 {
 		t.Errorf("messages 长度 = %d, 期望 1", len(messagesDict))
-	}
-}
-
-func TestBuildReleaseRequestBody_不支持的Messages类型(t *testing.T) {
-	// params.Messages 为不支持的类型时，应返回错误
-	client, err := NewInferenceAffinityModelClient(
-		newTestModelConfig(),
-		newTestClientConfig("InferenceAffinity", "test-key", "https://vllm.example.com/v1"),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	params := model_clients.NewReleaseParams(
-		model_clients.WithReleaseSessionID("session-1"),
-		model_clients.WithReleaseMessagesIndex(0),
-		model_clients.WithReleaseMessages("invalid_type"), // string 不是支持的类型
-	)
-
-	_, err = client.buildReleaseRequestBody(params)
-	if err == nil {
-		t.Error("不支持的 messages 类型应返回错误")
 	}
 }
 
@@ -1277,15 +1255,15 @@ func TestRelease_构建请求体错误(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 传入不支持的 messages 类型，使 buildReleaseRequestBody 报错
+	// 传入空消息参数，使 sanitizeMessages 报错
 	_, err = client.Release(
 		context.Background(),
 		model_clients.WithReleaseSessionID("session-1"),
 		model_clients.WithReleaseMessagesIndex(0),
-		model_clients.WithReleaseMessages("invalid_type"),
+		model_clients.WithReleaseMessages(model_clients.MessagesParam{}),
 	)
 	if err == nil {
-		t.Error("buildReleaseRequestBody 错误时 Release 应返回错误")
+		t.Error("空消息时 Release 应返回错误")
 	}
 }
 

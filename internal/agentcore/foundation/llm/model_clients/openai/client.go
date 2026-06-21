@@ -108,8 +108,8 @@ func (c *OpenAIModelClient) Invoke(
 
 	// 5.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
 	// 请求发送前调用 tracer_record_data 回调，记录请求参数
-	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
-		fn(map[string]any{"llm_params": reqParams})
+	if params.TracerRecordData != nil {
+		params.TracerRecordData(map[string]any{"llm_params": reqParams})
 	}
 
 	// 6. 构建 HTTP 请求
@@ -184,8 +184,8 @@ func (c *OpenAIModelClient) Invoke(
 
 	// 10.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=assistant_message)
 	// 响应解析后调用 tracer_record_data 回调，记录响应结果
-	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
-		fn(map[string]any{"llm_response": assistantMsg})
+	if params.TracerRecordData != nil {
+		params.TracerRecordData(map[string]any{"llm_response": assistantMsg})
 	}
 
 	// 触发 LLMOutput 回调（对齐 Python trigger(LLM_OUTPUT)）
@@ -248,8 +248,8 @@ func (c *OpenAIModelClient) Stream(
 
 	// 6.5 对齐 Python: if tracer_record_data: await tracer_record_data(llm_params=params)
 	// 请求发送前调用 tracer_record_data 回调，记录请求参数
-	if fn, ok := params.TracerRecordData.(func(map[string]any)); ok && fn != nil {
-		fn(map[string]any{"llm_params": reqParams})
+	if params.TracerRecordData != nil {
+		params.TracerRecordData(map[string]any{"llm_params": reqParams})
 	}
 
 	// 7. 构建 HTTP 请求
@@ -478,7 +478,7 @@ func init() {
 // BuildEffectiveHeaders 合并配置级和请求级 headers。
 //
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
-func (c *OpenAIModelClient) BuildEffectiveHeaders(requestHeaders map[string]any) map[string]string {
+func (c *OpenAIModelClient) BuildEffectiveHeaders(requestHeaders map[string]string) map[string]string {
 	return headers_helper.MergeRequestHeaders(c.baseHeaders, requestHeaders)
 }
 

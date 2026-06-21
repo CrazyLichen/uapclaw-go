@@ -632,9 +632,9 @@ type tracerRecordDataCapturingClient struct {
 	// invokeErr Invoke 返回的错误
 	invokeErr error
 	// capturedInvokeRecordData 捕获到的 Invoke TracerRecordData 回调
-	capturedInvokeRecordData any
+	capturedInvokeRecordData func(map[string]any)
 	// capturedStreamRecordData 捕获到的 Stream TracerRecordData 回调
-	capturedStreamRecordData any
+	capturedStreamRecordData func(map[string]any)
 	// streamResult Stream 返回的结果
 	streamResult *model_clients.StreamResult
 	// streamErr Stream 返回的错误
@@ -704,14 +704,8 @@ func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 		t.Fatal("期望 TracerRecordData 被注入，实际为 nil")
 	}
 
-	// 验证回调类型正确且可调用
-	fn, ok := inner.capturedInvokeRecordData.(func(map[string]any))
-	if !ok {
-		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedInvokeRecordData)
-	}
-
 	// 调用回调不应 panic
-	fn(map[string]any{"llm_params": map[string]any{"model": "test"}})
+	inner.capturedInvokeRecordData(map[string]any{"llm_params": map[string]any{"model": "test"}})
 }
 
 // TestTracedModelClient_Stream_注入TracerRecordData 测试 Stream 将 tracer_record_data 回调注入到 opts
@@ -749,14 +743,8 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 		t.Fatal("期望 TracerRecordData 被注入，实际为 nil")
 	}
 
-	// 验证回调类型正确且可调用
-	fn, ok := inner.capturedStreamRecordData.(func(map[string]any))
-	if !ok {
-		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedStreamRecordData)
-	}
-
 	// 调用回调不应 panic
-	fn(map[string]any{"llm_params": map[string]any{"model": "test"}})
+	inner.capturedStreamRecordData(map[string]any{"llm_params": map[string]any{"model": "test"}})
 }
 
 // TestTracedModelClient_Invoke_回调触发TraceLLMRequest 测试底层客户端调用回调时 TraceLLMRequest 事件被触发
@@ -792,11 +780,7 @@ func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 	}
 
 	// 手动调用捕获的回调，模拟底层客户端调用
-	fn, ok := inner.capturedInvokeRecordData.(func(map[string]any))
-	if !ok {
-		t.Fatalf("期望 TracerRecordData 类型为 func(map[string]any)，实际: %T", inner.capturedInvokeRecordData)
-	}
-	fn(map[string]any{"llm_params": map[string]any{"model": "qwen-max"}})
+	inner.capturedInvokeRecordData(map[string]any{"llm_params": map[string]any{"model": "qwen-max"}})
 
 	// 验证 OnInvokeData 被填充（TraceLLMRequest → OnLLMRequest → updateRunningTraceData）
 	lastSpan := tracer.AgentSpanManager.LastSpan()

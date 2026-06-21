@@ -84,7 +84,7 @@ type ModelClientConfig struct {
 	// SSLCert SSL 证书文件路径（可选）
 	SSLCert string `json:"ssl_cert,omitempty"`
 	// CustomHeaders 开发者自定义请求头，每次 LLM 调用时合并
-	CustomHeaders map[string]any `json:"custom_headers,omitempty"`
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"`
 	// Extra 额外字段（对应 Python model_config extra="allow"），不直接参与 JSON 序列化
 	Extra map[string]any `json:"-"`
 }
@@ -245,7 +245,7 @@ func WithSSLCert(cert string) ModelClientConfigOption {
 }
 
 // WithCustomHeaders 设置自定义请求头。
-func WithCustomHeaders(headers map[string]any) ModelClientConfigOption {
+func WithCustomHeaders(headers map[string]string) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.CustomHeaders = headers }
 }
 
