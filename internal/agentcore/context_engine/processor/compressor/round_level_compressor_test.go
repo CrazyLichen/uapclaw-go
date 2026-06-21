@@ -142,11 +142,25 @@ type trackingTokenCounter struct {
 	lowCount           int
 	highCallsBeforeLow int
 	callCount          int
+	// useEstimation 是否使用消息内容估算而非固定返回值
+	// hasCompressionBenefit 需要区分长短消息，固定返回值无法满足
+	useEstimation bool
 }
 
 func (c *trackingTokenCounter) Count(_ string, _ string) (int, error) { return c.lowCount, nil }
 func (c *trackingTokenCounter) CountMessages(msgs []llm_schema.BaseMessage, _ string) (int, error) {
 	c.callCount++
+	if c.useEstimation {
+		// 基于消息内容估算，与真实 TokenCounter 行为一致：长消息返回大数
+		total := 0
+		for _, msg := range msgs {
+			total += len(msg.GetContent().Text()) / 3
+		}
+		if total == 0 {
+			total = 1
+		}
+		return total, nil
+	}
 	if c.callCount <= c.highCallsBeforeLow {
 		return c.highCount, nil
 	}
@@ -1099,11 +1113,9 @@ func TestRoundLevelCompressor_OnAddMessages_压缩成功(t *testing.T) {
 	rlc := newRLCWithModel(cfg, fakeClient)
 
 	// 使用 trackingTokenCounter 来调试调用模式
-	// 前6次返回500(超过target=100)，之后返回50(低于target=100)
+	// useEstimation=true：基于消息内容估算 token 数，让 hasCompressionBenefit 能正确判断
 	tc := &trackingTokenCounter{t: t, name: "OnAddMessages压缩成功"}
-	tc.highCount = 500
-	tc.lowCount = 50
-	tc.highCallsBeforeLow = 6
+	tc.useEstimation = true
 
 	mc := &fakeModelContext{
 		messages:     []llm_schema.BaseMessage{},
@@ -1157,7 +1169,8 @@ func TestRoundLevelCompressor_buildJSONReplacements_正常(t *testing.T) {
 		},
 	}
 
-	replacements := rlc.buildJSONReplacements(targets, parserContent, &fakeModelContext{tokenCounter: &fakeTokenCounter{count: 50}})
+	// nil TokenCounter → 走字符估算，原始消息长>替换消息短 → hasCompressionBenefit 返回 true
+	replacements := rlc.buildJSONReplacements(targets, parserContent, &fakeModelContext{tokenCounter: nil})
 	if len(replacements) != 1 {
 		t.Fatalf("应构建 1 个替换，实际: %d", len(replacements))
 	}
@@ -1193,7 +1206,7 @@ func TestRoundLevelCompressor_buildJSONReplacements_缺失blockID(t *testing.T) 
 		},
 	}
 
-	replacements := rlc.buildJSONReplacements(targets, parserContent, &fakeModelContext{tokenCounter: &fakeTokenCounter{count: 50}})
+	replacements := rlc.buildJSONReplacements(targets, parserContent, &fakeModelContext{tokenCounter: nil})
 	if len(replacements) != 0 {
 		t.Errorf("block_id 不匹配时不应产生替换，实际: %d", len(replacements))
 	}
@@ -1322,10 +1335,11 @@ func TestRoundLevelCompressor_hasCompressionBenefit(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
 	fakeClient := &rlcFakeBaseModelClient{}
 	rlc := newRLCWithModel(cfg, fakeClient)
-	mc := &fakeModelContext{tokenCounter: &fakeTokenCounter{count: 0}}
+
+	// nil TokenCounter → 走字符估算降级：长消息 len/3 > 短消息 len/3
+	mc := &fakeModelContext{tokenCounter: nil}
 
 	// 原始消息长，替换消息短 → 有收益
-	// 使用 TokenCounter，通过字符估算降级：长消息 len/3 > 短消息 len/3
 	original := []llm_schema.BaseMessage{llm_schema.NewUserMessage("很长很长很长很长很长的消息内容需要压缩处理")}
 	replacement := []llm_schema.BaseMessage{llm_schema.NewUserMessage("短")}
 	if !rlc.hasCompressionBenefit(original, replacement, mc) {
@@ -1463,11 +1477,9 @@ func TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功(t *testin
 	}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
-	// 前6次返回500(超过target=100)，之后返回50(低于target=100)
+	// useEstimation=true：基于消息内容估算 token 数
 	tc := &trackingTokenCounter{t: t, name: "OnGetContextWindow超预算"}
-	tc.highCount = 500
-	tc.lowCount = 50
-	tc.highCallsBeforeLow = 6
+	tc.useEstimation = true
 
 	mc := &fakeModelContext{
 		messages:     []llm_schema.BaseMessage{},
@@ -1565,11 +1577,9 @@ func TestRoundLevelCompressor_compressUntilTarget_force强制(t *testing.T) {
 	}
 	rlc := newRLCWithModel(cfg, fakeClient)
 
-	// highCallsBeforeLow 设大一些确保走完递归压缩
+	// useEstimation=true：基于消息内容估算 token 数
 	tc := &trackingTokenCounter{t: t, name: "force压缩"}
-	tc.highCount = 500
-	tc.lowCount = 50
-	tc.highCallsBeforeLow = 8
+	tc.useEstimation = true
 
 	mc := &fakeModelContext{
 		tokenCounter: tc,
@@ -1600,9 +1610,7 @@ func TestRoundLevelCompressor_runAggressivePhase_有目标(t *testing.T) {
 
 	// 前 4 次返回高值（超预算），之后返回低值
 	tc := &trackingTokenCounter{t: t, name: "runAggressivePhase"}
-	tc.highCount = 500
-	tc.lowCount = 50
-	tc.highCallsBeforeLow = 4
+	tc.useEstimation = true
 
 	mc := &fakeModelContext{
 		tokenCounter: tc,
@@ -2059,7 +2067,8 @@ func TestRoundLevelCompressor_buildRawFallbackReplacement_正常(t *testing.T) {
 	}
 
 	contentText := "这是 LLM 返回的非 JSON 格式摘要内容"
-	replacement := rlc.buildRawFallbackReplacement(targets, contentText, &fakeModelContext{tokenCounter: &fakeTokenCounter{count: 50}})
+	// nil TokenCounter → 走字符估算，原始消息长>摘要短 → hasCompressionBenefit 返回 true
+	replacement := rlc.buildRawFallbackReplacement(targets, contentText, &fakeModelContext{tokenCounter: nil})
 	if replacement == nil {
 		t.Fatal("应构建 Fallback 替换")
 	}
