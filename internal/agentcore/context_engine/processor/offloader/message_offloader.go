@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/danwakefield/fnmatch"
 	"github.com/google/uuid"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
@@ -457,54 +458,19 @@ func extractToolArgs(toolCall *llm_schema.ToolCall) map[string]any {
 
 // matchPattern 检查参数值是否匹配通配符模式。
 //
-// 使用 strings 包实现 fnmatch 风格匹配（* 匹配任意字符包括 /）。
-// filepath.Match 的 * 不匹配 /，与 Python fnmatch 行为不同，
-// 因此手动实现简单的通配符匹配。
+// 使用 fnmatch 库实现与 Python fnmatch 一致的通配符匹配，
+// 支持 *、?、[...] 等模式，且 * 匹配任意字符包括 /。
 //
 // 对应 Python: MessageOffloader._match_pattern()
 func matchPattern(args map[string]any, pattern string) bool {
 	for _, value := range args {
 		if strVal, ok := value.(string); ok {
-			if fnmatchStar(pattern, strVal) {
+			if fnmatch.Match(pattern, strVal, 0) {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-// fnmatchStar 实现仅含 * 通配符的简单模式匹配。
-//
-// 与 filepath.Match 不同，* 匹配任意字符包括 /。
-// 这与 Python fnmatch 的默认行为对齐。
-func fnmatchStar(pattern, s string) bool {
-	pi, si := 0, 0
-	for pi < len(pattern) && si < len(s) {
-		if pattern[pi] == '*' {
-			// 跳过连续的 *
-			for pi < len(pattern) && pattern[pi] == '*' {
-				pi++
-			}
-			if pi == len(pattern) {
-				return true // 模式以 * 结尾，匹配剩余
-			}
-			// 在 s 中查找下一个非 * 字符的匹配位置
-			for si < len(s) && s[si] != pattern[pi] {
-				si++
-			}
-		} else {
-			if pattern[pi] != s[si] {
-				return false
-			}
-			pi++
-			si++
-		}
-	}
-	// 消耗剩余的 *
-	for pi < len(pattern) && pattern[pi] == '*' {
-		pi++
-	}
-	return pi == len(pattern) && si == len(s)
 }
 
 // init 自动注册到 context_engine 注册表
