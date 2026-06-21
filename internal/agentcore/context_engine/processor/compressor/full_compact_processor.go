@@ -437,7 +437,7 @@ func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, 
 			return &iface.ContextEvent{
 				EventType:        fcp.ProcessorType(),
 				MessagesToModify: buildRangeIndices(0, len(allMessages)-1),
-				CompactSummary:   _messageToText(sessionMemoryMessage),
+				CompactSummary:   MessageToText(sessionMemoryMessage),
 			}, sessionMemoryMessages, sessionMemoryMessage
 		}
 		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory candidate rejected: token budget exceeded")
@@ -592,7 +592,7 @@ func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages 
 func (fcp *FullCompactProcessor) _truncateForPromptBudget(messages []llm_schema.BaseMessage, mc iface.ModelContext) []llm_schema.BaseMessage {
 	groups := fcp._groupMessagesByAPIRound(messages)
 	for len(groups) > 0 {
-		candidate := flattenGroups(groups)
+		candidate := FlattenGroups(groups)
 		if fcp._countPromptTokens(candidate, mc) <= fcp.fcpConfig.CompressionCallMaxTokens {
 			return candidate
 		}
@@ -643,11 +643,7 @@ func (fcp *FullCompactProcessor) _truncateMessagesFromHead(messages []llm_schema
 //
 // 对应 Python: FullCompactProcessor._group_messages_by_api_round()
 func (fcp *FullCompactProcessor) _groupMessagesByAPIRound(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
-	ranges := processor.GroupCompletedAPIRounds(messages)
-	groups := make([][]llm_schema.BaseMessage, 0, len(ranges))
-	for _, r := range ranges {
-		groups = append(groups, messages[r[0]:r[1]])
-	}
+	groups := GroupCompletedAPIRoundsMessages(messages)
 	return groups
 }
 
@@ -933,7 +929,7 @@ func (fcp *FullCompactProcessor) _buildFallbackSummary(messages []llm_schema.Bas
 	}
 	var lines []string
 	for idx, msg := range tail {
-		lines = append(lines, fmt.Sprintf("[%d] %s: %s", startIdx+idx, msg.GetRole().String(), _messageToText(msg)))
+		lines = append(lines, fmt.Sprintf("[%d] %s: %s", startIdx+idx, msg.GetRole().String(), MessageToText(msg)))
 	}
 	return "Summary:\n" + strings.Join(lines, "\n")
 }
@@ -989,32 +985,8 @@ func (fcp *FullCompactProcessor) _serializeMessage(msg llm_schema.BaseMessage) s
 		parts = append(parts, fmt.Sprintf("tool_call_id=%s", tm.ToolCallID))
 	}
 
-	parts = append(parts, fmt.Sprintf("content=%s", _messageToText(msg)))
+	parts = append(parts, fmt.Sprintf("content=%s", MessageToText(msg)))
 	return strings.Join(parts, " | ")
-}
-
-// _messageToText 提取消息纯文本内容。
-//
-// 对应 Python: FullCompactProcessor._message_to_text() / util.message_to_text()
-func _messageToText(msg llm_schema.BaseMessage) string {
-	content := msg.GetContent().Text()
-	if content != "" {
-		return content
-	}
-	// 尝试从 parts 获取文本
-	parts := msg.GetContent().Parts()
-	if len(parts) > 0 {
-		var texts []string
-		for _, p := range parts {
-			if p.Text != "" {
-				texts = append(texts, p.Text)
-			}
-		}
-		if len(texts) > 0 {
-			return strings.Join(texts, "\n")
-		}
-	}
-	return ""
 }
 
 // _findLastCompactionBoundaryIndex 从后找 boundary 或 sessionMemoryBoundary 消息索引。
@@ -1112,23 +1084,23 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 	// ⤵️ 待完善：需对接 FullCompactProcessor 的配置和状态标记
 	keepSigs := make(map[string]bool)
 	for _, msg := range messagesToKeep {
-		keepSigs[_messageSignature(msg)] = true
+		keepSigs[MessageSignature(msg)] = true
 	}
 
-	rounds := groupCompletedAPIRounds(messages)
+	rounds := GroupCompletedAPIRoundsMessages(messages)
 	var selectedRounds [][]llm_schema.BaseMessage
 	seenRoundSigs := make(map[string]bool)
 
 	for i := len(rounds) - 1; i >= 0; i-- {
 		roundMsgs := rounds[i]
-		roundSig := _roundSignature(roundMsgs)
+		roundSig := RoundSignature(roundMsgs)
 		if seenRoundSigs[roundSig] {
 			continue
 		}
 		// 检查轮次中的消息是否在 keep 集合中
 		overlap := false
 		for _, msg := range roundMsgs {
-			if keepSigs[_messageSignature(msg)] {
+			if keepSigs[MessageSignature(msg)] {
 				overlap = true
 				break
 			}
@@ -1136,7 +1108,7 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 		if overlap {
 			continue
 		}
-		if !roundContainsSkillRead(roundMsgs) {
+		if !RoundContainsSkillRead(roundMsgs) {
 			continue
 		}
 		selectedRounds = append(selectedRounds, roundMsgs)
@@ -1163,7 +1135,7 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 	for _, roundMsgs := range selectedRounds {
 		var serializedParts []string
 		for _, msg := range roundMsgs {
-			serializedParts = append(serializedParts, fmt.Sprintf("role=%s, content=%s", msg.GetRole().String(), _messageToText(msg)))
+			serializedParts = append(serializedParts, fmt.Sprintf("role=%s, content=%s", msg.GetRole().String(), MessageToText(msg)))
 		}
 		serialized := strings.Join(serializedParts, "\n")
 		// 注意：这里使用默认的 StateMarker 和 truncateStateText
@@ -1200,97 +1172,6 @@ func buildPlanModeReinjectedContent(_ context.Context, _ iface.ModelContext, _ [
 // 对应 Python: build_plan_reinjected_content()
 func buildPlanReinjectedContent(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	return ""
-}
-
-// groupCompletedAPIRounds 按已完成 API 轮次分组返回消息子列表。
-func groupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
-	ranges := processor.GroupCompletedAPIRounds(messages)
-	groups := make([][]llm_schema.BaseMessage, 0, len(ranges))
-	for _, r := range ranges {
-		groups = append(groups, messages[r[0]:r[1]])
-	}
-	return groups
-}
-
-// roundContainsSkillRead 检查轮次中是否包含 skill 文件读取。
-func roundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
-	for _, msg := range messages {
-		am, ok := msg.(*llm_schema.AssistantMessage)
-		if !ok {
-			continue
-		}
-		for _, tc := range am.ToolCalls {
-			if tc.Name != "read_file" {
-				continue
-			}
-			filePath := extractArgumentValue(tc.Arguments, "file_path")
-			if isSkillFilePath(filePath) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// isSkillFilePath 判断文件路径是否为 skill 文件。
-func isSkillFilePath(filePath string) bool {
-	if filePath == "" {
-		return false
-	}
-	normalized := strings.ReplaceAll(strings.ToLower(filePath), "\\", "/")
-	return strings.HasSuffix(normalized, "/skill.md") || strings.HasSuffix(normalized, "skill.md")
-}
-
-// extractArgumentValue 从 JSON 参数文本中提取指定 key 的值。
-func extractArgumentValue(argumentsText string, keys ...string) string {
-	if argumentsText == "" {
-		return ""
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(argumentsText), &parsed); err == nil {
-		for _, key := range keys {
-			if val, ok := parsed[key].(string); ok && strings.TrimSpace(val) != "" {
-				return strings.TrimSpace(val)
-			}
-		}
-	}
-	// fallback：正则提取
-	for _, key := range keys {
-		pattern := fmt.Sprintf(`"%s"\s*:\s*"([^"]+)"`, regexp.QuoteMeta(key))
-		if match := regexp.MustCompile(pattern).FindStringSubmatch(argumentsText); len(match) > 1 {
-			return strings.TrimSpace(match[1])
-		}
-	}
-	return ""
-}
-
-// _messageSignature 生成消息签名（用于去重）。
-func _messageSignature(msg llm_schema.BaseMessage) string {
-	var toolCallIDs []string
-	if am, ok := msg.(*llm_schema.AssistantMessage); ok {
-		for _, tc := range am.ToolCalls {
-			toolCallIDs = append(toolCallIDs, tc.ID)
-		}
-	}
-	return fmt.Sprintf("%s|%s|%s", msg.GetRole().String(), _messageToText(msg), strings.Join(toolCallIDs, "|"))
-}
-
-// _roundSignature 生成轮次签名。
-func _roundSignature(messages []llm_schema.BaseMessage) string {
-	var sigs []string
-	for _, msg := range messages {
-		sigs = append(sigs, _messageSignature(msg))
-	}
-	return strings.Join(sigs, "|")
-}
-
-// flattenGroups 将分组展平为单一切片。
-func flattenGroups(groups [][]llm_schema.BaseMessage) []llm_schema.BaseMessage {
-	var result []llm_schema.BaseMessage
-	for _, g := range groups {
-		result = append(result, g...)
-	}
-	return result
 }
 
 // init 自动注册到 context_engine 注册表

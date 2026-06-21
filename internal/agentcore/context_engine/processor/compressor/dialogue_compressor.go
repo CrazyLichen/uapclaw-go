@@ -2,19 +2,18 @@ package compressor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/output_parsers"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -706,20 +705,6 @@ func IsValidBlocksPayload(parserContent any) bool {
 	}
 	_, ok = blocks.([]any)
 	return ok
-}
-
-// EstimateContentTokens 估算内容的 Token 数（字符长度 / 3）。
-//
-// 对应 Python: DialogueCompressor._estimate_content_tokens()
-func EstimateContentTokens(content any) int {
-	if str, ok := content.(string); ok {
-		return len(str) / 3
-	}
-	data, err := json.Marshal(content)
-	if err != nil {
-		return len(fmt.Sprintf("%v", content)) / 3
-	}
-	return len(data) / 3
 }
 
 // ExtractCompactSummaryFromReplacements 从替换列表提取压缩摘要文本。
