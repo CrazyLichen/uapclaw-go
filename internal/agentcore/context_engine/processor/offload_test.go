@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -31,10 +31,10 @@ func (m *mockModelContext) ClearMessages(_ context.Context, _ bool) error       
 func (m *mockModelContext) AddMessages(_ context.Context, _ any) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
-func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ *int, _ *int) (*context_engine.ContextWindow, error) {
+func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *mockModelContext) Statistic() *context_engine.ContextStats  { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats  { return nil }
 func (m *mockModelContext) SessionID() string                        { return m.sessionID }
 func (m *mockModelContext) ContextID() string                        { return "ctx-123" }
 func (m *mockModelContext) TokenCounter() token.TokenCounter         { return nil }
@@ -48,8 +48,8 @@ func TestOffloadMessages_in_memory模式正常(t *testing.T) {
 	mc := &mockModelContext{sessionID: "test-session"}
 
 	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", msgs,
-		WithOffloadType("in_memory"),
-		WithOffloadHandle("test-handle"),
+		iface.WithOffloadType("in_memory"),
+		iface.WithOffloadHandle("test-handle"),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)
@@ -80,9 +80,9 @@ func TestOffloadMessages_filesystem模式正常(t *testing.T) {
 	offloadPath := filepath.Join(tmpDir, "offload", "test.json")
 
 	result, err := p.OffloadMessages(context.Background(), mc, "assistant", "摘要", msgs,
-		WithOffloadType("filesystem"),
-		WithOffloadHandle("test-handle"),
-		WithOffloadPath(offloadPath),
+		iface.WithOffloadType("filesystem"),
+		iface.WithOffloadHandle("test-handle"),
+		iface.WithOffloadPath(offloadPath),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)
@@ -117,9 +117,9 @@ func TestOffloadMessages_filesystem失败fallback(t *testing.T) {
 
 	// 使用相对路径，写入会失败，fallback 到 in_memory
 	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", msgs,
-		WithOffloadType("filesystem"),
-		WithOffloadHandle("test-handle"),
-		WithOffloadPath("relative/path.json"),
+		iface.WithOffloadType("filesystem"),
+		iface.WithOffloadHandle("test-handle"),
+		iface.WithOffloadPath("relative/path.json"),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)
@@ -145,7 +145,7 @@ func TestOffloadMessages_自动生成Handle(t *testing.T) {
 	mc := &mockModelContext{sessionID: "test-session"}
 
 	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", msgs,
-		WithOffloadType("in_memory"),
+		iface.WithOffloadType("in_memory"),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)
@@ -174,7 +174,7 @@ func TestOffloadMessages_默认filesystem(t *testing.T) {
 
 	// 不指定 OffloadType，默认应为 filesystem
 	result, err := p.OffloadMessages(context.Background(), mc, "assistant", "摘要", msgs,
-		WithOffloadPath(offloadPath),
+		iface.WithOffloadPath(offloadPath),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)
@@ -212,8 +212,8 @@ func TestOffloadMessages_各角色(t *testing.T) {
 	roles := []string{"system", "tool", "assistant"}
 	for _, role := range roles {
 		result, err := p.OffloadMessages(context.Background(), mc, role, "摘要", msgs,
-			WithOffloadType("in_memory"),
-			WithOffloadHandle("handle-"+role),
+			iface.WithOffloadType("in_memory"),
+			iface.WithOffloadHandle("handle-"+role),
 		)
 		if err != nil {
 			t.Errorf("角色 %q OffloadMessages 返回错误: %v", role, err)
@@ -233,7 +233,7 @@ func TestOffloadMessages_filesystem无路径(t *testing.T) {
 
 	// filesystem 模式但使用自动生成的路径（相对路径，写入会失败，fallback）
 	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", msgs,
-		WithOffloadType("filesystem"),
+		iface.WithOffloadType("filesystem"),
 	)
 	if err != nil {
 		t.Fatalf("OffloadMessages 返回错误: %v", err)

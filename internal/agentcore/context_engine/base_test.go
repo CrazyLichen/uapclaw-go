@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -12,7 +13,7 @@ import (
 
 // TestContextWindow_GetMessages_空窗口 测试空窗口的 GetMessages
 func TestContextWindow_GetMessages_空窗口(t *testing.T) {
-	w := NewContextWindow()
+	w := iface.NewContextWindow()
 	msgs := w.GetMessages()
 	if len(msgs) != 0 {
 		t.Errorf("空窗口应返回 0 条消息，实际 %d", len(msgs))
@@ -24,7 +25,7 @@ func TestContextWindow_GetMessages_合并系统消息和上下文消息(t *testi
 	sysMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "系统提示")
 	userMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeUser, "用户输入")
 
-	w := &ContextWindow{
+	w := &iface.ContextWindow{
 		SystemMessages:  []llm_schema.BaseMessage{sysMsg},
 		ContextMessages: []llm_schema.BaseMessage{userMsg},
 	}
@@ -45,7 +46,7 @@ func TestContextWindow_GetMessages_合并系统消息和上下文消息(t *testi
 func TestContextWindow_GetMessages_仅系统消息(t *testing.T) {
 	sysMsg := llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "系统提示")
 
-	w := &ContextWindow{
+	w := &iface.ContextWindow{
 		SystemMessages: []llm_schema.BaseMessage{sysMsg},
 	}
 
@@ -60,7 +61,7 @@ func TestContextWindow_GetMessages_仅系统消息(t *testing.T) {
 
 // TestContextWindow_GetTools_空工具 测试空工具列表
 func TestContextWindow_GetTools_空工具(t *testing.T) {
-	w := NewContextWindow()
+	w := iface.NewContextWindow()
 	tools := w.GetTools()
 	if len(tools) != 0 {
 		t.Errorf("空窗口应返回 0 个工具，实际 %d", len(tools))
@@ -75,7 +76,7 @@ func TestContextWindow_GetTools_有工具(t *testing.T) {
 		Description: "测试工具",
 	}
 
-	w := &ContextWindow{
+	w := &iface.ContextWindow{
 		Tools: []*schema.ToolInfo{toolInfo},
 	}
 
@@ -90,7 +91,7 @@ func TestContextWindow_GetTools_有工具(t *testing.T) {
 
 // TestContextStats_零值 测试 ContextStats 零值
 func TestContextStats_零值(t *testing.T) {
-	var stats ContextStats
+	var stats iface.ContextStats
 	if stats.TotalMessages != 0 {
 		t.Errorf("零值 TotalMessages 应为 0，实际 %d", stats.TotalMessages)
 	}
@@ -104,7 +105,7 @@ func TestContextStats_零值(t *testing.T) {
 
 // TestContextStats_字段完整性 测试 ContextStats 所有 13 个字段零值
 func TestContextStats_字段完整性(t *testing.T) {
-	var stats ContextStats
+	var stats iface.ContextStats
 	// 消息计数字段
 	if stats.TotalMessages != 0 {
 		t.Errorf("TotalMessages 应为 0，实际 %d", stats.TotalMessages)
@@ -151,7 +152,7 @@ func TestContextStats_字段完整性(t *testing.T) {
 
 // TestContextWindow_Statistic零值 测试 Statistic 为值类型零值时可直接访问
 func TestContextWindow_Statistic零值(t *testing.T) {
-	w := &ContextWindow{
+	w := &iface.ContextWindow{
 		SystemMessages:  []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "hi")},
 		ContextMessages: []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeUser, "hello")},
 	}
@@ -171,7 +172,7 @@ func TestContextWindow_Statistic零值(t *testing.T) {
 
 // TestNewContextWindow 测试 NewContextWindow 构造函数
 func TestNewContextWindow(t *testing.T) {
-	w := NewContextWindow()
+	w := iface.NewContextWindow()
 
 	// 消息和工具切片应初始化为空切片（非 nil），避免 JSON 序列化为 null
 	if w.SystemMessages == nil {
@@ -204,7 +205,7 @@ func TestNewContextWindow(t *testing.T) {
 
 // TestNewContextWindow_JSON序列化 测试 NewContextWindow 的 JSON 序列化
 func TestNewContextWindow_JSON序列化(t *testing.T) {
-	w := NewContextWindow()
+	w := iface.NewContextWindow()
 
 	data, err := json.Marshal(w)
 	if err != nil {

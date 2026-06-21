@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -58,7 +58,7 @@ func TestOnAddMessages_空消息列表(t *testing.T) {
 func TestOnGetContextWindow_默认透传(t *testing.T) {
 	c := &testConfig{Name: "test"}
 	p := NewBaseProcessor(c)
-	cw := context_engine.ContextWindow{
+	cw := iface.ContextWindow{
 		SystemMessages:  []llm_schema.BaseMessage{llm_schema.NewSystemMessage("sys")},
 		ContextMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")},
 	}
@@ -91,7 +91,7 @@ func TestTriggerAddMessages_默认不触发(t *testing.T) {
 func TestTriggerGetContextWindow_默认不触发(t *testing.T) {
 	c := &testConfig{Name: "test"}
 	p := NewBaseProcessor(c)
-	triggered, err := p.TriggerGetContextWindow(context.Background(), nil, context_engine.ContextWindow{})
+	triggered, err := p.TriggerGetContextWindow(context.Background(), nil, iface.ContextWindow{})
 	if err != nil {
 		t.Fatalf("TriggerGetContextWindow 返回错误: %v", err)
 	}

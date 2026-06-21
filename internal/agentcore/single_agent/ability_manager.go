@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
@@ -39,7 +39,7 @@ type AbilityManager struct {
 	// mcpServers MCP 服务器注册表
 	mcpServers map[string]*mcp.McpServerConfig
 	// contextEngine 上下文引擎
-	contextEngine context_engine.ContextEngine
+	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
 	resourceMgr ResourceManager
 	// rail 工具调用生命周期钩子 ⤵️ 预留，6.4-6.10 回填
@@ -77,7 +77,7 @@ func NewAbilityManager(resourceMgr ResourceManager) *AbilityManager {
 }
 
 // SetContextEngine 设置上下文引擎。
-func (am *AbilityManager) SetContextEngine(ce context_engine.ContextEngine) {
+func (am *AbilityManager) SetContextEngine(ce iface.ContextEngine) {
 	am.contextEngine = ce
 }
 

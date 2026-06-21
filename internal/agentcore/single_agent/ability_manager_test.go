@@ -481,7 +481,7 @@ func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.
 
 func TestAbilityManager_SetContextEngine(t *testing.T) {
 	am := NewAbilityManager(nil)
-	am.SetContextEngine(nil) // 不应 panic，nil 满足 context_engine.ContextEngine 接口
+	am.SetContextEngine(nil) // 不应 panic，nil 满足 iface.ContextEngine 接口
 }
 
 func TestAbilityManager_SetRail(t *testing.T) {

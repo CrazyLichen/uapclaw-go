@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -25,7 +27,7 @@ func (c *testConfig) Validate() error {
 
 // TestContextEvent_字段默认值 验证 ContextEvent 零值
 func TestContextEvent_字段默认值(t *testing.T) {
-	var e ContextEvent
+	var e iface.ContextEvent
 	if e.EventType != "" {
 		t.Errorf("EventType 零值应为空串，实际 %q", e.EventType)
 	}
@@ -42,7 +44,7 @@ func TestContextEvent_字段默认值(t *testing.T) {
 
 // TestContextEvent_构造 验证结构体字面量构造
 func TestContextEvent_构造(t *testing.T) {
-	e := &ContextEvent{
+	e := &iface.ContextEvent{
 		EventType:        "DialogueCompressor",
 		MessagesToModify: []int{0, 1, 2},
 		CompactSummary:   "压缩了3条消息",
@@ -67,7 +69,7 @@ func TestContextEvent_构造(t *testing.T) {
 
 // TestContextEvent_JSON序列化 验证 JSON 序列化/反序列化
 func TestContextEvent_JSON序列化(t *testing.T) {
-	original := &ContextEvent{
+	original := &iface.ContextEvent{
 		EventType:        "MessageOffloader",
 		MessagesToModify: []int{5},
 		CompactSummary:   "卸载了1条消息",
@@ -79,7 +81,7 @@ func TestContextEvent_JSON序列化(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 
-	var restored ContextEvent
+	var restored iface.ContextEvent
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatalf("反序列化失败: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestContextEvent_JSON序列化(t *testing.T) {
 
 // TestContextEvent_JSON省略空字段 验证 omitempty 行为
 func TestContextEvent_JSON省略空字段(t *testing.T) {
-	e := ContextEvent{EventType: "test"}
+	e := iface.ContextEvent{EventType: "test"}
 	data, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("序列化失败: %v", err)
@@ -146,7 +148,7 @@ func TestNewBaseProcessor(t *testing.T) {
 
 // TestProcessorOption_默认值 验证 ProcessorOption 零值
 func TestProcessorOption_默认值(t *testing.T) {
-	po := newProcessorOption()
+	po := iface.NewProcessorOption()
 	if po.SysOperation != nil {
 		t.Error("SysOperation 默认应为 nil")
 	}
@@ -166,11 +168,11 @@ func TestProcessorOption_默认值(t *testing.T) {
 
 // TestProcessorOption_选项函数 验证 With* 选项函数
 func TestProcessorOption_选项函数(t *testing.T) {
-	po := newProcessorOption(
-		WithOffloadHandle("abc123"),
-		WithOffloadType("filesystem"),
-		WithOffloadPath("/tmp/offload.json"),
-		WithExtra("key1", "value1"),
+	po := iface.NewProcessorOption(
+		iface.WithOffloadHandle("abc123"),
+		iface.WithOffloadType("filesystem"),
+		iface.WithOffloadPath("/tmp/offload.json"),
+		iface.WithExtra("key1", "value1"),
 	)
 	if po.OffloadHandle != "abc123" {
 		t.Errorf("OffloadHandle = %q, want abc123", po.OffloadHandle)
@@ -189,7 +191,7 @@ func TestProcessorOption_选项函数(t *testing.T) {
 // TestWithSysOperation 验证 SysOperation 选项
 func TestWithSysOperation(t *testing.T) {
 	op := struct{}{}
-	po := newProcessorOption(WithSysOperation(op))
+	po := iface.NewProcessorOption(iface.WithSysOperation(op))
 	if po.SysOperation == nil {
 		t.Error("SysOperation 不应为 nil")
 	}

@@ -1,7 +1,7 @@
 package schema
 
 import (
-	contextengine "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -82,7 +82,7 @@ type ContextCompressionState struct {
 	// After 压缩后指标，nil 表示操作未完成或被跳过
 	After *ContextCompressionMetric `json:"after,omitempty"`
 	// Statistic 上下文统计快照
-	Statistic contextengine.ContextStats `json:"statistic"`
+	Statistic iface.ContextStats `json:"statistic"`
 	// Saved 压缩节省量，nil 表示无节省（操作未完成）
 	Saved *ContextCompressionSaved `json:"saved,omitempty"`
 	// CompressionUsage LLM 调用用量，nil 表示未调用 LLM

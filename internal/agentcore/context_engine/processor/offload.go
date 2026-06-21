@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
@@ -32,12 +32,12 @@ const (
 //   - "filesystem"（默认）：卸载到文件系统，失败时 fallback 到内存
 //
 // 对应 Python: ContextProcessor.offload_messages()
-func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc context_engine.ModelContext, role string, content string, messages []llm_schema.BaseMessage, opts ...Option) (llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, opts ...iface.Option) (llm_schema.BaseMessage, error) {
 	if len(messages) == 0 {
 		return nil, nil
 	}
 
-	po := newProcessorOption(opts...)
+	po := iface.NewProcessorOption(opts...)
 
 	offloadHandle := po.OffloadHandle
 	if offloadHandle == "" {
@@ -93,7 +93,7 @@ func (p *BaseProcessor) GenerateOffloadPath(workspaceDir, sessionID, offloadHand
 //
 // ⤵️ 5.31 回填：需 ModelContext.OffloadMessages(handle, messages) 方法
 // 当前实现预留调用点，待 5.31 ModelContext 补充 OffloadMessages 方法后回填。
-func (p *BaseProcessor) offloadMessagesToMemory(mc context_engine.ModelContext, role string, content string, messages []llm_schema.BaseMessage, offloadHandle string) (llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, offloadHandle string) (llm_schema.BaseMessage, error) {
 	content = content + fmt.Sprintf(offloadMessageHandle, offloadHandle, "in_memory")
 
 	// ⤵️ 5.31 回填：调用 mc.OffloadMessages(offloadHandle, messages) 存入内存

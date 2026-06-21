@@ -117,59 +117,74 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 // Count 计算文本的 Token 数量。
 //
 // 优先使用 tiktoken 编码器精确计算，失败时降级为 len(text)//4。
+// 返回 (count, error)：计数成功时 error 为 nil，count 为 token 数；
+// 编码器不可用（enc 为 nil）时返回 (0, error)，由调用方决定是否降级。
 //
 // 对应 Python: TiktokenCounter.count(text, model="")
-func (tc *TiktokenCounter) Count(text string, model string) int {
-	if tc.enc != nil {
-		count, err := tc.enc.Count(text)
-		if err == nil {
-			return count
-		}
-		// 运行时编码失败
+func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
+	if tc.enc == nil {
+		return 0, fmt.Errorf("Tiktoken 编码器未初始化（模型: %s），无法计算 token", tc.model)
+	}
+	count, err := tc.enc.Count(text)
+	if err != nil {
+		// 运行时编码失败，返回降级值和 error，调用方可选择使用降级值
+		fallback := tc.fallbackCount(text)
 		logger.Warn(logComponent).Str("model", tc.model).
 			Int("text_len", len(text)).
+			Int("fallback_count", fallback).
 			Err(err).
-			Msg("Tiktoken 编码失败，使用 len//4 降级计算")
+			Msg("Tiktoken 编码失败，降级为 len//4 计算")
+		return fallback, nil
 	}
-	return tc.fallbackCount(text)
+	return count, nil
 }
 
 // CountMessages 计算消息列表的 Token 数量。
 //
 // 按 OpenAI 惯例格式化消息：<|start|>{role}\n{content}<|end|>，
 // AssistantMessage 额外序列化 ToolCalls 计入 token，末尾 +3 tokens。
+// 内部调用 Count，若编码器不可用则返回 (0, error)。
 //
 // 对应 Python: TiktokenCounter.count_messages(messages, model="")
-func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, model string) int {
+func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, model string) (int, error) {
 	if len(messages) == 0 {
-		return 0
+		return 0, nil
 	}
 	total := 0
 	for _, msg := range messages {
 		// 格式: <|start|>{role}\n{content}<|end|>
 		content := contentToString(msg.GetContent())
 		piece := fmt.Sprintf("<|start|>%s\n%s<|end|>", msg.GetRole(), content)
-		total += tc.Count(piece, model)
+		count, err := tc.Count(piece, model)
+		if err != nil {
+			return 0, fmt.Errorf("计算消息 token 失败: %w", err)
+		}
+		total += count
 
 		// AssistantMessage 特殊处理：额外计算 ToolCalls token
 		if asst, ok := msg.(*llm_schema.AssistantMessage); ok && len(asst.ToolCalls) > 0 {
 			toolCallsJSON, err := json.Marshal(asst.ToolCalls)
 			if err == nil {
-				total += tc.Count(string(toolCallsJSON), model)
+				tcCount, tcErr := tc.Count(string(toolCallsJSON), model)
+				if tcErr != nil {
+					return 0, fmt.Errorf("计算 ToolCalls token 失败: %w", tcErr)
+				}
+				total += tcCount
 			}
 		}
 	}
-	return total + 3
+	return total + 3, nil
 }
 
 // CountTools 计算工具定义的 Token 数量。
 //
 // 按格式 <|start|>functions.{name}:{idx}\n{json}<|end|> 计数，末尾 +3 tokens。
+// 内部调用 Count，若编码器不可用则返回 (0, error)。
 //
 // 对应 Python: TiktokenCounter.count_tools(tools, model="")
-func (tc *TiktokenCounter) CountTools(tools []*common_schema.ToolInfo, model string) int {
+func (tc *TiktokenCounter) CountTools(tools []*common_schema.ToolInfo, model string) (int, error) {
 	if len(tools) == 0 {
-		return 0
+		return 0, nil
 	}
 	total := 0
 	for idx, tool := range tools {
@@ -185,9 +200,13 @@ func (tc *TiktokenCounter) CountTools(tools []*common_schema.ToolInfo, model str
 		}
 		// 格式: <|start|>functions.{name}:{idx}\n{json}<|end|>
 		piece := fmt.Sprintf("<|start|>functions.%s:%d\n%s<|end|>", tool.Name, idx, string(jsonStr))
-		total += tc.Count(piece, model)
+		count, countErr := tc.Count(piece, model)
+		if countErr != nil {
+			return 0, fmt.Errorf("计算工具 token 失败: %w", countErr)
+		}
+		total += count
 	}
-	return total + 3
+	return total + 3, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

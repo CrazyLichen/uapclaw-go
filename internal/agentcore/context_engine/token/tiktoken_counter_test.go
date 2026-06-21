@@ -44,26 +44,32 @@ func TestCount_纯文本(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
 
 	// 英文文本
-	enCount := tc.Count("hello world", "gpt-4")
+	enCount, err := tc.Count("hello world", "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, enCount, 0, "英文文本 token 数应大于 0")
 
 	// 中文文本
-	zhCount := tc.Count("你好世界", "gpt-4")
+	zhCount, err := tc.Count("你好世界", "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, zhCount, 0, "中文文本 token 数应大于 0")
 
 	// 混合文本
-	mixCount := tc.Count("hello 世界", "gpt-4")
+	mixCount, err := tc.Count("hello 世界", "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, mixCount, 0, "混合文本 token 数应大于 0")
 
 	// 长文本 token 数应大于短文本
-	longCount := tc.Count("This is a longer sentence with more words.", "gpt-4")
+	longCount, err := tc.Count("This is a longer sentence with more words.", "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, longCount, enCount, "长文本 token 数应大于短文本")
 }
 
-// TestCount_空字符串 验证返回 0
+// TestCount_空字符串 验证返回 (0, nil)
 func TestCount_空字符串(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
-	assert.Equal(t, 0, tc.Count("", "gpt-4"))
+	count, err := tc.Count("", "gpt-4")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }
 
 // TestCountMessages_多角色 验证 system/user/assistant/tool 消息格式化后计数
@@ -76,7 +82,8 @@ func TestCountMessages_多角色(t *testing.T) {
 		llm_schema.NewAssistantMessage("The weather is sunny."),
 	}
 
-	count := tc.CountMessages(messages, "gpt-4")
+	count, err := tc.CountMessages(messages, "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, count, 0, "多角色消息 token 数应大于 0")
 	// 末尾 +3
 	assert.GreaterOrEqual(t, count, 3, "应包含末尾 3 tokens")
@@ -90,7 +97,8 @@ func TestCountMessages_AssistantToolCalls(t *testing.T) {
 	msgNoCalls := []llm_schema.BaseMessage{
 		llm_schema.NewAssistantMessage("hello"),
 	}
-	countNoCalls := tc.CountMessages(msgNoCalls, "gpt-4")
+	countNoCalls, err := tc.CountMessages(msgNoCalls, "gpt-4")
+	assert.NoError(t, err)
 
 	// 带 ToolCalls
 	calls := []*llm_schema.ToolCall{
@@ -99,17 +107,23 @@ func TestCountMessages_AssistantToolCalls(t *testing.T) {
 	msgWithCalls := []llm_schema.BaseMessage{
 		llm_schema.NewAssistantMessage("", llm_schema.WithToolCalls(calls)),
 	}
-	countWithCalls := tc.CountMessages(msgWithCalls, "gpt-4")
+	countWithCalls, err := tc.CountMessages(msgWithCalls, "gpt-4")
+	assert.NoError(t, err)
 
 	assert.Greater(t, countWithCalls, countNoCalls,
 		"带 ToolCalls 的消息 token 数应大于不带 ToolCalls 的消息")
 }
 
-// TestCountMessages_空列表 验证返回 0
+// TestCountMessages_空列表 验证返回 (0, nil)
 func TestCountMessages_空列表(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
-	assert.Equal(t, 0, tc.CountMessages(nil, "gpt-4"))
-	assert.Equal(t, 0, tc.CountMessages([]llm_schema.BaseMessage{}, "gpt-4"))
+	count, err := tc.CountMessages(nil, "gpt-4")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	count, err = tc.CountMessages([]llm_schema.BaseMessage{}, "gpt-4")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }
 
 // TestCountTools_多个工具 验证 tools 按 functions.{name}:{idx} 格式计数
@@ -131,17 +145,23 @@ func TestCountTools_多个工具(t *testing.T) {
 		}),
 	}
 
-	count := tc.CountTools(tools, "gpt-4")
+	count, err := tc.CountTools(tools, "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, count, 0, "工具 token 数应大于 0")
 	// 末尾 +3
 	assert.GreaterOrEqual(t, count, 3, "应包含末尾 3 tokens")
 }
 
-// TestCountTools_空列表 验证返回 0
+// TestCountTools_空列表 验证返回 (0, nil)
 func TestCountTools_空列表(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
-	assert.Equal(t, 0, tc.CountTools(nil, "gpt-4"))
-	assert.Equal(t, 0, tc.CountTools([]*schema.ToolInfo{}, "gpt-4"))
+	count, err := tc.CountTools(nil, "gpt-4")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	count, err = tc.CountTools([]*schema.ToolInfo{}, "gpt-4")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }
 
 // TestCountTools_Parameters为空 验证 parameters 为 nil 时的处理
@@ -152,7 +172,8 @@ func TestCountTools_Parameters为空(t *testing.T) {
 		schema.NewToolInfo("simple_tool", "A simple tool", nil),
 	}
 
-	count := tc.CountTools(tools, "gpt-4")
+	count, err := tc.CountTools(tools, "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, count, 0, "即使 parameters 为空，token 数也应大于 0")
 }
 
@@ -201,8 +222,10 @@ func TestCount_不同模型结果(t *testing.T) {
 	tc4o := NewTiktokenCounter("gpt-4o")
 
 	text := "hello world"
-	count4 := tc4.Count(text, "")
-	count4o := tc4o.Count(text, "")
+	count4, err := tc4.Count(text, "")
+	assert.NoError(t, err)
+	count4o, err := tc4o.Count(text, "")
+	assert.NoError(t, err)
 
 	// 两者都应能正常计数
 	assert.Greater(t, count4, 0)
@@ -218,11 +241,12 @@ func TestCountMessages_ToolMessage(t *testing.T) {
 		llm_schema.NewToolMessage("call_1", "The weather is 72°F"),
 	}
 
-	count := tc.CountMessages(messages, "gpt-4")
+	count, err := tc.CountMessages(messages, "gpt-4")
+	assert.NoError(t, err)
 	assert.Greater(t, count, 0, "包含 ToolMessage 的消息列表 token 数应大于 0")
 }
 
-// TestFallbackCount_降级计算 验证 enc 为 nil 时使用 len(text)//4 降级计算
+// TestFallbackCount_降级计算 验证 enc 为 nil 时 Count 返回 error
 func TestFallbackCount_降级计算(t *testing.T) {
 	tc := &TiktokenCounter{
 		model: "test-model",
@@ -230,33 +254,39 @@ func TestFallbackCount_降级计算(t *testing.T) {
 	}
 
 	text := "hello world"
-	result := tc.Count(text, "")
-	assert.Equal(t, len(text)/4, result, "降级计算应为 len(text)//4")
+	count, err := tc.Count(text, "")
+	assert.Error(t, err, "enc 为 nil 时 Count 应返回 error")
+	assert.Equal(t, 0, count, "enc 为 nil 时 Count 应返回 0")
 }
 
 // TestFallbackCount_只警告一次 验证降级警告只输出一次
+// 注意：enc 为 nil 时 Count 返回 error 不调用 fallbackCount，
+// 此测试验证 Count 返回 error 的行为，fallbackWarned 不应在 enc 为 nil 时触发
 func TestFallbackCount_只警告一次(t *testing.T) {
 	tc := &TiktokenCounter{
 		model: "test-model",
 		enc:   nil,
 	}
 
-	// 多次调用 fallbackCount，fallbackWarned 应只在第一次变为 true
-	tc.Count("first call", "")
-	assert.True(t, tc.fallbackWarned, "第一次调用后 fallbackWarned 应为 true")
+	// enc 为 nil 时 Count 返回 error，不调用 fallbackCount
+	_, err := tc.Count("first call", "")
+	assert.Error(t, err, "enc 为 nil 时 Count 应返回 error")
+	assert.False(t, tc.fallbackWarned, "enc 为 nil 时不调用 fallbackCount，fallbackWarned 应为 false")
 
-	tc.Count("second call", "")
-	// fallbackWarned 仍为 true，不会重复警告
-	assert.True(t, tc.fallbackWarned)
+	_, err = tc.Count("second call", "")
+	assert.Error(t, err)
+	assert.False(t, tc.fallbackWarned)
 }
 
-// TestFallbackCount_空文本 验证降级计算对空文本返回 0
+// TestFallbackCount_空文本 验证 enc 为 nil 时 Count 空文本
 func TestFallbackCount_空文本(t *testing.T) {
 	tc := &TiktokenCounter{
 		model: "test-model",
 		enc:   nil,
 	}
-	assert.Equal(t, 0, tc.Count("", ""))
+	count, err := tc.Count("", "")
+	assert.Error(t, err, "enc 为 nil 时即使空文本也应返回 error")
+	assert.Equal(t, 0, count)
 }
 
 // TestNewTiktokenCounter_ForModel路径 验证通过 ForModel 路径创建编码器
@@ -277,7 +307,8 @@ func TestCountMessages_多模态消息(t *testing.T) {
 	textMsg := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("Hello World"),
 	}
-	textCount := tc.CountMessages(textMsg, "gpt-4")
+	textCount, err := tc.CountMessages(textMsg, "gpt-4")
+	assert.NoError(t, err)
 
 	// 多模态消息（text 部分 + image_url 部分）
 	multiMsg := []llm_schema.BaseMessage{
@@ -286,14 +317,15 @@ func TestCountMessages_多模态消息(t *testing.T) {
 			llm_schema.ContentPart{Type: "image_url", ImageURL: &llm_schema.ImageURL{URL: "https://example.com/img.png"}},
 		)),
 	}
-	multiCount := tc.CountMessages(multiMsg, "gpt-4")
+	multiCount, err := tc.CountMessages(multiMsg, "gpt-4")
+	assert.NoError(t, err)
 
 	// 多模态消息只计算 text 部分，不含 image_url 的 JSON 结构
 	assert.LessOrEqual(t, multiCount, textCount+3,
 		"多模态消息的 token 数不应超过纯文本消息太多（忽略 image_url 部分）")
 }
 
-// TestFallbackCount_CountMessages 验证 enc 为 nil 时 CountMessages 使用降级计算
+// TestFallbackCount_CountMessages 验证 enc 为 nil 时 CountMessages 返回 error
 func TestFallbackCount_CountMessages(t *testing.T) {
 	tc := &TiktokenCounter{
 		model: "test-model",
@@ -303,14 +335,12 @@ func TestFallbackCount_CountMessages(t *testing.T) {
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("hello"),
 	}
-	count := tc.CountMessages(messages, "")
-	assert.Greater(t, count, 0, "降级模式下 CountMessages 应返回大于 0 的值")
-	// 降级模式：整个格式化字符串 "<|start|>user\nhello<|end|>" 的 len//4 + 3
-	// 格式化字符串长度 = len("<|start|>user\nhello<|end|>") = 27, 27//4 = 6, +3 = 9
-	assert.Equal(t, 9, count, "降级模式下 CountMessages 应返回正确的 len//4 + 3 值")
+	count, err := tc.CountMessages(messages, "")
+	assert.Error(t, err, "enc 为 nil 时 CountMessages 应返回 error")
+	assert.Equal(t, 0, count, "enc 为 nil 时 CountMessages 应返回 0")
 }
 
-// TestFallbackCount_CountTools 验证 enc 为 nil 时 CountTools 使用降级计算
+// TestFallbackCount_CountTools 验证 enc 为 nil 时 CountTools 返回 error
 func TestFallbackCount_CountTools(t *testing.T) {
 	tc := &TiktokenCounter{
 		model: "test-model",
@@ -320,6 +350,7 @@ func TestFallbackCount_CountTools(t *testing.T) {
 	tools := []*schema.ToolInfo{
 		schema.NewToolInfo("search", "Search the web", nil),
 	}
-	count := tc.CountTools(tools, "")
-	assert.Greater(t, count, 0, "降级模式下 CountTools 应返回大于 0 的值")
+	count, err := tc.CountTools(tools, "")
+	assert.Error(t, err, "enc 为 nil 时 CountTools 应返回 error")
+	assert.Equal(t, 0, count, "enc 为 nil 时 CountTools 应返回 0")
 }

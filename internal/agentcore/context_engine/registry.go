@@ -3,26 +3,21 @@ package context_engine
 import (
 	"sort"
 	"sync"
+
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ProcessorFactory 处理器工厂函数类型。
-//
-// 根据 ProcessorConfig 创建对应的 ContextProcessor 实例。
-// 对应 Python: ContextEngine._PROCESSOR_MAP 中存储的 processor_class，
-// 运行时通过 processor_class(config) 创建实例。
-//
-// 参数 config 必须实现 processor.ProcessorConfig 接口，
-// 返回值必须实现 processor.ContextProcessor 接口。
-// 使用 any 类型避免 context_engine → processor 循环依赖。
-type ProcessorFactory func(config any) any
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// processorFactories 处理器工厂注册表
-	processorFactories = make(map[string]ProcessorFactory)
+	processorFactories = make(map[string]iface.ProcessorFactory)
 	// processorFactoriesMu 注册表读写锁
 	processorFactoriesMu sync.RWMutex
 )
@@ -35,7 +30,7 @@ var (
 // 5.30 ContextEngine 门面实现时通过 GetProcessorFactory 获取工厂创建实例。
 //
 // 对应 Python: @ContextEngine.register_processor() 装饰器
-func RegisterProcessorFactory(processorType string, factory ProcessorFactory) {
+func RegisterProcessorFactory(processorType string, factory iface.ProcessorFactory) {
 	processorFactoriesMu.Lock()
 	defer processorFactoriesMu.Unlock()
 	processorFactories[processorType] = factory
@@ -46,7 +41,7 @@ func RegisterProcessorFactory(processorType string, factory ProcessorFactory) {
 // 返回工厂函数和是否找到的标志。5.30 ContextEngine._create_processor 对应使用。
 //
 // 对应 Python: ContextEngine._PROCESSOR_MAP.get(processor_type)
-func GetProcessorFactory(processorType string) (ProcessorFactory, bool) {
+func GetProcessorFactory(processorType string) (iface.ProcessorFactory, bool) {
 	processorFactoriesMu.RLock()
 	defer processorFactoriesMu.RUnlock()
 	factory, ok := processorFactories[processorType]

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	contextengine "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -150,7 +150,7 @@ func TestContextCompressionState_完整构造(t *testing.T) {
 		Model:       "qwen-max",
 		Before:      ContextCompressionMetric{Messages: 20, Tokens: 5000},
 		After:       &ContextCompressionMetric{Messages: 10, Tokens: 2000},
-		Statistic:   contextengine.ContextStats{TotalMessages: 10},
+		Statistic:   iface.ContextStats{TotalMessages: 10},
 		Saved:       &ContextCompressionSaved{Messages: 10, Tokens: 3000, Percent: 60.0},
 		CompressionUsage: &ContextCompressionUsage{
 			Calls:       1,
@@ -215,7 +215,7 @@ func TestContextCompressionState_JSON序列化(t *testing.T) {
 		Processor:   "MicroCompactProcessor",
 		Before:      ContextCompressionMetric{Messages: 15, Tokens: 3000},
 		After:       &ContextCompressionMetric{Messages: 8, Tokens: 1500, ContextPercent: 18},
-		Statistic:   contextengine.ContextStats{TotalMessages: 8},
+		Statistic:   iface.ContextStats{TotalMessages: 8},
 		Saved:       &ContextCompressionSaved{Messages: 7, Tokens: 1500, Percent: 50.0},
 		DurationMs:  200,
 		ContextMax:  8192,

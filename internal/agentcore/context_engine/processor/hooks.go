@@ -3,7 +3,7 @@ package processor
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -23,7 +23,7 @@ func (p *BaseProcessor) ProcessorType() string {
 // 默认实现直接返回输入的消息列表，不执行任何变换。
 //
 // 对应 Python: ContextProcessor.on_add_messages() 默认实现
-func (p *BaseProcessor) OnAddMessages(_ context.Context, _ context_engine.ModelContext, messages []llm_schema.BaseMessage, _ ...Option) (*ContextEvent, []llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) OnAddMessages(_ context.Context, _ iface.ModelContext, messages []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
 	return nil, messages, nil
 }
 
@@ -33,7 +33,7 @@ func (p *BaseProcessor) OnAddMessages(_ context.Context, _ context_engine.ModelC
 // 默认实现直接返回输入的上下文窗口，不执行任何变换。
 //
 // 对应 Python: ContextProcessor.on_get_context_window() 默认实现
-func (p *BaseProcessor) OnGetContextWindow(_ context.Context, _ context_engine.ModelContext, cw context_engine.ContextWindow, _ ...Option) (*ContextEvent, context_engine.ContextWindow, error) {
+func (p *BaseProcessor) OnGetContextWindow(_ context.Context, _ iface.ModelContext, cw iface.ContextWindow, _ ...iface.Option) (*iface.ContextEvent, iface.ContextWindow, error) {
 	return nil, cw, nil
 }
 
@@ -43,7 +43,7 @@ func (p *BaseProcessor) OnGetContextWindow(_ context.Context, _ context_engine.M
 // 默认实现始终返回 false，表示此处理器不需要介入。
 //
 // 对应 Python: ContextProcessor.trigger_add_messages() 默认实现
-func (p *BaseProcessor) TriggerAddMessages(_ context.Context, _ context_engine.ModelContext, _ []llm_schema.BaseMessage, _ ...Option) (bool, error) {
+func (p *BaseProcessor) TriggerAddMessages(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	return false, nil
 }
 
@@ -53,7 +53,7 @@ func (p *BaseProcessor) TriggerAddMessages(_ context.Context, _ context_engine.M
 // 默认实现始终返回 false，表示此处理器不需要介入。
 //
 // 对应 Python: ContextProcessor.trigger_get_context_window() 默认实现
-func (p *BaseProcessor) TriggerGetContextWindow(_ context.Context, _ context_engine.ModelContext, _ context_engine.ContextWindow, _ ...Option) (bool, error) {
+func (p *BaseProcessor) TriggerGetContextWindow(_ context.Context, _ iface.ModelContext, _ iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	return false, nil
 }
 
