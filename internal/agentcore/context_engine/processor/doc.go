@@ -30,7 +30,9 @@
 //	│   ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
 //	│   └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
 //	└── offloader/      # 卸载处理器子包
-//	    └── doc.go                      # 子包文档（待实现）
+//	    ├── doc.go                     # 子包文档
+//	    ├── message_offloader.go       # MessageOffloader 消息卸载器
+//	    └── message_offloader_test.go  # 单元测试
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/
 package processor
