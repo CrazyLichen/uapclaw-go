@@ -17,7 +17,8 @@
 //	├── state.go     # BaseProcessor SaveState/LoadState 默认实现
 //	├── offload.go   # OffloadMessages 方法族 + offload 常量 + GenerateOffloadPath
 //	├── usage.go     # CompressionUsage 追踪方法族（ExtractUsageMetadata/MergeCompressionUsage 等）
-//	└── round.go     # GroupCompletedAPIRounds 包级导出函数
+//	├── round.go     # GroupCompletedAPIRounds 包级导出函数
+//	└── replace.go   # Replacement 结构体 + ReplaceMessages 通用替换函数
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/
 package processor
