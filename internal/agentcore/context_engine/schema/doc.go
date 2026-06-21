@@ -6,9 +6,10 @@
 // 文件目录：
 //
 //	schema/
-//	├── doc.go       # 包文档
-//	├── config.go    # ContextEngineConfig 上下文引擎配置
-//	└── offload.go   # Offload 消息模型（OffloadInfo + Offload 子类型 + Offloadable 接口 + 反序列化工厂）
+//	├── doc.go              # 包文档
+//	├── config.go           # ContextEngineConfig 上下文引擎配置
+//	├── context_state.go    # 压缩状态模型（ContextCompressionState + 辅助类型 + CompressionStatus/Phase）
+//	└── offload.go          # Offload 消息模型（OffloadInfo + Offload 子类型 + Offloadable 接口 + 反序列化工厂）
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/schema/
 package schema

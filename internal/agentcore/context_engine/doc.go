@@ -15,11 +15,16 @@
 //	│                   # 消息类型使用 []llm_schema.BaseMessage（接口类型，非指针切片）
 //	│                   # ⤵️ StatMessages/StatTools/StatContextWindow 实际逻辑待 5.31 回填
 //	├── schema/
-//	│   ├── doc.go       # Schema 子包文档
-//	│   └── config.go    # ContextEngineConfig 上下文引擎配置
+//	│   ├── doc.go              # Schema 子包文档
+//	│   ├── config.go           # ContextEngineConfig 上下文引擎配置
+//	│   ├── context_state.go    # 压缩状态模型（ContextCompressionState + 辅助类型 + CompressionStatus/Phase）
+//	│   └── offload.go          # Offload 消息模型
+//	├── processor/
+//	│   ├── doc.go              # Processor 子包文档
+//	│   └── base.go             # ContextEvent 处理器结果类型
 //	└── token/
-//	    ├── doc.go       # Token 子包文档
-//	    └── base.go      # TokenCounter 接口定义
+//	    ├── doc.go              # Token 子包文档
+//	    └── base.go             # TokenCounter 接口定义
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/
 package context_engine

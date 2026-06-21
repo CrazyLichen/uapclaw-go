@@ -579,3 +579,77 @@ func TestCallbackFramework_自定义事件与LLMToolSession隔离(t *testing.T) 
 		t.Error("自定义事件不应触发 Session 回调")
 	}
 }
+
+// TestCallbackFramework_OnContext和TriggerContext 测试 Context 回调注册与触发
+func TestCallbackFramework_OnContext和TriggerContext(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnContext(ContextUpdated, func(_ context.Context, data *ContextCallEventData) any {
+		if data.SessionID != "sess-001" {
+			t.Errorf("SessionID = %q, want sess-001", data.SessionID)
+		}
+		atomic.AddInt32(&called, 1)
+		return nil
+	})
+
+	fw.TriggerContext(context.Background(), &ContextCallEventData{
+		Event:     ContextUpdated,
+		SessionID: "sess-001",
+		ContextID: "ctx-001",
+	})
+
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("called = %d, want 1", called)
+	}
+}
+
+// TestCallbackFramework_OffContext 测试注销 Context 回调
+func TestCallbackFramework_OffContext(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fn := func(_ context.Context, _ *ContextCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}
+
+	fw.OnContext(ContextCleared, fn)
+	fw.OffContext(ContextCleared, fn)
+
+	fw.TriggerContext(context.Background(), &ContextCallEventData{
+		Event: ContextCleared,
+	})
+
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("OffContext 后不应触发，called = %d", called)
+	}
+}
+
+// TestCallbackFramework_TriggerContext_Nil上下文 测试 nil context 防御
+func TestCallbackFramework_TriggerContext_Nil上下文(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+	fw.OnContext(ContextRetrieved, func(_ context.Context, _ *ContextCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	})
+	fw.TriggerContext(nil, &ContextCallEventData{Event: ContextRetrieved}) //nolint:staticcheck // SA1012: 专门测试 nil context 的防御逻辑
+	if atomic.LoadInt32(&called) != 0 {
+		t.Error("nil context 不应触发回调")
+	}
+}
+
+// TestCallbackFramework_TriggerContext_NilData 测试 nil data 防御
+func TestCallbackFramework_TriggerContext_NilData(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+	fw.OnContext(ContextRetrieved, func(_ context.Context, _ *ContextCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	})
+	fw.TriggerContext(context.Background(), nil)
+	if atomic.LoadInt32(&called) != 0 {
+		t.Error("nil data 不应触发回调")
+	}
+}

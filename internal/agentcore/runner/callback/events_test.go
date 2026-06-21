@@ -185,3 +185,50 @@ func TestSessionCallEventData_String(t *testing.T) {
 		t.Error("String() 不应返回空字符串")
 	}
 }
+
+// TestContextCallEventType_字符串值 测试 Context 事件类型字符串值
+func TestContextCallEventType_字符串值(t *testing.T) {
+	tests := []struct {
+		event ContextCallEventType
+		want  string
+	}{
+		{ContextUpdated, "_framework:context_updated"},
+		{ContextOffloaded, "_framework:context_offloaded"},
+		{ContextRetrieved, "_framework:context_retrieved"},
+		{ContextCleared, "_framework:context_cleared"},
+		{ContextCompressionStateEvent, "_framework:context.compression_state"},
+	}
+	for _, tt := range tests {
+		if string(tt.event) != tt.want {
+			t.Errorf("ContextCallEventType = %q, want %q", tt.event, tt.want)
+		}
+	}
+}
+
+// TestContextCallEventType_String 测试 String 方法
+func TestContextCallEventType_String(t *testing.T) {
+	if ContextUpdated.String() != "_framework:context_updated" {
+		t.Errorf("String() = %q, want _framework:context_updated", ContextUpdated.String())
+	}
+}
+
+// TestContextCallEventData_String 测试 String 方法
+func TestContextCallEventData_String(t *testing.T) {
+	data := &ContextCallEventData{
+		Event:     ContextCleared,
+		SessionID: "sess-001",
+		ContextID: "ctx-001",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestContextCallEventData_NilString 测试 nil String
+func TestContextCallEventData_NilString(t *testing.T) {
+	var d *ContextCallEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}

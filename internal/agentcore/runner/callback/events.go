@@ -77,6 +77,26 @@ type SessionCallEventData struct {
 	Extra map[string]any
 }
 
+// ContextCallEventData 上下文调用事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (ContextEvents) +
+//
+//	openjiuwen/core/runner/callback/framework.py (trigger kwargs)
+type ContextCallEventData struct {
+	// Event 事件类型
+	Event ContextCallEventType
+	// SessionID 会话标识
+	SessionID string
+	// ContextID 上下文标识
+	ContextID string
+	// State 压缩状态（仅 ContextCompressionStateEvent 事件有值，实际类型 *schema.ContextCompressionState）
+	State any
+	// Context 上下文实例引用（实际类型 context_engine.ModelContext）
+	Context any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LLMCallEventType LLM 调用事件类型。
@@ -150,6 +170,26 @@ const (
 	AgentSessionCreated SessionCallEventType = "_framework:agent_session_created"
 )
 
+// ContextCallEventType 上下文调用事件类型。
+//
+// 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (ContextEvents)
+type ContextCallEventType string
+
+const (
+	// ContextUpdated 上下文更新事件（add_messages 后触发）
+	ContextUpdated ContextCallEventType = "_framework:context_updated"
+	// ContextOffloaded 上下文卸载事件（offload 后触发）
+	ContextOffloaded ContextCallEventType = "_framework:context_offloaded"
+	// ContextRetrieved 上下文检索事件（get_context_window 后触发）
+	ContextRetrieved ContextCallEventType = "_framework:context_retrieved"
+	// ContextCleared 上下文清空事件（clear 后触发）
+	ContextCleared ContextCallEventType = "_framework:context_cleared"
+	// ContextCompressionStateEvent 压缩状态事件（处理器执行后触发）
+	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -205,4 +245,17 @@ func (d *LLMCallEventData) String() string {
 		return "nil"
 	}
 	return fmt.Sprintf("LLMCallEventData{事件:%s, 模型名:%s, 服务商:%s}", d.Event, d.ModelName, d.ModelProvider)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t ContextCallEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *ContextCallEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("ContextCallEventData{事件:%s, 会话ID:%s, 上下文ID:%s}", d.Event, d.SessionID, d.ContextID)
 }

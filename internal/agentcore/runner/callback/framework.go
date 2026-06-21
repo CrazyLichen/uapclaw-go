@@ -40,6 +40,8 @@ type CallbackFramework struct {
 	// Python 用 session_id + "write_stream" 构造 per-session 事件名，
 	// Go 在此 map 中以相同方式存储，实现 per-session 隔离。
 	customCallbacks map[string][]CustomCallbackFunc
+	// contextCallbacks 上下文事件回调函数注册表
+	contextCallbacks map[ContextCallEventType][]ContextCallbackFunc
 }
 
 // LLMCallbackFunc LLM 回调函数类型。
@@ -61,6 +63,9 @@ type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) a
 // 事件名由调用方自由构造（如 sessionID + "write_stream"），
 // 不受预定义枚举约束，适合 per-session 隔离等动态场景。
 type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
+
+// ContextCallbackFunc 上下文事件回调函数类型。
+type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -84,6 +89,7 @@ func NewCallbackFramework() *CallbackFramework {
 		toolCallbacks:    make(map[ToolCallEventType][]ToolCallbackFunc),
 		sessionCallbacks: make(map[SessionCallEventType][]SessionCallbackFunc),
 		customCallbacks:  make(map[string][]CustomCallbackFunc),
+		contextCallbacks: make(map[ContextCallEventType][]ContextCallbackFunc),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -322,4 +328,60 @@ func (fw *CallbackFramework) GetCallbacksForTest(event LLMCallEventType) []LLMCa
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
 	return fw.llmCallbacks[event]
+}
+
+// OnContext 注册上下文事件回调函数。
+//
+// 同一事件可注册多个回调，按注册顺序执行。
+//
+// 对应 Python: AsyncCallbackFramework.on(event, callback)
+func (fw *CallbackFramework) OnContext(event ContextCallEventType, fn ContextCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.contextCallbacks[event] = append(fw.contextCallbacks[event], fn)
+}
+
+// OffContext 注销上下文事件回调函数。
+//
+// 移除指定事件中与 fn 匹配的回调（按指针匹配）。
+// 若事件下无匹配回调，不做任何操作。
+//
+// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
+func (fw *CallbackFramework) OffContext(event ContextCallEventType, fn ContextCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.contextCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, cb := range callbacks {
+		if fmt.Sprintf("%p", cb) == fmt.Sprintf("%p", fn) {
+			fw.contextCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerContext 触发上下文事件，按注册顺序调用所有回调，返回所有回调结果。
+//
+// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
+//
+// 对应 Python: AsyncCallbackFramework.trigger(event, **kwargs) → List[Any]
+func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCallEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	fw.mu.RLock()
+	callbacks := fw.contextCallbacks[data.Event]
+	fw.mu.RUnlock()
+
+	results := make([]any, 0, len(callbacks))
+	for _, fn := range callbacks {
+		result := fn(ctx, data)
+		results = append(results, result)
+	}
+	return results
 }
