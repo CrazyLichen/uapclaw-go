@@ -71,8 +71,11 @@ type ContextEngine interface {
 	ClearContext(ctx context.Context, contextID string, sessionID string) error
 	// SaveContexts 保存上下文状态
 	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) error
-	// RegisterProcessor 注册处理器
-	RegisterProcessor(processorType string, processor any)
+	// RegisterProcessor 注册已构造的处理器实例
+	//
+	// 参数 p 必须实现 processor.ContextProcessor 接口。
+	// 使用 any 类型避免 context_engine → processor 循环依赖。
+	RegisterProcessor(processorType string, p any)
 }
 
 // ContextStats 上下文统计快照，记录消息数量、Token 数量和对话轮次。
