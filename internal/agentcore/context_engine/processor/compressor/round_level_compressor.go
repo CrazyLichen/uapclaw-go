@@ -377,6 +377,14 @@ func (rlc *RoundLevelCompressor) OnGetContextWindow(ctx context.Context, mc ifac
 
 	compressedMessages, err := rlc.compressUntilTarget(ctx, cw.ContextMessages, mc, cw.SystemMessages, cw.Tools, 0, false)
 	if err != nil {
+		// 区分模型调用失败与其他错误：兜底压缩失败不允许降级，但错误信息需明确标识原因
+		if isModelCallFailedError(err) {
+			return nil, cw, exception.NewBaseError(
+				exception.StatusModelCallFailed,
+				exception.WithMsg("round level compression failed: model call failed"),
+				exception.WithCause(err),
+			)
+		}
 		return nil, cw, exception.NewBaseError(
 			exception.StatusContextExecutionError,
 			exception.WithMsg("round level compression failed"),
