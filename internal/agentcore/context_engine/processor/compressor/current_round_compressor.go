@@ -674,6 +674,7 @@ func (crc *CurrentRoundCompressor) GetCompressIdx(messages []llm_schema.BaseMess
 	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "compress_idx_found").
 		Int("compress_idx", compressedIdx).
+		Int("keep_start_idx", keepIndex).
 		Msg("找到可压缩索引")
 	return compressedIdx
 }
@@ -812,12 +813,13 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 				Msg("压缩后 Token 数未减少，跳过")
 			return nil, nil
 		}
+		logger.Info(logger.ComponentAgentCore).
+			Str("event_type", "compress_success").
+			Int("original_tokens", inputTokens).
+			Int("compressed_tokens", compressedTokens).
+			Int("saved_tokens", inputTokens-compressedTokens).
+			Msg("当轮压缩成功")
 	}
-
-	logger.Info(logger.ComponentAgentCore).
-		Str("event_type", "compress_success").
-		Int("input_tokens", inputTokens).
-		Msg("当轮压缩成功")
 
 	return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summary)), nil
 }
@@ -866,16 +868,20 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 
 	summaryText := response.GetContent().Text()
 	if summaryText != "" {
+		mergedTokens := CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summaryText)}, modelName, crc.ProcessorType())
 		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "merge_success").
-			Int("old_count", len(oldCompressMessages)).
+			Int("block_count", len(oldCompressMessages)).
+			Int("original_tokens", totalTokens).
+			Int("merged_tokens", mergedTokens).
 			Msg("历史记忆块合并成功")
 		return llm_schema.NewUserMessage(crc.WrapCurrentRoundMemoryBlock(summaryText)), nil
 	}
 
 	logger.Warn(logger.ComponentAgentCore).
 		Str("event_type", "merge_failed").
-		Int("old_count", len(oldCompressMessages)).
+		Int("block_count", len(oldCompressMessages)).
+		Int("original_tokens", totalTokens).
 		Msg("历史记忆块合并失败，LLM 返回空内容")
 	return nil, nil
 }
