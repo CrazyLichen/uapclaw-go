@@ -2,10 +2,26 @@ package processor
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// testConfig 测试用处理器配置
+type testConfig struct {
+	Name  string
+	Value int
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+func (c *testConfig) Validate() error {
+	if c.Name == "" {
+		return fmt.Errorf("name 不能为空")
+	}
+	return nil
+}
 
 // TestContextEvent_字段默认值 验证 ContextEvent 零值
 func TestContextEvent_字段默认值(t *testing.T) {
@@ -94,5 +110,87 @@ func TestContextEvent_JSON省略空字段(t *testing.T) {
 	// EventType 应保留
 	if _, ok := m["event_type"]; !ok {
 		t.Error("event_type 不应被省略")
+	}
+}
+
+// TestProcessorConfig_校验通过 验证合法配置
+func TestProcessorConfig_校验通过(t *testing.T) {
+	c := &testConfig{Name: "test", Value: 10}
+	if err := c.Validate(); err != nil {
+		t.Errorf("Validate() 不应返回错误，实际: %v", err)
+	}
+}
+
+// TestProcessorConfig_校验失败 验证非法配置
+func TestProcessorConfig_校验失败(t *testing.T) {
+	c := &testConfig{Name: "", Value: 10}
+	if err := c.Validate(); err == nil {
+		t.Error("Validate() 应返回错误，实际 nil")
+	}
+}
+
+// TestNewBaseProcessor 验证 BaseProcessor 构造
+func TestNewBaseProcessor(t *testing.T) {
+	c := &testConfig{Name: "compressor", Value: 5}
+	p := NewBaseProcessor(c)
+	if p == nil {
+		t.Fatal("NewBaseProcessor 返回 nil")
+	}
+	if p.Config() != c {
+		t.Error("Config() 应返回传入的配置")
+	}
+	if p.compressionUsage != nil {
+		t.Error("compressionUsage 初始值应为 nil")
+	}
+}
+
+// TestProcessorOption_默认值 验证 ProcessorOption 零值
+func TestProcessorOption_默认值(t *testing.T) {
+	po := newProcessorOption()
+	if po.SysOperation != nil {
+		t.Error("SysOperation 默认应为 nil")
+	}
+	if po.OffloadHandle != "" {
+		t.Error("OffloadHandle 默认应为空")
+	}
+	if po.OffloadType != "" {
+		t.Error("OffloadType 默认应为空")
+	}
+	if po.OffloadPath != "" {
+		t.Error("OffloadPath 默认应为空")
+	}
+	if po.Extra != nil {
+		t.Error("Extra 默认应为 nil")
+	}
+}
+
+// TestProcessorOption_选项函数 验证 With* 选项函数
+func TestProcessorOption_选项函数(t *testing.T) {
+	po := newProcessorOption(
+		WithOffloadHandle("abc123"),
+		WithOffloadType("filesystem"),
+		WithOffloadPath("/tmp/offload.json"),
+		WithExtra("key1", "value1"),
+	)
+	if po.OffloadHandle != "abc123" {
+		t.Errorf("OffloadHandle = %q, want abc123", po.OffloadHandle)
+	}
+	if po.OffloadType != "filesystem" {
+		t.Errorf("OffloadType = %q, want filesystem", po.OffloadType)
+	}
+	if po.OffloadPath != "/tmp/offload.json" {
+		t.Errorf("OffloadPath = %q, want /tmp/offload.json", po.OffloadPath)
+	}
+	if po.Extra["key1"] != "value1" {
+		t.Errorf("Extra[key1] = %v, want value1", po.Extra["key1"])
+	}
+}
+
+// TestWithSysOperation 验证 SysOperation 选项
+func TestWithSysOperation(t *testing.T) {
+	op := struct{}{}
+	po := newProcessorOption(WithSysOperation(op))
+	if po.SysOperation == nil {
+		t.Error("SysOperation 不应为 nil")
 	}
 }
