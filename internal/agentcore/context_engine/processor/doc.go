@@ -22,12 +22,15 @@
 //	├── usage.go        # CompressionUsage 追踪方法族（ExtractUsageMetadata/MergeCompressionUsage 等）
 //	├── round.go        # GroupCompletedAPIRounds 包级导出函数
 //	├── replace.go      # Replacement 结构体 + ReplaceMessages 通用替换函数
-//	└── compressor/     # 压缩处理器子包
-//	    ├── doc.go                     # 子包文档
-//	    ├── util.go                    # 包级共享函数
-//	    ├── dialogue_compressor.go     # DialogueCompressor 对话压缩器
-//	    ├── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器
-//	    └── full_compact_processor.go  # FullCompactProcessor 全量压缩处理器
+//	├── util.go         # 包级共享工具函数（FindLastFinalAssistantIdx 等，从 compressor 迁移）
+//	├── compressor/     # 压缩处理器子包
+//	│   ├── doc.go                          # 子包文档
+//	│   ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器
+//	│   ├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
+//	│   ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
+//	│   └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	└── offloader/      # 卸载处理器子包
+//	    └── doc.go                      # 子包文档（待实现）
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/
 package processor

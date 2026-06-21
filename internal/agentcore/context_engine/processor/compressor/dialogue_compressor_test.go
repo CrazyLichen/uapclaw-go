@@ -192,72 +192,6 @@ func TestDialogueCompressorConfig_Validate_MessagesThreshold零(t *testing.T) {
 	}
 }
 
-// TestFindLastFinalAssistantIdx_无AssistantMessage 验证无 AssistantMessage 时返回 -1
-func TestFindLastFinalAssistantIdx_无AssistantMessage(t *testing.T) {
-	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("你好"),
-		llm_schema.NewSystemMessage("系统消息"),
-	}
-	idx := FindLastFinalAssistantIdx(messages)
-	if idx != -1 {
-		t.Errorf("无 AssistantMessage 应返回 -1，实际: %d", idx)
-	}
-}
-
-// TestFindLastFinalAssistantIdx_有ToolCalls 验证含 tool_calls 的 AssistantMessage 被跳过
-func TestFindLastFinalAssistantIdx_有ToolCalls(t *testing.T) {
-	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("你好"),
-		llm_schema.NewAssistantMessage("我来查",
-			llm_schema.WithToolCalls([]*llm_schema.ToolCall{
-				{ID: "call_1", Name: "get_weather", Arguments: `{}`},
-			}),
-		),
-	}
-	idx := FindLastFinalAssistantIdx(messages)
-	if idx != -1 {
-		t.Errorf("含 tool_calls 的 AssistantMessage 应被跳过，实际: %d", idx)
-	}
-}
-
-// TestFindLastFinalAssistantIdx_找到最终Assistant 验证找到最后一条不含 tool_calls 的 AssistantMessage
-func TestFindLastFinalAssistantIdx_找到最终Assistant(t *testing.T) {
-	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("你好"),
-		llm_schema.NewAssistantMessage("你好！"),
-		llm_schema.NewUserMessage("查询天气"),
-		llm_schema.NewAssistantMessage("我来查",
-			llm_schema.WithToolCalls([]*llm_schema.ToolCall{
-				{ID: "call_1", Name: "get_weather", Arguments: `{}`},
-			}),
-		),
-		llm_schema.NewToolMessage("call_1", "晴天"),
-		llm_schema.NewAssistantMessage("今天晴天"),
-	}
-	idx := FindLastFinalAssistantIdx(messages)
-	if idx != 5 {
-		t.Errorf("最后一条不含 tool_calls 的 AssistantMessage 应在索引 5，实际: %d", idx)
-	}
-}
-
-// TestFindLastFinalAssistantIdx_最后一条有ToolCalls 验证最后一条有 tool_calls 时往前找
-func TestFindLastFinalAssistantIdx_最后一条有ToolCalls(t *testing.T) {
-	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("你好"),
-		llm_schema.NewAssistantMessage("你好！"),
-		llm_schema.NewUserMessage("查询天气"),
-		llm_schema.NewAssistantMessage("查询中",
-			llm_schema.WithToolCalls([]*llm_schema.ToolCall{
-				{ID: "call_1", Name: "get_weather", Arguments: `{}`},
-			}),
-		),
-	}
-	idx := FindLastFinalAssistantIdx(messages)
-	if idx != 1 {
-		t.Errorf("应找到索引 1 的 AssistantMessage，实际: %d", idx)
-	}
-}
-
 // TestGetCompressPairs_纯对话 验证不含工具调用的配对
 func TestGetCompressPairs_纯对话(t *testing.T) {
 	messages := []llm_schema.BaseMessage{
@@ -514,7 +448,7 @@ func TestSerializeMessage_ToolMessage(t *testing.T) {
 // TestEstimateContentTokens_字符串 验证字符串内容 Token 估算
 func TestEstimateContentTokens_字符串(t *testing.T) {
 	content := "123456789" // 9 字符 → 9/3 = 3
-	tokens := EstimateContentTokens(content)
+	tokens := processor.EstimateContentTokens(content)
 	if tokens != 3 {
 		t.Errorf("9 字符应估算为 3 tokens，实际: %d", tokens)
 	}
@@ -523,7 +457,7 @@ func TestEstimateContentTokens_字符串(t *testing.T) {
 // TestEstimateContentTokens_非字符串 验证非字符串内容 Token 估算
 func TestEstimateContentTokens_非字符串(t *testing.T) {
 	content := map[string]string{"key": "value"}
-	tokens := EstimateContentTokens(content)
+	tokens := processor.EstimateContentTokens(content)
 	if tokens <= 0 {
 		t.Errorf("非字符串内容应返回正数，实际: %d", tokens)
 	}
@@ -531,7 +465,7 @@ func TestEstimateContentTokens_非字符串(t *testing.T) {
 
 // TestEstimateContentTokens_空字符串 验证空字符串返回 0
 func TestEstimateContentTokens_空字符串(t *testing.T) {
-	tokens := EstimateContentTokens("")
+	tokens := processor.EstimateContentTokens("")
 	if tokens != 0 {
 		t.Errorf("空字符串应返回 0 tokens，实际: %d", tokens)
 	}
@@ -1310,7 +1244,7 @@ func TestGetCompressPairs_连续UserMessage(t *testing.T) {
 
 // TestEstimateContentTokens_NilContent 验证 nil 内容 Token 估算
 func TestEstimateContentTokens_NilContent(t *testing.T) {
-	tokens := EstimateContentTokens(nil)
+	tokens := processor.EstimateContentTokens(nil)
 	if tokens < 0 {
 		t.Errorf("nil 内容应返回非负数，实际: %d", tokens)
 	}

@@ -1,4 +1,4 @@
-package compressor
+package processor
 
 import (
 	"fmt"
@@ -200,6 +200,67 @@ func TestCountMessagesTokens(t *testing.T) {
 		got := CountMessagesTokens(nil, messages, "", "TestProcessor")
 		if got <= 0 {
 			t.Errorf("CountMessagesTokens() = %d, want > 0", got)
+		}
+	})
+}
+
+func TestFindLastFinalAssistantIdx(t *testing.T) {
+	t.Run("无AssistantMessage返回负一", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("你好"),
+			llm_schema.NewSystemMessage("系统消息"),
+		}
+		idx := FindLastFinalAssistantIdx(messages)
+		if idx != -1 {
+			t.Errorf("无 AssistantMessage 应返回 -1，实际: %d", idx)
+		}
+	})
+	t.Run("有ToolCalls跳过", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("你好"),
+			llm_schema.NewAssistantMessage("我来查",
+				llm_schema.WithToolCalls([]*llm_schema.ToolCall{
+					{ID: "call_1", Name: "get_weather", Arguments: `{}`},
+				}),
+			),
+		}
+		idx := FindLastFinalAssistantIdx(messages)
+		if idx != -1 {
+			t.Errorf("含 tool_calls 的 AssistantMessage 应被跳过，实际: %d", idx)
+		}
+	})
+	t.Run("找到最终Assistant", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("你好"),
+			llm_schema.NewAssistantMessage("你好！"),
+			llm_schema.NewUserMessage("查询天气"),
+			llm_schema.NewAssistantMessage("我来查",
+				llm_schema.WithToolCalls([]*llm_schema.ToolCall{
+					{ID: "call_1", Name: "get_weather", Arguments: `{}`},
+				}),
+			),
+			llm_schema.NewToolMessage("call_1", "晴天"),
+			llm_schema.NewAssistantMessage("今天晴天"),
+		}
+		idx := FindLastFinalAssistantIdx(messages)
+		if idx != 5 {
+			t.Errorf("最后一条不含 tool_calls 的 AssistantMessage 应在索引 5，实际: %d", idx)
+		}
+	})
+	t.Run("最后一条有ToolCalls往前找", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("你好"),
+			llm_schema.NewAssistantMessage("你好！"),
+			llm_schema.NewUserMessage("查询天气"),
+			llm_schema.NewAssistantMessage("查询中",
+				llm_schema.WithToolCalls([]*llm_schema.ToolCall{
+					{ID: "call_1", Name: "get_weather", Arguments: `{}`},
+				}),
+			),
+		}
+		idx := FindLastFinalAssistantIdx(messages)
+		if idx != 1 {
+			t.Errorf("应找到索引 1 的 AssistantMessage，实际: %d", idx)
 		}
 	})
 }

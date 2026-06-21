@@ -153,7 +153,7 @@ func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.Mode
 	// 收集被清除消息对应的工具名集合
 	clearedTools := make(map[string]bool)
 	for _, index := range modifiedIndices {
-		toolName := ResolveToolNameFromMessage(allMessages[index], allMessages)
+		toolName := processor.ResolveToolNameFromMessage(allMessages[index], allMessages)
 		if toolName != "" {
 			clearedTools[toolName] = true
 		}
@@ -206,7 +206,7 @@ func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm
 		if tm.GetContent().Text() == mcp.mcpConfig.ClearedMarker {
 			continue
 		}
-		toolName := ResolveToolNameFromMessage(message, messages)
+		toolName := processor.ResolveToolNameFromMessage(message, messages)
 		if toolName == "" {
 			continue
 		}

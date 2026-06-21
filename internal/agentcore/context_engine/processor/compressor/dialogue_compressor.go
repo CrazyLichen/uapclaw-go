@@ -348,7 +348,7 @@ func (dc *DialogueCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) 
 		return keepIndex
 	}
 
-	lastFinalAssistantIdx := FindLastFinalAssistantIdx(messages)
+	lastFinalAssistantIdx := processor.FindLastFinalAssistantIdx(messages)
 	if lastFinalAssistantIdx == -1 {
 		return keepIndex
 	}
@@ -356,20 +356,6 @@ func (dc *DialogueCompressor) GetCompressIdx(messages []llm_schema.BaseMessage) 
 		return lastFinalAssistantIdx
 	}
 	return keepIndex
-}
-
-// FindLastFinalAssistantIdx 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
-//
-// 对应 Python: DialogueCompressor._find_last_final_assistant_idx()
-func FindLastFinalAssistantIdx(messages []llm_schema.BaseMessage) int {
-	for idx := len(messages) - 1; idx >= 0; idx-- {
-		msg := messages[idx]
-		am, ok := msg.(*llm_schema.AssistantMessage)
-		if ok && len(am.ToolCalls) == 0 {
-			return idx
-		}
-	}
-	return -1
 }
 
 // GetCompressPairs 识别消息列表中的对话轮次配对。
@@ -767,7 +753,7 @@ func (dc *DialogueCompressor) countMessagesTokens(mc iface.ModelContext, message
 	if dc.model != nil && dc.model.ModelConfig != nil {
 		modelName = dc.model.ModelConfig.ModelName
 	}
-	return CountMessagesTokens(mc.TokenCounter(), messages, modelName, dc.ProcessorType())
+	return processor.CountMessagesTokens(mc.TokenCounter(), messages, modelName, dc.ProcessorType())
 }
 
 // isModelCallFailedError 判断错误是否为 MODEL_CALL_FAILED

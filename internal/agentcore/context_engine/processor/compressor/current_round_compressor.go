@@ -581,7 +581,7 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 	}
 
 	modelName := crc.getModelName()
-	tokens := CountMessagesTokens(mc.TokenCounter(), append(mc.GetMessages(nil, true), messagesToAdd...), modelName, crc.ProcessorType())
+	tokens := processor.CountMessagesTokens(mc.TokenCounter(), append(mc.GetMessages(nil, true), messagesToAdd...), modelName, crc.ProcessorType())
 	if tokens > crc.tokenThreshold {
 		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "CurrentRoundCompressor_triggered").
@@ -691,7 +691,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 
 	// 第一阶段：压缩选定跨度
 	if actualEndIdx >= startIdx {
-		actualEndIdx = FindLastCompletedAPIRoundEndIdx(contextMessages, startIdx, actualEndIdx)
+		actualEndIdx = processor.FindLastCompletedAPIRoundEndIdx(contextMessages, startIdx, actualEndIdx)
 	}
 	if actualEndIdx >= startIdx {
 		messagesToCompress := contextMessages[startIdx : actualEndIdx+1]
@@ -700,7 +700,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 			return nil, nil, "", err
 		}
 		if compressedMsg != nil {
-			compactSummaryParts = append(compactSummaryParts, MessageToText(compressedMsg))
+			compactSummaryParts = append(compactSummaryParts, processor.MessageToText(compressedMsg))
 			contextMessages = processor.ReplaceMessages(contextMessages, []processor.Replacement{
 				{StartIdx: startIdx, EndIdx: actualEndIdx, Messages: []llm_schema.BaseMessage{compressedMsg}},
 			})
@@ -712,7 +712,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 	}
 
 	// 第二阶段：合并旧记忆块
-	mergeRanges := IterSummaryMergeRanges(contextMessages, currentRoundMemoryBlockMarker, crc.summaryMergeMinBlocks)
+	mergeRanges := processor.IterSummaryMergeRanges(contextMessages, currentRoundMemoryBlockMarker, crc.summaryMergeMinBlocks)
 	for _, mergeRange := range mergeRanges {
 		startIdx_ := mergeRange[0]
 		endIdx_ := mergeRange[1]
@@ -722,7 +722,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 			return nil, nil, "", err
 		}
 		if compressedMsg != nil {
-			compactSummaryParts = append(compactSummaryParts, MessageToText(compressedMsg))
+			compactSummaryParts = append(compactSummaryParts, processor.MessageToText(compressedMsg))
 			contextMessages = processor.ReplaceMessages(contextMessages, []processor.Replacement{
 				{StartIdx: startIdx_, EndIdx: endIdx_, Messages: []llm_schema.BaseMessage{compressedMsg}},
 			})
@@ -755,7 +755,7 @@ func (crc *CurrentRoundCompressor) MultiCompress(ctx context.Context, mc iface.M
 // 对应 Python: CurrentRoundCompressor.compress()
 func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelContext, messagesToCompress []llm_schema.BaseMessage, allContextMessages []llm_schema.BaseMessage, compressEndIdx int, currentQueryIdx int) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
-	inputTokens := CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
+	inputTokens := processor.CountMessagesTokens(mc.TokenCounter(), messagesToCompress, modelName, crc.ProcessorType())
 	if inputTokens < crc.minSelectedTokens {
 		logger.Debug(logger.ComponentAgentCore).
 			Str("event_type", "compress_skipped").
@@ -770,7 +770,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 	recentContext := ""
 	priorContextAndQuery := ""
 
-	summaryIndices := CollectSummaryIndices(allContextMessages, currentRoundMemoryBlockMarker)
+	summaryIndices := processor.CollectSummaryIndices(allContextMessages, currentRoundMemoryBlockMarker)
 	if len(summaryIndices) > 0 {
 		var parts []string
 		for _, idx := range summaryIndices {
@@ -804,7 +804,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 
 	summary := response.GetContent().Text()
 	if summary != "" {
-		compressedTokens := CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summary)}, modelName, crc.ProcessorType())
+		compressedTokens := processor.CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summary)}, modelName, crc.ProcessorType())
 		if compressedTokens >= inputTokens {
 			logger.Debug(logger.ComponentAgentCore).
 				Str("event_type", "compress_no_benefit").
@@ -831,7 +831,7 @@ func (crc *CurrentRoundCompressor) Compress(ctx context.Context, mc iface.ModelC
 // 对应 Python: CurrentRoundCompressor._merge_summary_blocks()
 func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc iface.ModelContext, oldCompressMessages []llm_schema.BaseMessage) (*llm_schema.UserMessage, error) {
 	modelName := crc.getModelName()
-	totalTokens := CountMessagesTokens(mc.TokenCounter(), oldCompressMessages, modelName, crc.ProcessorType())
+	totalTokens := processor.CountMessagesTokens(mc.TokenCounter(), oldCompressMessages, modelName, crc.ProcessorType())
 	if totalTokens <= crc.accumulatedSummaryTokenLimit {
 		logger.Debug(logger.ComponentAgentCore).
 			Str("event_type", "merge_skipped").
@@ -868,7 +868,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 
 	summaryText := response.GetContent().Text()
 	if summaryText != "" {
-		mergedTokens := CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summaryText)}, modelName, crc.ProcessorType())
+		mergedTokens := processor.CountMessagesTokens(mc.TokenCounter(), []llm_schema.BaseMessage{llm_schema.NewUserMessage(summaryText)}, modelName, crc.ProcessorType())
 		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "merge_success").
 			Int("block_count", len(oldCompressMessages)).
@@ -975,7 +975,7 @@ func (crc *CurrentRoundCompressor) BuildPrompt(targetTokens int, priorSummaries 
 func (crc *CurrentRoundCompressor) FormatRecentContext(allContextMessages []llm_schema.BaseMessage, endIdx int) string {
 	var recentMessages []llm_schema.BaseMessage
 	for _, msg := range allContextMessages[endIdx+1:] {
-		if IsSummaryMessage(msg, currentRoundMemoryBlockMarker) {
+		if processor.IsSummaryMessage(msg, currentRoundMemoryBlockMarker) {
 			continue
 		}
 		recentMessages = append(recentMessages, msg)
@@ -1002,7 +1002,7 @@ func (crc *CurrentRoundCompressor) FormatPriorContextAndQuery(allContextMessages
 	if currentQueryIdx > 0 {
 		for _, msg := range allContextMessages[:currentQueryIdx] {
 			isPlainUser := false
-			if um, ok := msg.(*llm_schema.UserMessage); ok && !IsSummaryMessage(um, currentRoundMemoryBlockMarker) {
+			if um, ok := msg.(*llm_schema.UserMessage); ok && !processor.IsSummaryMessage(um, currentRoundMemoryBlockMarker) {
 				isPlainUser = true
 			}
 			isPlainAssistant := false

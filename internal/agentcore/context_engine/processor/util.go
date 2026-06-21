@@ -1,4 +1,4 @@
-package compressor
+package processor
 
 import (
 	"encoding/json"
@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -99,11 +98,11 @@ func MessageToText(msg llm_schema.BaseMessage) string {
 
 // GroupCompletedAPIRoundsMessages 按已完成 API 轮次分组返回消息子列表。
 //
-// 内部调用 processor.GroupCompletedAPIRounds 获取轮次范围，再按范围切分消息。
+// 内部调用 GroupCompletedAPIRounds 获取轮次范围，再按范围切分消息。
 //
 // 对应 Python: FullCompactProcessor._group_messages_by_api_round()
 func GroupCompletedAPIRoundsMessages(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
-	ranges := processor.GroupCompletedAPIRounds(messages)
+	ranges := GroupCompletedAPIRounds(messages)
 	groups := make([][]llm_schema.BaseMessage, 0, len(ranges))
 	for _, r := range ranges {
 		groups = append(groups, messages[r[0]:r[1]])
@@ -288,6 +287,18 @@ func CountMessagesTokens(tokenCounter token.TokenCounter, messages []llm_schema.
 	return total
 }
 
+// FindLastFinalAssistantIdx 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
+func FindLastFinalAssistantIdx(messages []llm_schema.BaseMessage) int {
+	for idx := len(messages) - 1; idx >= 0; idx-- {
+		msg := messages[idx]
+		am, ok := msg.(*llm_schema.AssistantMessage)
+		if ok && len(am.ToolCalls) == 0 {
+			return idx
+		}
+	}
+	return -1
+}
+
 // FindLastCompletedAPIRoundEndIdx 找到范围内最后一个完整 API 轮次的结束索引。
 //
 // 对应 Python: util.find_last_completed_api_round_end_idx()
@@ -296,7 +307,7 @@ func FindLastCompletedAPIRoundEndIdx(messages []llm_schema.BaseMessage, startIdx
 		return endIdx
 	}
 	candidateMessages := messages[startIdx : endIdx+1]
-	completedRounds := processor.GroupCompletedAPIRounds(candidateMessages)
+	completedRounds := GroupCompletedAPIRounds(candidateMessages)
 	if len(completedRounds) == 0 {
 		return startIdx - 1
 	}

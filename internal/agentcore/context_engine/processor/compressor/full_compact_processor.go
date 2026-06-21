@@ -437,7 +437,7 @@ func (fcp *FullCompactProcessor) _buildReplacementMessages(ctx context.Context, 
 			return &iface.ContextEvent{
 				EventType:        fcp.ProcessorType(),
 				MessagesToModify: buildRangeIndices(0, len(allMessages)-1),
-				CompactSummary:   MessageToText(sessionMemoryMessage),
+				CompactSummary:   processor.MessageToText(sessionMemoryMessage),
 			}, sessionMemoryMessages, sessionMemoryMessage
 		}
 		logger.Info(logger.ComponentAgentCore).Msg("[FullCompact] session_memory candidate rejected: token budget exceeded")
@@ -592,7 +592,7 @@ func (fcp *FullCompactProcessor) _generateSummary(ctx context.Context, messages 
 func (fcp *FullCompactProcessor) _truncateForPromptBudget(messages []llm_schema.BaseMessage, mc iface.ModelContext) []llm_schema.BaseMessage {
 	groups := fcp._groupMessagesByAPIRound(messages)
 	for len(groups) > 0 {
-		candidate := FlattenGroups(groups)
+		candidate := processor.FlattenGroups(groups)
 		if fcp._countPromptTokens(candidate, mc) <= fcp.fcpConfig.CompressionCallMaxTokens {
 			return candidate
 		}
@@ -643,7 +643,7 @@ func (fcp *FullCompactProcessor) _truncateMessagesFromHead(messages []llm_schema
 //
 // 对应 Python: FullCompactProcessor._group_messages_by_api_round()
 func (fcp *FullCompactProcessor) _groupMessagesByAPIRound(messages []llm_schema.BaseMessage) [][]llm_schema.BaseMessage {
-	groups := GroupCompletedAPIRoundsMessages(messages)
+	groups := processor.GroupCompletedAPIRoundsMessages(messages)
 	return groups
 }
 
@@ -890,7 +890,7 @@ func (fcp *FullCompactProcessor) countContextWindowTokens(mc iface.ModelContext,
 	}
 	total := 0
 	for _, msg := range messages {
-		total += EstimateContentTokens(msg.GetContent().Text())
+		total += processor.EstimateContentTokens(msg.GetContent().Text())
 	}
 	return total
 }
@@ -912,7 +912,7 @@ func (fcp *FullCompactProcessor) _countPromptTokens(messages []llm_schema.BaseMe
 	}
 	total := 0
 	for _, msg := range promptMessages {
-		total += EstimateContentTokens(msg.GetContent().Text())
+		total += processor.EstimateContentTokens(msg.GetContent().Text())
 	}
 	return total
 }
@@ -929,7 +929,7 @@ func (fcp *FullCompactProcessor) _buildFallbackSummary(messages []llm_schema.Bas
 	}
 	var lines []string
 	for idx, msg := range tail {
-		lines = append(lines, fmt.Sprintf("[%d] %s: %s", startIdx+idx, msg.GetRole().String(), MessageToText(msg)))
+		lines = append(lines, fmt.Sprintf("[%d] %s: %s", startIdx+idx, msg.GetRole().String(), processor.MessageToText(msg)))
 	}
 	return "Summary:\n" + strings.Join(lines, "\n")
 }
@@ -985,7 +985,7 @@ func (fcp *FullCompactProcessor) _serializeMessage(msg llm_schema.BaseMessage) s
 		parts = append(parts, fmt.Sprintf("tool_call_id=%s", tm.ToolCallID))
 	}
 
-	parts = append(parts, fmt.Sprintf("content=%s", MessageToText(msg)))
+	parts = append(parts, fmt.Sprintf("content=%s", processor.MessageToText(msg)))
 	return strings.Join(parts, " | ")
 }
 
@@ -1084,23 +1084,23 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 	// ⤵️ 待完善：需对接 FullCompactProcessor 的配置和状态标记
 	keepSigs := make(map[string]bool)
 	for _, msg := range messagesToKeep {
-		keepSigs[MessageSignature(msg)] = true
+		keepSigs[processor.MessageSignature(msg)] = true
 	}
 
-	rounds := GroupCompletedAPIRoundsMessages(messages)
+	rounds := processor.GroupCompletedAPIRoundsMessages(messages)
 	var selectedRounds [][]llm_schema.BaseMessage
 	seenRoundSigs := make(map[string]bool)
 
 	for i := len(rounds) - 1; i >= 0; i-- {
 		roundMsgs := rounds[i]
-		roundSig := RoundSignature(roundMsgs)
+		roundSig := processor.RoundSignature(roundMsgs)
 		if seenRoundSigs[roundSig] {
 			continue
 		}
 		// 检查轮次中的消息是否在 keep 集合中
 		overlap := false
 		for _, msg := range roundMsgs {
-			if keepSigs[MessageSignature(msg)] {
+			if keepSigs[processor.MessageSignature(msg)] {
 				overlap = true
 				break
 			}
@@ -1108,7 +1108,7 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 		if overlap {
 			continue
 		}
-		if !RoundContainsSkillRead(roundMsgs) {
+		if !processor.RoundContainsSkillRead(roundMsgs) {
 			continue
 		}
 		selectedRounds = append(selectedRounds, roundMsgs)
@@ -1135,7 +1135,7 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 	for _, roundMsgs := range selectedRounds {
 		var serializedParts []string
 		for _, msg := range roundMsgs {
-			serializedParts = append(serializedParts, fmt.Sprintf("role=%s, content=%s", msg.GetRole().String(), MessageToText(msg)))
+			serializedParts = append(serializedParts, fmt.Sprintf("role=%s, content=%s", msg.GetRole().String(), processor.MessageToText(msg)))
 		}
 		serialized := strings.Join(serializedParts, "\n")
 		// 注意：这里使用默认的 StateMarker 和 truncateStateText

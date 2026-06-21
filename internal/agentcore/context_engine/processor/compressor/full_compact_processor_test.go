@@ -1058,7 +1058,7 @@ func TestIsSkillFilePath(t *testing.T) {
 		{"/path/to/skill.txt", false},
 	}
 	for _, tt := range tests {
-		result := IsSkillFilePath(tt.path)
+		result := processor.IsSkillFilePath(tt.path)
 		if result != tt.expected {
 			t.Errorf("IsSkillFilePath(%q) = %v, want %v", tt.path, result, tt.expected)
 		}
@@ -1068,25 +1068,25 @@ func TestIsSkillFilePath(t *testing.T) {
 // TestExtractArgumentValue 验证参数值提取
 func TestExtractArgumentValue(t *testing.T) {
 	// JSON 格式
-	result := ExtractArgumentValue(nil,`{"file_path": "/tmp/test.go"}`, "file_path")
+	result := processor.ExtractArgumentValue(nil,`{"file_path": "/tmp/test.go"}`, "file_path")
 	if result != "/tmp/test.go" {
 		t.Errorf("期望 /tmp/test.go，实际: %s", result)
 	}
 
 	// 多个 key
-	result = ExtractArgumentValue(nil,`{"pattern": "*.go"}`, "pattern", "path")
+	result = processor.ExtractArgumentValue(nil,`{"pattern": "*.go"}`, "pattern", "path")
 	if result != "*.go" {
 		t.Errorf("期望 *.go，实际: %s", result)
 	}
 
 	// 空 JSON
-	result = ExtractArgumentValue(nil,"", "file_path")
+	result = processor.ExtractArgumentValue(nil,"", "file_path")
 	if result != "" {
 		t.Errorf("空 JSON 应返回空字符串，实际: %s", result)
 	}
 
 	// 非法 JSON fallback
-	result = ExtractArgumentValue(nil,`invalid json "file_path": "/tmp/test.go"`, "file_path")
+	result = processor.ExtractArgumentValue(nil,`invalid json "file_path": "/tmp/test.go"`, "file_path")
 	if result != "/tmp/test.go" {
 		t.Errorf("fallback 正则应提取值，实际: %s", result)
 	}
@@ -1102,7 +1102,7 @@ func TestRoundContainsSkillRead(t *testing.T) {
 			}),
 		),
 	}
-	if !RoundContainsSkillRead(messages) {
+	if !processor.RoundContainsSkillRead(messages) {
 		t.Error("含 skill.md 读取的轮次应返回 true")
 	}
 
@@ -1114,7 +1114,7 @@ func TestRoundContainsSkillRead(t *testing.T) {
 			}),
 		),
 	}
-	if RoundContainsSkillRead(messages2) {
+	if processor.RoundContainsSkillRead(messages2) {
 		t.Error("非 skill 读取的轮次应返回 false")
 	}
 
@@ -1126,7 +1126,7 @@ func TestRoundContainsSkillRead(t *testing.T) {
 			}),
 		),
 	}
-	if RoundContainsSkillRead(messages3) {
+	if processor.RoundContainsSkillRead(messages3) {
 		t.Error("非文件读取工具应返回 false")
 	}
 }
@@ -1189,7 +1189,7 @@ func TestFullCompactProcessor_BuildMinimalCompactInput(t *testing.T) {
 // TestMessageToText 验证消息文本提取
 func TestMessageToText(t *testing.T) {
 	msg := llm_schema.NewUserMessage("你好世界")
-	result := MessageToText(msg)
+	result := processor.MessageToText(msg)
 	if result != "你好世界" {
 		t.Errorf("期望 你好世界，实际: %s", result)
 	}
@@ -1694,7 +1694,7 @@ func TestFlattenGroups(t *testing.T) {
 		{llm_schema.NewUserMessage("1"), llm_schema.NewUserMessage("2")},
 		{llm_schema.NewUserMessage("3")},
 	}
-	result := FlattenGroups(groups)
+	result := processor.FlattenGroups(groups)
 	if len(result) != 3 {
 		t.Errorf("期望 3 条消息，实际: %d", len(result))
 	}
@@ -1702,7 +1702,7 @@ func TestFlattenGroups(t *testing.T) {
 
 // TestFlattenGroups_空分组 验证空分组
 func TestFlattenGroups_空分组(t *testing.T) {
-	result := FlattenGroups(nil)
+	result := processor.FlattenGroups(nil)
 	if result != nil {
 		t.Errorf("空分组应返回 nil，实际: %v", result)
 	}
@@ -2037,7 +2037,7 @@ func TestMessageToText_多模态内容(t *testing.T) {
 		llm_schema.ContentPart{Type: "image_url", ImageURL: &llm_schema.ImageURL{URL: "http://example.com/img.png"}},
 		llm_schema.ContentPart{Type: "text", Text: "更多描述"},
 	))
-	result := MessageToText(msg)
+	result := processor.MessageToText(msg)
 	if !strings.Contains(result, "图片描述") {
 		t.Errorf("应包含 Parts 中的文本，实际: %s", result)
 	}
@@ -2050,7 +2050,7 @@ func TestMessageToText_多模态内容(t *testing.T) {
 func TestMessageToText_空Parts(t *testing.T) {
 	msg := llm_schema.NewUserMessage("")
 	msg.SetContent(llm_schema.NewMultiModalContent())
-	result := MessageToText(msg)
+	result := processor.MessageToText(msg)
 	if result != "" {
 		t.Errorf("空 Parts 应返回空字符串，实际: %s", result)
 	}
@@ -2059,7 +2059,7 @@ func TestMessageToText_空Parts(t *testing.T) {
 // TestMessageToText_纯文本 验证纯文本消息直接返回
 func TestMessageToText_纯文本(t *testing.T) {
 	msg := llm_schema.NewUserMessage("你好世界")
-	result := MessageToText(msg)
+	result := processor.MessageToText(msg)
 	if result != "你好世界" {
 		t.Errorf("纯文本应直接返回，实际: %s", result)
 	}
