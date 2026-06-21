@@ -1,0 +1,25 @@
+package processor
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SaveState 导出处理器内部状态为可序列化的 map。
+//
+// 默认实现返回空 map。具体处理器应覆写此方法，
+// 将自身状态导出为 JSON 兼容的 map。
+//
+// 对应 Python: ContextProcessor.save_state()（抽象方法）
+func (p *BaseProcessor) SaveState() map[string]any {
+	return make(map[string]any)
+}
+
+// LoadState 从 map 恢复处理器内部状态。
+//
+// 默认实现为空操作。具体处理器应覆写此方法，
+// 从 JSON 兼容的 map 中恢复自身状态。
+//
+// 对应 Python: ContextProcessor.load_state()（抽象方法）
+func (p *BaseProcessor) LoadState(_ map[string]any) {
+	// 默认空操作
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
