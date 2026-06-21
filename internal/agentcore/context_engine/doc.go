@@ -21,7 +21,12 @@
 //	│   └── offload.go          # Offload 消息模型
 //	├── processor/
 //	│   ├── doc.go              # Processor 子包文档
-//	│   └── base.go             # ContextEvent 处理器结果类型
+//	│   ├── base.go             # ContextProcessor 接口 + ProcessorConfig 接口 + ContextEvent + BaseProcessor
+//	│   ├── hooks.go            # 钩子默认实现 + ProcessorType + IsAPIRound
+//	│   ├── state.go            # SaveState/LoadState 默认实现
+//	│   ├── offload.go          # OffloadMessages 方法族 + offload 常量
+//	│   ├── usage.go            # CompressionUsage 追踪方法族
+//	│   └── round.go            # GroupCompletedAPIRounds 函数
 //	└── token/
 //	    ├── doc.go              # Token 子包文档
 //	    └── base.go             # TokenCounter 接口定义
