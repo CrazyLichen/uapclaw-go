@@ -1,6 +1,6 @@
 module github.com/uapclaw/uapclaw-go
 
-go 1.25.8
+go 1.26
 
 // 后续领域依赖（按需添加）
 //
@@ -22,7 +22,7 @@ go 1.25.8
 // - github.com/milvus-io/milvus/client/v2  Milvus
 //
 // 领域五：会话与上下文
-// - github.com/pkoukk/tiktoken-go    Tiktoken
+// - github.com/tiktoken-go/tokenizer Tiktoken（纯 Go 实现，BPE 编译期嵌入）
 //
 // 领域六：Agent 核心
 // - (无额外依赖)
