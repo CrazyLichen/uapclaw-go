@@ -450,6 +450,48 @@ func TestMicroCompactProcessor_OnAddMessages(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("非ToolMessage在索引中时跳过", func(t *testing.T) {
+		// collectFlatIndicesForCompact 只收集 ToolMessage 索引，
+		// OnAddMessages 内部也会通过类型断言跳过非 ToolMessage。
+		// 构造一个消息列表，其中 UserMessage 不应被修改。
+		mcp, _ := NewMicroCompactProcessor(cfg)
+		assistantMsg := &llm_schema.AssistantMessage{
+			DefaultMessage: *llm_schema.NewDefaultMessage(llm_schema.RoleTypeAssistant, ""),
+			ToolCalls: []*llm_schema.ToolCall{
+				{ID: "call_1", Name: "grep"},
+				{ID: "call_2", Name: "grep"},
+				{ID: "call_3", Name: "grep"},
+				{ID: "call_4", Name: "grep"},
+			},
+		}
+		mcMessages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("hello"),
+			assistantMsg,
+			llm_schema.NewToolMessage("call_1", "result1"),
+			llm_schema.NewToolMessage("call_2", "result2"),
+			llm_schema.NewToolMessage("call_3", "result3"),
+		}
+		mc := &fakeModelContextForMicro{messages: mcMessages}
+		messagesToAdd := []llm_schema.BaseMessage{
+			llm_schema.NewToolMessage("call_4", "result4"),
+		}
+
+		event, _, err := mcp.OnAddMessages(context.Background(), mc, messagesToAdd)
+		if err != nil {
+			t.Fatalf("OnAddMessages() error = %v", err)
+		}
+		if event == nil {
+			t.Fatal("OnAddMessages() event should not be nil")
+		}
+		// 验证 modifiedIndices 中不包含 UserMessage 的索引
+		for _, idx := range event.MessagesToModify {
+			msg := mc.GetMessages(nil, true)[idx]
+			if _, ok := msg.(*llm_schema.UserMessage); ok {
+				t.Errorf("UserMessage 不应在 modifiedIndices 中，索引 %d", idx)
+			}
+		}
+	})
 }
 
 // ──────────────────────────── 测试辅助 ────────────────────────────

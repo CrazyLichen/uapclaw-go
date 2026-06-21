@@ -150,11 +150,25 @@ func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.Mode
 		return nil, messagesToAdd, nil
 	}
 
+	// 收集被清除消息对应的工具名集合
+	clearedTools := make(map[string]bool)
+	for _, index := range modifiedIndices {
+		toolName := context_utils.ResolveToolNameFromMessage(allMessages[index], allMessages)
+		if toolName != "" {
+			clearedTools[toolName] = true
+		}
+	}
+	var toolNames []string
+	for name := range clearedTools {
+		toolNames = append(toolNames, name)
+	}
+
 	mc.SetMessages(allMessages, true)
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "MicroCompactProcessor_cleared").
 		Int("cleared_count", len(modifiedIndices)).
+		Strs("tools", toolNames).
 		Bool("force", force).
 		Msg("微压缩处理器清除了旧工具结果内容")
 
