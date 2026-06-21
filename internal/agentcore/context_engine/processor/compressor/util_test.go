@@ -1,6 +1,8 @@
 package compressor
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -138,6 +140,217 @@ func TestResolveToolNameFromMessage(t *testing.T) {
 		got := ResolveToolNameFromMessage(msg, nil)
 		if got != "" {
 			t.Errorf("ResolveToolNameFromMessage() = %q, want empty string", got)
+		}
+	})
+}
+
+func TestIsSummaryMessage(t *testing.T) {
+	t.Run("是摘要消息", func(t *testing.T) {
+		msg := llm_schema.NewUserMessage("[CURRENT_ROUND_MEMORY_BLOCK]\nSummary:\ntest")
+		if !IsSummaryMessage(msg, "[CURRENT_ROUND_MEMORY_BLOCK]") {
+			t.Error("IsSummaryMessage() = false, want true")
+		}
+	})
+	t.Run("不是摘要消息_标记不匹配", func(t *testing.T) {
+		msg := llm_schema.NewUserMessage("[DIALOGUE_MEMORY_BLOCK]\nSummary:\ntest")
+		if IsSummaryMessage(msg, "[CURRENT_ROUND_MEMORY_BLOCK]") {
+			t.Error("IsSummaryMessage() = true, want false")
+		}
+	})
+	t.Run("不是摘要消息_非UserMessage", func(t *testing.T) {
+		msg := llm_schema.NewAssistantMessage("hello")
+		if IsSummaryMessage(msg, "[CURRENT_ROUND_MEMORY_BLOCK]") {
+			t.Error("IsSummaryMessage() = true, want false")
+		}
+	})
+}
+
+func TestCollectSummaryIndices(t *testing.T) {
+	t.Run("多个摘要", func(t *testing.T) {
+		marker := "[CURRENT_ROUND_MEMORY_BLOCK]"
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("hello"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns1"),
+			llm_schema.NewAssistantMessage("hi"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns2"),
+		}
+		got := CollectSummaryIndices(messages, marker)
+		if len(got) != 2 || got[0] != 1 || got[1] != 3 {
+			t.Errorf("CollectSummaryIndices() = %v, want [1 3]", got)
+		}
+	})
+	t.Run("无摘要", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+		got := CollectSummaryIndices(messages, "[CURRENT_ROUND_MEMORY_BLOCK]")
+		if len(got) != 0 {
+			t.Errorf("CollectSummaryIndices() = %v, want []", got)
+		}
+	})
+}
+
+func TestCountMessagesTokens(t *testing.T) {
+	t.Run("空消息返回0", func(t *testing.T) {
+		got := CountMessagesTokens(nil, nil, "", "")
+		if got != 0 {
+			t.Errorf("CountMessagesTokens(nil) = %d, want 0", got)
+		}
+	})
+	t.Run("无TokenCounter降级到字符估算", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello world")}
+		got := CountMessagesTokens(nil, messages, "", "TestProcessor")
+		if got <= 0 {
+			t.Errorf("CountMessagesTokens() = %d, want > 0", got)
+		}
+	})
+}
+
+func TestFindLastCompletedAPIRoundEndIdx(t *testing.T) {
+	t.Run("有完成轮次", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("hello"),
+			llm_schema.NewAssistantMessage("hi"),
+			llm_schema.NewUserMessage("world"),
+		}
+		got := FindLastCompletedAPIRoundEndIdx(messages, 0, 1)
+		if got != 1 {
+			t.Errorf("FindLastCompletedAPIRoundEndIdx() = %d, want 1", got)
+		}
+	})
+	t.Run("无完成轮次", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+		got := FindLastCompletedAPIRoundEndIdx(messages, 0, 0)
+		if got != -1 {
+			t.Errorf("FindLastCompletedAPIRoundEndIdx() = %d, want -1", got)
+		}
+	})
+	t.Run("endIdx小于startIdx", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+		got := FindLastCompletedAPIRoundEndIdx(messages, 1, 0)
+		if got != 0 {
+			t.Errorf("FindLastCompletedAPIRoundEndIdx() = %d, want 0", got)
+		}
+	})
+}
+
+func TestIterSummaryMergeRanges(t *testing.T) {
+	marker := "[CURRENT_ROUND_MEMORY_BLOCK]"
+	t.Run("足够连续块", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns1"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns2"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns3"),
+			llm_schema.NewAssistantMessage("break"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns4"),
+		}
+		got := IterSummaryMergeRanges(messages, marker, 3)
+		if len(got) != 1 || got[0] != [2]int{0, 2} {
+			t.Errorf("IterSummaryMergeRanges() = %v, want [[0 2]]", got)
+		}
+	})
+	t.Run("不足连续块", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns1"),
+			llm_schema.NewUserMessage(marker + "\nSummary:\ns2"),
+		}
+		got := IterSummaryMergeRanges(messages, marker, 3)
+		if len(got) != 0 {
+			t.Errorf("IterSummaryMergeRanges() = %v, want []", got)
+		}
+	})
+}
+
+func TestParseToolArguments(t *testing.T) {
+	t.Run("正常JSON", func(t *testing.T) {
+		got := ParseToolArguments(`{"file_path": "/tmp/test.go"}`)
+		if got["file_path"] != "/tmp/test.go" {
+			t.Errorf("ParseToolArguments() = %v, want file_path=/tmp/test.go", got)
+		}
+	})
+	t.Run("空字符串", func(t *testing.T) {
+		got := ParseToolArguments("")
+		if len(got) != 0 {
+			t.Errorf("ParseToolArguments('') = %v, want empty map", got)
+		}
+	})
+	t.Run("非法JSON", func(t *testing.T) {
+		got := ParseToolArguments("not json")
+		if len(got) != 0 {
+			t.Errorf("ParseToolArguments('not json') = %v, want empty map", got)
+		}
+	})
+}
+
+func TestDescribeToolCall(t *testing.T) {
+	t.Run("read_file", func(t *testing.T) {
+		got := DescribeToolCall("read_file", `{"file_path": "/tmp/test.go"}`)
+		if !strings.Contains(got, "read_file") || !strings.Contains(got, "/tmp/test.go") {
+			t.Errorf("DescribeToolCall() = %q", got)
+		}
+	})
+	t.Run("未知工具", func(t *testing.T) {
+		got := DescribeToolCall("custom_tool", `{"arg": "val"}`)
+		if !strings.Contains(got, "custom_tool") {
+			t.Errorf("DescribeToolCall() = %q", got)
+		}
+	})
+}
+
+func TestFindToolResultText(t *testing.T) {
+	t.Run("找到结果", func(t *testing.T) {
+		tm := llm_schema.NewToolMessage("call_1", "file content here")
+		messages := []llm_schema.BaseMessage{tm}
+		got := FindToolResultText(messages, "call_1")
+		if got != "file content here" {
+			t.Errorf("FindToolResultText() = %q, want %q", got, "file content here")
+		}
+	})
+	t.Run("未找到", func(t *testing.T) {
+		got := FindToolResultText(nil, "call_999")
+		if got != "" {
+			t.Errorf("FindToolResultText() = %q, want empty", got)
+		}
+	})
+	t.Run("空ToolCallID", func(t *testing.T) {
+		got := FindToolResultText(nil, "")
+		if got != "" {
+			t.Errorf("FindToolResultText() = %q, want empty", got)
+		}
+	})
+}
+
+func TestExtractSkillNameFromPath(t *testing.T) {
+	t.Run("正常skill路径", func(t *testing.T) {
+		got := ExtractSkillNameFromPath("skills/grep/skill.md")
+		if got != "grep" {
+			t.Errorf("ExtractSkillNameFromPath() = %q, want %q", got, "grep")
+		}
+	})
+	t.Run("非skill路径", func(t *testing.T) {
+		got := ExtractSkillNameFromPath("path/to/readme.md")
+		if got != "" {
+			t.Errorf("ExtractSkillNameFromPath() = %q, want empty", got)
+		}
+	})
+	t.Run("空路径", func(t *testing.T) {
+		got := ExtractSkillNameFromPath("")
+		if got != "" {
+			t.Errorf("ExtractSkillNameFromPath() = %q, want empty", got)
+		}
+	})
+}
+
+func TestExtractSkillFileContent(t *testing.T) {
+	t.Run("空内容", func(t *testing.T) {
+		got := ExtractSkillFileContent(nil, "")
+		if got != "" {
+			t.Errorf("ExtractSkillFileContent() = %q, want empty", got)
+		}
+	})
+	t.Run("正常JSON内容", func(t *testing.T) {
+		input := fmt.Sprintf(`"content": "hello skill"`)
+		got := ExtractSkillFileContent(nil, input)
+		if got == "" {
+			t.Errorf("ExtractSkillFileContent() = empty, want non-empty")
 		}
 	})
 }

@@ -762,32 +762,12 @@ func (dc *DialogueCompressor) collectCompleteRounds(messages []llm_schema.BaseMe
 }
 
 // countMessagesTokens 计算消息列表的 Token 数。
-//
-// 优先使用 TokenCounter（传入压缩模型的 ModelName），出错时 fallback 到字符估算。
-// 对应 Python: DialogueCompressor._count_messages_tokens()
 func (dc *DialogueCompressor) countMessagesTokens(mc iface.ModelContext, messages []llm_schema.BaseMessage) int {
-	tokenCounter := mc.TokenCounter()
-	if tokenCounter != nil {
-		modelName := ""
-		if dc.model != nil && dc.model.ModelConfig != nil {
-			modelName = dc.model.ModelConfig.ModelName
-		}
-		count, err := tokenCounter.CountMessages(messages, modelName)
-		if err == nil {
-			return count
-		}
-		// CountMessages 返回 error 时降级到字符估算
-		logger.Warn(logger.ComponentAgentCore).
-			Str("processor_type", dc.ProcessorType()).
-			Err(err).
-			Msg("TokenCounter 返回错误，降级为字符估算")
+	modelName := ""
+	if dc.model != nil && dc.model.ModelConfig != nil {
+		modelName = dc.model.ModelConfig.ModelName
 	}
-
-	total := 0
-	for _, msg := range messages {
-		total += EstimateContentTokens(msg.GetContent().Text())
-	}
-	return total
+	return CountMessagesTokens(mc.TokenCounter(), messages, modelName, dc.ProcessorType())
 }
 
 // isModelCallFailedError 判断错误是否为 MODEL_CALL_FAILED

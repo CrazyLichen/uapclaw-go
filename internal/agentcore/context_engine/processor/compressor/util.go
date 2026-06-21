@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -237,4 +239,283 @@ func EstimateContentTokens(content any) int {
 	return len(data) / 3
 }
 
+// IsSummaryMessage 判断消息是否为指定标记的摘要消息。
+//
+// 对应 Python: util.is_summary_message()
+func IsSummaryMessage(msg llm_schema.BaseMessage, marker string) bool {
+	_, ok := msg.(*llm_schema.UserMessage)
+	return ok && strings.HasPrefix(msg.GetContent().Text(), marker)
+}
+
+// CollectSummaryIndices 收集所有指定标记的摘要消息索引。
+//
+// 对应 Python: util.collect_summary_indices()
+func CollectSummaryIndices(messages []llm_schema.BaseMessage, marker string) []int {
+	var indices []int
+	for i, msg := range messages {
+		if IsSummaryMessage(msg, marker) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+// CountMessagesTokens 计算 Token 数，优先使用 TokenCounter，失败时降级到字符估算。
+//
+// 对应 Python: util.count_messages_tokens()
+func CountMessagesTokens(tokenCounter token.TokenCounter, messages []llm_schema.BaseMessage, modelName string, processorType string) int {
+	if len(messages) == 0 {
+		return 0
+	}
+	if tokenCounter != nil {
+		count, err := tokenCounter.CountMessages(messages, modelName)
+		if err == nil {
+			return count
+		}
+		prefix := ""
+		if processorType != "" {
+			prefix = fmt.Sprintf("[%s] ", processorType)
+		}
+		logger.Warn(logger.ComponentAgentCore).
+			Str("processor_type", processorType).
+			Err(err).
+			Msg(prefix + "token_counter 返回错误，降级为字符估算")
+	}
+	total := 0
+	for _, msg := range messages {
+		total += EstimateContentTokens(msg.GetContent().Text())
+	}
+	return total
+}
+
+// FindLastCompletedAPIRoundEndIdx 找到范围内最后一个完整 API 轮次的结束索引。
+//
+// 对应 Python: util.find_last_completed_api_round_end_idx()
+func FindLastCompletedAPIRoundEndIdx(messages []llm_schema.BaseMessage, startIdx int, endIdx int) int {
+	if endIdx < startIdx {
+		return endIdx
+	}
+	candidateMessages := messages[startIdx : endIdx+1]
+	completedRounds := processor.GroupCompletedAPIRounds(candidateMessages)
+	if len(completedRounds) == 0 {
+		return startIdx - 1
+	}
+	lastRound := completedRounds[len(completedRounds)-1]
+	return startIdx + lastRound[1] - 1
+}
+
+// IterSummaryMergeRanges 返回连续摘要消息范围，用于二次合并。
+//
+// 对应 Python: util.iter_summary_merge_ranges()
+func IterSummaryMergeRanges(messages []llm_schema.BaseMessage, marker string, minBlocks int) [][2]int {
+	var ranges [][2]int
+	var startIdx *int
+	var previousIdx *int
+
+	for idx, msg := range messages {
+		if IsSummaryMessage(msg, marker) {
+			if startIdx == nil {
+				s := idx
+				startIdx = &s
+			}
+			p := idx
+			previousIdx = &p
+			continue
+		}
+		if startIdx != nil && previousIdx != nil {
+			if *previousIdx-*startIdx+1 >= minBlocks {
+				ranges = append(ranges, [2]int{*startIdx, *previousIdx})
+			}
+			startIdx = nil
+			previousIdx = nil
+		}
+	}
+
+	if startIdx != nil && previousIdx != nil {
+		if *previousIdx-*startIdx+1 >= minBlocks {
+			ranges = append(ranges, [2]int{*startIdx, *previousIdx})
+		}
+	}
+
+	return ranges
+}
+
+// ParseToolArguments 解析工具调用 JSON 参数。
+//
+// 对应 Python: util.parse_tool_arguments()
+func ParseToolArguments(argumentsText string) map[string]any {
+	if argumentsText == "" {
+		return map[string]any{}
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(argumentsText), &parsed); err != nil {
+		return map[string]any{}
+	}
+	return parsed
+}
+
+// DescribeToolCall 生成工具调用的可读描述。
+//
+// 对应 Python: util.describe_tool_call()
+func DescribeToolCall(toolName string, argumentsText string) string {
+	parsed := ParseToolArguments(argumentsText)
+	switch toolName {
+	case "read_file":
+		filePath := ExtractArgumentValue(parsed, argumentsText, "file_path")
+		return fmt.Sprintf("read_file path=%s", filePathOrDefault(filePath))
+	case "write_file":
+		filePath := ExtractArgumentValue(parsed, argumentsText, "file_path")
+		return fmt.Sprintf("write_file path=%s", filePathOrDefault(filePath))
+	case "edit_file":
+		filePath := ExtractArgumentValue(parsed, argumentsText, "file_path")
+		return fmt.Sprintf("edit_file path=%s", filePathOrDefault(filePath))
+	case "glob":
+		pattern := ExtractArgumentValue(parsed, argumentsText, "pattern")
+		path := ExtractArgumentValue(parsed, argumentsText, "path")
+		return fmt.Sprintf("glob pattern=%s path=%s", filePathOrDefault(pattern), pathOrDefault(path))
+	case "grep":
+		pattern := ExtractArgumentValue(parsed, argumentsText, "pattern")
+		path := ExtractArgumentValue(parsed, argumentsText, "path", "file_path")
+		return fmt.Sprintf("grep pattern=%s path=%s", filePathOrDefault(pattern), filePathOrDefault(path))
+	default:
+		return fmt.Sprintf("%s args=%s", toolName, argumentsText)
+	}
+}
+
+// FindToolResultText 根据 toolCallID 查找工具结果文本。
+//
+// 对应 Python: util.find_tool_result_text()
+func FindToolResultText(messages []llm_schema.BaseMessage, toolCallID string) string {
+	if toolCallID == "" {
+		return ""
+	}
+	for i := len(messages) - 1; i >= 0; i-- {
+		tm, ok := messages[i].(*llm_schema.ToolMessage)
+		if ok && tm.ToolCallID == toolCallID {
+			return MessageToText(tm)
+		}
+	}
+	return ""
+}
+
+// ExtractToolResultHint 提取工具结果的简要提示。
+//
+// 对应 Python: util.extract_tool_result_hint()
+func ExtractToolResultHint(toolName string, resultText string, allowedToolNames []string) string {
+	if resultText == "" {
+		return ""
+	}
+	allowed := false
+	for _, name := range allowedToolNames {
+		if name == toolName {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return ""
+	}
+	switch toolName {
+	case "read_file":
+		filePathMatch := regexp.MustCompile(`"file_path"\s*:\s*"([^"]+)"`).FindStringSubmatch(resultText)
+		lineCountMatch := regexp.MustCompile(`"line_count"\s*:\s*(\d+)`).FindStringSubmatch(resultText)
+		var parts []string
+		if len(filePathMatch) > 1 {
+			parts = append(parts, fmt.Sprintf("result_path=%s", filePathMatch[1]))
+		}
+		if len(lineCountMatch) > 1 {
+			parts = append(parts, fmt.Sprintf("lines=%s", lineCountMatch[1]))
+		}
+		return strings.Join(parts, " ")
+	case "glob":
+		countMatch := regexp.MustCompile(`"count"\s*:\s*(\d+)`).FindStringSubmatch(resultText)
+		if len(countMatch) > 1 {
+			return fmt.Sprintf("matches=%s", countMatch[1])
+		}
+	case "grep":
+		countMatch := regexp.MustCompile(`"count"\s*:\s*(\d+)`).FindStringSubmatch(resultText)
+		if len(countMatch) > 1 {
+			return fmt.Sprintf("hits=%s", countMatch[1])
+		}
+	case "edit_file":
+		replacementsMatch := regexp.MustCompile(`"replacements"\s*:\s*(\d+)`).FindStringSubmatch(resultText)
+		if len(replacementsMatch) > 1 {
+			return fmt.Sprintf("replacements=%s", replacementsMatch[1])
+		}
+	case "write_file":
+		bytesMatch := regexp.MustCompile(`"bytes_written"\s*:\s*(\d+)`).FindStringSubmatch(resultText)
+		if len(bytesMatch) > 1 {
+			return fmt.Sprintf("bytes_written=%s", bytesMatch[1])
+		}
+	}
+	return ""
+}
+
+// ExtractSkillNameFromPath 从文件路径中提取 skill 名称。
+//
+// 对应 Python: util.extract_skill_name_from_path()
+func ExtractSkillNameFromPath(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	normalized := strings.ReplaceAll(filePath, "\\", "/")
+	normalized = strings.TrimRight(normalized, "/")
+	parts := strings.Split(normalized, "/")
+	if len(parts) >= 2 && strings.EqualFold(parts[len(parts)-1], "skill.md") {
+		return parts[len(parts)-2]
+	}
+	return ""
+}
+
+// ExtractSkillFileContent 提取 skill 文件内容。
+//
+// truncateFn 用于截断文本，通常为 FullCompactProcessor.TruncateStateText。
+// 对应 Python: util.extract_skill_file_content()
+func ExtractSkillFileContent(truncateFn func(string) string, resultText string) string {
+	if resultText == "" {
+		return ""
+	}
+	contentMatch := regexp.MustCompile(`"content"\s*:\s*"((?:[^"\\]|\\.)*)"`).FindStringSubmatch(resultText)
+	content := ""
+	if len(contentMatch) > 1 {
+		rawContent := contentMatch[1]
+		var err error
+		content, err = stringUnescape(rawContent)
+		if err != nil {
+			content = strings.ReplaceAll(strings.ReplaceAll(rawContent, `\"`, `"`), `\n`, "\n")
+		}
+	} else {
+		content = resultText
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	if truncateFn != nil {
+		return truncateFn(content)
+	}
+	return content
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func filePathOrDefault(path string) string {
+	if path == "" {
+		return "[unknown]"
+	}
+	return path
+}
+
+func pathOrDefault(path string) string {
+	if path == "" {
+		return "."
+	}
+	return path
+}
+
+// stringUnescape 对 JSON 字符串进行反转义
+func stringUnescape(s string) (string, error) {
+	var result string
+	err := json.Unmarshal([]byte(`"`+s+`"`), &result)
+	return result, err
+}
