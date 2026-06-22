@@ -532,7 +532,9 @@ func (f *fakeModelContextForMicro) SetMessages(messages []llm_schema.BaseMessage
 	f.messages = messages
 }
 func (f *fakeModelContextForMicro) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (f *fakeModelContextForMicro) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error      { return nil }
+func (f *fakeModelContextForMicro) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
+	return nil
+}
 func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
@@ -540,17 +542,17 @@ func (f *fakeModelContextForMicro) GetContextWindow(_ context.Context, _ []llm_s
 	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats   { return nil }
-func (f *fakeModelContextForMicro) SessionID() string                { return "test-session" }
-func (f *fakeModelContextForMicro) ContextID() string                { return "test-context" }
-func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter { return f.tokenCounter }
-func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool          { return nil }
-func (f *fakeModelContextForMicro) WorkspaceDir() string             { return "" }
-func (f *fakeModelContextForMicro) SetSessionRef(_ *session.Session) {}
-func (f *fakeModelContextForMicro) GetSessionRef() *session.Session  { return nil }
+func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats                       { return nil }
+func (f *fakeModelContextForMicro) SessionID() string                                    { return "test-session" }
+func (f *fakeModelContextForMicro) ContextID() string                                    { return "test-context" }
+func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter                     { return f.tokenCounter }
+func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool                              { return nil }
+func (f *fakeModelContextForMicro) WorkspaceDir() string                                 { return "" }
+func (f *fakeModelContextForMicro) SetSessionRef(_ *session.Session)                     {}
+func (f *fakeModelContextForMicro) GetSessionRef() *session.Session                      { return nil }
 func (f *fakeModelContextForMicro) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
-func (f *fakeModelContextForMicro) SaveState() map[string]any        { return nil }
-func (f *fakeModelContextForMicro) LoadState(_ map[string]any)       {}
+func (f *fakeModelContextForMicro) SaveState() map[string]any                            { return nil }
+func (f *fakeModelContextForMicro) LoadState(_ map[string]any)                           {}
 func (f *fakeModelContextForMicro) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
 	return "", nil
 }

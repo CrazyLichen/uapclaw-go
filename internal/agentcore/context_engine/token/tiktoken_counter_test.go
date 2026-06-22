@@ -3,9 +3,9 @@ package token
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestNewTiktokenCounter_默认模型 验证 model 为空时默认使用 "gpt-4"

@@ -6,10 +6,10 @@ import (
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -17,36 +17,39 @@ import (
 
 // mockModelContext 测试用 ModelContext mock
 type mockModelContext struct {
-	sessionID  string
-	contextID  string
-	messages   []llm_schema.BaseMessage
-	saveState  map[string]any
+	sessionID string
+	contextID string
+	messages  []llm_schema.BaseMessage
+	saveState map[string]any
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (m *mockModelContext) Len() int                                            { return len(m.messages) }
+func (m *mockModelContext) Len() int                                           { return len(m.messages) }
 func (m *mockModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage { return m.messages }
-func (m *mockModelContext) SetMessages(msgs []llm_schema.BaseMessage, _ bool)   { m.messages = msgs }
-func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage  { return nil }
-func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error { m.messages = nil; return nil }
+func (m *mockModelContext) SetMessages(msgs []llm_schema.BaseMessage, _ bool)  { m.messages = msgs }
+func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
+func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
+	m.messages = nil
+	return nil
+}
 func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return m.messages, nil
 }
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return iface.NewContextWindow(), nil
 }
-func (m *mockModelContext) Statistic() *iface.ContextStats   { return &iface.ContextStats{} }
-func (m *mockModelContext) SessionID() string                { return m.sessionID }
-func (m *mockModelContext) ContextID() string                { return m.contextID }
-func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
-func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
-func (m *mockModelContext) WorkspaceDir() string             { return "" }
-func (m *mockModelContext) SetSessionRef(_ *session.Session) {}
-func (m *mockModelContext) GetSessionRef() *session.Session  { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats                       { return &iface.ContextStats{} }
+func (m *mockModelContext) SessionID() string                                    { return m.sessionID }
+func (m *mockModelContext) ContextID() string                                    { return m.contextID }
+func (m *mockModelContext) TokenCounter() token.TokenCounter                     { return nil }
+func (m *mockModelContext) ReloaderTool() tool.Tool                              { return nil }
+func (m *mockModelContext) WorkspaceDir() string                                 { return "" }
+func (m *mockModelContext) SetSessionRef(_ *session.Session)                     {}
+func (m *mockModelContext) GetSessionRef() *session.Session                      { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
-func (m *mockModelContext) SaveState() map[string]any        { return m.saveState }
-func (m *mockModelContext) LoadState(_ map[string]any)       {}
+func (m *mockModelContext) SaveState() map[string]any                            { return m.saveState }
+func (m *mockModelContext) LoadState(_ map[string]any)                           {}
 func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
 	return compressResultNoop, nil
 }

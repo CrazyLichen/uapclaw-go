@@ -33,7 +33,9 @@ func (f *fakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ bool
 	f.messages = messages
 }
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error      { return nil }
+func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
+	return nil
+}
 func (f *fakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
@@ -41,17 +43,17 @@ func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.Ba
 	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fakeModelContext) Statistic() *iface.ContextStats   { return nil }
-func (f *fakeModelContext) SessionID() string                { return "test-session" }
-func (f *fakeModelContext) ContextID() string                { return "test-context" }
-func (f *fakeModelContext) TokenCounter() token.TokenCounter { return f.tokenCounter }
-func (f *fakeModelContext) ReloaderTool() tool.Tool          { return nil }
-func (f *fakeModelContext) WorkspaceDir() string             { return "" }
-func (f *fakeModelContext) SetSessionRef(_ *session.Session) {}
-func (f *fakeModelContext) GetSessionRef() *session.Session  { return nil }
+func (f *fakeModelContext) Statistic() *iface.ContextStats                       { return nil }
+func (f *fakeModelContext) SessionID() string                                    { return "test-session" }
+func (f *fakeModelContext) ContextID() string                                    { return "test-context" }
+func (f *fakeModelContext) TokenCounter() token.TokenCounter                     { return f.tokenCounter }
+func (f *fakeModelContext) ReloaderTool() tool.Tool                              { return nil }
+func (f *fakeModelContext) WorkspaceDir() string                                 { return "" }
+func (f *fakeModelContext) SetSessionRef(_ *session.Session)                     {}
+func (f *fakeModelContext) GetSessionRef() *session.Session                      { return nil }
 func (f *fakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
-func (f *fakeModelContext) SaveState() map[string]any        { return nil }
-func (f *fakeModelContext) LoadState(_ map[string]any)       {}
+func (f *fakeModelContext) SaveState() map[string]any                            { return nil }
+func (f *fakeModelContext) LoadState(_ map[string]any)                           {}
 func (f *fakeModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
 	return "", nil
 }

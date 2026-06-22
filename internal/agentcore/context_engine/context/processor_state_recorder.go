@@ -97,12 +97,12 @@ type ProcessorStateRecorder struct {
 // 对应 Python: ContextProcessorStateRecorder.__init__()
 func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func() *session.Session, tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
 	return &ProcessorStateRecorder{
-		sessionID:    sessionID,
-		contextID:    contextID,
+		sessionID:     sessionID,
+		contextID:     contextID,
 		getSessionRef: getSessionRef,
-		tokenCounter: tokenCounter,
-		historyLimit: historyLimit,
-		history:      make([]map[string]any, 0),
+		tokenCounter:  tokenCounter,
+		historyLimit:  historyLimit,
+		history:       make([]map[string]any, 0),
 	}
 }
 
@@ -383,15 +383,15 @@ func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) s
 // stateToMap 将 ContextCompressionState 转换为 map，用于流式推送和历史记录。
 func (r *ProcessorStateRecorder) stateToMap(state *schema.ContextCompressionState) map[string]any {
 	m := map[string]any{
-		"type":          state.Type,
-		"operation_id":  state.OperationID,
-		"status":        string(state.Status),
-		"phase":         string(state.Phase),
-		"processor":     state.Processor,
-		"model":         state.Model,
-		"duration_ms":   state.DurationMs,
-		"context_max":   state.ContextMax,
-		"summary":       state.Summary,
+		"type":            state.Type,
+		"operation_id":    state.OperationID,
+		"status":          string(state.Status),
+		"phase":           string(state.Phase),
+		"processor":       state.Processor,
+		"model":           state.Model,
+		"duration_ms":     state.DurationMs,
+		"context_max":     state.ContextMax,
+		"summary":         state.Summary,
 		"compact_summary": state.CompactSummary,
 	}
 

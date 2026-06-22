@@ -9,20 +9,20 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // fakeTokenCounter 模拟 Token 计数器，用于测试
 type fakeTokenCounter struct {
-	countVal   int
-	countErr   error
-	msgCount   int
-	msgErr     error
-	toolCount  int
-	toolErr    error
+	countVal  int
+	countErr  error
+	msgCount  int
+	msgErr    error
+	toolCount int
+	toolErr   error
 }
 
 func (f *fakeTokenCounter) Count(text string, model string) (int, error) {
@@ -228,21 +228,21 @@ func TestBuildState_完整构建(t *testing.T) {
 	}
 
 	input := ProcessorStateInput{
-		OperationID:    "op-1",
-		Status:         schema.CompressionCompleted,
-		Phase:          schema.PhaseActiveCompress,
-		Trigger:        "auto",
-		Processor:      &fakeProcessor{processorType: "TestProcessor"},
-		Reason:         "context overflow",
-		BeforeMessages: beforeMsgs,
-		AfterMessages:  afterMsgs,
-		StartedAt:      now.Add(-2 * time.Second),
-		EndedAt:        now,
-		Error:          "",
+		OperationID:      "op-1",
+		Status:           schema.CompressionCompleted,
+		Phase:            schema.PhaseActiveCompress,
+		Trigger:          "auto",
+		Processor:        &fakeProcessor{processorType: "TestProcessor"},
+		Reason:           "context overflow",
+		BeforeMessages:   beforeMsgs,
+		AfterMessages:    afterMsgs,
+		StartedAt:        now.Add(-2 * time.Second),
+		EndedAt:          now,
+		Error:            "",
 		MessagesToModify: []int{0, 1},
-		Force:          false,
-		ContextMax:     8000,
-		CompactSummary: "compacted",
+		Force:            false,
+		ContextMax:       8000,
+		CompactSummary:   "compacted",
 		CompressionUsage: &schema.ContextCompressionUsage{
 			Calls:       1,
 			TotalTokens: 500,
@@ -459,8 +459,8 @@ func TestBuildMetric_tokenCounter失败降级(t *testing.T) {
 		Status:         schema.CompressionStarted,
 		BeforeMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello world!!!")},
 		// "hello world!!!" = 14 chars → ceil(14/4) = 4
-		StartedAt: now,
-		EndedAt:   now,
+		StartedAt:  now,
+		EndedAt:    now,
 		ContextMax: 100,
 	}
 
@@ -938,15 +938,15 @@ func TestStateToMap_完整状态(t *testing.T) {
 	recorder := newTestRecorder(nil, 10)
 
 	state := &schema.ContextCompressionState{
-		Type:        schema.ContextCompressionStateType,
-		OperationID: "op-full",
-		Status:      schema.CompressionCompleted,
-		Phase:       schema.PhaseActiveCompress,
-		Processor:   "FullProcessor",
-		Model:       "test-model",
-		DurationMs:  2000,
-		ContextMax:  8000,
-		Summary:     "full test",
+		Type:           schema.ContextCompressionStateType,
+		OperationID:    "op-full",
+		Status:         schema.CompressionCompleted,
+		Phase:          schema.PhaseActiveCompress,
+		Processor:      "FullProcessor",
+		Model:          "test-model",
+		DurationMs:     2000,
+		ContextMax:     8000,
+		Summary:        "full test",
 		CompactSummary: "compacted",
 		Before: schema.ContextCompressionMetric{
 			Time:           "2025-01-01T00:00:00.000Z",

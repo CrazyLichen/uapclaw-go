@@ -18,9 +18,9 @@ import (
 
 // mockTokenCounter 模拟 Token 计数器
 type mockTokenCounter struct {
-	countFn          func(text string, model string) (int, error)
-	countMessagesFn  func(messages []llm_schema.BaseMessage, model string) (int, error)
-	countToolsFn     func(tools []*schema.ToolInfo, model string) (int, error)
+	countFn         func(text string, model string) (int, error)
+	countMessagesFn func(messages []llm_schema.BaseMessage, model string) (int, error)
+	countToolsFn    func(tools []*schema.ToolInfo, model string) (int, error)
 }
 
 func (m *mockTokenCounter) Count(text string, model string) (int, error) {
@@ -55,21 +55,21 @@ func (m *mockWorkspace) RootPath() string {
 
 // smcMockProcessor 模拟上下文处理器（SessionModelContext 测试用）
 type smcMockProcessor struct {
-	processType             string
-	triggerAddResult        bool
-	triggerAddErr           error
-	onAddResult             *iface.ContextEvent
-	onAddMessages           []llm_schema.BaseMessage
-	onAddErr                error
-	triggerGetResult        bool
-	triggerGetErr           error
-	onGetResult             *iface.ContextEvent
-	onGetWindow             iface.ContextWindow
-	onGetErr                error
-	saveStateResult         map[string]any
-	loadStateCalled         bool
-	loadStateInput          map[string]any
-	mu                      sync.Mutex
+	processType      string
+	triggerAddResult bool
+	triggerAddErr    error
+	onAddResult      *iface.ContextEvent
+	onAddMessages    []llm_schema.BaseMessage
+	onAddErr         error
+	triggerGetResult bool
+	triggerGetErr    error
+	onGetResult      *iface.ContextEvent
+	onGetWindow      iface.ContextWindow
+	onGetErr         error
+	saveStateResult  map[string]any
+	loadStateCalled  bool
+	loadStateInput   map[string]any
+	mu               sync.Mutex
 }
 
 func (m *smcMockProcessor) OnAddMessages(_ context.Context, _ iface.ModelContext, messages []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
@@ -125,11 +125,11 @@ func newSMCMockCompressionProcessor() *smcMockCompressionProcessor {
 // newTestSessionModelContext 创建测试用的 SessionModelContext 实例
 func newTestSessionModelContext(opts ...func(*testContextOpts)) *SessionModelContext {
 	o := &testContextOpts{
-		contextID:   "test-ctx-id",
-		sessionID:   "test-session-id",
-		modelName:   "test-model",
-		windowSize:  10,
-		windowRound: 5,
+		contextID:    "test-ctx-id",
+		sessionID:    "test-session-id",
+		modelName:    "test-model",
+		windowSize:   10,
+		windowRound:  5,
 		tokenCounter: &mockTokenCounter{},
 	}
 	for _, opt := range opts {
@@ -836,7 +836,7 @@ func TestSessionModelContext_LoadState(t *testing.T) {
 
 		state := map[string]any{
 			"test-ctx-id": map[string]any{
-				"messages":         []llm_schema.BaseMessage{},
+				"messages": []llm_schema.BaseMessage{},
 				"processor_states": map[string]any{
 					"TestProcessor": map[string]any{"config": "value"},
 				},
@@ -1139,9 +1139,9 @@ func TestRunAddProcessors_带事件记录(t *testing.T) {
 		processType:      "EventProcessor",
 		triggerAddResult: true,
 		onAddResult: &iface.ContextEvent{
-			EventType:       "compress",
+			EventType:        "compress",
 			MessagesToModify: []int{0},
-			CompactSummary:  "compressed",
+			CompactSummary:   "compressed",
 		},
 		onAddMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("compressed")},
 	}
@@ -1424,9 +1424,9 @@ func TestRecordFromEvent_nil事件(t *testing.T) {
 func TestRecordFromEvent_有事件(t *testing.T) {
 	recorder := newTestRecorder(nil, 10)
 	event := &iface.ContextEvent{
-		EventType:       "compress",
+		EventType:        "compress",
 		MessagesToModify: []int{0, 1},
-		CompactSummary:  "summary",
+		CompactSummary:   "summary",
 	}
 	recorder.recordFromEvent(event)
 	// 仅验证不 panic，日志效果通过人工检查

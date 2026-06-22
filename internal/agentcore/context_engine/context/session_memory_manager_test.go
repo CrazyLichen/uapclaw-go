@@ -179,8 +179,8 @@ func TestSessionMemoryDirectUpdater_Invoke_模型未配置时返回错误(t *tes
 
 	err := updater.Invoke(context.Background(), SessionMemoryUpdateOptions{
 		FullContextMessages: []llm_schema.BaseMessage{},
-		NotesPath:          "/tmp/test_notes.md",
-		CurrentNotes:       "test",
+		NotesPath:           "/tmp/test_notes.md",
+		CurrentNotes:        "test",
 	})
 	if err == nil {
 		t.Error("未配置模型客户端时 Invoke 应返回错误")
@@ -369,7 +369,7 @@ func TestGetSessionMemoryRuntime_真实session(t *testing.T) {
 func TestUpdateSessionMemoryRuntime_真实session(t *testing.T) {
 	sess := session.NewSession()
 	updateSessionMemoryRuntime(sess, map[string]any{
-		"initialized":  true,
+		"initialized":   true,
 		"is_extracting": true,
 	})
 
@@ -807,10 +807,10 @@ func TestGetBoolFromMap(t *testing.T) {
 // TestGetStringFromMap 测试从 map 安全获取 string
 func TestGetStringFromMap(t *testing.T) {
 	m := map[string]any{
-		"str":    "hello",
-		"empty":  "",
-		"nil":    nil,
-		"int":    42,
+		"str":   "hello",
+		"empty": "",
+		"nil":   nil,
+		"int":   42,
 	}
 	if v := getStringFromMap(m, "str"); v != "hello" {
 		t.Errorf("str 期望 hello，实际 %q", v)
@@ -1069,7 +1069,9 @@ func (m *mockModelContextForCountTokens) GetMessages(_ int, _ bool) []llm_schema
 	return m.messages
 }
 func (m *mockModelContextForCountTokens) SetMessages(_ []llm_schema.BaseMessage, _ bool) {}
-func (m *mockModelContextForCountTokens) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
+func (m *mockModelContextForCountTokens) PopMessages(_ int, _ bool) []llm_schema.BaseMessage {
+	return nil
+}
 func (m *mockModelContextForCountTokens) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
 	return nil
 }
@@ -1079,19 +1081,21 @@ func (m *mockModelContextForCountTokens) AddMessages(_ context.Context, _ llm_sc
 func (m *mockModelContextForCountTokens) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*commonschema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *mockModelContextForCountTokens) Statistic() *iface.ContextStats { return &iface.ContextStats{} }
-func (m *mockModelContextForCountTokens) SessionID() string              { return "" }
-func (m *mockModelContextForCountTokens) ContextID() string              { return "" }
+func (m *mockModelContextForCountTokens) Statistic() *iface.ContextStats {
+	return &iface.ContextStats{}
+}
+func (m *mockModelContextForCountTokens) SessionID() string { return "" }
+func (m *mockModelContextForCountTokens) ContextID() string { return "" }
 func (m *mockModelContextForCountTokens) TokenCounter() token.TokenCounter {
 	return m.tokenCounter
 }
-func (m *mockModelContextForCountTokens) ReloaderTool() tool.Tool { return nil }
-func (m *mockModelContextForCountTokens) WorkspaceDir() string { return "" }
-func (m *mockModelContextForCountTokens) SetSessionRef(_ *session.Session) {}
-func (m *mockModelContextForCountTokens) GetSessionRef() *session.Session   { return nil }
+func (m *mockModelContextForCountTokens) ReloaderTool() tool.Tool                              { return nil }
+func (m *mockModelContextForCountTokens) WorkspaceDir() string                                 { return "" }
+func (m *mockModelContextForCountTokens) SetSessionRef(_ *session.Session)                     {}
+func (m *mockModelContextForCountTokens) GetSessionRef() *session.Session                      { return nil }
 func (m *mockModelContextForCountTokens) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
-func (m *mockModelContextForCountTokens) SaveState() map[string]any        { return nil }
-func (m *mockModelContextForCountTokens) LoadState(_ map[string]any)       {}
+func (m *mockModelContextForCountTokens) SaveState() map[string]any                            { return nil }
+func (m *mockModelContextForCountTokens) LoadState(_ map[string]any)                           {}
 func (m *mockModelContextForCountTokens) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
 	return "", nil
 }

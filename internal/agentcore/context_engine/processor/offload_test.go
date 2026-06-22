@@ -24,31 +24,34 @@ type mockModelContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (m *mockModelContext) Len() int                                            { return 0 }
+func (m *mockModelContext) Len() int                                           { return 0 }
 func (m *mockModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)      {}
-func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage  { return nil }
-func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error { return nil }
+func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)     {}
+func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
+func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
+	return nil
+}
 func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *mockModelContext) Statistic() *iface.ContextStats   { return nil }
-func (m *mockModelContext) SessionID() string                { return m.sessionID }
-func (m *mockModelContext) ContextID() string                { return "ctx-123" }
-func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
-func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
-func (m *mockModelContext) WorkspaceDir() string             { return "" }
-func (m *mockModelContext) SetSessionRef(_ *session.Session) {}
-func (m *mockModelContext) GetSessionRef() *session.Session  { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats                       { return nil }
+func (m *mockModelContext) SessionID() string                                    { return m.sessionID }
+func (m *mockModelContext) ContextID() string                                    { return "ctx-123" }
+func (m *mockModelContext) TokenCounter() token.TokenCounter                     { return nil }
+func (m *mockModelContext) ReloaderTool() tool.Tool                              { return nil }
+func (m *mockModelContext) WorkspaceDir() string                                 { return "" }
+func (m *mockModelContext) SetSessionRef(_ *session.Session)                     {}
+func (m *mockModelContext) GetSessionRef() *session.Session                      { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
-func (m *mockModelContext) SaveState() map[string]any        { return nil }
-func (m *mockModelContext) LoadState(_ map[string]any)       {}
+func (m *mockModelContext) SaveState() map[string]any                            { return nil }
+func (m *mockModelContext) LoadState(_ map[string]any)                           {}
 func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
 	return "", nil
 }
+
 // TestOffloadMessages_in_memory模式正常 验证 in_memory 模式正常流程
 func TestOffloadMessages_in_memory模式正常(t *testing.T) {
 	c := &testConfig{Name: "test"}
