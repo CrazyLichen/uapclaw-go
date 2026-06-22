@@ -88,6 +88,12 @@ type ProcessorOption struct {
 	OffloadType string
 	// OffloadPath 卸载文件路径，未指定时自动生成
 	OffloadPath string
+	// ToolCallID 工具调用 ID，对应 Python offload_messages(tool_call_id=...)
+	ToolCallID string
+	// Name 消息发送者名称，对应 Python offload_messages(name=...)
+	Name string
+	// Metadata 附加元数据，对应 Python offload_messages(metadata=...)
+	Metadata map[string]any
 	// Extra 额外参数
 	Extra map[string]any
 }
@@ -122,6 +128,27 @@ func WithOffloadType(offloadType string) Option {
 // WithOffloadPath 设置卸载文件路径
 func WithOffloadPath(path string) Option {
 	return func(o *ProcessorOption) { o.OffloadPath = path }
+}
+
+// WithToolCallID 设置工具调用 ID
+//
+// 对应 Python: offload_messages(tool_call_id=...)
+func WithToolCallID(toolCallID string) Option {
+	return func(o *ProcessorOption) { o.ToolCallID = toolCallID }
+}
+
+// WithName 设置消息发送者名称
+//
+// 对应 Python: offload_messages(name=...)
+func WithName(name string) Option {
+	return func(o *ProcessorOption) { o.Name = name }
+}
+
+// WithMetadata 设置附加元数据
+//
+// 对应 Python: offload_messages(metadata=...)
+func WithMetadata(metadata map[string]any) Option {
+	return func(o *ProcessorOption) { o.Metadata = metadata }
 }
 
 // WithExtra 设置额外参数

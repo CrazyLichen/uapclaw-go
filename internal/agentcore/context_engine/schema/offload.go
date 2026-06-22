@@ -133,13 +133,15 @@ func NewOffloadAssistantMessage(content, handle, offloadType string, opts ...llm
 
 // NewOffloadMessage 工厂函数，根据 role 自动分派创建对应 Offload 子类型。
 // 等价 Python: create_offload_message(role, content, offload_handle, offload_type, **kwargs)
-func NewOffloadMessage(role llm_schema.RoleType, content, handle, offloadType string, opts ...llm_schema.MessageOption) Offloadable {
+//
+// 当 role 为 tool 时，toolCallID 传递给 NewOffloadToolMessage 以保持 ToolMessage 关联。
+func NewOffloadMessage(role llm_schema.RoleType, content, handle, offloadType, toolCallID string, opts ...llm_schema.MessageOption) Offloadable {
 	switch role {
 	case llm_schema.RoleTypeAssistant:
 		// AssistantMessage 使用 AssistantMessageOption，此处使用默认构造
 		return NewOffloadAssistantMessage(content, handle, offloadType)
 	case llm_schema.RoleTypeTool:
-		return NewOffloadToolMessage("", content, handle, offloadType, opts...)
+		return NewOffloadToolMessage(toolCallID, content, handle, offloadType, opts...)
 	case llm_schema.RoleTypeSystem:
 		return NewOffloadSystemMessage(content, handle, offloadType, opts...)
 	default:

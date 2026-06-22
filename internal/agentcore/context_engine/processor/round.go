@@ -22,6 +22,13 @@ type DialogueRound [2]*int
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GetToolCallID 从消息中提取 tool_call_id。
+//
+// 仅 ToolMessage 类型有此字段，其他类型返回空字符串。
+func GetToolCallID(msg llm_schema.BaseMessage) string {
+	return getToolCallID(msg)
+}
+
 // GroupCompletedAPIRounds 将消息列表按已完成的 API 轮次分组，
 // 返回每个轮次的 [start, end) 半开区间列表。
 //

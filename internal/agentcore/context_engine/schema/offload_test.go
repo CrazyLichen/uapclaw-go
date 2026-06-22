@@ -71,7 +71,7 @@ func TestNewOffloadMessage_工厂函数(t *testing.T) {
 		{llm_schema.RoleTypeTool, "*schema.OffloadToolMessage"},
 	}
 	for _, tt := range tests {
-		msg := NewOffloadMessage(tt.role, "content", "handle", "in_memory")
+		msg := NewOffloadMessage(tt.role, "content", "handle", "in_memory", "call_001")
 		gotType := fmt.Sprintf("%T", msg)
 		if gotType != tt.wantType {
 			t.Errorf("role=%v: got %v, want %v", tt.role, gotType, tt.wantType)

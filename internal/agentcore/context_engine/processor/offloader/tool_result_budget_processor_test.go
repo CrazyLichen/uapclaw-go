@@ -14,12 +14,19 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestToolResultBudgetProcessorConfig_默认值(t *testing.T) {
-	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       50000,
-		LargeMessageThreshold: 10000,
-		TrimSize:              3000,
+	cfg := &ToolResultBudgetProcessorConfig{}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("零值 Config 期望通过验证（自动填充默认值），实际错误: %v", err)
 	}
-	_ = cfg.Validate()
+	if cfg.TokensThreshold != 50000 {
+		t.Errorf("TokensThreshold 期望 50000, 实际 %d", cfg.TokensThreshold)
+	}
+	if cfg.LargeMessageThreshold != 10000 {
+		t.Errorf("LargeMessageThreshold 期望 10000, 实际 %d", cfg.LargeMessageThreshold)
+	}
+	if cfg.TrimSize != 3000 {
+		t.Errorf("TrimSize 期望 3000, 实际 %d", cfg.TrimSize)
+	}
 	if cfg.OffloadFilePrefix != "ToolResultBudgetProcessor" {
 		t.Errorf("OffloadFilePrefix 期望 ToolResultBudgetProcessor, 实际 %s", cfg.OffloadFilePrefix)
 	}
@@ -43,45 +50,17 @@ func TestToolResultBudgetProcessorConfig_自定义值(t *testing.T) {
 	}
 }
 
-func TestToolResultBudgetProcessorConfig_Validate_TokensThreshold零(t *testing.T) {
+func TestToolResultBudgetProcessorConfig_Validate_负值报错(t *testing.T) {
 	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       0,
-		LargeMessageThreshold: 100,
-		TrimSize:              50,
+		TokensThreshold: -1,
 	}
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("TokensThreshold=0 期望报错，实际通过")
-	}
-}
-
-func TestToolResultBudgetProcessorConfig_Validate_LargeMessageThreshold零(t *testing.T) {
-	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       50000,
-		LargeMessageThreshold: 0,
-		TrimSize:              50,
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("LargeMessageThreshold=0 期望报错，实际通过")
-	}
-}
-
-func TestToolResultBudgetProcessorConfig_Validate_TrimSize零(t *testing.T) {
-	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       50000,
-		LargeMessageThreshold: 100,
-		TrimSize:              0,
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("TrimSize=0 期望报错，实际通过")
+		t.Fatal("TokensThreshold=-1 期望报错，实际通过")
 	}
 }
 
 func TestNewToolResultBudgetProcessor_正常创建(t *testing.T) {
-	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       50000,
-		LargeMessageThreshold: 10000,
-		TrimSize:              3000,
-	}
+	cfg := &ToolResultBudgetProcessorConfig{}
 	trbp, err := NewToolResultBudgetProcessor(cfg)
 	if err != nil {
 		t.Fatalf("期望创建成功，实际错误: %v", err)
@@ -92,11 +71,7 @@ func TestNewToolResultBudgetProcessor_正常创建(t *testing.T) {
 }
 
 func TestToolResultBudgetProcessor_SaveLoadState(t *testing.T) {
-	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:       50000,
-		LargeMessageThreshold: 10000,
-		TrimSize:              3000,
-	}
+	cfg := &ToolResultBudgetProcessorConfig{}
 	trbp, _ := NewToolResultBudgetProcessor(cfg)
 	state := trbp.SaveState()
 	if len(state) != 0 {

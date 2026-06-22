@@ -37,6 +37,8 @@ const (
 //   - "in_memory"：卸载到内存（通过 ModelContext.OffloadMessages 存入）
 //   - "filesystem"（默认）：卸载到文件系统，失败时 fallback 到内存
 //
+// 选项中可传递 ToolCallID/Name/Metadata，在创建 OffloadMessage 时携带原始消息的关联信息。
+//
 // 对应 Python: ContextProcessor.offload_messages()
 func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, opts ...iface.Option) (llm_schema.BaseMessage, error) {
 	if len(messages) == 0 {
@@ -59,8 +61,17 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 		return nil, nil
 	}
 
+	// 构建消息选项：从 ProcessorOption 中提取 Name/Metadata 传递给 OffloadMessage
+	var msgOpts []llm_schema.MessageOption
+	if po.Name != "" {
+		msgOpts = append(msgOpts, llm_schema.WithMessageName(po.Name))
+	}
+	if po.Metadata != nil {
+		msgOpts = append(msgOpts, llm_schema.WithMetadata(po.Metadata))
+	}
+
 	if offloadType == "in_memory" {
-		return p.offloadMessagesToMemory(mc, role, content, messages, offloadHandle)
+		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, msgOpts)
 	}
 
 	// filesystem 模式
@@ -73,10 +84,10 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 	writeSuccess := p.writeOffloadToFile(sessionID, offloadHandle, offloadPath, messages, po.SysOperation)
 	if !writeSuccess {
 		// fallback 到内存模式
-		return p.offloadMessagesToMemory(mc, role, content, messages, offloadHandle)
+		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, msgOpts)
 	}
 
-	return p.offloadMessagesToFilesystem(role, content, offloadHandle, offloadPath)
+	return p.offloadMessagesToFilesystem(role, content, offloadHandle, offloadPath, po.ToolCallID, msgOpts)
 }
 
 // GenerateOffloadPath 生成 offload 文件路径。
@@ -99,7 +110,7 @@ func (p *BaseProcessor) GenerateOffloadPath(workspaceDir, sessionID, offloadHand
 //
 // ⤵️ 5.31 回填：需 ModelContext.OffloadMessages(handle, messages) 方法
 // 当前实现预留调用点，待 5.31 ModelContext 补充 OffloadMessages 方法后回填。
-func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role string, content string, messages []llm_schema.BaseMessage, offloadHandle string) (llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role string, content string, offloadHandle string, toolCallID string, msgOpts []llm_schema.MessageOption) (llm_schema.BaseMessage, error) {
 	content = content + fmt.Sprintf(offloadMessageHandle, offloadHandle, "in_memory")
 
 	// ⤵️ 5.31 回填：调用 mc.OffloadMessages(offloadHandle, messages) 存入内存
@@ -114,11 +125,13 @@ func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role stri
 		content,
 		offloadHandle,
 		"in_memory",
+		toolCallID,
+		msgOpts...,
 	), nil
 }
 
 // offloadMessagesToFilesystem 将消息卸载到文件系统。
-func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string, offloadHandle string, offloadPath string) (llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string, offloadHandle string, offloadPath string, toolCallID string, msgOpts []llm_schema.MessageOption) (llm_schema.BaseMessage, error) {
 	if offloadPath != "" {
 		content = content + fmt.Sprintf(offloadMessageHandleWithPath, "filesystem", offloadPath)
 	} else {
@@ -130,6 +143,8 @@ func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string,
 		content,
 		offloadHandle,
 		"filesystem",
+		toolCallID,
+		msgOpts...,
 	), nil
 }
 

@@ -124,11 +124,12 @@ func WithSysOption(op any) ToolResultBudgetProcessorOption {
 
 // Validate 校验工具结果预算处理器配置。
 //
-// 校验流程：先检查核心字段是否已设置（零值视为未设置，报错），
-// 再应用默认值填充可选字段。
+// 校验流程：先应用默认值填充零值字段，再校验核心字段有效性。
+// 与 Python Pydantic Field(default=..., gt=0) 行为对齐：零值自动填充默认值。
 //
 // 对应 Python: ToolResultBudgetProcessorConfig._validate_config()
 func (c *ToolResultBudgetProcessorConfig) Validate() error {
+	c.applyDefaults()
 	if c.TokensThreshold <= 0 {
 		return fmt.Errorf("ToolResultBudgetProcessorConfig.TokensThreshold(%d) 必须大于 0", c.TokensThreshold)
 	}
@@ -138,7 +139,6 @@ func (c *ToolResultBudgetProcessorConfig) Validate() error {
 	if c.TrimSize <= 0 {
 		return fmt.Errorf("ToolResultBudgetProcessorConfig.TrimSize(%d) 必须大于 0", c.TrimSize)
 	}
-	c.applyDefaults()
 	return nil
 }
 
@@ -441,6 +441,9 @@ func (p *ToolResultBudgetProcessor) messageSize(msg llm_schema.BaseMessage, mc i
 // 两阶段构建：先用 "pending" 构建占位内容 → 调用 OffloadMessages →
 // 提取实际 handle/type → 重建最终内容。
 //
+// 调用 OffloadMessages 时传递 tool_call_id/name/metadata/sys_operation，
+// 与 Python offload_messages(tool_call_id=..., name=..., metadata=..., sys_operation=...) 对齐。
+//
 // 对应 Python: ToolResultBudgetProcessor._offload_tool_message()
 func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext) (llm_schema.BaseMessage, error) {
 	content := message.GetContent().Text()
@@ -459,13 +462,30 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 	// 阶段1：用 "pending" 构建
 	persistedContent := buildPersistedOutputMessage(len(content), "pending", preview, hasMore)
 
+	// 从原始 ToolMessage 提取 tool_call_id/name/metadata
+	toolCallID := processor.GetToolCallID(message)
+	msgName := message.GetName()
+	msgMetadata := message.GetMetadata()
+
+	offloadOpts := []iface.Option{
+		iface.WithOffloadHandle(offloadHandle),
+		iface.WithOffloadPath(offloadPath),
+		iface.WithToolCallID(toolCallID),
+		iface.WithSysOperation(p.sysOperation),
+	}
+	if msgName != "" {
+		offloadOpts = append(offloadOpts, iface.WithName(msgName))
+	}
+	if msgMetadata != nil {
+		offloadOpts = append(offloadOpts, iface.WithMetadata(msgMetadata))
+	}
+
 	offloadMsg, err := p.OffloadMessages(
 		ctx, mc,
 		"tool",
 		persistedContent,
 		[]llm_schema.BaseMessage{message},
-		iface.WithOffloadHandle(offloadHandle),
-		iface.WithOffloadPath(offloadPath),
+		offloadOpts...,
 	)
 	if err != nil {
 		return nil, err
@@ -492,6 +512,7 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 		Str("processor_type", p.ProcessorType()).
 		Str("offload_handle", actualHandle).
 		Str("offload_type", actualType).
+		Str("tool_call_id", toolCallID).
 		Int("original_size", len(content)).
 		Int("trim_size", p.config.TrimSize).
 		Msg("工具结果已卸载")
