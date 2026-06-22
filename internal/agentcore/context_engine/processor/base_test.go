@@ -104,7 +104,9 @@ func TestContextEvent_JSON省略空字段(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 	var m map[string]json.RawMessage
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
 	// CompressionUsage 为 nil 时应省略
 	if _, ok := m["compression_usage"]; ok {
 		t.Error("compression_usage 应被 omitempty 省略")

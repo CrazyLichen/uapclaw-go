@@ -157,17 +157,17 @@ func IsCompressionProcessor(p iface.ContextProcessor) bool {
 // 对应 Python: ContextUtils.format_reloaded_messages()
 func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMessage) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("重载消息 handle=%s:\n", offloadHandle))
+	fmt.Fprintf(&sb, "重载消息 handle=%s:\n", offloadHandle)
 	for i, msg := range messages {
 		msgJSON, err := json.Marshal(map[string]any{
 			"role":    msg.GetRole().String(),
 			"content": msg.GetContent().String(),
 		})
 		if err != nil {
-			sb.WriteString(fmt.Sprintf("消息 %d: {序列化失败}\n", i+1))
+			fmt.Fprintf(&sb, "消息 %d: {序列化失败}\n", i+1)
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("消息 %d: %s\n", i+1, string(msgJSON)))
+		fmt.Fprintf(&sb, "消息 %d: %s\n", i+1, string(msgJSON))
 	}
 	return sb.String()
 }

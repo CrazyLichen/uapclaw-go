@@ -673,7 +673,16 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 	}
 
 	// 执行处理器（force=true, phase=active_compress）
-	mc.runAddProcessors(ctx, nil, true, compOpts.ProcessorTypes, true, ceschema.PhaseActiveCompress, iface.WithSysOperation(compOpts.SysOperation))
+	if _, err := mc.runAddProcessors(ctx, nil, true, compOpts.ProcessorTypes, true, ceschema.PhaseActiveCompress, iface.WithSysOperation(compOpts.SysOperation)); err != nil {
+		mc.activeCompressionInProgress = false
+		mc.processorLock.Unlock()
+		logger.Error(logComponent).
+			Err(err).
+			Str("event_type", "CONTEXT_COMPRESS_ERROR").
+			Str("context_id", mc.contextID).
+			Msg("主动压缩执行处理器失败")
+		return "error", err
+	}
 
 	mc.activeCompressionInProgress = false
 	mc.processorLock.Unlock()

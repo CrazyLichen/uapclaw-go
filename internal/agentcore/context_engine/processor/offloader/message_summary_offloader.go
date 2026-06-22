@@ -733,7 +733,7 @@ func (mso *MessageSummaryOffloader) buildStepContextText(messages []llm_schema.B
 		if len(content) > 2000 {
 			content = content[:2000]
 		}
-		sb.WriteString(fmt.Sprintf("[%s] %s", msg.GetRole().String(), content))
+		fmt.Fprintf(&sb, "[%s] %s", msg.GetRole().String(), content)
 	}
 	return sb.String()
 }

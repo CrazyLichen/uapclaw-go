@@ -34,7 +34,9 @@ func TestContextCompressionMetric_JSON省略空字段(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 	var raw map[string]json.RawMessage
-	json.Unmarshal(data, &raw)
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
 	if _, ok := raw["time"]; ok {
 		t.Error("空 Time 应被 omitempty 省略")
 	}
@@ -97,7 +99,9 @@ func TestContextCompressionUsage_Details省略(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 	var raw map[string]json.RawMessage
-	json.Unmarshal(data, &raw)
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
 	if _, ok := raw["details"]; ok {
 		t.Error("空 Details 应被 omitempty 省略")
 	}
@@ -259,7 +263,9 @@ func TestContextCompressionState_JSON省略可选字段(t *testing.T) {
 		t.Fatalf("序列化失败: %v", err)
 	}
 	var raw map[string]json.RawMessage
-	json.Unmarshal(data, &raw)
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("反序列化失败: %v", err)
+	}
 	// 这些字段应为 nil/零值，被 omitempty 省略
 	if _, ok := raw["after"]; ok {
 		t.Error("nil After 应被 omitempty 省略")

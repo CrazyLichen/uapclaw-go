@@ -386,11 +386,7 @@ func (p *ToolResultBudgetProcessor) shouldOffloadMessage(message llm_schema.Base
 
 	// 规则 5：大小检查
 	size := p.messageSize(message, mc)
-	if size <= p.config.LargeMessageThreshold {
-		return false
-	}
-
-	return true
+	return size > p.config.LargeMessageThreshold
 }
 
 // isAllowlistedToolMessage 检查消息是否为白名单工具的结果。

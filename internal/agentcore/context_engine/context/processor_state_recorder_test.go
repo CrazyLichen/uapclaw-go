@@ -133,7 +133,7 @@ func TestHistory_返回切片副本(t *testing.T) {
 	}
 
 	// 修改返回切片的长度，不影响原始数据
-	history = append(history, map[string]any{"key": "value2"})
+	_ = append(history, map[string]any{"key": "value2"})
 	if len(recorder.history) != 1 {
 		t.Error("History() 应返回切片副本，修改切片长度不应影响原始数据")
 	}

@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -408,7 +407,7 @@ func TestExtractSkillFileContent(t *testing.T) {
 		}
 	})
 	t.Run("正常JSON内容", func(t *testing.T) {
-		input := fmt.Sprintf(`"content": "hello skill"`)
+		input := `"content": "hello skill"`
 		got := ExtractSkillFileContent(nil, input)
 		if got == "" {
 			t.Errorf("ExtractSkillFileContent() = empty, want non-empty")

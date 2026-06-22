@@ -123,7 +123,7 @@ func NewTiktokenCounter(model string) *TiktokenCounter {
 // 对应 Python: TiktokenCounter.count(text, model="")
 func (tc *TiktokenCounter) Count(text string, model string) (int, error) {
 	if tc.enc == nil {
-		return 0, fmt.Errorf("Tiktoken 编码器未初始化（模型: %s），无法计算 token", tc.model)
+		return 0, fmt.Errorf("tiktoken 编码器未初始化（模型: %s），无法计算 token", tc.model)
 	}
 	count, err := tc.enc.Count(text)
 	if err != nil {

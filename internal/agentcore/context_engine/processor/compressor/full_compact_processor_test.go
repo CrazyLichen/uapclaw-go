@@ -1886,7 +1886,7 @@ func TestFullCompactProcessor_BuildReplacementMessages_LLM压缩路径(t *testin
 
 	event, newCtx, userMsg := fcp._buildReplacementMessages(context.Background(), mc, messages)
 	if event == nil {
-		t.Error("应返回非 nil event")
+		t.Fatal("应返回非 nil event")
 	}
 	if newCtx == nil {
 		t.Error("应返回非 nil newContextMessages")
