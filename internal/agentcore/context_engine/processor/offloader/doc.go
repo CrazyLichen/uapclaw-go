@@ -6,16 +6,21 @@
 //
 // 当前实现：
 //   - MessageOffloader：基础裁剪卸载，将大消息截断为 trim_size + 省略标记
-//
-// 后续实现（5.28/5.29）将继承 MessageOffloader：
-//   - MessageSummaryOffloader：用 LLM 生成摘要替代简单裁剪
-//   - ToolResultBudgetProcessor：按轮次控制工具结果 Token 预算
+//   - MessageSummaryOffloader：LLM 自适应压缩卸载，用 LLM 生成摘要替代简单裁剪，
+//     支持抽取式/生成式两种压缩策略，含三级降级机制
+//   - ToolResultBudgetProcessor：按轮次控制工具结果 Token 预算，
+//     超预算时从最大的工具结果开始逐个卸载，保留前 N 字符预览
 //
 // 文件目录：
 //
 //	offloader/
-//	├── doc.go                     # 包文档
-//	└── message_offloader.go       # MessageOffloader + Config
+//	├── doc.go                              # 包文档
+//	├── message_offloader.go                # MessageOffloader + Config
+//	├── message_offloader_test.go           # MessageOffloader 单元测试
+//	├── message_summary_offloader.go        # MessageSummaryOffloader + Config
+//	├── message_summary_offloader_test.go   # MessageSummaryOffloader 单元测试
+//	├── tool_result_budget_processor.go     # ToolResultBudgetProcessor + Config
+//	└── tool_result_budget_processor_test.go # ToolResultBudgetProcessor 单元测试
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/offloader/
 package offloader
