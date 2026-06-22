@@ -6,6 +6,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// DialogueRound 对话轮次，[0]=userIdx, [1]=assistantIdx（nil 表示不完整轮次）。
+//
+// 一轮对话定义为：user 消息 → 下一条不含 tool_calls 的 assistant 消息。
+// 不完整轮次（有 user 无 assistant）的 assistantIdx 为 nil。
+//
+// 对应 Python: ContextUtils.find_all_dialogue_round() 返回的单个 [user_idx, assistant_idx]
+type DialogueRound [2]*int
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -74,6 +82,77 @@ func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
 				currentStart = -1
 			}
 		}
+	}
+
+	return rounds
+}
+
+// FindAllDialogueRound 查找所有对话轮次边界。
+//
+// 从后往前扫描消息列表，识别 user → assistant(无 tool_calls) 的轮次。
+// 返回从新到旧排列的轮次列表。连续的 user 消息被视为同组的起始。
+//
+// 对应 Python: ContextUtils.find_all_dialogue_round()
+func FindAllDialogueRound(messages []llm_schema.BaseMessage) []DialogueRound {
+	var rounds []DialogueRound
+	i := len(messages) - 1
+
+	findContiguousUserGroupStart := func(userIdx int) int {
+		for userIdx-1 >= 0 && isUserMessage(messages[userIdx-1]) {
+			userIdx--
+		}
+		return userIdx
+	}
+
+	for i >= 0 {
+		// 查找该轮的 assistant（可能不存在）
+		assistantIdx := (*int)(nil)
+		roundEnd := i
+
+		// 跳过非 assistant 消息
+		for i >= 0 && !isAssistantMessage(messages[i]) {
+			i--
+		}
+
+		if i >= 0 {
+			msg := messages[i]
+			hasToolCalls := len(getToolCalls(msg)) > 0
+
+			if !hasToolCalls {
+				idx := i
+				assistantIdx = &idx
+			}
+			i--
+		} else {
+			// 未找到 assistant，将剩余部分视为不完整轮次
+			i = roundEnd
+		}
+
+		// 查找该轮的 user 消息
+		for i >= 0 && !isUserMessage(messages[i]) {
+			i--
+		}
+
+		if i < 0 {
+			break
+		}
+
+		foundUserIdx := i
+		userIdx := findContiguousUserGroupStart(foundUserIdx)
+
+		// 首轮：查找尾部不完整轮次（最后一个 user 之后还有 user）
+		if len(rounds) == 0 {
+			for lastIdx := len(messages) - 1; lastIdx > foundUserIdx; lastIdx-- {
+				if isUserMessage(messages[lastIdx]) {
+					startIdx := findContiguousUserGroupStart(lastIdx)
+					rounds = append(rounds, DialogueRound{&startIdx, nil})
+					break
+				}
+			}
+		}
+
+		rounds = append(rounds, DialogueRound{&userIdx, assistantIdx})
+		i = userIdx - 1
 	}
 
 	return rounds
