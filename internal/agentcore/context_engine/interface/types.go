@@ -52,6 +52,31 @@ type ModelContext interface {
 	TokenCounter() token.TokenCounter
 	// ReloaderTool 返回重载卸载消息的工具
 	ReloaderTool() tool.Tool
+	// WorkspaceDir 返回工作目录路径
+	//
+	// 对应 Python: SessionModelContext.workspace_dir()
+	WorkspaceDir() string
+	// SetSessionRef 设置会话引用
+	//
+	// 对应 Python: SessionModelContext.set_session_ref()
+	SetSessionRef(sess *session.Session)
+	// OffloadMessages 将消息卸载到内存缓冲区
+	//
+	// 对应 Python: SessionModelContext.offload_messages()
+	OffloadMessages(handle string, messages []llm_schema.BaseMessage)
+	// SaveState 保存上下文状态为 map
+	//
+	// 对应 Python: SessionModelContext.save_state()
+	SaveState() map[string]any
+	// LoadState 从 map 恢复上下文状态
+	//
+	// 对应 Python: SessionModelContext.load_state()
+	LoadState(state map[string]any)
+	// CompressContext 主动压缩上下文
+	//
+	// 返回 "busy"/"compressed"/"noop"。
+	// 对应 Python: SessionModelContext.compress_context()
+	CompressContext(ctx context.Context, opts ...CompressContextOption) (string, error)
 }
 
 // ContextEngine 上下文引擎门面接口。
@@ -61,18 +86,74 @@ type ModelContext interface {
 //
 // 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
-	// CreateContext 创建上下文
-	CreateContext(ctx context.Context, contextID string, sess *session.Session) (ModelContext, error)
-	// GetContext 获取上下文
+	// CreateContext 创建或获取上下文
+	CreateContext(ctx context.Context, contextID string, sess *session.Session, opts ...CreateContextOption) (ModelContext, error)
+	// GetContext 获取上下文（不存在返回 nil）
 	GetContext(contextID string, sessionID string) ModelContext
-	// CompressContext 压缩上下文
-	CompressContext(ctx context.Context, contextID string, sess *session.Session) (string, error)
-	// ClearContext 清空上下文
-	ClearContext(ctx context.Context, contextID string, sessionID string) error
-	// SaveContexts 保存上下文状态
-	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) error
-	// RegisterProcessor 注册已构造的处理器实例
-	RegisterProcessor(processorType string, p ContextProcessor)
+	// CompressContext 主动压缩上下文，返回 "busy"/"compressed"/"noop"
+	CompressContext(ctx context.Context, contextID string, sess *session.Session, opts ...CompressContextOption) (string, error)
+	// ClearContext 清空上下文（三种粒度：全清/按session/按context+session）
+	ClearContext(ctx context.Context, opts ...ClearContextOption) error
+	// SaveContexts 批量持久化上下文状态，返回 contextID → state 映射
+	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) (map[string]any, error)
+}
+
+// ProcessorSpec 处理器规格，指定类型和配置。
+//
+// 对应 Python: (processor_type, processor_config) 元组
+type ProcessorSpec struct {
+	// Type 处理器类型标识
+	Type string
+	// Config 处理器配置
+	Config ProcessorConfig
+}
+
+// ──────────────────────────── Option 类型 ────────────────────────────
+
+// ContextEngineOption ContextEngine 构造器选项函数
+type ContextEngineOption func(*ContextEngineOptions)
+
+// ContextEngineOptions ContextEngine 构造器可选项
+type ContextEngineOptions struct {
+	// Workspace 工作空间
+	// ⤵️ 9.32 回填：替换 any 为 Workspace 接口类型
+	Workspace any
+	// SysOperation 系统操作接口
+	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
+	SysOperation any
+}
+
+// CreateContextOption CreateContext 方法选项函数
+type CreateContextOption func(*CreateContextOptions)
+
+// CreateContextOptions CreateContext 方法可选项
+type CreateContextOptions struct {
+	// Processors 处理器规格列表
+	Processors []ProcessorSpec
+	// HistoryMessages 历史消息
+	HistoryMessages []llm_schema.BaseMessage
+	// TokenCounter Token 计数器
+	TokenCounter token.TokenCounter
+}
+
+// CompressContextOption CompressContext 方法选项函数
+type CompressContextOption func(*CompressContextOptions)
+
+// CompressContextOptions CompressContext 方法可选项
+type CompressContextOptions struct {
+	// ProcessorTypes 压缩处理器类型过滤列表
+	ProcessorTypes []string
+}
+
+// ClearContextOption ClearContext 方法选项函数
+type ClearContextOption func(*ClearContextOptions)
+
+// ClearContextOptions ClearContext 方法可选项
+type ClearContextOptions struct {
+	// SessionID 会话 ID
+	SessionID string
+	// ContextID 上下文 ID
+	ContextID string
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -130,6 +211,82 @@ type ContextWindow struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithWorkspace 设置工作空间
+func WithWorkspace(w any) ContextEngineOption {
+	return func(o *ContextEngineOptions) { o.Workspace = w }
+}
+
+// WithEngineSysOperation 设置上下文引擎的系统操作接口
+func WithEngineSysOperation(op any) ContextEngineOption {
+	return func(o *ContextEngineOptions) { o.SysOperation = op }
+}
+
+// WithProcessors 设置处理器规格列表
+func WithProcessors(specs []ProcessorSpec) CreateContextOption {
+	return func(o *CreateContextOptions) { o.Processors = specs }
+}
+
+// WithHistoryMessages 设置历史消息
+func WithHistoryMessages(msgs []llm_schema.BaseMessage) CreateContextOption {
+	return func(o *CreateContextOptions) { o.HistoryMessages = msgs }
+}
+
+// WithTokenCounter 设置 Token 计数器
+func WithTokenCounter(tc token.TokenCounter) CreateContextOption {
+	return func(o *CreateContextOptions) { o.TokenCounter = tc }
+}
+
+// WithProcessorTypes 设置压缩处理器类型过滤列表
+func WithProcessorTypes(types []string) CompressContextOption {
+	return func(o *CompressContextOptions) { o.ProcessorTypes = types }
+}
+
+// WithSessionID 设置会话 ID（用于 ClearContext）
+func WithSessionID(sid string) ClearContextOption {
+	return func(o *ClearContextOptions) { o.SessionID = sid }
+}
+
+// WithContextID 设置上下文 ID（用于 ClearContext，需配合 WithSessionID）
+func WithContextID(cid string) ClearContextOption {
+	return func(o *ClearContextOptions) { o.ContextID = cid }
+}
+
+// NewContextEngineOptions 从选项列表构建 ContextEngineOptions
+func NewContextEngineOptions(opts ...ContextEngineOption) *ContextEngineOptions {
+	o := &ContextEngineOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+// NewCreateContextOptions 从选项列表构建 CreateContextOptions
+func NewCreateContextOptions(opts ...CreateContextOption) *CreateContextOptions {
+	o := &CreateContextOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+// NewCompressContextOptions 从选项列表构建 CompressContextOptions
+func NewCompressContextOptions(opts ...CompressContextOption) *CompressContextOptions {
+	o := &CompressContextOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+// NewClearContextOptions 从选项列表构建 ClearContextOptions
+func NewClearContextOptions(opts ...ClearContextOption) *ClearContextOptions {
+	o := &ClearContextOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
 
 // GetMessages 合并系统消息和上下文消息，返回完整消息列表。
 //
