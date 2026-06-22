@@ -366,7 +366,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 5.26 | ✅ | RoundLevelCompressor | 轮级压缩器 | `openjiuwen/core/context_engine/processor/` |
 | 5.27 | ✅ | MessageOffloader | 消息卸载器 | `openjiuwen/core/context_engine/processor/` |
 | 5.28 | ☐ | MessageSummaryOffloader | 消息摘要卸载器 | `openjiuwen/core/context_engine/processor/` |
-| 5.29 | ☐ | ToolResultBudgetProcessor | 工具结果预算处理器 | `openjiuwen/core/context_engine/processor/` |
+| 5.29 | ✅ | ToolResultBudgetProcessor | ✅ ToolResultBudgetProcessorConfig（兼容字段+实际字段+默认值+Validate）；✅ 嵌入 *BaseProcessor 平级实现；✅ TriggerAddMessages（按轮次检查预算）；✅ OnAddMessages（逐轮卸载最大工具结果）；✅ shouldOffloadMessage（5条规则+IsText判断）；✅ isAllowlistedToolMessage（白名单保护）；✅ messageSize（Token计数+字符/3降级）；✅ offloadToolMessage（两阶段persisted-output构建）；✅ buildPersistedOutputMessage；✅ FindAllDialogueRound（processor/round.go 新增）；✅ EstimateMessageTokens（processor/util.go 新增）；✅ init()自动注册；⤵️ 5.31 回填 newOffloadHandleAndPath WorkspaceDir；⤵️ 5.31 回填 OffloadMessages OffloadMessages；⤵️ 9.32 回填 writeOffloadToFile SysOperation；测试覆盖率 85.1% | `openjiuwen/core/context_engine/processor/offloader/` |
 | 5.30 | ☐ | ContextEngine 门面 | 上下文池管理，处理器注册，会话状态持久化 | `openjiuwen/core/context_engine/context_engine.py` |
 | 5.31 | ☐ | Context 实现 | 具体上下文实例 | `openjiuwen/core/context_engine/context/` |
 
