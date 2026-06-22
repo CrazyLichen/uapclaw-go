@@ -83,8 +83,6 @@ func WithWorkflowSessionInner(inner *internal.WorkflowSession) WorkflowSessionOp
 	}
 }
 
-// ──────────────────────────── 导出函数（续）────────────────────────────
-
 // GetSessionID 返回会话唯一标识
 func (ws *WorkflowSession) GetSessionID() string {
 	if ws.inner == nil {
@@ -128,3 +126,5 @@ func (ws *WorkflowSession) Close() error {
 func (ws *WorkflowSession) Inner() *internal.WorkflowSession {
 	return ws.inner
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

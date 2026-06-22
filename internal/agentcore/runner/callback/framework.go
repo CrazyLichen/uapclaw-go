@@ -44,6 +44,8 @@ type CallbackFramework struct {
 	contextCallbacks map[ContextCallEventType][]ContextCallbackFunc
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // LLMCallbackFunc LLM 回调函数类型。
 //
 // 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
@@ -66,8 +68,6 @@ type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
 
 // ContextCallbackFunc 上下文事件回调函数类型。
 type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -385,3 +385,5 @@ func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCa
 	}
 	return results
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

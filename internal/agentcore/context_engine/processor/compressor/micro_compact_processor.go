@@ -6,8 +6,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

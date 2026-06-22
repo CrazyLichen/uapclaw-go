@@ -51,11 +51,6 @@
 //	  dictable_variable.go      — DictableVariable
 //	  assembler.go              — PromptAssembler
 //	  template.go               — PromptTemplate
-//	  variable_test.go
-//	  textable_variable_test.go
-//	  dictable_variable_test.go
-//	  assembler_test.go
-//	  template_test.go
 //
 // # Python 对应路径
 //

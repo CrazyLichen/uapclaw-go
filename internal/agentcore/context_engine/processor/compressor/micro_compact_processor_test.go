@@ -7,8 +7,8 @@ import (
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -539,8 +539,8 @@ func (f *fakeModelContextForMicro) GetContextWindow(_ context.Context, _ []llm_s
 	_ []*schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats      { return nil }
-func (f *fakeModelContextForMicro) SessionID() string                   { return "test-session" }
-func (f *fakeModelContextForMicro) ContextID() string                   { return "test-context" }
-func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter    { return f.tokenCounter }
-func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool             { return nil }
+func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats   { return nil }
+func (f *fakeModelContextForMicro) SessionID() string                { return "test-session" }
+func (f *fakeModelContextForMicro) ContextID() string                { return "test-context" }
+func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter { return f.tokenCounter }
+func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool          { return nil }

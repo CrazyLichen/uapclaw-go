@@ -10,8 +10,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -521,7 +521,7 @@ func newTestMessageOffloader() *MessageOffloader {
 
 // fakeModelContext 方法实现
 
-func (f *fakeModelContext) Len() int                                             { return len(f.messages) }
+func (f *fakeModelContext) Len() int                                            { return len(f.messages) }
 func (f *fakeModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage { return f.messages }
 func (f *fakeModelContext) SetMessages(msgs []llm_schema.BaseMessage, _ bool)   { f.messages = msgs }
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage  { return nil }
@@ -533,7 +533,7 @@ func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.Ba
 	_ []*commonschema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fakeModelContext) Statistic() *iface.ContextStats  { return nil }
+func (f *fakeModelContext) Statistic() *iface.ContextStats   { return nil }
 func (f *fakeModelContext) SessionID() string                { return f.sessionID }
 func (f *fakeModelContext) ContextID() string                { return "" }
 func (f *fakeModelContext) TokenCounter() token.TokenCounter { return f }

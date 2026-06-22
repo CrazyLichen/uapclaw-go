@@ -28,10 +28,16 @@ type PromptTemplate struct {
 	PlaceholderSuffix string
 }
 
-// ──────────────────────────── 构造选项 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // TemplateOption PromptTemplate 构造选项函数。
 type TemplateOption func(*PromptTemplate)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithTemplatePrefix 设置占位符前缀。
 func WithTemplatePrefix(prefix string) TemplateOption {
@@ -42,8 +48,6 @@ func WithTemplatePrefix(prefix string) TemplateOption {
 func WithTemplateSuffix(suffix string) TemplateOption {
 	return func(t *PromptTemplate) { t.PlaceholderSuffix = suffix }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPromptTemplate 创建 PromptTemplate 实例。
 //

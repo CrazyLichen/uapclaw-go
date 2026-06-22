@@ -6,12 +6,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// envsContextKeyType 请求级环境变量的 context key 类型
+type envsContextKeyType struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// envsContextKeyType 请求级环境变量的 context key 类型
-type envsContextKeyType struct{}
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // envsContextKey 请求级环境变量的 context key
 var envsContextKey envsContextKeyType

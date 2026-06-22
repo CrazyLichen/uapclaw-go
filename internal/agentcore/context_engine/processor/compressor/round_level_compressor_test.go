@@ -428,12 +428,12 @@ func TestBuildRawTargets_跳过已有记忆块(t *testing.T) {
 	// 中间插入已有记忆块
 	marker := "[ROUND_LEVEL_MEMORY_BLOCK]"
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("问题1"),      // 0
-		llm_schema.NewAssistantMessage("回答1"), // 1
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块"), // 2 - 应被跳过
+		llm_schema.NewUserMessage("问题1"),                                                       // 0
+		llm_schema.NewAssistantMessage("回答1"),                                                  // 1
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块"),                                  // 2 - 应被跳过
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 3 - ack
-		llm_schema.NewUserMessage("问题2"),      // 4
-		llm_schema.NewAssistantMessage("回答2"), // 5
+		llm_schema.NewUserMessage("问题2"),                                                       // 4
+		llm_schema.NewAssistantMessage("回答2"),                                                  // 5
 	}
 
 	compressEnd := 5
@@ -587,7 +587,7 @@ func TestProtectToolCallBoundary_尾部ToolMessage(t *testing.T) {
 			}),
 		), // 1 - tool_calls 引用了 tc-1
 		llm_schema.NewToolMessage("tc-1", "结果"), // 2 - 对应 tc-1
-		llm_schema.NewAssistantMessage("回答"),     // 3
+		llm_schema.NewAssistantMessage("回答"),    // 3
 	}
 
 	protectedEndIdx := rlc.protectToolCallBoundary(messages, 0, 1)
@@ -686,9 +686,9 @@ func TestBuildAggressiveTargets_无原始目标(t *testing.T) {
 	// 全部是记忆块，buildRawTargets 返回空，应退回 collectRoundLevelMemoryTargets
 	marker := "[ROUND_LEVEL_MEMORY_BLOCK]"
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"), // 0
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"),                                 // 0
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 1
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"), // 2
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"),                                 // 2
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 3
 	}
 
@@ -1105,8 +1105,8 @@ func TestRoundLevelCompressor_OnAddMessages_ModelCallFailed降级(t *testing.T) 
 // TestRoundLevelCompressor_OnAddMessages_压缩成功 验证压缩成功场景
 func TestRoundLevelCompressor_OnAddMessages_压缩成功(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10   // 低阈值确保触发
-	cfg.TargetTotalTokens = 100   // 压缩目标 - 假计数器初始返回500>100
+	cfg.TriggerTotalTokens = 10 // 低阈值确保触发
+	cfg.TargetTotalTokens = 100 // 压缩目标 - 假计数器初始返回500>100
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "压缩摘要"}]}`),
 	}
@@ -1150,10 +1150,10 @@ func TestRoundLevelCompressor_buildJSONReplacements_正常(t *testing.T) {
 
 	targets := []roundCompressTarget{
 		{
-			blockID:      "block_1",
-			scope:        "completed_react",
-			startIdx:     0,
-			endIdx:       1,
+			blockID:  "block_1",
+			scope:    "completed_react",
+			startIdx: 0,
+			endIdx:   1,
 			messages: []llm_schema.BaseMessage{
 				llm_schema.NewUserMessage(strings.Repeat("很长的问题内容需要压缩处理，重复多次以增加token数", 10)),
 				llm_schema.NewAssistantMessage(strings.Repeat("很长的回答内容需要压缩处理，重复多次以增加token数", 10)),
@@ -1279,11 +1279,11 @@ func TestRoundLevelCompressor_collectRoundLevelMemoryTargets(t *testing.T) {
 
 	marker := "[ROUND_LEVEL_MEMORY_BLOCK]"
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"), // 0
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"),                                 // 0
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 1
-		llm_schema.NewUserMessage("问题"),      // 2
-		llm_schema.NewAssistantMessage("回答"), // 3
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"), // 4
+		llm_schema.NewUserMessage("问题"),                                                        // 2
+		llm_schema.NewAssistantMessage("回答"),                                                   // 3
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"),                                 // 4
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 5
 	}
 
@@ -1436,9 +1436,9 @@ func TestRoundLevelCompressor_findRoundLevelBlockEnd(t *testing.T) {
 
 	marker := "[ROUND_LEVEL_MEMORY_BLOCK]"
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块"), // 0 - start
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块"),                                  // 0 - start
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 1 - ack
-		llm_schema.NewUserMessage("问题"), // 2 - 非 ack
+		llm_schema.NewUserMessage("问题"),                                                        // 2 - 非 ack
 	}
 
 	endIdx := rlc.findRoundLevelBlockEnd(messages, 0, 2)
@@ -1470,8 +1470,8 @@ func TestRoundLevelCompressor_buildModifyIndices(t *testing.T) {
 // TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功 验证超预算时触发压缩
 func TestRoundLevelCompressor_OnGetContextWindow_超预算压缩成功(t *testing.T) {
 	cfg := validRoundLevelCompressorConfig()
-	cfg.TriggerTotalTokens = 10  // 低阈值确保触发
-	cfg.TargetTotalTokens = 100  // 压缩目标
+	cfg.TriggerTotalTokens = 10 // 低阈值确保触发
+	cfg.TargetTotalTokens = 100 // 压缩目标
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage(`{"blocks": [{"block_id": "block_1", "summary": "压缩摘要"}]}`),
 	}
@@ -1659,12 +1659,12 @@ func TestRoundLevelCompressor_buildRecursiveMergeTargets_两块合并(t *testing
 
 	marker := "[ROUND_LEVEL_MEMORY_BLOCK]"
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"),                          // 0 - L1
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块1"),                                 // 0 - L1
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 1 - ack
-		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"),                          // 2 - L1（相邻）
+		llm_schema.NewUserMessage(marker + "\nSummary:\n记忆块2"),                                 // 2 - L1（相邻）
 		llm_schema.NewAssistantMessage("Understood. I have recorded this compressed context."), // 3 - ack
-		llm_schema.NewUserMessage("问题"),      // 4
-		llm_schema.NewAssistantMessage("回答"), // 5
+		llm_schema.NewUserMessage("问题"),                                                        // 4
+		llm_schema.NewAssistantMessage("回答"),                                                   // 5
 	}
 
 	// 给两个记忆块设置相同的 compress_level

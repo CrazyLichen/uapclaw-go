@@ -113,9 +113,6 @@ type SystemMessage struct {
 	DefaultMessage
 }
 
-// MessageOption DefaultMessage 构造选项函数。
-type MessageOption func(*DefaultMessage)
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // RoleType 消息角色类型枚举，标识消息发送者的身份。
@@ -133,6 +130,9 @@ const (
 	// RoleTypeTool 工具返回消息
 	RoleTypeTool
 )
+
+// MessageOption DefaultMessage 构造选项函数。
+type MessageOption func(*DefaultMessage)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

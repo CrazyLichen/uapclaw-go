@@ -8,47 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ProviderType 模型服务提供商标识枚举，用于标识 LLM API 的服务提供商。
-//
-// 枚举值序列化为字符串（与 Python ProviderType 一致），
-// 例如 ProviderTypeOpenAI 序列化为 "OpenAI"。
-//
-// 对应 Python: openjiuwen/core/foundation/llm/schema/config.py (ProviderType)
-type ProviderType int
-
-const (
-	// ProviderTypeOpenAI OpenAI 服务商
-	ProviderTypeOpenAI ProviderType = iota
-	// ProviderTypeOpenRouter OpenRouter 服务商
-	ProviderTypeOpenRouter
-	// ProviderTypeSiliconFlow SiliconFlow 服务商
-	ProviderTypeSiliconFlow
-	// ProviderTypeDashScope DashScope（阿里云百炼）服务商
-	ProviderTypeDashScope
-	// ProviderTypeDeepSeek DeepSeek 服务商
-	ProviderTypeDeepSeek
-	// ProviderTypeInferenceAffinity InferenceAffinity 服务商
-	ProviderTypeInferenceAffinity
-	// ProviderTypeIntelliRouter IntelliRouter 服务商
-	ProviderTypeIntelliRouter
-)
-
-// providerTypeStrings ProviderType 枚举值对应的字符串表示，与 Python 端保持一致。
-var providerTypeStrings = [...]string{
-	"OpenAI",
-	"OpenRouter",
-	"SiliconFlow",
-	"DashScope",
-	"DeepSeek",
-	"InferenceAffinity",
-	"intelli_router",
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ProviderValidator 自定义 Provider 验证器接口。
 
 // ProviderValidator 自定义 Provider 验证器接口。
 //
@@ -112,15 +72,59 @@ type ModelRequestConfig struct {
 	Extra map[string]any `json:"-"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ProviderType 模型服务提供商标识枚举，用于标识 LLM API 的服务提供商。
+//
+// 枚举值序列化为字符串（与 Python ProviderType 一致），
+// 例如 ProviderTypeOpenAI 序列化为 "OpenAI"。
+//
+// 对应 Python: openjiuwen/core/foundation/llm/schema/config.py (ProviderType)
+type ProviderType int
+
+const (
+	// ProviderTypeOpenAI OpenAI 服务商
+	ProviderTypeOpenAI ProviderType = iota
+	// ProviderTypeOpenRouter OpenRouter 服务商
+	ProviderTypeOpenRouter
+	// ProviderTypeSiliconFlow SiliconFlow 服务商
+	ProviderTypeSiliconFlow
+	// ProviderTypeDashScope DashScope（阿里云百炼）服务商
+	ProviderTypeDashScope
+	// ProviderTypeDeepSeek DeepSeek 服务商
+	ProviderTypeDeepSeek
+	// ProviderTypeInferenceAffinity InferenceAffinity 服务商
+	ProviderTypeInferenceAffinity
+	// ProviderTypeIntelliRouter IntelliRouter 服务商
+	ProviderTypeIntelliRouter
+)
+
+// ModelClientConfigOption ModelClientConfig 构造选项函数。
+type ModelClientConfigOption func(*ModelClientConfig)
+
+// ModelRequestConfigOption ModelRequestConfig 构造选项函数。
+type ModelRequestConfigOption func(*ModelRequestConfig)
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// providerTypeStrings ProviderType 枚举值对应的字符串表示，与 Python 端保持一致。
+var providerTypeStrings = [...]string{
+	"OpenAI",
+	"OpenRouter",
+	"SiliconFlow",
+	"DashScope",
+	"DeepSeek",
+	"InferenceAffinity",
+	"intelli_router",
+}
 
 // modelClientConfigKnownKeys ModelClientConfig 已知的 JSON 键名集合，用于 Extra 字段拆分。
 var modelClientConfigKnownKeys map[string]struct{}
 
 // modelRequestConfigKnownKeys ModelRequestConfig 已知的 JSON 键名集合，用于 Extra 字段拆分。
 var modelRequestConfigKnownKeys map[string]struct{}
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // providerTypeMap 字符串到 ProviderType 的映射，用于 JSON 反序列化。
 var providerTypeMap map[string]ProviderType
@@ -217,9 +221,6 @@ func ValidateAndNormalizeProvider(provider string) string {
 func SetProviderValidator(v ProviderValidator) {
 	globalProviderValidator = v
 }
-
-// ModelClientConfigOption ModelClientConfig 构造选项函数。
-type ModelClientConfigOption func(*ModelClientConfig)
 
 // WithClientID 设置客户端唯一标识。
 func WithClientID(id string) ModelClientConfigOption {
@@ -378,9 +379,6 @@ func (c *ModelClientConfig) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
-
-// ModelRequestConfigOption ModelRequestConfig 构造选项函数。
-type ModelRequestConfigOption func(*ModelRequestConfig)
 
 // WithModelName 设置模型名称。
 func WithModelName(name string) ModelRequestConfigOption {

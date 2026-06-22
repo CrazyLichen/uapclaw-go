@@ -22,6 +22,8 @@ type ToolMessageChunk struct {
 	ToolMessage
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // AssistantMessageChunkOption AssistantMessageChunk 构造选项函数。
 type AssistantMessageChunkOption func(*AssistantMessageChunk)
 

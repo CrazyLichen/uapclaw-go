@@ -30,7 +30,7 @@ func (m *mockProcessor) TriggerAddMessages(_ context.Context, _ iface.ModelConte
 func (m *mockProcessor) TriggerGetContextWindow(_ context.Context, _ iface.ModelContext, _ iface.ContextWindow, _ ...iface.Option) (bool, error) {
 	return false, nil
 }
-func (m *mockProcessor) SaveState() map[string]any { return nil }
+func (m *mockProcessor) SaveState() map[string]any  { return nil }
 func (m *mockProcessor) LoadState(_ map[string]any) {}
 func (m *mockProcessor) ProcessorType() string      { return "MockProcessor" }
 

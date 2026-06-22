@@ -8,10 +8,10 @@ import (
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
-	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -23,22 +23,22 @@ type mockModelContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (m *mockModelContext) Len() int                                                { return 0 }
-func (m *mockModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage     { return nil }
-func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)          {}
-func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage      { return nil }
-func (m *mockModelContext) ClearMessages(_ context.Context, _ bool) error           { return nil }
+func (m *mockModelContext) Len() int                                            { return 0 }
+func (m *mockModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage { return nil }
+func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)      {}
+func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage  { return nil }
+func (m *mockModelContext) ClearMessages(_ context.Context, _ bool) error       { return nil }
 func (m *mockModelContext) AddMessages(_ context.Context, _ any) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *mockModelContext) Statistic() *iface.ContextStats  { return nil }
-func (m *mockModelContext) SessionID() string                        { return m.sessionID }
-func (m *mockModelContext) ContextID() string                        { return "ctx-123" }
-func (m *mockModelContext) TokenCounter() token.TokenCounter         { return nil }
-func (m *mockModelContext) ReloaderTool() tool.Tool                  { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats   { return nil }
+func (m *mockModelContext) SessionID() string                { return m.sessionID }
+func (m *mockModelContext) ContextID() string                { return "ctx-123" }
+func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
+func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
 
 // TestOffloadMessages_in_memory模式正常 验证 in_memory 模式正常流程
 func TestOffloadMessages_in_memory模式正常(t *testing.T) {

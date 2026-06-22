@@ -7,7 +7,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // Offloadable 卸载消息接口，等价 Python isinstance(msg, OffloadMixin)。
 //
@@ -21,8 +21,6 @@ type Offloadable interface {
 	// GetOffloadInfo 获取卸载元数据
 	GetOffloadInfo() OffloadInfo
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // OffloadInfo 卸载元数据，等价 Python OffloadMixin。
 //
@@ -70,6 +68,12 @@ type OffloadToolMessage struct {
 	llm_schema.ToolMessage
 	OffloadInfo
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -476,14 +476,14 @@ Output plain text only.
 //   - SummaryMergeMinBlocks=3, PriorContextWindowSize=10
 func NewCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
-		TokensThreshold:                100000,
-		MessagesToKeep:                 3,
+		TokensThreshold:                 100000,
+		MessagesToKeep:                  3,
 		MinSelectedTokensForCompression: 20000,
-		CompressionTargetTokens:        4000,
-		SummaryMergeTargetTokens:       4000,
-		AccumulatedSummaryTokenLimit:   20000,
-		SummaryMergeMinBlocks:          3,
-		PriorContextWindowSize:         10,
+		CompressionTargetTokens:         4000,
+		SummaryMergeTargetTokens:        4000,
+		AccumulatedSummaryTokenLimit:    20000,
+		SummaryMergeMinBlocks:           3,
+		PriorContextWindowSize:          10,
 	}
 }
 

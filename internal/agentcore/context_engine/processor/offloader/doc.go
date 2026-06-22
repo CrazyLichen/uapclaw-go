@@ -15,8 +15,7 @@
 //
 //	offloader/
 //	├── doc.go                     # 包文档
-//	├── message_offloader.go       # MessageOffloader + Config
-//	└── message_offloader_test.go  # 单元测试
+//	└── message_offloader.go       # MessageOffloader + Config
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/offloader/
 package offloader

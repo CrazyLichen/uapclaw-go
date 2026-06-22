@@ -73,9 +73,9 @@ type FullCompactProcessorConfig struct {
 type FullCompactProcessor struct {
 	*processor.BaseProcessor
 	// fcpConfig 全量压缩处理器具体配置
-	fcpConfig  *FullCompactProcessorConfig
+	fcpConfig *FullCompactProcessorConfig
 	// model 压缩用 LLM 实例
-	model      *llm.Model
+	model *llm.Model
 	// reinjector 状态重新注入器
 	reinjector *FullCompactStateReinjector
 }

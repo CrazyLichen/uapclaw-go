@@ -20,14 +20,14 @@ import (
 // validCurrentRoundCompressorConfig 创建合法的 CurrentRoundCompressorConfig
 func validCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
-		TokensThreshold:                100,
-		MessagesToKeep:                 3,
+		TokensThreshold:                 100,
+		MessagesToKeep:                  3,
 		MinSelectedTokensForCompression: 10,
-		CompressionTargetTokens:        4000,
-		SummaryMergeTargetTokens:       4000,
-		AccumulatedSummaryTokenLimit:   20000,
-		SummaryMergeMinBlocks:          3,
-		PriorContextWindowSize:         10,
+		CompressionTargetTokens:         4000,
+		SummaryMergeTargetTokens:        4000,
+		AccumulatedSummaryTokenLimit:    20000,
+		SummaryMergeMinBlocks:           3,
+		PriorContextWindowSize:          10,
 	}
 }
 
@@ -318,8 +318,8 @@ func TestCurrentRoundCompressor_TriggerAddMessages_消息数少于MessagesToKeep
 // TestCurrentRoundCompressor_OnAddMessages_触发压缩 验证压缩触发后输出包含 CURRENT_ROUND_MEMORY_BLOCK
 func TestCurrentRoundCompressor_OnAddMessages_触发压缩(t *testing.T) {
 	cfg := validCurrentRoundCompressorConfig()
-	cfg.TokensThreshold = 10       // 低阈值确保触发
-	cfg.MessagesToKeep = 1         // 仅保留 1 条
+	cfg.TokensThreshold = 10                // 低阈值确保触发
+	cfg.MessagesToKeep = 1                  // 仅保留 1 条
 	cfg.MinSelectedTokensForCompression = 1 // 低阈值确保进入压缩
 	fakeClient := &crcFakeBaseModelClient{
 		invokeResult: llm_schema.NewAssistantMessage("压缩摘要内容"),
@@ -440,9 +440,9 @@ func TestCurrentRoundCompressor_GetCompressIdx_找到边界(t *testing.T) {
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("第一个问题"),  // 0
+		llm_schema.NewUserMessage("第一个问题"),    // 0
 		llm_schema.NewAssistantMessage("回答1"), // 1
-		llm_schema.NewUserMessage("第二个问题"),  // 2 - keepIndex = 5-3=2, 2 >= 2 → 在保留区域
+		llm_schema.NewUserMessage("第二个问题"),    // 2 - keepIndex = 5-3=2, 2 >= 2 → 在保留区域
 		llm_schema.NewAssistantMessage("回答2"), // 3
 		llm_schema.NewAssistantMessage("回答3"), // 4
 	}
@@ -480,9 +480,9 @@ func TestCurrentRoundCompressor_GetCompressIdx_在保留区域内(t *testing.T) 
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("问题1"),     // 0
+		llm_schema.NewUserMessage("问题1"),      // 0
 		llm_schema.NewAssistantMessage("回答1"), // 1
-		llm_schema.NewUserMessage("问题2"),     // 2 - keepIndex=5-3=2, 2 >= 2
+		llm_schema.NewUserMessage("问题2"),      // 2 - keepIndex=5-3=2, 2 >= 2
 		llm_schema.NewAssistantMessage("回答2"), // 3
 		llm_schema.NewAssistantMessage("回答3"), // 4
 	}
@@ -501,9 +501,9 @@ func TestCurrentRoundCompressor_GetCompressIdx_可压缩边界(t *testing.T) {
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("问题1"),     // 0
+		llm_schema.NewUserMessage("问题1"),      // 0
 		llm_schema.NewAssistantMessage("回答1"), // 1
-		llm_schema.NewUserMessage("问题2"),     // 2 - keepIndex=5-2=3, 2 < 3
+		llm_schema.NewUserMessage("问题2"),      // 2 - keepIndex=5-2=3, 2 < 3
 		llm_schema.NewAssistantMessage("回答2"), // 3
 		llm_schema.NewAssistantMessage("回答3"), // 4
 	}
@@ -610,10 +610,10 @@ func TestFormatRecentContext_排除记忆块(t *testing.T) {
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("用户问题"),  // 0
-		llm_schema.NewAssistantMessage("回答"), // 1
+		llm_schema.NewUserMessage("用户问题"),                                         // 0
+		llm_schema.NewAssistantMessage("回答"),                                      // 1
 		llm_schema.NewUserMessage("[CURRENT_ROUND_MEMORY_BLOCK]\nSummary:\n旧记忆块"), // 2 - 应被排除
-		llm_schema.NewAssistantMessage("最新回答"), // 3
+		llm_schema.NewAssistantMessage("最新回答"),                                    // 3
 	}
 
 	// endIdx=1，取 messages[2:] 作为 recent messages
@@ -652,16 +652,16 @@ func TestFormatPriorContextAndQuery_过滤工具消息(t *testing.T) {
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("纯用户消息"),  // 0
+		llm_schema.NewUserMessage("纯用户消息"),      // 0
 		llm_schema.NewAssistantMessage("纯助手消息"), // 1
 		llm_schema.NewAssistantMessage("带工具",
 			llm_schema.WithToolCalls([]*llm_schema.ToolCall{
 				{ID: "tc-1", Name: "test_tool", Arguments: "{}"},
 			}),
 		), // 2 - 应被过滤
-		llm_schema.NewToolMessage("tc-1", "工具结果"), // 3 - 应被过滤
+		llm_schema.NewToolMessage("tc-1", "工具结果"),                                // 3 - 应被过滤
 		llm_schema.NewUserMessage("[CURRENT_ROUND_MEMORY_BLOCK]\nSummary:\n记忆块"), // 4 - 摘要 User 应被过滤
-		llm_schema.NewUserMessage("当前查询"), // 5 - currentQueryIdx
+		llm_schema.NewUserMessage("当前查询"),                                        // 5 - currentQueryIdx
 	}
 
 	result := crc.FormatPriorContextAndQuery(messages, 5)
@@ -697,13 +697,13 @@ func TestFormatPriorContextAndQuery_窗口截断(t *testing.T) {
 	crc := newCRCWithModel(cfg, fakeClient)
 
 	messages := []llm_schema.BaseMessage{
-		llm_schema.NewUserMessage("用户1"),     // 0
+		llm_schema.NewUserMessage("用户1"),      // 0
 		llm_schema.NewAssistantMessage("助手1"), // 1
-		llm_schema.NewUserMessage("用户2"),     // 2
+		llm_schema.NewUserMessage("用户2"),      // 2
 		llm_schema.NewAssistantMessage("助手2"), // 3
-		llm_schema.NewUserMessage("用户3"),     // 4
+		llm_schema.NewUserMessage("用户3"),      // 4
 		llm_schema.NewAssistantMessage("助手3"), // 5
-		llm_schema.NewUserMessage("当前查询"),   // 6 - currentQueryIdx
+		llm_schema.NewUserMessage("当前查询"),     // 6 - currentQueryIdx
 	}
 
 	result := crc.FormatPriorContextAndQuery(messages, 6)

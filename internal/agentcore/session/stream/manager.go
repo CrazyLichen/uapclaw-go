@@ -46,9 +46,6 @@ type StreamWriterManager struct {
 	defaultModes []StreamMode
 }
 
-// StreamOutputOption StreamOutput 的可选配置
-type StreamOutputOption func(*streamOutputConfig)
-
 // streamOutputConfig StreamOutput 内部配置
 type streamOutputConfig struct {
 	// firstFrameTimeout 首帧超时，对应 Python first_frame_timeout
@@ -56,6 +53,11 @@ type streamOutputConfig struct {
 	// timeout 帧间隔超时，对应 Python timeout
 	timeout time.Duration
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// StreamOutputOption StreamOutput 的可选配置
+type StreamOutputOption func(*streamOutputConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

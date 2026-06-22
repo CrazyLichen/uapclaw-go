@@ -93,6 +93,8 @@ type SubWorkflowSession struct {
 	mainWorkflowID2 string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // WorkflowSessionOption WorkflowSession 构造选项函数类型
 type WorkflowSessionOption func(*WorkflowSession)
 

@@ -57,15 +57,6 @@
 //	  generation_response.go  — 多模态生成响应（图片/音频/视频）
 //	  config.go               — ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
 //	  model_info.go           — BaseModelInfo + ModelConfig
-//	  tool_call_test.go       — ToolCall 测试
-//	  usage_metadata_test.go  — UsageMetadata 测试
-//	  message_test.go         — 消息基础类型测试
-//	  assistant_message_test.go — AssistantMessage 测试
-//	  tool_message_test.go    — ToolMessage 测试
-//	  message_chunk_test.go   — 流式消息块测试
-//	  generation_response_test.go — 多模态生成响应测试
-//	  config_test.go          — ProviderType/ModelClientConfig/ModelRequestConfig 测试
-//	  model_info_test.go      — BaseModelInfo/ModelConfig 测试
 //
 // 对应 Python 代码路径：
 //

@@ -49,15 +49,19 @@ type ModelConfig struct {
 	ModelInfo BaseModelInfo `json:"model_info"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// BaseModelInfoOption BaseModelInfo 构造选项函数。
+type BaseModelInfoOption func(*BaseModelInfo)
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // baseModelInfoKnownKeys BaseModelInfo 已知的 JSON 键名集合，用于 Extra 字段拆分。
 var baseModelInfoKnownKeys map[string]struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// BaseModelInfoOption BaseModelInfo 构造选项函数。
-type BaseModelInfoOption func(*BaseModelInfo)
 
 // WithAPIKey 设置 API 密钥。
 func WithAPIKey(key string) BaseModelInfoOption {

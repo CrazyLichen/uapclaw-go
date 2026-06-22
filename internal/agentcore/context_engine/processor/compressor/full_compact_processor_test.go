@@ -10,12 +10,12 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -35,7 +35,7 @@ func (f *fcpFakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ b
 	f.messages = messages
 }
 func (f *fcpFakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (f *fcpFakeModelContext) ClearMessages(_ context.Context, _ bool) error        { return nil }
+func (f *fcpFakeModelContext) ClearMessages(_ context.Context, _ bool) error      { return nil }
 func (f *fcpFakeModelContext) AddMessages(_ context.Context, _ any) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
@@ -43,11 +43,11 @@ func (f *fcpFakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema
 	_ []*schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fcpFakeModelContext) Statistic() *iface.ContextStats  { return nil }
-func (f *fcpFakeModelContext) SessionID() string                        { return "test-session" }
-func (f *fcpFakeModelContext) ContextID() string                        { return "test-context" }
-func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter         { return f.tokenCounter }
-func (f *fcpFakeModelContext) ReloaderTool() tool.Tool                  { return nil }
+func (f *fcpFakeModelContext) Statistic() *iface.ContextStats   { return nil }
+func (f *fcpFakeModelContext) SessionID() string                { return "test-session" }
+func (f *fcpFakeModelContext) ContextID() string                { return "test-context" }
+func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter { return f.tokenCounter }
+func (f *fcpFakeModelContext) ReloaderTool() tool.Tool          { return nil }
 
 // fcpFakeTokenCounter 测试用 TokenCounter 模拟
 type fcpFakeTokenCounter struct {
@@ -1068,25 +1068,25 @@ func TestIsSkillFilePath(t *testing.T) {
 // TestExtractArgumentValue 验证参数值提取
 func TestExtractArgumentValue(t *testing.T) {
 	// JSON 格式
-	result := processor.ExtractArgumentValue(nil,`{"file_path": "/tmp/test.go"}`, "file_path")
+	result := processor.ExtractArgumentValue(nil, `{"file_path": "/tmp/test.go"}`, "file_path")
 	if result != "/tmp/test.go" {
 		t.Errorf("期望 /tmp/test.go，实际: %s", result)
 	}
 
 	// 多个 key
-	result = processor.ExtractArgumentValue(nil,`{"pattern": "*.go"}`, "pattern", "path")
+	result = processor.ExtractArgumentValue(nil, `{"pattern": "*.go"}`, "pattern", "path")
 	if result != "*.go" {
 		t.Errorf("期望 *.go，实际: %s", result)
 	}
 
 	// 空 JSON
-	result = processor.ExtractArgumentValue(nil,"", "file_path")
+	result = processor.ExtractArgumentValue(nil, "", "file_path")
 	if result != "" {
 		t.Errorf("空 JSON 应返回空字符串，实际: %s", result)
 	}
 
 	// 非法 JSON fallback
-	result = processor.ExtractArgumentValue(nil,`invalid json "file_path": "/tmp/test.go"`, "file_path")
+	result = processor.ExtractArgumentValue(nil, `invalid json "file_path": "/tmp/test.go"`, "file_path")
 	if result != "/tmp/test.go" {
 		t.Errorf("fallback 正则应提取值，实际: %s", result)
 	}
@@ -2140,8 +2140,8 @@ func TestNewFullCompactProcessor_有Model配置但创建失败(t *testing.T) {
 	cfg.Model = &llm_schema.ModelRequestConfig{ModelName: "test"}
 	cfg.ModelClient = &llm_schema.ModelClientConfig{
 		ClientProvider: "不存在的provider",
-		ClientID:      "test",
-		APIKey:        "fake",
+		ClientID:       "test",
+		APIKey:         "fake",
 	}
 
 	fcp, err := NewFullCompactProcessor(cfg)

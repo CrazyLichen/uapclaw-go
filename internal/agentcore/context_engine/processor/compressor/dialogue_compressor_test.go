@@ -8,12 +8,12 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -40,11 +40,11 @@ func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.Ba
 	_ []*schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (f *fakeModelContext) Statistic() *iface.ContextStats  { return nil }
-func (f *fakeModelContext) SessionID() string                        { return "test-session" }
-func (f *fakeModelContext) ContextID() string                        { return "test-context" }
-func (f *fakeModelContext) TokenCounter() token.TokenCounter         { return f.tokenCounter }
-func (f *fakeModelContext) ReloaderTool() tool.Tool                  { return nil }
+func (f *fakeModelContext) Statistic() *iface.ContextStats   { return nil }
+func (f *fakeModelContext) SessionID() string                { return "test-session" }
+func (f *fakeModelContext) ContextID() string                { return "test-context" }
+func (f *fakeModelContext) TokenCounter() token.TokenCounter { return f.tokenCounter }
+func (f *fakeModelContext) ReloaderTool() tool.Tool          { return nil }
 
 // fakeTokenCounter 测试用 TokenCounter 模拟
 type fakeTokenCounter struct {
@@ -89,7 +89,7 @@ type testConfig struct {
 }
 
 func (c *testConfig) ProcessorType() string { return c.Name }
-func (c *testConfig) Validate() error      { return nil }
+func (c *testConfig) Validate() error       { return nil }
 
 // validDialogueCompressorConfig 创建合法的 DialogueCompressorConfig
 func validDialogueCompressorConfig() *DialogueCompressorConfig {

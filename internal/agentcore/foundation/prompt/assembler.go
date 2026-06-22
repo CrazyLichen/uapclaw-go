@@ -27,10 +27,16 @@ type PromptAssembler struct {
 	inputKeys       []string            // 所有需要外部传入的键名（去重保序）
 }
 
-// ──────────────────────────── 构造选项 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // AssemblerOption PromptAssembler 构造选项函数。
 type AssemblerOption func(*PromptAssembler)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithAssemblerPrefix 设置占位符前缀。
 func WithAssemblerPrefix(prefix string) AssemblerOption {
@@ -46,8 +52,6 @@ func WithAssemblerSuffix(suffix string) AssemblerOption {
 func WithAssemblerVariable(name string, variable Variable) AssemblerOption {
 	return func(a *PromptAssembler) { a.variables[name] = variable }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPromptAssembler 创建模板装配器。
 //
