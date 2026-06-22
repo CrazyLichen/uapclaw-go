@@ -26,9 +26,8 @@ type ModelContext interface {
 	// Len 返回上下文消息数量
 	Len() int
 	// GetMessages 获取消息列表
-	// size 限制返回数量，nil 表示不限制
-	// withHistory 控制是否包含历史消息
-	GetMessages(size *int, withHistory bool) []llm_schema.BaseMessage
+	// size ≤ 0 表示不限制；withHistory 控制是否包含历史消息
+	GetMessages(size int, withHistory bool) []llm_schema.BaseMessage
 	// SetMessages 替换消息列表
 	// withHistory 控制是否替换历史消息
 	SetMessages(messages []llm_schema.BaseMessage, withHistory bool)
@@ -44,9 +43,10 @@ type ModelContext interface {
 	// opts 透传给处理器，对齐 Python: add_messages(messages, **kwargs)
 	AddMessages(ctx context.Context, message llm_schema.BaseMessage, opts ...Option) ([]llm_schema.BaseMessage, error)
 	// GetContextWindow 构建上下文窗口供模型推理使用
+	// windowSize ≤ 0 使用默认值；dialogueRound ≤ 0 使用默认值
 	// opts 透传给处理器，对齐 Python: get_context_window(..., **kwargs)
 	GetContextWindow(ctx context.Context, systemMessages []llm_schema.BaseMessage,
-		tools []*schema.ToolInfo, windowSize *int, dialogueRound *int, opts ...Option) (*ContextWindow, error)
+		tools []*schema.ToolInfo, windowSize int, dialogueRound int, opts ...Option) (*ContextWindow, error)
 	// Statistic 计算上下文统计信息
 	Statistic() *ContextStats
 	// SessionID 返回会话 ID

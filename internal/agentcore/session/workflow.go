@@ -3,6 +3,7 @@ package session
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -19,8 +20,7 @@ type WorkflowSession struct {
 	// envs 环境变量（从 parent.config 获取）
 	envs map[string]any
 	// workflowCard 工作流卡片
-	// ⤵️ 后续回填
-	workflowCard any
+	workflowCard *schema.WorkflowCard
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -105,12 +105,12 @@ func (ws *WorkflowSession) GetParent() BaseSession {
 }
 
 // SetWorkflowCard 设置工作流卡片
-func (ws *WorkflowSession) SetWorkflowCard(card any) {
+func (ws *WorkflowSession) SetWorkflowCard(card *schema.WorkflowCard) {
 	ws.workflowCard = card
 }
 
 // GetWorkflowCard 返回工作流卡片
-func (ws *WorkflowSession) GetWorkflowCard() any {
+func (ws *WorkflowSession) GetWorkflowCard() *schema.WorkflowCard {
 	return ws.workflowCard
 }
 

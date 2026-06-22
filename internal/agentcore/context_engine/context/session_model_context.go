@@ -66,11 +66,21 @@ type SessionModelContext struct {
 	kvCacheManager *KVCacheManager
 	// offloadMessageBuffer 卸载消息缓冲区
 	offloadMessageBuffer *OffloadMessageBuffer
+	// reloaderToolCard 重载工具卡片
+	reloaderToolCard *tool.ToolCard
 }
 
 // workspaceInterface 工作空间私有接口，用于 WorkspaceDir() 类型断言
 type workspaceInterface interface {
 	RootPath() string
+}
+
+// reloaderToolInput 重载工具输入参数结构体。
+type reloaderToolInput struct {
+	// OffloadHandle 卸载内容的唯一标识
+	OffloadHandle string `json:"offload_handle" jsonschema:"description=A unique identifier or file path pointing to the offloaded content."`
+	// OffloadType 卸载内容的存储类型
+	OffloadType string `json:"offload_type" jsonschema:"description=The storage backend used when the content was offloaded."`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -80,7 +90,14 @@ type workspaceInterface interface {
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
-const reloaderSystemPrompt = `You have a tool called "reloader_tool". When you encounter placeholders in the conversation that look like [[HANDLE:xxxx]], it means some previous conversation content has been offloaded to free up context space. If you need to recall the offloaded content to answer the user's question, please call reloader_tool with the handle value (e.g., xxxx) to reload the original content.`
+const reloaderSystemPrompt = `You may see offloaded content markers in your context: [[OFFLOAD: handle=<id>, type=<type>]].
+
+When you see an offloaded-content marker and believe retrieving it will help your answer, 
+feel free to call reload_original_context_messages:
+- Call reload_original_context_messages(offload_handle="<id>", offload_type="<type>") with the exact values from the marker
+- Do not guess or make up the missing content
+
+Storage types: "in_memory" (session cache).`
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -163,6 +180,19 @@ func NewSessionModelContext(
 		mc.offloadMessageBuffer.SetWorkspaceInfo(workspaceDir, sessionID)
 	}
 
+	// 8. 创建 reloaderToolCard 对齐 Python _reloader_tool_card
+	reloaderToolCard := tool.NewToolCard(
+		"reload_original_context_messages",
+		"Retrieve messages that were previously offloaded from the context window. Provide the exact handle and storage type returned when the content was offloaded; the tool will fetch the complete original message list and inject it back into the conversation, allowing the model to see the full text as if it had never been removed.",
+		[]*schema.Param{
+			schema.NewStringParam("offload_handle", "A unique identifier or file path pointing to the offloaded content. Accepts either a UUID string (e.g., 'abc123-def456') for memory-based storage.", true),
+			schema.NewStringParam("offload_type", "The storage backend used when the content was offloaded. Must be one of: 'in_memory': Content was stored in in-memory cache. Requires offload_handle to be a UUID or key string.", true),
+		},
+		nil,
+	)
+	reloaderToolCard.ID = fmt.Sprintf("reload_%s_%s", sessionID, contextID)
+	mc.reloaderToolCard = reloaderToolCard
+
 	logger.Info(logComponent).
 		Str("event_type", "SESSION_MODEL_CONTEXT_CREATED").
 		Str("context_id", contextID).
@@ -185,9 +215,9 @@ func (mc *SessionModelContext) Len() int {
 
 // GetMessages 获取消息列表。
 //
-// size 限制返回数量，nil 表示不限制；withHistory 控制是否包含历史消息。
+// size ≤ 0 表示不限制；withHistory 控制是否包含历史消息。
 // 对应 Python: SessionModelContext.get_messages()
-func (mc *SessionModelContext) GetMessages(size *int, withHistory bool) []llm_schema.BaseMessage {
+func (mc *SessionModelContext) GetMessages(size int, withHistory bool) []llm_schema.BaseMessage {
 	return mc.messageBuffer.GetBack(size, withHistory)
 }
 
@@ -327,29 +357,27 @@ func (mc *SessionModelContext) GetContextWindow(
 	ctx context.Context,
 	systemMessages []llm_schema.BaseMessage,
 	tools []*schema.ToolInfo,
-	windowSize *int,
-	dialogueRound *int,
+	windowSize int,
+	dialogueRound int,
 	opts ...iface.Option,
 ) (*iface.ContextWindow, error) {
 	// 1. 参数校验
 	effectiveWindowSize := mc.defaultWindowSize
-	if windowSize != nil {
-		if *windowSize <= 0 {
-			return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
-				exception.WithParam("error_msg", fmt.Sprintf("windowSize 必须 > 0，当前值: %d", *windowSize)),
-			)
-		}
-		effectiveWindowSize = *windowSize
+	if windowSize > 0 {
+		effectiveWindowSize = windowSize
+	} else if windowSize < 0 {
+		return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("windowSize 不能为负数，当前值: %d", windowSize)),
+		)
 	}
 
 	effectiveDialogueRound := mc.defaultDialogueRound
-	if dialogueRound != nil {
-		if *dialogueRound <= 0 {
-			return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
-				exception.WithParam("error_msg", fmt.Sprintf("dialogueRound 必须 > 0，当前值: %d", *dialogueRound)),
-			)
-		}
-		effectiveDialogueRound = *dialogueRound
+	if dialogueRound > 0 {
+		effectiveDialogueRound = dialogueRound
+	} else if dialogueRound < 0 {
+		return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
+			exception.WithParam("error_msg", fmt.Sprintf("dialogueRound 不能为负数，当前值: %d", dialogueRound)),
+		)
 	}
 
 	// 2. 获取锁
@@ -409,11 +437,9 @@ func (mc *SessionModelContext) GetContextWindow(
 	// 6. ValidateAndFixContextWindow
 	ValidateAndFixContextWindow(window)
 
-	// 7. kvCacheManager.Release（条件）
+	// 7. kvCacheManager.Release（条件），Option 透传 model
 	if mc.kvCacheManager != nil {
-		// 尝试从 sessionRef 获取 model
-		model := mc.getModelFromSession()
-		if err := mc.kvCacheManager.Release(ctx, window, model); err != nil {
+		if err := mc.kvCacheManager.Release(ctx, window, opts...); err != nil {
 			logger.Error(logComponent).
 				Str("event_type", "KV_CACHE_RELEASE_ERROR").
 				Str("context_id", mc.contextID).
@@ -440,7 +466,7 @@ func (mc *SessionModelContext) GetContextWindow(
 //
 // 对应 Python: SessionModelContext.statistic()
 func (mc *SessionModelContext) Statistic() *iface.ContextStats {
-	messages := mc.messageBuffer.GetBack(nil, true)
+	messages := mc.messageBuffer.GetBack(0, true)
 	stat := &iface.ContextStats{}
 	mc.statMessages(stat, messages)
 	return stat
@@ -463,9 +489,32 @@ func (mc *SessionModelContext) TokenCounter() token.TokenCounter {
 
 // ReloaderTool 返回重载卸载消息的工具。
 //
-// Go 端 Tool 的构造方式与 Python 不同，当前返回 nil，后续补充实现。
+// 对应 Python: SessionModelContext.reloader_tool()
 func (mc *SessionModelContext) ReloaderTool() tool.Tool {
-	return nil
+	if mc.reloaderToolCard == nil {
+		return nil
+	}
+
+	// 闭包捕获 offloadMessageBuffer 引用，对齐 Python @tool 装饰器
+	reloadFn := func(ctx context.Context, input reloaderToolInput) (string, error) {
+		reloadedMessages := mc.offloadMessageBuffer.Reload(input.OffloadHandle, input.OffloadType)
+		if len(reloadedMessages) == 0 {
+			return fmt.Sprintf("Failed to reload messages with offload_handle=%s and offload_type=%s", input.OffloadHandle, input.OffloadType), nil
+		}
+		return FormatReloadedMessages(input.OffloadHandle, reloadedMessages), nil
+	}
+
+	t, err := tool.NewTool(reloadFn,
+		tool.WithToolCard(mc.reloaderToolCard),
+	)
+	if err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "RELOADER_TOOL_CREATE_ERROR").
+			Err(err).
+			Msg("创建 reloader tool 失败")
+		return nil
+	}
+	return t
 }
 
 // WorkspaceDir 返回工作目录路径。
@@ -508,7 +557,7 @@ func (mc *SessionModelContext) OffloadMessages(handle string, messages []llm_sch
 // 返回 {contextID: {messages: ..., offload_messages: ...}}。
 // 对应 Python: SessionModelContext.save_state()
 func (mc *SessionModelContext) SaveState() map[string]any {
-	allMessages := mc.messageBuffer.GetBack(nil, true)
+	allMessages := mc.messageBuffer.GetBack(0, true)
 	offloadMessages := mc.offloadMessageBuffer.GetAll()
 	processorStates := make(map[string]any)
 	for _, proc := range mc.processors {
@@ -690,7 +739,7 @@ func (mc *SessionModelContext) runAddProcessors(
 		}
 
 		// 记录处理前状态
-		beforeMessages := mc.messageBuffer.GetBack(nil, true)
+		beforeMessages := mc.messageBuffer.GetBack(0, true)
 		operationID := uuid.New().String()
 		startTime := time.Now()
 
@@ -728,7 +777,7 @@ func (mc *SessionModelContext) runAddProcessors(
 
 		// 记录处理器事件和状态
 		if event != nil {
-			afterMessages := mc.messageBuffer.GetBack(nil, true)
+			afterMessages := mc.messageBuffer.GetBack(0, true)
 			if len(messages) > 0 {
 				afterMessages = append(afterMessages, messages...)
 			}
@@ -789,7 +838,7 @@ func (mc *SessionModelContext) selectProcessors(processorTypes []string, compres
 // getWindowMessages 先按 dialogueRound 截取，再按 windowSize 截取。
 func (mc *SessionModelContext) getWindowMessages(windowSize, dialogueRound int) []llm_schema.BaseMessage {
 	// 获取全部消息（含历史）
-	messages := mc.messageBuffer.GetBack(nil, true)
+	messages := mc.messageBuffer.GetBack(0, true)
 
 	// 先按 dialogueRound 截取
 	if dialogueRound > 0 {

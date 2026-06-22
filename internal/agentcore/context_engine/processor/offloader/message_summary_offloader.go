@@ -279,7 +279,7 @@ func (mso *MessageSummaryOffloader) ProcessorType() string { return "MessageSumm
 //
 // 对应 Python: MessageSummaryOffloader.trigger_add_messages()
 func (mso *MessageSummaryOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	contextMessages := mc.GetMessages(nil, true)
+	contextMessages := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
 	for _, msg := range messagesToAdd {
 		if mso.shouldOffloadMessage(msg, mc, allMessages) {
@@ -304,7 +304,7 @@ func (mso *MessageSummaryOffloader) OnAddMessages(ctx context.Context, mc iface.
 	baseIndex := mc.Len()
 
 	for index, message := range messagesToAdd {
-		allMessages := mc.GetMessages(nil, true)
+		allMessages := mc.GetMessages(0, true)
 		allMessages = append(allMessages, messagesToAdd...)
 		if !mso.shouldOffloadMessage(message, mc, allMessages) {
 			continue
@@ -523,7 +523,7 @@ func (mso *MessageSummaryOffloader) newOffloadHandleAndPath(mc iface.ModelContex
 //
 // 对应 Python: MessageSummaryOffloader._offload_message_adaptive()
 func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext) (llm_schema.BaseMessage, error) {
-	contextMessages := mc.GetMessages(nil, true)
+	contextMessages := mc.GetMessages(0, true)
 	functionCall := mso.getFunctionCallFromChain(message, contextMessages)
 
 	var step string

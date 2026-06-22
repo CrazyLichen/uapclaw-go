@@ -642,7 +642,7 @@ func (m *SessionMemoryManager) CollectContextWindow(mc iface.ModelContext) *ifac
 	if mc == nil {
 		return iface.NewContextWindow()
 	}
-	messages := mc.GetMessages(nil, false)
+	messages := mc.GetMessages(0, false)
 	window := iface.NewContextWindow()
 	window.ContextMessages = messages
 	return window

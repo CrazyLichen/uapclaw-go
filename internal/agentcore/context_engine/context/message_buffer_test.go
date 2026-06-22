@@ -126,14 +126,14 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 	})
 
 	t.Run("size为nil且withHistory为true_返回全部消息", func(t *testing.T) {
-		result := buf.GetBack(nil, true)
+		result := buf.GetBack(0, true)
 		if len(result) != 5 {
 			t.Errorf("期望 5 条消息, 实际=%d", len(result))
 		}
 	})
 
 	t.Run("size为nil且withHistory为false_仅返回上下文消息", func(t *testing.T) {
-		result := buf.GetBack(nil, false)
+		result := buf.GetBack(0, false)
 		if len(result) != 3 {
 			t.Errorf("期望 3 条上下文消息, 实际=%d", len(result))
 		}
@@ -145,7 +145,7 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 
 	t.Run("size非nil且withHistory为true_返回尾部N条", func(t *testing.T) {
 		size := 2
-		result := buf.GetBack(&size, true)
+		result := buf.GetBack(size, true)
 		if len(result) != 2 {
 			t.Errorf("期望 2 条消息, 实际=%d", len(result))
 		}
@@ -159,7 +159,7 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 
 	t.Run("size非nil且withHistory为false_返回尾部N条上下文消息", func(t *testing.T) {
 		size := 2
-		result := buf.GetBack(&size, false)
+		result := buf.GetBack(size, false)
 		if len(result) != 2 {
 			t.Errorf("期望 2 条上下文消息, 实际=%d", len(result))
 		}
@@ -170,7 +170,7 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 
 	t.Run("size超出上下文长度且withHistory为false", func(t *testing.T) {
 		size := 10
-		result := buf.GetBack(&size, false)
+		result := buf.GetBack(size, false)
 		if len(result) != 3 {
 			t.Errorf("期望 3 条上下文消息, 实际=%d", len(result))
 		}
@@ -178,7 +178,7 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 
 	t.Run("size超出总长度且withHistory为true", func(t *testing.T) {
 		size := 100
-		result := buf.GetBack(&size, true)
+		result := buf.GetBack(size, true)
 		if len(result) != 5 {
 			t.Errorf("期望 5 条消息, 实际=%d", len(result))
 		}
@@ -197,7 +197,7 @@ func TestContextMessageBuffer_GetBack(t *testing.T) {
 			llm_schema.NewUserMessage("c3"),
 		})
 		// GetBack(nil, true) 应返回窗口内 3 条（c1, c2, c3）
-		result := b.GetBack(nil, true)
+		result := b.GetBack(0, true)
 		if len(result) != 3 {
 			t.Errorf("期望 3 条, 实际=%d", len(result))
 		}
@@ -266,7 +266,7 @@ func TestContextMessageBuffer_PopBack(t *testing.T) {
 			t.Errorf("期望弹出内容为 c2, 实际=%s", popped[0].GetContent().Text())
 		}
 		// 历史消息不变
-		allMsgs := buf.GetBack(nil, true)
+		allMsgs := buf.GetBack(0, true)
 		if len(allMsgs) != 2 {
 			t.Errorf("期望剩余 2 条, 实际=%d", len(allMsgs))
 		}
@@ -298,7 +298,7 @@ func TestContextMessageBuffer_SetMessages(t *testing.T) {
 			llm_schema.NewUserMessage("n2"),
 		}
 		buf.SetMessages(newMsgs, true)
-		result := buf.GetBack(nil, true)
+		result := buf.GetBack(0, true)
 		if len(result) != 2 {
 			t.Fatalf("期望 2 条消息, 实际=%d", len(result))
 		}
@@ -306,7 +306,7 @@ func TestContextMessageBuffer_SetMessages(t *testing.T) {
 			t.Errorf("期望第一条内容为 n1, 实际=%s", result[0].GetContent().Text())
 		}
 		// withHistory=true 时 historyMessagesSize 置零
-		ctxOnly := buf.GetBack(nil, false)
+		ctxOnly := buf.GetBack(0, false)
 		if len(ctxOnly) != 2 {
 			t.Errorf("期望上下文消息 2 条（historyMessagesSize=0）, 实际=%d", len(ctxOnly))
 		}
@@ -324,7 +324,7 @@ func TestContextMessageBuffer_SetMessages(t *testing.T) {
 		}
 		buf.SetMessages(newCtxMsgs, false)
 
-		allMsgs := buf.GetBack(nil, true)
+		allMsgs := buf.GetBack(0, true)
 		if len(allMsgs) != 3 {
 			t.Fatalf("期望 3 条消息（2历史+1上下文）, 实际=%d", len(allMsgs))
 		}
@@ -336,7 +336,7 @@ func TestContextMessageBuffer_SetMessages(t *testing.T) {
 		}
 
 		// 上下文部分只有新设置的 1 条
-		ctxOnly := buf.GetBack(nil, false)
+		ctxOnly := buf.GetBack(0, false)
 		if len(ctxOnly) != 1 {
 			t.Errorf("期望上下文消息 1 条, 实际=%d", len(ctxOnly))
 		}
@@ -366,7 +366,7 @@ func TestContextMessageBuffer_Rebuild(t *testing.T) {
 			llm_schema.NewUserMessage("c"),
 		}
 		buf.Rebuild(history)
-		result := buf.GetBack(nil, true)
+		result := buf.GetBack(0, true)
 		if len(result) != 2 {
 			t.Fatalf("期望 2 条消息, 实际=%d", len(result))
 		}
@@ -388,7 +388,7 @@ func TestContextMessageBuffer_Rebuild(t *testing.T) {
 		}
 		buf.Rebuild(history)
 		// 全部是历史消息，GetBack(nil, false) 应返回空
-		ctxOnly := buf.GetBack(nil, false)
+		ctxOnly := buf.GetBack(0, false)
 		if len(ctxOnly) != 0 {
 			t.Errorf("期望上下文为空（全部是历史）, 实际=%d", len(ctxOnly))
 		}
@@ -725,19 +725,18 @@ func TestContextMessageBuffer_GetBack_contextStart超出长度(t *testing.T) {
 		contextMessages:     []llm_schema.BaseMessage{llm_schema.NewUserMessage("a")},
 		historyMessagesSize: 5, // 超出实际长度
 	}
-	result := buf.GetBack(nil, false)
+	result := buf.GetBack(0, false)
 	if result != nil {
 		t.Errorf("contextStart 超出长度时应返回 nil，实际 %v", result)
 	}
 }
 
-// TestContextMessageBuffer_GetBack_size为负数 测试 size 为负数时返回 nil
+// TestContextMessageBuffer_GetBack_size为负数 测试 size ≤ 0 表示不限制，返回全部消息
 func TestContextMessageBuffer_GetBack_size为负数(t *testing.T) {
 	buf := NewContextMessageBuffer([]llm_schema.BaseMessage{llm_schema.NewUserMessage("a")}, 0)
-	size := -1
-	result := buf.GetBack(&size, true)
-	if result != nil {
-		t.Errorf("size 为负数时应返回 nil，实际 %v", result)
+	result := buf.GetBack(-1, true)
+	if len(result) != 1 {
+		t.Errorf("size ≤ 0 时应返回全部消息，实际长度 %d", len(result))
 	}
 }
 
@@ -746,7 +745,7 @@ func TestContextMessageBuffer_GetBack_withHistoryFalse_size超出(t *testing.T) 
 	buf := NewContextMessageBuffer([]llm_schema.BaseMessage{llm_schema.NewUserMessage("h1")}, 0)
 	buf.AddBack([]llm_schema.BaseMessage{llm_schema.NewUserMessage("c1")})
 	size := 100
-	result := buf.GetBack(&size, false)
+	result := buf.GetBack(size, false)
 	if len(result) != 1 {
 		t.Errorf("期望 1 条上下文消息，实际 %d", len(result))
 	}
@@ -762,7 +761,7 @@ func TestContextMessageBuffer_SetMessages_withHistoryFalse历史截断(t *testin
 	newMsgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("b")}
 	buf.SetMessages(newMsgs, false)
 	// 历史部分应截取 min(len, historyMessagesSize)
-	allMsgs := buf.GetBack(nil, true)
+	allMsgs := buf.GetBack(0, true)
 	if len(allMsgs) != 2 { // 1 (history) + 1 (new)
 		t.Errorf("期望 2 条消息，实际 %d", len(allMsgs))
 	}

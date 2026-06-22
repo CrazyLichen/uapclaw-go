@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // TestNewWorkflowSessionFacade 测试基本构造
@@ -50,9 +51,17 @@ func TestWorkflowSessionFacade_GetParent(t *testing.T) {
 func TestWorkflowSessionFacade_SetGetWorkflowCard(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	ws.SetWorkflowCard("test_card")
-	if ws.GetWorkflowCard() != "test_card" {
-		t.Errorf("期望 workflowCard='test_card'，实际=%v", ws.GetWorkflowCard())
+	card := schema.NewWorkflowCard(schema.WithName("test_workflow"), schema.WithID("wf-001"))
+	ws.SetWorkflowCard(card)
+	got := ws.GetWorkflowCard()
+	if got == nil {
+		t.Fatal("期望 GetWorkflowCard 返回非 nil")
+	}
+	if got.ID != "wf-001" {
+		t.Errorf("期望 card.ID='wf-001'，实际=%s", got.ID)
+	}
+	if got.Name != "test_workflow" {
+		t.Errorf("期望 card.Name='test_workflow'，实际=%s", got.Name)
 	}
 }
 

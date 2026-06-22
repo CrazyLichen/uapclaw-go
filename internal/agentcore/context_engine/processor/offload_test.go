@@ -25,14 +25,14 @@ type mockModelContext struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func (m *mockModelContext) Len() int                                            { return 0 }
-func (m *mockModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage { return nil }
+func (m *mockModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
 func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)      {}
 func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage  { return nil }
 func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error { return nil }
 func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
-func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ *int, _ *int, _ ...iface.Option) (*iface.ContextWindow, error) {
+func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (m *mockModelContext) Statistic() *iface.ContextStats   { return nil }

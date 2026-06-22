@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -48,13 +47,17 @@ func NewKVCacheManager(sessionID string) *KVCacheManager {
 // Release 检查前后两次 ContextWindow 差异并释放 KV 缓存。
 //
 // 流程：
-//  1. model 为 nil 或不支持 KV Cache Release → 直接返回
+//  1. 从 Option 中提取 model，为 nil 或不支持 KV Cache Release → 直接返回
 //  2. 首次调用（lastContextWindow 为 nil）→ 保存快照，不释放
 //  3. 前缀对比检测差异 → 无差异则更新快照返回
 //  4. 有差异 → 构建 ReleaseOption 调用 model.Release
 //
 // 对应 Python: KVCacheManager.release()
-func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.ContextWindow, model *llm.Model) error {
+func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.ContextWindow, opts ...iface.Option) error {
+	// 从 Option 中提取 model
+	po := iface.NewProcessorOption(opts...)
+	model := po.Model
+
 	// model 为 nil，无需释放
 	if model == nil {
 		return nil
@@ -81,30 +84,30 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 	}
 
 	// 构建 ReleaseOption
-	opts := []model_clients.ReleaseOption{
+	releaseOpts := []model_clients.ReleaseOption{
 		model_clients.WithReleaseSessionID(m.sessionID),
 		model_clients.WithReleaseMessages(model_clients.NewMessagesParam(contextWindow.GetMessages()...)),
 	}
 
 	// 消息释放索引
-	if msgIdx != nil {
-		opts = append(opts, model_clients.WithReleaseMessagesIndex(*msgIdx))
+	if msgIdx >= 0 {
+		releaseOpts = append(releaseOpts, model_clients.WithReleaseMessagesIndex(msgIdx))
 	}
 
 	// 工具释放
-	if toolIdx != nil {
+	if toolIdx >= 0 {
 		// 将 []*schema.ToolInfo 转换为 []commonschema.ToolInfoProvider
 		tools := contextWindow.GetTools()
 		toolProviders := make([]commonschema.ToolInfoProvider, len(tools))
 		for i, t := range tools {
 			toolProviders[i] = t
 		}
-		opts = append(opts, model_clients.WithReleaseTools(toolProviders...))
-		opts = append(opts, model_clients.WithReleaseToolsIndex(*toolIdx))
+		releaseOpts = append(releaseOpts, model_clients.WithReleaseTools(toolProviders...))
+		releaseOpts = append(releaseOpts, model_clients.WithReleaseToolsIndex(toolIdx))
 	}
 
 	// 调用模型释放
-	_, err := model.Release(ctx, opts...)
+	_, err := model.Release(ctx, releaseOpts...)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "KV_CACHE_RELEASE_ERROR").
@@ -121,11 +124,11 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 	evt := logger.Info(logComponent).
 		Str("event_type", "KV_CACHE_RELEASED").
 		Str("session_id", m.sessionID)
-	if msgIdx != nil {
-		evt = evt.Int("messages_released_index", *msgIdx)
+	if msgIdx >= 0 {
+		evt = evt.Int("messages_released_index", msgIdx)
 	}
-	if toolIdx != nil {
-		evt = evt.Int("tools_released_index", *toolIdx)
+	if toolIdx >= 0 {
+		evt = evt.Int("tools_released_index", toolIdx)
 	}
 	evt.Msg("KV 缓存已释放")
 
@@ -142,13 +145,13 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 //
 // 返回 (shouldRelease, msgIdx, toolIdx)：
 //   - shouldRelease: 是否需要释放（找到差异时为 true）
-//   - msgIdx: 消息首个差异位置（nil 表示消息无差异）
-//   - toolIdx: 工具首个差异位置（nil 表示工具无差异）
+//   - msgIdx: 消息首个差异位置（-1 表示消息无差异）
+//   - toolIdx: 工具首个差异位置（-1 表示工具无差异）
 //
 // 对应 Python: KVCacheManager._check_release_needed()
-func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) (bool, *int, *int) {
-	var msgIdx *int
-	var toolIdx *int
+func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) (bool, int, int) {
+	msgIdx := -1
+	toolIdx := -1
 
 	// 消息比较
 	lastMessages := m.lastContextWindow.GetMessages()
@@ -161,16 +164,14 @@ func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) 
 
 	for i := 0; i < minLen; i++ {
 		if !messagesEqual(lastMessages[i], currentMessages[i]) {
-			idx := i
-			msgIdx = &idx
+			msgIdx = i
 			break
 		}
 	}
 
 	// 长度不同但前缀一致时，短列表末尾即为差异位置
-	if msgIdx == nil && len(lastMessages) != len(currentMessages) {
-		idx := minLen
-		msgIdx = &idx
+	if msgIdx < 0 && len(lastMessages) != len(currentMessages) {
+		msgIdx = minLen
 	}
 
 	// 工具比较
@@ -184,19 +185,17 @@ func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) 
 
 	for i := 0; i < minToolLen; i++ {
 		if lastTools[i].Name != currentTools[i].Name {
-			idx := i
-			toolIdx = &idx
+			toolIdx = i
 			break
 		}
 	}
 
 	// 长度不同但前缀一致时，短列表末尾即为差异位置
-	if toolIdx == nil && len(lastTools) != len(currentTools) {
-		idx := minToolLen
-		toolIdx = &idx
+	if toolIdx < 0 && len(lastTools) != len(currentTools) {
+		toolIdx = minToolLen
 	}
 
-	shouldRelease := msgIdx != nil || toolIdx != nil
+	shouldRelease := msgIdx >= 0 || toolIdx >= 0
 	return shouldRelease, msgIdx, toolIdx
 }
 

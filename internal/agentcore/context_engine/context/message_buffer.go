@@ -86,18 +86,18 @@ func (b *ContextMessageBuffer) AddBack(messages []llm_schema.BaseMessage) {
 
 // GetBack 获取缓冲区尾部消息。
 //
-// size==nil: withHistory=true 返回全部有效消息，withHistory=false 返回历史之后的部分；
-// size!=nil: 根据withHistory计算实际size，返回尾部N条消息。
+// size ≤ 0: withHistory=true 返回全部有效消息，withHistory=false 返回历史之后的部分；
+// size > 0: 根据withHistory计算实际size，返回尾部N条消息。
 //
 // 对应 Python: ContextMessageBuffer.get_back
-func (b *ContextMessageBuffer) GetBack(size *int, withHistory bool) []llm_schema.BaseMessage {
+func (b *ContextMessageBuffer) GetBack(size int, withHistory bool) []llm_schema.BaseMessage {
 	// 先截取有效窗口
 	messages := b.contextMessages
 	if b.maxBufferSize > 0 && len(messages) > b.maxBufferSize {
 		messages = messages[len(messages)-b.maxBufferSize:]
 	}
 
-	if size == nil {
+	if size <= 0 {
 		if withHistory {
 			return messages
 		}
@@ -109,8 +109,8 @@ func (b *ContextMessageBuffer) GetBack(size *int, withHistory bool) []llm_schema
 		return messages[contextStart:]
 	}
 
-	// size 不为 nil
-	requestedSize := *size
+	// size > 0
+	requestedSize := size
 	if !withHistory {
 		contextStart := b.historyMessagesSize
 		// 计算上下文部分可用的消息数
@@ -138,7 +138,10 @@ func (b *ContextMessageBuffer) GetBack(size *int, withHistory bool) []llm_schema
 // withHistory=true 且弹出数量超过上下文部分时，减少 historyMessagesSize。
 // 对应 Python: ContextMessageBuffer.pop_back
 func (b *ContextMessageBuffer) PopBack(size int, withHistory bool) []llm_schema.BaseMessage {
-	popped := b.GetBack(&size, withHistory)
+	if size <= 0 {
+		return nil
+	}
+	popped := b.GetBack(size, withHistory)
 	poppedCount := len(popped)
 
 	if poppedCount == 0 {

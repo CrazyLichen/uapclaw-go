@@ -304,7 +304,7 @@ func (rlc *RoundLevelCompressor) ProcessorType() string { return "RoundLevelComp
 //
 // 对应 Python: RoundLevelCompressor.trigger_add_messages()
 func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	allMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	totalTokens := rlc.countContextWindowTokens(nil, allMessages, nil, mc)
 	if totalTokens > rlc.triggerTotalTokens {
 		logger.Info(logger.ComponentAgentCore).
@@ -321,7 +321,7 @@ func (rlc *RoundLevelCompressor) TriggerAddMessages(ctx context.Context, mc ifac
 //
 // 对应 Python: RoundLevelCompressor.on_add_messages()
 func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	allMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	rlc.ResetCompressionUsage()
 
 	compressedMessages, err := rlc.compressUntilTarget(ctx, allMessages, mc, nil, nil, rlc.keepRecentMessages, false)

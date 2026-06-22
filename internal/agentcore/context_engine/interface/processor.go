@@ -3,6 +3,7 @@ package iface
 import (
 	"context"
 
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -94,6 +95,8 @@ type ProcessorOption struct {
 	Name string
 	// Metadata 附加元数据，对应 Python offload_messages(metadata=...)
 	Metadata map[string]any
+	// Model 模型实例，用于 KV Cache Release
+	Model *llm.Model
 	// Extra 额外参数
 	Extra map[string]any
 }
@@ -149,6 +152,11 @@ func WithName(name string) Option {
 // 对应 Python: offload_messages(metadata=...)
 func WithMetadata(metadata map[string]any) Option {
 	return func(o *ProcessorOption) { o.Metadata = metadata }
+}
+
+// WithModel 设置 KV Cache 释放用的模型实例
+func WithModel(m *llm.Model) Option {
+	return func(o *ProcessorOption) { o.Model = m }
 }
 
 // WithExtra 设置额外参数

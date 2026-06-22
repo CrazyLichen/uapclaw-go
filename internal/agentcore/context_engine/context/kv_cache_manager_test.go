@@ -73,7 +73,7 @@ func TestRelease_model为nil(t *testing.T) {
 	ctx := context.Background()
 	cw := newContextWindowWithMessages(nil, nil, nil)
 
-	err := mgr.Release(ctx, cw, nil)
+	err := mgr.Release(ctx, cw)
 	if err != nil {
 		t.Errorf("model 为 nil 时应返回 nil 错误，实际: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRelease_首次调用model为nil时不更新快照(t *testing.T) {
 	msgs := []llm_schema.BaseMessage{newUserMessage("hello")}
 	cw := newContextWindowWithMessages(msgs, nil, nil)
 
-	_ = mgr.Release(ctx, cw, nil)
+	_ = mgr.Release(ctx, cw)
 
 	// model 为 nil 时 Release 直接返回，不保存快照
 	if mgr.lastContextWindow != nil {
@@ -107,7 +107,7 @@ func TestRelease_model为nil时不更新快照(t *testing.T) {
 	cw2 := newContextWindowWithMessages(msgs, nil, nil)
 
 	// 首次调用 model 为 nil
-	_ = mgr.Release(ctx, cw1, nil)
+	_ = mgr.Release(ctx, cw1)
 
 	// model 为 nil 时不会更新 lastContextWindow
 	if mgr.lastContextWindow != nil {
@@ -115,7 +115,7 @@ func TestRelease_model为nil时不更新快照(t *testing.T) {
 	}
 
 	// 再次调用仍为 nil
-	_ = mgr.Release(ctx, cw2, nil)
+	_ = mgr.Release(ctx, cw2)
 	if mgr.lastContextWindow != nil {
 		t.Error("model 为 nil 时 lastContextWindow 始终不应被更新")
 	}
@@ -160,11 +160,11 @@ func TestCheckReleaseNeeded_消息不同时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("消息不同时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 0 {
-		t.Errorf("msgIdx 应为 0，实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 0 {
+		t.Errorf("msgIdx 应为 0，实际: %d", msgIdx)
 	}
-	if toolIdx != nil {
-		t.Errorf("toolIdx 应为 nil，实际: %v", toolIdx)
+	if toolIdx >= 0 {
+		t.Errorf("toolIdx 应为 -1，实际: %d", toolIdx)
 	}
 }
 
@@ -185,8 +185,8 @@ func TestCheckReleaseNeeded_消息角色不同时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("消息角色不同时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 0 {
-		t.Errorf("msgIdx 应为 0，实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 0 {
+		t.Errorf("msgIdx 应为 0，实际: %d", msgIdx)
 	}
 }
 
@@ -206,11 +206,11 @@ func TestCheckReleaseNeeded_工具不同时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("工具不同时应需要释放")
 	}
-	if msgIdx != nil {
-		t.Errorf("msgIdx 应为 nil，实际: %v", msgIdx)
+	if msgIdx >= 0 {
+		t.Errorf("msgIdx 应为 -1，实际: %d", msgIdx)
 	}
-	if toolIdx == nil || *toolIdx != 0 {
-		t.Errorf("toolIdx 应为 0，实际: %v", toolIdx)
+	if toolIdx < 0 || toolIdx != 0 {
+		t.Errorf("toolIdx 应为 0，实际: %d", toolIdx)
 	}
 }
 
@@ -231,11 +231,11 @@ func TestCheckReleaseNeeded_完全相同不需要释放(t *testing.T) {
 	if shouldRelease {
 		t.Error("完全相同时不应需要释放")
 	}
-	if msgIdx != nil {
-		t.Errorf("msgIdx 应为 nil，实际: %v", msgIdx)
+	if msgIdx >= 0 {
+		t.Errorf("msgIdx 应为 -1，实际: %d", msgIdx)
 	}
-	if toolIdx != nil {
-		t.Errorf("toolIdx 应为 nil，实际: %v", toolIdx)
+	if toolIdx >= 0 {
+		t.Errorf("toolIdx 应为 -1，实际: %d", toolIdx)
 	}
 }
 
@@ -256,8 +256,8 @@ func TestCheckReleaseNeeded_消息长度不同时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("消息长度不同时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 1 {
-		t.Errorf("msgIdx 应为 1（短列表末尾），实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 1 {
+		t.Errorf("msgIdx 应为 1（短列表末尾），实际: %d", msgIdx)
 	}
 }
 
@@ -278,8 +278,8 @@ func TestCheckReleaseNeeded_消息长度缩短时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("消息变少时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 1 {
-		t.Errorf("msgIdx 应为 1（短列表末尾），实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 1 {
+		t.Errorf("msgIdx 应为 1（短列表末尾），实际: %d", msgIdx)
 	}
 }
 
@@ -303,8 +303,8 @@ func TestCheckReleaseNeeded_工具长度不同时需要释放(t *testing.T) {
 	if !shouldRelease {
 		t.Error("工具数量变化时应需要释放")
 	}
-	if toolIdx == nil || *toolIdx != 1 {
-		t.Errorf("toolIdx 应为 1（短列表末尾），实际: %v", toolIdx)
+	if toolIdx < 0 || toolIdx != 1 {
+		t.Errorf("toolIdx 应为 1（短列表末尾），实际: %d", toolIdx)
 	}
 }
 
@@ -333,8 +333,8 @@ func TestCheckReleaseNeeded_中间消息不同(t *testing.T) {
 	if !shouldRelease {
 		t.Error("中间消息不同时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 1 {
-		t.Errorf("msgIdx 应为 1，实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 1 {
+		t.Errorf("msgIdx 应为 1，实际: %d", msgIdx)
 	}
 }
 
@@ -362,8 +362,8 @@ func TestCheckReleaseNeeded_系统消息和上下文消息合并比较(t *testin
 	if !shouldRelease {
 		t.Error("系统消息变化时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 0 {
-		t.Errorf("msgIdx 应为 0（系统消息位置），实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 0 {
+		t.Errorf("msgIdx 应为 0（系统消息位置），实际: %d", msgIdx)
 	}
 }
 
@@ -384,8 +384,8 @@ func TestCheckReleaseNeeded_工具描述不同但名称相同不需要释放(t *
 	if shouldRelease {
 		t.Error("仅工具描述变化（名称相同）时不应需要释放")
 	}
-	if toolIdx != nil {
-		t.Errorf("toolIdx 应为 nil，实际: %v", toolIdx)
+	if toolIdx >= 0 {
+		t.Errorf("toolIdx 应为 -1，实际: %d", toolIdx)
 	}
 }
 
@@ -403,11 +403,11 @@ func TestCheckReleaseNeeded_空消息和空工具(t *testing.T) {
 	if shouldRelease {
 		t.Error("空消息和空工具不需要释放")
 	}
-	if msgIdx != nil {
-		t.Errorf("msgIdx 应为 nil，实际: %v", msgIdx)
+	if msgIdx >= 0 {
+		t.Errorf("msgIdx 应为 -1，实际: %d", msgIdx)
 	}
-	if toolIdx != nil {
-		t.Errorf("toolIdx 应为 nil，实际: %v", toolIdx)
+	if toolIdx >= 0 {
+		t.Errorf("toolIdx 应为 -1，实际: %d", toolIdx)
 	}
 }
 
@@ -429,11 +429,11 @@ func TestCheckReleaseNeeded_消息不同且工具也不同(t *testing.T) {
 	if !shouldRelease {
 		t.Error("消息和工具都不同时应需要释放")
 	}
-	if msgIdx == nil || *msgIdx != 0 {
-		t.Errorf("msgIdx 应为 0，实际: %v", msgIdx)
+	if msgIdx < 0 || msgIdx != 0 {
+		t.Errorf("msgIdx 应为 0，实际: %d", msgIdx)
 	}
-	if toolIdx == nil || *toolIdx != 0 {
-		t.Errorf("toolIdx 应为 0，实际: %v", toolIdx)
+	if toolIdx < 0 || toolIdx != 0 {
+		t.Errorf("toolIdx 应为 0，实际: %d", toolIdx)
 	}
 }
 
@@ -505,8 +505,8 @@ func TestRelease_model为nil不更新快照_多次调用(t *testing.T) {
 	cw2 := newContextWindowWithMessages(msgs2, nil, nil)
 
 	// model 为 nil 时，无论 ContextWindow 如何变化，都不处理
-	_ = mgr.Release(ctx, cw1, nil)
-	_ = mgr.Release(ctx, cw2, nil)
+	_ = mgr.Release(ctx, cw1)
+	_ = mgr.Release(ctx, cw2)
 
 	// lastContextWindow 始终为 nil（因为 nil model 直接返回）
 	if mgr.lastContextWindow != nil {
@@ -529,7 +529,7 @@ func TestRelease_手动设置快照后model为nil(t *testing.T) {
 	// model 为 nil 应直接返回，不检查差异
 	msgs2 := []llm_schema.BaseMessage{newUserMessage("world")}
 	cw2 := newContextWindowWithMessages(msgs2, nil, nil)
-	err := mgr.Release(ctx, cw2, nil)
+	err := mgr.Release(ctx, cw2)
 	if err != nil {
 		t.Errorf("model 为 nil 时应返回 nil，实际: %v", err)
 	}

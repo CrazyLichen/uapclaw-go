@@ -296,7 +296,7 @@ func (fcp *FullCompactProcessor) ProcessorType() string {
 //
 // 对应 Python: FullCompactProcessor.trigger_add_messages()
 func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	candidateMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	candidateMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	if !fcp.IsAPIRound(candidateMessages) {
 		return false, nil
 	}
@@ -309,7 +309,7 @@ func (fcp *FullCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.
 //
 // 对应 Python: FullCompactProcessor.on_add_messages()
 func (fcp *FullCompactProcessor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	allMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	fcp.ResetCompressionUsage()
 
 	event, newContextMessages, sessionMemoryMessage := fcp._buildReplacementMessages(ctx, mc, allMessages)

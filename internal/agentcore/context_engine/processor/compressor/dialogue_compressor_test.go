@@ -26,7 +26,7 @@ type fakeModelContext struct {
 }
 
 func (f *fakeModelContext) Len() int { return len(f.messages) }
-func (f *fakeModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage {
+func (f *fakeModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
 	return f.messages
 }
 func (f *fakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ bool) {
@@ -38,7 +38,7 @@ func (f *fakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessa
 	return nil, nil
 }
 func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ *int, _ *int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fakeModelContext) Statistic() *iface.ContextStats   { return nil }

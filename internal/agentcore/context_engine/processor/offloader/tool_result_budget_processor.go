@@ -148,7 +148,7 @@ func (c *ToolResultBudgetProcessorConfig) Validate() error {
 //
 // 对应 Python: ToolResultBudgetProcessor.trigger_add_messages()
 func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	allMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	exceededRounds := p.roundBudgetExceeded(allMessages, mc)
 	if len(exceededRounds) > 0 {
 		logger.Info(logger.ComponentAgentCore).
@@ -170,7 +170,7 @@ func (p *ToolResultBudgetProcessor) OnAddMessages(ctx context.Context, mc iface.
 	po := iface.NewProcessorOption(opts...)
 	p.sysOperation = po.SysOperation
 
-	contextMessages := mc.GetMessages(nil, true)
+	contextMessages := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
 	contextSize := len(contextMessages)
 	updatedMessages := make([]llm_schema.BaseMessage, len(allMessages))

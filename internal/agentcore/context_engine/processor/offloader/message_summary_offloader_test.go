@@ -166,7 +166,7 @@ func TestMessageSummaryOffloader_shouldOffloadMessage(t *testing.T) {
 			}),
 		)
 		mc := &fakeModelContext{messages: []llm_schema.BaseMessage{assistantMsg}, sessionID: "test-session", tokenCount: 200}
-		assert.False(t, mso.shouldOffloadMessage(toolMsg, mc, mc.GetMessages(nil, true)))
+		assert.False(t, mso.shouldOffloadMessage(toolMsg, mc, mc.GetMessages(0, true)))
 	})
 
 	t.Run("消息太小返回false", func(t *testing.T) {

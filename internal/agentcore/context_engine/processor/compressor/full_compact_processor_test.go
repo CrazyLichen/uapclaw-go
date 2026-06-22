@@ -29,7 +29,7 @@ type fcpFakeModelContext struct {
 }
 
 func (f *fcpFakeModelContext) Len() int { return len(f.messages) }
-func (f *fcpFakeModelContext) GetMessages(_ *int, _ bool) []llm_schema.BaseMessage {
+func (f *fcpFakeModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
 	return f.messages
 }
 func (f *fcpFakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ bool) {
@@ -41,7 +41,7 @@ func (f *fcpFakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMe
 	return nil, nil
 }
 func (f *fcpFakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ *int, _ *int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fcpFakeModelContext) Statistic() *iface.ContextStats   { return nil }

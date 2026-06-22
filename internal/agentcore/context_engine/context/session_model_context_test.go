@@ -347,7 +347,7 @@ func TestSessionModelContext_GetMessages(t *testing.T) {
 	})
 
 	t.Run("获取全部消息", func(t *testing.T) {
-		msgs := mc.GetMessages(nil, true)
+		msgs := mc.GetMessages(0, true)
 		if len(msgs) != 2 {
 			t.Errorf("期望消息数=2, 实际=%d", len(msgs))
 		}
@@ -355,7 +355,7 @@ func TestSessionModelContext_GetMessages(t *testing.T) {
 
 	t.Run("限制返回数量", func(t *testing.T) {
 		size := 1
-		msgs := mc.GetMessages(&size, true)
+		msgs := mc.GetMessages(size, true)
 		if len(msgs) != 1 {
 			t.Errorf("期望消息数=1, 实际=%d", len(msgs))
 		}
@@ -492,21 +492,19 @@ func TestSessionModelContext_AddMessages(t *testing.T) {
 
 // TestSessionModelContext_GetContextWindow 测试 GetContextWindow 方法
 func TestSessionModelContext_GetContextWindow(t *testing.T) {
-	t.Run("参数校验-windowSize小于等于0", func(t *testing.T) {
+	t.Run("参数校验-windowSize为负数", func(t *testing.T) {
 		mc := newTestSessionModelContext()
-		windowSize := 0
-		_, err := mc.GetContextWindow(context.Background(), nil, nil, &windowSize, nil)
+		_, err := mc.GetContextWindow(context.Background(), nil, nil, -1, 0)
 		if err == nil {
-			t.Error("期望 windowSize<=0 返回错误")
+			t.Error("期望 windowSize<0 返回错误")
 		}
 	})
 
-	t.Run("参数校验-dialogueRound小于等于0", func(t *testing.T) {
+	t.Run("参数校验-dialogueRound为负数", func(t *testing.T) {
 		mc := newTestSessionModelContext()
-		dialogueRound := -1
-		_, err := mc.GetContextWindow(context.Background(), nil, nil, nil, &dialogueRound)
+		_, err := mc.GetContextWindow(context.Background(), nil, nil, 0, -1)
 		if err == nil {
-			t.Error("期望 dialogueRound<=0 返回错误")
+			t.Error("期望 dialogueRound<0 返回错误")
 		}
 	})
 
@@ -521,7 +519,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 			o.windowSize = 0  // 不按窗口大小截取
 		})
 
-		window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+		window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -541,7 +539,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 		tools := []*schema.ToolInfo{
 			{Name: "test_tool", Description: "测试工具"},
 		}
-		window, err := mc.GetContextWindow(context.Background(), sysMsgs, tools, nil, nil)
+		window, err := mc.GetContextWindow(context.Background(), sysMsgs, tools, 0, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -560,7 +558,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 		sysMsgs := []llm_schema.BaseMessage{
 			llm_schema.NewSystemMessage("原始系统消息"),
 		}
-		window, err := mc.GetContextWindow(context.Background(), sysMsgs, nil, nil, nil)
+		window, err := mc.GetContextWindow(context.Background(), sysMsgs, nil, 0, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -581,7 +579,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 			o.historyMessages = history
 		})
 		windowSize := 2
-		window, err := mc.GetContextWindow(context.Background(), nil, nil, &windowSize, nil)
+		window, err := mc.GetContextWindow(context.Background(), nil, nil, windowSize, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -603,7 +601,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 		mc := newTestSessionModelContext(func(o *testContextOpts) {
 			o.processors = []iface.ContextProcessor{proc}
 		})
-		window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+		window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -627,7 +625,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 			}
 			o.processors = []iface.ContextProcessor{proc}
 		})
-		window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+		window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -1014,10 +1012,19 @@ func TestSessionModelContext_Len(t *testing.T) {
 // TestSessionModelContext_ReloaderTool 测试 ReloaderTool 方法
 func TestSessionModelContext_ReloaderTool(t *testing.T) {
 	mc := newTestSessionModelContext()
-	tool := mc.ReloaderTool()
-	// 当前实现返回 nil
-	if tool != nil {
-		t.Errorf("期望 ReloaderTool()=nil (当前未实现), 实际=%v", tool)
+	rlTool := mc.ReloaderTool()
+	if rlTool == nil {
+		t.Fatal("期望 ReloaderTool() 非 nil，实际为 nil")
+	}
+
+	// 校验 ToolCard 基本属性
+	card := rlTool.Card()
+	if card.Name != "reload_original_context_messages" {
+		t.Errorf("期望 card.Name=reload_original_context_messages, 实际=%s", card.Name)
+	}
+	expectedID := fmt.Sprintf("reload_%s_%s", mc.SessionID(), mc.ContextID())
+	if card.ID != expectedID {
+		t.Errorf("期望 card.ID=%s, 实际=%s", expectedID, card.ID)
 	}
 }
 
@@ -1222,7 +1229,7 @@ func TestGetContextWindow_处理器触发判断错误(t *testing.T) {
 		o.processors = []iface.ContextProcessor{proc}
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("msg")}
 	})
-	window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+	window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 	if err != nil {
 		t.Errorf("触发判断失败不应返回错误，实际: %v", err)
 	}
@@ -1242,7 +1249,7 @@ func TestGetContextWindow_处理器执行错误(t *testing.T) {
 		o.processors = []iface.ContextProcessor{proc}
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("msg")}
 	})
-	window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+	window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 	if err != nil {
 		t.Errorf("处理器执行失败不应返回错误，实际: %v", err)
 	}
@@ -1257,7 +1264,7 @@ func TestGetContextWindow_带KV缓存(t *testing.T) {
 		o.enableKVCache = true
 		o.historyMessages = []llm_schema.BaseMessage{llm_schema.NewUserMessage("msg")}
 	})
-	window, err := mc.GetContextWindow(context.Background(), nil, nil, nil, nil)
+	window, err := mc.GetContextWindow(context.Background(), nil, nil, 0, 0)
 	if err != nil {
 		t.Errorf("期望无错误，实际: %v", err)
 	}

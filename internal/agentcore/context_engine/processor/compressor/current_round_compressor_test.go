@@ -349,7 +349,7 @@ func TestCurrentRoundCompressor_OnAddMessages_触发压缩(t *testing.T) {
 
 	// 验证压缩成功
 	if event == nil {
-		contextMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+		contextMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 		idx := crc.GetCompressIdx(contextMessages)
 		t.Fatalf("压缩触发后应返回非空 event，GetCompressIdx=%d, len(contextMessages)=%d", idx, len(contextMessages))
 	}
@@ -365,7 +365,7 @@ func TestCurrentRoundCompressor_OnAddMessages_触发压缩(t *testing.T) {
 	}
 
 	// 验证 ModelContext 中的消息包含记忆块
-	updated := mc.GetMessages(nil, true)
+	updated := mc.GetMessages(0, true)
 	found := false
 	for _, msg := range updated {
 		if strings.Contains(msg.GetContent().Text(), "[CURRENT_ROUND_MEMORY_BLOCK]") {

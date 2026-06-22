@@ -132,7 +132,7 @@ func (mo *MessageOffloader) ProcessorType() string { return "MessageOffloader" }
 // 对应 Python: MessageOffloader.trigger_add_messages()
 func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
 	cfg := mo.config
-	allMessages := append(mc.GetMessages(nil, true), messagesToAdd...)
+	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
 	messageSize := len(allMessages)
 
 	if cfg.MessagesToKeep != nil && messageSize <= *cfg.MessagesToKeep {
@@ -154,7 +154,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 	// 计算 Token 数
 	tokenCounter := mc.TokenCounter()
 	if tokenCounter != nil {
-		contextTokens, _ := tokenCounter.CountMessages(mc.GetMessages(nil, true), "")
+		contextTokens, _ := tokenCounter.CountMessages(mc.GetMessages(0, true), "")
 		addTokens, _ := tokenCounter.CountMessages(messagesToAdd, "")
 		tokens := contextTokens + addTokens
 		if tokens > cfg.TokensThreshold {
@@ -177,7 +177,7 @@ func (mo *MessageOffloader) TriggerAddMessages(_ context.Context, mc iface.Model
 //
 // 对应 Python: MessageOffloader.on_add_messages()
 func (mo *MessageOffloader) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	contextMessages := mc.GetMessages(nil, true)
+	contextMessages := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
 	contextSize := len(contextMessages)
 
