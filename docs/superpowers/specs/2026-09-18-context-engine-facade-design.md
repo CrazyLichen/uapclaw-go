@@ -137,8 +137,8 @@ Go 对齐：构造时 Option 注入，`CreateContext` 时自动透传给 Session
 
 | 函数 | 对齐 Python 参数 |
 |------|------------------|
-| `WithWorkspace(w Workspace) ContextEngineOption` | `workspace=` |
-| `WithSysOperation(op SysOperation) ContextEngineOption` | `sys_operation=` |
+| `WithWorkspace(w any) ContextEngineOption` | `workspace=` |
+| `WithEngineSysOperation(op any) ContextEngineOption` | `sys_operation=` |
 
 ### 4.2 CreateContextOption
 
@@ -165,6 +165,11 @@ type ProcessorSpec struct {
 | 函数 | 对齐 Python 参数 |
 |------|------------------|
 | `WithProcessorTypes(types []string) CompressContextOption` | `processor_types=` |
+| `WithCompressSysOperation(op any) CompressContextOption` | `sys_operation=`（由 ContextEngine 透传） |
+| `WithModelName(name string) CompressContextOption` | `model_name=`（用于 resolve_context_max） |
+
+**说明**：Python 的 `compress_context(processor_types=, sys_operation=self._sys_operation, **kwargs)` 透传 `sys_operation` 和 `**kwargs`。
+Go 在 `CompressContext` 方法中自动注入 `ce.sysOperation`（若调用方未指定），通过 `CompressContextOption` 独立补齐各字段，方案 A（各 Option 独立补齐）。
 
 ### 4.4 ClearContextOption
 
@@ -180,7 +185,7 @@ type ProcessorSpec struct {
 
 ## 五、ModelContext 接口补充（5.30 定义签名，5.31 实现）
 
-当前 ModelContext 接口缺失的方法，需在 5.30 补充接口签名：
+### 5.1 新增方法（5.30 初版）
 
 | 新增方法 | Python 对应 | 用途 |
 |----------|------------|------|
@@ -190,6 +195,22 @@ type ProcessorSpec struct {
 | `SaveState() map[string]any` | `save_state()` | 保存上下文状态 |
 | `LoadState(state map[string]any)` | `load_state()` | 恢复上下文状态 |
 | `CompressContext(ctx context.Context, opts ...CompressContextOption) (string, error)` | `compress_context()` | 主动压缩 |
+
+### 5.2 签名变更（5.30 补齐 Option 透传）
+
+Python 的 `add_messages`/`get_context_window`/`clear_messages` 均接受 `**kwargs` 透传给 processor，
+Go 需要等价支持，采用方案 A（各 Option 独立补齐）：
+
+| 方法 | 原签名 | 新签名 | Python 对应 |
+|------|--------|--------|------------|
+| `AddMessages` | `(ctx, message any)` | `(ctx, message BaseMessage, opts ...Option)` | `add_messages(messages, **kwargs)` |
+| `GetContextWindow` | `(ctx, sysMsgs, tools, ws, dr)` | `(ctx, sysMsgs, tools, ws, dr, opts ...Option)` | `get_context_window(..., **kwargs)` |
+| `ClearMessages` | `(ctx, withHistory)` | `(ctx, withHistory, opts ...Option)` | `clear_messages(**kwargs)` |
+
+**`AddMessages` message 参数类型变更说明**：
+- 原为 `message any`（接受 `*BaseMessage` 或 `[]*BaseMessage`），但 Python 的 `messages: BaseMessage | List[BaseMessage]` 传入的都是 `BaseMessage` 实例
+- Go 的 `BaseMessage` 是接口类型，`UserMessage`/`AssistantMessage`/`ToolMessage` 等具体类型都实现了该接口
+- 改为 `message llm_schema.BaseMessage` 更类型安全，单条直接传，多条传 slice（5.31 实现时在内部统一为 `[]BaseMessage`）
 
 ## 六、完整回填点清单
 

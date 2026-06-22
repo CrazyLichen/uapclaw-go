@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -86,6 +87,9 @@ func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEn
 //
 // 对应 Python: ContextEngine.create_context()
 func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, sess *session.Session, opts ...iface.CreateContextOption) (iface.ModelContext, error) {
+	if contextID == "" {
+		contextID = defaultContextID
+	}
 	contextID = processContextID(contextID)
 	sessionID := defaultSessionID
 	if sess != nil {
@@ -99,6 +103,13 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 		mc.SetSessionRef(sess)
 		opt := iface.NewCreateContextOptions(opts...)
 		loadStateFromSession(mc, sess, opt.HistoryMessages)
+		// 触发 ContextRetrieved 事件，对齐 Python: @_fw.emit_after(ContextEvents.CONTEXT_RETRIEVED, result_key="context")
+		callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+			Event:     callback.ContextRetrieved,
+			SessionID: sessionID,
+			ContextID: contextID,
+			Context:   mc,
+		})
 		return mc, nil
 	}
 	ce.mu.RUnlock()
@@ -122,6 +133,7 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 	}
 
 	// ⤵️ 5.31 回填：构造 SessionModelContext 实例
+	// ⤵️ 5.31 回填：新创建后触发 ContextRetrieved 事件（与缓存命中路径一致）
 	_ = processorInstances
 	_ = tokenCounter
 	_ = opt.HistoryMessages
@@ -148,6 +160,8 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 // 返回值："busy"（被动压缩进行中）、"compressed"（压缩成功）、"noop"（无变化）。
 //
 // 对应 Python: ContextEngine.compress_context()
+// Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
+// Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
 func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess *session.Session, opts ...iface.CompressContextOption) (string, error) {
 	sessionID := defaultSessionID
 	if sess != nil {
@@ -163,7 +177,16 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 		)
 	}
 
-	return mc.CompressContext(ctx, opts...)
+	// 对齐 Python: context.compress_context(processor_types=, sys_operation=self._sys_operation, **kwargs)
+	// 若调用方未通过 WithCompressSysOperation 指定，自动注入 ce.sysOperation
+	compressOpts := make([]iface.CompressContextOption, 0, len(opts)+1)
+	opt := iface.NewCompressContextOptions(opts...)
+	if opt.SysOperation == nil && ce.sysOperation != nil {
+		compressOpts = append(compressOpts, iface.WithCompressSysOperation(ce.sysOperation))
+	}
+	compressOpts = append(compressOpts, opts...)
+
+	return mc.CompressContext(ctx, compressOpts...)
 }
 
 // ClearContext 清空上下文。
@@ -174,7 +197,7 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 //   - WithSessionID + WithContextID → 清除指定上下文
 //
 // 对应 Python: ContextEngine.clear_context()
-func (ce *contextEngine) ClearContext(_ context.Context, opts ...iface.ClearContextOption) error {
+func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearContextOption) error {
 	opt := iface.NewClearContextOptions(opts...)
 
 	if opt.SessionID == "" {
@@ -183,8 +206,13 @@ func (ce *contextEngine) ClearContext(_ context.Context, opts ...iface.ClearCont
 		clearedCount := len(ce.contextPool)
 		ce.contextPool = make(map[string]iface.ModelContext)
 		ce.mu.Unlock()
-		_ = clearedCount
-		// ⤵️ 6.4-6.10 回填：触发 ContextCleared 事件
+		// 触发 ContextCleared 事件，对齐 Python: await trigger(ContextEvents.CONTEXT_CLEARED, context_id=, session_id=, cleared_count=)
+		callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+			Event:     callback.ContextCleared,
+			SessionID: "",
+			ContextID: "",
+			Extra:     map[string]any{"cleared_count": clearedCount},
+		})
 		return nil
 	}
 
@@ -210,8 +238,13 @@ func (ce *contextEngine) ClearContext(_ context.Context, opts ...iface.ClearCont
 		}
 		clearedCount := len(deleteContextIDs)
 		ce.mu.Unlock()
-		_ = clearedCount
-		// ⤵️ 6.4-6.10 回填：触发 ContextCleared 事件
+		// 触发 ContextCleared 事件
+		callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+			Event:     callback.ContextCleared,
+			SessionID: opt.SessionID,
+			ContextID: "",
+			Extra:     map[string]any{"cleared_count": clearedCount},
+		})
 		return nil
 	}
 
@@ -228,7 +261,12 @@ func (ce *contextEngine) ClearContext(_ context.Context, opts ...iface.ClearCont
 	}
 	delete(ce.contextPool, fullContextID)
 	ce.mu.Unlock()
-	// ⤵️ 6.4-6.10 回填：触发 ContextCleared 事件
+	// 触发 ContextCleared 事件
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextCleared,
+		SessionID: opt.SessionID,
+		ContextID: contextID,
+	})
 	return nil
 }
 
@@ -238,7 +276,7 @@ func (ce *contextEngine) ClearContext(_ context.Context, opts ...iface.ClearCont
 // 通过 saveStateToSession 写入 Session。
 //
 // 对应 Python: ContextEngine.save_contexts()
-func (ce *contextEngine) SaveContexts(_ context.Context, sess *session.Session, contextIDs []string) (map[string]any, error) {
+func (ce *contextEngine) SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) (map[string]any, error) {
 	if sess == nil {
 		logger.Warn(logComponent).
 			Msg("Save context failed, session cannot be nil")
@@ -272,7 +310,12 @@ func (ce *contextEngine) SaveContexts(_ context.Context, sess *session.Session, 
 	}
 
 	saveStateToSession(sess, states)
-	// ⤵️ 6.4-6.10 回填：触发 ContextOffloaded 事件
+	// 触发 ContextOffloaded 事件，对齐 Python: @_fw.emit_after(ContextEvents.CONTEXT_OFFLOADED, result_key="result")
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextOffloaded,
+		SessionID: sessionID,
+		Extra:     map[string]any{"result": states},
+	})
 	return states, nil
 }
 

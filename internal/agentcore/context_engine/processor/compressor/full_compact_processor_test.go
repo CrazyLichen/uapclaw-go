@@ -36,12 +36,12 @@ func (f *fcpFakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ b
 	f.messages = messages
 }
 func (f *fcpFakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (f *fcpFakeModelContext) ClearMessages(_ context.Context, _ bool) error      { return nil }
-func (f *fcpFakeModelContext) AddMessages(_ context.Context, _ any) ([]llm_schema.BaseMessage, error) {
+func (f *fcpFakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error      { return nil }
+func (f *fcpFakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (f *fcpFakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
+	_ []*schema.ToolInfo, _ *int, _ *int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fcpFakeModelContext) Statistic() *iface.ContextStats   { return nil }

@@ -35,13 +35,16 @@ type ModelContext interface {
 	PopMessages(size int, withHistory bool) []llm_schema.BaseMessage
 	// ClearMessages 清空消息
 	// withHistory 控制是否清空历史消息
-	ClearMessages(ctx context.Context, withHistory bool) error
+	// opts 透传给处理器，对齐 Python: clear_messages(**kwargs)
+	ClearMessages(ctx context.Context, withHistory bool, opts ...Option) error
 	// AddMessages 添加消息
-	// message 接受 *BaseMessage（单条）或 []*BaseMessage（列表）
-	AddMessages(ctx context.Context, message any) ([]llm_schema.BaseMessage, error)
+	// message 接受 BaseMessage（单条）或 []BaseMessage（列表）
+	// opts 透传给处理器，对齐 Python: add_messages(messages, **kwargs)
+	AddMessages(ctx context.Context, message llm_schema.BaseMessage, opts ...Option) ([]llm_schema.BaseMessage, error)
 	// GetContextWindow 构建上下文窗口供模型推理使用
+	// opts 透传给处理器，对齐 Python: get_context_window(..., **kwargs)
 	GetContextWindow(ctx context.Context, systemMessages []llm_schema.BaseMessage,
-		tools []*schema.ToolInfo, windowSize *int, dialogueRound *int) (*ContextWindow, error)
+		tools []*schema.ToolInfo, windowSize *int, dialogueRound *int, opts ...Option) (*ContextWindow, error)
 	// Statistic 计算上下文统计信息
 	Statistic() *ContextStats
 	// SessionID 返回会话 ID
@@ -143,6 +146,11 @@ type CompressContextOption func(*CompressContextOptions)
 type CompressContextOptions struct {
 	// ProcessorTypes 压缩处理器类型过滤列表
 	ProcessorTypes []string
+	// SysOperation 系统操作接口，由 ContextEngine 透传
+	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
+	SysOperation any
+	// ModelName 模型名称，用于 resolve_context_max
+	ModelName string
 }
 
 // ClearContextOption ClearContext 方法选项函数
@@ -240,6 +248,17 @@ func WithTokenCounter(tc token.TokenCounter) CreateContextOption {
 // WithProcessorTypes 设置压缩处理器类型过滤列表
 func WithProcessorTypes(types []string) CompressContextOption {
 	return func(o *CompressContextOptions) { o.ProcessorTypes = types }
+}
+
+// WithCompressSysOperation 设置压缩时的系统操作接口
+// ⤵️ 9.32 回填参数类型
+func WithCompressSysOperation(op any) CompressContextOption {
+	return func(o *CompressContextOptions) { o.SysOperation = op }
+}
+
+// WithModelName 设置模型名称，用于 resolve_context_max
+func WithModelName(name string) CompressContextOption {
+	return func(o *CompressContextOptions) { o.ModelName = name }
 }
 
 // WithSessionID 设置会话 ID（用于 ClearContext）

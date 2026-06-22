@@ -532,12 +532,12 @@ func (f *fakeModelContextForMicro) SetMessages(messages []llm_schema.BaseMessage
 	f.messages = messages
 }
 func (f *fakeModelContextForMicro) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
-func (f *fakeModelContextForMicro) ClearMessages(_ context.Context, _ bool) error      { return nil }
-func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ any) ([]llm_schema.BaseMessage, error) {
+func (f *fakeModelContextForMicro) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error      { return nil }
+func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (f *fakeModelContextForMicro) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ *int, _ *int) (*iface.ContextWindow, error) {
+	_ []*schema.ToolInfo, _ *int, _ *int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats   { return nil }
