@@ -66,8 +66,6 @@ type SessionModelContext struct {
 	kvCacheManager *KVCacheManager
 	// offloadMessageBuffer 卸载消息缓冲区
 	offloadMessageBuffer *OffloadMessageBuffer
-	// reloaderToolCard 重载工具卡片
-	reloaderToolCard *tool.ToolCard
 }
 
 // workspaceInterface 工作空间私有接口，用于 WorkspaceDir() 类型断言
@@ -78,9 +76,9 @@ type workspaceInterface interface {
 // reloaderToolInput 重载工具输入参数结构体。
 type reloaderToolInput struct {
 	// OffloadHandle 卸载内容的唯一标识
-	OffloadHandle string `json:"offload_handle" jsonschema:"description=A unique identifier or file path pointing to the offloaded content."`
+	OffloadHandle string `json:"offload_handle" jsonschema:"description=A unique identifier or file path pointing to the offloaded content. Accepts either a UUID string (e.g. abc123-def456) for memory-based storage, or a file path for filesystem-based storage."`
 	// OffloadType 卸载内容的存储类型
-	OffloadType string `json:"offload_type" jsonschema:"description=The storage backend used when the content was offloaded."`
+	OffloadType string `json:"offload_type" jsonschema:"description=The storage backend used when the content was offloaded. Must be one of: in_memory (session cache, handle is UUID), filesystem (disk file, handle is file path)."`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -97,7 +95,7 @@ feel free to call reload_original_context_messages:
 - Call reload_original_context_messages(offload_handle="<id>", offload_type="<type>") with the exact values from the marker
 - Do not guess or make up the missing content
 
-Storage types: "in_memory" (session cache).`
+Storage types: "in_memory" (session cache), "filesystem" (disk file).`
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -180,18 +178,8 @@ func NewSessionModelContext(
 		mc.offloadMessageBuffer.SetWorkspaceInfo(workspaceDir, sessionID)
 	}
 
-	// 8. 创建 reloaderToolCard 对齐 Python _reloader_tool_card
-	reloaderToolCard := tool.NewToolCard(
-		"reload_original_context_messages",
-		"Retrieve messages that were previously offloaded from the context window. Provide the exact handle and storage type returned when the content was offloaded; the tool will fetch the complete original message list and inject it back into the conversation, allowing the model to see the full text as if it had never been removed.",
-		[]*schema.Param{
-			schema.NewStringParam("offload_handle", "A unique identifier or file path pointing to the offloaded content. Accepts either a UUID string (e.g., 'abc123-def456') for memory-based storage.", true),
-			schema.NewStringParam("offload_type", "The storage backend used when the content was offloaded. Must be one of: 'in_memory': Content was stored in in-memory cache. Requires offload_handle to be a UUID or key string.", true),
-		},
-		nil,
-	)
-	reloaderToolCard.ID = fmt.Sprintf("reload_%s_%s", sessionID, contextID)
-	mc.reloaderToolCard = reloaderToolCard
+	// 8. reloaderToolCard 不再预构造，由 ReloaderTool() 调用 NewTool 时从
+	//    reloaderToolInput 反射自动生成 schema + ToolCard
 
 	logger.Info(logComponent).
 		Str("event_type", "SESSION_MODEL_CONTEXT_CREATED").
@@ -489,12 +477,10 @@ func (mc *SessionModelContext) TokenCounter() token.TokenCounter {
 
 // ReloaderTool 返回重载卸载消息的工具。
 //
+// NewTool 从 reloaderToolInput 的 jsonschema tag 反射提取 input schema，
+// 内部自动生成 ToolCard，无需手动构造。
 // 对应 Python: SessionModelContext.reloader_tool()
 func (mc *SessionModelContext) ReloaderTool() tool.Tool {
-	if mc.reloaderToolCard == nil {
-		return nil
-	}
-
 	// 闭包捕获 offloadMessageBuffer 引用，对齐 Python @tool 装饰器
 	reloadFn := func(ctx context.Context, input reloaderToolInput) (string, error) {
 		reloadedMessages := mc.offloadMessageBuffer.Reload(input.OffloadHandle, input.OffloadType)
@@ -505,7 +491,8 @@ func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 	}
 
 	t, err := tool.NewTool(reloadFn,
-		tool.WithToolCard(mc.reloaderToolCard),
+		tool.WithToolName("reload_original_context_messages"),
+		tool.WithToolDescription("Retrieve messages that were previously offloaded from the context window. Provide the exact handle and storage type returned when the content was offloaded; the tool will fetch the complete original message list and inject it back into the conversation, allowing the model to see the full text as if it had never been removed."),
 	)
 	if err != nil {
 		logger.Error(logComponent).
@@ -514,6 +501,10 @@ func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 			Msg("创建 reloader tool 失败")
 		return nil
 	}
+
+	// 设置自定义 ID，对齐 Python: f"reload_{session_id}_{context_id}"
+	t.Card().ID = fmt.Sprintf("reload_%s_%s", mc.sessionID, mc.contextID)
+
 	return t
 }
 
