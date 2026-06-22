@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -538,6 +539,14 @@ func (f *fakeModelContext) SessionID() string                { return f.sessionI
 func (f *fakeModelContext) ContextID() string                { return "" }
 func (f *fakeModelContext) TokenCounter() token.TokenCounter { return f }
 func (f *fakeModelContext) ReloaderTool() tool.Tool          { return nil }
+func (f *fakeModelContext) WorkspaceDir() string             { return "" }
+func (f *fakeModelContext) SetSessionRef(_ *session.Session) {}
+func (f *fakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
+func (f *fakeModelContext) SaveState() map[string]any        { return nil }
+func (f *fakeModelContext) LoadState(_ map[string]any)       {}
+func (f *fakeModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
+	return "", nil
+}
 
 // 实现 token.TokenCounter 接口
 func (f *fakeModelContext) Count(text string, model string) (int, error) {

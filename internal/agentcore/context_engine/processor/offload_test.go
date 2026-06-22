@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -39,7 +40,14 @@ func (m *mockModelContext) SessionID() string                { return m.sessionI
 func (m *mockModelContext) ContextID() string                { return "ctx-123" }
 func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
 func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
-
+func (m *mockModelContext) WorkspaceDir() string             { return "" }
+func (m *mockModelContext) SetSessionRef(_ *session.Session) {}
+func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
+func (m *mockModelContext) SaveState() map[string]any        { return nil }
+func (m *mockModelContext) LoadState(_ map[string]any)       {}
+func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
+	return "", nil
+}
 // TestOffloadMessages_in_memory模式正常 验证 in_memory 模式正常流程
 func TestOffloadMessages_in_memory模式正常(t *testing.T) {
 	c := &testConfig{Name: "test"}

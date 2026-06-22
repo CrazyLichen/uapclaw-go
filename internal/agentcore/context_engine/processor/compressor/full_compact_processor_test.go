@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -48,6 +49,14 @@ func (f *fcpFakeModelContext) SessionID() string                { return "test-s
 func (f *fcpFakeModelContext) ContextID() string                { return "test-context" }
 func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter { return f.tokenCounter }
 func (f *fcpFakeModelContext) ReloaderTool() tool.Tool          { return nil }
+func (f *fcpFakeModelContext) WorkspaceDir() string             { return "" }
+func (f *fcpFakeModelContext) SetSessionRef(_ *session.Session) {}
+func (f *fcpFakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
+func (f *fcpFakeModelContext) SaveState() map[string]any        { return nil }
+func (f *fcpFakeModelContext) LoadState(_ map[string]any)       {}
+func (f *fcpFakeModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
+	return "", nil
+}
 
 // fcpFakeTokenCounter 测试用 TokenCounter 模拟
 type fcpFakeTokenCounter struct {
