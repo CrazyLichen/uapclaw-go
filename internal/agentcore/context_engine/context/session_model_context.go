@@ -1,0 +1,982 @@
+package context
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SessionModelContext 上下文引擎的核心运行时实现，管理对话消息和上下文窗口。
+//
+// 对应 Python: openjiuwen/core/context_engine/context/context.py (SessionModelContext)
+type SessionModelContext struct {
+	// contextID 上下文唯一标识
+	contextID string
+	// sessionID 会话唯一标识
+	sessionID string
+	// messageBuffer 消息缓冲区
+	messageBuffer *ContextMessageBuffer
+	// defaultWindowSize 默认窗口大小
+	defaultWindowSize int
+	// enableReload 是否启用 offload 重载功能
+	enableReload bool
+	// contextWindowTokens 上下文窗口 token 数
+	contextWindowTokens int
+	// modelName 模型名称
+	modelName string
+	// modelContextWindowTokens 各模型上下文窗口 token 映射
+	modelContextWindowTokens map[string]int
+	// workspace 工作空间
+	workspace any
+	// sysOperation 系统操作接口
+	sysOperation any
+	// sessionRef 会话引用
+	sessionRef *session.Session
+	// defaultDialogueRound 默认对话轮数
+	defaultDialogueRound int
+	// tokenCounter Token 计数器
+	tokenCounter token.TokenCounter
+	// processors 处理器列表
+	processors []iface.ContextProcessor
+	// stateRecorder 压缩状态记录器
+	stateRecorder *ProcessorStateRecorder
+	// processorLock 处理器互斥锁，对齐 Python asyncio.Lock
+	processorLock sync.Mutex
+	// activeCompressionInProgress 主动压缩进行中标志
+	activeCompressionInProgress bool
+	// kvCacheManager KV 缓存管理器
+	kvCacheManager *KVCacheManager
+	// offloadMessageBuffer 卸载消息缓冲区
+	offloadMessageBuffer *OffloadMessageBuffer
+}
+
+// workspaceInterface 工作空间私有接口，用于 WorkspaceDir() 类型断言
+type workspaceInterface interface {
+	RootPath() string
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
+//
+// 对应 Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
+const reloaderSystemPrompt = `You have a tool called "reloader_tool". When you encounter placeholders in the conversation that look like [[HANDLE:xxxx]], it means some previous conversation content has been offloaded to free up context space. If you need to recall the offloaded content to answer the user's question, please call reloader_tool with the handle value (e.g., xxxx) to reload the original content.`
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewSessionModelContext 创建 SessionModelContext 实例。
+//
+// 流程：
+//  1. 校验历史消息 + 确保 ID
+//  2. 创建消息缓冲区
+//  3. 从配置读取窗口参数
+//  4. 创建状态记录器
+//  5. 条件创建 KVCacheManager
+//  6. 创建卸载缓冲区
+//
+// 对应 Python: SessionModelContext.__init__
+func NewSessionModelContext(
+	contextID string,
+	sessionID string,
+	config ceschema.ContextEngineConfig,
+	historyMessages []llm_schema.BaseMessage,
+	processors []iface.ContextProcessor,
+	tokenCounter token.TokenCounter,
+	sessionRef *session.Session,
+	workspace any,
+	sysOperation any,
+) *SessionModelContext {
+	// 1. 校验历史消息
+	if err := ValidateMessages(historyMessages); err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "CONTEXT_HISTORY_VALIDATE_ERROR").
+			Str("context_id", contextID).
+			Str("session_id", sessionID).
+			Err(err).
+			Msg("历史消息校验失败")
+	}
+	// 2. 确保消息 ID
+	EnsureContextMessageIDs(historyMessages)
+
+	// 3. 创建消息缓冲区
+	messageBuffer := NewContextMessageBuffer(historyMessages, config.MaxContextMessageNum)
+
+	// 4. 从配置读取窗口参数
+	mc := &SessionModelContext{
+		contextID:                contextID,
+		sessionID:                sessionID,
+		messageBuffer:            messageBuffer,
+		defaultWindowSize:        config.DefaultWindowMessageNum,
+		defaultDialogueRound:     config.DefaultWindowRoundNum,
+		enableReload:             config.EnableReload,
+		contextWindowTokens:      config.ContextWindowTokens,
+		modelName:                config.ModelName,
+		modelContextWindowTokens: config.ModelContextWindowTokens,
+		workspace:                workspace,
+		sysOperation:             sysOperation,
+		sessionRef:               sessionRef,
+		tokenCounter:             tokenCounter,
+		processors:               processors,
+	}
+
+	// 5. 创建状态记录器
+	mc.stateRecorder = NewProcessorStateRecorder(
+		sessionID,
+		contextID,
+		func() *session.Session { return mc.sessionRef },
+		tokenCounter,
+		100, // historyLimit
+	)
+
+	// 6. 条件创建 KVCacheManager
+	if config.EnableKVCacheRelease {
+		mc.kvCacheManager = NewKVCacheManager(sessionID)
+	}
+
+	// 7. 创建卸载消息缓冲区
+	mc.offloadMessageBuffer = NewOffloadMessageBuffer(nil)
+	mc.offloadMessageBuffer.SetSysOperation(sysOperation)
+	workspaceDir := mc.WorkspaceDir()
+	if workspaceDir != "" {
+		mc.offloadMessageBuffer.SetWorkspaceInfo(workspaceDir, sessionID)
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "SESSION_MODEL_CONTEXT_CREATED").
+		Str("context_id", contextID).
+		Str("session_id", sessionID).
+		Int("history_message_count", len(historyMessages)).
+		Int("processor_count", len(processors)).
+		Bool("enable_reload", mc.enableReload).
+		Bool("enable_kv_cache_release", mc.kvCacheManager != nil).
+		Msg("SessionModelContext 已创建")
+
+	return mc
+}
+
+// Len 返回上下文消息数量。
+//
+// 对应 Python: SessionModelContext.len()
+func (mc *SessionModelContext) Len() int {
+	return mc.messageBuffer.Size()
+}
+
+// GetMessages 获取消息列表。
+//
+// size 限制返回数量，nil 表示不限制；withHistory 控制是否包含历史消息。
+// 对应 Python: SessionModelContext.get_messages()
+func (mc *SessionModelContext) GetMessages(size *int, withHistory bool) []llm_schema.BaseMessage {
+	return mc.messageBuffer.GetBack(size, withHistory)
+}
+
+// SetMessages 替换消息列表。
+//
+// 对应 Python: SessionModelContext.set_messages()
+func (mc *SessionModelContext) SetMessages(messages []llm_schema.BaseMessage, withHistory bool) {
+	if err := ValidateMessages(messages); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "CONTEXT_SET_MESSAGES_VALIDATE_ERROR").
+			Str("context_id", mc.contextID).
+			Err(err).
+			Msg("设置消息校验失败")
+		return
+	}
+	EnsureContextMessageIDs(messages)
+	mc.messageBuffer.SetMessages(messages, withHistory)
+}
+
+// PopMessages 从尾部弹出消息。
+//
+// size < 0 返回错误；withHistory 控制是否从历史消息中弹出。
+// 对应 Python: SessionModelContext.pop_messages()
+func (mc *SessionModelContext) PopMessages(size int, withHistory bool) []llm_schema.BaseMessage {
+	if size < 0 {
+		logger.Warn(logComponent).
+			Str("event_type", "CONTEXT_POP_MESSAGES_INVALID_SIZE").
+			Str("context_id", mc.contextID).
+			Int("size", size).
+			Msg("PopMessages size 不能为负数")
+		return nil
+	}
+	return mc.messageBuffer.PopBack(size, withHistory)
+}
+
+// ClearMessages 清空消息，重置卸载缓冲区，触发 ContextCleared 事件。
+//
+// 对应 Python: SessionModelContext.clear_messages()
+func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bool, opts ...iface.Option) error {
+	// 弹出全部消息
+	totalSize := mc.messageBuffer.Size()
+	if totalSize > 0 {
+		mc.messageBuffer.PopBack(totalSize, withHistory)
+	}
+
+	// 重置卸载缓冲区
+	mc.offloadMessageBuffer = NewOffloadMessageBuffer(nil)
+	mc.offloadMessageBuffer.SetSysOperation(mc.sysOperation)
+	workspaceDir := mc.WorkspaceDir()
+	if workspaceDir != "" {
+		mc.offloadMessageBuffer.SetWorkspaceInfo(workspaceDir, mc.sessionID)
+	}
+
+	// 触发 ContextCleared 事件
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextCleared,
+		SessionID: mc.sessionID,
+		ContextID: mc.contextID,
+		Context:   mc,
+	})
+
+	logger.Info(logComponent).
+		Str("event_type", "CONTEXT_CLEARED").
+		Str("context_id", mc.contextID).
+		Str("session_id", mc.sessionID).
+		Int("cleared_count", totalSize).
+		Msg("上下文消息已清空")
+
+	return nil
+}
+
+// AddMessages 添加消息，执行处理器管线，触发 ContextUpdated 事件。
+//
+// 核心方法：
+//   - 快速路径：activeCompressionInProgress && !processorLock.TryLock() → 仅入队
+//   - 正常路径：processorLock.Lock() → runAddProcessors → 入队 → Unlock
+//
+// 对应 Python: SessionModelContext.add_messages()
+func (mc *SessionModelContext) AddMessages(ctx context.Context, message llm_schema.BaseMessage, opts ...iface.Option) ([]llm_schema.BaseMessage, error) {
+	// 将单条消息包装为列表
+	messages := []llm_schema.BaseMessage{message}
+	EnsureContextMessageIDs(messages)
+
+	locked := false
+	// 快速路径：主动压缩进行中，尝试非阻塞获取锁
+	if mc.activeCompressionInProgress {
+		if !mc.processorLock.TryLock() {
+			// 无法获取锁，仅入队不执行处理器
+			mc.messageBuffer.AddBack(messages)
+			logger.Info(logComponent).
+				Str("event_type", "CONTEXT_ADD_MESSAGES_FAST_PATH").
+				Str("context_id", mc.contextID).
+				Int("message_count", len(messages)).
+				Msg("主动压缩进行中，消息仅入队")
+		} else {
+			locked = true
+		}
+	} else {
+		mc.processorLock.Lock()
+		locked = true
+	}
+
+	if locked {
+		// 执行处理器
+		messages, _ = mc.runAddProcessors(ctx, messages, false, nil, false, ceschema.PhaseAddMessages, opts...)
+		// 入队
+		mc.messageBuffer.AddBack(messages)
+		mc.processorLock.Unlock()
+	}
+
+	// 触发 ContextUpdated 事件
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextUpdated,
+		SessionID: mc.sessionID,
+		ContextID: mc.contextID,
+		Context:   mc,
+	})
+
+	return messages, nil
+}
+
+// GetContextWindow 构建上下文窗口供模型推理使用。
+//
+// 核心方法：
+//  1. 参数校验
+//  2. 获取锁
+//  3. enableReload → 追加 reloaderSystemPrompt
+//  4. getWindowMessages
+//  5. 遍历处理器：trigger + on_get_context_window
+//  6. ValidateAndFixContextWindow
+//  7. kvCacheManager.Release（条件）
+//  8. statContextWindow
+//  9. 触发 ContextRetrieved 事件
+//
+// 对应 Python: SessionModelContext.get_context_window()
+func (mc *SessionModelContext) GetContextWindow(
+	ctx context.Context,
+	systemMessages []llm_schema.BaseMessage,
+	tools []*schema.ToolInfo,
+	windowSize *int,
+	dialogueRound *int,
+	opts ...iface.Option,
+) (*iface.ContextWindow, error) {
+	// 1. 参数校验
+	effectiveWindowSize := mc.defaultWindowSize
+	if windowSize != nil {
+		if *windowSize <= 0 {
+			return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("windowSize 必须 > 0，当前值: %d", *windowSize)),
+			)
+		}
+		effectiveWindowSize = *windowSize
+	}
+
+	effectiveDialogueRound := mc.defaultDialogueRound
+	if dialogueRound != nil {
+		if *dialogueRound <= 0 {
+			return nil, exception.NewBaseError(exception.StatusContextMessageInvalid,
+				exception.WithParam("error_msg", fmt.Sprintf("dialogueRound 必须 > 0，当前值: %d", *dialogueRound)),
+			)
+		}
+		effectiveDialogueRound = *dialogueRound
+	}
+
+	// 2. 获取锁
+	mc.processorLock.Lock()
+	defer mc.processorLock.Unlock()
+
+	// 3. enableReload → 追加 reloaderSystemPrompt
+	if mc.enableReload {
+		reloaderMsg := llm_schema.NewSystemMessage(reloaderSystemPrompt)
+		systemMessages = append(systemMessages, reloaderMsg)
+	}
+
+	// 4. getWindowMessages
+	contextMessages := mc.getWindowMessages(effectiveWindowSize, effectiveDialogueRound)
+
+	// 构建 ContextWindow
+	window := iface.NewContextWindow()
+	window.SystemMessages = systemMessages
+	window.ContextMessages = contextMessages
+	window.Tools = tools
+
+	// 5. 遍历处理器：trigger + on_get_context_window
+	for _, proc := range mc.processors {
+		triggered, err := proc.TriggerGetContextWindow(ctx, mc, *window, opts...)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "CONTEXT_PROCESSOR_TRIGGER_ERROR").
+				Str("processor", proc.ProcessorType()).
+				Str("context_id", mc.contextID).
+				Err(err).
+				Msg("处理器触发判断失败")
+			continue
+		}
+		if !triggered {
+			continue
+		}
+
+		event, newWindow, err := proc.OnGetContextWindow(ctx, mc, *window, opts...)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "CONTEXT_PROCESSOR_ERROR").
+				Str("processor", proc.ProcessorType()).
+				Str("context_id", mc.contextID).
+				Err(err).
+				Msg("处理器执行失败")
+			continue
+		}
+
+		window = &newWindow
+
+		// 记录处理器事件
+		if event != nil {
+			mc.stateRecorder.recordFromEvent(event)
+		}
+	}
+
+	// 6. ValidateAndFixContextWindow
+	ValidateAndFixContextWindow(window)
+
+	// 7. kvCacheManager.Release（条件）
+	if mc.kvCacheManager != nil {
+		// 尝试从 sessionRef 获取 model
+		model := mc.getModelFromSession()
+		if err := mc.kvCacheManager.Release(ctx, window, model); err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "KV_CACHE_RELEASE_ERROR").
+				Str("context_id", mc.contextID).
+				Err(err).
+				Msg("KV 缓存释放失败")
+		}
+	}
+
+	// 8. statContextWindow
+	mc.statContextWindow(window)
+
+	// 9. 触发 ContextRetrieved 事件
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextRetrieved,
+		SessionID: mc.sessionID,
+		ContextID: mc.contextID,
+		Context:   mc,
+	})
+
+	return window, nil
+}
+
+// Statistic 计算上下文统计信息。
+//
+// 对应 Python: SessionModelContext.statistic()
+func (mc *SessionModelContext) Statistic() *iface.ContextStats {
+	messages := mc.messageBuffer.GetBack(nil, true)
+	stat := &iface.ContextStats{}
+	mc.statMessages(stat, messages)
+	return stat
+}
+
+// SessionID 返回会话 ID。
+func (mc *SessionModelContext) SessionID() string {
+	return mc.sessionID
+}
+
+// ContextID 返回上下文 ID。
+func (mc *SessionModelContext) ContextID() string {
+	return mc.contextID
+}
+
+// TokenCounter 返回 Token 计数器。
+func (mc *SessionModelContext) TokenCounter() token.TokenCounter {
+	return mc.tokenCounter
+}
+
+// ReloaderTool 返回重载卸载消息的工具。
+//
+// Go 端 Tool 的构造方式与 Python 不同，当前返回 nil，后续补充实现。
+func (mc *SessionModelContext) ReloaderTool() tool.Tool {
+	return nil
+}
+
+// WorkspaceDir 返回工作目录路径。
+//
+// 通过类型断言检查 workspace 是否实现 workspaceInterface 接口。
+// 对应 Python: SessionModelContext.workspace_dir()
+func (mc *SessionModelContext) WorkspaceDir() string {
+	if mc.workspace == nil {
+		return ""
+	}
+	if ws, ok := mc.workspace.(workspaceInterface); ok {
+		return ws.RootPath()
+	}
+	return ""
+}
+
+// SetSessionRef 设置会话引用。
+//
+// 对应 Python: SessionModelContext.set_session_ref()
+func (mc *SessionModelContext) SetSessionRef(sess *session.Session) {
+	mc.sessionRef = sess
+}
+
+// GetSessionRef 获取会话引用。
+//
+// 对应 Python: SessionModelContext.get_session_ref()
+func (mc *SessionModelContext) GetSessionRef() *session.Session {
+	return mc.sessionRef
+}
+
+// OffloadMessages 将消息卸载到内存缓冲区。
+//
+// 对应 Python: SessionModelContext.offload_messages()
+func (mc *SessionModelContext) OffloadMessages(handle string, messages []llm_schema.BaseMessage) {
+	mc.offloadMessageBuffer.Offload(handle, offloadTypeInMemory, messages)
+}
+
+// SaveState 保存上下文状态为 map。
+//
+// 返回 {contextID: {messages: ..., offload_messages: ...}}。
+// 对应 Python: SessionModelContext.save_state()
+func (mc *SessionModelContext) SaveState() map[string]any {
+	allMessages := mc.messageBuffer.GetBack(nil, true)
+	offloadMessages := mc.offloadMessageBuffer.GetAll()
+	processorStates := make(map[string]any)
+	for _, proc := range mc.processors {
+		processorStates[proc.ProcessorType()] = proc.SaveState()
+	}
+
+	return map[string]any{
+		mc.contextID: map[string]any{
+			"messages":           allMessages,
+			"offload_messages":   offloadMessages,
+			"processor_states":   processorStates,
+			"compression_history": mc.stateRecorder.History(),
+		},
+	}
+}
+
+// LoadState 从 map 恢复上下文状态。
+//
+// 对应 Python: SessionModelContext.load_state()
+func (mc *SessionModelContext) LoadState(state map[string]any) {
+	contextState, ok := state[mc.contextID]
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "CONTEXT_LOAD_STATE_NOT_FOUND").
+			Str("context_id", mc.contextID).
+			Msg("未找到上下文状态")
+		return
+	}
+
+	stateMap, ok := contextState.(map[string]any)
+	if !ok {
+		logger.Warn(logComponent).
+			Str("event_type", "CONTEXT_LOAD_STATE_INVALID_TYPE").
+			Str("context_id", mc.contextID).
+			Msg("上下文状态类型无效")
+		return
+	}
+
+	// 恢复消息
+	if messagesVal, exists := stateMap["messages"]; exists {
+		if messages, ok := messagesVal.([]llm_schema.BaseMessage); ok {
+			if err := ValidateMessages(messages); err != nil {
+				logger.Error(logComponent).
+					Str("event_type", "CONTEXT_LOAD_STATE_VALIDATE_ERROR").
+					Str("context_id", mc.contextID).
+					Err(err).
+					Msg("恢复消息校验失败")
+				return
+			}
+			EnsureContextMessageIDs(messages)
+			mc.messageBuffer.Rebuild(messages)
+		}
+	}
+
+	// 恢复卸载消息缓冲区
+	if offloadVal, exists := stateMap["offload_messages"]; exists {
+		if offloadMessages, ok := offloadVal.(map[string][]llm_schema.BaseMessage); ok {
+			mc.offloadMessageBuffer = NewOffloadMessageBuffer(offloadMessages)
+			mc.offloadMessageBuffer.SetSysOperation(mc.sysOperation)
+			workspaceDir := mc.WorkspaceDir()
+			if workspaceDir != "" {
+				mc.offloadMessageBuffer.SetWorkspaceInfo(workspaceDir, mc.sessionID)
+			}
+		}
+	}
+
+	// 恢复处理器状态
+	if procStatesVal, exists := stateMap["processor_states"]; exists {
+		if procStates, ok := procStatesVal.(map[string]any); ok {
+			for _, proc := range mc.processors {
+				if procState, exists := procStates[proc.ProcessorType()]; exists {
+					if ps, ok := procState.(map[string]any); ok {
+						proc.LoadState(ps)
+					}
+				}
+			}
+		}
+	}
+
+	// 恢复压缩历史
+	if historyVal, exists := stateMap["compression_history"]; exists {
+		if history, ok := historyVal.([]map[string]any); ok {
+			mc.stateRecorder.LoadHistory(history)
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "CONTEXT_LOAD_STATE").
+		Str("context_id", mc.contextID).
+		Msg("上下文状态已恢复")
+}
+
+// CompressContext 主动压缩上下文。
+//
+// 返回 "busy"/"compressed"/"noop"。
+// 对应 Python: SessionModelContext.compress_context()
+func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (string, error) {
+	// 尝试非阻塞获取锁
+	if !mc.processorLock.TryLock() {
+		logger.Warn(logComponent).
+			Str("event_type", "CONTEXT_COMPRESS_BUSY").
+			Str("context_id", mc.contextID).
+			Msg("上下文压缩忙，跳过")
+		return "busy", nil
+	}
+
+	mc.activeCompressionInProgress = true
+
+	// 解析选项
+	compOpts := iface.NewCompressContextOptions(opts...)
+
+	// 按 compressionOnly 过滤处理器
+	filteredProcessors := mc.selectProcessors(compOpts.ProcessorTypes, true)
+	if len(filteredProcessors) == 0 {
+		mc.activeCompressionInProgress = false
+		mc.processorLock.Unlock()
+		logger.Info(logComponent).
+			Str("event_type", "CONTEXT_COMPRESS_NOOP").
+			Str("context_id", mc.contextID).
+			Msg("无压缩处理器，跳过主动压缩")
+		return "noop", nil
+	}
+
+	// 执行处理器（force=true, phase=active_compress）
+	mc.runAddProcessors(ctx, nil, true, compOpts.ProcessorTypes, true, ceschema.PhaseActiveCompress, iface.WithSysOperation(compOpts.SysOperation))
+
+	mc.activeCompressionInProgress = false
+	mc.processorLock.Unlock()
+
+	logger.Info(logComponent).
+		Str("event_type", "CONTEXT_COMPRESS_DONE").
+		Str("context_id", mc.contextID).
+		Msg("主动压缩完成")
+
+	return "compressed", nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// runAddProcessors 遍历处理器执行 trigger + on_add_messages。
+//
+// 参数：
+//   - messages: 待添加的消息列表
+//   - force: 是否强制执行（主动压缩时为 true）
+//   - processorTypes: 处理器类型过滤列表
+//   - compressionOnly: 是否仅执行压缩类型处理器
+//   - phase: 压缩阶段（PhaseAddMessages 或 PhaseActiveCompress）
+//   - opts: 处理器选项
+func (mc *SessionModelContext) runAddProcessors(
+	ctx context.Context,
+	messages []llm_schema.BaseMessage,
+	force bool,
+	processorTypes []string,
+	compressionOnly bool,
+	phase ceschema.CompressionPhase,
+	opts ...iface.Option,
+) ([]llm_schema.BaseMessage, error) {
+	filteredProcessors := mc.selectProcessors(processorTypes, compressionOnly)
+
+	for _, proc := range filteredProcessors {
+		// 触发判断
+		triggered := true
+		if !force {
+			var err error
+			triggered, err = proc.TriggerAddMessages(ctx, mc, messages, opts...)
+			if err != nil {
+				logger.Error(logComponent).
+					Str("event_type", "CONTEXT_PROCESSOR_TRIGGER_ERROR").
+					Str("processor", proc.ProcessorType()).
+					Str("context_id", mc.contextID).
+					Err(err).
+					Msg("处理器触发判断失败")
+				continue
+			}
+		}
+
+		if !triggered {
+			continue
+		}
+
+		// 记录处理前状态
+		beforeMessages := mc.messageBuffer.GetBack(nil, true)
+		operationID := uuid.New().String()
+		startTime := time.Now()
+
+		// 执行处理器
+		event, newMessages, err := proc.OnAddMessages(ctx, mc, messages, opts...)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "CONTEXT_PROCESSOR_ERROR").
+				Str("processor", proc.ProcessorType()).
+				Str("context_id", mc.contextID).
+				Err(err).
+				Msg("处理器执行失败")
+
+			// 构建失败状态
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:    operationID,
+				Status:         ceschema.CompressionFailed,
+				Phase:          phase,
+				Trigger:        "add_messages",
+				Processor:      proc,
+				BeforeMessages: beforeMessages,
+				Force:          force,
+				StartedAt:      startTime,
+				EndedAt:        time.Now(),
+				Error:          err.Error(),
+				ContextMax:     mc.resolveContextMax(opts...),
+			}))
+			continue
+		}
+
+		// 处理器返回了新消息
+		if newMessages != nil {
+			messages = newMessages
+		}
+
+		// 记录处理器事件和状态
+		if event != nil {
+			afterMessages := mc.messageBuffer.GetBack(nil, true)
+			if len(messages) > 0 {
+				afterMessages = append(afterMessages, messages...)
+			}
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:      operationID,
+				Status:           ceschema.CompressionCompleted,
+				Phase:            phase,
+				Trigger:          "add_messages",
+				Processor:        proc,
+				Reason:           "处理器执行成功",
+				BeforeMessages:   beforeMessages,
+				AfterMessages:    afterMessages,
+				Force:            force,
+				StartedAt:        startTime,
+				EndedAt:          time.Now(),
+				MessagesToModify: event.MessagesToModify,
+				CompactSummary:   event.CompactSummary,
+				ContextMax:       mc.resolveContextMax(opts...),
+			}))
+		}
+	}
+
+	return messages, nil
+}
+
+// selectProcessors 按 processorTypes 和 compressionOnly 过滤处理器列表。
+func (mc *SessionModelContext) selectProcessors(processorTypes []string, compressionOnly bool) []iface.ContextProcessor {
+	if len(mc.processors) == 0 {
+		return nil
+	}
+
+	var result []iface.ContextProcessor
+	for _, proc := range mc.processors {
+		// compressionOnly 过滤
+		if compressionOnly && !IsCompressionProcessor(proc) {
+			continue
+		}
+
+		// processorTypes 过滤
+		if len(processorTypes) > 0 {
+			matched := false
+			for _, pt := range processorTypes {
+				if proc.ProcessorType() == pt {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+
+		result = append(result, proc)
+	}
+	return result
+}
+
+// getWindowMessages 先按 dialogueRound 截取，再按 windowSize 截取。
+func (mc *SessionModelContext) getWindowMessages(windowSize, dialogueRound int) []llm_schema.BaseMessage {
+	// 获取全部消息（含历史）
+	messages := mc.messageBuffer.GetBack(nil, true)
+
+	// 先按 dialogueRound 截取
+	if dialogueRound > 0 {
+		roundStartIdx := FindLastNDialogueRound(messages, dialogueRound)
+		if roundStartIdx >= 0 && roundStartIdx < len(messages) {
+			messages = messages[roundStartIdx:]
+		}
+	}
+
+	// 再按 windowSize 截取
+	if windowSize > 0 && len(messages) > windowSize {
+		messages = messages[len(messages)-windowSize:]
+	}
+
+	return messages
+}
+
+// statContextWindow 调用 statMessages + statTools + find_all_dialogue_round 填充 ContextWindow 的 Statistic。
+func (mc *SessionModelContext) statContextWindow(window *iface.ContextWindow) {
+	allMessages := window.GetMessages()
+	stat := &window.Statistic
+
+	// 按角色统计消息 + token 计算
+	mc.statMessages(stat, allMessages)
+
+	// 工具 token 统计
+	mc.statTools(stat, window.Tools)
+
+	// 对话轮次
+	stat.TotalDialogues = mc.countDialogueRounds(allMessages)
+}
+
+// statMessages 按角色统计消息数量和 token 数。
+func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages []llm_schema.BaseMessage) {
+	stat.TotalMessages = len(messages)
+
+	// 按角色计数消息数量
+	mc.countMessagesByRole(stat, messages)
+
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
+	for i := len(messages) - 1; i >= 0; i-- {
+		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
+			if am.UsageMetadata != nil && am.UsageMetadata.TotalTokens > 0 {
+				stat.TotalTokens = am.UsageMetadata.TotalTokens
+				// 仍需按角色累加 token 数，供分角色统计使用
+				mc.countMessagesTokensByRole(stat, messages)
+				return
+			}
+		}
+	}
+
+	// 无 usage_metadata，逐条计算 token 并按角色累加
+	mc.countMessagesTokensByRole(stat, messages)
+}
+
+// countMessagesByRole 按角色计数消息数量。
+func (mc *SessionModelContext) countMessagesByRole(stat *iface.ContextStats, messages []llm_schema.BaseMessage) {
+	for _, msg := range messages {
+		switch msg.GetRole() {
+		case llm_schema.RoleTypeSystem:
+			stat.SystemMessages++
+		case llm_schema.RoleTypeUser:
+			stat.UserMessages++
+		case llm_schema.RoleTypeAssistant:
+			stat.AssistantMessages++
+		case llm_schema.RoleTypeTool:
+			stat.ToolMessages++
+		}
+	}
+}
+
+// countMessagesTokensByRole 逐条计算消息 token 并按角色累加。
+func (mc *SessionModelContext) countMessagesTokensByRole(stat *iface.ContextStats, messages []llm_schema.BaseMessage) {
+	var totalTokens int
+	for _, msg := range messages {
+		tokens := mc.countSingleMessageTokens(msg)
+		totalTokens += tokens
+
+		switch msg.GetRole() {
+		case llm_schema.RoleTypeSystem:
+			stat.SystemMessageTokens += tokens
+		case llm_schema.RoleTypeUser:
+			stat.UserMessageTokens += tokens
+		case llm_schema.RoleTypeAssistant:
+			stat.AssistantMessageTokens += tokens
+		case llm_schema.RoleTypeTool:
+			stat.ToolMessageTokens += tokens
+		}
+	}
+	stat.TotalTokens = totalTokens
+}
+
+// statTools 统计工具 token 数。
+func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []*schema.ToolInfo) {
+	if len(tools) == 0 {
+		return
+	}
+	stat.Tools = len(tools)
+
+	var toolTokens int
+	for _, t := range tools {
+		toolTokens += mc.countToolTokens(t)
+	}
+	stat.ToolTokens = toolTokens
+	stat.TotalTokens += toolTokens
+}
+
+// countSingleMessageTokens 计算单条消息的 token 数。
+func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessage) int {
+	content := msg.GetContent().Text()
+
+	if mc.tokenCounter != nil {
+		count, err := mc.tokenCounter.Count(content, mc.resolveContextModelName())
+		if err == nil && count > 0 {
+			return count
+		}
+	}
+
+	// 降级：字符数/4 向上取整
+	if len(content) == 0 {
+		return 0
+	}
+	return (len(content) + 3) / 4
+}
+
+// countToolTokens 计算单工具的 token 数。
+func (mc *SessionModelContext) countToolTokens(toolInfo *schema.ToolInfo) int {
+	if mc.tokenCounter != nil {
+		count, err := mc.tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, mc.resolveContextModelName())
+		if err == nil {
+			return count
+		}
+	}
+
+	// 降级：字符数/4 向上取整
+	totalChars := len(toolInfo.Name) + len(toolInfo.Description)
+	if toolInfo.Parameters != nil {
+		for k, v := range toolInfo.Parameters {
+			totalChars += len(k)
+			if s, ok := v.(string); ok {
+				totalChars += len(s)
+			}
+		}
+	}
+	if totalChars == 0 {
+		return 0
+	}
+	return (totalChars + 3) / 4
+}
+
+// countDialogueRounds 统计对话轮次数。
+func (mc *SessionModelContext) countDialogueRounds(messages []llm_schema.BaseMessage) int {
+	rounds := processor.FindAllDialogueRound(messages)
+	return len(rounds)
+}
+
+// resolveContextModelName 从实例解析模型名称。
+func (mc *SessionModelContext) resolveContextModelName() string {
+	if mc.modelName != "" {
+		return mc.modelName
+	}
+	return ""
+}
+
+// resolveContextMax 解析最大上下文 token 数。
+func (mc *SessionModelContext) resolveContextMax(opts ...iface.Option) int {
+	return ResolveContextMax(mc.modelName, mc.contextWindowTokens, mc.modelContextWindowTokens)
+}
+
+// getModelFromSession 尝试从 sessionRef 获取 llm.Model 实例。
+func (mc *SessionModelContext) getModelFromSession() *llm.Model {
+	if mc.sessionRef == nil {
+		return nil
+	}
+	// Session 不直接持有 Model，返回 nil
+	// 实际 Model 通过 Processor 的 option 传入
+	return nil
+}
+
+// recordFromEvent 从 ContextEvent 记录简要信息到日志。
+func (r *ProcessorStateRecorder) recordFromEvent(event *iface.ContextEvent) {
+	if event == nil {
+		return
+	}
+	logger.Info(logComponent).
+		Str("event_type", event.EventType).
+		Int("messages_to_modify_count", len(event.MessagesToModify)).
+		Str("compact_summary", event.CompactSummary).
+		Msg("处理器事件")
+}

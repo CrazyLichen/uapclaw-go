@@ -541,6 +541,7 @@ func (f *fakeModelContext) TokenCounter() token.TokenCounter { return f }
 func (f *fakeModelContext) ReloaderTool() tool.Tool          { return nil }
 func (f *fakeModelContext) WorkspaceDir() string             { return "" }
 func (f *fakeModelContext) SetSessionRef(_ *session.Session) {}
+func (f *fakeModelContext) GetSessionRef() *session.Session  { return nil }
 func (f *fakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContext) SaveState() map[string]any        { return nil }
 func (f *fakeModelContext) LoadState(_ map[string]any)       {}

@@ -547,6 +547,7 @@ func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter { return f.
 func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool          { return nil }
 func (f *fakeModelContextForMicro) WorkspaceDir() string             { return "" }
 func (f *fakeModelContextForMicro) SetSessionRef(_ *session.Session) {}
+func (f *fakeModelContextForMicro) GetSessionRef() *session.Session  { return nil }
 func (f *fakeModelContextForMicro) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContextForMicro) SaveState() map[string]any        { return nil }
 func (f *fakeModelContextForMicro) LoadState(_ map[string]any)       {}

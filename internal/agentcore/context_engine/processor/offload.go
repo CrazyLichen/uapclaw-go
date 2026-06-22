@@ -71,7 +71,7 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 	}
 
 	if offloadType == "in_memory" {
-		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, msgOpts)
+		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, messages, msgOpts)
 	}
 
 	// filesystem 模式
@@ -84,7 +84,7 @@ func (p *BaseProcessor) OffloadMessages(ctx context.Context, mc iface.ModelConte
 	writeSuccess := p.writeOffloadToFile(sessionID, offloadHandle, offloadPath, messages, po.SysOperation)
 	if !writeSuccess {
 		// fallback 到内存模式
-		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, msgOpts)
+		return p.offloadMessagesToMemory(mc, role, content, offloadHandle, po.ToolCallID, messages, msgOpts)
 	}
 
 	return p.offloadMessagesToFilesystem(role, content, offloadHandle, offloadPath, po.ToolCallID, msgOpts)
@@ -107,18 +107,11 @@ func (p *BaseProcessor) GenerateOffloadPath(workspaceDir, sessionID, offloadHand
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // offloadMessagesToMemory 将消息卸载到内存。
-//
-// ⤵️ 5.31 回填：需 ModelContext.OffloadMessages(handle, messages) 方法
-// 当前实现预留调用点，待 5.31 ModelContext 补充 OffloadMessages 方法后回填。
-func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role string, content string, offloadHandle string, toolCallID string, msgOpts []llm_schema.MessageOption) (llm_schema.BaseMessage, error) {
+func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role string, content string, offloadHandle string, toolCallID string, messages []llm_schema.BaseMessage, msgOpts []llm_schema.MessageOption) (llm_schema.BaseMessage, error) {
 	content = content + fmt.Sprintf(offloadMessageHandle, offloadHandle, "in_memory")
 
-	// ⤵️ 5.31 回填：调用 mc.OffloadMessages(offloadHandle, messages) 存入内存
-	// if om, ok := mc.(interface{ OffloadMessages(string, []llm_schema.BaseMessage) }); ok {
-	//     om.OffloadMessages(offloadHandle, messages)
-	// } else {
-	//     return nil, nil
-	// }
+	// 调用 mc.OffloadMessages 将消息存入内存缓冲区
+	mc.OffloadMessages(offloadHandle, messages)
 
 	return schema.NewOffloadMessage(
 		roleTypeFromRole(role),

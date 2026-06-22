@@ -2,6 +2,8 @@ package iface
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -63,6 +65,10 @@ type ModelContext interface {
 	//
 	// 对应 Python: SessionModelContext.set_session_ref()
 	SetSessionRef(sess *session.Session)
+	// GetSessionRef 获取会话引用
+	//
+	// 对应 Python: SessionModelContext.get_session_ref()
+	GetSessionRef() *session.Session
 	// OffloadMessages 将消息卸载到内存缓冲区
 	//
 	// 对应 Python: SessionModelContext.offload_messages()
@@ -347,35 +353,105 @@ func NewContextWindow() *ContextWindow {
 //   - 若无 usage_metadata，则逐条计算 token（TiktokenCounter 或 fallback 字符串长度/4）
 //
 // 对应 Python: Context._stat_messages(stat, messages)
-//
-// ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
 func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCounter token.TokenCounter) {
-	// ⤵️ 待 5.31 回填：按角色计数 + token 计算
-	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_messages)
-	//
-	// 实现要点：
-	//   1. s.TotalMessages = len(messages)
-	//   2. 按角色计数：s.SystemMessages / s.UserMessages / s.AssistantMessages / s.ToolMessages
-	//   3. token 计算优先级：
-	//      a) 最后一条 AssistantMessage 的 usage_metadata.total_tokens → 直接赋值 s.TotalTokens 并返回
-	//      b) 逐条调用 tokenCounter.CountMessages 或 fallback len(content)/4
-	//   4. s.TotalDialogues 由 StatContextWindow 统一计算（依赖 ContextUtils.find_all_dialogue_round）
+	s.TotalMessages = len(messages)
+
+	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
+	if usageTokens := getLastAssistantUsageTokens(messages); usageTokens > 0 {
+		s.TotalTokens = usageTokens
+		return
+	}
+
+	// 逐条计算 token，按角色累加
+	for _, msg := range messages {
+		tokens := countSingleMessageTokens(msg, tokenCounter)
+		switch msg.GetRole() {
+		case llm_schema.RoleTypeSystem:
+			s.SystemMessages++
+			s.SystemMessageTokens += tokens
+		case llm_schema.RoleTypeUser:
+			s.UserMessages++
+			s.UserMessageTokens += tokens
+		case llm_schema.RoleTypeAssistant:
+			s.AssistantMessages++
+			s.AssistantMessageTokens += tokens
+		case llm_schema.RoleTypeTool:
+			s.ToolMessages++
+			s.ToolMessageTokens += tokens
+		}
+	}
+	s.TotalTokens = s.SystemMessageTokens + s.UserMessageTokens + s.AssistantMessageTokens + s.ToolMessageTokens
 }
 
 // StatTools 统计工具数量和 token 数，填充 ContextStats 的 Tools/ToolTokens 字段。
 //
 // 对应 Python: Context._stat_tools(stat, tools)
-//
-// ⤵️ 待 5.31 Context 具体实现时回填实际统计逻辑
 func (s *ContextStats) StatTools(tools []*schema.ToolInfo, tokenCounter token.TokenCounter) {
-	// ⤵️ 待 5.31 回填：工具计数 + token 计算
-	// 参见 Python: openjiuwen/core/context_engine/context/context.py (_stat_tools)
-	//
-	// 实现要点：
-	//   1. s.Tools = len(tools)
-	//   2. 逐条计算工具 token：tokenCounter.CountTools 或 fallback len(name+description+parameters)/4
-	//   3. s.ToolTokens = 各工具 token 之和
-	//   4. s.TotalTokens += s.ToolTokens
+	s.Tools = len(tools)
+	for _, t := range tools {
+		s.ToolTokens += countToolTokens(t, tokenCounter)
+	}
+	s.TotalTokens += s.ToolTokens
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getLastAssistantUsageTokens 从消息列表中获取最后一条 AssistantMessage 的 usage_metadata.total_tokens。
+// 返回 0 表示未找到有效的 usage_metadata。
+func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
+	for i := len(messages) - 1; i >= 0; i-- {
+		am, ok := messages[i].(*llm_schema.AssistantMessage)
+		if !ok {
+			continue
+		}
+		if am.UsageMetadata != nil && am.UsageMetadata.TotalTokens > 0 {
+			return am.UsageMetadata.TotalTokens
+		}
+	}
+	return 0
+}
+
+// countSingleMessageTokens 计算单条消息的 token 数。
+// 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/4。
+func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.TokenCounter) int {
+	if tokenCounter != nil {
+		count, err := tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
+		if err == nil {
+			return count
+		}
+	}
+	// fallback：字符串长度 / 4
+	text := msg.GetContent().Text()
+	if text == "" {
+		return 0
+	}
+	return len(text) / 4
+}
+
+// countToolTokens 计算单个工具定义的 token 数。
+// 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4。
+func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter) int {
+	if tokenCounter != nil {
+		count, err := tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, "")
+		if err == nil {
+			return count
+		}
+	}
+	// fallback：拼接 name + description + parameters JSON，长度 / 4
+	text := toolInfo.Name
+	if toolInfo.Description != "" {
+		text += toolInfo.Description
+	}
+	if toolInfo.Parameters != nil {
+		if data, err := json.Marshal(toolInfo.Parameters); err == nil {
+			text += string(data)
+		}
+	}
+	if text == "" {
+		return 0
+	}
+	return len(text) / 4
+}
+
+// 确保 contextID 参数可用（避免未使用导入编译错误）
+var _ = fmt.Sprintf

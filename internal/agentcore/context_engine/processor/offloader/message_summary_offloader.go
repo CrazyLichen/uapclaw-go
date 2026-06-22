@@ -504,7 +504,7 @@ func (mso *MessageSummaryOffloader) newOffloadHandleAndPath(mc iface.ModelContex
 	sessionID := mc.SessionID()
 
 	// ⤵️ 5.31 回填：使用 mc.WorkspaceDir() 获取工作目录
-	workspaceDir := ""
+	workspaceDir := mc.WorkspaceDir()
 
 	fileName := fmt.Sprintf("%s_%s.json", mso.ProcessorType(), offloadHandle)
 	if workspaceDir != "" {

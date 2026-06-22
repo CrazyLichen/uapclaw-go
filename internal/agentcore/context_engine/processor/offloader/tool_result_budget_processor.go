@@ -550,7 +550,7 @@ func (p *ToolResultBudgetProcessor) newOffloadHandleAndPath(mc iface.ModelContex
 
 	// ⤵️ 5.31 回填：使用 mc.WorkspaceDir() 获取工作目录
 	// 当前 ModelContext 接口没有 WorkspaceDir() 方法，使用空字符串
-	workspaceDir := ""
+	workspaceDir := mc.WorkspaceDir()
 
 	filePrefix := p.config.OffloadFilePrefix
 	if filePrefix == "" {

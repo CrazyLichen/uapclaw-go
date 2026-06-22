@@ -43,6 +43,7 @@ func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
 func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
 func (m *mockModelContext) WorkspaceDir() string             { return "" }
 func (m *mockModelContext) SetSessionRef(_ *session.Session) {}
+func (m *mockModelContext) GetSessionRef() *session.Session  { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any        { return m.saveState }
 func (m *mockModelContext) LoadState(_ map[string]any)       {}
@@ -290,14 +291,17 @@ func TestContextEngine_GetContext_点号替换(t *testing.T) {
 	}
 }
 
-func TestContextEngine_CreateContext_531未实现(t *testing.T) {
+func TestContextEngine_CreateContext_531已实现(t *testing.T) {
 	config := schema.NewContextEngineConfig()
 	ce := NewContextEngine(config)
 
 	sess := session.NewSession(session.WithSessionID("s1"))
-	_, err := ce.CreateContext(context.Background(), "ctx1", sess)
-	if err == nil {
-		t.Fatal("5.31 未实现时期望返回错误")
+	mc, err := ce.CreateContext(context.Background(), "ctx1", sess)
+	if err != nil {
+		t.Fatalf("5.31 已实现，CreateContext 不应返回错误: %v", err)
+	}
+	if mc == nil {
+		t.Fatal("5.31 已实现，CreateContext 应返回非 nil ModelContext")
 	}
 }
 

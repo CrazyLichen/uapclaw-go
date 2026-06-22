@@ -309,7 +309,7 @@ func (mo *MessageOffloader) newOffloadHandleAndPath(mc iface.ModelContext) (stri
 
 	// ⤵️ 5.31 回填：使用 mc.WorkspaceDir() 获取工作目录
 	// 当前 ModelContext 接口没有 WorkspaceDir() 方法，使用空字符串
-	workspaceDir := ""
+	workspaceDir := mc.WorkspaceDir()
 
 	fileName := fmt.Sprintf("%s_%s.json", mo.ProcessorType(), offloadHandle)
 	if workspaceDir != "" {

@@ -51,6 +51,7 @@ func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter { return f.token
 func (f *fcpFakeModelContext) ReloaderTool() tool.Tool          { return nil }
 func (f *fcpFakeModelContext) WorkspaceDir() string             { return "" }
 func (f *fcpFakeModelContext) SetSessionRef(_ *session.Session) {}
+func (f *fcpFakeModelContext) GetSessionRef() *session.Session   { return nil }
 func (f *fcpFakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fcpFakeModelContext) SaveState() map[string]any        { return nil }
 func (f *fcpFakeModelContext) LoadState(_ map[string]any)       {}
@@ -755,27 +756,31 @@ func TestBuildSkillReinjectedContent_无Skill(t *testing.T) {
 	}
 }
 
-// TestBuildTaskStatusReinjectedContent 验证任务状态构建器（当前返回空字符串）
+// TestBuildTaskStatusReinjectedContent 验证任务状态构建器
 func TestBuildTaskStatusReinjectedContent(t *testing.T) {
-	result := buildTaskStatusReinjectedContent(context.Background(), nil, nil, nil)
+	mc := &fcpFakeModelContext{}
+	result := buildTaskStatusReinjectedContent(context.Background(), mc, nil, nil)
 	str, ok := result.(string)
 	if !ok {
 		t.Fatalf("期望返回 string，实际: %T", result)
 	}
+	// 无 session 时返回空字符串
 	if str != "" {
-		t.Errorf("当前应返回空字符串（⤵️ 5.31 回填），实际: %s", str)
+		t.Errorf("无 session 时应返回空字符串，实际: %s", str)
 	}
 }
 
-// TestBuildPlanModeReinjectedContent 验证计划模式构建器（当前返回空字符串）
+// TestBuildPlanModeReinjectedContent 验证计划模式构建器
 func TestBuildPlanModeReinjectedContent(t *testing.T) {
-	result := buildPlanModeReinjectedContent(context.Background(), nil, nil, nil)
+	mc := &fcpFakeModelContext{}
+	result := buildPlanModeReinjectedContent(context.Background(), mc, nil, nil)
 	str, ok := result.(string)
 	if !ok {
 		t.Fatalf("期望返回 string，实际: %T", result)
 	}
+	// 无 session 时返回空字符串
 	if str != "" {
-		t.Errorf("当前应返回空字符串（⤵️ 5.31 回填），实际: %s", str)
+		t.Errorf("无 session 时应返回空字符串，实际: %s", str)
 	}
 }
 
@@ -794,6 +799,7 @@ func TestBuildPlanReinjectedContent(t *testing.T) {
 // TestFullCompactProcessor_BuildReinjectedStateMessages 验证状态重新注入消息构建
 func TestFullCompactProcessor_BuildReinjectedStateMessages(t *testing.T) {
 	fcp := newTestFCP(nil)
+	mc := &fcpFakeModelContext{}
 
 	// 普通消息（无 skill 读取）→ 只有 task_status/plan_mode/plan builder，都返回 ""
 	messages := []llm_schema.BaseMessage{
@@ -801,8 +807,8 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages(t *testing.T) {
 		llm_schema.NewAssistantMessage("你好！"),
 	}
 
-	result := fcp.buildReinjectedStateMessages(context.Background(), nil, messages, nil)
-	// 当前所有 builder 返回空内容，结果应为 nil
+	result := fcp.buildReinjectedStateMessages(context.Background(), mc, messages, nil)
+	// 无 session 时所有 builder 返回空内容，结果应为 nil
 	if len(result) != 0 {
 		t.Errorf("所有 builder 返回空时应为 nil，实际: %d", len(result))
 	}
@@ -1231,46 +1237,54 @@ func TestInitRegistration_FullCompact(t *testing.T) {
 	}
 }
 
-// TestFullCompactProcessor_LoadSessionMemoryRuntime 验证 Session Memory 运行时加载（当前返回 nil）
+// TestFullCompactProcessor_LoadSessionMemoryRuntime 验证 Session Memory 运行时加载
 func TestFullCompactProcessor_LoadSessionMemoryRuntime(t *testing.T) {
 	fcp := newTestFCP(nil)
-	result := fcp._loadSessionMemoryRuntime(context.Background(), nil)
+	mc := &fcpFakeModelContext{}
+	result := fcp._loadSessionMemoryRuntime(context.Background(), mc)
+	// 无 session 时返回 nil
 	if result != nil {
-		t.Errorf("当前应返回 nil（⤵️ 5.31 回填），实际: %v", result)
+		t.Errorf("无 session 时应返回 nil，实际: %v", result)
 	}
 }
 
-// TestFullCompactProcessor_LoadSessionMemoryText 验证 Session Memory 文本加载（当前返回空）
+// TestFullCompactProcessor_LoadSessionMemoryText 验证 Session Memory 文本加载
 func TestFullCompactProcessor_LoadSessionMemoryText(t *testing.T) {
 	fcp := newTestFCP(nil)
-	result := fcp._loadSessionMemoryText(context.Background(), nil, nil)
+	mc := &fcpFakeModelContext{}
+	result := fcp._loadSessionMemoryText(context.Background(), mc, nil)
+	// 无 session 时返回空
 	if result != "" {
-		t.Errorf("当前应返回空字符串（⤵️ 5.31 回填），实际: %s", result)
+		t.Errorf("无 session 时应返回空字符串，实际: %s", result)
 	}
 }
 
-// TestFullCompactProcessor_ResolveSessionMemoryPath 验证路径解析（当前返回空）
+// TestFullCompactProcessor_ResolveSessionMemoryPath 验证路径解析
 func TestFullCompactProcessor_ResolveSessionMemoryPath(t *testing.T) {
 	fcp := newTestFCP(nil)
-	result := fcp._resolveSessionMemoryPath(context.Background(), nil, nil)
+	mc := &fcpFakeModelContext{}
+	result := fcp._resolveSessionMemoryPath(context.Background(), mc, nil)
+	// 无 workspace 时返回空
 	if result != "" {
-		t.Errorf("当前应返回空字符串（⤵️ 5.31 回填），实际: %s", result)
+		t.Errorf("无 workspace 时应返回空字符串，实际: %s", result)
 	}
 }
 
-// TestFullCompactProcessor_SelectMessagesAfterSessionMemory 验证消息选择（当前返回 nil）
+// TestFullCompactProcessor_SelectMessagesAfterSessionMemory 验证消息选择
 func TestFullCompactProcessor_SelectMessagesAfterSessionMemory(t *testing.T) {
 	fcp := newTestFCP(nil)
 	result := fcp._selectMessagesAfterSessionMemory(nil, nil, false)
+	// 空 runtime 时返回原消息（nil）
 	if result != nil {
-		t.Errorf("当前应返回 nil（⤵️ 5.31 回填），实际: %v", result)
+		t.Errorf("空 runtime 时应返回 nil，实际: %v", result)
 	}
 }
 
-// TestFullCompactProcessor_InvalidateSessionMemoryAnchor 验证锚点失效（当前空操作）
+// TestFullCompactProcessor_InvalidateSessionMemoryAnchor 验证锚点失效
 func TestFullCompactProcessor_InvalidateSessionMemoryAnchor(t *testing.T) {
 	fcp := newTestFCP(nil)
-	fcp._invalidateSessionMemoryAnchor(context.Background(), nil)
+	mc := &fcpFakeModelContext{}
+	fcp._invalidateSessionMemoryAnchor(context.Background(), mc)
 }
 
 // TestNewFullCompactProcessorConfig_默认值 验证默认配置值
@@ -1531,7 +1545,8 @@ func TestFullCompactProcessor_BuildSessionMemoryMessages_禁用时(t *testing.T)
 	cfg := validFCPConfig()
 	cfg.SessionMemoryEnabled = false
 	fcp := newTestFCP(cfg)
-	messages, userMsg := fcp._buildSessionMemoryMessages(context.Background(), nil, nil, nil, false)
+	mc := &fcpFakeModelContext{}
+	messages, userMsg := fcp._buildSessionMemoryMessages(context.Background(), mc, nil, nil, false)
 	if messages != nil {
 		t.Error("SessionMemoryEnabled=false 时应返回 nil messages")
 	}
@@ -1545,8 +1560,9 @@ func TestFullCompactProcessor_BuildSessionMemoryMessages_启用但无内容(t *t
 	cfg := validFCPConfig()
 	cfg.SessionMemoryEnabled = true
 	fcp := newTestFCP(cfg)
-	// _loadSessionMemoryText 当前返回 ""（⤵️ 5.31），所以 sessionMemoryText 为空
-	messages, userMsg := fcp._buildSessionMemoryMessages(context.Background(), nil, nil, nil, false)
+	mc := &fcpFakeModelContext{}
+	// 无 session 时 _loadSessionMemoryText 返回空，所以 sessionMemoryText 为空
+	messages, userMsg := fcp._buildSessionMemoryMessages(context.Background(), mc, nil, nil, false)
 	if messages != nil {
 		t.Error("sessionMemoryText 为空时应返回 nil messages")
 	}
@@ -1993,11 +2009,12 @@ func TestFullCompactProcessor_OnAddMessages_有Event时设置CompressionUsage(t 
 
 // ──────────────────────────── _invalidateSessionMemoryAnchor 测试 ────────────────────────────
 
-// TestFullCompactProcessor_InvalidateSessionMemoryAnchor_空操作 验证当前空操作不 panic
+// TestFullCompactProcessor_InvalidateSessionMemoryAnchor_空操作 验证无 session 时不 panic
 func TestFullCompactProcessor_InvalidateSessionMemoryAnchor_空操作(t *testing.T) {
 	fcp := newTestFCP(nil)
+	mc := &fcpFakeModelContext{}
 	// 不应 panic
-	fcp._invalidateSessionMemoryAnchor(context.Background(), nil)
+	fcp._invalidateSessionMemoryAnchor(context.Background(), mc)
 }
 
 // ──────────────────────────── LoadState 测试 ────────────────────────────
@@ -2090,7 +2107,7 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages_有StringBuilder(t *t
 		llm_schema.NewAssistantMessage("你好！"),
 	}
 
-	result := fcp.buildReinjectedStateMessages(context.Background(), nil, messages, nil)
+	result := fcp.buildReinjectedStateMessages(context.Background(), &fcpFakeModelContext{}, messages, nil)
 	if len(result) == 0 {
 		t.Error("有非空 string builder 时应返回状态消息")
 	}
@@ -2122,7 +2139,7 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages_有SliceBuilder(t *te
 		llm_schema.NewAssistantMessage("你好！"),
 	}
 
-	result := fcp.buildReinjectedStateMessages(context.Background(), nil, messages, nil)
+	result := fcp.buildReinjectedStateMessages(context.Background(), &fcpFakeModelContext{}, messages, nil)
 	if len(result) == 0 {
 		t.Error("有 []BaseMessage builder 时应返回注入消息")
 	}
@@ -2135,7 +2152,7 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages_空CandidateMessages(
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewSystemMessage("[FULL_COMPACT_BOUNDARY]\ncompacted"),
 	}
-	result := fcp.buildReinjectedStateMessages(context.Background(), nil, messages, nil)
+	result := fcp.buildReinjectedStateMessages(context.Background(), &fcpFakeModelContext{}, messages, nil)
 	if len(result) != 0 {
 		t.Errorf("候选消息为空时应返回 nil，实际: %d", len(result))
 	}

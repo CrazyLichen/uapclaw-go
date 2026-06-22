@@ -42,6 +42,7 @@ func (m *mockModelContext) TokenCounter() token.TokenCounter { return nil }
 func (m *mockModelContext) ReloaderTool() tool.Tool          { return nil }
 func (m *mockModelContext) WorkspaceDir() string             { return "" }
 func (m *mockModelContext) SetSessionRef(_ *session.Session) {}
+func (m *mockModelContext) GetSessionRef() *session.Session  { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any        { return nil }
 func (m *mockModelContext) LoadState(_ map[string]any)       {}

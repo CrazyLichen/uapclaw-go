@@ -4,16 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -793,51 +796,68 @@ func (fcp *FullCompactProcessor) _buildSessionMemoryMessage(sessionMemoryText st
 
 // _loadSessionMemoryRuntime 加载 Session Memory 运行时信息。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 nil
-//
 // 对应 Python: FullCompactProcessor._load_session_memory_runtime()
-func (fcp *FullCompactProcessor) _loadSessionMemoryRuntime(_ context.Context, _ iface.ModelContext) map[string]any {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return nil
+func (fcp *FullCompactProcessor) _loadSessionMemoryRuntime(_ context.Context, mc iface.ModelContext) map[string]any {
+	sess := mc.GetSessionRef()
+	if sess == nil {
+		return nil
+	}
+	return cecontext.GetSessionMemoryRuntime(sess)
 }
 
 // _loadSessionMemoryText 加载 Session Memory 文本内容。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 ""
-//
 // 对应 Python: FullCompactProcessor._load_session_memory_text()
-func (fcp *FullCompactProcessor) _loadSessionMemoryText(_ context.Context, _ iface.ModelContext, _ map[string]any) string {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return ""
+func (fcp *FullCompactProcessor) _loadSessionMemoryText(_ context.Context, mc iface.ModelContext, runtime map[string]any) string {
+	memoryPath, _ := runtime["memory_path"].(string)
+	if memoryPath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(memoryPath)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // _resolveSessionMemoryPath 解析 Session Memory 文件路径。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 ""
-//
 // 对应 Python: FullCompactProcessor._resolve_session_memory_path()
-func (fcp *FullCompactProcessor) _resolveSessionMemoryPath(_ context.Context, _ iface.ModelContext, _ map[string]any) string {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return ""
+func (fcp *FullCompactProcessor) _resolveSessionMemoryPath(_ context.Context, mc iface.ModelContext, _ map[string]any) string {
+	workspaceDir := mc.WorkspaceDir()
+	if workspaceDir == "" {
+		return ""
+	}
+	return cecontext.GetSessionMemoryPath(workspaceDir, mc.SessionID())
 }
 
 // _selectMessagesAfterSessionMemory 选择 Session Memory 之后的消息。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 nil
-//
 // 对应 Python: FullCompactProcessor._select_messages_after_session_memory()
-func (fcp *FullCompactProcessor) _selectMessagesAfterSessionMemory(_ []llm_schema.BaseMessage, _ map[string]any, _ bool) []llm_schema.BaseMessage {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return nil
+func (fcp *FullCompactProcessor) _selectMessagesAfterSessionMemory(messages []llm_schema.BaseMessage, runtime map[string]any, _ bool) []llm_schema.BaseMessage {
+	notesUptoID, _ := runtime["notes_upto_message_id"].(string)
+	if notesUptoID == "" {
+		return messages
+	}
+	idx := cecontext.FindMessageIndexByContextMessageID(messages, notesUptoID)
+	if idx < 0 {
+		return messages
+	}
+	if idx+1 >= len(messages) {
+		return nil
+	}
+	return messages[idx+1:]
 }
 
 // _invalidateSessionMemoryAnchor 使 Session Memory 锚点失效。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前空操作
-//
 // 对应 Python: FullCompactProcessor._invalidate_session_memory_anchor()
-func (fcp *FullCompactProcessor) _invalidateSessionMemoryAnchor(_ context.Context, _ iface.ModelContext) {
-	// ⤵️ 5.31 回填：需要 session 引用
+func (fcp *FullCompactProcessor) _invalidateSessionMemoryAnchor(_ context.Context, mc iface.ModelContext) {
+	sess := mc.GetSessionRef()
+	if sess == nil {
+		return
+	}
+	cecontext.InvalidateSessionMemoryAnchor(sess)
 }
 
 // buildReinjectedStateMessages 构建重新注入的状态消息。
@@ -1153,22 +1173,40 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 
 // buildTaskStatusReinjectedContent 构建任务状态重新注入内容。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 ""
-//
 // 对应 Python: build_task_status_reinjected_content()
-func buildTaskStatusReinjectedContent(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return ""
+func buildTaskStatusReinjectedContent(_ context.Context, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	sess := mc.GetSessionRef()
+	if sess == nil {
+		return ""
+	}
+	st, err := sess.GetState(state.StringKey("task_status"))
+	if err != nil || st == nil {
+		return ""
+	}
+	data, err := json.Marshal(st)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // buildPlanModeReinjectedContent 构建计划模式重新注入内容。
 //
-// ⤵️ 5.31 回填：需要 session 引用，当前返回 ""
-//
 // 对应 Python: build_plan_mode_reinjected_content()
-func buildPlanModeReinjectedContent(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
-	// ⤵️ 5.31 回填：需要 session 引用
-	return ""
+func buildPlanModeReinjectedContent(_ context.Context, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	sess := mc.GetSessionRef()
+	if sess == nil {
+		return ""
+	}
+	st, err := sess.GetState(state.StringKey("plan_mode"))
+	if err != nil || st == nil {
+		return ""
+	}
+	data, err := json.Marshal(st)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // buildPlanReinjectedContent 构建计划重新注入内容，空实现。

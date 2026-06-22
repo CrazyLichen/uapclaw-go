@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
@@ -132,16 +133,36 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 		tokenCounter = token.NewTiktokenCounter(ce.config.ModelName)
 	}
 
-	// ⤵️ 5.31 回填：构造 SessionModelContext 实例
-	// ⤵️ 5.31 回填：新创建后触发 ContextRetrieved 事件（与缓存命中路径一致）
-	_ = processorInstances
-	_ = tokenCounter
-	_ = opt.HistoryMessages
-
-	return nil, exception.NewBaseError(
-		exception.StatusContextExecutionError,
-		exception.WithMsg("ContextEngine.CreateContext: SessionModelContext 尚未实现（⤵️ 5.31 回填）"),
+	// 构造 SessionModelContext 实例
+	mc := cecontext.NewSessionModelContext(
+		contextID,
+		sessionID,
+		ce.config,
+		opt.HistoryMessages,
+		processorInstances,
+		tokenCounter,
+		sess,
+		ce.workspace,
+		ce.sysOperation,
 	)
+
+	// 存入池
+	ce.mu.Lock()
+	ce.contextPool[fullContextID] = mc
+	ce.mu.Unlock()
+
+	// 加载已有状态
+	loadStateFromSession(mc, sess, opt.HistoryMessages)
+
+	// 触发 ContextRetrieved 事件（与缓存命中路径一致）
+	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
+		Event:     callback.ContextRetrieved,
+		SessionID: sessionID,
+		ContextID: contextID,
+		Context:   mc,
+	})
+
+	return mc, nil
 }
 
 // GetContext 获取上下文（不存在返回 nil）。
