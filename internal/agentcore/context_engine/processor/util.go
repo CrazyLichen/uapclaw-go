@@ -238,6 +238,26 @@ func EstimateContentTokens(content any) int {
 	return len(data) / 3
 }
 
+// EstimateMessageTokens 估算单条消息的 Token 数。
+//
+// 优先使用 content 文本估算，为空时尝试 JSON 序列化后估算。
+//
+// 对应 Python: ContextUtils.estimate_message_tokens()
+func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
+	if msg == nil {
+		return 0
+	}
+	content := msg.GetContent()
+	if content.IsText() {
+		text := content.Text()
+		if text == "" {
+			return 0
+		}
+		return len(text) / 3
+	}
+	return EstimateContentTokens(content)
+}
+
 // IsSummaryMessage 判断消息是否为指定标记的摘要消息。
 //
 // 对应 Python: util.is_summary_message()

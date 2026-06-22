@@ -415,3 +415,28 @@ func TestExtractSkillFileContent(t *testing.T) {
 		}
 	})
 }
+
+func TestEstimateMessageTokens_字符串内容(t *testing.T) {
+	msg := llm_schema.NewUserMessage("hello world")
+	result := EstimateMessageTokens(msg)
+	if result != len("hello world")/3 {
+		t.Errorf("期望 %d, 实际 %d", len("hello world")/3, result)
+	}
+}
+
+func TestEstimateMessageTokens_空内容(t *testing.T) {
+	msg := llm_schema.NewUserMessage("")
+	result := EstimateMessageTokens(msg)
+	if result != 0 {
+		t.Errorf("期望 0, 实际 %d", result)
+	}
+}
+
+func TestEstimateMessageTokens_长内容(t *testing.T) {
+	content := strings.Repeat("x", 3000)
+	msg := llm_schema.NewToolMessage("tc-1", content)
+	result := EstimateMessageTokens(msg)
+	if result != len(content)/3 {
+		t.Errorf("期望 %d, 实际 %d", len(content)/3, result)
+	}
+}
