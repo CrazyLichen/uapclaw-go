@@ -35,7 +35,7 @@ func NewBaseProcessor(config iface.ProcessorConfig) *BaseProcessor {
 	}
 }
 
-// Config 返回处理器配置（只读）
+// Config 返回处理器配置。
 func (p *BaseProcessor) Config() iface.ProcessorConfig {
 	return p.config
 }

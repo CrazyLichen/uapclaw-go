@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ModelContext 上下文引擎的核心抽象接口，管理对话消息和上下文窗口。
 //
@@ -117,8 +117,6 @@ type ProcessorSpec struct {
 	Config ProcessorConfig
 }
 
-// ──────────────────────────── Option 类型 ────────────────────────────
-
 // ContextEngineOption ContextEngine 构造器选项函数
 type ContextEngineOption func(*ContextEngineOptions)
 
@@ -169,8 +167,6 @@ type ClearContextOptions struct {
 	// ContextID 上下文 ID
 	ContextID string
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ContextStats 上下文统计快照，记录消息数量、Token 数量和对话轮次。
 //
@@ -223,6 +219,9 @@ type ContextWindow struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 确保 contextID 参数可用（避免未使用导入编译错误）
+var _ = fmt.Sprintf
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -452,6 +451,3 @@ func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter)
 	}
 	return len(text) / 4
 }
-
-// 确保 contextID 参数可用（避免未使用导入编译错误）
-var _ = fmt.Sprintf

@@ -24,6 +24,11 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// workspaceInterface 工作空间私有接口，用于 WorkspaceDir() 类型断言
+type workspaceInterface interface {
+	RootPath() string
+}
+
 // SessionModelContext 上下文引擎的核心运行时实现，管理对话消息和上下文窗口。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/context.py (SessionModelContext)
@@ -66,11 +71,6 @@ type SessionModelContext struct {
 	kvCacheManager *KVCacheManager
 	// offloadMessageBuffer 卸载消息缓冲区
 	offloadMessageBuffer *OffloadMessageBuffer
-}
-
-// workspaceInterface 工作空间私有接口，用于 WorkspaceDir() 类型断言
-type workspaceInterface interface {
-	RootPath() string
 }
 
 // reloaderToolInput 重载工具输入参数结构体。
@@ -557,9 +557,9 @@ func (mc *SessionModelContext) SaveState() map[string]any {
 
 	return map[string]any{
 		mc.contextID: map[string]any{
-			"messages":           allMessages,
-			"offload_messages":   offloadMessages,
-			"processor_states":   processorStates,
+			"messages":            allMessages,
+			"offload_messages":    offloadMessages,
+			"processor_states":    processorStates,
 			"compression_history": mc.stateRecorder.History(),
 		},
 	}

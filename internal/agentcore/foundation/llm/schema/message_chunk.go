@@ -30,8 +30,6 @@ type AssistantMessageChunkOption func(*AssistantMessageChunk)
 // ToolMessageChunkOption ToolMessageChunk 构造选项函数。
 type ToolMessageChunkOption func(*ToolMessageChunk)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────

@@ -1,4 +1,4 @@
-// headers_helper 包提供 LLM 请求头构建辅助函数。
+// Package headers_helper 提供 LLM 请求头构建辅助函数。
 //
 // 包含 HTTP 头清洗、大小写不敏感合并、配置级/请求级 headers 组装等功能。
 //

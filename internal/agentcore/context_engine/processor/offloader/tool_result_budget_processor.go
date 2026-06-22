@@ -66,9 +66,6 @@ type ToolResultBudgetProcessor struct {
 	sysOperation any
 }
 
-// ToolResultBudgetProcessorOption 构造选项函数
-type ToolResultBudgetProcessorOption func(*ToolResultBudgetProcessor)
-
 // offloadCandidate 卸载候选消息
 type offloadCandidate struct {
 	idx  int
@@ -76,6 +73,9 @@ type offloadCandidate struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ToolResultBudgetProcessorOption 构造选项函数
+type ToolResultBudgetProcessorOption func(*ToolResultBudgetProcessor)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

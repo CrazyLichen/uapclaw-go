@@ -75,10 +75,10 @@ type MessageSummaryOffloader struct {
 	model *llm.Model
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // MessageSummaryOffloaderOption 摘要卸载器构造选项
 type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

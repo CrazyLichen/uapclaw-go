@@ -15,8 +15,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -83,13 +83,6 @@ type FullCompactProcessor struct {
 	reinjector *FullCompactStateReinjector
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// FullCompactProcessorOption FullCompactProcessor 构造选项函数。
-type FullCompactProcessorOption func(*FullCompactProcessor)
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ReinjectedStateBuilderSpec 重新注入状态构建器规格。
 //
 // 每个 Builder 负责从历史消息中提取特定类型的状态信息，
@@ -115,6 +108,11 @@ type FullCompactStateReinjector struct {
 	// builders 注册的构建器列表
 	builders []ReinjectedStateBuilderSpec
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// FullCompactProcessorOption FullCompactProcessor 构造选项函数。
+type FullCompactProcessorOption func(*FullCompactProcessor)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

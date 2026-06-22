@@ -454,31 +454,6 @@ func (c *OpenAIModelClient) Release(
 	)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// init 注册 OpenAI 和 OpenRouter 客户端到全局注册表。
-//
-// 对应 Python: OpenAIModelClient.__client_name__ = ["OpenAI", "OpenRouter"]
-// 通过 __init_subclass__ 自动注册。
-func init() {
-	registry := model_clients.GetClientRegistry()
-
-	// OpenAI 客户端工厂
-	openAIFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
-		client, err := NewOpenAIModelClient(mc, cc)
-		if err != nil {
-			// 注册阶段无法返回 error，记录日志并返回 nil
-			// 实际使用时 CreateModelClient 会正常创建
-			logger.Error(logComponent).Err(err).Msg("创建 OpenAI 客户端失败")
-			return nil
-		}
-		return client
-	}
-
-	registry.Register("OpenAI", "llm", openAIFactory)
-	registry.Register("OpenRouter", "llm", openAIFactory)
-}
-
 // BuildEffectiveHeaders 合并配置级和请求级 headers。
 //
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。
@@ -536,4 +511,29 @@ func ExtractHTTPHeaders(effectiveHeaders map[string]string) map[string]string {
 		return nil
 	}
 	return effectiveHeaders
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// init 注册 OpenAI 和 OpenRouter 客户端到全局注册表。
+//
+// 对应 Python: OpenAIModelClient.__client_name__ = ["OpenAI", "OpenRouter"]
+// 通过 __init_subclass__ 自动注册。
+func init() {
+	registry := model_clients.GetClientRegistry()
+
+	// OpenAI 客户端工厂
+	openAIFactory := func(mc *llmschema.ModelRequestConfig, cc *llmschema.ModelClientConfig) model_clients.BaseModelClient {
+		client, err := NewOpenAIModelClient(mc, cc)
+		if err != nil {
+			// 注册阶段无法返回 error，记录日志并返回 nil
+			// 实际使用时 CreateModelClient 会正常创建
+			logger.Error(logComponent).Err(err).Msg("创建 OpenAI 客户端失败")
+			return nil
+		}
+		return client
+	}
+
+	registry.Register("OpenAI", "llm", openAIFactory)
+	registry.Register("OpenRouter", "llm", openAIFactory)
 }

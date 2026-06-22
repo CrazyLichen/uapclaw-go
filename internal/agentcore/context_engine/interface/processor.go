@@ -56,8 +56,6 @@ type ContextProcessor interface {
 	ProcessorType() string
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ContextEvent 上下文处理器执行结果，由各 Processor 的 OnAddMessages / OnGetContextWindow 返回。
 //
 // 当处理器实际执行了操作时返回非 nil 的 ContextEvent，携带修改了哪些消息索引、
@@ -101,10 +99,10 @@ type ProcessorOption struct {
 	Extra map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // Option 处理器选项函数类型
 type Option func(*ProcessorOption)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

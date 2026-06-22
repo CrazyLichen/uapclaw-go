@@ -48,6 +48,8 @@ const offloadTypeInMemory = "in_memory"
 // offloadTypeFilesystem 文件系统存储类型标识
 const offloadTypeFilesystem = "filesystem"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContextMessageBuffer 创建消息缓冲区实例。

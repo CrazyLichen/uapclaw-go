@@ -12,15 +12,27 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// SessionMemoryUpdater 会话记忆更新器接口。
+// direct_replace 模式由 SessionMemoryDirectUpdater 实现；
+// agent_edit 模式 ⤵️ 6.x 回填，由 SessionMemoryAgentUpdater 实现。
+type SessionMemoryUpdater interface {
+	// Invoke 执行记忆更新
+	Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error
+	// BindModelDefaults 绑定默认模型配置
+	BindModelDefaults(modelConfig *llm_schema.ModelRequestConfig, clientConfig *llm_schema.ModelClientConfig)
+	// SetInheritedSystemPrompt 设置继承的系统提示词
+	SetInheritedSystemPrompt(prompt string)
+}
 
 // SessionMemoryConfig 会话记忆配置。
 //
@@ -76,20 +88,6 @@ type SessionMemoryManager struct {
 	updater SessionMemoryUpdater
 	mu      sync.Mutex
 	tasks   map[string]context.CancelFunc
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// SessionMemoryUpdater 会话记忆更新器接口。
-// direct_replace 模式由 SessionMemoryDirectUpdater 实现；
-// agent_edit 模式 ⤵️ 6.x 回填，由 SessionMemoryAgentUpdater 实现。
-type SessionMemoryUpdater interface {
-	// Invoke 执行记忆更新
-	Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error
-	// BindModelDefaults 绑定默认模型配置
-	BindModelDefaults(modelConfig *llm_schema.ModelRequestConfig, clientConfig *llm_schema.ModelClientConfig)
-	// SetInheritedSystemPrompt 设置继承的系统提示词
-	SetInheritedSystemPrompt(prompt string)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -498,9 +496,9 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 
 	// 更新运行时状态
 	updateSessionMemoryRuntime(sess, map[string]any{
-		"session_id":            sessionID,
-		"memory_path":           notesPath,
-		"pending_memory_path":   pendingNotesPath,
+		"session_id":          sessionID,
+		"memory_path":         notesPath,
+		"pending_memory_path": pendingNotesPath,
 	})
 
 	// ShouldUpdate 判断
@@ -668,9 +666,7 @@ func (m *SessionMemoryManager) Shutdown() {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getSessionMemoryRuntime 从 session state 获取 "__session_memory__" 键的值。
+// GetSessionMemoryRuntime 从 session state 获取 "__session_memory__" 键的值。
 //
 // 对应 Python: get_session_memory_runtime()
 func GetSessionMemoryRuntime(sess *session.Session) map[string]any {
@@ -697,6 +693,49 @@ func GetSessionMemoryRuntime(sess *session.Session) map[string]any {
 	}
 	return result
 }
+
+// InvalidateSessionMemoryAnchor 重置基线。
+//
+// 对应 Python: invalidate_session_memory_anchor()
+func InvalidateSessionMemoryAnchor(sess *session.Session) {
+	if sess == nil {
+		return
+	}
+	updateSessionMemoryRuntime(sess, map[string]any{
+		"tokens_at_last_update":         0,
+		"last_summarized_message_count": 0,
+		"notes_upto_message_id":         "",
+	})
+}
+
+// GetSessionMemoryPath 返回会话记忆文件路径。
+// 格式：{workspaceDir}/context/{sessionID}_context/session_memory/session_context.md
+//
+// 对应 Python: SessionMemoryManager._get_session_memory_path()
+func GetSessionMemoryPath(workspaceDir, sessionID string) string {
+	return filepath.Join(workspaceDir, "context", sessionID+"_context", "session_memory", "session_context.md")
+}
+
+// GetContextMessageID 从消息 metadata 获取 context_message_id。
+//
+// 对应 Python: get_context_message_id()
+func GetContextMessageID(msg llm_schema.BaseMessage) string {
+	metadata := msg.GetMetadata()
+	if metadata == nil {
+		return ""
+	}
+	id, ok := metadata[ContextMessageIDKey]
+	if !ok {
+		return ""
+	}
+	s, ok := id.(string)
+	if !ok || s == "" {
+		return ""
+	}
+	return s
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateSessionMemoryRuntime 更新运行时状态。
 //
@@ -729,28 +768,6 @@ func updateSessionMemoryRuntime(sess *session.Session, st map[string]any) {
 		Msg("更新会话记忆运行时状态")
 
 	sess.UpdateState(map[string]any{sessionMemoryStateKey: merged})
-}
-
-// invalidateSessionMemoryAnchor 重置基线。
-//
-// 对应 Python: invalidate_session_memory_anchor()
-func InvalidateSessionMemoryAnchor(sess *session.Session) {
-	if sess == nil {
-		return
-	}
-	updateSessionMemoryRuntime(sess, map[string]any{
-		"tokens_at_last_update":         0,
-		"last_summarized_message_count": 0,
-		"notes_upto_message_id":         "",
-	})
-}
-
-// getSessionMemoryPath 返回会话记忆文件路径。
-// 格式：{workspaceDir}/context/{sessionID}_context/session_memory/session_context.md
-//
-// 对应 Python: SessionMemoryManager._get_session_memory_path()
-func GetSessionMemoryPath(workspaceDir, sessionID string) string {
-	return filepath.Join(workspaceDir, "context", sessionID+"_context", "session_memory", "session_context.md")
 }
 
 // getPendingSessionMemoryPath 返回待提交路径。
@@ -847,36 +864,17 @@ func findLastCompletedAPIRoundEnd(messages []llm_schema.BaseMessage) int {
 	return rounds[len(rounds)-1][1]
 }
 
-// getContextMessageID 从消息 metadata 获取 context_message_id。
-//
-// 对应 Python: get_context_message_id()
-func GetContextMessageID(msg llm_schema.BaseMessage) string {
-	metadata := msg.GetMetadata()
-	if metadata == nil {
-		return ""
-	}
-	id, ok := metadata[ContextMessageIDKey]
-	if !ok {
-		return ""
-	}
-	s, ok := id.(string)
-	if !ok || s == "" {
-		return ""
-	}
-	return s
-}
-
 // buildSessionMemoryRuntime 构建初始运行时状态。
 func buildSessionMemoryRuntime() map[string]any {
 	return map[string]any{
-		"memory_path":                    "",
-		"pending_memory_path":            "",
-		"initialized":                    false,
-		"is_extracting":                  false,
-		"tokens_at_last_update":          0,
-		"tool_calls_at_last_update":      0,
-		"last_summarized_message_count":  0,
-		"notes_upto_message_id":          "",
+		"memory_path":                   "",
+		"pending_memory_path":           "",
+		"initialized":                   false,
+		"is_extracting":                 false,
+		"tokens_at_last_update":         0,
+		"tool_calls_at_last_update":     0,
+		"last_summarized_message_count": 0,
+		"notes_upto_message_id":         "",
 	}
 }
 
@@ -900,14 +898,14 @@ func normalizeDirectResponseContent(content string) string {
 func getRuntimeState(sess *session.Session) map[string]any {
 	st := GetSessionMemoryRuntime(sess)
 	return map[string]any{
-		"memory_path":                    getStringFromMap(st, "memory_path"),
-		"pending_memory_path":            getStringFromMap(st, "pending_memory_path"),
-		"initialized":                    getBoolFromMap(st, "initialized"),
-		"is_extracting":                  getBoolFromMap(st, "is_extracting"),
-		"tokens_at_last_update":          getIntFromMap(st, "tokens_at_last_update"),
-		"tool_calls_at_last_update":      getIntFromMap(st, "tool_calls_at_last_update"),
-		"last_summarized_message_count":  getIntFromMap(st, "last_summarized_message_count"),
-		"notes_upto_message_id":          getStringFromMap(st, "notes_upto_message_id"),
+		"memory_path":                   getStringFromMap(st, "memory_path"),
+		"pending_memory_path":           getStringFromMap(st, "pending_memory_path"),
+		"initialized":                   getBoolFromMap(st, "initialized"),
+		"is_extracting":                 getBoolFromMap(st, "is_extracting"),
+		"tokens_at_last_update":         getIntFromMap(st, "tokens_at_last_update"),
+		"tool_calls_at_last_update":     getIntFromMap(st, "tool_calls_at_last_update"),
+		"last_summarized_message_count": getIntFromMap(st, "last_summarized_message_count"),
+		"notes_upto_message_id":         getStringFromMap(st, "notes_upto_message_id"),
 	}
 }
 
@@ -1014,8 +1012,8 @@ func (m *SessionMemoryManager) updateBackground(
 
 	err := m.updater.Invoke(ctx, SessionMemoryUpdateOptions{
 		FullContextMessages: contextWindow.GetMessages(),
-		NotesPath:          pendingNotesPath,
-		CurrentNotes:       currentNotes,
+		NotesPath:           pendingNotesPath,
+		CurrentNotes:        currentNotes,
 	})
 
 	if err != nil {
