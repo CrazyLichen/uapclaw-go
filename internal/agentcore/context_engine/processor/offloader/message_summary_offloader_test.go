@@ -24,6 +24,19 @@ import (
 // fakeModelContext 实现了 TokenCounter 接口，CountMessages 返回 tokenCount 字段。
 // 对需要大消息通过阈值的测试，必须设置 tokenCount > LargeMessageThreshold。
 
+// msoNewForTest 创建带 fake model 的 MessageSummaryOffloader，用于不需要 LLM 调用的纯逻辑测试。
+func msoNewForTest(cfg *MessageSummaryOffloaderConfig) *MessageSummaryOffloader {
+	fakeClient := &msoFakeBaseModelClient{
+		invokeResp: llm_schema.NewAssistantMessage(`{"summary":"test","offload_data_explanation":{}}`),
+	}
+	model := msoNewFakeLLMModel(fakeClient)
+	mso, err := NewMessageSummaryOffloader(cfg, WithMessageSummaryModel(model))
+	if err != nil {
+		panic(fmt.Sprintf("msoNewForTest: %v", err))
+	}
+	return mso
+}
+
 // TestMessageSummaryOffloaderConfig_Validate 测试配置校验
 func TestMessageSummaryOffloaderConfig_Validate(t *testing.T) {
 	t.Run("默认值应用", func(t *testing.T) {
@@ -67,8 +80,7 @@ func TestMessageSummaryOffloaderConfig_Validate(t *testing.T) {
 func TestMessageSummaryOffloader_ProcessorType(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 	assert.Equal(t, "MessageSummaryOffloader", mso.ProcessorType())
 }
 
@@ -79,8 +91,7 @@ func TestMessageSummaryOffloader_TriggerAddMessages(t *testing.T) {
 			LargeMessageThreshold: 100,
 		}
 		require.NoError(t, cfg.Validate())
-		mso, err := NewMessageSummaryOffloader(cfg)
-		require.NoError(t, err)
+		mso := msoNewForTest(cfg)
 
 		// 创建一条大的 tool 消息
 		longContent := strings.Repeat("x", 500)
@@ -99,8 +110,7 @@ func TestMessageSummaryOffloader_TriggerAddMessages(t *testing.T) {
 			LargeMessageThreshold: 1000,
 		}
 		require.NoError(t, cfg.Validate())
-		mso, err := NewMessageSummaryOffloader(cfg)
-		require.NoError(t, err)
+		mso := msoNewForTest(cfg)
 
 		shortMsg := llm_schema.NewToolMessage("call-1", "short")
 		mc := &fakeModelContext{messages: nil, sessionID: "test-session"}
@@ -115,8 +125,7 @@ func TestMessageSummaryOffloader_TriggerAddMessages(t *testing.T) {
 			LargeMessageThreshold: 10,
 		}
 		require.NoError(t, cfg.Validate())
-		mso, err := NewMessageSummaryOffloader(cfg)
-		require.NoError(t, err)
+		mso := msoNewForTest(cfg)
 
 		longContent := strings.Repeat("x", 500)
 		userMsg := llm_schema.NewUserMessage(longContent)
@@ -134,8 +143,7 @@ func TestMessageSummaryOffloader_shouldOffloadMessage(t *testing.T) {
 		LargeMessageThreshold: 100,
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("角色不匹配返回false", func(t *testing.T) {
 		userMsg := llm_schema.NewUserMessage(strings.Repeat("x", 500))
@@ -179,8 +187,7 @@ func TestMessageSummaryOffloader_shouldOffloadMessage(t *testing.T) {
 func TestMessageSummaryOffloader_isContextOverflowError(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	tests := []struct {
 		name     string
@@ -212,8 +219,7 @@ func TestMessageSummaryOffloader_isContextOverflowError(t *testing.T) {
 func TestMessageSummaryOffloader_smartTruncateContent(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("短内容不截断", func(t *testing.T) {
 		content := "short"
@@ -239,8 +245,7 @@ func TestMessageSummaryOffloader_smartTruncateContent(t *testing.T) {
 func TestMessageSummaryOffloader_parseCompressionResult(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("正常JSON", func(t *testing.T) {
 		input := `{"compression_strategy":"extractive","summary":"test summary","offload_data_explanation":{"category":"logs","description":"raw data","inferability":"medium"}}`
@@ -274,8 +279,7 @@ func TestMessageSummaryOffloader_parseCompressionResult(t *testing.T) {
 func TestMessageSummaryOffloader_getStepFromChainDefault(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("返回最后的UserMessage", func(t *testing.T) {
 		messages := []llm_schema.BaseMessage{
@@ -305,8 +309,7 @@ func TestMessageSummaryOffloader_getStepFromChainDefault(t *testing.T) {
 func TestMessageSummaryOffloader_isValidForStepSummary(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("UserMessage有效", func(t *testing.T) {
 		msg := llm_schema.NewUserMessage("hello")
@@ -340,8 +343,7 @@ func TestMessageSummaryOffloader_buildCompressionAttempts(t *testing.T) {
 			ContentMaxCharsForCompression: 1000,
 		}
 		require.NoError(t, cfg.Validate())
-		mso, err := NewMessageSummaryOffloader(cfg)
-		require.NoError(t, err)
+		mso := msoNewForTest(cfg)
 
 		content := "short content"
 		attempts := mso.buildCompressionAttempts(content)
@@ -354,8 +356,7 @@ func TestMessageSummaryOffloader_buildCompressionAttempts(t *testing.T) {
 			ContentMaxCharsForCompression: 1000,
 		}
 		require.NoError(t, cfg.Validate())
-		mso, err := NewMessageSummaryOffloader(cfg)
-		require.NoError(t, err)
+		mso := msoNewForTest(cfg)
 
 		content := strings.Repeat("x", 3000)
 		attempts := mso.buildCompressionAttempts(content)
@@ -528,8 +529,7 @@ func TestMessageSummaryOffloader_OnAddMessages_完整流程(t *testing.T) {
 func TestMessageSummaryOffloader_SaveLoadState(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	state := mso.SaveState()
 	assert.Empty(t, state)
@@ -574,8 +574,7 @@ func TestMessageSummaryOffloader_buildCompressionPrompt(t *testing.T) {
 		SummaryMaxTokens: 900,
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("无functionCall时显示NA", func(t *testing.T) {
 		prompt := mso.buildCompressionPrompt("test step", nil, "test content")
@@ -601,8 +600,7 @@ func TestMessageSummaryOffloader_buildCompressionPrompt(t *testing.T) {
 func TestMessageSummaryOffloader_newOffloadHandleAndPath(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	mc := &fakeModelContext{messages: nil, sessionID: "test-session"}
 	handle, path := mso.newOffloadHandleAndPath(mc)
@@ -617,8 +615,7 @@ func TestMessageSummaryOffloader_selectMessagesForStepSummary(t *testing.T) {
 		StepSummaryMaxContextMessages: 3,
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("过滤后消息不足2条返回nil", func(t *testing.T) {
 		messages := []llm_schema.BaseMessage{
@@ -651,10 +648,11 @@ func TestMessageSummaryOffloader_selectMessagesForStepSummary(t *testing.T) {
 func TestMessageSummaryOffloader_NewMessageSummaryOffloader_无ModelClient(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	// 不传 WithMessageSummaryModel，model 应为 nil
+	// 不传 ModelClient 和 WithMessageSummaryModel，应返回错误
 	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
-	assert.Nil(t, mso.model)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ModelClient")
+	assert.Nil(t, mso)
 }
 
 // TestMessageSummaryOffloader_NewMessageSummaryOffloader_有ModelClient 测试有 ModelClient 时创建
@@ -681,8 +679,7 @@ func TestMessageSummaryOffloader_NewMessageSummaryOffloader_有ModelClient(t *te
 func TestMessageSummaryOffloader_messageSize(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("TokenCounter优先", func(t *testing.T) {
 		msg := llm_schema.NewToolMessage("call-1", "hello world")
@@ -762,8 +759,7 @@ func TestMessageSummaryOffloader_isProtectedToolMessage(t *testing.T) {
 		ProtectedToolNames: []string{"reload_original_context_messages", "protected_tool*"},
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("受保护工具名完全匹配", func(t *testing.T) {
 		toolMsg := llm_schema.NewToolMessage("call-1", "result")
@@ -783,8 +779,7 @@ func TestMessageSummaryOffloader_isProtectedToolMessage(t *testing.T) {
 			ProtectedToolNames: []string{"protected_tool_v2:data*"},
 		}
 		require.NoError(t, cfg2.Validate())
-		mso2, err := NewMessageSummaryOffloader(cfg2)
-		require.NoError(t, err)
+		mso2 := msoNewForTest(cfg2)
 
 		toolMsg := llm_schema.NewToolMessage("call-2", "result")
 		assistantMsg := llm_schema.NewAssistantMessage("",
@@ -864,8 +859,7 @@ func TestMessageSummaryOffloader_buildStepContextText(t *testing.T) {
 		StepSummaryMaxContextMessages: 5,
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("多条有效消息构建上下文", func(t *testing.T) {
 		messages := []llm_schema.BaseMessage{
@@ -1028,32 +1022,13 @@ func TestMessageSummaryOffloader_offloadMessageAdaptive(t *testing.T) {
 		// 替换消息应实现 Offloadable
 		assert.True(t, schema.IsOffloaded(replacement))
 	})
-
-	t.Run("无model时返回nil", func(t *testing.T) {
-		cfgNoModel := &MessageSummaryOffloaderConfig{
-			LargeMessageThreshold:         100,
-			ContentMaxCharsForCompression: 1000,
-		}
-		require.NoError(t, cfgNoModel.Validate())
-		msoNoModel, err := NewMessageSummaryOffloader(cfgNoModel)
-		require.NoError(t, err)
-
-		longContent := strings.Repeat("x", 500)
-		toolMsg := llm_schema.NewToolMessage("call-1", longContent)
-		mc := &fakeModelContext{messages: nil, sessionID: "test-session", tokenCount: 200}
-
-		replacement, err := msoNoModel.offloadMessageAdaptive(context.Background(), toolMsg, mc)
-		require.NoError(t, err)
-		assert.Nil(t, replacement)
-	})
 }
 
 // TestMessageSummaryOffloader_getStepFromChainDefault_补充 测试默认任务提取补充
 func TestMessageSummaryOffloader_getStepFromChainDefault_补充(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("UserMessage为空内容返回空", func(t *testing.T) {
 		messages := []llm_schema.BaseMessage{
@@ -1078,8 +1053,7 @@ func TestMessageSummaryOffloader_getStepFromChainDefault_补充(t *testing.T) {
 func TestMessageSummaryOffloader_smartTruncateContent_补充(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("maxChars等于内容长度不截断", func(t *testing.T) {
 		content := "hello"
@@ -1098,8 +1072,7 @@ func TestMessageSummaryOffloader_smartTruncateContent_补充(t *testing.T) {
 func TestMessageSummaryOffloader_newOffloadHandleAndPath_补充(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("WorkspaceDir非空时生成完整路径", func(t *testing.T) {
 		mc := &fakeModelContext{messages: nil, sessionID: "test-session"}
@@ -1141,8 +1114,7 @@ func TestMessageSummaryOffloader_OnAddMessages_错误路径(t *testing.T) {
 func TestMessageSummaryOffloader_parseCompressionResult_补充(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("JSON在文本中混合", func(t *testing.T) {
 		input := `Here is the result: {"summary":"mixed summary","offload_data_explanation":{"category":"data","description":"desc","inferability":"high"}} end`
@@ -1180,8 +1152,7 @@ func TestMessageSummaryOffloader_NewMessageSummaryOffloader_WithModelClient(t *t
 func TestMessageSummaryOffloader_LoadState_非空(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	// LoadState 是空操作，调用不 panic 即可
 	mso.LoadState(map[string]any{"key": "value"})
@@ -1192,8 +1163,7 @@ func TestMessageSummaryOffloader_LoadState_非空(t *testing.T) {
 func TestMessageSummaryOffloader_messageSize_完整(t *testing.T) {
 	cfg := &MessageSummaryOffloaderConfig{}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("TokenCounter返回0", func(t *testing.T) {
 		msg := llm_schema.NewToolMessage("call-1", "hello world")
@@ -1324,8 +1294,7 @@ func TestMessageSummaryOffloader_buildStepContextText_补充(t *testing.T) {
 		StepSummaryMaxContextMessages: 5,
 	}
 	require.NoError(t, cfg.Validate())
-	mso, err := NewMessageSummaryOffloader(cfg)
-	require.NoError(t, err)
+	mso := msoNewForTest(cfg)
 
 	t.Run("空内容消息跳过", func(t *testing.T) {
 		messages := []llm_schema.BaseMessage{

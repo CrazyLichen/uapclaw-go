@@ -238,13 +238,14 @@ func NewMessageSummaryOffloader(config *MessageSummaryOffloaderConfig, opts ...M
 
 	// 如果未通过选项注入 Model，则从配置创建
 	if mso.model == nil {
-		if config.ModelClient != nil {
-			model, err := llm.NewModel(config.ModelClient, config.Model)
-			if err != nil {
-				return nil, err
-			}
-			mso.model = model
+		if config.ModelClient == nil {
+			return nil, fmt.Errorf("MessageSummaryOffloader: ModelClient 不能为空，摘要卸载需要 LLM 模型")
 		}
+		model, err := llm.NewModel(config.ModelClient, config.Model)
+		if err != nil {
+			return nil, err
+		}
+		mso.model = model
 	}
 
 	return mso, nil
@@ -522,10 +523,6 @@ func (mso *MessageSummaryOffloader) newOffloadHandleAndPath(mc iface.ModelContex
 //
 // 对应 Python: MessageSummaryOffloader._offload_message_adaptive()
 func (mso *MessageSummaryOffloader) offloadMessageAdaptive(ctx context.Context, message llm_schema.BaseMessage, mc iface.ModelContext) (llm_schema.BaseMessage, error) {
-	// 无模型时无法进行 LLM 压缩，直接返回 nil
-	if mso.model == nil {
-		return nil, nil
-	}
 	contextMessages := mc.GetMessages(nil, true)
 	functionCall := mso.getFunctionCallFromChain(message, contextMessages)
 
