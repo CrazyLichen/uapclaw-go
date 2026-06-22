@@ -7,18 +7,19 @@
 //
 // 核心接口和数据结构定义在 interface 子包中，外部包应直接导入
 // context_engine/interface 包并使用 iface.Xxx 形式引用类型。
-// 本包仅提供处理器工厂注册表（RegisterProcessorFactory/GetProcessorFactory/ListProcessorFactories）
-// 和预留函数 StatContextWindow。
+// 本包提供处理器工厂注册表（RegisterProcessorFactory/GetProcessorFactory/ListProcessorFactories）、
+// ContextEngine 门面（NewContextEngine）和预留函数 StatContextWindow。
 //
 // 文件目录：
 //
 //	context_engine/
 //	├── doc.go           # 包文档
 //	├── base.go          # StatContextWindow 预留函数
+//	├── engine.go        # ContextEngine 门面实现（上下文池管理、处理器创建、会话状态持久化）
 //	├── registry.go      # 处理器工厂注册表（Register/Get/List）
 //	├── interface/
 //	│   ├── doc.go              # Interface 子包文档
-//	│   ├── types.go            # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats 结构体
+//	│   ├── types.go            # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats + Option 类型 + ProcessorSpec
 //	│   ├── processor.go        # ContextProcessor/ProcessorConfig 接口 + ContextEvent/ProcessorOption + Option
 //	│   └── registry.go         # ProcessorFactory 工厂函数类型
 //	├── schema/

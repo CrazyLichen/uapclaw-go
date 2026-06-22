@@ -9,7 +9,7 @@
 //
 //	interface/
 //	├── doc.go          # 包文档
-//	├── types.go        # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats 结构体
+//	├── types.go        # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats + Option 类型 + ProcessorSpec
 //	├── processor.go    # ContextProcessor/ProcessorConfig 接口 + ContextEvent/ProcessorOption + Option 类型
 //	└── registry.go     # ProcessorFactory 工厂函数类型
 //
