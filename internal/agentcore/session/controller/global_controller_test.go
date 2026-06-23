@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -807,7 +808,7 @@ func TestOnAgentSessionCreated_正常注入(t *testing.T) {
 	require.NotNil(t, session)
 
 	// 构造回调数据
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
 	sa := newFakeStateAccessor()
 	data := &callback.SessionCallEventData{
 		SessionID: "test-session",
@@ -825,7 +826,7 @@ func TestOnAgentSessionCreated_正常注入(t *testing.T) {
 func TestOnAgentSessionCreated_空SessionID(t *testing.T) {
 	data := &callback.SessionCallEventData{
 		SessionID: "",
-		Card:      &schema.AgentCard{BaseCard: schema.BaseCard{ID: "a1"}},
+		Card:      &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "a1"}},
 		Session:   newFakeStateAccessor(),
 	}
 	result := onAgentSessionCreated(context.Background(), data)
@@ -845,7 +846,7 @@ func TestOnAgentSessionCreated_空Card(t *testing.T) {
 func TestOnAgentSessionCreated_空Session(t *testing.T) {
 	data := &callback.SessionCallEventData{
 		SessionID: "s1",
-		Card:      &schema.AgentCard{BaseCard: schema.BaseCard{ID: "a1"}},
+		Card:      &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "a1"}},
 		Session:   nil,
 	}
 	result := onAgentSessionCreated(context.Background(), data)

@@ -38,7 +38,7 @@ func (r *eventRecorder) record(_ context.Context, data *callback.LLMCallEventDat
 type mockModelClient struct {
 	invokeResult    *llmschema.AssistantMessage
 	invokeErr       error
-	streamResult    *model_clients.StreamResult
+	streamChan      <-chan *llmschema.AssistantMessageChunk
 	streamErr       error
 	releaseResult   bool
 	releaseErr      error
@@ -54,8 +54,8 @@ func (m *mockModelClient) Invoke(_ context.Context, _ model_clients.MessagesPara
 	return m.invokeResult, m.invokeErr
 }
 
-func (m *mockModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
-	return m.streamResult, m.streamErr
+func (m *mockModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return m.streamChan, m.streamErr
 }
 
 func (m *mockModelClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...model_clients.GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {
@@ -215,7 +215,7 @@ func TestModel_Stream_回调事件(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
 		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
-		client:            &mockModelClient{streamResult: model_clients.NewStreamResult(chunkChan)},
+		client:            &mockModelClient{streamChan: chunkChan},
 		callbackFramework: fw,
 	}
 
@@ -229,10 +229,8 @@ func TestModel_Stream_回调事件(t *testing.T) {
 		t.Errorf("callback.LLMStreamInput 应被调用 1 次，实际 %d 次", streamInputCalled)
 	}
 
-	// 等待流结束
-	final := result.Final()
-	if final == nil {
-		t.Error("流式结果不应为 nil")
+	// 等待流结束，读取所有 chunk
+	for range result {
 	}
 }
 
@@ -639,7 +637,7 @@ func TestModel_Stream_输出回调(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(llmschema.WithModelName("test-model")),
 		ClientConfig:      llmschema.NewModelClientConfig("OpenAI", "key", "http://localhost"),
-		client:            &mockModelClient{streamResult: model_clients.NewStreamResult(chunkChan)},
+		client:            &mockModelClient{streamChan: chunkChan},
 		callbackFramework: fw,
 	}
 
@@ -649,14 +647,15 @@ func TestModel_Stream_输出回调(t *testing.T) {
 		t.Fatalf("Stream 不应返回错误: %v", err)
 	}
 
-	// 等待流结束和 goroutine 触发回调
-	result.Final()
+	// 等待流结束，读取所有 chunk
+	for range result {
+	}
 
 	// 等待 goroutine 完成回调
 	time.Sleep(50 * time.Millisecond)
 
-	if atomic.LoadInt32(&outputCalled) != 1 {
-		t.Errorf("callback.LLMStreamOutput 应被调用 1 次，实际 %d 次", outputCalled)
+	if atomic.LoadInt32(&outputCalled) != 2 {
+		t.Errorf("callback.LLMStreamOutput 应被调用 2 次（per item），实际 %d 次", outputCalled)
 	}
 
 	outputDataMu.Lock()

@@ -384,7 +384,7 @@ func (f *msoFakeBaseModelClient) Invoke(_ context.Context, messages model_client
 	}
 	return f.invokeResp, f.invokeErr
 }
-func (f *msoFakeBaseModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+func (f *msoFakeBaseModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llm_schema.AssistantMessageChunk, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (f *msoFakeBaseModelClient) GenerateImage(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateImageOption) (*llm_schema.ImageGenerationResponse, error) {
@@ -979,7 +979,7 @@ func (f *msoRetryFakeClient) Invoke(ctx context.Context, messages model_clients.
 	summaryJSON := `{"compression_strategy":"abstractive","summary":"retry summary","offload_data_explanation":{"category":"data","description":"data","inferability":"low"}}`
 	return llm_schema.NewAssistantMessage(summaryJSON), nil
 }
-func (f *msoRetryFakeClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+func (f *msoRetryFakeClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llm_schema.AssistantMessageChunk, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (f *msoRetryFakeClient) GenerateImage(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateImageOption) (*llm_schema.ImageGenerationResponse, error) {

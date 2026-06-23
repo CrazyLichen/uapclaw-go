@@ -20,7 +20,6 @@
 //	GenerateSpeechParams   — 语音生成参数 + GenerateSpeechOption
 //	GenerateVideoParams    — 视频生成参数 + GenerateVideoOption
 //	ReleaseParams          — 缓存释放参数 + ReleaseOption
-//	StreamResult           — 流式结果（Channel + Final 合并）
 //
 // 注册与工厂：
 //
@@ -42,7 +41,7 @@
 //
 //	model_clients/
 //	  doc.go                 — 包文档（本文件）
-//	  base_client.go         — BaseModelClient 接口 + BaseOutputParser + BaseClientEmbed
+//	  base_client.go         — BaseModelClient 接口 + BaseOutputParser + BaseClientEmbed（Stream 返回纯 chunk channel）
 //	  base_client_test.go    — BaseClientEmbed 测试
 //	  registry.go            — ClientRegistry + CreateModelClient + ProviderValidator 桥接
 //	  registry_test.go       — 注册表测试
@@ -50,8 +49,6 @@
 //	  messages_param_test.go — MessagesParam 测试
 //	  invoke_params.go       — InvokeParams/StreamParams/Generate*Params + Functional Options
 //	  invoke_params_test.go  — 参数 Options 测试
-//	  stream_result.go       — StreamResult 流式结果类型
-//	  stream_result_test.go  — StreamResult 测试
 //
 // # Python 对应路径
 //

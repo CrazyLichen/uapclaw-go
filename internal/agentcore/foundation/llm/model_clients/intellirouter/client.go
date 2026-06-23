@@ -198,7 +198,7 @@ func (c *IntelliRouterModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
-) (*model_clients.StreamResult, error) {
+) (<-chan *llmschema.AssistantMessageChunk, error) {
 	params := model_clients.NewStreamParams(opts...)
 	modelName := params.Model
 	if modelName == "" && c.ModelConfig != nil {
@@ -346,7 +346,7 @@ func (c *IntelliRouterModelClient) Stream(
 	}()
 
 	c.router.RecordSuccess(dep, time.Since(start))
-	return model_clients.NewStreamResult(chunkChan), nil
+	return chunkChan, nil
 }
 
 // GenerateImage 生成图片（当前不支持）。

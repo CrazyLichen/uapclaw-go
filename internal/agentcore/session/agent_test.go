@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
@@ -434,7 +435,7 @@ func TestSession_GetAgentID返回空(t *testing.T) {
 
 // TestSession_WithCard 测试 WithCard 选项
 func TestSession_WithCard(t *testing.T) {
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
 	s := NewSession(WithCard(card))
 	if s.card == nil {
 		t.Error("WithCard 后 card 不应为 nil")
@@ -487,7 +488,7 @@ func TestSession_GetAgentName返回空(t *testing.T) {
 
 // TestSession_GetAgentName有Card 测试有 card 时返回名称
 func TestSession_GetAgentName有Card(t *testing.T) {
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Name: "测试Agent"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Name: "测试Agent"}}
 	s := NewSession(WithCard(card))
 	if s.GetAgentName() != "测试Agent" {
 		t.Errorf("GetAgentName 期望 测试Agent，实际 %s", s.GetAgentName())
@@ -504,7 +505,7 @@ func TestSession_GetAgentDescription返回空(t *testing.T) {
 
 // TestSession_GetAgentDescription有Card 测试有 card 时返回描述
 func TestSession_GetAgentDescription有Card(t *testing.T) {
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Description: "测试描述"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Description: "测试描述"}}
 	s := NewSession(WithCard(card))
 	if s.GetAgentDescription() != "测试描述" {
 		t.Errorf("GetAgentDescription 期望 测试描述，实际 %s", s.GetAgentDescription())

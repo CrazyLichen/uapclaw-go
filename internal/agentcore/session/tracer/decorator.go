@@ -125,9 +125,9 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 }
 
 // Stream 流式调用 LLM，在调用前后触发追踪事件，并通过 tracer_record_data 回调记录中间过程。
-// 流程：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Stream → Final() 收集结果 → TriggerAgent(TraceLLMEnd/Error)
-// 对齐 Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
-func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+// 执行顺序：CreateAgentSpan → TriggerAgent(TraceLLMStart) → 注入 tracer_record_data 回调 → inner.Stream → 逐 chunk 透传 → TriggerAgent(TraceLLMEnd/Error)
+// 对齐 Python: _make_trace_stream_wrap_handler 中 async for item in call_next(...): yield item
+func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
 	c.tracer.TriggerAgent(ctx, TraceLLMStart, &TriggerParams{
 		Span:         &span.Span,
@@ -135,7 +135,7 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 		InstanceInfo: c.instanceInfo,
 	})
 
-	// 创建 tracer_record_data 回调闭包，对齐 Python 同 Invoke
+	// 注入 tracer_record_data 回调（对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data）
 	spanPtr := &span.Span
 	tracerRecordData := func(data map[string]any) {
 		c.tracer.TriggerAgent(ctx, TraceLLMRequest, &TriggerParams{
@@ -145,7 +145,7 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 	}
 	opts = append(opts, model_clients.WithStreamTracerRecordData(tracerRecordData))
 
-	streamResult, err := c.inner.Stream(ctx, messages, opts...)
+	chunkChan, err := c.inner.Stream(ctx, messages, opts...)
 	if err != nil {
 		c.tracer.TriggerAgent(ctx, TraceLLMError, &TriggerParams{
 			Span:  &span.Span,
@@ -154,21 +154,20 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 		return nil, err
 	}
 
-	// 等待流式结果收集完毕
-	finalMsg := streamResult.Final()
+	// 逐 chunk 透传，流结束后触发 TraceLLMEnd（对齐 Python _make_trace_stream_wrap_handler）
+	out := make(chan *llmschema.AssistantMessageChunk)
+	go func() {
+		defer close(out)
+		for chunk := range chunkChan {
+			out <- chunk
+		}
+		// 流结束，触发 TraceLLMEnd
+		c.tracer.TriggerAgent(ctx, TraceLLMEnd, &TriggerParams{
+			Span: &span.Span,
+		})
+	}()
 
-	// 将最终合并的 chunk 转换为 AssistantMessage 作为输出记录
-	var outputs any
-	if finalMsg != nil {
-		outputs = finalMsg.ToAssistantMessage()
-	}
-
-	c.tracer.TriggerAgent(ctx, TraceLLMEnd, &TriggerParams{
-		Span:    &span.Span,
-		Outputs: outputs,
-	})
-
-	return streamResult, nil
+	return out, nil
 }
 
 // GenerateImage 生成图片，直接委托 inner。

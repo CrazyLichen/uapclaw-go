@@ -594,16 +594,20 @@ func TestDeepSeekModelClient_Stream_成功(t *testing.T) {
 	}
 
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
-	if result == nil {
-		t.Fatal("Stream 结果不应为 nil")
-	}
 
-	// Final() 会阻塞等待流结束，然后返回合并结果
-	final := result.Final()
+	// 从 channel 读取并累积为最终结果
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -680,11 +684,11 @@ func TestDeepSeekModelClient_Stream_HTTP错误(t *testing.T) {
 	}
 
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err == nil {
 		t.Error("Stream HTTP 429 应返回错误")
 	}
-	if result != nil {
+	if chunkChan != nil {
 		t.Error("Stream HTTP 429 结果应为 nil")
 	}
 	baseErr, ok := err.(*exception.BaseError)

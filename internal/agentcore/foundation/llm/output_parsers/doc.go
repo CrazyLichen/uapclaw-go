@@ -21,8 +21,8 @@
 //
 // 流式（在 Stream 时传入 parser，_astream_with_parser 自动处理）：
 //
-//	result, _ := model.Stream(ctx, messages, model_clients.WithStreamOutputParser(parser))
-//	for chunk := range result.Chunks {
+//	chunkChan, _ := model.Stream(ctx, messages, model_clients.WithStreamOutputParser(parser))
+//	for chunk := range chunkChan {
 //	    if chunk.ParserContent != nil {
 //	        // 解析成功
 //	    }

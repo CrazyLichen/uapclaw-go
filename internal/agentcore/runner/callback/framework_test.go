@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -652,4 +653,52 @@ func TestCallbackFramework_TriggerContext_NilData(t *testing.T) {
 	if atomic.LoadInt32(&called) != 0 {
 		t.Error("nil data 不应触发回调")
 	}
+}
+
+func TestCallbackFramework_TransformLLMIO_透传(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	// 未注册时透传
+	input := map[string]any{"key": "value"}
+	result := fw.TransformLLMIOInput(ctx, LLMStreamInput, input)
+	assert.Equal(t, input, result)
+
+	output := &llmschema.AssistantMessageChunk{}
+	result = fw.TransformLLMIOOutput(ctx, LLMStreamOutput, output)
+	assert.Equal(t, output, result)
+}
+
+func TestCallbackFramework_TransformAgentIO_透传(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	input := map[string]any{"key": "value"}
+	result := fw.TransformAgentIOInput(ctx, AgentStreamInput, input)
+	assert.Equal(t, input, result)
+
+	result = fw.TransformAgentIOOutput(ctx, AgentStreamOutput, input)
+	assert.Equal(t, input, result)
+}
+
+func TestCallbackFramework_TransformLLMIO_注册后变换(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	// 注册变换：输入加前缀，输出加倍
+	fw.RegisterLLMTransformIO(
+		LLMStreamInput, LLMStreamOutput,
+		func(ctx context.Context, event LLMCallEventType, input any) any {
+			return "transformed_" + input.(string)
+		},
+		func(ctx context.Context, event LLMCallEventType, output any) any {
+			return output.(string) + output.(string)
+		},
+	)
+
+	result := fw.TransformLLMIOInput(ctx, LLMStreamInput, "hello")
+	assert.Equal(t, "transformed_hello", result)
+
+	result = fw.TransformLLMIOOutput(ctx, LLMStreamOutput, "ab")
+	assert.Equal(t, "abab", result)
 }

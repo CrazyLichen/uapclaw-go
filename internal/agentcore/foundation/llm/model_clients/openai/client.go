@@ -208,14 +208,18 @@ func (c *OpenAIModelClient) Invoke(
 	return assistantMsg, nil
 }
 
-// Stream 流式调用 LLM，返回流式结果。
+// Stream 流式调用 LLM，返回纯 chunk channel。
+//
+// 调用方通过 `range chunkChan` 消费流式 chunk；
+// goroutine 内部累积 final_message，流结束时通过
+// tracer_record_data(llm_response=finalMessage) 传出。
 //
 // 对应 Python: OpenAIModelClient.stream()
 func (c *OpenAIModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
-) (*model_clients.StreamResult, error) {
+) (<-chan *llmschema.AssistantMessageChunk, error) {
 	params := model_clients.NewStreamParams(opts...)
 
 	// 1. 转换消息格式
@@ -312,10 +316,16 @@ func (c *OpenAIModelClient) Stream(
 
 		// 对齐 Python _astream_with_parser: 累积内容缓冲区
 		accumulatedContent := ""
+		// 对齐 Python _astream_with_parser: final_message 累积
+		var finalMessage *llmschema.AssistantMessageChunk
 
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
+				// 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
+				if params.TracerRecordData != nil {
+					params.TracerRecordData(map[string]any{"llm_response": finalMessage})
+				}
 				// 对齐 Python: 流结束时触发 LLMOutput 回调
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
@@ -384,6 +394,13 @@ func (c *OpenAIModelClient) Stream(
 				IsStream:      true,
 			})
 
+			// 对齐 Python: final_message = final_message + parsed_chunk
+			if finalMessage == nil {
+				finalMessage = chunk
+			} else {
+				finalMessage = finalMessage.Merge(chunk)
+			}
+
 			// 发送到 channel（支持 context 取消）
 			select {
 			case chunkChan <- chunk:
@@ -399,7 +416,7 @@ func (c *OpenAIModelClient) Stream(
 		}
 	}()
 
-	return model_clients.NewStreamResult(chunkChan), nil
+	return chunkChan, nil
 }
 
 // GenerateImage 生成图片（当前不支持）。

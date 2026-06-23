@@ -312,15 +312,20 @@ func TestOpenAIModelClient_Stream_成功(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
-	if result == nil {
-		t.Fatal("Stream 结果不应为 nil")
-	}
 
-	final := result.Final()
+	// 从 channel 读取并累积为最终结果
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -341,11 +346,11 @@ func TestOpenAIModelClient_Stream_HTTP错误(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err == nil {
 		t.Error("Stream HTTP 429 应返回错误")
 	}
-	if result != nil {
+	if chunkChan != nil {
 		t.Error("Stream HTTP 429 结果应为 nil")
 	}
 	baseErr, ok := err.(*exception.BaseError)
@@ -657,11 +662,11 @@ func TestOpenAIModelClient_Stream_网络错误(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err == nil {
 		t.Error("Stream 网络错误应返回错误")
 	}
-	if result != nil {
+	if chunkChan != nil {
 		t.Error("Stream 网络错误结果应为 nil")
 	}
 	baseErr, ok := err.(*exception.BaseError)
@@ -768,12 +773,19 @@ func TestOpenAIModelClient_Stream_无效JSON走logger(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
 
-	final := result.Final()
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -802,14 +814,21 @@ func TestOpenAIModelClient_Stream_OutputParser成功(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg,
+	chunkChan, err := client.Stream(context.Background(), msg,
 		model_clients.WithStreamOutputParser(&streamOutputParser{}),
 	)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
 
-	final := result.Final()
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -838,7 +857,7 @@ func TestOpenAIModelClient_Stream_OutputParser错误(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg,
+	chunkChan, err := client.Stream(context.Background(), msg,
 		model_clients.WithStreamOutputParser(&streamErrorOutputParser{}),
 	)
 	if err != nil {
@@ -846,7 +865,14 @@ func TestOpenAIModelClient_Stream_OutputParser错误(t *testing.T) {
 	}
 
 	// 验证流正常结束（parser 错误不应导致流崩溃）
-	final := result.Final()
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -876,13 +902,20 @@ func TestOpenAIModelClient_Stream_SSE异常关闭(t *testing.T) {
 
 	client := newTestClientWithServer(server, nil)
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(context.Background(), msg)
+	chunkChan, err := client.Stream(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
 
 	// 验证流正常终止（不 panic）
-	final := result.Final()
+	var final *llmschema.AssistantMessageChunk
+	for chunk := range chunkChan {
+		if final == nil {
+			final = chunk
+		} else {
+			final = final.Merge(chunk)
+		}
+	}
 	if final == nil {
 		t.Fatal("Final 不应为 nil")
 	}
@@ -908,16 +941,16 @@ func TestOpenAIModelClient_Stream_Context取消(t *testing.T) {
 	client := newTestClientWithServer(server, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	msg := model_clients.NewTextMessagesParam("Hi")
-	result, err := client.Stream(ctx, msg)
+	chunkChan, err := client.Stream(ctx, msg)
 	if err != nil {
 		t.Fatalf("Stream 返回错误: %v", err)
 	}
 
 	// 读取一个 chunk 后取消 context
-	<-result.Chunks // 读一个
-	cancel()        // 取消
+	<-chunkChan // 读一个
+	cancel()    // 取消
 
 	// 验证流正常终止（不 panic）
-	for range result.Chunks {
+	for range chunkChan {
 	}
 }

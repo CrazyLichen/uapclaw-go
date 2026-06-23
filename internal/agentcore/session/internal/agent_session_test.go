@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -72,7 +73,7 @@ func TestAgentSession_State不为Nil(t *testing.T) {
 // TestAgentSession_选项注入 测试通过选项注入组件
 func TestAgentSession_选项注入(t *testing.T) {
 	cfg := config.NewSessionConfig(context.Background())
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "test-agent"}}
 	s := NewAgentSession("test-id",
 		WithConfig(cfg),
 		WithCard(card),
@@ -115,7 +116,7 @@ func TestAgentSession_Card(t *testing.T) {
 		t.Errorf("无 Card 时 AgentID 应返回空字符串，实际 %s", s.AgentID())
 	}
 
-	card := &schema.AgentCard{BaseCard: schema.BaseCard{ID: "my-agent"}}
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "my-agent"}}
 	s2 := NewAgentSession("test-id", WithCard(card))
 	if s2.Card() != card {
 		t.Errorf("Card 期望 %v，实际 %v", card, s2.Card())

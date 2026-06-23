@@ -133,7 +133,7 @@ func (c *InferenceAffinityModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
-) (*model_clients.StreamResult, error) {
+) (<-chan *llmschema.AssistantMessageChunk, error) {
 	params := model_clients.NewStreamParams(opts...)
 
 	// 1. 预处理消息：基类转换 + sanitize tool_calls
@@ -229,10 +229,15 @@ func (c *InferenceAffinityModelClient) Stream(
 		defer func() { _ = resp.Body.Close() }()
 
 		accumulatedContent := ""
+		var finalMessage *llmschema.AssistantMessageChunk
 
 		for {
 			data, err := sseReader.ReadEvent()
 			if err == io.EOF {
+				// 对齐 Python: if tracer_record_data: await tracer_record_data(llm_response=final_message)
+				if params.TracerRecordData != nil {
+					params.TracerRecordData(map[string]any{"llm_response": finalMessage})
+				}
 				// 对齐 Python: 流结束时触发 LLMOutput 回调
 				_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
 					Event:         callback.LLMOutput,
@@ -290,6 +295,20 @@ func (c *InferenceAffinityModelClient) Stream(
 				}
 			}
 
+			// 对齐 OpenAI: 逐 chunk 触发 LLMResponseReceived 回调
+			_ = callback.GetCallbackFramework().TriggerLLM(ctx, &callback.LLMCallEventData{
+				Event:         callback.LLMResponseReceived,
+				ModelName:     modelName,
+				ModelProvider: c.ClientConfig.ClientProvider,
+				IsStream:      true,
+			})
+			// 对齐 Python: final_message = final_message + parsed_chunk
+			if finalMessage == nil {
+				finalMessage = chunk
+			} else {
+				finalMessage = finalMessage.Merge(chunk)
+			}
+
 			select {
 			case chunkChan <- chunk:
 			case <-ctx.Done():
@@ -304,7 +323,7 @@ func (c *InferenceAffinityModelClient) Stream(
 		}
 	}()
 
-	return model_clients.NewStreamResult(chunkChan), nil
+	return chunkChan, nil
 }
 
 // Release 释放 vLLM KV Cache。

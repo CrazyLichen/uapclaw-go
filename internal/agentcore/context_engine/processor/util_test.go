@@ -439,3 +439,79 @@ func TestEstimateMessageTokens_长内容(t *testing.T) {
 		t.Errorf("期望 %d, 实际 %d", len(content)/3, result)
 	}
 }
+
+// TestGroupCompletedAPIRoundsMessages 测试按 API 轮次分组消息
+func TestGroupCompletedAPIRoundsMessages(t *testing.T) {
+	t.Run("空消息列表", func(t *testing.T) {
+		groups := GroupCompletedAPIRoundsMessages(nil)
+		if len(groups) != 0 {
+			t.Errorf("期望 0 组，实际 %d", len(groups))
+		}
+	})
+
+	t.Run("单轮对话", func(t *testing.T) {
+		messages := []llm_schema.BaseMessage{
+			llm_schema.NewUserMessage("你好"),
+			llm_schema.NewAssistantMessage("你好！"),
+		}
+		groups := GroupCompletedAPIRoundsMessages(messages)
+		if len(groups) < 1 {
+			t.Error("应至少有 1 组")
+		}
+	})
+}
+
+// TestMessageSignature 测试消息签名生成
+func TestMessageSignature(t *testing.T) {
+	t.Run("用户消息", func(t *testing.T) {
+		msg := llm_schema.NewUserMessage("你好")
+		sig := MessageSignature(msg)
+		if sig == "" {
+			t.Error("签名不应为空")
+		}
+		if !strings.Contains(sig, "user") {
+			t.Errorf("签名应包含 role=user，实际: %s", sig)
+		}
+	})
+
+	t.Run("助手消息", func(t *testing.T) {
+		msg := llm_schema.NewAssistantMessage("回复")
+		sig := MessageSignature(msg)
+		if !strings.Contains(sig, "assistant") {
+			t.Errorf("签名应包含 role=assistant，实际: %s", sig)
+		}
+	})
+}
+
+// TestRoundSignature 测试轮次签名生成
+func TestRoundSignature(t *testing.T) {
+	messages := []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("你好"),
+		llm_schema.NewAssistantMessage("你好！"),
+	}
+	sig := RoundSignature(messages)
+	if sig == "" {
+		t.Error("轮次签名不应为空")
+	}
+}
+
+// TestFlattenGroups 测试分组展平
+func TestFlattenGroups(t *testing.T) {
+	t.Run("空分组", func(t *testing.T) {
+		result := FlattenGroups(nil)
+		if len(result) != 0 {
+			t.Errorf("期望 0 条消息，实际 %d", len(result))
+		}
+	})
+
+	t.Run("多个分组", func(t *testing.T) {
+		groups := [][]llm_schema.BaseMessage{
+			{llm_schema.NewUserMessage("a"), llm_schema.NewAssistantMessage("b")},
+			{llm_schema.NewUserMessage("c"), llm_schema.NewAssistantMessage("d")},
+		}
+		result := FlattenGroups(groups)
+		if len(result) != 4 {
+			t.Errorf("期望 4 条消息，实际 %d", len(result))
+		}
+	})
+}

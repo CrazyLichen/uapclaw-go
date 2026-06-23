@@ -71,7 +71,7 @@ func (w *WarpBaseAgent) Configure(_ context.Context, config any) error {
 }
 
 // Invoke 非流式调用，包含回调包装骨架。
-// 执行顺序：① emit_before → ② transform_io(输入) → invokeImpl → ② transform_io(输出) → ③ emit_after
+// 执行顺序：① transform_io input → ② emit_before → invokeImpl → ③ transform_io output → ④ emit_after
 //
 // 对应 Python: _AgentMeta 元类装饰后的 invoke
 func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error) {
@@ -82,15 +82,15 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 
 	fw := callback.GetCallbackFramework()
 
-	// ① emit_before: 触发全局 AgentInvokeInput 事件
+	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
+	_ = fw.TransformAgentIOInput(ctx, callback.AgentInvokeInput, inputs)
+
+	// ② emit_before: 触发全局 AgentInvokeInput 事件
 	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
 		Event:   callback.AgentInvokeInput,
 		AgentID: w.card.ID,
 		Inputs:  inputs,
 	})
-
-	// ② transform_io 输入变换（⤵️ 预留，6.24 回填）
-	// inputs = fw.TriggerTransform(ctx, callback.AgentInvokeInput, inputs)
 
 	// 执行子类的真实逻辑
 	result, err := w.invoker.invokeImpl(ctx, inputs, opts...)
@@ -109,10 +109,10 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 		)
 	}
 
-	// ② transform_io 输出变换（⤵️ 预留，6.24 回填）
-	// result = fw.TriggerTransform(ctx, callback.AgentInvokeOutput, result)
+	// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
+	result = fw.TransformAgentIOOutput(ctx, callback.AgentInvokeOutput, result)
 
-	// ③ emit_after: 触发全局 AgentInvokeOutput 事件
+	// ④ emit_after: 触发全局 AgentInvokeOutput 事件
 	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
 		Event:   callback.AgentInvokeOutput,
 		AgentID: w.card.ID,
@@ -123,7 +123,7 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 }
 
 // Stream 流式调用，包含回调包装骨架。
-// 执行顺序：① emit_before → streamImpl → per-item { ② transform_io(输出) → ③ emit_after }
+// 执行顺序：① transform_io input → ② emit_before → streamImpl → per-item { ③ transform_io output → ④ emit_after }
 //
 // 对应 Python: _AgentMeta 元类装饰后的 stream
 func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error) {
@@ -134,7 +134,10 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 
 	fw := callback.GetCallbackFramework()
 
-	// ① emit_before
+	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
+	_ = fw.TransformAgentIOInput(ctx, callback.AgentStreamInput, inputs)
+
+	// ② emit_before: 触发全局 AgentStreamInput 事件
 	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
 		Event:   callback.AgentStreamInput,
 		AgentID: w.card.ID,
@@ -156,21 +159,21 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 		)
 	}
 
-	// 包装 channel：每个 item 触发 ③ emit_after 后转发
+	// 包装 channel：per-item { ③ transform_io 输出变换 → ④ emit_after }
 	out := make(chan stream.Schema)
 	go func() {
 		defer close(out)
 		for item := range ch {
-			// ② transform_io 输出变换（⤵️ 预留，6.24 回填）
-			// item = fw.TriggerTransform(ctx, callback.AgentStreamOutput, item)
-
-			// ③ emit_after (per-item)
+			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
+			if transformed := fw.TransformAgentIOOutput(ctx, callback.AgentStreamOutput, item); transformed != nil {
+				item = transformed.(stream.Schema)
+			}
+			// ④ emit_after (per_item)
 			fw.TriggerAgent(ctx, &callback.AgentCallEventData{
 				Event:   callback.AgentStreamOutput,
 				AgentID: w.card.ID,
 				Result:  item,
 			})
-
 			out <- item
 		}
 	}()

@@ -194,37 +194,6 @@ func TestWorkflowCard_ToolInfo_无参数(t *testing.T) {
 	// 所以 Parameters 是空 map，不含 properties 键也正常
 }
 
-func TestAgentCard_ToolInfo_有参数(t *testing.T) {
-	card := NewAgentCard(
-		WithName("sub_agent"),
-		WithDescription("子 Agent"),
-	)
-	card.InputParams = map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"task": map[string]any{"type": "string"}},
-	}
-	card.InterfaceURL = "http://localhost:8080/a2a"
-	info := card.ToolInfo()
-	if info.Name != "sub_agent" {
-		t.Errorf("Name = %q, want sub_agent", info.Name)
-	}
-	if card.InterfaceURL != "http://localhost:8080/a2a" {
-		t.Errorf("InterfaceURL = %q, want http://localhost:8080/a2a", card.InterfaceURL)
-	}
-}
-
-func TestAgentCard_ToolInfo_无参数(t *testing.T) {
-	card := NewAgentCard(WithName("no_params_agent"))
-	info := card.ToolInfo()
-	if info.Name != "no_params_agent" {
-		t.Errorf("Name = %q, want no_params_agent", info.Name)
-	}
-	// InputParams 为 nil 时应返回空 object schema
-	typ, ok := info.Parameters["type"].(string)
-	if !ok || typ != "object" {
-		t.Errorf("无参数时 type 应为 object，实际 %v", info.Parameters)
-	}
-}
 
 func TestWorkflowCard_能力(t *testing.T) {
 	card := NewWorkflowCard(WithName("wf"), WithDescription("工作流"))
@@ -237,16 +206,6 @@ func TestWorkflowCard_能力(t *testing.T) {
 	var _ Ability = card // 编译期接口检查
 }
 
-func TestAgentCard_能力(t *testing.T) {
-	card := NewAgentCard(WithName("ag"), WithDescription("Agent"))
-	if card.AbilityName() != "ag" {
-		t.Errorf("AbilityName = %q, want ag", card.AbilityName())
-	}
-	if card.AbilityKind() != AbilityKindAgent {
-		t.Errorf("AbilityKind = %v, want AbilityKindAgent", card.AbilityKind())
-	}
-	var _ Ability = card // 编译期接口检查
-}
 
 // TestWorkflowCard_AbilityID 验证 WorkflowCard.AbilityID() 返回 card.ID。
 func TestWorkflowCard_AbilityID(t *testing.T) {
@@ -256,13 +215,6 @@ func TestWorkflowCard_AbilityID(t *testing.T) {
 	}
 }
 
-// TestAgentCard_AbilityID 验证 AgentCard.AbilityID() 返回 card.ID。
-func TestAgentCard_AbilityID(t *testing.T) {
-	card := NewAgentCard(WithName("ag"))
-	if got := card.AbilityID(); got != card.ID {
-		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
-	}
-}
 
 // TestBaseCard_GoString 验证 GoString 输出格式。
 func TestBaseCard_GoString(t *testing.T) {

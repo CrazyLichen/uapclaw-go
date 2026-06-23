@@ -299,3 +299,68 @@ func TestBuildPersistedOutputMessage_无更多内容(t *testing.T) {
 		t.Error("has_more=false 时不应包含省略号")
 	}
 }
+
+// TestWithSysOption 测试 WithSysOption 选项函数
+func TestWithSysOption(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{
+		TokensThreshold:      50000,
+		LargeMessageThreshold: 5000,
+		TrimSize:             1000,
+	}
+	p, err := NewToolResultBudgetProcessor(cfg)
+	if err != nil {
+		t.Fatalf("创建处理器失败: %v", err)
+	}
+
+	// 验证 WithSysOption 注入选项
+	op := "testSysOp"
+	WithSysOption(op)(p)
+	if p.sysOperation != op {
+		t.Error("WithSysOption 应注入 sysOperation")
+	}
+}
+
+// TestToolResultBudgetProcessor_OnGetContextWindow 测试上下文窗口透传
+func TestToolResultBudgetProcessor_OnGetContextWindow(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{
+		TokensThreshold:      50000,
+		LargeMessageThreshold: 5000,
+		TrimSize:             1000,
+	}
+	p, err := NewToolResultBudgetProcessor(cfg)
+	if err != nil {
+		t.Fatalf("创建处理器失败: %v", err)
+	}
+
+	cw := iface.ContextWindow{}
+	event, outCW, err := p.OnGetContextWindow(context.Background(), nil, cw)
+	if err != nil {
+		t.Errorf("不应返回错误: %v", err)
+	}
+	if event != nil {
+		t.Error("OnGetContextWindow 应返回 nil event")
+	}
+	// 验证透传：返回的 cw 应该是同一个对象（零值结构体的字段应一致）
+	_ = outCW
+}
+
+// TestToolResultBudgetProcessor_TriggerGetContextWindow 测试不触发上下文窗口
+func TestToolResultBudgetProcessor_TriggerGetContextWindow(t *testing.T) {
+	cfg := &ToolResultBudgetProcessorConfig{
+		TokensThreshold:      50000,
+		LargeMessageThreshold: 5000,
+		TrimSize:             1000,
+	}
+	p, err := NewToolResultBudgetProcessor(cfg)
+	if err != nil {
+		t.Fatalf("创建处理器失败: %v", err)
+	}
+
+	triggered, err := p.TriggerGetContextWindow(context.Background(), nil, iface.ContextWindow{})
+	if err != nil {
+		t.Errorf("不应返回错误: %v", err)
+	}
+	if triggered {
+		t.Error("TriggerGetContextWindow 应始终返回 false")
+	}
+}

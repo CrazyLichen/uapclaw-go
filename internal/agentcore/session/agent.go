@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
@@ -30,7 +31,7 @@ type Session struct {
 	// inner 内部 AgentSession 实例
 	inner *internal.AgentSession
 	// card Agent 身份元数据
-	card *schema.AgentCard
+	card *agentschema.AgentCard
 	// envs 环境变量（通过 WithEnvs 设置）
 	// 对齐 Python: Session.__init__(envs=dict)
 	envs map[string]any
@@ -131,7 +132,7 @@ func WithSessionID(id string) SessionOption {
 }
 
 // WithCard 设置 Agent 身份元数据的选项
-func WithCard(card *schema.AgentCard) SessionOption {
+func WithCard(card *agentschema.AgentCard) SessionOption {
 	return func(s *Session) {
 		s.card = card
 	}
@@ -460,7 +461,7 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 // 对齐 Python: openjiuwen/core/session/agent.py create_agent_session()
 // 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
 func CreateAgentSession(agentID, sessionID string) *Session {
-	card := &schema.AgentCard{
+	card := &agentschema.AgentCard{
 		BaseCard: schema.BaseCard{ID: agentID},
 	}
 	return NewSession(WithSessionID(sessionID), WithCard(card))

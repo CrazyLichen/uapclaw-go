@@ -50,8 +50,8 @@ type BaseModelClient interface {
 	// Invoke 非流式调用 LLM，返回完整的助手消息。
 	Invoke(ctx context.Context, messages MessagesParam, opts ...InvokeOption) (*llmschema.AssistantMessage, error)
 
-	// Stream 流式调用 LLM，返回流式结果（含 chunk channel + Final 合并方法）。
-	Stream(ctx context.Context, messages MessagesParam, opts ...StreamOption) (*StreamResult, error)
+	// Stream 流式调用 LLM，返回纯 chunk channel，调用方通过 range chunkChan 消费。
+	Stream(ctx context.Context, messages MessagesParam, opts ...StreamOption) (<-chan *llmschema.AssistantMessageChunk, error)
 
 	// GenerateImage 生成图片。
 	GenerateImage(ctx context.Context, messages []*llmschema.UserMessage, opts ...GenerateImageOption) (*llmschema.ImageGenerationResponse, error)

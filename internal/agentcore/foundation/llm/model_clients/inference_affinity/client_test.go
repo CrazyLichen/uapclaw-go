@@ -282,7 +282,7 @@ func TestStream_基本调用(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := client.Stream(
+	chunkChan, err := client.Stream(
 		context.Background(),
 		model_clients.NewTextMessagesParam("你好"),
 	)
@@ -292,7 +292,7 @@ func TestStream_基本调用(t *testing.T) {
 
 	// 消费所有 chunk
 	var chunks []string
-	for chunk := range result.Chunks {
+	for chunk := range chunkChan {
 		if chunk.Content.Text() != "" {
 			chunks = append(chunks, chunk.Content.Text())
 		}
@@ -322,7 +322,7 @@ func TestStream_带缓存共享(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := client.Stream(
+	chunkChan, err := client.Stream(
 		context.Background(),
 		model_clients.NewTextMessagesParam("hello"),
 		model_clients.WithStreamExtra(map[string]any{
@@ -335,7 +335,7 @@ func TestStream_带缓存共享(t *testing.T) {
 	}
 
 	// 消费所有 chunk
-	for range result.Chunks {
+	for range chunkChan {
 	}
 
 	if capturedBody["cache_sharing"] != true {

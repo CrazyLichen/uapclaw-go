@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -602,7 +602,7 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 	}
 
 	// 从 Card 提取 AgentID
-	card, ok := data.Card.(*schema.AgentCard)
+	card, ok := data.Card.(*agentschema.AgentCard)
 	if !ok {
 		return nil
 	}

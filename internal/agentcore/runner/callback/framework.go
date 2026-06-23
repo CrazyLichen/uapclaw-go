@@ -44,6 +44,26 @@ type CallbackFramework struct {
 	contextCallbacks map[ContextCallEventType][]ContextCallbackFunc
 	// agentCallbacks Agent 回调函数注册表
 	agentCallbacks map[AgentCallEventType][]AgentCallbackFunc
+	// llmTransformIO LLM 层 IO 变换回调注册表，键为 inputEvent
+	llmTransformIO map[LLMCallEventType]*llmTransformIOEntry
+	// agentTransformIO Agent 层 IO 变换回调注册表，键为 inputEvent
+	agentTransformIO map[AgentCallEventType]*agentTransformIOEntry
+}
+
+// llmTransformIOEntry LLM 层 TransformIO 注册条目
+type llmTransformIOEntry struct {
+	// inputFn 输入变换函数
+	inputFn TransformLLMIOInputFunc
+	// outputFn 输出变换函数
+	outputFn TransformLLMIOOutputFunc
+}
+
+// agentTransformIOEntry Agent 层 TransformIO 注册条目
+type agentTransformIOEntry struct {
+	// inputFn 输入变换函数
+	inputFn TransformAgentIOInputFunc
+	// outputFn 输出变换函数
+	outputFn TransformAgentIOOutputFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -93,6 +113,8 @@ func NewCallbackFramework() *CallbackFramework {
 		customCallbacks:  make(map[string][]CustomCallbackFunc),
 		contextCallbacks: make(map[ContextCallEventType][]ContextCallbackFunc),
 		agentCallbacks:    make(map[AgentCallEventType][]AgentCallbackFunc),
+		llmTransformIO:    make(map[LLMCallEventType]*llmTransformIOEntry),
+		agentTransformIO:  make(map[AgentCallEventType]*agentTransformIOEntry),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -443,6 +465,101 @@ func (fw *CallbackFramework) TriggerAgent(ctx context.Context, data *AgentCallEv
 		results = append(results, result)
 	}
 	return results
+}
+
+// RegisterLLMTransformIO 注册 LLM 层 IO 变换回调。
+//
+// 对齐 Python: CallbackFramework.transform_io 注册机制。
+// inputFn 在 emit_before 前对输入做变换，outputFn 在 emit_after 前对输出做变换。
+// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
+func (fw *CallbackFramework) RegisterLLMTransformIO(
+	inputEvent LLMCallEventType,
+	outputEvent LLMCallEventType,
+	inputFn TransformLLMIOInputFunc,
+	outputFn TransformLLMIOOutputFunc,
+) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	entry := &llmTransformIOEntry{
+		inputFn:  inputFn,
+		outputFn: outputFn,
+	}
+	fw.llmTransformIO[inputEvent] = entry
+	fw.llmTransformIO[outputEvent] = entry
+}
+
+// TransformLLMIOInput 应用 LLM 层输入变换。
+//
+// 如果没有注册变换回调，返回原始输入（透传）。
+// 对齐 Python: transform_io 的 input_fn 在 emit_before 前执行。
+func (fw *CallbackFramework) TransformLLMIOInput(ctx context.Context, event LLMCallEventType, input any) any {
+	fw.mu.RLock()
+	entry, ok := fw.llmTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.inputFn == nil {
+		return input
+	}
+	return entry.inputFn(ctx, event, input)
+}
+
+// TransformLLMIOOutput 应用 LLM 层输出变换。
+//
+// 如果没有注册变换回调，返回原始输出（透传）。
+// 对齐 Python: transform_io 的 output_fn 在 emit_after 前执行。
+func (fw *CallbackFramework) TransformLLMIOOutput(ctx context.Context, event LLMCallEventType, output any) any {
+	fw.mu.RLock()
+	entry, ok := fw.llmTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.outputFn == nil {
+		return output
+	}
+	return entry.outputFn(ctx, event, output)
+}
+
+// RegisterAgentTransformIO 注册 Agent 层 IO 变换回调。
+//
+// 对齐 Python: CallbackFramework.transform_io 注册机制。
+// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
+func (fw *CallbackFramework) RegisterAgentTransformIO(
+	inputEvent AgentCallEventType,
+	outputEvent AgentCallEventType,
+	inputFn TransformAgentIOInputFunc,
+	outputFn TransformAgentIOOutputFunc,
+) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	entry := &agentTransformIOEntry{
+		inputFn:  inputFn,
+		outputFn: outputFn,
+	}
+	fw.agentTransformIO[inputEvent] = entry
+	fw.agentTransformIO[outputEvent] = entry
+}
+
+// TransformAgentIOInput 应用 Agent 层输入变换。
+//
+// 如果没有注册变换回调，返回原始输入（透传）。
+func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event AgentCallEventType, input any) any {
+	fw.mu.RLock()
+	entry, ok := fw.agentTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.inputFn == nil {
+		return input
+	}
+	return entry.inputFn(ctx, event, input)
+}
+
+// TransformAgentIOOutput 应用 Agent 层输出变换。
+//
+// 如果没有注册变换回调，返回原始输出（透传）。
+func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event AgentCallEventType, output any) any {
+	fw.mu.RLock()
+	entry, ok := fw.agentTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.outputFn == nil {
+		return output
+	}
+	return entry.outputFn(ctx, event, output)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

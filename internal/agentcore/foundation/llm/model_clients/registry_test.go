@@ -13,7 +13,7 @@ type mockModelClient struct{}
 func (m *mockModelClient) Invoke(_ context.Context, _ MessagesParam, _ ...InvokeOption) (*llmschema.AssistantMessage, error) {
 	return nil, nil
 }
-func (m *mockModelClient) Stream(_ context.Context, _ MessagesParam, _ ...StreamOption) (*StreamResult, error) {
+func (m *mockModelClient) Stream(_ context.Context, _ MessagesParam, _ ...StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	return nil, nil
 }
 func (m *mockModelClient) GenerateImage(_ context.Context, _ []*llmschema.UserMessage, _ ...GenerateImageOption) (*llmschema.ImageGenerationResponse, error) {

@@ -26,7 +26,7 @@ type rlcFakeBaseModelClient struct {
 func (f *rlcFakeBaseModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llm_schema.AssistantMessage, error) {
 	return f.invokeResult, f.invokeErr
 }
-func (f *rlcFakeBaseModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+func (f *rlcFakeBaseModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llm_schema.AssistantMessageChunk, error) {
 	return nil, nil
 }
 func (f *rlcFakeBaseModelClient) GenerateImage(_ context.Context, _ []*llm_schema.UserMessage, _ ...model_clients.GenerateImageOption) (*llm_schema.ImageGenerationResponse, error) {

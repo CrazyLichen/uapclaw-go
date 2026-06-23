@@ -98,7 +98,7 @@ func WithCallbackFramework(fw *callback.CallbackFramework) ModelOption {
 // Invoke 非流式调用 LLM。
 //
 // 对应 Python: Model.invoke()
-// 流程：Trigger(callback.LLMInvokeInput) → client.Invoke → Trigger(callback.LLMInvokeOutput)
+// 执行顺序：① transform_io input → ② emit_before → client.Invoke → ③ transform_io output → ④ emit_after
 func (m *Model) Invoke(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
@@ -107,9 +107,13 @@ func (m *Model) Invoke(
 	// 提取参数用于事件数据
 	params := model_clients.NewInvokeParams(opts...)
 	modelName := m.resolveModelName(params.Model)
+	fw := m.callbackFramework
 
-	// 1. 触发 callback.LLMInvokeInput 事件（调用前）
-	_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
+	_ = fw.TransformLLMIOInput(ctx, callback.LLMInvokeInput, messages)
+
+	// ② emit_before: 触发 callback.LLMInvokeInput 事件（调用前）
+	_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMInvokeInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
@@ -120,11 +124,11 @@ func (m *Model) Invoke(
 		},
 	})
 
-	// 2. 调用底层客户端
+	// 调用底层客户端
 	result, err := m.client.Invoke(ctx, messages, opts...)
 	if err != nil {
 		// 触发 callback.LLMCallError 事件
-		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+		_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
@@ -138,7 +142,12 @@ func (m *Model) Invoke(
 		return nil, err
 	}
 
-	// 3. 触发 callback.LLMInvokeOutput 事件（调用后）
+	// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
+	if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMInvokeOutput, result); transformed != nil {
+		result = transformed.(*llmschema.AssistantMessage)
+	}
+
+	// ④ emit_after: 触发 callback.LLMInvokeOutput 事件（调用后）
 	eventData := &callback.LLMCallEventData{
 		Event:         callback.LLMInvokeOutput,
 		ModelName:     modelName,
@@ -153,7 +162,7 @@ func (m *Model) Invoke(
 	if result != nil && result.UsageMetadata != nil {
 		eventData.Usage = result.UsageMetadata
 	}
-	_ = m.callbackFramework.TriggerLLM(ctx, eventData)
+	_ = fw.TriggerLLM(ctx, eventData)
 
 	return result, nil
 }
@@ -161,21 +170,28 @@ func (m *Model) Invoke(
 // Stream 流式调用 LLM。
 //
 // 对应 Python: Model.stream()
-// 流程：Trigger(callback.LLMStreamInput) → client.Stream → Trigger(callback.LLMStreamOutput)
+// 执行顺序：① transform_io input → ② emit_before → client.Stream → per-item { ③ transform_io output → ④ emit_after }
 //
-// 注意：2.14 节仅在流开始和流结束时触发事件，
-// 逐项触发（Python 的 emit_after + item_key="result"）在 6.24 节实现。
+// 对齐 Python 装饰器链：
+//
+//	fn = _fw.emit_before(LLM_STREAM_INPUT)(fn)
+//	fn = _fw.transform_io(LLM_STREAM_INPUT, LLM_STREAM_OUTPUT)(fn)
+//	fn = _fw.emit_after(LLM_STREAM_OUTPUT, item_key="result")(fn)
 func (m *Model) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
-) (*model_clients.StreamResult, error) {
+) (<-chan *llmschema.AssistantMessageChunk, error) {
 	// 提取参数用于事件数据
 	params := model_clients.NewStreamParams(opts...)
 	modelName := m.resolveStreamModelName(params.Model)
+	fw := m.callbackFramework
 
-	// 1. 触发 callback.LLMStreamInput 事件（流开始前）
-	_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
+	_ = fw.TransformLLMIOInput(ctx, callback.LLMStreamInput, messages)
+
+	// ② emit_before: 触发 LLMStreamInput 事件（流开始前）
+	_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
 		Event:         callback.LLMStreamInput,
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
@@ -186,11 +202,11 @@ func (m *Model) Stream(
 		},
 	})
 
-	// 2. 调用底层客户端
-	result, err := m.client.Stream(ctx, messages, opts...)
+	// 调用底层客户端
+	chunkChan, err := m.client.Stream(ctx, messages, opts...)
 	if err != nil {
 		// 触发 callback.LLMCallError 事件
-		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
+		_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
 			Event:         callback.LLMCallError,
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
@@ -204,31 +220,39 @@ func (m *Model) Stream(
 		return nil, err
 	}
 
-	// 3. 启动后台 goroutine，流结束后触发 callback.LLMStreamOutput 事件
+	// 包装 channel：per-item { ③ transform_io 输出变换 → ④ emit_after }
+	out := make(chan *llmschema.AssistantMessageChunk)
 	go func() {
-		// Final() 阻塞等待流结束
-		finalChunk := result.Final()
+		defer close(out)
+		for chunk := range chunkChan {
+			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
+			if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMStreamOutput, chunk); transformed != nil {
+				chunk = transformed.(*llmschema.AssistantMessageChunk)
+			}
 
-		var usage *llmschema.UsageMetadata
-		if finalChunk != nil && finalChunk.UsageMetadata != nil {
-			usage = finalChunk.UsageMetadata
+			// ④ emit_after (per_item): 每 chunk 触发 LLMStreamOutput
+			var usage *llmschema.UsageMetadata
+			if chunk != nil && chunk.UsageMetadata != nil {
+				usage = chunk.UsageMetadata
+			}
+			_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
+				Event:         callback.LLMStreamOutput,
+				ModelName:     modelName,
+				ModelProvider: m.ClientConfig.ClientProvider,
+				IsStream:      true,
+				Response:      chunk,
+				Usage:         usage,
+				Extra: map[string]any{
+					"model_config":        m.ModelConfig,
+					"model_client_config": m.ClientConfig,
+				},
+			})
+
+			out <- chunk
 		}
-
-		_ = m.callbackFramework.TriggerLLM(ctx, &callback.LLMCallEventData{
-			Event:         callback.LLMStreamOutput,
-			ModelName:     modelName,
-			ModelProvider: m.ClientConfig.ClientProvider,
-			IsStream:      true,
-			Response:      finalChunk,
-			Usage:         usage,
-			Extra: map[string]any{
-				"model_config":        m.ModelConfig,
-				"model_client_config": m.ClientConfig,
-			},
-		})
 	}()
 
-	return result, nil
+	return out, nil
 }
 
 // Release 释放模型缓存/资源。

@@ -10,6 +10,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -35,7 +36,7 @@ type AbilityManager struct {
 	// workflows 工作流注册表
 	workflows map[string]*schema.WorkflowCard
 	// agents Agent 注册表
-	agents map[string]*schema.AgentCard
+	agents map[string]*agentschema.AgentCard
 	// mcpServers MCP 服务器注册表
 	mcpServers map[string]*mcp.McpServerConfig
 	// contextEngine 上下文引擎
@@ -70,7 +71,7 @@ func NewAbilityManager(resourceMgr ResourceManager) *AbilityManager {
 	return &AbilityManager{
 		tools:       make(map[string]*tool.ToolCard),
 		workflows:   make(map[string]*schema.WorkflowCard),
-		agents:      make(map[string]*schema.AgentCard),
+		agents:      make(map[string]*agentschema.AgentCard),
 		mcpServers:  make(map[string]*mcp.McpServerConfig),
 		resourceMgr: resourceMgr,
 	}
@@ -118,7 +119,7 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 		am.workflows[a.Name] = a
 		return AddAbilityResult{Name: a.Name, Added: true, Reason: "added_workflow"}
 
-	case *schema.AgentCard:
+	case *agentschema.AgentCard:
 		existing, ok := am.agents[a.Name]
 		if ok {
 			logger.Warn(logger.ComponentAgentCore).

@@ -24,6 +24,7 @@ type Ability interface {
 //
 // 子类包括：ToolCard、AgentCard、WorkflowCard、TeamCard、SysOperationCard。
 // BaseCard 提供统一身份标识和 LLM function calling 所需的元信息。
+// AgentCard 已迁移至 single_agent/schema/ 包。
 //
 // 对应 Python: openjiuwen/core/common/schema/card.py (BaseCard)
 type BaseCard struct {
@@ -46,18 +47,6 @@ type WorkflowCard struct {
 	InputParams map[string]any `json:"input_params,omitempty"`
 }
 
-// AgentCard Agent 配置卡片，嵌入 BaseCard，增加输入/输出参数和接口 URL。
-//
-// 对应 Python: openjiuwen/core/single_agent/schema/agent_card.py (AgentCard)
-type AgentCard struct {
-	BaseCard
-	// InputParams 输入参数定义（JSON Schema 格式）
-	InputParams map[string]any `json:"input_params,omitempty"`
-	// OutputParams 输出参数定义（JSON Schema 格式）
-	OutputParams map[string]any `json:"output_params,omitempty"`
-	// InterfaceURL A2A JSON-RPC 基础 URL
-	InterfaceURL string `json:"interface_url,omitempty"`
-}
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -176,41 +165,6 @@ func (c *WorkflowCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 Ability 接口。
 func (c *WorkflowCard) AbilityKind() AbilityKind { return AbilityKindWorkflow }
-
-// NewAgentCard 创建 AgentCard 实例。
-//
-// 对应 Python: AgentCard(name=..., description=..., input_params=..., output_params=..., interface_url=...)
-func NewAgentCard(opts ...CardOption) *AgentCard {
-	return &AgentCard{
-		BaseCard: *NewBaseCard(opts...),
-	}
-}
-
-// ToolInfo 返回工具描述信息，供 LLM function calling 消费。
-// AgentCard 的 InputParams 直接作为 JSON Schema parameters；
-// InputParams 为 nil 时返回空 object schema。
-//
-// 对应 Python: AgentCard.tool_info()
-func (c *AgentCard) ToolInfo() *ToolInfo {
-	params := c.InputParams
-	if params == nil {
-		params = map[string]any{
-			"type":       "object",
-			"properties": map[string]any{},
-			"required":   []string{},
-		}
-	}
-	return NewToolInfo(c.Name, c.Description, params)
-}
-
-// AbilityName 实现 Ability 接口。
-func (c *AgentCard) AbilityName() string { return c.Name }
-
-// AbilityID 实现 Ability 接口。
-func (c *AgentCard) AbilityID() string { return c.ID }
-
-// AbilityKind 实现 Ability 接口。
-func (c *AgentCard) AbilityKind() AbilityKind { return AbilityKindAgent }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

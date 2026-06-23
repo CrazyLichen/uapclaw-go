@@ -1,13 +1,13 @@
 package internal
 
 import (
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -37,7 +37,7 @@ type AgentSession struct {
 	// ✅ 5.11 已回填：any → *tracer.TraceAgentSpan
 	agentSpan *tracer.TraceAgentSpan
 	// card Agent 身份元数据
-	card *schema.AgentCard
+	card *agentschema.AgentCard
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -145,7 +145,7 @@ func WithCheckpointer(cp checkpointer.Checkpointer) AgentSessionOption {
 }
 
 // WithCard 设置 Agent 身份元数据的选项
-func WithCard(card *schema.AgentCard) AgentSessionOption {
+func WithCard(card *agentschema.AgentCard) AgentSessionOption {
 	return func(s *AgentSession) {
 		s.card = card
 	}
@@ -202,7 +202,7 @@ func (s *AgentSession) Close() error {
 }
 
 // Card 获取 Agent 身份元数据
-func (s *AgentSession) Card() *schema.AgentCard {
+func (s *AgentSession) Card() *agentschema.AgentCard {
 	return s.card
 }
 

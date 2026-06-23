@@ -25,8 +25,8 @@ type fakeModelClient struct {
 	generateImageResult *llmschema.ImageGenerationResponse
 	// generateImageErr GenerateImage 返回的错误
 	generateImageErr error
-	// streamResult Stream 返回的结果
-	streamResult *model_clients.StreamResult
+	// streamChan Stream 返回的 chunk channel
+	streamChan <-chan *llmschema.AssistantMessageChunk
 	// streamErr Stream 返回的错误
 	streamErr error
 }
@@ -64,8 +64,8 @@ func (f *fakeModelClient) Invoke(_ context.Context, _ model_clients.MessagesPara
 }
 
 // Stream 实现 model_clients.BaseModelClient 接口
-func (f *fakeModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
-	return f.streamResult, f.streamErr
+func (f *fakeModelClient) Stream(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
+	return f.streamChan, f.streamErr
 }
 
 // GenerateImage 实现 model_clients.BaseModelClient 接口
@@ -635,8 +635,8 @@ type tracerRecordDataCapturingClient struct {
 	capturedInvokeRecordData func(map[string]any)
 	// capturedStreamRecordData 捕获到的 Stream TracerRecordData 回调
 	capturedStreamRecordData func(map[string]any)
-	// streamResult Stream 返回的结果
-	streamResult *model_clients.StreamResult
+	// streamChan Stream 返回的 chunk channel
+	streamChan <-chan *llmschema.AssistantMessageChunk
 	// streamErr Stream 返回的错误
 	streamErr error
 }
@@ -649,10 +649,10 @@ func (c *tracerRecordDataCapturingClient) Invoke(_ context.Context, _ model_clie
 }
 
 // Stream 实现 model_clients.BaseModelClient 接口，捕获 TracerRecordData 回调
-func (c *tracerRecordDataCapturingClient) Stream(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.StreamOption) (*model_clients.StreamResult, error) {
+func (c *tracerRecordDataCapturingClient) Stream(_ context.Context, _ model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	params := model_clients.NewStreamParams(opts...)
 	c.capturedStreamRecordData = params.TracerRecordData
-	return c.streamResult, c.streamErr
+	return c.streamChan, c.streamErr
 }
 
 // GenerateImage 实现 model_clients.BaseModelClient 接口
@@ -723,7 +723,7 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 	close(chunkChan)
 
 	inner := &tracerRecordDataCapturingClient{
-		streamResult: model_clients.NewStreamResult(chunkChan),
+		streamChan: chunkChan,
 	}
 
 	client := &TracedModelClient{

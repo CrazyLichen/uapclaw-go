@@ -100,7 +100,7 @@ func (c *DeepSeekModelClient) Stream(
 	ctx context.Context,
 	messages model_clients.MessagesParam,
 	opts ...model_clients.StreamOption,
-) (*model_clients.StreamResult, error) {
+) (<-chan *llmschema.AssistantMessageChunk, error) {
 	// 1. 预处理消息：基类转换 + 补充 reasoning_content
 	enrichedMsgs, err := c.enrichMessagesWithReasoningContent(messages)
 	if err != nil {
