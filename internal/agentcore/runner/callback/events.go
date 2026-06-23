@@ -101,7 +101,7 @@ type ContextCallEventData struct {
 // AgentCallEventData Agent 调用事件数据。
 type AgentCallEventData struct {
 	// Event 事件类型
-	Event AgentCallEventType
+	Event AgentCallGlobalEventType
 	// AgentID Agent 标识
 	AgentID string
 	// Inputs 调用输入
@@ -209,22 +209,26 @@ const (
 	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
 )
 
-// AgentCallEventType Agent 调用事件类型。
+// AgentCallGlobalEventType Agent 调用全局事件类型。
+//
+// 与 Rail 层 AgentCallbackEvent（per-Agent 实例级事件）区分：
+//   - AgentCallGlobalEventType = 框架级全局观测（日志/监控/transform_io）
+//   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
-type AgentCallEventType string
+type AgentCallGlobalEventType string
 
 const (
 	// AgentStarted Agent 执行启动
-	AgentStarted AgentCallEventType = "_framework:agent_started"
+	AgentStarted AgentCallGlobalEventType = "_framework:agent_started"
 	// AgentInvokeInput invoke 调用前触发
-	AgentInvokeInput AgentCallEventType = "_framework:agent_invoke_input"
+	AgentInvokeInput AgentCallGlobalEventType = "_framework:agent_invoke_input"
 	// AgentInvokeOutput invoke 调用后触发
-	AgentInvokeOutput AgentCallEventType = "_framework:agent_invoke_output"
+	AgentInvokeOutput AgentCallGlobalEventType = "_framework:agent_invoke_output"
 	// AgentStreamInput stream 调用前触发
-	AgentStreamInput AgentCallEventType = "_framework:agent_stream_input"
+	AgentStreamInput AgentCallGlobalEventType = "_framework:agent_stream_input"
 	// AgentStreamOutput stream 每项触发
-	AgentStreamOutput AgentCallEventType = "_framework:agent_stream_output"
+	AgentStreamOutput AgentCallGlobalEventType = "_framework:agent_stream_output"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -309,11 +313,11 @@ type TransformLLMIOOutputFunc func(ctx context.Context, event LLMCallEventType, 
 
 // TransformAgentIOInputFunc Agent 层输入变换回调函数类型。
 // 对齐 Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
-type TransformAgentIOInputFunc func(ctx context.Context, event AgentCallEventType, input any) any
+type TransformAgentIOInputFunc func(ctx context.Context, event AgentCallGlobalEventType, input any) any
 
 // TransformAgentIOOutputFunc Agent 层输出变换回调函数类型。
 // 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
-type TransformAgentIOOutputFunc func(ctx context.Context, event AgentCallEventType, output any) any
+type TransformAgentIOOutputFunc func(ctx context.Context, event AgentCallGlobalEventType, output any) any
 
 // TransformToolIOInputFunc Tool 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
@@ -329,7 +333,7 @@ type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType
 type AgentCallbackFunc func(ctx context.Context, data *AgentCallEventData) any
 
 // String 实现 fmt.Stringer 接口。
-func (t AgentCallEventType) String() string {
+func (t AgentCallGlobalEventType) String() string {
 	return string(t)
 }
 
