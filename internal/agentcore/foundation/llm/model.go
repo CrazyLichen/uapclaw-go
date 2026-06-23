@@ -110,7 +110,9 @@ func (m *Model) Invoke(
 	fw := m.callbackFramework
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	_ = fw.TransformLLMIOInput(ctx, callback.LLMInvokeInput, messages)
+	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMInvokeInput, messages); transformed != nil {
+		messages = transformed.(model_clients.MessagesParam)
+	}
 
 	// ② emit_before: 触发 callback.LLMInvokeInput 事件（调用前）
 	_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{
@@ -188,7 +190,9 @@ func (m *Model) Stream(
 	fw := m.callbackFramework
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	_ = fw.TransformLLMIOInput(ctx, callback.LLMStreamInput, messages)
+	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMStreamInput, messages); transformed != nil {
+		messages = transformed.(model_clients.MessagesParam)
+	}
 
 	// ② emit_before: 触发 LLMStreamInput 事件（流开始前）
 	_ = fw.TriggerLLM(ctx, &callback.LLMCallEventData{

@@ -83,7 +83,9 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 	fw := callback.GetCallbackFramework()
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	_ = fw.TransformAgentIOInput(ctx, callback.AgentInvokeInput, inputs)
+	if transformed := fw.TransformAgentIOInput(ctx, callback.AgentInvokeInput, inputs); transformed != nil {
+		inputs = transformed.(map[string]any)
+	}
 
 	// ② emit_before: 触发全局 AgentInvokeInput 事件
 	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
@@ -135,7 +137,9 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 	fw := callback.GetCallbackFramework()
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	_ = fw.TransformAgentIOInput(ctx, callback.AgentStreamInput, inputs)
+	if transformed := fw.TransformAgentIOInput(ctx, callback.AgentStreamInput, inputs); transformed != nil {
+		inputs = transformed.(map[string]any)
+	}
 
 	// ② emit_before: 触发全局 AgentStreamInput 事件
 	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
