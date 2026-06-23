@@ -82,7 +82,7 @@
 //	RouterSessionFacade  — 路由会话门面，禁写壳（路由函数场景）
 //	SessionConfig        — 会话配置接口，环境变量/工作流配置/Agent配置的统一抽象
 //	WorkflowConfigProvider — 工作流配置提供者接口（占位，⤵️ 8.15 回填）
-//	AgentConfig         — Agent 配置接口（定义于 single_agent/interfaces，实现于 single_agent/config，session/config 因循环依赖保留 any）
+//	AgentConfig         — Agent 配置接口（定义于 single_agent/interfaces，实现于 single_agent/config）
 //	WorkflowInteraction   — 工作流交互，通过 GraphInterrupt 暂停图执行
 //	SimpleAgentInteraction — 简单 Agent 交互，无输入队列
 //	AgentInteraction      — 完整 Agent 交互，含输入队列 + 检查点 + 流输出

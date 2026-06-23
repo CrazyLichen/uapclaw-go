@@ -3,10 +3,12 @@ package interfaces
 import (
 	"context"
 
-	"github.com/uapclaw/uap-claw-go/internal/agentcore/session"
-	"github.com/uapclaw/uap-claw-go/internal/agentcore/session/stream"
-	agentschema "github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uap-claw-go/internal/common/schema"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -15,8 +17,7 @@ import (
 //
 // 定义所有 Agent 子类共有的配置访问方法，
 // ReActAgentConfig、ControllerAgentConfig 等具体配置均实现此接口。
-// ContextEngineConfig/ModelClientConfig 等子配置通过具体配置类型的便捷方法获取
-// （如 ReActAgentConfig.GetContextEngineConfig()），无需在接口中定义。
+// 包含模型名称、内存作用域、上下文引擎配置、模型客户端配置四个核心访问方法。
 //
 // 对应 Python: BaseAgent.config 属性（无类型约束，子类各自持有具体 config 类型）
 type AgentConfig interface {
@@ -24,6 +25,10 @@ type AgentConfig interface {
 	ModelName() string
 	// MemScopeID 返回内存作用域标识
 	MemScopeID() string
+	// GetContextEngineConfig 返回上下文引擎配置
+	GetContextEngineConfig() ceschema.ContextEngineConfig
+	// GetModelClientConfig 返回模型客户端配置（可能为 nil）
+	GetModelClientConfig() *llmschema.ModelClientConfig
 }
 
 // Workflow 工作流执行接口（最小定义，领域八扩展）。

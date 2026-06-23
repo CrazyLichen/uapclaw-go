@@ -310,11 +310,11 @@ func TestReActAgentConfig_AgentConfig接口(t *testing.T) {
 	// MemScopeID() 接口方法
 	assert.Equal(t, "scope-42", cfg.MemScopeID(), "MemScopeID() 应返回 MemScopeID 字段")
 
-	// GetContextEngineConfig() 便捷方法
+	// GetContextEngineConfig() 接口方法
 	ceCfg := cfg.GetContextEngineConfig()
-	assert.Equal(t, 200, ceCfg.MaxContextMessageNum, "GetContextEngineConfig() 应返回 ContextEngineConfig 指针")
+	assert.Equal(t, 200, ceCfg.MaxContextMessageNum, "GetContextEngineConfig() 应返回 ContextEngineConfig")
 
-	// GetModelClientConfig() 便捷方法
+	// GetModelClientConfig() 接口方法
 	mcCfg := cfg.GetModelClientConfig()
 	assert.NotNil(t, mcCfg, "GetModelClientConfig() 应返回 ModelClientConfig 指针")
 	assert.Equal(t, "openai", mcCfg.ClientProvider)

@@ -88,19 +88,6 @@ func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 	assert.Equal(t, "test_workflow_config", cfg.GetWorkflowConfig("wf1"))
 }
 
-// TestNewSessionConfig_AgentConfig 测试 Agent 配置的存取
-// AgentConfig 已实现，因循环依赖 config 包保留 any，调用方通过类型断言使用
-func TestNewSessionConfig_AgentConfig(t *testing.T) {
-	cfg := NewSessionConfig(context.Background())
-
-	// 无配置时返回 nil
-	assert.Nil(t, cfg.GetAgentConfig())
-
-	// 设置 Agent 配置（使用字符串测试 any 存储）
-	cfg.SetAgentConfig("test_agent_config")
-	assert.Equal(t, "test_agent_config", cfg.GetAgentConfig())
-}
-
 // TestNewSessionConfig_ContextEnvs 测试 context 注入环境变量
 func TestNewSessionConfig_ContextEnvs(t *testing.T) {
 	ctx := context.Background()

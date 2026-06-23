@@ -284,14 +284,14 @@ func (c *ReActAgentConfig) MemScopeID() string {
 	return c.MemScopeID
 }
 
-// GetModelClientConfig 返回模型客户端配置（便捷方法，非接口方法）
-func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
-	return c.ModelClientConfig
+// GetContextEngineConfig 返回上下文引擎配置（实现 AgentConfig 接口）
+func (c *ReActAgentConfig) GetContextEngineConfig() ceschema.ContextEngineConfig {
+	return c.ContextEngineConfig
 }
 
-// GetContextEngineConfig 返回上下文引擎配置（便捷方法，非接口方法）
-func (c *ReActAgentConfig) GetContextEngineConfig() *ceschema.ContextEngineConfig {
-	return &c.ContextEngineConfig
+// GetModelClientConfig 返回模型客户端配置（实现 AgentConfig 接口，可能为 nil）
+func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
+	return c.ModelClientConfig
 }
 
 // Validate 校验 ReActAgentConfig 的字段合法性。
