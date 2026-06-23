@@ -407,6 +407,14 @@ func (c *IntelliRouterModelClient) GetRouterStats() map[string]any {
 	return c.router.GetStats()
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // convertChunk 将 SSE JSON 块转换为 AssistantMessageChunk。
 //
 // 对齐 Python IntelliRouterModelClient._convert_chunk()：
@@ -429,8 +437,6 @@ func (c *IntelliRouterModelClient) convertChunk(
 	// 对齐 Python: 空 content 也返回 chunk（Python 原样返回 content="" 的 chunk）
 	return llmschema.NewAssistantMessageChunk(content)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 IntelliRouter 客户端到全局注册表（2.6 回填点）。
 func init() {

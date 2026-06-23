@@ -27,10 +27,16 @@ type AgentCard struct {
 	InterfaceURL string `json:"interface_url,omitempty"`
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentCardOption AgentCard 构造选项函数。
 type AgentCardOption func(*AgentCard)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithInputParams 从 Go struct 类型自动反射提取输入参数定义。
 // 对齐 Python AgentCard(input_params=Type[BaseModel]) 的 model_json_schema() 路径。
@@ -105,3 +111,5 @@ func (c *AgentCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 Ability 接口。
 func (c *AgentCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindAgent }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -3,10 +3,10 @@ package config
 import (
 	"fmt"
 
-	ceschema "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/schema"
-	ceiface "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/interface"
-	llmschema "github.com/uapclaw/uap-claw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/interfaces"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

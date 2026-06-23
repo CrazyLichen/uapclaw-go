@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // Ability 四类能力的统一接口，ToolCard/WorkflowCard/AgentCard/McpServerConfig 均实现此接口。
 type Ability interface {
@@ -17,8 +17,6 @@ type Ability interface {
 	// AbilityKind 返回能力类型
 	AbilityKind() AbilityKind
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseCard 数字名片基类，所有 Card 类型均嵌入此结构体。
 //
@@ -80,10 +78,14 @@ func (k AbilityKind) String() string {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // CardOption BaseCard 构造选项函数。
 type CardOption func(*BaseCard)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithName 设置 Card 名称。
 func WithName(name string) CardOption {

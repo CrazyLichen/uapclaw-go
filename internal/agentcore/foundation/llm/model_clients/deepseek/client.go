@@ -10,11 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent deepseek 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DeepSeekModelClient DeepSeek 模型客户端。
@@ -31,6 +26,15 @@ const logComponent = logger.ComponentAgentCore
 type DeepSeekModelClient struct {
 	openai.OpenAIModelClient
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent deepseek 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

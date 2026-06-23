@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	ceschema "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/schema"
-	ceiface "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/interface"
-	llmschema "github.com/uapclaw/uap-claw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/interfaces"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── NewReActAgentConfig 测试 ────────────────────────────
