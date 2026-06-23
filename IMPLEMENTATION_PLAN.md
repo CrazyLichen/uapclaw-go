@@ -385,7 +385,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.2 | ✅ | BaseAgent 接口 | ✅ BaseAgent 接口（Configure/Invoke/Stream + Card/Config/AbilityManager/CallbackManager/RegisterCallback/RegisterRail/UnregisterRail）；✅ WarpBaseAgent 默认实现（agentInvoker 虚分发 + emit_before/emit_after 回调骨架）；✅ AgentCallEventType/AgentCallEventData/AgentCallbackFunc 新增到 CallbackFramework（OnAgent/OffAgent/TriggerAgent）；✅ StatusAgentNotConfigured 错误码；✅ AgentOptions 扩展（Session/StreamModes + WithSession/WithStreamModes）；✅ 测试全部通过 | `openjiuwen/core/single_agent/base.py` |
 | 6.3 | ✅ | ReActAgentConfig | ✅ AgentConfig 接口（ModelName/MemScopeID）；✅ ReActAgentConfig 迁移至 sa/config 包，打破 schema↔interfaces 循环依赖；✅ 回填 ContextEngineConfig→ceschema.ContextEngineConfig, ContextProcessors→[]ceiface.ProcessorSpec；✅ 17字段+Workspace any⤵️ + Option 模式（18基础+4复合）；✅ BaseAgent.Config()/Configure() 回填 any→AgentConfig；✅ SessionConfig 注释更新；✅ Validate+测试 | `openjiuwen/core/single_agent/agents/react_agent.py` (ReActAgentConfig) |
 | **6.x 回调框架** | — | | | |
-| 6.4 | ☐ | AgentCallbackEvent 枚举 | 10 种事件类型 | `openjiuwen/core/single_agent/agent_callback_manager.py` |
+| 6.4 | ✅ | AgentCallbackEvent 枚举 | ✅ AgentCallbackEvent 枚举（type string，10 种事件，常量 Callback 前缀）；✅ AllCallbackEvents/String/GoString；✅ AgentCallEventType 重命名为 AgentCallGlobalEventType（常量名不变）；✅ 测试全部通过（rail/ 覆盖率 100%） | `openjiuwen/core/single_agent/rail/base.py` |
 | 6.5 | ☐ | AgentCallbackContext | 回调上下文，retry/force_finish/steering | `openjiuwen/core/single_agent/agent_callback_manager.py` (AgentCallbackContext) |
 | 6.6 | ☐ | AgentCallbackManager | 回调管理器 | `openjiuwen/core/single_agent/agent_callback_manager.py` |
 | **6.x Rail 系统** | — | | | |
