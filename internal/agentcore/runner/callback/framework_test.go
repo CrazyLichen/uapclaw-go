@@ -702,3 +702,92 @@ func TestCallbackFramework_TransformLLMIO_注册后变换(t *testing.T) {
 	result = fw.TransformLLMIOOutput(ctx, LLMStreamOutput, "ab")
 	assert.Equal(t, "abab", result)
 }
+
+// ──────────────────────────── Tool TransformIO 测试 ────────────────────────────
+
+func TestRegisterToolTransformIO_双键注册(t *testing.T) {
+	fw := NewCallbackFramework()
+	var inputCalled, outputCalled bool
+
+	fw.RegisterToolTransformIO(
+		ToolInvokeInput, ToolInvokeOutput,
+		func(_ context.Context, _ ToolCallEventType, input map[string]any) map[string]any {
+			inputCalled = true
+			input["transformed"] = true
+			return input
+		},
+		func(_ context.Context, _ ToolCallEventType, output map[string]any) map[string]any {
+			outputCalled = true
+			output["transformed"] = true
+			return output
+		},
+	)
+
+	// 通过 inputEvent 查找
+	result := fw.TransformToolIOInput(context.Background(), ToolInvokeInput, map[string]any{"key": "val"})
+	if !inputCalled {
+		t.Error("inputFn 未被调用")
+	}
+	if result["transformed"] != true {
+		t.Error("input 变换未生效")
+	}
+
+	// 通过 outputEvent 查找
+	outResult := fw.TransformToolIOOutput(context.Background(), ToolInvokeOutput, map[string]any{"key": "val"})
+	if !outputCalled {
+		t.Error("outputFn 未被调用")
+	}
+	if outResult["transformed"] != true {
+		t.Error("output 变换未生效")
+	}
+}
+
+func TestTransformToolIOInput_未注册时透传(t *testing.T) {
+	fw := NewCallbackFramework()
+	input := map[string]any{"key": "val"}
+	result := fw.TransformToolIOInput(context.Background(), ToolInvokeInput, input)
+	if result["key"] != "val" {
+		t.Errorf("未注册时应该透传，got %v", result)
+	}
+}
+
+func TestTransformToolIOOutput_未注册时透传(t *testing.T) {
+	fw := NewCallbackFramework()
+	output := map[string]any{"key": "val"}
+	result := fw.TransformToolIOOutput(context.Background(), ToolInvokeOutput, output)
+	if result["key"] != "val" {
+		t.Errorf("未注册时应该透传，got %v", result)
+	}
+}
+
+func TestTransformToolIOInput_已注册时变换(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.RegisterToolTransformIO(
+		ToolInvokeInput, ToolInvokeOutput,
+		func(_ context.Context, _ ToolCallEventType, input map[string]any) map[string]any {
+			input["added"] = "by_transform"
+			return input
+		},
+		nil,
+	)
+	result := fw.TransformToolIOInput(context.Background(), ToolInvokeInput, map[string]any{"key": "val"})
+	if result["added"] != "by_transform" {
+		t.Errorf("变换未生效，got %v", result)
+	}
+}
+
+func TestTransformToolIOOutput_已注册时变换(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.RegisterToolTransformIO(
+		ToolInvokeInput, ToolInvokeOutput,
+		nil,
+		func(_ context.Context, _ ToolCallEventType, output map[string]any) map[string]any {
+			output["added"] = "by_transform"
+			return output
+		},
+	)
+	result := fw.TransformToolIOOutput(context.Background(), ToolInvokeOutput, map[string]any{"key": "val"})
+	if result["added"] != "by_transform" {
+		t.Errorf("变换未生效，got %v", result)
+	}
+}
