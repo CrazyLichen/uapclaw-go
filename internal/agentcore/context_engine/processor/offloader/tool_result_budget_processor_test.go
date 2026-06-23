@@ -303,9 +303,9 @@ func TestBuildPersistedOutputMessage_无更多内容(t *testing.T) {
 // TestWithSysOption 测试 WithSysOption 选项函数
 func TestWithSysOption(t *testing.T) {
 	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:      50000,
+		TokensThreshold:       50000,
 		LargeMessageThreshold: 5000,
-		TrimSize:             1000,
+		TrimSize:              1000,
 	}
 	p, err := NewToolResultBudgetProcessor(cfg)
 	if err != nil {
@@ -323,9 +323,9 @@ func TestWithSysOption(t *testing.T) {
 // TestToolResultBudgetProcessor_OnGetContextWindow 测试上下文窗口透传
 func TestToolResultBudgetProcessor_OnGetContextWindow(t *testing.T) {
 	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:      50000,
+		TokensThreshold:       50000,
 		LargeMessageThreshold: 5000,
-		TrimSize:             1000,
+		TrimSize:              1000,
 	}
 	p, err := NewToolResultBudgetProcessor(cfg)
 	if err != nil {
@@ -347,9 +347,9 @@ func TestToolResultBudgetProcessor_OnGetContextWindow(t *testing.T) {
 // TestToolResultBudgetProcessor_TriggerGetContextWindow 测试不触发上下文窗口
 func TestToolResultBudgetProcessor_TriggerGetContextWindow(t *testing.T) {
 	cfg := &ToolResultBudgetProcessorConfig{
-		TokensThreshold:      50000,
+		TokensThreshold:       50000,
 		LargeMessageThreshold: 5000,
-		TrimSize:             1000,
+		TrimSize:              1000,
 	}
 	p, err := NewToolResultBudgetProcessor(cfg)
 	if err != nil {

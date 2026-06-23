@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -24,8 +24,8 @@ func TestNewReActAgentConfig(t *testing.T) {
 	assert.Equal(t, 10, cfg.ContextEngineConfig.DefaultWindowRoundNum, "ContextEngineConfig.DefaultWindowRoundNum 默认应为 10")
 
 	// 其他字段应为零值
-	assert.Empty(t, cfg.MemScopeID)
-	assert.Empty(t, cfg.ModelName)
+	assert.Empty(t, cfg.MemScopeIDVal)
+	assert.Empty(t, cfg.ModelNameVal)
 	assert.Empty(t, cfg.APIKey)
 	assert.Empty(t, cfg.APIBase)
 	assert.Nil(t, cfg.CustomHeaders)
@@ -44,12 +44,12 @@ func TestNewReActAgentConfig(t *testing.T) {
 func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 	t.Run("WithMemScopeID", func(t *testing.T) {
 		cfg := NewReActAgentConfig(WithMemScopeID("scope1"))
-		assert.Equal(t, "scope1", cfg.MemScopeID)
+		assert.Equal(t, "scope1", cfg.MemScopeIDVal)
 	})
 
 	t.Run("WithModelName", func(t *testing.T) {
 		cfg := NewReActAgentConfig(WithModelName("gpt-4"))
-		assert.Equal(t, "gpt-4", cfg.ModelName)
+		assert.Equal(t, "gpt-4", cfg.ModelNameVal)
 	})
 
 	t.Run("WithModelProvider", func(t *testing.T) {
@@ -116,8 +116,8 @@ func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 
 	t.Run("WithContextEngineConfig", func(t *testing.T) {
 		ceCfg := ceschema.ContextEngineConfig{
-			MaxContextMessageNum:  300,
-			DefaultWindowRoundNum: 15,
+			MaxContextMessageNum:     300,
+			DefaultWindowRoundNum:    15,
 			ModelContextWindowTokens: make(map[string]int),
 		}
 		cfg := NewReActAgentConfig(WithContextEngineConfig(ceCfg))
@@ -144,7 +144,7 @@ func TestNewReActAgentConfig_WithModelClient(t *testing.T) {
 	assert.Equal(t, "dashscope", cfg.ModelProvider)
 	assert.Equal(t, "sk-test", cfg.APIKey)
 	assert.Equal(t, "https://dashscope.api", cfg.APIBase)
-	assert.Equal(t, "qwen-max", cfg.ModelName)
+	assert.Equal(t, "qwen-max", cfg.ModelNameVal)
 
 	// 验证 ModelClientConfig 被创建
 	assert.NotNil(t, cfg.ModelClientConfig)
@@ -346,8 +346,8 @@ func TestReActAgentConfig_JSON序列化(t *testing.T) {
 	assert.NoError(t, err, "反序列化不应报错")
 
 	// 比较关键字段
-	assert.Equal(t, original.MemScopeID, restored.MemScopeID, "MemScopeID round-trip 一致")
-	assert.Equal(t, original.ModelName, restored.ModelName, "ModelName round-trip 一致")
+	assert.Equal(t, original.MemScopeIDVal, restored.MemScopeIDVal, "MemScopeIDVal round-trip 一致")
+	assert.Equal(t, original.ModelNameVal, restored.ModelNameVal, "ModelNameVal round-trip 一致")
 	assert.Equal(t, original.ModelProvider, restored.ModelProvider, "ModelProvider round-trip 一致")
 	assert.Equal(t, original.APIKey, restored.APIKey, "APIKey round-trip 一致")
 	assert.Equal(t, original.APIBase, restored.APIBase, "APIBase round-trip 一致")

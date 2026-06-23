@@ -138,11 +138,11 @@ func TestArtifact_JSON序列化(t *testing.T) {
 	name := "summary"
 	desc := "结果摘要"
 	artifact := Artifact{
-		ArtifactID: &artifactID,
-		Name:       &name,
+		ArtifactID:  &artifactID,
+		Name:        &name,
 		Description: &desc,
-		Parts:      []Part{NewTextPart("hello")},
-		Metadata:   map[string]any{"key": "value"},
+		Parts:       []Part{NewTextPart("hello")},
+		Metadata:    map[string]any{"key": "value"},
 	}
 	data, err := json.Marshal(artifact)
 	if err != nil {

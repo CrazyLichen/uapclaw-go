@@ -194,7 +194,6 @@ func TestWorkflowCard_ToolInfo_无参数(t *testing.T) {
 	// 所以 Parameters 是空 map，不含 properties 键也正常
 }
 
-
 func TestWorkflowCard_能力(t *testing.T) {
 	card := NewWorkflowCard(WithName("wf"), WithDescription("工作流"))
 	if card.AbilityName() != "wf" {
@@ -206,7 +205,6 @@ func TestWorkflowCard_能力(t *testing.T) {
 	var _ Ability = card // 编译期接口检查
 }
 
-
 // TestWorkflowCard_AbilityID 验证 WorkflowCard.AbilityID() 返回 card.ID。
 func TestWorkflowCard_AbilityID(t *testing.T) {
 	card := NewWorkflowCard(WithName("wf"))
@@ -214,7 +212,6 @@ func TestWorkflowCard_AbilityID(t *testing.T) {
 		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
 	}
 }
-
 
 // TestBaseCard_GoString 验证 GoString 输出格式。
 func TestBaseCard_GoString(t *testing.T) {

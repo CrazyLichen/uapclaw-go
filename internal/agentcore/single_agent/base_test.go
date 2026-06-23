@@ -326,8 +326,8 @@ func TestWarpBaseAgent_Configure(t *testing.T) {
 	if !ok {
 		t.Fatalf("Config 类型应为 *ReActAgentConfig，实际 %T", agent.Config())
 	}
-	if got.ModelName != "qwen-max" {
-		t.Errorf("ModelName = %v, want qwen-max", got.ModelName)
+	if got.ModelName() != "qwen-max" {
+		t.Errorf("ModelName() = %v, want qwen-max", got.ModelName())
 	}
 }
 

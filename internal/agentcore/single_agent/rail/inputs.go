@@ -11,8 +11,9 @@ package rail
 type EventInputs interface {
 	// EventKind 返回事件输入的种类标识
 	EventKind() string
+}
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 结构体（续）────────────────────────────
 
 // InvokeInputs BEFORE/AFTER_INVOKE 事件输入。
 // ⤵️ 6.9 回填字段

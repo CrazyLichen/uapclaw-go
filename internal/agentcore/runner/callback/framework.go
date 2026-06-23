@@ -122,10 +122,10 @@ func NewCallbackFramework() *CallbackFramework {
 		sessionCallbacks: make(map[SessionCallEventType][]SessionCallbackFunc),
 		customCallbacks:  make(map[string][]CustomCallbackFunc),
 		contextCallbacks: make(map[ContextCallEventType][]ContextCallbackFunc),
-		agentCallbacks:    make(map[AgentCallGlobalEventType][]AgentCallbackFunc),
-		llmTransformIO:    make(map[LLMCallEventType]*llmTransformIOEntry),
-		agentTransformIO:  make(map[AgentCallGlobalEventType]*agentTransformIOEntry),
-		toolTransformIO:    make(map[ToolCallEventType]*toolTransformIOEntry),
+		agentCallbacks:   make(map[AgentCallGlobalEventType][]AgentCallbackFunc),
+		llmTransformIO:   make(map[LLMCallEventType]*llmTransformIOEntry),
+		agentTransformIO: make(map[AgentCallGlobalEventType]*agentTransformIOEntry),
+		toolTransformIO:  make(map[ToolCallEventType]*toolTransformIOEntry),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)

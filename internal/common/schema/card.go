@@ -45,7 +45,6 @@ type WorkflowCard struct {
 	InputParams map[string]any `json:"input_params,omitempty"`
 }
 
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AbilityKind 能力类型枚举，标识四类 Ability 的类型。

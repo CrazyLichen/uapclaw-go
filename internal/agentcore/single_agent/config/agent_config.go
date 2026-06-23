@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -15,10 +15,10 @@ import (
 //
 // 对应 Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
 type ReActAgentConfig struct {
-	// MemScopeID 内存作用域标识
-	MemScopeID string `json:"mem_scope_id"`
-	// ModelName 模型名称
-	ModelName string `json:"model_name"`
+	// MemScopeIDVal 内存作用域标识
+	MemScopeIDVal string `json:"mem_scope_id"`
+	// ModelNameVal 模型名称
+	ModelNameVal string `json:"model_name"`
 	// ModelProvider 模型提供商
 	ModelProvider string `json:"model_provider"`
 	// APIKey API 密钥
@@ -95,8 +95,8 @@ func NewReActAgentConfig(opts ...ReActAgentConfigOption) *ReActAgentConfig {
 
 	cfg := &ReActAgentConfig{
 		ModelProvider:       "openai",
-		MaxIterations:      5,
-		LLMTopLogprobs:     1,
+		MaxIterations:       5,
+		LLMTopLogprobs:      1,
 		ContextEngineConfig: defaultCECfg,
 	}
 	for _, opt := range opts {
@@ -107,12 +107,12 @@ func NewReActAgentConfig(opts ...ReActAgentConfigOption) *ReActAgentConfig {
 
 // WithMemScopeID 设置内存作用域标识
 func WithMemScopeID(id string) ReActAgentConfigOption {
-	return func(c *ReActAgentConfig) { c.MemScopeID = id }
+	return func(c *ReActAgentConfig) { c.MemScopeIDVal = id }
 }
 
 // WithModelName 设置模型名称
 func WithModelName(name string) ReActAgentConfigOption {
-	return func(c *ReActAgentConfig) { c.ModelName = name }
+	return func(c *ReActAgentConfig) { c.ModelNameVal = name }
 }
 
 // WithModelProvider 设置模型提供商
@@ -204,7 +204,7 @@ func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelC
 		c.ModelProvider = provider
 		c.APIKey = apiKey
 		c.APIBase = apiBase
-		c.ModelName = modelName
+		c.ModelNameVal = modelName
 
 		// 构建扩展参数
 		extra := &modelClientExtra{verifySSL: true}
@@ -244,10 +244,10 @@ func WithModelProviderDetails(provider, apiKey, apiBase string) ReActAgentConfig
 func WithContextEngine(maxMsgNum, windowRoundNum int, enableReload, enableKVCacheRelease bool) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
 		c.ContextEngineConfig = ceschema.ContextEngineConfig{
-			MaxContextMessageNum:  maxMsgNum,
-			DefaultWindowRoundNum: windowRoundNum,
-			EnableReload:         enableReload,
-			EnableKVCacheRelease: enableKVCacheRelease,
+			MaxContextMessageNum:     maxMsgNum,
+			DefaultWindowRoundNum:    windowRoundNum,
+			EnableReload:             enableReload,
+			EnableKVCacheRelease:     enableKVCacheRelease,
 			ModelContextWindowTokens: make(map[string]int),
 		}
 	}
@@ -276,12 +276,12 @@ func WithExtraCustomHeaders(headers map[string]string) ModelClientExtraOption {
 
 // ModelName 返回模型名称（实现 AgentConfig 接口）
 func (c *ReActAgentConfig) ModelName() string {
-	return c.ModelName
+	return c.ModelNameVal
 }
 
 // MemScopeID 返回内存作用域标识（实现 AgentConfig 接口）
 func (c *ReActAgentConfig) MemScopeID() string {
-	return c.MemScopeID
+	return c.MemScopeIDVal
 }
 
 // GetContextEngineConfig 返回上下文引擎配置（实现 AgentConfig 接口）
