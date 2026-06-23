@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -51,7 +52,7 @@ type ExecuteResult struct {
 	Err error
 }
 
-// ToolCallContext 工具调用上下文（预留，6.5 回填）。
+// ToolCallContext 工具调用上下文（6.5 回填）。
 type ToolCallContext struct {
 	// ToolCall 工具调用信息
 	ToolCall *llmschema.ToolCall
@@ -63,6 +64,9 @@ type ToolCallContext struct {
 	ToolResult any
 	// ToolMsg 工具返回消息
 	ToolMsg *llmschema.ToolMessage
+	// callbackCtx 所属 AgentCallbackContext（6.5 回填）
+	// 用于在 ToolRail 钩子中访问 retry/force_finish/steering 等控制机制
+	callbackCtx *rail.AgentCallbackContext
 	// ⤵️ 预留字段：force_finish / steering_queue / skip_tool
 }
 

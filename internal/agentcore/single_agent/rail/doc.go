@@ -13,7 +13,19 @@
 //
 //	rail/
 //	├── doc.go       # 包文档
-//	└── event.go     # AgentCallbackEvent 枚举定义
+//	├── event.go     # AgentCallbackEvent 枚举定义
+//	├── context.go   # AgentCallbackContext 结构体与方法
+//	└── inputs.go    # EventInputs 接口及各事件 Inputs 结构体
+//
+// 核心类型/接口索引：
+//
+//	AgentCallbackEvent       — 10 种生命周期事件枚举
+//	AgentCallbackContext     — Rail 系统核心中介对象（retry/force_finish/steering）
+//	EventInputs              — 回调事件输入接口
+//	InvokeInputs             — BEFORE/AFTER_INVOKE 事件输入
+//	ModelCallInputs          — BEFORE/AFTER_MODEL_CALL 事件输入
+//	ToolCallInputs           — BEFORE/AFTER_TOOL_CALL 事件输入
+//	TaskIterationInputs      — BEFORE/AFTER_TASK_ITERATION 事件输入
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/rail/base.py
 package rail
