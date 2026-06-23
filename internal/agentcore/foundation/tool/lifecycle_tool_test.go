@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 
@@ -347,5 +348,91 @@ func TestNewLifecycleTool_自动获取全局fw(t *testing.T) {
 	}
 	if lt.fw != runnnercallback.GetCallbackFramework() {
 		t.Error("fw 应为全局回调框架")
+	}
+}
+
+func TestLifecycleTool_Stream_事件顺序对齐Python(t *testing.T) {
+	card := NewToolCard("stream_order", "流式顺序工具", nil, nil)
+	inner := &mockTool{
+		card: card,
+		streamFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (<-chan StreamChunk, error) {
+			ch := make(chan StreamChunk, 3)
+			ch <- StreamChunk{Data: map[string]any{"val": 1}}
+			ch <- StreamChunk{Data: map[string]any{"val": 2}}
+			ch <- StreamChunk{Done: true}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	fw := runnnercallback.NewCallbackFramework()
+	var order []string
+	// TransformIO：输入/输出变换
+	fw.RegisterToolTransformIO(
+		runnnercallback.ToolStreamInput, runnnercallback.ToolStreamOutput,
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, input map[string]any) map[string]any {
+			order = append(order, "TransformIO_input")
+			return input
+		},
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, output map[string]any) map[string]any {
+			order = append(order, "TransformIO_output")
+			return output
+		},
+	)
+	fw.OnTool(runnnercallback.ToolStreamInput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "STREAM_INPUT(emit_before)")
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolCallStarted, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "STARTED")
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolResultReceived, func(_ context.Context, data *runnnercallback.ToolCallEventData) any {
+		// RESULT_RECEIVED 拿到原始数据（内层 _lifecycle_stream 触发，未变换）
+		order = append(order, fmt.Sprintf("RESULT_RECEIVED(val=%v)", data.Result["val"]))
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolStreamOutput, func(_ context.Context, data *runnnercallback.ToolCallEventData) any {
+		// STREAM_OUTPUT 拿到变换后的数据（emit_after 最外层触发）
+		order = append(order, fmt.Sprintf("STREAM_OUTPUT(val=%v)", data.Result["val"]))
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "FINISHED")
+		return nil
+	})
+
+	lt := NewLifecycleTool(inner, fw)
+	ch, err := lt.Stream(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Stream 返回错误: %v", err)
+	}
+	for range ch {
+		// 消费所有 chunk
+	}
+
+	// Python 装饰器链 per-chunk 实际顺序（由内到外执行）：
+	//   _lifecycle_stream(内层): RESULT_RECEIVED(原始数据) → yield chunk
+	//   transform_io(外层): TransformIO_output → yield transformed
+	//   emit_after(最外): STREAM_OUTPUT(变换后数据)
+	//
+	// 完整顺序：
+	//   TransformIO_input → STREAM_INPUT → STARTED
+	//   → RESULT_RECEIVED(val=1) → TransformIO_output → STREAM_OUTPUT(val=1)
+	//   → RESULT_RECEIVED(val=2) → TransformIO_output → STREAM_OUTPUT(val=2)
+	//   → FINISHED
+	expected := []string{
+		"TransformIO_input", "STREAM_INPUT(emit_before)", "STARTED",
+		"RESULT_RECEIVED(val=1)", "TransformIO_output", "STREAM_OUTPUT(val=1)",
+		"RESULT_RECEIVED(val=2)", "TransformIO_output", "STREAM_OUTPUT(val=2)",
+		"FINISHED",
+	}
+	if len(order) != len(expected) {
+		t.Fatalf("事件数 = %d, want %d; order = %v", len(order), len(expected), order)
+	}
+	for i, e := range expected {
+		if order[i] != e {
+			t.Errorf("事件[%d] = %s, want %s", i, order[i], e)
+		}
 	}
 }

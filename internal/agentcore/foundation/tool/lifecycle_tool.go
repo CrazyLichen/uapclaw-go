@@ -98,8 +98,11 @@ func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 //
 //	执行时由外到内调用，实际顺序：
 //	  TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行]
-//	  → per-chunk: TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT
+//	  → per-chunk: RESULT_RECEIVED(原始数据) → TransformIO(output) → STREAM_OUTPUT(变换后数据)
 //	  → Done: FINISHED
+//
+//	RESULT_RECEIVED 在内层 _lifecycle_stream 触发，拿到原始 chunk（未变换）；
+//	TransformIO/STREAM_OUTPUT 在外层处理，拿到变换后的数据。
 //
 // 异常时：触发 TOOL_CALL_ERROR
 func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error) {
@@ -142,11 +145,12 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 				outCh <- chunk
 				return
 			}
-			// TransformToolIOOutput — per-chunk 输出变换
+			// RESULT_RECEIVED：内层 _lifecycle_stream 触发，拿到原始数据（未变换）
+			// 对齐 Python：_lifecycle_stream 中 async for chunk → trigger(RESULT_RECEIVED, chunk) → yield chunk
+			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
+			// TransformToolIOOutput — per-chunk 输出变换（transform_io 外层处理 yield 出来的 item）
 			transformedData := t.fw.TransformToolIOOutput(ctx, runnnercallback.ToolStreamOutput, chunk.Data)
-			// 触发 TOOL_RESULT_RECEIVED
-			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, transformedData))
-			// 触发 TOOL_STREAM_OUTPUT
+			// STREAM_OUTPUT：emit_after 最外层触发，拿到变换后的数据
 			_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, transformedData))
 			// 用变换后的数据构造新 chunk 发给下游
 			outCh <- StreamChunk{Data: transformedData}

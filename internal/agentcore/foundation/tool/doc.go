@@ -62,7 +62,7 @@
 //
 //	执行时由外到内调用，实际顺序：
 //	  Invoke: TransformIO(input) → emit_before(INVOKE_INPUT) → STARTED → [执行] → FINISHED → TransformIO(output) → emit_after(INVOKE_OUTPUT)
-//	  Stream: TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行] → per-chunk{TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT} → FINISHED
+//	  Stream: TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行] → per-chunk{RESULT_RECEIVED(原始) → TransformIO(output) → STREAM_OUTPUT(变换后)} → FINISHED
 //	  异常时触发 TOOL_CALL_ERROR
 //
 // 文件目录：
