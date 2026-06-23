@@ -313,20 +313,20 @@ func TestWarpBaseAgent_Configure(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("cfg_agent"), schema.WithDescription("配置测试"))
 	agent := NewWarpBaseAgent(card, nil)
 
-	cfg := map[string]any{"model": "qwen-max", "temperature": 0.7}
+	cfg := agentschema.NewReActAgentConfig(
+		agentschema.WithModelName("qwen-max"),
+		agentschema.WithMaxIterations(10),
+	)
 	err := agent.Configure(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("不应有错误: %v", err)
 	}
-	if agent.Config() == nil {
-		t.Fatal("Config 不应为 nil")
-	}
-	got, ok := agent.Config().(map[string]any)
+	got, ok := agent.Config().(*agentschema.ReActAgentConfig)
 	if !ok {
-		t.Fatalf("Config 类型应为 map[string]any，实际 %T", agent.Config())
+		t.Fatalf("Config 类型应为 *ReActAgentConfig，实际 %T", agent.Config())
 	}
-	if got["model"] != "qwen-max" {
-		t.Errorf("model = %v, want qwen-max", got["model"])
+	if got.ModelName != "qwen-max" {
+		t.Errorf("ModelName = %v, want qwen-max", got.ModelName)
 	}
 }
 

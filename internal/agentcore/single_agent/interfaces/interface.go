@@ -3,13 +3,28 @@ package interfaces
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uap-claw-go/internal/agentcore/session"
+	"github.com/uapclaw/uap-claw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uap-claw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentConfig Agent 配置接口，所有 Agent 配置必须实现。
+//
+// 定义所有 Agent 子类共有的配置访问方法，
+// ReActAgentConfig、ControllerAgentConfig 等具体配置均实现此接口。
+// ContextEngineConfig/ModelClientConfig 等子配置通过类型断言获取，
+// 避免接口包导入 context_engine/schema 产生循环依赖。
+//
+// 对应 Python: BaseAgent.config 属性（无类型约束，子类各自持有具体 config 类型）
+type AgentConfig interface {
+	// ModelName 返回模型名称
+	ModelName() string
+	// MemScopeID 返回内存作用域标识
+	MemScopeID() string
+}
 
 // Workflow 工作流执行接口（最小定义，领域八扩展）。
 //
@@ -47,7 +62,7 @@ type BaseAgent interface {
 
 	// Configure 配置 Agent。
 	// 对应 Python: BaseAgent.configure(config)
-	Configure(ctx context.Context, config any) error
+	Configure(ctx context.Context, config AgentConfig) error
 
 	// Invoke 非流式调用 Agent。
 	// 对应 Python: BaseAgent.invoke(inputs, session)
@@ -65,7 +80,7 @@ type BaseAgent interface {
 
 	// Config 返回当前配置。
 	// 对应 Python: BaseAgent.config 属性
-	Config() any
+	Config() AgentConfig
 
 	// AbilityManager 返回能力管理器。
 	// 对应 Python: BaseAgent.ability_manager 属性

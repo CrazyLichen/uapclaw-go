@@ -36,7 +36,7 @@ type WarpBaseAgent struct {
 	// card Agent 身份卡片（必需）
 	card *agentschema.AgentCard
 	// config Agent 配置（可选，Configure 时设置）
-	config any
+	config interfaces.AgentConfig
 	// abilityManager 能力管理器
 	abilityManager *ability.AbilityManager
 	// callbackManager 回调管理器
@@ -89,7 +89,7 @@ func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.Resource
 
 // Configure 配置 Agent。
 // 对应 Python: BaseAgent.configure(config)
-func (w *WarpBaseAgent) Configure(_ context.Context, config any) error {
+func (w *WarpBaseAgent) Configure(_ context.Context, config interfaces.AgentConfig) error {
 	w.config = config
 	return nil
 }
@@ -213,7 +213,7 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 func (w *WarpBaseAgent) Card() *agentschema.AgentCard { return w.card }
 
 // Config 返回当前配置。
-func (w *WarpBaseAgent) Config() any { return w.config }
+func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }
 
 // AbilityManager 返回能力管理器。
 // 返回 any，调用方通过类型断言获取 *ability.AbilityManager。

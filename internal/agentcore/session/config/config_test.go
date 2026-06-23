@@ -89,14 +89,14 @@ func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 }
 
 // TestNewSessionConfig_AgentConfig 测试 Agent 配置的存取
-// ⤵️ 6.3 回填：AgentConfig 实现后 SetAgentConfig/GetAgentConfig 参数从 any 改为具体类型
+// AgentConfig 已实现，因循环依赖 config 包保留 any，调用方通过类型断言使用
 func TestNewSessionConfig_AgentConfig(t *testing.T) {
 	cfg := NewSessionConfig(context.Background())
 
 	// 无配置时返回 nil
 	assert.Nil(t, cfg.GetAgentConfig())
 
-	// 设置 Agent 配置
+	// 设置 Agent 配置（使用字符串测试 any 存储）
 	cfg.SetAgentConfig("test_agent_config")
 	assert.Equal(t, "test_agent_config", cfg.GetAgentConfig())
 }

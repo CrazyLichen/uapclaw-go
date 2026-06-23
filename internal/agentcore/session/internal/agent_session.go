@@ -209,8 +209,8 @@ func (s *AgentSession) Card() *agentschema.AgentCard {
 // AgentID 获取 Agent ID，满足 checkpointer.AgentIDProvider 接口。
 //
 // 优先级链（对齐 Python AgentSession.agent_id()）：
-//  1. config.get_agent_config().id（⤵️ 5.12 回填：config 类型确定后实现）
-//  2. card.AbilityID()（当前走此分支）
+//  1. config.get_agent_config() 的 MemScopeID（通过 AgentConfig 接口类型断言）
+//  2. card.AbilityID()（fallback）
 //
 // Python 原始逻辑：
 //
@@ -219,15 +219,18 @@ func (s *AgentSession) Card() *agentschema.AgentCard {
 //	    if agent_config is not None:
 //	        return agent_config.id
 //	    return self._card.id
+//
+// Python 中 agent_config.id 访问的是 ReActAgentConfig 上未显式定义的 id 属性，
+// 实际运行时走 card.id 分支。Go 中使用 MemScopeID() 作为 agent 配置提供的 ID。
 func (s *AgentSession) AgentID() string {
 	if s.config != nil {
 		if ac := s.config.GetAgentConfig(); ac != nil {
-			// ⤵️ 6.3 回填：AgentConfig 实现后 GetAgentConfig 返回具体类型，直接调用 .ID()
-			type agentConfigIDProvider interface {
-				ID() string
+			// 通过类型断言获取 AgentConfig 接口
+			type agentConfigProvider interface {
+				MemScopeID() string
 			}
-			if provider, ok := ac.(agentConfigIDProvider); ok {
-				if id := provider.ID(); id != "" {
+			if provider, ok := ac.(agentConfigProvider); ok {
+				if id := provider.MemScopeID(); id != "" {
 					return id
 				}
 			}

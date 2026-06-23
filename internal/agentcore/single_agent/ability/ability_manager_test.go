@@ -481,7 +481,7 @@ func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.
 	return f.result, f.err
 }
 
-func (f *fakeAgent) Configure(_ context.Context, _ any) error { return nil }
+func (f *fakeAgent) Configure(_ context.Context, _ interfaces.AgentConfig) error { return nil }
 
 func (f *fakeAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	ch := make(chan stream.Schema)
@@ -491,7 +491,7 @@ func (f *fakeAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.
 
 func (f *fakeAgent) Card() *agentschema.AgentCard { return nil }
 
-func (f *fakeAgent) Config() any { return nil }
+func (f *fakeAgent) Config() interfaces.AgentConfig { return nil }
 
 func (f *fakeAgent) AbilityManager() any { return nil }
 
