@@ -419,11 +419,11 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	}
 }
 
-// TestAgentCallEventType_事件名对齐Python 验证事件名与 Python AgentEvents 对齐
-func TestAgentCallEventType_事件名对齐Python(t *testing.T) {
+// TestAgentCallGlobalEventType_事件名对齐Python 验证事件名与 Python AgentEvents 对齐
+func TestAgentCallGlobalEventType_事件名对齐Python(t *testing.T) {
 	// 对应 Python: openjiuwen/core/runner/callback/events.py AgentEvents
 	tests := []struct {
-		got  callback.AgentCallEventType
+		got  callback.AgentCallGlobalEventType
 		want string
 	}{
 		{callback.AgentStarted, "_framework:agent_started"},
