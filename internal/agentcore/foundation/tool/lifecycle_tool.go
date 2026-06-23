@@ -127,8 +127,8 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 				// 流正常结束
 				// 6. 触发 TOOL_CALL_FINISHED
 				_ = t.fw.TriggerTool(ctx, newFinishedData(card, inputs, nil))
-				// 7. emit_after：触发 TOOL_STREAM_OUTPUT
-				_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
+				// 注意：Python 中 emit_after(STREAM_OUTPUT) 是 per-item 模式，
+				// 仅在每个数据 chunk 上触发，Done 时不触发 STREAM_OUTPUT
 				outCh <- chunk
 				return
 			}

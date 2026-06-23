@@ -167,8 +167,8 @@ func TestLifecycleTool_Stream_成功(t *testing.T) {
 	if atomic.LoadInt32(&resultReceived) != 2 {
 		t.Errorf("ToolResultReceived 触发 %d 次, want 2（仅数据块）", resultReceived)
 	}
-	if atomic.LoadInt32(&streamOutput) != 3 {
-		t.Errorf("ToolStreamOutput 触发 %d 次, want 3（2 数据块 + 1 结束标记）", streamOutput)
+	if atomic.LoadInt32(&streamOutput) != 2 {
+		t.Errorf("ToolStreamOutput 触发 %d 次, want 2（仅数据块，对齐 Python emit_after per-item 模式）", streamOutput)
 	}
 	if atomic.LoadInt32(&finished) != 1 {
 		t.Errorf("ToolCallFinished 触发 %d 次, want 1", finished)
