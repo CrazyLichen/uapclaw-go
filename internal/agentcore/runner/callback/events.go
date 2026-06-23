@@ -315,6 +315,16 @@ type TransformAgentIOInputFunc func(ctx context.Context, event AgentCallEventTyp
 // 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
 type TransformAgentIOOutputFunc func(ctx context.Context, event AgentCallEventType, output any) any
 
+// TransformToolIOInputFunc Tool 层输入变换回调函数类型。
+// 接收事件名和原始输入，返回变换后的输入。
+// 对齐 Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
+type TransformToolIOInputFunc func(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any
+
+// TransformToolIOOutputFunc Tool 层输出变换回调函数类型。
+// 接收事件名和原始输出，返回变换后的输出。
+// 对齐 Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
+type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any
+
 // AgentCallbackFunc Agent 回调函数类型。
 type AgentCallbackFunc func(ctx context.Context, data *AgentCallEventData) any
 
