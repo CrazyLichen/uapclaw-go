@@ -223,3 +223,104 @@ func TestLifecycleTool_Stream_中途出错(t *testing.T) {
 		t.Errorf("ToolCallError 触发 %d 次, want 1", errEvent)
 	}
 }
+
+// ──────────────────────────── TransformIO 测试 ────────────────────────────
+
+func TestLifecycleTool_Invoke_TransformIO(t *testing.T) {
+	card := NewToolCard("transform_tool", "变换工具", nil, nil)
+	inner := &mockTool{
+		card: card,
+		invokeFn: func(_ context.Context, inputs map[string]any, _ ...ToolOption) (map[string]any, error) {
+			return map[string]any{"echo": inputs["msg"]}, nil
+		},
+	}
+
+	fw := runnnercallback.NewCallbackFramework()
+	// 注册 TransformIO：输入加前缀，输出加后缀
+	fw.RegisterToolTransformIO(
+		runnnercallback.ToolInvokeInput, runnnercallback.ToolInvokeOutput,
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, input map[string]any) map[string]any {
+			input["msg"] = "prefix_" + input["msg"].(string)
+			return input
+		},
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, output map[string]any) map[string]any {
+			output["echo"] = output["echo"].(string) + "_suffix"
+			return output
+		},
+	)
+
+	lt := NewLifecycleTool(inner, fw)
+	result, err := lt.Invoke(context.Background(), map[string]any{"msg": "hello"})
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	// 输入变换：msg = "prefix_hello"，inner 返回 echo = "prefix_hello"
+	// 输出变换：echo = "prefix_hello_suffix"
+	if result["echo"] != "prefix_hello_suffix" {
+		t.Errorf("result[echo] = %v, want prefix_hello_suffix", result["echo"])
+	}
+}
+
+func TestLifecycleTool_Invoke_事件顺序对齐Python(t *testing.T) {
+	card := NewToolCard("order_tool", "顺序工具", nil, nil)
+	inner := &mockTool{
+		card: card,
+		invokeFn: func(_ context.Context, _ map[string]any, _ ...ToolOption) (map[string]any, error) {
+			return map[string]any{"ok": true}, nil
+		},
+	}
+
+	fw := runnnercallback.NewCallbackFramework()
+	var order []string
+	fw.OnTool(runnnercallback.ToolInvokeInput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "INVOKE_INPUT")
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolCallStarted, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "STARTED")
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolCallFinished, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "FINISHED")
+		return nil
+	})
+	fw.OnTool(runnnercallback.ToolInvokeOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
+		order = append(order, "INVOKE_OUTPUT")
+		return nil
+	})
+
+	lt := NewLifecycleTool(inner, fw)
+	_, err := lt.Invoke(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+
+	expected := []string{"INVOKE_INPUT", "STARTED", "FINISHED", "INVOKE_OUTPUT"}
+	if len(order) != len(expected) {
+		t.Fatalf("事件数 = %d, want %d; order = %v", len(order), len(expected), order)
+	}
+	for i, e := range expected {
+		if order[i] != e {
+			t.Errorf("事件[%d] = %s, want %s", i, order[i], e)
+		}
+	}
+}
+
+func TestNewLifecycleTool_自动获取全局fw(t *testing.T) {
+	card := NewToolCard("auto_fw", "自动fw", nil, nil)
+	inner := &mockTool{
+		card: card,
+		invokeFn: func(_ context.Context, inputs map[string]any, _ ...ToolOption) (map[string]any, error) {
+			return inputs, nil
+		},
+	}
+
+	// 不传 fw，应自动使用全局回调框架
+	lt := NewLifecycleTool(inner)
+	if lt.fw == nil {
+		t.Error("fw 不应为 nil")
+	}
+	if lt.fw != runnnercallback.GetCallbackFramework() {
+		t.Error("fw 应为全局回调框架")
+	}
+}
