@@ -1,4 +1,4 @@
-package tracer
+package decorator
 
 import (
 	"context"
@@ -7,19 +7,22 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// tracerSession 追踪装饰所需的会话接口，避免 tracer → internal 循环依赖。
+// TracerSession 追踪装饰所需的会话最小接口。
+//
+// 从 tracer 父包抽出至 decorator 子包，避免 tracer → single_agent/interfaces 循环依赖。
 // internal.AgentSession 天然满足此接口。
-type tracerSession interface {
+type TracerSession interface {
 	// Tracer 获取追踪器
-	Tracer() *Tracer
+	Tracer() *tracer.Tracer
 	// AgentSpan 获取 Agent 追踪跨度
-	AgentSpan() *TraceAgentSpan
+	AgentSpan() *tracer.TraceAgentSpan
 }
 
 // TracedModelClient 追踪装饰的模型客户端，包装 BaseModelClient 并在 Invoke/Stream 调用时触发追踪事件。
@@ -30,9 +33,9 @@ type TracedModelClient struct {
 	// inner 被装饰的原始模型客户端
 	inner model_clients.BaseModelClient
 	// tracer 追踪器
-	tracer *Tracer
+	tracer *tracer.Tracer
 	// agentSpan Agent 追踪跨度
-	agentSpan *TraceAgentSpan
+	agentSpan *tracer.TraceAgentSpan
 	// instanceInfo 实例信息
 	instanceInfo map[string]any
 }
@@ -45,9 +48,9 @@ type TracedTool struct {
 	// inner 被装饰的原始工具
 	inner tool.Tool
 	// tracer 追踪器
-	tracer *Tracer
+	tracer *tracer.Tracer
 	// agentSpan Agent 追踪跨度
-	agentSpan *TraceAgentSpan
+	agentSpan *tracer.TraceAgentSpan
 	// instanceInfo 实例信息
 	instanceInfo map[string]any
 }
@@ -61,9 +64,9 @@ type TracedWorkflow struct {
 	// inner 被装饰的原始工作流实例
 	inner sainterfaces.Workflow
 	// tracer 追踪器
-	tracer *Tracer
+	tracer *tracer.Tracer
 	// agentSpan Agent 追踪跨度
-	agentSpan *TraceAgentSpan
+	agentSpan *tracer.TraceAgentSpan
 	// instanceInfo 实例信息
 	instanceInfo map[string]any
 }
@@ -89,19 +92,21 @@ type ModelConfigProvider interface {
 // 对齐 Python: decorate_model_with_trace 中 call_kwargs["tracer_record_data"] = tracer_record_data
 func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
-	c.tracer.TriggerAgent(ctx, TraceLLMStart, &TriggerParams{
+	c.tracer.TriggerAgent(ctx, tracer.TraceLLMStart, &tracer.TriggerParams{
 		Span:         &span.Span,
 		Inputs:       messages,
 		InstanceInfo: c.instanceInfo,
 	})
 
 	// 创建 tracer_record_data 回调闭包，对齐 Python:
-	//   async def tracer_record_data(**kw):
-	//       await tracer.trigger("tracer_agent", f"on_{invoke_type.value}_request", span=span, **kw)
+	//
+	//	async def tracer_record_data(**kw):
+	//	    await tracer.trigger("tracer_agent", f"on_{invoke_type.value}_request", span=span, **kw)
+	//
 	// 底层模型客户端在请求发送前和响应解析后调用此回调，触发 TraceLLMRequest 事件。
 	spanPtr := &span.Span
 	tracerRecordData := func(data map[string]any) {
-		c.tracer.TriggerAgent(ctx, TraceLLMRequest, &TriggerParams{
+		c.tracer.TriggerAgent(ctx, tracer.TraceLLMRequest, &tracer.TriggerParams{
 			Span:         spanPtr,
 			OnInvokeData: data,
 		})
@@ -110,14 +115,14 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 
 	result, err := c.inner.Invoke(ctx, messages, opts...)
 	if err != nil {
-		c.tracer.TriggerAgent(ctx, TraceLLMError, &TriggerParams{
+		c.tracer.TriggerAgent(ctx, tracer.TraceLLMError, &tracer.TriggerParams{
 			Span:  &span.Span,
 			Error: err,
 		})
 		return nil, err
 	}
 
-	c.tracer.TriggerAgent(ctx, TraceLLMEnd, &TriggerParams{
+	c.tracer.TriggerAgent(ctx, tracer.TraceLLMEnd, &tracer.TriggerParams{
 		Span:    &span.Span,
 		Outputs: result,
 	})
@@ -129,7 +134,7 @@ func (c *TracedModelClient) Invoke(ctx context.Context, messages model_clients.M
 // 对齐 Python: _make_trace_stream_wrap_handler 中 async for item in call_next(...): yield item
 func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.MessagesParam, opts ...model_clients.StreamOption) (<-chan *llmschema.AssistantMessageChunk, error) {
 	span := c.tracer.AgentSpanManager.CreateAgentSpan(c.agentSpan)
-	c.tracer.TriggerAgent(ctx, TraceLLMStart, &TriggerParams{
+	c.tracer.TriggerAgent(ctx, tracer.TraceLLMStart, &tracer.TriggerParams{
 		Span:         &span.Span,
 		Inputs:       messages,
 		InstanceInfo: c.instanceInfo,
@@ -138,7 +143,7 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 	// 注入 tracer_record_data 回调（对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data）
 	spanPtr := &span.Span
 	tracerRecordData := func(data map[string]any) {
-		c.tracer.TriggerAgent(ctx, TraceLLMRequest, &TriggerParams{
+		c.tracer.TriggerAgent(ctx, tracer.TraceLLMRequest, &tracer.TriggerParams{
 			Span:         spanPtr,
 			OnInvokeData: data,
 		})
@@ -147,7 +152,7 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 
 	chunkChan, err := c.inner.Stream(ctx, messages, opts...)
 	if err != nil {
-		c.tracer.TriggerAgent(ctx, TraceLLMError, &TriggerParams{
+		c.tracer.TriggerAgent(ctx, tracer.TraceLLMError, &tracer.TriggerParams{
 			Span:  &span.Span,
 			Error: err,
 		})
@@ -162,7 +167,7 @@ func (c *TracedModelClient) Stream(ctx context.Context, messages model_clients.M
 			out <- chunk
 		}
 		// 流结束，触发 TraceLLMEnd
-		c.tracer.TriggerAgent(ctx, TraceLLMEnd, &TriggerParams{
+		c.tracer.TriggerAgent(ctx, tracer.TraceLLMEnd, &tracer.TriggerParams{
 			Span: &span.Span,
 		})
 	}()
@@ -194,7 +199,7 @@ func (c *TracedModelClient) Release(ctx context.Context, opts ...model_clients.R
 // 流程：CreateAgentSpan(agentSpan) → TriggerAgent(TracePluginStart) → inner.Invoke → TriggerAgent(TracePluginEnd/Error)
 func (t *TracedTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {
 	span := t.tracer.AgentSpanManager.CreateAgentSpan(t.agentSpan)
-	t.tracer.TriggerAgent(ctx, TracePluginStart, &TriggerParams{
+	t.tracer.TriggerAgent(ctx, tracer.TracePluginStart, &tracer.TriggerParams{
 		Span:         &span.Span,
 		Inputs:       inputs,
 		InstanceInfo: t.instanceInfo,
@@ -202,14 +207,14 @@ func (t *TracedTool) Invoke(ctx context.Context, inputs map[string]any, opts ...
 
 	result, err := t.inner.Invoke(ctx, inputs, opts...)
 	if err != nil {
-		t.tracer.TriggerAgent(ctx, TracePluginError, &TriggerParams{
+		t.tracer.TriggerAgent(ctx, tracer.TracePluginError, &tracer.TriggerParams{
 			Span:  &span.Span,
 			Error: err,
 		})
 		return nil, err
 	}
 
-	t.tracer.TriggerAgent(ctx, TracePluginEnd, &TriggerParams{
+	t.tracer.TriggerAgent(ctx, tracer.TracePluginEnd, &tracer.TriggerParams{
 		Span:    &span.Span,
 		Outputs: result,
 	})
@@ -232,7 +237,7 @@ func (t *TracedTool) Card() *tool.ToolCard {
 // 对应 Python: async_trace(workflow.invoke, session, InvokeType.WORKFLOW, instance_info)
 func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts ...sainterfaces.WorkflowOption) (any, error) {
 	span := w.tracer.AgentSpanManager.CreateAgentSpan(w.agentSpan)
-	w.tracer.TriggerAgent(ctx, TraceWorkflowStart, &TriggerParams{
+	w.tracer.TriggerAgent(ctx, tracer.TraceWorkflowStart, &tracer.TriggerParams{
 		Span:         &span.Span,
 		Inputs:       inputs,
 		InstanceInfo: w.instanceInfo,
@@ -240,14 +245,14 @@ func (w *TracedWorkflow) Invoke(ctx context.Context, inputs map[string]any, opts
 
 	result, err := w.inner.Invoke(ctx, inputs, opts...)
 	if err != nil {
-		w.tracer.TriggerAgent(ctx, TraceWorkflowError, &TriggerParams{
+		w.tracer.TriggerAgent(ctx, tracer.TraceWorkflowError, &tracer.TriggerParams{
 			Span:  &span.Span,
 			Error: err,
 		})
 		return nil, err
 	}
 
-	w.tracer.TriggerAgent(ctx, TraceWorkflowEnd, &TriggerParams{
+	w.tracer.TriggerAgent(ctx, tracer.TraceWorkflowEnd, &tracer.TriggerParams{
 		Span:    &span.Span,
 		Outputs: result,
 	})
@@ -271,7 +276,7 @@ func (w *TracedWorkflow) Card() *schema.WorkflowCard {
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 model。
 // instanceInfo 中 class_name 从模型配置获取（对齐 Python model.config.model_config.model_name），
 // type 固定为 "llm"（对齐 Python decorate_model_with_trace）。
-func DecorateModelWithTrace(model model_clients.BaseModelClient, session tracerSession) model_clients.BaseModelClient {
+func DecorateModelWithTrace(model model_clients.BaseModelClient, session TracerSession) model_clients.BaseModelClient {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return model
@@ -305,7 +310,7 @@ func DecorateModelWithTrace(model model_clients.BaseModelClient, session tracerS
 // 如果 session.Tracer() 或 session.AgentSpan() 为 nil，返回原始 tool。
 // instanceInfo 中 class_name 从 tool.Card().Name 获取（对齐 Python tool.card.name），
 // type 固定为 "tool"（对齐 Python decorate_tool_with_trace）。
-func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
+func DecorateToolWithTrace(t tool.Tool, session TracerSession) tool.Tool {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return t
@@ -338,7 +343,7 @@ func DecorateToolWithTrace(t tool.Tool, session tracerSession) tool.Tool {
 // instanceInfo 中 class_name 和 metadata 从 workflow.Card() 获取
 // （对齐 Python workflow.card.name / workflow.card.id 等），
 // type 固定为 "workflow"（对齐 Python decorate_workflow_with_trace）。
-func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session tracerSession) sainterfaces.Workflow {
+func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session TracerSession) sainterfaces.Workflow {
 	tracerVal := session.Tracer()
 	if tracerVal == nil {
 		return w
@@ -350,10 +355,11 @@ func DecorateWorkflowWithTrace(w sainterfaces.Workflow, session tracerSession) s
 	}
 
 	// 从 workflow.Card() 提取元数据，对齐 Python:
-	//   metadata = dict(id=workflow.card.id, name=workflow.card.name,
-	//                   description=workflow.card.description,
-	//                   version=workflow.card.version)
-	//   instance_info = {"class_name": workflow.card.name, "type": "workflow", "metadata": metadata}
+	//
+	//	metadata = dict(id=workflow.card.id, name=workflow.card.name,
+	//	                description=workflow.card.description,
+	//	                version=workflow.card.version)
+	//	instance_info = {"class_name": workflow.card.name, "type": "workflow", "metadata": metadata}
 	className := "Workflow"
 	instanceInfo := map[string]any{"class_name": className, "type": "workflow"}
 

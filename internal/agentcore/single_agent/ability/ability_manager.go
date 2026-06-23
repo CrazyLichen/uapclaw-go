@@ -1,4 +1,4 @@
-package single_agent
+package ability
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -42,7 +44,7 @@ type AbilityManager struct {
 	// contextEngine 上下文引擎
 	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
-	resourceMgr ResourceManager
+	resourceMgr resource.ResourceManager
 	// rail 工具调用生命周期钩子 ⤵️ 预留，6.4-6.10 回填
 	rail ToolRail
 }
@@ -64,9 +66,9 @@ type toolItem struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbilityManager 创建 AbilityManager 实例。
-func NewAbilityManager(resourceMgr ResourceManager) *AbilityManager {
+func NewAbilityManager(resourceMgr resource.ResourceManager) *AbilityManager {
 	if resourceMgr == nil {
-		resourceMgr = &NoopResourceManager{}
+		resourceMgr = &resource.NoopResourceManager{}
 	}
 	return &AbilityManager{
 		tools:       make(map[string]*tool.ToolCard),
@@ -476,9 +478,9 @@ func (am *AbilityManager) executeTool(
 		toolID = toolCard.Name
 	}
 
-	var opts []ResourceOption
+	var opts []resource.ResourceOption
 	if tag != "" {
-		opts = append(opts, WithResourceTag(tag))
+		opts = append(opts, resource.WithResourceTag(tag))
 	}
 
 	t, err := am.resourceMgr.GetTool(toolID, opts...)
@@ -533,7 +535,7 @@ func (am *AbilityManager) executeWorkflow(
 		wfID = wfCard.Name
 	}
 
-	wf, err := am.resourceMgr.GetWorkflow(wfID)
+	wfAny, err := am.resourceMgr.GetWorkflow(wfID)
 	if err != nil {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -541,6 +543,17 @@ func (am *AbilityManager) executeWorkflow(
 			"工作流实例未找到: "+wfID,
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
+		)
+		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+	}
+
+	wf, ok := wfAny.(interfaces.Workflow)
+	if !ok {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"工作流实例类型断言失败: "+wfID,
+			exception.WithParam("tool_name", toolName),
 		)
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
@@ -581,7 +594,7 @@ func (am *AbilityManager) executeAgent(
 		agentID = agentCard.Name
 	}
 
-	ag, err := am.resourceMgr.GetAgent(agentID)
+	agAny, err := am.resourceMgr.GetAgent(agentID)
 	if err != nil {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -589,6 +602,17 @@ func (am *AbilityManager) executeAgent(
 			"Agent 实例未找到: "+agentID,
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
+		)
+		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+	}
+
+	ag, ok := agAny.(interfaces.BaseAgent)
+	if !ok {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"Agent 实例类型断言失败: "+agentID,
+			exception.WithParam("tool_name", toolName),
 		)
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
@@ -623,9 +647,9 @@ func (am *AbilityManager) executeFallbackTool(
 	sess *session.Session,
 	tag string,
 ) ExecuteResult {
-	var opts []ResourceOption
+	var opts []resource.ResourceOption
 	if tag != "" {
-		opts = append(opts, WithResourceTag(tag))
+		opts = append(opts, resource.WithResourceTag(tag))
 	}
 
 	t, err := am.resourceMgr.GetTool(toolName, opts...)

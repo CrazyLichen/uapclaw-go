@@ -1,4 +1,4 @@
-package tracer
+package decorator
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -41,13 +42,13 @@ type fakeTool struct {
 	card *tool.ToolCard
 }
 
-// fakeAgentSession 用于测试的模拟会话，实现 AgentSessionProvider 接口
+// fakeAgentSession 用于测试的模拟会话，实现 TracerSession 接口
 // 替代 session/internal 包的真实 AgentSession，避免循环依赖
 type fakeAgentSession struct {
 	// tracer 追踪器
-	tracer *Tracer
+	tracer *tracer.Tracer
 	// agentSpan Agent 追踪跨度
-	agentSpan *TraceAgentSpan
+	agentSpan *tracer.TraceAgentSpan
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -105,13 +106,13 @@ func (f *fakeTool) Card() *tool.ToolCard {
 	return f.card
 }
 
-// Tracer 实现 AgentSessionProvider 接口
-func (f *fakeAgentSession) Tracer() *Tracer {
+// Tracer 实现 TracerSession 接口
+func (f *fakeAgentSession) Tracer() *tracer.Tracer {
 	return f.tracer
 }
 
-// AgentSpan 实现 AgentSessionProvider 接口
-func (f *fakeAgentSession) AgentSpan() *TraceAgentSpan {
+// AgentSpan 实现 TracerSession 接口
+func (f *fakeAgentSession) AgentSpan() *tracer.TraceAgentSpan {
 	return f.agentSpan
 }
 
@@ -144,8 +145,8 @@ func (f *fakeWorkflow) Card() *schema.WorkflowCard {
 
 // TestTracedModelClient_Invoke_成功 测试 Invoke 成功时触发 TraceLLMStart 和 TraceLLMEnd 事件
 func TestTracedModelClient_Invoke_成功(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeModelClient{
 		invokeResult: &llmschema.AssistantMessage{
@@ -155,7 +156,7 @@ func TestTracedModelClient_Invoke_成功(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -173,8 +174,8 @@ func TestTracedModelClient_Invoke_成功(t *testing.T) {
 
 // TestTracedModelClient_Invoke_失败 测试 Invoke 失败时触发 TraceLLMStart 和 TraceLLMError 事件
 func TestTracedModelClient_Invoke_失败(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeModelClient{
 		invokeErr: errors.New("调用失败"),
@@ -182,7 +183,7 @@ func TestTracedModelClient_Invoke_失败(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -203,8 +204,8 @@ func TestTracedModelClient_Invoke_失败(t *testing.T) {
 
 // TestTracedModelClient_GenerateImage_直接委托 测试 GenerateImage 直接委托 inner
 func TestTracedModelClient_GenerateImage_直接委托(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	expectedResp := &llmschema.ImageGenerationResponse{}
 	inner := &fakeModelClient{
@@ -213,7 +214,7 @@ func TestTracedModelClient_GenerateImage_直接委托(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -229,8 +230,8 @@ func TestTracedModelClient_GenerateImage_直接委托(t *testing.T) {
 
 // TestTracedTool_Invoke_成功 测试工具 Invoke 成功时触发 TracePluginStart 和 TracePluginEnd 事件
 func TestTracedTool_Invoke_成功(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	expectedResult := map[string]any{"key": "value"}
 	inner := &fakeTool{
@@ -239,7 +240,7 @@ func TestTracedTool_Invoke_成功(t *testing.T) {
 
 	tracedTool := &TracedTool{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "Tool"},
 	}
@@ -255,8 +256,8 @@ func TestTracedTool_Invoke_成功(t *testing.T) {
 
 // TestTracedTool_Invoke_失败 测试工具 Invoke 失败时触发 TracePluginStart 和 TracePluginError 事件
 func TestTracedTool_Invoke_失败(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeTool{
 		invokeErr: errors.New("工具调用失败"),
@@ -264,7 +265,7 @@ func TestTracedTool_Invoke_失败(t *testing.T) {
 
 	tracedTool := &TracedTool{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "Tool"},
 	}
@@ -283,8 +284,8 @@ func TestTracedTool_Invoke_失败(t *testing.T) {
 
 // TestTracedTool_Card_委托 测试 Card 方法直接委托 inner
 func TestTracedTool_Card_委托(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	expectedCard := tool.NewToolCard("test-tool", "测试工具", []*schema.Param{}, nil)
 	inner := &fakeTool{
@@ -293,7 +294,7 @@ func TestTracedTool_Card_委托(t *testing.T) {
 
 	tracedTool := &TracedTool{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "Tool"},
 	}
@@ -309,12 +310,12 @@ func TestTracedTool_Card_委托(t *testing.T) {
 
 // TestDecorateModelWithTrace_有Tracer 测试有 Tracer 时返回 TracedModelClient
 func TestDecorateModelWithTrace_有Tracer(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeModelClient{}
 	session := &fakeAgentSession{
-		tracer:    tracer,
+		tracer:    tr,
 		agentSpan: agentSpan,
 	}
 
@@ -327,7 +328,7 @@ func TestDecorateModelWithTrace_有Tracer(t *testing.T) {
 	if tracedClient.inner != inner {
 		t.Fatal("期望 TracedModelClient.inner 等于原始 model")
 	}
-	if tracedClient.tracer != tracer {
+	if tracedClient.tracer != tr {
 		t.Fatal("期望 TracedModelClient.tracer 等于 session 的 tracer")
 	}
 	if tracedClient.agentSpan != agentSpan {
@@ -349,10 +350,10 @@ func TestDecorateModelWithTrace_无Tracer(t *testing.T) {
 
 // TestDecorateModelWithTrace_无AgentSpan 测试有 Tracer 但无 AgentSpan 时返回原始 model
 func TestDecorateModelWithTrace_无AgentSpan(t *testing.T) {
-	tracer := NewTracer()
+	tr := tracer.NewTracer()
 	inner := &fakeModelClient{}
 	session := &fakeAgentSession{
-		tracer: tracer,
+		tracer: tr,
 	}
 
 	decorated := DecorateModelWithTrace(inner, session)
@@ -364,12 +365,12 @@ func TestDecorateModelWithTrace_无AgentSpan(t *testing.T) {
 
 // TestDecorateToolWithTrace_有Tracer 测试有 Tracer 时返回 TracedTool
 func TestDecorateToolWithTrace_有Tracer(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeTool{}
 	session := &fakeAgentSession{
-		tracer:    tracer,
+		tracer:    tr,
 		agentSpan: agentSpan,
 	}
 
@@ -382,7 +383,7 @@ func TestDecorateToolWithTrace_有Tracer(t *testing.T) {
 	if tracedT.inner != inner {
 		t.Fatal("期望 TracedTool.inner 等于原始 tool")
 	}
-	if tracedT.tracer != tracer {
+	if tracedT.tracer != tr {
 		t.Fatal("期望 TracedTool.tracer 等于 session 的 tracer")
 	}
 	if tracedT.agentSpan != agentSpan {
@@ -404,8 +405,8 @@ func TestDecorateToolWithTrace_无Tracer(t *testing.T) {
 
 // TestDecorateWorkflowWithTrace_有Tracer 测试有 Tracer 时返回 TracedWorkflow
 func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	innerWorkflow := &fakeWorkflow{
 		card: schema.NewWorkflowCard(
@@ -415,7 +416,7 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	}
 	innerWorkflow.card.Version = "1.0"
 	session := &fakeAgentSession{
-		tracer:    tracer,
+		tracer:    tr,
 		agentSpan: agentSpan,
 	}
 
@@ -428,7 +429,7 @@ func TestDecorateWorkflowWithTrace_有Tracer(t *testing.T) {
 	if tracedWf.inner != innerWorkflow {
 		t.Fatal("期望 TracedWorkflow.inner 等于原始 w")
 	}
-	if tracedWf.tracer != tracer {
+	if tracedWf.tracer != tr {
 		t.Fatal("期望 TracedWorkflow.tracer 等于 session 的 tracer")
 	}
 	// 验证 instanceInfo 包含 metadata
@@ -464,8 +465,8 @@ func TestDecorateWorkflowWithTrace_无Tracer(t *testing.T) {
 
 // TestTracedWorkflow_Invoke_成功 测试 Invoke 成功时触发 TraceWorkflowStart 和 TraceWorkflowEnd
 func TestTracedWorkflow_Invoke_成功(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	expectedResult := map[string]any{"output": "done"}
 	inner := &fakeWorkflow{
@@ -475,7 +476,7 @@ func TestTracedWorkflow_Invoke_成功(t *testing.T) {
 
 	tracedWf := &TracedWorkflow{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "wf-1", "type": "workflow"},
 	}
@@ -491,8 +492,8 @@ func TestTracedWorkflow_Invoke_成功(t *testing.T) {
 
 // TestTracedWorkflow_Invoke_失败 测试 Invoke 失败时触发 TraceWorkflowStart 和 TraceWorkflowError
 func TestTracedWorkflow_Invoke_失败(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeWorkflow{
 		invokeErr: errors.New("工作流执行失败"),
@@ -501,7 +502,7 @@ func TestTracedWorkflow_Invoke_失败(t *testing.T) {
 
 	tracedWf := &TracedWorkflow{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "wf-1", "type": "workflow"},
 	}
@@ -520,8 +521,8 @@ func TestTracedWorkflow_Invoke_失败(t *testing.T) {
 
 // TestTracedWorkflow_Card_委托 测试 Card 方法直接委托 inner
 func TestTracedWorkflow_Card_委托(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	expectedCard := schema.NewWorkflowCard(
 		schema.WithName("my-workflow"),
@@ -535,7 +536,7 @@ func TestTracedWorkflow_Card_委托(t *testing.T) {
 
 	tracedWf := &TracedWorkflow{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "my-workflow", "type": "workflow"},
 	}
@@ -554,12 +555,12 @@ func TestTracedWorkflow_Card_委托(t *testing.T) {
 
 // TestDecorateWorkflowWithTrace_无Card 测试 Card 为 nil 时 class_name 使用默认值
 func TestDecorateWorkflowWithTrace_无Card(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	innerWorkflow := &fakeWorkflow{card: nil}
 	session := &fakeAgentSession{
-		tracer:    tracer,
+		tracer:    tr,
 		agentSpan: agentSpan,
 	}
 
@@ -579,13 +580,13 @@ func TestDecorateWorkflowWithTrace_无Card(t *testing.T) {
 
 // TestTracedModelClient_Release_直接委托 测试 Release 直接委托 inner
 func TestTracedModelClient_Release_直接委托(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeModelClient{}
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -601,13 +602,13 @@ func TestTracedModelClient_Release_直接委托(t *testing.T) {
 
 // TestTracedTool_Stream_直接委托 测试 Stream 直接委托 inner
 func TestTracedTool_Stream_直接委托(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &fakeTool{}
 	tracedTool := &TracedTool{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "Tool"},
 	}
@@ -678,8 +679,8 @@ func (c *tracerRecordDataCapturingClient) Release(_ context.Context, _ ...model_
 // TestTracedModelClient_Invoke_注入TracerRecordData 测试 Invoke 将 tracer_record_data 回调注入到 opts
 // 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
 func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	inner := &tracerRecordDataCapturingClient{
 		invokeResult: &llmschema.AssistantMessage{
@@ -689,7 +690,7 @@ func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -711,8 +712,8 @@ func TestTracedModelClient_Invoke_注入TracerRecordData(t *testing.T) {
 // TestTracedModelClient_Stream_注入TracerRecordData 测试 Stream 将 tracer_record_data 回调注入到 opts
 // 对齐 Python: call_kwargs["tracer_record_data"] = tracer_record_data
 func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	chunkChan := make(chan *llmschema.AssistantMessageChunk, 1)
 	chunkChan <- &llmschema.AssistantMessageChunk{
@@ -728,7 +729,7 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -750,16 +751,16 @@ func TestTracedModelClient_Stream_注入TracerRecordData(t *testing.T) {
 // TestTracedModelClient_Invoke_回调触发TraceLLMRequest 测试底层客户端调用回调时 TraceLLMRequest 事件被触发
 // 对齐 Python: tracer.trigger("tracer_agent", "on_llm_request", span=span, **kw)
 func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
-	tracer := NewTracer()
-	agentSpan := tracer.AgentSpanManager.CreateAgentSpan()
+	tr := tracer.NewTracer()
+	agentSpan := tr.AgentSpanManager.CreateAgentSpan()
 
 	// 手动创建 handler 并注册 TraceLLMRequest 事件分派（模拟 buildAgentDispatch 的对应条目）
-	handler := NewTraceAgentHandler(nil, tracer.AgentSpanManager)
-	tracer.agentHandler = handler
-	tracer.agentDispatch[TraceLLMRequest] = func(ctx context.Context, p *TriggerParams) {
-		span := tracer.getOrCreateAgentSpan(p)
+	handler := tracer.NewTraceAgentHandler(nil, tr.AgentSpanManager)
+	tr.SetAgentHandler(handler)
+	tr.SetAgentDispatchEntry(tracer.TraceLLMRequest, func(ctx context.Context, p *tracer.TriggerParams) {
+		span := tr.GetOrCreateAgentSpan(p)
 		_ = handler.OnLLMRequest(ctx, span, p.OnInvokeData)
-	}
+	})
 
 	inner := &tracerRecordDataCapturingClient{
 		invokeResult: &llmschema.AssistantMessage{
@@ -769,7 +770,7 @@ func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 
 	client := &TracedModelClient{
 		inner:        inner,
-		tracer:       tracer,
+		tracer:       tr,
 		agentSpan:    agentSpan,
 		instanceInfo: map[string]any{"class_name": "BaseModelClient"},
 	}
@@ -783,7 +784,7 @@ func TestTracedModelClient_Invoke_回调触发TraceLLMRequest(t *testing.T) {
 	inner.capturedInvokeRecordData(map[string]any{"llm_params": map[string]any{"model": "qwen-max"}})
 
 	// 验证 OnInvokeData 被填充（TraceLLMRequest → OnLLMRequest → updateRunningTraceData）
-	lastSpan := tracer.AgentSpanManager.LastSpan()
+	lastSpan := tr.AgentSpanManager.LastSpan()
 	if lastSpan == nil {
 		t.Fatal("期望存在 span，实际为 nil")
 	}

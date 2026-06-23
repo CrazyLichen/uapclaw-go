@@ -1,9 +1,8 @@
-package single_agent
+package resource
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -12,13 +11,18 @@ import (
 
 // ResourceManager 实例获取接口，AbilityManager 通过此接口获取 Tool/Workflow/Agent 实例。
 // 具体实现由领域六/九提供，3.13 阶段使用 NoopResourceManager。
+//
+// GetWorkflow/GetAgent 返回 any，避免 resource → interfaces 循环依赖。
+// 调用方通过类型断言获取 interfaces.Workflow / interfaces.BaseAgent。
 type ResourceManager interface {
 	// GetTool 按 ID 获取工具实例
 	GetTool(toolID string, opts ...ResourceOption) (tool.Tool, error)
 	// GetWorkflow 按 ID 获取工作流实例
-	GetWorkflow(workflowID string, opts ...ResourceOption) (interfaces.Workflow, error)
+	// 返回 any，调用方类型断言为 interfaces.Workflow
+	GetWorkflow(workflowID string, opts ...ResourceOption) (any, error)
 	// GetAgent 按 ID 获取 Agent 实例
-	GetAgent(agentID string, opts ...ResourceOption) (interfaces.BaseAgent, error)
+	// 返回 any，调用方类型断言为 interfaces.BaseAgent
+	GetAgent(agentID string, opts ...ResourceOption) (any, error)
 	// GetMcpToolInfos 获取 MCP 服务器的工具描述列表
 	GetMcpToolInfos(serverID string) ([]*schema.ToolInfo, error)
 }
@@ -75,7 +79,7 @@ func (n *NoopResourceManager) GetTool(toolID string, opts ...ResourceOption) (to
 }
 
 // GetWorkflow 实现 ResourceManager 接口，返回 NotFound 错误。
-func (n *NoopResourceManager) GetWorkflow(workflowID string, opts ...ResourceOption) (interfaces.Workflow, error) {
+func (n *NoopResourceManager) GetWorkflow(workflowID string, opts ...ResourceOption) (any, error) {
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", workflowID),
@@ -84,7 +88,7 @@ func (n *NoopResourceManager) GetWorkflow(workflowID string, opts ...ResourceOpt
 }
 
 // GetAgent 实现 ResourceManager 接口，返回 NotFound 错误。
-func (n *NoopResourceManager) GetAgent(agentID string, opts ...ResourceOption) (interfaces.BaseAgent, error) {
+func (n *NoopResourceManager) GetAgent(agentID string, opts ...ResourceOption) (any, error) {
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", agentID),

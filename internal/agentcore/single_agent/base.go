@@ -5,7 +5,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -36,7 +38,7 @@ type WarpBaseAgent struct {
 	// config Agent 配置（可选，Configure 时设置）
 	config any
 	// abilityManager 能力管理器
-	abilityManager *AbilityManager
+	abilityManager *ability.AbilityManager
 	// callbackManager 回调管理器
 	// ⤵️ 6.6 回填：从 any 改为 *AgentCallbackManager
 	callbackManager any
@@ -49,6 +51,28 @@ type WarpBaseAgent struct {
 // AgentOption Agent 调用选项函数（re-export from interfaces）。
 type AgentOption = interfaces.AgentOption
 
+// 以下类型别名为子包 re-export，保持包内兼容。
+type (
+	// AbilityManager 能力管理器（re-export from ability 子包）
+	AbilityManager = ability.AbilityManager
+	// AddAbilityResult 添加能力结果（re-export from ability 子包）
+	AddAbilityResult = ability.AddAbilityResult
+	// ExecuteResult 工具执行结果（re-export from ability 子包）
+	ExecuteResult = ability.ExecuteResult
+	// ToolRail 工具调用钩子接口（re-export from ability 子包）
+	ToolRail = ability.ToolRail
+	// AbilityExecutionError 能力执行错误（re-export from ability 子包）
+	AbilityExecutionError = ability.AbilityExecutionError
+	// ResourceManager 资源管理器接口（re-export from resource 子包）
+	ResourceManager = resource.ResourceManager
+	// NoopResourceManager 空资源管理器（re-export from resource 子包）
+	NoopResourceManager = resource.NoopResourceManager
+	// ResourceOptions 资源选项（re-export from resource 子包）
+	ResourceOptions = resource.ResourceOptions
+	// ResourceOption 资源选项函数（re-export from resource 子包）
+	ResourceOption = resource.ResourceOption
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -56,10 +80,10 @@ type AgentOption = interfaces.AgentOption
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWarpBaseAgent 创建 WarpBaseAgent 实例。
-func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr ResourceManager) *WarpBaseAgent {
+func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.ResourceManager) *WarpBaseAgent {
 	return &WarpBaseAgent{
 		card:           card,
-		abilityManager: NewAbilityManager(resourceMgr),
+		abilityManager: ability.NewAbilityManager(resourceMgr),
 	}
 }
 
@@ -192,6 +216,7 @@ func (w *WarpBaseAgent) Card() *agentschema.AgentCard { return w.card }
 func (w *WarpBaseAgent) Config() any { return w.config }
 
 // AbilityManager 返回能力管理器。
+// 返回 any，调用方通过类型断言获取 *ability.AbilityManager。
 func (w *WarpBaseAgent) AbilityManager() any { return w.abilityManager }
 
 // CallbackManager 返回回调管理器。

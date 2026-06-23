@@ -3,6 +3,7 @@ package interfaces
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -68,8 +69,8 @@ type BaseAgent interface {
 
 	// AbilityManager 返回能力管理器。
 	// 对应 Python: BaseAgent.ability_manager 属性
-	// ⤵️ 返回类型暂用 any，避免 single_agent → single_agent 循环依赖；
-	// 调用方通过类型断言获取 *AbilityManager。6.2 完成后可考虑提取接口。
+	// 返回 any，因为 interfaces → ability → resource → interfaces 构成循环依赖，
+	// 无法用具体类型。调用方通过类型断言获取 *ability.AbilityManager。
 	AbilityManager() any
 
 	// CallbackManager 返回回调管理器。
@@ -102,9 +103,7 @@ type WorkflowOptions struct{}
 type AgentOptions struct {
 	// Session 会话实例（可选）
 	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
-	// ⤵️ 类型暂用 any，避免 single_agent/interfaces → session 循环依赖；
-	// 调用方通过类型断言获取 *session.Session。后续可考虑提取 Session 接口。
-	Session any
+	Session *session.Session
 	// StreamModes 流式输出模式（可选）
 	// 对应 Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
 	StreamModes []stream.StreamMode
@@ -125,8 +124,7 @@ type WorkflowOption func(*WorkflowOptions)
 type AgentOption func(*AgentOptions)
 
 // WithSession 设置会话实例。
-// ⤵️ 参数类型暂用 any，避免 single_agent/interfaces → session 循环依赖。
-func WithSession(sess any) AgentOption {
+func WithSession(sess *session.Session) AgentOption {
 	return func(o *AgentOptions) { o.Session = sess }
 }
 

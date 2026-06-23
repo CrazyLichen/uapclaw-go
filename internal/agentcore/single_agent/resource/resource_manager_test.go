@@ -1,4 +1,4 @@
-package single_agent
+package resource
 
 import (
 	"testing"

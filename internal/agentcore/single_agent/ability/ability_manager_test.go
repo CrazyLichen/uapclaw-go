@@ -1,4 +1,4 @@
-package single_agent
+package ability
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -46,7 +47,7 @@ func newFakeResourceManager() *fakeResourceManager {
 	}
 }
 
-func (f *fakeResourceManager) GetTool(toolID string, _ ...ResourceOption) (tool.Tool, error) {
+func (f *fakeResourceManager) GetTool(toolID string, _ ...resource.ResourceOption) (tool.Tool, error) {
 	t, ok := f.tools[toolID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", toolID))
@@ -54,7 +55,7 @@ func (f *fakeResourceManager) GetTool(toolID string, _ ...ResourceOption) (tool.
 	return t, nil
 }
 
-func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption) (interfaces.Workflow, error) {
+func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...resource.ResourceOption) (any, error) {
 	w, ok := f.workflows[workflowID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", workflowID))
@@ -62,7 +63,7 @@ func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption
 	return w, nil
 }
 
-func (f *fakeResourceManager) GetAgent(agentID string, _ ...ResourceOption) (interfaces.BaseAgent, error) {
+func (f *fakeResourceManager) GetAgent(agentID string, _ ...resource.ResourceOption) (any, error) {
 	a, ok := f.agents[agentID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", agentID))
