@@ -1491,7 +1491,7 @@ func TestChromaVectorStore_getFieldMapping_缓存命中(t *testing.T) {
 		t.Fatalf("getFieldMapping() error = %v", err)
 	}
 	if fm == nil {
-		t.Error("getFieldMapping() 不应返回 nil")
+		t.Fatal("getFieldMapping() 不应返回 nil")
 	}
 	if fm.PKField != "id" {
 		t.Errorf("PKField = %v, 期望 id", fm.PKField)
@@ -1516,7 +1516,7 @@ func TestChromaVectorStore_getFieldMapping_缓存未命中(t *testing.T) {
 		t.Fatalf("getFieldMapping() error = %v", err)
 	}
 	if fm == nil {
-		t.Error("getFieldMapping() 不应返回 nil")
+		t.Fatal("getFieldMapping() 不应返回 nil")
 	}
 }
 
