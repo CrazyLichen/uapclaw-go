@@ -23,6 +23,9 @@
 //	├── interfaces/
 //	│   ├── doc.go             # 子包文档
 //	│   └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	├── rail/
+//	│   ├── doc.go             # 子包文档
+//	│   └── event.go           # AgentCallbackEvent 枚举 — Agent 生命周期回调事件类型（10 种）
 //	├── resource/
 //	│   ├── doc.go             # 子包文档
 //	│   └── resource_manager.go # ResourceManager 接口 + NoopResourceManager + ResourceOptions
