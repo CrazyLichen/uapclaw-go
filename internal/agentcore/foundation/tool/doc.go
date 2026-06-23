@@ -54,10 +54,15 @@
 //
 // 回调生命周期（对齐 Python _ToolMeta 两步装饰链顺序）：
 //
-//	LifecycleTool 包装器在 Invoke/Stream 调用前后自动触发以下事件
-//	（事件定义在 agentcore/runner/callback/ 包中）：
-//	  Invoke: emit_before(INVOKE_INPUT) → TransformIO(input) → STARTED → [执行] → FINISHED → TransformIO(output) → emit_after(INVOKE_OUTPUT)
-//	  Stream: emit_before(STREAM_INPUT) → TransformIO(input) → STARTED → [执行] → per-chunk{TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT} → FINISHED → emit_after(STREAM_OUTPUT)
+//	Python 装饰器链（由内到外包装）：
+//	  fn0 = _lifecycle_invoke    (内层: STARTED/FINISHED/ERROR)
+//	  fn1 = emit_before(fn0)     (中层: 触发 INVOKE_INPUT)
+//	  fn2 = transform_io(fn1)    (外层: 输入/输出变换)
+//	  fn3 = emit_after(fn2)      (最外: 触发 INVOKE_OUTPUT)
+//
+//	执行时由外到内调用，实际顺序：
+//	  Invoke: TransformIO(input) → emit_before(INVOKE_INPUT) → STARTED → [执行] → FINISHED → TransformIO(output) → emit_after(INVOKE_OUTPUT)
+//	  Stream: TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行] → per-chunk{TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT} → FINISHED
 //	  异常时触发 TOOL_CALL_ERROR
 //
 // 文件目录：

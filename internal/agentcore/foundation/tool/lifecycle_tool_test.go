@@ -236,6 +236,12 @@ func TestLifecycleTool_Invoke_TransformIO(t *testing.T) {
 	}
 
 	fw := runnnercallback.NewCallbackFramework()
+	// 记录 emit_before 收到的参数（应该是 TransformIO 变换后的）
+	var emitBeforeInputs map[string]any
+	fw.OnTool(runnnercallback.ToolInvokeInput, func(_ context.Context, data *runnnercallback.ToolCallEventData) any {
+		emitBeforeInputs = data.Inputs
+		return nil
+	})
 	// 注册 TransformIO：输入加前缀，输出加后缀
 	fw.RegisterToolTransformIO(
 		runnnercallback.ToolInvokeInput, runnnercallback.ToolInvokeOutput,
@@ -259,6 +265,10 @@ func TestLifecycleTool_Invoke_TransformIO(t *testing.T) {
 	if result["echo"] != "prefix_hello_suffix" {
 		t.Errorf("result[echo] = %v, want prefix_hello_suffix", result["echo"])
 	}
+	// emit_before 拿到的应是 TransformIO 变换后的参数
+	if emitBeforeInputs["msg"] != "prefix_hello" {
+		t.Errorf("emit_before 收到的 msg = %v, want prefix_hello（TransformIO 先执行，emit_before 拿变换后参数）", emitBeforeInputs["msg"])
+	}
 }
 
 func TestLifecycleTool_Invoke_事件顺序对齐Python(t *testing.T) {
@@ -272,8 +282,20 @@ func TestLifecycleTool_Invoke_事件顺序对齐Python(t *testing.T) {
 
 	fw := runnnercallback.NewCallbackFramework()
 	var order []string
+	// TransformIO 输入变换：在 emit_before 之前执行（transform_io 包装 emit_before，由外到内调用）
+	fw.RegisterToolTransformIO(
+		runnnercallback.ToolInvokeInput, runnnercallback.ToolInvokeOutput,
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, input map[string]any) map[string]any {
+			order = append(order, "TransformIO_input")
+			return input
+		},
+		func(_ context.Context, _ runnnercallback.ToolCallEventType, output map[string]any) map[string]any {
+			order = append(order, "TransformIO_output")
+			return output
+		},
+	)
 	fw.OnTool(runnnercallback.ToolInvokeInput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
-		order = append(order, "INVOKE_INPUT")
+		order = append(order, "INVOKE_INPUT(emit_before)")
 		return nil
 	})
 	fw.OnTool(runnnercallback.ToolCallStarted, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
@@ -285,7 +307,7 @@ func TestLifecycleTool_Invoke_事件顺序对齐Python(t *testing.T) {
 		return nil
 	})
 	fw.OnTool(runnnercallback.ToolInvokeOutput, func(_ context.Context, _ *runnnercallback.ToolCallEventData) any {
-		order = append(order, "INVOKE_OUTPUT")
+		order = append(order, "INVOKE_OUTPUT(emit_after)")
 		return nil
 	})
 
@@ -295,7 +317,10 @@ func TestLifecycleTool_Invoke_事件顺序对齐Python(t *testing.T) {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
 
-	expected := []string{"INVOKE_INPUT", "STARTED", "FINISHED", "INVOKE_OUTPUT"}
+	// Python 装饰器链实际执行顺序：
+	// transform_io(最外) → emit_before(中层) → _lifecycle_invoke(内层) → emit_after(最外)
+	// 展开：TransformIO_input → INVOKE_INPUT → STARTED → [执行] → FINISHED → TransformIO_output → INVOKE_OUTPUT
+	expected := []string{"TransformIO_input", "INVOKE_INPUT(emit_before)", "STARTED", "FINISHED", "TransformIO_output", "INVOKE_OUTPUT(emit_after)"}
 	if len(order) != len(expected) {
 		t.Fatalf("事件数 = %d, want %d; order = %v", len(order), len(expected), order)
 	}
