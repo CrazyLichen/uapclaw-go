@@ -48,6 +48,8 @@ type CallbackFramework struct {
 	llmTransformIO map[LLMCallEventType]*llmTransformIOEntry
 	// agentTransformIO Agent 层 IO 变换回调注册表，键为 inputEvent
 	agentTransformIO map[AgentCallEventType]*agentTransformIOEntry
+	// toolTransformIO Tool 层 IO 变换回调注册表，键为 inputEvent 或 outputEvent
+	toolTransformIO map[ToolCallEventType]*toolTransformIOEntry
 }
 
 // llmTransformIOEntry LLM 层 TransformIO 注册条目
@@ -64,6 +66,14 @@ type agentTransformIOEntry struct {
 	inputFn TransformAgentIOInputFunc
 	// outputFn 输出变换函数
 	outputFn TransformAgentIOOutputFunc
+}
+
+// toolTransformIOEntry Tool 层 TransformIO 注册条目
+type toolTransformIOEntry struct {
+	// inputFn 输入变换函数
+	inputFn TransformToolIOInputFunc
+	// outputFn 输出变换函数
+	outputFn TransformToolIOOutputFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -115,6 +125,7 @@ func NewCallbackFramework() *CallbackFramework {
 		agentCallbacks:    make(map[AgentCallEventType][]AgentCallbackFunc),
 		llmTransformIO:    make(map[LLMCallEventType]*llmTransformIOEntry),
 		agentTransformIO:  make(map[AgentCallEventType]*agentTransformIOEntry),
+		toolTransformIO:    make(map[ToolCallEventType]*toolTransformIOEntry),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -555,6 +566,55 @@ func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event Ag
 func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event AgentCallEventType, output any) any {
 	fw.mu.RLock()
 	entry, ok := fw.agentTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.outputFn == nil {
+		return output
+	}
+	return entry.outputFn(ctx, event, output)
+}
+
+// RegisterToolTransformIO 注册 Tool 层 IO 变换回调。
+//
+// 对齐 Python: CallbackFramework.transform_io 注册机制。
+// inputFn 在 emit_before 前对输入做变换，outputFn 在 emit_after 前对输出做变换。
+// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
+func (fw *CallbackFramework) RegisterToolTransformIO(
+	inputEvent ToolCallEventType,
+	outputEvent ToolCallEventType,
+	inputFn TransformToolIOInputFunc,
+	outputFn TransformToolIOOutputFunc,
+) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	entry := &toolTransformIOEntry{
+		inputFn:  inputFn,
+		outputFn: outputFn,
+	}
+	fw.toolTransformIO[inputEvent] = entry
+	fw.toolTransformIO[outputEvent] = entry
+}
+
+// TransformToolIOInput 应用 Tool 层输入变换。
+//
+// 如果没有注册变换回调，返回原始输入（透传）。
+// 对齐 Python: transform_io 的 input_fn 在 emit_before 前执行。
+func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any {
+	fw.mu.RLock()
+	entry, ok := fw.toolTransformIO[event]
+	fw.mu.RUnlock()
+	if !ok || entry.inputFn == nil {
+		return input
+	}
+	return entry.inputFn(ctx, event, input)
+}
+
+// TransformToolIOOutput 应用 Tool 层输出变换。
+//
+// 如果没有注册变换回调，返回原始输出（透传）。
+// 对齐 Python: transform_io 的 output_fn 在 emit_after 前执行。
+func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any {
+	fw.mu.RLock()
+	entry, ok := fw.toolTransformIO[event]
 	fw.mu.RUnlock()
 	if !ok || entry.outputFn == nil {
 		return output
