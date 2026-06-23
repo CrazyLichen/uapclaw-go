@@ -1,6 +1,7 @@
 package callback
 
 import (
+	"context"
 	"fmt"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -93,6 +94,24 @@ type ContextCallEventData struct {
 	State any
 	// Context 上下文实例引用（实际类型 context_engine.ModelContext）
 	Context any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// AgentCallEventData Agent 调用事件数据。
+type AgentCallEventData struct {
+	// Event 事件类型
+	Event AgentCallEventType
+	// AgentID Agent 标识
+	AgentID string
+	// Inputs 调用输入
+	Inputs map[string]any
+	// Result 调用结果（InvokeOutput/StreamOutput 时有值）
+	Result any
+	// Session 会话实例（实际类型 *session.Session）
+	Session any
+	// Error 错误信息
+	Error error
 	// Extra 额外数据
 	Extra map[string]any
 }
@@ -190,6 +209,24 @@ const (
 	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
 )
 
+// AgentCallEventType Agent 调用事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
+type AgentCallEventType string
+
+const (
+	// AgentStarted Agent 执行启动
+	AgentStarted AgentCallEventType = "_framework:agent_started"
+	// AgentInvokeInput invoke 调用前触发
+	AgentInvokeInput AgentCallEventType = "_framework:agent_invoke_input"
+	// AgentInvokeOutput invoke 调用后触发
+	AgentInvokeOutput AgentCallEventType = "_framework:agent_invoke_output"
+	// AgentStreamInput stream 调用前触发
+	AgentStreamInput AgentCallEventType = "_framework:agent_stream_input"
+	// AgentStreamOutput stream 每项触发
+	AgentStreamOutput AgentCallEventType = "_framework:agent_stream_output"
+)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -258,4 +295,20 @@ func (d *ContextCallEventData) String() string {
 		return "nil"
 	}
 	return fmt.Sprintf("ContextCallEventData{事件:%s, 会话ID:%s, 上下文ID:%s}", d.Event, d.SessionID, d.ContextID)
+}
+
+// AgentCallbackFunc Agent 回调函数类型。
+type AgentCallbackFunc func(ctx context.Context, data *AgentCallEventData) any
+
+// String 实现 fmt.Stringer 接口。
+func (t AgentCallEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *AgentCallEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("AgentCallEventData{事件:%s, AgentID:%s}", d.Event, d.AgentID)
 }

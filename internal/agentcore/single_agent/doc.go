@@ -11,13 +11,18 @@
 //
 //	single_agent/
 //	├── doc.go                 # 包文档
+//	├── base.go                # WarpBaseAgent — BaseAgent 默认实现，Invoke/Stream 回调包装骨架
 //	├── ability_types.go       # Ability 联合类型 + AddAbilityResult + AbilityExecutionError + ToolRail 预留
 //	├── json_repair.go         # RepairToolArgumentsJSON + ParseToolArguments
 //	├── resource_manager.go    # ResourceManager 接口 + NoopResourceManager + ResourceOptions
 //	├── ability_manager.go     # AbilityManager 核心结构 + 注册/查询/执行
-//	└── interfaces/
+//	├── interfaces/
+//	│   ├── doc.go             # 子包文档
+//	│   └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	└── schema/
 //	    ├── doc.go             # 子包文档
-//	    └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	    ├── agent_card.go      # AgentCard 结构体 + 构造函数 + Ability 接口实现
+//	    └── agent_result.go    # Part/Artifact/AgentResult 结果模型
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/ability_manager.py
 package single_agent

@@ -7,6 +7,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -34,14 +35,14 @@ func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 type fakeResourceManager struct {
 	tools     map[string]tool.Tool
 	workflows map[string]interfaces.Workflow
-	agents    map[string]interfaces.Agent
+	agents    map[string]interfaces.BaseAgent
 }
 
 func newFakeResourceManager() *fakeResourceManager {
 	return &fakeResourceManager{
 		tools:     make(map[string]tool.Tool),
 		workflows: make(map[string]interfaces.Workflow),
-		agents:    make(map[string]interfaces.Agent),
+		agents:    make(map[string]interfaces.BaseAgent),
 	}
 }
 
@@ -61,7 +62,7 @@ func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...ResourceOption
 	return w, nil
 }
 
-func (f *fakeResourceManager) GetAgent(agentID string, _ ...ResourceOption) (interfaces.Agent, error) {
+func (f *fakeResourceManager) GetAgent(agentID string, _ ...ResourceOption) (interfaces.BaseAgent, error) {
 	a, ok := f.agents[agentID]
 	if !ok {
 		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", agentID))
@@ -123,7 +124,7 @@ func TestAbilityManager_Add_Workflow(t *testing.T) {
 
 func TestAbilityManager_Add_Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag := schema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
 	result := am.Add(ag)
 	if !result.Added {
 		t.Error("应成功添加")
@@ -206,7 +207,7 @@ func TestAbilityManager_Get(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("tool1", "工具", nil, nil))
 	am.Add(schema.NewWorkflowCard(schema.WithName("wf1"), schema.WithDescription("工作流")))
-	am.Add(schema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent")))
+	am.Add(agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent")))
 
 	if am.Get("tool1") == nil {
 		t.Error("tool1 应存在")
@@ -226,7 +227,7 @@ func TestAbilityManager_List(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("t1", "工具", nil, nil))
 	am.Add(schema.NewWorkflowCard(schema.WithName("w1"), schema.WithDescription("工作流")))
-	am.Add(schema.NewAgentCard(schema.WithName("a1"), schema.WithDescription("Agent")))
+	am.Add(agentschema.NewAgentCard(schema.WithName("a1"), schema.WithDescription("Agent")))
 	list := am.List()
 	if len(list) != 3 {
 		t.Errorf("List 长度 = %d, want 3", len(list))
@@ -304,7 +305,7 @@ func TestAbilityManager_ListToolInfo(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("tool1", "工具1", nil, nil))
 	am.Add(schema.NewWorkflowCard(schema.WithName("wf1"), schema.WithDescription("工作流1")))
-	am.Add(schema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent1")))
+	am.Add(agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent1")))
 
 	infos, err := am.ListToolInfo(context.Background(), nil)
 	if err != nil {
@@ -479,6 +480,28 @@ func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.
 	return f.result, f.err
 }
 
+func (f *fakeAgent) Configure(_ context.Context, _ any) error { return nil }
+
+func (f *fakeAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+
+func (f *fakeAgent) Card() *agentschema.AgentCard { return nil }
+
+func (f *fakeAgent) Config() any { return nil }
+
+func (f *fakeAgent) AbilityManager() any { return nil }
+
+func (f *fakeAgent) CallbackManager() any { return nil }
+
+func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ int) error { return nil }
+
+func (f *fakeAgent) RegisterRail(_ context.Context, _ any) error { return nil }
+
+func (f *fakeAgent) UnregisterRail(_ context.Context, _ any) error { return nil }
+
 func TestAbilityManager_SetContextEngine(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.SetContextEngine(nil) // 不应 panic，nil 满足 iface.ContextEngine 接口
@@ -531,7 +554,7 @@ func TestAbilityManager_Remove_Workflow(t *testing.T) {
 
 func TestAbilityManager_Remove_Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag := schema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent"))
 	am.Add(ag)
 	removed := am.Remove("ag1")
 	if removed == nil {
@@ -558,8 +581,8 @@ func TestAbilityManager_Add_重复Workflow(t *testing.T) {
 
 func TestAbilityManager_Add_重复Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag1 := schema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent1"))
-	ag2 := schema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent2"))
+	ag1 := agentschema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent1"))
+	ag2 := agentschema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent2"))
 	am.Add(ag1)
 	result := am.Add(ag2)
 	if result.Added {
@@ -738,7 +761,7 @@ func TestAbilityManager_Execute_Agent成功(t *testing.T) {
 	frm := newFakeResourceManager()
 	am := NewAbilityManager(frm)
 
-	ag := schema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
 	am.Add(ag)
 
 	frm.agents[ag.ID] = &fakeAgent{result: map[string]any{"response": "ok"}}
@@ -759,7 +782,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 	frm := newFakeResourceManager()
 	am := NewAbilityManager(frm)
 
-	ag := schema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
 	am.Add(ag)
 	// 不注册 agent 实例
 
@@ -779,7 +802,7 @@ func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
 	frm := newFakeResourceManager()
 	am := NewAbilityManager(frm)
 
-	ag := schema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
 	am.Add(ag)
 
 	frm.agents[ag.ID] = &fakeAgent{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("agent错误"))}

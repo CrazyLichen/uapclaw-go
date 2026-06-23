@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -32,30 +33,115 @@ type Workflow interface {
 	Card() *schema.WorkflowCard
 }
 
-// Agent Agent 执行接口（最小定义，领域六扩展）。
-type Agent interface {
-	// Invoke 调用 Agent
+// BaseAgent Agent 执行的核心行为契约。
+//
+// 对应 Python: openjiuwen/core/single_agent/base.py (BaseAgent)
+//
+// 设计原则：
+//   - Card is required（定义 Agent 是什么）
+//   - Config is optional（定义 Agent 怎么运行）
+//   - 所有子类（ReActAgent/ControllerAgent）实现此接口
+type BaseAgent interface {
+	// ── 核心三方法 ──
+
+	// Configure 配置 Agent。
+	// 对应 Python: BaseAgent.configure(config)
+	Configure(ctx context.Context, config any) error
+
+	// Invoke 非流式调用 Agent。
+	// 对应 Python: BaseAgent.invoke(inputs, session)
 	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
+
+	// Stream 流式调用 Agent。
+	// 对应 Python: BaseAgent.stream(inputs, session, stream_modes)
+	Stream(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error)
+
+	// ── 访问器 ──
+
+	// Card 返回 Agent 身份卡片。
+	// 对应 Python: BaseAgent.card 属性
+	Card() *agentschema.AgentCard
+
+	// Config 返回当前配置。
+	// 对应 Python: BaseAgent.config 属性
+	Config() any
+
+	// AbilityManager 返回能力管理器。
+	// 对应 Python: BaseAgent.ability_manager 属性
+	// ⤵️ 返回类型暂用 any，避免 single_agent → single_agent 循环依赖；
+	// 调用方通过类型断言获取 *AbilityManager。6.2 完成后可考虑提取接口。
+	AbilityManager() any
+
+	// CallbackManager 返回回调管理器。
+	// 对应 Python: BaseAgent.agent_callback_manager 属性
+	// ⤵️ 6.6 回填：返回类型从 any 改为 *AgentCallbackManager
+	CallbackManager() any
+
+	// ── 回调/Rail 注册 ──
+
+	// RegisterCallback 注册回调。
+	// 对应 Python: BaseAgent.register_callback(event, callback, priority)
+	// ⤵️ 6.4-6.6 回填：event/callback 参数类型从 any 改为具体类型
+	RegisterCallback(ctx context.Context, event any, callback any, priority int) error
+
+	// RegisterRail 注册 Rail。
+	// 对应 Python: BaseAgent.register_rail(rail)
+	// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail
+	RegisterRail(ctx context.Context, rail any) error
+
+	// UnregisterRail 注销 Rail。
+	// 对应 Python: BaseAgent.unregister_rail(rail)
+	// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail
+	UnregisterRail(ctx context.Context, rail any) error
 }
 
 // WorkflowOptions 工作流执行选项（预留）。
 type WorkflowOptions struct{}
 
-// AgentOptions Agent 调用选项（预留）。
-type AgentOptions struct{}
+// AgentOptions Agent 调用选项。
+type AgentOptions struct {
+	// Session 会话实例（可选）
+	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
+	// ⤵️ 类型暂用 any，避免 single_agent/interfaces → session 循环依赖；
+	// 调用方通过类型断言获取 *session.Session。后续可考虑提取 Session 接口。
+	Session any
+	// StreamModes 流式输出模式（可选）
+	// 对应 Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
+	StreamModes []stream.StreamMode
+}
 
 // ──────────────────────────── 枚举 ────────────────────────────
-
-// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
-type WorkflowOption func(*WorkflowOptions)
-
-// AgentOption Agent 调用选项函数（预留，领域六扩展）。
-type AgentOption func(*AgentOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
+type WorkflowOption func(*WorkflowOptions)
+
+// AgentOption Agent 调用选项函数。
+type AgentOption func(*AgentOptions)
+
+// WithSession 设置会话实例。
+// ⤵️ 参数类型暂用 any，避免 single_agent/interfaces → session 循环依赖。
+func WithSession(sess any) AgentOption {
+	return func(o *AgentOptions) { o.Session = sess }
+}
+
+// WithStreamModes 设置流式输出模式。
+func WithStreamModes(modes []stream.StreamMode) AgentOption {
+	return func(o *AgentOptions) { o.StreamModes = modes }
+}
+
+// NewAgentOptions 从选项列表构建 AgentOptions。
+func NewAgentOptions(opts ...AgentOption) *AgentOptions {
+	o := &AgentOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

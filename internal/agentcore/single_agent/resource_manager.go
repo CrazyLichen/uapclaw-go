@@ -18,7 +18,7 @@ type ResourceManager interface {
 	// GetWorkflow 按 ID 获取工作流实例
 	GetWorkflow(workflowID string, opts ...ResourceOption) (interfaces.Workflow, error)
 	// GetAgent 按 ID 获取 Agent 实例
-	GetAgent(agentID string, opts ...ResourceOption) (interfaces.Agent, error)
+	GetAgent(agentID string, opts ...ResourceOption) (interfaces.BaseAgent, error)
 	// GetMcpToolInfos 获取 MCP 服务器的工具描述列表
 	GetMcpToolInfos(serverID string) ([]*schema.ToolInfo, error)
 }
@@ -84,7 +84,7 @@ func (n *NoopResourceManager) GetWorkflow(workflowID string, opts ...ResourceOpt
 }
 
 // GetAgent 实现 ResourceManager 接口，返回 NotFound 错误。
-func (n *NoopResourceManager) GetAgent(agentID string, opts ...ResourceOption) (interfaces.Agent, error) {
+func (n *NoopResourceManager) GetAgent(agentID string, opts ...ResourceOption) (interfaces.BaseAgent, error) {
 	return nil, exception.BuildError(
 		exception.StatusAbilityNotFound,
 		exception.WithParam("ability_name", agentID),

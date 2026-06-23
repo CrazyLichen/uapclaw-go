@@ -39,6 +39,10 @@ var (
 	StatusAbilityMalformedArguments = NewStatusCode(
 		"ABILITY_MALFORMED_ARGUMENTS", 120007,
 		"malformed tool arguments, tool: {tool_name}, reason: {error_msg}")
+	// StatusAgentNotConfigured Agent 未配置（invoker 未设置）
+	StatusAgentNotConfigured = NewStatusCode(
+		"AGENT_NOT_CONFIGURED", 120008,
+		"agent not configured, invoker not set, reason: {error_msg}")
 )
 
 // =============================================================================================================

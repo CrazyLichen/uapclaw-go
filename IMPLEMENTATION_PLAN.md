@@ -381,8 +381,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **6.x Agent 模型与接口** | — | | | |
-| 6.1 | ☐ | AgentCard / AgentResult 模型 | `AgentCard`，`AgentResult{TaskID, Status, Artifacts}`，`Part/Artifact` | `openjiuwen/core/single_agent/schema/agent_card.py` · `agent_result.py` |
-| 6.2 | ☐ | BaseAgent 接口 | `Configure/Invoke/Stream`，AbilityManager 挂载 | `openjiuwen/core/single_agent/base.py` |
+| 6.1 | ✅ | AgentCard / AgentResult 模型 | ✅ AgentCard 迁移至 single_agent/schema/；✅ InputParams/OutputParams 改为 []*schema.Param（与 ToolCard 一致），ToolInfo() 调 ToJSONSchemaMap 生成 JSON Schema；✅ WithInputParamsFromStruct[I]/WithOutputParamsFromStruct[O] 泛型 Option 从 Go struct 反射提取参数（对齐 Python Type[BaseModel]）；✅ TaskStatus 9 值枚举（controller/schema/）；✅ Part（含 RawBytes 自定义 JSON marshal 对齐 Python UTF-8 decode）；✅ Artifact（artifactId camelCase）；✅ AgentResult（taskID snake_case + sessionId camelCase）；✅ 便捷构造函数；✅ 测试全部通过 | `openjiuwen/core/single_agent/schema/agent_card.py` · `agent_result.py` |
+| 6.2 | ✅ | BaseAgent 接口 | ✅ BaseAgent 接口（Configure/Invoke/Stream + Card/Config/AbilityManager/CallbackManager/RegisterCallback/RegisterRail/UnregisterRail）；✅ WarpBaseAgent 默认实现（agentInvoker 虚分发 + emit_before/emit_after 回调骨架）；✅ AgentCallEventType/AgentCallEventData/AgentCallbackFunc 新增到 CallbackFramework（OnAgent/OffAgent/TriggerAgent）；✅ StatusAgentNotConfigured 错误码；✅ AgentOptions 扩展（Session/StreamModes + WithSession/WithStreamModes）；✅ 测试全部通过 | `openjiuwen/core/single_agent/base.py` |
 | 6.3 | ☐ | ReActAgentConfig | ReAct Agent 配置 | `openjiuwen/core/single_agent/agents/react_agent.py` (ReActAgentConfig) |
 | **6.x 回调框架** | — | | | |
 | 6.4 | ☐ | AgentCallbackEvent 枚举 | 10 种事件类型 | `openjiuwen/core/single_agent/agent_callback_manager.py` |

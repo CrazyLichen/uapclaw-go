@@ -42,6 +42,8 @@ type CallbackFramework struct {
 	customCallbacks map[string][]CustomCallbackFunc
 	// contextCallbacks 上下文事件回调函数注册表
 	contextCallbacks map[ContextCallEventType][]ContextCallbackFunc
+	// agentCallbacks Agent 回调函数注册表
+	agentCallbacks map[AgentCallEventType][]AgentCallbackFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -90,6 +92,7 @@ func NewCallbackFramework() *CallbackFramework {
 		sessionCallbacks: make(map[SessionCallEventType][]SessionCallbackFunc),
 		customCallbacks:  make(map[string][]CustomCallbackFunc),
 		contextCallbacks: make(map[ContextCallEventType][]ContextCallbackFunc),
+		agentCallbacks:    make(map[AgentCallEventType][]AgentCallbackFunc),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
@@ -376,6 +379,62 @@ func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCa
 
 	fw.mu.RLock()
 	callbacks := fw.contextCallbacks[data.Event]
+	fw.mu.RUnlock()
+
+	results := make([]any, 0, len(callbacks))
+	for _, fn := range callbacks {
+		result := fn(ctx, data)
+		results = append(results, result)
+	}
+	return results
+}
+
+// OnAgent 注册 Agent 事件回调函数。
+//
+// 同一事件可注册多个回调，按注册顺序执行。
+//
+// 对应 Python: AsyncCallbackFramework.on(event, callback)
+func (fw *CallbackFramework) OnAgent(event AgentCallEventType, fn AgentCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.agentCallbacks[event] = append(fw.agentCallbacks[event], fn)
+}
+
+// OffAgent 注销 Agent 事件回调函数。
+//
+// 移除指定事件中与 fn 匹配的回调（按指针匹配）。
+// 若事件下无匹配回调，不做任何操作。
+//
+// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
+func (fw *CallbackFramework) OffAgent(event AgentCallEventType, fn AgentCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.agentCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, cb := range callbacks {
+		if fmt.Sprintf("%p", cb) == fmt.Sprintf("%p", fn) {
+			fw.agentCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerAgent 触发 Agent 事件，按注册顺序调用所有回调，返回所有回调结果。
+//
+// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
+//
+// 对应 Python: AsyncCallbackFramework.trigger(event, **kwargs) → List[Any]
+func (fw *CallbackFramework) TriggerAgent(ctx context.Context, data *AgentCallEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	fw.mu.RLock()
+	callbacks := fw.agentCallbacks[data.Event]
 	fw.mu.RUnlock()
 
 	results := make([]any, 0, len(callbacks))
