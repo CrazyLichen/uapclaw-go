@@ -52,13 +52,13 @@
 //	        ├── McpToolCard — MCP 工具卡片（3.5 节）
 //	        └── RestfulApiCard — RESTful API 工具卡片（3.8 节，InputSchema 替代 InputParams）
 //
-// 回调生命周期：
+// 回调生命周期（对齐 Python _ToolMeta 两步装饰链顺序）：
 //
 //	LifecycleTool 包装器在 Invoke/Stream 调用前后自动触发以下事件
 //	（事件定义在 agentcore/runner/callback/ 包中）：
-//	  TOOL_CALL_STARTED → TOOL_INVOKE_INPUT → [执行] → TOOL_INVOKE_OUTPUT → TOOL_CALL_FINISHED
+//	  Invoke: emit_before(INVOKE_INPUT) → TransformIO(input) → STARTED → [执行] → FINISHED → TransformIO(output) → emit_after(INVOKE_OUTPUT)
+//	  Stream: emit_before(STREAM_INPUT) → TransformIO(input) → STARTED → [执行] → per-chunk{TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT} → FINISHED → emit_after(STREAM_OUTPUT)
 //	  异常时触发 TOOL_CALL_ERROR
-//	  Stream 模式额外触发 TOOL_RESULT_RECEIVED（逐 chunk）
 //
 // 文件目录：
 //
