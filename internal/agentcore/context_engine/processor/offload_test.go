@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
@@ -254,4 +255,130 @@ func TestOffloadMessages_filesystem无路径(t *testing.T) {
 	if result == nil {
 		t.Fatal("fallback 后应返回 OffloadMessage")
 	}
+}
+
+// TestOffloadMessages_空消息 验证空消息列表返回 nil
+func TestOffloadMessages_空消息(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	mc := &mockModelContext{sessionID: "test-session"}
+
+	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", nil)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestOffloadMessages_nilModelContext 验证 nil ModelContext 返回 nil
+func TestOffloadMessages_nilModelContext(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+
+	result, err := p.OffloadMessages(context.Background(), nil, "user", "摘要", msgs,
+		iface.WithOffloadType("in_memory"),
+	)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestOffloadMessages_含ToolCallID 验证带 ToolCallID 的 offload
+func TestOffloadMessages_含ToolCallID(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+	mc := &mockModelContext{sessionID: "test-session"}
+
+	result, err := p.OffloadMessages(context.Background(), mc, "tool", "摘要", msgs,
+		iface.WithOffloadType("in_memory"),
+		iface.WithOffloadHandle("handle-tc"),
+		iface.WithToolCallID("call_1"),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// TestOffloadMessages_含Name和Metadata 验证带 Name 和 Metadata 的 offload
+func TestOffloadMessages_含Name和Metadata(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+	mc := &mockModelContext{sessionID: "test-session"}
+
+	result, err := p.OffloadMessages(context.Background(), mc, "assistant", "摘要", msgs,
+		iface.WithOffloadType("in_memory"),
+		iface.WithOffloadHandle("handle-nm"),
+		iface.WithName("offload_msg"),
+		iface.WithMetadata(map[string]any{"key": "val"}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// TestRoleTypeFromRole 根据 role 字符串返回 RoleType 枚举值
+func TestRoleTypeFromRole(t *testing.T) {
+	t.Run("assistant", func(t *testing.T) {
+		assert.Equal(t, llm_schema.RoleTypeAssistant, roleTypeFromRole("assistant"))
+	})
+	t.Run("user", func(t *testing.T) {
+		assert.Equal(t, llm_schema.RoleTypeUser, roleTypeFromRole("user"))
+	})
+	t.Run("system", func(t *testing.T) {
+		assert.Equal(t, llm_schema.RoleTypeSystem, roleTypeFromRole("system"))
+	})
+	t.Run("tool", func(t *testing.T) {
+		assert.Equal(t, llm_schema.RoleTypeTool, roleTypeFromRole("tool"))
+	})
+	t.Run("未知角色", func(t *testing.T) {
+		assert.Equal(t, llm_schema.RoleTypeUser, roleTypeFromRole("unknown"))
+	})
+}
+
+// TestWriteOffloadToFile_相对路径失败 验证相对路径写入返回 false
+func TestWriteOffloadToFile_相对路径失败(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+
+	result := p.writeOffloadToFile("session1", "handle1", "relative/path.json", msgs, nil)
+	assert.False(t, result)
+}
+
+// TestWriteOffloadToFile_绝对路径成功 验证绝对路径写入成功
+func TestWriteOffloadToFile_绝对路径成功(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+	tmpDir := t.TempDir()
+	offloadPath := filepath.Join(tmpDir, "test.json")
+
+	result := p.writeOffloadToFile("session1", "handle1", offloadPath, msgs, nil)
+	assert.True(t, result)
+
+	// 验证文件已写入
+	data, err := os.ReadFile(offloadPath)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, data)
+}
+
+// TestOffloadMessages_filesystem_空OffloadPath 验证 filesystem 模式且 offloadMessagesToFilesystem 中 offloadPath 为空
+func TestOffloadMessages_filesystem_空OffloadPath(t *testing.T) {
+	c := &testConfig{Name: "test"}
+	p := NewBaseProcessor(c)
+	msgs := []llm_schema.BaseMessage{llm_schema.NewUserMessage("hello")}
+	mc := &mockModelContext{sessionID: "test-session"}
+
+	// 提供绝对路径的 offloadPath，使写入成功，但 offloadMessagesToFilesystem 中拼接路径
+	tmpDir := t.TempDir()
+	offloadPath := filepath.Join(tmpDir, "offload", "empty_path_test.json")
+	result, err := p.OffloadMessages(context.Background(), mc, "user", "摘要", msgs,
+		iface.WithOffloadType("filesystem"),
+		iface.WithOffloadHandle("handle-empty"),
+		iface.WithOffloadPath(offloadPath),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	offloadable, ok := result.(schema.Offloadable)
+	assert.True(t, ok)
+	info := offloadable.GetOffloadInfo()
+	assert.Equal(t, "filesystem", info.OffloadType)
 }

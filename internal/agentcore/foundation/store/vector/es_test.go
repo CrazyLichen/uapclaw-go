@@ -1800,3 +1800,335 @@ func TestEsBuildMappings_带ESVectorField配置(t *testing.T) {
 		t.Error("field_name 不应出现在 mapping 中")
 	}
 }
+
+// TestESVectorStore_CreateCollection_并发创建 验证并发创建时 resource_already_exists_exception 静默返回
+func TestESVectorStore_CreateCollection_并发创建(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"HEAD": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			},
+			"PUT ": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprint(w, `{"error":{"type":"resource_already_exists_exception","reason":"index already exists"}}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	schema := createESTestSchema()
+	ctx := context.Background()
+
+	err := s.CreateCollection(ctx, "test_coll", schema, WithDistanceMetric("COSINE"))
+	if err != nil {
+		t.Fatalf("并发创建应静默返回 nil, error = %v", err)
+	}
+}
+
+// TestESVectorStore_CreateCollection_客户端错误 验证客户端创建失败
+func TestESVectorStore_CreateCollection_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	schema := createESTestSchema()
+	ctx := context.Background()
+	err := s.CreateCollection(ctx, "test_coll", schema)
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_DeleteCollection_客户端错误 验证客户端创建失败
+func TestESVectorStore_DeleteCollection_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	err := s.DeleteCollection(ctx, "test_coll")
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_CollectionExists_客户端错误 验证客户端创建失败
+func TestESVectorStore_CollectionExists_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	_, err := s.CollectionExists(ctx, "test_coll")
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_Search_客户端错误 验证客户端创建失败
+func TestESVectorStore_Search_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	_, err := s.Search(ctx, "test_coll", []float64{0.1}, "embedding", 5, nil)
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_DeleteDocsByIDs_客户端错误 验证客户端创建失败
+func TestESVectorStore_DeleteDocsByIDs_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	err := s.DeleteDocsByIDs(ctx, "test_coll", []string{"id1"})
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_DeleteDocsByFilters_客户端错误 验证客户端创建失败
+func TestESVectorStore_DeleteDocsByFilters_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	err := s.DeleteDocsByFilters(ctx, "test_coll", map[string]any{"status": "active"})
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_UpdateCollectionMetadata_schemaVersion非整数 验证 schema_version 为非整数类型时报错
+func TestESVectorStore_UpdateCollectionMetadata_schemaVersion非整数(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	ctx := context.Background()
+
+	err := s.UpdateCollectionMetadata(ctx, "test_coll", map[string]any{
+		"schema_version": "not_int",
+	})
+	if err == nil {
+		t.Error("schema_version 为非整数应返回错误")
+	}
+}
+
+// TestESVectorStore_UpdateCollectionMetadata_客户端错误 验证客户端创建失败
+func TestESVectorStore_UpdateCollectionMetadata_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	err := s.UpdateCollectionMetadata(ctx, "test_coll", map[string]any{"key": "val", "schema_version": 0})
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_GetCollectionMetadata_客户端错误 验证客户端创建失败
+func TestESVectorStore_GetCollectionMetadata_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	_, err := s.GetCollectionMetadata(ctx, "test_coll")
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_AddDocs_客户端错误 验证客户端创建失败
+func TestESVectorStore_AddDocs_客户端错误(t *testing.T) {
+	s := NewESVectorStore([]string{"http://localhost:9200"}, "", "")
+	s.createClient = func(addrs []string, user, pass string) (esClient, error) {
+		return nil, fmt.Errorf("连接失败")
+	}
+
+	ctx := context.Background()
+	docs := []map[string]any{{"id": "1"}}
+	err := s.AddDocs(ctx, "test_coll", docs)
+	if err == nil {
+		t.Error("客户端创建失败应返回错误")
+	}
+}
+
+// TestESVectorStore_Search_NumCandidates 验证自定义 NumCandidates 生效
+func TestESVectorStore_Search_NumCandidates(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"__collection_metadata__": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"_source":{"_meta":{"distance_metric":"COSINE"}}}`)
+			},
+			"_search": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"hits":{"hits":[]}}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	_, err := s.Search(ctx, "test_coll", []float64{0.1, 0.2, 0.3}, "embedding", 5, nil,
+		WithNumCandidates(500))
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+}
+
+// TestESVectorStore_AddDocs_请求失败 验证 AddDocs 请求失败时返回错误
+func TestESVectorStore_AddDocs_请求失败(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"__collection_metadata__": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, `{"found":false}`)
+			},
+			"_bulk": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"error":"bulk failed"}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	docs := []map[string]any{{"id": "doc1", "embedding": []float64{0.1}}}
+	err := s.AddDocs(ctx, "test_coll", docs)
+	if err == nil {
+		t.Error("AddDocs 请求失败应返回错误")
+	}
+}
+
+// TestESVectorStore_DeleteDocsByIDs_请求失败 验证 DeleteDocsByIDs 请求失败时返回错误
+func TestESVectorStore_DeleteDocsByIDs_请求失败(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"_bulk": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"error":"bulk delete failed"}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	err := s.DeleteDocsByIDs(ctx, "test_coll", []string{"id1"})
+	if err == nil {
+		t.Error("DeleteDocsByIDs 请求失败应返回错误")
+	}
+}
+
+// TestESVectorStore_DeleteDocsByIDs_刷新失败 验证刷新失败是非致命错误
+func TestESVectorStore_DeleteDocsByIDs_刷新失败(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"_bulk": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"errors":false,"items":[{"delete":{"status":200}}]}`)
+			},
+			"_refresh": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"error":"refresh failed"}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	err := s.DeleteDocsByIDs(ctx, "test_coll", []string{"id1"})
+	if err != nil {
+		t.Fatalf("刷新失败不应返回 error, got: %v", err)
+	}
+}
+
+// TestESVectorStore_GetSchema_mapping反射失败 验证 mapping 反射失败时返回错误
+func TestESVectorStore_GetSchema_mapping反射失败(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"__collection_metadata__": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, `{"found":false}`)
+			},
+			"mapping": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"error":"mapping failed"}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	_, err := s.GetSchema(ctx, "test_coll")
+	if err == nil {
+		t.Error("mapping 反射失败应返回错误")
+	}
+}
+
+// TestESVectorStore_GetSchema_mapping格式异常 验证 mapping 格式异常时返回错误
+func TestESVectorStore_GetSchema_mapping格式异常(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"__collection_metadata__": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, `{"found":false}`)
+			},
+			"mapping": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"other_index": {"mappings": {"properties": {}}}}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	_, err := s.GetSchema(ctx, "test_coll")
+	if err == nil {
+		t.Error("mapping 格式异常应返回错误")
+	}
+}
+
+// TestESVectorStore_Search_搜索失败 验证搜索请求失败时返回错误
+func TestESVectorStore_Search_搜索失败(t *testing.T) {
+	handler := &esMockHandler{
+		responses: map[string]func(w http.ResponseWriter, r *http.Request){
+			"__collection_metadata__": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `{"_source":{"_meta":{"distance_metric":"COSINE"}}}`)
+			},
+			"_search": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, `{"error":"search failed"}`)
+			},
+		},
+	}
+	s := newTestESVectorStore(handler)
+	defer s.Close()
+
+	ctx := context.Background()
+	_, err := s.Search(ctx, "test_coll", []float64{0.1, 0.2, 0.3}, "embedding", 5, nil)
+	if err == nil {
+		t.Error("搜索失败应返回错误")
+	}
+}

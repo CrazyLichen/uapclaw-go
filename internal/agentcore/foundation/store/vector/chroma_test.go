@@ -1438,3 +1438,279 @@ func newChromaTestStore() *ChromaVectorStore {
 	}
 	return s
 }
+
+// TestChromaWhereFilter_UnmarshalJSON 验证 UnmarshalJSON 实现
+func TestChromaWhereFilter_UnmarshalJSON(t *testing.T) {
+	// nil clause 时 UnmarshalJSON 直接返回 nil
+	f := &chromaWhereFilter{clause: nil}
+	err := f.UnmarshalJSON([]byte(`{"key":"value"}`))
+	if err != nil {
+		t.Errorf("UnmarshalJSON with nil clause error = %v, 期望 nil", err)
+	}
+
+	// 有 clause 时委托给 clause
+	clause := chromav2.EqString("key", "value")
+	f2 := &chromaWhereFilter{clause: clause}
+	err = f2.UnmarshalJSON([]byte(`{"key":"value"}`))
+	// 不应 panic，具体行为由 SDK 决定
+	_ = err
+}
+
+// TestChromaVectorStore_getCollection_缓存未命中 验证缓存未命中时从客户端获取
+func TestChromaVectorStore_getCollection_缓存未命中(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 清除缓存模拟未命中
+	s.mu.Lock()
+	delete(s.collectionCache, "test_coll")
+	s.mu.Unlock()
+
+	// 再次获取应从客户端重新加载
+	coll, err := s.getCollection(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("getCollection() error = %v", err)
+	}
+	if coll == nil {
+		t.Error("getCollection() 不应返回 nil")
+	}
+}
+
+// TestChromaVectorStore_getFieldMapping_缓存命中 验证字段映射缓存命中
+func TestChromaVectorStore_getFieldMapping_缓存命中(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 字段映射已在 CreateCollection 时缓存
+	fm, err := s.getFieldMapping(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("getFieldMapping() error = %v", err)
+	}
+	if fm == nil {
+		t.Error("getFieldMapping() 不应返回 nil")
+	}
+	if fm.PKField != "id" {
+		t.Errorf("PKField = %v, 期望 id", fm.PKField)
+	}
+}
+
+// TestChromaVectorStore_getFieldMapping_缓存未命中 验证字段映射缓存未命中时从元数据恢复
+func TestChromaVectorStore_getFieldMapping_缓存未命中(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 清除字段映射缓存
+	s.mu.Lock()
+	delete(s.fieldMappingCache, "test_coll")
+	s.mu.Unlock()
+
+	// 应从 CollectionMetadata 恢复
+	fm, err := s.getFieldMapping(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("getFieldMapping() error = %v", err)
+	}
+	if fm == nil {
+		t.Error("getFieldMapping() 不应返回 nil")
+	}
+}
+
+// TestChromaVectorStore_getFieldMapping_集合不存在 验证不存在的集合返回错误
+func TestChromaVectorStore_getFieldMapping_集合不存在(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+
+	_, err := s.getFieldMapping(ctx, "not_exist")
+	if err == nil {
+		t.Error("getFieldMapping() 不存在的集合应返回错误")
+	}
+}
+
+// TestGetScoreConverter_小写 验证小写距离度量也能正确匹配
+func TestGetScoreConverter_小写(t *testing.T) {
+	converter := getScoreConverter("cosine")
+	if converter == nil {
+		t.Error("getScoreConverter(cosine) 不应返回 nil")
+	}
+	converter = getScoreConverter("l2")
+	if converter == nil {
+		t.Error("getScoreConverter(l2) 不应返回 nil")
+	}
+	converter = getScoreConverter("ip")
+	if converter == nil {
+		t.Error("getScoreConverter(ip) 不应返回 nil")
+	}
+}
+
+// TestToFloat32Slice_空Float32 验证空 []float32 不返回 nil（长度为 0 的合法向量）
+func TestToFloat32Slice_空Float32(t *testing.T) {
+	emb := toFloat32Slice([]float32{})
+	if emb == nil {
+		t.Error("toFloat32Slice([]float32{}) 不应返回 nil")
+	}
+}
+
+// TestToFloat32Slice_float32InAny 验证 []any 中 float32 元素转换
+func TestToFloat32Slice_float32InAny(t *testing.T) {
+	emb := toFloat32Slice([]any{float32(0.1), float32(0.2)})
+	if emb == nil {
+		t.Error("toFloat32Slice([]any{float32}) 不应返回 nil")
+	}
+}
+
+// TestToFloat32Slice_intInAny 验证 []any 中 int 元素转换
+func TestToFloat32Slice_intInAny(t *testing.T) {
+	emb := toFloat32Slice([]any{int(1), int(2)})
+	if emb == nil {
+		t.Error("toFloat32Slice([]any{int}) 不应返回 nil")
+	}
+}
+
+// TestChromaVectorStore_GetSchema_元数据无Schema 验证元数据中无 schema 时回退到 inferDefaultSchema
+func TestChromaVectorStore_GetSchema_元数据无Schema(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 获取 Schema 时，由于 CreateCollection 已缓存字段映射，
+	// 即使元数据中没有 schema 字段也能推断出默认 schema
+	gotSchema, err := s.GetSchema(ctx, "test_coll")
+	if err != nil {
+		t.Fatalf("GetSchema() error = %v", err)
+	}
+	if gotSchema == nil {
+		t.Fatal("GetSchema() 不应返回 nil")
+	}
+}
+
+// TestChromaVectorStore_Search_有结果有Metadata 验证搜索结果包含 metadata 字段
+func TestChromaVectorStore_Search_有结果有Metadata(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 构造带 metadata 的搜索结果
+	meta := chromav2.NewMetadataFromMap(map[string]interface{}{"category": "test"})
+	queryResult := &chromav2.QueryResultImpl{
+		IDLists: []chromav2.DocumentIDs{
+			{chromav2.DocumentID("doc1")},
+		},
+		DocumentsLists: []chromav2.Documents{
+			{chromav2.NewTextDocument("hello")},
+		},
+		MetadatasLists: []chromav2.DocumentMetadatas{
+			{meta},
+		},
+		DistancesLists: []embeddings.Distances{
+			{0.2},
+		},
+	}
+
+	fakeColl, ok := s.collectionCache["test_coll"].(*fakeChromaCollection)
+	if !ok {
+		t.Skip("需要 fakeChromaCollection 类型")
+	}
+	s.collectionCache["test_coll"] = &fakeChromaCollectionWithQuery{
+		fakeChromaCollection: fakeColl,
+		queryResult:          queryResult,
+	}
+
+	results, err := s.Search(ctx, "test_coll", []float64{0.1, 0.2}, "embedding", 5, nil)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search() 返回 %d 结果, 期望 1", len(results))
+	}
+}
+
+// TestChromaVectorStore_GetAllDocuments_获取失败 验证集合获取文档失败时返回错误
+func TestChromaVectorStore_GetAllDocuments_获取失败(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	fakeColl, ok := s.collectionCache["test_coll"].(*fakeChromaCollection)
+	if !ok {
+		t.Skip("需要 fakeChromaCollection 类型")
+	}
+	s.collectionCache["test_coll"] = &fakeChromaCollectionWithQuery{
+		fakeChromaCollection: fakeColl,
+		getErr:               fmt.Errorf("get failed"),
+	}
+
+	_, err := s.GetAllDocuments(ctx, "test_coll")
+	if err == nil {
+		t.Error("GetAllDocuments() 获取失败应返回错误")
+	}
+}
+
+// TestChromaVectorStore_DeleteDocsByFilters_空WhereClause 验证过滤条件不支持的类型返回 nil
+func TestChromaVectorStore_DeleteDocsByFilters_空WhereClause(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	// 使用不支持的值类型，buildChromaWhereFilter 返回 nil
+	err := s.DeleteDocsByFilters(ctx, "test_coll", map[string]any{"data": []string{"a", "b"}})
+	if err != nil {
+		t.Errorf("DeleteDocsByFilters(unsupported type) error = %v, 期望 nil", err)
+	}
+}
+
+// TestChromaVectorStore_AddDocs_any向量 验证 []any 类型向量转换
+func TestChromaVectorStore_AddDocs_any向量(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	docs := []map[string]any{
+		{"id": "doc1", "text": "hello", "embedding": []any{float64(0.1), float64(0.2), float64(0.3)}},
+	}
+	err := s.AddDocs(ctx, "test_coll", docs)
+	if err != nil {
+		t.Fatalf("AddDocs() with []any vectors error = %v", err)
+	}
+}
+
+// TestChromaVectorStore_AddDocs_无向量 验证文档不含向量字段时仍能插入（向量列表为空）
+func TestChromaVectorStore_AddDocs_无向量(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	docs := []map[string]any{
+		{"id": "doc1", "text": "hello"},
+	}
+	err := s.AddDocs(ctx, "test_coll", docs)
+	if err != nil {
+		t.Fatalf("AddDocs() without embedding error = %v", err)
+	}
+}
+
+// TestChromaVectorStore_AddDocs_元数据转换失败 验证文档 metadata 含不可序列化值时不报错
+func TestChromaVectorStore_AddDocs_元数据转换失败(t *testing.T) {
+	s := newChromaTestStore()
+	ctx := context.Background()
+	schema := createTestSchema()
+	_ = s.CreateCollection(ctx, "test_coll", schema)
+
+	docs := []map[string]any{
+		{"id": "doc1", "text": "hello", "embedding": []float32{0.1}, "extra": []string{"a", "b"}},
+	}
+	err := s.AddDocs(ctx, "test_coll", docs)
+	if err != nil {
+		t.Fatalf("AddDocs() with non-scalar metadata error = %v", err)
+	}
+}

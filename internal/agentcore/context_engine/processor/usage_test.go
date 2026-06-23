@@ -3,6 +3,7 @@ package processor
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -290,4 +291,70 @@ func TestMergeCompressionUsage_modelName左nil取右(t *testing.T) {
 	if result["model_name"] != "qwen-plus" {
 		t.Errorf("model_name = %v, want qwen-plus（left 为 nil 时取 right）", result["model_name"])
 	}
+}
+
+// TestToFloat64 将 any 转为 float64
+func TestToFloat64(t *testing.T) {
+	t.Run("float64", func(t *testing.T) {
+		assert.Equal(t, 3.14, toFloat64(3.14))
+	})
+	t.Run("int", func(t *testing.T) {
+		assert.Equal(t, float64(42), toFloat64(42))
+	})
+	t.Run("int64", func(t *testing.T) {
+		assert.Equal(t, float64(100), toFloat64(int64(100)))
+	})
+	t.Run("其他类型", func(t *testing.T) {
+		assert.Equal(t, float64(0), toFloat64("not a number"))
+	})
+	t.Run("nil", func(t *testing.T) {
+		assert.Equal(t, float64(0), toFloat64(nil))
+	})
+}
+
+// TestToSliceOfMaps 将 any 转为 []map[string]any
+func TestToSliceOfMaps(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		assert.Nil(t, toSliceOfMaps(nil))
+	})
+	t.Run("正确类型", func(t *testing.T) {
+		input := []map[string]any{{"a": 1}, {"b": 2}}
+		assert.Equal(t, input, toSliceOfMaps(input))
+	})
+	t.Run("[]any类型", func(t *testing.T) {
+		input := []any{
+			map[string]any{"a": 1},
+			map[string]any{"b": 2},
+		}
+		result := toSliceOfMaps(input)
+		assert.Len(t, result, 2)
+		assert.Equal(t, 1, result[0]["a"])
+	})
+	t.Run("[]any含非map元素", func(t *testing.T) {
+		input := []any{
+			map[string]any{"a": 1},
+			"not a map",
+		}
+		result := toSliceOfMaps(input)
+		assert.Len(t, result, 1)
+	})
+	t.Run("其他类型", func(t *testing.T) {
+		assert.Nil(t, toSliceOfMaps("not a slice"))
+	})
+}
+
+// TestToInt 将 any 转为 int
+func TestToInt_覆盖(t *testing.T) {
+	t.Run("int", func(t *testing.T) {
+		assert.Equal(t, 42, toInt(42))
+	})
+	t.Run("int64", func(t *testing.T) {
+		assert.Equal(t, 100, toInt(int64(100)))
+	})
+	t.Run("float64", func(t *testing.T) {
+		assert.Equal(t, 3, toInt(3.7))
+	})
+	t.Run("其他类型", func(t *testing.T) {
+		assert.Equal(t, 0, toInt("not a number"))
+	})
 }

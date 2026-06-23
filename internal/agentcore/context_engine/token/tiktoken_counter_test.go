@@ -1,12 +1,41 @@
 package token
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tiktoken-go/tokenizer"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// errorCodec 模拟编码器 Count 方法返回错误的 mock
+type errorCodec struct{}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// Count 模拟编码失败
+func (errorCodec) Count(string) (int, error) {
+	return 0, errors.New("mock encode error")
+}
+
+// Encode 满足 Codec 接口
+func (errorCodec) Encode(string) ([]uint, []string, error) {
+	return nil, nil, errors.New("mock encode error")
+}
+
+// Decode 满足 Codec 接口
+func (errorCodec) Decode([]uint) (string, error) {
+	return "", errors.New("mock decode error")
+}
+
+// GetName 满足 Codec 接口
+func (errorCodec) GetName() string {
+	return "error-mock"
+}
 
 // TestNewTiktokenCounter_默认模型 验证 model 为空时默认使用 "gpt-4"
 func TestNewTiktokenCounter_默认模型(t *testing.T) {
@@ -353,4 +382,105 @@ func TestFallbackCount_CountTools(t *testing.T) {
 	count, err := tc.CountTools(tools, "")
 	assert.Error(t, err, "enc 为 nil 时 CountTools 应返回 error")
 	assert.Equal(t, 0, count, "enc 为 nil 时 CountTools 应返回 0")
+}
+
+// TestFallbackCount_编码失败时降级 验证 enc.Count 返回 error 时走 fallbackCount 降级路径
+func TestFallbackCount_编码失败时降级(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{}, // 模拟编码失败
+	}
+
+	text := "hello world test text"
+	count, err := tc.Count(text, "")
+	// 编码失败时应走 fallbackCount，返回 len(text)//4 且 error 为 nil
+	assert.NoError(t, err, "编码失败走降级路径，不应返回 error")
+	assert.Equal(t, len(text)/4, count, "降级值应为 len(text)//4")
+}
+
+// TestFallbackCount_警告只输出一次 验证 fallbackCount 的 fallbackWarned 标志只警告一次
+func TestFallbackCount_警告只输出一次(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{},
+	}
+
+	// 第一次调用，fallbackWarned 应变为 true
+	count1, err1 := tc.Count("first", "")
+	assert.NoError(t, err1)
+	assert.True(t, tc.fallbackWarned, "首次调用 fallbackCount 后 fallbackWarned 应为 true")
+	assert.Equal(t, len("first")/4, count1)
+
+	// 第二次调用，fallbackWarned 仍为 true（不再重复警告）
+	count2, err2 := tc.Count("second", "")
+	assert.NoError(t, err2)
+	assert.True(t, tc.fallbackWarned)
+	assert.Equal(t, len("second")/4, count2)
+}
+
+// TestFallbackCount_空文本降级 验证编码失败时空文本的降级计算
+func TestFallbackCount_空文本降级(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{},
+	}
+
+	count, err := tc.Count("", "")
+	assert.NoError(t, err, "编码失败走降级路径，不应返回 error")
+	assert.Equal(t, 0, count, "空文本降级值为 0")
+}
+
+// TestCountMessages_编码失败时降级 验证 enc.Count 返回 error 时 CountMessages 走降级路径
+func TestCountMessages_编码失败时降级(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{},
+	}
+
+	messages := []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("hello world"),
+	}
+	count, err := tc.CountMessages(messages, "")
+	// 编码失败时 Count 走降级路径返回 (fallback, nil)，CountMessages 应正常完成
+	assert.NoError(t, err, "编码失败走降级路径，CountMessages 不应返回 error")
+	assert.Greater(t, count, 0, "降级计算后 token 数应大于 0")
+}
+
+// TestCountTools_编码失败时降级 验证 enc.Count 返回 error 时 CountTools 走降级路径
+func TestCountTools_编码失败时降级(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{},
+	}
+
+	tools := []*schema.ToolInfo{
+		schema.NewToolInfo("search", "Search the web", nil),
+	}
+	count, err := tc.CountTools(tools, "")
+	// 编码失败时 Count 走降级路径返回 (fallback, nil)，CountTools 应正常完成
+	assert.NoError(t, err, "编码失败走降级路径，CountTools 不应返回 error")
+	assert.Greater(t, count, 0, "降级计算后 token 数应大于 0")
+}
+
+// TestNewTiktokenCounter_映射表命中但Get失败 验证 model2enc 命中但 tokenizer.Get 失败时 enc 为 nil
+func TestNewTiktokenCounter_映射表命中但Get失败(t *testing.T) {
+	// 无法轻易模拟 tokenizer.Get 失败，但可以通过验证现有模型映射都正常工作来间接覆盖
+	// 此测试验证 model2enc 中所有模型都能成功创建编码器（不触发降级）
+	for model, encName := range model2enc {
+		_, err := tokenizer.Get(encName)
+		assert.NoError(t, err, "模型 %s 映射的编码 %s 应可正常获取", model, encName)
+	}
+}
+
+// TestCount_编码失败时返回降级值 验证 Count 在编码失败时返回降级值而非 error
+func TestCount_编码失败时返回降级值(t *testing.T) {
+	tc := &TiktokenCounter{
+		model: "test-model",
+		enc:   errorCodec{},
+	}
+
+	// 编码失败走降级路径
+	count, err := tc.Count("hello world", "")
+	assert.NoError(t, err, "编码失败应走降级路径，不返回 error")
+	assert.Equal(t, len("hello world")/4, count)
 }

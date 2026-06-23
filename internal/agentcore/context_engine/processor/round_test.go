@@ -3,6 +3,7 @@ package processor
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -314,4 +315,45 @@ func TestFindAllDialogueRound_连续user消息(t *testing.T) {
 	if result[0][1] == nil || *result[0][1] != 2 {
 		t.Errorf("assistantIdx = %v, want 2", result[0][1])
 	}
+}
+
+// TestGetToolCallID 从消息中提取 tool_call_id
+func TestGetToolCallID(t *testing.T) {
+	t.Run("ToolMessage有ID", func(t *testing.T) {
+		msg := llm_schema.NewToolMessage("call_123", "result")
+		assert.Equal(t, "call_123", GetToolCallID(msg))
+	})
+	t.Run("ToolMessage空ID", func(t *testing.T) {
+		msg := llm_schema.NewToolMessage("", "result")
+		assert.Equal(t, "", GetToolCallID(msg))
+	})
+	t.Run("非ToolMessage", func(t *testing.T) {
+		msg := llm_schema.NewUserMessage("hello")
+		assert.Equal(t, "", GetToolCallID(msg))
+	})
+	t.Run("AssistantMessage", func(t *testing.T) {
+		msg := llm_schema.NewAssistantMessage("hello")
+		assert.Equal(t, "", GetToolCallID(msg))
+	})
+}
+
+// TestGetToolCalls 从消息中获取 tool_calls（间接覆盖）
+func TestGetToolCalls_覆盖(t *testing.T) {
+	t.Run("AssistantMessage无ToolCalls", func(t *testing.T) {
+		msg := llm_schema.NewAssistantMessage("hello")
+		// GroupCompletedAPIRounds 会调用 getToolCalls
+		rounds := GroupCompletedAPIRounds([]llm_schema.BaseMessage{msg})
+		// 单独的 assistant 不含 tool_calls 构成一个完成轮次
+		assert.Len(t, rounds, 1)
+		assert.Equal(t, [2]int{0, 1}, rounds[0])
+	})
+}
+
+// TestGetToolCallID_非导出 从 ToolMessage 中获取 tool_call_id（间接覆盖 getToolCallID）
+func TestGetToolCallID_非导出覆盖(t *testing.T) {
+	t.Run("ToolMessage覆盖非导出getToolCallID", func(t *testing.T) {
+		msg := llm_schema.NewToolMessage("tc-abc", "data")
+		// GetToolCallID 内部调用 getToolCallID，覆盖非导出函数
+		assert.Equal(t, "tc-abc", GetToolCallID(msg))
+	})
 }

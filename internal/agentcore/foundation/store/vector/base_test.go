@@ -788,3 +788,214 @@ func TestOptions_空选项(t *testing.T) {
 		t.Errorf("OutputFields = %v, 期望 nil", o.OutputFields)
 	}
 }
+
+// TestOptions_WithShardsNum 验证 WithShardsNum 选项生效
+func TestOptions_WithShardsNum(t *testing.T) {
+	o := newOptions(WithShardsNum(3))
+	if o.ShardsNum != 3 {
+		t.Errorf("ShardsNum = %d, 期望 3", o.ShardsNum)
+	}
+}
+
+// TestOptions_WithNumCandidates 验证 WithNumCandidates 选项生效
+func TestOptions_WithNumCandidates(t *testing.T) {
+	o := newOptions(WithNumCandidates(200))
+	if o.NumCandidates != 200 {
+		t.Errorf("NumCandidates = %d, 期望 200", o.NumCandidates)
+	}
+}
+
+// TestOptions_WithVectorField 验证 WithVectorField 选项生效
+func TestOptions_WithVectorField(t *testing.T) {
+	vf := "test_vector_field"
+	o := newOptions(WithVectorField(vf))
+	if o.VectorField != vf {
+		t.Errorf("VectorField = %v, 期望 %v", o.VectorField, vf)
+	}
+}
+
+// TestVectorDataTypeFromString_已知类型 验证已知类型字符串正确解析
+func TestVectorDataTypeFromString_已知类型(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected VectorDataType
+	}{
+		{"VARCHAR", VectorDataTypeVarchar},
+		{"FLOAT_VECTOR", VectorDataTypeFloatVector},
+		{"INT64", VectorDataTypeInt64},
+		{"INT32", VectorDataTypeInt32},
+		{"INT16", VectorDataTypeInt16},
+		{"INT8", VectorDataTypeInt8},
+		{"FLOAT", VectorDataTypeFloat},
+		{"DOUBLE", VectorDataTypeDouble},
+		{"BOOL", VectorDataTypeBool},
+		{"JSON", VectorDataTypeJSON},
+		{"ARRAY", VectorDataTypeArray},
+		// 大小写不敏感
+		{"varchar", VectorDataTypeVarchar},
+		{"float_vector", VectorDataTypeFloatVector},
+	}
+	for _, tt := range tests {
+		got := vectorDataTypeFromString(tt.input)
+		if got != tt.expected {
+			t.Errorf("vectorDataTypeFromString(%q) = %v, 期望 %v", tt.input, got, tt.expected)
+		}
+	}
+}
+
+// TestVectorDataTypeFromString_未知类型 验证未知类型回退 VARCHAR
+func TestVectorDataTypeFromString_未知类型(t *testing.T) {
+	got := vectorDataTypeFromString("UNKNOWN_TYPE")
+	if got != VectorDataTypeVarchar {
+		t.Errorf("vectorDataTypeFromString(UNKNOWN_TYPE) = %v, 期望 VARCHAR", got)
+	}
+}
+
+// TestVectorDataTypeFromString_空字符串 验证空字符串回退 VARCHAR
+func TestVectorDataTypeFromString_空字符串(t *testing.T) {
+	got := vectorDataTypeFromString("")
+	if got != VectorDataTypeVarchar {
+		t.Errorf("vectorDataTypeFromString('') = %v, 期望 VARCHAR", got)
+	}
+}
+
+// TestFieldSchema_ToDict_非VarcharWithMaxLength 验证非 VARCHAR 类型有 MaxLength 时序列化
+func TestFieldSchema_ToDict_非VarcharWithMaxLength(t *testing.T) {
+	field, _ := NewFieldSchema("count", VectorDataTypeInt32, WithMaxLength(100))
+	got := field.ToDict()
+	if got["max_length"] != 100 {
+		t.Errorf("max_length = %v, 期望 100", got["max_length"])
+	}
+}
+
+// TestFieldFromDict_float64Dim 验证 dim 为 float64 类型时正确解析（JSON 反序列化产物）
+func TestFieldFromDict_float64Dim(t *testing.T) {
+	data := map[string]any{
+		"name": "embedding",
+		"type": "FLOAT_VECTOR",
+		"dim":  float64(768), // JSON 反序列化后数字类型为 float64
+	}
+	field, err := FieldFromDict(data)
+	if err != nil {
+		t.Fatalf("FieldFromDict() 返回错误: %v", err)
+	}
+	if field.Dim != 768 {
+		t.Errorf("Dim = %d, 期望 768", field.Dim)
+	}
+}
+
+// TestFieldFromDict_float64MaxLength 验证 max_length 为 float64 类型时正确解析
+func TestFieldFromDict_float64MaxLength(t *testing.T) {
+	data := map[string]any{
+		"name":       "id",
+		"type":       "VARCHAR",
+		"max_length": float64(256),
+	}
+	field, err := FieldFromDict(data)
+	if err != nil {
+		t.Fatalf("FieldFromDict() 返回错误: %v", err)
+	}
+	if field.MaxLength != 256 {
+		t.Errorf("MaxLength = %d, 期望 256", field.MaxLength)
+	}
+}
+
+// TestFieldFromDict_float64MaxCapacity 验证 max_capacity 为 float64 类型时正确解析
+func TestFieldFromDict_float64MaxCapacity(t *testing.T) {
+	data := map[string]any{
+		"name":         "tags",
+		"type":         "ARRAY",
+		"element_type": "INT64",
+		"max_capacity": float64(20),
+	}
+	field, err := FieldFromDict(data)
+	if err != nil {
+		t.Fatalf("FieldFromDict() 返回错误: %v", err)
+	}
+	if field.MaxCapacity != 20 {
+		t.Errorf("MaxCapacity = %d, 期望 20", field.MaxCapacity)
+	}
+}
+
+// TestFieldFromDict_无类型 验证缺少 type 和 dtype 时回退 VARCHAR
+func TestFieldFromDict_无类型(t *testing.T) {
+	data := map[string]any{
+		"name": "field1",
+	}
+	field, err := FieldFromDict(data)
+	if err != nil {
+		t.Fatalf("FieldFromDict() 返回错误: %v", err)
+	}
+	if field.DType != VectorDataTypeVarchar {
+		t.Errorf("DType = %v, 期望 VARCHAR（回退默认值）", field.DType)
+	}
+}
+
+// TestFieldFromDict_defaultValue 验证 default_value 反序列化
+func TestFieldFromDict_defaultValue(t *testing.T) {
+	data := map[string]any{
+		"name":          "status",
+		"type":          "VARCHAR",
+		"default_value": "active",
+	}
+	field, err := FieldFromDict(data)
+	if err != nil {
+		t.Fatalf("FieldFromDict() 返回错误: %v", err)
+	}
+	if field.DefaultValue != "active" {
+		t.Errorf("DefaultValue = %v, 期望 active", field.DefaultValue)
+	}
+}
+
+// TestCollectionFromDict_无FieldsKey 验证缺少 fields 键时创建空 Schema
+func TestCollectionFromDict_无FieldsKey(t *testing.T) {
+	data := map[string]any{
+		"description": "无字段集合",
+	}
+	schema, err := CollectionFromDict(data)
+	if err != nil {
+		t.Fatalf("CollectionFromDict() 返回错误: %v", err)
+	}
+	if len(schema.fields) != 0 {
+		t.Errorf("fields 长度 = %d, 期望 0", len(schema.fields))
+	}
+}
+
+// TestCollectionFromDict_JSON格式非字典元素 验证 []any 中非字典元素被跳过
+func TestCollectionFromDict_JSON格式非字典元素(t *testing.T) {
+	data := map[string]any{
+		"fields": []any{
+			"not_a_map", // 非字典元素应被跳过
+			map[string]any{"name": "id", "type": "VARCHAR", "is_primary": true},
+		},
+	}
+	schema, err := CollectionFromDict(data)
+	if err != nil {
+		t.Fatalf("CollectionFromDict() 返回错误: %v", err)
+	}
+	if len(schema.fields) != 1 {
+		t.Errorf("fields 长度 = %d, 期望 1", len(schema.fields))
+	}
+}
+
+// TestNewCollectionSchemaFromFields_正常 验证从字段列表创建 Schema
+func TestNewCollectionSchemaFromFields_正常(t *testing.T) {
+	pk, _ := NewFieldSchema("id", VectorDataTypeVarchar, WithPrimary())
+	vec, _ := NewFieldSchema("embedding", VectorDataTypeFloatVector, WithDim(128))
+	schema, err := NewCollectionSchemaFromFields([]*FieldSchema{pk, vec},
+		WithCollectionDescription("测试集合"),
+		WithEnableDynamicField(),
+	)
+	if err != nil {
+		t.Fatalf("NewCollectionSchemaFromFields() 返回错误: %v", err)
+	}
+	if schema.Description != "测试集合" {
+		t.Errorf("Description = %q, 期望 %q", schema.Description, "测试集合")
+	}
+	if !schema.EnableDynamicField {
+		t.Error("EnableDynamicField 应为 true")
+	}
+	if len(schema.fields) != 2 {
+		t.Errorf("fields 长度 = %d, 期望 2", len(schema.fields))
+	}
+}

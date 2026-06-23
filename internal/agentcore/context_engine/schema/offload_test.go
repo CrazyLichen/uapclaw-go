@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
@@ -240,6 +241,91 @@ func TestUnmarshalOffloadMessage_不支持的角色(t *testing.T) {
 	if err == nil {
 		t.Error("不支持的角色应返回错误")
 	}
+}
+
+// TestGetOffloadInfo_SystemMessage 验证 OffloadSystemMessage 的 GetOffloadInfo 方法
+func TestGetOffloadInfo_SystemMessage(t *testing.T) {
+	msg := NewOffloadSystemMessage("系统内容", "handle-sys", "filesystem")
+	info := msg.GetOffloadInfo()
+	assert.Equal(t, "filesystem", info.OffloadType)
+	assert.Equal(t, "handle-sys", info.OffloadHandle)
+}
+
+// TestGetOffloadInfo_ToolMessage 验证 OffloadToolMessage 的 GetOffloadInfo 方法
+func TestGetOffloadInfo_ToolMessage(t *testing.T) {
+	msg := NewOffloadToolMessage("call_002", "工具内容", "handle-tool", "in_memory")
+	info := msg.GetOffloadInfo()
+	assert.Equal(t, "in_memory", info.OffloadType)
+	assert.Equal(t, "handle-tool", info.OffloadHandle)
+}
+
+// TestMarshalJSON_正常序列化 验证 OffloadAssistantMessage MarshalJSON 正常路径
+func TestMarshalJSON_正常序列化(t *testing.T) {
+	msg := NewOffloadAssistantMessage("助手内容", "handle-marshal", "in_memory")
+	data, err := json.Marshal(msg)
+	assert.NoError(t, err)
+
+	// 验证序列化结果包含关键字段
+	var raw map[string]json.RawMessage
+	assert.NoError(t, json.Unmarshal(data, &raw))
+	assert.Contains(t, raw, "offload_type")
+	assert.Contains(t, raw, "offload_handle")
+	assert.Contains(t, raw, "role")
+}
+
+// TestUnmarshalJSON_正常反序列化 验证 OffloadAssistantMessage UnmarshalJSON 正常路径
+func TestUnmarshalJSON_正常反序列化(t *testing.T) {
+	jsonData := `{"role":"assistant","content":"反序列化测试","offload_type":"filesystem","offload_handle":"handle-unmarshal"}`
+	var msg OffloadAssistantMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	assert.NoError(t, err)
+	assert.Equal(t, llm_schema.RoleTypeAssistant, msg.GetRole())
+	assert.Equal(t, "filesystem", msg.OffloadType)
+	assert.Equal(t, "handle-unmarshal", msg.OffloadHandle)
+}
+
+// TestUnmarshalJSON_内层反序列化失败 验证 OffloadAssistantMessage UnmarshalJSON 错误路径
+func TestUnmarshalJSON_内层反序列化失败(t *testing.T) {
+	// 传入非法 JSON，内层 AssistantMessage 反序列化应失败
+	jsonData := `{invalid_json`
+	var msg OffloadAssistantMessage
+	err := json.Unmarshal([]byte(jsonData), &msg)
+	assert.Error(t, err)
+}
+
+// TestUnmarshalOffloadMessage_解析role失败 验证输入不是合法 JSON 时返回错误
+func TestUnmarshalOffloadMessage_解析role失败(t *testing.T) {
+	_, err := UnmarshalOffloadMessage([]byte(`not json`))
+	assert.Error(t, err)
+}
+
+// TestUnmarshalOffloadMessage_user反序列化失败 验证 user 角色数据损坏时返回错误
+func TestUnmarshalOffloadMessage_user反序列化失败(t *testing.T) {
+	// content 字段类型错误导致反序列化失败
+	jsonData := `{"role":"user","content":12345,"offload_type":"in_memory","offload_handle":"h1"}`
+	_, err := UnmarshalOffloadMessage([]byte(jsonData))
+	assert.Error(t, err)
+}
+
+// TestUnmarshalOffloadMessage_system反序列化失败 验证 system 角色数据损坏时返回错误
+func TestUnmarshalOffloadMessage_system反序列化失败(t *testing.T) {
+	jsonData := `{"role":"system","content":12345,"offload_type":"in_memory","offload_handle":"h1"}`
+	_, err := UnmarshalOffloadMessage([]byte(jsonData))
+	assert.Error(t, err)
+}
+
+// TestUnmarshalOffloadMessage_assistant反序列化失败 验证 assistant 角色数据损坏时返回错误
+func TestUnmarshalOffloadMessage_assistant反序列化失败(t *testing.T) {
+	jsonData := `{"role":"assistant","content":12345,"offload_type":"in_memory","offload_handle":"h1"}`
+	_, err := UnmarshalOffloadMessage([]byte(jsonData))
+	assert.Error(t, err)
+}
+
+// TestUnmarshalOffloadMessage_tool反序列化失败 验证 tool 角色数据损坏时返回错误
+func TestUnmarshalOffloadMessage_tool反序列化失败(t *testing.T) {
+	jsonData := `{"role":"tool","content":12345,"offload_type":"in_memory","offload_handle":"h1"}`
+	_, err := UnmarshalOffloadMessage([]byte(jsonData))
+	assert.Error(t, err)
 }
 
 // TestOffloadInfo_Metadata 验证 OffloadInfo 附加元数据
