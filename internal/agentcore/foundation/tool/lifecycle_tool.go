@@ -14,12 +14,6 @@ import (
 // 注册到 AbilityManager 时自动包装，对调用方透明。
 //
 // 对应 Python: _ToolMeta.__call__ 中的生命周期注入逻辑
-//
-// ⤵️ 预留：transform_io 机制（回调函数修改工具调用输入/输出）。
-// Python 的 CallbackFramework 支持 transform_io，允许回调在调用前后修改 IO 数据。
-// 当前 Go 实现只触发事件通知，不支持回调修改数据。
-// 实现 transform_io 需要 CallbackFramework 架构改造（回调签名支持返回修改后数据），
-// 标记为后续改进，参见 docs/review/2025-07-10-tool-system.md S11。
 type LifecycleTool struct {
 	inner Tool
 	fw    *runnnercallback.CallbackFramework
@@ -28,10 +22,19 @@ type LifecycleTool struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLifecycleTool 创建带生命周期回调的工具包装器。
-func NewLifecycleTool(inner Tool, fw *runnnercallback.CallbackFramework) *LifecycleTool {
+//
+// fw 参数可选：不传或传 nil 时自动使用全局回调框架 GetCallbackFramework()，
+// 对齐 Python: _ToolMeta.__call__ 中通过 Runner.callback_framework 获取。
+func NewLifecycleTool(inner Tool, fw ...*runnnercallback.CallbackFramework) *LifecycleTool {
+	var f *runnnercallback.CallbackFramework
+	if len(fw) > 0 && fw[0] != nil {
+		f = fw[0]
+	} else {
+		f = runnnercallback.GetCallbackFramework()
+	}
 	return &LifecycleTool{
 		inner: inner,
-		fw:    fw,
+		fw:    f,
 	}
 }
 
@@ -40,49 +43,68 @@ func (t *LifecycleTool) Card() *ToolCard {
 	return t.inner.Card()
 }
 
-// Invoke 包装生命周期：STARTED → INVOKE_INPUT → [执行] → INVOKE_OUTPUT → FINISHED / ERROR
+// Invoke 包装生命周期（对齐 Python _ToolMeta 两步装饰链顺序）：
 //
-// 对应 Python: _ToolMeta 中对 invoke 的 _lifecycle_invoke 包装 + IO 转换钩子
+//	emit_before(INVOKE_INPUT) → TransformIO(input) → STARTED → [执行] → FINISHED → TransformIO(output) → emit_after(INVOKE_OUTPUT)
+//
+// 异常时：emit_before(INVOKE_INPUT) → TransformIO(input) → STARTED → [执行] → ERROR
+//
+// 对应 Python: _lifecycle_invoke（内层 STARTED/FINISHED）+ 外层 emit_before/transform_io/emit_after
 func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error) {
 	card := t.inner.Card()
 
-	// 1. 触发 TOOL_CALL_STARTED
-	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
-
-	// 2. 触发 TOOL_INVOKE_INPUT（emit_before）
+	// 1. emit_before：触发 TOOL_INVOKE_INPUT
 	_ = t.fw.TriggerTool(ctx, newInvokeInputData(card, inputs))
 
-	// 3. 执行内部 Tool
+	// 2. TransformToolIOInput — 输入变换
+	inputs = t.fw.TransformToolIOInput(ctx, runnnercallback.ToolInvokeInput, inputs)
+
+	// 3. 触发 TOOL_CALL_STARTED
+	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
+
+	// 4. 执行内部 Tool
 	result, err := t.inner.Invoke(ctx, inputs, opts...)
 
 	if err != nil {
-		// 4. 触发 TOOL_CALL_ERROR
+		// 5. 触发 TOOL_CALL_ERROR
 		_ = t.fw.TriggerTool(ctx, newErrorData(card, inputs, err))
 		return nil, err
 	}
 
-	// 5. 触发 TOOL_INVOKE_OUTPUT（emit_after）
-	_ = t.fw.TriggerTool(ctx, newInvokeOutputData(card, result))
-
 	// 6. 触发 TOOL_CALL_FINISHED
 	_ = t.fw.TriggerTool(ctx, newFinishedData(card, inputs, result))
+
+	// 7. TransformToolIOOutput — 输出变换
+	result = t.fw.TransformToolIOOutput(ctx, runnnercallback.ToolInvokeOutput, result)
+
+	// 8. emit_after：触发 TOOL_INVOKE_OUTPUT
+	_ = t.fw.TriggerTool(ctx, newInvokeOutputData(card, result))
 
 	return result, nil
 }
 
-// Stream 包装生命周期：STARTED → STREAM_INPUT → [执行] → 逐 chunk RESULT_RECEIVED → FINISHED / ERROR
+// Stream 包装生命周期（对齐 Python _ToolMeta 两步装饰链顺序）：
 //
-// 对应 Python: _ToolMeta 中对 stream 的 _lifecycle_stream 包装
+//	emit_before(STREAM_INPUT) → TransformIO(input) → STARTED → [执行]
+//	  → per-chunk: TransformIO(output) → RESULT_RECEIVED → STREAM_OUTPUT
+//	  → Done: FINISHED → emit_after(STREAM_OUTPUT)
+//
+// 异常时：触发 TOOL_CALL_ERROR
+//
+// 对应 Python: _lifecycle_stream（内层 STARTED/FINISHED）+ 外层 emit_before/transform_io/emit_after
 func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error) {
 	card := t.inner.Card()
 
-	// 1. 触发 TOOL_CALL_STARTED
-	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
-
-	// 2. 触发 TOOL_STREAM_INPUT（emit_before）
+	// 1. emit_before：触发 TOOL_STREAM_INPUT
 	_ = t.fw.TriggerTool(ctx, newStreamInputData(card, inputs))
 
-	// 3. 执行内部 Tool
+	// 2. TransformToolIOInput — 输入变换
+	inputs = t.fw.TransformToolIOInput(ctx, runnnercallback.ToolStreamInput, inputs)
+
+	// 3. 触发 TOOL_CALL_STARTED
+	_ = t.fw.TriggerTool(ctx, newStartedData(card, inputs))
+
+	// 4. 执行内部 Tool
 	innerCh, err := t.inner.Stream(ctx, inputs, opts...)
 	if err != nil {
 		// 出错时触发 TOOL_CALL_ERROR
@@ -90,7 +112,7 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 		return nil, err
 	}
 
-	// 4. 包装输出 channel，逐 chunk 触发 RESULT_RECEIVED
+	// 5. 包装输出 channel，逐 chunk 触发生命周期事件
 	outCh := make(chan StreamChunk, 1)
 	go func() {
 		defer close(outCh)
@@ -103,16 +125,21 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 			}
 			if chunk.Done {
 				// 流正常结束
-				_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
+				// 6. 触发 TOOL_CALL_FINISHED
 				_ = t.fw.TriggerTool(ctx, newFinishedData(card, inputs, nil))
+				// 7. emit_after：触发 TOOL_STREAM_OUTPUT
+				_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, nil))
 				outCh <- chunk
 				return
 			}
-			// 正常数据块：触发 TOOL_RESULT_RECEIVED
-			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, chunk.Data))
+			// TransformToolIOOutput — per-chunk 输出变换
+			transformedData := t.fw.TransformToolIOOutput(ctx, runnnercallback.ToolStreamOutput, chunk.Data)
+			// 触发 TOOL_RESULT_RECEIVED
+			_ = t.fw.TriggerTool(ctx, newResultReceivedData(card, transformedData))
 			// 触发 TOOL_STREAM_OUTPUT
-			_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, chunk.Data))
-			outCh <- chunk
+			_ = t.fw.TriggerTool(ctx, newStreamOutputData(card, transformedData))
+			// 用变换后的数据构造新 chunk 发给下游
+			outCh <- StreamChunk{Data: transformedData}
 		}
 	}()
 
