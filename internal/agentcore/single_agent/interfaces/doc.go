@@ -4,6 +4,9 @@
 // 避免 tracer → single_agent → context_engine 的循环依赖。
 // 接口与具体实现分离，tracer 只需依赖接口定义，不需要导入 single_agent 包本体。
 //
+// AgentConfig 接口的具体实现位于 single_agent/config 包（ReActAgentConfig 等），
+// 本包仅定义最小接口方法，不导入 config 包以保持依赖方向单一。
+//
 // 文件目录：
 //
 //	interfaces/

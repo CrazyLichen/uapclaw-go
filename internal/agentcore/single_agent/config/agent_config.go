@@ -1,8 +1,10 @@
-package schema
+package config
 
 import (
 	"fmt"
 
+	ceschema "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/schema"
+	ceiface "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uap-claw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/interfaces"
 )
@@ -44,11 +46,9 @@ type ReActAgentConfig struct {
 	// SysOperationID 系统操作标识
 	SysOperationID string `json:"sys_operation_id,omitempty"`
 	// ContextEngineConfig 上下文引擎配置
-	// ⤵️ 回填：循环依赖解决后改为 ceschema.ContextEngineConfig
-	ContextEngineConfig any `json:"context_engine_config,omitempty"`
+	ContextEngineConfig ceschema.ContextEngineConfig `json:"context_engine_config,omitempty"`
 	// ContextProcessors 上下文处理器规格列表
-	// ⤵️ 回填：循环依赖解决后改为 []ceiface.ProcessorSpec
-	ContextProcessors []any `json:"context_processors,omitempty"`
+	ContextProcessors []ceiface.ProcessorSpec `json:"context_processors,omitempty"`
 	// Workspace 工作区实例
 	// ⤵️ 回填：Workspace 接口定义后改为具体类型
 	Workspace any `json:"-"`
@@ -85,18 +85,19 @@ type ModelClientExtraOption func(*modelClientExtra)
 //   - ModelProvider: "openai"
 //   - MaxIterations: 5
 //   - LLMTopLogprobs: 1
-//   - ContextEngineConfig: map[string]any{max_context_message_num:200, default_window_round_num:10}
+//   - ContextEngineConfig: ceschema.NewContextEngineConfig() 并设置 MaxContextMessageNum=200, DefaultWindowRoundNum=10
 //
 // 对应 Python: ReActAgentConfig()
 func NewReActAgentConfig(opts ...ReActAgentConfigOption) *ReActAgentConfig {
+	defaultCECfg := ceschema.NewContextEngineConfig()
+	defaultCECfg.MaxContextMessageNum = 200
+	defaultCECfg.DefaultWindowRoundNum = 10
+
 	cfg := &ReActAgentConfig{
-		ModelProvider:    "openai",
-		MaxIterations:   5,
-		LLMTopLogprobs:  1,
-		ContextEngineConfig: map[string]any{
-			"max_context_message_num": 200,
-			"default_window_round_num": 10,
-		},
+		ModelProvider:       "openai",
+		MaxIterations:      5,
+		LLMTopLogprobs:     1,
+		ContextEngineConfig: defaultCECfg,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -180,12 +181,12 @@ func WithSysOperationID(id string) ReActAgentConfigOption {
 }
 
 // WithContextEngineConfig 设置上下文引擎配置
-func WithContextEngineConfig(cfg any) ReActAgentConfigOption {
+func WithContextEngineConfig(cfg ceschema.ContextEngineConfig) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) { c.ContextEngineConfig = cfg }
 }
 
 // WithContextProcessors 设置上下文处理器规格列表
-func WithContextProcessors(procs []any) ReActAgentConfigOption {
+func WithContextProcessors(procs []ceiface.ProcessorSpec) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) { c.ContextProcessors = procs }
 }
 
@@ -242,11 +243,12 @@ func WithModelProviderDetails(provider, apiKey, apiBase string) ReActAgentConfig
 // 对应 Python: ReActAgentConfig.configure_context_engine()
 func WithContextEngine(maxMsgNum, windowRoundNum int, enableReload, enableKVCacheRelease bool) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) {
-		c.ContextEngineConfig = map[string]any{
-			"max_context_message_num":    maxMsgNum,
-			"default_window_round_num":  windowRoundNum,
-			"enable_reload":             enableReload,
-			"enable_kv_cache_release":   enableKVCacheRelease,
+		c.ContextEngineConfig = ceschema.ContextEngineConfig{
+			MaxContextMessageNum:  maxMsgNum,
+			DefaultWindowRoundNum: windowRoundNum,
+			EnableReload:         enableReload,
+			EnableKVCacheRelease: enableKVCacheRelease,
+			ModelContextWindowTokens: make(map[string]int),
 		}
 	}
 }
@@ -288,9 +290,8 @@ func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
 }
 
 // GetContextEngineConfig 返回上下文引擎配置（便捷方法，非接口方法）
-// ⤵️ 回填：循环依赖解决后返回类型改为 ceschema.ContextEngineConfig
-func (c *ReActAgentConfig) GetContextEngineConfig() any {
-	return c.ContextEngineConfig
+func (c *ReActAgentConfig) GetContextEngineConfig() *ceschema.ContextEngineConfig {
+	return &c.ContextEngineConfig
 }
 
 // Validate 校验 ReActAgentConfig 的字段合法性。
@@ -311,11 +312,9 @@ func (c *ReActAgentConfig) Validate() error {
 			return fmt.Errorf("model_client_config 校验失败: %w", err)
 		}
 	}
-	// ContextEngineConfig 递归校验（通过类型断言调用 Validate）
-	if ceCfg, ok := c.ContextEngineConfig.(interface{ Validate() error }); ok {
-		if err := ceCfg.Validate(); err != nil {
-			return fmt.Errorf("context_engine_config 校验失败: %w", err)
-		}
+	// ContextEngineConfig 递归校验
+	if err := c.ContextEngineConfig.Validate(); err != nil {
+		return fmt.Errorf("context_engine_config 校验失败: %w", err)
 	}
 	return nil
 }

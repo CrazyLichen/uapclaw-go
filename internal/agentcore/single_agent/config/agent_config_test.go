@@ -1,12 +1,14 @@
-package schema
+package config
 
 import (
 	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	ceschema "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/schema"
+	ceiface "github.com/uapclaw/uap-claw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uap-claw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uap-claw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── NewReActAgentConfig 测试 ────────────────────────────
@@ -112,8 +114,21 @@ func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 		assert.Equal(t, "test_workspace", cfg.Workspace)
 	})
 
+	t.Run("WithContextEngineConfig", func(t *testing.T) {
+		ceCfg := ceschema.ContextEngineConfig{
+			MaxContextMessageNum:  300,
+			DefaultWindowRoundNum: 15,
+			ModelContextWindowTokens: make(map[string]int),
+		}
+		cfg := NewReActAgentConfig(WithContextEngineConfig(ceCfg))
+		assert.Equal(t, 300, cfg.ContextEngineConfig.MaxContextMessageNum)
+		assert.Equal(t, 15, cfg.ContextEngineConfig.DefaultWindowRoundNum)
+	})
+
 	t.Run("WithContextProcessors", func(t *testing.T) {
-		procs := []any{map[string]string{"type": "DialogueCompressor"}}
+		procs := []ceiface.ProcessorSpec{
+			{Type: "DialogueCompressor"},
+		}
 		cfg := NewReActAgentConfig(WithContextProcessors(procs))
 		assert.Equal(t, procs, cfg.ContextProcessors)
 	})
@@ -262,6 +277,17 @@ func TestReActAgentConfig_Validate(t *testing.T) {
 		cfg := NewReActAgentConfig(WithModelClient("openai", "sk-xxx", "https://api.openai.com", "gpt-4"))
 		assert.Nil(t, cfg.Validate())
 	})
+
+	t.Run("ContextEngineConfig递归校验_负值返回错误", func(t *testing.T) {
+		cfg := NewReActAgentConfig()
+		cfg.ContextEngineConfig.MaxContextMessageNum = -1
+		assert.Error(t, cfg.Validate())
+	})
+
+	t.Run("ContextEngineConfig递归校验_有效配置通过", func(t *testing.T) {
+		cfg := NewReActAgentConfig(WithContextEngine(100, 5, false, false))
+		assert.Nil(t, cfg.Validate())
+	})
 }
 
 // ──────────────────────────── AgentConfig 接口测试 ────────────────────────────
@@ -284,13 +310,13 @@ func TestReActAgentConfig_AgentConfig接口(t *testing.T) {
 	// MemScopeID() 接口方法
 	assert.Equal(t, "scope-42", cfg.MemScopeID(), "MemScopeID() 应返回 MemScopeID 字段")
 
-	// ContextEngineConfig() 接口方法
-	ceCfg := cfg.ContextEngineConfig()
-	assert.Equal(t, 200, ceCfg.MaxContextMessageNum, "ContextEngineConfig() 应返回 ContextEngineConfig 字段")
+	// GetContextEngineConfig() 便捷方法
+	ceCfg := cfg.GetContextEngineConfig()
+	assert.Equal(t, 200, ceCfg.MaxContextMessageNum, "GetContextEngineConfig() 应返回 ContextEngineConfig 指针")
 
-	// ModelClientConfig() 接口方法
-	mcCfg := cfg.ModelClientConfig()
-	assert.NotNil(t, mcCfg, "ModelClientConfig() 应返回 ModelClientConfig 字段")
+	// GetModelClientConfig() 便捷方法
+	mcCfg := cfg.GetModelClientConfig()
+	assert.NotNil(t, mcCfg, "GetModelClientConfig() 应返回 ModelClientConfig 指针")
 	assert.Equal(t, "openai", mcCfg.ClientProvider)
 }
 

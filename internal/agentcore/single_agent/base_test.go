@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -313,15 +314,15 @@ func TestWarpBaseAgent_Configure(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("cfg_agent"), schema.WithDescription("配置测试"))
 	agent := NewWarpBaseAgent(card, nil)
 
-	cfg := agentschema.NewReActAgentConfig(
-		agentschema.WithModelName("qwen-max"),
-		agentschema.WithMaxIterations(10),
+	cfg := agentconfig.NewReActAgentConfig(
+		agentconfig.WithModelName("qwen-max"),
+		agentconfig.WithMaxIterations(10),
 	)
 	err := agent.Configure(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("不应有错误: %v", err)
 	}
-	got, ok := agent.Config().(*agentschema.ReActAgentConfig)
+	got, ok := agent.Config().(*agentconfig.ReActAgentConfig)
 	if !ok {
 		t.Fatalf("Config 类型应为 *ReActAgentConfig，实际 %T", agent.Config())
 	}

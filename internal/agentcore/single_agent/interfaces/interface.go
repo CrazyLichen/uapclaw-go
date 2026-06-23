@@ -15,8 +15,8 @@ import (
 //
 // 定义所有 Agent 子类共有的配置访问方法，
 // ReActAgentConfig、ControllerAgentConfig 等具体配置均实现此接口。
-// ContextEngineConfig/ModelClientConfig 等子配置通过类型断言获取，
-// 避免接口包导入 context_engine/schema 产生循环依赖。
+// ContextEngineConfig/ModelClientConfig 等子配置通过具体配置类型的便捷方法获取
+// （如 ReActAgentConfig.GetContextEngineConfig()），无需在接口中定义。
 //
 // 对应 Python: BaseAgent.config 属性（无类型约束，子类各自持有具体 config 类型）
 type AgentConfig interface {

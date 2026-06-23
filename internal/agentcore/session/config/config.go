@@ -34,11 +34,11 @@ type SessionConfig interface {
 	// ⤵️ 8.15 回填：WorkflowConfig 实现后返回类型从 any 改为 WorkflowConfig
 	GetWorkflowConfig(workflowID string) any
 	// GetAgentConfig 获取 Agent 配置。
-	// 调用方应传入 AgentConfig 实现者（定义于 single_agent/interfaces），
+	// 调用方应传入 AgentConfig 实现者（定义于 single_agent/config，接口定义于 single_agent/interfaces），
 	// 因循环依赖限制（interfaces → session → config）暂保留 any 类型。
 	GetAgentConfig() any
 	// SetAgentConfig 设置 Agent 配置。
-	// 调用方应传入 AgentConfig 实现者（定义于 single_agent/interfaces），
+	// 调用方应传入 AgentConfig 实现者（定义于 single_agent/config，接口定义于 single_agent/interfaces），
 	// 因循环依赖限制（interfaces → session → config）暂保留 any 类型。
 	SetAgentConfig(agentConfig any)
 	// AddWorkflowConfig 添加工作流配置。
@@ -66,7 +66,8 @@ type defaultSessionConfig struct {
 	// ⤵️ 8.15 回填：map[string]any → map[string]WorkflowConfig
 	workflowConfigs map[string]any
 	// agentConfig Agent 配置
-	// 调用方应传入 AgentConfig 实现者，因循环依赖限制暂保留 any 类型
+	// 调用方应传入 AgentConfig 实现者（定义于 single_agent/config，接口定义于 single_agent/interfaces），
+	// 因循环依赖限制（interfaces → session → config）暂保留 any 类型
 	agentConfig any
 	// loader 内置配置加载钩子
 	loader BuiltinConfigLoader
