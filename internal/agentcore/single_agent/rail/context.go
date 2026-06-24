@@ -1,6 +1,8 @@
 package rail
 
 import (
+	"context"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -204,8 +206,9 @@ func (c *AgentCallbackContext) FireLifecycle(
 	savedInputs := c.inputs
 
 	// 2. fire(before)
-	// ⤵️ 6.6 回填：if err := c.Fire(before); err != nil { ... }
-	_ = before // 占位，避免编译错误
+	if err := c.Fire(before); err != nil {
+		return err
+	}
 
 	var origErr error
 	err := fn()
@@ -216,8 +219,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 
 	// finally: 恢复 inputs + fire(after)
 	c.inputs = savedInputs
-	// ⤵️ 6.6 回填：c.Fire(after)，异常安全处理
-	_ = after // 占位
+	_ = c.Fire(after) // 异常安全：忽略 after 阶段的错误
 
 	if origErr != nil {
 		return origErr
@@ -228,9 +230,16 @@ func (c *AgentCallbackContext) FireLifecycle(
 // Fire 触发回调事件。
 //
 // 对应 Python: AgentCallbackContext.fire(event)
-// ⤵️ 6.6 回填：调用 agent.CallbackManager().Execute(event, self)
-func (c *AgentCallbackContext) Fire(_ AgentCallbackEvent) error {
-	panic("TODO: 6.6 AgentCallbackManager")
+func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
+	c.event = event
+	if c.agent == nil {
+		return nil
+	}
+	manager, ok := c.agent.CallbackManager().(*AgentCallbackManager)
+	if !ok {
+		return nil
+	}
+	return manager.Execute(context.Background(), event, c)
 }
 
 // RequestRetry 请求重试。

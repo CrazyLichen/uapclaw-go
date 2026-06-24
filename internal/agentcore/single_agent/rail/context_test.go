@@ -181,12 +181,11 @@ func TestFireLifecycle_恢复Inputs(t *testing.T) {
 	assert.Equal(t, origInputs, ctx.Inputs()) // fn 后 inputs 恢复
 }
 
-// TestFire_预留Panic 验证 Fire 方法 panic 信息包含 "6.6"
-func TestFire_预留Panic(t *testing.T) {
+// TestFire_无回调管理器 agent 为 nil 时 Fire 返回 nil（无 panic）
+func TestFire_无回调管理器(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.6 AgentCallbackManager", func() {
-		_ = ctx.Fire(CallbackBeforeModelCall)
-	})
+	err := ctx.Fire(CallbackBeforeModelCall)
+	assert.NoError(t, err)
 }
 
 // TestRequestRetry_预留Panic 验证 RequestRetry 方法 panic 信息包含 "6.10"

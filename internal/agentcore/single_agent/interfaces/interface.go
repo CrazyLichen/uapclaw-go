@@ -5,6 +5,7 @@ import (
 
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -95,20 +96,21 @@ type BaseAgent interface {
 
 	// CallbackManager 返回回调管理器。
 	// 对应 Python: BaseAgent.agent_callback_manager 属性
-	// ⤵️ 6.6 回填：返回类型从 any 改为 *AgentCallbackManager
+	// 返回 any（实际类型 *rail.AgentCallbackManager），避免 interfaces → rail 循环依赖
 	CallbackManager() any
 
 	// ── 回调/Rail 注册 ──
 
 	// RegisterCallback 注册回调。
 	// 对应 Python: BaseAgent.register_callback(event, callback, priority)
-	// ⤵️ 6.4-6.6 回填：event/callback 参数类型从 any 改为具体类型
-	RegisterCallback(ctx context.Context, event any, callback any, priority int) error
+	// event 实际类型 rail.AgentCallbackEvent，callback 实际类型 cb.PerAgentCallbackFunc，
+	// 用 any 避免循环依赖，委托给 AgentCallbackManager.RegisterCallback。
+	RegisterCallback(ctx context.Context, event any, fn any, opts ...cb.CallbackOption) error
 
 	// RegisterRail 注册 Rail。
 	// 对应 Python: BaseAgent.register_rail(rail)
-	// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail
-	RegisterRail(ctx context.Context, rail any) error
+	// rail 实际类型 rail.AgentRail，用 any 避免循环依赖。
+	RegisterRail(ctx context.Context, rail any, opts ...cb.CallbackOption) error
 
 	// UnregisterRail 注销 Rail。
 	// 对应 Python: BaseAgent.unregister_rail(rail)

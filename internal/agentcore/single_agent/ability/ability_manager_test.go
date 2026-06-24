@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
@@ -497,9 +498,11 @@ func (f *fakeAgent) AbilityManager() any { return nil }
 
 func (f *fakeAgent) CallbackManager() any { return nil }
 
-func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ int) error { return nil }
+func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+	return nil
+}
 
-func (f *fakeAgent) RegisterRail(_ context.Context, _ any) error { return nil }
+func (f *fakeAgent) RegisterRail(_ context.Context, _ any, _ ...callback.CallbackOption) error { return nil }
 
 func (f *fakeAgent) UnregisterRail(_ context.Context, _ any) error { return nil }
 

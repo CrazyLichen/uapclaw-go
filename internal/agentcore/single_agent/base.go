@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -40,8 +41,7 @@ type WarpBaseAgent struct {
 	// abilityManager 能力管理器
 	abilityManager *ability.AbilityManager
 	// callbackManager 回调管理器
-	// ⤵️ 6.6 回填：从 any 改为 *AgentCallbackManager
-	callbackManager any
+	callbackManager *rail.AgentCallbackManager
 	// invoker 子类注入的真实执行逻辑，实现虚分发
 	invoker agentInvoker
 }
@@ -84,6 +84,7 @@ func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.Resource
 	return &WarpBaseAgent{
 		card:           card,
 		abilityManager: ability.NewAbilityManager(resourceMgr),
+		callbackManager: rail.NewAgentCallbackManager(card.ID),
 	}
 }
 
@@ -220,24 +221,33 @@ func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }
 func (w *WarpBaseAgent) AbilityManager() any { return w.abilityManager }
 
 // CallbackManager 返回回调管理器。
-// ⤵️ 6.6 回填：返回类型从 any 改为 *AgentCallbackManager
+// 返回 any（实际类型 *rail.AgentCallbackManager），避免循环依赖。
 func (w *WarpBaseAgent) CallbackManager() any { return w.callbackManager }
 
 // RegisterCallback 注册回调。
-// ⤵️ 预留：6.4-6.6 实现后委托给 AgentCallbackManager
-func (w *WarpBaseAgent) RegisterCallback(_ context.Context, _ any, _ any, _ int) error {
+// 委托给 AgentCallbackManager.RegisterCallback。
+func (w *WarpBaseAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...callback.CallbackOption) error {
+	if w.callbackManager != nil {
+		w.callbackManager.RegisterCallback(ctx, event.(rail.AgentCallbackEvent), fn.(callback.PerAgentCallbackFunc), opts...)
+	}
 	return nil
 }
 
 // RegisterRail 注册 Rail。
-// ⤵️ 预留：6.7 实现后委托给 AgentCallbackManager
-func (w *WarpBaseAgent) RegisterRail(_ context.Context, _ any) error {
+// 委托给 AgentCallbackManager.RegisterRail。
+func (w *WarpBaseAgent) RegisterRail(ctx context.Context, railObj any, opts ...callback.CallbackOption) error {
+	if w.callbackManager != nil {
+		return w.callbackManager.RegisterRail(ctx, railObj, opts...)
+	}
 	return nil
 }
 
 // UnregisterRail 注销 Rail。
-// ⤵️ 预留：6.7 实现后委托给 AgentCallbackManager
-func (w *WarpBaseAgent) UnregisterRail(_ context.Context, _ any) error {
+// 委托给 AgentCallbackManager.UnregisterRail。
+func (w *WarpBaseAgent) UnregisterRail(ctx context.Context, railObj any) error {
+	if w.callbackManager != nil {
+		return w.callbackManager.UnregisterRail(ctx, railObj)
+	}
 	return nil
 }
 
