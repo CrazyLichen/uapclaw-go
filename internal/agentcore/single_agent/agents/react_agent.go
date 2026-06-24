@@ -499,10 +499,12 @@ func (a *ReActAgent) executeToolCalls(
 		return nil, fmt.Errorf("AbilityManager 未初始化")
 	}
 
-	results, err := am.Execute(ctx, toolCalls, sess)
-	if err != nil {
-		return nil, fmt.Errorf("工具执行失败: %w", err)
+	// 将 toolCalls 转为指针切片以匹配 Execute 签名
+	toolCallPtrs := make([]*llmschema.ToolCall, len(toolCalls))
+	for i := range toolCalls {
+		toolCallPtrs[i] = &toolCalls[i]
 	}
+	results := am.Execute(ctx, cbc, toolCallPtrs, sess, "")
 
 	for _, r := range results {
 		if r.ToolMsg != nil && modelCtx != nil {

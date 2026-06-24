@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -355,8 +356,15 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 // 使用 WaitGroup + 按 index 写切片，与 Python asyncio.gather(return_exceptions=True) 语义一致：
 // 所有任务都执行完毕，错误作为 ExecuteResult.Err 返回。
 // 结果顺序与输入 toolCalls 顺序一致。
+//
+// cbc 为 Rail 系统的 AgentCallbackContext，用于：
+//   - 为每个 tool_call 创建隔离子上下文（ForkForToolCall）
+//   - 传播子上下文的 force-finish 信号回父 cbc
+//
+// 对应 Python: AbilityManager.execute(ctx, tool_call, session, tag)
 func (am *AbilityManager) Execute(
 	ctx context.Context,
+	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess *session.Session,
 	tag string,
@@ -365,22 +373,55 @@ func (am *AbilityManager) Execute(
 		return nil
 	}
 
+	// cbc 为 nil 时走降级路径（不使用 Rail 系统，直接执行工具调用）
+	if cbc == nil {
+		am.mu.RLock()
+		results := make([]ExecuteResult, len(toolCalls))
+		var wg sync.WaitGroup
+		for i, tc := range toolCalls {
+			wg.Add(1)
+			go func(idx int, toolCall *llmschema.ToolCall) {
+				defer wg.Done()
+				results[idx] = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+			}(i, tc)
+		}
+		am.mu.RUnlock()
+		wg.Wait()
+		return results
+	}
+
 	am.mu.RLock()
 	results := make([]ExecuteResult, len(toolCalls))
+
+	// 为每个 tool_call 创建隔离子上下文
+	// 对应 Python: tool_ctx = AgentCallbackContext(agent=ctx.agent, inputs=ToolCallInputs(...), extra=ctx.extra, ...)
+	toolCtxs := make([]*rail.AgentCallbackContext, len(toolCalls))
+	for i, tc := range toolCalls {
+		toolCtxs[i] = cbc.ForkForToolCall(tc)
+	}
 
 	var wg sync.WaitGroup
 	for i, tc := range toolCalls {
 		wg.Add(1)
-		go func(idx int, toolCall *llmschema.ToolCall) {
+		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *rail.AgentCallbackContext) {
 			defer wg.Done()
-			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCall, sess, tag)
-		}(i, tc)
+			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCtx, toolCall, sess, tag)
+		}(i, tc, toolCtxs[i])
 	}
 	am.mu.RUnlock()
 
 	wg.Wait()
 
-	// ⤵️ 预留：force_finish 信号传播（等 6.4-6.10 Rail 系统就绪后回填）
+	// force-finish 信号传播：子 toolCtx → 父 cbc
+	// 对应 Python: for tool_ctx in tool_contexts:
+	//   ff = tool_ctx.consume_force_finish()
+	//   if ff is not None: ctx.request_force_finish(ff.result); break
+	for _, toolCtx := range toolCtxs {
+		if ff := toolCtx.ConsumeForceFinish(); ff != nil {
+			cbc.RequestForceFinish(ff.Result)
+			break
+		}
+	}
 
 	return results
 }
@@ -388,21 +429,28 @@ func (am *AbilityManager) Execute(
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // railedExecuteSingleToolCall 在 Rail 生命周期内执行单个工具调用。
-// 当前阶段直接调用 executeSingleToolCall，Rail 钩子调用点预留。
+//
+// 使用 ToolCallRail.Execute 包装，自动提供：
+//   - fire(BEFORE_TOOL_CALL) → before 钩子
+//   - force-finish 门控 → 可跳过工具执行
+//   - 异常 → fire(ON_TOOL_EXCEPTION) → 可 request_retry() 重试
+//   - fire(AFTER_TOOL_CALL) → after 钩子
+//
+// 对应 Python: @rail(before=BEFORE_TOOL_CALL, after=AFTER_TOOL_CALL, on_exception=ON_TOOL_EXCEPTION)
+//
+//	async def _railed_execute_single_tool_call(self, ctx, tool_call, session, tag=None): ...
 func (am *AbilityManager) railedExecuteSingleToolCall(
 	ctx context.Context,
+	toolCtx *rail.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	sess *session.Session,
 	tag string,
 ) ExecuteResult {
-	// ⤵️ 预留：BeforeToolCall Rail 钩子
-	// if am.rail != nil { ... }
-
-	result := am.executeSingleToolCall(ctx, toolCall, sess, tag)
-
-	// ⤵️ 预留：AfterToolCall Rail 钩子
-	// if am.rail != nil { ... }
-
+	var result ExecuteResult
+	_ = rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
+		result = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+		return result.Err
+	})
 	return result
 }
 

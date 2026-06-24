@@ -351,7 +351,7 @@ func TestAbilityManager_Execute_单工具成功(t *testing.T) {
 		result: map[string]any{"result": "搜索结果"},
 	}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `{"query": "test"}`),
 	}, nil, "")
 
@@ -381,7 +381,7 @@ func TestAbilityManager_Execute_并行多工具(t *testing.T) {
 	frm.tools[card1.ID] = &fakeTool{card: card1, result: map[string]any{"result": "A"}}
 	frm.tools[card2.ID] = &fakeTool{card: card2, result: map[string]any{"result": "B"}}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "tool_a", `{}`),
 		llmschema.NewToolCall("call_2", "tool_b", `{}`),
 	}, nil, "")
@@ -408,7 +408,7 @@ func TestAbilityManager_Execute_参数解析失败(t *testing.T) {
 	toolCard := tool.NewToolCard("search", "搜索", nil, nil)
 	am.Add(toolCard)
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `not json at all`),
 	}, nil, "")
 
@@ -429,7 +429,7 @@ func TestAbilityManager_Execute_能力未找到(t *testing.T) {
 	frm := newFakeResourceManager()
 	am := NewAbilityManager(frm)
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "nonexistent", `{}`),
 	}, nil, "")
 
@@ -663,7 +663,7 @@ func TestAbilityManager_Execute_工具实例未找到(t *testing.T) {
 	am.Add(toolCard)
 	// 不注册工具实例 → GetTool 返回 NotFound
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `{}`),
 	}, nil, "")
 
@@ -687,7 +687,7 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 		err:  exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("执行失败")),
 	}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "fail_tool", `{}`),
 	}, nil, "")
 
@@ -708,7 +708,7 @@ func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
 
 	frm.workflows[wf.ID] = &fakeWorkflow{result: map[string]any{"output": "done"}}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
 	}, nil, "")
 
@@ -728,7 +728,7 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 	am.Add(wf)
 	// 不注册 workflow 实例
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
 	}, nil, "")
 
@@ -749,7 +749,7 @@ func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
 
 	frm.workflows[wf.ID] = &fakeWorkflow{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("wf错误"))}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
 	}, nil, "")
 
@@ -770,7 +770,7 @@ func TestAbilityManager_Execute_Agent成功(t *testing.T) {
 
 	frm.agents[ag.ID] = &fakeAgent{result: map[string]any{"response": "ok"}}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
 	}, nil, "")
 
@@ -790,7 +790,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 	am.Add(ag)
 	// 不注册 agent 实例
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
 	}, nil, "")
 
@@ -811,7 +811,7 @@ func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
 
 	frm.agents[ag.ID] = &fakeAgent{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("agent错误"))}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
 	}, nil, "")
 
@@ -829,7 +829,7 @@ func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 	mc := mcp.NewMcpServerConfig("my_mcp", "http://localhost:8080/sse", "sse")
 	am.Add(mc)
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_mcp", "my_mcp", `{}`),
 	}, nil, "")
 
@@ -843,7 +843,7 @@ func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 
 func TestAbilityManager_Execute_空ToolCall(t *testing.T) {
 	am := NewAbilityManager(nil)
-	results := am.Execute(context.Background(), nil, nil, "")
+	results := am.Execute(context.Background(), nil, nil, nil, "")
 	if results != nil {
 		t.Errorf("空 ToolCall 应返回 nil")
 	}
@@ -860,7 +860,7 @@ func TestAbilityManager_Execute_兜底Tool成功(t *testing.T) {
 		result: map[string]any{"result": "fallback"},
 	}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fallback_tool", `{}`),
 	}, nil, "")
 
@@ -882,7 +882,7 @@ func TestAbilityManager_Execute_兜底Tool执行错误(t *testing.T) {
 		err:  exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("兜底失败")),
 	}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fail_fb", `{}`),
 	}, nil, "")
 
@@ -906,7 +906,7 @@ func TestAbilityManager_Execute_带Tag(t *testing.T) {
 		result: map[string]any{"result": "ok"},
 	}
 
-	results := am.Execute(context.Background(), []*llmschema.ToolCall{
+	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_tag", "tagged_tool", `{}`),
 	}, nil, "my_tag")
 
