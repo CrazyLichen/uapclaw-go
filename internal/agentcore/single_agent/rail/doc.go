@@ -15,12 +15,14 @@
 //	├── doc.go       # 包文档
 //	├── event.go     # AgentCallbackEvent 枚举定义
 //	├── context.go   # AgentCallbackContext 结构体与方法
-//	└── inputs.go    # EventInputs 接口及各事件 Inputs 结构体
+//	├── inputs.go    # EventInputs 接口及各事件 Inputs 结构体
+//	└── manager.go   # AgentCallbackManager 回调管理器
 //
 // 核心类型/接口索引：
 //
 //	AgentCallbackEvent       — 10 种生命周期事件枚举
 //	AgentCallbackContext     — Rail 系统核心中介对象（retry/force_finish/steering）
+//	AgentCallbackManager    — PerAgent 实例级回调管理器（注册/触发/注销）
 //	EventInputs              — 回调事件输入接口
 //	InvokeInputs             — BEFORE/AFTER_INVOKE 事件输入
 //	ModelCallInputs          — BEFORE/AFTER_MODEL_CALL 事件输入
