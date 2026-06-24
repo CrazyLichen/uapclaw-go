@@ -460,20 +460,20 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	sess *session.Session,
 	tag string,
 ) ExecuteResult {
-	// before 钩子改写回填：将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
-	// 对齐 Python: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
-	// 对齐 Python: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
-	if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
-		if inputs.ToolName != "" {
-			toolCall.Name = inputs.ToolName
-		}
-		if inputs.ToolArgs != "" {
-			toolCall.Arguments = inputs.ToolArgs
-		}
-	}
-
 	var result ExecuteResult
 	_ = rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
+		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
+		// 对齐 Python: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
+		// 对齐 Python: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
+		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+			if inputs.ToolName != "" {
+				toolCall.Name = inputs.ToolName
+			}
+			if inputs.ToolArgs != "" {
+				toolCall.Arguments = inputs.ToolArgs
+			}
+		}
+
 		result = am.executeSingleToolCall(ctx, toolCall, sess, tag)
 		// 回填结果到 inputs（对齐 Python L681-686）
 		// after 钩子触发时可通过 inputs 访问执行结果，也可改写。
