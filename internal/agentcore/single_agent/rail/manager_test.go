@@ -214,4 +214,116 @@ func TestExecute_错误中断(t *testing.T) {
 	}
 }
 
+// TestRegisterRail_批量注册 测试注册含 2 个钩子的 Rail。
+func TestRegisterRail_批量注册(t *testing.T) {
+	const agentID = "task67_test_rail_register"
+	m := NewAgentCallbackManager(agentID)
+	defer m.Clear()
+
+	// 构造一个含 2 个钩子的 Rail
+	r := NewBaseRail()
+	var beforeCalled, afterCalled int32
+	beforeFn := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&beforeCalled, 1)
+		return nil
+	}
+	afterFn := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&afterCalled, 1)
+		return nil
+	}
+
+	// 用一个实现了 AgentRail 的测试 struct
+	testRail := &testRailWithHooks{
+		BaseRail: r,
+		callbacks: r.BuildCallbacks(
+			r.CallbackFrom(CallbackBeforeModelCall, beforeFn),
+			r.CallbackFrom(CallbackAfterModelCall, afterFn),
+		),
+	}
+
+	err := m.RegisterRail(context.Background(), testRail)
+	if err != nil {
+		t.Fatalf("RegisterRail 返回错误: %v", err)
+	}
+
+	if !m.HasHooks(CallbackBeforeModelCall) {
+		t.Fatal("注册后 BeforeModelCall 应有钩子")
+	}
+	if !m.HasHooks(CallbackAfterModelCall) {
+		t.Fatal("注册后 AfterModelCall 应有钩子")
+	}
+}
+
+// TestRegisterRail_优先级传递 测试 RegisterRail 传入 rail.Priority() 到 CallbackOption。
+func TestRegisterRail_优先级传递(t *testing.T) {
+	const agentID = "task67_test_rail_priority"
+	m := NewAgentCallbackManager(agentID)
+	defer m.Clear()
+
+	r := NewBaseRail().WithPriority(90)
+	fn := func(_ context.Context, _ any) error { return nil }
+	testRail := &testRailWithHooks{
+		BaseRail:  r,
+		callbacks: r.BuildCallbacks(r.CallbackFrom(CallbackBeforeInvoke, fn)),
+	}
+
+	err := m.RegisterRail(context.Background(), testRail)
+	if err != nil {
+		t.Fatalf("RegisterRail 返回错误: %v", err)
+	}
+
+	if !m.HasHooks(CallbackBeforeInvoke) {
+		t.Fatal("注册后 BeforeInvoke 应有钩子")
+	}
+}
+
+// TestUnregisterRail_批量注销 测试注销后事件无钩子。
+func TestUnregisterRail_批量注销(t *testing.T) {
+	const agentID = "task67_test_rail_unregister"
+	m := NewAgentCallbackManager(agentID)
+	defer m.Clear()
+
+	r := NewBaseRail()
+	fn1 := func(_ context.Context, _ any) error { return nil }
+	fn2 := func(_ context.Context, _ any) error { return nil }
+	testRail := &testRailWithHooks{
+		BaseRail: r,
+		callbacks: r.BuildCallbacks(
+			r.CallbackFrom(CallbackBeforeToolCall, fn1),
+			r.CallbackFrom(CallbackAfterToolCall, fn2),
+		),
+	}
+
+	err := m.RegisterRail(context.Background(), testRail)
+	if err != nil {
+		t.Fatalf("RegisterRail 返回错误: %v", err)
+	}
+
+	if !m.HasHooks(CallbackBeforeToolCall) || !m.HasHooks(CallbackAfterToolCall) {
+		t.Fatal("注册后两个事件都应有钩子")
+	}
+
+	err = m.UnregisterRail(context.Background(), testRail)
+	if err != nil {
+		t.Fatalf("UnregisterRail 返回错误: %v", err)
+	}
+
+	if m.HasHooks(CallbackBeforeToolCall) {
+		t.Fatal("注销后 BeforeToolCall 不应有钩子")
+	}
+	if m.HasHooks(CallbackAfterToolCall) {
+		t.Fatal("注销后 AfterToolCall 不应有钩子")
+	}
+}
+
+// testRailWithHooks 用于测试的 AgentRail 实现，覆盖 GetCallbacks。
+type testRailWithHooks struct {
+	*BaseRail
+	callbacks map[AgentCallbackEvent]cb.PerAgentCallbackFunc
+}
+
+func (r *testRailWithHooks) GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	return r.callbacks
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
