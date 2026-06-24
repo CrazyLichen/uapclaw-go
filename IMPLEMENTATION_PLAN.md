@@ -613,7 +613,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **10.1 Schema 层** | — | | | |
-| 10.1.1 | ☐ | ReqMethod 枚举 | ~100 个 RPC 方法名 | `jiuwenswarm/common/schema/message.py` (ReqMethod) |
+| 10.1.1 | ✅ | ReqMethod 枚举 | ~100 个 RPC 方法名 | `jiuwenswarm/common/schema/message.py` (ReqMethod) |
 | 10.1.2 | ☐ | EventType 枚举 | 事件类型 | `jiuwenswarm/common/schema/message.py` (EventType) |
 | 10.1.3 | ☐ | Mode 枚举 | 运行模式（agent.plan/code.normal/team 等） | `jiuwenswarm/common/schema/message.py` (Mode) |
 | 10.1.4 | ☐ | Message 模型 | 内部消息格式 | `jiuwenswarm/common/schema/message.py` (Message) |
