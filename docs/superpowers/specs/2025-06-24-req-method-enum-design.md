@@ -1,6 +1,6 @@
 # 10.1.1 ReqMethod 枚举设计
 
-> 实现计划步骤 10.1.1 — ReqMethod 枚举，产出 ~82 个 RPC 方法名常量。
+> 实现计划步骤 10.1.1 — ReqMethod 枚举，产出 ~142 个 RPC 方法名常量。
 > Python 参考：`jiuwenswarm/common/schema/message.py` (ReqMethod)
 
 ## 1. 流程位置与作用
@@ -24,10 +24,10 @@ ReqMethod 枚举定义了 **Gateway ↔ AgentServer 之间 E2A 协议的 RPC 方
 
 | 决策项 | 选择 | 理由 |
 |--------|------|------|
-| 实现范围 | 全量 82 个枚举值 | mvp_plan 决策"Schema 一次到位免反复"，MVP 方法集只影响路由分发，不影响 Schema 定义 |
+| 实现范围 | 全量 142 个枚举值 | mvp_plan 决策"Schema 一次到位免反复"，MVP 方法集只影响路由分发，不影响 Schema 定义 |
 | 类型定义 | `type ReqMethod string` | 与项目先例 AgentCallbackEvent string 一致，天然 JSON 可序列化，无需额外映射 |
 | 辅助方法 | ParseReqMethod + IsValid + AllReqMethods + String + GoString | 消除 Python 中 3 处重复的 _parse_req_method() 遍历逻辑 |
-| 文件组织 | 单文件 req_method.go | 与项目先例一致，82 个常量按分组注释分隔，Go 标准库常见模式 |
+| 文件组织 | 单文件 req_method.go | 与项目先例一致，142 个常量按分组注释分隔，Go 标准库常见模式 |
 | 命名对齐 | `chat.interrupt` → ReqMethodChatCancel | 与 Python `CHAT_CANCEL = "chat.interrupt"` 语义对齐 |
 | 查找优化 | 包级 map 查找表 | ParseReqMethod/IsValid 使用 map 实现 O(1) 查找，优于 Python 的遍历 |
 
@@ -46,7 +46,7 @@ type ReqMethod string
 
 ## 4. 常量定义
 
-82 个枚举常量，按功能分组以注释分隔。命名规则：
+142 个枚举常量，按功能分组以注释分隔。命名规则：
 
 - Go 常量名：`ReqMethod` + 大驼峰（如 `ReqMethodChatSend`）
 - 字符串值：与 Python 完全一致（如 `"chat.send"`）
@@ -143,7 +143,7 @@ var reqMethodLookup map[string]ReqMethod
 ```
 internal/swarm/schema/
 ├── doc.go            # 包文档
-├── req_method.go     # ReqMethod 类型 + 82 个常量 + 辅助方法
+├── req_method.go     # ReqMethod 类型 + 142 个常量 + 辅助方法
 └── req_method_test.go # 单元测试
 ```
 
@@ -161,7 +161,7 @@ internal/swarm/schema/
 
 ## 9. 测试要求
 
-- `TestAllReqMethods`：验证返回数量为 82
+- `TestAllReqMethods`：验证返回数量为 142
 - `TestParseReqMethod_合法值`：随机抽样验证解析成功
 - `TestParseReqMethod_非法值`：验证非法字符串返回错误
 - `TestIsValid`：合法/非法值验证
@@ -172,6 +172,6 @@ internal/swarm/schema/
 
 ## 10. 与 MVP 计划的关系
 
-- **Schema 层全量定义 82 个**，与 MVP 10 个方法集无关
+- **Schema 层全量定义 142 个**，与 MVP 10 个方法集无关
 - MVP 10 个方法集只影响 AgentServer 路由分发时实际处理的方法子集
 - Schema 一次到位，后续新增 RPC 方法只需在 req_method.go 添加常量 + 更新 AllReqMethods
