@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -319,6 +321,47 @@ func TestRequestRetry_负数归零(t *testing.T) {
 	req = ctx.ConsumeRetryRequest()
 	assert.NotNil(t, req)
 	assert.Equal(t, 0.0, req.DelaySeconds)
+}
+
+// TestForkForToolCall_字段共享与隔离 验证 ForkForToolCall 的共享/独立语义
+func TestForkForToolCall_字段共享与隔离(t *testing.T) {
+	agent := &fakeRailAgent{agentID: "test-agent"}
+	sess := session.NewSession()
+	parentInputs := &InvokeInputs{}
+	parent := NewAgentCallbackContext(agent, parentInputs, sess)
+	q := make(chan string, steeringQueueSize)
+	parent.BindSteeringQueue(q)
+	parent.Extra()["shared_key"] = "shared_val"
+
+	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "search", Arguments: `{"q":"hello"}`}
+	child := parent.ForkForToolCall(toolCall)
+
+	// 共享字段
+	assert.Equal(t, agent, child.Agent())                         // agent 引用共享
+	assert.Equal(t, sess, child.Session())                        // session 引用共享
+	assert.Equal(t, parent.Extra(), child.Extra())                // extra 字典引用共享
+	assert.Equal(t, parent.SteeringQueue(), child.SteeringQueue()) // steeringQueue 引用共享
+
+	// 独立字段
+	assert.Nil(t, child.ConsumeRetryRequest())        // retryRequest 独立零值
+	assert.False(t, child.HasForceFinishRequest())    // forceFinishRequest 独立零值
+	assert.Nil(t, child.Exception())                  // exception 独立零值
+	assert.Equal(t, 0, child.RetryAttempt())          // retryAttempt 独立零值
+
+	// inputs 为 ToolCallInputs
+	inputs, ok := child.Inputs().(*ToolCallInputs)
+	assert.True(t, ok)
+	assert.Equal(t, toolCall, inputs.ToolCall)
+	assert.Equal(t, "search", inputs.ToolName)
+
+	// extra 修改互相可见（引用共享）
+	child.Extra()["child_key"] = "child_val"
+	assert.Equal(t, "child_val", parent.Extra()["child_key"])
+
+	// force-finish 独立：子 ctx 设置不影响父
+	child.RequestForceFinish(map[string]any{"reason": "budget_exceeded"})
+	assert.True(t, child.HasForceFinishRequest())
+	assert.False(t, parent.HasForceFinishRequest())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -319,6 +320,36 @@ func (c *AgentCallbackContext) ConsumeForceFinish() *ForceFinishRequest {
 // 对应 Python: AgentCallbackContext.has_force_finish_request -> bool
 func (c *AgentCallbackContext) HasForceFinishRequest() bool {
 	return c.forceFinishRequest != nil
+}
+
+// ForkForToolCall 为单个工具调用创建隔离的子上下文。
+//
+// 共享字段（引用共享，跨 rail 通信）：
+//   - agent、extra、steeringQueue、session、config、modelContext
+//
+// 独立字段（每个工具调用各自持有零值）：
+//   - retryRequest、forceFinishRequest、exception、retryAttempt、event、inputs
+//
+// 对应 Python: AbilityManager.execute 中 tool_ctx = AgentCallbackContext(
+//
+//	agent=ctx.agent, inputs=ToolCallInputs(...), config=ctx.config,
+//	session=session, context=ctx.context, extra=ctx.extra,
+//
+// )
+func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *AgentCallbackContext {
+	return &AgentCallbackContext{
+		agent: c.agent,
+		inputs: &ToolCallInputs{
+			ToolCall: toolCall,
+			ToolName: toolCall.Name,
+			ToolArgs: toolCall.Arguments,
+		},
+		config:        c.config,
+		session:       c.session,
+		modelContext:  c.modelContext,
+		extra:         c.extra,
+		steeringQueue: c.steeringQueue,
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
