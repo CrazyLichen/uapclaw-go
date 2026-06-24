@@ -25,7 +25,7 @@ type searchOutput struct {
 // ──────────────────────────── 测试用函数 ────────────────────────────
 
 // searchFunc 搜索函数
-func searchFunc(ctx context.Context, input searchInput) (searchOutput, error) {
+func searchFunc(ctx context.Context, input searchInput, opts ...ToolOption) (searchOutput, error) {
 	return searchOutput{
 		Results: []string{input.Query},
 		Total:   input.Limit,
@@ -159,7 +159,7 @@ func TestNewInvokeFunction_WithCard(t *testing.T) {
 
 // TestInvokeFunction_Invoke_函数返回错误 测试用户函数执行失败
 func TestInvokeFunction_Invoke_函数返回错误(t *testing.T) {
-	errFunc := func(ctx context.Context, input searchInput) (searchOutput, error) {
+	errFunc := func(ctx context.Context, input searchInput, opts ...ToolOption) (searchOutput, error) {
 		return searchOutput{}, fmt.Errorf("执行失败")
 	}
 	fn, _ := NewInvokeFunction("search", errFunc)
@@ -172,7 +172,7 @@ func TestInvokeFunction_Invoke_函数返回错误(t *testing.T) {
 // TestInvokeFunction_Invoke_空输入参数 测试无 InputParams 时的直接调用
 func TestInvokeFunction_Invoke_空输入参数(t *testing.T) {
 	type emptyFuncInput struct{}
-	emptyFunc := func(ctx context.Context, input emptyFuncInput) (map[string]any, error) {
+	emptyFunc := func(ctx context.Context, input emptyFuncInput, opts ...ToolOption) (map[string]any, error) {
 		return map[string]any{"ok": true}, nil
 	}
 	fn, _ := NewInvokeFunction("empty", emptyFunc)

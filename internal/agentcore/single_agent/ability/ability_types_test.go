@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -58,6 +59,83 @@ func TestBuildToolMessageContent_其他(t *testing.T) {
 	}
 }
 
+func TestBuildToolMessageContent_result解包(t *testing.T) {
+	// structToMap 包装的 {"result": "search..."} 应解包为 "search..."
+	result := map[string]any{"result": "search results..."}
+	got := BuildToolMessageContent(result)
+	if got != "search results..." {
+		t.Errorf("content = %q, want search results...", got)
+	}
+}
+
+func TestBuildToolMessageContent_result解包多层(t *testing.T) {
+	// result 内再包一层 {"result": {"result": "deep"}}
+	result := map[string]any{"result": map[string]any{"result": "deep"}}
+	got := BuildToolMessageContent(result)
+	if got != "deep" {
+		t.Errorf("content = %q, want deep", got)
+	}
+}
+
+func TestBuildToolMessageContent_普通map走JSON序列化(t *testing.T) {
+	result := map[string]any{"message": "created", "count": float64(2)}
+	got := BuildToolMessageContent(result)
+	// JSON 序列化 key 按字典序排列
+	want := `{"count":2,"message":"created"}`
+	if got != want {
+		t.Errorf("content = %q, want %q", got, want)
+	}
+}
+
+func TestBuildToolMessageContent_反射提取DataContent(t *testing.T) {
+	type toolOutput struct {
+		Data    map[string]any
+		Success bool
+		Error   string
+	}
+	result := toolOutput{
+		Data:    map[string]any{"content": "hello"},
+		Success: true,
+	}
+	got := BuildToolMessageContent(result)
+	if got != "hello" {
+		t.Errorf("content = %q, want hello", got)
+	}
+}
+
+func TestBuildToolMessageContent_反射提取Error(t *testing.T) {
+	type toolOutput struct {
+		Data    any
+		Success bool
+		Error   string
+	}
+	result := toolOutput{
+		Data:    nil,
+		Success: false,
+		Error:   "timeout",
+	}
+	got := BuildToolMessageContent(result)
+	if got != "timeout" {
+		t.Errorf("content = %q, want timeout", got)
+	}
+}
+
+func TestBuildToolMessageContent_反射指针类型(t *testing.T) {
+	type toolOutput struct {
+		Data    map[string]any
+		Success bool
+		Error   string
+	}
+	result := &toolOutput{
+		Data:    map[string]any{"content": "ptr hello"},
+		Success: true,
+	}
+	got := BuildToolMessageContent(result)
+	if got != "ptr hello" {
+		t.Errorf("content = %q, want ptr hello", got)
+	}
+}
+
 func TestAddAbilityResult(t *testing.T) {
 	r := AddAbilityResult{Name: "test", Added: true, Reason: "added_tool"}
 	if r.Name != "test" {
@@ -68,5 +146,12 @@ func TestAddAbilityResult(t *testing.T) {
 	}
 	if r.Reason != "added_tool" {
 		t.Errorf("Reason = %q, want added_tool", r.Reason)
+	}
+}
+
+func TestInterruptAutoConfirmKey(t *testing.T) {
+	// 验证常量值对齐 Python: INTERRUPT_AUTO_CONFIRM_KEY = "__interrupt_auto_confirm__"
+	if InterruptAutoConfirmKey != state.StringKey("__interrupt_auto_confirm__") {
+		t.Errorf("InterruptAutoConfirmKey = %v, want __interrupt_auto_confirm__", InterruptAutoConfirmKey)
 	}
 }

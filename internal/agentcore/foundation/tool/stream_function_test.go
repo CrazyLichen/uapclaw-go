@@ -8,7 +8,7 @@ import (
 // ──────────────────────────── 测试用函数 ────────────────────────────
 
 // streamSearchFunc 流式搜索函数
-func streamSearchFunc(ctx context.Context, input searchInput) (<-chan searchOutput, error) {
+func streamSearchFunc(ctx context.Context, input searchInput, opts ...ToolOption) (<-chan searchOutput, error) {
 	ch := make(chan searchOutput, 2)
 	go func() {
 		defer close(ch)

@@ -1,9 +1,12 @@
 package ability
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -46,6 +49,10 @@ type ExecuteResult struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// InterruptAutoConfirmKey 中断自动确认状态键。
+// 对齐 Python: openjiuwen/core/single_agent/interrupt/state.py INTERRUPT_AUTO_CONFIRM_KEY
+var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbilityExecutionError 创建能力执行错误。
@@ -67,25 +74,65 @@ func NewAbilityExecutionError(
 // BuildToolMessageContent 从执行结果中提取 ToolMessage 的 content 字段。
 //
 // 提取逻辑（对齐 Python _build_tool_message_content）：
-//  1. 结果有 data.content 字段 → 返回 content
-//  2. 结果 success=false 且有 error → 返回 error
-//  3. 其他 → 字符串化结果
+//  路径 1: map[string]any — 按 key 提取
+//    1a. data.content 提取
+//    1b. success=false + error 提取
+//    1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
+//    1d. 普通 map — JSON 序列化
+//  路径 2: 反射提取（对齐 Python getattr(result, "data", None)）
+//  路径 3: 最终 fallback — fmt.Sprintf("%v", result)
 func BuildToolMessageContent(result any) string {
+	// 路径 1：map[string]any — 按 key 提取
 	if m, ok := result.(map[string]any); ok {
+		// 1a. data.content 提取
 		if data, ok := m["data"].(map[string]any); ok {
 			if content, ok := data["content"]; ok {
-				s := fmt.Sprintf("%v", content)
-				if s != "" {
+				if s := fmt.Sprintf("%v", content); s != "" {
 					return s
 				}
 			}
 		}
+		// 1b. success=false + error 提取
 		if success, ok := m["success"].(bool); ok && !success {
 			if errVal, ok := m["error"]; ok {
 				return fmt.Sprintf("%v", errVal)
 			}
 		}
+		// 1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
+		// 对齐 Python: LocalFunction 返回 string 时，Go 包装为 {"result": v}，
+		// 需解包后递归，使 "search..." 走到路径 3 的 fmt.Sprintf("%v", result) 返回原值。
+		if v, ok := m["result"]; ok && len(m) == 1 {
+			return BuildToolMessageContent(v)
+		}
+		// 1d. 普通 map — JSON 序列化（对齐 Python str(dict)）
+		if jsonBytes, err := json.Marshal(m); err == nil {
+			return string(jsonBytes)
+		}
 	}
+
+	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
+	v := reflect.ValueOf(result)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() == reflect.Struct {
+		if f := v.FieldByName("Data"); f.IsValid() {
+			if dataMap, ok := f.Interface().(map[string]any); ok {
+				if content, ok := dataMap["content"]; ok {
+					if s := fmt.Sprintf("%v", content); s != "" {
+						return s
+					}
+				}
+			}
+		}
+		if f := v.FieldByName("Success"); f.IsValid() && f.Kind() == reflect.Bool && !f.Bool() {
+			if ef := v.FieldByName("Error"); ef.IsValid() {
+				return fmt.Sprintf("%v", ef.Interface())
+			}
+		}
+	}
+
+	// 路径 3：最终 fallback
 	return fmt.Sprintf("%v", result)
 }
 

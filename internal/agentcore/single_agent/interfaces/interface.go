@@ -119,8 +119,13 @@ type BaseAgent interface {
 	UnregisterRail(ctx context.Context, rail rail.AgentRail) error
 }
 
-// WorkflowOptions 工作流执行选项（预留）。
-type WorkflowOptions struct{}
+// WorkflowOptions 工作流执行选项。
+type WorkflowOptions struct {
+	// Session 工作流会话（对齐 Python workflow.invoke(inputs, session=...)）
+	Session *session.WorkflowSession
+	// Context 模型上下文，待领域八具体化（对齐 Python workflow.invoke(inputs, context=...)）
+	Context any
+}
 
 // AgentOptions Agent 调用选项。
 type AgentOptions struct {
@@ -159,6 +164,25 @@ func WithStreamModes(modes []stream.StreamMode) AgentOption {
 // NewAgentOptions 从选项列表构建 AgentOptions。
 func NewAgentOptions(opts ...AgentOption) *AgentOptions {
 	o := &AgentOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+// WithWorkflowSession 设置工作流会话。
+func WithWorkflowSession(sess *session.WorkflowSession) WorkflowOption {
+	return func(o *WorkflowOptions) { o.Session = sess }
+}
+
+// WithWorkflowContext 设置模型上下文。
+func WithWorkflowContext(ctx any) WorkflowOption {
+	return func(o *WorkflowOptions) { o.Context = ctx }
+}
+
+// NewWorkflowOptions 从选项列表构建 WorkflowOptions。
+func NewWorkflowOptions(opts ...WorkflowOption) *WorkflowOptions {
+	o := &WorkflowOptions{}
 	for _, opt := range opts {
 		opt(o)
 	}

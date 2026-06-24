@@ -14,13 +14,13 @@ import (
 
 // InvokeFunction 本地函数工具（Invoke 模式），将 Go 函数包装为 Tool。
 //
-// 用户函数签名：func(ctx context.Context, input I) (O, error)
+// 用户函数签名：func(ctx context.Context, input I, opts ...ToolOption) (O, error)
 //
 // 对应 Python: openjiuwen/core/foundation/tool/function/function.py (LocalFunction)
 // Python 不区分 Invoke/Stream，Go 通过不同类型在编译期保证签名正确。
 type InvokeFunction[I any, O any] struct {
 	card *ToolCard
-	fn   func(context.Context, I) (O, error)
+	fn   func(context.Context, I, ...ToolOption) (O, error)
 }
 
 // localFuncConfig 内部配置。
@@ -63,7 +63,7 @@ func WithCard(card *ToolCard) LocalFuncOption {
 //	// 等价于 NewInvokeFunction[SearchInput, SearchOutput]("search", Search)
 //
 // 对应 Python: LocalFunction(card=card, func=func)
-func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I) (O, error), opts ...LocalFuncOption) (*InvokeFunction[I, O], error) {
+func NewInvokeFunction[I any, O any](name string, fn func(context.Context, I, ...ToolOption) (O, error), opts ...LocalFuncOption) (*InvokeFunction[I, O], error) {
 	cfg := &localFuncConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -175,7 +175,7 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 	}
 
 	// 3. 调用用户函数
-	output, err := f.fn(ctx, input)
+	output, err := f.fn(ctx, input, opts...)
 	if err != nil {
 		return nil, exception.BuildError(
 			exception.StatusToolLocalFunctionExecutionError,

@@ -14,12 +14,12 @@ import (
 
 // StreamFunction 本地函数工具（Stream 模式），将 Go 流式函数包装为 Tool。
 //
-// 用户函数签名：func(ctx context.Context, input I) (<-chan O, error)
+// 用户函数签名：func(ctx context.Context, input I, opts ...ToolOption) (<-chan O, error)
 //
 // 对应 Python: openjiuwen/core/foundation/tool/function/function.py (LocalFunction.stream)
 type StreamFunction[I any, O any] struct {
 	card *ToolCard
-	fn   func(context.Context, I) (<-chan O, error)
+	fn   func(context.Context, I, ...ToolOption) (<-chan O, error)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -29,7 +29,7 @@ type StreamFunction[I any, O any] struct {
 // 使用示例：
 //
 //	fn, _ := NewStreamFunction("stream_search", StreamSearch)
-func NewStreamFunction[I any, O any](name string, fn func(context.Context, I) (<-chan O, error), opts ...LocalFuncOption) (*StreamFunction[I, O], error) {
+func NewStreamFunction[I any, O any](name string, fn func(context.Context, I, ...ToolOption) (<-chan O, error), opts ...LocalFuncOption) (*StreamFunction[I, O], error) {
 	cfg := &localFuncConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -146,7 +146,7 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 	}
 
 	// 3. 调用用户流式函数
-	ch, err := f.fn(ctx, input)
+	ch, err := f.fn(ctx, input, opts...)
 	if err != nil {
 		return nil, exception.BuildError(
 			exception.StatusToolLocalFunctionExecutionError,

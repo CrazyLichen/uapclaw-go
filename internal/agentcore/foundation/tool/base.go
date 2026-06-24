@@ -35,6 +35,10 @@ type ToolCallOptions struct {
 	MaxResponseBytes int
 	// RaiseForStatus HTTP 错误是否抛异常（RestfulApi 使用）
 	RaiseForStatus bool
+	// Session 会话实例（对齐 Python kwargs["session"]）
+	// 使用 any 避免循环依赖：tool → session → controller → schema → tool。
+	// 实际类型为 *session.Session，调用方通过类型断言获取。
+	Session any
 }
 
 // StreamChunk 流式执行的返回块。
@@ -114,6 +118,12 @@ func WithMaxResponseBytes(n int) ToolOption {
 // WithRaiseForStatus 设置 HTTP 错误是否抛异常。
 func WithRaiseForStatus(raise bool) ToolOption {
 	return func(o *ToolCallOptions) { o.RaiseForStatus = raise }
+}
+
+// WithToolSession 设置会话实例。
+// sess 实际类型为 *session.Session，用 any 避免循环依赖。
+func WithToolSession(sess any) ToolOption {
+	return func(o *ToolCallOptions) { o.Session = sess }
 }
 
 // NewToolCallOptions 从选项列表构造 ToolCallOptions。

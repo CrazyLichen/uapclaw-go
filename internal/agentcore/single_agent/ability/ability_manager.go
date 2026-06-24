@@ -10,11 +10,13 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -575,7 +577,7 @@ func (am *AbilityManager) executeTool(
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
 	// 对齐 Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
-	result, err := lt.Invoke(ctx, toolArgs)
+	result, err := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).
@@ -596,7 +598,19 @@ func (am *AbilityManager) executeTool(
 	return ExecuteResult{Result: result, ToolMsg: toolMsg}
 }
 
-// executeWorkflow 执行 Workflow 类型能力。⤵️ 预留，领域八回填。
+// executeWorkflow 执行 Workflow 类型能力。
+//
+// 对齐 Python: AbilityManager._execute_single_tool_call (workflow 分支 L760-775)
+// + AbilityManager._run_workflow (L690-726)
+// 完整步骤：
+//  1. 获取 WorkflowCard（L761-762）
+//  2. 从 ResourceManager 获取 workflow 实例（L763-764）
+//  3. 创建 workflow session（L707）
+//  4. 创建隔离 context（L708-712）
+//  5. 通过 Runner.RunWorkflow 执行（L713-718）
+//  6. 检测 INPUT_REQUIRED 中断（L719-723）
+//  7. 正常完成 — 提取 result（L725）
+//  8. 构建 ToolMessage（L726）
 func (am *AbilityManager) executeWorkflow(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
@@ -605,13 +619,20 @@ func (am *AbilityManager) executeWorkflow(
 	sess *session.Session,
 	tag string,
 ) ExecuteResult {
+	// 步骤 1：获取 WorkflowCard（对齐 Python L761-762）
 	wfCard := am.workflows[toolName]
 	wfID := wfCard.ID
 	if wfID == "" {
 		wfID = wfCard.Name
 	}
 
-	wfAny, err := am.resourceMgr.GetWorkflow(wfID)
+	// 步骤 2：从 ResourceManager 获取 workflow 实例（对齐 Python L763-764）
+	var opts []resource.ResourceOption
+	if tag != "" {
+		opts = append(opts, resource.WithResourceTag(tag))
+	}
+
+	wfAny, err := am.resourceMgr.GetWorkflow(wfID, opts...)
 	if err != nil {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -634,7 +655,20 @@ func (am *AbilityManager) executeWorkflow(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
-	result, err := wf.Invoke(ctx, toolArgs)
+	// 步骤 3：创建 workflow session（对齐 Python L707: workflow_session = session.create_workflow_session()）
+	var workflowSess *session.WorkflowSession
+	if sess != nil {
+		workflowSess = sess.CreateWorkflowSession()
+	}
+
+	// 步骤 4：创建隔离 context（对齐 Python L708-712: workflow_context = context_engine.create_context(...)）
+	var wfCtx any
+	if am.contextEngine != nil && sess != nil {
+		wfCtx, _ = am.contextEngine.CreateContext(ctx, wfID, sess)
+	}
+
+	// 步骤 5：通过 Runner.RunWorkflow 执行（对齐 Python L713-718: workflow_output = await Runner.run_workflow(...)）
+	result, err := runner.RunWorkflow(ctx, wf, toolArgs, workflowSess, wfCtx)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("workflow_name", toolName).
@@ -650,12 +684,36 @@ func (am *AbilityManager) executeWorkflow(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
-	content := BuildToolMessageContent(result)
+	// 步骤 6：检测 INPUT_REQUIRED 中断（对齐 Python L719-723: if WorkflowOutput.state == INPUT_REQUIRED → return (WorkflowOutput, None)）
+	if wfOut, ok := result.(*workflow.WorkflowOutput); ok && wfOut.State == workflow.WorkflowExecutionStateInputRequired {
+		return ExecuteResult{Result: wfOut, ToolMsg: nil}
+	}
+
+	// 步骤 7：正常完成 — 提取 result（对齐 Python L725: result = workflow_output.result）
+	actualResult := result
+	if wfOut, ok := result.(*workflow.WorkflowOutput); ok {
+		actualResult = wfOut.Result
+	}
+
+	// 步骤 8：构建 ToolMessage（对齐 Python L726: ToolMessage(content=str(result))）
+	content := BuildToolMessageContent(actualResult)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}
+	return ExecuteResult{Result: actualResult, ToolMsg: toolMsg}
 }
 
-// executeAgent 执行 Agent 类型能力。⤵️ 预留，领域六回填。
+// executeAgent 执行 Agent 类型能力。
+//
+// 对齐 Python: AbilityManager._execute_single_tool_call (agent 分支 L776-807)
+// 完整步骤：
+//  1. 获取 AgentCard（L777-778）
+//  2. 解析 agent_id（L779）
+//  3. 从 ResourceManager 获取 agent 实例（L780-781）
+//  4. 构造子会话 ID（L788）
+//  5. 注入 conversation_id（L789）
+//  6. 创建子会话（L791-794）
+//  7. 传播 auto_confirm（L796-798）
+//  8. 通过 Runner.RunAgent 执行（L800）
+//  9. 构建 ToolMessage（L834-838）
 func (am *AbilityManager) executeAgent(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
@@ -664,13 +722,22 @@ func (am *AbilityManager) executeAgent(
 	sess *session.Session,
 	tag string,
 ) ExecuteResult {
+	// 步骤 1：获取 AgentCard（对齐 Python L777-778）
 	agentCard := am.agents[toolName]
+
+	// 步骤 2：解析 agent_id（对齐 Python L779）
 	agentID := agentCard.ID
 	if agentID == "" {
 		agentID = agentCard.Name
 	}
 
-	agAny, err := am.resourceMgr.GetAgent(agentID)
+	// 步骤 3：从 ResourceManager 获取 agent 实例（对齐 Python L780-781）
+	var opts []resource.ResourceOption
+	if tag != "" {
+		opts = append(opts, resource.WithResourceTag(tag))
+	}
+
+	agAny, err := am.resourceMgr.GetAgent(agentID, opts...)
 	if err != nil {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -693,7 +760,30 @@ func (am *AbilityManager) executeAgent(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
-	result, err := ag.Invoke(ctx, toolArgs)
+	// 步骤 4-7：子会话生命周期（仅当 sess 非 nil 时执行）
+	var childSession *session.Session
+	if sess != nil {
+		// 步骤 4：构造子会话 ID（对齐 Python L788: child_session_id = f"{session.id}:{tool_call.id}"）
+		childSessionID := fmt.Sprintf("%s:%s", sess.GetSessionID(), toolCall.ID)
+
+		// 步骤 5：注入 conversation_id（对齐 Python L789: tool_args["conversation_id"] = child_session_id）
+		toolArgs["conversation_id"] = childSessionID
+
+		// 步骤 6：创建子会话（对齐 Python L791-794: child_session = create_agent_session(...)）
+		childSession = session.CreateAgentSession(agentID, childSessionID)
+
+		// 步骤 7：传播 auto_confirm（对齐 Python L796-798）
+		autoConfirmVal, _ := sess.GetState(InterruptAutoConfirmKey)
+		if autoConfirmVal != nil {
+			childSession.UpdateState(map[string]any{InterruptAutoConfirmKey.String(): autoConfirmVal})
+		}
+	} else {
+		// sess 为 nil 时仍需创建子会话（对齐 Python: _prepare_agent 始终创建 session）
+		childSession = session.CreateAgentSession(agentID, toolCall.ID)
+	}
+
+	// 步骤 8：通过 Runner.RunAgent 执行（对齐 Python L800: result = await Runner.run_agent(agent, inputs, session=child_session)）
+	result, err := runner.RunAgent(ctx, ag, toolArgs, childSession)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("agent_name", toolName).
@@ -709,6 +799,7 @@ func (am *AbilityManager) executeAgent(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
+	// 步骤 9：构建 ToolMessage（对齐 Python L834-838）
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
 	return ExecuteResult{Result: result, ToolMsg: toolMsg}
@@ -744,7 +835,7 @@ func (am *AbilityManager) executeFallbackTool(
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
 	// 对齐 Python: _ToolMeta.__call__ 中的自动生命周期注入
 	lt := tool.NewLifecycleTool(t)
-	result, invokeErr := lt.Invoke(ctx, toolArgs)
+	result, invokeErr := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if invokeErr != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).

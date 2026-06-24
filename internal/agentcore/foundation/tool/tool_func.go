@@ -58,7 +58,7 @@ func WithToolCard(card *ToolCard) ToolFuncOption {
 //
 //	// 手动指定参数（覆盖自动提取）
 //	fn, _ := NewTool(Search, WithToolInputParams(params))
-func NewTool[I any, O any](fn func(context.Context, I) (O, error), opts ...ToolFuncOption) (*InvokeFunction[I, O], error) {
+func NewTool[I any, O any](fn func(context.Context, I, ...ToolOption) (O, error), opts ...ToolFuncOption) (*InvokeFunction[I, O], error) {
 	cfg := &toolFuncConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -115,7 +115,7 @@ func NewTool[I any, O any](fn func(context.Context, I) (O, error), opts ...ToolF
 // 使用示例：
 //
 //	fn, _ := NewStreamTool(StreamSearch, WithToolName("stream_search"))
-func NewStreamTool[I any, O any](fn func(context.Context, I) (<-chan O, error), opts ...ToolFuncOption) (*StreamFunction[I, O], error) {
+func NewStreamTool[I any, O any](fn func(context.Context, I, ...ToolOption) (<-chan O, error), opts ...ToolFuncOption) (*StreamFunction[I, O], error) {
 	cfg := &toolFuncConfig{}
 	for _, opt := range opts {
 		opt(cfg)
