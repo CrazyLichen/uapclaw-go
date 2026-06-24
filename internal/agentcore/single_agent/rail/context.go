@@ -1,6 +1,8 @@
 package rail
 
 import (
+	"errors"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -58,6 +60,9 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// ErrSteeringQueueFull steering 队列已满
+var ErrSteeringQueueFull = errors.New("steering queue full")
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -131,20 +136,21 @@ func (c *AgentCallbackContext) BindSteeringQueue(q chan string) {
 
 // PushSteering 非阻塞推送 steering 消息。
 //
-// 无队列时 no-op，队列满时 warn 日志丢弃。
+// 无队列时 no-op，队列满时返回 ErrSteeringQueueFull（对齐 Python QueueFull 异常）。
 // 对应 Python: AgentCallbackContext.push_steering(msg)
-func (c *AgentCallbackContext) PushSteering(msg string) {
+func (c *AgentCallbackContext) PushSteering(msg string) error {
 	if c.steeringQueue == nil {
-		return
+		return nil
 	}
 	select {
 	case c.steeringQueue <- msg:
+		return nil
 	default:
-		// 队列满，warn 日志丢弃
 		logger.Warn(logComponent).
 			Str("event_type", "steering_queue_full").
 			Str("msg", msg).
-			Msg("steering 队列已满，消息丢弃")
+			Msg("steering 队列已满")
+		return ErrSteeringQueueFull
 	}
 }
 

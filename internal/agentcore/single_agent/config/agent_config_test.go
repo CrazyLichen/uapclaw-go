@@ -151,7 +151,7 @@ func TestNewReActAgentConfig_WithModelClient(t *testing.T) {
 	assert.Equal(t, "dashscope", cfg.ModelClientConfig.ClientProvider)
 	assert.Equal(t, "sk-test", cfg.ModelClientConfig.APIKey)
 	assert.Equal(t, "https://dashscope.api", cfg.ModelClientConfig.APIBase)
-	assert.True(t, cfg.ModelClientConfig.VerifySSL, "VerifySSL 默认应为 true")
+	assert.False(t, cfg.ModelClientConfig.VerifySSL, "VerifySSL 默认应为 false（对齐 Python verify_ssl=False）")
 
 	// 验证 ModelRequestConfig 被创建
 	assert.NotNil(t, cfg.ModelRequestConfig)
@@ -170,6 +170,28 @@ func TestNewReActAgentConfig_WithModelClient_扩展参数(t *testing.T) {
 	assert.NotNil(t, cfg.ModelClientConfig)
 	assert.False(t, cfg.ModelClientConfig.VerifySSL, "WithVerifySSL(false) 应生效")
 	assert.Equal(t, headers, cfg.ModelClientConfig.CustomHeaders, "WithExtraCustomHeaders 应设置到 ModelClientConfig.CustomHeaders")
+}
+
+// TestNewReActAgentConfig_WithModelClient_CustomHeaders回退 验证 WithModelClient 自动回退到 c.CustomHeaders。
+func TestNewReActAgentConfig_WithModelClient_CustomHeaders回退(t *testing.T) {
+	// 先 WithCustomHeaders 再 WithModelClient，ModelClientConfig.CustomHeaders 应从 c.CustomHeaders 回退
+	headers := map[string]string{"X-Custom": "val"}
+	cfg := NewReActAgentConfig(
+		WithCustomHeaders(headers),
+		WithModelClient("openai", "sk-xxx", "https://api.openai.com", "gpt-4"),
+	)
+	assert.NotNil(t, cfg.ModelClientConfig)
+	assert.Equal(t, headers, cfg.ModelClientConfig.CustomHeaders, "WithModelClient 应回退到 c.CustomHeaders")
+
+	// WithExtraCustomHeaders 优先级高于 c.CustomHeaders
+	extraHeaders := map[string]string{"X-Extra": "extra"}
+	cfg2 := NewReActAgentConfig(
+		WithCustomHeaders(headers),
+		WithModelClient("openai", "sk-xxx", "https://api.openai.com", "gpt-4",
+			WithExtraCustomHeaders(extraHeaders),
+		),
+	)
+	assert.Equal(t, extraHeaders, cfg2.ModelClientConfig.CustomHeaders, "WithExtraCustomHeaders 应优先于 c.CustomHeaders")
 }
 
 // TestNewReActAgentConfig_WithModelProviderDetails 验证复合 Option 仅设置顶层字段。
@@ -227,17 +249,22 @@ func TestNewReActAgentConfig_WithCustomHeadersSync_无ModelClientConfig(t *testi
 // TestReActAgentConfig_Validate 验证校验逻辑。
 func TestReActAgentConfig_Validate(t *testing.T) {
 	t.Run("正常情况返回nil", func(t *testing.T) {
-		cfg := NewReActAgentConfig()
+		cfg := NewReActAgentConfig(WithModelName("test-model"))
 		assert.Nil(t, cfg.Validate())
 	})
 
+	t.Run("ModelName为空返回错误", func(t *testing.T) {
+		cfg := NewReActAgentConfig()
+		assert.Error(t, cfg.Validate())
+	})
+
 	t.Run("LLMTopLogprobs为0通过", func(t *testing.T) {
-		cfg := NewReActAgentConfig(WithLLMTopLogprobs(0))
+		cfg := NewReActAgentConfig(WithModelName("test-model"), WithLLMTopLogprobs(0))
 		assert.Nil(t, cfg.Validate())
 	})
 
 	t.Run("LLMTopLogprobs为20通过", func(t *testing.T) {
-		cfg := NewReActAgentConfig(WithLLMTopLogprobs(20))
+		cfg := NewReActAgentConfig(WithModelName("test-model"), WithLLMTopLogprobs(20))
 		assert.Nil(t, cfg.Validate())
 	})
 
@@ -257,7 +284,7 @@ func TestReActAgentConfig_Validate(t *testing.T) {
 	})
 
 	t.Run("MaxIterations为1通过", func(t *testing.T) {
-		cfg := NewReActAgentConfig(WithMaxIterations(1))
+		cfg := NewReActAgentConfig(WithModelName("test-model"), WithMaxIterations(1))
 		assert.Nil(t, cfg.Validate())
 	})
 
@@ -267,7 +294,7 @@ func TestReActAgentConfig_Validate(t *testing.T) {
 	})
 
 	t.Run("ModelClientConfig非nil时递归校验_空APIKey返回错误", func(t *testing.T) {
-		cfg := NewReActAgentConfig()
+		cfg := NewReActAgentConfig(WithModelName("test-model"))
 		// 构造一个 APIKey 为空的 ModelClientConfig
 		cfg.ModelClientConfig = llmschema.NewModelClientConfig("openai", "", "https://api.openai.com")
 		assert.Error(t, cfg.Validate())
@@ -279,13 +306,13 @@ func TestReActAgentConfig_Validate(t *testing.T) {
 	})
 
 	t.Run("ContextEngineConfig递归校验_负值返回错误", func(t *testing.T) {
-		cfg := NewReActAgentConfig()
+		cfg := NewReActAgentConfig(WithModelName("test-model"))
 		cfg.ContextEngineConfig.MaxContextMessageNum = -1
 		assert.Error(t, cfg.Validate())
 	})
 
 	t.Run("ContextEngineConfig递归校验_有效配置通过", func(t *testing.T) {
-		cfg := NewReActAgentConfig(WithContextEngine(100, 5, false, false))
+		cfg := NewReActAgentConfig(WithModelName("test-model"), WithContextEngine(100, 5, false, false))
 		assert.Nil(t, cfg.Validate())
 	})
 }

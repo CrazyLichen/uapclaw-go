@@ -172,6 +172,7 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 func newStartedData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallStarted, &card.BaseCard)
 	data.Inputs = inputs
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -180,6 +181,7 @@ func newFinishedData(card *ToolCard, inputs map[string]any, result map[string]an
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallFinished, &card.BaseCard)
 	data.Inputs = inputs
 	data.Result = result
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -188,6 +190,7 @@ func newErrorData(card *ToolCard, inputs map[string]any, err error) *runnnercall
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallError, &card.BaseCard)
 	data.Inputs = inputs
 	data.Error = err
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -195,6 +198,7 @@ func newErrorData(card *ToolCard, inputs map[string]any, err error) *runnnercall
 func newResultReceivedData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolResultReceived, &card.BaseCard)
 	data.Result = result
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -202,6 +206,7 @@ func newResultReceivedData(card *ToolCard, result map[string]any) *runnnercallba
 func newInvokeInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeInput, &card.BaseCard)
 	data.Inputs = inputs
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -209,6 +214,7 @@ func newInvokeInputData(card *ToolCard, inputs map[string]any) *runnnercallback.
 func newInvokeOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeOutput, &card.BaseCard)
 	data.Result = result
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -216,6 +222,7 @@ func newInvokeOutputData(card *ToolCard, result map[string]any) *runnnercallback
 func newStreamInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamInput, &card.BaseCard)
 	data.Inputs = inputs
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }
 
@@ -223,5 +230,6 @@ func newStreamInputData(card *ToolCard, inputs map[string]any) *runnnercallback.
 func newStreamOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
 	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamOutput, &card.BaseCard)
 	data.Result = result
+	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
 }

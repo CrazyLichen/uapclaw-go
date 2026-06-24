@@ -2,6 +2,7 @@ package single_agent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -106,16 +107,30 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 
 	fw := callback.GetCallbackFramework()
 
+	// 解析 AgentOptions，获取 Session 等选项（对齐 Python invoke(inputs, session=None)）
+	agentOpts := interfaces.NewAgentOptions(opts...)
+
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentInvokeInput, inputs); transformed != nil {
-		inputs = transformed.(map[string]any)
+		if v, ok := transformed.(map[string]any); ok {
+			inputs = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformAgentIOInput").
+				Str("agent_id", w.card.ID).
+				Str("expected", "map[string]any").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输入")
+		}
 	}
 
 	// ② emit_before: 触发全局 AgentInvokeInput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:   callback.GlobalAgentInvokeInput,
-		AgentID: w.card.ID,
-		Inputs:  inputs,
+		Event:     callback.GlobalAgentInvokeInput,
+		AgentID:   w.card.ID,
+		AgentName: w.card.Name,
+		Inputs:    inputs,
+		Session:   agentOpts.Session,
 	})
 
 	// 执行子类的真实逻辑
@@ -140,9 +155,10 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 
 	// ④ emit_after: 触发全局 AgentInvokeOutput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:   callback.GlobalAgentInvokeOutput,
-		AgentID: w.card.ID,
-		Result:  result,
+		Event:     callback.GlobalAgentInvokeOutput,
+		AgentID:   w.card.ID,
+		AgentName: w.card.Name,
+		Result:    result,
 	})
 
 	return result, nil
@@ -160,16 +176,30 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 
 	fw := callback.GetCallbackFramework()
 
+	// 解析 AgentOptions，获取 Session 等选项（对齐 Python stream(inputs, session=None)）
+	agentOpts := interfaces.NewAgentOptions(opts...)
+
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentStreamInput, inputs); transformed != nil {
-		inputs = transformed.(map[string]any)
+		if v, ok := transformed.(map[string]any); ok {
+			inputs = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformAgentIOInput").
+				Str("agent_id", w.card.ID).
+				Str("expected", "map[string]any").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输入")
+		}
 	}
 
 	// ② emit_before: 触发全局 AgentStreamInput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:   callback.GlobalAgentStreamInput,
-		AgentID: w.card.ID,
-		Inputs:  inputs,
+		Event:     callback.GlobalAgentStreamInput,
+		AgentID:   w.card.ID,
+		AgentName: w.card.Name,
+		Inputs:    inputs,
+		Session:   agentOpts.Session,
 	})
 
 	// 调用子类的真实 stream
@@ -194,13 +224,23 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 		for item := range ch {
 			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
 			if transformed := fw.TransformAgentIOOutput(ctx, callback.GlobalAgentStreamOutput, item); transformed != nil {
-				item = transformed.(stream.Schema)
+				if v, ok := transformed.(stream.Schema); ok {
+					item = v
+				} else {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("event", "TransformAgentIOOutput").
+						Str("agent_id", w.card.ID).
+						Str("expected", "stream.Schema").
+						Str("actual", fmt.Sprintf("%T", transformed)).
+						Msg("TransformIO 返回类型不匹配，使用原始输出")
+				}
 			}
 			// ④ emit_after (per_item)
 			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-				Event:   callback.GlobalAgentStreamOutput,
-				AgentID: w.card.ID,
-				Result:  item,
+				Event:     callback.GlobalAgentStreamOutput,
+				AgentID:   w.card.ID,
+				AgentName: w.card.Name,
+				Result:    item,
 			})
 			out <- item
 		}

@@ -29,6 +29,8 @@ type AgentConfig interface {
 	GetContextEngineConfig() ceschema.ContextEngineConfig
 	// GetModelClientConfig 返回模型客户端配置（可能为 nil）
 	GetModelClientConfig() *llmschema.ModelClientConfig
+	// Validate 校验配置的合法性
+	Validate() error
 }
 
 // Workflow 工作流执行接口（最小定义，领域八扩展）。

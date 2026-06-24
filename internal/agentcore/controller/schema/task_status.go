@@ -11,6 +11,8 @@ package schema
 // 对应 Python: openjiuwen/core/controller/schema/task.py (TaskStatus)
 type TaskStatus string
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// TaskSubmitted 已提交，等待执行
 	TaskSubmitted TaskStatus = "submitted"
@@ -32,6 +34,8 @@ const (
 	TaskUnknown TaskStatus = "unknown"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsTerminal 判断是否为终态（completed/failed/canceled）。
@@ -45,9 +49,5 @@ func (s TaskStatus) IsTerminal() bool {
 func (s TaskStatus) IsInputRequired() bool {
 	return s == TaskInputRequired
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

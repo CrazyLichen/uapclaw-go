@@ -119,8 +119,6 @@ func (r *AgentResult) IsTerminal() bool {
 	return r.Status.IsTerminal()
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // MarshalJSON 实现 json.Marshaler 接口：将 []byte 做 UTF-8 decode 转 JSON 字符串。
 // 非 UTF-8 数据返回错误，与 Python 的 UnicodeDecodeError 行为对齐。
 func (r RawBytes) MarshalJSON() ([]byte, error) {
@@ -146,3 +144,5 @@ func (r *RawBytes) UnmarshalJSON(data []byte) error {
 	*r = []byte(s)
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

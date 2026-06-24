@@ -8,6 +8,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -117,7 +118,15 @@ func (m *Model) Invoke(
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMInvokeInput, messages); transformed != nil {
-		messages = transformed.(model_clients.MessagesParam)
+		if v, ok := transformed.(model_clients.MessagesParam); ok {
+			messages = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformLLMIOInput").
+				Str("expected", "MessagesParam").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输入")
+		}
 	}
 
 	// ② emit_before: 触发 callback.LLMInvokeInput 事件（调用前）
@@ -126,6 +135,7 @@ func (m *Model) Invoke(
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      false,
+		Messages:      messages,
 		Extra: map[string]any{
 			"model_config":        m.ModelConfig,
 			"model_client_config": m.ClientConfig,
@@ -141,6 +151,7 @@ func (m *Model) Invoke(
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
 			IsStream:      false,
+			Messages:      messages,
 			Error:         err,
 			Extra: map[string]any{
 				"model_config":        m.ModelConfig,
@@ -152,7 +163,15 @@ func (m *Model) Invoke(
 
 	// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
 	if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMInvokeOutput, result); transformed != nil {
-		result = transformed.(*llmschema.AssistantMessage)
+		if v, ok := transformed.(*llmschema.AssistantMessage); ok {
+			result = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformLLMIOOutput").
+				Str("expected", "*AssistantMessage").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输出")
+		}
 	}
 
 	// ④ emit_after: 触发 callback.LLMInvokeOutput 事件（调用后）
@@ -197,7 +216,15 @@ func (m *Model) Stream(
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
 	if transformed := fw.TransformLLMIOInput(ctx, callback.LLMStreamInput, messages); transformed != nil {
-		messages = transformed.(model_clients.MessagesParam)
+		if v, ok := transformed.(model_clients.MessagesParam); ok {
+			messages = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformLLMIOInput").
+				Str("expected", "MessagesParam").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输入")
+		}
 	}
 
 	// ② emit_before: 触发 LLMStreamInput 事件（流开始前）
@@ -206,6 +233,7 @@ func (m *Model) Stream(
 		ModelName:     modelName,
 		ModelProvider: m.ClientConfig.ClientProvider,
 		IsStream:      true,
+		Messages:      messages,
 		Extra: map[string]any{
 			"model_config":        m.ModelConfig,
 			"model_client_config": m.ClientConfig,
@@ -221,6 +249,7 @@ func (m *Model) Stream(
 			ModelName:     modelName,
 			ModelProvider: m.ClientConfig.ClientProvider,
 			IsStream:      true,
+			Messages:      messages,
 			Error:         err,
 			Extra: map[string]any{
 				"model_config":        m.ModelConfig,
@@ -237,7 +266,15 @@ func (m *Model) Stream(
 		for chunk := range chunkChan {
 			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
 			if transformed := fw.TransformLLMIOOutput(ctx, callback.LLMStreamOutput, chunk); transformed != nil {
-				chunk = transformed.(*llmschema.AssistantMessageChunk)
+				if v, ok := transformed.(*llmschema.AssistantMessageChunk); ok {
+					chunk = v
+				} else {
+					logger.Warn(logger.ComponentAgentCore).
+						Str("event", "TransformLLMIOOutput").
+						Str("expected", "*AssistantMessageChunk").
+						Str("actual", fmt.Sprintf("%T", transformed)).
+						Msg("TransformIO 返回类型不匹配，使用原始输出")
+				}
 			}
 
 			// ④ emit_after (per_item): 每 chunk 触发 LLMStreamOutput
