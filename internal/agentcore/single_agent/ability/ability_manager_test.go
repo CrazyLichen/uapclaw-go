@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -946,4 +948,83 @@ func TestPrioritizePaidSearch_无paid无free(t *testing.T) {
 	if len(result) != 1 || result[0].name != "other" {
 		t.Errorf("无 paid/free 时应原样返回")
 	}
+}
+
+// ──────────────────────────── Rail 集成测试 ────────────────────────────
+
+// fakeRailAgentForAbility 实现 rail.RailAgent 接口，用于 ability 测试
+type fakeRailAgentForAbility struct {
+	cbMgr   *rail.AgentCallbackManager
+	agentID string
+}
+
+func (f *fakeRailAgentForAbility) CallbackManager() *rail.AgentCallbackManager { return f.cbMgr }
+func (f *fakeRailAgentForAbility) AgentID() string                            { return f.agentID }
+
+// TestAbilityManager_Execute_forceFinish传播 验证子 toolCtx 的 force-finish 信号传播到父 cbc
+func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {
+	mgr := rail.NewAgentCallbackManager("test_ff_prop")
+	defer mgr.Clear()
+
+	// 注册 after_tool_call 钩子，在第一个工具调用后设置 force-finish
+	callCount := 0
+	mgr.RegisterCallback(context.Background(), rail.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*rail.AgentCallbackContext)
+		callCount++
+		if callCount == 1 {
+			cbc.RequestForceFinish(map[string]any{"reason": "budget_exceeded"})
+		}
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	toolCalls := []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}
+
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+	_ = results
+
+	// 父 cbc 应收到 force-finish 信号
+	assert.True(t, cbc.HasForceFinishRequest())
+	finish := cbc.ConsumeForceFinish()
+	assert.NotNil(t, finish)
+	assert.Equal(t, "budget_exceeded", finish.Result["reason"])
+}
+
+// TestAbilityManager_Execute_Rail包装 验证 ToolCallRail 自动触发 before/after 钩子
+func TestAbilityManager_Execute_Rail包装(t *testing.T) {
+	mgr := rail.NewAgentCallbackManager("test_rail_wrap")
+	defer mgr.Clear()
+
+	var firedEvents []rail.AgentCallbackEvent
+	registerHook := func(event rail.AgentCallbackEvent) {
+		mgr.RegisterCallback(context.Background(), event, func(_ context.Context, railCtx any) error {
+			cbc := railCtx.(*rail.AgentCallbackContext)
+			firedEvents = append(firedEvents, cbc.Event())
+			return nil
+		})
+	}
+	registerHook(rail.CallbackBeforeToolCall)
+	registerHook(rail.CallbackAfterToolCall)
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	toolCalls := []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}
+
+	_ = am.Execute(context.Background(), cbc, toolCalls, nil, "")
+
+	assert.Contains(t, firedEvents, rail.CallbackBeforeToolCall)
+	assert.Contains(t, firedEvents, rail.CallbackAfterToolCall)
 }
