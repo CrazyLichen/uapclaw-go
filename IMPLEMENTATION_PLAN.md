@@ -387,7 +387,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **6.x 回调框架** | — | | | |
 | 6.4 | ✅ | AgentCallbackEvent 枚举 | ✅ AgentCallbackEvent 枚举（type string，10 种事件，常量 Callback 前缀）；✅ AllCallbackEvents/String/GoString；✅ AgentCallEventType 重命名为 AgentCallGlobalEventType（常量名不变）；✅ 测试全部通过（rail/ 覆盖率 100%） | `openjiuwen/core/single_agent/rail/base.py` |
 | 6.5 | ✅ | AgentCallbackContext | ✅ AgentCallbackContext 结构体+构造函数+getter/setter；✅ steering 方法（BindSteeringQueue/PushSteering/DrainSteering/HasPendingSteering/SteeringQueue）；✅ FireLifecycle 方法（inputs 保存/恢复+异常设置）；✅ Fire/Retry/ForceFinish 预留 panic 占位（6.6/6.10 回填）；✅ EventInputs 接口+4 个 Inputs struct 骨架（6.9 回填字段）；✅ ToolCallContext 增加 callbackCtx 字段；✅ 测试全部通过（rail/ 覆盖率 93.0%） | `openjiuwen/core/single_agent/rail/base.py` |
-| 6.6 | ☐ | AgentCallbackManager | 回调管理器 | `openjiuwen/core/single_agent/agent_callback_manager.py` |
+| 6.6 | ✅ | AgentCallbackManager | ✅ AgentCallbackManager 结构体+8个方法；✅ 委托给全局 CallbackFramework PerAgent 域；✅ 命名空间隔离({agentID}_{event})；✅ CallbackInfo[F] 泛型包装（所有域统一）；✅ Functional Options 模式；✅ triggerCallbacks 泛型公共方法+两种执行策略；✅ PerAgent 域 5 个方法；✅ GlobalAgent 域重命名；✅ 回填 Fire()/FireLifecycle() 占位；✅ 回填 BaseAgent 接口/WarpBaseAgent 委托；✅ 测试全部通过 | `openjiuwen/core/single_agent/agent_callback_manager.py` |
 | **6.x Rail 系统** | — | | | |
 | 6.7 | ☐ | AgentRail 接口 | 10 个生命周期钩子 | `openjiuwen/core/single_agent/rail/base.py` |
 | 6.8 | ☐ | @rail 装饰器等价 | 生命周期钩子注册 | `openjiuwen/core/single_agent/rail/` (@rail decorator) |
