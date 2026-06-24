@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // RailAgent Rail 包所需的最小 Agent 接口。
 //
@@ -38,8 +38,6 @@ type RailAgent interface {
 // 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法，
 // 避免 rail → interfaces 循环依赖。
 type railConfig interface{}
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentCallbackContext Rail 系统与 Agent 运行时之间的核心中介对象。
 //

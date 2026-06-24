@@ -64,6 +64,12 @@ type modelClientExtra struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ReActAgentConfigOption ReActAgentConfig 构造选项函数
+type ReActAgentConfigOption func(*ReActAgentConfig)
+
+// ModelClientExtraOption WithModelClient 复合 Option 的扩展参数函数
+type ModelClientExtraOption func(*modelClientExtra)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -72,12 +78,6 @@ type modelClientExtra struct {
 var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// ReActAgentConfigOption ReActAgentConfig 构造选项函数
-type ReActAgentConfigOption func(*ReActAgentConfig)
-
-// ModelClientExtraOption WithModelClient 复合 Option 的扩展参数函数
-type ModelClientExtraOption func(*modelClientExtra)
 
 // NewReActAgentConfig 创建 ReActAgentConfig 实例，所有字段使用默认值。
 //

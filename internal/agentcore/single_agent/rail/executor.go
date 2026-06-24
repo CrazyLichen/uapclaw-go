@@ -80,7 +80,7 @@ func NewRailExecutor(before, after, onException AgentCallbackEvent) *RailExecuto
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 在 before/after/on_exception 钩子包裹下执行 fn。
 //
@@ -182,7 +182,7 @@ func (re *RailExecutor) RailEvents() (before, after, onException AgentCallbackEv
 	return re.Before, re.After, re.OnException
 }
 
-// ──────────────────────────── 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // fireAfter 触发 after 事件。
 //

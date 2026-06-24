@@ -6,7 +6,7 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentRail Agent 生命周期 Rail 接口。
 //
@@ -52,8 +52,6 @@ type AgentRail interface {
 	// 用户嵌入 BaseRail 后通过 BuildCallbacks(CallbackFrom(...)) 实现。
 	GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseRail AgentRail 的 no-op 默认实现。
 //

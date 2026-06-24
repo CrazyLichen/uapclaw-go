@@ -17,6 +17,8 @@
 //	│   ├── ability_manager.go # AbilityManager 核心结构 + 注册/查询/执行
 //	│   ├── ability_types.go   # Ability 联合类型 + AddAbilityResult + AbilityExecutionError
 //	│   └── json_repair.go     # RepairToolArgumentsJSON + ParseToolArguments
+//	├── agents/
+//	│   └── react_agent.go     # ReActAgent — ReAct 循环 Agent（Think → Act → Observe）
 //	├── config/
 //	│   ├── doc.go             # 子包文档
 //	│   └── agent_config.go    # ReActAgentConfig 结构体 + Option + AgentConfig 接口实现 + Validate
@@ -25,7 +27,12 @@
 //	│   └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
 //	├── rail/
 //	│   ├── doc.go             # 子包文档
-//	│   └── event.go           # AgentCallbackEvent 枚举 — Agent 生命周期回调事件类型（10 种）
+//	│   ├── context.go         # AgentCallbackContext 结构体与方法
+//	│   ├── event.go           # AgentCallbackEvent 枚举 — Agent 生命周期回调事件类型
+//	│   ├── executor.go        # RailExecutor 结构体 + ModelCallRail/ToolCallRail
+//	│   ├── inputs.go          # EventInputs 接口及各事件 Inputs 结构体
+//	│   ├── manager.go         # AgentCallbackManager 回调管理器
+//	│   └── rail.go            # AgentRail 接口 + BaseRail 结构体 + CallbackFrom/BuildCallbacks
 //	├── resource/
 //	│   ├── doc.go             # 子包文档
 //	│   └── resource_manager.go # ResourceManager 接口 + NoopResourceManager + ResourceOptions

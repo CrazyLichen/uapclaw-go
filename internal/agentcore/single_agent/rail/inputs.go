@@ -5,7 +5,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // EventInputs 回调事件输入接口。
 //
@@ -40,8 +40,6 @@ type InvokeQuery interface {
 	// - *InteractiveInput → 从 RawInputs 提取 string，无法提取则返回空串
 	PlainText() string
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // RunContext 结构化运行时上下文（心跳等场景）。
 //
@@ -213,7 +211,7 @@ func NewMapInputs() *MapInputs {
 	return &MapInputs{Data: make(map[string]any)}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsInteractiveInput 实现 InvokeQuery 接口，普通字符串查询始终返回 false。
 func (q InvokeQueryString) IsInteractiveInput() bool { return false }

@@ -40,6 +40,14 @@
 //
 //	import _ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/intellirouter"
 //
+// 文件目录：
+//
+//	intellirouter/
+//	├── doc.go      # 包文档
+//	├── client.go   # IntelliRouter 客户端（覆写 Invoke/Stream 动态路由）
+//	├── config.go   # 路由配置（Deployment + RoutingStrategy + IntelliRouterConfig）
+//	└── router.go   # ReliableRouter — 路由策略实现与健康状态管理
+//
 // # Python 对应路径
 //
 //	openjiuwen/core/foundation/llm/model_clients/intelli_router_model_client.py

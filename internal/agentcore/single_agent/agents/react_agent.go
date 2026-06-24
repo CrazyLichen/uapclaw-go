@@ -123,7 +123,7 @@ func NewPromptSection(name string, content map[string]string, priority int) Prom
 	}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // invokeImpl 实现 agentInvoker 接口 —— ReAct 循环核心逻辑。
 //
@@ -259,7 +259,7 @@ func (a *ReActAgent) AgentID() string {
 	return a.base.AgentID()
 }
 
-// ──────────────────────────── 非导出方法 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // reactLoop ReAct 循环核心。
 //

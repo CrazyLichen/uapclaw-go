@@ -10,5 +10,11 @@
 //   - 无工具调用时，reasoning_content 可不传（传了也会被忽略）
 //   - 本客户端对所有 assistant 消息统一兜底补空字符串，确保不会因漏传触发 400
 //
+// 文件目录：
+//
+//	deepseek/
+//	├── doc.go        # 包文档
+//	└── client.go     # DeepSeek 客户端实现（覆写 Invoke/Stream 补充 reasoning_content）
+//
 // 对应 Python: openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py
 package deepseek

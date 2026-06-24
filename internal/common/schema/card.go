@@ -61,6 +61,15 @@ const (
 	AbilityKindMcpServer
 )
 
+// CardOption BaseCard 构造选项函数。
+type CardOption func(*BaseCard)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // String 实现 fmt.Stringer 接口。
 func (k AbilityKind) String() string {
 	switch k {
@@ -76,15 +85,6 @@ func (k AbilityKind) String() string {
 		return "unknown"
 	}
 }
-
-// CardOption BaseCard 构造选项函数。
-type CardOption func(*BaseCard)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithName 设置 Card 名称。
 func WithName(name string) CardOption {

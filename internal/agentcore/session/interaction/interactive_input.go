@@ -48,7 +48,7 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 	return input, nil
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsInteractiveInput 实现 rail.InvokeQuery 接口，交互式输入始终返回 true。
 //
