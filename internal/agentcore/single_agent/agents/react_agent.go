@@ -8,6 +8,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -16,8 +17,10 @@ import (
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -47,8 +50,8 @@ type SystemPromptBuilder struct {
 // ReActAgent ReAct 循环 Agent：Think → Act → Observe。
 //
 // 内嵌 WarpBaseAgent 获取 BaseAgent 的全部方法，
-// 通过 agentInvoker 接口实现虚分发：
-// WarpBaseAgent.Invoke → invoker.invokeImpl → ReActAgent.invokeImpl。
+// 通过 AgentInvoker 接口实现虚分发：
+// WarpBaseAgent.Invoke → invoker.InvokeImpl → ReActAgent.InvokeImpl。
 //
 // 对应 Python: ReActAgent (openjiuwen/core/single_agent/agents/react_agent.py)
 type ReActAgent struct {
@@ -68,7 +71,7 @@ type ReActAgent struct {
 	kvReleaseWarningLogged bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 枚 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -92,7 +95,7 @@ func NewReActAgent(
 	card *agentschema.AgentCard,
 	config *saconfig.ReActAgentConfig,
 ) *ReActAgent {
-	base := single_agent.NewWarpBaseAgent(card, single_agent.NoopResourceManager{})
+	base := single_agent.NewWarpBaseAgent(card, &resource.NoopResourceManager{})
 
 	agent := &ReActAgent{
 		base:          base,
@@ -123,21 +126,15 @@ func NewPromptSection(name string, content map[string]string, priority int) Prom
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// invokeImpl 实现 agentInvoker 接口 —— ReAct 循环核心逻辑。
+// InvokeImpl 实现 AgentInvoker 接口 —— ReAct 循环核心逻辑。
 //
 // 对应 Python: ReActAgent._inner_invoke()
-func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
+func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
 	if sess == nil {
-		var err error
-		sess, err = session.NewSession(session.WithSessionID("default_session"))
-		if err != nil {
-			return nil, fmt.Errorf("创建 session 失败: %w", err)
-		}
+		sess = session.NewSession(session.WithSessionID("default_session"))
 	}
 
 	query, _ := inputs["query"].(string)
@@ -183,19 +180,15 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	return result, nil
 }
 
-// streamImpl 实现 agentInvoker 接口 —— 流式调用。
+// StreamImpl 实现 AgentInvoker 接口 —— 流式调用。
 //
 // 对应 Python: ReActAgent._inner_stream()
-func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
 	if sess == nil {
-		var err error
-		sess, err = session.NewSession(session.WithSessionID("default_session"))
-		if err != nil {
-			return nil, fmt.Errorf("创建 session 失败: %w", err)
-		}
+		sess = session.NewSession(session.WithSessionID("default_session"))
 	}
 
 	inputs["_streaming"] = true
@@ -203,18 +196,18 @@ func (a *ReActAgent) streamImpl(ctx context.Context, inputs map[string]any, opts
 
 	go func() {
 		defer close(outCh)
-		result, err := a.invokeImpl(ctx, inputs, opts...)
+		result, err := a.InvokeImpl(ctx, inputs, opts...)
 		if err != nil {
-			outCh <- stream.Schema{
-				StreamMode: stream.StreamModeLlmOutput,
-				Data:       map[string]any{"error": err.Error(), "result_type": "error"},
+			outCh <- &stream.CustomSchema{
+				Type: stream.StreamModeCustom.Mode(),
+				Data: map[string]any{"error": err.Error(), "result_type": "error"},
 			}
 			return
 		}
 		if resultMap, ok := result.(map[string]any); ok {
-			outCh <- stream.Schema{
-				StreamMode: stream.StreamModeLlmOutput,
-				Data:       resultMap,
+			outCh <- &stream.CustomSchema{
+				Type: stream.StreamModeCustom.Mode(),
+				Data: resultMap,
 			}
 		}
 	}()
@@ -284,7 +277,7 @@ func (a *ReActAgent) reactLoop(
 
 	if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok && invokeInputs.Query.PlainText() != "" {
 		if modelCtx != nil {
-			modelCtx.AddMessage(llmschema.NewUserMessage(invokeInputs.Query.PlainText()))
+			modelCtx.AddMessages(ctx, llmschema.NewUserMessage(invokeInputs.Query.PlainText()))
 		}
 	}
 
@@ -293,7 +286,7 @@ func (a *ReActAgent) reactLoop(
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
 			for _, msg := range steeringMsgs {
-				modelCtx.AddMessage(llmschema.NewUserMessage("[STEERING] " + msg))
+				modelCtx.AddMessages(ctx, llmschema.NewUserMessage("[STEERING] "+msg))
 			}
 		}
 
@@ -311,7 +304,7 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		if aiMsg != nil && modelCtx != nil {
-			modelCtx.AddMessage(aiMsg)
+			modelCtx.AddMessages(ctx, aiMsg)
 		}
 
 		// 无工具调用
@@ -321,7 +314,7 @@ func (a *ReActAgent) reactLoop(
 			}
 			content := ""
 			if aiMsg != nil {
-				content = aiMsg.Content
+				content = aiMsg.Content.Text()
 			}
 			a.saveContexts(sess)
 			iterResult = map[string]any{"output": content, "result_type": "answer"}
@@ -357,16 +350,15 @@ func (a *ReActAgent) callModel(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	modelCtx ceinterface.ModelContext,
-	tools []llmschema.ToolCall,
+	tools []*cschema.ToolInfo,
 ) (*llmschema.AssistantMessage, error) {
 	previewMsgs := make([]llmschema.BaseMessage, 0)
 	if modelCtx != nil {
-		previewMsgs = modelCtx.GetMessages()
+		previewMsgs = modelCtx.GetMessages(0, true)
 	}
 	cbc.SetInputs(&rail.ModelCallInputs{
 		Messages:     previewMsgs,
-		Tools:        tools,
-		ModelContext:  modelCtx,
+		ModelContext: modelCtx,
 	})
 
 	var result *llmschema.AssistantMessage
@@ -385,10 +377,10 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 
 	modelCtx := cbc.ModelContext()
 	var messages []llmschema.BaseMessage
-	var contextTools []llmschema.ToolCall
+	var contextTools []*cschema.ToolInfo
 
 	if modelCtx != nil {
-		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, toolsFromInputs(cbc))
+		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, nil, 0, 0)
 		if err != nil {
 			return nil, fmt.Errorf("获取上下文窗口失败: %w", err)
 		}
@@ -400,7 +392,6 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 
 	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
 		inputs.Messages = messages
-		inputs.Tools = contextTools
 	}
 
 	llmModel, err := a.getLLM()
@@ -426,11 +417,16 @@ func (a *ReActAgent) callLLMInvoke(
 	llmModel *llm.Model,
 	modelName string,
 	messages []llmschema.BaseMessage,
-	tools []llmschema.ToolCall,
+	tools []*cschema.ToolInfo,
 ) (*llmschema.AssistantMessage, error) {
-	resp, err := (*llmModel).Invoke(ctx, messages,
-		llm.WithModel(modelName),
-		llm.WithTools(tools),
+	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
+	for i, t := range tools {
+		toolProviders[i] = t
+	}
+	msgsParam := model_clients.NewMessagesParam(messages...)
+	resp, err := (*llmModel).Invoke(ctx, msgsParam,
+		model_clients.WithInvokeModel(modelName),
+		model_clients.WithTools(toolProviders...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("LLM invoke 失败: %w", err)
@@ -444,11 +440,16 @@ func (a *ReActAgent) callLLMStream(
 	llmModel *llm.Model,
 	modelName string,
 	messages []llmschema.BaseMessage,
-	tools []llmschema.ToolCall,
+	tools []*cschema.ToolInfo,
 ) (*llmschema.AssistantMessage, error) {
-	chunkCh, err := (*llmModel).Stream(ctx, messages,
-		llm.WithModel(modelName),
-		llm.WithTools(tools),
+	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
+	for i, t := range tools {
+		toolProviders[i] = t
+	}
+	msgsParam := model_clients.NewMessagesParam(messages...)
+	chunkCh, err := (*llmModel).Stream(ctx, msgsParam,
+		model_clients.WithStreamModel(modelName),
+		model_clients.WithStreamTools(toolProviders...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("LLM stream 失败: %w", err)
@@ -459,7 +460,7 @@ func (a *ReActAgent) callLLMStream(
 		if finalMsg == nil {
 			finalMsg = llmschema.NewAssistantMessage("")
 		}
-		finalMsg.Content += chunk.Content
+		finalMsg.Content = llmschema.NewTextContent(finalMsg.Content.Text() + chunk.Content.Text())
 		if len(chunk.ToolCalls) > 0 {
 			finalMsg.ToolCalls = append(finalMsg.ToolCalls, chunk.ToolCalls...)
 		}
@@ -474,7 +475,7 @@ func (a *ReActAgent) callLLMStream(
 func (a *ReActAgent) executeToolCalls(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
-	toolCalls []llmschema.ToolCall,
+	toolCalls []*llmschema.ToolCall,
 	sess *session.Session,
 	modelCtx ceinterface.ModelContext,
 ) ([]ability.ExecuteResult, error) {
@@ -499,16 +500,11 @@ func (a *ReActAgent) executeToolCalls(
 		return nil, fmt.Errorf("AbilityManager 未初始化")
 	}
 
-	// 将 toolCalls 转为指针切片以匹配 Execute 签名
-	toolCallPtrs := make([]*llmschema.ToolCall, len(toolCalls))
-	for i := range toolCalls {
-		toolCallPtrs[i] = &toolCalls[i]
-	}
-	results := am.Execute(ctx, cbc, toolCallPtrs, sess, "")
+	results := am.Execute(ctx, cbc, toolCalls, sess, "")
 
 	for _, r := range results {
 		if r.ToolMsg != nil && modelCtx != nil {
-			modelCtx.AddMessage(r.ToolMsg)
+			modelCtx.AddMessages(ctx, r.ToolMsg)
 		}
 	}
 
@@ -533,17 +529,20 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 	}
 	var initErr error
 	a.llmOnce.Do(func() {
-		model, err := llm.NewModel(
-			llm.WithModelName(a.config.ModelNameVal),
-			llm.WithModelProvider(a.config.ModelProvider),
-			llm.WithAPIKey(a.config.APIKey),
-			llm.WithAPIBase(a.config.APIBase),
-		)
+		clientCfg := &llmschema.ModelClientConfig{
+			ClientProvider: a.config.ModelProvider,
+			APIKey:         a.config.APIKey,
+			APIBase:        a.config.APIBase,
+		}
+		modelCfg := &llmschema.ModelRequestConfig{
+			ModelName: a.config.ModelNameVal,
+		}
+		model, err := llm.NewModel(clientCfg, modelCfg)
 		if err != nil {
 			initErr = err
 			return
 		}
-		a.llm = &model
+		a.llm = model
 	})
 	if initErr != nil {
 		return nil, fmt.Errorf("LLM 初始化失败: %w", initErr)
@@ -552,13 +551,13 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 }
 
 // getTools 获取工具列表。
-func (a *ReActAgent) getTools() ([]llmschema.ToolCall, error) {
+func (a *ReActAgent) getTools() ([]*cschema.ToolInfo, error) {
 	am := a.getAbilityManager()
 	if am == nil {
 		return nil, nil
 	}
-	_ = am.ListToolInfo()
-	return nil, nil
+	tools, _ := am.ListToolInfo(context.Background(), nil)
+	return tools, nil
 }
 
 // getAbilityManager 返回能力管理器。
@@ -578,7 +577,7 @@ func (a *ReActAgent) saveContexts(sess *session.Session) {
 	if a.contextEngine == nil || sess == nil {
 		return
 	}
-	if err := a.contextEngine.SaveContexts(context.Background(), sess); err != nil {
+	if _, err := a.contextEngine.SaveContexts(context.Background(), sess, nil); err != nil {
 		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("保存上下文失败")
 	}
 }
@@ -644,14 +643,4 @@ func (s *PromptSection) Render(language string) string {
 		return v
 	}
 	return ""
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// toolsFromInputs 从 AgentCallbackContext 的 Inputs 中提取工具列表。
-func toolsFromInputs(cbc *rail.AgentCallbackContext) []llmschema.ToolCall {
-	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
-		return inputs.Tools
-	}
-	return nil
 }

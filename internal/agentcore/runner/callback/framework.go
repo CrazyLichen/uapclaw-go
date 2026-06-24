@@ -132,16 +132,16 @@ var globalCallbackFramework = NewCallbackFramework()
 // 默认注册 LLM 日志回调，保持与原有日志行为一致。
 func NewCallbackFramework() *CallbackFramework {
 	fw := &CallbackFramework{
-		llmCallbacks:        make(map[LLMCallEventType][]*CallbackInfo[LLMCallbackFunc]),
-		toolCallbacks:       make(map[ToolCallEventType][]*CallbackInfo[ToolCallbackFunc]),
-		sessionCallbacks:    make(map[SessionCallEventType][]*CallbackInfo[SessionCallbackFunc]),
-		customCallbacks:     make(map[string][]*CallbackInfo[CustomCallbackFunc]),
-		contextCallbacks:    make(map[ContextCallEventType][]*CallbackInfo[ContextCallbackFunc]),
+		llmCallbacks:         make(map[LLMCallEventType][]*CallbackInfo[LLMCallbackFunc]),
+		toolCallbacks:        make(map[ToolCallEventType][]*CallbackInfo[ToolCallbackFunc]),
+		sessionCallbacks:     make(map[SessionCallEventType][]*CallbackInfo[SessionCallbackFunc]),
+		customCallbacks:      make(map[string][]*CallbackInfo[CustomCallbackFunc]),
+		contextCallbacks:     make(map[ContextCallEventType][]*CallbackInfo[ContextCallbackFunc]),
 		globalAgentCallbacks: make(map[GlobalAgentEventType][]*CallbackInfo[GlobalAgentCallbackFunc]),
-		perAgentCallbacks:   make(map[string][]*CallbackInfo[PerAgentCallbackFunc]),
-		llmTransformIO:      make(map[LLMCallEventType]*llmTransformIOEntry),
-		agentTransformIO:    make(map[GlobalAgentEventType]*agentTransformIOEntry),
-		toolTransformIO:     make(map[ToolCallEventType]*toolTransformIOEntry),
+		perAgentCallbacks:    make(map[string][]*CallbackInfo[PerAgentCallbackFunc]),
+		llmTransformIO:       make(map[LLMCallEventType]*llmTransformIOEntry),
+		agentTransformIO:     make(map[GlobalAgentEventType]*agentTransformIOEntry),
+		toolTransformIO:      make(map[ToolCallEventType]*toolTransformIOEntry),
 	}
 	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
 	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)

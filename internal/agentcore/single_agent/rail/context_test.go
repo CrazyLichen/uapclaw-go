@@ -337,16 +337,16 @@ func TestForkForToolCall_字段共享与隔离(t *testing.T) {
 	child := parent.ForkForToolCall(toolCall)
 
 	// 共享字段
-	assert.Equal(t, agent, child.Agent())                         // agent 引用共享
-	assert.Equal(t, sess, child.Session())                        // session 引用共享
-	assert.Equal(t, parent.Extra(), child.Extra())                // extra 字典引用共享
+	assert.Equal(t, agent, child.Agent())                          // agent 引用共享
+	assert.Equal(t, sess, child.Session())                         // session 引用共享
+	assert.Equal(t, parent.Extra(), child.Extra())                 // extra 字典引用共享
 	assert.Equal(t, parent.SteeringQueue(), child.SteeringQueue()) // steeringQueue 引用共享
 
 	// 独立字段
-	assert.Nil(t, child.ConsumeRetryRequest())        // retryRequest 独立零值
-	assert.False(t, child.HasForceFinishRequest())    // forceFinishRequest 独立零值
-	assert.Nil(t, child.Exception())                  // exception 独立零值
-	assert.Equal(t, 0, child.RetryAttempt())          // retryAttempt 独立零值
+	assert.Nil(t, child.ConsumeRetryRequest())     // retryRequest 独立零值
+	assert.False(t, child.HasForceFinishRequest()) // forceFinishRequest 独立零值
+	assert.Nil(t, child.Exception())               // exception 独立零值
+	assert.Equal(t, 0, child.RetryAttempt())       // retryAttempt 独立零值
 
 	// inputs 为 ToolCallInputs
 	inputs, ok := child.Inputs().(*ToolCallInputs)

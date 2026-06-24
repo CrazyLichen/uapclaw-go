@@ -74,13 +74,14 @@ func NewAbilityExecutionError(
 // BuildToolMessageContent 从执行结果中提取 ToolMessage 的 content 字段。
 //
 // 提取逻辑（对齐 Python _build_tool_message_content）：
-//  路径 1: map[string]any — 按 key 提取
-//    1a. data.content 提取
-//    1b. success=false + error 提取
-//    1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
-//    1d. 普通 map — JSON 序列化
-//  路径 2: 反射提取（对齐 Python getattr(result, "data", None)）
-//  路径 3: 最终 fallback — fmt.Sprintf("%v", result)
+//
+//	路径 1: map[string]any — 按 key 提取
+//	  1a. data.content 提取
+//	  1b. success=false + error 提取
+//	  1c. structToMap 的 {"result": v} 包装 — 解包后递归处理
+//	  1d. 普通 map — JSON 序列化
+//	路径 2: 反射提取（对齐 Python getattr(result, "data", None)）
+//	路径 3: 最终 fallback — fmt.Sprintf("%v", result)
 func BuildToolMessageContent(result any) string {
 	// 路径 1：map[string]any — 按 key 提取
 	if m, ok := result.(map[string]any); ok {

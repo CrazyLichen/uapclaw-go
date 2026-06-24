@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
@@ -959,7 +959,7 @@ type fakeRailAgentForAbility struct {
 }
 
 func (f *fakeRailAgentForAbility) CallbackManager() *rail.AgentCallbackManager { return f.cbMgr }
-func (f *fakeRailAgentForAbility) AgentID() string                            { return f.agentID }
+func (f *fakeRailAgentForAbility) AgentID() string                             { return f.agentID }
 
 // TestAbilityManager_Execute_forceFinish传播 验证子 toolCtx 的 force-finish 信号传播到父 cbc
 func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {

@@ -17,17 +17,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// agentInvoker 子类真实执行接口，用于虚分发。
+// AgentInvoker 子类真实执行接口，用于虚分发。
 //
-// Go 内嵌结构体无法虚分发到子类方法（w.invokeImpl() 在编译期
-// 绑定 WarpBaseAgent.invokeImpl，不会调用 ReActAgent.invokeImpl）。
-// 通过接口字段 invoker agentInvoker 实现等价虚方法表：
-// 构造时 agent.invoker = agent，调用 w.invoker.invokeImpl() 走虚分发。
-type agentInvoker interface {
-	// invokeImpl 子类实现的非流式调用逻辑
-	invokeImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
-	// streamImpl 子类实现的流式调用逻辑
-	streamImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error)
+// Go 内嵌结构体无法虚分发到子类方法（w.InvokeImpl() 在编译期
+// 绑定 WarpBaseAgent.InvokeImpl，不会调用 ReActAgent.InvokeImpl）。
+// 通过接口字段 invoker AgentInvoker 实现等价虚方法表：
+// 构造时 agent.invoker = agent，调用 w.invoker.InvokeImpl() 走虚分发。
+type AgentInvoker interface {
+	// InvokeImpl 子类实现的非流式调用逻辑
+	InvokeImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
+	// StreamImpl 子类实现的流式调用逻辑
+	StreamImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error)
 }
 
 // WarpBaseAgent BaseAgent 的默认实现，提供 Invoke/Stream 的回调包装骨架。
@@ -44,7 +44,7 @@ type WarpBaseAgent struct {
 	// callbackManager 回调管理器
 	callbackManager *rail.AgentCallbackManager
 	// invoker 子类注入的真实执行逻辑，实现虚分发
-	invoker agentInvoker
+	invoker AgentInvoker
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -81,8 +81,8 @@ type (
 // NewWarpBaseAgent 创建 WarpBaseAgent 实例。
 func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.ResourceManager) *WarpBaseAgent {
 	return &WarpBaseAgent{
-		card:           card,
-		abilityManager: ability.NewAbilityManager(resourceMgr),
+		card:            card,
+		abilityManager:  ability.NewAbilityManager(resourceMgr),
 		callbackManager: rail.NewAgentCallbackManager(card.ID),
 	}
 }
@@ -133,7 +133,7 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 	})
 
 	// 执行子类的真实逻辑
-	result, err := w.invoker.invokeImpl(ctx, inputs, opts...)
+	result, err := w.invoker.InvokeImpl(ctx, inputs, opts...)
 	if err != nil {
 		// 已经是 BaseError 则直接返回（对齐 Python except BaseError: raise）
 		if _, ok := err.(*exception.BaseError); ok {
@@ -202,7 +202,7 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 	})
 
 	// 调用子类的真实 stream
-	ch, err := w.invoker.streamImpl(ctx, inputs, opts...)
+	ch, err := w.invoker.StreamImpl(ctx, inputs, opts...)
 	if err != nil {
 		if _, ok := err.(*exception.BaseError); ok {
 			return nil, err
@@ -255,7 +255,7 @@ func (w *WarpBaseAgent) Card() *agentschema.AgentCard { return w.card }
 //
 // 子类（如 ReActAgent）构造时必须调用此方法设置自身为 invoker，
 // 使 WarpBaseAgent.Invoke/Stream 能正确分发到子类的实现。
-func (w *WarpBaseAgent) SetInvoker(inv agentInvoker) { w.invoker = inv }
+func (w *WarpBaseAgent) SetInvoker(inv AgentInvoker) { w.invoker = inv }
 
 // Config 返回当前配置。
 func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }

@@ -482,7 +482,7 @@ func (mc *SessionModelContext) TokenCounter() token.TokenCounter {
 // 对应 Python: SessionModelContext.reloader_tool()
 func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 	// 闭包捕获 offloadMessageBuffer 引用，对齐 Python @tool 装饰器
-	reloadFn := func(ctx context.Context, input reloaderToolInput) (string, error) {
+	reloadFn := func(ctx context.Context, input reloaderToolInput, _ ...tool.ToolOption) (string, error) {
 		reloadedMessages := mc.offloadMessageBuffer.Reload(input.OffloadHandle, input.OffloadType)
 		if len(reloadedMessages) == 0 {
 			return fmt.Sprintf("Failed to reload messages with offload_handle=%s and offload_type=%s", input.OffloadHandle, input.OffloadType), nil

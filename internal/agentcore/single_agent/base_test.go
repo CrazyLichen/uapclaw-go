@@ -16,45 +16,45 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// stubInvoker 实现 agentInvoker 接口，持有可配置的返回值
+// stubInvoker 实现 AgentInvoker 接口，持有可配置的返回值
 type stubInvoker struct {
-	// invokeResult invokeImpl 返回的结果
+	// invokeResult InvokeImpl 返回的结果
 	invokeResult any
-	// invokeErr invokeImpl 返回的错误
+	// invokeErr InvokeImpl 返回的错误
 	invokeErr error
-	// streamCh streamImpl 返回的 channel
+	// streamCh StreamImpl 返回的 channel
 	streamCh <-chan stream.Schema
-	// streamErr streamImpl 返回的错误
+	// streamErr StreamImpl 返回的错误
 	streamErr error
 }
 
-func (s *stubInvoker) invokeImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (any, error) {
+func (s *stubInvoker) InvokeImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (any, error) {
 	return s.invokeResult, s.invokeErr
 }
 
-func (s *stubInvoker) streamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
+func (s *stubInvoker) StreamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
 	return s.streamCh, s.streamErr
 }
 
-// testSubAgent 内嵌 WarpBaseAgent 并实现 agentInvoker，验证虚分发
+// testSubAgent 内嵌 WarpBaseAgent 并实现 AgentInvoker，验证虚分发
 type testSubAgent struct {
 	*WarpBaseAgent
-	// invokeCalled 是否调用了 invokeImpl
+	// invokeCalled 是否调用了 InvokeImpl
 	invokeCalled bool
-	// streamCalled 是否调用了 streamImpl
+	// streamCalled 是否调用了 StreamImpl
 	streamCalled bool
 	// mu 保护并发字段
 	mu sync.Mutex
 }
 
-func (a *testSubAgent) invokeImpl(_ context.Context, inputs map[string]any, _ ...AgentOption) (any, error) {
+func (a *testSubAgent) InvokeImpl(_ context.Context, inputs map[string]any, _ ...AgentOption) (any, error) {
 	a.mu.Lock()
 	a.invokeCalled = true
 	a.mu.Unlock()
 	return map[string]any{"echo": inputs}, nil
 }
 
-func (a *testSubAgent) streamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
+func (a *testSubAgent) StreamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
 	a.mu.Lock()
 	a.streamCalled = true
 	a.mu.Unlock()
@@ -365,7 +365,7 @@ func TestWarpBaseAgent_访问器(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_虚分发 定义内嵌 WarpBaseAgent 的子类型，实现 agentInvoker，验证 invokeImpl 走子类实现
+// TestWarpBaseAgent_虚分发 定义内嵌 WarpBaseAgent 的子类型，实现 AgentInvoker，验证 InvokeImpl 走子类实现
 func TestWarpBaseAgent_虚分发(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("sub_agent"), schema.WithDescription("虚分发测试"))
 	base := NewWarpBaseAgent(card, nil)
@@ -373,7 +373,7 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	// 关键：将 invoker 指向自身，实现虚分发
 	sub.invoker = sub
 
-	// 验证 Invoke 走子类的 invokeImpl
+	// 验证 Invoke 走子类的 InvokeImpl
 	result, err := sub.Invoke(context.Background(), map[string]any{"key": "val"})
 	if err != nil {
 		t.Fatalf("不应有错误: %v", err)
@@ -382,7 +382,7 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	called := sub.invokeCalled
 	sub.mu.Unlock()
 	if !called {
-		t.Error("子类 invokeImpl 应被调用")
+		t.Error("子类 InvokeImpl 应被调用")
 	}
 	m, ok := result.(map[string]any)
 	if !ok {
@@ -396,7 +396,7 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 		t.Errorf("echo[key] = %v, want val", echo["key"])
 	}
 
-	// 验证 Stream 走子类的 streamImpl
+	// 验证 Stream 走子类的 StreamImpl
 	outCh, err := sub.Stream(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("不应有错误: %v", err)
@@ -405,7 +405,7 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	streamCalled := sub.streamCalled
 	sub.mu.Unlock()
 	if !streamCalled {
-		t.Error("子类 streamImpl 应被调用")
+		t.Error("子类 StreamImpl 应被调用")
 	}
 	var items []stream.Schema
 	for item := range outCh {
