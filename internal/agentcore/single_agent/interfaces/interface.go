@@ -99,7 +99,7 @@ type BaseAgent interface {
 
 	// CallbackManager 返回回调管理器。
 	// 对应 Python: BaseAgent.agent_callback_manager 属性
-	// 通过 rail 包内定义 railAgent 最小接口打破循环依赖，返回具体类型。
+	// 通过 rail 包内定义 RailAgent 最小接口打破循环依赖，返回具体类型。
 	CallbackManager() *rail.AgentCallbackManager
 
 	// ── 回调/Rail 注册 ──

@@ -11,14 +11,25 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
-// railAgent Rail 包所需的最小 Agent 接口。
+// RailAgent Rail 包所需的最小 Agent 接口。
 //
 // 在 rail 包内定义，打破 rail → interfaces 循环依赖，
 // 使 AgentCallbackContext 可以直接访问 CallbackManager 具体类型，
 // Fire() 无需类型断言。
-type railAgent interface {
+// interfaces.BaseAgent 隐式满足此接口。
+//
+// 对应 Python: BaseAgent (openjiuwen/core/single_agent/base.py)
+type RailAgent interface {
 	// CallbackManager 返回 PerAgent 回调管理器
 	CallbackManager() *AgentCallbackManager
+	// AgentID 返回 Agent 唯一标识
+	// ⤴️ 6.7 定义；BaseAgent 通过 Card().ID 隐式满足
+	AgentID() string
+	// ⤵️ 后续 Rail 子类实现时按需扩充：
+	// AbilityManager() — 工具注册/注销（MemoryRail, SkillUseRail 等需要）
+	// SystemPromptBuilder() — 系统提示词构建器（多数 Rail init 中需要）
+	// Card() — Agent 元数据（agent.card.id 等场景）
+	// DeepConfig() — 深层配置（HeartbeatRail 等需要）
 }
 
 // railConfig Rail 包所需的最小 Config 接口。
@@ -37,7 +48,7 @@ type railConfig interface{}
 // 对应 Python: openjiuwen/core/single_agent/rail/base.py AgentCallbackContext (L226-416)
 type AgentCallbackContext struct {
 	// agent 当前 Agent 实例引用（最小化接口，仅暴露 CallbackManager）
-	agent railAgent
+	agent RailAgent
 	// event 当前回调事件类型（由 Fire 设置）
 	event AgentCallbackEvent
 	// inputs 当前事件的输入数据（随事件变化）
@@ -88,7 +99,7 @@ var ErrSteeringQueueFull = errors.New("steering queue full")
 //
 // 对应 Python: AgentCallbackContext(agent=..., inputs=..., session=...)
 func NewAgentCallbackContext(
-	agent railAgent,
+	agent RailAgent,
 	inputs EventInputs,
 	sess *session.Session,
 ) *AgentCallbackContext {
@@ -101,7 +112,7 @@ func NewAgentCallbackContext(
 }
 
 // Agent 返回当前 Agent 实例引用（最小化接口）
-func (c *AgentCallbackContext) Agent() railAgent { return c.agent }
+func (c *AgentCallbackContext) Agent() RailAgent { return c.agent }
 
 // Event 返回当前回调事件类型
 func (c *AgentCallbackContext) Event() AgentCallbackEvent { return c.event }
@@ -252,7 +263,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 // Fire 触发回调事件。
 //
 // 对应 Python: AgentCallbackContext.fire(event)
-// 通过 railAgent 最小接口直接访问 CallbackManager，无需类型断言。
+// 通过 RailAgent 最小接口直接访问 CallbackManager，无需类型断言。
 func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
 	c.event = event
 	if c.agent == nil {

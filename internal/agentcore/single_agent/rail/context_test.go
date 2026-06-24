@@ -9,13 +9,16 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeRailAgent 实现 railAgent 接口，用于测试
+// fakeRailAgent 实现 RailAgent 接口，用于测试
 type fakeRailAgent struct {
 	// cbMgr 回调管理器
 	cbMgr *AgentCallbackManager
+	// agentID Agent 唯一标识
+	agentID string
 }
 
 func (f *fakeRailAgent) CallbackManager() *AgentCallbackManager { return f.cbMgr }
+func (f *fakeRailAgent) AgentID() string                        { return f.agentID }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
