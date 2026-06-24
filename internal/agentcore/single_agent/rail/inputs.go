@@ -43,21 +43,6 @@ type InvokeQuery interface {
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// InvokeQueryString 普通字符串查询，实现 InvokeQuery 接口。
-//
-// 对齐 Python: InvokeInputs.query 为 str 类型时的分支
-type InvokeQueryString string
-
-// RunKind 运行模式枚举。
-//
-// 对应 Python: RunKind (openjiuwen/core/single_agent/rail/base.py L43-47)
-type RunKind string
-
-// HeartbeatReason 心跳触发原因枚举。
-//
-// 对应 Python: HeartbeatReason (openjiuwen/core/single_agent/rail/base.py L50-53)
-type HeartbeatReason string
-
 // RunContext 结构化运行时上下文（心跳等场景）。
 //
 // 对应 Python: RunContext (openjiuwen/core/single_agent/rail/base.py L56-62)
@@ -173,6 +158,21 @@ type ForceFinishRequest struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// InvokeQueryString 普通字符串查询，实现 InvokeQuery 接口。
+//
+// 对齐 Python: InvokeInputs.query 为 str 类型时的分支
+type InvokeQueryString string
+
+// RunKind 运行模式枚举。
+//
+// 对应 Python: RunKind (openjiuwen/core/single_agent/rail/base.py L43-47)
+type RunKind string
+
+// HeartbeatReason 心跳触发原因枚举。
+//
+// 对应 Python: HeartbeatReason (openjiuwen/core/single_agent/rail/base.py L50-53)
+type HeartbeatReason string
+
 const (
 	// RunKindNormal 正常运行
 	RunKindNormal RunKind = "normal"
@@ -205,6 +205,11 @@ func NewRunContext() *RunContext {
 // 对齐 Python: InvokeInputs(query="hello") 中 query 为 str 的分支
 func NewInvokeQueryString(s string) InvokeQuery {
 	return InvokeQueryString(s)
+}
+
+// NewMapInputs 创建 MapInputs 实例。
+func NewMapInputs() *MapInputs {
+	return &MapInputs{Data: make(map[string]any)}
 }
 
 // ──────────────────────────── 导出方法 ────────────────────────────

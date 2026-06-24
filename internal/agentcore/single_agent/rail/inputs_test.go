@@ -345,4 +345,12 @@ func TestMapInputs_默认零值(t *testing.T) {
 	assert.Nil(t, inputs.Data)
 }
 
+// TestNewMapInputs 验证 NewMapInputs 构造函数
+func TestNewMapInputs(t *testing.T) {
+	inputs := NewMapInputs()
+	assert.NotNil(t, inputs)
+	assert.NotNil(t, inputs.Data)
+	assert.Empty(t, inputs.Data)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
