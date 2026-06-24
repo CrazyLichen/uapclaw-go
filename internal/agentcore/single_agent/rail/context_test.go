@@ -64,7 +64,7 @@ func TestPushSteering_正常写入(t *testing.T) {
 	assert.Equal(t, []string{"msg1", "msg2"}, msgs)
 }
 
-// TestPushSteering_队列满丢弃 验证队列满时 PushSteering 不阻塞
+// TestPushSteering_队列满丢弃 验证队列满时 PushSteering 返回 ErrSteeringQueueFull
 func TestPushSteering_队列满丢弃(t *testing.T) {
 	q := make(chan string, 2)
 	ctx := NewAgentCallbackContext(nil, nil, nil)
@@ -72,8 +72,9 @@ func TestPushSteering_队列满丢弃(t *testing.T) {
 
 	ctx.PushSteering("a")
 	ctx.PushSteering("b")
-	// 队列已满（容量 2），再写应 no-op 不阻塞
-	ctx.PushSteering("c")
+	// 队列已满（容量 2），再写应返回 ErrSteeringQueueFull
+	err := ctx.PushSteering("c")
+	assert.Equal(t, ErrSteeringQueueFull, err)
 
 	msgs := ctx.DrainSteering()
 	assert.Equal(t, []string{"a", "b"}, msgs)

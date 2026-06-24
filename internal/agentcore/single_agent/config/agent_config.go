@@ -206,8 +206,8 @@ func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelC
 		c.APIBase = apiBase
 		c.ModelNameVal = modelName
 
-		// 构建扩展参数
-		extra := &modelClientExtra{verifySSL: true}
+		// 构建扩展参数（verifySSL 默认 false，对齐 Python configure_model_client(verify_ssl=False)）
+		extra := &modelClientExtra{verifySSL: false}
 		for _, opt := range opts {
 			opt(extra)
 		}
@@ -217,14 +217,21 @@ func WithModelClient(provider, apiKey, apiBase, modelName string, opts ...ModelC
 			provider, apiKey, apiBase,
 			llmschema.WithVerifySSL(extra.verifySSL),
 		)
+		// 优先 extra.customHeaders，回退 c.CustomHeaders（对齐 Python configure_model_client 传递 self.custom_headers）
 		if len(extra.customHeaders) > 0 {
 			c.ModelClientConfig.CustomHeaders = extra.customHeaders
+		} else if len(c.CustomHeaders) > 0 {
+			c.ModelClientConfig.CustomHeaders = c.CustomHeaders
 		}
 
-		// 创建 ModelRequestConfig
-		c.ModelRequestConfig = llmschema.NewModelRequestConfig(
-			llmschema.WithModelName(modelName),
-		)
+		// 创建或更新 ModelRequestConfig（对齐 Python configure_model_client 条件创建 model_config_obj）
+		if c.ModelRequestConfig == nil {
+			c.ModelRequestConfig = llmschema.NewModelRequestConfig(
+				llmschema.WithModelName(modelName),
+			)
+		} else {
+			c.ModelRequestConfig.ModelName = modelName
+		}
 	}
 }
 
@@ -297,10 +304,14 @@ func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
 // Validate 校验 ReActAgentConfig 的字段合法性。
 //
 // 校验规则：
-//   - LLMTopLogprobs 范围 [0, 20]
+//   - ModelNameVal 非空
 //   - MaxIterations > 0
+//   - LLMTopLogprobs 范围 [0, 20]
 //   - 子配置非 nil 时递归校验
 func (c *ReActAgentConfig) Validate() error {
+	if c.ModelNameVal == "" {
+		return fmt.Errorf("model_name 不能为空")
+	}
 	if c.MaxIterations <= 0 {
 		return fmt.Errorf("max_iterations 必须 > 0，当前值: %d", c.MaxIterations)
 	}

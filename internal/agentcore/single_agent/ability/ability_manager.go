@@ -664,7 +664,11 @@ func (am *AbilityManager) executeFallbackTool(
 		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
 	}
 
-	result, invokeErr := t.Invoke(ctx, toolArgs)
+	// 用 LifecycleTool 包装，使 fallback 路径走完整回调链
+	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
+	// 对齐 Python: _ToolMeta.__call__ 中的自动生命周期注入
+	lt := tool.NewLifecycleTool(t)
+	result, invokeErr := lt.Invoke(ctx, toolArgs)
 	if invokeErr != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).

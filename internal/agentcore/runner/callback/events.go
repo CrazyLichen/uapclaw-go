@@ -104,6 +104,8 @@ type GlobalAgentEventData struct {
 	Event GlobalAgentEventType
 	// AgentID Agent 标识
 	AgentID string
+	// AgentName Agent 名称
+	AgentName string
 	// Inputs 调用输入
 	Inputs map[string]any
 	// Result 调用结果（InvokeOutput/StreamOutput 时有值）
@@ -348,7 +350,7 @@ func (d *GlobalAgentEventData) String() string {
 	if d == nil {
 		return "nil"
 	}
-	return fmt.Sprintf("GlobalAgentEventData{事件:%s, AgentID:%s}", d.Event, d.AgentID)
+	return fmt.Sprintf("GlobalAgentEventData{事件:%s, AgentID:%s, AgentName:%s}", d.Event, d.AgentID, d.AgentName)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
