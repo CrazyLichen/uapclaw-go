@@ -253,6 +253,12 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 // Card 返回 Agent 身份卡片。
 func (w *WarpBaseAgent) Card() *agentschema.AgentCard { return w.card }
 
+// SetInvoker 设置虚分发执行器。
+//
+// 子类（如 ReActAgent）构造时必须调用此方法设置自身为 invoker，
+// 使 WarpBaseAgent.Invoke/Stream 能正确分发到子类的实现。
+func (w *WarpBaseAgent) SetInvoker(inv agentInvoker) { w.invoker = inv }
+
 // Config 返回当前配置。
 func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }
 

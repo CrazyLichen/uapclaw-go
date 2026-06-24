@@ -17,6 +17,7 @@
 //	├── context.go   # AgentCallbackContext 结构体与方法
 //	├── inputs.go    # EventInputs 接口及各事件 Inputs 结构体
 //	├── rail.go      # AgentRail 接口 + BaseRail 结构体 + CallbackFrom/BuildCallbacks
+//	├── executor.go  # RailExecutor 结构体（@rail 装饰器等价）+ ModelCallRail/ToolCallRail
 //	└── manager.go   # AgentCallbackManager 回调管理器
 //
 // 核心类型/接口索引：
@@ -26,12 +27,21 @@
 //	AgentCallbackManager    — PerAgent 实例级回调管理器（注册/触发/注销）
 //	AgentRail                — Agent 生命周期 Rail 接口（10 个钩子 + Init/Uninit/GetCallbacks）
 //	BaseRail                 — AgentRail 的 no-op 默认实现（嵌入后只需覆盖关心的钩子）
+//	RailExecutor             — @rail 装饰器等价（before/gate/exception/retry/after 包裹执行）
 //	RailAgent                — Rail 包所需的最小 Agent 接口（打破循环依赖）
 //	EventInputs              — 回调事件输入接口
-//	InvokeInputs             — BEFORE/AFTER_INVOKE 事件输入
-//	ModelCallInputs          — BEFORE/AFTER_MODEL_CALL 事件输入
-//	ToolCallInputs           — BEFORE/AFTER_TOOL_CALL 事件输入
-//	TaskIterationInputs      — BEFORE/AFTER_TASK_ITERATION 事件输入
+//	InvokeQuery              — Invoke 阶段查询输入接口（IsInteractiveInput + PlainText）
+//	InvokeQueryString        — 普通字符串查询，实现 InvokeQuery
+//	InvokeInputs             — BEFORE/AFTER_INVOKE 事件输入（query/result/run_kind/run_context）
+//	ModelCallInputs          — BEFORE/AFTER_MODEL_CALL 事件输入（messages/tools/response）
+//	ToolCallInputs           — BEFORE/AFTER_TOOL_CALL 事件输入（tool_call/tool_name/tool_result/tool_msg）
+//	TaskIterationInputs      — BEFORE/AFTER_TASK_ITERATION 事件输入（iteration/query/is_follow_up）
+//	MapInputs                — 任意字典事件输入（Dict[str, Any] 兜底，对齐 Python EventInputs Union）
+//	RunKind                  — 运行模式枚举（normal/heartbeat/cron）
+//	RunContext               — 结构化运行时上下文（心跳等场景）
+//	HeartbeatReason          — 心跳触发原因枚举（interval/manual）
+//	RetryRequest             — 重试指令（delay_seconds）
+//	ForceFinishRequest       — 提前终止信号（result）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/rail/base.py
 package rail

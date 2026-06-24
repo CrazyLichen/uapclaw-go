@@ -99,3 +99,59 @@ func TestInteractiveInput_Update_多次(t *testing.T) {
 		t.Errorf("UserInputs['node2'] 期望 'value2'，实际=%v", input.UserInputs["node2"])
 	}
 }
+
+// ──────────────────────────── InvokeQuery 接口方法测试 ────────────────────────────
+
+// TestInteractiveInput_IsInteractiveInput 测试 IsInteractiveInput 方法
+func TestInteractiveInput_IsInteractiveInput(t *testing.T) {
+	// 无 RawInputs
+	ii, err := NewInteractiveInput()
+	if err != nil {
+		t.Fatalf("不应返回错误：%v", err)
+	}
+	if !ii.IsInteractiveInput() {
+		t.Error("IsInteractiveInput 应返回 true")
+	}
+
+	// 有 RawInputs
+	ii2, err := NewInteractiveInput("内容")
+	if err != nil {
+		t.Fatalf("不应返回错误：%v", err)
+	}
+	if !ii2.IsInteractiveInput() {
+		t.Error("IsInteractiveInput 应返回 true")
+	}
+}
+
+// TestInteractiveInput_PlainText_RawInputs为字符串 测试 RawInputs 为字符串时 PlainText 提取
+func TestInteractiveInput_PlainText_RawInputs为字符串(t *testing.T) {
+	ii, err := NewInteractiveInput("恢复内容")
+	if err != nil {
+		t.Fatalf("不应返回错误：%v", err)
+	}
+	if ii.PlainText() != "恢复内容" {
+		t.Errorf("PlainText 期望 '恢复内容'，实际=%s", ii.PlainText())
+	}
+}
+
+// TestInteractiveInput_PlainText_RawInputs为非字符串 测试 RawInputs 为非字符串时 PlainText 返回空串
+func TestInteractiveInput_PlainText_RawInputs为非字符串(t *testing.T) {
+	ii, err := NewInteractiveInput(map[string]any{"key": "val"})
+	if err != nil {
+		t.Fatalf("不应返回错误：%v", err)
+	}
+	if ii.PlainText() != "" {
+		t.Errorf("PlainText 期望空串，实际=%s", ii.PlainText())
+	}
+}
+
+// TestInteractiveInput_PlainText_RawInputs为nil 测试 RawInputs 为 nil 时 PlainText 返回空串
+func TestInteractiveInput_PlainText_RawInputs为nil(t *testing.T) {
+	ii, err := NewInteractiveInput()
+	if err != nil {
+		t.Fatalf("不应返回错误：%v", err)
+	}
+	if ii.PlainText() != "" {
+		t.Errorf("PlainText 期望空串，实际=%s", ii.PlainText())
+	}
+}

@@ -67,11 +67,9 @@ type AgentCallbackContext struct {
 	retryAttempt int
 
 	// retryRequest 重试请求信号
-	// ⤵️ 6.10 回填：类型从 any 改为 *RetryRequest
-	retryRequest any
+	retryRequest *RetryRequest
 	// forceFinishRequest 强制终止请求信号
-	// ⤵️ 6.10 回填：类型从 any 改为 *ForceFinishRequest
-	forceFinishRequest any
+	forceFinishRequest *ForceFinishRequest
 	// steeringQueue 外部注入的 steering 消息队列
 	steeringQueue chan string
 }
@@ -280,42 +278,43 @@ func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
 //
 // 在 on_model_exception / on_tool_exception 钩子内调用。
 // 对应 Python: AgentCallbackContext.request_retry(delay_seconds)
-// ⤵️ 6.10 回填
-func (c *AgentCallbackContext) RequestRetry(_ float64) {
-	panic("TODO: 6.10 RetryRequest")
+func (c *AgentCallbackContext) RequestRetry(delaySeconds float64) {
+	c.retryRequest = &RetryRequest{DelaySeconds: delaySeconds}
 }
 
 // ConsumeRetryRequest 消费重试请求（一次性）。
 //
+// 返回并清除待处理的 RetryRequest（read-and-clear 模式）。
 // 对应 Python: AgentCallbackContext.consume_retry_request() -> Optional[RetryRequest]
-// ⤵️ 6.10 回填
-func (c *AgentCallbackContext) ConsumeRetryRequest() any {
-	panic("TODO: 6.10 RetryRequest")
+func (c *AgentCallbackContext) ConsumeRetryRequest() *RetryRequest {
+	req := c.retryRequest
+	c.retryRequest = nil
+	return req
 }
 
 // RequestForceFinish 请求提前终止。
 //
 // 在任何钩子中调用（如 before_model_call、after_tool_call）。
 // 对应 Python: AgentCallbackContext.request_force_finish(result)
-// ⤵️ 6.10 回填
-func (c *AgentCallbackContext) RequestForceFinish(_ map[string]any) {
-	panic("TODO: 6.10 ForceFinishRequest")
+func (c *AgentCallbackContext) RequestForceFinish(result map[string]any) {
+	c.forceFinishRequest = &ForceFinishRequest{Result: result}
 }
 
 // ConsumeForceFinish 消费提前终止请求（一次性）。
 //
+// 返回并清除待处理的 ForceFinishRequest（read-and-clear 模式）。
 // 对应 Python: AgentCallbackContext.consume_force_finish() -> Optional[ForceFinishRequest]
-// ⤵️ 6.10 回填
-func (c *AgentCallbackContext) ConsumeForceFinish() any {
-	panic("TODO: 6.10 ForceFinishRequest")
+func (c *AgentCallbackContext) ConsumeForceFinish() *ForceFinishRequest {
+	req := c.forceFinishRequest
+	c.forceFinishRequest = nil
+	return req
 }
 
 // HasForceFinishRequest 检查是否有待处理的提前终止请求。
 //
 // 对应 Python: AgentCallbackContext.has_force_finish_request -> bool
-// ⤵️ 6.10 回填
 func (c *AgentCallbackContext) HasForceFinishRequest() bool {
-	panic("TODO: 6.10 ForceFinishRequest")
+	return c.forceFinishRequest != nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

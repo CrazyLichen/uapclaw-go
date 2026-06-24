@@ -232,42 +232,71 @@ func TestFire_正常触发(t *testing.T) {
 	assert.True(t, called)
 }
 
-// TestRequestRetry_预留Panic 验证 RequestRetry 方法 panic 信息包含 "6.10"
-func TestRequestRetry_预留Panic(t *testing.T) {
+// ──────────────────────────── Retry / ForceFinish ────────────────────────────
+
+// TestRequestRetry_设置请求 验证 RequestRetry 设置 retryRequest
+func TestRequestRetry_设置请求(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.10 RetryRequest", func() {
-		ctx.RequestRetry(1.0)
-	})
+	assert.Nil(t, ctx.ConsumeRetryRequest())
+
+	ctx.RequestRetry(2.5)
+	req := ctx.ConsumeRetryRequest()
+	assert.NotNil(t, req)
+	assert.Equal(t, 2.5, req.DelaySeconds)
 }
 
-// TestConsumeRetryRequest_预留Panic 验证 ConsumeRetryRequest 方法 panic 信息包含 "6.10"
-func TestConsumeRetryRequest_预留Panic(t *testing.T) {
+// TestConsumeRetryRequest_一次性消费 验证 consume-and-clear 模式
+func TestConsumeRetryRequest_一次性消费(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.10 RetryRequest", func() {
-		_ = ctx.ConsumeRetryRequest()
-	})
+	ctx.RequestRetry(1.0)
+
+	// 第一次消费返回请求
+	req := ctx.ConsumeRetryRequest()
+	assert.NotNil(t, req)
+	assert.Equal(t, 1.0, req.DelaySeconds)
+
+	// 第二次消费返回 nil（已清除）
+	req2 := ctx.ConsumeRetryRequest()
+	assert.Nil(t, req2)
 }
 
-// TestRequestForceFinish_预留Panic 验证 RequestForceFinish 方法 panic 信息包含 "6.10"
-func TestRequestForceFinish_预留Panic(t *testing.T) {
+// TestRequestForceFinish_设置请求 验证 RequestForceFinish 设置 forceFinishRequest
+func TestRequestForceFinish_设置请求(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.10 ForceFinishRequest", func() {
-		ctx.RequestForceFinish(nil)
-	})
+	assert.False(t, ctx.HasForceFinishRequest())
+
+	result := map[string]any{"status": "early_exit"}
+	ctx.RequestForceFinish(result)
+	assert.True(t, ctx.HasForceFinishRequest())
+
+	req := ctx.ConsumeForceFinish()
+	assert.NotNil(t, req)
+	assert.Equal(t, "early_exit", req.Result["status"])
 }
 
-// TestConsumeForceFinish_预留Panic 验证 ConsumeForceFinish 方法 panic 信息包含 "6.10"
-func TestConsumeForceFinish_预留Panic(t *testing.T) {
+// TestConsumeForceFinish_一次性消费 验证 consume-and-clear 模式
+func TestConsumeForceFinish_一次性消费(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.10 ForceFinishRequest", func() {
-		_ = ctx.ConsumeForceFinish()
-	})
+	ctx.RequestForceFinish(map[string]any{"ok": true})
+
+	// 第一次消费返回请求
+	req := ctx.ConsumeForceFinish()
+	assert.NotNil(t, req)
+	assert.True(t, req.Result["ok"].(bool))
+
+	// 第二次消费返回 nil（已清除）
+	req2 := ctx.ConsumeForceFinish()
+	assert.Nil(t, req2)
 }
 
-// TestHasForceFinishRequest_预留Panic 验证 HasForceFinishRequest 方法 panic 信息包含 "6.10"
-func TestHasForceFinishRequest_预留Panic(t *testing.T) {
+// TestHasForceFinishRequest_消费后为false 验证消费后 HasForceFinishRequest 返回 false
+func TestHasForceFinishRequest_消费后为false(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	assert.PanicsWithValue(t, "TODO: 6.10 ForceFinishRequest", func() {
-		_ = ctx.HasForceFinishRequest()
-	})
+	ctx.RequestForceFinish(map[string]any{})
+	assert.True(t, ctx.HasForceFinishRequest())
+
+	_ = ctx.ConsumeForceFinish()
+	assert.False(t, ctx.HasForceFinishRequest())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
