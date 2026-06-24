@@ -274,13 +274,14 @@ func TestToolCallInputs_字段(t *testing.T) {
 	inputs := &ToolCallInputs{
 		ToolCall:   tc,
 		ToolName:   "search",
-		ToolArgs:   map[string]any{"q": "test"},
+		ToolArgs:   `{"q": "test"}`,
 		ToolResult: "result data",
 		ToolMsg:    tm,
 	}
 
 	assert.Equal(t, tc, inputs.ToolCall)
 	assert.Equal(t, "search", inputs.ToolName)
+	assert.Equal(t, `{"q": "test"}`, inputs.ToolArgs)
 	assert.Equal(t, "result data", inputs.ToolResult)
 	assert.Equal(t, tm, inputs.ToolMsg)
 }
@@ -290,7 +291,7 @@ func TestToolCallInputs_默认零值(t *testing.T) {
 	inputs := &ToolCallInputs{}
 	assert.Nil(t, inputs.ToolCall)
 	assert.Equal(t, "", inputs.ToolName)
-	assert.Nil(t, inputs.ToolArgs)
+	assert.Equal(t, "", inputs.ToolArgs)
 	assert.Nil(t, inputs.ToolResult)
 	assert.Nil(t, inputs.ToolMsg)
 }

@@ -102,8 +102,9 @@ type ToolCallInputs struct {
 	ToolCall *schema.ToolCall
 	// ToolName 工具名称（before 钩子可改写）
 	ToolName string
-	// ToolArgs 工具参数（before 钩子可改写）
-	ToolArgs any
+	// ToolArgs 工具参数 JSON 字符串（before 钩子可改写）
+	// 对齐 Python: tool_args: Any（实际为 str，即 ToolCall.arguments）
+	ToolArgs string
 	// ToolResult 工具执行结果（调用完成后填充）
 	ToolResult any
 	// ToolMsg 工具返回消息（调用完成后填充）
