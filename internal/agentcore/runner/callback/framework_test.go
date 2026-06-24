@@ -791,3 +791,273 @@ func TestTransformToolIOOutput_已注册时变换(t *testing.T) {
 		t.Errorf("变换未生效，got %v", result)
 	}
 }
+
+// ──────────────────────────── CallbackInfo 包装测试 ────────────────────────────
+
+// TestCallbackFramework_CallbackInfo优先级 测试优先级排序
+func TestCallbackFramework_CallbackInfo优先级(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callOrder []string
+
+	// 低优先级（默认0）先注册，高优先级后注册
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		callOrder = append(callOrder, "low")
+		return nil
+	})
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		callOrder = append(callOrder, "high")
+		return nil
+	}, WithPriority(10))
+
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+
+	// callOrder 只包含用户回调（默认的 LoggingLLMCallback 不计入）
+	if len(callOrder) != 2 {
+		t.Fatalf("期望 2 次用户回调，实际 %d 次，顺序 %v", len(callOrder), callOrder)
+	}
+	// 高优先级应先执行
+	if callOrder[0] != "high" || callOrder[1] != "low" {
+		t.Errorf("期望 [high, low]，实际 %v", callOrder)
+	}
+}
+
+// TestCallbackFramework_CallbackInfoOnce 测试一次性回调
+func TestCallbackFramework_CallbackInfoOnce(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}, WithOnce())
+
+	// 第一次触发
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("期望调用 1 次，实际 %d 次", called)
+	}
+
+	// 第二次触发：Once 回调应被禁用
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("Once 回调第二次不应被调用，实际 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_CallbackInfoDisabled 测试 CallbackType=transform 被跳过
+func TestCallbackFramework_CallbackInfoDisabled(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}, WithCallbackType("transform"))
+
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("transform 类型回调应被跳过，实际调用 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_GetCallbacksForTest_CallbackInfo 测试 GetCallbacksForTest 返回 CallbackInfo
+func TestCallbackFramework_GetCallbacksForTest_CallbackInfo(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	callbacks := fw.GetCallbacksForTest(LLMCallStarted)
+	if len(callbacks) == 0 {
+		t.Fatal("应该有默认日志回调")
+	}
+	// 第一个应该是 LoggingLLMCallback
+	if callbacks[0].Callback == nil {
+		t.Error("CallbackInfo.Callback 不应为 nil")
+	}
+	if !callbacks[0].Enabled {
+		t.Error("默认回调应该是启用的")
+	}
+}
+
+// ──────────────────────────── PerAgent 域测试 ────────────────────────────
+
+// TestCallbackFramework_OnPerAgent和TriggerPerAgent 测试 PerAgent 注册与触发
+func TestCallbackFramework_OnPerAgent和TriggerPerAgent(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fn := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}
+
+	fw.OnPerAgent("agent1_before_model_call", fn)
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("期望调用 1 次，实际 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_OffPerAgent 测试注销 PerAgent 回调
+func TestCallbackFramework_OffPerAgent(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fn := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}
+
+	fw.OnPerAgent("agent1_before_model_call", fn)
+	fw.OffPerAgent("agent1_before_model_call", fn)
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("注销后不应被调用，实际 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_OffAllPerAgent 测试清除所有 PerAgent 回调
+func TestCallbackFramework_OffAllPerAgent(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fn1 := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}
+	fn2 := func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}
+
+	fw.OnPerAgent("agent1_before_model_call", fn1)
+	fw.OnPerAgent("agent1_before_model_call", fn2)
+	fw.OffAllPerAgent("agent1_before_model_call")
+
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("OffAllPerAgent 后不应有回调被调用，实际 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_TriggerPerAgent_错误中断 测试 PerAgent error 中断执行
+func TestCallbackFramework_TriggerPerAgent_错误中断(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callOrder []string
+
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		callOrder = append(callOrder, "first")
+		return fmt.Errorf("callback error")
+	}, WithPriority(10))
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		callOrder = append(callOrder, "second")
+		return nil
+	})
+
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err == nil || err.Error() != "callback error" {
+		t.Errorf("期望 callback error，实际 %v", err)
+	}
+	if len(callOrder) != 1 || callOrder[0] != "first" {
+		t.Errorf("错误后应中断，期望 [first]，实际 %v", callOrder)
+	}
+}
+
+// TestCallbackFramework_PerAgent优先级 测试 PerAgent 优先级排序
+func TestCallbackFramework_PerAgent优先级(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callOrder []string
+
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		callOrder = append(callOrder, "low")
+		return nil
+	})
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		callOrder = append(callOrder, "high")
+		return nil
+	}, WithPriority(10))
+
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if len(callOrder) != 2 || callOrder[0] != "high" || callOrder[1] != "low" {
+		t.Errorf("期望 [high, low]，实际 %v", callOrder)
+	}
+}
+
+// TestCallbackFramework_PerAgentOnce 测试 PerAgent Once 选项
+func TestCallbackFramework_PerAgentOnce(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	}, WithOnce())
+
+	// 第一次触发
+	err := fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("期望调用 1 次，实际 %d 次", called)
+	}
+
+	// 第二次触发：Once 应被禁用
+	err = fw.TriggerPerAgent(context.Background(), "agent1_before_model_call", nil)
+	if err != nil {
+		t.Errorf("TriggerPerAgent 返回错误: %v", err)
+	}
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("Once 回调第二次不应被调用，实际 %d 次", called)
+	}
+}
+
+// TestCallbackFramework_HasPerAgentHooks 测试 HasPerAgentHooks
+func TestCallbackFramework_HasPerAgentHooks(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	if fw.HasPerAgentHooks("agent1_before_model_call") {
+		t.Error("未注册时不应有回调")
+	}
+
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		return nil
+	})
+
+	if !fw.HasPerAgentHooks("agent1_before_model_call") {
+		t.Error("注册后应有回调")
+	}
+
+	if fw.HasPerAgentHooks("agent2_before_model_call") {
+		t.Error("不同事件不应有回调")
+	}
+}
+
+// TestCallbackFramework_TriggerPerAgent_Nil上下文 测试 nil context 防御
+func TestCallbackFramework_TriggerPerAgent_Nil上下文(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnPerAgent("agent1_before_model_call", func(_ context.Context, _ any) error {
+		atomic.AddInt32(&called, 1)
+		return nil
+	})
+
+	err := fw.TriggerPerAgent(nil, "agent1_before_model_call", nil) //nolint:staticcheck // 测试 nil context 行为
+	if err != nil {
+		t.Errorf("nil context 应返回 nil，实际 %v", err)
+	}
+	if atomic.LoadInt32(&called) != 0 {
+		t.Error("nil context 时回调不应被调用")
+	}
+}
