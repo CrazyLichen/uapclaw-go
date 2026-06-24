@@ -389,7 +389,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.5 | ✅ | AgentCallbackContext | ✅ AgentCallbackContext 结构体+构造函数+getter/setter；✅ steering 方法（BindSteeringQueue/PushSteering/DrainSteering/HasPendingSteering/SteeringQueue）；✅ FireLifecycle 方法（inputs 保存/恢复+异常设置）；✅ Fire/Retry/ForceFinish 预留 panic 占位（6.6/6.10 回填）；✅ EventInputs 接口+4 个 Inputs struct 骨架（6.9 回填字段）；✅ ToolCallContext 增加 callbackCtx 字段；✅ 测试全部通过（rail/ 覆盖率 93.0%） | `openjiuwen/core/single_agent/rail/base.py` |
 | 6.6 | ✅ | AgentCallbackManager | ✅ AgentCallbackManager 结构体+8个方法；✅ 委托给全局 CallbackFramework PerAgent 域；✅ 命名空间隔离({agentID}_{event})；✅ CallbackInfo[F] 泛型包装（所有域统一）；✅ Functional Options 模式；✅ triggerCallbacks 泛型公共方法+两种执行策略；✅ PerAgent 域 5 个方法；✅ GlobalAgent 域重命名；✅ 回填 Fire()/FireLifecycle() 占位；✅ 回填 BaseAgent 接口/WarpBaseAgent 委托；✅ 测试全部通过 | `openjiuwen/core/single_agent/agent_callback_manager.py` |
 | **6.x Rail 系统** | — | | | |
-| 6.7 | ☐ | AgentRail 接口 | 10 个生命周期钩子 | `openjiuwen/core/single_agent/rail/base.py` |
+| 6.7 | ✅ | AgentRail 接口 | ✅ AgentRail 接口(10钩子+Init/Uninit/GetCallbacks)；✅ BaseRail no-op默认+CallbackFrom/BuildCallbacks辅助；✅ RegisterRail/UnregisterRail 回填实现；✅ RailAgent 接口扩充 AgentID()；✅ interfaces 包参数类型从 any 改为 AgentRail；✅ WarpBaseAgent RegisterRail 添加 Init 调用、UnregisterRail 添加 Uninit 调用；✅ 测试全部通过 | `openjiuwen/core/single_agent/rail/base.py` |
 | 6.8 | ☐ | @rail 装饰器等价 | 生命周期钩子注册 | `openjiuwen/core/single_agent/rail/` (@rail decorator) |
 | 6.9 | ☐ | Rail Inputs | `InvokeInputs/ModelCallInputs/ToolCallInputs/TaskIterationInputs` | `openjiuwen/core/single_agent/rail/` (Typed inputs) |
 | 6.10 | ☐ | ForceFinishRequest / RetryRequest | 提前终止与重试 | `openjiuwen/core/single_agent/rail/` |
