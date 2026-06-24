@@ -113,7 +113,7 @@ func BuildToolMessageContent(result any) string {
 
 	// 路径 2：反射提取（对齐 Python getattr(result, "data", None)）
 	v := reflect.ValueOf(result)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == 22 /* reflect.Ptr */ {
 		v = v.Elem()
 	}
 	if v.Kind() == reflect.Struct {

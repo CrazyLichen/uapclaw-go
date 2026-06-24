@@ -184,11 +184,10 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 //
 // 对应 Python: ReActAgent._inner_stream()
 func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+	// 如果 opts 中没有 session，补充默认 session
 	agentOpts := interfaces.NewAgentOptions(opts...)
-	sess := agentOpts.Session
-
-	if sess == nil {
-		sess = session.NewSession(session.WithSessionID("default_session"))
+	if agentOpts.Session == nil {
+		opts = append(opts, interfaces.WithSession(session.NewSession(session.WithSessionID("default_session"))))
 	}
 
 	inputs["_streaming"] = true
@@ -563,13 +562,11 @@ func (a *ReActAgent) getTools() ([]*cschema.ToolInfo, error) {
 // getAbilityManager 返回能力管理器。
 func (a *ReActAgent) getAbilityManager() *ability.AbilityManager {
 	amAny := a.base.AbilityManager()
-	if amAny == nil {
+	am, ok := amAny.(*ability.AbilityManager)
+	if !ok {
 		return nil
 	}
-	if am, ok := amAny.(*ability.AbilityManager); ok {
-		return am
-	}
-	return nil
+	return am
 }
 
 // saveContexts 保存上下文。
