@@ -1,25 +1,13 @@
 package ability
 
 import (
-	"context"
 	"fmt"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ToolRail 工具调用生命周期钩子接口（3.13 只定义，6.4-6.10 实现）。
-type ToolRail interface {
-	// BeforeToolCall 工具调用前触发
-	BeforeToolCall(ctx context.Context, callCtx *ToolCallContext) (*ToolCallContext, error)
-	// AfterToolCall 工具调用后触发
-	AfterToolCall(ctx context.Context, callCtx *ToolCallContext, result *ToolCallResult) (*ToolCallResult, error)
-	// OnToolException 工具调用异常时触发
-	OnToolException(ctx context.Context, callCtx *ToolCallContext, err error) error
-}
 
 // AddAbilityResult 添加能力的返回结果。
 //
@@ -50,32 +38,6 @@ type ExecuteResult struct {
 	ToolMsg *llmschema.ToolMessage
 	// Err 执行错误（如有）
 	Err error
-}
-
-// ToolCallContext 工具调用上下文（6.5 回填）。
-type ToolCallContext struct {
-	// ToolCall 工具调用信息
-	ToolCall *llmschema.ToolCall
-	// ToolName 工具名称
-	ToolName string
-	// ToolArgs 工具参数
-	ToolArgs map[string]any
-	// ToolResult 工具执行结果
-	ToolResult any
-	// ToolMsg 工具返回消息
-	ToolMsg *llmschema.ToolMessage
-	// callbackCtx 所属 AgentCallbackContext（6.5 回填）
-	// 用于在 ToolRail 钩子中访问 retry/force_finish/steering 等控制机制
-	callbackCtx *rail.AgentCallbackContext
-	// ⤵️ 预留字段：force_finish / steering_queue / skip_tool
-}
-
-// ToolCallResult 工具调用结果（预留）。
-type ToolCallResult struct {
-	// Result 执行结果
-	Result any
-	// ToolMsg 返回给 LLM 的 ToolMessage
-	ToolMsg *llmschema.ToolMessage
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

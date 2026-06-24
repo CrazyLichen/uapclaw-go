@@ -60,8 +60,6 @@ type (
 	AddAbilityResult = ability.AddAbilityResult
 	// ExecuteResult 工具执行结果（re-export from ability 子包）
 	ExecuteResult = ability.ExecuteResult
-	// ToolRail 工具调用钩子接口（re-export from ability 子包）
-	ToolRail = ability.ToolRail
 	// AbilityExecutionError 能力执行错误（re-export from ability 子包）
 	AbilityExecutionError = ability.AbilityExecutionError
 	// ResourceManager 资源管理器接口（re-export from resource 子包）

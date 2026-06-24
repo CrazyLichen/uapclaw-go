@@ -45,8 +45,6 @@ type AbilityManager struct {
 	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
 	resourceMgr resource.ResourceManager
-	// rail 工具调用生命周期钩子 ⤵️ 预留，6.4-6.10 回填
-	rail ToolRail
 }
 
 // toolItem 内部辅助类型，用于 prioritizePaidSearch 的输入。
@@ -82,11 +80,6 @@ func NewAbilityManager(resourceMgr resource.ResourceManager) *AbilityManager {
 // SetContextEngine 设置上下文引擎。
 func (am *AbilityManager) SetContextEngine(ce iface.ContextEngine) {
 	am.contextEngine = ce
-}
-
-// SetRail 设置工具调用生命周期钩子（预留，6.4-6.10 回填）。
-func (am *AbilityManager) SetRail(rail ToolRail) {
-	am.rail = rail
 }
 
 // Add 添加单个能力。重复 name 时保留已有的，记录 Warn 日志，返回 Added=false。

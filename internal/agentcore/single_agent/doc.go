@@ -15,7 +15,7 @@
 //	├── ability/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── ability_manager.go # AbilityManager 核心结构 + 注册/查询/执行
-//	│   ├── ability_types.go   # Ability 联合类型 + AddAbilityResult + AbilityExecutionError + ToolRail 预留
+//	│   ├── ability_types.go   # Ability 联合类型 + AddAbilityResult + AbilityExecutionError
 //	│   └── json_repair.go     # RepairToolArgumentsJSON + ParseToolArguments
 //	├── config/
 //	│   ├── doc.go             # 子包文档

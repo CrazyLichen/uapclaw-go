@@ -516,11 +516,6 @@ func TestAbilityManager_SetContextEngine(t *testing.T) {
 	am.SetContextEngine(nil) // 不应 panic，nil 满足 iface.ContextEngine 接口
 }
 
-func TestAbilityManager_SetRail(t *testing.T) {
-	am := NewAbilityManager(nil)
-	am.SetRail(nil) // 不应 panic
-}
-
 func TestAbilityManager_RemoveMany(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("t1", "工具1", nil, nil))

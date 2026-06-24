@@ -9,7 +9,7 @@
 //	ability/
 //	├── doc.go               # 包文档
 //	├── ability_manager.go   # AbilityManager 核心结构 + 注册/查询/执行
-//	├── ability_types.go     # Ability 联合类型 + AddAbilityResult + AbilityExecutionError + ToolRail 预留
+//	├── ability_types.go     # Ability 联合类型 + AddAbilityResult + AbilityExecutionError
 //	└── json_repair.go       # RepairToolArgumentsJSON + ParseToolArguments
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/ability_manager.py
