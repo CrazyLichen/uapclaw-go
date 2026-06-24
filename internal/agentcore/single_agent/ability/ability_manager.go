@@ -412,6 +412,20 @@ func (am *AbilityManager) Execute(
 
 	wg.Wait()
 
+	// 从 inputs 读取 after 钩子可能改写的最终值。
+	// 对齐 Python: AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs.
+	// 优先使用 inputs 中的值，兜底用原始 ExecuteResult。
+	for i, toolCtx := range toolCtxs {
+		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+			if inputs.ToolResult != nil {
+				results[i].Result = inputs.ToolResult
+			}
+			if inputs.ToolMsg != nil {
+				results[i].ToolMsg = inputs.ToolMsg
+			}
+		}
+	}
+
 	// force-finish 信号传播：子 toolCtx → 父 cbc
 	// 对应 Python: for tool_ctx in tool_contexts:
 	//   ff = tool_ctx.consume_force_finish()
@@ -449,6 +463,12 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	var result ExecuteResult
 	_ = rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
 		result = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+		// 回填结果到 inputs（对齐 Python: ctx.inputs.tool_result/tool_msg = ...）
+		// after 钩子触发时可通过 inputs 访问执行结果，也可改写。
+		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+			inputs.ToolResult = result.Result
+			inputs.ToolMsg = result.ToolMsg
+		}
 		return result.Err
 	})
 	return result
