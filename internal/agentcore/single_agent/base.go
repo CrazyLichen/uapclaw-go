@@ -283,19 +283,39 @@ func (w *WarpBaseAgent) RegisterCallback(ctx context.Context, event any, fn any,
 }
 
 // RegisterRail 注册 Rail。
-// 委托给 AgentCallbackManager.RegisterRail。
-func (w *WarpBaseAgent) RegisterRail(ctx context.Context, railObj any, opts ...callback.CallbackOption) error {
+// 调用 rail.Init() 初始化后委托给 AgentCallbackManager.RegisterRail。
+//
+// 对应 Python: BaseAgent.register_rail(rail) → rail.init(self) → manager.register_rail(rail, self)
+func (w *WarpBaseAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...callback.CallbackOption) error {
 	if w.callbackManager != nil {
-		return w.callbackManager.RegisterRail(ctx, railObj, opts...)
+		// 调用 Rail 初始化钩子（对齐 Python: rail.init(self)）
+		if err := r.Init(w); err != nil {
+			return err
+		}
+		return w.callbackManager.RegisterRail(ctx, r, opts...)
 	}
 	return nil
 }
 
 // UnregisterRail 注销 Rail。
-// 委托给 AgentCallbackManager.UnregisterRail。
-func (w *WarpBaseAgent) UnregisterRail(ctx context.Context, railObj any) error {
+// 委托给 AgentCallbackManager.UnregisterRail 后调用 rail.Uninit()。
+//
+// 对应 Python: BaseAgent.unregister_rail(rail) → manager.unregister_rail(rail, self) → rail.uninit(self)
+func (w *WarpBaseAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
 	if w.callbackManager != nil {
-		return w.callbackManager.UnregisterRail(ctx, railObj)
+		err := w.callbackManager.UnregisterRail(ctx, r)
+		// 调用 Rail 注销钩子（对齐 Python: rail.uninit(self)）
+		if uninitErr := r.Uninit(w); uninitErr != nil {
+			if err == nil {
+				return uninitErr
+			}
+			// 两个错误都存在时，返回注销错误，注销钩子错误记录日志
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "rail_uninit_error").
+				Err(uninitErr).
+				Msg("Rail Uninit 返回错误")
+		}
+		return err
 	}
 	return nil
 }

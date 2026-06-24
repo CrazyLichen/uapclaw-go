@@ -4,6 +4,7 @@ import (
 	"context"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -43,18 +44,35 @@ func (m *AgentCallbackManager) RegisterCallback(ctx context.Context, event Agent
 // RegisterRail 批量注册一个 Rail 实例的所有回调。
 //
 // 对应 Python: AgentCallbackManager.register_rail(rail)
-// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail，遍历 rail.getCallbacks() 注册
-func (m *AgentCallbackManager) RegisterRail(_ context.Context, _ any, _ ...cb.CallbackOption) error {
-	// ⤵️ 6.7 回填：实现 Rail 批量注册
+// 遍历 rail.GetCallbacks()，将每个钩子按 rail.Priority() 注册到 CallbackFramework。
+func (m *AgentCallbackManager) RegisterRail(ctx context.Context, r AgentRail, opts ...cb.CallbackOption) error {
+	callbacks := r.GetCallbacks()
+	priorityOpt := cb.WithPriority(r.Priority())
+	allOpts := append([]cb.CallbackOption{priorityOpt}, opts...)
+	for event, fn := range callbacks {
+		m.RegisterCallback(ctx, event, fn, allOpts...)
+		logger.Debug(logComponent).
+			Str("event_type", "rail_register_callback").
+			Str("event", string(event)).
+			Int("priority", r.Priority()).
+			Msg("Rail 钩子注册到回调框架")
+	}
 	return nil
 }
 
 // UnregisterRail 批量注销一个 Rail 实例的所有回调。
 //
 // 对应 Python: AgentCallbackManager.unregister_rail(rail)
-// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail
-func (m *AgentCallbackManager) UnregisterRail(_ context.Context, _ any) error {
-	// ⤵️ 6.7 回填：实现 Rail 批量注销
+// 遍历 rail.GetCallbacks()，逐个注销。
+func (m *AgentCallbackManager) UnregisterRail(_ context.Context, r AgentRail) error {
+	callbacks := r.GetCallbacks()
+	for event, fn := range callbacks {
+		m.Unregister(event, fn)
+		logger.Debug(logComponent).
+			Str("event_type", "rail_unregister_callback").
+			Str("event", string(event)).
+			Msg("Rail 钩子从回调框架注销")
+	}
 	return nil
 }
 

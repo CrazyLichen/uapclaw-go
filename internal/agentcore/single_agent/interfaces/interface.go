@@ -112,13 +112,11 @@ type BaseAgent interface {
 
 	// RegisterRail 注册 Rail。
 	// 对应 Python: BaseAgent.register_rail(rail)
-	// rail 实际类型 rail.AgentRail，用 any 避免循环依赖。
-	RegisterRail(ctx context.Context, rail any, opts ...cb.CallbackOption) error
+	RegisterRail(ctx context.Context, rail rail.AgentRail, opts ...cb.CallbackOption) error
 
 	// UnregisterRail 注销 Rail。
 	// 对应 Python: BaseAgent.unregister_rail(rail)
-	// ⤵️ 6.7 回填：rail 参数类型从 any 改为 AgentRail
-	UnregisterRail(ctx context.Context, rail any) error
+	UnregisterRail(ctx context.Context, rail rail.AgentRail) error
 }
 
 // WorkflowOptions 工作流执行选项（预留）。

@@ -499,13 +499,17 @@ func (f *fakeAgent) AbilityManager() any { return nil }
 
 func (f *fakeAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
 
+func (f *fakeAgent) AgentID() string { return "" }
+
 func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
 	return nil
 }
 
-func (f *fakeAgent) RegisterRail(_ context.Context, _ any, _ ...callback.CallbackOption) error { return nil }
+func (f *fakeAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+	return nil
+}
 
-func (f *fakeAgent) UnregisterRail(_ context.Context, _ any) error { return nil }
+func (f *fakeAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error { return nil }
 
 func TestAbilityManager_SetContextEngine(t *testing.T) {
 	am := NewAbilityManager(nil)
