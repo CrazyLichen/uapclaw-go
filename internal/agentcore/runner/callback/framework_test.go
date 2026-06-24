@@ -674,10 +674,10 @@ func TestCallbackFramework_TransformAgentIO_透传(t *testing.T) {
 	ctx := context.Background()
 
 	input := map[string]any{"key": "value"}
-	result := fw.TransformAgentIOInput(ctx, AgentStreamInput, input)
+	result := fw.TransformAgentIOInput(ctx, GlobalAgentStreamInput, input)
 	assert.Equal(t, input, result)
 
-	result = fw.TransformAgentIOOutput(ctx, AgentStreamOutput, input)
+	result = fw.TransformAgentIOOutput(ctx, GlobalAgentStreamOutput, input)
 	assert.Equal(t, input, result)
 }
 

@@ -17,7 +17,7 @@
 //	ToolCallEventType     — Tool 调用生命周期事件（11 种），预定义枚举事件名
 //	SessionCallEventType  — Session 生命周期事件（2 种），预定义枚举事件名
 //	ContextCallEventType  — Context 生命周期事件（5 种），预定义枚举事件名
-//	AgentCallGlobalEventType — Agent 调用全局事件（5 种），预定义枚举事件名
+//	GlobalAgentEventType — Agent 调用全局事件（5 种），预定义枚举事件名
 //	CustomCallbackFunc    — 自定义事件（自由字符串事件名 + map[string]any 数据）
 //
 // 设计说明：

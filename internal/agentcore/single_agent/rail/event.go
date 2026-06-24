@@ -10,9 +10,9 @@ import "fmt"
 //
 // 定义 per-Agent 实例级的 10 个生命周期事件，
 // 供 AgentCallbackManager 注册回调和 AgentRail 钩子使用。
-// 与框架层 AgentCallGlobalEventType（全局观测事件）是不同层次：
+// 与框架层 GlobalAgentEventType（全局观测事件）是不同层次：
 //   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
-//   - AgentCallGlobalEventType = 框架级全局观测（日志/监控/transform_io）
+//   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
 //
 // 事件值即 Python AgentRail 对应方法名，无需额外 EVENT_METHOD_MAP 映射。
 // AgentCallbackManager 注册时通过 agentID 前缀构造唯一事件名

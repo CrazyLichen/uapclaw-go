@@ -128,7 +128,7 @@ func TestWarpBaseAgent_Invoke_invoker未设置(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_Invoke_触发回调 注册 AgentCallbackFunc，验证 TriggerAgent 被调用（before + after）
+// TestWarpBaseAgent_Invoke_触发回调 注册 GlobalAgentCallbackFunc，验证 TriggerGlobalAgent 被调用（before + after）
 func TestWarpBaseAgent_Invoke_触发回调(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("cb_agent"), schema.WithDescription("回调测试"))
 	agent := NewWarpBaseAgent(card, nil)
@@ -139,16 +139,16 @@ func TestWarpBaseAgent_Invoke_触发回调(t *testing.T) {
 
 	fw := callback.GetCallbackFramework()
 
-	beforeFn := func(_ context.Context, data *callback.AgentCallEventData) any {
-		if data.Event == callback.AgentInvokeInput {
+	beforeFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
+		if data.Event == callback.GlobalAgentInvokeInput {
 			mu.Lock()
 			beforeTriggered = true
 			mu.Unlock()
 		}
 		return nil
 	}
-	afterFn := func(_ context.Context, data *callback.AgentCallEventData) any {
-		if data.Event == callback.AgentInvokeOutput {
+	afterFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
+		if data.Event == callback.GlobalAgentInvokeOutput {
 			mu.Lock()
 			afterTriggered = true
 			mu.Unlock()
@@ -156,10 +156,10 @@ func TestWarpBaseAgent_Invoke_触发回调(t *testing.T) {
 		return nil
 	}
 
-	fw.OnAgent(callback.AgentInvokeInput, beforeFn)
-	fw.OnAgent(callback.AgentInvokeOutput, afterFn)
-	defer fw.OffAgent(callback.AgentInvokeInput, beforeFn)
-	defer fw.OffAgent(callback.AgentInvokeOutput, afterFn)
+	fw.OnGlobalAgent(callback.GlobalAgentInvokeInput, beforeFn)
+	fw.OnGlobalAgent(callback.GlobalAgentInvokeOutput, afterFn)
+	defer fw.OffGlobalAgent(callback.GlobalAgentInvokeInput, beforeFn)
+	defer fw.OffGlobalAgent(callback.GlobalAgentInvokeOutput, afterFn)
 
 	_, err := agent.Invoke(context.Background(), map[string]any{"x": 1})
 	if err != nil {
@@ -267,7 +267,7 @@ func TestWarpBaseAgent_Stream_invoker未设置(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_Stream_每项触发回调 每个 stream item 触发一次 TriggerAgent
+// TestWarpBaseAgent_Stream_每项触发回调 每个 stream item 触发一次 TriggerGlobalAgent
 func TestWarpBaseAgent_Stream_每项触发回调(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("stream_cb"), schema.WithDescription("流式回调"))
 	agent := NewWarpBaseAgent(card, nil)
@@ -282,8 +282,8 @@ func TestWarpBaseAgent_Stream_每项触发回调(t *testing.T) {
 	var outputCount int
 
 	fw := callback.GetCallbackFramework()
-	afterFn := func(_ context.Context, data *callback.AgentCallEventData) any {
-		if data.Event == callback.AgentStreamOutput {
+	afterFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
+		if data.Event == callback.GlobalAgentStreamOutput {
 			mu.Lock()
 			outputCount++
 			mu.Unlock()
@@ -291,8 +291,8 @@ func TestWarpBaseAgent_Stream_每项触发回调(t *testing.T) {
 		return nil
 	}
 
-	fw.OnAgent(callback.AgentStreamOutput, afterFn)
-	defer fw.OffAgent(callback.AgentStreamOutput, afterFn)
+	fw.OnGlobalAgent(callback.GlobalAgentStreamOutput, afterFn)
+	defer fw.OffGlobalAgent(callback.GlobalAgentStreamOutput, afterFn)
 
 	outCh, err := agent.Stream(context.Background(), nil)
 	if err != nil {
@@ -419,18 +419,18 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	}
 }
 
-// TestAgentCallGlobalEventType_事件名对齐Python 验证事件名与 Python AgentEvents 对齐
-func TestAgentCallGlobalEventType_事件名对齐Python(t *testing.T) {
+// TestGlobalAgentEventType_事件名对齐Python 验证事件名与 Python AgentEvents 对齐
+func TestGlobalAgentEventType_事件名对齐Python(t *testing.T) {
 	// 对应 Python: openjiuwen/core/runner/callback/events.py AgentEvents
 	tests := []struct {
-		got  callback.AgentCallGlobalEventType
+		got  callback.GlobalAgentEventType
 		want string
 	}{
-		{callback.AgentStarted, "_framework:agent_started"},
-		{callback.AgentInvokeInput, "_framework:agent_invoke_input"},
-		{callback.AgentInvokeOutput, "_framework:agent_invoke_output"},
-		{callback.AgentStreamInput, "_framework:agent_stream_input"},
-		{callback.AgentStreamOutput, "_framework:agent_stream_output"},
+		{callback.GlobalAgentStarted, "_framework:agent_started"},
+		{callback.GlobalAgentInvokeInput, "_framework:agent_invoke_input"},
+		{callback.GlobalAgentInvokeOutput, "_framework:agent_invoke_output"},
+		{callback.GlobalAgentStreamInput, "_framework:agent_stream_input"},
+		{callback.GlobalAgentStreamOutput, "_framework:agent_stream_output"},
 	}
 	for _, tt := range tests {
 		if string(tt.got) != tt.want {

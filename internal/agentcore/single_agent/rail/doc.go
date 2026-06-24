@@ -5,7 +5,7 @@
 //
 // 本包与框架层 callback/ 包的事件体系是不同层次：
 //   - 本包 AgentCallbackEvent = per-Agent 实例级生命周期事件
-//   - callback.AgentCallGlobalEventType = 框架级全局观测事件
+//   - callback.GlobalAgentEventType = 框架级全局观测事件
 //
 // 两者不桥接，各自独立触发，与 Python 保持一致。
 //

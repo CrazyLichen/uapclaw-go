@@ -98,10 +98,10 @@ type ContextCallEventData struct {
 	Extra map[string]any
 }
 
-// AgentCallEventData Agent 调用事件数据。
-type AgentCallEventData struct {
+// GlobalAgentEventData Agent 调用事件数据。
+type GlobalAgentEventData struct {
 	// Event 事件类型
-	Event AgentCallGlobalEventType
+	Event GlobalAgentEventType
 	// AgentID Agent 标识
 	AgentID string
 	// Inputs 调用输入
@@ -209,26 +209,26 @@ const (
 	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
 )
 
-// AgentCallGlobalEventType Agent 调用全局事件类型。
+// GlobalAgentEventType Agent 调用全局事件类型。
 //
 // 与 Rail 层 AgentCallbackEvent（per-Agent 实例级事件）区分：
-//   - AgentCallGlobalEventType = 框架级全局观测（日志/监控/transform_io）
+//   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
 //   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
-type AgentCallGlobalEventType string
+type GlobalAgentEventType string
 
 const (
-	// AgentStarted Agent 执行启动
-	AgentStarted AgentCallGlobalEventType = "_framework:agent_started"
-	// AgentInvokeInput invoke 调用前触发
-	AgentInvokeInput AgentCallGlobalEventType = "_framework:agent_invoke_input"
-	// AgentInvokeOutput invoke 调用后触发
-	AgentInvokeOutput AgentCallGlobalEventType = "_framework:agent_invoke_output"
-	// AgentStreamInput stream 调用前触发
-	AgentStreamInput AgentCallGlobalEventType = "_framework:agent_stream_input"
-	// AgentStreamOutput stream 每项触发
-	AgentStreamOutput AgentCallGlobalEventType = "_framework:agent_stream_output"
+	// GlobalAgentStarted Agent 执行启动
+	GlobalAgentStarted GlobalAgentEventType = "_framework:agent_started"
+	// GlobalAgentInvokeInput invoke 调用前触发
+	GlobalAgentInvokeInput GlobalAgentEventType = "_framework:agent_invoke_input"
+	// GlobalAgentInvokeOutput invoke 调用后触发
+	GlobalAgentInvokeOutput GlobalAgentEventType = "_framework:agent_invoke_output"
+	// GlobalAgentStreamInput stream 调用前触发
+	GlobalAgentStreamInput GlobalAgentEventType = "_framework:agent_stream_input"
+	// GlobalAgentStreamOutput stream 每项触发
+	GlobalAgentStreamOutput GlobalAgentEventType = "_framework:agent_stream_output"
 )
 
 // TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
@@ -243,11 +243,11 @@ type TransformLLMIOOutputFunc func(ctx context.Context, event LLMCallEventType, 
 
 // TransformAgentIOInputFunc Agent 层输入变换回调函数类型。
 // 对齐 Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
-type TransformAgentIOInputFunc func(ctx context.Context, event AgentCallGlobalEventType, input any) any
+type TransformAgentIOInputFunc func(ctx context.Context, event GlobalAgentEventType, input any) any
 
 // TransformAgentIOOutputFunc Agent 层输出变换回调函数类型。
 // 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
-type TransformAgentIOOutputFunc func(ctx context.Context, event AgentCallGlobalEventType, output any) any
+type TransformAgentIOOutputFunc func(ctx context.Context, event GlobalAgentEventType, output any) any
 
 // TransformToolIOInputFunc Tool 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
@@ -259,8 +259,14 @@ type TransformToolIOInputFunc func(ctx context.Context, event ToolCallEventType,
 // 对齐 Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
 type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any
 
-// AgentCallbackFunc Agent 回调函数类型。
-type AgentCallbackFunc func(ctx context.Context, data *AgentCallEventData) any
+// GlobalAgentCallbackFunc Agent 回调函数类型。
+type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventData) any
+
+// PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
+// agentCallbackContext 实际类型为 *rail.AgentCallbackContext，回调内需类型断言。
+//
+// 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
+type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -333,16 +339,16 @@ func (d *ContextCallEventData) String() string {
 }
 
 // String 实现 fmt.Stringer 接口。
-func (t AgentCallGlobalEventType) String() string {
+func (t GlobalAgentEventType) String() string {
 	return string(t)
 }
 
 // String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
-func (d *AgentCallEventData) String() string {
+func (d *GlobalAgentEventData) String() string {
 	if d == nil {
 		return "nil"
 	}
-	return fmt.Sprintf("AgentCallEventData{事件:%s, AgentID:%s}", d.Event, d.AgentID)
+	return fmt.Sprintf("GlobalAgentEventData{事件:%s, AgentID:%s}", d.Event, d.AgentID)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

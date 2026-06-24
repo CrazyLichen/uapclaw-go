@@ -107,13 +107,13 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 	fw := callback.GetCallbackFramework()
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	if transformed := fw.TransformAgentIOInput(ctx, callback.AgentInvokeInput, inputs); transformed != nil {
+	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentInvokeInput, inputs); transformed != nil {
 		inputs = transformed.(map[string]any)
 	}
 
 	// ② emit_before: 触发全局 AgentInvokeInput 事件
-	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
-		Event:   callback.AgentInvokeInput,
+	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
+		Event:   callback.GlobalAgentInvokeInput,
 		AgentID: w.card.ID,
 		Inputs:  inputs,
 	})
@@ -136,11 +136,11 @@ func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts 
 	}
 
 	// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
-	result = fw.TransformAgentIOOutput(ctx, callback.AgentInvokeOutput, result)
+	result = fw.TransformAgentIOOutput(ctx, callback.GlobalAgentInvokeOutput, result)
 
 	// ④ emit_after: 触发全局 AgentInvokeOutput 事件
-	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
-		Event:   callback.AgentInvokeOutput,
+	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
+		Event:   callback.GlobalAgentInvokeOutput,
 		AgentID: w.card.ID,
 		Result:  result,
 	})
@@ -161,13 +161,13 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 	fw := callback.GetCallbackFramework()
 
 	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	if transformed := fw.TransformAgentIOInput(ctx, callback.AgentStreamInput, inputs); transformed != nil {
+	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentStreamInput, inputs); transformed != nil {
 		inputs = transformed.(map[string]any)
 	}
 
 	// ② emit_before: 触发全局 AgentStreamInput 事件
-	fw.TriggerAgent(ctx, &callback.AgentCallEventData{
-		Event:   callback.AgentStreamInput,
+	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
+		Event:   callback.GlobalAgentStreamInput,
 		AgentID: w.card.ID,
 		Inputs:  inputs,
 	})
@@ -193,12 +193,12 @@ func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts 
 		defer close(out)
 		for item := range ch {
 			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
-			if transformed := fw.TransformAgentIOOutput(ctx, callback.AgentStreamOutput, item); transformed != nil {
+			if transformed := fw.TransformAgentIOOutput(ctx, callback.GlobalAgentStreamOutput, item); transformed != nil {
 				item = transformed.(stream.Schema)
 			}
 			// ④ emit_after (per_item)
-			fw.TriggerAgent(ctx, &callback.AgentCallEventData{
-				Event:   callback.AgentStreamOutput,
+			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
+				Event:   callback.GlobalAgentStreamOutput,
 				AgentID: w.card.ID,
 				Result:  item,
 			})
