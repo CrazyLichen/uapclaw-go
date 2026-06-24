@@ -66,7 +66,7 @@ func TestAgentCallbackContext_GetterSetter(t *testing.T) {
 func TestPushSteering_无队列(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
 	// 不应 panic
-	ctx.PushSteering("test")
+	_ = ctx.PushSteering("test")
 }
 
 // TestPushSteering_正常写入 验证正常写入后可 DrainSteering 读出
@@ -75,8 +75,8 @@ func TestPushSteering_正常写入(t *testing.T) {
 	q := make(chan string, steeringQueueSize)
 	ctx.BindSteeringQueue(q)
 
-	ctx.PushSteering("msg1")
-	ctx.PushSteering("msg2")
+	_ = ctx.PushSteering("msg1")
+	_ = ctx.PushSteering("msg2")
 
 	msgs := ctx.DrainSteering()
 	assert.Equal(t, []string{"msg1", "msg2"}, msgs)
@@ -88,8 +88,8 @@ func TestPushSteering_队列满丢弃(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
 	ctx.BindSteeringQueue(q)
 
-	ctx.PushSteering("a")
-	ctx.PushSteering("b")
+	_ = ctx.PushSteering("a")
+	_ = ctx.PushSteering("b")
 	// 队列已满（容量 2），再写应返回 ErrSteeringQueueFull
 	err := ctx.PushSteering("c")
 	assert.Equal(t, ErrSteeringQueueFull, err)
@@ -124,7 +124,7 @@ func TestHasPendingSteering(t *testing.T) {
 	assert.False(t, ctx.HasPendingSteering())
 
 	// 有消息
-	ctx.PushSteering("msg")
+	_ = ctx.PushSteering("msg")
 	assert.True(t, ctx.HasPendingSteering())
 
 	// drain 后
@@ -139,7 +139,7 @@ func TestBindSteeringQueue(t *testing.T) {
 	ctx.BindSteeringQueue(q)
 	assert.Equal(t, q, ctx.SteeringQueue())
 
-	ctx.PushSteering("test")
+	_ = ctx.PushSteering("test")
 	msgs := ctx.DrainSteering()
 	assert.Equal(t, []string{"test"}, msgs)
 }

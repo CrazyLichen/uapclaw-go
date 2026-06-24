@@ -277,7 +277,7 @@ func (a *ReActAgent) reactLoop(
 
 	if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok && invokeInputs.Query.PlainText() != "" {
 		if modelCtx != nil {
-			modelCtx.AddMessages(ctx, llmschema.NewUserMessage(invokeInputs.Query.PlainText()))
+			_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage(invokeInputs.Query.PlainText()))
 		}
 	}
 
@@ -286,7 +286,7 @@ func (a *ReActAgent) reactLoop(
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
 			for _, msg := range steeringMsgs {
-				modelCtx.AddMessages(ctx, llmschema.NewUserMessage("[STEERING] "+msg))
+				_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage("[STEERING] "+msg))
 			}
 		}
 
@@ -304,7 +304,7 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		if aiMsg != nil && modelCtx != nil {
-			modelCtx.AddMessages(ctx, aiMsg)
+			_, _ = modelCtx.AddMessages(ctx, aiMsg)
 		}
 
 		// 无工具调用
@@ -504,7 +504,7 @@ func (a *ReActAgent) executeToolCalls(
 
 	for _, r := range results {
 		if r.ToolMsg != nil && modelCtx != nil {
-			modelCtx.AddMessages(ctx, r.ToolMsg)
+			_, _ = modelCtx.AddMessages(ctx, r.ToolMsg)
 		}
 	}
 
