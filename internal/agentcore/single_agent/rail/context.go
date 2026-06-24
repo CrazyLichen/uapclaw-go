@@ -277,8 +277,12 @@ func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
 // RequestRetry 请求重试。
 //
 // 在 on_model_exception / on_tool_exception 钩子内调用。
+// 负数 delaySeconds 被静默归零（对齐 Python: if delay_seconds < 0: delay_seconds = 0.0）。
 // 对应 Python: AgentCallbackContext.request_retry(delay_seconds)
 func (c *AgentCallbackContext) RequestRetry(delaySeconds float64) {
+	if delaySeconds < 0 {
+		delaySeconds = 0
+	}
 	c.retryRequest = &RetryRequest{DelaySeconds: delaySeconds}
 }
 

@@ -299,4 +299,26 @@ func TestHasForceFinishRequest_消费后为false(t *testing.T) {
 	assert.False(t, ctx.HasForceFinishRequest())
 }
 
+// TestRequestRetry_负数归零 验证负数 delaySeconds 被静默归零
+func TestRequestRetry_负数归零(t *testing.T) {
+	ctx := NewAgentCallbackContext(nil, nil, nil)
+
+	ctx.RequestRetry(-1.5)
+	req := ctx.ConsumeRetryRequest()
+	assert.NotNil(t, req)
+	assert.Equal(t, 0.0, req.DelaySeconds)
+
+	// 正数不受影响
+	ctx.RequestRetry(3.0)
+	req = ctx.ConsumeRetryRequest()
+	assert.NotNil(t, req)
+	assert.Equal(t, 3.0, req.DelaySeconds)
+
+	// 零不受影响
+	ctx.RequestRetry(0.0)
+	req = ctx.ConsumeRetryRequest()
+	assert.NotNil(t, req)
+	assert.Equal(t, 0.0, req.DelaySeconds)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
