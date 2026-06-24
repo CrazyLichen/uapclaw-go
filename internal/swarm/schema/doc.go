@@ -8,7 +8,8 @@
 //
 //	schema/
 //	├── doc.go           # 包文档
-//	└── req_method.go    # ReqMethod 枚举（~82 个 RPC 方法名）
+//	├── req_method.go    # ReqMethod 枚举（142 个 RPC 方法名）
+//	└── event_type.go    # EventType 枚举（26 个事件类型）
 //
 // 对应 Python 代码：jiuwenswarm/common/schema/
 package schema
