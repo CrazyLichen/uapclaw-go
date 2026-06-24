@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -98,8 +99,8 @@ type BaseAgent interface {
 
 	// CallbackManager 返回回调管理器。
 	// 对应 Python: BaseAgent.agent_callback_manager 属性
-	// 返回 any（实际类型 *rail.AgentCallbackManager），避免 interfaces → rail 循环依赖
-	CallbackManager() any
+	// 通过 rail 包内定义 railAgent 最小接口打破循环依赖，返回具体类型。
+	CallbackManager() *rail.AgentCallbackManager
 
 	// ── 回调/Rail 注册 ──
 

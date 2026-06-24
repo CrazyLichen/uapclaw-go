@@ -261,8 +261,8 @@ func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }
 func (w *WarpBaseAgent) AbilityManager() any { return w.abilityManager }
 
 // CallbackManager 返回回调管理器。
-// 返回 any（实际类型 *rail.AgentCallbackManager），避免循环依赖。
-func (w *WarpBaseAgent) CallbackManager() any { return w.callbackManager }
+// 返回具体类型 *rail.AgentCallbackManager（通过 rail 包内 railAgent 最小接口打破循环依赖）。
+func (w *WarpBaseAgent) CallbackManager() *rail.AgentCallbackManager { return w.callbackManager }
 
 // RegisterCallback 注册回调。
 // 委托给 AgentCallbackManager.RegisterCallback。

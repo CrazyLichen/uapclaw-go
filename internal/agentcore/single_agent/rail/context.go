@@ -6,9 +6,26 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ──────────────────────────── 接口 ────────────────────────────
+
+// railAgent Rail 包所需的最小 Agent 接口。
+//
+// 在 rail 包内定义，打破 rail → interfaces 循环依赖，
+// 使 AgentCallbackContext 可以直接访问 CallbackManager 具体类型，
+// Fire() 无需类型断言。
+type railAgent interface {
+	// CallbackManager 返回 PerAgent 回调管理器
+	CallbackManager() *AgentCallbackManager
+}
+
+// railConfig Rail 包所需的最小 Config 接口。
+//
+// 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法，
+// 避免 rail → interfaces 循环依赖。
+type railConfig interface{}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -19,14 +36,14 @@ import (
 //
 // 对应 Python: openjiuwen/core/single_agent/rail/base.py AgentCallbackContext (L226-416)
 type AgentCallbackContext struct {
-	// agent 当前 Agent 实例引用
-	agent interfaces.BaseAgent
+	// agent 当前 Agent 实例引用（最小化接口，仅暴露 CallbackManager）
+	agent railAgent
 	// event 当前回调事件类型（由 Fire 设置）
 	event AgentCallbackEvent
 	// inputs 当前事件的输入数据（随事件变化）
 	inputs EventInputs
-	// config 运行时配置
-	config interfaces.AgentConfig
+	// config 运行时配置（最小化接口，预留）
+	config railConfig
 	// session 当前 Session
 	session *session.Session
 	// modelContext 当前 ModelContext
@@ -71,7 +88,7 @@ var ErrSteeringQueueFull = errors.New("steering queue full")
 //
 // 对应 Python: AgentCallbackContext(agent=..., inputs=..., session=...)
 func NewAgentCallbackContext(
-	agent interfaces.BaseAgent,
+	agent railAgent,
 	inputs EventInputs,
 	sess *session.Session,
 ) *AgentCallbackContext {
@@ -83,8 +100,8 @@ func NewAgentCallbackContext(
 	}
 }
 
-// Agent 返回当前 Agent 实例引用
-func (c *AgentCallbackContext) Agent() interfaces.BaseAgent { return c.agent }
+// Agent 返回当前 Agent 实例引用（最小化接口）
+func (c *AgentCallbackContext) Agent() railAgent { return c.agent }
 
 // Event 返回当前回调事件类型
 func (c *AgentCallbackContext) Event() AgentCallbackEvent { return c.event }
@@ -98,11 +115,11 @@ func (c *AgentCallbackContext) Inputs() EventInputs { return c.inputs }
 // SetInputs 设置当前事件输入数据
 func (c *AgentCallbackContext) SetInputs(inputs EventInputs) { c.inputs = inputs }
 
-// Config 返回运行时配置
-func (c *AgentCallbackContext) Config() interfaces.AgentConfig { return c.config }
+// Config 返回运行时配置（最小化接口）
+func (c *AgentCallbackContext) Config() railConfig { return c.config }
 
 // SetConfig 设置运行时配置
-func (c *AgentCallbackContext) SetConfig(config interfaces.AgentConfig) { c.config = config }
+func (c *AgentCallbackContext) SetConfig(config railConfig) { c.config = config }
 
 // Session 返回当前 Session
 func (c *AgentCallbackContext) Session() *session.Session { return c.session }
@@ -235,13 +252,14 @@ func (c *AgentCallbackContext) FireLifecycle(
 // Fire 触发回调事件。
 //
 // 对应 Python: AgentCallbackContext.fire(event)
+// 通过 railAgent 最小接口直接访问 CallbackManager，无需类型断言。
 func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
 	c.event = event
 	if c.agent == nil {
 		return nil
 	}
-	manager, ok := c.agent.CallbackManager().(*AgentCallbackManager)
-	if !ok {
+	manager := c.agent.CallbackManager()
+	if manager == nil {
 		return nil
 	}
 	return manager.Execute(context.Background(), event, c)

@@ -9,7 +9,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -359,16 +358,10 @@ func TestWarpBaseAgent_访问器(t *testing.T) {
 		t.Error("AbilityManager 内部值不应为 nil")
 	}
 
-	// CallbackManager 不为 nil（构造时初始化）
-	if agent.CallbackManager() == nil {
-		t.Error("CallbackManager 不应为 nil")
-	}
-	cm, ok := agent.CallbackManager().(*rail.AgentCallbackManager)
-	if !ok {
-		t.Fatalf("CallbackManager 类型应为 *rail.AgentCallbackManager，实际 %T", agent.CallbackManager())
-	}
+	// CallbackManager 不为 nil（构造时初始化），返回具体类型
+	cm := agent.CallbackManager()
 	if cm == nil {
-		t.Error("CallbackManager 内部值不应为 nil")
+		t.Error("CallbackManager 不应为 nil")
 	}
 }
 

@@ -1,10 +1,23 @@
 package rail
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// fakeRailAgent 实现 railAgent 接口，用于测试
+type fakeRailAgent struct {
+	// cbMgr 回调管理器
+	cbMgr *AgentCallbackManager
+}
+
+func (f *fakeRailAgent) CallbackManager() *AgentCallbackManager { return f.cbMgr }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewAgentCallbackContext 验证构造函数字段初始化
 func TestNewAgentCallbackContext(t *testing.T) {
@@ -187,6 +200,33 @@ func TestFire_无回调管理器(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
 	err := ctx.Fire(CallbackBeforeModelCall)
 	assert.NoError(t, err)
+}
+
+// TestFire_回调管理器为nil agent 存在但 CallbackManager 返回 nil 时 Fire 返回 nil
+func TestFire_回调管理器为nil(t *testing.T) {
+	agent := &fakeRailAgent{cbMgr: nil}
+	ctx := NewAgentCallbackContext(agent, nil, nil)
+	err := ctx.Fire(CallbackBeforeModelCall)
+	assert.NoError(t, err)
+}
+
+// TestFire_正常触发 agent 和 CallbackManager 都存在时 Fire 正常执行
+func TestFire_正常触发(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_fire_agent")
+	defer mgr.Clear()
+
+	var called bool
+	fn := func(_ context.Context, _ any) error {
+		called = true
+		return nil
+	}
+	mgr.RegisterCallback(context.Background(), CallbackBeforeModelCall, fn)
+
+	agent := &fakeRailAgent{cbMgr: mgr}
+	ctx := NewAgentCallbackContext(agent, nil, nil)
+	err := ctx.Fire(CallbackBeforeModelCall)
+	assert.NoError(t, err)
+	assert.True(t, called)
 }
 
 // TestRequestRetry_预留Panic 验证 RequestRetry 方法 panic 信息包含 "6.10"

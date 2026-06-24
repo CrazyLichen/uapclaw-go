@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -496,7 +497,7 @@ func (f *fakeAgent) Config() interfaces.AgentConfig { return nil }
 
 func (f *fakeAgent) AbilityManager() any { return nil }
 
-func (f *fakeAgent) CallbackManager() any { return nil }
+func (f *fakeAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
 
 func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
 	return nil
