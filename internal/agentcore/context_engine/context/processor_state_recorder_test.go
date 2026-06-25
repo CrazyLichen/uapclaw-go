@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -68,7 +69,7 @@ func (p *fakeProcessor) ProcessorType() string { return p.processorType }
 
 // 辅助函数：创建基本测试用的 ProcessorStateRecorder
 func newTestRecorder(tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
-	return NewProcessorStateRecorder("session-1", "ctx-1", func() *session.Session { return nil }, tokenCounter, historyLimit)
+	return NewProcessorStateRecorder("session-1", "ctx-1", func() sessioninterfaces.SessionFacade { return nil }, tokenCounter, historyLimit)
 }
 
 // ──────────────────────────── 测试 NewProcessorStateRecorder ────────────────────────────
@@ -882,7 +883,7 @@ func (e fmtError) Error() string { return string(e) }
 // TestEmit_带sessionRef推送流式数据 测试有 sessionRef 时推送流式数据
 func TestEmit_带sessionRef推送流式数据(t *testing.T) {
 	sess := session.NewSession()
-	recorder := NewProcessorStateRecorder("session-1", "ctx-1", func() *session.Session {
+	recorder := NewProcessorStateRecorder("session-1", "ctx-1", func() sessioninterfaces.SessionFacade {
 		return sess
 	}, nil, 10)
 

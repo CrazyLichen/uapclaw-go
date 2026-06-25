@@ -12,6 +12,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
@@ -235,7 +236,7 @@ func TestHandleResume_无新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess *session.Session, modelCtx ceinterface.ModelContext) ([]any, error) {
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]any, error) {
 		return []any{[2]any{map[string]any{"result": "ok"}, nil}}, nil
 	}
 
@@ -274,7 +275,7 @@ func TestHandleResume_有新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess *session.Session, modelCtx ceinterface.ModelContext) ([]any, error) {
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]any, error) {
 		return []any{[2]any{&ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, nil}}, nil
 	}
 

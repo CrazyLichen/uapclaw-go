@@ -17,11 +17,11 @@ import (
 // 仅 *internal.NodeSession（及嵌入它的 *SubWorkflowSession）满足此接口，
 // WorkflowSession 不满足（缺少 ExecutableID/ParentID/NodeID/NodeType）。
 //
-// 与 interfaces.BaseSession + Provider 的映射关系：
+// 与 interfaces.InnerSession + Provider 的映射关系：
 //
-//	Tracer()       → BaseSession.Tracer()
-//	State()        → BaseSession.State()
-//	Config()       → BaseSession.Config()
+//	Tracer()       → InnerSession.Tracer()
+//	State()        → InnerSession.State()
+//	Config()       → InnerSession.Config()
 //	WorkflowID()   → WorkflowIDProvider.WorkflowID()
 //	ExecutableID() → ExecutableIDProvider.ExecutableID()
 //	NodeID()       → 无对应 Provider（需补充）

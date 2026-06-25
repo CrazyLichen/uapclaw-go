@@ -394,9 +394,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.9 | ✅ | Rail Inputs | ✅ InvokeQuery 接口(IsInteractiveInput+PlainText)；✅ InvokeQueryString 实现；✅ *InteractiveInput 隐式实现 InvokeQuery；✅ InvokeInputs(query→InvokeQuery/conversationID/result/runKind/runContext+IsHeartbeat/IsLightweightContext/IsCron)；✅ ModelCallInputs(messages/tools/modelContext/response)；✅ ToolCallInputs(toolCall/toolName/toolArgs/toolResult/toolMsg)；✅ TaskIterationInputs(iteration/loopEvent/conversationID/result/query/isFollowUp)；✅ MapInputs 兜底(Dict[str,Any]对齐Python EventInputs Union)；✅ RunKind/RunContext/HeartbeatReason 辅助类型；✅ 测试全部通过 | `openjiuwen/core/single_agent/rail/` (Typed inputs) |
 | 6.10 | ✅ | ForceFinishRequest / RetryRequest | ✅ RetryRequest 结构体(DelaySeconds)；✅ ForceFinishRequest 结构体(Result)；✅ RequestRetry/ConsumeRetryRequest 真实实现(consume-and-clear)；✅ RequestForceFinish/ConsumeForceFinish 真实实现(consume-and-clear)；✅ HasForceFinishRequest 真实实现(检查字段)；✅ context.go 字段类型从 any 改为具体类型；✅ executor.go 重试延迟支持(RetryRequest.DelaySeconds + context 取消保护)；✅ 测试全部通过(含重试循环、force-finish 门控、一次性消费) | `openjiuwen/core/single_agent/rail/` |
 | **6.x ReAct Agent** | — | | | |
-| 6.11 | ☐ | ReActAgent 实现 | ReAct 循环：Think→Act→Observe，最大迭代次数 | `openjiuwen/core/single_agent/agents/react_agent.py` |
-| 6.12 | ☐ | 流式输出 | `_inner_stream`，实时推送 Agent 思考过程 | `openjiuwen/core/single_agent/agents/react_agent.py` (_inner_stream) |
-| 6.13 | ☐ | KV Cache 释放 | 上下文缓存管理 | `openjiuwen/core/single_agent/agents/react_agent.py` (kv_cache_release) |
+| 6.11 | ✅ | ReActAgent 实现 | ReAct 循环：Think→Act→Observe，最大迭代次数 | `openjiuwen/core/single_agent/agents/react_agent.py` |
+| 6.12 | ✅ | 流式输出 | `_inner_stream`，实时推送 Agent 思考过程 | `openjiuwen/core/single_agent/agents/react_agent.py` (_inner_stream) |
+| 6.13 | ✅ | KV Cache 释放 | 上下文缓存管理 | `openjiuwen/core/single_agent/agents/react_agent.py` (kv_cache_release) |
 | **6.x 中断/恢复系统** | — | | | |
 | 6.14 | ✅ | ToolInterruptHandler | 工具级中断管理 | `openjiuwen/core/single_agent/interrupt/handler.py` |
 | 6.15 | ✅ | InterruptionState / ToolInterruptionState | 工作流/工具中断状态 | `openjiuwen/core/single_agent/interrupt/` |

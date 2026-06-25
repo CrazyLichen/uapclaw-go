@@ -6,7 +6,7 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -55,7 +55,7 @@ type AgentCallbackContext struct {
 	// config 运行时配置（最小化接口，预留）
 	config railConfig
 	// session 当前 Session
-	session *session.Session
+	session sessioninterfaces.SessionFacade
 	// modelContext 当前 ModelContext
 	modelContext ceinterface.ModelContext
 	// extra 跨 rail 通信字典（单次 invoke 内跨事件持久，子 ctx 共享）
@@ -98,7 +98,7 @@ var ErrSteeringQueueFull = errors.New("steering queue full")
 func NewAgentCallbackContext(
 	agent RailAgent,
 	inputs EventInputs,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 ) *AgentCallbackContext {
 	return &AgentCallbackContext{
 		agent:   agent,
@@ -130,7 +130,7 @@ func (c *AgentCallbackContext) Config() railConfig { return c.config }
 func (c *AgentCallbackContext) SetConfig(config railConfig) { c.config = config }
 
 // Session 返回当前 Session
-func (c *AgentCallbackContext) Session() *session.Session { return c.session }
+func (c *AgentCallbackContext) Session() sessioninterfaces.SessionFacade { return c.session }
 
 // ModelContext 返回当前 ModelContext
 func (c *AgentCallbackContext) ModelContext() ceinterface.ModelContext { return c.modelContext }

@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -25,6 +26,9 @@ type RouterSessionFacade struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// 编译时检查 *RouterSessionFacade 满足 SessionFacade 接口
+var _ interfaces.SessionFacade = (*RouterSessionFacade)(nil)
 
 // NewRouterSessionFacade 创建路由会话门面实例。
 func NewRouterSessionFacade(inner *NodeSessionFacade) *RouterSessionFacade {
@@ -104,9 +108,9 @@ func (r *RouterSessionFacade) TraceError(ctx context.Context, err error) error {
 
 // Interact 请求用户输入 — 禁止操作
 // 对齐 Python RouterSession.interact: pass
-func (r *RouterSessionFacade) Interact(ctx context.Context, value any) (any, error) {
+func (r *RouterSessionFacade) Interact(ctx context.Context, value any) error {
 	// 路由场景禁止交互，静默返回 nil
-	return nil, nil
+	return nil
 }
 
 // WriteStream 写入标准输出流 — 禁止操作
@@ -125,7 +129,7 @@ func (r *RouterSessionFacade) WriteCustomStream(ctx context.Context, data any) e
 
 // GetEnv 获取环境变量值 — 禁止操作
 // 对齐 Python RouterSession.get_env: pass
-func (r *RouterSessionFacade) GetEnv(key string) any {
+func (r *RouterSessionFacade) GetEnv(key string, defaultValue ...any) any {
 	// 路由场景禁止读取配置，返回 nil
 	return nil
 }

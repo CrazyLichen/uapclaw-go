@@ -1,6 +1,6 @@
 // Package session 提供会话管理的抽象接口、代理实现和 Agent/Workflow/Node 公开会话。
 //
-// 本包通过类型别名引用 interfaces.BaseSession 作为所有会话类型的统一抽象。ProxySession 实现代理模式。
+// 本包通过类型别名引用 interfaces.InnerSession 作为所有会话类型的统一抽象。ProxySession 实现代理模式。
 // Session 是 Agent 场景下的公开会话，组合内部层 AgentSession，提供 PreRun/PostRun
 // 生命周期、状态读写、流写入等用户面向 API。
 // WorkflowSession 是工作流场景下的公开会话，组合内部层 WorkflowSession，提供
@@ -17,10 +17,11 @@
 //
 //	session/
 //	├── doc.go              # 包文档
-//	├── session.go          # BaseSession 类型别名 + ProxySession 实现
+//	├── session.go          # InnerSession/SessionFacade 类型别名 + ProxySession 实现
 //	├── interfaces/         # 统一接口定义
 //	│   ├── doc.go                           # interfaces 包文档
-//	│   └── interfaces.go                    # BaseSession/Checkpointer/Storage/*Provider 接口
+//	│   ├── facade.go                        # SessionFacade 门面会话共有接口
+//	│   └── interfaces.go                    # InnerSession/Checkpointer/Storage/*Provider 接口
 //	├── agent.go            # Session 公开会话（Agent 场景）+ CreateAgentSession
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
 //	├── node.go             # NodeSessionFacade 公开会话（工作流组件场景）
@@ -74,7 +75,9 @@
 //
 // 核心类型/接口索引：
 //
-//	BaseSession          — 会话基类接口，所有会话类型的核心抽象
+//	InnerSession        — 会话基类接口，所有会话类型的核心抽象
+//	BaseSession         — Deprecated alias of InnerSession
+//	SessionFacade       — 门面会话共有接口，Agent/Node/Router 门面的统一抽象
 //	ProxySession         — 代理会话，将调用委托给内部 stub
 //	Session              — Agent 公开会话，用户面向 API
 //	WorkflowSession      — Workflow 公开会话，用户面向 API

@@ -166,25 +166,25 @@ func TestAgentSession_WithStreamWriterManager(t *testing.T) {
 // testMockCP 用于 agent_session_test 的模拟检查点器
 type testMockCP struct{}
 
-func (m *testMockCP) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCP) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCP) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
+func (m *testMockCP) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	return nil
 }
-func (m *testMockCP) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCP) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCP) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCP) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCP) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCP) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *testMockCP) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCP) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *testMockCP) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCP) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
 func (m *testMockCP) SessionExists(ctx context.Context, sessionID string) (bool, error) {

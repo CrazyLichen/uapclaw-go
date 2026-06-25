@@ -20,7 +20,7 @@ type BuiltinConfigLoader interface {
 // 对应 Python: openjiuwen/core/session/config/base.py (Config)
 //
 // 定义在 config 包而非 interfaces 包，避免 tracer↔interfaces 循环依赖：
-// interfaces 导入 tracer（BaseSession.Tracer() 返回 *tracer.Tracer），
+// interfaces 导入 tracer（InnerSession.Tracer() 返回 *tracer.Tracer），
 // 如果 SessionConfig 在 interfaces 中，tracer 引用 SessionConfig 会产生循环。
 // 移到 config 包后，依赖方向为 interfaces→config、tracer→config，无循环。
 type SessionConfig interface {

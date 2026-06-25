@@ -49,12 +49,13 @@ func TestNewWorkflowSession_无parent(t *testing.T) {
 	}
 }
 
-// TestWorkflowSession_BaseSession接口 测试 BaseSession 8 个方法
-func TestWorkflowSession_BaseSession接口(t *testing.T) {
+// TestWorkflowSession_InnerSession接口 测试 InnerSession 8 个方法
+// TestWorkflowSession_InnerSession接口 测试 InnerSession 8 个方法
+func TestWorkflowSession_InnerSession接口(t *testing.T) {
 	ws := NewWorkflowSession()
 
-	// 验证实现了 interfaces.BaseSession 接口
-	var _ interfaces.BaseSession = ws
+	// 验证实现了 interfaces.InnerSession 接口
+	var _ interfaces.InnerSession = ws
 
 	if ws.Config() == nil {
 		t.Error("默认 config 应自动创建（对齐 Python Config()）")
@@ -221,10 +222,10 @@ func TestNewNodeSession_嵌套路径(t *testing.T) {
 	}
 }
 
-// TestNodeSession_BaseSession接口 测试委托方法
+// TestNodeSession_InnerSession接口 测试委托方法
 // NodeSession 应使用 WorkflowSession 作为 parent（AgentSession 不实现 WorkflowState）。
 // ✅ 5.11 已回填：Tracer 类型改为 *tracer.Tracer
-func TestNodeSession_BaseSession接口(t *testing.T) {
+func TestNodeSession_InnerSession接口(t *testing.T) {
 	parent := NewWorkflowSession(
 		WithWorkflowSessionID("parent-123"),
 	)

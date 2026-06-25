@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
@@ -369,7 +370,7 @@ func (am *AbilityManager) Execute(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) []ExecuteResult {
 	if len(toolCalls) == 0 {
@@ -452,7 +453,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	ctx context.Context,
 	toolCtx *rail.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) ExecuteResult {
 	var result ExecuteResult
@@ -527,7 +528,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
 	toolName := toolCall.Name
@@ -578,7 +579,7 @@ func (am *AbilityManager) executeTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
 	toolCard := am.tools[toolName]
@@ -652,7 +653,7 @@ func (am *AbilityManager) executeWorkflow(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
 	// 步骤 1：获取 WorkflowCard（对齐 Python L761-762）
@@ -694,7 +695,10 @@ func (am *AbilityManager) executeWorkflow(
 	// 步骤 3：创建 workflow session（对齐 Python L707: workflow_session = session.create_workflow_session()）
 	var workflowSess *session.WorkflowSession
 	if sess != nil {
-		workflowSess = sess.CreateWorkflowSession()
+		// 创建 workflow session 需要断言 *session.Session 具体类型
+		if agentSess, ok := sess.(*session.Session); ok {
+			workflowSess = agentSess.CreateWorkflowSession()
+		}
 	}
 
 	// 步骤 4：创建隔离 context（对齐 Python L708-712: workflow_context = context_engine.create_context(...)）
@@ -755,7 +759,7 @@ func (am *AbilityManager) executeAgent(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
 	// 步骤 1：获取 AgentCard（对齐 Python L777-778）
@@ -847,7 +851,7 @@ func (am *AbilityManager) executeFallbackTool(
 	toolCall *llmschema.ToolCall,
 	toolName string,
 	toolArgs map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
 	var opts []resource.ResourceOption

@@ -47,7 +47,7 @@ type BaseInteraction struct {
 	// idx 当前输入队列消费索引
 	idx int
 	// session 基础会话
-	session interfaces.BaseSession
+	session interfaces.InnerSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -83,7 +83,7 @@ const (
 // NewBaseInteraction 创建交互基类实例。
 // defaultInput 为可选的默认输入，会被追加到从 session state 读取的输入队列之后。
 // 对应 Python: BaseInteraction.__init__(session, default_input)
-func NewBaseInteraction(session interfaces.BaseSession, defaultInput ...any) *BaseInteraction {
+func NewBaseInteraction(session interfaces.InnerSession, defaultInput ...any) *BaseInteraction {
 	bi := &BaseInteraction{
 		session: session,
 	}
@@ -173,7 +173,7 @@ func (b *BaseInteraction) getNextInteractiveInput() any {
 
 // writeInteractionOutput 写入交互输出到流。
 // ✅ 5.10 已回填：StreamWriterManager 类型确定后直接调用
-func writeInteractionOutput(session interfaces.BaseSession, outputType string, index int, payload any) error {
+func writeInteractionOutput(session interfaces.InnerSession, outputType string, index int, payload any) error {
 	mgr := session.StreamWriterManager()
 	if mgr == nil {
 		return nil
@@ -196,7 +196,7 @@ func writeInteractionOutput(session interfaces.BaseSession, outputType string, i
 // 对应 Python: session.state().commit_cmp()
 // Python 中通过继承链直接调用，Go 中通过类型断言 WorkflowState 获取。
 // 类型断言失败时对齐 Python AttributeError：Log Error + Panic。
-func commitCMP(session interfaces.BaseSession) {
+func commitCMP(session interfaces.InnerSession) {
 	st := session.State()
 	if ws, ok := st.(state.WorkflowState); ok {
 		ws.CommitCmp()
@@ -212,7 +212,7 @@ func commitCMP(session interfaces.BaseSession) {
 // getExecutableID 通过类型断言从 session 获取可执行路径 ID。
 // NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
 // 断言失败时记录 Warn 日志并返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
-func getExecutableID(session interfaces.BaseSession) string {
+func getExecutableID(session interfaces.InnerSession) string {
 	if provider, ok := session.(ExecutableIDProvider); ok {
 		return provider.ExecutableID()
 	}

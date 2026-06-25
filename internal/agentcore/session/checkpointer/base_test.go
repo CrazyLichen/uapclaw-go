@@ -130,7 +130,7 @@ func TestGetTeamID_不满足接口(t *testing.T) {
 
 // ──────────────────────────── 测试辅助类型 ────────────────────────────
 
-// testSession 最小 interfaces.BaseSession 实现
+// testSession 最小 interfaces.InnerSession 实现
 type testSession struct {
 	sessionID string
 }

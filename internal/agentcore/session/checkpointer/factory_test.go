@@ -383,25 +383,25 @@ func contains(s, substr string) bool {
 // mockCheckpointer 用于测试的模拟检查点器
 type mockCheckpointer struct{}
 
-func (m *mockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *mockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
+func (m *mockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	return nil
 }
-func (m *mockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *mockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *mockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *mockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *mockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *mockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *mockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *mockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *mockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
 func (m *mockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {

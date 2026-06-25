@@ -7,6 +7,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -131,7 +132,7 @@ type WorkflowOptions struct {
 type AgentOptions struct {
 	// Session 会话实例（可选）
 	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
-	Session *session.Session
+	Session sessioninterfaces.SessionFacade
 	// StreamModes 流式输出模式（可选）
 	// 对应 Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
 	StreamModes []stream.StreamMode
@@ -152,7 +153,7 @@ type AgentOption func(*AgentOptions)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithSession 设置会话实例。
-func WithSession(sess *session.Session) AgentOption {
+func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
 	return func(o *AgentOptions) { o.Session = sess }
 }
 

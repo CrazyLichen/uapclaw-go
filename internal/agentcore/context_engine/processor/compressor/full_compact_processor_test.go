@@ -16,7 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -52,8 +52,8 @@ func (f *fcpFakeModelContext) ContextID() string                                
 func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter                     { return f.tokenCounter }
 func (f *fcpFakeModelContext) ReloaderTool() tool.Tool                              { return nil }
 func (f *fcpFakeModelContext) WorkspaceDir() string                                 { return "" }
-func (f *fcpFakeModelContext) SetSessionRef(_ *session.Session)                     {}
-func (f *fcpFakeModelContext) GetSessionRef() *session.Session                      { return nil }
+func (f *fcpFakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)                     {}
+func (f *fcpFakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade                      { return nil }
 func (f *fcpFakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fcpFakeModelContext) SaveState() map[string]any                            { return nil }
 func (f *fcpFakeModelContext) LoadState(_ map[string]any)                           {}

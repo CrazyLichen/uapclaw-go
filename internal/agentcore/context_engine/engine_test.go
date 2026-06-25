@@ -10,6 +10,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	common_schema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -45,8 +46,8 @@ func (m *mockModelContext) ContextID() string                                   
 func (m *mockModelContext) TokenCounter() token.TokenCounter                     { return nil }
 func (m *mockModelContext) ReloaderTool() tool.Tool                              { return nil }
 func (m *mockModelContext) WorkspaceDir() string                                 { return "" }
-func (m *mockModelContext) SetSessionRef(_ *session.Session)                     {}
-func (m *mockModelContext) GetSessionRef() *session.Session                      { return nil }
+func (m *mockModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)                     {}
+func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade                      { return nil }
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any                            { return m.saveState }
 func (m *mockModelContext) LoadState(_ map[string]any)                           {}

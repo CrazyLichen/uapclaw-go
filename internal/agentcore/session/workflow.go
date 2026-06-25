@@ -52,7 +52,7 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 }
 
 // WithWorkflowSessionParent 设置父会话的选项
-func WithWorkflowSessionParent(parent BaseSession) WorkflowSessionOption {
+func WithWorkflowSessionParent(parent InnerSession) WorkflowSessionOption {
 	return func(ws *WorkflowSession) {
 		var envs map[string]any
 		if parent != nil && parent.Config() != nil {
@@ -97,7 +97,7 @@ func (ws *WorkflowSession) GetEnvs() map[string]any {
 }
 
 // GetParent 返回父会话
-func (ws *WorkflowSession) GetParent() BaseSession {
+func (ws *WorkflowSession) GetParent() InnerSession {
 	if ws.inner == nil {
 		return nil
 	}

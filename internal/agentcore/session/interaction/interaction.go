@@ -46,7 +46,7 @@ type WorkflowInteraction struct {
 // 对应 Python: openjiuwen/core/session/interaction/interaction.py (SimpleAgentInteraction)
 type SimpleAgentInteraction struct {
 	// session Agent 内部会话
-	session interfaces.BaseSession
+	session interfaces.InnerSession
 }
 
 // AgentInteraction 完整 Agent 交互，管理输入队列 + checkpointer + stream 输出。
@@ -69,7 +69,7 @@ type AgentInteraction struct {
 // 构造时从 workflow_state 读取并清除 INTERACTIVE_INPUT，作为 defaultInput 传入 BaseInteraction。
 // 对应 Python: WorkflowInteraction.__init__(session)
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
-func NewWorkflowInteraction(session interfaces.BaseSession) *WorkflowInteraction {
+func NewWorkflowInteraction(session interfaces.InnerSession) *WorkflowInteraction {
 	// 类型断言获取 WorkflowState
 	ws, ok := session.State().(state.WorkflowState)
 	if !ok {
@@ -97,14 +97,14 @@ func NewWorkflowInteraction(session interfaces.BaseSession) *WorkflowInteraction
 
 // NewSimpleAgentInteraction 创建简单 Agent 交互实例。
 // 对应 Python: SimpleAgentInteraction.__init__(session)
-func NewSimpleAgentInteraction(session interfaces.BaseSession) *SimpleAgentInteraction {
+func NewSimpleAgentInteraction(session interfaces.InnerSession) *SimpleAgentInteraction {
 	return &SimpleAgentInteraction{session: session}
 }
 
 // NewAgentInteraction 创建完整 Agent 交互实例。
 // nodeID 通过类型断言 ExecutableIDProvider 从 session 获取（Python 中 executable_id 只在 NodeSession 上有）。
 // 对应 Python: AgentInteraction.__init__(session)
-func NewAgentInteraction(session interfaces.BaseSession) *AgentInteraction {
+func NewAgentInteraction(session interfaces.InnerSession) *AgentInteraction {
 	bi := NewBaseInteraction(session)
 	return &AgentInteraction{
 		BaseInteraction: bi,

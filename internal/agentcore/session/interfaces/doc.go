@@ -5,7 +5,9 @@
 // 获取统一的接口定义，避免各自重复声明或产生循环导入。
 //
 // 接口与 Python 的对应关系：
-//   - BaseSession        → Python BaseSession(ABC)，所有会话类型的基类
+//   - SessionFacade      → Python agent.Session 和 node.Session 的共有方法集
+//   - InnerSession      → Python BaseSession(ABC)，所有会话类型的基类
+//   - BaseSession       → Deprecated alias of InnerSession
 //   - Checkpointer       → Python Checkpointer(ABC)，检查点器接口
 //   - Storage            → Python Storage(ABC)，状态存储接口
 //   - AgentIDProvider    → Python hasattr(session, "agent_id") 检测
@@ -19,7 +21,8 @@
 //
 //	interfaces/
 //	├── doc.go            # 包文档
-//	└── interfaces.go     # 接口定义
+//	├── facade.go         # SessionFacade 门面会话共有接口
+//	└── interfaces.go     # InnerSession/Checkpointer/Storage/*Provider 接口
 //
 // 对应 Python 代码：无独立文件，接口分散在 openjiuwen/core/session/ 各子模块中
 package interfaces

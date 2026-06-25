@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -64,11 +64,11 @@ type ModelContext interface {
 	// SetSessionRef 设置会话引用
 	//
 	// 对应 Python: SessionModelContext.set_session_ref()
-	SetSessionRef(sess *session.Session)
+	SetSessionRef(sess sessioninterfaces.SessionFacade)
 	// GetSessionRef 获取会话引用
 	//
 	// 对应 Python: SessionModelContext.get_session_ref()
-	GetSessionRef() *session.Session
+	GetSessionRef() sessioninterfaces.SessionFacade
 	// OffloadMessages 将消息卸载到内存缓冲区
 	//
 	// 对应 Python: SessionModelContext.offload_messages()
@@ -96,15 +96,15 @@ type ModelContext interface {
 // 对应 Python: openjiuwen/core/context_engine/context_engine.py (ContextEngine)
 type ContextEngine interface {
 	// CreateContext 创建或获取上下文
-	CreateContext(ctx context.Context, contextID string, sess *session.Session, opts ...CreateContextOption) (ModelContext, error)
+	CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CreateContextOption) (ModelContext, error)
 	// GetContext 获取上下文（不存在返回 nil）
 	GetContext(contextID string, sessionID string) ModelContext
 	// CompressContext 主动压缩上下文，返回 "busy"/"compressed"/"noop"
-	CompressContext(ctx context.Context, contextID string, sess *session.Session, opts ...CompressContextOption) (string, error)
+	CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CompressContextOption) (string, error)
 	// ClearContext 清空上下文（三种粒度：全清/按session/按context+session）
 	ClearContext(ctx context.Context, opts ...ClearContextOption) error
 	// SaveContexts 批量持久化上下文状态，返回 contextID → state 映射
-	SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) (map[string]any, error)
+	SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error)
 }
 
 // ProcessorSpec 处理器规格，指定类型和配置。

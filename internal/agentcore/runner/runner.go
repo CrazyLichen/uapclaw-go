@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -30,7 +31,7 @@ func RunAgent(
 	ctx context.Context,
 	agent interfaces.BaseAgent,
 	inputs map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 ) (any, error) {
 	// 步骤 1：任务组作用域（对齐 Python L417: with self._root_task_group_scope()）
 	// ⤵️ 预留章节回填：任务组作用域

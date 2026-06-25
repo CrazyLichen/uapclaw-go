@@ -16,7 +16,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -54,7 +54,7 @@ type SessionModelContext struct {
 	// sysOperation 系统操作接口
 	sysOperation any
 	// sessionRef 会话引用
-	sessionRef *session.Session
+	sessionRef sessioninterfaces.SessionFacade
 	// defaultDialogueRound 默认对话轮数
 	defaultDialogueRound int
 	// tokenCounter Token 计数器
@@ -119,7 +119,7 @@ func NewSessionModelContext(
 	historyMessages []llm_schema.BaseMessage,
 	processors []iface.ContextProcessor,
 	tokenCounter token.TokenCounter,
-	sessionRef *session.Session,
+	sessionRef sessioninterfaces.SessionFacade,
 	workspace any,
 	sysOperation any,
 ) *SessionModelContext {
@@ -160,7 +160,7 @@ func NewSessionModelContext(
 	mc.stateRecorder = NewProcessorStateRecorder(
 		sessionID,
 		contextID,
-		func() *session.Session { return mc.sessionRef },
+		func() sessioninterfaces.SessionFacade { return mc.sessionRef },
 		tokenCounter,
 		100, // historyLimit
 	)
@@ -525,14 +525,14 @@ func (mc *SessionModelContext) WorkspaceDir() string {
 // SetSessionRef 设置会话引用。
 //
 // 对应 Python: SessionModelContext.set_session_ref()
-func (mc *SessionModelContext) SetSessionRef(sess *session.Session) {
+func (mc *SessionModelContext) SetSessionRef(sess sessioninterfaces.SessionFacade) {
 	mc.sessionRef = sess
 }
 
 // GetSessionRef 获取会话引用。
 //
 // 对应 Python: SessionModelContext.get_session_ref()
-func (mc *SessionModelContext) GetSessionRef() *session.Session {
+func (mc *SessionModelContext) GetSessionRef() sessioninterfaces.SessionFacade {
 	return mc.sessionRef
 }
 

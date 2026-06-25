@@ -45,13 +45,13 @@ type testWorkflowSession struct {
 	config     config.SessionConfig
 	st         state.SessionState
 	workflowID string
-	parent     interfaces.BaseSession
+	parent     interfaces.InnerSession
 }
 
 func (s *testWorkflowSession) State() state.SessionState      { return s.st }
 func (s *testWorkflowSession) Config() config.SessionConfig   { return s.config }
 func (s *testWorkflowSession) WorkflowID() string             { return s.workflowID }
-func (s *testWorkflowSession) Parent() interfaces.BaseSession { return s.parent }
+func (s *testWorkflowSession) Parent() interfaces.InnerSession { return s.parent }
 
 // ──────────────────────────── NewInMemoryCheckpointer 测试 ────────────────────────────
 

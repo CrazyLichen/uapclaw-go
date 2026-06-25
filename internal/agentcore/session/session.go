@@ -11,7 +11,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ProxySession 代理会话，将所有 BaseSession 方法委托给内部 stub。
+// ProxySession 代理会话，将所有 InnerSession 方法委托给内部 stub。
 // 对应 Python: openjiuwen/core/session/session.py ProxySession
 //
 // 修正 Python 遗漏：Python 的 ProxySession 未覆盖 actor_manager 和 close 方法，
@@ -21,17 +21,23 @@ import (
 // stub 为 nil 时调用任何方法会 panic。
 type ProxySession struct {
 	// stub 被代理的底层会话
-	stub BaseSession
+	stub InnerSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// BaseSession 会话基类接口，定义所有会话类型共有的核心能力。
+// SessionFacade 门面会话接口（re-export from interfaces）
+type SessionFacade = interfaces.SessionFacade
+
+// InnerSession 会话基类接口，定义所有会话类型共有的核心能力。
 // 对应 Python: openjiuwen/core/session/session.py BaseSession
 //
-// 类型别名指向 interfaces.BaseSession，消除重复定义。
-// 外部代码仍可通过 session.BaseSession 引用，零破坏性迁移。
-type BaseSession = interfaces.BaseSession
+// 类型别名指向 interfaces.InnerSession，消除重复定义。
+// 外部代码仍可通过 session.InnerSession 引用，零破坏性迁移。
+type InnerSession = interfaces.InnerSession
+
+// Deprecated: 使用 InnerSession
+type BaseSession = interfaces.InnerSession
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -40,13 +46,13 @@ type BaseSession = interfaces.BaseSession
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProxySession 创建代理会话实例（stub 为 nil）。
-// 必须在调用 BaseSession 方法之前通过 SetSession 注入底层会话，否则 panic。
+// 必须在调用 InnerSession 方法之前通过 SetSession 注入底层会话，否则 panic。
 func NewProxySession() *ProxySession {
 	return &ProxySession{}
 }
 
 // SetSession 设置被代理的底层会话
-func (p *ProxySession) SetSession(stub BaseSession) {
+func (p *ProxySession) SetSession(stub InnerSession) {
 	p.stub = stub
 }
 

@@ -2,7 +2,7 @@ package resource
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -32,7 +32,7 @@ type ResourceOptions struct {
 	// Tag 资源标签
 	Tag string
 	// Session 会话实例
-	Session *session.Session
+	Session sessioninterfaces.SessionFacade
 }
 
 // NoopResourceManager ResourceManager 的空实现，3.13 阶段使用。
@@ -56,7 +56,7 @@ func WithResourceTag(tag string) ResourceOption {
 }
 
 // WithResourceSession 设置会话实例。
-func WithResourceSession(sess *session.Session) ResourceOption {
+func WithResourceSession(sess sessioninterfaces.SessionFacade) ResourceOption {
 	return func(o *ResourceOptions) { o.Session = sess }
 }
 

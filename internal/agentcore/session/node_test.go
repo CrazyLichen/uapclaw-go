@@ -368,7 +368,7 @@ func TestNodeSessionFacade_Interact_流式模式返回错误(t *testing.T) {
 	ns := internal.NewNodeSession(ws, "node1", "Test", false)
 	facade := NewNodeSessionFacade(ns, true) // streamMode=true
 
-	_, err := facade.Interact(context.Background(), "question")
+	_, err := facade.InteractWithResult(context.Background(), "question")
 	if err == nil {
 		t.Error("流式模式下 Interact 应返回错误")
 	}
@@ -390,7 +390,7 @@ func TestNodeSessionFacade_Interact_非流式模式触发GraphInterrupt(t *testi
 		}
 	}()
 
-	_, _ = facade.Interact(context.Background(), "question")
+	_, _ = facade.InteractWithResult(context.Background(), "question")
 }
 
 // ──────────────────────────── 流写入方法测试 ────────────────────────────

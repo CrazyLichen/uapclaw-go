@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -87,7 +87,7 @@ func NewContextEngine(config schema.ContextEngineConfig, opts ...iface.ContextEn
 // 否则创建新实例（⤵️ 5.31 回填 SessionModelContext 构造），存入池。
 //
 // 对应 Python: ContextEngine.create_context()
-func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, sess *session.Session, opts ...iface.CreateContextOption) (iface.ModelContext, error) {
+func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CreateContextOption) (iface.ModelContext, error) {
 	if contextID == "" {
 		contextID = defaultContextID
 	}
@@ -183,7 +183,7 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 // 对应 Python: ContextEngine.compress_context()
 // Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
 // Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
-func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess *session.Session, opts ...iface.CompressContextOption) (string, error) {
+func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CompressContextOption) (string, error) {
 	sessionID := defaultSessionID
 	if sess != nil {
 		sessionID = sess.GetSessionID()
@@ -297,7 +297,7 @@ func (ce *contextEngine) ClearContext(ctx context.Context, opts ...iface.ClearCo
 // 通过 saveStateToSession 写入 Session。
 //
 // 对应 Python: ContextEngine.save_contexts()
-func (ce *contextEngine) SaveContexts(ctx context.Context, sess *session.Session, contextIDs []string) (map[string]any, error) {
+func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade, contextIDs []string) (map[string]any, error) {
 	if sess == nil {
 		logger.Warn(logComponent).
 			Msg("保存上下文失败，会话不能为 nil")
@@ -374,7 +374,7 @@ func processContextID(contextID string) string {
 // loadStateFromSession 从 Session 中加载上下文状态到 ModelContext。
 //
 // 对应 Python: ContextEngine._load_state_from_session()
-func loadStateFromSession(mc iface.ModelContext, sess *session.Session, historyMessages []llm_schema.BaseMessage) {
+func loadStateFromSession(mc iface.ModelContext, sess sessioninterfaces.SessionFacade, historyMessages []llm_schema.BaseMessage) {
 	if sess == nil {
 		return
 	}
@@ -402,7 +402,7 @@ func loadStateFromSession(mc iface.ModelContext, sess *session.Session, historyM
 // saveStateToSession 将上下文状态写入 Session。
 //
 // 对应 Python: ContextEngine._save_state_to_session()
-func saveStateToSession(sess *session.Session, states map[string]any) {
+func saveStateToSession(sess sessioninterfaces.SessionFacade, states map[string]any) {
 	if sess == nil {
 		return
 	}

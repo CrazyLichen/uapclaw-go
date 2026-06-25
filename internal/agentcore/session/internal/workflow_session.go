@@ -16,7 +16,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// WorkflowSession 工作流级内部会话，实现 BaseSession 接口。
+// WorkflowSession 工作流级内部会话，实现 InnerSession 接口。
 //
 // 持有工作流运行所需的基础设施组件，支持延迟注入 StreamWriterManager 和 ActorManager。
 // Checkpointer 委托给 parent（通常是 AgentSession），确保父子会话共享持久化机制。
@@ -26,7 +26,7 @@ type WorkflowSession struct {
 	// sessionID 会话唯一标识（从 parent 继承或自动生成）
 	sessionID string
 	// parent 父会话（通常是 AgentSession）
-	parent interfaces.BaseSession
+	parent interfaces.InnerSession
 	// config 会话配置
 	config config.SessionConfig
 	// tracer 追踪器
@@ -44,15 +44,15 @@ type WorkflowSession struct {
 	workflowID string
 }
 
-// NodeSession 工作流节点级会话，实现 BaseSession 接口。
+// NodeSession 工作流节点级会话，实现 InnerSession 接口。
 //
-// 包装一个 BaseSession（通常是 WorkflowSession），通过 CreateNodeState 创建节点专属的状态视图。
+// 包装一个 InnerSession（通常是 WorkflowSession），通过 CreateNodeState 创建节点专属的状态视图。
 // 大部分方法委托给被包装的 session，但 State() 返回节点专属视图，Close() 为空实现。
 //
 // 对应 Python: openjiuwen/core/session/internal/workflow.py (NodeSession)
 type NodeSession struct {
 	// delegate 被包装的会话（通常是 WorkflowSession）
-	delegate interfaces.BaseSession
+	delegate interfaces.InnerSession
 	// executableID 全局唯一可执行路径 ID（parentID + "." + nodeID）
 	executableID string
 	// nodeID 节点 ID
@@ -148,7 +148,7 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 }
 
 // WithWorkflowParent 设置父会话的选项
-func WithWorkflowParent(parent interfaces.BaseSession) WorkflowSessionOption {
+func WithWorkflowParent(parent interfaces.InnerSession) WorkflowSessionOption {
 	return func(s *WorkflowSession) {
 		s.parent = parent
 	}
@@ -180,7 +180,7 @@ func WithWorkflowID(id string) WorkflowSessionOption {
 // 从 parent session 的 state 创建节点专属状态视图（共享底层状态，切换 nodeID/parentID）。
 // executableID = parentID + "." + nodeID（parentID 为空时退化为 nodeID）。
 // 类型断言 WorkflowState 失败时对齐 Python AttributeError：Log Error + Panic。
-func NewNodeSession(parent interfaces.BaseSession, nodeID, nodeType string, skipTrace bool) *NodeSession {
+func NewNodeSession(parent interfaces.InnerSession, nodeID, nodeType string, skipTrace bool) *NodeSession {
 	logger.Info(logger.ComponentAgentCore).
 		Str("action", "new_node_session").
 		Str("node_id", nodeID).
@@ -355,7 +355,7 @@ func (s *WorkflowSession) WorkflowNestingDepth() int {
 }
 
 // Parent 返回父会话
-func (s *WorkflowSession) Parent() interfaces.BaseSession {
+func (s *WorkflowSession) Parent() interfaces.InnerSession {
 	return s.parent
 }
 
@@ -400,7 +400,7 @@ func (n *NodeSession) SkipTrace() bool {
 }
 
 // Parent 返回父 session 引用
-func (n *NodeSession) Parent() interfaces.BaseSession {
+func (n *NodeSession) Parent() interfaces.InnerSession {
 	return n.delegate
 }
 
@@ -499,7 +499,7 @@ func (s *SubWorkflowSession) Close() error {
 
 // createParentID 计算父节点 ID。
 // 如果 session 是 NodeSession，返回其 executable_id；否则返回空字符串。
-func createParentID(s interfaces.BaseSession) string {
+func createParentID(s interfaces.InnerSession) string {
 	if ns, ok := s.(*NodeSession); ok {
 		return ns.ExecutableID()
 	}
@@ -515,25 +515,25 @@ func createExecutableID(nodeID, parentID string) string {
 	return nodeID
 }
 
-// getWorkflowID 从 BaseSession 获取 WorkflowID。
+// getWorkflowID 从 InnerSession 获取 WorkflowID。
 // 如果 session 有 WorkflowID 方法则调用，否则返回空字符串。
-func getWorkflowID(s interfaces.BaseSession) string {
+func getWorkflowID(s interfaces.InnerSession) string {
 	if ws, ok := s.(interface{ WorkflowID() string }); ok {
 		return ws.WorkflowID()
 	}
 	return ""
 }
 
-// getWorkflowNestingDepth 从 BaseSession 获取嵌套深度。
-func getWorkflowNestingDepth(s interfaces.BaseSession) int {
+// getWorkflowNestingDepth 从 InnerSession 获取嵌套深度。
+func getWorkflowNestingDepth(s interfaces.InnerSession) int {
 	if ws, ok := s.(interface{ WorkflowNestingDepth() int }); ok {
 		return ws.WorkflowNestingDepth()
 	}
 	return 0
 }
 
-// getMainWorkflowID 从 BaseSession 获取主工作流 ID。
-func getMainWorkflowID(s interfaces.BaseSession) string {
+// getMainWorkflowID 从 InnerSession 获取主工作流 ID。
+func getMainWorkflowID(s interfaces.InnerSession) string {
 	if ws, ok := s.(interface{ MainWorkflowID() string }); ok {
 		return ws.MainWorkflowID()
 	}

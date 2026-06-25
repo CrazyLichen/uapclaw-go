@@ -13,8 +13,8 @@ import (
 
 // ──────────────────────────── fake 实现 ────────────────────────────
 
-// fakeBaseSession 用于测试的最小 interfaces.BaseSession 实现
-type fakeBaseSession struct {
+// fakeInnerSession 用于测试的最小 interfaces.InnerSession 实现
+type fakeInnerSession struct {
 	stateValue  state.SessionState
 	swMgrValue  *stream.StreamWriterManager
 	cpValue     interfaces.Checkpointer
@@ -23,19 +23,19 @@ type fakeBaseSession struct {
 	config      config.SessionConfig
 }
 
-func (f *fakeBaseSession) State() state.SessionState                        { return f.stateValue }
-func (f *fakeBaseSession) StreamWriterManager() *stream.StreamWriterManager { return f.swMgrValue }
-func (f *fakeBaseSession) Checkpointer() interfaces.Checkpointer            { return f.cpValue }
-func (f *fakeBaseSession) ExecutableID() string                             { return f.execIDValue }
-func (f *fakeBaseSession) SessionID() string                                { return f.sessionID }
-func (f *fakeBaseSession) Config() config.SessionConfig                     { return f.config }
-func (f *fakeBaseSession) Tracer() *tracer.Tracer                           { return nil }
-func (f *fakeBaseSession) ActorManager() any                                { return nil }
-func (f *fakeBaseSession) Close() error                                     { return nil }
+func (f *fakeInnerSession) State() state.SessionState                        { return f.stateValue }
+func (f *fakeInnerSession) StreamWriterManager() *stream.StreamWriterManager { return f.swMgrValue }
+func (f *fakeInnerSession) Checkpointer() interfaces.Checkpointer            { return f.cpValue }
+func (f *fakeInnerSession) ExecutableID() string                             { return f.execIDValue }
+func (f *fakeInnerSession) SessionID() string                                { return f.sessionID }
+func (f *fakeInnerSession) Config() config.SessionConfig                     { return f.config }
+func (f *fakeInnerSession) Tracer() *tracer.Tracer                           { return nil }
+func (f *fakeInnerSession) ActorManager() any                                { return nil }
+func (f *fakeInnerSession) Close() error                                     { return nil }
 
-// newFakeBaseSession 创建测试用 fake session
-func newFakeBaseSession() *fakeBaseSession {
-	return &fakeBaseSession{
+// newFakeInnerSession 创建测试用 fake session
+func newFakeInnerSession() *fakeInnerSession {
+	return &fakeInnerSession{
 		stateValue: state.NewInMemoryWorkflowState(),
 	}
 }
@@ -44,7 +44,7 @@ func newFakeBaseSession() *fakeBaseSession {
 
 // TestNewBaseInteraction_无默认输入 测试无 defaultInput 时队列为空
 func TestNewBaseInteraction_无默认输入(t *testing.T) {
-	session := newFakeBaseSession()
+	session := newFakeInnerSession()
 	bi := NewBaseInteraction(session)
 
 	if bi == nil {
@@ -60,7 +60,7 @@ func TestNewBaseInteraction_无默认输入(t *testing.T) {
 
 // TestNewBaseInteraction_有默认输入 测试有 defaultInput 时队列包含默认值
 func TestNewBaseInteraction_有默认输入(t *testing.T) {
-	session := newFakeBaseSession()
+	session := newFakeInnerSession()
 	bi := NewBaseInteraction(session, "default_input")
 
 	if len(bi.interactiveInputs) != 1 {
@@ -77,7 +77,7 @@ func TestNewBaseInteraction_有默认输入(t *testing.T) {
 // TestNewBaseInteraction_从SessionState读取输入 测试从 session state 合并已有输入
 // 对齐 Python：state().get() 读取 agent_state/comp_state（非 global_state）
 func TestNewBaseInteraction_从SessionState读取输入(t *testing.T) {
-	session := newFakeBaseSession()
+	session := newFakeInnerSession()
 	// 预设 session state 中的输入（写入组件级状态并提交）
 	if cs, ok := session.State().(*state.WorkflowCommitState); ok {
 		require.NoError(t, cs.Update(map[string]any{InteractiveInputKey: []any{"existing_input"}}))
@@ -102,7 +102,7 @@ func TestNewBaseInteraction_从SessionState读取输入(t *testing.T) {
 
 // TestGetNextInteractiveInput_顺序消费 测试输入队列顺序消费
 func TestGetNextInteractiveInput_顺序消费(t *testing.T) {
-	session := newFakeBaseSession()
+	session := newFakeInnerSession()
 	bi := NewBaseInteraction(session, "input1")
 
 	// 第一次消费
@@ -123,7 +123,7 @@ func TestGetNextInteractiveInput_顺序消费(t *testing.T) {
 
 // TestGetNextInteractiveInput_队列为空 测试空队列返回 nil
 func TestGetNextInteractiveInput_队列为空(t *testing.T) {
-	session := newFakeBaseSession()
+	session := newFakeInnerSession()
 	bi := NewBaseInteraction(session)
 
 	result := bi.getNextInteractiveInput()
@@ -200,7 +200,7 @@ func TestPanicAgentInterrupt_非string消息(t *testing.T) {
 // TestCommitCMP_WorkflowCommitState 测试 WorkflowCommitState 提交
 func TestCommitCMP_WorkflowCommitState(t *testing.T) {
 	cs := state.NewInMemoryWorkflowState()
-	session := &fakeBaseSession{stateValue: cs}
+	session := &fakeInnerSession{stateValue: cs}
 
 	// 不应 panic
 	commitCMP(session)
@@ -208,7 +208,7 @@ func TestCommitCMP_WorkflowCommitState(t *testing.T) {
 
 // TestCommitCMP_非WorkflowCommitState 测试非 WorkflowCommitState 会 panic（对齐 Python AttributeError）
 func TestCommitCMP_非WorkflowCommitState(t *testing.T) {
-	session := &fakeBaseSession{stateValue: state.NewInMemoryStateLike()}
+	session := &fakeInnerSession{stateValue: state.NewInMemoryStateLike()}
 
 	defer func() {
 		if r := recover(); r == nil {

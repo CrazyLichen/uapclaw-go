@@ -16,9 +16,9 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Test接口满足_ProxySession 验证 ProxySession 满足 BaseSession 接口。
+// Test接口满足_ProxySession 验证 ProxySession 满足 InnerSession 接口。
 func Test接口满足_ProxySession(t *testing.T) {
-	var _ BaseSession = (*ProxySession)(nil)
+	var _ InnerSession = (*ProxySession)(nil)
 }
 
 // TestNewProxySession 验证 NewProxySession 创建的实例 stub 为 nil。
@@ -31,7 +31,7 @@ func TestNewProxySession(t *testing.T) {
 
 // ──────────────────────────── 非导出类型 ────────────────────────────
 
-// mockStub 用于测试的 BaseSession 模拟实现
+// mockStub 用于测试的 InnerSession 模拟实现
 type mockStub struct {
 	configVal              config.SessionConfig
 	stateVal               state.SessionState
@@ -56,25 +56,25 @@ func (m *mockStub) Close() error                                     { m.closeCa
 // testMockCheckpointer 用于 session_test 的模拟检查点器
 type testMockCheckpointer struct{}
 
-func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
+func (m *testMockCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	return nil
 }
-func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (m *testMockCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (m *testMockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (m *testMockCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
 func (m *testMockCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
@@ -209,8 +209,8 @@ func TestProxySession_NilStub时Panic(t *testing.T) {
 	}
 }
 
-// TestAgentSession_接口实现 在 session 包中验证 AgentSession 满足 BaseSession 接口
+// TestAgentSession_接口实现 在 session 包中验证 AgentSession 满足 InnerSession 接口
 // （internal 包不能导入 session 包，否则循环依赖）
 func TestAgentSession_接口实现(t *testing.T) {
-	var _ BaseSession = internal.NewAgentSession("test")
+	var _ InnerSession = internal.NewAgentSession("test")
 }

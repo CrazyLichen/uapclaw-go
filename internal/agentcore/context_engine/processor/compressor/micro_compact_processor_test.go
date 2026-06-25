@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -548,8 +548,8 @@ func (f *fakeModelContextForMicro) ContextID() string                           
 func (f *fakeModelContextForMicro) TokenCounter() token.TokenCounter                     { return f.tokenCounter }
 func (f *fakeModelContextForMicro) ReloaderTool() tool.Tool                              { return nil }
 func (f *fakeModelContextForMicro) WorkspaceDir() string                                 { return "" }
-func (f *fakeModelContextForMicro) SetSessionRef(_ *session.Session)                     {}
-func (f *fakeModelContextForMicro) GetSessionRef() *session.Session                      { return nil }
+func (f *fakeModelContextForMicro) SetSessionRef(_ sessioninterfaces.SessionFacade)                     {}
+func (f *fakeModelContextForMicro) GetSessionRef() sessioninterfaces.SessionFacade                      { return nil }
 func (f *fakeModelContextForMicro) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContextForMicro) SaveState() map[string]any                            { return nil }
 func (f *fakeModelContextForMicro) LoadState(_ map[string]any)                           {}

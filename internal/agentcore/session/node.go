@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
@@ -39,6 +40,9 @@ type NodeSessionFacade struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// 编译时检查 *NodeSessionFacade 满足 SessionFacade 接口
+var _ interfaces.SessionFacade = (*NodeSessionFacade)(nil)
 
 // NewNodeSessionFacade 创建工作流节点会话门面实例。
 //
@@ -163,12 +167,27 @@ func (f *NodeSessionFacade) TraceError(ctx context.Context, err error) error {
 
 // Interact 请求用户输入。
 //
+// SessionFacade 接口实现，仅返回 error。
+// 需要返回值时使用 InteractWithResult。
+//
 // 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
 // async generator 中恢复执行。这是工作流引擎的硬限制，不是设计偏好。
 //
 // ✅ 5.7 已回填：WorkflowInteraction 实现后填充真实逻辑
 // 对应 Python: Session.interact(value)
-func (f *NodeSessionFacade) Interact(ctx context.Context, value any) (any, error) {
+func (f *NodeSessionFacade) Interact(ctx context.Context, value any) error {
+	_, err := f.InteractWithResult(ctx, value)
+	return err
+}
+
+// InteractWithResult 请求用户输入并返回结果。
+//
+// 流式模式下（streamMode=true）返回错误，因为 GraphInterrupt 无法在
+// async generator 中恢复执行。这是工作流引擎的硬限制，不是设计偏好。
+//
+// ✅ 5.7 已回填：WorkflowInteraction 实现后填充真实逻辑
+// 对应 Python: Session.interact(value)
+func (f *NodeSessionFacade) InteractWithResult(ctx context.Context, value any) (any, error) {
 	if f.streamMode {
 		return nil, fmt.Errorf("流式处理（transform 或 collect）期间不支持交互, comp_id=%s, workflow=%s",
 			f.GetComponentID(), f.GetWorkflowID())
@@ -218,12 +237,12 @@ func (f *NodeSessionFacade) WriteCustomStream(ctx context.Context, data any) err
 
 // GetEnv 获取环境变量值。
 // 对应 Python: Session.get_env(key)
-func (f *NodeSessionFacade) GetEnv(key string) any {
+func (f *NodeSessionFacade) GetEnv(key string, defaultValue ...any) any {
 	cfg := f.inner.Config()
 	if cfg == nil {
 		return nil
 	}
-	return cfg.GetEnv(key)
+	return cfg.GetEnv(key, defaultValue...)
 }
 
 // GetNodeConfig 获取节点级配置。

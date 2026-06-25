@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -63,6 +64,9 @@ type SessionOption func(*Session)
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// 编译时检查 *Session 满足 SessionFacade 接口
+var _ interfaces.SessionFacade = (*Session)(nil)
 
 // NewSession 创建公开层 Session 实例。
 //
@@ -246,57 +250,19 @@ func (s *Session) DumpState() map[string]any {
 }
 
 // WriteStream 写入标准输出流。
+//
+// SessionFacade 接口实现。
 // 对应 Python: Session.write_stream(data)
-// data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
-// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
-// ✅ SW-31 已回填：触发自定义 StreamWrite 回调
-func (s *Session) WriteStream(data any) error {
-	ctx := context.Background()
-	streamData := normalizeOutputStream(s.tagStreamPayload(data))
-
-	// ⤴️ SW-31 回填：触发自定义 StreamWrite 事件
-	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
-	callback.GetCallbackFramework().TriggerCustom(ctx,
-		s.GetSessionID()+"write_stream",
-		map[string]any{"data": streamData},
-	)
-
-	mgr := s.inner.StreamWriterManager()
-	if mgr == nil {
-		return nil
-	}
-	writer := mgr.GetOutputWriter()
-	if writer == nil {
-		return nil
-	}
-	return writer.Write(ctx, streamData)
+func (s *Session) WriteStream(ctx context.Context, data any) error {
+	return s.writeStream(data)
 }
 
 // WriteCustomStream 写入自定义流。
+//
+// SessionFacade 接口实现。
 // 对应 Python: Session.write_custom_stream(data)
-// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
-// ✅ SW-32 已回填：触发自定义 StreamWrite 回调
-func (s *Session) WriteCustomStream(data any) error {
-	ctx := context.Background()
-	streamData := s.tagStreamPayload(data)
-
-	// ⤴️ SW-32 回填：触发自定义 StreamWrite 事件
-	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
-	callback.GetCallbackFramework().TriggerCustom(ctx,
-		s.GetSessionID()+"write_stream",
-		map[string]any{"data": streamData},
-	)
-
-	mgr := s.inner.StreamWriterManager()
-	if mgr == nil {
-		return nil
-	}
-	writer := mgr.GetCustomWriter()
-	if writer == nil {
-		return nil
-	}
-	schema := normalizeCustomStream(streamData)
-	return writer.Write(ctx, schema)
+func (s *Session) WriteCustomStream(ctx context.Context, data any) error {
+	return s.writeCustomStream(data)
 }
 
 // StreamIterator 返回流迭代 channel。
@@ -474,6 +440,60 @@ func init() {
 	controller.RegisterSessionCreator(func(agentID, sessionID string) controller.StateAccessor {
 		return CreateAgentSession(agentID, sessionID)
 	})
+}
+
+// writeStream 写入标准输出流（内部实现）。
+// 对应 Python: Session.write_stream(data)
+// data 接受 any 类型，内部通过 normalizeOutputStream 统一转为 OutputSchema。
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
+// ✅ SW-31 已回填：触发自定义 StreamWrite 回调
+func (s *Session) writeStream(data any) error {
+	ctx := context.Background()
+	streamData := normalizeOutputStream(s.tagStreamPayload(data))
+
+	// ⤴️ SW-31 回填：触发自定义 StreamWrite 事件
+	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	callback.GetCallbackFramework().TriggerCustom(ctx,
+		s.GetSessionID()+"write_stream",
+		map[string]any{"data": streamData},
+	)
+
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetOutputWriter()
+	if writer == nil {
+		return nil
+	}
+	return writer.Write(ctx, streamData)
+}
+
+// writeCustomStream 写入自定义流（内部实现）。
+// 对应 Python: Session.write_custom_stream(data)
+// ✅ 5.10 已回填：StreamWriterManager 实现后填充真实逻辑
+// ✅ SW-32 已回填：触发自定义 StreamWrite 回调
+func (s *Session) writeCustomStream(data any) error {
+	ctx := context.Background()
+	streamData := s.tagStreamPayload(data)
+
+	// ⤴️ SW-32 回填：触发自定义 StreamWrite 事件
+	// 对应 Python: await trigger(self._session_id + "write_stream", data=stream_data)
+	callback.GetCallbackFramework().TriggerCustom(ctx,
+		s.GetSessionID()+"write_stream",
+		map[string]any{"data": streamData},
+	)
+
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		return nil
+	}
+	writer := mgr.GetCustomWriter()
+	if writer == nil {
+		return nil
+	}
+	schema := normalizeCustomStream(streamData)
+	return writer.Write(ctx, schema)
 }
 
 // tagStreamPayload 为流数据添加来源元数据。

@@ -14,8 +14,8 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -465,7 +465,7 @@ func (m *SessionMemoryManager) BindModelDefaults(
 // 对应 Python: SessionMemoryManager.maybe_schedule_update()
 func (m *SessionMemoryManager) MaybeScheduleUpdate(
 	ctx context.Context,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	mc iface.ModelContext,
 	workspaceDir string,
 ) {
@@ -543,7 +543,7 @@ func (m *SessionMemoryManager) MaybeScheduleUpdate(
 //
 // 对应 Python: SessionMemoryManager.should_update()
 func (m *SessionMemoryManager) ShouldUpdate(
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	mc iface.ModelContext,
 	window *iface.ContextWindow,
 ) bool {
@@ -669,7 +669,7 @@ func (m *SessionMemoryManager) Shutdown() {
 // GetSessionMemoryRuntime 从 session state 获取 "__session_memory__" 键的值。
 //
 // 对应 Python: get_session_memory_runtime()
-func GetSessionMemoryRuntime(sess *session.Session) map[string]any {
+func GetSessionMemoryRuntime(sess sessioninterfaces.SessionFacade) map[string]any {
 	if sess == nil {
 		logger.Info(logComponent).
 			Str("event_type", "SESSION_MEMORY_RUNTIME").
@@ -697,7 +697,7 @@ func GetSessionMemoryRuntime(sess *session.Session) map[string]any {
 // InvalidateSessionMemoryAnchor 重置基线。
 //
 // 对应 Python: invalidate_session_memory_anchor()
-func InvalidateSessionMemoryAnchor(sess *session.Session) {
+func InvalidateSessionMemoryAnchor(sess sessioninterfaces.SessionFacade) {
 	if sess == nil {
 		return
 	}
@@ -740,7 +740,7 @@ func GetContextMessageID(msg llm_schema.BaseMessage) string {
 // updateSessionMemoryRuntime 更新运行时状态。
 //
 // 对应 Python: update_session_memory_runtime()
-func updateSessionMemoryRuntime(sess *session.Session, st map[string]any) {
+func updateSessionMemoryRuntime(sess sessioninterfaces.SessionFacade, st map[string]any) {
 	if sess == nil {
 		return
 	}
@@ -895,7 +895,7 @@ func normalizeDirectResponseContent(content string) string {
 // getRuntimeState 获取运行时状态（带默认值填充）。
 //
 // 对应 Python: SessionMemoryManager._get_runtime_state()
-func getRuntimeState(sess *session.Session) map[string]any {
+func getRuntimeState(sess sessioninterfaces.SessionFacade) map[string]any {
 	st := GetSessionMemoryRuntime(sess)
 	return map[string]any{
 		"memory_path":                   getStringFromMap(st, "memory_path"),
@@ -910,7 +910,7 @@ func getRuntimeState(sess *session.Session) map[string]any {
 }
 
 // setRuntimeState 设置运行时状态。
-func setRuntimeState(sess *session.Session, st map[string]any) {
+func setRuntimeState(sess sessioninterfaces.SessionFacade, st map[string]any) {
 	updateSessionMemoryRuntime(sess, st)
 }
 
@@ -983,7 +983,7 @@ func truncateContextWindowToCompletedAPIRound(window *iface.ContextWindow) *ifac
 // 对应 Python: SessionMemoryManager._update_background()
 func (m *SessionMemoryManager) updateBackground(
 	ctx context.Context,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	mc iface.ModelContext,
 	contextWindow *iface.ContextWindow,
 	notesPath string,

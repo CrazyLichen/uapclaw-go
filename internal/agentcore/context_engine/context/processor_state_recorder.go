@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -75,7 +75,7 @@ type ProcessorStateRecorder struct {
 	// contextID 上下文 ID
 	contextID string
 	// getSessionRef 获取会话引用的回调函数
-	getSessionRef func() *session.Session
+	getSessionRef func() sessioninterfaces.SessionFacade
 	// tokenCounter Token 计数器
 	tokenCounter token.TokenCounter
 	// historyLimit 历史记录上限
@@ -95,7 +95,7 @@ type ProcessorStateRecorder struct {
 // NewProcessorStateRecorder 创建处理器状态记录器实例。
 //
 // 对应 Python: ContextProcessorStateRecorder.__init__()
-func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func() *session.Session, tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
+func NewProcessorStateRecorder(sessionID, contextID string, getSessionRef func() sessioninterfaces.SessionFacade, tokenCounter token.TokenCounter, historyLimit int) *ProcessorStateRecorder {
 	return &ProcessorStateRecorder{
 		sessionID:     sessionID,
 		contextID:     contextID,
@@ -160,7 +160,7 @@ func (r *ProcessorStateRecorder) Emit(ctx context.Context, state *schema.Context
 	sessionRef := r.getSessionRef()
 	if sessionRef != nil {
 		stateMap := r.stateToMap(state)
-		_ = sessionRef.WriteStream(stream.OutputSchema{
+		_ = sessionRef.WriteStream(context.Background(), stream.OutputSchema{
 			Type:    schema.ContextCompressionStateType,
 			Payload: stateMap,
 		})

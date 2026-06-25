@@ -18,25 +18,25 @@ import (
 // noOpCheckpointer 空操作检查点器，用于不需要真实检查点逻辑的测试
 type noOpCheckpointer struct{}
 
-func (n *noOpCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (n *noOpCheckpointer) PreWorkflowExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.BaseSession, result any, exception error) error {
+func (n *noOpCheckpointer) PostWorkflowExecute(ctx context.Context, session interfaces.InnerSession, result any, exception error) error {
 	return nil
 }
-func (n *noOpCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (n *noOpCheckpointer) PreAgentExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.BaseSession, inputs any) error {
+func (n *noOpCheckpointer) PreAgentTeamExecute(ctx context.Context, session interfaces.InnerSession, inputs any) error {
 	return nil
 }
-func (n *noOpCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (n *noOpCheckpointer) InterruptAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (n *noOpCheckpointer) PostAgentExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
-func (n *noOpCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.BaseSession) error {
+func (n *noOpCheckpointer) PostAgentTeamExecute(ctx context.Context, session interfaces.InnerSession) error {
 	return nil
 }
 func (n *noOpCheckpointer) SessionExists(ctx context.Context, sessionID string) (bool, error) {
@@ -179,10 +179,10 @@ func TestSession_DumpState(t *testing.T) {
 func TestSession_桩方法返回Nil(t *testing.T) {
 	s := NewSession(WithCheckpointer(&noOpCheckpointer{}))
 
-	if err := s.WriteStream(nil); err != nil {
+	if err := s.WriteStream(context.Background(), nil); err != nil {
 		t.Errorf("WriteStream 桩应返回 nil，实际 %v", err)
 	}
-	if err := s.WriteCustomStream(nil); err != nil {
+	if err := s.WriteCustomStream(context.Background(), nil); err != nil {
 		t.Errorf("WriteCustomStream 桩应返回 nil，实际 %v", err)
 	}
 	// StreamIterator 不再返回 nil：默认 StreamWriterManager 自动创建
@@ -322,7 +322,7 @@ func TestNormalizeOutputStream_各种类型(t *testing.T) {
 func TestSession_WriteCustomStream_map数据(t *testing.T) {
 	s := NewSession()
 	// 传入 map 数据，走 map 分支
-	err := s.WriteCustomStream(map[string]any{"key": "value"})
+	err := s.WriteCustomStream(context.Background(), map[string]any{"key": "value"})
 	if err != nil {
 		t.Errorf("WriteCustomStream map 数据不应返回错误，实际=%v", err)
 	}
@@ -332,7 +332,7 @@ func TestSession_WriteCustomStream_map数据(t *testing.T) {
 func TestSession_WriteStream_OutputSchema(t *testing.T) {
 	s := NewSession()
 	os := stream.OutputSchema{Type: "message", Index: 0, Payload: "test"}
-	err := s.WriteStream(os)
+	err := s.WriteStream(context.Background(), os)
 	if err != nil {
 		t.Errorf("WriteStream OutputSchema 不应返回错误，实际=%v", err)
 	}
@@ -616,7 +616,7 @@ func TestSession_WriteStream_触发CustomCallback(t *testing.T) {
 	fw.OnCustom("sw31-testwrite_stream", fn)
 	defer fw.OffAllCustom("sw31-testwrite_stream")
 
-	_ = s.WriteStream(map[string]any{"text": "hello"})
+	_ = s.WriteStream(context.Background(), map[string]any{"text": "hello"})
 
 	if !triggered {
 		t.Error("WriteStream 应触发自定义 StreamWrite 回调")
@@ -646,7 +646,7 @@ func TestSession_WriteCustomStream_触发CustomCallback(t *testing.T) {
 	fw.OnCustom("sw32-testwrite_stream", fn)
 	defer fw.OffAllCustom("sw32-testwrite_stream")
 
-	_ = s.WriteCustomStream(map[string]any{"key": "value"})
+	_ = s.WriteCustomStream(context.Background(), map[string]any{"key": "value"})
 
 	if !triggered {
 		t.Error("WriteCustomStream 应触发自定义 StreamWrite 回调")
@@ -673,7 +673,7 @@ func TestSession_CloseStream_注销CustomCallback(t *testing.T) {
 	fw.OnCustom("sw33-testwrite_stream", fn)
 
 	// WriteStream 应触发回调
-	_ = s.WriteStream("data1")
+	_ = s.WriteStream(context.Background(), "data1")
 	if atomic.LoadInt32(&callCount) != 1 {
 		t.Errorf("WriteStream 后期望调用 1 次，实际 %d 次", callCount)
 	}
@@ -715,13 +715,13 @@ func TestSession_Stream回调_PerSession隔离(t *testing.T) {
 	}()
 
 	// s1 写入只触发 session-A 回调
-	_ = s1.WriteStream("data-A")
+	_ = s1.WriteStream(context.Background(), "data-A")
 	if atomic.LoadInt32(&callA) != 1 || atomic.LoadInt32(&callB) != 0 {
 		t.Errorf("s1 WriteStream: 期望 callA=1 callB=0，实际 callA=%d callB=%d", callA, callB)
 	}
 
 	// s2 写入只触发 session-B 回调
-	_ = s2.WriteStream("data-B")
+	_ = s2.WriteStream(context.Background(), "data-B")
 	if atomic.LoadInt32(&callA) != 1 || atomic.LoadInt32(&callB) != 1 {
 		t.Errorf("s2 WriteStream: 期望 callA=1 callB=1，实际 callA=%d callB=%d", callA, callB)
 	}
@@ -731,7 +731,7 @@ func TestSession_Stream回调_PerSession隔离(t *testing.T) {
 
 	// s2 回调应仍有效
 	atomic.StoreInt32(&callB, 0)
-	_ = s2.WriteStream("data-B2")
+	_ = s2.WriteStream(context.Background(), "data-B2")
 	if atomic.LoadInt32(&callB) != 1 {
 		t.Error("s1 CloseStream 后 s2 回调应仍有效")
 	}

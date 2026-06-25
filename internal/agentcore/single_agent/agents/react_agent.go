@@ -11,11 +11,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -69,9 +71,25 @@ type ReActAgent struct {
 	llmOnce sync.Once
 	// kvReleaseWarningLogged KV cache 释放不支持的一次性警告标记
 	kvReleaseWarningLogged bool
+	// hitlHandler HITL 中断处理器
+	hitlHandler *interrupt.ToolInterruptHandler
 }
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// KVCacheReleaser KV Cache 释放能力接口。
+//
+// 对应 Python: llm.supports_kv_cache_release() 方法
+type KVCacheReleaser interface {
+	SupportsKVCacheRelease() bool
+}
+
+// KVCacheKwargsBuilder KV Cache 调用参数构建接口。
+//
+// 对应 Python: llm.build_kv_cache_invoke_kwargs() 方法
+type KVCacheKwargsBuilder interface {
+	BuildKVCacheInvokeKwargs(sess sessioninterfaces.SessionFacade, enableKVCacheRelease bool) map[string]any
+}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -106,6 +124,9 @@ func NewReActAgent(
 	// 关键：设置虚分发
 	base.SetInvoker(agent)
 
+	// 初始化 HITL 中断处理器
+	agent.hitlHandler = interrupt.NewToolInterruptHandler(agent)
+
 	return agent
 }
 
@@ -133,8 +154,15 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
+	var agentSess *session.Session
 	if sess == nil {
 		sess = session.NewSession(session.WithSessionID("default_session"))
+	}
+
+	// 断言 *session.Session 以获取生命周期方法
+	if as, ok := sess.(*session.Session); ok {
+		agentSess = as
+		as.PreRun(ctx)
 	}
 
 	query, _ := inputs["query"].(string)
@@ -162,13 +190,82 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 
 	var result map[string]any
+	var loopErr error
+
 	err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
-		var innerErr error
-		result, innerErr = a.reactLoop(ctx, cbc, sess)
-		return innerErr
+		// 加载 HITL 中断状态
+		hitlState := a.hitlHandler.Load(sess)
+		var interruptionState interrupt.ToolInterruptionState
+		if hitlState != nil {
+			a.hitlHandler.Clear(sess)
+			interruptionState = *hitlState
+		}
+		// ⤵️ Workflow: interruptionState = a.loadInterruptionState(sess)
+
+		// 如果存在中断状态，恢复原始 query
+		if hitlState != nil {
+			cbc.Extra()["_original_query"] = hitlState.OriginalQuery
+		}
+
+		// 初始化上下文
+		modelCtx, ctxErr := a.initContext(ctx, sess)
+		if ctxErr != nil {
+			return fmt.Errorf("初始化上下文失败: %w", ctxErr)
+		}
+		cbc.SetModelContext(modelCtx)
+
+		startIteration := 0
+		if hitlState != nil {
+			// HITL 中断恢复分支
+			resumeResult, resumeErr := a.hitlHandler.HandleResume(ctx, &interrupt.ResumeContext{
+				State:           &interruptionState,
+				UserInput:       query,
+				Ctx:             cbc,
+				ModelContext:    modelCtx,
+				Session:         sess,
+				InvokeInputs:    invokeInputs,
+				ExecuteToolCall: a.makeExecuteToolCallFunc(),
+			})
+			if resumeErr != nil {
+				return resumeErr
+			}
+			if resumeResult != nil {
+				// 仍有中断，invokeInputs.result 已设置
+				result = resumeResult
+				return nil
+			}
+			// 无新中断，从恢复起始迭代继续
+			if si, ok := cbc.Extra()[interrupt.ResumeStartIterationKey].(int); ok {
+				startIteration = si
+				delete(cbc.Extra(), interrupt.ResumeStartIterationKey)
+			}
+		} else {
+			// 正常路径：添加 UserMessage
+			if query != "" && modelCtx != nil {
+				_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage(query))
+			}
+		}
+
+		// 调用 ReAct 循环
+		if invokeInputs.Result == nil {
+			result, loopErr = a.reactLoop(ctx, cbc, sess, startIteration)
+		}
+		return loopErr
 	})
-	if err != nil {
+
+	// context.Canceled 时清除上下文消息
+	if err != nil && ctx.Err() == context.Canceled {
+		a.ClearContextMessages(sess)
+	}
+	if err != nil && ctx.Err() != context.Canceled {
 		return nil, err
+	}
+
+	// 生命周期后处理
+	if agentSess != nil {
+		a.saveContexts(sess)
+		_ = agentSess.CloseStream()
+		_ = agentSess.Commit(ctx)
 	}
 
 	if invokeResult, ok := cbc.Extra()["invoke_result"]; ok {
@@ -182,12 +279,26 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 
 // StreamImpl 实现 AgentInvoker 接口 —— 流式调用。
 //
-// 对应 Python: ReActAgent._inner_stream()
+// 对应 Python: ReActAgent.stream()
 func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (<-chan stream.Schema, error) {
-	// 如果 opts 中没有 session，补充默认 session
 	agentOpts := interfaces.NewAgentOptions(opts...)
-	if agentOpts.Session == nil {
-		opts = append(opts, interfaces.WithSession(session.NewSession(session.WithSessionID("default_session"))))
+	sess := agentOpts.Session
+
+	if sess == nil {
+		sess = session.NewSession(session.WithSessionID("default_session"))
+		// 补充到 opts 中
+		opts = append(opts, interfaces.WithSession(sess))
+	}
+
+	// AgentSession 生命周期断言（直接断言 *session.Session）
+	var agentSess *session.Session
+	isAgentSess := false
+	if as, ok := sess.(*session.Session); ok {
+		agentSess = as
+		isAgentSess = true
+		if err := as.PreRun(ctx, inputs); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("PreRun 失败")
+		}
 	}
 
 	inputs["_streaming"] = true
@@ -195,20 +306,7 @@ func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts
 
 	go func() {
 		defer close(outCh)
-		result, err := a.InvokeImpl(ctx, inputs, opts...)
-		if err != nil {
-			outCh <- &stream.CustomSchema{
-				Type: stream.StreamModeCustom.Mode(),
-				Data: map[string]any{"error": err.Error(), "result_type": "error"},
-			}
-			return
-		}
-		if resultMap, ok := result.(map[string]any); ok {
-			outCh <- &stream.CustomSchema{
-				Type: stream.StreamModeCustom.Mode(),
-				Data: resultMap,
-			}
-		}
+		a.innerStream(ctx, sess, agentSess, isAgentSess, inputs, opts, outCh)
 	}()
 
 	return outCh, nil
@@ -251,6 +349,11 @@ func (a *ReActAgent) AgentID() string {
 	return a.base.AgentID()
 }
 
+// ContextEngine 返回上下文引擎（满足 InterruptAgent 接口）。
+func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
+	return a.contextEngine
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // reactLoop ReAct 循环核心。
@@ -259,7 +362,8 @@ func (a *ReActAgent) AgentID() string {
 func (a *ReActAgent) reactLoop(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
+	startIteration int,
 ) (map[string]any, error) {
 	maxIter := defaultMaxIterations
 	if a.config != nil && a.config.MaxIterations > 0 {
@@ -281,7 +385,7 @@ func (a *ReActAgent) reactLoop(
 	}
 
 	var iterResult map[string]any
-	for iteration := 0; iteration < maxIter; iteration++ {
+	for iteration := startIteration; iteration < maxIter; iteration++ {
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
 			for _, msg := range steeringMsgs {
@@ -290,7 +394,7 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		// 调用 LLM
-		aiMsg, err := a.callModel(ctx, cbc, modelCtx, tools)
+		aiMsg, err := a.callModel(ctx, cbc, modelCtx, tools, sess)
 		if err != nil {
 			return nil, fmt.Errorf("迭代 %d 模型调用失败: %w", iteration, err)
 		}
@@ -321,7 +425,8 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		// 执行工具
-		if _, err := a.executeToolCalls(ctx, cbc, aiMsg.ToolCalls, sess, modelCtx); err != nil {
+		results, err := a.executeToolCalls(ctx, cbc, aiMsg.ToolCalls, sess, modelCtx)
+		if err != nil {
 			logger.Error(logComponent).Str("event_type", "tool_execution_error").Int("iteration", iteration).Err(err).Msg("工具执行失败")
 		}
 
@@ -331,6 +436,27 @@ func (a *ReActAgent) reactLoop(
 			iterResult = finish.Result
 			break
 		}
+
+		// HITL 中断检测
+		originalQuery := ""
+		if oq, ok := cbc.Extra()["_original_query"].(string); ok {
+			originalQuery = oq
+		}
+		// 将 []ExecuteResult 转为 []any 供 BuildInterruptState 使用
+		anyResults := make([]any, len(results))
+		for i, r := range results {
+			anyResults[i] = [2]any{r.Result, r.ToolMsg}
+		}
+		hitlInterrupt, _ := a.AfterExecuteToolCallForHITL(
+			anyResults, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
+		)
+		if hitlInterrupt != nil {
+			if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok {
+				_, _ = a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, invokeInputs, nil)
+			}
+			break
+		}
+		// ⤵️ 6.11: Workflow 中断检测
 	}
 
 	if iterResult == nil {
@@ -350,6 +476,7 @@ func (a *ReActAgent) callModel(
 	cbc *rail.AgentCallbackContext,
 	modelCtx ceinterface.ModelContext,
 	tools []*cschema.ToolInfo,
+	sess sessioninterfaces.SessionFacade,
 ) (*llmschema.AssistantMessage, error) {
 	previewMsgs := make([]llmschema.BaseMessage, 0)
 	if modelCtx != nil {
@@ -363,23 +490,52 @@ func (a *ReActAgent) callModel(
 	var result *llmschema.AssistantMessage
 	err := rail.ModelCallRail.Execute(ctx, cbc, func() error {
 		var e error
-		result, e = a.railedModelCall(ctx, cbc)
+		result, e = a.railedModelCall(ctx, cbc, sess)
 		return e
 	})
 	return result, err
 }
 
 // railedModelCall 在 Rail 钩子内执行 LLM 调用。
-func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbackContext) (*llmschema.AssistantMessage, error) {
+func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (*llmschema.AssistantMessage, error) {
 	systemPrompt := a.promptBuilder.Build()
 	systemMsgs := []llmschema.BaseMessage{llmschema.NewSystemMessage(systemPrompt)}
 
 	modelCtx := cbc.ModelContext()
+
+	// KV Cache 释放逻辑（对应 Python _railed_model_call L686-720）
+	var enableKVRelease bool
+	if a.config != nil {
+		enableKVRelease = a.config.ContextEngineConfig.EnableKVCacheRelease
+	}
+
+	// 提前获取 LLM 实例（KV Cache 检查和 GetContextWindow 都需要）
+	llmModel, llmErr := a.getLLM()
+
+	var supportsKVRelease bool
+	if llmModel != nil {
+		supportsKVRelease = llmModel.SupportsKVCacheRelease()
+	}
+
+	// 不支持时一次性警告
+	if enableKVRelease && !supportsKVRelease && !a.kvReleaseWarningLogged {
+		logger.Warn(logComponent).
+			Str("event_type", "kv_cache_release_not_supported").
+			Msg("enable_kv_cache_release 已启用但当前 LLM 不支持 KV Cache 释放")
+		a.kvReleaseWarningLogged = true
+	}
+
+	// 构建 GetContextWindow 选项：支持 KV Cache 时传入 model
+	var contextWindowOpts []ceinterface.Option
+	if enableKVRelease && supportsKVRelease && llmModel != nil {
+		contextWindowOpts = append(contextWindowOpts, ceinterface.WithModel(llmModel))
+	}
+
 	var messages []llmschema.BaseMessage
 	var contextTools []*cschema.ToolInfo
 
 	if modelCtx != nil {
-		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, nil, 0, 0)
+		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, nil, 0, 0, contextWindowOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("获取上下文窗口失败: %w", err)
 		}
@@ -393,10 +549,16 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 		inputs.Messages = messages
 	}
 
-	llmModel, err := a.getLLM()
-	if err != nil {
-		return nil, err
+	// LLM 实例必须在调用前可用
+	if llmErr != nil {
+		return nil, llmErr
 	}
+	if llmModel == nil {
+		return nil, fmt.Errorf("LLM 实例为 nil")
+	}
+
+	// 构建 KV Cache extra kwargs（对应 Python L736-742）
+	extraKVPairs := llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
 
 	isStreaming, _ := cbc.Extra()["_streaming"].(bool)
 	modelName := ""
@@ -405,9 +567,9 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 	}
 
 	if isStreaming {
-		return a.callLLMStream(ctx, llmModel, modelName, messages, contextTools)
+		return a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
 	}
-	return a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools)
+	return a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
 }
 
 // callLLMInvoke 非流式 LLM 调用。
@@ -417,16 +579,24 @@ func (a *ReActAgent) callLLMInvoke(
 	modelName string,
 	messages []llmschema.BaseMessage,
 	tools []*cschema.ToolInfo,
+	extraKVPairs map[string]any,
 ) (*llmschema.AssistantMessage, error) {
 	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
 	for i, t := range tools {
 		toolProviders[i] = t
 	}
 	msgsParam := model_clients.NewMessagesParam(messages...)
-	resp, err := (*llmModel).Invoke(ctx, msgsParam,
+
+	// 构建 invoke 选项（含 KV Cache extra kwargs）
+	invokeOpts := []model_clients.InvokeOption{
 		model_clients.WithInvokeModel(modelName),
 		model_clients.WithTools(toolProviders...),
-	)
+	}
+	if len(extraKVPairs) > 0 {
+		invokeOpts = append(invokeOpts, model_clients.WithInvokeExtra(extraKVPairs))
+	}
+
+	resp, err := (*llmModel).Invoke(ctx, msgsParam, invokeOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("LLM invoke 失败: %w", err)
 	}
@@ -440,21 +610,31 @@ func (a *ReActAgent) callLLMStream(
 	modelName string,
 	messages []llmschema.BaseMessage,
 	tools []*cschema.ToolInfo,
+	sess sessioninterfaces.SessionFacade,
+	extraKVPairs map[string]any,
 ) (*llmschema.AssistantMessage, error) {
 	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
 	for i, t := range tools {
 		toolProviders[i] = t
 	}
 	msgsParam := model_clients.NewMessagesParam(messages...)
-	chunkCh, err := (*llmModel).Stream(ctx, msgsParam,
+
+	// 构建 stream 选项（含 KV Cache extra kwargs）
+	streamOpts := []model_clients.StreamOption{
 		model_clients.WithStreamModel(modelName),
 		model_clients.WithStreamTools(toolProviders...),
-	)
+	}
+	if len(extraKVPairs) > 0 {
+		streamOpts = append(streamOpts, model_clients.WithStreamExtra(extraKVPairs))
+	}
+
+	chunkCh, err := (*llmModel).Stream(ctx, msgsParam, streamOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("LLM stream 失败: %w", err)
 	}
 
 	var finalMsg *llmschema.AssistantMessage
+	chunkIndex := 0
 	for chunk := range chunkCh {
 		if finalMsg == nil {
 			finalMsg = llmschema.NewAssistantMessage("")
@@ -463,10 +643,55 @@ func (a *ReActAgent) callLLMStream(
 		if len(chunk.ToolCalls) > 0 {
 			finalMsg.ToolCalls = append(finalMsg.ToolCalls, chunk.ToolCalls...)
 		}
+		if chunk.ReasoningContent != "" {
+			finalMsg.ReasoningContent += chunk.ReasoningContent
+		}
+		if chunk.UsageMetadata != nil {
+			finalMsg.UsageMetadata = chunk.UsageMetadata
+		}
+
+		// 实时写入 session stream（对齐 Python railed_model_call L776-809）
+		if sess != nil {
+			if chunk.Content.Text() != "" {
+				_ = sess.WriteStream(ctx, &stream.OutputSchema{
+					Type:  "llm_output",
+					Index: chunkIndex,
+					Payload: map[string]any{
+						"content":     chunk.Content.Text(),
+						"result_type": "answer",
+					},
+				})
+				chunkIndex++
+			}
+			if chunk.ReasoningContent != "" {
+				_ = sess.WriteStream(ctx, &stream.OutputSchema{
+					Type:  "llm_reasoning",
+					Index: chunkIndex,
+					Payload: map[string]any{
+						"content":     chunk.ReasoningContent,
+						"result_type": "answer",
+					},
+				})
+				chunkIndex++
+			}
+		}
 	}
 	if finalMsg == nil {
 		finalMsg = llmschema.NewAssistantMessage("")
 	}
+
+	// 写入 usage_metadata（对齐 Python L804-809）
+	if sess != nil && finalMsg.UsageMetadata != nil {
+		_ = sess.WriteStream(ctx, &stream.OutputSchema{
+			Type:  "llm_usage",
+			Index: 0,
+			Payload: map[string]any{
+				"usage_metadata": finalMsg.UsageMetadata,
+				"result_type":    "answer",
+			},
+		})
+	}
+
 	return finalMsg, nil
 }
 
@@ -475,7 +700,7 @@ func (a *ReActAgent) executeToolCalls(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
 ) ([]ability.ExecuteResult, error) {
 	if len(toolCalls) == 0 {
@@ -511,7 +736,7 @@ func (a *ReActAgent) executeToolCalls(
 }
 
 // initContext 初始化上下文引擎。
-func (a *ReActAgent) initContext(ctx context.Context, sess *session.Session) (ceinterface.ModelContext, error) {
+func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.SessionFacade) (ceinterface.ModelContext, error) {
 	if a.contextEngine == nil {
 		return nil, nil
 	}
@@ -570,12 +795,34 @@ func (a *ReActAgent) getAbilityManager() *ability.AbilityManager {
 }
 
 // saveContexts 保存上下文。
-func (a *ReActAgent) saveContexts(sess *session.Session) {
+func (a *ReActAgent) saveContexts(sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil || sess == nil {
 		return
 	}
 	if _, err := a.contextEngine.SaveContexts(context.Background(), sess, nil); err != nil {
 		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("保存上下文失败")
+	}
+}
+
+// makeExecuteToolCallFunc 创建 ExecuteToolCallFunc 闭包，
+// 将 ReActAgent.executeToolCalls 适配为 interrupt.ExecuteToolCallFunc 类型。
+func (a *ReActAgent) makeExecuteToolCallFunc() interrupt.ExecuteToolCallFunc {
+	return func(
+		ctx context.Context,
+		cbc *rail.AgentCallbackContext,
+		toolCalls []*llmschema.ToolCall,
+		sess sessioninterfaces.SessionFacade,
+		modelCtx ceinterface.ModelContext,
+	) ([]any, error) {
+		results, err := a.executeToolCalls(ctx, cbc, toolCalls, sess, modelCtx)
+		if err != nil {
+			return nil, err
+		}
+		anyResults := make([]any, len(results))
+		for i, r := range results {
+			anyResults[i] = [2]any{r.Result, r.ToolMsg}
+		}
+		return anyResults, nil
 	}
 }
 

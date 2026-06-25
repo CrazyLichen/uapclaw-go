@@ -54,7 +54,7 @@ const (
 
 // GetThreadID 获取线程 ID（session_id:workflow_id）。
 // 对应 Python: Checkpointer.get_thread_id()（@staticmethod）
-func GetThreadID(session interfaces.BaseSession) string {
+func GetThreadID(session interfaces.InnerSession) string {
 	return session.SessionID() + ":" + getWorkflowID(session)
 }
 
@@ -74,7 +74,7 @@ func BuildKeyWithNamespace(sessionID, namespace, entityID string, suffixes ...st
 
 // GetAgentID 类型断言获取 Agent ID，不存在返回 "Na"。
 // 对应 Python: session.agent_id() if hasattr(session, "agent_id") else "Na"
-func GetAgentID(session interfaces.BaseSession) string {
+func GetAgentID(session interfaces.InnerSession) string {
 	if provider, ok := session.(AgentIDProvider); ok {
 		if id := provider.AgentID(); id != "" {
 			return id
@@ -85,7 +85,7 @@ func GetAgentID(session interfaces.BaseSession) string {
 
 // GetTeamID 类型断言获取 Team ID，不存在返回 "Na"。
 // 对应 Python: session.team_id() if hasattr(session, "team_id") else "Na"
-func GetTeamID(session interfaces.BaseSession) string {
+func GetTeamID(session interfaces.InnerSession) string {
 	if provider, ok := session.(TeamIDProvider); ok {
 		if id := provider.TeamID(); id != "" {
 			return id
@@ -96,7 +96,7 @@ func GetTeamID(session interfaces.BaseSession) string {
 
 // GetConfigEnv 从 session.Config() 获取环境变量值。
 // 返回环境变量值和是否可用。
-func GetConfigEnv(session interfaces.BaseSession, key string, defaultValue ...any) (any, bool) {
+func GetConfigEnv(session interfaces.InnerSession, key string, defaultValue ...any) (any, bool) {
 	cfg := session.Config()
 	if cfg == nil {
 		return nil, false
@@ -108,7 +108,7 @@ func GetConfigEnv(session interfaces.BaseSession, key string, defaultValue ...an
 
 // getWorkflowID 从 session 获取 WorkflowID，不存在返回空字符串。
 // 对齐 Python: hasattr(session, "workflow_id") 检测。
-func getWorkflowID(session interfaces.BaseSession) string {
+func getWorkflowID(session interfaces.InnerSession) string {
 	if ws, ok := session.(WorkflowIDProvider); ok {
 		return ws.WorkflowID()
 	}
@@ -118,7 +118,7 @@ func getWorkflowID(session interfaces.BaseSession) string {
 // processInteractiveInputs 处理交互输入并更新工作流状态。
 // 对齐 Python: _process_interactive_inputs(session, inputs)。
 // 提取为公共函数，InMemory 和 Persistence 版本共用，消除代码重复（CP-25）。
-func processInteractiveInputs(session interfaces.BaseSession, inputs *interaction.InteractiveInput) {
+func processInteractiveInputs(session interfaces.InnerSession, inputs *interaction.InteractiveInput) {
 	// 对齐 Python: if inputs.raw_inputs is not None → update_and_commit_workflow_state
 	if inputs.RawInputs != nil {
 		if wfState, ok := session.State().(state.WorkflowState); ok && wfState != nil {

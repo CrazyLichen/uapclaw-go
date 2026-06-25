@@ -7,7 +7,7 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -30,7 +30,7 @@ type ResumeContext struct {
 	// ModelContext 上下文引擎的 ModelContext
 	ModelContext ceinterface.ModelContext
 	// Session 会话（可选）
-	Session *session.Session
+	Session sessioninterfaces.SessionFacade
 	// InvokeInputs 调用输入
 	// 对应 Python: Optional[InvokeInputs]
 	InvokeInputs *rail.InvokeInputs
@@ -58,7 +58,7 @@ type ExecuteToolCallFunc func(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
 ) ([]any, error)
 
@@ -128,7 +128,7 @@ func (h *ToolInterruptHandler) BuildInterruptState(
 // Save 保存中断状态到 session。
 //
 // 对齐 Python: save(state, session)
-func (h *ToolInterruptHandler) Save(intState *ToolInterruptionState, sess *session.Session) {
+func (h *ToolInterruptHandler) Save(intState *ToolInterruptionState, sess sessioninterfaces.SessionFacade) {
 	if sess != nil {
 		sess.UpdateState(map[string]any{h.key: intState})
 	}
@@ -137,7 +137,7 @@ func (h *ToolInterruptHandler) Save(intState *ToolInterruptionState, sess *sessi
 // Load 从 session 加载中断状态。
 //
 // 对齐 Python: load(session)
-func (h *ToolInterruptHandler) Load(sess *session.Session) *ToolInterruptionState {
+func (h *ToolInterruptHandler) Load(sess sessioninterfaces.SessionFacade) *ToolInterruptionState {
 	if sess != nil {
 		val, _ := sess.GetState(state.StringKey(h.key))
 		if st, ok := val.(*ToolInterruptionState); ok {
@@ -150,7 +150,7 @@ func (h *ToolInterruptHandler) Load(sess *session.Session) *ToolInterruptionStat
 // Clear 清除 session 中的中断状态。
 //
 // 对齐 Python: clear(session)
-func (h *ToolInterruptHandler) Clear(sess *session.Session) {
+func (h *ToolInterruptHandler) Clear(sess sessioninterfaces.SessionFacade) {
 	if sess != nil {
 		sess.UpdateState(map[string]any{h.key: nil})
 	}
@@ -164,7 +164,7 @@ func (h *ToolInterruptHandler) CommitInterrupt(
 	ctx context.Context,
 	intState *ToolInterruptionState,
 	modelCtx ceinterface.ModelContext,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 	invokeInputs *rail.InvokeInputs,
 	subAgentOutputs []any,
 ) (map[string]any, error) {
@@ -201,7 +201,7 @@ func (h *ToolInterruptHandler) CommitInterrupt(
 func (h *ToolInterruptHandler) WriteInterruptToStream(
 	_ context.Context,
 	result map[string]any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 ) error {
 	schemasVal, ok := result["state"]
 	if !ok {
@@ -214,7 +214,7 @@ func (h *ToolInterruptHandler) WriteInterruptToStream(
 
 	for _, schema := range schemas {
 		if sess != nil {
-			if err := sess.WriteStream(schema); err != nil {
+			if err := sess.WriteStream(context.Background(), schema); err != nil {
 				logger.Warn(logComponent).Err(err).Msg("write_interrupt_to_stream: 写入流失败")
 				// 对齐 Python: await session.write_stream(schema) 失败时异常传播给调用方
 				return fmt.Errorf("write_interrupt_to_stream: 写入流失败: %w", err)
@@ -524,7 +524,7 @@ func handleSubAgentInterrupt(
 func saveAutoConfirmFromState(
 	intState *ToolInterruptionState,
 	userInput any,
-	sess *session.Session,
+	sess sessioninterfaces.SessionFacade,
 ) {
 	if sess == nil {
 		return

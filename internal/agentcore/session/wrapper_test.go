@@ -125,13 +125,10 @@ func TestRouterSessionFacade_禁止交互和流(t *testing.T) {
 	facade := NewNodeSessionFacade(ns, false)
 	router := NewRouterSessionFacade(facade)
 
-	// Interact 应返回 nil, nil（静默忽略）
-	result, err := router.Interact(context.Background(), "question")
+	// Interact 应返回 nil（静默忽略）
+	err := router.Interact(context.Background(), "question")
 	if err != nil {
 		t.Errorf("Interact 应返回 nil 错误，实际=%v", err)
-	}
-	if result != nil {
-		t.Errorf("Interact 应返回 nil 结果，实际=%v", result)
 	}
 
 	// WriteStream 应返回 nil
