@@ -160,7 +160,7 @@ func TestSseClient_读取资源(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	// 读取不存在的资源可能返回错误，但不应 panic
 	_, err = client.ReadResource(context.Background(), "test://nonexistent")
@@ -180,7 +180,7 @@ func TestSseClient_连接带AuthHeaders(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	tools, err := client.ListTools(context.Background())
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestSseClient_带超时连接成功(t *testing.T) {
 
 	err := client.Connect(ctx)
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	tools, err := client.ListTools(context.Background())
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestStreamableHttpClient_连接带AuthHeaders(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	tools, err := client.ListTools(context.Background())
 	require.NoError(t, err)
@@ -319,7 +319,7 @@ func TestStreamableHttpClient_带超时连接成功(t *testing.T) {
 
 	err := client.Connect(context.Background(), types.WithConnectTimeout(30))
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	tools, err := client.ListTools(context.Background())
 	require.NoError(t, err)

@@ -31,7 +31,7 @@ func TestSseClient_连接带AuthQueryParams(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	tools, err := client.ListTools(context.Background())
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestSseClient_连接带超时选项(t *testing.T) {
 
 	err := client.Connect(context.Background(), types.WithConnectTimeout(30))
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 }
 
 // TestSseClient_断开连接已连接 测试已连接状态下断开连接。
@@ -83,7 +83,7 @@ func TestStreamableHttpClient_连接带AuthQueryParams(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 }
 
 // TestStreamableHttpClient_断开连接已连接 测试已连接状态下断开连接。
@@ -112,7 +112,7 @@ func TestStreamableHttpClient_连接带超时选项(t *testing.T) {
 
 	err := client.Connect(context.Background(), types.WithConnectTimeout(30))
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 }
 
 // ──────────────────────────── PlaywrightClient 扩展测试 ────────────────────────────
@@ -140,7 +140,7 @@ func TestPlaywrightClient_SSE传输完整流程(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	// CallTool
 	result, err := client.CallTool(context.Background(), "echo", map[string]any{"text": "hello"})
@@ -166,7 +166,7 @@ func TestPlaywrightClient_GetToolInfo工具不存在(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	_, err = client.GetToolInfo(context.Background(), "nonexistent")
 	assert.Error(t, err)
@@ -264,7 +264,7 @@ func TestSseClient_资源操作(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	// 列出工具
 	tools, err := client.ListTools(context.Background())
@@ -305,7 +305,7 @@ func TestStreamableHttpClient_资源操作(t *testing.T) {
 
 	err := client.Connect(context.Background())
 	require.NoError(t, err)
-	defer client.Disconnect(context.Background())
+	defer func() { _ = client.Disconnect(context.Background()) }()
 
 	// 列出工具
 	tools, err := client.ListTools(context.Background())
