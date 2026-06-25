@@ -542,8 +542,8 @@ func (f *fakeModelContext) ContextID() string                                   
 func (f *fakeModelContext) TokenCounter() token.TokenCounter                     { return f }
 func (f *fakeModelContext) ReloaderTool() tool.Tool                              { return nil }
 func (f *fakeModelContext) WorkspaceDir() string                                 { return "" }
-func (f *fakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)                     {}
-func (f *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade                      { return nil }
+func (f *fakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)      {}
+func (f *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade       { return nil }
 func (f *fakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContext) SaveState() map[string]any                            { return nil }
 func (f *fakeModelContext) LoadState(_ map[string]any)                           {}

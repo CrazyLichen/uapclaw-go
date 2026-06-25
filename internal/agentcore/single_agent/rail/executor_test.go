@@ -487,6 +487,51 @@ func TestRailExecutor_Execute_重试循环(t *testing.T) {
 	assert.Equal(t, 1, cbc.RetryAttempt())
 }
 
+// TestRailExecutor_Execute_after回调出错有原始异常 after 回调出错但有原始异常时 log 不掩盖原始错误
+func TestRailExecutor_Execute_after回调出错有原始异常(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_after_err_orig")
+	defer mgr.Clear()
+
+	afterErr := errors.New("after hook failed")
+	mgr.RegisterCallback(context.Background(), CallbackAfterModelCall, func(_ context.Context, _ any) error {
+		return afterErr
+	})
+
+	agent := &fakeRailAgent{cbMgr: mgr}
+	cbc := NewAgentCallbackContext(agent, &ModelCallInputs{}, nil)
+
+	fnErr := errors.New("fn failed")
+	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, "")
+	err := re.Execute(context.Background(), cbc, func() error {
+		return fnErr
+	})
+
+	// 有原始异常时，after 错误被 log 不掩盖，返回原始错误
+	assert.Equal(t, fnErr, err)
+}
+
+// TestRailExecutor_Execute_after回调出错无原始异常 after 回调出错且无原始异常时返回 after 错误
+func TestRailExecutor_Execute_after回调出错无原始异常(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_after_err_no_orig")
+	defer mgr.Clear()
+
+	afterErr := errors.New("after hook failed")
+	mgr.RegisterCallback(context.Background(), CallbackAfterModelCall, func(_ context.Context, _ any) error {
+		return afterErr
+	})
+
+	agent := &fakeRailAgent{cbMgr: mgr}
+	cbc := NewAgentCallbackContext(agent, &ModelCallInputs{}, nil)
+
+	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, "")
+	err := re.Execute(context.Background(), cbc, func() error {
+		return nil // fn 成功
+	})
+
+	// 无原始异常时，返回 after 错误
+	assert.Equal(t, afterErr, err)
+}
+
 // TestRailExecutor_Execute_重试仍失败 验证 on_exception 钩子不请求重试时直接返回错误
 func TestRailExecutor_Execute_重试仍失败(t *testing.T) {
 	mgr := NewAgentCallbackManager("test_retry_fail")

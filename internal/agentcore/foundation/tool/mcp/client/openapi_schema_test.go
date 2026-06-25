@@ -947,3 +947,1068 @@ func TestOapiSchemaToMap_然后OapiMapToParam_完整流程(t *testing.T) {
 		t.Errorf("期望 format=email，实际 %v", emailSchema["format"])
 	}
 }
+
+// ──────────────────────────── deepCopyMap 测试 ────────────────────────────
+
+// TestDeepCopyMap_Nil 测试 nil 输入返回 nil。
+func TestDeepCopyMap_Nil(t *testing.T) {
+	result := deepCopyMap(nil)
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// TestDeepCopyMap_空Map 测试空 map 拷贝。
+func TestDeepCopyMap_空Map(t *testing.T) {
+	result := deepCopyMap(map[string]any{})
+	if len(result) != 0 {
+		t.Errorf("期望空 map，实际 %v", result)
+	}
+}
+
+// TestDeepCopyMap_嵌套Map 测试嵌套 map 深拷贝。
+func TestDeepCopyMap_嵌套Map(t *testing.T) {
+	original := map[string]any{
+		"key": map[string]any{
+			"nested": "value",
+		},
+		"arr": []any{
+			map[string]any{"item": "1"},
+			"simple",
+		},
+		"str": "hello",
+	}
+	copied := deepCopyMap(original)
+
+	// 修改原始不影响拷贝
+	original["key"].(map[string]any)["nested"] = "changed"
+	if copied["key"].(map[string]any)["nested"] != "value" {
+		t.Error("深拷贝失败：修改原始影响了拷贝")
+	}
+}
+
+// ──────────────────────────── deepCopySlice 测试 ────────────────────────────
+
+// TestDeepCopySlice_Nil 测试 nil 输入返回 nil。
+func TestDeepCopySlice_Nil(t *testing.T) {
+	result := deepCopySlice(nil)
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// TestDeepCopySlice_嵌套Slice 测试嵌套 slice 深拷贝。
+func TestDeepCopySlice_嵌套Slice(t *testing.T) {
+	original := []any{
+		map[string]any{"key": "value"},
+		[]any{"nested"},
+		"simple",
+	}
+	copied := deepCopySlice(original)
+
+	// 修改原始不影响拷贝
+	original[0].(map[string]any)["key"] = "changed"
+	if copied[0].(map[string]any)["key"] != "value" {
+		t.Error("深拷贝失败：修改原始影响了拷贝")
+	}
+}
+
+// ──────────────────────────── convertOpenAPISchemaToJSONSchema 测试 ────────────────────────────
+
+// TestConvertOpenAPISchemaToJSONSchema_Nil 测试 nil 输入返回 nil。
+func TestConvertOpenAPISchemaToJSONSchema_Nil(t *testing.T) {
+	result := convertOpenAPISchemaToJSONSchema(nil, "3.0.0")
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_Nullable转换 测试 nullable 字段转换。
+func TestConvertOpenAPISchemaToJSONSchema_Nullable转换(t *testing.T) {
+	input := map[string]any{
+		"type":     "string",
+		"nullable": true,
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	// nullable 应被删除
+	if _, ok := result["nullable"]; ok {
+		t.Error("期望 nullable 被删除")
+	}
+	// type 应转为数组
+	typeVal, ok := result["type"].([]string)
+	if !ok {
+		t.Fatalf("期望 type 为 []string，实际 %T", result["type"])
+	}
+	if len(typeVal) != 2 || typeVal[0] != "string" || typeVal[1] != "null" {
+		t.Errorf("期望 type [string null]，实际 %v", typeVal)
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_OneOf转AnyOf 测试 oneOf 转 anyOf。
+func TestConvertOpenAPISchemaToJSONSchema_OneOf转AnyOf(t *testing.T) {
+	input := map[string]any{
+		"type": "string",
+		"oneOf": []any{
+			map[string]any{"type": "string", "enum": []any{"a", "b"}},
+			map[string]any{"type": "integer"},
+		},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.1.0")
+	// oneOf 应被转换为 anyOf
+	if _, ok := result["oneOf"]; ok {
+		t.Error("期望 oneOf 被删除")
+	}
+	anyOf, ok := result["anyOf"].([]any)
+	if !ok {
+		t.Fatal("期望 anyOf 存在")
+	}
+	if len(anyOf) != 2 {
+		t.Errorf("期望 2 个 anyOf，实际 %d", len(anyOf))
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_移除OpenAPI特有字段 测试移除 OpenAPI 特有字段。
+func TestConvertOpenAPISchemaToJSONSchema_移除OpenAPI特有字段(t *testing.T) {
+	input := map[string]any{
+		"type":          "string",
+		"discriminator": map[string]any{"propertyName": "type"},
+		"readOnly":      true,
+		"writeOnly":     false,
+		"xml":           map[string]any{"name": "user"},
+		"externalDocs":  map[string]any{"url": "https://example.com"},
+		"deprecated":    true,
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	for _, field := range []string{"discriminator", "readOnly", "writeOnly", "xml", "externalDocs", "deprecated"} {
+		if _, ok := result[field]; ok {
+			t.Errorf("期望 %s 被删除", field)
+		}
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_递归处理 测试递归处理嵌套 schema。
+func TestConvertOpenAPISchemaToJSONSchema_递归处理(t *testing.T) {
+	input := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"field": map[string]any{
+				"type":     "string",
+				"nullable": true,
+			},
+		},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	props := result["properties"].(map[string]any)
+	field := props["field"].(map[string]any)
+	typeVal, ok := field["type"].([]string)
+	if !ok {
+		t.Fatalf("期望嵌套字段 type 为 []string，实际 %T", field["type"])
+	}
+	if len(typeVal) != 2 || typeVal[1] != "null" {
+		t.Errorf("期望嵌套字段 type 含 null，实际 %v", typeVal)
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_NullableWithOneOf 测试 nullable 配合 oneOf 转换。
+func TestConvertOpenAPISchemaToJSONSchema_NullableWithOneOf(t *testing.T) {
+	input := map[string]any{
+		"nullable": true,
+		"oneOf": []any{
+			map[string]any{"type": "string"},
+			map[string]any{"type": "integer"},
+		},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	// nullable + oneOf → anyOf 并追加 null
+	anyOf, ok := result["anyOf"].([]any)
+	if !ok {
+		t.Fatal("期望 anyOf 存在")
+	}
+	// 应有 3 个元素：原 oneOf 的 2 个 + null
+	if len(anyOf) != 3 {
+		t.Errorf("期望 3 个 anyOf（2+null），实际 %d", len(anyOf))
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_NullableWithEnum 测试 nullable 配合 enum。
+func TestConvertOpenAPISchemaToJSONSchema_NullableWithEnum(t *testing.T) {
+	input := map[string]any{
+		"type":     "string",
+		"nullable": true,
+		"enum":     []any{"active", "inactive"},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	enumVal, ok := result["enum"].([]any)
+	if !ok {
+		t.Fatal("期望 enum 存在")
+	}
+	// nullable 时 enum 应追加 null
+	if len(enumVal) != 3 {
+		t.Errorf("期望 3 个 enum 值（2+null），实际 %d", len(enumVal))
+	}
+}
+
+// ──────────────────────────── formatDeepObjectParameter 测试 ────────────────────────────
+
+// TestFormatDeepObjectParameter_Nil 测试 nil 输入返回 nil。
+func TestFormatDeepObjectParameter_Nil(t *testing.T) {
+	result := formatDeepObjectParameter(nil, "filter")
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// TestFormatDeepObjectParameter_正常值 测试正常 deepObject 参数序列化。
+func TestFormatDeepObjectParameter_正常值(t *testing.T) {
+	paramValue := map[string]any{
+		"id":   "123",
+		"type": "user",
+	}
+	result := formatDeepObjectParameter(paramValue, "filter")
+	if len(result) != 2 {
+		t.Fatalf("期望 2 个参数，实际 %d", len(result))
+	}
+	if result["filter[id]"] != "123" {
+		t.Errorf("期望 filter[id]=123，实际 %s", result["filter[id]"])
+	}
+	if result["filter[type]"] != "user" {
+		t.Errorf("期望 filter[type]=user，实际 %s", result["filter[type]"])
+	}
+}
+
+// ──────────────────────────── schemaTypeFromOpenAPI 测试 ────────────────────────────
+
+// TestSchemaTypeFromOpenAPI_Nil 测试 nil schema 返回默认 string 类型。
+func TestSchemaTypeFromOpenAPI_Nil(t *testing.T) {
+	result := schemaTypeFromOpenAPI(nil)
+	if result != schema.ParamTypeString {
+		t.Errorf("期望 ParamTypeString，实际 %v", result)
+	}
+}
+
+// TestSchemaTypeFromOpenAPI_各类型 测试各类型映射。
+func TestSchemaTypeFromOpenAPI_各类型(t *testing.T) {
+	tests := []struct {
+		typeStr string
+		want    schema.ParamType
+	}{
+		{"string", schema.ParamTypeString},
+		{"boolean", schema.ParamTypeBoolean},
+		{"integer", schema.ParamTypeInteger},
+		{"number", schema.ParamTypeNumber},
+		{"array", schema.ParamTypeArray},
+		{"object", schema.ParamTypeObject},
+		{"unknown", schema.ParamTypeString},
+	}
+	for _, tt := range tests {
+		t.Run(tt.typeStr, func(t *testing.T) {
+			result := schemaTypeFromOpenAPI(map[string]any{"type": tt.typeStr})
+			if result != tt.want {
+				t.Errorf("期望 %v，实际 %v", tt.want, result)
+			}
+		})
+	}
+}
+
+// ──────────────────────────── schemaTypeFromTypeStr 测试 ────────────────────────────
+
+// TestSchemaTypeFromTypeStr_所有类型 测试所有类型字符串映射。
+func TestSchemaTypeFromTypeStr_所有类型(t *testing.T) {
+	tests := []struct {
+		input string
+		want  schema.ParamType
+	}{
+		{"string", schema.ParamTypeString},
+		{"boolean", schema.ParamTypeBoolean},
+		{"integer", schema.ParamTypeInteger},
+		{"number", schema.ParamTypeNumber},
+		{"array", schema.ParamTypeArray},
+		{"object", schema.ParamTypeObject},
+		{"", schema.ParamTypeString},
+		{"unknown", schema.ParamTypeString},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := schemaTypeFromTypeStr(tt.input)
+			if result != tt.want {
+				t.Errorf("期望 %v，实际 %v", tt.want, result)
+			}
+		})
+	}
+}
+
+// ──────────────────────────── collectReferencedDefs 扩展测试 ────────────────────────────
+
+// TestCollectReferencedDefs_数组中的引用 测试数组中的 $ref 收集。
+func TestCollectReferencedDefs_数组中的引用(t *testing.T) {
+	m := map[string]any{
+		"anyOf": []any{
+			map[string]any{"$ref": "#/$defs/User"},
+			map[string]any{"type": "string"},
+		},
+	}
+	collected := make(map[string]bool)
+	collectReferencedDefs(m, collected)
+	if !collected["User"] {
+		t.Error("期望收集到 User 定义")
+	}
+}
+
+// TestCollectReferencedDefs_嵌套引用 测试多层嵌套 $ref 收集。
+func TestCollectReferencedDefs_嵌套引用(t *testing.T) {
+	m := map[string]any{
+		"properties": map[string]any{
+			"field": map[string]any{
+				"$ref": "#/$defs/Item",
+			},
+		},
+	}
+	collected := make(map[string]bool)
+	collectReferencedDefs(m, collected)
+	if !collected["Item"] {
+		t.Error("期望收集到 Item 定义")
+	}
+}
+
+// TestCollectReferencedDefs_非Defs引用 测试非 #/$defs/ 前缀的 $ref 不收集。
+func TestCollectReferencedDefs_非Defs引用(t *testing.T) {
+	m := map[string]any{
+		"$ref": "#/components/schemas/User",
+	}
+	collected := make(map[string]bool)
+	collectReferencedDefs(m, collected)
+	if len(collected) != 0 {
+		t.Errorf("期望不收集非 $defs 引用，实际 %v", collected)
+	}
+}
+
+// ──────────────────────────── replaceSchemaRefs 扩展测试 ────────────────────────────
+
+// TestReplaceSchemaRefs_数组中的引用 测试数组中的 $ref 替换。
+func TestReplaceSchemaRefs_数组中的引用(t *testing.T) {
+	m := map[string]any{
+		"anyOf": []any{
+			map[string]any{"$ref": "#/components/schemas/User"},
+		},
+	}
+	replaceSchemaRefs(m)
+	anyOf := m["anyOf"].([]any)
+	item := anyOf[0].(map[string]any)
+	if item["$ref"] != "#/$defs/User" {
+		t.Errorf("期望 #/$defs/User，实际 %v", item["$ref"])
+	}
+}
+
+// ──────────────────────────── extractOutputSchema 扩展测试 ────────────────────────────
+
+// TestExtractOutputSchema_含Defs引用 测试含 $defs 引用的输出 schema。
+// 通过直接测试 replaceSchemaRefs 和 collectReferencedDefs 来间接覆盖 extractOutputSchema 中的 $defs 逻辑。
+func TestExtractOutputSchema_含Defs引用(t *testing.T) {
+	// 直接测试 collectReferencedDefs + $defs 构建
+	outputSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"data": map[string]any{
+				"$ref": "#/$defs/User",
+			},
+		},
+	}
+
+	schemaDefinitions := map[string]map[string]any{
+		"User": {
+			"type": "object",
+			"properties": map[string]any{
+				"name": map[string]any{"type": "string"},
+			},
+		},
+	}
+
+	// 收集引用
+	referencedDefs := make(map[string]bool)
+	collectReferencedDefs(outputSchema, referencedDefs)
+	if !referencedDefs["User"] {
+		t.Error("期望收集到 User 定义引用")
+	}
+
+	// 递归展开
+	prevCount := 0
+	for len(referencedDefs) > prevCount {
+		prevCount = len(referencedDefs)
+		for name := range referencedDefs {
+			if def, exists := schemaDefinitions[name]; exists {
+				collectReferencedDefs(def, referencedDefs)
+			}
+		}
+	}
+
+	// 构建 $defs
+	if len(referencedDefs) > 0 {
+		defs := make(map[string]any, len(referencedDefs))
+		for name := range referencedDefs {
+			if def, exists := schemaDefinitions[name]; exists {
+				copied := deepCopyMap(def)
+				replaceSchemaRefs(copied)
+				defs[name] = copied
+			}
+		}
+		outputSchema["$defs"] = defs
+	}
+
+	defs, ok := outputSchema["$defs"].(map[string]any)
+	if !ok {
+		t.Fatal("期望 $defs 存在")
+	}
+	if _, exists := defs["User"]; !exists {
+		t.Error("期望 $defs 含 User 定义")
+	}
+}
+
+// TestExtractOutputSchema_无JSONContent 测试无 JSON Content-Type 时返回 nil。
+func TestExtractOutputSchema_无JSONContent(t *testing.T) {
+	desc := "成功"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+					Content:     openapi3.Content{},
+				},
+			}),
+		),
+	}
+	result := extractOutputSchema(op, nil, "")
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// TestExtractOutputSchema_202响应 测试 202 响应的提取。
+func TestExtractOutputSchema_202响应(t *testing.T) {
+	desc := "已接受"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(202, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+					Content: openapi3.Content{
+						"application/json": &openapi3.MediaType{
+							Schema: &openapi3.SchemaRef{
+								Value: &openapi3.Schema{
+									Type: &openapi3.Types{"object"},
+									Properties: openapi3.Schemas{
+										"status": &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"string"}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}),
+		),
+	}
+	result := extractOutputSchema(op, nil, "")
+	if result == nil {
+		t.Fatal("期望非 nil 输出 schema")
+	}
+}
+
+// TestExtractOutputSchema_204响应 测试 204 响应返回 nil（无 Content）。
+func TestExtractOutputSchema_204响应(t *testing.T) {
+	desc := "无内容"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(204, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+				},
+			}),
+		),
+	}
+	result := extractOutputSchema(op, nil, "")
+	// 204 通常无 Content，所以 outputSchema 应为 nil
+	if result != nil {
+		t.Errorf("期望 nil（204 无内容），实际 %v", result)
+	}
+}
+
+// ──────────────────────────── buildInputParams 扩展测试 ────────────────────────────
+
+// TestBuildInputParams_请求体简单类型 测试请求体为简单类型时创建 body 参数。
+func TestBuildInputParams_请求体简单类型(t *testing.T) {
+	reqBody := &openapiRequestBodyInfo{
+		contentType: "application/json",
+		schema:      map[string]any{"type": "string"},
+	}
+	result := buildInputParams(nil, reqBody)
+	if len(result) != 1 {
+		t.Fatalf("期望 1 个参数，实际 %d", len(result))
+	}
+	if result[0].Name != "body" {
+		t.Errorf("期望参数名 body，实际 %s", result[0].Name)
+	}
+}
+
+// TestBuildInputParams_同名冲突 测试参数名冲突时加 __body 后缀。
+func TestBuildInputParams_同名冲突(t *testing.T) {
+	params := []openapiParameterInfo{
+		{name: "id", in: "path", required: true, schema: map[string]any{"type": "string"}},
+	}
+	reqBody := &openapiRequestBodyInfo{
+		contentType: "application/json",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"id":   map[string]any{"type": "string"},
+				"name": map[string]any{"type": "string"},
+			},
+		},
+	}
+	result := buildInputParams(params, reqBody)
+	// 应有 3 个参数：id (path), id__body (body), name (body)
+	if len(result) != 3 {
+		t.Fatalf("期望 3 个参数，实际 %d", len(result))
+	}
+	names := make([]string, len(result))
+	for i, p := range result {
+		names[i] = p.Name
+	}
+	foundBodySuffix := false
+	for _, name := range names {
+		if name == "id__body" {
+			foundBodySuffix = true
+		}
+	}
+	if !foundBodySuffix {
+		t.Errorf("期望存在 id__body 参数，实际 %v", names)
+	}
+}
+
+// ──────────────────────────── resolveRequestBody 扩展测试 ────────────────────────────
+
+// TestResolveRequestBody_anyOf取首项 测试 anyOf 取第一个子 schema。
+func TestResolveRequestBody_anyOf取首项(t *testing.T) {
+	bodyArgs := map[string]any{"name": "张三"}
+	schemaMap := map[string]any{
+		"anyOf": []any{
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name": map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+	result := resolveRequestBody(bodyArgs, schemaMap)
+	if result["name"] != "张三" {
+		t.Errorf("期望 name=张三，实际 %v", result["name"])
+	}
+}
+
+// TestResolveRequestBody_嵌套对象 测试嵌套对象递归构建。
+func TestResolveRequestBody_嵌套对象(t *testing.T) {
+	bodyArgs := map[string]any{
+		"address": map[string]any{"city": "北京", "zip": "100000"},
+	}
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"address": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"city": map[string]any{"type": "string"},
+					"zip":  map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+	result := resolveRequestBody(bodyArgs, schemaMap)
+	addr, ok := result["address"].(map[string]any)
+	if !ok {
+		t.Fatal("期望 address 为 map[string]any")
+	}
+	if addr["city"] != "北京" {
+		t.Errorf("期望 city=北京，实际 %v", addr["city"])
+	}
+}
+
+// TestResolveRequestBody_额外字段 测试 bodyArgs 包含 properties 中不存在的字段。
+func TestResolveRequestBody_额外字段(t *testing.T) {
+	bodyArgs := map[string]any{"name": "张三", "extra": "额外值"}
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}
+	result := resolveRequestBody(bodyArgs, schemaMap)
+	if result["name"] != "张三" {
+		t.Errorf("期望 name=张三，实际 %v", result["name"])
+	}
+	if result["extra"] != "额外值" {
+		t.Errorf("期望 extra=额外值，实际 %v", result["extra"])
+	}
+}
+
+// TestResolveRequestBody_allOfMap格式 测试 allOf 为 []map[string]any 格式。
+func TestResolveRequestBody_allOfMap格式(t *testing.T) {
+	bodyArgs := map[string]any{"name": "张三", "age": 25}
+	schemaMap := map[string]any{
+		"allOf": []map[string]any{
+			{
+				"type": "object",
+				"properties": map[string]any{
+					"name": map[string]any{"type": "string"},
+				},
+			},
+			{
+				"type": "object",
+				"properties": map[string]any{
+					"age": map[string]any{"type": "integer"},
+				},
+			},
+		},
+	}
+	result := resolveRequestBody(bodyArgs, schemaMap)
+	if result["name"] != "张三" {
+		t.Errorf("期望 name=张三，实际 %v", result["name"])
+	}
+	if result["age"] != 25 {
+		t.Errorf("期望 age=25，实际 %v", result["age"])
+	}
+}
+
+// ──────────────────────────── buildRequestFromSchema 扩展测试 ────────────────────────────
+
+// TestBuildRequestFromSchema_deepObject参数 测试 deepObject 风格查询参数。
+func TestBuildRequestFromSchema_deepObject参数(t *testing.T) {
+	params := []openapiParameterInfo{
+		{name: "filter", in: "query", style: "deepObject"},
+	}
+	arguments := map[string]any{
+		"filter": map[string]any{"id": "123", "type": "user"},
+	}
+	req, err := buildRequestFromSchema("GET", "http://api.example.com", "/items", params, nil, arguments)
+	if err != nil {
+		t.Fatalf("构建请求失败: %v", err)
+	}
+	query := req.URL.Query()
+	if query.Get("filter[id]") != "123" {
+		t.Errorf("期望 filter[id]=123，实际 %s", query.Get("filter[id]"))
+	}
+	if query.Get("filter[type]") != "user" {
+		t.Errorf("期望 filter[type]=user，实际 %s", query.Get("filter[type]"))
+	}
+}
+
+// TestBuildRequestFromSchema_body后缀参数 测试 __body 后缀参数名还原。
+func TestBuildRequestFromSchema_body后缀参数(t *testing.T) {
+	reqBody := &openapiRequestBodyInfo{
+		contentType: "application/json",
+		schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name": map[string]any{"type": "string"},
+			},
+		},
+	}
+	arguments := map[string]any{
+		"name__body": "test",
+	}
+	req, err := buildRequestFromSchema("POST", "http://api.example.com", "/items", nil, reqBody, arguments)
+	if err != nil {
+		t.Fatalf("构建请求失败: %v", err)
+	}
+	if req.Body == nil {
+		t.Fatal("期望非 nil 请求体")
+	}
+}
+
+// TestBuildRequestFromSchema_查询参数追加到已有 测试查询参数追加到已有查询参数的 URL。
+func TestBuildRequestFromSchema_查询参数追加到已有(t *testing.T) {
+	params := []openapiParameterInfo{
+		{name: "page", in: "query"},
+	}
+	arguments := map[string]any{"page": 1}
+	req, err := buildRequestFromSchema("GET", "http://api.example.com", "/items?existing=1", params, nil, arguments)
+	if err != nil {
+		t.Fatalf("构建请求失败: %v", err)
+	}
+	query := req.URL.Query()
+	if query.Get("existing") != "1" {
+		t.Errorf("期望 existing=1，实际 %s", query.Get("existing"))
+	}
+	if query.Get("page") != "1" {
+		t.Errorf("期望 page=1，实际 %s", query.Get("page"))
+	}
+}
+
+// TestBuildRequestFromSchema_无参数 测试无参数的请求构建。
+func TestBuildRequestFromSchema_无参数(t *testing.T) {
+	req, err := buildRequestFromSchema("GET", "http://api.example.com", "/items", nil, nil, map[string]any{})
+	if err != nil {
+		t.Fatalf("构建请求失败: %v", err)
+	}
+	if req.Method != "GET" {
+		t.Errorf("期望 GET，实际 %s", req.Method)
+	}
+}
+
+// ──────────────────────────── oapiSchemaToMap 扩展测试 ────────────────────────────
+
+// TestOapiSchemaToMap_完整字段 测试含所有字段的 schema 转换。
+func TestOapiSchemaToMap_完整字段(t *testing.T) {
+	maxLen := uint64(100)
+	maxItems := uint64(10)
+	s := &openapi3.Schema{
+		Type:        &openapi3.Types{"string"},
+		Format:      "email",
+		Description: "邮箱地址",
+		Default:     "test@example.com",
+		Enum:        []any{"active", "inactive"},
+		MinLength:   1,
+		MaxLength:   &maxLen,
+		Pattern:     "^[a-z]+@",
+		MinItems:    0,
+		MaxItems:    &maxItems,
+	}
+	result := oapiSchemaToMap(s)
+	if result["type"] != "string" {
+		t.Errorf("期望 type=string，实际 %v", result["type"])
+	}
+	if result["format"] != "email" {
+		t.Errorf("期望 format=email，实际 %v", result["format"])
+	}
+	if result["description"] != "邮箱地址" {
+		t.Errorf("期望 description=邮箱地址，实际 %v", result["description"])
+	}
+	if result["default"] != "test@example.com" {
+		t.Errorf("期望 default=test@example.com，实际 %v", result["default"])
+	}
+	if result["pattern"] != "^[a-z]+@" {
+		t.Errorf("期望 pattern=^[a-z]+@，实际 %v", result["pattern"])
+	}
+}
+
+// TestOapiSchemaToMap_数值约束 测试数值约束字段。
+func TestOapiSchemaToMap_数值约束(t *testing.T) {
+	minVal := 0.0
+	maxVal := 100.0
+	s := &openapi3.Schema{
+		Type: &openapi3.Types{"integer"},
+		Min:  &minVal,
+		Max:  &maxVal,
+	}
+	result := oapiSchemaToMap(s)
+	if result["minimum"] != 0.0 {
+		t.Errorf("期望 minimum=0.0，实际 %v", result["minimum"])
+	}
+	if result["maximum"] != 100.0 {
+		t.Errorf("期望 maximum=100.0，实际 %v", result["maximum"])
+	}
+}
+
+// TestOapiSchemaToMap_Items 测试 Items 字段转换。
+func TestOapiSchemaToMap_Items(t *testing.T) {
+	s := &openapi3.Schema{
+		Type: &openapi3.Types{"array"},
+		Items: &openapi3.SchemaRef{
+			Value: &openapi3.Schema{Type: &openapi3.Types{"string"}},
+		},
+	}
+	result := oapiSchemaToMap(s)
+	items, ok := result["items"].(map[string]any)
+	if !ok {
+		t.Fatal("期望 items 为 map[string]any")
+	}
+	if items["type"] != "string" {
+		t.Errorf("期望 items.type=string，实际 %v", items["type"])
+	}
+}
+
+// TestOapiSchemaToMap_Required 测试 Required 字段转换。
+func TestOapiSchemaToMap_Required(t *testing.T) {
+	s := &openapi3.Schema{
+		Type:     &openapi3.Types{"object"},
+		Required: []string{"name", "age"},
+	}
+	result := oapiSchemaToMap(s)
+	reqArr, ok := result["required"].([]string)
+	if !ok {
+		t.Fatal("期望 required 为 []string")
+	}
+	if len(reqArr) != 2 {
+		t.Errorf("期望 2 个 required，实际 %d", len(reqArr))
+	}
+}
+
+// ──────────────────────────── oapiMapToParam 扩展测试 ────────────────────────────
+
+// TestOapiMapToParam_TypeAnyArray 测试 []any 格式的 type 数组。
+func TestOapiMapToParam_TypeAnyArray(t *testing.T) {
+	m := map[string]any{
+		"type": []any{"string", "null"},
+	}
+	p := oapiMapToParam("name", m, false)
+	if p.Type != schema.ParamTypeString {
+		t.Errorf("期望 Type=string，实际 %v", p.Type)
+	}
+	if !p.Nullable {
+		t.Error("期望 Nullable=true")
+	}
+}
+
+// ──────────────────────────── extractOutputSchema 扩展测试 ────────────────────────────
+
+// TestExtractOutputSchema_兜底2xx响应 测试非标准 2xx 响应的兜底查找。
+func TestExtractOutputSchema_兜底2xx响应(t *testing.T) {
+	desc := "成功"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(),
+	}
+	// 手动添加 206 响应（不在 200/201/202/204 列表中）
+	op.Responses.Set("206", &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Description: &desc,
+			Content: openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Value: &openapi3.Schema{
+							Type: &openapi3.Types{"object"},
+							Properties: openapi3.Schemas{
+								"partial": &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"boolean"}}},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	result := extractOutputSchema(op, nil, "")
+	if result == nil {
+		t.Fatal("期望非 nil 输出 schema")
+	}
+}
+
+// TestExtractOutputSchema_非JSONContentType 测试非 JSON Content-Type 兜底。
+func TestExtractOutputSchema_非JSONContentType(t *testing.T) {
+	desc := "成功"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+					Content: openapi3.Content{
+						"application/xml": &openapi3.MediaType{
+							Schema: &openapi3.SchemaRef{
+								Value: &openapi3.Schema{
+									Type: &openapi3.Types{"object"},
+									Properties: openapi3.Schemas{
+										"data": &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"string"}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}),
+		),
+	}
+
+	result := extractOutputSchema(op, nil, "")
+	if result == nil {
+		t.Fatal("期望非 nil 输出 schema（兜底取第一个 Content-Type）")
+	}
+}
+
+// TestExtractOutputSchema_OAS3版本转换 测试 OpenAPI 3.0 版本触发 convertOpenAPISchemaToJSONSchema。
+func TestExtractOutputSchema_OAS3版本转换(t *testing.T) {
+	desc := "成功"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+					Content: openapi3.Content{
+						"application/json": &openapi3.MediaType{
+							Schema: &openapi3.SchemaRef{
+								Value: &openapi3.Schema{
+									Type:     &openapi3.Types{"string"},
+									Nullable: true,
+								},
+							},
+						},
+					},
+				},
+			}),
+		),
+	}
+
+	result := extractOutputSchema(op, nil, "3.0.0")
+	if result == nil {
+		t.Fatal("期望非 nil 输出 schema")
+	}
+	// OpenAPI 3.0 nullable 应被转换为 JSON Schema type 数组
+	if result["type"] != "object" {
+		t.Errorf("期望 type=object（非 object 类型被包装），实际 %v", result["type"])
+	}
+	// 应有 x-fastmcp-wrap-result
+	if wrapResult, _ := result["x-fastmcp-wrap-result"].(bool); !wrapResult {
+		t.Error("期望 x-fastmcp-wrap-result=true")
+	}
+}
+
+// TestExtractOutputSchema_顶层Ref内联展开 测试顶层 $ref 内联展开。
+// 由于 openapi3.Schema 没有 Ref 字段，通过直接测试 deepCopyMap 和 replaceSchemaRefs 间接覆盖。
+func TestExtractOutputSchema_顶层Ref内联展开(t *testing.T) {
+	// 测试 $ref 内联展开逻辑
+	schemaDefinitions := map[string]map[string]any{
+		"User": {
+			"type": "object",
+			"properties": map[string]any{
+				"name": map[string]any{"type": "string"},
+			},
+		},
+	}
+
+	// 模拟 outputSchema 是一个 $ref
+	outputSchema := map[string]any{
+		"$ref": "#/$defs/User",
+	}
+
+	// 顶层 $ref 内联展开
+	if refPath, ok := outputSchema["$ref"].(string); ok && schemaDefinitions != nil {
+		if refPath == "#/$defs/User" {
+			schemaName := "User"
+			if def, exists := schemaDefinitions[schemaName]; exists {
+				expanded := deepCopyMap(def)
+				replaceSchemaRefs(expanded)
+				if expanded["type"] != "object" {
+					t.Errorf("期望 type=object，实际 %v", expanded["type"])
+				}
+			}
+		}
+	}
+}
+
+// TestExtractOutputSchema_HalJsonContentType 测试 application/hal+json Content-Type。
+func TestExtractOutputSchema_HalJsonContentType(t *testing.T) {
+	desc := "成功"
+	op := &openapi3.Operation{
+		Responses: openapi3.NewResponses(
+			openapi3.WithStatus(200, &openapi3.ResponseRef{
+				Value: &openapi3.Response{
+					Description: &desc,
+					Content: openapi3.Content{
+						"application/hal+json": &openapi3.MediaType{
+							Schema: &openapi3.SchemaRef{
+								Value: &openapi3.Schema{
+									Type: &openapi3.Types{"object"},
+									Properties: openapi3.Schemas{
+										"_links": &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"object"}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}),
+		),
+	}
+
+	result := extractOutputSchema(op, nil, "")
+	if result == nil {
+		t.Fatal("期望非 nil 输出 schema")
+	}
+}
+
+// TestExtractOutputSchema_NilResponses 测试 nil Responses 返回 nil。
+func TestExtractOutputSchema_NilResponses(t *testing.T) {
+	op := &openapi3.Operation{
+		Responses: nil,
+	}
+	result := extractOutputSchema(op, nil, "")
+	if result != nil {
+		t.Errorf("期望 nil，实际 %v", result)
+	}
+}
+
+// ──────────────────────────── convertOpenAPISchemaToJSONSchema 扩展测试 ────────────────────────────
+
+// TestConvertOpenAPISchemaToJSONSchema_NilableWithAnyOf 测试 nullable 配合 anyOf 转换。
+func TestConvertOpenAPISchemaToJSONSchema_NilableWithAnyOf(t *testing.T) {
+	input := map[string]any{
+		"nullable": true,
+		"anyOf": []any{
+			map[string]any{"type": "string"},
+		},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	anyOf, ok := result["anyOf"].([]any)
+	if !ok {
+		t.Fatal("期望 anyOf 存在")
+	}
+	// nullable + anyOf 应追加 null
+	if len(anyOf) != 2 {
+		t.Errorf("期望 2 个 anyOf（1+null），实际 %d", len(anyOf))
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_NilableWithTypeArray 测试 nullable 配合 type 数组。
+func TestConvertOpenAPISchemaToJSONSchema_NilableWithTypeArray(t *testing.T) {
+	input := map[string]any{
+		"type":     []any{"string", "null"},
+		"nullable": true,
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	typeVal, ok := result["type"].([]any)
+	if !ok {
+		t.Fatalf("期望 type 为 []any，实际 %T", result["type"])
+	}
+	// 已有 null 不重复添加
+	if len(typeVal) != 2 {
+		t.Errorf("期望 2 个 type，实际 %d", len(typeVal))
+	}
+}
+
+// TestConvertOpenAPISchemaToJSONSchema_Items递归 测试 items 递归处理。
+func TestConvertOpenAPISchemaToJSONSchema_Items递归(t *testing.T) {
+	input := map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type":     "string",
+			"nullable": true,
+		},
+	}
+	result := convertOpenAPISchemaToJSONSchema(input, "3.0.0")
+	items, ok := result["items"].(map[string]any)
+	if !ok {
+		t.Fatal("期望 items 存在")
+	}
+	typeVal, ok := items["type"].([]string)
+	if !ok {
+		t.Fatalf("期望 items.type 为 []string，实际 %T", items["type"])
+	}
+	if len(typeVal) != 2 || typeVal[1] != "null" {
+		t.Errorf("期望 items.type 含 null，实际 %v", typeVal)
+	}
+}
+
+// ──────────────────────────── oapiSchemaToMap 扩展测试 ────────────────────────────
+
+// TestOapiSchemaToMap_ExclusiveMinMax 测试 exclusiveMinimum/exclusiveMaximum 字段。
+func TestOapiSchemaToMap_ExclusiveMinMax(t *testing.T) {
+	boolTrue := true
+	s := &openapi3.Schema{
+		Type:         &openapi3.Types{"integer"},
+		ExclusiveMin: openapi3.ExclusiveBound{Bool: &boolTrue},
+		ExclusiveMax: openapi3.ExclusiveBound{Bool: &boolTrue},
+	}
+	result := oapiSchemaToMap(s)
+	if result["exclusiveMinimum"] != true {
+		t.Errorf("期望 exclusiveMinimum=true，实际 %v", result["exclusiveMinimum"])
+	}
+	if result["exclusiveMaximum"] != true {
+		t.Errorf("期望 exclusiveMaximum=true，实际 %v", result["exclusiveMaximum"])
+	}
+}

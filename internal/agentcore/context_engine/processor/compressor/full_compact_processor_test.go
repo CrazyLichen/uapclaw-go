@@ -52,8 +52,8 @@ func (f *fcpFakeModelContext) ContextID() string                                
 func (f *fcpFakeModelContext) TokenCounter() token.TokenCounter                     { return f.tokenCounter }
 func (f *fcpFakeModelContext) ReloaderTool() tool.Tool                              { return nil }
 func (f *fcpFakeModelContext) WorkspaceDir() string                                 { return "" }
-func (f *fcpFakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)                     {}
-func (f *fcpFakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade                      { return nil }
+func (f *fcpFakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)      {}
+func (f *fcpFakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade       { return nil }
 func (f *fcpFakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fcpFakeModelContext) SaveState() map[string]any                            { return nil }
 func (f *fcpFakeModelContext) LoadState(_ map[string]any)                           {}

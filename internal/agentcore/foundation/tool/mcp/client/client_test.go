@@ -711,3 +711,643 @@ func TestLoadOpenAPISpec_路径不存在(t *testing.T) {
 	_, err := loadOpenAPISpec("/nonexistent/path/openapi.json")
 	assert.Error(t, err)
 }
+
+// ──────────────────────────── SseClient 扩展测试 ────────────────────────────
+
+// TestSseClient_未连接时GetToolInfo返回错误 测试未连接时 GetToolInfo 返回错误。
+func TestSseClient_未连接时GetToolInfo返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/sse", "sse")
+	client := NewSseClient(config)
+	_, err := client.GetToolInfo(context.Background(), "tool")
+	assert.Error(t, err)
+}
+
+// TestSseClient_未连接时ListResources返回错误 测试未连接时 ListResources 返回错误。
+func TestSseClient_未连接时ListResources返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/sse", "sse")
+	client := NewSseClient(config)
+	_, err := client.ListResources(context.Background())
+	assert.Error(t, err)
+}
+
+// TestSseClient_未连接时ReadResource返回错误 测试未连接时 ReadResource 返回错误。
+func TestSseClient_未连接时ReadResource返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/sse", "sse")
+	client := NewSseClient(config)
+	_, err := client.ReadResource(context.Background(), "uri")
+	assert.Error(t, err)
+}
+
+// TestSseClient_Close 测试 Close 方法。
+func TestSseClient_Close(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/sse", "sse")
+	client := NewSseClient(config)
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+// ──────────────────────────── StdioClient 扩展测试 ────────────────────────────
+
+// TestStdioClient_未连接时GetToolInfo返回错误 测试未连接时 GetToolInfo 返回错误。
+func TestStdioClient_未连接时GetToolInfo返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "stdio")
+	client := NewStdioClient(config)
+	_, err := client.GetToolInfo(context.Background(), "tool")
+	assert.Error(t, err)
+}
+
+// TestStdioClient_未连接时ListResources返回错误 测试未连接时 ListResources 返回错误。
+func TestStdioClient_未连接时ListResources返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "stdio")
+	client := NewStdioClient(config)
+	_, err := client.ListResources(context.Background())
+	assert.Error(t, err)
+}
+
+// TestStdioClient_未连接时ReadResource返回错误 测试未连接时 ReadResource 返回错误。
+func TestStdioClient_未连接时ReadResource返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "stdio")
+	client := NewStdioClient(config)
+	_, err := client.ReadResource(context.Background(), "uri")
+	assert.Error(t, err)
+}
+
+// TestStdioClient_Close 测试 Close 方法。
+func TestStdioClient_Close(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "stdio")
+	client := NewStdioClient(config)
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+// ──────────────────────────── StreamableHttpClient 扩展测试 ────────────────────────────
+
+// TestStreamableHttpClient_未连接时CallTool返回错误 测试未连接时 CallTool 返回错误。
+func TestStreamableHttpClient_未连接时CallTool返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/mcp", "streamable-http")
+	client := NewStreamableHttpClient(config)
+	_, err := client.CallTool(context.Background(), "tool", nil)
+	assert.Error(t, err)
+}
+
+// TestStreamableHttpClient_未连接时GetToolInfo返回错误 测试未连接时 GetToolInfo 返回错误。
+func TestStreamableHttpClient_未连接时GetToolInfo返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/mcp", "streamable-http")
+	client := NewStreamableHttpClient(config)
+	_, err := client.GetToolInfo(context.Background(), "tool")
+	assert.Error(t, err)
+}
+
+// TestStreamableHttpClient_未连接时ListResources返回错误 测试未连接时 ListResources 返回错误。
+func TestStreamableHttpClient_未连接时ListResources返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/mcp", "streamable-http")
+	client := NewStreamableHttpClient(config)
+	_, err := client.ListResources(context.Background())
+	assert.Error(t, err)
+}
+
+// TestStreamableHttpClient_未连接时ReadResource返回错误 测试未连接时 ReadResource 返回错误。
+func TestStreamableHttpClient_未连接时ReadResource返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/mcp", "streamable-http")
+	client := NewStreamableHttpClient(config)
+	_, err := client.ReadResource(context.Background(), "uri")
+	assert.Error(t, err)
+}
+
+// TestStreamableHttpClient_Close 测试 Close 方法。
+func TestStreamableHttpClient_Close(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "http://localhost:8080/mcp", "streamable-http")
+	client := NewStreamableHttpClient(config)
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+// ──────────────────────────── PlaywrightClient 扩展测试 ────────────────────────────
+
+// TestPlaywrightClient_未初始化时CallTool返回错误 测试未初始化时 CallTool 返回错误。
+func TestPlaywrightClient_未初始化时CallTool返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	_, err := client.CallTool(context.Background(), "tool", nil)
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_未初始化时GetToolInfo返回错误 测试未初始化时 GetToolInfo 返回错误。
+func TestPlaywrightClient_未初始化时GetToolInfo返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	_, err := client.GetToolInfo(context.Background(), "tool")
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_未初始化时ListResources返回错误 测试未初始化时 ListResources 返回错误。
+func TestPlaywrightClient_未初始化时ListResources返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	_, err := client.ListResources(context.Background())
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_未初始化时ReadResource返回错误 测试未初始化时 ReadResource 返回错误。
+func TestPlaywrightClient_未初始化时ReadResource返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	_, err := client.ReadResource(context.Background(), "uri")
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_Close 测试 Close 方法。
+func TestPlaywrightClient_Close(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+// ──────────────────────────── PlaywrightClient 委托测试 ────────────────────────────
+
+// fakeMcpClient 用于测试的模拟 MCP 客户端。
+type fakeMcpClient struct {
+	tools         []*types.McpToolCard
+	callResult    any
+	callErr       error
+	listToolsErr  error
+	disconnectErr error
+}
+
+func (f *fakeMcpClient) Connect(_ context.Context, _ ...types.ConnectOption) error {
+	return nil
+}
+
+func (f *fakeMcpClient) Disconnect(_ context.Context) error {
+	return f.disconnectErr
+}
+
+func (f *fakeMcpClient) ListTools(_ context.Context) ([]*types.McpToolCard, error) {
+	return f.tools, f.listToolsErr
+}
+
+func (f *fakeMcpClient) CallTool(_ context.Context, _ string, _ map[string]any) (any, error) {
+	return f.callResult, f.callErr
+}
+
+func (f *fakeMcpClient) GetToolInfo(_ context.Context, toolName string) (*types.McpToolCard, error) {
+	for _, card := range f.tools {
+		if card.Name == toolName {
+			return card, nil
+		}
+	}
+	return nil, fmt.Errorf("tool %q not found", toolName)
+}
+
+func (f *fakeMcpClient) ListResources(_ context.Context) ([]any, error) {
+	return nil, nil
+}
+
+func (f *fakeMcpClient) ReadResource(_ context.Context, _ string) (any, error) {
+	return nil, nil
+}
+
+func (f *fakeMcpClient) Close() error {
+	return f.disconnectErr
+}
+
+// TestPlaywrightClient_委托ListTools 测试通过委托调用 ListTools。
+func TestPlaywrightClient_委托ListTools(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{
+		tools: []*types.McpToolCard{
+			types.NewMcpToolCard("tool1", "desc1", "test", nil),
+		},
+	}
+
+	tools, err := client.ListTools(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, tools, 1)
+	assert.Equal(t, "tool1", tools[0].Name)
+}
+
+// TestPlaywrightClient_委托CallTool 测试通过委托调用 CallTool。
+func TestPlaywrightClient_委托CallTool(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{
+		callResult: map[string]any{"result": "ok"},
+	}
+
+	result, err := client.CallTool(context.Background(), "tool1", map[string]any{"key": "val"})
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+// TestPlaywrightClient_委托CallTool错误 测试委托 CallTool 返回错误。
+func TestPlaywrightClient_委托CallTool错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{
+		callErr: fmt.Errorf("调用失败"),
+	}
+
+	_, err := client.CallTool(context.Background(), "tool1", nil)
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_委托GetToolInfo 测试通过委托调用 GetToolInfo。
+func TestPlaywrightClient_委托GetToolInfo(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{
+		tools: []*types.McpToolCard{
+			types.NewMcpToolCard("tool1", "desc1", "test", nil),
+		},
+	}
+
+	toolInfo, err := client.GetToolInfo(context.Background(), "tool1")
+	assert.NoError(t, err)
+	assert.Equal(t, "tool1", toolInfo.Name)
+}
+
+// TestPlaywrightClient_委托GetToolInfo工具不存在 测试委托 GetToolInfo 工具不存在。
+func TestPlaywrightClient_委托GetToolInfo工具不存在(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{tools: []*types.McpToolCard{}}
+
+	_, err := client.GetToolInfo(context.Background(), "nonexistent")
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_委托ListResources 测试通过委托调用 ListResources。
+func TestPlaywrightClient_委托ListResources(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{}
+
+	resources, err := client.ListResources(context.Background())
+	assert.NoError(t, err)
+	assert.Nil(t, resources)
+}
+
+// TestPlaywrightClient_委托ReadResource 测试通过委托调用 ReadResource。
+func TestPlaywrightClient_委托ReadResource(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{}
+
+	result, err := client.ReadResource(context.Background(), "uri")
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestPlaywrightClient_委托Disconnect 测试通过委托断开连接。
+func TestPlaywrightClient_委托Disconnect(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{}
+
+	err := client.Disconnect(context.Background())
+	assert.NoError(t, err)
+}
+
+// TestPlaywrightClient_委托Disconnect错误 测试委托 Disconnect 返回错误。
+func TestPlaywrightClient_委托Disconnect错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{disconnectErr: fmt.Errorf("断开失败")}
+
+	err := client.Disconnect(context.Background())
+	assert.Error(t, err)
+}
+
+// TestPlaywrightClient_委托ListTools错误 测试委托 ListTools 返回错误。
+func TestPlaywrightClient_委托ListTools错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "npx", "playwright")
+	client := NewPlaywrightClient(config)
+	client.delegate = &fakeMcpClient{listToolsErr: fmt.Errorf("列出工具失败")}
+
+	_, err := client.ListTools(context.Background())
+	assert.Error(t, err)
+}
+
+// ──────────────────────────── OpenApiClient 扩展测试 ────────────────────────────
+
+// TestOpenApiClient_未连接时GetToolInfo返回错误 测试未连接时 GetToolInfo 返回错误。
+func TestOpenApiClient_未连接时GetToolInfo返回错误(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "openapi.json", "openapi")
+	client := NewOpenApiClient(config)
+	_, err := client.GetToolInfo(context.Background(), "tool")
+	assert.Error(t, err)
+}
+
+// TestOpenApiClient_Close 测试 Close 方法。
+func TestOpenApiClient_Close(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "openapi.json", "openapi")
+	client := NewOpenApiClient(config)
+	// 未连接时 Close 应无错误
+	err := client.Close()
+	assert.NoError(t, err)
+}
+
+// TestOpenApiClient_Close已连接 测试已连接时 Close 断开连接。
+func TestOpenApiClient_Close已连接(t *testing.T) {
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"paths":   map[string]any{},
+	}
+	specJSON, _ := json.Marshal(spec)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err := client.Connect(context.Background())
+	require.NoError(t, err)
+	assert.True(t, client.isConnected)
+
+	err = client.Close()
+	assert.NoError(t, err)
+	assert.False(t, client.isConnected)
+}
+
+// TestOpenApiClient_GetToolInfo工具不存在 测试 GetToolInfo 工具不存在返回错误。
+func TestOpenApiClient_GetToolInfo工具不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"paths":   map[string]any{},
+	}
+	specJSON, _ := json.Marshal(spec)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err := client.Connect(context.Background())
+	require.NoError(t, err)
+
+	_, err = client.GetToolInfo(context.Background(), "nonexistent")
+	assert.Error(t, err)
+}
+
+// TestOpenApiClient_CallToolHTTP错误 测试 CallTool 返回 HTTP 错误响应。
+func TestOpenApiClient_CallToolHTTP错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "internal error"})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"servers": []map[string]any{{"url": server.URL}},
+		"paths": map[string]any{
+			"/fail": map[string]any{
+				"get": map[string]any{
+					"operationId": "failCall",
+					"responses":   map[string]any{"200": map[string]any{"description": "ok"}},
+				},
+			},
+		},
+	}
+	specJSON, err := json.Marshal(spec)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err = client.Connect(context.Background())
+	require.NoError(t, err)
+
+	_, err = client.CallTool(context.Background(), "failCall", map[string]any{})
+	assert.Error(t, err)
+}
+
+// TestOpenApiClient_CallTool带OutputSchema 测试 CallTool 带输出 Schema 时返回 structuredContent。
+func TestOpenApiClient_CallTool带OutputSchema(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "1", "name": "test"})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"servers": []map[string]any{{"url": server.URL}},
+		"paths": map[string]any{
+			"/items": map[string]any{
+				"get": map[string]any{
+					"operationId": "getItems",
+					"summary":     "获取项目",
+					"responses": map[string]any{
+						"200": map[string]any{
+							"description": "成功",
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"id":   map[string]any{"type": "string"},
+											"name": map[string]any{"type": "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	specJSON, err := json.Marshal(spec)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err = client.Connect(context.Background())
+	require.NoError(t, err)
+
+	result, err := client.CallTool(context.Background(), "getItems", map[string]any{})
+	require.NoError(t, err)
+	resultMap := result.(map[string]any)
+	assert.Contains(t, resultMap, "content")
+	// object 类型响应应有 structuredContent
+	assert.Contains(t, resultMap, "structuredContent")
+}
+
+// TestOpenApiClient_空ServerPath 测试空 ServerPath 连接不报错。
+func TestOpenApiClient_空ServerPath(t *testing.T) {
+	config := types.NewMcpServerConfig("test", "", "openapi")
+	client := NewOpenApiClient(config)
+
+	err := client.Connect(context.Background())
+	// 空 ServerPath 不会加载文件，直接成功
+	assert.NoError(t, err)
+}
+
+// TestOpenApiClient_CallToolHTTP4xx错误 测试 CallTool 返回 HTTP 4xx 错误响应。
+func TestOpenApiClient_CallToolHTTP4xx错误(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "bad request"})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"servers": []map[string]any{{"url": server.URL}},
+		"paths": map[string]any{
+			"/bad": map[string]any{
+				"post": map[string]any{
+					"operationId": "badCall",
+					"requestBody": map[string]any{
+						"required": true,
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"name": map[string]any{"type": "string"},
+									},
+								},
+							},
+						},
+					},
+					"responses": map[string]any{"200": map[string]any{"description": "ok"}},
+				},
+			},
+		},
+	}
+	specJSON, err := json.Marshal(spec)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err = client.Connect(context.Background())
+	require.NoError(t, err)
+
+	_, err = client.CallTool(context.Background(), "badCall", map[string]any{"name": "test"})
+	assert.Error(t, err)
+}
+
+// TestOpenApiClient_CallToolWrapResult 测试 CallTool 非 object 类型响应使用 x-fastmcp-wrap-result。
+func TestOpenApiClient_CallToolWrapResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode("hello world")
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"servers": []map[string]any{{"url": server.URL}},
+		"paths": map[string]any{
+			"/greeting": map[string]any{
+				"get": map[string]any{
+					"operationId": "getGreeting",
+					"responses": map[string]any{
+						"200": map[string]any{
+							"description": "成功",
+							"content": map[string]any{
+								"application/json": map[string]any{
+									"schema": map[string]any{
+										"type": "string",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	specJSON, err := json.Marshal(spec)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(specPath, specJSON, 0644))
+
+	config := types.NewMcpServerConfig("test", specPath, "openapi")
+	client := NewOpenApiClient(config)
+
+	err = client.Connect(context.Background())
+	require.NoError(t, err)
+
+	result, err := client.CallTool(context.Background(), "getGreeting", map[string]any{})
+	require.NoError(t, err)
+	resultMap := result.(map[string]any)
+	assert.Contains(t, resultMap, "content")
+	// string 类型响应应有 structuredContent（wrap result）
+	assert.Contains(t, resultMap, "structuredContent")
+	structuredContent := resultMap["structuredContent"].(map[string]any)
+	assert.Contains(t, structuredContent, "result")
+}
+
+// TestLoadOpenAPISpec_无效JSON 测试无效 JSON 内容返回错误。
+func TestLoadOpenAPISpec_无效JSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.json")
+	require.NoError(t, os.WriteFile(specPath, []byte("{invalid json}"), 0644))
+
+	_, err := loadOpenAPISpec(specPath)
+	assert.Error(t, err)
+}
+
+// TestLoadOpenAPISpec_无效YAML 测试无效 YAML 内容返回错误。
+func TestLoadOpenAPISpec_无效YAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	specPath := filepath.Join(tmpDir, "openapi.yaml")
+	require.NoError(t, os.WriteFile(specPath, []byte(":\n  :\n    - [invalid"), 0644))
+
+	// 重点是 loadOpenAPISpec 不 panic
+	assert.NotPanics(t, func() {
+		_, _ = loadOpenAPISpec(specPath)
+	})
+}
+
+// TestLoadOpenAPISpec_符号链接 测试符号链接文件返回错误。
+func TestLoadOpenAPISpec_符号链接(t *testing.T) {
+	tmpDir := t.TempDir()
+	realPath := filepath.Join(tmpDir, "real_openapi.json")
+	linkPath := filepath.Join(tmpDir, "openapi.json")
+
+	spec := map[string]any{
+		"openapi": "3.0.0",
+		"info":    map[string]any{"title": "Test", "version": "1.0.0"},
+		"paths":   map[string]any{},
+	}
+	specJSON, err := json.Marshal(spec)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(realPath, specJSON, 0644))
+	require.NoError(t, os.Symlink(realPath, linkPath))
+
+	_, err = loadOpenAPISpec(linkPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "符号链接")
+}

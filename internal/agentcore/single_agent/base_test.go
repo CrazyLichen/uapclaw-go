@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -418,6 +419,200 @@ func TestWarpBaseAgent_虚分发(t *testing.T) {
 	if !ok || o.Payload != "sub_stream" {
 		t.Errorf("stream item payload 应为 sub_stream，实际 %v", items[0])
 	}
+}
+
+// TestWarpBaseAgent_SetInvoker 设置 invoker 后可通过 Invoke 调用
+func TestWarpBaseAgent_SetInvoker(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("set_inv"), schema.WithDescription("SetInvoker 测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	inv := &stubInvoker{invokeResult: "set_invoker_ok"}
+	agent.SetInvoker(inv)
+
+	result, err := agent.Invoke(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+	if result != "set_invoker_ok" {
+		t.Errorf("result = %v, want set_invoker_ok", result)
+	}
+}
+
+// TestWarpBaseAgent_AgentID 返回 card.ID
+func TestWarpBaseAgent_AgentID(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("id_test"), schema.WithDescription("AgentID 测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	if agent.AgentID() != card.ID {
+		t.Errorf("AgentID() = %q, want %q", agent.AgentID(), card.ID)
+	}
+}
+
+// TestWarpBaseAgent_AgentID_card为nil card 为 nil 时返回空串
+func TestWarpBaseAgent_AgentID_card为nil(t *testing.T) {
+	agent := &WarpBaseAgent{}
+	if agent.AgentID() != "" {
+		t.Errorf("card 为 nil 时 AgentID() 应返回空串，实际 %q", agent.AgentID())
+	}
+}
+
+// TestWarpBaseAgent_RegisterCallback callbackManager 非 nil 时委托注册
+func TestWarpBaseAgent_RegisterCallback(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("rc_agent"), schema.WithDescription("注册回调测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	fn := callback.PerAgentCallbackFunc(func(_ context.Context, _ any) error { return nil })
+	err := agent.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, fn)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_RegisterCallback_nilManager callbackManager 为 nil 时不 panic
+func TestWarpBaseAgent_RegisterCallback_nilManager(t *testing.T) {
+	agent := &WarpBaseAgent{}
+	fn := callback.PerAgentCallbackFunc(func(_ context.Context, _ any) error { return nil })
+	err := agent.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, fn)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_RegisterRail callbackManager 非 nil 时委托注册
+func TestWarpBaseAgent_RegisterRail(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("rr_agent"), schema.WithDescription("注册 Rail 测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	r := &testRail{}
+	err := agent.RegisterRail(context.Background(), r)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_RegisterRail_nilManager callbackManager 为 nil 时直接返回 nil
+func TestWarpBaseAgent_RegisterRail_nilManager(t *testing.T) {
+	agent := &WarpBaseAgent{}
+	r := &testRail{}
+	err := agent.RegisterRail(context.Background(), r)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_RegisterRail_init失败 Rail Init 返回错误时传播
+func TestWarpBaseAgent_RegisterRail_init失败(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("rr_fail"), schema.WithDescription("Rail Init 失败"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	r := &testRail{initErr: errors.New("init failed")}
+	err := agent.RegisterRail(context.Background(), r)
+	if err == nil {
+		t.Fatal("应有错误")
+	}
+	if err.Error() != "init failed" {
+		t.Errorf("错误 = %v, want init failed", err)
+	}
+}
+
+// TestWarpBaseAgent_UnregisterRail 正常注销
+func TestWarpBaseAgent_UnregisterRail(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("ur_agent"), schema.WithDescription("注销 Rail 测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	r := &testRail{}
+	err := agent.UnregisterRail(context.Background(), r)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_UnregisterRail_nilManager callbackManager 为 nil 时不 panic
+func TestWarpBaseAgent_UnregisterRail_nilManager(t *testing.T) {
+	agent := &WarpBaseAgent{}
+	r := &testRail{}
+	err := agent.UnregisterRail(context.Background(), r)
+	if err != nil {
+		t.Fatalf("不应有错误: %v", err)
+	}
+}
+
+// TestWarpBaseAgent_UnregisterRail_uninit失败 Uninit 返回错误且 callbackManager.UnregisterRail 成功时返回 uninitErr
+func TestWarpBaseAgent_UnregisterRail_uninit失败(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("ur_fail"), schema.WithDescription("Uninit 失败测试"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	r := &testRail{uninitErr: errors.New("uninit failed")}
+	err := agent.UnregisterRail(context.Background(), r)
+	if err == nil {
+		t.Fatal("应有错误")
+	}
+	if err.Error() != "uninit failed" {
+		t.Errorf("错误 = %v, want uninit failed", err)
+	}
+}
+
+// TestWarpBaseAgent_Stream_子类错误透传 StreamImpl 返回 BaseError 时直接透传
+func TestWarpBaseAgent_Stream_子类错误透传(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("stream_err"), schema.WithDescription("Stream 错误透传"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	origErr := exception.NewBaseError(exception.StatusAgentNotConfigured, exception.WithMsg("stream 子类错误"))
+	agent.invoker = &stubInvoker{streamErr: origErr}
+
+	_, err := agent.Stream(context.Background(), nil)
+	if err != origErr {
+		t.Errorf("应透传原始 BaseError，实际 %v", err)
+	}
+}
+
+// TestWarpBaseAgent_Stream_普通错误包装 StreamImpl 返回普通 error 时包装为 BaseError
+func TestWarpBaseAgent_Stream_普通错误包装(t *testing.T) {
+	card := agentschema.NewAgentCard(schema.WithName("stream_wrap"), schema.WithDescription("Stream 普通错误包装"))
+	agent := NewWarpBaseAgent(card, nil)
+
+	agent.invoker = &stubInvoker{streamErr: errors.New("stream fail")}
+
+	_, err := agent.Stream(context.Background(), nil)
+	if err == nil {
+		t.Fatal("应有错误")
+	}
+	baseErr, ok := err.(*exception.BaseError)
+	if !ok {
+		t.Fatalf("错误类型应为 *BaseError，实际 %T", err)
+	}
+	if baseErr.Status() != exception.StatusAgentControllerRuntimeError {
+		t.Errorf("Status = %v, want StatusAgentControllerRuntimeError", baseErr.Status())
+	}
+}
+
+// testRail 实现 rail.AgentRail 接口，用于 RegisterRail/UnregisterRail 测试
+type testRail struct {
+	initErr   error
+	uninitErr error
+}
+
+func (r *testRail) Priority() int                                                      { return 50 }
+func (r *testRail) Init(_ rail.RailAgent) error                                        { return r.initErr }
+func (r *testRail) Uninit(_ rail.RailAgent) error                                      { return r.uninitErr }
+func (r *testRail) BeforeInvoke(_ context.Context, _ *rail.AgentCallbackContext) error { return nil }
+func (r *testRail) AfterInvoke(_ context.Context, _ *rail.AgentCallbackContext) error  { return nil }
+func (r *testRail) BeforeTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+	return nil
+}
+func (r *testRail) AfterTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+	return nil
+}
+func (r *testRail) BeforeModelCall(_ context.Context, _ *rail.AgentCallbackContext) error { return nil }
+func (r *testRail) AfterModelCall(_ context.Context, _ *rail.AgentCallbackContext) error  { return nil }
+func (r *testRail) OnModelException(_ context.Context, _ *rail.AgentCallbackContext) error {
+	return nil
+}
+func (r *testRail) BeforeToolCall(_ context.Context, _ *rail.AgentCallbackContext) error  { return nil }
+func (r *testRail) AfterToolCall(_ context.Context, _ *rail.AgentCallbackContext) error   { return nil }
+func (r *testRail) OnToolException(_ context.Context, _ *rail.AgentCallbackContext) error { return nil }
+func (r *testRail) GetCallbacks() map[rail.AgentCallbackEvent]callback.PerAgentCallbackFunc {
+	return nil
 }
 
 // TestGlobalAgentEventType_事件名对齐Python 验证事件名与 Python AgentEvents 对齐

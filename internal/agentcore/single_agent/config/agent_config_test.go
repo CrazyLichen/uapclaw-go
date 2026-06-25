@@ -132,6 +132,18 @@ func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 		cfg := NewReActAgentConfig(WithContextProcessors(procs))
 		assert.Equal(t, procs, cfg.ContextProcessors)
 	})
+
+	t.Run("WithModelClientConfig", func(t *testing.T) {
+		mcCfg := llmschema.NewModelClientConfig("openai", "sk-test", "https://api.openai.com")
+		cfg := NewReActAgentConfig(WithModelClientConfig(mcCfg))
+		assert.Equal(t, mcCfg, cfg.ModelClientConfig)
+	})
+
+	t.Run("WithModelRequestConfig", func(t *testing.T) {
+		mrCfg := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
+		cfg := NewReActAgentConfig(WithModelRequestConfig(mrCfg))
+		assert.Equal(t, mrCfg, cfg.ModelRequestConfig)
+	})
 }
 
 // TestNewReActAgentConfig_WithModelClient 验证复合 Option 联动。

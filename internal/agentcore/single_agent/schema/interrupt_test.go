@@ -38,6 +38,12 @@ func TestToolInterruptException_String_无ToolCall(t *testing.T) {
 	assert.Equal(t, "tool interrupt: 确认", e.String())
 }
 
+// TestToolInterruptException_String_无Request 无 Request 时返回默认字符串
+func TestToolInterruptException_String_无Request(t *testing.T) {
+	e := &ToolInterruptException{Request: nil}
+	assert.Equal(t, "tool interrupt", e.String())
+}
+
 func TestToolInterruptException_实现error接口(t *testing.T) {
 	var err error = &ToolInterruptException{Request: &InterruptRequest{Message: "test"}}
 	assert.Error(t, err)

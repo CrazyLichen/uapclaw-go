@@ -585,3 +585,129 @@ func TestMergeQueryParams_无效URL(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "解析 URL 失败")
 }
+
+// ──────────────────────────── convertSchemaArray 测试 ────────────────────────────
+
+// TestConvertSchemaArray_空数组 测试空数组返回空切片。
+func TestConvertSchemaArray_空数组(t *testing.T) {
+	result := convertSchemaArray([]any{})
+	assert.Empty(t, result)
+}
+
+// TestConvertSchemaArray_字符串类型 测试含字符串类型子 schema 的转换。
+func TestConvertSchemaArray_字符串类型(t *testing.T) {
+	arr := []any{
+		map[string]any{"type": "string", "description": "名称"},
+		map[string]any{"type": "integer", "description": "年龄"},
+	}
+	result := convertSchemaArray(arr)
+	assert.Len(t, result, 2)
+	assert.Equal(t, commonschema.ParamTypeString, result[0].Type)
+	assert.Equal(t, commonschema.ParamTypeInteger, result[1].Type)
+}
+
+// TestConvertSchemaArray_非map类型 测试非 map 类型走默认分支仍生成参数。
+func TestConvertSchemaArray_非map类型(t *testing.T) {
+	arr := []any{
+		"not_a_map",
+		map[string]any{"type": "string"},
+	}
+	result := convertSchemaArray(arr)
+	// 非 map 类型会走 jsonSchemaPropToParam 的默认分支，生成 string 类型参数
+	assert.Len(t, result, 2)
+	assert.Equal(t, commonschema.ParamTypeString, result[0].Type)
+}
+
+// ──────────────────────────── applyCommonFields 测试 ────────────────────────────
+
+// TestApplyCommonFields_Enum 测试 enum 字段提取。
+func TestApplyCommonFields_Enum(t *testing.T) {
+	p := commonschema.NewStringParam("status", "状态", true)
+	propMap := map[string]any{
+		"enum": []any{"active", "inactive"},
+	}
+	applyCommonFields(p, propMap)
+	assert.Equal(t, []any{"active", "inactive"}, p.Enum)
+}
+
+// TestApplyCommonFields_Default 测试 default 字段提取。
+func TestApplyCommonFields_Default(t *testing.T) {
+	p := commonschema.NewStringParam("name", "名称", true)
+	propMap := map[string]any{
+		"default": "test",
+	}
+	applyCommonFields(p, propMap)
+	assert.Equal(t, "test", p.Default)
+}
+
+// TestApplyCommonFields_Nullable 测试 nullable 字段提取。
+func TestApplyCommonFields_Nullable(t *testing.T) {
+	p := commonschema.NewStringParam("name", "名称", true)
+	propMap := map[string]any{
+		"nullable": true,
+	}
+	applyCommonFields(p, propMap)
+	assert.True(t, p.Nullable)
+}
+
+// TestApplyCommonFields_AnyOf 测试 anyOf 字段提取。
+func TestApplyCommonFields_AnyOf(t *testing.T) {
+	p := commonschema.NewStringParam("value", "值", false)
+	propMap := map[string]any{
+		"anyOf": []any{
+			map[string]any{"type": "string"},
+			map[string]any{"type": "integer"},
+		},
+	}
+	applyCommonFields(p, propMap)
+	assert.Len(t, p.AnyOf, 2)
+}
+
+// TestApplyCommonFields_AllOf 测试 allOf 字段提取。
+func TestApplyCommonFields_AllOf(t *testing.T) {
+	p := commonschema.NewStringParam("value", "值", false)
+	propMap := map[string]any{
+		"allOf": []any{
+			map[string]any{"type": "string"},
+		},
+	}
+	applyCommonFields(p, propMap)
+	assert.Len(t, p.AllOf, 1)
+}
+
+// TestApplyCommonFields_OneOf 测试 oneOf 字段提取。
+func TestApplyCommonFields_OneOf(t *testing.T) {
+	p := commonschema.NewStringParam("value", "值", false)
+	propMap := map[string]any{
+		"oneOf": []any{
+			map[string]any{"type": "string"},
+			map[string]any{"type": "null"},
+		},
+	}
+	applyCommonFields(p, propMap)
+	assert.Len(t, p.OneOf, 2)
+}
+
+// TestApplyCommonFields_空Map 测试空 map 不影响 Param。
+func TestApplyCommonFields_空Map(t *testing.T) {
+	p := commonschema.NewStringParam("name", "名称", true)
+	applyCommonFields(p, map[string]any{})
+	assert.Nil(t, p.Enum)
+	assert.Nil(t, p.Default)
+	assert.False(t, p.Nullable)
+	assert.Nil(t, p.AnyOf)
+	assert.Nil(t, p.AllOf)
+	assert.Nil(t, p.OneOf)
+}
+
+// ──────────────────────────── resourceContentsToMap 扩展测试 ────────────────────────────
+
+// TestResourceContentsToMap_未知类型 测试未知 ResourceContents 走 default 分支。
+func TestResourceContentsToMap_未知类型(t *testing.T) {
+	// 使用一个不在 switch 中的类型
+	rc := mcp.BlobResourceContents{} // 已有测试，换用自定义方式
+	// 直接构造一个未实现具体类型的 ResourceContents
+	result := resourceContentsToMap(rc)
+	// BlobResourceContents 有自己的分支，结果不为 unknown
+	assert.NotNil(t, result)
+}

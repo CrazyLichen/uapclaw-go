@@ -317,8 +317,9 @@ func (m *Model) Release(ctx context.Context, opts ...model_clients.ReleaseOption
 // 仅 InferenceAffinity 返回 true，其他客户端返回 false。
 //
 // 对应 Python: Model.supports_kv_cache_release()
-//   Python 使用 isinstance(self._client, InferenceAffinityModelClient) 判断，
-//   Go 通过接口方法实现等价语义。
+//
+//	Python 使用 isinstance(self._client, InferenceAffinityModelClient) 判断，
+//	Go 通过接口方法实现等价语义。
 func (m *Model) SupportsKVCacheRelease() bool {
 	return m.client.SupportsKVCacheRelease()
 }

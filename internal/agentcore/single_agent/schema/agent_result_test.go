@@ -303,3 +303,51 @@ func TestAgentCard_NewAgentCard_在新包中(t *testing.T) {
 		t.Errorf("Name 期望 %q，实际 %q", "test_agent", card.Name)
 	}
 }
+
+// TestNewRawPart 验证 NewRawPart 创建二进制 Part
+func TestNewRawPart(t *testing.T) {
+	raw := []byte("binary data")
+	part := NewRawPart(raw)
+	if part.Text != nil {
+		t.Error("Text 应为 nil")
+	}
+	if part.URL != nil {
+		t.Error("URL 应为 nil")
+	}
+	if !equalBytes(part.Raw, raw) {
+		t.Errorf("Raw = %v, want %v", part.Raw, raw)
+	}
+}
+
+func equalBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestRawBytes_MarshalJSON_nil nil 时序列化为 null
+func TestRawBytes_MarshalJSON_nil(t *testing.T) {
+	var raw RawBytes
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("序列化 nil RawBytes 失败: %v", err)
+	}
+	if string(data) != "null" {
+		t.Errorf("nil RawBytes 序列化应为 null，实际 %q", string(data))
+	}
+}
+
+// TestRawBytes_UnmarshalJSON_非字符串 非 JSON 字符串输入应返回错误
+func TestRawBytes_UnmarshalJSON_非字符串(t *testing.T) {
+	var raw RawBytes
+	err := json.Unmarshal([]byte("123"), &raw)
+	if err == nil {
+		t.Error("非字符串 JSON 反序列化应返回错误")
+	}
+}

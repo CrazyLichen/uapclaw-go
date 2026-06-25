@@ -364,4 +364,28 @@ func TestForkForToolCall_字段共享与隔离(t *testing.T) {
 	assert.False(t, parent.HasForceFinishRequest())
 }
 
+// TestAgentCallbackContext_Config_SetConfig 验证 Config/SetConfig 方法
+func TestAgentCallbackContext_Config_SetConfig(t *testing.T) {
+	ctx := NewAgentCallbackContext(nil, nil, nil)
+
+	// 默认 nil
+	assert.Nil(t, ctx.Config())
+
+	// SetConfig
+	ctx.SetConfig("some_config")
+	assert.Equal(t, "some_config", ctx.Config())
+}
+
+// TestAgentCallbackContext_ModelContext_SetModelContext 验证 ModelContext/SetModelContext 方法
+func TestAgentCallbackContext_ModelContext_SetModelContext(t *testing.T) {
+	ctx := NewAgentCallbackContext(nil, nil, nil)
+
+	// 默认 nil
+	assert.Nil(t, ctx.ModelContext())
+
+	// SetModelContext（nil 满足接口）
+	ctx.SetModelContext(nil)
+	assert.Nil(t, ctx.ModelContext())
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

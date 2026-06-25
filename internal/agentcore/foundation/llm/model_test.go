@@ -36,19 +36,19 @@ func (r *eventRecorder) record(_ context.Context, data *callback.LLMCallEventDat
 
 // mockModelClient 模拟 BaseModelClient，用于测试 Model 门面
 type mockModelClient struct {
-	invokeResult        *llmschema.AssistantMessage
-	invokeErr           error
-	streamChan          <-chan *llmschema.AssistantMessageChunk
-	streamErr           error
-	releaseResult       bool
-	releaseErr          error
-	supportsKVCache     bool
-	genImageResult      *llmschema.ImageGenerationResponse
-	genImageErr         error
-	genSpeechResult     *llmschema.AudioGenerationResponse
-	genSpeechErr        error
-	genVideoResult      *llmschema.VideoGenerationResponse
-	genVideoErr         error
+	invokeResult    *llmschema.AssistantMessage
+	invokeErr       error
+	streamChan      <-chan *llmschema.AssistantMessageChunk
+	streamErr       error
+	releaseResult   bool
+	releaseErr      error
+	supportsKVCache bool
+	genImageResult  *llmschema.ImageGenerationResponse
+	genImageErr     error
+	genSpeechResult *llmschema.AudioGenerationResponse
+	genSpeechErr    error
+	genVideoResult  *llmschema.VideoGenerationResponse
+	genVideoErr     error
 }
 
 func (m *mockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
