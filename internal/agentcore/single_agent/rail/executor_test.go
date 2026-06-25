@@ -186,10 +186,22 @@ func TestRailExecutor_Execute_全部事件为空(t *testing.T) {
 	assert.True(t, fnCalled)
 }
 
-// TestRailExecutor_Execute_before出错时返回错误 验证 before 钩子出错时直接返回
-func TestRailExecutor_Execute_before出错时返回错误(t *testing.T) {
-	mgr := NewAgentCallbackManager("test_before_err")
+// TestRailExecutor_Execute_before出错时走OnException和After 验证 before 钩子出错时走 on_exception → after(finally)
+// 对齐 Python: before 和 fn 在同一 try 块中，before 异常也走 except → finally
+func TestRailExecutor_Execute_before出错时走OnException和After(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_before_err_exc")
 	defer mgr.Clear()
+
+	var firedEvents []AgentCallbackEvent
+	registerHook := func(event AgentCallbackEvent) {
+		mgr.RegisterCallback(context.Background(), event, func(_ context.Context, _ any) error {
+			firedEvents = append(firedEvents, event)
+			return nil
+		})
+	}
+	registerHook(CallbackBeforeModelCall)
+	registerHook(CallbackOnModelException)
+	registerHook(CallbackAfterModelCall)
 
 	beforeErr := errors.New("before hook failed")
 	mgr.RegisterCallback(context.Background(), CallbackBeforeModelCall, func(_ context.Context, _ any) error {
@@ -200,7 +212,7 @@ func TestRailExecutor_Execute_before出错时返回错误(t *testing.T) {
 	cbc := NewAgentCallbackContext(agent, &ModelCallInputs{}, nil)
 
 	fnCalled := false
-	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, "")
+	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, CallbackOnModelException)
 	err := re.Execute(context.Background(), cbc, func() error {
 		fnCalled = true
 		return nil
@@ -208,6 +220,95 @@ func TestRailExecutor_Execute_before出错时返回错误(t *testing.T) {
 
 	assert.Equal(t, beforeErr, err)
 	assert.False(t, fnCalled) // fn 不应被执行
+	// before 错误走 on_exception → after(finally)
+	assert.Equal(t, []AgentCallbackEvent{
+		CallbackBeforeModelCall,
+		CallbackOnModelException,
+		CallbackAfterModelCall,
+	}, firedEvents)
+	// exception 应被设置
+	assert.Equal(t, beforeErr, cbc.Exception())
+}
+
+// TestRailExecutor_Execute_before出错无OnException 验证 before 出错但无 on_exception 时走 after(finally)
+func TestRailExecutor_Execute_before出错无OnException(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_before_no_exc")
+	defer mgr.Clear()
+
+	var firedEvents []AgentCallbackEvent
+	registerHook := func(event AgentCallbackEvent) {
+		mgr.RegisterCallback(context.Background(), event, func(_ context.Context, _ any) error {
+			firedEvents = append(firedEvents, event)
+			return nil
+		})
+	}
+	registerHook(CallbackBeforeModelCall)
+	registerHook(CallbackAfterModelCall)
+
+	beforeErr := errors.New("before hook failed")
+	mgr.RegisterCallback(context.Background(), CallbackBeforeModelCall, func(_ context.Context, _ any) error {
+		return beforeErr
+	})
+
+	agent := &fakeRailAgent{cbMgr: mgr}
+	cbc := NewAgentCallbackContext(agent, &ModelCallInputs{}, nil)
+
+	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, "") // 无 on_exception
+	err := re.Execute(context.Background(), cbc, func() error { return nil })
+
+	assert.Equal(t, beforeErr, err)
+	// before 错误无 on_exception，但仍走 after(finally)
+	assert.Equal(t, []AgentCallbackEvent{
+		CallbackBeforeModelCall,
+		CallbackAfterModelCall,
+	}, firedEvents)
+}
+
+// TestRailExecutor_Execute_before异常请求重试 验证 before 异常也走重试逻辑
+func TestRailExecutor_Execute_before异常请求重试(t *testing.T) {
+	mgr := NewAgentCallbackManager("test_before_retry")
+	defer mgr.Clear()
+
+	beforeCallCount := 0
+	mgr.RegisterCallback(context.Background(), CallbackBeforeModelCall, func(_ context.Context, _ any) error {
+		beforeCallCount++
+		if beforeCallCount == 1 {
+			return errors.New("before first call failed")
+		}
+		return nil
+	})
+
+	// on_exception 钩子：第一次失败后请求重试
+	mgr.RegisterCallback(context.Background(), CallbackOnModelException, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*AgentCallbackContext)
+		if cbc.RetryAttempt() == 0 {
+			cbc.RequestRetry(0)
+		}
+		return nil
+	})
+
+	var afterFired []AgentCallbackEvent
+	mgr.RegisterCallback(context.Background(), CallbackAfterModelCall, func(_ context.Context, _ any) error {
+		afterFired = append(afterFired, CallbackAfterModelCall)
+		return nil
+	})
+
+	agent := &fakeRailAgent{cbMgr: mgr}
+	cbc := NewAgentCallbackContext(agent, &ModelCallInputs{}, nil)
+
+	fnCalled := false
+	re := NewRailExecutor(CallbackBeforeModelCall, CallbackAfterModelCall, CallbackOnModelException)
+	err := re.Execute(context.Background(), cbc, func() error {
+		fnCalled = true
+		return nil
+	})
+
+	// 重试后成功
+	assert.NoError(t, err)
+	assert.True(t, fnCalled)
+	assert.Equal(t, 2, beforeCallCount) // before 被调用两次
+	// after 应触发两次（每次迭代都触发，finally 语义）
+	assert.Len(t, afterFired, 2)
 }
 
 // TestRailExecutor_Execute_context取消时跳过After 验证 context 取消后 after 事件被跳过

@@ -398,9 +398,9 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.12 | ☐ | 流式输出 | `_inner_stream`，实时推送 Agent 思考过程 | `openjiuwen/core/single_agent/agents/react_agent.py` (_inner_stream) |
 | 6.13 | ☐ | KV Cache 释放 | 上下文缓存管理 | `openjiuwen/core/single_agent/agents/react_agent.py` (kv_cache_release) |
 | **6.x 中断/恢复系统** | — | | | |
-| 6.14 | ☐ | ToolInterruptHandler | 工具级中断管理 | `openjiuwen/core/single_agent/interrupt/handler.py` |
-| 6.15 | ☐ | InterruptionState / ToolInterruptionState | 工作流/工具中断状态 | `openjiuwen/core/single_agent/interrupt/` |
-| 6.16 | ☐ | ResumeContext | 恢复上下文 | `openjiuwen/core/single_agent/interrupt/` |
+| 6.14 | ✅ | ToolInterruptHandler | 工具级中断管理 | `openjiuwen/core/single_agent/interrupt/handler.py` |
+| 6.15 | ✅ | InterruptionState / ToolInterruptionState | 工作流/工具中断状态 | `openjiuwen/core/single_agent/interrupt/` |
+| 6.16 | ✅ | ResumeContext | 恢复上下文 | `openjiuwen/core/single_agent/interrupt/` |
 | **6.x 技能系统** | — | | | |
 | 6.17 | ☐ | Skill 模型 | `Skill{Name, Description, Directory}` | `openjiuwen/core/single_agent/skills/skill_manager.py` (Skill) |
 | 6.18 | ☐ | SkillManager | 注册/注销/获取技能，YAML front-matter 加载 | `openjiuwen/core/single_agent/skills/skill_manager.py` |

@@ -2,11 +2,13 @@ package ability
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -35,12 +37,14 @@ type AbilityExecutionError struct {
 
 // ExecuteResult 单个工具调用的执行结果。
 type ExecuteResult struct {
-	// Result 执行结果
+	// Result 执行结果。
+	// 正常返回: map[string]any 或具体类型
+	// 工具中断: *saschema.ToolInterruptException
+	// 工作流中断: *workflow.WorkflowOutput (state=INPUT_REQUIRED)
+	// 执行错误: *AbilityExecutionError
 	Result any
 	// ToolMsg 返回给 LLM 的 ToolMessage
 	ToolMsg *llmschema.ToolMessage
-	// Err 执行错误（如有）
-	Err error
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -138,3 +142,26 @@ func BuildToolMessageContent(result any) string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// errorToExecuteResult 将 error 转换为 ExecuteResult。
+// 用于降级路径（cbc==nil）和 railedExecuteSingleToolCall 的异常处理。
+//
+// 转换规则：
+//   - ToolInterruptException → Result=tie, ToolMsg=nil
+//   - AbilityExecutionError  → Result=err, ToolMsg=aee.ToolMessage
+//   - 其他 error             → Result=err, ToolMsg=兜底构建
+func errorToExecuteResult(err error, toolCallID string) ExecuteResult {
+	var tie *saschema.ToolInterruptException
+	if errors.As(err, &tie) {
+		return ExecuteResult{Result: tie}
+	}
+	var toolMsg *llmschema.ToolMessage
+	var execErr *AbilityExecutionError
+	if errors.As(err, &execErr) {
+		toolMsg = execErr.ToolMessage
+	}
+	if toolMsg == nil {
+		toolMsg = llmschema.NewToolMessage(toolCallID, err.Error())
+	}
+	return ExecuteResult{Result: err, ToolMsg: toolMsg}
+}

@@ -2,9 +2,11 @@ package ability
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -80,6 +82,16 @@ func (f *fakeResourceManager) GetMcpToolInfos(_ string) ([]*schema.ToolInfo, err
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// isAbilityExecutionErrorInResult 检查 ExecuteResult.Result 是否为 *AbilityExecutionError。
+func isAbilityExecutionErrorInResult(result any) bool {
+	err, ok := result.(error)
+	if !ok {
+		return false
+	}
+	var aee *AbilityExecutionError
+	return errors.As(err, &aee)
+}
 
 func TestAbilityManager_Add_Tool(t *testing.T) {
 	am := NewAbilityManager(nil)
@@ -360,8 +372,8 @@ func TestAbilityManager_Execute_单工具成功(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err != nil {
-		t.Fatalf("不应有错误: %v", results[0].Err)
+	if isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("不应有错误: %v", results[0].Result)
 	}
 	if results[0].ToolMsg == nil {
 		t.Fatal("ToolMsg 不应为 nil")
@@ -394,7 +406,7 @@ func TestAbilityManager_Execute_并行多工具(t *testing.T) {
 	// 两个都应成功
 	errCount := 0
 	for _, r := range results {
-		if r.Err != nil {
+		if isAbilityExecutionErrorInResult(r.Result) {
 			errCount++
 		}
 	}
@@ -417,13 +429,12 @@ func TestAbilityManager_Execute_参数解析失败(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 	// 错误应为 AbilityExecutionError
-	var execErr *AbilityExecutionError
-	if !isAbilityExecutionError(results[0].Err, &execErr) {
-		t.Errorf("错误类型应为 *AbilityExecutionError，实际 %T", results[0].Err)
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Errorf("错误类型应为 *AbilityExecutionError，实际 %T", results[0].Result)
 	}
 }
 
@@ -438,19 +449,8 @@ func TestAbilityManager_Execute_能力未找到(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
-	}
-}
-
-// isAbilityExecutionError 检查错误是否为 *AbilityExecutionError。
-func isAbilityExecutionError(err error, target **AbilityExecutionError) bool {
-	switch e := err.(type) {
-	case *AbilityExecutionError:
-		*target = e
-		return true
-	default:
-		return false
 	}
 }
 
@@ -672,7 +672,7 @@ func TestAbilityManager_Execute_工具实例未找到(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -696,7 +696,7 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -717,8 +717,8 @@ func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err != nil {
-		t.Fatalf("不应有错误: %v", results[0].Err)
+	if isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("不应有错误: %v", results[0].Result)
 	}
 }
 
@@ -737,7 +737,7 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -758,7 +758,7 @@ func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -779,8 +779,8 @@ func TestAbilityManager_Execute_Agent成功(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err != nil {
-		t.Fatalf("不应有错误: %v", results[0].Err)
+	if isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("不应有错误: %v", results[0].Result)
 	}
 }
 
@@ -799,7 +799,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -820,7 +820,7 @@ func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -838,7 +838,7 @@ func TestAbilityManager_Execute_McpServer暂未实现(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("MCP 执行应返回错误")
 	}
 }
@@ -869,8 +869,8 @@ func TestAbilityManager_Execute_兜底Tool成功(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err != nil {
-		t.Fatalf("不应有错误: %v", results[0].Err)
+	if isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("不应有错误: %v", results[0].Result)
 	}
 }
 
@@ -891,7 +891,7 @@ func TestAbilityManager_Execute_兜底Tool执行错误(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err == nil {
+	if !isAbilityExecutionErrorInResult(results[0].Result) {
 		t.Fatal("应有错误")
 	}
 }
@@ -915,8 +915,8 @@ func TestAbilityManager_Execute_带Tag(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("结果数量 = %d, want 1", len(results))
 	}
-	if results[0].Err != nil {
-		t.Fatalf("不应有错误: %v", results[0].Err)
+	if isAbilityExecutionErrorInResult(results[0].Result) {
+		t.Fatalf("不应有错误: %v", results[0].Result)
 	}
 }
 
@@ -1027,4 +1027,88 @@ func TestAbilityManager_Execute_Rail包装(t *testing.T) {
 
 	assert.Contains(t, firedEvents, rail.CallbackBeforeToolCall)
 	assert.Contains(t, firedEvents, rail.CallbackAfterToolCall)
+}
+
+// TestAbilityManager_Execute_skipTool before hook 通过 _skip_tool 跳过工具执行
+// 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
+func TestAbilityManager_Execute_skipTool(t *testing.T) {
+	mgr := rail.NewAgentCallbackManager("test_skip_tool")
+	defer mgr.Clear()
+
+	// before_tool_call 钩子：设置 _skip_tool 并预设拒绝结果
+	mgr.RegisterCallback(context.Background(), rail.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*rail.AgentCallbackContext)
+		inputs, ok := cbc.Inputs().(*rail.ToolCallInputs)
+		if !ok {
+			return nil
+		}
+		// 模拟安全护栏拒绝工具执行
+		cbc.Extra()["_skip_tool"] = true
+		inputs.ToolResult = map[string]any{"error": "工具被安全护栏拒绝"}
+		inputs.ToolMsg = llmschema.NewToolMessage("tc1", "工具被安全护栏拒绝")
+		return nil
+	})
+
+	// after_tool_call 钩子：验证 after 仍然触发（finally 语义）
+	afterFired := false
+	mgr.RegisterCallback(context.Background(), rail.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
+		afterFired = true
+		// after 不应再看到 _skip_tool（pop 一次性消费）
+		_, exists := railCtx.(*rail.AgentCallbackContext).Extra()["_skip_tool"]
+		assert.False(t, exists, "after 钩子不应看到 _skip_tool（应已被 pop 消费）")
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	toolCalls := []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}
+
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+
+	// 验证结果：应为 before hook 预设的拒绝结果
+	require.Len(t, results, 1)
+	resultMap, ok := results[0].Result.(map[string]any)
+	require.True(t, ok, "Result 应为 map[string]any")
+	assert.Equal(t, "工具被安全护栏拒绝", resultMap["error"])
+	assert.NotNil(t, results[0].ToolMsg, "ToolMsg 应为 before hook 预设的消息")
+	assert.Equal(t, "工具被安全护栏拒绝", results[0].ToolMsg.Content.Text())
+
+	// after 钩子仍应触发（finally 语义）
+	assert.True(t, afterFired, "after 钩子应触发（finally 语义）")
+}
+
+// TestAbilityManager_Execute_skipTool非bool值 忽略非 bool 的 _skip_tool 值
+func TestAbilityManager_Execute_skipTool非bool值(t *testing.T) {
+	mgr := rail.NewAgentCallbackManager("test_skip_tool_nonbool")
+	defer mgr.Clear()
+
+	// before_tool_call 钩子：设置 _skip_tool 为字符串（非 bool），应被忽略
+	mgr.RegisterCallback(context.Background(), rail.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*rail.AgentCallbackContext)
+		cbc.Extra()["_skip_tool"] = "yes" // 非 bool，应被忽略
+		return nil
+	})
+
+	agent := &fakeRailAgentForAbility{cbMgr: mgr}
+	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+
+	am := NewAbilityManager(nil)
+	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
+
+	toolCalls := []*llmschema.ToolCall{
+		{Name: "echo", Arguments: `{}`, ID: "tc1"},
+	}
+
+	results := am.Execute(context.Background(), cbc, toolCalls, nil, "")
+
+	// _skip_tool 非bool值被忽略，工具应正常执行
+	require.Len(t, results, 1)
+	// echo 工具不存在实例，会返回 AbilityExecutionError，但不是 skip 结果
+	assert.True(t, isAbilityExecutionErrorInResult(results[0].Result), "工具应正常执行（非skip路径），因无实例返回错误")
 }

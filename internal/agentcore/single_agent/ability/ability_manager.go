@@ -2,6 +2,7 @@ package ability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -356,7 +357,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 
 // Execute 并行执行多个 ToolCall，返回每个调用的结果。
 // 使用 WaitGroup + 按 index 写切片，与 Python asyncio.gather(return_exceptions=True) 语义一致：
-// 所有任务都执行完毕，错误作为 ExecuteResult.Err 返回。
+// 所有任务都执行完毕，错误/中断统一在 ExecuteResult.Result 中。
 // 结果顺序与输入 toolCalls 顺序一致。
 //
 // cbc 为 Rail 系统的 AgentCallbackContext，用于：
@@ -384,7 +385,12 @@ func (am *AbilityManager) Execute(
 			wg.Add(1)
 			go func(idx int, toolCall *llmschema.ToolCall) {
 				defer wg.Done()
-				results[idx] = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+				r, err := am.executeSingleToolCall(ctx, toolCall, sess, tag)
+				if err != nil {
+					results[idx] = errorToExecuteResult(err, toolCall.ID)
+				} else {
+					results[idx] = r
+				}
 			}(i, tc)
 		}
 		am.mu.RUnlock()
@@ -414,20 +420,6 @@ func (am *AbilityManager) Execute(
 
 	wg.Wait()
 
-	// 从 inputs 读取 after 钩子可能改写的最终值。
-	// 对齐 Python: AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs.
-	// 优先使用 inputs 中的值，兜底用原始 ExecuteResult。
-	for i, toolCtx := range toolCtxs {
-		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
-			if inputs.ToolResult != nil {
-				results[i].Result = inputs.ToolResult
-			}
-			if inputs.ToolMsg != nil {
-				results[i].ToolMsg = inputs.ToolMsg
-			}
-		}
-	}
-
 	// force-finish 信号传播：子 toolCtx → 父 cbc
 	// 对应 Python: for tool_ctx in tool_contexts:
 	//   ff = tool_ctx.consume_force_finish()
@@ -448,7 +440,8 @@ func (am *AbilityManager) Execute(
 //
 // 使用 ToolCallRail.Execute 包装，自动提供：
 //   - fire(BEFORE_TOOL_CALL) → before 钩子
-//   - force-finish 门控 → 可跳过工具执行
+//   - _skip_tool 门控 → before 钩子可跳过工具执行（设置 extra["_skip_tool"]=true）
+//   - force-finish 门控 → before 钩子可终止整个 Agent 循环
 //   - 异常 → fire(ON_TOOL_EXCEPTION) → 可 request_retry() 重试
 //   - fire(AFTER_TOOL_CALL) → after 钩子
 //
@@ -463,7 +456,8 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	tag string,
 ) ExecuteResult {
 	var result ExecuteResult
-	_ = rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
+
+	railErr := rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
 		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
 		// 对齐 Python: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
 		// 对齐 Python: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
@@ -476,29 +470,66 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 			}
 		}
 
-		result = am.executeSingleToolCall(ctx, toolCall, sess, tag)
-		// 回填结果到 inputs（对齐 Python L681-686）
-		// after 钩子触发时可通过 inputs 访问执行结果，也可改写。
-		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
-			inputs.ToolCall = toolCall
-			inputs.ToolName = toolCall.Name
-			inputs.ToolArgs = toolCall.Arguments
-			inputs.ToolResult = result.Result
-			inputs.ToolMsg = result.ToolMsg
+		// _skip_tool 门控：before hook 可通过设置 extra["_skip_tool"] = true 来跳过工具执行
+		// 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
+		// before hook 在设置 _skip_tool 的同时，会在 inputs 中预设 tool_result 和 tool_msg
+		if skipVal, exists := toolCtx.Extra()["_skip_tool"]; exists {
+			delete(toolCtx.Extra(), "_skip_tool") // pop 语义：一次性消费
+			if skipBool, ok := skipVal.(bool); ok && skipBool {
+				if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+					result = ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}
+				}
+				return nil // before hook 正常返回 → 走正常路径 → after 触发
+			}
 		}
-		return result.Err
+
+		var err error
+		result, err = am.executeSingleToolCall(ctx, toolCall, sess, tag)
+
+		// 仅 err == nil 时回填结果到 inputs（D6）
+		// 对齐 Python L681-686：after 钩子触发时可通过 inputs 访问执行结果，也可改写
+		if err == nil {
+			if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+				inputs.ToolCall = toolCall
+				inputs.ToolName = toolCall.Name
+				inputs.ToolArgs = toolCall.Arguments
+				inputs.ToolResult = result.Result
+				inputs.ToolMsg = result.ToolMsg
+			}
+		}
+		return err
 	})
+
+	// 统一处理 Rail.Execute 返回的 error
+	if railErr != nil {
+		return errorToExecuteResult(railErr, toolCall.ID)
+	}
+
+	// railErr == nil，从 inputs 读取 after 钩子可能改写的值（D4）
+	// 对齐 Python L625-638：AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs
+	if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+		if inputs.ToolResult != nil {
+			result.Result = inputs.ToolResult
+		}
+		if inputs.ToolMsg != nil {
+			result.ToolMsg = inputs.ToolMsg
+		}
+	}
 	return result
 }
 
 // executeSingleToolCall 执行单个工具调用。
 // 路由逻辑：按 tool_name 查找 Card → 从 ResourceManager 获取实例 → 执行。
+//
+// 返回 (ExecuteResult, error)：
+//   - ExecuteResult 承载正常结果（Result + ToolMsg）
+//   - error 承载异常（ToolInterruptException 或 AbilityExecutionError）
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
 	sess *session.Session,
 	tag string,
-) ExecuteResult {
+) (ExecuteResult, error) {
 	toolName := toolCall.Name
 
 	// 解析参数
@@ -514,7 +545,7 @@ func (am *AbilityManager) executeSingleToolCall(
 			err.Error(),
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 路由分发
@@ -534,7 +565,7 @@ func (am *AbilityManager) executeSingleToolCall(
 			"MCP 工具执行暂未实现: "+toolName,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 兜底：尝试从 ResourceManager 按 name 获取 Tool
@@ -549,7 +580,7 @@ func (am *AbilityManager) executeTool(
 	toolArgs map[string]any,
 	sess *session.Session,
 	tag string,
-) ExecuteResult {
+) (ExecuteResult, error) {
 	toolCard := am.tools[toolName]
 	toolID := toolCard.ID
 	if toolID == "" {
@@ -570,7 +601,7 @@ func (am *AbilityManager) executeTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 用 LifecycleTool 包装，使 Tool 调用走完整回调链
@@ -579,6 +610,11 @@ func (am *AbilityManager) executeTool(
 	lt := tool.NewLifecycleTool(t)
 	result, err := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if err != nil {
+		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
+		var tie *agentschema.ToolInterruptException
+		if errors.As(err, &tie) {
+			return ExecuteResult{}, tie
+		}
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).
 			Err(err).
@@ -590,12 +626,12 @@ func (am *AbilityManager) executeTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}
+	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // executeWorkflow 执行 Workflow 类型能力。
@@ -618,7 +654,7 @@ func (am *AbilityManager) executeWorkflow(
 	toolArgs map[string]any,
 	sess *session.Session,
 	tag string,
-) ExecuteResult {
+) (ExecuteResult, error) {
 	// 步骤 1：获取 WorkflowCard（对齐 Python L761-762）
 	wfCard := am.workflows[toolName]
 	wfID := wfCard.ID
@@ -641,7 +677,7 @@ func (am *AbilityManager) executeWorkflow(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	wf, ok := wfAny.(interfaces.Workflow)
@@ -652,7 +688,7 @@ func (am *AbilityManager) executeWorkflow(
 			"工作流实例类型断言失败: "+wfID,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 步骤 3：创建 workflow session（对齐 Python L707: workflow_session = session.create_workflow_session()）
@@ -681,12 +717,12 @@ func (am *AbilityManager) executeWorkflow(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 步骤 6：检测 INPUT_REQUIRED 中断（对齐 Python L719-723: if WorkflowOutput.state == INPUT_REQUIRED → return (WorkflowOutput, None)）
 	if wfOut, ok := result.(*workflow.WorkflowOutput); ok && wfOut.State == workflow.WorkflowExecutionStateInputRequired {
-		return ExecuteResult{Result: wfOut, ToolMsg: nil}
+		return ExecuteResult{Result: wfOut, ToolMsg: nil}, nil
 	}
 
 	// 步骤 7：正常完成 — 提取 result（对齐 Python L725: result = workflow_output.result）
@@ -698,7 +734,7 @@ func (am *AbilityManager) executeWorkflow(
 	// 步骤 8：构建 ToolMessage（对齐 Python L726: ToolMessage(content=str(result))）
 	content := BuildToolMessageContent(actualResult)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: actualResult, ToolMsg: toolMsg}
+	return ExecuteResult{Result: actualResult, ToolMsg: toolMsg}, nil
 }
 
 // executeAgent 执行 Agent 类型能力。
@@ -721,7 +757,7 @@ func (am *AbilityManager) executeAgent(
 	toolArgs map[string]any,
 	sess *session.Session,
 	tag string,
-) ExecuteResult {
+) (ExecuteResult, error) {
 	// 步骤 1：获取 AgentCard（对齐 Python L777-778）
 	agentCard := am.agents[toolName]
 
@@ -746,7 +782,7 @@ func (am *AbilityManager) executeAgent(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	ag, ok := agAny.(interfaces.BaseAgent)
@@ -757,7 +793,7 @@ func (am *AbilityManager) executeAgent(
 			"Agent 实例类型断言失败: "+agentID,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 步骤 4-7：子会话生命周期（仅当 sess 非 nil 时执行）
@@ -796,13 +832,13 @@ func (am *AbilityManager) executeAgent(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 步骤 9：构建 ToolMessage（对齐 Python L834-838）
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}
+	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // executeFallbackTool 兜底：从 ResourceManager 按 name 获取 Tool。
@@ -813,7 +849,7 @@ func (am *AbilityManager) executeFallbackTool(
 	toolArgs map[string]any,
 	sess *session.Session,
 	tag string,
-) ExecuteResult {
+) (ExecuteResult, error) {
 	var opts []resource.ResourceOption
 	if tag != "" {
 		opts = append(opts, resource.WithResourceTag(tag))
@@ -828,7 +864,7 @@ func (am *AbilityManager) executeFallbackTool(
 			exception.WithParam("ability_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	// 用 LifecycleTool 包装，使 fallback 路径走完整回调链
@@ -837,6 +873,11 @@ func (am *AbilityManager) executeFallbackTool(
 	lt := tool.NewLifecycleTool(t)
 	result, invokeErr := lt.Invoke(ctx, toolArgs, tool.WithToolSession(sess))
 	if invokeErr != nil {
+		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
+		var tie *agentschema.ToolInterruptException
+		if errors.As(invokeErr, &tie) {
+			return ExecuteResult{}, tie
+		}
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).
 			Err(invokeErr).
@@ -848,12 +889,12 @@ func (am *AbilityManager) executeFallbackTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(invokeErr),
 		)
-		return ExecuteResult{Err: execErr, ToolMsg: execErr.ToolMessage}
+		return ExecuteResult{}, execErr
 	}
 
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}
+	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // prioritizePaidSearch 当 paid_search 和 free_search 同时存在时，
