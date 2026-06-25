@@ -77,20 +77,6 @@ type ReActAgent struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// KVCacheReleaser KV Cache 释放能力接口。
-//
-// 对应 Python: llm.supports_kv_cache_release() 方法
-type KVCacheReleaser interface {
-	SupportsKVCacheRelease() bool
-}
-
-// KVCacheKwargsBuilder KV Cache 调用参数构建接口。
-//
-// 对应 Python: llm.build_kv_cache_invoke_kwargs() 方法
-type KVCacheKwargsBuilder interface {
-	BuildKVCacheInvokeKwargs(sess sessioninterfaces.SessionFacade, enableKVCacheRelease bool) map[string]any
-}
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -162,7 +148,7 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	// 断言 *session.Session 以获取生命周期方法
 	if as, ok := sess.(*session.Session); ok {
 		agentSess = as
-		as.PreRun(ctx)
+		as.PreRun(ctx, inputs) // 对齐 Python: session.pre_run(inputs=inputs)
 	}
 
 	query, _ := inputs["query"].(string)
@@ -246,9 +232,9 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 			}
 		}
 
-		// 调用 ReAct 循环
+		// 调用 ReAct 循环（initContext 和 UserMessage 已在上方完成）
 		if invokeInputs.Result == nil {
-			result, loopErr = a.reactLoop(ctx, cbc, sess, startIteration)
+			result, loopErr = a.reactLoop(ctx, cbc, sess, modelCtx, startIteration)
 		}
 		return loopErr
 	})
@@ -359,10 +345,12 @@ func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
 // reactLoop ReAct 循环核心。
 //
 // 对应 Python: ReActAgent._inner_invoke() 中的主循环
+// 注意：initContext 和 UserMessage 已在 InvokeImpl 中完成，此处不再重复。
 func (a *ReActAgent) reactLoop(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	sess sessioninterfaces.SessionFacade,
+	modelCtx ceinterface.ModelContext,
 	startIteration int,
 ) (map[string]any, error) {
 	maxIter := defaultMaxIterations
@@ -370,19 +358,7 @@ func (a *ReActAgent) reactLoop(
 		maxIter = a.config.MaxIterations
 	}
 
-	modelCtx, err := a.initContext(ctx, sess)
-	if err != nil {
-		return nil, fmt.Errorf("初始化上下文失败: %w", err)
-	}
-	cbc.SetModelContext(modelCtx)
-
 	tools, _ := a.getTools()
-
-	if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok && invokeInputs.Query.PlainText() != "" {
-		if modelCtx != nil {
-			_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage(invokeInputs.Query.PlainText()))
-		}
-	}
 
 	var iterResult map[string]any
 	for iteration := startIteration; iteration < maxIter; iteration++ {
