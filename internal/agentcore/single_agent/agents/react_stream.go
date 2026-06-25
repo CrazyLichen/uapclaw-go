@@ -28,13 +28,12 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 			if a.hitlHandler != nil {
 				_ = a.hitlHandler.WriteInterruptToStream(ctx, result, sess)
 			}
-		} else {
-			// ⤵️ 6.12: Workflow 中断写入流
-			// workflowState := result["workflow_execution_state"]
-			// componentIDs := result["component_ids"]
-			// pendingID := componentIDs[0]
-			// 遍历 workflowState.result，写入 payload.id == pendingID 的 schema
 		}
+		// ⤵️ 6.12: Workflow 中断写入流（暂未实现）
+		// else 分支：workflowState := result["workflow_execution_state"]
+		// componentIDs := result["component_ids"]
+		// pendingID := componentIDs[0]
+		// 遍历 workflowState.result，写入 payload.id == pendingID 的 schema
 	} else {
 		// 正常 answer 结果
 		output, _ := result["output"].(string)

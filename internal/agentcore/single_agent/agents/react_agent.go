@@ -146,7 +146,9 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 		newSess := session.NewSession(session.WithSessionID("default_session"))
 		sess = newSess
 		// 对齐 Python invoke(): 自建 session 时 pre_run + need_cleanup=True
-		newSess.PreRun(ctx, inputs)
+		if err := newSess.PreRun(ctx, inputs); err != nil {
+			return nil, err
+		}
 		agentSess = newSess
 		needCleanup = true
 	}
@@ -156,7 +158,9 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 		if as, ok := sess.(*session.Session); ok {
 			agentSess = as
 			// 非自建 session 时，PreRun 在此处调用（幂等，重复调用无副作用）
-			as.PreRun(ctx, inputs) // 对齐 Python: session.pre_run(inputs=inputs)
+			if err := as.PreRun(ctx, inputs); err != nil { // 对齐 Python: session.pre_run(inputs=inputs)
+				return nil, err
+			}
 		}
 	}
 
@@ -196,7 +200,7 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
 		// 对齐 Python L1301-1302: 空 query 校验
 		if query == "" {
-			return fmt.Errorf("Input must contain 'query'")
+			return fmt.Errorf("input must contain 'query'")
 		}
 
 		// 加载 HITL 中断状态

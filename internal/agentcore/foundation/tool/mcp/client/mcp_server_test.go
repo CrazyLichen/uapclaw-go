@@ -458,7 +458,7 @@ func TestMcpClient_直接创建(t *testing.T) {
 
 	err = client.Start(ctx)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	initReq := mcp.InitializeRequest{
 		Params: mcp.InitializeParams{

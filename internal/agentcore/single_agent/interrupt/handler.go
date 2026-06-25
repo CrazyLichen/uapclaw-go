@@ -474,8 +474,7 @@ func handleSubAgentInterrupt(
 		return
 	}
 
-	subStateVal, _ := dict["state"]
-	subState, ok := subStateVal.([]any)
+	subState, ok := dict["state"].([]any)
 	if !ok {
 		subState = nil
 	}
