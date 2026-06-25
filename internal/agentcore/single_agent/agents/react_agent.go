@@ -141,14 +141,23 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	sess := agentOpts.Session
 
 	var agentSess *session.Session
+	needCleanup := false // 对齐 Python: need_cleanup，仅在自建 session 时为 true
 	if sess == nil {
-		sess = session.NewSession(session.WithSessionID("default_session"))
+		newSess := session.NewSession(session.WithSessionID("default_session"))
+		sess = newSess
+		// 对齐 Python invoke(): 自建 session 时 pre_run + need_cleanup=True
+		newSess.PreRun(ctx, inputs)
+		agentSess = newSess
+		needCleanup = true
 	}
 
 	// 断言 *session.Session 以获取生命周期方法
-	if as, ok := sess.(*session.Session); ok {
-		agentSess = as
-		as.PreRun(ctx, inputs) // 对齐 Python: session.pre_run(inputs=inputs)
+	if agentSess == nil {
+		if as, ok := sess.(*session.Session); ok {
+			agentSess = as
+			// 非自建 session 时，PreRun 在此处调用（幂等，重复调用无副作用）
+			as.PreRun(ctx, inputs) // 对齐 Python: session.pre_run(inputs=inputs)
+		}
 	}
 
 	query, _ := inputs["query"].(string)
@@ -160,9 +169,15 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 	cbc := rail.NewAgentCallbackContext(a, invokeInputs, sess)
 
-	// 设置 extra
+	// 设置 extra（对齐 Python L1289-1296）
 	if userID, ok := inputs["user_id"].(string); ok {
 		cbc.Extra()["user_id"] = userID
+	}
+	if runKind, ok := inputs["run_kind"].(string); ok {
+		cbc.Extra()["run_kind"] = runKind
+	}
+	if runContext, ok := inputs["run_context"].(string); ok {
+		cbc.Extra()["run_context"] = runContext
 	}
 	if streaming, ok := inputs["_streaming"].(bool); ok {
 		cbc.Extra()["_streaming"] = streaming
@@ -179,6 +194,11 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 	var loopErr error
 
 	err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+		// 对齐 Python L1301-1302: 空 query 校验
+		if query == "" {
+			return fmt.Errorf("Input must contain 'query'")
+		}
+
 		// 加载 HITL 中断状态
 		hitlState := a.hitlHandler.Load(sess)
 		var interruptionState interrupt.ToolInterruptionState
@@ -247,19 +267,25 @@ func (a *ReActAgent) InvokeImpl(ctx context.Context, inputs map[string]any, opts
 		return nil, err
 	}
 
-	// 生命周期后处理
-	if agentSess != nil {
+	// 生命周期后处理（对齐 Python finally: if need_cleanup）
+	if needCleanup {
 		a.saveContexts(sess)
+	}
+	if agentSess != nil {
 		_ = agentSess.CloseStream()
 		_ = agentSess.Commit(ctx)
 	}
 
+	// 对齐 Python L1434: return ctx.extra.get("invoke_result", invoke_inputs.result)
 	if invokeResult, ok := cbc.Extra()["invoke_result"]; ok {
 		if r, ok2 := invokeResult.(map[string]any); ok2 {
 			return r, nil
 		}
 	}
 
+	if invokeInputs.Result != nil {
+		return invokeInputs.Result, nil
+	}
 	return result, nil
 }
 
@@ -270,10 +296,12 @@ func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
+	needCleanup := false // 对齐 Python: need_cleanup，仅在自建 session 时为 true
 	if sess == nil {
 		sess = session.NewSession(session.WithSessionID("default_session"))
 		// 补充到 opts 中
 		opts = append(opts, interfaces.WithSession(sess))
+		needCleanup = true
 	}
 
 	// AgentSession 生命周期断言（直接断言 *session.Session）
@@ -292,7 +320,7 @@ func (a *ReActAgent) StreamImpl(ctx context.Context, inputs map[string]any, opts
 
 	go func() {
 		defer close(outCh)
-		a.innerStream(ctx, sess, agentSess, isAgentSess, inputs, opts, outCh)
+		a.innerStream(ctx, sess, agentSess, isAgentSess, needCleanup, inputs, opts, outCh)
 	}()
 
 	return outCh, nil
@@ -436,6 +464,8 @@ func (a *ReActAgent) reactLoop(
 	}
 
 	if iterResult == nil {
+		// 对齐 Python for-else: max iterations 时执行 save_contexts
+		a.saveContexts(sess)
 		iterResult = map[string]any{"output": "Max iterations reached without completion", "result_type": "error"}
 	}
 
@@ -536,6 +566,17 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 	// 构建 KV Cache extra kwargs（对应 Python L736-742）
 	extraKVPairs := llmModel.BuildKVCacheInvokeKwargs(sess, enableKVRelease)
 
+	// 补充 llm_return_token_ids 和 llm_logprobs 配置（对齐 Python L744-749）
+	if a.config != nil {
+		if a.config.LLMReturnTokenIDs {
+			extraKVPairs["return_token_ids"] = true
+		}
+		if a.config.LLMLogprobs {
+			extraKVPairs["logprobs"] = true
+			extraKVPairs["top_logprobs"] = a.config.LLMTopLogprobs
+		}
+	}
+
 	isStreaming, _ := cbc.Extra()["_streaming"].(bool)
 	modelName := ""
 	if a.config != nil {
@@ -627,24 +668,25 @@ func (a *ReActAgent) callLLMStream(
 		}
 
 		// 实时写入 session stream（对齐 Python railed_model_call L776-809）
+		// Python 先写 reasoning_content，再写 content
 		if sess != nil {
-			if chunk.Content.Text() != "" {
-				_ = sess.WriteStream(ctx, &stream.OutputSchema{
-					Type:  "llm_output",
-					Index: chunkIndex,
-					Payload: map[string]any{
-						"content":     chunk.Content.Text(),
-						"result_type": "answer",
-					},
-				})
-				chunkIndex++
-			}
 			if chunk.ReasoningContent != "" {
 				_ = sess.WriteStream(ctx, &stream.OutputSchema{
 					Type:  "llm_reasoning",
 					Index: chunkIndex,
 					Payload: map[string]any{
 						"content":     chunk.ReasoningContent,
+						"result_type": "answer",
+					},
+				})
+				chunkIndex++
+			}
+			if chunk.Content.Text() != "" {
+				_ = sess.WriteStream(ctx, &stream.OutputSchema{
+					Type:  "llm_output",
+					Index: chunkIndex,
+					Payload: map[string]any{
+						"content":     chunk.Content.Text(),
 						"result_type": "answer",
 					},
 				})

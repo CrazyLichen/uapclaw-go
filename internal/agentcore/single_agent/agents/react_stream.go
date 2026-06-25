@@ -59,6 +59,7 @@ func (a *ReActAgent) innerStream(
 	sess sessioninterfaces.SessionFacade,
 	agentSess *session.Session,
 	isAgentSess bool,
+	needCleanup bool,
 	inputs map[string]any,
 	opts []interfaces.AgentOption,
 	outCh chan<- stream.Schema,
@@ -66,9 +67,12 @@ func (a *ReActAgent) innerStream(
 	// streamProcess: 在后台执行 invoke，结果写入 session stream
 	streamProcess := func() {
 		defer func() {
-			// finally: 清理
-			if isAgentSess && agentSess != nil {
+			// finally: 清理（对齐 Python L1555-1560）
+			// save_contexts 由 needCleanup 控制，close_stream/commit 由 is_agent_session 控制
+			if needCleanup {
 				a.saveContexts(sess)
+			}
+			if isAgentSess && agentSess != nil {
 				_ = agentSess.CloseStream()
 				_ = agentSess.Commit(ctx)
 			}
