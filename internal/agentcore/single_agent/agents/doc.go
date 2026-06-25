@@ -7,6 +7,7 @@
 // 文件目录：
 //
 //	agents/
+//	├── doc.go           # 包文档
 //	├── react_agent.go   # ReActAgent — ReAct 循环 Agent（Think → Act → Observe）
 //	├── react_hitl.go    # ReActAgent HITL 中断/恢复集成方法
 //	└── react_stream.go  # ReActAgent 流式执行（_inner_stream 模式）

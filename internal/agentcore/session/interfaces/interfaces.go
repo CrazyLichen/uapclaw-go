@@ -50,9 +50,6 @@ type InnerSession interface {
 	Close() error
 }
 
-// Deprecated: 使用 InnerSession
-type BaseSession = InnerSession
-
 // Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
 // 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
 //
@@ -137,3 +134,8 @@ type ParentProvider interface {
 type ExecutableIDProvider interface {
 	ExecutableID() string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// Deprecated: 使用 InnerSession
+type BaseSession = InnerSession

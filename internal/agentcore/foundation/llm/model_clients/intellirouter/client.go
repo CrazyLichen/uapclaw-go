@@ -406,6 +406,11 @@ func (c *IntelliRouterModelClient) Release(
 	)
 }
 
+// SupportsKVCacheRelease IntelliRouter 客户端不支持 KV Cache 释放。
+func (c *IntelliRouterModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // GetRouterStats 获取路由器统计信息。
 //
 // 便捷方法，暴露内部路由器的统计信息供监控和调试使用。

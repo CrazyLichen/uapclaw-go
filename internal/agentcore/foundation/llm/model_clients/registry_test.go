@@ -29,6 +29,10 @@ func (m *mockModelClient) Release(_ context.Context, _ ...ReleaseOption) (bool, 
 	return false, nil
 }
 
+func (m *mockModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // mockFactory 创建 mockModelClient 的工厂函数。
 func mockFactory(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient {
 	return &mockModelClient{}

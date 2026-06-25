@@ -36,18 +36,19 @@ func (r *eventRecorder) record(_ context.Context, data *callback.LLMCallEventDat
 
 // mockModelClient 模拟 BaseModelClient，用于测试 Model 门面
 type mockModelClient struct {
-	invokeResult    *llmschema.AssistantMessage
-	invokeErr       error
-	streamChan      <-chan *llmschema.AssistantMessageChunk
-	streamErr       error
-	releaseResult   bool
-	releaseErr      error
-	genImageResult  *llmschema.ImageGenerationResponse
-	genImageErr     error
-	genSpeechResult *llmschema.AudioGenerationResponse
-	genSpeechErr    error
-	genVideoResult  *llmschema.VideoGenerationResponse
-	genVideoErr     error
+	invokeResult        *llmschema.AssistantMessage
+	invokeErr           error
+	streamChan          <-chan *llmschema.AssistantMessageChunk
+	streamErr           error
+	releaseResult       bool
+	releaseErr          error
+	supportsKVCache     bool
+	genImageResult      *llmschema.ImageGenerationResponse
+	genImageErr         error
+	genSpeechResult     *llmschema.AudioGenerationResponse
+	genSpeechErr        error
+	genVideoResult      *llmschema.VideoGenerationResponse
+	genVideoErr         error
 }
 
 func (m *mockModelClient) Invoke(_ context.Context, _ model_clients.MessagesParam, _ ...model_clients.InvokeOption) (*llmschema.AssistantMessage, error) {
@@ -72,6 +73,10 @@ func (m *mockModelClient) GenerateVideo(_ context.Context, _ []*llmschema.UserMe
 
 func (m *mockModelClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return m.releaseResult, m.releaseErr
+}
+
+func (m *mockModelClient) SupportsKVCacheRelease() bool {
+	return m.supportsKVCache
 }
 
 // mockSession 模拟 SessionLike 接口
@@ -236,37 +241,52 @@ func TestModel_Stream_回调事件(t *testing.T) {
 
 // TestModel_BuildKVCacheInvokeKwargs_参数构建 测试 KV Cache 参数构建
 func TestModel_BuildKVCacheInvokeKwargs_参数构建(t *testing.T) {
-	model := &Model{
-		ModelConfig:       llmschema.NewModelRequestConfig(),
-		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
-		client:            &mockModelClient{},
-		callbackFramework: callback.NewCallbackFramework(),
-	}
+	t.Run("不支持KV Cache的客户端返回空map", func(t *testing.T) {
+		model := &Model{
+			ModelConfig:       llmschema.NewModelRequestConfig(),
+			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			client:            &mockModelClient{supportsKVCache: false},
+			callbackFramework: callback.NewCallbackFramework(),
+		}
+		kwargs := model.BuildKVCacheInvokeKwargs(&mockSession{id: "test-session"}, true)
+		if len(kwargs) != 0 {
+			t.Errorf("不支持 KV Cache 的客户端应返回空 map，实际 %v", kwargs)
+		}
+	})
 
-	// 无 session
-	kwargs := model.BuildKVCacheInvokeKwargs(nil, false)
-	if len(kwargs) != 0 {
-		t.Errorf("无 session 时期望空 map，实际 %v", kwargs)
-	}
+	t.Run("支持KV Cache的客户端正常构建参数", func(t *testing.T) {
+		model := &Model{
+			ModelConfig:       llmschema.NewModelRequestConfig(),
+			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
+			client:            &mockModelClient{supportsKVCache: true},
+			callbackFramework: callback.NewCallbackFramework(),
+		}
 
-	// 有 session，启用 cache
-	session := &mockSession{id: "test-session-123"}
-	kwargs = model.BuildKVCacheInvokeKwargs(session, true)
-	if kwargs["session_id"] != "test-session-123" {
-		t.Errorf("期望 session_id=test-session-123，实际 %v", kwargs["session_id"])
-	}
-	if kwargs["enable_cache_sharing"] != true {
-		t.Errorf("期望 enable_cache_sharing=true，实际 %v", kwargs["enable_cache_sharing"])
-	}
+		// 无 session
+		kwargs := model.BuildKVCacheInvokeKwargs(nil, false)
+		if len(kwargs) != 0 {
+			t.Errorf("无 session 时期望空 map，实际 %v", kwargs)
+		}
 
-	// 有 session，不启用 cache
-	kwargs = model.BuildKVCacheInvokeKwargs(session, false)
-	if kwargs["session_id"] != "test-session-123" {
-		t.Errorf("期望 session_id=test-session-123，实际 %v", kwargs["session_id"])
-	}
-	if _, ok := kwargs["enable_cache_sharing"]; ok {
-		t.Error("不启用 cache 时不应有 enable_cache_sharing 键")
-	}
+		// 有 session，启用 cache
+		session := &mockSession{id: "test-session-123"}
+		kwargs = model.BuildKVCacheInvokeKwargs(session, true)
+		if kwargs["session_id"] != "test-session-123" {
+			t.Errorf("期望 session_id=test-session-123，实际 %v", kwargs["session_id"])
+		}
+		if kwargs["enable_cache_sharing"] != true {
+			t.Errorf("期望 enable_cache_sharing=true，实际 %v", kwargs["enable_cache_sharing"])
+		}
+
+		// 有 session，不启用 cache
+		kwargs = model.BuildKVCacheInvokeKwargs(session, false)
+		if kwargs["session_id"] != "test-session-123" {
+			t.Errorf("期望 session_id=test-session-123，实际 %v", kwargs["session_id"])
+		}
+		if _, ok := kwargs["enable_cache_sharing"]; ok {
+			t.Error("不启用 cache 时不应有 enable_cache_sharing 键")
+		}
+	})
 }
 
 // TestModel_GetClient_获取底层客户端 测试获取底层客户端
@@ -376,7 +396,7 @@ func TestModel_SupportsKVCacheRelease_KV缓存释放支持(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
 			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
-			client:            &mockModelClient{releaseResult: true, releaseErr: nil},
+			client:            &mockModelClient{supportsKVCache: true},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
 		if !model.SupportsKVCacheRelease() {
@@ -384,32 +404,15 @@ func TestModel_SupportsKVCacheRelease_KV缓存释放支持(t *testing.T) {
 		}
 	})
 
-	t.Run("不支持KV Cache Release-返回错误", func(t *testing.T) {
+	t.Run("不支持KV Cache Release", func(t *testing.T) {
 		model := &Model{
 			ModelConfig:       llmschema.NewModelRequestConfig(),
 			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
-			client:            &mockModelClient{releaseResult: false, releaseErr: fmt.Errorf("not supported")},
+			client:            &mockModelClient{supportsKVCache: false},
 			callbackFramework: callback.NewCallbackFramework(),
 		}
 		if model.SupportsKVCacheRelease() {
-			t.Error("SupportsKVCacheRelease 应返回 false（客户端返回错误）")
-		}
-	})
-
-	t.Run("不支持KV Cache Release-无错误但返回false", func(t *testing.T) {
-		// Release 返回 (false, nil) 表示调用成功但不支持
-		// 当前实现：err == nil → return true
-		// 这实际上是个边界情况：成功调用 Release 但返回 false
-		// 在实际场景中，InferenceAffinity 返回 (true, nil)，其他客户端返回错误
-		model := &Model{
-			ModelConfig:       llmschema.NewModelRequestConfig(),
-			ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
-			client:            &mockModelClient{releaseResult: false, releaseErr: nil},
-			callbackFramework: callback.NewCallbackFramework(),
-		}
-		// 当前实现认为 err == nil 即为支持
-		if !model.SupportsKVCacheRelease() {
-			t.Error("err == nil 时当前实现返回 true（即使 bool 为 false）")
+			t.Error("SupportsKVCacheRelease 应返回 false")
 		}
 	})
 }
@@ -758,7 +761,7 @@ func TestModel_BuildKVCacheInvokeKwargs_仅Session(t *testing.T) {
 	model := &Model{
 		ModelConfig:       llmschema.NewModelRequestConfig(),
 		ClientConfig:      llmschema.NewModelClientConfig("test", "key", "http://localhost"),
-		client:            &mockModelClient{},
+		client:            &mockModelClient{supportsKVCache: true},
 		callbackFramework: callback.NewCallbackFramework(),
 	}
 

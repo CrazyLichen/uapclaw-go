@@ -886,6 +886,103 @@ func (cp *PersistenceCheckpointer) GraphStore() any {
 	return cp.graphStore
 }
 
+// Create 创建 Persistence 检查点器。
+// 对应 Python: PersistenceCheckpointerProvider.create()
+//
+// 配置项（对齐 Python conf 字典）：
+//   - db_type:   存储后端类型，当前仅支持 "sqlite"（默认 "sqlite"），Python 额外支持 "shelve"
+//   - db_path:   数据库文件路径（默认 "checkpointer"）
+//   - db_client: 预配置的 *gorm.DB 实例（可选，提供时跳过自动创建）
+//   - db_timeout: SQLite 锁等待秒数（默认 5，对齐 Python 默认 30 秒）
+//   - db_enable_wal: 是否启用 SQLite WAL 模式（默认 true）
+func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
+	// db_type：当前仅支持 sqlite
+	dbType := "sqlite"
+	if v, ok := conf["db_type"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			dbType = s
+		}
+	}
+	if dbType != "sqlite" {
+		return nil, fmt.Errorf("不支持的数据库类型: %s（当前仅支持 sqlite）", dbType)
+	}
+
+	// db_client：优先使用预配置的 *gorm.DB
+	if v, ok := conf["db_client"]; ok && v != nil {
+		if db, ok := v.(*gorm.DB); ok {
+			logger.Info(logComponent).
+				Str("action", "persistence_provider_create").
+				Str("db_type", dbType).
+				Bool("db_client_provided", true).
+				Msg("使用预配置的数据库客户端创建检查点器")
+			kvStore := kv.NewDbBasedKVStore(db)
+			return NewPersistenceCheckpointer(kvStore), nil
+		}
+	}
+
+	// db_path：数据库文件路径
+	dbPath := "checkpointer"
+	if v, ok := conf["db_path"]; ok {
+		if s, ok := v.(string); ok {
+			dbPath = s
+		}
+	}
+	if !strings.HasSuffix(dbPath, ".db") {
+		dbPath = dbPath + ".db"
+	}
+
+	// 确保父目录存在
+	dir := filepath.Dir(dbPath)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0o755)
+	}
+
+	// db_timeout：SQLite 锁等待秒数（默认 5）
+	dbTimeout := 5
+	if v, ok := conf["db_timeout"]; ok {
+		switch t := v.(type) {
+		case int:
+			dbTimeout = t
+		case float64:
+			dbTimeout = int(t)
+		}
+	}
+
+	// db_enable_wal：是否启用 WAL 模式（默认 true）
+	dbEnableWAL := true
+	if v, ok := conf["db_enable_wal"]; ok {
+		if b, ok := v.(bool); ok {
+			dbEnableWAL = b
+		}
+	}
+
+	// 使用 GORM + SQLite 创建 DbBasedKVStore
+	dsn := fmt.Sprintf("%s?_busy_timeout=%d", dbPath, dbTimeout*1000)
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("打开数据库失败: %w", err)
+	}
+
+	// 启用 WAL 模式
+	if dbEnableWAL {
+		sqlDB, err := db.DB()
+		if err == nil {
+			_, _ = sqlDB.Exec("PRAGMA journal_mode=WAL")
+		}
+	}
+
+	logger.Info(logComponent).
+		Str("action", "persistence_provider_create").
+		Str("db_type", dbType).
+		Str("db_path", dbPath).
+		Int("db_timeout", dbTimeout).
+		Bool("db_enable_wal", dbEnableWAL).
+		Msg("创建持久化检查点器")
+
+	kvStore := kv.NewDbBasedKVStore(db)
+	return NewPersistenceCheckpointer(kvStore), nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newPersistenceAgentStorage 创建 Agent 持久化状态存储。
@@ -1010,101 +1107,4 @@ func (ws *PersistenceWorkflowStorage) serializeState(st any) *serdeTuple {
 // 委托给公共函数 processInteractiveInputs，消除代码重复（CP-25）。
 func (ws *PersistenceWorkflowStorage) processInteractiveInputs(session interfaces.InnerSession, inputs *interaction.InteractiveInput) {
 	processInteractiveInputs(session, inputs)
-}
-
-// Create 创建 Persistence 检查点器。
-// 对应 Python: PersistenceCheckpointerProvider.create()
-//
-// 配置项（对齐 Python conf 字典）：
-//   - db_type:   存储后端类型，当前仅支持 "sqlite"（默认 "sqlite"），Python 额外支持 "shelve"
-//   - db_path:   数据库文件路径（默认 "checkpointer"）
-//   - db_client: 预配置的 *gorm.DB 实例（可选，提供时跳过自动创建）
-//   - db_timeout: SQLite 锁等待秒数（默认 5，对齐 Python 默认 30 秒）
-//   - db_enable_wal: 是否启用 SQLite WAL 模式（默认 true）
-func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
-	// db_type：当前仅支持 sqlite
-	dbType := "sqlite"
-	if v, ok := conf["db_type"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			dbType = s
-		}
-	}
-	if dbType != "sqlite" {
-		return nil, fmt.Errorf("不支持的数据库类型: %s（当前仅支持 sqlite）", dbType)
-	}
-
-	// db_client：优先使用预配置的 *gorm.DB
-	if v, ok := conf["db_client"]; ok && v != nil {
-		if db, ok := v.(*gorm.DB); ok {
-			logger.Info(logComponent).
-				Str("action", "persistence_provider_create").
-				Str("db_type", dbType).
-				Bool("db_client_provided", true).
-				Msg("使用预配置的数据库客户端创建检查点器")
-			kvStore := kv.NewDbBasedKVStore(db)
-			return NewPersistenceCheckpointer(kvStore), nil
-		}
-	}
-
-	// db_path：数据库文件路径
-	dbPath := "checkpointer"
-	if v, ok := conf["db_path"]; ok {
-		if s, ok := v.(string); ok {
-			dbPath = s
-		}
-	}
-	if !strings.HasSuffix(dbPath, ".db") {
-		dbPath = dbPath + ".db"
-	}
-
-	// 确保父目录存在
-	dir := filepath.Dir(dbPath)
-	if dir != "" && dir != "." {
-		_ = os.MkdirAll(dir, 0o755)
-	}
-
-	// db_timeout：SQLite 锁等待秒数（默认 5）
-	dbTimeout := 5
-	if v, ok := conf["db_timeout"]; ok {
-		switch t := v.(type) {
-		case int:
-			dbTimeout = t
-		case float64:
-			dbTimeout = int(t)
-		}
-	}
-
-	// db_enable_wal：是否启用 WAL 模式（默认 true）
-	dbEnableWAL := true
-	if v, ok := conf["db_enable_wal"]; ok {
-		if b, ok := v.(bool); ok {
-			dbEnableWAL = b
-		}
-	}
-
-	// 使用 GORM + SQLite 创建 DbBasedKVStore
-	dsn := fmt.Sprintf("%s?_busy_timeout=%d", dbPath, dbTimeout*1000)
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("打开数据库失败: %w", err)
-	}
-
-	// 启用 WAL 模式
-	if dbEnableWAL {
-		sqlDB, err := db.DB()
-		if err == nil {
-			_, _ = sqlDB.Exec("PRAGMA journal_mode=WAL")
-		}
-	}
-
-	logger.Info(logComponent).
-		Str("action", "persistence_provider_create").
-		Str("db_type", dbType).
-		Str("db_path", dbPath).
-		Int("db_timeout", dbTimeout).
-		Bool("db_enable_wal", dbEnableWAL).
-		Msg("创建持久化检查点器")
-
-	kvStore := kv.NewDbBasedKVStore(db)
-	return NewPersistenceCheckpointer(kvStore), nil
 }

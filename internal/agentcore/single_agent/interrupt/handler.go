@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
@@ -16,6 +16,14 @@ import (
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// InterruptAgent ToolInterruptHandler 所需的最小 Agent 接口。
+// 在 interrupt 包内定义，避免 interrupt → agents 循环依赖。
+// ReActAgent 隐式满足此接口。
+type InterruptAgent interface {
+	// ContextEngine 返回上下文引擎
+	ContextEngine() ceinterface.ContextEngine
+}
 
 // ResumeContext 恢复上下文，携带用户输入和恢复信息。
 //
@@ -40,15 +48,17 @@ type ResumeContext struct {
 	ExecuteToolCall ExecuteToolCallFunc
 }
 
-// ──────────────────────────── 接口 ────────────────────────────
-
-// InterruptAgent ToolInterruptHandler 所需的最小 Agent 接口。
-// 在 interrupt 包内定义，避免 interrupt → agents 循环依赖。
-// ReActAgent 隐式满足此接口。
-type InterruptAgent interface {
-	// ContextEngine 返回上下文引擎
-	ContextEngine() ceinterface.ContextEngine
+// ToolInterruptHandler 工具中断处理器。
+//
+// 对应 Python: ToolInterruptHandler(agent)
+type ToolInterruptHandler struct {
+	// agent ReActAgent 引用（最小接口）
+	agent InterruptAgent
+	// key 中断状态存储键
+	key string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ExecuteToolCallFunc 工具调用执行函数类型。
 // 对应 Python: Optional[Callable] — handle_resume 中调用 execute_tool_call(ctx, tools, session, context)。
@@ -61,18 +71,6 @@ type ExecuteToolCallFunc func(
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
 ) ([]any, error)
-
-// ToolInterruptHandler 工具中断处理器。
-//
-// 对应 Python: ToolInterruptHandler(agent)
-type ToolInterruptHandler struct {
-	// agent ReActAgent 引用（最小接口）
-	agent InterruptAgent
-	// key 中断状态存储键
-	key string
-}
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

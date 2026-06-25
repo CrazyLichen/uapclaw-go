@@ -56,6 +56,10 @@ func (f *crcFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.R
 	return false, nil
 }
 
+func (f *crcFakeBaseModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 const crcTestProvider = "CRCTestProvider"
 
 // crcFakeRegistryOnce 确保 fake provider 只注册一次

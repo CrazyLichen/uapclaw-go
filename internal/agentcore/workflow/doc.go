@@ -5,8 +5,8 @@
 // 文件目录：
 //
 //	workflow/
-//	├── base.go               # WorkflowOutput + WorkflowExecutionState
-//	└── doc.go                # 包文档
+//	├── doc.go                # 包文档
+//	└── base.go               # WorkflowOutput + WorkflowExecutionState
 //
 // 对应 Python 代码：openjiuwen/core/workflow/base.py
 package workflow

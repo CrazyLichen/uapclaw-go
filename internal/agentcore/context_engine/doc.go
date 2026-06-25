@@ -17,6 +17,8 @@
 //	├── base.go          # StatContextWindow 预留函数
 //	├── engine.go        # ContextEngine 门面实现（上下文池管理、处理器创建、会话状态持久化）
 //	├── registry.go      # 处理器工厂注册表（Register/Get/List）
+//	├── context/
+//	│   └── （见 context/ 子包 doc.go）
 //	├── interface/
 //	│   ├── doc.go              # Interface 子包文档
 //	│   ├── types.go            # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats + Option 类型 + ProcessorSpec
@@ -36,12 +38,14 @@
 //	│   ├── usage.go            # CompressionUsage 追踪方法族
 //	│   ├── round.go            # GroupCompletedAPIRounds 函数
 //	│   ├── replace.go          # Replacement 结构体 + ReplaceMessages 通用替换函数
+//	│   ├── util.go             # 包级共享函数
 //	│   └── compressor/         # 压缩处理器子包
-//	│       ├── doc.go                     # 子包文档
-//	│       ├── util.go                    # 包级共享函数
-//	│       ├── dialogue_compressor.go     # DialogueCompressor 对话压缩器
-//	│       ├── micro_compact_processor.go # MicroCompactProcessor 微压缩处理器
-//	│       └── full_compact_processor.go  # FullCompactProcessor 全量压缩处理器
+//	│       ├── doc.go                          # 子包文档
+//	│       ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器
+//	│       ├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
+//	│       ├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
+//	│       ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
+//	│       └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
 //	└── token/
 //	    ├── doc.go              # Token 子包文档
 //	    ├── base.go             # TokenCounter 接口定义

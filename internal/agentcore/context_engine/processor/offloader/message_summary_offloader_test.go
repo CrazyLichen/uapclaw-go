@@ -400,6 +400,10 @@ func (f *msoFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.R
 	return false, nil
 }
 
+func (f *msoFakeBaseModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 const msoTestProvider = "MSOTestProvider"
 
 // msoCurrentFakeClient 当前使用的 fake 客户端
@@ -993,6 +997,10 @@ func (f *msoRetryFakeClient) GenerateVideo(_ context.Context, _ []*llm_schema.Us
 }
 func (f *msoRetryFakeClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
+}
+
+func (f *msoRetryFakeClient) SupportsKVCacheRelease() bool {
+	return false
 }
 
 // TestMessageSummaryOffloader_offloadMessageAdaptive 测试自适应卸载

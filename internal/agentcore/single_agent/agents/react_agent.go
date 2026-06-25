@@ -368,6 +368,65 @@ func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
 	return a.contextEngine
 }
 
+// AddSection 添加或替换节。
+func (b *SystemPromptBuilder) AddSection(section PromptSection) *SystemPromptBuilder {
+	b.sections[section.Name] = section
+	return b
+}
+
+// RemoveSection 移除指定名称的节。
+func (b *SystemPromptBuilder) RemoveSection(name string) *SystemPromptBuilder {
+	delete(b.sections, name)
+	return b
+}
+
+// HasSection 检查节是否存在。
+func (b *SystemPromptBuilder) HasSection(name string) bool {
+	_, ok := b.sections[name]
+	return ok
+}
+
+// Build 按优先级排序并拼接为完整系统提示词。
+func (b *SystemPromptBuilder) Build() string {
+	sections := make([]PromptSection, 0, len(b.sections))
+	for _, s := range b.sections {
+		sections = append(sections, s)
+	}
+	sort.Slice(sections, func(i, j int) bool {
+		return sections[i].Priority < sections[j].Priority
+	})
+
+	parts := make([]string, 0, len(sections))
+	for _, s := range sections {
+		if content := s.Render(b.Language); content != "" {
+			parts = append(parts, content)
+		}
+	}
+
+	result := ""
+	for i, part := range parts {
+		if i > 0 {
+			result += "\n\n"
+		}
+		result += part
+	}
+	return result
+}
+
+// Render 渲染指定语言的内容。
+func (s *PromptSection) Render(language string) string {
+	if content, ok := s.Content[language]; ok {
+		return content
+	}
+	if content, ok := s.Content[defaultLanguage]; ok {
+		return content
+	}
+	for _, v := range s.Content {
+		return v
+	}
+	return ""
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // reactLoop ReAct 循环核心。
@@ -670,21 +729,14 @@ func (a *ReActAgent) callLLMStream(
 		return nil, fmt.Errorf("LLM stream 失败: %w", err)
 	}
 
-	var finalMsg *llmschema.AssistantMessage
+	var accumulated *llmschema.AssistantMessageChunk
 	chunkIndex := 0
 	for chunk := range chunkCh {
-		if finalMsg == nil {
-			finalMsg = llmschema.NewAssistantMessage("")
-		}
-		finalMsg.Content = llmschema.NewTextContent(finalMsg.Content.Text() + chunk.Content.Text())
-		if len(chunk.ToolCalls) > 0 {
-			finalMsg.ToolCalls = append(finalMsg.ToolCalls, chunk.ToolCalls...)
-		}
-		if chunk.ReasoningContent != "" {
-			finalMsg.ReasoningContent += chunk.ReasoningContent
-		}
-		if chunk.UsageMetadata != nil {
-			finalMsg.UsageMetadata = chunk.UsageMetadata
+		// 使用 Merge 增量合并（对齐 Python __add__ 语义）
+		if accumulated == nil {
+			accumulated = chunk
+		} else {
+			accumulated = accumulated.Merge(chunk)
 		}
 
 		// 实时写入 session stream（对齐 Python railed_model_call L776-809）
@@ -714,7 +766,12 @@ func (a *ReActAgent) callLLMStream(
 			}
 		}
 	}
-	if finalMsg == nil {
+
+	// 从累积 chunk 转换为最终 AssistantMessage（对齐 Python L791-802）
+	var finalMsg *llmschema.AssistantMessage
+	if accumulated != nil {
+		finalMsg = accumulated.ToAssistantMessage()
+	} else {
 		finalMsg = llmschema.NewAssistantMessage("")
 	}
 
@@ -862,67 +919,4 @@ func (a *ReActAgent) makeExecuteToolCallFunc() interrupt.ExecuteToolCallFunc {
 		}
 		return anyResults, nil
 	}
-}
-
-// ──────────────────────────── SystemPromptBuilder 方法 ────────────────────────────
-
-// AddSection 添加或替换节。
-func (b *SystemPromptBuilder) AddSection(section PromptSection) *SystemPromptBuilder {
-	b.sections[section.Name] = section
-	return b
-}
-
-// RemoveSection 移除指定名称的节。
-func (b *SystemPromptBuilder) RemoveSection(name string) *SystemPromptBuilder {
-	delete(b.sections, name)
-	return b
-}
-
-// HasSection 检查节是否存在。
-func (b *SystemPromptBuilder) HasSection(name string) bool {
-	_, ok := b.sections[name]
-	return ok
-}
-
-// Build 按优先级排序并拼接为完整系统提示词。
-func (b *SystemPromptBuilder) Build() string {
-	sections := make([]PromptSection, 0, len(b.sections))
-	for _, s := range b.sections {
-		sections = append(sections, s)
-	}
-	sort.Slice(sections, func(i, j int) bool {
-		return sections[i].Priority < sections[j].Priority
-	})
-
-	parts := make([]string, 0, len(sections))
-	for _, s := range sections {
-		if content := s.Render(b.Language); content != "" {
-			parts = append(parts, content)
-		}
-	}
-
-	result := ""
-	for i, part := range parts {
-		if i > 0 {
-			result += "\n\n"
-		}
-		result += part
-	}
-	return result
-}
-
-// ──────────────────────────── PromptSection 方法 ────────────────────────────
-
-// Render 渲染指定语言的内容。
-func (s *PromptSection) Render(language string) string {
-	if content, ok := s.Content[language]; ok {
-		return content
-	}
-	if content, ok := s.Content[defaultLanguage]; ok {
-		return content
-	}
-	for _, v := range s.Content {
-		return v
-	}
-	return ""
 }

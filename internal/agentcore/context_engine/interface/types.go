@@ -117,9 +117,6 @@ type ProcessorSpec struct {
 	Config ProcessorConfig
 }
 
-// ContextEngineOption ContextEngine 构造器选项函数
-type ContextEngineOption func(*ContextEngineOptions)
-
 // ContextEngineOptions ContextEngine 构造器可选项
 type ContextEngineOptions struct {
 	// Workspace 工作空间
@@ -129,9 +126,6 @@ type ContextEngineOptions struct {
 	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
 	SysOperation any
 }
-
-// CreateContextOption CreateContext 方法选项函数
-type CreateContextOption func(*CreateContextOptions)
 
 // CreateContextOptions CreateContext 方法可选项
 type CreateContextOptions struct {
@@ -143,9 +137,6 @@ type CreateContextOptions struct {
 	TokenCounter token.TokenCounter
 }
 
-// CompressContextOption CompressContext 方法选项函数
-type CompressContextOption func(*CompressContextOptions)
-
 // CompressContextOptions CompressContext 方法可选项
 type CompressContextOptions struct {
 	// ProcessorTypes 压缩处理器类型过滤列表
@@ -156,9 +147,6 @@ type CompressContextOptions struct {
 	// ModelName 模型名称，用于 resolve_context_max
 	ModelName string
 }
-
-// ClearContextOption ClearContext 方法选项函数
-type ClearContextOption func(*ClearContextOptions)
 
 // ClearContextOptions ClearContext 方法可选项
 type ClearContextOptions struct {
@@ -213,6 +201,18 @@ type ContextWindow struct {
 	// Statistic 统计信息（值类型，零值始终可用，与 Python ContextStats() 默认实例对齐）
 	Statistic ContextStats `json:"statistic"`
 }
+
+// ContextEngineOption ContextEngine 构造器选项函数
+type ContextEngineOption func(*ContextEngineOptions)
+
+// CreateContextOption CreateContext 方法选项函数
+type CreateContextOption func(*CreateContextOptions)
+
+// CompressContextOption CompressContext 方法选项函数
+type CompressContextOption func(*CompressContextOptions)
+
+// ClearContextOption ClearContext 方法选项函数
+type ClearContextOption func(*ClearContextOptions)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 

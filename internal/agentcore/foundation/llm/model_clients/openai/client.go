@@ -471,6 +471,11 @@ func (c *OpenAIModelClient) Release(
 	)
 }
 
+// SupportsKVCacheRelease OpenAI 客户端不支持 KV Cache 释放。
+func (c *OpenAIModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // BuildEffectiveHeaders 合并配置级和请求级 headers。
 //
 // 导出以供 SiliconFlow/InferenceAffinity/IntelliRouter 等独立实现 Stream 的客户端复用。

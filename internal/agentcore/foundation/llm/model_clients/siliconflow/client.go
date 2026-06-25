@@ -354,6 +354,11 @@ func (c *SiliconFlowModelClient) Release(
 	)
 }
 
+// SupportsKVCacheRelease SiliconFlow 客户端不支持 KV Cache 释放。
+func (c *SiliconFlowModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 SiliconFlow 客户端到全局注册表（2.6 回填点）。

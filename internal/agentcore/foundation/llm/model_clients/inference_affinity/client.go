@@ -448,6 +448,11 @@ func (c *InferenceAffinityModelClient) GenerateVideo(
 	)
 }
 
+// SupportsKVCacheRelease InferenceAffinity 客户端支持 KV Cache 释放。
+func (c *InferenceAffinityModelClient) SupportsKVCacheRelease() bool {
+	return true
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 注册 InferenceAffinity 客户端到全局注册表（2.6 回填点）。

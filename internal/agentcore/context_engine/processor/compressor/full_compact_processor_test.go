@@ -1365,6 +1365,10 @@ func (f *fcpFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.R
 	return false, nil
 }
 
+func (f *fcpFakeBaseModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 const fcpTestProvider = "FCPTestProvider"
 
 // fcpFakeRegistryOnce 确保 fake provider 只注册一次

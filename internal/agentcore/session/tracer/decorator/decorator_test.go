@@ -89,6 +89,10 @@ func (f *fakeModelClient) Release(_ context.Context, _ ...model_clients.ReleaseO
 	return false, nil
 }
 
+func (f *fakeModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // Invoke 实现 tool.Tool 接口
 func (f *fakeTool) Invoke(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (map[string]any, error) {
 	return f.invokeResult, f.invokeErr
@@ -674,6 +678,10 @@ func (c *tracerRecordDataCapturingClient) GenerateVideo(_ context.Context, _ []*
 // Release 实现 model_clients.BaseModelClient 接口
 func (c *tracerRecordDataCapturingClient) Release(_ context.Context, _ ...model_clients.ReleaseOption) (bool, error) {
 	return false, nil
+}
+
+func (c *tracerRecordDataCapturingClient) SupportsKVCacheRelease() bool {
+	return false
 }
 
 // TestTracedModelClient_Invoke_注入TracerRecordData 测试 Invoke 将 tracer_record_data 回调注入到 opts

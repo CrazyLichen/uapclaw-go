@@ -195,6 +195,11 @@ func (c *TracedModelClient) Release(ctx context.Context, opts ...model_clients.R
 	return c.inner.Release(ctx, opts...)
 }
 
+// SupportsKVCacheRelease 委托给底层客户端判断是否支持 KV Cache 释放。
+func (c *TracedModelClient) SupportsKVCacheRelease() bool {
+	return c.inner.SupportsKVCacheRelease()
+}
+
 // Invoke 执行工具，在调用前后触发追踪事件。
 // 流程：CreateAgentSpan(agentSpan) → TriggerAgent(TracePluginStart) → inner.Invoke → TriggerAgent(TracePluginEnd/Error)
 func (t *TracedTool) Invoke(ctx context.Context, inputs map[string]any, opts ...tool.ToolOption) (map[string]any, error) {

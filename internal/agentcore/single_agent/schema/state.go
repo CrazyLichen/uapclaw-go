@@ -4,19 +4,6 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// InterruptionKey ReActAgent 中断状态键
-	InterruptionKey = "__react_agent_interruption__"
-	// ResumeUserInputKey 恢复时用户输入的键
-	ResumeUserInputKey = "_resume_user_input"
-	// InterruptAutoConfirmKey 自动确认配置键
-	InterruptAutoConfirmKey = "__interrupt_auto_confirm__"
-	// ResumeStartIterationKey 恢复时起始迭代键
-	ResumeStartIterationKey = "_resume_start_iteration"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseInterruptionState 中断状态基类。
@@ -85,3 +72,24 @@ type InterruptionState struct {
 	// PendingComponentID 待处理的组件 ID
 	PendingComponentID string
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// InterruptionKey ReActAgent 中断状态键
+	InterruptionKey = "__react_agent_interruption__"
+	// ResumeUserInputKey 恢复时用户输入的键
+	ResumeUserInputKey = "_resume_user_input"
+	// InterruptAutoConfirmKey 自动确认配置键
+	InterruptAutoConfirmKey = "__interrupt_auto_confirm__"
+	// ResumeStartIterationKey 恢复时起始迭代键
+	ResumeStartIterationKey = "_resume_start_iteration"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

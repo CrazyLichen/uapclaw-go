@@ -186,10 +186,10 @@ func TestToolInterruptionState(t *testing.T) {
 
 func TestWorkflowInterruptEntry(t *testing.T) {
 	entry := &WorkflowInterruptEntry{
-		ToolCall:              &llmschema.ToolCall{ID: "wf_1"},
-		ComponentIDs:          []string{"comp1", "comp2"},
+		ToolCall:               &llmschema.ToolCall{ID: "wf_1"},
+		ComponentIDs:           []string{"comp1", "comp2"},
 		WorkflowExecutionState: nil,
-		CollectedInput:        nil,
+		CollectedInput:         nil,
 	}
 	assert.Equal(t, "wf_1", entry.ToolCall.ID)
 	assert.Len(t, entry.ComponentIDs, 2)

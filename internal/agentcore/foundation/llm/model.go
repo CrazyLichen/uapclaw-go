@@ -313,22 +313,20 @@ func (m *Model) Release(ctx context.Context, opts ...model_clients.ReleaseOption
 
 // SupportsKVCacheRelease 检查底层客户端是否支持 KV cache release。
 //
-// 通过尝试调用 Release 并检查返回的错误判断是否支持。
-// 更高效的做法：检查 client 是否实现了特定接口（6.24 节优化）。
+// 零副作用判断：委托给底层 client 的 SupportsKVCacheRelease 方法，
+// 仅 InferenceAffinity 返回 true，其他客户端返回 false。
 //
 // 对应 Python: Model.supports_kv_cache_release()
+//   Python 使用 isinstance(self._client, InferenceAffinityModelClient) 判断，
+//   Go 通过接口方法实现等价语义。
 func (m *Model) SupportsKVCacheRelease() bool {
-	// 尝试无副作用的判断：调用 Release(nil ctx 和空参数) 看返回的错误类型
-	// 这里简化实现：委托给底层 client，如果 Release 返回 "不支持" 错误则为 false
-	_, err := m.client.Release(context.Background())
-	if err != nil {
-		// 返回不支持错误时，说明不支持 KV cache release
-		return false
-	}
-	return true
+	return m.client.SupportsKVCacheRelease()
 }
 
 // BuildKVCacheInvokeKwargs 为 InferenceAffinity 客户端构建额外参数。
+//
+// 仅当底层客户端支持 KV Cache 释放时才构建 kwargs，
+// 其他客户端直接返回空 map，避免向 API 请求注入无意义参数。
 //
 // 当底层客户端为 InferenceAffinity 时：
 //   - session_id: 使用 session.GetSessionID()
@@ -336,6 +334,11 @@ func (m *Model) SupportsKVCacheRelease() bool {
 //
 // 对应 Python: Model.build_kv_cache_invoke_kwargs()
 func (m *Model) BuildKVCacheInvokeKwargs(session SessionLike, enableKVCacheRelease bool) map[string]any {
+	// 对齐 Python: 仅 InferenceAffinity 客户端需要构建 KV cache kwargs
+	if !m.SupportsKVCacheRelease() {
+		return map[string]any{}
+	}
+
 	extra := make(map[string]any)
 
 	if session != nil {

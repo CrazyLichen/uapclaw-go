@@ -1,7 +1,5 @@
 // Package config 提供会话配置的具体实现。
 //
-// 对应 Python 代码：openjiuwen/core/session/config/base.py
-//
 // 核心类型：
 //   - MetadataLike         — 回调元数据结构体
 //   - BuiltinConfigLoader  — 内置配置加载钩子接口
@@ -13,8 +11,7 @@
 //	├── doc.go             # 包文档
 //	├── config.go          # MetadataLike、BuiltinConfigLoader、defaultSessionConfig
 //	├── env_loader.go      # 环境变量加载（trySetEnv、loadEnvConfigs 等）
-//	├── context.go         # WithEnvs context 注入函数
-//	├── config_test.go     # config 测试
-//	├── env_loader_test.go # 环境加载测试
-//	└── context_test.go    # context 注入测试
+//	└── context.go         # WithEnvs context 注入函数
+//
+// 对应 Python 代码：openjiuwen/core/session/config/base.py
 package config

@@ -67,6 +67,12 @@ type BaseModelClient interface {
 	// 对应 Python: InferenceAffinityModelClient.release()
 	// 仅 InferenceAffinity 客户端有实际实现，其他客户端返回不支持错误。
 	Release(ctx context.Context, opts ...ReleaseOption) (bool, error)
+
+	// SupportsKVCacheRelease 检查客户端是否支持 KV Cache 释放。
+	//
+	// 零副作用判断：仅 InferenceAffinity 返回 true，其他客户端返回 false。
+	// 对应 Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
+	SupportsKVCacheRelease() bool
 }
 
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。

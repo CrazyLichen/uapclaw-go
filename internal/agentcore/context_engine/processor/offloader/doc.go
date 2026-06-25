@@ -16,11 +16,8 @@
 //	offloader/
 //	├── doc.go                              # 包文档
 //	├── message_offloader.go                # MessageOffloader + Config
-//	├── message_offloader_test.go           # MessageOffloader 单元测试
 //	├── message_summary_offloader.go        # MessageSummaryOffloader + Config
-//	├── message_summary_offloader_test.go   # MessageSummaryOffloader 单元测试
-//	├── tool_result_budget_processor.go     # ToolResultBudgetProcessor + Config
-//	└── tool_result_budget_processor_test.go # ToolResultBudgetProcessor 单元测试
+//	└── tool_result_budget_processor.go     # ToolResultBudgetProcessor + Config
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/offloader/
 package offloader

@@ -448,6 +448,11 @@ func (c *DashScopeModelClient) Release(
 	)
 }
 
+// SupportsKVCacheRelease DashScope 客户端不支持 KV Cache 释放。
+func (c *DashScopeModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() {

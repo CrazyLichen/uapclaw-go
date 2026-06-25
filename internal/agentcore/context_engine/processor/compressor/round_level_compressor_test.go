@@ -42,6 +42,10 @@ func (f *rlcFakeBaseModelClient) Release(_ context.Context, _ ...model_clients.R
 	return false, nil
 }
 
+func (f *rlcFakeBaseModelClient) SupportsKVCacheRelease() bool {
+	return false
+}
+
 const rlcTestProvider = "RLCTestProvider"
 
 // rlcFakeRegistryOnce 确保 fake provider 只注册一次

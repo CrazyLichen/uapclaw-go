@@ -147,6 +147,15 @@ func (c *defaultSessionConfig) AddWorkflowConfig(workflowID string, workflowConf
 	c.workflowConfigs[workflowID] = workflowConfig
 }
 
+// LoadBuiltinConfigs 默认加载器实现。
+// 对应 Python: Config._load_builtin_configs_
+func (l *defaultBuiltinConfigLoader) LoadBuiltinConfigs(envs map[string]any) {
+	defaults := constants.BuiltinDefaults()
+	for k, v := range defaults {
+		envs[k] = v
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // loadEnvs 加载环境变量配置。
@@ -159,14 +168,5 @@ func (c *defaultSessionConfig) loadEnvs(ctx context.Context) {
 	envConfigs := loadEnvConfigs(ctx)
 	for k, v := range envConfigs {
 		c.env[k] = v
-	}
-}
-
-// LoadBuiltinConfigs 默认加载器实现。
-// 对应 Python: Config._load_builtin_configs_
-func (l *defaultBuiltinConfigLoader) LoadBuiltinConfigs(envs map[string]any) {
-	defaults := constants.BuiltinDefaults()
-	for k, v := range defaults {
-		envs[k] = v
 	}
 }
