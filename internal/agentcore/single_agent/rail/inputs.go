@@ -3,6 +3,7 @@ package rail
 import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -81,11 +82,11 @@ type InvokeInputs struct {
 type ModelCallInputs struct {
 	// Messages 发送给 LLM 的消息列表（context window 构建后填充）
 	Messages []schema.BaseMessage
-	// Tools 工具定义列表
-	Tools []schema.ToolCall
+	// Tools 工具定义列表（对齐 Python: tools: Optional[List[ToolInfo]]）
+	Tools []*cschema.ToolInfo
 	// ModelContext 当前 ModelContext（构建 context window 使用）
 	ModelContext ceinterface.ModelContext
-	// Response LLM 响应（调用完成后填充）
+	// Response LLM 响应（调用完成后填充，对齐 Python: response）
 	Response *schema.AssistantMessage
 }
 

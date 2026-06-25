@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -240,12 +241,12 @@ func TestInvokeInputs_IsCron(t *testing.T) {
 // TestModelCallInputs_字段 验证 ModelCallInputs 各字段赋值
 func TestModelCallInputs_字段(t *testing.T) {
 	msgs := []schema.BaseMessage{schema.NewDefaultMessage(schema.RoleTypeUser, "hello")}
-	tc := schema.NewToolCall("id1", "tool1", "{}")
+	toolInfo := &cschema.ToolInfo{Name: "tool1"}
 	resp := &schema.AssistantMessage{}
 
 	inputs := &ModelCallInputs{
 		Messages: msgs,
-		Tools:    []schema.ToolCall{*tc},
+		Tools:    []*cschema.ToolInfo{toolInfo},
 		Response: resp,
 	}
 

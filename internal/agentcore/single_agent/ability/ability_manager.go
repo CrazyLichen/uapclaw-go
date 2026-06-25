@@ -459,21 +459,10 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	var result ExecuteResult
 
 	railErr := rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
-		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
-		// 对齐 Python: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
-		// 对齐 Python: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
-		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
-			if inputs.ToolName != "" {
-				toolCall.Name = inputs.ToolName
-			}
-			if inputs.ToolArgs != "" {
-				toolCall.Arguments = inputs.ToolArgs
-			}
-		}
-
 		// _skip_tool 门控：before hook 可通过设置 extra["_skip_tool"] = true 来跳过工具执行
 		// 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
 		// before hook 在设置 _skip_tool 的同时，会在 inputs 中预设 tool_result 和 tool_msg
+		// 注意：_skip_tool 判断必须在 toolName/toolArgs 回写之前，skip 时不需要回写
 		if skipVal, exists := toolCtx.Extra()["_skip_tool"]; exists {
 			delete(toolCtx.Extra(), "_skip_tool") // pop 语义：一次性消费
 			if skipBool, ok := skipVal.(bool); ok && skipBool {
@@ -481,6 +470,18 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 					result = ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}
 				}
 				return nil // before hook 正常返回 → 走正常路径 → after 触发
+			}
+		}
+
+		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
+		// 对齐 Python L669-673: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
+		// 对齐 Python L669-673: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
+		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+			if inputs.ToolName != "" {
+				toolCall.Name = inputs.ToolName
+			}
+			if inputs.ToolArgs != "" {
+				toolCall.Arguments = inputs.ToolArgs
 			}
 		}
 

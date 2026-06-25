@@ -488,8 +488,10 @@ func (a *ReActAgent) callModel(
 	if modelCtx != nil {
 		previewMsgs = modelCtx.GetMessages(0, true)
 	}
+	// 对齐 Python L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
 	cbc.SetInputs(&rail.ModelCallInputs{
 		Messages:     previewMsgs,
+		Tools:        tools,
 		ModelContext: modelCtx,
 	})
 
@@ -551,8 +553,10 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 		messages = systemMsgs
 	}
 
+	// 写回 cbc.Inputs()（对齐 Python L727-728: ctx.inputs.messages = ...; ctx.inputs.tools = ...）
 	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
 		inputs.Messages = messages
+		inputs.Tools = contextTools
 	}
 
 	// LLM 实例必须在调用前可用
@@ -584,9 +588,25 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 	}
 
 	if isStreaming {
-		return a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
+		aiMsg, err := a.callLLMStream(ctx, llmModel, modelName, messages, contextTools, sess, extraKVPairs)
+		if err != nil {
+			return nil, err
+		}
+		// 写回 Response（对齐 Python L803: ctx.inputs.response = ai_message）
+		if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
+			inputs.Response = aiMsg
+		}
+		return aiMsg, nil
 	}
-	return a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
+	aiMsg, err := a.callLLMInvoke(ctx, llmModel, modelName, messages, contextTools, extraKVPairs)
+	if err != nil {
+		return nil, err
+	}
+	// 写回 Response（对齐 Python L758: ctx.inputs.response = ai_message）
+	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
+		inputs.Response = aiMsg
+	}
+	return aiMsg, nil
 }
 
 // callLLMInvoke 非流式 LLM 调用。
