@@ -615,7 +615,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **10.1 Schema 层** | — | | | |
 | 10.1.1 | ✅ | ReqMethod 枚举 | ~100 个 RPC 方法名 | `jiuwenswarm/common/schema/message.py` (ReqMethod) |
 | 10.1.2 | ✅ | EventType 枚举 | 事件类型 | `jiuwenswarm/common/schema/message.py` (EventType) |
-| 10.1.3 | ☐ | Mode 枚举 | 运行模式（agent.plan/code.normal/team 等） | `jiuwenswarm/common/schema/message.py` (Mode) |
+| 10.1.3 | ✅ | Mode 枚举 | 运行模式（agent.plan/code.normal/team 等） | `jiuwenswarm/common/schema/message.py` (Mode) |
 | 10.1.4 | ☐ | Message 模型 | 内部消息格式 | `jiuwenswarm/common/schema/message.py` (Message) |
 | 10.1.5 | ☐ | AgentRequest / AgentResponse | Agent 请求与响应模型 | `jiuwenswarm/common/schema/agent.py` |
 | 10.1.6 | ☐ | AgentResponseChunk | Agent 流式响应块 | `jiuwenswarm/common/schema/agent.py` |
