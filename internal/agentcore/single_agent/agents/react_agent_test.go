@@ -17,9 +17,9 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -230,7 +230,7 @@ func TestReActAgent_InvokeImpl_空输入(t *testing.T) {
 	agent := NewReActAgent(card, config)
 
 	inputs := map[string]any{}
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_InvokeImpl_空query 验证空 query 返回错误
@@ -246,7 +246,7 @@ func TestReActAgent_InvokeImpl_空query(t *testing.T) {
 	agent := NewReActAgent(card, config)
 
 	inputs := map[string]any{"query": ""}
-	_, err := agent.InvokeImpl(context.Background(), inputs)
+	_, err := agent.invokeImpl(context.Background(), inputs)
 	assert.Error(t, err)
 }
 
@@ -266,7 +266,7 @@ func TestReActAgent_InvokeImpl_上下文取消(t *testing.T) {
 	cancel()
 
 	inputs := map[string]any{"query": "hello"}
-	_, _ = agent.InvokeImpl(ctx, inputs)
+	_, _ = agent.invokeImpl(ctx, inputs)
 }
 
 // TestReActAgent_InvokeImpl_带Session 验证 InvokeImpl 使用已有 session
@@ -283,7 +283,7 @@ func TestReActAgent_InvokeImpl_带Session(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("test_invoke_session"))
 	inputs := map[string]any{"query": "hello"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_boolStreaming 验证 _streaming 布尔值处理
@@ -302,7 +302,7 @@ func TestReActAgent_InvokeImpl_boolStreaming(t *testing.T) {
 		"query":      "hello",
 		"_streaming": true,
 	}
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_AgentID 验证 AgentID 返回正确值
@@ -407,7 +407,7 @@ func TestReActAgent_StreamImpl(t *testing.T) {
 	agent := NewReActAgent(card, config)
 
 	inputs := map[string]any{"query": "test"}
-	ch, _ := agent.StreamImpl(context.Background(), inputs)
+	ch, _ := agent.streamImpl(context.Background(), inputs)
 	assert.NotNil(t, ch)
 	for range ch {
 	}
@@ -427,7 +427,7 @@ func TestReActAgent_StreamImpl_带Session(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("test_stream_session"))
 	inputs := map[string]any{"query": "test"}
-	ch, err := agent.StreamImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	ch, err := agent.streamImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -692,7 +692,7 @@ func TestReActAgent_InvokeImpl_有ContextEngine(t *testing.T) {
 	sess := session.NewSession(session.WithSessionID("test_invoke_ce"))
 	inputs := map[string]any{"query": "hello"}
 	// LLM 未初始化会报错，但不 panic
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_有ContextEngineAndPrompt 验证有 context engine 和 prompt 时执行
@@ -714,7 +714,7 @@ func TestReActAgent_InvokeImpl_有ContextEngineAndPrompt(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("test_invoke_cep"))
 	inputs := map[string]any{"query": "hello"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_SteeringQueueWithSession 验证带 steering queue 和 session
@@ -735,7 +735,7 @@ func TestReActAgent_InvokeImpl_SteeringQueueWithSession(t *testing.T) {
 		"query":           "hello",
 		"_steering_queue": steeringCh,
 	}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_中断恢复 验证 HITL 中断恢复路径
@@ -765,7 +765,7 @@ func TestReActAgent_InvokeImpl_中断恢复(t *testing.T) {
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})
 
 	inputs := map[string]any{"query": "用户确认"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_中断恢复有ContextEngine 验证中断恢复有 context engine
@@ -797,7 +797,7 @@ func TestReActAgent_InvokeImpl_中断恢复有ContextEngine(t *testing.T) {
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})
 
 	inputs := map[string]any{"query": "用户确认"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_有queryNoSession 验证有 query 无 session 时 InvokeImpl 不 panic
@@ -813,7 +813,7 @@ func TestReActAgent_InvokeImpl_有queryNoSession(t *testing.T) {
 	agent := NewReActAgent(card, config)
 
 	inputs := map[string]any{"query": "你好"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_InvokeImpl_invokeResultInExtra 验证 invoke_result 在 extra 中优先返回
@@ -841,7 +841,7 @@ func TestReActAgent_InvokeImpl_invokeResultInExtra(t *testing.T) {
 		"conversation_id": "conv1",
 	}
 	sess := session.NewSession(session.WithSessionID("extra_res_session"))
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_executeToolCalls_有ToolCalls 验证有工具调用时执行
@@ -886,7 +886,7 @@ func TestReActAgent_InvokeImpl_多迭代(t *testing.T) {
 
 	inputs := map[string]any{"query": "hello"}
 	sess := session.NewSession(session.WithSessionID("multi_iter_session"))
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_InvokeImpl_默认迭代 验证默认迭代次数配置
@@ -901,7 +901,7 @@ func TestReActAgent_InvokeImpl_默认迭代(t *testing.T) {
 	agent := NewReActAgent(card, config)
 
 	inputs := map[string]any{"query": "hello"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_InvokeImpl_上下文引擎创建失败 验证 initContext 失败返回错误
@@ -920,7 +920,7 @@ func TestReActAgent_InvokeImpl_上下文引擎创建失败(t *testing.T) {
 	agent.contextEngine = fce
 
 	inputs := map[string]any{"query": "hello"}
-	_, err := agent.InvokeImpl(context.Background(), inputs)
+	_, err := agent.invokeImpl(context.Background(), inputs)
 	assert.Error(t, err)
 }
 
@@ -934,7 +934,7 @@ func TestReActAgent_InvokeImpl_无ConfigMaxIterations(t *testing.T) {
 
 	inputs := map[string]any{"query": "hello"}
 	// config 为 nil，getLLM 返回错误，不 panic
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_StreamImpl_无Config 验证 StreamImpl 无 config 时
@@ -946,7 +946,7 @@ func TestReActAgent_StreamImpl_无Config(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 
 	inputs := map[string]any{"query": "test"}
-	ch, err := agent.StreamImpl(context.Background(), inputs)
+	ch, err := agent.streamImpl(context.Background(), inputs)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -1104,7 +1104,7 @@ func TestReActAgent_InvokeImpl_有LLM(t *testing.T) {
 	inputs := map[string]any{"query": "hello"}
 	sess := session.NewSession(session.WithSessionID("invoke_llm_sess"))
 	// LLM 调用可能因网络错误失败，但覆盖更多代码路径
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_StreamImpl_有LLM 验证有 LLM 实例时 StreamImpl 执行更多分支
@@ -1127,7 +1127,7 @@ func TestReActAgent_StreamImpl_有LLM(t *testing.T) {
 
 	inputs := map[string]any{"query": "test"}
 	sess := session.NewSession(session.WithSessionID("stream_llm_sess"))
-	ch, _ := agent.StreamImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	ch, _ := agent.streamImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	if ch != nil {
 		for range ch {
 		}
@@ -2014,7 +2014,7 @@ func TestReActAgent_innerStream_非AgentSession(t *testing.T) {
 
 	inputs := map[string]any{"query": "hello"}
 	// 不传 session，触发自建 session 路径（isAgentSess=false）
-	ch, err := agent.StreamImpl(context.Background(), inputs)
+	ch, err := agent.streamImpl(context.Background(), inputs)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -2046,7 +2046,7 @@ func TestReActAgent_innerStream_AgentSession(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("inner_agent_sess"))
 	inputs := map[string]any{"query": "hello"}
-	ch, err := agent.StreamImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	ch, err := agent.streamImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -2063,7 +2063,7 @@ func TestReActAgent_innerStream_invoke错误(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 
 	inputs := map[string]any{"query": "hello"}
-	ch, err := agent.StreamImpl(context.Background(), inputs)
+	ch, err := agent.streamImpl(context.Background(), inputs)
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -2139,7 +2139,7 @@ func TestReActAgent_InvokeImpl_完整路径(t *testing.T) {
 		"run_kind":        "normal",
 		"run_context":     "test",
 	}
-	result, err := agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	result, err := agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -2168,7 +2168,7 @@ func TestReActAgent_InvokeImpl_完整路径无Session(t *testing.T) {
 	agent.contextEngine = fce
 
 	inputs := map[string]any{"query": "hello"}
-	result, err := agent.InvokeImpl(context.Background(), inputs)
+	result, err := agent.invokeImpl(context.Background(), inputs)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
@@ -2207,7 +2207,7 @@ func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("invoke_priority_sess"))
 	inputs := map[string]any{"query": "hello"}
-	result, err := agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	result, err := agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	if resultMap, ok := result.(map[string]any); ok {
@@ -2240,7 +2240,7 @@ func TestReActAgent_StreamImpl_完整路径(t *testing.T) {
 
 	sess := session.NewSession(session.WithSessionID("stream_full_sess"))
 	inputs := map[string]any{"query": "hello"}
-	ch, err := agent.StreamImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	ch, err := agent.streamImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, ch)
 	for range ch {
@@ -2267,7 +2267,7 @@ func TestReActAgent_Configure_校验失败(t *testing.T) {
 func TestReActAgent_InvokeImpl_有query(t *testing.T) {
 	agent := newTestAgent("invoke_q2")
 	inputs := map[string]any{"query": "你好"}
-	_, _ = agent.InvokeImpl(context.Background(), inputs)
+	_, _ = agent.invokeImpl(context.Background(), inputs)
 }
 
 // TestReActAgent_InvokeImpl_带额外参数 带 user_id/run_kind/run_context 等额外参数
@@ -2281,7 +2281,7 @@ func TestReActAgent_InvokeImpl_带额外参数(t *testing.T) {
 		"run_context": "ctx1",
 		"_streaming":  false,
 	}
-	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+	_, _ = agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 }
 
 // TestReActAgent_AfterExecuteToolCallForHITL_nilHandler handler 为 nil 时返回 nil
