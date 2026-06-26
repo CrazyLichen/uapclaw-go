@@ -19,6 +19,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -549,7 +550,7 @@ func TestReActAgent_AfterExecuteToolCallForHITL_有中断(t *testing.T) {
 		Request:  req,
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "test_tool", Arguments: "{}"},
 	}
-	results := []any{[2]any{tie, nil}}
+	results := []ability.ExecuteResult{{Result: tie, ToolMsg: nil}}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "test_tool", Arguments: "{}"}}
 	aiMsg := llmschema.NewAssistantMessage("test")
 

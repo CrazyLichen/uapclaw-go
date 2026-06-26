@@ -116,7 +116,7 @@ func (a *ReActAgent) saveContexts(sess sessioninterfaces.SessionFacade) {
 }
 
 // makeExecuteToolCallFunc 创建 ExecuteToolCallFunc 闭包，
-// 将 ReActAgent.executeToolCalls 适配为 interrupt.ExecuteToolCallFunc 类型。
+// 直接复用 executeToolCalls 的 []ability.ExecuteResult 返回值。
 func (a *ReActAgent) makeExecuteToolCallFunc() interrupt.ExecuteToolCallFunc {
 	return func(
 		ctx context.Context,
@@ -124,15 +124,7 @@ func (a *ReActAgent) makeExecuteToolCallFunc() interrupt.ExecuteToolCallFunc {
 		toolCalls []*llmschema.ToolCall,
 		sess sessioninterfaces.SessionFacade,
 		modelCtx ceinterface.ModelContext,
-	) ([]any, error) {
-		results, err := a.executeToolCalls(ctx, cbc, toolCalls, sess, modelCtx)
-		if err != nil {
-			return nil, err
-		}
-		anyResults := make([]any, len(results))
-		for i, r := range results {
-			anyResults[i] = [2]any{r.Result, r.ToolMsg}
-		}
-		return anyResults, nil
+	) ([]ability.ExecuteResult, error) {
+		return a.executeToolCalls(ctx, cbc, toolCalls, sess, modelCtx)
 	}
 }

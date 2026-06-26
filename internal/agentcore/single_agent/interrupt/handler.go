@@ -11,6 +11,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -63,14 +64,14 @@ type ToolInterruptHandler struct {
 // ExecuteToolCallFunc 工具调用执行函数类型。
 // 对应 Python: Optional[Callable] — handle_resume 中调用 execute_tool_call(ctx, tools, session, context)。
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
-// 返回 []any 而非 []ability.ExecuteResult，避免 interrupt → ability 循环依赖。
+// 返回 []ability.ExecuteResult（替代原 []any），提供类型安全。
 type ExecuteToolCallFunc func(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
-) ([]any, error)
+) ([]ability.ExecuteResult, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -98,12 +99,12 @@ func NewToolInterruptHandler(agent InterruptAgent) *ToolInterruptHandler {
 //
 // 对齐 Python: build_interrupt_state(results, tool_calls, ai_message, iteration, original_query)
 func (h *ToolInterruptHandler) BuildInterruptState(
-	results []any,
+	results []ability.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
 	originalQuery string,
-) (*ToolInterruptionState, []any) {
+) (*ToolInterruptionState, []PayloadEntry) {
 	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls)
 
 	if len(interruptedTools) == 0 {
@@ -164,7 +165,7 @@ func (h *ToolInterruptHandler) CommitInterrupt(
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
 	invokeInputs *rail.InvokeInputs,
-	subAgentOutputs []any,
+	subAgentOutputs []PayloadEntry,
 ) (map[string]any, error) {
 	// 持久化上下文引擎状态
 	// 对齐 Python: await self._agent.context_engine.save_contexts(session)
@@ -266,7 +267,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	// 重执行工具调用
 	// 对齐 Python: results = await execute_tool_call(ctx, tools_to_execute, session, context)
 	// Python 中 execute_tool_call 失败时异常直接传播给调用方
-	var results []any
+	var results []ability.ExecuteResult
 	if len(toolsToExecute) > 0 && resumeCtx.ExecuteToolCall != nil {
 		var err error
 		results, err = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
@@ -298,37 +299,29 @@ func (h *ToolInterruptHandler) HandleResume(
 }
 
 // BuildInterruptResult 构建中断结果 dict。
-// 遍历 payloads（每个元素为 [2]any{innerID, payload}），
+// 遍历 payloads（每个元素为 PayloadEntry{InnerID, Payload}），
 // payload 为 OutputSchema 时直接追加，否则包装为 OutputSchema(type=INTERACTION)。
 //
 // 对齐 Python: build_interrupt_result(payloads)
 // 返回 {"result_type": "interrupt", "state": [...], "interrupt_ids": [...]}
-func BuildInterruptResult(payloads []any) map[string]any {
+func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 	interruptIDs := make([]string, 0)
 	stateOutputs := make([]any, 0)
 
-	for idx, payload := range payloads {
-		// payloads 中每个元素为 [2]any{innerID, payloadObj}
-		pair, ok := payload.([2]any)
-		if !ok {
-			continue
-		}
-		innerID, _ := pair[0].(string)
-		payloadObj := pair[1]
-
-		interruptIDs = append(interruptIDs, innerID)
+	for idx, entry := range payloads {
+		interruptIDs = append(interruptIDs, entry.InnerID)
 
 		// 对齐 Python: isinstance(payload, OutputSchema) 分支
-		if _, isOutputSchema := payloadObj.(*stream.OutputSchema); isOutputSchema {
-			stateOutputs = append(stateOutputs, payloadObj)
+		if _, isOutputSchema := entry.Payload.(*stream.OutputSchema); isOutputSchema {
+			stateOutputs = append(stateOutputs, entry.Payload)
 		} else {
 			// 包装为 OutputSchema(type=INTERACTION, index=idx, payload=InteractionOutput{id, value})
 			stateOutputs = append(stateOutputs, &stream.OutputSchema{
 				Type:  interaction.InteractionType,
 				Index: idx,
 				Payload: &interaction.InteractionOutput{
-					ID:    innerID,
-					Value: payloadObj,
+					ID:    entry.InnerID,
+					Value: entry.Payload,
 				},
 			})
 		}
@@ -344,20 +337,20 @@ func BuildInterruptResult(payloads []any) map[string]any {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // collectInterrupts 收集工具中断和子 Agent 中断。
-// 遍历 results（每个元素为 [2]any{toolResult, toolMsg}），
-// 根据 toolResult 类型分派到 handleToolInterruptException 或 handleSubAgentInterrupt。
+// 遍历 results，根据 ToolCallResult.Result 类型分派到
+// handleToolInterruptException 或 handleSubAgentInterrupt。
 //
 // 对齐 Python: _collect_interrupts(results, tool_calls)
 // 返回:
 //   - interruptedTools: outerID → ToolInterruptEntry
-//   - payloads: [][2]any{innerID, payloadObj}
+//   - payloads: []PayloadEntry
 //   - autoConfirmMapping: innerID → autoConfirmKey
 func (h *ToolInterruptHandler) collectInterrupts(
-	results []any,
+	results []ability.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
-) (map[string]*ToolInterruptEntry, []any, map[string]string) {
+) (map[string]*ToolInterruptEntry, []PayloadEntry, map[string]string) {
 	interruptedTools := make(map[string]*ToolInterruptEntry)
-	var payloads []any
+	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
 	for i, result := range results {
@@ -365,14 +358,7 @@ func (h *ToolInterruptHandler) collectInterrupts(
 			break
 		}
 		toolCall := toolCalls[i]
-
-		// 解包 (toolResult, toolMsg) 元组
-		var toolResult any
-		if pair, ok := result.([2]any); ok {
-			toolResult = pair[0]
-		} else {
-			toolResult = result
-		}
+		toolResult := result.Result
 
 		// 对齐 Python: isinstance(tool_result, ToolInterruptException)
 		if tie, ok := toolResult.(*ToolInterruptException); ok {
@@ -386,19 +372,11 @@ func (h *ToolInterruptHandler) collectInterrupts(
 }
 
 // isSubAgentInterrupt 检查结果是否为子 Agent 中断 dict。
-// 支持 bare map[string]any 和 tuple 包装 ([2]any{map, ...}) 两种形式。
 //
 // 对齐 Python: _is_sub_agent_interrupt(result)
 // 判断条件: isinstance(tool_result, dict) and tool_result.get("result_type") == "interrupt" and "interrupt_ids" in tool_result
 func isSubAgentInterrupt(result any) bool {
-	var toolResult any
-	if pair, ok := result.([2]any); ok && len(pair) >= 1 {
-		toolResult = pair[0]
-	} else {
-		toolResult = result
-	}
-
-	dict, ok := toolResult.(map[string]any)
+	dict, ok := result.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -417,7 +395,7 @@ func handleToolInterruptException(
 	tie *ToolInterruptException,
 	toolCall *llmschema.ToolCall,
 	interruptedTools map[string]*ToolInterruptEntry,
-	payloads *[]any,
+	payloads *[]PayloadEntry,
 	autoConfirmMapping map[string]string,
 ) {
 	// 对齐 Python: tc = tool_result.tool_call or tool_call
@@ -440,7 +418,7 @@ func handleToolInterruptException(
 
 	// 构造 payload: ToolCallInterruptRequest
 	payload := NewToolCallInterruptRequest(tie.Request, tc)
-	*payloads = append(*payloads, [2]any{innerID, payload})
+	*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: payload})
 
 	// 记录 auto_confirm_mapping
 	// 对齐 Python: auto_confirm_mapping[inner_id] = tool_result.request.auto_confirm_key
@@ -456,20 +434,12 @@ func handleSubAgentInterrupt(
 	toolResult any,
 	toolCall *llmschema.ToolCall,
 	interruptedTools map[string]*ToolInterruptEntry,
-	payloads *[]any,
+	payloads *[]PayloadEntry,
 	autoConfirmMapping map[string]string,
 ) {
 	outerID := toolCall.ID
 
-	// 解包 tuple
-	var actualToolResult any
-	if pair, ok := toolResult.([2]any); ok && len(pair) >= 1 {
-		actualToolResult = pair[0]
-	} else {
-		actualToolResult = toolResult
-	}
-
-	dict, ok := actualToolResult.(map[string]any)
+	dict, ok := toolResult.(map[string]any)
 	if !ok {
 		return
 	}
@@ -499,7 +469,7 @@ func handleSubAgentInterrupt(
 		// Go 中直接存 tcir（*ToolCallInterruptRequest 满足 InterruptRequester 接口），不丢子类字段
 		if tcir, ok := payloadObj.(*ToolCallInterruptRequest); ok {
 			interruptRequests[innerID] = tcir
-			*payloads = append(*payloads, [2]any{innerID, outputSchema})
+			*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: outputSchema})
 			if tcir.GetAutoConfirmKey() != "" {
 				autoConfirmMapping[innerID] = tcir.GetAutoConfirmKey()
 			}

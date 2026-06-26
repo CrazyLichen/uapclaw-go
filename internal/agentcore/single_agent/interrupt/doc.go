@@ -16,11 +16,13 @@
 //
 // 类型定义已迁移至 sa/schema 包（exception.go/response.go/state.go），
 // 本包通过类型别名 re-export 保持 API 兼容。
+// PayloadEntry 定义在本包（payload.go）。
 //
 // 文件目录：
 //
 //	interrupt/
 //	├── doc.go           # 包文档
+//	├── payload.go       # PayloadEntry（替代 [2]any{innerID, payload} tuple）
 //	├── response.go      # InterruptRequest + ToolCallInterruptRequest（re-export 自 sa/schema）
 //	├── exception.go     # ToolInterruptException（re-export 自 sa/schema）
 //	├── state.go         # 常量 + 中断状态类型（re-export 自 sa/schema）

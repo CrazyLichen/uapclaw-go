@@ -185,7 +185,7 @@ func (a *ReActAgent) callLLMInvoke(
 		invokeOpts = append(invokeOpts, model_clients.WithInvokeExtra(extraKVPairs))
 	}
 
-	resp, err := (*llmModel).Invoke(ctx, msgsParam, invokeOpts...)
+	resp, err := llmModel.Invoke(ctx, msgsParam, invokeOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("LLM invoke 失败: %w", err)
 	}
@@ -217,7 +217,7 @@ func (a *ReActAgent) callLLMStream(
 		streamOpts = append(streamOpts, model_clients.WithStreamExtra(extraKVPairs))
 	}
 
-	chunkCh, err := (*llmModel).Stream(ctx, msgsParam, streamOpts...)
+	chunkCh, err := llmModel.Stream(ctx, msgsParam, streamOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("LLM stream 失败: %w", err)
 	}

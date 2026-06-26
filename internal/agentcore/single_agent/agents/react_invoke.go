@@ -167,12 +167,12 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 //
 // 对应 Python: ReActAgent._after_execute_tool_call_for_hitl()
 func (a *ReActAgent) AfterExecuteToolCallForHITL(
-	results []any,
+	results []ability.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
 	originalQuery string,
-) (*interrupt.ToolInterruptionState, []any) {
+) (*interrupt.ToolInterruptionState, []interrupt.PayloadEntry) {
 	if a.hitlHandler == nil {
 		return nil, nil
 	}
@@ -194,7 +194,7 @@ func (a *ReActAgent) CommitInterrupt(
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
 	invokeInputs *rail.InvokeInputs,
-	subAgentOutputs []any,
+	subAgentOutputs []interrupt.PayloadEntry,
 ) (map[string]any, error) {
 	if a.hitlHandler == nil {
 		return nil, nil
@@ -645,13 +645,8 @@ func (a *ReActAgent) reactLoop(
 		if oq, ok := cbc.Extra()["_original_query"].(string); ok {
 			originalQuery = oq
 		}
-		// 将 []ExecuteResult 转为 []any 供 BuildInterruptState 使用
-		anyResults := make([]any, len(results))
-		for i, r := range results {
-			anyResults[i] = [2]any{r.Result, r.ToolMsg}
-		}
 		hitlInterrupt, _ := a.AfterExecuteToolCallForHITL(
-			anyResults, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
+			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
 		)
 		if hitlInterrupt != nil {
 			if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok {
