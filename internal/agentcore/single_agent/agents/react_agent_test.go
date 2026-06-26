@@ -45,6 +45,21 @@ type fakeSessionFacade struct {
 	stateData map[string]any
 }
 
+// ──────────────────────────── 辅助函数 ────────────────────────────
+
+// newTestAgent 创建测试用 ReActAgent
+func newTestAgent(name string) *ReActAgent {
+	card := agentschema.NewAgentCard(
+		cschema.WithName(name),
+		cschema.WithDescription("测试"),
+	)
+	config := saconfig.NewReActAgentConfig(
+		saconfig.WithModelName("qwen-max"),
+		saconfig.WithMaxIterations(1),
+	)
+	return NewReActAgent(card, config)
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewReActAgent 验证 ReActAgent 构造函数
@@ -2266,4 +2281,139 @@ func TestReActAgent_StreamImpl_完整路径(t *testing.T) {
 	assert.NotNil(t, ch)
 	for range ch {
 	}
+}
+
+// ──────────────────────────── 合并自 ext_test 的独有测试 ────────────────────────────
+
+// TestReActAgent_ContextEngine 默认返回 nil
+func TestReActAgent_ContextEngine(t *testing.T) {
+	agent := newTestAgent("ce_default")
+	assert.Nil(t, agent.ContextEngine())
+}
+
+// TestReActAgent_Configure_校验失败 配置校验失败时返回错误
+func TestReActAgent_Configure_校验失败(t *testing.T) {
+	agent := newTestAgent("cfg_fail")
+	config := saconfig.NewReActAgentConfig() // ModelName 为空，校验失败
+	err := agent.Configure(context.Background(), config)
+	assert.Error(t, err)
+}
+
+// TestReActAgent_InvokeImpl_有query 有 query 时正常执行（LLM 未初始化会报错但不 panic）
+func TestReActAgent_InvokeImpl_有query(t *testing.T) {
+	agent := newTestAgent("invoke_q2")
+	inputs := map[string]any{"query": "你好"}
+	_, _ = agent.InvokeImpl(context.Background(), inputs)
+}
+
+// TestReActAgent_InvokeImpl_带额外参数 带 user_id/run_kind/run_context 等额外参数
+func TestReActAgent_InvokeImpl_带额外参数(t *testing.T) {
+	agent := newTestAgent("invoke_extra2")
+	sess := session.NewSession(session.WithSessionID("extra_session2"))
+	inputs := map[string]any{
+		"query":       "测试",
+		"user_id":     "u1",
+		"run_kind":    "heartbeat",
+		"run_context": "ctx1",
+		"_streaming":  false,
+	}
+	_, _ = agent.InvokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
+}
+
+// TestReActAgent_AfterExecuteToolCallForHITL_nilHandler handler 为 nil 时返回 nil
+func TestReActAgent_AfterExecuteToolCallForHITL_nilHandler(t *testing.T) {
+	card := agentschema.NewAgentCard(cschema.WithName("hitl_nil"), cschema.WithDescription("HITL nil 测试"))
+	agent := NewReActAgent(card, nil)
+	agent.hitlHandler = nil
+
+	intState, payloads := agent.AfterExecuteToolCallForHITL(nil, nil, nil, 0, "")
+	assert.Nil(t, intState)
+	assert.Nil(t, payloads)
+}
+
+// TestReActAgent_CommitInterrupt_nilHandler handler 为 nil 时返回 nil
+func TestReActAgent_CommitInterrupt_nilHandler(t *testing.T) {
+	card := agentschema.NewAgentCard(cschema.WithName("commit_nil"), cschema.WithDescription("Commit nil 测试"))
+	agent := NewReActAgent(card, nil)
+	agent.hitlHandler = nil
+
+	result, err := agent.CommitInterrupt(context.Background(), nil, nil, nil, nil, nil)
+	assert.Nil(t, result)
+	assert.NoError(t, err)
+}
+
+// TestReActAgent_ClearContextMessages_无引擎 无 context engine 时不 panic
+func TestReActAgent_ClearContextMessages_无引擎(t *testing.T) {
+	agent := newTestAgent("clear_no_ce")
+	sess := session.NewSession(session.WithSessionID("clear_no_ce_sess"))
+	agent.ClearContextMessages(sess)
+}
+
+// TestReActAgent_ClearContextMessages_nilSession sess 为 nil 时不 panic
+func TestReActAgent_ClearContextMessages_nilSession(t *testing.T) {
+	agent := newTestAgent("clear_nil2")
+	agent.ClearContextMessages(nil)
+}
+
+// TestReActAgent_executeToolCalls_空列表 空工具调用列表返回 nil
+func TestReActAgent_executeToolCalls_空列表(t *testing.T) {
+	agent := newTestAgent("exec_empty")
+	results, err := agent.executeToolCalls(context.Background(), nil, nil, nil, nil)
+	assert.NoError(t, err)
+	assert.Nil(t, results)
+}
+
+// TestReActAgent_saveContexts_无引擎 无 context engine 时不 panic
+func TestReActAgent_saveContexts_无引擎(t *testing.T) {
+	agent := newTestAgent("save_no_ce")
+	agent.saveContexts(nil)
+	sess := session.NewSession(session.WithSessionID("save_no_ce_sess"))
+	agent.saveContexts(sess)
+}
+
+// TestReActAgent_getAbilityManager 正常返回 AbilityManager
+func TestReActAgent_getAbilityManager(t *testing.T) {
+	agent := newTestAgent("get_am")
+	am := agent.getAbilityManager()
+	assert.NotNil(t, am)
+}
+
+// TestReActAgent_getTools 正常返回工具列表
+func TestReActAgent_getTools(t *testing.T) {
+	agent := newTestAgent("get_tools2")
+	tools, err := agent.getTools()
+	assert.NoError(t, err)
+	_ = tools
+}
+
+// TestReActAgent_makeExecuteToolCallFunc_NotNil 创建闭包不 panic
+func TestReActAgent_makeExecuteToolCallFunc_NotNil(t *testing.T) {
+	agent := newTestAgent("make_exec_notnil")
+	fn := agent.makeExecuteToolCallFunc()
+	assert.NotNil(t, fn)
+}
+
+// TestReActAgent_makeExecuteToolCallFunc_空工具调用 空工具调用返回空结果
+func TestReActAgent_makeExecuteToolCallFunc_空工具调用(t *testing.T) {
+	agent := newTestAgent("make_exec_empty")
+	fn := agent.makeExecuteToolCallFunc()
+
+	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
+	results, err := fn(context.Background(), cbc, nil, nil, nil)
+	assert.NoError(t, err)
+	_ = results
+}
+
+// TestReActAgent_WriteInvokeResultToStream_nilHandler hitlHandler 为 nil 时不 panic
+func TestReActAgent_WriteInvokeResultToStream_nilHandler(t *testing.T) {
+	card := agentschema.NewAgentCard(cschema.WithName("nil_handler2"), cschema.WithDescription("nil handler2"))
+	agent := NewReActAgent(card, nil)
+	agent.hitlHandler = nil
+
+	sess := session.NewSession(session.WithSessionID("nil_h_session2"))
+	result := map[string]any{
+		"result_type":   "interrupt",
+		"interrupt_ids": []string{"id1"},
+	}
+	agent.WriteInvokeResultToStream(context.Background(), result, sess)
 }

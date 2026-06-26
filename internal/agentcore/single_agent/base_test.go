@@ -3,11 +3,9 @@ package single_agent
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -15,65 +13,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// stubInvoker 实现 AgentInvoker 接口，持有可配置的返回值
-type stubInvoker struct {
-	// invokeResult InvokeImpl 返回的结果
-	invokeResult any
-	// invokeErr InvokeImpl 返回的错误
-	invokeErr error
-	// streamCh StreamImpl 返回的 channel
-	streamCh <-chan stream.Schema
-	// streamErr StreamImpl 返回的错误
-	streamErr error
-}
-
-func (s *stubInvoker) InvokeImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (any, error) {
-	return s.invokeResult, s.invokeErr
-}
-
-func (s *stubInvoker) StreamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
-	return s.streamCh, s.streamErr
-}
-
-// testSubAgent 内嵌 WarpBaseAgent 并实现 AgentInvoker，验证虚分发
-type testSubAgent struct {
-	*WarpBaseAgent
-	// invokeCalled 是否调用了 InvokeImpl
-	invokeCalled bool
-	// streamCalled 是否调用了 StreamImpl
-	streamCalled bool
-	// mu 保护并发字段
-	mu sync.Mutex
-}
-
-func (a *testSubAgent) InvokeImpl(_ context.Context, inputs map[string]any, _ ...AgentOption) (any, error) {
-	a.mu.Lock()
-	a.invokeCalled = true
-	a.mu.Unlock()
-	return map[string]any{"echo": inputs}, nil
-}
-
-func (a *testSubAgent) StreamImpl(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
-	a.mu.Lock()
-	a.streamCalled = true
-	a.mu.Unlock()
-	ch := make(chan stream.Schema, 1)
-	ch <- stream.OutputSchema{Type: "output", Index: 0, Payload: "sub_stream"}
-	close(ch)
-	return ch, nil
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// TestNewWarpBaseAgent 构造函数验证
-func TestNewWarpBaseAgent(t *testing.T) {
+// TestNewBaseAgent 构造函数验证
+func TestNewBaseAgent(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("test_agent"), schema.WithDescription("测试 Agent"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	if agent == nil {
-		t.Fatal("NewWarpBaseAgent 不应返回 nil")
+		t.Fatal("NewBaseAgent 不应返回 nil")
 	}
 	if agent.Card() == nil {
 		t.Fatal("Card 不应为 nil")
@@ -84,236 +32,12 @@ func TestNewWarpBaseAgent(t *testing.T) {
 	if agent.AbilityManager() == nil {
 		t.Error("AbilityManager 不应为 nil")
 	}
-	// 新构造的 agent invoker 为 nil
-	if agent.invoker != nil {
-		t.Error("新构造的 agent invoker 应为 nil")
-	}
 }
 
-// TestWarpBaseAgent_Invoke_正常调用 invoker 设置后，Invoke 返回 invokeImpl 结果
-func TestWarpBaseAgent_Invoke_正常调用(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("inv_agent"), schema.WithDescription("调用测试"))
-	agent := NewWarpBaseAgent(card, nil)
-	agent.invoker = &stubInvoker{
-		invokeResult: map[string]any{"answer": 42},
-	}
-
-	result, err := agent.Invoke(context.Background(), map[string]any{"q": "hello"})
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("结果类型应为 map[string]any，实际 %T", result)
-	}
-	if m["answer"] != 42 {
-		t.Errorf("answer = %v, want 42", m["answer"])
-	}
-}
-
-// TestWarpBaseAgent_Invoke_invoker未设置 invoker 为 nil 时返回 StatusAgentNotConfigured 错误
-func TestWarpBaseAgent_Invoke_invoker未设置(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("nil_invoker"), schema.WithDescription("未设置 invoker"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	_, err := agent.Invoke(context.Background(), nil)
-	if err == nil {
-		t.Fatal("应有错误")
-	}
-	baseErr, ok := err.(*exception.BaseError)
-	if !ok {
-		t.Fatalf("错误类型应为 *BaseError，实际 %T", err)
-	}
-	if baseErr.Status() != exception.StatusAgentNotConfigured {
-		t.Errorf("Status = %v, want StatusAgentNotConfigured", baseErr.Status())
-	}
-}
-
-// TestWarpBaseAgent_Invoke_触发回调 注册 GlobalAgentCallbackFunc，验证 TriggerGlobalAgent 被调用（before + after）
-func TestWarpBaseAgent_Invoke_触发回调(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("cb_agent"), schema.WithDescription("回调测试"))
-	agent := NewWarpBaseAgent(card, nil)
-	agent.invoker = &stubInvoker{invokeResult: "ok"}
-
-	var mu sync.Mutex
-	var beforeTriggered, afterTriggered bool
-
-	fw := callback.GetCallbackFramework()
-
-	beforeFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
-		if data.Event == callback.GlobalAgentInvokeInput {
-			mu.Lock()
-			beforeTriggered = true
-			mu.Unlock()
-		}
-		return nil
-	}
-	afterFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
-		if data.Event == callback.GlobalAgentInvokeOutput {
-			mu.Lock()
-			afterTriggered = true
-			mu.Unlock()
-		}
-		return nil
-	}
-
-	fw.OnGlobalAgent(callback.GlobalAgentInvokeInput, beforeFn)
-	fw.OnGlobalAgent(callback.GlobalAgentInvokeOutput, afterFn)
-	defer fw.OffGlobalAgent(callback.GlobalAgentInvokeInput, beforeFn)
-	defer fw.OffGlobalAgent(callback.GlobalAgentInvokeOutput, afterFn)
-
-	_, err := agent.Invoke(context.Background(), map[string]any{"x": 1})
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if !beforeTriggered {
-		t.Error("AgentInvokeInput 回调应被触发")
-	}
-	if !afterTriggered {
-		t.Error("AgentInvokeOutput 回调应被触发")
-	}
-}
-
-// TestWarpBaseAgent_Invoke_子类错误透传 invokeImpl 返回 BaseError 时直接透传
-func TestWarpBaseAgent_Invoke_子类错误透传(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("base_err"), schema.WithDescription("BaseError 透传"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	origErr := exception.NewBaseError(exception.StatusAgentNotConfigured, exception.WithMsg("子类错误"))
-	agent.invoker = &stubInvoker{invokeErr: origErr}
-
-	_, err := agent.Invoke(context.Background(), nil)
-	if err == nil {
-		t.Fatal("应有错误")
-	}
-	// 应直接透传同一个 BaseError 实例
-	if err != origErr {
-		t.Errorf("应透传原始 BaseError，实际 %v", err)
-	}
-}
-
-// TestWarpBaseAgent_Invoke_普通错误包装 invokeImpl 返回普通 error 时包装为 BaseError
-func TestWarpBaseAgent_Invoke_普通错误包装(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("wrap_err"), schema.WithDescription("普通错误包装"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	plainErr := errors.New("something went wrong")
-	agent.invoker = &stubInvoker{invokeErr: plainErr}
-
-	_, err := agent.Invoke(context.Background(), nil)
-	if err == nil {
-		t.Fatal("应有错误")
-	}
-	baseErr, ok := err.(*exception.BaseError)
-	if !ok {
-		t.Fatalf("错误类型应为 *BaseError，实际 %T", err)
-	}
-	if baseErr.Status() != exception.StatusAgentControllerRuntimeError {
-		t.Errorf("Status = %v, want StatusAgentControllerRuntimeError", baseErr.Status())
-	}
-}
-
-// TestWarpBaseAgent_Stream_正常调用 invoker 设置后，Stream 返回 channel 且数据正确
-func TestWarpBaseAgent_Stream_正常调用(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("stream_ok"), schema.WithDescription("流式正常"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	ch := make(chan stream.Schema, 2)
-	ch <- stream.OutputSchema{Type: "output", Index: 0, Payload: "chunk1"}
-	ch <- stream.OutputSchema{Type: "output", Index: 1, Payload: "chunk2"}
-	close(ch)
-
-	agent.invoker = &stubInvoker{streamCh: ch}
-
-	outCh, err := agent.Stream(context.Background(), map[string]any{"q": "hi"})
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-
-	var items []stream.Schema
-	for item := range outCh {
-		items = append(items, item)
-	}
-	if len(items) != 2 {
-		t.Fatalf("应有 2 个 item，实际 %d", len(items))
-	}
-	o1, ok := items[0].(stream.OutputSchema)
-	if !ok || o1.Payload != "chunk1" {
-		t.Errorf("第一个 item payload 应为 chunk1，实际 %v", items[0])
-	}
-	o2, ok := items[1].(stream.OutputSchema)
-	if !ok || o2.Payload != "chunk2" {
-		t.Errorf("第二个 item payload 应为 chunk2，实际 %v", items[1])
-	}
-}
-
-// TestWarpBaseAgent_Stream_invoker未设置 invoker 为 nil 时返回错误
-func TestWarpBaseAgent_Stream_invoker未设置(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("no_stream"), schema.WithDescription("未设置 invoker"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	_, err := agent.Stream(context.Background(), nil)
-	if err == nil {
-		t.Fatal("应有错误")
-	}
-	baseErr, ok := err.(*exception.BaseError)
-	if !ok {
-		t.Fatalf("错误类型应为 *BaseError，实际 %T", err)
-	}
-	if baseErr.Status() != exception.StatusAgentNotConfigured {
-		t.Errorf("Status = %v, want StatusAgentNotConfigured", baseErr.Status())
-	}
-}
-
-// TestWarpBaseAgent_Stream_每项触发回调 每个 stream item 触发一次 TriggerGlobalAgent
-func TestWarpBaseAgent_Stream_每项触发回调(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("stream_cb"), schema.WithDescription("流式回调"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	ch := make(chan stream.Schema, 2)
-	ch <- stream.OutputSchema{Type: "output", Index: 0, Payload: "a"}
-	ch <- stream.OutputSchema{Type: "output", Index: 1, Payload: "b"}
-	close(ch)
-	agent.invoker = &stubInvoker{streamCh: ch}
-
-	var mu sync.Mutex
-	var outputCount int
-
-	fw := callback.GetCallbackFramework()
-	afterFn := func(_ context.Context, data *callback.GlobalAgentEventData) any {
-		if data.Event == callback.GlobalAgentStreamOutput {
-			mu.Lock()
-			outputCount++
-			mu.Unlock()
-		}
-		return nil
-	}
-
-	fw.OnGlobalAgent(callback.GlobalAgentStreamOutput, afterFn)
-	defer fw.OffGlobalAgent(callback.GlobalAgentStreamOutput, afterFn)
-
-	outCh, err := agent.Stream(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-	// 消费完 channel
-	for range outCh {
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if outputCount != 2 {
-		t.Errorf("AgentStreamOutput 应触发 2 次，实际 %d 次", outputCount)
-	}
-}
-
-// TestWarpBaseAgent_Configure Configure 设置 config 成功
-func TestWarpBaseAgent_Configure(t *testing.T) {
+// TestBaseAgent_Configure Configure 设置 config 成功
+func TestBaseAgent_Configure(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("cfg_agent"), schema.WithDescription("配置测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	cfg := agentconfig.NewReActAgentConfig(
 		agentconfig.WithModelName("qwen-max"),
@@ -332,10 +56,10 @@ func TestWarpBaseAgent_Configure(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_访问器 Card/Config/AbilityManager/CallbackManager 返回正确值
-func TestWarpBaseAgent_访问器(t *testing.T) {
+// TestBaseAgent_访问器 Card/Config/AbilityManager/CallbackManager 返回正确值
+func TestBaseAgent_访问器(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("acc_agent"), schema.WithDescription("访问器测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	// Card
 	if agent.Card() != card {
@@ -366,100 +90,28 @@ func TestWarpBaseAgent_访问器(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_虚分发 定义内嵌 WarpBaseAgent 的子类型，实现 AgentInvoker，验证 InvokeImpl 走子类实现
-func TestWarpBaseAgent_虚分发(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("sub_agent"), schema.WithDescription("虚分发测试"))
-	base := NewWarpBaseAgent(card, nil)
-	sub := &testSubAgent{WarpBaseAgent: base}
-	// 关键：将 invoker 指向自身，实现虚分发
-	sub.invoker = sub
-
-	// 验证 Invoke 走子类的 InvokeImpl
-	result, err := sub.Invoke(context.Background(), map[string]any{"key": "val"})
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-	sub.mu.Lock()
-	called := sub.invokeCalled
-	sub.mu.Unlock()
-	if !called {
-		t.Error("子类 InvokeImpl 应被调用")
-	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("结果类型应为 map[string]any，实际 %T", result)
-	}
-	echo, ok := m["echo"].(map[string]any)
-	if !ok {
-		t.Fatalf("echo 类型应为 map[string]any，实际 %T", m["echo"])
-	}
-	if echo["key"] != "val" {
-		t.Errorf("echo[key] = %v, want val", echo["key"])
-	}
-
-	// 验证 Stream 走子类的 StreamImpl
-	outCh, err := sub.Stream(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-	sub.mu.Lock()
-	streamCalled := sub.streamCalled
-	sub.mu.Unlock()
-	if !streamCalled {
-		t.Error("子类 StreamImpl 应被调用")
-	}
-	var items []stream.Schema
-	for item := range outCh {
-		items = append(items, item)
-	}
-	if len(items) != 1 {
-		t.Fatalf("应有 1 个 stream item，实际 %d", len(items))
-	}
-	o, ok := items[0].(stream.OutputSchema)
-	if !ok || o.Payload != "sub_stream" {
-		t.Errorf("stream item payload 应为 sub_stream，实际 %v", items[0])
-	}
-}
-
-// TestWarpBaseAgent_SetInvoker 设置 invoker 后可通过 Invoke 调用
-func TestWarpBaseAgent_SetInvoker(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("set_inv"), schema.WithDescription("SetInvoker 测试"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	inv := &stubInvoker{invokeResult: "set_invoker_ok"}
-	agent.SetInvoker(inv)
-
-	result, err := agent.Invoke(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("不应有错误: %v", err)
-	}
-	if result != "set_invoker_ok" {
-		t.Errorf("result = %v, want set_invoker_ok", result)
-	}
-}
-
-// TestWarpBaseAgent_AgentID 返回 card.ID
-func TestWarpBaseAgent_AgentID(t *testing.T) {
+// TestBaseAgent_AgentID 返回 card.ID
+func TestBaseAgent_AgentID(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("id_test"), schema.WithDescription("AgentID 测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	if agent.AgentID() != card.ID {
 		t.Errorf("AgentID() = %q, want %q", agent.AgentID(), card.ID)
 	}
 }
 
-// TestWarpBaseAgent_AgentID_card为nil card 为 nil 时返回空串
-func TestWarpBaseAgent_AgentID_card为nil(t *testing.T) {
-	agent := &WarpBaseAgent{}
+// TestBaseAgent_AgentID_card为nil card 为 nil 时返回空串
+func TestBaseAgent_AgentID_card为nil(t *testing.T) {
+	agent := &BaseAgent{}
 	if agent.AgentID() != "" {
 		t.Errorf("card 为 nil 时 AgentID() 应返回空串，实际 %q", agent.AgentID())
 	}
 }
 
-// TestWarpBaseAgent_RegisterCallback callbackManager 非 nil 时委托注册
-func TestWarpBaseAgent_RegisterCallback(t *testing.T) {
+// TestBaseAgent_RegisterCallback callbackManager 非 nil 时委托注册
+func TestBaseAgent_RegisterCallback(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("rc_agent"), schema.WithDescription("注册回调测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	fn := callback.PerAgentCallbackFunc(func(_ context.Context, _ any) error { return nil })
 	err := agent.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, fn)
@@ -468,9 +120,9 @@ func TestWarpBaseAgent_RegisterCallback(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_RegisterCallback_nilManager callbackManager 为 nil 时不 panic
-func TestWarpBaseAgent_RegisterCallback_nilManager(t *testing.T) {
-	agent := &WarpBaseAgent{}
+// TestBaseAgent_RegisterCallback_nilManager callbackManager 为 nil 时不 panic
+func TestBaseAgent_RegisterCallback_nilManager(t *testing.T) {
+	agent := &BaseAgent{}
 	fn := callback.PerAgentCallbackFunc(func(_ context.Context, _ any) error { return nil })
 	err := agent.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, fn)
 	if err != nil {
@@ -478,10 +130,10 @@ func TestWarpBaseAgent_RegisterCallback_nilManager(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_RegisterRail callbackManager 非 nil 时委托注册
-func TestWarpBaseAgent_RegisterRail(t *testing.T) {
+// TestBaseAgent_RegisterRail callbackManager 非 nil 时委托注册
+func TestBaseAgent_RegisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("rr_agent"), schema.WithDescription("注册 Rail 测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	r := &testRail{}
 	err := agent.RegisterRail(context.Background(), r)
@@ -490,9 +142,9 @@ func TestWarpBaseAgent_RegisterRail(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_RegisterRail_nilManager callbackManager 为 nil 时直接返回 nil
-func TestWarpBaseAgent_RegisterRail_nilManager(t *testing.T) {
-	agent := &WarpBaseAgent{}
+// TestBaseAgent_RegisterRail_nilManager callbackManager 为 nil 时直接返回 nil
+func TestBaseAgent_RegisterRail_nilManager(t *testing.T) {
+	agent := &BaseAgent{}
 	r := &testRail{}
 	err := agent.RegisterRail(context.Background(), r)
 	if err != nil {
@@ -500,10 +152,10 @@ func TestWarpBaseAgent_RegisterRail_nilManager(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_RegisterRail_init失败 Rail Init 返回错误时传播
-func TestWarpBaseAgent_RegisterRail_init失败(t *testing.T) {
+// TestBaseAgent_RegisterRail_init失败 Rail Init 返回错误时传播
+func TestBaseAgent_RegisterRail_init失败(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("rr_fail"), schema.WithDescription("Rail Init 失败"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	r := &testRail{initErr: errors.New("init failed")}
 	err := agent.RegisterRail(context.Background(), r)
@@ -515,10 +167,10 @@ func TestWarpBaseAgent_RegisterRail_init失败(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_UnregisterRail 正常注销
-func TestWarpBaseAgent_UnregisterRail(t *testing.T) {
+// TestBaseAgent_UnregisterRail 正常注销
+func TestBaseAgent_UnregisterRail(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("ur_agent"), schema.WithDescription("注销 Rail 测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	r := &testRail{}
 	err := agent.UnregisterRail(context.Background(), r)
@@ -527,9 +179,9 @@ func TestWarpBaseAgent_UnregisterRail(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_UnregisterRail_nilManager callbackManager 为 nil 时不 panic
-func TestWarpBaseAgent_UnregisterRail_nilManager(t *testing.T) {
-	agent := &WarpBaseAgent{}
+// TestBaseAgent_UnregisterRail_nilManager callbackManager 为 nil 时不 panic
+func TestBaseAgent_UnregisterRail_nilManager(t *testing.T) {
+	agent := &BaseAgent{}
 	r := &testRail{}
 	err := agent.UnregisterRail(context.Background(), r)
 	if err != nil {
@@ -537,10 +189,10 @@ func TestWarpBaseAgent_UnregisterRail_nilManager(t *testing.T) {
 	}
 }
 
-// TestWarpBaseAgent_UnregisterRail_uninit失败 Uninit 返回错误且 callbackManager.UnregisterRail 成功时返回 uninitErr
-func TestWarpBaseAgent_UnregisterRail_uninit失败(t *testing.T) {
+// TestBaseAgent_UnregisterRail_uninit失败 Uninit 返回错误且 callbackManager.UnregisterRail 成功时返回 uninitErr
+func TestBaseAgent_UnregisterRail_uninit失败(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithName("ur_fail"), schema.WithDescription("Uninit 失败测试"))
-	agent := NewWarpBaseAgent(card, nil)
+	agent := NewBaseAgent(card, nil)
 
 	r := &testRail{uninitErr: errors.New("uninit failed")}
 	err := agent.UnregisterRail(context.Background(), r)
@@ -549,40 +201,6 @@ func TestWarpBaseAgent_UnregisterRail_uninit失败(t *testing.T) {
 	}
 	if err.Error() != "uninit failed" {
 		t.Errorf("错误 = %v, want uninit failed", err)
-	}
-}
-
-// TestWarpBaseAgent_Stream_子类错误透传 StreamImpl 返回 BaseError 时直接透传
-func TestWarpBaseAgent_Stream_子类错误透传(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("stream_err"), schema.WithDescription("Stream 错误透传"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	origErr := exception.NewBaseError(exception.StatusAgentNotConfigured, exception.WithMsg("stream 子类错误"))
-	agent.invoker = &stubInvoker{streamErr: origErr}
-
-	_, err := agent.Stream(context.Background(), nil)
-	if err != origErr {
-		t.Errorf("应透传原始 BaseError，实际 %v", err)
-	}
-}
-
-// TestWarpBaseAgent_Stream_普通错误包装 StreamImpl 返回普通 error 时包装为 BaseError
-func TestWarpBaseAgent_Stream_普通错误包装(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("stream_wrap"), schema.WithDescription("Stream 普通错误包装"))
-	agent := NewWarpBaseAgent(card, nil)
-
-	agent.invoker = &stubInvoker{streamErr: errors.New("stream fail")}
-
-	_, err := agent.Stream(context.Background(), nil)
-	if err == nil {
-		t.Fatal("应有错误")
-	}
-	baseErr, ok := err.(*exception.BaseError)
-	if !ok {
-		t.Fatalf("错误类型应为 *BaseError，实际 %T", err)
-	}
-	if baseErr.Status() != exception.StatusAgentControllerRuntimeError {
-		t.Errorf("Status = %v, want StatusAgentControllerRuntimeError", baseErr.Status())
 	}
 }
 
@@ -632,5 +250,15 @@ func TestGlobalAgentEventType_事件名对齐Python(t *testing.T) {
 		if string(tt.got) != tt.want {
 			t.Errorf("事件名 = %q, want %q", tt.got, tt.want)
 		}
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestBaseError_StatusAgentNotConfigured 验证 StatusAgentNotConfigured 错误码可用
+func TestBaseError_StatusAgentNotConfigured(t *testing.T) {
+	err := exception.NewBaseError(exception.StatusAgentNotConfigured, exception.WithMsg("未配置"))
+	if err.Status() != exception.StatusAgentNotConfigured {
+		t.Errorf("Status = %v, want StatusAgentNotConfigured", err.Status())
 	}
 }

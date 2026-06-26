@@ -77,6 +77,61 @@ func TestNewInvokeQueryString(t *testing.T) {
 	assert.Equal(t, "测试查询", q.PlainText())
 }
 
+// TestQueryFromInputs_字符串 验证 QueryFromInputs 对字符串 query 的提取
+func TestQueryFromInputs_字符串(t *testing.T) {
+	q := QueryFromInputs(map[string]any{"query": "你好"})
+	assert.False(t, q.IsInteractiveInput())
+	assert.Equal(t, "你好", q.PlainText())
+}
+
+// TestQueryFromInputs_InteractiveInput 验证 QueryFromInputs 对 *InteractiveInput 的提取
+func TestQueryFromInputs_InteractiveInput(t *testing.T) {
+	ii, err := interaction.NewInteractiveInput("恢复内容")
+	assert.NoError(t, err)
+	q := QueryFromInputs(map[string]any{"query": ii})
+	assert.True(t, q.IsInteractiveInput())
+	assert.Equal(t, "恢复内容", q.PlainText())
+}
+
+// TestQueryFromInputs_InteractiveInput有UserInputs 验证 QueryFromInputs 对含 UserInputs 的 InteractiveInput 的提取
+func TestQueryFromInputs_InteractiveInput有UserInputs(t *testing.T) {
+	ii, err := interaction.NewInteractiveInput()
+	assert.NoError(t, err)
+	_ = ii.Update("tc_123", map[string]any{"approved": true})
+	q := QueryFromInputs(map[string]any{"query": ii})
+	assert.True(t, q.IsInteractiveInput())
+	// UserInputs 有值但 RawInputs 为 nil，PlainText 返回空串
+	assert.Equal(t, "", q.PlainText())
+}
+
+// TestQueryFromInputs_空字符串 验证 QueryFromInputs 对空字符串 query 的提取
+func TestQueryFromInputs_空字符串(t *testing.T) {
+	q := QueryFromInputs(map[string]any{"query": ""})
+	assert.False(t, q.IsInteractiveInput())
+	assert.Equal(t, "", q.PlainText())
+}
+
+// TestQueryFromInputs_nil 验证 QueryFromInputs 对 query 不存在的处理
+func TestQueryFromInputs_nil(t *testing.T) {
+	q := QueryFromInputs(map[string]any{})
+	assert.False(t, q.IsInteractiveInput())
+	assert.Equal(t, "", q.PlainText())
+}
+
+// TestQueryFromInputs_显式nil 验证 QueryFromInputs 对 query 为 nil 的处理
+func TestQueryFromInputs_显式nil(t *testing.T) {
+	q := QueryFromInputs(map[string]any{"query": nil})
+	assert.False(t, q.IsInteractiveInput())
+	assert.Equal(t, "", q.PlainText())
+}
+
+// TestQueryFromInputs_非字符串非InteractiveInput 验证 QueryFromInputs 对其他类型的兜底处理
+func TestQueryFromInputs_非字符串非InteractiveInput(t *testing.T) {
+	q := QueryFromInputs(map[string]any{"query": 123})
+	assert.False(t, q.IsInteractiveInput())
+	assert.Equal(t, "123", q.PlainText())
+}
+
 // TestInteractiveInput_InvokeQuery 验证 *InteractiveInput 实现 InvokeQuery 接口
 func TestInteractiveInput_InvokeQuery(t *testing.T) {
 	// InteractiveInput 无 RawInputs

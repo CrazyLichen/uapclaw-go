@@ -2,39 +2,23 @@ package single_agent
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentInvoker 子类真实执行接口，用于虚分发。
+// BaseAgent Agent 基础配置/管理容器。
+// 不实现 Invoke/Stream，子类自行实现并在方法体内调用回调骨架。
 //
-// Go 内嵌结构体无法虚分发到子类方法（w.InvokeImpl() 在编译期
-// 绑定 WarpBaseAgent.InvokeImpl，不会调用 ReActAgent.InvokeImpl）。
-// 通过接口字段 invoker AgentInvoker 实现等价虚方法表：
-// 构造时 agent.invoker = agent，调用 w.invoker.InvokeImpl() 走虚分发。
-type AgentInvoker interface {
-	// InvokeImpl 子类实现的非流式调用逻辑
-	InvokeImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
-	// StreamImpl 子类实现的流式调用逻辑
-	StreamImpl(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error)
-}
-
-// WarpBaseAgent BaseAgent 的默认实现，提供 Invoke/Stream 的回调包装骨架。
-// 子类内嵌 WarpBaseAgent 并实现 agentInvoker 接口。
-//
-// 对应 Python: openjiuwen/core/single_agent/base.py (BaseAgent)
-type WarpBaseAgent struct {
+// 对应 Python: BaseAgent（不含 _AgentMeta 装饰逻辑）
+type BaseAgent struct {
 	// card Agent 身份卡片（必需）
 	card *agentschema.AgentCard
 	// config Agent 配置（可选，Configure 时设置）
@@ -43,8 +27,6 @@ type WarpBaseAgent struct {
 	abilityManager *ability.AbilityManager
 	// callbackManager 回调管理器
 	callbackManager *rail.AgentCallbackManager
-	// invoker 子类注入的真实执行逻辑，实现虚分发
-	invoker AgentInvoker
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -78,9 +60,9 @@ type (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewWarpBaseAgent 创建 WarpBaseAgent 实例。
-func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.ResourceManager) *WarpBaseAgent {
-	return &WarpBaseAgent{
+// NewBaseAgent 创建 BaseAgent 实例。
+func NewBaseAgent(card *agentschema.AgentCard, resourceMgr resource.ResourceManager) *BaseAgent {
+	return &BaseAgent{
 		card:            card,
 		abilityManager:  ability.NewAbilityManager(resourceMgr),
 		callbackManager: rail.NewAgentCallbackManager(card.ID),
@@ -89,199 +71,39 @@ func NewWarpBaseAgent(card *agentschema.AgentCard, resourceMgr resource.Resource
 
 // Configure 配置 Agent。
 // 对应 Python: BaseAgent.configure(config)
-func (w *WarpBaseAgent) Configure(_ context.Context, config interfaces.AgentConfig) error {
-	w.config = config
+func (b *BaseAgent) Configure(_ context.Context, config interfaces.AgentConfig) error {
+	b.config = config
 	return nil
 }
 
-// Invoke 非流式调用，包含回调包装骨架。
-// 执行顺序：① transform_io input → ② emit_before → invokeImpl → ③ transform_io output → ④ emit_after
-//
-// 对应 Python: _AgentMeta 元类装饰后的 invoke
-func (w *WarpBaseAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error) {
-	if w.invoker == nil {
-		return nil, exception.NewBaseError(exception.StatusAgentNotConfigured,
-			exception.WithMsg("invoker 未设置，子类构造时必须设置 invoker"))
-	}
-
-	fw := callback.GetCallbackFramework()
-
-	// 解析 AgentOptions，获取 Session 等选项（对齐 Python invoke(inputs, session=None)）
-	agentOpts := interfaces.NewAgentOptions(opts...)
-
-	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentInvokeInput, inputs); transformed != nil {
-		if v, ok := transformed.(map[string]any); ok {
-			inputs = v
-		} else {
-			logger.Warn(logger.ComponentAgentCore).
-				Str("event", "TransformAgentIOInput").
-				Str("agent_id", w.card.ID).
-				Str("expected", "map[string]any").
-				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
-		}
-	}
-
-	// ② emit_before: 触发全局 AgentInvokeInput 事件
-	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:     callback.GlobalAgentInvokeInput,
-		AgentID:   w.card.ID,
-		AgentName: w.card.Name,
-		Inputs:    inputs,
-		Session:   agentOpts.Session,
-	})
-
-	// 执行子类的真实逻辑
-	result, err := w.invoker.InvokeImpl(ctx, inputs, opts...)
-	if err != nil {
-		// 已经是 BaseError 则直接返回（对齐 Python except BaseError: raise）
-		if _, ok := err.(*exception.BaseError); ok {
-			return nil, err
-		}
-		// 其他错误包装（对齐 Python except Exception as e: raise build_error(...)）
-		logger.Error(logger.ComponentAgentCore).
-			Str("agent_id", w.card.ID).
-			Err(err).
-			Msg("Agent invoke 错误")
-		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
-			exception.WithCause(err),
-		)
-	}
-
-	// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
-	result = fw.TransformAgentIOOutput(ctx, callback.GlobalAgentInvokeOutput, result)
-
-	// ④ emit_after: 触发全局 AgentInvokeOutput 事件
-	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:     callback.GlobalAgentInvokeOutput,
-		AgentID:   w.card.ID,
-		AgentName: w.card.Name,
-		Result:    result,
-	})
-
-	return result, nil
-}
-
-// Stream 流式调用，包含回调包装骨架。
-// 执行顺序：① transform_io input → ② emit_before → streamImpl → per-item { ③ transform_io output → ④ emit_after }
-//
-// 对应 Python: _AgentMeta 元类装饰后的 stream
-func (w *WarpBaseAgent) Stream(ctx context.Context, inputs map[string]any, opts ...AgentOption) (<-chan stream.Schema, error) {
-	if w.invoker == nil {
-		return nil, exception.NewBaseError(exception.StatusAgentNotConfigured,
-			exception.WithMsg("invoker 未设置，子类构造时必须设置 invoker"))
-	}
-
-	fw := callback.GetCallbackFramework()
-
-	// 解析 AgentOptions，获取 Session 等选项（对齐 Python stream(inputs, session=None)）
-	agentOpts := interfaces.NewAgentOptions(opts...)
-
-	// ① transform_io 输入变换（对齐 Python transform_io 的 input_fn）
-	if transformed := fw.TransformAgentIOInput(ctx, callback.GlobalAgentStreamInput, inputs); transformed != nil {
-		if v, ok := transformed.(map[string]any); ok {
-			inputs = v
-		} else {
-			logger.Warn(logger.ComponentAgentCore).
-				Str("event", "TransformAgentIOInput").
-				Str("agent_id", w.card.ID).
-				Str("expected", "map[string]any").
-				Str("actual", fmt.Sprintf("%T", transformed)).
-				Msg("TransformIO 返回类型不匹配，使用原始输入")
-		}
-	}
-
-	// ② emit_before: 触发全局 AgentStreamInput 事件
-	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-		Event:     callback.GlobalAgentStreamInput,
-		AgentID:   w.card.ID,
-		AgentName: w.card.Name,
-		Inputs:    inputs,
-		Session:   agentOpts.Session,
-	})
-
-	// 调用子类的真实 stream
-	ch, err := w.invoker.StreamImpl(ctx, inputs, opts...)
-	if err != nil {
-		if _, ok := err.(*exception.BaseError); ok {
-			return nil, err
-		}
-		logger.Error(logger.ComponentAgentCore).
-			Str("agent_id", w.card.ID).
-			Err(err).
-			Msg("Agent stream 错误")
-		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
-			exception.WithCause(err),
-		)
-	}
-
-	// 包装 channel：per-item { ③ transform_io 输出变换 → ④ emit_after }
-	out := make(chan stream.Schema)
-	go func() {
-		defer close(out)
-		for item := range ch {
-			// ③ transform_io 输出变换（对齐 Python transform_io 的 output_fn，per item）
-			if transformed := fw.TransformAgentIOOutput(ctx, callback.GlobalAgentStreamOutput, item); transformed != nil {
-				if v, ok := transformed.(stream.Schema); ok {
-					item = v
-				} else {
-					logger.Warn(logger.ComponentAgentCore).
-						Str("event", "TransformAgentIOOutput").
-						Str("agent_id", w.card.ID).
-						Str("expected", "stream.Schema").
-						Str("actual", fmt.Sprintf("%T", transformed)).
-						Msg("TransformIO 返回类型不匹配，使用原始输出")
-				}
-			}
-			// ④ emit_after (per_item)
-			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
-				Event:     callback.GlobalAgentStreamOutput,
-				AgentID:   w.card.ID,
-				AgentName: w.card.Name,
-				Result:    item,
-			})
-			out <- item
-		}
-	}()
-
-	return out, nil
-}
-
 // Card 返回 Agent 身份卡片。
-func (w *WarpBaseAgent) Card() *agentschema.AgentCard { return w.card }
-
-// SetInvoker 设置虚分发执行器。
-//
-// 子类（如 ReActAgent）构造时必须调用此方法设置自身为 invoker，
-// 使 WarpBaseAgent.Invoke/Stream 能正确分发到子类的实现。
-func (w *WarpBaseAgent) SetInvoker(inv AgentInvoker) { w.invoker = inv }
+func (b *BaseAgent) Card() *agentschema.AgentCard { return b.card }
 
 // Config 返回当前配置。
-func (w *WarpBaseAgent) Config() interfaces.AgentConfig { return w.config }
+func (b *BaseAgent) Config() interfaces.AgentConfig { return b.config }
 
 // AbilityManager 返回能力管理器。
 // 返回 any，调用方通过类型断言获取 *ability.AbilityManager。
-func (w *WarpBaseAgent) AbilityManager() any { return w.abilityManager }
+func (b *BaseAgent) AbilityManager() any { return b.abilityManager }
 
 // CallbackManager 返回回调管理器。
 // 返回具体类型 *rail.AgentCallbackManager（通过 rail 包内 RailAgent 最小接口打破循环依赖）。
-func (w *WarpBaseAgent) CallbackManager() *rail.AgentCallbackManager { return w.callbackManager }
+func (b *BaseAgent) CallbackManager() *rail.AgentCallbackManager { return b.callbackManager }
 
 // AgentID 返回 Agent 唯一标识。
 // 满足 rail.RailAgent 最小接口。
-func (w *WarpBaseAgent) AgentID() string {
-	if w.card != nil {
-		return w.card.ID
+func (b *BaseAgent) AgentID() string {
+	if b.card != nil {
+		return b.card.ID
 	}
 	return ""
 }
 
 // RegisterCallback 注册回调。
 // 委托给 AgentCallbackManager.RegisterCallback。
-func (w *WarpBaseAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...callback.CallbackOption) error {
-	if w.callbackManager != nil {
-		w.callbackManager.RegisterCallback(ctx, event.(rail.AgentCallbackEvent), fn.(callback.PerAgentCallbackFunc), opts...)
+func (b *BaseAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...callback.CallbackOption) error {
+	if b.callbackManager != nil {
+		b.callbackManager.RegisterCallback(ctx, event.(rail.AgentCallbackEvent), fn.(callback.PerAgentCallbackFunc), opts...)
 	}
 	return nil
 }
@@ -290,13 +112,13 @@ func (w *WarpBaseAgent) RegisterCallback(ctx context.Context, event any, fn any,
 // 调用 rail.Init() 初始化后委托给 AgentCallbackManager.RegisterRail。
 //
 // 对应 Python: BaseAgent.register_rail(rail) → rail.init(self) → manager.register_rail(rail, self)
-func (w *WarpBaseAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...callback.CallbackOption) error {
-	if w.callbackManager != nil {
+func (b *BaseAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...callback.CallbackOption) error {
+	if b.callbackManager != nil {
 		// 调用 Rail 初始化钩子（对齐 Python: rail.init(self)）
-		if err := r.Init(w); err != nil {
+		if err := r.Init(b); err != nil {
 			return err
 		}
-		return w.callbackManager.RegisterRail(ctx, r, opts...)
+		return b.callbackManager.RegisterRail(ctx, r, opts...)
 	}
 	return nil
 }
@@ -305,11 +127,11 @@ func (w *WarpBaseAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts
 // 委托给 AgentCallbackManager.UnregisterRail 后调用 rail.Uninit()。
 //
 // 对应 Python: BaseAgent.unregister_rail(rail) → manager.unregister_rail(rail, self) → rail.uninit(self)
-func (w *WarpBaseAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
-	if w.callbackManager != nil {
-		err := w.callbackManager.UnregisterRail(ctx, r)
+func (b *BaseAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
+	if b.callbackManager != nil {
+		err := b.callbackManager.UnregisterRail(ctx, r)
 		// 调用 Rail 注销钩子（对齐 Python: rail.uninit(self)）
-		if uninitErr := r.Uninit(w); uninitErr != nil {
+		if uninitErr := r.Uninit(b); uninitErr != nil {
 			if err == nil {
 				return uninitErr
 			}

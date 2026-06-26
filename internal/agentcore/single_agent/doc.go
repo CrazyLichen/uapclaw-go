@@ -11,7 +11,7 @@
 //
 //	single_agent/
 //	├── doc.go                 # 包文档
-//	├── base.go                # WarpBaseAgent — BaseAgent 默认实现，Invoke/Stream 回调包装骨架
+//	├── base.go                # BaseAgent — Agent 基础配置/管理容器
 //	├── ability/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── ability_manager.go # AbilityManager 核心结构 + 注册/查询/执行

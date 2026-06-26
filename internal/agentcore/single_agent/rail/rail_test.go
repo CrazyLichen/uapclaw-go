@@ -136,7 +136,7 @@ func TestAgentRail_接口满足(t *testing.T) {
 	var _ AgentRail = NewBaseRail()
 }
 
-// TestRailAgent_接口满足 测试 WarpBaseAgent 隐式满足 RailAgent 接口。
+// TestRailAgent_接口满足 测试 BaseAgent 隐式满足 RailAgent 接口。
 func TestRailAgent_接口满足(t *testing.T) {
 	// 通过 fakeRailAgent 验证 RailAgent 接口可满足
 	_ = &fakeRailAgent{agentID: "test", cbMgr: nil}

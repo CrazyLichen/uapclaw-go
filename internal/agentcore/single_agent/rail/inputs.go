@@ -1,8 +1,11 @@
 package rail
 
 import (
+	"fmt"
+
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -205,6 +208,30 @@ func NewRunContext() *RunContext {
 // 对齐 Python: InvokeInputs(query="hello") 中 query 为 str 的分支
 func NewInvokeQueryString(s string) InvokeQuery {
 	return InvokeQueryString(s)
+}
+
+// QueryFromInputs 从 inputs map 中提取 query 字段，返回 InvokeQuery 接口。
+//
+// 对齐 Python: DeepAgent._normalize_inputs() 中对 inputs["query"] 的处理：
+//   - *InteractiveInput → 直接返回（中断恢复路径）
+//   - string           → 包装为 InvokeQueryString（普通路径）
+//   - 其他             → 用 fmt.Sprintf 转字符串兜底
+//   - nil/不存在       → 返回空字符串 InvokeQueryString
+func QueryFromInputs(inputs map[string]any) InvokeQuery {
+	q := inputs["query"]
+	if q == nil {
+		return NewInvokeQueryString("")
+	}
+	// 指针类型：中断恢复路径（与全代码库惯例一致，InteractiveInput 方法接收者均为指针）
+	if ii, ok := q.(*interaction.InteractiveInput); ok {
+		return ii
+	}
+	// 字符串类型：普通查询路径
+	if s, ok := q.(string); ok {
+		return NewInvokeQueryString(s)
+	}
+	// 兜底：将任意值转字符串
+	return NewInvokeQueryString(fmt.Sprintf("%v", q))
 }
 
 // NewMapInputs 创建 MapInputs 实例。
