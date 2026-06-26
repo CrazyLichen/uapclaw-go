@@ -9,8 +9,6 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -112,19 +110,5 @@ func (a *ReActAgent) saveContexts(sess sessioninterfaces.SessionFacade) {
 	}
 	if _, err := a.contextEngine.SaveContexts(context.Background(), sess, nil); err != nil {
 		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("保存上下文失败")
-	}
-}
-
-// makeExecuteToolCallFunc 创建 ExecuteToolCallFunc 闭包，
-// 直接复用 executeToolCalls 的 []ability.ExecuteResult 返回值。
-func (a *ReActAgent) makeExecuteToolCallFunc() interrupt.ExecuteToolCallFunc {
-	return func(
-		ctx context.Context,
-		cbc *rail.AgentCallbackContext,
-		toolCalls []*llmschema.ToolCall,
-		sess sessioninterfaces.SessionFacade,
-		modelCtx ceinterface.ModelContext,
-	) ([]ability.ExecuteResult, error) {
-		return a.executeToolCalls(ctx, cbc, toolCalls, sess, modelCtx)
 	}
 }

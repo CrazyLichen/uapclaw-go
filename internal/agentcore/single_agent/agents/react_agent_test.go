@@ -609,22 +609,6 @@ func TestReActAgent_executeToolCalls_无AbilityManager(t *testing.T) {
 	_ = results
 }
 
-// TestReActAgent_makeExecuteToolCallFunc_有能力管理器 验证闭包在有 AbilityManager 时执行
-func TestReActAgent_makeExecuteToolCallFunc_有能力管理器(t *testing.T) {
-	card := agentschema.NewAgentCard(
-		cschema.WithName("make_exec_am"),
-		cschema.WithDescription("创建执行闭包有 AM 测试"),
-	)
-	agent := NewReActAgent(card, nil)
-
-	fn := agent.makeExecuteToolCallFunc()
-	cbc := rail.NewAgentCallbackContext(nil, nil, nil)
-	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1", Arguments: "{}"}}
-	// 不 panic，有 AbilityManager 会返回结果（含错误信息）
-	results, _ := fn(context.Background(), cbc, toolCalls, nil, nil)
-	_ = results
-}
-
 // TestWriteInvokeResultToStream_正常结果 验证正常结果写入流
 func TestWriteInvokeResultToStream_正常结果(t *testing.T) {
 	card := agentschema.NewAgentCard(
@@ -880,27 +864,6 @@ func TestReActAgent_executeToolCalls_有ToolCalls(t *testing.T) {
 	// newTestAgent 创建的 agent 有 AbilityManager，工具不存在时会返回错误结果
 	results, err := agent.executeToolCalls(context.Background(), cbc, toolCalls, sess, fmc)
 	// 不 panic，即使工具不存在
-	_ = results
-	_ = err
-}
-
-// TestReActAgent_makeExecuteToolCallFunc_有ToolCalls 验证闭包执行工具调用
-func TestReActAgent_makeExecuteToolCallFunc_有ToolCalls(t *testing.T) {
-	card := agentschema.NewAgentCard(
-		cschema.WithName("make_exec_tc"),
-		cschema.WithDescription("闭包执行工具调用测试"),
-	)
-	config := saconfig.NewReActAgentConfig(
-		saconfig.WithModelName("qwen-max"),
-	)
-	agent := NewReActAgent(card, config)
-
-	fn := agent.makeExecuteToolCallFunc()
-	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
-	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1", Arguments: "{}"}}
-	sess := session.NewSession(session.WithSessionID("make_exec_tc_sess"))
-	fmc := &fakeModelContext{}
-	results, err := fn(context.Background(), cbc, toolCalls, sess, fmc)
 	_ = results
 	_ = err
 }
@@ -2385,24 +2348,6 @@ func TestReActAgent_getTools(t *testing.T) {
 	tools, err := agent.getTools()
 	assert.NoError(t, err)
 	_ = tools
-}
-
-// TestReActAgent_makeExecuteToolCallFunc_NotNil 创建闭包不 panic
-func TestReActAgent_makeExecuteToolCallFunc_NotNil(t *testing.T) {
-	agent := newTestAgent("make_exec_notnil")
-	fn := agent.makeExecuteToolCallFunc()
-	assert.NotNil(t, fn)
-}
-
-// TestReActAgent_makeExecuteToolCallFunc_空工具调用 空工具调用返回空结果
-func TestReActAgent_makeExecuteToolCallFunc_空工具调用(t *testing.T) {
-	agent := newTestAgent("make_exec_empty")
-	fn := agent.makeExecuteToolCallFunc()
-
-	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
-	results, err := fn(context.Background(), cbc, nil, nil, nil)
-	assert.NoError(t, err)
-	_ = results
 }
 
 // TestReActAgent_WriteInvokeResultToStream_nilHandler hitlHandler 为 nil 时不 panic

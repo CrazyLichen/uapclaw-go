@@ -378,7 +378,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 				ModelContext:    modelCtx,
 				Session:         sess,
 				InvokeInputs:    curInputs,
-				ExecuteToolCall: a.makeExecuteToolCallFunc(),
+				ExecuteToolCall: a.executeToolCalls,
 			})
 			if resumeErr != nil {
 				return resumeErr
