@@ -9,8 +9,7 @@
 //
 //	decorator/
 //	├── doc.go           # 子包文档
-//	├── decorator.go     # TracedModelClient/TracedTool/TracedWorkflow 装饰器 + Decorate*WithTrace + TracerSession 接口
-//	└── decorator_test.go
+//	└── decorator.go     # TracedModelClient/TracedTool/TracedWorkflow 装饰器 + Decorate*WithTrace + TracerSession 接口
 //
 // 对应 Python 代码：openjiuwen/core/session/tracer/decorator.py
 package decorator

@@ -239,8 +239,6 @@ func NewMapInputs() *MapInputs {
 	return &MapInputs{Data: make(map[string]any)}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // IsInteractiveInput 实现 InvokeQuery 接口，普通字符串查询始终返回 false。
 func (q InvokeQueryString) IsInteractiveInput() bool { return false }
 

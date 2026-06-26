@@ -13,11 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent dashscope 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DashScopeModelClient 阿里云百炼 DashScope 模型客户端。
@@ -32,6 +27,11 @@ const logComponent = logger.ComponentAgentCore
 type DashScopeModelClient struct {
 	openai.OpenAIModelClient
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent dashscope 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

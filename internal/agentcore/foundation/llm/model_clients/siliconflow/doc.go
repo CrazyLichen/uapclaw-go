@@ -12,5 +12,11 @@
 //   - 多轮对话中，上一轮 LLM 返回的 assistant 消息（含 tool_calls）以 dict 格式透传，
 //     dict 内容不可控，必须清洗
 //
+// 文件目录：
+//
+//	siliconflow/
+//	├── doc.go        # 包文档
+//	└── client.go     # SiliconFlow 客户端实现（覆写 Invoke/Stream 补充 sanitize）
+//
 // 对应 Python: openjiuwen/core/foundation/llm/model_clients/siliconflow_model_client.py
 package siliconflow

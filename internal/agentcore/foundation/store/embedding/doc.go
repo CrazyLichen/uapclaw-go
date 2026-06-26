@@ -7,8 +7,7 @@
 //
 //	embedding/
 //	├── doc.go           # 包文档
-//	├── base.go          # BaseEmbedding 接口、EmbedOption、Callback 定义
-//	└── base_test.go     # 单元测试
+//	└── base.go          # BaseEmbedding 接口、EmbedOption、Callback 定义
 //
 // 对应 Python 代码：
 //
