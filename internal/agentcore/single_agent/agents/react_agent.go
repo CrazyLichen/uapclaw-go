@@ -8,8 +8,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -60,6 +60,9 @@ type ReActAgent struct {
 	kvReleaseWarningLogged bool
 	// hitlHandler HITL 中断处理器
 	hitlHandler *interrupt.ToolInterruptHandler
+	// skillUtil 技能工具（延迟初始化，Configure 时根据 sysOperationID 创建）
+	// 对应 Python: self._skill_util
+	skillUtil *skills.SkillUtil
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -73,6 +76,12 @@ const (
 	defaultLanguage = "cn"
 	// defaultMaxIterations 默认最大迭代次数
 	defaultMaxIterations = 5
+	// skillsSection skills 区段名称
+	// 对应 Python: _SKILLS_SECTION = "skills"
+	skillsSection = "skills"
+	// skillsSectionPriority skills 区段优先级
+	// 对应 Python: _SKILLS_SECTION_PRIORITY = 90
+	skillsSectionPriority = 90
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -86,7 +95,7 @@ func NewReActAgent(
 	card *agentschema.AgentCard,
 	config *saconfig.ReActAgentConfig,
 ) *ReActAgent {
-	base := single_agent.NewBaseAgent(card, &resource.NoopResourceManager{})
+	base := single_agent.NewBaseAgent(card, nil)
 
 	agent := &ReActAgent{
 		base:          base,

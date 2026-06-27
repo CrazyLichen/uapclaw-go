@@ -177,6 +177,11 @@ func (t *MCPTool) Card() *tool.ToolCard {
 	return &t.card.ToolCard
 }
 
+// McpCard 返回 MCP 工具配置卡片，包含服务器标识信息。
+func (t *MCPTool) McpCard() *McpToolCard {
+	return t.card
+}
+
 // Invoke 调用 MCP 远程工具。
 //
 // 流程：

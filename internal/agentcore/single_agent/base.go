@@ -3,11 +3,11 @@ package single_agent
 import (
 	"context"
 
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -44,14 +44,6 @@ type (
 	ExecuteResult = ability.ExecuteResult
 	// AbilityExecutionError 能力执行错误（re-export from ability 子包）
 	AbilityExecutionError = ability.AbilityExecutionError
-	// ResourceManager 资源管理器接口（re-export from resource 子包）
-	ResourceManager = resource.ResourceManager
-	// NoopResourceManager 空资源管理器（re-export from resource 子包）
-	NoopResourceManager = resource.NoopResourceManager
-	// ResourceOptions 资源选项（re-export from resource 子包）
-	ResourceOptions = resource.ResourceOptions
-	// ResourceOption 资源选项函数（re-export from resource 子包）
-	ResourceOption = resource.ResourceOption
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -61,7 +53,7 @@ type (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseAgent 创建 BaseAgent 实例。
-func NewBaseAgent(card *agentschema.AgentCard, resourceMgr resource.ResourceManager) *BaseAgent {
+func NewBaseAgent(card *agentschema.AgentCard, resourceMgr *resourcesmanager.ResourceMgr) *BaseAgent {
 	return &BaseAgent{
 		card:            card,
 		abilityManager:  ability.NewAbilityManager(resourceMgr),

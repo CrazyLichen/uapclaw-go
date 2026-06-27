@@ -405,12 +405,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.17 | ✅ | Skill 模型 | `Skill{Name, Description, Directory}` | `openjiuwen/core/single_agent/skills/skill_manager.py` (Skill) |
 | 6.18 | ✅ | SkillManager | 注册/注销/获取技能，YAML front-matter 加载 | `openjiuwen/core/single_agent/skills/skill_manager.py` |
 | **6.x 事件驱动 Controller** | — | | | |
-| 6.19 | ☐ | Controller | 事件驱动任务编排 | `openjiuwen/core/controller/base.py` |
-| 6.20 | ✅ | TaskManager / EventQueue | 任务与事件队列 | `openjiuwen/core/controller/` |
-| 6.21 | ✅ | TaskScheduler / EventHandler | 调度器与事件处理器 | `openjiuwen/core/controller/` |
+| 6.19 | ✅ | Controller | ✅ Controller 主结构体：两阶段初始化、懒启动、会话绑定/解绑、Stream/Invoke 流式/批量执行、状态持久化、config 级联传播、首帧超时；✅ IntentToolkits 完整实现；✅ IntentRecognizer 骨架（⤵️ 6.23 回填 LLM 调用）；✅ EventHandlerWithIntentRecognition 完整实现 | `openjiuwen/core/controller/base.py` |
+| 6.20 | ✅ | TaskManager / EventQueue | 任务与事件队列 + intent_toolkits.go | `openjiuwen/core/controller/` |
+| 6.21 | ✅ | TaskScheduler / EventHandler | 调度器与事件处理器 + intent_recognizer.go | `openjiuwen/core/controller/` |
 | 6.22 | ☐ | ControllerAgent | 基于 Controller 的 Agent | `openjiuwen/core/single_agent/base.py` (ControllerAgent) |
 | **6.x Runner 编排** | — | | | |
-| 6.23 | ☐ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表 | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
+| 6.23 | ✅ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表 | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
 | 6.24 | ☐ | AsyncCallbackFramework | 事件注册/触发/emit_before/emit_after/transform_io | `openjiuwen/core/runner/callback/` |
 | 6.25 | ☐ | Runner 单例 | `RunAgent/RunAgentStreaming/RunWorkflow/SpawnAgent` | `openjiuwen/core/runner/runner.py` |
 | 6.26 | ☐ | RunnerConfig | Runner 配置（distributed_mode 等） | `openjiuwen/core/runner/runner_config.py` |

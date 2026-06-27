@@ -374,7 +374,8 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		if renderedPrompt != "" {
 			a.AddPromptBuilderSection("identity", map[string]string{defaultLanguage: renderedPrompt}, 10)
 		}
-		// ⤵️ Skill: a.updateSkillPromptBuilderSection(renderedPrompt)
+		// ⤴️ Skill: 更新技能提示词区段
+		a.updateSkillPromptBuilderSection(renderedPrompt)
 
 		startIteration := 0
 		if hitlState != nil {

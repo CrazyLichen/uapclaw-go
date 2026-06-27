@@ -12,11 +12,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -49,7 +48,7 @@ type AbilityManager struct {
 	// contextEngine 上下文引擎
 	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
-	resourceMgr resource.ResourceManager
+	resourceMgr *resourcesmanager.ResourceMgr
 }
 
 // toolItem 内部辅助类型，用于 prioritizePaidSearch 的输入。
@@ -69,10 +68,7 @@ type toolItem struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbilityManager 创建 AbilityManager 实例。
-func NewAbilityManager(resourceMgr resource.ResourceManager) *AbilityManager {
-	if resourceMgr == nil {
-		resourceMgr = &resource.NoopResourceManager{}
-	}
+func NewAbilityManager(resourceMgr *resourcesmanager.ResourceMgr) *AbilityManager {
 	return &AbilityManager{
 		tools:       make(map[string]*tool.ToolCard),
 		workflows:   make(map[string]*schema.WorkflowCard),
@@ -589,13 +585,23 @@ func (am *AbilityManager) executeTool(
 		toolID = toolCard.Name
 	}
 
-	var opts []resource.ResourceOption
+	var opts []resourcesmanager.ResourceOption
 	if tag != "" {
-		opts = append(opts, resource.WithResourceTag(tag))
+		opts = append(opts, resourcesmanager.WithTag(resourcesmanager.Tag(tag)))
 	}
 
-	t, err := am.resourceMgr.GetTool(toolID, opts...)
-	if err != nil {
+	if am.resourceMgr == nil {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"工具实例未找到: "+toolID,
+			exception.WithParam("tool_name", toolName),
+		)
+		return ExecuteResult{}, execErr
+	}
+
+	tools, err := am.resourceMgr.GetTool(toolID, opts...)
+	if err != nil || len(tools) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
 			toolCall.ID,
@@ -605,6 +611,7 @@ func (am *AbilityManager) executeTool(
 		)
 		return ExecuteResult{}, execErr
 	}
+	t := tools[0]
 
 	// 用 LifecycleTool 包装，使 Tool 调用走完整回调链
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）
@@ -665,13 +672,23 @@ func (am *AbilityManager) executeWorkflow(
 	}
 
 	// 步骤 2：从 ResourceManager 获取 workflow 实例（对齐 Python L763-764）
-	var opts []resource.ResourceOption
+	var opts []resourcesmanager.ResourceOption
 	if tag != "" {
-		opts = append(opts, resource.WithResourceTag(tag))
+		opts = append(opts, resourcesmanager.WithTag(resourcesmanager.Tag(tag)))
 	}
 
-	wfAny, err := am.resourceMgr.GetWorkflow(wfID, opts...)
-	if err != nil {
+	if am.resourceMgr == nil {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"工作流实例未找到: "+wfID,
+			exception.WithParam("tool_name", toolName),
+		)
+		return ExecuteResult{}, execErr
+	}
+
+	wfs, err := am.resourceMgr.GetWorkflow(ctx, wfID, opts...)
+	if err != nil || len(wfs) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
 			toolCall.ID,
@@ -682,16 +699,7 @@ func (am *AbilityManager) executeWorkflow(
 		return ExecuteResult{}, execErr
 	}
 
-	wf, ok := wfAny.(interfaces.Workflow)
-	if !ok {
-		execErr := NewAbilityExecutionError(
-			exception.StatusAbilityNotFound,
-			toolCall.ID,
-			"工作流实例类型断言失败: "+wfID,
-			exception.WithParam("tool_name", toolName),
-		)
-		return ExecuteResult{}, execErr
-	}
+	wf := wfs[0]
 
 	// 步骤 3：创建 workflow session（对齐 Python L707: workflow_session = session.create_workflow_session()）
 	var workflowSess *session.WorkflowSession
@@ -773,13 +781,23 @@ func (am *AbilityManager) executeAgent(
 	}
 
 	// 步骤 3：从 ResourceManager 获取 agent 实例（对齐 Python L780-781）
-	var opts []resource.ResourceOption
+	var opts []resourcesmanager.ResourceOption
 	if tag != "" {
-		opts = append(opts, resource.WithResourceTag(tag))
+		opts = append(opts, resourcesmanager.WithTag(resourcesmanager.Tag(tag)))
 	}
 
-	agAny, err := am.resourceMgr.GetAgent(agentID, opts...)
-	if err != nil {
+	if am.resourceMgr == nil {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"Agent 实例未找到: "+agentID,
+			exception.WithParam("tool_name", toolName),
+		)
+		return ExecuteResult{}, execErr
+	}
+
+	ags, err := am.resourceMgr.GetAgent(ctx, agentID, opts...)
+	if err != nil || len(ags) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
 			toolCall.ID,
@@ -790,16 +808,7 @@ func (am *AbilityManager) executeAgent(
 		return ExecuteResult{}, execErr
 	}
 
-	ag, ok := agAny.(interfaces.BaseAgent)
-	if !ok {
-		execErr := NewAbilityExecutionError(
-			exception.StatusAbilityNotFound,
-			toolCall.ID,
-			"Agent 实例类型断言失败: "+agentID,
-			exception.WithParam("tool_name", toolName),
-		)
-		return ExecuteResult{}, execErr
-	}
+	ag := ags[0]
 
 	// 步骤 4-7：子会话生命周期（仅当 sess 非 nil 时执行）
 	var childSession *session.Session
@@ -855,13 +864,23 @@ func (am *AbilityManager) executeFallbackTool(
 	sess sessioninterfaces.SessionFacade,
 	tag string,
 ) (ExecuteResult, error) {
-	var opts []resource.ResourceOption
+	var opts []resourcesmanager.ResourceOption
 	if tag != "" {
-		opts = append(opts, resource.WithResourceTag(tag))
+		opts = append(opts, resourcesmanager.WithTag(resourcesmanager.Tag(tag)))
 	}
 
-	t, err := am.resourceMgr.GetTool(toolName, opts...)
-	if err != nil {
+	if am.resourceMgr == nil {
+		execErr := NewAbilityExecutionError(
+			exception.StatusAbilityNotFound,
+			toolCall.ID,
+			"能力未找到: "+toolName,
+			exception.WithParam("ability_name", toolName),
+		)
+		return ExecuteResult{}, execErr
+	}
+
+	tools, err := am.resourceMgr.GetTool(toolName, opts...)
+	if err != nil || len(tools) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
 			toolCall.ID,
@@ -871,6 +890,7 @@ func (am *AbilityManager) executeFallbackTool(
 		)
 		return ExecuteResult{}, execErr
 	}
+	t := tools[0]
 
 	// 用 LifecycleTool 包装，使 fallback 路径走完整回调链
 	// （emit_before → TransformIO → STARTED → [执行] → FINISHED → TransformIO → emit_after）

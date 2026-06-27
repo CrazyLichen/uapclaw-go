@@ -7,6 +7,8 @@
 //
 //	runner/
 //	├── callback/             # 回调框架子包
+//	├── message_queue/        # 内存消息队列子包
+//	├── resources_manager/    # 资源注册表子包（Agent/Tool/Workflow/Model/Prompt 全局注册）
 //	├── doc.go                # 包文档
 //	└── runner.go             # RunAgent/RunWorkflow 全局函数
 //

@@ -8,6 +8,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -119,4 +120,30 @@ func (s *PromptSection) Render(language string) string {
 		return v
 	}
 	return ""
+}
+
+// updateSkillPromptBuilderSection 更新技能提示词区段。
+//
+// 在 invoke 入口阶段，根据已注册技能更新 prompt_builder 的 skills section。
+// 如果渲染后的系统提示词为空、skillUtil 为 nil 或无已注册技能，则移除 skills section。
+// 否则将技能提示词注入 skills section（priority=90）。
+//
+// 对应 Python: ReActAgent._update_skill_prompt_builder_section(rendered_system_prompt)
+func (a *ReActAgent) updateSkillPromptBuilderSection(renderedSystemPrompt string) {
+	if renderedSystemPrompt == "" || a.skillUtil == nil || !a.skillUtil.HasSkill() {
+		a.promptBuilder.RemoveSection(skillsSection)
+		return
+	}
+	skillPrompt := a.skillUtil.GetSkillPrompt()
+	a.AddPromptBuilderSection(skillsSection, map[string]string{defaultLanguage: skillPrompt}, skillsSectionPriority)
+}
+
+// SkillUtil 返回技能工具实例。
+func (a *ReActAgent) SkillUtil() *skills.SkillUtil {
+	return a.skillUtil
+}
+
+// SetSkillUtil 设置技能工具实例。
+func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
+	a.skillUtil = su
 }

@@ -11,11 +11,11 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/resource"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -38,47 +38,38 @@ func (f *fakeTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOpt
 	return nil, tool.ErrStreamNotSupported
 }
 
-// fakeResourceManager 用于测试的模拟资源管理器
-type fakeResourceManager struct {
-	tools     map[string]tool.Tool
-	workflows map[string]interfaces.Workflow
-	agents    map[string]interfaces.BaseAgent
-}
-
-func newFakeResourceManager() *fakeResourceManager {
-	return &fakeResourceManager{
-		tools:     make(map[string]tool.Tool),
-		workflows: make(map[string]interfaces.Workflow),
-		agents:    make(map[string]interfaces.BaseAgent),
+// newTestResourceMgr 创建用于测试的 ResourceMgr，并注册指定的工具/工作流/Agent 实例。
+func newTestResourceMgr(
+	tools map[string]tool.Tool,
+	workflows map[string]interfaces.Workflow,
+	agents map[string]interfaces.BaseAgent,
+) *resourcesmanager.ResourceMgr {
+	mgr := resourcesmanager.NewResourceMgr()
+	for id, t := range tools {
+		_ = mgr.AddTool(t)
+		_ = mgr.AddTool(t, resourcesmanager.WithTag(resourcesmanager.Tag(id)))
 	}
-}
-
-func (f *fakeResourceManager) GetTool(toolID string, _ ...resource.ResourceOption) (tool.Tool, error) {
-	t, ok := f.tools[toolID]
-	if !ok {
-		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", toolID))
+	for id, wf := range workflows {
+		card := wf.Card()
+		if card == nil {
+			card = schema.NewWorkflowCard(schema.WithID(id))
+		}
+		provider := func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
+			return wf, nil
+		}
+		_ = mgr.AddWorkflow(card, resourcesmanager.WorkflowProvider(provider))
 	}
-	return t, nil
-}
-
-func (f *fakeResourceManager) GetWorkflow(workflowID string, _ ...resource.ResourceOption) (any, error) {
-	w, ok := f.workflows[workflowID]
-	if !ok {
-		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", workflowID))
+	for id, ag := range agents {
+		agCard := ag.Card()
+		if agCard == nil {
+			agCard = agentschema.NewAgentCard(schema.WithID(id))
+		}
+		provider := func(_ context.Context, _ *agentschema.AgentCard) (interfaces.BaseAgent, error) {
+			return ag, nil
+		}
+		_ = mgr.AddAgent(agCard, resourcesmanager.AgentProvider(provider))
 	}
-	return w, nil
-}
-
-func (f *fakeResourceManager) GetAgent(agentID string, _ ...resource.ResourceOption) (any, error) {
-	a, ok := f.agents[agentID]
-	if !ok {
-		return nil, exception.BuildError(exception.StatusAbilityNotFound, exception.WithParam("ability_name", agentID))
-	}
-	return a, nil
-}
-
-func (f *fakeResourceManager) GetMcpToolInfos(_ string) ([]*schema.ToolInfo, error) {
-	return nil, nil
+	return mgr
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -352,18 +343,15 @@ func TestAbilityManager_ListToolInfo_按名称过滤(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_单工具成功(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
-	// 注册工具 Card
+	// 注册工具 Card 和实例
 	toolCard := tool.NewToolCard("search", "搜索", nil, nil)
-	am.Add(toolCard)
-
-	// 注册工具实例
-	frm.tools[toolCard.ID] = &fakeTool{
+	ft := &fakeTool{
 		card:   toolCard,
 		result: map[string]any{"result": "搜索结果"},
 	}
+	frm := newTestResourceMgr(map[string]tool.Tool{toolCard.ID: ft}, nil, nil)
+	am := NewAbilityManager(frm)
+	am.Add(toolCard)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "search", `{"query": "test"}`),
@@ -384,16 +372,14 @@ func TestAbilityManager_Execute_单工具成功(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_并行多工具(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	card1 := tool.NewToolCard("tool_a", "工具A", nil, nil)
 	card2 := tool.NewToolCard("tool_b", "工具B", nil, nil)
+	ft1 := &fakeTool{card: card1, result: map[string]any{"result": "A"}}
+	ft2 := &fakeTool{card: card2, result: map[string]any{"result": "B"}}
+	frm := newTestResourceMgr(map[string]tool.Tool{card1.ID: ft1, card2.ID: ft2}, nil, nil)
+	am := NewAbilityManager(frm)
 	am.Add(card1)
 	am.Add(card2)
-
-	frm.tools[card1.ID] = &fakeTool{card: card1, result: map[string]any{"result": "A"}}
-	frm.tools[card2.ID] = &fakeTool{card: card2, result: map[string]any{"result": "B"}}
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "tool_a", `{}`),
@@ -416,7 +402,7 @@ func TestAbilityManager_Execute_并行多工具(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_参数解析失败(t *testing.T) {
-	frm := newFakeResourceManager()
+	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
 	toolCard := tool.NewToolCard("search", "搜索", nil, nil)
@@ -439,7 +425,7 @@ func TestAbilityManager_Execute_参数解析失败(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_能力未找到(t *testing.T) {
-	frm := newFakeResourceManager()
+	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
@@ -658,7 +644,7 @@ func TestAbilityManager_ListToolInfo_MCP工具排除(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_工具实例未找到(t *testing.T) {
-	frm := newFakeResourceManager()
+	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
 	toolCard := tool.NewToolCard("search", "搜索", nil, nil)
@@ -678,16 +664,14 @@ func TestAbilityManager_Execute_工具实例未找到(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	toolCard := tool.NewToolCard("fail_tool", "失败工具", nil, nil)
-	am.Add(toolCard)
-
-	frm.tools[toolCard.ID] = &fakeTool{
+	ft := &fakeTool{
 		card: toolCard,
 		err:  exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("执行失败")),
 	}
+	frm := newTestResourceMgr(map[string]tool.Tool{toolCard.ID: ft}, nil, nil)
+	am := NewAbilityManager(frm)
+	am.Add(toolCard)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_1", "fail_tool", `{}`),
@@ -702,13 +686,11 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	fw := &fakeWorkflow{result: map[string]any{"output": "done"}, card: wf}
+	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
+	am := NewAbilityManager(frm)
 	am.Add(wf)
-
-	frm.workflows[wf.ID] = &fakeWorkflow{result: map[string]any{"output": "done"}}
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
@@ -723,7 +705,7 @@ func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
-	frm := newFakeResourceManager()
+	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
 	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
@@ -743,13 +725,11 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	fw := &fakeWorkflow{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("wf错误")), card: wf}
+	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
+	am := NewAbilityManager(frm)
 	am.Add(wf)
-
-	frm.workflows[wf.ID] = &fakeWorkflow{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("wf错误"))}
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_wf", "my_wf", `{}`),
@@ -764,13 +744,11 @@ func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Agent成功(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	fa := &fakeAgent{result: map[string]any{"response": "ok"}}
+	frm := newTestResourceMgr(nil, nil, map[string]interfaces.BaseAgent{ag.ID: fa})
+	am := NewAbilityManager(frm)
 	am.Add(ag)
-
-	frm.agents[ag.ID] = &fakeAgent{result: map[string]any{"response": "ok"}}
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
@@ -785,7 +763,7 @@ func TestAbilityManager_Execute_Agent成功(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
-	frm := newFakeResourceManager()
+	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
 	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
@@ -805,13 +783,11 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	fa := &fakeAgent{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("agent错误"))}
+	frm := newTestResourceMgr(nil, nil, map[string]interfaces.BaseAgent{ag.ID: fa})
+	am := NewAbilityManager(frm)
 	am.Add(ag)
-
-	frm.agents[ag.ID] = &fakeAgent{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("agent错误"))}
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_ag", "my_agent", `{}`),
@@ -852,15 +828,15 @@ func TestAbilityManager_Execute_空ToolCall(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_兜底Tool成功(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
-	// 不注册 Card，但注册 Tool 实例（用 tool name 作 key）
+	// 不注册 Card，但注册 Tool 实例（用 tool name 作 ID，使 GetTool 能按 name 找到）
 	fallbackCard := tool.NewToolCard("fallback_tool", "兜底工具", nil, nil)
-	frm.tools["fallback_tool"] = &fakeTool{
+	fallbackCard.ID = "fallback_tool"
+	ft := &fakeTool{
 		card:   fallbackCard,
 		result: map[string]any{"result": "fallback"},
 	}
+	frm := newTestResourceMgr(map[string]tool.Tool{"fallback_tool": ft}, nil, nil)
+	am := NewAbilityManager(frm)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fallback_tool", `{}`),
@@ -875,14 +851,14 @@ func TestAbilityManager_Execute_兜底Tool成功(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_兜底Tool执行错误(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	fallbackCard := tool.NewToolCard("fail_fb", "失败兜底", nil, nil)
-	frm.tools["fail_fb"] = &fakeTool{
+	fallbackCard.ID = "fail_fb"
+	ft := &fakeTool{
 		card: fallbackCard,
 		err:  exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("兜底失败")),
 	}
+	frm := newTestResourceMgr(map[string]tool.Tool{"fail_fb": ft}, nil, nil)
+	am := NewAbilityManager(frm)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_fb", "fail_fb", `{}`),
@@ -897,16 +873,15 @@ func TestAbilityManager_Execute_兜底Tool执行错误(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_带Tag(t *testing.T) {
-	frm := newFakeResourceManager()
-	am := NewAbilityManager(frm)
-
 	toolCard := tool.NewToolCard("tagged_tool", "带标签工具", nil, nil)
-	am.Add(toolCard)
-
-	frm.tools[toolCard.ID] = &fakeTool{
+	ft := &fakeTool{
 		card:   toolCard,
 		result: map[string]any{"result": "ok"},
 	}
+	mgr := resourcesmanager.NewResourceMgr()
+	_ = mgr.AddTool(ft, resourcesmanager.WithTag(resourcesmanager.Tag("my_tag")))
+	am := NewAbilityManager(mgr)
+	am.Add(toolCard)
 
 	results := am.Execute(context.Background(), nil, []*llmschema.ToolCall{
 		llmschema.NewToolCall("call_tag", "tagged_tool", `{}`),

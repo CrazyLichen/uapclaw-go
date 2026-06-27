@@ -33,13 +33,16 @@
 //	│   ├── inputs.go          # EventInputs 接口及各事件 Inputs 结构体
 //	│   ├── manager.go         # AgentCallbackManager 回调管理器
 //	│   └── rail.go            # AgentRail 接口 + BaseRail 结构体 + CallbackFrom/BuildCallbacks
-//	├── resource/
+//	├── schema/
 //	│   ├── doc.go             # 子包文档
-//	│   └── resource_manager.go # ResourceManager 接口 + NoopResourceManager + ResourceOptions
-//	└── schema/
+//	│   ├── agent_card.go      # AgentCard 结构体 + 构造函数 + Ability 接口实现
+//	│   └── agent_result.go    # Part/Artifact/AgentResult 结果模型
+//	└── skills/
 //	    ├── doc.go             # 子包文档
-//	    ├── agent_card.go      # AgentCard 结构体 + 构造函数 + Ability 接口实现
-//	    └── agent_result.go    # Part/Artifact/AgentResult 结果模型
+//	    ├── skill.go           # Skill 模型 — 技能元数据结构体
+//	    ├── skill_manager.go   # SkillManager — 技能注册/注销/查询 + YAML front-matter 加载
+//	    ├── skill_util.go      # SkillUtil — 高层门面，组合 SkillManager + RemoteSkillUtil
+//	    └── remote_skill_util.go # GitHubTree/GitHubError/RemoteSkillUtil — GitHub 远程技能下载
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/ability_manager.py
 package single_agent
