@@ -622,12 +622,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.1.7 | ✅ | HookEventBase | 钩子事件基类 | `jiuwenswarm/common/schema/event_base.py` |
 | 10.1.8 | ✅ | PermissionContext | 权限上下文 | `jiuwenswarm/common/schema/agent.py` |
 | **10.2 E2A 协议** | — | | | |
-| 10.2.1 | ☐ | E2AEnvelope | 请求信封 | `jiuwenswarm/common/e2a/models.py` (E2AEnvelope) |
-| 10.2.2 | ☐ | E2AResponse | 响应模型 | `jiuwenswarm/common/e2a/models.py` (E2AResponse) |
-| 10.2.3 | ☐ | E2AProvenance / E2AAuth | 来源标识与认证 | `jiuwenswarm/common/e2a/models.py` |
-| 10.2.4 | ☐ | E2AFileRef / IdentityOrigin | 文件引用与身份来源 | `jiuwenswarm/common/e2a/models.py` |
+| 10.2.1 | ✅ | E2AEnvelope | 请求信封 | `jiuwenswarm/common/e2a/models.py` (E2AEnvelope) |
+| 10.2.2 | ✅ | E2AResponse | 响应模型 | `jiuwenswarm/common/e2a/models.py` (E2AResponse) |
+| 10.2.3 | ✅ | E2AProvenance / E2AAuth | 来源标识与认证 | `jiuwenswarm/common/e2a/models.py` |
+| 10.2.4 | ✅ | E2AFileRef / IdentityOrigin | 文件引用与身份来源 | `jiuwenswarm/common/e2a/models.py` |
 | 10.2.5 | ☐ | Wire Codec | E2A ↔ AgentResponse/AgentResponseChunk 编解码 | `jiuwenswarm/common/e2a/wire_codec.py` |
-| 10.2.6 | ☐ | E2A Constants | 协议常量 | `jiuwenswarm/common/e2a/constants.py` |
+| 10.2.6 | ✅ | E2A Constants | 协议常量 | `jiuwenswarm/common/e2a/constants.py` |
 | 10.2.7 | ☐ | gateway_normalize | Message/E2A/AgentResponse 格式互转 | `jiuwenswarm/common/e2a/gateway_normalize.py` |
 | 10.2.8 | ☐ | agent_compat | `e2a_to_agent_request()` 转换 | `jiuwenswarm/common/e2a/agent_compat.py` |
 | 10.2.9 | ☐ | ACP 适配器 | JSON-RPC ACP 协议桥接 | `jiuwenswarm/common/e2a/adapters.py` · `acp/` |
