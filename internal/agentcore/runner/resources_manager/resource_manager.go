@@ -466,7 +466,7 @@ func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 
 	// ⤵️ 预留：WithRefresh() 时先 RemoveTool 再 AddTool
 	if o.Refresh {
-		m.registry.Tool().RemoveTool(toolID)
+		_, _ = m.registry.Tool().RemoveTool(toolID)
 	}
 
 	if err := m.registry.Tool().AddTool(toolID, t); err != nil {

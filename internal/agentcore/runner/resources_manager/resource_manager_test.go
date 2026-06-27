@@ -772,8 +772,8 @@ func setupMcpServer(mgr *ResourceMgr, serverID, serverName string, toolNames []s
 	serverConfig := mcp.NewMcpServerConfig(serverName, "http://localhost:8080/sse", "sse", mcp.WithServerID(serverID))
 
 	// 使用 innerRefreshMcpTools 注册工具和服务器资源
-	mockClient.Connect(context.Background())
-	mgr.registry.Tool().innerRefreshMcpTools(context.Background(), mockClient, serverConfig, nil)
+	_ = mockClient.Connect(context.Background())
+	_, _ = mgr.registry.Tool().innerRefreshMcpTools(context.Background(), mockClient, serverConfig, nil)
 	mgr.registry.Tool().mu.Lock()
 	mgr.registry.Tool().mcpServerNameToIDs[serverName] = append(
 		mgr.registry.Tool().mcpServerNameToIDs[serverName], serverID)
@@ -1001,7 +1001,7 @@ func TestResourceMgr_AddMcpServer_使用Mock(t *testing.T) {
 	serverConfig := mcp.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse", mcp.WithServerID("srv1"))
 
 	// 使用 innerRefreshMcpTools 模拟添加过程
-	mockClient.Connect(context.Background())
+	_ = mockClient.Connect(context.Background())
 	toolMgr := mgr.registry.Tool()
 	cards, err := toolMgr.innerRefreshMcpTools(context.Background(), mockClient, serverConfig, nil)
 	if err != nil {

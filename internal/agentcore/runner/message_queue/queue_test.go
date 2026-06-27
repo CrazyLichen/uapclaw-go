@@ -187,7 +187,7 @@ func TestMessageQueueInMemory_同步发布Handler错误(t *testing.T) {
 	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	q.ProduceSync(context.Background(), "error_topic", invoke)
+	_ = q.ProduceSync(context.Background(), "error_topic", invoke)
 
 	result, err := invoke.WaitResponse(context.Background())
 	assert.Error(t, err)
@@ -206,7 +206,7 @@ func TestMessageQueueInMemory_Handler未设置(t *testing.T) {
 	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	q.ProduceSync(context.Background(), "no_handler_topic", invoke)
+	_ = q.ProduceSync(context.Background(), "no_handler_topic", invoke)
 
 	_, err := invoke.WaitResponse(context.Background())
 	assert.ErrorIs(t, err, ErrHandlerNotSet)
