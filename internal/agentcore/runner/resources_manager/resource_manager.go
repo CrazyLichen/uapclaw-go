@@ -3,6 +3,7 @@ package resources_manager
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -896,14 +897,15 @@ func (m *ResourceMgr) RefreshMcpServer(ctx context.Context, serverID string, opt
 	return m.registry.Tool().RefreshToolServer(ctx, serverID, o.SkipIfNotExists, o.Force)
 }
 
-// RemoveMcpServer 移除 MCP 工具服务器。
+// RemoveMcpServer 移除 MCP 工具服务器，返回被移除的服务器 ID 列表。
 //
 // 对应 Python: ResourceManager.remove_mcp_server(server_id, **kwargs)
-func (m *ResourceMgr) RemoveMcpServer(ctx context.Context, serverID string, opts ...McpOption) error {
+// Python 返回 Result[str, Exception] | list[Result[str, Exception]]，Go 返回 ([]string, error)
+func (m *ResourceMgr) RemoveMcpServer(ctx context.Context, serverID string, opts ...McpOption) ([]string, error) {
 	o := applyMcpOptions(opts...)
 	toolIDs, err := m.registry.Tool().RemoveToolServer(ctx, serverID, o.SkipIfNotExists)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 清理标签和缓存
@@ -912,7 +914,8 @@ func (m *ResourceMgr) RemoveMcpServer(ctx context.Context, serverID string, opts
 		m.idToCard.Pop(id)
 	}
 
-	return nil
+	// Python 中返回 Ok(mcp_server_id)，Go 中返回 serverID
+	return []string{serverID}, nil
 }
 
 // GetMcpTool 通过工具名和服务器 ID 获取 MCP 工具。
@@ -1236,4 +1239,533 @@ func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcp.McpServerConfi
 		)
 	}
 	return nil
+}
+
+// --- 核心分派方法 ---
+
+// getMgr 根据 resourceType 获取子管理器。
+// 不支持的类型返回 nil。
+//
+// 对应 Python: ResourceManager._get_mgr(resource_type)
+func (m *ResourceMgr) getMgr(resourceType string) any {
+	switch resourceType {
+	case "workflow":
+		return m.registry.Workflow()
+	case "agent":
+		return m.registry.Agent()
+	case "team":
+		return m.registry.AgentTeam()
+	case "tool":
+		return m.registry.Tool()
+	case "prompt":
+		return m.registry.Prompt()
+	case "model":
+		return m.registry.Model()
+	case "sys_operation":
+		return m.registry.SysOperation()
+	default:
+		return nil
+	}
+}
+
+// dispatchAdd 分发到子管理器的 add 方法。
+// resource 为资源实例或 provider，resourceCard 和 interfaceURL 仅 agent 类型使用。
+//
+// 对应 Python: ResourceManager._dispatch_add(resource_type, resource_id, resource, resource_card=None, interface_url=None)
+func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any, resourceCard *schema.BaseCard, interfaceURL string) error {
+	switch resourceType {
+	case "workflow":
+		provider, ok := resource.(WorkflowProvider)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "resource is not WorkflowProvider"),
+			)
+		}
+		return m.registry.Workflow().AddWorkflow(resourceID, provider)
+	case "agent":
+		provider, ok := resource.(AgentProvider)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "resource is not AgentProvider"),
+			)
+		}
+		// ⤵️ 预留：interface_url 用于分布式场景
+		_ = interfaceURL
+		return m.registry.Agent().AddAgent(resourceID, provider)
+	case "team":
+		// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
+		provider := resource
+		return m.registry.AgentTeam().AddAgentTeam(resourceID, provider)
+	case "tool":
+		t, ok := resource.(tool.Tool)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "resource is not Tool"),
+			)
+		}
+		return m.registry.Tool().AddTool(resourceID, t)
+	case "prompt":
+		tmpl, ok := resource.(*prompt.PromptTemplate)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "resource is not PromptTemplate"),
+			)
+		}
+		return m.registry.Prompt().AddPrompt(resourceID, tmpl)
+	case "model":
+		provider, ok := resource.(ModelProvider)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "resource is not ModelProvider"),
+			)
+		}
+		return m.registry.Model().AddModel(resourceID, provider)
+	case "sys_operation":
+		return m.registry.SysOperation().AddSysOperation(resourceID, resource)
+	default:
+		return exception.BuildError(exception.StatusResourceAddError,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("resource_id", resourceID),
+			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+		)
+	}
+}
+
+// dispatchRemove 分发到子管理器的 remove 方法，返回被移除的资源。
+//
+// 对应 Python: ResourceManager._dispatch_remove(resource_type, resource_id)
+func (m *ResourceMgr) dispatchRemove(resourceType, resourceID string) (any, error) {
+	switch resourceType {
+	case "workflow":
+		return m.registry.Workflow().RemoveWorkflow(resourceID)
+	case "agent":
+		return m.registry.Agent().RemoveAgent(resourceID)
+	case "team":
+		return m.registry.AgentTeam().RemoveAgentTeam(resourceID)
+	case "tool":
+		return m.registry.Tool().RemoveTool(resourceID)
+	case "prompt":
+		return m.registry.Prompt().RemovePrompt(resourceID)
+	case "model":
+		return m.registry.Model().RemoveModel(resourceID)
+	case "sys_operation":
+		return m.registry.SysOperation().RemoveSysOperation(resourceID)
+	default:
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("resource_id", resourceID),
+			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+		)
+	}
+}
+
+// dispatchGet 分发到子管理器的 get 方法。
+// 仅 workflow/model/tool 类型传 session。
+//
+// 对应 Python: ResourceManager._dispatch_get(resource_type, resource_id, session=None)
+func (m *ResourceMgr) dispatchGet(ctx context.Context, resourceType, resourceID string, session any) (any, error) {
+	switch resourceType {
+	case "workflow":
+		s, _ := session.(decorator.TracerSession)
+		return m.registry.Workflow().GetWorkflow(ctx, resourceID, s)
+	case "agent":
+		return m.registry.Agent().GetAgent(ctx, resourceID)
+	case "team":
+		// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
+		return m.registry.AgentTeam().GetAgentTeam(resourceID)
+	case "tool":
+		s, _ := session.(decorator.TracerSession)
+		return m.registry.Tool().GetTool(resourceID, s)
+	case "prompt":
+		return m.registry.Prompt().GetPrompt(resourceID)
+	case "model":
+		s, _ := session.(decorator.TracerSession)
+		return m.registry.Model().GetModel(ctx, resourceID, s)
+	case "sys_operation":
+		return m.registry.SysOperation().GetSysOperation(resourceID)
+	default:
+		return nil, exception.BuildError(exception.StatusResourceGetError,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("resource_id", resourceID),
+			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+		)
+	}
+}
+
+// --- 内部核心流转方法 ---
+
+// innerAddResource 核心添加逻辑：检查重复 → 分发 add → 缓存 card → 标记 tag → 日志。
+//
+// 对应 Python: ResourceManager._inner_add_resource(resource_id, resource_type, resource, resource_card=None, tag=None, interface_url=None)
+func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource any, resourceCard *schema.BaseCard, tag Tag, interfaceURL string) error {
+	// 1. 检查资源是否已存在
+	if m.tagMgr.HasResource(resourceID) {
+		return exception.BuildError(exception.StatusResourceAddError,
+			exception.WithParam("card", resourceCardStr(resourceCard, resourceID)),
+			exception.WithParam("reason", "resource already exist"),
+		)
+	}
+
+	// 2. 分发到子管理器 add
+	if err := m.dispatchAdd(resourceType, resourceID, resource, resourceCard, interfaceURL); err != nil {
+		return err
+	}
+
+	// 3. 缓存 card 到 idToCard
+	if resourceCard != nil {
+		m.idToCard.Set(resourceID, resourceCard)
+	}
+
+	// 4. 标记 tag
+	effectiveTag := tag
+	if effectiveTag == "" {
+		effectiveTag = TagGlobal
+	}
+	m.tagMgr.TagResource(resourceID, []Tag{effectiveTag})
+
+	// 5. 日志记录
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "RESOURCE_MGR_ADD_RESOURCE").
+		Str("resource_id", resourceID).
+		Str("resource_type", resourceType).
+		Str("tag", effectiveTag).
+		Str("card", resourceCardStr(resourceCard, resourceID)).
+		Msg("添加资源成功")
+
+	return nil
+}
+
+// innerRemoveResources 核心移除逻辑：按 tag 查找或直接按 ID → 遍历移除 → 分发 remove → Pop card → 日志。
+//
+// 对应 Python: ResourceManager._inner_remove_resources(resource_id, resource_type, tag, tag_match_strategy, skip_if_tag_not_exists)
+func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfTagNotExists bool) ([]any, error) {
+	idsToRemove := resourceIDs
+
+	// 如果未指定 ID 列表，按 tag 查找
+	if len(idsToRemove) == 0 {
+		if err := innerValidateTag(tag); err != nil {
+			return nil, err
+		}
+		effectiveTag := tag
+		if effectiveTag == "" {
+			effectiveTag = TagGlobal
+		}
+		found, err := m.tagMgr.FindResourcesByTags([]Tag{effectiveTag}, tagMatchStrategy, skipIfTagNotExists)
+		if err != nil {
+			return nil, err
+		}
+		idsToRemove = found
+		if len(idsToRemove) == 0 {
+			return []any{}, nil
+		}
+	}
+
+	results := make([]any, 0, len(idsToRemove))
+	for _, removeID := range idsToRemove {
+		// 1. 移除标签
+		m.tagMgr.RemoveResource(removeID)
+
+		// 2. 分发到子管理器 remove
+		_, rmErr := m.dispatchRemove(resourceType, removeID)
+
+		// 3. 从 idToCard Pop
+		removedCard := m.idToCard.Pop(removeID)
+
+		if rmErr != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "RESOURCE_MGR_REMOVE_RESOURCE").
+				Str("resource_id", removeID).
+				Str("resource_type", resourceType).
+				Str("tag", tag).
+				Str("card", resourceCardStr(removedCard, removeID)).
+				Err(rmErr).
+				Msg("移除资源失败")
+			return nil, rmErr
+		}
+
+		// 4. 根据 idReturnTypes 决定返回内容
+		if _, isIDReturn := idReturnTypes[resourceType]; isIDReturn {
+			results = append(results, removeID)
+		} else {
+			if removedCard != nil {
+				results = append(results, removedCard)
+			}
+		}
+
+		logger.Info(logger.ComponentAgentCore).
+			Str("event_type", "RESOURCE_MGR_REMOVE_RESOURCE").
+			Str("resource_id", removeID).
+			Str("resource_type", resourceType).
+			Str("tag", tag).
+			Str("card", resourceCardStr(removedCard, removeID)).
+			Msg("移除资源成功")
+	}
+
+	return results, nil
+}
+
+// innerGetResources 同步获取资源：查找 ID → 遍历 dispatchGet → 日志。
+//
+// 对应 Python: ResourceManager._inner_get_resources(resource_id, resource_type, tag, tag_match_strategy, session)
+func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceID, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
+	ids, _, err := m.innerFindResourceIDs(resourceID, resourceType, tag, tagMatchStrategy)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]any, 0, len(ids))
+	for _, id := range ids {
+		if !m.tagMgr.HasResource(id) {
+			continue
+		}
+		resource, getErr := m.dispatchGet(ctx, resourceType, id, session)
+		if getErr != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "RESOURCE_MGR_GET_RESOURCE").
+				Str("resource_id", id).
+				Str("resource_type", resourceType).
+				Err(getErr).
+				Msg("获取资源失败")
+			continue
+		}
+		if resource != nil {
+			results = append(results, resource)
+		}
+	}
+
+	return results, nil
+}
+
+// innerGetResourcesByProvider 通过 Provider 获取资源（workflow/agent/team/model 类型）。
+// 逻辑同 innerGetResources，但用于 Provider 模式。
+//
+// 对应 Python: ResourceManager._inner_get_resources_by_provider(resource_id, resource_type, tag, tag_match_strategy, session)
+func (m *ResourceMgr) innerGetResourcesByProvider(ctx context.Context, resourceID, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
+	ids, _, err := m.innerFindResourceIDs(resourceID, resourceType, tag, tagMatchStrategy)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ids) == 0 {
+		return []any{}, nil
+	}
+
+	results := make([]any, 0, len(ids))
+	for _, id := range ids {
+		if !m.tagMgr.HasResource(id) {
+			continue
+		}
+		resource, getErr := m.dispatchGet(ctx, resourceType, id, session)
+		if getErr != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "RESOURCE_MGR_GET_RESOURCE").
+				Str("resource_id", id).
+				Str("resource_type", resourceType).
+				Err(getErr).
+				Msg("通过 Provider 获取资源失败")
+			continue
+		}
+		if resource != nil {
+			results = append(results, resource)
+		}
+	}
+
+	return results, nil
+}
+
+// --- 验证方法 ---
+
+// innerValidateTag 验证标签：空值、GLOBAL 与其他 tag 混用、空元素、重复 tag。
+// Go 中 tag 是单个 Tag (string)，验证单个 tag 非空即可。
+//
+// 对应 Python: ResourceManager._inner_validate_tag(tag)
+func innerValidateTag(tag Tag) error {
+	if tag == "" {
+		return exception.BuildError(exception.StatusResourceTagValueInvalid,
+			exception.WithParam("tag", tag),
+			exception.WithParam("reason", "tag is empty value"),
+		)
+	}
+	return nil
+}
+
+// innerValidateResourceCard 验证 Card 类型：使用 reflect 检查 card 是否为 cardClassType 实例。
+//
+// 对应 Python: ResourceManager._inner_validate_resource_card(card, resource_type, card_class_type)
+func innerValidateResourceCard(card *schema.BaseCard, resourceType string, cardClassType reflect.Type) error {
+	if card == nil {
+		return exception.BuildError(exception.StatusResourceCardValueInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", fmt.Sprintf("card cannot be nil, must be an instance of %s", cardClassType.Name())),
+		)
+	}
+	cardType := reflect.TypeOf(card)
+	if cardType != cardClassType {
+		return exception.BuildError(exception.StatusResourceCardValueInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", fmt.Sprintf("cannot be nil, must be an instance of %s", cardClassType.Name())),
+		)
+	}
+	return nil
+}
+
+// innerValidateResourceIDs 批量 ID 校验：列表非空、每个 ID 有效、无重复。
+//
+// 对应 Python: ResourceManager._inner_validate_resource_ids(resource_id, resource_type)
+func innerValidateResourceIDs(resourceIDs []string, resourceType string) error {
+	if len(resourceIDs) == 0 {
+		return exception.BuildError(exception.StatusResourceIDValueInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", fmt.Sprintf("%s id list cannot be empty", resourceType)),
+		)
+	}
+
+	seen := make(map[string]struct{}, len(resourceIDs))
+	for idx, rid := range resourceIDs {
+		if rid == "" {
+			return exception.BuildError(exception.StatusResourceIDValueInvalid,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("reason", fmt.Sprintf("invalid %s id at idx %d: cannot be empty", resourceType, idx)),
+			)
+		}
+		if strings.TrimSpace(rid) == "" {
+			return exception.BuildError(exception.StatusResourceIDValueInvalid,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("reason", fmt.Sprintf("invalid %s id at idx %d: cannot be whitespace only", resourceType, idx)),
+			)
+		}
+		if _, exists := seen[rid]; exists {
+			return exception.BuildError(exception.StatusResourceIDValueInvalid,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("reason", fmt.Sprintf("duplicate %s id found: '%s' appears multiple times", resourceType, rid)),
+			)
+		}
+		seen[rid] = struct{}{}
+	}
+	return nil
+}
+
+// innerValidateProviders 批量 Provider 校验：列表非空、每个 provider 非 nil。
+// Go 静态类型语言中，provider 类型由编译器保证，此处仅校验空值。
+//
+// 对应 Python: ResourceManager._inner_validate_providers(providers, resource_type, card_class_type=None)
+func innerValidateProviders(providers []any, resourceType string, cardClassType reflect.Type) error {
+	if len(providers) == 0 {
+		return exception.BuildError(exception.StatusResourceProviderInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", "cannot be empty: expected a non-empty list of providers"),
+		)
+	}
+
+	for idx, provider := range providers {
+		if provider == nil {
+			expectedName := "any"
+			if cardClassType != nil {
+				expectedName = cardClassType.Name()
+			}
+			return exception.BuildError(exception.StatusResourceProviderInvalid,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("reason", fmt.Sprintf("invalid provider at idx %d: provider cannot be nil, must be an instance of %s", idx, expectedName)),
+			)
+		}
+	}
+	return nil
+}
+
+// innerValidateResource 资源实例类型校验：非 nil，且 reflect 类型匹配。
+//
+// 对应 Python: ResourceManager._inner_validate_resource(instance, resource_type, resource_class_type)
+func innerValidateResource(instance any, resourceType string, resourceClassType reflect.Type) error {
+	if instance == nil {
+		return exception.BuildError(exception.StatusResourceValueInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", fmt.Sprintf("%s cannot be nil: expected an instance of %s", resourceType, resourceClassType.Name())),
+		)
+	}
+
+	instanceType := reflect.TypeOf(instance)
+	if instanceType != resourceClassType {
+		return exception.BuildError(exception.StatusResourceValueInvalid,
+			exception.WithParam("resource_type", resourceType),
+			exception.WithParam("reason", fmt.Sprintf("invalid %s type: expected %s, got %s", resourceType, resourceClassType.Name(), instanceType.Name())),
+		)
+	}
+	return nil
+}
+
+// getCardType 从 Card 推断资源类型。
+// 判断 card 的 reflect 类型，返回 "mcp"/"function"/"team"/"workflow"/"agent" 或空字符串。
+//
+// 对应 Python: ResourceManager._get_card_type(card)
+func getCardType(card *schema.BaseCard) string {
+	if card == nil {
+		return ""
+	}
+	// 通过 reflect 判断 card 的实际类型
+	cardType := reflect.TypeOf(card)
+	// 检查各 Card 类型
+	switch cardType {
+	case reflect.TypeOf((*mcp.McpToolCard)(nil)):
+		return "mcp"
+	case reflect.TypeOf((*schema.WorkflowCard)(nil)):
+		return "workflow"
+	case reflect.TypeOf((*agentschema.AgentCard)(nil)):
+		return "agent"
+	default:
+		// 检查是否嵌入了 ToolCard（function 类型）
+		// ⤵️ 预留：等 TeamCard 类型实现后添加 team 判断
+		return ""
+	}
+}
+
+// innerGetServerIDs 按 serverID/serverName/tag 查找服务器 ID 列表。
+// 返回: (server_id 列表, 是否精确匹配)。
+//
+// 对应 Python: ResourceManager._inner_get_server_ids(server_id, server_name, tag, tag_match_strategy, skip_if_tag_not_exists, error_code)
+func (m *ResourceMgr) innerGetServerIDs(serverID, serverName string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfNotExists bool, errorCode exception.StatusCode) ([]string, bool, error) {
+	serverIDs := make([]string, 0)
+	exactMatch := false
+
+	if serverID != "" {
+		serverIDs = append(serverIDs, serverID)
+		exactMatch = true
+	} else {
+		effectiveTag := tag
+		if effectiveTag == "" {
+			effectiveTag = TagGlobal
+		}
+
+		if serverName == "" {
+			// 按 tag 查找
+			found, err := m.tagMgr.FindResourcesByTags([]Tag{effectiveTag}, tagMatchStrategy, skipIfNotExists)
+			if err != nil {
+				return nil, false, err
+			}
+			serverIDs = found
+		} else {
+			// 按 server name 查找
+			serverIDs = m.registry.Tool().GetMcpServerIDs(serverName)
+		}
+	}
+
+	return serverIDs, exactMatch, nil
+}
+
+// resourceCardStr 返回 card 的字符串表示，用于日志。
+// card 为 nil 时回退到 resourceID。
+func resourceCardStr(card *schema.BaseCard, resourceID string) string {
+	if card != nil {
+		return card.String()
+	}
+	return resourceID
 }

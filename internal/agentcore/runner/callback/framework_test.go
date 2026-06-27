@@ -1114,9 +1114,9 @@ func TestCallbackFramework_OnWorkflow和TriggerWorkflow(t *testing.T) {
 
 	fw.OnWorkflow(WorkflowStarted, fn)
 	results := fw.TriggerWorkflow(context.Background(), &WorkflowEventData{
-		Event:     WorkflowStarted,
+		Event:      WorkflowStarted,
 		WorkflowID: "wf-001",
-		NodeID:    "node-001",
+		NodeID:     "node-001",
 	})
 
 	if !called {

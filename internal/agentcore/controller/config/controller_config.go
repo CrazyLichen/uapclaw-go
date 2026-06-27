@@ -96,13 +96,13 @@ func DefaultControllerConfig() *ControllerConfig {
 		EventQueueSize:            10000,
 		EventTimeout:              300,
 		EnableIntentRecognition:   false,
-		IntentLLMID:              "",
+		IntentLLMID:               "",
 		IntentConfidenceThreshold: 0.7,
-		IntentTypeList:           []string{"create_task", "pause_task", "resume_task", "cancel_task", "unknown_task"},
+		IntentTypeList:            []string{"create_task", "pause_task", "resume_task", "cancel_task", "unknown_task"},
 		DefaultResponse: DefaultResponse{
 			Type: "text",
 		},
-		SuppressCompletionSignal:  false,
-		StreamFirstFrameTimeout:    30.0,
+		SuppressCompletionSignal: false,
+		StreamFirstFrameTimeout:  30.0,
 	}
 }

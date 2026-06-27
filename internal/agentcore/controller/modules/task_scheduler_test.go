@@ -248,7 +248,7 @@ func TestTaskScheduler_调度执行(t *testing.T) {
 	// 注册完成执行器
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 		}
 	})
@@ -297,7 +297,7 @@ func TestTaskScheduler_并发执行(t *testing.T) {
 	// 注册执行器，延迟后完成
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk, 1)
@@ -367,7 +367,7 @@ func TestTaskScheduler_最大并发限制(t *testing.T) {
 	// 注册执行器，延迟后完成，记录启动数
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				startedCount.Add(1)
@@ -432,7 +432,7 @@ func TestTaskScheduler_暂停任务(t *testing.T) {
 	// 注册可暂停执行器
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk)
@@ -507,7 +507,7 @@ func TestTaskScheduler_取消任务(t *testing.T) {
 
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk)
@@ -567,7 +567,7 @@ func TestTaskScheduler_任务超时(t *testing.T) {
 	// 注册慢执行器（永远不完成）
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk)
@@ -615,7 +615,7 @@ func TestTaskScheduler_完成信号(t *testing.T) {
 
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 		}
 	})
@@ -667,7 +667,7 @@ func TestTaskScheduler_抑制完成信号(t *testing.T) {
 
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 		}
 	})
@@ -752,7 +752,7 @@ func TestTaskScheduler_执行TaskInteraction(t *testing.T) {
 	// 注册发送 TASK_INTERACTION 的执行器
 	reg.AddTaskExecutor("interaction-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk, 1)
@@ -803,16 +803,14 @@ func TestTaskScheduler_执行TaskFailed(t *testing.T) {
 	// 注册发送 TASK_FAILED 的执行器
 	reg.AddTaskExecutor("failed-type", func(deps *TaskExecutorDependencies) TaskExecutor {
 		return &configurableFakeTaskExecutor{
-			canPauseResult: true,
+			canPauseResult:  true,
 			canCancelResult: true,
 			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
 				ch := make(chan *schema.ControllerOutputChunk, 1)
 				ch <- &schema.ControllerOutputChunk{
 					Payload: &schema.ControllerOutputPayload{
 						Type: payloadTypeTaskFailed,
-						Metadata: map[string]any{
-							"error_message": "执行失败",
-						},
+						Data: []schema.DataFrame{&schema.TextDataFrame{Text: "执行失败"}},
 					},
 					LastChunk: true,
 				}

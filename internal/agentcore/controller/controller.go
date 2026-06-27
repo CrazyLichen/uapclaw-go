@@ -7,16 +7,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -137,7 +137,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 
 // SetEventHandler 注入事件处理器并接线依赖。
 // 对应 Python: Controller.set_event_handler(event_handler)
-// EventQueue 的 handler 设置在 ensureStarted 中完成，对齐 Python。
+// 偏差8 修复：SetEventHandler 立即同步 EventQueue 的 EventHandler，对齐 Python 行为。
 func (c *Controller) SetEventHandler(handler modules.EventHandler) {
 	c.eventHandler = handler
 	base := handler.GetBase()
@@ -146,6 +146,10 @@ func (c *Controller) SetEventHandler(handler modules.EventHandler) {
 	base.TaskScheduler = c.taskScheduler
 	base.TaskManager = c.taskManager
 	base.AbilityMgr = c.abilityMgr
+	// 立即同步到 EventQueue
+	if c.eventQueue != nil {
+		c.eventQueue.SetEventHandler(handler)
+	}
 }
 
 // AddTaskExecutor 注册 TaskExecutor，支持链式调用。

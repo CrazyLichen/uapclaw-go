@@ -57,7 +57,7 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 		return provider(ctx, nil)
 	}
 
-	err := m.RegisterProvider(workflowID, wrappedProvider)
+	err := m.registerProvider(workflowID, wrappedProvider)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "WORKFLOW_ADD_ERROR").
@@ -103,7 +103,7 @@ func (m *WorkflowMgr) AddWorkflows(workflows []WorkflowEntry) {
 //
 // 对应 Python: WorkflowMgr.remove_workflow(workflow_id)
 func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error) {
-	unwrapped, err := m.UnregisterProvider(workflowID)
+	unwrapped, err := m.unregisterProvider(workflowID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "WORKFLOW_REMOVE_ERROR").
@@ -134,7 +134,7 @@ func (m *WorkflowMgr) RemoveWorkflow(workflowID string) (WorkflowProvider, error
 //
 // 对应 Python: WorkflowMgr.get_workflow(workflow_id, session)
 func (m *WorkflowMgr) GetWorkflow(ctx context.Context, workflowID string, session decorator.TracerSession) (interfaces.Workflow, error) {
-	w, err := m.GetResource(ctx, workflowID)
+	w, err := m.getResource(ctx, workflowID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "WORKFLOW_GET_ERROR").

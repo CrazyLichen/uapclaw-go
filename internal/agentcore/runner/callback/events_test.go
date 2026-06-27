@@ -288,9 +288,9 @@ func TestTaskManagerEventType_值验证(t *testing.T) {
 // TestWorkflowEventData_String 测试 WorkflowEventData.String() 方法
 func TestWorkflowEventData_String(t *testing.T) {
 	data := &WorkflowEventData{
-		Event:     WorkflowStarted,
+		Event:      WorkflowStarted,
 		WorkflowID: "wf-001",
-		NodeID:    "node-001",
+		NodeID:     "node-001",
 	}
 	result := data.String()
 	if result == "" {

@@ -94,8 +94,12 @@ type ReinjectedStateBuilderSpec struct {
 	Name string
 	// Label 构建器标签（用于状态消息标题）
 	Label string
-	// Builder 构建器函数，返回 []BaseMessage（列表）或 string（文本）
-	Builder func(ctx context.Context, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any
+	// Builder 构建器函数，第二个参数为 FullCompactProcessor 实例，
+	// 使 Builder 能访问 processor 的配置（StateMarker、ReinjectRecentSkills）和方法（TruncateStateText）。
+	// 返回 []BaseMessage（列表）或 string（文本）。
+	//
+	// 对应 Python: builder(processor, *, context, messages, messages_to_keep)
+	Builder func(ctx context.Context, fcp *FullCompactProcessor, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any
 }
 
 // FullCompactStateReinjector 状态重新注入器，管理多个 Builder 的注册和执行。
@@ -390,7 +394,7 @@ func WithFullCompactModel(model *llm.Model) FullCompactProcessorOption {
 // RegisterBuilder 注册状态构建器，同名则替换。
 //
 // 对应 Python: FullCompactStateReinjector.register_builder()
-func (r *FullCompactStateReinjector) RegisterBuilder(name, label string, builder func(ctx context.Context, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any) {
+func (r *FullCompactStateReinjector) RegisterBuilder(name, label string, builder func(ctx context.Context, fcp *FullCompactProcessor, mc iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any) {
 	spec := ReinjectedStateBuilderSpec{Name: name, Label: label, Builder: builder}
 	for i, existing := range r.builders {
 		if existing.Name == name {
@@ -871,7 +875,7 @@ func (fcp *FullCompactProcessor) buildReinjectedStateMessages(ctx context.Contex
 
 	var stateMessages []llm_schema.BaseMessage
 	for _, spec := range fcp.reinjector.IterBuilders() {
-		content := spec.Builder(ctx, mc, candidateMessages, messagesToKeep)
+		content := spec.Builder(ctx, fcp, mc, candidateMessages, messagesToKeep)
 		if content == nil {
 			continue
 		}
@@ -1101,9 +1105,7 @@ func _buildHeadTailTruncatedText(text string, keptChars int) string {
 // 最多 ReinjectRecentSkills 个，提取 skill 内容+工具调用描述。
 //
 // 对应 Python: build_skill_reinjected_content()
-func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any {
-	// 当前简化实现：基于已完成 API 轮次，查找含 skill.md 文件读取的轮次
-	// ⤵️ 待完善：需对接 FullCompactProcessor 的配置和状态标记
+func buildSkillReinjectedContent(_ context.Context, fcp *FullCompactProcessor, _ iface.ModelContext, messages []llm_schema.BaseMessage, messagesToKeep []llm_schema.BaseMessage) any {
 	keepSigs := make(map[string]bool)
 	for _, msg := range messagesToKeep {
 		keepSigs[processor.MessageSignature(msg)] = true
@@ -1135,6 +1137,10 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 		}
 		selectedRounds = append(selectedRounds, roundMsgs)
 		seenRoundSigs[roundSig] = true
+		// 达到 ReinjectRecentSkills 上限时提前终止
+		if len(selectedRounds) >= fcp.fcpConfig.ReinjectRecentSkills {
+			break
+		}
 	}
 
 	// 反转顺序（因为是从后往前选的）
@@ -1142,17 +1148,8 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 		selectedRounds[i], selectedRounds[j] = selectedRounds[j], selectedRounds[i]
 	}
 
-	// 限制数量（默认最多3个，这里硬编码，后续对接 fcpConfig）
-	maxSkills := 3
-	if len(selectedRounds) > maxSkills {
-		selectedRounds = selectedRounds[:maxSkills]
-	}
-
-	// 注意：这里返回 []BaseMessage 类型，但实际 Python 实现中使用了 processor.state_marker
-	// 由于 builder 在 buildReinjectedStateMessages 中会被 _makeStateMessage 包装
-	// 返回 []BaseMessage 时直接 extend，不经过 _makeStateMessage
-	// 但 Python 中 buildSkillReinjectedContent 直接返回带 state_marker 的 UserMessage 列表
-	// Go 端保持一致：返回带 state_marker 的 UserMessage 列表
+	// 构建重新注入消息，使用 processor 的 StateMarker 和 TruncateStateText
+	// 对应 Python: UserMessage(content=f"{processor.state_marker}\n[SKILLS]\n{processor.truncate_state_text(serialized_round)}")
 	var reinjectedMessages []llm_schema.BaseMessage
 	for _, roundMsgs := range selectedRounds {
 		var serializedParts []string
@@ -1160,10 +1157,10 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 			serializedParts = append(serializedParts, fmt.Sprintf("role=%s, content=%s", msg.GetRole().String(), processor.MessageToText(msg)))
 		}
 		serialized := strings.Join(serializedParts, "\n")
-		// 注意：这里使用默认的 StateMarker 和 truncateStateText
-		// 由于 builder 无法直接访问 processor，这里用简化的方式
+		// 使用 processor 的 TruncateStateText 截断过长内容
+		truncated := fcp.TruncateStateText(serialized)
 		reinjectedMessages = append(reinjectedMessages, llm_schema.NewUserMessage(
-			"[FULL_COMPACT_STATE]\n[SKILLS]\n"+serialized,
+			fcp.fcpConfig.StateMarker+"\n[SKILLS]\n"+truncated,
 		))
 	}
 	return reinjectedMessages
@@ -1172,7 +1169,7 @@ func buildSkillReinjectedContent(_ context.Context, _ iface.ModelContext, messag
 // buildTaskStatusReinjectedContent 构建任务状态重新注入内容。
 //
 // 对应 Python: build_task_status_reinjected_content()
-func buildTaskStatusReinjectedContent(_ context.Context, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+func buildTaskStatusReinjectedContent(_ context.Context, _ *FullCompactProcessor, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	sess := mc.GetSessionRef()
 	if sess == nil {
 		return ""
@@ -1191,7 +1188,7 @@ func buildTaskStatusReinjectedContent(_ context.Context, mc iface.ModelContext, 
 // buildPlanModeReinjectedContent 构建计划模式重新注入内容。
 //
 // 对应 Python: build_plan_mode_reinjected_content()
-func buildPlanModeReinjectedContent(_ context.Context, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+func buildPlanModeReinjectedContent(_ context.Context, _ *FullCompactProcessor, mc iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	sess := mc.GetSessionRef()
 	if sess == nil {
 		return ""
@@ -1210,7 +1207,7 @@ func buildPlanModeReinjectedContent(_ context.Context, mc iface.ModelContext, _ 
 // buildPlanReinjectedContent 构建计划重新注入内容，空实现。
 //
 // 对应 Python: build_plan_reinjected_content()
-func buildPlanReinjectedContent(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+func buildPlanReinjectedContent(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 	return ""
 }
 

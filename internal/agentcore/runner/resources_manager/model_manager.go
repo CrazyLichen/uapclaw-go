@@ -56,7 +56,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 		return provider(ctx, modelID)
 	}
 
-	err := m.RegisterProvider(modelID, wrappedProvider)
+	err := m.registerProvider(modelID, wrappedProvider)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "MODEL_ADD_ERROR").
@@ -80,7 +80,7 @@ func (m *ModelMgr) AddModel(modelID string, provider ModelProvider) error {
 //
 // 对应 Python: ModelMgr.remove_model(model_id)
 func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
-	unwrapped, err := m.UnregisterProvider(modelID)
+	unwrapped, err := m.unregisterProvider(modelID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "MODEL_REMOVE_ERROR").
@@ -111,7 +111,7 @@ func (m *ModelMgr) RemoveModel(modelID string) (ModelProvider, error) {
 //
 // 对应 Python: ModelMgr.get_model(model_id, session)
 func (m *ModelMgr) GetModel(ctx context.Context, modelID string, session decorator.TracerSession) (model_clients.BaseModelClient, error) {
-	model, err := m.GetResource(ctx, modelID)
+	model, err := m.getResource(ctx, modelID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "MODEL_GET_ERROR").

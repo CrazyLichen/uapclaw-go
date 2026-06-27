@@ -649,7 +649,7 @@ func TestFullCompactProcessor_BuildFallbackSummary_超过20条(t *testing.T) {
 func TestFullCompactStateReinjector_RegisterBuilder(t *testing.T) {
 	r := &FullCompactStateReinjector{}
 
-	builder := func(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	builder := func(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 		return "test"
 	}
 	r.RegisterBuilder("test", "TEST", builder)
@@ -670,10 +670,10 @@ func TestFullCompactStateReinjector_RegisterBuilder(t *testing.T) {
 func TestFullCompactStateReinjector_RegisterBuilder_同名替换(t *testing.T) {
 	r := &FullCompactStateReinjector{}
 
-	builder1 := func(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	builder1 := func(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 		return "v1"
 	}
-	builder2 := func(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	builder2 := func(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 		return "v2"
 	}
 	r.RegisterBuilder("test", "V1", builder1)
@@ -708,6 +708,7 @@ func TestFullCompactStateReinjector_IterBuilders(t *testing.T) {
 
 // TestBuildSkillReinjectedContent 验证 skill 构建器
 func TestBuildSkillReinjectedContent(t *testing.T) {
+	fcp := newTestFCP(validFCPConfig())
 	// 构建含 skill 读取的轮次
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("读取skill"),
@@ -720,7 +721,7 @@ func TestBuildSkillReinjectedContent(t *testing.T) {
 		llm_schema.NewAssistantMessage("已读取skill"),
 	}
 
-	result := buildSkillReinjectedContent(context.Background(), nil, messages, nil)
+	result := buildSkillReinjectedContent(context.Background(), fcp, nil, messages, nil)
 	msgList, ok := result.([]llm_schema.BaseMessage)
 	if !ok {
 		t.Fatalf("期望返回 []BaseMessage，实际: %T", result)
@@ -732,10 +733,15 @@ func TestBuildSkillReinjectedContent(t *testing.T) {
 	if !strings.Contains(msgList[0].GetContent().Text(), "[SKILLS]") {
 		t.Error("注入消息应包含 [SKILLS] 标记")
 	}
+	// 消息应使用 StateMarker
+	if !strings.Contains(msgList[0].GetContent().Text(), fcp.fcpConfig.StateMarker) {
+		t.Error("注入消息应使用 StateMarker")
+	}
 }
 
 // TestBuildSkillReinjectedContent_无Skill 验证无 skill 读取时不注入
 func TestBuildSkillReinjectedContent_无Skill(t *testing.T) {
+	fcp := newTestFCP(validFCPConfig())
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("查询天气"),
 		llm_schema.NewAssistantMessage("查询中",
@@ -747,7 +753,7 @@ func TestBuildSkillReinjectedContent_无Skill(t *testing.T) {
 		llm_schema.NewAssistantMessage("今天晴天"),
 	}
 
-	result := buildSkillReinjectedContent(context.Background(), nil, messages, nil)
+	result := buildSkillReinjectedContent(context.Background(), fcp, nil, messages, nil)
 	msgList, ok := result.([]llm_schema.BaseMessage)
 	if !ok {
 		// 可能返回 nil 或空列表
@@ -761,7 +767,7 @@ func TestBuildSkillReinjectedContent_无Skill(t *testing.T) {
 // TestBuildTaskStatusReinjectedContent 验证任务状态构建器
 func TestBuildTaskStatusReinjectedContent(t *testing.T) {
 	mc := &fcpFakeModelContext{}
-	result := buildTaskStatusReinjectedContent(context.Background(), mc, nil, nil)
+	result := buildTaskStatusReinjectedContent(context.Background(), nil, mc, nil, nil)
 	str, ok := result.(string)
 	if !ok {
 		t.Fatalf("期望返回 string，实际: %T", result)
@@ -775,7 +781,7 @@ func TestBuildTaskStatusReinjectedContent(t *testing.T) {
 // TestBuildPlanModeReinjectedContent 验证计划模式构建器
 func TestBuildPlanModeReinjectedContent(t *testing.T) {
 	mc := &fcpFakeModelContext{}
-	result := buildPlanModeReinjectedContent(context.Background(), mc, nil, nil)
+	result := buildPlanModeReinjectedContent(context.Background(), nil, mc, nil, nil)
 	str, ok := result.(string)
 	if !ok {
 		t.Fatalf("期望返回 string，实际: %T", result)
@@ -788,7 +794,7 @@ func TestBuildPlanModeReinjectedContent(t *testing.T) {
 
 // TestBuildPlanReinjectedContent 验证计划构建器（空实现）
 func TestBuildPlanReinjectedContent(t *testing.T) {
-	result := buildPlanReinjectedContent(context.Background(), nil, nil, nil)
+	result := buildPlanReinjectedContent(context.Background(), nil, nil, nil, nil)
 	str, ok := result.(string)
 	if !ok {
 		t.Fatalf("期望返回 string，实际: %T", result)
@@ -2104,7 +2110,7 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages_有StringBuilder(t *t
 	cfg := validFCPConfig()
 	fcp := newTestFCP(cfg)
 	// 注册一个返回非空 string 的 builder
-	fcp.reinjector.RegisterBuilder("test_string", "TEST_STRING", func(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	fcp.reinjector.RegisterBuilder("test_string", "TEST_STRING", func(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 		return "这是测试状态内容"
 	})
 
@@ -2136,7 +2142,7 @@ func TestFullCompactProcessor_BuildReinjectedStateMessages_有SliceBuilder(t *te
 	fcp := newTestFCP(cfg)
 	// 注册一个返回 []BaseMessage 的 builder
 	injectedMsg := llm_schema.NewUserMessage("注入消息")
-	fcp.reinjector.RegisterBuilder("test_slice", "TEST_SLICE", func(_ context.Context, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
+	fcp.reinjector.RegisterBuilder("test_slice", "TEST_SLICE", func(_ context.Context, _ *FullCompactProcessor, _ iface.ModelContext, _ []llm_schema.BaseMessage, _ []llm_schema.BaseMessage) any {
 		return []llm_schema.BaseMessage{injectedMsg}
 	})
 

@@ -298,13 +298,13 @@ func (tm *TaskManager) PopTask(ctx context.Context, filter *TaskFilter) ([]*sche
 			return []*schema.Task{}, nil
 		}
 		filter = &TaskFilter{
-			TaskID:     filter.TaskID,
-			SessionID:  filter.SessionID,
-			UserID:     filter.UserID,
-			Priority:   maxPriority,
-			Status:     filter.Status,
+			TaskID:       filter.TaskID,
+			SessionID:    filter.SessionID,
+			UserID:       filter.UserID,
+			Priority:     maxPriority,
+			Status:       filter.Status,
 			WithChildren: filter.WithChildren,
-			IsRoot:     filter.IsRoot,
+			IsRoot:       filter.IsRoot,
 		}
 		logger.Info(logComponent).
 			Int("highest_priority", maxPriority).

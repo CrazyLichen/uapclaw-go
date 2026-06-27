@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

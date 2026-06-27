@@ -103,36 +103,36 @@ type eventSlice []Event
 
 // inputEventJSON InputEvent 的 JSON 序列化中间结构。
 type inputEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	InputData      dataFrameSlice  `json:"input_data"`
+	EventTypeField EventType      `json:"event_type"`
+	EventID        string         `json:"event_id"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	InputData      dataFrameSlice `json:"input_data"`
 }
 
 // taskInteractionEventJSON TaskInteractionEvent 的 JSON 序列化中间结构。
 type taskInteractionEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	Interaction    dataFrameSlice  `json:"interaction"`
-	Task           *Task           `json:"task,omitempty"`
+	EventTypeField EventType      `json:"event_type"`
+	EventID        string         `json:"event_id"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	Interaction    dataFrameSlice `json:"interaction"`
+	Task           *Task          `json:"task,omitempty"`
 }
 
 // taskCompletionEventJSON TaskCompletionEvent 的 JSON 序列化中间结构。
 type taskCompletionEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	TaskResult     dataFrameSlice  `json:"task_result"`
-	Task           *Task           `json:"task,omitempty"`
+	EventTypeField EventType      `json:"event_type"`
+	EventID        string         `json:"event_id"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	TaskResult     dataFrameSlice `json:"task_result"`
+	Task           *Task          `json:"task,omitempty"`
 }
 
 // followUpEventJSON FollowUpEvent 的 JSON 序列化中间结构。
 type followUpEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	InputData      dataFrameSlice  `json:"input_data"`
+	EventTypeField EventType      `json:"event_type"`
+	EventID        string         `json:"event_id"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+	InputData      dataFrameSlice `json:"input_data"`
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

@@ -130,7 +130,7 @@ func TestEvent_JSON序列化_InputEvent(t *testing.T) {
 
 func TestEvent_JSON序列化_TaskFailedEvent(t *testing.T) {
 	evt := &TaskFailedEvent{
-		BaseEvent:   *NewBaseEvent(EventTaskFailed),
+		BaseEvent:    *NewBaseEvent(EventTaskFailed),
 		ErrorMessage: "执行出错",
 	}
 	data, err := json.Marshal(evt)
@@ -157,7 +157,7 @@ func TestEvent_JSON序列化_多态切片(t *testing.T) {
 	// 构造包含不同类型 Event 的切片
 	inputEvt, _ := FromUserInput("多态测试")
 	failedEvt := &TaskFailedEvent{
-		BaseEvent:   *NewBaseEvent(EventTaskFailed),
+		BaseEvent:    *NewBaseEvent(EventTaskFailed),
 		ErrorMessage: "多态失败",
 	}
 	followEvt := FromText("后续输入")
@@ -299,7 +299,7 @@ func TestBaseEvent_SetMetadata(t *testing.T) {
 // TestTaskInteractionEvent_MarshalJSON 测试 TaskInteractionEvent 序列化
 func TestTaskInteractionEvent_MarshalJSON(t *testing.T) {
 	evt := &TaskInteractionEvent{
-		BaseEvent: *NewBaseEvent(EventTaskInteraction),
+		BaseEvent:   *NewBaseEvent(EventTaskInteraction),
 		Interaction: []DataFrame{&TextDataFrame{Text: "请确认"}},
 	}
 	data, err := json.Marshal(evt)
