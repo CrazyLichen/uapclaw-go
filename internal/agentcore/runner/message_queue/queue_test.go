@@ -38,7 +38,7 @@ func TestMessageQueueInMemory_启动停止(t *testing.T) {
 func TestMessageQueueInMemory_生产消费(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
 	sub := q.Subscribe("test_topic")
@@ -60,7 +60,7 @@ func TestMessageQueueInMemory_生产消费(t *testing.T) {
 func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	sub := q.Subscribe("sync_topic")
 	var handlerCalled atomic.Bool
@@ -86,7 +86,7 @@ func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 func TestMessageQueueInMemory_火忘发布(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
 	sub := q.Subscribe("async_topic")
@@ -110,7 +110,7 @@ func TestMessageQueueInMemory_火忘发布(t *testing.T) {
 func TestMessageQueueInMemory_多Topic路由(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	var topic1Received, topic2Received atomic.Int32
 
@@ -128,8 +128,8 @@ func TestMessageQueueInMemory_多Topic路由(t *testing.T) {
 	})
 	sub2.Activate()
 
-	q.Produce(context.Background(), "topic_1", NewQueueMessage(map[string]any{"key": "1"}))
-	q.Produce(context.Background(), "topic_2", NewQueueMessage(map[string]any{"key": "2"}))
+	_ = q.Produce(context.Background(), "topic_1", NewQueueMessage(map[string]any{"key": "1"}))
+	_ = q.Produce(context.Background(), "topic_2", NewQueueMessage(map[string]any{"key": "2"}))
 
 	assert.Eventually(t, func() bool { return topic1Received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 	assert.Eventually(t, func() bool { return topic2Received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
@@ -139,7 +139,7 @@ func TestMessageQueueInMemory_多Topic路由(t *testing.T) {
 func TestMessageQueueInMemory_订阅取消(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	q.Subscribe("cancel_topic")
 	err := q.Unsubscribe(context.Background(), "cancel_topic")
@@ -153,7 +153,7 @@ func TestMessageQueueInMemory_订阅取消(t *testing.T) {
 func TestMessageQueueInMemory_激活停用(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
 	sub := q.Subscribe("toggle_topic")
@@ -166,7 +166,7 @@ func TestMessageQueueInMemory_激活停用(t *testing.T) {
 	sub.Activate()
 	assert.True(t, sub.IsActive())
 
-	q.Produce(context.Background(), "toggle_topic", NewQueueMessage(map[string]any{"key": "1"}))
+	_ = q.Produce(context.Background(), "toggle_topic", NewQueueMessage(map[string]any{"key": "1"}))
 	assert.Eventually(t, func() bool { return received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 
 	// 停用
@@ -178,7 +178,7 @@ func TestMessageQueueInMemory_激活停用(t *testing.T) {
 func TestMessageQueueInMemory_同步发布Handler错误(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	sub := q.Subscribe("error_topic")
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
@@ -199,7 +199,7 @@ func TestMessageQueueInMemory_同步发布Handler错误(t *testing.T) {
 func TestMessageQueueInMemory_Handler未设置(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	sub := q.Subscribe("no_handler_topic")
 	// 不设置 handler
@@ -216,7 +216,7 @@ func TestMessageQueueInMemory_Handler未设置(t *testing.T) {
 func TestMessageQueueInMemory_重复订阅同Topic(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
-	defer q.Stop(context.Background())
+	defer func() { _ = q.Stop(context.Background()) }()
 
 	sub1 := q.Subscribe("same_topic")
 	sub2 := q.Subscribe("same_topic")
