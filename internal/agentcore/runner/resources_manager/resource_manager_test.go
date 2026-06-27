@@ -759,13 +759,11 @@ func (m *rmMockMcpClient) Close() error {
 func setupMcpServer(mgr *ResourceMgr, serverID, serverName string, toolNames []string) *rmMockMcpClient {
 	mockClient := &rmMockMcpClient{}
 	mcpCards := make([]*types.McpToolCard, 0, len(toolNames))
-	toolIDs := make([]string, 0, len(toolNames))
 	for _, name := range toolNames {
 		card := mcp.NewMcpToolCard(name, name+"描述", serverName, nil, mcp.WithMcpToolCardServerID(serverID))
 		toolID := mgr.registry.Tool().GenerateMcpToolID(serverID, serverName, name)
 		card.ID = toolID
 		mcpCards = append(mcpCards, card)
-		toolIDs = append(toolIDs, toolID)
 	}
 	mockClient.tools = mcpCards
 
@@ -1297,6 +1295,11 @@ func TestResourceMgr_AddWorkflows_批量(t *testing.T) {
 
 // ──────────────────────────── 核心分派方法测试 ────────────────────────────
 
+// indirectTypeName 返回值的非指针类型名称
+func indirectTypeName(v any) string {
+	return reflect.Indirect(reflect.ValueOf(v)).Type().Name()
+}
+
 // TestGetMgr_各资源类型 测试 getMgr 对各资源类型返回正确的子管理器
 func TestGetMgr_各资源类型(t *testing.T) {
 	mgr := newTestResourceMgr()
@@ -1306,13 +1309,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if wm == nil {
 		t.Fatal("getMgr(workflow) 不应返回 nil")
 	}
-	// 指针类型 Name() 为空，需取 Elem
-	wmType := reflect.TypeOf(wm)
-	if wmType.Kind() == reflect.Ptr {
-		wmType = wmType.Elem()
-	}
-	if wmType.Name() != "WorkflowMgr" {
-		t.Fatalf("getMgr(workflow) 期望 WorkflowMgr，实际 %s", wmType.Name())
+	if indirectTypeName(wm) != "WorkflowMgr" {
+		t.Fatalf("getMgr(workflow) 期望 WorkflowMgr，实际 %s", indirectTypeName(wm))
 	}
 
 	// agent → AgentMgr
@@ -1320,12 +1318,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if am == nil {
 		t.Fatal("getMgr(agent) 不应返回 nil")
 	}
-	amType := reflect.TypeOf(am)
-	if amType.Kind() == reflect.Ptr {
-		amType = amType.Elem()
-	}
-	if amType.Name() != "AgentMgr" {
-		t.Fatalf("getMgr(agent) 期望 AgentMgr，实际 %s", amType.Name())
+	if indirectTypeName(am) != "AgentMgr" {
+		t.Fatalf("getMgr(agent) 期望 AgentMgr，实际 %s", indirectTypeName(am))
 	}
 
 	// team → AgentTeamMgr
@@ -1333,12 +1327,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if tm == nil {
 		t.Fatal("getMgr(team) 不应返回 nil")
 	}
-	tmType := reflect.TypeOf(tm)
-	if tmType.Kind() == reflect.Ptr {
-		tmType = tmType.Elem()
-	}
-	if tmType.Name() != "AgentTeamMgr" {
-		t.Fatalf("getMgr(team) 期望 AgentTeamMgr，实际 %s", tmType.Name())
+	if indirectTypeName(tm) != "AgentTeamMgr" {
+		t.Fatalf("getMgr(team) 期望 AgentTeamMgr，实际 %s", indirectTypeName(tm))
 	}
 
 	// tool → ToolMgr
@@ -1346,12 +1336,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if tlm == nil {
 		t.Fatal("getMgr(tool) 不应返回 nil")
 	}
-	tlmType := reflect.TypeOf(tlm)
-	if tlmType.Kind() == reflect.Ptr {
-		tlmType = tlmType.Elem()
-	}
-	if tlmType.Name() != "ToolMgr" {
-		t.Fatalf("getMgr(tool) 期望 ToolMgr，实际 %s", tlmType.Name())
+	if indirectTypeName(tlm) != "ToolMgr" {
+		t.Fatalf("getMgr(tool) 期望 ToolMgr，实际 %s", indirectTypeName(tlm))
 	}
 
 	// prompt → PromptMgr
@@ -1359,12 +1345,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if pm == nil {
 		t.Fatal("getMgr(prompt) 不应返回 nil")
 	}
-	pmType := reflect.TypeOf(pm)
-	if pmType.Kind() == reflect.Ptr {
-		pmType = pmType.Elem()
-	}
-	if pmType.Name() != "PromptMgr" {
-		t.Fatalf("getMgr(prompt) 期望 PromptMgr，实际 %s", pmType.Name())
+	if indirectTypeName(pm) != "PromptMgr" {
+		t.Fatalf("getMgr(prompt) 期望 PromptMgr，实际 %s", indirectTypeName(pm))
 	}
 
 	// model → ModelMgr
@@ -1372,12 +1354,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if mm == nil {
 		t.Fatal("getMgr(model) 不应返回 nil")
 	}
-	mmType := reflect.TypeOf(mm)
-	if mmType.Kind() == reflect.Ptr {
-		mmType = mmType.Elem()
-	}
-	if mmType.Name() != "ModelMgr" {
-		t.Fatalf("getMgr(model) 期望 ModelMgr，实际 %s", mmType.Name())
+	if indirectTypeName(mm) != "ModelMgr" {
+		t.Fatalf("getMgr(model) 期望 ModelMgr，实际 %s", indirectTypeName(mm))
 	}
 
 	// sys_operation → SysOperationMgr
@@ -1385,12 +1363,8 @@ func TestGetMgr_各资源类型(t *testing.T) {
 	if som == nil {
 		t.Fatal("getMgr(sys_operation) 不应返回 nil")
 	}
-	somType := reflect.TypeOf(som)
-	if somType.Kind() == reflect.Ptr {
-		somType = somType.Elem()
-	}
-	if somType.Name() != "SysOperationMgr" {
-		t.Fatalf("getMgr(sys_operation) 期望 SysOperationMgr，实际 %s", somType.Name())
+	if indirectTypeName(som) != "SysOperationMgr" {
+		t.Fatalf("getMgr(sys_operation) 期望 SysOperationMgr，实际 %s", indirectTypeName(som))
 	}
 }
 

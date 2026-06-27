@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
@@ -88,6 +87,6 @@ func TestEventHandlerBase_字段类型验证(t *testing.T) {
 	assert.Equal(t, tm, base.TaskManager)
 	assert.Equal(t, ts, base.TaskScheduler)
 	// 确保接口类型可以赋值为 nil
-	var _ iface.ContextEngine = base.ContextEngine
+	var _ = base.ContextEngine
 	var _ sessioninterfaces.SessionFacade = nil
 }

@@ -916,7 +916,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, chu
 	case payloadTypeTaskFailed:
 		// 对齐 Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
 		errMsg := "Unknown error"
-		if chunk.Payload.Data != nil && len(chunk.Payload.Data) > 0 {
+		if len(chunk.Payload.Data) > 0 {
 			if textDF, ok := chunk.Payload.Data[0].(*schema.TextDataFrame); ok {
 				errMsg = textDF.Text
 			}
