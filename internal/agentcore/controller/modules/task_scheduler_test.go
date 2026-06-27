@@ -256,7 +256,7 @@ func TestTaskScheduler_调度执行(t *testing.T) {
 	// 启动 EventQueue
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	// 添加会话
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
@@ -265,7 +265,7 @@ func TestTaskScheduler_调度执行(t *testing.T) {
 	// 启动调度器
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	// 提交任务
 	task := schema.NewTask("sess-1", "test-type")
@@ -320,14 +320,14 @@ func TestTaskScheduler_并发执行(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	// 提交 3 个任务
 	taskIDs := make([]string, 3)
@@ -390,14 +390,14 @@ func TestTaskScheduler_最大并发限制(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	// 提交 4 个任务
 	for i := 0; i < 4; i++ {
@@ -447,14 +447,14 @@ func TestTaskScheduler_暂停任务(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	// 提交任务
 	task := schema.NewTask("sess-1", "test-type")
@@ -522,14 +522,14 @@ func TestTaskScheduler_取消任务(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err = sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task2 := schema.NewTask("sess-1", "test-type")
 	err = tm.AddTask(context.Background(), task2)
@@ -583,14 +583,14 @@ func TestTaskScheduler_任务超时(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task := schema.NewTask("sess-1", "test-type")
 	err = tm.AddTask(context.Background(), task)
@@ -622,14 +622,14 @@ func TestTaskScheduler_完成信号(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task := schema.NewTask("sess-1", "test-type")
 	err = tm.AddTask(context.Background(), task)
@@ -674,14 +674,14 @@ func TestTaskScheduler_抑制完成信号(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task := schema.NewTask("sess-1", "test-type")
 	err = tm.AddTask(context.Background(), task)
@@ -771,14 +771,14 @@ func TestTaskScheduler_执行TaskInteraction(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task := schema.NewTask("sess-1", "interaction-type")
 	err = tm.AddTask(context.Background(), task)
@@ -822,14 +822,14 @@ func TestTaskScheduler_执行TaskFailed(t *testing.T) {
 
 	eq.SetEventHandler(&schedulerFakeEventHandler{})
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
 
 	err := sched.Start(context.Background())
 	require.NoError(t, err)
-	defer sched.Stop(context.Background())
+	defer func() { _ = sched.Stop(context.Background()) }()
 
 	task := schema.NewTask("sess-1", "failed-type")
 	err = tm.AddTask(context.Background(), task)

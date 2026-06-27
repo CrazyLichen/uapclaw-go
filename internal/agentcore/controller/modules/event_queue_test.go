@@ -111,7 +111,7 @@ func TestEventQueue_订阅取消(t *testing.T) {
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)
@@ -150,7 +150,7 @@ func TestEventQueue_同步发布_等待处理完成(t *testing.T) {
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)
@@ -179,7 +179,7 @@ func TestEventQueue_火忘发布_不等处理(t *testing.T) {
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)
@@ -208,7 +208,7 @@ func TestEventQueue_Topic路由_不同事件类型到不同Handler(t *testing.T)
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)
@@ -322,7 +322,7 @@ func TestEventQueue_订阅后发送TaskCompletionEvent(t *testing.T) {
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)
@@ -350,7 +350,7 @@ func TestEventQueue_同步发布Handler返回结果(t *testing.T) {
 
 	eq := NewEventQueue(cfg)
 	eq.Start()
-	defer eq.Stop(context.Background())
+	defer func() { _ = eq.Stop(context.Background()) }()
 
 	handler := &fakeEventHandler{}
 	eq.SetEventHandler(handler)

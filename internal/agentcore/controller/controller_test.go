@@ -367,8 +367,8 @@ func TestController_StartStop(t *testing.T) {
 // TestController_restoreTaskManagerState_有状态 测试恢复状态（有保存状态）
 func TestController_restoreTaskManagerState_有状态(t *testing.T) {
 	c := newTestController()
-	c.Start(context.Background())
-	defer c.Stop(context.Background())
+	require.NoError(t, c.Start(context.Background()))
+	defer func() { _ = c.Stop(context.Background()) }()
 
 	mockSess := newMockSessionFacade("test-session")
 
