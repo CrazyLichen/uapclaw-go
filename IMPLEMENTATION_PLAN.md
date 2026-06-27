@@ -402,12 +402,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.15 | ✅ | InterruptionState / ToolInterruptionState | 工作流/工具中断状态 | `openjiuwen/core/single_agent/interrupt/` |
 | 6.16 | ✅ | ResumeContext | 恢复上下文 | `openjiuwen/core/single_agent/interrupt/` |
 | **6.x 技能系统** | — | | | |
-| 6.17 | ☐ | Skill 模型 | `Skill{Name, Description, Directory}` | `openjiuwen/core/single_agent/skills/skill_manager.py` (Skill) |
-| 6.18 | ☐ | SkillManager | 注册/注销/获取技能，YAML front-matter 加载 | `openjiuwen/core/single_agent/skills/skill_manager.py` |
+| 6.17 | ✅ | Skill 模型 | `Skill{Name, Description, Directory}` | `openjiuwen/core/single_agent/skills/skill_manager.py` (Skill) |
+| 6.18 | ✅ | SkillManager | 注册/注销/获取技能，YAML front-matter 加载 | `openjiuwen/core/single_agent/skills/skill_manager.py` |
 | **6.x 事件驱动 Controller** | — | | | |
 | 6.19 | ☐ | Controller | 事件驱动任务编排 | `openjiuwen/core/controller/base.py` |
-| 6.20 | ☐ | TaskManager / EventQueue | 任务与事件队列 | `openjiuwen/core/controller/` |
-| 6.21 | ☐ | TaskScheduler / EventHandler | 调度器与事件处理器 | `openjiuwen/core/controller/` |
+| 6.20 | ✅ | TaskManager / EventQueue | 任务与事件队列 | `openjiuwen/core/controller/` |
+| 6.21 | ✅ | TaskScheduler / EventHandler | 调度器与事件处理器 | `openjiuwen/core/controller/` |
 | 6.22 | ☐ | ControllerAgent | 基于 Controller 的 Agent | `openjiuwen/core/single_agent/base.py` (ControllerAgent) |
 | **6.x Runner 编排** | — | | | |
 | 6.23 | ☐ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表 | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
