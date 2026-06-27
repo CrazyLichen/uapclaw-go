@@ -690,8 +690,8 @@ func TestToolMgr_GetMcpTools_使用Mock(t *testing.T) {
 	serverConfig := mcp.NewMcpServerConfig("test_server", "http://localhost:8080/sse", "sse", mcp.WithServerID("srv1"))
 
 	// 先注册工具和服务器资源
-	mockClient.Connect(context.Background())
-	mgr.innerRefreshMcpTools(context.Background(), mockClient, serverConfig, nil)
+	_ = mockClient.Connect(context.Background())
+	_, _ = mgr.innerRefreshMcpTools(context.Background(), mockClient, serverConfig, nil)
 
 	// 获取所有工具
 	tools, err := mgr.GetMcpTools(context.Background(), "srv1", nil)

@@ -129,7 +129,7 @@ func TestRemoteSkillUtil_listGitHubFiles_递归(t *testing.T) {
 			t.Errorf("期望 Accept=application/vnd.github+json")
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(treeResponse)
+		_ = json.NewEncoder(w).Encode(treeResponse)
 	}))
 	defer server.Close()
 
@@ -156,7 +156,7 @@ func TestRemoteSkillUtil_listGitHubFiles_递归(t *testing.T) {
 func TestRemoteSkillUtil_fetchGitHubTree_错误响应(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
 	}))
 	defer server.Close()
 
@@ -178,7 +178,7 @@ func TestRemoteSkillUtil_fetchGitHubTree_带Token(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedToken = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(gitHubTreeResponse{Tree: []gitHubTreeItem{}})
+		_ = json.NewEncoder(w).Encode(gitHubTreeResponse{Tree: []gitHubTreeItem{}})
 	}))
 	defer server.Close()
 
@@ -207,7 +207,7 @@ func TestRemoteSkillUtil_SearchGitHubForSkills(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(treeResponse)
+		_ = json.NewEncoder(w).Encode(treeResponse)
 	}))
 	defer server.Close()
 
@@ -244,7 +244,7 @@ func TestRemoteSkillUtil_UploadSkillFromGitHub_空列表(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(treeResponse)
+		_ = json.NewEncoder(w).Encode(treeResponse)
 	}))
 	defer server.Close()
 
@@ -272,7 +272,7 @@ func TestRemoteSkillUtil_fetchGitHubTree_截断(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(treeResponse)
+		_ = json.NewEncoder(w).Encode(treeResponse)
 	}))
 	defer server.Close()
 

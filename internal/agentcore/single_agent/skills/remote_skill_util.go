@@ -304,7 +304,7 @@ func DownloadFileFromGitHub(tree *GitHubTree, filePath string, token string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("请求 GitHub API 失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, &GitHubError{Message: fmt.Sprintf("HTTP %d 下载 %s 失败", resp.StatusCode, filePath)}
@@ -431,7 +431,7 @@ func (r *RemoteSkillUtil) fetchGitHubTree(url string, token string, recursive bo
 	if err != nil {
 		return nil, fmt.Errorf("请求 GitHub Tree API 失败: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -484,7 +484,7 @@ func fetchGitHubRaw(url string, token string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, &GitHubError{Message: fmt.Sprintf("HTTP %d 请求 %s 失败", resp.StatusCode, url)}
