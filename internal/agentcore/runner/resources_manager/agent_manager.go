@@ -18,7 +18,7 @@ type AgentMgr struct {
 	AbstractManager[interfaces.BaseAgent]
 }
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -61,7 +61,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 		return provider(ctx, nil)
 	}
 
-	err := m.RegisterProvider(agentID, wrappedProvider)
+	err := m.registerProvider(agentID, wrappedProvider)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "AGENT_ADD_ERROR").
@@ -87,7 +87,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 //
 // ⤵️ 预留：分布式场景下 RemoteAgent 的清理逻辑
 func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
-	unwrapped, err := m.UnregisterProvider(agentID)
+	unwrapped, err := m.unregisterProvider(agentID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "AGENT_REMOVE_ERROR").
@@ -120,7 +120,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 //
 // ⤵️ 预留：分布式场景下 _is_remote_agent 判断和 RemoteAgent 调用逻辑
 func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.BaseAgent, error) {
-	agent, err := m.GetResource(ctx, agentID)
+	agent, err := m.getResource(ctx, agentID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("event_type", "AGENT_GET_ERROR").

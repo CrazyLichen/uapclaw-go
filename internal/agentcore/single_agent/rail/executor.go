@@ -80,8 +80,6 @@ func NewRailExecutor(before, after, onException AgentCallbackEvent) *RailExecuto
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Execute 在 before/after/on_exception 钩子包裹下执行 fn。
 //
 // 对齐 Python: @rail 装饰器的 wrapper 函数 (base.py L603-663)
@@ -246,8 +244,6 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *AgentCallbackContext
 
 	return origErr
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isCancelled 检查 context 是否已被取消。
 //

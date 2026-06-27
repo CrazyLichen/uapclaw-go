@@ -64,8 +64,8 @@ type Workflow interface {
 // 对应 Python: openjiuwen/core/single_agent/base.py (BaseAgent)
 //
 // 设计原则：
-//   - Card is required（定义 Agent 是什么）
-//   - Config is optional（定义 Agent 怎么运行）
+//   - Card 是必填项（定义 Agent 是什么）
+//   - Config 是可选项（定义 Agent 怎么运行）
 //   - 所有子类（ReActAgent/ControllerAgent）实现此接口
 type BaseAgent interface {
 	// ── 核心三方法 ──

@@ -48,6 +48,36 @@ type TaskManagerState struct {
 	RootTasks map[string]struct{} `json:"root_tasks"`
 }
 
+// ToMap 将 TaskManagerState 序列化为 map[string]any。
+// 用于 Controller 保存状态到 session。
+func (s *TaskManagerState) ToMap() map[string]any {
+	data, err := json.Marshal(s)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("TaskManagerState 序列化失败")
+		return nil
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		logger.Error(logComponent).Err(err).Msg("TaskManagerState 反序列化到 map 失败")
+		return nil
+	}
+	return result
+}
+
+// TaskManagerStateFromMap 从 map[string]any 反序列化为 TaskManagerState。
+// 用于 Controller 从 session 恢复状态。
+func TaskManagerStateFromMap(data map[string]any) (*TaskManagerState, error) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("序列化 map 失败: %w", err)
+	}
+	var state TaskManagerState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return nil, fmt.Errorf("反序列化 TaskManagerState 失败: %w", err)
+	}
+	return &state, nil
+}
+
 // TaskManager 任务管理器。
 // 对应 Python: TaskManager
 type TaskManager struct {

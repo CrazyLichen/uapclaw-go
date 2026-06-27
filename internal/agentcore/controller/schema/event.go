@@ -98,6 +98,43 @@ type FollowUpEvent struct {
 // 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
 type EventType string
 
+// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
+type eventSlice []Event
+
+// inputEventJSON InputEvent 的 JSON 序列化中间结构。
+type inputEventJSON struct {
+	EventTypeField EventType       `json:"event_type"`
+	EventID        string          `json:"event_id"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
+	InputData      dataFrameSlice  `json:"input_data"`
+}
+
+// taskInteractionEventJSON TaskInteractionEvent 的 JSON 序列化中间结构。
+type taskInteractionEventJSON struct {
+	EventTypeField EventType       `json:"event_type"`
+	EventID        string          `json:"event_id"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
+	Interaction    dataFrameSlice  `json:"interaction"`
+	Task           *Task           `json:"task,omitempty"`
+}
+
+// taskCompletionEventJSON TaskCompletionEvent 的 JSON 序列化中间结构。
+type taskCompletionEventJSON struct {
+	EventTypeField EventType       `json:"event_type"`
+	EventID        string          `json:"event_id"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
+	TaskResult     dataFrameSlice  `json:"task_result"`
+	Task           *Task           `json:"task,omitempty"`
+}
+
+// followUpEventJSON FollowUpEvent 的 JSON 序列化中间结构。
+type followUpEventJSON struct {
+	EventTypeField EventType       `json:"event_type"`
+	EventID        string          `json:"event_id"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
+	InputData      dataFrameSlice  `json:"input_data"`
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -288,43 +325,6 @@ func (e *FollowUpEvent) UnmarshalJSON(data []byte) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
-type eventSlice []Event
-
-// inputEventJSON InputEvent 的 JSON 序列化中间结构。
-type inputEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	InputData      dataFrameSlice  `json:"input_data"`
-}
-
-// taskInteractionEventJSON TaskInteractionEvent 的 JSON 序列化中间结构。
-type taskInteractionEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	Interaction    dataFrameSlice  `json:"interaction"`
-	Task           *Task           `json:"task,omitempty"`
-}
-
-// taskCompletionEventJSON TaskCompletionEvent 的 JSON 序列化中间结构。
-type taskCompletionEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	TaskResult     dataFrameSlice  `json:"task_result"`
-	Task           *Task           `json:"task,omitempty"`
-}
-
-// followUpEventJSON FollowUpEvent 的 JSON 序列化中间结构。
-type followUpEventJSON struct {
-	EventTypeField EventType       `json:"event_type"`
-	EventID        string          `json:"event_id"`
-	Metadata       map[string]any  `json:"metadata,omitempty"`
-	InputData      dataFrameSlice  `json:"input_data"`
-}
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 Event 按具体类型序列化。
 func (es eventSlice) MarshalJSON() ([]byte, error) {

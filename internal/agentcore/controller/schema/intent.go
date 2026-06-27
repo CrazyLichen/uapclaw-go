@@ -34,6 +34,9 @@ type Intent struct {
 	ClarificationPrompt string `json:"clarification_prompt,omitempty"`
 }
 
+// IntentOption 意图可选配置函数。
+type IntentOption func(*Intent)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // IntentType 意图类型枚举，定义所有支持的用户意图。
@@ -97,7 +100,7 @@ func (i *Intent) Validate() error {
 	if i.Confidence < 0.0 || i.Confidence > 1.0 {
 		return exception.NewBaseError(
 			exception.StatusAgentControllerRuntimeError,
-			exception.WithMsg(fmt.Sprintf("Confidence must be between 0.0 and 1.0, got %v", i.Confidence)),
+			exception.WithMsg(fmt.Sprintf("置信度必须在 0.0 和 1.0 之间，当前值 %v", i.Confidence)),
 		)
 	}
 
@@ -107,71 +110,66 @@ func (i *Intent) Validate() error {
 		if i.TargetTaskDescription == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("CREATE_TASK intent requires target_task_description"),
+				exception.WithMsg("CREATE_TASK 意图需要 target_task_description"),
 			)
 		}
 	case IntentContinueTask:
 		if len(i.DependTaskID) == 0 {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("CONTINUE_TASK intent requires depend_task_id"),
+				exception.WithMsg("CONTINUE_TASK 意图需要 depend_task_id"),
 			)
 		}
 	case IntentSupplementTask:
 		if i.TargetTaskID == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("SUPPLEMENT_TASK intent requires target_task_id"),
+				exception.WithMsg("SUPPLEMENT_TASK 意图需要 target_task_id"),
 			)
 		}
 		if i.SupplementaryInfo == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("SUPPLEMENT_TASK intent requires supplementary_info"),
+				exception.WithMsg("SUPPLEMENT_TASK 意图需要 supplementary_info"),
 			)
 		}
 	case IntentModifyTask:
 		if i.TargetTaskID == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("MODIFY_TASK intent requires target_task_id"),
+				exception.WithMsg("MODIFY_TASK 意图需要 target_task_id"),
 			)
 		}
 		if i.ModificationDetails == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("MODIFY_TASK intent requires modification_details"),
+				exception.WithMsg("MODIFY_TASK 意图需要 modification_details"),
 			)
 		}
 	case IntentPauseTask, IntentResumeTask, IntentCancelTask:
 		if i.TargetTaskID == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg(fmt.Sprintf("%s intent requires target_task_id", string(i.IntentType))),
+				exception.WithMsg(fmt.Sprintf("%s 意图需要 target_task_id", string(i.IntentType))),
 			)
 		}
 	case IntentSwitchTask:
 		if i.TargetTaskDescription == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("SWITCH_TASK intent requires target_task_description"),
+				exception.WithMsg("SWITCH_TASK 意图需要 target_task_description"),
 			)
 		}
 	case IntentUnknownTask:
 		if i.ClarificationPrompt == "" {
 			return exception.NewBaseError(
 				exception.StatusAgentControllerRuntimeError,
-				exception.WithMsg("UNKNOWN_TASK intent requires clarification_prompt"),
+				exception.WithMsg("UNKNOWN_TASK 意图需要 clarification_prompt"),
 			)
 		}
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// IntentOption 意图可选配置函数。
-type IntentOption func(*Intent)
 
 // WithTargetTaskID 设置目标任务ID。
 func WithTargetTaskID(id string) IntentOption {
@@ -207,3 +205,5 @@ func WithConfidence(c float64) IntentOption {
 func WithClarificationPrompt(prompt string) IntentOption {
 	return func(i *Intent) { i.ClarificationPrompt = prompt }
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

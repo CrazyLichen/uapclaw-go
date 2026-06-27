@@ -57,6 +57,11 @@ func (eq *EventQueue) SetEventHandler(handler EventHandler) {
 	eq.eventHandler = handler
 }
 
+// EventHandler 获取事件处理器。
+func (eq *EventQueue) EventHandler() EventHandler {
+	return eq.eventHandler
+}
+
 // Start 启动事件队列。
 //
 // 对齐 Python: EventQueue.start()

@@ -33,38 +33,38 @@ func NewAbstractManager[T any]() AbstractManager[T] {
 	}
 }
 
-// RegisterProvider 注册资源提供者，重复注册返回 error。
+// registerProvider 注册资源提供者，重复注册返回 error。
 //
 // 对应 Python: AbstractManager._register_resource_provider(resource_id, resource)
-func (m *AbstractManager[T]) RegisterProvider(resourceID string, provider func(context.Context) (T, error)) error {
+func (m *AbstractManager[T]) registerProvider(resourceID string, provider func(context.Context) (T, error)) error {
 	if m.providers.Contains(resourceID) {
-		return fmt.Errorf("add resource failed, %s is already exist", resourceID)
+		return fmt.Errorf("添加资源失败，%s 已存在", resourceID)
 	}
 	m.providers.Set(resourceID, provider)
 	return nil
 }
 
-// GetResource 调用 provider 获取资源实例。
+// getResource 调用 provider 获取资源实例。
 //
 // 对应 Python: AbstractManager._get_resource(resource_id)
 // Python 中通过 inspect.iscoroutinefunction 区分同步/异步 provider，
 // Go 中统一调用 provider(ctx)。
-func (m *AbstractManager[T]) GetResource(ctx context.Context, resourceID string) (T, error) {
+func (m *AbstractManager[T]) getResource(ctx context.Context, resourceID string) (T, error) {
 	var zero T
 	provider := m.providers.Get(resourceID)
 	if provider == nil {
-		return zero, fmt.Errorf("resource %s not found", resourceID)
+		return zero, fmt.Errorf("资源 %s 未找到", resourceID)
 	}
 	return provider(ctx)
 }
 
-// UnregisterProvider 注销资源提供者，返回被注销的 provider。
+// unregisterProvider 注销资源提供者，返回被注销的 provider。
 //
 // 对应 Python: AbstractManager._unregister_resource_provider(resource_id)
-func (m *AbstractManager[T]) UnregisterProvider(resourceID string) (func(context.Context) (T, error), error) {
+func (m *AbstractManager[T]) unregisterProvider(resourceID string) (func(context.Context) (T, error), error) {
 	provider := m.providers.Pop(resourceID)
 	if provider == nil {
-		return nil, fmt.Errorf("resource %s not found", resourceID)
+		return nil, fmt.Errorf("资源 %s 未找到", resourceID)
 	}
 	return provider, nil
 }

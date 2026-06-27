@@ -95,7 +95,7 @@ func (m *ToolMgr) AddTool(toolID string, t tool.Tool) error {
 		return exception.BuildError(
 			exception.StatusResourceAddError,
 			exception.WithParam("tool_id", toolID),
-			exception.WithParam("reason", "already exist tool"),
+			exception.WithParam("reason", "工具已存在"),
 		)
 	}
 	m.tools.Set(toolID, t)
@@ -112,7 +112,7 @@ func (m *ToolMgr) GetTool(toolID string, session decorator.TracerSession) (tool.
 			exception.StatusResourceGetError,
 			exception.WithParam("resource_id", toolID),
 			exception.WithParam("resource_type", "tool"),
-			exception.WithParam("reason", "tool not found"),
+			exception.WithParam("reason", "工具未找到"),
 		)
 	}
 	if session != nil {
@@ -133,7 +133,7 @@ func (m *ToolMgr) GetMcpTool(ctx context.Context, toolName, serverID string, ses
 			exception.StatusResourceMCPToolGetError,
 			exception.WithParam("server_id", serverID),
 			exception.WithParam("tool_name", toolName),
-			exception.WithParam("reason", "mcp server resource not found"),
+			exception.WithParam("reason", "MCP 服务器资源未找到"),
 		)
 	}
 	toolID := m.GenerateMcpToolID(serverID, resource.Config.ServerName, toolName)
@@ -190,7 +190,7 @@ func (m *ToolMgr) RemoveTool(toolID string) (tool.Tool, error) {
 			exception.StatusResourceGetError,
 			exception.WithParam("resource_id", toolID),
 			exception.WithParam("resource_type", "tool"),
-			exception.WithParam("reason", "tool not found"),
+			exception.WithParam("reason", "工具未找到"),
 		)
 	}
 	return t, nil
@@ -317,7 +317,7 @@ func (m *ToolMgr) RemoveToolServer(ctx context.Context, serverID string, ignoreN
 			return nil, exception.BuildError(
 				exception.StatusResourceMCPServerRemoveError,
 				exception.WithParam("server_id", serverID),
-				exception.WithParam("reason", "server is not exist"),
+				exception.WithParam("reason", "服务器不存在"),
 			)
 		}
 		return []string{}, nil
@@ -421,7 +421,7 @@ func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNo
 			return nil, exception.BuildError(
 				exception.StatusResourceMCPServerRefreshError,
 				exception.WithParam("server_id", serverID),
-				exception.WithParam("reason", "server is not exist"),
+				exception.WithParam("reason", "服务器不存在"),
 			)
 		}
 		return []*mcp.McpToolCard{}, nil
@@ -482,7 +482,7 @@ func (m *ToolMgr) GetMcpClient(serverID string) (mcp.McpClient, error) {
 			exception.StatusResourceGetError,
 			exception.WithParam("resource_id", serverID),
 			exception.WithParam("resource_type", "mcp_client"),
-			exception.WithParam("reason", "mcp server resource not found"),
+			exception.WithParam("reason", "MCP 服务器资源未找到"),
 		)
 	}
 	return resource.Client, nil
@@ -500,7 +500,7 @@ func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcp.McpServerConfig, err
 			exception.StatusResourceGetError,
 			exception.WithParam("resource_id", serverID),
 			exception.WithParam("resource_type", "mcp_server_config"),
-			exception.WithParam("reason", "mcp server resource not found"),
+			exception.WithParam("reason", "MCP 服务器资源未找到"),
 		)
 	}
 	// 深拷贝配置

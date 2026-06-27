@@ -15,6 +15,22 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TaskExecutor 任务执行器接口。
+// 对应 Python: TaskExecutor(ABC)
+type TaskExecutor interface {
+	// ExecuteAbility 执行任务，返回输出分片 channel。
+	// channel 关闭表示执行结束。
+	ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error)
+	// CanPause 检查任务是否可暂停，返回 (是否可暂停, 原因)。
+	CanPause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
+	// Pause 暂停任务，返回 (是否成功, 系统级错误)。
+	Pause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
+	// CanCancel 检查任务是否可取消，返回 (是否可取消, 原因)。
+	CanCancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
+	// Cancel 取消任务，返回 (是否成功, 系统级错误)。
+	Cancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
+}
+
 // TaskExecutorDependencies 任务执行器依赖。
 // 对齐 Python: TaskExecutorDependencies
 type TaskExecutorDependencies struct {
@@ -39,21 +55,11 @@ type TaskExecutorRegistry struct {
 	mu sync.RWMutex
 }
 
-// TaskExecutor 任务执行器接口。
-// 对应 Python: TaskExecutor(ABC)
-type TaskExecutor interface {
-	// ExecuteAbility 执行任务，返回输出分片 channel。
-	// channel 关闭表示执行结束。
-	ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error)
-	// CanPause 检查任务是否可暂停，返回 (是否可暂停, 原因)。
-	CanPause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
-	// Pause 暂停任务，返回 (是否成功, 系统级错误)。
-	Pause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
-	// CanCancel 检查任务是否可取消，返回 (是否可取消, 原因)。
-	CanCancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
-	// Cancel 取消任务，返回 (是否成功, 系统级错误)。
-	Cancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
-}
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -93,3 +99,5 @@ func (r *TaskExecutorRegistry) GetTaskExecutor(taskType string, deps *TaskExecut
 	}
 	return builder(deps), nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -45,6 +45,24 @@ type Task struct {
 	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
+// taskJSON Task 的 JSON 序列化中间结构。
+type taskJSON struct {
+	SessionID           string                   `json:"session_id"`
+	TaskID              string                   `json:"task_id"`
+	TaskType            string                   `json:"task_type"`
+	Description         string                   `json:"description,omitempty"`
+	Priority            int                      `json:"priority"`
+	Inputs              eventSlice               `json:"inputs,omitempty"`
+	Outputs             []*ControllerOutputChunk `json:"outputs,omitempty"`
+	Status              TaskStatus               `json:"status"`
+	ParentTaskID        string                   `json:"parent_task_id,omitempty"`
+	ContextID           string                   `json:"context_id,omitempty"`
+	InputRequiredFields map[string]any           `json:"input_required_fields,omitempty"`
+	ErrorMessage        string                   `json:"error_message,omitempty"`
+	Metadata            map[string]any           `json:"metadata,omitempty"`
+	Extensions          map[string]any           `json:"extensions,omitempty"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -159,21 +177,3 @@ func (t *Task) String() string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// taskJSON Task 的 JSON 序列化中间结构。
-type taskJSON struct {
-	SessionID           string                   `json:"session_id"`
-	TaskID              string                   `json:"task_id"`
-	TaskType            string                   `json:"task_type"`
-	Description         string                   `json:"description,omitempty"`
-	Priority            int                      `json:"priority"`
-	Inputs              eventSlice               `json:"inputs,omitempty"`
-	Outputs             []*ControllerOutputChunk `json:"outputs,omitempty"`
-	Status              TaskStatus               `json:"status"`
-	ParentTaskID        string                   `json:"parent_task_id,omitempty"`
-	ContextID           string                   `json:"context_id,omitempty"`
-	InputRequiredFields map[string]any           `json:"input_required_fields,omitempty"`
-	ErrorMessage        string                   `json:"error_message,omitempty"`
-	Metadata            map[string]any           `json:"metadata,omitempty"`
-	Extensions          map[string]any           `json:"extensions,omitempty"`
-}

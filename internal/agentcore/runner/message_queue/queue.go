@@ -72,6 +72,8 @@ type Subscription struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var (
 	// ErrQueueNotRunning 队列未运行
 	ErrQueueNotRunning = errors.New("message queue is not running")

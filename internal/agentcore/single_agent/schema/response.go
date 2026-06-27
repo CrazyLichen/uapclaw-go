@@ -4,7 +4,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // InterruptRequester 中断请求接口，InterruptRequest 和 ToolCallInterruptRequest 均满足。
 //
@@ -18,8 +18,6 @@ type InterruptRequester interface {
 	// GetAutoConfirmKey 返回自动确认配置键
 	GetAutoConfirmKey() string
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // InterruptRequest 工具中断请求，携带需要用户确认的信息。
 //
@@ -53,6 +51,12 @@ type ToolCallInterruptRequest struct {
 	Index int
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewToolCallInterruptRequest 从 InterruptRequest 和 ToolCall 创建 ToolCallInterruptRequest。
@@ -79,3 +83,5 @@ func (r *ToolCallInterruptRequest) GetMessage() string { return r.Message }
 
 // GetAutoConfirmKey 实现 InterruptRequester 接口（覆盖嵌入实现，返回相同值）。
 func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

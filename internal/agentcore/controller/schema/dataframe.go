@@ -47,6 +47,9 @@ type FileDataFrame struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// dataFrameSlice DataFrame 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
+type dataFrameSlice []DataFrame
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -77,9 +80,6 @@ func UnmarshalDataFrames(data []byte) ([]DataFrame, error) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// dataFrameSlice DataFrame 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
-type dataFrameSlice []DataFrame
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 DataFrame 按具体类型序列化。
 func (ds dataFrameSlice) MarshalJSON() ([]byte, error) {
