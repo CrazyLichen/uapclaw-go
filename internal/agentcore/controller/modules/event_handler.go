@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
@@ -24,7 +25,7 @@ type EventHandlerBase struct {
 	// TaskScheduler 任务调度器（同包内类型，前向引用）
 	TaskScheduler *TaskScheduler
 	// AbilityMgr 能力管理器
-	AbilityMgr any // 使用 any 避免导入 ability 包的循环依赖，Controller.SetEventHandler 时注入
+	AbilityMgr *ability.AbilityManager
 }
 
 // EventHandlerInput 事件处理器输入参数。

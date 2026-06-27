@@ -7,6 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -20,7 +21,7 @@ type TaskExecutorDependencies struct {
 	// Config 配置
 	Config *config.ControllerConfig
 	// AbilityMgr 能力管理器
-	AbilityMgr any
+	AbilityMgr *ability.AbilityManager
 	// ContextEngine 上下文引擎
 	ContextEngine iface.ContextEngine
 	// TaskManager 任务管理器（同包前向引用）
@@ -46,12 +47,12 @@ type TaskExecutor interface {
 	ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error)
 	// CanPause 检查任务是否可暂停，返回 (是否可暂停, 原因)。
 	CanPause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
-	// Pause 暂停任务。
-	Pause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) error
+	// Pause 暂停任务，返回 (是否成功, 系统级错误)。
+	Pause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
 	// CanCancel 检查任务是否可取消，返回 (是否可取消, 原因)。
 	CanCancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
-	// Cancel 取消任务。
-	Cancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) error
+	// Cancel 取消任务，返回 (是否成功, 系统级错误)。
+	Cancel(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, error)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

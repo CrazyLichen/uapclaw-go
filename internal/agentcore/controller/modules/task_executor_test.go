@@ -31,8 +31,8 @@ func (f *fakeTaskExecutor) CanPause(_ context.Context, _ string, _ sessioninterf
 }
 
 // Pause 模拟暂停任务
-func (f *fakeTaskExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) error {
-	return nil
+func (f *fakeTaskExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
+	return true, nil
 }
 
 // CanCancel 模拟检查是否可取消
@@ -41,8 +41,8 @@ func (f *fakeTaskExecutor) CanCancel(_ context.Context, _ string, _ sessioninter
 }
 
 // Cancel 模拟取消任务
-func (f *fakeTaskExecutor) Cancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) error {
-	return nil
+func (f *fakeTaskExecutor) Cancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
+	return true, nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

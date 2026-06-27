@@ -65,12 +65,12 @@ func TestEventHandlerInput_字段访问(t *testing.T) {
 		ContextEngine: nil, // iface.ContextEngine 接口，nil 合法
 		TaskManager:   &TaskManager{},
 		TaskScheduler: &TaskScheduler{},
-		AbilityMgr:    "test-ability",
+		AbilityMgr:    nil,
 	}
 	assert.NotNil(t, base.Config)
 	assert.NotNil(t, base.TaskManager)
 	assert.NotNil(t, base.TaskScheduler)
-	assert.Equal(t, "test-ability", base.AbilityMgr)
+	assert.Nil(t, base.AbilityMgr)
 }
 
 // TestEventHandlerBase_字段类型验证 验证各字段类型正确赋值

@@ -9,9 +9,9 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -28,7 +28,7 @@ type TaskScheduler struct {
 	// contextEngine 上下文引擎
 	contextEngine any // iface.ContextEngine，用 any 避免循环依赖
 	// abilityMgr 能力管理器
-	abilityMgr any
+	abilityMgr *ability.AbilityManager
 	// eventQueue 事件队列
 	eventQueue *EventQueue
 	// taskExecutorRegistry 任务执行器注册表
@@ -63,12 +63,12 @@ type runningTaskEntry struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// payloadTypeTaskCompletion 任务完成载荷类型
-	payloadTypeTaskCompletion = "TASK_COMPLETION"
-	// payloadTypeTaskInteraction 任务交互载荷类型
-	payloadTypeTaskInteraction = "TASK_INTERACTION"
-	// payloadTypeTaskFailed 任务失败载荷类型
-	payloadTypeTaskFailed = "TASK_FAILED"
+	// payloadTypeTaskCompletion 任务完成载荷类型（对齐 EventType 枚举值）
+	payloadTypeTaskCompletion = "task_completion"
+	// payloadTypeTaskInteraction 任务交互载荷类型（对齐 EventType 枚举值）
+	payloadTypeTaskInteraction = "task_interaction"
+	// payloadTypeTaskFailed 任务失败载荷类型（对齐 EventType 枚举值）
+	payloadTypeTaskFailed = "task_failed"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -82,9 +82,8 @@ func NewTaskScheduler(
 	cfg *config.ControllerConfig,
 	taskManager *TaskManager,
 	contextEngine any,
-	abilityMgr any,
+	abilityMgr *ability.AbilityManager,
 	eventQueue *EventQueue,
-	registry *TaskExecutorRegistry,
 	card any,
 ) *TaskScheduler {
 	return &TaskScheduler{
@@ -93,7 +92,7 @@ func NewTaskScheduler(
 		contextEngine:        contextEngine,
 		abilityMgr:           abilityMgr,
 		eventQueue:           eventQueue,
-		taskExecutorRegistry: registry,
+		taskExecutorRegistry: NewTaskExecutorRegistry(),
 		sessions:             make(map[string]sessioninterfaces.SessionFacade),
 		card:                 card,
 		runningTasks:         make(map[string]*runningTaskEntry),
@@ -186,32 +185,35 @@ func (s *TaskScheduler) SetConfig(cfg *config.ControllerConfig) {
 // PauseTask 暂停指定任务。
 //
 // 对齐 Python: TaskScheduler.pause_task
-func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) error {
+// 返回 (是否成功暂停, 系统级错误)。
+func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) (bool, error) {
 	s.mu.Lock()
 	entry, exists := s.runningTasks[taskID]
 	s.mu.Unlock()
 
 	if !exists {
-		logger.Error(logComponent).
-			Str("event_type", "LLM_CALL_ERROR").
+		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Msg("暂停任务失败：任务不在运行中")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("任务不在运行中: %s", taskID)),
-		)
+		return false, nil
 	}
 
 	// 获取任务信息
 	tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{TaskID: taskID})
-	if err != nil || len(tasks) == 0 {
+	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
 			Msg("暂停任务失败：无法获取任务")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("无法获取任务: %s", taskID)),
-		)
+		return false, err
+	}
+	if len(tasks) == 0 {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("task_id", taskID).
+			Msg("暂停任务失败：任务不存在")
+		return false, nil
 	}
 	task := tasks[0]
 
@@ -223,9 +225,7 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Str("session_id", task.SessionID).
 			Msg("暂停任务失败：会话不存在")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("会话不存在: %s", task.SessionID)),
-		)
+		return false, nil
 	}
 
 	// 检查是否可暂停
@@ -236,26 +236,29 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Err(err).
 			Msg("检查暂停失败")
-		return err
+		return false, err
 	}
 	if !canPause {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Str("reason", reason).
 			Msg("任务不可暂停")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("任务不可暂停: %s, 原因: %s", taskID, reason)),
-		)
+		return false, nil
 	}
 
 	// 执行暂停
-	if err := entry.executor.Pause(ctx, taskID, sess); err != nil {
+	if paused, err := entry.executor.Pause(ctx, taskID, sess); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
 			Msg("暂停任务执行失败")
-		return err
+		return false, err
+	} else if !paused {
+		logger.Warn(logComponent).
+			Str("task_id", taskID).
+			Msg("executor.Pause 返回 false")
+		return false, nil
 	}
 
 	// 取消运行中的 goroutine
@@ -275,31 +278,37 @@ func (s *TaskScheduler) PauseTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Err(err).
 			Msg("更新任务状态为 PAUSED 失败")
-		return err
+		return false, err
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "task_paused").
 		Str("task_id", taskID).
 		Msg("任务已暂停")
-	return nil
+	return true, nil
 }
 
 // CancelTask 取消指定任务。
 //
 // 对齐 Python: TaskScheduler.cancel_task
-func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
+// 返回 (是否成功取消, 系统级错误)。
+func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, error) {
 	// 获取任务信息
 	tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{TaskID: taskID})
-	if err != nil || len(tasks) == 0 {
+	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
 			Msg("取消任务失败：无法获取任务")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("无法获取任务: %s", taskID)),
-		)
+		return false, err
+	}
+	if len(tasks) == 0 {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("task_id", taskID).
+			Msg("取消任务失败：任务不存在")
+		return false, nil
 	}
 	task := tasks[0]
 
@@ -311,13 +320,23 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
 				Str("task_id", taskID).
 				Err(err).
 				Msg("更新已提交任务状态为 CANCELED 失败")
-			return err
+			return false, err
 		}
 		logger.Info(logComponent).
 			Str("event_type", "task_canceled").
 			Str("task_id", taskID).
 			Msg("已提交任务已取消")
-		return nil
+		return true, nil
+	}
+
+	// 已终态幂等返回 true（对齐 Python）
+	if task.Status == schema.TaskCanceled || task.Status == schema.TaskCompleted || task.Status == schema.TaskFailed {
+		logger.Info(logComponent).
+			Str("event_type", "task_canceled_idempotent").
+			Str("task_id", taskID).
+			Str("status", string(task.Status)).
+			Msg("任务已处于终态，取消操作幂等返回")
+		return true, nil
 	}
 
 	// WORKING 状态需要取消运行中的 goroutine
@@ -326,13 +345,10 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
 	s.mu.Unlock()
 
 	if !exists {
-		logger.Error(logComponent).
-			Str("event_type", "LLM_CALL_ERROR").
+		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Msg("取消任务失败：任务不在运行中")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("任务不在运行中: %s", taskID)),
-		)
+		return false, nil
 	}
 
 	// 获取会话
@@ -343,9 +359,7 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Str("session_id", task.SessionID).
 			Msg("取消任务失败：会话不存在")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("会话不存在: %s", task.SessionID)),
-		)
+		return false, nil
 	}
 
 	// 检查是否可取消
@@ -356,26 +370,29 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Err(err).
 			Msg("检查取消失败")
-		return err
+		return false, err
 	}
 	if !canCancel {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Str("reason", reason).
 			Msg("任务不可取消")
-		return exception.NewBaseError(exception.StatusAgentControllerTaskExecutionError,
-			exception.WithMsg(fmt.Sprintf("任务不可取消: %s, 原因: %s", taskID, reason)),
-		)
+		return false, nil
 	}
 
 	// 执行取消
-	if err := entry.executor.Cancel(ctx, taskID, sess); err != nil {
+	if canceled, err := entry.executor.Cancel(ctx, taskID, sess); err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("task_id", taskID).
 			Err(err).
 			Msg("取消任务执行失败")
-		return err
+		return false, err
+	} else if !canceled {
+		logger.Warn(logComponent).
+			Str("task_id", taskID).
+			Msg("executor.Cancel 返回 false")
+		return false, nil
 	}
 
 	// 取消运行中的 goroutine
@@ -395,14 +412,14 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) error {
 			Str("task_id", taskID).
 			Err(err).
 			Msg("更新任务状态为 CANCELED 失败")
-		return err
+		return false, err
 	}
 
 	logger.Info(logComponent).
 		Str("event_type", "task_canceled").
 		Str("task_id", taskID).
 		Msg("任务已取消")
-	return nil
+	return true, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -664,7 +681,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 		// 获取任务信息判断 session
 		tasks, err := s.taskManager.GetTask(ctx, &TaskFilter{TaskID: taskID})
 		if err == nil && len(tasks) > 0 {
-			s.ensureSessionCompletionSignal(ctx, tasks[0].SessionID, sess)
+			s.EnsureSessionCompletionSignal(ctx, tasks[0].SessionID)
 		}
 	}()
 
@@ -726,10 +743,12 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 	}
 }
 
-// ensureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
+// EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
 //
-// 对齐 Python: TaskScheduler._ensure_session_completion_signal
-func (s *TaskScheduler) ensureSessionCompletionSignal(ctx context.Context, sessionID string, sess sessioninterfaces.SessionFacade) {
+// 对齐 Python: TaskScheduler.ensure_session_completion_signal
+// Controller.stream() 在 publish_event 返回后调用此方法，
+// 使得没有新任务的轮次也能发送完成信号。
+func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessionID string) {
 	s.mu.Lock()
 	suppress := s.config.SuppressCompletionSignal
 	s.mu.Unlock()
@@ -745,10 +764,25 @@ func (s *TaskScheduler) ensureSessionCompletionSignal(ctx context.Context, sessi
 		return
 	}
 
-	// 发送 all_tasks_processed chunk 到 session 流
+	// 从 sessions map 查找 session（对齐 Python: self._sessions.get）
+	s.mu.Lock()
+	sess, exists := s.sessions[sessionID]
+	s.mu.Unlock()
+
+	if !exists {
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).
+			Msg("会话不存在，无法发送完成信号")
+		return
+	}
+
+	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
 	chunk := &schema.ControllerOutputChunk{
 		Payload: &schema.ControllerOutputPayload{
 			Type: schema.AllTasksProcessed,
+			Data: []schema.DataFrame{
+				&schema.TextDataFrame{Text: "All tasks have been successfully processed"},
+			},
 		},
 		LastChunk: true,
 	}

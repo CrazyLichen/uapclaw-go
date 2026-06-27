@@ -50,6 +50,8 @@ type topicSubscription struct {
 	cancel context.CancelFunc
 	// done 消费 goroutine 退出信号
 	done chan struct{}
+	// timeout 消息处理超时（对齐 Python SubscriptionInMemory._timeout）
+	timeout time.Duration
 }
 
 // internalMessage 内部消息封装，区分 QueueMessage 和 InvokeQueueMessage
@@ -142,9 +144,10 @@ func (q *MessageQueueInMemory) Subscribe(topic string) *Subscription {
 	}
 
 	ts := &topicSubscription{
-		topic: topic,
-		ch:    make(chan *internalMessage, q.maxSize),
-		done:  make(chan struct{}),
+		topic:   topic,
+		ch:      make(chan *internalMessage, q.maxSize),
+		done:    make(chan struct{}),
+		timeout: q.timeout,
 	}
 	// 标记 done 已关闭（初始状态非活跃）
 	close(ts.done)
@@ -176,10 +179,10 @@ func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) er
 	return nil
 }
 
-// Produce 向指定 topic 生产消息。
+// Produce 火忘发布消息，不等待处理结果。
 //
-// 对应 Python: MessageQueueInMemory.produce_message(topic, queue_message)
-func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *QueueMessage, invoke *InvokeQueueMessage) error {
+// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message) 火忘模式
+func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *QueueMessage) error {
 	if !q.running.Load() {
 		return ErrQueueNotRunning
 	}
@@ -192,7 +195,33 @@ func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *Q
 		return ErrTopicNotFound
 	}
 
-	im := &internalMessage{payload: msg.Payload, invoke: invoke}
+	im := &internalMessage{payload: msg.Payload}
+
+	select {
+	case ts.ch <- im:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// ProduceSync 同步发布消息，等待处理结果。
+//
+// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message) 同步模式
+func (q *MessageQueueInMemory) ProduceSync(ctx context.Context, topic string, invoke *InvokeQueueMessage) error {
+	if !q.running.Load() {
+		return ErrQueueNotRunning
+	}
+
+	q.mu.RLock()
+	ts, exists := q.topics[topic]
+	q.mu.RUnlock()
+
+	if !exists {
+		return ErrTopicNotFound
+	}
+
+	im := &internalMessage{payload: invoke.Payload, invoke: invoke}
 
 	select {
 	case ts.ch <- im:
@@ -211,10 +240,9 @@ func (s *Subscription) SetMessageHandler(handler func(ctx context.Context, paylo
 
 // Activate 激活订阅，启动消费 goroutine。
 //
-// 对应 Python: Subscription.activate()
-// timeout 参数来自 MessageQueueInMemory 的 timeout 配置。
-func (s *Subscription) Activate(timeout time.Duration) {
-	s.ts.activate(timeout)
+// 对齐 Python: Subscription.activate()
+func (s *Subscription) Activate() {
+	s.ts.activate()
 }
 
 // Deactivate 停用订阅，停止消费 goroutine。
@@ -232,7 +260,7 @@ func (s *Subscription) IsActive() bool {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // activate 启动消费 goroutine。
-func (ts *topicSubscription) activate(timeout time.Duration) {
+func (ts *topicSubscription) activate() {
 	if ts.active.Load() {
 		return
 	}
@@ -242,7 +270,7 @@ func (ts *topicSubscription) activate(timeout time.Duration) {
 	ts.done = make(chan struct{})
 	ts.active.Store(true)
 
-	go ts.consume(ctx, timeout)
+	go ts.consume(ctx)
 
 	logger.Info(logger.ComponentCommon).
 		Str("event_type", "subscription_activated").
@@ -270,7 +298,7 @@ func (ts *topicSubscription) deactivate() {
 }
 
 // consume 消费 goroutine 主循环。
-func (ts *topicSubscription) consume(ctx context.Context, timeout time.Duration) {
+func (ts *topicSubscription) consume(ctx context.Context) {
 	defer close(ts.done)
 
 	for {
@@ -280,7 +308,7 @@ func (ts *topicSubscription) consume(ctx context.Context, timeout time.Duration)
 				// channel 已关闭
 				return
 			}
-			ts.handleMessage(ctx, im, timeout)
+			ts.handleMessage(ctx, im)
 		case <-ctx.Done():
 			return
 		}
@@ -288,7 +316,7 @@ func (ts *topicSubscription) consume(ctx context.Context, timeout time.Duration)
 }
 
 // handleMessage 处理单条消息。
-func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMessage, timeout time.Duration) {
+func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMessage) {
 	ts.handlerMu.RLock()
 	handler := ts.handler
 	ts.handlerMu.RUnlock()
@@ -307,8 +335,8 @@ func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMess
 	// 处理超时控制
 	var result any
 	var err error
-	if timeout > 0 {
-		handleCtx, cancel := context.WithTimeout(ctx, timeout)
+	if ts.timeout > 0 {
+		handleCtx, cancel := context.WithTimeout(ctx, ts.timeout)
 		result, err = handler(handleCtx, im.payload)
 		cancel()
 	} else {

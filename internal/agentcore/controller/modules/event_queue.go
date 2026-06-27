@@ -103,7 +103,6 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 			exception.WithMsg(err.Error()))
 	}
 
-	timeout := time.Duration(eq.config.EventTimeout * float64(time.Second))
 	eventTypes := []schema.EventType{
 		schema.EventInput,
 		schema.EventTaskInteraction,
@@ -119,7 +118,7 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 		// 捕获当前 eventType 和 handler，避免闭包引用循环变量
 		handler := eq.makeEventHandler(eventType)
 		sub.SetMessageHandler(handler)
-		sub.Activate(timeout)
+		sub.Activate()
 
 		logger.Info(logComponent).
 			Str("event_type", "event_queue_subscribed").
@@ -185,7 +184,7 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 	}
 
 	invoke := message_queue.NewInvokeQueueMessage(payload)
-	err := eq.queue.Produce(ctx, topic, message_queue.NewQueueMessage(payload), invoke)
+	err := eq.queue.ProduceSync(ctx, topic, invoke)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -238,7 +237,7 @@ func (eq *EventQueue) PublishEventAsync(ctx context.Context, agentID string, ses
 		"session": sess,
 	}
 
-	err := eq.queue.Produce(ctx, topic, message_queue.NewQueueMessage(payload), nil)
+	err := eq.queue.Produce(ctx, topic, message_queue.NewQueueMessage(payload))
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").

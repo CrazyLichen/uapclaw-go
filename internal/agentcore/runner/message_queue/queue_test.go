@@ -18,7 +18,7 @@ func TestMessageQueueInMemory_启动停止(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 
 	// 未启动时 Produce 应返回错误
-	err := q.Produce(context.Background(), "test", NewQueueMessage(nil), nil)
+	err := q.Produce(context.Background(), "test", NewQueueMessage(nil))
 	assert.ErrorIs(t, err, ErrQueueNotRunning)
 
 	// 启动
@@ -47,9 +47,9 @@ func TestMessageQueueInMemory_生产消费(t *testing.T) {
 		received.Add(1)
 		return nil, nil
 	})
-	sub.Activate(q.timeout)
+	sub.Activate()
 
-	err := q.Produce(context.Background(), "test_topic", NewQueueMessage(map[string]any{"key": "value"}), nil)
+	err := q.Produce(context.Background(), "test_topic", NewQueueMessage(map[string]any{"key": "value"}))
 	require.NoError(t, err)
 
 	// 等待消息被消费
@@ -69,10 +69,10 @@ func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 		handlerCalled.Store(true)
 		return "handler_result", nil
 	})
-	sub.Activate(q.timeout)
+	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	err := q.Produce(context.Background(), "sync_topic", NewQueueMessage(invoke.Payload), invoke)
+	err := q.ProduceSync(context.Background(), "sync_topic", invoke)
 	require.NoError(t, err)
 
 	// WaitResponse 应阻塞直到 handler 处理完成
@@ -95,10 +95,10 @@ func TestMessageQueueInMemory_火忘发布(t *testing.T) {
 		received.Add(1)
 		return nil, nil
 	})
-	sub.Activate(q.timeout)
+	sub.Activate()
 
 	// 火忘发布，不传 InvokeQueueMessage
-	err := q.Produce(context.Background(), "async_topic", NewQueueMessage(map[string]any{"key": "value"}), nil)
+	err := q.Produce(context.Background(), "async_topic", NewQueueMessage(map[string]any{"key": "value"}))
 	require.NoError(t, err)
 
 	// Produce 立即返回，handler 可能还没处理完
@@ -119,17 +119,17 @@ func TestMessageQueueInMemory_多Topic路由(t *testing.T) {
 		topic1Received.Add(1)
 		return nil, nil
 	})
-	sub1.Activate(q.timeout)
+	sub1.Activate()
 
 	sub2 := q.Subscribe("topic_2")
 	sub2.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		topic2Received.Add(1)
 		return nil, nil
 	})
-	sub2.Activate(q.timeout)
+	sub2.Activate()
 
-	q.Produce(context.Background(), "topic_1", NewQueueMessage(map[string]any{"key": "1"}), nil)
-	q.Produce(context.Background(), "topic_2", NewQueueMessage(map[string]any{"key": "2"}), nil)
+	q.Produce(context.Background(), "topic_1", NewQueueMessage(map[string]any{"key": "1"}))
+	q.Produce(context.Background(), "topic_2", NewQueueMessage(map[string]any{"key": "2"}))
 
 	assert.Eventually(t, func() bool { return topic1Received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 	assert.Eventually(t, func() bool { return topic2Received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
@@ -145,7 +145,7 @@ func TestMessageQueueInMemory_订阅取消(t *testing.T) {
 	err := q.Unsubscribe(context.Background(), "cancel_topic")
 	require.NoError(t, err)
 
-	err = q.Produce(context.Background(), "cancel_topic", NewQueueMessage(nil), nil)
+	err = q.Produce(context.Background(), "cancel_topic", NewQueueMessage(nil))
 	assert.ErrorIs(t, err, ErrTopicNotFound)
 }
 
@@ -163,10 +163,10 @@ func TestMessageQueueInMemory_激活停用(t *testing.T) {
 	})
 
 	// 激活
-	sub.Activate(q.timeout)
+	sub.Activate()
 	assert.True(t, sub.IsActive())
 
-	q.Produce(context.Background(), "toggle_topic", NewQueueMessage(map[string]any{"key": "1"}), nil)
+	q.Produce(context.Background(), "toggle_topic", NewQueueMessage(map[string]any{"key": "1"}))
 	assert.Eventually(t, func() bool { return received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 
 	// 停用
@@ -184,10 +184,10 @@ func TestMessageQueueInMemory_同步发布Handler错误(t *testing.T) {
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		return nil, errors.New("handler error")
 	})
-	sub.Activate(q.timeout)
+	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	q.Produce(context.Background(), "error_topic", NewQueueMessage(invoke.Payload), invoke)
+	q.ProduceSync(context.Background(), "error_topic", invoke)
 
 	result, err := invoke.WaitResponse(context.Background())
 	assert.Error(t, err)
@@ -203,10 +203,10 @@ func TestMessageQueueInMemory_Handler未设置(t *testing.T) {
 
 	sub := q.Subscribe("no_handler_topic")
 	// 不设置 handler
-	sub.Activate(q.timeout)
+	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	q.Produce(context.Background(), "no_handler_topic", NewQueueMessage(invoke.Payload), invoke)
+	q.ProduceSync(context.Background(), "no_handler_topic", invoke)
 
 	_, err := invoke.WaitResponse(context.Background())
 	assert.ErrorIs(t, err, ErrHandlerNotSet)

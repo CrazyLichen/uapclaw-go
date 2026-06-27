@@ -119,8 +119,8 @@ func (e *configurableFakeTaskExecutor) CanPause(_ context.Context, _ string, _ s
 }
 
 // Pause 实现 TaskExecutor 接口
-func (e *configurableFakeTaskExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) error {
-	return e.pauseErr
+func (e *configurableFakeTaskExecutor) Pause(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
+	return true, e.pauseErr
 }
 
 // CanCancel 实现 TaskExecutor 接口
@@ -129,8 +129,8 @@ func (e *configurableFakeTaskExecutor) CanCancel(_ context.Context, _ string, _ 
 }
 
 // Cancel 实现 TaskExecutor 接口
-func (e *configurableFakeTaskExecutor) Cancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) error {
-	return e.cancelErr
+func (e *configurableFakeTaskExecutor) Cancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
+	return true, e.cancelErr
 }
 
 // HandleInput 实现 EventHandler 接口
@@ -183,9 +183,9 @@ func (h *schedulerFakeEventHandler) OnAbort() {}
 func newTestScheduler(cfg *config.ControllerConfig) (*TaskScheduler, *TaskManager, *EventQueue, *TaskExecutorRegistry) {
 	tm := NewTaskManager(cfg)
 	eq := NewEventQueue(cfg)
-	reg := NewTaskExecutorRegistry()
 
-	sched := NewTaskScheduler(cfg, tm, nil, nil, eq, reg, nil)
+	sched := NewTaskScheduler(cfg, tm, nil, nil, eq, nil)
+	reg := sched.TaskExecutorRegistry()
 
 	// 注册默认执行器
 	reg.AddTaskExecutor("test-type", func(deps *TaskExecutorDependencies) TaskExecutor {
@@ -224,7 +224,7 @@ func TestTaskScheduler_启停(t *testing.T) {
 // TestTaskScheduler_NotifyTaskSubmitted 测试 NotifyTaskSubmitted 唤醒调度循环
 func TestTaskScheduler_NotifyTaskSubmitted(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
-	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, NewTaskExecutorRegistry(), nil)
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
 
 	// 非阻塞写入
 	sched.NotifyTaskSubmitted()
@@ -468,7 +468,8 @@ func TestTaskScheduler_暂停任务(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// 暂停任务
-	err = sched.PauseTask(context.Background(), task.TaskID)
+	ok, err := sched.PauseTask(context.Background(), task.TaskID)
+	assert.True(t, ok)
 	require.NoError(t, err)
 	pausedCh <- struct{}{} // 解除执行器阻塞
 
@@ -493,7 +494,8 @@ func TestTaskScheduler_取消任务(t *testing.T) {
 	require.NoError(t, err)
 
 	// 直接取消 SUBMITTED 任务
-	err = sched.CancelTask(context.Background(), task1.TaskID)
+	ok, err := sched.CancelTask(context.Background(), task1.TaskID)
+	assert.True(t, ok)
 	require.NoError(t, err)
 
 	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: task1.TaskID})
@@ -540,7 +542,8 @@ func TestTaskScheduler_取消任务(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// 取消任务
-	err = sched.CancelTask(context.Background(), task2.TaskID)
+	ok, err = sched.CancelTask(context.Background(), task2.TaskID)
+	assert.True(t, ok)
 	require.NoError(t, err)
 	canceledCh <- struct{}{}
 
@@ -703,7 +706,7 @@ func TestTaskScheduler_抑制完成信号(t *testing.T) {
 // TestTaskScheduler_Sessions 测试 Sessions 返回会话字典
 func TestTaskScheduler_Sessions(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
-	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, NewTaskExecutorRegistry(), nil)
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
 
 	sess := &schedulerFakeSessionFacade{sessionID: "sess-1"}
 	sched.Sessions()["sess-1"] = sess
@@ -716,7 +719,7 @@ func TestTaskScheduler_Sessions(t *testing.T) {
 // TestTaskScheduler_SetConfig 测试 SetConfig 更新配置
 func TestTaskScheduler_SetConfig(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
-	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, NewTaskExecutorRegistry(), nil)
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
 
 	newCfg := config.DefaultControllerConfig()
 	newCfg.MaxConcurrentTasks = 10
@@ -731,10 +734,10 @@ func TestTaskScheduler_SetConfig(t *testing.T) {
 // TestTaskScheduler_TaskExecutorRegistry 测试 TaskExecutorRegistry 返回注册表
 func TestTaskScheduler_TaskExecutorRegistry(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
-	reg := NewTaskExecutorRegistry()
-	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, reg, nil)
+	sched := NewTaskScheduler(cfg, NewTaskManager(cfg), nil, nil, nil, nil)
+	reg := sched.TaskExecutorRegistry()
 
-	assert.Equal(t, reg, sched.TaskExecutorRegistry())
+	assert.NotNil(t, reg)
 }
 
 // TestTaskScheduler_执行TaskInteraction 测试 TASK_INTERACTION 事件触发 INPUT_REQUIRED 状态
@@ -844,4 +847,57 @@ func TestTaskScheduler_执行TaskFailed(t *testing.T) {
 	tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: task.TaskID})
 	require.Len(t, tasks, 1)
 	assert.Equal(t, "执行失败", tasks[0].ErrorMessage)
+}
+
+// TestTaskScheduler_PauseTask_不在运行中 测试暂停不在运行中的任务返回 (false, nil)。
+func TestTaskScheduler_PauseTask_不在运行中(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := NewTaskManager(cfg)
+	sched := NewTaskScheduler(cfg, tm, nil, nil, nil, nil)
+
+	ok, err := sched.PauseTask(context.Background(), "nonexistent")
+	assert.False(t, ok)
+	assert.NoError(t, err)
+}
+
+// TestTaskScheduler_CancelTask_不在运行中 测试取消不在运行中的任务返回 (false, nil)。
+func TestTaskScheduler_CancelTask_不在运行中(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := NewTaskManager(cfg)
+	sched := NewTaskScheduler(cfg, tm, nil, nil, nil, nil)
+
+	// 先添加一个 WORKING 任务到 TaskManager 但不在 runningTasks
+	task := schema.NewTask("sess1", "test_type")
+	task.Status = schema.TaskWorking
+	_ = tm.AddTask(context.Background(), task)
+
+	ok, err := sched.CancelTask(context.Background(), task.TaskID)
+	assert.False(t, ok)
+	assert.NoError(t, err)
+}
+
+// TestTaskScheduler_CancelTask_终态幂等 测试取消已终态任务幂等返回 (true, nil)。
+func TestTaskScheduler_CancelTask_终态幂等(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := NewTaskManager(cfg)
+	sched := NewTaskScheduler(cfg, tm, nil, nil, nil, nil)
+
+	// 添加一个 COMPLETED 任务
+	task := schema.NewTask("sess1", "test_type")
+	task.Status = schema.TaskCompleted
+	_ = tm.AddTask(context.Background(), task)
+
+	ok, err := sched.CancelTask(context.Background(), task.TaskID)
+	assert.True(t, ok)
+	assert.NoError(t, err)
+}
+
+// TestTaskScheduler_EnsureSessionCompletionSignal_会话不存在 测试完成信号在会话不存在时优雅返回。
+func TestTaskScheduler_EnsureSessionCompletionSignal_会话不存在(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := NewTaskManager(cfg)
+	sched := NewTaskScheduler(cfg, tm, nil, nil, nil, nil)
+
+	// 没有注册任何 session，EnsureSessionCompletionSignal 应优雅返回
+	sched.EnsureSessionCompletionSignal(context.Background(), "nonexistent-session")
 }
