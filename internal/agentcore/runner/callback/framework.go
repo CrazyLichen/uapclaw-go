@@ -2,12 +2,26 @@ package callback
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// HookFunc 生命周期钩子函数类型
+type HookFunc func(ctx context.Context, event string, data any)
+
+// eventHistoryEntry 事件历史记录条目
+type eventHistoryEntry struct {
+	// Event 事件名
+	Event string
+	// Time 发生时间
+	Time time.Time
+	// Data 事件数据
+	Data any
+}
 
 // CallbackFramework 回调框架，事件注册与触发的核心结构。
 //
@@ -55,6 +69,36 @@ type CallbackFramework struct {
 	agentTransformIO map[GlobalAgentEventType]*agentTransformIOEntry
 	// toolTransformIO Tool 层 IO 变换回调注册表，键为 inputEvent 或 outputEvent
 	toolTransformIO map[ToolCallEventType]*toolTransformIOEntry
+	// workflowCallbacks 工作流回调函数注册表
+	workflowCallbacks map[WorkflowEventType][]*CallbackInfo[WorkflowCallbackFunc]
+	// agentTeamCallbacks AgentTeam 回调函数注册表
+	agentTeamCallbacks map[AgentTeamEventType][]*CallbackInfo[AgentTeamCallbackFunc]
+	// retrievalCallbacks 检索回调函数注册表
+	retrievalCallbacks map[RetrievalEventType][]*CallbackInfo[RetrievalCallbackFunc]
+	// memoryCallbacks 记忆回调函数注册表
+	memoryCallbacks map[MemoryEventType][]*CallbackInfo[MemoryCallbackFunc]
+	// taskManagerCallbacks 任务管理回调函数注册表
+	taskManagerCallbacks map[TaskManagerEventType][]*CallbackInfo[TaskManagerCallbackFunc]
+	// hooks 生命周期钩子（事件名 → HookType → 钩子函数列表）
+	hooks map[string]map[HookType][]HookFunc
+	// filters 事件级过滤器（事件名 → 过滤器列表）
+	filters map[string][]EventFilter
+	// globalFilters 全局过滤器
+	globalFilters []EventFilter
+	// callbackFilters 回调级过滤器（回调函数指针 → 过滤器列表）
+	callbackFilters map[any][]EventFilter
+	// metrics 执行指标（"{event}:{callbackName}" → CallbackMetrics）
+	metrics map[string]*CallbackMetrics
+	// circuitBreakers 熔断器（"{event}:{callbackName}" → *CircuitBreakerFilter）
+	circuitBreakers map[string]*CircuitBreakerFilter
+	// chains 回调链（事件名 → CallbackChain）
+	chains map[string]*CallbackChain
+	// enableEventHistory 是否启用事件历史
+	enableEventHistory bool
+	// eventHistory 事件历史记录（环形缓冲区，最大 1000 条）
+	eventHistory []eventHistoryEntry
+	// enableMetrics 是否启用指标
+	enableMetrics bool
 }
 
 // llmTransformIOEntry LLM 层 TransformIO 注册条目
@@ -118,18 +162,18 @@ type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) a
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
-// globalCallbackFramework 全局回调框架单例。
-//
-// 对应 Python: Runner.callback_framework（Runner 初始化时创建的全局单例）
-var globalCallbackFramework = NewCallbackFramework()
+const (
+	// maxEventHistory 事件历史记录最大条数
+	maxEventHistory = 1000
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCallbackFramework 创建回调框架实例。
-//
-// 默认注册 LLM 日志回调，保持与原有日志行为一致。
 func NewCallbackFramework() *CallbackFramework {
 	fw := &CallbackFramework{
 		llmCallbacks:         make(map[LLMCallEventType][]*CallbackInfo[LLMCallbackFunc]),
@@ -142,25 +186,21 @@ func NewCallbackFramework() *CallbackFramework {
 		llmTransformIO:       make(map[LLMCallEventType]*llmTransformIOEntry),
 		agentTransformIO:     make(map[GlobalAgentEventType]*agentTransformIOEntry),
 		toolTransformIO:      make(map[ToolCallEventType]*toolTransformIOEntry),
+		workflowCallbacks:    make(map[WorkflowEventType][]*CallbackInfo[WorkflowCallbackFunc]),
+		agentTeamCallbacks:   make(map[AgentTeamEventType][]*CallbackInfo[AgentTeamCallbackFunc]),
+		retrievalCallbacks:   make(map[RetrievalEventType][]*CallbackInfo[RetrievalCallbackFunc]),
+		memoryCallbacks:      make(map[MemoryEventType][]*CallbackInfo[MemoryCallbackFunc]),
+		taskManagerCallbacks: make(map[TaskManagerEventType][]*CallbackInfo[TaskManagerCallbackFunc]),
+		hooks:                make(map[string]map[HookType][]HookFunc),
+		filters:              make(map[string][]EventFilter),
+		globalFilters:        make([]EventFilter, 0),
+		callbackFilters:      make(map[any][]EventFilter),
+		metrics:              make(map[string]*CallbackMetrics),
+		circuitBreakers:      make(map[string]*CircuitBreakerFilter),
+		chains:               make(map[string]*CallbackChain),
+		eventHistory:         make([]eventHistoryEntry, 0, maxEventHistory),
 	}
-	// 默认注册 LLM 日志回调，保持与原有 logger.Info/Error 行为一致
-	fw.OnLLM(LLMCallStarted, LoggingLLMCallback)
-	fw.OnLLM(LLMCallError, LoggingLLMCallback)
-	fw.OnLLM(LLMResponseReceived, LoggingLLMCallback)
-	fw.OnLLM(LLMInvokeInput, LoggingLLMCallback)
-	fw.OnLLM(LLMInvokeOutput, LoggingLLMCallback)
-	fw.OnLLM(LLMStreamInput, LoggingLLMCallback)
-	fw.OnLLM(LLMStreamOutput, LoggingLLMCallback)
-	fw.OnLLM(LLMInput, LoggingLLMCallback)
-	fw.OnLLM(LLMOutput, LoggingLLMCallback)
 	return fw
-}
-
-// GetCallbackFramework 返回全局回调框架单例。
-//
-// 对应 Python: Runner.callback_framework 类属性
-func GetCallbackFramework() *CallbackFramework {
-	return globalCallbackFramework
 }
 
 // OnLLM 注册 LLM 事件回调函数。
@@ -228,6 +268,7 @@ func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventD
 		func(fn LLMCallbackFunc, ctx context.Context, data *LLMCallEventData) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -289,6 +330,7 @@ func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEven
 		func(fn ToolCallbackFunc, ctx context.Context, data *ToolCallEventData) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -350,6 +392,7 @@ func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCa
 		func(fn SessionCallbackFunc, ctx context.Context, data *SessionCallEventData) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -433,6 +476,7 @@ func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, da
 		func(fn CustomCallbackFunc, ctx context.Context, data map[string]any) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -509,6 +553,7 @@ func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCa
 		func(fn ContextCallbackFunc, ctx context.Context, data *ContextCallEventData) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -578,6 +623,7 @@ func (fw *CallbackFramework) TriggerGlobalAgent(ctx context.Context, data *Globa
 		func(fn GlobalAgentCallbackFunc, ctx context.Context, data *GlobalAgentEventData) (any, error) {
 			return fn(ctx, data), nil
 		},
+		fw,
 	)
 	return results
 }
@@ -647,6 +693,7 @@ func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, 
 		func(fn PerAgentCallbackFunc, ctx context.Context, data any) (any, error) {
 			return nil, fn(ctx, data)
 		},
+		fw,
 	)
 	return err
 }
@@ -803,6 +850,466 @@ func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event To
 	return entry.outputFn(ctx, event, output)
 }
 
+// OnWorkflow 注册 Workflow 事件回调函数。
+//
+// 同一事件可注册多个回调，按优先级排序执行。
+func (fw *CallbackFramework) OnWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc, opts ...CallbackOption) {
+	cfg := applyCallbackOptions(opts...)
+	info := &CallbackInfo[WorkflowCallbackFunc]{
+		Callback:     fn,
+		Priority:     cfg.Priority,
+		Once:         cfg.Once,
+		Enabled:      true,
+		Namespace:    cfg.Namespace,
+		Tags:         cfg.Tags,
+		MaxRetries:   cfg.MaxRetries,
+		RetryDelay:   cfg.RetryDelay,
+		Timeout:      cfg.Timeout,
+		CreatedAt:    float64(time.Now().UnixNano()) / 1e9,
+		CallbackType: cfg.CallbackType,
+	}
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.workflowCallbacks[event] = append(fw.workflowCallbacks[event], info)
+	sortCallbacks(fw.workflowCallbacks[event])
+}
+
+// OffWorkflow 注销 Workflow 事件回调函数。
+func (fw *CallbackFramework) OffWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.workflowCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, info := range callbacks {
+		if fmt.Sprintf("%p", info.Callback) == fmt.Sprintf("%p", fn) {
+			fw.workflowCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerWorkflow 触发 Workflow 事件，按优先级顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerWorkflow(ctx context.Context, data *WorkflowEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	results, _ := triggerCallbacks(fw.workflowCallbacks, data.Event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn WorkflowCallbackFunc, ctx context.Context, data *WorkflowEventData) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// OnAgentTeam 注册 AgentTeam 事件回调函数。
+//
+// 同一事件可注册多个回调，按优先级排序执行。
+func (fw *CallbackFramework) OnAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc, opts ...CallbackOption) {
+	cfg := applyCallbackOptions(opts...)
+	info := &CallbackInfo[AgentTeamCallbackFunc]{
+		Callback:     fn,
+		Priority:     cfg.Priority,
+		Once:         cfg.Once,
+		Enabled:      true,
+		Namespace:    cfg.Namespace,
+		Tags:         cfg.Tags,
+		MaxRetries:   cfg.MaxRetries,
+		RetryDelay:   cfg.RetryDelay,
+		Timeout:      cfg.Timeout,
+		CreatedAt:    float64(time.Now().UnixNano()) / 1e9,
+		CallbackType: cfg.CallbackType,
+	}
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.agentTeamCallbacks[event] = append(fw.agentTeamCallbacks[event], info)
+	sortCallbacks(fw.agentTeamCallbacks[event])
+}
+
+// OffAgentTeam 注销 AgentTeam 事件回调函数。
+func (fw *CallbackFramework) OffAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.agentTeamCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, info := range callbacks {
+		if fmt.Sprintf("%p", info.Callback) == fmt.Sprintf("%p", fn) {
+			fw.agentTeamCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerAgentTeam 触发 AgentTeam 事件，按优先级顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerAgentTeam(ctx context.Context, data *AgentTeamEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	results, _ := triggerCallbacks(fw.agentTeamCallbacks, data.Event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn AgentTeamCallbackFunc, ctx context.Context, data *AgentTeamEventData) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// OnRetrieval 注册 Retrieval 事件回调函数。
+//
+// 同一事件可注册多个回调，按优先级排序执行。
+func (fw *CallbackFramework) OnRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc, opts ...CallbackOption) {
+	cfg := applyCallbackOptions(opts...)
+	info := &CallbackInfo[RetrievalCallbackFunc]{
+		Callback:     fn,
+		Priority:     cfg.Priority,
+		Once:         cfg.Once,
+		Enabled:      true,
+		Namespace:    cfg.Namespace,
+		Tags:         cfg.Tags,
+		MaxRetries:   cfg.MaxRetries,
+		RetryDelay:   cfg.RetryDelay,
+		Timeout:      cfg.Timeout,
+		CreatedAt:    float64(time.Now().UnixNano()) / 1e9,
+		CallbackType: cfg.CallbackType,
+	}
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.retrievalCallbacks[event] = append(fw.retrievalCallbacks[event], info)
+	sortCallbacks(fw.retrievalCallbacks[event])
+}
+
+// OffRetrieval 注销 Retrieval 事件回调函数。
+func (fw *CallbackFramework) OffRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.retrievalCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, info := range callbacks {
+		if fmt.Sprintf("%p", info.Callback) == fmt.Sprintf("%p", fn) {
+			fw.retrievalCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerRetrieval 触发 Retrieval 事件，按优先级顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerRetrieval(ctx context.Context, data *RetrievalEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	results, _ := triggerCallbacks(fw.retrievalCallbacks, data.Event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn RetrievalCallbackFunc, ctx context.Context, data *RetrievalEventData) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// OnMemory 注册 Memory 事件回调函数。
+//
+// 同一事件可注册多个回调，按优先级排序执行。
+func (fw *CallbackFramework) OnMemory(event MemoryEventType, fn MemoryCallbackFunc, opts ...CallbackOption) {
+	cfg := applyCallbackOptions(opts...)
+	info := &CallbackInfo[MemoryCallbackFunc]{
+		Callback:     fn,
+		Priority:     cfg.Priority,
+		Once:         cfg.Once,
+		Enabled:      true,
+		Namespace:    cfg.Namespace,
+		Tags:         cfg.Tags,
+		MaxRetries:   cfg.MaxRetries,
+		RetryDelay:   cfg.RetryDelay,
+		Timeout:      cfg.Timeout,
+		CreatedAt:    float64(time.Now().UnixNano()) / 1e9,
+		CallbackType: cfg.CallbackType,
+	}
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.memoryCallbacks[event] = append(fw.memoryCallbacks[event], info)
+	sortCallbacks(fw.memoryCallbacks[event])
+}
+
+// OffMemory 注销 Memory 事件回调函数。
+func (fw *CallbackFramework) OffMemory(event MemoryEventType, fn MemoryCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.memoryCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, info := range callbacks {
+		if fmt.Sprintf("%p", info.Callback) == fmt.Sprintf("%p", fn) {
+			fw.memoryCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerMemory 触发 Memory 事件，按优先级顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerMemory(ctx context.Context, data *MemoryEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	results, _ := triggerCallbacks(fw.memoryCallbacks, data.Event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn MemoryCallbackFunc, ctx context.Context, data *MemoryEventData) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// OnTaskManager 注册 TaskManager 事件回调函数。
+//
+// 同一事件可注册多个回调，按优先级排序执行。
+func (fw *CallbackFramework) OnTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc, opts ...CallbackOption) {
+	cfg := applyCallbackOptions(opts...)
+	info := &CallbackInfo[TaskManagerCallbackFunc]{
+		Callback:     fn,
+		Priority:     cfg.Priority,
+		Once:         cfg.Once,
+		Enabled:      true,
+		Namespace:    cfg.Namespace,
+		Tags:         cfg.Tags,
+		MaxRetries:   cfg.MaxRetries,
+		RetryDelay:   cfg.RetryDelay,
+		Timeout:      cfg.Timeout,
+		CreatedAt:    float64(time.Now().UnixNano()) / 1e9,
+		CallbackType: cfg.CallbackType,
+	}
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.taskManagerCallbacks[event] = append(fw.taskManagerCallbacks[event], info)
+	sortCallbacks(fw.taskManagerCallbacks[event])
+}
+
+// OffTaskManager 注销 TaskManager 事件回调函数。
+func (fw *CallbackFramework) OffTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	callbacks, ok := fw.taskManagerCallbacks[event]
+	if !ok {
+		return
+	}
+
+	for i, info := range callbacks {
+		if fmt.Sprintf("%p", info.Callback) == fmt.Sprintf("%p", fn) {
+			fw.taskManagerCallbacks[event] = append(callbacks[:i], callbacks[i+1:]...)
+			return
+		}
+	}
+}
+
+// TriggerTaskManager 触发 TaskManager 事件，按优先级顺序调用所有回调，返回所有回调结果。
+func (fw *CallbackFramework) TriggerTaskManager(ctx context.Context, data *TaskManagerEventData) []any {
+	if ctx == nil || data == nil {
+		return nil
+	}
+
+	results, _ := triggerCallbacks(fw.taskManagerCallbacks, data.Event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn TaskManagerCallbackFunc, ctx context.Context, data *TaskManagerEventData) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// AddFilter 添加事件级过滤器
+func (fw *CallbackFramework) AddFilter(event string, filter EventFilter) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.filters[event] = append(fw.filters[event], filter)
+}
+
+// AddGlobalFilter 添加全局过滤器
+func (fw *CallbackFramework) AddGlobalFilter(filter EventFilter) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.globalFilters = append(fw.globalFilters, filter)
+}
+
+// AddCircuitBreaker 添加熔断器
+func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failureThreshold int, timeout float64) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	key := event + ":" + callbackName
+	fw.circuitBreakers[key] = NewCircuitBreakerFilter(failureThreshold, timeout)
+}
+
+// AddHook 添加生命周期钩子
+func (fw *CallbackFramework) AddHook(event string, hookType HookType, hook HookFunc) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	if fw.hooks[event] == nil {
+		fw.hooks[event] = make(map[HookType][]HookFunc)
+	}
+	fw.hooks[event][hookType] = append(fw.hooks[event][hookType], hook)
+}
+
+// TriggerChain 链式触发
+func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, data any) *ChainResult {
+	fw.mu.RLock()
+	chain, ok := fw.chains[event]
+	fw.mu.RUnlock()
+	if !ok {
+		return &ChainResult{Action: ChainActionContinue, Result: data}
+	}
+	cctx := &ChainContext{
+		Event:       event,
+		InitialData: data,
+		StartTime:   time.Now(),
+		Metadata:    make(map[string]any),
+	}
+	return chain.Execute(ctx, cctx)
+}
+
+// TriggerParallel 并发触发
+func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, data map[string]any) []any {
+	results, _ := triggerCallbacks(fw.customCallbacks, event, data, ctx, &fw.mu,
+		strategyCollect,
+		func(fn CustomCallbackFunc, ctx context.Context, data map[string]any) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+	return results
+}
+
+// TriggerUntil 触发直到条件满足
+func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, condition func(any) bool, data map[string]any) any {
+	fw.mu.RLock()
+	callbacks := fw.customCallbacks[event]
+	fw.mu.RUnlock()
+
+	for _, info := range callbacks {
+		if !info.Enabled || info.CallbackType == "transform" {
+			continue
+		}
+		result := info.Callback(ctx, data)
+		if condition(result) {
+			return result
+		}
+	}
+	return nil
+}
+
+// TriggerWithTimeout 带总超时的触发
+func (fw *CallbackFramework) TriggerWithTimeout(ctx context.Context, event string, timeout float64, data map[string]any) ([]any, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout*float64(time.Second)))
+	defer cancel()
+
+	return triggerCallbacks(fw.customCallbacks, event, data, timeoutCtx, &fw.mu,
+		strategyCollect,
+		func(fn CustomCallbackFunc, ctx context.Context, data map[string]any) (any, error) {
+			return fn(ctx, data), nil
+		},
+		fw,
+	)
+}
+
+// GetMetrics 查询指标
+func (fw *CallbackFramework) GetMetrics(event, callbackName string) *CallbackMetrics {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	key := event + ":" + callbackName
+	return fw.metrics[key]
+}
+
+// ResetMetrics 重置指标
+func (fw *CallbackFramework) ResetMetrics() {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.metrics = make(map[string]*CallbackMetrics)
+}
+
+// GetSlowCallbacks 查询慢回调
+func (fw *CallbackFramework) GetSlowCallbacks(threshold float64) map[string]*CallbackMetrics {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	result := make(map[string]*CallbackMetrics)
+	for key, m := range fw.metrics {
+		if m.AvgTime() > threshold {
+			result[key] = m
+		}
+	}
+	return result
+}
+
+// EnableMetrics 开关指标记录
+func (fw *CallbackFramework) EnableMetrics(enabled bool) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.enableMetrics = enabled
+}
+
+// EnableEventHistory 开关事件历史
+func (fw *CallbackFramework) EnableEventHistory(enabled bool) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	fw.enableEventHistory = enabled
+}
+
+// GetStatistics 框架统计信息
+func (fw *CallbackFramework) GetStatistics() map[string]any {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	return map[string]any{
+		"llm_callbacks":          len(fw.llmCallbacks),
+		"tool_callbacks":         len(fw.toolCallbacks),
+		"session_callbacks":      len(fw.sessionCallbacks),
+		"custom_callbacks":       len(fw.customCallbacks),
+		"context_callbacks":      len(fw.contextCallbacks),
+		"agent_callbacks":        len(fw.globalAgentCallbacks),
+		"per_agent_callbacks":    len(fw.perAgentCallbacks),
+		"workflow_callbacks":     len(fw.workflowCallbacks),
+		"agent_team_callbacks":   len(fw.agentTeamCallbacks),
+		"retrieval_callbacks":    len(fw.retrievalCallbacks),
+		"memory_callbacks":       len(fw.memoryCallbacks),
+		"task_manager_callbacks": len(fw.taskManagerCallbacks),
+		"hooks":                  len(fw.hooks),
+		"filters":                len(fw.filters),
+		"global_filters":         len(fw.globalFilters),
+		"callback_filters":       len(fw.callbackFilters),
+		"metrics":                len(fw.metrics),
+		"circuit_breakers":       len(fw.circuitBreakers),
+		"chains":                 len(fw.chains),
+		"enable_event_history":   fw.enableEventHistory,
+		"event_history_count":    len(fw.eventHistory),
+		"enable_metrics":         fw.enableMetrics,
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // triggerCallbacks 泛型触发核心逻辑（包级独立函数，因 Go 不支持方法类型参数）。
@@ -815,6 +1322,7 @@ func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event To
 //   - mu: 并发读写锁
 //   - strategy: 执行策略（strategyCollect 或 strategyAbortOnError）
 //   - execute: 执行单个回调的闭包，返回 (result, error)
+//   - fw: 框架实例，用于访问钩子/过滤器/指标/熔断器
 func triggerCallbacks[F any, E comparable, D any](
 	callbacksMap map[E][]*CallbackInfo[F],
 	event E,
@@ -823,6 +1331,7 @@ func triggerCallbacks[F any, E comparable, D any](
 	mu *sync.RWMutex,
 	strategy triggerStrategy,
 	execute func(F, context.Context, D) (any, error),
+	fw *CallbackFramework,
 ) ([]any, error) {
 	if ctx == nil {
 		return nil, nil
@@ -832,7 +1341,12 @@ func triggerCallbacks[F any, E comparable, D any](
 	callbacks := callbacksMap[event]
 	mu.RUnlock()
 
-	// ⤵️ 回填：BEFORE 钩子执行（对应 Python: _execute_hooks(event, HookType.BEFORE)）
+	eventStr := fmt.Sprintf("%v", event)
+
+	// BEFORE 钩子执行
+	if fw != nil {
+		fw.executeHooks(ctx, eventStr, HookTypeBefore, data)
+	}
 
 	var results []any
 	for _, info := range callbacks {
@@ -843,23 +1357,125 @@ func triggerCallbacks[F any, E comparable, D any](
 			continue
 		}
 
-		// ⤵️ 回填：过滤器检查（对应 Python: _apply_filters）
-		// ⤵️ 回填：熔断器检查（对应 Python: _circuit_breakers）
-		// ⤵️ 回填：回调级超时控制（对应 Python: trigger_with_timeout）
-		// ⤵️ 回填：回调级重试（对应 Python: max_retries/retry_delay）
+		// 过滤器检查（全局 → 事件 → 回调级三级管线）
+		if fw != nil {
+			filterResult := fw.applyFilters(ctx, eventStr, info, data)
+			switch filterResult.Action {
+			case FilterActionStop:
+				return results, nil
+			case FilterActionSkip:
+				continue
+			case FilterActionModify:
+				// 对于 MODIFY，修改 data（但 data 是泛型 D，这里简化处理，记录修改但不改变执行参数）
+			}
+		}
 
-		result, err := execute(info.Callback, ctx, data)
+		// 熔断器检查
+		cbKey := eventStr + ":" + getCallbackName(info)
+		if fw != nil {
+			if cb, ok := fw.circuitBreakers[cbKey]; ok && cb.IsOpen(cbKey) {
+				continue // 熔断器打开，跳过此回调
+			}
+		}
+
+		// 回调级重试 + 超时
+		maxRetries := info.MaxRetries
+		if maxRetries < 1 {
+			maxRetries = 0
+		}
+
+		var result any
+		var err error
+		for retry := 0; retry <= maxRetries; retry++ {
+			// 超时控制
+			executeCtx := ctx
+			var cancel context.CancelFunc
+			if info.Timeout > 0 {
+				executeCtx, cancel = context.WithTimeout(ctx, time.Duration(info.Timeout*float64(time.Second)))
+			}
+
+			startTime := time.Now()
+			result, err = execute(info.Callback, executeCtx, data)
+			executionTime := time.Since(startTime).Seconds()
+
+			if cancel != nil {
+				cancel()
+			}
+
+			if err == nil {
+				// 指标记录（is_error=False）
+				if fw != nil && fw.enableMetrics {
+					fw.updateMetrics(cbKey, executionTime, false)
+				}
+				// 熔断器记录成功
+				if fw != nil {
+					if cb, ok := fw.circuitBreakers[cbKey]; ok {
+						parts := splitCircuitBreakerKey(cbKey)
+						cb.RecordSuccess(parts[0], parts[1])
+					}
+				}
+				break
+			}
+
+			// AbortError 检测
+			var abortErr *AbortError
+			if errors.As(err, &abortErr) {
+				// ERROR 钩子执行（传入 abortErr.Cause ?? abortErr）
+				if fw != nil {
+					hookErr := error(abortErr)
+					if abortErr.Cause != nil {
+						hookErr = abortErr.Cause
+					}
+					fw.executeHooks(ctx, eventStr, HookTypeError, hookErr)
+				}
+				// 指标记录（is_error=True）
+				if fw != nil && fw.enableMetrics {
+					fw.updateMetrics(cbKey, executionTime, true)
+				}
+				// 熔断器记录失败
+				if fw != nil {
+					if cb, ok := fw.circuitBreakers[cbKey]; ok {
+						parts := splitCircuitBreakerKey(cbKey)
+						cb.RecordFailure(parts[0], parts[1])
+					}
+				}
+				// AbortError 传播逻辑
+				if abortErr.Cause != nil {
+					return nil, abortErr.Cause
+				}
+				return nil, abortErr
+			}
+
+			// 普通错误处理
+			// ERROR 钩子执行
+			if fw != nil {
+				fw.executeHooks(ctx, eventStr, HookTypeError, err)
+			}
+			// 指标记录（is_error=True）
+			if fw != nil && fw.enableMetrics {
+				fw.updateMetrics(cbKey, executionTime, true)
+			}
+			// 熔断器记录失败
+			if fw != nil {
+				if cb, ok := fw.circuitBreakers[cbKey]; ok {
+					parts := splitCircuitBreakerKey(cbKey)
+					cb.RecordFailure(parts[0], parts[1])
+				}
+			}
+
+			// 重试判断
+			if retry < maxRetries && info.RetryDelay > 0 {
+				time.Sleep(time.Duration(info.RetryDelay * float64(time.Second)))
+			}
+		}
 
 		if err != nil {
-			// ⤵️ 回填：ERROR 钩子执行（对应 Python: _execute_hooks(event, HookType.ERROR)）
-			// ⤵️ 回填：指标记录（is_error=True）
 			if strategy == strategyAbortOnError {
 				return nil, err
 			}
 			continue
 		}
 
-		// ⤵️ 回填：指标记录（is_error=False）
 		results = append(results, result)
 
 		if info.Once {
@@ -867,7 +1483,106 @@ func triggerCallbacks[F any, E comparable, D any](
 		}
 	}
 
-	// ⤵️ 回填：AFTER 钩子执行（对应 Python: _execute_hooks(event, HookType.AFTER)）
+	// AFTER 钩子执行
+	if fw != nil {
+		fw.executeHooks(ctx, eventStr, HookTypeAfter, data)
+	}
 
 	return results, nil
+}
+
+// executeHooks 执行生命周期钩子
+func (fw *CallbackFramework) executeHooks(ctx context.Context, event string, hookType HookType, data any) {
+	fw.mu.RLock()
+	hookTypes, ok := fw.hooks[event]
+	if !ok {
+		fw.mu.RUnlock()
+		return
+	}
+	hooks, ok := hookTypes[hookType]
+	if !ok {
+		fw.mu.RUnlock()
+		return
+	}
+	// 复制一份避免持锁时间过长
+	hooksCopy := make([]HookFunc, len(hooks))
+	copy(hooksCopy, hooks)
+	fw.mu.RUnlock()
+
+	for _, hook := range hooksCopy {
+		hook(ctx, event, data)
+	}
+}
+
+// applyFilters 应用三级过滤器管线（全局 → 事件 → 回调级）
+func (fw *CallbackFramework) applyFilters(ctx context.Context, event string, info any, data any) FilterResult {
+	callbackName := getCallbackNameFromAny(info)
+
+	// 全局过滤器
+	for _, f := range fw.globalFilters {
+		result := f.Filter(ctx, event, callbackName, data)
+		if result.Action == FilterActionStop || result.Action == FilterActionSkip {
+			return result
+		}
+	}
+
+	// 事件级过滤器
+	fw.mu.RLock()
+	eventFilters, ok := fw.filters[event]
+	fw.mu.RUnlock()
+	if ok {
+		for _, f := range eventFilters {
+			result := f.Filter(ctx, event, callbackName, data)
+			if result.Action == FilterActionStop || result.Action == FilterActionSkip {
+				return result
+			}
+		}
+	}
+
+	// 回调级过滤器
+	fw.mu.RLock()
+	cbFilters, ok := fw.callbackFilters[info]
+	fw.mu.RUnlock()
+	if ok {
+		for _, f := range cbFilters {
+			result := f.Filter(ctx, event, callbackName, data)
+			if result.Action == FilterActionStop || result.Action == FilterActionSkip {
+				return result
+			}
+		}
+	}
+
+	return FilterResult{Action: FilterActionContinue}
+}
+
+// updateMetrics 更新执行指标
+func (fw *CallbackFramework) updateMetrics(key string, executionTime float64, isError bool) {
+	fw.mu.Lock()
+	m, ok := fw.metrics[key]
+	if !ok {
+		m = &CallbackMetrics{}
+		fw.metrics[key] = m
+	}
+	fw.mu.Unlock()
+	m.Update(executionTime, isError)
+}
+
+// getCallbackName 从 CallbackInfo 获取回调函数名（用于指标 key）
+func getCallbackName[F any](info *CallbackInfo[F]) string {
+	return fmt.Sprintf("%T", info.Callback)
+}
+
+// getCallbackNameFromAny 从任意 CallbackInfo 获取回调函数名
+func getCallbackNameFromAny(info any) string {
+	return fmt.Sprintf("%T", info)
+}
+
+// splitCircuitBreakerKey 拆分熔断器键为 event 和 callbackName
+func splitCircuitBreakerKey(key string) [2]string {
+	for i := len(key) - 1; i >= 0; i-- {
+		if key[i] == ':' {
+			return [2]string{key[:i], key[i+1:]}
+		}
+	}
+	return [2]string{key, ""}
 }

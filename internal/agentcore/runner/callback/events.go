@@ -10,6 +10,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// EventBase 事件基类，提供 scope 支持。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (EventBase)
+type EventBase struct {
+	// Scope 作用域
+	Scope string
+}
+
 // LLMCallEventData LLM 调用事件数据，回调函数接收此结构获取上下文信息。
 //
 // 对应 Python: AsyncCallbackFramework.trigger() 中的 kwargs 参数集合
@@ -94,6 +102,86 @@ type ContextCallEventData struct {
 	State any
 	// Context 上下文实例引用（实际类型 context_engine.ModelContext）
 	Context any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// WorkflowEventData Workflow 事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
+type WorkflowEventData struct {
+	// Event 事件类型
+	Event WorkflowEventType
+	// WorkflowID 工作流标识
+	WorkflowID string
+	// NodeID 节点标识
+	NodeID string
+	// Inputs 调用输入参数
+	Inputs map[string]any
+	// Result 调用结果
+	Result any
+	// Error 错误信息
+	Error error
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// AgentTeamEventData Agent 协作事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
+type AgentTeamEventData struct {
+	// Event 事件类型
+	Event AgentTeamEventType
+	// AgentID Agent 标识
+	AgentID string
+	// Message 消息内容
+	Message any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// RetrievalEventData 检索事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
+type RetrievalEventData struct {
+	// Event 事件类型
+	Event RetrievalEventType
+	// Query 检索查询
+	Query string
+	// Results 检索结果
+	Results any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// MemoryEventData 记忆事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
+type MemoryEventData struct {
+	// Event 事件类型
+	Event MemoryEventType
+	// Key 记忆键
+	Key string
+	// Value 记忆值
+	Value any
+	// Extra 额外数据
+	Extra map[string]any
+}
+
+// TaskManagerEventData 任务管理事件数据，回调函数接收此结构获取上下文信息。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
+type TaskManagerEventData struct {
+	// Event 事件类型
+	Event TaskManagerEventType
+	// TaskID 任务标识
+	TaskID string
+	// Status 任务状态
+	Status string
+	// Result 任务结果
+	Result any
+	// Error 错误信息
+	Error error
 	// Extra 额外数据
 	Extra map[string]any
 }
@@ -233,6 +321,106 @@ const (
 	GlobalAgentStreamOutput GlobalAgentEventType = "_framework:agent_stream_output"
 )
 
+// WorkflowEventType Workflow 事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
+type WorkflowEventType string
+
+const (
+	// WorkflowStarted 工作流启动
+	WorkflowStarted WorkflowEventType = "_framework:workflow_started"
+	// WorkflowFinished 工作流完成
+	WorkflowFinished WorkflowEventType = "_framework:workflow_finished"
+	// WorkflowError 工作流出错
+	WorkflowError WorkflowEventType = "_framework:workflow_error"
+	// WorkflowCancelled 工作流取消
+	WorkflowCancelled WorkflowEventType = "_framework:workflow_cancelled"
+	// NodeExecuted 节点执行完成
+	NodeExecuted WorkflowEventType = "_framework:node_executed"
+	// NodeError 节点执行出错
+	NodeError WorkflowEventType = "_framework:node_error"
+	// EdgeTraversed 边遍历
+	EdgeTraversed WorkflowEventType = "_framework:edge_traversed"
+	// LoopStarted 循环开始
+	LoopStarted WorkflowEventType = "_framework:loop_started"
+	// LoopFinished 循环结束
+	LoopFinished WorkflowEventType = "_framework:loop_finished"
+	// WorkflowInvokeInput invoke 调用前触发
+	WorkflowInvokeInput WorkflowEventType = "_framework:workflow_invoke_input"
+	// WorkflowInvokeOutput invoke 调用后触发
+	WorkflowInvokeOutput WorkflowEventType = "_framework:workflow_invoke_output"
+	// WorkflowStreamInput stream 调用前触发
+	WorkflowStreamInput WorkflowEventType = "_framework:workflow_stream_input"
+	// WorkflowStreamOutput stream 每项触发
+	WorkflowStreamOutput WorkflowEventType = "_framework:workflow_stream_output"
+	// ComponentBatchInput 组件批量输入
+	ComponentBatchInput WorkflowEventType = "_framework:component_batch_input"
+	// ComponentBatchOutput 组件批量输出
+	ComponentBatchOutput WorkflowEventType = "_framework:component_batch_output"
+	// ComponentStreamInput 组件流式输入
+	ComponentStreamInput WorkflowEventType = "_framework:component_stream_input"
+)
+
+// AgentTeamEventType Agent 协作事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
+type AgentTeamEventType string
+
+const (
+	// AgentP2PReceived 点对点消息接收
+	AgentP2PReceived AgentTeamEventType = "_framework:agent_p2p_received"
+	// AgentPubsubReceived 发布订阅消息接收
+	AgentPubsubReceived AgentTeamEventType = "_framework:agent_pubsub_received"
+)
+
+// RetrievalEventType 检索事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
+type RetrievalEventType string
+
+const (
+	// RetrievalStarted 检索启动
+	RetrievalStarted RetrievalEventType = "_framework:retrieval_started"
+)
+
+// MemoryEventType 记忆事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
+type MemoryEventType string
+
+const (
+	// MemoryAdded 记忆新增
+	MemoryAdded MemoryEventType = "_framework:memory_added"
+	// MemoryUpdated 记忆更新
+	MemoryUpdated MemoryEventType = "_framework:memory_updated"
+	// MemoryDeleted 记忆删除
+	MemoryDeleted MemoryEventType = "_framework:memory_deleted"
+	// MemorySearchStarted 记忆检索启动
+	MemorySearchStarted MemoryEventType = "_framework:memory_search_started"
+	// MemorySearchFinished 记忆检索完成
+	MemorySearchFinished MemoryEventType = "_framework:memory_search_finished"
+)
+
+// TaskManagerEventType 任务管理事件类型。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
+type TaskManagerEventType string
+
+const (
+	// TaskCreated 任务创建
+	TaskCreated TaskManagerEventType = "_framework:task_created"
+	// TaskRunning 任务运行中
+	TaskRunning TaskManagerEventType = "_framework:task_running"
+	// TaskCompleted 任务完成
+	TaskCompleted TaskManagerEventType = "_framework:task_completed"
+	// TaskFailed 任务失败
+	TaskFailed TaskManagerEventType = "_framework:task_failed"
+	// TaskCancelled 任务取消
+	TaskCancelled TaskManagerEventType = "_framework:task_cancelled"
+	// TaskTimeout 任务超时
+	TaskTimeout TaskManagerEventType = "_framework:task_timeout"
+)
+
 // TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
 // 对齐 Python: transform_io 的 input_fn（LLM_STREAM_INPUT / LLM_INVOKE_INPUT）
@@ -270,11 +458,55 @@ type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventDat
 // 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
 type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
 
+// WorkflowCallbackFunc Workflow 回调函数类型。
+type WorkflowCallbackFunc func(ctx context.Context, data *WorkflowEventData) any
+
+// AgentTeamCallbackFunc Agent 协作回调函数类型。
+type AgentTeamCallbackFunc func(ctx context.Context, data *AgentTeamEventData) any
+
+// RetrievalCallbackFunc 检索回调函数类型。
+type RetrievalCallbackFunc func(ctx context.Context, data *RetrievalEventData) any
+
+// MemoryCallbackFunc 记忆回调函数类型。
+type MemoryCallbackFunc func(ctx context.Context, data *MemoryEventData) any
+
+// TaskManagerCallbackFunc 任务管理回调函数类型。
+type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventData) any
+
 // ──────────────────────────── 常量 ────────────────────────────
+
+// DefaultScope 默认作用域，与 Python DEFAULT_SCOPE 一致。
+const DefaultScope = "_framework"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// BuildEventName 构建带 scope 的事件名。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py build_event_name(scope, event_name)
+func BuildEventName(scope, eventName string) string {
+	return scope + ":" + eventName
+}
+
+// ParseEventName 解析带 scope 的事件名，返回 (scope, eventName)。
+//
+// 对应 Python: openjiuwen/core/runner/callback/events.py parse_event_name(scoped_event)
+func ParseEventName(scopedEvent string) (scope, eventName string) {
+	for i := 0; i < len(scopedEvent); i++ {
+		if scopedEvent[i] == ':' {
+			return scopedEvent[:i], scopedEvent[i+1:]
+		}
+	}
+	return DefaultScope, scopedEvent
+}
+
+// GetEvent 获取带 scope 的完整事件名。
+//
+// 对应 Python: EventBase.get_event(event_name)
+func (e *EventBase) GetEvent(eventName string) string {
+	return BuildEventName(e.Scope, eventName)
+}
 
 // NewToolCallEventData 创建工具调用事件数据。
 func NewToolCallEventData(event ToolCallEventType, card *commonschema.BaseCard) *ToolCallEventData {
@@ -351,6 +583,71 @@ func (d *GlobalAgentEventData) String() string {
 		return "nil"
 	}
 	return fmt.Sprintf("GlobalAgentEventData{事件:%s, AgentID:%s, AgentName:%s}", d.Event, d.AgentID, d.AgentName)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t WorkflowEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *WorkflowEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("WorkflowEventData{事件:%s, 工作流ID:%s, 节点ID:%s}", d.Event, d.WorkflowID, d.NodeID)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t AgentTeamEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *AgentTeamEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("AgentTeamEventData{事件:%s, AgentID:%s}", d.Event, d.AgentID)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t RetrievalEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *RetrievalEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("RetrievalEventData{事件:%s, 查询:%s}", d.Event, d.Query)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t MemoryEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *MemoryEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("MemoryEventData{事件:%s, 键:%s}", d.Event, d.Key)
+}
+
+// String 实现 fmt.Stringer 接口。
+func (t TaskManagerEventType) String() string {
+	return string(t)
+}
+
+// String 实现 fmt.Stringer 接口，返回事件数据的简洁描述。
+func (d *TaskManagerEventData) String() string {
+	if d == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("TaskManagerEventData{事件:%s, 任务ID:%s, 状态:%s}", d.Event, d.TaskID, d.Status)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

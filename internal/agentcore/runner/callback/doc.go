@@ -1,18 +1,22 @@
-// Package callback 提供统一的回调框架，支持事件注册与触发。
+// Package callback 提供统一的异步回调框架，支持事件注册、触发、过滤器、钩子、
+// 链式执行、熔断器、指标记录、历史回放和 transform_io 变换。
 //
-// 本包是所有领域（LLM、Tool、Session、Agent、Workflow 等）共享的回调基础设施，
-// 与 Python 中 openjiuwen/core/runner/callback/ 对应。
+// 本包是所有领域（LLM、Tool、Session、Agent、Workflow、Memory、TaskManager 等）共享的
+// 回调基础设施，与 Python 中 openjiuwen/core/runner/callback/ 对应。
 //
-// 2.14 节实现 LLM 相关事件的回调框架最小子集。
-// 5.3 节扩展 Session 事件维度（OnSession/OffSession/TriggerSession）。
-// 5.19 节扩展 Context 事件维度（OnContext/OffContext/TriggerContext）。
-// SW-31/32/33 扩展自定义事件维度（OnCustom/OffCustom/OffAllCustom/TriggerCustom），
-// 支持动态事件名（如 sessionID+"write_stream"），对应 Python 的 trigger(event, **kwargs)。
-// 后续 Workflow 等领域扩展时，在同一框架中新增事件类型。
-// 完整能力（过滤器/熔断器/链式执行/装饰器/transform_io）在 6.24 节实现。
-// 6.6 节引入 CallbackInfo[F] 泛型包装，统一所有域的回调函数类型签名；
-// 引入 Functional Options 模式（CallbackOption）配置回调行为；
-// 引入 PerAgent 域（OnPerAgent/OffPerAgent/TriggerPerAgent 等），支持 per-Agent 实例级回调。
+// 6.24 节已实现完整能力：
+//   - 事件注册/触发/注销（11 个域：LLM/Tool/Session/Context/Agent/PerAgent/Workflow/
+//     AgentTeam/Retrieval/Memory/TaskManager + 自定义事件）
+//   - BEFORE/AFTER/ERROR/Cleanup 生命周期钩子（AddHook）
+//   - 三级过滤器管线（全局 → 事件级 → 回调级，7 种过滤器实现）
+//   - 链式执行（CallbackChain：顺序执行 + 回滚 + 重试 + 错误处理）
+//   - 熔断器（AddCircuitBreaker + CircuitBreakerFilter）
+//   - 执行指标记录（EnableMetrics + GetMetrics + GetSlowCallbacks）
+//   - 事件历史回放（EnableEventHistory）
+//   - CallbackInfo[F] 泛型包装 + Functional Options（WithPriority/WithOnce/WithMaxRetries 等）
+//   - transform_io 变换（LLM/Agent/Tool 三层 IO 变换）
+//   - 并发触发/条件触发/超时触发（TriggerParallel/TriggerUntil/TriggerWithTimeout）
+//   - 全局单例 + 便捷触发（GetCallbackFramework/Trigger）
 //
 // 事件体系：
 //
@@ -21,14 +25,19 @@
 //	SessionCallEventType  — Session 生命周期事件（2 种），预定义枚举事件名
 //	ContextCallEventType  — Context 生命周期事件（5 种），预定义枚举事件名
 //	GlobalAgentEventType  — Agent 调用全局事件（5 种），预定义枚举事件名
+//	WorkflowEventType     — Workflow 生命周期事件（16 种），预定义枚举事件名
+//	AgentTeamEventType    — Agent 协作事件（2 种），预定义枚举事件名
+//	RetrievalEventType    — 检索事件（1 种），预定义枚举事件名
+//	MemoryEventType       — 记忆事件（5 种），预定义枚举事件名
+//	TaskManagerEventType  — 任务管理事件（6 种），预定义枚举事件名
 //	CustomCallbackFunc    — 自定义事件（自由字符串事件名 + map[string]any 数据）
 //
 // 设计说明：
 //
 //	Python 的 AsyncCallbackFramework 只有一个 _callbacks: Dict[str, List]，
 //	所有事件（包括 "abc-123write_stream" 这类动态事件名）共用同一注册表。
-//	Go 将其拆分为六个独立 map：
-//	  - LLM/Tool/Session/Context/Agent 域使用预定义枚举事件名和固定数据结构
+//	Go 将其拆分为多个独立 map：
+//	  - 各域使用预定义枚举事件名和固定数据结构
 //	  - 自定义域使用自由字符串事件名和 map[string]any 数据
 //	这样既保留了类型安全，又支持 Python 的动态事件名场景。
 //
@@ -41,19 +50,32 @@
 //
 //	callback/
 //	├── doc.go                # 包文档
-//	├── callback_info.go      # CallbackInfo[F] 泛型包装
-//	├── options.go            # Functional Options 模式（CallbackOption）
-//	├── events.go             # 事件类型定义（LLM + Tool + Session + Context + Agent）
-//	├── framework.go          # CallbackFramework 核心（含自定义事件 + PerAgent 域）
-//	└── logging.go            # 默认日志回调
+//	├── framework.go          # CallbackFramework 核心（注册/触发/注销/钩子/指标/熔断器/历史）
+//	├── enums.go              # FilterAction / ChainAction / HookType 枚举
+//	├── models.go             # CallbackMetrics / FilterResult / ChainContext / ChainResult / CallbackInfo[F]
+//	├── events.go             # 事件类型定义（scope + 所有域枚举 + EventData + 函数类型）
+//	├── filters.go            # EventFilter 接口 + 7 种过滤器
+//	├── chain.go              # CallbackChain（顺序执行+回滚+重试）
+//	├── errors.go             # AbortError
+//	├── utils.go              # 全局单例 + Trigger 便捷函数
+//	└── options.go            # CallbackOption（Functional Options 模式）
 //
 // 核心类型/接口索引：
 //
+//	CallbackFramework        — 核心回调框架（多域注册/触发/注销/钩子/过滤器/指标/熔断器）
 //	CallbackInfo[F]          — 泛型回调包装，统一所有域的回调函数类型签名
+//	CallbackChain            — 链式回调执行链（回滚/重试/错误处理）
 //	CallbackOption           — Functional Option 配置回调行为
-//	PerAgentCallbackFunc     — PerAgent 域回调函数类型
+//	CallbackMetrics          — 执行指标（调用次数/耗时/错误率）
+//	EventFilter              — 过滤器接口（7 种实现：RateLimit/CircuitBreaker/Validation/Logging/Auth/ParamModify/Conditional）
+//	AbortError               — 回调中止错误
+//	FilterAction             — 过滤器动作枚举（Continue/Stop/Skip/Modify）
+//	ChainAction              — 链式执行动作枚举（Continue/Break/Retry/Rollback）
+//	HookType                 — 钩子类型枚举（Before/After/Error/Cleanup）
+//	FilterResult             — 过滤器返回结果
+//	ChainContext             — 链式执行上下文
+//	ChainResult              — 链式执行结果
 //	triggerStrategy          — 回调触发策略枚举（顺序执行/并行执行）
-//	CallbackFramework        — 核心回调框架（多域注册/触发/注销）
 //
 // 对应 Python 代码：openjiuwen/core/runner/callback/
 package callback

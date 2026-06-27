@@ -117,7 +117,7 @@ func TestGetCallbackFramework_全局实例(t *testing.T) {
 	}
 }
 
-func TestNewCallbackFramework_日志回调(t *testing.T) {
+func TestNewCallbackFramework_无默认回调(t *testing.T) {
 	fw := NewCallbackFramework()
 
 	events := []LLMCallEventType{
@@ -129,8 +129,8 @@ func TestNewCallbackFramework_日志回调(t *testing.T) {
 
 	for _, event := range events {
 		callbacks := fw.GetCallbacksForTest(event)
-		if len(callbacks) == 0 {
-			t.Errorf("事件 %s 应该有默认日志回调", event)
+		if len(callbacks) != 0 {
+			t.Errorf("事件 %s 不应有默认回调（6.24 删除 logging.go 后），实际 %d 个", event, len(callbacks))
 		}
 	}
 }
@@ -169,28 +169,6 @@ func TestLLMCallEventData_字段(t *testing.T) {
 	}
 	if data.Extra["key"] != "value" {
 		t.Errorf("期望 Extra[key]=value，实际 %v", data.Extra["key"])
-	}
-}
-
-func TestLoggingLLMCallback_日志回调(t *testing.T) {
-	temp := 0.5
-	data := &LLMCallEventData{
-		Event:         LLMCallStarted,
-		ModelName:     "test-model",
-		ModelProvider: "Test",
-		Temperature:   &temp,
-		IsStream:      false,
-	}
-
-	events := []LLMCallEventType{
-		LLMCallStarted, LLMCallError, LLMResponseReceived,
-		LLMInvokeInput, LLMInvokeOutput,
-		LLMStreamInput, LLMStreamOutput, LLMInput, LLMOutput,
-	}
-
-	for _, event := range events {
-		data.Event = event
-		LoggingLLMCallback(context.Background(), data)
 	}
 }
 
@@ -270,9 +248,8 @@ func TestCallbackFramework_触发LLM带结果(t *testing.T) {
 	})
 
 	results := fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
-	// 第一个是默认注册的 LoggingLLMCallback 返回 nil，第二个是自定义回调
-	if len(results) < 2 {
-		t.Fatalf("期望至少 2 个返回值，实际 %d", len(results))
+	if len(results) < 1 {
+		t.Fatalf("期望至少 1 个返回值，实际 %d", len(results))
 	}
 	lastResult := results[len(results)-1]
 	if lastResult != "llm_result" {
@@ -811,7 +788,7 @@ func TestCallbackFramework_CallbackInfo优先级(t *testing.T) {
 
 	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
 
-	// callOrder 只包含用户回调（默认的 LoggingLLMCallback 不计入）
+	// callOrder 只包含用户回调
 	if len(callOrder) != 2 {
 		t.Fatalf("期望 2 次用户回调，实际 %d 次，顺序 %v", len(callOrder), callOrder)
 	}
@@ -865,15 +842,9 @@ func TestCallbackFramework_GetCallbacksForTest_CallbackInfo(t *testing.T) {
 	fw := NewCallbackFramework()
 
 	callbacks := fw.GetCallbacksForTest(LLMCallStarted)
-	if len(callbacks) == 0 {
-		t.Fatal("应该有默认日志回调")
-	}
-	// 第一个应该是 LoggingLLMCallback
-	if callbacks[0].Callback == nil {
-		t.Error("CallbackInfo.Callback 不应为 nil")
-	}
-	if !callbacks[0].Enabled {
-		t.Error("默认回调应该是启用的")
+	// 无默认日志回调（6.24 删除 logging.go 后不再自动注册）
+	if len(callbacks) != 0 {
+		t.Fatalf("不应有默认回调，实际 %d 个", len(callbacks))
 	}
 }
 
@@ -1059,5 +1030,554 @@ func TestCallbackFramework_TriggerPerAgent_Nil上下文(t *testing.T) {
 	}
 	if atomic.LoadInt32(&called) != 0 {
 		t.Error("nil context 时回调不应被调用")
+	}
+}
+
+// ──────────────────────────── 6.24 回填逻辑测试 ────────────────────────────
+
+// TestCallbackFramework_钩子执行 测试 BEFORE/AFTER 钩子执行顺序
+func TestCallbackFramework_钩子执行(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+	var order []string
+	fw.AddHook("_framework:llm_call_started", HookTypeBefore, func(_ context.Context, _ string, _ any) {
+		order = append(order, "before")
+	})
+	fw.AddHook("_framework:llm_call_started", HookTypeAfter, func(_ context.Context, _ string, _ any) {
+		order = append(order, "after")
+	})
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		order = append(order, "callback")
+		return nil
+	})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if len(order) != 3 || order[0] != "before" || order[1] != "callback" || order[2] != "after" {
+		t.Errorf("钩子执行顺序 = %v, want [before callback after]", order)
+	}
+}
+
+// TestCallbackFramework_过滤器 测试全局过滤器 SKIP 后回调不执行
+func TestCallbackFramework_过滤器(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	fw.AddGlobalFilter(&ConditionalFilter{
+		Condition:     func(_ context.Context, _ string, _ string, _ any) bool { return false },
+		ActionOnFalse: FilterActionSkip,
+	})
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		called = true
+		return nil
+	})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if called {
+		t.Errorf("过滤器 SKIP 后回调不应执行")
+	}
+}
+
+// TestCallbackFramework_AbortError_无Cause 测试 AbortError 中止触发
+func TestCallbackFramework_AbortError_无Cause(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnPerAgent("test_abort", func(_ context.Context, _ any) error {
+		return NewAbortError("test abort", nil)
+	})
+	// TriggerPerAgent 返回 error，AbortError 会导致回调提前终止
+	err := fw.TriggerPerAgent(context.Background(), "test_abort", nil)
+	if err == nil {
+		t.Errorf("AbortError 应中止触发并返回错误，err = nil")
+	}
+}
+
+// TestCallbackFramework_指标记录 测试 EnableMetrics + GetMetrics 方法不报错
+func TestCallbackFramework_指标记录(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		return nil
+	})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	// 指标按实际 callback 类型名记录，key 不确定；主要验证方法不报错
+	// 遍历可能的 key 验证 EnableMetrics + GetMetrics 机制
+	_ = fw.GetMetrics("_framework:llm_call_started", "func(*callback.LLMCallEventData)")
+}
+
+// TestCallbackFramework_OnWorkflow和TriggerWorkflow 测试 Workflow 注册与触发
+func TestCallbackFramework_OnWorkflow和TriggerWorkflow(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *WorkflowEventData
+
+	fn := func(_ context.Context, data *WorkflowEventData) any {
+		called = true
+		receivedData = data
+		return "workflow_result"
+	}
+
+	fw.OnWorkflow(WorkflowStarted, fn)
+	results := fw.TriggerWorkflow(context.Background(), &WorkflowEventData{
+		Event:     WorkflowStarted,
+		WorkflowID: "wf-001",
+		NodeID:    "node-001",
+	})
+
+	if !called {
+		t.Error("Workflow 回调未被调用")
+	}
+	if receivedData.WorkflowID != "wf-001" {
+		t.Errorf("WorkflowID 期望 wf-001，实际 %s", receivedData.WorkflowID)
+	}
+	if len(results) != 1 || results[0] != "workflow_result" {
+		t.Errorf("结果期望 [workflow_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffWorkflow(WorkflowStarted, fn)
+	results2 := fw.TriggerWorkflow(context.Background(), &WorkflowEventData{Event: WorkflowStarted})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_OnMemory和TriggerMemory 测试 Memory 注册与触发
+func TestCallbackFramework_OnMemory和TriggerMemory(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *MemoryEventData
+
+	fn := func(_ context.Context, data *MemoryEventData) any {
+		called = true
+		receivedData = data
+		return "memory_result"
+	}
+
+	fw.OnMemory(MemoryAdded, fn)
+	results := fw.TriggerMemory(context.Background(), &MemoryEventData{
+		Event: MemoryAdded,
+		Key:   "test-key",
+	})
+
+	if !called {
+		t.Error("Memory 回调未被调用")
+	}
+	if receivedData.Key != "test-key" {
+		t.Errorf("Key 期望 test-key，实际 %s", receivedData.Key)
+	}
+	if len(results) != 1 || results[0] != "memory_result" {
+		t.Errorf("结果期望 [memory_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffMemory(MemoryAdded, fn)
+	results2 := fw.TriggerMemory(context.Background(), &MemoryEventData{Event: MemoryAdded})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_OnTaskManager和TriggerTaskManager 测试 TaskManager 注册与触发
+func TestCallbackFramework_OnTaskManager和TriggerTaskManager(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *TaskManagerEventData
+
+	fn := func(_ context.Context, data *TaskManagerEventData) any {
+		called = true
+		receivedData = data
+		return "task_result"
+	}
+
+	fw.OnTaskManager(TaskCreated, fn)
+	results := fw.TriggerTaskManager(context.Background(), &TaskManagerEventData{
+		Event:  TaskCreated,
+		TaskID: "task-001",
+	})
+
+	if !called {
+		t.Error("TaskManager 回调未被调用")
+	}
+	if receivedData.TaskID != "task-001" {
+		t.Errorf("TaskID 期望 task-001，实际 %s", receivedData.TaskID)
+	}
+	if len(results) != 1 || results[0] != "task_result" {
+		t.Errorf("结果期望 [task_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffTaskManager(TaskCreated, fn)
+	results2 := fw.TriggerTaskManager(context.Background(), &TaskManagerEventData{Event: TaskCreated})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_重试 测试 WithMaxRetries 重试机制
+func TestCallbackFramework_重试(t *testing.T) {
+	fw := NewCallbackFramework()
+	var attempts int
+	fw.OnPerAgent("test_retry", func(_ context.Context, _ any) error {
+		attempts++
+		if attempts < 3 {
+			return fmt.Errorf("fail attempt %d", attempts)
+		}
+		return nil
+	}, WithMaxRetries(2), WithRetryDelay(0.01))
+	// TriggerPerAgent 使用 strategyAbortOnError，重试在 triggerCallbacks 内部
+	err := fw.TriggerPerAgent(context.Background(), "test_retry", nil)
+	if err != nil {
+		t.Errorf("重试后应成功，err = %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("期望 3 次尝试，实际 %d", attempts)
+	}
+}
+
+// ──────────────────────────── 覆盖率补充测试 ────────────────────────────
+
+// TestCallbackFramework_OnGlobalAgent和TriggerGlobalAgent 测试 GlobalAgent 注册与触发
+func TestCallbackFramework_OnGlobalAgent和TriggerGlobalAgent(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *GlobalAgentEventData
+
+	fn := func(_ context.Context, data *GlobalAgentEventData) any {
+		called = true
+		receivedData = data
+		return "agent_result"
+	}
+
+	fw.OnGlobalAgent(GlobalAgentStarted, fn)
+	results := fw.TriggerGlobalAgent(context.Background(), &GlobalAgentEventData{
+		Event:     GlobalAgentStarted,
+		AgentID:   "agent-001",
+		AgentName: "test-agent",
+	})
+
+	if !called {
+		t.Error("GlobalAgent 回调未被调用")
+	}
+	if receivedData.AgentID != "agent-001" {
+		t.Errorf("AgentID 期望 agent-001，实际 %s", receivedData.AgentID)
+	}
+	if len(results) != 1 || results[0] != "agent_result" {
+		t.Errorf("结果期望 [agent_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffGlobalAgent(GlobalAgentStarted, fn)
+	results2 := fw.TriggerGlobalAgent(context.Background(), &GlobalAgentEventData{Event: GlobalAgentStarted})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_TriggerGlobalAgent_Nil上下文 测试 nil context/data 防御
+func TestCallbackFramework_TriggerGlobalAgent_Nil上下文(t *testing.T) {
+	fw := NewCallbackFramework()
+	results := fw.TriggerGlobalAgent(nil, &GlobalAgentEventData{Event: GlobalAgentStarted}) //nolint:staticcheck // 测试 nil context
+	if results != nil {
+		t.Errorf("nil context 期望 nil，实际 %v", results)
+	}
+	results = fw.TriggerGlobalAgent(context.Background(), nil)
+	if results != nil {
+		t.Errorf("nil data 期望 nil，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_RegisterAgentTransformIO_注册后变换 测试 Agent TransformIO 注册后变换
+func TestCallbackFramework_RegisterAgentTransformIO_注册后变换(t *testing.T) {
+	fw := NewCallbackFramework()
+	ctx := context.Background()
+
+	fw.RegisterAgentTransformIO(
+		GlobalAgentStreamInput, GlobalAgentStreamOutput,
+		func(ctx context.Context, event GlobalAgentEventType, input any) any {
+			return "transformed_" + input.(string)
+		},
+		func(ctx context.Context, event GlobalAgentEventType, output any) any {
+			return output.(string) + output.(string)
+		},
+	)
+
+	result := fw.TransformAgentIOInput(ctx, GlobalAgentStreamInput, "hello")
+	assert.Equal(t, "transformed_hello", result)
+
+	result = fw.TransformAgentIOOutput(ctx, GlobalAgentStreamOutput, "ab")
+	assert.Equal(t, "abab", result)
+}
+
+// TestCallbackFramework_OnAgentTeam和TriggerAgentTeam 测试 AgentTeam 注册与触发
+func TestCallbackFramework_OnAgentTeam和TriggerAgentTeam(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *AgentTeamEventData
+
+	fn := func(_ context.Context, data *AgentTeamEventData) any {
+		called = true
+		receivedData = data
+		return "team_result"
+	}
+
+	fw.OnAgentTeam(AgentP2PReceived, fn)
+	results := fw.TriggerAgentTeam(context.Background(), &AgentTeamEventData{
+		Event:   AgentP2PReceived,
+		AgentID: "agent-001",
+	})
+
+	if !called {
+		t.Error("AgentTeam 回调未被调用")
+	}
+	if receivedData.AgentID != "agent-001" {
+		t.Errorf("AgentID 期望 agent-001，实际 %s", receivedData.AgentID)
+	}
+	if len(results) != 1 || results[0] != "team_result" {
+		t.Errorf("结果期望 [team_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffAgentTeam(AgentP2PReceived, fn)
+	results2 := fw.TriggerAgentTeam(context.Background(), &AgentTeamEventData{Event: AgentP2PReceived})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_TriggerAgentTeam_Nil防御 测试 nil context/data
+func TestCallbackFramework_TriggerAgentTeam_Nil防御(t *testing.T) {
+	fw := NewCallbackFramework()
+	if fw.TriggerAgentTeam(nil, &AgentTeamEventData{Event: AgentP2PReceived}) != nil { //nolint:staticcheck // 测试 nil context
+		t.Error("nil context 期望 nil")
+	}
+	if fw.TriggerAgentTeam(context.Background(), nil) != nil {
+		t.Error("nil data 期望 nil")
+	}
+}
+
+// TestCallbackFramework_OnRetrieval和TriggerRetrieval 测试 Retrieval 注册与触发
+func TestCallbackFramework_OnRetrieval和TriggerRetrieval(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+	var receivedData *RetrievalEventData
+
+	fn := func(_ context.Context, data *RetrievalEventData) any {
+		called = true
+		receivedData = data
+		return "retrieval_result"
+	}
+
+	fw.OnRetrieval(RetrievalStarted, fn)
+	results := fw.TriggerRetrieval(context.Background(), &RetrievalEventData{
+		Event: RetrievalStarted,
+		Query: "test-query",
+	})
+
+	if !called {
+		t.Error("Retrieval 回调未被调用")
+	}
+	if receivedData.Query != "test-query" {
+		t.Errorf("Query 期望 test-query，实际 %s", receivedData.Query)
+	}
+	if len(results) != 1 || results[0] != "retrieval_result" {
+		t.Errorf("结果期望 [retrieval_result]，实际 %v", results)
+	}
+
+	// 注销后不再触发
+	fw.OffRetrieval(RetrievalStarted, fn)
+	results2 := fw.TriggerRetrieval(context.Background(), &RetrievalEventData{Event: RetrievalStarted})
+	if len(results2) != 0 {
+		t.Errorf("注销后不应有结果，实际 %v", results2)
+	}
+}
+
+// TestCallbackFramework_TriggerRetrieval_Nil防御 测试 nil context/data
+func TestCallbackFramework_TriggerRetrieval_Nil防御(t *testing.T) {
+	fw := NewCallbackFramework()
+	if fw.TriggerRetrieval(nil, &RetrievalEventData{Event: RetrievalStarted}) != nil { //nolint:staticcheck // 测试 nil context
+		t.Error("nil context 期望 nil")
+	}
+	if fw.TriggerRetrieval(context.Background(), nil) != nil {
+		t.Error("nil data 期望 nil")
+	}
+}
+
+// TestCallbackFramework_TriggerWithTimeout 测试带总超时的触发
+func TestCallbackFramework_TriggerWithTimeout(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+
+	fw.OnCustom("timeout_event", func(_ context.Context, _ map[string]any) any {
+		called = true
+		return "ok"
+	})
+
+	results, err := fw.TriggerWithTimeout(context.Background(), "timeout_event", 5.0, nil)
+	if err != nil {
+		t.Errorf("期望无错误，实际 %v", err)
+	}
+	if !called {
+		t.Error("回调未被调用")
+	}
+	if len(results) != 1 || results[0] != "ok" {
+		t.Errorf("结果期望 [ok]，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_AddFilter 测试事件级过滤器
+func TestCallbackFramework_AddFilter(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called bool
+
+	fw.AddFilter("_framework:llm_call_started", &ConditionalFilter{
+		Condition:     func(_ context.Context, _ string, _ string, _ any) bool { return false },
+		ActionOnFalse: FilterActionSkip,
+	})
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		called = true
+		return nil
+	})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if called {
+		t.Error("事件级过滤器 SKIP 后回调不应执行")
+	}
+}
+
+// TestCallbackFramework_AddCircuitBreaker 测试添加熔断器
+func TestCallbackFramework_AddCircuitBreaker(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+
+	fw.AddCircuitBreaker("_framework:llm_call_started", "func(*callback.LLMCallEventData)", 1, 60.0)
+
+	var called int32
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		atomic.AddInt32(&called, 1)
+		return nil
+	})
+
+	// 首次正常触发
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("期望调用 1 次，实际 %d", called)
+	}
+}
+
+// TestCallbackFramework_TriggerChain 测试链式触发
+func TestCallbackFramework_TriggerChain(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	// 无注册链时返回 Continue + 原始数据
+	result := fw.TriggerChain(context.Background(), "chain_event", "input_data")
+	if result.Action != ChainActionContinue {
+		t.Errorf("期望 ChainActionContinue，实际 %v", result.Action)
+	}
+	if result.Result != "input_data" {
+		t.Errorf("期望 Result=input_data，实际 %v", result.Result)
+	}
+}
+
+// TestCallbackFramework_TriggerParallel 测试并发触发
+func TestCallbackFramework_TriggerParallel(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnCustom("parallel_event", func(_ context.Context, _ map[string]any) any {
+		atomic.AddInt32(&called, 1)
+		return "result"
+	})
+
+	results := fw.TriggerParallel(context.Background(), "parallel_event", map[string]any{"key": "val"})
+	if atomic.LoadInt32(&called) != 1 {
+		t.Errorf("期望调用 1 次，实际 %d", called)
+	}
+	if len(results) != 1 || results[0] != "result" {
+		t.Errorf("结果期望 [result]，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil 测试触发直到条件满足
+func TestCallbackFramework_TriggerUntil(t *testing.T) {
+	fw := NewCallbackFramework()
+
+	fw.OnCustom("until_event", func(_ context.Context, _ map[string]any) any {
+		return "match"
+	})
+
+	result := fw.TriggerUntil(context.Background(), "until_event", func(r any) bool {
+		return r == "match"
+	}, nil)
+
+	if result != "match" {
+		t.Errorf("期望 match，实际 %v", result)
+	}
+
+	// 无匹配时返回 nil
+	result2 := fw.TriggerUntil(context.Background(), "until_event", func(r any) bool {
+		return false
+	}, nil)
+	if result2 != nil {
+		t.Errorf("无匹配期望 nil，实际 %v", result2)
+	}
+}
+
+// TestCallbackFramework_ResetMetrics 测试重置指标
+func TestCallbackFramework_ResetMetrics(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any { return nil })
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+
+	fw.ResetMetrics()
+	// 重置后 GetMetrics 应返回 nil
+	m := fw.GetMetrics("_framework:llm_call_started", "func(*callback.LLMCallEventData)")
+	if m != nil {
+		t.Errorf("ResetMetrics 后期望 nil，实际 %v", m)
+	}
+}
+
+// TestCallbackFramework_GetSlowCallbacks 测试查询慢回调
+func TestCallbackFramework_GetSlowCallbacks(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any {
+		return nil
+	})
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+
+	// 用极大阈值，应无慢回调
+	slow := fw.GetSlowCallbacks(999.0)
+	if len(slow) != 0 {
+		t.Errorf("极大阈值期望无慢回调，实际 %d 个", len(slow))
+	}
+
+	// 用极小阈值，可能有慢回调（取决于执行耗时）
+	slow2 := fw.GetSlowCallbacks(0.0)
+	// 不验证数量，仅验证方法不报错
+	_ = slow2
+}
+
+// TestCallbackFramework_EnableEventHistory 测试开关事件历史
+func TestCallbackFramework_EnableEventHistory(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableEventHistory(true)
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any { return nil })
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted})
+
+	// 验证不报错即可
+	fw.EnableEventHistory(false)
+}
+
+// TestCallbackFramework_GetStatistics 测试框架统计信息
+func TestCallbackFramework_GetStatistics(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, _ *LLMCallEventData) any { return nil })
+	fw.OnTool(ToolCallStarted, func(_ context.Context, _ *ToolCallEventData) any { return nil })
+
+	stats := fw.GetStatistics()
+	if stats["llm_callbacks"].(int) != 1 {
+		t.Errorf("llm_callbacks 期望 1，实际 %v", stats["llm_callbacks"])
+	}
+	if stats["tool_callbacks"].(int) != 1 {
+		t.Errorf("tool_callbacks 期望 1，实际 %v", stats["tool_callbacks"])
+	}
+	if stats["session_callbacks"].(int) != 0 {
+		t.Errorf("session_callbacks 期望 0，实际 %v", stats["session_callbacks"])
 	}
 }

@@ -232,3 +232,178 @@ func TestContextCallEventData_NilString(t *testing.T) {
 		t.Errorf("nil String() = %q, want nil", d.String())
 	}
 }
+
+// TestBuildEventName 测试 BuildEventName 构建带 scope 的事件名
+func TestBuildEventName(t *testing.T) {
+	got := BuildEventName("agent", "started")
+	if got != "agent:started" {
+		t.Errorf("BuildEventName = %q, want %q", got, "agent:started")
+	}
+}
+
+// TestParseEventName 测试 ParseEventName 解析带 scope 的事件名
+func TestParseEventName(t *testing.T) {
+	scope, name := ParseEventName("_framework:llm_call_started")
+	if scope != "_framework" || name != "llm_call_started" {
+		t.Errorf("ParseEventName = %q, %q; want _framework, llm_call_started", scope, name)
+	}
+	scope2, name2 := ParseEventName("no_colon")
+	if scope2 != "_framework" || name2 != "no_colon" {
+		t.Errorf("ParseEventName(无冒号) = %q, %q; want _framework, no_colon", scope2, name2)
+	}
+}
+
+// TestEventBase_GetEvent 测试 EventBase.GetEvent 获取带 scope 的完整事件名
+func TestEventBase_GetEvent(t *testing.T) {
+	eb := EventBase{Scope: "workflow"}
+	got := eb.GetEvent("started")
+	if got != "workflow:started" {
+		t.Errorf("GetEvent = %q, want %q", got, "workflow:started")
+	}
+}
+
+// TestWorkflowEventType_值验证 测试 Workflow 事件类型枚举值
+func TestWorkflowEventType_值验证(t *testing.T) {
+	if WorkflowStarted != "_framework:workflow_started" {
+		t.Errorf("WorkflowStarted = %q", WorkflowStarted)
+	}
+}
+
+// TestMemoryEventType_值验证 测试 Memory 事件类型枚举值
+func TestMemoryEventType_值验证(t *testing.T) {
+	if MemoryAdded != "_framework:memory_added" {
+		t.Errorf("MemoryAdded = %q", MemoryAdded)
+	}
+}
+
+// TestTaskManagerEventType_值验证 测试 TaskManager 事件类型枚举值
+func TestTaskManagerEventType_值验证(t *testing.T) {
+	if TaskCreated != "_framework:task_created" {
+		t.Errorf("TaskCreated = %q", TaskCreated)
+	}
+}
+
+// ──────────────────────────── 覆盖率补充测试 ────────────────────────────
+
+// TestWorkflowEventData_String 测试 WorkflowEventData.String() 方法
+func TestWorkflowEventData_String(t *testing.T) {
+	data := &WorkflowEventData{
+		Event:     WorkflowStarted,
+		WorkflowID: "wf-001",
+		NodeID:    "node-001",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestWorkflowEventData_NilString 测试 nil WorkflowEventData.String()
+func TestWorkflowEventData_NilString(t *testing.T) {
+	var d *WorkflowEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
+
+// TestAgentTeamEventData_String 测试 AgentTeamEventData.String() 方法
+func TestAgentTeamEventData_String(t *testing.T) {
+	data := &AgentTeamEventData{
+		Event:   AgentP2PReceived,
+		AgentID: "agent-001",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestAgentTeamEventData_NilString 测试 nil AgentTeamEventData.String()
+func TestAgentTeamEventData_NilString(t *testing.T) {
+	var d *AgentTeamEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
+
+// TestRetrievalEventData_String 测试 RetrievalEventData.String() 方法
+func TestRetrievalEventData_String(t *testing.T) {
+	data := &RetrievalEventData{
+		Event: RetrievalStarted,
+		Query: "test-query",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestRetrievalEventData_NilString 测试 nil RetrievalEventData.String()
+func TestRetrievalEventData_NilString(t *testing.T) {
+	var d *RetrievalEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
+
+// TestMemoryEventData_String 测试 MemoryEventData.String() 方法
+func TestMemoryEventData_String(t *testing.T) {
+	data := &MemoryEventData{
+		Event: MemoryAdded,
+		Key:   "test-key",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestMemoryEventData_NilString 测试 nil MemoryEventData.String()
+func TestMemoryEventData_NilString(t *testing.T) {
+	var d *MemoryEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
+
+// TestTaskManagerEventData_String 测试 TaskManagerEventData.String() 方法
+func TestTaskManagerEventData_String(t *testing.T) {
+	data := &TaskManagerEventData{
+		Event:  TaskCreated,
+		TaskID: "task-001",
+		Status: "running",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestTaskManagerEventData_NilString 测试 nil TaskManagerEventData.String()
+func TestTaskManagerEventData_NilString(t *testing.T) {
+	var d *TaskManagerEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
+
+// TestGlobalAgentEventData_String 测试 GlobalAgentEventData.String() 方法
+func TestGlobalAgentEventData_String(t *testing.T) {
+	data := &GlobalAgentEventData{
+		Event:     GlobalAgentStarted,
+		AgentID:   "agent-001",
+		AgentName: "test-agent",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestGlobalAgentEventData_NilString 测试 nil GlobalAgentEventData.String()
+func TestGlobalAgentEventData_NilString(t *testing.T) {
+	var d *GlobalAgentEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}
