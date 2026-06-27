@@ -391,7 +391,7 @@ func (m *TagMgr) Display(enableLog bool) string {
 				sortedResources = append(sortedResources, id)
 			}
 			sort.Strings(sortedResources)
-			sb.WriteString(fmt.Sprintf("  tag['%s']: [%s]\n", tag, strings.Join(sortedResources, ", ")))
+			fmt.Fprintf(&sb, "  tag['%s']: [%s]\n", tag, strings.Join(sortedResources, ", "))
 		}
 	}
 
@@ -410,15 +410,15 @@ func (m *TagMgr) Display(enableLog bool) string {
 			sortedTagNames = append(sortedTagNames, tag)
 		}
 		sort.Strings(sortedTagNames)
-		sb.WriteString(fmt.Sprintf("  resource['%s']: [%s]\n", resourceID, strings.Join(sortedTagNames, ", ")))
+		fmt.Fprintf(&sb, "  resource['%s']: [%s]\n", resourceID, strings.Join(sortedTagNames, ", "))
 	}
 
 	// 统计信息
 	globalResources := m.tagToResource[TagGlobal]
-	sb.WriteString(fmt.Sprintf("\nStatistics:\n"))
-	sb.WriteString(fmt.Sprintf("  Total tags: %d\n", len(m.tagToResource)))
-	sb.WriteString(fmt.Sprintf("  Total resources: %d\n", len(m.resourceTags)))
-	sb.WriteString(fmt.Sprintf("  GLOBAL resources: %d\n", len(globalResources)))
+	sb.WriteString("\nStatistics:\n")
+	fmt.Fprintf(&sb, "  Total tags: %d\n", len(m.tagToResource))
+	fmt.Fprintf(&sb, "  Total resources: %d\n", len(m.resourceTags))
+	fmt.Fprintf(&sb, "  GLOBAL resources: %d\n", len(globalResources))
 
 	msg := sb.String()
 	if enableLog {
