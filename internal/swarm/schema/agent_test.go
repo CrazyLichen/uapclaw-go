@@ -235,7 +235,7 @@ func TestNewAgentResponse(t *testing.T) {
 
 // TestNewAgentResponse_使用Option 验证通过 Option 设置各字段
 func TestNewAgentResponse_使用Option(t *testing.T) {
-	payload := json.RawMessage(`{"content":"answer"}`)
+	payload := map[string]any{"content": "answer"}
 	resp := NewAgentResponse("req-1", "web",
 		WithResponseOK(false),
 		WithPayload(payload),
@@ -245,8 +245,8 @@ func TestNewAgentResponse_使用Option(t *testing.T) {
 	if resp.OK {
 		t.Error("OK 应为 false（被 Option 覆盖）")
 	}
-	if string(resp.Payload) != `{"content":"answer"}` {
-		t.Errorf("Payload = %s, 期望 {\"content\":\"answer\"}", string(resp.Payload))
+	if resp.Payload["content"] != "answer" {
+		t.Errorf("Payload[\"content\"] = %v, 期望 \"answer\"", resp.Payload["content"])
 	}
 	if resp.Metadata["key"] != "val" {
 		t.Error("Metadata[\"key\"] 期望 \"val\"")
@@ -284,7 +284,7 @@ func TestAgentResponse_JSON往返(t *testing.T) {
 		RequestID: "req-1",
 		ChannelID: "web",
 		OK:        true,
-		Payload:   json.RawMessage(`{"content":"final answer"}`),
+		Payload:   map[string]any{"content": "final answer"},
 		Metadata:  map[string]any{"method": "chat.send"},
 	}
 
@@ -307,22 +307,173 @@ func TestAgentResponse_JSON往返(t *testing.T) {
 	if decoded.OK != original.OK {
 		t.Errorf("OK: got %v, want %v", decoded.OK, original.OK)
 	}
-	if string(decoded.Payload) != string(original.Payload) {
-		t.Errorf("Payload: got %s, want %s", string(decoded.Payload), string(original.Payload))
+	if decoded.Payload["content"] != "final answer" {
+		t.Errorf("Payload[\"content\"]: got %v, want \"final answer\"", decoded.Payload["content"])
 	}
 	if decoded.Metadata["method"] != "chat.send" {
 		t.Errorf("Metadata[\"method\"]: got %v, want \"chat.send\"", decoded.Metadata["method"])
 	}
 }
 
-// ──────────────────────────── AgentResponseChunk 基础测试 ────────────────────────────
+// ──────────────────────────── AgentResponseChunk 工厂函数测试 ────────────────────────────
 
-// TestAgentResponseChunk_JSON序列化 验证骨架结构体 JSON 序列化/反序列化基本验证
-func TestAgentResponseChunk_JSON序列化(t *testing.T) {
+// TestNewAgentResponseChunk 验证工厂函数默认值
+func TestNewAgentResponseChunk(t *testing.T) {
+	payload := map[string]any{"event_type": "chat.delta", "content": "hello"}
+	chunk := NewAgentResponseChunk("req-1", "web", payload)
+
+	if chunk.RequestID != "req-1" {
+		t.Errorf("RequestID = %q, 期望 \"req-1\"", chunk.RequestID)
+	}
+	if chunk.ChannelID != "web" {
+		t.Errorf("ChannelID = %q, 期望 \"web\"", chunk.ChannelID)
+	}
+	if chunk.Payload["event_type"] != "chat.delta" {
+		t.Errorf("Payload[\"event_type\"] = %v, 期望 \"chat.delta\"", chunk.Payload["event_type"])
+	}
+	if chunk.IsComplete {
+		t.Error("IsComplete 默认应为 false")
+	}
+}
+
+// TestNewAgentResponseChunk_使用Option 验证通过 Option 设置各字段
+func TestNewAgentResponseChunk_使用Option(t *testing.T) {
+	payload := map[string]any{"event_type": "chat.delta", "content": "hello"}
+	newPayload := map[string]any{"event_type": "chat.final", "content": "answer"}
+	chunk := NewAgentResponseChunk("req-1", "web", payload,
+		WithChunkIsComplete(true),
+		WithChunkPayload(newPayload),
+	)
+
+	if !chunk.IsComplete {
+		t.Error("IsComplete 应为 true（被 Option 覆盖）")
+	}
+	if chunk.Payload["event_type"] != "chat.final" {
+		t.Errorf("Payload[\"event_type\"] = %v, 期望 \"chat.final\"", chunk.Payload["event_type"])
+	}
+}
+
+// TestNewTerminalChunk 验证终止哨兵工厂函数
+func TestNewTerminalChunk(t *testing.T) {
+	chunk := NewTerminalChunk("req-1", "web")
+
+	if chunk.RequestID != "req-1" {
+		t.Errorf("RequestID = %q, 期望 \"req-1\"", chunk.RequestID)
+	}
+	if chunk.ChannelID != "web" {
+		t.Errorf("ChannelID = %q, 期望 \"web\"", chunk.ChannelID)
+	}
+	if !chunk.IsComplete {
+		t.Error("IsComplete 应为 true（终止哨兵）")
+	}
+	if chunk.Payload["is_complete"] != true {
+		t.Errorf("Payload[\"is_complete\"] = %v, 期望 true", chunk.Payload["is_complete"])
+	}
+}
+
+// ──────────────────────────── AgentResponseChunk Validate 测试 ────────────────────────────
+
+// TestAgentResponseChunk_Validate_正常 验证正常数据通过校验
+func TestAgentResponseChunk_Validate_正常(t *testing.T) {
+	chunk := NewAgentResponseChunk("req-1", "web", map[string]any{})
+	if err := chunk.Validate(); err != nil {
+		t.Errorf("正常数据 Validate 返回错误: %v", err)
+	}
+}
+
+// TestAgentResponseChunk_Validate_requestID为空 验证 request_id 为空返回错误
+func TestAgentResponseChunk_Validate_requestID为空(t *testing.T) {
+	chunk := &AgentResponseChunk{ChannelID: "web"}
+	if err := chunk.Validate(); err == nil {
+		t.Error("request_id 为空时期望返回错误")
+	}
+}
+
+// TestAgentResponseChunk_Validate_channelID为空 验证 channel_id 为空返回错误
+func TestAgentResponseChunk_Validate_channelID为空(t *testing.T) {
+	chunk := &AgentResponseChunk{RequestID: "req-1"}
+	if err := chunk.Validate(); err == nil {
+		t.Error("channel_id 为空时期望返回错误")
+	}
+}
+
+// ──────────────────────────── AgentResponseChunk IsTerminal 测试 ────────────────────────────
+
+// TestAgentResponseChunk_IsTerminal_空payload 验证形态 A：payload 为空，is_complete=true
+func TestAgentResponseChunk_IsTerminal_空payload(t *testing.T) {
+	chunk := &AgentResponseChunk{
+		RequestID:  "req-1",
+		ChannelID:  "web",
+		IsComplete: true,
+	}
+	if !chunk.IsTerminal() {
+		t.Error("payload 为空且 is_complete=true 时应为终止哨兵")
+	}
+}
+
+// TestAgentResponseChunk_IsTerminal_标准形态 验证形态 B：payload={"is_complete":true}，is_complete=true
+func TestAgentResponseChunk_IsTerminal_标准形态(t *testing.T) {
+	chunk := NewTerminalChunk("req-1", "web")
+	if !chunk.IsTerminal() {
+		t.Error("NewTerminalChunk 创建的 chunk 应为终止哨兵")
+	}
+}
+
+// TestAgentResponseChunk_IsTerminal_中间chunk 验证 is_complete=false 不是终止哨兵
+func TestAgentResponseChunk_IsTerminal_中间chunk(t *testing.T) {
+	chunk := NewAgentResponseChunk("req-1", "web", map[string]any{"event_type": "chat.delta", "content": "hi"})
+	if chunk.IsTerminal() {
+		t.Error("is_complete=false 的中间 chunk 不应为终止哨兵")
+	}
+}
+
+// TestAgentResponseChunk_IsTerminal_含eventtype 验证含 event_type 的结束 chunk 不是终止哨兵
+func TestAgentResponseChunk_IsTerminal_含eventtype(t *testing.T) {
+	chunk := &AgentResponseChunk{
+		RequestID:  "req-1",
+		ChannelID:  "web",
+		Payload:    map[string]any{"event_type": "chat.error", "error": "something"},
+		IsComplete: true,
+	}
+	if chunk.IsTerminal() {
+		t.Error("含 event_type 的结束 chunk 不应为终止哨兵")
+	}
+}
+
+// TestAgentResponseChunk_IsTerminal_含content 验证含 content 的结束 chunk 不是终止哨兵
+func TestAgentResponseChunk_IsTerminal_含content(t *testing.T) {
+	chunk := &AgentResponseChunk{
+		RequestID:  "req-1",
+		ChannelID:  "web",
+		Payload:    map[string]any{"content": "final answer"},
+		IsComplete: true,
+	}
+	if chunk.IsTerminal() {
+		t.Error("含 content 的结束 chunk 不应为终止哨兵")
+	}
+}
+
+// TestAgentResponseChunk_IsTerminal_含error 验证含 error 的结束 chunk 不是终止哨兵
+func TestAgentResponseChunk_IsTerminal_含error(t *testing.T) {
+	chunk := &AgentResponseChunk{
+		RequestID:  "req-1",
+		ChannelID:  "web",
+		Payload:    map[string]any{"error": "bad"},
+		IsComplete: true,
+	}
+	if chunk.IsTerminal() {
+		t.Error("含 error 的结束 chunk 不应为终止哨兵")
+	}
+}
+
+// ──────────────────────────── AgentResponseChunk JSON 往返测试 ────────────────────────────
+
+// TestAgentResponseChunk_JSON往返 验证 JSON marshal/unmarshal 往返一致
+func TestAgentResponseChunk_JSON往返(t *testing.T) {
 	original := &AgentResponseChunk{
 		RequestID:  "req-1",
 		ChannelID:  "web",
-		Payload:    json.RawMessage(`{"content":"delta"}`),
+		Payload:    map[string]any{"event_type": "chat.delta", "content": "hello"},
 		IsComplete: false,
 	}
 
@@ -342,20 +493,20 @@ func TestAgentResponseChunk_JSON序列化(t *testing.T) {
 	if decoded.ChannelID != original.ChannelID {
 		t.Errorf("ChannelID: got %q, want %q", decoded.ChannelID, original.ChannelID)
 	}
-	if string(decoded.Payload) != string(original.Payload) {
-		t.Errorf("Payload: got %s, want %s", string(decoded.Payload), string(original.Payload))
+	if decoded.Payload["event_type"] != "chat.delta" {
+		t.Errorf("Payload[\"event_type\"]: got %v, want \"chat.delta\"", decoded.Payload["event_type"])
 	}
 	if decoded.IsComplete != original.IsComplete {
 		t.Errorf("IsComplete: got %v, want %v", decoded.IsComplete, original.IsComplete)
 	}
 }
 
-// TestAgentResponseChunk_IsComplete为true 验证完成标记
+// TestAgentResponseChunk_IsComplete为true 验证完成标记序列化
 func TestAgentResponseChunk_IsComplete为true(t *testing.T) {
 	chunk := &AgentResponseChunk{
 		RequestID:  "req-1",
 		ChannelID:  "web",
-		Payload:    json.RawMessage(`{"content":"done"}`),
+		Payload:    map[string]any{"content": "done"},
 		IsComplete: true,
 	}
 
@@ -366,5 +517,30 @@ func TestAgentResponseChunk_IsComplete为true(t *testing.T) {
 
 	if !strings.Contains(string(data), `"is_complete":true`) {
 		t.Errorf("IsComplete=true 时 JSON 应包含 is_complete:true，实际: %s", string(data))
+	}
+}
+
+// TestAgentResponseChunk_终止哨兵JSON往返 验证 NewTerminalChunk 创建的 chunk JSON 往返一致
+func TestAgentResponseChunk_终止哨兵JSON往返(t *testing.T) {
+	original := NewTerminalChunk("req-1", "web")
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+
+	var decoded AgentResponseChunk
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+
+	if decoded.RequestID != "req-1" {
+		t.Errorf("RequestID: got %q, want \"req-1\"", decoded.RequestID)
+	}
+	if !decoded.IsComplete {
+		t.Error("IsComplete 应为 true")
+	}
+	if !decoded.IsTerminal() {
+		t.Error("往返后的终止哨兵仍应被 IsTerminal() 识别")
 	}
 }

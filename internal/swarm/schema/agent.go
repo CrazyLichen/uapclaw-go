@@ -60,8 +60,8 @@ type AgentResponse struct {
 	ChannelID string `json:"channel_id"`
 	// OK 是否成功（工厂函数默认 true，对齐 Python ok=True）
 	OK bool `json:"ok"`
-	// Payload 响应负载（延迟解析，与 Message.Payload 一致）
-	Payload json.RawMessage `json:"payload,omitempty"`
+	// Payload 响应负载（对齐 Python payload: dict | None）
+	Payload map[string]any `json:"payload,omitempty"`
 	// Metadata 扩展元数据
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
@@ -69,7 +69,15 @@ type AgentResponse struct {
 // AgentResponseChunk Agent 响应片段（AgentServer → Gateway，流式）。
 //
 // 作为 AgentServer 向 Gateway 返回的流式响应块，承载增量负载和完成标识。
-// 当前仅定义结构体骨架，工厂函数和 Validate 留给步骤 10.1.6 补全。
+// payload 为 map[string]any，业务语义（event_type 等）由使用侧负责构造，
+// 不在 Schema 层定义 payload 内部结构（对齐 Python AgentResponseChunk.payload: dict | None）。
+//
+// 流式协议约定：
+//   - is_complete=false：流中间的业务 chunk
+//   - is_complete=true 且 payload 含 event_type/content/error 等业务字段：携带业务的结束 chunk
+//   - is_complete=true 且 payload 为空/仅含 {"is_complete":true}：终止哨兵，流结束标记
+//
+// 终止哨兵推荐使用 NewTerminalChunk() 工厂创建，避免手动构造出错。
 //
 // 对应 Python: jiuwenswarm/common/schema/agent.py (AgentResponseChunk)
 type AgentResponseChunk struct {
@@ -77,8 +85,8 @@ type AgentResponseChunk struct {
 	RequestID string `json:"request_id"`
 	// ChannelID 来源渠道标识
 	ChannelID string `json:"channel_id"`
-	// Payload 响应负载片段（延迟解析）
-	Payload json.RawMessage `json:"payload,omitempty"`
+	// Payload 响应负载片段（对齐 Python payload: dict | None）
+	Payload map[string]any `json:"payload,omitempty"`
 	// IsComplete 是否为最后一个片段
 	IsComplete bool `json:"is_complete"`
 }
@@ -124,6 +132,43 @@ func NewAgentResponse(requestID, channelID string, opts ...AgentResponseOption) 
 	return resp
 }
 
+// NewAgentResponseChunk 创建 Agent 响应片段实例。
+//
+// 工厂函数保证：IsComplete=false（零值，流中间 chunk）。
+// 如需创建终止哨兵 chunk，请使用 NewTerminalChunk()。
+func NewAgentResponseChunk(requestID, channelID string, payload map[string]any, opts ...AgentResponseChunkOption) *AgentResponseChunk {
+	chunk := &AgentResponseChunk{
+		RequestID:  requestID,
+		ChannelID:  channelID,
+		Payload:    payload,
+		IsComplete: false,
+	}
+	for _, opt := range opts {
+		opt(chunk)
+	}
+	return chunk
+}
+
+// NewTerminalChunk 创建终止哨兵 chunk。
+//
+// 终止哨兵是流结束标记：is_complete=true，payload 为 {"is_complete":true}。
+// 消费侧通过 IsTerminal() 识别终止哨兵，不再下发业务事件。
+//
+// 对齐 Python 中两处终止哨兵形态：
+//   - payload=None, is_complete=True（interface_deep / team_helpers / auto_harness）
+//   - payload={"is_complete": True}, is_complete=True（gateway_normalize / interface）
+//
+// Go 统一使用形态 B（payload={"is_complete":true}），因为：
+//   - 形态 B 信息自包含，消费侧无需额外判断
+func NewTerminalChunk(requestID, channelID string) *AgentResponseChunk {
+	return &AgentResponseChunk{
+		RequestID:  requestID,
+		ChannelID:  channelID,
+		Payload:    map[string]any{"is_complete": true},
+		IsComplete: true,
+	}
+}
+
 // AgentRequestOption Agent 请求可选配置函数。
 type AgentRequestOption func(*AgentRequest)
 
@@ -166,13 +211,26 @@ func WithResponseOK(v bool) AgentResponseOption {
 }
 
 // WithPayload 设置响应负载。
-func WithPayload(p json.RawMessage) AgentResponseOption {
+func WithPayload(p map[string]any) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.Payload = p }
 }
 
 // WithResponseMetadata 设置扩展元数据。
 func WithResponseMetadata(m map[string]any) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.Metadata = m }
+}
+
+// AgentResponseChunkOption Agent 响应片段可选配置函数。
+type AgentResponseChunkOption func(*AgentResponseChunk)
+
+// WithChunkIsComplete 设置是否为最后片段。
+func WithChunkIsComplete(v bool) AgentResponseChunkOption {
+	return func(chunk *AgentResponseChunk) { chunk.IsComplete = v }
+}
+
+// WithChunkPayload 设置响应负载片段。
+func WithChunkPayload(p map[string]any) AgentResponseChunkOption {
+	return func(chunk *AgentResponseChunk) { chunk.Payload = p }
 }
 
 // Validate 校验 AgentRequest 必填字段。
@@ -207,6 +265,67 @@ func (r *AgentResponse) Validate() error {
 		return fmt.Errorf("channel_id 不能为空")
 	}
 	return nil
+}
+
+// Validate 校验 AgentResponseChunk 必填字段。
+//
+// 校验规则（对齐 Python AgentResponseChunk 必填）：
+//   - request_id 非空
+//   - channel_id 非空
+func (c *AgentResponseChunk) Validate() error {
+	if c.RequestID == "" {
+		return fmt.Errorf("request_id 不能为空")
+	}
+	if c.ChannelID == "" {
+		return fmt.Errorf("channel_id 不能为空")
+	}
+	return nil
+}
+
+// IsTerminal 判断是否为终止哨兵 chunk。
+//
+// 终止哨兵是流结束标记，消费侧不应将其作为业务事件下发。
+//
+// 判断逻辑（对齐 Python _is_terminal_stream_chunk）：
+//   - is_complete 必须为 true
+//   - payload 为空，或仅含 {"is_complete":true} 且无 event_type/content/error 等业务字段
+func (c *AgentResponseChunk) IsTerminal() bool {
+	if !c.IsComplete {
+		return false
+	}
+	// payload 为 nil → 终止哨兵（形态 A：payload=None, is_complete=True）
+	if c.Payload == nil {
+		return true
+	}
+	// 含 event_type → 非终止哨兵，是带业务的结束 chunk
+	if _, ok := c.Payload["event_type"]; ok {
+		return false
+	}
+	// 含 content 非空 → 非终止哨兵
+	if v, ok := c.Payload["content"]; ok && v != nil {
+		if s, isStr := v.(string); isStr && s != "" {
+			return false
+		} else if !isStr {
+			return false
+		}
+	}
+	// 含 error 非空 → 非终止哨兵
+	if v, ok := c.Payload["error"]; ok && v != nil {
+		if s, isStr := v.(string); isStr && s != "" {
+			return false
+		} else if !isStr {
+			return false
+		}
+	}
+	// 仅含 is_complete=true 且无其他业务键 → 终止哨兵（形态 B）
+	if v, ok := c.Payload["is_complete"]; ok {
+		if b, isBool := v.(bool); isBool && b {
+			if len(c.Payload) == 1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
