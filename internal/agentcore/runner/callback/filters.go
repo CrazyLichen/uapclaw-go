@@ -158,10 +158,11 @@ func (f *RateLimitFilter) Filter(_ context.Context, event string, callbackName s
 }
 
 // NewRateLimitFilter 创建滑动窗口限流过滤器。
-func NewRateLimitFilter(maxCalls int, timeWindow float64, name ...string) *RateLimitFilter {
+// name 为空时使用默认名称 "RateLimit"。
+func NewRateLimitFilter(maxCalls int, timeWindow float64, name string) *RateLimitFilter {
 	n := "RateLimit"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &RateLimitFilter{
 		name:       n,
@@ -254,10 +255,11 @@ func (f *CircuitBreakerFilter) RecordFailure(event string, callbackName string) 
 }
 
 // NewCircuitBreakerFilter 创建断路器过滤器。
-func NewCircuitBreakerFilter(failureThreshold int, timeout float64, name ...string) *CircuitBreakerFilter {
+// name 为空时使用默认名称 "CircuitBreaker"。
+func NewCircuitBreakerFilter(failureThreshold int, timeout float64, name string) *CircuitBreakerFilter {
 	n := "CircuitBreaker"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &CircuitBreakerFilter{
 		name:             n,
@@ -286,10 +288,11 @@ func (f *ValidationFilter) Filter(_ context.Context, _ string, _ string, data an
 }
 
 // NewValidationFilter 创建校验过滤器。
-func NewValidationFilter(validator func(any) bool, name ...string) *ValidationFilter {
+// name 为空时使用默认名称 "Validation"。
+func NewValidationFilter(validator func(any) bool, name string) *ValidationFilter {
 	n := "Validation"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &ValidationFilter{
 		name:      n,
@@ -313,10 +316,11 @@ func (f *LoggingFilter) Filter(_ context.Context, event string, callbackName str
 }
 
 // NewLoggingFilter 创建日志过滤器。
-func NewLoggingFilter(name ...string) *LoggingFilter {
+// name 为空时使用默认名称 "Logging"。
+func NewLoggingFilter(name string) *LoggingFilter {
 	n := "Logging"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &LoggingFilter{name: n}
 }
@@ -349,10 +353,11 @@ func (f *AuthFilter) Filter(_ context.Context, _ string, _ string, data any) Fil
 }
 
 // NewAuthFilter 创建鉴权过滤器。
-func NewAuthFilter(requiredRole string, name ...string) *AuthFilter {
+// name 为空时使用默认名称 "Auth"。
+func NewAuthFilter(requiredRole string, name string) *AuthFilter {
 	n := "Auth"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &AuthFilter{
 		name:         n,
@@ -375,10 +380,11 @@ func (f *ParamModifyFilter) Filter(_ context.Context, _ string, _ string, data a
 }
 
 // NewParamModifyFilter 创建参数修改过滤器。
-func NewParamModifyFilter(modifier func(any) any, name ...string) *ParamModifyFilter {
+// name 为空时使用默认名称 "ParamModify"。
+func NewParamModifyFilter(modifier func(any) any, name string) *ParamModifyFilter {
 	n := "ParamModify"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &ParamModifyFilter{
 		name:     n,
@@ -403,14 +409,15 @@ func (f *ConditionalFilter) Filter(ctx context.Context, event string, callbackNa
 }
 
 // NewConditionalFilter 创建条件过滤器。
+// name 为空时使用默认名称 "Conditional"。
 func NewConditionalFilter(
 	condition func(ctx context.Context, event, callbackName string, data any) bool,
 	actionOnFalse FilterAction,
-	name ...string,
+	name string,
 ) *ConditionalFilter {
 	n := "Conditional"
-	if len(name) > 0 && name[0] != "" {
-		n = name[0]
+	if name != "" {
+		n = name
 	}
 	return &ConditionalFilter{
 		name:          n,

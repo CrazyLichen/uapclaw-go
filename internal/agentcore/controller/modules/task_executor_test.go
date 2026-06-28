@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -19,8 +19,8 @@ type fakeTaskExecutor struct {
 }
 
 // ExecuteAbility 模拟执行任务
-func (f *fakeTaskExecutor) ExecuteAbility(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-	ch := make(chan *schema.ControllerOutputChunk)
+func (f *fakeTaskExecutor) ExecuteAbility(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+	ch := make(chan *stream.OutputSchema)
 	close(ch)
 	return ch, nil
 }

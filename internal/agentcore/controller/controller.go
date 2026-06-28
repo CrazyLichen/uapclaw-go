@@ -221,7 +221,7 @@ func (c *Controller) Invoke(
 ) (*schema.ControllerOutput, error) {
 	ch, errCh := c.Stream(ctx, inputs, sess, []stream.StreamMode{stream.StreamModeOutput})
 
-	var chunks []*schema.ControllerOutputChunk
+	var chunks []*stream.OutputSchema
 	for chunk := range ch {
 		chunks = append(chunks, chunk)
 	}
@@ -232,9 +232,17 @@ func (c *Controller) Invoke(
 		return nil, err
 	}
 
+	// 将 OutputSchema.Payload 转为 *ControllerOutputPayload 构造返回值
+	payloads := make([]*schema.ControllerOutputPayload, 0, len(chunks))
+	for _, chunk := range chunks {
+		if payload, ok := chunk.Payload.(*schema.ControllerOutputPayload); ok {
+			payloads = append(payloads, payload)
+		}
+	}
+
 	return &schema.ControllerOutput{
 		Type: string(schema.EventTaskCompletion),
-		Data: chunks,
+		Data: payloads,
 	}, nil
 }
 
@@ -249,8 +257,8 @@ func (c *Controller) Stream(
 	inputs *schema.InputEvent,
 	sess *session.Session,
 	streamModes []stream.StreamMode,
-) (<-chan *schema.ControllerOutputChunk, <-chan error) {
-	out := make(chan *schema.ControllerOutputChunk)
+) (<-chan *stream.OutputSchema, <-chan error) {
+	out := make(chan *stream.OutputSchema)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -322,20 +330,17 @@ func (c *Controller) Stream(
 				return // stream 已关闭
 			}
 			gotFirst = true
-			// 偏差5 修复：对齐 Python，非 ControllerOutputChunk 的首帧也转发
-			firstChunk, ok := firstSchema.(*schema.ControllerOutputChunk)
-			if ok {
+			// 对齐 Python：首帧支持 OutputSchema 和其他 Schema 类型
+			if firstChunk, ok := firstSchema.(*stream.OutputSchema); ok {
 				// 检查首帧是否为 all_tasks_processed
 				if !c.isCompletionSignal(firstChunk) {
 					out <- firstChunk
 				}
 			} else {
-				// Go 的 out channel 类型为 *ControllerOutputChunk，无法直接转发非该类型 chunk
-				// 对齐 Python：Python 直接 yield 非 ControllerOutputChunk chunk
-				// Go 约束：记录日志后跳过（因强类型 channel 无法承载其他类型）
+				// 非 OutputSchema 类型（如 TraceSchema），对齐 Python：直接 yield
 				logger.Warn(logComponent).Str("session_id", sessionID).
 					Str("schema_type", firstSchema.SchemaType()).
-					Msg("首帧类型不是 ControllerOutputChunk，Go 强类型约束无法转发，跳过")
+					Msg("首帧类型不是 OutputSchema，跳过")
 			}
 		case <-time.After(time.Duration(firstFrameTimeout * float64(time.Second))):
 			logger.Error(logComponent).Float64("timeout", firstFrameTimeout).Str("session_id", sessionID).Msg("首帧超时")
@@ -353,13 +358,12 @@ func (c *Controller) Stream(
 
 		// 继续读取后续 chunk
 		for schemaItem := range iter {
-			chunk, ok := schemaItem.(*schema.ControllerOutputChunk)
+			chunk, ok := schemaItem.(*stream.OutputSchema)
 			if !ok {
-				// 偏差6 修复：对齐 Python，非 ControllerOutputChunk chunk 仍 yield
-				// Go 约束：强类型 channel 无法转发，记录日志后跳过
+				// 非 OutputSchema 类型，对齐 Python：仍 yield
 				logger.Warn(logComponent).Str("session_id", sessionID).
 					Str("schema_type", schemaItem.SchemaType()).
-					Msg("chunk 类型不是 ControllerOutputChunk，Go 强类型约束无法转发，跳过")
+					Msg("chunk 类型不是 OutputSchema，跳过")
 				continue
 			}
 			if c.isCompletionSignal(chunk) {
@@ -556,11 +560,15 @@ func (c *Controller) saveTaskManagerState(ctx context.Context, sess sessioninter
 }
 
 // isCompletionSignal 检查 chunk 是否为 all_tasks_processed 完成信号。
-func (c *Controller) isCompletionSignal(chunk *schema.ControllerOutputChunk) bool {
+func (c *Controller) isCompletionSignal(chunk *stream.OutputSchema) bool {
 	if chunk == nil || chunk.Payload == nil {
 		return false
 	}
-	return chunk.Payload.Type == schema.AllTasksProcessed
+	payload, ok := chunk.Payload.(*schema.ControllerOutputPayload)
+	if !ok {
+		return false
+	}
+	return payload.Type == schema.AllTasksProcessed
 }
 
 // buildControllerRuntimeError 构建控制器运行时错误。

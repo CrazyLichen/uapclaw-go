@@ -513,6 +513,27 @@ func (s *Session) tagStreamPayload(data any) any {
 			result[k] = val
 		}
 		return result
+	case *stream.OutputSchema:
+		// 指针类型：在副本上修改 Payload 注入 sourceMetadata
+		payload := v.Payload
+		if payloadMap, ok := payload.(map[string]any); ok {
+			newPayload := make(map[string]any, len(payloadMap)+len(s.sourceMetadata))
+			for k, val := range payloadMap {
+				newPayload[k] = val
+			}
+			for k, val := range s.sourceMetadata {
+				newPayload[k] = val
+			}
+			payload = newPayload
+		} else {
+			newPayload := make(map[string]any, 1+len(s.sourceMetadata))
+			newPayload["value"] = payload
+			for k, val := range s.sourceMetadata {
+				newPayload[k] = val
+			}
+			payload = newPayload
+		}
+		return &stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload, IsLastSchema: v.IsLastSchema}
 	case stream.OutputSchema:
 		payload := v.Payload
 		if payloadMap, ok := payload.(map[string]any); ok {
@@ -532,7 +553,7 @@ func (s *Session) tagStreamPayload(data any) any {
 			}
 			payload = newPayload
 		}
-		return stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload}
+		return stream.OutputSchema{Type: v.Type, Index: v.Index, Payload: payload, IsLastSchema: v.IsLastSchema}
 	case stream.CustomSchema:
 		// 对齐 Python：CustomSchema 的 extra="allow" 语义下，metadata 合并进 Data 字段
 		newData := make(map[string]any, len(v.Data)+len(s.sourceMetadata))
@@ -553,11 +574,14 @@ func (s *Session) tagStreamPayload(data any) any {
 // ✅ 5.10 已回填：R1 回填
 //
 // 转换逻辑对齐 Python:
-//   - OutputSchema → 直接返回
+//   - *OutputSchema / OutputSchema → 直接返回（指针解引用为值）
 //   - dict 含 type/index/payload → 构造 OutputSchema（对齐 Pydantic model_validate）
 //   - 其他 → OutputSchema{Type:"message", Index:0, Payload:data}
 func normalizeOutputStream(data any) stream.OutputSchema {
 	switch v := data.(type) {
+	case *stream.OutputSchema:
+		// 指针类型：解引用为值返回（对齐 Python isinstance(data, OutputSchema) 直接 return）
+		return *v
 	case stream.OutputSchema:
 		return v
 	case map[string]any:

@@ -51,10 +51,13 @@ func NewCustomStreamWriter(emitter *StreamEmitter) *customWriter {
 }
 
 // Write 写入标准输出流数据。
-// Schema 为 nil 时返回校验错误；Schema 类型非 OutputSchema 时返回校验错误（对齐 Python OutputStreamWriter 绑定 OutputSchema 的泛型约束）；
+// Schema 为 nil 时返回校验错误；Schema 类型非 OutputSchema/*OutputSchema 时返回校验错误（对齐 Python OutputStreamWriter 绑定 OutputSchema 的泛型约束）；
 // emitter 已关闭时丢弃数据并返回 nil。
 func (w *outputWriter) Write(ctx context.Context, schema Schema) error {
-	if _, ok := schema.(OutputSchema); !ok {
+	switch schema.(type) {
+	case OutputSchema, *OutputSchema:
+		// 值和指针均接受，对齐 Python isinstance(data, OutputSchema) 的继承兼容语义
+	default:
 		return exception.NewBaseError(exception.StatusStreamWriterWriteStreamValidationError,
 			exception.WithMsg("outputWriter 只接受 OutputSchema 类型"),
 			exception.WithParam("schema_type", schemaTypeOf(schema)),
@@ -140,6 +143,8 @@ func schemaTypeOf(schema Schema) string {
 	switch schema.(type) {
 	case OutputSchema:
 		return "OutputSchema"
+	case *OutputSchema:
+		return "*OutputSchema"
 	case TraceSchema:
 		return "TraceSchema"
 	case CustomSchema:

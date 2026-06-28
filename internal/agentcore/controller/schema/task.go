@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -28,7 +29,7 @@ type Task struct {
 	// Inputs 输入事件列表（自定义 JSON 序列化以支持多态）
 	Inputs []Event `json:"inputs,omitempty"`
 	// Outputs 输出分片列表
-	Outputs []*ControllerOutputChunk `json:"outputs,omitempty"`
+	Outputs []*stream.OutputSchema `json:"outputs,omitempty"`
 	// Status 任务状态
 	Status TaskStatus `json:"status"`
 	// ParentTaskID 父任务ID
@@ -53,7 +54,7 @@ type taskJSON struct {
 	Description         string                   `json:"description,omitempty"`
 	Priority            int                      `json:"priority"`
 	Inputs              eventSlice               `json:"inputs,omitempty"`
-	Outputs             []*ControllerOutputChunk `json:"outputs,omitempty"`
+	Outputs             []*stream.OutputSchema   `json:"outputs,omitempty"`
 	Status              TaskStatus               `json:"status"`
 	ParentTaskID        string                   `json:"parent_task_id,omitempty"`
 	ContextID           string                   `json:"context_id,omitempty"`

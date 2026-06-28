@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,7 +31,7 @@ type schedulerFakeSessionFacade struct {
 // configurableFakeTaskExecutor 可配置的模拟任务执行器
 type configurableFakeTaskExecutor struct {
 	// executeFunc 执行函数
-	executeFunc func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error)
+	executeFunc func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error)
 	// canPauseResult 是否可暂停
 	canPauseResult bool
 	// canPauseReason 不可暂停原因
@@ -96,18 +97,19 @@ func (f *schedulerFakeSessionFacade) getWrittenChunks() []any {
 }
 
 // ExecuteAbility 实现 TaskExecutor 接口
-func (e *configurableFakeTaskExecutor) ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
+func (e *configurableFakeTaskExecutor) ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
 	if e.executeFunc != nil {
 		return e.executeFunc(ctx, taskID, sess)
 	}
 	// 默认：发送一个 completion chunk 然后关闭
-	ch := make(chan *schema.ControllerOutputChunk, 1)
-	ch <- &schema.ControllerOutputChunk{
+	ch := make(chan *stream.OutputSchema, 1)
+	ch <- &stream.OutputSchema{
+		Type:         "controller_output",
 		Payload: &schema.ControllerOutputPayload{
 			Type: payloadTypeTaskCompletion,
 			Data: []schema.DataFrame{&schema.TextDataFrame{Text: "done"}},
 		},
-		LastChunk: true,
+		IsLastSchema: true,
 	}
 	close(ch)
 	return ch, nil
@@ -299,16 +301,17 @@ func TestTaskScheduler_并发执行(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk, 1)
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema, 1)
 				go func() {
 					time.Sleep(100 * time.Millisecond)
-					ch <- &schema.ControllerOutputChunk{
+					ch <- &stream.OutputSchema{
+						Type: "controller_output",
 						Payload: &schema.ControllerOutputPayload{
 							Type: payloadTypeTaskCompletion,
 							Data: []schema.DataFrame{&schema.TextDataFrame{Text: "done"}},
 						},
-						LastChunk: true,
+						IsLastSchema: true,
 					}
 					close(ch)
 					completedCount.Add(1)
@@ -369,17 +372,18 @@ func TestTaskScheduler_最大并发限制(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
 				startedCount.Add(1)
-				ch := make(chan *schema.ControllerOutputChunk, 1)
+				ch := make(chan *stream.OutputSchema, 1)
 				go func() {
 					time.Sleep(200 * time.Millisecond)
-					ch <- &schema.ControllerOutputChunk{
+					ch <- &stream.OutputSchema{
+						Type: "controller_output",
 						Payload: &schema.ControllerOutputPayload{
 							Type: payloadTypeTaskCompletion,
 							Data: []schema.DataFrame{&schema.TextDataFrame{Text: "done"}},
 						},
-						LastChunk: true,
+						IsLastSchema: true,
 					}
 					close(ch)
 				}()
@@ -434,8 +438,8 @@ func TestTaskScheduler_暂停任务(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk)
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema)
 				go func() {
 					<-pausedCh // 阻塞直到被暂停
 					close(ch)
@@ -509,8 +513,8 @@ func TestTaskScheduler_取消任务(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk)
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema)
 				go func() {
 					<-canceledCh // 阻塞直到被取消
 					close(ch)
@@ -569,8 +573,8 @@ func TestTaskScheduler_任务超时(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk)
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema)
 				go func() {
 					// 长时间阻塞，等待 context 取消
 					<-ctx.Done()
@@ -645,8 +649,8 @@ func TestTaskScheduler_完成信号(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		chunks := sess.getWrittenChunks()
 		for _, c := range chunks {
-			if chunk, ok := c.(*schema.ControllerOutputChunk); ok {
-				if chunk.Payload != nil && chunk.Payload.Type == schema.AllTasksProcessed {
+			if chunk, ok := c.(*stream.OutputSchema); ok {
+				if payload, ok := chunk.Payload.(*schema.ControllerOutputPayload); ok && payload.Type == schema.AllTasksProcessed {
 					return true
 				}
 			}
@@ -697,8 +701,10 @@ func TestTaskScheduler_抑制完成信号(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	chunks := sess.getWrittenChunks()
 	for _, c := range chunks {
-		if chunk, ok := c.(*schema.ControllerOutputChunk); ok {
-			assert.NotEqual(t, schema.AllTasksProcessed, chunk.Payload.Type)
+		if chunk, ok := c.(*stream.OutputSchema); ok {
+			if payload, ok := chunk.Payload.(*schema.ControllerOutputPayload); ok {
+				assert.NotEqual(t, schema.AllTasksProcessed, payload.Type)
+			}
 		}
 	}
 }
@@ -754,14 +760,15 @@ func TestTaskScheduler_执行TaskInteraction(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk, 1)
-				ch <- &schema.ControllerOutputChunk{
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema, 1)
+				ch <- &stream.OutputSchema{
+					Type: "controller_output",
 					Payload: &schema.ControllerOutputPayload{
 						Type: payloadTypeTaskInteraction,
 						Data: []schema.DataFrame{&schema.TextDataFrame{Text: "请确认"}},
 					},
-					LastChunk: true,
+					IsLastSchema: true,
 				}
 				close(ch)
 				return ch, nil
@@ -805,14 +812,15 @@ func TestTaskScheduler_执行TaskFailed(t *testing.T) {
 		return &configurableFakeTaskExecutor{
 			canPauseResult:  true,
 			canCancelResult: true,
-			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-				ch := make(chan *schema.ControllerOutputChunk, 1)
-				ch <- &schema.ControllerOutputChunk{
+			executeFunc: func(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+				ch := make(chan *stream.OutputSchema, 1)
+				ch <- &stream.OutputSchema{
+					Type: "controller_output",
 					Payload: &schema.ControllerOutputPayload{
 						Type: payloadTypeTaskFailed,
 						Data: []schema.DataFrame{&schema.TextDataFrame{Text: "执行失败"}},
 					},
-					LastChunk: true,
+					IsLastSchema: true,
 				}
 				close(ch)
 				return ch, nil

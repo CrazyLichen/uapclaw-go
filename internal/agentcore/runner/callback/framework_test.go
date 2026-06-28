@@ -1439,6 +1439,63 @@ func TestCallbackFramework_AddFilter(t *testing.T) {
 	}
 }
 
+// TestCallbackFramework_FilterModify_修改LLM参数 测试 FilterActionModify 在 triggerCallbacks 中修改执行参数
+func TestCallbackFramework_FilterModify_修改LLM参数(t *testing.T) {
+	fw := NewCallbackFramework()
+	var receivedModel string
+
+	// 全局 ParamModifyFilter：修改 LLMCallEventData 的 ModelName
+	fw.AddGlobalFilter(&ParamModifyFilter{
+		Modifier: func(data any) any {
+			if d, ok := data.(*LLMCallEventData); ok {
+				d.ModelName = "modified-model"
+				return d
+			}
+			return data
+		},
+	})
+
+	fw.OnLLM(LLMCallStarted, func(_ context.Context, data *LLMCallEventData) any {
+		receivedModel = data.ModelName
+		return nil
+	})
+
+	fw.TriggerLLM(context.Background(), &LLMCallEventData{Event: LLMCallStarted, ModelName: "original-model"})
+	if receivedModel != "modified-model" {
+		t.Errorf("FilterModify 后 ModelName 期望 modified-model，实际 %s", receivedModel)
+	}
+}
+
+// TestCallbackFramework_FilterModify_修改CustomData 测试 FilterActionModify 在自定义域中修改 map[string]any 数据
+func TestCallbackFramework_FilterModify_修改CustomData(t *testing.T) {
+	fw := NewCallbackFramework()
+	var receivedValue any
+
+	// 全局 ParamModifyFilter：在 data 中添加 modified=true
+	fw.AddGlobalFilter(&ParamModifyFilter{
+		Modifier: func(data any) any {
+			if m, ok := data.(map[string]any); ok {
+				m["modified"] = true
+				return m
+			}
+			return data
+		},
+	})
+
+	fw.OnCustom("modify_event", func(_ context.Context, data map[string]any) any {
+		receivedValue = data["modified"]
+		return "ok"
+	})
+
+	results := fw.TriggerCustom(context.Background(), "modify_event", map[string]any{"key": "val"})
+	if len(results) != 1 || results[0] != "ok" {
+		t.Errorf("期望 [ok]，实际 %v", results)
+	}
+	if receivedValue != true {
+		t.Errorf("FilterModify 后数据应包含 modified=true，实际 %v", receivedValue)
+	}
+}
+
 // TestCallbackFramework_AddCircuitBreaker 测试添加熔断器
 func TestCallbackFramework_AddCircuitBreaker(t *testing.T) {
 	fw := NewCallbackFramework()
@@ -1492,6 +1549,63 @@ func TestCallbackFramework_TriggerParallel(t *testing.T) {
 	}
 }
 
+// TestCallbackFramework_TriggerParallel_多回调并发 测试多个回调并发执行
+func TestCallbackFramework_TriggerParallel_多回调并发(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableMetrics(true)
+	var callCount int32
+
+	// 注册 3 个回调
+	for i := 0; i < 3; i++ {
+		fw.OnCustom("parallel_multi", func(_ context.Context, _ map[string]any) any {
+			atomic.AddInt32(&callCount, 1)
+			return "ok"
+		})
+	}
+
+	results := fw.TriggerParallel(context.Background(), "parallel_multi", nil)
+	if atomic.LoadInt32(&callCount) != 3 {
+		t.Errorf("期望 3 个回调都执行，实际 %d", callCount)
+	}
+	if len(results) != 3 {
+		t.Errorf("期望 3 个结果，实际 %d", len(results))
+	}
+}
+
+// TestCallbackFramework_TriggerParallel_过滤器SKIP 测试并发触发中过滤器 SKIP
+func TestCallbackFramework_TriggerParallel_过滤器SKIP(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	// 全局过滤器 SKIP
+	fw.AddGlobalFilter(&ConditionalFilter{
+		Condition:     func(_ context.Context, _ string, _ string, _ any) bool { return false },
+		ActionOnFalse: FilterActionSkip,
+	})
+
+	fw.OnCustom("parallel_filtered", func(_ context.Context, _ map[string]any) any {
+		atomic.AddInt32(&called, 1)
+		return "result"
+	})
+
+	results := fw.TriggerParallel(context.Background(), "parallel_filtered", nil)
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("过滤器 SKIP 后回调不应执行，实际 %d", called)
+	}
+	if len(results) != 0 {
+		t.Errorf("期望空结果，实际 %v", results)
+	}
+}
+
+// TestCallbackFramework_TriggerParallel_无回调 测试并发触发无回调事件
+func TestCallbackFramework_TriggerParallel_无回调(t *testing.T) {
+	fw := NewCallbackFramework()
+	results := fw.TriggerParallel(context.Background(), "no_callbacks", nil)
+	if results != nil {
+		t.Errorf("无回调期望 nil，实际 %v", results)
+	}
+}
+
 // TestCallbackFramework_TriggerUntil 测试触发直到条件满足
 func TestCallbackFramework_TriggerUntil(t *testing.T) {
 	fw := NewCallbackFramework()
@@ -1514,6 +1628,159 @@ func TestCallbackFramework_TriggerUntil(t *testing.T) {
 	}, nil)
 	if result2 != nil {
 		t.Errorf("无匹配期望 nil，实际 %v", result2)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_过滤器管线 测试 TriggerUntil 过滤器管线
+func TestCallbackFramework_TriggerUntil_过滤器管线(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	// 全局过滤器 SKIP
+	fw.AddGlobalFilter(&ConditionalFilter{
+		Condition:     func(_ context.Context, _ string, _ string, _ any) bool { return false },
+		ActionOnFalse: FilterActionSkip,
+	})
+
+	fw.OnCustom("until_filtered", func(_ context.Context, _ map[string]any) any {
+		atomic.AddInt32(&called, 1)
+		return "match"
+	})
+
+	result := fw.TriggerUntil(context.Background(), "until_filtered", func(r any) bool {
+		return r == "match"
+	}, nil)
+
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("过滤器 SKIP 后回调不应执行，实际 %d", called)
+	}
+	if result != nil {
+		t.Errorf("过滤后期望 nil，实际 %v", result)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_过滤器STOP 测试 TriggerUntil 过滤器 STOP 终止循环
+func TestCallbackFramework_TriggerUntil_过滤器STOP(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	// 全局过滤器 STOP
+	fw.AddGlobalFilter(&ConditionalFilter{
+		Condition:     func(_ context.Context, _ string, _ string, _ any) bool { return false },
+		ActionOnFalse: FilterActionStop,
+	})
+
+	fw.OnCustom("until_stop", func(_ context.Context, _ map[string]any) any {
+		atomic.AddInt32(&called, 1)
+		return "match"
+	})
+
+	result := fw.TriggerUntil(context.Background(), "until_stop", func(r any) bool {
+		return r == "match"
+	}, nil)
+
+	if atomic.LoadInt32(&called) != 0 {
+		t.Errorf("过滤器 STOP 后回调不应执行，实际 %d", called)
+	}
+	if result != nil {
+		t.Errorf("STOP 后期望 nil，实际 %v", result)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_Once 测试 TriggerUntil 的 once 处理
+func TestCallbackFramework_TriggerUntil_Once(t *testing.T) {
+	fw := NewCallbackFramework()
+	var called int32
+
+	fw.OnCustom("until_once", func(_ context.Context, _ map[string]any) any {
+		atomic.AddInt32(&called, 1)
+		return 5
+	}, WithOnce())
+
+	// 第一次：条件不满足，once 回调被禁用
+	result := fw.TriggerUntil(context.Background(), "until_once", func(r any) bool {
+		return r == 10
+	}, nil)
+	if result != nil {
+		t.Errorf("条件不满足期望 nil，实际 %v", result)
+	}
+
+	// 第二次：once 回调已禁用，不再执行
+	result2 := fw.TriggerUntil(context.Background(), "until_once", func(r any) bool {
+		return r == 5
+	}, nil)
+	if result2 != nil {
+		t.Errorf("Once 回调禁用后期望 nil，实际 %v", result2)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_优先级遍历 测试 TriggerUntil 按优先级遍历
+func TestCallbackFramework_TriggerUntil_优先级遍历(t *testing.T) {
+	fw := NewCallbackFramework()
+	var callOrder []string
+
+	fw.OnCustom("until_priority", func(_ context.Context, _ map[string]any) any {
+		callOrder = append(callOrder, "low")
+		return 5
+	})
+	fw.OnCustom("until_priority", func(_ context.Context, _ map[string]any) any {
+		callOrder = append(callOrder, "high")
+		return 10
+	}, WithPriority(10))
+
+	// 高优先级先执行，返回 10，满足条件
+	result := fw.TriggerUntil(context.Background(), "until_priority", func(r any) bool {
+		return r == 10
+	}, nil)
+
+	if result != 10 {
+		t.Errorf("期望 10，实际 %v", result)
+	}
+	// 高优先级先执行后返回，低优先级不应执行
+	if len(callOrder) != 1 || callOrder[0] != "high" {
+		t.Errorf("期望 [high]，实际 %v", callOrder)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_过滤器MODIFY 测试 TriggerUntil MODIFY 修改参数
+func TestCallbackFramework_TriggerUntil_过滤器MODIFY(t *testing.T) {
+	fw := NewCallbackFramework()
+	var receivedValue any
+
+	// 添加参数修改过滤器
+	fw.AddGlobalFilter(&ParamModifyFilter{
+		Modifier: func(data any) any {
+			if m, ok := data.(map[string]any); ok {
+				m["modified"] = true
+				return m
+			}
+			return data
+		},
+	})
+
+	fw.OnCustom("until_modify", func(_ context.Context, data map[string]any) any {
+		receivedValue = data["modified"]
+		return "ok"
+	})
+
+	result := fw.TriggerUntil(context.Background(), "until_modify", func(r any) bool {
+		return r == "ok"
+	}, map[string]any{"key": "val"})
+
+	if result != "ok" {
+		t.Errorf("期望 ok，实际 %v", result)
+	}
+	if receivedValue != true {
+		t.Errorf("MODIFY 后数据应包含 modified=true，实际 %v", receivedValue)
+	}
+}
+
+// TestCallbackFramework_TriggerUntil_无回调 测试 TriggerUntil 无回调事件
+func TestCallbackFramework_TriggerUntil_无回调(t *testing.T) {
+	fw := NewCallbackFramework()
+	result := fw.TriggerUntil(context.Background(), "no_callbacks", func(r any) bool { return true }, nil)
+	if result != nil {
+		t.Errorf("无回调期望 nil，实际 %v", result)
 	}
 }
 

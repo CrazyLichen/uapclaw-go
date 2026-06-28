@@ -7,8 +7,8 @@ import (
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -20,7 +20,7 @@ import (
 type TaskExecutor interface {
 	// ExecuteAbility 执行任务，返回输出分片 channel。
 	// channel 关闭表示执行结束。
-	ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error)
+	ExecuteAbility(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error)
 	// CanPause 检查任务是否可暂停，返回 (是否可暂停, 原因)。
 	CanPause(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade) (bool, string, error)
 	// Pause 暂停任务，返回 (是否成功, 系统级错误)。

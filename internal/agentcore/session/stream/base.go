@@ -22,6 +22,9 @@ type Schema interface {
 
 // OutputSchema 标准输出流数据，对应 Python OutputSchema。
 // 框架标准流数据，有 Index 字段用于排序。
+// IsLastSchema 标识是否为最后一帧，对齐 Python ControllerOutputChunk.last_chunk。
+// Payload 为 any 类型，controller 场景下存放 *schema.ControllerOutputPayload，
+// 其他场景存放任意数据（对齐 Python OutputSchema.payload: Any）。
 type OutputSchema struct {
 	// Type 数据类型标识
 	Type string
@@ -29,6 +32,8 @@ type OutputSchema struct {
 	Index int
 	// Payload 实际数据载荷
 	Payload any
+	// IsLastSchema 是否最后一帧（对齐 Python ControllerOutputChunk.last_chunk）
+	IsLastSchema bool
 }
 
 // TraceSchema 追踪流数据，对应 Python TraceSchema。

@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -48,6 +49,8 @@ type TaskScheduler struct {
 	notifyCh chan struct{}
 	// cancelFunc 调度 goroutine 取消函数
 	cancelFunc context.CancelFunc
+	// wg 等待所有任务 goroutine 退出（对齐 Python: asyncio.gather）
+	wg sync.WaitGroup
 }
 
 // runningTaskEntry 运行中任务条目。
@@ -483,6 +486,7 @@ func (s *TaskScheduler) schedule(ctx context.Context) {
 			s.runningTasks[task.TaskID] = entry
 			s.mu.Unlock()
 
+			s.wg.Add(1)
 			go s.executeTaskWrapper(taskCtx, task.TaskID, sess, entry)
 
 			logger.Info(logComponent).
@@ -601,14 +605,13 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 				Msg("写入流数据失败")
 		}
 
-		// 7. 根据 payload.type 判断状态
-		if chunk.Payload == nil {
+		// 7. 根据 payload.type 判断状态（Payload 为 any，类型断言为 *ControllerOutputPayload）
+		payload, ok := chunk.Payload.(*schema.ControllerOutputPayload)
+		if !ok || payload == nil {
 			continue
 		}
 
-		payloadType := chunk.Payload.Type
-
-		switch payloadType {
+		switch payload.Type {
 		case payloadTypeTaskCompletion:
 			// TASK_COMPLETION → COMPLETED
 			if err := s.taskManager.UpdateTaskStatus(ctx, taskID, schema.TaskCompleted); err != nil {
@@ -623,7 +626,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 				Str("task_id", taskID).
 				Msg("任务已完成")
 			// 发布任务事件
-			s.publishTaskEvent(ctx, taskID, chunk, sess)
+			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
 
 		case payloadTypeTaskInteraction:
@@ -640,14 +643,14 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 				Str("task_id", taskID).
 				Msg("任务需要用户输入")
 			// 发布任务事件
-			s.publishTaskEvent(ctx, taskID, chunk, sess)
+			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
 
 		case payloadTypeTaskFailed:
 			// TASK_FAILED → FAILED
 			errMsg := ""
-			if chunk.Payload.Metadata != nil {
-				if msg, ok := chunk.Payload.Metadata["error_message"].(string); ok {
+			if payload.Metadata != nil {
+				if msg, ok := payload.Metadata["error_message"].(string); ok {
 					errMsg = msg
 				}
 			}
@@ -663,7 +666,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 				Str("task_id", taskID).
 				Msg("任务已失败")
 			// 发布任务事件
-			s.publishTaskEvent(ctx, taskID, chunk, sess)
+			s.publishTaskEvent(ctx, taskID, payload, sess)
 			return
 
 		case schema.TaskProcessing:
@@ -677,7 +680,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			// 未知类型，继续处理下一个 chunk
 			logger.Debug(logComponent).
 				Str("task_id", taskID).
-				Str("payload_type", payloadType).
+				Str("payload_type", payload.Type).
 				Msg("未知 payload 类型")
 		}
 	}
@@ -687,6 +690,8 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 //
 // 对齐 Python: TaskScheduler._execute_task_wrapper
 func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, sess sessioninterfaces.SessionFacade, entry *runningTaskEntry) {
+	defer s.wg.Done()
+
 	defer func() {
 		// 通知 goroutine 已退出
 		if entry != nil && entry.done != nil {
@@ -805,14 +810,15 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 	}
 
 	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
-	chunk := &schema.ControllerOutputChunk{
+	chunk := &stream.OutputSchema{
+		Type:    "controller_output",
 		Payload: &schema.ControllerOutputPayload{
 			Type: schema.AllTasksProcessed,
 			Data: []schema.DataFrame{
 				&schema.TextDataFrame{Text: "All tasks have been successfully processed"},
 			},
 		},
-		LastChunk: true,
+		IsLastSchema: true,
 	}
 	if err := sess.WriteStream(ctx, chunk); err != nil {
 		logger.Error(logComponent).
@@ -858,25 +864,23 @@ func (s *TaskScheduler) handleTaskExecutionFailure(ctx context.Context, taskID s
 	// 1. 更新任务状态为 FAILED
 	_ = s.taskManager.UpdateTaskStatus(ctx, taskID, schema.TaskFailed, WithErrorMessage(errorMsg))
 
-	// 2. 构建 failed chunk（对齐 Python: ControllerOutputPayload(type=TASK_FAILED, data=[TextDataFrame(text=error_msg)])）
-	failedChunk := &schema.ControllerOutputChunk{
-		Payload: &schema.ControllerOutputPayload{
-			Type: payloadTypeTaskFailed,
-			Data: []schema.DataFrame{
-				&schema.TextDataFrame{Text: errorMsg},
-			},
+	// 2. 构建 failed payload（对齐 Python: ControllerOutputPayload(type=TASK_FAILED, data=[TextDataFrame(text=error_msg)])）
+	failedPayload := &schema.ControllerOutputPayload{
+		Type: payloadTypeTaskFailed,
+		Data: []schema.DataFrame{
+			&schema.TextDataFrame{Text: errorMsg},
 		},
 	}
 
 	// 3. 发布 TaskFailedEvent
-	s.publishTaskEvent(ctx, taskID, failedChunk, sess)
+	s.publishTaskEvent(ctx, taskID, failedPayload, sess)
 }
 
-// publishTaskEvent 根据 chunk.payload.type 构建事件并通过 EventQueue 发布。
+// publishTaskEvent 根据 payload.type 构建事件并通过 EventQueue 发布。
 //
 // 对齐 Python: TaskScheduler._publish_task_event
-func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, chunk *schema.ControllerOutputChunk, sess sessioninterfaces.SessionFacade) {
-	if s.eventQueue == nil || chunk.Payload == nil {
+func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, payload *schema.ControllerOutputPayload, sess sessioninterfaces.SessionFacade) {
+	if s.eventQueue == nil || payload == nil {
 		return
 	}
 
@@ -900,24 +904,24 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, chu
 
 	var event schema.Event
 
-	switch chunk.Payload.Type {
+	switch payload.Type {
 	case payloadTypeTaskCompletion:
 		event = &schema.TaskCompletionEvent{
 			BaseEvent:  *schema.NewBaseEvent(schema.EventTaskCompletion),
-			TaskResult: chunk.Payload.Data,
+			TaskResult: payload.Data,
 			Task:       task,
 		}
 	case payloadTypeTaskInteraction:
 		event = &schema.TaskInteractionEvent{
 			BaseEvent:   *schema.NewBaseEvent(schema.EventTaskInteraction),
-			Interaction: chunk.Payload.Data,
+			Interaction: payload.Data,
 			Task:        task,
 		}
 	case payloadTypeTaskFailed:
 		// 对齐 Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
 		errMsg := "Unknown error"
-		if len(chunk.Payload.Data) > 0 {
-			if textDF, ok := chunk.Payload.Data[0].(*schema.TextDataFrame); ok {
+		if len(payload.Data) > 0 {
+			if textDF, ok := payload.Data[0].(*schema.TextDataFrame); ok {
 				errMsg = textDF.Text
 			}
 		}
@@ -956,23 +960,18 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, chu
 		logger.Info(logComponent).
 			Str("event_type", "task_event_published").
 			Str("task_id", taskID).
-			Str("payload_type", chunk.Payload.Type).
+			Str("payload_type", payload.Type).
 			Msg("任务事件已发布")
 	}
 }
 
-// waitAllTasksComplete 收集所有运行中任务的 CancelFunc，调用 cancel 并等待退出。
+// waitAllTasksComplete 取消所有运行中任务并等待退出。
 //
-// 对齐 Python: TaskScheduler._wait_all_tasks_complete
+// 对齐 Python: TaskScheduler._wait_all_tasks_complete（使用 asyncio.gather 等待）
 func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
+	// 取消所有运行中任务
 	s.mu.Lock()
-	entries := make(map[string]*runningTaskEntry, len(s.runningTasks))
 	for id, entry := range s.runningTasks {
-		entries[id] = entry
-	}
-	s.mu.Unlock()
-
-	for id, entry := range entries {
 		if entry.cancel != nil {
 			entry.cancel()
 		}
@@ -980,20 +979,20 @@ func (s *TaskScheduler) waitAllTasksComplete(_ context.Context) {
 			Str("event_type", "task_cancel_on_stop").
 			Str("task_id", id).
 			Msg("停止时取消运行中任务")
-		// 等待 goroutine 退出
-		s.waitForTaskDone(entry.done, id)
 	}
+	s.mu.Unlock()
 
-	// 等待 runningTasks 清空
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		s.mu.Lock()
-		count := len(s.runningTasks)
-		s.mu.Unlock()
-		if count == 0 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	// 等待所有任务 goroutine 退出（对齐 Python: asyncio.gather）
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// 所有任务 goroutine 已退出
+	case <-time.After(5 * time.Second):
+		logger.Warn(logComponent).Msg("等待任务完成超时（5s）")
 	}
 }
 

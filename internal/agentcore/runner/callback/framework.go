@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1164,7 +1166,7 @@ func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failu
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	key := event + ":" + callbackName
-	fw.circuitBreakers[key] = NewCircuitBreakerFilter(failureThreshold, timeout)
+	fw.circuitBreakers[key] = NewCircuitBreakerFilter(failureThreshold, timeout, "")
 }
 
 // AddHook 添加生命周期钩子
@@ -1194,33 +1196,151 @@ func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, dat
 	return chain.Execute(ctx, cctx)
 }
 
-// TriggerParallel 并发触发
+// TriggerParallel 并发触发，使用 errgroup 并行执行所有回调。
+//
+// 对应 Python: AsyncCallbackFramework.trigger_parallel(event, *args, **kwargs)
 func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, data map[string]any) []any {
-	results, _ := triggerCallbacks(fw.customCallbacks, event, data, ctx, &fw.mu,
-		strategyCollect,
-		func(fn CustomCallbackFunc, ctx context.Context, data map[string]any) (any, error) {
-			return fn(ctx, data), nil
-		},
-		fw,
-	)
-	return results
-}
-
-// TriggerUntil 触发直到条件满足
-func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, condition func(any) bool, data map[string]any) any {
 	fw.mu.RLock()
 	callbacks := fw.customCallbacks[event]
 	fw.mu.RUnlock()
+
+	if len(callbacks) == 0 {
+		return nil
+	}
+
+	// BEFORE 钩子执行
+	fw.executeHooks(ctx, event, HookTypeBefore, data)
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	var resultsMu sync.Mutex
+	var results []any
 
 	for _, info := range callbacks {
 		if !info.Enabled || info.CallbackType == "transform" {
 			continue
 		}
-		result := info.Callback(ctx, data)
+		cbInfo := info // 捕获循环变量
+
+		eg.Go(func() error {
+			// 检查 errgroup 上下文是否已取消
+			if egCtx.Err() != nil {
+				return egCtx.Err()
+			}
+
+			// 过滤器检查（全局 → 事件 → 回调级三级管线）
+			filterResult := fw.applyFilters(egCtx, event, cbInfo, data)
+			switch filterResult.Action {
+			case FilterActionStop:
+				return nil // STOP：跳过此回调，不中断其他并发回调
+			case FilterActionSkip:
+				return nil
+			}
+
+			// 熔断器检查
+			cbKey := event + ":" + getCallbackName(cbInfo)
+			if cb, ok := fw.circuitBreakers[cbKey]; ok && cb.IsOpen(cbKey) {
+				return nil // 熔断器打开，跳过此回调
+			}
+
+			// 执行回调
+			startTime := time.Now()
+			result, err := cbInfo.Callback(egCtx, data), error(nil)
+			executionTime := time.Since(startTime).Seconds()
+
+			if err != nil {
+				// ERROR 钩子执行
+				fw.executeHooks(egCtx, event, HookTypeError, err)
+				if fw.enableMetrics {
+					fw.updateMetrics(cbKey, executionTime, true)
+				}
+				return nil // 单个回调错误不中断并发执行
+			}
+
+			// 指标记录
+			if fw.enableMetrics {
+				fw.updateMetrics(cbKey, executionTime, false)
+			}
+
+			resultsMu.Lock()
+			results = append(results, result)
+			resultsMu.Unlock()
+
+			return nil
+		})
+	}
+
+	// 等待所有并发回调完成（忽略 errgroup 中的错误，因为上面已 return nil）
+	_ = eg.Wait()
+
+	// AFTER 钩子执行
+	fw.executeHooks(ctx, event, HookTypeAfter, data)
+
+	return results
+}
+
+// TriggerUntil 触发回调直到条件满足。
+//
+// 按优先级顺序遍历注册在 event 上的回调，对每个回调依次执行：
+//  1. 跳过 enabled=false 或 callbackType="transform" 的回调
+//  2. 应用过滤器管线（全局→事件→回调级），STOP 终止循环，SKIP 跳过当前回调，MODIFY 使用修改后数据
+//  3. 执行回调
+//  4. 检查 condition(result)，满足则处理 once 后返回 result
+//  5. 不满足则处理 once 后继续下一个回调
+//  6. 异常时记录 ERROR 钩子并继续
+//
+// 对应 Python: AsyncCallbackFramework.trigger_until(event, condition, *args, **kwargs)
+func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, condition func(any) bool, data map[string]any) any {
+	fw.mu.RLock()
+	callbacks := fw.customCallbacks[event]
+	fw.mu.RUnlock()
+
+	if len(callbacks) == 0 {
+		return nil
+	}
+
+	for _, info := range callbacks {
+		if !info.Enabled || info.CallbackType == "transform" {
+			continue
+		}
+
+		// 过滤器检查（全局 → 事件 → 回调级三级管线）
+		filterResult := fw.applyFilters(ctx, event, info, data)
+		switch filterResult.Action {
+		case FilterActionStop:
+			return nil // STOP：终止整个循环
+		case FilterActionSkip:
+			continue // SKIP：跳过当前回调
+		case FilterActionModify:
+			// MODIFY：使用修改后数据
+			if modified, ok := filterResult.ModifiedData.(map[string]any); ok {
+				data = modified
+			}
+		}
+
+		// 执行回调
+		result, err := info.Callback(ctx, data), error(nil)
+
+		if err != nil {
+			// ERROR 钩子执行
+			fw.executeHooks(ctx, event, HookTypeError, err)
+			continue // 异常时继续下一个回调
+		}
+
+		// 检查条件
 		if condition(result) {
+			// 处理 once-only 回调
+			if info.Once {
+				info.Enabled = false
+			}
 			return result
 		}
+
+		// 条件不满足，处理 once-only 回调
+		if info.Once {
+			info.Enabled = false
+		}
 	}
+
 	return nil
 }
 
@@ -1342,9 +1462,10 @@ func triggerCallbacks[F any, E comparable, D any](
 	mu.RUnlock()
 
 	eventStr := fmt.Sprintf("%v", event)
+	hasFramework := fw != nil
 
 	// BEFORE 钩子执行
-	if fw != nil {
+	if hasFramework {
 		fw.executeHooks(ctx, eventStr, HookTypeBefore, data)
 	}
 
@@ -1357,8 +1478,11 @@ func triggerCallbacks[F any, E comparable, D any](
 			continue
 		}
 
+		// 当前回调使用的执行数据（MODIFY 可能修改）
+		execData := data
+
 		// 过滤器检查（全局 → 事件 → 回调级三级管线）
-		if fw != nil {
+		if hasFramework {
 			filterResult := fw.applyFilters(ctx, eventStr, info, data)
 			switch filterResult.Action {
 			case FilterActionStop:
@@ -1366,13 +1490,16 @@ func triggerCallbacks[F any, E comparable, D any](
 			case FilterActionSkip:
 				continue
 			case FilterActionModify:
-				// 对于 MODIFY，修改 data（但 data 是泛型 D，这里简化处理，记录修改但不改变执行参数）
+				// MODIFY：用修改后数据替换执行参数
+				if modified, ok := filterResult.ModifiedData.(D); ok {
+					execData = modified
+				}
 			}
 		}
 
 		// 熔断器检查
 		cbKey := eventStr + ":" + getCallbackName(info)
-		if fw != nil {
+		if hasFramework {
 			if cb, ok := fw.circuitBreakers[cbKey]; ok && cb.IsOpen(cbKey) {
 				continue // 熔断器打开，跳过此回调
 			}
@@ -1395,7 +1522,7 @@ func triggerCallbacks[F any, E comparable, D any](
 			}
 
 			startTime := time.Now()
-			result, err = execute(info.Callback, executeCtx, data)
+			result, err = execute(info.Callback, executeCtx, execData)
 			executionTime := time.Since(startTime).Seconds()
 
 			if cancel != nil {
@@ -1404,11 +1531,11 @@ func triggerCallbacks[F any, E comparable, D any](
 
 			if err == nil {
 				// 指标记录（is_error=False）
-				if fw != nil && fw.enableMetrics {
+				if hasFramework && fw.enableMetrics {
 					fw.updateMetrics(cbKey, executionTime, false)
 				}
 				// 熔断器记录成功
-				if fw != nil {
+				if hasFramework {
 					if cb, ok := fw.circuitBreakers[cbKey]; ok {
 						parts := splitCircuitBreakerKey(cbKey)
 						cb.RecordSuccess(parts[0], parts[1])
@@ -1421,7 +1548,7 @@ func triggerCallbacks[F any, E comparable, D any](
 			var abortErr *AbortError
 			if errors.As(err, &abortErr) {
 				// ERROR 钩子执行（传入 abortErr.Cause ?? abortErr）
-				if fw != nil {
+				if hasFramework {
 					hookErr := error(abortErr)
 					if abortErr.Cause != nil {
 						hookErr = abortErr.Cause
@@ -1429,11 +1556,11 @@ func triggerCallbacks[F any, E comparable, D any](
 					fw.executeHooks(ctx, eventStr, HookTypeError, hookErr)
 				}
 				// 指标记录（is_error=True）
-				if fw != nil && fw.enableMetrics {
+				if hasFramework && fw.enableMetrics {
 					fw.updateMetrics(cbKey, executionTime, true)
 				}
 				// 熔断器记录失败
-				if fw != nil {
+				if hasFramework {
 					if cb, ok := fw.circuitBreakers[cbKey]; ok {
 						parts := splitCircuitBreakerKey(cbKey)
 						cb.RecordFailure(parts[0], parts[1])
@@ -1448,15 +1575,15 @@ func triggerCallbacks[F any, E comparable, D any](
 
 			// 普通错误处理
 			// ERROR 钩子执行
-			if fw != nil {
+			if hasFramework {
 				fw.executeHooks(ctx, eventStr, HookTypeError, err)
 			}
 			// 指标记录（is_error=True）
-			if fw != nil && fw.enableMetrics {
+			if hasFramework && fw.enableMetrics {
 				fw.updateMetrics(cbKey, executionTime, true)
 			}
 			// 熔断器记录失败
-			if fw != nil {
+			if hasFramework {
 				if cb, ok := fw.circuitBreakers[cbKey]; ok {
 					parts := splitCircuitBreakerKey(cbKey)
 					cb.RecordFailure(parts[0], parts[1])
@@ -1484,7 +1611,7 @@ func triggerCallbacks[F any, E comparable, D any](
 	}
 
 	// AFTER 钩子执行
-	if fw != nil {
+	if hasFramework {
 		fw.executeHooks(ctx, eventStr, HookTypeAfter, data)
 	}
 

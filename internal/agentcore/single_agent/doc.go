@@ -11,7 +11,7 @@
 //
 //	single_agent/
 //	├── doc.go                 # 包文档
-//	├── base.go                # BaseAgent — Agent 基础配置/管理容器
+//	├── reexports.go           # 子包类型别名 re-export
 //	├── ability/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── ability_manager.go # AbilityManager 核心结构 + 注册/查询/执行
@@ -25,6 +25,8 @@
 //	├── interfaces/
 //	│   ├── doc.go             # 子包文档
 //	│   └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	├── interrupt/
+//	│   └── ...                # HITL 中断处理
 //	├── rail/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── context.go         # AgentCallbackContext 结构体与方法

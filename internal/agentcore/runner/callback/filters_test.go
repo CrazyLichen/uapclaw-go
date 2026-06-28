@@ -10,7 +10,7 @@ import (
 
 // TestRateLimitFilter_未超限返回Continue 测试限流未超限时返回 CONTINUE
 func TestRateLimitFilter_未超限返回Continue(t *testing.T) {
-	f := NewRateLimitFilter(3, 1.0)
+	f := NewRateLimitFilter(3, 1.0, "")
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
@@ -23,7 +23,7 @@ func TestRateLimitFilter_未超限返回Continue(t *testing.T) {
 
 // TestRateLimitFilter_超限返回Skip 测试限流超限时返回 SKIP
 func TestRateLimitFilter_超限返回Skip(t *testing.T) {
-	f := NewRateLimitFilter(2, 10.0)
+	f := NewRateLimitFilter(2, 10.0, "")
 	ctx := context.Background()
 
 	// 前两次应该通过
@@ -46,7 +46,7 @@ func TestRateLimitFilter_超限返回Skip(t *testing.T) {
 
 // TestRateLimitFilter_窗口过期后重置 测试时间窗口过期后限流重置
 func TestRateLimitFilter_窗口过期后重置(t *testing.T) {
-	f := NewRateLimitFilter(1, 0.05) // 50ms 窗口
+	f := NewRateLimitFilter(1, 0.05, "") // 50ms 窗口
 	ctx := context.Background()
 
 	// 第一次通过
@@ -73,7 +73,7 @@ func TestRateLimitFilter_窗口过期后重置(t *testing.T) {
 
 // TestRateLimitFilter_不同键独立计数 测试不同 event:callbackName 键独立计数
 func TestRateLimitFilter_不同键独立计数(t *testing.T) {
-	f := NewRateLimitFilter(1, 10.0)
+	f := NewRateLimitFilter(1, 10.0, "")
 	ctx := context.Background()
 
 	// 第一个键通过
@@ -91,7 +91,7 @@ func TestRateLimitFilter_不同键独立计数(t *testing.T) {
 
 // TestRateLimitFilter_Name 测试 Name 方法
 func TestRateLimitFilter_Name(t *testing.T) {
-	f := NewRateLimitFilter(1, 1.0)
+	f := NewRateLimitFilter(1, 1.0, "")
 	if f.Name() != "RateLimit" {
 		t.Errorf("期望名称 RateLimit，实际 %s", f.Name())
 	}
@@ -103,7 +103,7 @@ func TestRateLimitFilter_Name(t *testing.T) {
 
 // TestCircuitBreakerFilter_断路关闭时返回Continue 测试断路器关闭时正常放行
 func TestCircuitBreakerFilter_断路关闭时返回Continue(t *testing.T) {
-	f := NewCircuitBreakerFilter(3, 60.0)
+	f := NewCircuitBreakerFilter(3, 60.0, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", nil)
@@ -114,7 +114,7 @@ func TestCircuitBreakerFilter_断路关闭时返回Continue(t *testing.T) {
 
 // TestCircuitBreakerFilter_断路打开时返回Skip 测试断路器打开时返回 SKIP
 func TestCircuitBreakerFilter_断路打开时返回Skip(t *testing.T) {
-	f := NewCircuitBreakerFilter(2, 60.0)
+	f := NewCircuitBreakerFilter(2, 60.0, "")
 	ctx := context.Background()
 
 	// 记录足够失败次数打开断路器
@@ -132,7 +132,7 @@ func TestCircuitBreakerFilter_断路打开时返回Skip(t *testing.T) {
 
 // TestCircuitBreakerFilter_超时后重置 测试断路器超时后尝试重置
 func TestCircuitBreakerFilter_超时后重置(t *testing.T) {
-	f := NewCircuitBreakerFilter(1, 0.05) // 50ms 超时
+	f := NewCircuitBreakerFilter(1, 0.05, "") // 50ms 超时
 	ctx := context.Background()
 
 	// 记录失败打开断路器
@@ -156,7 +156,7 @@ func TestCircuitBreakerFilter_超时后重置(t *testing.T) {
 
 // TestCircuitBreakerFilter_RecordSuccess重置失败计数 测试 RecordSuccess 重置失败计数
 func TestCircuitBreakerFilter_RecordSuccess重置失败计数(t *testing.T) {
-	f := NewCircuitBreakerFilter(3, 60.0)
+	f := NewCircuitBreakerFilter(3, 60.0, "")
 	ctx := context.Background()
 
 	f.RecordFailure("event", "callback")
@@ -173,7 +173,7 @@ func TestCircuitBreakerFilter_RecordSuccess重置失败计数(t *testing.T) {
 
 // TestCircuitBreakerFilter_Name 测试 Name 方法
 func TestCircuitBreakerFilter_Name(t *testing.T) {
-	f := NewCircuitBreakerFilter(5, 60.0)
+	f := NewCircuitBreakerFilter(5, 60.0, "")
 	if f.Name() != "CircuitBreaker" {
 		t.Errorf("期望名称 CircuitBreaker，实际 %s", f.Name())
 	}
@@ -186,7 +186,7 @@ func TestCircuitBreakerFilter_Name(t *testing.T) {
 // TestValidationFilter_校验通过返回Continue 测试校验通过返回 CONTINUE
 func TestValidationFilter_校验通过返回Continue(t *testing.T) {
 	validator := func(data any) bool { return true }
-	f := NewValidationFilter(validator)
+	f := NewValidationFilter(validator, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", "valid_data")
@@ -198,7 +198,7 @@ func TestValidationFilter_校验通过返回Continue(t *testing.T) {
 // TestValidationFilter_校验失败返回Skip 测试校验失败返回 SKIP
 func TestValidationFilter_校验失败返回Skip(t *testing.T) {
 	validator := func(data any) bool { return false }
-	f := NewValidationFilter(validator)
+	f := NewValidationFilter(validator, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", "invalid_data")
@@ -218,7 +218,7 @@ func TestValidationFilter_条件校验(t *testing.T) {
 		}
 		return false
 	}
-	f := NewValidationFilter(validator)
+	f := NewValidationFilter(validator, "")
 	ctx := context.Background()
 
 	r1 := f.Filter(ctx, "ev", "cb", "good")
@@ -234,7 +234,7 @@ func TestValidationFilter_条件校验(t *testing.T) {
 
 // TestValidationFilter_Name 测试 Name 方法
 func TestValidationFilter_Name(t *testing.T) {
-	f := NewValidationFilter(func(any) bool { return true })
+	f := NewValidationFilter(func(any) bool { return true }, "")
 	if f.Name() != "Validation" {
 		t.Errorf("期望名称 Validation，实际 %s", f.Name())
 	}
@@ -242,7 +242,7 @@ func TestValidationFilter_Name(t *testing.T) {
 
 // TestLoggingFilter_始终返回Continue 测试 LoggingFilter 始终返回 CONTINUE
 func TestLoggingFilter_始终返回Continue(t *testing.T) {
-	f := NewLoggingFilter()
+	f := NewLoggingFilter("")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "test_event", "test_callback", map[string]any{"key": "value"})
@@ -253,7 +253,7 @@ func TestLoggingFilter_始终返回Continue(t *testing.T) {
 
 // TestLoggingFilter_Name 测试 Name 方法
 func TestLoggingFilter_Name(t *testing.T) {
-	f := NewLoggingFilter()
+	f := NewLoggingFilter("")
 	if f.Name() != "Logging" {
 		t.Errorf("期望名称 Logging，实际 %s", f.Name())
 	}
@@ -265,7 +265,7 @@ func TestLoggingFilter_Name(t *testing.T) {
 
 // TestAuthFilter_角色匹配返回Continue 测试角色匹配时返回 CONTINUE
 func TestAuthFilter_角色匹配返回Continue(t *testing.T) {
-	f := NewAuthFilter("admin")
+	f := NewAuthFilter("admin", "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", map[string]any{"user_role": "admin"})
@@ -276,7 +276,7 @@ func TestAuthFilter_角色匹配返回Continue(t *testing.T) {
 
 // TestAuthFilter_角色不匹配返回Skip 测试角色不匹配时返回 SKIP
 func TestAuthFilter_角色不匹配返回Skip(t *testing.T) {
-	f := NewAuthFilter("admin")
+	f := NewAuthFilter("admin", "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", map[string]any{"user_role": "guest"})
@@ -290,7 +290,7 @@ func TestAuthFilter_角色不匹配返回Skip(t *testing.T) {
 
 // TestAuthFilter_缺少角色默认Guest 测试 data 中无 user_role 时默认为 guest
 func TestAuthFilter_缺少角色默认Guest(t *testing.T) {
-	f := NewAuthFilter("admin")
+	f := NewAuthFilter("admin", "")
 	ctx := context.Background()
 
 	// 空数据
@@ -306,7 +306,7 @@ func TestAuthFilter_缺少角色默认Guest(t *testing.T) {
 	}
 
 	// guest 角色匹配 guest 要求
-	fGuest := NewAuthFilter("guest")
+	fGuest := NewAuthFilter("guest", "")
 	r3 := fGuest.Filter(ctx, "event", "callback", nil)
 	if r3.Action != FilterActionContinue {
 		t.Errorf("guest 角色匹配期望 CONTINUE，实际 %v", r3.Action)
@@ -315,7 +315,7 @@ func TestAuthFilter_缺少角色默认Guest(t *testing.T) {
 
 // TestAuthFilter_Name 测试 Name 方法
 func TestAuthFilter_Name(t *testing.T) {
-	f := NewAuthFilter("admin")
+	f := NewAuthFilter("admin", "")
 	if f.Name() != "Auth" {
 		t.Errorf("期望名称 Auth，实际 %s", f.Name())
 	}
@@ -330,7 +330,7 @@ func TestParamModifyFilter_返回Modify动作(t *testing.T) {
 		}
 		return data
 	}
-	f := NewParamModifyFilter(modifier)
+	f := NewParamModifyFilter(modifier, "")
 	ctx := context.Background()
 
 	data := map[string]any{"key": "value"}
@@ -356,7 +356,7 @@ func TestParamModifyFilter_简单值修改(t *testing.T) {
 		}
 		return data
 	}
-	f := NewParamModifyFilter(doubler)
+	f := NewParamModifyFilter(doubler, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "ev", "cb", 5)
@@ -370,7 +370,7 @@ func TestParamModifyFilter_简单值修改(t *testing.T) {
 
 // TestParamModifyFilter_Name 测试 Name 方法
 func TestParamModifyFilter_Name(t *testing.T) {
-	f := NewParamModifyFilter(func(data any) any { return data })
+	f := NewParamModifyFilter(func(data any) any { return data }, "")
 	if f.Name() != "ParamModify" {
 		t.Errorf("期望名称 ParamModify，实际 %s", f.Name())
 	}
@@ -379,7 +379,7 @@ func TestParamModifyFilter_Name(t *testing.T) {
 // TestConditionalFilter_条件为真返回Continue 测试条件为真时返回 CONTINUE
 func TestConditionalFilter_条件为真返回Continue(t *testing.T) {
 	condition := func(_ context.Context, _, _ string, _ any) bool { return true }
-	f := NewConditionalFilter(condition, FilterActionSkip)
+	f := NewConditionalFilter(condition, FilterActionSkip, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", nil)
@@ -391,7 +391,7 @@ func TestConditionalFilter_条件为真返回Continue(t *testing.T) {
 // TestConditionalFilter_条件为假返回Skip 测试条件为假时返回 SKIP
 func TestConditionalFilter_条件为假返回Skip(t *testing.T) {
 	condition := func(_ context.Context, _, _ string, _ any) bool { return false }
-	f := NewConditionalFilter(condition, FilterActionSkip)
+	f := NewConditionalFilter(condition, FilterActionSkip, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", nil)
@@ -403,7 +403,7 @@ func TestConditionalFilter_条件为假返回Skip(t *testing.T) {
 // TestConditionalFilter_条件为假返回Stop 测试条件为假时返回自定义动作 STOP
 func TestConditionalFilter_条件为假返回Stop(t *testing.T) {
 	condition := func(_ context.Context, _, _ string, _ any) bool { return false }
-	f := NewConditionalFilter(condition, FilterActionStop)
+	f := NewConditionalFilter(condition, FilterActionStop, "")
 	ctx := context.Background()
 
 	result := f.Filter(ctx, "event", "callback", nil)
@@ -417,7 +417,7 @@ func TestConditionalFilter_基于事件名条件(t *testing.T) {
 	condition := func(_ context.Context, event, _ string, _ any) bool {
 		return event == "allowed_event"
 	}
-	f := NewConditionalFilter(condition, FilterActionSkip)
+	f := NewConditionalFilter(condition, FilterActionSkip, "")
 	ctx := context.Background()
 
 	r1 := f.Filter(ctx, "allowed_event", "cb", nil)
@@ -433,7 +433,7 @@ func TestConditionalFilter_基于事件名条件(t *testing.T) {
 
 // TestConditionalFilter_Name 测试 Name 方法
 func TestConditionalFilter_Name(t *testing.T) {
-	f := NewConditionalFilter(func(_ context.Context, _, _ string, _ any) bool { return true }, FilterActionSkip)
+	f := NewConditionalFilter(func(_ context.Context, _, _ string, _ any) bool { return true }, FilterActionSkip, "")
 	if f.Name() != "Conditional" {
 		t.Errorf("期望名称 Conditional，实际 %s", f.Name())
 	}
@@ -441,21 +441,22 @@ func TestConditionalFilter_Name(t *testing.T) {
 
 // TestEventFilter_接口兼容性 测试所有过滤器都实现 EventFilter 接口
 func TestEventFilter_接口兼容性(t *testing.T) {
-	var _ EventFilter = NewRateLimitFilter(1, 1.0)
-	var _ EventFilter = NewCircuitBreakerFilter(5, 60.0)
-	var _ EventFilter = NewValidationFilter(func(any) bool { return true })
-	var _ EventFilter = NewLoggingFilter()
-	var _ EventFilter = NewAuthFilter("admin")
-	var _ EventFilter = NewParamModifyFilter(func(data any) any { return data })
+	var _ EventFilter = NewRateLimitFilter(1, 1.0, "")
+	var _ EventFilter = NewCircuitBreakerFilter(5, 60.0, "")
+	var _ EventFilter = NewValidationFilter(func(any) bool { return true }, "")
+	var _ EventFilter = NewLoggingFilter("")
+	var _ EventFilter = NewAuthFilter("admin", "")
+	var _ EventFilter = NewParamModifyFilter(func(data any) any { return data }, "")
 	var _ EventFilter = NewConditionalFilter(
 		func(_ context.Context, _, _ string, _ any) bool { return true },
 		FilterActionSkip,
+		"",
 	)
 }
 
 // TestCircuitBreakerFilter_IsOpen 测试 IsOpen 方法
 func TestCircuitBreakerFilter_IsOpen(t *testing.T) {
-	f := NewCircuitBreakerFilter(1, 60.0)
+	f := NewCircuitBreakerFilter(1, 60.0, "")
 
 	// 初始状态关闭
 	if f.IsOpen("event:callback") {
@@ -476,7 +477,7 @@ func TestCircuitBreakerFilter_IsOpen(t *testing.T) {
 
 // TestCircuitBreakerFilter_IsOpen_超时后重置 测试 IsOpen 超时后重置
 func TestCircuitBreakerFilter_IsOpen_超时后重置(t *testing.T) {
-	f := NewCircuitBreakerFilter(1, 0.05) // 50ms 超时
+	f := NewCircuitBreakerFilter(1, 0.05, "") // 50ms 超时
 	f.RecordFailure("event", "callback")
 	if !f.IsOpen("event:callback") {
 		t.Error("断路器应打开")

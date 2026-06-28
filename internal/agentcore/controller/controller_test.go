@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -247,11 +248,11 @@ func TestController_AbilityManager(t *testing.T) {
 func TestController_isCompletionSignal(t *testing.T) {
 	c := newTestController()
 	assert.False(t, c.isCompletionSignal(nil))
-	chunk := &schema.ControllerOutputChunk{Payload: nil}
+	chunk := &stream.OutputSchema{Payload: nil}
 	assert.False(t, c.isCompletionSignal(chunk))
 	chunk.Payload = &schema.ControllerOutputPayload{Type: "processing"}
 	assert.False(t, c.isCompletionSignal(chunk))
-	chunk.Payload.Type = schema.AllTasksProcessed
+	chunk.Payload = &schema.ControllerOutputPayload{Type: schema.AllTasksProcessed}
 	assert.True(t, c.isCompletionSignal(chunk))
 }
 
@@ -314,8 +315,8 @@ func (m *mockEventHandler) OnAbort() {}
 // mockTaskExecutor 简单的 TaskExecutor mock
 type mockTaskExecutor struct{}
 
-func (m *mockTaskExecutor) ExecuteAbility(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (<-chan *schema.ControllerOutputChunk, error) {
-	ch := make(chan *schema.ControllerOutputChunk)
+func (m *mockTaskExecutor) ExecuteAbility(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (<-chan *stream.OutputSchema, error) {
+	ch := make(chan *stream.OutputSchema)
 	close(ch)
 	return ch, nil
 }
