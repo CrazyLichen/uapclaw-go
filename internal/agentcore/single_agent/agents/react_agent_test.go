@@ -91,132 +91,6 @@ func TestNewReActAgent_nilConfig(t *testing.T) {
 	assert.Nil(t, agent.config)
 }
 
-// TestNewSystemPromptBuilder 验证系统提示词构建器构造
-func TestNewSystemPromptBuilder(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	assert.NotNil(t, builder)
-	assert.Equal(t, "cn", builder.Language)
-	assert.NotNil(t, builder.sections)
-}
-
-// TestNewPromptSection 验证提示节构造
-func TestNewPromptSection(t *testing.T) {
-	section := NewPromptSection("test", map[string]string{"cn": "测试"}, 10)
-	assert.Equal(t, "test", section.Name)
-	assert.Equal(t, 10, section.Priority)
-	assert.Equal(t, "测试", section.Content["cn"])
-}
-
-// TestPromptSection_Render 验证提示节渲染
-func TestPromptSection_Render(t *testing.T) {
-	section := PromptSection{
-		Name:     "test",
-		Content:  map[string]string{"cn": "中文", "en": "English"},
-		Priority: 10,
-	}
-
-	// 匹配指定语言
-	assert.Equal(t, "中文", section.Render("cn"))
-	assert.Equal(t, "English", section.Render("en"))
-
-	// 回退到默认语言
-	assert.Equal(t, "中文", section.Render("fr"))
-
-	// 空内容
-	emptySection := PromptSection{Name: "empty", Content: map[string]string{}}
-	assert.Equal(t, "", emptySection.Render("cn"))
-}
-
-// TestPromptSection_Render_任意语言回退 验证无默认语言时回退到任意语言
-func TestPromptSection_Render_任意语言回退(t *testing.T) {
-	section := PromptSection{
-		Name:     "test",
-		Content:  map[string]string{"en": "English"},
-		Priority: 10,
-	}
-	assert.Equal(t, "English", section.Render("fr"))
-}
-
-// TestSystemPromptBuilder_AddSection 验证添加节
-func TestSystemPromptBuilder_AddSection(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "a", Content: map[string]string{"cn": "AAA"}, Priority: 20})
-	builder.AddSection(PromptSection{Name: "b", Content: map[string]string{"cn": "BBB"}, Priority: 10})
-
-	assert.True(t, builder.HasSection("a"))
-	assert.True(t, builder.HasSection("b"))
-}
-
-// TestSystemPromptBuilder_AddSection_链式调用 验证 AddSection 返回自身支持链式调用
-func TestSystemPromptBuilder_AddSection_链式调用(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	result := builder.AddSection(PromptSection{Name: "a", Content: map[string]string{"cn": "AAA"}, Priority: 10})
-	assert.Equal(t, builder, result)
-}
-
-// TestSystemPromptBuilder_AddSection_同名称覆盖 验证同名称节覆盖
-func TestSystemPromptBuilder_AddSection_同名称覆盖(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "a", Content: map[string]string{"cn": "AAA"}, Priority: 10})
-	builder.AddSection(PromptSection{Name: "a", Content: map[string]string{"cn": "BBB"}, Priority: 20})
-	assert.Equal(t, "BBB", builder.Build())
-}
-
-// TestSystemPromptBuilder_RemoveSection 验证移除节
-func TestSystemPromptBuilder_RemoveSection(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "a", Content: map[string]string{"cn": "AAA"}, Priority: 10})
-	assert.True(t, builder.HasSection("a"))
-
-	builder.RemoveSection("a")
-	assert.False(t, builder.HasSection("a"))
-}
-
-// TestSystemPromptBuilder_RemoveSection_链式调用 验证 RemoveSection 返回自身
-func TestSystemPromptBuilder_RemoveSection_链式调用(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	result := builder.RemoveSection("nonexistent")
-	assert.Equal(t, builder, result)
-}
-
-// TestSystemPromptBuilder_HasSection_不存在 验证不存在时节返回 false
-func TestSystemPromptBuilder_HasSection_不存在(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	assert.False(t, builder.HasSection("nonexistent"))
-}
-
-// TestSystemPromptBuilder_Build 验证构建结果按优先级排序
-func TestSystemPromptBuilder_Build(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "low", Content: map[string]string{"cn": "LOW"}, Priority: 30})
-	builder.AddSection(PromptSection{Name: "mid", Content: map[string]string{"cn": "MID"}, Priority: 20})
-	builder.AddSection(PromptSection{Name: "high", Content: map[string]string{"cn": "HIGH"}, Priority: 10})
-
-	result := builder.Build()
-	assert.Equal(t, "HIGH\n\nMID\n\nLOW", result)
-}
-
-// TestSystemPromptBuilder_Build_空构建器 验证空构建器返回空字符串
-func TestSystemPromptBuilder_Build_空构建器(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	assert.Equal(t, "", builder.Build())
-}
-
-// TestSystemPromptBuilder_Build_单节 验证单节构建不添加换行
-func TestSystemPromptBuilder_Build_单节(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "only", Content: map[string]string{"cn": "ONLY"}, Priority: 10})
-	assert.Equal(t, "ONLY", builder.Build())
-}
-
-// TestSystemPromptBuilder_Build_跳过空内容节 验证空内容节被跳过
-func TestSystemPromptBuilder_Build_跳过空内容节(t *testing.T) {
-	builder := NewSystemPromptBuilder()
-	builder.AddSection(PromptSection{Name: "empty", Content: map[string]string{}, Priority: 10})
-	builder.AddSection(PromptSection{Name: "nonempty", Content: map[string]string{"cn": "VALUE"}, Priority: 20})
-	assert.Equal(t, "VALUE", builder.Build())
-}
-
 // TestReActAgent_InvokeImpl_空输入 验证无 query 时不 panic
 func TestReActAgent_InvokeImpl_空输入(t *testing.T) {
 	card := agentschema.NewAgentCard(
@@ -390,8 +264,36 @@ func TestReActAgent_AddPromptBuilderSection(t *testing.T) {
 		cschema.WithDescription("提示词测试"),
 	)
 	agent := NewReActAgent(card, nil)
-	agent.AddPromptBuilderSection("identity", map[string]string{"cn": "我是测试Agent"}, 10)
+	agent.AddPromptBuilderSection("identity", "我是测试Agent", 10)
 	assert.True(t, agent.promptBuilder.HasSection("identity"))
+}
+
+// TestReActAgent_AddPromptBuilderSection_空内容时移除 验证空内容时移除节
+//
+// 对齐 Python: ReActAgent.add_prompt_builder_section — content 为空时 remove_section
+func TestReActAgent_AddPromptBuilderSection_空内容时移除(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		cschema.WithName("prompt_empty"),
+		cschema.WithDescription("空内容提示词测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	agent.AddPromptBuilderSection("identity", "内容", 10)
+	assert.True(t, agent.promptBuilder.HasSection("identity"))
+
+	// 空内容应移除
+	agent.AddPromptBuilderSection("identity", "", 10)
+	assert.False(t, agent.promptBuilder.HasSection("identity"))
+}
+
+// TestReActAgent_AddPromptBuilderSection_空白内容时移除 验证全空白内容时移除节
+func TestReActAgent_AddPromptBuilderSection_空白内容时移除(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		cschema.WithName("prompt_ws"),
+		cschema.WithDescription("空白内容提示词测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	agent.AddPromptBuilderSection("identity", "   ", 10)
+	assert.False(t, agent.promptBuilder.HasSection("identity"))
 }
 
 // TestReActAgent_StreamImpl 验证 StreamImpl 返回 channel
