@@ -511,7 +511,7 @@ func (r *Runner) prepareAgent(
 
 		if agentRef.IsByID() {
 			// 对齐 Python L505-510: isinstance(agent, str) + isinstance(session, AgentSession)
-			agents, err := r.resourceMgr.GetAgent(ctx, agentRef.ID())
+			agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
 			if err != nil {
 				return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
 			}
@@ -549,7 +549,7 @@ func (r *Runner) prepareAgent(
 
 	if agentRef.IsByID() {
 		// 对齐 Python L515-526: isinstance(agent, str) + not isinstance(session, AgentSession)
-		agents, err := r.resourceMgr.GetAgent(ctx, agentRef.ID())
+		agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
 		if err != nil {
 			return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
 		}
@@ -604,7 +604,7 @@ func (r *Runner) prepareWorkflow(
 	// 获取 workflow 实例（对齐 Python L650-654）
 	var workflowInstance interfaces.Workflow
 	if workflowRef.IsByID() {
-		workflows, err := r.resourceMgr.GetWorkflow(ctx, workflowKey)
+		workflows, err := r.resourceMgr.GetWorkflow(ctx, []string{workflowKey})
 		if err != nil {
 			return nil, nil, fmt.Errorf("获取Workflow失败: %w", err)
 		}
@@ -635,7 +635,7 @@ func (r *Runner) createWorkflowSession(sess any) *session.WorkflowSession {
 	}
 	switch s := sess.(type) {
 	case string:
-		return session.NewWorkflowSession(session.WithWorkflowSessionSessionID(s))
+		return session.NewWorkflowSession(session.WithWorkflowSessionID(s))
 	case *session.WorkflowSession:
 		return s
 	case *session.Session:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,15 @@ type eventHistoryEntry struct {
 // 2.14 节仅实现最小子集：OnLLM/OffLLM/TriggerLLM、OnTool/OffTool/TriggerTool。
 // 5.3 节扩展：OnSession/OffSession/TriggerSession。
 // SW-31/32/33 扩展：OnCustom/OffCustom/OffAllCustom/TriggerCustom，支持动态事件名。
-// 完整能力（过滤器/熔断器/链式执行/装饰器/transform_io）在 6.24 节实现。
+// 完整能力（过滤器/熔断器/链式执行/transform_io）在 6.24 节实现。
+//
+// 设计差异（Python decorator vs Go 调用处直接触发）：
+//   - Python 的 emit_before/emit_after/emit_around/on_wrap/wrap 是装饰器模式，
+//     用 @语法隐式包装函数调用前后触发事件。
+//   - Go 不实现装饰器，事件触发逻辑直接扩展到各自的调用处
+//     （如 LLM 调用处显式调用 TriggerLLM，Tool 调用处显式调用 TriggerTool）。
+//   - Python 的 transform_io 装饰器同理，Go 用 RegisterLLMTransformIO + TransformLLMIOInput/Output
+//     方法级 API 在调用处显式调用，不使用装饰器包装。
 //
 // 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
 // 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
@@ -456,10 +465,28 @@ func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
 // 与 OffCustom 不同：OffCustom 按指针移除单个回调，OffAllCustom 清除整个事件。
 //
 // 对应 Python: AsyncCallbackFramework.unregister_event(event)
+// OffAllCustom 注销自定义事件的所有回调，同时清理关联的过滤器、链、钩子和熔断器。
+//
+// 对应 Python: AsyncCallbackFramework.unregister_event(event)
+// Python 逻辑：清理 callbacks + callback_filters + circuit_breakers + chains + hooks + filters。
+// Go 之前只删除 callbacks，现已对齐 Python 全量清理。
 func (fw *CallbackFramework) OffAllCustom(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
+	// 清理回调
 	delete(fw.customCallbacks, event)
+	// 清理事件级过滤器
+	delete(fw.filters, event)
+	// 清理链
+	delete(fw.chains, event)
+	// 清理钩子
+	delete(fw.hooks, event)
+	// 清理熔断器（按 event: 前缀匹配）
+	for key := range fw.circuitBreakers {
+		if strings.HasPrefix(key, event+":") {
+			delete(fw.circuitBreakers, key)
+		}
+	}
 }
 
 // TriggerCustom 触发自定义事件，按优先级顺序调用所有回调，返回所有回调结果。
@@ -675,10 +702,26 @@ func (fw *CallbackFramework) OffPerAgent(event string, fn PerAgentCallbackFunc) 
 }
 
 // OffAllPerAgent 清除指定事件上的所有 PerAgent 回调。
+// OffAllPerAgent 注销 PerAgent 事件的所有回调，同时清理关联的过滤器、链、钩子和熔断器。
+//
+// 对应 Python: AsyncCallbackFramework.unregister_event(event)
 func (fw *CallbackFramework) OffAllPerAgent(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
+	// 清理回调
 	delete(fw.perAgentCallbacks, event)
+	// 清理事件级过滤器
+	delete(fw.filters, event)
+	// 清理链
+	delete(fw.chains, event)
+	// 清理钩子
+	delete(fw.hooks, event)
+	// 清理熔断器（按 event: 前缀匹配）
+	for key := range fw.circuitBreakers {
+		if strings.HasPrefix(key, event+":") {
+			delete(fw.circuitBreakers, key)
+		}
+	}
 }
 
 // TriggerPerAgent 触发指定事件的所有 PerAgent 回调，按优先级顺序执行。
@@ -1161,12 +1204,19 @@ func (fw *CallbackFramework) AddGlobalFilter(filter EventFilter) {
 	fw.globalFilters = append(fw.globalFilters, filter)
 }
 
-// AddCircuitBreaker 添加熔断器
+// AddCircuitBreaker 添加熔断器，同时将熔断器注册为事件过滤器。
+//
+// 对应 Python: AsyncCallbackFramework.add_circuit_breaker(event, callback, ...)
+// Python 逻辑：创建 CircuitBreakerFilter 后同时调用 self.add_filter(event, breaker)，
+// 使熔断器在触发流程中生效。Go 之前遗漏了 add_filter 调用，现已对齐。
 func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failureThreshold int, timeout float64) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	key := event + ":" + callbackName
-	fw.circuitBreakers[key] = NewCircuitBreakerFilter(failureThreshold, timeout, "")
+	breaker := NewCircuitBreakerFilter(failureThreshold, timeout, "")
+	fw.circuitBreakers[key] = breaker
+	// 与 Python 对齐：熔断器同时注册为事件过滤器
+	fw.filters[event] = append(fw.filters[event], breaker)
 }
 
 // AddHook 添加生命周期钩子
@@ -1400,6 +1450,40 @@ func (fw *CallbackFramework) EnableEventHistory(enabled bool) {
 	fw.enableEventHistory = enabled
 }
 
+// GetEventHistory 获取事件历史记录，支持按事件名和时间过滤。
+//
+// 对应 Python: AsyncCallbackFramework.get_event_history(event=None, since=None)
+func (fw *CallbackFramework) GetEventHistory(event string, since time.Time) []eventHistoryEntry {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+
+	result := make([]eventHistoryEntry, 0, len(fw.eventHistory))
+	for _, entry := range fw.eventHistory {
+		if event != "" && entry.Event != event {
+			continue
+		}
+		if !since.IsZero() && entry.Time.Before(since) {
+			continue
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+// ReplayEvents 回放历史事件，对每条历史记录重新触发。
+//
+// 对应 Python: AsyncCallbackFramework.replay_events(since=None)
+func (fw *CallbackFramework) ReplayEvents(ctx context.Context, since time.Time) {
+	history := fw.GetEventHistory("", since)
+	for _, entry := range history {
+		data, ok := entry.Data.(map[string]any)
+		if !ok {
+			data = map[string]any{"replay_data": entry.Data}
+		}
+		fw.TriggerCustom(ctx, entry.Event, data)
+	}
+}
+
 // GetStatistics 框架统计信息
 func (fw *CallbackFramework) GetStatistics() map[string]any {
 	fw.mu.RLock()
@@ -1429,6 +1513,149 @@ func (fw *CallbackFramework) GetStatistics() map[string]any {
 		"enable_metrics":         fw.enableMetrics,
 	}
 }
+
+// TriggerDelayed 延迟触发事件。
+//
+// 对应 Python: AsyncCallbackFramework.trigger_delayed(event, delay, *args, **kwargs)
+func (fw *CallbackFramework) TriggerDelayed(ctx context.Context, event string, data map[string]any, delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		fw.TriggerCustom(ctx, event, data)
+	}()
+}
+
+// UnregisterNamespace 注销指定命名空间下的所有回调。
+//
+// 对应 Python: AsyncCallbackFramework.unregister_namespace(namespace)
+func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	prefix := namespace + ":"
+	// 遍历所有回调 map，删除命名空间匹配的条目
+	for k, v := range fw.customCallbacks {
+		if strings.HasPrefix(string(k), prefix) {
+			delete(fw.customCallbacks, k)
+		}
+		_ = v // 避免未使用变量警告
+	}
+	for k, v := range fw.perAgentCallbacks {
+		if strings.HasPrefix(string(k), prefix) {
+			delete(fw.perAgentCallbacks, k)
+		}
+		_ = v
+	}
+	// 清理匹配的过滤器、链、钩子、熔断器
+	for k := range fw.filters {
+		if strings.HasPrefix(k, prefix) {
+			delete(fw.filters, k)
+		}
+	}
+	for k := range fw.chains {
+		if strings.HasPrefix(k, prefix) {
+			delete(fw.chains, k)
+		}
+	}
+	for k := range fw.hooks {
+		if strings.HasPrefix(k, prefix) {
+			delete(fw.hooks, k)
+		}
+	}
+	for k := range fw.circuitBreakers {
+		if strings.HasPrefix(k, prefix) {
+			delete(fw.circuitBreakers, k)
+		}
+	}
+}
+
+// UnregisterByTags 注销包含任一指定标签的所有回调。
+//
+// 对应 Python: AsyncCallbackFramework.unregister_by_tags(event, tags)
+func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	tagSet := make(map[string]bool, len(tags))
+	for _, t := range tags {
+		tagSet[t] = true
+	}
+	// 从自定义回调中过滤
+	if callbacks, ok := fw.customCallbacks[event]; ok {
+		filtered := make([]*CallbackInfo[CustomCallbackFunc], 0, len(callbacks))
+		for _, info := range callbacks {
+			hasTag := false
+			for _, t := range info.Tags {
+				if tagSet[t] {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				filtered = append(filtered, info)
+			}
+		}
+		fw.customCallbacks[event] = filtered
+	}
+}
+
+// ListEvents 列出所有已注册事件名。
+//
+// 对应 Python: AsyncCallbackFramework.list_events(namespace=None)
+func (fw *CallbackFramework) ListEvents(namespace string) []string {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	eventSet := make(map[string]bool)
+	for k := range fw.customCallbacks {
+		eventSet[k] = true
+	}
+	for k := range fw.perAgentCallbacks {
+		eventSet[k] = true
+	}
+	result := make([]string, 0, len(eventSet))
+	for e := range eventSet {
+		if namespace != "" && !strings.HasPrefix(e, namespace+":") {
+			continue
+		}
+		result = append(result, e)
+	}
+	return result
+}
+
+// ListCallbacks 列出指定事件的回调信息。
+//
+// 对应 Python: AsyncCallbackFramework.list_callbacks(event)
+func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	result := make([]map[string]any, 0)
+	if callbacks, ok := fw.customCallbacks[event]; ok {
+		for _, info := range callbacks {
+			result = append(result, map[string]any{
+				"priority":    info.Priority,
+				"once":        info.Once,
+				"enabled":     info.Enabled,
+				"namespace":   info.Namespace,
+				"tags":        info.Tags,
+				"callback_type": info.CallbackType,
+			})
+		}
+	}
+	return result
+}
+
+// OnChain 注册链式回调，自动创建 CallbackChain。
+//
+// 对应 Python: AsyncCallbackFramework.on_chain(event, rollback_handler=, error_handler=)
+func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler any) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	if _, exists := fw.chains[event]; !exists {
+		fw.chains[event] = NewCallbackChain(event)
+	}
+}
+
+// ⤵️ 预留：trigger_stream / trigger_generator 需要基于 channel 的流式触发模式。
+// Python 中 trigger_stream 对异步输入流的每一项触发事件，trigger_generator 聚合异步生成器输出。
+// Go 等价实现需使用 channel 模式，等有实际流式调用场景时再实现。
+// 对应 Python: AsyncCallbackFramework.trigger_stream() / trigger_generator()
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -1463,6 +1690,24 @@ func triggerCallbacks[F any, E comparable, D any](
 
 	eventStr := fmt.Sprintf("%v", event)
 	hasFramework := fw != nil
+
+	// 记录事件历史（与 Python 对齐）
+	if hasFramework {
+		fw.mu.Lock()
+		if fw.enableEventHistory {
+			entry := eventHistoryEntry{
+				Event: eventStr,
+				Time:  time.Now(),
+				Data:  data,
+			}
+			fw.eventHistory = append(fw.eventHistory, entry)
+			// 环形缓冲区：超过上限时截断最旧的记录
+			if len(fw.eventHistory) > maxEventHistory {
+				fw.eventHistory = fw.eventHistory[len(fw.eventHistory)-maxEventHistory:]
+			}
+		}
+		fw.mu.Unlock()
+	}
 
 	// BEFORE 钩子执行
 	if hasFramework {

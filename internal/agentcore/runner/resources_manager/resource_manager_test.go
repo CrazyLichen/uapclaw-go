@@ -102,7 +102,7 @@ func TestResourceMgr_GetAgent_正常(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("测试Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
-	agents, err := mgr.GetAgent(context.Background(), "agent-1")
+	agents, err := mgr.GetAgent(context.Background(), []string{"agent-1"})
 	if err != nil {
 		t.Fatalf("GetAgent 失败: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestResourceMgr_RemoveAgent_正常(t *testing.T) {
 	card := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("测试Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
-	removed, err := mgr.RemoveAgent("agent-1")
+	removed, err := mgr.RemoveAgent([]string{"agent-1"})
 	if err != nil {
 		t.Fatalf("RemoveAgent 失败: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestResourceMgr_GetWorkflow_正常(t *testing.T) {
 	card := schema.NewWorkflowCard(schema.WithID("wf-1"), schema.WithName("测试Workflow"))
 	_ = mgr.AddWorkflow(card, stubWorkflowProvider())
 
-	workflows, err := mgr.GetWorkflow(context.Background(), "wf-1")
+	workflows, err := mgr.GetWorkflow(context.Background(), []string{"wf-1"})
 	if err != nil {
 		t.Fatalf("GetWorkflow 失败: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestResourceMgr_GetModel_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
 	_ = mgr.AddModel("model-1", stubModelProvider())
 
-	models, err := mgr.GetModel(context.Background(), "model-1")
+	models, err := mgr.GetModel(context.Background(), []string{"model-1"})
 	if err != nil {
 		t.Fatalf("GetModel 失败: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestResourceMgr_GetPrompt_正常(t *testing.T) {
 	tmpl := prompt.NewPromptTemplate("测试模板", "hello {{name}}")
 	_ = mgr.AddPrompt("prompt-1", tmpl)
 
-	prompts, err := mgr.GetPrompt("prompt-1")
+	prompts, err := mgr.GetPrompt([]string{"prompt-1"})
 	if err != nil {
 		t.Fatalf("GetPrompt 失败: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestResourceMgr_GetTool_正常(t *testing.T) {
 	stub := &rmStubTool{card: toolCard}
 	_ = mgr.AddTool(stub)
 
-	tools, err := mgr.GetTool(toolCard.ID)
+	tools, err := mgr.GetTool([]string{toolCard.ID})
 	if err != nil {
 		t.Fatalf("GetTool 失败: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 	}
 
 	// 带 Tag 获取
-	agents, err := mgr.GetAgent(context.Background(), "agent-tag-1", WithTag("custom-tag"))
+	agents, err := mgr.GetAgent(context.Background(), []string{"agent-tag-1"}, WithTag("custom-tag"))
 	if err != nil {
 		t.Fatalf("GetAgent 带 Tag 失败: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 	}
 
 	// 用不匹配的 Tag 获取
-	agents, err = mgr.GetAgent(context.Background(), "agent-tag-1", WithTag("non-existent-tag"))
+	agents, err = mgr.GetAgent(context.Background(), []string{"agent-tag-1"}, WithTag("non-existent-tag"))
 	if err != nil {
 		t.Fatalf("GetAgent 不匹配 Tag 不应报错: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestResourceMgr_Release(t *testing.T) {
 	}
 
 	// 验证重建后资源已清空
-	agents, err := mgr.GetAgent(context.Background(), "agent-rel-1")
+	agents, err := mgr.GetAgent(context.Background(), []string{"agent-rel-1"})
 	if err != nil {
 		t.Fatalf("Release 后 GetAgent 不应报错: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	// Agent 不存在
-	agents, err := mgr.GetAgent(context.Background(), "non-existent")
+	agents, err := mgr.GetAgent(context.Background(), []string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 Agent 不应报错: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 	}
 
 	// Workflow 不存在
-	workflows, err := mgr.GetWorkflow(context.Background(), "non-existent")
+	workflows, err := mgr.GetWorkflow(context.Background(), []string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 Workflow 不应报错: %v", err)
 	}
@@ -413,7 +413,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 	}
 
 	// Model 不存在
-	models, err := mgr.GetModel(context.Background(), "non-existent")
+	models, err := mgr.GetModel(context.Background(), []string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 Model 不应报错: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 	}
 
 	// Prompt 不存在
-	prompts, err := mgr.GetPrompt("non-existent")
+	prompts, err := mgr.GetPrompt([]string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 Prompt 不应报错: %v", err)
 	}
@@ -431,7 +431,7 @@ func TestResourceMgr_获取不存在返回空(t *testing.T) {
 	}
 
 	// Tool 不存在
-	tools, err := mgr.GetTool("non-existent")
+	tools, err := mgr.GetTool([]string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 Tool 不应报错: %v", err)
 	}
@@ -558,11 +558,11 @@ func TestResourceMgr_AddAgents_批量(t *testing.T) {
 		t.Fatalf("AddAgents 失败: %v", err)
 	}
 
-	agents1, _ := mgr.GetAgent(context.Background(), "batch-agent-1")
+	agents1, _ := mgr.GetAgent(context.Background(), []string{"batch-agent-1"})
 	if len(agents1) != 1 {
 		t.Fatal("batch-agent-1 应存在")
 	}
-	agents2, _ := mgr.GetAgent(context.Background(), "batch-agent-2")
+	agents2, _ := mgr.GetAgent(context.Background(), []string{"batch-agent-2"})
 	if len(agents2) != 1 {
 		t.Fatal("batch-agent-2 应存在")
 	}
@@ -576,7 +576,7 @@ func TestResourceMgr_RemoveWorkflow_正常(t *testing.T) {
 	card := schema.NewWorkflowCard(schema.WithID("wf-rm-1"), schema.WithName("移除Workflow"))
 	_ = mgr.AddWorkflow(card, stubWorkflowProvider())
 
-	removed, err := mgr.RemoveWorkflow("wf-rm-1")
+	removed, err := mgr.RemoveWorkflow([]string{"wf-rm-1"})
 	if err != nil {
 		t.Fatalf("RemoveWorkflow 失败: %v", err)
 	}
@@ -590,7 +590,7 @@ func TestResourceMgr_RemoveModel_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
 	_ = mgr.AddModel("model-rm-1", stubModelProvider())
 
-	removed, err := mgr.RemoveModel("model-rm-1")
+	removed, err := mgr.RemoveModel([]string{"model-rm-1"})
 	if err != nil {
 		t.Fatalf("RemoveModel 失败: %v", err)
 	}
@@ -605,7 +605,7 @@ func TestResourceMgr_RemovePrompt_正常(t *testing.T) {
 	tmpl := prompt.NewPromptTemplate("移除模板", "hello")
 	_ = mgr.AddPrompt("prompt-rm-1", tmpl)
 
-	removed, err := mgr.RemovePrompt("prompt-rm-1")
+	removed, err := mgr.RemovePrompt([]string{"prompt-rm-1"})
 	if err != nil {
 		t.Fatalf("RemovePrompt 失败: %v", err)
 	}
@@ -621,7 +621,7 @@ func TestResourceMgr_RemoveTool_正常(t *testing.T) {
 	stub := &rmStubTool{card: toolCard}
 	_ = mgr.AddTool(stub)
 
-	removed, err := mgr.RemoveTool(toolCard.ID)
+	removed, err := mgr.RemoveTool([]string{toolCard.ID})
 	if err != nil {
 		t.Fatalf("RemoveTool 失败: %v", err)
 	}
@@ -800,11 +800,11 @@ func TestResourceMgr_AddModels_批量(t *testing.T) {
 		t.Fatalf("AddModels 失败: %v", err)
 	}
 
-	models1, _ := mgr.GetModel(context.Background(), "batch-model-1")
+	models1, _ := mgr.GetModel(context.Background(), []string{"batch-model-1"})
 	if len(models1) != 1 {
 		t.Fatal("batch-model-1 应存在")
 	}
-	models2, _ := mgr.GetModel(context.Background(), "batch-model-2")
+	models2, _ := mgr.GetModel(context.Background(), []string{"batch-model-2"})
 	if len(models2) != 1 {
 		t.Fatal("batch-model-2 应存在")
 	}
@@ -826,7 +826,7 @@ func TestResourceMgr_AddModels_部分失败(t *testing.T) {
 	}
 
 	// model-ok 应存在
-	models, _ := mgr.GetModel(context.Background(), "model-ok")
+	models, _ := mgr.GetModel(context.Background(), []string{"model-ok"})
 	if len(models) != 1 {
 		t.Fatal("model-ok 应存在")
 	}
@@ -848,11 +848,11 @@ func TestResourceMgr_AddPrompts_批量(t *testing.T) {
 		t.Fatalf("AddPrompts 失败: %v", err)
 	}
 
-	prompts1, _ := mgr.GetPrompt("batch-prompt-1")
+	prompts1, _ := mgr.GetPrompt([]string{"batch-prompt-1"})
 	if len(prompts1) != 1 {
 		t.Fatal("batch-prompt-1 应存在")
 	}
-	prompts2, _ := mgr.GetPrompt("batch-prompt-2")
+	prompts2, _ := mgr.GetPrompt([]string{"batch-prompt-2"})
 	if len(prompts2) != 1 {
 		t.Fatal("batch-prompt-2 应存在")
 	}
@@ -902,27 +902,27 @@ func TestResourceMgr_AddSysOperation_空ID报错(t *testing.T) {
 // TestResourceMgr_RemoveSysOperation_预留 测试 RemoveSysOperation 预留方法
 func TestResourceMgr_RemoveSysOperation_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	// RemoveSysOperation 先查找 innerFindResourceIDs，空 ID 应报错
-	err := mgr.RemoveSysOperation("")
+	// RemoveSysOperation 先校验 innerValidateResourceIDs，空列表应报错
+	err := mgr.RemoveSysOperation(nil)
 	if err == nil {
-		t.Fatal("空 ID 应返回错误")
+		t.Fatal("空列表应返回错误")
 	}
 }
 
 // TestResourceMgr_GetSysOperation_预留 测试 GetSysOperation 预留方法
 func TestResourceMgr_GetSysOperation_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	// GetSysOperation 先查找 innerFindResourceIDs，空 ID 应报错
-	_, err := mgr.GetSysOperation("")
+	// GetSysOperation 先校验 innerValidateResourceIDs，空列表应报错
+	_, err := mgr.GetSysOperation(nil)
 	if err == nil {
-		t.Fatal("空 ID 应返回错误")
+		t.Fatal("空列表应返回错误")
 	}
 }
 
 // TestResourceMgr_GetSysOperation_不存在 测试获取不存在的系统操作
 func TestResourceMgr_GetSysOperation_不存在(t *testing.T) {
 	mgr := newTestResourceMgr()
-	results, err := mgr.GetSysOperation("non-existent")
+	results, err := mgr.GetSysOperation([]string{"non-existent"})
 	if err != nil {
 		t.Fatalf("获取不存在的 SysOperation 不应报错: %v", err)
 	}
@@ -945,7 +945,7 @@ func TestResourceMgr_AddAgentTeam_预留(t *testing.T) {
 // TestResourceMgr_RemoveAgentTeam_预留 测试 RemoveAgentTeam 预留方法返回错误
 func TestResourceMgr_RemoveAgentTeam_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	_, err := mgr.RemoveAgentTeam("team-1")
+	_, err := mgr.RemoveAgentTeam([]string{"team-1"})
 	if err == nil {
 		t.Fatal("预留方法应返回错误")
 	}
@@ -954,7 +954,7 @@ func TestResourceMgr_RemoveAgentTeam_预留(t *testing.T) {
 // TestResourceMgr_GetAgentTeam_预留 测试 GetAgentTeam 预留方法返回错误
 func TestResourceMgr_GetAgentTeam_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	_, err := mgr.GetAgentTeam("team-1")
+	_, err := mgr.GetAgentTeam([]string{"team-1"})
 	if err == nil {
 		t.Fatal("预留方法应返回错误")
 	}
@@ -1248,7 +1248,7 @@ func TestResourceMgr_GetToolInfos_正常(t *testing.T) {
 	stub := &rmStubTool{card: toolCard}
 	_ = mgr.AddTool(stub)
 
-	infos, err := mgr.GetToolInfos(toolCard.ID)
+	infos, err := mgr.GetToolInfos([]string{toolCard.ID}, nil)
 	if err != nil {
 		t.Fatalf("GetToolInfos 失败: %v", err)
 	}
@@ -1261,7 +1261,7 @@ func TestResourceMgr_GetToolInfos_正常(t *testing.T) {
 func TestResourceMgr_GetToolInfos_不存在(t *testing.T) {
 	mgr := newTestResourceMgr()
 
-	infos, err := mgr.GetToolInfos("nonexistent")
+	infos, err := mgr.GetToolInfos([]string{"nonexistent"}, nil)
 	if err != nil {
 		t.Fatalf("GetToolInfos 不存在的工具不应报错: %v", err)
 	}
@@ -1283,11 +1283,11 @@ func TestResourceMgr_AddWorkflows_批量(t *testing.T) {
 		t.Fatalf("AddWorkflows 失败: %v", err)
 	}
 
-	wf1, _ := mgr.GetWorkflow(context.Background(), "batch-wf-1")
+	wf1, _ := mgr.GetWorkflow(context.Background(), []string{"batch-wf-1"})
 	if len(wf1) != 1 {
 		t.Fatal("batch-wf-1 应存在")
 	}
-	wf2, _ := mgr.GetWorkflow(context.Background(), "batch-wf-2")
+	wf2, _ := mgr.GetWorkflow(context.Background(), []string{"batch-wf-2"})
 	if len(wf2) != 1 {
 		t.Fatal("batch-wf-2 应存在")
 	}
@@ -1391,7 +1391,7 @@ func TestDispatchAdd_各资源类型(t *testing.T) {
 		t.Fatalf("dispatchAdd workflow 失败: %v", err)
 	}
 	// 验证已添加
-	wfList, _ := mgr.GetWorkflow(ctx, "da-wf-1")
+	wfList, _ := mgr.GetWorkflow(ctx, []string{"da-wf-1"})
 	if len(wfList) != 1 {
 		t.Fatalf("dispatchAdd workflow 后应存在 1 个，实际 %d", len(wfList))
 	}
@@ -1525,7 +1525,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	}
 
 	// 验证移除后资源不存在
-	agents, _ := mgr.GetAgent(ctx, "dr-agent-1")
+	agents, _ := mgr.GetAgent(ctx, []string{"dr-agent-1"})
 	if len(agents) != 0 {
 		t.Fatal("dispatchRemove agent 后资源应不存在")
 	}
@@ -1761,7 +1761,7 @@ func TestInnerGetResources_同步获取(t *testing.T) {
 	stubTool := &rmStubTool{card: toolCard}
 	_ = mgr.AddTool(stubTool)
 
-	results, err := mgr.innerGetResources(ctx, toolCard.ID, "tool", "", TagMatchAll, nil)
+	results, err := mgr.innerGetResources(ctx, []string{toolCard.ID}, "tool", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResources tool 失败: %v", err)
 	}
@@ -1773,7 +1773,7 @@ func TestInnerGetResources_同步获取(t *testing.T) {
 	tmpl := prompt.NewPromptTemplate("获取模板", "hello")
 	_ = mgr.AddPrompt("igr-prompt-1", tmpl)
 
-	results, err = mgr.innerGetResources(ctx, "igr-prompt-1", "prompt", "", TagMatchAll, nil)
+	results, err = mgr.innerGetResources(ctx, []string{"igr-prompt-1"}, "prompt", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResources prompt 失败: %v", err)
 	}
@@ -1782,7 +1782,7 @@ func TestInnerGetResources_同步获取(t *testing.T) {
 	}
 
 	// 获取不存在的资源
-	results, err = mgr.innerGetResources(ctx, "nonexistent", "tool", "", TagMatchAll, nil)
+	results, err = mgr.innerGetResources(ctx, []string{"nonexistent"}, "tool", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResources 不存在资源不应报错: %v", err)
 	}
@@ -1800,7 +1800,7 @@ func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
 	agentCard := agentschema.NewAgentCard(schema.WithID("igrp-agent-1"), schema.WithName("ProviderAgent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider())
 
-	results, err := mgr.innerGetResourcesByProvider(ctx, "igrp-agent-1", "agent", "", TagMatchAll, nil)
+	results, err := mgr.innerGetResourcesByProvider(ctx, []string{"igrp-agent-1"}, "agent", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResourcesByProvider agent 失败: %v", err)
 	}
@@ -1812,7 +1812,7 @@ func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
 	wfCard := schema.NewWorkflowCard(schema.WithID("igrp-wf-1"), schema.WithName("ProviderWorkflow"))
 	_ = mgr.AddWorkflow(wfCard, stubWorkflowProvider())
 
-	results, err = mgr.innerGetResourcesByProvider(ctx, "igrp-wf-1", "workflow", "", TagMatchAll, nil)
+	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"igrp-wf-1"}, "workflow", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResourcesByProvider workflow 失败: %v", err)
 	}
@@ -1823,7 +1823,7 @@ func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
 	// 添加 model 并通过 provider 获取
 	_ = mgr.AddModel("igrp-model-1", stubModelProvider())
 
-	results, err = mgr.innerGetResourcesByProvider(ctx, "igrp-model-1", "model", "", TagMatchAll, nil)
+	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"igrp-model-1"}, "model", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResourcesByProvider model 失败: %v", err)
 	}
@@ -1832,7 +1832,7 @@ func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
 	}
 
 	// 获取不存在的资源
-	results, err = mgr.innerGetResourcesByProvider(ctx, "nonexistent", "agent", "", TagMatchAll, nil)
+	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"nonexistent"}, "agent", "", TagMatchAll, nil)
 	if err != nil {
 		t.Fatalf("innerGetResourcesByProvider 不存在资源不应报错: %v", err)
 	}
@@ -1845,7 +1845,7 @@ func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
 
 // TestInnerValidateTag_空值报错 测试 innerValidateTag 空 tag 报错
 func TestInnerValidateTag_空值报错(t *testing.T) {
-	err := innerValidateTag("")
+	err := innerValidateTag(nil)
 	if err == nil {
 		t.Fatal("空 tag 应返回错误")
 	}
@@ -1853,11 +1853,35 @@ func TestInnerValidateTag_空值报错(t *testing.T) {
 
 // TestInnerValidateTag_正常值 测试 innerValidateTag 正常值不报错
 func TestInnerValidateTag_正常值(t *testing.T) {
-	if err := innerValidateTag(TagGlobal); err != nil {
+	if err := innerValidateTag([]Tag{TagGlobal}); err != nil {
 		t.Fatalf("TagGlobal 不应报错: %v", err)
 	}
-	if err := innerValidateTag("custom-tag"); err != nil {
+	if err := innerValidateTag([]Tag{"custom-tag"}); err != nil {
 		t.Fatalf("自定义 tag 不应报错: %v", err)
+	}
+}
+
+// TestInnerValidateTag_GLOBAL混用报错 测试 GLOBAL 与其他标签混用报错
+func TestInnerValidateTag_GLOBAL混用报错(t *testing.T) {
+	err := innerValidateTag([]Tag{TagGlobal, "custom-tag"})
+	if err == nil {
+		t.Fatal("GLOBAL 与其他标签混用应返回错误")
+	}
+}
+
+// TestInnerValidateTag_重复标签报错 测试重复标签报错
+func TestInnerValidateTag_重复标签报错(t *testing.T) {
+	err := innerValidateTag([]Tag{"tag1", "tag1"})
+	if err == nil {
+		t.Fatal("重复标签应返回错误")
+	}
+}
+
+// TestInnerValidateTag_空元素报错 测试列表中空元素报错
+func TestInnerValidateTag_空元素报错(t *testing.T) {
+	err := innerValidateTag([]Tag{"tag1", ""})
+	if err == nil {
+		t.Fatal("列表中空元素应返回错误")
 	}
 }
 

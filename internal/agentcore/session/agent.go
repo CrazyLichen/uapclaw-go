@@ -419,7 +419,7 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 	return NewWorkflowSession(
 		WithWorkflowSessionInner(inner),
 		WithWorkflowSessionParent(s.inner),
-		WithWorkflowSessionSessionID(s.inner.SessionID()),
+		WithWorkflowSessionID(s.inner.SessionID()),
 	)
 }
 

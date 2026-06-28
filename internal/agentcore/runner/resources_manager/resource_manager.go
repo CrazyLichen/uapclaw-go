@@ -279,9 +279,12 @@ func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) err
 // RemoveAgent 注销 Agent，返回被注销的 AgentCard 列表。
 //
 // 对应 Python: ResourceManager.remove_agent(agent_id, **kwargs)
-func (m *ResourceMgr) RemoveAgent(agentID string, opts ...ResourceOption) ([]*agentschema.AgentCard, error) {
+func (m *ResourceMgr) RemoveAgent(agentIDs []string, opts ...ResourceOption) ([]*agentschema.AgentCard, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(agentID, "agent", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(agentIDs, "agent"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(agentIDs, "agent", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -313,9 +316,12 @@ func (m *ResourceMgr) RemoveAgent(agentID string, opts ...ResourceOption) ([]*ag
 // GetAgent 获取 Agent 实例列表。
 //
 // 对应 Python: ResourceManager.get_agent(agent_id, **kwargs)
-func (m *ResourceMgr) GetAgent(ctx context.Context, agentID string, opts ...ResourceOption) ([]interfaces.BaseAgent, error) {
+func (m *ResourceMgr) GetAgent(ctx context.Context, agentIDs []string, opts ...ResourceOption) ([]interfaces.BaseAgent, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(agentID, "agent", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(agentIDs, "agent"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(agentIDs, "agent", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -394,9 +400,12 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 // RemoveWorkflow 注销 Workflow，返回被注销的 WorkflowCard 列表。
 //
 // 对应 Python: ResourceManager.remove_workflow(workflow_id, **kwargs)
-func (m *ResourceMgr) RemoveWorkflow(workflowID string, opts ...ResourceOption) ([]*schema.WorkflowCard, error) {
+func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOption) ([]*schema.WorkflowCard, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(workflowID, "workflow", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(workflowIDs, "workflow"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(workflowIDs, "workflow", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -426,9 +435,12 @@ func (m *ResourceMgr) RemoveWorkflow(workflowID string, opts ...ResourceOption) 
 // GetWorkflow 获取 Workflow 实例列表。
 //
 // 对应 Python: ResourceManager.get_workflow(workflow_id, **kwargs)
-func (m *ResourceMgr) GetWorkflow(ctx context.Context, workflowID string, opts ...ResourceOption) ([]interfaces.Workflow, error) {
+func (m *ResourceMgr) GetWorkflow(ctx context.Context, workflowIDs []string, opts ...ResourceOption) ([]interfaces.Workflow, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(workflowID, "workflow", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(workflowIDs, "workflow"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(workflowIDs, "workflow", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -494,9 +506,12 @@ func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 // GetTool 获取 Tool 实例列表。
 //
 // 对应 Python: ResourceManager.get_tool(tool_id, **kwargs)
-func (m *ResourceMgr) GetTool(toolID string, opts ...ResourceOption) ([]tool.Tool, error) {
+func (m *ResourceMgr) GetTool(toolIDs []string, opts ...ResourceOption) ([]tool.Tool, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(toolID, "tool", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(toolIDs, "tool"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(toolIDs, "tool", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -521,9 +536,12 @@ func (m *ResourceMgr) GetTool(toolID string, opts ...ResourceOption) ([]tool.Too
 // RemoveTool 注销 Tool，返回被注销的工具 ID 列表。
 //
 // 对应 Python: ResourceManager.remove_tool(tool_id, **kwargs)
-func (m *ResourceMgr) RemoveTool(toolID string, opts ...ResourceOption) ([]string, error) {
+func (m *ResourceMgr) RemoveTool(toolIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(toolID, "tool", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(toolIDs, "tool"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(toolIDs, "tool", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -602,9 +620,12 @@ func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) err
 // RemoveModel 注销 Model，返回被注销的模型 ID 列表。
 //
 // 对应 Python: ResourceManager.remove_model(model_id, **kwargs)
-func (m *ResourceMgr) RemoveModel(modelID string, opts ...ResourceOption) ([]string, error) {
+func (m *ResourceMgr) RemoveModel(modelIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(modelID, "model", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(modelIDs, "model"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(modelIDs, "model", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -631,9 +652,12 @@ func (m *ResourceMgr) RemoveModel(modelID string, opts ...ResourceOption) ([]str
 // GetModel 获取 Model 实例列表。
 //
 // 对应 Python: ResourceManager.get_model(model_id, **kwargs)
-func (m *ResourceMgr) GetModel(ctx context.Context, modelID string, opts ...ResourceOption) ([]model_clients.BaseModelClient, error) {
+func (m *ResourceMgr) GetModel(ctx context.Context, modelIDs []string, opts ...ResourceOption) ([]model_clients.BaseModelClient, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(modelID, "model", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(modelIDs, "model"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(modelIDs, "model", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -707,9 +731,12 @@ func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) 
 // RemovePrompt 注销 Prompt，返回被注销的 ID 列表。
 //
 // 对应 Python: ResourceManager.remove_prompt(prompt_id, **kwargs)
-func (m *ResourceMgr) RemovePrompt(promptID string, opts ...ResourceOption) ([]string, error) {
+func (m *ResourceMgr) RemovePrompt(promptIDs []string, opts ...ResourceOption) ([]string, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(promptID, "prompt", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(promptIDs, "prompt"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(promptIDs, "prompt", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -736,9 +763,12 @@ func (m *ResourceMgr) RemovePrompt(promptID string, opts ...ResourceOption) ([]s
 // GetPrompt 获取 Prompt 模板列表。
 //
 // 对应 Python: ResourceManager.get_prompt(prompt_id, **kwargs)
-func (m *ResourceMgr) GetPrompt(promptID string, opts ...ResourceOption) ([]*prompt.PromptTemplate, error) {
+func (m *ResourceMgr) GetPrompt(promptIDs []string, opts ...ResourceOption) ([]*prompt.PromptTemplate, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(promptID, "prompt", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(promptIDs, "prompt"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(promptIDs, "prompt", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -765,6 +795,13 @@ func (m *ResourceMgr) GetPrompt(promptID string, opts ...ResourceOption) ([]*pro
 // AddSysOperation 注册系统操作，基础部分+工具注册⤵️。
 //
 // 对应 Python: ResourceManager.add_sys_operation(sys_operation_id, instance, **kwargs)
+// AddSysOperation 添加系统操作。
+//
+// ⤵️ 预留：9.32 实现后补充 registerSysOperationTools 调用。
+// Python 逻辑：add 成功后自动调用 _register_sys_operation_tools 将操作方法注册为工具。
+// 当前缺少该步骤，等 SysOperationToolAdapter 实现后回填。
+//
+// 对应 Python: ResourceManager.add_sys_operation(card, *, tag=None)
 func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance any, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 
@@ -795,10 +832,18 @@ func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance any, opts 
 
 // RemoveSysOperation 注销系统操作。
 //
+// ⤵️ 预留：9.32 实现后补充关联工具清理逻辑。
+// Python 逻辑：remove 后调用 tool.remove_sys_operation_tools(op_id) 获取关联工具 ID，
+// 再调用 _inner_remove_resources(tool_ids, resource_type="tool") 清理关联工具。
+// 当前缺少该步骤，等 SysOperationToolAdapter 实现后回填。
+//
 // 对应 Python: ResourceManager.remove_sys_operation(sys_operation_id, **kwargs)
-func (m *ResourceMgr) RemoveSysOperation(sysOperationID string, opts ...ResourceOption) error {
+func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(sysOperationID, "sys_operation", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(sysOperationIDs, "sys_operation"); err != nil {
+		return err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return err
 	}
@@ -823,9 +868,12 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationID string, opts ...Resource
 // GetSysOperation 获取系统操作实例列表。
 //
 // 对应 Python: ResourceManager.get_sys_operation(sys_operation_id, **kwargs)
-func (m *ResourceMgr) GetSysOperation(sysOperationID string, opts ...ResourceOption) ([]any, error) {
+func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...ResourceOption) ([]any, error) {
 	o := applyResourceOptions(opts...)
-	resourceIDs, _, err := m.innerFindResourceIDs(sysOperationID, "sys_operation", o.Tag, o.TagMatchStrategy)
+	if err := innerValidateResourceIDs(sysOperationIDs, "sys_operation"); err != nil {
+		return nil, err
+	}
+	resourceIDs, _, err := m.innerFindResourceIDs(sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -845,6 +893,33 @@ func (m *ResourceMgr) GetSysOperation(sysOperationID string, opts ...ResourceOpt
 	}
 
 	return results, nil
+}
+
+// registerSysOperationTools 自动注册系统操作的方法为工具。
+//
+// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
+//   1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
+//   2. 对每个工具调用 innerAddResource 注册到 ToolMgr
+//   3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
+//
+// 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
+func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
+	// ⤵️ 预留：9.32 实现后回填
+	// 需要：SysOperationToolAdapter, LocalFunction, OperationRegistry
+}
+
+// GetSysOpToolCards 获取系统操作的工具卡片。
+//
+// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
+//   1. 获取 SysOperation 实例
+//   2. 通过 OperationRegistry 获取支持的 operation_name 列表
+//   3. 按 operation_name + tool_name 过滤 idToCard 查找 ToolCard
+//   4. 当 operation_name 为列表时不允许同时指定 tool_name
+//
+// 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
+func (m *ResourceMgr) GetSysOpToolCards(_ string, _ string, _ string) ([]*schema.BaseCard, error) {
+	// ⤵️ 预留：9.32 实现后回填
+	return nil, fmt.Errorf("GetSysOpToolCards not implemented: pending 9.32 SysOperation interface")
 }
 
 // --- MCP Server 操作 ---
@@ -1016,12 +1091,31 @@ func (m *ResourceMgr) HasTag(tag Tag) bool {
 	return m.tagMgr.HasTag(tag)
 }
 
-// RemoveTag 完全移除标签及其所有关联。
+// RemoveTag 完全移除标签及其所有关联资源。
 //
 // 对应 Python: ResourceManager.remove_tag(tag, **kwargs)
+// Python 逻辑：对每个受影响的 resource_id 调用 self._resource_registry.remove_by_id(resource_id)，
+// 即标签移除会同时清理注册表中的资源。
 func (m *ResourceMgr) RemoveTag(tag Tag, opts ...TagOption) ([]string, error) {
 	o := applyTagOptions(opts...)
-	return m.tagMgr.RemoveTag(tag, o.SkipIfNotExists)
+	removedResourceIDs, err := m.tagMgr.RemoveTag(tag, o.SkipIfNotExists)
+	if err != nil {
+		return nil, err
+	}
+
+	// 同步清理注册表中的资源（与 Python 对齐）
+	for _, resourceID := range removedResourceIDs {
+		m.registry.RemoveByID(resourceID)
+		m.idToCard.Pop(resourceID)
+	}
+
+	logger.Info(logger.ComponentAgentCore).
+		Str("event_type", "RESOURCE_MGR_REMOVE_TAG").
+		Str("tag", string(tag)).
+		Strs("removal_resource_ids", removedResourceIDs).
+		Msg("移除标签及关联资源成功")
+
+	return removedResourceIDs, nil
 }
 
 // UpdateResourceTag 更新资源标签。
@@ -1062,18 +1156,34 @@ func (m *ResourceMgr) ResourceHasTag(resourceID string, tag Tag) bool {
 
 // --- ToolInfo 操作 ---
 
-// GetToolInfos 获取工具描述信息列表。
+// GetToolInfos 获取工具描述信息列表，支持按 toolType 过滤。
 //
-// 对应 Python: ResourceManager.get_tool_infos(tool_id, **kwargs)
-func (m *ResourceMgr) GetToolInfos(toolID string, opts ...ResourceOption) ([]*schema.ToolInfo, error) {
-	tools, err := m.GetTool(toolID, opts...)
+// 对应 Python: ResourceManager.get_tool_infos(tool_id, *, tool_type=None, tag=, ...)
+// Python 用 _get_card_type(card) 和 tool_type 列表做过滤，Go 用 getCardType + toolTypes 参数对齐。
+func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ...ResourceOption) ([]*schema.ToolInfo, error) {
+	tools, err := m.GetTool(toolIDs, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	results := make([]*schema.ToolInfo, 0, len(tools))
 	for _, t := range tools {
-		if info := t.Card().ToolInfo(); info != nil {
+		card := t.Card()
+		// 按类型过滤（与 Python 对齐）
+		if len(toolTypes) > 0 {
+			cardType := getCardType(&schema.BaseCard{ID: card.ID, Name: card.Name})
+			matched := false
+			for _, tt := range toolTypes {
+				if cardType == tt {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		if info := card.ToolInfo(); info != nil {
 			results = append(results, info)
 		}
 	}
@@ -1114,16 +1224,16 @@ func (m *ResourceMgr) AddAgentTeam(agentTeamID string, provider any, opts ...Res
 //
 // 对应 Python: ResourceManager.remove_agent_team(agent_team_id, **kwargs)
 // ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-func (m *ResourceMgr) RemoveAgentTeam(agentTeamID string, opts ...ResourceOption) (any, error) {
-	return nil, fmt.Errorf("agent team not implemented, agent_team_id=%s", agentTeamID)
+func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) (any, error) {
+	return nil, fmt.Errorf("agent team not implemented, agent_team_ids=%v", agentTeamIDs)
 }
 
 // GetAgentTeam 获取 Agent 团队。
 //
 // 对应 Python: ResourceManager.get_agent_team(agent_team_id, **kwargs)
 // ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-func (m *ResourceMgr) GetAgentTeam(agentTeamID string, opts ...ResourceOption) (any, error) {
-	return nil, fmt.Errorf("agent team not implemented, agent_team_id=%s", agentTeamID)
+func (m *ResourceMgr) GetAgentTeam(agentTeamIDs []string, opts ...ResourceOption) (any, error) {
+	return nil, fmt.Errorf("agent team not implemented, agent_team_ids=%v", agentTeamIDs)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1155,36 +1265,48 @@ func applyTagOptions(opts ...TagOption) tagOptions {
 	return o
 }
 
-// innerFindResourceIDs 根据 resourceID、resourceType、tag 和 tagMatchStrategy 查找匹配的资源 ID 列表。
+// innerFindResourceIDs 根据 resourceIDs、resourceType、tag 和 tagMatchStrategy 查找匹配的资源 ID 列表。
 // 返回值：资源ID列表、是否跳过（因标签不存在）、错误。
+// 如果 resourceIDs 非空且指定了非全局 tag，按 tag 过滤 resourceIDs；
+// 如果 resourceIDs 非空且无 tag（或 TagGlobal），直接返回 resourceIDs；
+// 如果 resourceIDs 为空且指定了 tag，按 tag 查找所有匹配资源。
 //
 // 对应 Python: ResourceManager._inner_find_resource_ids(resource_id, resource_type, tag, tag_match_strategy)
-func (m *ResourceMgr) innerFindResourceIDs(resourceID, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy) ([]string, bool, error) {
-	if resourceID == "" {
-		return nil, false, exception.BuildError(exception.StatusResourceIDValueInvalid,
-			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", "resource id is empty"),
-		)
+func (m *ResourceMgr) innerFindResourceIDs(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy) ([]string, bool, error) {
+	// 如果指定了 resourceIDs，按标签过滤或直接返回
+	if len(resourceIDs) > 0 {
+		// 指定了非全局标签，需过滤出同时拥有该标签的 ID
+		if tag != "" && tag != TagGlobal {
+			foundIDs, err := m.tagMgr.FindResourcesByTags([]Tag{tag}, tagMatchStrategy, true)
+			if err != nil {
+				return nil, false, err
+			}
+			foundSet := make(map[string]struct{}, len(foundIDs))
+			for _, id := range foundIDs {
+				foundSet[id] = struct{}{}
+			}
+			result := make([]string, 0, len(resourceIDs))
+			for _, id := range resourceIDs {
+				if _, ok := foundSet[id]; ok {
+					result = append(result, id)
+				}
+			}
+			return result, false, nil
+		}
+		return resourceIDs, false, nil
 	}
 
-	// 如果指定了标签，先按标签查找
+	// resourceIDs 为空时，按标签查找
 	if tag != "" && tag != TagGlobal {
 		foundIDs, err := m.tagMgr.FindResourcesByTags([]Tag{tag}, tagMatchStrategy, true)
 		if err != nil {
 			return nil, false, err
 		}
-		// 过滤出匹配 resourceID 的结果
-		result := make([]string, 0)
-		for _, id := range foundIDs {
-			if id == resourceID {
-				result = append(result, id)
-			}
-		}
-		return result, false, nil
+		return foundIDs, false, nil
 	}
 
-	// TagGlobal 或无标签，直接返回 resourceID
-	return []string{resourceID}, false, nil
+	// TagGlobal 或无标签且无 ID 列表，返回空
+	return nil, false, nil
 }
 
 // innerValidateResourceID 验证资源 ID 非空、非纯空白。
@@ -1209,6 +1331,10 @@ func (m *ResourceMgr) innerValidateResourceID(resourceID, resourceType string) e
 // innerValidateProvider 验证 provider 非空。
 //
 // 对应 Python: ResourceManager._inner_validate_provider(provider, resource_type)
+// innerValidateProvider 校验 provider 非空。
+//
+// 对应 Python: ResourceManager._inner_validate_provider(provider, resource_type)
+// ⤵️ 预留：Python 还校验 provider 可调用性和 RemoteAgent 特殊处理（9.84 实现后回填）。
 func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) error {
 	if provider == nil {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
@@ -1219,9 +1345,11 @@ func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) e
 	return nil
 }
 
-// innerValidateServerConfig 验证 MCP 服务器配置。
+// innerValidateServerConfig 校验 MCP 服务器配置。
 //
 // 对应 Python: ResourceManager._inner_validate_server_config(server_config)
+// ⤵️ 预留：Python 支持列表校验（检查 server_id 类型/空白/列表内重复 ID），Go 当前仅校验单个。
+// 批量场景出现时扩展为 innerValidateServerConfigs([]*McpServerConfig)。
 func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcp.McpServerConfig) error {
 	if serverConfig == nil {
 		return exception.BuildError(exception.StatusResourceMCPServerParamInvalid,
@@ -1453,7 +1581,7 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 
 	// 如果未指定 ID 列表，按 tag 查找
 	if len(idsToRemove) == 0 {
-		if err := innerValidateTag(tag); err != nil {
+		if err := innerValidateTag([]Tag{tag}); err != nil {
 			return nil, err
 		}
 		effectiveTag := tag
@@ -1517,8 +1645,8 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 // innerGetResources 同步获取资源：查找 ID → 遍历 dispatchGet → 日志。
 //
 // 对应 Python: ResourceManager._inner_get_resources(resource_id, resource_type, tag, tag_match_strategy, session)
-func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceID, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
-	ids, _, err := m.innerFindResourceIDs(resourceID, resourceType, tag, tagMatchStrategy)
+func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
+	ids, _, err := m.innerFindResourceIDs(resourceIDs, resourceType, tag, tagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -1550,8 +1678,8 @@ func (m *ResourceMgr) innerGetResources(ctx context.Context, resourceID, resourc
 // 逻辑同 innerGetResources，但用于 Provider 模式。
 //
 // 对应 Python: ResourceManager._inner_get_resources_by_provider(resource_id, resource_type, tag, tag_match_strategy, session)
-func (m *ResourceMgr) innerGetResourcesByProvider(ctx context.Context, resourceID, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
-	ids, _, err := m.innerFindResourceIDs(resourceID, resourceType, tag, tagMatchStrategy)
+func (m *ResourceMgr) innerGetResourcesByProvider(ctx context.Context, resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, session any) ([]any, error) {
+	ids, _, err := m.innerFindResourceIDs(resourceIDs, resourceType, tag, tagMatchStrategy)
 	if err != nil {
 		return nil, err
 	}
@@ -1589,12 +1717,47 @@ func (m *ResourceMgr) innerGetResourcesByProvider(ctx context.Context, resourceI
 // Go 中 tag 是单个 Tag (string)，验证单个 tag 非空即可。
 //
 // 对应 Python: ResourceManager._inner_validate_tag(tag)
-func innerValidateTag(tag Tag) error {
-	if tag == "" {
+// innerValidateTag 校验标签列表。
+//
+// 对应 Python: ResourceManager._inner_validate_tag(tag)
+// Python 校验：(1) 空值 (2) GLOBAL 与其他标签混用 (3) 空元素 (4) 重复元素
+func innerValidateTag(tags []Tag) error {
+	if len(tags) == 0 {
 		return exception.BuildError(exception.StatusResourceTagValueInvalid,
-			exception.WithParam("tag", tag),
-			exception.WithParam("reason", "tag is empty value"),
+			exception.WithParam("tag", ""),
+			exception.WithParam("reason", "tag list is empty"),
 		)
+	}
+	// 检查 GLOBAL 与其他标签混用
+	hasGlobal := false
+	for _, t := range tags {
+		if t == TagGlobal {
+			hasGlobal = true
+			break
+		}
+	}
+	if hasGlobal && len(tags) > 1 {
+		return exception.BuildError(exception.StatusResourceTagValueInvalid,
+			exception.WithParam("tag", fmt.Sprintf("%v", tags)),
+			exception.WithParam("reason", "The GLOBAL tag already exists and cannot be assigned additional tags."),
+		)
+	}
+	// 检查空元素和重复
+	seen := make(map[Tag]bool, len(tags))
+	for _, t := range tags {
+		if t == "" {
+			return exception.BuildError(exception.StatusResourceTagValueInvalid,
+				exception.WithParam("tag", fmt.Sprintf("%v", tags)),
+				exception.WithParam("reason", "has empty tag value"),
+			)
+		}
+		if seen[t] {
+			return exception.BuildError(exception.StatusResourceTagValueInvalid,
+				exception.WithParam("tag", fmt.Sprintf("%v", tags)),
+				exception.WithParam("reason", fmt.Sprintf("has duplicate tag '%s' item", t)),
+			)
+		}
+		seen[t] = true
 	}
 	return nil
 }
@@ -1717,13 +1880,14 @@ func getCardType(card *schema.BaseCard) string {
 	switch cardType {
 	case reflect.TypeOf((*mcp.McpToolCard)(nil)):
 		return "mcp"
+	case reflect.TypeOf((*tool.ToolCard)(nil)):
+		return "function"
 	case reflect.TypeOf((*schema.WorkflowCard)(nil)):
 		return "workflow"
 	case reflect.TypeOf((*agentschema.AgentCard)(nil)):
 		return "agent"
 	default:
-		// 检查是否嵌入了 ToolCard（function 类型）
-		// ⤵️ 预留：等 TeamCard 类型实现后添加 team 判断
+		// ⤵️ 预留：8.28 TeamCard 实现后添加 reflect.TypeOf((*TeamCard)(nil)) → "team"
 		return ""
 	}
 }

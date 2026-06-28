@@ -600,7 +600,7 @@ func (am *AbilityManager) executeTool(
 		return ExecuteResult{}, execErr
 	}
 
-	tools, err := am.resourceMgr.GetTool(toolID, opts...)
+	tools, err := am.resourceMgr.GetTool([]string{toolID}, opts...)
 	if err != nil || len(tools) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -687,7 +687,7 @@ func (am *AbilityManager) executeWorkflow(
 		return ExecuteResult{}, execErr
 	}
 
-	wfs, err := am.resourceMgr.GetWorkflow(ctx, wfID, opts...)
+	wfs, err := am.resourceMgr.GetWorkflow(ctx, []string{wfID}, opts...)
 	if err != nil || len(wfs) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -796,7 +796,7 @@ func (am *AbilityManager) executeAgent(
 		return ExecuteResult{}, execErr
 	}
 
-	ags, err := am.resourceMgr.GetAgent(ctx, agentID, opts...)
+	ags, err := am.resourceMgr.GetAgent(ctx, []string{agentID}, opts...)
 	if err != nil || len(ags) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,
@@ -879,7 +879,7 @@ func (am *AbilityManager) executeFallbackTool(
 		return ExecuteResult{}, execErr
 	}
 
-	tools, err := am.resourceMgr.GetTool(toolName, opts...)
+	tools, err := am.resourceMgr.GetTool([]string{toolName}, opts...)
 	if err != nil || len(tools) == 0 {
 		execErr := NewAbilityExecutionError(
 			exception.StatusAbilityNotFound,

@@ -38,7 +38,13 @@ func NewAgentMgr() AgentMgr {
 //
 // 对应 Python: AgentMgr.add_agent(agent_id, provider)
 //
-// ⤵️ 预留：分布式场景下 AgentAdapter/RemoteAgent/_is_remote_agent/interface_url 的判断逻辑
+// ⤵️ 预留：9.84 DistRunner + 10.3.3 AgentAdapter 实现后回填分布式逻辑。
+// 回填内容：
+//   - _is_remote_agent 判断（检查 provider 是否为 RemoteAgent 实例）
+//   - _remote_agents dict（存储 RemoteAgent 引用）
+//   - AddAgent 中 AgentAdapter + interface_url 分支
+//   - RemoveAgent 中 AgentAdapter.stop() 清理
+//   - GetAgent 中 _remote_agents.get() 优先查找
 func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 	if agentID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
@@ -85,7 +91,7 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 //
 // 对应 Python: AgentMgr.remove_agent(agent_id)
 //
-// ⤵️ 预留：分布式场景下 RemoteAgent 的清理逻辑
+// ⤵️ 预留：9.84 + 10.3.3 实现后回填：RemoteAgent 的清理逻辑（stop AgentAdapter、pop _remote_agents）
 func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 	unwrapped, err := m.unregisterProvider(agentID)
 	if err != nil {
@@ -118,7 +124,7 @@ func (m *AgentMgr) RemoveAgent(agentID string) (AgentProvider, error) {
 //
 // 对应 Python: AgentMgr.get_agent(agent_id)
 //
-// ⤵️ 预留：分布式场景下 _is_remote_agent 判断和 RemoteAgent 调用逻辑
+// ⤵️ 预留：9.84 + 10.3.3 实现后回填：_remote_agents.get() 优先查找逻辑
 func (m *AgentMgr) GetAgent(ctx context.Context, agentID string) (interfaces.BaseAgent, error) {
 	agent, err := m.getResource(ctx, agentID)
 	if err != nil {

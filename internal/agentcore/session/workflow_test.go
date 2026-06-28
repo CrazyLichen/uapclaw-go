@@ -92,23 +92,23 @@ func TestWorkflowSessionFacade_Inner为nil时防御(t *testing.T) {
 	}
 }
 
-// TestWithWorkflowSessionSessionID_inner为nil时创建 测试 WithWorkflowSessionSessionID 在 inner 为 nil 时自动创建
-func TestWithWorkflowSessionSessionID_inner为nil时创建(t *testing.T) {
-	ws := NewWorkflowSession(WithWorkflowSessionSessionID("auto-id"))
+// TestWithWorkflowSessionID_inner为nil时创建 测试 WithWorkflowSessionID 在 inner 为 nil 时自动创建
+func TestWithWorkflowSessionID_inner为nil时创建(t *testing.T) {
+	ws := NewWorkflowSession(WithWorkflowSessionID("auto-id"))
 	if ws.inner == nil {
-		t.Fatal("WithWorkflowSessionSessionID 在 inner 为 nil 时应自动创建 inner")
+		t.Fatal("WithWorkflowSessionID 在 inner 为 nil 时应自动创建 inner")
 	}
 	if ws.inner.SessionID() != "auto-id" {
 		t.Errorf("期望 inner.SessionID()='auto-id'，实际=%s", ws.inner.SessionID())
 	}
 }
 
-// TestWithWorkflowSessionSessionID_inner已存在时跳过 测试 inner 已设置时不覆盖
-func TestWithWorkflowSessionSessionID_inner已存在时跳过(t *testing.T) {
+// TestWithWorkflowSessionID_inner已存在时跳过 测试 inner 已设置时不覆盖
+func TestWithWorkflowSessionID_inner已存在时跳过(t *testing.T) {
 	inner := internal.NewWorkflowSession(internal.WithWorkflowSessionID("original-id"))
 	ws := NewWorkflowSession(
 		WithWorkflowSessionInner(inner),
-		WithWorkflowSessionSessionID("new-id"), // 应因 inner 已存在而跳过
+		WithWorkflowSessionID("new-id"), // 应因 inner 已存在而跳过
 	)
 	if ws.inner.SessionID() != "original-id" {
 		t.Errorf("inner 已存在时不应覆盖，期望='original-id'，实际=%s", ws.inner.SessionID())

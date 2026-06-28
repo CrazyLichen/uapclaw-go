@@ -65,8 +65,8 @@ func WithWorkflowSessionParent(parent InnerSession) WorkflowSessionOption {
 	}
 }
 
-// WithWorkflowSessionSessionID 设置会话 ID 的选项
-func WithWorkflowSessionSessionID(id string) WorkflowSessionOption {
+// WithWorkflowSessionID 设置会话 ID 的选项
+func WithWorkflowSessionID(id string) WorkflowSessionOption {
 	return func(ws *WorkflowSession) {
 		if ws.inner == nil {
 			ws.inner = internal.NewWorkflowSession(
