@@ -2,9 +2,11 @@ package runner
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -91,7 +93,7 @@ func TestRunAgent_正常调用(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("test-agent", "test-session")
 
-	result, err := RunAgent(context.Background(), ag, map[string]any{"input": "test"}, sess)
+	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, sess, nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgent 失败: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestRunAgent_执行错误(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("err-agent", "err-session")
 
-	_, err := RunAgent(context.Background(), ag, nil, sess)
+	_, err := RunAgent(context.Background(), ByAgent(ag), nil, sess, nil, nil)
 	if err == nil {
 		t.Error("RunAgent 应返回错误")
 	}
@@ -125,7 +127,7 @@ func TestRunWorkflow_正常调用(t *testing.T) {
 		result: map[string]any{"status": "completed"},
 	}
 
-	result, err := RunWorkflow(context.Background(), wf, map[string]any{"input": "test"}, nil, nil)
+	result, err := RunWorkflow(context.Background(), ByWorkflow(wf), map[string]any{"input": "test"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunWorkflow 失败: %v", err)
 	}
@@ -145,8 +147,76 @@ func TestRunWorkflow_执行错误(t *testing.T) {
 		err:  context.DeadlineExceeded,
 	}
 
-	_, err := RunWorkflow(context.Background(), wf, nil, nil, nil)
+	_, err := RunWorkflow(context.Background(), ByWorkflow(wf), nil, nil, nil, nil)
 	if err == nil {
 		t.Error("RunWorkflow 应返回错误")
+	}
+}
+
+// TestStart_正常启动 测试 Start 正常启动
+func TestStart_正常启动(t *testing.T) {
+	if err := Start(context.Background()); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
+}
+
+// TestStop_正常停止 测试 Stop 正常停止
+func TestStop_正常停止(t *testing.T) {
+	if err := Stop(context.Background()); err != nil {
+		t.Fatalf("Stop 失败: %v", err)
+	}
+}
+
+// TestGetResourceMgr 测试 GetResourceMgr 返回非 nil
+func TestGetResourceMgr(t *testing.T) {
+	mgr := GetResourceMgr()
+	if mgr == nil {
+		t.Error("GetResourceMgr 返回 nil, 期望非 nil")
+	}
+}
+
+// TestGetCallbackFramework 测试 GetCallbackFramework 返回非 nil
+func TestGetCallbackFramework(t *testing.T) {
+	fw := GetCallbackFramework()
+	if fw == nil {
+		t.Error("GetCallbackFramework 返回 nil, 期望非 nil")
+	}
+}
+
+// TestRelease_正常释放 测试 Release 正常释放
+func TestRelease_正常释放(t *testing.T) {
+	if err := Release(context.Background(), "test-session", false); err != nil {
+		t.Fatalf("Release 失败: %v", err)
+	}
+}
+
+// TestSpawnAgent_未实现 测试 SpawnAgent 返回未实现错误
+func TestSpawnAgent_未实现(t *testing.T) {
+	_, err := SpawnAgent(context.Background(), nil, nil, nil, nil, nil, nil)
+	if err == nil {
+		t.Error("SpawnAgent 应返回错误")
+	}
+	if !strings.Contains(err.Error(), "6.28") {
+		t.Errorf("错误信息应包含 '6.28', 实际: %v", err)
+	}
+}
+
+// TestSetConfig_GetConfig 测试 SetConfig 和 GetConfig 往返
+func TestSetConfig_GetConfig(t *testing.T) {
+	cfg := &config.RunnerConfig{
+		DistributedMode: false,
+		EnvPrefix:       "test-prefix",
+		InstanceID:       "test-instance",
+	}
+	SetConfig(cfg)
+	got := GetConfig()
+	if got == nil {
+		t.Fatal("GetConfig 返回 nil")
+	}
+	if got.EnvPrefix != "test-prefix" {
+		t.Errorf("EnvPrefix = %q, want %q", got.EnvPrefix, "test-prefix")
+	}
+	if got.InstanceID != "test-instance" {
+		t.Errorf("InstanceID = %q, want %q", got.InstanceID, "test-instance")
 	}
 }
