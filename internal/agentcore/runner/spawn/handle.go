@@ -53,14 +53,6 @@ type SpawnedProcessHandle struct {
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
-	// defaultHealthCheckInterval 默认健康检查间隔
-	defaultHealthCheckInterval = 5 * time.Second
-	// shutdownAckTimeout SHUTDOWN_ACK 等待超时
-	shutdownAckTimeout = 10 * time.Second
-	// shutdownWaitPeriod 关闭后等待进程退出的宽限期
-	shutdownWaitPeriod = 2 * time.Second
-	// forceKillGracePeriod SIGTERM 后等待 SIGKILL 的宽限期
-	forceKillGracePeriod = 3 * time.Second
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -167,7 +159,7 @@ func (h *SpawnedProcessHandle) StartHealthCheck(ctx context.Context, interval ..
 		return fmt.Errorf("健康检查已在运行")
 	}
 
-	checkInterval := defaultHealthCheckInterval
+	checkInterval := DefaultHealthCheckInterval
 	if len(interval) > 0 && interval[0] > 0 {
 		checkInterval = interval[0]
 	}
@@ -249,7 +241,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 	}
 
 	// 等待 SHUTDOWN_ACK
-	shutdownTimeout := shutdownAckTimeout
+	shutdownTimeout := DefaultShutdownTimeout
 	if len(timeout) > 0 && timeout[0] > 0 {
 		shutdownTimeout = timeout[0]
 	}
@@ -277,7 +269,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 		select {
 		case <-waitCh:
 			return true, nil
-		case <-time.After(shutdownWaitPeriod):
+		case <-time.After(ShutdownWaitPeriod):
 			// 宽限期超时，强制终止
 			logger.Warn(logComponent).
 				Str("process_id", h.processID).
@@ -317,7 +309,7 @@ func (h *SpawnedProcessHandle) ForceKill() error {
 	select {
 	case <-waitCh:
 		return nil
-	case <-time.After(forceKillGracePeriod):
+	case <-time.After(ForceTerminateGracePeriod):
 		return h.cmd.Process.Kill()
 	}
 }
