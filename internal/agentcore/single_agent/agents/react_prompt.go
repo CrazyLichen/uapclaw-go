@@ -26,6 +26,9 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
+var _ interfaces.BaseAgent = (*ReActAgent)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AddPromptBuilderSection 添加或替换提示节，空内容时移除该节。
@@ -157,9 +160,6 @@ func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
 func (a *ReActAgent) PromptBuilder() *prompts.SystemPromptBuilder {
 	return a.promptBuilder
 }
-
-// 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
-var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

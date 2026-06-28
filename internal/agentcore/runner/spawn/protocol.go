@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// Message 通信消息结构体。
+// 对齐 Python: Message (protocol.py)
+type Message struct {
+	// Type 消息类型
+	Type MessageType `json:"type"`
+	// Payload 消息载荷
+	Payload any `json:"payload"`
+	// Timestamp 时间戳
+	Timestamp time.Time `json:"timestamp"`
+	// MessageID 消息唯一标识
+	MessageID string `json:"message_id"`
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageType 消息类型枚举。
@@ -91,20 +106,12 @@ func (t *MessageType) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("未知的消息类型: %s", s)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
-// Message 通信消息结构体。
-// 对齐 Python: Message (protocol.py)
-type Message struct {
-	// Type 消息类型
-	Type MessageType `json:"type"`
-	// Payload 消息载荷
-	Payload any `json:"payload"`
-	// Timestamp 时间戳
-	Timestamp time.Time `json:"timestamp"`
-	// MessageID 消息唯一标识
-	MessageID string `json:"message_id"`
-}
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// messageIDCounter 消息 ID 计数器。
+var messageIDCounter uint64
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -174,9 +181,6 @@ func NewMessage(msgType MessageType, payload any) Message {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// messageIDCounter 消息 ID 计数器。
-var messageIDCounter uint64
 
 // generateMessageID 生成消息唯一标识。
 func generateMessageID() string {

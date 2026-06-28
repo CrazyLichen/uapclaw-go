@@ -150,7 +150,7 @@ func NewResourceMgr() *ResourceMgr {
 	return mgr
 }
 
-// --- Functional Options: ResourceOption ---
+// --- 函数选项：ResourceOption ---
 
 // WithTag 设置资源标签。
 func WithTag(tag Tag) ResourceOption {
@@ -182,7 +182,7 @@ func WithInterfaceURL(url string) ResourceOption {
 	return func(o *resourceOptions) { o.InterfaceURL = url }
 }
 
-// --- Functional Options: McpOption ---
+// --- 函数选项：McpOption ---
 
 // WithMcpServerName 设置 MCP 服务器名称。
 func WithMcpServerName(name string) McpOption {
@@ -214,7 +214,7 @@ func WithMcpSession(session decorator.TracerSession) McpOption {
 	return func(o *mcpOptions) { o.Session = session }
 }
 
-// --- Functional Options: TagOption ---
+// --- 函数选项：TagOption ---
 
 // WithTagSkipIfNotExists 设置标签不存在时跳过。
 func WithTagSkipIfNotExists() TagOption {

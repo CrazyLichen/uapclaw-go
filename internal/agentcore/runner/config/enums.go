@@ -7,6 +7,8 @@ package config
 // 对应 Python: MessageQueueType(str, Enum)
 type MessageQueueType string
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// MessageQueueTypePulsar Pulsar 消息队列
 	MessageQueueTypePulsar MessageQueueType = "pulsar"

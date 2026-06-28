@@ -87,6 +87,9 @@ const githubRequestTimeout = 30 * time.Second
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ensure 接口检查
+var _ bytes.Buffer
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewGitHubTree 创建 GitHubTree 实例。
@@ -492,6 +495,3 @@ func fetchGitHubRaw(url string, token string) ([]byte, error) {
 
 	return io.ReadAll(resp.Body)
 }
-
-// ensure 接口检查
-var _ bytes.Buffer

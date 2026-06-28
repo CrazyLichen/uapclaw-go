@@ -30,6 +30,9 @@ const descriptionTruncateLen = 30
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ensure 检查截断函数与 GoString 逻辑一致（编译期检查）。
+var _ = truncateDescription
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkill 创建 Skill 实例。
@@ -84,6 +87,3 @@ func truncateDescription(desc string) string {
 	}
 	return desc
 }
-
-// ensure 检查截断函数与 GoString 逻辑一致（编译期检查）。
-var _ = truncateDescription

@@ -11,8 +11,7 @@
 //
 //	prompts/
 //	├── doc.go           # 包文档
-//	├── builder.go       # PromptSection + SystemPromptBuilder + 常量
-//	└── builder_test.go  # 单元测试
+//	└── builder.go       # PromptSection + SystemPromptBuilder + 常量
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/prompts/
 package prompts

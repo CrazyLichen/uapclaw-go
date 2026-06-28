@@ -173,8 +173,6 @@ type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) a
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// maxEventHistory 事件历史记录最大条数
 	maxEventHistory = 1000

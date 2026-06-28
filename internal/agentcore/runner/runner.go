@@ -78,39 +78,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// initRunner 初始化全局Runner实例。
-// 对齐 Python: GLOBAL_RUNNER = _RunnerImpl(config=DEFAULT_RUNNER_CONFIG)
-// 创建 Runner 的同时设置默认配置。
-func initRunner() {
-	runnerOnce.Do(func() {
-		// 对齐 Python __init__: set_runner_config(DEFAULT_RUNNER_CONFIG)
-		config.SetRunnerConfig(config.GetRunnerConfig())
-
-		globalRunner = &Runner{
-			runnerID:          defaultRunnerID,
-			resourceMgr:      resources_manager.NewResourceMgr(),
-			messageQueue:     message_queue.NewMessageQueueInMemory(defaultMQMaxSize, defaultMQTimeout),
-			callbackFramework: callback.NewCallbackFramework(),
-		}
-	})
-}
-
-// getRunner 获取全局Runner实例（懒初始化）。
-func getRunner() *Runner {
-	runnerMu.RLock()
-	r := globalRunner
-	runnerMu.RUnlock()
-	if r == nil {
-		runnerMu.Lock()
-		if globalRunner == nil {
-			initRunner()
-		}
-		r = globalRunner
-		runnerMu.Unlock()
-	}
-	return r
-}
-
 // SetGlobalRunner 替换全局Runner实例（用于测试注入）。
 func SetGlobalRunner(r *Runner) {
 	runnerMu.Lock()
@@ -444,7 +411,7 @@ func RunWorkflowStreaming(
 	return ch, nil
 }
 
-// --- Spawn ---
+// --- Spawn 子进程 ---
 
 // SpawnAgent 启动子进程运行 Agent。
 // 对齐 Python: Runner.spawn_agent() (runner.py L532-576)
@@ -581,7 +548,48 @@ func GetCallbackFramework() *callback.CallbackFramework {
 	return getRunner().callbackFramework
 }
 
+// IsRemoteAgent 判断Agent是否为远程Agent。
+// 对齐 Python: _RunnerImpl._is_remote_agent() (runner.py L123-131)
+// ⤵️ 预留：远程Agent判断（依赖 RemoteAgent 实现）
+func IsRemoteAgent(agent interfaces.BaseAgent) bool {
+	// ⤵️ 预留：实现远程Agent判断逻辑
+	return false
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// initRunner 初始化全局Runner实例。
+// 对齐 Python: GLOBAL_RUNNER = _RunnerImpl(config=DEFAULT_RUNNER_CONFIG)
+// 创建 Runner 的同时设置默认配置。
+func initRunner() {
+	runnerOnce.Do(func() {
+		// 对齐 Python __init__: set_runner_config(DEFAULT_RUNNER_CONFIG)
+		config.SetRunnerConfig(config.GetRunnerConfig())
+
+		globalRunner = &Runner{
+			runnerID:          defaultRunnerID,
+			resourceMgr:      resources_manager.NewResourceMgr(),
+			messageQueue:     message_queue.NewMessageQueueInMemory(defaultMQMaxSize, defaultMQTimeout),
+			callbackFramework: callback.NewCallbackFramework(),
+		}
+	})
+}
+
+// getRunner 获取全局Runner实例（懒初始化）。
+func getRunner() *Runner {
+	runnerMu.RLock()
+	r := globalRunner
+	runnerMu.RUnlock()
+	if r == nil {
+		runnerMu.Lock()
+		if globalRunner == nil {
+			initRunner()
+		}
+		r = globalRunner
+		runnerMu.Unlock()
+	}
+	return r
+}
 
 // prepareAgent 准备Agent实例和会话。
 // 对齐 Python: _RunnerImpl._prepare_agent() (runner.py L502-530)
@@ -745,12 +753,4 @@ func generateWorkflowKey(id, version string) string {
 		return id + ":" + version
 	}
 	return id
-}
-
-// IsRemoteAgent 判断Agent是否为远程Agent。
-// 对齐 Python: _RunnerImpl._is_remote_agent() (runner.py L123-131)
-// ⤵️ 预留：远程Agent判断（依赖 RemoteAgent 实现）
-func IsRemoteAgent(agent interfaces.BaseAgent) bool {
-	// ⤵️ 预留：实现远程Agent判断逻辑
-	return false
 }

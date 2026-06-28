@@ -8,19 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// SpawnAgentKind Agent 启动方式枚举。
-// 对齐 Python: SpawnAgentKind (agent_config.py)
-type SpawnAgentKind string
-
-const (
-	// SpawnAgentKindClassAgent 类 Agent 启动（通过 ResourceMgr 注册表查找）
-	SpawnAgentKindClassAgent SpawnAgentKind = "class_agent"
-	// SpawnAgentKindTeamAgent 团队 Agent 启动（通过 FromSpawnPayload 构造）
-	SpawnAgentKindTeamAgent SpawnAgentKind = "team_agent"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnAgentConfig Spawn 基础配置。
@@ -59,6 +46,19 @@ type SpawnConfig struct {
 	// HealthCheckTimeout 健康检查响应超时，默认 3s
 	HealthCheckTimeout time.Duration
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// SpawnAgentKind Agent 启动方式枚举。
+// 对齐 Python: SpawnAgentKind (agent_config.py)
+type SpawnAgentKind string
+
+const (
+	// SpawnAgentKindClassAgent 类 Agent 启动（通过 ResourceMgr 注册表查找）
+	SpawnAgentKindClassAgent SpawnAgentKind = "class_agent"
+	// SpawnAgentKindTeamAgent 团队 Agent 启动（通过 FromSpawnPayload 构造）
+	SpawnAgentKindTeamAgent SpawnAgentKind = "team_agent"
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
