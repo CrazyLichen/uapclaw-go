@@ -3,6 +3,7 @@ package config
 import (
 	"sync"
 
+	"github.com/mohae/deepcopy"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -11,6 +12,7 @@ import (
 var (
 	// DEFAULT_RUNNER_CONFIG 默认 Runner 配置。
 	// distributed_mode=false，消息队列类型=FAKE。
+	// InstanceID 自动生成 UUID，对齐 Python DEFAULT_RUNNER_CONFIG。
 	//
 	// 对应 Python: DEFAULT_RUNNER_CONFIG
 	DEFAULT_RUNNER_CONFIG = &RunnerConfig{
@@ -25,7 +27,7 @@ var (
 			ReplyTopicTemplate: "openjiuwen.reply.runner.{instance_id}",
 		},
 		EnvPrefix:              "",
-		InstanceID:             "",
+		InstanceID:             generateInstanceID(),
 		CheckpointerConfig:     nil,
 		EnableSessionController: false,
 		EnableA2A:              false,
@@ -86,21 +88,9 @@ func GetRunnerConfig() *RunnerConfig {
 // cloneDefaultConfig 深拷贝 DEFAULT_RUNNER_CONFIG。
 //
 // 对应 Python: DEFAULT_RUNNER_CONFIG.model_copy(deep=True)
+// InstanceID 保留原值（深拷贝语义，非重新生成）。
+// 使用 deepcopy 库确保 CheckpointerConfig.Conf 等 map[string]any 字段也被深拷贝。
 func cloneDefaultConfig() *RunnerConfig {
-	cfg := *DEFAULT_RUNNER_CONFIG
-	if DEFAULT_RUNNER_CONFIG.DistributedConfig != nil {
-		dc := *DEFAULT_RUNNER_CONFIG.DistributedConfig
-		mq := dc.MessageQueueConfig
-		if DEFAULT_RUNNER_CONFIG.DistributedConfig.MessageQueueConfig.PulsarConfig != nil {
-			pc := *DEFAULT_RUNNER_CONFIG.DistributedConfig.MessageQueueConfig.PulsarConfig
-			mq.PulsarConfig = &pc
-		}
-		dc.MessageQueueConfig = mq
-		cfg.DistributedConfig = &dc
-	}
-	if DEFAULT_RUNNER_CONFIG.CheckpointerConfig != nil {
-		cc := *DEFAULT_RUNNER_CONFIG.CheckpointerConfig
-		cfg.CheckpointerConfig = &cc
-	}
-	return &cfg
+	result := deepcopy.Copy(DEFAULT_RUNNER_CONFIG)
+	return result.(*RunnerConfig)
 }

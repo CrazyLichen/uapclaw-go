@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
@@ -49,7 +50,8 @@ type DistributedConfig struct {
 //
 // 对应 Python: RunnerConfig(BaseModel)
 type RunnerConfig struct {
-	// DistributedMode 分布式模式开关，默认 true
+	// DistributedMode 分布式模式开关
+	// Python 字段默认值为 True，DEFAULT_RUNNER_CONFIG 覆盖为 False
 	DistributedMode bool
 	// DistributedConfig 分布式配置
 	DistributedConfig *DistributedConfig
@@ -76,6 +78,39 @@ func NewPulsarConfig(url string) *PulsarConfig {
 	return &PulsarConfig{
 		URL:        url,
 		MaxWorkers: 8,
+	}
+}
+
+// NewMessageQueueConfig 创建消息队列配置，Type 默认 PULSAR。
+//
+// 对应 Python: MessageQueueConfig(type=MessageQueueType.PULSAR, pulsar_config=None)
+func NewMessageQueueConfig() *MessageQueueConfig {
+	return &MessageQueueConfig{
+		Type: MessageQueueTypePulsar,
+	}
+}
+
+// NewDistributedConfig 创建分布式配置，各字段默认值对齐 Python DistributedConfig(BaseModel)。
+//
+// 对应 Python: DistributedConfig(request_timeout=30.0, max_request_concurrency=10000, ...)
+func NewDistributedConfig() *DistributedConfig {
+	return &DistributedConfig{
+		RequestTimeout:       30.0,
+		MaxRequestConcurrency: 10000,
+		MessageQueueConfig:   *NewMessageQueueConfig(),
+		AgentTopicTemplate:   "openjiuwen.single_agent.{agent_id}.{version}",
+		ReplyTopicTemplate:   "openjiuwen.reply.runner.{instance_id}",
+	}
+}
+
+// NewRunnerConfig 创建 Runner 全局配置，各字段默认值对齐 Python RunnerConfig(BaseModel)。
+//
+// 对应 Python: RunnerConfig(distributed_mode=True, instance_id=uuid4(), ...)
+func NewRunnerConfig() *RunnerConfig {
+	return &RunnerConfig{
+		DistributedMode:   true,
+		DistributedConfig: NewDistributedConfig(),
+		InstanceID:        generateInstanceID(),
 	}
 }
 
@@ -128,4 +163,12 @@ func (c *RunnerConfig) ReplyTopicTemplate() string {
 		return ""
 	}
 	return c.DistributedConfig.GetReplyTopicTemplate(c.EnvPrefix)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// generateInstanceID 生成实例唯一 ID。
+// 对齐 Python: instance_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+func generateInstanceID() string {
+	return uuid.New().String()
 }

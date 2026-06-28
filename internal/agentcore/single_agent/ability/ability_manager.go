@@ -819,8 +819,8 @@ func (am *AbilityManager) executeAgent(
 		// 步骤 5：注入 conversation_id（对齐 Python L789: tool_args["conversation_id"] = child_session_id）
 		toolArgs["conversation_id"] = childSessionID
 
-		// 步骤 6：创建子会话（对齐 Python L791-794: child_session = create_agent_session(...)）
-		childSession = session.CreateAgentSession(agentID, childSessionID)
+		// 步骤 6：创建子会话（对齐 Python L791-794: child_session = create_agent_session(session_id=..., card=agent.card)）
+		childSession = session.CreateAgentSession(childSessionID, ag.Card(), nil)
 
 		// 步骤 7：传播 auto_confirm（对齐 Python L796-798）
 		autoConfirmVal, _ := sess.GetState(InterruptAutoConfirmKey)
@@ -829,7 +829,7 @@ func (am *AbilityManager) executeAgent(
 		}
 	} else {
 		// sess 为 nil 时仍需创建子会话（对齐 Python: _prepare_agent 始终创建 session）
-		childSession = session.CreateAgentSession(agentID, toolCall.ID)
+		childSession = session.CreateAgentSession(toolCall.ID, ag.Card(), nil)
 	}
 
 	// 步骤 8：通过 Runner.RunAgent 执行（对齐 Python L800: result = await Runner.run_agent(agent, inputs, session=child_session)）

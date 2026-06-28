@@ -102,6 +102,13 @@ func newTestRunner() *Runner {
 	}
 }
 
+// newTestAgentCard 创建测试用最小 AgentCard（仅含 ID）。
+func newTestAgentCard(agentID string) *agentschema.AgentCard {
+	return &agentschema.AgentCard{
+		BaseCard: schema.BaseCard{ID: agentID},
+	}
+}
+
 // makeStreamCh 创建包含指定数据的流通道
 func makeStreamCh(items ...stream.Schema) <-chan stream.Schema {
 	ch := make(chan stream.Schema, len(items))
@@ -120,7 +127,7 @@ func TestRunAgent_正常调用(t *testing.T) {
 		card:   agentschema.NewAgentCard(schema.WithName("test-agent"), schema.WithDescription("测试 Agent")),
 		result: map[string]any{"output": "hello"},
 	}
-	sess := session.CreateAgentSession("test-agent", "test-session")
+	sess := session.CreateAgentSession("test-session", newTestAgentCard("test-agent"), nil)
 
 	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, sess, nil, nil)
 	if err != nil {
@@ -141,7 +148,7 @@ func TestRunAgent_执行错误(t *testing.T) {
 		card: agentschema.NewAgentCard(schema.WithName("err-agent"), schema.WithDescription("错误 Agent")),
 		err:  context.DeadlineExceeded,
 	}
-	sess := session.CreateAgentSession("err-agent", "err-session")
+	sess := session.CreateAgentSession("err-session", newTestAgentCard("err-agent"), nil)
 
 	_, err := RunAgent(context.Background(), ByAgent(ag), nil, sess, nil, nil)
 	if err == nil {
@@ -225,7 +232,7 @@ func TestRunAgentStreaming_正常调用(t *testing.T) {
 		card:     agentschema.NewAgentCard(schema.WithName("stream-agent"), schema.WithDescription("流式 Agent")),
 		streamCh: ch,
 	}
-	sess := session.CreateAgentSession("stream-agent", "stream-session")
+	sess := session.CreateAgentSession("stream-session", newTestAgentCard("stream-agent"), nil)
 
 	outCh, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, sess, nil, nil, nil)
 	if err != nil {
@@ -273,7 +280,7 @@ func TestRunAgentStreaming_流式错误(t *testing.T) {
 		card:      agentschema.NewAgentCard(schema.WithName("stream-err"), schema.WithDescription("流式错误 Agent")),
 		streamErr: context.DeadlineExceeded,
 	}
-	sess := session.CreateAgentSession("stream-err", "err-session")
+	sess := session.CreateAgentSession("err-session", newTestAgentCard("stream-err"), nil)
 
 	_, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, sess, nil, nil, nil)
 	if err == nil {
@@ -558,7 +565,7 @@ func TestCreateWorkflowSession(t *testing.T) {
 	}
 
 	// *session.Session → 调用 CreateWorkflowSession
-	agentSess := session.CreateAgentSession("test-agent", "test-sess")
+	agentSess := session.CreateAgentSession("test-sess", newTestAgentCard("test-agent"), nil)
 	ws = r.createWorkflowSession(agentSess)
 	if ws == nil {
 		t.Error("*Session 参数应返回非 nil WorkflowSession")
@@ -591,7 +598,7 @@ func TestPrepareAgent_按实例有会话(t *testing.T) {
 		card:   agentschema.NewAgentCard(schema.WithName("pa-inst-sess"), schema.WithDescription("按实例有会话")),
 		result: "ok",
 	}
-	sess := session.CreateAgentSession("pa-inst-sess", "existing-session")
+	sess := session.CreateAgentSession("existing-session", newTestAgentCard("pa-inst-sess"), nil)
 
 	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), nil, sess)
 	if err != nil {
@@ -621,7 +628,7 @@ func TestPrepareAgent_按ID有会话(t *testing.T) {
 		t.Fatalf("AddAgent 失败: %v", err)
 	}
 
-	sess := session.CreateAgentSession("registered-agent", "existing-session")
+	sess := session.CreateAgentSession("existing-session", newTestAgentCard("registered-agent"), nil)
 	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgentID("registered-agent"), nil, sess)
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
@@ -694,7 +701,7 @@ func TestPrepareAgent_按ID不存在(t *testing.T) {
 // TestPrepareAgent_按ID不存在有会话 测试 prepareAgent 按 ID 查找不存在但有会话
 func TestPrepareAgent_按ID不存在有会话(t *testing.T) {
 	r := newTestRunner()
-	sess := session.CreateAgentSession("ghost-agent", "ghost-session")
+	sess := session.CreateAgentSession("ghost-session", newTestAgentCard("ghost-agent"), nil)
 
 	_, _, err := r.prepareAgent(context.Background(), ByAgentID("ghost-agent"), nil, sess)
 	if err == nil {

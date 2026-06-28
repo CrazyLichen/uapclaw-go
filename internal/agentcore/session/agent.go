@@ -15,7 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -424,21 +423,26 @@ func (s *Session) CreateWorkflowSession() *WorkflowSession {
 }
 
 // CreateAgentSession 创建 Agent 会话实例。
-// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session()
+// 对齐 Python: openjiuwen/core/session/agent.py create_agent_session(session_id, envs, card)
 // 用于 AgentSessionContainer.load() 从磁盘恢复会话时创建真实 Session。
-func CreateAgentSession(agentID, sessionID string) *Session {
-	card := &agentschema.AgentCard{
-		BaseCard: schema.BaseCard{ID: agentID},
+func CreateAgentSession(sessionID string, card *agentschema.AgentCard, envs map[string]any) *Session {
+	opts := []SessionOption{WithSessionID(sessionID)}
+	if card != nil {
+		opts = append(opts, WithCard(card))
 	}
-	return NewSession(WithSessionID(sessionID), WithCard(card))
+	if envs != nil {
+		opts = append(opts, WithEnvs(envs))
+	}
+	return NewSession(opts...)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() {
 	// 注册 Session 创建函数到 controller 包，解决循环依赖
-	controller.RegisterSessionCreator(func(agentID, sessionID string) controller.StateAccessor {
-		return CreateAgentSession(agentID, sessionID)
+	// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+	controller.RegisterSessionCreator(func(sessionID string, card *agentschema.AgentCard, envs map[string]any) controller.StateAccessor {
+		return CreateAgentSession(sessionID, card, envs)
 	})
 }
 

@@ -79,8 +79,13 @@ var (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // initRunner 初始化全局Runner实例。
+// 对齐 Python: GLOBAL_RUNNER = _RunnerImpl(config=DEFAULT_RUNNER_CONFIG)
+// 创建 Runner 的同时设置默认配置。
 func initRunner() {
 	runnerOnce.Do(func() {
+		// 对齐 Python __init__: set_runner_config(DEFAULT_RUNNER_CONFIG)
+		config.SetRunnerConfig(config.GetRunnerConfig())
+
 		globalRunner = &Runner{
 			runnerID:          defaultRunnerID,
 			resourceMgr:      resources_manager.NewResourceMgr(),
@@ -130,6 +135,15 @@ func Start(ctx context.Context) error {
 	// 步骤 2：进入任务组作用域（对齐 Python L274: with self._root_task_group_scope()）
 	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
 
+	// 对齐 Python L320-322: start 失败时调用 _close_root_task_group() 清理
+	started := false
+	defer func() {
+		if !started {
+			// 步骤 1 的清理：关闭根任务组
+			// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
+		}
+	}()
+
 	// 步骤 3：初始化 Checkpointer（对齐 Python L277-302）
 	cfg := config.GetRunnerConfig()
 	if cfg != nil && cfg.CheckpointerConfig != nil {
@@ -162,6 +176,7 @@ func Start(ctx context.Context) error {
 	// 步骤 5：启动本地消息队列（对齐 Python L312: result = await self._message_queue.start()）
 	r.messageQueue.Start()
 
+	started = true
 	logger.Info(logComponent).
 		Str("event_type", "runner_start").
 		Str("runner_id", r.runnerID).
@@ -171,12 +186,35 @@ func Start(ctx context.Context) error {
 
 // Stop 停止Runner并清理资源。
 // 对齐 Python: Runner.stop() (runner.py L324-348)
+// 返回首个遇到的错误（对齐 Python 失败返回 False），用 defer 保证后续清理仍执行。
 func Stop(ctx context.Context) error {
 	r := getRunner()
 	logger.Info(logComponent).
 		Str("event_type", "runner_stop").
 		Str("runner_id", r.runnerID).
 		Msg("开始停止 Runner")
+
+	var firstErr error
+
+	// 对齐 Python L346-348: finally 保证释放资源管理器和关闭根任务组
+	defer func() {
+		// 步骤 4：释放资源管理器（对齐 Python L347: await self._resource_manager.release()）
+		if r.resourceMgr != nil {
+			if err := r.resourceMgr.Release(ctx); err != nil {
+				logger.Warn(logComponent).
+					Str("event_type", "runner_stop").
+					Str("runner_id", r.runnerID).
+					Err(err).
+					Msg("资源管理器释放失败")
+				if firstErr == nil {
+					firstErr = err
+				}
+			}
+		}
+
+		// 步骤 5：关闭根任务组（对齐 Python L348: await self._close_root_task_group()）
+		// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
+	}()
 
 	// 步骤 1：进入任务组作用域（对齐 Python L328）
 	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
@@ -191,21 +229,17 @@ func Stop(ctx context.Context) error {
 			Str("runner_id", r.runnerID).
 			Err(err).
 			Msg("消息队列停止失败")
+		firstErr = err
 	}
 
-	// 步骤 4：释放资源管理器（对齐 Python L347: await self._resource_manager.release()）
-	if r.resourceMgr != nil {
-		if err := r.resourceMgr.Release(ctx); err != nil {
-			logger.Warn(logComponent).
-				Str("event_type", "runner_stop").
-				Str("runner_id", r.runnerID).
-				Err(err).
-				Msg("资源管理器释放失败")
-		}
+	if firstErr != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "runner_stop").
+			Str("runner_id", r.runnerID).
+			Err(firstErr).
+			Msg("Runner 停止过程中遇到错误")
+		return firstErr
 	}
-
-	// 步骤 5：关闭根任务组（对齐 Python L348: await self._close_root_task_group()）
-	// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
 
 	logger.Info(logComponent).
 		Str("event_type", "runner_stop").
@@ -674,9 +708,15 @@ func (r *Runner) prepareWorkflow(
 
 // createAgentSession 创建Agent会话。
 // 对齐 Python: _RunnerImpl._create_agent_session() (runner.py L657-670)
+// 从 agent 提取完整 card 和 envs，传给 CreateAgentSession。
 func (r *Runner) createAgentSession(agent interfaces.BaseAgent, sessionID string) *session.Session {
-	// 对齐 Python L668-669: agent_session = create_agent_session(session_id=session_id, envs=envs, card=card)
-	return session.CreateAgentSession(agent.Card().ID, sessionID)
+	// 对齐 Python L658-669: 提取 card 和 envs
+	card := agent.Card()
+	// ⤵️ 预留：从 AgentConfig 提取 envs
+	// Python L665-666: if isinstance(config, Config): envs = getattr(config, "_env", None)
+	// Go 的 AgentConfig 接口目前不含 envs，待 AgentConfig 完善（添加 GetEnvs）后回填
+	var envs map[string]any
+	return session.CreateAgentSession(sessionID, card, envs)
 }
 
 // createWorkflowSession 创建Workflow会话。

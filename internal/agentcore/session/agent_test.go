@@ -512,9 +512,11 @@ func TestSession_GetAgentDescription有Card(t *testing.T) {
 	}
 }
 
-// TestCreateAgentSession 测试通过 agentID 和 sessionID 创建 Session
+// TestCreateAgentSession 测试通过 sessionID、card 和 envs 创建 Session
+// 对齐 Python: create_agent_session(session_id, envs, card)
 func TestCreateAgentSession(t *testing.T) {
-	s := CreateAgentSession("agent-1", "sess-1")
+	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
+	s := CreateAgentSession("sess-1", card, nil)
 	if s == nil {
 		t.Fatal("CreateAgentSession 返回 nil")
 	}

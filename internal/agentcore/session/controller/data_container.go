@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"sync"
 
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -104,7 +106,8 @@ var (
 	// sessionCreator 从序列化数据重建 Session 的函数。
 	// 由 session 包在 init 时通过 RegisterSessionCreator 注册，
 	// 解决 controller → session 的循环依赖问题。
-	sessionCreator func(agentID, sessionID string) StateAccessor
+	// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+	sessionCreator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -122,7 +125,8 @@ func GetFactory() *DataContainerFactory {
 // RegisterSessionCreator 注册 Session 创建函数。
 // 由 session 包在 init 时调用，将 CreateAgentSession 注入到 controller 包，
 // 解决 controller → session 的循环依赖。
-func RegisterSessionCreator(creator func(agentID, sessionID string) StateAccessor) {
+// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))
+func RegisterSessionCreator(creator func(sessionID string, card *agentschema.AgentCard, envs map[string]any) StateAccessor) {
 	sessionCreator = creator
 }
 
@@ -138,7 +142,12 @@ func NewAgentSessionContainer() *AgentSessionContainer {
 func LoadAgentSessionContainer(agentID, sessionID string, serialized any) (DataContainer, error) {
 	container := NewAgentSessionContainer()
 	if sessionCreator != nil {
-		sa := sessionCreator(agentID, sessionID)
+		// 对齐 Python: create_agent_session(session_id=session_id, card=AgentCard(id=agent_id))
+		// controller 只有 agentID，构建最小 card 传给 sessionCreator
+		card := &agentschema.AgentCard{
+			BaseCard: schema.BaseCard{ID: agentID},
+		}
+		sa := sessionCreator(sessionID, card, nil)
 		container.SetSession(sa)
 		// PreRun 触发 AGENT_SESSION_CREATED 回调，回调中会注入 Session
 		// G-08 修复：PreRun 失败时返回 error，阻止部分初始化的容器被使用
