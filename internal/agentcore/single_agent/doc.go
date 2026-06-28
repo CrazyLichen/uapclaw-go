@@ -11,7 +11,6 @@
 //
 //	single_agent/
 //	├── doc.go                 # 包文档
-//	├── reexports.go           # 子包类型别名 re-export
 //	├── ability/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── ability_manager.go # AbilityManager 核心结构 + 注册/查询/执行
