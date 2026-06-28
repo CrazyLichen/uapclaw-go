@@ -96,8 +96,8 @@ func (m *mockWorkflow) Card() *schema.WorkflowCard {
 func newTestRunner() *Runner {
 	return &Runner{
 		runnerID:          "test-runner",
-		resourceMgr:      resources_manager.NewResourceMgr(),
-		messageQueue:     message_queue.NewMessageQueueInMemory(100, 30*1e9),
+		resourceMgr:       resources_manager.NewResourceMgr(),
+		messageQueue:      message_queue.NewMessageQueueInMemory(100, 30*1e9),
 		callbackFramework: cb.NewCallbackFramework(),
 	}
 }
@@ -305,8 +305,8 @@ func TestRunWorkflowStreaming_正常调用(t *testing.T) {
 	)
 
 	wf := &mockWorkflow{
-		card:      schema.NewWorkflowCard(schema.WithName("stream-wf"), schema.WithDescription("流式 Workflow")),
-		streamCh:  ch,
+		card:     schema.NewWorkflowCard(schema.WithName("stream-wf"), schema.WithDescription("流式 Workflow")),
+		streamCh: ch,
 	}
 
 	outCh, err := RunWorkflowStreaming(context.Background(), ByWorkflow(wf), nil, nil, nil, nil, nil)
@@ -451,7 +451,7 @@ func TestSetConfig_GetConfig(t *testing.T) {
 	cfg := &config.RunnerConfig{
 		DistributedMode: false,
 		EnvPrefix:       "test-prefix",
-		InstanceID:       "test-instance",
+		InstanceID:      "test-instance",
 	}
 	SetConfig(cfg)
 	got := GetConfig()
@@ -476,8 +476,8 @@ func TestSetGlobalRunner(t *testing.T) {
 	// 替换为自定义 Runner
 	custom := &Runner{
 		runnerID:          "custom-runner",
-		resourceMgr:      resources_manager.NewResourceMgr(),
-		messageQueue:     message_queue.NewMessageQueueInMemory(10, 30*1e9),
+		resourceMgr:       resources_manager.NewResourceMgr(),
+		messageQueue:      message_queue.NewMessageQueueInMemory(10, 30*1e9),
 		callbackFramework: cb.NewCallbackFramework(),
 	}
 	SetGlobalRunner(custom)

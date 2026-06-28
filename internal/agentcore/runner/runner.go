@@ -568,8 +568,8 @@ func initRunner() {
 
 		globalRunner = &Runner{
 			runnerID:          defaultRunnerID,
-			resourceMgr:      resources_manager.NewResourceMgr(),
-			messageQueue:     message_queue.NewMessageQueueInMemory(defaultMQMaxSize, defaultMQTimeout),
+			resourceMgr:       resources_manager.NewResourceMgr(),
+			messageQueue:      message_queue.NewMessageQueueInMemory(defaultMQMaxSize, defaultMQTimeout),
 			callbackFramework: callback.NewCallbackFramework(),
 		}
 	})

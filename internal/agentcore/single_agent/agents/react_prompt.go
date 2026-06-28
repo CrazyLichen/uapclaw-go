@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"

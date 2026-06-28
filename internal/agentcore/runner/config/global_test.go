@@ -40,13 +40,13 @@ func TestSetGetRunnerConfig_基本读写(t *testing.T) {
 
 	// 设置后 Get 返回设置的配置
 	custom := &RunnerConfig{
-		DistributedMode:        true,
-		EnvPrefix:              "test",
-		InstanceID:             "test-instance-123",
+		DistributedMode:         true,
+		EnvPrefix:               "test",
+		InstanceID:              "test-instance-123",
 		EnableSessionController: true,
-		EnableA2A:              true,
+		EnableA2A:               true,
 		DistributedConfig: &DistributedConfig{
-			RequestTimeout:       60.0,
+			RequestTimeout:        60.0,
 			MaxRequestConcurrency: 5000,
 			MessageQueueConfig: MessageQueueConfig{
 				Type: MessageQueueTypePulsar,

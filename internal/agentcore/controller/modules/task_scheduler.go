@@ -11,8 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -811,7 +811,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 
 	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
 	chunk := &stream.OutputSchema{
-		Type:    "controller_output",
+		Type: "controller_output",
 		Payload: &schema.ControllerOutputPayload{
 			Type: schema.AllTasksProcessed,
 			Data: []schema.DataFrame{

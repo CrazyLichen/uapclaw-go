@@ -18,7 +18,7 @@ var (
 	DEFAULT_RUNNER_CONFIG = &RunnerConfig{
 		DistributedMode: false,
 		DistributedConfig: &DistributedConfig{
-			RequestTimeout:       30.0,
+			RequestTimeout:        30.0,
 			MaxRequestConcurrency: 10000,
 			MessageQueueConfig: MessageQueueConfig{
 				Type: MessageQueueTypeFake,
@@ -26,11 +26,11 @@ var (
 			AgentTopicTemplate: "openjiuwen.single_agent.{agent_id}.{version}",
 			ReplyTopicTemplate: "openjiuwen.reply.runner.{instance_id}",
 		},
-		EnvPrefix:              "",
-		InstanceID:             generateInstanceID(),
-		CheckpointerConfig:     nil,
+		EnvPrefix:               "",
+		InstanceID:              generateInstanceID(),
+		CheckpointerConfig:      nil,
 		EnableSessionController: false,
-		EnableA2A:              false,
+		EnableA2A:               false,
 	}
 
 	// globalConfig 全局 Runner 配置单例

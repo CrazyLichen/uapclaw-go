@@ -104,7 +104,7 @@ func (e *configurableFakeTaskExecutor) ExecuteAbility(ctx context.Context, taskI
 	// 默认：发送一个 completion chunk 然后关闭
 	ch := make(chan *stream.OutputSchema, 1)
 	ch <- &stream.OutputSchema{
-		Type:         "controller_output",
+		Type: "controller_output",
 		Payload: &schema.ControllerOutputPayload{
 			Type: payloadTypeTaskCompletion,
 			Data: []schema.DataFrame{&schema.TextDataFrame{Text: "done"}},

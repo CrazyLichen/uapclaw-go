@@ -898,9 +898,9 @@ func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...Resource
 // registerSysOperationTools 自动注册系统操作的方法为工具。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//   1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
-//   2. 对每个工具调用 innerAddResource 注册到 ToolMgr
-//   3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
+//  1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
+//  2. 对每个工具调用 innerAddResource 注册到 ToolMgr
+//  3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
 //
 // 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
 func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
@@ -911,10 +911,10 @@ func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
 // GetSysOpToolCards 获取系统操作的工具卡片。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//   1. 获取 SysOperation 实例
-//   2. 通过 OperationRegistry 获取支持的 operation_name 列表
-//   3. 按 operation_name + tool_name 过滤 idToCard 查找 ToolCard
-//   4. 当 operation_name 为列表时不允许同时指定 tool_name
+//  1. 获取 SysOperation 实例
+//  2. 通过 OperationRegistry 获取支持的 operation_name 列表
+//  3. 按 operation_name + tool_name 过滤 idToCard 查找 ToolCard
+//  4. 当 operation_name 为列表时不允许同时指定 tool_name
 //
 // 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
 func (m *ResourceMgr) GetSysOpToolCards(_ string, _ string, _ string) ([]*schema.BaseCard, error) {

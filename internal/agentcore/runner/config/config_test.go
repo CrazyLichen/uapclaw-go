@@ -91,7 +91,7 @@ func TestRunnerConfig_TopicTemplate(t *testing.T) {
 // TestRunnerConfig_字段默认值 测试 RunnerConfig 各字段默认值语义。
 func TestRunnerConfig_字段默认值(t *testing.T) {
 	cfg := &RunnerConfig{
-		DistributedMode:  true,
+		DistributedMode:   true,
 		DistributedConfig: &DistributedConfig{},
 	}
 	assert.True(t, cfg.DistributedMode)

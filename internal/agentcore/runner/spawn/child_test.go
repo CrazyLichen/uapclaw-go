@@ -235,7 +235,7 @@ func TestProcessMessageLoop_输入消息(t *testing.T) {
 			"agent_kind": "class_agent",
 			"payload":    map[string]any{},
 		},
-		"inputs":   map[string]any{},
+		"inputs":    map[string]any{},
 		"streaming": false,
 	})
 	data, _ := json.Marshal(inputMsg)
@@ -433,7 +433,7 @@ func TestProcessMessageLoop_输入消息补充inputs(t *testing.T) {
 			"agent_kind": "class_agent",
 			"payload":    map[string]any{},
 		},
-		"inputs":   map[string]any{"key1": "val1"},
+		"inputs":    map[string]any{"key1": "val1"},
 		"streaming": false,
 	})
 	shutdownMsg := NewMessage(MessageTypeShutdown, nil)
@@ -490,7 +490,7 @@ func TestProcessMessageLoop_并发Agent执行(t *testing.T) {
 			"agent_kind": "class_agent",
 			"payload":    map[string]any{},
 		},
-		"inputs":   map[string]any{},
+		"inputs":    map[string]any{},
 		"streaming": false,
 	})
 
@@ -514,7 +514,7 @@ func TestProcessMessageLoop_并发Agent执行(t *testing.T) {
 
 // syncBuffer 并发安全的 bytes.Buffer
 type syncBuffer struct {
-	mu sync.Mutex
+	mu  sync.Mutex
 	buf bytes.Buffer
 }
 
@@ -580,7 +580,7 @@ func TestProcessMessageLoop_输入消息有streaming和streamModes(t *testing.T)
 func TestProcessMessageLoop_输入消息无agentConfigKey(t *testing.T) {
 	// payload 有 inputs 但没有 agent_config，且全局 agentConfig 也为 nil
 	inputMsg := NewMessage(MessageTypeInput, map[string]any{
-		"inputs":   map[string]any{},
+		"inputs":    map[string]any{},
 		"streaming": false,
 	})
 
@@ -606,7 +606,7 @@ func TestProcessMessageLoop_已有AgentConfig(t *testing.T) {
 	}
 
 	inputMsg := NewMessage(MessageTypeInput, map[string]any{
-		"inputs":   map[string]any{"key": "value"},
+		"inputs":    map[string]any{"key": "value"},
 		"streaming": false,
 	})
 

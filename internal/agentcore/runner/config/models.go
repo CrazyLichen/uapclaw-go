@@ -95,11 +95,11 @@ func NewMessageQueueConfig() *MessageQueueConfig {
 // 对应 Python: DistributedConfig(request_timeout=30.0, max_request_concurrency=10000, ...)
 func NewDistributedConfig() *DistributedConfig {
 	return &DistributedConfig{
-		RequestTimeout:       30.0,
+		RequestTimeout:        30.0,
 		MaxRequestConcurrency: 10000,
-		MessageQueueConfig:   *NewMessageQueueConfig(),
-		AgentTopicTemplate:   "openjiuwen.single_agent.{agent_id}.{version}",
-		ReplyTopicTemplate:   "openjiuwen.reply.runner.{instance_id}",
+		MessageQueueConfig:    *NewMessageQueueConfig(),
+		AgentTopicTemplate:    "openjiuwen.single_agent.{agent_id}.{version}",
+		ReplyTopicTemplate:    "openjiuwen.reply.runner.{instance_id}",
 	}
 }
 

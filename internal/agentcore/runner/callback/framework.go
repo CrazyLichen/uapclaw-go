@@ -1627,11 +1627,11 @@ func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
 	if callbacks, ok := fw.customCallbacks[event]; ok {
 		for _, info := range callbacks {
 			result = append(result, map[string]any{
-				"priority":    info.Priority,
-				"once":        info.Once,
-				"enabled":     info.Enabled,
-				"namespace":   info.Namespace,
-				"tags":        info.Tags,
+				"priority":      info.Priority,
+				"once":          info.Once,
+				"enabled":       info.Enabled,
+				"namespace":     info.Namespace,
+				"tags":          info.Tags,
 				"callback_type": info.CallbackType,
 			})
 		}

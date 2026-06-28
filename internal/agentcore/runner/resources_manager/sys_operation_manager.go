@@ -43,10 +43,10 @@ func NewSysOperationMgr() *SysOperationMgr {
 // AddSysOperation 注册系统操作。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//   1. 校验 sysOperationID 非空且不重复
-//   2. 校验 instance 非空
-//   3. 校验 isolation_key_template 唯一性（sandboxKeyOwnerMap 查重）
-//   4. 写入 sysOperations 和 sandboxKeyOwnerMap
+//  1. 校验 sysOperationID 非空且不重复
+//  2. 校验 instance 非空
+//  3. 校验 isolation_key_template 唯一性（sandboxKeyOwnerMap 查重）
+//  4. 写入 sysOperations 和 sandboxKeyOwnerMap
 //
 // 对应 Python: SysOperationMgr.add_sys_operation(sys_operation_id, sys_operation_instance)
 func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance any) error {
@@ -57,9 +57,9 @@ func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance any) e
 // RemoveSysOperation 注销系统操作。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//   1. 校验 sysOperationID 非空
-//   2. 从 sysOperations 弹出实例
-//   3. 清理 sandboxKeyOwnerMap 中该实例的 isolation_key_template
+//  1. 校验 sysOperationID 非空
+//  2. 从 sysOperations 弹出实例
+//  3. 清理 sandboxKeyOwnerMap 中该实例的 isolation_key_template
 //
 // 对应 Python: SysOperationMgr.remove_sys_operation(sys_operation_id)
 func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (any, error) {
@@ -70,8 +70,8 @@ func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (any, error)
 // GetSysOperation 获取系统操作。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//   1. 校验 sysOperationID 非空
-//   2. 从 sysOperations 查询并返回
+//  1. 校验 sysOperationID 非空
+//  2. 从 sysOperations 查询并返回
 //
 // 对应 Python: SysOperationMgr.get_sys_operation(sys_operation_id)
 func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (any, error) {
