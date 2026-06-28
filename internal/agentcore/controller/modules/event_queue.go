@@ -118,12 +118,24 @@ func (eq *EventQueue) Subscribe(ctx context.Context, agentID, sessionID string) 
 
 	for _, eventType := range eventTypes {
 		topic := eq.buildTopic(agentID, sessionID, eventType)
-		sub := eq.queue.Subscribe(topic)
+		subBase, err := eq.queue.Subscribe(topic)
+		if err != nil {
+			logger.Error(logComponent).
+				Str("event_type", "LLM_CALL_ERROR").
+				Str("topic", topic).
+				Str("agent_id", agentID).
+				Str("session_id", sessionID).
+				Err(err).
+				Msg("创建事件订阅失败")
+			return exception.NewBaseError(exception.StatusAgentControllerEventQueueError,
+				exception.WithMsg(fmt.Sprintf("创建事件订阅失败: topic=%s, err=%v", topic, err)),
+				exception.WithCause(err))
+		}
 
 		// 捕获当前 eventType 和 handler，避免闭包引用循环变量
 		handler := eq.makeEventHandler(eventType)
-		sub.SetMessageHandler(handler)
-		sub.Activate()
+		subBase.SetMessageHandler(handler)
+		subBase.Activate()
 
 		logger.Info(logComponent).
 			Str("event_type", "event_queue_subscribed").
@@ -189,7 +201,7 @@ func (eq *EventQueue) PublishEvent(ctx context.Context, agentID string, sess ses
 	}
 
 	invoke := message_queue.NewInvokeQueueMessage(payload)
-	err := eq.queue.ProduceSync(ctx, topic, invoke)
+	err := eq.queue.Produce(ctx, topic, invoke)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("event_type", "LLM_CALL_ERROR").

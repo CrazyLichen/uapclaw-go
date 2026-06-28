@@ -1,25 +1,36 @@
-// Package message_queue 提供基于 Go channel 的内存消息队列实现。
+// Package message_queue 提供消息队列接口及内存/本地实现。
 //
-// 本包对齐 Python 的 MessageQueueInMemory，支持按 topic 路由、
-// 同步/火忘发布、订阅生命周期管理。
+// 本包对齐 Python 的 MessageQueueBase + MessageQueueInMemory + LocalMessageQueue，
+// 支持按 topic 路由、同步/火忘发布、订阅生命周期管理。
 //
 // 核心概念：
 //
-//	MessageQueueInMemory  — 消息队列管理器，管理 topic → Subscription 映射
-//	Subscription          — 订阅句柄，持有关联 topic + message handler 回调
-//	QueueMessage          — 火忘消息（发布后不等待处理完成）
-//	InvokeQueueMessage    — 同步消息（发布后等待 handler 处理完成）
+//	QueueMessageBase   — 消息基础接口（GetMessageID/GetPayload 等），统一 Produce 参数类型
+//	MessageQueueBase   — 消息队列基础接口（Start/Stop/Subscribe/Unsubscribe/Produce）
+//	SubscriptionBase   — 订阅基础接口（SetMessageHandler/Activate/Deactivate/IsActive）
+//	MessageQueueInMemory — 基于 Go channel 的内存消息队列实现
+//	LocalMessageQueue   — no-op 本地消息队列（start/stop 空操作）
+//	QueueMessage        — 火忘消息（发布后不等待处理完成），实现 QueueMessageBase
+//	InvokeQueueMessage  — 同步消息（发布后等待 handler 处理完成），实现 QueueMessageBase
+//	StreamQueueMessage  — 流式消息（发布后等待流式处理结果），实现 QueueMessageBase
 //
-// 同步发布语义：使用 InvokeQueueMessage，handler 处理完后通过
-// CompleteResponse 通知调用方，调用方通过 WaitResponse 阻塞等待。
-// 对应 Python 中 await queue_message.response 的语义。
+// Produce 统一入口：MessageQueueBase.Produce(ctx, topic, QueueMessageBase)。
+// 消息类型决定发布模式，对齐 Python produce_message(topic, message) + isinstance 判断：
+//   - *QueueMessage: 火忘发布
+//   - *InvokeQueueMessage: 同步发布，handler 完成后 CompleteResponse 通知
+//   - *StreamQueueMessage: 流式发布，handler 完成后 CompleteResponse 通知
 //
 // 文件目录：
 //
 //	message_queue/
 //	├── doc.go        # 包文档
-//	├── message.go    # QueueMessage / InvokeQueueMessage 消息类型
-//	└── queue.go      # MessageQueueInMemory / Subscription 核心
+//	├── base.go       # MessageQueueBase / SubscriptionBase 接口 + QueueMessage / InvokeQueueMessage / StreamQueueMessage
+//	├── local.go      # LocalMessageQueue / LocalSubscription（no-op 实现）
+//	└── queue.go      # MessageQueueInMemory / Subscription 核心实现
 //
-// 对应 Python 代码：openjiuwen/core/runner/message_queue_inmemory.py
+// 对应 Python 代码：
+//
+//	openjiuwen/core/runner/message_queue_base.py      （接口 + QueueMessage/InvokeQueueMessage/StreamQueueMessage）
+//	openjiuwen/core/runner/message_queue_inmemory.py  （MessageQueueInMemory + SubscriptionInMemory）
+//	openjiuwen/core/runner/message_queue_base.py      （LocalMessageQueue no-op）
 package message_queue

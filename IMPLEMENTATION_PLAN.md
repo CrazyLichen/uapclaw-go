@@ -413,8 +413,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.23 | ✅ | ResourceMgr | Agent/Tool/Workflow/Model/Prompt 全局注册表 | `openjiuwen/core/runner/resources_manager/resource_manager.py` |
 | 6.24 | ✅ | AsyncCallbackFramework | 事件注册/触发/emit_before/emit_after/transform_io | `openjiuwen/core/runner/callback/` |
 | 6.25 | ☐ | Runner 单例 | `RunAgent/RunAgentStreaming/RunWorkflow/SpawnAgent` | `openjiuwen/core/runner/runner.py` |
-| 6.26 | ☐ | RunnerConfig | Runner 配置（distributed_mode 等） | `openjiuwen/core/runner/runner_config.py` |
-| 6.27 | ☐ | LocalMessageQueue | 本地消息队列 | `openjiuwen/core/runner/message_queue_inmemory.py` |
+| 6.26 | ✅ | RunnerConfig | Runner 配置（distributed_mode 等） | `openjiuwen/core/runner/runner_config.py` |
+| 6.27 | ✅ | LocalMessageQueue | 本地消息队列 | `openjiuwen/core/runner/message_queue_inmemory.py` |
 | 6.28 | ☐ | Spawn 子进程 | JSON over stdin/stdout，`SpawnedProcessHandle` | `openjiuwen/core/runner/spawn/` |
 | 6.29 | ☐ | Agent Prompts | Agent 系统提示词模板 | `openjiuwen/core/single_agent/prompts/` |
 

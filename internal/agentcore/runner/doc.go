@@ -7,7 +7,8 @@
 //
 //	runner/
 //	├── callback/             # 回调框架子包
-//	├── message_queue/        # 内存消息队列子包
+//	├── config/               # Runner 全局配置子包（RunnerConfig/DistributedConfig/PulsarConfig 等）
+//	├── message_queue/        # 消息队列子包（MessageQueueBase 接口 + InMemory/Local 实现）
 //	├── resources_manager/    # 资源注册表子包（Agent/Tool/Workflow/Model/Prompt 全局注册）
 //	├── doc.go                # 包文档
 //	└── runner.go             # RunAgent/RunWorkflow 全局函数

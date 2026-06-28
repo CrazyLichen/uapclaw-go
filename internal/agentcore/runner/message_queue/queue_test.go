@@ -41,7 +41,8 @@ func TestMessageQueueInMemory_生产消费(t *testing.T) {
 	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
-	sub := q.Subscribe("test_topic")
+	sub, err := q.Subscribe("test_topic")
+	require.NoError(t, err)
 
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		received.Add(1)
@@ -49,20 +50,21 @@ func TestMessageQueueInMemory_生产消费(t *testing.T) {
 	})
 	sub.Activate()
 
-	err := q.Produce(context.Background(), "test_topic", NewQueueMessage(map[string]any{"key": "value"}))
+	err = q.Produce(context.Background(), "test_topic", NewQueueMessage(map[string]any{"key": "value"}))
 	require.NoError(t, err)
 
 	// 等待消息被消费
 	assert.Eventually(t, func() bool { return received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 }
 
-// TestMessageQueueInMemory_同步发布等待 测试 InvokeQueueMessage 的同步等待语义。
+// TestMessageQueueInMemory_同步发布等待 测试 Produce 传入 InvokeQueueMessage 的同步等待语义。
 func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
-	sub := q.Subscribe("sync_topic")
+	sub, err := q.Subscribe("sync_topic")
+	require.NoError(t, err)
 	var handlerCalled atomic.Bool
 
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
@@ -72,7 +74,7 @@ func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	err := q.ProduceSync(context.Background(), "sync_topic", invoke)
+	err = q.Produce(context.Background(), "sync_topic", invoke)
 	require.NoError(t, err)
 
 	// WaitResponse 应阻塞直到 handler 处理完成
@@ -82,14 +84,38 @@ func TestMessageQueueInMemory_同步发布等待(t *testing.T) {
 	assert.True(t, handlerCalled.Load())
 }
 
-// TestMessageQueueInMemory_火忘发布 测试 QueueMessage 不等待处理完成。
+// TestMessageQueueInMemory_流式发布等待 测试 Produce 传入 StreamQueueMessage 的流式等待语义。
+func TestMessageQueueInMemory_流式发布等待(t *testing.T) {
+	q := NewMessageQueueInMemory(100, 10*time.Second)
+	q.Start()
+	defer func() { _ = q.Stop(context.Background()) }()
+
+	sub, err := q.Subscribe("stream_topic")
+	require.NoError(t, err)
+
+	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
+		return "stream_result", nil
+	})
+	sub.Activate()
+
+	stream := NewStreamQueueMessage(map[string]any{"key": "value"})
+	err = q.Produce(context.Background(), "stream_topic", stream)
+	require.NoError(t, err)
+
+	result, err := stream.WaitResponse(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "stream_result", result)
+}
+
+// TestMessageQueueInMemory_火忘发布 测试 Produce 传入 QueueMessage 不等待处理完成。
 func TestMessageQueueInMemory_火忘发布(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
-	sub := q.Subscribe("async_topic")
+	sub, err := q.Subscribe("async_topic")
+	require.NoError(t, err)
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		time.Sleep(100 * time.Millisecond) // 模拟处理耗时
 		received.Add(1)
@@ -97,12 +123,11 @@ func TestMessageQueueInMemory_火忘发布(t *testing.T) {
 	})
 	sub.Activate()
 
-	// 火忘发布，不传 InvokeQueueMessage
-	err := q.Produce(context.Background(), "async_topic", NewQueueMessage(map[string]any{"key": "value"}))
+	// 火忘发布，传入 QueueMessage
+	err = q.Produce(context.Background(), "async_topic", NewQueueMessage(map[string]any{"key": "value"}))
 	require.NoError(t, err)
 
-	// Produce 立即返回，handler 可能还没处理完
-	// 但最终会处理
+	// Produce 立即返回，handler 可能还没处理完，但最终会处理
 	assert.Eventually(t, func() bool { return received.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
 }
 
@@ -114,14 +139,16 @@ func TestMessageQueueInMemory_多Topic路由(t *testing.T) {
 
 	var topic1Received, topic2Received atomic.Int32
 
-	sub1 := q.Subscribe("topic_1")
+	sub1, err := q.Subscribe("topic_1")
+	require.NoError(t, err)
 	sub1.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		topic1Received.Add(1)
 		return nil, nil
 	})
 	sub1.Activate()
 
-	sub2 := q.Subscribe("topic_2")
+	sub2, err := q.Subscribe("topic_2")
+	require.NoError(t, err)
 	sub2.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		topic2Received.Add(1)
 		return nil, nil
@@ -141,8 +168,9 @@ func TestMessageQueueInMemory_订阅取消(t *testing.T) {
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
-	q.Subscribe("cancel_topic")
-	err := q.Unsubscribe(context.Background(), "cancel_topic")
+	_, err := q.Subscribe("cancel_topic")
+	require.NoError(t, err)
+	err = q.Unsubscribe(context.Background(), "cancel_topic")
 	require.NoError(t, err)
 
 	err = q.Produce(context.Background(), "cancel_topic", NewQueueMessage(nil))
@@ -156,7 +184,8 @@ func TestMessageQueueInMemory_激活停用(t *testing.T) {
 	defer func() { _ = q.Stop(context.Background()) }()
 
 	var received atomic.Int32
-	sub := q.Subscribe("toggle_topic")
+	sub, err := q.Subscribe("toggle_topic")
+	require.NoError(t, err)
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		received.Add(1)
 		return nil, nil
@@ -174,20 +203,21 @@ func TestMessageQueueInMemory_激活停用(t *testing.T) {
 	assert.False(t, sub.IsActive())
 }
 
-// TestMessageQueueInMemory_同步发布Handler错误 测试 handler 返回错误时 WaitResponse 收到错误。
+// TestMessageQueueInMemory_同步发布Handler错误 测试 handler 返回错误时 InvokeQueueMessage.WaitResponse 收到错误。
 func TestMessageQueueInMemory_同步发布Handler错误(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
-	sub := q.Subscribe("error_topic")
+	sub, err := q.Subscribe("error_topic")
+	require.NoError(t, err)
 	sub.SetMessageHandler(func(ctx context.Context, payload map[string]any) (any, error) {
 		return nil, errors.New("handler error")
 	})
 	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	_ = q.ProduceSync(context.Background(), "error_topic", invoke)
+	_ = q.Produce(context.Background(), "error_topic", invoke)
 
 	result, err := invoke.WaitResponse(context.Background())
 	assert.Error(t, err)
@@ -201,24 +231,46 @@ func TestMessageQueueInMemory_Handler未设置(t *testing.T) {
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
-	sub := q.Subscribe("no_handler_topic")
+	sub, err := q.Subscribe("no_handler_topic")
+	require.NoError(t, err)
 	// 不设置 handler
 	sub.Activate()
 
 	invoke := NewInvokeQueueMessage(map[string]any{"key": "value"})
-	_ = q.ProduceSync(context.Background(), "no_handler_topic", invoke)
+	_ = q.Produce(context.Background(), "no_handler_topic", invoke)
 
-	_, err := invoke.WaitResponse(context.Background())
+	_, err = invoke.WaitResponse(context.Background())
 	assert.ErrorIs(t, err, ErrHandlerNotSet)
 }
 
-// TestMessageQueueInMemory_重复订阅同Topic 测试对同一 topic 多次 Subscribe 返回同一订阅。
+// TestMessageQueueInMemory_重复订阅同Topic 测试对同一 topic 多次 Subscribe 返回错误。
 func TestMessageQueueInMemory_重复订阅同Topic(t *testing.T) {
 	q := NewMessageQueueInMemory(100, 10*time.Second)
 	q.Start()
 	defer func() { _ = q.Stop(context.Background()) }()
 
-	sub1 := q.Subscribe("same_topic")
-	sub2 := q.Subscribe("same_topic")
-	assert.Equal(t, sub1.ts, sub2.ts)
+	sub1, err := q.Subscribe("same_topic")
+	require.NoError(t, err)
+	require.NotNil(t, sub1)
+
+	// 重复订阅应返回 ErrTopicAlreadySubscribed（对齐 Python ValueError）
+	_, err = q.Subscribe("same_topic")
+	assert.ErrorIs(t, err, ErrTopicAlreadySubscribed)
+}
+
+// TestMessageQueueInMemory_实现MessageQueueBase接口 测试 MessageQueueInMemory 满足 MessageQueueBase 接口。
+func TestMessageQueueInMemory_实现MessageQueueBase接口(t *testing.T) {
+	var _ MessageQueueBase = &MessageQueueInMemory{}
+}
+
+// TestSubscription_实现SubscriptionBase接口 测试 Subscription 满足 SubscriptionBase 接口。
+func TestSubscription_实现SubscriptionBase接口(t *testing.T) {
+	var _ SubscriptionBase = &Subscription{}
+}
+
+// TestQueueMessage_实现QueueMessageBase接口 测试三种消息都满足 QueueMessageBase 接口。
+func TestQueueMessage_实现QueueMessageBase接口(t *testing.T) {
+	var _ QueueMessageBase = &QueueMessage{}
+	var _ QueueMessageBase = &InvokeQueueMessage{}
+	var _ QueueMessageBase = &StreamQueueMessage{}
 }

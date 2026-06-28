@@ -16,8 +16,9 @@ import (
 //
 // 对齐 Python MessageQueueInMemory，支持：
 //   - 按 topic 路由消息到不同订阅者
-//   - 同步发布（InvokeQueueMessage，等待处理完成）
 //   - 火忘发布（QueueMessage，不等待）
+//   - 同步发布（InvokeQueueMessage，等待处理完成）
+//   - 流式发布（StreamQueueMessage，等待流式处理结果）
 //   - 订阅生命周期管理（Activate/Deactivate）
 //
 // 对应 Python: openjiuwen/core/runner/message_queue_inmemory.py
@@ -54,15 +55,17 @@ type topicSubscription struct {
 	timeout time.Duration
 }
 
-// internalMessage 内部消息封装，区分 QueueMessage 和 InvokeQueueMessage
+// internalMessage 内部消息封装，携带原始消息和类型断言结果
 type internalMessage struct {
 	// payload 消息载荷
 	payload map[string]any
-	// invoke 同步消息（非 nil 时为同步发布）
+	// invoke 同步消息（类型断言 *InvokeQueueMessage 结果）
 	invoke *InvokeQueueMessage
+	// stream 流式消息（类型断言 *StreamQueueMessage 结果）
+	stream *StreamQueueMessage
 }
 
-// Subscription 导出的订阅句柄
+// Subscription 导出的订阅句柄，实现 SubscriptionBase 接口。
 //
 // 对应 Python: MessageQueueInMemory.subscribe() 返回的 Subscription 对象
 type Subscription struct {
@@ -85,6 +88,8 @@ var (
 	ErrSubscriptionNotActive = errors.New("subscription is not active")
 	// ErrHandlerNotSet handler 未设置
 	ErrHandlerNotSet = errors.New("message handler not set")
+	// ErrTopicAlreadySubscribed topic 已被订阅
+	ErrTopicAlreadySubscribed = errors.New("topic is already subscribed")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -100,7 +105,7 @@ func NewMessageQueueInMemory(maxSize int, timeout time.Duration) *MessageQueueIn
 	}
 }
 
-// Start 启动消息队列。
+// Start 启动消息队列。实现 MessageQueueBase 接口。
 //
 // 对应 Python: MessageQueueInMemory.start()
 func (q *MessageQueueInMemory) Start() {
@@ -110,7 +115,7 @@ func (q *MessageQueueInMemory) Start() {
 		Msg("消息队列已启动")
 }
 
-// Stop 停止消息队列，取消所有订阅和消费 goroutine。
+// Stop 停止消息队列，取消所有订阅和消费 goroutine。实现 MessageQueueBase 接口。
 //
 // 对应 Python: MessageQueueInMemory.stop()
 func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
@@ -134,15 +139,18 @@ func (q *MessageQueueInMemory) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Subscribe 创建或获取 topic 订阅。
+// Subscribe 创建 topic 订阅。实现 MessageQueueBase 接口。
+// 返回 SubscriptionBase 接口，调用方可通过类型断言获取 *Subscription。
+// 若 topic 已被订阅，返回 ErrTopicAlreadySubscribed 错误。
 //
 // 对应 Python: MessageQueueInMemory.subscribe(topic)
-func (q *MessageQueueInMemory) Subscribe(topic string) *Subscription {
+// Python 中重复订阅同一 topic 抛 ValueError。
+func (q *MessageQueueInMemory) Subscribe(topic string) (SubscriptionBase, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if ts, exists := q.topics[topic]; exists {
-		return &Subscription{ts: ts}
+	if _, exists := q.topics[topic]; exists {
+		return nil, ErrTopicAlreadySubscribed
 	}
 
 	ts := &topicSubscription{
@@ -155,10 +163,10 @@ func (q *MessageQueueInMemory) Subscribe(topic string) *Subscription {
 	close(ts.done)
 	q.topics[topic] = ts
 
-	return &Subscription{ts: ts}
+	return &Subscription{ts: ts}, nil
 }
 
-// Unsubscribe 取消订阅，停止消费 goroutine 并移除 topic。
+// Unsubscribe 取消订阅，停止消费 goroutine 并移除 topic。实现 MessageQueueBase 接口。
 //
 // 对应 Python: MessageQueueInMemory.unsubscribe(topic)
 func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) error {
@@ -181,10 +189,14 @@ func (q *MessageQueueInMemory) Unsubscribe(ctx context.Context, topic string) er
 	return nil
 }
 
-// Produce 火忘发布消息，不等待处理结果。
+// Produce 发布消息到指定 topic。实现 MessageQueueBase 接口。
+// 消息类型决定发布模式，对齐 Python isinstance 判断：
+//   - *QueueMessage: 火忘发布，不等待处理完成
+//   - *InvokeQueueMessage: 同步发布，等待处理完成
+//   - *StreamQueueMessage: 流式发布，等待流式处理结果
 //
-// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message) 火忘模式
-func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *QueueMessage) error {
+// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message)
+func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg QueueMessageBase) error {
 	if !q.running.Load() {
 		return ErrQueueNotRunning
 	}
@@ -197,7 +209,14 @@ func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *Q
 		return ErrTopicNotFound
 	}
 
-	im := &internalMessage{payload: msg.Payload}
+	// 通过类型断言判断消息类型，对齐 Python isinstance 模式
+	im := &internalMessage{payload: msg.GetPayload()}
+	switch m := msg.(type) {
+	case *InvokeQueueMessage:
+		im.invoke = m
+	case *StreamQueueMessage:
+		im.stream = m
+	}
 
 	select {
 	case ts.ch <- im:
@@ -207,54 +226,28 @@ func (q *MessageQueueInMemory) Produce(ctx context.Context, topic string, msg *Q
 	}
 }
 
-// ProduceSync 同步发布消息，等待处理结果。
-//
-// 对齐 Python: MessageQueueInMemory.produce_message(topic, queue_message) 同步模式
-func (q *MessageQueueInMemory) ProduceSync(ctx context.Context, topic string, invoke *InvokeQueueMessage) error {
-	if !q.running.Load() {
-		return ErrQueueNotRunning
-	}
-
-	q.mu.RLock()
-	ts, exists := q.topics[topic]
-	q.mu.RUnlock()
-
-	if !exists {
-		return ErrTopicNotFound
-	}
-
-	im := &internalMessage{payload: invoke.Payload, invoke: invoke}
-
-	select {
-	case ts.ch <- im:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// SetMessageHandler 设置消息处理回调。
+// SetMessageHandler 设置消息处理回调。实现 SubscriptionBase 接口。
 func (s *Subscription) SetMessageHandler(handler func(ctx context.Context, payload map[string]any) (any, error)) {
 	s.ts.handlerMu.Lock()
 	defer s.ts.handlerMu.Unlock()
 	s.ts.handler = handler
 }
 
-// Activate 激活订阅，启动消费 goroutine。
+// Activate 激活订阅，启动消费 goroutine。实现 SubscriptionBase 接口。
 //
 // 对齐 Python: Subscription.activate()
 func (s *Subscription) Activate() {
 	s.ts.activate()
 }
 
-// Deactivate 停用订阅，停止消费 goroutine。
+// Deactivate 停用订阅，停止消费 goroutine。实现 SubscriptionBase 接口。
 //
 // 对应 Python: Subscription.deactivate()
 func (s *Subscription) Deactivate() {
 	s.ts.deactivate()
 }
 
-// IsActive 返回订阅是否活跃。
+// IsActive 返回订阅是否活跃。实现 SubscriptionBase 接口。
 func (s *Subscription) IsActive() bool {
 	return s.ts.active.Load()
 }
@@ -318,6 +311,8 @@ func (ts *topicSubscription) consume(ctx context.Context) {
 }
 
 // handleMessage 处理单条消息。
+// 通过 internalMessage.invoke / stream 字段判断消息类型，
+// 对齐 Python SubscriptionInMemory._handle_response 的 isinstance 判断。
 func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMessage) {
 	ts.handlerMu.RLock()
 	handler := ts.handler
@@ -330,6 +325,9 @@ func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMess
 			Msg("消息处理回调未设置，丢弃消息")
 		if im.invoke != nil {
 			im.invoke.CompleteResponse(nil, ErrHandlerNotSet)
+		}
+		if im.stream != nil {
+			im.stream.CompleteResponse(nil, ErrHandlerNotSet)
 		}
 		return
 	}
@@ -345,8 +343,11 @@ func (ts *topicSubscription) handleMessage(ctx context.Context, im *internalMess
 		result, err = handler(ctx, im.payload)
 	}
 
-	// 如果是同步消息，通知调用方处理完成
+	// 根据消息类型通知调用方，对齐 Python _handle_response
 	if im.invoke != nil {
 		im.invoke.CompleteResponse(result, err)
+	}
+	if im.stream != nil {
+		im.stream.CompleteResponse(result, err)
 	}
 }
