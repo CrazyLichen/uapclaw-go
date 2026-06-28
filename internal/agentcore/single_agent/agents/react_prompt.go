@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
@@ -13,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -168,14 +170,56 @@ var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 // 否则将技能提示词注入 skills section（priority=90）。
 //
 // 对应 Python: ReActAgent._update_skill_prompt_builder_section(rendered_system_prompt)
-func (a *ReActAgent) updateSkillPromptBuilderSection(renderedSystemPrompt string) {
+func (a *ReActAgent) updateSkillPromptBuilderSection(ctx context.Context, renderedSystemPrompt string) {
 	if renderedSystemPrompt == "" || a.skillUtil == nil || !a.skillUtil.HasSkill() {
 		a.promptBuilder.RemoveSection(skillsSection)
 		return
 	}
-	// ⤵️ TODO: 对齐 Python await self._warn_missing_skill_read_file_tool()
-	// 该方法在 Python 中异步检查技能是否缺少 read_file 工具并发出警告，
-	// Go 版本待 skill 相关功能完善后回填
+	a.warnMissingSkillReadFileTool(ctx)
 	skillPrompt := a.skillUtil.GetSkillPrompt()
 	a.AddPromptBuilderSection(skillsSection, skillPrompt, skillsSectionPriority)
+}
+
+// warnMissingSkillReadFileTool 检查技能提示词启用时是否缺少必需的 read_file 工具，
+// 若缺少则记录警告日志。
+//
+// 对应 Python: ReActAgent._warn_missing_skill_read_file_tool()
+func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
+	toolInfos, err := a.abilityManager.ListToolInfo(ctx, nil)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "list_tool_info_error").
+			Err(err).
+			Msg("获取工具列表失败，跳过 read_file 检查")
+		return
+	}
+
+	hasReadFile := false
+	existingToolNames := make([]string, 0)
+
+	for _, t := range toolInfos {
+		if t.Name != "" {
+			existingToolNames = append(existingToolNames, t.Name)
+			if t.Name == "read_file" {
+				hasReadFile = true
+			}
+		}
+	}
+
+	if hasReadFile {
+		return
+	}
+
+	sort.Strings(existingToolNames)
+	errMsg := fmt.Sprintf(
+		"skill prompt requires tool 'read_file' but it is not found in ability_manager. existing_tools=%v",
+		existingToolNames,
+	)
+	buildErr := exception.BuildError(exception.StatusAgentToolNotFound,
+		exception.WithMsg(errMsg),
+	)
+	logger.Warn(logComponent).
+		Str("event_type", "skill_missing_read_file_tool").
+		Str("existing_tools", fmt.Sprintf("%v", existingToolNames)).
+		Msg(buildErr.Error())
 }
