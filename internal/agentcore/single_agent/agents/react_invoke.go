@@ -372,7 +372,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		// 用渲染后的 prompt 更新 identity section（替换 Configure 时的模板名）
 		renderedPrompt := a.promptBuilder.Build()
 		if renderedPrompt != "" {
-			a.AddPromptBuilderSection("identity", map[string]string{defaultLanguage: renderedPrompt}, 10)
+			a.AddPromptBuilderSection(identitySection, renderedPrompt, identitySectionPriority)
 		}
 		// ⤴️ Skill: 更新技能提示词区段
 		a.updateSkillPromptBuilderSection(renderedPrompt)

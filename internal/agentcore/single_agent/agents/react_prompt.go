@@ -3,12 +3,13 @@ package agents
 import (
 	"context"
 	"fmt"
-	"sort"
+	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
@@ -25,11 +26,19 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// AddPromptBuilderSection 添加或替换提示节。
-func (a *ReActAgent) AddPromptBuilderSection(name string, content map[string]string, priority int) {
-	a.promptBuilder.AddSection(PromptSection{
+// AddPromptBuilderSection 添加或替换提示节，空内容时移除该节。
+//
+// 对应 Python: ReActAgent.add_prompt_builder_section(name, content, *, priority)
+// Python 行为：content 为空/None 时 remove_section，否则 add_section 且 cn/en 内容相同。
+func (a *ReActAgent) AddPromptBuilderSection(name string, content string, priority int) {
+	text := strings.TrimSpace(content)
+	if text == "" {
+		a.promptBuilder.RemoveSection(name)
+		return
+	}
+	a.promptBuilder.AddSection(prompts.PromptSection{
 		Name:     name,
-		Content:  content,
+		Content:  map[string]string{"cn": text, "en": text},
 		Priority: priority,
 	})
 }
@@ -46,9 +55,9 @@ func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfi
 		return fmt.Errorf("config 校验失败: %w", err)
 	}
 	a.config = cfg
-	a.promptBuilder = NewSystemPromptBuilder()
+	a.promptBuilder = prompts.NewSystemPromptBuilder()
 	if cfg.PromptTemplateName != "" {
-		a.AddPromptBuilderSection("identity", map[string]string{defaultLanguage: cfg.PromptTemplateName}, 10)
+		a.AddPromptBuilderSection(identitySection, cfg.PromptTemplateName, identitySectionPriority)
 	}
 	return nil
 }
@@ -130,64 +139,27 @@ func (a *ReActAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error
 	return nil
 }
 
-// AddSection 添加或替换节。
-func (b *SystemPromptBuilder) AddSection(section PromptSection) *SystemPromptBuilder {
-	b.sections[section.Name] = section
-	return b
+// SkillUtil 返回技能工具实例。
+func (a *ReActAgent) SkillUtil() *skills.SkillUtil {
+	return a.skillUtil
 }
 
-// RemoveSection 移除指定名称的节。
-func (b *SystemPromptBuilder) RemoveSection(name string) *SystemPromptBuilder {
-	delete(b.sections, name)
-	return b
+// SetSkillUtil 设置技能工具实例。
+func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
+	a.skillUtil = su
 }
 
-// HasSection 检查节是否存在。
-func (b *SystemPromptBuilder) HasSection(name string) bool {
-	_, ok := b.sections[name]
-	return ok
+// PromptBuilder 返回系统提示词构建器。
+//
+// 对应 Python: ReActAgent.prompt_builder / ReActAgent.system_prompt_builder
+func (a *ReActAgent) PromptBuilder() *prompts.SystemPromptBuilder {
+	return a.promptBuilder
 }
 
-// Build 按优先级排序并拼接为完整系统提示词。
-func (b *SystemPromptBuilder) Build() string {
-	sections := make([]PromptSection, 0, len(b.sections))
-	for _, s := range b.sections {
-		sections = append(sections, s)
-	}
-	sort.Slice(sections, func(i, j int) bool {
-		return sections[i].Priority < sections[j].Priority
-	})
+// 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
+var _ interfaces.BaseAgent = (*ReActAgent)(nil)
 
-	parts := make([]string, 0, len(sections))
-	for _, s := range sections {
-		if content := s.Render(b.Language); content != "" {
-			parts = append(parts, content)
-		}
-	}
-
-	result := ""
-	for i, part := range parts {
-		if i > 0 {
-			result += "\n\n"
-		}
-		result += part
-	}
-	return result
-}
-
-// Render 渲染指定语言的内容。
-func (s *PromptSection) Render(language string) string {
-	if content, ok := s.Content[language]; ok {
-		return content
-	}
-	if content, ok := s.Content[defaultLanguage]; ok {
-		return content
-	}
-	for _, v := range s.Content {
-		return v
-	}
-	return ""
-}
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateSkillPromptBuilderSection 更新技能提示词区段。
 //
@@ -201,19 +173,9 @@ func (a *ReActAgent) updateSkillPromptBuilderSection(renderedSystemPrompt string
 		a.promptBuilder.RemoveSection(skillsSection)
 		return
 	}
+	// ⤵️ TODO: 对齐 Python await self._warn_missing_skill_read_file_tool()
+	// 该方法在 Python 中异步检查技能是否缺少 read_file 工具并发出警告，
+	// Go 版本待 skill 相关功能完善后回填
 	skillPrompt := a.skillUtil.GetSkillPrompt()
-	a.AddPromptBuilderSection(skillsSection, map[string]string{defaultLanguage: skillPrompt}, skillsSectionPriority)
+	a.AddPromptBuilderSection(skillsSection, skillPrompt, skillsSectionPriority)
 }
-
-// SkillUtil 返回技能工具实例。
-func (a *ReActAgent) SkillUtil() *skills.SkillUtil {
-	return a.skillUtil
-}
-
-// SetSkillUtil 设置技能工具实例。
-func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
-	a.skillUtil = su
-}
-
-// 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
-var _ interfaces.BaseAgent = (*ReActAgent)(nil)
