@@ -1,7 +1,6 @@
 package single_agent
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )

@@ -717,7 +717,7 @@ func (am *AbilityManager) executeWorkflow(
 	}
 
 	// 步骤 5：通过 Runner.RunWorkflow 执行（对齐 Python L713-718: workflow_output = await Runner.run_workflow(...)）
-	result, err := runner.RunWorkflow(ctx, wf, toolArgs, workflowSess, wfCtx)
+	result, err := runner.RunWorkflow(ctx, runner.ByWorkflow(wf), toolArgs, workflowSess, wfCtx, nil)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("workflow_name", toolName).
@@ -833,7 +833,7 @@ func (am *AbilityManager) executeAgent(
 	}
 
 	// 步骤 8：通过 Runner.RunAgent 执行（对齐 Python L800: result = await Runner.run_agent(agent, inputs, session=child_session)）
-	result, err := runner.RunAgent(ctx, ag, toolArgs, childSession)
+	result, err := runner.RunAgent(ctx, runner.ByAgent(ag), toolArgs, childSession, nil, nil)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("agent_name", toolName).
