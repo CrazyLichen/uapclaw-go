@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -411,37 +412,89 @@ func RunWorkflowStreaming(
 
 // --- Spawn ---
 
-// SpawnAgent 启动子进程运行Agent。
+// SpawnAgent 启动子进程运行 Agent。
 // 对齐 Python: Runner.spawn_agent() (runner.py L532-576)
-// ⤵️ 预留：Spawn子进程（依赖 6.28 SpawnedProcessHandle 实现）
 func SpawnAgent(
 	ctx context.Context,
-	agentConfig any,
+	agentConfig spawn.SpawnAgentConfig,
 	inputs map[string]any,
 	sess sessioninterfaces.SessionFacade,
-	modelCtx any,
 	envs map[string]any,
-	spawnConfig any,
-) (any, error) {
-	// ⤵️ 预留：Spawn子进程实现（依赖 6.28 SpawnedProcessHandle 实现）
-	return nil, fmt.Errorf("spawn_agent 未实现：依赖 6.28 SpawnedProcessHandle")
+	spawnCfg ...spawn.SpawnConfig,
+) (*spawn.SpawnedProcessHandle, error) {
+	cfg := spawn.DefaultSpawnConfig()
+	if len(spawnCfg) > 0 {
+		cfg = spawnCfg[0]
+	}
+
+	// 合并环境变量到 agentConfig
+	if envs != nil {
+		if agentConfig.Payload == nil {
+			agentConfig.Payload = make(map[string]any)
+		}
+		agentConfig.Payload["envs"] = envs
+	}
+
+	handle, err := spawn.SpawnProcess(ctx, agentConfig, inputs, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("spawn_agent 启动子进程失败: %w", err)
+	}
+
+	return handle, nil
 }
 
-// SpawnAgentStreaming 启动子进程运行Agent（流式）。
+// SpawnAgentStreaming 启动子进程运行 Agent（流式）。
 // 对齐 Python: Runner.spawn_agent_streaming() (runner.py L578-640)
-// ⤵️ 预留：Spawn子进程流式（依赖 6.28 SpawnedProcessHandle 实现）
 func SpawnAgentStreaming(
 	ctx context.Context,
-	agentConfig any,
+	agentConfig spawn.SpawnAgentConfig,
 	inputs map[string]any,
 	sess sessioninterfaces.SessionFacade,
-	modelCtx any,
-	streamModes any,
+	streamModes []string,
 	envs map[string]any,
-	spawnConfig any,
+	spawnCfg ...spawn.SpawnConfig,
 ) (<-chan stream.Schema, error) {
-	// ⤵️ 预留：Spawn子进程流式实现（依赖 6.28 SpawnedProcessHandle 实现）
-	return nil, fmt.Errorf("spawn_agent_streaming 未实现：依赖 6.28 SpawnedProcessHandle")
+	cfg := spawn.DefaultSpawnConfig()
+	if len(spawnCfg) > 0 {
+		cfg = spawnCfg[0]
+	}
+
+	// 在 payload 中标记流式模式和 stream_modes
+	if agentConfig.Payload == nil {
+		agentConfig.Payload = make(map[string]any)
+	}
+	agentConfig.Payload["streaming"] = true
+	agentConfig.Payload["stream_modes"] = streamModes
+	if envs != nil {
+		agentConfig.Payload["envs"] = envs
+	}
+
+	handle, err := spawn.SpawnProcess(ctx, agentConfig, inputs, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("spawn_agent_streaming 启动子进程失败: %w", err)
+	}
+
+	ch := make(chan stream.Schema, 64)
+
+	go func() {
+		defer close(ch)
+		for {
+			msg, err := handle.ReceiveMessage(ctx)
+			if err != nil {
+				return
+			}
+			switch msg.Type {
+			case spawn.MessageTypeStreamChunk:
+				if schema, ok := msg.Payload.(stream.Schema); ok {
+					ch <- schema
+				}
+			case spawn.MessageTypeDone, spawn.MessageTypeError:
+				return
+			}
+		}
+	}()
+
+	return ch, nil
 }
 
 // --- 释放 ---

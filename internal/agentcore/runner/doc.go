@@ -10,6 +10,7 @@
 //	├── config/               # Runner 全局配置子包（RunnerConfig/DistributedConfig/PulsarConfig 等）
 //	├── message_queue/        # 消息队列子包（MessageQueueBase 接口 + InMemory/Local 实现）
 //	├── resources_manager/    # 资源注册表子包（Agent/Tool/Workflow/Model/Prompt 全局注册）
+//	├── spawn/                # 子进程 Spawn 子包（SpawnedProcessHandle/SpawnAgentConfig/Protocol 等）
 //	├── doc.go                # 包文档
 //	├── ref.go                # AgentRef/WorkflowRef 引用类型
 //	└── runner.go             # Runner 结构体 + 全局实例 + 全部包级函数

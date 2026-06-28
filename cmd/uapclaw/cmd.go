@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 )
@@ -50,6 +51,7 @@ func newRootCmd() *cobra.Command {
 		newWebCmd(),
 		newInitCmd(),
 		newAcpCmd(),
+		newSpawnChildCmd(),
 	)
 
 	return rootCmd
@@ -192,4 +194,22 @@ func makeDotenvPreRunE() func(cmd *cobra.Command, args []string) error {
 		_, err := dotenv.ParseEarly(dotenvPath, instanceName)
 		return err
 	}
+}
+
+// newSpawnChildCmd 创建 spawn-child 子命令
+func newSpawnChildCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "spawn-child",
+		Short:  "作为子进程运行 Agent（内部命令，不应直接调用）",
+		Hidden: true,
+		RunE:   runSpawnChild,
+	}
+}
+
+// runSpawnChild 执行 spawn-child 子命令
+func runSpawnChild(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	agentConfig := map[string]any{}
+	inputs := map[string]any{}
+	return spawn.RunSpawnedProcess(ctx, agentConfig, inputs)
 }

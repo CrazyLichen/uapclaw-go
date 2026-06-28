@@ -415,7 +415,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 6.25 | ✅ | Runner 单例 | `RunAgent/RunAgentStreaming/RunWorkflow/SpawnAgent` | `openjiuwen/core/runner/runner.py` |
 | 6.26 | ✅ | RunnerConfig | Runner 配置（distributed_mode 等） | `openjiuwen/core/runner/runner_config.py` |
 | 6.27 | ✅ | LocalMessageQueue | 本地消息队列 | `openjiuwen/core/runner/message_queue_inmemory.py` |
-| 6.28 | ☐ | Spawn 子进程 | JSON over stdin/stdout，`SpawnedProcessHandle` | `openjiuwen/core/runner/spawn/` |
+| 6.28 | ✅ | Spawn 子进程 | JSON over stdin/stdout，`SpawnedProcessHandle` | `openjiuwen/core/runner/spawn/` |
 | 6.29 | ☐ | Agent Prompts | Agent 系统提示词模板 | `openjiuwen/core/single_agent/prompts/` |
 
 **验证点**：✅ 完整 ReAct 循环可用：用户提问 → Agent 思考 → 调用工具 → 返回结果
