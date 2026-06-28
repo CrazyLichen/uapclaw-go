@@ -7,8 +7,12 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -33,34 +37,97 @@ func (a *ReActAgent) AddPromptBuilderSection(name string, content map[string]str
 // Configure 配置 ReActAgent。
 //
 // 对应 Python: ReActAgent.configure(config)
-func (a *ReActAgent) Configure(ctx context.Context, config *saconfig.ReActAgentConfig) error {
-	if config == nil {
-		return fmt.Errorf("config 不能为 nil")
+func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfig) error {
+	cfg, ok := config.(*saconfig.ReActAgentConfig)
+	if !ok {
+		return fmt.Errorf("config 类型应为 *ReActAgentConfig，实际 %T", config)
 	}
-	if err := config.Validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("config 校验失败: %w", err)
 	}
-	a.config = config
+	a.config = cfg
 	a.promptBuilder = NewSystemPromptBuilder()
-	if config.PromptTemplateName != "" {
-		a.AddPromptBuilderSection("identity", map[string]string{defaultLanguage: config.PromptTemplateName}, 10)
+	if cfg.PromptTemplateName != "" {
+		a.AddPromptBuilderSection("identity", map[string]string{defaultLanguage: cfg.PromptTemplateName}, 10)
 	}
 	return nil
 }
 
 // CallbackManager 返回回调管理器（满足 RailAgent 接口）。
 func (a *ReActAgent) CallbackManager() *rail.AgentCallbackManager {
-	return a.base.CallbackManager()
+	return a.callbackManager
 }
 
 // AgentID 返回 Agent 唯一标识（满足 RailAgent 接口）。
 func (a *ReActAgent) AgentID() string {
-	return a.base.AgentID()
+	if a.card != nil {
+		return a.card.ID
+	}
+	return ""
 }
 
 // ContextEngine 返回上下文引擎（满足 InterruptAgent 接口）。
 func (a *ReActAgent) ContextEngine() ceinterface.ContextEngine {
 	return a.contextEngine
+}
+
+// Card 返回Agent身份卡片。
+// 对齐 Python: BaseAgent.card 属性
+func (a *ReActAgent) Card() *agentschema.AgentCard {
+	return a.card
+}
+
+// Config 返回当前配置。
+// 对齐 Python: BaseAgent.config 属性
+func (a *ReActAgent) Config() interfaces.AgentConfig {
+	return a.config
+}
+
+// AbilityManager 返回能力管理器。
+// 对齐 Python: BaseAgent.ability_manager 属性
+// 返回 any，调用方通过类型断言获取 *ability.AbilityManager。
+func (a *ReActAgent) AbilityManager() any {
+	return a.abilityManager
+}
+
+// RegisterCallback 注册回调。
+// 对齐 Python: BaseAgent.register_callback(event, callback, priority)
+func (a *ReActAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...callback.CallbackOption) error {
+	if a.callbackManager != nil {
+		a.callbackManager.RegisterCallback(ctx, event.(rail.AgentCallbackEvent), fn.(callback.PerAgentCallbackFunc), opts...)
+	}
+	return nil
+}
+
+// RegisterRail 注册 Rail。
+// 对齐 Python: BaseAgent.register_rail(rail)
+func (a *ReActAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...callback.CallbackOption) error {
+	if a.callbackManager != nil {
+		if err := r.Init(a); err != nil {
+			return err
+		}
+		return a.callbackManager.RegisterRail(ctx, r, opts...)
+	}
+	return nil
+}
+
+// UnregisterRail 注销 Rail。
+// 对齐 Python: BaseAgent.unregister_rail(rail)
+func (a *ReActAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
+	if a.callbackManager != nil {
+		err := a.callbackManager.UnregisterRail(ctx, r)
+		if uninitErr := r.Uninit(a); uninitErr != nil {
+			if err == nil {
+				return uninitErr
+			}
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "rail_uninit_error").
+				Err(uninitErr).
+				Msg("Rail Uninit 返回错误")
+		}
+		return err
+	}
+	return nil
 }
 
 // AddSection 添加或替换节。
@@ -147,3 +214,6 @@ func (a *ReActAgent) SkillUtil() *skills.SkillUtil {
 func (a *ReActAgent) SetSkillUtil(su *skills.SkillUtil) {
 	a.skillUtil = su
 }
+
+// 编译期接口检查：ReActAgent 必须满足 interfaces.BaseAgent
+var _ interfaces.BaseAgent = (*ReActAgent)(nil)

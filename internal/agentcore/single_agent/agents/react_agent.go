@@ -5,9 +5,10 @@ import (
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -39,13 +40,17 @@ type SystemPromptBuilder struct {
 
 // ReActAgent ReAct 循环 Agent：Think → Act → Observe。
 //
-// 内嵌 BaseAgent 获取配置/管理能力，
+// 直接持有基础字段（card/abilityManager/callbackManager），
 // 自行实现 Invoke/Stream，在方法体内显式调用回调骨架。
 //
 // 对应 Python: ReActAgent (openjiuwen/core/single_agent/agents/react_agent.py)
 type ReActAgent struct {
-	// base 基础 Agent（提供 Configure/Card/AbilityManager/CallbackManager 等方法）
-	base *single_agent.BaseAgent
+	// card Agent 身份卡片
+	card *agentschema.AgentCard
+	// abilityManager 能力管理器
+	abilityManager *ability.AbilityManager
+	// callbackManager 回调管理器
+	callbackManager *rail.AgentCallbackManager
 	// config Agent 配置
 	config *saconfig.ReActAgentConfig
 	// contextEngine 上下文引擎
@@ -95,12 +100,12 @@ func NewReActAgent(
 	card *agentschema.AgentCard,
 	config *saconfig.ReActAgentConfig,
 ) *ReActAgent {
-	base := single_agent.NewBaseAgent(card, nil)
-
 	agent := &ReActAgent{
-		base:          base,
-		config:        config,
-		promptBuilder: NewSystemPromptBuilder(),
+		card:            card,
+		abilityManager:  ability.NewAbilityManager(nil),
+		callbackManager: rail.NewAgentCallbackManager(card.ID),
+		config:          config,
+		promptBuilder:   NewSystemPromptBuilder(),
 	}
 
 	// 初始化 HITL 中断处理器

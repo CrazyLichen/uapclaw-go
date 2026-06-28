@@ -75,7 +75,7 @@ func TestNewReActAgent(t *testing.T) {
 
 	agent := NewReActAgent(card, config)
 	assert.NotNil(t, agent)
-	assert.NotNil(t, agent.base)
+	assert.NotNil(t, agent.card)
 	assert.Equal(t, config, agent.config)
 	assert.NotNil(t, agent.promptBuilder)
 }

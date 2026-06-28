@@ -44,7 +44,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 		} else {
 			logger.Warn(logger.ComponentAgentCore).
 				Str("event", "TransformAgentIOInput").
-				Str("agent_id", a.base.Card().ID).
+				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
 				Str("actual", fmt.Sprintf("%T", transformed)).
 				Msg("TransformIO 返回类型不匹配，使用原始输入")
@@ -54,8 +54,8 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	// ② emit_before: 触发全局 AgentInvokeInput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
 		Event:     callback.GlobalAgentInvokeInput,
-		AgentID:   a.base.Card().ID,
-		AgentName: a.base.Card().Name,
+		AgentID:   a.card.ID,
+		AgentName: a.card.Name,
 		Inputs:    inputs,
 		Session:   agentOpts.Session,
 	})
@@ -71,7 +71,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 			return nil, err
 		}
 		logger.Error(logger.ComponentAgentCore).
-			Str("agent_id", a.base.Card().ID).
+			Str("agent_id", a.card.ID).
 			Err(err).
 			Msg("Agent invoke 错误")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
@@ -85,8 +85,8 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	// ⑤ emit_after: 触发全局 AgentInvokeOutput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
 		Event:     callback.GlobalAgentInvokeOutput,
-		AgentID:   a.base.Card().ID,
-		AgentName: a.base.Card().Name,
+		AgentID:   a.card.ID,
+		AgentName: a.card.Name,
 		Result:    result,
 	})
 
@@ -108,7 +108,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 		} else {
 			logger.Warn(logger.ComponentAgentCore).
 				Str("event", "TransformAgentIOInput").
-				Str("agent_id", a.base.Card().ID).
+				Str("agent_id", a.card.ID).
 				Str("expected", "map[string]any").
 				Str("actual", fmt.Sprintf("%T", transformed)).
 				Msg("TransformIO 返回类型不匹配，使用原始输入")
@@ -118,8 +118,8 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 	// ② emit_before: 触发全局 AgentStreamInput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
 		Event:     callback.GlobalAgentStreamInput,
-		AgentID:   a.base.Card().ID,
-		AgentName: a.base.Card().Name,
+		AgentID:   a.card.ID,
+		AgentName: a.card.Name,
 		Inputs:    inputs,
 		Session:   agentOpts.Session,
 	})
@@ -131,7 +131,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 			return nil, err
 		}
 		logger.Error(logger.ComponentAgentCore).
-			Str("agent_id", a.base.Card().ID).
+			Str("agent_id", a.card.ID).
 			Err(err).
 			Msg("Agent stream 错误")
 		return nil, exception.NewBaseError(exception.StatusAgentControllerRuntimeError,
@@ -151,7 +151,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 				} else {
 					logger.Warn(logger.ComponentAgentCore).
 						Str("event", "TransformAgentIOOutput").
-						Str("agent_id", a.base.Card().ID).
+						Str("agent_id", a.card.ID).
 						Str("expected", "stream.Schema").
 						Str("actual", fmt.Sprintf("%T", transformed)).
 						Msg("TransformIO 返回类型不匹配，使用原始输出")
@@ -160,8 +160,8 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 			// ④ emit_after (per_item)
 			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
 				Event:     callback.GlobalAgentStreamOutput,
-				AgentID:   a.base.Card().ID,
-				AgentName: a.base.Card().Name,
+				AgentID:   a.card.ID,
+				AgentName: a.card.Name,
 				Result:    item,
 			})
 			out <- item

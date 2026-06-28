@@ -105,12 +105,10 @@ func (a *ReActAgent) getTools() ([]*cschema.ToolInfo, error) {
 
 // getAbilityManager 返回能力管理器。
 func (a *ReActAgent) getAbilityManager() *ability.AbilityManager {
-	amAny := a.base.AbilityManager()
-	am, ok := amAny.(*ability.AbilityManager)
-	if !ok {
+	if a.abilityManager == nil {
 		return nil
 	}
-	return am
+	return a.abilityManager
 }
 
 // saveContexts 保存上下文。
