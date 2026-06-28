@@ -108,6 +108,10 @@ func Start(ctx context.Context) error {
 		if !started {
 			// 步骤 1 的清理：关闭根任务组
 			// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
+			logger.Debug(logComponent).
+				Str("event_type", "runner_start_failed").
+				Str("runner_id", r.runnerID).
+				Msg("Runner 启动失败，执行清理")
 		}
 	}()
 
@@ -611,7 +615,7 @@ func (r *Runner) prepareAgent(
 				return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
 			}
 			if len(agents) == 0 || agents[0] == nil {
-				return nil, nil, fmt.Errorf("Agent不存在: %s", agentRef.ID())
+				return nil, nil, fmt.Errorf("agent不存在: %s", agentRef.ID())
 			}
 			agentInstance := agents[0]
 			// 对齐 Python L509: await session.pre_run(inputs=inputs)
@@ -649,7 +653,7 @@ func (r *Runner) prepareAgent(
 			return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
 		}
 		if len(agents) == 0 || agents[0] == nil {
-			return nil, nil, fmt.Errorf("Agent不存在: %s", agentRef.ID())
+			return nil, nil, fmt.Errorf("agent不存在: %s", agentRef.ID())
 		}
 		agentInstance := agents[0]
 
@@ -704,7 +708,7 @@ func (r *Runner) prepareWorkflow(
 			return nil, nil, fmt.Errorf("获取Workflow失败: %w", err)
 		}
 		if len(workflows) == 0 || workflows[0] == nil {
-			return nil, nil, fmt.Errorf("Workflow不存在: %s", workflowKey)
+			return nil, nil, fmt.Errorf("workflow不存在: %s", workflowKey)
 		}
 		workflowInstance = workflows[0]
 	} else {

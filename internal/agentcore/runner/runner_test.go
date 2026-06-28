@@ -506,7 +506,7 @@ func TestGetRunner_懒初始化(t *testing.T) {
 
 	r := getRunner()
 	if r == nil {
-		t.Error("getRunner 应返回非 nil")
+		t.Fatal("getRunner 应返回非 nil")
 	}
 	if r.runnerID != defaultRunnerID {
 		t.Errorf("runnerID = %q, want %q", r.runnerID, defaultRunnerID)

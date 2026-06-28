@@ -141,6 +141,9 @@ func ProcessMessageLoop(
 
 		case <-agentDoneCh:
 			// Agent 任务完成，退出循环
+			if agentCancel != nil {
+				agentCancel()
+			}
 			return nil
 
 		case err := <-errCh:
@@ -149,12 +152,18 @@ func ProcessMessageLoop(
 				logger.Info(logger.ComponentAgentCore).
 					Str("event_type", "SPAWN_STDIN_CLOSED").
 					Msg("stdin 关闭，退出消息循环")
+				if agentCancel != nil {
+					agentCancel()
+				}
 				return nil
 			}
 			logger.Error(logger.ComponentAgentCore).
 				Str("event_type", "SPAWN_STDIN_ERROR").
 				Err(err).
 				Msg("stdin 读取错误")
+			if agentCancel != nil {
+				agentCancel()
+			}
 			return fmt.Errorf("stdin 读取错误: %w", err)
 
 		case <-ctx.Done():
@@ -166,6 +175,9 @@ func ProcessMessageLoop(
 		}
 	}
 
+	if agentCancel != nil {
+		agentCancel()
+	}
 	return nil
 }
 

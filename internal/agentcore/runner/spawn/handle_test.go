@@ -210,7 +210,7 @@ func TestSpawnedProcessHandle_StartHealthCheck_重复启动(t *testing.T) {
 	if err != nil {
 		t.Fatalf("首次 StartHealthCheck 失败: %v", err)
 	}
-	defer handle.StopHealthCheck()
+	defer func() { _ = handle.StopHealthCheck() }()
 
 	// 重复启动应返回错误
 	err = handle.StartHealthCheck(context.Background(), 10*time.Second)
