@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"syscall"
 	"time"
 )
 
@@ -120,9 +119,8 @@ func WaitForTCPPort(ctx context.Context, host string, port int, opts ...PortOpti
 // WaitForPIDExit 等待进程退出。
 //
 // 对应 Python: wait_for_pid_exit()
-// Linux 使用 syscall.Kill(pid, 0) 检查进程是否存在（信号 0 不发送信号，仅检查权限/存在性）。
-// 如果进程不存在，syscall.ESRCH 错误会被捕获，函数返回 nil。
-// 超时后返回错误。
+// 使用平台相关的 processExists 函数检查进程是否存在。
+// 如果进程不存在，函数返回 nil。超时后返回错误。
 func WaitForPIDExit(ctx context.Context, pid int) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -132,9 +130,7 @@ func WaitForPIDExit(ctx context.Context, pid int) error {
 		case <-ctx.Done():
 			return fmt.Errorf("process %d did not exit within deadline: %w", pid, ctx.Err())
 		case <-ticker.C:
-			// syscall.Kill(pid, 0) 不发送信号，仅检查进程是否存在
-			err := syscall.Kill(pid, 0)
-			if err == syscall.ESRCH {
+			if !processExists(pid) {
 				// 进程不存在
 				return nil
 			}

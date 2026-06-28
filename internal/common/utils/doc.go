@@ -12,6 +12,8 @@
 //	├── net.go            # 网络工具：本机 IP + URL 脱敏 + 递归值脱敏
 //	├── dict.go           # 字典工具：嵌套字典操作 + RemoveZeroValues + ValidateArgs
 //	├── port.go           # 端口等待：WaitForTCPPort + WaitForPIDExit
+//	├── port_unix.go      # Unix 平台进程存在性检查（syscall.Kill）
+//	├── port_windows.go   # Windows 平台进程存在性检查（os.FindProcess）
 //	├── background.go     # 后台任务：BackgroundTask + Task + TaskManager
 //	└── pool.go           # 引用计数连接池：RefCountedResource + TransportPool + ResourcePool[T]
 //

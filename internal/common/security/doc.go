@@ -6,8 +6,10 @@
 // 文件目录：
 //
 //	security/
-//	├── doc.go         # 包文档
-//	└── ssl_utils.go   # SSL/TLS 配置工具函数
+//	├── doc.go               # 包文档
+//	├── ssl_utils.go         # SSL/TLS 配置工具函数
+//	├── ssl_utils_unix.go    # Unix 平台安全文件打开（O_NOFOLLOW）
+//	└── ssl_utils_windows.go # Windows 平台安全文件打开
 //
 // 对应 Python 代码：openjiuwen/core/common/security/ssl_utils.py
 package security

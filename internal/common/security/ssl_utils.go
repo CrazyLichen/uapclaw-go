@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
@@ -135,8 +134,8 @@ func secureLoadCert(cfg *tls.Config, certPath string) error {
 		)
 	}
 
-	// 安全打开文件（O_NOFOLLOW 防止符号链接）
-	fd, err := os.OpenFile(certPath, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	// 安全打开文件（Unix 使用 O_NOFOLLOW 防止符号链接攻击，Windows 退化为普通打开）
+	fd, err := openFileNoFollow(certPath)
 	if err != nil {
 		return exception.BuildError(
 			exception.StatusCommonSSLContextInitFailed,
