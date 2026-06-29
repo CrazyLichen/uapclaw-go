@@ -338,10 +338,10 @@ func TestCheckPortConflicts(t *testing.T) {
 
 // TestCheckPortConflicts_无冲突 测试无端口冲突
 func TestCheckPortConflicts_无冲突(t *testing.T) {
-	// 使用不太可能被占用的端口
+	// 使用不太可能被占用的端口（高端口号，避免 CI 环境常见服务占用）
 	ports := map[string]int{
 		"agent_server": 58092,
-		"web":          59000,
+		"web":          65000,
 	}
 	conflicts := CheckPortConflicts(ports, nil)
 	if len(conflicts) != 0 {

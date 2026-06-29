@@ -97,8 +97,8 @@ func RunSpawnedProcess(
 			logger.Error(logger.ComponentAgentCore).
 				Str("event_type", "SPAWN_RUNNER_START_ERROR").
 				Err(err).
-				Msg("Runner 启动失败")
-			return fmt.Errorf("Runner 启动失败: %w", err)
+				Msg("runner 启动失败")
+			return fmt.Errorf("runner 启动失败: %w", err)
 		}
 		defer func() {
 			if stopErr := childRunner.Stop(ctx); stopErr != nil {
@@ -316,7 +316,7 @@ func ExecuteAgent(
 	case SpawnAgentKindClassAgent:
 		return executeChildAgent(ctx, agentConfig, inputs, stdout, streaming, streamModes, childRunner, agentCreator)
 	case SpawnAgentKindTeamAgent:
-		return nil, fmt.Errorf("TEAM_AGENT 模式尚未实现：依赖 9.x TeamAgent")
+		return nil, fmt.Errorf("team_agent 模式尚未实现：依赖 9.x TeamAgent")
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 启动方式: %s", agentConfig.AgentKind)
 	}
