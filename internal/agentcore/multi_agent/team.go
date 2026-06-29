@@ -11,23 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TeamCard 团队身份卡片（类型别名，实际定义在 schema 子包）。
-//
-// 使用类型别名保持外部 API 兼容：所有通过 multiagent.TeamCard 的代码无需修改 import。
-// 完整定义见 internal/agentcore/multi_agent/schema/team_card.go
-//
-// 对应 Python: openjiuwen/core/multi_agent/schema/team_card.py (TeamCard)
-// ⤴️ 8.28 回填：从 schema 子包引入类型别名
-type TeamCard = schema.TeamCard
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BaseTeam 多 Agent 团队核心行为契约。
 //
 // 对应 Python: openjiuwen/core/multi_agent/team.py (BaseTeam)
@@ -123,6 +106,17 @@ type BaseTeam interface {
 	Config() *TeamConfig
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TeamCard 团队身份卡片（类型别名，实际定义在 schema 子包）。
+//
+// 使用类型别名保持外部 API 兼容：所有通过 multiagent.TeamCard 的代码无需修改 import。
+// 完整定义见 internal/agentcore/multi_agent/schema/team_card.go
+//
+// 对应 Python: openjiuwen/core/multi_agent/schema/team_card.py (TeamCard)
+// ⤴️ 8.28 回填：从 schema 子包引入类型别名
+type TeamCard = schema.TeamCard
+
 // AgentTeamProvider 团队资源提供者函数，接受 TeamCard 返回 BaseTeam 实例。
 //
 // 对应 Python: AgentTeamProvider = Callable[[TeamCard], Awaitable[BaseTeam]] | Callable[[TeamCard], BaseTeam]
@@ -135,5 +129,11 @@ type AgentTeamProvider func(ctx context.Context, card *TeamCard) (BaseTeam, erro
 // 在 multi_agent 包内定义以避免 multi_agent → resources_manager 循环依赖。
 // 签名与 resources_manager.AgentProvider 完全一致，具体团队实现中可直接互换。
 type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

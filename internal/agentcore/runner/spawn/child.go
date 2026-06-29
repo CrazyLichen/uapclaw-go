@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ChildRunner 子进程 Runner 接口，由 runner 包实现并注入。
 // 对齐 Python: Runner.set_config() / Runner.start() / Runner.stop()
@@ -43,6 +43,12 @@ type AgentCreator interface {
 	// 对齐 Python: agent = agent_cls(**class_config.init_kwargs)
 	CreateByType(ctx context.Context, agentType string, agentCard map[string]any, initKwargs map[string]any) (interfaces.BaseAgent, error)
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -920,7 +920,7 @@ func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
 // 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
 func (m *ResourceMgr) GetSysOpToolCards(_ string, _ string, _ string) ([]*schema.BaseCard, error) {
 	// ⤵️ 预留：9.32 实现后回填
-	return nil, fmt.Errorf("GetSysOpToolCards not implemented: pending 9.32 SysOperation interface")
+	return nil, fmt.Errorf("GetSysOpToolCards 尚未实现：等待 9.32 SysOperation 接口")
 }
 
 // --- MCP Server 操作 ---
@@ -1333,13 +1333,13 @@ func (m *ResourceMgr) innerValidateResourceID(resourceID, resourceType string) e
 	if resourceID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", "resource id is empty"),
+			exception.WithParam("reason", "资源 ID 为空"),
 		)
 	}
 	if strings.TrimSpace(resourceID) == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", "resource id is whitespace only"),
+			exception.WithParam("reason", "资源 ID 仅含空白字符"),
 		)
 	}
 	return nil
@@ -1356,7 +1356,7 @@ func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) e
 	if provider == nil {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", "provider is nil"),
+			exception.WithParam("reason", "provider 为空"),
 		)
 	}
 	return nil
@@ -1370,17 +1370,17 @@ func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) e
 func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcp.McpServerConfig) error {
 	if serverConfig == nil {
 		return exception.BuildError(exception.StatusResourceMCPServerParamInvalid,
-			exception.WithParam("reason", "server config is nil"),
+			exception.WithParam("reason", "服务器配置为空"),
 		)
 	}
 	if serverConfig.ServerID == "" {
 		return exception.BuildError(exception.StatusResourceMCPServerParamInvalid,
-			exception.WithParam("reason", "server id is empty"),
+			exception.WithParam("reason", "服务器 ID 为空"),
 		)
 	}
 	if serverConfig.ServerName == "" {
 		return exception.BuildError(exception.StatusResourceMCPServerParamInvalid,
-			exception.WithParam("reason", "server name is empty"),
+			exception.WithParam("reason", "服务器名称为空"),
 		)
 	}
 	return nil
@@ -1425,7 +1425,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 			return exception.BuildError(exception.StatusResourceAddError,
 				exception.WithParam("resource_type", resourceType),
 				exception.WithParam("resource_id", resourceID),
-				exception.WithParam("reason", "resource is not WorkflowProvider"),
+				exception.WithParam("reason", "资源不是 WorkflowProvider"),
 			)
 		}
 		return m.registry.Workflow().AddWorkflow(resourceID, provider)
@@ -1435,7 +1435,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 			return exception.BuildError(exception.StatusResourceAddError,
 				exception.WithParam("resource_type", resourceType),
 				exception.WithParam("resource_id", resourceID),
-				exception.WithParam("reason", "resource is not AgentProvider"),
+				exception.WithParam("reason", "资源不是 AgentProvider"),
 			)
 		}
 		// ⤵️ 预留：interface_url 用于分布式场景
@@ -1446,7 +1446,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 		if !ok {
 			return exception.BuildError(exception.StatusResourceProviderInvalid,
 				exception.WithParam("resource_type", "team"),
-				exception.WithParam("reason", "resource is not AgentTeamProvider"),
+				exception.WithParam("reason", "资源不是 AgentTeamProvider"),
 			)
 		}
 		return m.registry.AgentTeam().AddAgentTeam(resourceID, provider)
@@ -1456,7 +1456,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 			return exception.BuildError(exception.StatusResourceAddError,
 				exception.WithParam("resource_type", resourceType),
 				exception.WithParam("resource_id", resourceID),
-				exception.WithParam("reason", "resource is not Tool"),
+				exception.WithParam("reason", "资源不是 Tool"),
 			)
 		}
 		return m.registry.Tool().AddTool(resourceID, t)
@@ -1466,7 +1466,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 			return exception.BuildError(exception.StatusResourceAddError,
 				exception.WithParam("resource_type", resourceType),
 				exception.WithParam("resource_id", resourceID),
-				exception.WithParam("reason", "resource is not PromptTemplate"),
+				exception.WithParam("reason", "资源不是 PromptTemplate"),
 			)
 		}
 		return m.registry.Prompt().AddPrompt(resourceID, tmpl)
@@ -1476,7 +1476,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 			return exception.BuildError(exception.StatusResourceAddError,
 				exception.WithParam("resource_type", resourceType),
 				exception.WithParam("resource_id", resourceID),
-				exception.WithParam("reason", "resource is not ModelProvider"),
+				exception.WithParam("reason", "资源不是 ModelProvider"),
 			)
 		}
 		return m.registry.Model().AddModel(resourceID, provider)
@@ -1486,7 +1486,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("resource_type", resourceType),
 			exception.WithParam("resource_id", resourceID),
-			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+			exception.WithParam("reason", fmt.Sprintf("不支持的资源类型: %s", resourceType)),
 		)
 	}
 }
@@ -1514,7 +1514,7 @@ func (m *ResourceMgr) dispatchRemove(resourceType, resourceID string) (any, erro
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_type", resourceType),
 			exception.WithParam("resource_id", resourceID),
-			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+			exception.WithParam("reason", fmt.Sprintf("不支持的资源类型: %s", resourceType)),
 		)
 	}
 }
@@ -1546,7 +1546,7 @@ func (m *ResourceMgr) dispatchGet(ctx context.Context, resourceType, resourceID 
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_type", resourceType),
 			exception.WithParam("resource_id", resourceID),
-			exception.WithParam("reason", fmt.Sprintf("unsupported resource type: %s", resourceType)),
+			exception.WithParam("reason", fmt.Sprintf("不支持的资源类型: %s", resourceType)),
 		)
 	}
 }
@@ -1561,7 +1561,7 @@ func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource
 	if m.tagMgr.HasResource(resourceID) {
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("card", resourceCardStr(resourceCard, resourceID)),
-			exception.WithParam("reason", "resource already exist"),
+			exception.WithParam("reason", "资源已存在"),
 		)
 	}
 
@@ -1746,7 +1746,7 @@ func innerValidateTag(tags []Tag) error {
 	if len(tags) == 0 {
 		return exception.BuildError(exception.StatusResourceTagValueInvalid,
 			exception.WithParam("tag", ""),
-			exception.WithParam("reason", "tag list is empty"),
+			exception.WithParam("reason", "标签列表为空"),
 		)
 	}
 	// 检查 GLOBAL 与其他标签混用
@@ -1760,7 +1760,7 @@ func innerValidateTag(tags []Tag) error {
 	if hasGlobal && len(tags) > 1 {
 		return exception.BuildError(exception.StatusResourceTagValueInvalid,
 			exception.WithParam("tag", fmt.Sprintf("%v", tags)),
-			exception.WithParam("reason", "The GLOBAL tag already exists and cannot be assigned additional tags."),
+			exception.WithParam("reason", "GLOBAL 标签已存在，不能再分配额外标签"),
 		)
 	}
 	// 检查空元素和重复
@@ -1769,13 +1769,13 @@ func innerValidateTag(tags []Tag) error {
 		if t == "" {
 			return exception.BuildError(exception.StatusResourceTagValueInvalid,
 				exception.WithParam("tag", fmt.Sprintf("%v", tags)),
-				exception.WithParam("reason", "has empty tag value"),
+				exception.WithParam("reason", "包含空标签值"),
 			)
 		}
 		if seen[t] {
 			return exception.BuildError(exception.StatusResourceTagValueInvalid,
 				exception.WithParam("tag", fmt.Sprintf("%v", tags)),
-				exception.WithParam("reason", fmt.Sprintf("has duplicate tag '%s' item", t)),
+				exception.WithParam("reason", fmt.Sprintf("包含重复标签 '%s'", t)),
 			)
 		}
 		seen[t] = true
@@ -1790,14 +1790,14 @@ func innerValidateResourceCard(card *schema.BaseCard, resourceType string, cardC
 	if card == nil {
 		return exception.BuildError(exception.StatusResourceCardValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", fmt.Sprintf("card cannot be nil, must be an instance of %s", cardClassType.Name())),
+			exception.WithParam("reason", fmt.Sprintf("card 不能为空，必须是 %s 的实例", cardClassType.Name())),
 		)
 	}
 	cardType := reflect.TypeOf(card)
 	if cardType != cardClassType {
 		return exception.BuildError(exception.StatusResourceCardValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", fmt.Sprintf("cannot be nil, must be an instance of %s", cardClassType.Name())),
+			exception.WithParam("reason", fmt.Sprintf("不能为空，必须是 %s 的实例", cardClassType.Name())),
 		)
 	}
 	return nil
@@ -1810,7 +1810,7 @@ func innerValidateResourceIDs(resourceIDs []string, resourceType string) error {
 	if len(resourceIDs) == 0 {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", fmt.Sprintf("%s id list cannot be empty", resourceType)),
+			exception.WithParam("reason", fmt.Sprintf("%s ID 列表不能为空", resourceType)),
 		)
 	}
 
@@ -1819,19 +1819,19 @@ func innerValidateResourceIDs(resourceIDs []string, resourceType string) error {
 		if rid == "" {
 			return exception.BuildError(exception.StatusResourceIDValueInvalid,
 				exception.WithParam("resource_type", resourceType),
-				exception.WithParam("reason", fmt.Sprintf("invalid %s id at idx %d: cannot be empty", resourceType, idx)),
+				exception.WithParam("reason", fmt.Sprintf("无效的 %s ID（索引 %d）：不能为空", resourceType, idx)),
 			)
 		}
 		if strings.TrimSpace(rid) == "" {
 			return exception.BuildError(exception.StatusResourceIDValueInvalid,
 				exception.WithParam("resource_type", resourceType),
-				exception.WithParam("reason", fmt.Sprintf("invalid %s id at idx %d: cannot be whitespace only", resourceType, idx)),
+				exception.WithParam("reason", fmt.Sprintf("无效的 %s ID（索引 %d）：仅含空白字符", resourceType, idx)),
 			)
 		}
 		if _, exists := seen[rid]; exists {
 			return exception.BuildError(exception.StatusResourceIDValueInvalid,
 				exception.WithParam("resource_type", resourceType),
-				exception.WithParam("reason", fmt.Sprintf("duplicate %s id found: '%s' appears multiple times", resourceType, rid)),
+				exception.WithParam("reason", fmt.Sprintf("发现重复的 %s ID：'%s' 出现多次", resourceType, rid)),
 			)
 		}
 		seen[rid] = struct{}{}
@@ -1847,7 +1847,7 @@ func innerValidateProviders(providers []any, resourceType string, cardClassType 
 	if len(providers) == 0 {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", "cannot be empty: expected a non-empty list of providers"),
+			exception.WithParam("reason", "不能为空：期望非空的 provider 列表"),
 		)
 	}
 
@@ -1859,7 +1859,7 @@ func innerValidateProviders(providers []any, resourceType string, cardClassType 
 			}
 			return exception.BuildError(exception.StatusResourceProviderInvalid,
 				exception.WithParam("resource_type", resourceType),
-				exception.WithParam("reason", fmt.Sprintf("invalid provider at idx %d: provider cannot be nil, must be an instance of %s", idx, expectedName)),
+				exception.WithParam("reason", fmt.Sprintf("无效的 provider（索引 %d）：provider 不能为空，必须是 %s 的实例", idx, expectedName)),
 			)
 		}
 	}
@@ -1873,7 +1873,7 @@ func innerValidateResource(instance any, resourceType string, resourceClassType 
 	if instance == nil {
 		return exception.BuildError(exception.StatusResourceValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", fmt.Sprintf("%s cannot be nil: expected an instance of %s", resourceType, resourceClassType.Name())),
+			exception.WithParam("reason", fmt.Sprintf("%s 不能为空：期望 %s 的实例", resourceType, resourceClassType.Name())),
 		)
 	}
 
@@ -1881,7 +1881,7 @@ func innerValidateResource(instance any, resourceType string, resourceClassType 
 	if instanceType != resourceClassType {
 		return exception.BuildError(exception.StatusResourceValueInvalid,
 			exception.WithParam("resource_type", resourceType),
-			exception.WithParam("reason", fmt.Sprintf("invalid %s type: expected %s, got %s", resourceType, resourceClassType.Name(), instanceType.Name())),
+			exception.WithParam("reason", fmt.Sprintf("无效的 %s 类型：期望 %s，实际 %s", resourceType, resourceClassType.Name(), instanceType.Name())),
 		)
 	}
 	return nil

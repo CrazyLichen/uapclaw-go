@@ -36,10 +36,13 @@ type TeamCard struct {
 	Tags []string `json:"tags,omitempty"`
 }
 
-// TeamCardOption TeamCard 构造选项函数。
-type TeamCardOption func(*TeamCard)
-
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// TeamCardOption TeamCard 构造选项函数，统一设置 BaseCard 字段和 TeamCard 字段。
+//
+// 采用方案C：去掉 CardOption 混合，所有选项均通过 TeamCardOption 设置，
+// 编译时类型安全，避免 opts ...any 的运行时 switch。
+type TeamCardOption func(*TeamCard)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -50,20 +53,37 @@ type TeamCardOption func(*TeamCard)
 // NewTeamCard 创建 TeamCard 实例，默认 Version="1.0.0"。
 //
 // 对应 Python: TeamCard(id=uuid4().hex, name="", description="", agent_cards=[], topic="", version="1.0.0", tags=[])
-func NewTeamCard(opts ...any) *TeamCard {
+// 所有选项（含 BaseCard 字段）均通过 TeamCardOption 设置，编译时类型安全。
+func NewTeamCard(opts ...TeamCardOption) *TeamCard {
 	card := &TeamCard{
 		BaseCard: *schema.NewBaseCard(),
 		Version:  "1.0.0",
 	}
 	for _, opt := range opts {
-		switch o := opt.(type) {
-		case schema.CardOption:
-			o(&card.BaseCard)
-		case TeamCardOption:
-			o(card)
-		}
+		opt(card)
 	}
 	return card
+}
+
+// WithTeamCardID 设置团队卡片 ID（覆盖自动生成的 UUID）。
+//
+// 对应 Python: TeamCard(id=...)
+func WithTeamCardID(id string) TeamCardOption {
+	return func(c *TeamCard) { c.ID = id }
+}
+
+// WithTeamCardName 设置团队名称。
+//
+// 对应 Python: TeamCard(name=...)
+func WithTeamCardName(name string) TeamCardOption {
+	return func(c *TeamCard) { c.Name = name }
+}
+
+// WithTeamCardDescription 设置团队描述。
+//
+// 对应 Python: TeamCard(description=...)
+func WithTeamCardDescription(desc string) TeamCardOption {
+	return func(c *TeamCard) { c.Description = desc }
 }
 
 // WithAgentCards 设置成员 Agent 卡片列表。

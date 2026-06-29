@@ -34,7 +34,7 @@ func TestHandleHealthCheck(t *testing.T) {
 // TestHandleShutdown 测试关闭处理器
 func TestHandleShutdown(t *testing.T) {
 	var buf bytes.Buffer
-	msg := NewMessage(MessageTypeShutdown, map[string]any{"reason": "parent_initiated"})
+	msg := NewMessage(MessageTypeShutdown, map[string]any{"reason": "父进程发起"})
 
 	err := HandleShutdown(context.Background(), msg, &buf)
 	if err != nil {

@@ -48,12 +48,16 @@ type SpawnedProcessHandle struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -231,7 +235,7 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 
 	// 发送 SHUTDOWN 消息
 	shutdownMsg := NewMessage(MessageTypeShutdown, map[string]any{
-		"reason": "parent_initiated",
+		"reason": "父进程发起",
 	})
 	if err := h.SendMessage(ctx, shutdownMsg); err != nil {
 		logger.Warn(logComponent).

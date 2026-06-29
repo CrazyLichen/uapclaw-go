@@ -531,7 +531,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			Err(err).
 			Msg("执行任务失败：无法获取任务")
 		// 对齐 Python: 抛出 AGENT_CONTROLLER_TASK_EXECUTION_ERROR
-		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("task %s not found", taskID))
+		s.handleTaskExecutionFailure(ctx, taskID, sess, fmt.Sprintf("任务 %s 未找到", taskID))
 		return
 	}
 	task := tasks[0]
@@ -760,7 +760,7 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 			if timeout != nil {
 				timeoutStr = fmt.Sprintf("%v", *timeout)
 			}
-			errorMsg := fmt.Sprintf("Task timeout after %s seconds", timeoutStr)
+			errorMsg := fmt.Sprintf("任务超时，超时时间 %s 秒", timeoutStr)
 			logger.Error(logComponent).
 				Str("event_type", "LLM_CALL_ERROR").
 				Str("task_id", taskID).
@@ -815,7 +815,7 @@ func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessi
 		Payload: &schema.ControllerOutputPayload{
 			Type: schema.AllTasksProcessed,
 			Data: []schema.DataFrame{
-				&schema.TextDataFrame{Text: "All tasks have been successfully processed"},
+				&schema.TextDataFrame{Text: "所有任务已成功处理"},
 			},
 		},
 		IsLastSchema: true,
@@ -919,7 +919,7 @@ func (s *TaskScheduler) publishTaskEvent(ctx context.Context, taskID string, pay
 		}
 	case payloadTypeTaskFailed:
 		// 对齐 Python: error_msg = payload_data[0].text if payload_data else "Unknown error"
-		errMsg := "Unknown error"
+		errMsg := "未知错误"
 		if len(payload.Data) > 0 {
 			if textDF, ok := payload.Data[0].(*schema.TextDataFrame); ok {
 				errMsg = textDF.Text
