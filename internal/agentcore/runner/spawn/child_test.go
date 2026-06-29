@@ -745,7 +745,7 @@ func TestProcessMessageLoop_输入消息inputs非map(t *testing.T) {
 // TestApplyLoggingConfigFromEnv_无环境变量 测试无日志配置环境变量时正常初始化
 func TestApplyLoggingConfigFromEnv_无环境变量(t *testing.T) {
 	origVal, hasVal := os.LookupEnv(EnvSpawnLoggingConfig)
-	os.Unsetenv(EnvSpawnLoggingConfig)
+	_ = os.Unsetenv(EnvSpawnLoggingConfig)
 	defer func() {
 		if hasVal {
 			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
