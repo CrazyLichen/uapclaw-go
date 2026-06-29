@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -41,7 +40,7 @@ func (t *stubTeam) Stream(_ context.Context, _ map[string]any, _ ...TeamOption) 
 	return ch, nil
 }
 
-func (t *stubTeam) AddAgent(_ context.Context, _ *agentschema.AgentCard, _ resources_manager.AgentProvider) error {
+func (t *stubTeam) AddAgent(_ context.Context, _ *agentschema.AgentCard, _ TeamAgentProvider) error {
 	return nil
 }
 

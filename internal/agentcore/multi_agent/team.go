@@ -4,7 +4,6 @@ import (
 	"context"
 
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -61,7 +60,7 @@ type BaseTeam interface {
 	// AddAgent 向团队注册 Agent。
 	//
 	// 对应 Python: BaseTeam.add_agent(card, provider) -> self
-	AddAgent(ctx context.Context, card *agentschema.AgentCard, provider resources_manager.AgentProvider) error
+	AddAgent(ctx context.Context, card *agentschema.AgentCard, provider TeamAgentProvider) error
 
 	// RemoveAgent 从团队注销 Agent。
 	//
@@ -132,5 +131,12 @@ type BaseTeam interface {
 // 对应 Python: AgentTeamProvider = Callable[[TeamCard], Awaitable[BaseTeam]] | Callable[[TeamCard], BaseTeam]
 // 用于延迟加载团队资源，注册时传入工厂函数而非实例。
 type AgentTeamProvider func(ctx context.Context, card *TeamCard) (BaseTeam, error)
+
+// TeamAgentProvider 团队内 Agent 资源提供者函数，接受 AgentCard 返回 Agent 实例。
+//
+// 对应 Python: AgentProvider = Callable[[AgentCard], Awaitable[BaseAgent]] | Callable[[AgentCard], BaseAgent]
+// 签名与 resources_manager.AgentProvider 一致，在 multi_agent 包内定义以避免循环依赖。
+// 具体团队实现中可通过类型转换互转：resources_manager.AgentProvider(provider) 或 TeamAgentProvider(rmProvider)。
+type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (any, error)
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

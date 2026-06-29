@@ -5,6 +5,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
+	multiagent "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -50,6 +51,16 @@ type AgentEntry struct {
 	Card *agentschema.AgentCard
 	// Provider Agent 提供者
 	Provider AgentProvider
+}
+
+// AgentTeamEntry AgentTeam 批量添加条目。
+//
+// 对应 Python: (TeamCard, AgentTeamProvider) 元组
+type AgentTeamEntry struct {
+	// Card 团队身份元数据
+	Card *multiagent.TeamCard
+	// Provider 团队提供者
+	Provider multiagent.AgentTeamProvider
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
