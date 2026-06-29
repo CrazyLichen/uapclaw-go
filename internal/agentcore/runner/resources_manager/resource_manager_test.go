@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -931,32 +932,34 @@ func TestResourceMgr_GetSysOperation_不存在(t *testing.T) {
 	}
 }
 
-// --- AgentTeam 测试（⤵️ 预留方法，验证调用不 panic）---
+// --- AgentTeam 测试 ---
 
-// TestResourceMgr_AddAgentTeam_预留 测试 AddAgentTeam 预留方法返回错误
-func TestResourceMgr_AddAgentTeam_预留(t *testing.T) {
+// TestResourceMgr_AddAgentTeam_nilProvider报错 测试 AddAgentTeam nil provider 报错
+func TestResourceMgr_AddAgentTeam_nilProvider报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	err := mgr.AddAgentTeam("team-1", nil)
+	card := &multiagents.TeamCard{BaseCard: schema.BaseCard{ID: "team-1", Name: "test-team"}}
+	err := mgr.AddAgentTeam(card, nil)
 	if err == nil {
-		t.Fatal("预留方法应返回错误")
+		t.Fatal("nil provider 应返回错误")
 	}
 }
 
-// TestResourceMgr_RemoveAgentTeam_预留 测试 RemoveAgentTeam 预留方法返回错误
-func TestResourceMgr_RemoveAgentTeam_预留(t *testing.T) {
+// TestResourceMgr_RemoveAgentTeam_不存在报错 测试 RemoveAgentTeam 不存在报错
+func TestResourceMgr_RemoveAgentTeam_不存在报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	_, err := mgr.RemoveAgentTeam([]string{"team-1"})
+	_, err := mgr.RemoveAgentTeam([]string{"team-notexist"})
 	if err == nil {
-		t.Fatal("预留方法应返回错误")
+		t.Fatal("不存在的团队应返回错误")
 	}
 }
 
-// TestResourceMgr_GetAgentTeam_预留 测试 GetAgentTeam 预留方法返回错误
-func TestResourceMgr_GetAgentTeam_预留(t *testing.T) {
+// TestResourceMgr_GetAgentTeam_不存在报错 测试 GetAgentTeam 不存在报错
+func TestResourceMgr_GetAgentTeam_不存在报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	_, err := mgr.GetAgentTeam([]string{"team-1"})
+	ctx := context.Background()
+	_, err := mgr.GetAgentTeam(ctx, []string{"team-notexist"})
 	if err == nil {
-		t.Fatal("预留方法应返回错误")
+		t.Fatal("不存在的团队应返回错误")
 	}
 }
 
