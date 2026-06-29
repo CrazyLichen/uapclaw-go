@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -1215,25 +1216,41 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 // AddAgentTeam 注册 Agent 团队。
 //
 // 对应 Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
-// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-func (m *ResourceMgr) AddAgentTeam(agentTeamID string, provider any, opts ...ResourceOption) error {
-	return fmt.Errorf("agent team not implemented, agent_team_id=%s", agentTeamID)
+func (m *ResourceMgr) AddAgentTeam(card *multiagents.TeamCard, provider multiagents.AgentTeamProvider, opts ...ResourceOption) error {
+	if err := m.innerValidateProvider(provider, "team"); err != nil {
+		return err
+	}
+	return m.innerAddResource(card.ID, "team", provider, &card.BaseCard, "", "")
 }
 
 // RemoveAgentTeam 注销 Agent 团队。
 //
 // 对应 Python: ResourceManager.remove_agent_team(agent_team_id, **kwargs)
-// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) (any, error) {
-	return nil, fmt.Errorf("agent team not implemented, agent_team_ids=%v", agentTeamIDs)
+func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) ([]multiagents.AgentTeamProvider, error) {
+	results := make([]multiagents.AgentTeamProvider, 0, len(agentTeamIDs))
+	for _, id := range agentTeamIDs {
+		provider, err := m.registry.AgentTeam().RemoveAgentTeam(id)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, provider)
+	}
+	return results, nil
 }
 
 // GetAgentTeam 获取 Agent 团队。
 //
 // 对应 Python: ResourceManager.get_agent_team(agent_team_id, **kwargs)
-// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-func (m *ResourceMgr) GetAgentTeam(agentTeamIDs []string, opts ...ResourceOption) (any, error) {
-	return nil, fmt.Errorf("agent team not implemented, agent_team_ids=%v", agentTeamIDs)
+func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, opts ...ResourceOption) ([]multiagents.BaseTeam, error) {
+	results := make([]multiagents.BaseTeam, 0, len(agentTeamIDs))
+	for _, id := range agentTeamIDs {
+		team, err := m.registry.AgentTeam().GetAgentTeam(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, team)
+	}
+	return results, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1425,8 +1442,13 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 		_ = interfaceURL
 		return m.registry.Agent().AddAgent(resourceID, provider)
 	case "team":
-		// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-		provider := resource
+		provider, ok := resource.(multiagents.AgentTeamProvider)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceProviderInvalid,
+				exception.WithParam("resource_type", "team"),
+				exception.WithParam("reason", "resource is not AgentTeamProvider"),
+			)
+		}
 		return m.registry.AgentTeam().AddAgentTeam(resourceID, provider)
 	case "tool":
 		t, ok := resource.(tool.Tool)
@@ -1509,8 +1531,7 @@ func (m *ResourceMgr) dispatchGet(ctx context.Context, resourceType, resourceID 
 	case "agent":
 		return m.registry.Agent().GetAgent(ctx, resourceID)
 	case "team":
-		// ⤵️ 预留：等 TeamCard/BaseTeam 类型实现后回填
-		return m.registry.AgentTeam().GetAgentTeam(resourceID)
+		return m.registry.AgentTeam().GetAgentTeam(ctx, resourceID)
 	case "tool":
 		s, _ := session.(decorator.TracerSession)
 		return m.registry.Tool().GetTool(resourceID, s)
@@ -1886,8 +1907,9 @@ func getCardType(card *schema.BaseCard) string {
 		return "workflow"
 	case reflect.TypeOf((*agentschema.AgentCard)(nil)):
 		return "agent"
+	case reflect.TypeOf((*multiagents.TeamCard)(nil)):
+		return "team"
 	default:
-		// ⤵️ 预留：8.28 TeamCard 实现后添加 reflect.TypeOf((*TeamCard)(nil)) → "team"
 		return ""
 	}
 }
