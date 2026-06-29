@@ -18,6 +18,7 @@ func resetGlobal() {
 	defer globalMu.Unlock()
 	global = nil
 	globalOnce = sync.Once{}
+	globalSetup = false
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -312,4 +313,85 @@ func Test组件级日志函数_未初始化(t *testing.T) {
 	Warn(ComponentGateway).Msg("不应出现")
 	Error(ComponentChannel).Msg("不应出现")
 	Debug(ComponentCommon).Msg("不应出现")
+}
+
+func TestIsSetup(t *testing.T) {
+	resetGlobal()
+
+	if IsSetup() {
+		t.Error("期望 IsSetup() 返回 false")
+	}
+
+	tmpDir := t.TempDir()
+	err := Setup(WithOutputDir(tmpDir))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	if !IsSetup() {
+		t.Error("期望 IsSetup() 返回 true")
+	}
+}
+
+func TestReconfigure_更新日志级别(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	// 先 Setup 初始化
+	err := Setup(WithOutputDir(tmpDir), WithLogLevel("warn"))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	// 验证初始级别
+	levels := Levels()
+	if levels.Gateway != LogLevelWarn {
+		t.Errorf("期望初始 Gateway = warn，实际 %s", levels.Gateway)
+	}
+
+	// Reconfigure 更新为 debug
+	err = Reconfigure(WithLogLevel("debug"))
+	if err != nil {
+		t.Fatalf("Reconfigure 失败: %v", err)
+	}
+
+	// 验证级别已更新
+	levels = Levels()
+	if levels.Gateway != LogLevelDebug {
+		t.Errorf("期望 Reconfigure 后 Gateway = debug，实际 %s", levels.Gateway)
+	}
+}
+
+func TestReconfigure_未初始化返回错误(t *testing.T) {
+	resetGlobal()
+
+	err := Reconfigure(WithLogLevel("debug"))
+	if err == nil {
+		t.Error("期望 Reconfigure 在未初始化时返回错误")
+	}
+}
+
+func TestReconfigure_WithLoggingLevels(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	err := Setup(WithOutputDir(tmpDir), WithLogLevel("info"))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	// 构造自定义级别
+	customLevels := ResolveLoggingLevels(nil, "", "debug")
+	err = Reconfigure(WithLoggingLevels(customLevels))
+	if err != nil {
+		t.Fatalf("Reconfigure 失败: %v", err)
+	}
+
+	levels := Levels()
+	if levels.Gateway != LogLevelDebug {
+		t.Errorf("期望 Gateway = debug，实际 %s", levels.Gateway)
+	}
 }

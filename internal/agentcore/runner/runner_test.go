@@ -600,7 +600,7 @@ func TestPrepareAgent_按实例有会话(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("existing-session", newTestAgentCard("pa-inst-sess"), nil)
 
-	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), nil, sess)
+	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), nil, BySession(sess))
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
 	}
@@ -629,7 +629,7 @@ func TestPrepareAgent_按ID有会话(t *testing.T) {
 	}
 
 	sess := session.CreateAgentSession("existing-session", newTestAgentCard("registered-agent"), nil)
-	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgentID("registered-agent"), nil, sess)
+	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgentID("registered-agent"), nil, BySession(sess))
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
 	}
@@ -656,7 +656,7 @@ func TestPrepareAgent_按ID无会话(t *testing.T) {
 		t.Fatalf("AddAgent 失败: %v", err)
 	}
 
-	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgentID("byid-no-sess"), map[string]any{"input": "test"}, nil)
+	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgentID("byid-no-sess"), map[string]any{"input": "test"}, SessionRef{})
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
 	}
@@ -676,7 +676,7 @@ func TestPrepareAgent_按实例无会话(t *testing.T) {
 		result: "ok",
 	}
 
-	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, nil)
+	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, SessionRef{})
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
 	}
@@ -692,7 +692,7 @@ func TestPrepareAgent_按实例无会话(t *testing.T) {
 func TestPrepareAgent_按ID不存在(t *testing.T) {
 	r := newTestRunner()
 
-	_, _, err := r.prepareAgent(context.Background(), ByAgentID("nonexistent"), nil, nil)
+	_, _, err := r.prepareAgent(context.Background(), ByAgentID("nonexistent"), nil, SessionRef{})
 	if err == nil {
 		t.Error("应返回错误（Agent不存在）")
 	}
@@ -703,7 +703,7 @@ func TestPrepareAgent_按ID不存在有会话(t *testing.T) {
 	r := newTestRunner()
 	sess := session.CreateAgentSession("ghost-session", newTestAgentCard("ghost-agent"), nil)
 
-	_, _, err := r.prepareAgent(context.Background(), ByAgentID("ghost-agent"), nil, sess)
+	_, _, err := r.prepareAgent(context.Background(), ByAgentID("ghost-agent"), nil, BySession(sess))
 	if err == nil {
 		t.Error("应返回错误（Agent不存在）")
 	}
@@ -720,7 +720,7 @@ func TestPrepareAgent_自定义会话ID(t *testing.T) {
 	inputs := map[string]any{
 		"conversation_id": "custom-conv-123",
 	}
-	_, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), inputs, nil)
+	_, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), inputs, SessionRef{})
 	if err != nil {
 		t.Fatalf("prepareAgent 失败: %v", err)
 	}

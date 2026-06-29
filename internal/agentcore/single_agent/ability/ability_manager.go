@@ -833,7 +833,7 @@ func (am *AbilityManager) executeAgent(
 	}
 
 	// 步骤 8：通过 Runner.RunAgent 执行（对齐 Python L800: result = await Runner.run_agent(agent, inputs, session=child_session)）
-	result, err := runner.RunAgent(ctx, runner.ByAgent(ag), toolArgs, childSession, nil, nil)
+	result, err := runner.RunAgent(ctx, runner.ByAgent(ag), toolArgs, runner.BySession(childSession), nil, nil)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
 			Str("agent_name", toolName).

@@ -227,7 +227,7 @@ func RunAgent(
 	ctx context.Context,
 	agentRef AgentRef,
 	inputs map[string]any,
-	sess sessioninterfaces.SessionFacade,
+	sessionRef SessionRef,
 	modelCtx any,
 	envs map[string]any,
 ) (any, error) {
@@ -238,7 +238,7 @@ func RunAgent(
 	_ = r
 
 	// 步骤 2：_prepareAgent → 获取agent实例和session（对齐 Python L418）
-	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sess)
+	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sessionRef)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func RunAgentStreaming(
 	ctx context.Context,
 	agentRef AgentRef,
 	inputs map[string]any,
-	sess sessioninterfaces.SessionFacade,
+	sessionRef SessionRef,
 	modelCtx any,
 	streamModes any,
 	envs map[string]any,
@@ -289,7 +289,7 @@ func RunAgentStreaming(
 	_ = r
 
 	// 步骤 2：_prepareAgent → 获取agent实例和session（对齐 Python L450）
-	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sess)
+	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sessionRef)
 	if err != nil {
 		return nil, err
 	}
@@ -601,10 +601,11 @@ func (r *Runner) prepareAgent(
 	ctx context.Context,
 	agentRef AgentRef,
 	inputs map[string]any,
-	sess sessioninterfaces.SessionFacade,
+	sessionRef SessionRef,
 ) (interfaces.BaseAgent, sessioninterfaces.SessionFacade, error) {
 	// 分支 1：session 是 AgentSession（对齐 Python L504: isinstance(session, AgentSession)）
-	if sess != nil {
+	if sessionRef.IsByInstance() {
+		sess := sessionRef.Session()
 		// 断言为具体 Session 类型以调用 PreRun
 		agentSess, isAgentSess := sess.(*session.Session)
 
@@ -635,8 +636,10 @@ func (r *Runner) prepareAgent(
 		return agentRef.Agent(), sess, nil
 	}
 
-	// 分支 2：session 不是 AgentSession（对齐 Python L513-530）
-	// 解析 sessionID（对齐 Python L513-514: session_id = inputs.get(conversation_id, ...)）
+	// 分支 2：session 是 string 或 nil（对齐 Python L513-530）
+	// 解析 sessionID（对齐 Python L513-514:
+	//   session_id = inputs.get(conversation_id, session if isinstance(session, str) else default)
+	// 优先级：inputs["conversation_id"] > SessionRef.ID > default
 	sessionID := defaultAgentSessionID
 	if inputs != nil {
 		if convID, ok := inputs[agentConversationIDKey]; ok {
@@ -644,6 +647,9 @@ func (r *Runner) prepareAgent(
 				sessionID = id
 			}
 		}
+	}
+	if sessionID == defaultAgentSessionID && sessionRef.IsByID() {
+		sessionID = sessionRef.ID()
 	}
 
 	if agentRef.IsByID() {

@@ -56,6 +56,8 @@ var (
 	globalOnce sync.Once
 	// globalMu 保护 global 的读写
 	globalMu sync.RWMutex
+	// globalSetup 标记 Setup 是否已执行
+	globalSetup bool
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -93,6 +95,14 @@ func WithOutputDir(dir string) Option {
 func WithRotationConfig(cfg RotationConfig) Option {
 	return func(l *Logger) {
 		l.rotationCfg = cfg
+	}
+}
+
+// WithLoggingLevels 直接设置日志级别。
+// 用于 Reconfigure() 时直接传入解析好的级别配置。
+func WithLoggingLevels(levels LoggingLevels) Option {
+	return func(l *Logger) {
+		l.levels = levels
 	}
 }
 
@@ -157,6 +167,7 @@ func Setup(opts ...Option) error {
 		// 保存到全局单例
 		globalMu.Lock()
 		global = l
+		globalSetup = true
 		globalMu.Unlock()
 	})
 
@@ -227,8 +238,45 @@ func Close() error {
 	}
 
 	global = nil
+	globalSetup = false
 	globalOnce = sync.Once{} // 允许重新 Setup
 	return nil
+}
+
+// Reconfigure 运行时重新配置日志系统（如更新日志级别）。
+// 对齐 Python: configure_log_config()
+//
+// 仅更新 levels 并重建各组件的 zerolog.Logger 实例，
+// 不改变输出目录、轮转配置和 writer 链。
+// 必须在 Setup() 之后调用，否则返回错误。
+func Reconfigure(opts ...Option) error {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+
+	if global == nil {
+		return exception.NewBaseError(exception.StatusCommonLogExecutionRuntimeError,
+			exception.WithMsg("日志系统未初始化，无法重新配置"))
+	}
+
+	// 应用选项（仅更新 levels 生效，outputDir/rotationCfg 等忽略）
+	for _, opt := range opts {
+		opt(global)
+	}
+
+	// 重建各组件 Logger 的级别（不重建 writer 链，仅调整 level）
+	for comp, zl := range global.componentLoggers {
+		level := global.componentLevel(comp)
+		global.componentLoggers[comp] = zl.Level(level.ToZerologLevel())
+	}
+
+	return nil
+}
+
+// IsSetup 返回日志系统是否已初始化。
+func IsSetup() bool {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+	return globalSetup
 }
 
 // Levels 返回当前日志级别配置。

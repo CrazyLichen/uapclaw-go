@@ -230,7 +230,9 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 	}
 
 	// 发送 SHUTDOWN 消息
-	shutdownMsg := NewMessage(MessageTypeShutdown, nil)
+	shutdownMsg := NewMessage(MessageTypeShutdown, map[string]any{
+		"reason": "parent_initiated",
+	})
 	if err := h.SendMessage(ctx, shutdownMsg); err != nil {
 		logger.Warn(logComponent).
 			Str("process_id", h.processID).
@@ -281,37 +283,45 @@ func (h *SpawnedProcessHandle) Shutdown(ctx context.Context, timeout ...time.Dur
 	return true, nil
 }
 
-// ForceKill 强制终止子进程。
-// 平台兼容：Unix 使用 SIGTERM→等3s→SIGKILL，Windows 直接 Kill。
+// ForceKill 强制终止子进程（直接 SIGKILL）。
 // 对齐 Python: SpawnedProcessHandle.force_kill()
+//
+// 与 forceTerminate 的区别：
+//   - ForceKill：直接 SIGKILL，无宽限期
+//   - forceTerminate：SIGTERM → 3s → SIGKILL，给子进程清理机会
 func (h *SpawnedProcessHandle) ForceKill() error {
 	if !h.IsAlive() {
 		return nil
 	}
 
+	// 设置关闭标志
+	h.mu.Lock()
+	h.shutdownRequested = true
+	h.mu.Unlock()
+
+	// 停止健康检查
+	_ = h.StopHealthCheck()
+
 	logger.Info(logComponent).
 		Str("process_id", h.processID).
-		Msg("强制终止子进程")
+		Msg("强制终止子进程（SIGKILL）")
 
-	if h.isWindows() {
-		return h.cmd.Process.Kill()
+	err := h.cmd.Process.Kill()
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("process_id", h.processID).
+			Err(err).
+			Msg("SIGKILL 失败（进程可能已退出）")
+		return err
 	}
 
-	// Unix: SIGTERM → 等3s → SIGKILL
-	_ = h.cmd.Process.Signal(syscall.SIGTERM)
+	// 等待进程退出
+	_, _ = h.cmd.Process.Wait()
 
-	waitCh := make(chan struct{})
-	go func() {
-		_, _ = h.cmd.Process.Wait()
-		close(waitCh)
-	}()
-
-	select {
-	case <-waitCh:
-		return nil
-	case <-time.After(ForceTerminateGracePeriod):
-		return h.cmd.Process.Kill()
-	}
+	logger.Info(logComponent).
+		Str("process_id", h.processID).
+		Msg("子进程已强制终止")
+	return nil
 }
 
 // WaitForCompletion 等待子进程完成，返回退出码。
@@ -407,31 +417,54 @@ func (h *SpawnedProcessHandle) recordHealthFailure() {
 	}
 }
 
-// waitForHealthCheckResponse 等待健康检查响应。
+// waitForHealthCheckResponse 等待健康检查响应（循环读取，跳过非目标消息）。
+// 对齐 Python: SpawnedProcessHandle._wait_for_health_check_response()
+//
+// 持续读取 stdout 直到拿到 HEALTH_CHECK_RESPONSE、EOF 或超时。
+// streaming 场景下 STREAM_CHUNK 等消息会被跳过。
 func (h *SpawnedProcessHandle) waitForHealthCheckResponse(ctx context.Context, messageID string) (Message, error) {
-	msgCh := make(chan Message, 1)
-	errCh := make(chan error, 1)
+	for {
+		msgCh := make(chan Message, 1)
+		errCh := make(chan error, 1)
 
-	go func() {
-		msg, err := ReadMessage(h.stdout)
-		if err != nil {
-			errCh <- err
-			return
+		go func() {
+			msg, err := ReadMessage(h.stdout)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			msgCh <- msg
+		}()
+
+		select {
+		case msg := <-msgCh:
+			if msg.Type == MessageTypeHealthCheckResponse {
+				return msg, nil
+			}
+			// 跳过非健康检查消息（如 STREAM_CHUNK/OUTPUT/DONE 等），继续读
+			logger.Debug(logComponent).
+				Str("process_id", h.processID).
+				Str("message_type", msg.Type.String()).
+				Msg("健康检查等待期间收到非目标消息，跳过")
+			continue
+
+		case err := <-errCh:
+			if err == io.EOF {
+				return Message{}, fmt.Errorf("子进程关闭，读取健康检查响应失败")
+			}
+			return Message{}, fmt.Errorf("读取健康检查响应失败: %w", err)
+
+		case <-ctx.Done():
+			return Message{}, fmt.Errorf("健康检查响应超时")
 		}
-		msgCh <- msg
-	}()
-
-	select {
-	case msg := <-msgCh:
-		return msg, nil
-	case err := <-errCh:
-		return Message{}, fmt.Errorf("读取健康检查响应失败: %w", err)
-	case <-ctx.Done():
-		return Message{}, fmt.Errorf("健康检查响应超时")
 	}
 }
 
-// waitForShutdownAck 等待 SHUTDOWN_ACK 消息。
+// waitForShutdownAck 等待 SHUTDOWN_ACK 或 DONE 消息（循环读取，跳过非目标消息）。
+// 对齐 Python: SpawnedProcessHandle._wait_for_shutdown_ack()
+//
+// 持续读取 stdout 直到拿到 SHUTDOWN_ACK 或 DONE（Agent 自然完成也视为可退出）。
+// 其他消息（如 STREAM_CHUNK/OUTPUT/ERROR 等）会被跳过。
 func (h *SpawnedProcessHandle) waitForShutdownAck(ctx context.Context) bool {
 	shutdownTimeout := h.config.ShutdownTimeout
 	if shutdownTimeout <= 0 {
@@ -441,39 +474,102 @@ func (h *SpawnedProcessHandle) waitForShutdownAck(ctx context.Context) bool {
 	ackCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 	defer cancel()
 
-	msgCh := make(chan Message, 1)
-	errCh := make(chan error, 1)
+	for {
+		msgCh := make(chan Message, 1)
+		errCh := make(chan error, 1)
 
-	go func() {
-		msg, err := ReadMessage(h.stdout)
-		if err != nil {
-			errCh <- err
-			return
+		go func() {
+			msg, err := ReadMessage(h.stdout)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			msgCh <- msg
+		}()
+
+		select {
+		case msg := <-msgCh:
+			if msg.Type == MessageTypeShutdownAck {
+				return true
+			}
+			if msg.Type == MessageTypeDone {
+				// Agent 自然完成也视为可正常退出
+				logger.Info(logComponent).
+					Str("process_id", h.processID).
+					Msg("等待 SHUTDOWN_ACK 期间收到 DONE，视为正常退出")
+				return true
+			}
+			// 跳过其他消息，继续读
+			logger.Debug(logComponent).
+				Str("process_id", h.processID).
+				Str("message_type", msg.Type.String()).
+				Msg("等待 SHUTDOWN_ACK 期间收到非目标消息，跳过")
+			continue
+
+		case <-errCh:
+			return false
+
+		case <-ackCtx.Done():
+			return false
 		}
-		msgCh <- msg
-	}()
-
-	select {
-	case msg := <-msgCh:
-		return msg.Type == MessageTypeShutdownAck
-	case <-errCh:
-		return false
-	case <-ackCtx.Done():
-		return false
 	}
 }
 
-// forceTerminate 强制终止子进程。
+// forceTerminate 强制终止子进程（SIGTERM → 3s → SIGKILL）。
+// 对齐 Python: SpawnedProcessHandle._force_terminate()
+//
+// 返回 (graceful, error)：graceful=true 表示优雅退出，false 表示强制终止。
 func (h *SpawnedProcessHandle) forceTerminate() (bool, error) {
 	if !h.IsAlive() {
 		return true, nil
 	}
 
-	err := h.ForceKill()
-	if err != nil {
-		return false, fmt.Errorf("强制终止子进程 %s 失败: %w", h.processID, err)
+	// 设置关闭标志
+	h.mu.Lock()
+	h.shutdownRequested = true
+	h.mu.Unlock()
+
+	// 停止健康检查
+	_ = h.StopHealthCheck()
+
+	logger.Info(logComponent).
+		Str("process_id", h.processID).
+		Msg("发送 SIGTERM 终止子进程")
+
+	// Unix: SIGTERM → 等3s → SIGKILL
+	if !h.isWindows() {
+		_ = h.cmd.Process.Signal(syscall.SIGTERM)
+
+		waitCh := make(chan struct{})
+		go func() {
+			_, _ = h.cmd.Process.Wait()
+			close(waitCh)
+		}()
+
+		select {
+		case <-waitCh:
+			logger.Info(logComponent).
+				Str("process_id", h.processID).
+				Msg("子进程在 SIGTERM 后正常退出")
+			return false, nil
+		case <-time.After(ForceTerminateGracePeriod):
+			logger.Warn(logComponent).
+				Str("process_id", h.processID).
+				Msg("子进程未在宽限期内退出，执行 SIGKILL")
+			killErr := h.cmd.Process.Kill()
+			if killErr != nil {
+				return false, fmt.Errorf("SIGKILL 子进程 %s 失败: %w", h.processID, killErr)
+			}
+			return false, nil
+		}
 	}
-	return true, nil
+
+	// Windows: 直接 Kill（Windows 没有 SIGTERM）
+	killErr := h.cmd.Process.Kill()
+	if killErr != nil {
+		return false, fmt.Errorf("强制终止子进程 %s 失败: %w", h.processID, killErr)
+	}
+	return false, nil
 }
 
 // isWindows 判断当前平台是否为 Windows。

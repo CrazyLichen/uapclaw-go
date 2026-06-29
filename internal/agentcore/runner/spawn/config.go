@@ -27,12 +27,20 @@ type SpawnAgentConfig struct {
 
 // ClassAgentSpawnConfig 类 Agent Spawn 配置。
 // 对齐 Python: ClassAgentSpawnConfig (agent_config.py)
-// 用 AgentName 替代 Python 的 agent_module + agent_class（Go 无动态 import）。
+// Python 传 agent_module + agent_class + init_kwargs，
+// Go 传 AgentName + AgentCard + InitKwargs。
+// AgentCard 包含 Agent 完整元数据，由主进程从 ResourceMgr 中提取传给子进程，
+// 子进程据此通过 AgentCreator.CreateByType() 创建 Agent 实例。
 type ClassAgentSpawnConfig struct {
 	SpawnAgentConfig
-	// AgentName ResourceMgr 注册表中的名字
+	// AgentName Agent 名称
 	AgentName string `json:"agent_name"`
-	// InitKwargs 实例化参数
+	// AgentCard Agent 完整配置卡片（序列化为 map）。
+	// 对齐 Python: ClassAgentSpawnConfig.agent_module + agent_class
+	// Go 用 AgentCard 替代，因为 Go 没有 importlib 的 module+class 动态导入。
+	AgentCard map[string]any `json:"agent_card,omitempty"`
+	// InitKwargs 实例化参数。
+	// 对齐 Python: ClassAgentSpawnConfig.init_kwargs
 	InitKwargs map[string]any `json:"init_kwargs,omitempty"`
 }
 

@@ -1,7 +1,8 @@
 package runner
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -12,7 +13,7 @@ type AgentRef struct {
 	// id Agent ID（按ID查找时设置）
 	id string
 	// agent Agent实例（按实例传入时设置）
-	agent interfaces.BaseAgent
+	agent agentinterfaces.BaseAgent
 }
 
 // WorkflowRef 工作流引用，支持按ID查找或直接传入实例。
@@ -21,7 +22,16 @@ type WorkflowRef struct {
 	// id 工作流ID（按ID查找时设置）
 	id string
 	// workflow 工作流实例（按实例传入时设置）
-	workflow interfaces.Workflow
+	workflow agentinterfaces.Workflow
+}
+
+// SessionRef 会话引用，支持按ID查找或直接传入实例。
+// 对齐 Python: session: Optional[str | AgentSession] = None
+type SessionRef struct {
+	// id 会话 ID（按ID查找时设置）
+	id string
+	// session 会话实例（按实例传入时设置）
+	session sessioninterfaces.SessionFacade
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -38,7 +48,7 @@ func ByAgentID(id string) AgentRef {
 }
 
 // ByAgent 创建按实例传入的AgentRef。
-func ByAgent(agent interfaces.BaseAgent) AgentRef {
+func ByAgent(agent agentinterfaces.BaseAgent) AgentRef {
 	return AgentRef{agent: agent}
 }
 
@@ -58,7 +68,7 @@ func (r AgentRef) ID() string {
 }
 
 // Agent 返回Agent实例。
-func (r AgentRef) Agent() interfaces.BaseAgent {
+func (r AgentRef) Agent() agentinterfaces.BaseAgent {
 	return r.agent
 }
 
@@ -68,7 +78,7 @@ func ByWorkflowID(id string) WorkflowRef {
 }
 
 // ByWorkflow 创建按实例传入的WorkflowRef。
-func ByWorkflow(wf interfaces.Workflow) WorkflowRef {
+func ByWorkflow(wf agentinterfaces.Workflow) WorkflowRef {
 	return WorkflowRef{workflow: wf}
 }
 
@@ -88,8 +98,38 @@ func (r WorkflowRef) ID() string {
 }
 
 // Workflow 返回工作流实例。
-func (r WorkflowRef) Workflow() interfaces.Workflow {
+func (r WorkflowRef) Workflow() agentinterfaces.Workflow {
 	return r.workflow
+}
+
+// BySessionID 创建按ID查找的SessionRef。
+func BySessionID(id string) SessionRef {
+	return SessionRef{id: id}
+}
+
+// BySession 创建按实例传入的SessionRef。
+func BySession(session sessioninterfaces.SessionFacade) SessionRef {
+	return SessionRef{session: session}
+}
+
+// IsByID 判断是否按ID查找。
+func (r SessionRef) IsByID() bool {
+	return r.id != ""
+}
+
+// IsByInstance 判断是否按实例传入。
+func (r SessionRef) IsByInstance() bool {
+	return r.session != nil
+}
+
+// ID 返回会话ID。
+func (r SessionRef) ID() string {
+	return r.id
+}
+
+// Session 返回会话实例。
+func (r SessionRef) Session() sessioninterfaces.SessionFacade {
+	return r.session
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

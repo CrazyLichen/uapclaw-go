@@ -8,7 +8,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn/factory"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 )
@@ -211,5 +213,7 @@ func runSpawnChild(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	agentConfig := map[string]any{}
 	inputs := map[string]any{}
-	return spawn.RunSpawnedProcess(ctx, agentConfig, inputs)
+	childRunner := &runner.ChildRunnerImpl{}
+	agentCreator := factory.NewDefaultAgentCreator()
+	return spawn.RunSpawnedProcess(ctx, agentConfig, inputs, childRunner, agentCreator)
 }
