@@ -123,7 +123,7 @@ type BaseTeam interface {
 
     // AddAgent 向团队注册 Agent。
     // 对应 Python: BaseTeam.add_agent(card, provider) -> self
-    AddAgent(ctx context.Context, card *agentschema.AgentCard, provider AgentProvider) error
+    AddAgent(ctx context.Context, card *agentschema.AgentCard, provider TeamAgentProvider) error
 
     // RemoveAgent 从团队注销 Agent。
     // 对应 Python: BaseTeam.remove_agent(agent) -> self
@@ -188,6 +188,19 @@ type BaseTeam interface {
 // 用于延迟加载团队资源，注册时传入工厂函数而非实例。
 type AgentTeamProvider func(ctx context.Context, card *TeamCard) (BaseTeam, error)
 ```
+
+## TeamAgentProvider 类型
+
+```go
+// TeamAgentProvider 团队内 Agent 资源提供者函数，接受 AgentCard 返回 BaseAgent 实例。
+//
+// 对应 Python: AgentProvider = Callable[[AgentCard], Awaitable[BaseAgent]] | Callable[[AgentCard], BaseAgent]
+// 在 multi_agent 包内定义以避免 multi_agent → resources_manager 循环依赖。
+// 签名与 resources_manager.AgentProvider 完全一致，具体团队实现中可直接互换。
+type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error)
+```
+
+**循环依赖分析：** `multi_agent → single_agent/interfaces` 不会形成循环依赖，因为 `single_agent/interfaces` 的传递闭包中不包含 `multi_agent` 或 `resources_manager`。真正的循环依赖威胁是 `interfaces → ability → resources_manager → interfaces`（已通过 `AbilityManager()` 返回 `any` 回避）。
 
 ## TeamOption 定义
 

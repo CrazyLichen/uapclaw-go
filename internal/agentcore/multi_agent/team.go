@@ -3,26 +3,22 @@ package multi_agent
 import (
 	"context"
 
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TeamCard 团队身份卡片（最小占位，8.28 完整实现）。
+// TeamCard 团队身份卡片（类型别名，实际定义在 schema 子包）。
+//
+// 使用类型别名保持外部 API 兼容：所有通过 multiagent.TeamCard 的代码无需修改 import。
+// 完整定义见 internal/agentcore/multi_agent/schema/team_card.go
 //
 // 对应 Python: openjiuwen/core/multi_agent/schema/team_card.py (TeamCard)
-// Python 继承 BaseCard: id/name/description + agent_cards/topic/version/tags
-type TeamCard struct {
-	schema.BaseCard
-}
-
-// TeamConfig 团队运行时配置（最小占位，8.28 完整实现）。
-//
-// 对应 Python: openjiuwen/core/multi_agent/config.py (TeamConfig)
-// Python 字段: max_agents=10, max_concurrent_messages=100, message_timeout=30.0
-type TeamConfig struct{}
+// ⤴️ 8.28 回填：从 schema 子包引入类型别名
+type TeamCard = schema.TeamCard
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -123,7 +119,8 @@ type BaseTeam interface {
 	// Config 返回团队配置。
 	//
 	// 对应 Python: BaseTeam.config 属性
-	Config() TeamConfig
+	// ⤴️ 8.28 回填：返回类型从值 TeamConfig 改为指针 *TeamConfig
+	Config() *TeamConfig
 }
 
 // AgentTeamProvider 团队资源提供者函数，接受 TeamCard 返回 BaseTeam 实例。
@@ -132,11 +129,11 @@ type BaseTeam interface {
 // 用于延迟加载团队资源，注册时传入工厂函数而非实例。
 type AgentTeamProvider func(ctx context.Context, card *TeamCard) (BaseTeam, error)
 
-// TeamAgentProvider 团队内 Agent 资源提供者函数，接受 AgentCard 返回 Agent 实例。
+// TeamAgentProvider 团队内 Agent 资源提供者函数，接受 AgentCard 返回 BaseAgent 实例。
 //
 // 对应 Python: AgentProvider = Callable[[AgentCard], Awaitable[BaseAgent]] | Callable[[AgentCard], BaseAgent]
-// 签名与 resources_manager.AgentProvider 一致，在 multi_agent 包内定义以避免循环依赖。
-// 具体团队实现中可通过类型转换互转：resources_manager.AgentProvider(provider) 或 TeamAgentProvider(rmProvider)。
-type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (any, error)
+// 在 multi_agent 包内定义以避免 multi_agent → resources_manager 循环依赖。
+// 签名与 resources_manager.AgentProvider 完全一致，具体团队实现中可直接互换。
+type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error)
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

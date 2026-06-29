@@ -7,9 +7,13 @@
 // 文件目录：
 //
 //	multi_agent/
-//	├── doc.go            # 包文档
-//	├── team.go           # BaseTeam 接口 + AgentTeamProvider + TeamCard/TeamConfig 占位
-//	└── team_option.go    # TeamOptions 结构体 + TeamOption 函数类型 + WithXxx
+//	├── doc.go              # 包文档
+//	├── config.go           # TeamConfig 团队运行时配置 + 链式配置方法
+//	├── team.go             # BaseTeam 接口 + TeamCard 类型别名 + AgentTeamProvider/TeamAgentProvider
+//	├── team_option.go      # TeamOptions 结构体 + TeamOption 函数类型 + WithXxx
+//	└── schema/
+//	    ├── doc.go           # schema 子包文档
+//	    └── team_card.go    # TeamCard 团队身份卡片 + 构造函数 + TeamCardOption + String
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/
 package multi_agent
