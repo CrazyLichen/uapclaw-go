@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // TestHandleHealthCheck 测试健康检查处理器
@@ -738,4 +740,273 @@ func TestProcessMessageLoop_输入消息inputs非map(t *testing.T) {
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
 	}
+}
+
+// TestApplyLoggingConfigFromEnv_无环境变量 测试无日志配置环境变量时正常初始化
+func TestApplyLoggingConfigFromEnv_无环境变量(t *testing.T) {
+	origVal, hasVal := os.LookupEnv(EnvSpawnLoggingConfig)
+	os.Unsetenv(EnvSpawnLoggingConfig)
+	defer func() {
+		if hasVal {
+			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
+		} else {
+			os.Unsetenv(EnvSpawnLoggingConfig)
+		}
+	}()
+
+	// 不应 panic
+	applyLoggingConfigFromEnv()
+}
+
+// TestApplyLoggingConfigFromEnv_无效JSON 测试日志配置环境变量为无效 JSON 时使用默认配置
+func TestApplyLoggingConfigFromEnv_无效JSON(t *testing.T) {
+	origVal, hasVal := os.LookupEnv(EnvSpawnLoggingConfig)
+	_ = os.Setenv(EnvSpawnLoggingConfig, "not-valid-json")
+	defer func() {
+		if hasVal {
+			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
+		} else {
+			os.Unsetenv(EnvSpawnLoggingConfig)
+		}
+	}()
+
+	// 不应 panic，应使用默认配置并打印警告
+	applyLoggingConfigFromEnv()
+}
+
+// TestApplyLoggingConfigFromEnv_有效JSON 测试日志配置环境变量为有效 JSON 时应用配置
+func TestApplyLoggingConfigFromEnv_有效JSON(t *testing.T) {
+	origVal, hasVal := os.LookupEnv(EnvSpawnLoggingConfig)
+	configJSON := `{"level":"debug"}`
+	_ = os.Setenv(EnvSpawnLoggingConfig, configJSON)
+	defer func() {
+		if hasVal {
+			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
+		} else {
+			os.Unsetenv(EnvSpawnLoggingConfig)
+		}
+	}()
+
+	// 确保 logger 已初始化（可能被其他测试初始化）
+	if !logger.IsSetup() {
+		_ = logger.Setup()
+	}
+
+	// 不应 panic
+	applyLoggingConfigFromEnv()
+}
+
+// TestApplyLoggingConfigMap_nil 测试 nil 日志配置不操作
+func TestApplyLoggingConfigMap_nil(t *testing.T) {
+	// 不应 panic
+	applyLoggingConfigMap(nil)
+}
+
+// TestApplyLoggingConfigMap_有效配置 测试有效的日志配置 map
+func TestApplyLoggingConfigMap_有效配置(t *testing.T) {
+	if !logger.IsSetup() {
+		_ = logger.Setup()
+	}
+
+	// 不应 panic
+	applyLoggingConfigMap(map[string]any{"level": "info"})
+}
+
+// TestApplyLoggingConfigMap_空配置 测试空日志配置 map
+func TestApplyLoggingConfigMap_空配置(t *testing.T) {
+	if !logger.IsSetup() {
+		_ = logger.Setup()
+	}
+
+	// 不应 panic
+	applyLoggingConfigMap(map[string]any{})
+}
+
+// TestResolveLogLevelFromConfig_有级别 测试配置中有 level 字段
+func TestResolveLogLevelFromConfig_有级别(t *testing.T) {
+	level := resolveLogLevelFromConfig(map[string]any{"level": "debug"})
+	if level != "debug" {
+		t.Errorf("level = %q, want \"debug\"", level)
+	}
+}
+
+// TestResolveLogLevelFromConfig_无级别 测试配置中没有 level 字段
+func TestResolveLogLevelFromConfig_无级别(t *testing.T) {
+	level := resolveLogLevelFromConfig(map[string]any{})
+	if level != "" {
+		t.Errorf("level = %q, want \"\"", level)
+	}
+}
+
+// TestResolveLogLevelFromConfig_级别非字符串 测试 level 字段不是字符串
+func TestResolveLogLevelFromConfig_级别非字符串(t *testing.T) {
+	level := resolveLogLevelFromConfig(map[string]any{"level": 123})
+	if level != "" {
+		t.Errorf("level = %q, want \"\"", level)
+	}
+}
+
+// TestResolveLogLevelFromConfig_级别为空字符串 测试 level 字段为空字符串
+func TestResolveLogLevelFromConfig_级别为空字符串(t *testing.T) {
+	level := resolveLogLevelFromConfig(map[string]any{"level": ""})
+	if level != "" {
+		t.Errorf("level = %q, want \"\"", level)
+	}
+}
+
+// TestExecuteChildAgent_缺少AgentCard 测试缺少 AgentCard 时返回错误
+func TestExecuteChildAgent_缺少AgentCard(t *testing.T) {
+	var buf bytes.Buffer
+	creator := &testAgentCreator{}
+	// SpawnAgentConfig 不包含 agent_card 字段，序列化后 ClassAgentSpawnConfig.AgentCard 为 nil
+	_, err := executeChildAgent(
+		context.Background(),
+		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		nil, &buf, false, nil,
+		&stubChildRunner{}, creator,
+	)
+	if err == nil {
+		t.Error("缺少 AgentCard 时应返回错误")
+	}
+	if !strings.Contains(err.Error(), "agent_card") {
+		t.Errorf("错误信息应包含 'agent_card'，实际: %v", err)
+	}
+}
+
+// TestExecuteChildAgent_缺少ChildRunner 测试缺少 ChildRunner 时返回错误
+func TestExecuteChildAgent_缺少ChildRunner(t *testing.T) {
+	var buf bytes.Buffer
+	creator := &testAgentCreator{}
+	// SpawnAgentConfig 不包含 agent_card，先命中缺少 agent_card 的错误
+	_, err := executeChildAgent(
+		context.Background(),
+		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		nil, &buf, false, nil,
+		nil, creator,
+	)
+	if err == nil {
+		t.Error("缺少 agent_card 时应返回错误")
+	}
+}
+
+// TestExecuteChildAgent_非流式缺少AgentCard 测试非流式 ClassAgent 缺少 agent_card
+func TestExecuteChildAgent_非流式缺少AgentCard(t *testing.T) {
+	var buf bytes.Buffer
+	creator := &testAgentCreator{}
+	runner := &stubChildRunner{result: map[string]any{"status": "ok"}}
+	// SpawnAgentConfig 不包含 agent_card 字段，序列化后 AgentCard 为 nil
+	_, err := executeChildAgent(
+		context.Background(),
+		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		map[string]any{"input": "test"},
+		&buf, false, nil,
+		runner, creator,
+	)
+	if err == nil {
+		t.Error("缺少 agent_card 时应返回错误")
+	}
+	if !strings.Contains(err.Error(), "agent_card") {
+		t.Errorf("错误信息应包含 'agent_card'，实际: %v", err)
+	}
+}
+
+// TestExecuteChildAgent_流式缺少AgentCard 测试流式 ClassAgent 缺少 agent_card
+func TestExecuteChildAgent_流式缺少AgentCard(t *testing.T) {
+	var buf syncBuffer
+	creator := &testAgentCreator{}
+	runner := &stubChildRunner{result: nil}
+	// SpawnAgentConfig 不包含 agent_card 字段，序列化后 AgentCard 为 nil
+	_, err := executeChildAgent(
+		context.Background(),
+		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		map[string]any{"input": "test"},
+		&buf, true, []string{"text"},
+		runner, creator,
+	)
+	if err == nil {
+		t.Error("缺少 agent_card 时应返回错误")
+	}
+}
+
+// TestExecuteChildAgent_AgentCreator失败 测试 AgentCreator 返回错误（需要 AgentCard 才能走到创建步骤）
+func TestExecuteChildAgent_AgentCreator失败(t *testing.T) {
+	var buf bytes.Buffer
+	creator := &errorAgentCreator{}
+	runner := &stubChildRunner{}
+	// SpawnAgentConfig 不包含 agent_card，先命中缺少 agent_card 的错误
+	_, err := executeChildAgent(
+		context.Background(),
+		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		nil, &buf, false, nil,
+		runner, creator,
+	)
+	if err == nil {
+		t.Error("缺少 agent_card 时应返回错误")
+	}
+}
+
+// TestRunAgentTask_成功执行 测试 Agent 任务缺少 agent_card 时发送 ERROR 消息
+func TestRunAgentTask_成功执行(t *testing.T) {
+	var stdout syncBuffer
+	doneCh := make(chan struct{}, 1)
+
+	runner := &stubChildRunner{result: map[string]any{"status": "ok"}}
+	creator := &testAgentCreator{}
+	// SpawnAgentConfig 不包含 agent_card，executeChildAgent 会返回错误
+	agentConfig := SpawnAgentConfig{
+		AgentKind: SpawnAgentKindClassAgent,
+	}
+
+	go runAgentTask(
+		context.Background(),
+		agentConfig,
+		map[string]any{},
+		&stdout,
+		"test-msg-id",
+		false,
+		nil,
+		doneCh,
+		runner, creator,
+	)
+
+	select {
+	case <-doneCh:
+		msg, err := ReadMessage(&stdout)
+		if err != nil {
+			t.Fatalf("读取消息失败: %v", err)
+		}
+		// 缺少 agent_card 应发送 ERROR 消息
+		if msg.Type != MessageTypeError {
+			t.Errorf("消息类型 = %d, want ERROR", msg.Type)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("Agent 任务应在超时前完成")
+	}
+}
+
+// TestPrepareSpawnAgentConfig_有日志配置 测试配置中包含 logging_config 时调用 applyLoggingConfigMap
+func TestPrepareSpawnAgentConfig_有日志配置(t *testing.T) {
+	if !logger.IsSetup() {
+		_ = logger.Setup()
+	}
+
+	cfg := prepareSpawnAgentConfig(map[string]any{
+		"agent_kind": "class_agent",
+		"payload":    map[string]any{},
+		"logging_config": map[string]any{
+			"level": "info",
+		},
+	})
+	if cfg == nil {
+		t.Fatal("配置不应为 nil")
+	}
+}
+
+// ──────────────────────────── 额外测试辅助 ────────────────────────────
+
+// errorAgentCreator 总是返回错误的 AgentCreator
+type errorAgentCreator struct{}
+
+func (c *errorAgentCreator) CreateByType(_ context.Context, _ string, _ map[string]any, _ map[string]any) (interfaces.BaseAgent, error) {
+	return nil, fmt.Errorf("创建 Agent 失败")
 }
