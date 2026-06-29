@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -91,7 +90,7 @@ func (t *stubTeam) Config() *TeamConfig {
 
 // TestBaseTeam_编译时接口检查 验证 stubTeam 满足 BaseTeam 接口。
 func TestBaseTeam_编译时接口检查(t *testing.T) {
-	card := schema.NewTeamCard(commonschema.WithName("test-team"))
+	card := schema.NewTeamCard(schema.WithTeamCardName("test-team"))
 	team := &stubTeam{card: card, config: NewTeamConfig()}
 
 	// 基本调用验证

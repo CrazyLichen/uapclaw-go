@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

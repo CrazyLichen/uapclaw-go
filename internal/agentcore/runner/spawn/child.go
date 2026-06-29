@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -489,9 +489,10 @@ func executeChildAgent(
 
 // applyLoggingConfigFromEnv 从环境变量 UAPCLAW_SPAWN_LOGGING_CONFIG 读取日志配置并应用。
 // 对齐 Python: child_process.py L22-27
-//   _logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
-//   if _logging_config_json:
-//       configure_log_config(_json.loads(_logging_config_json))
+//
+//	_logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
+//	if _logging_config_json:
+//	    configure_log_config(_json.loads(_logging_config_json))
 //
 // 子进程首次初始化时调用 logger.Setup()，后续调用 logger.Reconfigure()。
 func applyLoggingConfigFromEnv() {

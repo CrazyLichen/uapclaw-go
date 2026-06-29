@@ -32,14 +32,14 @@ func TestNewTeamCard_默认值(t *testing.T) {
 	}
 }
 
-// TestNewTeamCard_带选项 验证所有 TeamCardOption。
+// TestNewTeamCard_带选项 验证所有 TeamCardOption（含 BaseCard 字段选项）。
 func TestNewTeamCard_带选项(t *testing.T) {
 	agentCard := agentschema.NewAgentCard(schema.WithName("agent1"))
 	cards := []*agentschema.AgentCard{agentCard}
 
 	card := NewTeamCard(
-		schema.WithName("my-team"),
-		schema.WithDescription("测试团队"),
+		WithTeamCardName("my-team"),
+		WithTeamCardDescription("测试团队"),
 		WithAgentCards(cards),
 		WithTopic("coding"),
 		WithTeamVersion("2.0.0"),
@@ -69,10 +69,18 @@ func TestNewTeamCard_带选项(t *testing.T) {
 	}
 }
 
+// TestNewTeamCard_WithTeamCardID 验证 WithTeamCardID 覆盖自动生成的 UUID。
+func TestNewTeamCard_WithTeamCardID(t *testing.T) {
+	card := NewTeamCard(WithTeamCardID("custom-id-123"))
+	if card.ID != "custom-id-123" {
+		t.Errorf("期望 ID='custom-id-123'，实际 '%s'", card.ID)
+	}
+}
+
 // TestTeamCard_String 验证 fmt.Stringer 输出。
 func TestTeamCard_String(t *testing.T) {
 	card := NewTeamCard(
-		schema.WithName("team1"),
+		WithTeamCardName("team1"),
 		WithTopic("math"),
 		WithTeamVersion("1.0.0"),
 	)
@@ -95,7 +103,7 @@ func TestTeamCard_String(t *testing.T) {
 // TestTeamCard_JSON序列化 验证 JSON marshal/unmarshal 和 omitempty。
 func TestTeamCard_JSON序列化(t *testing.T) {
 	card := NewTeamCard(
-		schema.WithName("team1"),
+		WithTeamCardName("team1"),
 		WithTopic("coding"),
 		WithTeamVersion("2.0.0"),
 		WithTags([]string{"ai"}),
@@ -149,7 +157,7 @@ func TestTeamCard_JSON序列化_omitempty(t *testing.T) {
 
 // TestTeamCard_嵌入BaseCard 验证嵌入后 ID/Name/Description 可访问。
 func TestTeamCard_嵌入BaseCard(t *testing.T) {
-	card := NewTeamCard(schema.WithID("abc123"), schema.WithName("n"), schema.WithDescription("d"))
+	card := NewTeamCard(WithTeamCardID("abc123"), WithTeamCardName("n"), WithTeamCardDescription("d"))
 	if card.ID != "abc123" {
 		t.Errorf("期望 ID='abc123'，实际 '%s'", card.ID)
 	}

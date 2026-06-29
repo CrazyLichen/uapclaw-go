@@ -129,7 +129,7 @@ func TestRunAgent_正常调用(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("test-session", newTestAgentCard("test-agent"), nil)
 
-	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, sess, nil, nil)
+	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, BySession(sess), nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgent 失败: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestRunAgent_执行错误(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("err-session", newTestAgentCard("err-agent"), nil)
 
-	_, err := RunAgent(context.Background(), ByAgent(ag), nil, sess, nil, nil)
+	_, err := RunAgent(context.Background(), ByAgent(ag), nil, BySession(sess), nil, nil)
 	if err == nil {
 		t.Error("RunAgent 应返回错误")
 	}
@@ -163,7 +163,7 @@ func TestRunAgent_无会话(t *testing.T) {
 		result: "ok",
 	}
 
-	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, nil, nil, nil)
+	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, SessionRef{}, nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgent 失败: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestRunAgentStreaming_正常调用(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("stream-session", newTestAgentCard("stream-agent"), nil)
 
-	outCh, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, sess, nil, nil, nil)
+	outCh, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, BySession(sess), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgentStreaming 失败: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRunAgentStreaming_无会话(t *testing.T) {
 		streamCh: ch,
 	}
 
-	outCh, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, nil, nil, nil, nil)
+	outCh, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, SessionRef{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgentStreaming 失败: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestRunAgentStreaming_流式错误(t *testing.T) {
 	}
 	sess := session.CreateAgentSession("err-session", newTestAgentCard("stream-err"), nil)
 
-	_, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, sess, nil, nil, nil)
+	_, err := RunAgentStreaming(context.Background(), ByAgent(ag), nil, BySession(sess), nil, nil, nil)
 	if err == nil {
 		t.Error("RunAgentStreaming 应返回错误")
 	}
@@ -291,7 +291,7 @@ func TestRunAgentStreaming_流式错误(t *testing.T) {
 // TestRunAgentStreaming_准备错误 测试 RunAgentStreaming prepareAgent 失败
 func TestRunAgentStreaming_准备错误(t *testing.T) {
 	// 使用 ByAgentID 但 agent 不存在
-	_, err := RunAgentStreaming(context.Background(), ByAgentID("nonexistent-agent"), nil, nil, nil, nil, nil)
+	_, err := RunAgentStreaming(context.Background(), ByAgentID("nonexistent-agent"), nil, SessionRef{}, nil, nil, nil)
 	if err == nil {
 		t.Error("RunAgentStreaming 应返回错误（Agent不存在）")
 	}

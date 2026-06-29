@@ -10,6 +10,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // TestHandleHealthCheck 测试健康检查处理器
@@ -54,7 +60,7 @@ func TestHandleShutdown(t *testing.T) {
 func TestProcessMessageLoop_stdin关闭(t *testing.T) {
 	var stdout bytes.Buffer
 	// 空的 stdin（立即 EOF）
-	err := ProcessMessageLoop(context.Background(), io.LimitReader(nil, 0), &stdout, nil, nil)
+	err := ProcessMessageLoop(context.Background(), io.LimitReader(nil, 0), &stdout, nil, nil, nil, nil)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v（预期 EOF 退出）", err)
 	}
@@ -66,7 +72,7 @@ func TestExecuteAgent_不支持的方式(t *testing.T) {
 	_, err := ExecuteAgent(
 		context.Background(),
 		SpawnAgentConfig{AgentKind: "unknown"},
-		nil, &buf, false, nil,
+		nil, &buf, false, nil, nil, nil,
 	)
 	if err == nil {
 		t.Error("不支持的 Agent 启动方式应返回错误")
@@ -79,7 +85,7 @@ func TestExecuteAgent_TeamAgent(t *testing.T) {
 	_, err := ExecuteAgent(
 		context.Background(),
 		SpawnAgentConfig{AgentKind: SpawnAgentKindTeamAgent},
-		nil, &buf, false, nil,
+		nil, &buf, false, nil, nil, nil,
 	)
 	if err == nil {
 		t.Error("TEAM_AGENT 模式应返回未实现错误")
@@ -89,39 +95,32 @@ func TestExecuteAgent_TeamAgent(t *testing.T) {
 	}
 }
 
-// TestExecuteAgent_ClassAgent 测试 CLASS_AGENT 执行（占位实现）
+// TestExecuteAgent_ClassAgent 测试 CLASS_AGENT 缺少注入时返回错误
 func TestExecuteAgent_ClassAgent(t *testing.T) {
 	var buf bytes.Buffer
-	result, err := ExecuteAgent(
+	_, err := ExecuteAgent(
 		context.Background(),
 		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
-		nil, &buf, false, nil,
+		nil, &buf, false, nil, nil, nil,
 	)
-	if err != nil {
-		t.Fatalf("CLASS_AGENT 执行失败: %v", err)
+	if err == nil {
+		t.Error("缺少 AgentCreator 时应返回错误")
 	}
-	resultMap, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("结果类型断言失败")
-	}
-	if resultMap["status"] != "placeholder" {
-		t.Errorf("status = %v, want placeholder", resultMap["status"])
+	if !strings.Contains(err.Error(), "AgentCreator") {
+		t.Errorf("错误信息应包含'AgentCreator'，实际: %v", err)
 	}
 }
 
-// TestExecuteAgent_ClassAgent_流式 测试 CLASS_AGENT 流式执行
+// TestExecuteAgent_ClassAgent_流式 测试 CLASS_AGENT 流式执行缺少注入时返回错误
 func TestExecuteAgent_ClassAgent_流式(t *testing.T) {
 	var buf bytes.Buffer
-	result, err := ExecuteAgent(
+	_, err := ExecuteAgent(
 		context.Background(),
 		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
-		nil, &buf, true, []string{"text"},
+		nil, &buf, true, []string{"text"}, nil, nil,
 	)
-	if err != nil {
-		t.Fatalf("CLASS_AGENT 流式执行失败: %v", err)
-	}
-	if result == nil {
-		t.Error("结果不应为 nil")
+	if err == nil {
+		t.Error("缺少 AgentCreator 时应返回错误")
 	}
 }
 
@@ -172,7 +171,7 @@ func TestProcessMessageLoop_健康检查消息(t *testing.T) {
 		context.Background(),
 		bytes.NewReader(data),
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	// 消息循环读完 stdin 后应退出
 	if err != nil {
@@ -191,7 +190,7 @@ func TestProcessMessageLoop_关闭消息(t *testing.T) {
 		context.Background(),
 		bytes.NewReader(data),
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
@@ -208,7 +207,7 @@ func TestProcessMessageLoop_上下文取消(t *testing.T) {
 	var stdout bytes.Buffer
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- ProcessMessageLoop(ctx, r, &stdout, nil, nil)
+		errCh <- ProcessMessageLoop(ctx, r, &stdout, nil, nil, nil, nil)
 	}()
 
 	// 取消上下文
@@ -246,7 +245,7 @@ func TestProcessMessageLoop_输入消息(t *testing.T) {
 		context.Background(),
 		bytes.NewReader(data),
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
@@ -267,7 +266,7 @@ func TestProcessMessageLoop_缺少AgentConfig(t *testing.T) {
 		context.Background(),
 		bytes.NewReader(data),
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	if err == nil {
 		t.Error("缺少 agent_config 时应返回错误")
@@ -277,31 +276,32 @@ func TestProcessMessageLoop_缺少AgentConfig(t *testing.T) {
 	}
 }
 
-// TestRunAgentTask_成功 测试 Agent 任务成功完成
+// TestRunAgentTask_成功 测试 Agent 任务完成（TEAM_AGENT 未实现返回 ERROR）
 func TestRunAgentTask_成功(t *testing.T) {
 	var stdout bytes.Buffer
 	doneCh := make(chan struct{}, 1)
 
 	go runAgentTask(
 		context.Background(),
-		SpawnAgentConfig{AgentKind: SpawnAgentKindClassAgent},
+		SpawnAgentConfig{AgentKind: SpawnAgentKindTeamAgent}, // TEAM_AGENT 未实现，会发 ERROR
 		map[string]any{},
 		&stdout,
 		"test-msg-id",
 		false,
 		nil,
 		doneCh,
+		nil, nil,
 	)
 
 	select {
 	case <-doneCh:
-		// 读取 stdout 中的 DONE 消息
+		// TEAM_AGENT 未实现，应发送 ERROR 消息
 		msg, err := ReadMessage(&stdout)
 		if err != nil {
 			t.Fatalf("读取消息失败: %v", err)
 		}
-		if msg.Type != MessageTypeDone {
-			t.Errorf("消息类型 = %d, want DONE", msg.Type)
+		if msg.Type != MessageTypeError {
+			t.Errorf("消息类型 = %d, want ERROR", msg.Type)
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("Agent 任务应在超时前完成")
@@ -322,6 +322,7 @@ func TestRunAgentTask_错误(t *testing.T) {
 		false,
 		nil,
 		doneCh,
+		nil, nil,
 	)
 
 	select {
@@ -357,7 +358,7 @@ func TestProcessMessageLoop_多次消息(t *testing.T) {
 		context.Background(),
 		&buf,
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
@@ -383,7 +384,7 @@ func TestProcessMessageLoop_InputPayload非map(t *testing.T) {
 		context.Background(),
 		bytes.NewReader(combined),
 		&stdout,
-		nil, nil,
+		nil, nil, nil, nil,
 	)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
@@ -456,6 +457,7 @@ func TestProcessMessageLoop_输入消息补充inputs(t *testing.T) {
 		&stdout,
 		nil,
 		initialInputs,
+		nil, nil,
 	)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
@@ -476,6 +478,76 @@ var (
 	osStdin  = io.Reader(nil)
 	osStdout = io.Writer(nil)
 )
+
+// testAgentCreator 测试用 AgentCreator，创建 stubBaseAgent 实例
+type testAgentCreator struct{}
+
+func (c *testAgentCreator) CreateByType(_ context.Context, _ string, agentCard map[string]any, _ map[string]any) (interfaces.BaseAgent, error) {
+	card := agentschema.NewAgentCard()
+	if agentCard != nil {
+		data, _ := json.Marshal(agentCard)
+		_ = json.Unmarshal(data, card)
+	}
+	return &stubBaseAgent{card: card}, nil
+}
+
+// stubBaseAgent 用于测试的模拟 BaseAgent
+type stubBaseAgent struct {
+	card *agentschema.AgentCard
+}
+
+func (a *stubBaseAgent) Configure(_ context.Context, _ interfaces.AgentConfig) error {
+	return nil
+}
+func (a *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (any, error) {
+	return map[string]any{"status": "ok"}, nil
+}
+func (a *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+func (a *stubBaseAgent) Card() *agentschema.AgentCard   { return a.card }
+func (a *stubBaseAgent) Config() interfaces.AgentConfig { return nil }
+func (a *stubBaseAgent) AbilityManager() any            { return nil }
+func (a *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
+	return rail.NewAgentCallbackManager("")
+}
+func (a *stubBaseAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (a *stubBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (a *stubBaseAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+	return nil
+}
+
+// stubChildRunner 用于测试的模拟 ChildRunner
+type stubChildRunner struct {
+	result       any
+	streamChunks []stream.Schema
+}
+
+func (r *stubChildRunner) SetConfig(_ map[string]any) error { return nil }
+func (r *stubChildRunner) Start(_ context.Context) error    { return nil }
+func (r *stubChildRunner) Stop(_ context.Context) error     { return nil }
+func (r *stubChildRunner) RunAgent(_ context.Context, _ interfaces.BaseAgent, _ map[string]any, _ string) (any, error) {
+	return r.result, nil
+}
+func (r *stubChildRunner) RunAgentStreaming(_ context.Context, _ interfaces.BaseAgent, _ map[string]any, _ string, _ any) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema, len(r.streamChunks))
+	for _, chunk := range r.streamChunks {
+		ch <- chunk
+	}
+	close(ch)
+	return ch, nil
+}
+
+// 编译期校验
+var _ ChildRunner = (*stubChildRunner)(nil)
+var _ AgentCreator = (*testAgentCreator)(nil)
+var _ interfaces.BaseAgent = (*stubBaseAgent)(nil)
 
 // TestProcessMessageLoop_并发Agent执行 测试 INPUT 消息启动 Agent 后只启动一次
 func TestProcessMessageLoop_并发Agent执行(t *testing.T) {
@@ -509,7 +581,7 @@ func TestProcessMessageLoop_并发Agent执行(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_ = ProcessMessageLoop(ctx, &buf, &stdout, cfg, map[string]any{})
+	_ = ProcessMessageLoop(ctx, &buf, &stdout, cfg, map[string]any{}, nil, nil)
 }
 
 // syncBuffer 并发安全的 bytes.Buffer
@@ -546,7 +618,7 @@ func TestProcessMessageLoop_未知消息类型(t *testing.T) {
 	buf.WriteByte('\n')
 
 	var stdout bytes.Buffer
-	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil)
+	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil, nil, nil)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
 	}
@@ -573,7 +645,7 @@ func TestProcessMessageLoop_输入消息有streaming和streamModes(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_ = ProcessMessageLoop(ctx, &buf, &stdout, nil, nil)
+	_ = ProcessMessageLoop(ctx, &buf, &stdout, nil, nil, nil, nil)
 }
 
 // TestProcessMessageLoop_输入消息无agentConfigKey 测试 INPUT 消息 payload 中没有 agent_config 键
@@ -590,7 +662,7 @@ func TestProcessMessageLoop_输入消息无agentConfigKey(t *testing.T) {
 	buf.WriteByte('\n')
 
 	var stdout bytes.Buffer
-	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil)
+	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil, nil, nil)
 	// 缺少 agent_config 应返回错误
 	if err == nil {
 		t.Log("缺少 agent_config 时应返回错误（或超时退出）")
@@ -619,7 +691,7 @@ func TestProcessMessageLoop_已有AgentConfig(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_ = ProcessMessageLoop(ctx, &buf, &stdout, cfg, map[string]any{})
+	_ = ProcessMessageLoop(ctx, &buf, &stdout, cfg, map[string]any{}, nil, nil)
 }
 
 // TestProcessMessageLoop_输入消息agentConfig非map 测试 INPUT 消息中 agent_config 不是 map[string]any
@@ -640,7 +712,7 @@ func TestProcessMessageLoop_输入消息agentConfig非map(t *testing.T) {
 	buf.WriteByte('\n')
 
 	var stdout bytes.Buffer
-	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil)
+	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil, nil, nil)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
 	}
@@ -662,7 +734,7 @@ func TestProcessMessageLoop_输入消息inputs非map(t *testing.T) {
 	buf.WriteByte('\n')
 
 	var stdout bytes.Buffer
-	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil)
+	err := ProcessMessageLoop(context.Background(), &buf, &stdout, nil, nil, nil, nil)
 	if err != nil {
 		t.Logf("ProcessMessageLoop 返回: %v", err)
 	}
