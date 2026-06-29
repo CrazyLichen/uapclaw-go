@@ -843,7 +843,7 @@ func TestWaitForShutdownAck_收到其他消息继续读(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	go func() {
-		defer pw.Close()
+		defer func() { _ = pw.Close() }()
 		// 先发一个 OUTPUT 消息（非目标），再发 SHUTDOWN_ACK
 		outputMsg := NewMessage(MessageTypeOutput, map[string]any{"result": "ok"})
 		_ = WriteMessage(pw, outputMsg)

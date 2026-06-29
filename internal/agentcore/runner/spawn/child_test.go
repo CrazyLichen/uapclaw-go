@@ -750,7 +750,7 @@ func TestApplyLoggingConfigFromEnv_无环境变量(t *testing.T) {
 		if hasVal {
 			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
 		} else {
-			os.Unsetenv(EnvSpawnLoggingConfig)
+			_ = os.Unsetenv(EnvSpawnLoggingConfig)
 		}
 	}()
 
@@ -766,7 +766,7 @@ func TestApplyLoggingConfigFromEnv_无效JSON(t *testing.T) {
 		if hasVal {
 			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
 		} else {
-			os.Unsetenv(EnvSpawnLoggingConfig)
+			_ = os.Unsetenv(EnvSpawnLoggingConfig)
 		}
 	}()
 
@@ -783,7 +783,7 @@ func TestApplyLoggingConfigFromEnv_有效JSON(t *testing.T) {
 		if hasVal {
 			_ = os.Setenv(EnvSpawnLoggingConfig, origVal)
 		} else {
-			os.Unsetenv(EnvSpawnLoggingConfig)
+			_ = os.Unsetenv(EnvSpawnLoggingConfig)
 		}
 	}()
 
