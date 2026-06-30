@@ -97,7 +97,7 @@ type BaseTeam interface {
 	// Card 返回团队身份卡片。
 	//
 	// 对应 Python: BaseTeam.card 属性
-	Card() *TeamCard
+	Card() schema.TeamCardInterface
 
 	// Config 返回团队配置。
 	//
@@ -108,20 +108,11 @@ type BaseTeam interface {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// TeamCard 团队身份卡片（类型别名，实际定义在 schema 子包）。
-//
-// 使用类型别名保持外部 API 兼容：所有通过 multiagent.TeamCard 的代码无需修改 import。
-// 完整定义见 internal/agentcore/multi_agent/schema/team_card.go
-//
-// 对应 Python: openjiuwen/core/multi_agent/schema/team_card.py (TeamCard)
-// ⤴️ 8.28 回填：从 schema 子包引入类型别名
-type TeamCard = schema.TeamCard
-
-// AgentTeamProvider 团队资源提供者函数，接受 TeamCard 返回 BaseTeam 实例。
+// AgentTeamProvider 团队资源提供者函数，接受 TeamCardInterface 返回 BaseTeam 实例。
 //
 // 对应 Python: AgentTeamProvider = Callable[[TeamCard], Awaitable[BaseTeam]] | Callable[[TeamCard], BaseTeam]
 // 用于延迟加载团队资源，注册时传入工厂函数而非实例。
-type AgentTeamProvider func(ctx context.Context, card *TeamCard) (BaseTeam, error)
+type AgentTeamProvider func(ctx context.Context, card schema.TeamCardInterface) (BaseTeam, error)
 
 // TeamAgentProvider 团队内 Agent 资源提供者函数，接受 AgentCard 返回 BaseAgent 实例。
 //

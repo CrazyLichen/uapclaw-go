@@ -13,7 +13,7 @@ import (
 
 // stubTeam 用于编译时检查 BaseTeam 接口满足的桩实现。
 type stubTeam struct {
-	card   *TeamCard
+	card   schema.TeamCardInterface
 	config *TeamConfig
 }
 
@@ -80,7 +80,7 @@ func (t *stubTeam) ListAgents() []string {
 	return nil
 }
 
-func (t *stubTeam) Card() *TeamCard {
+func (t *stubTeam) Card() schema.TeamCardInterface {
 	return t.card
 }
 
