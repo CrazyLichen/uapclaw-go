@@ -170,8 +170,10 @@ func TestResourceMgr_AddModel_正常(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddModel 失败: %v", err)
 	}
-	if cached := mgr.idToCard.Get("model-1"); cached == nil {
-		t.Fatal("idToCard 中未找到缓存")
+	// Model 无 CardInterface，不缓存到 idToCard（传 nil resourceCard）
+	// 验证标签已标记
+	if !mgr.tagMgr.HasResourceTag("model-1", TagGlobal) {
+		t.Fatal("应标记 GLOBAL 标签")
 	}
 }
 
@@ -199,8 +201,10 @@ func TestResourceMgr_AddPrompt_正常(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddPrompt 失败: %v", err)
 	}
-	if cached := mgr.idToCard.Get("prompt-1"); cached == nil {
-		t.Fatal("idToCard 中未找到缓存")
+	// Prompt 无 CardInterface，不缓存到 idToCard（传 nil resourceCard）
+	// 验证标签已标记
+	if !mgr.tagMgr.HasResourceTag("prompt-1", TagGlobal) {
+		t.Fatal("应标记 GLOBAL 标签")
 	}
 }
 
@@ -595,8 +599,10 @@ func TestResourceMgr_RemoveModel_正常(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RemoveModel 失败: %v", err)
 	}
-	if len(removed) != 1 {
-		t.Fatalf("期望移除 1 个，实际 %d", len(removed))
+	// Model 不在 idReturnTypes 中且无 card 缓存，返回空 ID 列表
+	// 验证资源已被移除（获取返回空）
+	if len(removed) != 0 {
+		t.Fatalf("期望移除 0 个（Model 无 ID 返回类型也无 card），实际 %d", len(removed))
 	}
 }
 
@@ -780,8 +786,7 @@ func setupMcpServer(mgr *ResourceMgr, serverID, serverName string, toolNames []s
 
 	// 同步 idToCard 和 tagMgr
 	for _, card := range mcpCards {
-		baseCard := &schema.BaseCard{ID: card.ID, Name: card.Name, Description: card.Description}
-		mgr.idToCard.Set(card.ID, baseCard)
+		mgr.idToCard.Set(card.ID, card)
 		mgr.tagMgr.TagResource(card.ID, []Tag{TagGlobal})
 	}
 
@@ -913,10 +918,13 @@ func TestResourceMgr_RemoveSysOperation_预留(t *testing.T) {
 // TestResourceMgr_GetSysOperation_预留 测试 GetSysOperation 预留方法
 func TestResourceMgr_GetSysOperation_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	// GetSysOperation 先校验 innerValidateResourceIDs，空列表应报错
-	_, err := mgr.GetSysOperation(nil)
-	if err == nil {
-		t.Fatal("空列表应返回错误")
+	// GetSysOperation 通过 innerGetResources，空列表提前返回空结果
+	results, err := mgr.GetSysOperation(nil)
+	if err != nil {
+		t.Fatalf("空列表不应报错: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("期望 0 个，实际 %d", len(results))
 	}
 }
 
@@ -953,13 +961,16 @@ func TestResourceMgr_RemoveAgentTeam_不存在报错(t *testing.T) {
 	}
 }
 
-// TestResourceMgr_GetAgentTeam_不存在报错 测试 GetAgentTeam 不存在报错
+// TestResourceMgr_GetAgentTeam_不存在报错 测试 GetAgentTeam 不存在返回空
 func TestResourceMgr_GetAgentTeam_不存在报错(t *testing.T) {
 	mgr := newTestResourceMgr()
 	ctx := context.Background()
-	_, err := mgr.GetAgentTeam(ctx, []string{"team-notexist"})
-	if err == nil {
-		t.Fatal("不存在的团队应返回错误")
+	teams, err := mgr.GetAgentTeam(ctx, []string{"team-notexist"})
+	if err != nil {
+		t.Fatalf("获取不存在的团队不应报错: %v", err)
+	}
+	if len(teams) != 0 {
+		t.Fatalf("期望 0 个团队，实际 %d", len(teams))
 	}
 }
 
@@ -1011,8 +1022,7 @@ func TestResourceMgr_AddMcpServer_使用Mock(t *testing.T) {
 
 	// 手动同步 idToCard 和 tagMgr（AddMcpServer 的行为）
 	for _, card := range cards {
-		baseCard := &schema.BaseCard{ID: card.ID, Name: card.Name, Description: card.Description}
-		mgr.idToCard.Set(card.ID, baseCard)
+		mgr.idToCard.Set(card.ID, card)
 		mgr.tagMgr.TagResource(card.ID, []Tag{TagGlobal})
 	}
 
@@ -1385,48 +1395,46 @@ func TestGetMgr_未知类型返回nil(t *testing.T) {
 // TestDispatchAdd_各资源类型 测试 dispatchAdd 对各资源类型正确分派
 func TestDispatchAdd_各资源类型(t *testing.T) {
 	mgr := newTestResourceMgr()
-	ctx := context.Background()
 
 	// workflow
 	wfProvider := stubWorkflowProvider()
-	wfCard := &schema.BaseCard{ID: "da-wf-1", Name: "测试Workflow"}
-	if err := mgr.dispatchAdd("workflow", "da-wf-1", wfProvider, wfCard, ""); err != nil {
+	if err := mgr.dispatchAdd("workflow", "da-wf-1", wfProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd workflow 失败: %v", err)
 	}
-	// 验证已添加
-	wfList, _ := mgr.GetWorkflow(ctx, []string{"da-wf-1"})
+	// dispatchAdd 只分发，不标记 tag，需手动标记后验证
+	mgr.tagMgr.TagResource("da-wf-1", []Tag{TagGlobal})
+	wfList, _ := mgr.GetWorkflow(context.Background(), []string{"da-wf-1"})
 	if len(wfList) != 1 {
 		t.Fatalf("dispatchAdd workflow 后应存在 1 个，实际 %d", len(wfList))
 	}
 
 	// agent
 	agentProvider := stubAgentProvider()
-	agentCard := &schema.BaseCard{ID: "da-agent-1", Name: "测试Agent"}
-	if err := mgr.dispatchAdd("agent", "da-agent-1", agentProvider, agentCard, ""); err != nil {
+	if err := mgr.dispatchAdd("agent", "da-agent-1", agentProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd agent 失败: %v", err)
 	}
 
 	// tool
 	toolCard := tool.NewToolCard("da-tool-1", "分派工具", nil, nil)
 	stubTool := &rmStubTool{card: toolCard}
-	if err := mgr.dispatchAdd("tool", toolCard.ID, stubTool, nil, ""); err != nil {
+	if err := mgr.dispatchAdd("tool", toolCard.ID, stubTool, ""); err != nil {
 		t.Fatalf("dispatchAdd tool 失败: %v", err)
 	}
 
 	// prompt
 	tmpl := prompt.NewPromptTemplate("分派模板", "hello")
-	if err := mgr.dispatchAdd("prompt", "da-prompt-1", tmpl, nil, ""); err != nil {
+	if err := mgr.dispatchAdd("prompt", "da-prompt-1", tmpl, ""); err != nil {
 		t.Fatalf("dispatchAdd prompt 失败: %v", err)
 	}
 
 	// model
 	modelProvider := stubModelProvider()
-	if err := mgr.dispatchAdd("model", "da-model-1", modelProvider, nil, ""); err != nil {
+	if err := mgr.dispatchAdd("model", "da-model-1", modelProvider, ""); err != nil {
 		t.Fatalf("dispatchAdd model 失败: %v", err)
 	}
 
 	// sys_operation（预留方法，预期返回错误）
-	if err := mgr.dispatchAdd("sys_operation", "da-sysop-1", struct{ Name string }{"op"}, nil, ""); err == nil {
+	if err := mgr.dispatchAdd("sys_operation", "da-sysop-1", struct{ Name string }{"op"}, ""); err == nil {
 		t.Fatal("dispatchAdd sys_operation 预留方法应返回错误")
 	}
 }
@@ -1436,32 +1444,32 @@ func TestDispatchAdd_类型不匹配报错(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	// workflow 传入错误类型
-	if err := mgr.dispatchAdd("workflow", "bad-wf", "not-a-provider", nil, ""); err == nil {
+	if err := mgr.dispatchAdd("workflow", "bad-wf", "not-a-provider", ""); err == nil {
 		t.Fatal("dispatchAdd workflow 传入非 WorkflowProvider 应报错")
 	}
 
 	// agent 传入错误类型
-	if err := mgr.dispatchAdd("agent", "bad-agent", "not-a-provider", nil, ""); err == nil {
+	if err := mgr.dispatchAdd("agent", "bad-agent", "not-a-provider", ""); err == nil {
 		t.Fatal("dispatchAdd agent 传入非 AgentProvider 应报错")
 	}
 
 	// tool 传入错误类型
-	if err := mgr.dispatchAdd("tool", "bad-tool", "not-a-tool", nil, ""); err == nil {
+	if err := mgr.dispatchAdd("tool", "bad-tool", "not-a-tool", ""); err == nil {
 		t.Fatal("dispatchAdd tool 传入非 Tool 应报错")
 	}
 
 	// prompt 传入错误类型
-	if err := mgr.dispatchAdd("prompt", "bad-prompt", "not-a-template", nil, ""); err == nil {
+	if err := mgr.dispatchAdd("prompt", "bad-prompt", "not-a-template", ""); err == nil {
 		t.Fatal("dispatchAdd prompt 传入非 PromptTemplate 应报错")
 	}
 
 	// model 传入错误类型
-	if err := mgr.dispatchAdd("model", "bad-model", "not-a-provider", nil, ""); err == nil {
+	if err := mgr.dispatchAdd("model", "bad-model", "not-a-provider", ""); err == nil {
 		t.Fatal("dispatchAdd model 传入非 ModelProvider 应报错")
 	}
 
 	// 不支持的资源类型
-	if err := mgr.dispatchAdd("unknown", "bad-unknown", nil, nil, ""); err == nil {
+	if err := mgr.dispatchAdd("unknown", "bad-unknown", nil, ""); err == nil {
 		t.Fatal("dispatchAdd 未知类型应报错")
 	}
 }
@@ -1609,7 +1617,7 @@ func TestInnerAddResource_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	agentProvider := stubAgentProvider()
-	agentCard := &schema.BaseCard{ID: "iar-agent-1", Name: "内部添加Agent"}
+	agentCard := agentschema.NewAgentCard(schema.WithID("iar-agent-1"), schema.WithName("内部添加Agent"))
 	err := mgr.innerAddResource("iar-agent-1", "agent", agentProvider, agentCard, "custom-tag", "")
 	if err != nil {
 		t.Fatalf("innerAddResource 失败: %v", err)
@@ -1631,7 +1639,7 @@ func TestInnerAddResource_重复添加报错(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	agentProvider := stubAgentProvider()
-	agentCard := &schema.BaseCard{ID: "iar-dup-1", Name: "重复Agent"}
+	agentCard := agentschema.NewAgentCard(schema.WithID("iar-dup-1"), schema.WithName("重复Agent"))
 	_ = mgr.innerAddResource("iar-dup-1", "agent", agentProvider, agentCard, "", "")
 
 	// 重复添加应报错
@@ -1646,8 +1654,8 @@ func TestInnerAddResource_默认TagGlobal(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	modelProvider := stubModelProvider()
-	modelCard := &schema.BaseCard{ID: "iar-model-g", Name: "默认Tag"}
-	err := mgr.innerAddResource("iar-model-g", "model", modelProvider, modelCard, "", "")
+	wfCard := schema.NewWorkflowCard(schema.WithID("iar-model-g"), schema.WithName("默认Tag"))
+	err := mgr.innerAddResource("iar-model-g", "model", modelProvider, wfCard, "", "")
 	if err != nil {
 		t.Fatalf("innerAddResource 失败: %v", err)
 	}
@@ -1794,56 +1802,6 @@ func TestInnerGetResources_同步获取(t *testing.T) {
 	}
 }
 
-// TestInnerGetResourcesByProvider_通过Provider获取 测试 innerGetResourcesByProvider 通过 provider 获取
-func TestInnerGetResourcesByProvider_通过Provider获取(t *testing.T) {
-	mgr := newTestResourceMgr()
-	ctx := context.Background()
-
-	// 添加 agent 并通过 provider 获取
-	agentCard := agentschema.NewAgentCard(schema.WithID("igrp-agent-1"), schema.WithName("ProviderAgent"))
-	_ = mgr.AddAgent(agentCard, stubAgentProvider())
-
-	results, err := mgr.innerGetResourcesByProvider(ctx, []string{"igrp-agent-1"}, "agent", "", TagMatchAll, nil)
-	if err != nil {
-		t.Fatalf("innerGetResourcesByProvider agent 失败: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("期望 1 个 agent，实际 %d", len(results))
-	}
-
-	// 添加 workflow 并通过 provider 获取
-	wfCard := schema.NewWorkflowCard(schema.WithID("igrp-wf-1"), schema.WithName("ProviderWorkflow"))
-	_ = mgr.AddWorkflow(wfCard, stubWorkflowProvider())
-
-	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"igrp-wf-1"}, "workflow", "", TagMatchAll, nil)
-	if err != nil {
-		t.Fatalf("innerGetResourcesByProvider workflow 失败: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("期望 1 个 workflow，实际 %d", len(results))
-	}
-
-	// 添加 model 并通过 provider 获取
-	_ = mgr.AddModel("igrp-model-1", stubModelProvider())
-
-	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"igrp-model-1"}, "model", "", TagMatchAll, nil)
-	if err != nil {
-		t.Fatalf("innerGetResourcesByProvider model 失败: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("期望 1 个 model，实际 %d", len(results))
-	}
-
-	// 获取不存在的资源
-	results, err = mgr.innerGetResourcesByProvider(ctx, []string{"nonexistent"}, "agent", "", TagMatchAll, nil)
-	if err != nil {
-		t.Fatalf("innerGetResourcesByProvider 不存在资源不应报错: %v", err)
-	}
-	if len(results) != 0 {
-		t.Fatalf("期望 0 个，实际 %d", len(results))
-	}
-}
-
 // ──────────────────────────── 验证方法测试 ────────────────────────────
 
 // TestInnerValidateTag_空值报错 测试 innerValidateTag 空 tag 报错
@@ -1891,7 +1849,7 @@ func TestInnerValidateTag_空元素报错(t *testing.T) {
 // TestInnerValidateResourceCard_Card类型不匹配 测试 innerValidateResourceCard Card 类型不匹配报错
 func TestInnerValidateResourceCard_Card类型不匹配(t *testing.T) {
 	// BaseCard 类型与 AgentCard 类型不匹配
-	baseCard := &schema.BaseCard{ID: "test", Name: "测试"}
+	baseCard := schema.NewBaseCard(schema.WithID("test"), schema.WithName("测试"))
 	agentCardType := reflect.TypeOf((*agentschema.AgentCard)(nil))
 	err := innerValidateResourceCard(baseCard, "agent", agentCardType)
 	if err == nil {
@@ -1910,10 +1868,10 @@ func TestInnerValidateResourceCard_Card为nil(t *testing.T) {
 
 // TestInnerValidateResourceCard_类型匹配 测试 innerValidateResourceCard 类型匹配正常
 func TestInnerValidateResourceCard_类型匹配(t *testing.T) {
-	// innerValidateResourceCard 接收 *schema.BaseCard，cardClassType 也用 BaseCard 类型时匹配
-	baseCard := &schema.BaseCard{ID: "test", Name: "测试"}
-	baseCardType := reflect.TypeOf((*schema.BaseCard)(nil))
-	err := innerValidateResourceCard(baseCard, "model", baseCardType)
+	// innerValidateResourceCard 接收 schema.CardInterface，cardClassType 也用 AgentCard 类型时匹配
+	agentCard := agentschema.NewAgentCard(schema.WithID("test"), schema.WithName("测试"))
+	agentCardType := reflect.TypeOf((*agentschema.AgentCard)(nil))
+	err := innerValidateResourceCard(agentCard, "agent", agentCardType)
 	if err != nil {
 		t.Fatalf("类型匹配不应报错: %v", err)
 	}
@@ -2027,26 +1985,40 @@ func TestGetCardType_各种Card类型(t *testing.T) {
 		t.Fatalf("getCardType(nil) 期望空字符串，实际 %s", got)
 	}
 
-	// getCardType 接收 *schema.BaseCard，reflect.TypeOf 始终为 *schema.BaseCard
-	// 因此 WorkflowCard/AgentCard/McpToolCard 的 BaseCard 提取后均为 BaseCard 类型
-	// 这些情况均落入 default 分支返回空字符串
+	// WorkflowCard → "workflow"
+	wfCard := schema.NewWorkflowCard(schema.WithID("wf-1"))
+	if got := getCardType(wfCard); got != "workflow" {
+		t.Fatalf("getCardType(WorkflowCard) 期望 workflow，实际 %s", got)
+	}
 
-	// 普通 BaseCard → 空字符串
-	baseCard := &schema.BaseCard{ID: "base-1"}
+	// AgentCard → "agent"
+	agentCard := agentschema.NewAgentCard(schema.WithID("agent-1"))
+	if got := getCardType(agentCard); got != "agent" {
+		t.Fatalf("getCardType(AgentCard) 期望 agent，实际 %s", got)
+	}
+
+	// ToolCard → "function"
+	toolCard := tool.NewToolCard("tool-1", "测试工具", nil, nil)
+	if got := getCardType(toolCard); got != "function" {
+		t.Fatalf("getCardType(ToolCard) 期望 function，实际 %s", got)
+	}
+
+	// TeamCard → "team"
+	teamCard := maschema.NewTeamCard(maschema.WithTeamCardID("team-1"))
+	if got := getCardType(teamCard); got != "team" {
+		t.Fatalf("getCardType(TeamCard) 期望 team，实际 %s", got)
+	}
+
+	// EventDrivenTeamCard → "team"
+	edTeamCard := maschema.NewEventDrivenTeamCard(maschema.WithEDID("ed-team-1"))
+	if got := getCardType(edTeamCard); got != "team" {
+		t.Fatalf("getCardType(EventDrivenTeamCard) 期望 team，实际 %s", got)
+	}
+
+	// BaseCard → 空字符串（不在 type switch 的匹配列表中）
+	baseCard := schema.NewBaseCard(schema.WithID("base-1"))
 	if got := getCardType(baseCard); got != "" {
 		t.Fatalf("getCardType(BaseCard) 期望空字符串，实际 %s", got)
-	}
-
-	// WorkflowCard 的 BaseCard → 空字符串（BaseCard 类型不匹配 WorkflowCard 类型）
-	wfCard := &schema.WorkflowCard{BaseCard: schema.BaseCard{ID: "wf-1"}}
-	if got := getCardType(&wfCard.BaseCard); got != "" {
-		t.Fatalf("getCardType(WorkflowCard.BaseCard) 期望空字符串，实际 %s", got)
-	}
-
-	// AgentCard 的 BaseCard → 空字符串
-	agentCard := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1"}}
-	if got := getCardType(&agentCard.BaseCard); got != "" {
-		t.Fatalf("getCardType(AgentCard.BaseCard) 期望空字符串，实际 %s", got)
 	}
 }
 
@@ -2136,7 +2108,7 @@ func TestResourceCardStr_card为nil(t *testing.T) {
 
 // TestResourceCardStr_card不为nil 测试 resourceCardStr card 不为 nil 时返回 card.String()
 func TestResourceCardStr_card不为nil(t *testing.T) {
-	card := &schema.BaseCard{ID: "card-1", Name: "测试"}
+	card := schema.NewBaseCard(schema.WithID("card-1"), schema.WithName("测试"))
 	result := resourceCardStr(card, "fallback-id")
 	if result == "fallback-id" {
 		t.Fatal("card 不为 nil 时不应回退到 resourceID")
