@@ -125,6 +125,15 @@ func (c *BaseCard) ToolInfo() *ToolInfo {
 	return nil
 }
 
+// GetID 返回唯一标识符。
+func (c *BaseCard) GetID() string { return c.ID }
+
+// GetName 返回名称。
+func (c *BaseCard) GetName() string { return c.Name }
+
+// GetDescription 返回描述信息。
+func (c *BaseCard) GetDescription() string { return c.Description }
+
 // String 实现 fmt.Stringer 接口，返回简洁的身份描述。
 //
 // 对应 Python: BaseCard.to_str()

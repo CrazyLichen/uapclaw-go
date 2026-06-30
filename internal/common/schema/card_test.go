@@ -245,3 +245,27 @@ func TestAbilityKind_String(t *testing.T) {
 		}
 	}
 }
+
+// TestBaseCard_GetID 验证 GetID() 返回 ID 字段。
+func TestBaseCard_GetID(t *testing.T) {
+	card := NewBaseCard(WithID("test-id"))
+	if got := card.GetID(); got != "test-id" {
+		t.Errorf("GetID() = %q, want %q", got, "test-id")
+	}
+}
+
+// TestBaseCard_GetName 验证 GetName() 返回 Name 字段。
+func TestBaseCard_GetName(t *testing.T) {
+	card := NewBaseCard(WithName("test-name"))
+	if got := card.GetName(); got != "test-name" {
+		t.Errorf("GetName() = %q, want %q", got, "test-name")
+	}
+}
+
+// TestBaseCard_GetDescription 验证 GetDescription() 返回 Description 字段。
+func TestBaseCard_GetDescription(t *testing.T) {
+	card := NewBaseCard(WithDescription("测试描述"))
+	if got := card.GetDescription(); got != "测试描述" {
+		t.Errorf("GetDescription() = %q, want %q", got, "测试描述")
+	}
+}
