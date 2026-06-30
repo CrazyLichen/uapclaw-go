@@ -23,6 +23,7 @@
 //	│   ├── facade.go                        # SessionFacade 门面会话共有接口
 //	│   └── interfaces.go                    # InnerSession/Checkpointer/Storage/*Provider 接口
 //	├── agent.go            # Session 公开会话（Agent 场景）+ CreateAgentSession
+//	├── agent_team.go      # AgentTeamSession 公开会话（Agent 团队场景）+ CreateAgentTeamSession
 //	├── workflow.go         # WorkflowSession 公开会话（Workflow 场景）
 //	├── node.go             # NodeSessionFacade 公开会话（工作流组件场景）
 //	├── wrapper.go          # RouterSessionFacade 路由会话门面（禁写壳）
@@ -80,6 +81,7 @@
 //	SessionFacade       — 门面会话共有接口，Agent/Node/Router 门面的统一抽象
 //	ProxySession         — 代理会话，将调用委托给内部 stub
 //	Session              — Agent 公开会话，用户面向 API
+//	AgentTeamSession     — Agent 团队公开会话，实现 SessionFacade 接口
 //	WorkflowSession      — Workflow 公开会话，用户面向 API
 //	NodeSessionFacade    — 工作流节点会话门面，组件开发者面向 API
 //	RouterSessionFacade  — 路由会话门面，禁写壳（路由函数场景）
