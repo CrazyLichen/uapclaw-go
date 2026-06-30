@@ -510,10 +510,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 8.27 | ✅ | BaseTeam 接口 | `AddAgent/RemoveAgent/Send/Publish/Subscribe/Invoke/Stream` | `openjiuwen/core/multi_agent/team.py` |
 | 8.28 | ✅ | TeamCard / TeamConfig | 团队元数据与配置 | `openjiuwen/core/multi_agent/schema/team_card.py` |
 | 8.29 | ✅ | EventDrivenTeamCard | 事件驱动团队卡片 | `openjiuwen/core/multi_agent/schema/` |
-| 8.30 | ☐ | TeamRuntime | 消息总线，P2P 通信 | `openjiuwen/core/multi_agent/team_runtime/` |
-| 8.31 | ☐ | CommunicableAgent | 可通信 Agent 包装 | `openjiuwen/core/multi_agent/team_runtime/` |
-| 8.32 | ☐ | MessageRouter / SubscriptionManager | 消息路由与订阅 | `openjiuwen/core/multi_agent/team_runtime/` |
-| 8.33 | ☐ | MessageBus | 消息总线 | `openjiuwen/core/multi_agent/team_runtime/` |
+| 8.30 | ✅ | TeamRuntime | 消息总线，P2P 通信 | `openjiuwen/core/multi_agent/team_runtime/` |
+| 8.31 | ✅ | CommunicableAgent | 可通信 Agent 包装 | `openjiuwen/core/multi_agent/team_runtime/` |
+| 8.32 | ✅ | MessageRouter / SubscriptionManager | 消息路由与订阅 | `openjiuwen/core/multi_agent/team_runtime/` |
+| 8.33 | ✅ | MessageBus | 消息总线 | `openjiuwen/core/multi_agent/team_runtime/` |
 | 8.34 | ☐ | HandoffTeam | 单活跃 Agent 交接模式 | `openjiuwen/core/multi_agent/teams/handoff/` |
 | 8.35 | ☐ | HierarchicalTeam (msgbus) | 层级管理-消息总线模式 | `openjiuwen/core/multi_agent/teams/` |
 | 8.36 | ☐ | HierarchicalTeam (tools) | 层级管理-工具委托模式 | `openjiuwen/core/multi_agent/teams/` |
