@@ -9,6 +9,48 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TeamCardInterface 团队卡片只读接口。
+//
+// TeamCard 和 EventDrivenTeamCard 均实现此接口。
+// BaseTeam.Card() 返回此接口类型，支持多态访问。
+// 需要 Subscriptions 时，直接调用 GetSubscriptions()，
+// 非 EventDrivenTeamCard 返回 nil。
+//
+// 对应 Python: BaseTeam.card 属性的类型声明 TeamCard（Python 运行时允许 TeamCard 子类实例）。
+// Go 中用接口实现多态，Python 中用继承实现。
+type TeamCardInterface interface {
+	// ── BaseCard 层 ──
+
+	// GetID 返回唯一标识符
+	GetID() string
+	// GetName 返回名称
+	GetName() string
+	// GetDescription 返回描述信息
+	GetDescription() string
+
+	// ── TeamCard 层 ──
+
+	// GetAgentCards 返回成员 Agent 卡片列表
+	GetAgentCards() []*agentschema.AgentCard
+	// GetTopic 返回团队主题/领域
+	GetTopic() string
+	// GetVersion 返回团队版本号
+	GetVersion() string
+	// GetTags 返回分类标签
+	GetTags() []string
+
+	// ── EventDrivenTeamCard 层（TeamCard 返回 nil）──
+
+	// GetSubscriptions 返回订阅映射。
+	// TeamCard 实现返回 nil；EventDrivenTeamCard 实现返回实际值。
+	GetSubscriptions() map[string][]string
+
+	// ── 通用 ──
+
+	// String 返回简洁的身份描述
+	String() string
+}
+
 // TeamCard 团队身份卡片，嵌入 BaseCard 提供统一身份标识。
 //
 // 不可变元数据，描述团队的"身份"和"组成"。
@@ -47,6 +89,9 @@ type TeamCardOption func(*TeamCard)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 TeamCard 满足 TeamCardInterface。
+var _ TeamCardInterface = (*TeamCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -120,5 +165,20 @@ func WithTags(tags []string) TeamCardOption {
 func (c *TeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s", c.ID, c.Name, c.Topic, c.Version)
 }
+
+// GetAgentCards 返回成员 Agent 卡片列表。
+func (c *TeamCard) GetAgentCards() []*agentschema.AgentCard { return c.AgentCards }
+
+// GetTopic 返回团队主题/领域。
+func (c *TeamCard) GetTopic() string { return c.Topic }
+
+// GetVersion 返回团队版本号。
+func (c *TeamCard) GetVersion() string { return c.Version }
+
+// GetTags 返回分类标签。
+func (c *TeamCard) GetTags() []string { return c.Tags }
+
+// GetSubscriptions 返回订阅映射。TeamCard 无订阅，返回 nil。
+func (c *TeamCard) GetSubscriptions() map[string][]string { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

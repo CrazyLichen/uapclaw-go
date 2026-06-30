@@ -169,6 +169,59 @@ func TestTeamCard_嵌入BaseCard(t *testing.T) {
 	}
 }
 
+// TestTeamCardInterface_TeamCard满足接口 验证 *TeamCard 满足 TeamCardInterface。
+func TestTeamCardInterface_TeamCard满足接口(t *testing.T) {
+	card := NewTeamCard(WithTopic("test"))
+	var iface TeamCardInterface = card
+	if iface.GetTopic() != "test" {
+		t.Errorf("GetTopic() = %q, want %q", iface.GetTopic(), "test")
+	}
+	if iface.GetSubscriptions() != nil {
+		t.Error("TeamCard.GetSubscriptions() 应返回 nil")
+	}
+}
+
+// TestTeamCard_GetSubscriptions_返回nil 验证 TeamCard.GetSubscriptions() 返回 nil。
+func TestTeamCard_GetSubscriptions_返回nil(t *testing.T) {
+	card := NewTeamCard()
+	if subs := card.GetSubscriptions(); subs != nil {
+		t.Errorf("期望 nil，实际 %v", subs)
+	}
+}
+
+// TestTeamCard_GetAgentCards 验证 GetAgentCards() 返回 AgentCards 字段。
+func TestTeamCard_GetAgentCards(t *testing.T) {
+	agentCard := agentschema.NewAgentCard(schema.WithName("a1"))
+	card := NewTeamCard(WithAgentCards([]*agentschema.AgentCard{agentCard}))
+	if got := card.GetAgentCards(); len(got) != 1 || got[0].Name != "a1" {
+		t.Errorf("GetAgentCards() = %v, want 1 个 agent a1", got)
+	}
+}
+
+// TestTeamCard_GetTopic 验证 GetTopic() 返回 Topic 字段。
+func TestTeamCard_GetTopic(t *testing.T) {
+	card := NewTeamCard(WithTopic("math"))
+	if got := card.GetTopic(); got != "math" {
+		t.Errorf("GetTopic() = %q, want %q", got, "math")
+	}
+}
+
+// TestTeamCard_GetVersion 验证 GetVersion() 返回 Version 字段。
+func TestTeamCard_GetVersion(t *testing.T) {
+	card := NewTeamCard(WithTeamVersion("2.0.0"))
+	if got := card.GetVersion(); got != "2.0.0" {
+		t.Errorf("GetVersion() = %q, want %q", got, "2.0.0")
+	}
+}
+
+// TestTeamCard_GetTags 验证 GetTags() 返回 Tags 字段。
+func TestTeamCard_GetTags(t *testing.T) {
+	card := NewTeamCard(WithTags([]string{"ai", "ml"}))
+	if got := card.GetTags(); len(got) != 2 || got[0] != "ai" {
+		t.Errorf("GetTags() = %v, want [ai ml]", got)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // contains 检查字符串是否包含子串。
