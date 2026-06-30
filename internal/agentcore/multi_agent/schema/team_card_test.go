@@ -222,6 +222,180 @@ func TestTeamCard_GetTags(t *testing.T) {
 	}
 }
 
+// TestNewEventDrivenTeamCard_默认值 验证默认 Version="1.0.0"，Subscriptions=nil。
+func TestNewEventDrivenTeamCard_默认值(t *testing.T) {
+	card := NewEventDrivenTeamCard()
+	if card.Version != "1.0.0" {
+		t.Errorf("期望 Version='1.0.0'，实际 '%s'", card.Version)
+	}
+	if card.Subscriptions != nil {
+		t.Errorf("期望 Subscriptions=nil，实际 %v", card.Subscriptions)
+	}
+	if card.Topic != "" {
+		t.Errorf("期望 Topic=''，实际 '%s'", card.Topic)
+	}
+	if card.ID == "" {
+		t.Error("期望 ID 非空")
+	}
+}
+
+// TestNewEventDrivenTeamCard_带选项 验证所有 EventDrivenTeamCardOption。
+func TestNewEventDrivenTeamCard_带选项(t *testing.T) {
+	agentCard := agentschema.NewAgentCard(schema.WithName("agent1"))
+	subs := map[string][]string{
+		"reviewer": {"code_events", "task_updates"},
+		"coder":    {"review_events"},
+	}
+	card := NewEventDrivenTeamCard(
+		WithEDID("team-123"),
+		WithEDName("event-team"),
+		WithEDDescription("事件驱动团队"),
+		WithEDAgentCards([]*agentschema.AgentCard{agentCard}),
+		WithEDTopic("coding"),
+		WithEDTeamVersion("2.0.0"),
+		WithEDTags([]string{"event", "driven"}),
+		WithSubscriptions(subs),
+	)
+	if card.ID != "team-123" {
+		t.Errorf("期望 ID='team-123'，实际 '%s'", card.ID)
+	}
+	if card.Name != "event-team" {
+		t.Errorf("期望 Name='event-team'，实际 '%s'", card.Name)
+	}
+	if card.Description != "事件驱动团队" {
+		t.Errorf("期望 Description='事件驱动团队'，实际 '%s'", card.Description)
+	}
+	if len(card.AgentCards) != 1 || card.AgentCards[0].Name != "agent1" {
+		t.Errorf("期望 AgentCards[0].Name='agent1'，实际 %v", card.AgentCards)
+	}
+	if card.Topic != "coding" {
+		t.Errorf("期望 Topic='coding'，实际 '%s'", card.Topic)
+	}
+	if card.Version != "2.0.0" {
+		t.Errorf("期望 Version='2.0.0'，实际 '%s'", card.Version)
+	}
+	if len(card.Tags) != 2 || card.Tags[0] != "event" {
+		t.Errorf("期望 Tags=['event','driven']，实际 %v", card.Tags)
+	}
+	if len(card.Subscriptions) != 2 {
+		t.Errorf("期望 len(Subscriptions)=2，实际 %d", len(card.Subscriptions))
+	}
+	if topics, ok := card.Subscriptions["reviewer"]; !ok || len(topics) != 2 {
+		t.Errorf("期望 reviewer 订阅 2 个 topic，实际 %v", topics)
+	}
+}
+
+// TestEventDrivenTeamCard_GetSubscriptions 验证 GetSubscriptions() 返回实际订阅映射。
+func TestEventDrivenTeamCard_GetSubscriptions(t *testing.T) {
+	subs := map[string][]string{"agent1": {"topic1"}}
+	card := NewEventDrivenTeamCard(WithSubscriptions(subs))
+	if got := card.GetSubscriptions(); len(got) != 1 || got["agent1"][0] != "topic1" {
+		t.Errorf("GetSubscriptions() = %v, want agent1→[topic1]", got)
+	}
+}
+
+// TestEventDrivenTeamCard_String 验证 String() 包含 subscriptions 数量。
+func TestEventDrivenTeamCard_String(t *testing.T) {
+	subs := map[string][]string{"a": {"t1"}, "b": {"t2"}}
+	card := NewEventDrivenTeamCard(
+		WithEDName("team1"),
+		WithEDTopic("math"),
+		WithSubscriptions(subs),
+	)
+	s := fmt.Sprintf("%v", card)
+	if !contains(s, "team1") {
+		t.Errorf("String() 应包含 Name='team1'，实际 '%s'", s)
+	}
+	if !contains(s, "math") {
+		t.Errorf("String() 应包含 Topic='math'，实际 '%s'", s)
+	}
+	if !contains(s, "subscriptions=2") {
+		t.Errorf("String() 应包含 subscriptions=2，实际 '%s'", s)
+	}
+}
+
+// TestEventDrivenTeamCard_JSON序列化 验证 JSON marshal/unmarshal。
+func TestEventDrivenTeamCard_JSON序列化(t *testing.T) {
+	subs := map[string][]string{"reviewer": {"code_events"}}
+	card := NewEventDrivenTeamCard(
+		WithEDName("event-team"),
+		WithEDTopic("coding"),
+		WithEDTeamVersion("2.0.0"),
+		WithSubscriptions(subs),
+	)
+	data, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	var decoded EventDrivenTeamCard
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+	if decoded.Name != "event-team" {
+		t.Errorf("期望 Name='event-team'，实际 '%s'", decoded.Name)
+	}
+	if decoded.Topic != "coding" {
+		t.Errorf("期望 Topic='coding'，实际 '%s'", decoded.Topic)
+	}
+	if len(decoded.Subscriptions) != 1 || decoded.Subscriptions["reviewer"][0] != "code_events" {
+		t.Errorf("期望 Subscriptions[reviewer]=[code_events]，实际 %v", decoded.Subscriptions)
+	}
+}
+
+// TestEventDrivenTeamCard_JSON序列化_omitempty 验证零值 Subscriptions 不出现在 JSON 中。
+func TestEventDrivenTeamCard_JSON序列化_omitempty(t *testing.T) {
+	card := NewEventDrivenTeamCard() // Subscriptions 为 nil
+	data, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Unmarshal map 失败: %v", err)
+	}
+	if _, ok := m["subscriptions"]; ok {
+		t.Error("零值 Subscriptions 不应出现在 JSON 中")
+	}
+}
+
+// TestEventDrivenTeamCard_嵌入TeamCard 验证嵌入后 TeamCard 字段可访问。
+func TestEventDrivenTeamCard_嵌入TeamCard(t *testing.T) {
+	card := NewEventDrivenTeamCard(
+		WithEDID("abc123"),
+		WithEDName("n"),
+		WithEDDescription("d"),
+	)
+	if card.ID != "abc123" {
+		t.Errorf("期望 ID='abc123'，实际 '%s'", card.ID)
+	}
+	if card.Name != "n" {
+		t.Errorf("期望 Name='n'，实际 '%s'", card.Name)
+	}
+	if card.Description != "d" {
+		t.Errorf("期望 Description='d'，实际 '%s'", card.Description)
+	}
+}
+
+// TestTeamCardInterface_EventDrivenTeamCard满足接口 验证 *EventDrivenTeamCard 满足 TeamCardInterface。
+func TestTeamCardInterface_EventDrivenTeamCard满足接口(t *testing.T) {
+	subs := map[string][]string{"agent1": {"topic1"}}
+	card := NewEventDrivenTeamCard(
+		WithEDName("ed-team"),
+		WithEDTopic("coding"),
+		WithSubscriptions(subs),
+	)
+	var iface TeamCardInterface = card
+	if iface.GetName() != "ed-team" {
+		t.Errorf("GetName() = %q, want %q", iface.GetName(), "ed-team")
+	}
+	if iface.GetTopic() != "coding" {
+		t.Errorf("GetTopic() = %q, want %q", iface.GetTopic(), "coding")
+	}
+	if got := iface.GetSubscriptions(); len(got) != 1 || got["agent1"][0] != "topic1" {
+		t.Errorf("GetSubscriptions() = %v, want agent1→[topic1]", got)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // contains 检查字符串是否包含子串。

@@ -86,12 +86,35 @@ type TeamCard struct {
 // 编译时类型安全，避免 opts ...any 的运行时 switch。
 type TeamCardOption func(*TeamCard)
 
+// EventDrivenTeamCard 事件驱动团队卡片，嵌入 TeamCard 并增加订阅映射。
+//
+// 不可变元数据 + 声明式订阅关系，描述"团队是什么"和"谁关心什么事件"。
+// AgentCards 仅存储成员 Agent 的卡片（元数据），不是 Agent 实例。
+//
+// 满足 TeamCardInterface 接口。
+//
+// 对应 Python: openjiuwen/core/multi_agent/schema/team_card.py (EventDrivenTeamCard)
+// Python 继承 TeamCard + subscriptions: Dict[str, List[str]]
+type EventDrivenTeamCard struct {
+	TeamCard
+	// Subscriptions 订阅映射：agent_id → 订阅的 topic 列表
+	//
+	// 对应 Python: EventDrivenTeamCard.subscriptions: Dict[str, List[str]] = Field(default_factory=dict)
+	Subscriptions map[string][]string `json:"subscriptions,omitempty"`
+}
+
+// EventDrivenTeamCardOption EventDrivenTeamCard 构造选项函数。
+type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 TeamCard 满足 TeamCardInterface。
 var _ TeamCardInterface = (*TeamCard)(nil)
+
+// 编译时验证 EventDrivenTeamCard 满足 TeamCardInterface。
+var _ TeamCardInterface = (*EventDrivenTeamCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -180,5 +203,78 @@ func (c *TeamCard) GetTags() []string { return c.Tags }
 
 // GetSubscriptions 返回订阅映射。TeamCard 无订阅，返回 nil。
 func (c *TeamCard) GetSubscriptions() map[string][]string { return nil }
+
+// NewEventDrivenTeamCard 创建 EventDrivenTeamCard 实例，默认 Version="1.0.0"。
+//
+// 对应 Python: EventDrivenTeamCard(id=uuid4().hex, name="", description="",
+//     agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})
+func NewEventDrivenTeamCard(opts ...EventDrivenTeamCardOption) *EventDrivenTeamCard {
+	card := &EventDrivenTeamCard{
+		TeamCard: *NewTeamCard(),
+	}
+	for _, opt := range opts {
+		opt(card)
+	}
+	return card
+}
+
+// ── BaseCard 层选项 ──
+
+// WithEDID 设置唯一标识符。
+func WithEDID(id string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.ID = id }
+}
+
+// WithEDName 设置名称。
+func WithEDName(name string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Name = name }
+}
+
+// WithEDDescription 设置描述信息。
+func WithEDDescription(desc string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Description = desc }
+}
+
+// ── TeamCard 层选项 ──
+
+// WithEDAgentCards 设置成员 Agent 卡片列表。
+func WithEDAgentCards(cards []*agentschema.AgentCard) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.AgentCards = cards }
+}
+
+// WithEDTopic 设置团队主题。
+func WithEDTopic(topic string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Topic = topic }
+}
+
+// WithEDTeamVersion 设置团队版本号。
+func WithEDTeamVersion(version string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Version = version }
+}
+
+// WithEDTags 设置分类标签。
+func WithEDTags(tags []string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Tags = tags }
+}
+
+// ── EventDrivenTeamCard 层选项 ──
+
+// WithSubscriptions 设置订阅映射。
+func WithSubscriptions(subs map[string][]string) EventDrivenTeamCardOption {
+	return func(c *EventDrivenTeamCard) { c.Subscriptions = subs }
+}
+
+// GetSubscriptions 返回订阅映射。
+func (c *EventDrivenTeamCard) GetSubscriptions() map[string][]string {
+	return c.Subscriptions
+}
+
+// String 实现 fmt.Stringer 接口，覆盖 TeamCard.String()。
+//
+// 对应 Python: BaseCard.to_str() 扩展，增加 subscriptions 数量字段
+func (c *EventDrivenTeamCard) String() string {
+	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s,subscriptions=%d",
+		c.ID, c.Name, c.Topic, c.Version, len(c.Subscriptions))
+}
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
