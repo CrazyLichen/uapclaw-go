@@ -2,6 +2,7 @@ package multi_agent
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -24,9 +25,7 @@ type TeamOption = schema.TeamOption
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithTeamSession 设置团队会话。
-//
-// ⤵️ 8.30 TeamSession 实现后参数类型从 any 替换为具体类型。
-func WithTeamSession(sess any) TeamOption {
+func WithTeamSession(sess *session.AgentTeamSession) TeamOption {
 	return schema.WithTeamSession(sess)
 }
 

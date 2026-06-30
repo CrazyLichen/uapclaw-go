@@ -631,9 +631,23 @@ func onAgentSessionCreated(ctx context.Context, data *callback.SessionCallEventD
 	return nil
 }
 
-// ⤵️ 5.13+ 回填：等 AgentTeamEvents 定义后注册 P2P/PubSub 回调
-// callback.GetCallbackFramework().OnTeamEvent(callback.AgentP2PReceived, onAgentP2PReceived)
-// callback.GetCallbackFramework().OnTeamEvent(callback.AgentPubsubReceived, onAgentPubsubReceived)
+// onAgentP2PReceived P2P 消息接收回调，当前仅记录日志。
+func onAgentP2PReceived(ctx context.Context, data *callback.AgentTeamEventData) any {
+	logger.Debug(logger.ComponentAgentCore).
+		Str("event_type", "agent_p2p_received").
+		Str("agent_id", data.AgentID).
+		Msg("收到 P2P 消息")
+	return nil
+}
+
+// onAgentPubsubReceived Pub-Sub 消息接收回调，当前仅记录日志。
+func onAgentPubsubReceived(ctx context.Context, data *callback.AgentTeamEventData) any {
+	logger.Debug(logger.ComponentAgentCore).
+		Str("event_type", "agent_pubsub_received").
+		Str("agent_id", data.AgentID).
+		Msg("收到 Pub-Sub 消息")
+	return nil
+}
 
 // ensureBasePath 确保存储根目录存在
 func (g *GlobalSessionController) ensureBasePath() error {
@@ -675,7 +689,9 @@ func (g *GlobalSessionController) getOrCreateController(agentID string) *Session
 	return controller
 }
 
-// init 注册 AGENT_SESSION_CREATED 回调
+// init 注册 AGENT_SESSION_CREATED 和 P2P/PubSub 回调
 func init() {
 	callback.GetCallbackFramework().OnSession(callback.AgentSessionCreated, onAgentSessionCreated)
+	callback.GetCallbackFramework().OnAgentTeam(callback.AgentP2PReceived, onAgentP2PReceived)
+	callback.GetCallbackFramework().OnAgentTeam(callback.AgentPubsubReceived, onAgentPubsubReceived)
 }

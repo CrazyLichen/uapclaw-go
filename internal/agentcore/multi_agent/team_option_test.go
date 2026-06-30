@@ -3,6 +3,7 @@ package multi_agent
 import (
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -25,7 +26,7 @@ func TestNewTeamOptions_空选项(t *testing.T) {
 
 // TestWithTeamSession_设置会话 测试 WithTeamSession 选项。
 func TestWithTeamSession_设置会话(t *testing.T) {
-	sess := "test-session"
+	sess := session.NewAgentTeamSession()
 	opts := NewTeamOptions(WithTeamSession(sess))
 	if opts.Session != sess {
 		t.Errorf("Session 期望 %v, 实际 %v", sess, opts.Session)

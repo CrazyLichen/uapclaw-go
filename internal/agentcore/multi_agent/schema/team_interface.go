@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -101,7 +102,6 @@ type BaseTeam interface {
 	// Config 返回团队配置。
 	//
 	// 对应 Python: BaseTeam.config 属性
-	// ⤴️ 8.28 回填：返回类型从值 TeamConfig 改为指针 *TeamConfig
 	Config() *TeamConfig
 }
 
@@ -112,8 +112,7 @@ type TeamOptions struct {
 	// Session 团队会话（可选）
 	//
 	// 对应 Python: invoke(message, session) 的 session 参数
-	// ⤵️ 8.30 TeamSession 实现后替换为具体类型
-	Session any
+	Session *session.AgentTeamSession
 	// SessionID 会话标识（可选）
 	//
 	// 对应 Python: send/publish 的 session_id 参数
@@ -189,9 +188,7 @@ func NewTeamConfig() *TeamConfig {
 }
 
 // WithTeamSession 设置团队会话。
-//
-// ⤵️ 8.30 TeamSession 实现后参数类型从 any 替换为具体类型。
-func WithTeamSession(sess any) TeamOption {
+func WithTeamSession(sess *session.AgentTeamSession) TeamOption {
 	return func(o *TeamOptions) { o.Session = sess }
 }
 
