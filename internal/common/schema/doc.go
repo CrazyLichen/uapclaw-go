@@ -7,12 +7,13 @@
 //
 //	schema/
 //	├── doc.go         # 包文档
-//	├── card.go        # BaseCard 数字名片基类 + WorkflowCard 工作流卡片
+//	├── card.go        # BaseCard 数字名片基类 + WorkflowCard 工作流卡片 + CardInterface 通用只读接口
 //	├── param.go       # Param / ParamType 参数定义模型，支持嵌套结构
 //	└── tool_info.go   # ToolInfoProvider 接口 + ToolInfo 本地工具描述 + McpToolInfo MCP 工具描述
 //
 // 核心类型：
 //
+//   - CardInterface：通用卡片只读接口，所有 Card 类型均实现（替代各处 *BaseCard 的只读消费场景）
 //   - BaseCard：数字名片基类，提供 ID/Name/Description 和 ToolInfo() 方法
 //   - WorkflowCard：工作流配置卡片，增加 Version 和 InputParams
 //   - Param / ParamType：参数定义模型，最终转换为 JSON Schema

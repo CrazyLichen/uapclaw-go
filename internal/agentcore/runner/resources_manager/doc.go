@@ -3,10 +3,13 @@
 //
 // 本包实现 ResourceMgr 门面类，统一管理所有资源的注册、获取、移除和标签分类。
 // 内部通过 ResourceRegistry 聚合 7 个子管理器，TagMgr 维护资源与标签的双向索引。
+// idToCard 缓存使用 schema.CardInterface 类型保留子类信息，替代原先的 *BaseCard。
 //
 // 设计模式：
 //
 //	ResourceMgr 作为门面，所有资源的 add/get/remove 操作通过内部核心方法统一流转。
+//	AddXxx 统一走 innerAddResource，RemoveXxx 统一走 innerRemoveResources，
+//	GetXxx 统一走 innerGetResources，与 Python _inner_add/_inner_remove/_inner_get 对齐。
 //	子管理器分两类：基于 AbstractManager 的 Provider 模式（Agent/Workflow/Model），
 //	和直接存储模式（Prompt/Tool/SysOperation）。
 //	Provider 模式支持延迟加载，注册时传入工厂函数而非实例，获取时调用工厂创建实例。
