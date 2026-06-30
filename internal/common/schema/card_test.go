@@ -21,6 +21,27 @@ func (c *testSubCard) ToolInfo() *ToolInfo {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// TestBaseCard_满足CardInterface 验证 *BaseCard 满足 CardInterface。
+func TestBaseCard_满足CardInterface(t *testing.T) {
+	card := NewBaseCard(WithID("test-id"), WithName("test-name"))
+	var iface CardInterface = card
+	if iface.GetID() != "test-id" {
+		t.Errorf("GetID() = %q, want %q", iface.GetID(), "test-id")
+	}
+	if iface.GetName() != "test-name" {
+		t.Errorf("GetName() = %q, want %q", iface.GetName(), "test-name")
+	}
+}
+
+// TestWorkflowCard_满足CardInterface 验证 *WorkflowCard 满足 CardInterface。
+func TestWorkflowCard_满足CardInterface(t *testing.T) {
+	card := NewWorkflowCard(WithID("wf-1"), WithName("wf-name"))
+	var iface CardInterface = card
+	if iface.GetID() != "wf-1" {
+		t.Errorf("GetID() = %q, want %q", iface.GetID(), "wf-1")
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 func TestNewBaseCard_默认ID(t *testing.T) {

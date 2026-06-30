@@ -18,6 +18,26 @@ type Ability interface {
 	AbilityKind() AbilityKind
 }
 
+// CardInterface 通用卡片只读接口，所有 Card 类型均实现此接口。
+//
+// BaseCard/WorkflowCard/AgentCard/ToolCard/McpToolCard/TeamCard/EventDrivenTeamCard 均满足。
+// 替代各处 *BaseCard 的只读消费场景（idToCard 缓存、日志格式化、类型判断等）。
+//
+// 不包含 ToolInfo()：McpToolCard.ToolInfo() 返回 *McpToolInfo（非 *ToolInfo），
+// 签名不兼容。ToolInfo 通过具体 Card 类型直接调用获取。
+//
+// 对应 Python: BaseCard 基类（Python 继承天然满足此接口的方法）。
+type CardInterface interface {
+	// GetID 返回唯一标识符
+	GetID() string
+	// GetName 返回名称
+	GetName() string
+	// GetDescription 返回描述信息
+	GetDescription() string
+	// String 返回简洁的身份描述
+	String() string
+}
+
 // BaseCard 数字名片基类，所有 Card 类型均嵌入此结构体。
 //
 // 子类包括：ToolCard、AgentCard、WorkflowCard、TeamCard、SysOperationCard。
@@ -67,6 +87,12 @@ type CardOption func(*BaseCard)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 BaseCard 满足 CardInterface。
+var _ CardInterface = (*BaseCard)(nil)
+
+// 编译时验证 WorkflowCard 满足 CardInterface。
+var _ CardInterface = (*WorkflowCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
