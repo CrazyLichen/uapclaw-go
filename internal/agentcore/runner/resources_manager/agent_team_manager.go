@@ -4,6 +4,7 @@ import (
 	"context"
 
 	multiagent "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
+	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -96,7 +97,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (multiagent.AgentTeam
 	}
 
 	// 将 wrapped provider 还原为 AgentTeamProvider
-	provider := func(ctx context.Context, card *multiagent.TeamCard) (multiagent.BaseTeam, error) {
+	provider := func(ctx context.Context, card maschema.TeamCardInterface) (multiagent.BaseTeam, error) {
 		return unwrapped(ctx)
 	}
 

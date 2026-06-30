@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
+	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -937,7 +937,7 @@ func TestResourceMgr_GetSysOperation_不存在(t *testing.T) {
 // TestResourceMgr_AddAgentTeam_nilProvider报错 测试 AddAgentTeam nil provider 报错
 func TestResourceMgr_AddAgentTeam_nilProvider报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := &multiagents.TeamCard{BaseCard: schema.BaseCard{ID: "team-1", Name: "test-team"}}
+	card := maschema.NewTeamCard(maschema.WithTeamCardID("team-1"), maschema.WithTeamCardName("test-team"))
 	err := mgr.AddAgentTeam(card, nil)
 	if err == nil {
 		t.Fatal("nil provider 应返回错误")

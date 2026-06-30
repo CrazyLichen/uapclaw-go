@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
+	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -1216,11 +1217,12 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 // AddAgentTeam 注册 Agent 团队。
 //
 // 对应 Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
-func (m *ResourceMgr) AddAgentTeam(card *multiagents.TeamCard, provider multiagents.AgentTeamProvider, opts ...ResourceOption) error {
+func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider multiagents.AgentTeamProvider, opts ...ResourceOption) error {
 	if err := m.innerValidateProvider(provider, "team"); err != nil {
 		return err
 	}
-	return m.innerAddResource(card.ID, "team", provider, &card.BaseCard, "", "")
+	baseCard := &schema.BaseCard{ID: card.GetID(), Name: card.GetName(), Description: card.GetDescription()}
+	return m.innerAddResource(card.GetID(), "team", provider, baseCard, "", "")
 }
 
 // RemoveAgentTeam 注销 Agent 团队。
@@ -1907,7 +1909,9 @@ func getCardType(card *schema.BaseCard) string {
 		return "workflow"
 	case reflect.TypeOf((*agentschema.AgentCard)(nil)):
 		return "agent"
-	case reflect.TypeOf((*multiagents.TeamCard)(nil)):
+	case reflect.TypeOf((*maschema.TeamCard)(nil)):
+		return "team"
+	case reflect.TypeOf((*maschema.EventDrivenTeamCard)(nil)):
 		return "team"
 	default:
 		return ""

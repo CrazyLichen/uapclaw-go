@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
+	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
@@ -20,7 +21,7 @@ func TestAgentTeamMgr_创建不返回nil(t *testing.T) {
 // TestAgentTeamMgr_添加团队 测试 AddAgentTeam 正常注册。
 func TestAgentTeamMgr_添加团队(t *testing.T) {
 	mgr := NewAgentTeamMgr()
-	provider := func(_ context.Context, _ *multiagents.TeamCard) (multiagents.BaseTeam, error) {
+	provider := func(_ context.Context, _ maschema.TeamCardInterface) (multiagents.BaseTeam, error) {
 		return nil, nil
 	}
 	err := mgr.AddAgentTeam("team-1", provider)
@@ -32,7 +33,7 @@ func TestAgentTeamMgr_添加团队(t *testing.T) {
 // TestAgentTeamMgr_重复添加报错 测试重复注册同一 ID。
 func TestAgentTeamMgr_重复添加报错(t *testing.T) {
 	mgr := NewAgentTeamMgr()
-	provider := func(_ context.Context, _ *multiagents.TeamCard) (multiagents.BaseTeam, error) {
+	provider := func(_ context.Context, _ maschema.TeamCardInterface) (multiagents.BaseTeam, error) {
 		return nil, nil
 	}
 	_ = mgr.AddAgentTeam("team-dup", provider)
@@ -45,7 +46,7 @@ func TestAgentTeamMgr_重复添加报错(t *testing.T) {
 // TestAgentTeamMgr_空ID报错 测试空 ID 校验。
 func TestAgentTeamMgr_空ID报错(t *testing.T) {
 	mgr := NewAgentTeamMgr()
-	provider := func(_ context.Context, _ *multiagents.TeamCard) (multiagents.BaseTeam, error) {
+	provider := func(_ context.Context, _ maschema.TeamCardInterface) (multiagents.BaseTeam, error) {
 		return nil, nil
 	}
 	err := mgr.AddAgentTeam("", provider)
@@ -66,7 +67,7 @@ func TestAgentTeamMgr_nilProvider报错(t *testing.T) {
 // TestAgentTeamMgr_移除团队 测试 RemoveAgentTeam 正常注销。
 func TestAgentTeamMgr_移除团队(t *testing.T) {
 	mgr := NewAgentTeamMgr()
-	provider := func(_ context.Context, _ *multiagents.TeamCard) (multiagents.BaseTeam, error) {
+	provider := func(_ context.Context, _ maschema.TeamCardInterface) (multiagents.BaseTeam, error) {
 		return nil, nil
 	}
 	_ = mgr.AddAgentTeam("team-rm", provider)
