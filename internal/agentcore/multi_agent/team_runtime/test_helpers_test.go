@@ -2,6 +2,7 @@ package team_runtime
 
 import (
 	"context"
+	"sync"
 )
 
 // mockMessageBusForRuntime 测试用 mock 消息总线
@@ -67,6 +68,7 @@ type mockAgentExecutor struct {
 	result any
 	err    error
 	calls  []mockExecutorCall
+	mu     sync.Mutex
 }
 
 type mockExecutorCall struct {
@@ -75,8 +77,19 @@ type mockExecutorCall struct {
 }
 
 func (e *mockAgentExecutor) RunAgent(_ context.Context, agentID string, inputs any, _ any) (any, error) {
+	e.mu.Lock()
 	e.calls = append(e.calls, mockExecutorCall{agentID: agentID, inputs: inputs})
+	e.mu.Unlock()
 	return e.result, e.err
+}
+
+// getCalls 线程安全地获取调用记录副本
+func (e *mockAgentExecutor) getCalls() []mockExecutorCall {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	cpy := make([]mockExecutorCall, len(e.calls))
+	copy(cpy, e.calls)
+	return cpy
 }
 
 // mockRuntimeBindable 测试用 mock RuntimeBindable 实现

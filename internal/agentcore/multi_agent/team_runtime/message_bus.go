@@ -144,7 +144,7 @@ func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime, executor Agent
 		mq:                  message_queue.NewMessageQueueInMemory(config.MaxQueueSize, time.Duration(config.ProcessTimeout*float64(time.Second))),
 		activeSubscriptions: make(map[string]message_queue.SubscriptionBase),
 		subscriptionManager: sm,
-		router:             router,
+		router:              router,
 	}
 }
 

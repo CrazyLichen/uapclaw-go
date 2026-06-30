@@ -46,8 +46,8 @@ type MessageRouter struct {
 func NewMessageRouter(sm *SubscriptionManager, runtime *TeamRuntime, executor AgentExecutor) *MessageRouter {
 	return &MessageRouter{
 		subscriptionManager: sm,
-		runtime:            runtime,
-		agentExecutor:      executor,
+		runtime:             runtime,
+		agentExecutor:       executor,
 	}
 }
 
@@ -63,7 +63,7 @@ func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEn
 		AgentID: envelope.Recipient,
 		Message: envelope.Message,
 		Extra: map[string]any{
-			"sender":    envelope.Sender,
+			"sender":     envelope.Sender,
 			"session_id": envelope.SessionID,
 			"message_id": envelope.MessageID,
 		},

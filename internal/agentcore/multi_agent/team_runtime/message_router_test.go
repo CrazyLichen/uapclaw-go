@@ -51,11 +51,12 @@ func TestMessageRouter_RouteP2PMessage(t *testing.T) {
 		}
 
 		// 验证 executor 被调用
-		if len(executor.calls) != 1 {
-			t.Errorf("executor 调用次数 = %d, want 1", len(executor.calls))
+		calls := executor.getCalls()
+		if len(calls) != 1 {
+			t.Errorf("executor 调用次数 = %d, want 1", len(calls))
 		}
-		if executor.calls[0].agentID != "recipient" {
-			t.Errorf("executor agentID = %q, want %q", executor.calls[0].agentID, "recipient")
+		if calls[0].agentID != "recipient" {
+			t.Errorf("executor agentID = %q, want %q", calls[0].agentID, "recipient")
 		}
 	})
 
@@ -95,8 +96,8 @@ func TestMessageRouter_RoutePubsubMessage(t *testing.T) {
 			t.Errorf("RoutePubsubMessage 返回错误: %v", err)
 		}
 		// 无订阅者，executor 不应被调用
-		if len(executor.calls) != 0 {
-			t.Errorf("executor 调用次数 = %d, want 0", len(executor.calls))
+		if len(executor.getCalls()) != 0 {
+			t.Errorf("executor 调用次数 = %d, want 0", len(executor.getCalls()))
 		}
 	})
 

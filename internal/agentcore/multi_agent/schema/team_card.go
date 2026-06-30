@@ -204,7 +204,8 @@ func (c *TeamCard) GetSubscriptions() map[string][]string { return nil }
 // NewEventDrivenTeamCard 创建 EventDrivenTeamCard 实例，默认 Version="1.0.0"。
 //
 // 对应 Python: EventDrivenTeamCard(id=uuid4().hex, name="", description="",
-//     agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})
+//
+//	agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})
 func NewEventDrivenTeamCard(opts ...EventDrivenTeamCardOption) *EventDrivenTeamCard {
 	card := &EventDrivenTeamCard{
 		TeamCard: *NewTeamCard(),
