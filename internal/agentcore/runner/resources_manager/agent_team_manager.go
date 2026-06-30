@@ -3,7 +3,6 @@ package resources_manager
 import (
 	"context"
 
-	multiagent "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -16,7 +15,7 @@ import (
 // 对应 Python: AgentTeamMgr (openjiuwen/core/runner/resources_manager/agent_team_manager.py)
 // Python 继承 AbstractManager[BaseTeam]，三个方法直接委托给父类。
 type AgentTeamMgr struct {
-	AbstractManager[multiagent.BaseTeam]
+	AbstractManager[maschema.BaseTeam]
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -30,14 +29,14 @@ type AgentTeamMgr struct {
 // NewAgentTeamMgr 创建 Agent 团队资源管理器。
 func NewAgentTeamMgr() *AgentTeamMgr {
 	return &AgentTeamMgr{
-		AbstractManager: NewAbstractManager[multiagent.BaseTeam](),
+		AbstractManager: NewAbstractManager[maschema.BaseTeam](),
 	}
 }
 
 // AddAgentTeam 注册 Agent 团队提供者。
 //
 // 对应 Python: AgentTeamMgr.add_agent_team(agent_team_id, agent_team) → self._register_resource_provider(...)
-func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider multiagent.AgentTeamProvider) error {
+func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider maschema.AgentTeamProvider) error {
 	if agentTeamID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "team"),
@@ -52,7 +51,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider multiagent.Agen
 	}
 
 	// 将 AgentTeamProvider 包装为 AbstractManager 所需的 func(context.Context) (T, error) 签名
-	wrappedProvider := func(ctx context.Context) (multiagent.BaseTeam, error) {
+	wrappedProvider := func(ctx context.Context) (maschema.BaseTeam, error) {
 		// AgentTeamProvider 签名为 func(ctx, card) → (BaseTeam, error)
 		// 此处 card 为 nil，由 provider 内部自行处理
 		return provider(ctx, nil)
@@ -81,7 +80,7 @@ func (m *AgentTeamMgr) AddAgentTeam(agentTeamID string, provider multiagent.Agen
 // RemoveAgentTeam 注销 Agent 团队提供者，返回被注销的 provider。
 //
 // 对应 Python: AgentTeamMgr.remove_agent_team(agent_team_id) → self._unregister_resource_provider(...)
-func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (multiagent.AgentTeamProvider, error) {
+func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (maschema.AgentTeamProvider, error) {
 	unwrapped, err := m.unregisterProvider(agentTeamID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).
@@ -97,7 +96,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (multiagent.AgentTeam
 	}
 
 	// 将 wrapped provider 还原为 AgentTeamProvider
-	provider := func(ctx context.Context, card maschema.TeamCardInterface) (multiagent.BaseTeam, error) {
+	provider := func(ctx context.Context, card maschema.TeamCardInterface) (maschema.BaseTeam, error) {
 		return unwrapped(ctx)
 	}
 
@@ -111,7 +110,7 @@ func (m *AgentTeamMgr) RemoveAgentTeam(agentTeamID string) (multiagent.AgentTeam
 // GetAgentTeam 获取 Agent 团队实例。
 //
 // 对应 Python: AgentTeamMgr.get_agent_team(agent_team_id) → await self._get_resource(...)
-func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (multiagent.BaseTeam, error) {
+func (m *AgentTeamMgr) GetAgentTeam(ctx context.Context, agentTeamID string) (maschema.BaseTeam, error) {
 	team, err := m.getResource(ctx, agentTeamID)
 	if err != nil {
 		logger.Error(logger.ComponentAgentCore).

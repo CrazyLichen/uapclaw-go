@@ -5,7 +5,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
-	multiagent "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -61,7 +60,7 @@ type AgentTeamEntry struct {
 	// Card 团队身份元数据
 	Card maschema.TeamCardInterface
 	// Provider 团队提供者
-	Provider multiagent.AgentTeamProvider
+	Provider maschema.AgentTeamProvider
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -10,7 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
-	multiagents "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -924,7 +923,7 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 // AddAgentTeam 注册 Agent 团队。
 //
 // 对应 Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
-func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider multiagents.AgentTeamProvider, opts ...ResourceOption) error {
+func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider maschema.AgentTeamProvider, opts ...ResourceOption) error {
 	if err := m.innerValidateProvider(provider, "team"); err != nil {
 		return err
 	}
@@ -934,15 +933,15 @@ func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider mul
 // RemoveAgentTeam 注销 Agent 团队。
 //
 // 对应 Python: ResourceManager.remove_agent_team(agent_team_id, **kwargs)
-func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) ([]multiagents.AgentTeamProvider, error) {
+func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOption) ([]maschema.AgentTeamProvider, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerRemoveResources(agentTeamIDs, "team", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
 	if err != nil {
 		return nil, err
 	}
-	removed := make([]multiagents.AgentTeamProvider, 0, len(results))
+	removed := make([]maschema.AgentTeamProvider, 0, len(results))
 	for _, r := range results {
-		if provider, ok := r.(multiagents.AgentTeamProvider); ok {
+		if provider, ok := r.(maschema.AgentTeamProvider); ok {
 			removed = append(removed, provider)
 		}
 	}
@@ -952,15 +951,15 @@ func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOpt
 // GetAgentTeam 获取 Agent 团队。
 //
 // 对应 Python: ResourceManager.get_agent_team(agent_team_id, **kwargs)
-func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, opts ...ResourceOption) ([]multiagents.BaseTeam, error) {
+func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, opts ...ResourceOption) ([]maschema.BaseTeam, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(ctx, agentTeamIDs, "team", o.Tag, o.TagMatchStrategy, o.Session)
 	if err != nil {
 		return nil, err
 	}
-	teams := make([]multiagents.BaseTeam, 0, len(results))
+	teams := make([]maschema.BaseTeam, 0, len(results))
 	for _, r := range results {
-		if team, ok := r.(multiagents.BaseTeam); ok {
+		if team, ok := r.(maschema.BaseTeam); ok {
 			teams = append(teams, team)
 		}
 	}
@@ -1156,7 +1155,7 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 		_ = interfaceURL
 		return m.registry.Agent().AddAgent(resourceID, provider)
 	case "team":
-		provider, ok := resource.(multiagents.AgentTeamProvider)
+		provider, ok := resource.(maschema.AgentTeamProvider)
 		if !ok {
 			return exception.BuildError(exception.StatusResourceProviderInvalid,
 				exception.WithParam("resource_type", "team"),
