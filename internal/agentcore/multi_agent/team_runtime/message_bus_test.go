@@ -46,7 +46,7 @@ func TestNewMessageBus(t *testing.T) {
 
 	bus := NewMessageBus(*config, runtime, executor)
 	if bus == nil {
-		t.Error("NewMessageBus 返回 nil")
+		t.Fatal("NewMessageBus 返回 nil")
 	}
 	if bus.teamID != "test-team" {
 		t.Errorf("teamID = %q, want %q", bus.teamID, "test-team")
@@ -303,7 +303,7 @@ func TestMessageBus_ensureSubscription(t *testing.T) {
 
 	bus := NewMessageBus(*config, runtime, executor)
 	_ = bus.Start(context.Background())
-	defer bus.Stop(context.Background())
+	defer func() { _ = bus.Stop(context.Background()) }()
 
 	t.Run("P2P topic 订阅", func(t *testing.T) {
 		topic := bus.getP2PTopic("session-1")

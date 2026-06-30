@@ -15,7 +15,7 @@ func TestNewMessageRouter(t *testing.T) {
 
 	router := NewMessageRouter(sm, runtime, executor)
 	if router == nil {
-		t.Error("NewMessageRouter 返回 nil")
+		t.Fatal("NewMessageRouter 返回 nil")
 	}
 	if router.subscriptionManager != sm {
 		t.Error("subscriptionManager 未正确设置")

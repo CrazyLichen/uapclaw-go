@@ -223,7 +223,7 @@ func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*ag
 	card, ok := tr.agentCards[agentID]
 	if !ok {
 		tr.mu.Unlock()
-		return nil, fmt.Errorf("Agent %s 不存在", agentID)
+		return nil, fmt.Errorf("agent %s 不存在", agentID)
 	}
 	delete(tr.agentCards, agentID)
 	tr.mu.Unlock()
@@ -261,7 +261,7 @@ func (tr *TeamRuntime) GetAgentCard(agentID string) (*agentschema.AgentCard, err
 
 	card, ok := tr.agentCards[agentID]
 	if !ok {
-		return nil, fmt.Errorf("Agent %s 不存在", agentID)
+		return nil, fmt.Errorf("agent %s 不存在", agentID)
 	}
 	return card, nil
 }
