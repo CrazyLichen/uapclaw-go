@@ -79,7 +79,8 @@ type ToolOption func(*ToolCallOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ErrStreamNotSupported 工具不支持流式调用时返回的错误。
+// 编译时验证 ToolCard 满足 schema.CardInterface。
+var _ schema.CardInterface = (*ToolCard)(nil)
 //
 // 对应 Python: TOOL_STREAM_NOT_SUPPORTED (182010)
 var ErrStreamNotSupported = exception.BuildError(

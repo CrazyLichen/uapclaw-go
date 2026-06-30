@@ -36,6 +36,9 @@ type AgentCardOption func(*AgentCard)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 编译时验证 AgentCard 满足 schema.CardInterface。
+var _ schema.CardInterface = (*AgentCard)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithInputParams 从 Go struct 类型自动反射提取输入参数定义。

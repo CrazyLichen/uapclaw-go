@@ -92,6 +92,11 @@ type McpToolCardOption func(*McpToolCard)
 // NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。
 const NoTimeout = -1
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 McpToolCard 满足 schema.CardInterface。
+var _ schema.CardInterface = (*McpToolCard)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithRetryTimes 设置重试次数。
