@@ -16,17 +16,13 @@ import (
 // 需要 Subscriptions 时，直接调用 GetSubscriptions()，
 // 非 EventDrivenTeamCard 返回 nil。
 //
+// 嵌入 schema.CardInterface 提供 GetID/GetName/GetDescription/String 只读方法。
+//
 // 对应 Python: BaseTeam.card 属性的类型声明 TeamCard（Python 运行时允许 TeamCard 子类实例）。
 // Go 中用接口实现多态，Python 中用继承实现。
 type TeamCardInterface interface {
-	// ── BaseCard 层 ──
-
-	// GetID 返回唯一标识符
-	GetID() string
-	// GetName 返回名称
-	GetName() string
-	// GetDescription 返回描述信息
-	GetDescription() string
+	// ── 通用（嵌入 CardInterface）──
+	schema.CardInterface
 
 	// ── TeamCard 层 ──
 
@@ -44,11 +40,6 @@ type TeamCardInterface interface {
 	// GetSubscriptions 返回订阅映射。
 	// TeamCard 实现返回 nil；EventDrivenTeamCard 实现返回实际值。
 	GetSubscriptions() map[string][]string
-
-	// ── 通用 ──
-
-	// String 返回简洁的身份描述
-	String() string
 }
 
 // TeamCard 团队身份卡片，嵌入 BaseCard 提供统一身份标识。
@@ -115,6 +106,12 @@ var _ TeamCardInterface = (*TeamCard)(nil)
 
 // 编译时验证 EventDrivenTeamCard 满足 TeamCardInterface。
 var _ TeamCardInterface = (*EventDrivenTeamCard)(nil)
+
+// 编译时验证 TeamCard 满足 schema.CardInterface。
+var _ schema.CardInterface = (*TeamCard)(nil)
+
+// 编译时验证 EventDrivenTeamCard 满足 schema.CardInterface。
+var _ schema.CardInterface = (*EventDrivenTeamCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

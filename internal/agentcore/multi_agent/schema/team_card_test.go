@@ -181,6 +181,18 @@ func TestTeamCardInterface_TeamCard满足接口(t *testing.T) {
 	}
 }
 
+// TestTeamCard_满足CardInterface 验证 *TeamCard 满足 schema.CardInterface。
+func TestTeamCard_满足CardInterface(t *testing.T) {
+	card := NewTeamCard(WithTeamCardID("tc-1"), WithTeamCardName("tc-name"))
+	var iface schema.CardInterface = card
+	if iface.GetID() != "tc-1" {
+		t.Errorf("GetID() = %q, want %q", iface.GetID(), "tc-1")
+	}
+	if iface.GetName() != "tc-name" {
+		t.Errorf("GetName() = %q, want %q", iface.GetName(), "tc-name")
+	}
+}
+
 // TestTeamCard_GetSubscriptions_返回nil 验证 TeamCard.GetSubscriptions() 返回 nil。
 func TestTeamCard_GetSubscriptions_返回nil(t *testing.T) {
 	card := NewTeamCard()
@@ -291,6 +303,18 @@ func TestEventDrivenTeamCard_GetSubscriptions(t *testing.T) {
 	card := NewEventDrivenTeamCard(WithSubscriptions(subs))
 	if got := card.GetSubscriptions(); len(got) != 1 || got["agent1"][0] != "topic1" {
 		t.Errorf("GetSubscriptions() = %v, want agent1→[topic1]", got)
+	}
+}
+
+// TestEventDrivenTeamCard_满足CardInterface 验证 *EventDrivenTeamCard 满足 schema.CardInterface。
+func TestEventDrivenTeamCard_满足CardInterface(t *testing.T) {
+	card := NewEventDrivenTeamCard(WithEDID("ed-1"), WithEDName("ed-name"))
+	var iface schema.CardInterface = card
+	if iface.GetID() != "ed-1" {
+		t.Errorf("GetID() = %q, want %q", iface.GetID(), "ed-1")
+	}
+	if iface.GetName() != "ed-name" {
+		t.Errorf("GetName() = %q, want %q", iface.GetName(), "ed-name")
 	}
 }
 
