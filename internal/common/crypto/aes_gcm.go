@@ -11,6 +11,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AesGcmCrypt AES-256-GCM 加密实现。
+//
+// 密文格式：hex(nonce) + hex(tag) + hex(ciphertext)，与 Python 完全兼容。
+// 对应 Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
+type AesGcmCrypt struct{}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -30,14 +38,6 @@ const (
 	// 对应 Python: CryptUtils.AES_GCM_CRYPT_NAME = "aes_gcm"
 	AesGcmName = "aes_gcm"
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// AesGcmCrypt AES-256-GCM 加密实现。
-//
-// 密文格式：hex(nonce) + hex(tag) + hex(ciphertext)，与 Python 完全兼容。
-// 对应 Python: openjiuwen/core/common/security/crypt_utils.py AesGcmCrypt
-type AesGcmCrypt struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

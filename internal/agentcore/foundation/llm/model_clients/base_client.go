@@ -35,14 +35,6 @@ type BaseOutputParser interface {
 	StreamParse(chunks <-chan any) <-chan StreamParsedResult
 }
 
-// StreamParsedResult 流式解析结果。
-type StreamParsedResult struct {
-	// Content 解析结果
-	Content any
-	// Error 解析错误
-	Error error
-}
-
 // BaseModelClient LLM 模型客户端接口，所有模型客户端实现必须满足此接口。
 //
 // 对应 Python: openjiuwen/core/foundation/llm/model_clients/base_model_client.py (BaseModelClient)
@@ -73,6 +65,14 @@ type BaseModelClient interface {
 	// 零副作用判断：仅 InferenceAffinity 返回 true，其他客户端返回 false。
 	// 对应 Python: Model.supports_kv_cache_release() 中 isinstance(self._client, InferenceAffinityModelClient)
 	SupportsKVCacheRelease() bool
+}
+
+// StreamParsedResult 流式解析结果。
+type StreamParsedResult struct {
+	// Content 解析结果
+	Content any
+	// Error 解析错误
+	Error error
 }
 
 // BaseClientEmbed BaseModelClient 的共享实现，具体客户端嵌入此结构体复用通用逻辑。

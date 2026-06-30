@@ -395,7 +395,7 @@ func (r *ProcessorStateRecorder) stateToMap(state *schema.ContextCompressionStat
 		"compact_summary": state.CompactSummary,
 	}
 
-	// Before
+	// 前置处理
 	m["before"] = map[string]any{
 		"time":            state.Before.Time,
 		"messages":        state.Before.Messages,
@@ -422,7 +422,7 @@ func (r *ProcessorStateRecorder) stateToMap(state *schema.ContextCompressionStat
 		}
 	}
 
-	// Statistic
+	// 统计
 	m["statistic"] = map[string]any{
 		"total_messages":           state.Statistic.TotalMessages,
 		"total_tokens":             state.Statistic.TotalTokens,

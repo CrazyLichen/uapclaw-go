@@ -1,5 +1,7 @@
 package exception
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // =============================================================================================================
 // 100. Workflow 100000–100999
 // =============================================================================================================
@@ -151,7 +153,7 @@ var (
 		"component sub_workflow param is invalid, error='{reason}'")
 )
 
-// LLMComponent 101000 - 101049
+// LLM 组件 101000 - 101049
 
 var (
 	// StatusComponentLLMTemplateConfigError LLM 模板配置错误
@@ -188,7 +190,7 @@ var (
 		"component llm_config is invalid, reason: {error_msg}")
 )
 
-// IntentDetectionComponent 101050 - 101069
+// 意图检测组件 101050 - 101069
 
 var (
 	// StatusComponentIntentDetectionInputParamError 意图检测输入参数错误
@@ -205,7 +207,7 @@ var (
 		"component intent_detection_invoke call failed, reason: {error_msg}")
 )
 
-// QuestionComponent 101070 - 101099
+// 问题组件 101070 - 101099
 
 var (
 	// StatusComponentQuestionerInputParamError 提问组件输入参数错误
@@ -238,7 +240,7 @@ var (
 		"component questioner_execution process error, reason: {error_msg}")
 )
 
-// KnowledgeRetrievalComponent 101100 - 101149
+// 知识检索组件 101100 - 101149
 
 var (
 	// StatusComponentKnowledgeRetrievalInvokeCallFailed 知识检索组件调用失败
@@ -259,7 +261,7 @@ var (
 		"component knowledge_retrieval llm_model initialization failed, reason: {error_msg}")
 )
 
-// MemoryWriteComponent 101150 - 101199
+// 记忆写入组件 101150 - 101199
 
 var (
 	// StatusComponentMemoryWriteInputParamError 记忆写入输入参数错误
@@ -272,7 +274,7 @@ var (
 		"component memory_write invoke call failed, reason: {error_msg}")
 )
 
-// MemoryRetrievalComponent 101200 - 101249
+// 记忆检索组件 101200 - 101249
 
 var (
 	// StatusComponentMemoryRetrievalInputParamError 记忆检索输入参数错误
@@ -285,7 +287,7 @@ var (
 		"component memory_retrieval invoke call failed, reason: {error_msg}")
 )
 
-// ToolComponent 102000 - 102019
+// 工具组件 102000 - 102019
 
 var (
 	// StatusComponentToolExecutionError 工具组件执行错误

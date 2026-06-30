@@ -18,8 +18,10 @@ import (
 // 线程安全，使用 RWMutex 保护内部 map。
 type ClientRegistry struct {
 	mu        sync.RWMutex
-	factories map[string]ClientFactory // key: "{clientType}_{clientName}"
+	factories map[string]ClientFactory // 键: "{客户端类型}_{客户端名称}"
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ClientFactory 客户端工厂函数类型。
 //

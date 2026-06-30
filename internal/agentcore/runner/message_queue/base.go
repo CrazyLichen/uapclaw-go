@@ -4,67 +4,6 @@ import "context"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// QueueMessage 火忘消息，发布后不等待处理完成。
-// 实现 QueueMessageBase 接口。
-//
-// 对应 Python: openjiuwen/core/runner/message_queue_base.py (QueueMessage)
-type QueueMessage struct {
-	// MessageID 消息唯一标识
-	MessageID string
-	// Payload 消息载荷
-	Payload map[string]any
-	// ErrorCode 错误码
-	ErrorCode int
-	// ErrorMsg 错误信息
-	ErrorMsg string
-}
-
-// InvokeQueueMessage 同步消息，发布后等待处理完成。
-// 实现 QueueMessageBase 接口。
-//
-// 对应 Python: openjiuwen/core/runner/message_queue_base.py (InvokeQueueMessage)
-// Python 中 InvokeQueueMessage 继承 QueueMessage 并增加 response Future。
-// Go 中使用 channel 实现等价的同步等待语义。
-type InvokeQueueMessage struct {
-	// MessageID 消息唯一标识
-	MessageID string
-	// Payload 消息载荷
-	Payload map[string]any
-	// ErrorCode 错误码
-	ErrorCode int
-	// ErrorMsg 错误信息
-	ErrorMsg string
-	// response 处理结果通道
-	response chan invokeResponse
-}
-
-// StreamQueueMessage 流式消息，发布后等待流式处理结果。
-// 实现 QueueMessageBase 接口。
-//
-// 对应 Python: openjiuwen/core/runner/message_queue_base.py (StreamQueueMessage)
-type StreamQueueMessage struct {
-	// MessageID 消息唯一标识
-	MessageID string
-	// Payload 消息载荷
-	Payload map[string]any
-	// ErrorCode 错误码
-	ErrorCode int
-	// ErrorMsg 错误信息
-	ErrorMsg string
-	// response 处理结果通道
-	response chan invokeResponse
-}
-
-// invokeResponse handler 处理结果
-type invokeResponse struct {
-	// result 处理结果
-	result any
-	// err 处理错误
-	err error
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // QueueMessageBase 消息基础接口，统一 Produce 参数类型。
 //
 // 对齐 Python QueueMessage 继承体系：
@@ -124,6 +63,65 @@ type MessageQueueBase interface {
 	//
 	// 对齐 Python: produce_message(topic, message) 由 isinstance(message, InvokeQueueMessage) 判断
 	Produce(ctx context.Context, topic string, msg QueueMessageBase) error
+}
+
+// QueueMessage 火忘消息，发布后不等待处理完成。
+// 实现 QueueMessageBase 接口。
+//
+// 对应 Python: openjiuwen/core/runner/message_queue_base.py (QueueMessage)
+type QueueMessage struct {
+	// MessageID 消息唯一标识
+	MessageID string
+	// Payload 消息载荷
+	Payload map[string]any
+	// ErrorCode 错误码
+	ErrorCode int
+	// ErrorMsg 错误信息
+	ErrorMsg string
+}
+
+// InvokeQueueMessage 同步消息，发布后等待处理完成。
+// 实现 QueueMessageBase 接口。
+//
+// 对应 Python: openjiuwen/core/runner/message_queue_base.py (InvokeQueueMessage)
+// Python 中 InvokeQueueMessage 继承 QueueMessage 并增加 response Future。
+// Go 中使用 channel 实现等价的同步等待语义。
+type InvokeQueueMessage struct {
+	// MessageID 消息唯一标识
+	MessageID string
+	// Payload 消息载荷
+	Payload map[string]any
+	// ErrorCode 错误码
+	ErrorCode int
+	// ErrorMsg 错误信息
+	ErrorMsg string
+	// response 处理结果通道
+	response chan invokeResponse
+}
+
+// StreamQueueMessage 流式消息，发布后等待流式处理结果。
+// 实现 QueueMessageBase 接口。
+//
+// 对应 Python: openjiuwen/core/runner/message_queue_base.py (StreamQueueMessage)
+type StreamQueueMessage struct {
+	// MessageID 消息唯一标识
+	MessageID string
+	// Payload 消息载荷
+	Payload map[string]any
+	// ErrorCode 错误码
+	ErrorCode int
+	// ErrorMsg 错误信息
+	ErrorMsg string
+	// response 处理结果通道
+	response chan invokeResponse
+}
+
+// invokeResponse handler 处理结果
+type invokeResponse struct {
+	// result 处理结果
+	result any
+	// err 处理错误
+	err error
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

@@ -697,7 +697,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 		protectedRecentStart = lastTargetIdx + 1
 	}
 
-	// Reference lines
+	// 参考行数
 	var referenceLines []string
 	for idx, msg := range contextMessages {
 		if !targetIndices[idx] && idx < protectedRecentStart {
@@ -705,7 +705,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 		}
 	}
 
-	// Target lines
+	// 目标行数
 	var targetLines []string
 	for _, t := range targets {
 		targetLines = append(targetLines,
@@ -722,7 +722,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 		targetLines = append(targetLines, "")
 	}
 
-	// Recent lines
+	// 近期行数
 	var recentLines []string
 	for idx := protectedRecentStart; idx < len(contextMessages); idx++ {
 		recentLines = append(recentLines, rlc.serializeMessage(idx, contextMessages[idx]))

@@ -11,12 +11,21 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// MarkdownOutputParser Markdown 输出解析器，将 LLM 输出解析为结构化 Markdown 元素。
+//
+// 支持提取的元素类型：headers, code_blocks, inline_code, links, images, tables, lists
+//
+// 对应 Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
+type MarkdownOutputParser struct{}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // mdLogComponent markdown output_parser 包日志组件标识（AgentCore 层）。
 const mdLogComponent = logger.ComponentAgentCore
 
-// ──────────────────────────── 正则 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// headerRegexp 匹配 Markdown 标题。
@@ -46,15 +55,6 @@ var (
 	// orderedListRegexp 匹配有序列表项。
 	orderedListRegexp = regexp.MustCompile(`^\s*\d+\.\s+`)
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// MarkdownOutputParser Markdown 输出解析器，将 LLM 输出解析为结构化 Markdown 元素。
-//
-// 支持提取的元素类型：headers, code_blocks, inline_code, links, images, tables, lists
-//
-// 对应 Python: openjiuwen/core/foundation/llm/output_parsers/markdown_output_parser.py (MarkdownOutputParser)
-type MarkdownOutputParser struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

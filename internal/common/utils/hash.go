@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // GenerateKey 根据密钥、地址和提供商生成 SHA256 哈希键。
 //
 // 对应 Python: generate_key(api_key, api_base, model_provider)

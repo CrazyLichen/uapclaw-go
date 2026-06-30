@@ -1,31 +1,5 @@
 package output_parsers
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// MarkdownElementType Markdown 元素类型常量。
-//
-// 对应 Python: MarkdownElementType
-type MarkdownElementType string
-
-const (
-	// MarkdownHeaderType 标题元素
-	MarkdownHeaderType MarkdownElementType = "header"
-	// MarkdownCodeBlockType 代码块元素
-	MarkdownCodeBlockType MarkdownElementType = "code_block"
-	// MarkdownInlineCodeType 行内代码元素
-	MarkdownInlineCodeType MarkdownElementType = "inline_code"
-	// MarkdownLinkType 链接元素
-	MarkdownLinkType MarkdownElementType = "link"
-	// MarkdownImageType 图片元素
-	MarkdownImageType MarkdownElementType = "image"
-	// MarkdownTableType 表格元素
-	MarkdownTableType MarkdownElementType = "table"
-	// MarkdownListType 列表元素
-	MarkdownListType MarkdownElementType = "list"
-	// MarkdownTextType 纯文本元素
-	MarkdownTextType MarkdownElementType = "text"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MarkdownElement 单个 Markdown 元素。
@@ -65,3 +39,29 @@ type MarkdownContent struct {
 	// Lists 列表列表
 	Lists []string `json:"lists"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// MarkdownElementType Markdown 元素类型常量。
+//
+// 对应 Python: MarkdownElementType
+type MarkdownElementType string
+
+const (
+	// MarkdownHeaderType 标题元素
+	MarkdownHeaderType MarkdownElementType = "header"
+	// MarkdownCodeBlockType 代码块元素
+	MarkdownCodeBlockType MarkdownElementType = "code_block"
+	// MarkdownInlineCodeType 行内代码元素
+	MarkdownInlineCodeType MarkdownElementType = "inline_code"
+	// MarkdownLinkType 链接元素
+	MarkdownLinkType MarkdownElementType = "link"
+	// MarkdownImageType 图片元素
+	MarkdownImageType MarkdownElementType = "image"
+	// MarkdownTableType 表格元素
+	MarkdownTableType MarkdownElementType = "table"
+	// MarkdownListType 列表元素
+	MarkdownListType MarkdownElementType = "list"
+	// MarkdownTextType 纯文本元素
+	MarkdownTextType MarkdownElementType = "text"
+)

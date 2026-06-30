@@ -27,7 +27,7 @@ import (
 // 始终使用自适应压缩生成上下文感知摘要。
 // 触发基于新添加消息的角色和大小是否超过 largeMessageThreshold。
 //
-// MessagesThreshold、TokensThreshold、MessagesToKeep、KeepLastRound
+// 消息阈值、令牌阈值、保留消息数、保留最后轮次
 // 为兼容字段，自适应压缩不使用这些参数进行触发或候选选择。
 //
 // 对应 Python: MessageSummaryOffloaderConfig (pydantic.BaseModel)

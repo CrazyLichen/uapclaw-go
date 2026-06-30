@@ -10,6 +10,22 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Tool 工具接口，所有工具类型（LocalFunction/MCPTool/RestfulApi）的统一抽象。
+//
+// Tool 接口只定义纯业务方法，生命周期回调由 LifecycleTool 包装器处理。
+//
+// 对应 Python: openjiuwen/core/foundation/tool/base.py (Tool)
+type Tool interface {
+	// Card 返回工具的配置卡片
+	Card() *ToolCard
+	// Invoke 一次性执行工具，返回完整结果。
+	// 不支持 Invoke 的工具在 Invoke 方法中返回 ErrInvokeNotSupported。
+	Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error)
+	// Stream 流式执行工具，逐步返回结果块。
+	// 不支持 Stream 的工具返回 ErrStreamNotSupported 错误。
+	Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
+}
+
 // ToolCard 工具配置卡片，嵌入 BaseCard，增加输入参数定义和扩展属性。
 //
 // 对应 Python: openjiuwen/core/foundation/tool/base.py (ToolCard)
@@ -54,22 +70,6 @@ type StreamChunk struct {
 	Error error
 	// Done true 表示流正常结束（Data 为空）
 	Done bool
-}
-
-// Tool 工具接口，所有工具类型（LocalFunction/MCPTool/RestfulApi）的统一抽象。
-//
-// Tool 接口只定义纯业务方法，生命周期回调由 LifecycleTool 包装器处理。
-//
-// 对应 Python: openjiuwen/core/foundation/tool/base.py (Tool)
-type Tool interface {
-	// Card 返回工具的配置卡片
-	Card() *ToolCard
-	// Invoke 一次性执行工具，返回完整结果。
-	// 不支持 Invoke 的工具在 Invoke 方法中返回 ErrInvokeNotSupported。
-	Invoke(ctx context.Context, inputs map[string]any, opts ...ToolOption) (map[string]any, error)
-	// Stream 流式执行工具，逐步返回结果块。
-	// 不支持 Stream 的工具返回 ErrStreamNotSupported 错误。
-	Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

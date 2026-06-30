@@ -505,7 +505,7 @@ func getEncoder(name string) encoding.Encoding {
 		return charmap.ISO8859_5
 	case "windows-1252", "cp1252":
 		return charmap.Windows1252
-	// UTF-16
+	// UTF-16 编码
 	case "utf-16":
 		return unicode.UTF16(unicode.LittleEndian, unicode.UseBOM)
 	case "utf-16le":

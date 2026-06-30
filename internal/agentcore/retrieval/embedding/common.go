@@ -21,6 +21,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// MultimodalEmbedder 多模态嵌入接口，支持文本+图片+音频+视频。
+type MultimodalEmbedder interface {
+	embedding.BaseEmbedding
+	// EmbedMultimodal 将多模态文档转换为向量。
+	EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error)
+}
+
 // EmbeddingConfig 嵌入模型配置。
 //
 // 对应 Python: EmbeddingConfig
@@ -37,13 +44,6 @@ type EmbeddingConfig struct {
 type MultimodalOption struct {
 	// Instruction 多模态嵌入指令（VLLM 使用）
 	Instruction string
-}
-
-// MultimodalEmbedder 多模态嵌入接口，支持文本+图片+音频+视频。
-type MultimodalEmbedder interface {
-	embedding.BaseEmbedding
-	// EmbedMultimodal 将多模态文档转换为向量。
-	EmbedMultimodal(ctx context.Context, doc *common.MultimodalDocument, opts ...MultimodalOption) ([]float64, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

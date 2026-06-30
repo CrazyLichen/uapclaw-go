@@ -355,7 +355,7 @@ func resolveDescription(jsonName string, tags schemaTagMap) string {
 }
 
 // humanizeName 将变量名转换为人类可读的描述文本。
-// snake_case → "search query"，camelCase/PascalCase → "user name"。
+// snake_case → "搜索查询"，camelCase/PascalCase → "用户名"。
 // 对常见缩写（id, url, api 等）转大写，与 Python _humanize_name 行为一致。
 // 对应 Python: CallableSchemaExtractor._humanize_name()
 func humanizeName(name string) string {

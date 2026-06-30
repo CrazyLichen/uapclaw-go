@@ -926,7 +926,7 @@ func buildInputParams(params []openapiParameterInfo, reqBody *openapiRequestBody
 	var result []*schema.Param
 
 	// 收集 path/query/header 参数名，用于冲突检测
-	locationParamNames := make(map[string]string) // name → location
+	locationParamNames := make(map[string]string) // 名称 → 位置
 	for _, p := range params {
 		if p.in == "path" || p.in == "query" || p.in == "header" {
 			locationParamNames[p.name] = p.in
@@ -1072,7 +1072,7 @@ func oapiMapToParam(name string, schemaMap map[string]any, required bool) *schem
 		p.Nullable = true
 	}
 
-	// Enum
+	// 枚举
 	if enumVals, ok := schemaMap["enum"].([]any); ok && len(enumVals) > 0 {
 		p.Enum = enumVals
 	}
@@ -1387,7 +1387,7 @@ func convertOpenAPISchemaToJSONSchema(schema map[string]any, openAPIVersion stri
 		}
 	}
 
-	// oneOf → anyOf
+	// oneOf 转 anyOf
 	if _, hasOneOf := result["oneOf"]; hasOneOf {
 		result["anyOf"] = result["oneOf"]
 		delete(result, "oneOf")
@@ -1435,7 +1435,7 @@ func convertOpenAPISchemaToJSONSchema(schema map[string]any, openAPIVersion stri
 //
 // 对应 Python: fastmcp.utilities.openapi.formatters.format_deep_object_parameter
 //
-// OpenAPI 3.0 deepObject style + explode=true：
+// OpenAPI 3.0 deepObject 样式 + explode=true：
 //   - 输入：{"id": "123", "type": "user"}, paramName="filter"
 //   - 输出：{"filter[id]": "123", "filter[type]": "user"}
 func formatDeepObjectParameter(paramValue map[string]any, paramName string) map[string]string {

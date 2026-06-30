@@ -7,6 +7,31 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// LoggingLevels 各输出通道的日志级别配置。
+// 对应 Python: LoggingLevels 数据类
+type LoggingLevels struct {
+	// Logger 根 Logger 级别（取各文件级别的最小值）
+	Logger LogLevel
+	// Console 控制台级别
+	Console LogLevel
+	// Common common.log 级别（基础设施层：config/workspace/dotenv/version）
+	Common LogLevel
+	// Gateway gateway.log 级别
+	Gateway LogLevel
+	// Channel channel.log 级别
+	Channel LogLevel
+	// AgentServer agent_server.log 级别
+	AgentServer LogLevel
+	// Permissions permissions.log 级别
+	Permissions LogLevel
+	// AgentCore agent_core.log 级别（agentcore/*）
+	AgentCore LogLevel
+	// Full full.log 级别
+	Full LogLevel
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LogLevel 日志级别枚举，与 zerolog.Level 对应。
@@ -25,9 +50,6 @@ const (
 	// LogLevelFatal 致命级别
 	LogLevelFatal
 )
-
-// logLevelStrings LogLevel 枚举到字符串的映射。
-var logLevelStrings = [...]string{"debug", "info", "warn", "error", "fatal"}
 
 // String 返回日志级别的字符串表示。
 func (l LogLevel) String() string {
@@ -68,30 +90,10 @@ func (l LogLevel) ToZerologLevel() zerolog.Level {
 	}
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
-// LoggingLevels 各输出通道的日志级别配置。
-// 对应 Python: LoggingLevels 数据类
-type LoggingLevels struct {
-	// Logger 根 Logger 级别（取各文件级别的最小值）
-	Logger LogLevel
-	// Console 控制台级别
-	Console LogLevel
-	// Common common.log 级别（基础设施层：config/workspace/dotenv/version）
-	Common LogLevel
-	// Gateway gateway.log 级别
-	Gateway LogLevel
-	// Channel channel.log 级别
-	Channel LogLevel
-	// AgentServer agent_server.log 级别
-	AgentServer LogLevel
-	// Permissions permissions.log 级别
-	Permissions LogLevel
-	// AgentCore agent_core.log 级别（agentcore/*）
-	AgentCore LogLevel
-	// Full full.log 级别
-	Full LogLevel
-}
+// logLevelStrings LogLevel 枚举到字符串的映射。
+var logLevelStrings = [...]string{"debug", "info", "warn", "error", "fatal"}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

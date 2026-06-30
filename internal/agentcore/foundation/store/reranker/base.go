@@ -9,6 +9,26 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// BaseReranker 重排序模型抽象接口，定义文档相关性重排序操作。
+//
+// 所有重排序模型实现必须满足此接口。给定查询和一组文档，
+// 返回文档到相关性分数的映射，分数越高表示越相关。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (Reranker)
+type BaseReranker interface {
+	// Rerank 对字符串文档列表进行异步重排序，返回文档到相关性分数的映射。
+	Rerank(ctx context.Context, query string, docs []string, opts ...RerankOption) (map[string]float64, error)
+
+	// RerankDocs 对 Document 列表进行异步重排序，返回文档 ID 到相关性分数的映射。
+	RerankDocs(ctx context.Context, query string, docs []*Document, opts ...RerankOption) (map[string]float64, error)
+
+	// RerankSync 对字符串文档列表进行同步重排序。
+	RerankSync(ctx context.Context, query string, docs []string, opts ...RerankOption) (map[string]float64, error)
+
+	// RerankDocsSync 对 Document 列表进行同步重排序。
+	RerankDocsSync(ctx context.Context, query string, docs []*Document, opts ...RerankOption) (map[string]float64, error)
+}
+
 // Document 文档数据模型，表示待重排序的文档。
 //
 // 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (Document)
@@ -56,26 +76,6 @@ type RerankOption struct {
 	// MultimodalQuery 多模态查询文档，用于 DashScope 等支持多模态查询的重排序器
 	// 类型为 *common.MultimodalDocument，使用 any 避免循环依赖
 	MultimodalQuery any
-}
-
-// BaseReranker 重排序模型抽象接口，定义文档相关性重排序操作。
-//
-// 所有重排序模型实现必须满足此接口。给定查询和一组文档，
-// 返回文档到相关性分数的映射，分数越高表示越相关。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_reranker.py (Reranker)
-type BaseReranker interface {
-	// Rerank 对字符串文档列表进行异步重排序，返回文档到相关性分数的映射。
-	Rerank(ctx context.Context, query string, docs []string, opts ...RerankOption) (map[string]float64, error)
-
-	// RerankDocs 对 Document 列表进行异步重排序，返回文档 ID 到相关性分数的映射。
-	RerankDocs(ctx context.Context, query string, docs []*Document, opts ...RerankOption) (map[string]float64, error)
-
-	// RerankSync 对字符串文档列表进行同步重排序。
-	RerankSync(ctx context.Context, query string, docs []string, opts ...RerankOption) (map[string]float64, error)
-
-	// RerankDocsSync 对 Document 列表进行同步重排序。
-	RerankDocsSync(ctx context.Context, query string, docs []*Document, opts ...RerankOption) (map[string]float64, error)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

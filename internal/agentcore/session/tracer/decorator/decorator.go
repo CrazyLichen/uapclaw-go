@@ -14,6 +14,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
+// 对齐 Python model.config.model_config.model_name 访问方式。
+// 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
+type ModelConfigProvider interface {
+	// GetModelName 获取模型名称
+	GetModelName() string
+}
+
 // TracerSession 追踪装饰所需的会话最小接口。
 //
 // 从 tracer 父包抽出至 decorator 子包，避免 tracer → single_agent/interfaces 循环依赖。
@@ -69,14 +77,6 @@ type TracedWorkflow struct {
 	agentSpan *tracer.TraceAgentSpan
 	// instanceInfo 实例信息
 	instanceInfo map[string]any
-}
-
-// ModelConfigProvider 模型配置提供者接口，用于从模型客户端获取模型名称。
-// 对齐 Python model.config.model_config.model_name 访问方式。
-// 具体的模型客户端（如 OpenAIModelClient）嵌入 BaseClientEmbed，实现此接口。
-type ModelConfigProvider interface {
-	// GetModelName 获取模型名称
-	GetModelName() string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -11,15 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent output_parsers 包日志组件标识（AgentCore 层）。
-const logComponent = logger.ComponentAgentCore
-
-// jsonCodeBlockRegexp 匹配 markdown 代码块中的 JSON。
-// 对齐 Python: re.search(r"```json\n(.*?)```", text, re.DOTALL)
-var jsonCodeBlockRegexp = regexp.MustCompile("(?s)```json\n(.*?)```")
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // JsonOutputParser JSON 输出解析器，从 LLM 输出中提取 JSON 数据。
@@ -30,6 +21,17 @@ var jsonCodeBlockRegexp = regexp.MustCompile("(?s)```json\n(.*?)```")
 //
 // 对应 Python: openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py (JsonOutputParser)
 type JsonOutputParser struct{}
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent output_parsers 包日志组件标识（AgentCore 层）。
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// jsonCodeBlockRegexp 匹配 markdown 代码块中的 JSON。
+// 对齐 Python: re.search(r"```json\n(.*?)```", text, re.DOTALL)
+var jsonCodeBlockRegexp = regexp.MustCompile("(?s)```json\n(.*?)```")
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

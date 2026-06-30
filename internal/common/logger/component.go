@@ -26,9 +26,6 @@ const (
 	ComponentAgentCore
 )
 
-// componentStrings Component 枚举到字符串的映射。
-var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions", "agent_core"}
-
 // String 返回组件的字符串表示。
 func (c Component) String() string {
 	if c < 0 || int(c) >= len(componentStrings) {
@@ -81,6 +78,21 @@ func (c Component) LogFileName() string {
 	}
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// componentStrings Component 枚举到字符串的映射。
+var componentStrings = [...]string{"common", "gateway", "channel", "agent_server", "permissions", "agent_core"}
+
+// 确保 Component 在编译时实现所需接口。
+var (
+	_ fmt.Stringer     = ComponentGateway
+	_ fmt.GoStringer   = ComponentGateway
+	_ json.Marshaler   = ComponentGateway
+	_ json.Unmarshaler = (*Component)(nil)
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // allComponents 返回所有组件枚举值，用于遍历。
 func allComponents() []Component {
 	return []Component{ComponentCommon, ComponentGateway, ComponentChannel, ComponentAgentServer, ComponentPermissions, ComponentAgentCore}
@@ -97,11 +109,3 @@ func componentFromString(name string) Component {
 	}
 	return ComponentCommon
 }
-
-// ensure Component implements required interfaces at compile time.
-var (
-	_ fmt.Stringer     = ComponentGateway
-	_ fmt.GoStringer   = ComponentGateway
-	_ json.Marshaler   = ComponentGateway
-	_ json.Unmarshaler = (*Component)(nil)
-)

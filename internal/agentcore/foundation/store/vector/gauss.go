@@ -17,6 +17,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// dbClient 封装 pgxpool.Pool 的查询方法，用于依赖注入和测试 mock。
+// *pgxpool.Pool 天然实现此接口。
+type dbClient interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Close()
+}
+
 // gaussCollMeta GaussDB 集合元数据缓存
 type gaussCollMeta struct {
 	// DistanceMetric 距离度量类型
@@ -27,15 +36,6 @@ type gaussCollMeta struct {
 	VectorDim int
 	// SchemaVersion schema 版本
 	SchemaVersion string
-}
-
-// dbClient 封装 pgxpool.Pool 的查询方法，用于依赖注入和测试 mock。
-// *pgxpool.Pool 天然实现此接口。
-type dbClient interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Close()
 }
 
 // GaussVectorStore 基于 GaussDB 的向量存储实现。

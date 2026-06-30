@@ -29,10 +29,12 @@ type ToolCall struct {
 	Index int `json:"index,omitempty"`
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ToolCallOption ToolCall 构造选项函数。
 type ToolCallOption func(*ToolCall)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithToolCallIndex 设置工具调用索引。
 func WithToolCallIndex(index int) ToolCallOption {

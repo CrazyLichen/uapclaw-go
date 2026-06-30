@@ -14,6 +14,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
+// interaction.GraphInterrupt 隐式满足此接口。
+type graphInterrupter interface {
+	isGraphInterrupt()
+}
+
 // traceBaseHandler 追踪基础处理器，对应 Python TraceBaseHandler。
 // 提供 FormatData 抽象方法、EmitStreamWriter/GetElapsedTime/GetNodeStatus 通用方法。
 type traceBaseHandler struct {
@@ -41,12 +47,6 @@ type TraceWorkflowHandler struct {
 	workflowSpans map[string]*TraceWorkflowSpan
 	// workflowMu 保护 workflowSpans 的读写锁
 	workflowMu sync.RWMutex
-}
-
-// graphInterrupter 图中断信号接口，避免 tracer → interaction 循环依赖。
-// interaction.GraphInterrupt 隐式满足此接口。
-type graphInterrupter interface {
-	isGraphInterrupt()
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

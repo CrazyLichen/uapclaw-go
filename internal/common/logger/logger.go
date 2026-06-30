@@ -360,7 +360,7 @@ func (l *Logger) createComponentLogger(
 	// Permissions 组件额外写入 agent_server.log
 	if comp == ComponentPermissions {
 		agentServerWriter := l.getOrCreateAgentServerWriter(sanitizedFullWriter, sanitizedConsoleWriter)
-		writers = append(writers, agentServerWriter) // permissions → agent_server.log
+		writers = append(writers, agentServerWriter) // 权限 → agent_server.log
 	}
 
 	multiWriter := zerolog.MultiLevelWriter(writers...)

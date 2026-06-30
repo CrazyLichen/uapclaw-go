@@ -670,7 +670,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			return
 
 		case schema.TaskProcessing:
-			// processing → continue
+			// 处理中 → 继续
 			logger.Debug(logComponent).
 				Str("task_id", taskID).
 				Msg("任务处理中分片")

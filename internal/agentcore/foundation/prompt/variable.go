@@ -34,7 +34,7 @@ type Variable interface {
 	Update(kwargs map[string]any)
 }
 
-// ──────────────────────────── 嵌入结构体 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // baseVariable 提供 Variable 接口的公共字段和 Eval 模板方法实现。
 // 具体变量类型嵌入此结构体，只需实现 Update 方法即可满足 Variable 接口。
@@ -208,6 +208,6 @@ func accessField(current any, field string) (any, error) {
 		return val, nil
 	}
 
-	// fallback: reflect struct field
+	// 降级：反射结构体字段
 	return accessStructField(current, field)
 }

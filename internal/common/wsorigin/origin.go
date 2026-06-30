@@ -60,8 +60,6 @@ func NewOriginCheckerWithEnv(enableCheckEnv, allowedHostsEnv string) *OriginChec
 	}
 }
 
-// ──────────────────────────── 方法 ────────────────────────────
-
 // IsEnabled 返回是否启用了 Origin 校验。
 //
 // 对应 Python: is_origin_check_enabled()
@@ -131,8 +129,10 @@ func (c *OriginChecker) ForbiddenResponse() (code int, headers map[string][]stri
 	}, forbiddenBody
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // forbiddenBody 校验失败时的响应体。
 // 对应 Python: _FORBIDDEN_BODY = b"Forbidden: Origin not allowed\n"
 var forbiddenBody = "Forbidden: Origin not allowed\n"
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

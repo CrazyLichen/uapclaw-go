@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 端口类型到环境变量名的映射。
 // 对应 Python: jiuwenswarm/instance_manager/bootstrap.py port_env_mapping

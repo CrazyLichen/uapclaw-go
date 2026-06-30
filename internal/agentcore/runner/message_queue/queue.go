@@ -27,7 +27,7 @@ type MessageQueueInMemory struct {
 	maxSize int
 	// timeout 消息处理超时
 	timeout time.Duration
-	// topics topic name → *topicSubscription
+	// 主题 主题名 → *主题订阅
 	topics map[string]*topicSubscription
 	// mu 保护 topics map
 	mu sync.RWMutex

@@ -12,18 +12,6 @@ import (
 	"time"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// TargetState 端口目标状态。
-type TargetState int
-
-const (
-	// StateConnected 等待端口可连接。
-	StateConnected TargetState = iota
-	// StateDisconnected 等待端口断开（拒绝连接）。
-	StateDisconnected
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // portConfig 端口等待配置，通过 Functional Options 模式设置。
@@ -37,6 +25,20 @@ type portConfig struct {
 
 // PortOption 端口等待选项。
 type PortOption func(*portConfig)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TargetState 端口目标状态。
+type TargetState int
+
+const (
+	// StateConnected 等待端口可连接。
+	StateConnected TargetState = iota
+	// StateDisconnected 等待端口断开（拒绝连接）。
+	StateDisconnected
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithInitialDelay 设置初始退避延迟（默认 100ms）。
 func WithInitialDelay(d time.Duration) PortOption {
@@ -62,8 +64,6 @@ func WithMaxAttempts(n int) PortOption {
 func WithTargetState(s TargetState) PortOption {
 	return func(c *portConfig) { c.targetState = s }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WaitForTCPPort 等待 TCP 端口达到目标状态，使用指数退避。
 //

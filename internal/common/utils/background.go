@@ -20,51 +20,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// TaskStatus 任务状态。
-type TaskStatus int
-
-const (
-	// TaskPending 待执行。
-	TaskPending TaskStatus = iota
-	// TaskRunning 执行中。
-	TaskRunning
-	// TaskCompleted 已完成。
-	TaskCompleted
-	// TaskFailed 失败。
-	TaskFailed
-	// TaskCancelled 已取消。
-	TaskCancelled
-	// TaskTimeout 超时。
-	TaskTimeout
-)
-
-// IsTerminal 判断是否为终态。
-func (s TaskStatus) IsTerminal() bool {
-	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout
-}
-
-// String 返回状态名称。
-func (s TaskStatus) String() string {
-	switch s {
-	case TaskPending:
-		return "PENDING"
-	case TaskRunning:
-		return "RUNNING"
-	case TaskCompleted:
-		return "COMPLETED"
-	case TaskFailed:
-		return "FAILED"
-	case TaskCancelled:
-		return "CANCELLED"
-	case TaskTimeout:
-		return "TIMEOUT"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BackgroundTask 后台任务句柄，支持优雅停止。
@@ -135,8 +90,60 @@ type taskConfig struct {
 	parentID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TaskStatus 任务状态。
+type TaskStatus int
+
+const (
+	// TaskPending 待执行。
+	TaskPending TaskStatus = iota
+	// TaskRunning 执行中。
+	TaskRunning
+	// TaskCompleted 已完成。
+	TaskCompleted
+	// TaskFailed 失败。
+	TaskFailed
+	// TaskCancelled 已取消。
+	TaskCancelled
+	// TaskTimeout 超时。
+	TaskTimeout
+)
+
+// IsTerminal 判断是否为终态。
+func (s TaskStatus) IsTerminal() bool {
+	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout
+}
+
+// String 返回状态名称。
+func (s TaskStatus) String() string {
+	switch s {
+	case TaskPending:
+		return "PENDING"
+	case TaskRunning:
+		return "RUNNING"
+	case TaskCompleted:
+		return "COMPLETED"
+	case TaskFailed:
+		return "FAILED"
+	case TaskCancelled:
+		return "CANCELLED"
+	case TaskTimeout:
+		return "TIMEOUT"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // TaskOption 任务选项。
 type TaskOption func(*taskConfig)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// taskManagerSingleton 全局 TaskManager 单例持有器。
+var taskManagerSingleton Singleton[TaskManager]
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithTaskName 设置任务名称。
 func WithTaskName(name string) TaskOption {
@@ -162,13 +169,6 @@ func WithTaskMetadata(md map[string]any) TaskOption {
 func WithTaskParentID(id string) TaskOption {
 	return func(c *taskConfig) { c.parentID = id }
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// taskManagerSingleton 全局 TaskManager 单例持有器。
-var taskManagerSingleton Singleton[TaskManager]
-
-// ──────────────────────────── BackgroundTask 方法 ────────────────────────────
 
 // NewBackgroundTask 创建后台任务。
 //
@@ -233,8 +233,6 @@ func (t *BackgroundTask) Name() string { return t.name }
 // Group 返回任务分组。
 func (t *BackgroundTask) Group() string { return t.group }
 
-// ──────────────────────────── Task 方法 ────────────────────────────
-
 // IsTerminal 判断任务是否为终态。
 func (t *Task) IsTerminal() bool {
 	t.mu.RLock()
@@ -260,8 +258,6 @@ func (t *Task) Wait() (any, error) {
 	defer t.mu.RUnlock()
 	return t.Result, t.Err
 }
-
-// ──────────────────────────── TaskManager 方法 ────────────────────────────
 
 // GetTaskManager 获取全局 TaskManager 单例。
 func GetTaskManager() *TaskManager {

@@ -64,6 +64,19 @@ const (
 	ErrorCategoryTermination
 )
 
+// String 实现 fmt.Stringer 接口，返回 ErrorCategory 的字符串表示。
+func (c ErrorCategory) String() string {
+	if int(c) >= 0 && int(c) < len(errorCategoryStrings) {
+		return errorCategoryStrings[c]
+	}
+	return fmt.Sprintf("ErrorCategory(%d)", int(c))
+}
+
+// MarshalJSON 实现 json.Marshaler 接口。
+func (c ErrorCategory) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -81,10 +94,10 @@ var errorCategoryAttrs = [...]struct {
 	Fatal       bool
 	Recoverable bool
 }{
-	{Fatal: true, Recoverable: false},  // Framework
-	{Fatal: false, Recoverable: false}, // Validation
-	{Fatal: false, Recoverable: true},  // Execution
-	{Fatal: false, Recoverable: false}, // Termination
+	{Fatal: true, Recoverable: false},  // 框架
+	{Fatal: false, Recoverable: false}, // 校验
+	{Fatal: false, Recoverable: true},  // 执行
+	{Fatal: false, Recoverable: false}, // 终止
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -250,19 +263,6 @@ func (e *BaseError) ToDict() map[string]any {
 func (e *BaseError) ToJSON() string {
 	data, _ := json.Marshal(e.ToDict())
 	return string(data)
-}
-
-// String 实现 fmt.Stringer 接口，返回 ErrorCategory 的字符串表示。
-func (c ErrorCategory) String() string {
-	if int(c) >= 0 && int(c) < len(errorCategoryStrings) {
-		return errorCategoryStrings[c]
-	}
-	return fmt.Sprintf("ErrorCategory(%d)", int(c))
-}
-
-// MarshalJSON 实现 json.Marshaler 接口。
-func (c ErrorCategory) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.String())
 }
 
 // BuildError 构建异常实例但不抛出，用于延迟抛出或包装到 Result 中。

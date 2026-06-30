@@ -33,7 +33,7 @@ type RefCountedResource struct {
 	refCount  atomic.Int64
 	closed    atomic.Bool
 	createdAt time.Time
-	lastUsed  atomic.Int64 // unix timestamp (nanoseconds)
+	lastUsed  atomic.Int64 // Unix 时间戳（纳秒）
 }
 
 // TransportConfig HTTP Transport 连接池配置。
@@ -91,7 +91,12 @@ type refCountedEntry[T any] struct {
 	closed    bool
 }
 
-// ──────────────────────────── RefCountedResource 方法 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// transportPoolSingleton 全局 TransportPool 单例持有器。
+var transportPoolSingleton Singleton[TransportPool]
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitRefCount 初始化引用计数（初始值为 1）。
 // 需要在嵌入 RefCountedResource 的结构体创建时调用。
@@ -163,8 +168,6 @@ func (r *RefCountedResource) MarkClosed() {
 	r.closed.Store(true)
 }
 
-// ──────────────────────────── TransportConfig 方法 ────────────────────────────
-
 // DefaultTransportConfig 返回默认 Transport 配置。
 func DefaultTransportConfig() TransportConfig {
 	return TransportConfig{
@@ -213,8 +216,6 @@ func (c TransportConfig) GenerateKey() string {
 	hash := md5.Sum([]byte(keyStr))
 	return fmt.Sprintf("%x", hash)
 }
-
-// ──────────────────────────── RefCountedTransport 方法 ────────────────────────────
 
 // NewRefCountedTransport 创建引用计数的 HTTP Transport。
 func NewRefCountedTransport(config TransportConfig) *RefCountedTransport {
@@ -266,11 +267,6 @@ func (t *RefCountedTransport) Close() error {
 func (t *RefCountedTransport) IsExpired() bool {
 	return t.RefCountedResource.IsExpired(t.config.TTL, t.config.MaxIdleTime)
 }
-
-// ──────────────────────────── TransportPool 方法 ────────────────────────────
-
-// transportPoolSingleton 全局 TransportPool 单例持有器。
-var transportPoolSingleton Singleton[TransportPool]
 
 // GetTransportPool 获取全局 TransportPool 单例。
 func GetTransportPool() *TransportPool {
@@ -388,8 +384,6 @@ func (p *TransportPool) evictOldest() {
 		delete(p.transports, oldestKey)
 	}
 }
-
-// ──────────────────────────── ResourcePool 方法 ────────────────────────────
 
 // NewResourcePool 创建泛型资源池。
 func NewResourcePool[T any](maxPool int, factory func(key string, config any) (*T, error), keyFunc func(config any) string) *ResourcePool[T] {

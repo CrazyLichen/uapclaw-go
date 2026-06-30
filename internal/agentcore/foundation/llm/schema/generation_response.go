@@ -58,7 +58,7 @@ type VideoGenerationResponse struct {
 	Format string `json:"format,omitempty"`
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // GenerationResponseOption GenerationResponse 的函数式选项。
 type GenerationResponseOption func(*GenerationResponse)
@@ -71,6 +71,8 @@ type AudioGenerationResponseOption func(*AudioGenerationResponse)
 
 // VideoGenerationResponseOption VideoGenerationResponse 的函数式选项。
 type VideoGenerationResponseOption func(*VideoGenerationResponse)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithModel 设置生成响应使用的模型名称。
 func WithModel(model string) GenerationResponseOption {

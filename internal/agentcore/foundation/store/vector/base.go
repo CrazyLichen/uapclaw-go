@@ -11,60 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// FieldSchema 集合中单个字段的 Schema 定义。
-//
-// 类似 Milvus FieldSchema，支持各种数据类型和字段属性。
-// 通过 NewFieldSchema 构造，构造时自动校验字段合法性。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (FieldSchema)
-type FieldSchema struct {
-	// Name 字段名
-	Name string
-	// DType 字段数据类型
-	DType VectorDataType
-	// IsPrimary 是否为主键字段
-	IsPrimary bool
-	// AutoID 是否自动生成 ID
-	AutoID bool
-	// MaxLength VARCHAR 字段最大长度，0 表示使用默认值 65535
-	MaxLength int
-	// Dim FLOAT_VECTOR 字段的向量维度，0 表示未设置
-	Dim int
-	// ElementType ARRAY 字段的元素类型，0 表示未设置
-	ElementType VectorDataType
-	// MaxCapacity ARRAY 字段的最大容量，0 表示未设置
-	MaxCapacity int
-	// Description 字段描述
-	Description string
-	// DefaultValue 字段默认值
-	DefaultValue any
-}
-
-// CollectionSchema 向量集合的 Schema 定义。
-//
-// 类似 Milvus CollectionSchema，支持动态字段。
-// fields 为未导出切片，通过方法访问和修改，保证校验逻辑不被绕过。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (CollectionSchema)
-type CollectionSchema struct {
-	// fields 字段定义列表（未导出，通过方法访问）
-	fields []*FieldSchema
-	// Description 集合描述
-	Description string
-	// EnableDynamicField 是否启用动态字段
-	EnableDynamicField bool
-}
-
-// VectorSearchResult 向量搜索结果。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorSearchResult)
-type VectorSearchResult struct {
-	// Score 相关度分数（越高越相关）
-	Score float64
-	// Fields 匹配文档的所有字段值（包括 id, text, metadata 等）
-	Fields map[string]any
-}
-
 // BaseVectorStore 向量存储后端的抽象接口。
 //
 // 所有向量存储后端（Chroma、Milvus、Gauss 等）必须实现此接口。
@@ -137,6 +83,60 @@ type BaseVectorStore interface {
 	//
 	// 对应 Python: BaseVectorStore.get_collection_metadata(collection_name)
 	GetCollectionMetadata(ctx context.Context, collectionName string, opts ...Option) (map[string]any, error)
+}
+
+// FieldSchema 集合中单个字段的 Schema 定义。
+//
+// 类似 Milvus FieldSchema，支持各种数据类型和字段属性。
+// 通过 NewFieldSchema 构造，构造时自动校验字段合法性。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (FieldSchema)
+type FieldSchema struct {
+	// Name 字段名
+	Name string
+	// DType 字段数据类型
+	DType VectorDataType
+	// IsPrimary 是否为主键字段
+	IsPrimary bool
+	// AutoID 是否自动生成 ID
+	AutoID bool
+	// MaxLength VARCHAR 字段最大长度，0 表示使用默认值 65535
+	MaxLength int
+	// Dim FLOAT_VECTOR 字段的向量维度，0 表示未设置
+	Dim int
+	// ElementType ARRAY 字段的元素类型，0 表示未设置
+	ElementType VectorDataType
+	// MaxCapacity ARRAY 字段的最大容量，0 表示未设置
+	MaxCapacity int
+	// Description 字段描述
+	Description string
+	// DefaultValue 字段默认值
+	DefaultValue any
+}
+
+// CollectionSchema 向量集合的 Schema 定义。
+//
+// 类似 Milvus CollectionSchema，支持动态字段。
+// fields 为未导出切片，通过方法访问和修改，保证校验逻辑不被绕过。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (CollectionSchema)
+type CollectionSchema struct {
+	// fields 字段定义列表（未导出，通过方法访问）
+	fields []*FieldSchema
+	// Description 集合描述
+	Description string
+	// EnableDynamicField 是否启用动态字段
+	EnableDynamicField bool
+}
+
+// VectorSearchResult 向量搜索结果。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_vector_store.py (VectorSearchResult)
+type VectorSearchResult struct {
+	// Score 相关度分数（越高越相关）
+	Score float64
+	// Fields 匹配文档的所有字段值（包括 id, text, metadata 等）
+	Fields map[string]any
 }
 
 // Options 向量存储操作的可选参数集合

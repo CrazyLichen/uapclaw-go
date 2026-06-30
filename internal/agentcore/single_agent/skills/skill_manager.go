@@ -13,6 +13,22 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// FsProvider 文件系统操作提供者接口。
+//
+// 【临时接口】仅用于当前 SkillManager 的文件读取和目录列举，
+// 后续 9.32 SysOperation 实现后，提供 SysOperation 适配器替换此接口，
+// 届时删除 FsProvider 及其 osFsProvider 默认实现。
+type FsProvider interface {
+	// ReadFile 读取文件内容，返回文本字符串。
+	ReadFile(path string) (string, error)
+	// ListFiles 列出目录下的文件（非递归）。
+	ListFiles(dir string) ([]FileInfo, error)
+	// ListDirectories 列出目录下的子目录（非递归）。
+	ListDirectories(dir string) ([]DirInfo, error)
+	// WriteFile 写入文件内容。
+	WriteFile(path string, data []byte) error
+}
+
 // SkillManager 管理技能注册和检索。
 //
 // 维护一个技能注册表 registry（name → Skill），提供注册、注销、查询方法。
@@ -29,22 +45,6 @@ type SkillManager struct {
 	description string
 	// fsProvider 文件系统操作提供者
 	fsProvider FsProvider
-}
-
-// FsProvider 文件系统操作提供者接口。
-//
-// 【临时接口】仅用于当前 SkillManager 的文件读取和目录列举，
-// 后续 9.32 SysOperation 实现后，提供 SysOperation 适配器替换此接口，
-// 届时删除 FsProvider 及其 osFsProvider 默认实现。
-type FsProvider interface {
-	// ReadFile 读取文件内容，返回文本字符串。
-	ReadFile(path string) (string, error)
-	// ListFiles 列出目录下的文件（非递归）。
-	ListFiles(dir string) ([]FileInfo, error)
-	// ListDirectories 列出目录下的子目录（非递归）。
-	ListDirectories(dir string) ([]DirInfo, error)
-	// WriteFile 写入文件内容。
-	WriteFile(path string, data []byte) error
 }
 
 // FileInfo 文件信息。

@@ -109,7 +109,7 @@ type ReliableRouter struct {
 	modelIndices map[string][]*Deployment
 	// Session 亲和性（对齐 Python LocalRouterState.session_deployment_map）
 	sessionMu      sync.RWMutex
-	sessionMap     map[string]sessionEntry // sessionID → {deploymentID, lastUsed}
+	sessionMap     map[string]sessionEntry // 会话ID → {部署ID, 最后使用时间}
 	sessionCleanup time.Time               // 上次清理时间
 	// 健康检查器（可选）
 	healthChecker *HealthChecker

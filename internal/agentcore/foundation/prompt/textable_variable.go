@@ -9,19 +9,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// defaultPrefix 默认占位符前缀。
-	defaultPrefix = "{{"
-	// defaultSuffix 默认占位符后缀。
-	defaultSuffix = "}}"
-	// innerVarName 内部变量名，对应 Python: "__inner__"。
-	innerVarName = "__inner__"
-	// defaultVarName 默认变量名，对应 Python: "default"。
-	defaultVarName = "default"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TextableVariable 字符串模板变量，处理 {{placeholder}} 占位符替换。
@@ -40,10 +27,23 @@ type TextableVariable struct {
 	placeholders []string // 完整占位符路径列表（去重），如 ["user.name", "domain"]
 }
 
-// ──────────────────────────── 构造选项 ────────────────────────────
-
 // TextableOption TextableVariable 构造选项函数。
 type TextableOption func(*TextableVariable)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultPrefix 默认占位符前缀。
+	defaultPrefix = "{{"
+	// defaultSuffix 默认占位符后缀。
+	defaultSuffix = "}}"
+	// innerVarName 内部变量名，对应 Python: "__inner__"。
+	innerVarName = "__inner__"
+	// defaultVarName 默认变量名，对应 Python: "default"。
+	defaultVarName = "default"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithPrefix 设置占位符前缀。
 func WithPrefix(prefix string) TextableOption {
@@ -54,8 +54,6 @@ func WithPrefix(prefix string) TextableOption {
 func WithSuffix(suffix string) TextableOption {
 	return func(v *TextableVariable) { v.suffix = suffix }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTextableVariable 创建字符串模板变量。
 //

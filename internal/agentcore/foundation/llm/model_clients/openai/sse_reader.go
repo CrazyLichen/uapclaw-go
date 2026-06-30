@@ -6,17 +6,6 @@ import (
 	"io"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// sseDataPrefix SSE 数据行前缀
-const sseDataPrefix = "data: "
-
-// sseDoneMarker SSE 流结束标记
-const sseDoneMarker = "[DONE]"
-
-// sseCommentPrefix SSE 注释行前缀
-const sseCommentPrefix = ":"
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SSEReader 从 HTTP 响应体读取 SSE (Server-Sent Events) 事件流。
@@ -35,6 +24,17 @@ const sseCommentPrefix = ":"
 type SSEReader struct {
 	scanner *bufio.Scanner
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// sseDataPrefix SSE 数据行前缀
+const sseDataPrefix = "data: "
+
+// sseDoneMarker SSE 流结束标记
+const sseDoneMarker = "[DONE]"
+
+// sseCommentPrefix SSE 注释行前缀
+const sseCommentPrefix = ":"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

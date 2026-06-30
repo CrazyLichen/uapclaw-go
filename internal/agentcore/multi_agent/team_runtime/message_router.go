@@ -9,6 +9,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// AgentExecutor Agent 执行器接口，解决 team_runtime → runner 循环依赖。
+//
+// Runner 实现此接口后注入 MessageRouter，使路由器能调用 Agent 而不直接依赖 runner 包。
+type AgentExecutor interface {
+	// RunAgent 执行指定 Agent 并返回结果。
+	RunAgent(ctx context.Context, agentID string, inputs any, sess any) (any, error)
+}
+
 // MessageRouter 消息路由器，将 P2P 和 Pub-Sub 消息路由到目标 Agent。
 //
 // P2P 模式：触发 AgentP2PReceived 回调 → 构建 Agent 会话 → 执行目标 Agent → 返回响应。
@@ -31,14 +39,6 @@ type MessageRouter struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// AgentExecutor Agent 执行器接口，解决 team_runtime → runner 循环依赖。
-//
-// Runner 实现此接口后注入 MessageRouter，使路由器能调用 Agent 而不直接依赖 runner 包。
-type AgentExecutor interface {
-	// RunAgent 执行指定 Agent 并返回结果。
-	RunAgent(ctx context.Context, agentID string, inputs any, sess any) (any, error)
-}
 
 // NewMessageRouter 创建消息路由器实例。
 //

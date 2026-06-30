@@ -152,7 +152,7 @@ func (s *graphSearcher) searchSingle(ctx context.Context, query, collection stri
 	// 有 BFS：对齐 Python 实现
 	// Python: 每轮搜索用 skip_ranking=True（不做 rerank），最后统一排序
 	uuids := make(map[string]struct{})
-	allResults := make(map[string]map[string]any) // uuid -> result
+	allResults := make(map[string]map[string]any) // uuid → 结果
 	isSimilarity := s.metric == "IP" || s.metric == "COSINE"
 
 	// 获取查询向量（所有轮次共用）

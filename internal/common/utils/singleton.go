@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Singleton 提供泛型单例持有器，线程安全。
 //
 // 对应 Python 的 Singleton 元类，但使用 Go 惯用的 sync.Once 实现。
@@ -23,6 +25,8 @@ type Singleton[T any] struct {
 	once     sync.Once
 	instance *T
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Get 获取单例实例，若未初始化则调用 factory 创建。
 //

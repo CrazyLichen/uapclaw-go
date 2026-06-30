@@ -12,45 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// MemoryDoc 记忆文档，表示一条存储的记忆条目。
-//
-// 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (MemoryDoc)
-type MemoryDoc struct {
-	// ID 唯一标识
-	ID string `json:"id"`
-	// Text 文本内容
-	Text string `json:"text"`
-	// Type 类型/分类
-	Type string `json:"type"`
-	// Timestamp 时间戳（零值 time.Time{} 表示未设置，由实现层填充当前时间；
-	// Python 创建时自动填充当前时间，Go 的 time.Time 零值为 0001-01-01）
-	Timestamp time.Time `json:"timestamp"`
-	// Fields 扩展字段（移除 omitempty：Python 默认 {} 空字典，Go 零值为 nil，
-	// omitempty 时 nil 不输出字段而 {} 输出 "fields":{}，行为不一致。
-	// 移除 omitempty 后 nil 输出 "fields":null，与 Python 行为更接近）
-	Fields map[string]any `json:"fields"`
-}
-
-// MemorySearchResult 记忆搜索结果，包含匹配文档和相关度分数。
-//
-// 对应 Python: search 方法返回的 tuple[MemoryDoc, float]
-type MemorySearchResult struct {
-	// Doc 匹配的记忆文档
-	Doc *MemoryDoc
-	// Score 相关度分数，范围 [0, 1]，越高越相关
-	Score float64
-}
-
-// UserScope 用户-作用域对，用于 ListUserScopes 返回值。
-//
-// 对应 Python: list_user_scopes 返回的 tuple[str, str]
-type UserScope struct {
-	// UserID 用户标识
-	UserID string
-	// ScopeID 作用域标识
-	ScopeID string
-}
-
 // StorageCodec 存储编解码器接口，用于对记忆文本进行加解密。
 //
 // 实现示例：AES 编解码器，对记忆文本进行加密存储和解密读取。
@@ -121,6 +82,45 @@ type BaseMemoryIndex interface {
 
 	// ListUserScopes 列出索引中所有 (userID, scopeID) 对。
 	ListUserScopes(ctx context.Context) ([]UserScope, error)
+}
+
+// MemoryDoc 记忆文档，表示一条存储的记忆条目。
+//
+// 对应 Python: openjiuwen/core/foundation/store/base_memory_index.py (MemoryDoc)
+type MemoryDoc struct {
+	// ID 唯一标识
+	ID string `json:"id"`
+	// Text 文本内容
+	Text string `json:"text"`
+	// Type 类型/分类
+	Type string `json:"type"`
+	// Timestamp 时间戳（零值 time.Time{} 表示未设置，由实现层填充当前时间；
+	// Python 创建时自动填充当前时间，Go 的 time.Time 零值为 0001-01-01）
+	Timestamp time.Time `json:"timestamp"`
+	// Fields 扩展字段（移除 omitempty：Python 默认 {} 空字典，Go 零值为 nil，
+	// omitempty 时 nil 不输出字段而 {} 输出 "fields":{}，行为不一致。
+	// 移除 omitempty 后 nil 输出 "fields":null，与 Python 行为更接近）
+	Fields map[string]any `json:"fields"`
+}
+
+// MemorySearchResult 记忆搜索结果，包含匹配文档和相关度分数。
+//
+// 对应 Python: search 方法返回的 tuple[MemoryDoc, float]
+type MemorySearchResult struct {
+	// Doc 匹配的记忆文档
+	Doc *MemoryDoc
+	// Score 相关度分数，范围 [0, 1]，越高越相关
+	Score float64
+}
+
+// UserScope 用户-作用域对，用于 ListUserScopes 返回值。
+//
+// 对应 Python: list_user_scopes 返回的 tuple[str, str]
+type UserScope struct {
+	// UserID 用户标识
+	UserID string
+	// ScopeID 作用域标识
+	ScopeID string
 }
 
 // backupData 备份数据

@@ -5,12 +5,6 @@ import (
 	"regexp"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// SensitiveMask 敏感信息统一掩码值。
-// 对应 Python: _SENSITIVE_MASK
-const SensitiveMask = "******"
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Sanitizer 敏感数据脱敏器，对日志文本进行 4 层正则 + 7 种模式的脱敏。
@@ -40,6 +34,12 @@ type sanitizerWriter struct {
 	underlying io.Writer
 	sanitizer  *Sanitizer
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// SensitiveMask 敏感信息统一掩码值。
+// 对应 Python: _SENSITIVE_MASK
+const SensitiveMask = "******"
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

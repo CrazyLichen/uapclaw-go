@@ -10,11 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
-
-// NormalizeFunc 配置后处理函数签名，用于 custom_headers 等字段的结构化。
-type NormalizeFunc func(map[string]any)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Config 管理 YAML 配置文件的读写与环境变量解析。
@@ -34,6 +29,11 @@ type Config struct {
 	normFn    NormalizeFunc  // 后处理钩子
 	mu        sync.RWMutex   // 读写锁
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// NormalizeFunc 配置后处理函数签名，用于 custom_headers 等字段的结构化。
+type NormalizeFunc func(map[string]any)
 
 // Option 配置选项函数。
 type Option func(*Config)

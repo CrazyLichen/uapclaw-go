@@ -267,7 +267,7 @@ the template structure, NOT content to be edited or removed.
 // NewSessionMemoryConfig 创建默认会话记忆配置。
 //
 // 默认值：TriggerTokens=10000, TriggerAddTokens=5000, ToolMin=3,
-// UpdateMode="direct_replace", DirectReplaceMaxRetries=2
+// 更新模式="direct_replace", 直接替换最大重试次数=2
 func NewSessionMemoryConfig() SessionMemoryConfig {
 	return SessionMemoryConfig{
 		TriggerTokens:           10000,

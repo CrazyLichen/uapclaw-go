@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识。
 const logComponent = logger.ComponentCommon

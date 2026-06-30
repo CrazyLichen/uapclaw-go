@@ -610,7 +610,7 @@ func (a *ReActAgent) reactLoop(
 			return nil, fmt.Errorf("迭代 %d 模型调用失败: %w", iteration, err)
 		}
 
-		// force-finish #1
+		// 强制完成 #1
 		if finish := cbc.ConsumeForceFinish(); finish != nil {
 			a.saveContexts(sess)
 			iterResult = finish.Result
@@ -642,7 +642,7 @@ func (a *ReActAgent) reactLoop(
 			return nil, fmt.Errorf("工具执行失败: %w", err)
 		}
 
-		// force-finish #2
+		// 强制完成 #2
 		if finish := cbc.ConsumeForceFinish(); finish != nil {
 			a.saveContexts(sess)
 			iterResult = finish.Result
