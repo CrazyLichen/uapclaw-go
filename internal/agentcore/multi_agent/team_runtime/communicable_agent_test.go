@@ -19,6 +19,9 @@ func TestCommunicableAgent_BindRuntime(t *testing.T) {
 		if c.AgentID() != "" {
 			t.Error("初始 AgentID 应为空")
 		}
+		if c.IsBound() {
+			t.Error("初始 IsBound 应为 false")
+		}
 
 		runtime := &TeamRuntime{teamID: "test-team"}
 		c.BindRuntime(runtime, "agent-1")
@@ -28,6 +31,44 @@ func TestCommunicableAgent_BindRuntime(t *testing.T) {
 		}
 		if c.AgentID() != "agent-1" {
 			t.Errorf("AgentID = %q, want %q", c.AgentID(), "agent-1")
+		}
+		if !c.IsBound() {
+			t.Error("绑定后 IsBound 应为 true")
+		}
+	})
+}
+
+// TestCommunicableAgent_IsBound 测试绑定状态判断
+func TestCommunicableAgent_IsBound(t *testing.T) {
+	t.Run("初始未绑定", func(t *testing.T) {
+		c := NewCommunicableAgent()
+		if c.IsBound() {
+			t.Error("初始 IsBound 应为 false")
+		}
+	})
+
+	t.Run("绑定后为 true", func(t *testing.T) {
+		c := NewCommunicableAgent()
+		runtime := &TeamRuntime{teamID: "test-team"}
+		c.BindRuntime(runtime, "agent-1")
+		if !c.IsBound() {
+			t.Error("绑定后 IsBound 应为 true")
+		}
+	})
+
+	t.Run("仅 runtime 非 nil 但 agentID 为空时为 false", func(t *testing.T) {
+		c := NewCommunicableAgent()
+		c.runtime = &TeamRuntime{teamID: "test-team"}
+		if c.IsBound() {
+			t.Error("agentID 为空时 IsBound 应为 false")
+		}
+	})
+
+	t.Run("仅 agentID 非空但 runtime 为 nil 时为 false", func(t *testing.T) {
+		c := NewCommunicableAgent()
+		c.agentID = "agent-1"
+		if c.IsBound() {
+			t.Error("runtime 为 nil 时 IsBound 应为 false")
 		}
 	})
 }

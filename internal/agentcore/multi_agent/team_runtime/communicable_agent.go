@@ -44,6 +44,13 @@ func NewCommunicableAgent() *CommunicableAgent {
 	return &CommunicableAgent{}
 }
 
+// IsBound 判断是否已绑定运行时。
+//
+// 对应 Python: CommunicableAgent.is_bound 属性
+func (c *CommunicableAgent) IsBound() bool {
+	return c.runtime != nil && c.agentID != ""
+}
+
 // BindRuntime 绑定团队运行时，注入运行时引用和 Agent 标识。
 // 实现 RuntimeBindable 接口。
 //
