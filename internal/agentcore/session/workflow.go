@@ -1,8 +1,8 @@
 package session
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
