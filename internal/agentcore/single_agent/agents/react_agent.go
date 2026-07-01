@@ -50,10 +50,7 @@ type ReActAgent struct {
 	skillUtil *skills.SkillUtil
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
@@ -72,8 +69,6 @@ const (
 	// 对应 Python: _SKILLS_SECTION_PRIORITY = 90
 	skillsSectionPriority = 90
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -97,5 +92,3 @@ func NewReActAgent(
 
 	return agent
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

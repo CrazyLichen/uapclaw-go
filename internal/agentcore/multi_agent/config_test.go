@@ -3,6 +3,8 @@ package multi_agent
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -11,7 +13,7 @@ import (
 //
 // 对应 Python: TeamConfig() 默认值
 func TestNewTeamConfig_默认值(t *testing.T) {
-	cfg := NewTeamConfig()
+	cfg := schema.NewTeamConfig()
 	if cfg.MaxAgents != 10 {
 		t.Errorf("期望 MaxAgents=10，实际 %d", cfg.MaxAgents)
 	}
@@ -27,7 +29,7 @@ func TestNewTeamConfig_默认值(t *testing.T) {
 //
 // 对应 Python: TeamConfig().configure_max_agents(5).configure_timeout(60.0).configure_concurrency(200)
 func TestTeamConfig_链式配置(t *testing.T) {
-	cfg := NewTeamConfig().
+	cfg := schema.NewTeamConfig().
 		ConfigureMaxAgents(5).
 		ConfigureTimeout(60.0).
 		ConfigureConcurrency(200)
@@ -47,7 +49,7 @@ func TestTeamConfig_链式配置(t *testing.T) {
 //
 // 对应 Python: configure_xxx() -> self 的链式语义
 func TestTeamConfig_链式配置_返回自身(t *testing.T) {
-	cfg := NewTeamConfig()
+	cfg := schema.NewTeamConfig()
 	ptr1 := cfg.ConfigureMaxAgents(3)
 	if ptr1 != cfg {
 		t.Error("ConfigureMaxAgents 应返回自身指针")
@@ -66,7 +68,7 @@ func TestTeamConfig_链式配置_返回自身(t *testing.T) {
 //
 // 对应 Python: model_config={"extra": "allow"} 允许动态额外字段
 func TestTeamConfig_Extra(t *testing.T) {
-	cfg := NewTeamConfig()
+	cfg := schema.NewTeamConfig()
 
 	// 不存在的 key
 	val, ok := cfg.GetExtra("not_exist")
@@ -100,7 +102,7 @@ func TestTeamConfig_Extra(t *testing.T) {
 
 // TestTeamConfig_JSON序列化 验证 JSON marshal/unmarshal（Extra 不序列化）。
 func TestTeamConfig_JSON序列化(t *testing.T) {
-	cfg := NewTeamConfig()
+	cfg := schema.NewTeamConfig()
 	cfg.SetExtra("secret", "value")
 
 	data, err := json.Marshal(cfg)
@@ -108,7 +110,7 @@ func TestTeamConfig_JSON序列化(t *testing.T) {
 		t.Fatalf("Marshal 失败: %v", err)
 	}
 
-	var decoded TeamConfig
+	var decoded schema.TeamConfig
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal 失败: %v", err)
 	}
@@ -124,7 +126,7 @@ func TestTeamConfig_JSON序列化(t *testing.T) {
 
 // TestTeamConfig_JSON序列化_omitempty 验证非零值字段出现在 JSON 中。
 func TestTeamConfig_JSON序列化_omitempty(t *testing.T) {
-	cfg := NewTeamConfig()
+	cfg := schema.NewTeamConfig()
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("Marshal 失败: %v", err)

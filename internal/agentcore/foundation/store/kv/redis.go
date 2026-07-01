@@ -48,13 +48,12 @@ type pipelineOp struct {
 	existsCmd *redis.IntCmd
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // Option RedisStore 的函数式选项
 type Option func(*RedisStore)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore

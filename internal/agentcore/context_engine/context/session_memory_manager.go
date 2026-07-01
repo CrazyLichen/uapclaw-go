@@ -90,8 +90,6 @@ type SessionMemoryManager struct {
 	tasks   map[string]context.CancelFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sessionMemoryStateKey 会话记忆运行时状态键
@@ -211,6 +209,9 @@ Based on the user conversation above
 or any past session summaries), update the session notes file.
 
 The file {{notesPath}} has already been read for you. Here are its current contents:
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 <current_notes_content>
 {{currentNotes}}
 </current_notes_content>
@@ -259,10 +260,6 @@ You ONLY update the actual content that comes AFTER these two preserved lines.
 The italic description lines starting and ending with underscores are part of
 the template structure, NOT content to be edited or removed.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionMemoryConfig 创建默认会话记忆配置。
 //

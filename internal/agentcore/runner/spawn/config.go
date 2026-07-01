@@ -61,14 +61,13 @@ type SpawnConfig struct {
 // 对齐 Python: SpawnAgentKind (agent_config.py)
 type SpawnAgentKind string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// SpawnAgentKindClassAgent 类 Agent 启动（通过 ResourceMgr 注册表查找）
 	SpawnAgentKindClassAgent SpawnAgentKind = "class_agent"
 	// SpawnAgentKindTeamAgent 团队 Agent 启动（通过 FromSpawnPayload 构造）
 	SpawnAgentKindTeamAgent SpawnAgentKind = "team_agent"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// DefaultHealthCheckInterval 默认健康检查间隔

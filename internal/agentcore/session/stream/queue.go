@@ -30,10 +30,7 @@ type StreamQueue struct {
 	chCloseOnce sync.Once
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultSendAttemptTimeout 每次发送尝试超时，对应 Python DEFAULT_SEND_ATTEMPT_TIMEOUT = 0.2
 	defaultSendAttemptTimeout = 200 * time.Millisecond
@@ -49,7 +46,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// ErrQueueClosed 队列已关闭
 	ErrQueueClosed = errors.New("stream queue is closed")
@@ -200,5 +196,3 @@ func (q *StreamQueue) IsClosed() bool {
 func IsEndOfStream(err error) bool {
 	return errors.Is(err, ErrQueueClosed)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

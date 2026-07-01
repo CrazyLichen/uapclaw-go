@@ -2,6 +2,7 @@ package session
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/internal"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -28,10 +29,6 @@ type WorkflowSession struct {
 // WorkflowSessionOption WorkflowSession 构造选项函数类型
 type WorkflowSessionOption func(*WorkflowSession)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowSession 创建公开层 WorkflowSession 实例。
@@ -52,7 +49,7 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 }
 
 // WithWorkflowSessionParent 设置父会话的选项
-func WithWorkflowSessionParent(parent InnerSession) WorkflowSessionOption {
+func WithWorkflowSessionParent(parent sessioninterfaces.InnerSession) WorkflowSessionOption {
 	return func(ws *WorkflowSession) {
 		var envs map[string]any
 		if parent != nil && parent.Config() != nil {
@@ -97,7 +94,7 @@ func (ws *WorkflowSession) GetEnvs() map[string]any {
 }
 
 // GetParent 返回父会话
-func (ws *WorkflowSession) GetParent() InnerSession {
+func (ws *WorkflowSession) GetParent() sessioninterfaces.InnerSession {
 	if ws.inner == nil {
 		return nil
 	}
@@ -126,5 +123,3 @@ func (ws *WorkflowSession) Close() error {
 func (ws *WorkflowSession) Inner() *internal.WorkflowSession {
 	return ws.inner
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

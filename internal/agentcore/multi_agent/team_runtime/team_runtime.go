@@ -27,9 +27,6 @@ type RuntimeConfig struct {
 	P2PTimeout float64
 }
 
-// RuntimeConfigOption 团队运行时配置选项函数类型
-type RuntimeConfigOption func(*RuntimeConfig)
-
 // TeamRuntime 团队运行时编排入口，聚合消息总线、订阅管理和 Agent 注册。
 //
 // 职责：
@@ -62,14 +59,14 @@ type TeamRuntime struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// RuntimeConfigOption 团队运行时配置选项函数类型
+type RuntimeConfigOption func(*RuntimeConfig)
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultP2PTimeout 默认 P2P 超时秒数
 	defaultP2PTimeout = 1800.0
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

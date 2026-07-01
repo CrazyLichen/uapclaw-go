@@ -84,8 +84,6 @@ const (
 // CardOption BaseCard 构造选项函数。
 type CardOption func(*BaseCard)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 BaseCard 满足 CardInterface。

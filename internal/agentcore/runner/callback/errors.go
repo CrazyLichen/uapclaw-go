@@ -59,8 +59,6 @@ func NewAbortErrorWithDetails(reason string, cause error, details any) *AbortErr
 	return ae
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Error 实现 error 接口。
 func (e *AbortError) Error() string {
 	if e.Cause != nil {

@@ -176,6 +176,7 @@ type RunKind string
 // 对应 Python: HeartbeatReason (openjiuwen/core/single_agent/rail/base.py L50-53)
 type HeartbeatReason string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// RunKindNormal 正常运行
 	RunKindNormal RunKind = "normal"
@@ -191,10 +192,6 @@ const (
 	// HeartbeatReasonManual 手动触发心跳
 	HeartbeatReasonManual HeartbeatReason = "manual"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -283,5 +280,3 @@ func (i *TaskIterationInputs) EventKind() string { return "task_iteration" }
 
 // EventKind 实现 EventInputs 接口
 func (m *MapInputs) EventKind() string { return "map" }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

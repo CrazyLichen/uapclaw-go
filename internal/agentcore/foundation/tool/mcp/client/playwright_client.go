@@ -39,8 +39,6 @@ func NewPlaywrightClient(config *types.McpServerConfig) *PlaywrightClient {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Connect 根据传输类型创建委托客户端并建立连接。
 func (c *PlaywrightClient) Connect(ctx context.Context, opts ...types.ConnectOption) error {
 	if strings.HasPrefix(c.config.ServerPath, "http://") || strings.HasPrefix(c.config.ServerPath, "https://") {

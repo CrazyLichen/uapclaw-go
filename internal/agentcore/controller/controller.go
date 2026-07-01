@@ -52,10 +52,7 @@ type Controller struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -68,6 +65,8 @@ const logComponent = logger.ComponentAgentCore
 func NewController() *Controller {
 	return &Controller{}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Init 两阶段初始化，创建子组件并接线。
 // 对应 Python: Controller.init(card, config, ability_manager, context_engine)

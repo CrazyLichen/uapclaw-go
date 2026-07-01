@@ -53,8 +53,6 @@ type WorkflowNodeSession interface {
 // 空结构体，所有方法均为静态风格（不持有状态）。
 type TracerWorkflowUtils struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
@@ -84,6 +82,8 @@ func (TracerWorkflowUtils) TraceWorkflowStart(ctx context.Context, session Workf
 		NeedSend: true,
 	})
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // TraceComponentBegin 追踪组件开始，对应 Python TracerWorkflowUtils.trace_component_begin。
 // 调用 TriggerWorkflow(TraceWFCallStart, parentNodeID=session.ParentID(), invokeID=session.ExecutableID(), sourceIDs=sourceIDs, metadata=组件元数据)。

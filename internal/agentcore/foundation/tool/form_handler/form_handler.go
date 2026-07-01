@@ -49,7 +49,6 @@ type FormHandlerManager struct {
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	handlerManagerOnce sync.Once
 	handlerManagerInst *FormHandlerManager
@@ -132,8 +131,6 @@ func (m *FormHandlerManager) GetHandler(handlerType string) FormHandler {
 	}
 	return m.defaultHandler
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // Handle 默认表单处理器实现，将值转为字符串写入 multipart Writer。
 //

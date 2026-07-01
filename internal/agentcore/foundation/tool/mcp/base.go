@@ -23,68 +23,43 @@ type MCPTool struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
-//
+
 // 以下类型定义在 mcp/types 子包中，此处通过类型别名重导出，
 // 保持 mcp 包的公共 API 向后兼容。
 
 // McpServerConfig MCP 服务器配置。
+// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpServerConfig)
 type McpServerConfig = types.McpServerConfig
 
 // McpToolCard MCP 工具配置卡片，扩展 ToolCard 增加服务器标识。
+// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpToolCard)
 type McpToolCard = types.McpToolCard
 
 // McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
+// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
 type McpClient = types.McpClient
-
-// ConnectOption 连接选项函数。
-type ConnectOption = types.ConnectOption
-
-// ConnectOptions 连接选项。
-type ConnectOptions = types.ConnectOptions
-
-// McpServerConfigOption 配置选项函数。
-type McpServerConfigOption = types.McpServerConfigOption
-
-// McpToolCardOption MCP 工具卡片选项函数。
-type McpToolCardOption = types.McpToolCardOption
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// 重导出常量
-const (
-	// NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。
-	NoTimeout = types.NoTimeout
-)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 重导出变量和函数
 var (
-	// WithRetryTimes 设置重试次数。
-	WithRetryTimes = types.WithRetryTimes
-	// WithConnectTimeout 设置连接超时时间（秒）。
-	WithConnectTimeout = types.WithConnectTimeout
-	// NewConnectOptions 从选项列表构造 ConnectOptions。
-	NewConnectOptions = types.NewConnectOptions
 	// WithServerID 设置服务器标识。
+	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 	WithServerID = types.WithServerID
-	// WithParams 设置传输层参数。
-	WithParams = types.WithParams
-	// WithAuthHeaders 设置认证请求头。
-	WithAuthHeaders = types.WithAuthHeaders
-	// WithAuthQueryParams 设置认证查询参数。
-	WithAuthQueryParams = types.WithAuthQueryParams
 	// NewMcpServerConfig 创建 MCP 服务器配置。
+	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpServerConfig = types.NewMcpServerConfig
 	// WithMcpToolCardServerID 设置 MCP 工具卡片的服务器标识。
+	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 	WithMcpToolCardServerID = types.WithMcpToolCardServerID
 	// NewMcpToolCard 创建 MCP 工具卡片。
+	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpToolCard = types.NewMcpToolCard
 )
 
@@ -249,5 +224,3 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 func (t *MCPTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.String())
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

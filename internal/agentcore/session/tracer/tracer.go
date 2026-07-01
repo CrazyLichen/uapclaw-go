@@ -62,12 +62,6 @@ type Tracer struct {
 	workflowDispatch map[string]map[TraceEvent]func(context.Context, *TriggerParams)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTracer 创建追踪器，自动生成 UUID 作为 traceID，创建 AgentSpanManager。
@@ -202,6 +196,22 @@ func (t *Tracer) PopWorkflowSpan(invokeID, parentNodeID string) {
 	if handler != nil {
 		handler.deleteWorkflowSpan(invokeID)
 	}
+}
+
+// GetOrCreateAgentSpan 从 TriggerParams 获取或创建 Agent 追踪跨度（导出版本）。
+// 如果 params.Span 非空，尝试转换为 TraceAgentSpan；否则自动创建。
+func (t *Tracer) GetOrCreateAgentSpan(p *TriggerParams) *TraceAgentSpan {
+	return t.getOrCreateAgentSpan(p)
+}
+
+// SetAgentHandler 设置 Agent 追踪处理器（用于测试）。
+func (t *Tracer) SetAgentHandler(h *TraceAgentHandler) {
+	t.agentHandler = h
+}
+
+// SetAgentDispatchEntry 设置 Agent 事件分发表条目（用于测试）。
+func (t *Tracer) SetAgentDispatchEntry(event TraceEvent, handler func(context.Context, *TriggerParams)) {
+	t.agentDispatch[event] = handler
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -369,12 +379,6 @@ func (t *Tracer) buildWorkflowDispatch(parentNodeID string) {
 	t.workflowDispatch[parentNodeID] = dispatch
 }
 
-// GetOrCreateAgentSpan 从 TriggerParams 获取或创建 Agent 追踪跨度（导出版本）。
-// 如果 params.Span 非空，尝试转换为 TraceAgentSpan；否则自动创建。
-func (t *Tracer) GetOrCreateAgentSpan(p *TriggerParams) *TraceAgentSpan {
-	return t.getOrCreateAgentSpan(p)
-}
-
 // getOrCreateAgentSpan 从 TriggerParams 获取或创建 Agent 追踪跨度。
 // 如果 params.Span 非空，尝试转换为 TraceAgentSpan；否则自动创建。
 func (t *Tracer) getOrCreateAgentSpan(p *TriggerParams) *TraceAgentSpan {
@@ -386,14 +390,4 @@ func (t *Tracer) getOrCreateAgentSpan(p *TriggerParams) *TraceAgentSpan {
 		}
 	}
 	return t.agentHandler.getTracerAgentSpan("")
-}
-
-// SetAgentHandler 设置 Agent 追踪处理器（用于测试）。
-func (t *Tracer) SetAgentHandler(h *TraceAgentHandler) {
-	t.agentHandler = h
-}
-
-// SetAgentDispatchEntry 设置 Agent 事件分发表条目（用于测试）。
-func (t *Tracer) SetAgentDispatchEntry(event TraceEvent, handler func(context.Context, *TriggerParams)) {
-	t.agentDispatch[event] = handler
 }

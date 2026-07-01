@@ -12,6 +12,8 @@ type WorkflowOutput struct {
 	State WorkflowExecutionState
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 枚 ────────────────────────────
 
 // WorkflowExecutionState 工作流执行状态。
@@ -19,6 +21,7 @@ type WorkflowOutput struct {
 // 对应 Python: openjiuwen/core/workflow/base.py WorkflowExecutionState(str, Enum)
 type WorkflowExecutionState string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// WorkflowExecutionStateCompleted 执行完成
 	WorkflowExecutionStateCompleted WorkflowExecutionState = "COMPLETED"

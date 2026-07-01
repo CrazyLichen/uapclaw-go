@@ -55,6 +55,8 @@ func Parse(content string) map[string]string {
 	return result
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // Load 加载 .env 文件并将变量写入环境变量（override 模式）。
 //
 // 读取指定路径的 .env 文件，解析后以 override 方式写入 os.Setenv，

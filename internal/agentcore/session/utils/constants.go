@@ -1,7 +1,6 @@
 package utils
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// RegexMaxLength 正则匹配最大长度
 	RegexMaxLength = 1000

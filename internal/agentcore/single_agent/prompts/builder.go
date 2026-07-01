@@ -39,10 +39,7 @@ type SystemPromptBuilder struct {
 	sections map[string]PromptSection
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// DefaultLanguage 默认提示词语言
 	// 对应 Python: DEFAULT_LANGUAGE = "cn"
@@ -50,7 +47,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// SupportedLanguages 支持的语言列表
 	// 对应 Python: SUPPORTED_LANGUAGES = ("cn", "en")

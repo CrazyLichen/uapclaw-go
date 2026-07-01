@@ -19,6 +19,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // RouteStrategy 路由策略接口，定义如何从多个部署端点中选择一个。
@@ -28,8 +30,6 @@ type RouteStrategy interface {
 	// ctx 用于传递路由上下文（如 session_id 用于亲和性路由）。
 	Select(deployments []*Deployment, modelName string, ctx *RoutingContext) (*Deployment, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // RoutingContext 路由上下文，携带请求级别的路由信息。
 //
@@ -246,6 +246,8 @@ func NewDeployment(config DeploymentConfig) *Deployment {
 	}
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // IsHealthy 返回部署端点是否健康。
 func (d *Deployment) IsHealthy() bool {
 	d.mu.RLock()
@@ -431,93 +433,6 @@ func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	return result
 }
 
-// checkDeployment 检查单个部署端点健康状态。
-//
-// 对应 Python: SDKHealthChecker.check_deployment()
-// 发送一个最小化 completion 请求（ping 消息 + max_tokens=1）。
-func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
-	result := HealthCheckResult{
-		DeploymentID: dep.ID,
-		Timestamp:    time.Now(),
-	}
-
-	// 构造最小化请求
-	reqBody := map[string]any{
-		"model":      dep.ModelName,
-		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-		"max_tokens": 1,
-	}
-	bodyBytes, _ := json.Marshal(reqBody)
-
-	// 构造 HTTP 请求
-	url := dep.APIBase + "/chat/completions"
-	req, err := http.NewRequestWithContext(
-		context.Background(), http.MethodPost, url, bytesReader(bodyBytes),
-	)
-	if err != nil {
-		result.IsHealthy = false
-		result.Error = fmt.Sprintf("构造请求失败: %v", err)
-		return result
-	}
-	req.Header.Set("Authorization", "Bearer "+dep.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	// 发送请求
-	client := &http.Client{Timeout: h.checkTimeout}
-	if !dep.VerifySSL {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
-
-	start := time.Now()
-	resp, err := client.Do(req)
-	latency := time.Since(start).Seconds()
-
-	if err != nil {
-		result.IsHealthy = false
-		result.Error = fmt.Sprintf("请求失败: %v", err)
-		return result
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusOK {
-		result.IsHealthy = true
-		result.Latency = latency
-	} else {
-		result.IsHealthy = false
-		result.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
-	}
-	return result
-}
-
-// backgroundLoop 后台健康检查循环。
-func (h *HealthChecker) backgroundLoop(ctx context.Context) {
-	// 首次立即检查一次
-	h.CheckAll()
-
-	ticker := time.NewTicker(h.checkInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			h.CheckAll()
-		}
-	}
-}
-
-// bytesReader 辅助函数，将 []byte 转为 io.Reader。
-func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
-
-type bytesReaderImpl struct{ data []byte }
-
-func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
-	return &bytesReaderImpl{data: data}
-}
-
 func (b *bytesReaderImpl) Read(p []byte) (int, error) {
 	if len(b.data) == 0 {
 		return 0, io.EOF
@@ -563,14 +478,6 @@ func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	}
 
 	return router
-}
-
-// buildModelIndices 构建 model 索引（对齐 Python BaseRouter._build_model_indices）。
-func (r *ReliableRouter) buildModelIndices() {
-	r.modelIndices = make(map[string][]*Deployment)
-	for _, dep := range r.deployments {
-		r.modelIndices[dep.ModelName] = append(r.modelIndices[dep.ModelName], dep)
-	}
 }
 
 // GetDeploymentsForModel 获取指定模型的所有部署。
@@ -752,85 +659,6 @@ func (r *ReliableRouter) GetHealthCheckResults() map[string]HealthCheckResult {
 func (r *ReliableRouter) StopHealthChecker() {
 	if r.healthChecker != nil {
 		r.healthChecker.Stop()
-	}
-}
-
-// ──── Session 亲和性 ────
-
-// getSessionAffinityDeployment 获取 session 对应的亲和性 deployment。
-//
-// 对应 Python: AdaptiveStrategy._get_session_affinity_deployment()
-func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, available []*Deployment) *Deployment {
-	if sessionID == "" {
-		return nil
-	}
-
-	r.sessionMu.RLock()
-	entry, ok := r.sessionMap[sessionID]
-	r.sessionMu.RUnlock()
-
-	if !ok {
-		return nil
-	}
-
-	// 检查 TTL 是否过期
-	if time.Since(entry.lastUsed).Seconds() > defaultSessionTTL {
-		// 过期了，删除映射
-		r.sessionMu.Lock()
-		delete(r.sessionMap, sessionID)
-		r.sessionMu.Unlock()
-		return nil
-	}
-
-	// 查找对应的 deployment 是否在可用列表中
-	for _, dep := range available {
-		if dep.ID == entry.deploymentID {
-			// 更新最近使用时间
-			r.sessionMu.Lock()
-			r.sessionMap[sessionID] = sessionEntry{
-				deploymentID: entry.deploymentID,
-				lastUsed:     time.Now(),
-			}
-			r.sessionMu.Unlock()
-			return dep
-		}
-	}
-
-	return nil
-}
-
-// updateSessionMapping 更新 session 到 deployment 的映射。
-//
-// 对应 Python: AdaptiveStrategy._update_session_mapping()
-func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
-	if sessionID == "" {
-		return
-	}
-
-	r.sessionMu.Lock()
-	defer r.sessionMu.Unlock()
-
-	r.sessionMap[sessionID] = sessionEntry{
-		deploymentID: deploymentID,
-		lastUsed:     time.Now(),
-	}
-
-	// 惰性清理过期 session
-	if time.Since(r.sessionCleanup).Seconds() > defaultSessionCleanup {
-		r.cleanupExpiredSessions()
-		r.sessionCleanup = time.Now()
-	}
-}
-
-// cleanupExpiredSessions 清理过期的 session 映射。
-//
-// 对应 Python: AdaptiveStrategy._cleanup_expired_sessions()
-func (r *ReliableRouter) cleanupExpiredSessions() {
-	now := time.Now()
-	for sid, entry := range r.sessionMap {
-		if now.Sub(entry.lastUsed).Seconds() > defaultSessionTTL {
-			delete(r.sessionMap, sid)
-		}
 	}
 }
 
@@ -1041,6 +869,182 @@ func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *Rout
 	return scores[0].dep, nil
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// checkDeployment 检查单个部署端点健康状态。
+//
+// 对应 Python: SDKHealthChecker.check_deployment()
+// 发送一个最小化 completion 请求（ping 消息 + max_tokens=1）。
+func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
+	result := HealthCheckResult{
+		DeploymentID: dep.ID,
+		Timestamp:    time.Now(),
+	}
+
+	// 构造最小化请求
+	reqBody := map[string]any{
+		"model":      dep.ModelName,
+		"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+		"max_tokens": 1,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	// 构造 HTTP 请求
+	url := dep.APIBase + "/chat/completions"
+	req, err := http.NewRequestWithContext(
+		context.Background(), http.MethodPost, url, bytesReader(bodyBytes),
+	)
+	if err != nil {
+		result.IsHealthy = false
+		result.Error = fmt.Sprintf("构造请求失败: %v", err)
+		return result
+	}
+	req.Header.Set("Authorization", "Bearer "+dep.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	// 发送请求
+	client := &http.Client{Timeout: h.checkTimeout}
+	if !dep.VerifySSL {
+		client.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	latency := time.Since(start).Seconds()
+
+	if err != nil {
+		result.IsHealthy = false
+		result.Error = fmt.Sprintf("请求失败: %v", err)
+		return result
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusOK {
+		result.IsHealthy = true
+		result.Latency = latency
+	} else {
+		result.IsHealthy = false
+		result.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	return result
+}
+
+// backgroundLoop 后台健康检查循环。
+func (h *HealthChecker) backgroundLoop(ctx context.Context) {
+	// 首次立即检查一次
+	h.CheckAll()
+
+	ticker := time.NewTicker(h.checkInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.CheckAll()
+		}
+	}
+}
+
+// bytesReader 辅助函数，将 []byte 转为 io.Reader。
+func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
+
+type bytesReaderImpl struct{ data []byte }
+
+func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
+	return &bytesReaderImpl{data: data}
+}
+
+// buildModelIndices 构建 model 索引（对齐 Python BaseRouter._build_model_indices）。
+func (r *ReliableRouter) buildModelIndices() {
+	r.modelIndices = make(map[string][]*Deployment)
+	for _, dep := range r.deployments {
+		r.modelIndices[dep.ModelName] = append(r.modelIndices[dep.ModelName], dep)
+	}
+}
+
+// ──── Session 亲和性 ────
+
+// getSessionAffinityDeployment 获取 session 对应的亲和性 deployment。
+//
+// 对应 Python: AdaptiveStrategy._get_session_affinity_deployment()
+func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, available []*Deployment) *Deployment {
+	if sessionID == "" {
+		return nil
+	}
+
+	r.sessionMu.RLock()
+	entry, ok := r.sessionMap[sessionID]
+	r.sessionMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	// 检查 TTL 是否过期
+	if time.Since(entry.lastUsed).Seconds() > defaultSessionTTL {
+		// 过期了，删除映射
+		r.sessionMu.Lock()
+		delete(r.sessionMap, sessionID)
+		r.sessionMu.Unlock()
+		return nil
+	}
+
+	// 查找对应的 deployment 是否在可用列表中
+	for _, dep := range available {
+		if dep.ID == entry.deploymentID {
+			// 更新最近使用时间
+			r.sessionMu.Lock()
+			r.sessionMap[sessionID] = sessionEntry{
+				deploymentID: entry.deploymentID,
+				lastUsed:     time.Now(),
+			}
+			r.sessionMu.Unlock()
+			return dep
+		}
+	}
+
+	return nil
+}
+
+// updateSessionMapping 更新 session 到 deployment 的映射。
+//
+// 对应 Python: AdaptiveStrategy._update_session_mapping()
+func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
+	if sessionID == "" {
+		return
+	}
+
+	r.sessionMu.Lock()
+	defer r.sessionMu.Unlock()
+
+	r.sessionMap[sessionID] = sessionEntry{
+		deploymentID: deploymentID,
+		lastUsed:     time.Now(),
+	}
+
+	// 惰性清理过期 session
+	if time.Since(r.sessionCleanup).Seconds() > defaultSessionCleanup {
+		r.cleanupExpiredSessions()
+		r.sessionCleanup = time.Now()
+	}
+}
+
+// cleanupExpiredSessions 清理过期的 session 映射。
+//
+// 对应 Python: AdaptiveStrategy._cleanup_expired_sessions()
+func (r *ReliableRouter) cleanupExpiredSessions() {
+	now := time.Now()
+	for sid, entry := range r.sessionMap {
+		if now.Sub(entry.lastUsed).Seconds() > defaultSessionTTL {
+			delete(r.sessionMap, sid)
+		}
+	}
+}
+
 // calculateScore 计算单个端点的自适应加权评分。
 //
 // 对应 Python: AdaptiveStrategy._calculate_score()
@@ -1092,8 +1096,6 @@ func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	// 加权求和
 	return s.WHealth*healthScore + s.WToken*tokenScore + s.WRPM*rpmScore + s.WLatency*latencyScore
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 func init() {
 	routerCache = make(map[string]*ReliableRouter)

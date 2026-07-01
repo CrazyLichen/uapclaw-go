@@ -24,42 +24,6 @@ type chromaWhereFilter struct {
 	clause chromav2.WhereClause
 }
 
-// String 实现 WhereFilter 接口
-func (f *chromaWhereFilter) String() string {
-	if f.clause != nil {
-		return f.clause.String()
-	}
-	return ""
-}
-
-// Validate 实现 WhereFilter 接口
-func (f *chromaWhereFilter) Validate() error {
-	if f.clause != nil {
-		return f.clause.Validate()
-	}
-	return nil
-}
-
-// MarshalJSON 实现 WhereFilter 接口
-func (f *chromaWhereFilter) MarshalJSON() ([]byte, error) {
-	if f.clause != nil {
-		return f.clause.MarshalJSON()
-	}
-	return []byte("null"), nil
-}
-
-// UnmarshalJSON 实现 WhereFilter 接口
-func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
-	if f.clause != nil {
-		return f.clause.UnmarshalJSON(b)
-	}
-	return nil
-}
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // chromaFieldMapping Chroma 集合的字段映射缓存。
 //
 // ChromaDB 不支持传统数据库的字段 Schema，通过 DocumentMetadata 存储字段映射信息。
@@ -101,7 +65,6 @@ type ChromaVectorStore struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// chromaMetadataKeySchema CollectionMetadata 中存储 Schema JSON 的键
 	chromaMetadataKeySchema = "schema"
@@ -115,9 +78,39 @@ const (
 	chromaDefaultBatchSize = 100
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// String 实现 WhereFilter 接口
+func (f *chromaWhereFilter) String() string {
+	if f.clause != nil {
+		return f.clause.String()
+	}
+	return ""
+}
+
+// Validate 实现 WhereFilter 接口
+func (f *chromaWhereFilter) Validate() error {
+	if f.clause != nil {
+		return f.clause.Validate()
+	}
+	return nil
+}
+
+// MarshalJSON 实现 WhereFilter 接口
+func (f *chromaWhereFilter) MarshalJSON() ([]byte, error) {
+	if f.clause != nil {
+		return f.clause.MarshalJSON()
+	}
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON 实现 WhereFilter 接口
+func (f *chromaWhereFilter) UnmarshalJSON(b []byte) error {
+	if f.clause != nil {
+		return f.clause.UnmarshalJSON(b)
+	}
+	return nil
+}
 
 // NewChromaVectorStore 创建 ChromaVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 ChromaDB 可用。

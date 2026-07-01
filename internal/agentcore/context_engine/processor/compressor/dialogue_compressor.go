@@ -152,6 +152,9 @@ Never drop higher-priority information to preserve lower-priority details.
 ## OUTPUT RULES
 
 - Target length for each block summary: <= {compression_target_tokens} tokens.
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 - Each block is a finished historical ReAct block, not ongoing work.
 - Preserve both ` + "`User Requirements`" + ` and ` + "`Final Result`" + ` explicitly in each summary when they exist.
 - Return valid JSON only.
@@ -167,10 +170,6 @@ Never drop higher-priority information to preserve lower-priority details.
 - Include at most one result per block_id.
 - Do not emit undeclared block_ids.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDialogueCompressor 创建对话压缩器实例。
 //
@@ -748,6 +747,8 @@ func (dc *DialogueCompressor) collectCompleteRounds(messages []llm_schema.BaseMe
 
 	return rounds
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // countMessagesTokens 计算消息列表的 Token 数。
 func (dc *DialogueCompressor) countMessagesTokens(mc iface.ModelContext, messages []llm_schema.BaseMessage) int {

@@ -20,7 +20,6 @@ import (
 type AesGcmCrypt struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// NonceLength GCM nonce 长度（字节）。
 	// 对应 Python: NONCE_LENGTH = 12

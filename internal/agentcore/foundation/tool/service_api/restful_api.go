@@ -68,7 +68,6 @@ type RestfulApi struct {
 type RestfulApiCardOption func(*RestfulApiCard)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultTimeout 默认超时秒数
 	defaultTimeout float64 = 60

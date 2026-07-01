@@ -46,6 +46,8 @@ func NewSSEReader(r io.Reader) *SSEReader {
 	return &SSEReader{scanner: scanner}
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ReadEvent 读取下一个 SSE 事件，返回 data 字段的 JSON 内容。
 //
 // 返回值：
@@ -90,5 +92,3 @@ func (r *SSEReader) ReadEvent() (string, error) {
 	// 正常结束（未收到 [DONE] 但流已关闭）
 	return "", io.EOF
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

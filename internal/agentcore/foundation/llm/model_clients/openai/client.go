@@ -29,8 +29,6 @@ type OpenAIModelClient struct {
 	baseHeaders map[string]string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent openai 包统一使用 AgentCore 组件标识记录日志。
@@ -75,6 +73,8 @@ func NewOpenAIModelClient(
 		baseHeaders:     baseHeaders,
 	}, nil
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Invoke 非流式调用 LLM，返回完整的助手消息。
 //

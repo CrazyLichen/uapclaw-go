@@ -81,7 +81,6 @@ type MessageSummaryOffloader struct {
 type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// msoDefaultTokensThreshold 默认 Token 触发阈值
 	msoDefaultTokensThreshold = 20000
@@ -94,16 +93,6 @@ const (
 	// msoDefaultContentMaxCharsForCompression 默认压缩输入字符上限
 	msoDefaultContentMaxCharsForCompression = 200000
 )
-
-// contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
-var contextOverflowKeywords = []string{
-	"context length",
-	"token limit",
-	"too long",
-	"exceeds",
-	"maximum context",
-	"context window",
-}
 
 // truncatedMarker 智能截断标记
 const truncatedMarker = "...[TRUNCATED]..."
@@ -251,6 +240,20 @@ func NewMessageSummaryOffloader(config *MessageSummaryOffloaderConfig, opts ...M
 	return mso, nil
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
+var contextOverflowKeywords = []string{
+	"context length",
+	"token limit",
+	"too long",
+	"exceeds",
+	"maximum context",
+	"context window",
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // WithMessageSummaryModel 注入已有 Model 实例（测试用）。
 func WithMessageSummaryModel(model *llm.Model) MessageSummaryOffloaderOption {
 	return func(mso *MessageSummaryOffloader) { mso.model = model }
@@ -365,6 +368,8 @@ func (c *MessageSummaryOffloaderConfig) applyMSODefaults() {
 		c.ContentMaxCharsForCompression = msoDefaultContentMaxCharsForCompression
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // shouldOffloadMessage 判断消息是否符合摘要卸载条件。
 //

@@ -45,6 +45,16 @@ const (
 	APIParamLocationForm
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+const (
+	// locationKey JSON Schema 中参数位置字段的键名
+	locationKey = "location"
+	// formHandlerTypeKey JSON Schema 中表单处理器类型字段的键名
+	formHandlerTypeKey = "form_handler_type"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // String 返回 APIParamLocation 的字符串表示。
 func (l APIParamLocation) String() string {
 	switch l {
@@ -62,17 +72,6 @@ func (l APIParamLocation) String() string {
 		return "unknown"
 	}
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// locationKey JSON Schema 中参数位置字段的键名
-	locationKey = "location"
-	// formHandlerTypeKey JSON Schema 中表单处理器类型字段的键名
-	formHandlerTypeKey = "form_handler_type"
-)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAPIParamMapper 创建参数映射器。
 //

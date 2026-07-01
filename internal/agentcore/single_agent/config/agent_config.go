@@ -70,8 +70,6 @@ type ReActAgentConfigOption func(*ReActAgentConfig)
 // ModelClientExtraOption WithModelClient 复合 Option 的扩展参数函数
 type ModelClientExtraOption func(*modelClientExtra)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期接口检查：ReActAgentConfig 必须实现 AgentConfig 接口
@@ -329,5 +327,3 @@ func (c *ReActAgentConfig) Validate() error {
 	}
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

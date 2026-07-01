@@ -21,6 +21,11 @@ type ClientRegistry struct {
 	factories map[string]ClientFactory // 键: "{客户端类型}_{客户端名称}"
 }
 
+// registryProviderValidator 实现 llmschema.ProviderValidator 接口。
+//
+// 将 ClientRegistry 中已注册的 LLM 客户端作为 Provider 验证来源。
+type registryProviderValidator struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ClientFactory 客户端工厂函数类型。
@@ -46,6 +51,8 @@ func NewClientRegistry() *ClientRegistry {
 		factories: make(map[string]ClientFactory),
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetClientRegistry 返回全局客户端注册表单例。
 func GetClientRegistry() *ClientRegistry {
@@ -160,8 +167,24 @@ func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *l
 	return GetClientRegistry().GetClient(provider, clientTypeLLM, modelConfig, clientConfig)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ValidateProvider 验证 provider 是否已在注册表中注册。
+//
+// 对应 Python: ModelClientConfig.validate_client_provider() 通过 ClientRegistry 查询。
+func (v *registryProviderValidator) ValidateProvider(provider string) string {
+	names := GetClientRegistry().ListClients()
+	prefix := clientTypeLLM + "_"
+	for _, name := range names {
+		if strings.HasPrefix(name, prefix) {
+			registeredProvider := name[len(prefix):]
+			if strings.EqualFold(registeredProvider, provider) {
+				return registeredProvider
+			}
+		}
+	}
+	return ""
+}
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
 func init() {
 	// 桥接 ClientRegistry → ProviderValidator，实现 2.5 节预埋的 SetProviderValidator
 	llmschema.SetProviderValidator(&registryProviderValidator{})
@@ -182,26 +205,4 @@ func (r *ClientRegistry) listClientsLocked() []string {
 		names = append(names, name)
 	}
 	return names
-}
-
-// registryProviderValidator 实现 llmschema.ProviderValidator 接口。
-//
-// 将 ClientRegistry 中已注册的 LLM 客户端作为 Provider 验证来源。
-type registryProviderValidator struct{}
-
-// ValidateProvider 验证 provider 是否已在注册表中注册。
-//
-// 对应 Python: ModelClientConfig.validate_client_provider() 通过 ClientRegistry 查询。
-func (v *registryProviderValidator) ValidateProvider(provider string) string {
-	names := GetClientRegistry().ListClients()
-	prefix := clientTypeLLM + "_"
-	for _, name := range names {
-		if strings.HasPrefix(name, prefix) {
-			registeredProvider := name[len(prefix):]
-			if strings.EqualFold(registeredProvider, provider) {
-				return registeredProvider
-			}
-		}
-	}
-	return ""
 }

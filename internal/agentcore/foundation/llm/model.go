@@ -50,10 +50,6 @@ type Model struct {
 // ModelOption Model 构造选项函数。
 type ModelOption func(*Model)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewModel 创建 Model 实例。
@@ -393,6 +389,14 @@ func (m *Model) GetClient() model_clients.BaseModelClient {
 	return m.client
 }
 
+// Format 实现 fmt.Formatter 接口，支持格式化输出 Model 信息。
+func (m *Model) Format(f fmt.State, _ rune) {
+	_, _ = fmt.Fprintf(f, "Model(provider=%s, model=%s)",
+		m.ClientConfig.ClientProvider,
+		m.resolveModelName(""),
+	)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // resolveModelName 解析非流式调用的模型名称。
@@ -417,12 +421,4 @@ func (m *Model) resolveStreamModelName(paramModel string) string {
 		return m.ModelConfig.ModelName
 	}
 	return ""
-}
-
-// Format 实现 fmt.Formatter 接口，支持格式化输出 Model 信息。
-func (m *Model) Format(f fmt.State, _ rune) {
-	_, _ = fmt.Fprintf(f, "Model(provider=%s, model=%s)",
-		m.ClientConfig.ClientProvider,
-		m.resolveModelName(""),
-	)
 }

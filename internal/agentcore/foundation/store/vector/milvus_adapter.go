@@ -27,24 +27,7 @@ type milvusClientAdapter struct {
 	client *milvusclient.Client
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。
-//
-// 注意：此函数依赖真实 Milvus 服务，无法在单元测试中覆盖，
-// 需通过集成测试（go test -tags=integration）验证。
-func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
-	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
-		Address: uri,
-		APIKey:  token,
-		DBName:  dbName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &milvusClientAdapter{client: c}, nil
-}
-
+// ──────────────────────────── 导出函数 ────────────────────────────
 func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
 	return a.client.CreateCollection(ctx, option)
 }
@@ -113,4 +96,22 @@ func (a *milvusClientAdapter) DescribeIndex(ctx context.Context, option milvuscl
 
 func (a *milvusClientAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultCreateClient 默认的客户端创建函数，使用新 SDK milvusclient.New。
+//
+// 注意：此函数依赖真实 Milvus 服务，无法在单元测试中覆盖，
+// 需通过集成测试（go test -tags=integration）验证。
+func defaultCreateClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+		Address: uri,
+		APIKey:  token,
+		DBName:  dbName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &milvusClientAdapter{client: c}, nil
 }

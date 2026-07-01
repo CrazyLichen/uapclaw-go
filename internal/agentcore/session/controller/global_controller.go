@@ -40,12 +40,7 @@ type GlobalSessionController struct {
 	enableSessionController bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	globalController     *GlobalSessionController
 	globalControllerOnce sync.Once

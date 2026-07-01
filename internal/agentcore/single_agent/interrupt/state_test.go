@@ -6,14 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestInterruptKey常量(t *testing.T) {
 	assert.Equal(t, "__react_agent_interruption__", InterruptionKey)
-	assert.Equal(t, "_resume_user_input", ResumeUserInputKey)
-	assert.Equal(t, "__interrupt_auto_confirm__", InterruptAutoConfirmKey)
+	assert.Equal(t, "_resume_user_input", saschema.ResumeUserInputKey)
+	assert.Equal(t, "__interrupt_auto_confirm__", saschema.InterruptAutoConfirmKey)
 	assert.Equal(t, "_resume_start_iteration", ResumeStartIterationKey)
 }
 
@@ -52,7 +53,7 @@ func TestToolInterruptionState(t *testing.T) {
 }
 
 func TestWorkflowInterruptEntry(t *testing.T) {
-	entry := &WorkflowInterruptEntry{
+	entry := &saschema.WorkflowInterruptEntry{
 		ToolCall:               &llmschema.ToolCall{ID: "wf_1"},
 		ComponentIDs:           []string{"comp1", "comp2"},
 		WorkflowExecutionState: nil,
@@ -63,9 +64,9 @@ func TestWorkflowInterruptEntry(t *testing.T) {
 }
 
 func TestInterruptionState(t *testing.T) {
-	s := &InterruptionState{
+	s := &saschema.InterruptionState{
 		BaseInterruptionState: BaseInterruptionState{Iteration: 2},
-		InterruptedWorkflows: map[string]*WorkflowInterruptEntry{
+		InterruptedWorkflows: map[string]*saschema.WorkflowInterruptEntry{
 			"wf1": {ToolCall: &llmschema.ToolCall{ID: "wf1"}},
 		},
 		PendingWorkflowID:  "wf1",

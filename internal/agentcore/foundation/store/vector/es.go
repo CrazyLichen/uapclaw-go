@@ -59,13 +59,12 @@ type ESVectorStore struct {
 	createClient func(addresses []string, username, password string) (esClient, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ESOption ESVectorStore 构造选项
 type ESOption func(*ESVectorStore)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// esDefaultBatchSize ES 默认批量插入大小
 	esDefaultBatchSize = 500
@@ -88,6 +87,8 @@ var esLogComponent = logger.ComponentAgentCore
 func WithESIndexPrefix(prefix string) ESOption {
 	return func(s *ESVectorStore) { s.indexPrefix = prefix }
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewESVectorStore 创建 ESVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 ES 可用。
@@ -825,8 +826,6 @@ func (s *ESVectorStore) GetCollectionMetadata(ctx context.Context, collectionNam
 	return metadata, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Do 实现 esClient 接口，将请求转发到内部客户端。
 // 使用传入的 ctx 而非 context.Background()，确保请求级超时和取消信号生效。
 func (w *esClientWrapper) Do(ctx context.Context, req esapi.Request) (*esapi.Response, error) {
@@ -837,6 +836,8 @@ func (w *esClientWrapper) Do(ctx context.Context, req esapi.Request) (*esapi.Res
 func (w *esClientWrapper) Close() {
 	// elasticsearch8.Client 没有显式 Close 方法，依赖 GC 回收
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getClient 惰性获取或创建 ES 客户端，双重检查锁。
 func (s *ESVectorStore) getClient() (esClient, error) {

@@ -78,10 +78,7 @@ type RerankOption struct {
 	MultimodalQuery any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultRerankerTimeout 默认请求超时时间（秒）
 	defaultRerankerTimeout float64 = 10
@@ -94,8 +91,6 @@ const (
 	// queryTemplate 查询模板，包含指令和查询
 	queryTemplate = "<Instruct>: {instruct}\n<Query>: {query}\n"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -173,5 +168,3 @@ func ReplacePlaceholder(s, old, new string) string {
 	}
 	return s
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

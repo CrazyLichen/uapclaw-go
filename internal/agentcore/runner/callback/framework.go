@@ -13,9 +13,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// HookFunc 生命周期钩子函数类型
-type HookFunc func(ctx context.Context, event string, data any)
-
 // eventHistoryEntry 事件历史记录条目
 type eventHistoryEntry struct {
 	// Event 事件名
@@ -138,6 +135,9 @@ type toolTransformIOEntry struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// HookFunc 生命周期钩子函数类型
+type HookFunc func(ctx context.Context, event string, data any)
+
 // triggerStrategy 回调触发执行策略。
 type triggerStrategy int
 
@@ -172,13 +172,10 @@ type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
 type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// maxEventHistory 事件历史记录最大条数
 	maxEventHistory = 1000
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -1650,12 +1647,12 @@ func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler
 	}
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // ⤵️ 预留：trigger_stream / trigger_generator 需要基于 channel 的流式触发模式。
 // Python 中 trigger_stream 对异步输入流的每一项触发事件，trigger_generator 聚合异步生成器输出。
 // Go 等价实现需使用 channel 模式，等有实际流式调用场景时再实现。
 // 对应 Python: AsyncCallbackFramework.trigger_stream() / trigger_generator()
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // triggerCallbacks 泛型触发核心逻辑（包级独立函数，因 Go 不支持方法类型参数）。
 //

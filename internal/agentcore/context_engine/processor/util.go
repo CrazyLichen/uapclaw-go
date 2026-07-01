@@ -11,14 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExtractToolName 从 ToolCall 中提取工具名称。
@@ -537,7 +529,6 @@ func ExtractSkillFileContent(truncateFn func(string) string, resultText string) 
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func filePathOrDefault(path string) string {
 	if path == "" {
 		return "[unknown]"

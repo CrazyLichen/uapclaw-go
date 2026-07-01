@@ -5,7 +5,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -52,21 +51,7 @@ type BaseInteraction struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ExecutableIDProvider 提供可执行路径 ID 的接口（通过类型断言获取）。
-// NodeSession 天然满足此接口（有 ExecutableID() 方法），AgentSession 不满足。
-// 对齐 Python: hasattr(session, "executable_id") 检测。
-type ExecutableIDProvider = interfaces.ExecutableIDProvider
-
-// InteractionOutputWriterProvider 交互所需的输出写入器提供者，类型别名指向 stream 包。
-// ✅ 5.10 已回填：从 stream 包导入
-type InteractionOutputWriterProvider = stream.InteractionOutputWriterProvider
-
-// InteractionOutputWriter 交互输出写入器，类型别名指向 stream 包。
-// ✅ 5.10 已回填：从 stream 包导入
-type InteractionOutputWriter = stream.InteractionOutputWriter
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// InteractionType 交互事件类型标识
 	// 对应 Python: INTERACTION = "__interaction__"
@@ -75,8 +60,6 @@ const (
 	// 对应 Python: INTERACTIVE_INPUT = "__interactive_input__"
 	InteractiveInputKey = "__interactive_input__"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -213,7 +196,7 @@ func commitCMP(session interfaces.InnerSession) {
 // NodeSession 天然满足 ExecutableIDProvider 接口，AgentSession 不满足。
 // 断言失败时记录 Warn 日志并返回空字符串，与 Python 行为一致（Python AgentSession 无 executable_id）。
 func getExecutableID(session interfaces.InnerSession) string {
-	if provider, ok := session.(ExecutableIDProvider); ok {
+	if provider, ok := session.(interfaces.ExecutableIDProvider); ok {
 		return provider.ExecutableID()
 	}
 	logger.Warn(logger.ComponentAgentCore).

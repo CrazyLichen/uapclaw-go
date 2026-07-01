@@ -18,7 +18,7 @@ import (
 
 // Test接口满足_ProxySession 验证 ProxySession 满足 InnerSession 接口。
 func Test接口满足_ProxySession(t *testing.T) {
-	var _ InnerSession = (*ProxySession)(nil)
+	var _ interfaces.InnerSession = (*ProxySession)(nil)
 }
 
 // TestNewProxySession 验证 NewProxySession 创建的实例 stub 为 nil。
@@ -212,5 +212,5 @@ func TestProxySession_NilStub时Panic(t *testing.T) {
 // TestAgentSession_接口实现 在 session 包中验证 AgentSession 满足 InnerSession 接口
 // （internal 包不能导入 session 包，否则循环依赖）
 func TestAgentSession_接口实现(t *testing.T) {
-	var _ InnerSession = internal.NewAgentSession("test")
+	var _ interfaces.InnerSession = internal.NewAgentSession("test")
 }

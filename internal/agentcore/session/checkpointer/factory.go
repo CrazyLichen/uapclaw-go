@@ -44,10 +44,6 @@ type CheckpointerFactory struct {
 // 对应 Python: InMemoryCheckpointerProvider
 type inMemoryProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // defaultFactory 全局默认工厂单例
@@ -69,6 +65,8 @@ func NewCheckpointerFactory() *CheckpointerFactory {
 	f.Register("persistence", &persistenceProvider{})
 	return f
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
 // 对应 Python: CheckpointerConfig.__repr__()
@@ -183,13 +181,12 @@ func RegisterCheckpointer(name string, provider CheckpointerProvider) {
 	defaultFactory.Register(name, provider)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Create 创建 InMemory 检查点器。
 func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
 	return defaultInMemoryCheckpointer, nil
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
 func init() {
 	defaultInMemoryCheckpointer = NewInMemoryCheckpointer()
 	defaultFactory = NewCheckpointerFactory()

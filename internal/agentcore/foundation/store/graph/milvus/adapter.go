@@ -16,21 +16,7 @@ type milvusClientGraphAdapter struct {
 	client *milvusclient.Client
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// defaultCreateGraphClient 默认客户端创建函数。
-// 仅在集成测试中覆盖。
-func defaultCreateGraphClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
-	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
-		Address: uri,
-		APIKey:  token,
-		DBName:  dbName,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &milvusClientGraphAdapter{client: c}, nil
-}
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateCollection 创建集合
 func (a *milvusClientGraphAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
@@ -133,4 +119,20 @@ func (a *milvusClientGraphAdapter) Compact(ctx context.Context, option milvuscli
 // Close 关闭客户端连接
 func (a *milvusClientGraphAdapter) Close(ctx context.Context) error {
 	return a.client.Close(ctx)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultCreateGraphClient 默认客户端创建函数。
+// 仅在集成测试中覆盖。
+func defaultCreateGraphClient(ctx context.Context, uri, token, dbName string) (milvusClient, error) {
+	c, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
+		Address: uri,
+		APIKey:  token,
+		DBName:  dbName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &milvusClientGraphAdapter{client: c}, nil
 }

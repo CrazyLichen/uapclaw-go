@@ -64,12 +64,6 @@ type taskJSON struct {
 	Extensions          map[string]any         `json:"extensions,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTask 创建新的 Task 实例，自动生成 TaskID。
@@ -176,5 +170,3 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 func (t *Task) String() string {
 	return fmt.Sprintf("Task(task_id=%s, session_id=%s, type=%s, status=%s)", t.TaskID, t.SessionID, t.TaskType, t.Status)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

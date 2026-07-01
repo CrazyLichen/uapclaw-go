@@ -16,9 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// StandardRerankerOption StandardReranker 可选配置
-type StandardRerankerOption func(*StandardReranker)
-
 // StandardReranker 标准重排序客户端，支持 vLLM 风格的 /rerank API。
 //
 // 对应 Python: openjiuwen/core/retrieval/reranker/standard_reranker.py (StandardReranker)
@@ -33,8 +30,10 @@ type StandardReranker struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// StandardRerankerOption StandardReranker 可选配置
+type StandardRerankerOption func(*StandardReranker)
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// standardEndPoint 标准重排序 API 端点
 	standardEndPoint = "/rerank"
@@ -56,6 +55,8 @@ func WithMaxRetries(n int) StandardRerankerOption {
 		r.maxRetries = n
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithRetryWait 设置重试等待时间
 func WithRetryWait(d time.Duration) StandardRerankerOption {

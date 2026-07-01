@@ -42,8 +42,6 @@ type InferenceAffinityModelClient struct {
 	openai.OpenAIModelClient
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。
@@ -88,6 +86,8 @@ func NewInferenceAffinityModelClient(
 		OpenAIModelClient: *openaiClient,
 	}, nil
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Invoke 非流式调用 InferenceAffinity API。
 //

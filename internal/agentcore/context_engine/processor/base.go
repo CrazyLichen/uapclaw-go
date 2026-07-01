@@ -20,12 +20,6 @@ type BaseProcessor struct {
 	compressionUsage map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseProcessor 创建处理器基类实例
@@ -39,5 +33,3 @@ func NewBaseProcessor(config iface.ProcessorConfig) *BaseProcessor {
 func (p *BaseProcessor) Config() iface.ProcessorConfig {
 	return p.config
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -19,11 +19,15 @@ import (
 type DefaultAgentCreator struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// AgentTypeReAct ReAct Agent 类型名
 	AgentTypeReAct = "react_agent"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期校验：DefaultAgentCreator 必须满足 spawn.AgentCreator 接口
+var _ spawn.AgentCreator = (*DefaultAgentCreator)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -80,9 +84,6 @@ func (c *DefaultAgentCreator) CreateByType(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 编译期校验：DefaultAgentCreator 必须满足 spawn.AgentCreator 接口
-var _ spawn.AgentCreator = (*DefaultAgentCreator)(nil)
 
 // buildReActAgentConfig 从 initKwargs 构建 ReActAgentConfig。
 // 对齐 Python: agent = agent_cls(**init_kwargs)

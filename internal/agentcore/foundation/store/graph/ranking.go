@@ -45,7 +45,6 @@ type RankerRegistry struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// DefaultWeightNameDense 默认名称向量权重
 	DefaultWeightNameDense = 0.15
@@ -58,7 +57,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// GlobalRankerRegistry 全局排序器注册表
 	GlobalRankerRegistry = NewRankerRegistry()

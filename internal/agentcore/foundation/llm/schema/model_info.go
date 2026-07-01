@@ -54,8 +54,6 @@ type ModelConfig struct {
 // BaseModelInfoOption BaseModelInfo 构造选项函数。
 type BaseModelInfoOption func(*BaseModelInfo)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // baseModelInfoKnownKeys BaseModelInfo 已知的 JSON 键名集合，用于 Extra 字段拆分。
@@ -215,7 +213,6 @@ func NewModelConfig(provider string, info BaseModelInfo) *ModelConfig {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() {
 	// 初始化 BaseModelInfo 已知 JSON 键名集合
 	baseModelInfoKnownKeys = map[string]struct{}{

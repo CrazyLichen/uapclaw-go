@@ -102,10 +102,7 @@ type PersistenceCheckpointer struct {
 // 对应 Python: PersistenceCheckpointerProvider
 type persistenceProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// keyNums 单实体存储的 key 数量（dumpType + blob）
 	keyNums = 2
@@ -121,8 +118,6 @@ const (
 	// wfUpdateBlobsDumpType 工作流更新类型键后缀
 	wfUpdateBlobsDumpType = "workflow_update_blobs_dump_type"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

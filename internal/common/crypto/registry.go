@@ -7,6 +7,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // BaseCrypt 加密算法抽象接口，密钥由调用方传入。
@@ -20,8 +22,6 @@ type BaseCrypt interface {
 	// Decrypt 使用指定密钥解密密文，返回明文字符串。
 	Decrypt(key []byte, ciphertext string) (string, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // CryptRegistry 加密算法注册表（并发安全）。
 //

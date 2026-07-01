@@ -85,8 +85,6 @@ func NewOpenApiClient(config *types.McpServerConfig) *OpenApiClient {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // Connect 读取 OpenAPI 文件并解析工具列表。
 func (c *OpenApiClient) Connect(_ context.Context, _ ...types.ConnectOption) error {
 	c.tools = make(map[string]*openAPIToolInfo)
@@ -344,6 +342,8 @@ func (c *OpenApiClient) ReadResource(_ context.Context, _ string) (any, error) {
 func (c *OpenApiClient) Close() error {
 	return c.Disconnect(context.Background())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // registerOperation 将 OpenAPI Operation 注册为 MCP 工具。
 func (c *OpenApiClient) registerOperation(method, path string, op *openapi3.Operation, components *openapi3.Components, openAPIVersion string) {

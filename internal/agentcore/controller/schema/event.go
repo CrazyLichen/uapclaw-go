@@ -91,16 +91,6 @@ type FollowUpEvent struct {
 	InputData []DataFrame `json:"input_data"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// EventType 事件类型枚举，定义所有支持的事件类型。
-//
-// 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
-type EventType string
-
-// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
-type eventSlice []Event
-
 // inputEventJSON InputEvent 的 JSON 序列化中间结构。
 type inputEventJSON struct {
 	EventTypeField EventType      `json:"event_type"`
@@ -135,8 +125,17 @@ type followUpEventJSON struct {
 	InputData      dataFrameSlice `json:"input_data"`
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
+// EventType 事件类型枚举，定义所有支持的事件类型。
+//
+// 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
+type EventType string
+
+// eventSlice Event 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
+type eventSlice []Event
+
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// EventInput 用户输入事件
 	EventInput EventType = "input"
@@ -149,8 +148,6 @@ const (
 	// EventFollowUp 后续事件
 	EventFollowUp EventType = "follow_up"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -323,8 +320,6 @@ func (e *FollowUpEvent) UnmarshalJSON(data []byte) error {
 	e.InputData = []DataFrame(j.InputData)
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler，遍历每个 Event 按具体类型序列化。
 func (es eventSlice) MarshalJSON() ([]byte, error) {

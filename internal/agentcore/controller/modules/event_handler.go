@@ -59,12 +59,6 @@ type EventHandlerInput struct {
 	Session sessioninterfaces.SessionFacade
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HandleFollowUp 默认实现：返回 not_supported 状态。
@@ -93,5 +87,3 @@ func (b *EventHandlerBase) WaitCompletion(_ context.Context, _ time.Duration) ma
 // OnAbort 默认实现：空操作。
 // 对齐 Python EventHandler.OnAbort 默认实现。
 func (b *EventHandlerBase) OnAbort() {}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

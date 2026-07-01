@@ -78,10 +78,7 @@ type MilvusVectorStore struct {
 	createClient func(ctx context.Context, uri, token, dbName string) (milvusClient, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultDistanceMetric 默认距离度量方式
 	defaultDistanceMetric = "COSINE"
@@ -113,6 +110,8 @@ func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorSt
 		createClient:       defaultCreateClient,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Close 关闭 Milvus 客户端连接。
 //

@@ -24,12 +24,6 @@ type SysOperationMgr struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSysOperationMgr 创建系统操作资源管理器。
@@ -78,5 +72,3 @@ func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (any, error) {
 	// ⤵️ 预留：9.32 实现后回填上述逻辑
 	return nil, fmt.Errorf("sys operation manager not implemented, sys_operation_id=%s", sysOperationID)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

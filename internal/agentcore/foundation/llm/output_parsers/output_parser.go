@@ -3,18 +3,9 @@ package output_parsers
 import (
 	"fmt"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
-
-// ──────────────────────────── 类型别名 ────────────────────────────
-
-// BaseOutputParser 重新导出 model_clients.BaseOutputParser，方便使用者仅导入 output_parsers 包。
-type BaseOutputParser = model_clients.BaseOutputParser
-
-// StreamParsedResult 重新导出 model_clients.StreamParsedResult。
-type StreamParsedResult = model_clients.StreamParsedResult
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

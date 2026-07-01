@@ -431,6 +431,8 @@ Your task is to merge them into one shorter, stable memory block while preservin
 [Historical memory blocks]:
 {compressed_blocks}
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 ---
 
 ## CONSOLIDATION RULES
@@ -462,10 +464,6 @@ Your task is to merge them into one shorter, stable memory block while preservin
 
 Output plain text only.
 `
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。
 //
@@ -1063,6 +1061,8 @@ func (crc *CurrentRoundCompressor) getModelName() string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // init 自动注册到 context_engine 注册表
 func init() {

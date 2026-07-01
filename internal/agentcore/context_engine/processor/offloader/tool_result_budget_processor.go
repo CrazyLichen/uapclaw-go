@@ -78,15 +78,12 @@ type offloadCandidate struct {
 type ToolResultBudgetProcessorOption func(*ToolResultBudgetProcessor)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// PersistedOutputTag 卸载后占位符开始标签
 	PersistedOutputTag = "<persisted-output>"
 	// PersistedOutputClosingTag 卸载后占位符结束标签
 	PersistedOutputClosingTag = "</persisted-output>"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -236,6 +233,8 @@ func (c *ToolResultBudgetProcessorConfig) applyDefaults() {
 		c.OffloadMessageTypes = []string{"tool"}
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // iterRoundRanges 调用 FindAllDialogueRound，将 DialogueRound 转为 [2]int 范围。
 //

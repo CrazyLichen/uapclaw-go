@@ -33,8 +33,6 @@ type SiliconFlowModelClient struct {
 	openai.OpenAIModelClient
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent siliconflow 包日志组件标识（AgentCore 层）。
@@ -76,6 +74,8 @@ func NewSiliconFlowModelClient(
 		OpenAIModelClient: *openaiClient,
 	}, nil
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Invoke 非流式调用 SiliconFlow API。
 //

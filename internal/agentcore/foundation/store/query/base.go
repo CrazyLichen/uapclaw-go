@@ -131,7 +131,6 @@ type CustomExpr struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// MatchModeExact 精确匹配
 	MatchModeExact = "exact"

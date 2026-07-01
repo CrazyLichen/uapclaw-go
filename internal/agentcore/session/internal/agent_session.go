@@ -45,10 +45,6 @@ type AgentSession struct {
 // AgentSessionOption AgentSession 构造选项函数类型
 type AgentSessionOption func(*AgentSession)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentSession 创建内部 AgentSession 实例。
@@ -223,5 +219,3 @@ func (s *AgentSession) AgentID() string {
 func (s *AgentSession) AgentSpan() *tracer.TraceAgentSpan {
 	return s.agentSpan
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

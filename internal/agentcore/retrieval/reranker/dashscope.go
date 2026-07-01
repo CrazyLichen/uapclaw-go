@@ -16,9 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// DashScopeRerankerOption DashScopeReranker 可选配置。
-type DashScopeRerankerOption func(*DashScopeReranker)
-
 // DashScopeReranker 阿里云 DashScope 重排序客户端。
 //
 // 继承 RerankerBase，使用 DashScope 专用的 /services/rerank/text-rerank/text-rerank API，
@@ -37,8 +34,10 @@ type DashScopeReranker struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// DashScopeRerankerOption DashScopeReranker 可选配置。
+type DashScopeRerankerOption func(*DashScopeReranker)
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// dashScopeEndPoint DashScope 重排序 API 端点
 	dashScopeEndPoint = "/services/rerank/text-rerank/text-rerank"
@@ -58,6 +57,8 @@ var _ = fmt.Sprintf
 func WithDashScopeMaxRetries(n int) DashScopeRerankerOption {
 	return func(r *DashScopeReranker) { r.maxRetries = n }
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithDashScopeRetryWait 设置重试等待时间。
 func WithDashScopeRetryWait(d time.Duration) DashScopeRerankerOption {

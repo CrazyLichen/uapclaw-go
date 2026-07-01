@@ -35,7 +35,6 @@ type mutexWriter struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultMaxSizeBytes 单文件最大字节数，20 MB。
 	// 对应 Python: _LOG_FILE_MAX_BYTES

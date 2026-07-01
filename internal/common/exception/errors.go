@@ -40,10 +40,10 @@ type baseErrorBuilder struct {
 	params  map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ErrorOption BaseError 构造选项函数。
 type ErrorOption func(*baseErrorBuilder)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ErrorCategory 错误类别枚举，表达控制流语义。
 //
@@ -63,21 +63,6 @@ const (
 	// ErrorCategoryTermination 正常控制流终止，非错误（fatal=False, recoverable=False）
 	ErrorCategoryTermination
 )
-
-// String 实现 fmt.Stringer 接口，返回 ErrorCategory 的字符串表示。
-func (c ErrorCategory) String() string {
-	if int(c) >= 0 && int(c) < len(errorCategoryStrings) {
-		return errorCategoryStrings[c]
-	}
-	return fmt.Sprintf("ErrorCategory(%d)", int(c))
-}
-
-// MarshalJSON 实现 json.Marshaler 接口。
-func (c ErrorCategory) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.String())
-}
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -101,6 +86,19 @@ var errorCategoryAttrs = [...]struct {
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// String 实现 fmt.Stringer 接口，返回 ErrorCategory 的字符串表示。
+func (c ErrorCategory) String() string {
+	if int(c) >= 0 && int(c) < len(errorCategoryStrings) {
+		return errorCategoryStrings[c]
+	}
+	return fmt.Sprintf("ErrorCategory(%d)", int(c))
+}
+
+// MarshalJSON 实现 json.Marshaler 接口。
+func (c ErrorCategory) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
+}
 
 // WithMsg 设置自定义消息（覆盖模板渲染结果）。
 func WithMsg(msg string) ErrorOption {

@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // Scope 隔离边界接口，定义数据隔离的基本边界。
@@ -22,8 +24,6 @@ type Subject interface {
 	// String 转为字符串表示
 	fmt.Stringer
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // MainScope 主域，系统内置默认域。
 // 用于不涉及额外租户或应用级隔离的通用场景，字符串表示为固定值 "main"。
@@ -76,6 +76,8 @@ type SessionScopeKey struct {
 	SessionScope SessionScope
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ──────────────────────────── MainScope 方法 ────────────────────────────
 
 // String 返回固定值 "main"
@@ -119,8 +121,6 @@ func (s SessionScope) String() string {
 func (k SessionScopeKey) String() string {
 	return "agent:" + k.AgentID + ":" + k.SessionScope.String()
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseSessionScope 从字符串解析 SessionScope。
 // 解析规则：不含 ":" 则整个字符串作为 scope；含 ":" 则第一段为 scope，其余为 subject。

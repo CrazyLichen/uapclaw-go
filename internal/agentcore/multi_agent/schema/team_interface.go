@@ -170,10 +170,6 @@ type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (a
 // TeamOption 团队调用选项函数。
 type TeamOption func(*TeamOptions)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamConfig 创建 TeamConfig 实例，设置默认值。
@@ -258,5 +254,3 @@ func (c *TeamConfig) GetExtra(key string) (any, bool) {
 	val, ok := c.Extra[key]
 	return val, ok
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

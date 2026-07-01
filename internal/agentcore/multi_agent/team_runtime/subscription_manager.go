@@ -28,7 +28,6 @@ type SubscriptionManager struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore

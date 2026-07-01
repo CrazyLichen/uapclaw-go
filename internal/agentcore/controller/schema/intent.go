@@ -34,10 +34,10 @@ type Intent struct {
 	ClarificationPrompt string `json:"clarification_prompt,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // IntentOption 意图可选配置函数。
 type IntentOption func(*Intent)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // IntentType 意图类型枚举，定义所有支持的用户意图。
 //
@@ -45,7 +45,6 @@ type IntentOption func(*Intent)
 type IntentType string
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// IntentCreateTask 创建任务
 	IntentCreateTask IntentType = "create_task"
@@ -67,8 +66,6 @@ const (
 	// IntentUnknownTask 未知意图
 	IntentUnknownTask IntentType = "unknown_task"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -205,5 +202,3 @@ func WithConfidence(c float64) IntentOption {
 func WithClarificationPrompt(prompt string) IntentOption {
 	return func(i *Intent) { i.ClarificationPrompt = prompt }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

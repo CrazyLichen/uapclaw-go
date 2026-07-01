@@ -40,10 +40,7 @@ type filePipeline struct {
 	store *FileKVStore
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultBucketName 默认 bucket 名称
 	defaultBucketName = "default"
@@ -343,17 +340,6 @@ func (s *FileKVStore) Pipeline(_ context.Context) KVPipeline {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// encodeFileEntry 将 value 和 expiryAt 编码为 fileEntry JSON 字节。
-func encodeFileEntry(value []byte, expiryAt int64) ([]byte, error) {
-	entry := fileEntry{
-		Value:    base64.StdEncoding.EncodeToString(value),
-		ExpiryAt: expiryAt,
-	}
-	return json.Marshal(entry)
-}
-
 // Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
 // expiry 为过期秒数，0 表示不过期。
 func (p *filePipeline) Set(_ context.Context, key string, value []byte, expiry int) error {
@@ -429,4 +415,15 @@ func (p *filePipeline) Execute(_ context.Context) ([]PipelineResult, error) {
 	})
 
 	return results, err
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// encodeFileEntry 将 value 和 expiryAt 编码为 fileEntry JSON 字节。
+func encodeFileEntry(value []byte, expiryAt int64) ([]byte, error) {
+	entry := fileEntry{
+		Value:    base64.StdEncoding.EncodeToString(value),
+		ExpiryAt: expiryAt,
+	}
+	return json.Marshal(entry)
 }

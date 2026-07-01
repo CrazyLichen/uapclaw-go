@@ -32,8 +32,6 @@ type AgentCard struct {
 // AgentCardOption AgentCard 构造选项函数。
 type AgentCardOption func(*AgentCard)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 AgentCard 满足 schema.CardInterface。
@@ -114,5 +112,3 @@ func (c *AgentCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 Ability 接口。
 func (c *AgentCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindAgent }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -33,16 +33,11 @@ type keyedProvider struct {
 	crypt crypto.BaseCrypt
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -118,6 +113,16 @@ func (c *AesStorageCodec) Decode(ciphertext string) string {
 	return decrypted
 }
 
+// Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥
+func (p *keyedProvider) Encrypt(plaintext string) (string, error) {
+	return p.crypt.Encrypt(p.key, plaintext)
+}
+
+// Decrypt 解密密文，委托 BaseCrypt 并传入持有密钥
+func (p *keyedProvider) Decrypt(ciphertext string) (string, error) {
+	return p.crypt.Decrypt(p.key, ciphertext)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getProvider 通过全局注册表获取加密算法，并构造持有当前密钥的 CryptoProvider。
@@ -140,14 +145,4 @@ func (c *AesStorageCodec) getProvider() crypto.CryptoProvider {
 		return nil
 	}
 	return &keyedProvider{key: c.key, crypt: crypt}
-}
-
-// Encrypt 加密明文，委托 BaseCrypt 并传入持有密钥
-func (p *keyedProvider) Encrypt(plaintext string) (string, error) {
-	return p.crypt.Encrypt(p.key, plaintext)
-}
-
-// Decrypt 解密密文，委托 BaseCrypt 并传入持有密钥
-func (p *keyedProvider) Decrypt(ciphertext string) (string, error) {
-	return p.crypt.Decrypt(p.key, ciphertext)
 }

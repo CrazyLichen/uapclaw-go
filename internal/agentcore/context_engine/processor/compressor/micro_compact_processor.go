@@ -44,8 +44,6 @@ type MicroCompactProcessor struct {
 	mcpConfig *MicroCompactProcessorConfig
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MicroCompactClearedMarker 旧工具结果内容清除标记
@@ -66,6 +64,8 @@ func NewMicroCompactProcessorConfig() *MicroCompactProcessorConfig {
 		ClearedMarker:     MicroCompactClearedMarker,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Validate 校验微压缩处理器配置。
 func (c *MicroCompactProcessorConfig) Validate() error {
@@ -220,6 +220,8 @@ func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm
 	}
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // hasAnyToolExceedThreshold 判断任一工具的 ToolMessage 数量是否超过触发阈值。
 //

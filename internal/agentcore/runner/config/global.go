@@ -8,7 +8,6 @@ import (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// DEFAULT_RUNNER_CONFIG 默认 Runner 配置。
 	// distributed_mode=false，消息队列类型=FAKE。

@@ -146,17 +146,13 @@ type MemoryIndexBase struct {
 	backups map[string]*backupData
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultTopK Search 默认返回结果数量（被 simple.go 等实现类引用）
 	defaultTopK = 10
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// logComponent 日志组件常量，store 属于基础设施层（被 simple.go 等实现类引用）
 	logComponent = logger.ComponentCommon

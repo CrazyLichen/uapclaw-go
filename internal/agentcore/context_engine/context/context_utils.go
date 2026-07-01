@@ -13,12 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// ContextMessageIDKey 消息元数据中 ID 的键名
 	ContextMessageIDKey = "context_message_id"
@@ -229,5 +224,3 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 	}
 	return -1
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

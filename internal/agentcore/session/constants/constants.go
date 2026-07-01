@@ -96,7 +96,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// EnvConfigKeys 环境变量键到配置键的映射表。
 	// 对应 Python: _ENV_CONFIG_KEYS
@@ -140,5 +139,3 @@ func BuiltinDefaults() map[string]any {
 		ForceDelWorkflowStateKey:                ForceDelWorkflowStateDefault,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

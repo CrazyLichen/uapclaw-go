@@ -97,8 +97,6 @@ type SpanManager struct {
 	sessionSpans map[string]*Span
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -121,6 +119,8 @@ func NewSpanManager(traceID string, parentID ...string) *SpanManager {
 		sessionSpans: make(map[string]*Span),
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetSpan 根据调用标识获取 Span
 func (m *SpanManager) GetSpan(invokeID string) *Span {

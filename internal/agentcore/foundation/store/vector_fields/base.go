@@ -68,7 +68,6 @@ const (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// StageConstruct 构建阶段（建索引时的参数）
 	StageConstruct = "construct"
@@ -77,7 +76,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// databaseTypeStrings DatabaseType 枚举值对应的字符串表示，与 Python 枚举值保持一致。
 	databaseTypeStrings = [...]string{

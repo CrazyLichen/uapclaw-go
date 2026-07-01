@@ -110,6 +110,23 @@ const (
 	TaskTimeout
 )
 
+// TaskOption 任务选项。
+type TaskOption func(*taskConfig)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// taskManagerSingleton 全局 TaskManager 单例持有器。
+var taskManagerSingleton Singleton[TaskManager]
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// WithTaskName 设置任务名称。
+func WithTaskName(name string) TaskOption {
+	return func(c *taskConfig) { c.name = name }
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // IsTerminal 判断是否为终态。
 func (s TaskStatus) IsTerminal() bool {
 	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout
@@ -133,21 +150,6 @@ func (s TaskStatus) String() string {
 	default:
 		return "UNKNOWN"
 	}
-}
-
-// TaskOption 任务选项。
-type TaskOption func(*taskConfig)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// taskManagerSingleton 全局 TaskManager 单例持有器。
-var taskManagerSingleton Singleton[TaskManager]
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// WithTaskName 设置任务名称。
-func WithTaskName(name string) TaskOption {
-	return func(c *taskConfig) { c.name = name }
 }
 
 // WithTaskGroup 设置任务分组。

@@ -37,7 +37,6 @@ type GaussDialector struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// gaussLogComponent 日志组件
 	gaussLogComponent = logger.ComponentAgentCore
@@ -127,5 +126,3 @@ func (dialector GaussDialector) Migrator(db *gorm.DB) gorm.Migrator {
 		},
 	}}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

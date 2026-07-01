@@ -105,8 +105,6 @@ type ModelClientConfigOption func(*ModelClientConfig)
 // ModelRequestConfigOption ModelRequestConfig 构造选项函数。
 type ModelRequestConfigOption func(*ModelRequestConfig)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // providerTypeStrings ProviderType 枚举值对应的字符串表示，与 Python 端保持一致。
@@ -141,6 +139,8 @@ func (p ProviderType) String() string {
 	}
 	return fmt.Sprintf("ProviderType(%d)", int(p))
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // MarshalJSON 实现 json.Marshaler 接口，将 ProviderType 序列化为字符串。
 func (p ProviderType) MarshalJSON() ([]byte, error) {
@@ -494,7 +494,6 @@ func (c *ModelRequestConfig) UnmarshalJSON(data []byte) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() {
 	// 初始化 providerTypeMap：精确匹配 + 大小写不敏感匹配
 	providerTypeMap = make(map[string]ProviderType, len(providerTypeStrings)*2)

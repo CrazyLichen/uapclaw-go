@@ -203,6 +203,8 @@ func NewRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	}
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // Validate 校验轮级压缩器配置。
 func (c *RoundLevelCompressorConfig) Validate() error {
 	if c.TriggerTotalTokens <= 0 {
@@ -476,6 +478,8 @@ func (rlc *RoundLevelCompressor) compressUntilTarget(
 	// 第五级：硬截断
 	return rlc.truncateToTarget(working, mc, systemMessages, tools), nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // runRecursiveCompression 递归压缩，先压缩 L0 原始块，再逐步合并同级别记忆块。
 //

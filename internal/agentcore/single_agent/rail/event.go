@@ -2,8 +2,6 @@ package rail
 
 import "fmt"
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // AgentCallbackEvent Agent 生命周期回调事件类型。
@@ -21,6 +19,7 @@ import "fmt"
 // 对应 Python: openjiuwen/core/single_agent/rail/base.py (AgentCallbackEvent)
 type AgentCallbackEvent string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// CallbackBeforeInvoke invoke 开始前
 	CallbackBeforeInvoke AgentCallbackEvent = "before_invoke"
@@ -43,10 +42,6 @@ const (
 	// CallbackOnToolException 工具执行异常
 	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -76,5 +71,3 @@ func (e AgentCallbackEvent) String() string {
 func (e AgentCallbackEvent) GoString() string {
 	return fmt.Sprintf("rail.AgentCallbackEvent(%q)", string(e))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

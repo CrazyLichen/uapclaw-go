@@ -91,14 +91,12 @@ type ContainerLoader func(agentID, sessionID string, serialized any) (DataContai
 type ContainerOption func(DataContainer)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// DefaultDataContainerType 默认数据容器类型
 	DefaultDataContainerType = "agent"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	factoryOnce     sync.Once
 	factoryInstance *DataContainerFactory

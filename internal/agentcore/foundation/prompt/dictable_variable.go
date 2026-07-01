@@ -28,10 +28,14 @@ type DictableVariable struct {
 	placeholders []string       // 完整占位符路径列表（去重）
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 构造选项 ────────────────────────────
 
 // DictableOption DictableVariable 构造选项函数。
 type DictableOption func(*DictableVariable)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithDictablePrefix 设置占位符前缀。
 func WithDictablePrefix(prefix string) DictableOption {
@@ -42,8 +46,6 @@ func WithDictablePrefix(prefix string) DictableOption {
 func WithDictableSuffix(suffix string) DictableOption {
 	return func(v *DictableVariable) { v.suffix = suffix }
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDictableVariable 创建字典/列表模板变量。
 //

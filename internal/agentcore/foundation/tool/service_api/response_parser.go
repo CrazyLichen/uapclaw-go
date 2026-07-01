@@ -81,7 +81,6 @@ type ParserRegistry struct {
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	registryOnce sync.Once
 	registryInst *ParserRegistry

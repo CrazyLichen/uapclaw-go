@@ -32,7 +32,6 @@ type SqlDbStore struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore

@@ -111,7 +111,6 @@ type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (inte
 type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// TagAll 匹配所有资源的特殊标签
 	//
@@ -130,9 +129,3 @@ const (
 	// 对应 Python: INACTIVE = "__inactive__"
 	TagInactive Tag = "__inactive__"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

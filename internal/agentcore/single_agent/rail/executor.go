@@ -42,10 +42,7 @@ type RailExecutor struct {
 	OnException AgentCallbackEvent
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// ModelCallRail 模型调用的 Rail 执行器。
 	//

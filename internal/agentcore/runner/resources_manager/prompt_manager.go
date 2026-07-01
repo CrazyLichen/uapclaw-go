@@ -19,12 +19,6 @@ type PromptMgr struct {
 	repo *ThreadSafeDict[string, *prompt.PromptTemplate]
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPromptMgr 创建 Prompt 资源管理器。
@@ -131,5 +125,3 @@ func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error)
 
 	return template, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

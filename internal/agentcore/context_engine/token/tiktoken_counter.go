@@ -31,8 +31,6 @@ type TiktokenCounter struct {
 	mu sync.Mutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // defaultModel 默认模型名称（对齐 Python: TiktokenCounter(model="gpt-4")）

@@ -8,6 +8,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // CryptoProvider 加密提供者接口，密钥由实现内部持有。
@@ -23,8 +25,6 @@ type CryptoProvider interface {
 	Decrypt(ciphertext string) (string, error)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // AesGcmProvider 基于 AES-256-GCM 的 CryptoProvider 实现。
 //
 // 持有密钥，将 BaseCrypt（key 外传）封装为 CryptoProvider（key 内持）。
@@ -35,7 +35,6 @@ type AesGcmProvider struct {
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// defaultProvider 全局默认加密提供者。
 	defaultProvider CryptoProvider

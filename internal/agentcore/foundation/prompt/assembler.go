@@ -32,10 +32,6 @@ type PromptAssembler struct {
 // AssemblerOption PromptAssembler 构造选项函数。
 type AssemblerOption func(*PromptAssembler)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithAssemblerPrefix 设置占位符前缀。

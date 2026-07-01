@@ -170,10 +170,6 @@ type GenerateVideoOption func(*GenerateVideoParams)
 // ReleaseOption 释放缓存选项函数。
 type ReleaseOption func(*ReleaseParams)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInvokeParams 创建 InvokeParams（默认零值，通过 opts 填充）。
@@ -535,5 +531,3 @@ func (p *StreamParams) ToStreamParams() *InvokeParams {
 		TracerRecordData: p.TracerRecordData,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

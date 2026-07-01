@@ -154,6 +154,3 @@ func Or(left, right QueryExpr) *LogicalExpr {
 func Not(expr QueryExpr) *LogicalExpr {
 	return &LogicalExpr{Operator: "not", Left: expr, Right: nil}
 }
-
-// 注意（T-24）：已移除 Xor() 函数。Milvus 和 Chroma 后端均不支持 xor 操作符，
-// 提供 Xor() 会误导用户以为该操作可用。如需使用，请直接构造 LogicalExpr 并自行处理错误。

@@ -28,6 +28,8 @@ type MessageEnvelope struct {
 	Metadata map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // EnvelopeOption 消息信封选项函数类型
 type EnvelopeOption func(*MessageEnvelope)
 

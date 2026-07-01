@@ -66,6 +66,9 @@ type ToolInterruptHandler struct {
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
 // 返回 []ability.ExecuteResult（替代原 []any），提供类型安全。
 type ExecuteToolCallFunc func(
+
+	// ──────────────────────────── 常量 ────────────────────────────
+
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
@@ -73,14 +76,10 @@ type ExecuteToolCallFunc func(
 	modelCtx ceinterface.ModelContext,
 ) ([]ability.ExecuteResult, error)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -566,10 +565,3 @@ func deepCopyToolCall(tc *llmschema.ToolCall) *llmschema.ToolCall {
 		Index:     tc.Index,
 	}
 }
-
-// ⤵️ 回填点: 集成 ReActAgent 时实现 Workflow 中断路径:
-//   - IsWorkflowInterrupted (对齐 Python: _is_interrupted)
-//   - AfterExecuteToolCallForWorkflow (对齐 Python: _after_execute_tool_call)
-//   - BuildWorkflowInterruptResult (对齐 Python: _build_interrupt_result)
-//   - HandleWorkflowResume (对齐 Python: _handle_resume 的 InterruptionState 分支)
-//   - ExtractComponentIDs / ExtractWorkflowID 等辅助方法

@@ -48,6 +48,61 @@ type TaskManagerState struct {
 	RootTasks map[string]struct{} `json:"root_tasks"`
 }
 
+// TaskManager 任务管理器。
+// 对应 Python: TaskManager
+type TaskManager struct {
+	// config 配置
+	config *config.ControllerConfig
+	// tasks 任务字典 taskID → *Task
+	tasks map[string]*schema.Task
+	// priorityIndex 优先级索引 priority → []taskID
+	priorityIndex map[int][]string
+	// parentToChildren 父→子关系索引 parentTaskID → {childTaskID}
+	parentToChildren map[string]map[string]struct{}
+	// childToParent 子→父关系索引 childTaskID → parentTaskID
+	childToParent map[string]string
+	// rootTasks 根任务集合
+	rootTasks map[string]struct{}
+	// mu 读写锁
+	mu sync.RWMutex
+	// onTaskSubmitted SUBMITTED 状态通知回调
+	onTaskSubmitted func()
+}
+
+// taskStatusConfig 任务状态更新内部配置。
+type taskStatusConfig struct {
+	// withChildren 是否同时更新子任务
+	withChildren bool
+	// isRecursive 是否递归更新子任务
+	isRecursive bool
+	// withErrorMessage 错误消息
+	withErrorMessage string
+}
+
+// taskPriorityConfig 任务优先级更新内部配置。
+type taskPriorityConfig struct {
+	// withChildren 是否同时更新子任务
+	withChildren bool
+	// isRecursive 是否递归更新子任务
+	isRecursive bool
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TaskStatusOption 任务状态更新选项函数。
+type TaskStatusOption func(*taskStatusConfig)
+
+// TaskPriorityOption 任务优先级更新选项函数。
+type TaskPriorityOption func(*taskPriorityConfig)
+
+// ──────────────────────────── 常量 ────────────────────────────
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ToMap 将 TaskManagerState 序列化为 map[string]any。
 // 用于 Controller 保存状态到 session。
 func (s *TaskManagerState) ToMap() map[string]any {
@@ -77,64 +132,6 @@ func TaskManagerStateFromMap(data map[string]any) (*TaskManagerState, error) {
 	}
 	return &state, nil
 }
-
-// TaskManager 任务管理器。
-// 对应 Python: TaskManager
-type TaskManager struct {
-	// config 配置
-	config *config.ControllerConfig
-	// tasks 任务字典 taskID → *Task
-	tasks map[string]*schema.Task
-	// priorityIndex 优先级索引 priority → []taskID
-	priorityIndex map[int][]string
-	// parentToChildren 父→子关系索引 parentTaskID → {childTaskID}
-	parentToChildren map[string]map[string]struct{}
-	// childToParent 子→父关系索引 childTaskID → parentTaskID
-	childToParent map[string]string
-	// rootTasks 根任务集合
-	rootTasks map[string]struct{}
-	// mu 读写锁
-	mu sync.RWMutex
-	// onTaskSubmitted SUBMITTED 状态通知回调
-	onTaskSubmitted func()
-}
-
-// TaskStatusOption 任务状态更新选项函数。
-type TaskStatusOption func(*taskStatusConfig)
-
-// TaskPriorityOption 任务优先级更新选项函数。
-type TaskPriorityOption func(*taskPriorityConfig)
-
-// taskStatusConfig 任务状态更新内部配置。
-type taskStatusConfig struct {
-	// withChildren 是否同时更新子任务
-	withChildren bool
-	// isRecursive 是否递归更新子任务
-	isRecursive bool
-	// withErrorMessage 错误消息
-	withErrorMessage string
-}
-
-// taskPriorityConfig 任务优先级更新内部配置。
-type taskPriorityConfig struct {
-	// withChildren 是否同时更新子任务
-	withChildren bool
-	// isRecursive 是否递归更新子任务
-	isRecursive bool
-}
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskManager 创建新的 TaskManager 实例。
 // 对应 Python: TaskManager.__init__

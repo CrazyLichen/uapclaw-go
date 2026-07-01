@@ -10,21 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ChainCallbackFunc 链回调函数类型。
-//
-// 对应 Python: Callable (chain 中使用的 async callback)
-type ChainCallbackFunc func(ctx context.Context, cctx *ChainContext) (any, error)
-
-// ChainRollbackHandler 回滚处理器类型。
-//
-// 对应 Python: Callable (rollback handler)
-type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
-
-// ChainErrorHandler 错误处理器类型。
-//
-// 对应 Python: Callable (error handler)，返回 ChainAction 决定后续动作
-type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
-
 // CallbackChain 顺序回调执行链，支持回滚、重试和错误处理。
 //
 // 对应 Python: openjiuwen/core/runner/callback/chain.py (CallbackChain)
@@ -40,6 +25,23 @@ type CallbackChain struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ChainCallbackFunc 链回调函数类型。
+//
+// 对应 Python: Callable (chain 中使用的 async callback)
+type ChainCallbackFunc func(ctx context.Context, cctx *ChainContext) (any, error)
+
+// ChainRollbackHandler 回滚处理器类型。
+//
+// 对应 Python: Callable (rollback handler)
+type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
+
+// ChainErrorHandler 错误处理器类型。
+//
+// 对应 Python: Callable (error handler)，返回 ChainAction 决定后续动作
+type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

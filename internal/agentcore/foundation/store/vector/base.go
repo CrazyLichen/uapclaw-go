@@ -155,6 +155,8 @@ type Options struct {
 	NumCandidates int
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // FieldOption FieldSchema 构造选项
 type FieldOption func(*FieldSchema)
 
@@ -163,8 +165,6 @@ type CollectionOption func(*CollectionSchema)
 
 // Option 向量存储操作的通用可选参数
 type Option func(*Options)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // VectorDataType 向量存储支持的字段数据类型。
 //

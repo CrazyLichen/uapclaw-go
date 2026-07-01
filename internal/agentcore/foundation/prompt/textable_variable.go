@@ -27,11 +27,12 @@ type TextableVariable struct {
 	placeholders []string // 完整占位符路径列表（去重），如 ["user.name", "domain"]
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // TextableOption TextableVariable 构造选项函数。
 type TextableOption func(*TextableVariable)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultPrefix 默认占位符前缀。
 	defaultPrefix = "{{"

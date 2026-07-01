@@ -63,10 +63,7 @@ type runningTaskEntry struct {
 	done chan struct{}
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// payloadTypeTaskCompletion 任务完成载荷类型（对齐 EventType 枚举值）
 	payloadTypeTaskCompletion = "task_completion"
@@ -75,8 +72,6 @@ const (
 	// payloadTypeTaskFailed 任务失败载荷类型（对齐 EventType 枚举值）
 	payloadTypeTaskFailed = "task_failed"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -433,6 +428,65 @@ func (s *TaskScheduler) CancelTask(ctx context.Context, taskID string) (bool, er
 	return true, nil
 }
 
+// EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
+//
+// 对齐 Python: TaskScheduler.ensure_session_completion_signal
+// Controller.stream() 在 publish_event 返回后调用此方法，
+// 使得没有新任务的轮次也能发送完成信号。
+func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessionID string) {
+	s.mu.Lock()
+	suppress := s.config.SuppressCompletionSignal
+	s.mu.Unlock()
+
+	if suppress {
+		logger.Debug(logComponent).
+			Str("session_id", sessionID).
+			Msg("完成信号被抑制")
+		return
+	}
+
+	if !s.areAllTasksCompleted(ctx, sessionID) {
+		return
+	}
+
+	// 从 sessions map 查找 session（对齐 Python: self._sessions.get）
+	s.mu.Lock()
+	sess, exists := s.sessions[sessionID]
+	s.mu.Unlock()
+
+	if !exists {
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).
+			Msg("会话不存在，无法发送完成信号")
+		return
+	}
+
+	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
+	chunk := &stream.OutputSchema{
+		Type: "controller_output",
+		Payload: &schema.ControllerOutputPayload{
+			Type: schema.AllTasksProcessed,
+			Data: []schema.DataFrame{
+				&schema.TextDataFrame{Text: "所有任务已成功处理"},
+			},
+		},
+		IsLastSchema: true,
+	}
+	if err := sess.WriteStream(ctx, chunk); err != nil {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("session_id", sessionID).
+			Err(err).
+			Msg("写入 all_tasks_processed 信号失败")
+		return
+	}
+
+	logger.Info(logComponent).
+		Str("event_type", "all_tasks_processed").
+		Str("session_id", sessionID).
+		Msg("所有任务已处理，已发送完成信号")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // schedule 调度循环，扫描 SUBMITTED 任务并启动执行。
@@ -774,65 +828,6 @@ func (s *TaskScheduler) executeTaskWrapper(ctx context.Context, taskID string, s
 				Msg("任务已取消")
 		}
 	}
-}
-
-// EnsureSessionCompletionSignal 检查并发送 all_tasks_processed 信号。
-//
-// 对齐 Python: TaskScheduler.ensure_session_completion_signal
-// Controller.stream() 在 publish_event 返回后调用此方法，
-// 使得没有新任务的轮次也能发送完成信号。
-func (s *TaskScheduler) EnsureSessionCompletionSignal(ctx context.Context, sessionID string) {
-	s.mu.Lock()
-	suppress := s.config.SuppressCompletionSignal
-	s.mu.Unlock()
-
-	if suppress {
-		logger.Debug(logComponent).
-			Str("session_id", sessionID).
-			Msg("完成信号被抑制")
-		return
-	}
-
-	if !s.areAllTasksCompleted(ctx, sessionID) {
-		return
-	}
-
-	// 从 sessions map 查找 session（对齐 Python: self._sessions.get）
-	s.mu.Lock()
-	sess, exists := s.sessions[sessionID]
-	s.mu.Unlock()
-
-	if !exists {
-		logger.Warn(logComponent).
-			Str("session_id", sessionID).
-			Msg("会话不存在，无法发送完成信号")
-		return
-	}
-
-	// 发送 all_tasks_processed chunk 到 session 流（补充 Payload.Data 对齐 Python）
-	chunk := &stream.OutputSchema{
-		Type: "controller_output",
-		Payload: &schema.ControllerOutputPayload{
-			Type: schema.AllTasksProcessed,
-			Data: []schema.DataFrame{
-				&schema.TextDataFrame{Text: "所有任务已成功处理"},
-			},
-		},
-		IsLastSchema: true,
-	}
-	if err := sess.WriteStream(ctx, chunk); err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "LLM_CALL_ERROR").
-			Str("session_id", sessionID).
-			Err(err).
-			Msg("写入 all_tasks_processed 信号失败")
-		return
-	}
-
-	logger.Info(logComponent).
-		Str("event_type", "all_tasks_processed").
-		Str("session_id", sessionID).
-		Msg("所有任务已处理，已发送完成信号")
 }
 
 // areAllTasksCompleted 检查会话内所有任务是否处于终态。

@@ -48,10 +48,6 @@ type inMemoryPipeline struct {
 	exec func(ops []operation) ([]PipelineResult, error)
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryKVStore 创建新的内存键值存储实例。
@@ -235,24 +231,6 @@ func (s *InMemoryKVStore) Pipeline(_ context.Context) KVPipeline {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getWithoutLock 在无锁状态下读取值并检查过期。
-// 与 Python 的 _get_without_lock 对齐。
-// key 不存在返回 nil，已过期返回 nil（但不删除）。
-func (s *InMemoryKVStore) getWithoutLock(key string) []byte {
-	e, ok := s.store[key]
-	if !ok {
-		return nil
-	}
-	if e.expiryTs != 0 && time.Now().Unix() > e.expiryTs {
-		// 已过期：返回 nil，但不删除（允许 ExclusiveSet 覆盖）
-		// 对齐 Python: current_time > expiry_ts（严格大于才算过期）
-		return nil
-	}
-	return e.value
-}
-
 // Set 向管道中添加一个 Set 操作（仅记录，不立即执行）。
 // expiry 为过期秒数，0 表示不过期。
 func (p *inMemoryPipeline) Set(_ context.Context, key string, value []byte, expiry int) error {
@@ -278,4 +256,22 @@ func (p *inMemoryPipeline) Execute(_ context.Context) ([]PipelineResult, error) 
 	results, err := p.exec(p.ops)
 	p.ops = nil // 清空操作列表，允许 Pipeline 复用
 	return results, err
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// getWithoutLock 在无锁状态下读取值并检查过期。
+// 与 Python 的 _get_without_lock 对齐。
+// key 不存在返回 nil，已过期返回 nil（但不删除）。
+func (s *InMemoryKVStore) getWithoutLock(key string) []byte {
+	e, ok := s.store[key]
+	if !ok {
+		return nil
+	}
+	if e.expiryTs != 0 && time.Now().Unix() > e.expiryTs {
+		// 已过期：返回 nil，但不删除（允许 ExclusiveSet 覆盖）
+		// 对齐 Python: current_time > expiry_ts（严格大于才算过期）
+		return nil
+	}
+	return e.value
 }

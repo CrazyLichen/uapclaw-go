@@ -23,8 +23,6 @@ type KVCacheManager struct {
 	lastContextWindow *iface.ContextWindow
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -43,6 +41,8 @@ func NewKVCacheManager(sessionID string) *KVCacheManager {
 		lastContextWindow: nil,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Release 检查前后两次 ContextWindow 差异并释放 KV 缓存。
 //

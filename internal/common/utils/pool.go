@@ -106,6 +106,8 @@ func (r *RefCountedResource) InitRefCount() {
 	r.lastUsed.Store(time.Now().UnixNano())
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // IncRef 增加引用计数，返回新的计数。
 // 对应 Python: increment_ref()
 func (r *RefCountedResource) IncRef() int64 {
@@ -362,29 +364,6 @@ func (p *TransportPool) Stats() map[string]any {
 	}
 }
 
-// evictOldest 淘汰最久未用的空闲 Transport。
-// 对应 Python: _evict_oldest_pool()
-func (p *TransportPool) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
-
-	for key, transport := range p.transports {
-		if transport.RefCount() == 0 && !transport.IsClosed() {
-			lastUsed := transport.LastUsed()
-			if oldestKey == "" || lastUsed.Before(oldestTime) {
-				oldestKey = key
-				oldestTime = lastUsed
-			}
-		}
-	}
-
-	if oldestKey != "" {
-		transport := p.transports[oldestKey]
-		_ = transport.Close()
-		delete(p.transports, oldestKey)
-	}
-}
-
 // NewResourcePool 创建泛型资源池。
 func NewResourcePool[T any](maxPool int, factory func(key string, config any) (*T, error), keyFunc func(config any) string) *ResourcePool[T] {
 	return &ResourcePool[T]{
@@ -444,6 +423,31 @@ func (p *ResourcePool[T]) Release(config any) {
 	entry.refCount--
 	if entry.refCount <= 0 {
 		delete(p.resources, key)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// evictOldest 淘汰最久未用的空闲 Transport。
+// 对应 Python: _evict_oldest_pool()
+func (p *TransportPool) evictOldest() {
+	var oldestKey string
+	var oldestTime time.Time
+
+	for key, transport := range p.transports {
+		if transport.RefCount() == 0 && !transport.IsClosed() {
+			lastUsed := transport.LastUsed()
+			if oldestKey == "" || lastUsed.Before(oldestTime) {
+				oldestKey = key
+				oldestTime = lastUsed
+			}
+		}
+	}
+
+	if oldestKey != "" {
+		transport := p.transports[oldestKey]
+		_ = transport.Close()
+		delete(p.transports, oldestKey)
 	}
 }
 

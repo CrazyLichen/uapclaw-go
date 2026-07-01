@@ -46,9 +46,6 @@ type BaseGraphStore interface {
 	AttachEmbedder(embedder embedding.BaseEmbedding) error
 }
 
-// Option 函数式选项
-type Option func(*Options)
-
 // Options 图存储操作选项
 type Options struct {
 	// 写入选项
@@ -81,8 +78,12 @@ type GraphStoreFactory struct {
 	backends map[string]func(*GraphConfig) (BaseGraphStore, error)
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
+// Option 函数式选项
+type Option func(*Options)
+
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// EntityCollection 实体集合名称
 	EntityCollection = "ENTITY_COLLECTION"
@@ -97,7 +98,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// globalFactory 全局图存储工厂
 	globalFactory = &GraphStoreFactory{

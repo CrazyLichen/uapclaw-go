@@ -44,11 +44,12 @@ type Logger struct {
 	_ sync.RWMutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // Option 日志选项函数（Functional Options 模式，与项目约定一致）。
 type Option func(*Logger)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// global 全局 Logger 单例
 	global *Logger

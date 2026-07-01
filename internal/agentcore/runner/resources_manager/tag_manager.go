@@ -29,12 +29,6 @@ type TagMgr struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTagMgr 创建标签管理器，初始化 TagGlobal 对应空集合。
@@ -430,6 +424,30 @@ func (m *TagMgr) Display(enableLog bool) string {
 	return msg
 }
 
+// String 返回标签更新策略的字符串表示。
+func (s TagUpdateStrategy) String() string {
+	switch s {
+	case TagUpdateMerge:
+		return "MERGE"
+	case TagUpdateReplace:
+		return "REPLACE"
+	default:
+		return fmt.Sprintf("TagUpdateStrategy(%d)", int(s))
+	}
+}
+
+// String 返回标签匹配策略的字符串表示。
+func (s TagMatchStrategy) String() string {
+	switch s {
+	case TagMatchAll:
+		return "ALL"
+	case TagMatchAny:
+		return "ANY"
+	default:
+		return fmt.Sprintf("TagMatchStrategy(%d)", int(s))
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // setGlobalResource 将资源设置为 GLOBAL 标签，GLOBAL 资源不能有其他标签。
@@ -736,28 +754,4 @@ func tagSetToSortedSlice(tags map[Tag]struct{}) []Tag {
 	}
 	sort.Strings(result)
 	return result
-}
-
-// String 返回标签更新策略的字符串表示。
-func (s TagUpdateStrategy) String() string {
-	switch s {
-	case TagUpdateMerge:
-		return "MERGE"
-	case TagUpdateReplace:
-		return "REPLACE"
-	default:
-		return fmt.Sprintf("TagUpdateStrategy(%d)", int(s))
-	}
-}
-
-// String 返回标签匹配策略的字符串表示。
-func (s TagMatchStrategy) String() string {
-	switch s {
-	case TagMatchAll:
-		return "ALL"
-	case TagMatchAny:
-		return "ANY"
-	default:
-		return fmt.Sprintf("TagMatchStrategy(%d)", int(s))
-	}
 }

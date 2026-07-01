@@ -1,7 +1,6 @@
 package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// StatusSuccess 成功
 	StatusSuccess = NewStatusCode("SUCCESS", 0, "success")

@@ -23,10 +23,10 @@ type portConfig struct {
 	targetState    TargetState
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // PortOption 端口等待选项。
 type PortOption func(*portConfig)
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // TargetState 端口目标状态。
 type TargetState int
@@ -140,7 +140,6 @@ func WaitForPIDExit(ctx context.Context, pid int) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func defaultPortConfig() *portConfig {
 	return &portConfig{
 		initialDelay:   100 * time.Millisecond,

@@ -57,7 +57,6 @@ type AuthStrategyRegistry struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// AuthTypeSSL SSL 认证类型
 	AuthTypeSSL = "ssl"

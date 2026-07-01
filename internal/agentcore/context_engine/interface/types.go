@@ -202,6 +202,8 @@ type ContextWindow struct {
 	Statistic ContextStats `json:"statistic"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ContextEngineOption ContextEngine 构造器选项函数
 type ContextEngineOption func(*ContextEngineOptions)
 
@@ -214,10 +216,6 @@ type CompressContextOption func(*CompressContextOptions)
 // ClearContextOption ClearContext 方法选项函数
 type ClearContextOption func(*ClearContextOptions)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 contextID 参数可用（避免未使用导入编译错误）
@@ -229,6 +227,8 @@ var _ = fmt.Sprintf
 func WithWorkspace(w any) ContextEngineOption {
 	return func(o *ContextEngineOptions) { o.Workspace = w }
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithEngineSysOperation 设置上下文引擎的系统操作接口
 func WithEngineSysOperation(op any) ContextEngineOption {

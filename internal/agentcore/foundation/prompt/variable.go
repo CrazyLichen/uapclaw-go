@@ -6,6 +6,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // Variable 模板变量接口，定义占位符变量的求值协议。
@@ -34,8 +36,6 @@ type Variable interface {
 	Update(kwargs map[string]any)
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // baseVariable 提供 Variable 接口的公共字段和 Eval 模板方法实现。
 // 具体变量类型嵌入此结构体，只需实现 Update 方法即可满足 Variable 接口。
 type baseVariable struct {
@@ -43,6 +43,8 @@ type baseVariable struct {
 	inputKeys []string
 	value     any // 初始值 nil；TextableVariable 存 string，DictableVariable 存 map/list
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Name 实现 Variable.Name。
 func (b *baseVariable) Name() string {
@@ -74,16 +76,6 @@ func (b *baseVariable) Eval(kwargs map[string]any) any {
 	return b.Value()
 }
 
-// evalBase 提供 Eval 的模板方法逻辑，由子类型的 Eval 方法调用。
-// 参数 v 是 Variable 接口，确保调用的是子类型的 Update 方法。
-func evalBase(b *baseVariable, v Variable, kwargs map[string]any) any {
-	filtered := prepareInputs(b.inputKeys, kwargs)
-	v.Update(filtered)
-	return b.Value()
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // PrepareInputs 按 inputKeys 过滤无关参数，仅保留键名匹配的键值对。
 // 对应 Python: Variable.prepare_inputs()（公开方法，测试可用）
 func PrepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
@@ -91,6 +83,14 @@ func PrepareInputs(inputKeys []string, kwargs map[string]any) map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// evalBase 提供 Eval 的模板方法逻辑，由子类型的 Eval 方法调用。
+// 参数 v 是 Variable 接口，确保调用的是子类型的 Update 方法。
+func evalBase(b *baseVariable, v Variable, kwargs map[string]any) any {
+	filtered := prepareInputs(b.inputKeys, kwargs)
+	v.Update(filtered)
+	return b.Value()
+}
 
 // prepareInputs 按 inputKeys 过滤无关参数。
 // 对应 Python: Variable._prepare_inputs()

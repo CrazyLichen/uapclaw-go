@@ -32,12 +32,7 @@ type QueryLanguageDefinition struct {
 	TextMatch func(QueryExpr) (any, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// queryExprFunctions 查询语言注册表
 	queryExprFunctions = make(map[string]QueryLanguageDefinition)

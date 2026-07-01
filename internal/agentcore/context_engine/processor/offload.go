@@ -14,20 +14,13 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// offloadMessageHandle 内存卸载消息占位符格式
 	offloadMessageHandle = "[[OFFLOAD: handle=%s, type=%s]]"
 	// offloadMessageHandleWithPath 文件系统卸载消息占位符格式（含路径）
 	offloadMessageHandleWithPath = "[[OFFLOAD: type=%s, path=%s]]"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -10,34 +10,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // 接口类型别名，统一指向 interfaces 包定义。
-// 外部代码仍可通过 checkpointer.Checkpointer 等引用，零破坏性迁移。
-type (
-	// Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
-	// 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
-	Checkpointer = interfaces.Checkpointer
-	// Storage 状态存储接口，负责单个实体的状态保存/恢复/清除。
-	// 对应 Python: openjiuwen/core/session/checkpointer/base.py (Storage)
-	Storage = interfaces.Storage
-	// WorkflowIDProvider 提供 WorkflowID 的接口（通过类型断言获取）。
-	// 对齐 Python: hasattr(session, "workflow_id") 检测。
-	WorkflowIDProvider = interfaces.WorkflowIDProvider
-	// ParentProvider 提供 Parent 的接口（通过类型断言获取）。
-	// 对齐 Python: isinstance(session.parent(), AgentSession) 检测。
-	ParentProvider = interfaces.ParentProvider
-	// AgentIDProvider 提供 Agent ID 的接口（通过类型断言获取）。
-	// 对齐 Python: hasattr(session, "agent_id") 检测。
-	AgentIDProvider = interfaces.AgentIDProvider
-	// TeamIDProvider 提供 Team ID 的接口（通过类型断言获取）。
-	// 对齐 Python: hasattr(session, "team_id") 检测。
-	TeamIDProvider = interfaces.TeamIDProvider
-)
+// 外部代码仍可通过 checkpointer.Checkpointer 引用，零破坏性迁移。
 
-// ──────────────────────────── 常量 ────────────────────────────
+// Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
+// 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
+// TODO: 考虑移除 reexport，让调用者直接使用 interfaces 包
+type Checkpointer = interfaces.Checkpointer
 
 const (
 	// SessionNamespaceAgent Agent 状态命名空间
@@ -75,7 +56,7 @@ func BuildKeyWithNamespace(sessionID, namespace, entityID string, suffixes ...st
 // GetAgentID 类型断言获取 Agent ID，不存在返回 "Na"。
 // 对应 Python: session.agent_id() if hasattr(session, "agent_id") else "Na"
 func GetAgentID(session interfaces.InnerSession) string {
-	if provider, ok := session.(AgentIDProvider); ok {
+	if provider, ok := session.(interfaces.AgentIDProvider); ok {
 		if id := provider.AgentID(); id != "" {
 			return id
 		}
@@ -86,7 +67,7 @@ func GetAgentID(session interfaces.InnerSession) string {
 // GetTeamID 类型断言获取 Team ID，不存在返回 "Na"。
 // 对应 Python: session.team_id() if hasattr(session, "team_id") else "Na"
 func GetTeamID(session interfaces.InnerSession) string {
-	if provider, ok := session.(TeamIDProvider); ok {
+	if provider, ok := session.(interfaces.TeamIDProvider); ok {
 		if id := provider.TeamID(); id != "" {
 			return id
 		}
@@ -109,7 +90,7 @@ func GetConfigEnv(session interfaces.InnerSession, key string, defaultValue ...a
 // getWorkflowID 从 session 获取 WorkflowID，不存在返回空字符串。
 // 对齐 Python: hasattr(session, "workflow_id") 检测。
 func getWorkflowID(session interfaces.InnerSession) string {
-	if ws, ok := session.(WorkflowIDProvider); ok {
+	if ws, ok := session.(interfaces.WorkflowIDProvider); ok {
 		return ws.WorkflowID()
 	}
 	return ""

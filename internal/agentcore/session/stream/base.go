@@ -68,12 +68,7 @@ type StreamMode struct {
 	options map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// StreamModeOutput 标准输出流，对应 Python BaseStreamMode.OUTPUT
 	StreamModeOutput = StreamMode{mode: "output", desc: "Standard stream data defined by the framework"}

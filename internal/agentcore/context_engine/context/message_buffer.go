@@ -38,8 +38,6 @@ type OffloadMessageBuffer struct {
 	sessionID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // offloadTypeInMemory 内存存储类型标识
@@ -62,6 +60,8 @@ func NewContextMessageBuffer(historyMessages []llm_schema.BaseMessage, maxBuffer
 	buf.Rebuild(historyMessages)
 	return buf
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Size 返回有效消息数量。
 //

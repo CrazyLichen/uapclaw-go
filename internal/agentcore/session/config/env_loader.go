@@ -11,12 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // logComponent 日志组件标识
@@ -50,6 +44,8 @@ func trySetEnv(envs map[string]any, configKey, envKey string, value any) {
 		envs[configKey] = value
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // trySetFloat 尝试将值转换为 float64 并设置
 func trySetFloat(envs map[string]any, configKey, envKey string, value any) {

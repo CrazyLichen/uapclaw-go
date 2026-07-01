@@ -7,14 +7,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// processorFactories 处理器工厂注册表
 	processorFactories = make(map[string]iface.ProcessorFactory)
@@ -61,5 +54,3 @@ func ListProcessorFactories() []string {
 	sort.Strings(types)
 	return types
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

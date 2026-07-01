@@ -13,7 +13,6 @@ import (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// CollectionEntity 实体集合名称
 	CollectionEntity = "entity"
@@ -83,6 +82,8 @@ func EnsureCollections(ctx context.Context, client milvusClient, storageCfg *gra
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildEntitySchema 构建 Entity 集合的 Schema。
 //
@@ -272,8 +273,6 @@ func buildIndexOptions(indexCfg *graph.GraphStoreIndexConfig, collection string,
 
 	return opts, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // addCommonFields 向 Schema 添加三个集合共有的通用字段。
 //

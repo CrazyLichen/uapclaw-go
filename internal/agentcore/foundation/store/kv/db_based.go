@@ -64,10 +64,7 @@ type dbBasedPipeline struct {
 	store *DbBasedKVStore
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// exclusiveValueKey JSON 中值的字段名
 	exclusiveValueKey = "exclusive_value"

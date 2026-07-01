@@ -58,8 +58,6 @@ type Session struct {
 // SessionOption Session 构造选项函数类型
 type SessionOption func(*Session)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查 *Session 满足 SessionFacade 接口
@@ -437,7 +435,6 @@ func CreateAgentSession(sessionID string, card *agentschema.AgentCard, envs map[
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() {
 	// 注册 Session 创建函数到 controller 包，解决循环依赖
 	// 对齐 Python: AgentSessionContainer.load → create_agent_session(session_id, card=AgentCard(id=agent_id))

@@ -77,10 +77,7 @@ type WorkflowStorage struct {
 	stateUpdatesBlobs map[string]serdeTuple
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
 	emptyFormatTag = "empty"
@@ -106,6 +103,8 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 		graphStore:           nil, // ⤵️ 8.7 回填
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // PreWorkflowExecute 工作流执行前保存检查点。
 // 对应 Python: InMemoryCheckpointer.pre_workflow_execute()
@@ -241,7 +240,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 		// 对齐 Python: if not isinstance(session.parent(), AgentSession)
 		// 有 parent → 保留 store；无 parent → 删除 store
 		hasParent := false
-		if pp, ok := session.(ParentProvider); ok && pp.Parent() != nil {
+		if pp, ok := session.(interfaces.ParentProvider); ok && pp.Parent() != nil {
 			hasParent = true
 		}
 		if !hasParent {

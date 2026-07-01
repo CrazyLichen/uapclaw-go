@@ -64,10 +64,6 @@ type defaultSessionConfig struct {
 // defaultBuiltinConfigLoader 默认内置配置加载器
 type defaultBuiltinConfigLoader struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 defaultSessionConfig 实现 SessionConfig 接口

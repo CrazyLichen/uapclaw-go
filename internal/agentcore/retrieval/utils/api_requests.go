@@ -35,14 +35,13 @@ type RetryConfig struct {
 // 对齐 Python: Literal["Reranker", "Embedding"]
 type TaskName string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// TaskReranker 重排序任务
 	TaskReranker TaskName = "Reranker"
 	// TaskEmbedding 嵌入任务
 	TaskEmbedding TaskName = "Embedding"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// defaultMaxRetries 默认最大重试次数
@@ -52,7 +51,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// logComponent 日志组件常量
 	logComponent = logger.ComponentAgentCore

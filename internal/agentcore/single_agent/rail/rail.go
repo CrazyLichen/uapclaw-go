@@ -70,10 +70,6 @@ type callbackEntry struct {
 	fn    cb.PerAgentCallbackFunc
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseRail 创建默认优先级(50)的 BaseRail。
@@ -159,5 +155,3 @@ func (r *BaseRail) BuildCallbacks(entries ...callbackEntry) map[AgentCallbackEve
 	}
 	return m
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

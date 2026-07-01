@@ -19,9 +19,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// DashscopeEmbeddingOption DashscopeEmbedding 可选配置。
-type DashscopeEmbeddingOption func(*DashscopeEmbedding)
-
 // DashscopeEmbedding 阿里云 DashScope 向量嵌入客户端。
 //
 // 使用 HTTP 直接调用 DashScope 多模态嵌入 API，
@@ -68,6 +65,9 @@ type dashscopeResponse struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// DashscopeEmbeddingOption DashscopeEmbedding 可选配置。
+type DashscopeEmbeddingOption func(*DashscopeEmbedding)
+
 // dashscopeInputMode DashScope API 输入模式
 type dashscopeInputMode int
 
@@ -79,13 +79,10 @@ const (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// dashscopeDefaultBaseURL DashScope API 默认地址
 	dashscopeDefaultBaseURL = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

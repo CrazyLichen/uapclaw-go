@@ -46,10 +46,7 @@ type Runner struct {
 	systemReplySub any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultRunnerID 默认Runner ID（对齐 Python _DEFAULT_RUNNER_ID = "global"）
 	defaultRunnerID = "global"
@@ -66,7 +63,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// globalRunner 全局Runner实例（对齐 Python GLOBAL_RUNNER）
 	globalRunner *Runner

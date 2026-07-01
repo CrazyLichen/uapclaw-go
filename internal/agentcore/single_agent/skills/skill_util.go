@@ -22,8 +22,6 @@ type SkillUtil struct {
 	remoteSkillUtil *RemoteSkillUtil
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // skillPromptContent 技能提示词模板内容。
@@ -61,6 +59,8 @@ func NewSkillUtil(sysOperationID string) *SkillUtil {
 		remoteSkillUtil: NewRemoteSkillUtil(sysOperationID),
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillUtilWithProvider 创建使用自定义 FsProvider 的 SkillUtil 实例。
 func NewSkillUtilWithProvider(sysOperationID string, provider FsProvider) *SkillUtil {

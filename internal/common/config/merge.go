@@ -8,7 +8,6 @@ import (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// maxMergeDepth DeepMerge 最大递归深度。
 	maxMergeDepth = 4

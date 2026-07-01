@@ -34,12 +34,6 @@ type SessionRef struct {
 	session sessioninterfaces.SessionFacade
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ByAgentID 创建按ID查找的AgentRef。
@@ -131,5 +125,3 @@ func (r SessionRef) ID() string {
 func (r SessionRef) Session() sessioninterfaces.SessionFacade {
 	return r.session
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

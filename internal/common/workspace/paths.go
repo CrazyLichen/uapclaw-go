@@ -22,7 +22,6 @@ type ResolvedPaths struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// EnvHome 自定义用户主目录环境变量。
 	// 对应 Python: JIUWENSWARM_HOME
@@ -46,7 +45,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// userHomeOnce 保证 UserHomeDir 只解析一次。
 	userHomeOnce sync.Once

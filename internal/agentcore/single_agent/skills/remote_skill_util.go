@@ -72,8 +72,6 @@ type gitHubFileItem struct {
 	RelativePath string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // githubAPI GitHub API 基础 URL
@@ -106,6 +104,8 @@ func NewGitHubTree(repoOwner, repoName, treeRef, directory string) *GitHubTree {
 		Directory: directory,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Clone 克隆 GitHubTree 实例。
 //

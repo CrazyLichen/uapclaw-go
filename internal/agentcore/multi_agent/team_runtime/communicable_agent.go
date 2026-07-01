@@ -23,10 +23,6 @@ type CommunicableAgent struct {
 	agentID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // errRuntimeNotBound 运行时未绑定错误
@@ -129,5 +125,3 @@ func (c *CommunicableAgent) Runtime() *TeamRuntime {
 func (c *CommunicableAgent) AgentID() string {
 	return c.agentID
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

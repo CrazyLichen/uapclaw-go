@@ -51,6 +51,21 @@ const (
 	MessageTypeDone
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// messageIDCounter 消息 ID 计数器。
+var messageIDCounter uint64
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SerializeMessage 序列化消息为 JSON 字节。
+// 对齐 Python: serialize_message()
+func SerializeMessage(msg Message) ([]byte, error) {
+	return json.Marshal(msg)
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // String 返回消息类型名称。
 func (t MessageType) String() string {
 	switch t {
@@ -104,21 +119,6 @@ func (t *MessageType) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	return fmt.Errorf("未知的消息类型: %s", s)
-}
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// messageIDCounter 消息 ID 计数器。
-var messageIDCounter uint64
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// SerializeMessage 序列化消息为 JSON 字节。
-// 对齐 Python: serialize_message()
-func SerializeMessage(msg Message) ([]byte, error) {
-	return json.Marshal(msg)
 }
 
 // DeserializeMessage 反序列化 JSON 字节为消息。

@@ -21,27 +21,13 @@ import (
 // stub 为 nil 时调用任何方法会 panic。
 type ProxySession struct {
 	// stub 被代理的底层会话
-	stub InnerSession
+	stub interfaces.InnerSession
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// SessionFacade 门面会话接口（re-export from interfaces）
-type SessionFacade = interfaces.SessionFacade
-
-// InnerSession 会话基类接口，定义所有会话类型共有的核心能力。
-// 对应 Python: openjiuwen/core/session/session.py BaseSession
-//
-// 类型别名指向 interfaces.InnerSession，消除重复定义。
-// 外部代码仍可通过 session.InnerSession 引用，零破坏性迁移。
-type InnerSession = interfaces.InnerSession
-
 // Deprecated: 使用 InnerSession
 type BaseSession = interfaces.InnerSession
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -52,7 +38,7 @@ func NewProxySession() *ProxySession {
 }
 
 // SetSession 设置被代理的底层会话
-func (p *ProxySession) SetSession(stub InnerSession) {
+func (p *ProxySession) SetSession(stub interfaces.InnerSession) {
 	p.stub = stub
 }
 
@@ -95,5 +81,3 @@ func (p *ProxySession) ActorManager() any {
 func (p *ProxySession) Close() error {
 	return p.stub.Close()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

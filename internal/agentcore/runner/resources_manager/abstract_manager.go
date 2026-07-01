@@ -18,12 +18,6 @@ type AbstractManager[T any] struct {
 	providers *ThreadSafeDict[string, func(context.Context) (T, error)]
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAbstractManager 创建泛型抽象管理器。
@@ -32,6 +26,8 @@ func NewAbstractManager[T any]() AbstractManager[T] {
 		providers: NewThreadSafeDict[string, func(context.Context) (T, error)](),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // registerProvider 注册资源提供者，重复注册返回 error。
 //
@@ -68,5 +64,3 @@ func (m *AbstractManager[T]) unregisterProvider(resourceID string) (func(context
 	}
 	return provider, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

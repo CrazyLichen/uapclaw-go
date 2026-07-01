@@ -33,10 +33,6 @@ type PromptTemplate struct {
 // TemplateOption PromptTemplate 构造选项函数。
 type TemplateOption func(*PromptTemplate)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithTemplatePrefix 设置占位符前缀。

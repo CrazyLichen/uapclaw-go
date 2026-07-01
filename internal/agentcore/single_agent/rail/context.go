@@ -73,10 +73,7 @@ type AgentCallbackContext struct {
 	steeringQueue chan string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
@@ -349,5 +346,3 @@ func (c *AgentCallbackContext) ForkForToolCall(toolCall *llmschema.ToolCall) *Ag
 		steeringQueue: c.steeringQueue,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -12,6 +12,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // VersionSource 版本源接口，定义从远程获取最新版本的标准方法
@@ -21,11 +23,6 @@ type VersionSource interface {
 	// FetchAssets 获取最新发布的资产列表
 	FetchAssets(ctx context.Context) ([]ReleaseAsset, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// GitHubSourceOption GitHub 版本源的可选配置
-type GitHubSourceOption func(*GitHubReleasesSource)
 
 // GitHubReleasesSource 从 GitHub Releases API 获取最新版本
 type GitHubReleasesSource struct {
@@ -43,8 +40,12 @@ type GitHubReleasesSource struct {
 	client *http.Client
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
+// GitHubSourceOption GitHub 版本源的可选配置
+type GitHubSourceOption func(*GitHubReleasesSource)
+
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultGitHubTimeout 默认 HTTP 请求超时
 	defaultGitHubTimeout = 20 * time.Second

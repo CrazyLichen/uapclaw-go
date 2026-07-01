@@ -68,8 +68,6 @@ type DirInfo struct {
 // 【临时实现】后续 9.32 SysOperation 实现后删除，替换为 SysOperation 适配器。
 type osFsProvider struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // SkillFileName 技能文件名（SKILL.md）。
@@ -94,6 +92,8 @@ func NewSkillManager(sysOperationID string) *SkillManager {
 		fsProvider:     &osFsProvider{},
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillManagerWithProvider 创建使用自定义 FsProvider 的 SkillManager 实例。
 //
@@ -204,6 +204,63 @@ func (sm *SkillManager) Clear() {
 // 对应 Python: SkillManager.count()
 func (sm *SkillManager) Count() int {
 	return len(sm.registry)
+}
+
+// osFsProvider 实现 FsProvider 接口
+
+// ReadFile 使用 os.ReadFile 读取文件内容。
+func (p *osFsProvider) ReadFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ListFiles 使用 os.ReadDir 列出目录下的文件（非递归）。
+func (p *osFsProvider) ListFiles(dir string) ([]FileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []FileInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		files = append(files, FileInfo{
+			Name: entry.Name(),
+			Path: filepath.Join(dir, entry.Name()),
+		})
+	}
+	return files, nil
+}
+
+// ListDirectories 使用 os.ReadDir 列出目录下的子目录（非递归）。
+func (p *osFsProvider) ListDirectories(dir string) ([]DirInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var dirs []DirInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dirs = append(dirs, DirInfo{
+			Name: entry.Name(),
+			Path: filepath.Join(dir, entry.Name()),
+		})
+	}
+	return dirs, nil
+}
+
+// WriteFile 使用 os.WriteFile 写入文件内容（必要时创建父目录）。
+func (p *osFsProvider) WriteFile(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -394,61 +451,4 @@ func (sm *SkillManager) registerRoot(root string, overwrite bool) error {
 		return errors.Join(allErrs...)
 	}
 	return nil
-}
-
-// osFsProvider 实现 FsProvider 接口
-
-// ReadFile 使用 os.ReadFile 读取文件内容。
-func (p *osFsProvider) ReadFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// ListFiles 使用 os.ReadDir 列出目录下的文件（非递归）。
-func (p *osFsProvider) ListFiles(dir string) ([]FileInfo, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	var files []FileInfo
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		files = append(files, FileInfo{
-			Name: entry.Name(),
-			Path: filepath.Join(dir, entry.Name()),
-		})
-	}
-	return files, nil
-}
-
-// ListDirectories 使用 os.ReadDir 列出目录下的子目录（非递归）。
-func (p *osFsProvider) ListDirectories(dir string) ([]DirInfo, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	var dirs []DirInfo
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		dirs = append(dirs, DirInfo{
-			Name: entry.Name(),
-			Path: filepath.Join(dir, entry.Name()),
-		})
-	}
-	return dirs, nil
-}
-
-// WriteFile 使用 os.WriteFile 写入文件内容（必要时创建父目录）。
-func (p *osFsProvider) WriteFile(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
 }

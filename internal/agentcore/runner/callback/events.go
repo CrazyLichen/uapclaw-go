@@ -216,68 +216,15 @@ type GlobalAgentEventData struct {
 // 对应 Python: openjiuwen/core/runner/callback/events.py (LLMCallEvents)
 type LLMCallEventType string
 
-const (
-	// LLMCallStarted LLM 调用启动
-	LLMCallStarted LLMCallEventType = "_framework:llm_call_started"
-	// LLMCallError LLM 调用失败
-	LLMCallError LLMCallEventType = "_framework:llm_call_error"
-	// LLMResponseReceived LLM 响应接收（流式/非流式）
-	LLMResponseReceived LLMCallEventType = "_framework:llm_response_received"
-	// LLMInvokeInput invoke 调用前触发
-	LLMInvokeInput LLMCallEventType = "_framework:llm_invoke_input"
-	// LLMInvokeOutput invoke 调用后触发
-	LLMInvokeOutput LLMCallEventType = "_framework:llm_invoke_output"
-	// LLMStreamInput stream 调用前触发
-	LLMStreamInput LLMCallEventType = "_framework:llm_stream_input"
-	// LLMStreamOutput stream 每项触发
-	LLMStreamOutput LLMCallEventType = "_framework:llm_stream_output"
-	// LLMInput 请求前触发（含 messages/tools），细粒度事件
-	LLMInput LLMCallEventType = "_framework:llm_input"
-	// LLMOutput 响应后触发（含 response/usage），细粒度事件
-	LLMOutput LLMCallEventType = "_framework:llm_output"
-)
-
 // ToolCallEventType 工具调用事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (ToolCallEvents)
 type ToolCallEventType string
 
-const (
-	// ToolCallStarted 工具调用启动
-	ToolCallStarted ToolCallEventType = "_framework:tool_call_started"
-	// ToolCallFinished 工具调用完成
-	ToolCallFinished ToolCallEventType = "_framework:tool_call_finished"
-	// ToolCallError 工具调用出错
-	ToolCallError ToolCallEventType = "_framework:tool_call_error"
-	// ToolResultReceived 工具结果接收（流式逐 chunk）
-	ToolResultReceived ToolCallEventType = "_framework:tool_result_received"
-	// ToolParseStarted 工具参数解析开始
-	ToolParseStarted ToolCallEventType = "_framework:tool_parse_started"
-	// ToolParseFinished 工具参数解析完成
-	ToolParseFinished ToolCallEventType = "_framework:tool_parse_finished"
-	// ToolInvokeInput invoke 调用前触发
-	ToolInvokeInput ToolCallEventType = "_framework:tool_invoke_input"
-	// ToolInvokeOutput invoke 调用后触发
-	ToolInvokeOutput ToolCallEventType = "_framework:tool_invoke_output"
-	// ToolStreamInput stream 调用前触发
-	ToolStreamInput ToolCallEventType = "_framework:tool_stream_input"
-	// ToolStreamOutput stream 每项触发
-	ToolStreamOutput ToolCallEventType = "_framework:tool_stream_output"
-	// ToolAuth 工具认证事件
-	ToolAuth ToolCallEventType = "_framework:tool_auth"
-)
-
 // SessionCallEventType Session 调用事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (SessionEvents)
 type SessionCallEventType string
-
-const (
-	// SessionCreated 会话创建事件
-	SessionCreated SessionCallEventType = "_framework:session_created"
-	// AgentSessionCreated Agent 会话创建事件
-	AgentSessionCreated SessionCallEventType = "_framework:agent_session_created"
-)
 
 // ContextCallEventType 上下文调用事件类型。
 //
@@ -285,19 +232,6 @@ const (
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (ContextEvents)
 type ContextCallEventType string
-
-const (
-	// ContextUpdated 上下文更新事件（add_messages 后触发）
-	ContextUpdated ContextCallEventType = "_framework:context_updated"
-	// ContextOffloaded 上下文卸载事件（offload 后触发）
-	ContextOffloaded ContextCallEventType = "_framework:context_offloaded"
-	// ContextRetrieved 上下文检索事件（get_context_window 后触发）
-	ContextRetrieved ContextCallEventType = "_framework:context_retrieved"
-	// ContextCleared 上下文清空事件（clear 后触发）
-	ContextCleared ContextCallEventType = "_framework:context_cleared"
-	// ContextCompressionStateEvent 压缩状态事件（处理器执行后触发）
-	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
-)
 
 // GlobalAgentEventType Agent 调用全局事件类型。
 //
@@ -308,118 +242,30 @@ const (
 // 对应 Python: openjiuwen/core/runner/callback/events.py (AgentEvents)
 type GlobalAgentEventType string
 
-const (
-	// GlobalAgentStarted Agent 执行启动
-	GlobalAgentStarted GlobalAgentEventType = "_framework:agent_started"
-	// GlobalAgentInvokeInput invoke 调用前触发
-	GlobalAgentInvokeInput GlobalAgentEventType = "_framework:agent_invoke_input"
-	// GlobalAgentInvokeOutput invoke 调用后触发
-	GlobalAgentInvokeOutput GlobalAgentEventType = "_framework:agent_invoke_output"
-	// GlobalAgentStreamInput stream 调用前触发
-	GlobalAgentStreamInput GlobalAgentEventType = "_framework:agent_stream_input"
-	// GlobalAgentStreamOutput stream 每项触发
-	GlobalAgentStreamOutput GlobalAgentEventType = "_framework:agent_stream_output"
-)
-
 // WorkflowEventType Workflow 事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (WorkflowEvents)
 type WorkflowEventType string
-
-const (
-	// WorkflowStarted 工作流启动
-	WorkflowStarted WorkflowEventType = "_framework:workflow_started"
-	// WorkflowFinished 工作流完成
-	WorkflowFinished WorkflowEventType = "_framework:workflow_finished"
-	// WorkflowError 工作流出错
-	WorkflowError WorkflowEventType = "_framework:workflow_error"
-	// WorkflowCancelled 工作流取消
-	WorkflowCancelled WorkflowEventType = "_framework:workflow_cancelled"
-	// NodeExecuted 节点执行完成
-	NodeExecuted WorkflowEventType = "_framework:node_executed"
-	// NodeError 节点执行出错
-	NodeError WorkflowEventType = "_framework:node_error"
-	// EdgeTraversed 边遍历
-	EdgeTraversed WorkflowEventType = "_framework:edge_traversed"
-	// LoopStarted 循环开始
-	LoopStarted WorkflowEventType = "_framework:loop_started"
-	// LoopFinished 循环结束
-	LoopFinished WorkflowEventType = "_framework:loop_finished"
-	// WorkflowInvokeInput invoke 调用前触发
-	WorkflowInvokeInput WorkflowEventType = "_framework:workflow_invoke_input"
-	// WorkflowInvokeOutput invoke 调用后触发
-	WorkflowInvokeOutput WorkflowEventType = "_framework:workflow_invoke_output"
-	// WorkflowStreamInput stream 调用前触发
-	WorkflowStreamInput WorkflowEventType = "_framework:workflow_stream_input"
-	// WorkflowStreamOutput stream 每项触发
-	WorkflowStreamOutput WorkflowEventType = "_framework:workflow_stream_output"
-	// ComponentBatchInput 组件批量输入
-	ComponentBatchInput WorkflowEventType = "_framework:component_batch_input"
-	// ComponentBatchOutput 组件批量输出
-	ComponentBatchOutput WorkflowEventType = "_framework:component_batch_output"
-	// ComponentStreamInput 组件流式输入
-	ComponentStreamInput WorkflowEventType = "_framework:component_stream_input"
-)
 
 // AgentTeamEventType Agent 协作事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (AgentTeamEvents)
 type AgentTeamEventType string
 
-const (
-	// AgentP2PReceived 点对点消息接收
-	AgentP2PReceived AgentTeamEventType = "_framework:agent_p2p_received"
-	// AgentPubsubReceived 发布订阅消息接收
-	AgentPubsubReceived AgentTeamEventType = "_framework:agent_pubsub_received"
-)
-
 // RetrievalEventType 检索事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (RetrievalEvents)
 type RetrievalEventType string
-
-const (
-	// RetrievalStarted 检索启动
-	RetrievalStarted RetrievalEventType = "_framework:retrieval_started"
-)
 
 // MemoryEventType 记忆事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (MemoryEvents)
 type MemoryEventType string
 
-const (
-	// MemoryAdded 记忆新增
-	MemoryAdded MemoryEventType = "_framework:memory_added"
-	// MemoryUpdated 记忆更新
-	MemoryUpdated MemoryEventType = "_framework:memory_updated"
-	// MemoryDeleted 记忆删除
-	MemoryDeleted MemoryEventType = "_framework:memory_deleted"
-	// MemorySearchStarted 记忆检索启动
-	MemorySearchStarted MemoryEventType = "_framework:memory_search_started"
-	// MemorySearchFinished 记忆检索完成
-	MemorySearchFinished MemoryEventType = "_framework:memory_search_finished"
-)
-
 // TaskManagerEventType 任务管理事件类型。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventType string
-
-const (
-	// TaskCreated 任务创建
-	TaskCreated TaskManagerEventType = "_framework:task_created"
-	// TaskRunning 任务运行中
-	TaskRunning TaskManagerEventType = "_framework:task_running"
-	// TaskCompleted 任务完成
-	TaskCompleted TaskManagerEventType = "_framework:task_completed"
-	// TaskFailed 任务失败
-	TaskFailed TaskManagerEventType = "_framework:task_failed"
-	// TaskCancelled 任务取消
-	TaskCancelled TaskManagerEventType = "_framework:task_cancelled"
-	// TaskTimeout 任务超时
-	TaskTimeout TaskManagerEventType = "_framework:task_timeout"
-)
 
 // TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
 // 接收事件名和原始输入，返回变换后的输入。
@@ -474,6 +320,159 @@ type MemoryCallbackFunc func(ctx context.Context, data *MemoryEventData) any
 type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventData) any
 
 // ──────────────────────────── 常量 ────────────────────────────
+const (
+	// LLMCallStarted LLM 调用启动
+	LLMCallStarted LLMCallEventType = "_framework:llm_call_started"
+	// LLMCallError LLM 调用失败
+	LLMCallError LLMCallEventType = "_framework:llm_call_error"
+	// LLMResponseReceived LLM 响应接收（流式/非流式）
+	LLMResponseReceived LLMCallEventType = "_framework:llm_response_received"
+	// LLMInvokeInput invoke 调用前触发
+	LLMInvokeInput LLMCallEventType = "_framework:llm_invoke_input"
+	// LLMInvokeOutput invoke 调用后触发
+	LLMInvokeOutput LLMCallEventType = "_framework:llm_invoke_output"
+	// LLMStreamInput stream 调用前触发
+	LLMStreamInput LLMCallEventType = "_framework:llm_stream_input"
+	// LLMStreamOutput stream 每项触发
+	LLMStreamOutput LLMCallEventType = "_framework:llm_stream_output"
+	// LLMInput 请求前触发（含 messages/tools），细粒度事件
+	LLMInput LLMCallEventType = "_framework:llm_input"
+	// LLMOutput 响应后触发（含 response/usage），细粒度事件
+	LLMOutput LLMCallEventType = "_framework:llm_output"
+)
+
+const (
+	// ToolCallStarted 工具调用启动
+	ToolCallStarted ToolCallEventType = "_framework:tool_call_started"
+	// ToolCallFinished 工具调用完成
+	ToolCallFinished ToolCallEventType = "_framework:tool_call_finished"
+	// ToolCallError 工具调用出错
+	ToolCallError ToolCallEventType = "_framework:tool_call_error"
+	// ToolResultReceived 工具结果接收（流式逐 chunk）
+	ToolResultReceived ToolCallEventType = "_framework:tool_result_received"
+	// ToolParseStarted 工具参数解析开始
+	ToolParseStarted ToolCallEventType = "_framework:tool_parse_started"
+	// ToolParseFinished 工具参数解析完成
+	ToolParseFinished ToolCallEventType = "_framework:tool_parse_finished"
+	// ToolInvokeInput invoke 调用前触发
+	ToolInvokeInput ToolCallEventType = "_framework:tool_invoke_input"
+	// ToolInvokeOutput invoke 调用后触发
+	ToolInvokeOutput ToolCallEventType = "_framework:tool_invoke_output"
+	// ToolStreamInput stream 调用前触发
+	ToolStreamInput ToolCallEventType = "_framework:tool_stream_input"
+	// ToolStreamOutput stream 每项触发
+	ToolStreamOutput ToolCallEventType = "_framework:tool_stream_output"
+	// ToolAuth 工具认证事件
+	ToolAuth ToolCallEventType = "_framework:tool_auth"
+)
+
+const (
+	// SessionCreated 会话创建事件
+	SessionCreated SessionCallEventType = "_framework:session_created"
+	// AgentSessionCreated Agent 会话创建事件
+	AgentSessionCreated SessionCallEventType = "_framework:agent_session_created"
+)
+
+const (
+	// ContextUpdated 上下文更新事件（add_messages 后触发）
+	ContextUpdated ContextCallEventType = "_framework:context_updated"
+	// ContextOffloaded 上下文卸载事件（offload 后触发）
+	ContextOffloaded ContextCallEventType = "_framework:context_offloaded"
+	// ContextRetrieved 上下文检索事件（get_context_window 后触发）
+	ContextRetrieved ContextCallEventType = "_framework:context_retrieved"
+	// ContextCleared 上下文清空事件（clear 后触发）
+	ContextCleared ContextCallEventType = "_framework:context_cleared"
+	// ContextCompressionStateEvent 压缩状态事件（处理器执行后触发）
+	ContextCompressionStateEvent ContextCallEventType = "_framework:context.compression_state"
+)
+
+const (
+	// GlobalAgentStarted Agent 执行启动
+	GlobalAgentStarted GlobalAgentEventType = "_framework:agent_started"
+	// GlobalAgentInvokeInput invoke 调用前触发
+	GlobalAgentInvokeInput GlobalAgentEventType = "_framework:agent_invoke_input"
+	// GlobalAgentInvokeOutput invoke 调用后触发
+	GlobalAgentInvokeOutput GlobalAgentEventType = "_framework:agent_invoke_output"
+	// GlobalAgentStreamInput stream 调用前触发
+	GlobalAgentStreamInput GlobalAgentEventType = "_framework:agent_stream_input"
+	// GlobalAgentStreamOutput stream 每项触发
+	GlobalAgentStreamOutput GlobalAgentEventType = "_framework:agent_stream_output"
+)
+
+const (
+	// WorkflowStarted 工作流启动
+	WorkflowStarted WorkflowEventType = "_framework:workflow_started"
+	// WorkflowFinished 工作流完成
+	WorkflowFinished WorkflowEventType = "_framework:workflow_finished"
+	// WorkflowError 工作流出错
+	WorkflowError WorkflowEventType = "_framework:workflow_error"
+	// WorkflowCancelled 工作流取消
+	WorkflowCancelled WorkflowEventType = "_framework:workflow_cancelled"
+	// NodeExecuted 节点执行完成
+	NodeExecuted WorkflowEventType = "_framework:node_executed"
+	// NodeError 节点执行出错
+	NodeError WorkflowEventType = "_framework:node_error"
+	// EdgeTraversed 边遍历
+	EdgeTraversed WorkflowEventType = "_framework:edge_traversed"
+	// LoopStarted 循环开始
+	LoopStarted WorkflowEventType = "_framework:loop_started"
+	// LoopFinished 循环结束
+	LoopFinished WorkflowEventType = "_framework:loop_finished"
+	// WorkflowInvokeInput invoke 调用前触发
+	WorkflowInvokeInput WorkflowEventType = "_framework:workflow_invoke_input"
+	// WorkflowInvokeOutput invoke 调用后触发
+	WorkflowInvokeOutput WorkflowEventType = "_framework:workflow_invoke_output"
+	// WorkflowStreamInput stream 调用前触发
+	WorkflowStreamInput WorkflowEventType = "_framework:workflow_stream_input"
+	// WorkflowStreamOutput stream 每项触发
+	WorkflowStreamOutput WorkflowEventType = "_framework:workflow_stream_output"
+	// ComponentBatchInput 组件批量输入
+	ComponentBatchInput WorkflowEventType = "_framework:component_batch_input"
+	// ComponentBatchOutput 组件批量输出
+	ComponentBatchOutput WorkflowEventType = "_framework:component_batch_output"
+	// ComponentStreamInput 组件流式输入
+	ComponentStreamInput WorkflowEventType = "_framework:component_stream_input"
+)
+
+const (
+	// AgentP2PReceived 点对点消息接收
+	AgentP2PReceived AgentTeamEventType = "_framework:agent_p2p_received"
+	// AgentPubsubReceived 发布订阅消息接收
+	AgentPubsubReceived AgentTeamEventType = "_framework:agent_pubsub_received"
+)
+
+const (
+	// RetrievalStarted 检索启动
+	RetrievalStarted RetrievalEventType = "_framework:retrieval_started"
+)
+
+const (
+	// MemoryAdded 记忆新增
+	MemoryAdded MemoryEventType = "_framework:memory_added"
+	// MemoryUpdated 记忆更新
+	MemoryUpdated MemoryEventType = "_framework:memory_updated"
+	// MemoryDeleted 记忆删除
+	MemoryDeleted MemoryEventType = "_framework:memory_deleted"
+	// MemorySearchStarted 记忆检索启动
+	MemorySearchStarted MemoryEventType = "_framework:memory_search_started"
+	// MemorySearchFinished 记忆检索完成
+	MemorySearchFinished MemoryEventType = "_framework:memory_search_finished"
+)
+
+const (
+	// TaskCreated 任务创建
+	TaskCreated TaskManagerEventType = "_framework:task_created"
+	// TaskRunning 任务运行中
+	TaskRunning TaskManagerEventType = "_framework:task_running"
+	// TaskCompleted 任务完成
+	TaskCompleted TaskManagerEventType = "_framework:task_completed"
+	// TaskFailed 任务失败
+	TaskFailed TaskManagerEventType = "_framework:task_failed"
+	// TaskCancelled 任务取消
+	TaskCancelled TaskManagerEventType = "_framework:task_cancelled"
+	// TaskTimeout 任务超时
+	TaskTimeout TaskManagerEventType = "_framework:task_timeout"
+)
 
 // DefaultScope 默认作用域，与 Python DEFAULT_SCOPE 一致。
 const DefaultScope = "_framework"
@@ -488,6 +487,8 @@ const DefaultScope = "_framework"
 func BuildEventName(scope, eventName string) string {
 	return scope + ":" + eventName
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseEventName 解析带 scope 的事件名，返回 (scope, eventName)。
 //
@@ -649,5 +650,3 @@ func (d *TaskManagerEventData) String() string {
 	}
 	return fmt.Sprintf("TaskManagerEventData{事件:%s, 任务ID:%s, 状态:%s}", d.Event, d.TaskID, d.Status)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

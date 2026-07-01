@@ -51,6 +51,13 @@ const (
 	LogLevelFatal
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// logLevelStrings LogLevel 枚举到字符串的映射。
+var logLevelStrings = [...]string{"debug", "info", "warn", "error", "fatal"}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // String 返回日志级别的字符串表示。
 func (l LogLevel) String() string {
 	if l < 0 || int(l) >= len(logLevelStrings) {
@@ -89,13 +96,6 @@ func (l LogLevel) ToZerologLevel() zerolog.Level {
 		return zerolog.InfoLevel
 	}
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logLevelStrings LogLevel 枚举到字符串的映射。
-var logLevelStrings = [...]string{"debug", "info", "warn", "error", "fatal"}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ParseLogLevel 将字符串解析为 LogLevel。
 // 支持大小写不敏感的 "debug"/"info"/"warn"/"error"/"fatal"。

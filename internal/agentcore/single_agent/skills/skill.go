@@ -21,8 +21,6 @@ type Skill struct {
 	Directory string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // descriptionTruncateLen __repr__ 中 description 截断长度
@@ -43,6 +41,8 @@ func NewSkill(name, description, directory string) *Skill {
 		Directory:   directory,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // AsDict 将 Skill 转为字典。
 //

@@ -18,12 +18,6 @@ type InteractiveInput struct {
 	RawInputs any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInteractiveInput 创建交互输入实例。
@@ -47,8 +41,6 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 	input.RawInputs = rawInputs[0]
 	return input, nil
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsInteractiveInput 实现 rail.InvokeQuery 接口，交互式输入始终返回 true。
 //
@@ -88,5 +80,3 @@ func (i *InteractiveInput) Update(nodeID string, value any) error {
 	i.UserInputs[nodeID] = value
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

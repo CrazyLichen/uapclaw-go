@@ -14,7 +14,6 @@ import (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// EnvSpawnProcess 子进程标识环境变量
 	EnvSpawnProcess = "UAPCLAW_SPAWN_PROCESS"

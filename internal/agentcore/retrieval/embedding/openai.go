@@ -20,9 +20,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// OpenAIEmbeddingOption OpenAIEmbedding 可选配置。
-type OpenAIEmbeddingOption func(*OpenAIEmbedding)
-
 // OpenAIEmbedding OpenAI 向量嵌入客户端。
 //
 // 使用 openai-go SDK，支持 Matryoshka 维度截断和多模态嵌入。
@@ -58,9 +55,8 @@ type OpenAIEmbedding struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
+// OpenAIEmbeddingOption OpenAIEmbedding 可选配置。
+type OpenAIEmbeddingOption func(*OpenAIEmbedding)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -134,8 +134,6 @@ const (
 // MessageOption DefaultMessage 构造选项函数。
 type MessageOption func(*DefaultMessage)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // roleTypeStrings RoleType 枚举值对应的字符串表示，与 Python 端保持一致。
@@ -153,6 +151,8 @@ var roleTypeMap map[string]RoleType
 
 // GetRole 返回消息角色
 func (m *DefaultMessage) GetRole() RoleType { return m.Role }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // SetRole 设置消息角色
 func (m *DefaultMessage) SetRole(role RoleType) { m.Role = role }

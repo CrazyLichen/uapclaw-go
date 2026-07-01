@@ -63,12 +63,11 @@ type GaussVectorStore struct {
 // gaussDistanceMetric GaussDB 支持的距离度量
 type gaussDistanceMetric string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	gaussMetricCosine gaussDistanceMetric = "cosine"
 	gaussMetricL2     gaussDistanceMetric = "l2"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// gaussDefaultDistanceMetric GaussDB 默认距离度量
@@ -94,6 +93,8 @@ func NewGaussVectorStore(connString string) *GaussVectorStore {
 		createPool:         defaultCreatePool,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Close 关闭数据库连接池。
 func (s *GaussVectorStore) Close() {

@@ -27,8 +27,6 @@ type DeepSeekModelClient struct {
 	openai.OpenAIModelClient
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent deepseek 包日志组件标识（AgentCore 层）。
@@ -70,6 +68,8 @@ func NewDeepSeekModelClient(
 		OpenAIModelClient: *openaiClient,
 	}, nil
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Invoke 非流式调用 DeepSeek API。
 //

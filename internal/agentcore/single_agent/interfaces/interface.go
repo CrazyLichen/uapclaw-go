@@ -146,10 +146,6 @@ type WorkflowOption func(*WorkflowOptions)
 // AgentOption Agent 调用选项函数。
 type AgentOption func(*AgentOptions)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithSession 设置会话实例。
@@ -189,5 +185,3 @@ func NewWorkflowOptions(opts ...WorkflowOption) *WorkflowOptions {
 	}
 	return o
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

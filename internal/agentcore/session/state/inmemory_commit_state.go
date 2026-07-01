@@ -21,12 +21,6 @@ type InMemoryCommitState struct {
 	updates map[string][]map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryCommitState 创建内存事务状态实例
@@ -169,5 +163,3 @@ func (s *InMemoryCommitState) SetUpdates(updates map[string][]map[string]any) {
 		s.updates = utils.DeepCopyUpdates(updates)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

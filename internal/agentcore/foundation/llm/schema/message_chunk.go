@@ -30,10 +30,6 @@ type AssistantMessageChunkOption func(*AssistantMessageChunk)
 // ToolMessageChunkOption ToolMessageChunk 构造选项函数。
 type ToolMessageChunkOption func(*ToolMessageChunk)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithChunkToolCalls 设置流式消息块的工具调用列表。

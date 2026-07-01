@@ -81,8 +81,6 @@ type reloaderToolInput struct {
 	OffloadType string `json:"offload_type" jsonschema:"description=The storage backend used when the content was offloaded. Must be one of: in_memory (session cache, handle is UUID), filesystem (disk file, handle is file path)."`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
@@ -193,6 +191,8 @@ func NewSessionModelContext(
 
 	return mc
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Len 返回上下文消息数量。
 //

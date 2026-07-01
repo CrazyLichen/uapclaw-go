@@ -69,14 +69,6 @@ type TeamCard struct {
 	Tags []string `json:"tags,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// TeamCardOption TeamCard 构造选项函数，统一设置 BaseCard 字段和 TeamCard 字段。
-//
-// 采用方案C：去掉 CardOption 混合，所有选项均通过 TeamCardOption 设置，
-// 编译时类型安全，避免 opts ...any 的运行时 switch。
-type TeamCardOption func(*TeamCard)
-
 // EventDrivenTeamCard 事件驱动团队卡片，嵌入 TeamCard 并增加订阅映射。
 //
 // 不可变元数据 + 声明式订阅关系，描述"团队是什么"和"谁关心什么事件"。
@@ -94,10 +86,16 @@ type EventDrivenTeamCard struct {
 	Subscriptions map[string][]string `json:"subscriptions,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// TeamCardOption TeamCard 构造选项函数，统一设置 BaseCard 字段和 TeamCard 字段。
+//
+// 采用方案C：去掉 CardOption 混合，所有选项均通过 TeamCardOption 设置，
+// 编译时类型安全，避免 opts ...any 的运行时 switch。
+type TeamCardOption func(*TeamCard)
+
 // EventDrivenTeamCardOption EventDrivenTeamCard 构造选项函数。
 type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -274,5 +272,3 @@ func (c *EventDrivenTeamCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s,topic=%s,version=%s,subscriptions=%d",
 		c.ID, c.Name, c.Topic, c.Version, len(c.Subscriptions))
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

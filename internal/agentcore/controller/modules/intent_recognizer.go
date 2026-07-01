@@ -51,10 +51,7 @@ type EventHandlerWithIntentRecognition struct {
 	recognizer *IntentRecognizer
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const logComponentIntent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -100,6 +97,8 @@ func NewIntentRecognizer(
 `,
 	}
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Recognize 识别意图。
 // 对应 Python: IntentRecognizer.recognize(event, session)

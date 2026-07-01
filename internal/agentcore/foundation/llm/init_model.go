@@ -34,8 +34,6 @@ const (
 	defaultInitVerifySSL   = false
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InitModel 便捷创建 Model 实例的工厂函数。
@@ -147,5 +145,3 @@ func WithInitCustomHeaders(h map[string]string) InitModelOption {
 func WithInitSSLCert(cert string) InitModelOption {
 	return func(c *initModelConfig) { c.sslCert = cert }
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

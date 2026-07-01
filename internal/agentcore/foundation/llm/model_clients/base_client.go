@@ -115,6 +115,8 @@ func WithClientName(name string) BaseClientEmbedOption {
 	return func(e *BaseClientEmbed) { e.clientName = name }
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // WithSkipValidate 跳过 ValidateConfig 校验。
 //
 // 适用场景：IntelliRouter 等客户端不需要 api_key/api_base

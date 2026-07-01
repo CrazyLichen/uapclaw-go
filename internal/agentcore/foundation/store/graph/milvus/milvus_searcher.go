@@ -36,7 +36,6 @@ type graphSearcher struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultSearchK 默认搜索返回数量
 	defaultSearchK = 5
@@ -48,7 +47,7 @@ const (
 	defaultMinScore = 0.0
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newGraphSearcher 创建图存储搜索器
 func newGraphSearcher(client milvusClient, embedder embedding.BaseEmbedding, indexCfg *graph.GraphStoreIndexConfig, registry *graph.RankerRegistry, metric string) *graphSearcher {
@@ -388,8 +387,6 @@ func (s *graphSearcher) rawHybridSearch(ctx context.Context, query, collection s
 	// 解析结果
 	return parseResultSets(resultSets), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // queryEmbedding 获取查询向量。如果 opts 中已提供则直接使用，否则调用 embedder。
 func (s *graphSearcher) queryEmbedding(ctx context.Context, query string, o graph.Options) ([]float64, error) {

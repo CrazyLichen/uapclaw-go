@@ -89,10 +89,7 @@ type McpOption func(*mcpOptions)
 // TagOption 标签操作选项函数。
 type TagOption func(*tagOptions)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// registryAccessors 资源类型 → 子管理器访问器名称的映射
 	//
@@ -604,19 +601,6 @@ func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...Resource
 	return instances, nil
 }
 
-// registerSysOperationTools 自动注册系统操作的方法为工具。
-//
-// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//  1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
-//  2. 对每个工具调用 innerAddResource 注册到 ToolMgr
-//  3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
-//
-// 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
-func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
-	// ⤵️ 预留：9.32 实现后回填
-	// 需要：SysOperationToolAdapter, LocalFunction, OperationRegistry
-}
-
 // GetSysOpToolCards 获取系统操作的工具卡片。
 //
 // ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
@@ -967,6 +951,19 @@ func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, o
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// registerSysOperationTools 自动注册系统操作的方法为工具。
+//
+// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
+//  1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
+//  2. 对每个工具调用 innerAddResource 注册到 ToolMgr
+//  3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
+//
+// 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
+func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
+	// ⤵️ 预留：9.32 实现后回填
+	// 需要：SysOperationToolAdapter, LocalFunction, OperationRegistry
+}
 
 // applyResourceOptions 应用资源选项。
 func applyResourceOptions(opts ...ResourceOption) resourceOptions {

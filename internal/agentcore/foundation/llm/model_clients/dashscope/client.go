@@ -66,6 +66,8 @@ func NewDashScopeModelClient(
 	}, nil
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // GenerateImage 实现 DashScope 万相文生图。
 //
 // 调用 DashScope 多模态 API（MultiModalConversation），支持文生图和图生图。
@@ -454,7 +456,6 @@ func (c *DashScopeModelClient) SupportsKVCacheRelease() bool {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
 func init() {
 	// 注册 DashScope 客户端到全局注册表（2.6 回填点）
 	registry := model_clients.GetClientRegistry()

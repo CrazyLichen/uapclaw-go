@@ -106,6 +106,12 @@ type ContextCompressionState struct {
 // 对应 Python: Literal["started", "completed", "noop", "skipped", "failed"]
 type CompressionStatus string
 
+// CompressionPhase 压缩操作阶段字面量类型。
+//
+// 对应 Python: Literal["add_messages", "get_context_window", "active_compress"]
+type CompressionPhase string
+
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// CompressionStarted 压缩操作已启动
 	CompressionStarted CompressionStatus = "started"
@@ -119,11 +125,6 @@ const (
 	CompressionFailed CompressionStatus = "failed"
 )
 
-// CompressionPhase 压缩操作阶段字面量类型。
-//
-// 对应 Python: Literal["add_messages", "get_context_window", "active_compress"]
-type CompressionPhase string
-
 const (
 	// PhaseAddMessages 添加消息阶段
 	PhaseAddMessages CompressionPhase = "add_messages"
@@ -132,8 +133,6 @@ const (
 	// PhaseActiveCompress 主动压缩阶段
 	PhaseActiveCompress CompressionPhase = "active_compress"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ContextCompressionStateType 压缩状态事件类型标识。
 // 用于回调事件名和 session stream 的 OutputSchema.Type 字段。

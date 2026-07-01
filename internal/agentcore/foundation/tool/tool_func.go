@@ -19,10 +19,12 @@ type toolFuncConfig struct {
 	card        *ToolCard
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ToolFuncOption 工具注册选项函数。
 type ToolFuncOption func(*toolFuncConfig)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithToolName 设置工具名称（覆盖函数名）。
 func WithToolName(name string) ToolFuncOption {

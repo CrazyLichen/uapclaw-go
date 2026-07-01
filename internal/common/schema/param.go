@@ -82,8 +82,6 @@ const (
 	ParamTypeObject
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // paramTypeStrings ParamType 枚举值对应的字符串表示，与 Python 端保持一致。
@@ -116,6 +114,8 @@ func NewStringParam(name, description string, required bool, defaultVal ...strin
 	}
 	return p
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBooleanParam 创建布尔类型参数。
 func NewBooleanParam(name, description string, required bool, defaultVal ...bool) *Param {

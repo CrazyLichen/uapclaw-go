@@ -57,6 +57,10 @@ type addFieldOptions struct {
 // ModalityKind 内容模态类型。
 type ModalityKind string
 
+// AddFieldOption AddField 可选参数函数
+type AddFieldOption func(*addFieldOptions)
+
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// ModalityText 文本模态
 	ModalityText ModalityKind = "text"
@@ -68,13 +72,7 @@ const (
 	ModalityVideo ModalityKind = "video"
 )
 
-// AddFieldOption AddField 可选参数函数
-type AddFieldOption func(*addFieldOptions)
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// audioBase64Pattern 音频 base64 正则，提取格式类型。
 	// 提取为包级变量避免每次调用 Content() 时重复编译，对齐 T-28 修复。

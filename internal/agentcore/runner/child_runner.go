@@ -15,6 +15,13 @@ import (
 // 在子进程中通过 SetConfig→Start→RunAgent→Stop 驱动 Agent 执行。
 type ChildRunnerImpl struct{}
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译期校验：ChildRunnerImpl 必须满足 spawn.ChildRunner 接口
+var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ──────────────────────────── 导出方法 ────────────────────────────
 
 // SetConfig 设置 Runner 配置。
@@ -63,8 +70,3 @@ func (c *ChildRunnerImpl) RunAgentStreaming(ctx context.Context, agent interface
 	}
 	return RunAgentStreaming(ctx, agentRef, inputs, sessionRef, nil, streamModes, nil)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 编译期校验：ChildRunnerImpl 必须满足 spawn.ChildRunner 接口
-var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)

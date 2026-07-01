@@ -39,7 +39,6 @@ type NormalizeFunc func(map[string]any)
 type Option func(*Config)
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// DefaultConfigDir 相对于用户主目录的默认配置目录。
 	DefaultConfigDir = ".uapclaw/config"

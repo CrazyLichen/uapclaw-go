@@ -36,7 +36,6 @@ type graphWriter struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultGraphBatchSize 默认批量写入大小
 	defaultGraphBatchSize = 100
@@ -44,7 +43,7 @@ const (
 	defaultEmbedBatchSize = 10
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newGraphWriter 创建图存储写入器
 func newGraphWriter(client milvusClient, storageCfg *graph.GraphStoreStorageConfig, embedder embedding.BaseEmbedding, embedDim, batchSize, maxConcurrent int) *graphWriter {
@@ -135,8 +134,6 @@ func (w *graphWriter) delete(ctx context.Context, collection string, opts ...gra
 		Str("expr", expr).Msg("成功删除数据")
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // addData 通用写入流程：
 // 1. 收集 EmbedTasks → 2. 批量嵌入 → 3. 截断字段 → 4. 序列化 → 5. 写入 → 6. Flush

@@ -30,12 +30,6 @@ type serdeTuple struct {
 // 对应 Python: openjiuwen/core/graph/store/serde.py (JsonSerializer)
 type JSONSerializer struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewJSONSerializer 创建 JSON 序列化器
@@ -68,5 +62,3 @@ func (s *JSONSerializer) LoadsTyped(formatTag string, data []byte) (any, error) 
 	}
 	return result, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -42,8 +42,6 @@ type AgentTeamSession struct {
 // AgentTeamSessionOption AgentTeamSession 构造选项函数类型
 type AgentTeamSessionOption func(*AgentTeamSession)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查接口实现
@@ -202,5 +200,3 @@ func (s *AgentTeamSession) TeamID() string {
 func (s *AgentTeamSession) TeamSpan() *tracer.TraceAgentSpan {
 	return s.teamSpan
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

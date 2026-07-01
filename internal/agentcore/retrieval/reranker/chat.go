@@ -30,10 +30,7 @@ type ChatReranker struct {
 	endPoint string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// chatEndPoint Chat Completion API 端点
 	chatEndPoint = "/chat/completions"

@@ -25,7 +25,7 @@ import (
 // 因此 Go 跳过此步骤不会影响当前行为。若未来方言行为变化需重新评估。
 type gaussStringSerializer struct{}
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Value 实现 schema.SerializerInterface，将 Go 值转换为数据库值。
 // 对标 Python GaussString.bind_processor().process(value)：

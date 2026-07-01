@@ -1,5 +1,7 @@
 package schema
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ──────────────────────────── 接口 ────────────────────────────
 
 // ToolInfoProvider 工具信息提供者接口，供 LLM 层统一消费。
@@ -13,8 +15,6 @@ type ToolInfoProvider interface {
 	// GetToolInfo 返回基础工具描述信息（传给 LLM 的公共字段）
 	GetToolInfo() *ToolInfo
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ToolInfo 工具描述信息，供 LLM function calling 消费。
 //

@@ -47,6 +47,7 @@ type MarkdownContent struct {
 // 对应 Python: MarkdownElementType
 type MarkdownElementType string
 
+// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// MarkdownHeaderType 标题元素
 	MarkdownHeaderType MarkdownElementType = "header"

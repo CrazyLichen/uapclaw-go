@@ -36,7 +36,6 @@ type SseClient struct {
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// mcpProtocolVersion MCP 协议版本
 	mcpProtocolVersion = "2025-03-26"

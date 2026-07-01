@@ -62,10 +62,7 @@ type MessageOffloader struct {
 	config *MessageOffloaderConfig
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// omitString 省略标记，等价 Python OMIT_STRING = "..."
 	omitString = "..."
@@ -76,8 +73,6 @@ const (
 	// defaultTrimSize 默认裁剪保留长度
 	defaultTrimSize = 100
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -225,6 +220,8 @@ func (c *MessageOffloaderConfig) applyDefaults() {
 	// 注意：Go 零值为 false，但 Python 默认 true
 	// 调用方应显式设置；此处不强制覆盖
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // offloadLargeMessages 遍历卸载范围，逐条卸载大消息。
 //

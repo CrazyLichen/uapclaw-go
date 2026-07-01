@@ -8,7 +8,6 @@ package config
 type MessageQueueType string
 
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// MessageQueueTypePulsar Pulsar 消息队列
 	MessageQueueTypePulsar MessageQueueType = "pulsar"

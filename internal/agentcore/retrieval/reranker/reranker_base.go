@@ -28,10 +28,7 @@ type RerankerBase struct {
 	retryWait time.Duration
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// defaultMaxRetries 默认最大重试次数
 	defaultMaxRetries = 3
@@ -40,7 +37,6 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
 var (
 	// logComponent 日志组件常量
 	logComponent = logger.ComponentAgentCore

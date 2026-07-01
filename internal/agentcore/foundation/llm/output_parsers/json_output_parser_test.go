@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 )
 
 // ──────────────────────────── Parse 测试 ────────────────────────────
@@ -295,7 +296,7 @@ func TestJsonOutputParser_StreamParse_UnsupportedChunkType(t *testing.T) {
 // ──────────────────────────── 辅助函数 ────────────────────────────
 
 // collectStreamResults 从 StreamParse 输出 channel 收集所有结果。
-func collectStreamResults(out <-chan StreamParsedResult) []any {
+func collectStreamResults(out <-chan model_clients.StreamParsedResult) []any {
 	var results []any
 	for r := range out {
 		if r.Error != nil {

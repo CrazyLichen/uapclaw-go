@@ -18,9 +18,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// APIEmbeddingOption APIEmbedding 可选配置。
-type APIEmbeddingOption func(*APIEmbedding)
-
 // APIEmbedding 通用 HTTP 嵌入客户端。
 //
 // 支持 OpenAI 兼容的三种响应格式：embedding/embeddings/data[]。
@@ -55,9 +52,8 @@ type APIEmbedding struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
+// APIEmbeddingOption APIEmbedding 可选配置。
+type APIEmbeddingOption func(*APIEmbedding)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

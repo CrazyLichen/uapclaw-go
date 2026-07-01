@@ -59,10 +59,6 @@ type streamOutputConfig struct {
 // StreamOutputOption StreamOutput 的可选配置
 type StreamOutputOption func(*streamOutputConfig)
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamWriterManager 创建流写入器管理器。
