@@ -73,6 +73,58 @@ func TestCommunicableAgent_IsBound(t *testing.T) {
 	})
 }
 
+// TestCommunicableAgent_BindRuntime_幂等绑定 测试相同 runtime 和 agentID 再次绑定
+func TestCommunicableAgent_BindRuntime_幂等绑定(t *testing.T) {
+	c := NewCommunicableAgent()
+	runtime := &TeamRuntime{teamID: "test-team"}
+	c.BindRuntime(runtime, "agent-1")
+
+	// 相同 runtime 和 agentID 再次绑定 — 应幂等跳过
+	c.BindRuntime(runtime, "agent-1")
+
+	if c.Runtime() != runtime {
+		t.Error("幂等绑定后 Runtime 应不变")
+	}
+	if c.AgentID() != "agent-1" {
+		t.Error("幂等绑定后 AgentID 应不变")
+	}
+	if !c.IsBound() {
+		t.Error("幂等绑定后 IsBound 应为 true")
+	}
+}
+
+// TestCommunicableAgent_BindRuntime_重绑定 测试不同 runtime 再次绑定
+func TestCommunicableAgent_BindRuntime_重绑定(t *testing.T) {
+	c := NewCommunicableAgent()
+	runtime1 := &TeamRuntime{teamID: "team-1"}
+	c.BindRuntime(runtime1, "agent-1")
+
+	// 不同 runtime 再次绑定 — 应覆盖并记录 warning
+	runtime2 := &TeamRuntime{teamID: "team-2"}
+	c.BindRuntime(runtime2, "agent-2")
+
+	if c.Runtime() != runtime2 {
+		t.Error("重绑定后 Runtime 应为新值")
+	}
+	if c.AgentID() != "agent-2" {
+		t.Error("重绑定后 AgentID 应为新值")
+	}
+}
+
+// TestCommunicableAgent_BindRuntime_相同runtime不同agentID 测试相同 runtime 但不同 agentID
+func TestCommunicableAgent_BindRuntime_相同runtime不同agentID(t *testing.T) {
+	c := NewCommunicableAgent()
+	runtime := &TeamRuntime{teamID: "test-team"}
+	c.BindRuntime(runtime, "agent-1")
+
+	// 相同 runtime 但不同 agentID — 应覆盖并记录 warning
+	c.BindRuntime(runtime, "agent-2")
+
+	if c.AgentID() != "agent-2" {
+		t.Error("重绑定后 AgentID 应为新值")
+	}
+}
+
 // TestCommunicableAgent_Send 测试 P2P 发送
 func TestCommunicableAgent_Send(t *testing.T) {
 	t.Run("未绑定时返回错误", func(t *testing.T) {

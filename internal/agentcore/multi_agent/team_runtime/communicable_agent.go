@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -54,8 +55,23 @@ func (c *CommunicableAgent) IsBound() bool {
 // BindRuntime 绑定团队运行时，注入运行时引用和 Agent 标识。
 // 实现 RuntimeBindable 接口。
 //
+// 幂等性：相同 runtime 和 agentID 时静默跳过。
+// 重绑定：已绑定到不同 runtime 或 agentID 时记录 warning 日志。
+//
 // 对应 Python: CommunicableAgent.bind_runtime(runtime, agent_id)
 func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
+	if c.IsBound() {
+		if c.runtime == runtime && c.agentID == agentID {
+			// 相同 runtime 和 agentID — 幂等，静默跳过
+			return
+		}
+		// 不同 runtime 或 agentID — 重绑定，记录 warning
+		logger.Warn(logComponent).
+			Str("event_type", "RUNTIME_REBIND").
+			Str("class_name", "CommunicableAgent").
+			Str("agent_id", c.agentID).
+			Msg("Agent 已绑定到运行时，重新绑定可能导致意外行为")
+	}
 	c.runtime = runtime
 	c.agentID = agentID
 }
