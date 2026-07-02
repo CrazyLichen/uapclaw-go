@@ -6,10 +6,13 @@
 // 文件目录：
 //
 //	handoff/
-//	├── doc.go                # 包文档
-//	├── handoff_config.go     # HandoffRoute/HandoffConfig/HandoffTeamConfig 配置定义
-//	├── handoff_request.go    # HandoffHistoryEntry/HandoffRequest 交接驱动消息
-//	└── interrupt.go          # TeamInterruptSignal/ExtractInterruptSignal/FlushTeamSession 团队中断信号
+//	├── doc.go                      # 包文档
+//	├── handoff_config.go           # HandoffRoute/HandoffConfig/HandoffTeamConfig 配置定义
+//	├── handoff_orchestrator.go     # HandoffOrchestrator 交接协调器
+//	├── handoff_request.go          # HandoffHistoryEntry/HandoffRequest 交接驱动消息
+//	├── handoff_signal.go           # HandoffSignal/ExtractHandoffSignal 交接信号提取
+//	├── handoff_tool.go             # HandoffTool 交接工具（实现 Tool 接口）
+//	└── interrupt.go                # TeamInterruptSignal/ExtractInterruptSignal/FlushTeamSession 团队中断信号
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/teams/handoff/
 package handoff
