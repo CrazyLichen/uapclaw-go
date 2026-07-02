@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	message_queue "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/message_queue"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -133,7 +134,10 @@ func WithTeamID(teamID string) MessageBusConfigOption {
 // NewMessageBus 创建消息总线实例。
 //
 // 对应 Python: MessageBus.__init__(config, runtime, message_router)
-func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime, executor AgentExecutor) *MessageBus {
+// Python 在初始化失败时 raise build_error(StatusCode.MESSAGE_QUEUE_INITIATION_ERROR, ...)，
+// Go 通过返回 error 对齐此语义。当前 MessageQueueInMemory 构造不返回 error，
+// 后续若支持则回填 StatusMessageQueueInitiationError。
+func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime, executor AgentExecutor) (*MessageBus, error) {
 	sm := NewSubscriptionManager()
 	router := NewMessageRouter(sm, runtime, executor)
 
@@ -144,7 +148,7 @@ func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime, executor Agent
 		activeSubscriptions: make(map[string]message_queue.SubscriptionBase),
 		subscriptionManager: sm,
 		router:              router,
-	}
+	}, nil
 }
 
 // Start 启动消息总线。
@@ -192,7 +196,12 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 			Str("event_type", "MESSAGE_BUS_STOP_ERROR").
 			Str("team_id", mb.teamID).
 			Msg("消息总线停止失败")
-		return err
+		return exception.BuildError(
+			exception.StatusMessageQueueInitiationError,
+			exception.WithCause(err),
+			exception.WithParam("type", "MessageQueueInMemory"),
+			exception.WithParam("reason", fmt.Sprintf("[shutdown phase] %s", err.Error())),
+		)
 	}
 
 	mb.running = false
@@ -274,7 +283,13 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 			Str("recipient", recipient).
 			Str("message_id", envelope.MessageID).
 			Msg("P2P 消息发送失败")
-		return nil, fmt.Errorf("P2P 消息发送失败: %w", err)
+		return nil, exception.BuildError(
+			exception.StatusMessageQueueTopicMessageProductionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", p2pTopic),
+			exception.WithParam("message", envelope.String()),
+			exception.WithParam("reason", err.Error()),
+		)
 	}
 
 	// 等待响应，带超时
@@ -292,7 +307,11 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 			Str("recipient", recipient).
 			Str("message_id", envelope.MessageID).
 			Msg("P2P 消息响应等待失败")
-		return nil, err
+		return nil, exception.BuildError(
+			exception.StatusMessageQueueMessageProcessExecutionError,
+			exception.WithCause(err),
+			exception.WithParam("reason", err.Error()),
+		)
 	}
 
 	logger.Info(logComponent).
@@ -342,7 +361,13 @@ func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, 
 			Str("topic_id", topicID).
 			Str("message_id", envelope.MessageID).
 			Msg("Pub-Sub 消息发布失败")
-		return fmt.Errorf("Pub-Sub 消息发布失败: %w", err)
+		return exception.BuildError(
+			exception.StatusMessageQueueTopicMessageProductionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", pubsubTopic),
+			exception.WithParam("message", envelope.String()),
+			exception.WithParam("reason", err.Error()),
+		)
 	}
 
 	logger.Info(logComponent).
@@ -450,13 +475,19 @@ func (mb *MessageBus) ensureSubscription(ctx context.Context, topic string) erro
 // handleP2PMessage 处理 P2P 消息，提取信封并路由。
 //
 // 对应 Python: MessageBus._handle_p2p_message(payload)
+// Python 在 ValueError/Exception 时 raise build_error(StatusCode.MESSAGE_QUEUE_MESSAGE_PROCESS_EXECUTION_ERROR, ...)，
+// Go 通过返回 BuildError 对齐此语义。
 func (mb *MessageBus) handleP2PMessage(ctx context.Context, payload map[string]any) (any, error) {
 	envelope, err := mb.extractEnvelopeFromPayload(payload)
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "P2P_HANDLE_ERROR").
 			Msg("提取 P2P 消息信封失败")
-		return nil, err
+		return nil, exception.BuildError(
+			exception.StatusMessageQueueMessageProcessExecutionError,
+			exception.WithCause(err),
+			exception.WithParam("reason", fmt.Sprintf("Invalid P2P message payload: %s", err.Error())),
+		)
 	}
 
 	return mb.router.RouteP2PMessage(ctx, envelope)
@@ -465,17 +496,26 @@ func (mb *MessageBus) handleP2PMessage(ctx context.Context, payload map[string]a
 // handlePubsubMessage 处理 Pub-Sub 消息，提取信封并路由。
 //
 // 对应 Python: MessageBus._handle_pubsub_message(payload)
+// Python 中所有异常仅记录日志不抛出（火忘语义），Go 对齐此行为：
+// 即使信封提取失败或路由失败，也仅记录日志，返回 (nil, nil)。
 func (mb *MessageBus) handlePubsubMessage(ctx context.Context, payload map[string]any) (any, error) {
 	envelope, err := mb.extractEnvelopeFromPayload(payload)
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "PUBSUB_HANDLE_ERROR").
 			Msg("提取 Pub-Sub 消息信封失败")
-		return nil, err
+		// 火忘语义：只记日志，吞掉错误
+		return nil, nil
 	}
 
 	if err := mb.router.RoutePubsubMessage(ctx, envelope); err != nil {
-		return nil, err
+		logger.Error(logComponent).Err(err).
+			Str("event_type", "PUBSUB_ROUTE_ERROR").
+			Str("topic_id", envelope.TopicID).
+			Str("message_id", envelope.MessageID).
+			Msg("Pub-Sub 消息路由失败")
+		// 火忘语义：只记日志，吞掉错误
+		return nil, nil
 	}
 	return nil, nil
 }
