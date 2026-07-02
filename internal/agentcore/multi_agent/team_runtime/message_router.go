@@ -43,7 +43,7 @@ func NewMessageRouter(sm *SubscriptionManager, runtime *TeamRuntime) *MessageRou
 // 流程：触发 AgentP2PReceived 回调 → 构建 Agent 会话 → runner.RunAgent → 返回响应。
 //
 // 对应 Python: MessageRouter.route_p2p_message(envelope)
-func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEnvelope) (any, error) {
+func (r *MessageRouter) RouteP2PMessage(ctx context.Context, envelope *MessageEnvelope) (map[string]any, error) {
 	// 触发 AgentP2PReceived 回调
 	callback.GetCallbackFramework().TriggerAgentTeam(ctx, &callback.AgentTeamEventData{
 		Event:   callback.AgentP2PReceived,

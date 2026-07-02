@@ -30,7 +30,7 @@ type ChildRunner interface {
 	Stop(ctx context.Context) error
 	// RunAgent 执行 Agent（非流式）。
 	// 对齐 Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
-	RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (any, error)
+	RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (map[string]any, error)
 	// RunAgentStreaming 执行 Agent（流式），返回消息块通道。
 	// 对齐 Python: Runner.run_agent_streaming(agent, inputs, session=session, stream_modes=stream_modes)
 	RunAgentStreaming(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string, streamModes any) (<-chan stream.Schema, error)

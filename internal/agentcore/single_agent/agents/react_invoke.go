@@ -25,7 +25,7 @@ import (
 // 执行顺序：① transform_io input → ② emit_before → ③ invokeImpl → ④ transform_io output → ⑤ emit_after
 //
 // 对应 Python: _AgentMeta 元类装饰后的 invoke
-func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
+func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	fw := callback.GetCallbackFramework()
 	agentOpts := interfaces.NewAgentOptions(opts...)
 
@@ -72,7 +72,18 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	}
 
 	// ④ transform_io 输出变换（对齐 Python transform_io 的 output_fn）
-	result = fw.TransformAgentIOOutput(ctx, callback.GlobalAgentInvokeOutput, result)
+	if transformed := fw.TransformAgentIOOutput(ctx, callback.GlobalAgentInvokeOutput, result); transformed != nil {
+		if v, ok := transformed.(map[string]any); ok {
+			result = v
+		} else {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event", "TransformAgentIOOutput").
+				Str("agent_id", a.card.ID).
+				Str("expected", "map[string]any").
+				Str("actual", fmt.Sprintf("%T", transformed)).
+				Msg("TransformIO 返回类型不匹配，使用原始输出")
+		}
+	}
 
 	// ⑤ emit_after: 触发全局 AgentInvokeOutput 事件
 	fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
@@ -259,7 +270,7 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 // invokeImpl 非流式调用的真实逻辑。
 //
 // 对应 Python: ReActAgent.invoke()
-func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
+func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	agentOpts := interfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
@@ -539,14 +550,7 @@ func (a *ReActAgent) innerStream(
 		}
 
 		// 正常结果写入流
-		if resultMap, ok := result.(map[string]any); ok {
-			a.WriteInvokeResultToStream(ctx, resultMap, sess)
-		} else if resultList, ok := result.([]stream.Schema); ok {
-			// invoke 返回 schema 列表（中断路径）
-			for _, schema := range resultList {
-				_ = sess.WriteStream(ctx, schema)
-			}
-		}
+		a.WriteInvokeResultToStream(ctx, result, sess)
 	}
 
 	if isAgentSess {

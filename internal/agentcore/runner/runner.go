@@ -233,7 +233,7 @@ func RunAgent(
 	sessionRef SessionRef,
 	modelCtx any,
 	envs map[string]any,
-) (any, error) {
+) (map[string]any, error) {
 	r := getRunner()
 
 	// 步骤 1：_prepareAgent → 获取agent实例和session（对齐 Python L418）

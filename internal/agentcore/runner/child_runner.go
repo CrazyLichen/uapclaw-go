@@ -50,7 +50,7 @@ func (c *ChildRunnerImpl) Stop(ctx context.Context) error {
 // RunAgent 执行 Agent（非流式）。
 // 将 BaseAgent 转为 AgentRef，sessionID 转为 SessionRef，后调用 runner.RunAgent。
 // 对齐 Python: Runner.run_agent(agent=agent, inputs=inputs, session=session)
-func (c *ChildRunnerImpl) RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (any, error) {
+func (c *ChildRunnerImpl) RunAgent(ctx context.Context, agent interfaces.BaseAgent, inputs map[string]any, sessionID string) (map[string]any, error) {
 	agentRef := ByAgent(agent)
 	sessionRef := SessionRef{}
 	if sessionID != "" {

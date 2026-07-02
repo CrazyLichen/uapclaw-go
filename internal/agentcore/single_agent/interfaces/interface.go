@@ -76,7 +76,7 @@ type BaseAgent interface {
 
 	// Invoke 非流式调用 Agent。
 	// 对应 Python: BaseAgent.invoke(inputs, session)
-	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (any, error)
+	Invoke(ctx context.Context, inputs map[string]any, opts ...AgentOption) (map[string]any, error)
 
 	// Stream 流式调用 Agent。
 	// 对应 Python: BaseAgent.stream(inputs, session, stream_modes)

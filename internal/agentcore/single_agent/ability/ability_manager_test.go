@@ -463,11 +463,11 @@ func (f *fakeWorkflow) Card() *schema.WorkflowCard {
 
 // fakeAgent 用于测试的模拟 Agent
 type fakeAgent struct {
-	result any
+	result map[string]any
 	err    error
 }
 
-func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (any, error) {
+func (f *fakeAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (map[string]any, error) {
 	return f.result, f.err
 }
 

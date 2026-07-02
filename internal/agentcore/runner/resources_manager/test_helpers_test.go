@@ -53,7 +53,7 @@ func (s *stubBaseAgent) Configure(_ context.Context, _ sainterfaces.AgentConfig)
 	return nil
 }
 
-func (s *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...sainterfaces.AgentOption) (any, error) {
+func (s *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...sainterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
 

@@ -23,7 +23,7 @@ import (
 // mockAgent 模拟 BaseAgent
 type mockAgent struct {
 	card      *agentschema.AgentCard
-	result    any
+	result    map[string]any
 	err       error
 	streamCh  <-chan stream.Schema
 	streamErr error
@@ -33,7 +33,7 @@ func (m *mockAgent) Configure(ctx context.Context, config interfaces.AgentConfig
 	return nil
 }
 
-func (m *mockAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
+func (m *mockAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	return m.result, m.err
 }
 
@@ -133,10 +133,7 @@ func TestRunAgent_正常调用(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunAgent 失败: %v", err)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result 类型错误: %T", result)
-	}
+	m := result
 	if m["output"] != "hello" {
 		t.Errorf("output = %v, want hello", m["output"])
 	}
@@ -160,15 +157,15 @@ func TestRunAgent_执行错误(t *testing.T) {
 func TestRunAgent_无会话(t *testing.T) {
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithName("no-sess-agent"), schema.WithDescription("无会话 Agent")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	result, err := RunAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, SessionRef{}, nil, nil)
 	if err != nil {
 		t.Fatalf("RunAgent 失败: %v", err)
 	}
-	if result != "ok" {
-		t.Errorf("result = %v, want ok", result)
+	if result["output"] != "ok" {
+		t.Errorf("result = %v, want ok", result["output"])
 	}
 }
 
@@ -596,7 +593,7 @@ func TestPrepareAgent_按实例有会话(t *testing.T) {
 	r := newTestRunner()
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithName("pa-inst-sess"), schema.WithDescription("按实例有会话")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 	sess := session.CreateAgentSession("existing-session", newTestAgentCard("pa-inst-sess"), nil)
 
@@ -617,7 +614,7 @@ func TestPrepareAgent_按ID有会话(t *testing.T) {
 	r := newTestRunner()
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithID("registered-agent"), schema.WithName("已注册 Agent"), schema.WithDescription("按ID有会话")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	// 注册 Agent 到资源管理器
@@ -646,7 +643,7 @@ func TestPrepareAgent_按ID无会话(t *testing.T) {
 	r := newTestRunner()
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithID("byid-no-sess"), schema.WithName("按ID无会话"), schema.WithDescription("按ID无会话")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error) {
@@ -673,7 +670,7 @@ func TestPrepareAgent_按实例无会话(t *testing.T) {
 	r := newTestRunner()
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithName("inst-no-sess"), schema.WithDescription("按实例无会话")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	agentInst, agentSess, err := r.prepareAgent(context.Background(), ByAgent(ag), map[string]any{"input": "test"}, SessionRef{})
@@ -714,7 +711,7 @@ func TestPrepareAgent_自定义会话ID(t *testing.T) {
 	r := newTestRunner()
 	ag := &mockAgent{
 		card:   agentschema.NewAgentCard(schema.WithName("custom-conv"), schema.WithDescription("自定义会话ID")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	inputs := map[string]any{
@@ -742,7 +739,7 @@ func TestPrepareWorkflow_按实例(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
 		card:   schema.NewWorkflowCard(schema.WithID("wf-inst"), schema.WithName("按实例 Workflow"), schema.WithDescription("按实例")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	workflowInst, workflowSess, err := r.prepareWorkflow(context.Background(), ByWorkflow(wf), nil)
@@ -762,7 +759,7 @@ func TestPrepareWorkflow_按ID(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
 		card:   schema.NewWorkflowCard(schema.WithID("wf-byid"), schema.WithName("按ID Workflow"), schema.WithDescription("按ID")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	provider := func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error) {
@@ -801,7 +798,7 @@ func TestPrepareWorkflow_按实例带Card(t *testing.T) {
 	wfCard.Version = "2.0"
 	wf := &mockWorkflow{
 		card:   wfCard,
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	workflowInst, _, err := r.prepareWorkflow(context.Background(), ByWorkflow(wf), nil)
@@ -818,7 +815,7 @@ func TestPrepareWorkflow_带WorkflowSession(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
 		card:   schema.NewWorkflowCard(schema.WithName("wf-ws"), schema.WithDescription("带 WorkflowSession")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 	existingWS := session.NewWorkflowSession()
 
@@ -836,7 +833,7 @@ func TestPrepareWorkflow_带字符串会话(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
 		card:   schema.NewWorkflowCard(schema.WithName("wf-str"), schema.WithDescription("字符串会话")),
-		result: "ok",
+		result: map[string]any{"output": "ok"},
 	}
 
 	_, workflowSess, err := r.prepareWorkflow(context.Background(), ByWorkflow(wf), "my-session-id")

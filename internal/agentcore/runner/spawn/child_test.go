@@ -501,7 +501,7 @@ type stubBaseAgent struct {
 func (a *stubBaseAgent) Configure(_ context.Context, _ interfaces.AgentConfig) error {
 	return nil
 }
-func (a *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (any, error) {
+func (a *stubBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (map[string]any, error) {
 	return map[string]any{"status": "ok"}, nil
 }
 func (a *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
@@ -527,14 +527,14 @@ func (a *stubBaseAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) erro
 
 // stubChildRunner 用于测试的模拟 ChildRunner
 type stubChildRunner struct {
-	result       any
+	result       map[string]any
 	streamChunks []stream.Schema
 }
 
 func (r *stubChildRunner) SetConfig(_ map[string]any) error { return nil }
 func (r *stubChildRunner) Start(_ context.Context) error    { return nil }
 func (r *stubChildRunner) Stop(_ context.Context) error     { return nil }
-func (r *stubChildRunner) RunAgent(_ context.Context, _ interfaces.BaseAgent, _ map[string]any, _ string) (any, error) {
+func (r *stubChildRunner) RunAgent(_ context.Context, _ interfaces.BaseAgent, _ map[string]any, _ string) (map[string]any, error) {
 	return r.result, nil
 }
 func (r *stubChildRunner) RunAgentStreaming(_ context.Context, _ interfaces.BaseAgent, _ map[string]any, _ string, _ any) (<-chan stream.Schema, error) {
