@@ -208,7 +208,7 @@ func (r *MessageRouter) buildAgentSession(sessionID, agentID string) *session.Se
 			Msg("构建 Agent 会话时获取 AgentCard 失败")
 		return nil
 	}
-	return teamSession.CreateAgentSession(card, agentID)
+	return teamSession.CreateAgentSession(card, agentID, true)
 }
 
 // toInputsMap 将消息内容转换为 map[string]any 类型以匹配 runner.RunAgent 签名。

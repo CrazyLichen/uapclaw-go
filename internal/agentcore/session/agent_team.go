@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -328,15 +329,55 @@ func (s *AgentTeamSession) CloseStream() error {
 
 // CreateAgentSession 创建子 AgentSession。
 //
-// 从当前 AgentTeamSession 的 sessionID 创建子 Agent 会话，
-// 子会话共享同一个 sessionID。
+// 从当前 AgentTeamSession 创建子 Agent 会话，对齐 Python:
 //
-// 对应 Python: Session.create_agent_session(card, agent_id)
-func (s *AgentTeamSession) CreateAgentSession(card *agentschema.AgentCard, agentID string) *Session {
-	return NewSession(
+//	Session.create_agent_session(card, agent_id, share_stream_writer=True)
+//
+// 参数：
+//   - card: Agent 身份元数据，nil 时用 agentID 构造默认 AgentCard
+//   - agentID: Agent 标识
+//   - shareStreamWriter: 是否共享父会话的 StreamWriterManager（默认 Python 为 True）
+//
+// 对应 Python: Session.create_agent_session(card, agent_id, *, share_stream_writer=True)
+func (s *AgentTeamSession) CreateAgentSession(
+	card *agentschema.AgentCard,
+	agentID string,
+	shareStreamWriter bool,
+) *Session {
+	// card 为 nil 时用 agentID 构造默认 AgentCard
+	// 对齐 Python: card = AgentCard(id=agent_id or "team_agent", name=agent_id or "team_agent")
+	if card == nil {
+		id := agentID
+		if id == "" {
+			id = "team_agent"
+		}
+		card = agentschema.NewAgentCard(
+			commonschema.WithID(id),
+			commonschema.WithName(id),
+		)
+	}
+
+	// 注入来源元数据
+	// 对齐 Python: source_metadata={"source_agent_id": card.id, "source_team_id": team_id}
+	sourceMetadata := map[string]any{
+		"source_agent_id": card.GetID(),
+		"source_team_id":  s.teamID,
+	}
+
+	opts := []SessionOption{
 		WithSessionID(s.sessionID),
+		WithEnvs(s.GetEnvs()),
 		WithCard(card),
-	)
+		WithCloseStreamOnPostRun(false), // 子会话不关闭流，由 Team PostRun 统一管理
+		WithSourceMetadata(sourceMetadata),
+	}
+
+	// 共享 StreamWriterManager（Python 默认 share_stream_writer=True）
+	if shareStreamWriter {
+		opts = append(opts, WithStreamWriterManager(s.inner.StreamWriterManager()))
+	}
+
+	return NewSession(opts...)
 }
 
 // Inner 返回内部层 AgentTeamSession

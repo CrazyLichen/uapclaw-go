@@ -291,7 +291,7 @@ func TestAgentTeamSession_CreateAgentSession(t *testing.T) {
 	s := NewAgentTeamSession(WithAgentTeamSessionID("team-parent"))
 	card := &agentschema.AgentCard{BaseCard: schema.BaseCard{ID: "agent-1", Name: "测试Agent"}}
 
-	agentSess := s.CreateAgentSession(card, "agent-1")
+	agentSess := s.CreateAgentSession(card, "agent-1", true)
 	if agentSess == nil {
 		t.Fatal("CreateAgentSession 返回 nil")
 	}

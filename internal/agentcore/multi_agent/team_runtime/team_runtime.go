@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -30,7 +31,7 @@ type RuntimeConfig struct {
 // TeamRuntime 团队运行时编排入口，聚合消息总线、订阅管理和 Agent 注册。
 //
 // 职责：
-//   - Agent 注册/注销（存储 AgentCard + wrapProvider 注入 RuntimeBindable + 注册到 ResourceMgr）
+//   - Agent 注册/注销（存储 AgentCard + wrapProvider 注入 RuntimeBindable + 注册到 Runner.resource_mgr）
 //   - 消息通信（Send/Publish/Subscribe 委托 messageBus）
 //   - 会话管理（BindTeamSession/UnbindTeamSession）
 //   - 生命周期（Start/Stop/CleanupSession）
@@ -45,8 +46,6 @@ type TeamRuntime struct {
 	agentCards map[string]*agentschema.AgentCard
 	// messageBus 消息总线
 	messageBus MessageBusInterface
-	// resourceMgr 资源管理器，用于注册 wrappedProvider
-	resourceMgr *resources_manager.ResourceMgr
 	// activeTeamSessions 活跃团队会话映射，sessionID → AgentTeamSession
 	activeTeamSessions map[string]*session.AgentTeamSession
 	// running 是否运行中
@@ -201,8 +200,10 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 	wrappedProvider := tr.wrapProvider(provider, agentID)
 
 	// 注册到 ResourceMgr（对齐 Python: Runner.resource_mgr.add_agent(card, wrapped_provider)）
-	if tr.resourceMgr != nil {
-		if err := tr.resourceMgr.AddAgent(card, wrappedProvider); err != nil {
+	// Python 通过 delayed import 访问 Runner.resource_mgr，
+	// Go 直接调用 runner.GetResourceMgr() 等价访问全局 ResourceMgr。
+	if resourceMgr := runner.GetResourceMgr(); resourceMgr != nil {
+		if err := resourceMgr.AddAgent(card, wrappedProvider); err != nil {
 			logger.Warn(logComponent).Err(err).
 				Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_ERROR").
 				Str("agent_id", agentID).
@@ -418,19 +419,6 @@ func (tr *TeamRuntime) IsRunning() bool {
 // SetMessageBus 设置消息总线，供外部注入。
 func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
 	tr.messageBus = bus
-}
-
-// SetResourceMgr 设置资源管理器，供外部注入。
-//
-// 设置后 RegisterAgent 会将 wrappedProvider 注册到 ResourceMgr，
-// 对齐 Python: Runner.resource_mgr.add_agent(card, wrapped_provider)。
-func (tr *TeamRuntime) SetResourceMgr(mgr *resources_manager.ResourceMgr) {
-	tr.resourceMgr = mgr
-}
-
-// GetResourceMgr 获取资源管理器。
-func (tr *TeamRuntime) GetResourceMgr() *resources_manager.ResourceMgr {
-	return tr.resourceMgr
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

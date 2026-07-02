@@ -164,7 +164,7 @@ func (t *LifecycleTool) Stream(ctx context.Context, inputs map[string]any, opts 
 
 // newStartedData 创建 TOOL_CALL_STARTED 事件数据
 func newStartedData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallStarted, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallStarted, card)
 	data.Inputs = inputs
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
@@ -172,7 +172,7 @@ func newStartedData(card *ToolCard, inputs map[string]any) *runnnercallback.Tool
 
 // newFinishedData 创建 TOOL_CALL_FINISHED 事件数据
 func newFinishedData(card *ToolCard, inputs map[string]any, result map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallFinished, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallFinished, card)
 	data.Inputs = inputs
 	data.Result = result
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
@@ -181,7 +181,7 @@ func newFinishedData(card *ToolCard, inputs map[string]any, result map[string]an
 
 // newErrorData 创建 TOOL_CALL_ERROR 事件数据
 func newErrorData(card *ToolCard, inputs map[string]any, err error) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallError, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolCallError, card)
 	data.Inputs = inputs
 	data.Error = err
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
@@ -190,7 +190,7 @@ func newErrorData(card *ToolCard, inputs map[string]any, err error) *runnnercall
 
 // newResultReceivedData 创建 TOOL_RESULT_RECEIVED 事件数据
 func newResultReceivedData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolResultReceived, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolResultReceived, card)
 	data.Result = result
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
@@ -198,7 +198,7 @@ func newResultReceivedData(card *ToolCard, result map[string]any) *runnnercallba
 
 // newInvokeInputData 创建 TOOL_INVOKE_INPUT 事件数据
 func newInvokeInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeInput, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeInput, card)
 	data.Inputs = inputs
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
@@ -206,7 +206,7 @@ func newInvokeInputData(card *ToolCard, inputs map[string]any) *runnnercallback.
 
 // newInvokeOutputData 创建 TOOL_INVOKE_OUTPUT 事件数据
 func newInvokeOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeOutput, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolInvokeOutput, card)
 	data.Result = result
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
@@ -214,7 +214,7 @@ func newInvokeOutputData(card *ToolCard, result map[string]any) *runnnercallback
 
 // newStreamInputData 创建 TOOL_STREAM_INPUT 事件数据
 func newStreamInputData(card *ToolCard, inputs map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamInput, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamInput, card)
 	data.Inputs = inputs
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data
@@ -222,7 +222,7 @@ func newStreamInputData(card *ToolCard, inputs map[string]any) *runnnercallback.
 
 // newStreamOutputData 创建 TOOL_STREAM_OUTPUT 事件数据
 func newStreamOutputData(card *ToolCard, result map[string]any) *runnnercallback.ToolCallEventData {
-	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamOutput, &card.BaseCard)
+	data := runnnercallback.NewToolCallEventData(runnnercallback.ToolStreamOutput, card)
 	data.Result = result
 	data.Extra = map[string]any{"tool_info": card.ToolInfo()}
 	return data

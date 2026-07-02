@@ -510,14 +510,14 @@ func (e *EventBase) GetEvent(eventName string) string {
 }
 
 // NewToolCallEventData 创建工具调用事件数据。
-func NewToolCallEventData(event ToolCallEventType, card *commonschema.BaseCard) *ToolCallEventData {
+func NewToolCallEventData(event ToolCallEventType, card commonschema.CardInterface) *ToolCallEventData {
 	if card == nil {
 		return &ToolCallEventData{Event: event}
 	}
 	return &ToolCallEventData{
 		Event:    event,
-		ToolName: card.Name,
-		ToolID:   card.ID,
+		ToolName: card.GetName(),
+		ToolID:   card.GetID(),
 	}
 }
 
