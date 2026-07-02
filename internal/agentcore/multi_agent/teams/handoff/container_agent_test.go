@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -908,6 +909,407 @@ func TestContainerAgent_Invoke_最大交接次数耗尽(t *testing.T) {
 		t.Fatal("交接被拒绝时应该调用 Complete")
 	}
 }
+
+// TestContainerAgent_RegisterCallback 测试 RegisterCallback 空操作
+func TestContainerAgent_RegisterCallback(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	err := agent.RegisterCallback(context.Background(), nil, nil)
+	assert.NoError(t, err)
+}
+
+// TestContainerAgent_RegisterRail 测试 RegisterRail 空操作
+func TestContainerAgent_RegisterRail(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	err := agent.RegisterRail(context.Background(), rail.NewBaseRail(), nil)
+	assert.NoError(t, err)
+}
+
+// TestContainerAgent_UnregisterRail 测试 UnregisterRail 空操作
+func TestContainerAgent_UnregisterRail(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	err := agent.UnregisterRail(context.Background(), rail.NewBaseRail())
+	assert.NoError(t, err)
+}
+
+// TestContainerAgent_saveAgentContextWithCE_ce为nil 测试 saveAgentContextWithCE 当 ce 为 nil 时直接返回
+func TestContainerAgent_saveAgentContextWithCE_ce为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	sess := newMockContainerSessionFacade("sess1")
+	// ce 为 nil，应直接返回
+	agent.saveAgentContextWithCE(context.Background(), nil, sess)
+}
+
+// TestContainerAgent_saveAgentContextWithCE_sess为nil 测试 saveAgentContextWithCE 当 sess 为 nil 时直接返回
+func TestContainerAgent_saveAgentContextWithCE_sess为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	// sess 为 nil，应直接返回
+	agent.saveAgentContextWithCE(context.Background(), nil, nil)
+}
+
+// TestContainerAgent_saveAgentContextWithCE_SaveContexts失败 测试 saveAgentContextWithCE 当 SaveContexts 失败时记录警告
+func TestContainerAgent_saveAgentContextWithCE_SaveContexts失败(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	// 创建 mock ContextEngine，SaveContexts 返回错误
+	mockCE := &mockContextEngine{saveErr: errors.New("save failed")}
+	sess := newMockContainerSessionFacade("sess1")
+
+	// 应记录警告但不 panic
+	agent.saveAgentContextWithCE(context.Background(), mockCE, sess)
+}
+
+// TestContainerAgent_saveAgentContextWithCE_成功 测试 saveAgentContextWithCE 成功
+func TestContainerAgent_saveAgentContextWithCE_成功(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	mockCE := &mockContextEngine{
+		saveResult: map[string]any{"default_context_id": map[string]any{}},
+	}
+	sess := newMockContainerSessionFacade("sess1")
+
+	agent.saveAgentContextWithCE(context.Background(), mockCE, sess)
+}
+
+// TestContainerAgent_writeResultToStream_result为nil 测试 writeResultToStream result 为 nil 时直接返回
+func TestContainerAgent_writeResultToStream_result为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	teamSession := session.NewAgentTeamSession()
+	// result 为 nil，不应 panic
+	agent.writeResultToStream(context.Background(), nil, teamSession)
+}
+
+// TestContainerAgent_writeResultToStream_session为nil 测试 writeResultToStream teamSession 为 nil 时直接返回
+func TestContainerAgent_writeResultToStream_session为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	// teamSession 为 nil，不应 panic
+	agent.writeResultToStream(context.Background(), map[string]any{"result": "ok"}, nil)
+}
+
+// TestContainerAgent_writeResultToStream_正常 测试 writeResultToStream 正常写入
+func TestContainerAgent_writeResultToStream_正常(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	teamSession := session.NewAgentTeamSession()
+	agent.writeResultToStream(context.Background(), map[string]any{"result": "ok"}, teamSession)
+	// 不 panic 即可
+}
+
+// TestContainerAgent_saveContextToTeamSession_agentSession为nil 测试 agentSession 为 nil 时直接返回
+func TestContainerAgent_saveContextToTeamSession_agentSession为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	teamSession := session.NewAgentTeamSession()
+	agent.saveContextToTeamSession(nil, teamSession)
+}
+
+// TestContainerAgent_saveContextToTeamSession_teamSession为nil 测试 teamSession 为 nil 时直接返回
+func TestContainerAgent_saveContextToTeamSession_teamSession为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	agent.saveContextToTeamSession(agentSession, nil)
+}
+
+// TestContainerAgent_saveContextToTeamSession_无上下文状态 测试 agent session 无上下文状态时直接返回
+func TestContainerAgent_saveContextToTeamSession_无上下文状态(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	// 不设置 context 状态
+	teamSession := session.NewAgentTeamSession()
+	agent.saveContextToTeamSession(agentSession, teamSession)
+}
+
+// TestContainerAgent_saveContextToTeamSession_上下文状态非map 测试 context 状态不是 map 类型时直接返回
+func TestContainerAgent_saveContextToTeamSession_上下文状态非map(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	agentSession.state["context"] = "not_a_map" // 非法类型
+	teamSession := session.NewAgentTeamSession()
+	agent.saveContextToTeamSession(agentSession, teamSession)
+}
+
+// TestContainerAgent_saveContextToTeamSession_无默认上下文 测试无 defaultContextID 时直接返回
+func TestContainerAgent_saveContextToTeamSession_无默认上下文(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	agentSession.state["context"] = map[string]any{
+		"other_context": map[string]any{},
+	}
+	teamSession := session.NewAgentTeamSession()
+	agent.saveContextToTeamSession(agentSession, teamSession)
+}
+
+// TestContainerAgent_saveContextToTeamSession_无消息 测试 messages 为空时直接返回
+func TestContainerAgent_saveContextToTeamSession_无消息(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	agentSession.state["context"] = map[string]any{
+		defaultContextID: map[string]any{
+			"messages": []any{},
+		},
+	}
+	teamSession := session.NewAgentTeamSession()
+	agent.saveContextToTeamSession(agentSession, teamSession)
+}
+
+// TestContainerAgent_injectContextHistory_agentSession为nil 测试 agentSession 为 nil 时直接返回
+func TestContainerAgent_injectContextHistory_agentSession为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	teamSession := session.NewAgentTeamSession()
+	agent.injectContextHistory(nil, teamSession)
+}
+
+// TestContainerAgent_injectContextHistory_teamSession为nil 测试 teamSession 为 nil 时直接返回
+func TestContainerAgent_injectContextHistory_teamSession为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	agent.injectContextHistory(agentSession, nil)
+}
+
+// TestContainerAgent_injectContextHistory_历史类型错误 测试历史消息类型错误时不注入
+func TestContainerAgent_injectContextHistory_历史类型错误(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, nil, nil)
+
+	teamSession := session.NewAgentTeamSession()
+	teamSession.UpdateState(map[string]any{
+		contextHistoryKey: "not_a_slice", // 非法类型
+	})
+
+	agentSession := newMockContainerSessionFacade("agent_123")
+	originalState := len(agentSession.state)
+	agent.injectContextHistory(agentSession, teamSession)
+
+	// 不应修改 agentSession 状态
+	assert.Equal(t, originalState, len(agentSession.state))
+}
+
+// TestContainerAgent_injectToolsOnce_AbilityManager为nil 测试目标 Agent AbilityManager 为 nil 时跳过注入
+func TestContainerAgent_injectToolsOnce_AbilityManager为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(commonschema.WithID("test"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return newMockBaseAgent("test"), nil
+	}
+	agent := NewContainerAgent(card, provider, map[string]struct{}{"target": {}}, nil)
+
+	// 创建 AbilityManager 返回 nil 的 mock
+	mockAgent := &mockBaseAgentNoAbility{
+		card: agentschema.NewAgentCard(commonschema.WithID("test")),
+	}
+
+	agent.injectToolsOnce(context.Background(), mockAgent)
+	assert.True(t, agent.toolsInjected)
+}
+
+// TestContainerAgent_Invoke_有TeamSession且执行错误 测试有 team session 且执行出错时的中断信号提取
+func TestContainerAgent_Invoke_有TeamSession且执行错误(t *testing.T) {
+	mockAgent := newMockBaseAgent("agent_a")
+	mockAgent.invokeErr = errors.New("execution error")
+
+	card := agentschema.NewAgentCard(commonschema.WithID("agent_a"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return mockAgent, nil
+	}
+
+	coord := NewHandoffOrchestrator("agent_a", []string{"agent_a"}, nil)
+
+	agent := NewContainerAgent(card, provider, nil, func(_ string) *HandoffOrchestrator {
+		return coord
+	})
+
+	// 创建 team session
+	teamSession := session.NewAgentTeamSession()
+
+	req := &HandoffRequest{
+		InputMessage: map[string]any{"query": "hello"},
+		Session:      teamSession,
+	}
+
+	result, err := agent.Invoke(context.Background(), map[string]any{HandoffRequestKey: req})
+	assert.NoError(t, err) // ContainerAgent 内部处理错误
+	assert.Equal(t, map[string]any{}, result)
+}
+
+// TestContainerAgent_Invoke_有TeamSession且返回中断 测试有 team session 且返回中断信号
+func TestContainerAgent_Invoke_有TeamSession且返回中断(t *testing.T) {
+	mockAgent := newMockBaseAgent("agent_a")
+	mockAgent.invokeResult = map[string]any{
+		"result_type": "interrupt",
+		"message":     "need input",
+	}
+
+	card := agentschema.NewAgentCard(commonschema.WithID("agent_a"))
+	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
+		return mockAgent, nil
+	}
+
+	coord := NewHandoffOrchestrator("agent_a", []string{"agent_a"}, nil)
+
+	agent := NewContainerAgent(card, provider, nil, func(_ string) *HandoffOrchestrator {
+		return coord
+	})
+
+	teamSession := session.NewAgentTeamSession()
+	req := &HandoffRequest{
+		InputMessage: map[string]any{"query": "hello"},
+		Session:      teamSession,
+	}
+
+	result, err := agent.Invoke(context.Background(), map[string]any{HandoffRequestKey: req})
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]any{}, result)
+
+	// 中断时应调用 Complete
+	select {
+	case <-coord.DoneCh():
+		// 正确
+	default:
+		t.Fatal("中断时应该调用 Complete")
+	}
+}
+
+// mockBaseAgentNoAbility 无 AbilityManager 的 mock Agent
+type mockBaseAgentNoAbility struct {
+	card *agentschema.AgentCard
+}
+
+func (m *mockBaseAgentNoAbility) Card() *agentschema.AgentCard                     { return m.card }
+func (m *mockBaseAgentNoAbility) Config() agentinterfaces.AgentConfig              { return nil }
+func (m *mockBaseAgentNoAbility) AbilityManager() any                              { return nil }
+func (m *mockBaseAgentNoAbility) CallbackManager() *rail.AgentCallbackManager      { return nil }
+func (m *mockBaseAgentNoAbility) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
+	return nil
+}
+func (m *mockBaseAgentNoAbility) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+func (m *mockBaseAgentNoAbility) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema, 1)
+	ch <- &stream.OutputSchema{IsLastSchema: true}
+	close(ch)
+	return ch, nil
+}
+func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+	return nil
+}
+func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+	return nil
+}
+func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ rail.AgentRail) error { return nil }
+
+// mockContextEngine 模拟 ContextEngine 接口
+type mockContextEngine struct {
+	saveResult map[string]any
+	saveErr    error
+}
+
+func (m *mockContextEngine) CreateContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CreateContextOption) (ceinterface.ModelContext, error) {
+	return nil, nil
+}
+func (m *mockContextEngine) GetContext(_ string, _ string) ceinterface.ModelContext { return nil }
+func (m *mockContextEngine) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CompressContextOption) (string, error) {
+	return "", nil
+}
+func (m *mockContextEngine) ClearContext(_ context.Context, _ ...ceinterface.ClearContextOption) error {
+	return nil
+}
+func (m *mockContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.SessionFacade, _ []string) (map[string]any, error) {
+	return m.saveResult, m.saveErr
+}
+
+// 确保 mockBaseAgentNoAbility 满足 BaseAgent 接口
+var _ agentinterfaces.BaseAgent = (*mockBaseAgentNoAbility)(nil)
+
+// 确保 mockContextEngine 满足 ContextEngine 接口
+var _ ceinterface.ContextEngine = (*mockContextEngine)(nil)
 
 // 确保 mockBaseAgent 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*mockBaseAgent)(nil)

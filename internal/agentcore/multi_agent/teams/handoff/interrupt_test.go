@@ -81,3 +81,15 @@ func TestFlushTeamSession_正常流程(t *testing.T) {
 	_ = FlushTeamSession(context.Background(), sess)
 	// 验证不 panic 即可，Commit 失败为预期行为
 }
+
+// TestFlushTeamSession_CloseStream失败 测试 CloseStream 失败时记录警告但不返回错误
+func TestFlushTeamSession_CloseStream失败(t *testing.T) {
+	// 使用已关闭 stream 的 session
+	sess := session.NewAgentTeamSession(
+		session.WithAgentTeamSessionID("close-stream-test"),
+	)
+	// 先关闭 stream
+	_ = sess.CloseStream()
+	// 再次 FlushTeamSession，CloseStream 会失败但不应 panic
+	_ = FlushTeamSession(context.Background(), sess)
+}

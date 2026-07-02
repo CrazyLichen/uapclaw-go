@@ -430,4 +430,66 @@ func TestHandoffCount_和CurrentAgentID_Getter(t *testing.T) {
 	}
 }
 
+// TestRestoreFromSession_快照类型异常 测试快照类型不是 map[string]any 时使用默认值
+func TestRestoreFromSession_快照类型异常(t *testing.T) {
+	sess := session.NewAgentTeamSession()
+	// 写入非法类型的快照
+	sess.UpdateState(map[string]any{
+		CoordinatorStateKey: "not_a_map",
+	})
+	agents := []string{"a", "b", "c"}
+
+	restored := RestoreFromSession(sess, "a", agents, nil)
+
+	// 应使用默认值
+	if restored.CurrentAgentID() != "a" {
+		t.Errorf("期望恢复后 CurrentAgentID = a（默认值），实际 = %s", restored.CurrentAgentID())
+	}
+	if restored.HandoffCount() != 0 {
+		t.Errorf("期望恢复后 HandoffCount = 0（默认值），实际 = %d", restored.HandoffCount())
+	}
+}
+
+// TestRestoreFromSession_handoffCount为int 测试 handoff_count 为 int 类型（非 float64）
+func TestRestoreFromSession_handoffCount为int(t *testing.T) {
+	sess := session.NewAgentTeamSession()
+	sess.UpdateState(map[string]any{
+		CoordinatorStateKey: map[string]any{
+			"current_agent_id": "b",
+			"handoff_count":    3,
+		},
+	})
+	agents := []string{"a", "b", "c"}
+
+	restored := RestoreFromSession(sess, "a", agents, nil)
+
+	if restored.CurrentAgentID() != "b" {
+		t.Errorf("期望恢复后 CurrentAgentID = b，实际 = %s", restored.CurrentAgentID())
+	}
+	if restored.HandoffCount() != 3 {
+		t.Errorf("期望恢复后 HandoffCount = 3，实际 = %d", restored.HandoffCount())
+	}
+}
+
+// TestRestoreFromSession_handoffCount为float64 测试 handoff_count 为 float64 类型（JSON 反序列化结果）
+func TestRestoreFromSession_handoffCount为float64(t *testing.T) {
+	sess := session.NewAgentTeamSession()
+	sess.UpdateState(map[string]any{
+		CoordinatorStateKey: map[string]any{
+			"current_agent_id": "c",
+			"handoff_count":    float64(5),
+		},
+	})
+	agents := []string{"a", "b", "c"}
+
+	restored := RestoreFromSession(sess, "a", agents, nil)
+
+	if restored.CurrentAgentID() != "c" {
+		t.Errorf("期望恢复后 CurrentAgentID = c，实际 = %s", restored.CurrentAgentID())
+	}
+	if restored.HandoffCount() != 5 {
+		t.Errorf("期望恢复后 HandoffCount = 5，实际 = %d", restored.HandoffCount())
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

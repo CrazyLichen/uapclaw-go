@@ -283,6 +283,199 @@ func TestFindHandoffPayload_无信号(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// TestFindHandoffFromSession_无Context状态 测试 agent session 无 context 状态时返回 nil
+func TestFindHandoffFromSession_无Context状态(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_Context状态非map 测试 context 状态不是 map 类型时返回 nil
+func TestFindHandoffFromSession_Context状态非map(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": "not_a_map",
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_无默认上下文 测试无 defaultContextID 时返回 nil
+func TestFindHandoffFromSession_无默认上下文(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				"other_context": map[string]any{},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_默认上下文非map 测试 defaultContextID 对应值不是 map 时返回 nil
+func TestFindHandoffFromSession_默认上下文非map(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: "not_a_map",
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_无消息列表 测试无 messages 时返回 nil
+func TestFindHandoffFromSession_无消息列表(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_消息列表类型错误 测试 messages 不是 []any 类型时返回 nil
+func TestFindHandoffFromSession_消息列表类型错误(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": "not_a_slice",
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_tool消息Content非字符串 测试 tool 消息 content 为非字符串时跳过
+func TestFindHandoffFromSession_tool消息Content非字符串(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": []any{
+						map[string]any{
+							"role":    "tool",
+							"content": 123, // 非字符串
+						},
+					},
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_tool消息Content为空 测试 tool 消息 content 为空字符串时跳过
+func TestFindHandoffFromSession_tool消息Content为空(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": []any{
+						map[string]any{
+							"role":    "tool",
+							"content": "",
+						},
+					},
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_非tool消息跳过 测试 role 非 tool 的消息被跳过
+func TestFindHandoffFromSession_非tool消息跳过(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": []any{
+						map[string]any{
+							"role":    "assistant",
+							"content": `{"__handoff_to__": "agent_b"}`,
+						},
+					},
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil（assistant 消息应被跳过），实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_tool消息非map类型跳过 测试消息非 map 类型时跳过
+func TestFindHandoffFromSession_tool消息非map类型跳过(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": []any{
+						"plain_string_message", // 非 map 类型
+					},
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil，实际为 %+v", result)
+	}
+}
+
+// TestFindHandoffFromSession_JSON解析失败 测试 tool 消息 content 不是合法 JSON 时跳过
+func TestFindHandoffFromSession_JSON解析失败(t *testing.T) {
+	sess := &mockSessionFacade{
+		stateData: map[string]any{
+			"context": map[string]any{
+				defaultContextID: map[string]any{
+					"messages": []any{
+						map[string]any{
+							"role":    "tool",
+							"content": "not_json",
+						},
+					},
+				},
+			},
+		},
+	}
+	result := findHandoffFromSession(sess)
+	if result != nil {
+		t.Errorf("期望返回 nil（JSON 解析失败），实际为 %+v", result)
+	}
+}
+
 // mockSessionFacade 实现 SessionFacade 接口的方法
 
 func (m *mockSessionFacade) GetSessionID() string                          { return "mock-session" }
