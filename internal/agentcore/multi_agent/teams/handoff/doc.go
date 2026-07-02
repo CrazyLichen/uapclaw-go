@@ -12,6 +12,7 @@
 //	├── handoff_orchestrator.go     # HandoffOrchestrator 交接协调器
 //	├── handoff_request.go          # HandoffHistoryEntry/HandoffRequest 交接驱动消息
 //	├── handoff_signal.go           # HandoffSignal/ExtractHandoffSignal 交接信号提取
+//	├── handoff_team.go             # HandoffTeam 顶层入口，实现 BaseTeam 接口
 //	├── handoff_tool.go             # HandoffTool 交接工具（实现 Tool 接口）
 //	└── interrupt.go                # TeamInterruptSignal/ExtractInterruptSignal/FlushTeamSession 团队中断信号
 //

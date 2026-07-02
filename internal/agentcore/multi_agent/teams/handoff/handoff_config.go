@@ -42,10 +42,8 @@ type HandoffTeamConfig struct {
 	Handoff HandoffConfig
 }
 
-// HandoffOrchestrator 交接编排器，被 TerminationCondition 回调引用。
-//
-// 当前为前向声明，具体字段和方法在后续任务中填充。
-type HandoffOrchestrator struct{}
+// HandoffOrchestrator 交接编排器，具体字段和方法在 handoff_orchestrator.go 中定义。
+// 此处仅做包内类型引用，HandoffConfig.TerminationCondition 需要引用此类型。
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
