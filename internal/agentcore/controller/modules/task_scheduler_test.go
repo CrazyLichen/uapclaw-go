@@ -346,12 +346,12 @@ func TestTaskScheduler_并发执行(t *testing.T) {
 		return completedCount.Load() == 3
 	}, 5*time.Second, 50*time.Millisecond, "3 个任务应全部完成")
 
-	// 验证所有任务状态
+	// 验证所有任务状态（轮询等待，因为 TaskManager 状态更新是异步的）
 	for _, id := range taskIDs {
-		tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: id})
-		if len(tasks) > 0 {
-			assert.Equal(t, schema.TaskCompleted, tasks[0].Status)
-		}
+		assert.Eventually(t, func() bool {
+			tasks, _ := tm.GetTask(context.Background(), &TaskFilter{TaskID: id})
+			return len(tasks) > 0 && tasks[0].Status == schema.TaskCompleted
+		}, 3*time.Second, 50*time.Millisecond, "任务 %s 应最终变为 completed 状态", id)
 	}
 }
 
