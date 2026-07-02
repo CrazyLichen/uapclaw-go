@@ -46,6 +46,10 @@ type HandoffTeam struct {
 	agentProviders map[string]maschema.TeamAgentProvider
 	// internalAgentsReady 内部 Agent 是否就绪
 	internalAgentsReady bool
+	// internalAgentsOnce 确保 ensureInternalAgents 只执行一次
+	internalAgentsOnce sync.Once
+	// internalAgentsErr ensureInternalAgents 首次执行的错误结果
+	internalAgentsErr error
 	// coordinatorRegistry 会话协调器注册表
 	coordinatorRegistry map[string]*HandoffOrchestrator
 	// initLock 初始化锁
@@ -212,8 +216,10 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 	// 存储原始 TeamAgentProvider（ContainerAgent 创建时使用）
 	t.agentProviders[card.ID] = provider
 
-	// 标记内部 Agent 需要重新初始化
-	t.internalAgentsReady = false
+	// 标记内部 Agent 需要重新初始化（在锁保护下重置，确保与 ensureInternalAgents 互斥）
+	t.initLock.Lock()
+	t.resetInternalAgents()
+	t.initLock.Unlock()
 
 	logger.Info(logComponent).
 		Str("action", "add_agent").
@@ -241,8 +247,10 @@ func (t *HandoffTeam) RemoveAgent(ctx context.Context, agentID string) error {
 	// 从 agentProviders 中移除
 	delete(t.agentProviders, agentID)
 
-	// 标记内部 Agent 需要重新初始化
-	t.internalAgentsReady = false
+	// 标记内部 Agent 需要重新初始化（在锁保护下重置，确保与 ensureInternalAgents 互斥）
+	t.initLock.Lock()
+	t.resetInternalAgents()
+	t.initLock.Unlock()
 
 	logger.Info(logComponent).
 		Str("action", "remove_agent").
@@ -359,10 +367,10 @@ func (t *HandoffTeam) getStartAgentID() string {
 	return ""
 }
 
-// ensureInternalAgents 双检锁创建 ContainerAgent + 端点注册 + 订阅。
+// ensureInternalAgents 使用 sync.Once 创建 ContainerAgent + 端点注册 + 订阅。
 //
 // 流程：
-//  1. 双检锁（initLock）
+//  1. sync.Once 保证初始化逻辑只执行一次（并发安全）
 //  2. 构建 routeGraph = BuildRouteGraph(agentIDs, routes)
 //  3. 对每个 agentID：
 //     - endpointID = __handoff_ep_{teamID}_{agentID}
@@ -373,18 +381,21 @@ func (t *HandoffTeam) getStartAgentID() string {
 //
 // 对应 Python: HandoffTeam._ensure_internal_agents()
 func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
-	if t.internalAgentsReady {
-		return nil
-	}
+	t.internalAgentsOnce.Do(func() {
+		err := t.initInternalAgents(ctx)
+		if err != nil {
+			t.internalAgentsErr = err
+			return
+		}
+		t.internalAgentsReady = true
+	})
+	return t.internalAgentsErr
+}
 
-	t.initLock.Lock()
-	defer t.initLock.Unlock()
-
-	// 双检锁
-	if t.internalAgentsReady {
-		return nil
-	}
-
+// initInternalAgents 执行内部 Agent 端点的实际初始化逻辑。
+//
+// 包含构建路由图、创建端点卡片、注册到运行时、订阅容器主题等步骤。
+func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 	cfg := t.config.Handoff
 	agentCards := t.card.GetAgentCards()
 	agentIDs := make([]string, 0, len(agentCards))
@@ -447,8 +458,6 @@ func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
 		}
 	}
 
-	t.internalAgentsReady = true
-
 	logger.Info(logComponent).
 		Str("action", "ensure_internal_agents").
 		Str("team_id", teamID).
@@ -456,6 +465,16 @@ func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
 		Msg("内部 Agent 端点初始化完成")
 
 	return nil
+}
+
+// resetInternalAgents 重置内部 Agent 初始化状态。
+//
+// 在 AddAgent 或 RemoveAgent 后调用，使后续 ensureInternalAgents 调用重新执行初始化。
+// 必须在 initLock 保护下调用，确保与 ensureInternalAgents 互斥。
+func (t *HandoffTeam) resetInternalAgents() {
+	t.internalAgentsReady = false
+	t.internalAgentsOnce = sync.Once{}
+	t.internalAgentsErr = nil
 }
 
 // makeContainerProvider 创建 ContainerAgent provider 闭包。

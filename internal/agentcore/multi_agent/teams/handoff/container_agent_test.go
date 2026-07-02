@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -18,8 +20,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -47,15 +47,15 @@ func newMockBaseAgent(id string) *mockBaseAgent {
 		commonschema.WithName(id),
 	)
 	return &mockBaseAgent{
-		card: card,
+		card:       card,
 		abilityMgr: ability.NewAbilityManager(nil),
 	}
 }
 
-func (m *mockBaseAgent) Card() *agentschema.AgentCard                     { return m.card }
-func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig              { return nil }
-func (m *mockBaseAgent) AbilityManager() any                              { return m.abilityMgr }
-func (m *mockBaseAgent) CallbackManager() *rail.AgentCallbackManager      { return nil }
+func (m *mockBaseAgent) Card() *agentschema.AgentCard                { return m.card }
+func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig         { return nil }
+func (m *mockBaseAgent) AbilityManager() any                         { return m.abilityMgr }
+func (m *mockBaseAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
 func (m *mockBaseAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -91,14 +91,16 @@ func newMockContainerSessionFacade(id string) *mockContainerSessionFacade {
 	}
 }
 
-func (m *mockContainerSessionFacade) GetSessionID() string                                    { return m.sessionID }
-func (m *mockContainerSessionFacade) UpdateState(data map[string]any)                         { m.state["global"] = data }
-func (m *mockContainerSessionFacade) GetState(key state.StateKey) (any, error)                { return m.state[key.String()], nil }
-func (m *mockContainerSessionFacade) DumpState() map[string]any                               { return m.state }
-func (m *mockContainerSessionFacade) WriteStream(_ context.Context, _ any) error              { return nil }
-func (m *mockContainerSessionFacade) WriteCustomStream(_ context.Context, _ any) error        { return nil }
-func (m *mockContainerSessionFacade) GetEnv(_ string, _ ...any) any                           { return nil }
-func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error                 { return nil }
+func (m *mockContainerSessionFacade) GetSessionID() string            { return m.sessionID }
+func (m *mockContainerSessionFacade) UpdateState(data map[string]any) { m.state["global"] = data }
+func (m *mockContainerSessionFacade) GetState(key state.StateKey) (any, error) {
+	return m.state[key.String()], nil
+}
+func (m *mockContainerSessionFacade) DumpState() map[string]any                        { return m.state }
+func (m *mockContainerSessionFacade) WriteStream(_ context.Context, _ any) error       { return nil }
+func (m *mockContainerSessionFacade) WriteCustomStream(_ context.Context, _ any) error { return nil }
+func (m *mockContainerSessionFacade) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error          { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -342,7 +344,7 @@ func TestContainerAgent_Invoke_目标Agent无交接信号(t *testing.T) {
 func TestContainerAgent_Invoke_目标Agent返回交接信号且审批通过(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeResult = map[string]any{
-		"output":      "need handoff",
+		"output":          "need handoff",
 		HandoffTargetKey:  "agent_b",
 		HandoffMessageKey: "context for b",
 		HandoffReasonKey:  "b is better",
@@ -381,7 +383,7 @@ func TestContainerAgent_Invoke_目标Agent返回交接信号且审批通过(t *t
 func TestContainerAgent_Invoke_目标Agent返回交接信号且审批拒绝(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeResult = map[string]any{
-		"output":      "need handoff",
+		"output":          "need handoff",
 		HandoffTargetKey:  "agent_c",
 		HandoffMessageKey: "",
 		HandoffReasonKey:  "c is better",
@@ -871,10 +873,10 @@ func TestContextHistoryKey(t *testing.T) {
 func TestContainerAgent_Invoke_最大交接次数耗尽(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeResult = map[string]any{
-		"output":           "need handoff",
-		HandoffTargetKey:   "agent_b",
-		HandoffReasonKey:   "pass to b",
-		HandoffMessageKey:  "",
+		"output":          "need handoff",
+		HandoffTargetKey:  "agent_b",
+		HandoffReasonKey:  "pass to b",
+		HandoffMessageKey: "",
 	}
 
 	card := agentschema.NewAgentCard(commonschema.WithID("agent_a"))
@@ -1261,10 +1263,10 @@ type mockBaseAgentNoAbility struct {
 	card *agentschema.AgentCard
 }
 
-func (m *mockBaseAgentNoAbility) Card() *agentschema.AgentCard                     { return m.card }
-func (m *mockBaseAgentNoAbility) Config() agentinterfaces.AgentConfig              { return nil }
-func (m *mockBaseAgentNoAbility) AbilityManager() any                              { return nil }
-func (m *mockBaseAgentNoAbility) CallbackManager() *rail.AgentCallbackManager      { return nil }
+func (m *mockBaseAgentNoAbility) Card() *agentschema.AgentCard                { return m.card }
+func (m *mockBaseAgentNoAbility) Config() agentinterfaces.AgentConfig         { return nil }
+func (m *mockBaseAgentNoAbility) AbilityManager() any                         { return nil }
+func (m *mockBaseAgentNoAbility) CallbackManager() *rail.AgentCallbackManager { return nil }
 func (m *mockBaseAgentNoAbility) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -1283,7 +1285,9 @@ func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ any, _ an
 func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ rail.AgentRail) error { return nil }
+func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+	return nil
+}
 
 // mockContextEngine 模拟 ContextEngine 接口
 type mockContextEngine struct {

@@ -13,8 +13,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -645,42 +645,42 @@ func (r *Runner) prepareAgent(
 
 		if agentRef.IsByID() {
 			// 对齐 Python L505-510: isinstance(agent, str) + isinstance(session, AgentSession)
-		agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
-		if err != nil {
-			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-				exception.WithParam("agent", agentRef.ID()),
-				exception.WithParam("reason", "获取Agent失败"),
-				exception.WithCause(err),
-			)
+			agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
+			if err != nil {
+				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+					exception.WithParam("agent", agentRef.ID()),
+					exception.WithParam("reason", "获取Agent失败"),
+					exception.WithCause(err),
+				)
+			}
+			if len(agents) == 0 || agents[0] == nil {
+				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+					exception.WithParam("agent", agentRef.ID()),
+					exception.WithParam("reason", "agent不存在"),
+				)
+			}
+			agentInstance := agents[0]
+			// 对齐 Python L509: await session.pre_run(inputs=inputs)
+			if isAgentSess {
+				if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
+					return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+						exception.WithParam("agent", agentRef.ID()),
+						exception.WithParam("reason", "PreRun失败"),
+						exception.WithCause(preErr),
+					)
+				}
+			}
+			return agentInstance, sess, nil
 		}
-		if len(agents) == 0 || agents[0] == nil {
-			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-				exception.WithParam("agent", agentRef.ID()),
-				exception.WithParam("reason", "agent不存在"),
-			)
-		}
-		agentInstance := agents[0]
-		// 对齐 Python L509: await session.pre_run(inputs=inputs)
+		// 对齐 Python L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
 		if isAgentSess {
 			if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
 				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-					exception.WithParam("agent", agentRef.ID()),
 					exception.WithParam("reason", "PreRun失败"),
 					exception.WithCause(preErr),
 				)
 			}
 		}
-		return agentInstance, sess, nil
-	}
-	// 对齐 Python L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
-	if isAgentSess {
-		if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
-			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-				exception.WithParam("reason", "PreRun失败"),
-				exception.WithCause(preErr),
-			)
-		}
-	}
 		return agentRef.Agent(), sess, nil
 	}
 
@@ -783,15 +783,15 @@ func (r *Runner) prepareWorkflow(
 	if workflowRef.IsByID() {
 		workflows, err := r.resourceMgr.GetWorkflow(ctx, []string{workflowKey})
 		if err != nil {
-		return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-			exception.WithParam("reason", "获取Workflow失败"),
-			exception.WithCause(err),
-		)
-	}
-	if len(workflows) == 0 || workflows[0] == nil {
-		return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
-			exception.WithParam("reason", fmt.Sprintf("workflow不存在: %s", workflowKey)),
-		)
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("reason", "获取Workflow失败"),
+				exception.WithCause(err),
+			)
+		}
+		if len(workflows) == 0 || workflows[0] == nil {
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("reason", fmt.Sprintf("workflow不存在: %s", workflowKey)),
+			)
 		}
 		workflowInstance = workflows[0]
 	} else {

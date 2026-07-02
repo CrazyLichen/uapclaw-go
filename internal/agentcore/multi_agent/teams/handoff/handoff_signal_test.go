@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -478,14 +478,16 @@ func TestFindHandoffFromSession_JSON解析失败(t *testing.T) {
 
 // mockSessionFacade 实现 SessionFacade 接口的方法
 
-func (m *mockSessionFacade) GetSessionID() string                          { return "mock-session" }
-func (m *mockSessionFacade) UpdateState(data map[string]any)               {}
-func (m *mockSessionFacade) GetState(key state.StateKey) (any, error)      { return m.stateData[key.String()], nil }
-func (m *mockSessionFacade) DumpState() map[string]any                     { return m.stateData }
-func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error    { return nil }
+func (m *mockSessionFacade) GetSessionID() string            { return "mock-session" }
+func (m *mockSessionFacade) UpdateState(data map[string]any) {}
+func (m *mockSessionFacade) GetState(key state.StateKey) (any, error) {
+	return m.stateData[key.String()], nil
+}
+func (m *mockSessionFacade) DumpState() map[string]any                        { return m.stateData }
+func (m *mockSessionFacade) WriteStream(_ context.Context, _ any) error       { return nil }
 func (m *mockSessionFacade) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *mockSessionFacade) GetEnv(key string, defaultValue ...any) any    { return nil }
-func (m *mockSessionFacade) Interact(_ context.Context, _ any) error       { return nil }
+func (m *mockSessionFacade) GetEnv(key string, defaultValue ...any) any       { return nil }
+func (m *mockSessionFacade) Interact(_ context.Context, _ any) error          { return nil }
 
 // 编译时验证 mockSessionFacade 满足 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)

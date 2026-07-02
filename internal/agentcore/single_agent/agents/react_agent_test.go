@@ -2112,9 +2112,7 @@ func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 	result, err := agent.invokeImpl(context.Background(), inputs, interfaces.WithSession(sess))
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	if resultMap, ok := result.(map[string]any); ok {
-		assert.Equal(t, "回调结果", resultMap["output"])
-	}
+	assert.Equal(t, "回调结果", result["output"])
 }
 
 // TestReActAgent_StreamImpl_完整路径 验证完整 StreamImpl 路径

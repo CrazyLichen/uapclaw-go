@@ -453,7 +453,7 @@ func (c *ContainerAgent) buildAgentInput(req *HandoffRequest) map[string]any {
 	historyData := make([]map[string]any, 0, len(req.History))
 	for _, entry := range req.History {
 		historyData = append(historyData, map[string]any{
-			"agent": entry.AgentID,
+			"agent":  entry.AgentID,
 			"output": entry.Output,
 		})
 	}
@@ -630,8 +630,8 @@ func (c *ContainerAgent) injectContextHistory(agentSession sessioninterfaces.Ses
 	agentSession.UpdateState(map[string]any{
 		"context": map[string]any{
 			defaultContextID: map[string]any{
-				"messages":          copied,
-				"offload_messages":  map[string]any{},
+				"messages":         copied,
+				"offload_messages": map[string]any{},
 			},
 		},
 	})
