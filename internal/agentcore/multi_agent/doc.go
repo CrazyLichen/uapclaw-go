@@ -26,6 +26,10 @@
 //	    ├── subscription_manager.go # SubscriptionManager 订阅管理
 //	    ├── runtime_bindable.go     # RuntimeBindable 运行时绑定接口
 //	    └── communicable_agent.go   # CommunicableAgent 可通信 Agent
+//	└── teams/
+//	    ├── doc.go              # teams 子包文档
+//	    ├── utils.go            # 独立调用/流式上下文工具函数
+//	    └── handoff/            # HandoffTeam（单活跃 Agent 交接模式）
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/
 package multi_agent
