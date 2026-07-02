@@ -3,7 +3,7 @@ package exception
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // =============================================================================================================
-// 100. Workflow 100000–100999
+// 100. 工作流 100000–100999
 // =============================================================================================================
 var (
 	// StatusWorkflowComponentIDInvalid 工作流组件 ID 无效
@@ -40,7 +40,7 @@ var (
 		"execute session is invalid, reason='{reason}', workflow='{workflow}'")
 )
 
-// 1. Workflow Execution Error Codes (100100 - 100199)
+// 1. 工作流执行错误码 (100100 - 100199)
 
 var (
 	// StatusWorkflowCompileError 工作流编译错误
@@ -57,7 +57,7 @@ var (
 		"workflow execution has error, error='{reason}', workflow='{workflow}'")
 )
 
-// 2. Workflow Component orchestration Error Codes (100200 - 100299)
+// 2. 工作流组件编排错误码 (100200 - 100299)
 
 var (
 	// StatusWorkflowInnerOrchestrationError 工作流内部编排错误
@@ -71,12 +71,12 @@ var (
 )
 
 // =============================================================================================================
-// 101. Built-in Workflow Component 101000–101999
+// 101. 内置工作流组件 101000–101999
 // =============================================================================================================
 
-// 00. Start Component 101000 - 101009
+// 00. 开始组件 101000 - 101009
 
-// 01. End Component 101010 - 101019
+// 01. 结束组件 101010 - 101019
 
 var (
 	// StatusComponentEndParamInvalid 结束组件参数无效
@@ -85,7 +85,7 @@ var (
 		"component end params is invalid, error='{reason}'")
 )
 
-// 02. BranchComponent 101020 - 101029
+// 02. 分支组件 101020 - 101029
 
 var (
 	// StatusComponentBranchParamInvalid 分支组件参数无效
@@ -114,7 +114,7 @@ var (
 		"number condition error, reason: {error_msg}")
 )
 
-// 03. LoopComponent 101030 - 101049
+// 03. 循环组件 101030 - 101049
 
 var (
 	// StatusComponentLoopGroupParamInvalid 循环组参数无效
@@ -143,7 +143,7 @@ var (
 		"loop set_var execution error, error='{reason}', comp='{comp}'")
 )
 
-// 05. SubWorkflowComponent 101150 - 101159
+// 05. 子工作流组件 101150 - 101159
 
 var (
 	// StatusComponentSubWorkflowParamInvalid 子工作流组件参数无效

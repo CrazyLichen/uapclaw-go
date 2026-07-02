@@ -36,11 +36,6 @@ type AgentInterrupt struct {
 	Message any
 }
 
-// Error 实现 error 接口，返回中断描述信息。
-func (e *AgentInterrupt) Error() string {
-	return fmt.Sprintf("AgentInterrupt: %v", e.Message)
-}
-
 // BaseInteraction 交互基类，管理交互输入队列。
 // 对应 Python: openjiuwen/core/session/interaction/base.py (BaseInteraction)
 type BaseInteraction struct {
@@ -67,6 +62,11 @@ const (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// Error 实现 error 接口，返回中断描述信息。
+func (e *AgentInterrupt) Error() string {
+	return fmt.Sprintf("AgentInterrupt: %v", e.Message)
+}
 
 // NewBaseInteraction 创建交互基类实例。
 // defaultInput 为可选的默认输入，会被追加到从 session state 读取的输入队列之后。

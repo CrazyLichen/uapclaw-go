@@ -131,7 +131,7 @@ func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ..
 	// 绑定会话到运行时
 	t.runtime.BindTeamSession(sess)
 
-	// PreRun
+	// PreRun 前置运行
 	if err := sess.PreRun(ctx, inputs); err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -144,7 +144,7 @@ func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ..
 	// 执行交接链路
 	result, err := t.runChain(ctx, inputs, sess)
 
-	// PostRun
+	// PostRun 后置运行
 	if postErr := sess.PostRun(ctx); postErr != nil {
 		logger.Warn(logComponent).Err(postErr).
 			Str("action", "handoff_team_invoke_post_run").

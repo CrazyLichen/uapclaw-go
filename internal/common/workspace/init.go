@@ -36,6 +36,28 @@ type InitResult struct {
 // logComponent 日志组件标识。
 const logComponent = logger.ComponentCommon
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 多语言文件映射：模板源名 → 目标名
+// 对应 Python: prepare_workspace 中的 multilang_files
+var multilangFiles = []struct {
+	srcSuffix string // 如 "AGENT_ZH.md"
+	dstName   string // 如 "AGENT.md"
+}{
+	{"AGENT", "AGENT.md"},
+	{"HEARTBEAT", "HEARTBEAT.md"},
+	{"IDENTITY", "IDENTITY.md"},
+	{"SOUL", "SOUL.md"},
+}
+
+// memory 多语言文件映射
+var memoryMultilangFiles = []struct {
+	srcSuffix string
+	dstName   string
+}{
+	{"MEMORY", "MEMORY.md"},
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Init 初始化工作区。
@@ -162,28 +184,6 @@ func Init(opt InitOption) (*InitResult, error) {
 		WorkspaceDir: targetDir,
 		Diff:         *diff,
 	}, nil
-}
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 多语言文件映射：模板源名 → 目标名
-// 对应 Python: prepare_workspace 中的 multilang_files
-var multilangFiles = []struct {
-	srcSuffix string // 如 "AGENT_ZH.md"
-	dstName   string // 如 "AGENT.md"
-}{
-	{"AGENT", "AGENT.md"},
-	{"HEARTBEAT", "HEARTBEAT.md"},
-	{"IDENTITY", "IDENTITY.md"},
-	{"SOUL", "SOUL.md"},
-}
-
-// memory 多语言文件映射
-var memoryMultilangFiles = []struct {
-	srcSuffix string
-	dstName   string
-}{
-	{"MEMORY", "MEMORY.md"},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

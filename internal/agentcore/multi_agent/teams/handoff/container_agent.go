@@ -66,6 +66,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 确保 ContainerAgent 满足 BaseAgent 接口
+var _ agentinterfaces.BaseAgent = (*ContainerAgent)(nil)
+
+// 确保 HandoffTool 满足 Tool 接口（冗余验证，handoff_tool.go 中已有）
+var _ tool.Tool = (*HandoffTool)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewContainerAgent 创建 ContainerAgent 实例。
@@ -700,12 +706,6 @@ func msgKey(msg any) string {
 	}
 	return role + ":" + content
 }
-
-// 确保 ContainerAgent 满足 BaseAgent 接口
-var _ agentinterfaces.BaseAgent = (*ContainerAgent)(nil)
-
-// 确保 HandoffTool 满足 Tool 接口（冗余验证，handoff_tool.go 中已有）
-var _ tool.Tool = (*HandoffTool)(nil)
 
 // saveAgentContextWithCE 使用 ContextEngine 接口保存上下文（内部辅助）。
 func (c *ContainerAgent) saveAgentContextWithCE(ctx context.Context, ce ceinterface.ContextEngine, sess sessioninterfaces.SessionFacade) {

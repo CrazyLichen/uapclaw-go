@@ -198,6 +198,24 @@ type AdaptiveStrategy struct {
 	sessionCleanupInterval float64 // Session 清理间隔（秒），默认 60
 }
 
+// bytesReaderImpl bytesReader 辅助实现，将 []byte 转为 io.Reader。
+type bytesReaderImpl struct{ data []byte }
+
+// withBytes 设置读取的数据并返回自身。
+func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
+	return &bytesReaderImpl{data: data}
+}
+
+// Read 实现 io.Reader 接口。
+func (b *bytesReaderImpl) Read(p []byte) (int, error) {
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data)
+	b.data = b.data[n:]
+	return n, nil
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 默认策略参数
@@ -215,6 +233,9 @@ const (
 	defaultHealthCheckTimeout = 5.0    // 健康检查超时(秒)
 )
 
+// logComponent intellirouter 包日志组件标识。
+const logComponent = logger.ComponentAgentCore
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // routerCache 路由器缓存，相同配置共享同一个 ReliableRouter 实例。
@@ -223,9 +244,6 @@ var routerCache map[string]*ReliableRouter
 
 // routerCacheLock 路由器缓存锁。
 var routerCacheLock sync.RWMutex
-
-// logComponent intellirouter 包日志组件标识。
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -245,8 +263,6 @@ func NewDeployment(config DeploymentConfig) *Deployment {
 		avgLatency: math.Inf(1), // 默认 +inf，表示无延迟数据
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // IsHealthy 返回部署端点是否健康。
 func (d *Deployment) IsHealthy() bool {
@@ -431,15 +447,6 @@ func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 		result[k] = v
 	}
 	return result
-}
-
-func (b *bytesReaderImpl) Read(p []byte) (int, error) {
-	if len(b.data) == 0 {
-		return 0, io.EOF
-	}
-	n := copy(p, b.data)
-	b.data = b.data[n:]
-	return n, nil
 }
 
 // ──── ReliableRouter ────
@@ -951,12 +958,6 @@ func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 
 // bytesReader 辅助函数，将 []byte 转为 io.Reader。
 func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
-
-type bytesReaderImpl struct{ data []byte }
-
-func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
-	return &bytesReaderImpl{data: data}
-}
 
 // buildModelIndices 构建 model 索引（对齐 Python BaseRouter._build_model_indices）。
 func (r *ReliableRouter) buildModelIndices() {
