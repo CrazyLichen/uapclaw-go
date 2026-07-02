@@ -302,6 +302,34 @@ func OutputDir() string {
 	return global.outputDir
 }
 
+// GetLogConfigSnapshot 返回当前日志配置的深拷贝快照。
+// 对应 Python: get_log_config_snapshot() (log_config.py L164-166)
+// 用于 Spawn 子进程时将主进程的日志配置传递给子进程，确保日志行为一致。
+func GetLogConfigSnapshot() map[string]any {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+
+	snapshot := make(map[string]any)
+
+	if global != nil {
+		// 记录各通道日志级别
+		levels := global.levels
+		snapshot["logger"] = levels.Logger.String()
+		snapshot["console"] = levels.Console.String()
+		snapshot["common"] = levels.Common.String()
+		snapshot["gateway"] = levels.Gateway.String()
+		snapshot["channel"] = levels.Channel.String()
+		snapshot["agent_server"] = levels.AgentServer.String()
+		snapshot["permissions"] = levels.Permissions.String()
+		snapshot["agent_core"] = levels.AgentCore.String()
+		snapshot["full"] = levels.Full.String()
+		// 记录输出目录
+		snapshot["output_dir"] = global.outputDir
+	}
+
+	return snapshot
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getLogger 获取指定组件的 Logger 实例指针（非导出）。

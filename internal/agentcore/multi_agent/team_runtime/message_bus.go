@@ -55,8 +55,8 @@ type MessageBusConfig struct {
 // MessageBus 消息总线，基于 MessageQueueInMemory 实现 P2P 和 Pub-Sub 消息收发。
 //
 // 每个会话（sessionID）对应一对 topic：
-//   - P2P topic:  {teamID}__p2p__{sessionID}
-//   - Pub-Sub topic: {teamID}__pubsub__{sessionID}
+//   - P2P topic:  {teamID}_{sessionID}__p2p__（无 sessionID 时为 {teamID}__p2p__）
+//   - Pub-Sub topic: {teamID}_{sessionID}__pubsub__（无 sessionID 时为 {teamID}__pubsub__）
 //
 // 通过 SubscriptionManager 维护订阅关系，通过 MessageRouter 路由消息到目标 Agent。
 //
@@ -70,8 +70,8 @@ type MessageBus struct {
 	mq *message_queue.MessageQueueInMemory
 	// activeSubscriptions 活跃订阅映射，topic → SubscriptionBase
 	activeSubscriptions map[string]message_queue.SubscriptionBase
-	// subscriptionLock 订阅操作互斥锁
-	subscriptionLock sync.Mutex
+	// subscriptionLock 订阅操作读写互斥锁（双检锁：RLock 快速路径 + Lock 慢速路径）
+	subscriptionLock sync.RWMutex
 	// subscriptionManager 订阅管理器
 	subscriptionManager *SubscriptionManager
 	// router 消息路由器
@@ -137,9 +137,9 @@ func WithTeamID(teamID string) MessageBusConfigOption {
 // Python 在初始化失败时 raise build_error(StatusCode.MESSAGE_QUEUE_INITIATION_ERROR, ...)，
 // Go 通过返回 error 对齐此语义。当前 MessageQueueInMemory 构造不返回 error，
 // 后续若支持则回填 StatusMessageQueueInitiationError。
-func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime, executor AgentExecutor) (*MessageBus, error) {
+func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime) (*MessageBus, error) {
 	sm := NewSubscriptionManager()
-	router := NewMessageRouter(sm, runtime, executor)
+	router := NewMessageRouter(sm, runtime)
 
 	return &MessageBus{
 		config:              config,
@@ -418,23 +418,49 @@ func (mb *MessageBus) GetSubscriptionCount() int {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getP2PTopic 获取 P2P topic 名称。
+//
+// 格式对齐 Python：
+//   - 有 sessionID: {teamID}_{sessionID}__p2p__
+//   - 无 sessionID: {teamID}__p2p__
 func (mb *MessageBus) getP2PTopic(sessionID string) string {
-	return mb.teamID + p2pTopicSuffix + sessionID
+	if sessionID != "" {
+		return mb.teamID + "_" + sessionID + p2pTopicSuffix
+	}
+	return mb.teamID + p2pTopicSuffix
 }
 
 // getPubsubTopic 获取 Pub-Sub topic 名称。
+//
+// 格式对齐 Python：
+//   - 有 sessionID: {teamID}_{sessionID}__pubsub__
+//   - 无 sessionID: {teamID}__pubsub__
 func (mb *MessageBus) getPubsubTopic(sessionID string) string {
-	return mb.teamID + pubsubTopicSuffix + sessionID
+	if sessionID != "" {
+		return mb.teamID + "_" + sessionID + pubsubTopicSuffix
+	}
+	return mb.teamID + pubsubTopicSuffix
 }
 
 // ensureSubscription 确保指定 topic 的订阅已激活（双检锁）。
 //
+// 快速路径：RLock 检查是否已订阅，避免大多数情况下的写锁竞争。
+// 慢速路径：Lock 创建订阅，再次检查防止重复创建。
+//
 // 对应 Python: MessageBus._ensure_subscription(topic)
 func (mb *MessageBus) ensureSubscription(ctx context.Context, topic string) error {
-	// 快速路径：检查是否已订阅
+	// 快速路径：读锁检查是否已订阅
+	mb.subscriptionLock.RLock()
+	if sub, ok := mb.activeSubscriptions[topic]; ok && sub.IsActive() {
+		mb.subscriptionLock.RUnlock()
+		return nil
+	}
+	mb.subscriptionLock.RUnlock()
+
+	// 慢速路径：写锁创建订阅
 	mb.subscriptionLock.Lock()
 	defer mb.subscriptionLock.Unlock()
 
+	// 双检：再次检查是否已订阅（可能在获取写锁前被其他 goroutine 创建）
 	if sub, ok := mb.activeSubscriptions[topic]; ok && sub.IsActive() {
 		return nil
 	}

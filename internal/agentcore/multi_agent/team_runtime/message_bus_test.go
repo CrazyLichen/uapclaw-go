@@ -45,9 +45,8 @@ func TestNewMessageBusConfig(t *testing.T) {
 func TestNewMessageBus(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
 
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -66,9 +65,7 @@ func TestNewMessageBus(t *testing.T) {
 func TestMessageBus_StartStop(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -112,9 +109,7 @@ func TestMessageBus_StartStop(t *testing.T) {
 func TestMessageBus_Subscriptions(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -170,9 +165,7 @@ func TestMessageBus_Subscriptions(t *testing.T) {
 func TestMessageBus_Send未启动(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -187,9 +180,7 @@ func TestMessageBus_Send未启动(t *testing.T) {
 func TestMessageBus_Publish未启动(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -204,14 +195,13 @@ func TestMessageBus_Publish未启动(t *testing.T) {
 func TestMessageBus_getP2PTopic(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("team-1"))
 	runtime := &TeamRuntime{teamID: "team-1"}
-	executor := &mockAgentExecutor{}
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
 
 	topic := bus.getP2PTopic("session-1")
-	want := "team-1__p2p__session-1"
+	want := "team-1_session-1__p2p__"
 	if topic != want {
 		t.Errorf("getP2PTopic = %q, want %q", topic, want)
 	}
@@ -221,14 +211,13 @@ func TestMessageBus_getP2PTopic(t *testing.T) {
 func TestMessageBus_getPubsubTopic(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("team-1"))
 	runtime := &TeamRuntime{teamID: "team-1"}
-	executor := &mockAgentExecutor{}
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
 
 	topic := bus.getPubsubTopic("session-1")
-	want := "team-1__pubsub__session-1"
+	want := "team-1_session-1__pubsub__"
 	if topic != want {
 		t.Errorf("getPubsubTopic = %q, want %q", topic, want)
 	}
@@ -265,9 +254,7 @@ func TestMessageBus_extractEnvelopeFromPayload(t *testing.T) {
 func TestMessageBus_CleanupSession(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -326,9 +313,7 @@ func TestContainsSubstring(t *testing.T) {
 func TestMessageBus_ensureSubscription(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{result: "test-result"}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -367,37 +352,12 @@ func TestMessageBus_ensureSubscription(t *testing.T) {
 	})
 }
 
-// TestMessageBus_handleP2PMessage 测试 P2P 消息处理
-func TestMessageBus_handleP2PMessage(t *testing.T) {
-	config := NewMessageBusConfig(WithTeamID("test-team"))
-	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{result: "p2p-result"}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
-	if err != nil {
-		t.Fatalf("NewMessageBus 返回错误: %v", err)
-	}
-
-	envelope := NewMessageEnvelope("msg-1", "hello", "sender", WithRecipient("recipient"))
-	payload := bus.buildEnvelopePayload(envelope)
-
-	result, err := bus.handleP2PMessage(context.Background(), payload)
-	if err != nil {
-		t.Errorf("handleP2PMessage 返回错误: %v", err)
-	}
-	if result != "p2p-result" {
-		t.Errorf("result = %v, want %v", result, "p2p-result")
-	}
-}
-
 // TestMessageBus_handleP2PMessage_无效信封 测试 P2P 消息处理无效信封
 // P2P 模式下无效信封应返回 BuildError(StatusMessageQueueMessageProcessExecutionError)
 func TestMessageBus_handleP2PMessage_无效信封(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -417,40 +377,12 @@ func TestMessageBus_handleP2PMessage_无效信封(t *testing.T) {
 	}
 }
 
-// TestMessageBus_handlePubsubMessage 测试 Pub-Sub 消息处理
-func TestMessageBus_handlePubsubMessage(t *testing.T) {
-	config := NewMessageBusConfig(WithTeamID("test-team"))
-	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{result: "pubsub-result"}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
-	if err != nil {
-		t.Fatalf("NewMessageBus 返回错误: %v", err)
-	}
-	// 添加订阅者
-	bus.subscriptionManager.Subscribe("agent-1", "topic-1")
-
-	envelope := NewMessageEnvelope("msg-1", "hello", "sender", WithTopicID("topic-1"))
-	payload := bus.buildEnvelopePayload(envelope)
-
-	result, err := bus.handlePubsubMessage(context.Background(), payload)
-	if err != nil {
-		t.Errorf("handlePubsubMessage 返回错误: %v", err)
-	}
-	// Pub-Sub 返回 nil
-	if result != nil {
-		t.Errorf("result = %v, want nil", result)
-	}
-}
-
 // TestMessageBus_handlePubsubMessage_无效信封 测试 Pub-Sub 消息处理无效信封
 // Pub-Sub 火忘语义：即使信封无效，也仅记日志不返回错误
 func TestMessageBus_handlePubsubMessage_无效信封(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}
@@ -500,9 +432,7 @@ func TestMessageBus_extractEnvelopeFromPayload_JSON(t *testing.T) {
 func TestMessageBus_Stop_有活跃订阅(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
 	runtime := &TeamRuntime{teamID: "test-team"}
-	executor := &mockAgentExecutor{}
-
-	bus, err := NewMessageBus(*config, runtime, executor)
+	bus, err := NewMessageBus(*config, runtime)
 	if err != nil {
 		t.Fatalf("NewMessageBus 返回错误: %v", err)
 	}

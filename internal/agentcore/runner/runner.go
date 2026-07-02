@@ -14,9 +14,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sessionconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -32,9 +35,6 @@ type Runner struct {
 	messageQueue *message_queue.MessageQueueInMemory
 	// callbackFramework 异步回调框架（对齐 Python _callback_framework）
 	callbackFramework *callback.CallbackFramework
-	// rootTaskGroup 根任务组（对齐 Python _root_task_group）
-	// ⤵️ 预留：任务组实现后回填
-	rootTaskGroup any
 	// teamRuntimeManager Team运行时管理器（对齐 Python _team_runtime_manager）
 	// ⤵️ 预留：TeamRunner（9.85）实现后回填
 	teamRuntimeManager any
@@ -92,26 +92,26 @@ func Start(ctx context.Context) error {
 		Str("runner_id", r.runnerID).
 		Msg("开始启动 Runner")
 
-	// 步骤 1：确保根任务组（对齐 Python L271: await self._ensure_root_task_group()）
-	// ⤵️ 预留：任务组初始化（依赖 TaskGroup 实现）
-
-	// 步骤 2：进入任务组作用域（对齐 Python L274: with self._root_task_group_scope()）
-	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
+	// 步骤 1：初始化 TaskManager（对齐 Python L271: await self._ensure_root_task_group()）
+	// Go 不需要 TaskGroup 作用域：TaskManager 是全局单例（GetTaskManager()），
+	// 不依赖 Python 的 ContextVar 传播机制。
 
 	// 对齐 Python L320-322: start 失败时调用 _close_root_task_group() 清理
 	started := false
 	defer func() {
 		if !started {
-			// 步骤 1 的清理：关闭根任务组
-			// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
-			logger.Debug(logComponent).
-				Str("event_type", "runner_start_failed").
-				Str("runner_id", r.runnerID).
-				Msg("Runner 启动失败，执行清理")
+			// start 失败时取消所有运行中任务（对齐 Python: _close_root_task_group 中 cancel_all）
+			if count := utils.GetTaskManager().CancelAll("runner_start_failed"); count > 0 {
+				logger.Debug(logComponent).
+					Str("event_type", "runner_start_failed").
+					Str("runner_id", r.runnerID).
+					Int("cancelled_tasks", count).
+					Msg("Runner 启动失败，取消运行中任务")
+			}
 		}
 	}()
 
-	// 步骤 3：初始化 Checkpointer（对齐 Python L277-302）
+	// 步骤 2：初始化 Checkpointer（对齐 Python L277-302）
 	cfg := config.GetRunnerConfig()
 	if cfg != nil && cfg.CheckpointerConfig != nil {
 		logger.Info(logComponent).
@@ -137,11 +137,14 @@ func Start(ctx context.Context) error {
 			Msg("Checkpointer 初始化成功")
 	}
 
-	// 步骤 4：启动分布式消息队列（对齐 Python L304-312）
+	// 步骤 3：启动分布式消息队列（对齐 Python L304-312）
 	// ⤵️ 预留：分布式模式启动（依赖分布式消息队列实现）
 
-	// 步骤 5：启动本地消息队列（对齐 Python L312: result = await self._message_queue.start()）
-	r.messageQueue.Start()
+	// 步骤 4：分布式模式下启动本地消息队列（对齐 Python L312: result = await self._message_queue.start()）
+	// Python 中本地消息队列仅在 distributed_mode 分支内启动
+	if cfg != nil && cfg.DistributedMode {
+		r.messageQueue.Start()
+	}
 
 	started = true
 	logger.Info(logComponent).
@@ -163,8 +166,18 @@ func Stop(ctx context.Context) error {
 
 	var firstErr error
 
-	// 对齐 Python L346-348: finally 保证释放资源管理器和关闭根任务组
+	// 对齐 Python L346-348: finally 保证释放资源管理器和取消所有任务
 	defer func() {
+		// 步骤 3：取消所有运行中任务（对齐 Python L348: await self._close_root_task_group()）
+		// Python 的 _close_root_task_group 首先调用 get_task_manager().cancel_all()
+		if count := utils.GetTaskManager().CancelAll("runner_stop"); count > 0 {
+			logger.Info(logComponent).
+				Str("event_type", "runner_stop").
+				Str("runner_id", r.runnerID).
+				Int("cancelled_tasks", count).
+				Msg("取消运行中任务")
+		}
+
 		// 步骤 4：释放资源管理器（对齐 Python L347: await self._resource_manager.release()）
 		if r.resourceMgr != nil {
 			if err := r.resourceMgr.Release(ctx); err != nil {
@@ -178,18 +191,12 @@ func Stop(ctx context.Context) error {
 				}
 			}
 		}
-
-		// 步骤 5：关闭根任务组（对齐 Python L348: await self._close_root_task_group()）
-		// ⤵️ 预留：任务组关闭（依赖 TaskGroup 实现）
 	}()
 
-	// 步骤 1：进入任务组作用域（对齐 Python L328）
-	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
-
-	// 步骤 2：停止分布式组件（对齐 Python L329-337）
+	// 步骤 1：停止分布式组件（对齐 Python L329-337）
 	// ⤵️ 预留：分布式模式停止（依赖分布式消息队列实现）
 
-	// 步骤 3：停止本地消息队列（对齐 Python L339: result = await self._message_queue.stop()）
+	// 步骤 2：停止本地消息队列（对齐 Python L339: result = await self._message_queue.stop()）
 	if err := r.messageQueue.Stop(ctx); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "runner_stop").
@@ -229,30 +236,26 @@ func RunAgent(
 ) (any, error) {
 	r := getRunner()
 
-	// 步骤 1：进入任务组作用域（对齐 Python L417: with self._root_task_group_scope()）
-	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
-	_ = r
-
-	// 步骤 2：_prepareAgent → 获取agent实例和session（对齐 Python L418）
+	// 步骤 1：_prepareAgent → 获取agent实例和session（对齐 Python L418）
 	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sessionRef)
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 3：判断是否远程Agent（对齐 Python L419-420: if _is_remote_agent）
+	// 步骤 2：判断是否远程Agent（对齐 Python L419-420: if _is_remote_agent）
 	// ⤵️ 预留：远程Agent支持（依赖 RemoteAgent 实现）
 	_ = agentInstance
 
-	// 步骤 4：判断是否LegacyBaseAgent（对齐 Python L421-423: elif isinstance(agent_instance, LegacyBaseAgent)）
+	// 步骤 3：判断是否LegacyBaseAgent（对齐 Python L421-423: elif isinstance(agent_instance, LegacyBaseAgent)）
 	// ⤵️ 预留：LegacyBaseAgent兼容（依赖 LegacyBaseAgent 实现）
 
-	// 步骤 5：正常Agent调用（对齐 Python L425: res = await agent_instance.invoke(inputs, agent_session)）
+	// 步骤 4：正常Agent调用（对齐 Python L425: res = await agent_instance.invoke(inputs, agent_session)）
 	result, err := agentInstance.Invoke(ctx, inputs, interfaces.WithSession(agentSession))
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 6：PostRun清理（对齐 Python L426: await agent_session.post_run()）
+	// 步骤 5：PostRun清理（对齐 Python L426: await agent_session.post_run()）
 	if agentSession != nil {
 		if agentSess, ok := agentSession.(*session.Session); ok {
 			if postErr := agentSess.PostRun(ctx); postErr != nil {
@@ -280,30 +283,26 @@ func RunAgentStreaming(
 ) (<-chan stream.Schema, error) {
 	r := getRunner()
 
-	// 步骤 1：进入任务组上下文（对齐 Python L448: token = self._enter_root_task_group_context()）
-	// ⤵️ 预留：任务组上下文（依赖 TaskGroup 实现）
-	_ = r
-
-	// 步骤 2：_prepareAgent → 获取agent实例和session（对齐 Python L450）
+	// 步骤 1：_prepareAgent → 获取agent实例和session（对齐 Python L450）
 	agentInstance, agentSession, err := r.prepareAgent(ctx, agentRef, inputs, sessionRef)
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 3：判断是否远程Agent（对齐 Python L451-453）
+	// 步骤 2：判断是否远程Agent（对齐 Python L451-453）
 	// ⤵️ 预留：远程Agent流式支持（依赖 RemoteAgent 实现）
 
-	// 步骤 4：判断是否LegacyBaseAgent（对齐 Python L454-457）
+	// 步骤 3：判断是否LegacyBaseAgent（对齐 Python L454-457）
 	// ⤵️ 预留：LegacyBaseAgent流式兼容（依赖 LegacyBaseAgent 实现）
 
-	// 步骤 5：正常Agent流式调用（对齐 Python L459-460）
+	// 步骤 4：正常Agent流式调用（对齐 Python L459-460）
 	opts := []interfaces.AgentOption{interfaces.WithSession(agentSession)}
 	ch, err := agentInstance.Stream(ctx, inputs, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 6：PostRun清理（对齐 Python L461: await agent_session.post_run()）
+	// 步骤 5：PostRun清理（对齐 Python L461: await agent_session.post_run()）
 	// 在单独 goroutine 中等待流完成后调用 PostRun
 	outCh := make(chan stream.Schema, 64)
 	go func() {
@@ -323,9 +322,6 @@ func RunAgentStreaming(
 		}
 	}()
 
-	// 步骤 7：退出任务组上下文（对齐 Python L463: self._exit_root_task_group_context(token)）
-	// ⤵️ 预留：任务组上下文退出（依赖 TaskGroup 实现）
-
 	return outCh, nil
 }
 
@@ -343,17 +339,13 @@ func RunWorkflow(
 ) (any, error) {
 	r := getRunner()
 
-	// 步骤 1：进入任务组作用域（对齐 Python L367: with self._root_task_group_scope()）
-	// ⤵️ 预留：任务组作用域（依赖 TaskGroup 实现）
-	_ = r
-
-	// 步骤 2：_prepareWorkflow → 获取workflow实例和session（对齐 Python L368）
+	// 步骤 1：_prepareWorkflow → 获取workflow实例和session（对齐 Python L368）
 	workflowInstance, workflowSession, err := r.prepareWorkflow(ctx, workflowRef, sess)
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 3：调用workflow.Invoke（对齐 Python L369: workflow_instance.invoke(inputs, session=workflow_session, context=context)）
+	// 步骤 2：调用workflow.Invoke（对齐 Python L369: workflow_instance.invoke(inputs, session=workflow_session, context=context)）
 	opts := []interfaces.WorkflowOption{}
 	if workflowSession != nil {
 		opts = append(opts, interfaces.WithWorkflowSession(workflowSession))
@@ -382,17 +374,13 @@ func RunWorkflowStreaming(
 ) (<-chan stream.Schema, error) {
 	r := getRunner()
 
-	// 步骤 1：进入任务组上下文（对齐 Python L390: token = self._enter_root_task_group_context()）
-	// ⤵️ 预留：任务组上下文（依赖 TaskGroup 实现）
-	_ = r
-
-	// 步骤 2：_prepareWorkflow → 获取workflow实例和session（对齐 Python L392）
+	// 步骤 1：_prepareWorkflow → 获取workflow实例和session（对齐 Python L392）
 	workflowInstance, workflowSession, err := r.prepareWorkflow(ctx, workflowRef, sess)
 	if err != nil {
 		return nil, err
 	}
 
-	// 步骤 3：调用workflow.Stream（对齐 Python L393-395）
+	// 步骤 2：调用workflow.Stream（对齐 Python L393-395）
 	opts := []interfaces.WorkflowOption{}
 	if workflowSession != nil {
 		opts = append(opts, interfaces.WithWorkflowSession(workflowSession))
@@ -404,9 +392,6 @@ func RunWorkflowStreaming(
 	if err != nil {
 		return nil, err
 	}
-
-	// 步骤 4：退出任务组上下文（对齐 Python L397: self._exit_root_task_group_context(token)）
-	// ⤵️ 预留：任务组上下文退出（依赖 TaskGroup 实现）
 
 	return ch, nil
 }
@@ -428,6 +413,14 @@ func SpawnAgent(
 		cfg = spawnCfg[0]
 	}
 
+	// 解析 session_id 并填充到 agentConfig（对齐 Python L559-562, L568）
+	agentConfig.SessionID = resolveSpawnSessionID(inputs, sess)
+
+	// 填充默认日志配置（对齐 Python L563-566）
+	if agentConfig.LoggingConfig == nil {
+		agentConfig.LoggingConfig = logger.GetLogConfigSnapshot()
+	}
+
 	// 合并环境变量到 agentConfig
 	if envs != nil {
 		if agentConfig.Payload == nil {
@@ -439,6 +432,16 @@ func SpawnAgent(
 	handle, err := spawn.SpawnProcess(ctx, agentConfig, inputs, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("spawn_agent 启动子进程失败: %w", err)
+	}
+
+	// 启动健康检查（对齐 Python L574-575: if spawn_config is not None: await handle.start_health_check()）
+	if len(spawnCfg) > 0 {
+		if hcErr := handle.StartHealthCheck(ctx, cfg.HealthCheckInterval); hcErr != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "spawn_agent").
+				Err(hcErr).
+				Msg("健康检查启动失败")
+		}
 	}
 
 	return handle, nil
@@ -460,6 +463,14 @@ func SpawnAgentStreaming(
 		cfg = spawnCfg[0]
 	}
 
+	// 解析 session_id 并填充到 agentConfig（对齐 Python L559-562, L568）
+	agentConfig.SessionID = resolveSpawnSessionID(inputs, sess)
+
+	// 填充默认日志配置（对齐 Python L563-566）
+	if agentConfig.LoggingConfig == nil {
+		agentConfig.LoggingConfig = logger.GetLogConfigSnapshot()
+	}
+
 	// 在 payload 中标记流式模式和 stream_modes
 	if agentConfig.Payload == nil {
 		agentConfig.Payload = make(map[string]any)
@@ -473,6 +484,16 @@ func SpawnAgentStreaming(
 	handle, err := spawn.SpawnProcess(ctx, agentConfig, inputs, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("spawn_agent_streaming 启动子进程失败: %w", err)
+	}
+
+	// 启动健康检查（对齐 Python spawn_agent_streaming 中同样逻辑）
+	if len(spawnCfg) > 0 {
+		if hcErr := handle.StartHealthCheck(ctx, cfg.HealthCheckInterval); hcErr != nil {
+			logger.Warn(logComponent).
+				Str("event_type", "spawn_agent_streaming").
+				Err(hcErr).
+				Msg("健康检查启动失败")
+		}
 	}
 
 	ch := make(chan stream.Schema, 64)
@@ -511,6 +532,10 @@ func Release(ctx context.Context, sessionID string, force bool) error {
 	if cp != nil {
 		return cp.Release(ctx, sessionID)
 	}
+	logger.Warn(logComponent).
+		Str("event_type", "runner_release").
+		Str("session_id", sessionID).
+		Msg("Checkpointer 为 nil，Release 被跳过")
 	return nil
 }
 
@@ -519,6 +544,12 @@ func Release(ctx context.Context, sessionID string, force bool) error {
 // SetConfig 设置Runner配置。
 // 对齐 Python: Runner.set_config() (runner.py L250-257)
 func SetConfig(cfg *config.RunnerConfig) {
+	r := getRunner()
+	logger.Info(logComponent).
+		Str("event_type", "runner_set_config").
+		Str("runner_id", r.runnerID).
+		Bool("distributed_mode", cfg != nil && cfg.DistributedMode).
+		Msg("设置 Runner 配置")
 	config.SetRunnerConfig(cfg)
 }
 
@@ -546,6 +577,13 @@ func GetPubSub() *message_queue.MessageQueueInMemory {
 // 对齐 Python: Runner.callback_framework 属性
 func GetCallbackFramework() *callback.CallbackFramework {
 	return getRunner().callbackFramework
+}
+
+// GetDistPubSub 获取分布式消息队列。
+// 对齐 Python: Runner.dist_pubsub 属性
+// ⤵️ 预留：返回类型待分布式消息队列实现后从 any 改为具体类型
+func GetDistPubSub() any {
+	return getRunner().distributeMessageQueue
 }
 
 // IsRemoteAgent 判断Agent是否为远程Agent。
@@ -607,28 +645,42 @@ func (r *Runner) prepareAgent(
 
 		if agentRef.IsByID() {
 			// 对齐 Python L505-510: isinstance(agent, str) + isinstance(session, AgentSession)
-			agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
-			if err != nil {
-				return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
-			}
-			if len(agents) == 0 || agents[0] == nil {
-				return nil, nil, fmt.Errorf("agent不存在: %s", agentRef.ID())
-			}
-			agentInstance := agents[0]
-			// 对齐 Python L509: await session.pre_run(inputs=inputs)
-			if isAgentSess {
-				if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
-					return nil, nil, fmt.Errorf("PreRun失败: %w", preErr)
-				}
-			}
-			return agentInstance, sess, nil
+		agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
+		if err != nil {
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("agent", agentRef.ID()),
+				exception.WithParam("reason", "获取Agent失败"),
+				exception.WithCause(err),
+			)
 		}
-		// 对齐 Python L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
+		if len(agents) == 0 || agents[0] == nil {
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("agent", agentRef.ID()),
+				exception.WithParam("reason", "agent不存在"),
+			)
+		}
+		agentInstance := agents[0]
+		// 对齐 Python L509: await session.pre_run(inputs=inputs)
 		if isAgentSess {
 			if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
-				return nil, nil, fmt.Errorf("PreRun失败: %w", preErr)
+				return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+					exception.WithParam("agent", agentRef.ID()),
+					exception.WithParam("reason", "PreRun失败"),
+					exception.WithCause(preErr),
+				)
 			}
 		}
+		return agentInstance, sess, nil
+	}
+	// 对齐 Python L511-512: isinstance(session, AgentSession) + not isinstance(agent, str)
+	if isAgentSess {
+		if preErr := agentSess.PreRun(ctx, inputs); preErr != nil {
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("reason", "PreRun失败"),
+				exception.WithCause(preErr),
+			)
+		}
+	}
 		return agentRef.Agent(), sess, nil
 	}
 
@@ -652,21 +704,42 @@ func (r *Runner) prepareAgent(
 		// 对齐 Python L515-526: isinstance(agent, str) + not isinstance(session, AgentSession)
 		agents, err := r.resourceMgr.GetAgent(ctx, []string{agentRef.ID()})
 		if err != nil {
-			return nil, nil, fmt.Errorf("获取Agent失败: %w", err)
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("agent", agentRef.ID()),
+				exception.WithParam("reason", "获取Agent失败"),
+				exception.WithCause(err),
+			)
 		}
 		if len(agents) == 0 || agents[0] == nil {
-			return nil, nil, fmt.Errorf("agent不存在: %s", agentRef.ID())
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("agent", agentRef.ID()),
+				exception.WithParam("reason", "agent不存在"),
+			)
 		}
 		agentInstance := agents[0]
 
-		// 判断是否远程Agent（对齐 Python L519: if self._is_remote_agent）
-		// ⤵️ 预留：远程Agent判断（依赖 RemoteAgent 实现）
+		// 判断是否远程Agent（对齐 Python L519-522: if self._is_remote_agent）
+		// ⤵️ 预留：IsRemoteAgent 当前始终返回 false，等 RemoteAgent 实现后生效
+		if IsRemoteAgent(agentInstance) {
+			// 对齐 Python L520-521: 注入 conversation_id
+			if inputs != nil {
+				if _, ok := inputs[agentConversationIDKey]; !ok {
+					inputs[agentConversationIDKey] = sessionID
+				}
+			}
+			// 对齐 Python L522: 远程Agent 不创建 AgentSession
+			return agentInstance, nil, nil
+		}
 
 		// 创建AgentSession（对齐 Python L524: agent_session = self._create_agent_session(...)）
 		agentSession := r.createAgentSession(agentInstance, sessionID)
 		// 对齐 Python L525: await agent_session.pre_run(inputs=inputs)
 		if preErr := agentSession.PreRun(ctx, inputs); preErr != nil {
-			return nil, nil, fmt.Errorf("PreRun失败: %w", preErr)
+			return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+				exception.WithParam("agent", agentRef.ID()),
+				exception.WithParam("reason", "PreRun失败"),
+				exception.WithCause(preErr),
+			)
 		}
 		return agentInstance, agentSession, nil
 	}
@@ -675,7 +748,10 @@ func (r *Runner) prepareAgent(
 	agentInstance := agentRef.Agent()
 	agentSession := r.createAgentSession(agentInstance, sessionID)
 	if preErr := agentSession.PreRun(ctx, inputs); preErr != nil {
-		return nil, nil, fmt.Errorf("PreRun失败: %w", preErr)
+		return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+			exception.WithParam("reason", "PreRun失败"),
+			exception.WithCause(preErr),
+		)
 	}
 	return agentInstance, agentSession, nil
 }
@@ -707,10 +783,15 @@ func (r *Runner) prepareWorkflow(
 	if workflowRef.IsByID() {
 		workflows, err := r.resourceMgr.GetWorkflow(ctx, []string{workflowKey})
 		if err != nil {
-			return nil, nil, fmt.Errorf("获取Workflow失败: %w", err)
-		}
-		if len(workflows) == 0 || workflows[0] == nil {
-			return nil, nil, fmt.Errorf("workflow不存在: %s", workflowKey)
+		return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+			exception.WithParam("reason", "获取Workflow失败"),
+			exception.WithCause(err),
+		)
+	}
+	if len(workflows) == 0 || workflows[0] == nil {
+		return nil, nil, exception.BuildError(exception.StatusRunnerRunAgentError,
+			exception.WithParam("reason", fmt.Sprintf("workflow不存在: %s", workflowKey)),
+		)
 		}
 		workflowInstance = workflows[0]
 	} else {
@@ -726,10 +807,14 @@ func (r *Runner) prepareWorkflow(
 func (r *Runner) createAgentSession(agent interfaces.BaseAgent, sessionID string) *session.Session {
 	// 对齐 Python L658-669: 提取 card 和 envs
 	card := agent.Card()
-	// ⤵️ 预留：从 AgentConfig 提取 envs
-	// Python L665-666: if isinstance(config, Config): envs = getattr(config, "_env", None)
-	// Go 的 AgentConfig 接口目前不含 envs，待 AgentConfig 完善（添加 GetEnvs）后回填
+	// 对齐 Python L665-666: if isinstance(config, Config): envs = getattr(config, "_env", None)
+	// Go 用类型断言：如果 agent.Config() 满足 SessionConfig 接口，提取 envs；否则 nil
 	var envs map[string]any
+	if cfg := agent.Config(); cfg != nil {
+		if sessionCfg, ok := cfg.(sessionconfig.SessionConfig); ok {
+			envs = sessionCfg.GetEnvs()
+		}
+	}
 	return session.CreateAgentSession(sessionID, card, envs)
 }
 
@@ -759,4 +844,23 @@ func generateWorkflowKey(id, version string) string {
 		return id + ":" + version
 	}
 	return id
+}
+
+// resolveSpawnSessionID 解析 Spawn 子进程的 session_id。
+// 对齐 Python: runner.py L559-562
+// 优先级：inputs["conversation_id"] > sess.GetSessionID() > defaultAgentSessionID
+func resolveSpawnSessionID(inputs map[string]any, sess sessioninterfaces.SessionFacade) string {
+	if inputs != nil {
+		if convID, ok := inputs[agentConversationIDKey]; ok {
+			if id, ok := convID.(string); ok && id != "" {
+				return id
+			}
+		}
+	}
+	if sess != nil {
+		if id := sess.GetSessionID(); id != "" {
+			return id
+		}
+	}
+	return defaultAgentSessionID
 }
