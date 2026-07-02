@@ -7,6 +7,7 @@
 //
 //	handoff/
 //	├── doc.go                      # 包文档
+//	├── container_agent.go          # ContainerAgent 核心包装器，实现 BaseAgent 接口
 //	├── handoff_config.go           # HandoffRoute/HandoffConfig/HandoffTeamConfig 配置定义
 //	├── handoff_orchestrator.go     # HandoffOrchestrator 交接协调器
 //	├── handoff_request.go          # HandoffHistoryEntry/HandoffRequest 交接驱动消息
