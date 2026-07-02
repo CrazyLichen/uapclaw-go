@@ -180,12 +180,12 @@ func findHandoffFromSession(agentSession sessioninterfaces.SessionFacade) map[st
 		if !ok {
 			continue
 		}
-		role, _ := msg["role"]
+		role := msg["role"]
 		roleStr, ok := role.(string)
 		if !ok || roleStr != "tool" {
 			continue
 		}
-		content, _ := msg["content"]
+		content := msg["content"]
 		contentStr, ok := content.(string)
 		if !ok || contentStr == "" {
 			continue

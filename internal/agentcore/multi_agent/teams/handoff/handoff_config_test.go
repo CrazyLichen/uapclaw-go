@@ -3,7 +3,6 @@ package handoff
 import (
 	"testing"
 
-	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -158,7 +157,7 @@ func TestHandoffTeamConfig_与TeamConfig类型兼容(t *testing.T) {
 	cfg := NewHandoffTeamConfig()
 
 	// 提取嵌入的 TeamConfig 引用，验证与 maschema.TeamConfig 类型兼容
-	var teamCfg *maschema.TeamConfig = &cfg.TeamConfig
+	teamCfg := &cfg.TeamConfig
 	if teamCfg.MaxAgents != 10 {
 		t.Errorf("期望 TeamConfig.MaxAgents = 10，实际 = %d", teamCfg.MaxAgents)
 	}

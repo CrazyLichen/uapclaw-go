@@ -176,9 +176,10 @@ func TestHandoffTool_Stream_正常调用(t *testing.T) {
 	var doneChunk tool.StreamChunk
 	count := 0
 	for chunk := range ch {
-		if count == 0 {
+		switch count {
+		case 0:
 			dataChunk = chunk
-		} else if count == 1 {
+		case 1:
 			doneChunk = chunk
 		}
 		count++
