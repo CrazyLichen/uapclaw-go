@@ -1,16 +1,18 @@
 // Package teams 提供多 Agent 团队的具体实现模式。
 //
 // 本包包含基于事件驱动的团队类型，如 HandoffTeam（单活跃 Agent 交接模式）、
-// HierarchicalTeam（监督者-执行者层级模式）。
+// HierarchicalTeam 消息总线模式（hierarchical_msgbus）、
+// HierarchicalToolsTeam 工具委托模式（hierarchical_tools）。
 // 所有团队类型均实现 BaseTeam 接口，可注册到 TeamRuntime 中运行。
 //
 // 文件目录：
 //
 //	teams/
-//	├── doc.go           # 包文档
-//	├── utils.go         # 独立调用上下文工具函数
-//	├── handoff/         # HandoffTeam 实现
-//	└── hierarchical/    # HierarchicalTeam 实现（消息总线模式）
+//	├── doc.go                 # 包文档
+//	├── utils.go               # 独立调用上下文工具函数
+//	├── handoff/               # HandoffTeam 实现
+//	├── hierarchical_msgbus/   # HierarchicalTeam 实现（消息总线模式）
+//	└── hierarchical_tools/    # HierarchicalToolsTeam 实现（工具委托模式）
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/teams/
 package teams

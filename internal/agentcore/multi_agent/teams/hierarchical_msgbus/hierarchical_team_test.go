@@ -1,4 +1,4 @@
-package hierarchical
+package hierarchical_msgbus
 
 import (
 	"context"

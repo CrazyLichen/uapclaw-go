@@ -52,7 +52,7 @@ func ExtractInterruptSignal(result map[string]any, err error) *TeamInterruptSign
 			msg = m
 		}
 		return &TeamInterruptSignal{
-			Result:  map[string]any{"result_type": "interrupt"},
+			Result:  map[string]any{"result_type": "interrupt", "message": msg},
 			Message: msg,
 		}
 	}
@@ -82,7 +82,7 @@ func FlushTeamSession(ctx context.Context, sess *session.AgentTeamSession) error
 			Str("action", "flush_team_session").
 			Str("session_id", sess.GetSessionID()).
 			Msg("FlushTeamSession Commit 失败")
-		return err
+		// 不返回错误，与 Python 行为一致
 	}
 
 	return nil

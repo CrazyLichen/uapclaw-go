@@ -1,4 +1,4 @@
-package hierarchical
+package hierarchical_msgbus
 
 import (
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"

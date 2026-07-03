@@ -605,15 +605,15 @@ func TestHandoffTeam_implementsBaseTeam(t *testing.T) {
 	var _ maschema.BaseTeam = (*HandoffTeam)(nil)
 }
 
-// TestHandoffTeam_GetRuntime 测试 GetRuntime 方法
-func TestHandoffTeam_GetRuntime(t *testing.T) {
+// TestHandoffTeam_runtime 测试 runtime 字段非空
+func TestHandoffTeam_runtime(t *testing.T) {
 	card := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team1"),
 	)
 	team := NewHandoffTeam(card, nil, nil)
 
-	if team.GetRuntime() == nil {
-		t.Error("GetRuntime 不应返回 nil")
+	if team.runtime == nil {
+		t.Error("runtime 不应为 nil")
 	}
 }
 

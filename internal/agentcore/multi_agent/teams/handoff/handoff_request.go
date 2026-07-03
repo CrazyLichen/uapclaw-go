@@ -9,9 +9,9 @@ import (
 // HandoffHistoryEntry 交接历史记录
 type HandoffHistoryEntry struct {
 	// AgentID Agent 标识
-	AgentID string
+	AgentID string `json:"agent"`
 	// Output Agent 输出结果
-	Output map[string]any
+	Output  map[string]any `json:"output"`
 }
 
 // HandoffRequest 交接驱动消息

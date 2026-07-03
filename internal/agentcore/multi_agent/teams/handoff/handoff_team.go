@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/teams"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -118,46 +117,19 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 
 // Invoke 非流式调用团队，执行交接链路。
 //
-// 从 opts 提取 session，无 session 时创建新 session，
-// 然后执行 runChain 完成交接编排。
+// 使用 StandaloneInvokeContext 管理会话生命周期（创建/PreRun/Bind/Unbind/Cleanup/Close/Commit），
+// 在上下文内执行 runChain 完成交接编排。
 //
 // 对应 Python: HandoffTeam.invoke(message, session=None)
 func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (any, error) {
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sess := teamOpts.Session
 
-	// 无 session 时创建新 session
-	if sess == nil {
-		sessionID := uuid.New().String()
-		sess = session.CreateAgentTeamSession(sessionID, nil, t.card.GetID())
-	}
-
-	// 绑定会话到运行时
-	t.runtime.BindTeamSession(sess)
-
-	// PreRun 前置运行
-	if err := sess.PreRun(ctx, inputs); err != nil {
-		logger.Error(logComponent).Err(err).
-			Str("event_type", "LLM_CALL_ERROR").
-			Str("method", "HandoffTeam.Invoke").
-			Str("team_id", t.card.GetID()).
-			Msg("PreRun 失败")
-		return nil, err
-	}
-
-	// 执行交接链路
-	result, err := t.runChain(ctx, inputs, sess)
-
-	// PostRun 后置运行
-	if postErr := sess.PostRun(ctx); postErr != nil {
-		logger.Warn(logComponent).Err(postErr).
-			Str("action", "handoff_team_invoke_post_run").
-			Str("team_id", t.card.GetID()).
-			Msg("PostRun 失败")
-	}
-
-	// 解绑会话
-	t.runtime.UnbindTeamSession(sess.GetSessionID())
+	result, err := teams.StandaloneInvokeContext(ctx, t.runtime, t.card, inputs, sess,
+		func(teamSession *session.AgentTeamSession, _ string) (map[string]any, error) {
+			return t.runChain(ctx, inputs, teamSession)
+		},
+	)
 
 	if err != nil {
 		return nil, err
@@ -336,11 +308,6 @@ func (t *HandoffTeam) Config() *maschema.TeamConfig {
 	return &t.config.TeamConfig
 }
 
-// GetRuntime 返回团队运行时。
-func (t *HandoffTeam) GetRuntime() *team_runtime.TeamRuntime {
-	return t.runtime
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // lookupCoordinator 查找会话协调器。
@@ -490,9 +457,14 @@ func (t *HandoffTeam) makeContainerProvider(
 ) resources_manager.AgentProvider {
 	coordinatorLookup := t.lookupCoordinator
 	agentProvider := t.agentProviders[agentID]
+	runtime := t.runtime
+	teamID := t.card.GetID()
 
 	return func(ctx context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
-		return NewContainerAgent(card, agentProvider, allowedTargets, coordinatorLookup), nil
+		container := NewContainerAgent(card, agentProvider, allowedTargets, coordinatorLookup)
+		endpointID := fmt.Sprintf("%s%s_%s", handoffEndpointPrefix, teamID, agentID)
+		container.BindRuntime(runtime, endpointID)
+		return container, nil
 	}
 }
 

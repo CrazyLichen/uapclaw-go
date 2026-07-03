@@ -9,6 +9,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -36,6 +37,7 @@ import (
 //
 // 对应 Python: ContainerAgent (container_agent.py)
 type ContainerAgent struct {
+	team_runtime.CommunicableAgent // 嵌入，获得 Send/Publish/Subscribe/IsBound/Runtime 方法
 	// targetCard 目标 Agent 的身份卡片
 	targetCard *agentschema.AgentCard
 	// targetProvider 目标 Agent 提供者函数
@@ -302,14 +304,14 @@ func (c *ContainerAgent) Stream(ctx context.Context, inputs map[string]any, opts
 	return ch, nil
 }
 
-// StripHandoffMessages 过滤交接辅助消息，保留有意义的消息。
+// stripHandoffMessages 过滤交接辅助消息，保留有意义的消息。
 //
 // 过滤规则：
 //   - 移除 role="tool" 的消息
 //   - 移除包含 tool_calls 的消息
 //
 // 对应 Python: ContainerAgent._strip_handoff_messages(messages)
-func StripHandoffMessages(messages []any) []any {
+func stripHandoffMessages(messages []any) []any {
 	var cleaned []any
 	for _, msg := range messages {
 		msgMap, ok := msg.(map[string]any)
@@ -405,9 +407,15 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 	sort.Strings(sortedTargets)
 
 	for _, targetID := range sortedTargets {
+		// 获取目标 Agent 的描述
+		// 对应 Python: card = self._runtime.get_agent_card(target_id) if self._runtime else None
+		//              description = card.description if card else ""
 		description := ""
-		// 尝试从运行时获取 AgentCard 的 description
-		// 此处暂不依赖 runtime，仅用空 description
+		if rt := c.Runtime(); rt != nil {
+			if card, cardErr := rt.GetAgentCard(targetID); cardErr == nil && card != nil {
+				description = card.Description
+			}
+		}
 
 		handoffTool := NewHandoffTool(targetID, description)
 		abilityMgr.Add(handoffTool.Card())
@@ -499,28 +507,61 @@ func (c *ContainerAgent) invokeTargetWithStream(
 
 // writeResultToStream 将结果写入 team session 的流。
 //
+// 支持 dict 和 list 两种结果类型：
+//   - dict 时直接 WriteStream
+//   - list 时逐个 dict 调用 WriteStream
+//
 // 对应 Python 中 result dict/list 分支写入 write_stream
-func (c *ContainerAgent) writeResultToStream(ctx context.Context, result map[string]any, teamSession *session.AgentTeamSession) {
+func (c *ContainerAgent) writeResultToStream(ctx context.Context, result any, teamSession *session.AgentTeamSession) {
 	if result == nil || teamSession == nil {
 		return
 	}
-	_ = teamSession.WriteStream(ctx, result)
+
+	switch v := result.(type) {
+	case map[string]any:
+		_ = teamSession.WriteStream(ctx, v)
+	case []any:
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				_ = teamSession.WriteStream(ctx, m)
+			}
+		}
+	}
 }
 
 // saveAgentContext 保存目标 Agent 的上下文引擎状态。
 //
+// 通过类型断言探测目标 Agent 是否有 ContextEngine，
+// 有则调用 SaveContexts 持久化，无则跳过。
+//
 // 对应 Python: ContainerAgent._save_agent_context(target_agent, agent_session)
+//             context_engine = getattr(target_agent, "context_engine", None)
 func (c *ContainerAgent) saveAgentContext(ctx context.Context, targetAgent agentinterfaces.BaseAgent, agentSession *session.Session) {
 	if targetAgent == nil || agentSession == nil {
 		return
 	}
 
-	// 尝试从目标 Agent 获取 ContextEngine
-	// 通过 Config 获取不可行（Config 返回 nil），直接跳过
-	// 后续通过 ContextEngine 接口访问时再补充
-	_ = ctx
-	_ = targetAgent
-	_ = agentSession
+	// 类型断言探测目标 Agent 是否有 ContextEngine
+	// 对应 Python: context_engine = getattr(target_agent, "context_engine", None)
+	type contextEngineHolder interface {
+		ContextEngine() ceinterface.ContextEngine
+	}
+	holder, ok := targetAgent.(contextEngineHolder)
+	if !ok {
+		return
+	}
+
+	ce := holder.ContextEngine()
+	if ce == nil {
+		return
+	}
+
+	if _, err := ce.SaveContexts(ctx, agentSession, nil); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("action", "save_agent_context").
+			Str("agent_id", targetAgent.Card().ID).
+			Msg("保存 Agent 上下文失败")
+	}
 }
 
 // saveContextToTeamSession 将 Agent 上下文历史保存到 team session。
@@ -561,7 +602,7 @@ func (c *ContainerAgent) saveContextToTeamSession(agentSession sessioninterfaces
 	}
 
 	// 过滤交接辅助消息
-	cleaned := StripHandoffMessages(newMessages)
+	cleaned := stripHandoffMessages(newMessages)
 	if len(cleaned) == 0 {
 		return
 	}
@@ -649,6 +690,8 @@ func (c *ContainerAgent) handleTeamInterrupt(
 }
 
 // publishHandoff 发布交接消息到下一个 ContainerAgent。
+//
+// 对应 Python: ContainerAgent._publish_handoff(next_input, history, signal, session_id)
 func (c *ContainerAgent) publishHandoff(
 	ctx context.Context,
 	inputMessage map[string]any,
@@ -663,11 +706,26 @@ func (c *ContainerAgent) publishHandoff(
 		Session:      req.Session,
 	}
 
-	// 通过 Communicable 的 Publish 发送
-	// ContainerAgent 本身不嵌入 CommunicableAgent，
-	// 由外部编排循环处理消息传递
-	_ = nextReq
-	_ = sessionID
+	if !c.IsBound() {
+		logger.Warn(logComponent).
+			Str("action", "publish_handoff").
+			Str("target_id", signal.Target).
+			Str("session_id", sessionID).
+			Msg("CommunicableAgent 未绑定运行时，无法发布交接消息")
+		return
+	}
+
+	topicID := containerTopicPrefix + signal.Target
+	if err := c.Publish(ctx, nextReq, topicID,
+		maschema.WithTeamSessionID(sessionID),
+	); err != nil {
+		logger.Warn(logComponent).Err(err).
+			Str("action", "publish_handoff").
+			Str("target_id", signal.Target).
+			Str("topic_id", topicID).
+			Str("session_id", sessionID).
+			Msg("发布交接请求失败")
+	}
 
 	logger.Info(logComponent).
 		Str("action", "publish_handoff").
@@ -677,35 +735,43 @@ func (c *ContainerAgent) publishHandoff(
 		Msg("发布交接消息到下一个 ContainerAgent")
 }
 
-// msgKey 生成消息的去重键，基于 role + content 的简单哈希。
+// msgKey 生成消息的去重键，基于 role + content + tool_calls + tool_call_id。
+//
+// 对应 Python: _msg_key(m) = (role, str(content), str(tool_calls), tool_call_id)
 func msgKey(msg any) string {
 	msgMap, ok := msg.(map[string]any)
 	if !ok {
 		return ""
 	}
+
 	role := ""
 	if r, ok := msgMap["role"]; ok {
 		if rs, ok := r.(string); ok {
 			role = rs
 		}
 	}
+
 	content := ""
 	if c, ok := msgMap["content"]; ok {
 		if cs, ok := c.(string); ok {
 			content = cs
 		}
 	}
-	return role + ":" + content
+
+	// 对应 Python: str(getattr(m, "tool_calls", ""))
+	toolCallsStr := ""
+	if tc, ok := msgMap["tool_calls"]; ok {
+		toolCallsStr = fmt.Sprintf("%v", tc)
+	}
+
+	// 对应 Python: getattr(m, "tool_call_id", "")
+	toolCallID := ""
+	if tci, ok := msgMap["tool_call_id"]; ok {
+		if s, ok := tci.(string); ok {
+			toolCallID = s
+		}
+	}
+
+	return role + ":" + content + ":" + toolCallsStr + ":" + toolCallID
 }
 
-// saveAgentContextWithCE 使用 ContextEngine 接口保存上下文（内部辅助）。
-func (c *ContainerAgent) saveAgentContextWithCE(ctx context.Context, ce ceinterface.ContextEngine, sess sessioninterfaces.SessionFacade) {
-	if ce == nil || sess == nil {
-		return
-	}
-	if _, err := ce.SaveContexts(ctx, sess, nil); err != nil {
-		logger.Warn(logComponent).Err(err).
-			Str("action", "save_agent_context").
-			Msg("保存 Agent 上下文失败")
-	}
-}

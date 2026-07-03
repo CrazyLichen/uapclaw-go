@@ -195,7 +195,7 @@ func TestBuildAgentInput_有历史(t *testing.T) {
 	assert.Equal(t, "agent_a", historySlice[0]["agent"])
 }
 
-// TestStripHandoffMessages_过滤role为tool 测试过滤 role=tool 消息
+// TeststripHandoffMessages_过滤role为tool 测试过滤 role=tool 消息
 func TestStripHandoffMessages_过滤role为tool(t *testing.T) {
 	messages := []any{
 		map[string]any{"role": "user", "content": "hello"},
@@ -203,61 +203,61 @@ func TestStripHandoffMessages_过滤role为tool(t *testing.T) {
 		map[string]any{"role": "assistant", "content": "response"},
 	}
 
-	cleaned := StripHandoffMessages(messages)
+	cleaned := stripHandoffMessages(messages)
 	assert.Len(t, cleaned, 2)
 	assert.Equal(t, "user", cleaned[0].(map[string]any)["role"])
 	assert.Equal(t, "assistant", cleaned[1].(map[string]any)["role"])
 }
 
-// TestStripHandoffMessages_过滤含toolCalls 测试过滤含 tool_calls 的消息
+// TeststripHandoffMessages_过滤含toolCalls 测试过滤含 tool_calls 的消息
 func TestStripHandoffMessages_过滤含toolCalls(t *testing.T) {
 	messages := []any{
 		map[string]any{"role": "assistant", "content": "thinking", "tool_calls": []any{"call1"}},
 		map[string]any{"role": "assistant", "content": "response"},
 	}
 
-	cleaned := StripHandoffMessages(messages)
+	cleaned := stripHandoffMessages(messages)
 	assert.Len(t, cleaned, 1)
 	assert.Equal(t, "response", cleaned[0].(map[string]any)["content"])
 }
 
-// TestStripHandoffMessages_空toolCalls保留 测试空 tool_calls 消息应保留
+// TeststripHandoffMessages_空toolCalls保留 测试空 tool_calls 消息应保留
 func TestStripHandoffMessages_空toolCalls保留(t *testing.T) {
 	messages := []any{
 		map[string]any{"role": "assistant", "content": "response", "tool_calls": []any{}},
 	}
 
-	cleaned := StripHandoffMessages(messages)
+	cleaned := stripHandoffMessages(messages)
 	assert.Len(t, cleaned, 1, "空 tool_calls 消息应保留")
 }
 
-// TestStripHandoffMessages_nilToolCalls保留 测试 nil tool_calls 消息应保留
+// TeststripHandoffMessages_nilToolCalls保留 测试 nil tool_calls 消息应保留
 func TestStripHandoffMessages_nilToolCalls保留(t *testing.T) {
 	messages := []any{
 		map[string]any{"role": "assistant", "content": "response", "tool_calls": nil},
 	}
 
-	cleaned := StripHandoffMessages(messages)
+	cleaned := stripHandoffMessages(messages)
 	assert.Len(t, cleaned, 1, "nil tool_calls 消息应保留")
 }
 
-// TestStripHandoffMessages_非map类型保留 测试非 map 类型消息直接保留
+// TeststripHandoffMessages_非map类型保留 测试非 map 类型消息直接保留
 func TestStripHandoffMessages_非map类型保留(t *testing.T) {
 	messages := []any{
 		"plain string message",
 		42,
 	}
 
-	cleaned := StripHandoffMessages(messages)
+	cleaned := stripHandoffMessages(messages)
 	assert.Len(t, cleaned, 2)
 }
 
-// TestStripHandoffMessages_空列表 测试空列表
+// TeststripHandoffMessages_空列表 测试空列表
 func TestStripHandoffMessages_空列表(t *testing.T) {
-	cleaned := StripHandoffMessages(nil)
+	cleaned := stripHandoffMessages(nil)
 	assert.Len(t, cleaned, 0)
 
-	cleaned = StripHandoffMessages([]any{})
+	cleaned = stripHandoffMessages([]any{})
 	assert.Len(t, cleaned, 0)
 }
 
@@ -660,7 +660,7 @@ func TestMsgKey(t *testing.T) {
 		{
 			name:     "map类型",
 			msg:      map[string]any{"role": "user", "content": "hello"},
-			expected: "user:hello",
+			expected: "user:hello::",
 		},
 		{
 			name:     "非map类型",
@@ -670,12 +670,27 @@ func TestMsgKey(t *testing.T) {
 		{
 			name:     "空map",
 			msg:      map[string]any{},
-			expected: ":",
+			expected: ":::",
 		},
 		{
 			name:     "只有role",
 			msg:      map[string]any{"role": "assistant"},
-			expected: "assistant:",
+			expected: "assistant:::",
+		},
+		{
+			name:     "有tool_calls",
+			msg:      map[string]any{"role": "assistant", "content": "call", "tool_calls": []any{"call1"}},
+			expected: "assistant:call:[call1]:",
+		},
+		{
+			name:     "有tool_call_id",
+			msg:      map[string]any{"role": "tool", "content": "result", "tool_call_id": "call_abc"},
+			expected: "tool:result::call_abc",
+		},
+		{
+			name:     "相同role_content不同tool_calls",
+			msg:      map[string]any{"role": "assistant", "content": "same", "tool_calls": []any{"call2"}},
+			expected: "assistant:same:[call2]:",
 		},
 	}
 
@@ -948,61 +963,43 @@ func TestContainerAgent_UnregisterRail(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestContainerAgent_saveAgentContextWithCE_ce为nil 测试 saveAgentContextWithCE 当 ce 为 nil 时直接返回
-func TestContainerAgent_saveAgentContextWithCE_ce为nil(t *testing.T) {
+// TestContainerAgent_saveAgentContext_无ContextEngine 测试目标 Agent 无 ContextEngine 时跳过
+func TestContainerAgent_saveAgentContext_无ContextEngine(t *testing.T) {
 	card := agentschema.NewAgentCard(commonschema.WithID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	sess := newMockContainerSessionFacade("sess1")
-	// ce 为 nil，应直接返回
-	agent.saveAgentContextWithCE(context.Background(), nil, sess)
+	mockAgent := newMockBaseAgent("test")
+	sess := session.NewSession(session.WithSessionID("sess1"))
+
+	// mockBaseAgent 不实现 ContextEngine() 方法，应直接跳过
+	agent.saveAgentContext(context.Background(), mockAgent, sess)
 }
 
-// TestContainerAgent_saveAgentContextWithCE_sess为nil 测试 saveAgentContextWithCE 当 sess 为 nil 时直接返回
-func TestContainerAgent_saveAgentContextWithCE_sess为nil(t *testing.T) {
+// TestContainerAgent_saveAgentContext_agentSession为nil 测试 agentSession 为 nil 时直接返回
+func TestContainerAgent_saveAgentContext_agentSession为nil(t *testing.T) {
 	card := agentschema.NewAgentCard(commonschema.WithID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	// sess 为 nil，应直接返回
-	agent.saveAgentContextWithCE(context.Background(), nil, nil)
+	mockAgent := newMockBaseAgent("test")
+	agent.saveAgentContext(context.Background(), mockAgent, nil)
 }
 
-// TestContainerAgent_saveAgentContextWithCE_SaveContexts失败 测试 saveAgentContextWithCE 当 SaveContexts 失败时记录警告
-func TestContainerAgent_saveAgentContextWithCE_SaveContexts失败(t *testing.T) {
+// TestContainerAgent_saveAgentContext_targetAgent为nil 测试 targetAgent 为 nil 时直接返回
+func TestContainerAgent_saveAgentContext_targetAgent为nil(t *testing.T) {
 	card := agentschema.NewAgentCard(commonschema.WithID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	// 创建 mock ContextEngine，SaveContexts 返回错误
-	mockCE := &mockContextEngine{saveErr: errors.New("save failed")}
-	sess := newMockContainerSessionFacade("sess1")
-
-	// 应记录警告但不 panic
-	agent.saveAgentContextWithCE(context.Background(), mockCE, sess)
-}
-
-// TestContainerAgent_saveAgentContextWithCE_成功 测试 saveAgentContextWithCE 成功
-func TestContainerAgent_saveAgentContextWithCE_成功(t *testing.T) {
-	card := agentschema.NewAgentCard(commonschema.WithID("test"))
-	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
-		return newMockBaseAgent("test"), nil
-	}
-	agent := NewContainerAgent(card, provider, nil, nil)
-
-	mockCE := &mockContextEngine{
-		saveResult: map[string]any{"default_context_id": map[string]any{}},
-	}
-	sess := newMockContainerSessionFacade("sess1")
-
-	agent.saveAgentContextWithCE(context.Background(), mockCE, sess)
+	sess := session.NewSession(session.WithSessionID("sess1"))
+	agent.saveAgentContext(context.Background(), nil, sess)
 }
 
 // TestContainerAgent_writeResultToStream_result为nil 测试 writeResultToStream result 为 nil 时直接返回
