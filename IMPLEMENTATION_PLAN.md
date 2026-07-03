@@ -516,7 +516,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 8.33 | ✅ | MessageBus | ✅ 消息总线；✅ 回填 Pub-Sub 火忘错误抑制（handlePubsubMessage 所有错误仅记日志不抛出）；✅ 回填结构化错误码（Stop→InitiationError, Send/Publish produce→ProductionError, Send response→ProcessExecutionError, handleP2P→ProcessExecutionError）；✅ NewMessageBus 签名改为 (*MessageBus, error) 对齐 Python raise 语义 | `openjiuwen/core/multi_agent/team_runtime/` |
 | 8.34 | ✅ | HandoffTeam | ✅ HandoffConfig/HandoffRoute/HandoffTeamConfig；✅ HandoffRequest/HandoffHistoryEntry；✅ HandoffSignal/ExtractHandoffSignal 两层提取；✅ HandoffTool 实现 Tool 接口；✅ TeamInterruptSignal/ExtractInterruptSignal；✅ HandoffOrchestrator 主体逻辑；✅ HandoffTeam 实现 BaseTeam 接口全部 13 方法 | `openjiuwen/core/multi_agent/teams/handoff/` |
 | 8.35 | ✅ | HierarchicalTeam (msgbus) | ✅ AbilityManagerInterface 接口化（ExecuteResult/AddAbilityResult 迁移到 schema 包，ReActAgent/Controller/ContainerAgent 适配）；✅ CommunicableAgent 移除 AgentID() 解决双重嵌入冲突；✅ HierarchicalTeamConfig；✅ P2PAbilityManager 分区并行派发+Semaphore 限流；✅ SupervisorAgent 双重嵌入 CommunicableAgent+ReActAgent；✅ HierarchicalTeam 实现 BaseTeam 接口全部 13 方法，复用 StandaloneInvokeContext | `openjiuwen/core/multi_agent/teams/` |
-| 8.36 | ☐ | HierarchicalTeam (tools) | 层级管理-工具委托模式 | `openjiuwen/core/multi_agent/teams/` |
+| 8.36 | ✅ | HierarchicalTeam (tools) | 层级管理-工具委托模式 | `openjiuwen/core/multi_agent/teams/` |
 
 **验证点**：✅ 可定义和执行工作流 DAG，多 Agent 协作完成任务
 
