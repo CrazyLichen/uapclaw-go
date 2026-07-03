@@ -44,9 +44,6 @@ func trySetEnv(envs map[string]any, configKey, envKey string, value any) {
 		envs[configKey] = value
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // trySetFloat 尝试将值转换为 float64 并设置
 func trySetFloat(envs map[string]any, configKey, envKey string, value any) {
 	switch v := value.(type) {

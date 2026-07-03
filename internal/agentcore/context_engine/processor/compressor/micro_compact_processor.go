@@ -220,9 +220,6 @@ func (mcp *MicroCompactProcessor) collectCompactableIndicesByTool(messages []llm
 	}
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // hasAnyToolExceedThreshold 判断任一工具的 ToolMessage 数量是否超过触发阈值。
 //
 // 对应 Python: MicroCompactProcessor._has_any_tool_exceed_threshold()

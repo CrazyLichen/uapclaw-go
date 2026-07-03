@@ -21,8 +21,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 接口 ────────────────────────────
-
 // RouteStrategy 路由策略接口，定义如何从多个部署端点中选择一个。
 type RouteStrategy interface {
 	// Select 从健康的部署端点中选择一个。
@@ -688,7 +686,7 @@ func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	routerCacheLock.Lock()
 	defer routerCacheLock.Unlock()
 
-	// double-check
+	// 二次检查（加锁后再次确认）
 	if r, ok := routerCache[key]; ok {
 		return r
 	}

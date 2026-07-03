@@ -60,8 +60,6 @@ func NewSkillUtil(sysOperationID string) *SkillUtil {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewSkillUtilWithProvider 创建使用自定义 FsProvider 的 SkillUtil 实例。
 func NewSkillUtilWithProvider(sysOperationID string, provider FsProvider) *SkillUtil {
 	return &SkillUtil{

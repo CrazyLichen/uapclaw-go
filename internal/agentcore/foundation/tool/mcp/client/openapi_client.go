@@ -43,8 +43,8 @@ type OpenApiClient struct {
 
 // openAPIToolInfo OpenAPI 工具路由信息（非导出）。
 type openAPIToolInfo struct {
-	method       string // GET/POST/PUT/DELETE/PATCH
-	path         string // /api/v1/items
+	method       string // HTTP 方法（GET/POST/PUT/DELETE/PATCH）
+	path         string // API 路径（如 /api/v1/items）
 	description  string
 	parameters   []openapiParameterInfo  // path/query/header/cookie 参数
 	requestBody  *openapiRequestBodyInfo // 请求体信息
@@ -54,7 +54,7 @@ type openAPIToolInfo struct {
 // openapiParameterInfo OpenAPI 参数信息。
 type openapiParameterInfo struct {
 	name        string
-	in          string // path, query, header, cookie
+	in          string // 参数位置（path/query/header/cookie）
 	required    bool
 	schema      map[string]any
 	description string

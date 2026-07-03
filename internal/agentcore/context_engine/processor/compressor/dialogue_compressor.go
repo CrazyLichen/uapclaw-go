@@ -747,9 +747,6 @@ func (dc *DialogueCompressor) collectCompleteRounds(messages []llm_schema.BaseMe
 
 	return rounds
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // countMessagesTokens 计算消息列表的 Token 数。
 func (dc *DialogueCompressor) countMessagesTokens(mc iface.ModelContext, messages []llm_schema.BaseMessage) int {
 	modelName := ""

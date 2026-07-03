@@ -287,7 +287,7 @@ func validateParamType(key string, val any, p *schema.Param) error {
 	case schema.ParamTypeNumber:
 		switch val.(type) {
 		case float64, int, int64:
-			// ok
+			// 类型匹配，无需处理
 		default:
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,

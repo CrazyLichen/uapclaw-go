@@ -286,18 +286,18 @@ func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageC
 			WithIsPrimaryKey(true).
 			WithMaxLength(int64(storageCfg.UUID)),
 	)
-	// created_at
+	// created_at 创建时间戳
 	schema = schema.WithField(
 		entity.NewField().WithName("created_at").
 			WithDataType(entity.FieldTypeInt64),
 	)
-	// user_id
+	// user_id 用户标识
 	schema = schema.WithField(
 		entity.NewField().WithName("user_id").
 			WithDataType(entity.FieldTypeVarChar).
 			WithMaxLength(int64(storageCfg.UserID)),
 	)
-	// obj_type
+	// obj_type 对象类型
 	schema = schema.WithField(
 		entity.NewField().WithName("obj_type").
 			WithDataType(entity.FieldTypeVarChar).
@@ -305,18 +305,18 @@ func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageC
 			WithEnableAnalyzer(true).
 			WithEnableMatch(true),
 	)
-	// language
+	// language 语言
 	schema = schema.WithField(
 		entity.NewField().WithName("language").
 			WithDataType(entity.FieldTypeVarChar).
 			WithMaxLength(int64(storageCfg.Language)),
 	)
-	// metadata
+	// metadata 元数据
 	schema = schema.WithField(
 		entity.NewField().WithName("metadata").
 			WithDataType(entity.FieldTypeJSON),
 	)
-	// content
+	// content 内容
 	schema = schema.WithField(
 		entity.NewField().WithName("content").
 			WithDataType(entity.FieldTypeVarChar).

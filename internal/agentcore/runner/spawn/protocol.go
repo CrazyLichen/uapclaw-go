@@ -64,8 +64,6 @@ func SerializeMessage(msg Message) ([]byte, error) {
 	return json.Marshal(msg)
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // String 返回消息类型名称。
 func (t MessageType) String() string {
 	switch t {

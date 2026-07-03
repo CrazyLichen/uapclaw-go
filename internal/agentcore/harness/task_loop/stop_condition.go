@@ -4,6 +4,27 @@ import "fmt"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// StopConditionEvaluator 停止条件评估器接口。
+// 每个评估器回答一个问题："循环该停了吗？"
+// LoopCoordinator 持有评估器切片，OR 语义：第一个 ShouldStop=true 即停止。
+// 对齐 Python: StopConditionEvaluator
+type StopConditionEvaluator interface {
+	// ShouldStop 评估是否应该停止循环
+	ShouldStop(ctx StopEvaluationContext) bool
+
+	// Name 返回评估器名称（用于状态序列化索引、停止原因和日志）
+	Name() string
+
+	// ExportState 导出评估器状态用于持久化（无状态评估器返回空 map）
+	ExportState() map[string]any
+
+	// ImportState 从持久化状态恢复（无状态评估器忽略参数）
+	ImportState(data map[string]any)
+
+	// Reset 重置内部状态，用于新的 invoke 周期
+	Reset()
+}
+
 // StopEvaluationContext 停止条件评估上下文。
 // 与 AgentCallbackContext 解耦，使评估器不依赖 Agent 回调系统。
 // 对齐 Python: StopEvaluationContext
@@ -70,29 +91,6 @@ type CustomPredicateEvaluator struct {
 	name string
 	// predicate 自定义判断函数
 	predicate func(ctx StopEvaluationContext) bool
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// StopConditionEvaluator 停止条件评估器接口。
-// 每个评估器回答一个问题："循环该停了吗？"
-// LoopCoordinator 持有评估器切片，OR 语义：第一个 ShouldStop=true 即停止。
-// 对齐 Python: StopConditionEvaluator
-type StopConditionEvaluator interface {
-	// ShouldStop 评估是否应该停止循环
-	ShouldStop(ctx StopEvaluationContext) bool
-
-	// Name 返回评估器名称（用于状态序列化索引、停止原因和日志）
-	Name() string
-
-	// ExportState 导出评估器状态用于持久化（无状态评估器返回空 map）
-	ExportState() map[string]any
-
-	// ImportState 从持久化状态恢复（无状态评估器忽略参数）
-	ImportState(data map[string]any)
-
-	// Reset 重置内部状态，用于新的 invoke 周期
-	Reset()
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

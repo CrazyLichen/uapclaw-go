@@ -6,7 +6,7 @@ import (
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // Communicable 可通信接口，Agent 实现此接口即可使用 P2P/Pub-Sub 通信。
 //

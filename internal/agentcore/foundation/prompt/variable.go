@@ -8,8 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 接口 ────────────────────────────
-
 // Variable 模板变量接口，定义占位符变量的求值协议。
 //
 // 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/variable.py (Variable)

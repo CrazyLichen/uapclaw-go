@@ -91,14 +91,14 @@ func RedactURLPassword(rawURL string) string {
 	buf.WriteString(":***")
 	buf.WriteByte('@')
 
-	// host:port
+	// 主机:端口
 	buf.WriteString(parsed.Hostname())
 	if parsed.Port() != "" {
 		buf.WriteByte(':')
 		buf.WriteString(parsed.Port())
 	}
 
-	// path
+	// 路径
 	buf.WriteString(parsed.Path)
 	if parsed.RawQuery != "" {
 		buf.WriteByte('?')

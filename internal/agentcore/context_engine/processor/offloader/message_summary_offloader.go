@@ -205,6 +205,16 @@ const defaultOffloadSummaryPrompt = `
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
+var contextOverflowKeywords = []string{
+	"context length",
+	"token limit",
+	"too long",
+	"exceeds",
+	"maximum context",
+	"context window",
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageSummaryOffloader 创建消息摘要卸载器实例。
@@ -239,20 +249,6 @@ func NewMessageSummaryOffloader(config *MessageSummaryOffloaderConfig, opts ...M
 
 	return mso, nil
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
-var contextOverflowKeywords = []string{
-	"context length",
-	"token limit",
-	"too long",
-	"exceeds",
-	"maximum context",
-	"context window",
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithMessageSummaryModel 注入已有 Model 实例（测试用）。
 func WithMessageSummaryModel(model *llm.Model) MessageSummaryOffloaderOption {
@@ -368,8 +364,6 @@ func (c *MessageSummaryOffloaderConfig) applyMSODefaults() {
 		c.ContentMaxCharsForCompression = msoDefaultContentMaxCharsForCompression
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // shouldOffloadMessage 判断消息是否符合摘要卸载条件。
 //

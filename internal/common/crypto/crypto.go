@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 接口 ────────────────────────────
-
 // CryptoProvider 加密提供者接口，密钥由实现内部持有。
 //
 // 对应 Python: jiuwenswarm/common/security/base_crypto.py CryptoProvider

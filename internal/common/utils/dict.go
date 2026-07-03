@@ -356,14 +356,14 @@ func checkType(key string, val any, propSchema map[string]any) error {
 				return fmt.Errorf("property %q: expected integer, got float64 with fractional part", key)
 			}
 		case int, int64:
-			// ok
+			// 类型匹配，无需处理
 		default:
 			return fmt.Errorf("property %q: expected integer, got %T", key, val)
 		}
 	case "number":
 		switch val.(type) {
 		case float64, int, int64:
-			// ok
+			// 类型匹配，无需处理
 		default:
 			return fmt.Errorf("property %q: expected number, got %T", key, val)
 		}

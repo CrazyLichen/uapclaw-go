@@ -15,7 +15,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // AbilityManagerInterface 能力管理器接口，Agent 通过此接口注册和调度能力。
 //
@@ -49,8 +49,6 @@ type AbilityManagerInterface interface {
 	// ReorderTools 重排工具顺序。
 	ReorderTools(orderedNames []string)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentConfig Agent 配置接口，所有 Agent 配置必须实现。
 //

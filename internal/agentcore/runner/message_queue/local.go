@@ -79,17 +79,17 @@ func (q *LocalMessageQueue) Produce(_ context.Context, topic string, _ QueueMess
 
 // SetMessageHandler 设置消息处理回调（no-op）。
 func (s *LocalSubscription) SetMessageHandler(_ func(ctx context.Context, payload map[string]any) (any, error)) {
-	// no-op
+	// 空操作
 }
 
 // Activate 激活订阅（no-op）。
 func (s *LocalSubscription) Activate() {
-	// no-op
+	// 空操作
 }
 
 // Deactivate 停用订阅（no-op）。
 func (s *LocalSubscription) Deactivate() {
-	// no-op
+	// 空操作
 }
 
 // IsActive 返回 false（本地订阅永远不活跃）。
