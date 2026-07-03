@@ -15,7 +15,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -31,7 +31,7 @@ type Controller struct {
 	// card Agent 身份元数据
 	card *agentschema.AgentCard
 	// abilityMgr 能力管理器
-	abilityMgr *ability.AbilityManager
+	abilityMgr agentinterfaces.AbilityManagerInterface
 	// config 控制器配置
 	config *config.ControllerConfig
 	// contextEngine 上下文引擎
@@ -73,7 +73,7 @@ func NewController() *Controller {
 func (c *Controller) Init(
 	card *agentschema.AgentCard,
 	cfg *config.ControllerConfig,
-	abilityMgr *ability.AbilityManager,
+	abilityMgr agentinterfaces.AbilityManagerInterface,
 	contextEngine iface.ContextEngine,
 ) {
 	c.card = card
@@ -442,13 +442,13 @@ func (c *Controller) SetContextEngine(ce iface.ContextEngine) {
 
 // AbilityManager 获取能力管理器。
 // 对应 Python: Controller.ability_manager (property getter)
-func (c *Controller) AbilityManager() *ability.AbilityManager {
+func (c *Controller) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return c.abilityMgr
 }
 
 // SetAbilityManager 设置能力管理器。
 // 对应 Python: Controller.ability_manager (property setter)
-func (c *Controller) SetAbilityManager(am *ability.AbilityManager) {
+func (c *Controller) SetAbilityManager(am agentinterfaces.AbilityManagerInterface) {
 	c.abilityMgr = am
 }
 

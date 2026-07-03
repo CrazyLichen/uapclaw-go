@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -37,7 +37,7 @@ type TaskExecutorDependencies struct {
 	// Config 配置
 	Config *config.ControllerConfig
 	// AbilityMgr 能力管理器
-	AbilityMgr *ability.AbilityManager
+	AbilityMgr agentinterfaces.AbilityManagerInterface
 	// ContextEngine 上下文引擎
 	ContextEngine iface.ContextEngine
 	// TaskManager 任务管理器（同包前向引用）

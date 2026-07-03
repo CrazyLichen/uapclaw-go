@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -29,7 +29,7 @@ type TaskScheduler struct {
 	// contextEngine 上下文引擎
 	contextEngine any // iface.ContextEngine，用 any 避免循环依赖
 	// abilityMgr 能力管理器
-	abilityMgr *ability.AbilityManager
+	abilityMgr agentinterfaces.AbilityManagerInterface
 	// eventQueue 事件队列
 	eventQueue *EventQueue
 	// taskExecutorRegistry 任务执行器注册表
@@ -82,7 +82,7 @@ func NewTaskScheduler(
 	cfg *config.ControllerConfig,
 	taskManager *TaskManager,
 	contextEngine any,
-	abilityMgr *ability.AbilityManager,
+	abilityMgr agentinterfaces.AbilityManagerInterface,
 	eventQueue *EventQueue,
 	card any,
 ) *TaskScheduler {
