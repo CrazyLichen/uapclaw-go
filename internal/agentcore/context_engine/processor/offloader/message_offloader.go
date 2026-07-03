@@ -220,6 +220,7 @@ func (c *MessageOffloaderConfig) applyDefaults() {
 	// 注意：Go 零值为 false，但 Python 默认 true
 	// 调用方应显式设置；此处不强制覆盖
 }
+
 // offloadLargeMessages 遍历卸载范围，逐条卸载大消息。
 //
 // 对应 Python: MessageOffloader._offload_large_messages()

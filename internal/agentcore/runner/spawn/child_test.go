@@ -509,8 +509,8 @@ func (a *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...interfa
 	close(ch)
 	return ch, nil
 }
-func (a *stubBaseAgent) Card() *agentschema.AgentCard   { return a.card }
-func (a *stubBaseAgent) Config() interfaces.AgentConfig { return nil }
+func (a *stubBaseAgent) Card() *agentschema.AgentCard                       { return a.card }
+func (a *stubBaseAgent) Config() interfaces.AgentConfig                     { return nil }
 func (a *stubBaseAgent) AbilityManager() interfaces.AbilityManagerInterface { return nil }
 func (a *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
 	return rail.NewAgentCallbackManager("")

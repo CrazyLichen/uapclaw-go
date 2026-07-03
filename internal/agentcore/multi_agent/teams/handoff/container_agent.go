@@ -535,7 +535,8 @@ func (c *ContainerAgent) writeResultToStream(ctx context.Context, result any, te
 // 有则调用 SaveContexts 持久化，无则跳过。
 //
 // 对应 Python: ContainerAgent._save_agent_context(target_agent, agent_session)
-//             context_engine = getattr(target_agent, "context_engine", None)
+//
+//	context_engine = getattr(target_agent, "context_engine", None)
 func (c *ContainerAgent) saveAgentContext(ctx context.Context, targetAgent agentinterfaces.BaseAgent, agentSession *session.Session) {
 	if targetAgent == nil || agentSession == nil {
 		return
@@ -774,4 +775,3 @@ func msgKey(msg any) string {
 
 	return role + ":" + content + ":" + toolCallsStr + ":" + toolCallID
 }
-

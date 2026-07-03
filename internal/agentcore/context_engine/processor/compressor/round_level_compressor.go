@@ -478,6 +478,7 @@ func (rlc *RoundLevelCompressor) compressUntilTarget(
 	// 第五级：硬截断
 	return rlc.truncateToTarget(working, mc, systemMessages, tools), nil
 }
+
 // runRecursiveCompression 递归压缩，先压缩 L0 原始块，再逐步合并同级别记忆块。
 //
 // 对应 Python: RoundLevelCompressor._run_recursive_compression()

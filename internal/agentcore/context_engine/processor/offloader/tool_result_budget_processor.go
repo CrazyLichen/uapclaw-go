@@ -233,6 +233,7 @@ func (c *ToolResultBudgetProcessorConfig) applyDefaults() {
 		c.OffloadMessageTypes = []string{"tool"}
 	}
 }
+
 // iterRoundRanges 调用 FindAllDialogueRound，将 DialogueRound 转为 [2]int 范围。
 //
 // assistantIdx 为 nil 时用 len(messages)-1 作为轮次结束索引。

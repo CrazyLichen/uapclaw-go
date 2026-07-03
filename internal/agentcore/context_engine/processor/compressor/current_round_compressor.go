@@ -1061,6 +1061,7 @@ func (crc *CurrentRoundCompressor) getModelName() string {
 	}
 	return ""
 }
+
 // init 自动注册到 context_engine 注册表
 func init() {
 	context_engine.RegisterProcessorFactory("CurrentRoundCompressor",
