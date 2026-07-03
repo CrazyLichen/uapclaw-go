@@ -409,6 +409,11 @@ func (tr *TeamRuntime) SetP2PTimeout(timeout float64) {
 	tr.p2pTimeout = timeout
 }
 
+// GetP2PTimeout 获取 P2P 超时秒数。
+func (tr *TeamRuntime) GetP2PTimeout() float64 {
+	return tr.p2pTimeout
+}
+
 // IsRunning 返回运行时是否已启动。
 func (tr *TeamRuntime) IsRunning() bool {
 	tr.mu.RLock()
