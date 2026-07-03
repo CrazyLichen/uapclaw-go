@@ -93,8 +93,7 @@ func (a *ReActAgent) Config() interfaces.AgentConfig {
 
 // AbilityManager 返回能力管理器。
 // 对齐 Python: BaseAgent.ability_manager 属性
-// 返回 any，调用方通过类型断言获取 *ability.AbilityManager。
-func (a *ReActAgent) AbilityManager() any {
+func (a *ReActAgent) AbilityManager() interfaces.AbilityManagerInterface {
 	return a.abilityManager
 }
 

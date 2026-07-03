@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
@@ -27,7 +28,7 @@ type ReActAgent struct {
 	// card Agent 身份卡片
 	card *agentschema.AgentCard
 	// abilityManager 能力管理器
-	abilityManager *ability.AbilityManager
+	abilityManager interfaces.AbilityManagerInterface
 	// callbackManager 回调管理器
 	callbackManager *rail.AgentCallbackManager
 	// config Agent 配置

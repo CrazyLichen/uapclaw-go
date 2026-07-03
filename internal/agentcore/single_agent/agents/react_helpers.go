@@ -8,7 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -94,11 +94,16 @@ func (a *ReActAgent) getTools() ([]*cschema.ToolInfo, error) {
 }
 
 // getAbilityManager 返回能力管理器。
-func (a *ReActAgent) getAbilityManager() *ability.AbilityManager {
+func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {
 	if a.abilityManager == nil {
 		return nil
 	}
 	return a.abilityManager
+}
+
+// SetAbilityManager 设置能力管理器，允许外部注入自定义实现。
+func (a *ReActAgent) SetAbilityManager(am interfaces.AbilityManagerInterface) {
+	a.abilityManager = am
 }
 
 // saveContexts 保存上下文。

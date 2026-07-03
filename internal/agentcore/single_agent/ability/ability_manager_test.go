@@ -483,11 +483,9 @@ func (f *fakeAgent) Card() *agentschema.AgentCard { return nil }
 
 func (f *fakeAgent) Config() interfaces.AgentConfig { return nil }
 
-func (f *fakeAgent) AbilityManager() any { return nil }
+func (f *fakeAgent) AbilityManager() interfaces.AbilityManagerInterface { return nil }
 
 func (f *fakeAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
-
-func (f *fakeAgent) AgentID() string { return "" }
 
 func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
 	return nil
