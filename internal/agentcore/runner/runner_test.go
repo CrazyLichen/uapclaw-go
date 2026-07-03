@@ -49,7 +49,7 @@ func (m *mockAgent) Config() interfaces.AgentConfig {
 	return nil
 }
 
-func (m *mockAgent) AbilityManager() any {
+func (m *mockAgent) AbilityManager() interfaces.AbilityManagerInterface {
 	return nil
 }
 

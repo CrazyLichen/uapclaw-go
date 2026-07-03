@@ -511,7 +511,7 @@ func (a *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...interfa
 }
 func (a *stubBaseAgent) Card() *agentschema.AgentCard   { return a.card }
 func (a *stubBaseAgent) Config() interfaces.AgentConfig { return nil }
-func (a *stubBaseAgent) AbilityManager() any            { return nil }
+func (a *stubBaseAgent) AbilityManager() interfaces.AbilityManagerInterface { return nil }
 func (a *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
 	return rail.NewAgentCallbackManager("")
 }

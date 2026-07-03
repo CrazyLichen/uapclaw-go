@@ -69,7 +69,7 @@ func (s *stubBaseAgent) Config() sainterfaces.AgentConfig {
 	return nil
 }
 
-func (s *stubBaseAgent) AbilityManager() any {
+func (s *stubBaseAgent) AbilityManager() sainterfaces.AbilityManagerInterface {
 	return nil
 }
 
