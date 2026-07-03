@@ -28,7 +28,7 @@ type SupervisorAgent struct {
 	// CommunicableAgent 嵌入：Send/Publish/Subscribe/Unsubscribe/Runtime/BindRuntime
 	team_runtime.CommunicableAgent
 	// ReActAgent 嵌入：Invoke/Stream/Card/Configure/AgentID/...
-	agents.ReActAgent
+	*agents.ReActAgent
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -60,7 +60,7 @@ func NewSupervisorAgent(
 
 	supervisor := &SupervisorAgent{
 		CommunicableAgent: *team_runtime.NewCommunicableAgent(),
-		ReActAgent:        *react,
+		ReActAgent:        react,
 	}
 
 	if maxParallelSubAgents < 1 {
@@ -158,7 +158,7 @@ func Create(
 //
 // 对应 Python: SupervisorAgent.register_sub_agent_card(card)
 func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
-	am := s.ReActAgent.AbilityManager()
+	am := s.AbilityManager()
 	if am != nil {
 		am.Add(card)
 	}

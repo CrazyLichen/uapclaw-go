@@ -148,7 +148,7 @@ func (m *P2PAbilityManager) Execute(
 //
 // 通过 AbilityKind() 判断，不依赖 AbilityManager 的私有 agents map。
 func (m *P2PAbilityManager) IsAgent(name string) bool {
-	a := m.AbilityManager.Get(name)
+	a := m.Get(name)
 	if a == nil {
 		return false
 	}
@@ -186,7 +186,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	}
 
 	// 获取 AgentCard
-	abilityCard := m.AbilityManager.Get(toolName)
+	abilityCard := m.Get(toolName)
 	agentCard, ok := abilityCard.(*agentschema.AgentCard)
 	if !ok || agentCard == nil {
 		return agentschema.ExecuteResult{}, fmt.Errorf("未找到 Agent 能力: %s", toolName)

@@ -47,7 +47,7 @@ func TestNewSupervisorAgent_最小并行数(t *testing.T) {
 	}
 
 	// 验证 AbilityManager 已设置
-	am := supervisor.ReActAgent.AbilityManager()
+	am := supervisor.AbilityManager()
 	if am == nil {
 		t.Fatal("期望 AbilityManager 非空")
 	}
@@ -69,7 +69,7 @@ func TestSupervisorAgent_RegisterSubAgentCard(t *testing.T) {
 	supervisor.RegisterSubAgentCard(subCard)
 
 	// 验证子 Agent 已注册：通过 AbilityManager 的 Get 判断
-	am := supervisor.ReActAgent.AbilityManager()
+	am := supervisor.AbilityManager()
 	if am == nil {
 		t.Fatal("期望 AbilityManager 非空")
 	}
@@ -101,7 +101,7 @@ func TestSupervisorAgent_RegisterSubAgentCard_多个(t *testing.T) {
 	}
 
 	// 验证 AbilityManager 非空
-	am := supervisor.ReActAgent.AbilityManager()
+	am := supervisor.AbilityManager()
 	if am == nil {
 		t.Fatal("期望 AbilityManager 非空")
 	}
@@ -176,7 +176,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	// 验证子 Agent 已注册到 AbilityManager
-	am := sup.ReActAgent.AbilityManager()
+	am := sup.AbilityManager()
 	if am == nil {
 		t.Fatal("期望 AbilityManager 非空")
 	}

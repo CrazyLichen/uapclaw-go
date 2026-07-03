@@ -52,7 +52,7 @@ func TestP2PAbilityManager_Execute_无Agent调用(t *testing.T) {
 
 	// 添加一个普通工具（非 Agent），使 fast path 生效
 	toolCard := tool.NewToolCard("test_tool", "test tool", nil, nil)
-	m.AbilityManager.Add(toolCard)
+	m.Add(toolCard)
 
 	// 构造 toolCalls
 	toolCalls := []*llmschema.ToolCall{
@@ -76,7 +76,7 @@ func TestP2PAbilityManager_IsAgent(t *testing.T) {
 		schema.WithName("sub_agent"),
 		schema.WithID("sub_agent_id"),
 	)
-	m.AbilityManager.Add(agentCard)
+	m.Add(agentCard)
 
 	if !m.IsAgent("sub_agent") {
 		t.Error("期望 IsAgent('sub_agent') = true")
@@ -96,7 +96,7 @@ func TestP2PAbilityManager_Execute_纯Agent调用(t *testing.T) {
 		schema.WithName("sub_agent"),
 		schema.WithID("sub_agent_id"),
 	)
-	m.AbilityManager.Add(agentCard)
+	m.Add(agentCard)
 
 	toolCalls := []*llmschema.ToolCall{
 		{Name: "sub_agent", ID: "tc1", Arguments: `{"query": "hello"}`},
@@ -123,10 +123,10 @@ func TestP2PAbilityManager_Execute_混合调用(t *testing.T) {
 		schema.WithName("sub_agent"),
 		schema.WithID("sub_agent_id"),
 	)
-	m.AbilityManager.Add(agentCard)
+	m.Add(agentCard)
 
 	toolCard := tool.NewToolCard("test_tool", "test tool", nil, nil)
-	m.AbilityManager.Add(toolCard)
+	m.Add(toolCard)
 
 	toolCalls := []*llmschema.ToolCall{
 		{Name: "sub_agent", ID: "tc1", Arguments: `{"query": "hello"}`},
@@ -151,7 +151,7 @@ func TestP2PAbilityManager_Execute_并行限流(t *testing.T) {
 			schema.WithName(fmt.Sprintf("agent_%d", i)),
 			schema.WithID(fmt.Sprintf("agent_id_%d", i)),
 		)
-		m.AbilityManager.Add(agentCard)
+		m.Add(agentCard)
 	}
 
 	toolCalls := []*llmschema.ToolCall{
