@@ -239,15 +239,6 @@ func (am *AbilityManager) List() []schema.Ability {
 	return abilities
 }
 
-// IsAgent 判断指定名称的能力是否为 Agent 类型。
-func (am *AbilityManager) IsAgent(name string) bool {
-	am.mu.RLock()
-	defer am.mu.RUnlock()
-
-	_, ok := am.agents[name]
-	return ok
-}
-
 // ReorderTools 按给定名称顺序重排 tools 注册表。
 func (am *AbilityManager) ReorderTools(orderedNames []string) {
 	am.mu.Lock()

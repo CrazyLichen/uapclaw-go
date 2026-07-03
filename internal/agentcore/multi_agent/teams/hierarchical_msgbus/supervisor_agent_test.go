@@ -3,7 +3,6 @@ package hierarchical_msgbus
 import (
 	"testing"
 
-	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -47,13 +46,18 @@ func TestSupervisorAgent_RegisterSubAgentCard(t *testing.T) {
 	)
 	supervisor.RegisterSubAgentCard(subCard)
 
-	// 验证子 Agent 已注册
+	// 验证子 Agent 已注册：通过 P2PAbilityManager 的 IsAgent 判断
 	am := supervisor.ReActAgent.AbilityManager()
 	if am == nil {
 		t.Fatal("期望 AbilityManager 非空")
 	}
-	if !am.IsAgent("sub_agent") {
-		t.Error("期望 IsAgent('sub_agent') = true")
+	// 获取能力并验证类型
+	ability := am.Get("sub_agent")
+	if ability == nil {
+		t.Error("期望 Get('sub_agent') 非空")
+	}
+	if ability.AbilityKind() != cschema.AbilityKindAgent {
+		t.Errorf("期望 AbilityKind = AbilityKindAgent, 实际 = %v", ability.AbilityKind())
 	}
 }
 
@@ -65,7 +69,7 @@ func TestSupervisorAgent_满足BaseAgent接口(t *testing.T) {
 
 // TestSupervisorAgent_满足Communicable接口 编译时接口检查。
 func TestSupervisorAgent_满足Communicable接口(t *testing.T) {
-	var _ maschema.Communicable = (*SupervisorAgent)(nil)
+	var _ team_runtime.Communicable = (*SupervisorAgent)(nil)
 	t.Log("SupervisorAgent 满足 Communicable 接口")
 }
 

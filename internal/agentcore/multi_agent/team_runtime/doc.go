@@ -13,14 +13,15 @@
 // 文件目录：
 //
 //	team_runtime/
-//	├── doc.go                # 包文档
-//	├── envelope.go           # MessageEnvelope 消息信封
-//	├── subscription_manager.go # SubscriptionManager 订阅管理器
-//	├── message_router.go     # MessageRouter 消息路由器
-//	├── message_bus.go        # MessageBus + MessageBusConfig 消息总线
-//	├── team_runtime.go       # TeamRuntime + RuntimeConfig 团队运行时
-//	├── runtime_bindable.go   # RuntimeBindable 接口
-//	└── communicable_agent.go # CommunicableAgent 可通信 Agent 实现
+//	├── doc.go                      # 包文档
+//	├── envelope.go                 # MessageEnvelope 消息信封
+//	├── subscription_manager.go     # SubscriptionManager 订阅管理器
+//	├── message_router.go           # MessageRouter 消息路由器
+//	├── message_bus.go              # MessageBus + MessageBusConfig 消息总线
+//	├── team_runtime.go             # TeamRuntime + RuntimeConfig 团队运行时
+//	├── runtime_bindable.go         # RuntimeBindable 接口
+//	├── communicable_interface.go   # Communicable 可通信接口（P2P/Pub-Sub + Runtime）
+//	└── communicable_agent.go       # CommunicableAgent 可通信 Agent 实现
 //
 // 对应 Python 代码：openjiuwen/core/multi_agent/team_runtime/
 package team_runtime

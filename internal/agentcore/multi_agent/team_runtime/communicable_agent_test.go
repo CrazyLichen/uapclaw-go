@@ -3,8 +3,6 @@ package team_runtime
 import (
 	"context"
 	"testing"
-
-	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -237,7 +235,7 @@ func TestCommunicableAgent_Unsubscribe(t *testing.T) {
 
 // TestCommunicableAgent_接口满足 测试编译时接口满足
 func TestCommunicableAgent_接口满足(t *testing.T) {
-	var _ maschema.Communicable = (*CommunicableAgent)(nil)
+	var _ Communicable = (*CommunicableAgent)(nil)
 	var _ RuntimeBindable = (*CommunicableAgent)(nil)
 }
 

@@ -34,8 +34,6 @@ type AbilityManagerInterface interface {
 	Get(name string) schema.Ability
 	// List 列出所有已注册能力。
 	List() []schema.Ability
-	// IsAgent 判断指定名称的能力是否为 Agent 类型。
-	IsAgent(name string) bool
 	// ListToolInfo 列出工具信息供 LLM 使用。
 	ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]*schema.ToolInfo, error)
 	// Execute 执行工具调用。

@@ -7,11 +7,14 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,8 +29,8 @@ import (
 type P2PAbilityManager struct {
 	// AbilityManager 嵌入：Add/Remove/Get/List/ListToolInfo 等
 	ability.AbilityManager
-	// supervisor 持有：用于 P2P send
-	supervisor *SupervisorAgent
+	// supervisor 持有：用于 P2P send（Communicable 接口）
+	supervisor team_runtime.Communicable
 	// maxParallel 最大并行子 Agent 派发数
 	maxParallel int
 	// timeout P2P 超时秒数（构造时传入）
@@ -42,13 +45,13 @@ type P2PAbilityManager struct {
 
 const (
 	// p2pLogComponent 日志组件标识
-	p2pLogComponent = logger.ComponentChannel
+	p2pLogComponent = cschema.ComponentChannel
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewP2PAbilityManager 创建 P2PAbilityManager 实例。
-func NewP2PAbilityManager(supervisor *SupervisorAgent, maxParallel int, timeout float64) *P2PAbilityManager {
+func NewP2PAbilityManager(supervisor team_runtime.Communicable, maxParallel int, timeout float64) *P2PAbilityManager {
 	if maxParallel < 1 {
 		maxParallel = 1
 	}
@@ -78,7 +81,7 @@ func (m *P2PAbilityManager) Execute(
 	agentIndices := make([]int, 0)
 	otherIndices := make([]int, 0)
 	for i, tc := range toolCalls {
-		if m.AbilityManager.IsAgent(tc.Name) {
+		if m.IsAgent(tc.Name) {
 			agentIndices = append(agentIndices, i)
 		} else {
 			otherIndices = append(otherIndices, i)
@@ -131,7 +134,7 @@ func (m *P2PAbilityManager) Execute(
 
 	wg.Wait()
 
-	logger.Debug(p2pLogComponent).
+	cschema.Debug(p2pLogComponent).
 		Str("action", "p2p_execute").
 		Int("agent_calls", len(agentIndices)).
 		Int("other_calls", len(otherIndices)).
@@ -141,9 +144,15 @@ func (m *P2PAbilityManager) Execute(
 	return results
 }
 
-// IsAgent 委托嵌入的 AbilityManager.IsAgent。
+// IsAgent 判断指定名称的能力是否为 Agent 类型。
+//
+// 通过 AbilityKind() 判断，不依赖 AbilityManager 的私有 agents map。
 func (m *P2PAbilityManager) IsAgent(name string) bool {
-	return m.AbilityManager.IsAgent(name)
+	a := m.AbilityManager.Get(name)
+	if a == nil {
+		return false
+	}
+	return a.AbilityKind() == schema.AbilityKindAgent
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -186,7 +195,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	// 获取超时：优先使用 runtime 的 p2pTimeout，其次使用构造时传入的 timeout
 	timeout := m.timeout
 	if m.supervisor != nil {
-		rt := m.supervisor.CommunicableAgent.Runtime()
+		rt := m.supervisor.Runtime()
 		if rt != nil {
 			rtTimeout := rt.GetP2PTimeout()
 			if rtTimeout > 0 {
@@ -195,7 +204,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 		}
 	}
 
-	logger.Debug(p2pLogComponent).
+	cschema.Debug(p2pLogComponent).
 		Str("action", "p2p_dispatch").
 		Str("tool_name", toolName).
 		Str("agent_id", agentCard.ID).
@@ -209,7 +218,7 @@ func (m *P2PAbilityManager) executeSingleP2P(
 		maschema.WithTeamTimeout(timeout),
 	)
 	if err != nil {
-		logger.Warn(p2pLogComponent).
+		cschema.Warn(p2pLogComponent).
 			Str("action", "p2p_dispatch_failed").
 			Str("tool_name", toolName).
 			Err(err).
@@ -224,7 +233,14 @@ func (m *P2PAbilityManager) executeSingleP2P(
 }
 
 // errorToP2PResult 将 error 转换为 ExecuteResult（P2P 派发失败）。
+//
+// 使用 AbilityExecutionError 包装，与 AbilityManager 的错误路径保持一致。
 func errorToP2PResult(err error, toolCallID string) agentschema.ExecuteResult {
-	toolMsg := llmschema.NewToolMessage(toolCallID, err.Error())
-	return agentschema.ExecuteResult{Result: err, ToolMsg: toolMsg}
+	execErr := ability.NewAbilityExecutionError(
+		exception.StatusAbilityExecutionError,
+		toolCallID,
+		err.Error(),
+		exception.WithCause(err),
+	)
+	return agentschema.ExecuteResult{Result: execErr, ToolMsg: execErr.ToolMessage}
 }

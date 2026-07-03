@@ -13,7 +13,7 @@ import (
 // CommunicableAgent 可通信 Agent 实现，嵌入 Agent 结构体获得 P2P/Pub-Sub 通信能力。
 //
 // Agent 通过组合此结构体，在 BindRuntime 被调用后即可使用 Send/Publish/Subscribe/Unsubscribe。
-// 外部通过类型断言 agent.(schema.Communicable) 获取通信接口。
+// 外部通过类型断言 agent.(Communicable) 获取通信接口。
 //
 // 对应 Python: CommunicableAgent (openjiuwen/core/multi_agent/team_runtime/communicable_agent.py)
 type CommunicableAgent struct {
@@ -28,8 +28,8 @@ type CommunicableAgent struct {
 // errRuntimeNotBound 运行时未绑定错误
 var errRuntimeNotBound = fmt.Errorf("运行时未绑定，请先调用 BindRuntime")
 
-// 编译时验证 CommunicableAgent 满足 schema.Communicable 接口
-var _ maschema.Communicable = (*CommunicableAgent)(nil)
+// 编译时验证 CommunicableAgent 满足 Communicable 接口
+var _ Communicable = (*CommunicableAgent)(nil)
 
 // 编译时验证 CommunicableAgent 满足 RuntimeBindable 接口
 var _ RuntimeBindable = (*CommunicableAgent)(nil)
@@ -73,7 +73,7 @@ func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
 }
 
 // Send P2P 发送消息到指定接收者，等待响应。
-// 实现 schema.Communicable 接口。
+// 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.send(message, recipient, opts)
 func (c *CommunicableAgent) Send(ctx context.Context, message any, recipient string, opts ...maschema.TeamOption) (any, error) {
@@ -84,7 +84,7 @@ func (c *CommunicableAgent) Send(ctx context.Context, message any, recipient str
 }
 
 // Publish Pub-Sub 发布消息到指定主题，发后即忘。
-// 实现 schema.Communicable 接口。
+// 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.publish(message, topic_id, opts)
 func (c *CommunicableAgent) Publish(ctx context.Context, message any, topicID string, opts ...maschema.TeamOption) error {
@@ -95,7 +95,7 @@ func (c *CommunicableAgent) Publish(ctx context.Context, message any, topicID st
 }
 
 // Subscribe 订阅主题。
-// 实现 schema.Communicable 接口。
+// 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.subscribe(topic)
 func (c *CommunicableAgent) Subscribe(ctx context.Context, topic string) error {
@@ -106,7 +106,7 @@ func (c *CommunicableAgent) Subscribe(ctx context.Context, topic string) error {
 }
 
 // Unsubscribe 取消订阅主题。
-// 实现 schema.Communicable 接口。
+// 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.unsubscribe(topic)
 func (c *CommunicableAgent) Unsubscribe(ctx context.Context, topic string) error {

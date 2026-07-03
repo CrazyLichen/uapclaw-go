@@ -346,11 +346,6 @@ func (t *HierarchicalTeam) Config() *maschema.TeamConfig {
 	return &t.config.TeamConfig
 }
 
-// GetRuntime 返回团队运行时。
-func (t *HierarchicalTeam) GetRuntime() *team_runtime.TeamRuntime {
-	return t.runtime
-}
-
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // assertReady 校验团队就绪状态。

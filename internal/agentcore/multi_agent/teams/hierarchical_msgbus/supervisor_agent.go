@@ -43,6 +43,9 @@ const (
 // 编译时验证 SupervisorAgent 满足 BaseAgent 接口
 var _ agentinterfaces.BaseAgent = (*SupervisorAgent)(nil)
 
+// 编译时验证 SupervisorAgent 满足 Communicable 接口
+var _ team_runtime.Communicable = (*SupervisorAgent)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSupervisorAgent 创建 SupervisorAgent 实例。
