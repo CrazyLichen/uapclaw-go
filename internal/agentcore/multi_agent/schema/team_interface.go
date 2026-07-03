@@ -125,6 +125,11 @@ type TeamOptions struct {
 	//
 	// 对应 Python: stream 的 stream_modes 参数
 	StreamModes []stream.StreamMode
+	// ParentAgentID 父 Agent ID，用于 HierarchicalToolsTeam 的层级注册。
+	//
+	// 在 AddAgent 时通过 WithParentAgentID() Option 传递，
+	// 声明当前 Agent 是哪个父 Agent 的子工具。
+	ParentAgentID string
 }
 
 // TeamConfig 团队运行时配置，控制团队的最大 Agent 数、并发数和超时。
@@ -201,6 +206,17 @@ func WithTeamTimeout(timeout float64) TeamOption {
 // WithTeamStreamModes 设置流式输出模式。
 func WithTeamStreamModes(modes []stream.StreamMode) TeamOption {
 	return func(o *TeamOptions) { o.StreamModes = modes }
+}
+
+// WithParentAgentID 设置父 Agent ID。
+//
+// 用于 HierarchicalToolsTeam.AddAgent() 时声明父子关系：
+//
+//	team.AddAgent(ctx, childCard, childProvider,
+//	    maschema.WithParentAgentID("parent_agent_id"),
+//	)
+func WithParentAgentID(parentID string) TeamOption {
+	return func(o *TeamOptions) { o.ParentAgentID = parentID }
 }
 
 // NewTeamOptions 从选项列表构建 TeamOptions。
