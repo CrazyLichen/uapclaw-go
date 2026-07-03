@@ -16,9 +16,6 @@ func TestCommunicableAgent_BindRuntime(t *testing.T) {
 		if c.Runtime() != nil {
 			t.Error("初始 Runtime 应为 nil")
 		}
-		if c.AgentID() != "" {
-			t.Error("初始 AgentID 应为空")
-		}
 		if c.IsBound() {
 			t.Error("初始 IsBound 应为 false")
 		}
@@ -28,9 +25,6 @@ func TestCommunicableAgent_BindRuntime(t *testing.T) {
 
 		if c.Runtime() != runtime {
 			t.Error("Runtime 绑定失败")
-		}
-		if c.AgentID() != "agent-1" {
-			t.Errorf("AgentID = %q, want %q", c.AgentID(), "agent-1")
 		}
 		if !c.IsBound() {
 			t.Error("绑定后 IsBound 应为 true")
@@ -85,9 +79,6 @@ func TestCommunicableAgent_BindRuntime_幂等绑定(t *testing.T) {
 	if c.Runtime() != runtime {
 		t.Error("幂等绑定后 Runtime 应不变")
 	}
-	if c.AgentID() != "agent-1" {
-		t.Error("幂等绑定后 AgentID 应不变")
-	}
 	if !c.IsBound() {
 		t.Error("幂等绑定后 IsBound 应为 true")
 	}
@@ -106,8 +97,8 @@ func TestCommunicableAgent_BindRuntime_重绑定(t *testing.T) {
 	if c.Runtime() != runtime2 {
 		t.Error("重绑定后 Runtime 应为新值")
 	}
-	if c.AgentID() != "agent-2" {
-		t.Error("重绑定后 AgentID 应为新值")
+	if !c.IsBound() {
+		t.Error("重绑定后 IsBound 应为 true")
 	}
 }
 
@@ -120,8 +111,8 @@ func TestCommunicableAgent_BindRuntime_相同runtime不同agentID(t *testing.T) 
 	// 相同 runtime 但不同 agentID — 应覆盖并记录 warning
 	c.BindRuntime(runtime, "agent-2")
 
-	if c.AgentID() != "agent-2" {
-		t.Error("重绑定后 AgentID 应为新值")
+	if !c.IsBound() {
+		t.Error("重绑定后 IsBound 应为 true")
 	}
 }
 

@@ -120,8 +120,3 @@ func (c *CommunicableAgent) Unsubscribe(ctx context.Context, topic string) error
 func (c *CommunicableAgent) Runtime() *TeamRuntime {
 	return c.runtime
 }
-
-// AgentID 返回 Agent 标识。
-func (c *CommunicableAgent) AgentID() string {
-	return c.agentID
-}
