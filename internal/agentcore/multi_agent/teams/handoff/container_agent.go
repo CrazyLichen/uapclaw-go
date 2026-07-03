@@ -16,7 +16,6 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -111,7 +110,7 @@ func (c *ContainerAgent) Config() agentinterfaces.AgentConfig {
 
 // AbilityManager 返回 nil（ContainerAgent 不直接管理能力）。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) AbilityManager() any {
+func (c *ContainerAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return nil
 }
 
@@ -390,16 +389,8 @@ func (c *ContainerAgent) injectToolsOnce(_ context.Context, targetAgent agentint
 	c.toolsInjected = true
 
 	// 注入到 AbilityManager
-	abilityMgrAny := targetAgent.AbilityManager()
-	if abilityMgrAny == nil {
-		return
-	}
-	abilityMgr, ok := abilityMgrAny.(*ability.AbilityManager)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("action", "inject_tools_once").
-			Str("agent_id", targetAgent.Card().ID).
-			Msg("目标 Agent 的 AbilityManager 类型断言失败")
+	abilityMgr := targetAgent.AbilityManager()
+	if abilityMgr == nil {
 		return
 	}
 
