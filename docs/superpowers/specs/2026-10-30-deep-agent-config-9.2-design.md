@@ -589,3 +589,37 @@ internal/agentcore/
 │       ├── registry.go                     # 注册表 + 发现
 │       └── registry_test.go
 ```
+
+### 六、回填标注总表
+
+所有 ⤵️ 回填点在代码中已标注，便于后续章节实现时搜索定位。
+
+**待回填（⤵️）：**
+
+| 标注位置 | ⤵️ 章节 | 回填目标 | 当前类型/实现 |
+|----------|---------|----------|--------------|
+| `harness/schema/config.go` SingleAgentConfig.Backend | 9.3 | BackendProtocol 接口 | `any` |
+| `harness/schema/config.go` DeepAgentConfig.Backend | 9.3 | BackendProtocol 接口 | `any` |
+| `harness/schema/config.go` DeepAgentConfig.PermissionHost | 9.1 | PermissionHostCallback 接口 | `any` |
+| `harness/harness_config/builder.go` Build | 9.3 | create_deep_agent 调用 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveBuiltinTools | 9.38 | 内置工具实例化 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveTools "package" | 9.38 | 包级工具加载 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveTools "entry_point" | 9.38 | entry_point 工具加载 | 返回 error 桩 |
+| `harness/harness_config/builder.go` createSysOperation | 9.32 | LocalSysOperation 创建 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveRails "builtin" | 9.19-9.24 | 内置 Rail 实例化 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveRails "package" | 9.19-9.24 | 包级 Rail 加载 | 返回 error 桩 |
+| `harness/harness_config/builder.go` resolveRails "entry_point" | 9.19-9.24 | entry_point Rail 加载 | 返回 error 桩 |
+| `runner/resources_manager/resource_manager.go` RemoveSysOperation | 9.32 | 关联工具清理逻辑 | 缺少清理步骤 |
+| `runner/resources_manager/resource_manager.go` GetSysOpToolCards | 9.32 | SysOperation 工具卡片获取 | 返回 error 桩 |
+| `runner/resources_manager/resource_manager.go` registerSysOperationTools | 9.32 | SysOperation 工具自动注册 | 空实现 |
+
+**已完成回填（✅）：**
+
+| 回填点 | 原类型 | 新类型 | 文件 |
+|--------|--------|--------|------|
+| SysOperation 字段 | `any` | `sysop.SysOperation` | context_engine/interface/types.go, processor.go, engine.go, context/message_buffer.go, context/session_model_context.go, processor/offloader/tool_result_budget_processor.go |
+| Workspace 字段 | `any` | `*hworkspace.Workspace` | context_engine/interface/types.go, engine.go, context/session_model_context.go, single_agent/config/agent_config.go |
+| GetSysOperation 返回 | `[]any` | `[]sysop.SysOperation` | runner/resources_manager/resource_manager.go |
+| writeOffloadToFile 优先路径 | `os.WriteFile` | SysOperation.Fs().WriteFile() 优先 | context_engine/processor/offload.go |
+| PromptMode 过滤 | 无 | FULL/MINIMAL/NONE 过滤逻辑 | single_agent/prompts/builder.go |
+| SysOperationMgr 方法 | error 桩 | 完整实现（Add/Remove/Get） | runner/resources_manager/sys_operation_manager.go |
