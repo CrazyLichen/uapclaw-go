@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -300,4 +301,56 @@ func TestCreate_NilAgentInListPanic(t *testing.T) {
 	}()
 
 	Create([]*agentschema.AgentCard{nil}, nil, nil, supervisorCard, "", 5, 3)
+}
+
+// ──────────────────────────── Configure 测试 ────────────────────────────
+
+// TestSupervisorAgent_Configure_ReActAgentConfig 验证 ReActAgentConfig 类型时 Configure 生效。
+func TestSupervisorAgent_Configure_ReActAgentConfig(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		cschema.WithName("supervisor"),
+		cschema.WithID("sup-configure"),
+	)
+	sup := NewSupervisorAgent(card, nil, 5)
+
+	cfg := saconfig.NewReActAgentConfig(saconfig.WithModelName("test-model"))
+	err := sup.Configure(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Configure 返回错误: %v", err)
+	}
+}
+
+// TestSupervisorAgent_Configure_非ReActAgentConfig 验证非 ReActAgentConfig 类型时 no-op。
+func TestSupervisorAgent_Configure_非ReActAgentConfig(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		cschema.WithName("supervisor"),
+		cschema.WithID("sup-noop"),
+	)
+	sup := NewSupervisorAgent(card, nil, 5)
+
+	err := sup.Configure(context.Background(), &mockAgentConfig{})
+	if err != nil {
+		t.Fatalf("Configure 非 ReActAgentConfig 应返回 nil，got: %v", err)
+	}
+}
+
+// mockAgentConfig 用于测试 Configure 的 no-op 路径
+type mockAgentConfig struct{}
+
+func (m *mockAgentConfig) ModelName() string                                  { return "" }
+func (m *mockAgentConfig) MemScopeID() string                                 { return "" }
+func (m *mockAgentConfig) GetContextEngineConfig() ceschema.ContextEngineConfig { return ceschema.ContextEngineConfig{} }
+func (m *mockAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig  { return nil }
+func (m *mockAgentConfig) Validate() error                                    { return nil }
+
+// TestNewSupervisorAgent_Config为nil 验证 config=nil 时正常创建。
+func TestNewSupervisorAgent_Config为nil(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		cschema.WithName("supervisor"),
+		cschema.WithID("sup-nil-cfg"),
+	)
+	sup := NewSupervisorAgent(card, nil, 5)
+	if sup == nil {
+		t.Fatal("NewSupervisorAgent(card, nil) 返回 nil")
+	}
 }

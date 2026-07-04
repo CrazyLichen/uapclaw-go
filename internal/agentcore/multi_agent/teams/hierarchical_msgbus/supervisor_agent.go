@@ -56,7 +56,13 @@ func NewSupervisorAgent(
 	config *saconfig.ReActAgentConfig,
 	maxParallelSubAgents int,
 ) *SupervisorAgent {
-	react := agents.NewReActAgent(card, config)
+	// 对齐 Python: super().__init__(card=card)，先创建默认实例
+	react := agents.NewReActAgent(card, nil)
+
+	// 对齐 Python: if config is not None: ReActAgent.configure(self, config)
+	if config != nil {
+		_ = react.Configure(context.Background(), config)
+	}
 
 	supervisor := &SupervisorAgent{
 		CommunicableAgent: *team_runtime.NewCommunicableAgent(),
@@ -167,4 +173,15 @@ func (s *SupervisorAgent) RegisterSubAgentCard(card *agentschema.AgentCard) {
 		Str("card_name", card.Name).
 		Str("card_id", card.ID).
 		Msg("注册子 Agent 卡片为 LLM 工具")
+}
+
+// Configure 配置 SupervisorAgent。
+//
+// 对齐 Python: SupervisorAgent.configure(config) — 只对 ReActAgentConfig 类型执行配置，其他类型 no-op。
+func (s *SupervisorAgent) Configure(ctx context.Context, config agentinterfaces.AgentConfig) error {
+	if reactCfg, ok := config.(*saconfig.ReActAgentConfig); ok {
+		return s.ReActAgent.Configure(ctx, reactCfg)
+	}
+	// 非 ReActAgentConfig 类型 no-op，与 Python isinstance 判断一致
+	return nil
 }
