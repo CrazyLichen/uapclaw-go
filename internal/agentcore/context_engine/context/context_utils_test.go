@@ -253,7 +253,7 @@ func TestIsCompressionProcessor_非压缩类型(t *testing.T) {
 	}
 }
 
-// TestFormatReloadedMessages_有消息 验证格式化输出包含消息内容
+// TestFormatReloadedMessages_有消息 验证格式化输出包含消息内容（英文输出，对齐 Python）
 func TestFormatReloadedMessages_有消息(t *testing.T) {
 	messages := []llm_schema.BaseMessage{
 		llm_schema.NewUserMessage("你好"),
@@ -263,11 +263,11 @@ func TestFormatReloadedMessages_有消息(t *testing.T) {
 	if !strings.Contains(result, "handle=handle-123") {
 		t.Errorf("输出应包含 handle，实际: %s", result)
 	}
-	if !strings.Contains(result, "消息 1:") {
-		t.Errorf("输出应包含 '消息 1:'，实际: %s", result)
+	if !strings.Contains(result, "message 1:") {
+		t.Errorf("输出应包含 'message 1:'，实际: %s", result)
 	}
-	if !strings.Contains(result, "消息 2:") {
-		t.Errorf("输出应包含 '消息 2:'，实际: %s", result)
+	if !strings.Contains(result, "message 2:") {
+		t.Errorf("输出应包含 'message 2:'，实际: %s", result)
 	}
 	if !strings.Contains(result, "user") {
 		t.Errorf("输出应包含 'user'，实际: %s", result)

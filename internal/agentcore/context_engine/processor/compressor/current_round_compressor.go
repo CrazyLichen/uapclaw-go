@@ -581,7 +581,8 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 	}
 
 	modelName := crc.getModelName()
-	tokens := processor.CountMessagesTokens(mc.TokenCounter(), append(mc.GetMessages(0, true), messagesToAdd...), modelName, crc.ProcessorType())
+	allMsgs, _ := mc.GetMessages(0, true)
+	tokens := processor.CountMessagesTokens(mc.TokenCounter(), append(allMsgs, messagesToAdd...), modelName, crc.ProcessorType())
 	if tokens > crc.tokenThreshold {
 		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "CurrentRoundCompressor_triggered").
@@ -602,7 +603,8 @@ func (crc *CurrentRoundCompressor) TriggerAddMessages(ctx context.Context, mc if
 //
 // 对应 Python: CurrentRoundCompressor.on_add_messages()
 func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	contextMessages := append(mc.GetMessages(0, true), messagesToAdd...)
+	ctxMsgs, _ := mc.GetMessages(0, true)
+	contextMessages := append(ctxMsgs, messagesToAdd...)
 	crc.ResetCompressionUsage()
 
 	lastUserIdx := crc.GetCompressIdx(contextMessages)

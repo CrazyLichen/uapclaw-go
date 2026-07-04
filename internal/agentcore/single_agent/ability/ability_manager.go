@@ -348,7 +348,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 
 // Execute 并行执行多个 ToolCall，返回每个调用的结果。
 // 使用 WaitGroup + 按 index 写切片，与 Python asyncio.gather(return_exceptions=True) 语义一致：
-// 所有任务都执行完毕，错误/中断统一在 ExecuteResult.Result 中。
+// 所有任务都执行完毕，错误/中断统一在 agentschema.ExecuteResult.Result 中。
 // 结果顺序与输入 toolCalls 顺序一致。
 //
 // cbc 为 Rail 系统的 AgentCallbackContext，用于：
@@ -362,7 +362,7 @@ func (am *AbilityManager) Execute(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) []ExecuteResult {
+) []agentschema.ExecuteResult {
 	if len(toolCalls) == 0 {
 		return nil
 	}
@@ -370,7 +370,7 @@ func (am *AbilityManager) Execute(
 	// cbc 为 nil 时走降级路径（不使用 Rail 系统，直接执行工具调用）
 	if cbc == nil {
 		am.mu.RLock()
-		results := make([]ExecuteResult, len(toolCalls))
+		results := make([]agentschema.ExecuteResult, len(toolCalls))
 		var wg sync.WaitGroup
 		for i, tc := range toolCalls {
 			wg.Add(1)
@@ -390,7 +390,7 @@ func (am *AbilityManager) Execute(
 	}
 
 	am.mu.RLock()
-	results := make([]ExecuteResult, len(toolCalls))
+	results := make([]agentschema.ExecuteResult, len(toolCalls))
 
 	// 为每个 tool_call 创建隔离子上下文
 	// 对应 Python: tool_ctx = AgentCallbackContext(agent=ctx.agent, inputs=ToolCallInputs(...), extra=ctx.extra, ...)
@@ -445,8 +445,8 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) ExecuteResult {
-	var result ExecuteResult
+) agentschema.ExecuteResult {
+	var result agentschema.ExecuteResult
 
 	railErr := rail.ToolCallRail.Execute(ctx, toolCtx, func() error {
 		// _skip_tool 门控：before hook 可通过设置 extra["_skip_tool"] = true 来跳过工具执行
@@ -457,7 +457,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 			delete(toolCtx.Extra(), "_skip_tool") // pop 语义：一次性消费
 			if skipBool, ok := skipVal.(bool); ok && skipBool {
 				if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
-					result = ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}
+					result = agentschema.ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}
 				}
 				return nil // before hook 正常返回 → 走正常路径 → after 触发
 			}
@@ -513,15 +513,15 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 // executeSingleToolCall 执行单个工具调用。
 // 路由逻辑：按 tool_name 查找 Card → 从 ResourceManager 获取实例 → 执行。
 //
-// 返回 (ExecuteResult, error)：
-//   - ExecuteResult 承载正常结果（Result + ToolMsg）
+// 返回 (agentschema.ExecuteResult, error)：
+//   - agentschema.ExecuteResult 承载正常结果（Result + ToolMsg）
 //   - error 承载异常（ToolInterruptException 或 AbilityExecutionError）
 func (am *AbilityManager) executeSingleToolCall(
 	ctx context.Context,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (ExecuteResult, error) {
+) (agentschema.ExecuteResult, error) {
 	toolName := toolCall.Name
 
 	// 解析参数
@@ -537,7 +537,7 @@ func (am *AbilityManager) executeSingleToolCall(
 			err.Error(),
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	// 路由分发
@@ -557,7 +557,7 @@ func (am *AbilityManager) executeSingleToolCall(
 			"MCP 工具执行暂未实现: "+toolName,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	// 兜底：尝试从 ResourceManager 按 name 获取 Tool
@@ -572,7 +572,7 @@ func (am *AbilityManager) executeTool(
 	toolArgs map[string]any,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (ExecuteResult, error) {
+) (agentschema.ExecuteResult, error) {
 	toolCard := am.tools[toolName]
 	toolID := toolCard.ID
 	if toolID == "" {
@@ -591,7 +591,7 @@ func (am *AbilityManager) executeTool(
 			"工具实例未找到: "+toolID,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	tools, err := am.resourceMgr.GetTool([]string{toolID}, opts...)
@@ -603,7 +603,7 @@ func (am *AbilityManager) executeTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 	t := tools[0]
 
@@ -616,7 +616,7 @@ func (am *AbilityManager) executeTool(
 		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
 		var tie *agentschema.ToolInterruptException
 		if errors.As(err, &tie) {
-			return ExecuteResult{}, tie
+			return agentschema.ExecuteResult{}, tie
 		}
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).
@@ -629,12 +629,12 @@ func (am *AbilityManager) executeTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // executeWorkflow 执行 Workflow 类型能力。
@@ -657,7 +657,7 @@ func (am *AbilityManager) executeWorkflow(
 	toolArgs map[string]any,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (ExecuteResult, error) {
+) (agentschema.ExecuteResult, error) {
 	// 步骤 1：获取 WorkflowCard（对齐 Python L761-762）
 	wfCard := am.workflows[toolName]
 	wfID := wfCard.ID
@@ -678,7 +678,7 @@ func (am *AbilityManager) executeWorkflow(
 			"工作流实例未找到: "+wfID,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	wfs, err := am.resourceMgr.GetWorkflow(ctx, []string{wfID}, opts...)
@@ -690,7 +690,7 @@ func (am *AbilityManager) executeWorkflow(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	wf := wfs[0]
@@ -724,12 +724,12 @@ func (am *AbilityManager) executeWorkflow(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	// 步骤 6：检测 INPUT_REQUIRED 中断（对齐 Python L719-723: if WorkflowOutput.state == INPUT_REQUIRED → return (WorkflowOutput, None)）
 	if wfOut, ok := result.(*workflow.WorkflowOutput); ok && wfOut.State == workflow.WorkflowExecutionStateInputRequired {
-		return ExecuteResult{Result: wfOut, ToolMsg: nil}, nil
+		return agentschema.ExecuteResult{Result: wfOut, ToolMsg: nil}, nil
 	}
 
 	// 步骤 7：正常完成 — 提取 result（对齐 Python L725: result = workflow_output.result）
@@ -741,7 +741,7 @@ func (am *AbilityManager) executeWorkflow(
 	// 步骤 8：构建 ToolMessage（对齐 Python L726: ToolMessage(content=str(result))）
 	content := BuildToolMessageContent(actualResult)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: actualResult, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: actualResult, ToolMsg: toolMsg}, nil
 }
 
 // executeAgent 执行 Agent 类型能力。
@@ -764,7 +764,7 @@ func (am *AbilityManager) executeAgent(
 	toolArgs map[string]any,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (ExecuteResult, error) {
+) (agentschema.ExecuteResult, error) {
 	// 步骤 1：获取 AgentCard（对齐 Python L777-778）
 	agentCard := am.agents[toolName]
 
@@ -787,7 +787,7 @@ func (am *AbilityManager) executeAgent(
 			"Agent 实例未找到: "+agentID,
 			exception.WithParam("tool_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	ags, err := am.resourceMgr.GetAgent(ctx, []string{agentID}, opts...)
@@ -799,7 +799,7 @@ func (am *AbilityManager) executeAgent(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	ag := ags[0]
@@ -840,13 +840,13 @@ func (am *AbilityManager) executeAgent(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	// 步骤 9：构建 ToolMessage（对齐 Python L834-838）
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // executeFallbackTool 兜底：从 ResourceManager 按 name 获取 Tool。
@@ -857,7 +857,7 @@ func (am *AbilityManager) executeFallbackTool(
 	toolArgs map[string]any,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
-) (ExecuteResult, error) {
+) (agentschema.ExecuteResult, error) {
 	var opts []resourcesmanager.ResourceOption
 	if tag != "" {
 		opts = append(opts, resourcesmanager.WithTag(resourcesmanager.Tag(tag)))
@@ -870,7 +870,7 @@ func (am *AbilityManager) executeFallbackTool(
 			"能力未找到: "+toolName,
 			exception.WithParam("ability_name", toolName),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	tools, err := am.resourceMgr.GetTool([]string{toolName}, opts...)
@@ -882,7 +882,7 @@ func (am *AbilityManager) executeFallbackTool(
 			exception.WithParam("ability_name", toolName),
 			exception.WithCause(err),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 	t := tools[0]
 
@@ -895,7 +895,7 @@ func (am *AbilityManager) executeFallbackTool(
 		// 扩展：tool 本身返回 ToolInterruptException → 直接透传
 		var tie *agentschema.ToolInterruptException
 		if errors.As(invokeErr, &tie) {
-			return ExecuteResult{}, tie
+			return agentschema.ExecuteResult{}, tie
 		}
 		logger.Error(logger.ComponentAgentCore).
 			Str("tool_name", toolName).
@@ -908,12 +908,12 @@ func (am *AbilityManager) executeFallbackTool(
 			exception.WithParam("tool_name", toolName),
 			exception.WithCause(invokeErr),
 		)
-		return ExecuteResult{}, execErr
+		return agentschema.ExecuteResult{}, execErr
 	}
 
 	content := BuildToolMessageContent(result)
 	toolMsg := llmschema.NewToolMessage(toolCall.ID, content)
-	return ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
+	return agentschema.ExecuteResult{Result: result, ToolMsg: toolMsg}, nil
 }
 
 // prioritizePaidSearch 当 paid_search 和 free_search 同时存在时，

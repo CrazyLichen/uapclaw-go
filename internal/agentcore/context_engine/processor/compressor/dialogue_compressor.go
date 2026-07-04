@@ -263,7 +263,8 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 		return false, nil
 	}
 
-	tokens := dc.countMessagesTokens(mc, mc.GetMessages(0, true))
+	allMsgs, _ := mc.GetMessages(0, true)
+	tokens := dc.countMessagesTokens(mc, allMsgs)
 	if tokens > dc.tokenThreshold {
 		logger.Info(logger.ComponentAgentCore).
 			Str("event_type", "DialogueCompressor_triggered").
@@ -280,7 +281,8 @@ func (dc *DialogueCompressor) TriggerAddMessages(ctx context.Context, mc iface.M
 //
 // 对应 Python: DialogueCompressor.on_add_messages()
 func (dc *DialogueCompressor) OnAddMessages(ctx context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
+	allMsgs, _ := mc.GetMessages(0, true)
+	allMessages := append(allMsgs, messagesToAdd...)
 	dc.ResetCompressionUsage()
 
 	compressUntilIdx := dc.GetCompressIdx(allMessages)

@@ -168,12 +168,27 @@ All tasks will be executed using the Agent's default model.
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildTodoSection 构建待办节（Priority 90）
-func BuildTodoSection(lang string) saprompt.PromptSection {
+//
+// modelSelection 为预构建的模型列表字符串（可为空）。
+// 若非空则追加模型选择提示词，否则追加"无模型选择"提示词。
+func BuildTodoSection(modelSelection string, lang string) saprompt.PromptSection {
 	var content string
 	if lang == "en" {
-		content = todoSystemPromptEN + noModelSelectionPromptEN
+		content = todoSystemPromptEN
 	} else {
-		content = todoSystemPromptCN + noModelSelectionPromptCN
+		content = todoSystemPromptCN
+	}
+
+	// 根据 modelSelection 是否存在动态选择提示词
+	modelContent := BuildModelSelectionPrompt(modelSelection, lang)
+	if modelContent != "" {
+		content = content + modelContent
+	} else {
+		if lang == "en" {
+			content = content + noModelSelectionPromptEN
+		} else {
+			content = content + noModelSelectionPromptCN
+		}
 	}
 
 	return saprompt.PromptSection{

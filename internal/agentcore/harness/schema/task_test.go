@@ -137,7 +137,7 @@ func TestTodoItem_FromDict(t *testing.T) {
 	data := map[string]any{
 		"id":                "item-1",
 		"content":           "内容",
-		"active_form":       "进行中",
+		"activeForm":        "进行中",
 		"description":       "描述",
 		"status":            "completed",
 		"depends_on":        []any{"dep1"},

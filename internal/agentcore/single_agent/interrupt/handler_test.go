@@ -15,7 +15,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 )
 
@@ -42,7 +42,7 @@ func TestBuildInterruptState_无中断(t *testing.T) {
 	h := NewToolInterruptHandler(agent)
 
 	aiMessage := &llmschema.AssistantMessage{}
-	results := []ability.ExecuteResult{
+	results := []agentschema.ExecuteResult{
 		{Result: map[string]any{"result": "ok"}, ToolMsg: nil},
 	}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1"}}
@@ -60,7 +60,7 @@ func TestBuildInterruptState_ToolInterruptException(t *testing.T) {
 	tie := &ToolInterruptException{Request: req}
 	aiMessage := &llmschema.AssistantMessage{}
 
-	results := []ability.ExecuteResult{
+	results := []agentschema.ExecuteResult{
 		{Result: tie, ToolMsg: nil},
 	}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1"}}
@@ -96,7 +96,7 @@ func TestBuildInterruptState_子Agent中断(t *testing.T) {
 		},
 	}
 	aiMessage := &llmschema.AssistantMessage{}
-	results := []ability.ExecuteResult{{Result: subResult, ToolMsg: nil}}
+	results := []agentschema.ExecuteResult{{Result: subResult, ToolMsg: nil}}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc_outer", Name: "agent_tool"}}
 
 	state, payloads := h.BuildInterruptState(results, toolCalls, aiMessage, 3, "query")
@@ -237,8 +237,8 @@ func TestHandleResume_无新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]ability.ExecuteResult, error) {
-		return []ability.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]agentschema.ExecuteResult, error) {
+		return []agentschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
 	}
 
 	resumeCtx := &ResumeContext{
@@ -276,8 +276,8 @@ func TestHandleResume_有新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]ability.ExecuteResult, error) {
-		return []ability.ExecuteResult{{Result: &ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, ToolMsg: nil}}, nil
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]agentschema.ExecuteResult, error) {
+		return []agentschema.ExecuteResult{{Result: &ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, ToolMsg: nil}}, nil
 	}
 
 	resumeCtx := &ResumeContext{
@@ -584,7 +584,7 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 		},
 	}
 
-	results := []ability.ExecuteResult{
+	results := []agentschema.ExecuteResult{
 		{Result: tie, ToolMsg: nil},
 		{Result: map[string]any{}, ToolMsg: nil},
 		{Result: subResult, ToolMsg: nil},

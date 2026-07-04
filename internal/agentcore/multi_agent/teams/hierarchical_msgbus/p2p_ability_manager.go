@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -45,8 +46,13 @@ type P2PAbilityManager struct {
 
 const (
 	// p2pLogComponent 日志组件标识
-	p2pLogComponent = cschema.ComponentChannel
+	p2pLogComponent = cschema.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 P2PAbilityManager 满足 AbilityManagerInterface 接口
+var _ agentinterfaces.AbilityManagerInterface = (*P2PAbilityManager)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -192,7 +198,14 @@ func (m *P2PAbilityManager) executeSingleP2P(
 	// 解析参数
 	toolArgs, err := ability.ParseToolArguments(toolCall.Arguments)
 	if err != nil {
-		toolArgs = map[string]any{}
+		cschema.Warn(p2pLogComponent).
+			Str("action", "parse_tool_arguments").
+			Str("tool_name", toolName).
+			Err(err).
+			Msg("P2P 工具参数解析失败")
+		return agentschema.ExecuteResult{}, exception.BuildError(exception.StatusAbilityMalformedArguments,
+			exception.WithParam("error_msg", fmt.Sprintf("P2P 工具 '%s' 参数解析失败: %v", toolName, err)),
+		)
 	}
 
 	// 获取 sessionID
@@ -257,6 +270,9 @@ func errorToP2PResult(err error, toolCallID string) agentschema.ExecuteResult {
 		toolCallID,
 		err.Error(),
 		exception.WithCause(err),
+		exception.WithParam("event_type", "LLM_CALL_ERROR"),
+		exception.WithParam("method", "P2PAbilityManager.Execute"),
+		exception.WithParam("model_provider", "p2p"),
 	)
 	return agentschema.ExecuteResult{Result: execErr, ToolMsg: execErr.ToolMessage}
 }

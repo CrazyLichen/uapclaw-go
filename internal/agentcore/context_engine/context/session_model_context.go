@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -202,10 +203,13 @@ func (mc *SessionModelContext) Len() int {
 
 // GetMessages 获取消息列表。
 //
-// size ≤ 0 表示不限制；withHistory 控制是否包含历史消息。
+// size ≤ 0 表示不限制；size < 0 返回错误；withHistory 控制是否包含历史消息。
 // 对应 Python: SessionModelContext.get_messages()
-func (mc *SessionModelContext) GetMessages(size int, withHistory bool) []llm_schema.BaseMessage {
-	return mc.messageBuffer.GetBack(size, withHistory)
+func (mc *SessionModelContext) GetMessages(size int, withHistory bool) ([]llm_schema.BaseMessage, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("get messages size 应大于等于 0，当前值: %d", size)
+	}
+	return mc.messageBuffer.GetBack(size, withHistory), nil
 }
 
 // SetMessages 替换消息列表。
@@ -947,24 +951,28 @@ func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []*sche
 }
 
 // countSingleMessageTokens 计算单条消息的 token 数。
+//
+// 对应 Python: SessionModelContext._count_single_message_tokens()
+// tokenCounter 返回结果（含 0）直接使用，不再降级估算。
+// fallback 使用 len/4 向下取整，对齐 Python len//4。
 func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessage) int {
 	content := msg.GetContent().Text()
 
 	if mc.tokenCounter != nil {
 		count, err := mc.tokenCounter.Count(content, mc.resolveContextModelName())
-		if err == nil && count > 0 {
+		if err == nil {
 			return count
 		}
 	}
 
-	// 降级：字符数/4 向上取整
-	if len(content) == 0 {
-		return 0
-	}
-	return (len(content) + 3) / 4
+	// 降级：字符数/4 向下取整，对齐 Python len//4
+	return len(content) / 4
 }
 
 // countToolTokens 计算单工具的 token 数。
+//
+// 对应 Python: SessionModelContext._count_tool_tokens()
+// fallback 使用 json.Marshal 序列化整个 parameters dict + len/4 向下取整，对齐 Python json.dumps + len//4。
 func (mc *SessionModelContext) countToolTokens(toolInfo *schema.ToolInfo) int {
 	if mc.tokenCounter != nil {
 		count, err := mc.tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, mc.resolveContextModelName())
@@ -973,20 +981,17 @@ func (mc *SessionModelContext) countToolTokens(toolInfo *schema.ToolInfo) int {
 		}
 	}
 
-	// 降级：字符数/4 向上取整
-	totalChars := len(toolInfo.Name) + len(toolInfo.Description)
+	// 降级：拼接 name + description + json.dumps(parameters)，对齐 Python
+	textContent := toolInfo.Name
+	if toolInfo.Description != "" {
+		textContent += toolInfo.Description
+	}
 	if toolInfo.Parameters != nil {
-		for k, v := range toolInfo.Parameters {
-			totalChars += len(k)
-			if s, ok := v.(string); ok {
-				totalChars += len(s)
-			}
+		if data, err := json.Marshal(toolInfo.Parameters); err == nil {
+			textContent += string(data)
 		}
 	}
-	if totalChars == 0 {
-		return 0
-	}
-	return (totalChars + 3) / 4
+	return len(textContent) / 4
 }
 
 // countDialogueRounds 统计对话轮次数。

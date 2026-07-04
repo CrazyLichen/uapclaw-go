@@ -49,15 +49,20 @@ func TestBuildSafetySection_基本验证(t *testing.T) {
 
 // TestBuildToolsSection_基本验证 测试工具节基本属性
 func TestBuildToolsSection_基本验证(t *testing.T) {
-	s := BuildToolsSection("test tools content", "cn")
+	tools := map[string]string{
+		"bash":  "执行 Shell 命令",
+		"glob":  "文件搜索",
+		"grep":  "内容搜索",
+	}
+	s := BuildToolsSection(tools, "cn")
+	if s == nil {
+		t.Fatal("期望 BuildToolsSection 返回非 nil")
+	}
 	if s.Name != SectionTools {
 		t.Errorf("Name = %q, want %q", s.Name, SectionTools)
 	}
 	if s.Priority != 30 {
 		t.Errorf("Priority = %d, want 30", s.Priority)
-	}
-	if s.Content["cn"] != "test tools content" {
-		t.Errorf("Content[cn] = %q, want 'test tools content'", s.Content["cn"])
 	}
 }
 
@@ -401,7 +406,7 @@ func TestBuildCompletionSignalSection_替换占位符(t *testing.T) {
 // TestBuildTodoSection_基本验证 测试待办节
 func TestBuildTodoSection_基本验证(t *testing.T) {
 	for _, lang := range []string{"cn", "en"} {
-		s := BuildTodoSection(lang)
+		s := BuildTodoSection("", lang)
 		if s.Name != SectionTodo {
 			t.Errorf("lang=%s: Name = %q, want %q", lang, s.Name, SectionTodo)
 		}

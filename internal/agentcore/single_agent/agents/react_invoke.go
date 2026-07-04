@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
@@ -178,7 +178,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 //
 // 对应 Python: ReActAgent._after_execute_tool_call_for_hitl()
 func (a *ReActAgent) AfterExecuteToolCallForHITL(
-	results []ability.ExecuteResult,
+	results []agentschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
@@ -682,7 +682,7 @@ func (a *ReActAgent) executeToolCalls(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
-) ([]ability.ExecuteResult, error) {
+) ([]agentschema.ExecuteResult, error) {
 	if len(toolCalls) == 0 {
 		return nil, nil
 	}
@@ -725,7 +725,7 @@ func (a *ReActAgent) executeToolCalls(
 // 构建包含 image_url content blocks 的 UserMessage。
 //
 // 对应 Python: ReActAgent._build_multimodal_tool_results_message()
-func (a *ReActAgent) buildMultimodalToolResultsMessage(results []ability.ExecuteResult) llmschema.BaseMessage {
+func (a *ReActAgent) buildMultimodalToolResultsMessage(results []agentschema.ExecuteResult) llmschema.BaseMessage {
 	var parts []llmschema.ContentPart
 	var loadedPaths []string
 

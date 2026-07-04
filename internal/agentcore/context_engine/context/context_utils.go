@@ -149,22 +149,84 @@ func IsCompressionProcessor(p iface.ContextProcessor) bool {
 
 // FormatReloadedMessages 将重新加载的消息格式化为可读字符串。
 //
+// 序列化消息全部字段（对齐 Python model_dump()），使用英文输出。
 // 对应 Python: ContextUtils.format_reloaded_messages()
 func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMessage) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "重载消息 handle=%s:\n", offloadHandle)
+	fmt.Fprintf(&sb, "reload messages with handle=%s:\n", offloadHandle)
 	for i, msg := range messages {
-		msgJSON, err := json.Marshal(map[string]any{
-			"role":    msg.GetRole().String(),
-			"content": msg.GetContent().String(),
-		})
+		dump := messageToMap(msg)
+		msgJSON, err := json.Marshal(dump)
 		if err != nil {
-			fmt.Fprintf(&sb, "消息 %d: {序列化失败}\n", i+1)
-			continue
+			fmt.Fprintf(&sb, "message %d: {serialization failed}", i+1)
+		} else {
+			fmt.Fprintf(&sb, "message %d: %s", i+1, string(msgJSON))
 		}
-		fmt.Fprintf(&sb, "消息 %d: %s\n", i+1, string(msgJSON))
+		if i != len(messages)-1 {
+			sb.WriteByte('\n')
+		}
 	}
 	return sb.String()
+}
+
+// messageToMap 将消息转换为 map，对齐 Python model_dump() 输出全部字段。
+func messageToMap(msg llm_schema.BaseMessage) map[string]any {
+	result := map[string]any{
+		"role":    msg.GetRole().String(),
+		"content": msg.GetContent().String(),
+	}
+	if name := msg.GetName(); name != "" {
+		result["name"] = name
+	}
+	if metadata := msg.GetMetadata(); len(metadata) > 0 {
+		result["metadata"] = metadata
+	}
+	// AssistantMessage 特有字段
+	if am, ok := msg.(*llm_schema.AssistantMessage); ok {
+		if len(am.ToolCalls) > 0 {
+			toolCalls := make([]map[string]any, 0, len(am.ToolCalls))
+			for _, call := range am.ToolCalls {
+				tc := map[string]any{
+					"id":   call.ID,
+					"type": call.Type,
+					"function": map[string]any{
+						"name":      call.Name,
+						"arguments": call.Arguments,
+					},
+				}
+				toolCalls = append(toolCalls, tc)
+			}
+			result["tool_calls"] = toolCalls
+		}
+		if am.UsageMetadata != nil {
+			result["usage_metadata"] = am.UsageMetadata
+		}
+		if am.FinishReason != "" && am.FinishReason != "null" {
+			result["finish_reason"] = am.FinishReason
+		}
+		if am.ParserContent != nil {
+			result["parser_content"] = am.ParserContent
+		}
+		if am.ReasoningContent != "" {
+			result["reasoning_content"] = am.ReasoningContent
+		}
+		if len(am.PromptTokenIDs) > 0 {
+			result["prompt_token_ids"] = am.PromptTokenIDs
+		}
+		if len(am.CompletionTokenIDs) > 0 {
+			result["completion_token_ids"] = am.CompletionTokenIDs
+		}
+		if am.Logprobs != nil {
+			result["logprobs"] = am.Logprobs
+		}
+	}
+	// ToolMessage 特有字段
+	if tm, ok := msg.(*llm_schema.ToolMessage); ok {
+		if tm.ToolCallID != "" {
+			result["tool_call_id"] = tm.ToolCallID
+		}
+	}
+	return result
 }
 
 // FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。

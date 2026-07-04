@@ -222,25 +222,39 @@ func RoundContainsSkillRead(messages []llm_schema.BaseMessage) bool {
 	return false
 }
 
-// EstimateContentTokens 估算内容的 Token 数（字符长度 / 3）。
+// EstimateContentTokens 估算内容的 Token 数（字符长度 / 3，最小返回 1）。
 //
 // 支持字符串和任意类型（JSON 序列化后估算）。
+// 任何非空输入至少返回 1，对齐 Python max(len//3, 1) 语义。
 //
-// 对应 Python: DialogueCompressor._estimate_content_tokens()
+// 对应 Python: ContextUtils.estimate_tokens()
 func EstimateContentTokens(content any) int {
 	if str, ok := content.(string); ok {
-		return len(str) / 3
+		result := len(str) / 3
+		if result < 1 {
+			return 1
+		}
+		return result
 	}
 	data, err := json.Marshal(content)
 	if err != nil {
-		return len(fmt.Sprintf("%v", content)) / 3
+		result := len(fmt.Sprintf("%v", content)) / 3
+		if result < 1 {
+			return 1
+		}
+		return result
 	}
-	return len(data) / 3
+	result := len(data) / 3
+	if result < 1 {
+		return 1
+	}
+	return result
 }
 
-// EstimateMessageTokens 估算单条消息的 Token 数。
+// EstimateMessageTokens 估算单条消息的 Token 数（最小返回 1）。
 //
 // 优先使用 content 文本估算，为空时尝试 JSON 序列化后估算。
+// 任何非 nil 消息至少返回 1，对齐 Python max(len//3, 1) 语义。
 //
 // 对应 Python: ContextUtils.estimate_message_tokens()
 func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
@@ -250,10 +264,11 @@ func EstimateMessageTokens(msg llm_schema.BaseMessage) int {
 	content := msg.GetContent()
 	if content.IsText() {
 		text := content.Text()
-		if text == "" {
-			return 0
+		result := len(text) / 3
+		if result < 1 {
+			return 1
 		}
-		return len(text) / 3
+		return result
 	}
 	return EstimateContentTokens(content)
 }

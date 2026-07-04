@@ -374,7 +374,7 @@ func TestMicroCompactProcessor_OnAddMessages(t *testing.T) {
 		}
 
 		// 验证消息内容被替换
-		updatedMessages := mc.GetMessages(0, true)
+		updatedMessages, _ := mc.GetMessages(0, true)
 		clearedCount := 0
 		keptCount := 0
 		for _, msg := range updatedMessages {
@@ -441,7 +441,8 @@ func TestMicroCompactProcessor_OnAddMessages(t *testing.T) {
 		}
 		// call_0 不应在 modifiedIndices 中（它已经是 marker 了）
 		for _, idx := range event.MessagesToModify {
-			msg := mc.GetMessages(0, true)[idx]
+			msgs, _ := mc.GetMessages(0, true)
+			msg := msgs[idx]
 			tm, ok := msg.(*llm_schema.ToolMessage)
 			if !ok {
 				continue
@@ -487,7 +488,8 @@ func TestMicroCompactProcessor_OnAddMessages(t *testing.T) {
 		}
 		// 验证 modifiedIndices 中不包含 UserMessage 的索引
 		for _, idx := range event.MessagesToModify {
-			msg := mc.GetMessages(0, true)[idx]
+			msgs, _ := mc.GetMessages(0, true)
+			msg := msgs[idx]
 			if _, ok := msg.(*llm_schema.UserMessage); ok {
 				t.Errorf("UserMessage 不应在 modifiedIndices 中，索引 %d", idx)
 			}
@@ -525,8 +527,8 @@ type fakeModelContextForMicro struct {
 }
 
 func (f *fakeModelContextForMicro) Len() int { return len(f.messages) }
-func (f *fakeModelContextForMicro) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
-	return f.messages
+func (f *fakeModelContextForMicro) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return f.messages, nil
 }
 func (f *fakeModelContextForMicro) SetMessages(messages []llm_schema.BaseMessage, _ bool) {
 	f.messages = messages

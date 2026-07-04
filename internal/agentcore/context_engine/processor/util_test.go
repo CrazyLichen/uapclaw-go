@@ -428,8 +428,9 @@ func TestEstimateMessageTokens_字符串内容(t *testing.T) {
 func TestEstimateMessageTokens_空内容(t *testing.T) {
 	msg := llm_schema.NewUserMessage("")
 	result := EstimateMessageTokens(msg)
-	if result != 0 {
-		t.Errorf("期望 0, 实际 %d", result)
+	// 空内容最小返回 1，对齐 Python max(len//3, 1)
+	if result != 1 {
+		t.Errorf("期望 1（最小值保护），实际 %d", result)
 	}
 }
 

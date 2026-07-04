@@ -29,8 +29,8 @@ type fcpFakeModelContext struct {
 }
 
 func (f *fcpFakeModelContext) Len() int { return len(f.messages) }
-func (f *fcpFakeModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
-	return f.messages
+func (f *fcpFakeModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return f.messages, nil
 }
 func (f *fcpFakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ bool) {
 	f.messages = messages

@@ -481,3 +481,32 @@ func TestLoopCoordinator_ShouldContinue_评估器panic不崩溃(t *testing.T) {
 		t.Error("ShouldContinue should be true when panicking evaluator is recovered and no other evaluator stops")
 	}
 }
+
+// TestLoopCoordinator_CustomPredicate_返回true停止循环 验证自定义谓词返回 true 时停止循环。
+// 对齐 Python: test_custom_predicate_stop
+func TestLoopCoordinator_CustomPredicate_返回true停止循环(t *testing.T) {
+	lc := NewLoopCoordinator([]StopConditionEvaluator{
+		NewCustomPredicateEvaluator("always_stop", func(_ StopEvaluationContext) bool {
+			return true
+		}),
+	})
+	if lc.ShouldContinue() {
+		t.Error("ShouldContinue with always-true predicate, want false")
+	}
+	if lc.StopReason() != "always_stop" {
+		t.Errorf("StopReason() = %q, want %q", lc.StopReason(), "always_stop")
+	}
+}
+
+// TestLoopCoordinator_CustomPredicate_返回false继续循环 验证自定义谓词返回 false 时继续循环。
+// 对齐 Python: test_custom_predicate_continue
+func TestLoopCoordinator_CustomPredicate_返回false继续循环(t *testing.T) {
+	lc := NewLoopCoordinator([]StopConditionEvaluator{
+		NewCustomPredicateEvaluator("never_stop", func(_ StopEvaluationContext) bool {
+			return false
+		}),
+	})
+	if !lc.ShouldContinue() {
+		t.Error("ShouldContinue with always-false predicate, want true")
+	}
+}

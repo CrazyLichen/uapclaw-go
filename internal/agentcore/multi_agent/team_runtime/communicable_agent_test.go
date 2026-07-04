@@ -118,7 +118,7 @@ func TestCommunicableAgent_BindRuntime_相同runtime不同agentID(t *testing.T) 
 func TestCommunicableAgent_Send(t *testing.T) {
 	t.Run("未绑定时返回错误", func(t *testing.T) {
 		c := NewCommunicableAgent()
-		_, err := c.Send(context.Background(), "hello", "recipient")
+		_, err := c.Send(context.Background(), map[string]any{"msg": "hello"}, "recipient")
 		if err == nil {
 			t.Error("未绑定时 Send 应返回错误")
 		}
@@ -137,12 +137,13 @@ func TestCommunicableAgent_Send(t *testing.T) {
 		runtime.running = true
 		runtime.mu.Unlock()
 
-		// 注册 recipient agent
+		// 注册 recipient agent 和 sender agent
 		runtime.agentCards["recipient"] = nil
+		runtime.agentCards["sender"] = nil
 
 		c.BindRuntime(runtime, "sender")
 
-		result, err := c.Send(context.Background(), "hello", "recipient")
+		result, err := c.Send(context.Background(), map[string]any{"msg": "hello"}, "recipient")
 		if err != nil {
 			t.Errorf("Send 返回错误: %v", err)
 		}
@@ -156,7 +157,7 @@ func TestCommunicableAgent_Send(t *testing.T) {
 func TestCommunicableAgent_Publish(t *testing.T) {
 	t.Run("未绑定时返回错误", func(t *testing.T) {
 		c := NewCommunicableAgent()
-		err := c.Publish(context.Background(), "hello", "topic-1")
+		err := c.Publish(context.Background(), map[string]any{"msg": "hello"}, "topic-1")
 		if err == nil {
 			t.Error("未绑定时 Publish 应返回错误")
 		}
@@ -174,7 +175,10 @@ func TestCommunicableAgent_Publish(t *testing.T) {
 
 		c.BindRuntime(runtime, "sender")
 
-		err := c.Publish(context.Background(), "hello", "topic-1")
+		// 注册 sender agent
+		runtime.agentCards["sender"] = nil
+
+		err := c.Publish(context.Background(), map[string]any{"msg": "hello"}, "topic-1")
 		if err != nil {
 			t.Errorf("Publish 返回错误: %v", err)
 		}

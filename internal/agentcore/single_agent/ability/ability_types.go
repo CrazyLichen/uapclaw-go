@@ -29,10 +29,8 @@ type AbilityExecutionError struct {
 	ToolMessage *llmschema.ToolMessage
 }
 
-// ExecuteResult 单个工具调用的执行结果。
-// 类型别名，实际定义在 schema 包。
-type ExecuteResult = saschema.ExecuteResult
-
+// saschema.ExecuteResult 单个工具调用的执行结果。
+// 实际定义在 saschema (single_agent/schema) 包，本包直接使用 saschema.ExecuteResult。
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InterruptAutoConfirmKey 中断自动确认状态键。
@@ -125,17 +123,17 @@ func BuildToolMessageContent(result any) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// errorToExecuteResult 将 error 转换为 ExecuteResult。
+// errorToExecuteResult 将 error 转换为 saschema.ExecuteResult。
 // 用于降级路径（cbc==nil）和 railedExecuteSingleToolCall 的异常处理。
 //
 // 转换规则：
 //   - ToolInterruptException → Result=tie, ToolMsg=nil
 //   - AbilityExecutionError  → Result=err, ToolMsg=aee.ToolMessage
 //   - 其他 error             → Result=err, ToolMsg=兜底构建
-func errorToExecuteResult(err error, toolCallID string) ExecuteResult {
+func errorToExecuteResult(err error, toolCallID string) saschema.ExecuteResult {
 	var tie *saschema.ToolInterruptException
 	if errors.As(err, &tie) {
-		return ExecuteResult{Result: tie}
+		return saschema.ExecuteResult{Result: tie}
 	}
 	var toolMsg *llmschema.ToolMessage
 	var execErr *AbilityExecutionError
@@ -145,5 +143,5 @@ func errorToExecuteResult(err error, toolCallID string) ExecuteResult {
 	if toolMsg == nil {
 		toolMsg = llmschema.NewToolMessage(toolCallID, err.Error())
 	}
-	return ExecuteResult{Result: err, ToolMsg: toolMsg}
+	return saschema.ExecuteResult{Result: err, ToolMsg: toolMsg}
 }

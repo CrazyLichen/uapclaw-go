@@ -26,8 +26,8 @@ type fakeModelContext struct {
 }
 
 func (f *fakeModelContext) Len() int { return len(f.messages) }
-func (f *fakeModelContext) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
-	return f.messages
+func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return f.messages, nil
 }
 func (f *fakeModelContext) SetMessages(messages []llm_schema.BaseMessage, _ bool) {
 	f.messages = messages
@@ -475,11 +475,11 @@ func TestEstimateContentTokens_非字符串(t *testing.T) {
 	}
 }
 
-// TestEstimateContentTokens_空字符串 验证空字符串返回 0
+// TestEstimateContentTokens_空字符串 验证空字符串返回最小值 1（对齐 Python max(len//3, 1)）
 func TestEstimateContentTokens_空字符串(t *testing.T) {
 	tokens := processor.EstimateContentTokens("")
-	if tokens != 0 {
-		t.Errorf("空字符串应返回 0 tokens，实际: %d", tokens)
+	if tokens != 1 {
+		t.Errorf("空字符串应返回 1（最小值保护），实际: %d", tokens)
 	}
 }
 

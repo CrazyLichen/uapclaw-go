@@ -54,8 +54,14 @@ func (c *CommunicableAgent) IsBound() bool {
 // 幂等性：相同 runtime 和 agentID 时静默跳过。
 // 重绑定：已绑定到不同 runtime 或 agentID 时记录 warning 日志。
 //
+// 注意：此方法假设在 Agent 创建时单次调用，无并发场景。
+// 若未来需要并发绑定，应添加 sync.RWMutex 保护 runtime/agentID 字段。
+//
 // 对应 Python: CommunicableAgent.bind_runtime(runtime, agent_id)
 func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
+	if agentID == "" {
+		panic("BindRuntime: agentID 不能为空字符串，agent 标识必须非空")
+	}
 	if c.IsBound() {
 		if c.runtime == runtime && c.agentID == agentID {
 			// 相同 runtime 和 agentID — 幂等，静默跳过
@@ -76,7 +82,7 @@ func (c *CommunicableAgent) BindRuntime(runtime *TeamRuntime, agentID string) {
 // 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.send(message, recipient, opts)
-func (c *CommunicableAgent) Send(ctx context.Context, message any, recipient string, opts ...maschema.TeamOption) (any, error) {
+func (c *CommunicableAgent) Send(ctx context.Context, message map[string]any, recipient string, opts ...maschema.TeamOption) (any, error) {
 	if c.runtime == nil {
 		return nil, errRuntimeNotBound
 	}
@@ -87,7 +93,7 @@ func (c *CommunicableAgent) Send(ctx context.Context, message any, recipient str
 // 实现 Communicable 接口。
 //
 // 对应 Python: CommunicableAgent.publish(message, topic_id, opts)
-func (c *CommunicableAgent) Publish(ctx context.Context, message any, topicID string, opts ...maschema.TeamOption) error {
+func (c *CommunicableAgent) Publish(ctx context.Context, message map[string]any, topicID string, opts ...maschema.TeamOption) error {
 	if c.runtime == nil {
 		return errRuntimeNotBound
 	}

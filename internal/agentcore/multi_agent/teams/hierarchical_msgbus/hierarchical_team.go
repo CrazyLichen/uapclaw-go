@@ -218,6 +218,15 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 		return nil
 	}
 
+	// 对齐 Python: if self.runtime.get_agent_count() >= self.config.max_agents
+	if t.config.TeamConfig.MaxAgents > 0 && t.runtime.GetAgentCount() >= t.config.TeamConfig.MaxAgents {
+		return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
+			exception.WithParam("error_msg", fmt.Sprintf(
+				"Agent 数量超过上限 (%d)", t.config.TeamConfig.MaxAgents,
+			)),
+		)
+	}
+
 	// 注册到运行时（包装为 resources_manager.AgentProvider）
 	wrappedProvider := resources_manager.AgentProvider(provider)
 	if err := t.runtime.RegisterAgent(ctx, card, wrappedProvider); err != nil {
@@ -228,6 +237,9 @@ func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.Agent
 			Msg("注册 Agent 到运行时失败")
 		return err
 	}
+
+	// 对齐 Python: self.card.agent_cards.append(card)
+	t.card.AddAgentCard(card)
 
 	// 识别 supervisor，设置 P2P timeout
 	if card.ID == t.supervisorID {
@@ -261,6 +273,9 @@ func (t *HierarchicalTeam) RemoveAgent(ctx context.Context, agentID string) erro
 			Msg("注销 Agent 失败")
 		return err
 	}
+
+	// 对齐 Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
+	t.card.RemoveAgentCard(agentID)
 
 	logger.Info(teamLogComponent).
 		Str("action", "remove_agent").

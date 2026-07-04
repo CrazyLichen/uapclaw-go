@@ -143,7 +143,8 @@ func (c *ToolResultBudgetProcessorConfig) Validate() error {
 //
 // 对应 Python: ToolResultBudgetProcessor.trigger_add_messages()
 func (p *ToolResultBudgetProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
+	allMsgs, _ := mc.GetMessages(0, true)
+	allMessages := append(allMsgs, messagesToAdd...)
 	exceededRounds := p.roundBudgetExceeded(allMessages, mc)
 	if len(exceededRounds) > 0 {
 		logger.Info(logger.ComponentAgentCore).
@@ -165,7 +166,7 @@ func (p *ToolResultBudgetProcessor) OnAddMessages(ctx context.Context, mc iface.
 	po := iface.NewProcessorOption(opts...)
 	p.sysOperation = po.SysOperation
 
-	contextMessages := mc.GetMessages(0, true)
+	contextMessages, _ := mc.GetMessages(0, true)
 	allMessages := append(contextMessages, messagesToAdd...)
 	contextSize := len(contextMessages)
 	updatedMessages := make([]llm_schema.BaseMessage, len(allMessages))
@@ -367,16 +368,8 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 //
 // 对应 Python: ToolResultBudgetProcessor._should_offload_message()
 func (p *ToolResultBudgetProcessor) shouldOffloadMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage, mc iface.ModelContext) bool {
-	// 规则 1：角色检查
-	roleMatch := false
-	role := message.GetRole().String()
-	for _, rt := range p.config.OffloadMessageTypes {
-		if rt == role {
-			roleMatch = true
-			break
-		}
-	}
-	if !roleMatch {
+	// 规则 1：严格类型检查，对齐 Python isinstance(message, ToolMessage)
+	if message.GetRole() != llm_schema.RoleTypeTool {
 		return false
 	}
 

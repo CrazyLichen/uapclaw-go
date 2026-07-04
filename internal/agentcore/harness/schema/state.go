@@ -31,13 +31,6 @@ type DeepAgentState struct {
 	PlanMode PlanModeState `json:"plan_mode"`
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// sessionStateKey 会话状态字典中的 DeepAgent 状态键
-	sessionStateKey = "deepagent"
-)
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewPlanModeState 创建带默认值的 PlanModeState
@@ -77,25 +70,24 @@ func (PlanModeState) FromDict(data map[string]any) PlanModeState {
 // NewDeepAgentState 创建带默认值的 DeepAgentState
 func NewDeepAgentState() DeepAgentState {
 	return DeepAgentState{
-		Iteration: 0,
-		PlanMode:  NewPlanModeState(),
+		Iteration:        0,
+		PendingFollowUps: []string{},
+		PlanMode:         NewPlanModeState(),
 	}
 }
 
-// ToSessionDict 将 DeepAgentState 序列化为 JSON 友好的字典，包装在 deepagent 键下
+// ToSessionDict 将 DeepAgentState 序列化为 JSON 友好的扁平字典
 func (s DeepAgentState) ToSessionDict() map[string]any {
-	inner := map[string]any{
+	result := map[string]any{
 		"iteration":            s.Iteration,
 		"stop_condition_state": s.StopConditionState,
 		"pending_follow_ups":   s.PendingFollowUps,
 		"plan_mode":            s.PlanMode.ToDict(),
 	}
 	if s.TaskPlan != nil {
-		inner["task_plan"] = s.TaskPlan.ToDict()
+		result["task_plan"] = s.TaskPlan.ToDict()
 	}
-	return map[string]any{
-		sessionStateKey: inner,
-	}
+	return result
 }
 
 // FromSessionDict 从会话快照字典恢复 DeepAgentState，nil 输入返回默认值
@@ -103,10 +95,9 @@ func (DeepAgentState) FromSessionDict(data map[string]any) DeepAgentState {
 	if data == nil {
 		return NewDeepAgentState()
 	}
-	inner, ok := data[sessionStateKey].(map[string]any)
-	if !ok {
-		return NewDeepAgentState()
-	}
+
+	// 直接从扁平字典读取（与 Python to_session_dict/from_session_dict 对齐）
+	inner := data
 
 	// 解析 task_plan
 	var taskPlan *TaskPlan
@@ -125,8 +116,10 @@ func (DeepAgentState) FromSessionDict(data map[string]any) DeepAgentState {
 	}
 
 	// 解析 pending_follow_ups
-	var pendingFollowUps []string
-	pendingFollowUps = parseStringSlice(inner, "pending_follow_ups")
+	pendingFollowUps := parseStringSlice(inner, "pending_follow_ups")
+	if pendingFollowUps == nil {
+		pendingFollowUps = []string{}
+	}
 
 	// 解析 plan_mode
 	var planMode PlanModeState

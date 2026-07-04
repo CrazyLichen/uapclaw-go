@@ -11,7 +11,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -64,7 +64,7 @@ type ToolInterruptHandler struct {
 // ExecuteToolCallFunc 工具调用执行函数类型。
 // 对应 Python: Optional[Callable] — handle_resume 中调用 execute_tool_call(ctx, tools, session, context)。
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
-// 返回 []ability.ExecuteResult（替代原 []any），提供类型安全。
+// 返回 []agentschema.ExecuteResult（替代原 []any），提供类型安全。
 type ExecuteToolCallFunc func(
 
 	// ──────────────────────────── 常量 ────────────────────────────
@@ -74,7 +74,7 @@ type ExecuteToolCallFunc func(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
-) ([]ability.ExecuteResult, error)
+) ([]agentschema.ExecuteResult, error)
 
 const (
 	// logComponent 日志组件标识
@@ -98,7 +98,7 @@ func NewToolInterruptHandler(agent InterruptAgent) *ToolInterruptHandler {
 //
 // 对齐 Python: build_interrupt_state(results, tool_calls, ai_message, iteration, original_query)
 func (h *ToolInterruptHandler) BuildInterruptState(
-	results []ability.ExecuteResult,
+	results []agentschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
@@ -266,7 +266,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	// 重执行工具调用
 	// 对齐 Python: results = await execute_tool_call(ctx, tools_to_execute, session, context)
 	// Python 中 execute_tool_call 失败时异常直接传播给调用方
-	var results []ability.ExecuteResult
+	var results []agentschema.ExecuteResult
 	if len(toolsToExecute) > 0 && resumeCtx.ExecuteToolCall != nil {
 		var err error
 		results, err = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
@@ -345,7 +345,7 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 //   - payloads: []PayloadEntry
 //   - autoConfirmMapping: innerID → autoConfirmKey
 func (h *ToolInterruptHandler) collectInterrupts(
-	results []ability.ExecuteResult,
+	results []agentschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 ) (map[string]*ToolInterruptEntry, []PayloadEntry, map[string]string) {
 	interruptedTools := make(map[string]*ToolInterruptEntry)

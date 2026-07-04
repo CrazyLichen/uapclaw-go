@@ -28,8 +28,8 @@ type ModelContext interface {
 	// Len 返回上下文消息数量
 	Len() int
 	// GetMessages 获取消息列表
-	// size ≤ 0 表示不限制；withHistory 控制是否包含历史消息
-	GetMessages(size int, withHistory bool) []llm_schema.BaseMessage
+	// size ≤ 0 表示不限制；size < 0 返回错误；withHistory 控制是否包含历史消息
+	GetMessages(size int, withHistory bool) ([]llm_schema.BaseMessage, error)
 	// SetMessages 替换消息列表
 	// withHistory 控制是否替换历史消息
 	SetMessages(messages []llm_schema.BaseMessage, withHistory bool)
@@ -145,6 +145,8 @@ type CompressContextOptions struct {
 	SysOperation sysop.SysOperation
 	// ModelName 模型名称，用于 resolve_context_max
 	ModelName string
+	// SessionID 显式 session_id fallback，对齐 Python compress_context(session_id=...)
+	SessionID string
 }
 
 // ClearContextOptions ClearContext 方法可选项
@@ -260,6 +262,11 @@ func WithCompressSysOperation(op sysop.SysOperation) CompressContextOption {
 // WithModelName 设置模型名称，用于 resolve_context_max
 func WithModelName(name string) CompressContextOption {
 	return func(o *CompressContextOptions) { o.ModelName = name }
+}
+
+// WithCompressSessionID 设置显式 session_id fallback，对齐 Python compress_context(session_id=...)
+func WithCompressSessionID(sid string) CompressContextOption {
+	return func(o *CompressContextOptions) { o.SessionID = sid }
 }
 
 // WithSessionID 设置会话 ID（用于 ClearContext）
@@ -407,7 +414,8 @@ func getLastAssistantUsageTokens(messages []llm_schema.BaseMessage) int {
 }
 
 // countSingleMessageTokens 计算单条消息的 token 数。
-// 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/4。
+// 优先使用 tokenCounter.CountMessages，失败时 fallback 到 len(content)/4 向下取整。
+// 对齐 Python: SessionModelContext._count_single_message_tokens()
 func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
 		count, err := tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
@@ -415,16 +423,13 @@ func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.Tok
 			return count
 		}
 	}
-	// fallback：字符串长度 / 4
-	text := msg.GetContent().Text()
-	if text == "" {
-		return 0
-	}
-	return len(text) / 4
+	// fallback：字符串长度 / 4 向下取整，对齐 Python len//4
+	return len(msg.GetContent().Text()) / 4
 }
 
 // countToolTokens 计算单个工具定义的 token 数。
-// 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4。
+// 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4 向下取整。
+// 对齐 Python: SessionModelContext._count_tool_tokens()
 func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
 		count, err := tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, "")
@@ -432,7 +437,7 @@ func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter)
 			return count
 		}
 	}
-	// fallback：拼接 name + description + parameters JSON，长度 / 4
+	// fallback：拼接 name + description + parameters JSON，长度 / 4 向下取整，对齐 Python len//4
 	text := toolInfo.Name
 	if toolInfo.Description != "" {
 		text += toolInfo.Description
@@ -441,9 +446,6 @@ func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter)
 		if data, err := json.Marshal(toolInfo.Parameters); err == nil {
 			text += string(data)
 		}
-	}
-	if text == "" {
-		return 0
 	}
 	return len(text) / 4
 }

@@ -214,6 +214,13 @@ func (r *ProcessorStateRecorder) BuildState(input ProcessorStateInput) *schema.C
 	// h. 设置 Model
 	state.Model = resolveModelName(input.Processor, input.Trigger, input.Force)
 
+	// i. 设置 Statistic，对齐 Python build_state(statistic=...)
+	statisticMessages := input.AfterMessages
+	if statisticMessages == nil {
+		statisticMessages = input.BeforeMessages
+	}
+	state.Statistic = r.buildStatistic(statisticMessages)
+
 	return state
 }
 
@@ -253,6 +260,46 @@ func (r *ProcessorStateRecorder) measureMessages(messages []llm_schema.BaseMessa
 		return 0
 	}
 	return int(math.Ceil(float64(totalChars) / 4))
+}
+
+// buildStatistic 构建上下文统计快照。
+//
+// 对应 Python: ContextProcessorStateRecorder._build_statistic()
+func (r *ProcessorStateRecorder) buildStatistic(messages []llm_schema.BaseMessage) iface.ContextStats {
+	stat := iface.ContextStats{}
+	for _, msg := range messages {
+		stat.TotalMessages++
+		tokens := r.countMessageForStatistic(msg)
+		switch msg.GetRole() {
+		case llm_schema.RoleTypeAssistant:
+			stat.AssistantMessages++
+			stat.AssistantMessageTokens += tokens
+		case llm_schema.RoleTypeUser:
+			stat.UserMessages++
+			stat.UserMessageTokens += tokens
+		case llm_schema.RoleTypeSystem:
+			stat.SystemMessages++
+			stat.SystemMessageTokens += tokens
+		case llm_schema.RoleTypeTool:
+			stat.ToolMessages++
+			stat.ToolMessageTokens += tokens
+		}
+		stat.TotalTokens += tokens
+	}
+	return stat
+}
+
+// countMessageForStatistic 统计单条消息的 token 数，用于构建 statistic。
+//
+// 对应 Python: ContextProcessorStateRecorder._count_message_for_statistic()
+func (r *ProcessorStateRecorder) countMessageForStatistic(msg llm_schema.BaseMessage) int {
+	if r.tokenCounter != nil {
+		count, err := r.tokenCounter.CountMessages([]llm_schema.BaseMessage{msg}, "")
+		if err == nil {
+			return count
+		}
+	}
+	return len(msg.GetContent().Text()) / 4
 }
 
 // buildSaved 构建压缩节省量指标。
@@ -367,10 +414,49 @@ func contextPercent(tokens, contextMax int) int {
 
 // resolveModelName 解析处理器使用的模型名称。
 //
-// 由于 Go 类型系统限制，简化为返回空字符串。
+// 优先从 config.model.model_name/model 提取，对齐 Python _resolve_model_name()。
+// Go 无反射 getattr，通过 ProcessorConfig 接口的可选 ModelName() 方法获取，
+// 若 config 未实现该方法则回退到 BaseProcessor.Config() 上继续尝试。
 //
 // 对应 Python: ContextProcessorStateRecorder._resolve_model_name()
 func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) string {
+	_ = trigger
+	_ = force
+	if proc == nil {
+		return ""
+	}
+
+	// 尝试从 processor 获取 BaseProcessor 的 Config()
+	type configProvider interface {
+		Config() iface.ProcessorConfig
+	}
+	if cp, ok := proc.(configProvider); ok {
+		cfg := cp.Config()
+		if cfg != nil {
+			// 尝试 config 上的 ModelName() 方法
+			type modelNameProvider interface {
+				ModelName() string
+			}
+			if mp, ok := cfg.(modelNameProvider); ok {
+				if name := mp.ModelName(); name != "" {
+					return name
+				}
+			}
+			// 尝试从 config.model 上获取 model_name
+			type modelConfigProvider interface {
+				GetModel() any
+			}
+			if mcp, ok := cfg.(modelConfigProvider); ok {
+				if modelCfg := mcp.GetModel(); modelCfg != nil {
+					if mp, ok := modelCfg.(modelNameProvider); ok {
+						if name := mp.ModelName(); name != "" {
+							return name
+						}
+					}
+				}
+			}
+		}
+	}
 	return ""
 }
 

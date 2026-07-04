@@ -109,7 +109,8 @@ func (mcp *MicroCompactProcessor) ProcessorType() string {
 //
 // 对应 Python: MicroCompactProcessor.trigger_add_messages()
 func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, _ ...iface.Option) (bool, error) {
-	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
+	allMsgs, _ := mc.GetMessages(0, true)
+	allMessages := append(allMsgs, messagesToAdd...)
 	if !mcp.IsAPIRound(allMessages) {
 		return false, nil
 	}
@@ -120,7 +121,8 @@ func (mcp *MicroCompactProcessor) TriggerAddMessages(_ context.Context, mc iface
 //
 // 对应 Python: MicroCompactProcessor.on_add_messages()
 func (mcp *MicroCompactProcessor) OnAddMessages(_ context.Context, mc iface.ModelContext, messagesToAdd []llm_schema.BaseMessage, opts ...iface.Option) (*iface.ContextEvent, []llm_schema.BaseMessage, error) {
-	allMessages := append(mc.GetMessages(0, true), messagesToAdd...)
+	allMsgs, _ := mc.GetMessages(0, true)
+	allMessages := append(allMsgs, messagesToAdd...)
 
 	// 从 opts 提取 force 标志
 	po := iface.NewProcessorOption(opts...)

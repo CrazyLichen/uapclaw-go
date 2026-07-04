@@ -273,14 +273,20 @@ func TestContextMessageBuffer_PopBack(t *testing.T) {
 		}
 	})
 
-	t.Run("弹出数量为零", func(t *testing.T) {
+	t.Run("弹出数量为零弹出全部", func(t *testing.T) {
 		history := []llm_schema.BaseMessage{
 			llm_schema.NewUserMessage("h1"),
 		}
 		buf := NewContextMessageBuffer(history, 0)
 		popped := buf.PopBack(0, true)
-		if popped != nil {
-			t.Errorf("期望弹出 nil, 实际=%v", popped)
+		// size=0 时弹出全部消息，对齐 Python pop_back(size=None)
+		if len(popped) != 1 {
+			t.Errorf("期望弹出 1 条（全部），实际=%d", len(popped))
+		}
+		// 缓冲区应为空
+		remaining := buf.GetBack(0, true)
+		if len(remaining) != 0 {
+			t.Errorf("期望剩余 0 条，实际=%d", len(remaining))
 		}
 	})
 }

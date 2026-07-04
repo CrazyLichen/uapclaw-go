@@ -324,6 +324,15 @@ func (u *SessionMemoryDirectUpdater) SetInheritedSystemPrompt(prompt string) {
 //
 // 对应 Python: SessionMemoryUpdateAgent._invoke_direct_replace()
 func (u *SessionMemoryDirectUpdater) Invoke(ctx context.Context, opts SessionMemoryUpdateOptions) error {
+	// 对齐 Python: if self._config.model is None or self._config.model_client is None: raise RuntimeError(...)
+	if u.config.Model == nil || u.config.ModelClient == nil {
+		logger.Error(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "SessionMemoryDirectUpdater.Invoke").
+			Msg("模型配置缺失，无法创建模型实例")
+		return fmt.Errorf("模型配置缺失: Model=%v, ModelClient=%v", u.config.Model, u.config.ModelClient)
+	}
+
 	// 确保 model 已创建（延迟初始化）
 	if u.model == nil {
 		model, err := llm.NewModel(u.config.ModelClient, u.config.Model)
@@ -637,7 +646,7 @@ func (m *SessionMemoryManager) CollectContextWindow(mc iface.ModelContext) *ifac
 	if mc == nil {
 		return iface.NewContextWindow()
 	}
-	messages := mc.GetMessages(0, false)
+	messages, _ := mc.GetMessages(0, false)
 	window := iface.NewContextWindow()
 	window.ContextMessages = messages
 	return window

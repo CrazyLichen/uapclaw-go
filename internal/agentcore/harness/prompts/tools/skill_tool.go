@@ -4,8 +4,8 @@ package tools
 
 // skillToolDescription skill_tool 工具双语描述
 var skillToolDescription = map[string]string{
-	"cn": "",
-	"en": "",
+	"cn": "使用此工具查看特定技能的内容",
+	"en": "Use this tool to view the skill contents of a certain skill",
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────

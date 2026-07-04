@@ -339,7 +339,10 @@ func TestSessionModelContext_GetMessages(t *testing.T) {
 	})
 
 	t.Run("获取全部消息", func(t *testing.T) {
-		msgs := mc.GetMessages(0, true)
+		msgs, err := mc.GetMessages(0, true)
+		if err != nil {
+			t.Errorf("不期望错误: %v", err)
+		}
 		if len(msgs) != 2 {
 			t.Errorf("期望消息数=2, 实际=%d", len(msgs))
 		}
@@ -347,9 +350,19 @@ func TestSessionModelContext_GetMessages(t *testing.T) {
 
 	t.Run("限制返回数量", func(t *testing.T) {
 		size := 1
-		msgs := mc.GetMessages(size, true)
+		msgs, err := mc.GetMessages(size, true)
+		if err != nil {
+			t.Errorf("不期望错误: %v", err)
+		}
 		if len(msgs) != 1 {
 			t.Errorf("期望消息数=1, 实际=%d", len(msgs))
+		}
+	})
+
+	t.Run("负数size返回错误", func(t *testing.T) {
+		_, err := mc.GetMessages(-1, true)
+		if err == nil {
+			t.Errorf("期望负数 size 返回错误，实际返回 nil")
 		}
 	})
 }
@@ -1442,14 +1455,14 @@ func TestCountSingleMessageTokens_tokenCounter失败降级(t *testing.T) {
 	mc := newTestSessionModelContext(func(o *testContextOpts) {
 		o.tokenCounter = tc
 	})
-	msg := llm_schema.NewUserMessage("abcdefgh") // 8 chars → (8+3)/4 = 2
+	msg := llm_schema.NewUserMessage("abcdefgh") // 8 chars → 8/4 = 2（向下取整，对齐 Python）
 	result := mc.countSingleMessageTokens(msg)
 	if result != 2 {
 		t.Errorf("期望 2（降级），实际 %d", result)
 	}
 }
 
-// TestCountSingleMessageTokens_tokenCounter返回0 测试 tokenCounter 返回 0 时降级
+// TestCountSingleMessageTokens_tokenCounter返回0 测试 tokenCounter 返回 0 时直接使用 0（对齐 Python）
 func TestCountSingleMessageTokens_tokenCounter返回0(t *testing.T) {
 	tc := &mockTokenCounter{
 		countFn: func(text string, model string) (int, error) {
@@ -1459,10 +1472,10 @@ func TestCountSingleMessageTokens_tokenCounter返回0(t *testing.T) {
 	mc := newTestSessionModelContext(func(o *testContextOpts) {
 		o.tokenCounter = tc
 	})
-	msg := llm_schema.NewUserMessage("abcdefgh") // 8 chars → (8+3)/4 = 2
+	msg := llm_schema.NewUserMessage("abcdefgh")
 	result := mc.countSingleMessageTokens(msg)
-	if result != 2 {
-		t.Errorf("期望 2（降级），实际 %d", result)
+	if result != 0 {
+		t.Errorf("期望 0（tokenCounter 返回 0 直接使用，不降级），实际 %d", result)
 	}
 }
 

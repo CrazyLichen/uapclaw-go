@@ -50,15 +50,15 @@ func newTestTeam(teamID string, rootAgentID string) *HierarchicalToolsTeam {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID(teamID),
 	)
-	var config *HierarchicalToolsTeamConfig
-	if rootAgentID != "" {
-		rootCard := agentschema.NewAgentCard(
-			cschema.WithName("root"),
-			cschema.WithID(rootAgentID),
-		)
-		config = &HierarchicalToolsTeamConfig{
-			RootAgent: rootCard,
-		}
+	if rootAgentID == "" {
+		rootAgentID = "default_root"
+	}
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID(rootAgentID),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
 	}
 	return NewHierarchicalToolsTeam(teamCard, config, nil)
 }
@@ -68,15 +68,15 @@ func newTestTeamWithRuntime(teamID string, rootAgentID string, bus team_runtime.
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID(teamID),
 	)
-	var config *HierarchicalToolsTeamConfig
-	if rootAgentID != "" {
-		rootCard := agentschema.NewAgentCard(
-			cschema.WithName("root"),
-			cschema.WithID(rootAgentID),
-		)
-		config = &HierarchicalToolsTeamConfig{
-			RootAgent: rootCard,
-		}
+	if rootAgentID == "" {
+		rootAgentID = "default_root"
+	}
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID(rootAgentID),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
 	}
 
 	rtCfg := team_runtime.NewRuntimeConfig(
@@ -121,14 +121,20 @@ func TestNewHierarchicalToolsTeam(t *testing.T) {
 	}
 }
 
-// TestNewHierarchicalToolsTeam_默认配置 验证 nil config 使用默认值。
+// TestNewHierarchicalToolsTeam_默认配置 验证 config 使用默认值。
 func TestNewHierarchicalToolsTeam_默认配置(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
-	if team.rootAgentID != "" {
-		t.Errorf("期望 rootAgentID 为空, 实际 = %s", team.rootAgentID)
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := NewHierarchicalToolsTeamConfig()
+	config.RootAgent = rootCard
+	team := NewHierarchicalToolsTeam(teamCard, config, nil)
+	if team.rootAgentID != "root_id" {
+		t.Errorf("期望 rootAgentID = root_id, 实际 = %s", team.rootAgentID)
 	}
 	if team.pendingChildren == nil {
 		t.Error("期望 pendingChildren 非空")
@@ -140,12 +146,19 @@ func TestNewHierarchicalToolsTeam_自定义Runtime(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
 	rtCfg := team_runtime.NewRuntimeConfig(
 		team_runtime.WithRuntimeTeamID("team_1"),
 	)
 	tr := team_runtime.NewTeamRuntime(*rtCfg)
 
-	team := NewHierarchicalToolsTeam(teamCard, nil, tr)
+	team := NewHierarchicalToolsTeam(teamCard, config, tr)
 	if team.runtime != tr {
 		t.Error("期望使用传入的 runtime")
 	}
@@ -178,10 +191,16 @@ func TestHierarchicalToolsTeam_Invoke_未配置RootAgent(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	config := NewHierarchicalToolsTeamConfig() // RootAgent 为 nil
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := NewHierarchicalToolsTeamConfig()
+	config.RootAgent = rootCard
 
 	team := NewHierarchicalToolsTeam(teamCard, config, nil)
 
+	// 未注册 root_agent 到 runtime，invoke 应报错
 	_, err := team.Invoke(context.Background(), map[string]any{"query": "hello"})
 	if err == nil {
 		t.Error("期望错误，实际为 nil")
@@ -217,7 +236,14 @@ func TestHierarchicalToolsTeam_Card(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
+	team := NewHierarchicalToolsTeam(teamCard, config, nil)
 	if team.Card().GetID() != "team_1" {
 		t.Errorf("期望 Card ID = team_1, 实际 = %s", team.Card().GetID())
 	}
@@ -228,7 +254,14 @@ func TestHierarchicalToolsTeam_GetAgentCount(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
+	team := NewHierarchicalToolsTeam(teamCard, config, nil)
 	if team.GetAgentCount() != 0 {
 		t.Errorf("期望 AgentCount = 0, 实际 = %d", team.GetAgentCount())
 	}
@@ -245,12 +278,15 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
-
 	rootCard := agentschema.NewAgentCard(
 		cschema.WithName("root"),
 		cschema.WithID("root_id"),
 	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
+	team := NewHierarchicalToolsTeam(teamCard, config, nil)
+
 	childCard := agentschema.NewAgentCard(
 		cschema.WithName("child"),
 		cschema.WithID("child_id"),
@@ -286,7 +322,14 @@ func TestHierarchicalToolsTeam_setupHierarchy_幂等(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
-	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
+	rootCard := agentschema.NewAgentCard(
+		cschema.WithName("root"),
+		cschema.WithID("root_id"),
+	)
+	config := &HierarchicalToolsTeamConfig{
+		RootAgent: rootCard,
+	}
+	team := NewHierarchicalToolsTeam(teamCard, config, nil)
 
 	// 无 pendingChildren，setupHierarchy 应成功
 	if err := team.setupHierarchy(context.Background()); err != nil {
@@ -575,6 +618,14 @@ func TestHierarchicalToolsTeam_Send_运行时已启动(t *testing.T) {
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
+	}
+
+	senderCard := agentschema.NewAgentCard(
+		cschema.WithName("sender"),
+		cschema.WithID("sender"),
+	)
+	if err := team.AddAgent(context.Background(), senderCard, noopProvider()); err != nil {
+		t.Fatalf("AddAgent sender 失败: %v", err)
 	}
 
 	result, err := team.Send(context.Background(), map[string]any{"msg": "hello"}, "root_id", "sender")

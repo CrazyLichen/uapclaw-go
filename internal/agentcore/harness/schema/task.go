@@ -113,7 +113,7 @@ func (item TodoItem) ToDict() map[string]any {
 	result := map[string]any{
 		"id":           item.ID,
 		"content":      item.Content,
-		"active_form":  item.ActiveForm,
+		"activeForm":   item.ActiveForm,
 		"description":  item.Description,
 		"status":       item.Status.String(),
 	}
@@ -137,7 +137,7 @@ func (TodoItem) FromDict(data map[string]any) TodoItem {
 	item := TodoItem{
 		ID:          strVal(data, "id", ""),
 		Content:     strVal(data, "content", ""),
-		ActiveForm:  strVal(data, "active_form", ""),
+		ActiveForm:  strVal(data, "activeForm", ""),
 		Description: strVal(data, "description", ""),
 	}
 	if statusStr, ok := data["status"].(string); ok {
@@ -211,7 +211,7 @@ func (tp *TaskPlan) MarkInProgress(taskID string) error {
 	return nil
 }
 
-// MarkCompleted 将任务标记为已完成，并设置结果摘要
+// MarkCompleted 将任务标记为已完成，并设置结果摘要；若为当前任务则清除 CurrentTaskID
 func (tp *TaskPlan) MarkCompleted(taskID string, summary string) error {
 	task := tp.GetTask(taskID)
 	if task == nil {
@@ -219,10 +219,13 @@ func (tp *TaskPlan) MarkCompleted(taskID string, summary string) error {
 	}
 	task.Status = TodoStatusCompleted
 	task.ResultSummary = summary
+	if tp.CurrentTaskID == taskID {
+		tp.CurrentTaskID = ""
+	}
 	return nil
 }
 
-// MarkCancelled 将任务标记为已取消，并设置取消原因
+// MarkCancelled 将任务标记为已取消，并设置取消原因；若为当前任务则清除 CurrentTaskID
 func (tp *TaskPlan) MarkCancelled(taskID string, reason string) error {
 	task := tp.GetTask(taskID)
 	if task == nil {
@@ -230,6 +233,9 @@ func (tp *TaskPlan) MarkCancelled(taskID string, reason string) error {
 	}
 	task.Status = TodoStatusCancelled
 	task.ResultSummary = reason
+	if tp.CurrentTaskID == taskID {
+		tp.CurrentTaskID = ""
+	}
 	return nil
 }
 
@@ -322,11 +328,11 @@ func (r ModelUsageRecord) String() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// allDepsCompleted 检查任务的所有依赖项是否已完成
+// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）
 func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
 	for _, depID := range task.DependsOn {
 		dep := tp.GetTask(depID)
-		if dep == nil || dep.Status != TodoStatusCompleted {
+		if dep == nil || (dep.Status != TodoStatusCompleted && dep.Status != TodoStatusCancelled) {
 			return false
 		}
 	}

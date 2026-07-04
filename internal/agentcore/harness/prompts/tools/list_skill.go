@@ -4,8 +4,8 @@ package tools
 
 // listSkillDescription list_skill 工具双语描述
 var listSkillDescription = map[string]string{
-	"cn": "",
-	"en": "",
+	"cn": "列出可用技能或为当前任务选择相关技能。",
+	"en": "List available skills or select relevant skills for the current task.",
 }
 
 // ──────────────────────────── 结构体 ────────────────────────────

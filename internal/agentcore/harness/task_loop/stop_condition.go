@@ -96,18 +96,21 @@ type CustomPredicateEvaluator struct {
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMaxRoundsEvaluator 创建最大轮次评估器。
+// maxRounds 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
 // 对齐 Python: MaxRoundsEvaluator
 func NewMaxRoundsEvaluator(maxRounds int) *MaxRoundsEvaluator {
 	return &MaxRoundsEvaluator{maxRounds: maxRounds}
 }
 
 // NewTokenBudgetEvaluator 创建 token 预算评估器。
+// maxTokens 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
 // 对齐 Python: TokenBudgetEvaluator
 func NewTokenBudgetEvaluator(maxTokens int) *TokenBudgetEvaluator {
 	return &TokenBudgetEvaluator{maxTokens: maxTokens}
 }
 
 // NewTimeoutEvaluator 创建超时评估器。
+// timeoutSeconds 为 0 或负数时，ShouldStop 立即返回 true（即"立即停止"）。
 // 对齐 Python: TimeoutEvaluator
 func NewTimeoutEvaluator(timeoutSeconds float64) *TimeoutEvaluator {
 	return &TimeoutEvaluator{timeoutSeconds: timeoutSeconds}

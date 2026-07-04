@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -301,6 +302,18 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 	if !tr.IsRunning() {
 		return nil, fmt.Errorf("团队运行时未启动，无法发送消息")
 	}
+	// 对齐 Python: if not sender: raise ...
+	if sender == "" {
+		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "sender 不能为空"),
+		)
+	}
+	// 对齐 Python: if not self.has_agent(sender): raise ...
+	if !tr.HasAgent(sender) {
+		return nil, exception.BuildError(exception.StatusAgentTeamAgentNotFound,
+			exception.WithParam("error_msg", fmt.Sprintf("发送者 Agent %s 不存在", sender)),
+		)
+	}
 	if !tr.HasAgent(recipient) {
 		return nil, fmt.Errorf("接收者 Agent %s 不存在", recipient)
 	}
@@ -321,6 +334,18 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	if !tr.IsRunning() {
 		return fmt.Errorf("团队运行时未启动，无法发布消息")
+	}
+	// 对齐 Python: if not sender: raise ...
+	if sender == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "sender 不能为空"),
+		)
+	}
+	// 对齐 Python: if not self.has_agent(sender): raise ...
+	if !tr.HasAgent(sender) {
+		return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
+			exception.WithParam("error_msg", fmt.Sprintf("发送者 Agent %s 不存在", sender)),
+		)
 	}
 
 	teamOpts := maschema.NewTeamOptions(opts...)

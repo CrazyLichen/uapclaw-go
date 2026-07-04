@@ -128,7 +128,7 @@ func TestDeepAgentState_默认值(t *testing.T) {
 	}
 }
 
-// TestDeepAgentState_ToSessionDict 验证 DeepAgentState 序列化包含 deepagent 键
+// TestDeepAgentState_ToSessionDict 验证 DeepAgentState 序列化为扁平字典
 func TestDeepAgentState_ToSessionDict(t *testing.T) {
 	s := DeepAgentState{
 		Iteration: 3,
@@ -142,44 +142,37 @@ func TestDeepAgentState_ToSessionDict(t *testing.T) {
 	}
 	d := s.ToSessionDict()
 
-	// 必须包含 deepagent 键
-	inner, ok := d["deepagent"].(map[string]any)
-	if !ok {
-		t.Fatal("缺少 'deepagent' 键或类型不正确")
+	// 扁平结构，直接在顶层
+	if d["iteration"] != 3 {
+		t.Errorf("期望 iteration = 3, 实际 = %v", d["iteration"])
 	}
-
-	if inner["iteration"] != 3 {
-		t.Errorf("期望 iteration = 3, 实际 = %v", inner["iteration"])
+	if d["task_plan"] != nil {
+		t.Errorf("期望 task_plan = nil, 实际 = %v", d["task_plan"])
 	}
-	if inner["task_plan"] != nil {
-		t.Errorf("期望 task_plan = nil, 实际 = %v", inner["task_plan"])
-	}
-	if inner["pending_follow_ups"] == nil {
+	if d["pending_follow_ups"] == nil {
 		t.Error("期望 pending_follow_ups 不为 nil")
 	}
-	if inner["stop_condition_state"] == nil {
+	if d["stop_condition_state"] == nil {
 		t.Error("期望 stop_condition_state 不为 nil")
 	}
-	if inner["plan_mode"] == nil {
+	if d["plan_mode"] == nil {
 		t.Error("期望 plan_mode 不为 nil")
 	}
 }
 
-// TestDeepAgentState_FromSessionDict 验证从会话字典反序列化
+// TestDeepAgentState_FromSessionDict 验证从会话字典反序列化（扁平结构）
 func TestDeepAgentState_FromSessionDict(t *testing.T) {
 	data := map[string]any{
-		"deepagent": map[string]any{
-			"iteration": 5,
-			"task_plan": nil,
-			"stop_condition_state": map[string]any{
-				"condition": "met",
-			},
-			"pending_follow_ups": []any{"item1", "item2"},
-			"plan_mode": map[string]any{
-				"mode":          "plan",
-				"pre_plan_mode": "normal",
-				"plan_slug":     "test-slug",
-			},
+		"iteration": 5,
+		"task_plan": nil,
+		"stop_condition_state": map[string]any{
+			"condition": "met",
+		},
+		"pending_follow_ups": []any{"item1", "item2"},
+		"plan_mode": map[string]any{
+			"mode":          "plan",
+			"pre_plan_mode": "normal",
+			"plan_slug":     "test-slug",
 		},
 	}
 	s := DeepAgentState{}.FromSessionDict(data)
@@ -257,12 +250,8 @@ func TestDeepAgentState_包含TaskPlan(t *testing.T) {
 	}
 	d := original.ToSessionDict()
 
-	// 验证 task_plan 不为 nil
-	inner, ok := d["deepagent"].(map[string]any)
-	if !ok {
-		t.Fatal("缺少 'deepagent' 键")
-	}
-	if inner["task_plan"] == nil {
+	// 验证 task_plan 不为 nil（扁平结构，不再包装在 deepagent 键下）
+	if d["task_plan"] == nil {
 		t.Error("期望 task_plan 不为 nil")
 	}
 

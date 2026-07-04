@@ -28,6 +28,14 @@ type TeamCardInterface interface {
 
 	// GetAgentCards 返回成员 Agent 卡片列表
 	GetAgentCards() []*agentschema.AgentCard
+	// AddAgentCard 追加成员 Agent 卡片。
+	//
+	// 对齐 Python: self.card.agent_cards.append(card)
+	AddAgentCard(card *agentschema.AgentCard)
+	// RemoveAgentCard 按 agentID 移除成员 Agent 卡片。
+	//
+	// 对齐 Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
+	RemoveAgentCard(agentID string)
 	// GetTopic 返回团队主题/领域
 	GetTopic() string
 	// GetVersion 返回团队版本号
@@ -186,6 +194,24 @@ func (c *TeamCard) String() string {
 
 // GetAgentCards 返回成员 Agent 卡片列表。
 func (c *TeamCard) GetAgentCards() []*agentschema.AgentCard { return c.AgentCards }
+
+// AddAgentCard 追加成员 Agent 卡片。
+//
+// 对齐 Python: self.card.agent_cards.append(card)
+func (c *TeamCard) AddAgentCard(card *agentschema.AgentCard) { c.AgentCards = append(c.AgentCards, card) }
+
+// RemoveAgentCard 按 agentID 移除成员 Agent 卡片。
+//
+// 对齐 Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
+func (c *TeamCard) RemoveAgentCard(agentID string) {
+	filtered := make([]*agentschema.AgentCard, 0, len(c.AgentCards))
+	for _, ac := range c.AgentCards {
+		if ac.ID != agentID {
+			filtered = append(filtered, ac)
+		}
+	}
+	c.AgentCards = filtered
+}
 
 // GetTopic 返回团队主题/领域。
 func (c *TeamCard) GetTopic() string { return c.Topic }

@@ -717,7 +717,7 @@ func (c *ContainerAgent) publishHandoff(
 	}
 
 	topicID := containerTopicPrefix + signal.Target
-	if err := c.Publish(ctx, nextReq, topicID,
+	if err := c.Publish(ctx, map[string]any{"handoff_request": nextReq}, topicID,
 		maschema.WithTeamSessionID(sessionID),
 	); err != nil {
 		logger.Warn(logComponent).Err(err).

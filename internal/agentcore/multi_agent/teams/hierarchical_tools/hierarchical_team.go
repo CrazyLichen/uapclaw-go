@@ -67,6 +67,11 @@ func NewHierarchicalToolsTeam(card maschema.TeamCardInterface, config *Hierarchi
 		config = defaultCfg
 	}
 
+	// 对齐 Python: root_agent: AgentCard = Field(...) 必填
+	if config.RootAgent == nil {
+		panic("NewHierarchicalToolsTeam: config.RootAgent 不能为 nil")
+	}
+
 	teamID := card.GetID()
 	var tr *team_runtime.TeamRuntime
 	if runtime != nil {
@@ -170,6 +175,10 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sess := teamOpts.Session
+	timeout := teamOpts.Timeout
+	if timeout == 0 {
+		timeout = t.config.TeamConfig.MessageTimeout
+	}
 
 	logger.Debug(toolsLogComponent).
 		Str("action", "hierarchical_tools_stream").
@@ -258,6 +267,15 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 		return nil
 	}
 
+	// 对齐 Python: if self.runtime.get_agent_count() >= self.config.max_agents
+	if t.config.TeamConfig.MaxAgents > 0 && t.runtime.GetAgentCount() >= t.config.TeamConfig.MaxAgents {
+		return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
+			exception.WithParam("error_msg", fmt.Sprintf(
+				"Agent 数量超过上限 (%d)", t.config.TeamConfig.MaxAgents,
+			)),
+		)
+	}
+
 	// 注册到运行时（包装为 resources_manager.AgentProvider）
 	wrappedProvider := resources_manager.AgentProvider(provider)
 	if err := t.runtime.RegisterAgent(ctx, card, wrappedProvider); err != nil {
@@ -268,6 +286,9 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 			Msg("注册 Agent 到运行时失败")
 		return err
 	}
+
+	// 对齐 Python: self.card.agent_cards.append(card)
+	t.card.AddAgentCard(card)
 
 	// 识别 rootAgent
 	if card.ID == t.rootAgentID {
@@ -311,6 +332,9 @@ func (t *HierarchicalToolsTeam) RemoveAgent(ctx context.Context, agentID string)
 			Msg("注销 Agent 失败")
 		return err
 	}
+
+	// 对齐 Python: self.card.agent_cards = [c for c in self.card.agent_cards if c.id != removed_card.id]
+	t.card.RemoveAgentCard(agentID)
 
 	logger.Info(toolsLogComponent).
 		Str("action", "remove_agent").
@@ -439,10 +463,10 @@ func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
 
 	resourceMgr := runner.GetResourceMgr()
 	if resourceMgr == nil {
-		logger.Warn(toolsLogComponent).
-			Str("action", "setup_hierarchy").
-			Msg("ResourceMgr 为空，跳过层级建立")
-		return nil
+		// 对齐 Python: Runner.resource_mgr 为 None 时抛异常，非静默跳过
+		return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
+			exception.WithParam("error_msg", "ResourceMgr 未初始化，无法建立层级关系"),
+		)
 	}
 
 	for parentID, childCards := range t.pendingChildren {

@@ -1066,8 +1066,8 @@ type mockModelContextForCountTokens struct {
 }
 
 func (m *mockModelContextForCountTokens) Len() int { return len(m.messages) }
-func (m *mockModelContextForCountTokens) GetMessages(_ int, _ bool) []llm_schema.BaseMessage {
-	return m.messages
+func (m *mockModelContextForCountTokens) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return m.messages, nil
 }
 func (m *mockModelContextForCountTokens) SetMessages(_ []llm_schema.BaseMessage, _ bool) {}
 func (m *mockModelContextForCountTokens) PopMessages(_ int, _ bool) []llm_schema.BaseMessage {

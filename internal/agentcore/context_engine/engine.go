@@ -144,12 +144,12 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 		ce.sysOperation,
 	)
 
+	// 加载已有状态（对齐 Python：先 _load_state_from_session，再存入 pool）
+	loadStateFromSession(mc, sess, opt.HistoryMessages)
+
 	// 存入池
 	ce.contextPool[fullContextID] = mc
 	ce.mu.Unlock()
-
-	// 加载已有状态
-	loadStateFromSession(mc, sess, opt.HistoryMessages)
 
 	// 触发 ContextRetrieved 事件（与缓存命中路径一致）
 	callback.GetCallbackFramework().TriggerContext(ctx, &callback.ContextCallEventData{
@@ -181,9 +181,13 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 // Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
 // Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
 func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CompressContextOption) (string, error) {
+	// 三层 fallback：sess → SessionID 选项 → defaultSessionID，对齐 Python
 	sessionID := defaultSessionID
+	opt := iface.NewCompressContextOptions(opts...)
 	if sess != nil {
 		sessionID = sess.GetSessionID()
+	} else if opt.SessionID != "" {
+		sessionID = opt.SessionID
 	}
 
 	contextID = processContextID(contextID)
@@ -198,7 +202,6 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 	// 对齐 Python: context.compress_context(processor_types=, sys_operation=self._sys_operation, **kwargs)
 	// 若调用方未通过 WithCompressSysOperation 指定，自动注入 ce.sysOperation
 	compressOpts := make([]iface.CompressContextOption, 0, len(opts)+1)
-	opt := iface.NewCompressContextOptions(opts...)
 	if opt.SysOperation == nil && ce.sysOperation != nil {
 		compressOpts = append(compressOpts, iface.WithCompressSysOperation(ce.sysOperation))
 	}
@@ -306,6 +309,8 @@ func (ce *contextEngine) SaveContexts(ctx context.Context, sess sessioninterface
 
 	targetIDs := contextIDs
 	if targetIDs == nil {
+		// 注意：收集 ID 与后续逐个保存之间释放了锁，contextPool 可能被并发修改，
+		// 导致部分 contextID 在保存时已不存在。这是已知的弱一致性语义，静默跳过即可。
 		ce.mu.RLock()
 		for _, mc := range ce.contextPool {
 			if mc.SessionID() == sessionID {

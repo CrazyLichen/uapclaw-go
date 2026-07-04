@@ -74,7 +74,7 @@ func newTestResourceMgr(
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// isAbilityExecutionErrorInResult 检查 ExecuteResult.Result 是否为 *AbilityExecutionError。
+// isAbilityExecutionErrorInResult 检查 saschema.ExecuteResult.Result 是否为 *AbilityExecutionError。
 func isAbilityExecutionErrorInResult(result any) bool {
 	err, ok := result.(error)
 	if !ok {

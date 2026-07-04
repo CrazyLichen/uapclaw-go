@@ -113,13 +113,12 @@ func (b *ContextMessageBuffer) GetBack(size int, withHistory bool) []llm_schema.
 // PopBack 弹出缓冲区尾部消息。
 //
 // withHistory=true 且弹出数量超过上下文部分时，减少 historyMessagesSize。
+// size <= 0 时弹出全部消息，对齐 Python pop_back(size=None)。
 // 对应 Python: ContextMessageBuffer.pop_back
 func (b *ContextMessageBuffer) PopBack(size int, withHistory bool) []llm_schema.BaseMessage {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if size <= 0 {
-		return nil
-	}
+	// size <= 0 时弹出全部，对齐 Python pop_back(size=None)
 	popped := b.getBackInternal(size, withHistory)
 	poppedCount := len(popped)
 
