@@ -39,7 +39,7 @@ type OffloadMessageBuffer struct {
 	// inMemoryMessages 内存中的卸载消息字典
 	inMemoryMessages map[string][]llm_schema.BaseMessage
 	// sysOperation 系统操作接口，用于文件系统 reload
-	sysOperation any
+	sysOperation sysop.SysOperation
 	// workspaceDir 工作空间目录路径
 	workspaceDir string
 	// sessionID 会话 ID

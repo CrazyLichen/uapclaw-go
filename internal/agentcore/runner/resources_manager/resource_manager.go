@@ -584,16 +584,18 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...Resou
 // GetSysOperation 获取系统操作实例列表。
 //
 // 对应 Python: ResourceManager.get_sys_operation(sys_operation_id, **kwargs)
-func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...ResourceOption) ([]any, error) {
+func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...ResourceOption) ([]sysop.SysOperation, error) {
 	o := applyResourceOptions(opts...)
 	results, err := m.innerGetResources(context.Background(), sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy, o.Session)
 	if err != nil {
 		return nil, err
 	}
-	instances := make([]any, 0, len(results))
+	instances := make([]sysop.SysOperation, 0, len(results))
 	for _, r := range results {
 		if r != nil {
-			instances = append(instances, r)
+			if op, ok := r.(sysop.SysOperation); ok {
+				instances = append(instances, op)
+			}
 		}
 	}
 	return instances, nil
