@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -41,14 +42,16 @@ func NewTaskLoopController() *TaskLoopController {
 }
 
 // SubmitRound 提交一轮任务：prepare_round → 构建 InputEvent → 注入元数据 → 发布。
+// runKind 为运行模式（normal/heartbeat/cron），零值空串表示未设置。
+// runContext 为结构化运行时上下文（心跳等场景），nil 表示无上下文。
 // 对齐 Python: TaskLoopController.submit_round
 func (tc *TaskLoopController) SubmitRound(
 	ctx context.Context,
 	sess *session.Session,
 	query string,
 	isFollowUp bool,
-	runKind any,
-	runContext any,
+	runKind rail.RunKind,
+	runContext *rail.RunContext,
 ) error {
 	handler := tc.EventHandler()
 	if handler == nil {
@@ -72,8 +75,8 @@ func (tc *TaskLoopController) SubmitRound(
 	if isFollowUp {
 		meta["is_follow_up"] = true
 	}
-	if runKind != nil {
-		meta["run_kind"] = runKind
+	if runKind != "" {
+		meta["run_kind"] = string(runKind)
 	}
 	if runContext != nil {
 		meta["run_context"] = runContext
@@ -83,6 +86,7 @@ func (tc *TaskLoopController) SubmitRound(
 	logger.Info(logComponent).
 		Int("round_id", roundID).
 		Bool("is_follow_up", isFollowUp).
+		Str("run_kind", string(runKind)).
 		Msg("提交任务轮次")
 
 	return tc.PublishEventAsync(ctx, sess, event)
