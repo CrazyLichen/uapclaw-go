@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	hs "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -73,6 +75,37 @@ func NewSystemPromptBuilderWithFilter(lang string, filter func([]PromptSection) 
 		Language:       lang,
 		sectionsFilter: filter,
 		sections:       make(map[string]PromptSection),
+	}
+}
+
+// NewSystemPromptBuilderWithPromptMode 创建按 PromptMode 过滤节的系统提示词构建器。
+//
+// 三种模式：
+//   - PromptModeFull：不过滤，等效于 NewSystemPromptBuilder
+//   - PromptModeMinimal：仅保留 Priority <= 20 的节
+//   - PromptModeNone：所有节均不参与构建（返回空节列表）
+//
+// 对应 Python: harness/prompts/builder.py SystemPromptBuilder(language, mode)
+func NewSystemPromptBuilderWithPromptMode(language string, mode hs.PromptMode) *SystemPromptBuilder {
+	switch mode {
+	case hs.PromptModeFull:
+		return NewSystemPromptBuilderWithFilter(language, nil)
+	case hs.PromptModeMinimal:
+		return NewSystemPromptBuilderWithFilter(language, func(sections []PromptSection) []PromptSection {
+			result := make([]PromptSection, 0, len(sections))
+			for _, s := range sections {
+				if s.Priority <= 20 {
+					result = append(result, s)
+				}
+			}
+			return result
+		})
+	case hs.PromptModeNone:
+		return NewSystemPromptBuilderWithFilter(language, func(_ []PromptSection) []PromptSection {
+			return nil
+		})
+	default:
+		return NewSystemPromptBuilderWithFilter(language, nil)
 	}
 }
 

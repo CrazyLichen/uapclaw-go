@@ -5,6 +5,7 @@ package prompts
 import (
 	"testing"
 
+	hs "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -271,6 +272,44 @@ func TestSystemPromptBuilder_Build_过滤钩子为nil(t *testing.T) {
 
 	result := builder.Build()
 	assert.Equal(t, "AAA\n\nBBB", result)
+}
+
+// TestNewSystemPromptBuilderWithPromptMode_Full 验证 PromptModeFull 不过滤
+func TestNewSystemPromptBuilderWithPromptMode_Full(t *testing.T) {
+	builder := NewSystemPromptBuilderWithPromptMode("cn", hs.PromptModeFull)
+	builder.AddSection(PromptSection{Name: "high", Content: map[string]string{"cn": "HIGH"}, Priority: 10})
+	builder.AddSection(PromptSection{Name: "mid", Content: map[string]string{"cn": "MID"}, Priority: 20})
+	builder.AddSection(PromptSection{Name: "low", Content: map[string]string{"cn": "LOW"}, Priority: 30})
+
+	result := builder.Build()
+	assert.Equal(t, "HIGH\n\nMID\n\nLOW", result)
+}
+
+// TestNewSystemPromptBuilderWithPromptMode_Minimal 验证 PromptModeMinimal 仅保留 Priority <= 20
+func TestNewSystemPromptBuilderWithPromptMode_Minimal(t *testing.T) {
+	builder := NewSystemPromptBuilderWithPromptMode("cn", hs.PromptModeMinimal)
+	builder.AddSection(PromptSection{Name: "high", Content: map[string]string{"cn": "HIGH"}, Priority: 10})
+	builder.AddSection(PromptSection{Name: "mid", Content: map[string]string{"cn": "MID"}, Priority: 20})
+	builder.AddSection(PromptSection{Name: "low", Content: map[string]string{"cn": "LOW"}, Priority: 30})
+
+	result := builder.Build()
+	assert.Equal(t, "HIGH\n\nMID", result)
+}
+
+// TestNewSystemPromptBuilderWithPromptMode_None 验证 PromptModeNone 返回空字符串
+func TestNewSystemPromptBuilderWithPromptMode_None(t *testing.T) {
+	builder := NewSystemPromptBuilderWithPromptMode("cn", hs.PromptModeNone)
+	builder.AddSection(PromptSection{Name: "high", Content: map[string]string{"cn": "HIGH"}, Priority: 10})
+	builder.AddSection(PromptSection{Name: "low", Content: map[string]string{"cn": "LOW"}, Priority: 30})
+
+	result := builder.Build()
+	assert.Equal(t, "", result)
+}
+
+// TestNewSystemPromptBuilderWithPromptMode_语言设置 验证语言设置正确
+func TestNewSystemPromptBuilderWithPromptMode_语言设置(t *testing.T) {
+	builder := NewSystemPromptBuilderWithPromptMode("en", hs.PromptModeFull)
+	assert.Equal(t, "en", builder.Language)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
