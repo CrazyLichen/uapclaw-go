@@ -18,6 +18,7 @@
 //
 //	controller/
 //	├── doc.go           # 包文档
+//	├── interface.go     # ControllerInterface 接口
 //	├── controller.go    # Controller 主结构体
 //	├── config/          # 控制器配置
 //	│   ├── doc.go

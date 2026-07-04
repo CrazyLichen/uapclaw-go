@@ -153,7 +153,7 @@ func (c *Controller) SetEventHandler(handler modules.EventHandler) {
 
 // AddTaskExecutor 注册 TaskExecutor，支持链式调用。
 // 对应 Python: Controller.add_task_executor(task_type, builder)
-func (c *Controller) AddTaskExecutor(taskType string, builder func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor) *Controller {
+func (c *Controller) AddTaskExecutor(taskType string, builder func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor) ControllerInterface {
 	c.taskScheduler.TaskExecutorRegistry().AddTaskExecutor(taskType, builder)
 	return c
 }
@@ -599,3 +599,6 @@ func formatError(err error) string {
 	}
 	return fmt.Sprintf("%v", err)
 }
+
+// 确保 Controller 满足 ControllerInterface
+var _ ControllerInterface = (*Controller)(nil)
