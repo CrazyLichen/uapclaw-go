@@ -344,7 +344,8 @@ func (c *SubAgentConfig) EffectiveRestrictToWorkDir() bool {
 	return c.RestrictToWorkDir
 }
 
-// NewSubAgentConfig 创建带默认值的子 Agent 配置
+// NewSubAgentConfig 创建子 Agent 配置
+// Python 中 restrict_to_work_dir 默认为 True，Go 零值为 false，需显式设置
 func NewSubAgentConfig() *SubAgentConfig {
 	return &SubAgentConfig{
 		RestrictToWorkDir: true,
