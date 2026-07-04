@@ -111,7 +111,7 @@ func (m *P2PAbilityManager) Execute(
 			m.sem <- struct{}{}
 			defer func() { <-m.sem }()
 
-			r, err := m.executeSingleP2P(ctx, tc, sess)
+			r, err := m.executeSingleP2P(ctx, cbc, tc, sess)
 			if err != nil {
 				results[i] = errorToP2PResult(err, tc.ID)
 			} else {
@@ -120,16 +120,20 @@ func (m *P2PAbilityManager) Execute(
 		}(idx, toolCalls[idx])
 	}
 
-	// 其他调用委托基类
+	// 其他调用也放入 goroutine，对齐 Python asyncio.gather 全并行语义
 	if len(otherIndices) > 0 {
-		otherToolCalls := make([]*llmschema.ToolCall, len(otherIndices))
-		for j, idx := range otherIndices {
-			otherToolCalls[j] = toolCalls[idx]
-		}
-		otherResults := m.AbilityManager.Execute(ctx, cbc, otherToolCalls, sess, tag)
-		for j, idx := range otherIndices {
-			results[idx] = otherResults[j]
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otherToolCalls := make([]*llmschema.ToolCall, len(otherIndices))
+			for j, idx := range otherIndices {
+				otherToolCalls[j] = toolCalls[idx]
+			}
+			otherResults := m.AbilityManager.Execute(ctx, cbc, otherToolCalls, sess, tag)
+			for j, idx := range otherIndices {
+				results[idx] = otherResults[j]
+			}
+		}()
 	}
 
 	wg.Wait()
@@ -160,18 +164,30 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 // executeSingleP2P 单个 P2P 派发。
 //
 // 流程：
-//  1. 解析 toolCall.Arguments 为 map[string]any
-//  2. 从 session 获取 sessionID
-//  3. supervisor.Send(ctx, toolArgs, agentCard.ID)
-//  4. 成功/失败处理
+//  1. 若非 Agent 调用，委托基类（fallback 路径）
+//  2. 解析 toolCall.Arguments 为 map[string]any
+//  3. 从 session 获取 sessionID
+//  4. supervisor.Send(ctx, toolArgs, agentCard.ID)
+//  5. 成功/失败处理
 //
 // 对应 Python: P2PAbilityManager._execute_single_tool_call()
 func (m *P2PAbilityManager) executeSingleP2P(
 	ctx context.Context,
+	cbc *rail.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 ) (agentschema.ExecuteResult, error) {
 	toolName := toolCall.Name
+
+	// 非 Agent 调用 fallback：委托基类
+	// 对齐 Python: if tool_name not in self._agents: return await super()._execute_single_tool_call(...)
+	if !m.IsAgent(toolName) {
+		singleResults := m.AbilityManager.Execute(ctx, cbc, []*llmschema.ToolCall{toolCall}, sess, "")
+		if len(singleResults) > 0 {
+			return singleResults[0], nil
+		}
+		return agentschema.ExecuteResult{}, nil
+	}
 
 	// 解析参数
 	toolArgs, err := ability.ParseToolArguments(toolCall.Arguments)
