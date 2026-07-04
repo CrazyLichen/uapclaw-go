@@ -5,6 +5,7 @@ import (
 
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -79,8 +80,7 @@ type ContextEvent struct {
 // 对应 Python: ContextProcessor.offload_messages(**kwargs) 中的关键字参数
 type ProcessorOption struct {
 	// SysOperation 系统操作接口
-	// ⤵️ 9.32 回填：将 any 替换为 SysOperation 接口类型
-	SysOperation any
+	SysOperation sysop.SysOperation
 	// OffloadHandle 卸载句柄，未指定时自动生成 UUID
 	OffloadHandle string
 	// OffloadType 卸载类型："filesystem" 或 "in_memory"
@@ -95,6 +95,8 @@ type ProcessorOption struct {
 	Metadata map[string]any
 	// Model 模型实例，用于 KV Cache Release
 	Model *llm.Model
+	// ModelName 模型名称，对齐 Python: kwargs.get("model_name") or self._model_name
+	ModelName string
 	// Extra 额外参数
 	Extra map[string]any
 }
@@ -107,8 +109,7 @@ type Option func(*ProcessorOption)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithSysOperation 设置系统操作接口
-// ⤵️ 9.32 回填参数类型
-func WithSysOperation(op any) Option {
+func WithSysOperation(op sysop.SysOperation) Option {
 	return func(o *ProcessorOption) { o.SysOperation = op }
 }
 
@@ -151,6 +152,11 @@ func WithMetadata(metadata map[string]any) Option {
 // WithModel 设置 KV Cache 释放用的模型实例
 func WithModel(m *llm.Model) Option {
 	return func(o *ProcessorOption) { o.Model = m }
+}
+
+// WithProcessorModelName 设置处理器模型名称，对齐 Python: kwargs.get("model_name")
+func WithProcessorModelName(name string) Option {
+	return func(o *ProcessorOption) { o.ModelName = name }
 }
 
 // WithExtra 设置额外参数

@@ -10,9 +10,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -26,11 +28,9 @@ type contextEngine struct {
 	// config 全局引擎配置
 	config schema.ContextEngineConfig
 	// workspace 工作空间，Option 注入
-	// ⤵️ 9.32 回填：替换 any 为 Workspace 接口类型
-	workspace any
+	workspace *hworkspace.Workspace
 	// sysOperation 系统操作接口，Option 注入
-	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
-	sysOperation any
+	sysOperation sysop.SysOperation
 	// contextPool 上下文池，key 为 "sessionID_contextID"
 	contextPool map[string]iface.ModelContext
 	// mu 保护 contextPool 的读写锁
@@ -94,9 +94,11 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 	}
 	fullContextID := sessionID + "_" + contextID
 
-	ce.mu.RLock()
+	// 全程使用写锁，消除 check-then-act 竞态条件
+	// Python 因 asyncio 单线程不存在此问题，Go 多 goroutine 需要全程写锁保证原子性
+	ce.mu.Lock()
 	if mc, ok := ce.contextPool[fullContextID]; ok {
-		ce.mu.RUnlock()
+		ce.mu.Unlock()
 		mc.SetSessionRef(sess)
 		opt := iface.NewCreateContextOptions(opts...)
 		loadStateFromSession(mc, sess, opt.HistoryMessages)
@@ -109,7 +111,6 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 		})
 		return mc, nil
 	}
-	ce.mu.RUnlock()
 
 	opt := iface.NewCreateContextOptions(opts...)
 
@@ -118,6 +119,7 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 	for _, spec := range opt.Processors {
 		p, err := ce.createProcessor(spec.Type, spec.Config)
 		if err != nil {
+			ce.mu.Unlock()
 			return nil, err
 		}
 		processorInstances = append(processorInstances, p)
@@ -143,7 +145,6 @@ func (ce *contextEngine) CreateContext(ctx context.Context, contextID string, se
 	)
 
 	// 存入池
-	ce.mu.Lock()
 	ce.contextPool[fullContextID] = mc
 	ce.mu.Unlock()
 

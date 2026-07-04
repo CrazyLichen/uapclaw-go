@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -486,7 +487,7 @@ func TestNewOffloadMessageBuffer(t *testing.T) {
 // TestOffloadMessageBuffer_SetSysOperation 测试设置系统操作接口
 func TestOffloadMessageBuffer_SetSysOperation(t *testing.T) {
 	buf := NewOffloadMessageBuffer(nil)
-	op := "test_op"
+	var op sysop.SysOperation = nil
 	buf.SetSysOperation(op)
 	if buf.sysOperation != op {
 		t.Errorf("期望 sysOperation=%v, 实际=%v", op, buf.sysOperation)

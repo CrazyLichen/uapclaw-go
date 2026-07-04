@@ -10,6 +10,7 @@ import (
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -42,15 +43,6 @@ func (m *mockTokenCounter) CountTools(tools []*schema.ToolInfo, model string) (i
 		return m.countToolsFn(tools, model)
 	}
 	return len(tools) * 20, nil
-}
-
-// mockWorkspace 模拟工作空间，实现 workspaceInterface 接口
-type mockWorkspace struct {
-	rootPath string
-}
-
-func (m *mockWorkspace) RootPath() string {
-	return m.rootPath
 }
 
 // smcMockProcessor 模拟上下文处理器（SessionModelContext 测试用）
@@ -175,7 +167,7 @@ type testContextOpts struct {
 	historyMessages          []llm_schema.BaseMessage
 	processors               []iface.ContextProcessor
 	tokenCounter             token.TokenCounter
-	workspace                any
+	workspace                *hworkspace.Workspace
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -291,16 +283,16 @@ func TestSessionModelContext_WorkspaceDir(t *testing.T) {
 
 	t.Run("workspace 实现 workspaceInterface", func(t *testing.T) {
 		mc := newTestSessionModelContext(func(o *testContextOpts) {
-			o.workspace = &mockWorkspace{rootPath: "/tmp/workspace"}
+			o.workspace = &hworkspace.Workspace{RootPath: "/tmp/workspace"}
 		})
 		if mc.WorkspaceDir() != "/tmp/workspace" {
 			t.Errorf("期望 WorkspaceDir()=/tmp/workspace, 实际=%s", mc.WorkspaceDir())
 		}
 	})
 
-	t.Run("workspace 未实现 workspaceInterface", func(t *testing.T) {
+	t.Run("workspace 为 nil", func(t *testing.T) {
 		mc := newTestSessionModelContext(func(o *testContextOpts) {
-			o.workspace = "just-a-string"
+			o.workspace = nil
 		})
 		if mc.WorkspaceDir() != "" {
 			t.Errorf("期望 WorkspaceDir()='', 实际=%s", mc.WorkspaceDir())
@@ -460,7 +452,7 @@ func TestSessionModelContext_AddMessages(t *testing.T) {
 	t.Run("快速路径-压缩进行中无法获取锁", func(t *testing.T) {
 		mc := newTestSessionModelContext()
 		// 模拟压缩进行中：先获取锁，设置标志
-		mc.activeCompressionInProgress = true
+		mc.activeCompressionInProgress.Store(true)
 		mc.processorLock.Lock()
 
 		done := make(chan struct{})
@@ -479,7 +471,7 @@ func TestSessionModelContext_AddMessages(t *testing.T) {
 
 		<-done
 		// 释放锁
-		mc.activeCompressionInProgress = false
+		mc.activeCompressionInProgress.Store(false)
 		mc.processorLock.Unlock()
 
 		if mc.Len() != 1 {
@@ -727,29 +719,19 @@ func TestSessionModelContext_SaveState(t *testing.T) {
 		})
 
 		state := mc.SaveState()
-		if len(state) != 1 {
-			t.Errorf("期望 state 有 1 个 key, 实际=%d", len(state))
+		if len(state) != 4 {
+			t.Errorf("期望 state 有 4 个 key, 实际=%d", len(state))
 		}
 
-		ctxState, ok := state["test-ctx-id"]
-		if !ok {
-			t.Fatal("期望 state 中有 test-ctx-id 键")
-		}
-
-		stateMap, ok := ctxState.(map[string]any)
-		if !ok {
-			t.Fatal("期望 ctxState 类型为 map[string]any")
-		}
-
-		// 检查消息
-		if msgs, ok := stateMap["messages"].([]llm_schema.BaseMessage); !ok {
+		// 检查消息（扁平格式）
+		if msgs, ok := state["messages"].([]llm_schema.BaseMessage); !ok {
 			t.Error("期望 messages 类型为 []llm_schema.BaseMessage")
 		} else if len(msgs) != 2 {
 			t.Errorf("期望消息数=2, 实际=%d", len(msgs))
 		}
 
 		// 检查卸载消息
-		if offloads, ok := stateMap["offload_messages"].(map[string][]llm_schema.BaseMessage); !ok {
+		if offloads, ok := state["offload_messages"].(map[string][]llm_schema.BaseMessage); !ok {
 			t.Error("期望 offload_messages 类型为 map[string][]llm_schema.BaseMessage")
 		} else if len(offloads) != 1 {
 			t.Errorf("期望卸载句柄数=1, 实际=%d", len(offloads))
@@ -766,8 +748,7 @@ func TestSessionModelContext_SaveState(t *testing.T) {
 		})
 
 		state := mc.SaveState()
-		ctxState := state["test-ctx-id"].(map[string]any)
-		procStates := ctxState["processor_states"].(map[string]any)
+		procStates := state["processor_states"].(map[string]any)
 		procState := procStates["TestProcessor"].(map[string]any)
 		if procState["key"] != "value" {
 			t.Error("期望处理器状态包含 key=value")
@@ -1437,7 +1418,7 @@ func TestRecordFromEvent_有事件(t *testing.T) {
 // TestAddMessages_压缩进行中获取锁 测试压缩进行中但能获取锁时走正常路径
 func TestAddMessages_压缩进行中获取锁(t *testing.T) {
 	mc := newTestSessionModelContext()
-	mc.activeCompressionInProgress = true
+	mc.activeCompressionInProgress.Store(true)
 	// 不锁住 processorLock，TryLock 应成功
 	msg := llm_schema.NewUserMessage("测试")
 	result, err := mc.AddMessages(context.Background(), msg)

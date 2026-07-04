@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -313,7 +314,7 @@ func TestWithSysOption(t *testing.T) {
 	}
 
 	// 验证 WithSysOption 注入选项
-	op := "testSysOp"
+	var op sysop.SysOperation = &sysop.BaseSysOperation{}
 	WithSysOption(op)(p)
 	if p.sysOperation != op {
 		t.Error("WithSysOption 应注入 sysOperation")

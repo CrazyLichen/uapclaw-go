@@ -66,8 +66,8 @@ func TestNewContextEngine_默认配置(t *testing.T) {
 func TestNewContextEngine_WithOptions(t *testing.T) {
 	config := schema.NewContextEngineConfig()
 	ce := NewContextEngine(config,
-		iface.WithWorkspace("test_workspace"),
-		iface.WithEngineSysOperation("test_sys_op"),
+		iface.WithWorkspace(nil),
+		iface.WithEngineSysOperation(nil),
 	)
 	if ce == nil {
 		t.Fatal("期望返回非 nil ContextEngine")

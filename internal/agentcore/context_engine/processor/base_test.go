@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -192,7 +193,7 @@ func TestProcessorOption_选项函数(t *testing.T) {
 
 // TestWithSysOperation 验证 SysOperation 选项
 func TestWithSysOperation(t *testing.T) {
-	op := struct{}{}
+	var op sysop.SysOperation = &sysop.BaseSysOperation{}
 	po := iface.NewProcessorOption(iface.WithSysOperation(op))
 	if po.SysOperation == nil {
 		t.Error("SysOperation 不应为 nil")

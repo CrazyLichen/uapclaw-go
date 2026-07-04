@@ -10,6 +10,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -120,11 +122,9 @@ type ProcessorSpec struct {
 // ContextEngineOptions ContextEngine 构造器可选项
 type ContextEngineOptions struct {
 	// Workspace 工作空间
-	// ⤵️ 9.32 回填：替换 any 为 Workspace 接口类型
-	Workspace any
+	Workspace *hworkspace.Workspace
 	// SysOperation 系统操作接口
-	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
-	SysOperation any
+	SysOperation sysop.SysOperation
 }
 
 // CreateContextOptions CreateContext 方法可选项
@@ -142,8 +142,7 @@ type CompressContextOptions struct {
 	// ProcessorTypes 压缩处理器类型过滤列表
 	ProcessorTypes []string
 	// SysOperation 系统操作接口，由 ContextEngine 透传
-	// ⤵️ 9.32 回填：替换 any 为 SysOperation 接口类型
-	SysOperation any
+	SysOperation sysop.SysOperation
 	// ModelName 模型名称，用于 resolve_context_max
 	ModelName string
 }
@@ -224,14 +223,12 @@ var _ = fmt.Sprintf
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithWorkspace 设置工作空间
-func WithWorkspace(w any) ContextEngineOption {
+func WithWorkspace(w *hworkspace.Workspace) ContextEngineOption {
 	return func(o *ContextEngineOptions) { o.Workspace = w }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // WithEngineSysOperation 设置上下文引擎的系统操作接口
-func WithEngineSysOperation(op any) ContextEngineOption {
+func WithEngineSysOperation(op sysop.SysOperation) ContextEngineOption {
 	return func(o *ContextEngineOptions) { o.SysOperation = op }
 }
 
@@ -256,8 +253,7 @@ func WithProcessorTypes(types []string) CompressContextOption {
 }
 
 // WithCompressSysOperation 设置压缩时的系统操作接口
-// ⤵️ 9.32 回填参数类型
-func WithCompressSysOperation(op any) CompressContextOption {
+func WithCompressSysOperation(op sysop.SysOperation) CompressContextOption {
 	return func(o *CompressContextOptions) { o.SysOperation = op }
 }
 

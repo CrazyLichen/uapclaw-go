@@ -12,6 +12,7 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -136,8 +137,9 @@ func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string,
 
 // writeOffloadToFile 写入卸载内容到文件系统。
 //
-// ⤵️ 9.32 回填：优先使用 SysOperation 异步写，移除 os 兜底路径
-func (p *BaseProcessor) writeOffloadToFile(sessionID string, offloadHandle string, offloadPath string, messages []llm_schema.BaseMessage, sysOperation any) bool {
+// 当 sysOperation 不为 nil 且其 Fs() 不为 nil 时，优先使用 SysOperation 的 Fs().WriteFile 写入；
+// 失败时 fallback 到 os 直接写文件。
+func (p *BaseProcessor) writeOffloadToFile(sessionID string, offloadHandle string, offloadPath string, messages []llm_schema.BaseMessage, sysOperation sysop.SysOperation) bool {
 	messageData := map[string]any{
 		"offload_handle": offloadHandle,
 		"messages":       serializeMessages(messages),
@@ -147,10 +149,20 @@ func (p *BaseProcessor) writeOffloadToFile(sessionID string, offloadHandle strin
 		return false
 	}
 
-	// ⤵️ 9.32 回填：当 sysOperation 不为 nil 时，优先使用 SysOperation 写文件
-	_ = sysOperation // 暂时忽略
+	// 优先使用 SysOperation 写文件
+	if sysOperation != nil && sysOperation.Fs() != nil {
+		result, err := sysOperation.Fs().WriteFile(context.Background(), offloadPath, string(contentJSON))
+		if err == nil && result != nil && result.Code == 0 {
+			return true
+		}
+		// SysOperation 写入失败，fallback 到 os
+	}
 
-	// 兜底：使用 os 直接写文件
+	return writeOffloadFallback(offloadPath, contentJSON)
+}
+
+// writeOffloadFallback 使用 os 直接写文件的兜底方法。
+func writeOffloadFallback(offloadPath string, contentJSON []byte) bool {
 	if !filepath.IsAbs(offloadPath) {
 		return false
 	}

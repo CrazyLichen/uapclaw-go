@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -62,8 +63,7 @@ type ToolResultBudgetProcessor struct {
 	// config 具体配置
 	config *ToolResultBudgetProcessorConfig
 	// sysOperation 系统操作接口，通过 WithSysOption 选项注入
-	// ⤵️ 9.32 回填：将 any 替换为 SysOperation 接口类型
-	sysOperation any
+	sysOperation sysop.SysOperation
 }
 
 // offloadCandidate 卸载候选消息
@@ -111,9 +111,7 @@ func (p *ToolResultBudgetProcessor) ProcessorType() string {
 }
 
 // WithSysOption 注入系统操作接口选项。
-//
-// ⤵️ 9.32 回填：将 any 替换为 SysOperation 接口类型
-func WithSysOption(op any) ToolResultBudgetProcessorOption {
+func WithSysOption(op sysop.SysOperation) ToolResultBudgetProcessorOption {
 	return func(p *ToolResultBudgetProcessor) {
 		p.sysOperation = op
 	}
@@ -186,9 +184,21 @@ func (p *ToolResultBudgetProcessor) OnAddMessages(ctx context.Context, mc iface.
 	}
 
 	mc.SetMessages(updatedMessages[:contextSize], true)
+
+	// 对齐 Python: sorted(set(modified_indices))，去重排序
+	uniqueIndices := make(map[int]struct{})
+	for _, idx := range modifiedIndices {
+		uniqueIndices[idx] = struct{}{}
+	}
+	sortedIndices := make([]int, 0, len(uniqueIndices))
+	for idx := range uniqueIndices {
+		sortedIndices = append(sortedIndices, idx)
+	}
+	sort.Ints(sortedIndices)
+
 	event := &iface.ContextEvent{
 		EventType:        p.ProcessorType(),
-		MessagesToModify: modifiedIndices,
+		MessagesToModify: sortedIndices,
 	}
 	return event, updatedMessages[contextSize:], nil
 }
@@ -327,15 +337,20 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 				Str("processor_type", p.ProcessorType()).
 				Int("message_idx", targetIdx).
 				Err(err).
-				Msg("卸载工具消息失败，跳过")
-			break
+				Msg("卸载工具消息失败，跳过当前候选继续尝试")
+			// 对齐 Python：卸载失败时 continue 而非 break，继续尝试下一个候选
+			continue
 		}
 		if offloaded != nil {
 			messages[targetIdx] = offloaded
 			modifiedIndices = append(modifiedIndices, targetIdx)
 			changed = true
 		} else {
-			break
+			logger.Warn(logger.ComponentAgentCore).
+				Str("processor_type", p.ProcessorType()).
+				Int("message_idx", targetIdx).
+				Msg("卸载返回空消息，跳过当前候选继续尝试")
+			continue
 		}
 	}
 	return changed, modifiedIndices
