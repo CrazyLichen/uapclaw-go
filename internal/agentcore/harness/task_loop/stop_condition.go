@@ -15,7 +15,7 @@ type StopConditionEvaluator interface {
 	// Name 返回评估器名称（用于状态序列化索引、停止原因和日志）
 	Name() string
 
-	// ExportState 导出评估器状态用于持久化（无状态评估器返回空 map）
+	// ExportState 导出评估器状态用于持久化（无状态评估器返回 nil）
 	ExportState() map[string]any
 
 	// ImportState 从持久化状态恢复（无状态评估器忽略参数）
@@ -129,6 +129,9 @@ func NewCompletionPromiseEvaluator(promise string, requiredConfirmations int) *C
 // NewCustomPredicateEvaluator 创建自定义谓词评估器。
 // 对齐 Python: CustomPredicateEvaluator
 func NewCustomPredicateEvaluator(name string, predicate func(ctx StopEvaluationContext) bool) *CustomPredicateEvaluator {
+	if predicate == nil {
+		panic("NewCustomPredicateEvaluator: predicate 不能为 nil")
+	}
 	return &CustomPredicateEvaluator{name: name, predicate: predicate}
 }
 
@@ -139,14 +142,15 @@ func (e *MaxRoundsEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 	return ctx.Iteration >= e.maxRounds
 }
 
-// Name 返回评估器名称 "max_rounds"。
+// Name 返回评估器名称 "MaxRoundsEvaluator"。
 func (e *MaxRoundsEvaluator) Name() string {
-	return "max_rounds"
+	return "MaxRoundsEvaluator"
 }
 
-// ExportState 无状态评估器，返回空 map。
+// ExportState 无状态评估器，返回 nil。
+// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
 func (e *MaxRoundsEvaluator) ExportState() map[string]any {
-	return map[string]any{}
+	return nil
 }
 
 // ImportState 无状态评估器，忽略参数。
@@ -160,14 +164,15 @@ func (e *TokenBudgetEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 	return ctx.TokenUsage >= e.maxTokens
 }
 
-// Name 返回评估器名称 "token_budget"。
+// Name 返回评估器名称 "TokenBudgetEvaluator"。
 func (e *TokenBudgetEvaluator) Name() string {
-	return "token_budget"
+	return "TokenBudgetEvaluator"
 }
 
-// ExportState 无状态评估器，返回空 map。
+// ExportState 无状态评估器，返回 nil。
+// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
 func (e *TokenBudgetEvaluator) ExportState() map[string]any {
-	return map[string]any{}
+	return nil
 }
 
 // ImportState 无状态评估器，忽略参数。
@@ -181,14 +186,15 @@ func (e *TimeoutEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 	return ctx.ElapsedSeconds >= e.timeoutSeconds
 }
 
-// Name 返回评估器名称 "timeout"。
+// Name 返回评估器名称 "TimeoutEvaluator"。
 func (e *TimeoutEvaluator) Name() string {
-	return "timeout"
+	return "TimeoutEvaluator"
 }
 
-// ExportState 无状态评估器，返回空 map。
+// ExportState 无状态评估器，返回 nil。
+// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
 func (e *TimeoutEvaluator) ExportState() map[string]any {
-	return map[string]any{}
+	return nil
 }
 
 // ImportState 无状态评估器，忽略参数。
@@ -203,9 +209,9 @@ func (e *CompletionPromiseEvaluator) ShouldStop(_ StopEvaluationContext) bool {
 	return e.fulfilled
 }
 
-// Name 返回评估器名称 "completion_promise"。
+// Name 返回评估器名称 "CompletionPromiseEvaluator"。
 func (e *CompletionPromiseEvaluator) Name() string {
-	return "completion_promise"
+	return "CompletionPromiseEvaluator"
 }
 
 // ExportState 导出状态：fulfilled, matchedText, requiredConfirmations, confirmationCount。
@@ -285,13 +291,18 @@ func (e *CustomPredicateEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 }
 
 // Name 返回评估器名称。
+// 对齐 Python: self.__class__.__name__ 默认返回 "CustomPredicateEvaluator"
 func (e *CustomPredicateEvaluator) Name() string {
+	if e.name == "" {
+		return "CustomPredicateEvaluator"
+	}
 	return e.name
 }
 
-// ExportState 无状态评估器，返回空 map。
+// ExportState 无状态评估器，返回 nil。
+// 对齐 Python: StopConditionEvaluator.get_state() 返回 None
 func (e *CustomPredicateEvaluator) ExportState() map[string]any {
-	return map[string]any{}
+	return nil
 }
 
 // ImportState 无状态评估器，忽略参数。

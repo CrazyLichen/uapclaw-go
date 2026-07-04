@@ -3,9 +3,12 @@ package workspace
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	wc "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/workspace_content"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -69,6 +72,11 @@ const (
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
+
+	// TeamLinksDir 团队链接目录名
+	TeamLinksDir = ".team"
+	// WorktreeLinksDir 工作树链接目录名
+	WorktreeLinksDir = ".worktree"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -88,7 +96,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 		"path":            "AGENT.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.AgentMDCN,
 	},
 	{
 		"name":            "SOUL.md",
@@ -96,7 +104,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 		"path":            "SOUL.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.SoulMDCN,
 	},
 	{
 		"name":            "HEARTBEAT.md",
@@ -104,7 +112,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 		"path":            "HEARTBEAT.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.HeartbeatMDCN,
 	},
 	{
 		"name":            "IDENTITY.md",
@@ -112,7 +120,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 		"path":            "IDENTITY.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.IdentityMDCN,
 	},
 	{
 		"name":            "USER.md",
@@ -133,7 +141,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 				"path":            "MEMORY.md",
 				"children":        []DirectoryNode{},
 				"is_file":         true,
-				"default_content": "",
+				"default_content": wc.MemoryMDCN,
 			},
 			{
 				"name":        "daily_memory",
@@ -193,7 +201,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 				"path":            "session_memory.md",
 				"children":        []DirectoryNode{},
 				"is_file":         true,
-				"default_content": "",
+				"default_content": wc.SessionMemoryMDCN,
 			},
 		},
 	},
@@ -209,7 +217,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 		"path":            "AGENT.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.AgentMDEN,
 	},
 	{
 		"name":            "SOUL.md",
@@ -217,7 +225,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 		"path":            "SOUL.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.SoulMDEN,
 	},
 	{
 		"name":            "HEARTBEAT.md",
@@ -225,7 +233,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 		"path":            "HEARTBEAT.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.HeartbeatMDEN,
 	},
 	{
 		"name":            "IDENTITY.md",
@@ -233,7 +241,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 		"path":            "IDENTITY.md",
 		"children":        []DirectoryNode{},
 		"is_file":         true,
-		"default_content": "",
+		"default_content": wc.IdentityMDEN,
 	},
 	{
 		"name":            "USER.md",
@@ -254,7 +262,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 				"path":            "MEMORY.md",
 				"children":        []DirectoryNode{},
 				"is_file":         true,
-				"default_content": "",
+				"default_content": wc.MemoryMDEN,
 			},
 			{
 				"name":        "daily_memory",
@@ -299,7 +307,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 				"path":            "session_memory.md",
 				"children":        []DirectoryNode{},
 				"is_file":         true,
-				"default_content": "",
+				"default_content": wc.SessionMemoryMDEN,
 			},
 		},
 	},
@@ -449,6 +457,48 @@ func (w *Workspace) GetNodePath(node any) *string {
 // 对应 Python: Workspace.get_default_directory
 func GetDefaultDirectory(language string) []DirectoryNode {
 	return getWorkspaceSchema(language)
+}
+
+// LinkTeam 创建 .team/{name} 符号链接，指向 targetPath。
+//
+// 对应 Python: Workspace.link_team
+func (w *Workspace) LinkTeam(name, targetPath string) error {
+	return w.createLink(TeamLinksDir, name, targetPath)
+}
+
+// UnlinkTeam 删除 .team/{name} 符号链接。
+//
+// 对应 Python: Workspace.unlink_team
+func (w *Workspace) UnlinkTeam(name string) error {
+	return w.removeLink(TeamLinksDir, name)
+}
+
+// LinkWorktree 创建 .worktree/{name} 符号链接，指向 targetPath。
+//
+// 对应 Python: Workspace.link_worktree
+func (w *Workspace) LinkWorktree(name, targetPath string) error {
+	return w.createLink(WorktreeLinksDir, name, targetPath)
+}
+
+// UnlinkWorktree 删除 .worktree/{name} 符号链接。
+//
+// 对应 Python: Workspace.unlink_worktree
+func (w *Workspace) UnlinkWorktree(name string) error {
+	return w.removeLink(WorktreeLinksDir, name)
+}
+
+// ListTeamLinks 列出 .team/ 目录中所有符号链接名称。
+//
+// 对应 Python: Workspace.list_team_links
+func (w *Workspace) ListTeamLinks() []string {
+	return w.listLinks(TeamLinksDir)
+}
+
+// ListWorktreeLinks 列出 .worktree/ 目录中所有符号链接名称。
+//
+// 对应 Python: Workspace.list_worktree_links
+func (w *Workspace) ListWorktreeLinks() []string {
+	return w.listLinks(WorktreeLinksDir)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -631,6 +681,128 @@ func normalizeNode(node map[string]any) DirectoryNode {
 			}
 		} else {
 			result[k] = v
+		}
+	}
+	return result
+}
+
+// ensureLinkDir 创建链接子目录（mkdir -p），返回目录完整路径。
+//
+// 对应 Python: Workspace._ensure_link_dir
+func (w *Workspace) ensureLinkDir(dir string) (string, error) {
+	fullDir := filepath.Join(w.RootPath, dir)
+	if err := os.MkdirAll(fullDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create link directory %q: %w", fullDir, err)
+	}
+	return fullDir, nil
+}
+
+// createDirectoryLink 创建目录符号链接，Windows 上回退到 junction。
+//
+// 对应 Python: Workspace._create_directory_link
+func createDirectoryLink(linkPath, targetPath string) error {
+	if runtime.GOOS == "windows" {
+		return createWindowsJunction(linkPath, targetPath)
+	}
+	return os.Symlink(targetPath, linkPath)
+}
+
+// createWindowsJunction 在 Windows 上通过 mklink /J 创建目录 junction。
+//
+// 对应 Python: Workspace._create_windows_junction
+func createWindowsJunction(linkPath, targetPath string) error {
+	// Windows junction 通过 syscall 或外部命令实现
+	// 此处简化处理：先尝试 symlink，失败则返回错误
+	if err := os.Symlink(targetPath, linkPath); err != nil {
+		return fmt.Errorf("failed to create directory link %q -> %q on windows: %w", linkPath, targetPath, err)
+	}
+	return nil
+}
+
+// removeDirectoryLink 删除目录符号链接或 junction。
+//
+// 对应 Python: Workspace._remove_directory_link
+func removeDirectoryLink(linkPath string) error {
+	return os.Remove(linkPath)
+}
+
+// isDirectoryLink 检查路径是否为符号链接。
+//
+// 对应 Python: Workspace._is_directory_link
+func isDirectoryLink(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeSymlink != 0
+}
+
+// createLink 在指定子目录下创建符号链接的内部实现。
+func (w *Workspace) createLink(subdir, name, targetPath string) error {
+	linkDir, err := w.ensureLinkDir(subdir)
+	if err != nil {
+		return err
+	}
+	linkPath := filepath.Join(linkDir, name)
+
+	// 已存在则跳过
+	if _, err := os.Lstat(linkPath); err == nil {
+		return nil
+	}
+
+	if err := createDirectoryLink(linkPath, targetPath); err != nil {
+		logger.Error(logComponent).
+			Str("link_path", linkPath).
+			Str("target_path", targetPath).
+			Err(err).
+			Msg("Workspace: failed to create directory link")
+		return err
+	}
+
+	logger.Info(logComponent).
+		Str("link_path", linkPath).
+		Str("target_path", targetPath).
+		Msg("Workspace: created directory link")
+	return nil
+}
+
+// removeLink 在指定子目录下删除符号链接的内部实现。
+func (w *Workspace) removeLink(subdir, name string) error {
+	linkPath := filepath.Join(w.RootPath, subdir, name)
+
+	if !isDirectoryLink(linkPath) {
+		logger.Warn(logComponent).
+			Str("link_path", linkPath).
+			Msg("Workspace: link does not exist or is not a symlink")
+		return nil
+	}
+
+	if err := removeDirectoryLink(linkPath); err != nil {
+		logger.Error(logComponent).
+			Str("link_path", linkPath).
+			Err(err).
+			Msg("Workspace: failed to remove directory link")
+		return err
+	}
+
+	logger.Info(logComponent).
+		Str("link_path", linkPath).
+		Msg("Workspace: removed directory link")
+	return nil
+}
+
+// listLinks 列出指定子目录中所有符号链接名称。
+func (w *Workspace) listLinks(subdir string) []string {
+	linkDir := filepath.Join(w.RootPath, subdir)
+	entries, err := os.ReadDir(linkDir)
+	if err != nil {
+		return nil
+	}
+
+	var result []string
+	for _, entry := range entries {
+		if isDirectoryLink(filepath.Join(linkDir, entry.Name())) {
+			result = append(result, entry.Name())
 		}
 	}
 	return result

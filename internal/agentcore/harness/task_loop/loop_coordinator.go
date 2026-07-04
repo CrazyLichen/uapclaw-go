@@ -1,6 +1,7 @@
 package task_loop
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -51,7 +52,7 @@ func NewLoopCoordinator(evaluators []StopConditionEvaluator) *LoopCoordinator {
 	}
 	return &LoopCoordinator{
 		evaluators: evaluators,
-		startTime:  time.Now(),
+		startTime:  time.Time{},
 	}
 }
 
@@ -75,9 +76,12 @@ func (lc *LoopCoordinator) ShouldContinue() bool {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
+					buf := make([]byte, 4096)
+					n := runtime.Stack(buf, false)
 					logger.Warn(logComponent).
 						Str("evaluator", ev.Name()).
 						Any("panic", r).
+						Str("stack", string(buf[:n])).
 						Msg("评估器 panic，跳过")
 				}
 			}()
@@ -174,10 +178,14 @@ func (lc *LoopCoordinator) TokenUsage() int {
 }
 
 // ElapsedSeconds 返回已用时间（秒）。
+// 若 startTime 为零值（尚未 Reset），返回 0.0。
 func (lc *LoopCoordinator) ElapsedSeconds() float64 {
 	lc.mu.Lock()
 	startTime := lc.startTime
 	lc.mu.Unlock()
+	if startTime.IsZero() {
+		return 0.0
+	}
 	return time.Since(startTime).Seconds()
 }
 
@@ -250,7 +258,10 @@ func (lc *LoopCoordinator) Evaluators() []StopConditionEvaluator {
 // buildEvalContext 构建评估上下文（调用者需持有锁）。
 // 对齐 Python: LoopCoordinator._build_eval_context
 func (lc *LoopCoordinator) buildEvalContext() StopEvaluationContext {
-	elapsed := time.Since(lc.startTime).Seconds()
+	elapsed := 0.0
+	if !lc.startTime.IsZero() {
+		elapsed = time.Since(lc.startTime).Seconds()
+	}
 	return StopEvaluationContext{
 		Iteration:      lc.iteration,
 		TokenUsage:     lc.tokenUsage,

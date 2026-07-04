@@ -482,4 +482,19 @@ func TestConstants(t *testing.T) {
 	}
 }
 
+// TestEffectiveRestrictToWorkDir 测试 EffectiveRestrictToWorkDir
+func TestEffectiveRestrictToWorkDir(t *testing.T) {
+	// Go 零值 false 表示"未设置"，但 Python 默认为 True
+	scfg := SubAgentConfig{}
+	if !scfg.EffectiveRestrictToWorkDir() {
+		t.Error("EffectiveRestrictToWorkDir() 应为 true（对齐 Python 默认值）")
+	}
+
+	// 显式设置也返回 true
+	scfg.RestrictToWorkDir = true
+	if !scfg.EffectiveRestrictToWorkDir() {
+		t.Error("EffectiveRestrictToWorkDir() 显式 true 时应为 true")
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

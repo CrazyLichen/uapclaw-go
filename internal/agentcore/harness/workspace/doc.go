@@ -6,13 +6,14 @@
 // 消息历史（messages）、技能库（skills）、子智能体（agents）和上下文（context）。
 //
 // 本包支持中文（cn）和英文（en）两种默认工作空间模式，并提供目录节点的
-// 增删查改、校验和默认补全功能。
+// 增删查改、校验和默认补全功能。同时提供团队链接（.team/）和工作树链接
+// （.worktree/）的符号链接管理方法。
 //
 // 文件目录：
 //
 //	workspace/
 //	├── doc.go           # 包文档
-//	└── workspace.go     # Workspace 结构体、WorkspaceNode 枚举及目录管理方法
+//	└── workspace.go     # Workspace 结构体、WorkspaceNode 枚举、目录管理方法及链接管理方法
 //
 // 对应 Python 代码：openjiuwen/harness/workspace/
 package workspace

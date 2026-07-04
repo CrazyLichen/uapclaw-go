@@ -63,8 +63,8 @@ func TestLoopCoordinator_ShouldContinue_单个评估器(t *testing.T) {
 		t.Error("ShouldContinue at iteration=3 with maxRounds=3, want false")
 	}
 
-	if lc.StopReason() != "max_rounds" {
-		t.Errorf("StopReason() = %q, want %q", lc.StopReason(), "max_rounds")
+	if lc.StopReason() != "MaxRoundsEvaluator" {
+		t.Errorf("StopReason() = %q, want %q", lc.StopReason(), "MaxRoundsEvaluator")
 	}
 }
 
@@ -85,8 +85,8 @@ func TestLoopCoordinator_ShouldContinue_多个评估器OR语义(t *testing.T) {
 	if lc.ShouldContinue() {
 		t.Error("ShouldContinue after exceeding token budget, want false")
 	}
-	if lc.StopReason() != "token_budget" {
-		t.Errorf("StopReason() = %q, want %q", lc.StopReason(), "token_budget")
+	if lc.StopReason() != "TokenBudgetEvaluator" {
+		t.Errorf("StopReason() = %q, want %q", lc.StopReason(), "TokenBudgetEvaluator")
 	}
 }
 
@@ -183,9 +183,17 @@ func TestLoopCoordinator_SetLastResult(t *testing.T) {
 func TestLoopCoordinator_ElapsedSeconds(t *testing.T) {
 	lc := NewLoopCoordinator(nil)
 
+	// 未 Reset 时返回 0.0
 	elapsed := lc.ElapsedSeconds()
+	if elapsed != 0.0 {
+		t.Errorf("ElapsedSeconds() before Reset = %f, want 0.0", elapsed)
+	}
+
+	// Reset 后返回 > 0
+	lc.Reset()
+	elapsed = lc.ElapsedSeconds()
 	if elapsed < 0 {
-		t.Errorf("ElapsedSeconds() = %f, want >= 0", elapsed)
+		t.Errorf("ElapsedSeconds() after Reset = %f, want >= 0", elapsed)
 	}
 
 	// 等待一小段时间后验证时间增长
@@ -193,6 +201,36 @@ func TestLoopCoordinator_ElapsedSeconds(t *testing.T) {
 	elapsed2 := lc.ElapsedSeconds()
 	if elapsed2 < elapsed {
 		t.Errorf("ElapsedSeconds() decreased: %f -> %f", elapsed, elapsed2)
+	}
+}
+
+func TestLoopCoordinator_零值StartTime不影响ShouldContinue(t *testing.T) {
+	// 未 Reset 时，TimeoutEvaluator 不应因零值 ElapsedSeconds 误触发
+	lc := NewLoopCoordinator([]StopConditionEvaluator{
+		NewTimeoutEvaluator(60.0),
+		NewMaxRoundsEvaluator(10),
+	})
+
+	// ElapsedSeconds 为 0.0，远小于 60s，不应触发超时停止
+	if !lc.ShouldContinue() {
+		t.Error("ShouldContinue should be true when startTime is zero and timeout is 60s")
+	}
+}
+
+func TestLoopCoordinator_Reset后ElapsedSeconds大于零(t *testing.T) {
+	lc := NewLoopCoordinator(nil)
+
+	// Reset 前
+	if lc.ElapsedSeconds() != 0.0 {
+		t.Errorf("ElapsedSeconds() before Reset = %f, want 0.0", lc.ElapsedSeconds())
+	}
+
+	lc.Reset()
+
+	// Reset 后立即应 > 0（虽然可能极小）
+	time.Sleep(10 * time.Millisecond)
+	if lc.ElapsedSeconds() <= 0 {
+		t.Errorf("ElapsedSeconds() after Reset = %f, want > 0", lc.ElapsedSeconds())
 	}
 }
 
@@ -217,14 +255,14 @@ func TestLoopCoordinator_ExportState_基本(t *testing.T) {
 		t.Errorf("StopReason = %q, want empty", state.StopReason)
 	}
 
-	// MaxRoundsEvaluator 无状态 → 空 map
-	if _, ok := state.EvaluatorStates["max_rounds"]; !ok {
-		t.Error("evaluator_states missing max_rounds")
+	// MaxRoundsEvaluator 无状态 → ExportState 返回 nil，不包含在 evaluator_states 中
+	if _, ok := state.EvaluatorStates["MaxRoundsEvaluator"]; ok {
+		t.Error("evaluator_states should not contain MaxRoundsEvaluator (stateless)")
 	}
 
 	// CompletionPromiseEvaluator 有状态
-	if _, ok := state.EvaluatorStates["completion_promise"]; !ok {
-		t.Error("evaluator_states missing completion_promise")
+	if _, ok := state.EvaluatorStates["CompletionPromiseEvaluator"]; !ok {
+		t.Error("evaluator_states missing CompletionPromiseEvaluator")
 	}
 }
 

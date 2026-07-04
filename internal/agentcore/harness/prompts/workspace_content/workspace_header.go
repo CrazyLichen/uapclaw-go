@@ -1,0 +1,106 @@
+package workspace_content
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// WorkspaceHeaderCN 工作空间标题（中文）
+	WorkspaceHeaderCN = "# 工作空间\n\n"
+	// WorkspaceHeaderEN 工作空间标题（英文）
+	WorkspaceHeaderEN = "# Workspace\n\n"
+
+	// ImportantFilesCN 工作目录下重要文件说明（中文）
+	ImportantFilesCN = "## 工作目录下重要文件\n\n" +
+		"| 文件 | 用途 | 操作工具 |\n" +
+		"|------|------|----------|\n" +
+		"| `AGENT.md` | Agent 启动指南 | read_file |\n" +
+		"| `IDENTITY.md` | Agent 身份设定 | read_file / edit_file |\n" +
+		"| `USER.md` | 用户档案（姓名、职业、爱好等） | read_memory / write_memory / edit_memory |\n" +
+		"| `memory/MEMORY.md` | 长期记忆（决策、偏好、持久事实） | read_memory / write_memory / edit_memory |\n" +
+		"| `memory/daily_memory/YYYY-MM-DD.md` | 每日会话记录 | read_memory / write_memory / edit_memory |\n"
+
+	// ImportantFilesEN 工作目录下重要文件说明（英文）
+	ImportantFilesEN = "## Important Files in Working Directory\n\n" +
+		"| File | Purpose | Tools |\n" +
+		"|------|---------|-------|\n" +
+		"| `AGENT.md` | Agent startup guide | read_file |\n" +
+		"| `IDENTITY.md` | Agent identity settings | read_file / edit_file |\n" +
+		"| `USER.md` | User profile (name, occupation, hobbies, etc.) | read_memory / write_memory / edit_memory |\n" +
+		"| `memory/MEMORY.md` | Long-term memory (decisions, preferences, persistent facts) " +
+		"| read_memory / write_memory / edit_memory |\n" +
+		"| `memory/daily_memory/YYYY-MM-DD.md` | Daily session records | read_memory / write_memory / edit_memory |\n"
+
+	// ContextHeaderCN 项目上下文标题（中文）
+	ContextHeaderCN = "# 项目上下文\n\n以下文件已加载到上下文中，无需再次读取。\n\n"
+	// ContextHeaderEN 项目上下文标题（英文）
+	ContextHeaderEN = "# Project Context\n\nThe following files are already loaded into context, so you do not need to read them again.\n\n"
+
+	// DailyMemoryTitleCN 每日记忆标题（中文），{date} 为日期占位符
+	DailyMemoryTitleCN = "## daily_memory/{date} - 今日记忆"
+	// DailyMemoryTitleEN 每日记忆标题（英文），{date} 为日期占位符
+	DailyMemoryTitleEN = "## daily_memory/{date} - Today's Memory"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// ContextFileTitlesCN 上下文文件标题映射（中文）
+	ContextFileTitlesCN = map[string]string{
+		"AGENT.md":     "## AGENT.md - 智能体配置",
+		"SOUL.md":      "## SOUL.md - 灵魂与价值观",
+		"HEARTBEAT.md": "## HEARTBEAT.md - 心跳任务",
+		"USER.md":      "## USER.md - 用户信息",
+		"IDENTITY.md":  "## IDENTITY.md - 身份凭证",
+		"MEMORY.md":    "## MEMORY.md - 长期记忆",
+	}
+
+	// ContextFileTitlesEN 上下文文件标题映射（英文）
+	ContextFileTitlesEN = map[string]string{
+		"AGENT.md":     "## AGENT.md - Agent Configuration",
+		"SOUL.md":      "## SOUL.md - Soul & Values",
+		"HEARTBEAT.md": "## HEARTBEAT.md - Heartbeat Tasks",
+		"USER.md":      "## USER.md - User Information",
+		"IDENTITY.md":  "## IDENTITY.md - Identity Credentials",
+		"MEMORY.md":    "## MEMORY.md - Long-term Memory",
+	}
+
+	// DirectoryDescriptionsCN 目录/文件描述映射（中文）
+	DirectoryDescriptionsCN = map[string]string{
+		"AGENT.md":     "智能体配置",
+		"SOUL.md":      "灵魂与价值观",
+		"HEARTBEAT.md": "心跳任务",
+		"USER.md":      "用户信息",
+		"IDENTITY.md":  "身份凭证",
+		"MEMORY.md":    "长期记忆",
+		"memory":       "记忆核心模块",
+		"daily_memory": "每日结构化记忆",
+		"todo":         "待办事项",
+		"messages":     "消息历史",
+		"skills":       "技能库",
+		"agents":       "子智能体",
+	}
+
+	// DirectoryDescriptionsEN 目录/文件描述映射（英文）
+	DirectoryDescriptionsEN = map[string]string{
+		"AGENT.md":     "Agent configuration",
+		"SOUL.md":      "Soul & values",
+		"HEARTBEAT.md": "Heartbeat tasks",
+		"USER.md":      "User information",
+		"IDENTITY.md":  "Identity credentials",
+		"MEMORY.md":    "Long-term memory",
+		"memory":       "Memory core module",
+		"daily_memory": "Daily structured memory",
+		"todo":         "Todo items",
+		"messages":     "Message history",
+		"skills":       "Skills library",
+		"agents":       "Sub-agents",
+	}
+
+	// ContextFiles 固定上下文文件列表
+	ContextFiles = []string{
+		"AGENT.md",
+		"SOUL.md",
+		"HEARTBEAT.md",
+		"USER.md",
+		"IDENTITY.md",
+	}
+)

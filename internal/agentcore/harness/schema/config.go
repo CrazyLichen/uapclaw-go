@@ -39,7 +39,7 @@ type AudioModelConfig struct {
 	// TranscriptionModel 语音转录模型名称
 	TranscriptionModel string `json:"transcription_model"`
 	// QAModel 语音问答模型名称
-	QAModel string `json:"qa_model"`
+	QAModel string `json:"question_answering_model"`
 	// MaxRetries 最大重试次数
 	MaxRetries int `json:"max_retries"`
 	// HTTPTimeout HTTP 请求超时秒数
@@ -339,6 +339,12 @@ func (c *DeepAgentConfig) EffectiveProgressiveToolMaxLoadedTools() int {
 		return DefaultProgressiveToolMax
 	}
 	return c.ProgressiveToolMaxLoadedTools
+}
+
+// EffectiveRestrictToWorkDir 返回有效的 RestrictToWorkDir 值
+// Go 零值 false 表示"未设置"，Python 默认为 True
+func (c *SubAgentConfig) EffectiveRestrictToWorkDir() bool {
+	return true
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

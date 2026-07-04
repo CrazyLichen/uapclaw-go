@@ -9,8 +9,8 @@ import "testing"
 func TestMaxRoundsEvaluator_基本功能(t *testing.T) {
 	e := NewMaxRoundsEvaluator(3)
 
-	if e.Name() != "max_rounds" {
-		t.Errorf("Name() = %q, want %q", e.Name(), "max_rounds")
+	if e.Name() != "MaxRoundsEvaluator" {
+		t.Errorf("Name() = %q, want %q", e.Name(), "MaxRoundsEvaluator")
 	}
 
 	ctx := StopEvaluationContext{Iteration: 2}
@@ -66,8 +66,8 @@ func TestMaxRoundsEvaluator_状态方法(t *testing.T) {
 func TestTokenBudgetEvaluator_基本功能(t *testing.T) {
 	e := NewTokenBudgetEvaluator(1000)
 
-	if e.Name() != "token_budget" {
-		t.Errorf("Name() = %q, want %q", e.Name(), "token_budget")
+	if e.Name() != "TokenBudgetEvaluator" {
+		t.Errorf("Name() = %q, want %q", e.Name(), "TokenBudgetEvaluator")
 	}
 
 	ctx := StopEvaluationContext{TokenUsage: 500}
@@ -102,8 +102,8 @@ func TestTokenBudgetEvaluator_状态方法(t *testing.T) {
 func TestTimeoutEvaluator_基本功能(t *testing.T) {
 	e := NewTimeoutEvaluator(60.0)
 
-	if e.Name() != "timeout" {
-		t.Errorf("Name() = %q, want %q", e.Name(), "timeout")
+	if e.Name() != "TimeoutEvaluator" {
+		t.Errorf("Name() = %q, want %q", e.Name(), "TimeoutEvaluator")
 	}
 
 	ctx := StopEvaluationContext{ElapsedSeconds: 30.0}
@@ -143,8 +143,8 @@ func TestTimeoutEvaluator_状态方法(t *testing.T) {
 func TestCompletionPromiseEvaluator_基本功能(t *testing.T) {
 	e := NewCompletionPromiseEvaluator("<promise>", 2)
 
-	if e.Name() != "completion_promise" {
-		t.Errorf("Name() = %q, want %q", e.Name(), "completion_promise")
+	if e.Name() != "CompletionPromiseEvaluator" {
+		t.Errorf("Name() = %q, want %q", e.Name(), "CompletionPromiseEvaluator")
 	}
 
 	if e.Promise() != "<promise>" {

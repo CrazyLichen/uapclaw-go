@@ -1,10 +1,13 @@
 package workspace
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/workspace_content"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -598,4 +601,285 @@ func topNames(nodes []DirectoryNode) []string {
 		}
 	}
 	return names
+}
+
+// TestCN模式_defaultContent非空 测试 CN 工作空间的 AGENT.md defaultContent 非空且包含中文
+func TestCN模式_defaultContent非空(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "cn")
+
+	for _, node := range w.Directories {
+		if name, ok := node["name"].(string); ok && name == "AGENT.md" {
+			content, _ := node["default_content"].(string)
+			if content == "" {
+				t.Error("CN AGENT.md default_content should not be empty")
+			}
+			if !strings.Contains(content, "智能体") {
+				t.Errorf("CN AGENT.md default_content should contain Chinese text '智能体', got: %s", content[:min(50, len(content))])
+			}
+			return
+		}
+	}
+	t.Error("AGENT.md node not found in CN workspace")
+}
+
+// TestCN模式_defaultContent各模板 测试 CN 工作空间各模板文件的 defaultContent
+func TestCN模式_defaultContent各模板(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "cn")
+
+	expected := map[string]string{
+		"AGENT.md":     workspace_content.AgentMDCN,
+		"SOUL.md":      workspace_content.SoulMDCN,
+		"HEARTBEAT.md": workspace_content.HeartbeatMDCN,
+		"IDENTITY.md":  workspace_content.IdentityMDCN,
+	}
+
+	for _, node := range w.Directories {
+		name, _ := node["name"].(string)
+		if wantContent, ok := expected[name]; ok {
+			content, _ := node["default_content"].(string)
+			if content != wantContent {
+				t.Errorf("CN %s default_content mismatch, got length %d, want length %d", name, len(content), len(wantContent))
+			}
+		}
+	}
+}
+
+// TestCN模式_memoryDefaultContent 测试 CN memory/MEMORY.md 的 defaultContent
+func TestCN模式_memoryDefaultContent(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "cn")
+
+	for _, node := range w.Directories {
+		if name, ok := node["name"].(string); ok && name == "memory" {
+			children, ok := node["children"].([]DirectoryNode)
+			if !ok {
+				t.Fatal("memory children should be []DirectoryNode")
+			}
+			for _, child := range children {
+				if childName, ok := child["name"].(string); ok && childName == "MEMORY.md" {
+					content, _ := child["default_content"].(string)
+					if content != workspace_content.MemoryMDCN {
+						t.Errorf("CN memory/MEMORY.md default_content mismatch, got length %d, want length %d",
+							len(content), len(workspace_content.MemoryMDCN))
+					}
+					return
+				}
+			}
+		}
+	}
+	t.Error("memory/MEMORY.md not found in CN workspace")
+}
+
+// TestEN模式_defaultContent非空 测试 EN 工作空间的 AGENT.md defaultContent 非空且包含英文
+func TestEN模式_defaultContent非空(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "en")
+
+	for _, node := range w.Directories {
+		if name, ok := node["name"].(string); ok && name == "AGENT.md" {
+			content, _ := node["default_content"].(string)
+			if content == "" {
+				t.Error("EN AGENT.md default_content should not be empty")
+			}
+			if !strings.Contains(content, "AGENT") {
+				t.Errorf("EN AGENT.md default_content should contain English text 'AGENT', got: %s", content[:min(50, len(content))])
+			}
+			return
+		}
+	}
+	t.Error("AGENT.md node not found in EN workspace")
+}
+
+// TestEN模式_defaultContent各模板 测试 EN 工作空间各模板文件的 defaultContent
+func TestEN模式_defaultContent各模板(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "en")
+
+	expected := map[string]string{
+		"AGENT.md":     workspace_content.AgentMDEN,
+		"SOUL.md":      workspace_content.SoulMDEN,
+		"HEARTBEAT.md": workspace_content.HeartbeatMDEN,
+		"IDENTITY.md":  workspace_content.IdentityMDEN,
+	}
+
+	for _, node := range w.Directories {
+		name, _ := node["name"].(string)
+		if wantContent, ok := expected[name]; ok {
+			content, _ := node["default_content"].(string)
+			if content != wantContent {
+				t.Errorf("EN %s default_content mismatch, got length %d, want length %d", name, len(content), len(wantContent))
+			}
+		}
+	}
+}
+
+// TestEN模式_不含codingMemory 测试 EN 工作空间不包含 coding_memory 节点
+func TestEN模式_不含codingMemory(t *testing.T) {
+	w := NewWorkspace("/tmp/workspace", "en")
+
+	for _, node := range w.Directories {
+		if name, ok := node["name"].(string); ok && name == "coding_memory" {
+			t.Error("EN workspace should not contain coding_memory node")
+		}
+	}
+}
+
+// TestLinkTeam_创建和删除 测试 LinkTeam 和 UnlinkTeam
+func TestLinkTeam_创建和删除(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	// 创建目标目录
+	targetDir := filepath.Join(t.TempDir(), "team-workspace")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("Failed to create target dir: %v", err)
+	}
+
+	// 创建链接
+	err := w.LinkTeam("team-alpha", targetDir)
+	if err != nil {
+		t.Fatalf("LinkTeam failed: %v", err)
+	}
+
+	// 验证链接存在
+	linkPath := filepath.Join(rootDir, TeamLinksDir, "team-alpha")
+	if !isDirectoryLink(linkPath) {
+		t.Error("team-alpha link should exist after LinkTeam")
+	}
+
+	// 验证 ListTeamLinks
+	links := w.ListTeamLinks()
+	found := false
+	for _, l := range links {
+		if l == "team-alpha" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("ListTeamLinks should contain 'team-alpha', got %v", links)
+	}
+
+	// 删除链接
+	err = w.UnlinkTeam("team-alpha")
+	if err != nil {
+		t.Fatalf("UnlinkTeam failed: %v", err)
+	}
+
+	// 验证链接已删除
+	if isDirectoryLink(linkPath) {
+		t.Error("team-alpha link should not exist after UnlinkTeam")
+	}
+}
+
+// TestLinkTeam_重复创建 测试 LinkTeam 对已存在链接的处理
+func TestLinkTeam_重复创建(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	targetDir := filepath.Join(t.TempDir(), "team-workspace")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("Failed to create target dir: %v", err)
+	}
+
+	// 第一次创建
+	err := w.LinkTeam("team-beta", targetDir)
+	if err != nil {
+		t.Fatalf("First LinkTeam failed: %v", err)
+	}
+
+	// 重复创建应跳过，不报错
+	err = w.LinkTeam("team-beta", targetDir)
+	if err != nil {
+		t.Fatalf("Duplicate LinkTeam should not error: %v", err)
+	}
+}
+
+// TestLinkWorktree_创建和删除 测试 LinkWorktree 和 UnlinkWorktree
+func TestLinkWorktree_创建和删除(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	targetDir := filepath.Join(t.TempDir(), "worktree-dir")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("Failed to create target dir: %v", err)
+	}
+
+	// 创建链接
+	err := w.LinkWorktree("feature-branch", targetDir)
+	if err != nil {
+		t.Fatalf("LinkWorktree failed: %v", err)
+	}
+
+	// 验证链接存在
+	linkPath := filepath.Join(rootDir, WorktreeLinksDir, "feature-branch")
+	if !isDirectoryLink(linkPath) {
+		t.Error("feature-branch link should exist after LinkWorktree")
+	}
+
+	// 验证 ListWorktreeLinks
+	links := w.ListWorktreeLinks()
+	found := false
+	for _, l := range links {
+		if l == "feature-branch" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("ListWorktreeLinks should contain 'feature-branch', got %v", links)
+	}
+
+	// 删除链接
+	err = w.UnlinkWorktree("feature-branch")
+	if err != nil {
+		t.Fatalf("UnlinkWorktree failed: %v", err)
+	}
+
+	// 验证链接已删除
+	if isDirectoryLink(linkPath) {
+		t.Error("feature-branch link should not exist after UnlinkWorktree")
+	}
+}
+
+// TestListTeamLinks_空目录 测试 ListTeamLinks 在目录不存在时返回空
+func TestListTeamLinks_空目录(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	links := w.ListTeamLinks()
+	if links != nil {
+		t.Errorf("ListTeamLinks should return nil for non-existent dir, got %v", links)
+	}
+}
+
+// TestListWorktreeLinks_空目录 测试 ListWorktreeLinks 在目录不存在时返回空
+func TestListWorktreeLinks_空目录(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	links := w.ListWorktreeLinks()
+	if links != nil {
+		t.Errorf("ListWorktreeLinks should return nil for non-existent dir, got %v", links)
+	}
+}
+
+// TestListTeamLinks_多个链接 测试 ListTeamLinks 列出多个链接
+func TestListTeamLinks_多个链接(t *testing.T) {
+	rootDir := t.TempDir()
+	w := NewWorkspace(rootDir, "cn")
+
+	targetDir1 := filepath.Join(t.TempDir(), "team1")
+	targetDir2 := filepath.Join(t.TempDir(), "team2")
+	os.MkdirAll(targetDir1, 0o755)
+	os.MkdirAll(targetDir2, 0o755)
+
+	if err := w.LinkTeam("alpha", targetDir1); err != nil {
+		t.Fatalf("LinkTeam alpha failed: %v", err)
+	}
+	if err := w.LinkTeam("beta", targetDir2); err != nil {
+		t.Fatalf("LinkTeam beta failed: %v", err)
+	}
+
+	links := w.ListTeamLinks()
+	if len(links) != 2 {
+		t.Errorf("ListTeamLinks should return 2 links, got %d: %v", len(links), links)
+	}
 }
