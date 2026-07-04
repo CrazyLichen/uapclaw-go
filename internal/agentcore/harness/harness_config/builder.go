@@ -79,9 +79,11 @@ var railDottedToName = buildRailDottedToName()
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Build 将 ResolvedHarnessConfig 组装为配置好的 DeepAgent。
-// 当前为桩实现，等待 9.3 阶段完成。
+//
+// ⤵️ 9.3 回填：DeepAgent Factory 实现后补全 Build 逻辑（调用 create_deep_agent）。
+// 对齐 Python: HarnessConfigBuilder.build → create_deep_agent(config)。
 func (HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) error {
-	return fmt.Errorf("create_deep_agent 尚未实现，等待 9.3")
+	return fmt.Errorf("create_deep_agent 尚未实现，⤵️ 9.3 回填")
 }
 
 // GenerateHarnessConfigYAML 从 create_deep_agent 风格的参数生成 harness_config.yaml 字符串。
@@ -178,7 +180,9 @@ func GenerateHarnessConfigYAML(
 }
 
 // resolveBuiltinTools 按组名实例化内置工具。
-// 当前返回错误，等待 9.38 工具实现完成。
+//
+// ⤵️ 9.38 回填：内置工具集实现后补全实例化逻辑。
+// 对齐 Python: resolve_builtin_tools → entry_point/module 工具加载。
 func resolveBuiltinTools(groupName string, sysOperation sysop.SysOperation) ([]*tool.ToolCard, error) {
 	entry, ok := builtinToolGroups[groupName]
 	if !ok {
@@ -189,8 +193,8 @@ func resolveBuiltinTools(groupName string, sysOperation sysop.SysOperation) ([]*
 		sort.Strings(validGroups)
 		return nil, fmt.Errorf("未知的内置工具组: '%s'，有效组: %v", groupName, validGroups)
 	}
-	// 实际工具实例化等待 9.38 阶段完成
-	return nil, fmt.Errorf("内置工具组 '%s' 实例化尚未实现（模块: %s，类: %v，需SysOp: %v），等待 9.38",
+	// ⤵️ 9.38 回填：实际工具实例化
+	return nil, fmt.Errorf("内置工具组 '%s' 实例化尚未实现（模块: %s，类: %v，需SysOp: %v），⤵️ 9.38 回填",
 		groupName, entry.ModulePath, entry.ClassNames, entry.NeedsSysOp)
 }
 
@@ -215,20 +219,22 @@ func resolveTools(resources *ResourcesSchema, sysOperation sysop.SysOperation) (
 				tools = append(tools, groupTools...)
 			}
 		case "package":
-			// 包级工具加载：等待 9.38 实现
-			return nil, fmt.Errorf("package 类型工具加载尚未实现，等待 9.38")
+			// ⤵️ 9.38 回填：包级工具加载
+			return nil, fmt.Errorf("package 类型工具加载尚未实现，⤵️ 9.38 回填")
 		case "entry_point":
-			// entry_point 类型工具加载：等待 9.38 实现
-			return nil, fmt.Errorf("entry_point 类型工具加载尚未实现，等待 9.38")
+			// ⤵️ 9.38 回填：entry_point 类型工具加载
+			return nil, fmt.Errorf("entry_point 类型工具加载尚未实现，⤵️ 9.38 回填")
 		}
 	}
 	return tools, nil
 }
 
 // createSysOperation 创建并注册本地 SysOperation，以 AgentCard 为键
+//
+// ⤵️ 9.32 回填：SysOperation 具体实现（LocalSysOperation）完成后补全。
+// 对齐 Python: create_sys_operation → LocalSysOperation(card, workspace)。
 func createSysOperation(card *sasc.AgentCard) (sysop.SysOperation, error) {
-	// SysOperation 创建等待 Runner 集成完成
-	return nil, fmt.Errorf("createSysOperation 尚未实现，等待 Runner 集成")
+	return nil, fmt.Errorf("createSysOperation 尚未实现，⤵️ 9.32 回填")
 }
 
 // resolveRails 从 resources.Rails 解析所有 Rail 实例
@@ -253,12 +259,14 @@ func resolveRails(resources *ResourcesSchema) ([]rail.AgentRail, error) {
 				sort.Strings(validNames)
 				return nil, fmt.Errorf("未知的内置 Rail: '%s'，有效名称: %v", name, validNames)
 			}
-			// Rail 实例化等待后续阶段完成
-			return nil, fmt.Errorf("内置 Rail '%s' 实例化尚未实现，等待后续阶段", name)
+			// ⤵️ 9.19-9.24 回填：内置 Rail 实例化
+			return nil, fmt.Errorf("内置 Rail '%s' 实例化尚未实现，⤵️ 9.19-9.24 回填", name)
 		case "package":
-			return nil, fmt.Errorf("package 类型 Rail 加载尚未实现，等待后续阶段")
+			// ⤵️ 9.19-9.24 回填：包级 Rail 加载
+			return nil, fmt.Errorf("package 类型 Rail 加载尚未实现，⤵️ 9.19-9.24 回填")
 		case "entry_point":
-			return nil, fmt.Errorf("entry_point 类型 Rail 加载尚未实现，等待后续阶段")
+			// ⤵️ 9.19-9.24 回填：entry_point 类型 Rail 加载
+			return nil, fmt.Errorf("entry_point 类型 Rail 加载尚未实现，⤵️ 9.19-9.24 回填")
 		}
 	}
 	return rails, nil
