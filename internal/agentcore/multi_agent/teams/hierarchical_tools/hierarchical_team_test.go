@@ -133,9 +133,6 @@ func TestNewHierarchicalToolsTeam_默认配置(t *testing.T) {
 	if team.pendingChildren == nil {
 		t.Error("期望 pendingChildren 非空")
 	}
-	if team.hierarchySetup {
-		t.Error("期望 hierarchySetup = false")
-	}
 }
 
 // TestNewHierarchicalToolsTeam_自定义Runtime 验证传入 runtime 参数。
@@ -243,8 +240,8 @@ func TestHierarchicalToolsTeam_满足BaseTeam接口(t *testing.T) {
 	t.Log("HierarchicalToolsTeam 满足 BaseTeam 接口")
 }
 
-// TestHierarchicalToolsTeam_AddAgentWithParent 验证父子关系记录。
-func TestHierarchicalToolsTeam_AddAgentWithParent(t *testing.T) {
+// TestHierarchicalToolsTeam_AddAgent_WithParent 验证父子关系记录。
+func TestHierarchicalToolsTeam_AddAgent_WithParent(t *testing.T) {
 	teamCard := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team_1"),
 	)
@@ -268,8 +265,8 @@ func TestHierarchicalToolsTeam_AddAgentWithParent(t *testing.T) {
 	}
 
 	// 注册 child 并声明父关系
-	if err := team.AddAgentWithParent(context.Background(), childCard, childProvider, "root_id"); err != nil {
-		t.Fatalf("AddAgentWithParent 失败: %v", err)
+	if err := team.AddAgent(context.Background(), childCard, childProvider, maschema.WithParentAgentID("root_id")); err != nil {
+		t.Fatalf("AddAgent WithParent 失败: %v", err)
 	}
 
 	children, ok := team.pendingChildren["root_id"]
@@ -291,12 +288,9 @@ func TestHierarchicalToolsTeam_setupHierarchy_幂等(t *testing.T) {
 	)
 	team := NewHierarchicalToolsTeam(teamCard, nil, nil)
 
-	// 无 pendingChildren，setupHierarchy 应成功且标记为已建立
+	// 无 pendingChildren，setupHierarchy 应成功
 	if err := team.setupHierarchy(context.Background()); err != nil {
 		t.Fatalf("setupHierarchy 失败: %v", err)
-	}
-	if !team.hierarchySetup {
-		t.Error("期望 hierarchySetup = true")
 	}
 
 	// 再次调用应直接返回 nil（幂等）
@@ -350,8 +344,8 @@ func TestHierarchicalToolsTeam_AddAgent_重复注册跳过(t *testing.T) {
 	}
 }
 
-// TestHierarchicalToolsTeam_AddAgentWithParent_空父ID 验证空 parentAgentID 不记录父子关系。
-func TestHierarchicalToolsTeam_AddAgentWithParent_空父ID(t *testing.T) {
+// TestHierarchicalToolsTeam_AddAgent_WithParent_空父ID 验证空 parentAgentID 不记录父子关系。
+func TestHierarchicalToolsTeam_AddAgent_WithParent_空父ID(t *testing.T) {
 	team := newTestTeam("team_1", "")
 
 	childCard := agentschema.NewAgentCard(
@@ -360,47 +354,12 @@ func TestHierarchicalToolsTeam_AddAgentWithParent_空父ID(t *testing.T) {
 	)
 
 	// 空 parentAgentID，不应记录父子关系
-	if err := team.AddAgentWithParent(context.Background(), childCard, noopProvider(), ""); err != nil {
-		t.Fatalf("AddAgentWithParent 失败: %v", err)
+	if err := team.AddAgent(context.Background(), childCard, noopProvider()); err != nil {
+		t.Fatalf("AddAgent 失败: %v", err)
 	}
 
 	if len(team.pendingChildren) != 0 {
 		t.Errorf("期望 pendingChildren 为空, 实际 = %d", len(team.pendingChildren))
-	}
-}
-
-// TestHierarchicalToolsTeam_AddAgentWithParent_重置层级标记 验证添加子 Agent 后 hierarchySetup 重置。
-func TestHierarchicalToolsTeam_AddAgentWithParent_重置层级标记(t *testing.T) {
-	team := newTestTeam("team_1", "root_id")
-
-	// 先让 setupHierarchy 执行（空 pendingChildren）
-	if err := team.setupHierarchy(context.Background()); err != nil {
-		t.Fatalf("setupHierarchy 失败: %v", err)
-	}
-	if !team.hierarchySetup {
-		t.Fatal("期望 hierarchySetup = true")
-	}
-
-	rootCard := agentschema.NewAgentCard(
-		cschema.WithName("root"),
-		cschema.WithID("root_id"),
-	)
-	childCard := agentschema.NewAgentCard(
-		cschema.WithName("child"),
-		cschema.WithID("child_id"),
-	)
-
-	// 注册 root
-	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
-		t.Fatalf("AddAgent 失败: %v", err)
-	}
-
-	// 添加父子关系应重置 hierarchySetup
-	if err := team.AddAgentWithParent(context.Background(), childCard, noopProvider(), "root_id"); err != nil {
-		t.Fatalf("AddAgentWithParent 失败: %v", err)
-	}
-	if team.hierarchySetup {
-		t.Error("期望 hierarchySetup = false，AddAgentWithParent 应重置")
 	}
 }
 
@@ -713,9 +672,6 @@ func TestHierarchicalToolsTeam_setupHierarchy_无待注册子Agent(t *testing.T)
 	if err := team.setupHierarchy(context.Background()); err != nil {
 		t.Fatalf("setupHierarchy 失败: %v", err)
 	}
-	if !team.hierarchySetup {
-		t.Error("期望 hierarchySetup = true")
-	}
 }
 
 // TestHierarchicalToolsTeam_setupHierarchy_有待注册子Agent 验证有 pendingChildren 但 ResourceMgr 为空时的行为。
@@ -735,8 +691,8 @@ func TestHierarchicalToolsTeam_setupHierarchy_有待注册子Agent(t *testing.T)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
 	}
-	if err := team.AddAgentWithParent(context.Background(), childCard, noopProvider(), "root_id"); err != nil {
-		t.Fatalf("AddAgentWithParent 失败: %v", err)
+	if err := team.AddAgent(context.Background(), childCard, noopProvider(), maschema.WithParentAgentID("root_id")); err != nil {
+		t.Fatalf("AddAgent WithParent 失败: %v", err)
 	}
 
 	// 调用 setupHierarchy
@@ -744,16 +700,7 @@ func TestHierarchicalToolsTeam_setupHierarchy_有待注册子Agent(t *testing.T)
 	// 此时 setupHierarchy 会报错（父 Agent 实例未找到），
 	// 这是正常行为，覆盖了 ResourceMgr 非空 + GetAgent 失败的分支
 	err := team.setupHierarchy(context.Background())
-	if err != nil {
-		// 父 Agent 实例未找到的错误是预期的，验证层级未建立
-		if team.hierarchySetup {
-			t.Error("期望 hierarchySetup = false（因为 setup 失败）")
-		}
-	} else {
-		if !team.hierarchySetup {
-			t.Error("期望 hierarchySetup = true")
-		}
-	}
+	_ = err
 }
 
 // TestHierarchicalToolsTeam_AddAgent_识别RootAgent 验证 AddAgent 识别 rootAgent。
@@ -775,8 +722,8 @@ func TestHierarchicalToolsTeam_AddAgent_识别RootAgent(t *testing.T) {
 	}
 }
 
-// TestHierarchicalToolsTeam_AddAgentWithParent_多个子Agent 验证同一父 Agent 下注册多个子 Agent。
-func TestHierarchicalToolsTeam_AddAgentWithParent_多个子Agent(t *testing.T) {
+// TestHierarchicalToolsTeam_AddAgent_WithParent_多个子Agent 验证同一父 Agent 下注册多个子 Agent。
+func TestHierarchicalToolsTeam_AddAgent_WithParent_多个子Agent(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
@@ -795,11 +742,11 @@ func TestHierarchicalToolsTeam_AddAgentWithParent_多个子Agent(t *testing.T) {
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent root 失败: %v", err)
 	}
-	if err := team.AddAgentWithParent(context.Background(), child1, noopProvider(), "root_id"); err != nil {
-		t.Fatalf("AddAgentWithParent child1 失败: %v", err)
+	if err := team.AddAgent(context.Background(), child1, noopProvider(), maschema.WithParentAgentID("root_id")); err != nil {
+		t.Fatalf("AddAgent WithParent child1 失败: %v", err)
 	}
-	if err := team.AddAgentWithParent(context.Background(), child2, noopProvider(), "root_id"); err != nil {
-		t.Fatalf("AddAgentWithParent child2 失败: %v", err)
+	if err := team.AddAgent(context.Background(), child2, noopProvider(), maschema.WithParentAgentID("root_id")); err != nil {
+		t.Fatalf("AddAgent WithParent child2 失败: %v", err)
 	}
 
 	children := team.pendingChildren["root_id"]

@@ -20,7 +20,7 @@ import (
 
 // HierarchicalToolsTeam 工具委托层级多 Agent 团队。
 //
-// 子 Agent 通过 AddAgentWithParent 注册到父 Agent 的 ability_manager，
+// 子 Agent 通过 AddAgent + WithParentAgentID() 注册到父 Agent 的 ability_manager，
 // LLM 将子 Agent 视为可调用的工具（tool_call），
 // 子 Agent 的执行由 AbilityManager.executeAgent() → Runner.RunAgent() 完成。
 // 支持多级树状层级（父→子→孙），任意 Agent 都可作为父节点。
@@ -37,8 +37,6 @@ type HierarchicalToolsTeam struct {
 	rootAgentID string
 	// pendingChildren 待注册的父子关系：parentID → []childAgentCard
 	pendingChildren map[string][]*agentschema.AgentCard
-	// hierarchySetup 标记层级是否已建立（幂等保护）
-	hierarchySetup bool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -91,7 +89,6 @@ func NewHierarchicalToolsTeam(card maschema.TeamCardInterface, config *Hierarchi
 		runtime:         tr,
 		rootAgentID:     rootAgentID,
 		pendingChildren: make(map[string][]*agentschema.AgentCard),
-		hierarchySetup:  false,
 	}
 
 	logger.Info(toolsLogComponent).
@@ -219,6 +216,12 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 					Str("method", "HierarchicalToolsTeam.Stream").
 					Str("root_agent_id", t.rootAgentID).
 					Msg("root_agent.Stream() 调用失败")
+				// 对齐 Python: error_result = {"output": str(e), "result_type": "error"}
+				errorResult := map[string]any{
+					"output":      streamErr.Error(),
+					"result_type": "error",
+				}
+				_ = teamSession.WriteStream(ctx, errorResult)
 				return streamErr
 			}
 
@@ -242,10 +245,10 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 // AddAgent 向团队注册 Agent。
 //
 // 若 Agent 已存在则跳过，否则注册到运行时。
+// 通过 WithParentAgentID() Option 声明层级关系，对齐 Python 的 parent_agent_id 参数。
 //
-// 对应 Python: HierarchicalTeam.add_agent(card, provider, parent_agent_id=None) —
-// parent_agent_id 通过 AddAgentWithParent 方法传递。
-func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
+// 对应 Python: HierarchicalTeam.add_agent(card, provider, parent_agent_id=None)
+func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, opts ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
 		logger.Warn(toolsLogComponent).
 			Str("action", "add_agent_skip").
@@ -275,37 +278,22 @@ func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.
 			Msg("注册 root_agent 到 HierarchicalToolsTeam")
 	}
 
+	// 对齐 Python: if parent_agent_id: self._pending_children.setdefault(parent_agent_id, []).append(card)
+	teamOpts := maschema.NewTeamOptions(opts...)
+	if teamOpts.ParentAgentID != "" {
+		t.pendingChildren[teamOpts.ParentAgentID] = append(t.pendingChildren[teamOpts.ParentAgentID], card)
+		logger.Debug(toolsLogComponent).
+			Str("action", "add_agent_with_parent").
+			Str("child_id", card.ID).
+			Str("parent_id", teamOpts.ParentAgentID).
+			Msg("记录父子关系到 pendingChildren")
+	}
+
 	logger.Info(toolsLogComponent).
 		Str("action", "add_agent").
 		Str("agent_id", card.ID).
 		Str("team_id", t.card.GetID()).
 		Msg("Agent 已注册到 HierarchicalToolsTeam")
-
-	return nil
-}
-
-// AddAgentWithParent 向团队注册 Agent 并声明其父 Agent。
-//
-// 调用 AddAgent 后，将 card 记录到 pendingChildren[parentAgentID] 中，
-// 在 invoke/stream 前通过 setupHierarchy() 注册到父 Agent 的 ability_manager。
-//
-// 对应 Python: HierarchicalTeam.add_agent(card, provider, parent_agent_id)
-func (t *HierarchicalToolsTeam) AddAgentWithParent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, parentAgentID string) error {
-	if err := t.AddAgent(ctx, card, provider); err != nil {
-		return err
-	}
-
-	if parentAgentID != "" {
-		t.pendingChildren[parentAgentID] = append(t.pendingChildren[parentAgentID], card)
-		// 层级已建立过，需要重置标记以允许再次 setup
-		t.hierarchySetup = false
-
-		logger.Debug(toolsLogComponent).
-			Str("action", "add_agent_with_parent").
-			Str("child_id", card.ID).
-			Str("parent_id", parentAgentID).
-			Msg("记录父子关系到 pendingChildren")
-	}
 
 	return nil
 }
@@ -439,18 +427,13 @@ func (t *HierarchicalToolsTeam) assertReady() error {
 
 // setupHierarchy 延迟注册子 Agent 到父 Agent 的 AbilityManager。
 //
-// 幂等：若 hierarchySetup == true 直接返回 nil。
 // 遍历 pendingChildren，从 ResourceMgr 获取父 Agent 实例，
 // 对每个子 AgentCard 调用 parentAgent.AbilityManager().Add(childCard)。
+// 执行后清空 pendingChildren，对齐 Python: self._pending_children.clear()。
 //
 // 对应 Python: HierarchicalTeam._setup_hierarchy()
 func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
-	if t.hierarchySetup {
-		return nil
-	}
-
 	if len(t.pendingChildren) == 0 {
-		t.hierarchySetup = true
 		return nil
 	}
 
@@ -459,7 +442,6 @@ func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
 		logger.Warn(toolsLogComponent).
 			Str("action", "setup_hierarchy").
 			Msg("ResourceMgr 为空，跳过层级建立")
-		t.hierarchySetup = true
 		return nil
 	}
 
@@ -497,6 +479,7 @@ func (t *HierarchicalToolsTeam) setupHierarchy(ctx context.Context) error {
 		}
 	}
 
-	t.hierarchySetup = true
+	// 对齐 Python: self._pending_children.clear()
+	t.pendingChildren = make(map[string][]*agentschema.AgentCard)
 	return nil
 }
