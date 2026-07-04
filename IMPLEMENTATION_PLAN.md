@@ -567,7 +567,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.37 | ☐ | AioProvider | Aio 沙箱 Provider | `openjiuwen/extensions/sys_operation/` |
 | **9.x 内置工具集** | — | | | |
 | 9.38-49 | ☐ | Harness 工具集 | Shell/文件系统/代码/MCP/Worktree/浏览器/Cron/TODO/AskUser/Memory/AgentMode/多模态 | `openjiuwen/harness/tools/` |
-| 9.50 | ☐ | Workspace 管理 | 工作空间管理 | `openjiuwen/harness/workspace/` |
+| 9.50 | 🔄 | Workspace 管理 | ✅ WorkspaceNode 枚举（15 值）；✅ DirectoryNode 类型；✅ Workspace 结构体 + NewWorkspace/GetDirectory/SetDirectory/GetNodePath/GetDefaultDirectory 方法；✅ validateDirectoryNode 校验；✅ CN/EN 双语默认模式；✅ 默认目录自动补全；✅ 深拷贝隔离；✅ 27 个单元测试全部通过 | `openjiuwen/harness/workspace/` |
 | 9.51-53 | ☐ | Harness 资源/Schema/Prompts | 资源管理/Schema 定义/提示词模板 | `openjiuwen/harness/resources/` · `schema/` · `prompts/` |
 | **9.x CLI** | — | | | |
 | 9.54 | ☐ | CLI REPL | 命令行交互界面 | `openjiuwen/harness/cli/` |
