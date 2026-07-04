@@ -78,8 +78,7 @@ type SubAgentConfig struct {
 	Rails []rail.AgentRail `json:"-"`
 	// Skills 技能名称列表
 	Skills []string `json:"skills,omitempty"`
-	// Backend 后端协议实例
-	// ⤵️ 9.3 回填：DeepAgent Factory 实现后改为 BackendProtocol 接口（对齐 Python backend: Optional[Any]）
+	// Backend 后端协议实例（any 占位，⤵️ 9.3 回填为 BackendProtocol 接口）
 	Backend any `json:"-"`
 	// Workspace 工作空间
 	Workspace *workspace.Workspace `json:"workspace,omitempty"`
@@ -95,7 +94,7 @@ type SubAgentConfig struct {
 	MaxIterations int `json:"max_iterations,omitempty"`
 	// FactoryName 工厂名称
 	FactoryName string `json:"factory_name,omitempty"`
-	// FactoryKwargs 工厂参数
+	// FactoryKwargs 工厂参数（any 占位，Python 原型为 Dict[str, Any]）
 	FactoryKwargs map[string]any `json:"factory_kwargs,omitempty"`
 	// EnablePlanMode 是否启用规划模式
 	EnablePlanMode bool `json:"enable_plan_mode"`
@@ -133,8 +132,7 @@ type DeepAgentConfig struct {
 	Skills []string `json:"skills,omitempty"`
 	// EnableSkillDiscovery 是否启用技能发现
 	EnableSkillDiscovery bool `json:"enable_skill_discovery"`
-	// Backend 后端协议实例
-	// ⤵️ 9.3 回填：DeepAgent Factory 实现后改为 BackendProtocol 接口（对齐 Python backend: Optional[Any]）
+	// Backend 后端协议实例（any 占位，⤵️ 9.3 回填为 BackendProtocol 接口）
 	Backend any `json:"-"`
 	// SysOperation 系统操作实例
 	SysOperation sysop.SysOperation `json:"-"`
@@ -170,8 +168,7 @@ type DeepAgentConfig struct {
 	DefaultMode AgentMode `json:"default_mode,omitempty"`
 	// Permissions 权限策略配置
 	Permissions *security.PermissionsSection `json:"permissions,omitempty"`
-	// PermissionHost 权限宿主回调
-	// ⤵️ 9.1 回填：DeepAgent 实现后改为 PermissionHostCallback 接口（对齐 Python permission_host: Any）
+	// PermissionHost 权限宿主回调（any 占位，⤵️ 9.1 回填为 PermissionHostCallback 接口）
 	PermissionHost any `json:"-"`
 }
 
@@ -342,9 +339,16 @@ func (c *DeepAgentConfig) EffectiveProgressiveToolMaxLoadedTools() int {
 }
 
 // EffectiveRestrictToWorkDir 返回有效的 RestrictToWorkDir 值
-// Go 零值 false 表示"未设置"，Python 默认为 True
+// Python 默认值为 True，Go 通过 NewSubAgentConfig 构造函数设置默认值
 func (c *SubAgentConfig) EffectiveRestrictToWorkDir() bool {
-	return true
+	return c.RestrictToWorkDir
+}
+
+// NewSubAgentConfig 创建带默认值的子 Agent 配置
+func NewSubAgentConfig() *SubAgentConfig {
+	return &SubAgentConfig{
+		RestrictToWorkDir: true,
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

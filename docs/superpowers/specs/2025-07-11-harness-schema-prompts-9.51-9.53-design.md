@@ -93,10 +93,12 @@ type DeepLoopEvent struct {
 
 **导出函数：**
 
-- `defaultEventPriority(eventType DeepLoopEventType) int`
-- `createLoopEvent(seq int, eventType DeepLoopEventType, content string, opts ...LoopEventOption) DeepLoopEvent`
+- `DefaultEventPriority(eventType DeepLoopEventType) int`
+- `CreateLoopEvent(seq int, eventType DeepLoopEventType, content string, opts ...LoopEventOption) DeepLoopEvent`
 
 使用 Functional Options 模式支持可选的 taskID、metadata、priority 参数。
+
+**注意：** 需跨包调用，因此导出（大写开头）。
 
 #### 3.1.2 state.go — 运行时可变状态
 
@@ -166,9 +168,10 @@ type TodoItem struct {
 
 ```go
 type TaskPlan struct {
-    Goal         string     `json:"goal"`
-    Tasks        []TodoItem `json:"tasks,omitempty"`
-    CurrentTaskID string   `json:"current_task_id,omitempty"`
+    TaskName      string     `json:"task_name"`
+    Goal          string     `json:"goal"`
+    Tasks         []TodoItem `json:"tasks,omitempty"`
+    CurrentTaskID string    `json:"current_task_id,omitempty"`
 }
 ```
 
@@ -292,10 +295,12 @@ type SystemPromptBuilder struct {
   - Full 模式：返回全部 section（委托给基类）
 - `BuildReport() *PromptReport`
 
-**包级函数：**
+**导出函数：**
 
-- `resolveLanguage(configLanguage string) string` — 优先级：config 参数 > `AGENT_PROMPT_LANGUAGE` 环境变量 > `DEFAULT_LANGUAGE`("cn")
-- `resolveMode(configMode string) PromptMode`
+- `ResolveLanguage(configLanguage string) string` — 优先级：config 参数 > `AGENT_PROMPT_LANGUAGE` 环境变量 > `DEFAULT_LANGUAGE`("cn")
+- `ResolveMode(configMode string) PromptMode`
+
+**注意：** 需跨包调用，因此导出（大写开头）。
 
 **包级常量：**
 
@@ -327,8 +332,10 @@ type PromptReport struct {
 
 #### sanitize.go
 
-- `sanitizePath(path string) string` — 剥离 `<>{[]}$`、`...`、`\n`、`\r` 等注入字符
-- `sanitizeUserContent(content string, maxLen int) string` — 剥离注入字符 + 截断长度
+- `SanitizePath(path string) string` — 剥离 `<>{[]}$`、`...`、`\n`、`\r` 等注入字符
+- `SanitizeUserContent(content string, maxLen int) string` — 剥离注入字符 + 截断长度
+
+**注意：** 需跨包调用，因此导出（大写开头）。
 
 ### 4.3 sections 包 — harness/prompts/sections/
 
@@ -404,8 +411,7 @@ func ValidateToolMetadata(provider ToolMetadataProvider) error
 
 ```go
 var (
-    providers []ToolMetadataProvider
-    registry  map[string]ToolMetadataProvider
+    registry sync.Map  // name -> ToolMetadataProvider，并发安全
 )
 
 // BuildToolCard 从注册表查找 provider 并组装 ToolCard
@@ -417,6 +423,8 @@ func BuildToolsSection(toolDescriptions []string, language string) prompts.Promp
 // RegisterToolProvider 动态注册工具元数据提供者
 func RegisterToolProvider(provider ToolMetadataProvider)
 ```
+
+**实现偏差：** 设计初始版本使用 `map[string]ToolMetadataProvider` + `sync.RWMutex`，实际改用 `sync.Map` 获得并发安全，更简洁。`providers []ToolMetadataProvider` 切片省略，`AllProviders()` 通过 `registry.Range()` 遍历实现。
 
 #### 工具文件规范
 
@@ -468,10 +476,10 @@ func RegisterToolProvider(provider ToolMetadataProvider)
 
 **改动：**
 - `RestrictToWorkDir` 保持 `bool` 值类型
-- `NewSubAgentConfig()` 构造函数中设置 `RestrictToWorkDir: true`
-- 新增 `EffectiveRestrictToWorkDir() bool` 方法：若字段为零值（false），返回 true（Python 默认值）
+- 新增 `NewSubAgentConfig()` 构造函数，设置 `RestrictToWorkDir: true`（对齐 Python 默认值）
+- 新增 `EffectiveRestrictToWorkDir() bool` 方法：直接返回 `c.RestrictToWorkDir` 字段值
 
-**注意：** 这里用 "零值表示未设置" 的约定：Go 中 `false` 是零值，但 Python 默认是 `True`。Effective 方法在零值时返回 Python 默认值 true，显式设为 false 时返回 false。
+**注意：** 构造函数设置默认值 true，Effective 方法直接返回字段值。调用方必须通过 `NewSubAgentConfig()` 创建实例才能获得 Python 默认值。
 
 ### 5.3 🔴 HIGH — StopConditionEvaluator 名称对齐
 
@@ -594,3 +602,47 @@ Windows 平台使用 junction 代替 symlink（`createWindowsJunction`）。
 - ToolMetadataProvider：Validate 双语完整性测试
 - 一致性修复：每个修复项需有对应测试覆盖
 - 整体覆盖率目标 ≥ 85%
+
+## 8. 实际实现偏差
+
+> 记录实现过程中与设计文档不一致的偏差，均已确认合理或已修正。
+
+| # | 偏差点 | 设计文档 | 实际实现 | 原因 |
+|---|--------|---------|---------|------|
+| 1 | TaskPlan.TaskName 字段 | 未列出 TaskName | 包含 `TaskName string` 字段 | Python 源码实际有 `task_name`，设计遗漏 |
+| 2 | EffectiveRestrictToWorkDir | 零值判断返回 Python 默认值 | 直接返回 `c.RestrictToWorkDir`，由 `NewSubAgentConfig()` 设置默认值 true | 更符合 Go 惯例，构造函数设默认值 |
+| 3 | registry 类型 | `map[string]ToolMetadataProvider` + `providers []` | `sync.Map` | 并发安全，无需手动加锁 |
+| 4 | loop_event 函数名 | `defaultEventPriority` / `createLoopEvent` | `DefaultEventPriority` / `CreateLoopEvent` | 需跨包调用，Go 导出规则 |
+| 5 | builder/sanitize 函数名 | `resolveLanguage` / `resolveMode` / `sanitizePath` / `sanitizeUserContent` | 对应大写导出 | 同上 |
+| 6 | state.go parseStringSlice | 未提及 | 新增 `parseStringSlice` 辅助函数 | JSON 反序列化后 `[]string` 变为 `[]any`，需兼容两种类型 |
+
+## 9. any 占位清单
+
+> 记录当前 harness 代码中所有 `any` 类型使用，分类标注是否为占位待回填。
+
+### 9.1 占位待回填（⤵️ 标记，后续步骤替换为具体接口类型）
+
+| 文件 | 字段/参数 | 当前类型 | 回填步骤 | 目标类型 |
+|------|----------|---------|---------|---------|
+| `schema/config.go:83` | `SubAgentConfig.Backend` | `any` | 9.3 | `BackendProtocol` 接口 |
+| `schema/config.go:138` | `DeepAgentConfig.Backend` | `any` | 9.3 | `BackendProtocol` 接口 |
+| `schema/config.go:175` | `DeepAgentConfig.PermissionHost` | `any` | 9.1 | `PermissionHostCallback` 接口 |
+| `schema/config.go:99` | `SubAgentConfig.FactoryKwargs` | `map[string]any` | — | Python 原型 `Dict[str, Any]`，Go 无泛型 dict，保持不变 |
+
+### 9.2 JSON Schema 动态结构（合理使用，非占位）
+
+- `prompts/tools/base.go` 接口 `GetInputParams(language string) map[string]any` — JSON Schema 本身是动态结构
+- `prompts/tools/*.go` 所有工具的参数 Schema 构建函数 — 对应 Python `dict` 返回值
+- `prompts/tools/registry.go` `sync.Map` 存储 `any` 值 — Go 标准库 `sync.Map` 签名要求
+
+### 9.3 状态序列化/反序列化（合理使用，非占位）
+
+- `schema/state.go` `StopConditionState map[string]any`、`ToDict()`/`FromDict()` — 对应 Python `dict`
+- `schema/task.go` `TodoItem.MetaData map[string]any`、`ToDict()`/`FromDict()` — 对应 Python `dict`
+- `schema/loop_event.go` `DeepLoopEvent.Metadata map[string]any` — 对应 Python `dict`
+- `task_loop/stop_condition.go` `ExportState()`/`ImportState()` 返回 `map[string]any`
+- `task_loop/loop_coordinator.go` `LoopCoordinatorExport.EvaluatorStates map[string]map[string]any`
+
+### 9.4 安全模型（合理使用，非占位）
+
+- `security/models.go` `PermissionSpec.Defaults/Tools map[string]any`、`Rules []map[string]any` — JSON 动态结构

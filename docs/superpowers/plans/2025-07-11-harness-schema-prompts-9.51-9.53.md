@@ -621,33 +621,37 @@ fix(harness): align AudioModelConfig JSON key with Python (question_answering_mo
 - Modify: `internal/agentcore/harness/schema/config.go`
 - Modify: `internal/agentcore/harness/schema/config_test.go`
 
-- [ ] **Step 1: 添加 EffectiveRestrictToWorkDir 方法**
+- [x] **Step 1: 添加 EffectiveRestrictToWorkDir 方法 + NewSubAgentConfig 构造函数**
 
-在 `SubAgentConfig` 上新增方法：
+在 `SubAgentConfig` 上新增方法和构造函数：
 
 ```go
 // EffectiveRestrictToWorkDir 返回有效的 RestrictToWorkDir 值
-// Go 零值 false 表示"未设置"，Python 默认为 True
-// 零值时返回 true（与 Python 默认一致），显式设为 false 时返回 false
+// Python 默认值为 True，Go 通过 NewSubAgentConfig 构造函数设置默认值
 func (c *SubAgentConfig) EffectiveRestrictToWorkDir() bool {
-    return true // Python 默认值
+    return c.RestrictToWorkDir
+}
+
+// NewSubAgentConfig 创建带默认值的子 Agent 配置
+func NewSubAgentConfig() *SubAgentConfig {
+    return &SubAgentConfig{
+        RestrictToWorkDir: true,
+    }
 }
 ```
 
-注意：由于 Go 的 `bool` 零值就是 `false`，无法区分"未设置"和"显式 false"。此方法直接返回 true 作为默认值。如果调用方需要显式设为 false，需通过其他机制（如配置文件显式设置后标记已设置）。
+- [x] **Step 2: 更新 config_test.go**
 
-- [ ] **Step 2: 更新 config_test.go**
+添加测试：`NewSubAgentConfig()` 默认 `RestrictToWorkDir` 为 true；`EffectiveRestrictToWorkDir()` 直接返回字段值；显式设 false 时返回 false。
 
-添加测试：`EffectiveRestrictToWorkDir()` 返回 true。
+- [x] **Step 3: 运行测试确认通过**
 
-- [ ] **Step 3: 运行测试确认通过**
+Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/harness/schema/... -run "TestEffectiveRestrictToWorkDir|TestNewSubAgentConfig" -v`
 
-Run: `cd /home/opensource/uap-claw-go && go test ./internal/agentcore/harness/schema/... -run TestSubAgent -v`
-
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```
-fix(harness): add EffectiveRestrictToWorkDir defaulting to true (Python align)
+fix(harness): EffectiveRestrictToWorkDir returns field value, NewSubAgentConfig sets default
 ```
 
 ---
