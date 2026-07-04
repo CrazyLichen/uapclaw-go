@@ -530,7 +530,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 |------|------|------|------|-----------------|
 | **9.x DeepAgent** | — | | | |
 | 9.1 | ☐ | DeepAgent | 包装 ReActAgent + 任务循环 + Rails + 技能 + 子 Agent | `openjiuwen/harness/deep_agent.py` |
-| 9.2 | ☐ | DeepAgentConfig | DeepAgent 配置 | `openjiuwen/harness/harness_config/` |
+| 9.2 | ✅ | DeepAgentConfig | DeepAgent 配置 | `openjiuwen/harness/harness_config/` |
 | 9.3 | ☐ | DeepAgent Factory | 创建 DeepAgent 实例 | `openjiuwen/harness/factory.py` |
 | 9.4 | ☐ | TaskLoopController | 任务循环控制器 | `openjiuwen/harness/task_loop/` |
 | 9.5 | ✅ | LoopCoordinator | 循环协调器 | `openjiuwen/harness/task_loop/` |
