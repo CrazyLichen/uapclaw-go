@@ -8,6 +8,7 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -110,8 +111,9 @@ func TestNewReActAgentConfig_WithOptions(t *testing.T) {
 	})
 
 	t.Run("WithWorkspace", func(t *testing.T) {
-		cfg := NewReActAgentConfig(WithWorkspace("test_workspace"))
-		assert.Equal(t, "test_workspace", cfg.Workspace)
+		ws := &hworkspace.Workspace{RootPath: "/test"}
+		cfg := NewReActAgentConfig(WithWorkspace(ws))
+		assert.Equal(t, ws, cfg.Workspace)
 	})
 
 	t.Run("WithContextEngineConfig", func(t *testing.T) {

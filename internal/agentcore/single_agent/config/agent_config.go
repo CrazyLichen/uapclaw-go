@@ -6,6 +6,7 @@ import (
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
@@ -50,8 +51,7 @@ type ReActAgentConfig struct {
 	// ContextProcessors 上下文处理器规格列表
 	ContextProcessors []ceiface.ProcessorSpec `json:"context_processors,omitempty"`
 	// Workspace 工作区实例
-	// ⤵️ 回填：Workspace 接口定义后改为具体类型
-	Workspace any `json:"-"`
+	Workspace *hworkspace.Workspace `json:"-"`
 }
 
 // modelClientExtra WithModelClient 复合 Option 的扩展参数容器
@@ -189,7 +189,7 @@ func WithContextProcessors(procs []ceiface.ProcessorSpec) ReActAgentConfigOption
 }
 
 // WithWorkspace 设置工作区实例
-func WithWorkspace(ws any) ReActAgentConfigOption {
+func WithWorkspace(ws *hworkspace.Workspace) ReActAgentConfigOption {
 	return func(c *ReActAgentConfig) { c.Workspace = ws }
 }
 

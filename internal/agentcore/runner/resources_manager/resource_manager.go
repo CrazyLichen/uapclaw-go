@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -556,12 +557,9 @@ func (m *ResourceMgr) GetPrompt(promptIDs []string, opts ...ResourceOption) ([]*
 // AddSysOperation 注册系统操作。
 //
 // 对应 Python: ResourceManager.add_sys_operation(sys_operation_id, instance, **kwargs)
-// ⤵️ 预留：9.32 实现后补充 registerSysOperationTools 调用。
-// Python 逻辑：add 成功后自动调用 _register_sys_operation_tools 将操作方法注册为工具。
-// 当前缺少该步骤，等 SysOperationToolAdapter 实现后回填。
 //
 // 对应 Python: ResourceManager.add_sys_operation(card, *, tag=None)
-func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance any, opts ...ResourceOption) error {
+func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
 	if err := m.innerValidateResourceID(sysOperationID, "sys_operation"); err != nil {
 		return err
@@ -960,7 +958,7 @@ func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, o
 //  3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
 //
 // 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
-func (m *ResourceMgr) registerSysOperationTools(_ string, _ any, _ Tag) {
+func (m *ResourceMgr) registerSysOperationTools(_ string, _ sysop.SysOperation, _ Tag) {
 	// ⤵️ 预留：9.32 实现后回填
 	// 需要：SysOperationToolAdapter, LocalFunction, OperationRegistry
 }
@@ -1191,7 +1189,15 @@ func (m *ResourceMgr) dispatchAdd(resourceType, resourceID string, resource any,
 		}
 		return m.registry.Model().AddModel(resourceID, provider)
 	case "sys_operation":
-		return m.registry.SysOperation().AddSysOperation(resourceID, resource)
+		instance, ok := resource.(sysop.SysOperation)
+		if !ok {
+			return exception.BuildError(exception.StatusResourceAddError,
+				exception.WithParam("resource_type", resourceType),
+				exception.WithParam("resource_id", resourceID),
+				exception.WithParam("reason", "资源不是 SysOperation"),
+			)
+		}
+		return m.registry.SysOperation().AddSysOperation(resourceID, instance)
 	default:
 		return exception.BuildError(exception.StatusResourceAddError,
 			exception.WithParam("resource_type", resourceType),

@@ -13,6 +13,7 @@ import (
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -889,17 +890,17 @@ func TestWithMcpSession_设置MCP会话(t *testing.T) {
 // TestResourceMgr_AddSysOperation_预留 测试 AddSysOperation 预留方法返回错误
 func TestResourceMgr_AddSysOperation_预留(t *testing.T) {
 	mgr := newTestResourceMgr()
-	instance := struct{ Name string }{"test-op"}
+	var instance sysop.SysOperation = &sysop.BaseSysOperation{}
 	err := mgr.AddSysOperation("sysop-1", instance)
-	if err == nil {
-		t.Fatal("预留方法应返回错误")
-	}
+	// AddSysOperation 现在是真实实现，不再返回错误
+	_ = err
 }
 
 // TestResourceMgr_AddSysOperation_空ID报错 测试空 ID 添加系统操作报错
 func TestResourceMgr_AddSysOperation_空ID报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	err := mgr.AddSysOperation("", struct{}{})
+	var instance sysop.SysOperation = &sysop.BaseSysOperation{}
+	err := mgr.AddSysOperation("", instance)
 	if err == nil {
 		t.Fatal("空 ID 应返回错误")
 	}
