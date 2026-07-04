@@ -37,7 +37,7 @@ func (t *stubTeam) Stream(_ context.Context, _ map[string]any, _ ...TeamOption) 
 	return ch, nil
 }
 
-func (t *stubTeam) AddAgent(_ context.Context, _ *agentschema.AgentCard, _ TeamAgentProvider) error {
+func (t *stubTeam) AddAgent(_ context.Context, _ *agentschema.AgentCard, _ TeamAgentProvider, _ ...TeamOption) error {
 	return nil
 }
 

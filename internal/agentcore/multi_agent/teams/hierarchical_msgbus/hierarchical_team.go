@@ -208,7 +208,7 @@ func (t *HierarchicalTeam) Stream(ctx context.Context, inputs map[string]any, op
 // 如果 card.ID == supervisorID，设置 P2P timeout。
 //
 // 对应 Python: HierarchicalTeam.add_agent(card, provider)
-func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider) error {
+func (t *HierarchicalTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
 		logger.Warn(teamLogComponent).
 			Str("action", "add_agent_skip").

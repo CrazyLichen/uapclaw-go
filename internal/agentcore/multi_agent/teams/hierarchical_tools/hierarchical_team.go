@@ -245,7 +245,7 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 //
 // 对应 Python: HierarchicalTeam.add_agent(card, provider, parent_agent_id=None) —
 // parent_agent_id 通过 AddAgentWithParent 方法传递。
-func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider) error {
+func (t *HierarchicalToolsTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
 		logger.Warn(toolsLogComponent).
 			Str("action", "add_agent_skip").

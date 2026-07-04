@@ -164,7 +164,7 @@ func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ..
 // 如果 Agent 已存在则跳过，否则注册到运行时并标记内部 Agent 需要重新初始化。
 //
 // 对应 Python: HandoffTeam.add_agent(card, provider) -> self
-func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider) error {
+func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard, provider maschema.TeamAgentProvider, _ ...maschema.TeamOption) error {
 	if t.runtime.HasAgent(card.ID) {
 		logger.Warn(logComponent).
 			Str("action", "add_agent_skip").

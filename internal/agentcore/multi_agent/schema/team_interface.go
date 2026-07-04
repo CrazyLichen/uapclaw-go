@@ -38,8 +38,11 @@ type BaseTeam interface {
 
 	// AddAgent 向团队注册 Agent。
 	//
-	// 对应 Python: BaseTeam.add_agent(card, provider) -> self
-	AddAgent(ctx context.Context, card *agentschema.AgentCard, provider TeamAgentProvider) error
+	// 通过 WithParentAgentID() Option 声明层级关系（仅 HierarchicalToolsTeam 使用），
+	// 其他 Team 实现忽略 opts。
+	//
+	// 对应 Python: BaseTeam.add_agent(card, provider, parent_agent_id=None) -> self
+	AddAgent(ctx context.Context, card *agentschema.AgentCard, provider TeamAgentProvider, opts ...TeamOption) error
 
 	// RemoveAgent 从团队注销 Agent。
 	//
