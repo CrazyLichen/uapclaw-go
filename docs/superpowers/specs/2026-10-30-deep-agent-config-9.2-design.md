@@ -123,10 +123,67 @@ DeepAgentConfig ──→ create_deep_agent() (9.3 Factory)
 - **Python**: `openjiuwen/core/sys_operation/`
 - **内容**（仅接口+枚举，不含具体实现）:
   - `OperationMode` 枚举（LOCAL / SANDBOX）
+  - `ShellType` 枚举（AUTO / CMD / POWERSHELL / BASH / SH）
+  - `ContainerScope` 枚举（SYSTEM / SESSION / CUSTOM）
   - `SysOperationCard` 结构体（嵌入 BaseCard，含 Mode, WorkConfig 字段）
-  - `LocalWorkConfig` 结构体
-  - `SandboxWorkConfig` 结构体
+  - `LocalWorkConfig` 结构体（ShellAllowlist, SandboxRoot, RestrictToSandbox, DangerousPatterns）
+  - `SandboxGatewayConfig` 结构体（Isolation, LauncherConfig, TimeoutSeconds, AuthHeaders, AuthQueryParams）
+  - `SandboxLauncherConfig` 结构体（LauncherType, GatewayURL, SandboxType, OnStop, IdleTTLSeconds, ExtraParams）
+  - `SandboxIsolationConfig` 结构体（CustomID, ContainerScope, Prefix）
   - `SysOperation` 接口（核心方法签名，对齐 Python `SysOperation` 的公开方法）
+
+**SysOperation 接口方法（对齐 Python `sys_operation.py`）：**
+
+```go
+type SysOperation interface {
+    // Card 返回配置卡片
+    Card() *SysOperationCard
+    // Fs 返回文件系统操作（对齐 Python: sys_operation.fs()）
+    Fs() FsOperation
+    // Shell 返回 Shell 操作（对齐 Python: sys_operation.shell()）
+    Shell() ShellOperation
+    // Code 返回代码执行操作（对齐 Python: sys_operation.code()）
+    Code() CodeOperation
+    // IsolationKeyTemplate 返回沙箱隔离键模板（对齐 Python: sys_operation.isolation_key_template）
+    IsolationKeyTemplate() string
+}
+```
+
+**FsOperation 接口（对齐 Python `BaseFsOperation` 的 10 个方法）：**
+
+```go
+type FsOperation interface {
+    ReadFile(ctx context.Context, path string, opts ...FsOption) (*ReadFileResult, error)
+    WriteFile(ctx context.Context, path string, content string, opts ...FsOption) (*WriteFileResult, error)
+    ListFiles(ctx context.Context, path string, opts ...FsOption) (*ListFilesResult, error)
+    ListDirectories(ctx context.Context, path string, opts ...FsOption) (*ListDirsResult, error)
+    SearchFiles(ctx context.Context, path string, pattern string, opts ...FsOption) (*SearchFilesResult, error)
+    // ... Upload/Download/Stream 方法留 9.38 扩展
+    ListTools() []*tool.ToolCard
+}
+```
+
+**ShellOperation 接口（对齐 Python `BaseShellOperation` 的 3 个方法）：**
+
+```go
+type ShellOperation interface {
+    ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*ExecuteCmdResult, error)
+    // Stream/Background 方法留 9.38 扩展
+    ListTools() []*tool.ToolCard
+}
+```
+
+**CodeOperation 接口（对齐 Python `BaseCodeOperation` 的 2 个方法）：**
+
+```go
+type CodeOperation interface {
+    ExecuteCode(ctx context.Context, code string, opts ...CodeOption) (*ExecuteCodeResult, error)
+    // Stream 方法留 9.38 扩展
+    ListTools() []*tool.ToolCard
+}
+```
+
+- **注意**: Fs/Shell/Code 的具体实现（LocalFsOperation, SandboxFsOperation 等）属于 9.32/9.33/9.34 范畴，本次仅定义接口
 - **回填**: 将已有代码中 `any` 类型的 SysOperation 字段替换为 `SysOperation` 接口
 
 #### 1.5 PermissionsSection 类型
@@ -261,9 +318,11 @@ HarnessConfig        ← 顶层 YAML 结构
 
 ### 四、回填点
 
-实现 9.2 后，需回填的已有代码：
+实现 9.2 后，需回填的已有代码。**每个回填点不仅改类型签名，还须按 Python 逻辑补充实现内容。**
 
 #### 4.1 SysOperation 接口回填（any → SysOperation）
+
+**类型替换：**
 
 | 文件 | 位置 | 变更 |
 |------|------|------|
@@ -279,6 +338,38 @@ HarnessConfig        ← 顶层 YAML 结构
 | `context_engine/context/session_model_context.go` | `sysOperation any` 字段 + 构造参数 | → `sysOperation sysop.SysOperation` |
 | `context_engine/processor/offloader/tool_result_budget_processor.go` | `sysOperation any` 字段 | → `sysOperation sysop.SysOperation` |
 
+**实现逻辑补充（对齐 Python `base.py:_write_offload_to_file`）：**
+
+`context_engine/processor/offload.go` 的 `writeOffloadToFile` 方法当前逻辑：
+```go
+// 当前：仅 os 兜底路径
+func (p *BaseProcessor) writeOffloadToFile(..., sysOperation any) bool {
+    _ = sysOperation  // 暂时忽略
+    // 直接用 os.WriteFile 写入
+}
+```
+
+回填后逻辑（对齐 Python）：
+```go
+func (p *BaseProcessor) writeOffloadToFile(..., sysOperation sysop.SysOperation) bool {
+    // Python: if sys_operation is not None:
+    //             await sys_operation.fs().write_file(file_path, content_json)
+    //         else:
+    //             # fallback: os.makedirs + open().write()
+    if sysOperation != nil && sysOperation.Fs() != nil {
+        // 优先使用 SysOperation 的 FS 接口写入（支持沙箱场景）
+        result, err := sysOperation.Fs().WriteFile(ctx, offloadPath, content, ...)
+        if err != nil || result.Code != 0 {
+            // SysOperation 写入失败，回退到 os 兜底
+            return p.writeOffloadFallback(offloadPath, content)
+        }
+        return true
+    }
+    // 兜底路径：直接用 os.WriteFile
+    return p.writeOffloadFallback(offloadPath, content)
+}
+```
+
 #### 4.2 Workspace 回填（any → *Workspace）
 
 | 文件 | 位置 | 变更 |
@@ -287,7 +378,15 @@ HarnessConfig        ← 顶层 YAML 结构
 | `context_engine/interface/types.go` | `ContextEngineOptions.Workspace any` | → `Workspace *workspace.Workspace` |
 | `context_engine/engine.go` | `workspace any` 字段 | → `workspace *workspace.Workspace` |
 
+**实现逻辑补充：**
+
+回填后，ContextEngine 的 workspace 字段可用于：
+- 获取 workspace 目录路径（`workspace.RootPath`）作为 context offload 的存储位置
+- 对齐 Python: `ContextEngine(config, workspace=, sys_operation=)` 传入 workspace 用于路径解析
+
 #### 4.3 SysOperationMgr 回填
+
+**类型替换：**
 
 | 文件 | 位置 | 变更 |
 |------|------|------|
@@ -296,11 +395,154 @@ HarnessConfig        ← 顶层 YAML 结构
 | `runner/resources_manager/sys_operation_manager.go` | `RemoveSysOperation(id string) (any, error)` | → `RemoveSysOperation(id string) (sysop.SysOperation, error)` |
 | `runner/resources_manager/sys_operation_manager.go` | `GetSysOperation(id string) (any, error)` | → `GetSysOperation(id string) (sysop.SysOperation, error)` |
 
+**实现逻辑补充（对齐 Python `resource_manager.py`）：**
+
+当前 `SysOperationMgr` 的三个方法都返回 `fmt.Errorf("sys operation manager not implemented")`。回填后实现实际逻辑：
+
+**`AddSysOperation`**（对齐 Python `SysOperationMgr.add_sys_operation`）：
+```go
+func (m *SysOperationMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation) error {
+    // 1. 校验 sysOperationID 非空
+    if sysOperationID == "" {
+        return fmt.Errorf("sys_operation_id 不能为空")
+    }
+    // 2. 校验不重复
+    if m.sysOperations.Has(sysOperationID) {
+        return fmt.Errorf("sys_operation %s 已存在", sysOperationID)
+    }
+    // 3. 写入 sysOperations
+    m.sysOperations.Set(sysOperationID, instance)
+    // 4. 写入 sandboxKeyOwnerMap（如果 instance 有 isolation key template）
+    //    Python: self._sandbox_key_owner_map[key_template] = sys_operation_id
+    if card := instance.Card(); card != nil {
+        if keyTpl := card.IsolationKeyTemplate(); keyTpl != "" {
+            m.mu.Lock()
+            m.sandboxKeyOwnerMap[keyTpl] = sysOperationID
+            m.mu.Unlock()
+        }
+    }
+    return nil
+}
+```
+
+**`RemoveSysOperation`**（对齐 Python `SysOperationMgr.remove_sys_operation`）：
+```go
+func (m *SysOperationMgr) RemoveSysOperation(sysOperationID string) (sysop.SysOperation, error) {
+    // 1. 校验 sysOperationID 非空
+    if sysOperationID == "" {
+        return nil, fmt.Errorf("sys_operation_id 不能为空")
+    }
+    // 2. 从 sysOperations 弹出实例
+    instance, ok := m.sysOperations.Get(sysOperationID)
+    if !ok {
+        return nil, fmt.Errorf("sys_operation %s 不存在", sysOperationID)
+    }
+    m.sysOperations.Delete(sysOperationID)
+    // 3. 从 sandboxKeyOwnerMap 清除对应条目
+    //    Python: 反向查找 key_template → 删除
+    m.mu.Lock()
+    for keyTpl, ownerID := range m.sandboxKeyOwnerMap {
+        if ownerID == sysOperationID {
+            delete(m.sandboxKeyOwnerMap, keyTpl)
+        }
+    }
+    m.mu.Unlock()
+    return instance, nil
+}
+```
+
+**`GetSysOperation`**（对齐 Python `SysOperationMgr.get_sys_operation`）：
+```go
+func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (sysop.SysOperation, error) {
+    // 1. 校验 sysOperationID 非空
+    if sysOperationID == "" {
+        return nil, fmt.Errorf("sys_operation_id 不能为空")
+    }
+    // 2. 从 sysOperations 查询并返回
+    instance, ok := m.sysOperations.Get(sysOperationID)
+    if !ok {
+        return nil, fmt.Errorf("sys_operation %s 不存在", sysOperationID)
+    }
+    return instance, nil
+}
+```
+
+**同时回填 `ResourceMgr` 中 SysOperation 相关方法：**
+
+**`AddSysOperation`**（对齐 Python `ResourceManager.add_sys_operation`）：
+```go
+func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation, opts ...ResourceOption) error {
+    // 1. 校验 ID
+    // 2. innerAddResource 写入注册表
+    // 3. ⤵️ 预留：9.32 实现后补充 registerSysOperationTools 调用
+    //    Python: add 成功后自动调用 _register_sys_operation_tools
+}
+```
+
+**`registerSysOperationTools`**（对齐 Python `ResourceManager._register_sys_operation_tools`）：
+```go
+func (m *ResourceMgr) registerSysOperationTools(card *sysop.SysOperationCard, instance sysop.SysOperation, tag Tag) {
+    // Python 逻辑：
+    //   1. SysOperationToolAdapter.ExtractTools(card, instance) → []ToolAdapterEntry
+    //   2. 对每个 (toolID, localFunc)：m.innerAddResource(toolID, "tool", localFunc, ...)
+    //   3. m.tool().AddSysOperationTools(card.ID, toolIDs)
+    // 当前 9.2 阶段：SysOperationToolAdapter 尚未实现（依赖 9.38-49 内置工具集）
+    // 保留 ⤵️ 标记，等 9.32/9.38 后回填
+}
+```
+
+**`GetSysOpToolCards`**（对齐 Python `ResourceManager.get_sys_op_tool_cards`）：
+```go
+func (m *ResourceMgr) GetSysOpToolCards(sysOperationID string, operationName string, toolName string) ([]*tool.ToolCard, error) {
+    // Python 逻辑：
+    //   1. 获取 SysOperation 实例
+    //   2. 获取对应 operation（如 fs/shell/code）的 sub-operation
+    //   3. 调用 sub_op.list_tools() 获取 ToolCard 列表
+    //   4. 按 operation_name/tool_name 过滤
+    // 当前 9.2 阶段：保留 ⤵️ 标记，等 9.32 后回填
+}
+```
+
 #### 4.4 PromptMode 回填
 
 | 文件 | 位置 | 变更 |
 |------|------|------|
 | `single_agent/prompts/builder.go` | `sectionsFilter` 钩子 | 添加 `NewSystemPromptBuilderWithPromptMode(mode PromptMode)` 构造函数 |
+
+**实现逻辑补充（对齐 Python `prompts/builder.py`）：**
+
+Python 中 `SystemPromptBuilder.__init__(language, mode)` 根据 PromptMode 构建 sectionsFilter：
+- `FULL` → 不过滤，返回所有 sections
+- `MINIMAL` → 只保留 priority <= 20 的 sections（identity + soul + 心跳等核心）
+- `NONE` → 返回空 sections（不注入系统提示词）
+
+回填后 Go 实现：
+```go
+func NewSystemPromptBuilderWithPromptMode(language string, mode PromptMode) *SystemPromptBuilder {
+    switch mode {
+    case PromptModeFull:
+        return NewSystemPromptBuilder(language)  // 默认不过滤
+    case PromptModeMinimal:
+        filter := func(sections []PromptSection) []PromptSection {
+            var filtered []PromptSection
+            for _, s := range sections {
+                if s.Priority <= 20 {
+                    filtered = append(filtered, s)
+                }
+            }
+            return filtered
+        }
+        return NewSystemPromptBuilderWithFilter(language, filter)
+    case PromptModeNone:
+        filter := func(sections []PromptSection) []PromptSection {
+            return nil
+        }
+        return NewSystemPromptBuilderWithFilter(language, filter)
+    default:
+        return NewSystemPromptBuilder(language)
+    }
+}
+```
 
 #### 4.5 ReActAgentConfig.SysOperationID — 不回填
 
