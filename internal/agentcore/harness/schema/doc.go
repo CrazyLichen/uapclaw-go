@@ -9,7 +9,8 @@
 //	schema/
 //	├── doc.go           # 包文档
 //	├── agent_mode.go    # AgentMode 枚举及 JSON 序列化
-//	└── prompt_mode.go   # PromptMode 枚举及 JSON 序列化
+//	├── prompt_mode.go   # PromptMode 枚举及 JSON 序列化
+//	└── config.go        # DeepAgentConfig 及辅助类型（VisionModelConfig、AudioModelConfig、SubAgentConfig、ModelSelectionEntry）
 //
 // 对应 Python 代码：openjiuwen/harness/schema/
 package schema
