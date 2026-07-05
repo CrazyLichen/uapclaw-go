@@ -18,32 +18,9 @@ import (
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (MCPTool)
 type MCPTool struct {
-	card      *McpToolCard
-	mcpClient McpClient
+	card      *types.McpToolCard
+	mcpClient types.McpClient
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// 以下类型定义在 mcp/types 子包中，此处通过类型别名重导出，
-// 保持 mcp 包的公共 API 向后兼容。
-
-// McpServerConfig MCP 服务器配置。
-// TODO: 考虑移除 reexport，让调用者直接使用 types 包
-//
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpServerConfig)
-type McpServerConfig = types.McpServerConfig
-
-// McpToolCard MCP 工具配置卡片，扩展 ToolCard 增加服务器标识。
-// TODO: 考虑移除 reexport，让调用者直接使用 types 包
-//
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/base.py (McpToolCard)
-type McpToolCard = types.McpToolCard
-
-// McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
-// TODO: 考虑移除 reexport，让调用者直接使用 types 包
-//
-// 对应 Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
-type McpClient = types.McpClient
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -137,7 +114,7 @@ func ExtractMCPToolResultContent(toolResult any) any {
 // mcpClient 为 nil 时返回 StatusToolMcpClientNotSupported 错误。
 //
 // 对应 Python: MCPTool.__init__(mcp_client, tool_info)
-func NewMCPTool(mcpClient McpClient, card *McpToolCard) (*MCPTool, error) {
+func NewMCPTool(mcpClient types.McpClient, card *types.McpToolCard) (*MCPTool, error) {
 	if mcpClient == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpClientNotSupported,
@@ -153,7 +130,7 @@ func (t *MCPTool) Card() *tool.ToolCard {
 }
 
 // McpCard 返回 MCP 工具配置卡片，包含服务器标识信息。
-func (t *MCPTool) McpCard() *McpToolCard {
+func (t *MCPTool) McpCard() *types.McpToolCard {
 	return t.card
 }
 

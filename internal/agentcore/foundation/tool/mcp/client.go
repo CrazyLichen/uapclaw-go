@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/client"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -14,7 +15,7 @@ import (
 // 未知类型返回 StatusToolMcpClientTypeUnknown 错误。
 //
 // 对应 Python: 各客户端的构造逻辑
-func NewMcpClient(config *McpServerConfig) (McpClient, error) {
+func NewMcpClient(config *types.McpServerConfig) (types.McpClient, error) {
 	if config == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpClientTypeUnknown,

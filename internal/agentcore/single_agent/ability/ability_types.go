@@ -14,12 +14,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AddAbilityResult 添加能力的返回结果。
-// 类型别名，实际定义在 schema 包。
-//
-// 对应 Python: AddAbilityResult
-type AddAbilityResult = saschema.AddAbilityResult
-
 // AbilityExecutionError 能力执行统一异常，嵌入 BaseError 并关联 ToolMessage。
 //
 // 对应 Python: AbilityExecutionError

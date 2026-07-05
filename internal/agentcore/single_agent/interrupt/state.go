@@ -4,20 +4,6 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// BaseInterruptionState 中断状态基类。
-// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
-type BaseInterruptionState = saschema.BaseInterruptionState
-
-// ToolInterruptEntry 工具中断条目。
-// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
-type ToolInterruptEntry = saschema.ToolInterruptEntry
-
-// ToolInterruptionState 工具中断状态（HITL 中断）。
-// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
-type ToolInterruptionState = saschema.ToolInterruptionState
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 从 sa/schema 包 re-export 中断状态相关常量，保持 API 兼容。
