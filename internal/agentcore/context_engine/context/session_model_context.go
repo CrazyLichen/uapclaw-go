@@ -192,8 +192,6 @@ func NewSessionModelContext(
 	return mc
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Len 返回上下文消息数量。
 //
 // 对应 Python: SessionModelContext.len()

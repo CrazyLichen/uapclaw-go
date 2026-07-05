@@ -94,8 +94,6 @@ func NewGaussVectorStore(connString string) *GaussVectorStore {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Close 关闭数据库连接池。
 func (s *GaussVectorStore) Close() {
 	s.mu.Lock()

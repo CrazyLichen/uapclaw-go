@@ -88,8 +88,6 @@ func WithESIndexPrefix(prefix string) ESOption {
 	return func(s *ESVectorStore) { s.indexPrefix = prefix }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewESVectorStore 创建 ESVectorStore 实例。
 // 客户端惰性创建，初始化时不需要 ES 可用。
 func NewESVectorStore(addresses []string, username, password string, opts ...ESOption) *ESVectorStore {

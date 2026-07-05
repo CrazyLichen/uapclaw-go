@@ -93,8 +93,6 @@ func NewSkillManager(sysOperationID string) *SkillManager {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewSkillManagerWithProvider 创建使用自定义 FsProvider 的 SkillManager 实例。
 //
 // 用于测试或后续 SysOperation 适配器注入。

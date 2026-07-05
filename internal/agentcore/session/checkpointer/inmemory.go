@@ -81,12 +81,9 @@ type WorkflowStorage struct {
 const (
 	// emptyFormatTag 空状态标记，用于 WorkflowStorage.exists 判断
 	emptyFormatTag = "empty"
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件标识
-var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -103,8 +100,6 @@ func NewInMemoryCheckpointer() *InMemoryCheckpointer {
 		graphStore:           nil, // ⤵️ 8.7 回填
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // PreWorkflowExecute 工作流执行前保存检查点。
 // 对应 Python: InMemoryCheckpointer.pre_workflow_execute()

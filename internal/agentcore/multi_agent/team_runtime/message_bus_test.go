@@ -3,6 +3,7 @@ package team_runtime
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -448,6 +449,72 @@ func TestMessageBus_Stop_有活跃订阅(t *testing.T) {
 	}
 	if len(bus.activeSubscriptions) != 0 {
 		t.Error("停止后 activeSubscriptions 应为空")
+	}
+}
+
+// TestMessageBus_Publish正常 测试已启动时发布 Pub-Sub 消息正常路径
+func TestMessageBus_Publish正常(t *testing.T) {
+	config := NewMessageBusConfig(WithTeamID("test-team"))
+	runtime := &TeamRuntime{teamID: "test-team"}
+	bus, err := NewMessageBus(*config, runtime)
+	if err != nil {
+		t.Fatalf("NewMessageBus 返回错误: %v", err)
+	}
+	_ = bus.Start(context.Background())
+	defer func() { _ = bus.Stop(context.Background()) }()
+
+	// 添加 Pub-Sub 订阅关系
+	bus.AddSubscription("agent-1", "topic-1")
+
+	// Publish 正常路径：火忘消息，Produce 成功即返回 nil
+	err = bus.Publish(context.Background(), "hello", "topic-1", "sender", "session-1")
+	if err != nil {
+		t.Errorf("Publish 正常路径应返回 nil，实际: %v", err)
+	}
+}
+
+// TestMessageBus_Send响应超时 测试已启动时 Send 等待响应超时
+func TestMessageBus_Send响应超时(t *testing.T) {
+	config := NewMessageBusConfig(WithTeamID("test-team"), WithProcessTimeout(1.0))
+	runtime := &TeamRuntime{teamID: "test-team"}
+	bus, err := NewMessageBus(*config, runtime)
+	if err != nil {
+		t.Fatalf("NewMessageBus 返回错误: %v", err)
+	}
+	_ = bus.Start(context.Background())
+	defer func() { _ = bus.Stop(context.Background()) }()
+
+	// Send 消息，但没有注册 agent，路由会失败
+	// handler（handleP2PMessage）会调用 RouteP2PMessage → runner.RunAgent 失败
+	// CompleteResponse 会将错误写入 response channel，WaitResponse 收到错误
+	result, err := bus.Send(context.Background(), "hello", "recipient", "sender", "session-1", 0.5)
+	if err == nil {
+		t.Error("Send 无注册 agent 时应返回错误")
+	}
+	if result != nil {
+		t.Errorf("result 应为 nil，实际: %v", result)
+	}
+}
+
+// TestMessageBus_Publish多次 测试多次 Publish 到同一 topic
+func TestMessageBus_Publish多次(t *testing.T) {
+	config := NewMessageBusConfig(WithTeamID("test-team"))
+	runtime := &TeamRuntime{teamID: "test-team"}
+	bus, err := NewMessageBus(*config, runtime)
+	if err != nil {
+		t.Fatalf("NewMessageBus 返回错误: %v", err)
+	}
+	_ = bus.Start(context.Background())
+	defer func() { _ = bus.Stop(context.Background()) }()
+
+	bus.AddSubscription("agent-1", "topic-1")
+
+	// 连续 Publish 多条消息
+	for i := 0; i < 3; i++ {
+		err = bus.Publish(context.Background(), fmt.Sprintf("msg-%d", i), "topic-1", "sender", "session-1")
+		if err != nil {
+			t.Errorf("Publish 第 %d 条消息失败: %v", i, err)
+		}
 	}
 }
 

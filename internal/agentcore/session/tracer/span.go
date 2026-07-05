@@ -120,8 +120,6 @@ func NewSpanManager(traceID string, parentID ...string) *SpanManager {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetSpan 根据调用标识获取 Span
 func (m *SpanManager) GetSpan(invokeID string) *Span {
 	m.mu.RLock()

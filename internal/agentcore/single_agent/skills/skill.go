@@ -42,8 +42,6 @@ func NewSkill(name, description, directory string) *Skill {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // AsDict 将 Skill 转为字典。
 //
 // includeDirectory 为 true 时包含 directory 字段，为 false 时省略。

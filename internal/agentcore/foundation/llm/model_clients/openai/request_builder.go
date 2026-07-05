@@ -43,8 +43,6 @@ func AdjustParamsForOpenAI(params map[string]any, apiBase string) {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildHTTPRequest 构建发送给 OpenAI API 的 HTTP 请求。
 //
 // 将请求参数序列化为 JSON，设置 Authorization 和 Content-Type 头，

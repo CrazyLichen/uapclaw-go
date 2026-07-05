@@ -40,8 +40,6 @@ func NewJsonOutputParser() *JsonOutputParser {
 	return &JsonOutputParser{}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Parse 解析 LLM 输出中的 JSON。
 //
 // 输入可以是 string 或 *AssistantMessage（对齐 Python Union[str, AssistantMessage]）。

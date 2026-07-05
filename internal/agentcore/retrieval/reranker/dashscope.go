@@ -58,8 +58,6 @@ func WithDashScopeMaxRetries(n int) DashScopeRerankerOption {
 	return func(r *DashScopeReranker) { r.maxRetries = n }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // WithDashScopeRetryWait 设置重试等待时间。
 func WithDashScopeRetryWait(d time.Duration) DashScopeRerankerOption {
 	return func(r *DashScopeReranker) { r.retryWait = d }

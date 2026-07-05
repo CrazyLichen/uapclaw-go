@@ -199,21 +199,6 @@ type AdaptiveStrategy struct {
 // bytesReaderImpl bytesReader 辅助实现，将 []byte 转为 io.Reader。
 type bytesReaderImpl struct{ data []byte }
 
-// withBytes 设置读取的数据并返回自身。
-func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
-	return &bytesReaderImpl{data: data}
-}
-
-// Read 实现 io.Reader 接口。
-func (b *bytesReaderImpl) Read(p []byte) (int, error) {
-	if len(b.data) == 0 {
-		return 0, io.EOF
-	}
-	n := copy(p, b.data)
-	b.data = b.data[n:]
-	return n, nil
-}
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 默认策略参数
@@ -876,6 +861,24 @@ func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *Rout
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// bytesReader 辅助函数，将 []byte 转为 io.Reader。
+func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
+
+// withBytes 设置读取的数据并返回自身。
+func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
+	return &bytesReaderImpl{data: data}
+}
+
+// Read 实现 io.Reader 接口。
+func (b *bytesReaderImpl) Read(p []byte) (int, error) {
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data)
+	b.data = b.data[n:]
+	return n, nil
+}
+
 // checkDeployment 检查单个部署端点健康状态。
 //
 // 对应 Python: SDKHealthChecker.check_deployment()
@@ -953,9 +956,6 @@ func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 		}
 	}
 }
-
-// bytesReader 辅助函数，将 []byte 转为 io.Reader。
-func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
 
 // buildModelIndices 构建 model 索引（对齐 Python BaseRouter._build_model_indices）。
 func (r *ReliableRouter) buildModelIndices() {

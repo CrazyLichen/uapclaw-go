@@ -56,8 +56,6 @@ func NewOriginChecker() *OriginChecker {
 	return NewOriginCheckerWithEnv(DefaultEnableCheckEnv, DefaultAllowedHostsEnv)
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewOriginCheckerWithEnv 创建 Origin 校验器，使用自定义环境变量名。
 // 用于测试场景或需要多实例不同配置的场景。
 func NewOriginCheckerWithEnv(enableCheckEnv, allowedHostsEnv string) *OriginChecker {

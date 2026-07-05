@@ -69,8 +69,6 @@ func NewContextMessageBuffer(historyMessages []llm_schema.BaseMessage, maxBuffer
 	return buf
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Size 返回有效消息数量。
 //
 // maxBufferSize > 0 时返回 min(len, maxBufferSize)，否则返回实际长度。

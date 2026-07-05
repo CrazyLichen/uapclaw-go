@@ -69,8 +69,6 @@ func NewDeepSeekModelClient(
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Invoke 非流式调用 DeepSeek API。
 //
 // 覆写 OpenAI 客户端的 Invoke，在委托前为所有 assistant 消息补充 reasoning_content。

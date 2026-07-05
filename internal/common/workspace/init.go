@@ -186,8 +186,6 @@ func Init(opt InitOption) (*InitResult, error) {
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Prepare 复制模板文件到工作区。
 //
 // 对应 Python: prepare_workspace(overwrite, preferred_language, workspace_dir)

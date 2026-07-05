@@ -66,8 +66,6 @@ func NewDashScopeModelClient(
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GenerateImage 实现 DashScope 万相文生图。
 //
 // 调用 DashScope 多模态 API（MultiModalConversation），支持文生图和图生图。

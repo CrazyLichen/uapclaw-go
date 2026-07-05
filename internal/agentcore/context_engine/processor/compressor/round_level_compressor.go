@@ -203,8 +203,6 @@ func NewRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Validate 校验轮级压缩器配置。
 func (c *RoundLevelCompressorConfig) Validate() error {
 	if c.TriggerTotalTokens <= 0 {

@@ -267,8 +267,6 @@ func NewFullCompactProcessorConfig() *FullCompactProcessorConfig {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Validate 校验全量压缩处理器配置。
 func (c *FullCompactProcessorConfig) Validate() error {
 	if c.TriggerTotalTokens <= 0 {

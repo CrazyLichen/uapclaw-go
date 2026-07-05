@@ -125,8 +125,6 @@ func WithTaskName(name string) TaskOption {
 	return func(c *taskConfig) { c.name = name }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // IsTerminal 判断是否为终态。
 func (s TaskStatus) IsTerminal() bool {
 	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout

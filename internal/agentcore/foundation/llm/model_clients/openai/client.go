@@ -74,8 +74,6 @@ func NewOpenAIModelClient(
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Invoke 非流式调用 LLM，返回完整的助手消息。
 //
 // 对应 Python: OpenAIModelClient.invoke()

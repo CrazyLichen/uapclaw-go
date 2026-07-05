@@ -83,8 +83,6 @@ func (TracerWorkflowUtils) TraceWorkflowStart(ctx context.Context, session Workf
 	})
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // TraceComponentBegin 追踪组件开始，对应 Python TracerWorkflowUtils.trace_component_begin。
 // 调用 TriggerWorkflow(TraceWFCallStart, parentNodeID=session.ParentID(), invokeID=session.ExecutableID(), sourceIDs=sourceIDs, metadata=组件元数据)。
 func (TracerWorkflowUtils) TraceComponentBegin(ctx context.Context, session WorkflowNodeSession, sourceIDs []string) {

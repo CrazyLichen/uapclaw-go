@@ -488,8 +488,6 @@ func BuildEventName(scope, eventName string) string {
 	return scope + ":" + eventName
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ParseEventName 解析带 scope 的事件名，返回 (scope, eventName)。
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py parse_event_name(scoped_event)

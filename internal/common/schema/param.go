@@ -115,8 +115,6 @@ func NewStringParam(name, description string, required bool, defaultVal ...strin
 	return p
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewBooleanParam 创建布尔类型参数。
 func NewBooleanParam(name, description string, required bool, defaultVal ...bool) *Param {
 	p := &Param{

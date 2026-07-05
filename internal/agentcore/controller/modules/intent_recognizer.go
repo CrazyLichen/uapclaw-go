@@ -98,8 +98,6 @@ func NewIntentRecognizer(
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Recognize 识别意图。
 // 对应 Python: IntentRecognizer.recognize(event, session)
 // ⤵️ 6.23 ResourceMgr 实现后回填 LLM 调用逻辑

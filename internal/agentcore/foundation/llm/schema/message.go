@@ -152,8 +152,6 @@ var roleTypeMap map[string]RoleType
 // GetRole 返回消息角色
 func (m *DefaultMessage) GetRole() RoleType { return m.Role }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // SetRole 设置消息角色
 func (m *DefaultMessage) SetRole(role RoleType) { m.Role = role }
 

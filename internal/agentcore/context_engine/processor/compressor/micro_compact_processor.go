@@ -65,8 +65,6 @@ func NewMicroCompactProcessorConfig() *MicroCompactProcessorConfig {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Validate 校验微压缩处理器配置。
 func (c *MicroCompactProcessorConfig) Validate() error {
 	if c.TriggerThreshold <= 0 {

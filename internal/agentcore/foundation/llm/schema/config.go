@@ -140,8 +140,6 @@ func (p ProviderType) String() string {
 	return fmt.Sprintf("ProviderType(%d)", int(p))
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // MarshalJSON 实现 json.Marshaler 接口，将 ProviderType 序列化为字符串。
 func (p ProviderType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.String())

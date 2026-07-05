@@ -84,12 +84,9 @@ const (
 	defaultDistanceMetric = "COSINE"
 	// defaultBatchSize 默认批量插入大小
 	defaultBatchSize = 128
+	// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
+	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件，agentcore 下统一使用 ComponentAgentCore
-var logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -110,8 +107,6 @@ func NewMilvusVectorStore(milvusURI, milvusToken, dbName string) *MilvusVectorSt
 		createClient:       defaultCreateClient,
 	}
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Close 关闭 Milvus 客户端连接。
 //

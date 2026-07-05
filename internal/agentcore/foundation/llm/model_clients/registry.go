@@ -52,8 +52,6 @@ func NewClientRegistry() *ClientRegistry {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetClientRegistry 返回全局客户端注册表单例。
 func GetClientRegistry() *ClientRegistry {
 	return globalRegistry

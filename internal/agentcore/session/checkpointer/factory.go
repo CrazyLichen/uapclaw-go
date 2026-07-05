@@ -66,8 +66,6 @@ func NewCheckpointerFactory() *CheckpointerFactory {
 	return f
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // String 返回脱敏后的配置字符串表示，实现 fmt.Stringer 接口。
 // 对应 Python: CheckpointerConfig.__repr__()
 // 递归脱敏 Conf 中的 URL 密码，防止日志泄露数据库连接字符串。

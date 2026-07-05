@@ -56,8 +56,6 @@ func WithMaxRetries(n int) StandardRerankerOption {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // WithRetryWait 设置重试等待时间
 func WithRetryWait(d time.Duration) StandardRerankerOption {
 	return func(r *StandardReranker) {

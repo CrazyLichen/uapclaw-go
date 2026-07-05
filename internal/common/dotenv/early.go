@@ -46,8 +46,6 @@ func ParseEarly(dotenvPath string, instanceName string) (string, error) {
 	return "", nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ParsedDotenv 返回已加载的 .env 文件路径。
 //
 // 如果 ParseEarly 尚未被调用或未加载任何 .env，返回空字符串。

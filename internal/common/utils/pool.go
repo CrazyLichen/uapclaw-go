@@ -106,8 +106,6 @@ func (r *RefCountedResource) InitRefCount() {
 	r.lastUsed.Store(time.Now().UnixNano())
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // IncRef 增加引用计数，返回新的计数。
 // 对应 Python: increment_ref()
 func (r *RefCountedResource) IncRef() int64 {

@@ -66,8 +66,6 @@ func NewController() *Controller {
 	return &Controller{}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Init 两阶段初始化，创建子组件并接线。
 // 对应 Python: Controller.init(card, config, ability_manager, context_engine)
 func (c *Controller) Init(

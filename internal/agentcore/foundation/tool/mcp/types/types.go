@@ -104,8 +104,6 @@ func WithRetryTimes(n int) ConnectOption {
 	return func(o *ConnectOptions) { o.RetryTimes = n }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // WithConnectTimeout 设置连接超时时间（秒）。
 func WithConnectTimeout(d float64) ConnectOption {
 	return func(o *ConnectOptions) { o.Timeout = d }

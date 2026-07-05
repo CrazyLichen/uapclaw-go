@@ -42,8 +42,6 @@ func NewStatusCode(name string, code int, msg string) StatusCode {
 	return StatusCode{code: code, message: msg, name: name}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Code 返回整数错误码。
 //
 // 对应 Python: StatusCode.XXX.code

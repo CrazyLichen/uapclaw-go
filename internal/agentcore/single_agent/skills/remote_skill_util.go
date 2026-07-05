@@ -105,8 +105,6 @@ func NewGitHubTree(repoOwner, repoName, treeRef, directory string) *GitHubTree {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Clone 克隆 GitHubTree 实例。
 //
 // 对应 Python: GitHubTree.clone()

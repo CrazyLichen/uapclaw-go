@@ -42,8 +42,6 @@ func NewKVCacheManager(sessionID string) *KVCacheManager {
 	}
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Release 检查前后两次 ContextWindow 差异并释放 KV 缓存。
 //
 // 流程：

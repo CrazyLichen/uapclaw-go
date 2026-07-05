@@ -75,8 +75,6 @@ func NewSiliconFlowModelClient(
 	}, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Invoke 非流式调用 SiliconFlow API。
 //
 // 覆写 OpenAI 客户端的 Invoke，在委托前对消息中的 tool_calls 做清洗。

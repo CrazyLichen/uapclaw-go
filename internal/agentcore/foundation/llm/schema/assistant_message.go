@@ -59,8 +59,6 @@ func WithToolCalls(calls []*ToolCall) AssistantMessageOption {
 	return func(m *AssistantMessage) { m.ToolCalls = calls }
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // WithUsageMetadata 设置用量元数据。
 func WithAssistantUsageMetadata(meta *UsageMetadata) AssistantMessageOption {
 	return func(m *AssistantMessage) { m.UsageMetadata = meta }
