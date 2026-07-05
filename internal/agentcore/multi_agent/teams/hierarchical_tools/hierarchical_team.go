@@ -175,10 +175,7 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sess := teamOpts.Session
-	timeout := teamOpts.Timeout
-	if timeout == 0 {
-		timeout = t.config.TeamConfig.MessageTimeout
-	}
+	_ = teamOpts.Timeout // TODO: 将 timeout 传递给 StandaloneStreamContext
 
 	logger.Debug(toolsLogComponent).
 		Str("action", "hierarchical_tools_stream").
