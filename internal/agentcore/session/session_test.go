@@ -38,7 +38,7 @@ type mockStub struct {
 	tracerVal              *tracer.Tracer
 	streamWriterManagerVal *stream.StreamWriterManager
 	sessionIDVal           string
-	checkpointerVal        checkpointer.Checkpointer
+	checkpointerVal        interfaces.Checkpointer
 	actorManagerVal        any
 	closeErr               error
 	closeCalled            bool
@@ -49,7 +49,7 @@ func (m *mockStub) State() state.SessionState                        { return m.
 func (m *mockStub) Tracer() *tracer.Tracer                           { return m.tracerVal }
 func (m *mockStub) StreamWriterManager() *stream.StreamWriterManager { return m.streamWriterManagerVal }
 func (m *mockStub) SessionID() string                                { return m.sessionIDVal }
-func (m *mockStub) Checkpointer() checkpointer.Checkpointer          { return m.checkpointerVal }
+func (m *mockStub) Checkpointer() interfaces.Checkpointer            { return m.checkpointerVal }
 func (m *mockStub) ActorManager() any                                { return m.actorManagerVal }
 func (m *mockStub) Close() error                                     { m.closeCalled = true; return m.closeErr }
 

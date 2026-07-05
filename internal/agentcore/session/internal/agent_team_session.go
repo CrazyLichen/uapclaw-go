@@ -32,7 +32,7 @@ type AgentTeamSession struct {
 	// tracer 追踪器
 	tracer *tracer.Tracer
 	// checkpointer 检查点器
-	checkpointer checkpointer.Checkpointer
+	checkpointer interfaces.Checkpointer
 	// teamSpan 团队追踪跨度
 	teamSpan *tracer.TraceAgentSpan
 }
@@ -134,7 +134,7 @@ func WithTeamStreamWriterManager(mgr *stream.StreamWriterManager) AgentTeamSessi
 }
 
 // WithTeamCheckpointer 设置检查点器的选项
-func WithTeamCheckpointer(cp checkpointer.Checkpointer) AgentTeamSessionOption {
+func WithTeamCheckpointer(cp interfaces.Checkpointer) AgentTeamSessionOption {
 	return func(s *AgentTeamSession) {
 		s.checkpointer = cp
 	}
@@ -173,7 +173,7 @@ func (s *AgentTeamSession) SessionID() string {
 }
 
 // Checkpointer 获取检查点管理器
-func (s *AgentTeamSession) Checkpointer() checkpointer.Checkpointer {
+func (s *AgentTeamSession) Checkpointer() interfaces.Checkpointer {
 	return s.checkpointer
 }
 

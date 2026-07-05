@@ -36,7 +36,7 @@ type AgentTeamSession struct {
 	// envs 环境变量（通过 WithAgentTeamEnvs 设置）
 	envs map[string]any
 	// checkpointer 检查点器（通过 WithAgentTeamCheckpointer option 设置）
-	checkpointer checkpointer.Checkpointer
+	checkpointer interfaces.Checkpointer
 	// streamWriterManager 流写入管理器（通过 WithAgentTeamStreamWriterManager 设置）
 	streamWriterManager *stream.StreamWriterManager
 	// preRunDone PreRun 是否已执行
@@ -128,7 +128,7 @@ func WithAgentTeamEnvs(envs map[string]any) AgentTeamSessionOption {
 
 // WithAgentTeamCheckpointer 设置检查点器的选项。
 // 若不设置，NewAgentTeamSession 默认注入 checkpointer.GetCheckpointer()。
-func WithAgentTeamCheckpointer(cp checkpointer.Checkpointer) AgentTeamSessionOption {
+func WithAgentTeamCheckpointer(cp interfaces.Checkpointer) AgentTeamSessionOption {
 	return func(s *AgentTeamSession) {
 		s.checkpointer = cp
 	}

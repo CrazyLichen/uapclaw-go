@@ -288,7 +288,7 @@ func (s *WorkflowSession) SessionID() string {
 
 // Checkpointer 获取检查点管理器。
 // 有 parent 则委托给 parent；无 parent 则从工厂获取（懒加载）。
-func (s *WorkflowSession) Checkpointer() checkpointer.Checkpointer {
+func (s *WorkflowSession) Checkpointer() interfaces.Checkpointer {
 	if s.parent != nil {
 		return s.parent.Checkpointer()
 	}
@@ -441,7 +441,7 @@ func (n *NodeSession) SessionID() string {
 }
 
 // Checkpointer 委托给父 session
-func (n *NodeSession) Checkpointer() checkpointer.Checkpointer {
+func (n *NodeSession) Checkpointer() interfaces.Checkpointer {
 	return n.delegate.Checkpointer()
 }
 

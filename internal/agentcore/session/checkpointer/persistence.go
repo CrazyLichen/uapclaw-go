@@ -890,7 +890,7 @@ func (cp *PersistenceCheckpointer) GraphStore() any {
 //   - db_client: 预配置的 *gorm.DB 实例（可选，提供时跳过自动创建）
 //   - db_timeout: SQLite 锁等待秒数（默认 5，对齐 Python 默认 30 秒）
 //   - db_enable_wal: 是否启用 SQLite WAL 模式（默认 true）
-func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
+func (p *persistenceProvider) Create(ctx context.Context, conf map[string]any) (interfaces.Checkpointer, error) {
 	// db_type：当前仅支持 sqlite
 	dbType := "sqlite"
 	if v, ok := conf["db_type"]; ok {

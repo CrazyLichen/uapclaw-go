@@ -68,7 +68,7 @@ func (p *ProxySession) SessionID() string {
 }
 
 // Checkpointer 获取底层会话的检查点管理器
-func (p *ProxySession) Checkpointer() interfaces.Checkpointer {
+func (p *ProxySession) Checkpointer() checkpointer.Checkpointer {
 	return p.stub.Checkpointer()
 }
 

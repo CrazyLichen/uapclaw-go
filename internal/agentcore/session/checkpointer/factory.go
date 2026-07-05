@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils"
 )
 
@@ -14,7 +15,7 @@ import (
 // 对应 Python: openjiuwen/core/session/checkpointer/checkpointer.py (CheckpointerProvider)
 type CheckpointerProvider interface {
 	// Create 创建检查点器实例
-	Create(ctx context.Context, conf map[string]any) (Checkpointer, error)
+	Create(ctx context.Context, conf map[string]any) (interfaces.Checkpointer, error)
 }
 
 // CheckpointerFactoryConfig 检查点器工厂配置结构体，用于工厂创建检查点器实例。
@@ -35,9 +36,9 @@ type CheckpointerFactory struct {
 	// registry 已注册的 Provider，key=类型名
 	registry map[string]CheckpointerProvider
 	// defaultCheckpointer 默认检查点器实例
-	defaultCheckpointer Checkpointer
+	defaultCheckpointer interfaces.Checkpointer
 	// typeCheckpointers 按类型缓存的检查点器实例
-	typeCheckpointers map[string]Checkpointer
+	typeCheckpointers map[string]interfaces.Checkpointer
 }
 
 // inMemoryProvider InMemory 检查点器提供者。
@@ -51,7 +52,7 @@ var defaultFactory *CheckpointerFactory
 
 // defaultInMemoryCheckpointer 全局默认 InMemory 检查点器实例
 // 对应 Python: default_inmemory_checkpointer
-var defaultInMemoryCheckpointer Checkpointer
+var defaultInMemoryCheckpointer interfaces.Checkpointer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -59,7 +60,7 @@ var defaultInMemoryCheckpointer Checkpointer
 func NewCheckpointerFactory() *CheckpointerFactory {
 	f := &CheckpointerFactory{
 		registry:          make(map[string]CheckpointerProvider),
-		typeCheckpointers: make(map[string]Checkpointer),
+		typeCheckpointers: make(map[string]interfaces.Checkpointer),
 	}
 	f.Register("in_memory", &inMemoryProvider{})
 	f.Register("persistence", &persistenceProvider{})
@@ -86,7 +87,7 @@ func (f *CheckpointerFactory) Register(name string, provider CheckpointerProvide
 // 对应 Python: CheckpointerFactory.create(checkpointer_conf)
 // Python CheckpointerConfig.type 默认值为 "in_memory"，此处对齐：
 // 若 conf.Type 为空则回退到 "in_memory"。
-func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerFactoryConfig) (Checkpointer, error) {
+func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerFactoryConfig) (interfaces.Checkpointer, error) {
 	// 对齐 Python CheckpointerConfig 的默认值
 	if conf.Type == "" {
 		conf.Type = "in_memory"
@@ -107,7 +108,7 @@ func (f *CheckpointerFactory) Create(ctx context.Context, conf CheckpointerFacto
 
 // SetDefaultCheckpointer 设置默认检查点器实例。
 // 对应 Python: CheckpointerFactory.set_default_checkpointer(checkpointer)
-func (f *CheckpointerFactory) SetDefaultCheckpointer(cp Checkpointer) {
+func (f *CheckpointerFactory) SetDefaultCheckpointer(cp interfaces.Checkpointer) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.defaultCheckpointer = cp
@@ -115,7 +116,7 @@ func (f *CheckpointerFactory) SetDefaultCheckpointer(cp Checkpointer) {
 
 // SetCheckpointer 设置指定类型的检查点器实例。
 // 对应 Python: CheckpointerFactory.set_checkpointer(store_type, checkpointer)
-func (f *CheckpointerFactory) SetCheckpointer(storeType string, cp Checkpointer) {
+func (f *CheckpointerFactory) SetCheckpointer(storeType string, cp interfaces.Checkpointer) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.typeCheckpointers[storeType] = cp
@@ -131,7 +132,7 @@ func (f *CheckpointerFactory) SetCheckpointer(storeType string, cp Checkpointer)
 // 4. defaultCheckpointer 未设置时，返回 defaultInMemoryCheckpointer
 //
 // 空字符串与不传参数等价（对齐 Python 行为），不会触发类型缓存查找。
-func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) Checkpointer {
+func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) interfaces.Checkpointer {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -155,22 +156,22 @@ func (f *CheckpointerFactory) GetCheckpointer(storeType ...string) Checkpointer 
 }
 
 // GetCheckpointer 从全局工厂获取检查点器实例。
-func GetCheckpointer(storeType ...string) Checkpointer {
+func GetCheckpointer(storeType ...string) interfaces.Checkpointer {
 	return defaultFactory.GetCheckpointer(storeType...)
 }
 
 // SetDefaultCheckpointer 设置全局默认检查点器。
-func SetDefaultCheckpointer(cp Checkpointer) {
+func SetDefaultCheckpointer(cp interfaces.Checkpointer) {
 	defaultFactory.SetDefaultCheckpointer(cp)
 }
 
 // SetCheckpointer 设置全局指定类型的检查点器。
-func SetCheckpointer(storeType string, cp Checkpointer) {
+func SetCheckpointer(storeType string, cp interfaces.Checkpointer) {
 	defaultFactory.SetCheckpointer(storeType, cp)
 }
 
 // CreateCheckpointer 从全局工厂创建检查点器。
-func CreateCheckpointer(ctx context.Context, conf CheckpointerFactoryConfig) (Checkpointer, error) {
+func CreateCheckpointer(ctx context.Context, conf CheckpointerFactoryConfig) (interfaces.Checkpointer, error) {
 	return defaultFactory.Create(ctx, conf)
 }
 
@@ -180,7 +181,7 @@ func RegisterCheckpointer(name string, provider CheckpointerProvider) {
 }
 
 // Create 创建 InMemory 检查点器。
-func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
+func (p *inMemoryProvider) Create(ctx context.Context, conf map[string]any) (interfaces.Checkpointer, error) {
 	return defaultInMemoryCheckpointer, nil
 }
 
