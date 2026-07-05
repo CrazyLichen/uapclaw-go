@@ -53,10 +53,10 @@ type DeepAgentProvider interface {
 
 const (
 	// DeepTaskType 深层 Agent 任务类型
-	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
+	// ✅ 9.7 已实现 BuildDeepExecutor，在 9.1 的 _setup_task_loop 中注册到 TaskExecutorRegistry
 	DeepTaskType = "deep_agent_task"
 	// SessionSpawnTaskType 会话派生任务类型
-	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
+	// ✅ 9.7 已实现 BuildSessionSpawnExecutor，在 9.1 的 _setup_task_loop 中注册到 TaskExecutorRegistry
 	SessionSpawnTaskType = "session_spawn_task"
 )
 
@@ -401,7 +401,7 @@ func (e *TaskLoopEventExecutor) Cancel(_ context.Context, taskID string, sess se
 
 // BuildDeepExecutor 构建 DeepTaskType 执行器的工厂闭包。
 // 返回的闭包捕获 provider，供 TaskExecutorRegistry 注册。
-// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
+// ✅ 9.7 已实现 BuildDeepExecutor，在 9.1 的 _setup_task_loop 中注册到 TaskExecutorRegistry
 func BuildDeepExecutor(provider DeepAgentProvider) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 	return func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 		return NewTaskLoopEventExecutor(deps, provider)
