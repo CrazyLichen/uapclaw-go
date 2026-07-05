@@ -81,6 +81,12 @@ func TestOffloadMessages_in_memory模式正常(t *testing.T) {
 	if info.OffloadHandle != "test-handle" {
 		t.Errorf("OffloadHandle = %q, want test-handle", info.OffloadHandle)
 	}
+	// 验证占位符使用 handle+type 格式
+	content := result.GetContent().Text()
+	expectedMarker := "[[OFFLOAD: handle=test-handle, type=in_memory]]"
+	if !containsMarker(content, expectedMarker) {
+		t.Errorf("content 中应包含 %q，实际: %q", expectedMarker, content)
+	}
 }
 
 // TestOffloadMessages_filesystem模式正常 验证 filesystem 模式正常流程
@@ -110,6 +116,12 @@ func TestOffloadMessages_filesystem模式正常(t *testing.T) {
 	info := offloadable.GetOffloadInfo()
 	if info.OffloadType != "filesystem" {
 		t.Errorf("OffloadType = %q, want filesystem", info.OffloadType)
+	}
+	// 验证占位符统一使用 handle+type 格式（不含 path）
+	content := result.GetContent().Text()
+	expectedMarker := "[[OFFLOAD: handle=test-handle, type=filesystem]]"
+	if !containsMarker(content, expectedMarker) {
+		t.Errorf("content 中应包含 %q，实际: %q", expectedMarker, content)
 	}
 	// 验证文件已写入
 	data, err := os.ReadFile(offloadPath)
@@ -381,4 +393,26 @@ func TestOffloadMessages_filesystem_空OffloadPath(t *testing.T) {
 	assert.True(t, ok)
 	info := offloadable.GetOffloadInfo()
 	assert.Equal(t, "filesystem", info.OffloadType)
+	// 验证占位符统一使用 handle+type 格式（不含 path）
+	content := result.GetContent().Text()
+	expectedMarker := "[[OFFLOAD: handle=handle-empty, type=filesystem]]"
+	assert.True(t, containsMarker(content, expectedMarker),
+		"content 中应包含 %q，实际: %q", expectedMarker, content)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// containsMarker 检查 content 中是否包含指定的 OFFLOAD 标记子串
+func containsMarker(content, marker string) bool {
+	return len(content) >= len(marker) && containsStr(content, marker)
+}
+
+// containsStr 检查 s 中是否包含 substr
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

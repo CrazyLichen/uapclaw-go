@@ -505,7 +505,8 @@ func (p *ToolResultBudgetProcessor) offloadToolMessage(ctx context.Context, mess
 	}
 
 	finalContent := buildPersistedOutputMessage(len(content),
-		fmt.Sprintf("[[OFFLOAD: handle=%s, type=%s, path=%s]]", actualHandle, actualType, offloadPath),
+		// 统一使用 handle+type 双字段格式，path 是内部实现细节不暴露给 LLM
+		fmt.Sprintf("[[OFFLOAD: handle=%s, type=%s]]", actualHandle, actualType),
 		preview, hasMore)
 	offloadMsg.SetContent(llm_schema.NewTextContent(finalContent))
 

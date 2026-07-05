@@ -17,10 +17,9 @@ import (
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (
-	// offloadMessageHandle 内存卸载消息占位符格式
+	// offloadMessageHandle 卸载消息占位符格式，统一使用 handle+type 双字段
+	// filesystem 的 path 是内部实现细节，不暴露给 LLM，LLM 只需 handle 和 type 来调用 reload 工具
 	offloadMessageHandle = "[[OFFLOAD: handle=%s, type=%s]]"
-	// offloadMessageHandleWithPath 文件系统卸载消息占位符格式（含路径）
-	offloadMessageHandleWithPath = "[[OFFLOAD: type=%s, path=%s]]"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -119,11 +118,8 @@ func (p *BaseProcessor) offloadMessagesToMemory(mc iface.ModelContext, role stri
 
 // offloadMessagesToFilesystem 将消息卸载到文件系统。
 func (p *BaseProcessor) offloadMessagesToFilesystem(role string, content string, offloadHandle string, offloadPath string, toolCallID string, msgOpts []llm_schema.MessageOption) (llm_schema.BaseMessage, error) {
-	if offloadPath != "" {
-		content = content + fmt.Sprintf(offloadMessageHandleWithPath, "filesystem", offloadPath)
-	} else {
-		content = content + fmt.Sprintf(offloadMessageHandle, offloadHandle, "filesystem")
-	}
+	// 统一使用 handle+type 格式，path 是内部实现细节不暴露给 LLM
+	content = content + fmt.Sprintf(offloadMessageHandle, offloadHandle, "filesystem")
 
 	return schema.NewOffloadMessage(
 		roleTypeFromRole(role),
