@@ -129,12 +129,15 @@ func WithToolSession(sess any) ToolOption {
 
 // NewToolCallOptions 从选项列表构造 ToolCallOptions。
 // 默认值：RaiseForStatus=true（与 Python raise_for_status=True 对齐）。
+// 忽略 nil 选项，防止 nil(o) panic。
 func NewToolCallOptions(opts ...ToolOption) *ToolCallOptions {
 	o := &ToolCallOptions{
 		RaiseForStatus: true,
 	}
 	for _, opt := range opts {
-		opt(o)
+		if opt != nil {
+			opt(o)
+		}
 	}
 	return o
 }
@@ -203,9 +206,10 @@ func (c *ToolCard) String() string {
 // ToolInfo 从 ToolCard 生成工具描述信息，供 LLM function calling 消费。
 //
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，构造 ToolInfo 返回。
+// 返回 ToolInterface 接口，统一 ToolInfo 和 McpToolInfo 的访问方式。
 //
 // 对应 Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
-func (c *ToolCard) ToolInfo() *schema.ToolInfo {
+func (c *ToolCard) ToolInfo() schema.ToolInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewToolInfo(c.Name, c.Description, parameters)
 }
