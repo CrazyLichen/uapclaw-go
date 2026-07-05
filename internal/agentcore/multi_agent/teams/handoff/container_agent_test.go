@@ -68,7 +68,7 @@ func (m *mockBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentin
 	close(ch)
 	return ch, nil
 }
-func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 func (m *mockBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
@@ -935,7 +935,7 @@ func TestContainerAgent_RegisterCallback(t *testing.T) {
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	err := agent.RegisterCallback(context.Background(), nil, nil)
+	err := agent.RegisterCallback(context.Background(), rail.AgentCallbackEvent(""), callback.PerAgentCallbackFunc(nil))
 	assert.NoError(t, err)
 }
 
@@ -1276,7 +1276,7 @@ func (m *mockBaseAgentNoAbility) Stream(_ context.Context, _ map[string]any, _ .
 	close(ch)
 	return ch, nil
 }
-func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {

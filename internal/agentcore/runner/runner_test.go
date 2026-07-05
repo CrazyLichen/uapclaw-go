@@ -57,7 +57,7 @@ func (m *mockAgent) CallbackManager() *rail.AgentCallbackManager {
 	return nil
 }
 
-func (m *mockAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...cb.CallbackOption) error {
+func (m *mockAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
 	return nil
 }
 

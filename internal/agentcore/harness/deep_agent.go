@@ -16,7 +16,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -154,7 +154,7 @@ var (
 	}
 
 	// 编译期接口检查
-	_ interfaces.DeepAgentInterface = (*DeepAgent)(nil)
+	_ hinterfaces.DeepAgentInterface = (*DeepAgent)(nil)
 	_ agentinterfaces.BaseAgent       = (*DeepAgent)(nil)
 )
 
@@ -375,16 +375,8 @@ func (d *DeepAgent) CallbackManager() *rail.AgentCallbackManager {
 
 // RegisterCallback 注册回调。
 // 对齐 Python: BaseAgent.register_callback(event, callback, priority)
-func (d *DeepAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...cb.CallbackOption) error {
-	e, ok := event.(rail.AgentCallbackEvent)
-	if !ok {
-		return fmt.Errorf("event 必须是 rail.AgentCallbackEvent 类型")
-	}
-	f, ok := fn.(cb.PerAgentCallbackFunc)
-	if !ok {
-		return fmt.Errorf("fn 必须是 cb.PerAgentCallbackFunc 类型")
-	}
-	d.callbackManager.RegisterCallback(ctx, e, f, opts...)
+func (d *DeepAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
+	d.callbackManager.RegisterCallback(ctx, event, fn, opts...)
 	return nil
 }
 
@@ -449,7 +441,7 @@ func (d *DeepAgent) ReactAgent() *agents.ReActAgent {
 
 // LoopCoordinator 返回循环协调器（可能为 nil）。
 // 对齐 Python: DeepAgent.loop_coordinator 属性 (line 677)
-func (d *DeepAgent) LoopCoordinator() interfaces.LoopCoordinatorInterface {
+func (d *DeepAgent) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
 	d.configMu.RLock()
 	defer d.configMu.RUnlock()
 	if d.loopCoordinator == nil {
@@ -568,7 +560,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string) error {
 // CreateSubagent 创建子 Agent 实例。
 // ⤵️ 9.3 / 9.25-9.31 回填：工厂分派所有分支返回 stub 错误
 // 对齐 Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
-func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (interfaces.DeepAgentInterface, error) {
+func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	spec := d.findSubagentSpec(subagentType)
 	if spec == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentCreateSubagentNotFound,
@@ -581,7 +573,7 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (in
 		return deepAgent, nil
 	}
 
-	// 尝试从 spec 获取 SubAgentConfig
+	// 从 spec 获取 SubAgentConfig（SubagentSpec 接口的另一个实现）
 	subCfg, ok := spec.(*hschema.SubAgentConfig)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentCreateSubagentNotFound,
@@ -945,6 +937,16 @@ func (d *DeepAgent) AgentID() string {
 		return ""
 	}
 	return d.card.ID
+}
+
+// SpecName 返回规格名称，用于子 Agent 匹配。
+// 实现 SubagentSpec 接口。
+// 对齐 Python: isinstance(spec, DeepAgent) 时通过 spec.card.name 匹配。
+func (d *DeepAgent) SpecName() string {
+	if d.card == nil {
+		return ""
+	}
+	return d.card.Name
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1874,9 +1876,10 @@ func (d *DeepAgent) hasPendingSessionSpawn() bool {
 	return false
 }
 
-// findSubagentSpec 查找匹配 subagentType 的 SubAgentConfig。
+// findSubagentSpec 查找匹配 subagentType 的子 Agent 规格。
+// 返回 SubagentSpec 接口，可能是 *SubAgentConfig 或 *DeepAgent。
 // 对齐 Python: DeepAgent._find_subagent_spec(subagent_type) (line 1032)
-func (d *DeepAgent) findSubagentSpec(subagentType string) any {
+func (d *DeepAgent) findSubagentSpec(subagentType string) hinterfaces.SubagentSpec {
 	d.configMu.RLock()
 	cfg := d.deepConfig
 	d.configMu.RUnlock()
@@ -1887,7 +1890,7 @@ func (d *DeepAgent) findSubagentSpec(subagentType string) any {
 
 	for i := range cfg.Subagents {
 		spec := &cfg.Subagents[i]
-		if spec.AgentCard != nil && spec.AgentCard.Name == subagentType {
+		if spec.SpecName() == subagentType {
 			return spec
 		}
 	}
@@ -1898,7 +1901,7 @@ func (d *DeepAgent) findSubagentSpec(subagentType string) any {
 
 // buildSubagentCreateKwargs 构建子 Agent 创建参数。
 // 对齐 Python: DeepAgent.create_subagent L938-982
-func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, subSessionID string) map[string]any {
+func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, subSessionID string) *hschema.SubagentCreateParams {
 	d.configMu.RLock()
 	cfg := d.deepConfig
 	d.configMu.RUnlock()
@@ -1955,26 +1958,26 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		promptMode = cfg.PromptMode
 	}
 
-	return map[string]any{
-		"model":                model,
-		"card":                 subCfg.AgentCard,
-		"system_prompt":        subCfg.SystemPrompt,
-		"tools":                subCfg.Tools,
-		"mcps":                 subCfg.Mcps,
-		"rails":                subCfg.Rails,
-		"enable_task_loop":     subCfg.EnableTaskLoop,
-		"max_iterations":       maxIterations,
-		"workspace":            subWorkspace,
-		"skills":               subCfg.Skills,
-		"backend":              backend,
-		"sys_operation":        sysOp,
-		"language":             language,
-		"prompt_mode":          promptMode,
-		"subagents":            nil,
-		"enable_async_subagent": false,
-		"add_general_purpose_agent": false,
-		"enable_plan_mode":     subCfg.EnablePlanMode,
-		"restrict_to_work_dir": subCfg.RestrictToWorkDir,
+	return &hschema.SubagentCreateParams{
+		Model:                  model,
+		Card:                   subCfg.AgentCard,
+		SystemPrompt:           subCfg.SystemPrompt,
+		Tools:                  subCfg.Tools,
+		Mcps:                   subCfg.Mcps,
+		Rails:                  subCfg.Rails,
+		EnableTaskLoop:         subCfg.EnableTaskLoop,
+		MaxIterations:          maxIterations,
+		Workspace:              subWorkspace,
+		Skills:                 subCfg.Skills,
+		Backend:                backend,
+		SysOperation:           sysOp,
+		Language:               language,
+		PromptMode:             promptMode,
+		Subagents:              nil,
+		EnableAsyncSubagent:    false,
+		AddGeneralPurposeAgent: false,
+		EnablePlanMode:         subCfg.EnablePlanMode,
+		RestrictToWorkDir:      subCfg.RestrictToWorkDir,
 	}
 }
 

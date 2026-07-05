@@ -77,7 +77,7 @@ func (s *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
 	return nil
 }
 
-func (s *stubBaseAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+func (s *stubBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 

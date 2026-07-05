@@ -487,7 +487,7 @@ func (f *fakeAgent) AbilityManager() interfaces.AbilityManagerInterface { return
 
 func (f *fakeAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
 
-func (f *fakeAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+func (f *fakeAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 

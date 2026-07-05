@@ -99,9 +99,9 @@ func (a *ReActAgent) AbilityManager() interfaces.AbilityManagerInterface {
 
 // RegisterCallback 注册回调。
 // 对齐 Python: BaseAgent.register_callback(event, callback, priority)
-func (a *ReActAgent) RegisterCallback(ctx context.Context, event any, fn any, opts ...callback.CallbackOption) error {
+func (a *ReActAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn callback.PerAgentCallbackFunc, opts ...callback.CallbackOption) error {
 	if a.callbackManager != nil {
-		a.callbackManager.RegisterCallback(ctx, event.(rail.AgentCallbackEvent), fn.(callback.PerAgentCallbackFunc), opts...)
+		a.callbackManager.RegisterCallback(ctx, event, fn, opts...)
 	}
 	return nil
 }

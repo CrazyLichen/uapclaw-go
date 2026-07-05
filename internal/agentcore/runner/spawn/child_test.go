@@ -515,7 +515,7 @@ func (a *stubBaseAgent) AbilityManager() interfaces.AbilityManagerInterface { re
 func (a *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
 	return rail.NewAgentCallbackManager("")
 }
-func (a *stubBaseAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...cb.CallbackOption) error {
+func (a *stubBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
 }
 func (a *stubBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...cb.CallbackOption) error {

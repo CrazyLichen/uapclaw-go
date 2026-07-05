@@ -102,6 +102,60 @@ type SubAgentConfig struct {
 	RestrictToWorkDir bool `json:"restrict_to_work_dir"`
 }
 
+// SpecName 返回规格名称，用于子 Agent 匹配。
+// 实现 interfaces.SubagentSpec 接口。
+// 对齐 Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
+func (c *SubAgentConfig) SpecName() string {
+	if c.AgentCard == nil {
+		return ""
+	}
+	return c.AgentCard.Name
+}
+
+// SubagentCreateParams 子 Agent 创建参数。
+// 对齐 Python: DeepAgent.create_subagent 中 create_kwargs 字典。
+// 替代 map[string]any，提供类型安全的参数传递。
+type SubagentCreateParams struct {
+	// Model 模型实例
+	Model *llm.Model
+	// Card Agent 身份卡片
+	Card *schema.AgentCard
+	// SystemPrompt 系统提示词
+	SystemPrompt string
+	// Tools 工具卡片列表
+	Tools []*tool.ToolCard
+	// Mcps MCP 服务器配置列表
+	Mcps []*mcptypes.McpServerConfig
+	// Rails Rail 列表
+	Rails []rail.AgentRail
+	// EnableTaskLoop 是否启用任务循环
+	EnableTaskLoop bool
+	// MaxIterations 最大迭代次数
+	MaxIterations int
+	// Workspace 工作空间
+	Workspace *workspace.Workspace
+	// Skills 技能名称列表
+	Skills []string
+	// Backend 后端协议实例
+	Backend any
+	// SysOperation 系统操作实例
+	SysOperation sysop.SysOperation
+	// Language 语言
+	Language string
+	// PromptMode 提示词模式
+	PromptMode PromptMode
+	// Subagents 子 Agent 列表（创建时为 nil）
+	Subagents []SubAgentConfig
+	// EnableAsyncSubagent 是否启用异步子 Agent
+	EnableAsyncSubagent bool
+	// AddGeneralPurposeAgent 是否添加通用 Agent
+	AddGeneralPurposeAgent bool
+	// EnablePlanMode 是否启用规划模式
+	EnablePlanMode bool
+	// RestrictToWorkDir 是否限制在工作目录
+	RestrictToWorkDir bool
+}
+
 // DeepAgentConfig DeepAgent 运行时配置中枢
 type DeepAgentConfig struct {
 	// Model 预构建的 LLM 模型实例

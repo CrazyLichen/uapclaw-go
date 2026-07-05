@@ -132,7 +132,7 @@ func (c *ContainerAgent) Configure(_ context.Context, _ agentinterfaces.AgentCon
 
 // RegisterCallback 空操作，ContainerAgent 不支持回调注册。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) RegisterCallback(_ context.Context, _ any, _ any, _ ...callback.CallbackOption) error {
+func (c *ContainerAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 

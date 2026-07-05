@@ -139,9 +139,7 @@ type BaseAgent interface {
 
 	// RegisterCallback 注册回调。
 	// 对应 Python: BaseAgent.register_callback(event, callback, priority)
-	// event 实际类型 rail.AgentCallbackEvent，callback 实际类型 cb.PerAgentCallbackFunc，
-	// 用 any 避免循环依赖，委托给 AgentCallbackManager.RegisterCallback。
-	RegisterCallback(ctx context.Context, event any, fn any, opts ...cb.CallbackOption) error
+	RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error
 
 	// RegisterRail 注册 Rail。
 	// 对应 Python: BaseAgent.register_rail(rail)
