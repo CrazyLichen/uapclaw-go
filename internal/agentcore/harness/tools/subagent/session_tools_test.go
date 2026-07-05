@@ -6,27 +6,16 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeProvider 测试用 DeepAgentProvider mock
+// fakeProvider 测试用 SessionToolProvider mock
 type fakeProvider struct {
-	// reactAgent 预设的 ReActAgent
-	reactAgent *agents.ReActAgent
-	// coordinator 预设的循环协调器
-	coordinator *task_loop.LoopCoordinator
 	// eventHandler 预设的事件处理器
 	eventHandler modules.EventHandler
 	// deepConfig 预设的 DeepAgentConfig
 	deepConfig *schema.DeepAgentConfig
-	// invokeActive 预设的 invoke 活跃标记
-	invokeActive bool
-	// autoInvokeScheduled 预设的自动 invoke 调度标记
-	autoInvokeScheduled bool
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -146,8 +135,8 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 
 // TestSessionSpawnTaskType 常量值正确
 func TestSessionSpawnTaskType(t *testing.T) {
-	if task_loop.SessionSpawnTaskType != "session_spawn_task" {
-		t.Fatalf("期望 session_spawn_task, 实际 %s", task_loop.SessionSpawnTaskType)
+	if SessionSpawnTaskType != "session_spawn_task" {
+		t.Fatalf("期望 session_spawn_task, 实际 %s", SessionSpawnTaskType)
 	}
 }
 
@@ -347,38 +336,8 @@ func TestBuildSessionsCancelInputParams(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ReactAgent 实现 DeepAgentProvider 接口
-func (f *fakeProvider) ReactAgent() *agents.ReActAgent { return f.reactAgent }
-
-// LoopCoordinator 实现 DeepAgentProvider 接口
-func (f *fakeProvider) LoopCoordinator() *task_loop.LoopCoordinator { return f.coordinator }
-
-// EventHandler 实现 DeepAgentProvider 接口
-func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }
-
-// LoadState 实现 DeepAgentProvider 接口
-func (f *fakeProvider) LoadState(_ sessioninterfaces.SessionFacade) *schema.DeepAgentState {
-	return nil
-}
-
-// DeepConfig 实现 DeepAgentProvider 接口
+// DeepConfig 实现 SessionToolProvider 接口
 func (f *fakeProvider) DeepConfig() *schema.DeepAgentConfig { return f.deepConfig }
 
-// IsInvokeActive 实现 DeepAgentProvider 接口
-func (f *fakeProvider) IsInvokeActive() bool { return f.invokeActive }
-
-// IsAutoInvokeScheduled 实现 DeepAgentProvider 接口
-func (f *fakeProvider) IsAutoInvokeScheduled() bool { return f.autoInvokeScheduled }
-
-// SetAutoInvokeScheduled 实现 DeepAgentProvider 接口
-func (f *fakeProvider) SetAutoInvokeScheduled(scheduled bool) {
-	f.autoInvokeScheduled = scheduled
-}
-
-// ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentProvider 接口
-func (f *fakeProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
-
-// CreateSubagent 实现 DeepAgentProvider 接口
-func (f *fakeProvider) CreateSubagent(_ string, _ string) (task_loop.DeepAgentProvider, error) {
-	return nil, nil
-}
+// EventHandler 实现 SessionToolProvider 接口
+func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }

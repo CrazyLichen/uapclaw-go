@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -299,10 +300,10 @@ func TestTaskLoopEventHandler_SetSessionToolkit(t *testing.T) {
 	h := NewTaskLoopEventHandler(provider)
 
 	// 设置 toolkit
-	toolkit := "test-toolkit"
+	toolkit := subagent.NewSessionToolkit()
 	h.SetSessionToolkit(toolkit)
 
-	// 验证内部字段被设置（通过再次设置不同值来间接验证）
+	// 验证内部字段被设置（通过再次设置 nil 来间接验证）
 	h.SetSessionToolkit(nil)
 }
 
@@ -883,6 +884,243 @@ func TestLoopQueues_PushFollowUp_满队列(t *testing.T) {
 	}
 	if drained[0] != "msg1" {
 		t.Errorf("DrainFollowUp 返回 %v，期望 [msg1]", drained)
+	}
+}
+
+// TestExtractResultFromEvent_从JsonDataFrame提取 从 TaskCompletionEvent 的 JsonDataFrame 提取 output
+func TestExtractResultFromEvent_从JsonDataFrame提取(t *testing.T) {
+	completionEvt := &cschema.TaskCompletionEvent{
+		TaskResult: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"output": "完成结果"}},
+		},
+	}
+	input := &modules.EventHandlerInput{
+		Event:   completionEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractResultFromEvent(input)
+	if result != "完成结果" {
+		t.Errorf("期望 '完成结果', 实际 %q", result)
+	}
+}
+
+// TestExtractResultFromEvent_截断500字符 结果超过 500 字符时截断
+func TestExtractResultFromEvent_截断500字符(t *testing.T) {
+	longResult := make([]byte, 600)
+	for i := range longResult {
+		longResult[i] = 'a'
+	}
+	completionEvt := &cschema.TaskCompletionEvent{
+		TaskResult: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"output": string(longResult)}},
+		},
+	}
+	input := &modules.EventHandlerInput{
+		Event:   completionEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractResultFromEvent(input)
+	if len(result) != 500 {
+		t.Errorf("期望 500, 实际 %d", len(result))
+	}
+}
+
+// TestExtractResultFromEvent_从TextDataFrame提取 从 TextDataFrame 提取文本
+func TestExtractResultFromEvent_从TextDataFrame提取(t *testing.T) {
+	completionEvt := &cschema.TaskCompletionEvent{
+		TaskResult: []cschema.DataFrame{
+			&cschema.TextDataFrame{Text: "文本结果"},
+		},
+	}
+	input := &modules.EventHandlerInput{
+		Event:   completionEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractResultFromEvent(input)
+	if result != "文本结果" {
+		t.Errorf("期望 '文本结果', 实际 %q", result)
+	}
+}
+
+// TestExtractResultFromEvent_空事件 事件无结果时返回空串
+func TestExtractResultFromEvent_空事件(t *testing.T) {
+	completionEvt := &cschema.TaskCompletionEvent{
+		TaskResult: []cschema.DataFrame{},
+	}
+	input := &modules.EventHandlerInput{
+		Event:   completionEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractResultFromEvent(input)
+	if result != "" {
+		t.Errorf("期望空串, 实际 %q", result)
+	}
+}
+
+// TestExtractErrorFromEvent_正常提取 从 TaskFailedEvent 提取错误消息
+func TestExtractErrorFromEvent_正常提取(t *testing.T) {
+	failedEvt := &cschema.TaskFailedEvent{
+		ErrorMessage: "网络超时",
+	}
+	input := &modules.EventHandlerInput{
+		Event:   failedEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractErrorFromEvent(input)
+	if result != "网络超时" {
+		t.Errorf("期望 '网络超时', 实际 %q", result)
+	}
+}
+
+// TestExtractErrorFromEvent_截断300字符 错误超过 300 字符时截断
+func TestExtractErrorFromEvent_截断300字符(t *testing.T) {
+	longError := make([]byte, 400)
+	for i := range longError {
+		longError[i] = 'e'
+	}
+	failedEvt := &cschema.TaskFailedEvent{
+		ErrorMessage: string(longError),
+	}
+	input := &modules.EventHandlerInput{
+		Event:   failedEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+	result := extractErrorFromEvent(input)
+	if len(result) != 300 {
+		t.Errorf("期望 300, 实际 %d", len(result))
+	}
+}
+
+// TestFormatSessionSpawnSteer_中文成功 中文成功模板
+func TestFormatSessionSpawnSteer_中文成功(t *testing.T) {
+	result := formatSessionSpawnSteer("研究A方向", false, "研究结果", "", "cn")
+	expected := "[后台任务完成] 任务描述=研究A方向, 结果=研究结果"
+	if result != expected {
+		t.Errorf("期望 %q, 实际 %q", expected, result)
+	}
+}
+
+// TestFormatSessionSpawnSteer_中文失败 中文失败模板
+func TestFormatSessionSpawnSteer_中文失败(t *testing.T) {
+	result := formatSessionSpawnSteer("研究A方向", true, "", "网络错误", "cn")
+	expected := "[后台任务失败] 任务描述=研究A方向, 错误=网络错误"
+	if result != expected {
+		t.Errorf("期望 %q, 实际 %q", expected, result)
+	}
+}
+
+// TestFormatSessionSpawnSteer_英文成功 英文成功模板
+func TestFormatSessionSpawnSteer_英文成功(t *testing.T) {
+	result := formatSessionSpawnSteer("Research A", false, "result", "", "en")
+	expected := "[Background task completed] Task Description=Research A, Result=result"
+	if result != expected {
+		t.Errorf("期望 %q, 实际 %q", expected, result)
+	}
+}
+
+// TestFormatSessionSpawnSteer_未知语言用中文 未知语言回退到中文
+func TestFormatSessionSpawnSteer_未知语言用中文(t *testing.T) {
+	result := formatSessionSpawnSteer("任务", false, "结果", "", "jp")
+	expected := "[后台任务完成] 任务描述=任务, 结果=结果"
+	if result != expected {
+		t.Errorf("期望 %q, 实际 %q", expected, result)
+	}
+}
+
+// TestTaskLoopEventHandler_HandleTaskCompletion_SessionSpawn_更新Toolkit SessionSpawn 完成时更新 toolkit
+func TestTaskLoopEventHandler_HandleTaskCompletion_SessionSpawn_更新Toolkit(t *testing.T) {
+	provider := &fakeDeepAgentProvider{
+		invokeActive: true,
+	}
+	h := NewTaskLoopEventHandler(provider)
+
+	// 设置 SessionToolkit
+	tk := subagent.NewSessionToolkit()
+	tk.UpsertRunning("task-spawn-1", "sub-1", "子任务描述")
+	h.SetSessionToolkit(tk)
+
+	// 设置交互队列
+	queues := NewLoopQueues(16)
+	h.SetInteractionQueues(queues)
+
+	// 构造 TaskCompletionEvent，metadata["task_type"] = "session_spawn_task"
+	completionEvt := &cschema.TaskCompletionEvent{
+		TaskResult: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"output": "子任务完成结果"}},
+		},
+	}
+	completionEvt.SetMetadata(map[string]any{
+		"task_id":   "task-spawn-1",
+		"task_type": "session_spawn_task",
+	})
+
+	input := &modules.EventHandlerInput{
+		Event:   completionEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+
+	result, err := h.HandleTaskCompletion(context.Background(), input)
+	if err != nil {
+		t.Fatalf("HandleTaskCompletion(SessionSpawn) 返回错误: %v", err)
+	}
+	if result["status"] != "session_spawn_completed" {
+		t.Errorf("HandleTaskCompletion(SessionSpawn) 返回 status=%v, 期望 session_spawn_completed", result["status"])
+	}
+
+	// 验证 toolkit 被更新为 completed
+	row := tk.Get("task-spawn-1")
+	if row == nil {
+		t.Fatal("toolkit 中应找到 task-spawn-1")
+	}
+	if row.Status != "completed" {
+		t.Errorf("期望 completed, 实际 %s", row.Status)
+	}
+}
+
+// TestTaskLoopEventHandler_HandleTaskFailed_SessionSpawn_更新Toolkit SessionSpawn 失败时更新 toolkit
+func TestTaskLoopEventHandler_HandleTaskFailed_SessionSpawn_更新Toolkit(t *testing.T) {
+	provider := &fakeDeepAgentProvider{
+		invokeActive: true,
+	}
+	h := NewTaskLoopEventHandler(provider)
+
+	// 设置 SessionToolkit
+	tk := subagent.NewSessionToolkit()
+	tk.UpsertRunning("task-spawn-2", "sub-2", "子任务描述")
+	h.SetSessionToolkit(tk)
+
+	// 设置交互队列
+	queues := NewLoopQueues(16)
+	h.SetInteractionQueues(queues)
+
+	failedEvt := &cschema.TaskFailedEvent{
+		ErrorMessage: "子任务执行失败",
+	}
+	failedEvt.SetMetadata(map[string]any{
+		"task_id":   "task-spawn-2",
+		"task_type": "session_spawn_task",
+	})
+
+	input := &modules.EventHandlerInput{
+		Event:   failedEvt,
+		Session: &fakeHandlerSess{sessionID: "sess-1"},
+	}
+
+	result, err := h.HandleTaskFailed(context.Background(), input)
+	if err != nil {
+		t.Fatalf("HandleTaskFailed(SessionSpawn) 返回错误: %v", err)
+	}
+	if result["status"] != "session_spawn_failed" {
+		t.Errorf("HandleTaskFailed(SessionSpawn) 返回 status=%v, 期望 session_spawn_failed", result["status"])
+	}
+
+	// 验证 toolkit 被更新为 error
+	row := tk.Get("task-spawn-2")
+	if row == nil {
+		t.Fatal("toolkit 中应找到 task-spawn-2")
+	}
+	if row.Status != "error" {
+		t.Errorf("期望 error, 实际 %s", row.Status)
 	}
 }
 

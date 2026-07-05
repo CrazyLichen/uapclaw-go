@@ -8,21 +8,38 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
+	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
+	// SessionSpawnTaskType 会话派生任务类型
+	// 对齐 Python: SESSION_SPAWN_TASK_TYPE
+	SessionSpawnTaskType = "session_spawn_task"
+
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 接口 ────────────────────────────
+
+// SessionToolProvider 会话工具所需的 Agent 能力接口。
+// 仅声明工具运行时所需的方法子集，避免 subagent → task_loop 循环依赖。
+// task_loop.DeepAgentProvider 隐式满足此接口。
+type SessionToolProvider interface {
+	// DeepConfig 返回 DeepAgent 配置
+	DeepConfig() *schema.DeepAgentConfig
+	// EventHandler 返回事件处理器
+	EventHandler() modules.EventHandler
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -69,7 +86,7 @@ type SessionsSpawnTool struct {
 	// card 工具卡片
 	card *tool.ToolCard
 	// provider 深层 Agent 提供者
-	provider task_loop.DeepAgentProvider
+	provider SessionToolProvider
 	// toolkit 会话任务注册表
 	toolkit *SessionToolkit
 	// language 语言
@@ -82,7 +99,7 @@ type SessionsCancelTool struct {
 	// card 工具卡片
 	card *tool.ToolCard
 	// provider 深层 Agent 提供者
-	provider task_loop.DeepAgentProvider
+	provider SessionToolProvider
 	// toolkit 会话任务注册表
 	toolkit *SessionToolkit
 	// language 语言
@@ -215,7 +232,7 @@ func (t *SessionsListTool) Stream(_ context.Context, _ map[string]any, _ ...tool
 
 // NewSessionsSpawnTool 创建异步子代理派生工具。
 // 对齐 Python: SessionsSpawnTool.__init__
-func NewSessionsSpawnTool(provider task_loop.DeepAgentProvider, toolkit *SessionToolkit, language, availableAgents string) *SessionsSpawnTool {
+func NewSessionsSpawnTool(provider SessionToolProvider, toolkit *SessionToolkit, language, availableAgents string) *SessionsSpawnTool {
 	desc := (&tools.SessionsSpawnMetadataProvider{}).GetDescription(language)
 	if availableAgents != "" {
 		desc = fmt.Sprintf(desc, availableAgents)
@@ -274,7 +291,7 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 	coreTask := &cschema.Task{
 		SessionID:  parentSessionID,
 		TaskID:     taskID,
-		TaskType:   task_loop.SessionSpawnTaskType,
+		TaskType:   SessionSpawnTaskType,
 		Description: taskDescription,
 		Status:     cschema.TaskSubmitted,
 		Metadata: map[string]any{
@@ -322,7 +339,7 @@ func (t *SessionsSpawnTool) Stream(_ context.Context, _ map[string]any, _ ...too
 
 // NewSessionsCancelTool 创建取消子代理任务工具。
 // 对齐 Python: SessionsCancelTool.__init__
-func NewSessionsCancelTool(provider task_loop.DeepAgentProvider, toolkit *SessionToolkit, language string) *SessionsCancelTool {
+func NewSessionsCancelTool(provider SessionToolProvider, toolkit *SessionToolkit, language string) *SessionsCancelTool {
 	desc := (&tools.SessionsCancelMetadataProvider{}).GetDescription(language)
 	card := tool.NewToolCard("sessions_cancel", desc, buildSessionsCancelInputParams(), nil)
 	return &SessionsCancelTool{card: card, provider: provider, toolkit: toolkit, language: language}
@@ -353,13 +370,6 @@ func (t *SessionsCancelTool) Invoke(ctx context.Context, inputs map[string]any, 
 	}
 
 	// 步骤 3：获取 TaskScheduler
-	coordinator := t.provider.LoopCoordinator()
-	if coordinator == nil {
-		return nil, exception.BuildError(
-			exception.StatusToolSessionToolInvoked,
-			exception.WithParam("reason", "loop_controller not available"),
-		)
-	}
 	handler := t.provider.EventHandler()
 	if handler == nil {
 		return nil, exception.BuildError(
@@ -429,7 +439,7 @@ func (t *SessionsCancelTool) Stream(_ context.Context, _ map[string]any, _ ...to
 // BuildSessionTools 构建会话工具列表（list, spawn, cancel）。
 // 对齐 Python: build_session_tools
 func BuildSessionTools(
-	provider task_loop.DeepAgentProvider,
+	provider SessionToolProvider,
 	toolkit *SessionToolkit,
 	language string,
 	availableAgents string,
@@ -445,24 +455,24 @@ func BuildSessionTools(
 
 // buildSessionsListInputParams 构建 sessions_list 工具的输入参数。
 // sessions_list 无必需参数。
-func buildSessionsListInputParams() []*schema.Param {
-	return []*schema.Param{}
+func buildSessionsListInputParams() []*commonschema.Param {
+	return []*commonschema.Param{}
 }
 
 // buildSessionsSpawnInputParams 构建 sessions_spawn 工具的输入参数。
 // 对齐 Python: SessionsSpawnTool 的 subagent_type + task_description 参数。
-func buildSessionsSpawnInputParams() []*schema.Param {
-	return []*schema.Param{
-		schema.NewStringParam("subagent_type", "子 agent 类型(如 'general-purpose')", true),
-		schema.NewStringParam("task_description", "任务描述", true),
+func buildSessionsSpawnInputParams() []*commonschema.Param {
+	return []*commonschema.Param{
+		commonschema.NewStringParam("subagent_type", "子 agent 类型(如 'general-purpose')", true),
+		commonschema.NewStringParam("task_description", "任务描述", true),
 	}
 }
 
 // buildSessionsCancelInputParams 构建 sessions_cancel 工具的输入参数。
 // 对齐 Python: SessionsCancelTool 的 task_id 参数。
-func buildSessionsCancelInputParams() []*schema.Param {
-	return []*schema.Param{
-		schema.NewStringParam("task_id", "要取消的任务 ID", true),
+func buildSessionsCancelInputParams() []*commonschema.Param {
+	return []*commonschema.Param{
+		commonschema.NewStringParam("task_id", "要取消的任务 ID", true),
 	}
 }
 

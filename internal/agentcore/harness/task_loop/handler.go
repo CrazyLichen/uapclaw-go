@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -35,8 +36,8 @@ type TaskLoopEventHandler struct {
 	// interactionQueues 交互双队列
 	interactionQueues *LoopQueues
 	// sessionToolkit 会话工具包
-	// ⤵️ 9.7 回填：用于 SessionSpawn 分支
-	sessionToolkit any
+	// ✅ 9.7 已实现：用于 SessionSpawn 分支完成/失败时更新 toolkit 状态
+	sessionToolkit *subagent.SessionToolkit
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -269,11 +270,12 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
-	// SessionSpawn 分支
+	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == SessionSpawnTaskType {
-			h.resolveRound(map[string]any{"status": "session_spawn_completed"}, 0)
-			return map[string]any{"status": "session_spawn_completed"}, nil
+			taskID, _ := event.GetMetadata()["task_id"].(string)
+			h.completeSessionSpawn(taskID, input, false)
+			return map[string]any{"status": "session_spawn_completed", "task_id": taskID}, nil
 		}
 	}
 
@@ -313,11 +315,12 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
-	// SessionSpawn 分支
+	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == SessionSpawnTaskType {
-			h.resolveRound(map[string]any{"status": "session_spawn_failed"}, 0)
-			return map[string]any{"status": "session_spawn_failed"}, nil
+			taskID, _ := event.GetMetadata()["task_id"].(string)
+			h.completeSessionSpawn(taskID, input, true)
+			return map[string]any{"status": "session_spawn_failed", "task_id": taskID}, nil
 		}
 	}
 
@@ -415,8 +418,8 @@ func (h *TaskLoopEventHandler) SetInteractionQueues(queues *LoopQueues) {
 }
 
 // SetSessionToolkit 设置会话工具包。
-// ⤵️ 9.7 回填：用于 SessionSpawn 分支
-func (h *TaskLoopEventHandler) SetSessionToolkit(toolkit any) {
+// ✅ 9.7 已实现：用于 SessionSpawn 分支
+func (h *TaskLoopEventHandler) SetSessionToolkit(toolkit *subagent.SessionToolkit) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sessionToolkit = toolkit
@@ -459,6 +462,144 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 				Msg("当前轮次 channel 已满，丢弃重复结果")
 		}
 	}
+}
+
+// completeSessionSpawn 处理 SessionSpawn 任务完成/失败。
+// 根据 parent agent 是否有活跃 invoke 分两路：
+//   - 有活跃 invoke：push_steer（注入引导文本到 steering 队列）
+//   - 无活跃 invoke：调度延迟 auto-invoke
+//
+// 对齐 Python: TaskLoopEventHandler._complete_session_spawn
+func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *modules.EventHandlerInput, isError bool) {
+	var resultStr string
+	var errorStr string
+	if isError {
+		errorStr = extractErrorFromEvent(input)
+	} else {
+		resultStr = extractResultFromEvent(input)
+	}
+
+	// 更新 SessionToolkit
+	if h.sessionToolkit != nil {
+		if isError {
+			h.sessionToolkit.MarkFailed(taskID, errorStr)
+		} else {
+			h.sessionToolkit.MarkCompleted(taskID, resultStr)
+		}
+	}
+
+	// 获取任务描述
+	var taskDescription string
+	if input.Event.GetMetadata() != nil {
+		taskDescription, _ = input.Event.GetMetadata()["task_description"].(string)
+	}
+
+	// 获取语言
+	language := "cn"
+	dc := h.provider.DeepConfig()
+	if dc != nil && dc.EffectiveLanguage() != "" {
+		language = dc.EffectiveLanguage()
+	}
+
+	// 格式化 steer 文本
+	steerText := formatSessionSpawnSteer(taskDescription, isError, resultStr, errorStr, language)
+
+	// 两路分支
+	if h.provider.IsInvokeActive() {
+		// 路径 1：有活跃 invoke → push_steer
+		if h.interactionQueues != nil {
+			h.interactionQueues.PushSteer(steerText)
+		}
+		logger.Info(logComponent).
+			Str("task_id", taskID).
+			Msg("SessionSpawn 完成，steer pushed（活跃 invoke）")
+	} else {
+		// 路径 2：无活跃 invoke → 调度延迟 auto-invoke
+		if !h.provider.IsAutoInvokeScheduled() {
+			h.provider.SetAutoInvokeScheduled(true)
+			if schedErr := h.provider.ScheduleAutoInvokeOnSpawnDone(steerText); schedErr != nil {
+				logger.Error(logComponent).
+					Err(schedErr).
+					Str("task_id", taskID).
+					Str("event_type", "LLM_CALL_ERROR").
+					Msg("调度 auto-invoke 失败")
+			}
+		}
+		logger.Info(logComponent).
+			Str("task_id", taskID).
+			Msg("SessionSpawn 完成，auto-invoke 调度")
+	}
+}
+
+// extractResultFromEvent 从完成事件中提取结果字符串。
+// 截断到 500 字符。
+// 对齐 Python: TaskLoopEventHandler._extract_result_from_event
+func extractResultFromEvent(input *modules.EventHandlerInput) string {
+	event := input.Event
+	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
+		for _, df := range tce.TaskResult {
+			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
+				if output, ok := jsonDF.Data["output"]; ok {
+					s := fmt.Sprintf("%v", output)
+					if len(s) > 500 {
+						s = s[:500]
+					}
+					return s
+				}
+			}
+			if textDF, ok := df.(*cschema.TextDataFrame); ok {
+				s := textDF.Text
+				if len(s) > 500 {
+					s = s[:500]
+				}
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// extractErrorFromEvent 从失败事件中提取错误字符串。
+// 截断到 300 字符。
+// 对齐 Python: TaskLoopEventHandler._extract_error_from_event
+func extractErrorFromEvent(input *modules.EventHandlerInput) string {
+	event := input.Event
+	errMsg := "unknown"
+	if tfe, ok := event.(*cschema.TaskFailedEvent); ok {
+		if tfe.ErrorMessage != "" {
+			errMsg = tfe.ErrorMessage
+		}
+	}
+	if len(errMsg) > 300 {
+		errMsg = errMsg[:300]
+	}
+	return errMsg
+}
+
+// formatSessionSpawnSteer 格式化 SessionSpawn 完成后的引导文本。
+// 对齐 Python: TaskLoopEventHandler._format_session_spawn_steer
+func formatSessionSpawnSteer(taskDescription string, isError bool, result string, err string, language string) string {
+	var steer string
+	detail := err
+	if !isError {
+		detail = result
+	}
+
+	if language == "en" {
+		if isError {
+			steer = fmt.Sprintf("[Background task failed] Task Description=%s, Error=%s", taskDescription, detail)
+		} else {
+			steer = fmt.Sprintf("[Background task completed] Task Description=%s, Result=%s", taskDescription, detail)
+		}
+	} else {
+		if isError {
+			steer = fmt.Sprintf("[后台任务失败] 任务描述=%s, 错误=%s", taskDescription, detail)
+		} else {
+			steer = fmt.Sprintf("[后台任务完成] 任务描述=%s, 结果=%s", taskDescription, detail)
+		}
+	}
+
+	return steer
 }
 
 // extractQuery 从事件中提取查询文本。
