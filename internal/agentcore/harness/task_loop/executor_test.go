@@ -5,10 +5,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -25,7 +27,7 @@ type fakeDeepAgentProvider struct {
 	// reactAgent 预设的 ReActAgent
 	reactAgent *agents.ReActAgent
 	// coordinator 预设的循环协调器
-	coordinator *LoopCoordinator
+	coordinator interfaces.LoopCoordinatorInterface
 	// eventHandler 预设的事件处理器
 	eventHandler modules.EventHandler
 	// state 预设的 DeepAgentState
@@ -37,7 +39,7 @@ type fakeDeepAgentProvider struct {
 	// autoInvokeScheduled 预设的自动 invoke 调度标记
 	autoInvokeScheduled bool
 	// subagent 预设的子 Agent 提供者（CreateSubagent 返回值）
-	subagent DeepAgentProvider
+	subagent interfaces.DeepAgentInterface
 	// createSubagentErr 预设的 CreateSubagent 错误
 	createSubagentErr error
 }
@@ -473,53 +475,70 @@ func TestIsSensitive_敏感模式(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ReactAgent 实现 DeepAgentProvider 接口
+// fakeLoopCoordinator 用于测试的模拟循环协调器
+type fakeLoopCoordinator struct {
+	// iteration 迭代次数
+	iteration int
+}
+
+// Iteration 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
+
+// RequestAbort 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) RequestAbort() {}
+
+// ReactAgent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent {
 	return f.reactAgent
 }
 
-// LoopCoordinator 实现 DeepAgentProvider 接口
-func (f *fakeDeepAgentProvider) LoopCoordinator() *LoopCoordinator {
+// LoopCoordinator 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) LoopCoordinator() interfaces.LoopCoordinatorInterface {
 	return f.coordinator
 }
 
-// EventHandler 实现 DeepAgentProvider 接口
+// LoopController 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) LoopController() controller.ControllerInterface {
+	return nil
+}
+
+// EventHandler 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) EventHandler() modules.EventHandler {
 	return f.eventHandler
 }
 
-// LoadState 实现 DeepAgentProvider 接口
+// LoadState 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return f.state
 }
 
-// DeepConfig 实现 DeepAgentProvider 接口
+// DeepConfig 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) DeepConfig() *hschema.DeepAgentConfig {
 	return f.config
 }
 
-// IsInvokeActive 实现 DeepAgentProvider 接口
+// IsInvokeActive 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) IsInvokeActive() bool {
 	return f.invokeActive
 }
 
-// IsAutoInvokeScheduled 实现 DeepAgentProvider 接口
+// IsAutoInvokeScheduled 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) IsAutoInvokeScheduled() bool {
 	return f.autoInvokeScheduled
 }
 
-// SetAutoInvokeScheduled 实现 DeepAgentProvider 接口
+// SetAutoInvokeScheduled 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
 	f.autoInvokeScheduled = scheduled
 }
 
-// ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentProvider 接口
+// ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error {
 	return nil
 }
 
-// CreateSubagent 实现 DeepAgentProvider 接口
-func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (DeepAgentProvider, error) {
+// CreateSubagent 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.DeepAgentInterface, error) {
 	return f.subagent, f.createSubagentErr
 }
 

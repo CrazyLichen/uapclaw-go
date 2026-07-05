@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -22,14 +23,14 @@ type SessionSpawnExecutor struct {
 	// deps 任务执行器依赖
 	deps *modules.TaskExecutorDependencies
 	// provider 深层 Agent 提供者（用于 CreateSubagent）
-	provider DeepAgentProvider
+	provider interfaces.DeepAgentInterface
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionSpawnExecutor 创建会话子进程执行器。
 // 对齐 Python: SessionSpawnExecutor.__init__
-func NewSessionSpawnExecutor(deps *modules.TaskExecutorDependencies, provider DeepAgentProvider) *SessionSpawnExecutor {
+func NewSessionSpawnExecutor(deps *modules.TaskExecutorDependencies, provider interfaces.DeepAgentInterface) *SessionSpawnExecutor {
 	return &SessionSpawnExecutor{
 		deps:     deps,
 		provider: provider,
@@ -186,7 +187,7 @@ func (e *SessionSpawnExecutor) Cancel(_ context.Context, taskID string, _ sessio
 // BuildSessionSpawnExecutor 构建 hschema.SessionSpawnTaskType 执行器的工厂闭包。
 // 返回的闭包捕获 provider，供 TaskExecutorRegistry 注册。
 // 对齐 Python: build_session_spawn_executor
-func BuildSessionSpawnExecutor(provider DeepAgentProvider) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
+func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 	return func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 		return NewSessionSpawnExecutor(deps, provider)
 	}

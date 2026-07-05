@@ -8,46 +8,15 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// DeepAgentProvider DeepAgent 临时解耦接口，提供 Executor/Handler 所需的运行时访问。
-// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，直接用 *DeepAgent 替换此接口，
-// 并删除 DeepAgentProvider 定义。此接口不是真实实现，仅用于解耦编译依赖。
-type DeepAgentProvider interface {
-	// ReactAgent 返回内层 ReActAgent 实例
-	ReactAgent() *agents.ReActAgent
-	// LoopCoordinator 返回循环协调器（可能为 nil）
-	LoopCoordinator() *LoopCoordinator
-	// EventHandler 返回事件处理器
-	EventHandler() modules.EventHandler
-	// LoadState 从会话加载 DeepAgentState
-	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
-	// DeepConfig 返回 DeepAgent 配置
-	DeepConfig() *hschema.DeepAgentConfig
-	// IsInvokeActive 判断是否有活跃的 invoke
-	IsInvokeActive() bool
-	// IsAutoInvokeScheduled 判断是否已调度自动 invoke
-	IsAutoInvokeScheduled() bool
-	// SetAutoInvokeScheduled 设置自动 invoke 调度标记
-	SetAutoInvokeScheduled(scheduled bool)
-	// ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke
-	// ⤵️ 9.1 回填：实现 SessionSpawn 完成后的自动 invoke 调度
-	ScheduleAutoInvokeOnSpawnDone(steerText string) error
-	// CreateSubagent 创建子 Agent 实例。
-	// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，由 *DeepAgent.CreateSubagent 实现。
-	// 对齐 Python: DeepAgent.create_subagent
-	CreateSubagent(subagentType string, subSessionID string) (DeepAgentProvider, error)
-}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -59,14 +28,14 @@ type TaskLoopEventExecutor struct {
 	// deps 任务执行器依赖
 	deps *modules.TaskExecutorDependencies
 	// provider 深层 Agent 提供者
-	provider DeepAgentProvider
+	provider interfaces.DeepAgentInterface
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskLoopEventExecutor 创建任务循环事件执行器。
 // 对齐 Python: TaskLoopEventExecutor.__init__
-func NewTaskLoopEventExecutor(deps *modules.TaskExecutorDependencies, provider DeepAgentProvider) *TaskLoopEventExecutor {
+func NewTaskLoopEventExecutor(deps *modules.TaskExecutorDependencies, provider interfaces.DeepAgentInterface) *TaskLoopEventExecutor {
 	return &TaskLoopEventExecutor{
 		deps:     deps,
 		provider: provider,
@@ -391,7 +360,7 @@ func (e *TaskLoopEventExecutor) Cancel(_ context.Context, taskID string, sess se
 // BuildDeepExecutor 构建 hschema.DeepTaskType 执行器的工厂闭包。
 // 返回的闭包捕获 provider，供 TaskExecutorRegistry 注册。
 // ✅ 9.7 已实现 BuildDeepExecutor，在 9.1 的 _setup_task_loop 中注册到 TaskExecutorRegistry
-func BuildDeepExecutor(provider DeepAgentProvider) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
+func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 	return func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 		return NewTaskLoopEventExecutor(deps, provider)
 	}

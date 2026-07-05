@@ -11,6 +11,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -24,8 +25,8 @@ type TaskLoopEventHandler struct {
 	// base 基础依赖容器
 	base modules.EventHandlerBase
 	// provider 深层 Agent 提供者
-	// ⤵️ 9.1 回填：用 *DeepAgent 替换 DeepAgentProvider
-	provider DeepAgentProvider
+	// ⤵️ 9.1 回填：用 *DeepAgent 替换 DeepAgentInterface
+	provider interfaces.DeepAgentInterface
 	// mu 保护轮次状态的互斥锁
 	mu sync.Mutex
 	// lastResult 上一轮完成结果
@@ -45,7 +46,7 @@ type TaskLoopEventHandler struct {
 
 // NewTaskLoopEventHandler 创建任务循环事件处理器。
 // 对齐 Python: TaskLoopEventHandler.__init__
-func NewTaskLoopEventHandler(provider DeepAgentProvider) *TaskLoopEventHandler {
+func NewTaskLoopEventHandler(provider interfaces.DeepAgentInterface) *TaskLoopEventHandler {
 	return &TaskLoopEventHandler{
 		provider:   provider,
 		currentCh:  make(chan map[string]any, 1),

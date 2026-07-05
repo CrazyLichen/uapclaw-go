@@ -17,7 +17,7 @@
 //	task_loop/
 //	├── doc.go                        # 包文档
 //	├── controller.go                 # TaskLoopController（嵌入 Controller + 轮次管理扩展）
-//	├── executor.go                   # TaskLoopEventExecutor（DeepAgent 任务执行器 + DeepAgentProvider 接口）
+//	├── executor.go                   # TaskLoopEventExecutor（DeepAgent 任务执行器，依赖 interfaces.DeepAgentInterface）
 //	├── session_spawn_executor.go     # SessionSpawnExecutor（会话子进程执行器）
 //	├── handler.go                    # TaskLoopEventHandler（实现 EventHandler 接口的事件处理器）
 //	├── loop_queues.go                # LoopQueues 双队列缓冲

@@ -3,21 +3,65 @@ package subagent
 import (
 	"context"
 	"testing"
-	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeProvider 测试用 SessionToolProvider mock
-type fakeProvider struct {
+// fakeDeepAgentProvider 测试用 DeepAgentInterface mock
+type fakeDeepAgentProvider struct {
+	// reactAgent 预设的 ReActAgent
+	reactAgent *agents.ReActAgent
+	// loopController 预设的 LoopController
+	loopController controller.ControllerInterface
 	// eventHandler 预设的事件处理器
 	eventHandler modules.EventHandler
+	// state 预设的 DeepAgentState
+	state *hschema.DeepAgentState
 	// deepConfig 预设的 DeepAgentConfig
 	deepConfig *hschema.DeepAgentConfig
+	// invokeActive 预设的 invoke 活跃标记
+	invokeActive bool
+	// autoInvokeScheduled 预设的自动 invoke 调度标记
+	autoInvokeScheduled bool
+	// subagent 预设的子 Agent
+	subagent interfaces.DeepAgentInterface
+	// createSubagentErr 预设的 CreateSubagent 错误
+	createSubagentErr error
+}
+
+// fakeLoopCoordinator 用于测试的模拟循环协调器
+type fakeLoopCoordinator struct {
+	// iteration 迭代次数
+	iteration int
+}
+
+// fakeController 测试用 ControllerInterface mock
+type fakeController struct {
+	// taskManager 预设的 TaskManager
+	taskManager *modules.TaskManager
+	// taskScheduler 预设的 TaskScheduler
+	taskScheduler *modules.TaskScheduler
+}
+
+// fakeHandlerSess 用于测试的模拟会话门面
+type fakeHandlerSess struct {
+	// sessionID 会话标识
+	sessionID string
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -135,8 +179,8 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 	}
 }
 
-// Testhschema.SessionSpawnTaskType 常量值正确
-func Testhschema.SessionSpawnTaskType(t *testing.T) {
+// TestSessionSpawnTaskTypeConstant 常量值正确
+func TestSessionSpawnTaskTypeConstant(t *testing.T) {
 	if hschema.SessionSpawnTaskType != "session_spawn_task" {
 		t.Fatalf("期望 session_spawn_task, 实际 %s", hschema.SessionSpawnTaskType)
 	}
@@ -202,7 +246,7 @@ func TestSessionsListTool_Card(t *testing.T) {
 
 // TestSessionsSpawnTool_Card 卡片名称正确
 func TestSessionsSpawnTool_Card(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
 	if tool.Card().Name != "sessions_spawn" {
@@ -212,7 +256,7 @@ func TestSessionsSpawnTool_Card(t *testing.T) {
 
 // TestSessionsSpawnTool_Invoke_未启用TaskLoop enable_task_loop 为 false 时返回错误
 func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
-	provider := &fakeProvider{
+	provider := &fakeDeepAgentProvider{
 		deepConfig: &hschema.DeepAgentConfig{EnableTaskLoop: false},
 	}
 	tk := NewSessionToolkit()
@@ -226,11 +270,11 @@ func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
 	}
 }
 
-// TestSessionsSpawnTool_Invoke_EventHandler为nil event_handler 为 nil 时返回错误
-func TestSessionsSpawnTool_Invoke_EventHandler为nil(t *testing.T) {
-	provider := &fakeProvider{
+// TestSessionsSpawnTool_Invoke_LoopController为nil loop_controller 为 nil 时返回错误
+func TestSessionsSpawnTool_Invoke_LoopController为nil(t *testing.T) {
+	provider := &fakeDeepAgentProvider{
 		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
-		eventHandler: nil,
+		loopController: nil,
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
@@ -245,7 +289,7 @@ func TestSessionsSpawnTool_Invoke_EventHandler为nil(t *testing.T) {
 
 // TestSessionsCancelTool_Card 卡片名称正确
 func TestSessionsCancelTool_Card(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsCancelTool(provider, tk, "cn")
 	if tool.Card().Name != "sessions_cancel" {
@@ -255,7 +299,7 @@ func TestSessionsCancelTool_Card(t *testing.T) {
 
 // TestSessionsCancelTool_Invoke_缺少TaskID task_id 为空时返回错误
 func TestSessionsCancelTool_Invoke_缺少TaskID(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsCancelTool(provider, tk, "cn")
 	_, err := tool.Invoke(context.Background(), map[string]any{}, nil)
@@ -266,7 +310,7 @@ func TestSessionsCancelTool_Invoke_缺少TaskID(t *testing.T) {
 
 // TestSessionsCancelTool_Invoke_任务不存在 toolkit 中无该任务时返回错误
 func TestSessionsCancelTool_Invoke_任务不存在(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsCancelTool(provider, tk, "cn")
 	_, err := tool.Invoke(context.Background(), map[string]any{"task_id": "nonexistent"}, nil)
@@ -277,7 +321,7 @@ func TestSessionsCancelTool_Invoke_任务不存在(t *testing.T) {
 
 // TestBuildSessionTools 构建三个工具
 func TestBuildSessionTools(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tools := BuildSessionTools(provider, tk, "cn", "")
 	if len(tools) != 3 {
@@ -348,7 +392,7 @@ func TestSessionsListTool_Stream(t *testing.T) {
 
 // TestSessionsSpawnTool_Stream 返回 Stream 不支持错误
 func TestSessionsSpawnTool_Stream(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
 	_, err := tool.Stream(context.Background(), map[string]any{}, nil)
@@ -359,7 +403,7 @@ func TestSessionsSpawnTool_Stream(t *testing.T) {
 
 // TestSessionsCancelTool_Stream 返回 Stream 不支持错误
 func TestSessionsCancelTool_Stream(t *testing.T) {
-	provider := &fakeProvider{}
+	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
 	tool := NewSessionsCancelTool(provider, tk, "cn")
 	_, err := tool.Stream(context.Background(), map[string]any{}, nil)
@@ -370,11 +414,11 @@ func TestSessionsCancelTool_Stream(t *testing.T) {
 
 // TestSessionsSpawnTool_Invoke_TaskManager为nil TaskManager 为 nil 时返回错误
 func TestSessionsSpawnTool_Invoke_TaskManager为nil(t *testing.T) {
-	// 构造 EventHandler 但 base.TaskManager 为 nil
-	handler := &fakeEventHandler{}
-	provider := &fakeProvider{
-		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
-		eventHandler: handler,
+	// 构造 LoopController 但 TaskManager 为 nil
+	ctrl := &fakeController{}
+	provider := &fakeDeepAgentProvider{
+		deepConfig:     &hschema.DeepAgentConfig{EnableTaskLoop: true},
+		loopController: ctrl,
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
@@ -391,10 +435,10 @@ func TestSessionsSpawnTool_Invoke_TaskManager为nil(t *testing.T) {
 func TestSessionsSpawnTool_Invoke_成功(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
 	tm := modules.NewTaskManager(cfg)
-	handler := &fakeEventHandler{taskManager: tm}
-	provider := &fakeProvider{
-		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
-		eventHandler: handler,
+	ctrl := &fakeController{taskManager: tm}
+	provider := &fakeDeepAgentProvider{
+		deepConfig:     &hschema.DeepAgentConfig{EnableTaskLoop: true},
+		loopController: ctrl,
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
@@ -422,10 +466,10 @@ func TestSessionsSpawnTool_Invoke_成功(t *testing.T) {
 func TestSessionsSpawnTool_Invoke_英文语言(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
 	tm := modules.NewTaskManager(cfg)
-	handler := &fakeEventHandler{taskManager: tm}
-	provider := &fakeProvider{
-		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
-		eventHandler: handler,
+	ctrl := &fakeController{taskManager: tm}
+	provider := &fakeDeepAgentProvider{
+		deepConfig:     &hschema.DeepAgentConfig{EnableTaskLoop: true},
+		loopController: ctrl,
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "en", "")
@@ -446,10 +490,10 @@ func TestSessionsSpawnTool_Invoke_英文语言(t *testing.T) {
 func TestSessionsSpawnTool_Invoke_带Session(t *testing.T) {
 	cfg := config.DefaultControllerConfig()
 	tm := modules.NewTaskManager(cfg)
-	handler := &fakeEventHandler{taskManager: tm}
-	provider := &fakeProvider{
-		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
-		eventHandler: handler,
+	ctrl := &fakeController{taskManager: tm}
+	provider := &fakeDeepAgentProvider{
+		deepConfig:     &hschema.DeepAgentConfig{EnableTaskLoop: true},
+		loopController: ctrl,
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
@@ -467,9 +511,9 @@ func TestSessionsSpawnTool_Invoke_带Session(t *testing.T) {
 
 // TestSessionsCancelTool_Invoke_Scheduler为nil TaskScheduler 为 nil 时返回错误
 func TestSessionsCancelTool_Invoke_Scheduler为nil(t *testing.T) {
-	handler := &fakeEventHandler{}
-	provider := &fakeProvider{
-		eventHandler: handler,
+	ctrl := &fakeController{}
+	provider := &fakeDeepAgentProvider{
+		loopController: ctrl,
 	}
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "测试任务")
@@ -490,60 +534,133 @@ func TestJoinLines(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// DeepConfig 实现 SessionToolProvider 接口
-func (f *fakeProvider) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
+// ReactAgent 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent { return f.reactAgent }
 
-// EventHandler 实现 SessionToolProvider 接口
-func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }
+// LoopCoordinator 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) LoopCoordinator() interfaces.LoopCoordinatorInterface { return &fakeLoopCoordinator{} }
 
-// fakeEventHandler 测试用 EventHandler mock
-type fakeEventHandler struct {
-	// taskManager 预设的 TaskManager
-	taskManager *modules.TaskManager
-	// taskScheduler 预设的 TaskScheduler
-	taskScheduler *modules.TaskScheduler
+// LoopController 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) LoopController() controller.ControllerInterface { return f.loopController }
+
+// EventHandler 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) EventHandler() modules.EventHandler { return f.eventHandler }
+
+// LoadState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState { return f.state }
+
+// DeepConfig 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
+
+// IsInvokeActive 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) IsInvokeActive() bool { return f.invokeActive }
+
+// IsAutoInvokeScheduled 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) IsAutoInvokeScheduled() bool { return f.autoInvokeScheduled }
+
+// SetAutoInvokeScheduled 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) { f.autoInvokeScheduled = scheduled }
+
+// ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
+
+// CreateSubagent 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.DeepAgentInterface, error) {
+	return f.subagent, f.createSubagentErr
 }
 
-// GetBase 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) GetBase() *modules.EventHandlerBase {
-	return &modules.EventHandlerBase{
-		TaskManager:   f.taskManager,
-		TaskScheduler: f.taskScheduler,
-	}
-}
+// Iteration 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
 
-// HandleInput 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) HandleInput(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+// RequestAbort 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) RequestAbort() {}
+
+// TaskManager 实现 ControllerInterface 接口
+func (f *fakeController) TaskManager() *modules.TaskManager { return f.taskManager }
+
+// TaskScheduler 实现 ControllerInterface 接口
+func (f *fakeController) TaskScheduler() *modules.TaskScheduler { return f.taskScheduler }
+
+// Init 实现 ControllerInterface 接口
+func (f *fakeController) Init(_ *agentschema.AgentCard, _ *config.ControllerConfig, _ agentinterfaces.AbilityManagerInterface, _ iface.ContextEngine) {}
+
+// Start 实现 ControllerInterface 接口
+func (f *fakeController) Start(_ context.Context) error { return nil }
+
+// Stop 实现 ControllerInterface 接口
+func (f *fakeController) Stop(_ context.Context) error { return nil }
+
+// Invoke 实现 ControllerInterface 接口
+func (f *fakeController) Invoke(_ context.Context, _ *cschema.InputEvent, _ *session.Session) (*cschema.ControllerOutput, error) {
 	return nil, nil
 }
 
-// HandleTaskInteraction 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) HandleTaskInteraction(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+// Stream 实现 ControllerInterface 接口
+func (f *fakeController) Stream(_ context.Context, _ *cschema.InputEvent, _ *session.Session, _ []stream.StreamMode) (<-chan *stream.OutputSchema, <-chan error) {
 	return nil, nil
 }
 
-// HandleTaskCompletion 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) HandleTaskCompletion(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+// PublishEventAsync 实现 ControllerInterface 接口
+func (f *fakeController) PublishEventAsync(_ context.Context, _ *session.Session, _ cschema.Event) error { return nil }
+
+// SetEventHandler 实现 ControllerInterface 接口
+func (f *fakeController) SetEventHandler(_ modules.EventHandler) {}
+
+// AddTaskExecutor 实现 ControllerInterface 接口
+func (f *fakeController) AddTaskExecutor(_ string, _ func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor) controller.ControllerInterface {
+	return f
+}
+
+// BindSession 实现 ControllerInterface 接口
+func (f *fakeController) BindSession(_ context.Context, _ *session.Session) error { return nil }
+
+// UnbindSession 实现 ControllerInterface 接口
+func (f *fakeController) UnbindSession(_ context.Context, _ *session.Session) error { return nil }
+
+// Config 实现 ControllerInterface 接口
+func (f *fakeController) Config() *config.ControllerConfig { return nil }
+
+// EventHandler 实现 ControllerInterface 接口
+func (f *fakeController) EventHandler() modules.EventHandler { return nil }
+
+// GetSessionID 实现 SessionFacade 接口
+func (f *fakeHandlerSess) GetSessionID() string {
+	return f.sessionID
+}
+
+// UpdateState 实现 SessionFacade 接口
+func (f *fakeHandlerSess) UpdateState(_ map[string]any) {}
+
+// GetState 实现 SessionFacade 接口
+func (f *fakeHandlerSess) GetState(_ state.StateKey) (any, error) {
 	return nil, nil
 }
 
-// HandleTaskFailed 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) HandleTaskFailed(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
-	return nil, nil
+// DumpState 实现 SessionFacade 接口
+func (f *fakeHandlerSess) DumpState() map[string]any {
+	return map[string]any{}
 }
 
-// HandleFollowUp 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) HandleFollowUp(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
-	return nil, nil
-}
-
-// PrepareRound 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) PrepareRound() int { return 0 }
-
-// WaitCompletion 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) WaitCompletion(_ context.Context, _ time.Duration) map[string]any {
+// WriteStream 实现 SessionFacade 接口
+func (f *fakeHandlerSess) WriteStream(_ context.Context, _ any) error {
 	return nil
 }
 
-// OnAbort 实现 modules.EventHandler 接口
-func (f *fakeEventHandler) OnAbort() {}
+// WriteCustomStream 实现 SessionFacade 接口
+func (f *fakeHandlerSess) WriteCustomStream(_ context.Context, _ any) error {
+	return nil
+}
+
+// GetEnv 实现 SessionFacade 接口
+func (f *fakeHandlerSess) GetEnv(_ string, _ ...any) any {
+	return nil
+}
+
+// Interact 实现 SessionFacade 接口
+func (f *fakeHandlerSess) Interact(_ context.Context, _ any) error {
+	return nil
+}
+
+// 编译时接口检查
+var _ interfaces.DeepAgentInterface = (*fakeDeepAgentProvider)(nil)
+var _ controller.ControllerInterface = (*fakeController)(nil)

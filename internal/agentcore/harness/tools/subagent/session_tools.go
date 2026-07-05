@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -24,18 +24,6 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// SessionToolProvider 会话工具所需的 Agent 能力接口。
-// 仅声明工具运行时所需的方法子集，避免 subagent → task_loop 循环依赖。
-// task_loop.DeepAgentProvider 隐式满足此接口。
-type SessionToolProvider interface {
-	// DeepConfig 返回 DeepAgent 配置
-	DeepConfig() *hschema.DeepAgentConfig
-	// EventHandler 返回事件处理器
-	EventHandler() modules.EventHandler
-}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -82,7 +70,7 @@ type SessionsSpawnTool struct {
 	// card 工具卡片
 	card *tool.ToolCard
 	// provider 深层 Agent 提供者
-	provider SessionToolProvider
+	provider interfaces.DeepAgentInterface
 	// toolkit 会话任务注册表
 	toolkit *SessionToolkit
 	// language 语言
@@ -95,7 +83,7 @@ type SessionsCancelTool struct {
 	// card 工具卡片
 	card *tool.ToolCard
 	// provider 深层 Agent 提供者
-	provider SessionToolProvider
+	provider interfaces.DeepAgentInterface
 	// toolkit 会话任务注册表
 	toolkit *SessionToolkit
 	// language 语言
@@ -228,7 +216,7 @@ func (t *SessionsListTool) Stream(_ context.Context, _ map[string]any, _ ...tool
 
 // NewSessionsSpawnTool 创建异步子代理派生工具。
 // 对齐 Python: SessionsSpawnTool.__init__
-func NewSessionsSpawnTool(provider SessionToolProvider, toolkit *SessionToolkit, language, availableAgents string) *SessionsSpawnTool {
+func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language, availableAgents string) *SessionsSpawnTool {
 	desc := (&tools.SessionsSpawnMetadataProvider{}).GetDescription(language)
 	if availableAgents != "" {
 		desc = fmt.Sprintf(desc, availableAgents)
@@ -252,15 +240,16 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 		)
 	}
 
-	// 步骤 2：获取 EventHandler 和 TaskManager
-	handler := t.provider.EventHandler()
-	if handler == nil {
+	// 步骤 2：获取 LoopController 和 TaskManager
+	// 对齐 Python: loop_controller.task_manager
+	loopCtrl := t.provider.LoopController()
+	if loopCtrl == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolSessionToolInvoked,
-			exception.WithParam("reason", "event_handler not available"),
+			exception.WithParam("reason", "loop_controller not available"),
 		)
 	}
-	tm := handler.GetBase().TaskManager
+	tm := loopCtrl.TaskManager()
 	if tm == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolSessionToolInvoked,
@@ -274,15 +263,8 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 
 	// 步骤 4：生成 task_id 和 sub_session_id
 	taskID := uuid.New().String()
-	var session any
-	for _, opt := range opts {
-		if opt != nil {
-			o := tool.NewToolCallOptions(opt)
-			if o.Session != nil {
-				session = o.Session
-			}
-		}
-	}
+	callOpts := tool.NewToolCallOptions(opts...)
+	session := callOpts.Session
 	parentSessionID := ""
 	if session != nil {
 		if sess, ok := session.(interface{ GetSessionID() string }); ok {
@@ -343,7 +325,7 @@ func (t *SessionsSpawnTool) Stream(_ context.Context, _ map[string]any, _ ...too
 
 // NewSessionsCancelTool 创建取消子代理任务工具。
 // 对齐 Python: SessionsCancelTool.__init__
-func NewSessionsCancelTool(provider SessionToolProvider, toolkit *SessionToolkit, language string) *SessionsCancelTool {
+func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language string) *SessionsCancelTool {
 	desc := (&tools.SessionsCancelMetadataProvider{}).GetDescription(language)
 	card := tool.NewToolCard("sessions_cancel", desc, buildSessionsCancelInputParams(), nil)
 	return &SessionsCancelTool{card: card, provider: provider, toolkit: toolkit, language: language}
@@ -373,15 +355,16 @@ func (t *SessionsCancelTool) Invoke(ctx context.Context, inputs map[string]any, 
 		)
 	}
 
-	// 步骤 3：获取 TaskScheduler
-	handler := t.provider.EventHandler()
-	if handler == nil {
+	// 步骤 3：获取 LoopController 和 TaskScheduler
+	// 对齐 Python: loop_controller.task_scheduler
+	loopCtrl := t.provider.LoopController()
+	if loopCtrl == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolSessionToolInvoked,
-			exception.WithParam("reason", "event_handler not available"),
+			exception.WithParam("reason", "loop_controller not available"),
 		)
 	}
-	scheduler := handler.GetBase().TaskScheduler
+	scheduler := loopCtrl.TaskScheduler()
 	if scheduler == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolSessionToolInvoked,
@@ -443,7 +426,7 @@ func (t *SessionsCancelTool) Stream(_ context.Context, _ map[string]any, _ ...to
 // BuildSessionTools 构建会话工具列表（list, spawn, cancel）。
 // 对齐 Python: build_session_tools
 func BuildSessionTools(
-	provider SessionToolProvider,
+	provider interfaces.DeepAgentInterface,
 	toolkit *SessionToolkit,
 	language string,
 	availableAgents string,
