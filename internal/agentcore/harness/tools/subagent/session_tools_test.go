@@ -1,8 +1,35 @@
 package subagent
 
 import (
+	"context"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// fakeProvider 测试用 DeepAgentProvider mock
+type fakeProvider struct {
+	// reactAgent 预设的 ReActAgent
+	reactAgent *agents.ReActAgent
+	// coordinator 预设的循环协调器
+	coordinator *task_loop.LoopCoordinator
+	// eventHandler 预设的事件处理器
+	eventHandler modules.EventHandler
+	// deepConfig 预设的 DeepAgentConfig
+	deepConfig *schema.DeepAgentConfig
+	// invokeActive 预设的 invoke 活跃标记
+	invokeActive bool
+	// autoInvokeScheduled 预设的自动 invoke 调度标记
+	autoInvokeScheduled bool
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestNewSessionToolkit 测试创建 SessionToolkit
 func TestNewSessionToolkit(t *testing.T) {
@@ -115,4 +142,243 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 	if row.Status != "running" {
 		t.Fatalf("期望 running, 实际 %s", row.Status)
 	}
+}
+
+// TestSessionSpawnTaskType 常量值正确
+func TestSessionSpawnTaskType(t *testing.T) {
+	if task_loop.SessionSpawnTaskType != "session_spawn_task" {
+		t.Fatalf("期望 session_spawn_task, 实际 %s", task_loop.SessionSpawnTaskType)
+	}
+}
+
+// TestSessionsListTool_Invoke_空列表 toolkit 为空时返回默认消息
+func TestSessionsListTool_Invoke_空列表(t *testing.T) {
+	tk := NewSessionToolkit()
+	tool := NewSessionsListTool(tk, "cn")
+	result, err := tool.Invoke(context.Background(), map[string]any{}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if result["success"] != true {
+		t.Error("期望 success=true")
+	}
+	data, _ := result["data"].(string)
+	if data != "当前会话没有后台子任务" {
+		t.Errorf("期望 '当前会话没有后台子任务', 实际 %q", data)
+	}
+}
+
+// TestSessionsListTool_Invoke_有任务 toolkit 中有任务时返回任务列表
+func TestSessionsListTool_Invoke_有任务(t *testing.T) {
+	tk := NewSessionToolkit()
+	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
+	tool := NewSessionsListTool(tk, "cn")
+	result, err := tool.Invoke(context.Background(), map[string]any{}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if result["success"] != true {
+		t.Error("期望 success=true")
+	}
+	data, _ := result["data"].(string)
+	if data == "" || data == "当前会话没有后台子任务" {
+		t.Errorf("期望包含任务信息, 实际 %q", data)
+	}
+}
+
+// TestSessionsListTool_Invoke_英文 语言为 en 时返回英文消息
+func TestSessionsListTool_Invoke_英文(t *testing.T) {
+	tk := NewSessionToolkit()
+	tool := NewSessionsListTool(tk, "en")
+	result, err := tool.Invoke(context.Background(), map[string]any{}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	data, _ := result["data"].(string)
+	if data != "No background tasks for this session" {
+		t.Errorf("期望英文消息, 实际 %q", data)
+	}
+}
+
+// TestSessionsListTool_Card 卡片名称正确
+func TestSessionsListTool_Card(t *testing.T) {
+	tk := NewSessionToolkit()
+	tool := NewSessionsListTool(tk, "cn")
+	if tool.Card().Name != "sessions_list" {
+		t.Errorf("期望 sessions_list, 实际 %s", tool.Card().Name)
+	}
+}
+
+// TestSessionsSpawnTool_Card 卡片名称正确
+func TestSessionsSpawnTool_Card(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	if tool.Card().Name != "sessions_spawn" {
+		t.Errorf("期望 sessions_spawn, 实际 %s", tool.Card().Name)
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_未启用TaskLoop enable_task_loop 为 false 时返回错误
+func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
+	provider := &fakeProvider{
+		deepConfig: &schema.DeepAgentConfig{EnableTaskLoop: false},
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	_, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "测试任务",
+	}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_EventHandler为nil event_handler 为 nil 时返回错误
+func TestSessionsSpawnTool_Invoke_EventHandler为nil(t *testing.T) {
+	provider := &fakeProvider{
+		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		eventHandler: nil,
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	_, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "测试任务",
+	}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestSessionsCancelTool_Card 卡片名称正确
+func TestSessionsCancelTool_Card(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsCancelTool(provider, tk, "cn")
+	if tool.Card().Name != "sessions_cancel" {
+		t.Errorf("期望 sessions_cancel, 实际 %s", tool.Card().Name)
+	}
+}
+
+// TestSessionsCancelTool_Invoke_缺少TaskID task_id 为空时返回错误
+func TestSessionsCancelTool_Invoke_缺少TaskID(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsCancelTool(provider, tk, "cn")
+	_, err := tool.Invoke(context.Background(), map[string]any{}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestSessionsCancelTool_Invoke_任务不存在 toolkit 中无该任务时返回错误
+func TestSessionsCancelTool_Invoke_任务不存在(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsCancelTool(provider, tk, "cn")
+	_, err := tool.Invoke(context.Background(), map[string]any{"task_id": "nonexistent"}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestBuildSessionTools 构建三个工具
+func TestBuildSessionTools(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tools := BuildSessionTools(provider, tk, "cn", "")
+	if len(tools) != 3 {
+		t.Fatalf("期望 3 个工具, 实际 %d", len(tools))
+	}
+	if tools[0].Card().Name != "sessions_list" {
+		t.Errorf("第 0 个工具期望 sessions_list, 实际 %s", tools[0].Card().Name)
+	}
+	if tools[1].Card().Name != "sessions_spawn" {
+		t.Errorf("第 1 个工具期望 sessions_spawn, 实际 %s", tools[1].Card().Name)
+	}
+	if tools[2].Card().Name != "sessions_cancel" {
+		t.Errorf("第 2 个工具期望 sessions_cancel, 实际 %s", tools[2].Card().Name)
+	}
+}
+
+// TestGenerateTokenHex 生成长度正确
+func TestGenerateTokenHex(t *testing.T) {
+	token := generateTokenHex(4)
+	// 4 字节 = 8 十六进制字符
+	if len(token) != 8 {
+		t.Fatalf("期望 8 字符, 实际 %d", len(token))
+	}
+}
+
+// TestBuildSessionsListInputParams 参数列表为空
+func TestBuildSessionsListInputParams(t *testing.T) {
+	params := buildSessionsListInputParams()
+	if len(params) != 0 {
+		t.Fatalf("期望 0 个参数, 实际 %d", len(params))
+	}
+}
+
+// TestBuildSessionsSpawnInputParams 两个必需参数
+func TestBuildSessionsSpawnInputParams(t *testing.T) {
+	params := buildSessionsSpawnInputParams()
+	if len(params) != 2 {
+		t.Fatalf("期望 2 个参数, 实际 %d", len(params))
+	}
+	if params[0].Name != "subagent_type" {
+		t.Errorf("第 0 个参数期望 subagent_type, 实际 %s", params[0].Name)
+	}
+	if params[1].Name != "task_description" {
+		t.Errorf("第 1 个参数期望 task_description, 实际 %s", params[1].Name)
+	}
+}
+
+// TestBuildSessionsCancelInputParams 一个必需参数
+func TestBuildSessionsCancelInputParams(t *testing.T) {
+	params := buildSessionsCancelInputParams()
+	if len(params) != 1 {
+		t.Fatalf("期望 1 个参数, 实际 %d", len(params))
+	}
+	if params[0].Name != "task_id" {
+		t.Errorf("第 0 个参数期望 task_id, 实际 %s", params[0].Name)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ReactAgent 实现 DeepAgentProvider 接口
+func (f *fakeProvider) ReactAgent() *agents.ReActAgent { return f.reactAgent }
+
+// LoopCoordinator 实现 DeepAgentProvider 接口
+func (f *fakeProvider) LoopCoordinator() *task_loop.LoopCoordinator { return f.coordinator }
+
+// EventHandler 实现 DeepAgentProvider 接口
+func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }
+
+// LoadState 实现 DeepAgentProvider 接口
+func (f *fakeProvider) LoadState(_ sessioninterfaces.SessionFacade) *schema.DeepAgentState {
+	return nil
+}
+
+// DeepConfig 实现 DeepAgentProvider 接口
+func (f *fakeProvider) DeepConfig() *schema.DeepAgentConfig { return f.deepConfig }
+
+// IsInvokeActive 实现 DeepAgentProvider 接口
+func (f *fakeProvider) IsInvokeActive() bool { return f.invokeActive }
+
+// IsAutoInvokeScheduled 实现 DeepAgentProvider 接口
+func (f *fakeProvider) IsAutoInvokeScheduled() bool { return f.autoInvokeScheduled }
+
+// SetAutoInvokeScheduled 实现 DeepAgentProvider 接口
+func (f *fakeProvider) SetAutoInvokeScheduled(scheduled bool) {
+	f.autoInvokeScheduled = scheduled
+}
+
+// ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentProvider 接口
+func (f *fakeProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
+
+// CreateSubagent 实现 DeepAgentProvider 接口
+func (f *fakeProvider) CreateSubagent(_ string, _ string) (task_loop.DeepAgentProvider, error) {
+	return nil, nil
 }
