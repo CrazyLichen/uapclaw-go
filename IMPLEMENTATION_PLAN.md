@@ -535,7 +535,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.4 | ✅ | TaskLoopController | 任务循环控制器 | `openjiuwen/harness/task_loop/` |
 | 9.5 | ✅ | LoopCoordinator | 循环协调器 | `openjiuwen/harness/task_loop/` |
 | 9.6 | ✅ | TaskLoopEventExecutor | 任务循环事件执行器；产出：`task_loop/executor.go`（DeepAgentProvider 接口 ⤵️ 9.1 回填 + TaskLoopEventExecutor + BuildDeepExecutor）、`task_loop/handler.go`（TaskLoopEventHandler per-round channel + 事件路由 + interactionQueuesProvider 实现）；SessionSpawn 相关逻辑 `any` 占位 + 注释标注 ⤵️ 9.7 回填；覆盖率 87.2% | `openjiuwen/harness/task_loop/` |
-| 9.7 | ☐ | SessionSpawnExecutor | 会话子进程执行器 | `openjiuwen/harness/task_loop/` |
+| 9.7 | ✅ | SessionSpawnExecutor | 会话子进程执行器；产出：`task_loop/session_spawn_executor.go`（SessionSpawnExecutor + BuildSessionSpawnExecutor）、`tools/subagent/session_tools.go`（SessionTaskRow + SessionToolkit + SessionsList/Spawn/Cancel 工具 + BuildSessionTools + SessionToolProvider 接口）、`task_loop/handler.go`（completeSessionSpawn 两路分支 + extractResultFromEvent + extractErrorFromEvent + formatSessionSpawnSteer + sessionToolkit 类型具体化）；task_loop 覆盖率 83.9%、subagent 覆盖率 81.5% | `openjiuwen/harness/task_loop/` |
 | **9.x 安全 Rails** | — | | | |
 | 9.8 | ☐ | ShellAST 分析 | Shell 命令 AST 解析与安全分析 | `openjiuwen/harness/security/` |
 | 9.9 | ☐ | TieredPolicy | 分层安全策略 | `openjiuwen/harness/security/` |

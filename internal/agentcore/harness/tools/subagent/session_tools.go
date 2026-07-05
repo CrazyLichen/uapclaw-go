@@ -278,10 +278,18 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 
 	// 步骤 4：生成 task_id 和 sub_session_id
 	taskID := uuid.New().String()
-	callOpts := tool.NewToolCallOptions(opts...)
+	var session any
+	for _, opt := range opts {
+		if opt != nil {
+			o := tool.NewToolCallOptions(opt)
+			if o.Session != nil {
+				session = o.Session
+			}
+		}
+	}
 	parentSessionID := ""
-	if callOpts.Session != nil {
-		if sess, ok := callOpts.Session.(interface{ GetSessionID() string }); ok {
+	if session != nil {
+		if sess, ok := session.(interface{ GetSessionID() string }); ok {
 			parentSessionID = sess.GetSessionID()
 		}
 	}

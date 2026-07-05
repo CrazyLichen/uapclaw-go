@@ -3,7 +3,9 @@ package subagent
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
@@ -334,6 +336,158 @@ func TestBuildSessionsCancelInputParams(t *testing.T) {
 	}
 }
 
+// TestSessionsListTool_Stream 返回 Stream 不支持错误
+func TestSessionsListTool_Stream(t *testing.T) {
+	tk := NewSessionToolkit()
+	tool := NewSessionsListTool(tk, "cn")
+	_, err := tool.Stream(context.Background(), map[string]any{}, nil)
+	if err == nil {
+		t.Fatal("期望返回 Stream 不支持错误")
+	}
+}
+
+// TestSessionsSpawnTool_Stream 返回 Stream 不支持错误
+func TestSessionsSpawnTool_Stream(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	_, err := tool.Stream(context.Background(), map[string]any{}, nil)
+	if err == nil {
+		t.Fatal("期望返回 Stream 不支持错误")
+	}
+}
+
+// TestSessionsCancelTool_Stream 返回 Stream 不支持错误
+func TestSessionsCancelTool_Stream(t *testing.T) {
+	provider := &fakeProvider{}
+	tk := NewSessionToolkit()
+	tool := NewSessionsCancelTool(provider, tk, "cn")
+	_, err := tool.Stream(context.Background(), map[string]any{}, nil)
+	if err == nil {
+		t.Fatal("期望返回 Stream 不支持错误")
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_TaskManager为nil TaskManager 为 nil 时返回错误
+func TestSessionsSpawnTool_Invoke_TaskManager为nil(t *testing.T) {
+	// 构造 EventHandler 但 base.TaskManager 为 nil
+	handler := &fakeEventHandler{}
+	provider := &fakeProvider{
+		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		eventHandler: handler,
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	_, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "测试任务",
+	}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_成功 提交任务成功时返回 pending 状态
+func TestSessionsSpawnTool_Invoke_成功(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := modules.NewTaskManager(cfg)
+	handler := &fakeEventHandler{taskManager: tm}
+	provider := &fakeProvider{
+		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		eventHandler: handler,
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	result, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "测试任务",
+	})
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if result["success"] != true {
+		t.Error("期望 success=true")
+	}
+	if result["status"] != "pending" {
+		t.Errorf("期望 pending, 实际 %v", result["status"])
+	}
+	// 验证 toolkit 中有任务
+	all := tk.ListAll()
+	if len(all) != 1 {
+		t.Fatalf("期望 1 个任务, 实际 %d", len(all))
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_英文语言 英文语言时返回英文消息
+func TestSessionsSpawnTool_Invoke_英文语言(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := modules.NewTaskManager(cfg)
+	handler := &fakeEventHandler{taskManager: tm}
+	provider := &fakeProvider{
+		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		eventHandler: handler,
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "en", "")
+	result, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "test task",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	msg, _ := result["message"].(string)
+	if msg == "" {
+		t.Error("期望有英文消息")
+	}
+}
+
+// TestSessionsSpawnTool_Invoke_带Session 传入 Session 时使用其 sessionID
+func TestSessionsSpawnTool_Invoke_带Session(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	tm := modules.NewTaskManager(cfg)
+	handler := &fakeEventHandler{taskManager: tm}
+	provider := &fakeProvider{
+		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		eventHandler: handler,
+	}
+	tk := NewSessionToolkit()
+	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
+	result, err := tool.Invoke(context.Background(), map[string]any{
+		"subagent_type":    "general-purpose",
+		"task_description": "测试任务",
+	})
+	if err != nil {
+		t.Fatalf("Invoke 返回错误: %v", err)
+	}
+	if result["success"] != true {
+		t.Error("期望 success=true")
+	}
+}
+
+// TestSessionsCancelTool_Invoke_Scheduler为nil TaskScheduler 为 nil 时返回错误
+func TestSessionsCancelTool_Invoke_Scheduler为nil(t *testing.T) {
+	handler := &fakeEventHandler{}
+	provider := &fakeProvider{
+		eventHandler: handler,
+	}
+	tk := NewSessionToolkit()
+	tk.UpsertRunning("task-1", "sub-1", "测试任务")
+	tool := NewSessionsCancelTool(provider, tk, "cn")
+	_, err := tool.Invoke(context.Background(), map[string]any{"task_id": "task-1"}, nil)
+	if err == nil {
+		t.Fatal("期望返回错误")
+	}
+}
+
+// TestJoinLines 多行连接
+func TestJoinLines(t *testing.T) {
+	result := joinLines([]string{"a", "b", "c"})
+	if result != "a\nb\nc" {
+		t.Errorf("期望 'a\\nb\\nc', 实际 %q", result)
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // DeepConfig 实现 SessionToolProvider 接口
@@ -341,3 +495,55 @@ func (f *fakeProvider) DeepConfig() *schema.DeepAgentConfig { return f.deepConfi
 
 // EventHandler 实现 SessionToolProvider 接口
 func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }
+
+// fakeEventHandler 测试用 EventHandler mock
+type fakeEventHandler struct {
+	// taskManager 预设的 TaskManager
+	taskManager *modules.TaskManager
+	// taskScheduler 预设的 TaskScheduler
+	taskScheduler *modules.TaskScheduler
+}
+
+// GetBase 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) GetBase() *modules.EventHandlerBase {
+	return &modules.EventHandlerBase{
+		TaskManager:   f.taskManager,
+		TaskScheduler: f.taskScheduler,
+	}
+}
+
+// HandleInput 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) HandleInput(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleTaskInteraction 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) HandleTaskInteraction(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleTaskCompletion 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) HandleTaskCompletion(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleTaskFailed 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) HandleTaskFailed(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// HandleFollowUp 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) HandleFollowUp(_ context.Context, _ *modules.EventHandlerInput) (map[string]any, error) {
+	return nil, nil
+}
+
+// PrepareRound 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) PrepareRound() int { return 0 }
+
+// WaitCompletion 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) WaitCompletion(_ context.Context, _ time.Duration) map[string]any {
+	return nil
+}
+
+// OnAbort 实现 modules.EventHandler 接口
+func (f *fakeEventHandler) OnAbort() {}
