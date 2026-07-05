@@ -46,4 +46,10 @@ type ControllerInterface interface {
 	Config() *config.ControllerConfig
 	// EventHandler 获取事件处理器
 	EventHandler() modules.EventHandler
+	// TaskScheduler 获取任务调度器
+	// 对齐 Python: Controller.task_scheduler
+	TaskScheduler() *modules.TaskScheduler
+	// TaskManager 获取任务管理器
+	// 对齐 Python: Controller.task_manager
+	TaskManager() *modules.TaskManager
 }
