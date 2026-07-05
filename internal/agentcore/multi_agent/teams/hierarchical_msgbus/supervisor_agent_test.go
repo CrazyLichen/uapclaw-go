@@ -18,8 +18,8 @@ import (
 // TestNewSupervisorAgent 验证构造函数。
 func TestNewSupervisorAgent(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 	config := saconfig.NewReActAgentConfig()
 
@@ -37,8 +37,8 @@ func TestNewSupervisorAgent(t *testing.T) {
 // TestNewSupervisorAgent_最小并行数 验证 maxParallelSubAgents < 1 时使用默认值。
 func TestNewSupervisorAgent_最小并行数(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 	config := saconfig.NewReActAgentConfig()
 
@@ -57,15 +57,15 @@ func TestNewSupervisorAgent_最小并行数(t *testing.T) {
 // TestSupervisorAgent_RegisterSubAgentCard 验证子 Agent 注册。
 func TestSupervisorAgent_RegisterSubAgentCard(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 	config := saconfig.NewReActAgentConfig()
 	supervisor := NewSupervisorAgent(card, config, 5)
 
 	subCard := agentschema.NewAgentCard(
-		cschema.WithName("sub_agent"),
-		cschema.WithID("sub_agent_id"),
+		cagentschema.WithAgentName("sub_agent"),
+		cagentschema.WithAgentID("sub_agent_id"),
 	)
 	supervisor.RegisterSubAgentCard(subCard)
 
@@ -87,16 +87,16 @@ func TestSupervisorAgent_RegisterSubAgentCard(t *testing.T) {
 // TestSupervisorAgent_RegisterSubAgentCard_多个 验证注册多个子 Agent。
 func TestSupervisorAgent_RegisterSubAgentCard_多个(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 	config := saconfig.NewReActAgentConfig()
 	supervisor := NewSupervisorAgent(card, config, 5)
 
 	for i := 0; i < 3; i++ {
 		subCard := agentschema.NewAgentCard(
-			cschema.WithName("sub_agent"),
-			cschema.WithID("sub_agent_id"),
+			cagentschema.WithAgentName("sub_agent"),
+			cagentschema.WithAgentID("sub_agent_id"),
 		)
 		supervisor.RegisterSubAgentCard(subCard)
 	}
@@ -129,16 +129,16 @@ func TestSupervisorAgent_满足RuntimeBindable接口(t *testing.T) {
 // TestCreate 验证 Create 函数基本流程。
 func TestCreate(t *testing.T) {
 	subCard1 := agentschema.NewAgentCard(
-		cschema.WithName("sub_agent_1"),
-		cschema.WithID("sub_agent_id_1"),
+		cagentschema.WithAgentName("sub_agent_1"),
+		cagentschema.WithAgentID("sub_agent_id_1"),
 	)
 	subCard2 := agentschema.NewAgentCard(
-		cschema.WithName("sub_agent_2"),
-		cschema.WithID("sub_agent_id_2"),
+		cagentschema.WithAgentName("sub_agent_2"),
+		cagentschema.WithAgentID("sub_agent_id_2"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 
 	card, provider := Create(
@@ -195,12 +195,12 @@ func TestCreate(t *testing.T) {
 // TestCreate_带模型配置 验证 Create 传入模型配置。
 func TestCreate_带模型配置(t *testing.T) {
 	subCard := agentschema.NewAgentCard(
-		cschema.WithName("sub_agent"),
-		cschema.WithID("sub_agent_id"),
+		cagentschema.WithAgentName("sub_agent"),
+		cagentschema.WithAgentID("sub_agent_id"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 
 	modelClientConfig := &llmschema.ModelClientConfig{
@@ -238,12 +238,12 @@ func TestCreate_带模型配置(t *testing.T) {
 // TestCreate_默认迭代数 验证 maxIterations < 1 时使用默认值 5。
 func TestCreate_默认迭代数(t *testing.T) {
 	subCard := agentschema.NewAgentCard(
-		cschema.WithName("sub_agent"),
-		cschema.WithID("sub_agent_id"),
+		cagentschema.WithAgentName("sub_agent"),
+		cagentschema.WithAgentID("sub_agent_id"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 
 	card, provider := Create(
@@ -272,8 +272,8 @@ func TestCreate_默认迭代数(t *testing.T) {
 // TestCreate_空AgentsPanic 验证空 agents 列表时 panic。
 func TestCreate_空AgentsPanic(t *testing.T) {
 	supervisorCard := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 
 	defer func() {
@@ -289,8 +289,8 @@ func TestCreate_空AgentsPanic(t *testing.T) {
 // TestCreate_NilAgentInListPanic 验证 agents 列表中含 nil 项时 panic。
 func TestCreate_NilAgentInListPanic(t *testing.T) {
 	supervisorCard := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("supervisor_id"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("supervisor_id"),
 	)
 
 	defer func() {
@@ -308,8 +308,8 @@ func TestCreate_NilAgentInListPanic(t *testing.T) {
 // TestSupervisorAgent_Configure_ReActAgentConfig 验证 ReActAgentConfig 类型时 Configure 生效。
 func TestSupervisorAgent_Configure_ReActAgentConfig(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("sup-configure"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("sup-configure"),
 	)
 	sup := NewSupervisorAgent(card, nil, 5)
 
@@ -323,8 +323,8 @@ func TestSupervisorAgent_Configure_ReActAgentConfig(t *testing.T) {
 // TestSupervisorAgent_Configure_非ReActAgentConfig 验证非 ReActAgentConfig 类型时 no-op。
 func TestSupervisorAgent_Configure_非ReActAgentConfig(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("sup-noop"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("sup-noop"),
 	)
 	sup := NewSupervisorAgent(card, nil, 5)
 
@@ -346,8 +346,8 @@ func (m *mockAgentConfig) Validate() error                                    { 
 // TestNewSupervisorAgent_Config为nil 验证 config=nil 时正常创建。
 func TestNewSupervisorAgent_Config为nil(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("supervisor"),
-		cschema.WithID("sup-nil-cfg"),
+		cagentschema.WithAgentName("supervisor"),
+		cagentschema.WithAgentID("sup-nil-cfg"),
 	)
 	sup := NewSupervisorAgent(card, nil, 5)
 	if sup == nil {

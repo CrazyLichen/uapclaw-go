@@ -14,7 +14,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -352,8 +351,8 @@ func (s *AgentTeamSession) CreateAgentSession(
 			id = "team_agent"
 		}
 		card = agentschema.NewAgentCard(
-			commonschema.WithID(id),
-			commonschema.WithName(id),
+			agentschema.WithAgentID(id),
+			agentschema.WithAgentName(id),
 		)
 	}
 

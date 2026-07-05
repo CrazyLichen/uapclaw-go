@@ -17,7 +17,6 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -410,8 +409,8 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 		// 创建端点标识和卡片
 		endpointID := fmt.Sprintf("%s%s_%s", handoffEndpointPrefix, teamID, agentID)
 		endpointCard := agentschema.NewAgentCard(
-			schema.WithID(endpointID),
-			schema.WithName(endpointID),
+			agentschema.WithAgentID(endpointID),
+			agentschema.WithAgentName(endpointID),
 		)
 
 		// 创建 ContainerAgent provider

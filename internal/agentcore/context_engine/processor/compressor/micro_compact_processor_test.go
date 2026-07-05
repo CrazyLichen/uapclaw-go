@@ -541,7 +541,7 @@ func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ llm_schema.B
 	return nil, nil
 }
 func (f *fakeModelContextForMicro) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	_ []schema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fakeModelContextForMicro) Statistic() *iface.ContextStats                       { return nil }

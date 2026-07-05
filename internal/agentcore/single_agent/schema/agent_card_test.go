@@ -24,17 +24,17 @@ type testAgentOutput struct {
 
 func TestAgentCard_ToolInfo_有参数(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("sub_agent"),
-		schema.WithDescription("子 Agent"),
+		agentschema.WithAgentName("sub_agent"),
+		agentschema.WithAgentDescription("子 Agent"),
 		WithInputParams[testAgentInput](),
 	)
 	info := card.ToolInfo()
-	if info.Name != "sub_agent" {
-		t.Errorf("Name = %q, want sub_agent", info.Name)
+	if info.GetName() != "sub_agent" {
+		t.Errorf("Name = %q, want sub_agent", info.GetName())
 	}
-	props, ok := info.Parameters["properties"].(map[string]any)
+	props, ok := info.GetParameters()["properties"].(map[string]any)
 	if !ok {
-		t.Fatalf("parameters 缺少 properties，实际 %v", info.Parameters)
+		t.Fatalf("parameters 缺少 properties，实际 %v", info.GetParameters())
 	}
 	if _, ok := props["query"]; !ok {
 		t.Error("properties 中缺少 query 参数")
@@ -42,19 +42,19 @@ func TestAgentCard_ToolInfo_有参数(t *testing.T) {
 }
 
 func TestAgentCard_ToolInfo_无参数(t *testing.T) {
-	card := NewAgentCard(schema.WithName("no_params_agent"))
+	card := NewAgentCard(agentschema.WithAgentName("no_params_agent"))
 	info := card.ToolInfo()
-	if info.Name != "no_params_agent" {
-		t.Errorf("Name = %q, want no_params_agent", info.Name)
+	if info.GetName() != "no_params_agent" {
+		t.Errorf("Name = %q, want no_params_agent", info.GetName())
 	}
-	typ, ok := info.Parameters["type"].(string)
+	typ, ok := info.GetParameters()["type"].(string)
 	if !ok || typ != "object" {
-		t.Errorf("无参数时 type 应为 object，实际 %v", info.Parameters)
+		t.Errorf("无参数时 type 应为 object，实际 %v", info.GetParameters())
 	}
 }
 
 func TestAgentCard_能力(t *testing.T) {
-	card := NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent"))
+	card := NewAgentCard(agentschema.WithAgentName("ag"), agentschema.WithAgentDescription("Agent"))
 	if card.AbilityName() != "ag" {
 		t.Errorf("AbilityName = %q, want ag", card.AbilityName())
 	}
@@ -65,7 +65,7 @@ func TestAgentCard_能力(t *testing.T) {
 }
 
 func TestAgentCard_AbilityID(t *testing.T) {
-	card := NewAgentCard(schema.WithName("ag"))
+	card := NewAgentCard(agentschema.WithAgentName("ag"))
 	if got := card.AbilityID(); got != card.ID {
 		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
 	}
@@ -73,7 +73,7 @@ func TestAgentCard_AbilityID(t *testing.T) {
 
 func TestAgentCard_反射提取Input(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("reflect_agent"),
+		agentschema.WithAgentName("reflect_agent"),
 		WithInputParams[testAgentInput](),
 	)
 	if len(card.InputParams) != 2 {
@@ -95,7 +95,7 @@ func TestAgentCard_反射提取Input(t *testing.T) {
 
 func TestAgentCard_反射提取Output(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("reflect_agent"),
+		agentschema.WithAgentName("reflect_agent"),
 		WithOutputParams[testAgentOutput](),
 	)
 	if len(card.OutputParams) != 1 {
@@ -108,8 +108,8 @@ func TestAgentCard_反射提取Output(t *testing.T) {
 
 func TestAgentCard_反射提取InputOutput(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("full_agent"),
-		schema.WithDescription("完整参数 Agent"),
+		agentschema.WithAgentName("full_agent"),
+		agentschema.WithAgentDescription("完整参数 Agent"),
 		WithInputParams[testAgentInput](),
 		WithOutputParams[testAgentOutput](),
 	)
@@ -123,8 +123,8 @@ func TestAgentCard_反射提取InputOutput(t *testing.T) {
 
 func TestAgentCard_JSON序列化(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("json_agent"),
-		schema.WithDescription("JSON 测试"),
+		agentschema.WithAgentName("json_agent"),
+		agentschema.WithAgentDescription("JSON 测试"),
 		WithInputParams[testAgentInput](),
 		WithOutputParams[testAgentOutput](),
 	)
@@ -148,8 +148,8 @@ func TestAgentCard_JSON序列化(t *testing.T) {
 
 func TestAgentCard_字段对齐Python(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("align_agent"),
-		schema.WithDescription("对齐测试"),
+		agentschema.WithAgentName("align_agent"),
+		agentschema.WithAgentDescription("对齐测试"),
 	)
 	if card.InputParams != nil {
 		t.Errorf("默认 InputParams 应为 nil，实际 %v", card.InputParams)
@@ -164,18 +164,18 @@ func TestAgentCard_字段对齐Python(t *testing.T) {
 
 func TestAgentCard_ToolInfo与ToolCard一致(t *testing.T) {
 	card := NewAgentCard(
-		schema.WithName("consistent_agent"),
+		agentschema.WithAgentName("consistent_agent"),
 		WithInputParams[testAgentInput](),
 	)
 	info := card.ToolInfo()
 
-	typ, ok := info.Parameters["type"].(string)
+	typ, ok := info.GetParameters()["type"].(string)
 	if !ok || typ != "object" {
-		t.Errorf("type 应为 object，实际 %v", info.Parameters)
+		t.Errorf("type 应为 object，实际 %v", info.GetParameters())
 	}
-	props, ok := info.Parameters["properties"].(map[string]any)
+	props, ok := info.GetParameters()["properties"].(map[string]any)
 	if !ok {
-		t.Fatalf("缺少 properties，实际 %v", info.Parameters)
+		t.Fatalf("缺少 properties，实际 %v", info.GetParameters())
 	}
 	if _, ok := props["query"]; !ok {
 		t.Error("properties 中缺少 query")
@@ -183,9 +183,9 @@ func TestAgentCard_ToolInfo与ToolCard一致(t *testing.T) {
 	if _, ok := props["limit"]; !ok {
 		t.Error("properties 中缺少 limit")
 	}
-	required, ok := info.Parameters["required"].([]string)
+	required, ok := info.GetParameters()["required"].([]string)
 	if !ok {
-		t.Fatalf("required 类型不对，实际 %T", info.Parameters["required"])
+		t.Fatalf("required 类型不对，实际 %T", info.GetParameters()["required"])
 	}
 	if len(required) != 1 || required[0] != "query" {
 		t.Errorf("required 期望 [query]，实际 %v", required)

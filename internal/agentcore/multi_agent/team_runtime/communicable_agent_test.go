@@ -134,7 +134,7 @@ func TestCommunicableAgent_Send(t *testing.T) {
 		mockBus.sendResult = "response"
 		runtime.SetMessageBus(mockBus)
 		runtime.mu.Lock()
-		runtime.running = true
+		runtime.running.Store(true)
 		runtime.mu.Unlock()
 
 		// 注册 recipient agent 和 sender agent
@@ -170,7 +170,7 @@ func TestCommunicableAgent_Publish(t *testing.T) {
 		mockBus := newMockMessageBus()
 		runtime.SetMessageBus(mockBus)
 		runtime.mu.Lock()
-		runtime.running = true
+		runtime.running.Store(true)
 		runtime.mu.Unlock()
 
 		c.BindRuntime(runtime, "sender")

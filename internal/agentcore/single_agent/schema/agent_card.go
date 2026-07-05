@@ -47,7 +47,7 @@ var _ schema.CardInterface = (*AgentCard)(nil)
 //	type MyInput struct {
 //	    Query string `json:"query" jsonschema:"description=搜索关键词,required"`
 //	}
-//	card := NewAgentCard(schema.WithName("my_agent"), WithInputParams[MyInput]())
+//	card := NewAgentCard(WithAgentName("my_agent"), WithInputParams[MyInput]())
 func WithInputParams[I any]() AgentCardOption {
 	return func(c *AgentCard) {
 		typ := reflect.TypeOf((*I)(nil)).Elem()
@@ -76,21 +76,41 @@ func WithOutputParams[O any]() AgentCardOption {
 	}
 }
 
-// NewAgentCard 创建 AgentCard 实例。
-// 先生成默认 BaseCard，再依次应用 CardOption（设置 ID/Name/Description）和 AgentCardOption（设置参数等）。
+// WithAgentName 设置 Agent 名称。
+func WithAgentName(name string) AgentCardOption {
+	return func(c *AgentCard) { c.Name = name }
+}
+
+// WithAgentDescription 设置 Agent 描述。
+func WithAgentDescription(desc string) AgentCardOption {
+	return func(c *AgentCard) { c.Description = desc }
+}
+
+// WithAgentID 设置 Agent 唯一标识（覆盖自动生成的 UUID）。
+func WithAgentID(id string) AgentCardOption {
+	return func(c *AgentCard) { c.ID = id }
+}
+
+// WithInterfaceURL 设置 A2A JSON-RPC 基础 URL。
+func WithInterfaceURL(url string) AgentCardOption {
+	return func(c *AgentCard) { c.InterfaceURL = url }
+}
+
+// WithOutputParamsDirect 直接设置输出参数定义。
+func WithOutputParamsDirect(params []*schema.Param) AgentCardOption {
+	return func(c *AgentCard) { c.OutputParams = params }
+}
+
+// NewAgentCard 创建 AgentCard 实例，编译时类型安全。
+// 所有选项均为 AgentCardOption 类型，消除运行时类型断言。
 //
 // 对应 Python: AgentCard(name=..., description=..., input_params=..., output_params=..., interface_url=...)
-func NewAgentCard(opts ...any) *AgentCard {
+func NewAgentCard(opts ...AgentCardOption) *AgentCard {
 	card := &AgentCard{
 		BaseCard: *schema.NewBaseCard(),
 	}
 	for _, opt := range opts {
-		switch o := opt.(type) {
-		case schema.CardOption:
-			o(&card.BaseCard)
-		case AgentCardOption:
-			o(card)
-		}
+		opt(card)
 	}
 	return card
 }
@@ -99,7 +119,7 @@ func NewAgentCard(opts ...any) *AgentCard {
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，与 ToolCard.ToolInfo() 一致。
 //
 // 对应 Python: AgentCard.tool_info() / AbilityManager.list_tool_info() 中 AgentCard 分支
-func (c *AgentCard) ToolInfo() *schema.ToolInfo {
+func (c *AgentCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewToolInfo(c.Name, c.Description, parameters)
 }

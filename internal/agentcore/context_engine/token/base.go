@@ -20,5 +20,5 @@ type TokenCounter interface {
 	// CountMessages 计算消息列表的 Token 数量
 	CountMessages(messages []llm_schema.BaseMessage, model string) (int, error)
 	// CountTools 计算工具定义的 Token 数量
-	CountTools(tools []*schema.ToolInfo, model string) (int, error)
+	CountTools(tools []schema.ToolInfoInterface, model string) (int, error)
 }

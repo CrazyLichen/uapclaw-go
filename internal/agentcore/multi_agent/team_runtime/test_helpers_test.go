@@ -43,16 +43,16 @@ func (m *mockMessageBusForRuntime) RemoveSubscription(agentID, topic string) {
 func (m *mockMessageBusForRuntime) RemoveAllSubscriptions(agentID string) {
 	delete(m.subscriptions, agentID)
 }
-func (m *mockMessageBusForRuntime) ListSubscriptions(agentID string) map[string]any {
+func (m *mockMessageBusForRuntime) ListSubscriptions(agentID string) any {
 	topics, ok := m.subscriptions[agentID]
 	if !ok {
-		return map[string]any{"agent_id": agentID, "topics": []string{}}
+		return &SubscriptionInfo{AgentID: agentID, Topics: []string{}}
 	}
 	topicList := make([]string, 0, len(topics))
 	for t := range topics {
 		topicList = append(topicList, t)
 	}
-	return map[string]any{"agent_id": agentID, "topics": topicList}
+	return &SubscriptionInfo{AgentID: agentID, Topics: topicList}
 }
 func (m *mockMessageBusForRuntime) GetSubscriptionCount() int {
 	count := 0

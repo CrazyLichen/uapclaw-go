@@ -468,7 +468,7 @@ func (c *msoContentAwareModelContext) Count(text string, _ string) (int, error) 
 	return len(text) / 3, nil
 }
 
-func (c *msoContentAwareModelContext) CountTools(_ []*commonschema.ToolInfo, _ string) (int, error) {
+func (c *msoContentAwareModelContext) CountTools(_ []commonschema.ToolInfoInterface, _ string) (int, error) {
 	return 0, nil
 }
 

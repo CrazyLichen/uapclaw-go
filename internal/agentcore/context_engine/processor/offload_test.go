@@ -35,7 +35,7 @@ func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.O
 func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
-func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*common_schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []common_schema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (m *mockModelContext) Statistic() *iface.ContextStats                       { return nil }

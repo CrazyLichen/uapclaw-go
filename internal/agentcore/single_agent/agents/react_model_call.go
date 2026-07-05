@@ -24,7 +24,7 @@ func (a *ReActAgent) callModel(
 	ctx context.Context,
 	cbc *rail.AgentCallbackContext,
 	modelCtx ceinterface.ModelContext,
-	tools []*cschema.ToolInfo,
+	tools []cschema.ToolInfoInterface,
 	sess sessioninterfaces.SessionFacade,
 ) (*llmschema.AssistantMessage, error) {
 	// 对齐 Python L619-625: preview messages 包含 system prompt 前缀
@@ -98,7 +98,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 	}
 
 	var messages []llmschema.BaseMessage
-	var contextTools []*cschema.ToolInfo
+	var contextTools []cschema.ToolInfoInterface
 
 	if modelCtx != nil {
 		contextWindow, err := modelCtx.GetContextWindow(ctx, systemMsgs, nil, 0, 0, contextWindowOpts...)
@@ -168,13 +168,10 @@ func (a *ReActAgent) callLLMInvoke(
 	llmModel *llm.Model,
 	modelName string,
 	messages []llmschema.BaseMessage,
-	tools []*cschema.ToolInfo,
+	tools []cschema.ToolInfoInterface,
 	extraKVPairs map[string]any,
 ) (*llmschema.AssistantMessage, error) {
-	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
-	for i, t := range tools {
-		toolProviders[i] = t
-	}
+	toolProviders := tools
 	msgsParam := model_clients.NewMessagesParam(messages...)
 
 	// 构建 invoke 选项（含 KV Cache extra kwargs）
@@ -199,14 +196,11 @@ func (a *ReActAgent) callLLMStream(
 	llmModel *llm.Model,
 	modelName string,
 	messages []llmschema.BaseMessage,
-	tools []*cschema.ToolInfo,
+	tools []cschema.ToolInfoInterface,
 	sess sessioninterfaces.SessionFacade,
 	extraKVPairs map[string]any,
 ) (*llmschema.AssistantMessage, error) {
-	toolProviders := make([]cschema.ToolInfoProvider, len(tools))
-	for i, t := range tools {
-		toolProviders[i] = t
-	}
+	toolProviders := tools
 	msgsParam := model_clients.NewMessagesParam(messages...)
 
 	// 构建 stream 选项（含 KV Cache extra kwargs）
@@ -287,7 +281,7 @@ func (a *ReActAgent) callLLMStream(
 // logLLMRequest 记录 LLM 请求诊断日志。
 //
 // 对应 Python: log_llm_request()
-func logLLMRequest(messages []llmschema.BaseMessage, tools []*cschema.ToolInfo) {
+func logLLMRequest(messages []llmschema.BaseMessage, tools []cschema.ToolInfoInterface) {
 	msgCount := len(messages)
 	toolCount := len(tools)
 	logger.Info(logComponent).

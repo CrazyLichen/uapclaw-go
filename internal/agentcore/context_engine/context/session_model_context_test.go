@@ -21,7 +21,7 @@ import (
 type mockTokenCounter struct {
 	countFn         func(text string, model string) (int, error)
 	countMessagesFn func(messages []llm_schema.BaseMessage, model string) (int, error)
-	countToolsFn    func(tools []*schema.ToolInfo, model string) (int, error)
+	countToolsFn    func(tools []schema.ToolInfoInterface, model string) (int, error)
 }
 
 func (m *mockTokenCounter) Count(text string, model string) (int, error) {
@@ -38,7 +38,7 @@ func (m *mockTokenCounter) CountMessages(messages []llm_schema.BaseMessage, mode
 	return len(messages) * 10, nil
 }
 
-func (m *mockTokenCounter) CountTools(tools []*schema.ToolInfo, model string) (int, error) {
+func (m *mockTokenCounter) CountTools(tools []schema.ToolInfoInterface, model string) (int, error) {
 	if m.countToolsFn != nil {
 		return m.countToolsFn(tools, model)
 	}
@@ -541,8 +541,8 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 		sysMsgs := []llm_schema.BaseMessage{
 			llm_schema.NewSystemMessage("系统指令"),
 		}
-		tools := []*schema.ToolInfo{
-			{Name: "test_tool", Description: "测试工具"},
+		tools := []schema.ToolInfoInterface{
+			schema.NewToolInfo("test_tool", "测试工具", nil),
 		}
 		window, err := mc.GetContextWindow(context.Background(), sysMsgs, tools, 0, 0)
 		if err != nil {
@@ -600,7 +600,7 @@ func TestSessionModelContext_GetContextWindow(t *testing.T) {
 			onGetWindow: iface.ContextWindow{
 				SystemMessages:  []llm_schema.BaseMessage{llm_schema.NewSystemMessage("处理后系统")},
 				ContextMessages: []llm_schema.BaseMessage{llm_schema.NewUserMessage("处理后上下文")},
-				Tools:           []*schema.ToolInfo{},
+				Tools:           []schema.ToolInfoInterface{},
 			},
 		}
 		mc := newTestSessionModelContext(func(o *testContextOpts) {
@@ -1272,7 +1272,7 @@ func TestGetContextWindow_带KV缓存(t *testing.T) {
 // TestCountToolTokens_有TokenCounter 测试有 tokenCounter 时使用计数器
 func TestCountToolTokens_有TokenCounter(t *testing.T) {
 	tc := &mockTokenCounter{
-		countToolsFn: func(tools []*schema.ToolInfo, model string) (int, error) {
+		countToolsFn: func(tools []schema.ToolInfoInterface, model string) (int, error) {
 			return 42, nil
 		},
 	}
@@ -1332,7 +1332,7 @@ func TestCountToolTokens_空工具信息(t *testing.T) {
 // TestCountToolTokens_tokenCounter失败降级 测试 tokenCounter 失败时降级
 func TestCountToolTokens_tokenCounter失败降级(t *testing.T) {
 	tc := &mockTokenCounter{
-		countToolsFn: func(tools []*schema.ToolInfo, model string) (int, error) {
+		countToolsFn: func(tools []schema.ToolInfoInterface, model string) (int, error) {
 			return 0, fmt.Errorf("counter error")
 		},
 	}
@@ -1497,9 +1497,9 @@ func TestStatTools_无工具(t *testing.T) {
 // TestStatTools_有工具 测试有工具时统计
 func TestStatTools_有工具(t *testing.T) {
 	mc := newTestSessionModelContext()
-	tools := []*schema.ToolInfo{
-		{Name: "tool1", Description: "desc1"},
-		{Name: "tool2", Description: "desc2"},
+	tools := []schema.ToolInfoInterface{
+		schema.NewToolInfo("tool1", "desc1", nil),
+		schema.NewToolInfo("tool2", "desc2", nil),
 	}
 	stat := &iface.ContextStats{}
 	mc.statTools(stat, tools)

@@ -33,7 +33,7 @@ func (m *mockAbilityMgr) Remove(_ string) commonschema.Ability       { return ni
 func (m *mockAbilityMgr) RemoveMany(_ []string) []commonschema.Ability { return nil }
 func (m *mockAbilityMgr) Get(_ string) commonschema.Ability            { return nil }
 func (m *mockAbilityMgr) List() []commonschema.Ability                 { return nil }
-func (m *mockAbilityMgr) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]*commonschema.ToolInfo, error) {
+func (m *mockAbilityMgr) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]commonschema.ToolInfoInterface, error) {
 	return nil, nil
 }
 func (m *mockAbilityMgr) Execute(_ context.Context, _ *rail.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
@@ -66,7 +66,7 @@ func (m *mockEventHandlerWithQueues) InteractionQueues() *LoopQueues {
 
 // newTestCard 创建测试用 AgentCard
 func newTestCard() *agentschema.AgentCard {
-	return agentschema.NewAgentCard(commonschema.WithName("test-agent"))
+	return agentschema.NewAgentCard(agentschema.WithAgentName("test-agent"))
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

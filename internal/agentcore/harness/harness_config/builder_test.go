@@ -312,7 +312,7 @@ func TestGenerateHarnessConfigYAML_基本(t *testing.T) {
 
 // TestGenerateHarnessConfigYAML_带AgentCard 测试带 AgentCard 的 YAML 生成
 func TestGenerateHarnessConfigYAML_带AgentCard(t *testing.T) {
-	card := sasc.NewAgentCard(cschema.WithID("my-agent"), cschema.WithName("My Agent"), cschema.WithDescription("测试描述"))
+	card := sasc.NewAgentCard(sasc.WithAgentID("my-agent"), sasc.WithAgentName("My Agent"), sasc.WithAgentDescription("测试描述"))
 	yamlStr, err := GenerateHarnessConfigYAML(card, nil, nil, nil, "en", nil, nil, nil)
 	require.NoError(t, err)
 	assert.Contains(t, yamlStr, "my-agent")

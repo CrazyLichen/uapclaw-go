@@ -336,68 +336,56 @@ func (p *Param) String() string {
 // MarshalJSON 实现 json.Marshaler 接口，处理 NaN 值的 Minimum/Maximum。
 // NaN 表示未设置，不输出到 JSON；非 NaN（包括 0）正常输出。
 func (p *Param) MarshalJSON() ([]byte, error) {
-	// 使用别名避免递归调用 MarshalJSON
-	type ParamAlias Param
-	alias := ParamAlias(*p)
-
-	// 先序列化基本字段
-	data, err := json.Marshal(map[string]any{
-		"name":        alias.Name,
-		"description": alias.Description,
-		"type":        alias.Type,
-		"required":    alias.Required,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, err
+	// 直接构建 map，避免 Marshal→Unmarshal→Marshal 的 round-trip 导致精度丢失
+	m := map[string]any{
+		"name":        p.Name,
+		"description": p.Description,
+		"type":        p.Type,
+		"required":    p.Required,
 	}
 
 	// 可选字段
-	if alias.Default != nil {
-		m["default"] = alias.Default
+	if p.Default != nil {
+		m["default"] = p.Default
 	}
-	if len(alias.Enum) > 0 {
-		m["enum"] = alias.Enum
+	if len(p.Enum) > 0 {
+		m["enum"] = p.Enum
 	}
-	if alias.MinLength > 0 {
-		m["minLength"] = alias.MinLength
+	if p.MinLength > 0 {
+		m["minLength"] = p.MinLength
 	}
-	if alias.MaxLength > 0 {
-		m["maxLength"] = alias.MaxLength
+	if p.MaxLength > 0 {
+		m["maxLength"] = p.MaxLength
 	}
-	if alias.Pattern != "" {
-		m["pattern"] = alias.Pattern
+	if p.Pattern != "" {
+		m["pattern"] = p.Pattern
 	}
-	if !math.IsNaN(alias.Minimum) {
-		m["minimum"] = alias.Minimum
+	if !math.IsNaN(p.Minimum) {
+		m["minimum"] = p.Minimum
 	}
-	if !math.IsNaN(alias.Maximum) {
-		m["maximum"] = alias.Maximum
+	if !math.IsNaN(p.Maximum) {
+		m["maximum"] = p.Maximum
 	}
-	if alias.Format != "" {
-		m["format"] = alias.Format
+	if p.Format != "" {
+		m["format"] = p.Format
 	}
-	if alias.Nullable {
-		m["nullable"] = alias.Nullable
+	if p.Nullable {
+		m["nullable"] = p.Nullable
 	}
-	if alias.Items != nil {
-		m["items"] = alias.Items
+	if p.Items != nil {
+		m["items"] = p.Items
 	}
-	if len(alias.Properties) > 0 {
-		m["properties"] = alias.Properties
+	if len(p.Properties) > 0 {
+		m["properties"] = p.Properties
 	}
-	if len(alias.AnyOf) > 0 {
-		m["anyOf"] = alias.AnyOf
+	if len(p.AnyOf) > 0 {
+		m["anyOf"] = p.AnyOf
 	}
-	if len(alias.AllOf) > 0 {
-		m["allOf"] = alias.AllOf
+	if len(p.AllOf) > 0 {
+		m["allOf"] = p.AllOf
 	}
-	if len(alias.OneOf) > 0 {
-		m["oneOf"] = alias.OneOf
+	if len(p.OneOf) > 0 {
+		m["oneOf"] = p.OneOf
 	}
 
 	return json.Marshal(m)

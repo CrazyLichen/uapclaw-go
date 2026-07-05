@@ -104,8 +104,8 @@ func TestTeamRuntime_RegisterAgent(t *testing.T) {
 	runtime := NewTeamRuntime(*config)
 
 	card := agentschema.NewAgentCard(
-		schema.WithID("agent-1"),
-		schema.WithName("test-agent"),
+		agentschema.WithAgentID("agent-1"),
+		agentschema.WithAgentName("test-agent"),
 	)
 
 	err := runtime.RegisterAgent(context.Background(), card, nil)
@@ -128,8 +128,8 @@ func TestTeamRuntime_UnregisterAgent(t *testing.T) {
 	runtime := NewTeamRuntime(*config)
 
 	card := agentschema.NewAgentCard(
-		schema.WithID("agent-1"),
-		schema.WithName("test-agent"),
+		agentschema.WithAgentID("agent-1"),
+		agentschema.WithAgentName("test-agent"),
 	)
 	_ = runtime.RegisterAgent(context.Background(), card, nil)
 
@@ -163,8 +163,8 @@ func TestTeamRuntime_GetAgentCard(t *testing.T) {
 	runtime := NewTeamRuntime(*config)
 
 	card := agentschema.NewAgentCard(
-		schema.WithID("agent-1"),
-		schema.WithName("test-agent"),
+		agentschema.WithAgentID("agent-1"),
+		agentschema.WithAgentName("test-agent"),
 	)
 	_ = runtime.RegisterAgent(context.Background(), card, nil)
 
@@ -196,8 +196,8 @@ func TestTeamRuntime_ListAgents(t *testing.T) {
 		t.Errorf("空运行时 ListAgents 长度 = %d, want 0", len(agents))
 	}
 
-	card1 := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("a1"))
-	card2 := agentschema.NewAgentCard(schema.WithID("agent-2"), schema.WithName("a2"))
+	card1 := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("a1"))
+	card2 := agentschema.NewAgentCard(agentschema.WithAgentID("agent-2"), agentschema.WithAgentName("a2"))
 	_ = runtime.RegisterAgent(context.Background(), card1, nil)
 	_ = runtime.RegisterAgent(context.Background(), card2, nil)
 
@@ -300,7 +300,7 @@ func TestTeamRuntime_Send接收者不存在(t *testing.T) {
 	mockBus := newMockMessageBus()
 	runtime.SetMessageBus(mockBus)
 	runtime.mu.Lock()
-	runtime.running = true
+	runtime.running.Store(true)
 	runtime.mu.Unlock()
 
 	_, err := runtime.Send(context.Background(), "hello", "nonexistent", "sender")

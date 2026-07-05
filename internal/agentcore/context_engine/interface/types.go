@@ -48,7 +48,7 @@ type ModelContext interface {
 	// windowSize ≤ 0 使用默认值；dialogueRound ≤ 0 使用默认值
 	// opts 透传给处理器，对齐 Python: get_context_window(..., **kwargs)
 	GetContextWindow(ctx context.Context, systemMessages []llm_schema.BaseMessage,
-		tools []*schema.ToolInfo, windowSize int, dialogueRound int, opts ...Option) (*ContextWindow, error)
+		tools []schema.ToolInfoInterface, windowSize int, dialogueRound int, opts ...Option) (*ContextWindow, error)
 	// Statistic 计算上下文统计信息
 	Statistic() *ContextStats
 	// SessionID 返回会话 ID
@@ -198,7 +198,7 @@ type ContextWindow struct {
 	// ContextMessages 上下文消息
 	ContextMessages []llm_schema.BaseMessage `json:"context_messages"`
 	// Tools 工具定义
-	Tools []*schema.ToolInfo `json:"tools"`
+	Tools []schema.ToolInfoInterface `json:"tools"`
 	// Statistic 统计信息（值类型，零值始终可用，与 Python ContextStats() 默认实例对齐）
 	Statistic ContextStats `json:"statistic"`
 }
@@ -328,7 +328,7 @@ func (w *ContextWindow) GetMessages() []llm_schema.BaseMessage {
 // GetTools 返回工具列表。
 //
 // 对应 Python: ContextWindow.get_tools()
-func (w *ContextWindow) GetTools() []*schema.ToolInfo {
+func (w *ContextWindow) GetTools() []schema.ToolInfoInterface {
 	return w.Tools
 }
 
@@ -342,7 +342,7 @@ func NewContextWindow() *ContextWindow {
 	return &ContextWindow{
 		SystemMessages:  make([]llm_schema.BaseMessage, 0),
 		ContextMessages: make([]llm_schema.BaseMessage, 0),
-		Tools:           make([]*schema.ToolInfo, 0),
+		Tools:           make([]schema.ToolInfoInterface, 0),
 		Statistic:       ContextStats{},
 	}
 }
@@ -388,7 +388,7 @@ func (s *ContextStats) StatMessages(messages []llm_schema.BaseMessage, tokenCoun
 // StatTools 统计工具数量和 token 数，填充 ContextStats 的 Tools/ToolTokens 字段。
 //
 // 对应 Python: Context._stat_tools(stat, tools)
-func (s *ContextStats) StatTools(tools []*schema.ToolInfo, tokenCounter token.TokenCounter) {
+func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter token.TokenCounter) {
 	s.Tools = len(tools)
 	for _, t := range tools {
 		s.ToolTokens += countToolTokens(t, tokenCounter)
@@ -430,20 +430,20 @@ func countSingleMessageTokens(msg llm_schema.BaseMessage, tokenCounter token.Tok
 // countToolTokens 计算单个工具定义的 token 数。
 // 优先使用 tokenCounter.CountTools，失败时 fallback 到 len(name+description+parameters)/4 向下取整。
 // 对齐 Python: SessionModelContext._count_tool_tokens()
-func countToolTokens(toolInfo *schema.ToolInfo, tokenCounter token.TokenCounter) int {
+func countToolTokens(toolInfo schema.ToolInfoInterface, tokenCounter token.TokenCounter) int {
 	if tokenCounter != nil {
-		count, err := tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, "")
+		count, err := tokenCounter.CountTools([]schema.ToolInfoInterface{toolInfo}, "")
 		if err == nil {
 			return count
 		}
 	}
 	// fallback：拼接 name + description + parameters JSON，长度 / 4 向下取整，对齐 Python len//4
-	text := toolInfo.Name
-	if toolInfo.Description != "" {
-		text += toolInfo.Description
+	text := toolInfo.GetName()
+	if toolInfo.GetDescription() != "" {
+		text += toolInfo.GetDescription()
 	}
-	if toolInfo.Parameters != nil {
-		if data, err := json.Marshal(toolInfo.Parameters); err == nil {
+	if toolInfo.GetParameters() != nil {
+		if data, err := json.Marshal(toolInfo.GetParameters()); err == nil {
 			text += string(data)
 		}
 	}

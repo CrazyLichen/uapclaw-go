@@ -2,7 +2,6 @@ package team_runtime
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -35,7 +34,7 @@ type MessageBusInterface interface {
 	// RemoveAllSubscriptions 移除所有订阅
 	RemoveAllSubscriptions(agentID string)
 	// ListSubscriptions 列出订阅
-	ListSubscriptions(agentID string) map[string]any
+	ListSubscriptions(agentID string) any
 	// GetSubscriptionCount 获取订阅数
 	GetSubscriptionCount() int
 }
@@ -404,7 +403,7 @@ func (mb *MessageBus) RemoveAllSubscriptions(agentID string) {
 // ListSubscriptions 列出订阅信息。
 //
 // 对应 Python: MessageBus.list_subscriptions(agent_id)
-func (mb *MessageBus) ListSubscriptions(agentID string) map[string]any {
+func (mb *MessageBus) ListSubscriptions(agentID string) any {
 	return mb.subscriptionManager.ListSubscriptions(agentID)
 }
 
@@ -554,24 +553,11 @@ func (mb *MessageBus) extractEnvelopeFromPayload(payload map[string]any) (*Messa
 	if !ok {
 		return nil, fmt.Errorf("payload 中缺少 envelope 字段")
 	}
-
-	// 尝试直接类型断言
-	if envelope, ok := envelopeAny.(*MessageEnvelope); ok {
-		return envelope, nil
+	envelope, ok := envelopeAny.(*MessageEnvelope)
+	if !ok {
+		return nil, fmt.Errorf("envelope 类型断言失败，期望 *MessageEnvelope，实际 %T", envelopeAny)
 	}
-
-	// 尝试 JSON 反序列化
-	jsonBytes, err := json.Marshal(envelopeAny)
-	if err != nil {
-		return nil, fmt.Errorf("序列化 envelope 失败: %w", err)
-	}
-
-	var envelope MessageEnvelope
-	if err := json.Unmarshal(jsonBytes, &envelope); err != nil {
-		return nil, fmt.Errorf("反序列化 envelope 失败: %w", err)
-	}
-
-	return &envelope, nil
+	return envelope, nil
 }
 
 // buildEnvelopePayload 构建包含信封的 payload。

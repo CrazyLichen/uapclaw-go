@@ -11,6 +11,20 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SubscriptionInfo 单个 Agent 的订阅信息。
+type SubscriptionInfo struct {
+	// AgentID Agent 唯一标识
+	AgentID string
+	// Topics 订阅的主题列表
+	Topics []string
+}
+
+// SubscriptionMap 全量订阅信息。
+type SubscriptionMap struct {
+	// Subscriptions 主题模式 → 订阅者 Agent ID 列表
+	Subscriptions map[string][]string
+}
+
 // SubscriptionManager 主题到 Agent 的订阅映射管理器，支持 fnmatch 通配符匹配。
 //
 // 维护双向索引实现高效查找和移除：
@@ -169,7 +183,7 @@ func (m *SubscriptionManager) GetSubscriptionCount() int {
 // ListSubscriptions 列出订阅信息用于调试，支持按 agentID 过滤。
 //
 // 对应 Python: SubscriptionManager.list_subscriptions
-func (m *SubscriptionManager) ListSubscriptions(agentID string) map[string]any {
+func (m *SubscriptionManager) ListSubscriptions(agentID string) any {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -180,9 +194,9 @@ func (m *SubscriptionManager) ListSubscriptions(agentID string) map[string]any {
 				topics = append(topics, t)
 			}
 		}
-		return map[string]any{
-			"agent_id": agentID,
-			"topics":   topics,
+		return &SubscriptionInfo{
+			AgentID: agentID,
+			Topics:  topics,
 		}
 	}
 
@@ -194,8 +208,8 @@ func (m *SubscriptionManager) ListSubscriptions(agentID string) map[string]any {
 		}
 		subs[pattern] = agentList
 	}
-	return map[string]any{
-		"subscriptions": subs,
+	return &SubscriptionMap{
+		Subscriptions: subs,
 	}
 }
 

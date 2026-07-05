@@ -425,7 +425,7 @@ func (rlc *RoundLevelCompressor) compressUntilTarget(
 	contextMessages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	keepRecent int,
 	force bool,
 ) ([]llm_schema.BaseMessage, error) {
@@ -487,7 +487,7 @@ func (rlc *RoundLevelCompressor) runRecursiveCompression(
 	messages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	keepRecent int,
 ) ([]llm_schema.BaseMessage, error) {
 	working := make([]llm_schema.BaseMessage, len(messages))
@@ -543,7 +543,7 @@ func (rlc *RoundLevelCompressor) runAggressivePhase(
 	messages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	keepRecent int,
 	targetTokens int,
 	phaseName string,
@@ -569,7 +569,7 @@ func (rlc *RoundLevelCompressor) applyLLMPhase(
 	messages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	targets []roundCompressTarget,
 	targetTokens int,
 	aggressive bool,
@@ -636,7 +636,7 @@ func (rlc *RoundLevelCompressor) prepareRoundCompressionMessages(
 	aggressive bool,
 	keepRecentMessages int,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 ) []llm_schema.BaseMessage {
 	systemPrompt := rlc.aggressivePrompt
 	if !aggressive {
@@ -673,7 +673,7 @@ func (rlc *RoundLevelCompressor) buildCompressionUserPrompt(
 	targetTokens int,
 	keepRecentMessages int,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 ) string {
 	// 收集目标索引集合
 	targetIndices := make(map[int]bool)
@@ -1379,7 +1379,7 @@ func (rlc *RoundLevelCompressor) truncateToTarget(
 	contextMessages []llm_schema.BaseMessage,
 	mc iface.ModelContext,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 ) []llm_schema.BaseMessage {
 	fixedTokens := rlc.countContextWindowFixedTokens(systemMessages, tools, mc)
 	allowedContextTokens := rlc.targetTotalTokens - fixedTokens
@@ -1480,7 +1480,7 @@ func (rlc *RoundLevelCompressor) buildHeadTailTruncatedText(text string, keptCha
 func (rlc *RoundLevelCompressor) countContextWindowTokens(
 	systemMessages []llm_schema.BaseMessage,
 	contextMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	mc iface.ModelContext,
 ) int {
 	tokenCounter := mc.TokenCounter()
@@ -1526,7 +1526,7 @@ func (rlc *RoundLevelCompressor) countContextWindowTokens(
 // 对应 Python: RoundLevelCompressor._count_context_window_fixed_tokens()
 func (rlc *RoundLevelCompressor) countContextWindowFixedTokens(
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	mc iface.ModelContext,
 ) int {
 	return rlc.countContextWindowTokens(systemMessages, nil, tools, mc)
@@ -1593,7 +1593,7 @@ func (rlc *RoundLevelCompressor) countMessageTokens(messages []llm_schema.BaseMe
 func (rlc *RoundLevelCompressor) isUnderContextWindowBudget(
 	systemMessages []llm_schema.BaseMessage,
 	contextMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	mc iface.ModelContext,
 ) bool {
 	totalTokens := rlc.countContextWindowTokens(systemMessages, contextMessages, tools, mc)
@@ -1655,7 +1655,7 @@ func (rlc *RoundLevelCompressor) serializeMessage(index int, msg llm_schema.Base
 // serializeTool 序列化工具定义为 JSON 文本。
 //
 // 对应 Python: RoundLevelCompressor._serialize_tool()
-func (rlc *RoundLevelCompressor) serializeTool(tool *schema.ToolInfo) string {
+func (rlc *RoundLevelCompressor) serializeTool(tool schema.ToolInfoInterface) string {
 	data, err := json.Marshal(tool)
 	if err != nil {
 		return "{}"

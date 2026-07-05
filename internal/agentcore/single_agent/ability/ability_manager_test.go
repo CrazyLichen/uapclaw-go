@@ -52,7 +52,7 @@ func newTestResourceMgr(
 	for id, wf := range workflows {
 		card := wf.Card()
 		if card == nil {
-			card = schema.NewWorkflowCard(schema.WithID(id))
+			card = schema.NewWorkflowCard(agentschema.WithAgentID(id))
 		}
 		provider := func(_ context.Context, _ *schema.WorkflowCard) (interfaces.Workflow, error) {
 			return wf, nil
@@ -62,7 +62,7 @@ func newTestResourceMgr(
 	for id, ag := range agents {
 		agCard := ag.Card()
 		if agCard == nil {
-			agCard = agentschema.NewAgentCard(schema.WithID(id))
+			agCard = agentschema.NewAgentCard(agentschema.WithAgentID(id))
 		}
 		provider := func(_ context.Context, _ *agentschema.AgentCard) (interfaces.BaseAgent, error) {
 			return ag, nil
@@ -120,7 +120,7 @@ func TestAbilityManager_Add_重复Tool(t *testing.T) {
 
 func TestAbilityManager_Add_Workflow(t *testing.T) {
 	am := NewAbilityManager(nil)
-	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	wf := schema.NewWorkflowCard(agentschema.WithAgentName("my_wf"), agentschema.WithAgentDescription("工作流"))
 	result := am.Add(wf)
 	if !result.Added {
 		t.Error("应成功添加")
@@ -132,7 +132,7 @@ func TestAbilityManager_Add_Workflow(t *testing.T) {
 
 func TestAbilityManager_Add_Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(agentschema.WithAgentName("my_agent"), agentschema.WithAgentDescription("Agent"))
 	result := am.Add(ag)
 	if !result.Added {
 		t.Error("应成功添加")
@@ -158,7 +158,7 @@ func TestAbilityManager_AddMany(t *testing.T) {
 	am := NewAbilityManager(nil)
 	results := am.AddMany([]schema.Ability{
 		tool.NewToolCard("t1", "工具1", nil, nil),
-		schema.NewWorkflowCard(schema.WithName("w1"), schema.WithDescription("工作流1")),
+		schema.NewWorkflowCard(agentschema.WithAgentName("w1"), agentschema.WithAgentDescription("工作流1")),
 	})
 	if len(results) != 2 {
 		t.Fatalf("len = %d, want 2", len(results))
@@ -214,8 +214,8 @@ func TestAbilityManager_Remove_McpServer级联删除(t *testing.T) {
 func TestAbilityManager_Get(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("tool1", "工具", nil, nil))
-	am.Add(schema.NewWorkflowCard(schema.WithName("wf1"), schema.WithDescription("工作流")))
-	am.Add(agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent")))
+	am.Add(schema.NewWorkflowCard(agentschema.WithAgentName("wf1"), agentschema.WithAgentDescription("工作流")))
+	am.Add(agentschema.NewAgentCard(agentschema.WithAgentName("ag1"), agentschema.WithAgentDescription("Agent")))
 
 	if am.Get("tool1") == nil {
 		t.Error("tool1 应存在")
@@ -234,8 +234,8 @@ func TestAbilityManager_Get(t *testing.T) {
 func TestAbilityManager_List(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("t1", "工具", nil, nil))
-	am.Add(schema.NewWorkflowCard(schema.WithName("w1"), schema.WithDescription("工作流")))
-	am.Add(agentschema.NewAgentCard(schema.WithName("a1"), schema.WithDescription("Agent")))
+	am.Add(schema.NewWorkflowCard(agentschema.WithAgentName("w1"), agentschema.WithAgentDescription("工作流")))
+	am.Add(agentschema.NewAgentCard(agentschema.WithAgentName("a1"), agentschema.WithAgentDescription("Agent")))
 	list := am.List()
 	if len(list) != 3 {
 		t.Errorf("List 长度 = %d, want 3", len(list))
@@ -312,8 +312,8 @@ func TestPrioritizePaidSearch_只有paid(t *testing.T) {
 func TestAbilityManager_ListToolInfo(t *testing.T) {
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("tool1", "工具1", nil, nil))
-	am.Add(schema.NewWorkflowCard(schema.WithName("wf1"), schema.WithDescription("工作流1")))
-	am.Add(agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent1")))
+	am.Add(schema.NewWorkflowCard(agentschema.WithAgentName("wf1"), agentschema.WithAgentDescription("工作流1")))
+	am.Add(agentschema.NewAgentCard(agentschema.WithAgentName("ag1"), agentschema.WithAgentDescription("Agent1")))
 
 	infos, err := am.ListToolInfo(context.Background(), nil)
 	if err != nil {
@@ -321,7 +321,7 @@ func TestAbilityManager_ListToolInfo(t *testing.T) {
 	}
 	names := make(map[string]bool)
 	for _, info := range infos {
-		names[info.Name] = true
+		names[info.GetName()] = true
 	}
 	if !names["tool1"] || !names["wf1"] || !names["ag1"] {
 		t.Errorf("缺少工具，实际 %v", names)
@@ -337,7 +337,7 @@ func TestAbilityManager_ListToolInfo_按名称过滤(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListToolInfo 错误: %v", err)
 	}
-	if len(infos) != 1 || infos[0].Name != "tool1" {
+	if len(infos) != 1 || infos[0].GetName() != "tool1" {
 		t.Errorf("应只返回 tool1，实际 %v", infos)
 	}
 }
@@ -531,7 +531,7 @@ func TestAbilityManager_Remove_不存在(t *testing.T) {
 
 func TestAbilityManager_Remove_Workflow(t *testing.T) {
 	am := NewAbilityManager(nil)
-	wf := schema.NewWorkflowCard(schema.WithName("wf1"), schema.WithDescription("工作流"))
+	wf := schema.NewWorkflowCard(agentschema.WithAgentName("wf1"), agentschema.WithAgentDescription("工作流"))
 	am.Add(wf)
 	removed := am.Remove("wf1")
 	if removed == nil {
@@ -544,7 +544,7 @@ func TestAbilityManager_Remove_Workflow(t *testing.T) {
 
 func TestAbilityManager_Remove_Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag := agentschema.NewAgentCard(schema.WithName("ag1"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(agentschema.WithAgentName("ag1"), agentschema.WithAgentDescription("Agent"))
 	am.Add(ag)
 	removed := am.Remove("ag1")
 	if removed == nil {
@@ -557,8 +557,8 @@ func TestAbilityManager_Remove_Agent(t *testing.T) {
 
 func TestAbilityManager_Add_重复Workflow(t *testing.T) {
 	am := NewAbilityManager(nil)
-	wf1 := schema.NewWorkflowCard(schema.WithName("wf"), schema.WithDescription("工作流1"))
-	wf2 := schema.NewWorkflowCard(schema.WithName("wf"), schema.WithDescription("工作流2"))
+	wf1 := schema.NewWorkflowCard(agentschema.WithAgentName("wf"), agentschema.WithAgentDescription("工作流1"))
+	wf2 := schema.NewWorkflowCard(agentschema.WithAgentName("wf"), agentschema.WithAgentDescription("工作流2"))
 	am.Add(wf1)
 	result := am.Add(wf2)
 	if result.Added {
@@ -571,8 +571,8 @@ func TestAbilityManager_Add_重复Workflow(t *testing.T) {
 
 func TestAbilityManager_Add_重复Agent(t *testing.T) {
 	am := NewAbilityManager(nil)
-	ag1 := agentschema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent1"))
-	ag2 := agentschema.NewAgentCard(schema.WithName("ag"), schema.WithDescription("Agent2"))
+	ag1 := agentschema.NewAgentCard(agentschema.WithAgentName("ag"), agentschema.WithAgentDescription("Agent1"))
+	ag2 := agentschema.NewAgentCard(agentschema.WithAgentName("ag"), agentschema.WithAgentDescription("Agent2"))
 	am.Add(ag1)
 	result := am.Add(ag2)
 	if result.Added {
@@ -625,14 +625,14 @@ func TestAbilityManager_ListToolInfo_MCP工具排除(t *testing.T) {
 		t.Fatalf("ListToolInfo 错误: %v", err)
 	}
 	for _, info := range infos {
-		if info.Name == "mcp_search" {
+		if info.GetName() == "mcp_search" {
 			t.Error("MCP 服务器下的工具应被排除")
 		}
 	}
 	// normal 工具应存在
 	found := false
 	for _, info := range infos {
-		if info.Name == "normal" {
+		if info.GetName() == "normal" {
 			found = true
 		}
 	}
@@ -684,7 +684,7 @@ func TestAbilityManager_Execute_工具执行错误(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Workflow成功(t *testing.T) {
-	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	wf := schema.NewWorkflowCard(agentschema.WithAgentName("my_wf"), agentschema.WithAgentDescription("工作流"))
 	fw := &fakeWorkflow{result: map[string]any{"output": "done"}, card: wf}
 	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
 	am := NewAbilityManager(frm)
@@ -706,7 +706,7 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
-	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	wf := schema.NewWorkflowCard(agentschema.WithAgentName("my_wf"), agentschema.WithAgentDescription("工作流"))
 	am.Add(wf)
 	// 不注册 workflow 实例
 
@@ -723,7 +723,7 @@ func TestAbilityManager_Execute_Workflow未找到(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
-	wf := schema.NewWorkflowCard(schema.WithName("my_wf"), schema.WithDescription("工作流"))
+	wf := schema.NewWorkflowCard(agentschema.WithAgentName("my_wf"), agentschema.WithAgentDescription("工作流"))
 	fw := &fakeWorkflow{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("wf错误")), card: wf}
 	frm := newTestResourceMgr(nil, map[string]interfaces.Workflow{wf.ID: fw}, nil)
 	am := NewAbilityManager(frm)
@@ -742,7 +742,7 @@ func TestAbilityManager_Execute_Workflow执行错误(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Agent成功(t *testing.T) {
-	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(agentschema.WithAgentName("my_agent"), agentschema.WithAgentDescription("Agent"))
 	fa := &fakeAgent{result: map[string]any{"response": "ok"}}
 	frm := newTestResourceMgr(nil, nil, map[string]interfaces.BaseAgent{ag.ID: fa})
 	am := NewAbilityManager(frm)
@@ -764,7 +764,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 	frm := newTestResourceMgr(nil, nil, nil)
 	am := NewAbilityManager(frm)
 
-	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(agentschema.WithAgentName("my_agent"), agentschema.WithAgentDescription("Agent"))
 	am.Add(ag)
 	// 不注册 agent 实例
 
@@ -781,7 +781,7 @@ func TestAbilityManager_Execute_Agent未找到(t *testing.T) {
 }
 
 func TestAbilityManager_Execute_Agent执行错误(t *testing.T) {
-	ag := agentschema.NewAgentCard(schema.WithName("my_agent"), schema.WithDescription("Agent"))
+	ag := agentschema.NewAgentCard(agentschema.WithAgentName("my_agent"), agentschema.WithAgentDescription("Agent"))
 	fa := &fakeAgent{err: exception.BuildError(exception.StatusAbilityExecutionError, exception.WithMsg("agent错误"))}
 	frm := newTestResourceMgr(nil, nil, map[string]interfaces.BaseAgent{ag.ID: fa})
 	am := NewAbilityManager(frm)

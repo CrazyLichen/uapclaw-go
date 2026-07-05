@@ -1079,7 +1079,7 @@ func (m *mockModelContextForCountTokens) ClearMessages(_ context.Context, _ bool
 func (m *mockModelContextForCountTokens) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
-func (m *mockModelContextForCountTokens) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []*commonschema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+func (m *mockModelContextForCountTokens) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []commonschema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (m *mockModelContextForCountTokens) Statistic() *iface.ContextStats {
@@ -1139,7 +1139,7 @@ func (f *fakeTokenCounterForSessionMemory) Count(text string, model string) (int
 func (f *fakeTokenCounterForSessionMemory) CountMessages(messages []llm_schema.BaseMessage, model string) (int, error) {
 	return f.count, f.err
 }
-func (f *fakeTokenCounterForSessionMemory) CountTools(tools []*commonschema.ToolInfo, model string) (int, error) {
+func (f *fakeTokenCounterForSessionMemory) CountTools(tools []commonschema.ToolInfoInterface, model string) (int, error) {
 	return f.count, f.err
 }
 

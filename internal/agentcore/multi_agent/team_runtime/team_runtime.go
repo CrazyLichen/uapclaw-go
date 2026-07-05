@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -50,9 +51,7 @@ type TeamRuntime struct {
 	// activeTeamSessions 活跃团队会话映射，sessionID → AgentTeamSession
 	activeTeamSessions map[string]*session.AgentTeamSession
 	// running 是否运行中
-	running bool
-	// startOnce 启动同步原语，确保 Start 只执行一次
-	startOnce sync.Once
+	running atomic.Bool
 	// p2pTimeout P2P 通信超时秒数
 	p2pTimeout float64
 	// mu 保护 agentCards、running 和 activeTeamSessions
@@ -124,35 +123,32 @@ func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 //
 // 对应 Python: TeamRuntime.start()
 func (tr *TeamRuntime) Start(ctx context.Context) error {
-	var startErr error
-	tr.startOnce.Do(func() {
-		if tr.messageBus == nil {
-			startErr = fmt.Errorf("消息总线未设置，请先调用 SetMessageBus")
-			return
-		}
-		if err := tr.messageBus.Start(ctx); err != nil {
-			startErr = err
-			return
-		}
-		tr.mu.Lock()
-		tr.running = true
-		tr.mu.Unlock()
+	if tr.running.Load() {
+		return nil
+	}
 
-		logger.Info(logComponent).
-			Str("event_type", "TEAM_RUNTIME_STARTED").
-			Str("team_id", tr.teamID).
-			Msg("团队运行时已启动")
-	})
-	return startErr
+	if tr.messageBus == nil {
+		return fmt.Errorf("消息总线未设置，请先调用 SetMessageBus")
+	}
+	if err := tr.messageBus.Start(ctx); err != nil {
+		return err
+	}
+
+	tr.running.Store(true)
+
+	logger.Info(logComponent).
+		Str("event_type", "TEAM_RUNTIME_STARTED").
+		Str("team_id", tr.teamID).
+		Msg("团队运行时已启动")
+
+	return nil
 }
 
 // Stop 停止团队运行时，停止消息总线。
 //
 // 对应 Python: TeamRuntime.stop()
 func (tr *TeamRuntime) Stop(ctx context.Context) error {
-	tr.mu.Lock()
-	tr.running = false
-	tr.mu.Unlock()
+	tr.running.Store(false)
 
 	if tr.messageBus != nil {
 		if err := tr.messageBus.Stop(ctx); err != nil {
@@ -407,7 +403,7 @@ func (tr *TeamRuntime) GetTeamSession(sessionID string) *session.AgentTeamSessio
 // ListSubscriptions 列出订阅信息，委托消息总线。
 //
 // 对应 Python: TeamRuntime.list_subscriptions(agent_id)
-func (tr *TeamRuntime) ListSubscriptions(agentID string) map[string]any {
+func (tr *TeamRuntime) ListSubscriptions(agentID string) any {
 	if tr.messageBus != nil {
 		return tr.messageBus.ListSubscriptions(agentID)
 	}
@@ -441,9 +437,7 @@ func (tr *TeamRuntime) GetP2PTimeout() float64 {
 
 // IsRunning 返回运行时是否已启动。
 func (tr *TeamRuntime) IsRunning() bool {
-	tr.mu.RLock()
-	defer tr.mu.RUnlock()
-	return tr.running
+	return tr.running.Load()
 }
 
 // SetMessageBus 设置消息总线，供外部注入。

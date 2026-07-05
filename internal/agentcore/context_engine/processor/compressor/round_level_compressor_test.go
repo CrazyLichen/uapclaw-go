@@ -134,7 +134,7 @@ func (c *alwaysHighThenLowCounter) CountMessages(_ []llm_schema.BaseMessage, _ s
 	}
 	return c.lowCount, nil
 }
-func (c *alwaysHighThenLowCounter) CountTools(_ []*schema.ToolInfo, _ string) (int, error) {
+func (c *alwaysHighThenLowCounter) CountTools(_ []schema.ToolInfoInterface, _ string) (int, error) {
 	return 0, nil
 }
 
@@ -170,7 +170,7 @@ func (c *trackingTokenCounter) CountMessages(msgs []llm_schema.BaseMessage, _ st
 	}
 	return c.lowCount, nil
 }
-func (c *trackingTokenCounter) CountTools(_ []*schema.ToolInfo, _ string) (int, error) {
+func (c *trackingTokenCounter) CountTools(_ []schema.ToolInfoInterface, _ string) (int, error) {
 	return 0, nil
 }
 

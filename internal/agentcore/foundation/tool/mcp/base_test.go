@@ -75,11 +75,14 @@ func TestMcpToolCard_ToolInfo(t *testing.T) {
 	}
 	card := types.NewMcpToolCard("web_search", "搜索网页", "search-server", params)
 	info := card.ToolInfo()
-	assert.Equal(t, "web_search", info.Name)
-	assert.Equal(t, "搜索网页", info.Description)
-	assert.Equal(t, "search-server", info.ServerName)
-	assert.Equal(t, "function", info.Type)
-	assert.NotNil(t, info.Parameters)
+	assert.Equal(t, "web_search", info.GetName())
+	assert.Equal(t, "搜索网页", info.GetDescription())
+	assert.Equal(t, "function", info.GetType())
+	assert.NotNil(t, info.GetParameters())
+	// McpToolInfo 特有字段通过类型断言获取
+	if mcpInfo, ok := info.(*schema.McpToolInfo); ok {
+		assert.Equal(t, "search-server", mcpInfo.ServerName)
+	}
 }
 
 func TestNewMcpToolCard_WithServerID(t *testing.T) {

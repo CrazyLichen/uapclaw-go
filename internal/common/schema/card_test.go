@@ -187,11 +187,11 @@ func TestWorkflowCard_ToolInfo_有参数(t *testing.T) {
 		"properties": map[string]any{"query": map[string]any{"type": "string"}},
 	}
 	info := card.ToolInfo()
-	if info.Name != "my_workflow" {
-		t.Errorf("Name = %q, want my_workflow", info.Name)
+	if info.GetName() != "my_workflow" {
+		t.Errorf("Name = %q, want my_workflow", info.GetName())
 	}
-	if info.Description != "我的工作流" {
-		t.Errorf("Description = %q, want 我的工作流", info.Description)
+	if info.GetDescription() != "我的工作流" {
+		t.Errorf("Description = %q, want 我的工作流", info.GetDescription())
 	}
 	if card.Version != "1.0" {
 		t.Errorf("Version = %q, want 1.0", card.Version)
@@ -201,10 +201,10 @@ func TestWorkflowCard_ToolInfo_有参数(t *testing.T) {
 func TestWorkflowCard_ToolInfo_无参数(t *testing.T) {
 	card := NewWorkflowCard(WithName("empty_wf"))
 	info := card.ToolInfo()
-	if info.Name != "empty_wf" {
-		t.Errorf("Name = %q, want empty_wf", info.Name)
+	if info.GetName() != "empty_wf" {
+		t.Errorf("Name = %q, want empty_wf", info.GetName())
 	}
-	props, ok := info.Parameters["properties"]
+	props, ok := info.GetParameters()["properties"]
 	if ok {
 		// properties 存在时应为空 map
 		if m, ok2 := props.(map[string]any); ok2 && len(m) != 0 {

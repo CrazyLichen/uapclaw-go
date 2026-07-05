@@ -979,7 +979,7 @@ func truncateContextWindowToCompletedAPIRound(window *iface.ContextWindow) *ifac
 	copy(result.SystemMessages, window.SystemMessages)
 	result.ContextMessages = make([]llm_schema.BaseMessage, completedEnd)
 	copy(result.ContextMessages, window.ContextMessages[:completedEnd])
-	result.Tools = make([]*commonschema.ToolInfo, len(window.Tools))
+	result.Tools = make([]commonschema.ToolInfoInterface, len(window.Tools))
 	copy(result.Tools, window.Tools)
 	return result
 }

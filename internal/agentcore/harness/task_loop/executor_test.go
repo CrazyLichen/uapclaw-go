@@ -17,7 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -399,7 +398,7 @@ func TestTaskLoopEventExecutor_ExecuteAbility_任务存在有描述(t *testing.T
 	taskID := "task-exec-1"
 
 	// 创建一个基本的 ReActAgent（有 card 但无 LLM，Invoke 返回错误）
-	card := agentschema.NewAgentCard(commonschema.WithName("test-agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-agent"))
 	saCfg := saconfig.NewReActAgentConfig()
 	reactAgent := agents.NewReActAgent(card, saCfg)
 

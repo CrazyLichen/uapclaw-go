@@ -296,12 +296,12 @@ func TestInvokeInputs_IsCron(t *testing.T) {
 // TestModelCallInputs_字段 验证 ModelCallInputs 各字段赋值
 func TestModelCallInputs_字段(t *testing.T) {
 	msgs := []schema.BaseMessage{schema.NewDefaultMessage(schema.RoleTypeUser, "hello")}
-	toolInfo := &cschema.ToolInfo{Name: "tool1"}
+	toolInfo := cschema.NewToolInfo("tool1", "", nil)
 	resp := &schema.AssistantMessage{}
 
 	inputs := &ModelCallInputs{
 		Messages: msgs,
-		Tools:    []*cschema.ToolInfo{toolInfo},
+		Tools:    []cschema.ToolInfoInterface{toolInfo},
 		Response: resp,
 	}
 

@@ -43,7 +43,7 @@ func (f *fcpFakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMe
 	return nil, nil
 }
 func (f *fcpFakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*schema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	_ []schema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fcpFakeModelContext) Statistic() *iface.ContextStats                       { return nil }
@@ -71,7 +71,7 @@ func (f *fcpFakeTokenCounter) Count(_ string, _ string) (int, error) { return f.
 func (f *fcpFakeTokenCounter) CountMessages(_ []llm_schema.BaseMessage, _ string) (int, error) {
 	return f.count, f.err
 }
-func (f *fcpFakeTokenCounter) CountTools(_ []*schema.ToolInfo, _ string) (int, error) {
+func (f *fcpFakeTokenCounter) CountTools(_ []schema.ToolInfoInterface, _ string) (int, error) {
 	return f.count, f.err
 }
 
@@ -94,7 +94,7 @@ func (d *fcpDynamicTokenCounter) CountMessages(_ []llm_schema.BaseMessage, _ str
 	}
 	return 0, nil
 }
-func (d *fcpDynamicTokenCounter) CountTools(_ []*schema.ToolInfo, _ string) (int, error) {
+func (d *fcpDynamicTokenCounter) CountTools(_ []schema.ToolInfoInterface, _ string) (int, error) {
 	return 0, d.err
 }
 

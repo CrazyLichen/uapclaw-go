@@ -25,6 +25,7 @@ type Ability interface {
 //
 // 不包含 ToolInfo()：McpToolCard.ToolInfo() 返回 *McpToolInfo（非 *ToolInfo），
 // 签名不兼容。ToolInfo 通过具体 Card 类型直接调用获取。
+// 重构后 ToolInfo() 返回 ToolInfoInterface，子类可返回不同的实现类型。
 //
 // 对应 Python: BaseCard 基类（Python 继承天然满足此接口的方法）。
 type CardInterface interface {
@@ -145,7 +146,7 @@ func NewBaseCard(opts ...CardOption) *BaseCard {
 // BaseCard 默认返回 nil，子类（如 ToolCard、AgentCard）应覆写此方法。
 //
 // 对应 Python: BaseCard.tool_info() — Python 中为空实现（...），子类各自覆写
-func (c *BaseCard) ToolInfo() *ToolInfo {
+func (c *BaseCard) ToolInfo() ToolInfoInterface {
 	return nil
 }
 
@@ -183,7 +184,7 @@ func NewWorkflowCard(opts ...CardOption) *WorkflowCard {
 // WorkflowCard 的 InputParams 直接作为 JSON Schema parameters。
 //
 // 对应 Python: WorkflowCard.tool_info()
-func (c *WorkflowCard) ToolInfo() *ToolInfo {
+func (c *WorkflowCard) ToolInfo() ToolInfoInterface {
 	params := c.InputParams
 	if params == nil {
 		params = make(map[string]any)

@@ -34,7 +34,7 @@ func TestNewTeamCard_默认值(t *testing.T) {
 
 // TestNewTeamCard_带选项 验证所有 TeamCardOption（含 BaseCard 字段选项）。
 func TestNewTeamCard_带选项(t *testing.T) {
-	agentCard := agentschema.NewAgentCard(schema.WithName("agent1"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentName("agent1"))
 	cards := []*agentschema.AgentCard{agentCard}
 
 	card := NewTeamCard(
@@ -203,7 +203,7 @@ func TestTeamCard_GetSubscriptions_返回nil(t *testing.T) {
 
 // TestTeamCard_GetAgentCards 验证 GetAgentCards() 返回 AgentCards 字段。
 func TestTeamCard_GetAgentCards(t *testing.T) {
-	agentCard := agentschema.NewAgentCard(schema.WithName("a1"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentName("a1"))
 	card := NewTeamCard(WithAgentCards([]*agentschema.AgentCard{agentCard}))
 	if got := card.GetAgentCards(); len(got) != 1 || got[0].Name != "a1" {
 		t.Errorf("GetAgentCards() = %v, want 1 个 agent a1", got)
@@ -253,19 +253,19 @@ func TestNewEventDrivenTeamCard_默认值(t *testing.T) {
 
 // TestNewEventDrivenTeamCard_带选项 验证所有 EventDrivenTeamCardOption。
 func TestNewEventDrivenTeamCard_带选项(t *testing.T) {
-	agentCard := agentschema.NewAgentCard(schema.WithName("agent1"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentName("agent1"))
 	subs := map[string][]string{
 		"reviewer": {"code_events", "task_updates"},
 		"coder":    {"review_events"},
 	}
 	card := NewEventDrivenTeamCard(
-		WithEDID("team-123"),
-		WithEDName("event-team"),
-		WithEDDescription("事件驱动团队"),
-		WithEDAgentCards([]*agentschema.AgentCard{agentCard}),
-		WithEDTopic("coding"),
-		WithEDTeamVersion("2.0.0"),
-		WithEDTags([]string{"event", "driven"}),
+		WithEventDrivenID("team-123"),
+		WithEventDrivenName("event-team"),
+		WithEventDrivenDescription("事件驱动团队"),
+		WithEventDrivenAgentCards([]*agentschema.AgentCard{agentCard}),
+		WithEventDrivenTopic("coding"),
+		WithEventDrivenTeamVersion("2.0.0"),
+		WithEventDrivenTags([]string{"event", "driven"}),
 		WithSubscriptions(subs),
 	)
 	if card.ID != "team-123" {
@@ -308,7 +308,7 @@ func TestEventDrivenTeamCard_GetSubscriptions(t *testing.T) {
 
 // TestEventDrivenTeamCard_满足CardInterface 验证 *EventDrivenTeamCard 满足 schema.CardInterface。
 func TestEventDrivenTeamCard_满足CardInterface(t *testing.T) {
-	card := NewEventDrivenTeamCard(WithEDID("ed-1"), WithEDName("ed-name"))
+	card := NewEventDrivenTeamCard(WithEventDrivenID("ed-1"), WithEventDrivenName("ed-name"))
 	var iface schema.CardInterface = card
 	if iface.GetID() != "ed-1" {
 		t.Errorf("GetID() = %q, want %q", iface.GetID(), "ed-1")
@@ -322,8 +322,8 @@ func TestEventDrivenTeamCard_满足CardInterface(t *testing.T) {
 func TestEventDrivenTeamCard_String(t *testing.T) {
 	subs := map[string][]string{"a": {"t1"}, "b": {"t2"}}
 	card := NewEventDrivenTeamCard(
-		WithEDName("team1"),
-		WithEDTopic("math"),
+		WithEventDrivenName("team1"),
+		WithEventDrivenTopic("math"),
 		WithSubscriptions(subs),
 	)
 	s := fmt.Sprintf("%v", card)
@@ -342,9 +342,9 @@ func TestEventDrivenTeamCard_String(t *testing.T) {
 func TestEventDrivenTeamCard_JSON序列化(t *testing.T) {
 	subs := map[string][]string{"reviewer": {"code_events"}}
 	card := NewEventDrivenTeamCard(
-		WithEDName("event-team"),
-		WithEDTopic("coding"),
-		WithEDTeamVersion("2.0.0"),
+		WithEventDrivenName("event-team"),
+		WithEventDrivenTopic("coding"),
+		WithEventDrivenTeamVersion("2.0.0"),
 		WithSubscriptions(subs),
 	)
 	data, err := json.Marshal(card)
@@ -385,9 +385,9 @@ func TestEventDrivenTeamCard_JSON序列化_omitempty(t *testing.T) {
 // TestEventDrivenTeamCard_嵌入TeamCard 验证嵌入后 TeamCard 字段可访问。
 func TestEventDrivenTeamCard_嵌入TeamCard(t *testing.T) {
 	card := NewEventDrivenTeamCard(
-		WithEDID("abc123"),
-		WithEDName("n"),
-		WithEDDescription("d"),
+		WithEventDrivenID("abc123"),
+		WithEventDrivenName("n"),
+		WithEventDrivenDescription("d"),
 	)
 	if card.ID != "abc123" {
 		t.Errorf("期望 ID='abc123'，实际 '%s'", card.ID)
@@ -404,8 +404,8 @@ func TestEventDrivenTeamCard_嵌入TeamCard(t *testing.T) {
 func TestTeamCardInterface_EventDrivenTeamCard满足接口(t *testing.T) {
 	subs := map[string][]string{"agent1": {"topic1"}}
 	card := NewEventDrivenTeamCard(
-		WithEDName("ed-team"),
-		WithEDTopic("coding"),
+		WithEventDrivenName("ed-team"),
+		WithEventDrivenTopic("coding"),
 		WithSubscriptions(subs),
 	)
 	var iface TeamCardInterface = card

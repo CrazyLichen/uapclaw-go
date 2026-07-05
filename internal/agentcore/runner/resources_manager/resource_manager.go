@@ -700,13 +700,13 @@ func (m *ResourceMgr) GetMcpTool(ctx context.Context, name, serverID string, opt
 // GetMcpToolInfos 通过工具名和服务器 ID 获取 MCP 工具信息。
 //
 // 对应 Python: ResourceManager.get_mcp_tool_infos(name, server_id, **kwargs)
-func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string, opts ...McpOption) ([]*schema.ToolInfo, error) {
+func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string, opts ...McpOption) ([]schema.ToolInfoInterface, error) {
 	tools, err := m.GetMcpTool(ctx, name, serverID, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*schema.ToolInfo, 0, len(tools))
+	results := make([]schema.ToolInfoInterface, 0, len(tools))
 	for _, t := range tools {
 		if info := t.Card().ToolInfo(); info != nil {
 			results = append(results, info)
@@ -852,18 +852,18 @@ func (m *ResourceMgr) ResourceHasTag(resourceID string, tag Tag) bool {
 //
 // 对应 Python: ResourceManager.get_tool_infos(tool_id, *, tool_type=None, tag=, ...)
 // Python 用 _get_card_type(card) 和 tool_type 列表做过滤，Go 用 getCardType + toolTypes 参数对齐。
-func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ...ResourceOption) ([]*schema.ToolInfo, error) {
-	tools, err := m.GetTool(toolIDs, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]*schema.ToolInfo, 0, len(tools))
-	for _, t := range tools {
-		toolCard := t.Card()
+// 从 idToCard 缓存直接读取 Card，通过匿名接口断言判断是否支持 ToolInfo() 方法，
+// 对齐 Python 的 hasattr(card, "tool_info") 语义。
+func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ...ResourceOption) ([]schema.ToolInfoInterface, error) {
+	results := make([]schema.ToolInfoInterface, 0, len(toolIDs))
+	for _, id := range toolIDs {
+		card := m.idToCard.Get(id)
+		if card == nil {
+			continue
+		}
 		// 按类型过滤（与 Python 对齐）
 		if len(toolTypes) > 0 {
-			cardType := getCardType(toolCard)
+			cardType := getCardType(card)
 			matched := false
 			for _, tt := range toolTypes {
 				if cardType == tt {
@@ -875,8 +875,11 @@ func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ..
 				continue
 			}
 		}
-		if info := toolCard.ToolInfo(); info != nil {
-			results = append(results, info)
+		// 匿名接口断言，对齐 Python hasattr(card, "tool_info")
+		if provider, ok := card.(interface{ ToolInfo() schema.ToolInfoInterface }); ok {
+			if info := provider.ToolInfo(); info != nil {
+				results = append(results, info)
+			}
 		}
 	}
 	return results, nil
@@ -1097,31 +1100,6 @@ func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcp.McpServerConfi
 }
 
 // --- 核心分派方法 ---
-
-// getMgr 根据 resourceType 获取子管理器。
-// 不支持的类型返回 nil。
-//
-// 对应 Python: ResourceManager._get_mgr(resource_type)
-func (m *ResourceMgr) getMgr(resourceType string) any {
-	switch resourceType {
-	case "workflow":
-		return m.registry.Workflow()
-	case "agent":
-		return m.registry.Agent()
-	case "team":
-		return m.registry.AgentTeam()
-	case "tool":
-		return m.registry.Tool()
-	case "prompt":
-		return m.registry.Prompt()
-	case "model":
-		return m.registry.Model()
-	case "sys_operation":
-		return m.registry.SysOperation()
-	default:
-		return nil
-	}
-}
 
 // dispatchAdd 分发到子管理器的 add 方法。
 // resource 为资源实例或 provider，interfaceURL 仅 agent 类型使用。

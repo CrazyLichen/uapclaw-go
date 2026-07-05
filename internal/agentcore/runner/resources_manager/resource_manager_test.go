@@ -83,7 +83,7 @@ func stubWorkflowProvider() WorkflowProvider {
 // TestResourceMgr_AddAgent_正常 测试正常添加 Agent
 func TestResourceMgr_AddAgent_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("测试Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("测试Agent"))
 	err := mgr.AddAgent(card, stubAgentProvider())
 	if err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
@@ -101,7 +101,7 @@ func TestResourceMgr_AddAgent_正常(t *testing.T) {
 // TestResourceMgr_GetAgent_正常 测试正常获取 Agent
 func TestResourceMgr_GetAgent_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("测试Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("测试Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
 	agents, err := mgr.GetAgent(context.Background(), []string{"agent-1"})
@@ -116,7 +116,7 @@ func TestResourceMgr_GetAgent_正常(t *testing.T) {
 // TestResourceMgr_RemoveAgent_正常 测试正常移除 Agent
 func TestResourceMgr_RemoveAgent_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-1"), schema.WithName("测试Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"), agentschema.WithAgentName("测试Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
 	removed, err := mgr.RemoveAgent([]string{"agent-1"})
@@ -261,7 +261,7 @@ func TestResourceMgr_GetTool_正常(t *testing.T) {
 // TestResourceMgr_Tag操作 测试标签添加和查询
 func TestResourceMgr_Tag操作(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-tag-1"), schema.WithName("标签Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-tag-1"), agentschema.WithAgentName("标签Agent"))
 
 	// 带 Tag 添加
 	err := mgr.AddAgent(card, stubAgentProvider(), WithTag("custom-tag"))
@@ -338,7 +338,7 @@ func TestResourceMgr_Tag操作(t *testing.T) {
 // TestResourceMgr_Release 测试资源管理器释放
 func TestResourceMgr_Release(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-rel-1"), schema.WithName("释放Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-rel-1"), agentschema.WithAgentName("释放Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
 	err := mgr.Release(context.Background())
@@ -366,7 +366,7 @@ func TestResourceMgr_Release(t *testing.T) {
 // TestResourceMgr_重复添加报错 测试重复添加同一资源返回错误
 func TestResourceMgr_重复添加报错(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-dup"), schema.WithName("重复Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-dup"), agentschema.WithAgentName("重复Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider())
 
 	// 重复添加应报错
@@ -553,8 +553,8 @@ func TestResourceMgr_验证方法(t *testing.T) {
 // TestResourceMgr_AddAgents_批量 测试批量添加 Agent
 func TestResourceMgr_AddAgents_批量(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card1 := agentschema.NewAgentCard(schema.WithID("batch-agent-1"), schema.WithName("批量Agent1"))
-	card2 := agentschema.NewAgentCard(schema.WithID("batch-agent-2"), schema.WithName("批量Agent2"))
+	card1 := agentschema.NewAgentCard(agentschema.WithAgentID("batch-agent-1"), agentschema.WithAgentName("批量Agent1"))
+	card2 := agentschema.NewAgentCard(agentschema.WithAgentID("batch-agent-2"), agentschema.WithAgentName("批量Agent2"))
 
 	err := mgr.AddAgents([]AgentEntry{
 		{Card: card1, Provider: stubAgentProvider()},
@@ -643,7 +643,7 @@ func TestResourceMgr_RemoveTool_正常(t *testing.T) {
 // TestResourceMgr_Tag增删改 测试标签的添加、删除和修改
 func TestResourceMgr_Tag增删改(t *testing.T) {
 	mgr := newTestResourceMgr()
-	card := agentschema.NewAgentCard(schema.WithID("agent-tag-mgmt"), schema.WithName("标签管理Agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent-tag-mgmt"), agentschema.WithAgentName("标签管理Agent"))
 	_ = mgr.AddAgent(card, stubAgentProvider(), WithTag("tag-a"))
 
 	// AddResourceTag
@@ -675,7 +675,7 @@ func TestResourceMgr_Tag增删改(t *testing.T) {
 
 	// RemoveTag
 	_ = mgr.AddAgent(
-		agentschema.NewAgentCard(schema.WithID("agent-tag-rm"), schema.WithName("标签移除Agent")),
+		agentschema.NewAgentCard(agentschema.WithAgentID("agent-tag-rm"), agentschema.WithAgentName("标签移除Agent")),
 		stubAgentProvider(),
 		WithTag("tag-to-remove"),
 	)
@@ -1309,90 +1309,6 @@ func TestResourceMgr_AddWorkflows_批量(t *testing.T) {
 
 // ──────────────────────────── 核心分派方法测试 ────────────────────────────
 
-// indirectTypeName 返回值的非指针类型名称
-func indirectTypeName(v any) string {
-	return reflect.Indirect(reflect.ValueOf(v)).Type().Name()
-}
-
-// TestGetMgr_各资源类型 测试 getMgr 对各资源类型返回正确的子管理器
-func TestGetMgr_各资源类型(t *testing.T) {
-	mgr := newTestResourceMgr()
-
-	// workflow → WorkflowMgr
-	wm := mgr.getMgr("workflow")
-	if wm == nil {
-		t.Fatal("getMgr(workflow) 不应返回 nil")
-	}
-	if indirectTypeName(wm) != "WorkflowMgr" {
-		t.Fatalf("getMgr(workflow) 期望 WorkflowMgr，实际 %s", indirectTypeName(wm))
-	}
-
-	// agent → AgentMgr
-	am := mgr.getMgr("agent")
-	if am == nil {
-		t.Fatal("getMgr(agent) 不应返回 nil")
-	}
-	if indirectTypeName(am) != "AgentMgr" {
-		t.Fatalf("getMgr(agent) 期望 AgentMgr，实际 %s", indirectTypeName(am))
-	}
-
-	// team → AgentTeamMgr
-	tm := mgr.getMgr("team")
-	if tm == nil {
-		t.Fatal("getMgr(team) 不应返回 nil")
-	}
-	if indirectTypeName(tm) != "AgentTeamMgr" {
-		t.Fatalf("getMgr(team) 期望 AgentTeamMgr，实际 %s", indirectTypeName(tm))
-	}
-
-	// tool → ToolMgr
-	tlm := mgr.getMgr("tool")
-	if tlm == nil {
-		t.Fatal("getMgr(tool) 不应返回 nil")
-	}
-	if indirectTypeName(tlm) != "ToolMgr" {
-		t.Fatalf("getMgr(tool) 期望 ToolMgr，实际 %s", indirectTypeName(tlm))
-	}
-
-	// prompt → PromptMgr
-	pm := mgr.getMgr("prompt")
-	if pm == nil {
-		t.Fatal("getMgr(prompt) 不应返回 nil")
-	}
-	if indirectTypeName(pm) != "PromptMgr" {
-		t.Fatalf("getMgr(prompt) 期望 PromptMgr，实际 %s", indirectTypeName(pm))
-	}
-
-	// model → ModelMgr
-	mm := mgr.getMgr("model")
-	if mm == nil {
-		t.Fatal("getMgr(model) 不应返回 nil")
-	}
-	if indirectTypeName(mm) != "ModelMgr" {
-		t.Fatalf("getMgr(model) 期望 ModelMgr，实际 %s", indirectTypeName(mm))
-	}
-
-	// sys_operation → SysOperationMgr
-	som := mgr.getMgr("sys_operation")
-	if som == nil {
-		t.Fatal("getMgr(sys_operation) 不应返回 nil")
-	}
-	if indirectTypeName(som) != "SysOperationMgr" {
-		t.Fatalf("getMgr(sys_operation) 期望 SysOperationMgr，实际 %s", indirectTypeName(som))
-	}
-}
-
-// TestGetMgr_未知类型返回nil 测试 getMgr 对未知类型返回 nil
-func TestGetMgr_未知类型返回nil(t *testing.T) {
-	mgr := newTestResourceMgr()
-	if mgr.getMgr("unknown") != nil {
-		t.Fatal("getMgr(unknown) 应返回 nil")
-	}
-	if mgr.getMgr("") != nil {
-		t.Fatal("getMgr(空字符串) 应返回 nil")
-	}
-}
-
 // TestDispatchAdd_各资源类型 测试 dispatchAdd 对各资源类型正确分派
 func TestDispatchAdd_各资源类型(t *testing.T) {
 	mgr := newTestResourceMgr()
@@ -1481,7 +1397,7 @@ func TestDispatchRemove_各资源类型(t *testing.T) {
 	ctx := context.Background()
 
 	// 先添加 agent
-	agentCard := agentschema.NewAgentCard(schema.WithID("dr-agent-1"), schema.WithName("移除Agent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("dr-agent-1"), agentschema.WithAgentName("移除Agent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider())
 
 	// dispatchRemove agent
@@ -1549,7 +1465,7 @@ func TestDispatchGet_各资源类型(t *testing.T) {
 	ctx := context.Background()
 
 	// 添加 agent 并获取
-	agentCard := agentschema.NewAgentCard(schema.WithID("dg-agent-1"), schema.WithName("获取Agent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("dg-agent-1"), agentschema.WithAgentName("获取Agent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider())
 	result, err := mgr.dispatchGet(ctx, "agent", "dg-agent-1", nil)
 	if err != nil {
@@ -1618,7 +1534,7 @@ func TestInnerAddResource_正常(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	agentProvider := stubAgentProvider()
-	agentCard := agentschema.NewAgentCard(schema.WithID("iar-agent-1"), schema.WithName("内部添加Agent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("iar-agent-1"), agentschema.WithAgentName("内部添加Agent"))
 	err := mgr.innerAddResource("iar-agent-1", "agent", agentProvider, agentCard, "custom-tag", "")
 	if err != nil {
 		t.Fatalf("innerAddResource 失败: %v", err)
@@ -1640,7 +1556,7 @@ func TestInnerAddResource_重复添加报错(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	agentProvider := stubAgentProvider()
-	agentCard := agentschema.NewAgentCard(schema.WithID("iar-dup-1"), schema.WithName("重复Agent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("iar-dup-1"), agentschema.WithAgentName("重复Agent"))
 	_ = mgr.innerAddResource("iar-dup-1", "agent", agentProvider, agentCard, "", "")
 
 	// 重复添加应报错
@@ -1688,7 +1604,7 @@ func TestInnerRemoveResources_按ID移除(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	// 先添加
-	agentCard := agentschema.NewAgentCard(schema.WithID("irr-agent-1"), schema.WithName("移除Agent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("irr-agent-1"), agentschema.WithAgentName("移除Agent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider())
 
 	// 按 ID 移除
@@ -1711,7 +1627,7 @@ func TestInnerRemoveResources_按Tag移除(t *testing.T) {
 	mgr := newTestResourceMgr()
 
 	// 添加带自定义 tag 的 agent
-	agentCard := agentschema.NewAgentCard(schema.WithID("irr-tag-1"), schema.WithName("TagAgent"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("irr-tag-1"), agentschema.WithAgentName("TagAgent"))
 	_ = mgr.AddAgent(agentCard, stubAgentProvider(), WithTag("rm-tag"))
 
 	// 按 tag 积除（空 ID 列表触发 tag 查找）
@@ -1870,7 +1786,7 @@ func TestInnerValidateResourceCard_Card为nil(t *testing.T) {
 // TestInnerValidateResourceCard_类型匹配 测试 innerValidateResourceCard 类型匹配正常
 func TestInnerValidateResourceCard_类型匹配(t *testing.T) {
 	// innerValidateResourceCard 接收 schema.CardInterface，cardClassType 也用 AgentCard 类型时匹配
-	agentCard := agentschema.NewAgentCard(schema.WithID("test"), schema.WithName("测试"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("test"), agentschema.WithAgentName("测试"))
 	agentCardType := reflect.TypeOf((*agentschema.AgentCard)(nil))
 	err := innerValidateResourceCard(agentCard, "agent", agentCardType)
 	if err != nil {
@@ -1993,7 +1909,7 @@ func TestGetCardType_各种Card类型(t *testing.T) {
 	}
 
 	// AgentCard → "agent"
-	agentCard := agentschema.NewAgentCard(schema.WithID("agent-1"))
+	agentCard := agentschema.NewAgentCard(agentschema.WithAgentID("agent-1"))
 	if got := getCardType(agentCard); got != "agent" {
 		t.Fatalf("getCardType(AgentCard) 期望 agent，实际 %s", got)
 	}
@@ -2011,7 +1927,7 @@ func TestGetCardType_各种Card类型(t *testing.T) {
 	}
 
 	// EventDrivenTeamCard → "team"
-	edTeamCard := maschema.NewEventDrivenTeamCard(maschema.WithEDID("ed-team-1"))
+	edTeamCard := maschema.NewEventDrivenTeamCard(maschema.WithEventDrivenID("ed-team-1"))
 	if got := getCardType(edTeamCard); got != "team" {
 		t.Fatalf("getCardType(EventDrivenTeamCard) 期望 team，实际 %s", got)
 	}

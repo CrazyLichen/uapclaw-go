@@ -242,40 +242,40 @@ func NewEventDrivenTeamCard(opts ...EventDrivenTeamCardOption) *EventDrivenTeamC
 
 // ── BaseCard 层选项 ──
 
-// WithEDID 设置唯一标识符。
-func WithEDID(id string) EventDrivenTeamCardOption {
+// WithEventDrivenID 设置唯一标识符。
+func WithEventDrivenID(id string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.ID = id }
 }
 
-// WithEDName 设置名称。
-func WithEDName(name string) EventDrivenTeamCardOption {
+// WithEventDrivenName 设置名称。
+func WithEventDrivenName(name string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.Name = name }
 }
 
-// WithEDDescription 设置描述信息。
-func WithEDDescription(desc string) EventDrivenTeamCardOption {
+// WithEventDrivenDescription 设置描述信息。
+func WithEventDrivenDescription(desc string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.Description = desc }
 }
 
 // ── TeamCard 层选项 ──
 
-// WithEDAgentCards 设置成员 Agent 卡片列表。
-func WithEDAgentCards(cards []*agentschema.AgentCard) EventDrivenTeamCardOption {
+// WithEventDrivenAgentCards 设置成员 Agent 卡片列表。
+func WithEventDrivenAgentCards(cards []*agentschema.AgentCard) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.AgentCards = cards }
 }
 
-// WithEDTopic 设置团队主题。
-func WithEDTopic(topic string) EventDrivenTeamCardOption {
+// WithEventDrivenTopic 设置团队主题。
+func WithEventDrivenTopic(topic string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.Topic = topic }
 }
 
-// WithEDTeamVersion 设置团队版本号。
-func WithEDTeamVersion(version string) EventDrivenTeamCardOption {
+// WithEventDrivenTeamVersion 设置团队版本号。
+func WithEventDrivenTeamVersion(version string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.Version = version }
 }
 
-// WithEDTags 设置分类标签。
-func WithEDTags(tags []string) EventDrivenTeamCardOption {
+// WithEventDrivenTags 设置分类标签。
+func WithEventDrivenTags(tags []string) EventDrivenTeamCardOption {
 	return func(c *EventDrivenTeamCard) { c.Tags = tags }
 }
 

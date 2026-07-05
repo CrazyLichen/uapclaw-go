@@ -84,7 +84,7 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 }
 
 // getTools 获取工具列表。
-func (a *ReActAgent) getTools() ([]*cschema.ToolInfo, error) {
+func (a *ReActAgent) getTools() ([]cschema.ToolInfoInterface, error) {
 	am := a.getAbilityManager()
 	if am == nil {
 		return nil, nil

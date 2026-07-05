@@ -2,16 +2,22 @@ package schema
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ToolInfoProvider 工具信息提供者接口，供 LLM 层统一消费。
+// ToolInfoInterface 工具信息接口，供 LLM 层统一消费。
 //
 // ToolInfo 和 McpToolInfo 均实现此接口。
 // LLM 层（ConvertToolsToDict / InvokeParams.Tools）只依赖此接口，
 // 不关心具体是本地工具还是 MCP 工具。
 //
 // 对应 Python: _convert_tools_to_dict() 中统一处理 ToolInfo / McpToolInfo 的逻辑
-type ToolInfoProvider interface {
-	// GetToolInfo 返回基础工具描述信息（传给 LLM 的公共字段）
-	GetToolInfo() *ToolInfo
+type ToolInfoInterface interface {
+	// GetType 返回类型标识，默认 "function"
+	GetType() string
+	// GetName 返回工具名称
+	GetName() string
+	// GetDescription 返回工具功能描述
+	GetDescription() string
+	// GetParameters 返回参数定义，对应 JSON Schema 的 parameters 字段
+	GetParameters() map[string]any
 }
 
 // ToolInfo 工具描述信息，供 LLM function calling 消费。
@@ -44,11 +50,17 @@ type McpToolInfo struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GetToolInfo 实现 ToolInfoProvider 接口，返回自身。
-func (t *ToolInfo) GetToolInfo() *ToolInfo { return t }
+// GetType 实现 ToolInfoInterface 接口，返回类型标识。
+func (t *ToolInfo) GetType() string { return t.Type }
 
-// GetToolInfo 实现 ToolInfoProvider 接口，返回内嵌的 ToolInfo。
-func (m *McpToolInfo) GetToolInfo() *ToolInfo { return &m.ToolInfo }
+// GetName 实现 ToolInfoInterface 接口，返回工具名称。
+func (t *ToolInfo) GetName() string { return t.Name }
+
+// GetDescription 实现 ToolInfoInterface 接口，返回工具功能描述。
+func (t *ToolInfo) GetDescription() string { return t.Description }
+
+// GetParameters 实现 ToolInfoInterface 接口，返回参数定义。
+func (t *ToolInfo) GetParameters() map[string]any { return t.Parameters }
 
 // NewToolInfo 创建 ToolInfo 实例，Type 默认为 "function"。
 func NewToolInfo(name, description string, parameters map[string]any) *ToolInfo {

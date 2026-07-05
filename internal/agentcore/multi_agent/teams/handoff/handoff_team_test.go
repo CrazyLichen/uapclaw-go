@@ -125,8 +125,8 @@ func TestHandoffTeam_AddAgent(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
@@ -159,8 +159,8 @@ func TestHandoffTeam_AddAgent_重复注册(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
@@ -196,8 +196,8 @@ func TestHandoffTeam_GetAgentCount(t *testing.T) {
 	}
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -217,12 +217,12 @@ func TestHandoffTeam_ListAgents(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	agentCard2 := agentschema.NewAgentCard(
-		schema.WithID("agent2"),
-		schema.WithName("Agent2"),
+		agentschema.WithAgentID("agent2"),
+		agentschema.WithAgentName("Agent2"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -257,8 +257,8 @@ func TestHandoffTeam_RemoveAgent(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -286,15 +286,15 @@ func TestHandoffTeam_RemoveAgent(t *testing.T) {
 // TestHandoffTeam_getStartAgentID_配置了StartAgent 测试 getStartAgentID 配置了起始 Agent
 func TestHandoffTeam_getStartAgentID_配置了StartAgent(t *testing.T) {
 	startAgent := agentschema.NewAgentCard(
-		schema.WithID("start_agent"),
-		schema.WithName("起始Agent"),
+		agentschema.WithAgentID("start_agent"),
+		agentschema.WithAgentName("起始Agent"),
 	)
 
 	card := maschema.NewTeamCard(
 		maschema.WithTeamCardID("team1"),
 		maschema.WithAgentCards([]*agentschema.AgentCard{
-			agentschema.NewAgentCard(schema.WithID("agent1"), schema.WithName("Agent1")),
-			agentschema.NewAgentCard(schema.WithID("agent2"), schema.WithName("Agent2")),
+			agentschema.NewAgentCard(agentschema.WithAgentID("agent1"), agentschema.WithAgentName("Agent1")),
+			agentschema.NewAgentCard(agentschema.WithAgentID("agent2"), agentschema.WithAgentName("Agent2")),
 		}),
 	)
 
@@ -311,12 +311,12 @@ func TestHandoffTeam_getStartAgentID_配置了StartAgent(t *testing.T) {
 // TestHandoffTeam_getStartAgentID_未配置StartAgent 测试 getStartAgentID 未配置起始 Agent
 func TestHandoffTeam_getStartAgentID_未配置StartAgent(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	agent2 := agentschema.NewAgentCard(
-		schema.WithID("agent2"),
-		schema.WithName("Agent2"),
+		agentschema.WithAgentID("agent2"),
+		agentschema.WithAgentName("Agent2"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -401,8 +401,8 @@ func TestHandoffTeam_GetAgentCard(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -472,8 +472,8 @@ func TestHandoffTeam_makeContainerProvider(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -506,12 +506,12 @@ func TestHandoffTeam_makeContainerProvider(t *testing.T) {
 // TestHandoffTeam_ensureInternalAgents 测试 ensureInternalAgents 双检锁
 func TestHandoffTeam_ensureInternalAgents(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	agent2 := agentschema.NewAgentCard(
-		schema.WithID("agent2"),
-		schema.WithName("Agent2"),
+		agentschema.WithAgentID("agent2"),
+		agentschema.WithAgentName("Agent2"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -557,8 +557,8 @@ func TestHandoffTeam_ensureInternalAgents(t *testing.T) {
 // TestHandoffTeam_ensureInternalAgents_并发 测试 ensureInternalAgents 并发安全
 func TestHandoffTeam_ensureInternalAgents_并发(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -625,8 +625,8 @@ func TestHandoffTeam_Send(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -647,8 +647,8 @@ func TestHandoffTeam_Publish(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -667,8 +667,8 @@ func TestHandoffTeam_Subscribe(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -687,8 +687,8 @@ func TestHandoffTeam_Unsubscribe(t *testing.T) {
 	team := NewHandoffTeam(card, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -725,8 +725,8 @@ func TestHandoffTeam_AddAgent_注册失败(t *testing.T) {
 	team := NewHandoffTeam(card, nil, rt)
 
 	agentCard := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 	provider := func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, nil
@@ -744,8 +744,8 @@ func TestHandoffTeam_AddAgent_注册失败(t *testing.T) {
 // TestHandoffTeam_ensureInternalAgents_获取AgentCard失败 测试确保内部 Agent 时获取卡片失败
 func TestHandoffTeam_ensureInternalAgents_获取AgentCard失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -765,8 +765,8 @@ func TestHandoffTeam_ensureInternalAgents_获取AgentCard失败(t *testing.T) {
 // TestHandoffTeam_Invoke_创建新Session 测试 Invoke 无 session 时创建新 session
 func TestHandoffTeam_Invoke_创建新Session(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -798,8 +798,8 @@ func TestHandoffTeam_Invoke_创建新Session(t *testing.T) {
 // TestHandoffTeam_Invoke_带Session 测试 Invoke 带 session
 func TestHandoffTeam_Invoke_带Session(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -831,8 +831,8 @@ func TestHandoffTeam_Invoke_带Session(t *testing.T) {
 // TestHandoffTeam_Invoke_PreRun失败 测试 Invoke 时 PreRun 失败
 func TestHandoffTeam_Invoke_PreRun失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -859,8 +859,8 @@ func TestHandoffTeam_Invoke_PreRun失败(t *testing.T) {
 // TestHandoffTeam_Stream_Invoke失败 测试 Stream 在 Invoke 失败时返回错误
 func TestHandoffTeam_Stream_Invoke失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -889,8 +889,8 @@ func TestHandoffTeam_Stream_Invoke失败(t *testing.T) {
 // TestHandoffTeam_runChain_ensureInternalAgents失败 测试 runChain 内部 Agent 初始化失败
 func TestHandoffTeam_runChain_ensureInternalAgents失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -911,8 +911,8 @@ func TestHandoffTeam_runChain_ensureInternalAgents失败(t *testing.T) {
 // TestHandoffTeam_runChain_上下文取消 测试 runChain 上下文取消时返回错误
 func TestHandoffTeam_runChain_上下文取消(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(
@@ -944,8 +944,8 @@ func TestHandoffTeam_runChain_上下文取消(t *testing.T) {
 // TestHandoffTeam_runChain_发布失败 测试 runChain 发布交接请求失败
 func TestHandoffTeam_runChain_发布失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
-		schema.WithID("agent1"),
-		schema.WithName("Agent1"),
+		agentschema.WithAgentID("agent1"),
+		agentschema.WithAgentName("Agent1"),
 	)
 
 	card := maschema.NewTeamCard(

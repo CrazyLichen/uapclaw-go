@@ -50,7 +50,7 @@ func TestTagUpdateStrategy_值(t *testing.T) {
 
 // TestAgentProvider_调用 测试 AgentProvider 函数类型可调用
 func TestAgentProvider_调用(t *testing.T) {
-	card := agentschema.NewAgentCard(schema.WithName("test"), schema.WithDescription("测试"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentName("test"), agentschema.WithAgentDescription("测试"))
 	provider := AgentProvider(func(_ context.Context, _ *agentschema.AgentCard) (interfaces.BaseAgent, error) {
 		return nil, nil
 	})
@@ -109,7 +109,7 @@ func TestModelEntry_字段(t *testing.T) {
 
 // TestAgentEntry_字段 测试 AgentEntry 结构体字段
 func TestAgentEntry_字段(t *testing.T) {
-	entry := AgentEntry{Card: agentschema.NewAgentCard(schema.WithName("test"))}
+	entry := AgentEntry{Card: agentschema.NewAgentCard(agentschema.WithAgentName("test"))}
 	if entry.Card == nil {
 		t.Error("AgentEntry.Card 不应为 nil")
 	}

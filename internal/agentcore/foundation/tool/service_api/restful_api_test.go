@@ -151,11 +151,11 @@ func TestRestfulApiCard_ToolInfo(t *testing.T) {
 	card, _ := NewRestfulApiCard("test-api", "测试API", "https://api.example.com/users/{id}", "PUT", inputSchema)
 
 	info := card.ToolInfo()
-	if info.Name != "test-api" {
-		t.Errorf("Name: 期望 test-api，实际 %s", info.Name)
+	if info.GetName() != "test-api" {
+		t.Errorf("Name: 期望 test-api，实际 %s", info.GetName())
 	}
 	// 验证 Parameters 是同一个 InputSchema 引用
-	if info.Parameters == nil {
+	if info.GetParameters() == nil {
 		t.Error("Parameters 不应为 nil")
 	}
 }

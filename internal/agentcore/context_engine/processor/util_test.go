@@ -811,7 +811,7 @@ func (e *errorTokenCounter) Count(_ string, _ string) (int, error) { return 0, a
 func (e *errorTokenCounter) CountMessages(_ []llm_schema.BaseMessage, _ string) (int, error) {
 	return 0, assert.AnError
 }
-func (e *errorTokenCounter) CountTools(_ []*common_schema.ToolInfo, _ string) (int, error) {
+func (e *errorTokenCounter) CountTools(_ []common_schema.ToolInfoInterface, _ string) (int, error) {
 	return 0, assert.AnError
 }
 
@@ -824,6 +824,6 @@ func (f *fakeTokenCounter) Count(_ string, _ string) (int, error) { return f.cou
 func (f *fakeTokenCounter) CountMessages(_ []llm_schema.BaseMessage, _ string) (int, error) {
 	return f.count, nil
 }
-func (f *fakeTokenCounter) CountTools(_ []*common_schema.ToolInfo, _ string) (int, error) {
+func (f *fakeTokenCounter) CountTools(_ []common_schema.ToolInfoInterface, _ string) (int, error) {
 	return f.count, nil
 }

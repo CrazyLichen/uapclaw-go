@@ -159,7 +159,7 @@ func TestCountMessages_空列表(t *testing.T) {
 func TestCountTools_多个工具(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
 
-	tools := []*schema.ToolInfo{
+	tools := []schema.ToolInfoInterface{
 		schema.NewToolInfo("search", "Search the web", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -188,7 +188,7 @@ func TestCountTools_空列表(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
 
-	count, err = tc.CountTools([]*schema.ToolInfo{}, "gpt-4")
+	count, err = tc.CountTools([]schema.ToolInfoInterface{}, "gpt-4")
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
@@ -197,7 +197,7 @@ func TestCountTools_空列表(t *testing.T) {
 func TestCountTools_Parameters为空(t *testing.T) {
 	tc := NewTiktokenCounter("gpt-4")
 
-	tools := []*schema.ToolInfo{
+	tools := []schema.ToolInfoInterface{
 		schema.NewToolInfo("simple_tool", "A simple tool", nil),
 	}
 
@@ -376,7 +376,7 @@ func TestFallbackCount_CountTools(t *testing.T) {
 		enc:   nil,
 	}
 
-	tools := []*schema.ToolInfo{
+	tools := []schema.ToolInfoInterface{
 		schema.NewToolInfo("search", "Search the web", nil),
 	}
 	count, err := tc.CountTools(tools, "")
@@ -453,7 +453,7 @@ func TestCountTools_编码失败时降级(t *testing.T) {
 		enc:   errorCodec{},
 	}
 
-	tools := []*schema.ToolInfo{
+	tools := []schema.ToolInfoInterface{
 		schema.NewToolInfo("search", "Search the web", nil),
 	}
 	count, err := tc.CountTools(tools, "")

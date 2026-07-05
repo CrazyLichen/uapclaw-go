@@ -8,7 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -94,13 +93,8 @@ func (m *KVCacheManager) Release(ctx context.Context, contextWindow *iface.Conte
 
 	// 工具释放
 	if toolIdx >= 0 {
-		// 将 []*schema.ToolInfo 转换为 []commonschema.ToolInfoProvider
 		tools := contextWindow.GetTools()
-		toolProviders := make([]commonschema.ToolInfoProvider, len(tools))
-		for i, t := range tools {
-			toolProviders[i] = t
-		}
-		releaseOpts = append(releaseOpts, model_clients.WithReleaseTools(toolProviders...))
+		releaseOpts = append(releaseOpts, model_clients.WithReleaseTools(tools...))
 		releaseOpts = append(releaseOpts, model_clients.WithReleaseToolsIndex(toolIdx))
 	}
 
@@ -182,7 +176,7 @@ func (m *KVCacheManager) checkReleaseNeeded(contextWindow *iface.ContextWindow) 
 	}
 
 	for i := 0; i < minToolLen; i++ {
-		if lastTools[i].Name != currentTools[i].Name {
+		if lastTools[i].GetName() != currentTools[i].GetName() {
 			toolIdx = i
 			break
 		}

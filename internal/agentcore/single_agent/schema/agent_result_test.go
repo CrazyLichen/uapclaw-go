@@ -298,7 +298,7 @@ func mergeMetadata(base, update map[string]any) map[string]any {
 
 // TestAgentCard_NewAgentCard_在新包中 验证 AgentCard 在 single_agent/schema/ 包中可用。
 func TestAgentCard_NewAgentCard_在新包中(t *testing.T) {
-	card := NewAgentCard(schema.WithName("test_agent"))
+	card := NewAgentCard(agentschema.WithAgentName("test_agent"))
 	if card.Name != "test_agent" {
 		t.Errorf("Name 期望 %q，实际 %q", "test_agent", card.Name)
 	}

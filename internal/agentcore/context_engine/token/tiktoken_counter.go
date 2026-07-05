@@ -180,24 +180,24 @@ func (tc *TiktokenCounter) CountMessages(messages []llm_schema.BaseMessage, mode
 // 内部调用 Count，若编码器不可用则返回 (0, error)。
 //
 // 对应 Python: TiktokenCounter.count_tools(tools, model="")
-func (tc *TiktokenCounter) CountTools(tools []*common_schema.ToolInfo, model string) (int, error) {
+func (tc *TiktokenCounter) CountTools(tools []common_schema.ToolInfoInterface, model string) (int, error) {
 	if len(tools) == 0 {
 		return 0, nil
 	}
 	total := 0
 	for idx, tool := range tools {
 		functionObj := map[string]any{
-			"name":        tool.Name,
-			"description": tool.Description,
-			"parameters":  tool.Parameters,
+			"name":        tool.GetName(),
+			"description": tool.GetDescription(),
+			"parameters":  tool.GetParameters(),
 		}
 		jsonStr, err := json.Marshal(functionObj)
 		if err != nil {
 			// JSON 序列化失败，使用字段拼接作为降级
-			jsonStr = []byte(tool.Name + tool.Description)
+			jsonStr = []byte(tool.GetName() + tool.GetDescription())
 		}
 		// 格式: <|start|>functions.{name}:{idx}\n{json}<|end|>
-		piece := fmt.Sprintf("<|start|>functions.%s:%d\n%s<|end|>", tool.Name, idx, string(jsonStr))
+		piece := fmt.Sprintf("<|start|>functions.%s:%d\n%s<|end|>", tool.GetName(), idx, string(jsonStr))
 		count, countErr := tc.Count(piece, model)
 		if countErr != nil {
 			return 0, fmt.Errorf("计算工具 token 失败: %w", countErr)

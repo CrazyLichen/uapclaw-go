@@ -185,7 +185,7 @@ func NewMcpToolCard(name, description, serverName string, inputParams []*schema.
 // 也可根据 tool_call.Name 在注册表中查找 Tool 实例。
 //
 // 对应 Python: McpToolCard.tool_info() -> McpToolInfo
-func (c *McpToolCard) ToolInfo() *schema.McpToolInfo {
+func (c *McpToolCard) ToolInfo() schema.ToolInfoInterface {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewMcpToolInfo(c.Name, c.Description, c.ServerName, parameters)
 }

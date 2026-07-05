@@ -29,8 +29,8 @@ func TestHierarchicalToolsTeamConfig_自定义值(t *testing.T) {
 // TestHierarchicalToolsTeamConfig_设置RootAgent 验证设置 RootAgent。
 func TestHierarchicalToolsTeamConfig_设置RootAgent(t *testing.T) {
 	rootCard := agentschema.NewAgentCard(
-		cschema.WithName("root"),
-		cschema.WithID("root_id"),
+		cagentschema.WithAgentName("root"),
+		cagentschema.WithAgentID("root_id"),
 	)
 	cfg := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,

@@ -270,11 +270,11 @@ func (am *AbilityManager) ReorderTools(orderedNames []string) {
 
 // ListToolInfo 获取 ToolInfo 列表供 LLM function calling 消费。
 // names 非空时只返回指定名称的工具；为空时返回全部。
-func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]*schema.ToolInfo, error) {
+func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpServerName ...string) ([]schema.ToolInfoInterface, error) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
-	var toolInfos []*schema.ToolInfo
+	var toolInfos []schema.ToolInfoInterface
 
 	// 1. ToolCards → ToolInfo
 	items := make([]toolItem, 0, len(am.tools))
@@ -300,7 +300,9 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 		if am.isToolInMcpServer(item.card.ID) {
 			continue
 		}
-		toolInfos = append(toolInfos, item.card.ToolInfo())
+		if info := item.card.ToolInfo(); info != nil {
+			toolInfos = append(toolInfos, info)
+		}
 	}
 
 	// 2. WorkflowCards → ToolInfo
@@ -317,7 +319,9 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 				continue
 			}
 		}
-		toolInfos = append(toolInfos, wf.ToolInfo())
+		if info := wf.ToolInfo(); info != nil {
+			toolInfos = append(toolInfos, info)
+		}
 	}
 
 	// 3. AgentCards → ToolInfo
@@ -334,7 +338,9 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 				continue
 			}
 		}
-		toolInfos = append(toolInfos, ag.ToolInfo())
+		if info := ag.ToolInfo(); info != nil {
+			toolInfos = append(toolInfos, info)
+		}
 	}
 
 	// 4. MCP 懒加载：⤵️ 预留，等 ResourceManager 实现后回填

@@ -177,14 +177,17 @@ func TestMcpToolCard_ToolInfo(t *testing.T) {
 	if info == nil {
 		t.Fatal("ToolInfo 不应为 nil")
 	}
-	if info.Name != "tool1" {
-		t.Errorf("Name = %q, want %q", info.Name, "tool1")
+	if info.GetName() != "tool1" {
+		t.Errorf("Name = %q, want %q", info.GetName(), "tool1")
 	}
-	if info.ServerName != "my-server" {
-		t.Errorf("ServerName = %q, want %q", info.ServerName, "my-server")
+	// McpToolInfo 特有字段通过类型断言获取
+	if mcpInfo, ok := info.(*schema.McpToolInfo); ok {
+		if mcpInfo.ServerName != "my-server" {
+			t.Errorf("ServerName = %q, want %q", mcpInfo.ServerName, "my-server")
+		}
 	}
-	if info.Type != "function" {
-		t.Errorf("Type = %q, want %q", info.Type, "function")
+	if info.GetType() != "function" {
+		t.Errorf("Type = %q, want %q", info.GetType(), "function")
 	}
 }
 
@@ -197,10 +200,10 @@ func TestMcpToolCard_ToolInfo_带参数(t *testing.T) {
 	card := NewMcpToolCard("search", "搜索", "search-srv", params)
 	info := card.ToolInfo()
 
-	if info.Parameters == nil {
+	if info.GetParameters() == nil {
 		t.Fatal("Parameters 不应为 nil")
 	}
-	props, ok := info.Parameters["properties"].(map[string]any)
+	props, ok := info.GetParameters()["properties"].(map[string]any)
 	if !ok {
 		t.Fatal("Properties 类型断言失败")
 	}

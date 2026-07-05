@@ -533,7 +533,7 @@ func (f *fakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessa
 	return nil, nil
 }
 func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
-	_ []*commonschema.ToolInfo, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
+	_ []commonschema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
 func (f *fakeModelContext) Statistic() *iface.ContextStats                       { return nil }
@@ -558,6 +558,6 @@ func (f *fakeModelContext) Count(text string, model string) (int, error) {
 func (f *fakeModelContext) CountMessages(messages []llm_schema.BaseMessage, model string) (int, error) {
 	return f.tokenCount, f.tokenErr
 }
-func (f *fakeModelContext) CountTools(tools []*commonschema.ToolInfo, model string) (int, error) {
+func (f *fakeModelContext) CountTools(tools []commonschema.ToolInfoInterface, model string) (int, error) {
 	return 0, nil
 }

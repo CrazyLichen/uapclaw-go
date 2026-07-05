@@ -229,7 +229,7 @@ func TestConvertToolsToDict_Nil(t *testing.T) {
 // TestConvertToolsToDict_空 测试空工具列表。
 func TestConvertToolsToDict_空(t *testing.T) {
 	e := newTestClientEmbed()
-	result := e.ConvertToolsToDict([]commonschema.ToolInfoProvider{})
+	result := e.ConvertToolsToDict([]commonschema.ToolInfoInterface{})
 	if result != nil {
 		t.Error("空工具列表应返回 nil")
 	}
@@ -238,7 +238,7 @@ func TestConvertToolsToDict_空(t *testing.T) {
 // TestConvertToolsToDict_ToolInfo 测试 ToolInfo 列表转换。
 func TestConvertToolsToDict_ToolInfo(t *testing.T) {
 	e := newTestClientEmbed()
-	tools := []commonschema.ToolInfoProvider{
+	tools := []commonschema.ToolInfoInterface{
 		commonschema.NewToolInfo("get_weather", "获取天气", map[string]any{
 			"type": "object",
 			"properties": map[string]any{

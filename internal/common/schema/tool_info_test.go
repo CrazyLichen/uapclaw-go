@@ -35,19 +35,27 @@ func TestNewToolInfo_nil参数(t *testing.T) {
 	}
 }
 
-// TestToolInfo_GetToolInfo 验证 ToolInfo 实现 ToolInfoProvider 接口
-func TestToolInfo_GetToolInfo(t *testing.T) {
-	info := NewToolInfo("tool", "desc", nil)
-	returned := info.GetToolInfo()
-	if returned != info {
-		t.Error("GetToolInfo 应返回自身")
+// TestToolInfo_Getter方法 验证 ToolInfo 的 ToolInfoInterface getter 方法
+func TestToolInfo_Getter方法(t *testing.T) {
+	info := NewToolInfo("tool", "描述", map[string]any{"type": "object"})
+	if info.GetType() != "function" {
+		t.Errorf("GetType() = %q, want function", info.GetType())
+	}
+	if info.GetName() != "tool" {
+		t.Errorf("GetName() = %q, want tool", info.GetName())
+	}
+	if info.GetDescription() != "描述" {
+		t.Errorf("GetDescription() = %q, want 描述", info.GetDescription())
+	}
+	if info.GetParameters()["type"] != "object" {
+		t.Errorf("GetParameters()[type] = %v, want object", info.GetParameters()["type"])
 	}
 }
 
-// TestToolInfo_ToolInfoProvider接口 验证 ToolInfo 满足 ToolInfoProvider 接口
-func TestToolInfo_ToolInfoProvider接口(t *testing.T) {
-	var _ ToolInfoProvider = &ToolInfo{}
-	var _ ToolInfoProvider = NewToolInfo("tool", "desc", nil)
+// TestToolInfo_ToolInfoInterface接口 验证 ToolInfo 满足 ToolInfoInterface 接口
+func TestToolInfo_ToolInfoInterface接口(t *testing.T) {
+	var _ ToolInfoInterface = &ToolInfo{}
+	var _ ToolInfoInterface = NewToolInfo("tool", "desc", nil)
 }
 
 // TestNewMcpToolInfo_基本创建 验证 NewMcpToolInfo 创建实例及字段赋值
@@ -82,22 +90,27 @@ func TestNewMcpToolInfo_nil参数(t *testing.T) {
 	}
 }
 
-// TestMcpToolInfo_GetToolInfo 验证 McpToolInfo.GetToolInfo 返回内嵌的 ToolInfo
-func TestMcpToolInfo_GetToolInfo(t *testing.T) {
-	info := NewMcpToolInfo("tool", "desc", "srv", nil)
-	returned := info.GetToolInfo()
-	if returned != &info.ToolInfo {
-		t.Error("GetToolInfo 应返回内嵌的 ToolInfo 指针")
+// TestMcpToolInfo_Getter方法 验证 McpToolInfo 通过嵌入 ToolInfo 自动满足 ToolInfoInterface
+func TestMcpToolInfo_Getter方法(t *testing.T) {
+	info := NewMcpToolInfo("tool", "描述", "srv", map[string]any{"type": "object"})
+	if info.GetType() != "function" {
+		t.Errorf("GetType() = %q, want function", info.GetType())
 	}
-	if returned.Name != "tool" {
-		t.Errorf("Name = %q, want %q", returned.Name, "tool")
+	if info.GetName() != "tool" {
+		t.Errorf("GetName() = %q, want tool", info.GetName())
+	}
+	if info.GetDescription() != "描述" {
+		t.Errorf("GetDescription() = %q, want 描述", info.GetDescription())
+	}
+	if info.GetParameters()["type"] != "object" {
+		t.Errorf("GetParameters()[type] = %v, want object", info.GetParameters()["type"])
 	}
 }
 
-// TestMcpToolInfo_ToolInfoProvider接口 验证 McpToolInfo 满足 ToolInfoProvider 接口
-func TestMcpToolInfo_ToolInfoProvider接口(t *testing.T) {
-	var _ ToolInfoProvider = &McpToolInfo{}
-	var _ ToolInfoProvider = NewMcpToolInfo("tool", "desc", "srv", nil)
+// TestMcpToolInfo_ToolInfoInterface接口 验证 McpToolInfo 满足 ToolInfoInterface 接口
+func TestMcpToolInfo_ToolInfoInterface接口(t *testing.T) {
+	var _ ToolInfoInterface = &McpToolInfo{}
+	var _ ToolInfoInterface = NewMcpToolInfo("tool", "desc", "srv", nil)
 }
 
 // TestToolInfo_JSON序列化 验证 ToolInfo JSON 序列化输出

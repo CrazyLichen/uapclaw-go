@@ -77,15 +77,15 @@ func TestContextWindow_GetTools_有工具(t *testing.T) {
 	}
 
 	w := &iface.ContextWindow{
-		Tools: []*schema.ToolInfo{toolInfo},
+		Tools: []schema.ToolInfoInterface{toolInfo},
 	}
 
 	tools := w.GetTools()
 	if len(tools) != 1 {
 		t.Fatalf("应返回 1 个工具，实际 %d", len(tools))
 	}
-	if tools[0].Name != "test_tool" {
-		t.Errorf("工具名称应为 test_tool，实际 %s", tools[0].Name)
+	if tools[0].GetName() != "test_tool" {
+		t.Errorf("工具名称应为 test_tool，实际 %s", tools[0].GetName())
 	}
 }
 

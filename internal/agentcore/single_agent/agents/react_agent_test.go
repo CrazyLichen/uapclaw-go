@@ -50,8 +50,8 @@ type fakeSessionFacade struct {
 // newTestAgent 创建测试用 ReActAgent
 func newTestAgent(name string) *ReActAgent {
 	card := agentschema.NewAgentCard(
-		cschema.WithName(name),
-		cschema.WithDescription("测试"),
+		cagentschema.WithAgentName(name),
+		cagentschema.WithAgentDescription("测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -65,8 +65,8 @@ func newTestAgent(name string) *ReActAgent {
 // TestNewReActAgent 验证 ReActAgent 构造函数
 func TestNewReActAgent(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("test_react"),
-		cschema.WithDescription("测试 ReActAgent"),
+		cagentschema.WithAgentName("test_react"),
+		cagentschema.WithAgentDescription("测试 ReActAgent"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -82,8 +82,8 @@ func TestNewReActAgent(t *testing.T) {
 // TestNewReActAgent_nilConfig 验证 ReActAgent 接受 nil config
 func TestNewReActAgent_nilConfig(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("nil_cfg_react"),
-		cschema.WithDescription("nil 配置 ReActAgent"),
+		cagentschema.WithAgentName("nil_cfg_react"),
+		cagentschema.WithAgentDescription("nil 配置 ReActAgent"),
 	)
 	agent := NewReActAgent(card, nil)
 	assert.NotNil(t, agent)
@@ -93,8 +93,8 @@ func TestNewReActAgent_nilConfig(t *testing.T) {
 // TestReActAgent_InvokeImpl_空输入 验证无 query 时不 panic
 func TestReActAgent_InvokeImpl_空输入(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("test_react"),
-		cschema.WithDescription("测试 ReActAgent"),
+		cagentschema.WithAgentName("test_react"),
+		cagentschema.WithAgentDescription("测试 ReActAgent"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -109,8 +109,8 @@ func TestReActAgent_InvokeImpl_空输入(t *testing.T) {
 // TestReActAgent_InvokeImpl_空query 验证空 query 返回错误
 func TestReActAgent_InvokeImpl_空query(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("test_react"),
-		cschema.WithDescription("测试 ReActAgent"),
+		cagentschema.WithAgentName("test_react"),
+		cagentschema.WithAgentDescription("测试 ReActAgent"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -126,8 +126,8 @@ func TestReActAgent_InvokeImpl_空query(t *testing.T) {
 // TestReActAgent_InvokeImpl_上下文取消 验证 context.Canceled 时清除上下文
 func TestReActAgent_InvokeImpl_上下文取消(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("test_react"),
-		cschema.WithDescription("测试 ReActAgent"),
+		cagentschema.WithAgentName("test_react"),
+		cagentschema.WithAgentDescription("测试 ReActAgent"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -145,8 +145,8 @@ func TestReActAgent_InvokeImpl_上下文取消(t *testing.T) {
 // TestReActAgent_InvokeImpl_带Session 验证 InvokeImpl 使用已有 session
 func TestReActAgent_InvokeImpl_带Session(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_sess"),
-		cschema.WithDescription("Invoke 带 Session 测试"),
+		cagentschema.WithAgentName("invoke_sess"),
+		cagentschema.WithAgentDescription("Invoke 带 Session 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -162,8 +162,8 @@ func TestReActAgent_InvokeImpl_带Session(t *testing.T) {
 // TestReActAgent_InvokeImpl_boolStreaming 验证 _streaming 布尔值处理
 func TestReActAgent_InvokeImpl_boolStreaming(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_bool"),
-		cschema.WithDescription("Invoke bool 测试"),
+		cagentschema.WithAgentName("invoke_bool"),
+		cagentschema.WithAgentDescription("Invoke bool 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -181,8 +181,8 @@ func TestReActAgent_InvokeImpl_boolStreaming(t *testing.T) {
 // TestReActAgent_AgentID 验证 AgentID 返回正确值
 func TestReActAgent_AgentID(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("id_test"),
-		cschema.WithDescription("ID 测试"),
+		cagentschema.WithAgentName("id_test"),
+		cagentschema.WithAgentDescription("ID 测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	assert.Equal(t, card.ID, agent.AgentID())
@@ -191,8 +191,8 @@ func TestReActAgent_AgentID(t *testing.T) {
 // TestReActAgent_CallbackManager 验证 CallbackManager 不为 nil
 func TestReActAgent_CallbackManager(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("cb_test"),
-		cschema.WithDescription("回调测试"),
+		cagentschema.WithAgentName("cb_test"),
+		cagentschema.WithAgentDescription("回调测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	assert.NotNil(t, agent.CallbackManager())
@@ -201,8 +201,8 @@ func TestReActAgent_CallbackManager(t *testing.T) {
 // TestReActAgent_ContextEngine_设置引擎 验证 ContextEngine 设置后返回正确值
 func TestReActAgent_ContextEngine_设置引擎(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("ce_set"),
-		cschema.WithDescription("设置上下文引擎测试"),
+		cagentschema.WithAgentName("ce_set"),
+		cagentschema.WithAgentDescription("设置上下文引擎测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	fce := &fakeContextEngine{}
@@ -213,8 +213,8 @@ func TestReActAgent_ContextEngine_设置引擎(t *testing.T) {
 // TestReActAgent_Configure 验证 Configure 正常配置
 func TestReActAgent_Configure(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("cfg_test"),
-		cschema.WithDescription("配置测试"),
+		cagentschema.WithAgentName("cfg_test"),
+		cagentschema.WithAgentDescription("配置测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -230,8 +230,8 @@ func TestReActAgent_Configure(t *testing.T) {
 // TestReActAgent_Configure_nil配置 验证 nil 配置返回错误
 func TestReActAgent_Configure_nil配置(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("nil_cfg"),
-		cschema.WithDescription("nil 配置测试"),
+		cagentschema.WithAgentName("nil_cfg"),
+		cagentschema.WithAgentDescription("nil 配置测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	err := agent.Configure(context.Background(), nil)
@@ -241,8 +241,8 @@ func TestReActAgent_Configure_nil配置(t *testing.T) {
 // TestReActAgent_Configure_带提示词模板 验证 Configure 带 PromptTemplateName 时添加提示节
 func TestReActAgent_Configure_带提示词模板(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("cfg_prompt"),
-		cschema.WithDescription("配置提示词测试"),
+		cagentschema.WithAgentName("cfg_prompt"),
+		cagentschema.WithAgentDescription("配置提示词测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -259,8 +259,8 @@ func TestReActAgent_Configure_带提示词模板(t *testing.T) {
 // TestReActAgent_AddPromptBuilderSection 验证添加提示节
 func TestReActAgent_AddPromptBuilderSection(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("prompt_test"),
-		cschema.WithDescription("提示词测试"),
+		cagentschema.WithAgentName("prompt_test"),
+		cagentschema.WithAgentDescription("提示词测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	agent.AddPromptBuilderSection("identity", "我是测试Agent", 10)
@@ -272,8 +272,8 @@ func TestReActAgent_AddPromptBuilderSection(t *testing.T) {
 // 对齐 Python: ReActAgent.add_prompt_builder_section — content 为空时 remove_section
 func TestReActAgent_AddPromptBuilderSection_空内容时移除(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("prompt_empty"),
-		cschema.WithDescription("空内容提示词测试"),
+		cagentschema.WithAgentName("prompt_empty"),
+		cagentschema.WithAgentDescription("空内容提示词测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	agent.AddPromptBuilderSection("identity", "内容", 10)
@@ -287,8 +287,8 @@ func TestReActAgent_AddPromptBuilderSection_空内容时移除(t *testing.T) {
 // TestReActAgent_AddPromptBuilderSection_空白内容时移除 验证全空白内容时移除节
 func TestReActAgent_AddPromptBuilderSection_空白内容时移除(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("prompt_ws"),
-		cschema.WithDescription("空白内容提示词测试"),
+		cagentschema.WithAgentName("prompt_ws"),
+		cagentschema.WithAgentDescription("空白内容提示词测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	agent.AddPromptBuilderSection("identity", "   ", 10)
@@ -298,8 +298,8 @@ func TestReActAgent_AddPromptBuilderSection_空白内容时移除(t *testing.T) 
 // TestReActAgent_StreamImpl 验证 StreamImpl 返回 channel
 func TestReActAgent_StreamImpl(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_test"),
-		cschema.WithDescription("流式测试"),
+		cagentschema.WithAgentName("stream_test"),
+		cagentschema.WithAgentDescription("流式测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -317,8 +317,8 @@ func TestReActAgent_StreamImpl(t *testing.T) {
 // TestReActAgent_StreamImpl_带Session 验证 StreamImpl 使用已有 session
 func TestReActAgent_StreamImpl_带Session(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_sess"),
-		cschema.WithDescription("流式 Session 测试"),
+		cagentschema.WithAgentName("stream_sess"),
+		cagentschema.WithAgentDescription("流式 Session 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -338,8 +338,8 @@ func TestReActAgent_StreamImpl_带Session(t *testing.T) {
 // TestReActAgent_getLLM_无配置 验证无配置时返回错误
 func TestReActAgent_getLLM_无配置(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("llm_test"),
-		cschema.WithDescription("LLM 测试"),
+		cagentschema.WithAgentName("llm_test"),
+		cagentschema.WithAgentDescription("LLM 测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	_, err := agent.getLLM()
@@ -349,8 +349,8 @@ func TestReActAgent_getLLM_无配置(t *testing.T) {
 // TestReActAgent_initContext_无引擎 验证无 context engine 时返回 nil
 func TestReActAgent_initContext_无引擎(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("ctx_test"),
-		cschema.WithDescription("上下文测试"),
+		cagentschema.WithAgentName("ctx_test"),
+		cagentschema.WithAgentDescription("上下文测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	mc, err := agent.initContext(context.Background(), nil)
@@ -361,8 +361,8 @@ func TestReActAgent_initContext_无引擎(t *testing.T) {
 // TestReActAgent_initContext_有引擎 验证有 context engine 时正确调用
 func TestReActAgent_initContext_有引擎(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("ctx_test2"),
-		cschema.WithDescription("上下文引擎测试"),
+		cagentschema.WithAgentName("ctx_test2"),
+		cagentschema.WithAgentDescription("上下文引擎测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -379,8 +379,8 @@ func TestReActAgent_initContext_有引擎(t *testing.T) {
 // TestReActAgent_initContext_引擎出错 验证 context engine 创建上下文出错时返回错误
 func TestReActAgent_initContext_引擎出错(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("ctx_err"),
-		cschema.WithDescription("上下文错误测试"),
+		cagentschema.WithAgentName("ctx_err"),
+		cagentschema.WithAgentDescription("上下文错误测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -396,8 +396,8 @@ func TestReActAgent_initContext_引擎出错(t *testing.T) {
 // TestReActAgent_saveContexts_引擎保存出错 验证 saveContexts 出错时仅打日志不 panic
 func TestReActAgent_saveContexts_引擎保存出错(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("save_err"),
-		cschema.WithDescription("保存错误测试"),
+		cagentschema.WithAgentName("save_err"),
+		cagentschema.WithAgentDescription("保存错误测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	fce := &fakeContextEngine{saveContextsErr: context.DeadlineExceeded}
@@ -409,8 +409,8 @@ func TestReActAgent_saveContexts_引擎保存出错(t *testing.T) {
 // TestReActAgent_ClearContextMessages_有引擎 验证有 context engine 时清除消息
 func TestReActAgent_ClearContextMessages_有引擎(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("clear_ctx2"),
-		cschema.WithDescription("清除上下文消息测试2"),
+		cagentschema.WithAgentName("clear_ctx2"),
+		cagentschema.WithAgentDescription("清除上下文消息测试2"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -425,8 +425,8 @@ func TestReActAgent_ClearContextMessages_有引擎(t *testing.T) {
 // TestReActAgent_ClearContextMessages_引擎返回nil 验证 GetContext 返回 nil 时不 panic
 func TestReActAgent_ClearContextMessages_引擎返回nil(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("clear_nil"),
-		cschema.WithDescription("清除 nil 上下文测试"),
+		cagentschema.WithAgentName("clear_nil"),
+		cagentschema.WithAgentDescription("清除 nil 上下文测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -440,8 +440,8 @@ func TestReActAgent_ClearContextMessages_引擎返回nil(t *testing.T) {
 // TestReActAgent_AfterExecuteToolCallForHITL_有中断 验证 HITL 检测到中断
 func TestReActAgent_AfterExecuteToolCallForHITL_有中断(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("hitl_int"),
-		cschema.WithDescription("HITL 中断测试"),
+		cagentschema.WithAgentName("hitl_int"),
+		cagentschema.WithAgentDescription("HITL 中断测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -464,8 +464,8 @@ func TestReActAgent_AfterExecuteToolCallForHITL_有中断(t *testing.T) {
 // TestReActAgent_CommitInterrupt_有中断状态 验证提交中断正常工作
 func TestReActAgent_CommitInterrupt_有中断状态(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("commit_int"),
-		cschema.WithDescription("提交中断测试"),
+		cagentschema.WithAgentName("commit_int"),
+		cagentschema.WithAgentDescription("提交中断测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -494,8 +494,8 @@ func TestReActAgent_CommitInterrupt_有中断状态(t *testing.T) {
 // TestReActAgent_executeToolCalls_无AbilityManager 验证无 AbilityManager 时返回错误
 func TestReActAgent_executeToolCalls_无AbilityManager(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("exec_no_am"),
-		cschema.WithDescription("无能力管理器测试"),
+		cagentschema.WithAgentName("exec_no_am"),
+		cagentschema.WithAgentDescription("无能力管理器测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -513,8 +513,8 @@ func TestReActAgent_executeToolCalls_无AbilityManager(t *testing.T) {
 // TestWriteInvokeResultToStream_正常结果 验证正常结果写入流
 func TestWriteInvokeResultToStream_正常结果(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("write_normal"),
-		cschema.WithDescription("写入正常结果测试"),
+		cagentschema.WithAgentName("write_normal"),
+		cagentschema.WithAgentDescription("写入正常结果测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -529,8 +529,8 @@ func TestWriteInvokeResultToStream_正常结果(t *testing.T) {
 // TestWriteInvokeResultToStream_中断结果 验证中断结果写入流
 func TestWriteInvokeResultToStream_中断结果(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("write_int"),
-		cschema.WithDescription("写入中断结果测试"),
+		cagentschema.WithAgentName("write_int"),
+		cagentschema.WithAgentDescription("写入中断结果测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -545,8 +545,8 @@ func TestWriteInvokeResultToStream_中断结果(t *testing.T) {
 // TestWriteInvokeResultToStream_中断结果有Handler 验证中断结果有 HITL handler 时写入
 func TestWriteInvokeResultToStream_中断结果有Handler(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("write_int_h"),
-		cschema.WithDescription("写入中断结果有 Handler 测试"),
+		cagentschema.WithAgentName("write_int_h"),
+		cagentschema.WithAgentDescription("写入中断结果有 Handler 测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -562,8 +562,8 @@ func TestWriteInvokeResultToStream_中断结果有Handler(t *testing.T) {
 // TestWriteInvokeResultToStream_中断无interruptIDs 验证中断结果无 interrupt_ids 走 Workflow 分支
 func TestWriteInvokeResultToStream_中断无interruptIDs(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("write_wf"),
-		cschema.WithDescription("写入 Workflow 中断测试"),
+		cagentschema.WithAgentName("write_wf"),
+		cagentschema.WithAgentDescription("写入 Workflow 中断测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -577,8 +577,8 @@ func TestWriteInvokeResultToStream_中断无interruptIDs(t *testing.T) {
 // TestReActAgent_InvokeImpl_有ContextEngine 验证 InvokeImpl 有 context engine 时正常执行
 func TestReActAgent_InvokeImpl_有ContextEngine(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_ce"),
-		cschema.WithDescription("Invoke 有 ContextEngine 测试"),
+		cagentschema.WithAgentName("invoke_ce"),
+		cagentschema.WithAgentDescription("Invoke 有 ContextEngine 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -599,8 +599,8 @@ func TestReActAgent_InvokeImpl_有ContextEngine(t *testing.T) {
 // TestReActAgent_InvokeImpl_有ContextEngineAndPrompt 验证有 context engine 和 prompt 时执行
 func TestReActAgent_InvokeImpl_有ContextEngineAndPrompt(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_cep"),
-		cschema.WithDescription("Invoke 有 ContextEngine 和 Prompt 测试"),
+		cagentschema.WithAgentName("invoke_cep"),
+		cagentschema.WithAgentDescription("Invoke 有 ContextEngine 和 Prompt 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -621,8 +621,8 @@ func TestReActAgent_InvokeImpl_有ContextEngineAndPrompt(t *testing.T) {
 // TestReActAgent_InvokeImpl_SteeringQueueWithSession 验证带 steering queue 和 session
 func TestReActAgent_InvokeImpl_SteeringQueueWithSession(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_steer_sess"),
-		cschema.WithDescription("Invoke Steering Session 测试"),
+		cagentschema.WithAgentName("invoke_steer_sess"),
+		cagentschema.WithAgentDescription("Invoke Steering Session 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -642,8 +642,8 @@ func TestReActAgent_InvokeImpl_SteeringQueueWithSession(t *testing.T) {
 // TestReActAgent_InvokeImpl_中断恢复 验证 HITL 中断恢复路径
 func TestReActAgent_InvokeImpl_中断恢复(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_resume"),
-		cschema.WithDescription("Invoke 中断恢复测试"),
+		cagentschema.WithAgentName("invoke_resume"),
+		cagentschema.WithAgentDescription("Invoke 中断恢复测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -672,8 +672,8 @@ func TestReActAgent_InvokeImpl_中断恢复(t *testing.T) {
 // TestReActAgent_InvokeImpl_中断恢复有ContextEngine 验证中断恢复有 context engine
 func TestReActAgent_InvokeImpl_中断恢复有ContextEngine(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_resume_ce"),
-		cschema.WithDescription("Invoke 中断恢复有 CE 测试"),
+		cagentschema.WithAgentName("invoke_resume_ce"),
+		cagentschema.WithAgentDescription("Invoke 中断恢复有 CE 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -704,8 +704,8 @@ func TestReActAgent_InvokeImpl_中断恢复有ContextEngine(t *testing.T) {
 // TestReActAgent_InvokeImpl_有queryNoSession 验证有 query 无 session 时 InvokeImpl 不 panic
 func TestReActAgent_InvokeImpl_有queryNoSession(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_q"),
-		cschema.WithDescription("Invoke 有 query 测试"),
+		cagentschema.WithAgentName("invoke_q"),
+		cagentschema.WithAgentDescription("Invoke 有 query 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -720,8 +720,8 @@ func TestReActAgent_InvokeImpl_有queryNoSession(t *testing.T) {
 // TestReActAgent_InvokeImpl_invokeResultInExtra 验证 invoke_result 在 extra 中优先返回
 func TestReActAgent_InvokeImpl_invokeResultInExtra(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_extra_res"),
-		cschema.WithDescription("Invoke extra result 测试"),
+		cagentschema.WithAgentName("invoke_extra_res"),
+		cagentschema.WithAgentDescription("Invoke extra result 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -748,8 +748,8 @@ func TestReActAgent_InvokeImpl_invokeResultInExtra(t *testing.T) {
 // TestReActAgent_executeToolCalls_有ToolCalls 验证有工具调用时执行
 func TestReActAgent_executeToolCalls_有ToolCalls(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("exec_tc"),
-		cschema.WithDescription("工具调用执行测试"),
+		cagentschema.WithAgentName("exec_tc"),
+		cagentschema.WithAgentDescription("工具调用执行测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -772,8 +772,8 @@ func TestReActAgent_executeToolCalls_有ToolCalls(t *testing.T) {
 // TestReActAgent_InvokeImpl_多迭代 验证多迭代配置时 InvokeImpl 正常执行
 func TestReActAgent_InvokeImpl_多迭代(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_multi"),
-		cschema.WithDescription("多迭代 Invoke 测试"),
+		cagentschema.WithAgentName("invoke_multi"),
+		cagentschema.WithAgentDescription("多迭代 Invoke 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -793,8 +793,8 @@ func TestReActAgent_InvokeImpl_多迭代(t *testing.T) {
 // TestReActAgent_InvokeImpl_默认迭代 验证默认迭代次数配置
 func TestReActAgent_InvokeImpl_默认迭代(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_default_iter"),
-		cschema.WithDescription("默认迭代 Invoke 测试"),
+		cagentschema.WithAgentName("invoke_default_iter"),
+		cagentschema.WithAgentDescription("默认迭代 Invoke 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -808,8 +808,8 @@ func TestReActAgent_InvokeImpl_默认迭代(t *testing.T) {
 // TestReActAgent_InvokeImpl_上下文引擎创建失败 验证 initContext 失败返回错误
 func TestReActAgent_InvokeImpl_上下文引擎创建失败(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_ce_fail"),
-		cschema.WithDescription("CE 创建失败测试"),
+		cagentschema.WithAgentName("invoke_ce_fail"),
+		cagentschema.WithAgentDescription("CE 创建失败测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -828,8 +828,8 @@ func TestReActAgent_InvokeImpl_上下文引擎创建失败(t *testing.T) {
 // TestReActAgent_InvokeImpl_无ConfigMaxIterations 验证 nil config 时 InvokeImpl 的默认迭代
 func TestReActAgent_InvokeImpl_无ConfigMaxIterations(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_nil_cfg_iter"),
-		cschema.WithDescription("nil config 迭代测试"),
+		cagentschema.WithAgentName("invoke_nil_cfg_iter"),
+		cagentschema.WithAgentDescription("nil config 迭代测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -841,8 +841,8 @@ func TestReActAgent_InvokeImpl_无ConfigMaxIterations(t *testing.T) {
 // TestReActAgent_StreamImpl_无Config 验证 StreamImpl 无 config 时
 func TestReActAgent_StreamImpl_无Config(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_no_cfg"),
-		cschema.WithDescription("流式无配置测试"),
+		cagentschema.WithAgentName("stream_no_cfg"),
+		cagentschema.WithAgentDescription("流式无配置测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -857,8 +857,8 @@ func TestReActAgent_StreamImpl_无Config(t *testing.T) {
 // TestReActAgent_callLLMInvoke_空工具 验证空工具列表时执行
 func TestReActAgent_callLLMInvoke_空工具(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("call_invoke_empty"),
-		cschema.WithDescription("callLLMInvoke 空工具测试"),
+		cagentschema.WithAgentName("call_invoke_empty"),
+		cagentschema.WithAgentDescription("callLLMInvoke 空工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -880,7 +880,7 @@ func TestReActAgent_callLLMInvoke_空工具(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{"key": "value"}
 	_, _ = agent.callLLMInvoke(context.Background(), llmModel2, "qwen-max", messages, tools, extra)
 }
@@ -888,8 +888,8 @@ func TestReActAgent_callLLMInvoke_空工具(t *testing.T) {
 // TestReActAgent_callLLMStream_空工具 验证空工具列表时流式执行
 func TestReActAgent_callLLMStream_空工具(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("call_stream_empty"),
-		cschema.WithDescription("callLLMStream 空工具测试"),
+		cagentschema.WithAgentName("call_stream_empty"),
+		cagentschema.WithAgentDescription("callLLMStream 空工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -910,7 +910,7 @@ func TestReActAgent_callLLMStream_空工具(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{"key": "value"}
 	sess := session.NewSession(session.WithSessionID("call_stream_empty_sess"))
 	_, _ = agent.callLLMStream(context.Background(), llmModel2, "qwen-max", messages, tools, sess, extra)
@@ -919,8 +919,8 @@ func TestReActAgent_callLLMStream_空工具(t *testing.T) {
 // TestReActAgent_callLLMInvoke_有LLMInstance 验证有 LLM 实例时执行调用
 func TestReActAgent_callLLMInvoke_有LLMInstance(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("call_invoke_llm"),
-		cschema.WithDescription("callLLMInvoke 有 LLM 测试"),
+		cagentschema.WithAgentName("call_invoke_llm"),
+		cagentschema.WithAgentDescription("callLLMInvoke 有 LLM 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -942,7 +942,7 @@ func TestReActAgent_callLLMInvoke_有LLMInstance(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{}
 	_, _ = agent.callLLMInvoke(context.Background(), llmModel2, "qwen-max", messages, tools, extra)
 }
@@ -950,8 +950,8 @@ func TestReActAgent_callLLMInvoke_有LLMInstance(t *testing.T) {
 // TestReActAgent_callLLMStream_有LLMInstance 验证有 LLM 实例时流式调用
 func TestReActAgent_callLLMStream_有LLMInstance(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("call_stream_llm"),
-		cschema.WithDescription("callLLMStream 有 LLM 测试"),
+		cagentschema.WithAgentName("call_stream_llm"),
+		cagentschema.WithAgentDescription("callLLMStream 有 LLM 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -972,7 +972,7 @@ func TestReActAgent_callLLMStream_有LLMInstance(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{}
 	sess := session.NewSession(session.WithSessionID("call_stream_llm_sess"))
 	_, _ = agent.callLLMStream(context.Background(), llmModel2, "qwen-max", messages, tools, sess, extra)
@@ -981,8 +981,8 @@ func TestReActAgent_callLLMStream_有LLMInstance(t *testing.T) {
 // TestReActAgent_InvokeImpl_有LLM 验证有 LLM 实例时 InvokeImpl 执行更多分支
 func TestReActAgent_InvokeImpl_有LLM(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_llm"),
-		cschema.WithDescription("Invoke 有 LLM 测试"),
+		cagentschema.WithAgentName("invoke_llm"),
+		cagentschema.WithAgentDescription("Invoke 有 LLM 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -1011,8 +1011,8 @@ func TestReActAgent_InvokeImpl_有LLM(t *testing.T) {
 // TestReActAgent_StreamImpl_有LLM 验证有 LLM 实例时 StreamImpl 执行更多分支
 func TestReActAgent_StreamImpl_有LLM(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_llm"),
-		cschema.WithDescription("Stream 有 LLM 测试"),
+		cagentschema.WithAgentName("stream_llm"),
+		cagentschema.WithAgentDescription("Stream 有 LLM 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("qwen-max"),
@@ -1077,8 +1077,8 @@ func newAgentWithFakeLLM(name string, fmc *fakeModelClient) *ReActAgent {
 	initFakeModelClient()
 
 	card := agentschema.NewAgentCard(
-		cschema.WithName(name),
-		cschema.WithDescription("测试"),
+		cagentschema.WithAgentName(name),
+		cagentschema.WithAgentDescription("测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1112,8 +1112,8 @@ func newAgentWithCustomFakeLLM(name string, fakeClient *fakeModelClient) *ReActA
 	initFakeModelClient()
 
 	card := agentschema.NewAgentCard(
-		cschema.WithName(name),
-		cschema.WithDescription("测试"),
+		cagentschema.WithAgentName(name),
+		cagentschema.WithAgentDescription("测试"),
 	)
 
 	// 构造 config 使用 fake provider
@@ -1216,7 +1216,7 @@ func (f *fakeContextEngine) SaveContexts(_ context.Context, _ sessioninterfaces.
 
 func (f *fakeModelContext) Len() int { return len(f.messages) }
 
-func (f *fakeModelContext) GetMessages(_ int, _ bool) []llmschema.BaseMessage { return f.messages }
+func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) { return f.messages, nil }
 
 func (f *fakeModelContext) SetMessages(msgs []llmschema.BaseMessage, _ bool) { f.messages = msgs }
 
@@ -1232,11 +1232,11 @@ func (f *fakeModelContext) AddMessages(_ context.Context, msg llmschema.BaseMess
 	return f.messages, nil
 }
 
-func (f *fakeModelContext) GetContextWindow(_ context.Context, sys []llmschema.BaseMessage, _ []*cschema.ToolInfo, _, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
+func (f *fakeModelContext) GetContextWindow(_ context.Context, sys []llmschema.BaseMessage, _ []cschema.ToolInfoInterface, _, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
 	return &ceinterface.ContextWindow{
 		SystemMessages:  sys,
 		ContextMessages: f.messages,
-		Tools:           make([]*cschema.ToolInfo, 0),
+		Tools:           make([]cschema.ToolInfoInterface, 0),
 	}, nil
 }
 
@@ -1291,8 +1291,8 @@ func (f *fakeSessionFacade) GetState(_ any) (any, error)             { return ni
 // TestReActAgent_reactLoop_无工具调用 验证 LLM 返回无工具调用时正常结束
 func TestReActAgent_reactLoop_无工具调用(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_no_tool"),
-		cschema.WithDescription("循环无工具测试"),
+		cagentschema.WithAgentName("loop_no_tool"),
+		cagentschema.WithAgentDescription("循环无工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1324,8 +1324,8 @@ func TestReActAgent_reactLoop_无工具调用(t *testing.T) {
 // TestReActAgent_reactLoop_有工具调用 验证 LLM 返回工具调用时执行工具
 func TestReActAgent_reactLoop_有工具调用(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_tool"),
-		cschema.WithDescription("循环有工具测试"),
+		cagentschema.WithAgentName("loop_tool"),
+		cagentschema.WithAgentDescription("循环有工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1365,8 +1365,8 @@ func TestReActAgent_reactLoop_有工具调用(t *testing.T) {
 // TestReActAgent_reactLoop_达到最大迭代 验证达到最大迭代次数返回错误结果
 func TestReActAgent_reactLoop_达到最大迭代(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_max"),
-		cschema.WithDescription("最大迭代测试"),
+		cagentschema.WithAgentName("loop_max"),
+		cagentschema.WithAgentDescription("最大迭代测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1397,8 +1397,8 @@ func TestReActAgent_reactLoop_达到最大迭代(t *testing.T) {
 // TestReActAgent_reactLoop_forceFinish 验证 force-finish 提前终止
 func TestReActAgent_reactLoop_forceFinish(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_ff"),
-		cschema.WithDescription("force-finish 测试"),
+		cagentschema.WithAgentName("loop_ff"),
+		cagentschema.WithAgentDescription("force-finish 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1438,8 +1438,8 @@ func TestReActAgent_reactLoop_forceFinish(t *testing.T) {
 // TestReActAgent_reactLoop_steering注入 验证 steering 消息注入到模型上下文
 func TestReActAgent_reactLoop_steering注入(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_steer"),
-		cschema.WithDescription("steering 注入测试"),
+		cagentschema.WithAgentName("loop_steer"),
+		cagentschema.WithAgentDescription("steering 注入测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1475,8 +1475,8 @@ func TestReActAgent_reactLoop_steering注入(t *testing.T) {
 // TestReActAgent_reactLoop_无配置 验证 nil config 使用默认迭代次数
 func TestReActAgent_reactLoop_无配置(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_nocfg"),
-		cschema.WithDescription("无配置循环测试"),
+		cagentschema.WithAgentName("loop_nocfg"),
+		cagentschema.WithAgentDescription("无配置循环测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	initFakeModelClient()
@@ -1500,8 +1500,8 @@ func TestReActAgent_reactLoop_无配置(t *testing.T) {
 // TestReActAgent_reactLoop_模型调用失败 验证 LLM 调用失败时返回错误
 func TestReActAgent_reactLoop_模型调用失败(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("loop_err"),
-		cschema.WithDescription("模型失败测试"),
+		cagentschema.WithAgentName("loop_err"),
+		cagentschema.WithAgentDescription("模型失败测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -1521,8 +1521,8 @@ func TestReActAgent_reactLoop_模型调用失败(t *testing.T) {
 // TestReActAgent_railedModelCall_基本调用 验证基本 railedModelCall 流程
 func TestReActAgent_railedModelCall_基本调用(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_basic"),
-		cschema.WithDescription("railed 基本测试"),
+		cagentschema.WithAgentName("railed_basic"),
+		cagentschema.WithAgentDescription("railed 基本测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1554,8 +1554,8 @@ func TestReActAgent_railedModelCall_基本调用(t *testing.T) {
 // TestReActAgent_railedModelCall_无ModelContext 验证 modelCtx 为 nil 时走 systemMsgs 分支
 func TestReActAgent_railedModelCall_无ModelContext(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_nil_mc"),
-		cschema.WithDescription("railed nil mc 测试"),
+		cagentschema.WithAgentName("railed_nil_mc"),
+		cagentschema.WithAgentDescription("railed nil mc 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1583,8 +1583,8 @@ func TestReActAgent_railedModelCall_无ModelContext(t *testing.T) {
 // TestReActAgent_railedModelCall_流式模式 验证 _streaming=true 走流式分支
 func TestReActAgent_railedModelCall_流式模式(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_stream"),
-		cschema.WithDescription("railed stream 测试"),
+		cagentschema.WithAgentName("railed_stream"),
+		cagentschema.WithAgentDescription("railed stream 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1617,8 +1617,8 @@ func TestReActAgent_railedModelCall_流式模式(t *testing.T) {
 // TestReActAgent_railedModelCall_KVCache配置 验证 KV Cache 配置处理
 func TestReActAgent_railedModelCall_KVCache配置(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_kv"),
-		cschema.WithDescription("railed KV 测试"),
+		cagentschema.WithAgentName("railed_kv"),
+		cagentschema.WithAgentDescription("railed KV 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1653,8 +1653,8 @@ func TestReActAgent_railedModelCall_KVCache配置(t *testing.T) {
 // TestReActAgent_railedModelCall_LLMLogprobs 验证 logprobs 和 return_token_ids 配置
 func TestReActAgent_railedModelCall_LLMLogprobs(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_logprobs"),
-		cschema.WithDescription("railed logprobs 测试"),
+		cagentschema.WithAgentName("railed_logprobs"),
+		cagentschema.WithAgentDescription("railed logprobs 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1689,8 +1689,8 @@ func TestReActAgent_railedModelCall_LLMLogprobs(t *testing.T) {
 // TestReActAgent_railedModelCall_无LLM 验证无 LLM 时返回错误
 func TestReActAgent_railedModelCall_无LLM(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("railed_no_llm"),
-		cschema.WithDescription("railed 无 LLM 测试"),
+		cagentschema.WithAgentName("railed_no_llm"),
+		cagentschema.WithAgentDescription("railed 无 LLM 测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -1708,8 +1708,8 @@ func TestReActAgent_railedModelCall_无LLM(t *testing.T) {
 // TestReActAgent_callLLMInvoke_有工具 验证有工具列表时执行
 func TestReActAgent_callLLMInvoke_有工具(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_tools"),
-		cschema.WithDescription("invoke 有工具测试"),
+		cagentschema.WithAgentName("invoke_tools"),
+		cagentschema.WithAgentDescription("invoke 有工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1726,12 +1726,8 @@ func TestReActAgent_callLLMInvoke_有工具(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{
-		{
-			Name:        "test_tool",
-			Description: "测试工具",
-			Parameters:  map[string]any{"type": "object"},
-		},
+	tools := []cschema.ToolInfoInterface{
+		cschema.NewToolInfo("test_tool", "测试工具", map[string]any{"type": "object"}),
 	}
 	extra := map[string]any{"key": "value"}
 
@@ -1743,8 +1739,8 @@ func TestReActAgent_callLLMInvoke_有工具(t *testing.T) {
 // TestReActAgent_callLLMInvoke_无Extra 验证无 extraKVPairs 时不传
 func TestReActAgent_callLLMInvoke_无Extra(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_no_extra"),
-		cschema.WithDescription("invoke 无 extra 测试"),
+		cagentschema.WithAgentName("invoke_no_extra"),
+		cagentschema.WithAgentDescription("invoke 无 extra 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1760,7 +1756,7 @@ func TestReActAgent_callLLMInvoke_无Extra(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{} // 空 extra
 
 	result, err := agent.callLLMInvoke(context.Background(), model, "test-model", messages, tools, extra)
@@ -1771,8 +1767,8 @@ func TestReActAgent_callLLMInvoke_无Extra(t *testing.T) {
 // TestReActAgent_callLLMInvoke_模型错误 验证 LLM 返回错误时包装返回
 func TestReActAgent_callLLMInvoke_模型错误(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_err"),
-		cschema.WithDescription("invoke 错误测试"),
+		cagentschema.WithAgentName("invoke_err"),
+		cagentschema.WithAgentDescription("invoke 错误测试"),
 	)
 	agent := NewReActAgent(card, nil)
 	initFakeModelClient()
@@ -1798,8 +1794,8 @@ func TestReActAgent_callLLMInvoke_模型错误(t *testing.T) {
 // TestReActAgent_callLLMStream_有工具 验证有工具列表时流式执行
 func TestReActAgent_callLLMStream_有工具(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_tools"),
-		cschema.WithDescription("stream 有工具测试"),
+		cagentschema.WithAgentName("stream_tools"),
+		cagentschema.WithAgentDescription("stream 有工具测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1815,12 +1811,8 @@ func TestReActAgent_callLLMStream_有工具(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{
-		{
-			Name:        "test_tool",
-			Description: "测试工具",
-			Parameters:  map[string]any{"type": "object"},
-		},
+	tools := []cschema.ToolInfoInterface{
+		cschema.NewToolInfo("test_tool", "测试工具", map[string]any{"type": "object"}),
 	}
 	sess := session.NewSession(session.WithSessionID("stream_tools_sess"))
 	extra := map[string]any{"key": "value"}
@@ -1833,8 +1825,8 @@ func TestReActAgent_callLLMStream_有工具(t *testing.T) {
 // TestReActAgent_callLLMStream_无Extra 验证空 extraKVPairs
 func TestReActAgent_callLLMStream_无Extra(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_no_extra"),
-		cschema.WithDescription("stream 无 extra 测试"),
+		cagentschema.WithAgentName("stream_no_extra"),
+		cagentschema.WithAgentDescription("stream 无 extra 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1850,7 +1842,7 @@ func TestReActAgent_callLLMStream_无Extra(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	sess := session.NewSession(session.WithSessionID("stream_no_extra_sess"))
 	extra := map[string]any{}
 
@@ -1862,8 +1854,8 @@ func TestReActAgent_callLLMStream_无Extra(t *testing.T) {
 // TestReActAgent_callLLMStream_nilSession 验证 sess 为 nil 时不写入流
 func TestReActAgent_callLLMStream_nilSession(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_nil_sess"),
-		cschema.WithDescription("stream nil session 测试"),
+		cagentschema.WithAgentName("stream_nil_sess"),
+		cagentschema.WithAgentDescription("stream nil session 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1879,7 +1871,7 @@ func TestReActAgent_callLLMStream_nilSession(t *testing.T) {
 
 	msg := llmschema.NewSystemMessage("test")
 	messages := []llmschema.BaseMessage{msg}
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	extra := map[string]any{}
 
 	result, err := agent.callLLMStream(context.Background(), model, "test-model", messages, tools, nil, extra)
@@ -1893,8 +1885,8 @@ func TestReActAgent_callLLMStream_nilSession(t *testing.T) {
 // 通过 StreamImpl 不传 session 来触发自建 session 路径
 func TestReActAgent_innerStream_非AgentSession(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("inner_no_agent"),
-		cschema.WithDescription("innerStream 非 agent 测试"),
+		cagentschema.WithAgentName("inner_no_agent"),
+		cagentschema.WithAgentDescription("innerStream 非 agent 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1925,8 +1917,8 @@ func TestReActAgent_innerStream_非AgentSession(t *testing.T) {
 // TestReActAgent_innerStream_AgentSession 验证 Agent session 走 StreamIterator 分支
 func TestReActAgent_innerStream_AgentSession(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("inner_agent"),
-		cschema.WithDescription("innerStream agent 测试"),
+		cagentschema.WithAgentName("inner_agent"),
+		cagentschema.WithAgentDescription("innerStream agent 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -1957,8 +1949,8 @@ func TestReActAgent_innerStream_AgentSession(t *testing.T) {
 // TestReActAgent_innerStream_invoke错误 验证 invoke 错误写入流
 func TestReActAgent_innerStream_invoke错误(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("inner_err"),
-		cschema.WithDescription("innerStream 错误测试"),
+		cagentschema.WithAgentName("inner_err"),
+		cagentschema.WithAgentDescription("innerStream 错误测试"),
 	)
 	// 无 config 导致 getLLM 失败
 	agent := NewReActAgent(card, nil)
@@ -1976,8 +1968,8 @@ func TestReActAgent_innerStream_invoke错误(t *testing.T) {
 // TestReActAgent_callModel_基本调用 验证 callModel 正常执行
 func TestReActAgent_callModel_基本调用(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("callmodel_basic"),
-		cschema.WithDescription("callModel 基本测试"),
+		cagentschema.WithAgentName("callmodel_basic"),
+		cagentschema.WithAgentDescription("callModel 基本测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -2001,7 +1993,7 @@ func TestReActAgent_callModel_基本调用(t *testing.T) {
 	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 
-	tools := []*cschema.ToolInfo{}
+	tools := []cschema.ToolInfoInterface{}
 	msg, err := agent.callModel(context.Background(), cbc, fmc, tools, sess)
 	assert.NoError(t, err)
 	assert.NotNil(t, msg)
@@ -2012,8 +2004,8 @@ func TestReActAgent_callModel_基本调用(t *testing.T) {
 // TestReActAgent_InvokeImpl_完整路径 验证完整 invoke 路径（有 LLM + ContextEngine + Session）
 func TestReActAgent_InvokeImpl_完整路径(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_full"),
-		cschema.WithDescription("完整 Invoke 测试"),
+		cagentschema.WithAgentName("invoke_full"),
+		cagentschema.WithAgentDescription("完整 Invoke 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -2048,8 +2040,8 @@ func TestReActAgent_InvokeImpl_完整路径(t *testing.T) {
 // TestReActAgent_InvokeImpl_完整路径无Session 验证自建 session 时的清理路径
 func TestReActAgent_InvokeImpl_完整路径无Session(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_full_nosess"),
-		cschema.WithDescription("完整 Invoke 无 session 测试"),
+		cagentschema.WithAgentName("invoke_full_nosess"),
+		cagentschema.WithAgentDescription("完整 Invoke 无 session 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -2077,8 +2069,8 @@ func TestReActAgent_InvokeImpl_完整路径无Session(t *testing.T) {
 // TestReActAgent_InvokeImpl_invokeResult优先 验证 extra 中 invoke_result 优先返回
 func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("invoke_priority"),
-		cschema.WithDescription("invoke result 优先测试"),
+		cagentschema.WithAgentName("invoke_priority"),
+		cagentschema.WithAgentDescription("invoke result 优先测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -2117,8 +2109,8 @@ func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 // TestReActAgent_StreamImpl_完整路径 验证完整 StreamImpl 路径
 func TestReActAgent_StreamImpl_完整路径(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		cschema.WithName("stream_full"),
-		cschema.WithDescription("完整 Stream 测试"),
+		cagentschema.WithAgentName("stream_full"),
+		cagentschema.WithAgentDescription("完整 Stream 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelClient(fakeClientProvider, "", "", "test-model"),
@@ -2185,7 +2177,7 @@ func TestReActAgent_InvokeImpl_带额外参数(t *testing.T) {
 
 // TestReActAgent_AfterExecuteToolCallForHITL_nilHandler handler 为 nil 时返回 nil
 func TestReActAgent_AfterExecuteToolCallForHITL_nilHandler(t *testing.T) {
-	card := agentschema.NewAgentCard(cschema.WithName("hitl_nil"), cschema.WithDescription("HITL nil 测试"))
+	card := agentschema.NewAgentCard(cagentschema.WithAgentName("hitl_nil"), cagentschema.WithAgentDescription("HITL nil 测试"))
 	agent := NewReActAgent(card, nil)
 	agent.hitlHandler = nil
 
@@ -2196,7 +2188,7 @@ func TestReActAgent_AfterExecuteToolCallForHITL_nilHandler(t *testing.T) {
 
 // TestReActAgent_CommitInterrupt_nilHandler handler 为 nil 时返回 nil
 func TestReActAgent_CommitInterrupt_nilHandler(t *testing.T) {
-	card := agentschema.NewAgentCard(cschema.WithName("commit_nil"), cschema.WithDescription("Commit nil 测试"))
+	card := agentschema.NewAgentCard(cagentschema.WithAgentName("commit_nil"), cagentschema.WithAgentDescription("Commit nil 测试"))
 	agent := NewReActAgent(card, nil)
 	agent.hitlHandler = nil
 
@@ -2251,7 +2243,7 @@ func TestReActAgent_getTools(t *testing.T) {
 
 // TestReActAgent_WriteInvokeResultToStream_nilHandler hitlHandler 为 nil 时不 panic
 func TestReActAgent_WriteInvokeResultToStream_nilHandler(t *testing.T) {
-	card := agentschema.NewAgentCard(cschema.WithName("nil_handler2"), cschema.WithDescription("nil handler2"))
+	card := agentschema.NewAgentCard(cagentschema.WithAgentName("nil_handler2"), cagentschema.WithAgentDescription("nil handler2"))
 	agent := NewReActAgent(card, nil)
 	agent.hitlHandler = nil
 

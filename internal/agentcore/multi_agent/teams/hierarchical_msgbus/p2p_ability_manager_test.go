@@ -73,8 +73,8 @@ func TestP2PAbilityManager_IsAgent(t *testing.T) {
 
 	// 注册 Agent 卡片
 	agentCard := agentschema.NewAgentCard(
-		schema.WithName("sub_agent"),
-		schema.WithID("sub_agent_id"),
+		agentschema.WithAgentName("sub_agent"),
+		agentschema.WithAgentID("sub_agent_id"),
 	)
 	m.Add(agentCard)
 
@@ -93,8 +93,8 @@ func TestP2PAbilityManager_Execute_纯Agent调用(t *testing.T) {
 
 	// 注册 Agent 卡片
 	agentCard := agentschema.NewAgentCard(
-		schema.WithName("sub_agent"),
-		schema.WithID("sub_agent_id"),
+		agentschema.WithAgentName("sub_agent"),
+		agentschema.WithAgentID("sub_agent_id"),
 	)
 	m.Add(agentCard)
 
@@ -120,8 +120,8 @@ func TestP2PAbilityManager_Execute_混合调用(t *testing.T) {
 
 	// 注册 Agent 和 Tool
 	agentCard := agentschema.NewAgentCard(
-		schema.WithName("sub_agent"),
-		schema.WithID("sub_agent_id"),
+		agentschema.WithAgentName("sub_agent"),
+		agentschema.WithAgentID("sub_agent_id"),
 	)
 	m.Add(agentCard)
 
@@ -148,8 +148,8 @@ func TestP2PAbilityManager_Execute_并行限流(t *testing.T) {
 	// 注册 3 个 Agent
 	for i := 0; i < 3; i++ {
 		agentCard := agentschema.NewAgentCard(
-			schema.WithName(fmt.Sprintf("agent_%d", i)),
-			schema.WithID(fmt.Sprintf("agent_id_%d", i)),
+			agentschema.WithAgentName(fmt.Sprintf("agent_%d", i)),
+			agentschema.WithAgentID(fmt.Sprintf("agent_id_%d", i)),
 		)
 		m.Add(agentCard)
 	}

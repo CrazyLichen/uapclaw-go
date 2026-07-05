@@ -182,7 +182,7 @@ func NewRestfulApiCard(
 //
 // 与 Python 对齐：RestfulApiCard 的 input_params 是原始 JSON Schema map，
 // 直接作为 ToolInfo.parameters 传给 LLM（location 等扩展属性也包含在内）。
-func (c *RestfulApiCard) ToolInfo() *schema.ToolInfo {
+func (c *RestfulApiCard) ToolInfo() schema.ToolInfoInterface {
 	return schema.NewToolInfo(c.Name, c.Description, c.InputSchema)
 }
 

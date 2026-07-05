@@ -15,7 +15,7 @@ import (
 func newContextWindowWithMessages(
 	systemMsgs []llm_schema.BaseMessage,
 	contextMsgs []llm_schema.BaseMessage,
-	tools []*commonschema.ToolInfo,
+	tools []commonschema.ToolInfoInterface,
 ) *iface.ContextWindow {
 	if systemMsgs == nil {
 		systemMsgs = make([]llm_schema.BaseMessage, 0)
@@ -24,7 +24,7 @@ func newContextWindowWithMessages(
 		contextMsgs = make([]llm_schema.BaseMessage, 0)
 	}
 	if tools == nil {
-		tools = make([]*commonschema.ToolInfo, 0)
+		tools = make([]commonschema.ToolInfoInterface, 0)
 	}
 	return &iface.ContextWindow{
 		SystemMessages:  systemMsgs,
@@ -127,7 +127,7 @@ func TestRelease_相同上下文窗口不释放(t *testing.T) {
 	mgr := NewKVCacheManager("session-1")
 
 	msgs := []llm_schema.BaseMessage{newUserMessage("hello")}
-	tools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	tools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 
 	cw1 := newContextWindowWithMessages(msgs, nil, tools)
 	cw2 := newContextWindowWithMessages(msgs, nil, tools)
@@ -195,11 +195,11 @@ func TestCheckReleaseNeeded_工具不同时需要释放(t *testing.T) {
 	t.Helper()
 	mgr := NewKVCacheManager("session-1")
 
-	lastTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	lastTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 	lastCW := newContextWindowWithMessages(nil, nil, lastTools)
 	mgr.lastContextWindow = lastCW
 
-	curTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool2", "desc1", nil)}
+	curTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool2", "desc1", nil)}
 	curCW := newContextWindowWithMessages(nil, nil, curTools)
 
 	shouldRelease, msgIdx, toolIdx := mgr.checkReleaseNeeded(curCW)
@@ -220,7 +220,7 @@ func TestCheckReleaseNeeded_完全相同不需要释放(t *testing.T) {
 	mgr := NewKVCacheManager("session-1")
 
 	msgs := []llm_schema.BaseMessage{newUserMessage("hello")}
-	tools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	tools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 
 	lastCW := newContextWindowWithMessages(msgs, nil, tools)
 	mgr.lastContextWindow = lastCW
@@ -288,12 +288,12 @@ func TestCheckReleaseNeeded_工具长度不同时需要释放(t *testing.T) {
 	t.Helper()
 	mgr := NewKVCacheManager("session-1")
 
-	lastTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	lastTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 	lastCW := newContextWindowWithMessages(nil, nil, lastTools)
 	mgr.lastContextWindow = lastCW
 
 	// 工具更多（前缀一致）
-	curTools := []*commonschema.ToolInfo{
+	curTools := []commonschema.ToolInfoInterface{
 		commonschema.NewToolInfo("tool1", "desc1", nil),
 		commonschema.NewToolInfo("tool2", "desc2", nil),
 	}
@@ -372,12 +372,12 @@ func TestCheckReleaseNeeded_工具描述不同但名称相同不需要释放(t *
 	t.Helper()
 	mgr := NewKVCacheManager("session-1")
 
-	lastTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	lastTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 	lastCW := newContextWindowWithMessages(nil, nil, lastTools)
 	mgr.lastContextWindow = lastCW
 
 	// 描述不同但名称相同
-	curTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc2", nil)}
+	curTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc2", nil)}
 	curCW := newContextWindowWithMessages(nil, nil, curTools)
 
 	shouldRelease, _, toolIdx := mgr.checkReleaseNeeded(curCW)
@@ -417,12 +417,12 @@ func TestCheckReleaseNeeded_消息不同且工具也不同(t *testing.T) {
 	mgr := NewKVCacheManager("session-1")
 
 	lastMsgs := []llm_schema.BaseMessage{newUserMessage("hello")}
-	lastTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool1", "desc1", nil)}
+	lastTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool1", "desc1", nil)}
 	lastCW := newContextWindowWithMessages(lastMsgs, nil, lastTools)
 	mgr.lastContextWindow = lastCW
 
 	curMsgs := []llm_schema.BaseMessage{newUserMessage("world")}
-	curTools := []*commonschema.ToolInfo{commonschema.NewToolInfo("tool2", "desc1", nil)}
+	curTools := []commonschema.ToolInfoInterface{commonschema.NewToolInfo("tool2", "desc1", nil)}
 	curCW := newContextWindowWithMessages(curMsgs, nil, curTools)
 
 	shouldRelease, msgIdx, toolIdx := mgr.checkReleaseNeeded(curCW)

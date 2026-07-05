@@ -107,10 +107,10 @@ func TestInvokeFunction_Stream_不支持(t *testing.T) {
 func TestInvokeFunction_Card_ToolInfo(t *testing.T) {
 	fn, _ := NewInvokeFunction("search", searchFunc)
 	info := fn.Card().ToolInfo()
-	if info.Name != "search" {
-		t.Errorf("ToolInfo.Name: 期望 search，实际 %q", info.Name)
+	if info.GetName() != "search" {
+		t.Errorf("ToolInfo.Name: 期望 search，实际 %q", info.GetName())
 	}
-	if info.Parameters == nil {
+	if info.GetParameters() == nil {
 		t.Error("ToolInfo.Parameters 不应为 nil")
 	}
 }

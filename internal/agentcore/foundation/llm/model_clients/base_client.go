@@ -256,23 +256,22 @@ func (e *BaseClientEmbed) ConvertMessagesToDict(messages MessagesParam) ([]map[s
 // McpToolInfo 的 ServerName 字段不发送给 LLM。
 //
 // 输出格式：[{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
-func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoProvider) []map[string]any {
+func (e *BaseClientEmbed) ConvertToolsToDict(tools []commonschema.ToolInfoInterface) []map[string]any {
 	if len(tools) == 0 {
 		return nil
 	}
 
 	result := make([]map[string]any, 0, len(tools))
 	for _, tool := range tools {
-		info := tool.GetToolInfo()
-		parameters := info.Parameters
+		parameters := tool.GetParameters()
 		if parameters == nil {
 			parameters = make(map[string]any)
 		}
 		toolDict := map[string]any{
-			"type": info.Type,
+			"type": tool.GetType(),
 			"function": map[string]any{
-				"name":        info.Name,
-				"description": info.Description,
+				"name":        tool.GetName(),
+				"description": tool.GetDescription(),
 				"parameters":  parameters,
 			},
 		}

@@ -34,7 +34,7 @@ func (f *fakeTokenCounter) CountMessages(messages []llm_schema.BaseMessage, mode
 	return f.msgCount, f.msgErr
 }
 
-func (f *fakeTokenCounter) CountTools(tools []*common_schema.ToolInfo, model string) (int, error) {
+func (f *fakeTokenCounter) CountTools(tools []common_schema.ToolInfoInterface, model string) (int, error) {
 	return f.toolCount, f.toolErr
 }
 

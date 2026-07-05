@@ -345,7 +345,7 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, message llm_sche
 func (mc *SessionModelContext) GetContextWindow(
 	ctx context.Context,
 	systemMessages []llm_schema.BaseMessage,
-	tools []*schema.ToolInfo,
+	tools []schema.ToolInfoInterface,
 	windowSize int,
 	dialogueRound int,
 	opts ...iface.Option,
@@ -869,8 +869,7 @@ func (mc *SessionModelContext) statContextWindow(window *iface.ContextWindow) {
 	mc.statTools(stat, window.Tools)
 }
 
-// statMessages 按角色统计消息数量和 token 数。
-//
+// statMessages 按角色统计消息数量和 token 数。//
 // 对齐 Python: _stat_messages(stat, messages)
 func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages []llm_schema.BaseMessage) {
 	stat.TotalMessages = len(messages)
@@ -934,7 +933,7 @@ func (mc *SessionModelContext) countMessagesTokensByRole(stat *iface.ContextStat
 }
 
 // statTools 统计工具 token 数。
-func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []*schema.ToolInfo) {
+func (mc *SessionModelContext) statTools(stat *iface.ContextStats, tools []schema.ToolInfoInterface) {
 	if len(tools) == 0 {
 		return
 	}
@@ -971,21 +970,21 @@ func (mc *SessionModelContext) countSingleMessageTokens(msg llm_schema.BaseMessa
 //
 // 对应 Python: SessionModelContext._count_tool_tokens()
 // fallback 使用 json.Marshal 序列化整个 parameters dict + len/4 向下取整，对齐 Python json.dumps + len//4。
-func (mc *SessionModelContext) countToolTokens(toolInfo *schema.ToolInfo) int {
+func (mc *SessionModelContext) countToolTokens(toolInfo schema.ToolInfoInterface) int {
 	if mc.tokenCounter != nil {
-		count, err := mc.tokenCounter.CountTools([]*schema.ToolInfo{toolInfo}, mc.resolveContextModelName())
+		count, err := mc.tokenCounter.CountTools([]schema.ToolInfoInterface{toolInfo}, mc.resolveContextModelName())
 		if err == nil {
 			return count
 		}
 	}
 
 	// 降级：拼接 name + description + json.dumps(parameters)，对齐 Python
-	textContent := toolInfo.Name
-	if toolInfo.Description != "" {
-		textContent += toolInfo.Description
+	textContent := toolInfo.GetName()
+	if toolInfo.GetDescription() != "" {
+		textContent += toolInfo.GetDescription()
 	}
-	if toolInfo.Parameters != nil {
-		if data, err := json.Marshal(toolInfo.Parameters); err == nil {
+	if toolInfo.GetParameters() != nil {
+		if data, err := json.Marshal(toolInfo.GetParameters()); err == nil {
 			textContent += string(data)
 		}
 	}

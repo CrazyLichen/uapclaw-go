@@ -191,9 +191,9 @@ func (a *ReActAgent) warnMissingSkillReadFileTool(ctx context.Context) {
 	existingToolNames := make([]string, 0)
 
 	for _, t := range toolInfos {
-		if t.Name != "" {
-			existingToolNames = append(existingToolNames, t.Name)
-			if t.Name == "read_file" {
+		if t.GetName() != "" {
+			existingToolNames = append(existingToolNames, t.GetName())
+			if t.GetName() == "read_file" {
 				hasReadFile = true
 			}
 		}

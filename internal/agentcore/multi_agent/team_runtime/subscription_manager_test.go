@@ -154,22 +154,22 @@ func TestSubscriptionManager_双向索引一致性(t *testing.T) {
 	m.Subscribe("agent-2", "topic-1")
 
 	// 通过 ListSubscriptions 验证双向索引
-	info1 := m.ListSubscriptions("agent-1")
-	topics1 := sortStrings(info1["topics"].([]string))
+	info1 := m.ListSubscriptions("agent-1").(*SubscriptionInfo)
+	topics1 := sortStrings(info1.Topics)
 	if len(topics1) != 2 || topics1[0] != "topic-1" || topics1[1] != "topic-2" {
 		t.Errorf("agent-1 的主题 = %v, want [topic-1, topic-2]", topics1)
 	}
 
-	info2 := m.ListSubscriptions("agent-2")
-	topics2 := info2["topics"].([]string)
+	info2 := m.ListSubscriptions("agent-2").(*SubscriptionInfo)
+	topics2 := info2.Topics
 	if len(topics2) != 1 || topics2[0] != "topic-1" {
 		t.Errorf("agent-2 的主题 = %v, want [topic-1]", topics2)
 	}
 
 	// 取消订阅后双向索引应同步清理
 	m.Unsubscribe("agent-1", "topic-1")
-	info1 = m.ListSubscriptions("agent-1")
-	topics1 = info1["topics"].([]string)
+	info1 = m.ListSubscriptions("agent-1").(*SubscriptionInfo)
+	topics1 = info1.Topics
 	if len(topics1) != 1 || topics1[0] != "topic-2" {
 		t.Errorf("取消订阅后 agent-1 的主题 = %v, want [topic-2]", topics1)
 	}
@@ -217,33 +217,29 @@ func TestSubscriptionManager_ListSubscriptions(t *testing.T) {
 	m.Subscribe("agent-2", "topic-1")
 
 	t.Run("按 agentID 过滤", func(t *testing.T) {
-		info := m.ListSubscriptions("agent-1")
-		if info["agent_id"] != "agent-1" {
-			t.Errorf("agent_id = %v, want agent-1", info["agent_id"])
+		info := m.ListSubscriptions("agent-1").(*SubscriptionInfo)
+		if info.AgentID != "agent-1" {
+			t.Errorf("agent_id = %v, want agent-1", info.AgentID)
 		}
-		topics := sortStrings(info["topics"].([]string))
+		topics := sortStrings(info.Topics)
 		if len(topics) != 2 || topics[0] != "topic-1" || topics[1] != "topic-2" {
 			t.Errorf("topics = %v, want [topic-1, topic-2]", topics)
 		}
 	})
 
 	t.Run("不存在的 agentID", func(t *testing.T) {
-		info := m.ListSubscriptions("agent-unknown")
-		if info["agent_id"] != "agent-unknown" {
-			t.Errorf("agent_id = %v, want agent-unknown", info["agent_id"])
+		info := m.ListSubscriptions("agent-unknown").(*SubscriptionInfo)
+		if info.AgentID != "agent-unknown" {
+			t.Errorf("agent_id = %v, want agent-unknown", info.AgentID)
 		}
-		topics := info["topics"].([]string)
-		if len(topics) != 0 {
-			t.Errorf("topics = %v, want []", topics)
+		if len(info.Topics) != 0 {
+			t.Errorf("topics = %v, want []", info.Topics)
 		}
 	})
 
 	t.Run("空 agentID 返回全部订阅", func(t *testing.T) {
-		info := m.ListSubscriptions("")
-		subsMap, ok := info["subscriptions"].(map[string][]string)
-		if !ok {
-			t.Fatalf("subscriptions 类型错误: %T", info["subscriptions"])
-		}
+		info := m.ListSubscriptions("").(*SubscriptionMap)
+		subsMap := info.Subscriptions
 		if len(subsMap) != 2 {
 			t.Errorf("订阅模式数 = %d, want 2", len(subsMap))
 		}
@@ -288,8 +284,8 @@ func TestSubscriptionManager_重复订阅幂等(t *testing.T) {
 		t.Errorf("重复订阅后计数 = %d, want 1", count)
 	}
 
-	info := m.ListSubscriptions("agent-1")
-	topics := info["topics"].([]string)
+	info := m.ListSubscriptions("agent-1").(*SubscriptionInfo)
+	topics := info.Topics
 	if len(topics) != 1 || topics[0] != "topic-1" {
 		t.Errorf("重复订阅后主题 = %v, want [topic-1]", topics)
 	}

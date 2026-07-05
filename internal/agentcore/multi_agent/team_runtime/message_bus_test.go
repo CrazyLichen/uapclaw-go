@@ -407,28 +407,6 @@ func TestMessageBus_buildEnvelopePayload(t *testing.T) {
 	}
 }
 
-// TestMessageBus_extractEnvelopeFromPayload_JSON 测试信封提取 JSON 路径
-func TestMessageBus_extractEnvelopeFromPayload_JSON(t *testing.T) {
-	bus := &MessageBus{}
-
-	// JSON map 路径（非 *MessageEnvelope 类型）
-	envelopeMap := map[string]any{
-		"MessageID": "msg-json",
-		"Message":   "hello",
-		"Sender":    "sender",
-		"Recipient": "recipient",
-	}
-	payload := map[string]any{"envelope": envelopeMap}
-
-	extracted, err := bus.extractEnvelopeFromPayload(payload)
-	if err != nil {
-		t.Errorf("extractEnvelopeFromPayload JSON 路径返回错误: %v", err)
-	}
-	if extracted.MessageID != "msg-json" {
-		t.Errorf("MessageID = %q, want %q", extracted.MessageID, "msg-json")
-	}
-}
-
 // TestMessageBus_Stop_有活跃订阅 测试停止时清理活跃订阅
 func TestMessageBus_Stop_有活跃订阅(t *testing.T) {
 	config := NewMessageBusConfig(WithTeamID("test-team"))
