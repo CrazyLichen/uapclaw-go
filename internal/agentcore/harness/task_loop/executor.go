@@ -41,8 +41,12 @@ type DeepAgentProvider interface {
 	// SetAutoInvokeScheduled 设置自动 invoke 调度标记
 	SetAutoInvokeScheduled(scheduled bool)
 	// ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke
-	// ⤵️ 9.7 回填
+	// ⤵️ 9.1 回填：实现 SessionSpawn 完成后的自动 invoke 调度
 	ScheduleAutoInvokeOnSpawnDone(steerText string) error
+	// CreateSubagent 创建子 Agent 实例。
+	// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，由 *DeepAgent.CreateSubagent 实现。
+	// 对齐 Python: DeepAgent.create_subagent
+	CreateSubagent(subagentType string, subSessionID string) (DeepAgentProvider, error)
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

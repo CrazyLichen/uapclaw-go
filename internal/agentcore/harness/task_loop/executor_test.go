@@ -36,6 +36,10 @@ type fakeDeepAgentProvider struct {
 	invokeActive bool
 	// autoInvokeScheduled 预设的自动 invoke 调度标记
 	autoInvokeScheduled bool
+	// subagent 预设的子 Agent 提供者（CreateSubagent 返回值）
+	subagent DeepAgentProvider
+	// createSubagentErr 预设的 CreateSubagent 错误
+	createSubagentErr error
 }
 
 // fakeSessionFacade 用于测试的模拟会话门面
@@ -512,6 +516,11 @@ func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
 // ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentProvider 接口
 func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error {
 	return nil
+}
+
+// CreateSubagent 实现 DeepAgentProvider 接口
+func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (DeepAgentProvider, error) {
+	return f.subagent, f.createSubagentErr
 }
 
 // GetSessionID 实现 SessionFacade 接口
