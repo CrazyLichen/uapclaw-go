@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // StructSchemaExtractor 从 Go struct 反射提取 []*schema.Param。
 //
 // 读取 struct 字段的 json tag（参数名）和 jsonschema tag（描述/必填/默认值/枚举），
@@ -27,10 +29,10 @@ import (
 // 支持 Optional → Nullable、Union → anyOf、Literal → enum 等高级类型的 Schema 生成。
 type StructSchemaExtractor struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // schemaTagMap jsonschema tag 的键值对映射
 type schemaTagMap map[string]string
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -61,6 +63,8 @@ var commonAbbreviations = map[string]string{
 	"io":    "IO",
 	"os":    "OS",
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -223,6 +227,8 @@ func (StructSchemaExtractor) ExtractDescription(typ reflect.Type) string {
 	}
 	return humanizeName(typ.Name())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

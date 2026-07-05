@@ -18,6 +18,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // APIEmbedding 通用 HTTP 嵌入客户端。
 //
 // 支持 OpenAI 兼容的三种响应格式：embedding/embeddings/data[]。
@@ -50,10 +52,10 @@ type APIEmbedding struct {
 	httpClient *http.Client
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // APIEmbeddingOption APIEmbedding 可选配置。
 type APIEmbeddingOption func(*APIEmbedding)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -242,6 +244,8 @@ func (a *APIEmbedding) DimensionWithContext(ctx context.Context) (int, error) {
 	}
 	return a.dimension, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

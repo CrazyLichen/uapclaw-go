@@ -2,6 +2,8 @@ package callback
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // callbackOptionConfig 回调注册选项内部配置。
 type callbackOptionConfig struct {
 	Priority     int
@@ -14,10 +16,10 @@ type callbackOptionConfig struct {
 	CallbackType string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // CallbackOption 回调注册选项（Functional Options 模式）。
 type CallbackOption func(*callbackOptionConfig)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -76,6 +78,8 @@ func WithCallbackType(t string) CallbackOption {
 		cfg.CallbackType = t
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

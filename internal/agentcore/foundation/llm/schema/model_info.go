@@ -7,6 +7,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // BaseModelInfo 模型基础信息，将 provider 配置和请求参数合并为单一结构体。
 //
 // 用于 BaseModelClient 的初始化，包含 API 连接信息和模型参数。
@@ -49,15 +51,17 @@ type ModelConfig struct {
 	ModelInfo BaseModelInfo `json:"model_info"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // BaseModelInfoOption BaseModelInfo 构造选项函数。
 type BaseModelInfoOption func(*BaseModelInfo)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // baseModelInfoKnownKeys BaseModelInfo 已知的 JSON 键名集合，用于 Extra 字段拆分。
 var baseModelInfoKnownKeys map[string]struct{}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

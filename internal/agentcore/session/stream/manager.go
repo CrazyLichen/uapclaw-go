@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // StreamWriter 流写入器接口
 type StreamWriter interface {
 	// Write 写入流数据
@@ -54,10 +56,10 @@ type streamOutputConfig struct {
 	timeout time.Duration
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // StreamOutputOption StreamOutput 的可选配置
 type StreamOutputOption func(*streamOutputConfig)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -238,6 +240,8 @@ func (m *StreamWriterManager) StreamOutput(opts ...StreamOutputOption) <-chan Sc
 
 	return out
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

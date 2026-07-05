@@ -8,6 +8,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Intent 意图，描述用户对任务的操作意图。
 //
 // 对应 Python: openjiuwen/core/controller/schema/intent.py (Intent)
@@ -33,8 +35,6 @@ type Intent struct {
 	// ClarificationPrompt 澄清提示（UNKNOWN_TASK 必需）
 	ClarificationPrompt string `json:"clarification_prompt,omitempty"`
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // IntentOption 意图可选配置函数。
 type IntentOption func(*Intent)
@@ -66,6 +66,8 @@ const (
 	// IntentUnknownTask 未知意图
 	IntentUnknownTask IntentType = "unknown_task"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

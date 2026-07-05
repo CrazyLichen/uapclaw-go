@@ -11,6 +11,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // DeepLoopEvent 深度循环事件
 type DeepLoopEvent struct {
 	// Priority 优先级（数值越小优先级越高）
@@ -36,6 +38,8 @@ type LoopEventOption func(*DeepLoopEvent)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // DeepLoopEventType 深度循环事件类型枚举
 type DeepLoopEventType int
 
@@ -48,7 +52,7 @@ const (
 	DeepLoopEventTypeAbort
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -58,6 +62,8 @@ var defaultEventPriorityMap = map[DeepLoopEventType]int{
 	DeepLoopEventTypeSteer:    1,
 	DeepLoopEventTypeFollowup: 10,
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -119,8 +125,6 @@ func WithPriority(priority int) LoopEventOption {
 		e.Priority = priority
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // String 返回 DeepLoopEventType 的字符串表示
 func (t DeepLoopEventType) String() string {

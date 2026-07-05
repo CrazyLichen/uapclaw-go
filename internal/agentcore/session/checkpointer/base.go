@@ -15,10 +15,14 @@ import (
 // 接口类型别名，统一指向 interfaces 包定义。
 // 外部代码仍可通过 checkpointer.Checkpointer 引用，零破坏性迁移。
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // Checkpointer 检查点器接口，定义会话状态持久化的生命周期钩子。
 // 对应 Python: openjiuwen/core/session/checkpointer/base.py (Checkpointer)
 // TODO: 考虑移除 reexport，让调用者直接使用 interfaces 包
 type Checkpointer = interfaces.Checkpointer
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// SessionNamespaceAgent Agent 状态命名空间
@@ -30,6 +34,8 @@ const (
 	// WorkflowNamespaceGraph Workflow 图状态命名空间
 	WorkflowNamespaceGraph = "workflow-graph"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -84,6 +90,8 @@ func GetConfigEnv(session interfaces.InnerSession, key string, defaultValue ...a
 	}
 	return cfg.GetEnv(key, defaultValue...), true
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

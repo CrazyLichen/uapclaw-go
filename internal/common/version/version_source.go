@@ -14,6 +14,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // VersionSource 版本源接口，定义从远程获取最新版本的标准方法
 type VersionSource interface {
 	// FetchLatest 获取最新发布版本信息
@@ -38,8 +40,6 @@ type GitHubReleasesSource struct {
 	client *http.Client
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // GitHubSourceOption GitHub 版本源的可选配置
 type GitHubSourceOption func(*GitHubReleasesSource)
 
@@ -52,6 +52,8 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentCommon
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -120,6 +122,8 @@ func (s *GitHubReleasesSource) FetchAssets(ctx context.Context) ([]ReleaseAsset,
 	}
 	return info.Assets, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

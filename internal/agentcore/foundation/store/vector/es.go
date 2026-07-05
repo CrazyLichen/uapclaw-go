@@ -20,6 +20,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // esClient ES 客户端抽象接口，用于解耦和测试 mock。
 type esClient interface {
 	Do(ctx context.Context, req esapi.Request) (*esapi.Response, error)
@@ -59,8 +61,6 @@ type ESVectorStore struct {
 	createClient func(addresses []string, username, password string) (esClient, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ESOption ESVectorStore 构造选项
 type ESOption func(*ESVectorStore)
 
@@ -78,8 +78,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // esLogComponent ES 日志组件
 var esLogComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -834,6 +838,8 @@ func (w *esClientWrapper) Do(ctx context.Context, req esapi.Request) (*esapi.Res
 func (w *esClientWrapper) Close() {
 	// elasticsearch8.Client 没有显式 Close 方法，依赖 GC 回收
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

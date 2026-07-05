@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Interrupt 图中断信号
 type Interrupt struct {
 	// Value 中断携带的值（OutputSchema 类型）
@@ -49,8 +51,6 @@ type BaseInteraction struct {
 	session interfaces.InnerSession
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// InteractionType 交互事件类型标识
@@ -60,6 +60,8 @@ const (
 	// 对应 Python: INTERACTIVE_INPUT = "__interactive_input__"
 	InteractiveInputKey = "__interactive_input__"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -93,6 +95,8 @@ func PanicGraphInterrupt(interrupts ...Interrupt) {
 func PanicAgentInterrupt(msg any) {
 	panic(&AgentInterrupt{Message: msg})
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

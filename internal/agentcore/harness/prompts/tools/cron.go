@@ -547,7 +547,7 @@ func GetCronJobInputParams(language string) map[string]any {
 			"enabled": map[string]any{"type": "boolean", "description": d("enabled")},
 			"schedule": map[string]any{
 				"type":                 "object",
-				"description":         d("schedule"),
+				"description":          d("schedule"),
 				"required":             []any{},
 				"additionalProperties": true,
 				"properties": map[string]any{
@@ -562,22 +562,22 @@ func GetCronJobInputParams(language string) map[string]any {
 			},
 			"payload": map[string]any{
 				"type":                 "object",
-				"description":         d("payload"),
+				"description":          d("payload"),
 				"required":             []any{},
 				"additionalProperties": true,
 				"properties": map[string]any{
-					"kind":                      map[string]any{"type": "string", "enum": []any{"systemEvent", "agentTurn"}, "description": d("payload.kind")},
-					"text":                      map[string]any{"type": "string", "description": d("payload.text")},
-					"message":                   map[string]any{"type": "string", "description": d("payload.message")},
-					"model":                     map[string]any{"type": "string", "description": d("payload.model")},
-					"thinking":                  map[string]any{"type": "string", "description": d("payload.thinking")},
-					"timeoutSeconds":            map[string]any{"type": "integer", "description": d("payload.timeoutSeconds")},
+					"kind":                       map[string]any{"type": "string", "enum": []any{"systemEvent", "agentTurn"}, "description": d("payload.kind")},
+					"text":                       map[string]any{"type": "string", "description": d("payload.text")},
+					"message":                    map[string]any{"type": "string", "description": d("payload.message")},
+					"model":                      map[string]any{"type": "string", "description": d("payload.model")},
+					"thinking":                   map[string]any{"type": "string", "description": d("payload.thinking")},
+					"timeoutSeconds":             map[string]any{"type": "integer", "description": d("payload.timeoutSeconds")},
 					"allowUnsafeExternalContent": map[string]any{"type": "boolean", "description": d("payload.allowUnsafeExternalContent")},
-					"lightContext":              map[string]any{"type": "boolean", "description": d("payload.lightContext")},
-					"deliver":                   map[string]any{"type": "string", "description": d("payload.deliver")},
-					"channel":                   map[string]any{"type": "string", "description": d("payload.channel")},
-					"to":                        map[string]any{"type": "string", "description": d("payload.to")},
-					"bestEffortDeliver":         map[string]any{"type": "boolean", "description": d("payload.bestEffortDeliver")},
+					"lightContext":               map[string]any{"type": "boolean", "description": d("payload.lightContext")},
+					"deliver":                    map[string]any{"type": "string", "description": d("payload.deliver")},
+					"channel":                    map[string]any{"type": "string", "description": d("payload.channel")},
+					"to":                         map[string]any{"type": "string", "description": d("payload.to")},
+					"bestEffortDeliver":          map[string]any{"type": "boolean", "description": d("payload.bestEffortDeliver")},
 					"fallbacks": map[string]any{
 						"type":        "array",
 						"description": d("payload.fallbacks"),
@@ -587,7 +587,7 @@ func GetCronJobInputParams(language string) map[string]any {
 			},
 			"delivery": map[string]any{
 				"type":                 "object",
-				"description":         d("delivery"),
+				"description":          d("delivery"),
 				"required":             []any{},
 				"additionalProperties": true,
 				"properties": map[string]any{
@@ -599,14 +599,14 @@ func GetCronJobInputParams(language string) map[string]any {
 					"failureDestination": map[string]any{"description": d("delivery.failureDestination")},
 				},
 			},
-			"sessionTarget":      map[string]any{"type": "string", "description": d("sessionTarget")},
-			"wakeMode":           map[string]any{"type": "string", "enum": []any{"now", "next-heartbeat"}, "description": d("wakeMode")},
-			"deleteAfterRun":     map[string]any{"type": "boolean", "description": d("deleteAfterRun")},
-			"cron_expr":          map[string]any{"type": "string", "description": d("cron_expr")},
-			"timezone":           map[string]any{"type": "string", "description": d("timezone")},
+			"sessionTarget":       map[string]any{"type": "string", "description": d("sessionTarget")},
+			"wakeMode":            map[string]any{"type": "string", "enum": []any{"now", "next-heartbeat"}, "description": d("wakeMode")},
+			"deleteAfterRun":      map[string]any{"type": "boolean", "description": d("deleteAfterRun")},
+			"cron_expr":           map[string]any{"type": "string", "description": d("cron_expr")},
+			"timezone":            map[string]any{"type": "string", "description": d("timezone")},
 			"wake_offset_seconds": map[string]any{"type": "integer", "description": d("wake_offset_seconds")},
-			"description":        map[string]any{"type": "string", "description": d("description")},
-			"targets":            map[string]any{"type": "string", "description": d("targets")},
+			"description":         map[string]any{"type": "string", "description": d("description")},
+			"targets":             map[string]any{"type": "string", "description": d("targets")},
 		},
 	}
 }
@@ -642,7 +642,7 @@ func GetCronInputParams(language string) map[string]any {
 			"mode":            map[string]any{"type": "string", "enum": []any{"now", "next-heartbeat"}, "description": d("mode")},
 			"contextMessages": map[string]any{"type": "integer", "description": d("contextMessages")},
 		},
-		"required":          []any{"action"},
+		"required":             []any{"action"},
 		"additionalProperties": true,
 	}
 }

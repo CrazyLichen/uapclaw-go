@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // CallbackChain 顺序回调执行链，支持回滚、重试和错误处理。
 //
 // 对应 Python: openjiuwen/core/runner/callback/chain.py (CallbackChain)
@@ -26,8 +28,6 @@ type CallbackChain struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ChainCallbackFunc 链回调函数类型。
 //
 // 对应 Python: Callable (chain 中使用的 async callback)
@@ -42,6 +42,8 @@ type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
 //
 // 对应 Python: Callable (error handler)，返回 ChainAction 决定后续动作
 type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -275,6 +277,8 @@ func (c *CallbackChain) Execute(ctx context.Context, cctx *ChainContext) *ChainR
 func (c *CallbackChain) Rollback(ctx context.Context, cctx *ChainContext, executedInfos []*CallbackInfo[ChainCallbackFunc]) {
 	c.rollback(ctx, cctx, executedInfos)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

@@ -9,6 +9,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // TeamCardInterface 团队卡片只读接口。
 //
 // TeamCard 和 EventDrivenTeamCard 均实现此接口。
@@ -94,8 +96,6 @@ type EventDrivenTeamCard struct {
 	Subscriptions map[string][]string `json:"subscriptions,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // TeamCardOption TeamCard 构造选项函数，统一设置 BaseCard 字段和 TeamCard 字段。
 //
 // 采用方案C：去掉 CardOption 混合，所有选项均通过 TeamCardOption 设置，
@@ -104,6 +104,8 @@ type TeamCardOption func(*TeamCard)
 
 // EventDrivenTeamCardOption EventDrivenTeamCard 构造选项函数。
 type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -118,6 +120,8 @@ var _ schema.CardInterface = (*TeamCard)(nil)
 
 // 编译时验证 EventDrivenTeamCard 满足 schema.CardInterface。
 var _ schema.CardInterface = (*EventDrivenTeamCard)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -198,7 +202,9 @@ func (c *TeamCard) GetAgentCards() []*agentschema.AgentCard { return c.AgentCard
 // AddAgentCard 追加成员 Agent 卡片。
 //
 // 对齐 Python: self.card.agent_cards.append(card)
-func (c *TeamCard) AddAgentCard(card *agentschema.AgentCard) { c.AgentCards = append(c.AgentCards, card) }
+func (c *TeamCard) AddAgentCard(card *agentschema.AgentCard) {
+	c.AgentCards = append(c.AgentCards, card)
+}
 
 // RemoveAgentCard 按 agentID 移除成员 Agent 卡片。
 //

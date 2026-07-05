@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ClientRegistry 模型客户端注册表，管理客户端类型的注册和创建。
 //
 // 对应 Python: openjiuwen/core/common/clients/client_registry.py (ClientRegistry)
@@ -26,12 +28,12 @@ type ClientRegistry struct {
 // 将 ClientRegistry 中已注册的 LLM 客户端作为 Provider 验证来源。
 type registryProviderValidator struct{}
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ClientFactory 客户端工厂函数类型。
 //
 // 工厂函数接收 ModelRequestConfig 和 ModelClientConfig，返回 BaseModelClient 实例。
 type ClientFactory func(modelConfig *llmschema.ModelRequestConfig, clientConfig *llmschema.ModelClientConfig) BaseModelClient
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -40,8 +42,12 @@ const clientTypeLLM = "llm"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // globalRegistry 全局客户端注册表单例。
 var globalRegistry = NewClientRegistry()
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

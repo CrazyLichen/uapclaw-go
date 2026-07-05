@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ModalityField 单个模态字段。
 type ModalityField struct {
 	// Kind 模态类型
@@ -52,8 +54,6 @@ type addFieldOptions struct {
 	dataID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ModalityKind 内容模态类型。
 type ModalityKind string
 
@@ -81,6 +81,8 @@ var (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -260,6 +262,8 @@ func (d *MultimodalDocument) Fields() []ModalityField {
 	copy(result, d.fields)
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

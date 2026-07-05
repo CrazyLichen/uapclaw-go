@@ -261,6 +261,8 @@ The italic description lines starting and ending with underscores are part of
 the template structure, NOT content to be edited or removed.
 `
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // NewSessionMemoryConfig 创建默认会话记忆配置。
 //
 // 默认值：TriggerTokens=10000, TriggerAddTokens=5000, ToolMin=3,

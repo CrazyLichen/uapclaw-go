@@ -204,7 +204,10 @@ type PowerShellMetadataProvider struct{}
 
 // GetPowerShellMetadataProviderInputParams 构建 powershell 工具的参数 Schema
 func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"command":          {"cn": "要执行的 PowerShell 命令", "en": "PowerShell command to execute"},
 		"timeout":          {"cn": "可选超时时间（秒），默认 300，上限 3600。对于长时间运行的任务，建议适当增大该值以避免任务被提前中断", "en": "Optional timeout in seconds, default 300, max 3600. For long-running tasks, it is recommended to increase this value to avoid premature termination"},
@@ -213,7 +216,12 @@ func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
 		"max_output_chars": {"cn": "最大输出字符数，0 表示不限制（默认）；非零时上限 20000", "en": "Max output characters; 0 (default) means no limit; non-zero values are capped at 20000"},
 		"description":      {"cn": "命令描述（可选），用于日志和审计", "en": "Optional command description for logging and audit trail"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -230,7 +238,9 @@ func GetPowerShellMetadataProviderInputParams(language string) map[string]any {
 
 func (p *PowerShellMetadataProvider) GetName() string { return "powershell" }
 func (p *PowerShellMetadataProvider) GetDescription(language string) string {
-	if d, ok := powershellDescription[language]; ok { return d }
+	if d, ok := powershellDescription[language]; ok {
+		return d
+	}
 	return powershellDescription["cn"]
 }
 func (p *PowerShellMetadataProvider) GetInputParams(language string) map[string]any {

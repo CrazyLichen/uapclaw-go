@@ -11,6 +11,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // EventInputs 回调事件输入接口。
 //
 // 各事件类型对应不同的 Inputs 结构体，均实现此接口。
@@ -159,8 +161,6 @@ type ForceFinishRequest struct {
 	Result map[string]any
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // InvokeQueryString 普通字符串查询，实现 InvokeQuery 接口。
 //
 // 对齐 Python: InvokeInputs.query 为 str 类型时的分支
@@ -192,6 +192,8 @@ const (
 	// HeartbeatReasonManual 手动触发心跳
 	HeartbeatReasonManual HeartbeatReason = "manual"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

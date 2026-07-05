@@ -71,16 +71,24 @@ type ExitWorktreeMetadataProvider struct{}
 
 // GetExitWorktreeMetadataProviderInputParams 构建 exit_worktree 工具的参数 Schema
 func GetExitWorktreeMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
-		"action":         {"cn": "\"keep\" 保留 worktree 目录和分支在磁盘上;\"remove\" 删除目录和分支", "en": "\"keep\" leaves the worktree and branch on disk; \"remove\" deletes both"},
+		"action":          {"cn": "\"keep\" 保留 worktree 目录和分支在磁盘上;\"remove\" 删除目录和分支", "en": "\"keep\" leaves the worktree and branch on disk; \"remove\" deletes both"},
 		"discard_changes": {"cn": "仅在 action=\"remove\" 且 worktree 有未提交文件或未合并提交时需设为 true。工具会先拒绝并列出变更,确认后再设此参数重新调用", "en": "Required true when action is \"remove\" and the worktree has uncommitted files or unmerged commits. The tool will refuse and list them otherwise"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":         map[string]any{"type": "string", "enum": []any{"keep", "remove"}, "description": d("action")},
+			"action":          map[string]any{"type": "string", "enum": []any{"keep", "remove"}, "description": d("action")},
 			"discard_changes": map[string]any{"type": "boolean", "description": d("discard_changes")},
 		},
 		"required": []any{"action"},
@@ -89,7 +97,9 @@ func GetExitWorktreeMetadataProviderInputParams(language string) map[string]any 
 
 func (p *ExitWorktreeMetadataProvider) GetName() string { return "exit_worktree" }
 func (p *ExitWorktreeMetadataProvider) GetDescription(language string) string {
-	if d, ok := exitWorktreeDescription[language]; ok { return d }
+	if d, ok := exitWorktreeDescription[language]; ok {
+		return d
+	}
 	return exitWorktreeDescription["cn"]
 }
 func (p *ExitWorktreeMetadataProvider) GetInputParams(language string) map[string]any {

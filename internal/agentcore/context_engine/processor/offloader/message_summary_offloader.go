@@ -22,6 +22,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // MessageSummaryOffloaderConfig 消息摘要卸载器配置。
 //
 // 始终使用自适应压缩生成上下文感知摘要。
@@ -74,8 +76,6 @@ type MessageSummaryOffloader struct {
 	// model LLM 模型实例，用于生成摘要
 	model *llm.Model
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // MessageSummaryOffloaderOption 摘要卸载器构造选项
 type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
@@ -205,6 +205,8 @@ const defaultOffloadSummaryPrompt = `
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // contextOverflowKeywords 上下文溢出关键词，不同模型服务商使用不同的错误格式
 var contextOverflowKeywords = []string{
 	"context length",
@@ -214,6 +216,8 @@ var contextOverflowKeywords = []string{
 	"maximum context",
 	"context window",
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -338,6 +342,8 @@ func (mso *MessageSummaryOffloader) SaveState() map[string]any {
 
 // LoadState 从 map 恢复处理器内部状态（空操作）。
 func (mso *MessageSummaryOffloader) LoadState(_ map[string]any) {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

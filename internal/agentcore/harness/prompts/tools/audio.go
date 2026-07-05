@@ -35,11 +35,19 @@ type AudioMetadataMetadataProvider struct{}
 
 // GetAudioTranscriptionMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioTranscriptionMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -51,17 +59,25 @@ func GetAudioTranscriptionMetadataProviderInputParams(language string) map[strin
 
 // GetAudioQuestionAnsweringMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioQuestionAnsweringMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
-		"question": {"cn": "要基于音频内容回答的问题", "en": "Question to answer based on the audio content"},
+		"question":          {"cn": "要基于音频内容回答的问题", "en": "Question to answer based on the audio content"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"audio_path_or_url": map[string]any{"type": "string", "description": d("audio_path_or_url")},
-			"question": map[string]any{"type": "string", "description": d("question")},
+			"question":          map[string]any{"type": "string", "description": d("question")},
 		},
 		"required": []any{"audio_path_or_url", "question"},
 	}
@@ -69,11 +85,19 @@ func GetAudioQuestionAnsweringMetadataProviderInputParams(language string) map[s
 
 // GetAudioMetadataMetadataProviderInputParams 构建工具的参数 Schema
 func GetAudioMetadataMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"audio_path_or_url": {"cn": "本地音频路径或公网 http(s) 音频 URL，不支持 sandbox-only 路径", "en": "Local audio path or public http(s) audio URL; sandbox-only paths are not supported"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -85,7 +109,9 @@ func GetAudioMetadataMetadataProviderInputParams(language string) map[string]any
 
 func (p *AudioTranscriptionMetadataProvider) GetName() string { return "audio_transcription" }
 func (p *AudioTranscriptionMetadataProvider) GetDescription(language string) string {
-	if d, ok := audioTranscriptionDescription[language]; ok { return d }
+	if d, ok := audioTranscriptionDescription[language]; ok {
+		return d
+	}
 	return audioTranscriptionDescription["cn"]
 }
 func (p *AudioTranscriptionMetadataProvider) GetInputParams(language string) map[string]any {
@@ -94,7 +120,9 @@ func (p *AudioTranscriptionMetadataProvider) GetInputParams(language string) map
 
 func (p *AudioQuestionAnsweringMetadataProvider) GetName() string { return "audio_question_answering" }
 func (p *AudioQuestionAnsweringMetadataProvider) GetDescription(language string) string {
-	if d, ok := audioQuestionAnsweringDescription[language]; ok { return d }
+	if d, ok := audioQuestionAnsweringDescription[language]; ok {
+		return d
+	}
 	return audioQuestionAnsweringDescription["cn"]
 }
 func (p *AudioQuestionAnsweringMetadataProvider) GetInputParams(language string) map[string]any {
@@ -103,7 +131,9 @@ func (p *AudioQuestionAnsweringMetadataProvider) GetInputParams(language string)
 
 func (p *AudioMetadataMetadataProvider) GetName() string { return "audio_metadata" }
 func (p *AudioMetadataMetadataProvider) GetDescription(language string) string {
-	if d, ok := audioMetadataDescription[language]; ok { return d }
+	if d, ok := audioMetadataDescription[language]; ok {
+		return d
+	}
 	return audioMetadataDescription["cn"]
 }
 func (p *AudioMetadataMetadataProvider) GetInputParams(language string) map[string]any {

@@ -8,6 +8,8 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // AgentMode Agent 执行模式枚举
 type AgentMode int
 
@@ -17,6 +19,8 @@ const (
 	// AgentModePlan 只读规划模式
 	AgentModePlan
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -31,8 +35,6 @@ func ParseAgentMode(s string) (AgentMode, error) {
 		return AgentModeNormal, fmt.Errorf("未知的 AgentMode: %q", s)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // String 返回 AgentMode 的字符串表示
 func (m AgentMode) String() string {

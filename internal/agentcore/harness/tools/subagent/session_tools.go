@@ -27,6 +27,8 @@ const (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // SessionTaskRow 会话任务行（业务视图）。
 // 对齐 Python: SessionTaskRow
 type SessionTaskRow struct {
@@ -89,6 +91,8 @@ type SessionsCancelTool struct {
 	// language 语言
 	language string
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -275,15 +279,15 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 
 	// 步骤 5：添加任务到 TaskManager
 	coreTask := &cschema.Task{
-		SessionID:  parentSessionID,
-		TaskID:     taskID,
-		TaskType:   hschema.SessionSpawnTaskType,
+		SessionID:   parentSessionID,
+		TaskID:      taskID,
+		TaskType:    hschema.SessionSpawnTaskType,
 		Description: taskDescription,
-		Status:     cschema.TaskSubmitted,
+		Status:      cschema.TaskSubmitted,
 		Metadata: map[string]any{
-			"subagent_type":   subagentType,
+			"subagent_type":    subagentType,
 			"task_description": taskDescription,
-			"sub_session_id":  subSessionID,
+			"sub_session_id":   subSessionID,
 		},
 	}
 	if err := tm.AddTask(ctx, coreTask); err != nil {
@@ -440,6 +444,8 @@ func BuildSessionTools(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // buildSessionsListInputParams 构建 sessions_list 工具的输入参数。
 // sessions_list 无必需参数。
 func buildSessionsListInputParams() []*commonschema.Param {
@@ -479,6 +485,8 @@ func joinLines(lines []string) string {
 	}
 	return result
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查
 var (

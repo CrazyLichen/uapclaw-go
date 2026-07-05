@@ -10,8 +10,8 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	sasc "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	rail "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	sasc "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 
 	"gopkg.in/yaml.v3"

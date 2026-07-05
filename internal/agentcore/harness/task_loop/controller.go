@@ -13,6 +13,8 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // interactionQueuesProvider 类型断言接口，用于从 EventHandler 获取 LoopQueues。
 // 对齐 Python: getattr(handler, "interaction_queues", None)
 // ⤴️ 9.6 回填：TaskLoopEventHandler 已实现此接口。
@@ -29,6 +31,8 @@ type interactionQueuesProvider interface {
 type TaskLoopController struct {
 	*controller.Controller
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -143,6 +147,8 @@ func (tc *TaskLoopController) HasFollowUp() bool {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // getInteractionQueues 从 EventHandler 防御性获取 LoopQueues。
 // 使用类型断言对齐 Python getattr(handler, "interaction_queues", None) 语义。
 // 只有实现了 interactionQueuesProvider 接口的 EventHandler 才能返回非 nil。
@@ -158,6 +164,8 @@ func (tc *TaskLoopController) getInteractionQueues() *LoopQueues {
 	}
 	return provider.InteractionQueues()
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 TaskLoopController 满足 ControllerInterface
 var _ controller.ControllerInterface = (*TaskLoopController)(nil)

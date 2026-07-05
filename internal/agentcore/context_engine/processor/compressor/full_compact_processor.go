@@ -21,6 +21,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // FullCompactProcessorConfig 全量压缩处理器配置。
 //
 // 当上下文 Token 数超过阈值时，使用 LLM 生成完整摘要或加载 Session Memory 替换历史消息，
@@ -113,10 +115,10 @@ type FullCompactStateReinjector struct {
 	builders []ReinjectedStateBuilderSpec
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // FullCompactProcessorOption FullCompactProcessor 构造选项函数。
 type FullCompactProcessorOption func(*FullCompactProcessor)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -128,12 +130,10 @@ const baseCompactPrompt = `CRITICAL: Respond with TEXT ONLY. Do NOT call any too
 - Tool calls will be REJECTED and will waste your only turn — you will fail the task.
 - Your entire response must be plain text: an <analysis> block followed by a <summary> block.
 
-
 Your task is to create a detailed summary of the conversation so far,
 pay close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns,
 and architectural decisions that would be essential for continuing development work without losing context.
-
 
 Before providing your final summary, wrap your analysis in <analysis>
 tags to organize your thoughts and ensure you've covered all necessary points. In your analysis process:
@@ -237,11 +237,15 @@ following this structure and ensuring precision and thoroughness in your respons
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // analysisRegex 匹配 <analysis>...</analysis> 的正则（编译一次复用）
 var analysisRegex = regexp.MustCompile(`(?s)<analysis>.*?</analysis>`)
 
 // summaryRegex 匹配 <summary>...</summary> 的正则（编译一次复用）
 var summaryRegex = regexp.MustCompile(`(?s)<summary>(.*?)</summary>`)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -415,6 +419,8 @@ func (r *FullCompactStateReinjector) IterBuilders() []ReinjectedStateBuilderSpec
 	copy(result, r.builders)
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

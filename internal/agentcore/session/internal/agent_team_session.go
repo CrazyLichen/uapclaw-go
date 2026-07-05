@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // AgentTeamSession AgentTeam 内部会话，实现 InnerSession 和 TeamIDProvider 接口。
 //
 // 持有 AgentTeam 会话运行所需的基础设施组件（配置、状态、追踪器、流写入管理器、检查点器），
@@ -37,10 +39,10 @@ type AgentTeamSession struct {
 	teamSpan *tracer.TraceAgentSpan
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentTeamSessionOption AgentTeamSession 构造选项函数类型
 type AgentTeamSessionOption func(*AgentTeamSession)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -49,6 +51,8 @@ var (
 	_ interfaces.InnerSession   = (*AgentTeamSession)(nil)
 	_ interfaces.TeamIDProvider = (*AgentTeamSession)(nil)
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -9,11 +9,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -44,12 +46,14 @@ type TaskLoopEventHandler struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // NewTaskLoopEventHandler 创建任务循环事件处理器。
 // 对齐 Python: TaskLoopEventHandler.__init__
 func NewTaskLoopEventHandler(provider interfaces.DeepAgentInterface) *TaskLoopEventHandler {
 	return &TaskLoopEventHandler{
-		provider:   provider,
-		currentCh:  make(chan map[string]any, 1),
+		provider:  provider,
+		currentCh: make(chan map[string]any, 1),
 	}
 }
 
@@ -181,12 +185,12 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 
 	// 构建核心任务
 	coreTask := &cschema.Task{
-		SessionID:  input.Session.GetSessionID(),
-		TaskID:     taskID,
-		TaskType:   hschema.DeepTaskType,
+		SessionID:   input.Session.GetSessionID(),
+		TaskID:      taskID,
+		TaskType:    hschema.DeepTaskType,
 		Description: query,
-		Status:     cschema.TaskSubmitted,
-		Metadata:   make(map[string]any),
+		Status:      cschema.TaskSubmitted,
+		Metadata:    make(map[string]any),
 	}
 	// 对齐 Python: inputs=[event] if isinstance(event, InputEvent) else None
 	// 将原始 InputEvent 携带在 coreTask.Inputs 中，供 executor 提取 InteractiveInput
@@ -436,6 +440,8 @@ func (h *TaskLoopEventHandler) LastResult() map[string]any {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // resolveRound 解析轮次：将结果非阻塞写入当前轮次的完成 channel。
 // 若 roundID 不匹配则丢弃（过期轮次的结果）。
 // 对齐 Python: TaskLoopEventHandler._resolve_round
@@ -631,6 +637,8 @@ func extractQuery(event cschema.Event) string {
 	}
 	return ""
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：TaskLoopEventHandler 必须满足 modules.EventHandler
 var _ modules.EventHandler = (*TaskLoopEventHandler)(nil)

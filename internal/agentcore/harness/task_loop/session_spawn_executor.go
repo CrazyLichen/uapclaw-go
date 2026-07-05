@@ -6,12 +6,14 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -25,6 +27,8 @@ type SessionSpawnExecutor struct {
 	// provider 深层 Agent 提供者（用于 CreateSubagent）
 	provider interfaces.DeepAgentInterface
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -195,6 +199,8 @@ func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // buildErrorChunk 构建错误输出分片。
 // 对齐 Python: SessionSpawnExecutor._build_error_chunk
 func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *stream.OutputSchema {
@@ -211,6 +217,8 @@ func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *st
 		IsLastSchema: true,
 	}
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：SessionSpawnExecutor 必须满足 modules.TaskExecutor
 var _ modules.TaskExecutor = (*SessionSpawnExecutor)(nil)

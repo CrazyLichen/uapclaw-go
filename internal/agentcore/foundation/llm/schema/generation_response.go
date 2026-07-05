@@ -2,6 +2,8 @@ package schema
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // GenerationResponse 多模态生成响应基类，所有具体生成响应类型的公共父类。
 //
 // 仅包含一个 Model 字段，表示用于生成的模型名称。
@@ -58,8 +60,6 @@ type VideoGenerationResponse struct {
 	Format string `json:"format,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // GenerationResponseOption GenerationResponse 的函数式选项。
 type GenerationResponseOption func(*GenerationResponse)
 
@@ -71,6 +71,8 @@ type AudioGenerationResponseOption func(*AudioGenerationResponse)
 
 // VideoGenerationResponseOption VideoGenerationResponse 的函数式选项。
 type VideoGenerationResponseOption func(*VideoGenerationResponse)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

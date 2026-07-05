@@ -17,7 +17,10 @@ type VideoUnderstandingMetadataProvider struct{}
 
 // GetVideoUnderstandingMetadataProviderInputParams 构建 video_understanding 工具的参数 Schema
 func GetVideoUnderstandingMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"query":           {"cn": "用户关于视频内容的问题", "en": "User query about the video content"},
 		"video_path":      {"cn": "本地视频路径或远程视频 URL", "en": "Local video path or remote video URL"},
@@ -26,7 +29,12 @@ func GetVideoUnderstandingMetadataProviderInputParams(language string) map[strin
 		"temperature":     {"cn": "可选，采样温度", "en": "Optional sampling temperature"},
 		"timeout_seconds": {"cn": "可选，请求超时时间（秒）", "en": "Optional timeout in seconds"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -43,7 +51,9 @@ func GetVideoUnderstandingMetadataProviderInputParams(language string) map[strin
 
 func (p *VideoUnderstandingMetadataProvider) GetName() string { return "video_understanding" }
 func (p *VideoUnderstandingMetadataProvider) GetDescription(language string) string {
-	if d, ok := videoUnderstandingDescription[language]; ok { return d }
+	if d, ok := videoUnderstandingDescription[language]; ok {
+		return d
+	}
 	return videoUnderstandingDescription["cn"]
 }
 func (p *VideoUnderstandingMetadataProvider) GetInputParams(language string) map[string]any {

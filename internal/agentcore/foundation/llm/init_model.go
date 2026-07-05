@@ -6,6 +6,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // initModelConfig InitModel 工厂函数的内部配置。
 type initModelConfig struct {
 	temperature   float64
@@ -18,10 +20,10 @@ type initModelConfig struct {
 	customHeaders map[string]string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // InitModelOption InitModel 工厂选项函数。
 type InitModelOption func(*initModelConfig)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -33,6 +35,8 @@ const (
 	defaultInitMaxRetries  = 3
 	defaultInitVerifySSL   = false
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

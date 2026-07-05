@@ -8,11 +8,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -203,8 +205,6 @@ type ContextWindow struct {
 	Statistic ContextStats `json:"statistic"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ContextEngineOption ContextEngine 构造器选项函数
 type ContextEngineOption func(*ContextEngineOptions)
 
@@ -219,8 +219,12 @@ type ClearContextOption func(*ClearContextOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 确保 contextID 参数可用（避免未使用导入编译错误）
 var _ = fmt.Sprintf
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -395,6 +399,8 @@ func (s *ContextStats) StatTools(tools []schema.ToolInfoInterface, tokenCounter 
 	}
 	s.TotalTokens += s.ToolTokens
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

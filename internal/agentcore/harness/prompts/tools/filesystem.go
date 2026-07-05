@@ -62,23 +62,31 @@ type GrepMetadataProvider struct{}
 
 // GetReadFileMetadataProviderInputParams 构建 read_file 工具的参数 Schema
 func GetReadFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"file_path": {"cn": "要读取的绝对路径", "en": "Absolute path of the file to read"},
-		"offset": {"cn": "要跳过的行数（0 表示从头读取）。仅在文件过大无法一次读完时提供", "en": "Number of lines to skip before reading (0 = start of file). Only provide when the file is too large to read at once"},
-		"limit": {"cn": "最多读取的行数（默认及上限均为 2000）。仅在文件过大无法一次读完时提供", "en": "Maximum number of lines to read (default and cap: 2000). Only provide when the file is too large to read at once"},
-		"pages": {"cn": "PDF 专属页码范围，例如 '1-5'、'3'、'10-20'。每次最多 20 页", "en": "PDF-only page range, e.g. '1-5', '3', '10-20'. Maximum 20 pages per request"},
-		"caption": {"cn": "可选。读取 skills/… 下的图片时，填入 SKILL.md 中的图片说明文字（Markdown alt），用于多模态用户提示。", "en": "Optional. When reading an image under skills/, pass the figure caption (markdown alt text from SKILL.md) for the multimodal user prompt."},
+		"offset":    {"cn": "要跳过的行数（0 表示从头读取）。仅在文件过大无法一次读完时提供", "en": "Number of lines to skip before reading (0 = start of file). Only provide when the file is too large to read at once"},
+		"limit":     {"cn": "最多读取的行数（默认及上限均为 2000）。仅在文件过大无法一次读完时提供", "en": "Maximum number of lines to read (default and cap: 2000). Only provide when the file is too large to read at once"},
+		"pages":     {"cn": "PDF 专属页码范围，例如 '1-5'、'3'、'10-20'。每次最多 20 页", "en": "PDF-only page range, e.g. '1-5', '3', '10-20'. Maximum 20 pages per request"},
+		"caption":   {"cn": "可选。读取 skills/… 下的图片时，填入 SKILL.md 中的图片说明文字（Markdown alt），用于多模态用户提示。", "en": "Optional. When reading an image under skills/, pass the figure caption (markdown alt text from SKILL.md) for the multimodal user prompt."},
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"file_path": map[string]any{"type": "string", "description": dd("file_path")},
-			"offset": map[string]any{"type": "integer", "description": dd("offset")},
-			"limit": map[string]any{"type": "integer", "description": dd("limit")},
-			"pages": map[string]any{"type": "string", "description": dd("pages")},
-			"caption": map[string]any{"type": "string", "description": dd("caption")},
+			"offset":    map[string]any{"type": "integer", "description": dd("offset")},
+			"limit":     map[string]any{"type": "integer", "description": dd("limit")},
+			"pages":     map[string]any{"type": "string", "description": dd("pages")},
+			"caption":   map[string]any{"type": "string", "description": dd("caption")},
 		},
 		"required": []any{"file_path"},
 	}
@@ -86,17 +94,25 @@ func GetReadFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetWriteFileMetadataProviderInputParams 构建 write_file 工具的参数 Schema
 func GetWriteFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"file_path": {"cn": "要写入的文件路径", "en": "Absolute path of the file to write"},
-		"content": {"cn": "要写入的内容", "en": "Content to write"},
+		"content":   {"cn": "要写入的内容", "en": "Content to write"},
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"file_path": map[string]any{"type": "string", "description": dd("file_path")},
-			"content": map[string]any{"type": "string", "description": dd("content")},
+			"content":   map[string]any{"type": "string", "description": dd("content")},
 		},
 		"required": []any{"file_path", "content"},
 	}
@@ -104,20 +120,28 @@ func GetWriteFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetEditFileMetadataProviderInputParams 构建 edit_file 工具的参数 Schema
 func GetEditFileMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
-		"file_path": {"cn": "目标文件的绝对路径", "en": "Absolute path to the target file"},
-		"old_string": {"cn": "要替换的原始文本（空字符串可用于创建新文件或向空文件写入内容）。必须在文件中唯一匹配，否则须设置 replace_all=true 或提供更多上下文", "en": "The text to replace (empty string creates a new file or writes to an empty file). Must match exactly once unless replace_all=true or more context is provided"},
-		"new_string": {"cn": "替换后的文本，必须与 old_string 不同", "en": "The replacement text, must differ from old_string"},
+		"file_path":   {"cn": "目标文件的绝对路径", "en": "Absolute path to the target file"},
+		"old_string":  {"cn": "要替换的原始文本（空字符串可用于创建新文件或向空文件写入内容）。必须在文件中唯一匹配，否则须设置 replace_all=true 或提供更多上下文", "en": "The text to replace (empty string creates a new file or writes to an empty file). Must match exactly once unless replace_all=true or more context is provided"},
+		"new_string":  {"cn": "替换后的文本，必须与 old_string 不同", "en": "The replacement text, must differ from old_string"},
 		"replace_all": {"cn": "是否替换文件中所有匹配项，默认 false", "en": "Replace all occurrences of old_string in the file, default false"},
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"file_path": map[string]any{"type": "string", "description": dd("file_path")},
-			"old_string": map[string]any{"type": "string", "description": dd("old_string")},
-			"new_string": map[string]any{"type": "string", "description": dd("new_string")},
+			"file_path":   map[string]any{"type": "string", "description": dd("file_path")},
+			"old_string":  map[string]any{"type": "string", "description": dd("old_string")},
+			"new_string":  map[string]any{"type": "string", "description": dd("new_string")},
 			"replace_all": map[string]any{"type": "boolean", "description": dd("replace_all")},
 		},
 		"required": []any{"file_path", "old_string", "new_string"},
@@ -126,17 +150,25 @@ func GetEditFileMetadataProviderInputParams(language string) map[string]any {
 
 // GetGlobMetadataProviderInputParams 构建 glob 工具的参数 Schema
 func GetGlobMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"pattern": {"cn": "glob 模式（如 *.py, **/*.js）", "en": "Glob pattern (e.g. *.py, **/*.js)"},
-		"path": {"cn": "搜索目录，省略时默认当前工作目录", "en": "Directory to search. Defaults to the current working directory when omitted"},
+		"path":    {"cn": "搜索目录，省略时默认当前工作目录", "en": "Directory to search. Defaults to the current working directory when omitted"},
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"pattern": map[string]any{"type": "string", "description": dd("pattern")},
-			"path": map[string]any{"type": "string", "description": dd("path")},
+			"path":    map[string]any{"type": "string", "description": dd("path")},
 		},
 		"required": []any{"pattern"},
 	}
@@ -144,16 +176,24 @@ func GetGlobMetadataProviderInputParams(language string) map[string]any {
 
 // GetListDirMetadataProviderInputParams 构建 list_files 工具的参数 Schema
 func GetListDirMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
-		"path": {"cn": "目录路径", "en": "Directory path"},
+		"path":        {"cn": "目录路径", "en": "Directory path"},
 		"show_hidden": {"cn": "显示隐藏文件", "en": "Show hidden files"},
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"path": map[string]any{"type": "string", "description": dd("path")},
+			"path":        map[string]any{"type": "string", "description": dd("path")},
 			"show_hidden": map[string]any{"type": "boolean", "description": dd("show_hidden")},
 		},
 		"required": []any{},
@@ -162,43 +202,51 @@ func GetListDirMetadataProviderInputParams(language string) map[string]any {
 
 // GetGrepMetadataProviderInputParams 构建 grep 工具的参数 Schema
 func GetGrepMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
-	p := map[string]map[string]string{
-		"pattern": {"cn": "搜索模式（正则表达式）", "en": "Search pattern (regular expression)"},
-		"path": {"cn": "搜索路径（文件或目录），默认为当前工作目录", "en": "Search path (file or directory). Defaults to the current working directory"},
-		"ignore_case": {"cn": "忽略大小写（兼容旧字段）", "en": "Ignore case (legacy compatibility alias)"},
-		"glob": {"cn": "glob 过滤模式，例如 *.py 或 *.{ts,tsx}", "en": "Glob filter pattern such as *.py or *.{ts,tsx}"},
-		"output_mode": {"cn": "输出模式：content、files_with_matches 或 count，默认 content", "en": "Output mode: content, files_with_matches, or count. Defaults to content"},
-		"-B": {"cn": "每个匹配前显示的上下文行数，仅在 content 模式生效", "en": "Lines of leading context before each match; only used in content mode"},
-		"-A": {"cn": "每个匹配后显示的上下文行数，仅在 content 模式生效", "en": "Lines of trailing context after each match; only used in content mode"},
-		"-C": {"cn": "每个匹配前后都显示的上下文行数，仅在 content 模式生效", "en": "Lines of context before and after each match; only used in content mode"},
-		"context": {"cn": "-C 的别名，用于设置前后对称上下文行数", "en": "Alias of -C for symmetric context lines"},
-		"-n": {"cn": "在 content 模式显示行号，默认 true", "en": "Show line numbers in content mode. Defaults to true"},
-		"-i": {"cn": "大小写不敏感搜索", "en": "Case-insensitive search"},
-		"type": {"cn": "文件类型过滤，例如 py、js、ts，需要 rg", "en": "File type filter such as py, js, or ts. Requires rg"},
-		"head_limit": {"cn": "只返回前 N 条记录或行。0 表示不限制，默认 250", "en": "Return only the first N entries or lines. Use 0 for unlimited. Defaults to 250"},
-		"offset": {"cn": "先跳过前 N 条记录或行，再应用 head_limit，默认 0", "en": "Skip the first N entries or lines before applying head_limit. Defaults to 0"},
-		"multiline": {"cn": "启用多行正则模式，需要 rg", "en": "Enable multiline regex mode. Requires rg"},
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
 	}
-	dd := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	p := map[string]map[string]string{
+		"pattern":     {"cn": "搜索模式（正则表达式）", "en": "Search pattern (regular expression)"},
+		"path":        {"cn": "搜索路径（文件或目录），默认为当前工作目录", "en": "Search path (file or directory). Defaults to the current working directory"},
+		"ignore_case": {"cn": "忽略大小写（兼容旧字段）", "en": "Ignore case (legacy compatibility alias)"},
+		"glob":        {"cn": "glob 过滤模式，例如 *.py 或 *.{ts,tsx}", "en": "Glob filter pattern such as *.py or *.{ts,tsx}"},
+		"output_mode": {"cn": "输出模式：content、files_with_matches 或 count，默认 content", "en": "Output mode: content, files_with_matches, or count. Defaults to content"},
+		"-B":          {"cn": "每个匹配前显示的上下文行数，仅在 content 模式生效", "en": "Lines of leading context before each match; only used in content mode"},
+		"-A":          {"cn": "每个匹配后显示的上下文行数，仅在 content 模式生效", "en": "Lines of trailing context after each match; only used in content mode"},
+		"-C":          {"cn": "每个匹配前后都显示的上下文行数，仅在 content 模式生效", "en": "Lines of context before and after each match; only used in content mode"},
+		"context":     {"cn": "-C 的别名，用于设置前后对称上下文行数", "en": "Alias of -C for symmetric context lines"},
+		"-n":          {"cn": "在 content 模式显示行号，默认 true", "en": "Show line numbers in content mode. Defaults to true"},
+		"-i":          {"cn": "大小写不敏感搜索", "en": "Case-insensitive search"},
+		"type":        {"cn": "文件类型过滤，例如 py、js、ts，需要 rg", "en": "File type filter such as py, js, or ts. Requires rg"},
+		"head_limit":  {"cn": "只返回前 N 条记录或行。0 表示不限制，默认 250", "en": "Return only the first N entries or lines. Use 0 for unlimited. Defaults to 250"},
+		"offset":      {"cn": "先跳过前 N 条记录或行，再应用 head_limit，默认 0", "en": "Skip the first N entries or lines before applying head_limit. Defaults to 0"},
+		"multiline":   {"cn": "启用多行正则模式，需要 rg", "en": "Enable multiline regex mode. Requires rg"},
+	}
+	dd := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"pattern": map[string]any{"type": "string", "description": dd("pattern")},
-			"path": map[string]any{"type": "string", "description": dd("path")},
+			"pattern":     map[string]any{"type": "string", "description": dd("pattern")},
+			"path":        map[string]any{"type": "string", "description": dd("path")},
 			"ignore_case": map[string]any{"type": "boolean", "description": dd("ignore_case")},
-			"glob": map[string]any{"type": "string", "description": dd("glob")},
+			"glob":        map[string]any{"type": "string", "description": dd("glob")},
 			"output_mode": map[string]any{"type": "string", "enum": []any{"content", "files_with_matches", "count"}, "description": dd("output_mode")},
-			"-B": map[string]any{"type": "integer", "description": dd("-B")},
-			"-A": map[string]any{"type": "integer", "description": dd("-A")},
-			"-C": map[string]any{"type": "integer", "description": dd("-C")},
-			"context": map[string]any{"type": "integer", "description": dd("context")},
-			"-n": map[string]any{"type": "boolean", "description": dd("-n")},
-			"-i": map[string]any{"type": "boolean", "description": dd("-i")},
-			"type": map[string]any{"type": "string", "description": dd("type")},
-			"head_limit": map[string]any{"type": "integer", "description": dd("head_limit")},
-			"offset": map[string]any{"type": "integer", "description": dd("offset")},
-			"multiline": map[string]any{"type": "boolean", "description": dd("multiline")},
+			"-B":          map[string]any{"type": "integer", "description": dd("-B")},
+			"-A":          map[string]any{"type": "integer", "description": dd("-A")},
+			"-C":          map[string]any{"type": "integer", "description": dd("-C")},
+			"context":     map[string]any{"type": "integer", "description": dd("context")},
+			"-n":          map[string]any{"type": "boolean", "description": dd("-n")},
+			"-i":          map[string]any{"type": "boolean", "description": dd("-i")},
+			"type":        map[string]any{"type": "string", "description": dd("type")},
+			"head_limit":  map[string]any{"type": "integer", "description": dd("head_limit")},
+			"offset":      map[string]any{"type": "integer", "description": dd("offset")},
+			"multiline":   map[string]any{"type": "boolean", "description": dd("multiline")},
 		},
 		"required": []any{"pattern"},
 	}
@@ -206,7 +254,9 @@ func GetGrepMetadataProviderInputParams(language string) map[string]any {
 
 func (p *ReadFileMetadataProvider) GetName() string { return "read_file" }
 func (p *ReadFileMetadataProvider) GetDescription(language string) string {
-	if d, ok := readFileDescription[language]; ok { return d }
+	if d, ok := readFileDescription[language]; ok {
+		return d
+	}
 	return readFileDescription["cn"]
 }
 func (p *ReadFileMetadataProvider) GetInputParams(language string) map[string]any {
@@ -215,7 +265,9 @@ func (p *ReadFileMetadataProvider) GetInputParams(language string) map[string]an
 
 func (p *WriteFileMetadataProvider) GetName() string { return "write_file" }
 func (p *WriteFileMetadataProvider) GetDescription(language string) string {
-	if d, ok := writeFileDescription[language]; ok { return d }
+	if d, ok := writeFileDescription[language]; ok {
+		return d
+	}
 	return writeFileDescription["cn"]
 }
 func (p *WriteFileMetadataProvider) GetInputParams(language string) map[string]any {
@@ -224,7 +276,9 @@ func (p *WriteFileMetadataProvider) GetInputParams(language string) map[string]a
 
 func (p *EditFileMetadataProvider) GetName() string { return "edit_file" }
 func (p *EditFileMetadataProvider) GetDescription(language string) string {
-	if d, ok := editFileDescription[language]; ok { return d }
+	if d, ok := editFileDescription[language]; ok {
+		return d
+	}
 	return editFileDescription["cn"]
 }
 func (p *EditFileMetadataProvider) GetInputParams(language string) map[string]any {
@@ -233,7 +287,9 @@ func (p *EditFileMetadataProvider) GetInputParams(language string) map[string]an
 
 func (p *GlobMetadataProvider) GetName() string { return "glob" }
 func (p *GlobMetadataProvider) GetDescription(language string) string {
-	if d, ok := globDescription[language]; ok { return d }
+	if d, ok := globDescription[language]; ok {
+		return d
+	}
 	return globDescription["cn"]
 }
 func (p *GlobMetadataProvider) GetInputParams(language string) map[string]any {
@@ -242,7 +298,9 @@ func (p *GlobMetadataProvider) GetInputParams(language string) map[string]any {
 
 func (p *ListDirMetadataProvider) GetName() string { return "list_files" }
 func (p *ListDirMetadataProvider) GetDescription(language string) string {
-	if d, ok := listDirDescription[language]; ok { return d }
+	if d, ok := listDirDescription[language]; ok {
+		return d
+	}
 	return listDirDescription["cn"]
 }
 func (p *ListDirMetadataProvider) GetInputParams(language string) map[string]any {
@@ -251,7 +309,9 @@ func (p *ListDirMetadataProvider) GetInputParams(language string) map[string]any
 
 func (p *GrepMetadataProvider) GetName() string { return "grep" }
 func (p *GrepMetadataProvider) GetDescription(language string) string {
-	if d, ok := grepDescription[language]; ok { return d }
+	if d, ok := grepDescription[language]; ok {
+		return d
+	}
 	return grepDescription["cn"]
 }
 func (p *GrepMetadataProvider) GetInputParams(language string) map[string]any {

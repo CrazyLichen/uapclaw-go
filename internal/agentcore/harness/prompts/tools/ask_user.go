@@ -34,14 +34,14 @@ func GetAskUserMetadataProviderInputParams(language string) map[string]any {
 		lang = "cn"
 	}
 	p := map[string]map[string]string{
-		"questions":          {"cn": "向用户提出的问题列表（1-4个）", "en": "Questions to ask the user (1-4 questions)"},
-		"header":             {"cn": "问题的简短标题或标签", "en": "A short label or tag for the question (max 12 chars)"},
-		"question":           {"cn": "完整的问题文本", "en": "The complete question to ask"},
-		"options":            {"cn": "可选答案列表（2-4个）", "en": "Available choices for this question (2-4 options)"},
-		"options_label":      {"cn": "选项显示文本（1-5个词）", "en": "The display text for this option (1-5 words)."},
+		"questions":           {"cn": "向用户提出的问题列表（1-4个）", "en": "Questions to ask the user (1-4 questions)"},
+		"header":              {"cn": "问题的简短标题或标签", "en": "A short label or tag for the question (max 12 chars)"},
+		"question":            {"cn": "完整的问题文本", "en": "The complete question to ask"},
+		"options":             {"cn": "可选答案列表（2-4个）", "en": "Available choices for this question (2-4 options)"},
+		"options_label":       {"cn": "选项显示文本（1-5个词）", "en": "The display text for this option (1-5 words)."},
 		"options_description": {"cn": "选项详细说明", "en": "Explanation of what this option means or what will happen if chosen."},
-		"options_preview":    {"cn": "可选的预览内容，用于UI模型、代码片段或视觉比较。仅在单选问题中支持。", "en": "Optional preview content rendered when this option is focused. Use for mockups, code snippets, or visual comparisons. Only supported for single-select questions."},
-		"multi_select":       {"cn": "是否允许多选", "en": "Set to true to allow the user to select multiple options instead of just one."},
+		"options_preview":     {"cn": "可选的预览内容，用于UI模型、代码片段或视觉比较。仅在单选问题中支持。", "en": "Optional preview content rendered when this option is focused. Use for mockups, code snippets, or visual comparisons. Only supported for single-select questions."},
+		"multi_select":        {"cn": "是否允许多选", "en": "Set to true to allow the user to select multiple options instead of just one."},
 	}
 	desc := func(key string) string {
 		if d, ok := p[key][lang]; ok {
@@ -58,9 +58,9 @@ func GetAskUserMetadataProviderInputParams(language string) map[string]any {
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"header":      map[string]any{"type": "string", "description": desc("header")},
-						"question":    map[string]any{"type": "string", "description": desc("question")},
-						"options":     map[string]any{
+						"header":   map[string]any{"type": "string", "description": desc("header")},
+						"question": map[string]any{"type": "string", "description": desc("question")},
+						"options": map[string]any{
 							"type":        "array",
 							"description": desc("options"),
 							"items": map[string]any{

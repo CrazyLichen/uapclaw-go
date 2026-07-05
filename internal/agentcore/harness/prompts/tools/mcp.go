@@ -26,11 +26,19 @@ type ReadMcpResourceMetadataProvider struct{}
 
 // GetListMcpResourcesMetadataProviderInputParams 构建 list_mcp_resources 工具的参数 Schema
 func GetListMcpResourcesMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"server_id": {"cn": "MCP 服务器的 server_id", "en": "The server_id of the MCP server"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -42,12 +50,20 @@ func GetListMcpResourcesMetadataProviderInputParams(language string) map[string]
 
 // GetReadMcpResourceMetadataProviderInputParams 构建 read_mcp_resource 工具的参数 Schema
 func GetReadMcpResourceMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"server_id": {"cn": "MCP 服务器的 server_id", "en": "The server_id of the MCP server"},
 		"uri":       {"cn": "要读取的资源 URI", "en": "The URI of the resource to read"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -60,7 +76,9 @@ func GetReadMcpResourceMetadataProviderInputParams(language string) map[string]a
 
 func (p *ListMcpResourcesMetadataProvider) GetName() string { return "list_mcp_resources" }
 func (p *ListMcpResourcesMetadataProvider) GetDescription(language string) string {
-	if d, ok := listMcpResourcesDescription[language]; ok { return d }
+	if d, ok := listMcpResourcesDescription[language]; ok {
+		return d
+	}
 	return listMcpResourcesDescription["cn"]
 }
 func (p *ListMcpResourcesMetadataProvider) GetInputParams(language string) map[string]any {
@@ -69,7 +87,9 @@ func (p *ListMcpResourcesMetadataProvider) GetInputParams(language string) map[s
 
 func (p *ReadMcpResourceMetadataProvider) GetName() string { return "read_mcp_resource" }
 func (p *ReadMcpResourceMetadataProvider) GetDescription(language string) string {
-	if d, ok := readMcpResourceDescription[language]; ok { return d }
+	if d, ok := readMcpResourceDescription[language]; ok {
+		return d
+	}
 	return readMcpResourceDescription["cn"]
 }
 func (p *ReadMcpResourceMetadataProvider) GetInputParams(language string) map[string]any {

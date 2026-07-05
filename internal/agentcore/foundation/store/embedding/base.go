@@ -4,6 +4,8 @@ import "context"
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Callback 嵌入进度回调接口。
 //
 // 对齐 Python: BaseCallback
@@ -44,12 +46,12 @@ type EmbedOptions struct {
 	Callback Callback
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // EmbedOption 函数选项模式，用于配置 EmbedOptions。
 //
 // 对齐 Python: embed_documents(batch_size=, callback_cls=)
 type EmbedOption func(*EmbedOptions)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

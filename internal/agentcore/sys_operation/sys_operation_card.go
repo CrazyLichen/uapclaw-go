@@ -9,6 +9,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // LocalWorkConfig 本地工作目录配置，控制 Shell 命令执行的安全边界。
 type LocalWorkConfig struct {
 	// ShellAllowlist Shell 命令白名单
@@ -86,11 +88,7 @@ type ToolIdProxy struct {
 // SysOperationCardOption SysOperationCard 构造选项函数
 type SysOperationCardOption func(*SysOperationCard)
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -179,6 +177,8 @@ func WithSysOpGatewayConfig(config *SandboxGatewayConfig) SysOperationCardOption
 func WithSysOpIsolationKeyTemplate(tpl string) SysOperationCardOption {
 	return func(c *SysOperationCard) { c.isolationKeyTemplate = tpl }
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

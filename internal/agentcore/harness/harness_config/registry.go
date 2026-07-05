@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // HarnessConfigInfo 注册的 harness_config 元数据
 type HarnessConfigInfo struct {
 	// ID 唯一标识
@@ -38,6 +40,8 @@ type HarnessConfigRegistry struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // globalRegistry 全局注册表单例
 var globalRegistry *HarnessConfigRegistry
 
@@ -45,6 +49,8 @@ var globalRegistry *HarnessConfigRegistry
 var globalRegistryOnce sync.Once
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getGlobalRegistry 获取全局注册表单例
 func getGlobalRegistry() *HarnessConfigRegistry {
@@ -56,6 +62,8 @@ func getGlobalRegistry() *HarnessConfigRegistry {
 	})
 	return globalRegistry
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // Register 向全局注册表添加 harness_config 信息
 func Register(info HarnessConfigInfo) {

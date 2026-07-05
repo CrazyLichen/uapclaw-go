@@ -260,8 +260,8 @@ const (
 // NewVisionModelConfig 创建带默认值的视觉模型配置
 func NewVisionModelConfig() *VisionModelConfig {
 	return &VisionModelConfig{
-		BaseURL:   DefaultOpenAIBaseURL,
-		Model:     DefaultOpenAIVisionModel,
+		BaseURL:    DefaultOpenAIBaseURL,
+		Model:      DefaultOpenAIVisionModel,
 		MaxRetries: 3,
 	}
 }
@@ -297,9 +297,9 @@ func (VisionModelConfig) FromEnv() VisionModelConfig {
 	}
 
 	return VisionModelConfig{
-		APIKey:    apiKey,
-		BaseURL:   baseURL,
-		Model:     model,
+		APIKey:     apiKey,
+		BaseURL:    baseURL,
+		Model:      model,
 		MaxRetries: parseIntEnv("VISION_MAX_RETRIES", 3),
 	}
 }
@@ -343,19 +343,19 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 			DefaultOpenAIAudioQAModel,
 			"AUDIO_QUESTION_ANSWERING_MODEL",
 		),
-		MaxRetries:    parseIntEnv("AUDIO_MAX_RETRIES", 3),
-		HTTPTimeout:   parseIntEnv("AUDIO_HTTP_TIMEOUT", DefaultAudioHTTPTimeout),
-		MaxAudioBytes: parseIntEnv("AUDIO_MAX_AUDIO_BYTES", DefaultMaxAudioBytes),
-		ACRAccessKey:  os.Getenv("ACR_ACCESS_KEY"),
+		MaxRetries:      parseIntEnv("AUDIO_MAX_RETRIES", 3),
+		HTTPTimeout:     parseIntEnv("AUDIO_HTTP_TIMEOUT", DefaultAudioHTTPTimeout),
+		MaxAudioBytes:   parseIntEnv("AUDIO_MAX_AUDIO_BYTES", DefaultMaxAudioBytes),
+		ACRAccessKey:    os.Getenv("ACR_ACCESS_KEY"),
 		ACRAccessSecret: os.Getenv("ACR_ACCESS_SECRET"),
-		ACRBaseURL:    envOrDefault("ACR_BASE_URL", DefaultACRBaseURL),
+		ACRBaseURL:      envOrDefault("ACR_BASE_URL", DefaultACRBaseURL),
 	}
 }
 
 // NewDeepAgentConfig 创建带默认值的 DeepAgent 配置
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
-		AutoCreateWorkspace:      true,
+		AutoCreateWorkspace:       true,
 		EnableReadImageMultimodal: true,
 	}
 }

@@ -2,6 +2,8 @@ package output_parsers
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // MarkdownElement 单个 Markdown 元素。
 //
 // 对应 Python: MarkdownElement (dataclass)
@@ -39,8 +41,6 @@ type MarkdownContent struct {
 	// Lists 列表列表
 	Lists []string `json:"lists"`
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // MarkdownElementType Markdown 元素类型常量。
 //

@@ -2,6 +2,8 @@ package state
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ReadableStateLike 只读状态访问接口
 // 对应 Python: ReadableStateLike
 type ReadableStateLike interface {
@@ -118,8 +120,6 @@ type WorkflowState interface {
 	// 对齐 Python CommitState.get_outputs()
 	GetOutputs(nodeID ...string) any
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // Transformer 状态转换函数，接受只读状态视图返回任意值
 type Transformer func(readable ReadableStateLike) any

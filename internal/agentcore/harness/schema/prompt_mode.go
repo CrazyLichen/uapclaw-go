@@ -8,6 +8,8 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // PromptMode 提示词注入模式枚举
 type PromptMode int
 
@@ -19,6 +21,8 @@ const (
 	// PromptModeNone 无提示词（不注入系统提示词）
 	PromptModeNone
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -35,8 +39,6 @@ func ParsePromptMode(s string) (PromptMode, error) {
 		return PromptModeFull, fmt.Errorf("未知的 PromptMode: %q", s)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // String 返回 PromptMode 的字符串表示
 func (m PromptMode) String() string {

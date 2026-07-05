@@ -59,24 +59,32 @@ type LspToolMetadataProvider struct{}
 
 // GetLspToolMetadataProviderInputParams 构建 lsp 工具的参数 Schema
 func GetLspToolMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
-		"operation":          {"cn": "LSP 操作类型，可选值：goToDefinition、findReferences、documentSymbol、workspaceSymbol、goToImplementation、prepareCallHierarchy、incomingCalls、outgoingCalls", "en": "LSP operation type. Options: goToDefinition, findReferences, documentSymbol, workspaceSymbol, goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"},
-		"file_path":          {"cn": "文件路径（绝对路径或相对于工作区根目录的路径）", "en": "The absolute or relative path to the file"},
-		"line":               {"cn": "行号（1-indexed，编辑器中显示的行号）", "en": "The line number (1-based, as shown in editors)"},
-		"character":          {"cn": "列号（1-indexed，默认为 1）", "en": "The character offset (1-based, as shown in editors; defaults to 1)"},
-		"query":              {"cn": "搜索查询字符串；为空时返回所有可用符号（仅 workspaceSymbol 使用）", "en": "Search query string; when empty, returns all available symbols (used by workspaceSymbol only)"},
+		"operation":           {"cn": "LSP 操作类型，可选值：goToDefinition、findReferences、documentSymbol、workspaceSymbol、goToImplementation、prepareCallHierarchy、incomingCalls、outgoingCalls", "en": "LSP operation type. Options: goToDefinition, findReferences, documentSymbol, workspaceSymbol, goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"},
+		"file_path":           {"cn": "文件路径（绝对路径或相对于工作区根目录的路径）", "en": "The absolute or relative path to the file"},
+		"line":                {"cn": "行号（1-indexed，编辑器中显示的行号）", "en": "The line number (1-based, as shown in editors)"},
+		"character":           {"cn": "列号（1-indexed，默认为 1）", "en": "The character offset (1-based, as shown in editors; defaults to 1)"},
+		"query":               {"cn": "搜索查询字符串；为空时返回所有可用符号（仅 workspaceSymbol 使用）", "en": "Search query string; when empty, returns all available symbols (used by workspaceSymbol only)"},
 		"include_declaration": {"cn": "为 true 时，结果中包含符号的定义位置（默认 true）", "en": "When true, the declaration location itself is included in the results (default: true)"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"operation":          map[string]any{"type": "string", "enum": []any{"goToDefinition", "findReferences", "documentSymbol", "workspaceSymbol", "goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls"}, "description": d("operation")},
-			"file_path":          map[string]any{"type": "string", "description": d("file_path")},
-			"line":               map[string]any{"type": "integer", "minimum": 1, "description": d("line")},
-			"character":          map[string]any{"type": "integer", "minimum": 1, "description": d("character")},
-			"query":              map[string]any{"type": "string", "description": d("query")},
+			"operation":           map[string]any{"type": "string", "enum": []any{"goToDefinition", "findReferences", "documentSymbol", "workspaceSymbol", "goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls"}, "description": d("operation")},
+			"file_path":           map[string]any{"type": "string", "description": d("file_path")},
+			"line":                map[string]any{"type": "integer", "minimum": 1, "description": d("line")},
+			"character":           map[string]any{"type": "integer", "minimum": 1, "description": d("character")},
+			"query":               map[string]any{"type": "string", "description": d("query")},
 			"include_declaration": map[string]any{"type": "boolean", "description": d("include_declaration")},
 		},
 		"required": []any{"operation", "file_path"},
@@ -85,7 +93,9 @@ func GetLspToolMetadataProviderInputParams(language string) map[string]any {
 
 func (p *LspToolMetadataProvider) GetName() string { return "lsp" }
 func (p *LspToolMetadataProvider) GetDescription(language string) string {
-	if d, ok := lspToolDescription[language]; ok { return d }
+	if d, ok := lspToolDescription[language]; ok {
+		return d
+	}
 	return lspToolDescription["cn"]
 }
 func (p *LspToolMetadataProvider) GetInputParams(language string) map[string]any {

@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // TodoItem 任务计划中的单个待办项
 type TodoItem struct {
 	// ID 唯一标识
@@ -56,6 +58,8 @@ type ModelUsageRecord struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // TodoStatus 待办项状态枚举
 type TodoStatus int
 
@@ -70,7 +74,7 @@ const (
 	TodoStatusCancelled
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -81,6 +85,8 @@ var StatusIcons = map[TodoStatus]string{
 	TodoStatusCompleted:  "[√]",
 	TodoStatusCancelled:  "[×]",
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -111,11 +117,11 @@ func NewTodoItem() TodoItem {
 // ToDict 将 TodoItem 序列化为 JSON 友好的字典
 func (item TodoItem) ToDict() map[string]any {
 	result := map[string]any{
-		"id":           item.ID,
-		"content":      item.Content,
-		"activeForm":   item.ActiveForm,
-		"description":  item.Description,
-		"status":       item.Status.String(),
+		"id":          item.ID,
+		"content":     item.Content,
+		"activeForm":  item.ActiveForm,
+		"description": item.Description,
+		"status":      item.Status.String(),
 	}
 	if len(item.DependsOn) > 0 {
 		result["depends_on"] = item.DependsOn
@@ -328,6 +334,8 @@ func (r ModelUsageRecord) String() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）
 func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
 	for _, depID := range task.DependsOn {
@@ -338,6 +346,8 @@ func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
 	}
 	return true
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回 TodoStatus 的字符串表示
 func (s TodoStatus) String() string {

@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // FsOperation 文件系统操作接口，定义读取、写入、列表、搜索等文件系统操作。
 type FsOperation interface {
 	// ReadFile 读取文件内容
@@ -174,10 +176,10 @@ type CodeOptions struct {
 	Cwd string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // OperationMode 操作模式枚举
 type OperationMode int
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// OperationModeLocal 本地执行模式
@@ -186,8 +188,12 @@ const (
 	OperationModeSandbox OperationMode = 1
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ShellType Shell 类型枚举
 type ShellType int
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// ShellTypeAuto 自动检测
@@ -202,8 +208,12 @@ const (
 	ShellTypeSh ShellType = 4
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ContainerScope 容器作用域枚举
 type ContainerScope int
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// ContainerScopeSystem 系统级容器
@@ -213,6 +223,8 @@ const (
 	// ContainerScopeCustom 自定义容器
 	ContainerScopeCustom ContainerScope = 2
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // FsOption 文件系统操作选项函数
 type FsOption func(*FsOptions)
@@ -227,6 +239,8 @@ type CodeOption func(*CodeOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 编译时验证 BaseSysOperation 满足 SysOperation 接口
 var _ SysOperation = (*BaseSysOperation)(nil)
 
@@ -238,6 +252,8 @@ var _ ShellOperation = (*BaseShellOperation)(nil)
 
 // 编译时验证 BaseCodeOperation 满足 CodeOperation 接口
 var _ CodeOperation = (*BaseCodeOperation)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -470,5 +486,3 @@ func (b *BaseCodeOperation) ExecuteCode(_ context.Context, _ string, _ ...CodeOp
 
 // ListTools 返回工具卡片列表（BaseCodeOperation 空实现）
 func (b *BaseCodeOperation) ListTools() []*tool.ToolCard { return nil }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

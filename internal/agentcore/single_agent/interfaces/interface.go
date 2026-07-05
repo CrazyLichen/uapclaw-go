@@ -17,6 +17,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // AbilityManagerInterface 能力管理器接口，Agent 通过此接口注册和调度能力。
 //
 // 对应 Python: AbilityManager 的公开方法集。
@@ -168,13 +170,13 @@ type AgentOptions struct {
 	StreamModes []stream.StreamMode
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // WorkflowOption 工作流执行选项函数（预留，领域八扩展）。
 type WorkflowOption func(*WorkflowOptions)
 
 // AgentOption Agent 调用选项函数。
 type AgentOption func(*AgentOptions)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	wscontent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/workspace_content"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -52,24 +52,24 @@ var markdownHeadingRegexp = regexp.MustCompile(`(?m)^#{1,6}\s+.*$`)
 
 // hiddenTools 隐藏工具集合（不在工具列表中展示）
 var hiddenTools = map[string]bool{
-	"cron_list_jobs":  true,
-	"cron_get_job":    true,
-	"cron_create_job": true,
-	"cron_update_job": true,
-	"cron_delete_job": true,
-	"cron_toggle_job": true,
+	"cron_list_jobs":   true,
+	"cron_get_job":     true,
+	"cron_create_job":  true,
+	"cron_update_job":  true,
+	"cron_delete_job":  true,
+	"cron_toggle_job":  true,
 	"cron_preview_job": true,
 }
 
 // summaryOverridesCN 中文工具摘要覆盖
 var summaryOverridesCN = map[string]string{
-	"paid_search":                "付费联网搜索（配置 API 时优先使用）",
+	"paid_search":               "付费联网搜索（配置 API 时优先使用）",
 	"free_search":               "免费搜索（DuckDuckGo 等）",
 	"fetch_webpage":             "抓取网页文本内容",
 	"image_ocr":                 "读取图片中的文字",
-	"visual_question_answering":  "理解图片内容并回答问题",
-	"audio_transcription":        "转写音频文件",
-	"audio_question_answering":   "理解音频内容并回答",
+	"visual_question_answering": "理解图片内容并回答问题",
+	"audio_transcription":       "转写音频文件",
+	"audio_question_answering":  "理解音频内容并回答",
 	"audio_metadata":            "识别音频时长和歌曲信息",
 	"video_understanding":       "分析视频内容",
 	"session_new":               "创建多个协程任务（子 agent 异步运行）",
@@ -84,13 +84,13 @@ var summaryOverridesCN = map[string]string{
 
 // summaryOverridesEN 英文工具摘要覆盖
 var summaryOverridesEN = map[string]string{
-	"paid_search":                "Paid web search (preferred when configured)",
+	"paid_search":               "Paid web search (preferred when configured)",
 	"free_search":               "Free web search",
 	"fetch_webpage":             "Fetch webpage text",
 	"image_ocr":                 "Read text from images",
-	"visual_question_answering":  "Understand images and answer questions",
-	"audio_transcription":        "Transcribe audio",
-	"audio_question_answering":   "Understand audio and answer questions",
+	"visual_question_answering": "Understand images and answer questions",
+	"audio_transcription":       "Transcribe audio",
+	"audio_question_answering":  "Understand audio and answer questions",
 	"audio_metadata":            "Identify audio duration and song metadata",
 	"video_understanding":       "Analyze video content",
 	"session_new":               "Create async sub-agent sessions",
@@ -172,9 +172,9 @@ func BuildToolsContent(tools map[string]string, lang string) string {
 
 	// 分组工具
 	type toolGroup struct {
-		names  []string
-		label  string
-		desc   string
+		names []string
+		label string
+		desc  string
 	}
 	groupedLabels := []toolGroup{
 		{

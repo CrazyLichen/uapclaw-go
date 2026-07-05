@@ -19,6 +19,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ToolResultBudgetProcessorConfig 工具结果预算处理器配置。
 //
 // 按轮次控制工具结果 Token 预算。此处理器不使用 MessageOffloader
@@ -72,8 +74,6 @@ type offloadCandidate struct {
 	size int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ToolResultBudgetProcessorOption 构造选项函数
 type ToolResultBudgetProcessorOption func(*ToolResultBudgetProcessor)
 
@@ -84,6 +84,8 @@ const (
 	// PersistedOutputClosingTag 卸载后占位符结束标签
 	PersistedOutputClosingTag = "</persisted-output>"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -221,6 +223,8 @@ func (p *ToolResultBudgetProcessor) SaveState() map[string]any {
 
 // LoadState 从 map 恢复处理器内部状态（空操作）。
 func (p *ToolResultBudgetProcessor) LoadState(_ map[string]any) {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

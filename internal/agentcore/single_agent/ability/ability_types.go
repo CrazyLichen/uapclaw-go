@@ -14,11 +14,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // AddAbilityResult 添加能力的返回结果。
 // 类型别名，实际定义在 schema 包。
 //
 // 对应 Python: AddAbilityResult
 type AddAbilityResult = saschema.AddAbilityResult
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // AbilityExecutionError 能力执行统一异常，嵌入 BaseError 并关联 ToolMessage。
 //
@@ -31,11 +35,14 @@ type AbilityExecutionError struct {
 
 // saschema.ExecuteResult 单个工具调用的执行结果。
 // 实际定义在 saschema (single_agent/schema) 包，本包直接使用 saschema.ExecuteResult。
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // InterruptAutoConfirmKey 中断自动确认状态键。
 // 对齐 Python: openjiuwen/core/single_agent/interrupt/state.py INTERRUPT_AUTO_CONFIRM_KEY
 var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -120,6 +127,8 @@ func BuildToolMessageContent(result any) string {
 	// 路径 3：最终 fallback
 	return fmt.Sprintf("%v", result)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

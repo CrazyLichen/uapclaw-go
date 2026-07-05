@@ -4,7 +4,7 @@ import (
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // DialogueRound 对话轮次，[0]=userIdx, [1]=assistantIdx（nil 表示不完整轮次）。
 //

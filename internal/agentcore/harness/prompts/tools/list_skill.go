@@ -17,11 +17,19 @@ type ListSkillMetadataProvider struct{}
 
 // GetListSkillMetadataProviderInputParams 构建 list_skill 工具的参数 Schema
 func GetListSkillMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"query": {"cn": "可选。当前用户任务。为空时返回所有可用技能。", "en": "Optional. Current user task. If empty, return all available skills."},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -33,7 +41,9 @@ func GetListSkillMetadataProviderInputParams(language string) map[string]any {
 
 func (p *ListSkillMetadataProvider) GetName() string { return "list_skill" }
 func (p *ListSkillMetadataProvider) GetDescription(language string) string {
-	if d, ok := listSkillDescription[language]; ok { return d }
+	if d, ok := listSkillDescription[language]; ok {
+		return d
+	}
 	return listSkillDescription["cn"]
 }
 func (p *ListSkillMetadataProvider) GetInputParams(language string) map[string]any {

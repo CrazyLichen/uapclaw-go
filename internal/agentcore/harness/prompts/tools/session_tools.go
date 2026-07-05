@@ -115,7 +115,10 @@ type SessionsCancelMetadataProvider struct{}
 
 // GetSessionsListMetadataProviderInputParams 构建 sessions_list 工具的参数 Schema
 func GetSessionsListMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	_ = lang // 无参数工具
 	return map[string]any{
 		"type":       "object",
@@ -126,12 +129,20 @@ func GetSessionsListMetadataProviderInputParams(language string) map[string]any 
 
 // GetSessionsSpawnMetadataProviderInputParams 构建 sessions_spawn 工具的参数 Schema
 func GetSessionsSpawnMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"subagent_type":    {"cn": "子 agent 类型(如 'general-purpose')", "en": "Subagent type (e.g., 'general-purpose')"},
 		"task_description": {"cn": "任务描述", "en": "Task description"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -144,11 +155,19 @@ func GetSessionsSpawnMetadataProviderInputParams(language string) map[string]any
 
 // GetSessionsCancelMetadataProviderInputParams 构建 sessions_cancel 工具的参数 Schema
 func GetSessionsCancelMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"task_id": {"cn": "要取消的任务 ID（从 sessions_list 获取）", "en": "Task ID to cancel (obtained from sessions_list)"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -160,7 +179,9 @@ func GetSessionsCancelMetadataProviderInputParams(language string) map[string]an
 
 func (p *SessionsListMetadataProvider) GetName() string { return "sessions_list" }
 func (p *SessionsListMetadataProvider) GetDescription(language string) string {
-	if d, ok := sessionsListDescription[language]; ok { return d }
+	if d, ok := sessionsListDescription[language]; ok {
+		return d
+	}
 	return sessionsListDescription["cn"]
 }
 func (p *SessionsListMetadataProvider) GetInputParams(language string) map[string]any {
@@ -169,7 +190,9 @@ func (p *SessionsListMetadataProvider) GetInputParams(language string) map[strin
 
 func (p *SessionsSpawnMetadataProvider) GetName() string { return "sessions_spawn" }
 func (p *SessionsSpawnMetadataProvider) GetDescription(language string) string {
-	if d, ok := sessionsSpawnDescription[language]; ok { return d }
+	if d, ok := sessionsSpawnDescription[language]; ok {
+		return d
+	}
 	return sessionsSpawnDescription["cn"]
 }
 func (p *SessionsSpawnMetadataProvider) GetInputParams(language string) map[string]any {
@@ -178,7 +201,9 @@ func (p *SessionsSpawnMetadataProvider) GetInputParams(language string) map[stri
 
 func (p *SessionsCancelMetadataProvider) GetName() string { return "sessions_cancel" }
 func (p *SessionsCancelMetadataProvider) GetDescription(language string) string {
-	if d, ok := sessionsCancelDescription[language]; ok { return d }
+	if d, ok := sessionsCancelDescription[language]; ok {
+		return d
+	}
 	return sessionsCancelDescription["cn"]
 }
 func (p *SessionsCancelMetadataProvider) GetInputParams(language string) map[string]any {

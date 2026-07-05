@@ -2,6 +2,8 @@ package workflow
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // WorkflowOutput 工作流执行结果。
 //
 // 对应 Python: openjiuwen/core/workflow/base.py WorkflowOutput(BaseModel)
@@ -11,8 +13,6 @@ type WorkflowOutput struct {
 	// State 执行状态
 	State WorkflowExecutionState
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 枚 ────────────────────────────
 

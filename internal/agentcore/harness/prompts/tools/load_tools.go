@@ -17,12 +17,20 @@ type LoadToolsMetadataProvider struct{}
 
 // GetLoadToolsMetadataProviderInputParams 构建 load_tools 工具的参数 Schema
 func GetLoadToolsMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"tool_names": {"cn": "要在当前 session 中可见的工具名称列表", "en": "Names of tools to make visible for the current session"},
 		"replace":    {"cn": "如果为 true，替换当前可见工具集，否则合并", "en": "If true, replace the current visible tool set instead of merging"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -35,7 +43,9 @@ func GetLoadToolsMetadataProviderInputParams(language string) map[string]any {
 
 func (p *LoadToolsMetadataProvider) GetName() string { return "load_tools" }
 func (p *LoadToolsMetadataProvider) GetDescription(language string) string {
-	if d, ok := loadToolsDescription[language]; ok { return d }
+	if d, ok := loadToolsDescription[language]; ok {
+		return d
+	}
 	return loadToolsDescription["cn"]
 }
 func (p *LoadToolsMetadataProvider) GetInputParams(language string) map[string]any {

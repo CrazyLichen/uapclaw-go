@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // RetryConfig 重试配置。
 //
 // 对齐 Python: sync_request_with_retry / async_request_with_retry 的参数
@@ -27,8 +29,6 @@ type RetryConfig struct {
 	// Task 任务类型，决定错误码前缀，默认 TaskReranker
 	Task TaskName
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // TaskName 任务类型，决定错误码前缀。
 //
@@ -57,6 +57,8 @@ var (
 	// censorshipKeywords 审查内容检测关键词，对齐 Python
 	censorshipKeywords = []string{"safety", "violation", "policy", "inspection", "appropriate"}
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -90,6 +92,8 @@ func RequestWithRetrySync(
 ) (map[string]any, error) {
 	return doRequestWithRetry(ctx, httpClient, url, jsonBody, headers, cfg)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

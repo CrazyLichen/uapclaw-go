@@ -17,6 +17,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // CurrentRoundCompressorConfig 当轮增量压缩器配置。
 //
 // 当 Token 累积超过阈值时，压缩最新用户边界后的连续消息段，
@@ -84,10 +86,10 @@ type CurrentRoundCompressor struct {
 	cleanPrompt string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // CurrentRoundCompressorOption CurrentRoundCompressor 构造选项函数。
 type CurrentRoundCompressorOption func(*CurrentRoundCompressor)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -464,6 +466,8 @@ Your task is to merge them into one shorter, stable memory block while preservin
 
 Output plain text only.
 `
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。
 //
@@ -1053,6 +1057,8 @@ func (crc *CurrentRoundCompressor) SaveState() map[string]any {
 
 // LoadState 从 map 恢复处理器内部状态（空操作）。
 func (crc *CurrentRoundCompressor) LoadState(_ map[string]any) {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

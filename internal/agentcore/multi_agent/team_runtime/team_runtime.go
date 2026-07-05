@@ -18,6 +18,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // RuntimeConfig 团队运行时配置。
 //
 // 对应 Python: RuntimeConfig (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
@@ -58,8 +60,6 @@ type TeamRuntime struct {
 	mu sync.RWMutex
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // RuntimeConfigOption 团队运行时配置选项函数类型
 type RuntimeConfigOption func(*RuntimeConfig)
 
@@ -70,6 +70,8 @@ const (
 	// defaultRuntimeTeamID 默认团队标识，对齐 Python: RuntimeConfig.team_id = "default"
 	defaultRuntimeTeamID = "default"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -481,6 +483,8 @@ func (tr *TeamRuntime) GetP2PTimeout() float64 {
 func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

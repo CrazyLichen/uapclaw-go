@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // WorkflowSession 工作流级内部会话，实现 InnerSession 接口。
 //
 // 持有工作流运行所需的基础设施组件，支持延迟注入 StreamWriterManager 和 ActorManager。
@@ -93,10 +95,10 @@ type SubWorkflowSession struct {
 	mainWorkflowID2 string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // WorkflowSessionOption WorkflowSession 构造选项函数类型
 type WorkflowSessionOption func(*WorkflowSession)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -490,6 +492,8 @@ func (s *SubWorkflowSession) SetActorManager(mgr any) {
 func (s *SubWorkflowSession) Close() error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

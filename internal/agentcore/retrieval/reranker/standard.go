@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // StandardReranker 标准重排序客户端，支持 vLLM 风格的 /rerank API。
 //
 // 对应 Python: openjiuwen/core/retrieval/reranker/standard_reranker.py (StandardReranker)
@@ -28,8 +30,6 @@ type StandardReranker struct {
 	endPoint string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // StandardRerankerOption StandardReranker 可选配置
 type StandardRerankerOption func(*StandardReranker)
 
@@ -41,11 +41,15 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 确保编译时接口合规
 var _ reranker.BaseReranker = (*StandardReranker)(nil)
 
 // 抑制未使用导入警告
 var _ = fmt.Sprintf
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -150,6 +154,8 @@ func (r *StandardReranker) RerankDocsSync(ctx context.Context, query string, doc
 	}
 	return r.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

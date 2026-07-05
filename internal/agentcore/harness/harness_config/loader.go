@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ResolvedSection 解析后的内联（非文件）提示词段，用于 add_section()
 type ResolvedSection struct {
 	// Name 段名称
@@ -46,6 +48,8 @@ type ResolvedHarnessConfig struct {
 
 // HarnessConfigLoader 加载、校验和解析 harness_config.yaml 文件
 type HarnessConfigLoader struct{}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -150,6 +154,8 @@ func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoo
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // normalizeContent 将段内容规范化为 {lang: text} 字典。
 // 若为 string，在 "cn" 和 "en" 键下复制同一文本；若为 map，拷贝；若为 nil，返回空。
 func normalizeContent(content any) map[string]string {
@@ -178,8 +184,12 @@ func normalizeContent(content any) map[string]string {
 	}
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // varPlaceholderRegexp 匹配 {{ var }} 占位符
 var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // renderTemplate 使用 text/template 渲染文本中的 {{ var }} 占位符。
 // 先将 {{ var }} 转为 {{ .Var }} 格式，再执行模板。

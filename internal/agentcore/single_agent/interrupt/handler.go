@@ -11,10 +11,12 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -59,8 +61,6 @@ type ToolInterruptHandler struct {
 	key string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ExecuteToolCallFunc 工具调用执行函数类型。
 // 对应 Python: Optional[Callable] — handle_resume 中调用 execute_tool_call(ctx, tools, session, context)。
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
@@ -76,10 +76,14 @@ type ExecuteToolCallFunc func(
 	modelCtx ceinterface.ModelContext,
 ) ([]agentschema.ExecuteResult, error)
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -332,6 +336,8 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 		"interrupt_ids": interruptIDs,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

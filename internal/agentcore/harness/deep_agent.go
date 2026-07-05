@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	ctrlmodules "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -34,7 +35,6 @@ import (
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -131,12 +131,12 @@ var (
 	// bridgeEvents 桥接到内层 ReActAgent 的事件集合
 	// 对齐 Python: _BRIDGE_EVENTS
 	bridgeEvents = map[rail.AgentCallbackEvent]bool{
-		rail.CallbackBeforeModelCall: true,
-		rail.CallbackAfterModelCall:  true,
+		rail.CallbackBeforeModelCall:  true,
+		rail.CallbackAfterModelCall:   true,
 		rail.CallbackOnModelException: true,
-		rail.CallbackBeforeToolCall:  true,
-		rail.CallbackAfterToolCall:   true,
-		rail.CallbackOnToolException: true,
+		rail.CallbackBeforeToolCall:   true,
+		rail.CallbackAfterToolCall:    true,
+		rail.CallbackOnToolException:  true,
 	}
 
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
@@ -155,7 +155,7 @@ var (
 
 	// 编译期接口检查
 	_ hinterfaces.DeepAgentInterface = (*DeepAgent)(nil)
-	_ agentinterfaces.BaseAgent       = (*DeepAgent)(nil)
+	_ agentinterfaces.BaseAgent      = (*DeepAgent)(nil)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -1211,7 +1211,9 @@ func (d *DeepAgent) syncBuilderToActiveRails() {
 
 	for _, r := range allRails {
 		// 对齐 Python: if hasattr(rail, "system_prompt_builder")
-		if setter, ok := r.(interface{ SetSystemPromptBuilder(*saprompts.SystemPromptBuilder) }); ok {
+		if setter, ok := r.(interface {
+			SetSystemPromptBuilder(*saprompts.SystemPromptBuilder)
+		}); ok {
 			if d.systemPromptBuilder != nil {
 				setter.SetSystemPromptBuilder(d.systemPromptBuilder.SystemPromptBuilder)
 			}
@@ -1257,7 +1259,7 @@ func (d *DeepAgent) createReactAgent() *agents.ReActAgent {
 	}
 
 	innerCard := agentschema.NewAgentCard(
-		agentschema.WithAgentName(d.card.Name + "_react"),
+		agentschema.WithAgentName(d.card.Name+"_react"),
 		agentschema.WithAgentDescription(d.card.Description),
 	)
 

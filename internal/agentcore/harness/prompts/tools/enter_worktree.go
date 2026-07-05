@@ -74,14 +74,22 @@ type EnterWorktreeMetadataProvider struct{}
 
 // GetEnterWorktreeMetadataProviderInputParams 构建 enter_worktree 工具的参数 Schema
 func GetEnterWorktreeMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"name": {
 			"cn": `可选的 worktree 名称。每个 "/" 分隔的段只能包含字母、数字、点、下划线和短横线;总长度最多 64 字符。若该名称对应的 worktree 已存在则直接进入; 不提供则使用当前 session 的默认名称,首次未指定时自动生成`,
 			"en": `Optional name for the worktree. Each "/"-separated segment may contain only letters, digits, dots, underscores, and dashes; max 64 chars total. If a worktree with this name already exists, it is re-entered. If omitted, the current session's default worktree name is used; the first unnamed call generates it`,
 		},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -93,7 +101,9 @@ func GetEnterWorktreeMetadataProviderInputParams(language string) map[string]any
 
 func (p *EnterWorktreeMetadataProvider) GetName() string { return "enter_worktree" }
 func (p *EnterWorktreeMetadataProvider) GetDescription(language string) string {
-	if d, ok := enterWorktreeDescription[language]; ok { return d }
+	if d, ok := enterWorktreeDescription[language]; ok {
+		return d
+	}
 	return enterWorktreeDescription["cn"]
 }
 func (p *EnterWorktreeMetadataProvider) GetInputParams(language string) map[string]any {

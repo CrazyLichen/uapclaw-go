@@ -14,6 +14,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // BaseOutputParser LLM 输出解析器接口。
 //
 // 2.6 节定义最小接口，2.16 节扩展完整方法（StreamParse + Parse 签名改为 any）。
@@ -96,17 +98,17 @@ type BaseClientEmbed struct {
 	skipValidate bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // BaseClientEmbedOption BaseClientEmbed 构造选项函数。
 type BaseClientEmbedOption func(*BaseClientEmbed)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent model_clients 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -498,6 +500,8 @@ func ExtractCostInfo(obj map[string]any) (inputCost, outputCost, totalCost float
 
 	return inputCost, outputCost, totalCost
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

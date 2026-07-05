@@ -17,14 +17,16 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
-	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -83,6 +85,8 @@ type reloaderToolInput struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
@@ -95,7 +99,7 @@ feel free to call reload_original_context_messages:
 
 Storage types: "in_memory" (session cache), "filesystem" (disk file).`
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -679,6 +683,8 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 
 	return "compressed", nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

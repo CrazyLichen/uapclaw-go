@@ -16,6 +16,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // DashScopeReranker 阿里云 DashScope 重排序客户端。
 //
 // 继承 RerankerBase，使用 DashScope 专用的 /services/rerank/text-rerank/text-rerank API，
@@ -32,8 +34,6 @@ type DashScopeReranker struct {
 	endPoint string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // DashScopeRerankerOption DashScopeReranker 可选配置。
 type DashScopeRerankerOption func(*DashScopeReranker)
 
@@ -45,11 +45,15 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 确保编译时接口合规
 var _ reranker.BaseReranker = (*DashScopeReranker)(nil)
 
 // 抑制未使用导入警告
 var _ = fmt.Sprintf
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -165,6 +169,8 @@ func (r *DashScopeReranker) RerankMultimodalSync(ctx context.Context, query stri
 	}
 	return r.doRerankSync(ctx, query, docsAny, resolveOption(opts...))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

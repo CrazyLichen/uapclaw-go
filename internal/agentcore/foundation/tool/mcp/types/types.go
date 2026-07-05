@@ -11,6 +11,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // McpClient MCP 客户端接口，定义与 MCP 服务器交互的标准方法。
 //
 // 对应 Python: openjiuwen/core/foundation/tool/mcp/client/mcp_client.py (McpClient)
@@ -76,8 +78,6 @@ type McpToolCard struct {
 	ServerID string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ConnectOption 连接选项函数。
 type ConnectOption func(*ConnectOptions)
 
@@ -89,13 +89,19 @@ type McpToolCardOption func(*McpToolCard)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // NoTimeout 不设超时，与 Python NO_TIMEOUT = -1 对齐。
 const NoTimeout = -1
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 编译时验证 McpToolCard 满足 schema.CardInterface。
 var _ schema.CardInterface = (*McpToolCard)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -9,6 +9,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // AgentCard Agent 配置卡片，嵌入 BaseCard，增加输入/输出参数和接口 URL。
 //
 // InputParams/OutputParams 使用 []*schema.Param 定义，与 ToolCard 一致，
@@ -27,15 +29,17 @@ type AgentCard struct {
 	InterfaceURL string `json:"interface_url,omitempty"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // AgentCardOption AgentCard 构造选项函数。
 type AgentCardOption func(*AgentCard)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 编译时验证 AgentCard 满足 schema.CardInterface。
 var _ schema.CardInterface = (*AgentCard)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

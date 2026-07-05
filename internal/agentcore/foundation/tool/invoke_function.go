@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // InvokeFunction 本地函数工具（Invoke 模式），将 Go 函数包装为 Tool。
 //
 // 用户函数签名：func(ctx context.Context, input I, opts ...ToolOption) (O, error)
@@ -30,10 +32,10 @@ type localFuncConfig struct {
 	card        *ToolCard
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // LocalFuncOption 本地函数构造选项函数。
 type LocalFuncOption func(*localFuncConfig)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -201,6 +203,8 @@ func (f *InvokeFunction[I, O]) Invoke(ctx context.Context, inputs map[string]any
 func (f *InvokeFunction[I, O]) Stream(ctx context.Context, inputs map[string]any, opts ...ToolOption) (<-chan StreamChunk, error) {
 	return nil, NewErrStreamNotSupported(f.card.String())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

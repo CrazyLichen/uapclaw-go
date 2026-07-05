@@ -17,13 +17,21 @@ type SearchToolsMetadataProvider struct{}
 
 // GetSearchToolsMetadataProviderInputParams 构建 search_tools 工具的参数 Schema
 func GetSearchToolsMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"query":        {"cn": "搜索候选工具的查询文本", "en": "Search query for finding relevant candidate tools"},
 		"limit":        {"cn": "返回候选工具的最大数量", "en": "Maximum number of candidate tools to return"},
 		"detail_level": {"cn": "1=name+描述, 2=+参数摘要, 3=+完整参数", "en": "1=name+description, 2=+parameter summary, 3=+full parameters"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -37,7 +45,9 @@ func GetSearchToolsMetadataProviderInputParams(language string) map[string]any {
 
 func (p *SearchToolsMetadataProvider) GetName() string { return "search_tools" }
 func (p *SearchToolsMetadataProvider) GetDescription(language string) string {
-	if d, ok := searchToolsDescription[language]; ok { return d }
+	if d, ok := searchToolsDescription[language]; ok {
+		return d
+	}
 	return searchToolsDescription["cn"]
 }
 func (p *SearchToolsMetadataProvider) GetInputParams(language string) map[string]any {

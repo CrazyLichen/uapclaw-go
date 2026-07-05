@@ -6,6 +6,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ContextCompressionMetric 上下文压缩前后指标快照。
 //
 // 对应 Python: openjiuwen/core/context_engine/schema/context_state.py (ContextCompressionMetric)
@@ -98,8 +100,6 @@ type ContextCompressionState struct {
 	// Error 错误信息，空串表示无错误
 	Error string `json:"error,omitempty"`
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
 
 // CompressionStatus 压缩操作状态字面量类型。
 //

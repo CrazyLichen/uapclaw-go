@@ -12,6 +12,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // ReActAgentConfig ReAct Agent 配置，聚合模型、上下文、提示词等子配置。
 //
 // 对应 Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
@@ -62,8 +64,6 @@ type modelClientExtra struct {
 	customHeaders map[string]string
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ReActAgentConfigOption ReActAgentConfig 构造选项函数
 type ReActAgentConfigOption func(*ReActAgentConfig)
 
@@ -72,8 +72,12 @@ type ModelClientExtraOption func(*modelClientExtra)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // 编译期接口检查：ReActAgentConfig 必须实现 AgentConfig 接口
 var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

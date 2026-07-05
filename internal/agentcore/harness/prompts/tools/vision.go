@@ -26,12 +26,20 @@ type VisualQuestionAnsweringMetadataProvider struct{}
 
 // GetImageOCRMetadataProviderInputParams 构建 image_ocr 工具的参数 Schema
 func GetImageOCRMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"image_path_or_url": {"cn": "本地图片路径或公网 http(s) 图片 URL", "en": "Local image path or public http(s) image URL"},
 		"prompt":            {"cn": "可选，自定义 OCR 提示词", "en": "Optional custom OCR prompt"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -44,14 +52,22 @@ func GetImageOCRMetadataProviderInputParams(language string) map[string]any {
 
 // GetVisualQuestionAnsweringMetadataProviderInputParams 构建 visual_question_answering 工具的参数 Schema
 func GetVisualQuestionAnsweringMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"image_path_or_url": {"cn": "本地图片路径或公网 http(s) 图片 URL", "en": "Local image path or public http(s) image URL"},
 		"question":          {"cn": "要询问图片的问题", "en": "Question to ask about the image"},
 		"include_ocr":       {"cn": "是否先执行 OCR 并把结果拼接进问答提示词，默认 true", "en": "Whether to run OCR first and inject the result into the VQA prompt, default true"},
 		"ocr_prompt":        {"cn": "可选，自定义 OCR 提示词，仅在 include_ocr 为 true 时使用", "en": "Optional custom OCR prompt used only when include_ocr is true"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -66,16 +82,22 @@ func GetVisualQuestionAnsweringMetadataProviderInputParams(language string) map[
 
 func (p *ImageOCRMetadataProvider) GetName() string { return "image_ocr" }
 func (p *ImageOCRMetadataProvider) GetDescription(language string) string {
-	if d, ok := imageOCRDescription[language]; ok { return d }
+	if d, ok := imageOCRDescription[language]; ok {
+		return d
+	}
 	return imageOCRDescription["cn"]
 }
 func (p *ImageOCRMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetImageOCRMetadataProviderInputParams(language)
 }
 
-func (p *VisualQuestionAnsweringMetadataProvider) GetName() string { return "visual_question_answering" }
+func (p *VisualQuestionAnsweringMetadataProvider) GetName() string {
+	return "visual_question_answering"
+}
 func (p *VisualQuestionAnsweringMetadataProvider) GetDescription(language string) string {
-	if d, ok := visualQuestionAnsweringDescription[language]; ok { return d }
+	if d, ok := visualQuestionAnsweringDescription[language]; ok {
+		return d
+	}
 	return visualQuestionAnsweringDescription["cn"]
 }
 func (p *VisualQuestionAnsweringMetadataProvider) GetInputParams(language string) map[string]any {

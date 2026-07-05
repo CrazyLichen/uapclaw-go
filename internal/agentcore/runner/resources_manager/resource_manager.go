@@ -22,6 +22,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Result 单个操作的结果，对齐 Python 的 Ok[T]/Error[E] Result 模式。
 //
 // Value 非 nil 表示操作成功，Err 非 nil 表示操作失败。
@@ -90,8 +92,6 @@ type tagOptions struct {
 	SkipIfNotExists bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ResourceOption 资源操作选项函数。
 type ResourceOption func(*resourceOptions)
 
@@ -140,6 +140,8 @@ var (
 		"prompt": true,
 	}
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -926,7 +928,9 @@ func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ..
 			}
 		}
 		// 匿名接口断言，对齐 Python hasattr(card, "tool_info")
-		if provider, ok := card.(interface{ ToolInfo() schema.ToolInfoInterface }); ok {
+		if provider, ok := card.(interface {
+			ToolInfo() schema.ToolInfoInterface
+		}); ok {
 			if info := provider.ToolInfo(); info != nil {
 				results = append(results, info)
 			}
@@ -1009,6 +1013,8 @@ func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, o
 	}
 	return teams, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

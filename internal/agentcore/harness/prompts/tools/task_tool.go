@@ -1,6 +1,6 @@
 package tools
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // GeneralPurposeAgentDesc 通用型子代理描述双语常量
 var GeneralPurposeAgentDesc = map[string]string{
@@ -83,19 +83,31 @@ var taskToolDescription = map[string]string{
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // TaskMetadataProvider task_tool 工具元数据提供者
 type TaskMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // GetTaskMetadataProviderInputParams 构建 task_tool 工具的参数 Schema
 func GetTaskMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"subagent_type":    {"cn": "子代理类型", "en": "Type of subagent to use"},
 		"task_description": {"cn": "任务描述", "en": "Task description"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -108,7 +120,9 @@ func GetTaskMetadataProviderInputParams(language string) map[string]any {
 
 func (p *TaskMetadataProvider) GetName() string { return "task_tool" }
 func (p *TaskMetadataProvider) GetDescription(language string) string {
-	if d, ok := taskToolDescription[language]; ok { return d }
+	if d, ok := taskToolDescription[language]; ok {
+		return d
+	}
 	return taskToolDescription["cn"]
 }
 func (p *TaskMetadataProvider) GetInputParams(language string) map[string]any {

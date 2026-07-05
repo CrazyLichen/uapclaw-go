@@ -17,6 +17,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // dbClient 封装 pgxpool.Pool 的查询方法，用于依赖注入和测试 mock。
 // *pgxpool.Pool 天然实现此接口。
 type dbClient interface {
@@ -58,8 +60,6 @@ type GaussVectorStore struct {
 	createPool func(ctx context.Context, connString string) (dbClient, error)
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // gaussDistanceMetric GaussDB 支持的距离度量
 type gaussDistanceMetric string
 
@@ -78,8 +78,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // gaussLogComponent 日志组件
 var gaussLogComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -667,6 +671,8 @@ func (s *GaussVectorStore) GetCollectionMetadata(ctx context.Context, collection
 		"vector_field": newMeta.VectorField,
 	}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

@@ -13,6 +13,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // SessionLike 会话最小接口，用于 BuildKVCacheInvokeKwargs 获取 session_id。
 //
 // 对应 Python: Model.build_kv_cache_invoke_kwargs() 中 session.get_session_id()
@@ -45,10 +47,10 @@ type Model struct {
 	callbackFramework *callback.CallbackFramework
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ModelOption Model 构造选项函数。
 type ModelOption func(*Model)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -396,6 +398,8 @@ func (m *Model) Format(f fmt.State, _ rune) {
 		m.resolveModelName(""),
 	)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

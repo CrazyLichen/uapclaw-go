@@ -14,6 +14,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // TaskFilter 任务过滤器。
 // 对应 Python: TaskFilter(BaseModel)
 type TaskFilter struct {
@@ -87,8 +89,6 @@ type taskPriorityConfig struct {
 	isRecursive bool
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // TaskStatusOption 任务状态更新选项函数。
 type TaskStatusOption func(*taskStatusConfig)
 
@@ -100,6 +100,8 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -757,6 +759,8 @@ func (tm *TaskManager) SetConfig(cfg *config.ControllerConfig) {
 	defer tm.mu.Unlock()
 	tm.config = cfg
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

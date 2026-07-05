@@ -9,6 +9,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // Event 事件接口，所有事件类型的公共契约。
 //
 // 对应 Python: openjiuwen/core/controller/schema/event.py (Event)
@@ -125,8 +127,6 @@ type followUpEventJSON struct {
 	InputData      dataFrameSlice `json:"input_data"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // EventType 事件类型枚举，定义所有支持的事件类型。
 //
 // 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)
@@ -148,6 +148,8 @@ const (
 	// EventFollowUp 后续事件
 	EventFollowUp EventType = "follow_up"
 )
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

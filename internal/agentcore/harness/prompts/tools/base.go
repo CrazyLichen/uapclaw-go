@@ -86,7 +86,7 @@ func validateSchemaPair(name string, refSchema, otherSchema map[string]any, refL
 
 	for key := range refKeys {
 		for _, langProps := range []struct {
-			lang string
+			lang  string
 			props map[string]any
 		}{
 			{refLang, refProps},

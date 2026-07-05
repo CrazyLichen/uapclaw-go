@@ -98,13 +98,13 @@ func GetBashInputParams(language string) map[string]any {
 		lang = "cn"
 	}
 	p := map[string]map[string]string{
-		"command":         {"cn": "要执行的命令", "en": "The command to execute"},
-		"timeout":         {"cn": "可选超时时间（秒），默认 300，上限 3600。对于长时间运行的任务，建议适当增大该值以避免任务被提前中断", "en": "Optional timeout in seconds, default 300, max 3600. For long-running tasks, it is recommended to increase this value to avoid premature termination"},
-		"description":     {"cn": "用简洁的主动语态描述该命令的作用。不要在描述中使用 \"复杂\" 或 \"风险\" 等词——直接描述它做什么。\n\n对于简单命令（git、npm、常用 CLI 工具），保持简短（5-10 个字）：\n- ls → \"列出当前目录文件\"\n- git status → \"显示工作区状态\"\n- npm install → \"安装项目依赖\"\n\n对于不易一眼看懂的命令（管道命令、冷门参数等），补充足够上下文说明其用途：\n- find . -name \"*.tmp\" -exec rm {} \\; → \"递归查找并删除所有 .tmp 文件\"\n- git reset --hard origin/main → \"丢弃所有本地更改，与远程 main 对齐\"\n- curl -s url | jq '.data[]' → \"从 URL 获取 JSON 并提取 data 数组元素\"", "en": "Clear, concise description of what this command does in active voice. Never use words like \"complex\" or \"risk\" in the description - just describe what it does.\n\nFor simple commands (git, npm, standard CLI tools), keep it brief (5-10 words):\n- ls -> \"List files in current directory\"\n- git status -> \"Show working tree status\"\n- npm install -> \"Install package dependencies\"\n\nFor commands that are harder to parse at a glance (piped commands, obscure flags, etc.), add enough context to clarify what it does:\n- find . -name \"*.tmp\" -exec rm {} \\; -> \"Find and delete all .tmp files recursively\"\n- git reset --hard origin/main -> \"Discard all local changes and match remote main\"\n- curl -s url | jq '.data[]' -> \"Fetch JSON from URL and extract data array elements\""},
+		"command":           {"cn": "要执行的命令", "en": "The command to execute"},
+		"timeout":           {"cn": "可选超时时间（秒），默认 300，上限 3600。对于长时间运行的任务，建议适当增大该值以避免任务被提前中断", "en": "Optional timeout in seconds, default 300, max 3600. For long-running tasks, it is recommended to increase this value to avoid premature termination"},
+		"description":       {"cn": "用简洁的主动语态描述该命令的作用。不要在描述中使用 \"复杂\" 或 \"风险\" 等词——直接描述它做什么。\n\n对于简单命令（git、npm、常用 CLI 工具），保持简短（5-10 个字）：\n- ls → \"列出当前目录文件\"\n- git status → \"显示工作区状态\"\n- npm install → \"安装项目依赖\"\n\n对于不易一眼看懂的命令（管道命令、冷门参数等），补充足够上下文说明其用途：\n- find . -name \"*.tmp\" -exec rm {} \\; → \"递归查找并删除所有 .tmp 文件\"\n- git reset --hard origin/main → \"丢弃所有本地更改，与远程 main 对齐\"\n- curl -s url | jq '.data[]' → \"从 URL 获取 JSON 并提取 data 数组元素\"", "en": "Clear, concise description of what this command does in active voice. Never use words like \"complex\" or \"risk\" in the description - just describe what it does.\n\nFor simple commands (git, npm, standard CLI tools), keep it brief (5-10 words):\n- ls -> \"List files in current directory\"\n- git status -> \"Show working tree status\"\n- npm install -> \"Install package dependencies\"\n\nFor commands that are harder to parse at a glance (piped commands, obscure flags, etc.), add enough context to clarify what it does:\n- find . -name \"*.tmp\" -exec rm {} \\; -> \"Find and delete all .tmp files recursively\"\n- git reset --hard origin/main -> \"Discard all local changes and match remote main\"\n- curl -s url | jq '.data[]' -> \"Fetch JSON from URL and extract data array elements\""},
 		"run_in_background": {"cn": "设为 true 以后台运行命令。仅在不需要立即获取结果时使用，命令完成后会收到通知", "en": "Set to true to run this command in the background. Only use this if you don't need the result immediately and are OK being notified when the command completes later"},
-		"workdir":         {"cn": "执行目录（相对或绝对路径），默认为工作区根目录；不能越出工作区沙箱", "en": "Working directory (relative or absolute path), defaults to workspace root; cannot escape workspace sandbox"},
-		"max_output_chars": {"cn": "最大输出字符数，0 表示不限制（默认）；非零时上限 20000，防止超大输出撑爆上下文", "en": "Max output characters; 0 (default) means no limit; non-zero values are capped at 20000 to prevent oversized output from flooding context"},
-		"shell_type":      {"cn": "指定 Shell 类型，可选值：auto/cmd/powershell/bash/sh，默认 auto。cmd/PowerShell 不支持 `mkdir -p`；需要该语法时保持 auto/bash/sh。", "en": "Shell to use: auto/cmd/powershell/bash/sh, default auto. cmd/PowerShell do not support `mkdir -p`; keep auto/bash/sh when you need that syntax."},
+		"workdir":           {"cn": "执行目录（相对或绝对路径），默认为工作区根目录；不能越出工作区沙箱", "en": "Working directory (relative or absolute path), defaults to workspace root; cannot escape workspace sandbox"},
+		"max_output_chars":  {"cn": "最大输出字符数，0 表示不限制（默认）；非零时上限 20000，防止超大输出撑爆上下文", "en": "Max output characters; 0 (default) means no limit; non-zero values are capped at 20000 to prevent oversized output from flooding context"},
+		"shell_type":        {"cn": "指定 Shell 类型，可选值：auto/cmd/powershell/bash/sh，默认 auto。cmd/PowerShell 不支持 `mkdir -p`；需要该语法时保持 auto/bash/sh。", "en": "Shell to use: auto/cmd/powershell/bash/sh, default auto. cmd/PowerShell do not support `mkdir -p`; keep auto/bash/sh when you need that syntax."},
 	}
 
 	desc := func(key string) string {
@@ -117,13 +117,13 @@ func GetBashInputParams(language string) map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"command":         map[string]any{"type": "string", "description": desc("command")},
-			"timeout":         map[string]any{"type": "integer", "description": desc("timeout")},
-			"description":     map[string]any{"type": "string", "description": desc("description")},
+			"command":           map[string]any{"type": "string", "description": desc("command")},
+			"timeout":           map[string]any{"type": "integer", "description": desc("timeout")},
+			"description":       map[string]any{"type": "string", "description": desc("description")},
 			"run_in_background": map[string]any{"type": "boolean", "description": desc("run_in_background")},
-			"workdir":         map[string]any{"type": "string", "description": desc("workdir")},
-			"max_output_chars": map[string]any{"type": "integer", "description": desc("max_output_chars")},
-			"shell_type":      map[string]any{"type": "string", "enum": []any{"auto", "cmd", "powershell", "bash", "sh"}, "description": desc("shell_type")},
+			"workdir":           map[string]any{"type": "string", "description": desc("workdir")},
+			"max_output_chars":  map[string]any{"type": "integer", "description": desc("max_output_chars")},
+			"shell_type":        map[string]any{"type": "string", "enum": []any{"auto", "cmd", "powershell", "bash", "sh"}, "description": desc("shell_type")},
 		},
 		"required": []any{"command"},
 	}

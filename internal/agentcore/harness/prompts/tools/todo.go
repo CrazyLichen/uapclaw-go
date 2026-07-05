@@ -216,7 +216,10 @@ type TodoGetMetadataProvider struct{}
 
 // GetTodoCreateMetadataProviderInputParams 构建 todo_create 工具的参数 Schema
 func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"tasks": {
 			"cn": "子任务列表，JSON 数组格式。每个元素为任务对象，必填字段：\n" +
@@ -245,7 +248,12 @@ func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
 		"status":            {"cn": "任务状态", "en": "Task status"},
 		"selected_model_id": {"cn": "执行此任务使用的模型 ID。见系统提示词「模型选择策略」。若任务结果不满意，可通过 todo_modify 更换更强的模型 ID 后重试。", "en": "Model ID for this task. See 'Model Selection Strategy' in system prompt. If task result is unsatisfactory, update via todo_modify and retry."},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -271,7 +279,10 @@ func GetTodoCreateMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoListMetadataProviderInputParams 构建 todo_list 工具的参数 Schema
 func GetTodoListMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	_ = lang
 	return map[string]any{
 		"type":       "object",
@@ -282,10 +293,13 @@ func GetTodoListMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoModifyMetadataProviderInputParams 构建 todo_modify 工具的参数 Schema
 func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
-		"action":           {"cn": "要执行的操作类型", "en": "Operation type to perform"},
-		"ids":              {"cn": "要操作的任务 ID 列表", "en": "List of task IDs to operate on"},
+		"action": {"cn": "要执行的操作类型", "en": "Operation type to perform"},
+		"ids":    {"cn": "要操作的任务 ID 列表", "en": "List of task IDs to operate on"},
 		"todos": {
 			"cn": "根据 action 字段处理的待办事项数组。" +
 				"支持修改 selected_model_id：若某任务执行结果质量不佳（输出不准确、逻辑错误、未达预期），" +
@@ -296,17 +310,22 @@ func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
 				"indicates stronger capability, " +
 				"and reset the task status to pending or in_progress to trigger re-execution.",
 		},
-		"todo_data":        {"cn": "用于 insert_after/insert_before 操作的对象", "en": "Object for insert_after/insert_before actions"},
-		"target_id":        {"cn": "目标任务 ID", "en": "Target task ID"},
-		"items":            {"cn": "要插入的任务列表", "en": "Tasks to insert"},
-		"id":               {"cn": "任务唯一标识符", "en": "Unique task identifier"},
-		"content":          {"cn": "任务摘要描述", "en": "Task summary description"},
-		"activeForm":       {"cn": "content 的进行语态", "en": "Present-tense form of content"},
-		"description":      {"cn": "任务详细内容", "en": "Detailed task content"},
-		"status":           {"cn": "任务状态", "en": "Task status"},
+		"todo_data":         {"cn": "用于 insert_after/insert_before 操作的对象", "en": "Object for insert_after/insert_before actions"},
+		"target_id":         {"cn": "目标任务 ID", "en": "Target task ID"},
+		"items":             {"cn": "要插入的任务列表", "en": "Tasks to insert"},
+		"id":                {"cn": "任务唯一标识符", "en": "Unique task identifier"},
+		"content":           {"cn": "任务摘要描述", "en": "Task summary description"},
+		"activeForm":        {"cn": "content 的进行语态", "en": "Present-tense form of content"},
+		"description":       {"cn": "任务详细内容", "en": "Detailed task content"},
+		"status":            {"cn": "任务状态", "en": "Task status"},
 		"selected_model_id": {"cn": "执行此任务使用的模型 ID。见系统提示词「模型选择策略」。若任务结果不满意，可通过 todo_modify 更换更强的模型 ID 后重试。", "en": "Model ID for this task. See 'Model Selection Strategy' in system prompt. If task result is unsatisfactory, update via todo_modify and retry."},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	todoItemSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -341,11 +360,19 @@ func GetTodoModifyMetadataProviderInputParams(language string) map[string]any {
 
 // GetTodoGetMetadataProviderInputParams 构建 todo_get 工具的参数 Schema
 func GetTodoGetMetadataProviderInputParams(language string) map[string]any {
-	lang := language; if lang != "cn" && lang != "en" { lang = "cn" }
+	lang := language
+	if lang != "cn" && lang != "en" {
+		lang = "cn"
+	}
 	p := map[string]map[string]string{
 		"id": {"cn": "任务唯一标识符", "en": "Unique task identifier"},
 	}
-	d := func(key string) string { if v, ok := p[key][lang]; ok { return v }; return p[key]["cn"] }
+	d := func(key string) string {
+		if v, ok := p[key][lang]; ok {
+			return v
+		}
+		return p[key]["cn"]
+	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -357,7 +384,9 @@ func GetTodoGetMetadataProviderInputParams(language string) map[string]any {
 
 func (p *TodoCreateMetadataProvider) GetName() string { return "todo_create" }
 func (p *TodoCreateMetadataProvider) GetDescription(language string) string {
-	if d, ok := todoCreateDescription[language]; ok { return d }
+	if d, ok := todoCreateDescription[language]; ok {
+		return d
+	}
 	return todoCreateDescription["cn"]
 }
 func (p *TodoCreateMetadataProvider) GetInputParams(language string) map[string]any {
@@ -366,7 +395,9 @@ func (p *TodoCreateMetadataProvider) GetInputParams(language string) map[string]
 
 func (p *TodoListMetadataProvider) GetName() string { return "todo_list" }
 func (p *TodoListMetadataProvider) GetDescription(language string) string {
-	if d, ok := todoListDescription[language]; ok { return d }
+	if d, ok := todoListDescription[language]; ok {
+		return d
+	}
 	return todoListDescription["cn"]
 }
 func (p *TodoListMetadataProvider) GetInputParams(language string) map[string]any {
@@ -375,7 +406,9 @@ func (p *TodoListMetadataProvider) GetInputParams(language string) map[string]an
 
 func (p *TodoModifyMetadataProvider) GetName() string { return "todo_modify" }
 func (p *TodoModifyMetadataProvider) GetDescription(language string) string {
-	if d, ok := todoModifyDescription[language]; ok { return d }
+	if d, ok := todoModifyDescription[language]; ok {
+		return d
+	}
 	return todoModifyDescription["cn"]
 }
 func (p *TodoModifyMetadataProvider) GetInputParams(language string) map[string]any {
@@ -384,7 +417,9 @@ func (p *TodoModifyMetadataProvider) GetInputParams(language string) map[string]
 
 func (p *TodoGetMetadataProvider) GetName() string { return "todo_get" }
 func (p *TodoGetMetadataProvider) GetDescription(language string) string {
-	if d, ok := todoGetDescription[language]; ok { return d }
+	if d, ok := todoGetDescription[language]; ok {
+		return d
+	}
 	return todoGetDescription["cn"]
 }
 func (p *TodoGetMetadataProvider) GetInputParams(language string) map[string]any {

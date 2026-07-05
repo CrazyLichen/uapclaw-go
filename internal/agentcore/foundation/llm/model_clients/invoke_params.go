@@ -6,6 +6,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // InvokeParams 非流式调用的完整参数。
 //
 // 对应 Python: BaseModelClient.invoke() 的关键字参数
@@ -150,8 +152,6 @@ type ReleaseParams struct {
 	ToolsReleasedIndex *int
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // InvokeOption 非流式调用选项函数。
 type InvokeOption func(*InvokeParams)
 
@@ -169,6 +169,8 @@ type GenerateVideoOption func(*GenerateVideoParams)
 
 // ReleaseOption 释放缓存选项函数。
 type ReleaseOption func(*ReleaseParams)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

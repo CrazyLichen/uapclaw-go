@@ -20,6 +20,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // TaskLoopEventExecutor 任务循环事件执行器。
 // 实现 modules.TaskExecutor 接口，将深层 Agent 的 ReAct 循环
 // 封装为 Controller 领域的标准任务执行流程。
@@ -30,6 +32,8 @@ type TaskLoopEventExecutor struct {
 	// provider 深层 Agent 提供者
 	provider interfaces.DeepAgentInterface
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -368,6 +372,8 @@ func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *module
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // getState 从会话加载 DeepAgentState。
 // 对齐 Python: TaskLoopEventExecutor._get_state
 func (e *TaskLoopEventExecutor) getState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
@@ -381,6 +387,8 @@ func (e *TaskLoopEventExecutor) getPlanTask(state *hschema.DeepAgentState, taskI
 	}
 	return state.TaskPlan.GetTask(taskID)
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // MakeFilter 创建按任务 ID 过滤的 TaskFilter。
 func MakeFilter(taskID string) *modules.TaskFilter {
@@ -410,6 +418,8 @@ func ExtractInteractiveInput(event *cschema.InputEvent) *interaction.Interactive
 	return nil
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // isSensitive 读取 IS_SENSITIVE 环境变量，判断是否为敏感模式。
 // 默认为敏感模式（true），IS_SENSITIVE=false 时为非敏感模式。
 // 对齐 Python: UserConfig.is_sensitive() + base_client.go 已有模式
@@ -421,6 +431,8 @@ func isSensitive() bool {
 	}
 	return true
 }
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时接口检查：TaskLoopEventExecutor 必须满足 modules.TaskExecutor
 var _ modules.TaskExecutor = (*TaskLoopEventExecutor)(nil)

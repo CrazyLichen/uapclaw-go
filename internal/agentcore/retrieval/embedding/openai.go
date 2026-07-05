@@ -20,6 +20,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
 // OpenAIEmbedding OpenAI 向量嵌入客户端。
 //
 // 使用 openai-go SDK，支持 Matryoshka 维度截断和多模态嵌入。
@@ -53,10 +55,10 @@ type OpenAIEmbedding struct {
 	httpClient *http.Client
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // OpenAIEmbeddingOption OpenAIEmbedding 可选配置。
 type OpenAIEmbeddingOption func(*OpenAIEmbedding)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -319,6 +321,8 @@ func (o *OpenAIEmbedding) DimensionWithContext(ctx context.Context) (int, error)
 	}
 	return o.dimension, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
