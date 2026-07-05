@@ -6,12 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────── 导出函数 ────────────────────
 
 func TestInterruptRequest_字段默认值(t *testing.T) {
-	req := &InterruptRequest{}
+	req := &saschema.InterruptRequest{}
 	assert.Equal(t, "", req.Message)
 	assert.Nil(t, req.PayloadSchema)
 	assert.Equal(t, "", req.AutoConfirmKey)
@@ -19,7 +20,7 @@ func TestInterruptRequest_字段默认值(t *testing.T) {
 }
 
 func TestInterruptRequest_完整字段(t *testing.T) {
-	req := &InterruptRequest{
+	req := &saschema.InterruptRequest{
 		Message:        "请确认是否继续",
 		PayloadSchema:  map[string]any{"type": "object"},
 		AutoConfirmKey: "auto_yes",
@@ -32,7 +33,7 @@ func TestInterruptRequest_完整字段(t *testing.T) {
 }
 
 func TestToolCallInterruptRequest_从ToolCall创建(t *testing.T) {
-	req := &InterruptRequest{
+	req := &saschema.InterruptRequest{
 		Message:        "需要用户输入",
 		PayloadSchema:  nil,
 		AutoConfirmKey: "",
@@ -54,7 +55,7 @@ func TestToolCallInterruptRequest_从ToolCall创建(t *testing.T) {
 }
 
 func TestToolCallInterruptRequest_Index默认值(t *testing.T) {
-	req := &InterruptRequest{Message: "test"}
+	req := &saschema.InterruptRequest{Message: "test"}
 	tc := &llmschema.ToolCall{ID: "c1", Name: "tool1", Arguments: "{}", Index: 0}
 	tcReq := NewToolCallInterruptRequest(req, tc)
 	assert.Equal(t, 0, tcReq.Index) // 0 表示未设置

@@ -446,8 +446,8 @@ func TestReActAgent_AfterExecuteToolCallForHITL_有中断(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 
 	// 构造 ToolInterruptException 结果
-	req := &interrupt.InterruptRequest{Message: "请确认", AutoConfirmKey: "auto_key"}
-	tie := &interrupt.ToolInterruptException{
+	req := &agentschema.InterruptRequest{Message: "请确认", AutoConfirmKey: "auto_key"}
+	tie := &agentschema.ToolInterruptException{
 		Request:  req,
 		ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "test_tool", Arguments: "{}"},
 	}
@@ -469,12 +469,12 @@ func TestReActAgent_CommitInterrupt_有中断状态(t *testing.T) {
 	)
 	agent := NewReActAgent(card, nil)
 
-	req := &interrupt.InterruptRequest{Message: "确认操作", AutoConfirmKey: "key1"}
-	intState := &interrupt.ToolInterruptionState{
-		InterruptedTools: map[string]*interrupt.ToolInterruptEntry{
+	req := &agentschema.InterruptRequest{Message: "确认操作", AutoConfirmKey: "key1"}
+	intState := &agentschema.ToolInterruptionState{
+		InterruptedTools: map[string]*agentschema.ToolInterruptEntry{
 			"tc1": {
 				ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "tool1"},
-				InterruptRequests: map[string]interrupt.InterruptRequester{
+				InterruptRequests: map[string]agentschema.InterruptRequester{
 					"tc1": req,
 				},
 			},
@@ -654,13 +654,13 @@ func TestReActAgent_InvokeImpl_中断恢复(t *testing.T) {
 	sess := session.NewSession(session.WithSessionID("resume_session"))
 
 	// 在 session 中设置中断状态
-	intState := &interrupt.ToolInterruptionState{
-		BaseInterruptionState: interrupt.BaseInterruptionState{
+	intState := &agentschema.ToolInterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{
 			AIMessage:     llmschema.NewAssistantMessage("need confirm"),
 			Iteration:     0,
 			OriginalQuery: "原始查询",
 		},
-		InterruptedTools:   map[string]*interrupt.ToolInterruptEntry{},
+		InterruptedTools:   map[string]*agentschema.ToolInterruptEntry{},
 		AutoConfirmMapping: map[string]string{},
 	}
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})
@@ -686,13 +686,13 @@ func TestReActAgent_InvokeImpl_中断恢复有ContextEngine(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("resume_ce_session"))
-	intState := &interrupt.ToolInterruptionState{
-		BaseInterruptionState: interrupt.BaseInterruptionState{
+	intState := &agentschema.ToolInterruptionState{
+		BaseInterruptionState: agentschema.BaseInterruptionState{
 			AIMessage:     llmschema.NewAssistantMessage("need confirm"),
 			Iteration:     0,
 			OriginalQuery: "原始查询",
 		},
-		InterruptedTools:   map[string]*interrupt.ToolInterruptEntry{},
+		InterruptedTools:   map[string]*agentschema.ToolInterruptEntry{},
 		AutoConfirmMapping: map[string]string{},
 	}
 	sess.UpdateState(map[string]any{interrupt.InterruptionKey: intState})

@@ -9,7 +9,7 @@ import (
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────── 导出函数 ────────────────────
 
 func TestInterruptKey常量(t *testing.T) {
 	assert.Equal(t, "__react_agent_interruption__", InterruptionKey)
@@ -19,7 +19,7 @@ func TestInterruptKey常量(t *testing.T) {
 }
 
 func TestBaseInterruptionState(t *testing.T) {
-	s := &BaseInterruptionState{
+	s := &saschema.BaseInterruptionState{
 		AIMessage:     &llmschema.AssistantMessage{},
 		Iteration:     3,
 		OriginalQuery: "你好",
@@ -29,10 +29,10 @@ func TestBaseInterruptionState(t *testing.T) {
 }
 
 func TestToolInterruptEntry(t *testing.T) {
-	entry := &ToolInterruptEntry{
+	entry := &saschema.ToolInterruptEntry{
 		ToolCall: &llmschema.ToolCall{ID: "c1", Name: "tool1"},
-		InterruptRequests: map[string]InterruptRequester{
-			"ir1": &InterruptRequest{Message: "确认1"},
+		InterruptRequests: map[string]saschema.InterruptRequester{
+			"ir1": &saschema.InterruptRequest{Message: "确认1"},
 		},
 		IsSubAgent: false,
 	}
@@ -41,9 +41,9 @@ func TestToolInterruptEntry(t *testing.T) {
 }
 
 func TestToolInterruptionState(t *testing.T) {
-	s := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 5},
-		InterruptedTools: map[string]*ToolInterruptEntry{
+	s := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 5},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc_1": {ToolCall: &llmschema.ToolCall{ID: "tc_1"}},
 		},
 		AutoConfirmMapping: map[string]string{"inner1": "auto_key"},
@@ -65,7 +65,7 @@ func TestWorkflowInterruptEntry(t *testing.T) {
 
 func TestInterruptionState(t *testing.T) {
 	s := &saschema.InterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 2},
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 2},
 		InterruptedWorkflows: map[string]*saschema.WorkflowInterruptEntry{
 			"wf1": {ToolCall: &llmschema.ToolCall{ID: "wf1"}},
 		},

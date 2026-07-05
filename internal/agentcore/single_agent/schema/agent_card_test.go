@@ -24,8 +24,8 @@ type testAgentOutput struct {
 
 func TestAgentCard_ToolInfo_有参数(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("sub_agent"),
-		agentschema.WithAgentDescription("子 Agent"),
+		WithAgentName("sub_agent"),
+		WithAgentDescription("子 Agent"),
 		WithInputParams[testAgentInput](),
 	)
 	info := card.ToolInfo()
@@ -42,7 +42,7 @@ func TestAgentCard_ToolInfo_有参数(t *testing.T) {
 }
 
 func TestAgentCard_ToolInfo_无参数(t *testing.T) {
-	card := NewAgentCard(agentschema.WithAgentName("no_params_agent"))
+	card := NewAgentCard(WithAgentName("no_params_agent"))
 	info := card.ToolInfo()
 	if info.GetName() != "no_params_agent" {
 		t.Errorf("Name = %q, want no_params_agent", info.GetName())
@@ -54,7 +54,7 @@ func TestAgentCard_ToolInfo_无参数(t *testing.T) {
 }
 
 func TestAgentCard_能力(t *testing.T) {
-	card := NewAgentCard(agentschema.WithAgentName("ag"), agentschema.WithAgentDescription("Agent"))
+	card := NewAgentCard(WithAgentName("ag"), WithAgentDescription("Agent"))
 	if card.AbilityName() != "ag" {
 		t.Errorf("AbilityName = %q, want ag", card.AbilityName())
 	}
@@ -65,7 +65,7 @@ func TestAgentCard_能力(t *testing.T) {
 }
 
 func TestAgentCard_AbilityID(t *testing.T) {
-	card := NewAgentCard(agentschema.WithAgentName("ag"))
+	card := NewAgentCard(WithAgentName("ag"))
 	if got := card.AbilityID(); got != card.ID {
 		t.Errorf("AbilityID() = %q, want %q", got, card.ID)
 	}
@@ -73,7 +73,7 @@ func TestAgentCard_AbilityID(t *testing.T) {
 
 func TestAgentCard_反射提取Input(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("reflect_agent"),
+		WithAgentName("reflect_agent"),
 		WithInputParams[testAgentInput](),
 	)
 	if len(card.InputParams) != 2 {
@@ -95,7 +95,7 @@ func TestAgentCard_反射提取Input(t *testing.T) {
 
 func TestAgentCard_反射提取Output(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("reflect_agent"),
+		WithAgentName("reflect_agent"),
 		WithOutputParams[testAgentOutput](),
 	)
 	if len(card.OutputParams) != 1 {
@@ -108,8 +108,8 @@ func TestAgentCard_反射提取Output(t *testing.T) {
 
 func TestAgentCard_反射提取InputOutput(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("full_agent"),
-		agentschema.WithAgentDescription("完整参数 Agent"),
+		WithAgentName("full_agent"),
+		WithAgentDescription("完整参数 Agent"),
 		WithInputParams[testAgentInput](),
 		WithOutputParams[testAgentOutput](),
 	)
@@ -123,8 +123,8 @@ func TestAgentCard_反射提取InputOutput(t *testing.T) {
 
 func TestAgentCard_JSON序列化(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("json_agent"),
-		agentschema.WithAgentDescription("JSON 测试"),
+		WithAgentName("json_agent"),
+		WithAgentDescription("JSON 测试"),
 		WithInputParams[testAgentInput](),
 		WithOutputParams[testAgentOutput](),
 	)
@@ -148,8 +148,8 @@ func TestAgentCard_JSON序列化(t *testing.T) {
 
 func TestAgentCard_字段对齐Python(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("align_agent"),
-		agentschema.WithAgentDescription("对齐测试"),
+		WithAgentName("align_agent"),
+		WithAgentDescription("对齐测试"),
 	)
 	if card.InputParams != nil {
 		t.Errorf("默认 InputParams 应为 nil，实际 %v", card.InputParams)
@@ -164,7 +164,7 @@ func TestAgentCard_字段对齐Python(t *testing.T) {
 
 func TestAgentCard_ToolInfo与ToolCard一致(t *testing.T) {
 	card := NewAgentCard(
-		agentschema.WithAgentName("consistent_agent"),
+		WithAgentName("consistent_agent"),
 		WithInputParams[testAgentInput](),
 	)
 	info := card.ToolInfo()

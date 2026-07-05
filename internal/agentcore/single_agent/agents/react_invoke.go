@@ -183,7 +183,7 @@ func (a *ReActAgent) AfterExecuteToolCallForHITL(
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
 	originalQuery string,
-) (*interrupt.ToolInterruptionState, []interrupt.PayloadEntry) {
+) (*agentschema.ToolInterruptionState, []interrupt.PayloadEntry) {
 	if a.hitlHandler == nil {
 		return nil, nil
 	}
@@ -201,7 +201,7 @@ func (a *ReActAgent) AfterExecuteToolCallForHITL(
 // 对应 Python: ReActAgent._commit_interrupt() 的 HITL 分支
 func (a *ReActAgent) CommitInterrupt(
 	ctx context.Context,
-	intState *interrupt.ToolInterruptionState,
+	intState *agentschema.ToolInterruptionState,
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
 	invokeInputs *rail.InvokeInputs,
@@ -352,7 +352,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 
 		// 加载 HITL 中断状态
 		hitlState := a.hitlHandler.Load(sess)
-		var interruptionState interrupt.ToolInterruptionState
+		var interruptionState agentschema.ToolInterruptionState
 		if hitlState != nil {
 			a.hitlHandler.Clear(sess)
 			interruptionState = *hitlState

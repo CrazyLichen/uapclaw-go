@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -31,7 +31,7 @@ type InterruptAgent interface {
 // 对应 Python: @dataclass ResumeContext
 type ResumeContext struct {
 	// State 工具中断状态
-	State *ToolInterruptionState
+	State *saschema.ToolInterruptionState
 	// UserInput 用户输入
 	UserInput any
 	// Ctx Agent 回调上下文
@@ -62,7 +62,7 @@ type ToolInterruptHandler struct {
 // ExecuteToolCallFunc 工具调用执行函数类型。
 // 对应 Python: Optional[Callable] — handle_resume 中调用 execute_tool_call(ctx, tools, session, context)。
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
-// 返回 []agentschema.ExecuteResult（替代原 []any），提供类型安全。
+// 返回 []saschema.ExecuteResult（替代原 []any），提供类型安全。
 type ExecuteToolCallFunc func(
 
 	// ──────────────────────────── 常量 ────────────────────────────
@@ -72,7 +72,7 @@ type ExecuteToolCallFunc func(
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
-) ([]agentschema.ExecuteResult, error)
+) ([]saschema.ExecuteResult, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -98,20 +98,20 @@ func NewToolInterruptHandler(agent InterruptAgent) *ToolInterruptHandler {
 //
 // 对齐 Python: build_interrupt_state(results, tool_calls, ai_message, iteration, original_query)
 func (h *ToolInterruptHandler) BuildInterruptState(
-	results []agentschema.ExecuteResult,
+	results []saschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
 	aiMessage *llmschema.AssistantMessage,
 	iteration int,
 	originalQuery string,
-) (*ToolInterruptionState, []PayloadEntry) {
+) (*saschema.ToolInterruptionState, []PayloadEntry) {
 	interruptedTools, payloads, autoConfirmMapping := h.collectInterrupts(results, toolCalls)
 
 	if len(interruptedTools) == 0 {
 		return nil, nil
 	}
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{
 			AIMessage:     aiMessage,
 			Iteration:     iteration,
 			OriginalQuery: originalQuery,
@@ -126,7 +126,7 @@ func (h *ToolInterruptHandler) BuildInterruptState(
 // Save 保存中断状态到 session。
 //
 // 对齐 Python: save(state, session)
-func (h *ToolInterruptHandler) Save(intState *ToolInterruptionState, sess sessioninterfaces.SessionFacade) {
+func (h *ToolInterruptHandler) Save(intState *saschema.ToolInterruptionState, sess sessioninterfaces.SessionFacade) {
 	if sess != nil {
 		sess.UpdateState(map[string]any{h.key: intState})
 	}
@@ -135,10 +135,10 @@ func (h *ToolInterruptHandler) Save(intState *ToolInterruptionState, sess sessio
 // Load 从 session 加载中断状态。
 //
 // 对齐 Python: load(session)
-func (h *ToolInterruptHandler) Load(sess sessioninterfaces.SessionFacade) *ToolInterruptionState {
+func (h *ToolInterruptHandler) Load(sess sessioninterfaces.SessionFacade) *saschema.ToolInterruptionState {
 	if sess != nil {
 		val, _ := sess.GetState(state.StringKey(h.key))
-		if st, ok := val.(*ToolInterruptionState); ok {
+		if st, ok := val.(*saschema.ToolInterruptionState); ok {
 			return st
 		}
 	}
@@ -160,7 +160,7 @@ func (h *ToolInterruptHandler) Clear(sess sessioninterfaces.SessionFacade) {
 // 对齐 Python: commit_interrupt(state, context, session, invoke_inputs, sub_agent_outputs)
 func (h *ToolInterruptHandler) CommitInterrupt(
 	ctx context.Context,
-	intState *ToolInterruptionState,
+	intState *saschema.ToolInterruptionState,
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
 	invokeInputs *rail.InvokeInputs,
@@ -266,7 +266,7 @@ func (h *ToolInterruptHandler) HandleResume(
 	// 重执行工具调用
 	// 对齐 Python: results = await execute_tool_call(ctx, tools_to_execute, session, context)
 	// Python 中 execute_tool_call 失败时异常直接传播给调用方
-	var results []agentschema.ExecuteResult
+	var results []saschema.ExecuteResult
 	if len(toolsToExecute) > 0 && resumeCtx.ExecuteToolCall != nil {
 		var err error
 		results, err = resumeCtx.ExecuteToolCall(ctx, cbc, toolsToExecute, sess, modelCtx)
@@ -345,10 +345,10 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 //   - payloads: []PayloadEntry
 //   - autoConfirmMapping: innerID → autoConfirmKey
 func (h *ToolInterruptHandler) collectInterrupts(
-	results []agentschema.ExecuteResult,
+	results []saschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,
-) (map[string]*ToolInterruptEntry, []PayloadEntry, map[string]string) {
-	interruptedTools := make(map[string]*ToolInterruptEntry)
+) (map[string]*saschema.ToolInterruptEntry, []PayloadEntry, map[string]string) {
+	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
@@ -360,7 +360,7 @@ func (h *ToolInterruptHandler) collectInterrupts(
 		toolResult := result.Result
 
 		// 对齐 Python: isinstance(tool_result, ToolInterruptException)
-		if tie, ok := toolResult.(*ToolInterruptException); ok {
+		if tie, ok := toolResult.(*saschema.ToolInterruptException); ok {
 			handleToolInterruptException(tie, toolCall, interruptedTools, &payloads, autoConfirmMapping)
 		} else if isSubAgentInterrupt(toolResult) {
 			handleSubAgentInterrupt(toolResult, toolCall, interruptedTools, &payloads, autoConfirmMapping)
@@ -391,9 +391,9 @@ func isSubAgentInterrupt(result any) bool {
 //
 // 对齐 Python: _handle_tool_interrupt_exception(tool_result, tool_call, interrupted_tools, payloads, auto_confirm_mapping)
 func handleToolInterruptException(
-	tie *ToolInterruptException,
+	tie *saschema.ToolInterruptException,
 	toolCall *llmschema.ToolCall,
-	interruptedTools map[string]*ToolInterruptEntry,
+	interruptedTools map[string]*saschema.ToolInterruptEntry,
 	payloads *[]PayloadEntry,
 	autoConfirmMapping map[string]string,
 ) {
@@ -408,9 +408,9 @@ func handleToolInterruptException(
 	// 构造 ToolInterruptEntry
 	// 对齐 Python: interrupt_requests={inner_id: tool_result.request}
 	// tie.Request 是 *InterruptRequest，满足 InterruptRequester 接口
-	interruptedTools[outerID] = &ToolInterruptEntry{
+	interruptedTools[outerID] = &saschema.ToolInterruptEntry{
 		ToolCall: tc,
-		InterruptRequests: map[string]InterruptRequester{
+		InterruptRequests: map[string]saschema.InterruptRequester{
 			innerID: tie.Request,
 		},
 	}
@@ -432,7 +432,7 @@ func handleToolInterruptException(
 func handleSubAgentInterrupt(
 	toolResult any,
 	toolCall *llmschema.ToolCall,
-	interruptedTools map[string]*ToolInterruptEntry,
+	interruptedTools map[string]*saschema.ToolInterruptEntry,
 	payloads *[]PayloadEntry,
 	autoConfirmMapping map[string]string,
 ) {
@@ -448,7 +448,7 @@ func handleSubAgentInterrupt(
 		subState = nil
 	}
 
-	interruptRequests := make(map[string]InterruptRequester)
+	interruptRequests := make(map[string]saschema.InterruptRequester)
 
 	for _, output := range subState {
 		outputSchema, ok := output.(*stream.OutputSchema)
@@ -466,7 +466,7 @@ func handleSubAgentInterrupt(
 		// 对齐 Python: isinstance(payload_obj, ToolCallInterruptRequest)
 		// Python 中 interrupt_requests[inner_id] = payload_obj（存子类实例，保留全部字段）
 		// Go 中直接存 tcir（*ToolCallInterruptRequest 满足 InterruptRequester 接口），不丢子类字段
-		if tcir, ok := payloadObj.(*ToolCallInterruptRequest); ok {
+		if tcir, ok := payloadObj.(*saschema.ToolCallInterruptRequest); ok {
 			interruptRequests[innerID] = tcir
 			*payloads = append(*payloads, PayloadEntry{InnerID: innerID, Payload: outputSchema})
 			if tcir.GetAutoConfirmKey() != "" {
@@ -476,7 +476,7 @@ func handleSubAgentInterrupt(
 	}
 
 	if _, exists := interruptedTools[outerID]; !exists {
-		interruptedTools[outerID] = &ToolInterruptEntry{
+		interruptedTools[outerID] = &saschema.ToolInterruptEntry{
 			ToolCall:          toolCall,
 			InterruptRequests: interruptRequests,
 			IsSubAgent:        true,
@@ -488,7 +488,7 @@ func handleSubAgentInterrupt(
 //
 // 对齐 Python: _save_auto_confirm_from_state(state, user_input, session)
 func saveAutoConfirmFromState(
-	intState *ToolInterruptionState,
+	intState *saschema.ToolInterruptionState,
 	userInput any,
 	sess sessioninterfaces.SessionFacade,
 ) {

@@ -16,10 +16,10 @@ import (
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 测试辅助 ────────────────────────────
+// ──────────────────── 测试辅助 ────────────────────
 
 // fakeInterruptAgent InterruptAgent 的测试桩
 type fakeInterruptAgent struct {
@@ -28,7 +28,7 @@ type fakeInterruptAgent struct {
 
 func (f *fakeInterruptAgent) ContextEngine() ceinterface.ContextEngine { return f.ce }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────── 导出函数 ────────────────────
 
 func TestNewToolInterruptHandler(t *testing.T) {
 	agent := &fakeInterruptAgent{}
@@ -42,7 +42,7 @@ func TestBuildInterruptState_无中断(t *testing.T) {
 	h := NewToolInterruptHandler(agent)
 
 	aiMessage := &llmschema.AssistantMessage{}
-	results := []agentschema.ExecuteResult{
+	results := []saschema.ExecuteResult{
 		{Result: map[string]any{"result": "ok"}, ToolMsg: nil},
 	}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1"}}
@@ -56,11 +56,11 @@ func TestBuildInterruptState_ToolInterruptException(t *testing.T) {
 	agent := &fakeInterruptAgent{}
 	h := NewToolInterruptHandler(agent)
 
-	req := &InterruptRequest{Message: "需要确认", AutoConfirmKey: "confirm_key"}
-	tie := &ToolInterruptException{Request: req}
+	req := &saschema.InterruptRequest{Message: "需要确认", AutoConfirmKey: "confirm_key"}
+	tie := &saschema.ToolInterruptException{Request: req}
 	aiMessage := &llmschema.AssistantMessage{}
 
-	results := []agentschema.ExecuteResult{
+	results := []saschema.ExecuteResult{
 		{Result: tie, ToolMsg: nil},
 	}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc1", Name: "tool1"}}
@@ -86,8 +86,8 @@ func TestBuildInterruptState_子Agent中断(t *testing.T) {
 				Index: 0,
 				Payload: &interaction.InteractionOutput{
 					ID: "inner_1",
-					Value: &ToolCallInterruptRequest{
-						InterruptRequest: InterruptRequest{Message: "子Agent确认"},
+					Value: &saschema.ToolCallInterruptRequest{
+						InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认"},
 						ToolName:         "sub_tool",
 						ToolCallID:       "inner_1",
 					},
@@ -96,7 +96,7 @@ func TestBuildInterruptState_子Agent中断(t *testing.T) {
 		},
 	}
 	aiMessage := &llmschema.AssistantMessage{}
-	results := []agentschema.ExecuteResult{{Result: subResult, ToolMsg: nil}}
+	results := []saschema.ExecuteResult{{Result: subResult, ToolMsg: nil}}
 	toolCalls := []*llmschema.ToolCall{{ID: "tc_outer", Name: "agent_tool"}}
 
 	state, payloads := h.BuildInterruptState(results, toolCalls, aiMessage, 3, "query")
@@ -116,9 +116,9 @@ func TestSave_Load_Clear(t *testing.T) {
 	loaded := h.Load(sess)
 	assert.Nil(t, loaded)
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 5},
-		InterruptedTools: map[string]*ToolInterruptEntry{
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 5},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {ToolCall: &llmschema.ToolCall{ID: "tc1"}},
 		},
 	}
@@ -136,8 +136,8 @@ func TestSave_Load_nilSession(t *testing.T) {
 	agent := &fakeInterruptAgent{}
 	h := NewToolInterruptHandler(agent)
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 1},
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
 	}
 	h.Save(intState, nil)
 	assert.Nil(t, h.Load(nil))
@@ -149,16 +149,16 @@ func TestCommitInterrupt(t *testing.T) {
 	h := NewToolInterruptHandler(agent)
 	sess := session.NewSession()
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 1},
-		InterruptedTools: map[string]*ToolInterruptEntry{
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {ToolCall: &llmschema.ToolCall{ID: "tc1"}},
 		},
 	}
 	invokeInputs := &rail.InvokeInputs{}
 	subAgentOutputs := []PayloadEntry{
-		{InnerID: "inner_1", Payload: &ToolCallInterruptRequest{
-			InterruptRequest: InterruptRequest{Message: "确认"},
+		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
+			InterruptRequest: saschema.InterruptRequest{Message: "确认"},
 			ToolName:         "tool1",
 			ToolCallID:       "tc1",
 		}},
@@ -179,8 +179,8 @@ func TestCommitInterrupt_nilSession(t *testing.T) {
 	agent := &fakeInterruptAgent{}
 	h := NewToolInterruptHandler(agent)
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 1},
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 1},
 	}
 	result, err := h.CommitInterrupt(context.Background(), intState, nil, nil, nil, nil)
 	require.NoError(t, err)
@@ -223,13 +223,13 @@ func TestHandleResume_无新中断(t *testing.T) {
 	h := NewToolInterruptHandler(agent)
 	sess := session.NewSession()
 
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 3},
-		InterruptedTools: map[string]*ToolInterruptEntry{
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 3},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {
 				ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "tool1", Arguments: `{"arg1":"val1"}`},
-				InterruptRequests: map[string]InterruptRequester{
-					"tc1": &InterruptRequest{Message: "确认"},
+				InterruptRequests: map[string]saschema.InterruptRequester{
+					"tc1": &saschema.InterruptRequest{Message: "确认"},
 				},
 			},
 		},
@@ -237,8 +237,8 @@ func TestHandleResume_无新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]agentschema.ExecuteResult, error) {
-		return []agentschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+		return []saschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
 	}
 
 	resumeCtx := &ResumeContext{
@@ -261,14 +261,14 @@ func TestHandleResume_有新中断(t *testing.T) {
 	h := NewToolInterruptHandler(agent)
 	sess := session.NewSession()
 
-	req := &InterruptRequest{Message: "再次确认"}
-	intState := &ToolInterruptionState{
-		BaseInterruptionState: BaseInterruptionState{Iteration: 2},
-		InterruptedTools: map[string]*ToolInterruptEntry{
+	req := &saschema.InterruptRequest{Message: "再次确认"}
+	intState := &saschema.ToolInterruptionState{
+		BaseInterruptionState: saschema.BaseInterruptionState{Iteration: 2},
+		InterruptedTools: map[string]*saschema.ToolInterruptEntry{
 			"tc1": {
 				ToolCall: &llmschema.ToolCall{ID: "tc1", Name: "tool1", Arguments: `{}`},
-				InterruptRequests: map[string]InterruptRequester{
-					"tc1": &InterruptRequest{Message: "确认"},
+				InterruptRequests: map[string]saschema.InterruptRequester{
+					"tc1": &saschema.InterruptRequest{Message: "确认"},
 				},
 			},
 		},
@@ -276,8 +276,8 @@ func TestHandleResume_有新中断(t *testing.T) {
 	}
 	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]agentschema.ExecuteResult, error) {
-		return []agentschema.ExecuteResult{{Result: &ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, ToolMsg: nil}}, nil
+	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+		return []saschema.ExecuteResult{{Result: &saschema.ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, ToolMsg: nil}}, nil
 	}
 
 	resumeCtx := &ResumeContext{
@@ -307,8 +307,8 @@ func TestBuildInterruptResult_空Payloads(t *testing.T) {
 
 func TestBuildInterruptResult_ToolCallInterruptRequest(t *testing.T) {
 	payloads := []PayloadEntry{
-		{InnerID: "inner_1", Payload: &ToolCallInterruptRequest{
-			InterruptRequest: InterruptRequest{Message: "确认"},
+		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
+			InterruptRequest: saschema.InterruptRequest{Message: "确认"},
 			ToolName:         "tool1",
 			ToolCallID:       "tc1",
 		}},
@@ -340,7 +340,7 @@ func TestBuildInterruptResult_OutputSchema(t *testing.T) {
 	assert.Equal(t, os, stateOutputs[0])
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// ──────────────────── 非导出函数 ────────────────────
 
 func TestIsSubAgentInterrupt_正向(t *testing.T) {
 	result := map[string]any{
@@ -369,11 +369,11 @@ func TestIsSubAgentInterrupt_反向(t *testing.T) {
 }
 
 func TestHandleToolInterruptException(t *testing.T) {
-	req := &InterruptRequest{Message: "需要确认", AutoConfirmKey: "auto_key"}
-	tie := &ToolInterruptException{Request: req}
+	req := &saschema.InterruptRequest{Message: "需要确认", AutoConfirmKey: "auto_key"}
+	tie := &saschema.ToolInterruptException{Request: req}
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "tool1"}
 
-	interruptedTools := make(map[string]*ToolInterruptEntry)
+	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
@@ -391,12 +391,12 @@ func TestHandleToolInterruptException(t *testing.T) {
 }
 
 func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
-	req := &InterruptRequest{Message: "需要确认"}
+	req := &saschema.InterruptRequest{Message: "需要确认"}
 	tcInException := &llmschema.ToolCall{ID: "tc_from_exception", Name: "tool_from_exception"}
-	tie := &ToolInterruptException{Request: req, ToolCall: tcInException}
+	tie := &saschema.ToolInterruptException{Request: req, ToolCall: tcInException}
 	toolCall := &llmschema.ToolCall{ID: "tc_original", Name: "tool_original"}
 
-	interruptedTools := make(map[string]*ToolInterruptEntry)
+	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
@@ -408,8 +408,8 @@ func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
 }
 
 func TestHandleSubAgentInterrupt(t *testing.T) {
-	tcir := &ToolCallInterruptRequest{
-		InterruptRequest: InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_auto"},
+	tcir := &saschema.ToolCallInterruptRequest{
+		InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_auto"},
 		ToolName:         "sub_tool",
 		ToolCallID:       "inner_1",
 	}
@@ -429,7 +429,7 @@ func TestHandleSubAgentInterrupt(t *testing.T) {
 	}
 
 	toolCall := &llmschema.ToolCall{ID: "tc_outer", Name: "agent_tool"}
-	interruptedTools := make(map[string]*ToolInterruptEntry)
+	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
@@ -441,7 +441,7 @@ func TestHandleSubAgentInterrupt(t *testing.T) {
 	assert.True(t, entry.IsSubAgent)
 	assert.Len(t, entry.InterruptRequests, 1)
 	// 验证存储的是完整 ToolCallInterruptRequest（子类），不是截断的 InterruptRequest
-	storedTCIR, ok := entry.InterruptRequests["inner_1"].(*ToolCallInterruptRequest)
+	storedTCIR, ok := entry.InterruptRequests["inner_1"].(*saschema.ToolCallInterruptRequest)
 	require.True(t, ok)
 	assert.Equal(t, "sub_tool", storedTCIR.ToolName)
 	assert.Equal(t, "inner_1", storedTCIR.ToolCallID)
@@ -457,7 +457,7 @@ func TestHandleSubAgentInterrupt_tuple包装(t *testing.T) {
 	}
 	toolCall := &llmschema.ToolCall{ID: "tc_outer", Name: "agent_tool"}
 
-	interruptedTools := make(map[string]*ToolInterruptEntry)
+	interruptedTools := make(map[string]*saschema.ToolInterruptEntry)
 	var payloads []PayloadEntry
 	autoConfirmMapping := make(map[string]string)
 
@@ -472,7 +472,7 @@ func TestHandleSubAgentInterrupt_tuple包装(t *testing.T) {
 
 func TestSaveAutoConfirmFromState(t *testing.T) {
 	sess := session.NewSession()
-	intState := &ToolInterruptionState{
+	intState := &saschema.ToolInterruptionState{
 		AutoConfirmMapping: map[string]string{
 			"inner_1": "auto_key_1",
 		},
@@ -493,13 +493,13 @@ func TestSaveAutoConfirmFromState(t *testing.T) {
 }
 
 func TestSaveAutoConfirmFromState_nilSession(t *testing.T) {
-	intState := &ToolInterruptionState{}
+	intState := &saschema.ToolInterruptionState{}
 	saveAutoConfirmFromState(intState, &interaction.InteractiveInput{}, nil)
 }
 
 func TestSaveAutoConfirmFromState_非InteractiveInput(t *testing.T) {
 	sess := session.NewSession()
-	intState := &ToolInterruptionState{}
+	intState := &saschema.ToolInterruptionState{}
 	saveAutoConfirmFromState(intState, "string_input", sess)
 	configVal, _ := sess.GetState(sessionstate.StringKey(InterruptAutoConfirmKey))
 	assert.Nil(t, configVal)
@@ -562,8 +562,8 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 	agent := &fakeInterruptAgent{}
 	h := NewToolInterruptHandler(agent)
 
-	req1 := &InterruptRequest{Message: "确认1", AutoConfirmKey: "key1"}
-	tie := &ToolInterruptException{Request: req1}
+	req1 := &saschema.InterruptRequest{Message: "确认1", AutoConfirmKey: "key1"}
+	tie := &saschema.ToolInterruptException{Request: req1}
 
 	subResult := map[string]any{
 		"result_type":   "interrupt",
@@ -574,8 +574,8 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 				Index: 0,
 				Payload: &interaction.InteractionOutput{
 					ID: "inner_2",
-					Value: &ToolCallInterruptRequest{
-						InterruptRequest: InterruptRequest{Message: "子Agent确认"},
+					Value: &saschema.ToolCallInterruptRequest{
+						InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认"},
 						ToolName:         "sub_tool",
 						ToolCallID:       "inner_2",
 					},
@@ -584,7 +584,7 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 		},
 	}
 
-	results := []agentschema.ExecuteResult{
+	results := []saschema.ExecuteResult{
 		{Result: tie, ToolMsg: nil},
 		{Result: map[string]any{}, ToolMsg: nil},
 		{Result: subResult, ToolMsg: nil},
