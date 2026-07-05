@@ -1049,12 +1049,8 @@ func (d *DeepAgent) hotReloadModel(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	// 获取当前 ReActAgent 配置的副本
-	currentConfig := d.reactAgent.Config()
-	if currentConfig == nil {
-		return
-	}
-	reactCfg, ok := currentConfig.(*saconfig.ReActAgentConfig)
-	if !ok {
+	reactCfg, ok := d.reactAgent.Config().(*saconfig.ReActAgentConfig)
+	if !ok || reactCfg == nil {
 		return
 	}
 	newReactConfig := *reactCfg // 值拷贝
@@ -1346,13 +1342,10 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 	}
 
 	d.configMu.RLock()
-	cfg := d.deepConfig
+	_ = d.deepConfig // ⤵️ 9.1 回填：init_cwd 逻辑（cfg.Workspace 非空时待实现）
 	d.configMu.RUnlock()
 
 	// 初始化工作空间 CWD
-	if cfg != nil && cfg.Workspace != nil {
-		// ⤵️ 9.1 回填：init_cwd 逻辑
-	}
 
 	// 注册待处理的 MCP 服务器
 	d.registerPendingMCPs(ctx)

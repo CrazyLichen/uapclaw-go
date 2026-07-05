@@ -139,9 +139,7 @@ func GenerateHarnessConfigYAML(
 			"content":  content,
 		})
 	}
-	for _, sec := range extraSections {
-		sections = append(sections, sec)
-	}
+	sections = append(sections, extraSections...)
 	if len(sections) > 0 {
 		data["prompts"] = map[string]any{"sections": sections}
 	}

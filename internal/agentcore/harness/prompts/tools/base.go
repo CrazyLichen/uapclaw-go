@@ -106,10 +106,6 @@ func validateSchemaPair(name string, refSchema, otherSchema map[string]any, refL
 					if nestedMap != nil {
 						// 获取另一语言对应属性
 						otherProp, _ := getOtherProp(refProps, otherProps, langProps.lang, key)
-						otherNested, _ := otherProp["properties"].(map[string]any)
-						if otherNested == nil {
-							otherNested = map[string]any{}
-						}
 						if err := validateSchemaPair(name, prop, otherProp, refLang, otherLang, fmt.Sprintf("%s.%s", path, key)); err != nil {
 							return err
 						}

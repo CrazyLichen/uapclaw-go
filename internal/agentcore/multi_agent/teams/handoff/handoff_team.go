@@ -172,10 +172,10 @@ func (t *HandoffTeam) AddAgent(ctx context.Context, card *agentschema.AgentCard,
 	}
 
 	// 对齐 Python: if self.runtime.get_agent_count() >= self.config.max_agents
-	if t.config.TeamConfig.MaxAgents > 0 && t.runtime.GetAgentCount() >= t.config.TeamConfig.MaxAgents {
+	if t.config.MaxAgents > 0 && t.runtime.GetAgentCount() >= t.config.MaxAgents {
 		return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
 			exception.WithParam("error_msg", fmt.Sprintf(
-				"Agent 数量超过上限 (%d)", t.config.TeamConfig.MaxAgents,
+				"Agent 数量超过上限 (%d)", t.config.MaxAgents,
 			)),
 		)
 	}

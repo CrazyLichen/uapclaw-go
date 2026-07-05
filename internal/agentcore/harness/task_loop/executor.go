@@ -258,7 +258,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 
 		// 检查是否被中断（interrupt），中断时跳过 MarkCompleted
 		// 对齐 Python: result.get("result_type") != "interrupt"
-		resultType, _ := resultMap["result_type"]
+		resultType := resultMap["result_type"]
 		if resultType != "interrupt" {
 			if e.getPlanTask(state, taskID) != nil {
 				if state != nil && state.TaskPlan != nil {

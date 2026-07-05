@@ -2709,9 +2709,7 @@ func TestDeepAgent_setupTaskLoop_新会话创建控制器(t *testing.T) {
 	require.NotNil(t, ctrl1)
 
 	// 手动绑定会话（模拟 Invoke 中的 BindSession 流程）
-	if err := ctrl1.BindSession(context.Background(), sess1); err != nil {
-		// BindSession 可能因缺少必要配置而失败，不影响测试
-	}
+	_ = ctrl1.BindSession(context.Background(), sess1)
 	agent.configMu.Lock()
 	agent.boundSessionID = sess1.GetSessionID()
 	agent.configMu.Unlock()
