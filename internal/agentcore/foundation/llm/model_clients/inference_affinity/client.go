@@ -23,8 +23,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // InferenceAffinityModelClient InferenceAffinity (vLLM) 模型客户端。
 //
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
@@ -46,15 +44,11 @@ type InferenceAffinityModelClient struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // logComponent inferenceaffinity 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
 
 // releaseKVCachePath vLLM KV Cache 释放 API 路径。
 const releaseKVCachePath = "/release_kv_cache"
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -454,8 +448,6 @@ func (c *InferenceAffinityModelClient) GenerateVideo(
 func (c *InferenceAffinityModelClient) SupportsKVCacheRelease() bool {
 	return true
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

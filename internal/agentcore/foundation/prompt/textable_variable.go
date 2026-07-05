@@ -11,8 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TextableVariable 字符串模板变量，处理 {{placeholder}} 占位符替换。
 //
 // 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/textable.py (TextableVariable)
@@ -43,8 +41,6 @@ const (
 	// defaultVarName 默认变量名，对应 Python: "default"。
 	defaultVarName = "default"
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -163,8 +159,6 @@ func (v *TextableVariable) Update(kwargs map[string]any) {
 
 	v.value = formattedText
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

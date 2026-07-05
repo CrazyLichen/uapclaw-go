@@ -2,8 +2,6 @@ package schema
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // AssistantMessageChunk 助手流式消息块，用于 SSE 流式场景中增量合并 LLM 响应片段。
 //
 // 设计要点：
@@ -29,8 +27,6 @@ type AssistantMessageChunkOption func(*AssistantMessageChunk)
 
 // ToolMessageChunkOption ToolMessageChunk 构造选项函数。
 type ToolMessageChunkOption func(*ToolMessageChunk)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -256,8 +252,6 @@ func (c *ToolMessageChunk) Merge(other *ToolMessageChunk) *ToolMessageChunk {
 		},
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

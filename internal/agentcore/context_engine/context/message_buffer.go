@@ -14,8 +14,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ContextMessageBuffer 消息缓冲区，管理历史消息和上下文消息，支持最大容量限制和自动扩缩容。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/message_buffer.py (ContextMessageBuffer)
@@ -50,15 +48,11 @@ type OffloadMessageBuffer struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // offloadTypeInMemory 内存存储类型标识
 const offloadTypeInMemory = "in_memory"
 
 // offloadTypeFilesystem 文件系统存储类型标识
 const offloadTypeFilesystem = "filesystem"
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -306,8 +300,6 @@ func (b *OffloadMessageBuffer) GetAll() map[string][]llm_schema.BaseMessage {
 	defer b.mu.Unlock()
 	return b.inMemoryMessages
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

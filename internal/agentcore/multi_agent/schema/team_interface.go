@@ -11,8 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // BaseTeam 多 Agent 团队核心行为契约。
 //
 // 对应 Python: openjiuwen/core/multi_agent/team.py (BaseTeam)
@@ -177,8 +175,6 @@ type TeamAgentProvider func(ctx context.Context, card *agentschema.AgentCard) (a
 
 // TeamOption 团队调用选项函数。
 type TeamOption func(*TeamOptions)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

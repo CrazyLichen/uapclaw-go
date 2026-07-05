@@ -6,8 +6,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // initModelConfig InitModel 工厂函数的内部配置。
 type initModelConfig struct {
 	temperature   float64
@@ -25,8 +23,6 @@ type InitModelOption func(*initModelConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // 默认值与 Python init_model() 保持一致
 const (
 	defaultInitTemperature = 0.95
@@ -35,8 +31,6 @@ const (
 	defaultInitMaxRetries  = 3
 	defaultInitVerifySSL   = false
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

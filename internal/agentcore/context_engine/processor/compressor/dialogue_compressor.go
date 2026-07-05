@@ -18,8 +18,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // DialogueCompressorConfig 对话压缩器配置。
 //
 // 对应 Python: DialogueCompressorConfig (pydantic.BaseModel)
@@ -96,8 +94,6 @@ type DialogueCompressor struct {
 
 // DialogueCompressorOption DialogueCompressor 构造选项函数。
 type DialogueCompressorOption func(*DialogueCompressor)
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -723,8 +719,6 @@ func (dc *DialogueCompressor) SaveState() map[string]any {
 
 // LoadState 从 map 恢复处理器内部状态（空操作）。
 func (dc *DialogueCompressor) LoadState(_ map[string]any) {}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

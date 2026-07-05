@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // Interrupt 图中断信号
 type Interrupt struct {
 	// Value 中断携带的值（OutputSchema 类型）
@@ -63,8 +61,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // Error 实现 error 接口，返回中断描述信息。
 func (e *AgentInterrupt) Error() string {
 	return fmt.Sprintf("AgentInterrupt: %v", e.Message)
@@ -95,8 +91,6 @@ func PanicGraphInterrupt(interrupts ...Interrupt) {
 func PanicAgentInterrupt(msg any) {
 	panic(&AgentInterrupt{Message: msg})
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

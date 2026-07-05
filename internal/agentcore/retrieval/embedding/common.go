@@ -21,8 +21,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // MultimodalEmbedder 多模态嵌入接口，支持文本+图片+音频+视频。
 type MultimodalEmbedder interface {
 	embedding.BaseEmbedding
@@ -70,8 +68,6 @@ const (
 	// logComponent 日志组件
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -381,8 +377,6 @@ func ApplyEmbedOptions(opts []embedding.EmbedOption, defaultBatchSize int) (int,
 	}
 	return batchSize, o.Callback
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

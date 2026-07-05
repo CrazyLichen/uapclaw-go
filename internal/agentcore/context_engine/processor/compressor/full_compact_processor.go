@@ -21,8 +21,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // FullCompactProcessorConfig 全量压缩处理器配置。
 //
 // 当上下文 Token 数超过阈值时，使用 LLM 生成完整摘要或加载 Session Memory 替换历史消息，
@@ -117,8 +115,6 @@ type FullCompactStateReinjector struct {
 
 // FullCompactProcessorOption FullCompactProcessor 构造选项函数。
 type FullCompactProcessorOption func(*FullCompactProcessor)
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -237,15 +233,11 @@ following this structure and ensuring precision and thoroughness in your respons
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // analysisRegex 匹配 <analysis>...</analysis> 的正则（编译一次复用）
 var analysisRegex = regexp.MustCompile(`(?s)<analysis>.*?</analysis>`)
 
 // summaryRegex 匹配 <summary>...</summary> 的正则（编译一次复用）
 var summaryRegex = regexp.MustCompile(`(?s)<summary>(.*?)</summary>`)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -419,8 +411,6 @@ func (r *FullCompactStateReinjector) IterBuilders() []ReinjectedStateBuilderSpec
 	copy(result, r.builders)
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

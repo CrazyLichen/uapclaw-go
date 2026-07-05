@@ -18,8 +18,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // AgentTeamSession Agent 团队公开会话，实现 SessionFacade 接口。
 //
 // 组合内部层 AgentTeamSession，提供 PreRun→Execute→PostRun 完整生命周期。
@@ -52,12 +50,8 @@ type AgentTeamSessionOption func(*AgentTeamSession)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 编译时检查 *AgentTeamSession 满足 SessionFacade 接口
 var _ interfaces.SessionFacade = (*AgentTeamSession)(nil)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -400,8 +394,6 @@ func (s *AgentTeamSession) StreamIterator() <-chan stream.Schema {
 	}
 	return mgr.StreamOutput()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

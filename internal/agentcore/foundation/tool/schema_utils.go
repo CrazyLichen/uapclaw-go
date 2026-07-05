@@ -11,8 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SchemaUtils 工具参数 Schema 工具类，提供校验、格式化、类型转换能力。
 //
 // 对应 Python: openjiuwen/core/common/utils/schema_utils.py (SchemaUtils)
@@ -26,8 +24,6 @@ type formatOptions struct {
 
 // FormatOption 格式化选项函数。
 type FormatOption func(*formatOptions)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -248,8 +244,6 @@ func (su SchemaUtils) RemoveNoneValues(data map[string]any) map[string]any {
 	}
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

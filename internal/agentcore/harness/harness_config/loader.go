@@ -12,8 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ResolvedSection 解析后的内联（非文件）提示词段，用于 add_section()
 type ResolvedSection struct {
 	// Name 段名称
@@ -48,8 +46,6 @@ type ResolvedHarnessConfig struct {
 
 // HarnessConfigLoader 加载、校验和解析 harness_config.yaml 文件
 type HarnessConfigLoader struct{}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -151,8 +147,6 @@ func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoo
 		SourcePath:    absPath,
 	}, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

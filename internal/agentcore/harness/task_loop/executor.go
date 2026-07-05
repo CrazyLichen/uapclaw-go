@@ -20,8 +20,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TaskLoopEventExecutor 任务循环事件执行器。
 // 实现 modules.TaskExecutor 接口，将深层 Agent 的 ReAct 循环
 // 封装为 Controller 领域的标准任务执行流程。
@@ -32,8 +30,6 @@ type TaskLoopEventExecutor struct {
 	// provider 深层 Agent 提供者
 	provider interfaces.DeepAgentInterface
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -369,8 +365,6 @@ func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *module
 		return NewTaskLoopEventExecutor(deps, provider)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

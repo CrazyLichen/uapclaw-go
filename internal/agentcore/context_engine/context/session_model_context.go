@@ -28,8 +28,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SessionModelContext 上下文引擎的核心运行时实现，管理对话消息和上下文窗口。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/context.py (SessionModelContext)
@@ -85,8 +83,6 @@ type reloaderToolInput struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
 //
 // 对应 Python: openjiuwen/core/context_engine/context/context.py (_RELOADER_SYSTEM_PROMPT)
@@ -98,8 +94,6 @@ feel free to call reload_original_context_messages:
 - Do not guess or make up the missing content
 
 Storage types: "in_memory" (session cache), "filesystem" (disk file).`
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -683,8 +677,6 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 
 	return "compressed", nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

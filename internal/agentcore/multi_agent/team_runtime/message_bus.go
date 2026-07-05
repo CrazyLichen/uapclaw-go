@@ -16,8 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // MessageBusInterface 消息总线接口，TeamRuntime 通过此接口解耦对 MessageBus 的直接依赖。
 // MessageBus 结构体和测试 mock 均实现此接口。
 type MessageBusInterface interface {
@@ -102,12 +100,8 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 编译时验证 MessageBus 满足 MessageBusInterface 接口
 var _ MessageBusInterface = (*MessageBus)(nil)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -434,8 +428,6 @@ func (mb *MessageBus) ListSubscriptions(agentID string) any {
 func (mb *MessageBus) GetSubscriptionCount() int {
 	return mb.subscriptionManager.GetSubscriptionCount()
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

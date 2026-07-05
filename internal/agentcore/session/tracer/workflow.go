@@ -9,8 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // WorkflowNodeSession 工作流节点会话接口，TracerWorkflowUtils 方法的 session 参数类型。
 //
 // 对应 Python TracerWorkflowUtils 中 session 参数的隐式接口（duck typing），
@@ -57,8 +55,6 @@ type TracerWorkflowUtils struct{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // loopID 循环节点标识的 state 全局键，对应 Python LOOP_ID = "__sys_loop_id"
 // （openjiuwen/core/common/constants/constant.py）
 // 循环组件（8.20）执行时将 loop_node_id 写入 state.GetGlobal(loopID)，
@@ -68,8 +64,6 @@ const loopID = "__sys_loop_id"
 // loopIndexSuffix 循环索引的后缀，对应 Python INDEX = "index" + NESTED_PATH_SPLIT = "."
 // 完整 key 为 loopID_value + "." + "index"，如 "loop_node_1.index"
 const loopIndexSuffix = ".index"
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -236,8 +230,6 @@ func (TracerWorkflowUtils) TraceComponentInteractiveInputs(ctx context.Context, 
 		ComponentMetadata: getComponentMetadata(session),
 	})
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

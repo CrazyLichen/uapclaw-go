@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SkillUtil 技能高层门面类，组合 SkillManager + RemoteSkillUtil。
 //
 // 提供 Agent 级别的技能注册、提示词生成等高层接口。
@@ -23,8 +21,6 @@ type SkillUtil struct {
 	// remoteSkillUtil 远程技能工具
 	remoteSkillUtil *RemoteSkillUtil
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -49,8 +45,6 @@ You can use the read_file tool to read the corresponding SKILL.md file to obtain
 const skillSystemPrefix = "You are an agent equipped with various skills to solve problems.\n" +
 	"Before attempting any task, read the relevant skill document (SKILL.md) " +
 	"using read_file and follow its workflow.\n"
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -153,8 +147,6 @@ func (su *SkillUtil) GetSkillPrompt() string {
 
 	return skillSystemPrefix + "\n" + content
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

@@ -18,8 +18,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // InterruptAgent ToolInterruptHandler 所需的最小 Agent 接口。
 // 在 interrupt 包内定义，避免 interrupt → agents 循环依赖。
 // ReActAgent 隐式满足此接口。
@@ -82,8 +80,6 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -336,8 +332,6 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 		"interrupt_ids": interruptIDs,
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

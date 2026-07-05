@@ -11,8 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // DeepLoopEvent 深度循环事件
 type DeepLoopEvent struct {
 	// Priority 优先级（数值越小优先级越高）
@@ -38,8 +36,6 @@ type LoopEventOption func(*DeepLoopEvent)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // DeepLoopEventType 深度循环事件类型枚举
 type DeepLoopEventType int
 
@@ -54,16 +50,12 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // defaultEventPriorityMap 事件类型默认优先级映射
 var defaultEventPriorityMap = map[DeepLoopEventType]int{
 	DeepLoopEventTypeAbort:    0,
 	DeepLoopEventTypeSteer:    1,
 	DeepLoopEventTypeFollowup: 10,
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

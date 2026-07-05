@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // Tool 工具接口，所有工具类型（LocalFunction/MCPTool/RestfulApi）的统一抽象。
 //
 // Tool 接口只定义纯业务方法，生命周期回调由 LifecycleTool 包装器处理。
@@ -79,8 +77,6 @@ type ToolOption func(*ToolCallOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 编译时验证 ToolCard 满足 schema.CardInterface。
 var _ schema.CardInterface = (*ToolCard)(nil)
 
@@ -95,8 +91,6 @@ var ErrInvokeNotSupported = exception.BuildError(
 	exception.StatusToolInvokeNotSupported,
 	exception.WithParam("card", ""),
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -17,8 +17,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SiliconFlowModelClient SiliconFlow 模型客户端。
 //
 // 嵌入 OpenAIModelClient 复用 HTTP 请求/响应解析/SSE 等基础能力，
@@ -37,12 +35,8 @@ type SiliconFlowModelClient struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // logComponent siliconflow 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -360,8 +354,6 @@ func (c *SiliconFlowModelClient) Release(
 func (c *SiliconFlowModelClient) SupportsKVCacheRelease() bool {
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

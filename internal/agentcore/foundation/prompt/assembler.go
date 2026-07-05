@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // PromptAssembler 模板装配器，负责编排变量求值和模板渲染。
 //
 // 对应 Python: openjiuwen/core/foundation/prompt/assemble/assembler.py (PromptAssembler)
@@ -31,8 +29,6 @@ type PromptAssembler struct {
 
 // AssemblerOption PromptAssembler 构造选项函数。
 type AssemblerOption func(*PromptAssembler)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -132,8 +128,6 @@ func (a *PromptAssembler) Assemble(kwargs map[string]any) (any, error) {
 	// 渲染模板
 	return a.format(), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

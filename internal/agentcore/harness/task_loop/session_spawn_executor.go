@@ -15,8 +15,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SessionSpawnExecutor 会话子进程执行器，执行 SESSION_SPAWN_TASK_TYPE 类型任务。
 // 从 TaskManager 获取任务元数据，提取 subagent_type/sub_session_id，
 // 通过 DeepAgent.create_subagent 创建子 Agent 并 invoke。
@@ -27,8 +25,6 @@ type SessionSpawnExecutor struct {
 	// provider 深层 Agent 提供者（用于 CreateSubagent）
 	provider interfaces.DeepAgentInterface
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -196,8 +192,6 @@ func BuildSessionSpawnExecutor(provider interfaces.DeepAgentInterface) func(deps
 		return NewSessionSpawnExecutor(deps, provider)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

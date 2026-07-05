@@ -21,8 +21,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // RoundLevelCompressorConfig 轮级压缩器配置。
 //
 // 当全量上下文 Token 超过触发阈值时，按轮次（ReAct block）渐进式压缩：
@@ -124,8 +122,6 @@ type RoundLevelCompressorOption func(*RoundLevelCompressor)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // roundLevelFallbackMarker 轮级记忆块标记
 const roundLevelFallbackMarker = "[ROUND_LEVEL_MEMORY_BLOCK]"
 
@@ -175,8 +171,6 @@ Rules:
 - For completed blocks, keep the final result before secondary detail.
 - Return valid JSON only.
 `
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -416,8 +410,6 @@ func (rlc *RoundLevelCompressor) SaveState() map[string]any {
 
 // LoadState 从 map 恢复处理器内部状态（空操作）。
 func (rlc *RoundLevelCompressor) LoadState(_ map[string]any) {}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

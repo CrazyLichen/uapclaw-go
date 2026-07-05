@@ -44,8 +44,6 @@ var InterruptAutoConfirmKey = state.StringKey("__interrupt_auto_confirm__")
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewAbilityExecutionError 创建能力执行错误。
 //
 // 对应 Python: AbilityExecutionError(status=..., msg=..., tool_message=...)
@@ -127,8 +125,6 @@ func BuildToolMessageContent(result any) string {
 	// 路径 3：最终 fallback
 	return fmt.Sprintf("%v", result)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

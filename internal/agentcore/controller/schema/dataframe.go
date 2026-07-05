@@ -7,8 +7,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // DataFrame 数据帧接口，Controller 输出载荷的数据单元。
 //
 // 对应 Python: openjiuwen/core/controller/schema/dataframe.py (BaseDataFrame)
@@ -49,8 +47,6 @@ type FileDataFrame struct {
 
 // dataFrameSlice DataFrame 切片的类型别名，用于实现多态 JSON 序列化/反序列化。
 type dataFrameSlice []DataFrame
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -131,8 +127,6 @@ func (ds *dataFrameSlice) UnmarshalJSON(data []byte) error {
 	*ds = result
 	return nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

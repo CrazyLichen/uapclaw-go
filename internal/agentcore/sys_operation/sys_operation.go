@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // FsOperation 文件系统操作接口，定义读取、写入、列表、搜索等文件系统操作。
 type FsOperation interface {
 	// ReadFile 读取文件内容
@@ -239,8 +237,6 @@ type CodeOption func(*CodeOptions)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 编译时验证 BaseSysOperation 满足 SysOperation 接口
 var _ SysOperation = (*BaseSysOperation)(nil)
 
@@ -252,8 +248,6 @@ var _ ShellOperation = (*BaseShellOperation)(nil)
 
 // 编译时验证 BaseCodeOperation 满足 CodeOperation 接口
 var _ CodeOperation = (*BaseCodeOperation)(nil)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TodoItem 任务计划中的单个待办项
 type TodoItem struct {
 	// ID 唯一标识
@@ -58,8 +56,6 @@ type ModelUsageRecord struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // TodoStatus 待办项状态枚举
 type TodoStatus int
 
@@ -76,8 +72,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // StatusIcons 状态对应的图标映射
 var StatusIcons = map[TodoStatus]string{
 	TodoStatusPending:    "[ ]",
@@ -85,8 +79,6 @@ var StatusIcons = map[TodoStatus]string{
 	TodoStatusCompleted:  "[√]",
 	TodoStatusCancelled:  "[×]",
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -331,8 +323,6 @@ func (r *ModelUsageRecord) Add(inputTokens, outputTokens int) {
 func (r ModelUsageRecord) String() string {
 	return fmt.Sprintf("%s: input=%d, output=%d", r.ModelID, r.InputTokens, r.OutputTokens)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

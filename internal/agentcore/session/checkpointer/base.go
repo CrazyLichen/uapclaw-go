@@ -37,8 +37,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetThreadID 获取线程 ID（session_id:workflow_id）。
 // 对应 Python: Checkpointer.get_thread_id()（@staticmethod）
 func GetThreadID(session interfaces.InnerSession) string {
@@ -90,8 +88,6 @@ func GetConfigEnv(session interfaces.InnerSession, key string, defaultValue ...a
 	}
 	return cfg.GetEnv(key, defaultValue...), true
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

@@ -9,8 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TeamCardInterface 团队卡片只读接口。
 //
 // TeamCard 和 EventDrivenTeamCard 均实现此接口。
@@ -107,8 +105,6 @@ type EventDrivenTeamCardOption func(*EventDrivenTeamCard)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 编译时验证 TeamCard 满足 TeamCardInterface。
 var _ TeamCardInterface = (*TeamCard)(nil)
 
@@ -120,8 +116,6 @@ var _ schema.CardInterface = (*TeamCard)(nil)
 
 // 编译时验证 EventDrivenTeamCard 满足 schema.CardInterface。
 var _ schema.CardInterface = (*EventDrivenTeamCard)(nil)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -45,8 +45,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // AllCallbackEvents 返回所有 AgentCallbackEvent 枚举值。
 // 用于遍历清理等场景。
 func AllCallbackEvents() []AgentCallbackEvent {

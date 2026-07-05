@@ -12,8 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // BaseGraphStore 图存储基础接口
 //
 // 对应 Python: GraphStore Protocol (base_graph_store.py)
@@ -104,8 +102,6 @@ var (
 		backends: make(map[string]func(*GraphConfig) (BaseGraphStore, error)),
 	}
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -220,8 +216,6 @@ func NewFromConfig(config *GraphConfig, backendName ...string) (BaseGraphStore, 
 	}
 	return constructor(config)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

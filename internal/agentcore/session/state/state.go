@@ -2,8 +2,6 @@ package state
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ReadableStateLike 只读状态访问接口
 // 对应 Python: ReadableStateLike
 type ReadableStateLike interface {

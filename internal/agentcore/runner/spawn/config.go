@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // SpawnAgentConfig Spawn 基础配置。
 // 对齐 Python: SpawnAgentConfig (agent_config.py)
 type SpawnAgentConfig struct {
@@ -83,8 +81,6 @@ const (
 	// ShutdownWaitPeriod 关闭后等待进程退出的宽限期
 	ShutdownWaitPeriod = 2 * time.Second
 )
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

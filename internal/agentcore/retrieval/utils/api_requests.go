@@ -16,8 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // RetryConfig 重试配置。
 //
 // 对齐 Python: sync_request_with_retry / async_request_with_retry 的参数
@@ -60,8 +58,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // RequestWithRetry 发送带重试的 HTTP POST 请求。
 //
 // 对齐 Python: async_request_with_retry。
@@ -92,8 +88,6 @@ func RequestWithRetrySync(
 ) (map[string]any, error) {
 	return doRequestWithRetry(ctx, httpClient, url, jsonBody, headers, cfg)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

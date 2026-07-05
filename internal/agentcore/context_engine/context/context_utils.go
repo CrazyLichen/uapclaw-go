@@ -23,8 +23,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ModelDefaultContextWindowTokens 各模型的默认上下文窗口大小映射表
 var ModelDefaultContextWindowTokens = map[string]int{
 	"glm-5":             200000,
@@ -51,8 +49,6 @@ var ModelDefaultContextWindowTokens = map[string]int{
 	"qwen-turbo":        8192,
 	"qwen-long":         1000000,
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

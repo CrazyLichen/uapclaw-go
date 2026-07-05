@@ -11,8 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // toolFuncConfig 便捷函数内部配置。
 type toolFuncConfig struct {
 	name        string
@@ -23,8 +21,6 @@ type toolFuncConfig struct {
 
 // ToolFuncOption 工具注册选项函数。
 type ToolFuncOption func(*toolFuncConfig)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -170,8 +166,6 @@ func NewStreamTool[I any, O any](fn func(context.Context, I, ...ToolOption) (<-c
 
 	return &StreamFunction[I, O]{card: card, fn: fn}, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

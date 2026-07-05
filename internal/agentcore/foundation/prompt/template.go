@@ -9,8 +9,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // PromptTemplate 可插值替换的 Prompt 模板，支持字符串和消息列表两种内容格式。
 //
 // 对应 Python: openjiuwen/core/foundation/prompt/template.py (PromptTemplate)
@@ -32,8 +30,6 @@ type PromptTemplate struct {
 
 // TemplateOption PromptTemplate 构造选项函数。
 type TemplateOption func(*PromptTemplate)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -176,8 +172,6 @@ func (t *PromptTemplate) InputKeys() ([]string, error) {
 
 	return assembler.InputKeys(), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

@@ -7,8 +7,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // HandoffRoute 交接路由规则，定义 Agent 间的定向交接路径。
 //
 // 对应 Python: HandoffRoute(source=str, target=str)
@@ -46,8 +44,6 @@ type HandoffTeamConfig struct {
 
 // HandoffOrchestrator 交接编排器，具体字段和方法在 handoff_orchestrator.go 中定义。
 // 此处仅做包内类型引用，HandoffConfig.TerminationCondition 需要引用此类型。
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

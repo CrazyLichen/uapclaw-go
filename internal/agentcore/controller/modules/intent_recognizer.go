@@ -16,8 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // ModelProvider 意图识别所需的模型调用接口。
 // ⤵️ 6.23 ResourceMgr 实现后回填
 type ModelProvider interface {
@@ -55,8 +53,6 @@ type EventHandlerWithIntentRecognition struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 const logComponentIntent = logger.ComponentAgentCore
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -243,8 +239,6 @@ func (h *EventHandlerWithIntentRecognition) HandleTaskFailed(ctx context.Context
 	}
 	return nil, nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

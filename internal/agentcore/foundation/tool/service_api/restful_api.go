@@ -26,8 +26,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // RestfulApiCard RESTful API 工具配置卡片，扩展 ToolCard 增加 HTTP 请求相关配置。
 //
 // 与 Python 对齐：input_params 使用原始 JSON Schema map（InputSchema），
@@ -81,8 +79,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // supportedMethods 支持的 HTTP 方法集合
 var supportedMethods = map[string]bool{
 	"GET": true, "POST": true, "PUT": true, "PATCH": true,
@@ -91,8 +87,6 @@ var supportedMethods = map[string]bool{
 
 // pathParamPattern 匹配 URL 中的路径参数占位符，如 {id}、{userId}
 var pathParamPattern = regexp.MustCompile(`\{(\w+)\}`)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -326,8 +320,6 @@ func GetParametersByLocation(card *RestfulApiCard) map[string][]map[string]any {
 
 	return result
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

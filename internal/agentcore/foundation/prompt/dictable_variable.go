@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // DictableVariable 字典/列表模板变量，递归处理多模态内容中的占位符。
 //
 // 对应 Python: openjiuwen/core/foundation/prompt/assemble/variables/dictable.py (DictableVariable)
@@ -34,8 +32,6 @@ type DictableVariable struct {
 
 // DictableOption DictableVariable 构造选项函数。
 type DictableOption func(*DictableVariable)
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -127,8 +123,6 @@ func (dv *DictableVariable) Update(kwargs map[string]any) {
 	dataCopy := deepCopyAny(dv.data)
 	dv.value = dv.recursiveFormat(dataCopy, kwargs)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

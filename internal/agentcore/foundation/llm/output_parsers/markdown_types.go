@@ -2,8 +2,6 @@ package output_parsers
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // MarkdownElement 单个 Markdown 元素。
 //
 // 对应 Python: MarkdownElement (dataclass)
