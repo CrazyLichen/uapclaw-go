@@ -206,10 +206,10 @@ func (c *ToolCard) String() string {
 // ToolInfo 从 ToolCard 生成工具描述信息，供 LLM function calling 消费。
 //
 // 将 InputParams ([]*Param) 转换为 JSON Schema map，构造 ToolInfo 返回。
-// 返回 ToolInterface 接口，统一 ToolInfo 和 McpToolInfo 的访问方式。
+// 返回 *ToolInfo，供 LLM function calling 消费。
 //
 // 对应 Python: ToolCard.tool_info() -> ToolInfo(name=..., description=..., parameters=...)
-func (c *ToolCard) ToolInfo() schema.ToolInterface {
+func (c *ToolCard) ToolInfo() *schema.ToolInfo {
 	parameters := schema.ToJSONSchemaMap(c.InputParams)
 	return schema.NewToolInfo(c.Name, c.Description, parameters)
 }
