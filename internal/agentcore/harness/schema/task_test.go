@@ -269,7 +269,7 @@ func TestTaskPlan_GetNextTask_依赖排序(t *testing.T) {
 	}
 
 	// 完成 B 后，A 可选
-	tp.MarkCompleted(itemB.ID, "B 完成")
+	_ = tp.MarkCompleted(itemB.ID, "B 完成")
 	next = tp.GetNextTask()
 	if next == nil {
 		t.Error("期望找到 A, 实际为 nil")
@@ -373,9 +373,9 @@ func TestTaskPlan_GetProgressSummary(t *testing.T) {
 		tp.AddTask(item)
 	}
 	// 完成 3 个
-	tp.MarkCompleted(tp.Tasks[0].ID, "")
-	tp.MarkCompleted(tp.Tasks[1].ID, "")
-	tp.MarkCompleted(tp.Tasks[2].ID, "")
+	_ = tp.MarkCompleted(tp.Tasks[0].ID, "")
+	_ = tp.MarkCompleted(tp.Tasks[1].ID, "")
+	_ = tp.MarkCompleted(tp.Tasks[2].ID, "")
 
 	summary := tp.GetProgressSummary()
 	expected := "3/7 completed"

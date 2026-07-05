@@ -868,8 +868,8 @@ func TestListTeamLinks_多个链接(t *testing.T) {
 
 	targetDir1 := filepath.Join(t.TempDir(), "team1")
 	targetDir2 := filepath.Join(t.TempDir(), "team2")
-	os.MkdirAll(targetDir1, 0o755)
-	os.MkdirAll(targetDir2, 0o755)
+	_ = os.MkdirAll(targetDir1, 0o755)
+	_ = os.MkdirAll(targetDir2, 0o755)
 
 	if err := w.LinkTeam("alpha", targetDir1); err != nil {
 		t.Fatalf("LinkTeam alpha failed: %v", err)

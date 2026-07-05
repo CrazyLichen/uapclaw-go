@@ -443,7 +443,7 @@ func TestTaskLoopEventExecutor_ExecuteAbility_任务存在有描述(t *testing.T
 // TestIsSensitive_默认敏感模式 无环境变量时返回 true
 func TestIsSensitive_默认敏感模式(t *testing.T) {
 	// 清理环境变量，确保默认值
-	os.Unsetenv("IS_SENSITIVE")
+	_ = os.Unsetenv("IS_SENSITIVE")
 	result := isSensitive()
 	if !result {
 		t.Error("isSensitive() 默认返回 false，期望 true")
@@ -452,8 +452,8 @@ func TestIsSensitive_默认敏感模式(t *testing.T) {
 
 // TestIsSensitive_非敏感模式 IS_SENSITIVE=false 时返回 false
 func TestIsSensitive_非敏感模式(t *testing.T) {
-	os.Setenv("IS_SENSITIVE", "false")
-	defer os.Unsetenv("IS_SENSITIVE")
+	_ = os.Setenv("IS_SENSITIVE", "false")
+	defer func() { _ = os.Unsetenv("IS_SENSITIVE") }()
 
 	result := isSensitive()
 	if result {
@@ -463,8 +463,8 @@ func TestIsSensitive_非敏感模式(t *testing.T) {
 
 // TestIsSensitive_敏感模式 IS_SENSITIVE=true 时返回 true
 func TestIsSensitive_敏感模式(t *testing.T) {
-	os.Setenv("IS_SENSITIVE", "true")
-	defer os.Unsetenv("IS_SENSITIVE")
+	_ = os.Setenv("IS_SENSITIVE", "true")
+	defer func() { _ = os.Unsetenv("IS_SENSITIVE") }()
 
 	result := isSensitive()
 	if !result {
