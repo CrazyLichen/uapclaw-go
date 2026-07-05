@@ -179,6 +179,7 @@ func Stop(ctx context.Context) error {
 		}
 
 		// 步骤 4：释放资源管理器（对齐 Python L347: await self._resource_manager.release()）
+		// Python finally 中 release 失败不影响返回值，仅记录日志
 		if r.resourceMgr != nil {
 			if err := r.resourceMgr.Release(ctx); err != nil {
 				logger.Warn(logComponent).
@@ -186,9 +187,6 @@ func Stop(ctx context.Context) error {
 					Str("runner_id", r.runnerID).
 					Err(err).
 					Msg("资源管理器释放失败")
-				if firstErr == nil {
-					firstErr = err
-				}
 			}
 		}
 	}()
@@ -256,6 +254,7 @@ func RunAgent(
 	}
 
 	// 步骤 5：PostRun清理（对齐 Python L426: await agent_session.post_run()）
+	// Python 中 PostRun 错误会传播给调用方，Go 对齐此行为
 	if agentSession != nil {
 		if agentSess, ok := agentSession.(*session.Session); ok {
 			if postErr := agentSess.PostRun(ctx); postErr != nil {
@@ -263,6 +262,7 @@ func RunAgent(
 					Str("event_type", "runner_run_agent").
 					Err(postErr).
 					Msg("Agent PostRun 失败")
+				return result, postErr
 			}
 		}
 	}

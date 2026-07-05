@@ -67,6 +67,8 @@ type RuntimeConfigOption func(*RuntimeConfig)
 const (
 	// defaultP2PTimeout 默认 P2P 超时秒数
 	defaultP2PTimeout = 1800.0
+	// defaultRuntimeTeamID 默认团队标识，对齐 Python: RuntimeConfig.team_id = "default"
+	defaultRuntimeTeamID = "default"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -74,6 +76,7 @@ const (
 // NewRuntimeConfig 创建团队运行时配置，设置默认值。
 func NewRuntimeConfig(opts ...RuntimeConfigOption) *RuntimeConfig {
 	cfg := &RuntimeConfig{
+		TeamID:     defaultRuntimeTeamID,
 		P2PTimeout: defaultP2PTimeout,
 	}
 	for _, opt := range opts {
@@ -108,15 +111,33 @@ func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 
 // NewTeamRuntime 创建团队运行时实例。
 //
+// 自动从 config 创建 MessageBus，对齐 Python TeamRuntime.__init__ 中
+// self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
+//
 // 对应 Python: TeamRuntime.__init__(config)
 func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
-	return &TeamRuntime{
+	tr := &TeamRuntime{
 		config:             config,
 		teamID:             config.TeamID,
 		agentCards:         make(map[string]*agentschema.AgentCard),
 		activeTeamSessions: make(map[string]*session.AgentTeamSession),
 		p2pTimeout:         config.P2PTimeout,
 	}
+
+	// 对齐 Python L78: self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)
+	if config.MessageBus != nil {
+		bus, err := NewMessageBus(*config.MessageBus, tr)
+		if err != nil {
+			logger.Error(logComponent).Err(err).
+				Str("event_type", "TEAM_RUNTIME_INIT_ERROR").
+				Str("team_id", config.TeamID).
+				Msg("创建 MessageBus 失败")
+		} else {
+			tr.messageBus = bus
+		}
+	}
+
+	return tr
 }
 
 // Start 启动团队运行时，初始化并启动消息总线。
@@ -128,7 +149,9 @@ func (tr *TeamRuntime) Start(ctx context.Context) error {
 	}
 
 	if tr.messageBus == nil {
-		return fmt.Errorf("消息总线未设置，请先调用 SetMessageBus")
+		return exception.BuildError(exception.StatusMessageQueueInitiationError,
+			exception.WithParam("reason", "消息总线未初始化"),
+		)
 	}
 	if err := tr.messageBus.Start(ctx); err != nil {
 		return err
@@ -146,8 +169,13 @@ func (tr *TeamRuntime) Start(ctx context.Context) error {
 
 // Stop 停止团队运行时，停止消息总线。
 //
-// 对应 Python: TeamRuntime.stop()
+// 对齐 Python: TeamRuntime.stop() — 先检查 if not self._running: return
 func (tr *TeamRuntime) Stop(ctx context.Context) error {
+	// 幂等检查，对齐 Python L127-128: if not self._running: return
+	if !tr.running.Load() {
+		return nil
+	}
+
 	// 先停 messageBus 再设 running=false，避免 running=false 后仍有请求进入
 	if tr.messageBus != nil {
 		if err := tr.messageBus.Stop(ctx); err != nil {
@@ -202,10 +230,23 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 	// Go 直接调用 runner.GetResourceMgr() 等价访问全局 ResourceMgr。
 	if resourceMgr := runner.GetResourceMgr(); resourceMgr != nil {
 		if err := resourceMgr.AddAgent(card, wrappedProvider); err != nil {
-			logger.Warn(logComponent).Err(err).
-				Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_ERROR").
-				Str("agent_id", agentID).
-				Msg("注册 Agent 到 ResourceMgr 失败，可能已存在")
+			// 对齐 Python: add_agent 的 is_err() 时 debug log 不抛异常（agent 已存在），
+			// 其他 ImportError/AttributeError/Exception 则 raise build_error
+			if isResourceAlreadyExistsError(err) {
+				logger.Debug(logComponent).Err(err).
+					Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_EXISTS").
+					Str("agent_id", agentID).
+					Msg("Agent 已存在于 ResourceMgr，复用")
+			} else {
+				logger.Error(logComponent).Err(err).
+					Str("event_type", "AGENT_REGISTER_TO_RESOURCEMGR_ERROR").
+					Str("agent_id", agentID).
+					Msg("注册 Agent 到 ResourceMgr 失败")
+				return exception.BuildError(exception.StatusAgentTeamAddRuntimeError,
+					exception.WithCause(err),
+					exception.WithParam("error_msg", fmt.Sprintf("注册 Agent '%s' 到 ResourceMgr 失败: %s", agentID, err.Error())),
+				)
+			}
 		}
 	}
 
@@ -441,12 +482,24 @@ func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
 }
 
-// SetMessageBus 设置消息总线，供外部注入。
-func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// setMessageBus 设置消息总线（仅测试使用）。
+// 生产代码中 MessageBus 由 NewTeamRuntime 自动创建，无需手动设置。
+func (tr *TeamRuntime) setMessageBus(bus MessageBusInterface) {
 	tr.messageBus = bus
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// isResourceAlreadyExistsError 判断是否为"资源已存在"类错误。
+//
+// 对齐 Python: add_agent 的 result.is_err() 表示 agent 已存在，
+// 此时仅 debug log 不抛异常。
+func isResourceAlreadyExistsError(err error) bool {
+	if baseErr, ok := err.(*exception.BaseError); ok {
+		return baseErr.Status() == exception.StatusResourceAddError
+	}
+	return false
+}
 
 // wrapProvider 包装 Agent provider，在 Agent 创建后自动注入 RuntimeBindable。
 //

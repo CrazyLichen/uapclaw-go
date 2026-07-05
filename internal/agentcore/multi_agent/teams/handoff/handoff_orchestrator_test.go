@@ -271,9 +271,12 @@ func TestComplete_发送结果(t *testing.T) {
 	coord.Complete(result)
 
 	select {
-	case r := <-coord.DoneCh():
-		if r["status"] != "done" {
-			t.Errorf("期望 result[status] = done，实际 = %v", r["status"])
+	case hr := <-coord.DoneCh():
+		if hr.err != nil {
+			t.Errorf("期望 err 为 nil，实际 = %v", hr.err)
+		}
+		if hr.result["status"] != "done" {
+			t.Errorf("期望 result[status] = done，实际 = %v", hr.result["status"])
 		}
 	default:
 		t.Errorf("期望 doneCh 中有结果")
@@ -292,13 +295,16 @@ func TestComplete_多次调用只发送一次(t *testing.T) {
 	coord.Complete(result2) // 第二次调用应被忽略
 
 	// 只应收到第一次的结果
-	r := <-coord.DoneCh()
-	if r["status"] != "first" {
-		t.Errorf("期望收到第一次的结果，实际 = %v", r["status"])
+	hr := <-coord.DoneCh()
+	if hr.err != nil {
+		t.Errorf("期望 err 为 nil，实际 = %v", hr.err)
+	}
+	if hr.result["status"] != "first" {
+		t.Errorf("期望收到第一次的结果，实际 = %v", hr.result["status"])
 	}
 }
 
-// TestError_发送错误 测试 Error 发送错误信息到 doneCh
+// TestError_发送错误 测试 Error 发送错误到 doneCh
 func TestError_发送错误(t *testing.T) {
 	agents := []string{"a", "b"}
 	coord := NewHandoffOrchestrator("a", agents, nil)
@@ -306,10 +312,12 @@ func TestError_发送错误(t *testing.T) {
 	coord.Error(context.Canceled)
 
 	select {
-	case r := <-coord.DoneCh():
-		errMsg, ok := r["error"].(string)
-		if !ok || errMsg == "" {
-			t.Errorf("期望 error 字段为非空字符串，实际 = %v", r["error"])
+	case hr := <-coord.DoneCh():
+		if hr.err == nil {
+			t.Errorf("期望 err 不为 nil，实际为 nil")
+		}
+		if hr.result != nil {
+			t.Errorf("期望 result 为 nil，实际 = %v", hr.result)
 		}
 	default:
 		t.Errorf("期望 doneCh 中有错误信息")

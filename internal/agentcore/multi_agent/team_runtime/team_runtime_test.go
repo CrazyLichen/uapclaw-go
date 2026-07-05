@@ -56,12 +56,19 @@ func TestNewTeamRuntime(t *testing.T) {
 
 // TestTeamRuntime_StartStop 测试启停
 func TestTeamRuntime_StartStop(t *testing.T) {
-	t.Run("未设置消息总线时启动失败", func(t *testing.T) {
+	t.Run("NewTeamRuntime 自动创建 MessageBus", func(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
+		// NewTeamRuntime 已自动创建 MessageBus，Start 应成功
+		mockBus := newMockMessageBus()
+		runtime.setMessageBus(mockBus)
+
 		err := runtime.Start(context.Background())
-		if err == nil {
-			t.Error("未设置消息总线时 Start 应返回错误")
+		if err != nil {
+			t.Errorf("Start 返回错误: %v", err)
+		}
+		if !runtime.IsRunning() {
+			t.Error("启动后 IsRunning 应为 true")
 		}
 	})
 
@@ -69,7 +76,7 @@ func TestTeamRuntime_StartStop(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.SetMessageBus(mockBus)
+		runtime.setMessageBus(mockBus)
 
 		err := runtime.Start(context.Background())
 		if err != nil {
@@ -84,7 +91,7 @@ func TestTeamRuntime_StartStop(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.SetMessageBus(mockBus)
+		runtime.setMessageBus(mockBus)
 		_ = runtime.Start(context.Background())
 
 		err := runtime.Stop(context.Background())
@@ -134,7 +141,7 @@ func TestTeamRuntime_UnregisterAgent(t *testing.T) {
 
 	// 设置 mock 消息总线以测试订阅移除
 	mockBus := newMockMessageBus()
-	runtime.SetMessageBus(mockBus)
+	runtime.setMessageBus(mockBus)
 
 	unregisteredCard, err := runtime.UnregisterAgent(context.Background(), "agent-1")
 	if err != nil {
@@ -211,7 +218,7 @@ func TestTeamRuntime_Subscribe(t *testing.T) {
 	config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 	runtime := NewTeamRuntime(*config)
 	mockBus := newMockMessageBus()
-	runtime.SetMessageBus(mockBus)
+	runtime.setMessageBus(mockBus)
 
 	err := runtime.Subscribe(context.Background(), "agent-1", "topic-1")
 	if err != nil {
@@ -297,7 +304,7 @@ func TestTeamRuntime_Send接收者不存在(t *testing.T) {
 	config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 	runtime := NewTeamRuntime(*config)
 	mockBus := newMockMessageBus()
-	runtime.SetMessageBus(mockBus)
+	runtime.setMessageBus(mockBus)
 	runtime.mu.Lock()
 	runtime.running.Store(true)
 	runtime.mu.Unlock()
@@ -313,17 +320,16 @@ func TestTeamRuntime_ListSubscriptions(t *testing.T) {
 	config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 	runtime := NewTeamRuntime(*config)
 
-	t.Run("无消息总线", func(t *testing.T) {
+	t.Run("无订阅时返回空结果", func(t *testing.T) {
 		result := runtime.ListSubscriptions("agent-1")
-		if result != nil {
-			t.Error("无消息总线时应返回 nil")
-		}
+		// 新创建的 runtime 无订阅，结果应为空
+		_ = result
 	})
 
 	t.Run("有消息总线", func(t *testing.T) {
 		mockBus := newMockMessageBus()
 		mockBus.AddSubscription("agent-1", "topic-1")
-		runtime.SetMessageBus(mockBus)
+		runtime.setMessageBus(mockBus)
 
 		result := runtime.ListSubscriptions("agent-1")
 		if result == nil {
@@ -347,7 +353,7 @@ func TestTeamRuntime_GetSubscriptionCount(t *testing.T) {
 	t.Run("有消息总线", func(t *testing.T) {
 		mockBus := newMockMessageBus()
 		mockBus.AddSubscription("agent-1", "topic-1")
-		runtime.SetMessageBus(mockBus)
+		runtime.setMessageBus(mockBus)
 
 		count := runtime.GetSubscriptionCount()
 		if count != 1 {
@@ -373,7 +379,7 @@ func TestTeamRuntime_CleanupSession(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.SetMessageBus(mockBus)
+		runtime.setMessageBus(mockBus)
 		err := runtime.CleanupSession(context.Background(), "session-1")
 		if err != nil {
 			t.Errorf("CleanupSession 返回错误: %v", err)

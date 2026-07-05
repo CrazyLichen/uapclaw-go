@@ -384,6 +384,19 @@ func (s *AgentTeamSession) Inner() *internal.AgentTeamSession {
 	return s.inner
 }
 
+// StreamIterator 返回流迭代 channel。
+//
+// 对应 Python: Session.stream_iterator() → stream_writer_manager().stream_output()
+func (s *AgentTeamSession) StreamIterator() <-chan stream.Schema {
+	mgr := s.inner.StreamWriterManager()
+	if mgr == nil {
+		ch := make(chan stream.Schema)
+		close(ch)
+		return ch
+	}
+	return mgr.StreamOutput()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // writeStream 写入标准输出流（内部实现）。

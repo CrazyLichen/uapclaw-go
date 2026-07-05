@@ -2,6 +2,7 @@ package teams
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
@@ -85,7 +86,23 @@ func StandaloneInvokeContext(
 		Bool("caller_owns", callerOwns).
 		Msg("进入独立调用上下文")
 
-	result, err := fn(teamSession, sid)
+	// 对齐 Python try/finally：即使 fn panic 也保证清理代码执行
+	var result map[string]any
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("业务逻辑 panic: %v", r)
+				logger.Error(logComponent).
+					Str("action", "standalone_invoke_context").
+					Str("session_id", sid).
+					Any("panic", r).
+					Msg("业务逻辑发生 panic")
+			}
+		}()
+		result, err = fn(teamSession, sid)
+	}()
+
 	if err != nil {
 		logger.Error(logComponent).Err(err).
 			Str("action", "standalone_invoke_context").
@@ -129,7 +146,15 @@ func StandaloneInvokeContext(
 // 若 sess 为 nil，创建新会话并在流结束后自动清理。
 //
 // runFn 是流式业务逻辑函数，接收 (teamSession, sessionID) 并返回 error。
-// 返回的通道在 runFn 完成后关闭。
+// runFn 内部通过 teamSession.WriteStream() 写入流数据，
+// 消费者通过返回的 channel 读取 teamSession.StreamIterator() 的数据。
+//
+// 对齐 Python: standalone_stream_context 中
+//
+//	async for chunk in team_session.stream_iterator(): yield chunk
+//
+// Go 直接返回 teamSession.StreamIterator()，runFn 在后台 goroutine 中运行，
+// 数据通过 StreamWriterManager → StreamOutput() 自动流到消费者。
 //
 // 对应 Python: teams/utils.py standalone_stream_context(runtime, card, message, run_coro, session)
 func StandaloneStreamContext(
@@ -166,15 +191,30 @@ func StandaloneStreamContext(
 		Bool("caller_owns", callerOwns).
 		Msg("进入独立流式上下文")
 
-	// 创建流通道
-	ch := make(chan stream.Schema, 1)
+	// 对齐 Python: 返回 team_session.stream_iterator()，
+	// 消费者从此 channel 读取 runFn 通过 WriteStream 写入的流数据
+	streamCh := teamSession.StreamIterator()
 
 	// 在后台 goroutine 中运行流式逻辑并管理生命周期
 	go func() {
-		defer close(ch)
+		// 对齐 Python try/finally：即使 runFn panic 也保证清理代码执行
+		var runErr error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					runErr = fmt.Errorf("流式业务逻辑 panic: %v", r)
+					logger.Error(logComponent).
+						Str("action", "standalone_stream_context").
+						Str("session_id", sid).
+						Any("panic", r).
+						Msg("流式业务逻辑发生 panic")
+				}
+			}()
+			runErr = runFn(teamSession, sid)
+		}()
 
-		if err := runFn(teamSession, sid); err != nil {
-			logger.Error(logComponent).Err(err).
+		if runErr != nil {
+			logger.Error(logComponent).Err(runErr).
 				Str("action", "standalone_stream_context").
 				Str("session_id", sid).
 				Msg("流式业务逻辑执行失败")
@@ -205,10 +245,19 @@ func StandaloneStreamContext(
 				Str("action", "standalone_stream_context").
 				Str("session_id", sid).
 				Msg("独立流式上下文已清理")
+		} else {
+			// Runner 拥有生命周期；仅发信号关闭流
+			// 对齐 Python: _bg 的 finally 中 caller_owns 时 await team_session.close_stream()
+			if closeErr := teamSession.CloseStream(); closeErr != nil {
+				logger.Warn(logComponent).Err(closeErr).
+					Str("action", "standalone_stream_context").
+					Str("session_id", sid).
+					Msg("CloseStream 失败")
+			}
 		}
 	}()
 
-	return ch, nil
+	return streamCh, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

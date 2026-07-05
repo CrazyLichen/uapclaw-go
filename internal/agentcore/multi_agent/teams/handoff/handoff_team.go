@@ -583,10 +583,11 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 	// 等待协调器完成，带超时
 	timeout := t.config.MessageTimeout
 	var result map[string]any
+	var coordErr error
 	if timeout > 0 {
 		select {
-		case res := <-coordinator.DoneCh():
-			result = res
+		case hr := <-coordinator.DoneCh():
+			result, coordErr = hr.result, hr.err
 		case <-time.After(time.Duration(timeout * float64(time.Second))):
 			// 超时，清理协调器
 			delete(t.coordinatorRegistry, sessionID)
@@ -610,8 +611,8 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 		}
 	} else {
 		select {
-		case res := <-coordinator.DoneCh():
-			result = res
+		case hr := <-coordinator.DoneCh():
+			result, coordErr = hr.result, hr.err
 		case <-ctx.Done():
 			// 上下文取消，清理协调器
 			delete(t.coordinatorRegistry, sessionID)
@@ -623,6 +624,17 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 	// 清理协调器和会话
 	delete(t.coordinatorRegistry, sessionID)
 	_ = t.runtime.CleanupSession(ctx, sessionID)
+
+	// 对齐 Python: await coordinator.done_future — 若有异常则传播
+	if coordErr != nil {
+		logger.Error(logComponent).Err(coordErr).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "HandoffTeam.runChain").
+			Str("team_id", t.card.GetID()).
+			Str("session_id", sessionID).
+			Msg("交接编排发生错误")
+		return nil, coordErr
+	}
 
 	logger.Info(logComponent).
 		Str("action", "run_chain_complete").

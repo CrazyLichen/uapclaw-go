@@ -10,6 +10,20 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// handoffResult 交接编排结果，区分正常结果和错误。
+//
+// 对齐 Python asyncio.Future 的 set_result/set_exception 双通道语义：
+//   - 正常完成：result 有值，err 为 nil
+//   - 异常完成：result 为 nil，err 有值
+//
+// 消费方通过 hr.err != nil 判断是否出错。
+type handoffResult struct {
+	// result 正常结果
+	result map[string]any
+	// err 异常错误
+	err error
+}
+
 // HandoffOrchestrator 每会话交接协调器。
 //
 // 管理交接路由、当前活跃 Agent、交接次数计数，
@@ -28,7 +42,7 @@ type HandoffOrchestrator struct {
 	// routeGraph 路由邻接表
 	routeGraph map[string]map[string]struct{}
 	// doneCh 完成通道（缓冲 1）
-	doneCh chan map[string]any
+	doneCh chan handoffResult
 	// doneOnce 保证只发送一次
 	doneOnce sync.Once
 }
@@ -79,7 +93,7 @@ func NewHandoffOrchestrator(startAgentID string, registeredAgents []string, conf
 		handoffCount:         0,
 		currentAgentID:       startAgentID,
 		routeGraph:           routeGraph,
-		doneCh:               make(chan map[string]any, 1),
+		doneCh:               make(chan handoffResult, 1),
 	}
 
 	logger.Info(logComponent).
@@ -204,10 +218,10 @@ func (o *HandoffOrchestrator) RequestHandoff(targetID string, reason string) boo
 //
 // doneOnce 保证只发送一次。
 //
-// 对应 Python: HandoffOrchestrator.complete(result)
+// 对应 Python: HandoffOrchestrator.complete(result) — 调用 done_future.set_result(result)
 func (o *HandoffOrchestrator) Complete(result map[string]any) {
 	o.doneOnce.Do(func() {
-		o.doneCh <- result
+		o.doneCh <- handoffResult{result: result}
 		close(o.doneCh)
 		logger.Info(logComponent).
 			Str("action", "handoff_orchestrator_complete").
@@ -215,18 +229,19 @@ func (o *HandoffOrchestrator) Complete(result map[string]any) {
 	})
 }
 
-// Error 标记编排错误，发送错误信息到 doneCh。
+// Error 标记编排错误，发送错误到 doneCh。
 //
-// 对应 Python: HandoffOrchestrator.error(exception)
+// 对齐 Python asyncio.Future.set_exception(exception)：
+// 错误通过 handoffResult.err 字段传递，消费方通过 hr.err != nil 判断。
+//
+// 对应 Python: HandoffOrchestrator.error(exception) — 调用 done_future.set_exception(exception)
 func (o *HandoffOrchestrator) Error(err error) {
 	o.doneOnce.Do(func() {
-		o.doneCh <- map[string]any{
-			"error": err.Error(),
-		}
+		o.doneCh <- handoffResult{err: err}
 		close(o.doneCh)
 		logger.Error(logComponent).Err(err).
 			Str("action", "handoff_orchestrator_error").
-			Msg("交接编排发生错误，错误信息已发送到 doneCh")
+			Msg("交接编排发生错误，错误已发送到 doneCh")
 	})
 }
 
@@ -240,7 +255,7 @@ func (o *HandoffOrchestrator) Close() {
 }
 
 // DoneCh 返回只读完成通道。
-func (o *HandoffOrchestrator) DoneCh() <-chan map[string]any {
+func (o *HandoffOrchestrator) DoneCh() <-chan handoffResult {
 	return o.doneCh
 }
 

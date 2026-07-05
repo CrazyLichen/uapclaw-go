@@ -83,7 +83,7 @@ func newTestTeamWithRuntime(teamID string, rootAgentID string, bus team_runtime.
 		team_runtime.WithRuntimeTeamID(teamID),
 	)
 	tr := team_runtime.NewTeamRuntime(*rtCfg)
-	tr.SetMessageBus(bus)
+	tr.setMessageBus(bus)
 	_ = tr.Start(context.Background())
 
 	return NewHierarchicalToolsTeam(teamCard, config, tr)

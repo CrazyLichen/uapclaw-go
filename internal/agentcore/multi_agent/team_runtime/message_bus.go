@@ -96,6 +96,8 @@ const (
 	defaultMaxQueueSize = 1000
 	// defaultProcessTimeout 默认处理超时秒数
 	defaultProcessTimeout = 1800.0
+	// defaultTeamID 默认团队标识，对齐 Python: self._team_id = self._config.team_id or "default"
+	defaultTeamID = "default"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -110,6 +112,7 @@ func NewMessageBusConfig(opts ...MessageBusConfigOption) *MessageBusConfig {
 	cfg := &MessageBusConfig{
 		MaxQueueSize:   defaultMaxQueueSize,
 		ProcessTimeout: defaultProcessTimeout,
+		TeamID:         defaultTeamID,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -254,7 +257,9 @@ func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) erro
 // 对应 Python: MessageBus.send(message, recipient, sender, session_id, timeout)
 func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, sender string, sessionID string, timeout float64) (any, error) {
 	if !mb.running.Load() {
-		return nil, fmt.Errorf("消息总线未启动，无法发送 P2P 消息")
+		return nil, exception.BuildError(exception.StatusMessageQueueInitiationError,
+			exception.WithParam("reason", "消息总线未启动，无法发送 P2P 消息"),
+		)
 	}
 
 	// 构建消息信封
@@ -269,7 +274,11 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 	// 确保 P2P topic 已订阅
 	p2pTopic := mb.getP2PTopic(sessionID)
 	if err := mb.ensureSubscription(ctx, p2pTopic); err != nil {
-		return nil, fmt.Errorf("确保 P2P 订阅失败: %w", err)
+		return nil, exception.BuildError(exception.StatusMessageQueueTopicSubscriptionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", p2pTopic),
+			exception.WithParam("reason", fmt.Sprintf("确保 P2P 订阅失败: %s", err.Error())),
+		)
 	}
 
 	// 构建 payload
@@ -332,7 +341,9 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 // 对应 Python: MessageBus.publish(message, topic_id, sender, session_id)
 func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, sender string, sessionID string) error {
 	if !mb.running.Load() {
-		return fmt.Errorf("消息总线未启动，无法发布 Pub-Sub 消息")
+		return exception.BuildError(exception.StatusMessageQueueInitiationError,
+			exception.WithParam("reason", "消息总线未启动，无法发布 Pub-Sub 消息"),
+		)
 	}
 
 	// 构建消息信封
@@ -347,7 +358,11 @@ func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, 
 	// 确保 Pub-Sub topic 已订阅
 	pubsubTopic := mb.getPubsubTopic(sessionID)
 	if err := mb.ensureSubscription(ctx, pubsubTopic); err != nil {
-		return fmt.Errorf("确保 Pub-Sub 订阅失败: %w", err)
+		return exception.BuildError(exception.StatusMessageQueueTopicSubscriptionError,
+			exception.WithCause(err),
+			exception.WithParam("topic", pubsubTopic),
+			exception.WithParam("reason", fmt.Sprintf("确保 Pub-Sub 订阅失败: %s", err.Error())),
+		)
 	}
 
 	// 构建 payload
