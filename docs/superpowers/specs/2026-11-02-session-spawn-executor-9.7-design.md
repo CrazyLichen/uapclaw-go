@@ -235,14 +235,134 @@ func BuildSessionTools(provider DeepAgentProvider, toolkit *SessionToolkit, lang
 ```
 
 **位置3：第264-269行 HandleTaskCompletion SessionSpawn 分支**
+
+对照 Python `TaskLoopEventHandler.handle_task_completion` (390-392行) + `_complete_session_spawn` (530-587行)：
+
 ```go
-// 回填后：提取 task_id + output → toolkit.MarkCompleted(taskID, output) → resolveRound
+// 回填后：
+if taskType == SessionSpawnTaskType {
+    h.completeSessionSpawn(taskID, input, false)
+    return map[string]any{"status": "session_spawn_completed", "task_id": taskID}, nil
+}
 ```
 
 **位置4：第308-313行 HandleTaskFailed SessionSpawn 分支**
+
+对照 Python `handle_task_failed` (455-457行)：
+
 ```go
-// 回填后：提取 task_id + error → toolkit.MarkFailed(taskID, errMsg) → resolveRound
+// 回填后：
+if taskType == SessionSpawnTaskType {
+    h.completeSessionSpawn(taskID, input, true)
+    return map[string]any{"status": "session_spawn_failed", "task_id": taskID, "error": errMsg}, nil
+}
 ```
+
+**新增方法：completeSessionSpawn**
+
+对照 Python `_complete_session_spawn` (530-587行)，这是 SessionSpawn 完成后的核心路由逻辑：
+
+```go
+// completeSessionSpawn 处理 SESSION_SPAWN 完成/失败。
+// 对齐 Python: TaskLoopEventHandler._complete_session_spawn
+func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *modules.EventHandlerInput, isError bool) {
+    // 1. 提取结果/错误字符串（截断：成功 500 字符，错误 300 字符）
+    var resultStr, errorStr string
+    if isError {
+        errorStr = extractErrorFromEvent(input)  // 对齐 Python: _extract_error_from_event
+    } else {
+        resultStr = extractResultFromEvent(input) // 对齐 Python: _extract_result_from_event
+    }
+
+    // 2. 更新 SessionToolkit 状态
+    h.mu.Lock()
+    toolkit := h.sessionToolkit
+    h.mu.Unlock()
+    if toolkit != nil {
+        if isError {
+            toolkit.MarkFailed(taskID, errorStr)
+        } else {
+            toolkit.MarkCompleted(taskID, resultStr)
+        }
+    }
+
+    // 3. 格式化 steer 文本（中英文双语模板）
+    taskDesc, _ := input.Event.GetMetadata()["task_description"].(string)
+    language := "cn"
+    if cfg := h.provider.DeepConfig(); cfg != nil {
+        language = cfg.Language
+    }
+    steerText := formatSessionSpawnSteer(taskDesc, isError, resultStr, errorStr, language)
+
+    // 4. 两条分支路径
+    if h.provider.IsInvokeActive() {
+        // Path 1: 有活跃 invoke → push_steer 注入引导队列
+        if h.interactionQueues != nil {
+            h.interactionQueues.PushSteer(steerText)
+        }
+        logger.Info(logComponent).Str("task_id", taskID).Msg("SessionSpawn 完成，steer 注入（活跃 invoke）")
+    } else {
+        // Path 2: 无活跃 invoke → 延迟调度自动 invoke
+        if !h.provider.IsAutoInvokeScheduled() {
+            h.provider.SetAutoInvokeScheduled(true)
+            _ = h.provider.ScheduleAutoInvokeOnSpawnDone(steerText)
+        }
+        logger.Info(logComponent).Str("task_id", taskID).Msg("SessionSpawn 完成，自动 invoke 已调度")
+    }
+}
+```
+
+**新增辅助方法（对照 Python _extract_result_from_event / _extract_error_from_event / _format_session_spawn_steer）：**
+
+```go
+// extractResultFromEvent 从完成事件提取结果字符串，截断 500 字符。
+// 对齐 Python: _extract_result_from_event (590-603行)
+func extractResultFromEvent(input *modules.EventHandlerInput) string {
+    event := input.Event
+    if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
+        for _, df := range tce.TaskResult {
+            if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
+                if output, ok := jsonDF.Data["output"]; ok {
+                    s := fmt.Sprintf("%v", output)
+                    if len(s) > 500 { s = s[:500] }
+                    return s
+                }
+            }
+            if textDF, ok := df.(*cschema.TextDataFrame); ok {
+                s := textDF.Text
+                if len(s) > 500 { s = s[:500] }
+                return s
+            }
+        }
+    }
+    return ""
+}
+
+// extractErrorFromEvent 从失败事件提取错误字符串，截断 300 字符。
+// 对齐 Python: _extract_error_from_event (606-610行)
+func extractErrorFromEvent(input *modules.EventHandlerInput) string {
+    event := input.Event
+    if tfe, ok := event.(*cschema.TaskFailedEvent); ok {
+        s := tfe.ErrorMessage
+        if len(s) > 300 { s = s[:300] }
+        return s
+    }
+    return "unknown"
+}
+
+// formatSessionSpawnSteer 格式化 SessionSpawn 完成的 steer 文本。
+// 对齐 Python: _format_session_spawn_steer (613-633行)
+func formatSessionSpawnSteer(taskDesc string, isError bool, result string, err string, language string) string {
+    // 中英文双语模板，对照 Python templates 字典
+    ...
+}
+```
+
+**关键区别于之前错误设计：**
+- ❌ 之前用 `fmt.Sprintf("%v", output)` 直接赋值，无截断，类型不精确
+- ✅ 现在对照 Python 的 `str(output)[:500]`，用 `fmt.Sprintf("%v", output)` 转 string + 截断 500 字符
+- ✅ 错误提取对照 Python 的 `str(error_message)[:300]`，截断 300 字符
+- ✅ 完整实现了 `_complete_session_spawn` 的两条路径（steer vs auto-invoke），之前完全遗漏
 
 ## 回填点完整清单（⤵️ 9.7，不能丢失）
 
@@ -254,8 +374,12 @@ func BuildSessionTools(provider DeepAgentProvider, toolkit *SessionToolkit, lang
 | 4 | `executor.go:398` | BuildDeepExecutor 注释 | 更新注释 | 回填 |
 | 5 | `handler.go:38` | sessionToolkit 字段类型 | `any` → `*subagent.SessionToolkit` | 回填 |
 | 6 | `handler.go:410` | SetSessionToolkit 参数类型 | `any` → `*subagent.SessionToolkit` | 回填 |
-| 7 | `handler.go:264-269` | HandleTaskCompletion SessionSpawn 分支 | 调用 toolkit.MarkCompleted | 回填 |
-| 8 | `handler.go:308-313` | HandleTaskFailed SessionSpawn 分支 | 调用 toolkit.MarkFailed | 回填 |
+| 7 | `handler.go:264-269` | HandleTaskCompletion SessionSpawn 分支 | 调用 `completeSessionSpawn(taskID, input, false)` | 回填 |
+| 8 | `handler.go:308-313` | HandleTaskFailed SessionSpawn 分支 | 调用 `completeSessionSpawn(taskID, input, true)` | 回填 |
+| 9 | `handler.go` (新增) | `completeSessionSpawn` 方法 | 完整实现：提取结果/错误 → 更新 toolkit → 格式化 steer → 两条路径(steer/auto-invoke) | 新增 |
+| 10 | `handler.go` (新增) | `extractResultFromEvent` | 从完成事件提取结果字符串，截断 500 字符 | 新增 |
+| 11 | `handler.go` (新增) | `extractErrorFromEvent` | 从失败事件提取错误字符串，截断 300 字符 | 新增 |
+| 12 | `handler.go` (新增) | `formatSessionSpawnSteer` | 中英文双语 steer 文本模板 | 新增 |
 
 ## 日志同步（对照 Python）
 
@@ -267,6 +391,8 @@ func BuildSessionTools(provider DeepAgentProvider, toolkit *SessionToolkit, lang
 | `[SessionSpawnExecutor] Cancelling task_id=...` | `Cancel` | Info | task_id |
 | `[SessionsSpawnTool] Submitted task_id=..., sub_session_id=..., subagent_type=...` | `SessionsSpawnTool.Invoke` | Info | task_id, sub_session_id, subagent_type |
 | `[SessionsCancelTool] Cancelled task_id=...` | `SessionsCancelTool.Invoke` | Info | task_id |
+| `[SessionSpawn] task_id=... completed, steer pushed (active invoke)` | `completeSessionSpawn` Path 1 | Info | task_id |
+| `[SessionSpawn] task_id=... completed, auto-invoke scheduled` | `completeSessionSpawn` Path 2 | Info | task_id |
 
 ## 测试策略
 
