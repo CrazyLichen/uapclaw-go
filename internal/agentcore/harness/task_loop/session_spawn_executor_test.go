@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -114,8 +115,8 @@ func TestSessionSpawnExecutor_buildErrorChunk(t *testing.T) {
 		t.Fatal("Payload 类型断言失败")
 	}
 	taskType, _ := payload.Metadata["task_type"].(string)
-	if taskType != SessionSpawnTaskType {
-		t.Fatalf("期望 %s, 实际 %s", SessionSpawnTaskType, taskType)
+	if taskType != hschema.SessionSpawnTaskType {
+		t.Fatalf("期望 %s, 实际 %s", hschema.SessionSpawnTaskType, taskType)
 	}
 	taskID, _ := payload.Metadata["task_id"].(string)
 	if taskID != "task-1" {

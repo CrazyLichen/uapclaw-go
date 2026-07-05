@@ -13,7 +13,8 @@
 //	├── config.go        # DeepAgentConfig 及辅助类型（VisionModelConfig、AudioModelConfig、SubAgentConfig、ModelSelectionEntry）
 //	├── loop_event.go    # DeepLoopEventType 枚举及 DeepLoopEvent 结构体
 //	├── state.go         # PlanModeState、DeepAgentState 会话状态
-//	└── task.go          # TodoStatus 枚举、TodoItem、TaskPlan、ModelUsageRecord 任务计划类型
+//	├── task.go          # TodoStatus 枚举、TodoItem、TaskPlan、ModelUsageRecord 任务计划类型
+//	└── task_type.go     # DeepTaskType + SessionSpawnTaskType 任务类型常量
 //
 // 对应 Python 代码：openjiuwen/harness/schema/
 package schema

@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -145,7 +146,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 				Data: []cschema.DataFrame{&cschema.JsonDataFrame{Data: map[string]any{"output": payload}}},
 				Metadata: map[string]any{
 					"task_id":   taskID,
-					"task_type": SessionSpawnTaskType,
+					"task_type": hschema.SessionSpawnTaskType,
 				},
 			},
 			IsLastSchema: true,
@@ -182,7 +183,7 @@ func (e *SessionSpawnExecutor) Cancel(_ context.Context, taskID string, _ sessio
 	return true, nil
 }
 
-// BuildSessionSpawnExecutor 构建 SessionSpawnTaskType 执行器的工厂闭包。
+// BuildSessionSpawnExecutor 构建 hschema.SessionSpawnTaskType 执行器的工厂闭包。
 // 返回的闭包捕获 provider，供 TaskExecutorRegistry 注册。
 // 对齐 Python: build_session_spawn_executor
 func BuildSessionSpawnExecutor(provider DeepAgentProvider) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
@@ -203,7 +204,7 @@ func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *st
 			Data: []cschema.DataFrame{&cschema.TextDataFrame{Text: errMsg}},
 			Metadata: map[string]any{
 				"task_id":   taskID,
-				"task_type": SessionSpawnTaskType,
+				"task_type": hschema.SessionSpawnTaskType,
 			},
 		},
 		IsLastSchema: true,

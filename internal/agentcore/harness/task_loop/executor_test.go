@@ -416,7 +416,7 @@ func TestTaskLoopEventExecutor_ExecuteAbility_任务存在有描述(t *testing.T
 	coreTask := &cschema.Task{
 		SessionID:  "sess-1",
 		TaskID:     taskID,
-		TaskType:   DeepTaskType,
+		TaskType:   hschema.DeepTaskType,
 		Description: "test task description",
 		Status:     cschema.TaskSubmitted,
 		Metadata:   map[string]any{"run_kind": "normal"},

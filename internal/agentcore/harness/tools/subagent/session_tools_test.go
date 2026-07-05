@@ -7,7 +7,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -17,7 +17,7 @@ type fakeProvider struct {
 	// eventHandler 预设的事件处理器
 	eventHandler modules.EventHandler
 	// deepConfig 预设的 DeepAgentConfig
-	deepConfig *schema.DeepAgentConfig
+	deepConfig *hschema.DeepAgentConfig
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -135,10 +135,10 @@ func TestSessionToolkit_UpsertRunning_覆盖(t *testing.T) {
 	}
 }
 
-// TestSessionSpawnTaskType 常量值正确
-func TestSessionSpawnTaskType(t *testing.T) {
-	if SessionSpawnTaskType != "session_spawn_task" {
-		t.Fatalf("期望 session_spawn_task, 实际 %s", SessionSpawnTaskType)
+// Testhschema.SessionSpawnTaskType 常量值正确
+func Testhschema.SessionSpawnTaskType(t *testing.T) {
+	if hschema.SessionSpawnTaskType != "session_spawn_task" {
+		t.Fatalf("期望 session_spawn_task, 实际 %s", hschema.SessionSpawnTaskType)
 	}
 }
 
@@ -213,7 +213,7 @@ func TestSessionsSpawnTool_Card(t *testing.T) {
 // TestSessionsSpawnTool_Invoke_未启用TaskLoop enable_task_loop 为 false 时返回错误
 func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
 	provider := &fakeProvider{
-		deepConfig: &schema.DeepAgentConfig{EnableTaskLoop: false},
+		deepConfig: &hschema.DeepAgentConfig{EnableTaskLoop: false},
 	}
 	tk := NewSessionToolkit()
 	tool := NewSessionsSpawnTool(provider, tk, "cn", "")
@@ -229,7 +229,7 @@ func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
 // TestSessionsSpawnTool_Invoke_EventHandler为nil event_handler 为 nil 时返回错误
 func TestSessionsSpawnTool_Invoke_EventHandler为nil(t *testing.T) {
 	provider := &fakeProvider{
-		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		eventHandler: nil,
 	}
 	tk := NewSessionToolkit()
@@ -373,7 +373,7 @@ func TestSessionsSpawnTool_Invoke_TaskManager为nil(t *testing.T) {
 	// 构造 EventHandler 但 base.TaskManager 为 nil
 	handler := &fakeEventHandler{}
 	provider := &fakeProvider{
-		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		eventHandler: handler,
 	}
 	tk := NewSessionToolkit()
@@ -393,7 +393,7 @@ func TestSessionsSpawnTool_Invoke_成功(t *testing.T) {
 	tm := modules.NewTaskManager(cfg)
 	handler := &fakeEventHandler{taskManager: tm}
 	provider := &fakeProvider{
-		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		eventHandler: handler,
 	}
 	tk := NewSessionToolkit()
@@ -424,7 +424,7 @@ func TestSessionsSpawnTool_Invoke_英文语言(t *testing.T) {
 	tm := modules.NewTaskManager(cfg)
 	handler := &fakeEventHandler{taskManager: tm}
 	provider := &fakeProvider{
-		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		eventHandler: handler,
 	}
 	tk := NewSessionToolkit()
@@ -448,7 +448,7 @@ func TestSessionsSpawnTool_Invoke_带Session(t *testing.T) {
 	tm := modules.NewTaskManager(cfg)
 	handler := &fakeEventHandler{taskManager: tm}
 	provider := &fakeProvider{
-		deepConfig:    &schema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		eventHandler: handler,
 	}
 	tk := NewSessionToolkit()
@@ -491,7 +491,7 @@ func TestJoinLines(t *testing.T) {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // DeepConfig 实现 SessionToolProvider 接口
-func (f *fakeProvider) DeepConfig() *schema.DeepAgentConfig { return f.deepConfig }
+func (f *fakeProvider) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
 
 // EventHandler 实现 SessionToolProvider 接口
 func (f *fakeProvider) EventHandler() modules.EventHandler { return f.eventHandler }

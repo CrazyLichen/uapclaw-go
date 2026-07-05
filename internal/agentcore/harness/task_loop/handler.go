@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -181,7 +182,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	coreTask := &cschema.Task{
 		SessionID:  input.Session.GetSessionID(),
 		TaskID:     taskID,
-		TaskType:   DeepTaskType,
+		TaskType:   hschema.DeepTaskType,
 		Description: query,
 		Status:     cschema.TaskSubmitted,
 		Metadata:   make(map[string]any),
@@ -206,7 +207,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 
 	logger.Info(logComponent).
 		Str("task_id", taskID).
-		Str("task_type", DeepTaskType).
+		Str("task_type", hschema.DeepTaskType).
 		Int("round_id", currentRound).
 		Bool("is_follow_up", isFollowUp).
 		Msg("提交深层 Agent 任务")
@@ -272,7 +273,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 
 	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
-		if taskType == SessionSpawnTaskType {
+		if taskType == hschema.SessionSpawnTaskType {
 			taskID, _ := event.GetMetadata()["task_id"].(string)
 			h.completeSessionSpawn(taskID, input, false)
 			return map[string]any{"status": "session_spawn_completed", "task_id": taskID}, nil
@@ -317,7 +318,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 
 	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
-		if taskType == SessionSpawnTaskType {
+		if taskType == hschema.SessionSpawnTaskType {
 			taskID, _ := event.GetMetadata()["task_id"].(string)
 			h.completeSessionSpawn(taskID, input, true)
 			return map[string]any{"status": "session_spawn_failed", "task_id": taskID}, nil

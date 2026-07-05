@@ -12,7 +12,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -21,10 +21,6 @@ import (
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// SessionSpawnTaskType 会话派生任务类型
-	// 对齐 Python: SESSION_SPAWN_TASK_TYPE
-	SessionSpawnTaskType = "session_spawn_task"
-
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
@@ -36,7 +32,7 @@ const (
 // task_loop.DeepAgentProvider 隐式满足此接口。
 type SessionToolProvider interface {
 	// DeepConfig 返回 DeepAgent 配置
-	DeepConfig() *schema.DeepAgentConfig
+	DeepConfig() *hschema.DeepAgentConfig
 	// EventHandler 返回事件处理器
 	EventHandler() modules.EventHandler
 }
@@ -299,7 +295,7 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 	coreTask := &cschema.Task{
 		SessionID:  parentSessionID,
 		TaskID:     taskID,
-		TaskType:   SessionSpawnTaskType,
+		TaskType:   hschema.SessionSpawnTaskType,
 		Description: taskDescription,
 		Status:     cschema.TaskSubmitted,
 		Metadata: map[string]any{
