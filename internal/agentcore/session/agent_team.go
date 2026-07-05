@@ -275,8 +275,8 @@ func (s *AgentTeamSession) PostRun(ctx context.Context) error {
 	_ = s.CloseStream()
 
 	// 提交检查点
+	// G17 修复：commit 失败后不设 postRunDone=true，允许重试 PostRun
 	if err := s.Commit(ctx); err != nil {
-		s.postRunDone = true
 		logger.Error(logger.ComponentAgentCore).Err(err).
 			Str("action", "agent_team_post_run").
 			Str("session_id", s.GetSessionID()).

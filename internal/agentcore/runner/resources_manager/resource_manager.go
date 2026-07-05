@@ -22,6 +22,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Result 单个操作的结果，对齐 Python 的 Ok[T]/Error[E] Result 模式。
+//
+// Value 非 nil 表示操作成功，Err 非 nil 表示操作失败。
+// 调用方通过 Err != nil 判断失败，内部赋值 Err 即可。
+type Result struct {
+	// Value 操作成功时的返回值
+	Value any
+	// Err 操作失败时的错误
+	Err error
+}
+
 // ResourceMgr 资源管理器门面，聚合 ResourceRegistry、TagMgr 和 idToCard 三大核心组件，
 // 提供统一的资源增删查改入口，是 Runner 依赖的最核心管理类。
 //
@@ -239,7 +250,9 @@ func (m *ResourceMgr) AddAgent(card *agentschema.AgentCard, provider AgentProvid
 // AddAgents 批量注册 Agent。
 //
 // 对应 Python: ResourceManager.add_agents(agents, **kwargs)
-func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) error {
+// S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
+func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) []Result {
+	results := make([]Result, 0, len(agents))
 	for _, entry := range agents {
 		if err := m.AddAgent(entry.Card, entry.Provider, opts...); err != nil {
 			logger.Error(logger.ComponentAgentCore).
@@ -247,9 +260,12 @@ func (m *ResourceMgr) AddAgents(agents []AgentEntry, opts ...ResourceOption) err
 				Str("agent_id", entry.Card.ID).
 				Err(err).
 				Msg("批量添加 Agent 失败")
+			results = append(results, Result{Err: err})
+		} else {
+			results = append(results, Result{Value: entry.Card.ID})
 		}
 	}
-	return nil
+	return results
 }
 
 // RemoveAgent 注销 Agent，返回被注销的 AgentCard 列表。
@@ -263,10 +279,12 @@ func (m *ResourceMgr) RemoveAgent(agentIDs []string, opts ...ResourceOption) ([]
 	}
 	removed := make([]*agentschema.AgentCard, 0, len(results))
 	for _, r := range results {
-		if card, ok := r.(schema.CardInterface); ok && card != nil {
-			removed = append(removed, &agentschema.AgentCard{
-				BaseCard: schema.BaseCard{ID: card.GetID(), Name: card.GetName(), Description: card.GetDescription()},
-			})
+		if r.Err != nil {
+			continue
+		}
+		// G11 修复：直接断言为 *agentschema.AgentCard，保留完整字段
+		if card, ok := r.Value.(*agentschema.AgentCard); ok && card != nil {
+			removed = append(removed, card)
 		}
 	}
 	return removed, nil
@@ -309,7 +327,9 @@ func (m *ResourceMgr) AddWorkflow(card *schema.WorkflowCard, provider WorkflowPr
 // AddWorkflows 批量注册 Workflow。
 //
 // 对应 Python: ResourceManager.add_workflows(workflows, **kwargs)
-func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOption) error {
+// S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
+func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOption) []Result {
+	results := make([]Result, 0, len(workflows))
 	for _, entry := range workflows {
 		card := schema.NewWorkflowCard(schema.WithID(entry.ID))
 		if err := m.AddWorkflow(card, entry.Provider, opts...); err != nil {
@@ -318,9 +338,12 @@ func (m *ResourceMgr) AddWorkflows(workflows []WorkflowEntry, opts ...ResourceOp
 				Str("workflow_id", entry.ID).
 				Err(err).
 				Msg("批量添加 Workflow 失败")
+			results = append(results, Result{Err: err})
+		} else {
+			results = append(results, Result{Value: entry.ID})
 		}
 	}
-	return nil
+	return results
 }
 
 // RemoveWorkflow 注销 Workflow，返回被注销的 WorkflowCard 列表。
@@ -334,10 +357,12 @@ func (m *ResourceMgr) RemoveWorkflow(workflowIDs []string, opts ...ResourceOptio
 	}
 	removed := make([]*schema.WorkflowCard, 0, len(results))
 	for _, r := range results {
-		if card, ok := r.(schema.CardInterface); ok && card != nil {
-			removed = append(removed, &schema.WorkflowCard{
-				BaseCard: schema.BaseCard{ID: card.GetID(), Name: card.GetName(), Description: card.GetDescription()},
-			})
+		if r.Err != nil {
+			continue
+		}
+		// G11 修复：直接断言为 *schema.WorkflowCard，保留完整字段
+		if card, ok := r.Value.(*schema.WorkflowCard); ok && card != nil {
+			removed = append(removed, card)
 		}
 	}
 	return removed, nil
@@ -376,8 +401,11 @@ func (m *ResourceMgr) AddTool(t tool.Tool, opts ...ResourceOption) error {
 	}
 
 	// refresh 前置处理（与 Python _refresh_existing_tool_if_needed 对齐）
+	// G10 修复：refresh 时完整清理 tagMgr 和 idToCard，对齐 Python _inner_remove_resources
 	if o.Refresh {
 		_, _ = m.registry.Tool().RemoveTool(toolID)
+		m.tagMgr.RemoveResource(toolID)
+		m.idToCard.Pop(toolID)
 	}
 
 	return m.innerAddResource(toolID, "tool", t, toolCard, o.Tag, "")
@@ -412,7 +440,10 @@ func (m *ResourceMgr) RemoveTool(toolIDs []string, opts ...ResourceOption) ([]st
 	}
 	removed := make([]string, 0, len(results))
 	for _, r := range results {
-		if id, ok := r.(string); ok {
+		if r.Err != nil {
+			continue
+		}
+		if id, ok := r.Value.(string); ok {
 			removed = append(removed, id)
 		}
 	}
@@ -438,7 +469,9 @@ func (m *ResourceMgr) AddModel(modelID string, provider ModelProvider, opts ...R
 // AddModels 批量注册 Model。
 //
 // 对应 Python: ResourceManager.add_models(models, **kwargs)
-func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) error {
+// S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
+func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) []Result {
+	results := make([]Result, 0, len(models))
 	for _, entry := range models {
 		if err := m.AddModel(entry.ID, entry.Provider, opts...); err != nil {
 			logger.Error(logger.ComponentAgentCore).
@@ -446,9 +479,12 @@ func (m *ResourceMgr) AddModels(models []ModelEntry, opts ...ResourceOption) err
 				Str("model_id", entry.ID).
 				Err(err).
 				Msg("批量添加 Model 失败")
+			results = append(results, Result{Err: err})
+		} else {
+			results = append(results, Result{Value: entry.ID})
 		}
 	}
-	return nil
+	return results
 }
 
 // RemoveModel 注销 Model，返回被注销的模型 ID 列表。
@@ -462,7 +498,10 @@ func (m *ResourceMgr) RemoveModel(modelIDs []string, opts ...ResourceOption) ([]
 	}
 	removed := make([]string, 0, len(results))
 	for _, r := range results {
-		if id, ok := r.(string); ok {
+		if r.Err != nil {
+			continue
+		}
+		if id, ok := r.Value.(string); ok {
 			removed = append(removed, id)
 		}
 	}
@@ -503,7 +542,9 @@ func (m *ResourceMgr) AddPrompt(promptID string, template *prompt.PromptTemplate
 // AddPrompts 批量注册 Prompt。
 //
 // 对应 Python: ResourceManager.add_prompts(prompts, **kwargs)
-func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) error {
+// S10 修复：返回 []Result 包含每个操作的成功/失败结果，对齐 Python
+func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) []Result {
+	results := make([]Result, 0, len(prompts))
 	for _, entry := range prompts {
 		if err := m.AddPrompt(entry.ID, entry.Template, opts...); err != nil {
 			logger.Error(logger.ComponentAgentCore).
@@ -511,9 +552,12 @@ func (m *ResourceMgr) AddPrompts(prompts []PromptEntry, opts ...ResourceOption) 
 				Str("prompt_id", entry.ID).
 				Err(err).
 				Msg("批量添加 Prompt 失败")
+			results = append(results, Result{Err: err})
+		} else {
+			results = append(results, Result{Value: entry.ID})
 		}
 	}
-	return nil
+	return results
 }
 
 // RemovePrompt 注销 Prompt，返回被注销的 ID 列表。
@@ -527,7 +571,10 @@ func (m *ResourceMgr) RemovePrompt(promptIDs []string, opts ...ResourceOption) (
 	}
 	removed := make([]string, 0, len(results))
 	for _, r := range results {
-		if id, ok := r.(string); ok {
+		if r.Err != nil {
+			continue
+		}
+		if id, ok := r.Value.(string); ok {
 			removed = append(removed, id)
 		}
 	}
@@ -646,6 +693,9 @@ func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcp.McpSer
 		m.tagMgr.TagResource(card.ID, []Tag{tag})
 		m.idToCard.Set(card.ID, card)
 	}
+
+	// S8 修复：为 server_id 也标记 tag，对齐 Python tag_resource(config.server_id, tag)
+	m.tagMgr.TagResource(serverConfig.ServerID, []Tag{tag})
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "RESOURCE_MGR_ADD_MCP_SERVER").
@@ -911,6 +961,10 @@ func (m *ResourceMgr) Release(ctx context.Context) error {
 //
 // 对应 Python: ResourceManager.add_agent_team(agent_team_id, provider, **kwargs)
 func (m *ResourceMgr) AddAgentTeam(card maschema.TeamCardInterface, provider maschema.AgentTeamProvider, opts ...ResourceOption) error {
+	// G15 修复：校验 card.GetID() 有效性，对齐 Python _inner_validate_resource_id
+	if err := m.innerValidateResourceID(card.GetID(), "team"); err != nil {
+		return err
+	}
 	if err := m.innerValidateProvider(provider, "team"); err != nil {
 		return err
 	}
@@ -928,7 +982,10 @@ func (m *ResourceMgr) RemoveAgentTeam(agentTeamIDs []string, opts ...ResourceOpt
 	}
 	removed := make([]maschema.AgentTeamProvider, 0, len(results))
 	for _, r := range results {
-		if provider, ok := r.(maschema.AgentTeamProvider); ok {
+		if r.Err != nil {
+			continue
+		}
+		if provider, ok := r.Value.(maschema.AgentTeamProvider); ok {
 			removed = append(removed, provider)
 		}
 	}
@@ -1290,7 +1347,8 @@ func (m *ResourceMgr) innerAddResource(resourceID, resourceType string, resource
 // innerRemoveResources 核心移除逻辑：按 tag 查找或直接按 ID → 遍历移除 → 分发 remove → Pop card → 日志。
 //
 // 对应 Python: ResourceManager._inner_remove_resources(resource_id, resource_type, tag, tag_match_strategy, skip_if_tag_not_exists)
-func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfTagNotExists bool) ([]any, error) {
+// S9 修复：按 tag 批量移除时容错继续，单个失败不中断，返回 Result 列表
+func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType string, tag Tag, tagMatchStrategy TagMatchStrategy, skipIfTagNotExists bool) ([]Result, error) {
 	idsToRemove := resourceIDs
 
 	// 如果未指定 ID 列表，按 tag 查找
@@ -1308,11 +1366,11 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 		}
 		idsToRemove = found
 		if len(idsToRemove) == 0 {
-			return []any{}, nil
+			return []Result{}, nil
 		}
 	}
 
-	results := make([]any, 0, len(idsToRemove))
+	results := make([]Result, 0, len(idsToRemove))
 	for _, removeID := range idsToRemove {
 		// 1. 移除标签
 		m.tagMgr.RemoveResource(removeID)
@@ -1332,15 +1390,17 @@ func (m *ResourceMgr) innerRemoveResources(resourceIDs []string, resourceType st
 				Str("card", resourceCardStr(removedCard, removeID)).
 				Err(rmErr).
 				Msg("移除资源失败")
-			return nil, rmErr
+			// S9 修复：容错继续，将失败结果加入列表而非直接返回
+			results = append(results, Result{Err: rmErr})
+			continue
 		}
 
 		// 4. 根据 idReturnTypes 决定返回内容
 		if _, isIDReturn := idReturnTypes[resourceType]; isIDReturn {
-			results = append(results, removeID)
+			results = append(results, Result{Value: removeID})
 		} else {
 			if removedCard != nil {
-				results = append(results, removedCard)
+				results = append(results, Result{Value: removedCard})
 			}
 		}
 

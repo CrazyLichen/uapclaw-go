@@ -556,12 +556,14 @@ func TestResourceMgr_AddAgents_批量(t *testing.T) {
 	card1 := agentschema.NewAgentCard(agentschema.WithAgentID("batch-agent-1"), agentschema.WithAgentName("批量Agent1"))
 	card2 := agentschema.NewAgentCard(agentschema.WithAgentID("batch-agent-2"), agentschema.WithAgentName("批量Agent2"))
 
-	err := mgr.AddAgents([]AgentEntry{
+	results := mgr.AddAgents([]AgentEntry{
 		{Card: card1, Provider: stubAgentProvider()},
 		{Card: card2, Provider: stubAgentProvider()},
 	})
-	if err != nil {
-		t.Fatalf("AddAgents 失败: %v", err)
+	for _, r := range results {
+		if r.Err != nil {
+			t.Fatalf("AddAgents 失败: %v", r.Err)
+		}
 	}
 
 	agents1, _ := mgr.GetAgent(context.Background(), []string{"batch-agent-1"})
@@ -799,12 +801,14 @@ func setupMcpServer(mgr *ResourceMgr, serverID, serverName string, toolNames []s
 // TestResourceMgr_AddModels_批量 测试批量添加 Model
 func TestResourceMgr_AddModels_批量(t *testing.T) {
 	mgr := newTestResourceMgr()
-	err := mgr.AddModels([]ModelEntry{
+	results := mgr.AddModels([]ModelEntry{
 		{ID: "batch-model-1", Provider: stubModelProvider()},
 		{ID: "batch-model-2", Provider: stubModelProvider()},
 	})
-	if err != nil {
-		t.Fatalf("AddModels 失败: %v", err)
+	for _, r := range results {
+		if r.Err != nil {
+			t.Fatalf("AddModels 失败: %v", r.Err)
+		}
 	}
 
 	models1, _ := mgr.GetModel(context.Background(), []string{"batch-model-1"})
@@ -823,13 +827,20 @@ func TestResourceMgr_AddModels_部分失败(t *testing.T) {
 	// 先添加 model-dup 使其重复
 	_ = mgr.AddModel("model-dup", stubModelProvider())
 
-	// 批量添加，其中一个会失败，但不应返回 error
-	err := mgr.AddModels([]ModelEntry{
+	// 批量添加，其中一个会失败，结果列表包含失败项
+	results := mgr.AddModels([]ModelEntry{
 		{ID: "model-ok", Provider: stubModelProvider()},
 		{ID: "model-dup", Provider: stubModelProvider()},
 	})
-	if err != nil {
-		t.Fatalf("AddModels 部分失败不应返回 error: %v", err)
+	// S10 修复：AddModels 返回 []Result，部分失败通过 Result.Err 判断
+	if len(results) != 2 {
+		t.Fatalf("AddModels 应返回 2 个 Result，实际 %d", len(results))
+	}
+	if results[0].Err != nil {
+		t.Fatalf("第一个 AddModel 不应失败: %v", results[0].Err)
+	}
+	if results[1].Err == nil {
+		t.Fatal("第二个 AddModel（重复）应失败")
 	}
 
 	// model-ok 应存在
@@ -847,12 +858,14 @@ func TestResourceMgr_AddPrompts_批量(t *testing.T) {
 	tmpl1 := prompt.NewPromptTemplate("模板1", "hello {{name}}")
 	tmpl2 := prompt.NewPromptTemplate("模板2", "world {{name}}")
 
-	err := mgr.AddPrompts([]PromptEntry{
+	results := mgr.AddPrompts([]PromptEntry{
 		{ID: "batch-prompt-1", Template: tmpl1},
 		{ID: "batch-prompt-2", Template: tmpl2},
 	})
-	if err != nil {
-		t.Fatalf("AddPrompts 失败: %v", err)
+	for _, r := range results {
+		if r.Err != nil {
+			t.Fatalf("AddPrompts 失败: %v", r.Err)
+		}
 	}
 
 	prompts1, _ := mgr.GetPrompt([]string{"batch-prompt-1"})
@@ -953,12 +966,15 @@ func TestResourceMgr_AddAgentTeam_nilProvider报错(t *testing.T) {
 	}
 }
 
-// TestResourceMgr_RemoveAgentTeam_不存在报错 测试 RemoveAgentTeam 不存在报错
-func TestResourceMgr_RemoveAgentTeam_不存在报错(t *testing.T) {
+// TestResourceMgr_RemoveAgentTeam_不存在返回空 测试 RemoveAgentTeam 不存在返回空列表
+func TestResourceMgr_RemoveAgentTeam_不存在返回空(t *testing.T) {
 	mgr := newTestResourceMgr()
-	_, err := mgr.RemoveAgentTeam([]string{"team-notexist"})
-	if err == nil {
-		t.Fatal("不存在的团队应返回错误")
+	removed, err := mgr.RemoveAgentTeam([]string{"team-notexist"})
+	if err != nil {
+		t.Fatalf("不存在的团队不应返回 error（容错继续）: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("不存在的团队应返回空列表，实际 %d", len(removed))
 	}
 }
 
@@ -1289,12 +1305,14 @@ func TestResourceMgr_GetToolInfos_不存在(t *testing.T) {
 // TestResourceMgr_AddWorkflows_批量 测试批量添加 Workflow
 func TestResourceMgr_AddWorkflows_批量(t *testing.T) {
 	mgr := newTestResourceMgr()
-	err := mgr.AddWorkflows([]WorkflowEntry{
+	results := mgr.AddWorkflows([]WorkflowEntry{
 		{ID: "batch-wf-1", Provider: stubWorkflowProvider()},
 		{ID: "batch-wf-2", Provider: stubWorkflowProvider()},
 	})
-	if err != nil {
-		t.Fatalf("AddWorkflows 失败: %v", err)
+	for _, r := range results {
+		if r.Err != nil {
+			t.Fatalf("AddWorkflows 失败: %v", r.Err)
+		}
 	}
 
 	wf1, _ := mgr.GetWorkflow(context.Background(), []string{"batch-wf-1"})
@@ -1662,9 +1680,9 @@ func TestInnerRemoveResources_idReturnTypes返回ID(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("期望移除 1 个，实际 %d", len(results))
 	}
-	// idReturnTypes 返回的是 ID 字符串
-	if id, ok := results[0].(string); !ok || id != toolCard.ID {
-		t.Fatalf("idReturnTypes 类型应返回 ID 字符串，实际 %v", results[0])
+	// idReturnTypes 返回的是 ID 字符串（通过 Result.Value）
+	if id, ok := results[0].Value.(string); !ok || id != toolCard.ID {
+		t.Fatalf("idReturnTypes 类型应返回 ID 字符串，实际 %v", results[0].Value)
 	}
 }
 

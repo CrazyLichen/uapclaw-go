@@ -3,12 +3,14 @@ package agents
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -96,6 +98,30 @@ func (a *ReActAgent) getTools() ([]cschema.ToolInfoInterface, error) {
 // SetAbilityManager 设置能力管理器，允许外部注入自定义实现。
 func (a *ReActAgent) SetAbilityManager(am interfaces.AbilityManagerInterface) {
 	a.abilityManager = am
+}
+
+// SetPromptBuilder 设置系统提示词构建器（由 DeepAgent 注入共享实例）。
+// 对齐 Python: agent.prompt_builder = prompt_builder / agent.system_prompt_builder = prompt_builder
+// 注意：Configure() 会覆盖此字段（新建 SystemPromptBuilder），
+// DeepAgent 需在每次调用 Configure 后重新调用此方法覆盖回共享实例。
+func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
+	a.promptBuilder = pb
+}
+
+// SetLLM 设置预构建的 LLM 模型实例（跳过延迟初始化）。
+// 对齐 Python: agent.set_llm(model)
+// 注意：Configure() 会重置 llmOnce，
+// DeepAgent 需在每次调用 Configure 后重新调用此方法确保注入生效。
+func (a *ReActAgent) SetLLM(m *llm.Model) {
+	a.llm = m
+	a.llmOnce = sync.Once{}
+}
+
+// GetLLM 返回 LLM 模型实例（延迟初始化）。
+// 对齐 Python: ReActAgent.get_llm()
+// 导出版本，供 DeepAgent 等外部消费者调用。
+func (a *ReActAgent) GetLLM() (*llm.Model, error) {
+	return a.getLLM()
 }
 
 // getAbilityManager 返回能力管理器。

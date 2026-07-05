@@ -352,8 +352,8 @@ func (s *Session) PostRun(ctx context.Context) error {
 	}
 
 	// G-08 修复：不再吞掉 Commit 错误，对齐 Python 异常传播行为
+	// G17 修复：commit 失败后不设 postRunDone=true，允许重试 PostRun
 	if err := s.Commit(ctx); err != nil {
-		s.postRunDone = true
 		logger.Error(logger.ComponentAgentCore).Err(err).
 			Str("action", "session_post_run").
 			Str("session_id", s.GetSessionID()).
@@ -590,7 +590,14 @@ func normalizeOutputStream(data any) stream.OutputSchema {
 		if _, hasType := v["type"]; hasType {
 			if _, hasIndex := v["index"]; hasIndex {
 				if _, hasPayload := v["payload"]; hasPayload {
-					index, _ := v["index"].(int)
+					// JSON 反序列化后数值为 float64，先尝试 float64 再尝试 int
+					var index int
+					switch idx := v["index"].(type) {
+					case float64:
+						index = int(idx)
+					case int:
+						index = idx
+					}
 					typeStr, _ := v["type"].(string)
 					return stream.OutputSchema{
 						Type:    typeStr,

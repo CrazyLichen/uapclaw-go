@@ -8,7 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

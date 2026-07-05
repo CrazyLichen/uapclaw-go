@@ -3,7 +3,9 @@ package team_runtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,8 +77,8 @@ type MessageBus struct {
 	subscriptionManager *SubscriptionManager
 	// router 消息路由器
 	router *MessageRouter
-	// running 是否运行中
-	running bool
+	// running 是否运行中（使用 atomic.Bool 保证并发安全）
+	running atomic.Bool
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -154,7 +156,7 @@ func NewMessageBus(config MessageBusConfig, runtime *TeamRuntime) (*MessageBus, 
 //
 // 对应 Python: MessageBus.start()
 func (mb *MessageBus) Start(ctx context.Context) error {
-	if mb.running {
+	if mb.running.Load() {
 		logger.Warn(logComponent).
 			Str("event_type", "MESSAGE_BUS_ALREADY_RUNNING").
 			Str("team_id", mb.teamID).
@@ -163,7 +165,7 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 	}
 
 	mb.mq.Start()
-	mb.running = true
+	mb.running.Store(true)
 
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_STARTED").
@@ -177,7 +179,7 @@ func (mb *MessageBus) Start(ctx context.Context) error {
 //
 // 对应 Python: MessageBus.stop()
 func (mb *MessageBus) Stop(ctx context.Context) error {
-	if !mb.running {
+	if !mb.running.Load() {
 		return nil
 	}
 
@@ -203,7 +205,7 @@ func (mb *MessageBus) Stop(ctx context.Context) error {
 		)
 	}
 
-	mb.running = false
+	mb.running.Store(false)
 
 	logger.Info(logComponent).
 		Str("event_type", "MESSAGE_BUS_STOPPED").
@@ -251,7 +253,7 @@ func (mb *MessageBus) CleanupSession(ctx context.Context, sessionID string) erro
 //
 // 对应 Python: MessageBus.send(message, recipient, sender, session_id, timeout)
 func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, sender string, sessionID string, timeout float64) (any, error) {
-	if !mb.running {
+	if !mb.running.Load() {
 		return nil, fmt.Errorf("消息总线未启动，无法发送 P2P 消息")
 	}
 
@@ -329,7 +331,7 @@ func (mb *MessageBus) Send(ctx context.Context, message any, recipient string, s
 //
 // 对应 Python: MessageBus.publish(message, topic_id, sender, session_id)
 func (mb *MessageBus) Publish(ctx context.Context, message any, topicID string, sender string, sessionID string) error {
-	if !mb.running {
+	if !mb.running.Load() {
 		return fmt.Errorf("消息总线未启动，无法发布 Pub-Sub 消息")
 	}
 
@@ -569,20 +571,5 @@ func (mb *MessageBus) buildEnvelopePayload(envelope *MessageEnvelope) map[string
 
 // containsP2PMarker 判断 topic 是否包含 P2P 标记。
 func containsP2PMarker(topic string) bool {
-	return containsSubstring(topic, p2pTopicSuffix)
-}
-
-// containsSubstring 判断 topic 是否包含子串。
-func containsSubstring(topic, substr string) bool {
-	return len(topic) >= len(substr) && containsStr(topic, substr)
-}
-
-// containsStr 字符串包含判断（避免导入 strings 仅此一处）
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(topic, p2pTopicSuffix)
 }

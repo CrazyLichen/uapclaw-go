@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +58,7 @@ func TestNewMessageBus(t *testing.T) {
 	if bus.teamID != "test-team" {
 		t.Errorf("teamID = %q, want %q", bus.teamID, "test-team")
 	}
-	if bus.running {
+	if bus.running.Load() {
 		t.Error("新创建的消息总线不应处于运行状态")
 	}
 }
@@ -76,7 +77,7 @@ func TestMessageBus_StartStop(t *testing.T) {
 		if err != nil {
 			t.Errorf("Start 返回错误: %v", err)
 		}
-		if !bus.running {
+		if !bus.running.Load() {
 			t.Error("启动后 running 应为 true")
 		}
 	})
@@ -93,7 +94,7 @@ func TestMessageBus_StartStop(t *testing.T) {
 		if err != nil {
 			t.Errorf("Stop 返回错误: %v", err)
 		}
-		if bus.running {
+		if bus.running.Load() {
 			t.Error("停止后 running 应为 false")
 		}
 	})
@@ -288,7 +289,7 @@ func TestContainsP2PMarker(t *testing.T) {
 	}
 }
 
-// TestContainsSubstring 测试子串判断辅助函数
+// TestContainsSubstring 测试子串判断（使用 strings.Contains）
 func TestContainsSubstring(t *testing.T) {
 	tests := []struct {
 		topic  string
@@ -301,9 +302,9 @@ func TestContainsSubstring(t *testing.T) {
 		{"short", "__p2p__", false},
 	}
 	for _, tt := range tests {
-		got := containsSubstring(tt.topic, tt.substr)
+		got := strings.Contains(tt.topic, tt.substr)
 		if got != tt.want {
-			t.Errorf("containsSubstring(%q, %q) = %v, want %v", tt.topic, tt.substr, got, tt.want)
+			t.Errorf("strings.Contains(%q, %q) = %v, want %v", tt.topic, tt.substr, got, tt.want)
 		}
 	}
 }

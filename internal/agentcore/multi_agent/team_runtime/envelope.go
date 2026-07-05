@@ -46,6 +46,12 @@ func NewMessageEnvelope(messageID string, message any, sender string, opts ...En
 	for _, opt := range opts {
 		opt(e)
 	}
+
+	// 互斥校验：Recipient 和 TopicID 不能同时设置
+	if e.Recipient != "" && e.TopicID != "" {
+		panic(fmt.Sprintf("MessageEnvelope 不允许同时设置 Recipient(%s) 和 TopicID(%s)，P2P 和 Pub-Sub 模式互斥", e.Recipient, e.TopicID))
+	}
+
 	return e
 }
 
