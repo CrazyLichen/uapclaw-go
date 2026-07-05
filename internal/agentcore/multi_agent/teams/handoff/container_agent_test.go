@@ -19,7 +19,6 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -43,8 +42,8 @@ type mockBaseAgent struct {
 // newMockBaseAgent 创建模拟 Agent
 func newMockBaseAgent(id string) *mockBaseAgent {
 	card := agentschema.NewAgentCard(
-		commonagentschema.WithAgentID(id),
-		commonagentschema.WithAgentName(id),
+		agentschema.WithAgentID(id),
+		agentschema.WithAgentName(id),
 	)
 	return &mockBaseAgent{
 		card:       card,
@@ -107,8 +106,8 @@ func (m *mockContainerSessionFacade) Interact(_ context.Context, _ any) error   
 // TestNewContainerAgent 测试构造函数
 func TestNewContainerAgent(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		commonagentschema.WithAgentID("test_agent"),
-		commonagentschema.WithAgentName("test_agent"),
+		agentschema.WithAgentID("test_agent"),
+		agentschema.WithAgentName("test_agent"),
 	)
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test_agent"), nil
@@ -126,8 +125,8 @@ func TestNewContainerAgent(t *testing.T) {
 // TestContainerAgent_Card 测试 Card 方法
 func TestContainerAgent_Card(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		commonagentschema.WithAgentID("my_agent"),
-		commonagentschema.WithAgentName("my_agent"),
+		agentschema.WithAgentID("my_agent"),
+		agentschema.WithAgentName("my_agent"),
 	)
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("my_agent"), nil
@@ -141,7 +140,7 @@ func TestContainerAgent_Card(t *testing.T) {
 
 // TestContainerAgent_Configure 测试 Configure 空操作
 func TestContainerAgent_Configure(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -153,7 +152,7 @@ func TestContainerAgent_Configure(t *testing.T) {
 
 // TestBuildAgentInput_无历史 测试构建 Agent 输入（无历史）
 func TestBuildAgentInput_无历史(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -172,7 +171,7 @@ func TestBuildAgentInput_无历史(t *testing.T) {
 
 // TestBuildAgentInput_有历史 测试构建 Agent 输入（有历史）
 func TestBuildAgentInput_有历史(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -263,7 +262,7 @@ func TestStripHandoffMessages_空列表(t *testing.T) {
 
 // TestContainerAgent_Invoke_提取HandoffRequest失败 测试 Invoke 提取 HandoffRequest 失败
 func TestContainerAgent_Invoke_提取HandoffRequest失败(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -287,7 +286,7 @@ func TestContainerAgent_Invoke_提取HandoffRequest失败(t *testing.T) {
 
 // TestContainerAgent_Invoke_协调器为nil 测试 Invoke coordinator 为 nil
 func TestContainerAgent_Invoke_协调器为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -311,7 +310,7 @@ func TestContainerAgent_Invoke_目标Agent无交接信号(t *testing.T) {
 	mockAgent := newMockBaseAgent("test_agent")
 	mockAgent.invokeResult = map[string]any{"output": "done"}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test_agent"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test_agent"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -350,7 +349,7 @@ func TestContainerAgent_Invoke_目标Agent返回交接信号且审批通过(t *t
 		HandoffReasonKey:  "b is better",
 	}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -389,7 +388,7 @@ func TestContainerAgent_Invoke_目标Agent返回交接信号且审批拒绝(t *t
 		HandoffReasonKey:  "c is better",
 	}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -430,7 +429,7 @@ func TestContainerAgent_Invoke_目标Agent返回中断信号(t *testing.T) {
 		"message":     "need user input",
 	}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -463,7 +462,7 @@ func TestContainerAgent_Invoke_目标Agent执行错误(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeErr = errors.New("execution failed")
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -485,7 +484,7 @@ func TestContainerAgent_Invoke_目标Agent执行错误(t *testing.T) {
 
 // TestContainerAgent_Invoke_目标AgentProvider失败 测试目标 Agent 提供者失败
 func TestContainerAgent_Invoke_目标AgentProvider失败(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return nil, errors.New("provider failed")
 	}
@@ -510,7 +509,7 @@ func TestContainerAgent_Invoke_有TeamSession(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeResult = map[string]any{"output": "result"}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -539,7 +538,7 @@ func TestContainerAgent_Invoke_有TeamSession(t *testing.T) {
 
 // TestContainerAgent_getTargetAgent_懒初始化 测试懒初始化
 func TestContainerAgent_getTargetAgent_懒初始化(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	callCount := 0
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		callCount++
@@ -565,7 +564,7 @@ func TestContainerAgent_getTargetAgent_懒初始化(t *testing.T) {
 func TestContainerAgent_injectToolsOnce(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -599,7 +598,7 @@ func TestContainerAgent_injectToolsOnce(t *testing.T) {
 
 // TestContainerAgent_满足BaseAgent接口 测试 ContainerAgent 满足 BaseAgent 接口
 func TestContainerAgent_满足BaseAgent接口(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -620,7 +619,7 @@ func TestContainerAgent_Stream(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeResult = map[string]any{"output": "result"}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -704,7 +703,7 @@ func TestMsgKey(t *testing.T) {
 
 // TestContainerAgent_saveContextToTeamSession 测试上下文历史保存
 func TestContainerAgent_saveContextToTeamSession(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -740,7 +739,7 @@ func TestContainerAgent_saveContextToTeamSession(t *testing.T) {
 
 // TestContainerAgent_injectContextHistory 测试上下文历史注入
 func TestContainerAgent_injectContextHistory(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -782,7 +781,7 @@ func TestContainerAgent_injectContextHistory(t *testing.T) {
 
 // TestContainerAgent_injectContextHistory_无历史 测试无历史时不注入
 func TestContainerAgent_injectContextHistory_无历史(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -802,7 +801,7 @@ func TestContainerAgent_injectContextHistory_无历史(t *testing.T) {
 
 // TestContainerAgent_handleTeamInterrupt 测试中断处理
 func TestContainerAgent_handleTeamInterrupt(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -840,7 +839,7 @@ func TestContainerAgent_handleTeamInterrupt(t *testing.T) {
 
 // TestContainerAgent_HandleTeamInterrupt_有Session 测试有 session 时的中断处理
 func TestContainerAgent_HandleTeamInterrupt_有Session(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -894,7 +893,7 @@ func TestContainerAgent_Invoke_最大交接次数耗尽(t *testing.T) {
 		HandoffMessageKey: "",
 	}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -929,7 +928,7 @@ func TestContainerAgent_Invoke_最大交接次数耗尽(t *testing.T) {
 
 // TestContainerAgent_RegisterCallback 测试 RegisterCallback 空操作
 func TestContainerAgent_RegisterCallback(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -941,7 +940,7 @@ func TestContainerAgent_RegisterCallback(t *testing.T) {
 
 // TestContainerAgent_RegisterRail 测试 RegisterRail 空操作
 func TestContainerAgent_RegisterRail(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -953,7 +952,7 @@ func TestContainerAgent_RegisterRail(t *testing.T) {
 
 // TestContainerAgent_UnregisterRail 测试 UnregisterRail 空操作
 func TestContainerAgent_UnregisterRail(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -965,7 +964,7 @@ func TestContainerAgent_UnregisterRail(t *testing.T) {
 
 // TestContainerAgent_saveAgentContext_无ContextEngine 测试目标 Agent 无 ContextEngine 时跳过
 func TestContainerAgent_saveAgentContext_无ContextEngine(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -980,7 +979,7 @@ func TestContainerAgent_saveAgentContext_无ContextEngine(t *testing.T) {
 
 // TestContainerAgent_saveAgentContext_agentSession为nil 测试 agentSession 为 nil 时直接返回
 func TestContainerAgent_saveAgentContext_agentSession为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -992,7 +991,7 @@ func TestContainerAgent_saveAgentContext_agentSession为nil(t *testing.T) {
 
 // TestContainerAgent_saveAgentContext_targetAgent为nil 测试 targetAgent 为 nil 时直接返回
 func TestContainerAgent_saveAgentContext_targetAgent为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1004,7 +1003,7 @@ func TestContainerAgent_saveAgentContext_targetAgent为nil(t *testing.T) {
 
 // TestContainerAgent_writeResultToStream_result为nil 测试 writeResultToStream result 为 nil 时直接返回
 func TestContainerAgent_writeResultToStream_result为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1017,7 +1016,7 @@ func TestContainerAgent_writeResultToStream_result为nil(t *testing.T) {
 
 // TestContainerAgent_writeResultToStream_session为nil 测试 writeResultToStream teamSession 为 nil 时直接返回
 func TestContainerAgent_writeResultToStream_session为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1029,7 +1028,7 @@ func TestContainerAgent_writeResultToStream_session为nil(t *testing.T) {
 
 // TestContainerAgent_writeResultToStream_正常 测试 writeResultToStream 正常写入
 func TestContainerAgent_writeResultToStream_正常(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1042,7 +1041,7 @@ func TestContainerAgent_writeResultToStream_正常(t *testing.T) {
 
 // TestContainerAgent_saveContextToTeamSession_agentSession为nil 测试 agentSession 为 nil 时直接返回
 func TestContainerAgent_saveContextToTeamSession_agentSession为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1054,7 +1053,7 @@ func TestContainerAgent_saveContextToTeamSession_agentSession为nil(t *testing.T
 
 // TestContainerAgent_saveContextToTeamSession_teamSession为nil 测试 teamSession 为 nil 时直接返回
 func TestContainerAgent_saveContextToTeamSession_teamSession为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1066,7 +1065,7 @@ func TestContainerAgent_saveContextToTeamSession_teamSession为nil(t *testing.T)
 
 // TestContainerAgent_saveContextToTeamSession_无上下文状态 测试 agent session 无上下文状态时直接返回
 func TestContainerAgent_saveContextToTeamSession_无上下文状态(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1080,7 +1079,7 @@ func TestContainerAgent_saveContextToTeamSession_无上下文状态(t *testing.T
 
 // TestContainerAgent_saveContextToTeamSession_上下文状态非map 测试 context 状态不是 map 类型时直接返回
 func TestContainerAgent_saveContextToTeamSession_上下文状态非map(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1094,7 +1093,7 @@ func TestContainerAgent_saveContextToTeamSession_上下文状态非map(t *testin
 
 // TestContainerAgent_saveContextToTeamSession_无默认上下文 测试无 defaultContextID 时直接返回
 func TestContainerAgent_saveContextToTeamSession_无默认上下文(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1110,7 +1109,7 @@ func TestContainerAgent_saveContextToTeamSession_无默认上下文(t *testing.T
 
 // TestContainerAgent_saveContextToTeamSession_无消息 测试 messages 为空时直接返回
 func TestContainerAgent_saveContextToTeamSession_无消息(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1128,7 +1127,7 @@ func TestContainerAgent_saveContextToTeamSession_无消息(t *testing.T) {
 
 // TestContainerAgent_injectContextHistory_agentSession为nil 测试 agentSession 为 nil 时直接返回
 func TestContainerAgent_injectContextHistory_agentSession为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1140,7 +1139,7 @@ func TestContainerAgent_injectContextHistory_agentSession为nil(t *testing.T) {
 
 // TestContainerAgent_injectContextHistory_teamSession为nil 测试 teamSession 为 nil 时直接返回
 func TestContainerAgent_injectContextHistory_teamSession为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1152,7 +1151,7 @@ func TestContainerAgent_injectContextHistory_teamSession为nil(t *testing.T) {
 
 // TestContainerAgent_injectContextHistory_历史类型错误 测试历史消息类型错误时不注入
 func TestContainerAgent_injectContextHistory_历史类型错误(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1173,7 +1172,7 @@ func TestContainerAgent_injectContextHistory_历史类型错误(t *testing.T) {
 
 // TestContainerAgent_injectToolsOnce_AbilityManager为nil 测试目标 Agent AbilityManager 为 nil 时跳过注入
 func TestContainerAgent_injectToolsOnce_AbilityManager为nil(t *testing.T) {
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("test"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("test"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return newMockBaseAgent("test"), nil
 	}
@@ -1181,7 +1180,7 @@ func TestContainerAgent_injectToolsOnce_AbilityManager为nil(t *testing.T) {
 
 	// 创建 AbilityManager 返回 nil 的 mock
 	mockAgent := &mockBaseAgentNoAbility{
-		card: agentschema.NewAgentCard(commonagentschema.WithAgentID("test")),
+		card: agentschema.NewAgentCard(agentschema.WithAgentID("test")),
 	}
 
 	agent.injectToolsOnce(context.Background(), mockAgent)
@@ -1193,7 +1192,7 @@ func TestContainerAgent_Invoke_有TeamSession且执行错误(t *testing.T) {
 	mockAgent := newMockBaseAgent("agent_a")
 	mockAgent.invokeErr = errors.New("execution error")
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}
@@ -1225,7 +1224,7 @@ func TestContainerAgent_Invoke_有TeamSession且返回中断(t *testing.T) {
 		"message":     "need input",
 	}
 
-	card := agentschema.NewAgentCard(commonagentschema.WithAgentID("agent_a"))
+	card := agentschema.NewAgentCard(agentschema.WithAgentID("agent_a"))
 	provider := func(_ context.Context, _ *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		return mockAgent, nil
 	}

@@ -132,7 +132,7 @@ func TestCommunicableAgent_Send(t *testing.T) {
 		// 设置 mock 消息总线
 		mockBus := newMockMessageBus()
 		mockBus.sendResult = "response"
-		runtime.setMessageBus(mockBus)
+		runtime.SetMessageBus(mockBus)
 		runtime.mu.Lock()
 		runtime.running.Store(true)
 		runtime.mu.Unlock()
@@ -168,7 +168,7 @@ func TestCommunicableAgent_Publish(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.setMessageBus(mockBus)
+		runtime.SetMessageBus(mockBus)
 		runtime.mu.Lock()
 		runtime.running.Store(true)
 		runtime.mu.Unlock()
@@ -200,7 +200,7 @@ func TestCommunicableAgent_Subscribe(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.setMessageBus(mockBus)
+		runtime.SetMessageBus(mockBus)
 
 		c.BindRuntime(runtime, "agent-1")
 
@@ -226,7 +226,7 @@ func TestCommunicableAgent_Unsubscribe(t *testing.T) {
 		config := NewRuntimeConfig(WithRuntimeTeamID("test-team"))
 		runtime := NewTeamRuntime(*config)
 		mockBus := newMockMessageBus()
-		runtime.setMessageBus(mockBus)
+		runtime.SetMessageBus(mockBus)
 
 		c.BindRuntime(runtime, "agent-1")
 

@@ -50,9 +50,9 @@ func TestBuildSafetySection_基本验证(t *testing.T) {
 // TestBuildToolsSection_基本验证 测试工具节基本属性
 func TestBuildToolsSection_基本验证(t *testing.T) {
 	tools := map[string]string{
-		"bash":  "执行 Shell 命令",
-		"glob":  "文件搜索",
-		"grep":  "内容搜索",
+		"bash": "执行 Shell 命令",
+		"glob": "文件搜索",
+		"grep": "内容搜索",
 	}
 	s := BuildToolsSection(tools, "cn")
 	if s == nil {
@@ -468,23 +468,23 @@ func TestBuildReloadSection_基本验证(t *testing.T) {
 // TestSectionName常量 测试节名称常量值
 func TestSectionName常量(t *testing.T) {
 	names := map[string]string{
-		SectionIdentity:            "identity",
-		SectionSafety:              "safety",
-		SectionSkills:              "skills",
-		SectionTools:               "tools",
-		SectionTodo:                "todo",
-		SectionTaskTool:            "task_tool",
-		SectionToolNavigation:      "tool_navigation",
+		SectionIdentity:             "identity",
+		SectionSafety:               "safety",
+		SectionSkills:               "skills",
+		SectionTools:                "tools",
+		SectionTodo:                 "todo",
+		SectionTaskTool:             "task_tool",
+		SectionToolNavigation:       "tool_navigation",
 		SectionProgressiveToolRules: "progressive_tool_rules",
-		SectionRuntime:             "runtime",
-		SectionMemory:              "memory",
-		SectionSessionTools:        "session_tools",
-		SectionModeInstructions:    "mode_instructions",
-		SectionWorkspace:           "workspace",
-		SectionHeartbeat:           "heartbeat",
-		SectionContext:             "context",
-		SectionExternalMemory:      "external_memory",
-		SectionCompletionSignal:    "completion_signal",
+		SectionRuntime:              "runtime",
+		SectionMemory:               "memory",
+		SectionSessionTools:         "session_tools",
+		SectionModeInstructions:     "mode_instructions",
+		SectionWorkspace:            "workspace",
+		SectionHeartbeat:            "heartbeat",
+		SectionContext:              "context",
+		SectionExternalMemory:       "external_memory",
+		SectionCompletionSignal:     "completion_signal",
 		SectionVerificationContract: "verification_contract",
 	}
 	for got, want := range names {

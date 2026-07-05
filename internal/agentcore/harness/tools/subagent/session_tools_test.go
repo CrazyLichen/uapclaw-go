@@ -4,20 +4,20 @@ import (
 	"context"
 	"testing"
 
+	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -273,7 +273,7 @@ func TestSessionsSpawnTool_Invoke_未启用TaskLoop(t *testing.T) {
 // TestSessionsSpawnTool_Invoke_LoopController为nil loop_controller 为 nil 时返回错误
 func TestSessionsSpawnTool_Invoke_LoopController为nil(t *testing.T) {
 	provider := &fakeDeepAgentProvider{
-		deepConfig:    &hschema.DeepAgentConfig{EnableTaskLoop: true},
+		deepConfig:     &hschema.DeepAgentConfig{EnableTaskLoop: true},
 		loopController: nil,
 	}
 	tk := NewSessionToolkit()
@@ -538,16 +538,22 @@ func TestJoinLines(t *testing.T) {
 func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent { return f.reactAgent }
 
 // LoopCoordinator 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) LoopCoordinator() interfaces.LoopCoordinatorInterface { return &fakeLoopCoordinator{} }
+func (f *fakeDeepAgentProvider) LoopCoordinator() interfaces.LoopCoordinatorInterface {
+	return &fakeLoopCoordinator{}
+}
 
 // LoopController 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) LoopController() controller.ControllerInterface { return f.loopController }
+func (f *fakeDeepAgentProvider) LoopController() controller.ControllerInterface {
+	return f.loopController
+}
 
 // EventHandler 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) EventHandler() modules.EventHandler { return f.eventHandler }
 
 // LoadState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState { return f.state }
+func (f *fakeDeepAgentProvider) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
+	return f.state
+}
 
 // DeepConfig 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
@@ -559,7 +565,9 @@ func (f *fakeDeepAgentProvider) IsInvokeActive() bool { return f.invokeActive }
 func (f *fakeDeepAgentProvider) IsAutoInvokeScheduled() bool { return f.autoInvokeScheduled }
 
 // SetAutoInvokeScheduled 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) { f.autoInvokeScheduled = scheduled }
+func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
+	f.autoInvokeScheduled = scheduled
+}
 
 // ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
@@ -582,7 +590,8 @@ func (f *fakeController) TaskManager() *modules.TaskManager { return f.taskManag
 func (f *fakeController) TaskScheduler() *modules.TaskScheduler { return f.taskScheduler }
 
 // Init 实现 ControllerInterface 接口
-func (f *fakeController) Init(_ *agentschema.AgentCard, _ *config.ControllerConfig, _ agentinterfaces.AbilityManagerInterface, _ iface.ContextEngine) {}
+func (f *fakeController) Init(_ *agentschema.AgentCard, _ *config.ControllerConfig, _ agentinterfaces.AbilityManagerInterface, _ iface.ContextEngine) {
+}
 
 // Start 实现 ControllerInterface 接口
 func (f *fakeController) Start(_ context.Context) error { return nil }
@@ -601,7 +610,9 @@ func (f *fakeController) Stream(_ context.Context, _ *cschema.InputEvent, _ *ses
 }
 
 // PublishEventAsync 实现 ControllerInterface 接口
-func (f *fakeController) PublishEventAsync(_ context.Context, _ *session.Session, _ cschema.Event) error { return nil }
+func (f *fakeController) PublishEventAsync(_ context.Context, _ *session.Session, _ cschema.Event) error {
+	return nil
+}
 
 // SetEventHandler 实现 ControllerInterface 接口
 func (f *fakeController) SetEventHandler(_ modules.EventHandler) {}

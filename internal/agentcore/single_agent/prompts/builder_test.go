@@ -5,8 +5,8 @@ package prompts
 import (
 	"testing"
 
-	hs "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/stretchr/testify/assert"
+	hs "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

@@ -25,8 +25,10 @@ type mockModelContext struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-func (m *mockModelContext) Len() int                                           { return 0 }
-func (m *mockModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) { return nil, nil }
+func (m *mockModelContext) Len() int { return 0 }
+func (m *mockModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return nil, nil
+}
 func (m *mockModelContext) SetMessages(_ []llm_schema.BaseMessage, _ bool)     {}
 func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
 func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {

@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -29,7 +29,7 @@ func (m *mockAbilityMgr) Add(_ commonschema.Ability) agentschema.AddAbilityResul
 func (m *mockAbilityMgr) AddMany(_ []commonschema.Ability) []agentschema.AddAbilityResult {
 	return nil
 }
-func (m *mockAbilityMgr) Remove(_ string) commonschema.Ability       { return nil }
+func (m *mockAbilityMgr) Remove(_ string) commonschema.Ability         { return nil }
 func (m *mockAbilityMgr) RemoveMany(_ []string) []commonschema.Ability { return nil }
 func (m *mockAbilityMgr) Get(_ string) commonschema.Ability            { return nil }
 func (m *mockAbilityMgr) List() []commonschema.Ability                 { return nil }

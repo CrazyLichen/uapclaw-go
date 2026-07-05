@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

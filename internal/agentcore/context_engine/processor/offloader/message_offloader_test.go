@@ -522,8 +522,10 @@ func newTestMessageOffloader() *MessageOffloader {
 
 // fakeModelContext 方法实现
 
-func (f *fakeModelContext) Len() int                                           { return len(f.messages) }
-func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) { return f.messages, nil }
+func (f *fakeModelContext) Len() int { return len(f.messages) }
+func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llm_schema.BaseMessage, error) {
+	return f.messages, nil
+}
 func (f *fakeModelContext) SetMessages(msgs []llm_schema.BaseMessage, _ bool)  { f.messages = msgs }
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage { return nil }
 func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {

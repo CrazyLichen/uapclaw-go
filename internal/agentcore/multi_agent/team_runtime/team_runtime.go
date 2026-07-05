@@ -484,7 +484,7 @@ func (tr *TeamRuntime) IsRunning() bool {
 
 // setMessageBus 设置消息总线（仅测试使用）。
 // 生产代码中 MessageBus 由 NewTeamRuntime 自动创建，无需手动设置。
-func (tr *TeamRuntime) setMessageBus(bus MessageBusInterface) {
+func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
 	tr.messageBus = bus
 }
 

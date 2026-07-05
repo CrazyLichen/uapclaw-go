@@ -11,27 +11,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
-	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -1001,7 +1001,7 @@ func TestDeepAgent_NewContextEngine(t *testing.T) {
 func TestNormalizeInputs_MapStringAny(t *testing.T) {
 	d := newTestDeepAgent()
 	inputs := map[string]any{
-		"query":          "hello world",
+		"query":           "hello world",
 		"conversation_id": "conv-1",
 	}
 
@@ -2597,7 +2597,6 @@ func (r *fakeAgentRailWithCallbacks) GetCallbacks() map[rail.AgentCallbackEvent]
 }
 
 // 确认 fakeAgentRailWithCallbacks 满足 AgentRail 接口
-
 
 // ──────────────────────────── 补充覆盖率测试 ────────────────────────────
 

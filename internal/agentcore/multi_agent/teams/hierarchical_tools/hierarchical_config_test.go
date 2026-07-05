@@ -5,7 +5,6 @@ import (
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -29,8 +28,8 @@ func TestHierarchicalToolsTeamConfig_自定义值(t *testing.T) {
 // TestHierarchicalToolsTeamConfig_设置RootAgent 验证设置 RootAgent。
 func TestHierarchicalToolsTeamConfig_设置RootAgent(t *testing.T) {
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	cfg := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,

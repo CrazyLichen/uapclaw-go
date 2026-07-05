@@ -191,9 +191,9 @@ func TestPermissionResult_NeedsApproval(t *testing.T) {
 
 func TestPermissionResult_序列化(t *testing.T) {
 	r := PermissionResult{
-		Permission:   PermissionLevelAsk,
-		MatchedRule:  "deny_read_env",
-		Reason:       "安全策略禁止读取 .env 文件",
+		Permission:    PermissionLevelAsk,
+		MatchedRule:   "deny_read_env",
+		Reason:        "安全策略禁止读取 .env 文件",
 		ExternalPaths: []string{"/home/user/.env"},
 	}
 	data, err := json.Marshal(r)
@@ -322,11 +322,11 @@ func TestPermissionsSection_序列化(t *testing.T) {
 		Tools:    map[string]any{"read_file": "ask", "write_file": "deny"},
 		Rules: []map[string]any{
 			{
-				"id":        "deny_read_env_files",
-				"tools":     []string{"read_file"},
+				"id":         "deny_read_env_files",
+				"tools":      []string{"read_file"},
 				"match_type": "path",
-				"pattern":   "re:\\.env(\\.local)?$",
-				"action":    "deny",
+				"pattern":    "re:\\.env(\\.local)?$",
+				"action":     "deny",
 			},
 		},
 		ApprovalOverrides: []ApprovalOverrideEntry{

@@ -9,7 +9,6 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -21,8 +20,8 @@ func TestNewHierarchicalTeam(t *testing.T) {
 		maschema.WithTeamCardName("hierarchical_team"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_id"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_id"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,
@@ -74,8 +73,8 @@ func TestHierarchicalTeam_Invoke_Supervisor未注册(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_id"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_id"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,
@@ -148,8 +147,8 @@ func TestHierarchicalTeam_AddAgent(t *testing.T) {
 	team := NewHierarchicalTeam(teamCard, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("worker"),
-		cagentschema.WithAgentID("worker_1"),
+		agentschema.WithAgentName("worker"),
+		agentschema.WithAgentID("worker_1"),
 	)
 
 	err := team.AddAgent(context.Background(), agentCard, dummyProvider())
@@ -169,8 +168,8 @@ func TestHierarchicalTeam_AddAgent_重复注册(t *testing.T) {
 	team := NewHierarchicalTeam(teamCard, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("worker"),
-		cagentschema.WithAgentID("worker_1"),
+		agentschema.WithAgentName("worker"),
+		agentschema.WithAgentID("worker_1"),
 	)
 
 	// 第一次注册
@@ -191,8 +190,8 @@ func TestHierarchicalTeam_AddAgent_注册Supervisor(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_1"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_1"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,
@@ -218,8 +217,8 @@ func TestHierarchicalTeam_RemoveAgent(t *testing.T) {
 	team := NewHierarchicalTeam(teamCard, nil, nil)
 
 	agentCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("worker"),
-		cagentschema.WithAgentID("worker_1"),
+		agentschema.WithAgentName("worker"),
+		agentschema.WithAgentID("worker_1"),
 	)
 
 	// 先注册
@@ -353,8 +352,8 @@ func TestHierarchicalTeam_GetAgentCard(t *testing.T) {
 
 	// 注册 Agent 后再获取
 	agentCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("worker"),
-		cagentschema.WithAgentID("worker_1"),
+		agentschema.WithAgentName("worker"),
+		agentschema.WithAgentID("worker_1"),
 	)
 	err = team.AddAgent(context.Background(), agentCard, dummyProvider())
 	if err != nil {
@@ -385,8 +384,8 @@ func TestHierarchicalTeam_ListAgents(t *testing.T) {
 
 	// 注册 Agent 后再列出
 	agentCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("worker"),
-		cagentschema.WithAgentID("worker_1"),
+		agentschema.WithAgentName("worker"),
+		agentschema.WithAgentID("worker_1"),
 	)
 	err := team.AddAgent(context.Background(), agentCard, dummyProvider())
 	if err != nil {
@@ -405,8 +404,8 @@ func TestHierarchicalTeam_Stream_Supervisor未注册(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_id"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_id"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,
@@ -442,8 +441,8 @@ func TestHierarchicalTeam_assertReady_已注册(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_id"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_id"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,
@@ -469,8 +468,8 @@ func TestHierarchicalTeam_assertReady_Supervisor未注册(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	supervisorCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("supervisor"),
-		cagentschema.WithAgentID("supervisor_id"),
+		agentschema.WithAgentName("supervisor"),
+		agentschema.WithAgentID("supervisor_id"),
 	)
 	config := &HierarchicalTeamConfig{
 		SupervisorAgent: supervisorCard,

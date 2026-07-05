@@ -444,9 +444,9 @@ func TestTaskPlan_FromDict(t *testing.T) {
 		"goal":      "目标1",
 		"tasks": []any{
 			map[string]any{
-				"id":       "t1",
-				"content":  "任务1",
-				"status":   "pending",
+				"id":      "t1",
+				"content": "任务1",
+				"status":  "pending",
 			},
 		},
 		"current_task_id": "t1",

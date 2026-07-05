@@ -16,8 +16,8 @@ func TestValidateToolMetadata_所有工具(t *testing.T) {
 
 	// 不需要严格校验的工具（空 description 或空参数 schema 是允许的）
 	skipValidate := map[string]bool{
-		"list_skill":  true, // description 为空
-		"skill_tool":  true, // description 为空
+		"list_skill": true, // description 为空
+		"skill_tool": true, // description 为空
 	}
 
 	for _, provider := range providers {
@@ -317,7 +317,7 @@ func TestValidateToolMetadata_结构不一致(t *testing.T) {
 // testBadProvider 用于测试 ValidateToolMetadata 的错误路径
 type testBadProvider struct{}
 
-func (p *testBadProvider) GetName() string { return "test_bad" }
+func (p *testBadProvider) GetName() string                       { return "test_bad" }
 func (p *testBadProvider) GetDescription(language string) string { return "test" }
 func (p *testBadProvider) GetInputParams(language string) map[string]any {
 	if language == "cn" {

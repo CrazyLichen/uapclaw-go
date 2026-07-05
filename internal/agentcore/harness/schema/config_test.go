@@ -310,13 +310,13 @@ func TestAudioModelConfigFromEnv(t *testing.T) {
 // TestSubAgentConfig 测试 SubAgentConfig 字段
 func TestSubAgentConfig(t *testing.T) {
 	scfg := SubAgentConfig{
-		SystemPrompt:    "测试提示词",
-		Language:        "en",
-		PromptMode:      PromptModeMinimal,
-		EnableTaskLoop:  true,
-		MaxIterations:   10,
-		FactoryName:     "test_factory",
-		EnablePlanMode:  true,
+		SystemPrompt:      "测试提示词",
+		Language:          "en",
+		PromptMode:        PromptModeMinimal,
+		EnableTaskLoop:    true,
+		MaxIterations:     10,
+		FactoryName:       "test_factory",
+		EnablePlanMode:    true,
 		RestrictToWorkDir: true,
 	}
 

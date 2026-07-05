@@ -9,8 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -415,12 +415,12 @@ func TestTaskLoopEventExecutor_ExecuteAbility_任务存在有描述(t *testing.T
 
 	// 预先添加任务到 TaskManager
 	coreTask := &cschema.Task{
-		SessionID:  "sess-1",
-		TaskID:     taskID,
-		TaskType:   hschema.DeepTaskType,
+		SessionID:   "sess-1",
+		TaskID:      taskID,
+		TaskType:    hschema.DeepTaskType,
 		Description: "test task description",
-		Status:     cschema.TaskSubmitted,
-		Metadata:   map[string]any{"run_kind": "normal"},
+		Status:      cschema.TaskSubmitted,
+		Metadata:    map[string]any{"run_kind": "normal"},
 	}
 	if addErr := tm.AddTask(context.Background(), coreTask); addErr != nil {
 		t.Fatalf("AddTask 返回错误: %v", addErr)

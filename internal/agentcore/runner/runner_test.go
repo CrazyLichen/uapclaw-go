@@ -172,7 +172,7 @@ func TestRunAgent_无会话(t *testing.T) {
 // TestRunWorkflow_正常调用 测试 RunWorkflow 正常调用路径
 func TestRunWorkflow_正常调用(t *testing.T) {
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentName("test-wf"), agentschema.WithAgentDescription("测试 Workflow")),
+		card:   schema.NewWorkflowCard(schema.WithName("test-wf"), schema.WithDescription("测试 Workflow")),
 		result: map[string]any{"status": "completed"},
 	}
 
@@ -192,7 +192,7 @@ func TestRunWorkflow_正常调用(t *testing.T) {
 // TestRunWorkflow_执行错误 测试 RunWorkflow 执行出错
 func TestRunWorkflow_执行错误(t *testing.T) {
 	wf := &mockWorkflow{
-		card: schema.NewWorkflowCard(agentschema.WithAgentName("err-wf"), agentschema.WithAgentDescription("错误 Workflow")),
+		card: schema.NewWorkflowCard(schema.WithName("err-wf"), schema.WithDescription("错误 Workflow")),
 		err:  context.DeadlineExceeded,
 	}
 
@@ -205,7 +205,7 @@ func TestRunWorkflow_执行错误(t *testing.T) {
 // TestRunWorkflow_带ModelCtx 测试 RunWorkflow 传入 modelCtx
 func TestRunWorkflow_带ModelCtx(t *testing.T) {
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentName("wf-ctx"), agentschema.WithAgentDescription("带上下文 Workflow")),
+		card:   schema.NewWorkflowCard(schema.WithName("wf-ctx"), schema.WithDescription("带上下文 Workflow")),
 		result: "done",
 	}
 
@@ -302,7 +302,7 @@ func TestRunWorkflowStreaming_正常调用(t *testing.T) {
 	)
 
 	wf := &mockWorkflow{
-		card:     schema.NewWorkflowCard(agentschema.WithAgentName("stream-wf"), agentschema.WithAgentDescription("流式 Workflow")),
+		card:     schema.NewWorkflowCard(schema.WithName("stream-wf"), schema.WithDescription("流式 Workflow")),
 		streamCh: ch,
 	}
 
@@ -323,7 +323,7 @@ func TestRunWorkflowStreaming_正常调用(t *testing.T) {
 // TestRunWorkflowStreaming_流式错误 测试 RunWorkflowStreaming 流式调用出错
 func TestRunWorkflowStreaming_流式错误(t *testing.T) {
 	wf := &mockWorkflow{
-		card:      schema.NewWorkflowCard(agentschema.WithAgentName("stream-err-wf"), agentschema.WithAgentDescription("流式错误 Workflow")),
+		card:      schema.NewWorkflowCard(schema.WithName("stream-err-wf"), schema.WithDescription("流式错误 Workflow")),
 		streamErr: context.DeadlineExceeded,
 	}
 
@@ -349,7 +349,7 @@ func TestRunWorkflowStreaming_带Session和ModelCtx(t *testing.T) {
 	)
 
 	wf := &mockWorkflow{
-		card:     schema.NewWorkflowCard(agentschema.WithAgentName("wf-full"), agentschema.WithAgentDescription("完整参数 Workflow")),
+		card:     schema.NewWorkflowCard(schema.WithName("wf-full"), schema.WithDescription("完整参数 Workflow")),
 		streamCh: ch,
 	}
 	ws := session.NewWorkflowSession()
@@ -738,7 +738,7 @@ func TestPrepareAgent_自定义会话ID(t *testing.T) {
 func TestPrepareWorkflow_按实例(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentID("wf-inst"), agentschema.WithAgentName("按实例 Workflow"), agentschema.WithAgentDescription("按实例")),
+		card:   schema.NewWorkflowCard(schema.WithID("wf-inst"), schema.WithName("按实例 Workflow"), schema.WithDescription("按实例")),
 		result: map[string]any{"output": "ok"},
 	}
 
@@ -758,7 +758,7 @@ func TestPrepareWorkflow_按实例(t *testing.T) {
 func TestPrepareWorkflow_按ID(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentID("wf-byid"), agentschema.WithAgentName("按ID Workflow"), agentschema.WithAgentDescription("按ID")),
+		card:   schema.NewWorkflowCard(schema.WithID("wf-byid"), schema.WithName("按ID Workflow"), schema.WithDescription("按ID")),
 		result: map[string]any{"output": "ok"},
 	}
 
@@ -794,7 +794,7 @@ func TestPrepareWorkflow_按ID不存在(t *testing.T) {
 // TestPrepareWorkflow_按实例带Card 测试 prepareWorkflow 按实例传入且有 Card 含版本号
 func TestPrepareWorkflow_按实例带Card(t *testing.T) {
 	r := newTestRunner()
-	wfCard := schema.NewWorkflowCard(agentschema.WithAgentID("wf-card"), agentschema.WithAgentName("带Card Workflow"), agentschema.WithAgentDescription("带Card"))
+	wfCard := schema.NewWorkflowCard(schema.WithID("wf-card"), schema.WithName("带Card Workflow"), schema.WithDescription("带Card"))
 	wfCard.Version = "2.0"
 	wf := &mockWorkflow{
 		card:   wfCard,
@@ -814,7 +814,7 @@ func TestPrepareWorkflow_按实例带Card(t *testing.T) {
 func TestPrepareWorkflow_带WorkflowSession(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentName("wf-ws"), agentschema.WithAgentDescription("带 WorkflowSession")),
+		card:   schema.NewWorkflowCard(schema.WithName("wf-ws"), schema.WithDescription("带 WorkflowSession")),
 		result: map[string]any{"output": "ok"},
 	}
 	existingWS := session.NewWorkflowSession()
@@ -832,7 +832,7 @@ func TestPrepareWorkflow_带WorkflowSession(t *testing.T) {
 func TestPrepareWorkflow_带字符串会话(t *testing.T) {
 	r := newTestRunner()
 	wf := &mockWorkflow{
-		card:   schema.NewWorkflowCard(agentschema.WithAgentName("wf-str"), agentschema.WithAgentDescription("字符串会话")),
+		card:   schema.NewWorkflowCard(schema.WithName("wf-str"), schema.WithDescription("字符串会话")),
 		result: map[string]any{"output": "ok"},
 	}
 

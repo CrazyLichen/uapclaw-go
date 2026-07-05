@@ -341,7 +341,7 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_正常完成(t *testing.T) {
 		},
 	}
 	completionEvt.SetMetadata(map[string]any{
-		"task_id":            "task-1",
+		"task_id":           "task-1",
 		"_handler_round_id": roundID,
 	})
 
@@ -378,7 +378,7 @@ func TestTaskLoopEventHandler_HandleTaskFailed_正常失败(t *testing.T) {
 		ErrorMessage: "something went wrong",
 	}
 	failedEvt.SetMetadata(map[string]any{
-		"task_id":            "task-1",
+		"task_id":           "task-1",
 		"_handler_round_id": roundID,
 	})
 
@@ -698,7 +698,7 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_无结果(t *testing.T) {
 		TaskResult: []cschema.DataFrame{},
 	}
 	completionEvt.SetMetadata(map[string]any{
-		"task_id":            "task-2",
+		"task_id":           "task-2",
 		"_handler_round_id": roundID,
 	})
 
@@ -759,7 +759,7 @@ func TestTaskLoopEventHandler_HandleInput_正常提交(t *testing.T) {
 		InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "test query"}},
 	}
 	evt.SetMetadata(map[string]any{
-		"task_id":            "task-input-1",
+		"task_id":           "task-input-1",
 		"_handler_round_id": 1,
 	})
 	input := &modules.EventHandlerInput{
@@ -794,9 +794,9 @@ func TestTaskLoopEventHandler_HandleInput_FollowUp(t *testing.T) {
 		InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "follow up query"}},
 	}
 	evt.SetMetadata(map[string]any{
-		"task_id":            "task-fu-1",
+		"task_id":           "task-fu-1",
 		"_handler_round_id": 1,
-		"is_follow_up":       true,
+		"is_follow_up":      true,
 	})
 	input := &modules.EventHandlerInput{
 		Event:   evt,
@@ -827,10 +827,10 @@ func TestTaskLoopEventHandler_HandleInput_带RunKindAndRunContext(t *testing.T) 
 		InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "query"}},
 	}
 	evt.SetMetadata(map[string]any{
-		"task_id":            "task-rr-1",
+		"task_id":           "task-rr-1",
 		"_handler_round_id": 1,
-		"run_kind":           "heartbeat",
-		"run_context":        "ctx-data",
+		"run_kind":          "heartbeat",
+		"run_context":       "ctx-data",
 	})
 	input := &modules.EventHandlerInput{
 		Event:   evt,

@@ -99,11 +99,11 @@ func TestHarnessConfig_完整结构(t *testing.T) {
 			Tags:       []string{"test", "demo"},
 			Visibility: "internal",
 		},
-		ID:          &id,
-		Name:        &name,
-		Language:    "en",
-		Workspace:   &WorkspaceSchema{RootPath: "/tmp/workspace"},
-		MaxIterations: func() *int { v := 20; return &v }(),
+		ID:                &id,
+		Name:              &name,
+		Language:          "en",
+		Workspace:         &WorkspaceSchema{RootPath: "/tmp/workspace"},
+		MaxIterations:     func() *int { v := 20; return &v }(),
 		CompletionTimeout: func() *float64 { v := 300.0; return &v }(),
 		Prompts: &PromptsSchema{
 			Sections: []SectionSchema{

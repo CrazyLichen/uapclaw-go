@@ -8,7 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -37,11 +36,11 @@ func (m *mockMessageBus) Send(_ context.Context, _ any, _ string, _ string, _ st
 func (m *mockMessageBus) Publish(_ context.Context, _ any, _ string, _ string, _ string) error {
 	return nil
 }
-func (m *mockMessageBus) AddSubscription(_, _ string)               {}
-func (m *mockMessageBus) RemoveSubscription(_, _ string)            {}
-func (m *mockMessageBus) RemoveAllSubscriptions(_ string)           {}
-func (m *mockMessageBus) ListSubscriptions(_ string) any { return nil }
-func (m *mockMessageBus) GetSubscriptionCount() int                 { return 0 }
+func (m *mockMessageBus) AddSubscription(_, _ string)     {}
+func (m *mockMessageBus) RemoveSubscription(_, _ string)  {}
+func (m *mockMessageBus) RemoveAllSubscriptions(_ string) {}
+func (m *mockMessageBus) ListSubscriptions(_ string) any  { return nil }
+func (m *mockMessageBus) GetSubscriptionCount() int       { return 0 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -54,8 +53,8 @@ func newTestTeam(teamID string, rootAgentID string) *HierarchicalToolsTeam {
 		rootAgentID = "default_root"
 	}
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID(rootAgentID),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID(rootAgentID),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -72,8 +71,8 @@ func newTestTeamWithRuntime(teamID string, rootAgentID string, bus team_runtime.
 		rootAgentID = "default_root"
 	}
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID(rootAgentID),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID(rootAgentID),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -83,7 +82,7 @@ func newTestTeamWithRuntime(teamID string, rootAgentID string, bus team_runtime.
 		team_runtime.WithRuntimeTeamID(teamID),
 	)
 	tr := team_runtime.NewTeamRuntime(*rtCfg)
-	tr.setMessageBus(bus)
+	tr.SetMessageBus(bus)
 	_ = tr.Start(context.Background())
 
 	return NewHierarchicalToolsTeam(teamCard, config, tr)
@@ -105,8 +104,8 @@ func TestNewHierarchicalToolsTeam(t *testing.T) {
 		maschema.WithTeamCardName("tools_team"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -127,8 +126,8 @@ func TestNewHierarchicalToolsTeam_默认配置(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := NewHierarchicalToolsTeamConfig()
 	config.RootAgent = rootCard
@@ -147,8 +146,8 @@ func TestNewHierarchicalToolsTeam_自定义Runtime(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -170,8 +169,8 @@ func TestHierarchicalToolsTeam_Invoke_RootAgent未注册(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -192,8 +191,8 @@ func TestHierarchicalToolsTeam_Invoke_未配置RootAgent(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := NewHierarchicalToolsTeamConfig()
 	config.RootAgent = rootCard
@@ -215,8 +214,8 @@ func TestHierarchicalToolsTeam_Invoke_运行时已启动(t *testing.T) {
 	team := newTestTeamWithRuntime("team_1", "root_id", bus)
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
@@ -237,8 +236,8 @@ func TestHierarchicalToolsTeam_Card(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -255,8 +254,8 @@ func TestHierarchicalToolsTeam_GetAgentCount(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -279,8 +278,8 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -288,8 +287,8 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent(t *testing.T) {
 	team := NewHierarchicalToolsTeam(teamCard, config, nil)
 
 	childCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child"),
-		cagentschema.WithAgentID("child_id"),
+		agentschema.WithAgentName("child"),
+		agentschema.WithAgentID("child_id"),
 	)
 
 	rootProvider := noopProvider()
@@ -323,8 +322,8 @@ func TestHierarchicalToolsTeam_setupHierarchy_幂等(t *testing.T) {
 		maschema.WithTeamCardID("team_1"),
 	)
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	config := &HierarchicalToolsTeamConfig{
 		RootAgent: rootCard,
@@ -347,8 +346,8 @@ func TestHierarchicalToolsTeam_AddAgent(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
@@ -367,8 +366,8 @@ func TestHierarchicalToolsTeam_AddAgent_重复注册跳过(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 
 	// 首次注册
@@ -392,8 +391,8 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent_空父ID(t *testing.T) {
 	team := newTestTeam("team_1", "")
 
 	childCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child"),
-		cagentschema.WithAgentID("child_id"),
+		agentschema.WithAgentName("child"),
+		agentschema.WithAgentID("child_id"),
 	)
 
 	// 空 parentAgentID，不应记录父子关系
@@ -411,8 +410,8 @@ func TestHierarchicalToolsTeam_RemoveAgent(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 
 	// 注册
@@ -475,8 +474,8 @@ func TestHierarchicalToolsTeam_GetAgentCard(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
@@ -514,8 +513,8 @@ func TestHierarchicalToolsTeam_ListAgents(t *testing.T) {
 
 	// 注册一个 Agent
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
@@ -545,12 +544,12 @@ func TestHierarchicalToolsTeam_GetAgentCount_注册后(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	childCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child"),
-		cagentschema.WithAgentID("child_id"),
+		agentschema.WithAgentName("child"),
+		agentschema.WithAgentID("child_id"),
 	)
 
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
@@ -613,16 +612,16 @@ func TestHierarchicalToolsTeam_Send_运行时已启动(t *testing.T) {
 	team := newTestTeamWithRuntime("team_1", "root_id", bus)
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
 	}
 
 	senderCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("sender"),
-		cagentschema.WithAgentID("sender"),
+		agentschema.WithAgentName("sender"),
+		agentschema.WithAgentID("sender"),
 	)
 	if err := team.AddAgent(context.Background(), senderCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent sender 失败: %v", err)
@@ -664,8 +663,8 @@ func TestHierarchicalToolsTeam_Stream_运行时已启动(t *testing.T) {
 	team := newTestTeamWithRuntime("team_1", "root_id", bus)
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
@@ -704,8 +703,8 @@ func TestHierarchicalToolsTeam_assertReady_成功(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
 		t.Fatalf("AddAgent 失败: %v", err)
@@ -730,12 +729,12 @@ func TestHierarchicalToolsTeam_setupHierarchy_有待注册子Agent(t *testing.T)
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	childCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child"),
-		cagentschema.WithAgentID("child_id"),
+		agentschema.WithAgentName("child"),
+		agentschema.WithAgentID("child_id"),
 	)
 
 	// 注册 root 和 child（含父子关系）
@@ -759,8 +758,8 @@ func TestHierarchicalToolsTeam_AddAgent_识别RootAgent(t *testing.T) {
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
@@ -778,16 +777,16 @@ func TestHierarchicalToolsTeam_AddAgent_WithParent_多个子Agent(t *testing.T) 
 	team := newTestTeam("team_1", "root_id")
 
 	rootCard := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("root"),
-		cagentschema.WithAgentID("root_id"),
+		agentschema.WithAgentName("root"),
+		agentschema.WithAgentID("root_id"),
 	)
 	child1 := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child1"),
-		cagentschema.WithAgentID("child_1"),
+		agentschema.WithAgentName("child1"),
+		agentschema.WithAgentID("child_1"),
 	)
 	child2 := agentschema.NewAgentCard(
-		cagentschema.WithAgentName("child2"),
-		cagentschema.WithAgentID("child_2"),
+		agentschema.WithAgentName("child2"),
+		agentschema.WithAgentID("child_2"),
 	)
 
 	if err := team.AddAgent(context.Background(), rootCard, noopProvider()); err != nil {
