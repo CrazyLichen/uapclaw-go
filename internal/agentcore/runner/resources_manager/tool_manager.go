@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -20,9 +21,9 @@ import (
 // 对应 Python: McpServerResource (openjiuwen/core/runner/resources_manager/tool_manager.py)
 type McpServerResource struct {
 	// Config MCP 服务器配置
-	Config *mcp.McpServerConfig
+	Config *mcptypes.McpServerConfig
 	// Client MCP 客户端
-	Client mcp.McpClient
+	Client mcptypes.McpClient
 	// ToolIDs 该服务器下所有工具 ID
 	ToolIDs []string
 	// LastUpdateTime 最后更新时间
@@ -202,7 +203,7 @@ func (m *ToolMgr) GenerateMcpToolID(serverID, serverName, toolName string) strin
 // 获取 server_id 粒度锁 → 检查重复 → 创建客户端 → 连接 → 刷新工具 → 更新映射。
 //
 // 对应 Python: ToolMgr.add_tool_server(server_config, expiry_time)
-func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcp.McpServerConfig, expiryTime *float64) ([]*mcp.McpToolCard, error) {
+func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcptypes.McpServerConfig, expiryTime *float64) ([]*mcptypes.McpToolCard, error) {
 	serverID := serverConfig.ServerID
 	lock := m.mcpServerLock(serverID)
 	lock.Lock()
@@ -214,7 +215,7 @@ func (m *ToolMgr) AddToolServer(ctx context.Context, serverConfig *mcp.McpServer
 	m.mu.RUnlock()
 	if ok && existing != nil {
 		// 已注册 — 返回缓存的工具卡片
-		cards := make([]*mcp.McpToolCard, 0)
+		cards := make([]*mcptypes.McpToolCard, 0)
 		for _, toolID := range existing.ToolIDs {
 			t := m.tools.Get(toolID)
 			if t != nil {
@@ -406,7 +407,7 @@ func (m *ToolMgr) GetSysOperationToolIDs(sysOpID string) []string {
 // RefreshToolServer 刷新 MCP 工具服务器，检查过期后刷新。
 //
 // 对应 Python: ToolMgr.refresh_tool_server(server_id, skip_not_exist, force)
-func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNotExist, force bool) ([]*mcp.McpToolCard, error) {
+func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNotExist, force bool) ([]*mcptypes.McpToolCard, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
 	m.mu.RUnlock()
@@ -419,7 +420,7 @@ func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNo
 				exception.WithParam("reason", "服务器不存在"),
 			)
 		}
-		return []*mcp.McpToolCard{}, nil
+		return []*mcptypes.McpToolCard{}, nil
 	}
 
 	needRefresh := force
@@ -447,7 +448,7 @@ func (m *ToolMgr) RefreshToolServer(ctx context.Context, serverID string, skipNo
 		return results, nil
 	}
 
-	return []*mcp.McpToolCard{}, nil
+	return []*mcptypes.McpToolCard{}, nil
 }
 
 // GetMcpServerIDs 按名称获取 MCP 服务器 ID 列表。
@@ -468,7 +469,7 @@ func (m *ToolMgr) GetMcpServerIDs(serverName string) []string {
 // GetMcpClient 获取 MCP 客户端。
 //
 // 对应 Python: ToolMgr.get_mcp_client(server_id)
-func (m *ToolMgr) GetMcpClient(serverID string) (mcp.McpClient, error) {
+func (m *ToolMgr) GetMcpClient(serverID string) (mcptypes.McpClient, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
 	m.mu.RUnlock()
@@ -486,7 +487,7 @@ func (m *ToolMgr) GetMcpClient(serverID string) (mcp.McpClient, error) {
 // GetMcpServerConfig 深拷贝配置返回。
 //
 // 对应 Python: ToolMgr.get_mcp_server_config(server_id)
-func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcp.McpServerConfig, error) {
+func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerConfig, error) {
 	m.mu.RLock()
 	resource, ok := m.mcpServerResources[serverID]
 	m.mu.RUnlock()
@@ -499,7 +500,7 @@ func (m *ToolMgr) GetMcpServerConfig(serverID string) (*mcp.McpServerConfig, err
 		)
 	}
 	// 深拷贝配置
-	copied := &mcp.McpServerConfig{
+	copied := &mcptypes.McpServerConfig{
 		ServerID:   resource.Config.ServerID,
 		ServerName: resource.Config.ServerName,
 		ServerPath: resource.Config.ServerPath,
@@ -575,14 +576,14 @@ func (m *ToolMgr) Release(ctx context.Context) error {
 // createClient 调用 mcp.NewMcpClient 创建 MCP 客户端。
 //
 // 对应 Python: ToolMgr._create_client(config)
-func (m *ToolMgr) createClient(config *mcp.McpServerConfig) (mcp.McpClient, error) {
+func (m *ToolMgr) createClient(config *mcptypes.McpServerConfig) (mcptypes.McpClient, error) {
 	return mcp.NewMcpClient(config)
 }
 
 // innerRefreshMcpTools 刷新 MCP 工具：list_tools → 注册 MCPTool → 更新 mcpServerResources。
 //
 // 对应 Python: ToolMgr._inner_refresh_mcp_tools(client, server_config, expiry_time)
-func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcp.McpClient, serverConfig *mcp.McpServerConfig, expiryTime *float64) ([]*mcp.McpToolCard, error) {
+func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcptypes.McpClient, serverConfig *mcptypes.McpServerConfig, expiryTime *float64) ([]*mcptypes.McpToolCard, error) {
 	mcpCards, err := client.ListTools(ctx)
 	if err != nil {
 		return nil, exception.BuildError(
@@ -593,7 +594,7 @@ func (m *ToolMgr) innerRefreshMcpTools(ctx context.Context, client mcp.McpClient
 		)
 	}
 	if mcpCards == nil {
-		mcpCards = make([]*mcp.McpToolCard, 0)
+		mcpCards = make([]*mcptypes.McpToolCard, 0)
 	}
 
 	for _, card := range mcpCards {
@@ -665,11 +666,11 @@ func (m *ToolMgr) mcpServerLock(serverID string) *sync.Mutex {
 }
 
 // deepCopyMcpToolCard 深拷贝 McpToolCard。
-func deepCopyMcpToolCard(card *mcp.McpToolCard) *mcp.McpToolCard {
+func deepCopyMcpToolCard(card *mcptypes.McpToolCard) *mcptypes.McpToolCard {
 	if card == nil {
 		return nil
 	}
-	copied := &mcp.McpToolCard{
+	copied := &mcptypes.McpToolCard{
 		ToolCard:   card.ToolCard,
 		ServerName: card.ServerName,
 		ServerID:   card.ServerID,

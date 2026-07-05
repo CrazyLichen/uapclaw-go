@@ -22,7 +22,6 @@ type ToolInterruptionState = saschema.ToolInterruptionState
 
 // 从 sa/schema 包 re-export 中断状态相关常量，保持 API 兼容。
 // 常量定义已迁移至 sa/schema 包。
-
 const (
 	// InterruptionKey ReActAgent 中断状态键
 	// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包

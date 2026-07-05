@@ -11,6 +11,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
@@ -44,7 +45,7 @@ type AbilityManager struct {
 	// agents Agent 注册表
 	agents map[string]*agentschema.AgentCard
 	// mcpServers MCP 服务器注册表
-	mcpServers map[string]*mcp.McpServerConfig
+	mcpServers map[string]*mcptypes.McpServerConfig
 	// contextEngine 上下文引擎
 	contextEngine iface.ContextEngine
 	// resourceMgr 资源管理器
@@ -78,7 +79,7 @@ func (am *AbilityManager) SetContextEngine(ce iface.ContextEngine) {
 }
 
 // Add 添加单个能力。重复 name 时保留已有的，记录 Warn 日志，返回 Added=false。
-func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
+func (am *AbilityManager) Add(ability schema.Ability) agentschema.AddAbilityResult {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
@@ -91,10 +92,10 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
 				Msg("检测到重复工具能力，保留已有能力，跳过新增")
-			return AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_tool"}
+			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_tool"}
 		}
 		am.tools[a.Name] = a
-		return AddAbilityResult{Name: a.Name, Added: true, Reason: "added_tool"}
+		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_tool"}
 
 	case *schema.WorkflowCard:
 		existing, ok := am.workflows[a.Name]
@@ -104,10 +105,10 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
 				Msg("检测到重复工作流能力，保留已有能力，跳过新增")
-			return AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_workflow"}
+			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_workflow"}
 		}
 		am.workflows[a.Name] = a
-		return AddAbilityResult{Name: a.Name, Added: true, Reason: "added_workflow"}
+		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_workflow"}
 
 	case *agentschema.AgentCard:
 		existing, ok := am.agents[a.Name]
@@ -117,12 +118,12 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 				Str("existing_id", existing.ID).
 				Str("new_id", a.ID).
 				Msg("检测到重复Agent能力，保留已有能力，跳过新增")
-			return AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_agent"}
+			return agentschema.AddAbilityResult{Name: a.Name, Added: false, Reason: "duplicate_agent"}
 		}
 		am.agents[a.Name] = a
-		return AddAbilityResult{Name: a.Name, Added: true, Reason: "added_agent"}
+		return agentschema.AddAbilityResult{Name: a.Name, Added: true, Reason: "added_agent"}
 
-	case *mcp.McpServerConfig:
+	case *mcptypes.McpServerConfig:
 		existing, ok := am.mcpServers[a.ServerName]
 		if ok {
 			logger.Warn(logger.ComponentAgentCore).
@@ -130,10 +131,10 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 				Str("existing_id", existing.ServerID).
 				Str("new_id", a.ServerID).
 				Msg("检测到重复MCP服务器能力，保留已有能力，跳过新增")
-			return AddAbilityResult{Name: a.ServerName, Added: false, Reason: "duplicate_mcp_server"}
+			return agentschema.AddAbilityResult{Name: a.ServerName, Added: false, Reason: "duplicate_mcp_server"}
 		}
 		am.mcpServers[a.ServerName] = a
-		return AddAbilityResult{Name: a.ServerName, Added: true, Reason: "added_mcp_server"}
+		return agentschema.AddAbilityResult{Name: a.ServerName, Added: true, Reason: "added_mcp_server"}
 
 	default:
 		name := "unknown"
@@ -143,13 +144,13 @@ func (am *AbilityManager) Add(ability schema.Ability) AddAbilityResult {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("ability_type", fmt.Sprintf("%T", a)).
 			Msg("未知能力类型")
-		return AddAbilityResult{Name: name, Added: false, Reason: "unknown_ability_type"}
+		return agentschema.AddAbilityResult{Name: name, Added: false, Reason: "unknown_ability_type"}
 	}
 }
 
 // AddMany 批量添加能力。
-func (am *AbilityManager) AddMany(abilities []schema.Ability) []AddAbilityResult {
-	results := make([]AddAbilityResult, len(abilities))
+func (am *AbilityManager) AddMany(abilities []schema.Ability) []agentschema.AddAbilityResult {
+	results := make([]agentschema.AddAbilityResult, len(abilities))
 	for i, a := range abilities {
 		results[i] = am.Add(a)
 	}

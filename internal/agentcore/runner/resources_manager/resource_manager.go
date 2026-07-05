@@ -90,6 +90,8 @@ type tagOptions struct {
 	SkipIfNotExists bool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ResourceOption 资源操作选项函数。
 type ResourceOption func(*resourceOptions)
 
@@ -665,7 +667,7 @@ func (m *ResourceMgr) GetSysOpToolCards(_ string, _ string, _ string) ([]schema.
 // AddMcpServer 添加 MCP 工具服务器。
 //
 // 对应 Python: ResourceManager.add_mcp_server(server_config, **kwargs)
-func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcp.McpServerConfig, opts ...McpOption) ([]*mcp.McpToolCard, error) {
+func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcptypes.McpServerConfig, opts ...McpOption) ([]*mcptypes.McpToolCard, error) {
 	o := applyMcpOptions(opts...)
 
 	if err := m.innerValidateServerConfig(serverConfig); err != nil {
@@ -707,7 +709,7 @@ func (m *ResourceMgr) AddMcpServer(ctx context.Context, serverConfig *mcp.McpSer
 // RefreshMcpServer 刷新 MCP 工具服务器。
 //
 // 对应 Python: ResourceManager.refresh_mcp_server(server_id, **kwargs)
-func (m *ResourceMgr) RefreshMcpServer(ctx context.Context, serverID string, opts ...McpOption) ([]*mcp.McpToolCard, error) {
+func (m *ResourceMgr) RefreshMcpServer(ctx context.Context, serverID string, opts ...McpOption) ([]*mcptypes.McpToolCard, error) {
 	o := applyMcpOptions(opts...)
 	return m.registry.Tool().RefreshToolServer(ctx, serverID, o.SkipIfNotExists, o.Force)
 }
@@ -766,7 +768,7 @@ func (m *ResourceMgr) GetMcpToolInfos(ctx context.Context, name, serverID string
 // GetMcpServerConfig 获取 MCP 服务器配置。
 //
 // 对应 Python: ResourceManager.get_mcp_server_config(server_id)
-func (m *ResourceMgr) GetMcpServerConfig(serverID string) (*mcp.McpServerConfig, error) {
+func (m *ResourceMgr) GetMcpServerConfig(serverID string) (*mcptypes.McpServerConfig, error) {
 	return m.registry.Tool().GetMcpServerConfig(serverID)
 }
 
@@ -924,9 +926,7 @@ func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ..
 			}
 		}
 		// 匿名接口断言，对齐 Python hasattr(card, "tool_info")
-		if provider, ok := card.(interface {
-			ToolInfo() schema.ToolInfoInterface
-		}); ok {
+		if provider, ok := card.(interface{ ToolInfo() schema.ToolInfoInterface }); ok {
 			if info := provider.ToolInfo(); info != nil {
 				results = append(results, info)
 			}
@@ -1137,7 +1137,7 @@ func (m *ResourceMgr) innerValidateProvider(provider any, resourceType string) e
 // 对应 Python: ResourceManager._inner_validate_server_config(server_config)
 // ⤵️ 预留：Python 支持列表校验（检查 server_id 类型/空白/列表内重复 ID），Go 当前仅校验单个。
 // 批量场景出现时扩展为 innerValidateServerConfigs([]*McpServerConfig)。
-func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcp.McpServerConfig) error {
+func (m *ResourceMgr) innerValidateServerConfig(serverConfig *mcptypes.McpServerConfig) error {
 	if serverConfig == nil {
 		return exception.BuildError(exception.StatusResourceMCPServerParamInvalid,
 			exception.WithParam("reason", "服务器配置为空"),
@@ -1616,7 +1616,7 @@ func getCardType(card schema.CardInterface) string {
 		return ""
 	}
 	switch card.(type) {
-	case *mcp.McpToolCard:
+	case *mcptypes.McpToolCard:
 		return "mcp"
 	case *tool.ToolCard:
 		return "function"

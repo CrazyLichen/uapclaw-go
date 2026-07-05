@@ -139,7 +139,7 @@ func TestBuildToolMessageContent_反射指针类型(t *testing.T) {
 }
 
 func TestAddAbilityResult(t *testing.T) {
-	r := AddAbilityResult{Name: "test", Added: true, Reason: "added_tool"}
+	r := saschema.AddAbilityResult{Name: "test", Added: true, Reason: "added_tool"}
 	if r.Name != "test" {
 		t.Errorf("Name = %q, want test", r.Name)
 	}
