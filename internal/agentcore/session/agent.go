@@ -36,7 +36,7 @@ type Session struct {
 	// 对齐 Python: Session.__init__(envs=dict)
 	envs map[string]any
 	// checkpointer 检查点器（通过 WithCheckpointer option 设置）
-	checkpointer checkpointer.Checkpointer
+	checkpointer interfaces.Checkpointer
 	// streamWriterManager 流写入管理器（通过 WithStreamWriterManager 设置）
 	// 对齐 Python: Session.__init__(stream_writer_manager=StreamWriterManager|None)
 	// ✅ 5.10 已回填：any → *stream.StreamWriterManager
@@ -148,7 +148,7 @@ func WithEnvs(envs map[string]any) SessionOption {
 
 // WithCheckpointer 设置检查点器的选项。
 // 若不设置，NewSession 默认注入 checkpointer.GetCheckpointer()。
-func WithCheckpointer(cp checkpointer.Checkpointer) SessionOption {
+func WithCheckpointer(cp interfaces.Checkpointer) SessionOption {
 	return func(s *Session) {
 		// 存到临时字段，在 NewSession 创建 inner 时使用
 		s.checkpointer = cp

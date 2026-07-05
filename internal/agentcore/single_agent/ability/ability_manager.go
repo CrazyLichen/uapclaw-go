@@ -10,7 +10,6 @@ import (
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -68,7 +67,7 @@ func NewAbilityManager(resourceMgr *resourcesmanager.ResourceMgr) *AbilityManage
 		tools:       make(map[string]*tool.ToolCard),
 		workflows:   make(map[string]*schema.WorkflowCard),
 		agents:      make(map[string]*agentschema.AgentCard),
-		mcpServers:  make(map[string]*mcp.McpServerConfig),
+		mcpServers:  make(map[string]*mcptypes.McpServerConfig),
 		resourceMgr: resourceMgr,
 	}
 }

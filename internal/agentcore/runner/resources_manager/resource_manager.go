@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -926,7 +926,9 @@ func (m *ResourceMgr) GetToolInfos(toolIDs []string, toolTypes []string, opts ..
 			}
 		}
 		// 匿名接口断言，对齐 Python hasattr(card, "tool_info")
-		if provider, ok := card.(interface{ ToolInfo() schema.ToolInfoInterface }); ok {
+		if provider, ok := card.(interface {
+			ToolInfo() schema.ToolInfoInterface
+		}); ok {
 			if info := provider.ToolInfo(); info != nil {
 				results = append(results, info)
 			}
