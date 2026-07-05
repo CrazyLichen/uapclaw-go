@@ -350,3 +350,52 @@ func TestCustomPredicateEvaluator_状态方法(t *testing.T) {
 	e.ImportState(nil)
 	e.Reset()
 }
+
+func TestToInt_类型分支(t *testing.T) {
+	if toInt(nil) != 0 {
+		t.Error("toInt(nil) != 0")
+	}
+	if toInt(42) != 42 {
+		t.Error("toInt(42) != 42")
+	}
+	if toInt(int64(100)) != 100 {
+		t.Error("toInt(int64(100)) != 100")
+	}
+	if toInt(float64(3.7)) != 3 {
+		t.Error("toInt(float64(3.7)) != 3")
+	}
+	if toInt("not_int") != 0 {
+		t.Error("toInt(\"not_int\") != 0")
+	}
+}
+
+func TestToBool_类型分支(t *testing.T) {
+	if toBool(nil) != false {
+		t.Error("toBool(nil) != false")
+	}
+	if toBool(true) != true {
+		t.Error("toBool(true) != true")
+	}
+	if toBool(false) != false {
+		t.Error("toBool(false) != false")
+	}
+	if toBool("true") != false {
+		t.Error("toBool(\"true\") != false (非 bool 类型)")
+	}
+	if toBool(1) != false {
+		t.Error("toBool(1) != false (非 bool 类型)")
+	}
+}
+
+func TestToStr_类型分支(t *testing.T) {
+	if toStr(nil) != "" {
+		t.Error("toStr(nil) != \"\"")
+	}
+	if toStr("hello") != "hello" {
+		t.Error("toStr(\"hello\") != \"hello\"")
+	}
+	// 非 string 类型使用 fmt.Sprintf
+	if toStr(42) != "42" {
+		t.Errorf("toStr(42) = %q, 期望 \"42\"", toStr(42))
+	}
+}

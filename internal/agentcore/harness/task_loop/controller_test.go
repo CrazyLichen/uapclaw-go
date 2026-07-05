@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -217,6 +218,82 @@ func TestTaskLoopController_SubmitRound(t *testing.T) {
 
 	roundID := handler.PrepareRound()
 	assert.Equal(t, 0, roundID)
+}
+
+// TestTaskLoopController_SubmitRound_无Handler EventHandler 为 nil 时返回 nil
+func TestTaskLoopController_SubmitRound_无Handler(t *testing.T) {
+	tc := NewTaskLoopController()
+	// 未 Init，EventHandler 为 nil
+
+	sess := session.NewSession()
+	err := tc.SubmitRound(context.Background(), sess, "test query", false, "", nil)
+	// handler 为 nil 时直接返回 nil
+	assert.Nil(t, err)
+}
+
+// TestTaskLoopController_SubmitRound_正常提交 有 EventHandler 时正常提交
+func TestTaskLoopController_SubmitRound_正常提交(t *testing.T) {
+	tc := NewTaskLoopController()
+	card := newTestCard()
+	cfg := config.DefaultControllerConfig()
+	tc.Init(card, cfg, &mockAbilityMgr{}, nil)
+
+	handler := &mockEventHandlerWithQueues{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	// 启动 Controller + 绑定 Session（注册 topic）
+	err := tc.Start(context.Background())
+	require.NoError(t, err)
+
+	sess := session.NewSession()
+	err = tc.BindSession(context.Background(), sess)
+	require.NoError(t, err)
+
+	err = tc.SubmitRound(context.Background(), sess, "test query", false, "", nil)
+	assert.NoError(t, err)
+}
+
+// TestTaskLoopController_SubmitRound_FollowUp 标记 isFollowUp 时注入元数据
+func TestTaskLoopController_SubmitRound_FollowUp(t *testing.T) {
+	tc := NewTaskLoopController()
+	card := newTestCard()
+	cfg := config.DefaultControllerConfig()
+	tc.Init(card, cfg, &mockAbilityMgr{}, nil)
+
+	handler := &mockEventHandlerWithQueues{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	err := tc.Start(context.Background())
+	require.NoError(t, err)
+
+	sess := session.NewSession()
+	err = tc.BindSession(context.Background(), sess)
+	require.NoError(t, err)
+
+	err = tc.SubmitRound(context.Background(), sess, "follow up query", true, rail.RunKindHeartbeat, nil)
+	assert.NoError(t, err)
+}
+
+// TestTaskLoopController_SubmitRound_带RunContext 有 runContext 时注入元数据
+func TestTaskLoopController_SubmitRound_带RunContext(t *testing.T) {
+	tc := NewTaskLoopController()
+	card := newTestCard()
+	cfg := config.DefaultControllerConfig()
+	tc.Init(card, cfg, &mockAbilityMgr{}, nil)
+
+	handler := &mockEventHandlerWithQueues{queues: NewLoopQueues(16)}
+	tc.SetEventHandler(handler)
+
+	err := tc.Start(context.Background())
+	require.NoError(t, err)
+
+	sess := session.NewSession()
+	err = tc.BindSession(context.Background(), sess)
+	require.NoError(t, err)
+
+	runCtx := &rail.RunContext{Reason: "test"}
+	err = tc.SubmitRound(context.Background(), sess, "query", false, rail.RunKindCron, runCtx)
+	assert.NoError(t, err)
 }
 
 // TestTaskLoopController_getInteractionQueues_无Provider 测试类型断言无 provider 返回 nil

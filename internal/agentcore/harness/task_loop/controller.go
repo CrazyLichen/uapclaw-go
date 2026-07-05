@@ -15,7 +15,7 @@ import (
 
 // interactionQueuesProvider 类型断言接口，用于从 EventHandler 获取 LoopQueues。
 // 对齐 Python: getattr(handler, "interaction_queues", None)
-// 只有 TaskLoopEventHandler（9.6）实现此接口，其他 EventHandler 不实现。
+// ⤴️ 9.6 回填：TaskLoopEventHandler 已实现此接口。
 type interactionQueuesProvider interface {
 	InteractionQueues() *LoopQueues
 }

@@ -34,7 +34,8 @@ func (a *ReActAgent) callModel(
 		previewMsgs = append(previewMsgs, llmschema.NewSystemMessage(previewPrompt))
 	}
 	if modelCtx != nil {
-		previewMsgs = append(previewMsgs, modelCtx.GetMessages(0, true)...)
+		msgs, _ := modelCtx.GetMessages(0, true)
+		previewMsgs = append(previewMsgs, msgs...)
 	}
 	// 对齐 Python L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
 	cbc.SetInputs(&rail.ModelCallInputs{
