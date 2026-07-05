@@ -415,6 +415,6 @@ func (m *mockCheckpointer) GraphStore() any { return nil }
 // mockProvider 用于测试的模拟 Provider
 type mockProvider struct{}
 
-func (p *mockProvider) Create(ctx context.Context, conf map[string]any) (Checkpointer, error) {
+func (p *mockProvider) Create(ctx context.Context, conf map[string]any) (interfaces.Checkpointer, error) {
 	return &mockCheckpointer{}, nil
 }

@@ -417,14 +417,14 @@ func (d *DeepAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error 
 	d.railsMu.Unlock()
 
 	// 从外层 DeepAgent 注销
-	d.callbackManager.UnregisterRail(ctx, r)
+	_ = d.callbackManager.UnregisterRail(ctx, r)
 
 	// 从内层 ReActAgent 注销桥接回调
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
 	d.configMu.RUnlock()
 	if reactAgent != nil {
-		reactAgent.CallbackManager().UnregisterRail(ctx, r)
+		_ = reactAgent.CallbackManager().UnregisterRail(ctx, r)
 	}
 
 	_ = r.Uninit(d)

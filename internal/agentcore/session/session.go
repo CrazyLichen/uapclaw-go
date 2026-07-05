@@ -1,7 +1,6 @@
 package session
 
 import (
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
@@ -68,7 +67,7 @@ func (p *ProxySession) SessionID() string {
 }
 
 // Checkpointer 获取底层会话的检查点管理器
-func (p *ProxySession) Checkpointer() checkpointer.Checkpointer {
+func (p *ProxySession) Checkpointer() interfaces.Checkpointer {
 	return p.stub.Checkpointer()
 }
 

@@ -153,16 +153,16 @@ func TestNewVisionModelConfig(t *testing.T) {
 // TestVisionModelConfigFromEnv 测试 VisionModelConfig.FromEnv
 func TestVisionModelConfigFromEnv(t *testing.T) {
 	// 无环境变量时应返回默认值
-	os.Unsetenv("VISION_API_KEY")
-	os.Unsetenv("OPENROUTER_API_KEY")
-	os.Unsetenv("OPENAI_API_KEY")
-	os.Unsetenv("VISION_BASE_URL")
-	os.Unsetenv("VISION_API_BASE")
-	os.Unsetenv("OPENROUTER_BASE_URL")
-	os.Unsetenv("OPENAI_BASE_URL")
-	os.Unsetenv("VISION_MODEL")
-	os.Unsetenv("VISION_MODEL_NAME")
-	os.Unsetenv("VISION_MAX_RETRIES")
+	_ = os.Unsetenv("VISION_API_KEY")
+	_ = os.Unsetenv("OPENROUTER_API_KEY")
+	_ = os.Unsetenv("OPENAI_API_KEY")
+	_ = os.Unsetenv("VISION_BASE_URL")
+	_ = os.Unsetenv("VISION_API_BASE")
+	_ = os.Unsetenv("OPENROUTER_BASE_URL")
+	_ = os.Unsetenv("OPENAI_BASE_URL")
+	_ = os.Unsetenv("VISION_MODEL")
+	_ = os.Unsetenv("VISION_MODEL_NAME")
+	_ = os.Unsetenv("VISION_MAX_RETRIES")
 
 	cfg := VisionModelConfig{}.FromEnv()
 	if cfg.APIKey != "" {
@@ -179,10 +179,10 @@ func TestVisionModelConfigFromEnv(t *testing.T) {
 	}
 
 	// 设置环境变量
-	os.Setenv("VISION_API_KEY", "test-key")
-	defer os.Unsetenv("VISION_API_KEY")
-	os.Setenv("VISION_MODEL", "custom-model")
-	defer os.Unsetenv("VISION_MODEL")
+	_ = os.Setenv("VISION_API_KEY", "test-key")
+	defer func() { _ = os.Unsetenv("VISION_API_KEY") }()
+	_ = os.Setenv("VISION_MODEL", "custom-model")
+	defer func() { _ = os.Unsetenv("VISION_MODEL") }()
 
 	cfg = VisionModelConfig{}.FromEnv()
 	if cfg.APIKey != "test-key" {
@@ -193,9 +193,9 @@ func TestVisionModelConfigFromEnv(t *testing.T) {
 	}
 
 	// 测试 OpenRouter URL 自动选择模型
-	os.Unsetenv("VISION_MODEL")
-	os.Setenv("VISION_BASE_URL", "https://openrouter.ai/api/v1")
-	defer os.Unsetenv("VISION_BASE_URL")
+	_ = os.Unsetenv("VISION_MODEL")
+	_ = os.Setenv("VISION_BASE_URL", "https://openrouter.ai/api/v1")
+	defer func() { _ = os.Unsetenv("VISION_BASE_URL") }()
 
 	cfg = VisionModelConfig{}.FromEnv()
 	if cfg.Model != DefaultOpenRouterVisionModel {
@@ -203,15 +203,15 @@ func TestVisionModelConfigFromEnv(t *testing.T) {
 	}
 
 	// 测试 MaxRetries 环境变量
-	os.Setenv("VISION_MAX_RETRIES", "5")
-	defer os.Unsetenv("VISION_MAX_RETRIES")
+	_ = os.Setenv("VISION_MAX_RETRIES", "5")
+	defer func() { _ = os.Unsetenv("VISION_MAX_RETRIES") }()
 	cfg = VisionModelConfig{}.FromEnv()
 	if cfg.MaxRetries != 5 {
 		t.Errorf("MaxRetries = %d，期望 5", cfg.MaxRetries)
 	}
 
 	// 无效 MaxRetries 应回退默认值
-	os.Setenv("VISION_MAX_RETRIES", "invalid")
+	_ = os.Setenv("VISION_MAX_RETRIES", "invalid")
 	cfg = VisionModelConfig{}.FromEnv()
 	if cfg.MaxRetries != 3 {
 		t.Errorf("MaxRetries = %d，期望 3（无效值回退）", cfg.MaxRetries)
@@ -259,7 +259,7 @@ func TestAudioModelConfigFromEnv(t *testing.T) {
 		"ACR_ACCESS_KEY", "ACR_ACCESS_SECRET", "ACR_BASE_URL",
 	}
 	for _, v := range audioEnvVars {
-		os.Unsetenv(v)
+		_ = os.Unsetenv(v)
 	}
 
 	cfg := AudioModelConfig{}.FromEnv()
@@ -283,14 +283,14 @@ func TestAudioModelConfigFromEnv(t *testing.T) {
 	}
 
 	// 设置环境变量
-	os.Setenv("AUDIO_API_KEY", "audio-test-key")
-	defer os.Unsetenv("AUDIO_API_KEY")
-	os.Setenv("ACR_ACCESS_KEY", "acr-key")
-	defer os.Unsetenv("ACR_ACCESS_KEY")
-	os.Setenv("ACR_ACCESS_SECRET", "acr-secret")
-	defer os.Unsetenv("ACR_ACCESS_SECRET")
-	os.Setenv("ACR_BASE_URL", "https://custom-acr.example.com")
-	defer os.Unsetenv("ACR_BASE_URL")
+	_ = os.Setenv("AUDIO_API_KEY", "audio-test-key")
+	defer func() { _ = os.Unsetenv("AUDIO_API_KEY") }()
+	_ = os.Setenv("ACR_ACCESS_KEY", "acr-key")
+	defer func() { _ = os.Unsetenv("ACR_ACCESS_KEY") }()
+	_ = os.Setenv("ACR_ACCESS_SECRET", "acr-secret")
+	defer func() { _ = os.Unsetenv("ACR_ACCESS_SECRET") }()
+	_ = os.Setenv("ACR_BASE_URL", "https://custom-acr.example.com")
+	defer func() { _ = os.Unsetenv("ACR_BASE_URL") }()
 
 	cfg = AudioModelConfig{}.FromEnv()
 	if cfg.APIKey != "audio-test-key" {

@@ -22,10 +22,10 @@ type testAgentSession struct {
 	st      state.SessionState
 }
 
-func (s *testAgentSession) AgentID() string              { return s.agentID }
-func (s *testAgentSession) State() state.SessionState    { return s.st }
-func (s *testAgentSession) Config() config.SessionConfig { return s.config }
-func (s *testAgentSession) Checkpointer() Checkpointer   { return nil }
+func (s *testAgentSession) AgentID() string                       { return s.agentID }
+func (s *testAgentSession) State() state.SessionState             { return s.st }
+func (s *testAgentSession) Config() config.SessionConfig          { return s.config }
+func (s *testAgentSession) Checkpointer() interfaces.Checkpointer { return nil }
 
 // testTeamSession Team 会话测试实现
 type testTeamSession struct {

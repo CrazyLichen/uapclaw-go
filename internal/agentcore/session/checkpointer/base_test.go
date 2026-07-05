@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
@@ -142,7 +143,7 @@ func (s *testSession) Tracer() *tracer.Tracer                           { return
 func (s *testSession) StreamWriterManager() *stream.StreamWriterManager { return nil }
 func (s *testSession) ActorManager() any                                { return nil }
 func (s *testSession) Close() error                                     { return nil }
-func (s *testSession) Checkpointer() Checkpointer                       { return nil }
+func (s *testSession) Checkpointer() interfaces.Checkpointer            { return nil }
 
 // testSessionWithWorkflowID 满足 WorkflowIDProvider 的 session
 type testSessionWithWorkflowID struct {

@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/constants"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 )
 
@@ -1087,7 +1088,7 @@ func TestPersistenceWorkflowStorage_Exists(t *testing.T) {
 
 // Test接口满足_PersistenceCheckpointer_Checkpointer 验证 PersistenceCheckpointer 满足 Checkpointer 接口
 func Test接口满足_PersistenceCheckpointer_Checkpointer(t *testing.T) {
-	var _ Checkpointer = (*PersistenceCheckpointer)(nil)
+	var _ interfaces.Checkpointer = (*PersistenceCheckpointer)(nil)
 }
 
 // Test接口满足_agentEntityHooks_EntityHooks 验证 agentEntityHooks 满足 EntityHooks 接口
