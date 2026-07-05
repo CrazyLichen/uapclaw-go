@@ -185,6 +185,14 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		Status:     cschema.TaskSubmitted,
 		Metadata:   make(map[string]any),
 	}
+	// 对齐 Python: inputs=[event] if isinstance(event, InputEvent) else None
+	// 将原始 InputEvent 携带在 coreTask.Inputs 中，供 executor 提取 InteractiveInput
+	if _, ok := event.(*cschema.InputEvent); ok {
+		coreTask.Inputs = []cschema.Event{event}
+	}
+	// 对齐 Python: task_metadata = {"_handler_round_id": current_round, ...}
+	// 写入轮次编号到 Metadata，供 HandleTaskCompletion/Failed 获取 round_id
+	coreTask.Metadata["_handler_round_id"] = currentRound
 	if runKind != "" {
 		coreTask.Metadata["run_kind"] = runKind
 	}
@@ -462,6 +470,13 @@ func extractQuery(event cschema.Event) string {
 		for _, df := range evt.InputData {
 			if textDF, ok := df.(*cschema.TextDataFrame); ok {
 				return textDF.Text
+			}
+			// 对齐 Python: data.get("query", data)，从 JsonDataFrame 提取查询
+			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
+				if q, ok := jsonDF.Data["query"]; ok {
+					return fmt.Sprintf("%v", q)
+				}
+				return fmt.Sprintf("%v", jsonDF.Data)
 			}
 		}
 	case *cschema.FollowUpEvent:

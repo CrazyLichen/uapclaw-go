@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
@@ -206,26 +207,18 @@ func TestExtractInteractiveInput_空InputData(t *testing.T) {
 	}
 }
 
-// TestExtractInteractiveInput_有文本 构造 InputEvent 含 TextDataFrame，验证返回非 nil 的 InteractiveInput
-func TestExtractInteractiveInput_有文本(t *testing.T) {
+// TestExtractInteractiveInput_仅有TextDataFrame Python 不从 TextDataFrame 构造 InteractiveInput，返回 nil
+func TestExtractInteractiveInput_仅有TextDataFrame(t *testing.T) {
 	event := &cschema.InputEvent{
 		InputData: []cschema.DataFrame{&cschema.TextDataFrame{Text: "hello"}},
 	}
 	result := ExtractInteractiveInput(event)
-	if result == nil {
-		t.Fatal("ExtractInteractiveInput 返回 nil，期望非 nil")
-	}
-	// 验证 RawInputs 包含文本
-	rawInputs, ok := result.RawInputs.([]string)
-	if !ok {
-		t.Fatalf("RawInputs 类型为 %T，期望 []string", result.RawInputs)
-	}
-	if len(rawInputs) != 1 || rawInputs[0] != "hello" {
-		t.Errorf("RawInputs 内容为 %v，期望 [hello]", rawInputs)
+	if result != nil {
+		t.Errorf("ExtractInteractiveInput(仅TextDataFrame) 返回 %v，期望 nil（Python 不从 TextDataFrame 构造 InteractiveInput）", result)
 	}
 }
 
-// TestExtractInteractiveInput_仅有JsonDataFrame InputData 仅含 JsonDataFrame 时返回 nil
+// TestExtractInteractiveInput_仅有JsonDataFrame InputData 仅含 JsonDataFrame（无 query 键）时返回 nil
 func TestExtractInteractiveInput_仅有JsonDataFrame(t *testing.T) {
 	event := &cschema.InputEvent{
 		InputData: []cschema.DataFrame{
@@ -235,6 +228,59 @@ func TestExtractInteractiveInput_仅有JsonDataFrame(t *testing.T) {
 	result := ExtractInteractiveInput(event)
 	if result != nil {
 		t.Errorf("ExtractInteractiveInput(仅JsonDataFrame) 返回 %v，期望 nil", result)
+	}
+}
+
+// TestExtractInteractiveInput_JsonDataFrame含InteractiveInput JsonDataFrame.data["query"] 为 *InteractiveInput 时直接返回
+func TestExtractInteractiveInput_JsonDataFrame含InteractiveInput(t *testing.T) {
+	// 构造一个 InteractiveInput 实例（通过 UserInputs 模式，RawInputs 为 nil）
+	ii, err := interaction.NewInteractiveInput()
+	if err != nil {
+		t.Fatalf("NewInteractiveInput 返回错误: %v", err)
+	}
+	_ = ii.Update("node-1", "user response")
+
+	event := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"query": ii}},
+		},
+	}
+	result := ExtractInteractiveInput(event)
+	if result == nil {
+		t.Fatal("ExtractInteractiveInput 返回 nil，期望非 nil InteractiveInput")
+	}
+	// 验证返回的 InteractiveInput 与输入相同
+	if result != ii {
+		t.Error("ExtractInteractiveInput 返回值与输入 InteractiveInput 不一致")
+	}
+}
+
+// TestExtractInteractiveInput_JsonDataFrameQuery不是InteractiveInput JsonDataFrame.data["query"] 为字符串时返回 nil
+func TestExtractInteractiveInput_JsonDataFrameQuery不是InteractiveInput(t *testing.T) {
+	event := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"query": "plain string"}},
+		},
+	}
+	result := ExtractInteractiveInput(event)
+	// query 不是 *InteractiveInput，返回 nil
+	if result != nil {
+		t.Errorf("ExtractInteractiveInput 返回 %v，期望 nil", result)
+	}
+}
+
+// TestExtractInteractiveInput_混合DataFrame JsonDataFrame 无 InteractiveInput，TextDataFrame 也被忽略
+func TestExtractInteractiveInput_混合DataFrame(t *testing.T) {
+	event := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"key": "value"}},
+			&cschema.TextDataFrame{Text: "from text"},
+		},
+	}
+	result := ExtractInteractiveInput(event)
+	// Python 不从 TextDataFrame 构造 InteractiveInput，JsonDataFrame 也无 InteractiveInput，返回 nil
+	if result != nil {
+		t.Errorf("ExtractInteractiveInput 返回 %v，期望 nil", result)
 	}
 }
 

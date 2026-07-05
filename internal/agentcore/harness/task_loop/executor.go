@@ -45,6 +45,17 @@ type DeepAgentProvider interface {
 	ScheduleAutoInvokeOnSpawnDone(steerText string) error
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// DeepTaskType 深层 Agent 任务类型
+	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
+	DeepTaskType = "deep_agent_task"
+	// SessionSpawnTaskType 会话派生任务类型
+	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
+	SessionSpawnTaskType = "session_spawn_task"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskLoopEventExecutor 任务循环事件执行器。
@@ -57,17 +68,6 @@ type TaskLoopEventExecutor struct {
 	// provider 深层 Agent 提供者
 	provider DeepAgentProvider
 }
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// DeepTaskType 深层 Agent 任务类型
-	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
-	DeepTaskType = "deep_agent_task"
-	// SessionSpawnTaskType 会话派生任务类型
-	// ⤵️ 9.7 回填：注册到 TaskExecutorRegistry
-	SessionSpawnTaskType = "session_spawn_task"
-)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -124,8 +124,8 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	task := tasks[0]
 
 	// 步骤 3：提取 query 和 rawInput
-	var query any = taskID
-	var rawInput any
+	query := taskID
+	var rawInput *interaction.InteractiveInput
 
 	if task.Description != "" {
 		query = task.Description
@@ -173,7 +173,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Bool("is_follow_up", isFollowUp).
 			Msg("开始执行任务迭代（敏感模式，隐藏查询内容）")
 	} else {
-		queryPreview := fmt.Sprintf("%v", query)
+		queryPreview := query
 		if len(queryPreview) > 120 {
 			queryPreview = queryPreview[:120]
 		}
@@ -191,11 +191,12 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 
 	// 步骤 9：构建迭代输入和回调上下文
 	// ⤵️ 9.1 回填：agent 参数传 nil，Fire 为空操作
+	// 对齐 Python: iter_inputs = TaskIterationInputs(query=query, ...)
 	iterInputs := &rail.TaskIterationInputs{
 		Iteration:      iteration,
 		LoopEvent:      loopEvent,
 		ConversationID: cid,
-		Query:          fmt.Sprintf("%v", query),
+		Query:          query,
 		IsFollowUp:     isFollowUp,
 	}
 	cbCtx := rail.NewAgentCallbackContext(nil, iterInputs, sess)
@@ -219,7 +220,8 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 12：确定有效查询
-	effectiveQuery := query
+	// 对齐 Python: effective_query = raw_input or iter_inputs.query or query
+	var effectiveQuery any = query
 	if rawInput != nil {
 		effectiveQuery = rawInput
 	} else if iterInputs.Query != "" {
@@ -426,28 +428,24 @@ func MakeFilter(taskID string) *modules.TaskFilter {
 }
 
 // ExtractInteractiveInput 从 InputEvent 提取交互式输入。
-// 将 InputEvent 的 InputData 转换为 InteractiveInput.RawInputs。
-// 对齐 Python: extract_interactive_input
+// 仅从 JsonDataFrame.data["query"] 中提取 *InteractiveInput（中断恢复路径）。
+// 对齐 Python: TaskLoopEventExecutor._extract_interactive_input
+// Python 不从 TextDataFrame 构造 InteractiveInput，TextDataFrame 走纯字符串路径。
 func ExtractInteractiveInput(event *cschema.InputEvent) *interaction.InteractiveInput {
 	if event == nil || len(event.InputData) == 0 {
 		return nil
 	}
-	// 尝试从 InputData 中提取文本
-	var texts []string
 	for _, df := range event.InputData {
-		if textDF, ok := df.(*cschema.TextDataFrame); ok {
-			texts = append(texts, textDF.Text)
+		// 对齐 Python: data.get("query"), isinstance(query, InteractiveInput)
+		if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
+			if q, ok := jsonDF.Data["query"]; ok {
+				if ii, ok := q.(*interaction.InteractiveInput); ok {
+					return ii
+				}
+			}
 		}
 	}
-	if len(texts) == 0 {
-		return nil
-	}
-	// 将文本列表作为 RawInputs
-	ii, err := interaction.NewInteractiveInput(texts)
-	if err != nil {
-		return nil
-	}
-	return ii
+	return nil
 }
 
 // isSensitive 读取 IS_SENSITIVE 环境变量，判断是否为敏感模式。

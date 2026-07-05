@@ -432,7 +432,7 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_SessionSpawn(t *testing.T) {
 	}
 }
 
-// TestExtractQuery_字典提取 从 InputEvent 的 JsonDataFrame 提取 query 字段
+// TestExtractQuery_字典提取 从 InputEvent 的 JsonDataFrame.data["query"] 提取查询字符串
 func TestExtractQuery_字典提取(t *testing.T) {
 	evt := &cschema.InputEvent{
 		InputData: []cschema.DataFrame{
@@ -440,9 +440,21 @@ func TestExtractQuery_字典提取(t *testing.T) {
 		},
 	}
 	result := extractQuery(evt)
-	// JsonDataFrame 不是 TextDataFrame，extractQuery 不处理，返回空串
-	if result != "" {
-		t.Errorf("extractQuery 对 JsonDataFrame 返回 %q，期望空串（仅处理 TextDataFrame）", result)
+	if result != "hello" {
+		t.Errorf("extractQuery 对 JsonDataFrame 返回 %q，期望 %q", result, "hello")
+	}
+}
+
+// TestExtractQuery_字典无QueryKey JsonDataFrame 无 query 键时返回整个 data 的字符串表示
+func TestExtractQuery_字典无QueryKey(t *testing.T) {
+	evt := &cschema.InputEvent{
+		InputData: []cschema.DataFrame{
+			&cschema.JsonDataFrame{Data: map[string]any{"key": "value"}},
+		},
+	}
+	result := extractQuery(evt)
+	if result == "" {
+		t.Error("extractQuery 对无 query 键的 JsonDataFrame 返回空串，期望非空")
 	}
 }
 
