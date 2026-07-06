@@ -1618,18 +1618,21 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 		}
 		logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
 
-		if err := ctrl.SubmitRound(ctx, sessConcrete, string(currentQuery.PlainText()), false, modified.RunKind, modified.RunContext); err != nil {
+		if err = ctrl.SubmitRound(ctx, sessConcrete, string(currentQuery.PlainText()), false, modified.RunKind, modified.RunContext); err != nil {
 			logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
 			break
 		}
 
 		result := ctrl.WaitRoundCompletion(ctx, &timeout)
-		if err != nil {
+		// 对齐 Python: wait_round_completion 返回的 result 可能包含 error
+		resultType, _ := result["result_type"].(string)
+		if resultType == "error" {
+			errOutput, _ := result["output"].(string)
+			err = fmt.Errorf("轮次完成返回错误: %s", errOutput)
 			logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("等待轮次完成失败")
 			break
 		}
 
-		resultType, _ := result["result_type"].(string)
 		outputPreview := ""
 		if output, ok := result["output"].(string); ok {
 			outputPreview = output
@@ -1683,7 +1686,7 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 		logLoop("pending SESSION_SPAWN tasks, controller kept alive", "", 0)
 	}
 
-	return lastResult, nil
+	return lastResult, err
 }
 
 // runTaskLoopStream 流式执行外层任务循环。
