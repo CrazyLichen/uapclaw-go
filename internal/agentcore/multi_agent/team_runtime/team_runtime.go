@@ -354,7 +354,9 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 		)
 	}
 	if !tr.HasAgent(recipient) {
-		return nil, fmt.Errorf("接收者 Agent %s 不存在", recipient)
+		return nil, exception.BuildError(exception.StatusAgentTeamAgentNotFound,
+			exception.WithParam("error_msg", fmt.Sprintf("接收者 Agent %s 不存在", recipient)),
+		)
 	}
 
 	teamOpts := maschema.NewTeamOptions(opts...)
