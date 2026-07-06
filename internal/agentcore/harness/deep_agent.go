@@ -1892,8 +1892,9 @@ func (d *DeepAgent) findSubagentSpec(subagentType string) hinterfaces.SubagentSp
 			return spec
 		}
 	}
-	// 也检查直接嵌入的 DeepAgent 实例
-	// ⤵️ 9.1 回填：SubAgentConfig 可能直接包含 DeepAgent 实例
+	// 对齐 Python: isinstance(spec, DeepAgent) → getattr(spec, "card", None).name == subagent_type
+	// ⤵️ 9.1 回填：搜索 DeepAgent 实例（需解决 schema→interfaces 循环依赖后，
+	// 将 Subagents 改为 []SubagentSpec 统一列表，届时此分支自然覆盖）
 	return nil
 }
 
