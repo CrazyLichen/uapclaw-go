@@ -50,6 +50,8 @@ type HandoffTeam struct {
 	internalAgentsErr error
 	// coordinatorRegistry 会话协调器注册表
 	coordinatorRegistry map[string]*HandoffOrchestrator
+	// registryMu coordinatorRegistry 并发保护锁
+	registryMu sync.RWMutex
 	// initLock 初始化锁
 	initLock sync.Mutex
 }
@@ -326,6 +328,8 @@ func (t *HandoffTeam) Config() *maschema.TeamConfig {
 //
 // 对应 Python: HandoffTeam._lookup_coordinator(session_id)
 func (t *HandoffTeam) lookupCoordinator(sessionID string) *HandoffOrchestrator {
+	t.registryMu.RLock()
+	defer t.registryMu.RUnlock()
 	return t.coordinatorRegistry[sessionID]
 }
 
@@ -538,7 +542,9 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 	}
 
 	// 注册协调器
+	t.registryMu.Lock()
 	t.coordinatorRegistry[sessionID] = coordinator
+	t.registryMu.Unlock()
 
 	// 构建交接请求
 	handoffReq := &HandoffRequest{
@@ -563,7 +569,9 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 		maschema.WithTeamSessionID(sessionID),
 	); err != nil {
 		// 发布失败，清理协调器
+		t.registryMu.Lock()
 		delete(t.coordinatorRegistry, sessionID)
+		t.registryMu.Unlock()
 		_ = t.runtime.CleanupSession(ctx, sessionID)
 
 		logger.Error(logComponent).Err(err).
@@ -588,7 +596,9 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 			result, coordErr = hr.result, hr.err
 		case <-time.After(time.Duration(timeout * float64(time.Second))):
 			// 超时，清理协调器
+			t.registryMu.Lock()
 			delete(t.coordinatorRegistry, sessionID)
+			t.registryMu.Unlock()
 			_ = t.runtime.CleanupSession(ctx, sessionID)
 
 			logger.Error(logComponent).
@@ -603,7 +613,9 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 			)
 		case <-ctx.Done():
 			// 上下文取消，清理协调器
+			t.registryMu.Lock()
 			delete(t.coordinatorRegistry, sessionID)
+			t.registryMu.Unlock()
 			_ = t.runtime.CleanupSession(ctx, sessionID)
 			return nil, ctx.Err()
 		}
@@ -613,14 +625,18 @@ func (t *HandoffTeam) runChain(ctx context.Context, inputs map[string]any, sess 
 			result, coordErr = hr.result, hr.err
 		case <-ctx.Done():
 			// 上下文取消，清理协调器
+			t.registryMu.Lock()
 			delete(t.coordinatorRegistry, sessionID)
+			t.registryMu.Unlock()
 			_ = t.runtime.CleanupSession(ctx, sessionID)
 			return nil, ctx.Err()
 		}
 	}
 
 	// 清理协调器和会话
+	t.registryMu.Lock()
 	delete(t.coordinatorRegistry, sessionID)
+	t.registryMu.Unlock()
 	_ = t.runtime.CleanupSession(ctx, sessionID)
 
 	// 对齐 Python: await coordinator.done_future — 若有异常则传播
