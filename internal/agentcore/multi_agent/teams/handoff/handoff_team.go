@@ -44,8 +44,6 @@ type HandoffTeam struct {
 	agentProviders map[string]maschema.TeamAgentProvider
 	// internalAgentsReady 内部 Agent 是否就绪
 	internalAgentsReady bool
-	// internalAgentsOnce 确保 ensureInternalAgents 只执行一次
-	internalAgentsOnce sync.Once
 	// internalAgentsErr ensureInternalAgents 首次执行的错误结果
 	internalAgentsErr error
 	// coordinatorRegistry 会话协调器注册表
@@ -350,7 +348,9 @@ func (t *HandoffTeam) getStartAgentID() string {
 	return ""
 }
 
-// ensureInternalAgents 使用 sync.Once 创建 ContainerAgent + 端点注册 + 订阅。
+// ensureInternalAgents 确保内部 Agent 端点已初始化。
+// 使用 initLock + internalAgentsReady bool 控制初始化，
+// 保证与 AddAgent/RemoveAgent 的 resetInternalAgents 互斥。
 //
 // 流程：
 //  1. sync.Once 保证初始化逻辑只执行一次（并发安全）
@@ -364,15 +364,20 @@ func (t *HandoffTeam) getStartAgentID() string {
 //
 // 对应 Python: HandoffTeam._ensure_internal_agents()
 func (t *HandoffTeam) ensureInternalAgents(ctx context.Context) error {
-	t.internalAgentsOnce.Do(func() {
-		err := t.initInternalAgents(ctx)
-		if err != nil {
-			t.internalAgentsErr = err
-			return
-		}
-		t.internalAgentsReady = true
-	})
-	return t.internalAgentsErr
+	t.initLock.Lock()
+	defer t.initLock.Unlock()
+
+	if t.internalAgentsReady {
+		return t.internalAgentsErr
+	}
+
+	err := t.initInternalAgents(ctx)
+	if err != nil {
+		t.internalAgentsErr = err
+		return err
+	}
+	t.internalAgentsReady = true
+	return nil
 }
 
 // initInternalAgents 执行内部 Agent 端点的实际初始化逻辑。
@@ -456,7 +461,6 @@ func (t *HandoffTeam) initInternalAgents(ctx context.Context) error {
 // 必须在 initLock 保护下调用，确保与 ensureInternalAgents 互斥。
 func (t *HandoffTeam) resetInternalAgents() {
 	t.internalAgentsReady = false
-	t.internalAgentsOnce = sync.Once{}
 	t.internalAgentsErr = nil
 }
 
