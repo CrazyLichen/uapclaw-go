@@ -56,6 +56,8 @@ type TeamRuntime struct {
 	p2pTimeout float64
 	// mu 保护 agentCards、running 和 activeTeamSessions
 	mu sync.RWMutex
+	// startMu ensureStarted 双检锁，对齐 Python: _start_lock
+	startMu sync.Mutex
 }
 
 // RuntimeConfigOption 团队运行时配置选项函数类型
@@ -335,8 +337,9 @@ func (tr *TeamRuntime) GetAgentCount() int {
 //
 // 对应 Python: TeamRuntime.send(message, recipient, sender, opts)
 func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
-	if !tr.IsRunning() {
-		return nil, fmt.Errorf("团队运行时未启动，无法发送消息")
+	// 对齐 Python: await self._ensure_started()
+	if err := tr.ensureStarted(ctx); err != nil {
+		return nil, err
 	}
 	// 对齐 Python: if not sender: raise ...
 	if sender == "" {
@@ -368,8 +371,9 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 //
 // 对应 Python: TeamRuntime.publish(message, topic_id, sender, opts)
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
-	if !tr.IsRunning() {
-		return fmt.Errorf("团队运行时未启动，无法发布消息")
+	// 对齐 Python: await self._ensure_started()
+	if err := tr.ensureStarted(ctx); err != nil {
+		return err
 	}
 	// 对齐 Python: if not sender: raise ...
 	if sender == "" {
@@ -478,6 +482,20 @@ func (tr *TeamRuntime) GetP2PTimeout() float64 {
 // IsRunning 返回运行时是否已启动。
 func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
+}
+
+// ensureStarted 确保运行时已启动（懒启动）。
+// 对齐 Python: TeamRuntime._ensure_started() (line 153-159)
+func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
+	if tr.IsRunning() {
+		return nil
+	}
+	tr.startMu.Lock()
+	defer tr.startMu.Unlock()
+	if tr.IsRunning() {
+		return nil
+	}
+	return tr.Start(ctx)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
