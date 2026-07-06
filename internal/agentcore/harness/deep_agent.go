@@ -1560,11 +1560,193 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *rail.AgentCal
 
 // runTaskLoopInvoke 运行外层任务循环，返回最后一轮结果。
 // 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112)
+// runTaskLoopInvoke 执行外层任务循环，返回最后一轮结果。
+// 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112-2144)
 func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+	sessConcrete, ok := sess.(*session.Session)
+	if !ok || sessConcrete == nil {
+		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
+			exception.WithMsg("任务循环模式需要 *session.Session 类型会话"))
+	}
+
+	loopCh, err := d.runTaskLoop(ctx, cbc, sessConcrete)
+	if err != nil {
+		return nil, err
+	}
+
+	// 对齐 Python: last_result: Dict[str, Any] = {}
+	// async for result in _run_task_loop(): last_result = result
+	var lastResult map[string]any
+	for result := range loopCh {
+		lastResult = result
+	}
+
+	// 对齐 Python: return last_result
+	return lastResult, nil
+}
+
+// runTaskLoop 任务循环生成器，每轮完成后将 result 发送到 channel。
+// 对齐 Python: DeepAgent._run_task_loop(ctx, session) (line 1991-2110)
+// invoke 和 stream 共用此方法：
+//   invoke: 从 channel 读取最后一轮结果
+//   stream: 后台goroutine从channel读取，每轮写入session流
+func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *rail.AgentCallbackContext, sess *session.Session) (<-chan map[string]any, error) {
 	modified, ok := cbc.Inputs().(*rail.InvokeInputs)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
 			exception.WithMsg("ctx.inputs 必须为 InvokeInputs 类型"))
+	}
+
+	coord, ctrl, err := d.setupTaskLoop(ctx, sess)
+	if err != nil {
+		return nil, err
+	}
+
+	// 绑定会话（对齐 Python line 2013-2017）
+	d.configMu.RLock()
+	boundID := d.boundSessionID
+	d.configMu.RUnlock()
+
+	sessionID := sess.GetSessionID()
+	if boundID != sessionID {
+		if err := ctrl.BindSession(ctx, sess); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("绑定会话失败")
+		}
+		d.configMu.Lock()
+		d.boundSessionID = sessionID
+		d.configMu.Unlock()
+	}
+
+	outCh := make(chan map[string]any, 1)
+
+	go func() {
+		defer close(outCh)
+
+		// 对齐 Python: try/finally 确保清理（line 2095-2110）
+		defer func() {
+			state := d.LoadState(sess)
+			state.StopConditionState = nil
+			d.saveState(sess, state)
+
+			if !d.hasPendingSessionSpawn() {
+				_ = ctrl.UnbindSession(ctx, sess)
+				_ = ctrl.Stop(ctx)
+				d.configMu.Lock()
+				d.loopCoordinator = nil
+				d.loopController = nil
+				d.loopSession = nil
+				d.boundSessionID = ""
+				d.configMu.Unlock()
+				logLoop("all tasks completed, controller cleaned up", "", 0)
+			} else {
+				logLoop("pending SESSION_SPAWN tasks, controller kept alive", "", 0)
+			}
+		}()
+
+		currentQuery := modified.Query
+		outerRound := 0
+
+		d.configMu.RLock()
+		timeout := hschema.DefaultCompletionTimeout
+		if d.deepConfig != nil && d.deepConfig.CompletionTimeout > 0 {
+			timeout = d.deepConfig.CompletionTimeout
+		}
+		d.configMu.RUnlock()
+
+		for coord.ShouldContinue() {
+			outerRound++
+
+			// 排空 follow-up（对齐 Python line 2026-2040）
+			_ = ctrl.DrainFollowUp()
+
+			queryPreview := currentQuery.PlainText()
+			if len(queryPreview) > 120 {
+				queryPreview = queryPreview[:120]
+			}
+			logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
+
+			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), false, modified.RunKind, modified.RunContext); err != nil {
+				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
+				break
+			}
+
+			result := ctrl.WaitRoundCompletion(ctx, &timeout)
+			resultType, _ := result["result_type"].(string)
+			if resultType == "error" {
+				errOutput, _ := result["output"].(string)
+				err = fmt.Errorf("轮次完成返回错误: %s", errOutput)
+				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("等待轮次完成失败")
+				break
+			}
+
+			outputPreview := ""
+			if output, ok := result["output"].(string); ok {
+				outputPreview = output
+				if len(outputPreview) > 200 {
+					outputPreview = outputPreview[:200]
+				}
+			}
+			logLoop("round=%d completed, result_type=%s", fmt.Sprintf(", output=%s", outputPreview), outerRound, resultType)
+
+			// yield result（对齐 Python line 2063: yield result）
+			select {
+			case outCh <- result:
+			case <-ctx.Done():
+				return
+			}
+
+			coord.IncrementIteration()
+			coord.SetLastResult(result)
+
+			// 更新状态
+			st := d.LoadState(sess)
+			exported := coord.ExportState()
+			st.StopConditionState = map[string]any{
+				"iteration":        exported.Iteration,
+				"token_usage":      exported.TokenUsage,
+				"stop_reason":      exported.StopReason,
+				"evaluator_states": exported.EvaluatorStates,
+			}
+			d.saveState(sess, st)
+
+			if resultType == "interrupt" {
+				logLoop("round=%d interrupted", "", outerRound)
+				break
+			}
+			if coord.IsAborted() {
+				logLoop("round=%d aborted", "", outerRound)
+				break
+			}
+
+			currentQuery = modified.Query
+		}
+	}()
+
+	return outCh, nil
+}
+
+// writeRoundResultToStream 将任务循环轮次结果写入会话流。
+// 对齐 Python: DeepAgent._write_round_result_to_stream(result, session) (line 2214-2232)
+func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[string]any, sess *session.Session) {
+	d.configMu.RLock()
+	reactAgent := d.reactAgent
+	d.configMu.RUnlock()
+
+	if reactAgent != nil {
+		reactAgent.WriteInvokeResultToStream(ctx, result, sess)
+	}
+}
+
+// runTaskLoopStream 流式执行外层任务循环。
+// 对齐 Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146-2212)
+//
+// 使用与 ReActAgent.Stream() 相同的"后台+前台"模式：
+//   后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
+//   前台: 从 session.StreamIterator() 读取chunk转发到 outCh
+func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
+	if sess == nil {
+		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
+			exception.WithMsg("任务循环模式需要会话"))
 	}
 
 	sessConcrete, ok := sess.(*session.Session)
@@ -1573,140 +1755,47 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 			exception.WithMsg("任务循环模式需要 *session.Session 类型会话"))
 	}
 
-	// 设置任务循环
-	coord, ctrl, err := d.setupTaskLoop(ctx, sessConcrete)
-	if err != nil {
-		return nil, err
-	}
-
-	// 绑定会话
-	d.configMu.RLock()
-	boundID := d.boundSessionID
-	d.configMu.RUnlock()
-
-	sessionID := sessConcrete.GetSessionID()
-	if boundID != sessionID {
-		if err := ctrl.BindSession(ctx, sessConcrete); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("绑定会话失败")
-		}
-		d.configMu.Lock()
-		d.boundSessionID = sessionID
-		d.configMu.Unlock()
-	}
-
-	// 执行循环
-	var lastResult map[string]any
-	outerRound := 0
-
-	d.configMu.RLock()
-	timeout := hschema.DefaultCompletionTimeout
-	if d.deepConfig != nil && d.deepConfig.CompletionTimeout > 0 {
-		timeout = d.deepConfig.CompletionTimeout
-	}
-	d.configMu.RUnlock()
-
-	for coord.ShouldContinue() {
-		outerRound++
-
-		// 排空 follow-up
-		_ = ctrl.DrainFollowUp()
-
-		currentQuery := modified.Query
-		queryPreview := currentQuery.PlainText()
-		if len(queryPreview) > 120 {
-			queryPreview = queryPreview[:120]
-		}
-		logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
-
-		if err = ctrl.SubmitRound(ctx, sessConcrete, string(currentQuery.PlainText()), false, modified.RunKind, modified.RunContext); err != nil {
-			logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
-			break
-		}
-
-		result := ctrl.WaitRoundCompletion(ctx, &timeout)
-		// 对齐 Python: wait_round_completion 返回的 result 可能包含 error
-		resultType, _ := result["result_type"].(string)
-		if resultType == "error" {
-			errOutput, _ := result["output"].(string)
-			err = fmt.Errorf("轮次完成返回错误: %s", errOutput)
-			logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("等待轮次完成失败")
-			break
-		}
-
-		outputPreview := ""
-		if output, ok := result["output"].(string); ok {
-			outputPreview = output
-			if len(outputPreview) > 200 {
-				outputPreview = outputPreview[:200]
-			}
-		}
-		logLoop("round=%d completed, result_type=%s", fmt.Sprintf(", output=%s", outputPreview), outerRound, resultType)
-
-		lastResult = result
-		coord.IncrementIteration()
-		coord.SetLastResult(result)
-
-		// 更新状态
-		st := d.LoadState(sessConcrete)
-		exported := coord.ExportState()
-		st.StopConditionState = map[string]any{
-			"iteration":        exported.Iteration,
-			"token_usage":      exported.TokenUsage,
-			"stop_reason":      exported.StopReason,
-			"evaluator_states": exported.EvaluatorStates,
-		}
-		d.saveState(sessConcrete, st)
-
-		if resultType == "interrupt" {
-			logLoop("round=%d interrupted", "", outerRound)
-			break
-		}
-		if coord.IsAborted() {
-			logLoop("round=%d aborted", "", outerRound)
-			break
-		}
-	}
-
-	// 清理
-	state := d.LoadState(sessConcrete)
-	state.StopConditionState = nil
-	d.saveState(sessConcrete, state)
-
-	if !d.hasPendingSessionSpawn() {
-		_ = ctrl.UnbindSession(ctx, sessConcrete)
-		_ = ctrl.Stop(ctx)
-		d.configMu.Lock()
-		d.loopCoordinator = nil
-		d.loopController = nil
-		d.loopSession = nil
-		d.boundSessionID = ""
-		d.configMu.Unlock()
-		logLoop("all tasks completed, controller cleaned up", "", 0)
-	} else {
-		logLoop("pending SESSION_SPAWN tasks, controller kept alive", "", 0)
-	}
-
-	return lastResult, err
-}
-
-// runTaskLoopStream 流式执行外层任务循环。
-// 对齐 Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146)
-func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
-	if sess == nil {
-		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
-			exception.WithMsg("任务循环模式需要会话"))
-	}
+	// 构建 AgentCallbackContext
+	cbc := rail.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	outCh := make(chan stream.Schema, 64)
 
-	// 后台 goroutine 运行任务循环
+	// 后台 goroutine: 运行任务循环，每轮结果写入session流
+	// 对齐 Python: _stream_process() (line 2182-2194)
+	go func() {
+		// 对齐 Python line 2190-2194: finally → session.close_stream()
+		defer func() {
+			_ = sessConcrete.CloseStream()
+		}()
+
+		loopCh, loopErr := d.runTaskLoop(ctx, cbc, sessConcrete)
+		if loopErr != nil {
+			// 对齐 Python line 2187-2189: except → 写入错误结果到流
+			d.writeRoundResultToStream(ctx, map[string]any{
+				"output":      loopErr.Error(),
+				"result_type": "error",
+			}, sessConcrete)
+			return
+		}
+
+		// 对齐 Python line 2184-2185:
+		// async for result in _run_task_loop(): _write_round_result_to_stream(result, session)
+		for result := range loopCh {
+			d.writeRoundResultToStream(ctx, result, sessConcrete)
+		}
+	}()
+
+	// 前台: 从 session.StreamIterator() 读取chunk转发到 outCh
+	// 对齐 Python line 2199-2200: async for chunk in session.stream_iterator(): yield chunk
 	go func() {
 		defer close(outCh)
-
-		// ⤵️ 9.1 回填：完整流式任务循环
-		// 后台 goroutine: runTaskLoop → 每轮 reactAgent.Invoke
-		// 前台: session.StreamIterator() → 转发到 outCh
-		logger.Info(logComponent).Msg("任务循环流式执行待补全，⤵️ 9.1 回填")
+		for chunk := range sessConcrete.StreamIterator() {
+			select {
+			case outCh <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
 	}()
 
 	return outCh, nil
