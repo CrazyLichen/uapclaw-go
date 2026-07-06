@@ -473,6 +473,9 @@ func generateTokenHex(n int) string {
 
 // joinLines 将多行文本用换行符连接。
 func joinLines(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
 	result := lines[0]
 	for i := 1; i < len(lines); i++ {
 		result += "\n" + lines[i]
