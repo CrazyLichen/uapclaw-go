@@ -347,6 +347,12 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
+	// 对齐 Python: if not recipient: raise ...
+	if recipient == "" {
+		return nil, exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "recipient 不能为空"),
+		)
+	}
 	// 对齐 Python: if not self.has_agent(sender): raise ...
 	if !tr.HasAgent(sender) {
 		return nil, exception.BuildError(exception.StatusAgentTeamAgentNotFound,
@@ -383,6 +389,12 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 			exception.WithParam("error_msg", "sender 不能为空"),
 		)
 	}
+	// 对齐 Python: if not topic_id: raise ...
+	if topicID == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "topic_id 不能为空"),
+		)
+	}
 	// 对齐 Python: if not self.has_agent(sender): raise ...
 	if !tr.HasAgent(sender) {
 		return exception.BuildError(exception.StatusAgentTeamAgentNotFound,
@@ -400,6 +412,18 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 //
 // 对应 Python: TeamRuntime.subscribe(agent_id, topic)
 func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic string) error {
+	// 对齐 Python: if not agent_id: raise ...
+	if agentID == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "agent_id 不能为空"),
+		)
+	}
+	// 对齐 Python: if not topic: raise ...
+	if topic == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "topic 不能为空"),
+		)
+	}
 	if tr.messageBus != nil {
 		tr.messageBus.AddSubscription(agentID, topic)
 	}
@@ -410,6 +434,18 @@ func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic stri
 //
 // 对应 Python: TeamRuntime.unsubscribe(agent_id, topic)
 func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic string) error {
+	// 对齐 Python: if not agent_id: raise ...
+	if agentID == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "agent_id 不能为空"),
+		)
+	}
+	// 对齐 Python: if not topic: raise ...
+	if topic == "" {
+		return exception.BuildError(exception.StatusAgentTeamExecutionError,
+			exception.WithParam("error_msg", "topic 不能为空"),
+		)
+	}
 	if tr.messageBus != nil {
 		tr.messageBus.RemoveSubscription(agentID, topic)
 	}
