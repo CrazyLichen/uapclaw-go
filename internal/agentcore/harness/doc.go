@@ -9,7 +9,8 @@
 //
 //	harness/
 //	├── doc.go               # 包文档
-//	└── deep_agent.go        # DeepAgent 结构体及全部方法实现
+//	├── deep_agent.go        # DeepAgent 结构体及全部方法实现
+//	└── factory.go           # CreateDeepAgent 工厂函数及辅助函数
 //
-// 对应 Python 代码：openjiuwen/harness/deep_agent.py
+// 对应 Python 代码：openjiuwen/harness/deep_agent.py, openjiuwen/harness/factory.py
 package harness

@@ -98,16 +98,29 @@ func (b *SystemPromptBuilder) BuildReport() *PromptReport {
 
 // ResolveLanguage 按优先级解析提示词语言：
 // 配置参数 > AGENT_PROMPT_LANGUAGE 环境变量 > DefaultLanguage。
+// 不在 SupportedLanguages 中的值回退到下一优先级。
 //
 // 对应 Python: resolve_language()
 func ResolveLanguage(configLanguage string) string {
-	if configLanguage != "" {
+	if configLanguage != "" && isSupportedLanguage(configLanguage) {
 		return configLanguage
 	}
-	if envLang := os.Getenv("AGENT_PROMPT_LANGUAGE"); envLang != "" {
+	if envLang := os.Getenv("AGENT_PROMPT_LANGUAGE"); isSupportedLanguage(envLang) {
 		return envLang
 	}
 	return DefaultLanguage
+}
+
+// isSupportedLanguage 检查语言是否在支持列表中。
+//
+// 对应 Python: config_language in SUPPORTED_LANGUAGES
+func isSupportedLanguage(lang string) bool {
+	for _, supported := range SupportedLanguages {
+		if lang == supported {
+			return true
+		}
+	}
+	return false
 }
 
 // ResolveMode 从配置字符串解析 PromptMode，空串默认为 PromptModeFull。

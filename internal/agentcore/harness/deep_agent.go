@@ -13,6 +13,7 @@ import (
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	ctrlmodules "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -25,6 +26,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
@@ -228,32 +230,26 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 	var result map[string]any
 
-	// 触发 BEFORE_INVOKE 回调
-	if err := cbc.Fire(rail.CallbackBeforeInvoke); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("BEFORE_INVOKE 回调执行异常")
-	}
-
-	if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
-		r, err := d.runTaskLoopInvoke(ctx, cbc, sess)
-		if err != nil {
-			// 触发 AFTER_INVOKE 回调（异常路径）
-			_ = cbc.Fire(rail.CallbackAfterInvoke)
-			return nil, err
+	// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
+	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
+	if err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+		if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
+			r, err := d.runTaskLoopInvoke(ctx, cbc, sess)
+			if err != nil {
+				return err
+			}
+			result = r
+		} else {
+			r, err := d.runSingleRoundInvoke(ctx, cbc, sess)
+			if err != nil {
+				return err
+			}
+			result = r
 		}
-		result = r
-	} else {
-		r, err := d.runSingleRoundInvoke(ctx, cbc, sess)
-		if err != nil {
-			_ = cbc.Fire(rail.CallbackAfterInvoke)
-			return nil, err
-		}
-		result = r
-	}
-	invokeInputs.Result = result
-
-	// 触发 AFTER_INVOKE 回调
-	if err := cbc.Fire(rail.CallbackAfterInvoke); err != nil {
-		logger.Warn(logComponent).Err(err).Msg("AFTER_INVOKE 回调执行异常")
+		invokeInputs.Result = result
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	if sess != nil {
@@ -289,6 +285,8 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	sess := agentOpts.Session
 	streamModes := agentOpts.StreamModes
 
+	cbc := rail.NewAgentCallbackContext(d, invokeInputs, sess)
+
 	outCh := make(chan stream.Schema, 64)
 
 	d.invokeActive.Store(true)
@@ -297,46 +295,52 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 		defer d.invokeActive.Store(false)
 		defer close(outCh)
 
-		var streamResult map[string]any
-		var streamOutputParts []string
+		// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
+		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
+		_ = cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+			var streamResult map[string]any
+			var streamOutputParts []string
 
-		if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
-			ch, err := d.runTaskLoopStream(ctx, invokeInputs, sess, streamModes)
-			if err != nil {
-				logger.Error(logComponent).Err(err).Msg("runTaskLoopStream 启动失败")
-				return
-			}
-			for chunk := range ch {
-				chunkResult := resultFromStreamChunk(chunk, &streamOutputParts)
-				if chunkResult != nil {
-					streamResult = chunkResult
+			if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
+				ch, err := d.runTaskLoopStream(ctx, invokeInputs, sess, streamModes)
+				if err != nil {
+					logger.Error(logComponent).Err(err).Msg("runTaskLoopStream 启动失败")
+					return err
 				}
-				outCh <- chunk
-			}
-		} else {
-			ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
-			if err != nil {
-				logger.Error(logComponent).Err(err).Msg("runSingleRoundStream 启动失败")
-				return
-			}
-			for chunk := range ch {
-				chunkResult := resultFromStreamChunk(chunk, &streamOutputParts)
-				if chunkResult != nil {
-					streamResult = chunkResult
+				for chunk := range ch {
+					chunkResult := resultFromStreamChunk(chunk, &streamOutputParts)
+					if chunkResult != nil {
+						streamResult = chunkResult
+					}
+					outCh <- chunk
 				}
-				outCh <- chunk
+			} else {
+				ch, err := d.runSingleRoundStream(ctx, invokeInputs, sess, streamModes)
+				if err != nil {
+					logger.Error(logComponent).Err(err).Msg("runSingleRoundStream 启动失败")
+					return err
+				}
+				for chunk := range ch {
+					chunkResult := resultFromStreamChunk(chunk, &streamOutputParts)
+					if chunkResult != nil {
+						streamResult = chunkResult
+					}
+					outCh <- chunk
+				}
 			}
-		}
 
-		if streamResult == nil && len(streamOutputParts) > 0 {
-			streamResult = map[string]any{
-				"output":      joinStrings(streamOutputParts),
-				"result_type": "answer",
+			// 对齐 Python line 2354-2360: stream_result 合并
+			if streamResult == nil && len(streamOutputParts) > 0 {
+				streamResult = map[string]any{
+					"output":      joinStrings(streamOutputParts),
+					"result_type": "answer",
+				}
 			}
-		}
-		if streamResult != nil {
-			invokeInputs.Result = streamResult
-		}
+			if streamResult != nil {
+				invokeInputs.Result = streamResult
+			}
+			return nil
+		})
 
 		if sess != nil {
 			d.saveState(sess, nil)
@@ -605,7 +609,14 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hi
 	case "explore_agent":
 		return nil, fmt.Errorf("explore_agent 工厂尚未实现，⤵️ 9.30 回填")
 	default:
-		return nil, fmt.Errorf("create_deep_agent 尚未实现，⤵️ 9.3 回填")
+		// 通过 CreateDeepAgent 工厂创建子 Agent 实例
+		kwargs := d.buildSubagentCreateKwargs(subCfg, subSessionID)
+		createParams := buildCreateParamsFromSubagentKwargs(kwargs)
+		subAgent, createErr := CreateDeepAgent(context.Background(), createParams)
+		if createErr != nil {
+			return nil, fmt.Errorf("创建子 Agent 失败: %w", createErr)
+		}
+		return subAgent, nil
 	}
 }
 
@@ -806,8 +817,15 @@ func (d *DeepAgent) Steer(ctx context.Context, msg string, sess *session.Session
 	}
 
 	// 对齐 Python: TaskInteractionEvent(interaction=[TextDataFrame(text=msg)])
-	// ⤵️ 9.6 回填：TaskInteractionEvent 构建逻辑
-	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: 走 channel，天然安全")
+	// 对齐 Python: controller.event_queue.publish_event_async(self.card.id, sess, event)
+	event := &cschema.TaskInteractionEvent{
+		Interaction: []cschema.DataFrame{&cschema.TextDataFrame{Text: msg}},
+	}
+	if err := ctrl.PublishEventAsync(ctx, s, event); err != nil {
+		logger.Warn(logComponent).Err(err).Str("msg", msg).Msg("Steer 发布 TaskInteractionEvent 失败")
+		return
+	}
+	logger.Debug(logComponent).Str("msg", msg).Msg("Steer: TaskInteractionEvent 已发布")
 }
 
 // Abort 请求立即中止任务循环。
@@ -1445,7 +1463,20 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 func (d *DeepAgent) normalizeInputs(inputs any) *rail.InvokeInputs {
 	switch v := inputs.(type) {
 	case map[string]any:
-		query, _ := v["query"].(string)
+		var query rail.InvokeQuery
+		// query 字段可能是 string 或 InteractiveInput
+		if q, ok := v["query"]; ok {
+			switch qv := q.(type) {
+			case string:
+				query = rail.InvokeQueryString(qv)
+			case *interaction.InteractiveInput:
+				query = qv
+			default:
+				query = rail.InvokeQueryString(fmt.Sprintf("%v", qv))
+			}
+		} else {
+			query = rail.InvokeQueryString("")
+		}
 		conversationID, _ := v["conversation_id"].(string)
 		var runKind rail.RunKind
 		var runContext *rail.RunContext
@@ -1454,18 +1485,33 @@ func (d *DeepAgent) normalizeInputs(inputs any) *rail.InvokeInputs {
 				runKind = rail.RunKind(kind)
 			}
 			if contextData, cOk := run["context"].(map[string]any); cOk {
+				// 对齐 Python: RunContext(**context_data) (line 1069)
 				runContext = &rail.RunContext{}
-				_ = contextData // ⤵️ 9.1 回填：RunContext 字段映射
+				if reason, ok := contextData["reason"].(string); ok {
+					runContext.Reason = rail.HeartbeatReason(reason)
+				}
+				if sessionID, ok := contextData["session_id"].(string); ok {
+					runContext.SessionID = sessionID
+				}
+				if mode, ok := contextData["context_mode"].(string); ok {
+					runContext.ContextMode = mode
+				}
+				if extra, ok := contextData["extra"].(map[string]any); ok {
+					runContext.Extra = extra
+				}
 			}
 		}
 		return &rail.InvokeInputs{
-			Query:          rail.InvokeQueryString(query),
+			Query:          query,
 			ConversationID: conversationID,
 			RunKind:        runKind,
 			RunContext:     runContext,
 		}
 	case string:
 		return &rail.InvokeInputs{Query: rail.InvokeQueryString(v)}
+	case *interaction.InteractiveInput:
+		// 对齐 Python: isinstance(inputs, InteractiveInput) → query = inputs
+		return &rail.InvokeInputs{Query: v}
 	default:
 		return &rail.InvokeInputs{Query: rail.InvokeQueryString(fmt.Sprintf("%v", v))}
 	}
@@ -1491,18 +1537,54 @@ func toEffectiveInputs(invokeInputs *rail.InvokeInputs) map[string]any {
 // 对齐 Python: DeepAgent._is_resume_input(invoke_inputs) (line 1106)
 func isResumeInput(invokeInputs *rail.InvokeInputs) bool {
 	// 对齐 Python: isinstance(invoke_inputs.query, InteractiveInput)
-	// ⤵️ 9.1 回填：InteractiveInput 类型检查
-	return false
+	return invokeInputs.Query != nil && invokeInputs.Query.IsInteractiveInput()
 }
 
 // resultFromStreamChunk 从流块构建 invoke 风格的结果。
 // 对齐 Python: DeepAgent._result_from_stream_chunk(chunk, output_parts) (line 1111)
 func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[string]any {
-	// ⤵️ 9.1 回填：流块结果提取逻辑
-	// 当前返回 nil，表示无结果
-	_ = chunk
-	_ = outputParts
-	return nil
+	// 只处理 OutputSchema 类型
+	outChunk, ok := chunk.(stream.OutputSchema)
+	if !ok {
+		return nil
+	}
+
+	chunkType := outChunk.Type
+	payload, ok := outChunk.Payload.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	switch chunkType {
+	case "llm_output":
+		// 对齐 Python: llm_output → 追加 content 到 outputParts
+		if content, ok := payload["content"].(string); ok {
+			*outputParts = append(*outputParts, content)
+		}
+		return nil
+
+	case "answer":
+		// 对齐 Python: answer → 从 payload 构建结果 dict
+		result := make(map[string]any, len(payload))
+		for k, v := range payload {
+			result[k] = v
+		}
+		if _, exists := result["result_type"]; !exists {
+			result["result_type"] = "answer"
+		}
+		if _, exists := result["output"]; !exists {
+			if content, ok := result["content"].(string); ok {
+				*outputParts = append(*outputParts, content)
+				result["output"] = content
+			} else {
+				return nil
+			}
+		}
+		return result
+
+	default:
+		return nil
+	}
 }
 
 // registerRailSelective 选择性路由 Rail 回调到正确的 Agent。
@@ -1569,7 +1651,7 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 			exception.WithMsg("任务循环模式需要 *session.Session 类型会话"))
 	}
 
-	loopCh, err := d.runTaskLoop(ctx, cbc, sessConcrete)
+	loopCh, err := d.runTaskLoop(ctx, cbc, sessConcrete, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1590,7 +1672,7 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 // invoke 和 stream 共用此方法：
 //   invoke: 从 channel 读取最后一轮结果
 //   stream: 后台goroutine从channel读取，每轮写入session流
-func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *rail.AgentCallbackContext, sess *session.Session) (<-chan map[string]any, error) {
+func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *rail.AgentCallbackContext, sess *session.Session, isStreaming bool) (<-chan map[string]any, error) {
 	modified, ok := cbc.Inputs().(*rail.InvokeInputs)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
@@ -1665,7 +1747,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *rail.AgentCallbackCont
 			}
 			logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
 
-			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), false, modified.RunKind, modified.RunContext); err != nil {
+			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), false, isStreaming, modified.RunKind, modified.RunContext); err != nil {
 				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
 				break
 			}
@@ -1744,6 +1826,9 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 //   后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
 //   前台: 从 session.StreamIterator() 读取chunk转发到 outCh
 func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
+	// 对齐 Python: _ = stream_modes（显式丢弃，task-loop stream 从 session.StreamIterator() 读取）
+	_ = streamModes
+
 	if sess == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
 			exception.WithMsg("任务循环模式需要会话"))
@@ -1768,7 +1853,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.In
 			_ = sessConcrete.CloseStream()
 		}()
 
-		loopCh, loopErr := d.runTaskLoop(ctx, cbc, sessConcrete)
+		loopCh, loopErr := d.runTaskLoop(ctx, cbc, sessConcrete, true)
 		if loopErr != nil {
 			// 对齐 Python line 2187-2189: except → 写入错误结果到流
 			d.writeRoundResultToStream(ctx, map[string]any{

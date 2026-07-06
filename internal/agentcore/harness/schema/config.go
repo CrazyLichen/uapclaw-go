@@ -78,7 +78,7 @@ type SubAgentConfig struct {
 	Rails []rail.AgentRail `json:"-"`
 	// Skills 技能名称列表
 	Skills []string `json:"skills,omitempty"`
-	// Backend 后端协议实例（any 占位，⤵️ 9.3 回填为 BackendProtocol 接口）
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any `json:"-"`
 	// Workspace 工作空间
 	Workspace *workspace.Workspace `json:"workspace,omitempty"`
@@ -186,7 +186,7 @@ type DeepAgentConfig struct {
 	Skills []string `json:"skills,omitempty"`
 	// EnableSkillDiscovery 是否启用技能发现
 	EnableSkillDiscovery bool `json:"enable_skill_discovery"`
-	// Backend 后端协议实例（any 占位，⤵️ 9.3 回填为 BackendProtocol 接口）
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any `json:"-"`
 	// SysOperation 系统操作实例
 	SysOperation sysop.SysOperation `json:"-"`

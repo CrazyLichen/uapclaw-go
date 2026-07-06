@@ -160,9 +160,11 @@ func (r *HarnessConfigRegistry) Load(configID string, model *llm.Model, params m
 	if len(workspaceRoot) > 0 {
 		wsRoot = workspaceRoot[0]
 	}
-	if err := builder.Build(resolved, model, wsRoot); err != nil {
+	result, err := builder.Build(resolved, model, wsRoot)
+	if err != nil {
 		return fmt.Errorf("构建 HarnessConfig '%s' 失败: %w", configID, err)
 	}
+	_ = result // 后续由调用方将 BuildResult 转换为 CreateDeepAgentParams
 
 	return nil
 }

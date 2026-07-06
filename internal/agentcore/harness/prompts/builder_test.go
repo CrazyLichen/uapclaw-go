@@ -111,6 +111,55 @@ func TestResolveLanguage_优先级(t *testing.T) {
 	}
 }
 
+// TestResolveLanguage_不支持的语言回退到默认 测试不支持的语言值回退到默认
+func TestResolveLanguage_不支持的语言回退到默认(t *testing.T) {
+	// 不支持的语言值应回退到默认语言
+	if lang := ResolveLanguage("jp"); lang != DefaultLanguage {
+		t.Errorf("不支持的语言应回退到默认，期望 %s，实际 %s", DefaultLanguage, lang)
+	}
+	if lang := ResolveLanguage("fr"); lang != DefaultLanguage {
+		t.Errorf("不支持的语言应回退到默认，期望 %s，实际 %s", DefaultLanguage, lang)
+	}
+
+	// 环境变量中不支持的语言也应回退
+	t.Setenv("AGENT_PROMPT_LANGUAGE", "de")
+	if lang := ResolveLanguage(""); lang != DefaultLanguage {
+		t.Errorf("环境变量不支持的语言应回退到默认，期望 %s，实际 %s", DefaultLanguage, lang)
+	}
+}
+
+// TestResolveLanguage_支持的语言正常返回 测试支持的语言值正常返回
+func TestResolveLanguage_支持的语言正常返回(t *testing.T) {
+	if lang := ResolveLanguage("cn"); lang != "cn" {
+		t.Errorf("期望 cn，实际 %s", lang)
+	}
+	if lang := ResolveLanguage("en"); lang != "en" {
+		t.Errorf("期望 en，实际 %s", lang)
+	}
+
+	// 环境变量中支持的语言
+	t.Setenv("AGENT_PROMPT_LANGUAGE", "en")
+	if lang := ResolveLanguage(""); lang != "en" {
+		t.Errorf("环境变量 en 应正常返回，实际 %s", lang)
+	}
+}
+
+// TestIsSupportedLanguage 测试语言支持校验
+func TestIsSupportedLanguage(t *testing.T) {
+	if !isSupportedLanguage("cn") {
+		t.Error("cn 应为支持的语言")
+	}
+	if !isSupportedLanguage("en") {
+		t.Error("en 应为支持的语言")
+	}
+	if isSupportedLanguage("jp") {
+		t.Error("jp 不应为支持的语言")
+	}
+	if isSupportedLanguage("") {
+		t.Error("空字符串不应为支持的语言")
+	}
+}
+
 // TestResolveMode 测试模式解析
 func TestResolveMode(t *testing.T) {
 	tests := []struct {

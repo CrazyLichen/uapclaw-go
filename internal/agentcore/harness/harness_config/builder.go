@@ -78,12 +78,71 @@ var railDottedToName = buildRailDottedToName()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Build 将 ResolvedHarnessConfig 组装为配置好的 DeepAgent。
+// Build 将 ResolvedHarnessConfig 转换为 CreateDeepAgentParams，
+// 供调用方传入 CreateDeepAgent() 工厂创建 DeepAgent。
 //
-// ⤵️ 9.3 回填：DeepAgent Factory 实现后补全 Build 逻辑（调用 create_deep_agent）。
 // 对齐 Python: HarnessConfigBuilder.build → create_deep_agent(config)。
-func (HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) error {
-	return fmt.Errorf("create_deep_agent 尚未实现，⤵️ 9.3 回填")
+// 注意：此方法返回 CreateDeepAgentParams 而非直接创建 DeepAgent，
+// 以避免 harness_config → harness 循环依赖。
+func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) (*BuildResult, error) {
+	if resolved == nil || resolved.Config == nil {
+		return nil, fmt.Errorf("resolved 配置不能为空")
+	}
+
+	config := resolved.Config
+	language := config.Language
+
+	// ── 1. Agent card ──
+	var agentName, agentDesc, agentID string
+	if config.Name != nil {
+		agentName = *config.Name
+	}
+	if config.Description != nil {
+		agentDesc = *config.Description
+	}
+	if config.ID != nil {
+		agentID = *config.ID
+	}
+	card := sasc.NewAgentCard(
+		sasc.WithAgentName(agentName),
+		sasc.WithAgentDescription(agentDesc),
+		sasc.WithAgentID(agentID),
+	)
+
+	// ── 2. Workspace ──
+	wsRoot := "./"
+	if len(workspaceRoot) > 0 && workspaceRoot[0] != "" {
+		wsRoot = workspaceRoot[0]
+	}
+
+	// ── 3. 构建 BuildResult ──
+	var systemPrompt string
+	if resolved.SystemPrompt != nil {
+		systemPrompt = *resolved.SystemPrompt
+	}
+
+	result := &BuildResult{
+		Card:             card,
+		SystemPrompt:     systemPrompt,
+		WorkspaceRoot:    wsRoot,
+		Language:         language,
+		MaxIterations:    15,
+		RestrictToWorkDir: true,
+	}
+
+	_ = config // 后续补全 tools/mcps/rails/skills 等资源的解析和注入
+	return result, nil
+}
+
+// BuildResult Build 方法的返回结果，
+// 包含构建 DeepAgent 所需的参数，由调用方转换为 CreateDeepAgentParams。
+type BuildResult struct {
+	Card             *sasc.AgentCard
+	SystemPrompt     string
+	WorkspaceRoot    string
+	Language         string
+	MaxIterations    int
+	RestrictToWorkDir bool
 }
 
 // GenerateHarnessConfigYAML 从 create_deep_agent 风格的参数生成 harness_config.yaml 字符串。
