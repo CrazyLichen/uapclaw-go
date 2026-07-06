@@ -57,17 +57,15 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 			Str("event_type", "LLM_CALL_ERROR").
 			Str("method", "SessionSpawnExecutor.ExecuteAbility").
 			Msg("查询任务失败")
-		ch <- e.buildErrorChunk(taskID, err.Error())
 		close(ch)
-		return ch, nil
+		return nil, err
 	}
 	if len(tasks) == 0 {
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Msg("未找到任务")
-		ch <- e.buildErrorChunk(taskID, "Task not found")
 		close(ch)
-		return ch, nil
+		return nil, fmt.Errorf("task %s not found", taskID)
 	}
 
 	task := tasks[0]
