@@ -8,6 +8,7 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -112,7 +113,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 			"query":           query,
 			"conversation_id": cid,
 		}
-		result, invokeErr := subAgent.ReactAgent().Invoke(ctx, effective)
+		result, invokeErr := subAgent.ReactAgent().Invoke(ctx, effective, agentinterfaces.WithSession(sess))
 
 		if invokeErr != nil {
 			// 异常路径
