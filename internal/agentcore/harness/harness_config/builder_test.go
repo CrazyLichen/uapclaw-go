@@ -284,15 +284,19 @@ func TestRailsToYAMLSpecs_空(t *testing.T) {
 	assert.Empty(t, specs)
 }
 
-// TestHarnessConfigBuilder_Build 测试 Builder.Build 桩实现
+// TestHarnessConfigBuilder_Build 测试 Builder.Build
 func TestHarnessConfigBuilder_Build(t *testing.T) {
 	builder := HarnessConfigBuilder{}
 	resolved := &ResolvedHarnessConfig{
 		Config: &HarnessConfig{SchemaVersion: DefaultSchemaVersion, Language: "cn"},
 	}
-	err := builder.Build(resolved, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "create_deep_agent 尚未实现")
+	result, err := builder.Build(resolved, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// 验证基本字段映射
+	assert.Equal(t, "cn", result.Language)
+	assert.Equal(t, 15, result.MaxIterations)
+	assert.True(t, result.RestrictToWorkDir)
 }
 
 // TestCreateSysOperation 测试 createSysOperation 桩实现

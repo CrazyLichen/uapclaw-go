@@ -10,6 +10,8 @@ import (
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	rail "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	sasc "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -84,7 +86,7 @@ var railDottedToName = buildRailDottedToName()
 // 对齐 Python: HarnessConfigBuilder.build → create_deep_agent(config)。
 // 注意：此方法返回 CreateDeepAgentParams 而非直接创建 DeepAgent，
 // 以避免 harness_config → harness 循环依赖。
-func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) (*BuildResult, error) {
+func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.Model, workspaceRoot ...string) (*CreateDeepAgentParams, error) {
 	if resolved == nil || resolved.Config == nil {
 		return nil, fmt.Errorf("resolved 配置不能为空")
 	}
@@ -109,40 +111,79 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 		sasc.WithAgentID(agentID),
 	)
 
-	// ── 2. Workspace ──
+	// ── 2. 语言解析（校验 + 回退） ──
+	resolvedLanguage := hprompts.ResolveLanguage(language)
+
+	// ── 3. Workspace ──
 	wsRoot := "./"
 	if len(workspaceRoot) > 0 && workspaceRoot[0] != "" {
 		wsRoot = workspaceRoot[0]
 	}
+	ws := workspace.NewWorkspace(wsRoot, resolvedLanguage)
 
-	// ── 3. 构建 BuildResult ──
+	// ── 4. 解析资源（tools/rails/mcps/skills） ──
+	// ⤵️ 9.38 回填：工具实例化实现后补全
+	resources := config.Resources
+	var tools []*tool.ToolCard
+	var extraRails []rail.AgentRail
+	var mcps []*mcptypes.McpServerConfig
+	var skills []string
+	var sysOperation sysop.SysOperation
+	if resources != nil {
+		resolvedTools, toolErr := resolveTools(resources, sysOperation)
+		if toolErr != nil {
+			return nil, fmt.Errorf("解析工具失败: %w", toolErr)
+		}
+		tools = resolvedTools
+
+		resolvedRails, railErr := resolveRails(resources)
+		if railErr != nil {
+			return nil, fmt.Errorf("解析 Rails 失败: %w", railErr)
+		}
+		extraRails = resolvedRails
+
+		resolvedMcps, mcpErr := resolveMcps(resources)
+		if mcpErr != nil {
+			return nil, fmt.Errorf("解析 MCPs 失败: %w", mcpErr)
+		}
+		mcps = resolvedMcps
+
+		if resources.Skills != nil {
+			skills = resources.Skills.Dirs
+		}
+	}
+
+	// ── 5. 构建 CreateDeepAgentParams ──
 	var systemPrompt string
 	if resolved.SystemPrompt != nil {
 		systemPrompt = *resolved.SystemPrompt
 	}
 
-	result := &BuildResult{
+	maxIter := 15
+	if config.MaxIterations != nil {
+		maxIter = *config.MaxIterations
+	}
+
+	result := &CreateDeepAgentParams{
+		Model:            model,
 		Card:             card,
 		SystemPrompt:     systemPrompt,
-		WorkspaceRoot:    wsRoot,
-		Language:         language,
-		MaxIterations:    15,
+		Mcps:             mcps,
+		Rails:            extraRails,
+		MaxIterations:    maxIter,
+		Workspace:        ws,
+		Skills:           skills,
+		SysOperation:     sysOperation,
+		Language:         resolvedLanguage,
 		RestrictToWorkDir: true,
 	}
 
-	_ = config // 后续补全 tools/mcps/rails/skills 等资源的解析和注入
-	return result, nil
-}
+	// 将解析出的 ToolCard 设置到 config.Tools 供后续使用
+	if len(tools) > 0 {
+		result.ToolInstances = nil // ToolCard → Tool 实例化待 9.38 回填
+	}
 
-// BuildResult Build 方法的返回结果，
-// 包含构建 DeepAgent 所需的参数，由调用方转换为 CreateDeepAgentParams。
-type BuildResult struct {
-	Card             *sasc.AgentCard
-	SystemPrompt     string
-	WorkspaceRoot    string
-	Language         string
-	MaxIterations    int
-	RestrictToWorkDir bool
+	return result, nil
 }
 
 // GenerateHarnessConfigYAML 从 create_deep_agent 风格的参数生成 harness_config.yaml 字符串。

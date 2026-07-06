@@ -136,7 +136,7 @@ type SubagentCreateParams struct {
 	Workspace *workspace.Workspace
 	// Skills 技能名称列表
 	Skills []string
-	// Backend 后端协议实例
+	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
 	Backend any
 	// SysOperation 系统操作实例
 	SysOperation sysop.SysOperation

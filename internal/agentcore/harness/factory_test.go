@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -313,7 +314,7 @@ func TestCreateDeepAgent_最小参数(t *testing.T) {
 	ensureResourceMgr()
 
 	ctx := context.Background()
-	agent, err := CreateDeepAgent(ctx, CreateDeepAgentParams{})
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{})
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 	// 默认卡片名称为 deep_agent
@@ -330,7 +331,7 @@ func TestCreateDeepAgent_自定义Card(t *testing.T) {
 		agentschema.WithAgentDescription("custom description"),
 	)
 	ctx := context.Background()
-	agent, err := CreateDeepAgent(ctx, CreateDeepAgentParams{
+	agent, err := CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
 		Card: customCard,
 	})
 	require.NoError(t, err)

@@ -3,16 +3,19 @@
 //
 // 本包对应 Python 中 openjiuwen/harness/harness_config/ 目录，实现从 YAML 文件
 // 到 ResolvedHarnessConfig 的完整管线：schema 定义 → loader 解析/模板渲染 →
-// builder 组装 → registry 发现/管理。
+// builder 组装。
+//
+// 注意：Registry（注册表发现 + Load 创建 DeepAgent）已移到 harness 包，
+// 因为 Load() 需要返回 *DeepAgent，而本包不能导入 harness（循环依赖）。
 //
 // 文件目录：
 //
 //	harness_config/
 //	├── doc.go           # 包文档
+//	├── params.go        # CreateDeepAgentParams 参数集定义
 //	├── schema.go        # YAML Schema 结构体定义与校验/序列化方法
 //	├── loader.go        # YAML 解析、模板渲染、配置加载
-//	├── builder.go       # 组装逻辑：内置注册表、工具/Rail/MCP 解析、YAML 生成
-//	└── registry.go      # HarnessConfig 注册表与发现机制
+//	└── builder.go       # 组装逻辑：内置注册表、工具/Rail/MCP 解析、YAML 生成
 //
 // 对应 Python 代码：openjiuwen/harness/harness_config/
 package harness_config

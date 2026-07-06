@@ -10,7 +10,9 @@
 //	harness/
 //	├── doc.go               # 包文档
 //	├── deep_agent.go        # DeepAgent 结构体及全部方法实现
-//	└── factory.go           # CreateDeepAgent 工厂函数及辅助函数
+//	├── factory.go           # CreateDeepAgent 工厂函数及辅助函数
+//	└── registry.go          # HarnessConfig 注册表、发现机制与 Load 创建
 //
-// 对应 Python 代码：openjiuwen/harness/deep_agent.py, openjiuwen/harness/factory.py
+// 对应 Python 代码：openjiuwen/harness/deep_agent.py, openjiuwen/harness/factory.py,
+// openjiuwen/harness/harness_config/registry.py
 package harness

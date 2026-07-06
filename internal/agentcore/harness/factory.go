@@ -15,6 +15,7 @@ import (
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -23,64 +24,6 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// CreateDeepAgentParams 创建 DeepAgent 的参数集。
-//
-// 对应 Python: create_deep_agent() 的全部关键字参数
-type CreateDeepAgentParams struct {
-	// Model 预构造的 Model 实例
-	Model *llm.Model
-	// Card Agent 身份卡片，nil 时创建默认卡片
-	Card *agentschema.AgentCard
-	// SystemPrompt 内层 ReActAgent 的系统提示词
-	SystemPrompt string
-	// ToolInstances Tool 实例列表，从中提取 ToolCard + 注册到 resource_mgr
-	ToolInstances []tool.Tool
-	// Mcps MCP 服务器配置列表
-	Mcps []*mcptypes.McpServerConfig
-	// Subagents 子 Agent 配置列表
-	Subagents []hschema.SubAgentConfig
-	// Rails AgentRail 实例列表
-	Rails []rail.AgentRail
-	// EnableTaskLoop 启用外层任务循环
-	EnableTaskLoop bool
-	// EnableAsyncSubagent 启用异步子 Agent 模式
-	EnableAsyncSubagent bool
-	// AddGeneralPurposeAgent 添加通用目的子 Agent
-	AddGeneralPurposeAgent bool
-	// MaxIterations 每次 invoke 的最大 ReAct 迭代次数
-	MaxIterations int
-	// Workspace 工作空间，nil 时创建默认
-	Workspace *workspace.Workspace
-	// Skills 技能定义列表
-	Skills []string
-	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
-	Backend any
-	// SysOperation 系统操作，nil 时自动创建默认
-	SysOperation sysop.SysOperation
-	// Language 提示词语言
-	Language string
-	// PromptMode 提示词模式
-	PromptMode hschema.PromptMode
-	// VisionModelConfig 视觉模型配置
-	VisionModelConfig *hschema.VisionModelConfig
-	// AudioModelConfig 音频模型配置
-	AudioModelConfig *hschema.AudioModelConfig
-	// EnableReadImageMultimodal 启用图像多模态读取
-	EnableReadImageMultimodal bool
-	// EnableTaskPlanning 启用任务规划
-	EnableTaskPlanning bool
-	// RestrictToWorkDir 限制文件访问到工作空间目录
-	RestrictToWorkDir bool
-	// DefaultMode 初始 Agent 模式
-	DefaultMode hschema.AgentMode
-	// ModelSelection 模型选择配置
-	ModelSelection []hschema.ModelSelectionEntry
-	// EnableSkillDiscovery 启用技能发现
-	EnableSkillDiscovery bool
-}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -99,7 +42,7 @@ type CreateDeepAgentParams struct {
 // 10. Rail 注册 (显式 + 默认自动添加)
 //
 // 对应 Python: openjiuwen/harness/factory.py create_deep_agent()
-func CreateDeepAgent(ctx context.Context, params CreateDeepAgentParams) (*DeepAgent, error) {
+func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) (*DeepAgent, error) {
 	// ── 步骤 1：默认 AgentCard ──
 	// 对齐 Python: factory.py L219-223
 	card := params.Card
@@ -498,7 +441,7 @@ func collectDisabledSkillsFromState(skillsDirs []string) []string {
 // ⤵️ 9.8-9.24 回填：SecurityRail/SkillUseRail/SubagentRail/TaskPlanningRail 具体实例化
 func addDefaultRails(
 	agent *DeepAgent,
-	params CreateDeepAgentParams,
+	params hconfig.CreateDeepAgentParams,
 	config *hschema.DeepAgentConfig,
 	effectiveSubagents []hschema.SubAgentConfig,
 	ws *workspace.Workspace,
@@ -560,15 +503,15 @@ func alreadyProvidedByType(typeMap map[reflect.Type]bool, _ string) bool {
 	return false
 }
 
-// buildCreateParamsFromSubagentKwargs 将 SubagentCreateParams 转换为 CreateDeepAgentParams。
+// buildCreateParamsFromSubagentKwargs 将 SubagentCreateParams 转换为 hconfig.CreateDeepAgentParams。
 // 用于 CreateSubagent 的 default 工厂分支调用 CreateDeepAgent。
 //
 // 对齐 Python: DeepAgent.create_subagent() 中 create_deep_agent(**create_kwargs)
-func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) CreateDeepAgentParams {
+func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) hconfig.CreateDeepAgentParams {
 	if kwargs == nil {
-		return CreateDeepAgentParams{}
+		return hconfig.CreateDeepAgentParams{}
 	}
-	return CreateDeepAgentParams{
+	return hconfig.CreateDeepAgentParams{
 		Model:                     kwargs.Model,
 		Card:                      kwargs.Card,
 		SystemPrompt:              kwargs.SystemPrompt,
