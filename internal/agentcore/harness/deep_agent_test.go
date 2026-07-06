@@ -1507,16 +1507,18 @@ func TestDeepAgent_hasPendingSessionSpawn(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_syncBuilderToActiveRails 同步 builder 到活跃 Rail
-func TestDeepAgent_syncBuilderToActiveRails(t *testing.T) {
+// TestDeepAgent_SystemPromptBuilder 系统提示词构建器访问
+func TestDeepAgent_SystemPromptBuilder(t *testing.T) {
 	d := newTestDeepAgent()
 
 	cfg := schema.NewDeepAgentConfig()
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
-	// 调用 syncBuilderToActiveRails（非导出，通过热重配置间接调用）
-	// 已经在 hotReconfigure 中调用，这里直接覆盖 ensureInitialized 路径
+	// 配置后 SystemPromptBuilder 不应为 nil
+	if d.SystemPromptBuilder() == nil {
+		t.Error("配置后 SystemPromptBuilder() 不应返回 nil")
+	}
 	if err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
@@ -3271,8 +3273,8 @@ func TestDeepAgent_createReactAgent_有ModelAndWorkspace(t *testing.T) {
 	require.NotNil(t, agent.ReactAgent())
 }
 
-// TestDeepAgent_syncBuilderToActiveRails_有RegisteredRails 有注册 Rail 时同步 builder
-func TestDeepAgent_syncBuilderToActiveRails_有RegisteredRails(t *testing.T) {
+// TestDeepAgent_SystemPromptBuilder_有RegisteredRails 有注册 Rail 时 SystemPromptBuilder 仍可访问
+func TestDeepAgent_SystemPromptBuilder_有RegisteredRails(t *testing.T) {
 	card := makeTestCard("deep-sba-rr", "test-deep-sba-rr")
 	agent := NewDeepAgent(card)
 
@@ -3284,28 +3286,20 @@ func TestDeepAgent_syncBuilderToActiveRails_有RegisteredRails(t *testing.T) {
 	// 初始化以注册 Rails
 	require.NoError(t, agent.EnsureInitialized(context.Background()))
 
-	// 热重配置触发 syncBuilderToActiveRails
+	// 热重配置后 SystemPromptBuilder 仍可访问
 	cfg2 := schema.NewDeepAgentConfig()
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg2))
 }
 
-// TestDeepAgent_syncBuilderToActiveRails_有StaleRails 有废弃 Rail 时同步 builder
-func TestDeepAgent_syncBuilderToActiveRails_有StaleRails(t *testing.T) {
+// TestDeepAgent_SystemPromptBuilder_未配置 未配置时返回 nil
+func TestDeepAgent_SystemPromptBuilder_未配置(t *testing.T) {
 	card := makeTestCard("deep-sba-sr", "test-deep-sba-sr")
 	agent := NewDeepAgent(card)
 
-	cfg := schema.NewDeepAgentConfig()
-	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
-	require.NoError(t, agent.EnsureInitialized(context.Background()))
-
-	// 注入 stale Rails
-	fr := &fakeAgentRail{}
-	agent.railsMu.Lock()
-	agent.staleRails = append(agent.staleRails, fr)
-	agent.railsMu.Unlock()
-
-	// syncBuilderToActiveRails 应遍历 staleRails
-	agent.syncBuilderToActiveRails()
+	// 未配置时 SystemPromptBuilder 返回 nil
+	if agent.SystemPromptBuilder() != nil {
+		t.Error("未配置时 SystemPromptBuilder() 应返回 nil")
+	}
 }
 
 // TestDeepAgent_runTaskLoopInvoke_非SessionFacade sess 不是 *session.Session 时返回错误

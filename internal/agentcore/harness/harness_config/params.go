@@ -29,8 +29,8 @@ type CreateDeepAgentParams struct {
 	ToolInstances []tool.Tool
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig
-	// Subagents 子 Agent 配置列表
-	Subagents []hschema.SubAgentConfig
+	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
+	Subagents []hschema.SubagentSpec
 	// Rails AgentRail 实例列表
 	Rails []rail.AgentRail
 	// EnableTaskLoop 启用外层任务循环

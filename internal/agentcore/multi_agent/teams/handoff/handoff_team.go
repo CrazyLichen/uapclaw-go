@@ -89,8 +89,17 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 	if runtime != nil {
 		tr = runtime
 	} else {
+		// 对齐 Python: BaseTeam._create_default_runtime()
+		// TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
+		// TeamConfig.message_timeout → MessageBusConfig.process_timeout
+		busCfg := team_runtime.NewMessageBusConfig(
+			team_runtime.WithMaxQueueSize(config.TeamConfig.MaxConcurrentMessages),
+			team_runtime.WithProcessTimeout(config.TeamConfig.MessageTimeout),
+			team_runtime.WithTeamID(teamID),
+		)
 		rtCfg := team_runtime.NewRuntimeConfig(
 			team_runtime.WithRuntimeTeamID(teamID),
+			team_runtime.WithRuntimeMessageBus(busCfg),
 		)
 		tr = team_runtime.NewTeamRuntime(*rtCfg)
 	}
@@ -134,26 +143,21 @@ func (t *HandoffTeam) Invoke(ctx context.Context, inputs map[string]any, opts ..
 	return result, nil
 }
 
-// Stream 流式调用团队，一次性 yield 完整结果后关闭。
+// Stream 流式调用团队，通过 standalone_stream_context 实现。
+// 后台 goroutine 运行 runChain，前台从 session.StreamIterator() 消费流式输出。
 //
-// 对应 Python: HandoffTeam.stream(message, session=None)
+// 对齐 Python: HandoffTeam.stream(message, session=None)
+// Python 使用 standalone_stream_context，Go 使用 StandaloneStreamContext 对齐。
 func (t *HandoffTeam) Stream(ctx context.Context, inputs map[string]any, opts ...maschema.TeamOption) (<-chan stream.Schema, error) {
-	result, err := t.Invoke(ctx, inputs, opts...)
-	if err != nil {
-		return nil, err
-	}
+	teamOpts := maschema.NewTeamOptions(opts...)
+	sess := teamOpts.Session
 
-	// 将结果包装为流式输出
-	resultMap, ok := result.(map[string]any)
-	if !ok {
-		resultMap = map[string]any{"result": result}
-	}
-
-	ch := make(chan stream.Schema, 2)
-	ch <- &stream.OutputSchema{Payload: resultMap, IsLastSchema: false}
-	ch <- &stream.OutputSchema{IsLastSchema: true}
-	close(ch)
-	return ch, nil
+	return teams.StandaloneStreamContext(ctx, t.runtime, t.card, inputs, sess,
+		func(teamSession *session.AgentTeamSession, _ string) error {
+			_, err := t.runChain(ctx, inputs, teamSession)
+			return err
+		},
+	)
 }
 
 // AddAgent 向团队注册 Agent。

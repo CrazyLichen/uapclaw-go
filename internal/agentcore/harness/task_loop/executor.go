@@ -31,6 +31,11 @@ type TaskLoopEventExecutor struct {
 	provider interfaces.DeepAgentInterface
 }
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口检查：TaskLoopEventExecutor 必须满足 modules.TaskExecutor
+var _ modules.TaskExecutor = (*TaskLoopEventExecutor)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskLoopEventExecutor 创建任务循环事件执行器。
@@ -202,6 +207,12 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		if rc, ok := task.Metadata["run_context"]; ok {
 			effective["run_context"] = rc
 		}
+		// 对齐 Python: _streaming=True 传递给 ReActAgent.invoke
+		// Python 中 task_loop_event_executor 始终传 _streaming=True，
+		// Go 中按 DeepAgent 调用模式区分：stream=true, invoke=false
+		if sv, ok := task.Metadata["_streaming"]; ok {
+			effective["_streaming"] = sv
+		}
 	}
 
 	// 步骤 14：注入 steering_queue
@@ -366,24 +377,6 @@ func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *module
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// getState 从会话加载 DeepAgentState。
-// 对齐 Python: TaskLoopEventExecutor._get_state
-func (e *TaskLoopEventExecutor) getState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
-	return e.provider.LoadState(sess)
-}
-
-// getPlanTask 从状态中获取指定任务 ID 的计划任务。
-func (e *TaskLoopEventExecutor) getPlanTask(state *hschema.DeepAgentState, taskID string) *hschema.TodoItem {
-	if state == nil || state.TaskPlan == nil {
-		return nil
-	}
-	return state.TaskPlan.GetTask(taskID)
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // MakeFilter 创建按任务 ID 过滤的 TaskFilter。
 func MakeFilter(taskID string) *modules.TaskFilter {
 	return &modules.TaskFilter{
@@ -414,6 +407,20 @@ func ExtractInteractiveInput(event *cschema.InputEvent) *interaction.Interactive
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// getState 从会话加载 DeepAgentState。
+// 对齐 Python: TaskLoopEventExecutor._get_state
+func (e *TaskLoopEventExecutor) getState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
+	return e.provider.LoadState(sess)
+}
+
+// getPlanTask 从状态中获取指定任务 ID 的计划任务。
+func (e *TaskLoopEventExecutor) getPlanTask(state *hschema.DeepAgentState, taskID string) *hschema.TodoItem {
+	if state == nil || state.TaskPlan == nil {
+		return nil
+	}
+	return state.TaskPlan.GetTask(taskID)
+}
+
 // isSensitive 读取 IS_SENSITIVE 环境变量，判断是否为敏感模式。
 // 默认为敏感模式（true），IS_SENSITIVE=false 时为非敏感模式。
 // 对齐 Python: UserConfig.is_sensitive() + base_client.go 已有模式
@@ -425,8 +432,3 @@ func isSensitive() bool {
 	}
 	return true
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 编译时接口检查：TaskLoopEventExecutor 必须满足 modules.TaskExecutor
-var _ modules.TaskExecutor = (*TaskLoopEventExecutor)(nil)

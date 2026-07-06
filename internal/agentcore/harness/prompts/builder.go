@@ -77,7 +77,7 @@ func (b *SystemPromptBuilder) Build() string {
 		if section == nil {
 			return ""
 		}
-		return section.Render(b.Language)
+		return section.Render(b.Language())
 	case hschema.PromptModeMinimal:
 		// MINIMAL 模式：仅渲染 MinimalSections 中的节
 		return b.buildWithFilter(func(s saprompt.PromptSection) bool {
@@ -155,7 +155,7 @@ func (b *SystemPromptBuilder) buildWithFilter(keep func(saprompt.PromptSection) 
 
 	parts := make([]string, 0, len(filtered))
 	for _, s := range filtered {
-		if content := s.Render(b.Language); content != "" {
+		if content := s.Render(b.Language()); content != "" {
 			parts = append(parts, content)
 		}
 	}

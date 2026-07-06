@@ -15,6 +15,7 @@ import (
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -931,8 +932,9 @@ type fakeRailAgentForAbility struct {
 	agentID string
 }
 
-func (f *fakeRailAgentForAbility) CallbackManager() *rail.AgentCallbackManager { return f.cbMgr }
-func (f *fakeRailAgentForAbility) AgentID() string                             { return f.agentID }
+func (f *fakeRailAgentForAbility) CallbackManager() *rail.AgentCallbackManager                      { return f.cbMgr }
+func (f *fakeRailAgentForAbility) AgentID() string                                                   { return f.agentID }
+func (f *fakeRailAgentForAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface        { return nil }
 
 // TestAbilityManager_Execute_forceFinish传播 验证子 toolCtx 的 force-finish 信号传播到父 cbc
 func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {

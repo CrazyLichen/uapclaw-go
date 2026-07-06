@@ -10,7 +10,7 @@
 //	├── doc.go           # 包文档
 //	├── agent_mode.go    # AgentMode 枚举及 JSON 序列化
 //	├── prompt_mode.go   # PromptMode 枚举及 JSON 序列化
-//	├── config.go        # DeepAgentConfig 及辅助类型（VisionModelConfig、AudioModelConfig、SubAgentConfig、ModelSelectionEntry）
+//	├── config.go        # DeepAgentConfig、SubagentSpec 及辅助类型（VisionModelConfig、AudioModelConfig、SubAgentConfig、ModelSelectionEntry）
 //	├── loop_event.go    # DeepLoopEventType 枚举及 DeepLoopEvent 结构体
 //	├── state.go         # PlanModeState、DeepAgentState 会话状态
 //	├── task.go          # TodoStatus 枚举、TodoItem、TaskPlan、ModelUsageRecord 任务计划类型

@@ -67,8 +67,17 @@ func NewHierarchicalTeam(card maschema.TeamCardInterface, config *HierarchicalTe
 	if runtime != nil {
 		tr = runtime
 	} else {
+		// 对齐 Python: BaseTeam._create_default_runtime()
+		// TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
+		// TeamConfig.message_timeout → MessageBusConfig.process_timeout
+		busCfg := team_runtime.NewMessageBusConfig(
+			team_runtime.WithMaxQueueSize(config.TeamConfig.MaxConcurrentMessages),
+			team_runtime.WithProcessTimeout(config.TeamConfig.MessageTimeout),
+			team_runtime.WithTeamID(teamID),
+		)
 		rtCfg := team_runtime.NewRuntimeConfig(
 			team_runtime.WithRuntimeTeamID(teamID),
+			team_runtime.WithRuntimeMessageBus(busCfg),
 		)
 		tr = team_runtime.NewTeamRuntime(*rtCfg)
 	}

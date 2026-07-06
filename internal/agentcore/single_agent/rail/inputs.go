@@ -221,6 +221,11 @@ func QueryFromInputs(inputs map[string]any) InvokeQuery {
 	if ii, ok := q.(*interaction.InteractiveInput); ok {
 		return ii
 	}
+	// InvokeQueryString 类型：DeepAgent.toEffectiveInputs 直接将 InvokeQuery 接口值放入 map，
+	// 需要 InvokeQueryString 类型断言才能正确解析
+	if qs, ok := q.(InvokeQueryString); ok {
+		return qs
+	}
 	// 字符串类型：普通查询路径
 	if s, ok := q.(string); ok {
 		return NewInvokeQueryString(s)

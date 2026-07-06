@@ -87,7 +87,9 @@ type DeepAgent struct {
 	railsMu sync.Mutex
 
 	// initialized 是否已初始化
-	initialized atomic.Bool
+	initialized bool
+	// initMu 初始化互斥锁，保护 ensureInitialized 的并发安全
+	initMu sync.Mutex
 	// invokeActive 是否有活跃 invoke
 	invokeActive atomic.Bool
 	// autoInvokeScheduled 是否已调度自动 invoke
@@ -187,7 +189,9 @@ func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.De
 		d.hotReconfigure(ctx, deepCfg)
 	}
 
-	d.initialized.Store(false)
+	d.initMu.Lock()
+	d.initialized = false
+	d.initMu.Unlock()
 	return nil
 }
 
@@ -369,6 +373,15 @@ func (d *DeepAgent) Config() agentinterfaces.AgentConfig {
 // 对齐 Python: BaseAgent.ability_manager 属性
 func (d *DeepAgent) AbilityManager() agentinterfaces.AbilityManagerInterface {
 	return d.abilityManager
+}
+
+// SystemPromptBuilder 返回系统提示词构建器。
+// 对齐 Python: DeepAgent.system_prompt_builder 属性
+func (d *DeepAgent) SystemPromptBuilder() saprompts.SystemPromptBuilderInterface {
+	if d.systemPromptBuilder != nil {
+		return d.systemPromptBuilder.SystemPromptBuilder
+	}
+	return nil
 }
 
 // CallbackManager 返回回调管理器。
@@ -634,13 +647,18 @@ func (d *DeepAgent) SetReactAgent(reactAgent *agents.ReActAgent, initd bool) {
 	d.configMu.Lock()
 	defer d.configMu.Unlock()
 	d.reactAgent = reactAgent
-	d.initialized.Store(initd)
+	d.initMu.Lock()
+	d.initialized = initd
+	d.initMu.Unlock()
 }
 
 // IsInitialized 返回是否已完成懒初始化。
 // 对齐 Python: DeepAgent.is_initialized 属性 (line 455)
 func (d *DeepAgent) IsInitialized() bool {
-	return d.initialized.Load()
+	d.initMu.Lock()
+	v := d.initialized
+	d.initMu.Unlock()
+	return v
 }
 
 // AddRail 同步排队一个 Rail 以便延迟注册。
@@ -1019,7 +1037,6 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	d.queuePendingRails(config)
-	d.syncBuilderToActiveRails()
 }
 
 // hotReloadRails 热重配置时循环废弃旧 Rail。
@@ -1213,28 +1230,6 @@ func (d *DeepAgent) hotReloadSystemPrompt(config *hschema.DeepAgentConfig) {
 	logger.Info(logComponent).Msg("[DeepAgent] 系统提示词热重载完成")
 }
 
-// syncBuilderToActiveRails 将当前 systemPromptBuilder 同步到活跃 Rail。
-// 对齐 Python: DeepAgent._sync_builder_to_active_rails() (line 397)
-func (d *DeepAgent) syncBuilderToActiveRails() {
-	d.railsMu.Lock()
-	defer d.railsMu.Unlock()
-
-	var allRails []rail.AgentRail
-	allRails = append(allRails, d.registeredRails...)
-	allRails = append(allRails, d.staleRails...)
-
-	for _, r := range allRails {
-		// 对齐 Python: if hasattr(rail, "system_prompt_builder")
-		if setter, ok := r.(interface {
-			SetSystemPromptBuilder(*saprompts.SystemPromptBuilder)
-		}); ok {
-			if d.systemPromptBuilder != nil {
-				setter.SetSystemPromptBuilder(d.systemPromptBuilder.SystemPromptBuilder)
-			}
-		}
-	}
-}
-
 // queuePendingRails 将配置驱动的 Rail 追加到待注册列表。
 // 对齐 Python: DeepAgent._queue_pending_rails(config) (line 408)
 func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
@@ -1355,9 +1350,13 @@ func (d *DeepAgent) createReactAgent() *agents.ReActAgent {
 // ensureInitialized 执行懒初始化。
 // 对齐 Python: DeepAgent._ensure_initialized() (line 813)
 func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
-	if d.initialized.Load() {
+	d.initMu.Lock()
+	if d.initialized {
+		d.initMu.Unlock()
 		return nil
 	}
+	// 整个初始化过程在锁内执行，防止并发重复初始化
+	defer d.initMu.Unlock()
 
 	d.configMu.RLock()
 	_ = d.deepConfig // ⤵️ 9.1 回填：init_cwd 逻辑（cfg.Workspace 非空时待实现）
@@ -1424,7 +1423,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 		d.railsMu.Unlock()
 	}
 
-	d.initialized.Store(true)
+	d.initialized = true
 	return nil
 }
 
@@ -2051,7 +2050,7 @@ func (d *DeepAgent) hasPendingSessionSpawn() bool {
 // findSubagentSpec 查找匹配 subagentType 的子 Agent 规格。
 // 返回 SubagentSpec 接口，可能是 *SubAgentConfig 或 *DeepAgent。
 // 对齐 Python: DeepAgent._find_subagent_spec(subagent_type) (line 1032)
-func (d *DeepAgent) findSubagentSpec(subagentType string) hinterfaces.SubagentSpec {
+func (d *DeepAgent) findSubagentSpec(subagentType string) hschema.SubagentSpec {
 	d.configMu.RLock()
 	cfg := d.deepConfig
 	d.configMu.RUnlock()
@@ -2060,15 +2059,11 @@ func (d *DeepAgent) findSubagentSpec(subagentType string) hinterfaces.SubagentSp
 		return nil
 	}
 
-	for i := range cfg.Subagents {
-		spec := &cfg.Subagents[i]
+	for _, spec := range cfg.Subagents {
 		if spec.SpecName() == subagentType {
 			return spec
 		}
 	}
-	// 对齐 Python: isinstance(spec, DeepAgent) → getattr(spec, "card", None).name == subagent_type
-	// ⤵️ 9.1 回填：搜索 DeepAgent 实例（需解决 schema→interfaces 循环依赖后，
-	// 将 Subagents 改为 []SubagentSpec 统一列表，届时此分支自然覆盖）
 	return nil
 }
 

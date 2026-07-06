@@ -33,7 +33,7 @@ func TestDefaultLanguage(t *testing.T) {
 func TestNewSystemPromptBuilder(t *testing.T) {
 	builder := NewSystemPromptBuilder()
 	assert.NotNil(t, builder)
-	assert.Equal(t, "cn", builder.Language)
+	assert.Equal(t, "cn", builder.Language())
 	assert.NotNil(t, builder.sections)
 	assert.Nil(t, builder.sectionsFilter)
 }
@@ -44,7 +44,7 @@ func TestNewSystemPromptBuilderWithFilter(t *testing.T) {
 		return sections
 	}
 	builder := NewSystemPromptBuilderWithFilter("en", filter)
-	assert.Equal(t, "en", builder.Language)
+	assert.Equal(t, "en", builder.Language())
 	assert.NotNil(t, builder.sectionsFilter)
 }
 
@@ -309,7 +309,7 @@ func TestNewSystemPromptBuilderWithPromptMode_None(t *testing.T) {
 // TestNewSystemPromptBuilderWithPromptMode_语言设置 验证语言设置正确
 func TestNewSystemPromptBuilderWithPromptMode_语言设置(t *testing.T) {
 	builder := NewSystemPromptBuilderWithPromptMode("en", hs.PromptModeFull)
-	assert.Equal(t, "en", builder.Language)
+	assert.Equal(t, "en", builder.Language())
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

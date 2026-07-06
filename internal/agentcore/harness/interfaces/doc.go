@@ -8,7 +8,7 @@
 //
 //	interfaces/
 //	├── doc.go           # 包文档
-//	└── deep_agent.go    # DeepAgentInterface + LoopCoordinatorInterface + SubagentSpec
+//	└── deep_agent.go    # DeepAgentInterface + LoopCoordinatorInterface
 //
 // 对应 Python 代码：openjiuwen/harness/deep_agent.py
 package interfaces

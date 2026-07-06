@@ -22,6 +22,26 @@ type PromptSection struct {
 	Priority int
 }
 
+// SystemPromptBuilderInterface 系统提示词构建器最小接口。
+//
+// 供 Rail 等消费者通过 RailAgent 接口访问 SystemPromptBuilder，
+// 避免依赖具体类型。saprompt.SystemPromptBuilder 和
+// hprompts.SystemPromptBuilder（嵌入 base）均隐式满足此接口。
+//
+// 对齐 Python: agent.system_prompt_builder 属性的类型约束
+type SystemPromptBuilderInterface interface {
+	// AddSection 添加或替换节
+	AddSection(section PromptSection) *SystemPromptBuilder
+	// RemoveSection 移除指定名称的节
+	RemoveSection(name string) *SystemPromptBuilder
+	// Language 返回当前语言
+	Language() string
+	// GetSection 按名称获取单个节
+	GetSection(name string) *PromptSection
+	// HasSection 检查节是否存在
+	HasSection(name string) bool
+}
+
 // SystemPromptBuilder 基于节的系统提示词构建器。
 //
 // 本类仅提供通用的节注册和渲染功能。
@@ -30,8 +50,8 @@ type PromptSection struct {
 //
 // 对应 Python: SystemPromptBuilder (openjiuwen/core/single_agent/prompts/builder.py)
 type SystemPromptBuilder struct {
-	// Language 当前语言（默认 "cn"）
-	Language string
+	// language 当前语言（默认 "cn"）
+	language string
 	// sectionsFilter 节过滤钩子，Build 时调用。nil 表示不过滤。
 	// 用于 harness 层的 PromptMode（FULL/MINIMAL/NONE）过滤。
 	// 对应 Python: SystemPromptBuilder._get_sections_for_build() 钩子方法
@@ -49,6 +69,10 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时验证 *SystemPromptBuilder 满足 SystemPromptBuilderInterface 接口。
+var _ SystemPromptBuilderInterface = (*SystemPromptBuilder)(nil)
+
 var (
 	// SupportedLanguages 支持的语言列表
 	// 对应 Python: SUPPORTED_LANGUAGES = ("cn", "en")
@@ -62,7 +86,7 @@ var (
 // 对应 Python: SystemPromptBuilder(language=DEFAULT_LANGUAGE)
 func NewSystemPromptBuilder() *SystemPromptBuilder {
 	return &SystemPromptBuilder{
-		Language: DefaultLanguage,
+		language: DefaultLanguage,
 		sections: make(map[string]PromptSection),
 	}
 }
@@ -72,7 +96,7 @@ func NewSystemPromptBuilder() *SystemPromptBuilder {
 // 对应 Python: harness/prompts/builder.py SystemPromptBuilder(language, mode) 子类构造
 func NewSystemPromptBuilderWithFilter(lang string, filter func([]PromptSection) []PromptSection) *SystemPromptBuilder {
 	return &SystemPromptBuilder{
-		Language:       lang,
+		language:       lang,
 		sectionsFilter: filter,
 		sections:       make(map[string]PromptSection),
 	}
@@ -165,6 +189,16 @@ func (b *SystemPromptBuilder) GetSection(name string) *PromptSection {
 	return nil
 }
 
+// Language 返回当前语言设置。
+func (b *SystemPromptBuilder) Language() string {
+	return b.language
+}
+
+// SetLanguage 设置当前语言。
+func (b *SystemPromptBuilder) SetLanguage(lang string) {
+	b.language = lang
+}
+
 // Build 按优先级排序并拼接为完整系统提示词。
 //
 // 安全多次调用，每次从当前所有注册节生成完整提示词。
@@ -178,7 +212,7 @@ func (b *SystemPromptBuilder) Build() string {
 
 	parts := make([]string, 0, len(sections))
 	for _, s := range sections {
-		if content := s.Render(b.Language); content != "" {
+		if content := s.Render(b.language); content != "" {
 			parts = append(parts, content)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 )
 
@@ -19,8 +20,9 @@ type fakeRailAgent struct {
 	agentID string
 }
 
-func (f *fakeRailAgent) CallbackManager() *AgentCallbackManager { return f.cbMgr }
-func (f *fakeRailAgent) AgentID() string                        { return f.agentID }
+func (f *fakeRailAgent) CallbackManager() *AgentCallbackManager                    { return f.cbMgr }
+func (f *fakeRailAgent) AgentID() string                                             { return f.agentID }
+func (f *fakeRailAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface  { return nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

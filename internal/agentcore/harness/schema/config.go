@@ -18,6 +18,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SubagentSpec 子 Agent 规格接口。
+// 允许 *SubAgentConfig 和 *DeepAgent 以统一类型返回。
+// 对齐 Python: _find_subagent_spec 返回 Optional[SubAgentConfig | DeepAgent]。
+// 放在 schema 包以避免 schema↔interfaces 循环依赖。
+type SubagentSpec interface {
+	// SpecName 返回规格名称，用于匹配 subagent_type。
+	SpecName() string
+}
+
 // VisionModelConfig 视觉模型运行时配置
 type VisionModelConfig struct {
 	// APIKey API 密钥
@@ -102,16 +111,6 @@ type SubAgentConfig struct {
 	RestrictToWorkDir bool `json:"restrict_to_work_dir"`
 }
 
-// SpecName 返回规格名称，用于子 Agent 匹配。
-// 实现 interfaces.SubagentSpec 接口。
-// 对齐 Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
-func (c *SubAgentConfig) SpecName() string {
-	if c.AgentCard == nil {
-		return ""
-	}
-	return c.AgentCard.Name
-}
-
 // SubagentCreateParams 子 Agent 创建参数。
 // 对齐 Python: DeepAgent.create_subagent 中 create_kwargs 字典。
 // 替代 map[string]any，提供类型安全的参数传递。
@@ -174,8 +173,9 @@ type DeepAgentConfig struct {
 	AddGeneralPurposeAgent bool `json:"add_general_purpose_agent"`
 	// MaxIterations 单次调用最大 ReAct 迭代次数，0 表示使用默认值 15
 	MaxIterations int `json:"max_iterations,omitempty"`
-	// Subagents 子 Agent 配置列表
-	Subagents []SubAgentConfig `json:"subagents,omitempty"`
+	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
+	// 对齐 Python: subagents: Optional[List[SubAgentConfig | DeepAgent]] = None
+	Subagents []SubagentSpec `json:"-"`
 	// Tools 挂载到 Agent 的工具卡片
 	Tools []*tool.ToolCard `json:"tools,omitempty"`
 	// Mcps 挂载到 Agent 的 MCP 服务器配置
@@ -256,6 +256,16 @@ const (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// SpecName 返回规格名称，用于子 Agent 匹配。
+// 实现 SubagentSpec 接口。
+// 对齐 Python: isinstance(spec, SubAgentConfig) 时通过 spec.agent_card.name 匹配。
+func (c *SubAgentConfig) SpecName() string {
+	if c.AgentCard == nil {
+		return ""
+	}
+	return c.AgentCard.Name
+}
 
 // NewVisionModelConfig 创建带默认值的视觉模型配置
 func NewVisionModelConfig() *VisionModelConfig {
@@ -353,10 +363,15 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 }
 
 // NewDeepAgentConfig 创建带默认值的 DeepAgent 配置
+// 对齐 Python: DeepAgentConfig 字段默认值（max_iterations=15, completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
 		AutoCreateWorkspace:       true,
 		EnableReadImageMultimodal: true,
+		MaxIterations:             DefaultMaxIterations,
+		CompletionTimeout:         DefaultCompletionTimeout,
+		ProgressiveToolMaxLoadedTools: DefaultProgressiveToolMax,
+		Language:                  DefaultLanguage,
 	}
 }
 

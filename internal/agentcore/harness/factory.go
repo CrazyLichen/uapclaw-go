@@ -238,7 +238,7 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 // 对应 Python: _inject_general_purpose_subagent()
 // ⤵️ 9.8-9.24 回填：SubagentRail/SysOperationRail 类型断言，当前跳过过滤
 func injectGeneralPurposeSubagent(
-	subagents []hschema.SubAgentConfig,
+	subagents []hschema.SubagentSpec,
 	addGeneralPurposeAgent bool,
 	resolvedLanguage string,
 	rails []rail.AgentRail,
@@ -247,8 +247,8 @@ func injectGeneralPurposeSubagent(
 	mcps []*mcptypes.McpServerConfig,
 	model *llm.Model,
 	skills []string,
-) []hschema.SubAgentConfig {
-	effectiveSubagents := make([]hschema.SubAgentConfig, len(subagents))
+) []hschema.SubagentSpec {
+	effectiveSubagents := make([]hschema.SubagentSpec, len(subagents))
 	copy(effectiveSubagents, subagents)
 
 	if !addGeneralPurposeAgent {
@@ -258,7 +258,7 @@ func injectGeneralPurposeSubagent(
 	// 检查是否已存在 general-purpose 子 Agent
 	hasGP := false
 	for _, s := range effectiveSubagents {
-		if s.AgentCard != nil && s.AgentCard.GetName() == "general-purpose" {
+		if subCfg, ok := s.(*hschema.SubAgentConfig); ok && subCfg.AgentCard != nil && subCfg.AgentCard.GetName() == "general-purpose" {
 			hasGP = true
 			break
 		}
@@ -303,7 +303,7 @@ func injectGeneralPurposeSubagent(
 		RestrictToWorkDir: false,
 	}
 
-	effectiveSubagents = append([]hschema.SubAgentConfig{gpConfig}, effectiveSubagents...)
+	effectiveSubagents = append([]hschema.SubagentSpec{&gpConfig}, effectiveSubagents...)
 	logger.Info(logComponent).Str("language", resolvedLanguage).Msg("已注入 general-purpose 子 Agent")
 	return effectiveSubagents
 }
@@ -443,7 +443,7 @@ func addDefaultRails(
 	agent *DeepAgent,
 	params hconfig.CreateDeepAgentParams,
 	config *hschema.DeepAgentConfig,
-	effectiveSubagents []hschema.SubAgentConfig,
+	effectiveSubagents []hschema.SubagentSpec,
 	ws *workspace.Workspace,
 	resolvedLanguage string,
 ) {

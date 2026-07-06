@@ -265,11 +265,13 @@ func (t *SessionsSpawnTool) Invoke(ctx context.Context, inputs map[string]any, o
 	taskID := uuid.New().String()
 	callOpts := tool.NewToolCallOptions(opts...)
 	session := callOpts.Session
+	if session == nil {
+		return nil, exception.BuildError(exception.StatusToolSessionToolInvoked,
+			exception.WithParam("reason", "SessionsSpawnTool requires a valid session"))
+	}
 	parentSessionID := ""
-	if session != nil {
-		if sess, ok := session.(interface{ GetSessionID() string }); ok {
-			parentSessionID = sess.GetSessionID()
-		}
+	if sess, ok := session.(interface{ GetSessionID() string }); ok {
+		parentSessionID = sess.GetSessionID()
 	}
 	subSessionID := fmt.Sprintf("%s_sub_%s", parentSessionID, generateTokenHex(4))
 

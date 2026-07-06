@@ -26,9 +26,13 @@ type RailAgent interface {
 	// AgentID 返回 Agent 唯一标识
 	// ⤴️ 6.7 定义；BaseAgent 通过 Card().ID 隐式满足
 	AgentID() string
+	// SystemPromptBuilder 返回系统提示词构建器
+	//
+	// 对齐 Python: agent.system_prompt_builder 属性
+	SystemPromptBuilder() saprompt.SystemPromptBuilderInterface
 	// ⤵️ 后续 Rail 子类实现时按需扩充：
-	// AbilityManager() — 工具注册/注销（MemoryRail, SkillUseRail 等需要）
-	// SystemPromptBuilder() — 系统提示词构建器（多数 Rail init 中需要）
+	// AbilityManager() — 因 rail → interfaces 循环依赖暂不加入接口，
+	//   Rail Init 中通过类型断言 agent.(interface{ AbilityManager() ... }) 访问
 	// Card() — Agent 元数据（agent.card.id 等场景）
 	// DeepConfig() — 深层配置（HeartbeatRail 等需要）
 }

@@ -324,21 +324,6 @@ func (r ModelUsageRecord) String() string {
 	return fmt.Sprintf("%s: input=%d, output=%d", r.ModelID, r.InputTokens, r.OutputTokens)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）
-func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
-	for _, depID := range task.DependsOn {
-		dep := tp.GetTask(depID)
-		if dep == nil || (dep.Status != TodoStatusCompleted && dep.Status != TodoStatusCancelled) {
-			return false
-		}
-	}
-	return true
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // String 返回 TodoStatus 的字符串表示
 func (s TodoStatus) String() string {
 	switch s {
@@ -372,4 +357,17 @@ func (s *TodoStatus) UnmarshalJSON(data []byte) error {
 	}
 	*s = parsed
 	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// allDepsCompleted 检查任务的所有依赖项是否已完成（Completed 或 Cancelled 均视为完成）
+func (tp *TaskPlan) allDepsCompleted(task TodoItem) bool {
+	for _, depID := range task.DependsOn {
+		dep := tp.GetTask(depID)
+		if dep == nil || (dep.Status != TodoStatusCompleted && dep.Status != TodoStatusCancelled) {
+			return false
+		}
+	}
+	return true
 }

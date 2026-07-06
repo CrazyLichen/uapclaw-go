@@ -226,7 +226,7 @@ func TestTaskLoopController_SubmitRound_无Handler(t *testing.T) {
 	// 未 Init，EventHandler 为 nil
 
 	sess := session.NewSession()
-	err := tc.SubmitRound(context.Background(), sess, "test query", false, "", nil)
+	err := tc.SubmitRound(context.Background(), sess, "test query", false, false, "", nil)
 	// handler 为 nil 时直接返回 nil
 	assert.Nil(t, err)
 }
@@ -249,7 +249,7 @@ func TestTaskLoopController_SubmitRound_正常提交(t *testing.T) {
 	err = tc.BindSession(context.Background(), sess)
 	require.NoError(t, err)
 
-	err = tc.SubmitRound(context.Background(), sess, "test query", false, "", nil)
+	err = tc.SubmitRound(context.Background(), sess, "test query", false, false, "", nil)
 	assert.NoError(t, err)
 }
 
@@ -270,7 +270,7 @@ func TestTaskLoopController_SubmitRound_FollowUp(t *testing.T) {
 	err = tc.BindSession(context.Background(), sess)
 	require.NoError(t, err)
 
-	err = tc.SubmitRound(context.Background(), sess, "follow up query", true, rail.RunKindHeartbeat, nil)
+	err = tc.SubmitRound(context.Background(), sess, "follow up query", true, false, rail.RunKindHeartbeat, nil)
 	assert.NoError(t, err)
 }
 
@@ -292,7 +292,7 @@ func TestTaskLoopController_SubmitRound_带RunContext(t *testing.T) {
 	require.NoError(t, err)
 
 	runCtx := &rail.RunContext{Reason: "test"}
-	err = tc.SubmitRound(context.Background(), sess, "query", false, rail.RunKindCron, runCtx)
+	err = tc.SubmitRound(context.Background(), sess, "query", false, true, rail.RunKindCron, runCtx)
 	assert.NoError(t, err)
 }
 

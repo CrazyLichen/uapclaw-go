@@ -154,6 +154,16 @@ func (a *ReActAgent) PromptBuilder() *prompts.SystemPromptBuilder {
 	return a.promptBuilder
 }
 
+// SystemPromptBuilder 返回系统提示词构建器接口（满足 RailAgent 接口）。
+//
+// 委托给 PromptBuilder()，对齐 Python: ReActAgent.system_prompt_builder 属性
+func (a *ReActAgent) SystemPromptBuilder() prompts.SystemPromptBuilderInterface {
+	if a.promptBuilder != nil {
+		return a.promptBuilder
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // updateSkillPromptBuilderSection 更新技能提示词区段。

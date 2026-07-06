@@ -3,6 +3,7 @@ package hierarchical_tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	maschema "github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/multi_agent/team_runtime"
@@ -175,7 +176,14 @@ func (t *HierarchicalToolsTeam) Stream(ctx context.Context, inputs map[string]an
 
 	teamOpts := maschema.NewTeamOptions(opts...)
 	sess := teamOpts.Session
-	_ = teamOpts.Timeout // TODO: 将 timeout 传递给 StandaloneStreamContext
+	timeout := teamOpts.Timeout
+
+	// 如果有 timeout，给 ctx 加 deadline
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeout*float64(time.Second)))
+		defer cancel()
+	}
 
 	logger.Debug(toolsLogComponent).
 		Str("action", "hierarchical_tools_stream").

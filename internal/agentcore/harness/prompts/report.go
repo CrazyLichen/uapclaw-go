@@ -56,7 +56,7 @@ const (
 //
 // 对应 Python: PromptReport.from_builder(builder)
 func NewPromptReport(builder *SystemPromptBuilder) *PromptReport {
-	language := builder.Language
+	language := builder.Language()
 	mode := builder.mode.String()
 
 	allSections := builder.GetAllSections()

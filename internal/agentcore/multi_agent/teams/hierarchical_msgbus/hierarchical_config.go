@@ -31,6 +31,7 @@ const (
 // NewHierarchicalTeamConfig 创建默认 HierarchicalTeamConfig。
 func NewHierarchicalTeamConfig() *HierarchicalTeamConfig {
 	return &HierarchicalTeamConfig{
-		Timeout: defaultP2PTimeout,
+		TeamConfig: *maschema.NewTeamConfig(),
+		Timeout:    defaultP2PTimeout,
 	}
 }

@@ -11,8 +11,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // interactionQueuesProvider 类型断言接口，用于从 EventHandler 获取 LoopQueues。
@@ -22,8 +20,6 @@ type interactionQueuesProvider interface {
 	InteractionQueues() *LoopQueues
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
 // TaskLoopController 任务循环控制器，嵌入 Controller 并扩展轮次管理能力。
 // 封装轮次提交/等待/完成、follow-up 队列操作和循环退出逻辑，
 // 是 DeepAgent 外层循环的"方向盘"。
@@ -31,6 +27,15 @@ type interactionQueuesProvider interface {
 type TaskLoopController struct {
 	*controller.Controller
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 确保 TaskLoopController 满足 ControllerInterface
+var _ controller.ControllerInterface = (*TaskLoopController)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -52,6 +57,7 @@ func (tc *TaskLoopController) SubmitRound(
 	sess *session.Session,
 	query string,
 	isFollowUp bool,
+	isStreaming bool,
 	runKind rail.RunKind,
 	runContext *rail.RunContext,
 ) error {
@@ -77,6 +83,10 @@ func (tc *TaskLoopController) SubmitRound(
 	if isFollowUp {
 		meta["is_follow_up"] = true
 	}
+	// 对齐 Python: _streaming=True 传递给 executor
+	// Python 中始终为 True（unbounded queue 不阻塞），
+	// Go 中按需区分（buffered channel 需要区分以避免阻塞）
+	meta["_streaming"] = isStreaming
 	if runKind != "" {
 		meta["run_kind"] = string(runKind)
 	}
@@ -88,6 +98,7 @@ func (tc *TaskLoopController) SubmitRound(
 	logger.Info(logComponent).
 		Int("round_id", roundID).
 		Bool("is_follow_up", isFollowUp).
+		Bool("is_streaming", isStreaming).
 		Str("run_kind", string(runKind)).
 		Msg("提交任务轮次")
 
@@ -160,8 +171,3 @@ func (tc *TaskLoopController) getInteractionQueues() *LoopQueues {
 	}
 	return provider.InteractionQueues()
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 确保 TaskLoopController 满足 ControllerInterface
-var _ controller.ControllerInterface = (*TaskLoopController)(nil)

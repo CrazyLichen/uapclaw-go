@@ -51,11 +51,3 @@ type LoopCoordinatorInterface interface {
 	// RequestAbort 请求中止循环
 	RequestAbort()
 }
-
-// SubagentSpec 子 Agent 规格接口。
-// 允许 *DeepAgent 和 *SubAgentConfig 以统一类型返回。
-// 对齐 Python: _find_subagent_spec 返回 Optional[SubAgentConfig | DeepAgent]。
-type SubagentSpec interface {
-	// SpecName 返回规格名称，用于匹配 subagent_type。
-	SpecName() string
-}

@@ -3,6 +3,7 @@ package task_loop
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -586,28 +587,37 @@ func extractErrorFromEvent(input *modules.EventHandlerInput) string {
 
 // formatSessionSpawnSteer 格式化 SessionSpawn 完成后的引导文本。
 // 对齐 Python: TaskLoopEventHandler._format_session_spawn_steer
+// 使用模板表结构，新增语言只需添加一个 entry。
 func formatSessionSpawnSteer(taskDescription string, isError bool, result string, err string, language string) string {
-	var steer string
+	// 对齐 Python: templates = {"cn": {"error": "...", "success": "..."}, "en": {...}}
+	steerTemplates := map[string]map[string]string{
+		"cn": {
+			"error":   "[后台任务失败] 任务描述={task_description}, 错误={detail}",
+			"success": "[后台任务完成] 任务描述={task_description}, 结果={detail}",
+		},
+		"en": {
+			"error":   "[Background task failed] Task Description={task_description}, Error={detail}",
+			"success": "[Background task completed] Task Description={task_description}, Result={detail}",
+		},
+	}
+
+	langTemplates, ok := steerTemplates[language]
+	if !ok {
+		langTemplates = steerTemplates["cn"]
+	}
+
+	key := "error"
 	detail := err
 	if !isError {
+		key = "success"
 		detail = result
 	}
 
-	if language == "en" {
-		if isError {
-			steer = fmt.Sprintf("[Background task failed] Task Description=%s, Error=%s", taskDescription, detail)
-		} else {
-			steer = fmt.Sprintf("[Background task completed] Task Description=%s, Result=%s", taskDescription, detail)
-		}
-	} else {
-		if isError {
-			steer = fmt.Sprintf("[后台任务失败] 任务描述=%s, 错误=%s", taskDescription, detail)
-		} else {
-			steer = fmt.Sprintf("[后台任务完成] 任务描述=%s, 结果=%s", taskDescription, detail)
-		}
-	}
-
-	return steer
+	template := langTemplates[key]
+	return strings.ReplaceAll(
+		strings.ReplaceAll(template, "{task_description}", taskDescription),
+		"{detail}", detail,
+	)
 }
 
 // extractQuery 从事件中提取查询文本。
