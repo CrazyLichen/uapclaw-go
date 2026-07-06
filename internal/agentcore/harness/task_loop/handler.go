@@ -473,6 +473,12 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 //
 // 对齐 Python: TaskLoopEventHandler._complete_session_spawn
 func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *modules.EventHandlerInput, isError bool) {
+	// 加锁读取 sessionToolkit 和 interactionQueues（对齐 SetSessionToolkit/SetInteractionQueues 的锁模式）
+	h.mu.Lock()
+	sessionToolkit := h.sessionToolkit
+	interactionQueues := h.interactionQueues
+	h.mu.Unlock()
+
 	var resultStr string
 	var errorStr string
 	if isError {
@@ -482,11 +488,11 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *module
 	}
 
 	// 更新 SessionToolkit
-	if h.sessionToolkit != nil {
+	if sessionToolkit != nil {
 		if isError {
-			h.sessionToolkit.MarkFailed(taskID, errorStr)
+			sessionToolkit.MarkFailed(taskID, errorStr)
 		} else {
-			h.sessionToolkit.MarkCompleted(taskID, resultStr)
+			sessionToolkit.MarkCompleted(taskID, resultStr)
 		}
 	}
 
@@ -509,8 +515,8 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *module
 	// 两路分支
 	if h.provider.IsInvokeActive() {
 		// 路径 1：有活跃 invoke → push_steer
-		if h.interactionQueues != nil {
-			h.interactionQueues.PushSteer(steerText)
+		if interactionQueues != nil {
+			interactionQueues.PushSteer(steerText)
 		}
 		logger.Info(logComponent).
 			Str("task_id", taskID).
