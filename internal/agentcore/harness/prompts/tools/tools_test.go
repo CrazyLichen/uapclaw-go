@@ -337,3 +337,72 @@ func (p *testBadProvider) GetInputParams(language string) map[string]any {
 		"required": []any{"bar"},
 	}
 }
+
+// ──────────────────────────── BuildToolCard 测试 ────────────────────────────
+
+func TestBuildToolCard_已注册工具(t *testing.T) {
+	card, err := BuildToolCard("search_tools", "SearchToolsTool", "cn", nil, "agent1")
+	if err != nil {
+		t.Fatalf("BuildToolCard 失败: %v", err)
+	}
+	if card.GetName() != "search_tools" {
+		t.Errorf("GetName() = %q, 期望 %q", card.GetName(), "search_tools")
+	}
+	if !strings.Contains(card.GetID(), "SearchToolsTool_agent1") {
+		t.Errorf("GetID() = %q, 应包含 'SearchToolsTool_agent1'", card.GetID())
+	}
+	if card.GetDescription() == "" {
+		t.Error("GetDescription() 不应为空")
+	}
+	if len(card.InputParams) == 0 {
+		t.Error("InputParams 不应为空")
+	}
+}
+
+func TestBuildToolCard_双语切换(t *testing.T) {
+	cardCN, err1 := BuildToolCard("search_tools", "SearchToolsTool", "cn", nil, "")
+	if err1 != nil {
+		t.Fatalf("BuildToolCard cn 失败: %v", err1)
+	}
+	cardEN, err2 := BuildToolCard("search_tools", "SearchToolsTool", "en", nil, "")
+	if err2 != nil {
+		t.Fatalf("BuildToolCard en 失败: %v", err2)
+	}
+	// 中文和英文描述应该不同
+	if cardCN.GetDescription() == cardEN.GetDescription() {
+		t.Error("cn 和 en 描述应不同")
+	}
+}
+
+func TestBuildToolCard_未注册工具报错(t *testing.T) {
+	_, err := BuildToolCard("nonexistent", "Xxx", "cn", nil, "")
+	if err == nil {
+		t.Error("未注册工具应返回错误")
+	}
+	if !strings.Contains(err.Error(), "not registered") {
+		t.Errorf("错误信息应包含 'not registered'，实际: %v", err)
+	}
+}
+
+func TestBuildToolCard_formatArgs填充(t *testing.T) {
+	// sessions_spawn 使用 {available_agents} 占位符
+	card, err := BuildToolCard("sessions_spawn", "sessions_spawn", "cn",
+		map[string]string{"available_agents": "general-purpose,react"}, "agent1")
+	if err != nil {
+		t.Fatalf("BuildToolCard formatArgs 失败: %v", err)
+	}
+	if !strings.Contains(card.GetDescription(), "general-purpose,react") {
+		t.Errorf("描述应包含 formatArgs 填充的内容，实际: %s", card.GetDescription())
+	}
+}
+
+func TestBuildToolCard_无AgentID时自动生成UUID(t *testing.T) {
+	card, err := BuildToolCard("search_tools", "SearchToolsTool", "en", nil, "")
+	if err != nil {
+		t.Fatalf("BuildToolCard 失败: %v", err)
+	}
+	// 当 agentID 为空时，ID 应包含 toolID + "_" + uuid 前 8 位
+	if !strings.Contains(card.GetID(), "SearchToolsTool_") {
+		t.Errorf("GetID() = %q, 应包含 'SearchToolsTool_'", card.GetID())
+	}
+}

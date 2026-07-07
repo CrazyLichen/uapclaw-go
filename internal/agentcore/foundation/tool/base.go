@@ -155,6 +155,21 @@ func NewToolCard(name, description string, inputParams []*schema.Param, properti
 	return card
 }
 
+// NewToolCardWithID 创建 ToolCard 实例，使用指定 ID。
+//
+// 对齐 Python: build_tool_card 中的 tool_id 生成逻辑。
+func NewToolCardWithID(id, name, description string, inputParams []*schema.Param, properties map[string]any) *ToolCard {
+	card := &ToolCard{
+		BaseCard:    *schema.NewBaseCard(schema.WithID(id), schema.WithName(name), schema.WithDescription(description)),
+		InputParams: inputParams,
+		Properties:  properties,
+	}
+	if card.Properties == nil {
+		card.Properties = make(map[string]any)
+	}
+	return card
+}
+
 // NewErrStreamNotSupported 创建带 card 信息的 Stream 不支持错误。
 func NewErrStreamNotSupported(card string) *exception.BaseError {
 	return exception.BuildError(
