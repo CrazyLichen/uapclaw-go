@@ -6,13 +6,19 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn/factory"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -99,12 +105,59 @@ func newAppCmd() *cobra.Command {
 		Short: "启动完整模式（AgentServer + Gateway）",
 		Long: `同时启动 Gateway 和 AgentServer（同进程），支持所有 IM 渠道接入。
 Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("app 模式尚未实现（领域十 + 十一）")
-		},
+		RunE: runAppCmd,
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
+	cmd.Flags().String("host", "", "监听地址（默认 127.0.0.1）")
+	cmd.Flags().Int("port", 0, "监听端口（默认 19000）")
 	return cmd
+}
+
+// runAppCmd 执行 app 子命令。
+//
+// 加载配置 → 创建 GatewayServer → 启动 → 等待退出信号。
+func runAppCmd(cmd *cobra.Command, _ []string) error {
+	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	// 读取 flags
+	host, _ := cmd.Flags().GetString("host")
+	port, _ := cmd.Flags().GetInt("port")
+
+	// 设置环境变量覆盖（优先于配置文件）
+	if host != "" {
+		os.Setenv("UAPCLAW_GATEWAY_HOST", host)
+	}
+	if port > 0 {
+		os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port))
+	}
+
+	// 加载配置
+	cfg, err := config.New("")
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	// 创建 GatewayServer
+	gs, err := gateway.NewGatewayServer(cfg)
+	if err != nil {
+		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
+	}
+
+	logger.Info(logger.ComponentGateway).
+		Str("version", version.Version).
+		Msg("uapclaw app 启动中")
+
+	// 启动服务器
+	if err := gs.Start(ctx); err != nil {
+		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
+	}
+
+	// 等待退出信号
+	<-ctx.Done()
+	logger.Info(logger.ComponentGateway).Msg("收到退出信号，正在关闭...")
+
+	return gs.Stop()
 }
 
 // newAgentServerCmd 创建 agentserver 子命令
