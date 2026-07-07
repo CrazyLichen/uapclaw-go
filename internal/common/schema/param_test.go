@@ -631,3 +631,155 @@ func TestNewNumberParam_MinimumMaximum默认NaN(t *testing.T) {
 		t.Errorf("NewNumberParam Maximum = %v, 期望 NaN", p.Maximum)
 	}
 }
+
+// ──────────────────────────── AdditionalProperties / MinItems / MaxItems 测试 ────────────────────────────
+
+func TestParam_AdditionalProperties_Object合法(t *testing.T) {
+	p := &Param{
+		Name:                 "config",
+		Type:                 ParamTypeObject,
+		Description:          "配置对象",
+		Required:             true,
+		AdditionalProperties: true,
+		Properties: []*Param{
+			NewStringParam("key", "键", true),
+		},
+	}
+	if err := p.Validate(); err != nil {
+		t.Errorf("Object 类型设置 AdditionalProperties=true 不应报错: %v", err)
+	}
+}
+
+func TestParam_AdditionalProperties_非Object非法(t *testing.T) {
+	p := &Param{
+		Name:                 "name",
+		Type:                 ParamTypeString,
+		Description:          "名称",
+		Required:             true,
+		AdditionalProperties: true,
+	}
+	err := p.Validate()
+	if err == nil {
+		t.Error("String 类型设置 AdditionalProperties 应返回错误")
+	}
+}
+
+func TestParam_MinItemsMaxItems_Array合法(t *testing.T) {
+	p := &Param{
+		Name:        "tags",
+		Type:        ParamTypeArray,
+		Description: "标签列表",
+		Required:    true,
+		Items:       NewStringParam("tag", "标签", true),
+		MinItems:    1,
+		MaxItems:    10,
+	}
+	if err := p.Validate(); err != nil {
+		t.Errorf("Array 类型设置 MinItems/MaxItems 不应报错: %v", err)
+	}
+}
+
+func TestParam_MinItemsMaxItems_非Array非法(t *testing.T) {
+	p := &Param{
+		Name:        "name",
+		Type:        ParamTypeString,
+		Description: "名称",
+		Required:    true,
+		MinItems:    1,
+	}
+	err := p.Validate()
+	if err == nil {
+		t.Error("String 类型设置 MinItems 应返回错误")
+	}
+
+	p2 := &Param{
+		Name:        "name",
+		Type:        ParamTypeString,
+		Description: "名称",
+		Required:    true,
+		MaxItems:    5,
+	}
+	err2 := p2.Validate()
+	if err2 == nil {
+		t.Error("String 类型设置 MaxItems 应返回错误")
+	}
+}
+
+func TestParamToSchemaMap_AdditionalProperties输出(t *testing.T) {
+	p := &Param{
+		Name:                 "config",
+		Type:                 ParamTypeObject,
+		Description:          "配置对象",
+		Required:             true,
+		AdditionalProperties: true,
+		Properties: []*Param{
+			NewStringParam("key", "键", true),
+		},
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	configSchema := props["config"].(map[string]any)
+
+	apVal, ok := configSchema["additionalProperties"]
+	if !ok {
+		t.Error("additionalProperties 未输出到 JSON Schema")
+	} else if apVal != true {
+		t.Errorf("additionalProperties = %v, 期望 true", apVal)
+	}
+}
+
+func TestParamToSchemaMap_MinItemsMaxItems输出(t *testing.T) {
+	p := &Param{
+		Name:        "tags",
+		Type:        ParamTypeArray,
+		Description: "标签列表",
+		Required:    true,
+		Items:       NewStringParam("tag", "标签", true),
+		MinItems:    1,
+		MaxItems:    20,
+	}
+	schema := ToJSONSchemaMap([]*Param{p})
+	props := schema["properties"].(map[string]any)
+	tagsSchema := props["tags"].(map[string]any)
+
+	if mi, ok := tagsSchema["minItems"]; !ok {
+		t.Error("minItems 未输出到 JSON Schema")
+	} else if mi != 1 {
+		t.Errorf("minItems = %v, 期望 1", mi)
+	}
+
+	if mi, ok := tagsSchema["maxItems"]; !ok {
+		t.Error("maxItems 未输出到 JSON Schema")
+	} else if mi != 20 {
+		t.Errorf("maxItems = %v, 期望 20", mi)
+	}
+}
+
+func TestParam_Validate_Object仅有AdditionalProperties合法(t *testing.T) {
+	// Object 类型可以仅有 AdditionalProperties=true 而无 Properties
+	p := &Param{
+		Name:                 "extra",
+		Type:                 ParamTypeObject,
+		Description:          "额外属性对象",
+		Required:             true,
+		AdditionalProperties: true,
+	}
+	if err := p.Validate(); err != nil {
+		t.Errorf("Object 仅有 AdditionalProperties=true 不应报错: %v", err)
+	}
+}
+
+func TestParam_Validate_Array有AdditionalProperties非法(t *testing.T) {
+	p := &Param{
+		Name:                 "arr",
+		Type:                 ParamTypeArray,
+		Description:          "数组",
+		Required:             true,
+		Items:                NewStringParam("item", "元素", true),
+		AdditionalProperties: true,
+	}
+	err := p.Validate()
+	if err == nil {
+		t.Error("Array 类型设置 AdditionalProperties 应返回错误")
+	}
+}

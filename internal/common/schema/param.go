@@ -52,6 +52,12 @@ type Param struct {
 	Items *Param `json:"items,omitempty"`
 	// Properties 对象属性列表（仅 Object 类型使用）
 	Properties []*Param `json:"properties,omitempty"`
+	// AdditionalProperties 对象是否允许额外属性（可选，仅 Object 类型）
+	AdditionalProperties bool `json:"additionalProperties,omitempty"`
+	// MinItems 数组最少元素数（可选，仅 Array 类型）
+	MinItems int `json:"minItems,omitempty"`
+	// MaxItems 数组最多元素数（可选，仅 Array 类型）
+	MaxItems int `json:"maxItems,omitempty"`
 	// AnyOf 多子 schema 至少匹配一个（JSON Schema 标准关键字）
 	AnyOf []*Param `json:"anyOf,omitempty"`
 	// AllOf 多子 schema 全部匹配（JSON Schema 标准关键字）
@@ -241,17 +247,26 @@ func (p *Param) Validate() error {
 		if len(p.Properties) > 0 {
 			return fmt.Errorf("Param %q: Array 类型不应有 properties 字段", p.Name)
 		}
+		if p.AdditionalProperties {
+			return fmt.Errorf("Param %q: Array 类型不应有 additionalProperties 字段", p.Name)
+		}
 		// 递归验证 items
 		if err := p.Items.Validate(); err != nil {
 			return err
 		}
 
 	case ParamTypeObject:
-		if len(p.Properties) == 0 {
-			return fmt.Errorf("Param %q: Object 类型必须有 properties 字段", p.Name)
+		if len(p.Properties) == 0 && !p.AdditionalProperties {
+			return fmt.Errorf("Param %q: Object 类型必须有 properties 字段或 additionalProperties=true", p.Name)
 		}
 		if p.Items != nil {
 			return fmt.Errorf("Param %q: Object 类型不应有 items 字段", p.Name)
+		}
+		if p.MinItems > 0 {
+			return fmt.Errorf("Param %q: Object 类型不应有 minItems 字段", p.Name)
+		}
+		if p.MaxItems > 0 {
+			return fmt.Errorf("Param %q: Object 类型不应有 maxItems 字段", p.Name)
 		}
 		// 递归验证 properties
 		for _, prop := range p.Properties {
@@ -266,6 +281,15 @@ func (p *Param) Validate() error {
 		}
 		if len(p.Properties) > 0 {
 			return fmt.Errorf("Param %q: %s 类型不应有 properties 字段", p.Name, p.Type)
+		}
+		if p.AdditionalProperties {
+			return fmt.Errorf("Param %q: %s 类型不应有 additionalProperties 字段", p.Name, p.Type)
+		}
+		if p.MinItems > 0 {
+			return fmt.Errorf("Param %q: %s 类型不应有 minItems 字段", p.Name, p.Type)
+		}
+		if p.MaxItems > 0 {
+			return fmt.Errorf("Param %q: %s 类型不应有 maxItems 字段", p.Name, p.Type)
 		}
 	}
 
@@ -378,6 +402,15 @@ func (p *Param) MarshalJSON() ([]byte, error) {
 	if len(p.Properties) > 0 {
 		m["properties"] = p.Properties
 	}
+	if p.AdditionalProperties {
+		m["additionalProperties"] = p.AdditionalProperties
+	}
+	if p.MinItems > 0 {
+		m["minItems"] = p.MinItems
+	}
+	if p.MaxItems > 0 {
+		m["maxItems"] = p.MaxItems
+	}
 	if len(p.AnyOf) > 0 {
 		m["anyOf"] = p.AnyOf
 	}
@@ -437,7 +470,16 @@ func paramToSchema(p *Param) map[string]any {
 		if p.Items != nil {
 			s["items"] = paramToSchema(p.Items)
 		}
+		if p.MinItems > 0 {
+			s["minItems"] = p.MinItems
+		}
+		if p.MaxItems > 0 {
+			s["maxItems"] = p.MaxItems
+		}
 	case ParamTypeObject:
+		if p.AdditionalProperties {
+			s["additionalProperties"] = true
+		}
 		if len(p.Properties) > 0 {
 			objProps := make(map[string]any, len(p.Properties))
 			var objRequired []string
