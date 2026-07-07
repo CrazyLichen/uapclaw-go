@@ -113,21 +113,6 @@ func TestServeCmd_Execute(t *testing.T) {
 	}
 }
 
-// TestAppCmd_Execute 验证 app 子命令执行输出
-func TestAppCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
-		rootCmd := newRootCmd()
-		rootCmd.SetArgs([]string{"app"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("执行 app 失败: %v", err)
-		}
-	})
-
-	if !strings.Contains(buf, "尚未实现") {
-		t.Errorf("app 输出未包含 '尚未实现', 实际输出: %s", buf)
-	}
-}
-
 // TestAgentServerCmd_Execute 验证 agentserver 子命令执行输出
 func TestAgentServerCmd_Execute(t *testing.T) {
 	buf := captureStdout(t, func() {

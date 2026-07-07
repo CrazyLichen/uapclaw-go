@@ -62,7 +62,7 @@ func TestNewChannelTransportWithBuffer_零值使用默认缓冲(t *testing.T) {
 // TestChannelTransport_Send 测试发送 E2AEnvelope
 func TestChannelTransport_Send(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	env := e2a.NewE2AEnvelope()
 	env.RequestID = "test-req-001"
@@ -90,7 +90,7 @@ func TestChannelTransport_Send(t *testing.T) {
 // TestChannelTransport_Send_关闭后返回错误 测试关闭后发送返回错误
 func TestChannelTransport_Send_关闭后返回错误(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	ct.Close()
+	_ = ct.Close()
 
 	env := e2a.NewE2AEnvelope()
 	env.RequestID = "test-req-closed"
@@ -104,12 +104,12 @@ func TestChannelTransport_Send_关闭后返回错误(t *testing.T) {
 // TestChannelTransport_Send_上下文取消 测试上下文取消时发送返回错误
 func TestChannelTransport_Send_上下文取消(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	// 先填满 sendCh 缓冲，使下一次 Send 阻塞
 	env0 := e2a.NewE2AEnvelope()
 	env0.RequestID = "fill"
-	ct.Send(context.Background(), env0)
+	_ = ct.Send(context.Background(), env0)
 
 	// 创建已取消的上下文
 	ctx, cancel := context.WithCancel(context.Background())
@@ -127,7 +127,7 @@ func TestChannelTransport_Send_上下文取消(t *testing.T) {
 // TestChannelTransport_Recv 测试接收 E2AResponse
 func TestChannelTransport_Recv(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	recvCh, err := ct.Recv()
 	if err != nil {
@@ -161,7 +161,7 @@ func TestChannelTransport_Recv(t *testing.T) {
 // TestChannelTransport_Recv_关闭后返回错误 测试关闭后接收返回错误
 func TestChannelTransport_Recv_关闭后返回错误(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	ct.Close()
+	_ = ct.Close()
 
 	_, err := ct.Recv()
 	if err != ErrTransportClosed {
@@ -205,7 +205,7 @@ func TestChannelTransport_实现AgentTransport接口(t *testing.T) {
 // TestChannelTransport_完整收发流程 测试完整收发流程
 func TestChannelTransport_完整收发流程(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(4, 4)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	// Gateway 端发送请求
 	env := e2a.NewE2AEnvelope()

@@ -43,13 +43,13 @@ func TestGatewayServer_Router路由(t *testing.T) {
 	resp, err := client.Get(server.URL + "/file-api/ws-debug-config")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// 测试前端静态文件
 	resp, err = client.Get(server.URL + "/")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestGatewayServer_Stop(t *testing.T) {
@@ -76,13 +76,13 @@ func TestSPAHandler(t *testing.T) {
 	resp, err := client.Get(server.URL + "/")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// 测试 index.html
 	resp, err = client.Get(server.URL + "/index.html")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestDefaultHostPort(t *testing.T) {

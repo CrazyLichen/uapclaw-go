@@ -19,8 +19,8 @@ import (
 func TestHandleFileContentGet(t *testing.T) {
 	// 设置临时工作区
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 创建测试文件
@@ -60,8 +60,8 @@ func TestHandleFileContentGet(t *testing.T) {
 
 func TestHandleFileContentPost(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	wsDir := workspace.AgentWorkspaceDir()
@@ -103,8 +103,8 @@ func TestHandleFileContentPost(t *testing.T) {
 
 func TestHandleListFiles(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	wsDir := workspace.AgentWorkspaceDir()
@@ -131,8 +131,8 @@ func TestHandleListFiles(t *testing.T) {
 
 func TestHandleListMarkdown(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	wsDir := workspace.AgentWorkspaceDir()
@@ -178,8 +178,8 @@ func TestHandleRebuildAgentData(t *testing.T) {
 
 func TestSafeFilePath_路径穿越(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 正常路径

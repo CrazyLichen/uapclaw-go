@@ -8,7 +8,7 @@ import (
 
 // TestResolveSDKChoice_未设置环境变量 验证默认值返回 harness
 func TestResolveSDKChoice_未设置环境变量(t *testing.T) {
-	os.Unsetenv(sdkEnvVar)
+	_ = os.Unsetenv(sdkEnvVar)
 	got := ResolveSDKChoice()
 	if got != defaultSDK {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, defaultSDK)
@@ -17,7 +17,7 @@ func TestResolveSDKChoice_未设置环境变量(t *testing.T) {
 
 // TestResolveSDKChoice_空值 验证空值返回默认
 func TestResolveSDKChoice_空值(t *testing.T) {
-	os.Setenv(sdkEnvVar, "")
+	_ = os.Setenv(sdkEnvVar, "")
 	got := ResolveSDKChoice()
 	if got != defaultSDK {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, defaultSDK)
@@ -26,7 +26,7 @@ func TestResolveSDKChoice_空值(t *testing.T) {
 
 // TestResolveSDKChoice_harness 验证 harness 值
 func TestResolveSDKChoice_harness(t *testing.T) {
-	os.Setenv(sdkEnvVar, "harness")
+	_ = os.Setenv(sdkEnvVar, "harness")
 	got := ResolveSDKChoice()
 	if got != "harness" {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, "harness")
@@ -35,7 +35,7 @@ func TestResolveSDKChoice_harness(t *testing.T) {
 
 // TestResolveSDKChoice_pi 验证 pi 值（预留）
 func TestResolveSDKChoice_pi(t *testing.T) {
-	os.Setenv(sdkEnvVar, "pi")
+	_ = os.Setenv(sdkEnvVar, "pi")
 	got := ResolveSDKChoice()
 	if got != "pi" {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, "pi")
@@ -44,7 +44,7 @@ func TestResolveSDKChoice_pi(t *testing.T) {
 
 // TestResolveSDKChoice_未知值 验证未知值回退默认
 func TestResolveSDKChoice_未知值(t *testing.T) {
-	os.Setenv(sdkEnvVar, "unknown_sdk")
+	_ = os.Setenv(sdkEnvVar, "unknown_sdk")
 	got := ResolveSDKChoice()
 	if got != defaultSDK {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, defaultSDK)
@@ -53,7 +53,7 @@ func TestResolveSDKChoice_未知值(t *testing.T) {
 
 // TestResolveSDKChoice_大小写 验证大小写不敏感
 func TestResolveSDKChoice_大小写(t *testing.T) {
-	os.Setenv(sdkEnvVar, "HARNESS")
+	_ = os.Setenv(sdkEnvVar, "HARNESS")
 	got := ResolveSDKChoice()
 	if got != "harness" {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, "harness")
@@ -62,7 +62,7 @@ func TestResolveSDKChoice_大小写(t *testing.T) {
 
 // TestResolveSDKChoice_前后空格 验证 trim
 func TestResolveSDKChoice_前后空格(t *testing.T) {
-	os.Setenv(sdkEnvVar, "  harness  ")
+	_ = os.Setenv(sdkEnvVar, "  harness  ")
 	got := ResolveSDKChoice()
 	if got != "harness" {
 		t.Errorf("ResolveSDKChoice() = %q, want %q", got, "harness")
@@ -111,7 +111,7 @@ func TestCreateAdapter_harnessCodeMode(t *testing.T) {
 
 // TestCreateAdapter_空SDK默认harness 验证空 SDK 使用默认 harness
 func TestCreateAdapter_空SDK默认harness(t *testing.T) {
-	os.Unsetenv(sdkEnvVar)
+	_ = os.Unsetenv(sdkEnvVar)
 	adapter, err := CreateAdapter("", "agent")
 	if err != nil {
 		t.Fatalf("CreateAdapter() error: %v", err)

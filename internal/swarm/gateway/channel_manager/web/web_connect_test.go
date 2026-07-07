@@ -111,7 +111,7 @@ func TestWebChannel_Send(t *testing.T) {
 func TestWebChannel_WebSocket连接生命周期(t *testing.T) {
 	wc := NewWebChannel(WebChannelConfig{Enabled: true})
 	require.NoError(t, wc.Start(context.Background()))
-	defer wc.Stop(context.Background())
+	defer func() { _ = wc.Stop(context.Background()) }()
 
 	// 启动 HTTP 测试服务器
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,10 +126,10 @@ func TestWebChannel_WebSocket连接生命周期(t *testing.T) {
 	dialer := websocket.DefaultDialer
 	conn, _, err := dialer.Dial(wsURL, nil)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 等待 connection.ack
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, message, err := conn.ReadMessage()
 	require.NoError(t, err)
 
@@ -154,7 +154,7 @@ func TestWebChannel_WebSocket连接生命周期(t *testing.T) {
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, reqData))
 
 	// 读取响应
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, respData, err := conn.ReadMessage()
 	require.NoError(t, err)
 

@@ -160,7 +160,7 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		wc.clientsMu.Lock()
 		delete(wc.clients, conn)
 		wc.clientsMu.Unlock()
-		conn.Close()
+		_ = conn.Close()
 
 		logger.Info(logComponent).
 			Str("event_type", "ws_disconnected").
@@ -261,7 +261,7 @@ func (wc *WebChannel) Stop(_ context.Context) error {
 	// 关闭所有客户端连接
 	wc.clientsMu.Lock()
 	for conn := range wc.clients {
-		conn.Close()
+		_ = conn.Close()
 	}
 	wc.clients = make(map[*websocket.Conn]bool)
 	wc.clientsMu.Unlock()

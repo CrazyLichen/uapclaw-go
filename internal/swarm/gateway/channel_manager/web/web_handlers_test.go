@@ -104,11 +104,11 @@ func TestNewAppRPCHandlers_全量注册(t *testing.T) {
 
 func TestHandleConfigGet(t *testing.T) {
 	// 设置测试环境变量
-	os.Setenv("MODEL_PROVIDER", "openai")
-	os.Setenv("MODEL_NAME", "gpt-4")
+	_ = os.Setenv("MODEL_PROVIDER", "openai")
+	_ = os.Setenv("MODEL_NAME", "gpt-4")
 	defer func() {
-		os.Unsetenv("MODEL_PROVIDER")
-		os.Unsetenv("MODEL_NAME")
+		_ = os.Unsetenv("MODEL_PROVIDER")
+		_ = os.Unsetenv("MODEL_NAME")
 	}()
 
 	result, err := handleConfigGet(context.Background(), nil, "")
@@ -138,7 +138,7 @@ func TestHandleConfigSet(t *testing.T) {
 
 	// 验证环境变量已更新
 	assert.Equal(t, "anthropic", os.Getenv("MODEL_PROVIDER"))
-	os.Unsetenv("MODEL_PROVIDER")
+	_ = os.Unsetenv("MODEL_PROVIDER")
 }
 
 func TestHandleChannelGet(t *testing.T) {
@@ -154,8 +154,8 @@ func TestHandleChannelGet(t *testing.T) {
 
 func TestHandleSessionList_空目录(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 确保会话目录存在
@@ -172,8 +172,8 @@ func TestHandleSessionList_空目录(t *testing.T) {
 
 func TestHandleSessionCreate(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	result, err := handleSessionCreate(context.Background(), map[string]any{
@@ -194,8 +194,8 @@ func TestHandleSessionCreate(t *testing.T) {
 
 func TestHandleSessionDelete(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
-	defer os.Unsetenv("UAPCLAW_DATA_DIR")
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	// 先创建会话

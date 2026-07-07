@@ -126,10 +126,14 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 
 	// 设置环境变量覆盖（优先于配置文件）
 	if host != "" {
-		os.Setenv("UAPCLAW_GATEWAY_HOST", host)
+		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
+			return fmt.Errorf("设置环境变量 UAPCLAW_GATEWAY_HOST 失败: %w", err)
+		}
 	}
 	if port > 0 {
-		os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port))
+		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
+			return fmt.Errorf("设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %w", err)
+		}
 	}
 
 	// 加载配置
