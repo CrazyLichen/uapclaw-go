@@ -16,7 +16,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -486,17 +485,19 @@ func (f *fakeAgent) Config() interfaces.AgentConfig { return nil }
 
 func (f *fakeAgent) AbilityManager() interfaces.AbilityManagerInterface { return nil }
 
-func (f *fakeAgent) CallbackManager() *rail.AgentCallbackManager { return nil }
+func (f *fakeAgent) CallbackManager() *interfaces.AgentCallbackManager { return nil }
 
-func (f *fakeAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+func (f *fakeAgent) RegisterCallback(_ context.Context, _ interfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 
-func (f *fakeAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+func (f *fakeAgent) RegisterRail(_ context.Context, _ interfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
 
-func (f *fakeAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error { return nil }
+func (f *fakeAgent) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error { return nil }
+
+func (f *fakeAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 func TestAbilityManager_SetContextEngine(t *testing.T) {
 	am := NewAbilityManager(nil)
@@ -926,25 +927,48 @@ func TestPrioritizePaidSearch_无paid无free(t *testing.T) {
 
 // ──────────────────────────── Rail 集成测试 ────────────────────────────
 
-// fakeRailAgentForAbility 实现 rail.RailAgent 接口，用于 ability 测试
+// fakeRailAgentForAbility 实现 interfaces.BaseAgent 接口，用于 ability 测试
 type fakeRailAgentForAbility struct {
-	cbMgr   *rail.AgentCallbackManager
+	cbMgr   *interfaces.AgentCallbackManager
 	agentID string
 }
 
-func (f *fakeRailAgentForAbility) CallbackManager() *rail.AgentCallbackManager                      { return f.cbMgr }
-func (f *fakeRailAgentForAbility) AgentID() string                                                   { return f.agentID }
-func (f *fakeRailAgentForAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface        { return nil }
+func (f *fakeRailAgentForAbility) CallbackManager() *interfaces.AgentCallbackManager                { return f.cbMgr }
+func (f *fakeRailAgentForAbility) AgentID() string                                                 { return f.agentID }
+func (f *fakeRailAgentForAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface      { return nil }
+func (f *fakeRailAgentForAbility) Configure(_ context.Context, _ interfaces.AgentConfig) error      { return nil }
+func (f *fakeRailAgentForAbility) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+func (f *fakeRailAgentForAbility) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
+}
+func (f *fakeRailAgentForAbility) Card() *agentschema.AgentCard {
+	card := agentschema.NewAgentCard()
+	card.ID = f.agentID
+	return card
+}
+func (f *fakeRailAgentForAbility) Config() interfaces.AgentConfig    { return nil }
+func (f *fakeRailAgentForAbility) AbilityManager() interfaces.AbilityManagerInterface { return nil }
+func (f *fakeRailAgentForAbility) RegisterCallback(_ context.Context, _ interfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+	return nil
+}
+func (f *fakeRailAgentForAbility) RegisterRail(_ context.Context, _ interfaces.AgentRail, _ ...callback.CallbackOption) error {
+	return nil
+}
+func (f *fakeRailAgentForAbility) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error { return nil }
 
 // TestAbilityManager_Execute_forceFinish传播 验证子 toolCtx 的 force-finish 信号传播到父 cbc
 func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {
-	mgr := rail.NewAgentCallbackManager("test_ff_prop")
+	mgr := interfaces.NewAgentCallbackManager("test_ff_prop")
 	defer mgr.Clear()
 
 	// 注册 after_tool_call 钩子，在第一个工具调用后设置 force-finish
 	callCount := 0
-	mgr.RegisterCallback(context.Background(), rail.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
-		cbc := railCtx.(*rail.AgentCallbackContext)
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
 		callCount++
 		if callCount == 1 {
 			cbc.RequestForceFinish(map[string]any{"reason": "budget_exceeded"})
@@ -953,7 +977,7 @@ func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {
 	})
 
 	agent := &fakeRailAgentForAbility{cbMgr: mgr}
-	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
 
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
@@ -974,22 +998,22 @@ func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {
 
 // TestAbilityManager_Execute_Rail包装 验证 ToolCallRail 自动触发 before/after 钩子
 func TestAbilityManager_Execute_Rail包装(t *testing.T) {
-	mgr := rail.NewAgentCallbackManager("test_rail_wrap")
+	mgr := interfaces.NewAgentCallbackManager("test_rail_wrap")
 	defer mgr.Clear()
 
-	var firedEvents []rail.AgentCallbackEvent
-	registerHook := func(event rail.AgentCallbackEvent) {
+	var firedEvents []interfaces.AgentCallbackEvent
+	registerHook := func(event interfaces.AgentCallbackEvent) {
 		mgr.RegisterCallback(context.Background(), event, func(_ context.Context, railCtx any) error {
-			cbc := railCtx.(*rail.AgentCallbackContext)
+			cbc := railCtx.(*interfaces.AgentCallbackContext)
 			firedEvents = append(firedEvents, cbc.Event())
 			return nil
 		})
 	}
-	registerHook(rail.CallbackBeforeToolCall)
-	registerHook(rail.CallbackAfterToolCall)
+	registerHook(interfaces.CallbackBeforeToolCall)
+	registerHook(interfaces.CallbackAfterToolCall)
 
 	agent := &fakeRailAgentForAbility{cbMgr: mgr}
-	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
 
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
@@ -1000,20 +1024,20 @@ func TestAbilityManager_Execute_Rail包装(t *testing.T) {
 
 	_ = am.Execute(context.Background(), cbc, toolCalls, nil, "")
 
-	assert.Contains(t, firedEvents, rail.CallbackBeforeToolCall)
-	assert.Contains(t, firedEvents, rail.CallbackAfterToolCall)
+	assert.Contains(t, firedEvents, interfaces.CallbackBeforeToolCall)
+	assert.Contains(t, firedEvents, interfaces.CallbackAfterToolCall)
 }
 
 // TestAbilityManager_Execute_skipTool before hook 通过 _skip_tool 跳过工具执行
 // 对齐 Python L664-667: skip_result = ctx.extra.pop("_skip_tool", None)
 func TestAbilityManager_Execute_skipTool(t *testing.T) {
-	mgr := rail.NewAgentCallbackManager("test_skip_tool")
+	mgr := interfaces.NewAgentCallbackManager("test_skip_tool")
 	defer mgr.Clear()
 
 	// before_tool_call 钩子：设置 _skip_tool 并预设拒绝结果
-	mgr.RegisterCallback(context.Background(), rail.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
-		cbc := railCtx.(*rail.AgentCallbackContext)
-		inputs, ok := cbc.Inputs().(*rail.ToolCallInputs)
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
+		inputs, ok := cbc.Inputs().(*interfaces.ToolCallInputs)
 		if !ok {
 			return nil
 		}
@@ -1026,16 +1050,16 @@ func TestAbilityManager_Execute_skipTool(t *testing.T) {
 
 	// after_tool_call 钩子：验证 after 仍然触发（finally 语义）
 	afterFired := false
-	mgr.RegisterCallback(context.Background(), rail.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackAfterToolCall, func(_ context.Context, railCtx any) error {
 		afterFired = true
 		// after 不应再看到 _skip_tool（pop 一次性消费）
-		_, exists := railCtx.(*rail.AgentCallbackContext).Extra()["_skip_tool"]
+		_, exists := railCtx.(*interfaces.AgentCallbackContext).Extra()["_skip_tool"]
 		assert.False(t, exists, "after 钩子不应看到 _skip_tool（应已被 pop 消费）")
 		return nil
 	})
 
 	agent := &fakeRailAgentForAbility{cbMgr: mgr}
-	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
 
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))
@@ -1060,18 +1084,18 @@ func TestAbilityManager_Execute_skipTool(t *testing.T) {
 
 // TestAbilityManager_Execute_skipTool非bool值 忽略非 bool 的 _skip_tool 值
 func TestAbilityManager_Execute_skipTool非bool值(t *testing.T) {
-	mgr := rail.NewAgentCallbackManager("test_skip_tool_nonbool")
+	mgr := interfaces.NewAgentCallbackManager("test_skip_tool_nonbool")
 	defer mgr.Clear()
 
 	// before_tool_call 钩子：设置 _skip_tool 为字符串（非 bool），应被忽略
-	mgr.RegisterCallback(context.Background(), rail.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
-		cbc := railCtx.(*rail.AgentCallbackContext)
+	mgr.RegisterCallback(context.Background(), interfaces.CallbackBeforeToolCall, func(_ context.Context, railCtx any) error {
+		cbc := railCtx.(*interfaces.AgentCallbackContext)
 		cbc.Extra()["_skip_tool"] = "yes" // 非 bool，应被忽略
 		return nil
 	})
 
 	agent := &fakeRailAgentForAbility{cbMgr: mgr}
-	cbc := rail.NewAgentCallbackContext(agent, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(agent, &interfaces.InvokeInputs{}, nil)
 
 	am := NewAbilityManager(nil)
 	am.Add(tool.NewToolCard("echo", "回显工具", nil, nil))

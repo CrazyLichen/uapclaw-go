@@ -11,7 +11,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -35,14 +35,14 @@ type ResumeContext struct {
 	// UserInput 用户输入
 	UserInput any
 	// Ctx Agent 回调上下文
-	Ctx *rail.AgentCallbackContext
+	Ctx *interfaces.AgentCallbackContext
 	// ModelContext 上下文引擎的 ModelContext
 	ModelContext ceinterface.ModelContext
 	// Session 会话（可选）
 	Session sessioninterfaces.SessionFacade
 	// InvokeInputs 调用输入
 	// 对应 Python: Optional[InvokeInputs]
-	InvokeInputs *rail.InvokeInputs
+	InvokeInputs *interfaces.InvokeInputs
 	// ExecuteToolCall 工具调用执行函数
 	// 对应 Python: Optional[Callable]
 	// 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls
@@ -68,7 +68,7 @@ type ExecuteToolCallFunc func(
 	// ──────────────────────────── 常量 ────────────────────────────
 
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
@@ -163,7 +163,7 @@ func (h *ToolInterruptHandler) CommitInterrupt(
 	intState *saschema.ToolInterruptionState,
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
-	invokeInputs *rail.InvokeInputs,
+	invokeInputs *interfaces.InvokeInputs,
 	subAgentOutputs []PayloadEntry,
 ) (map[string]any, error) {
 	// 持久化上下文引擎状态

@@ -11,7 +11,6 @@ import (
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -62,7 +61,7 @@ func (a *ReActAgent) Configure(ctx context.Context, config interfaces.AgentConfi
 }
 
 // CallbackManager 返回回调管理器（满足 RailAgent 接口）。
-func (a *ReActAgent) CallbackManager() *rail.AgentCallbackManager {
+func (a *ReActAgent) CallbackManager() *interfaces.AgentCallbackManager {
 	return a.callbackManager
 }
 
@@ -99,7 +98,7 @@ func (a *ReActAgent) AbilityManager() interfaces.AbilityManagerInterface {
 
 // RegisterCallback 注册回调。
 // 对齐 Python: BaseAgent.register_callback(event, callback, priority)
-func (a *ReActAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn callback.PerAgentCallbackFunc, opts ...callback.CallbackOption) error {
+func (a *ReActAgent) RegisterCallback(ctx context.Context, event interfaces.AgentCallbackEvent, fn callback.PerAgentCallbackFunc, opts ...callback.CallbackOption) error {
 	if a.callbackManager != nil {
 		a.callbackManager.RegisterCallback(ctx, event, fn, opts...)
 	}
@@ -108,7 +107,7 @@ func (a *ReActAgent) RegisterCallback(ctx context.Context, event rail.AgentCallb
 
 // RegisterRail 注册 Rail。
 // 对齐 Python: BaseAgent.register_rail(rail)
-func (a *ReActAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...callback.CallbackOption) error {
+func (a *ReActAgent) RegisterRail(ctx context.Context, r interfaces.AgentRail, opts ...callback.CallbackOption) error {
 	if a.callbackManager != nil {
 		if err := r.Init(a); err != nil {
 			return err
@@ -120,7 +119,7 @@ func (a *ReActAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ..
 
 // UnregisterRail 注销 Rail。
 // 对齐 Python: BaseAgent.unregister_rail(rail)
-func (a *ReActAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
+func (a *ReActAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail) error {
 	if a.callbackManager != nil {
 		err := a.callbackManager.UnregisterRail(ctx, r)
 		if uninitErr := r.Uninit(a); uninitErr != nil {

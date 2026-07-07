@@ -297,7 +297,7 @@ type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType
 type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventData) any
 
 // PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
-// agentCallbackContext 实际类型为 *rail.AgentCallbackContext，回调内需类型断言。
+// agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext，回调内需类型断言。
 //
 // 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
 type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error

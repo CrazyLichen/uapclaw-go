@@ -13,7 +13,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	commonschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -36,7 +36,7 @@ func (m *mockAbilityMgr) List() []commonschema.Ability                 { return 
 func (m *mockAbilityMgr) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]commonschema.ToolInfoInterface, error) {
 	return nil, nil
 }
-func (m *mockAbilityMgr) Execute(_ context.Context, _ *rail.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
+func (m *mockAbilityMgr) Execute(_ context.Context, _ *agentinterfaces.AgentCallbackContext, _ []*llmschema.ToolCall, _ sessioninterfaces.SessionFacade, _ string) []agentschema.ExecuteResult {
 	return nil
 }
 func (m *mockAbilityMgr) SetContextEngine(_ ceinterface.ContextEngine) {}
@@ -270,7 +270,7 @@ func TestTaskLoopController_SubmitRound_FollowUp(t *testing.T) {
 	err = tc.BindSession(context.Background(), sess)
 	require.NoError(t, err)
 
-	err = tc.SubmitRound(context.Background(), sess, "follow up query", true, false, rail.RunKindHeartbeat, nil)
+	err = tc.SubmitRound(context.Background(), sess, "follow up query", true, false, agentinterfaces.RunKindHeartbeat, nil)
 	assert.NoError(t, err)
 }
 
@@ -291,8 +291,8 @@ func TestTaskLoopController_SubmitRound_带RunContext(t *testing.T) {
 	err = tc.BindSession(context.Background(), sess)
 	require.NoError(t, err)
 
-	runCtx := &rail.RunContext{Reason: "test"}
-	err = tc.SubmitRound(context.Background(), sess, "query", false, true, rail.RunKindCron, runCtx)
+	runCtx := &agentinterfaces.RunContext{Reason: "test"}
+	err = tc.SubmitRound(context.Background(), sess, "query", false, true, agentinterfaces.RunKindCron, runCtx)
 	assert.NoError(t, err)
 }
 

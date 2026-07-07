@@ -1,4 +1,4 @@
-package rail
+package interfaces
 
 import (
 	"context"
@@ -7,22 +7,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// fakeRailAgent 实现 RailAgent 接口，用于测试
-type fakeRailAgent struct {
+// fakeBaseAgent 实现 BaseAgent 接口，用于测试
+type fakeBaseAgent struct {
 	// cbMgr 回调管理器
 	cbMgr *AgentCallbackManager
 	// agentID Agent 唯一标识
 	agentID string
 }
 
-func (f *fakeRailAgent) CallbackManager() *AgentCallbackManager                    { return f.cbMgr }
-func (f *fakeRailAgent) AgentID() string                                             { return f.agentID }
-func (f *fakeRailAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface  { return nil }
+func (f *fakeBaseAgent) Configure(_ context.Context, _ AgentConfig) error { return nil }
+func (f *fakeBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+func (f *fakeBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
+	return nil, nil
+}
+func (f *fakeBaseAgent) Card() *agentschema.AgentCard                                       { return nil }
+func (f *fakeBaseAgent) Config() AgentConfig                                                { return nil }
+func (f *fakeBaseAgent) AbilityManager() AbilityManagerInterface                             { return nil }
+func (f *fakeBaseAgent) CallbackManager() *AgentCallbackManager                              { return f.cbMgr }
+func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface          { return nil }
+func (f *fakeBaseAgent) RegisterCallback(_ context.Context, _ AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (f *fakeBaseAgent) RegisterRail(_ context.Context, _ AgentRail, _ ...cb.CallbackOption) error {
+	return nil
+}
+func (f *fakeBaseAgent) UnregisterRail(_ context.Context, _ AgentRail) error { return nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -74,7 +93,7 @@ func TestPushSteering_无队列(t *testing.T) {
 // TestPushSteering_正常写入 验证正常写入后可 DrainSteering 读出
 func TestPushSteering_正常写入(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	q := make(chan string, steeringQueueSize)
+	q := make(chan string, 4096)
 	ctx.BindSteeringQueue(q)
 
 	_ = ctx.PushSteering("msg1")
@@ -109,7 +128,7 @@ func TestDrainSteering_无队列(t *testing.T) {
 // TestDrainSteering_空队列 验证空队列返回 nil
 func TestDrainSteering_空队列(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	ctx.BindSteeringQueue(make(chan string, steeringQueueSize))
+	ctx.BindSteeringQueue(make(chan string, 4096))
 	assert.Nil(t, ctx.DrainSteering())
 }
 
@@ -121,7 +140,7 @@ func TestHasPendingSteering(t *testing.T) {
 	assert.False(t, ctx.HasPendingSteering())
 
 	// 空队列
-	q := make(chan string, steeringQueueSize)
+	q := make(chan string, 4096)
 	ctx.BindSteeringQueue(q)
 	assert.False(t, ctx.HasPendingSteering())
 
@@ -137,7 +156,7 @@ func TestHasPendingSteering(t *testing.T) {
 // TestBindSteeringQueue 验证绑定后 push/drain 可用
 func TestBindSteeringQueue(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	q := make(chan string, steeringQueueSize)
+	q := make(chan string, 4096)
 	ctx.BindSteeringQueue(q)
 	assert.Equal(t, q, ctx.SteeringQueue())
 
@@ -151,7 +170,7 @@ func TestSteeringQueue(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
 	assert.Nil(t, ctx.SteeringQueue())
 
-	q := make(chan string, steeringQueueSize)
+	q := make(chan string, 4096)
 	ctx.BindSteeringQueue(q)
 	assert.Equal(t, q, ctx.SteeringQueue())
 }
@@ -211,7 +230,7 @@ func TestFire_无回调管理器(t *testing.T) {
 
 // TestFire_回调管理器为nil agent 存在但 CallbackManager 返回 nil 时 Fire 返回 nil
 func TestFire_回调管理器为nil(t *testing.T) {
-	agent := &fakeRailAgent{cbMgr: nil}
+	agent := &fakeBaseAgent{cbMgr: nil}
 	ctx := NewAgentCallbackContext(agent, nil, nil)
 	err := ctx.Fire(CallbackBeforeModelCall)
 	assert.NoError(t, err)
@@ -229,7 +248,7 @@ func TestFire_正常触发(t *testing.T) {
 	}
 	mgr.RegisterCallback(context.Background(), CallbackBeforeModelCall, fn)
 
-	agent := &fakeRailAgent{cbMgr: mgr}
+	agent := &fakeBaseAgent{cbMgr: mgr}
 	ctx := NewAgentCallbackContext(agent, nil, nil)
 	err := ctx.Fire(CallbackBeforeModelCall)
 	assert.NoError(t, err)
@@ -327,11 +346,11 @@ func TestRequestRetry_负数归零(t *testing.T) {
 
 // TestForkForToolCall_字段共享与隔离 验证 ForkForToolCall 的共享/独立语义
 func TestForkForToolCall_字段共享与隔离(t *testing.T) {
-	agent := &fakeRailAgent{agentID: "test-agent"}
+	agent := &fakeBaseAgent{agentID: "test-agent"}
 	sess := session.NewSession()
 	parentInputs := &InvokeInputs{}
 	parent := NewAgentCallbackContext(agent, parentInputs, sess)
-	q := make(chan string, steeringQueueSize)
+	q := make(chan string, 4096)
 	parent.BindSteeringQueue(q)
 	parent.Extra()["shared_key"] = "shared_val"
 

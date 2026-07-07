@@ -11,6 +11,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -22,7 +23,7 @@ import (
 // 对应 Python: ReActAgent._call_model()
 func (a *ReActAgent) callModel(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	modelCtx ceinterface.ModelContext,
 	tools []cschema.ToolInfoInterface,
 	sess sessioninterfaces.SessionFacade,
@@ -38,7 +39,7 @@ func (a *ReActAgent) callModel(
 		previewMsgs = append(previewMsgs, msgs...)
 	}
 	// 对齐 Python L648-652: ctx.inputs = ModelCallInputs(messages=..., tools=..., model_context=...)
-	cbc.SetInputs(&rail.ModelCallInputs{
+	cbc.SetInputs(&interfaces.ModelCallInputs{
 		Messages:     previewMsgs,
 		Tools:        tools,
 		ModelContext: modelCtx,
@@ -60,7 +61,7 @@ func (a *ReActAgent) callModel(
 }
 
 // railedModelCall 在 Rail 钩子内执行 LLM 调用。
-func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (*llmschema.AssistantMessage, error) {
+func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *interfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (*llmschema.AssistantMessage, error) {
 	systemPrompt := a.promptBuilder.Build()
 	systemMsgs := []llmschema.BaseMessage{llmschema.NewSystemMessage(systemPrompt)}
 
@@ -112,7 +113,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 	}
 
 	// 写回 cbc.Inputs()（对齐 Python L727-728: ctx.inputs.messages = ...; ctx.inputs.tools = ...）
-	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
+	if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
 		inputs.Messages = messages
 		inputs.Tools = contextTools
 	}
@@ -146,7 +147,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 			return nil, err
 		}
 		// 写回 Response（对齐 Python L803: ctx.inputs.response = ai_message）
-		if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
+		if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
 			inputs.Response = aiMsg
 		}
 		return aiMsg, nil
@@ -156,7 +157,7 @@ func (a *ReActAgent) railedModelCall(ctx context.Context, cbc *rail.AgentCallbac
 		return nil, err
 	}
 	// 写回 Response（对齐 Python L758: ctx.inputs.response = ai_message）
-	if inputs, ok := cbc.Inputs().(*rail.ModelCallInputs); ok {
+	if inputs, ok := cbc.Inputs().(*interfaces.ModelCallInputs); ok {
 		inputs.Response = aiMsg
 	}
 	return aiMsg, nil

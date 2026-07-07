@@ -11,7 +11,6 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -74,7 +73,7 @@ func NewP2PAbilityManager(supervisor team_runtime.Communicable, maxParallel int,
 // 对齐 Python: P2PAbilityManager.execute()
 func (m *P2PAbilityManager) Execute(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *agentinterfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
@@ -179,7 +178,7 @@ func (m *P2PAbilityManager) IsAgent(name string) bool {
 // 对应 Python: P2PAbilityManager._execute_single_tool_call()
 func (m *P2PAbilityManager) executeSingleP2P(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *agentinterfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 ) (agentschema.ExecuteResult, error) {

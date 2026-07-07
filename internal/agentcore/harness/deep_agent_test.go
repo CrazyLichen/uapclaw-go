@@ -28,7 +28,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -49,7 +48,7 @@ type fakeSessionFacade struct {
 // fakeAgentRail 用于测试的模拟 Rail
 type fakeAgentRail struct {
 	// base 嵌入 BaseRail 获得默认实现
-	base rail.BaseRail
+	base agentinterfaces.BaseRail
 	// initCalled Init 是否被调用
 	initCalled bool
 	// uninitCalled Uninit 是否被调用
@@ -59,21 +58,21 @@ type fakeAgentRail struct {
 // fakeAgentRailWithType 带独立类型的模拟 Rail（用于 FindRailsByType 测试）
 type fakeAgentRailWithType struct {
 	// base 嵌入 BaseRail 获得默认实现
-	base rail.BaseRail
+	base agentinterfaces.BaseRail
 }
 
 // fakeAgentRailWithType2 另一个独立类型的模拟 Rail
 type fakeAgentRailWithType2 struct {
 	// base 嵌入 BaseRail 获得默认实现
-	base rail.BaseRail
+	base agentinterfaces.BaseRail
 }
 
 // fakeAgentRailWithCallbacks 带回调声明的模拟 Rail
 type fakeAgentRailWithCallbacks struct {
 	// base 嵌入 BaseRail 获得默认实现
-	base rail.BaseRail
+	base agentinterfaces.BaseRail
 	// events 声明的回调事件列表
-	events []rail.AgentCallbackEvent
+	events []agentinterfaces.AgentCallbackEvent
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -417,7 +416,7 @@ func TestDeepAgent_UnregisterRail(t *testing.T) {
 func TestDeepAgent_RegisterCallback_正常注册(t *testing.T) {
 	d := newTestDeepAgent()
 	fn := cb.PerAgentCallbackFunc(func(ctx context.Context, agentCallbackContext any) error { return nil })
-	err := d.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, fn)
+	err := d.RegisterCallback(context.Background(), agentinterfaces.CallbackBeforeInvoke, fn)
 	if err != nil {
 		t.Fatalf("RegisterCallback 返回错误: %v", err)
 	}
@@ -427,7 +426,7 @@ func TestDeepAgent_RegisterCallback_正常注册(t *testing.T) {
 func TestDeepAgent_RegisterCallback_未知事件(t *testing.T) {
 	d := newTestDeepAgent()
 	fn := cb.PerAgentCallbackFunc(func(ctx context.Context, agentCallbackContext any) error { return nil })
-	err := d.RegisterCallback(context.Background(), rail.AgentCallbackEvent("unknown_event"), fn)
+	err := d.RegisterCallback(context.Background(), agentinterfaces.AgentCallbackEvent("unknown_event"), fn)
 	// RegisterCallback 不再做事件合法性校验，由 AgentCallbackManager 管理
 	assert.NoError(t, err)
 }
@@ -438,7 +437,7 @@ func TestDeepAgent_RegisterCallback_正确类型(t *testing.T) {
 	var called cb.PerAgentCallbackFunc = func(ctx context.Context, data any) error {
 		return nil
 	}
-	err := d.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, called)
+	err := d.RegisterCallback(context.Background(), agentinterfaces.CallbackBeforeInvoke, called)
 	assert.NoError(t, err)
 }
 
@@ -1056,8 +1055,8 @@ func TestNormalizeInputs_Default(t *testing.T) {
 
 // TestToEffectiveInputs 转换 InvokeInputs 为 ReAct 输入字典
 func TestToEffectiveInputs(t *testing.T) {
-	inputs := &rail.InvokeInputs{
-		Query:          rail.InvokeQueryString("test query"),
+	inputs := &agentinterfaces.InvokeInputs{
+		Query:          agentinterfaces.InvokeQueryString("test query"),
 		ConversationID: "conv-1",
 		RunKind:        "heartbeat",
 	}
@@ -1069,16 +1068,16 @@ func TestToEffectiveInputs(t *testing.T) {
 	if result["conversation_id"] != "conv-1" {
 		t.Errorf("conversation_id=%v，期望 conv-1", result["conversation_id"])
 	}
-	// RunKind 存储为 rail.RunKind 类型
-	if result["run_kind"] != rail.RunKind("heartbeat") {
+	// RunKind 存储为 agentinterfaces.RunKind 类型
+	if result["run_kind"] != agentinterfaces.RunKind("heartbeat") {
 		t.Errorf("run_kind=%v，期望 heartbeat", result["run_kind"])
 	}
 }
 
 // TestToEffectiveInputs_最小字段 仅 query 时只有 query 键
 func TestToEffectiveInputs_最小字段(t *testing.T) {
-	inputs := &rail.InvokeInputs{
-		Query: rail.InvokeQueryString("minimal"),
+	inputs := &agentinterfaces.InvokeInputs{
+		Query: agentinterfaces.InvokeQueryString("minimal"),
 	}
 
 	result := toEffectiveInputs(inputs)
@@ -1092,8 +1091,8 @@ func TestToEffectiveInputs_最小字段(t *testing.T) {
 
 // TestIsResumeInput 当前始终返回 false
 func TestIsResumeInput(t *testing.T) {
-	inputs := &rail.InvokeInputs{
-		Query: rail.InvokeQueryString("resume"),
+	inputs := &agentinterfaces.InvokeInputs{
+		Query: agentinterfaces.InvokeQueryString("resume"),
 	}
 	if isResumeInput(inputs) {
 		t.Error("isResumeInput 当前应始终返回 false")
@@ -1161,7 +1160,7 @@ func TestRemoveRailByRef(t *testing.T) {
 	fr2 := &fakeAgentRail{}
 	fr3 := &fakeAgentRail{}
 
-	rails := []rail.AgentRail{fr1, fr2, fr3}
+	rails := []agentinterfaces.AgentRail{fr1, fr2, fr3}
 	result := removeRailByRef(rails, fr2)
 	if len(result) != 2 {
 		t.Fatalf("移除后长度=%d，期望 2", len(result))
@@ -1176,7 +1175,7 @@ func TestRemoveRailByRef_不匹配(t *testing.T) {
 	fr1 := &fakeAgentRail{}
 	fr2 := &fakeAgentRail{}
 
-	rails := []rail.AgentRail{fr1}
+	rails := []agentinterfaces.AgentRail{fr1}
 	result := removeRailByRef(rails, fr2)
 	if len(result) != 1 {
 		t.Errorf("不匹配时长度=%d，期望 1", len(result))
@@ -1188,8 +1187,8 @@ func TestFilterRailsNotType(t *testing.T) {
 	fr1 := &fakeAgentRailWithType{}
 	fr2 := &fakeAgentRailWithType2{}
 
-	rails := []rail.AgentRail{fr1, fr2}
-	predicate := func(r rail.AgentRail) bool {
+	rails := []agentinterfaces.AgentRail{fr1, fr2}
+	predicate := func(r agentinterfaces.AgentRail) bool {
 		return reflect.TypeOf(r) == reflect.TypeOf(fr1)
 	}
 	result := filterRailsNotType(rails, predicate)
@@ -1553,7 +1552,7 @@ func TestDeepAgent_hotReloadRails_部分更新(t *testing.T) {
 	// 首次配置，带 Rails
 	fr1 := &fakeAgentRailWithType{}
 	cfg1 := schema.NewDeepAgentConfig()
-	cfg1.Rails = []rail.AgentRail{fr1}
+	cfg1.Rails = []agentinterfaces.AgentRail{fr1}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg1); err != nil {
 		t.Fatalf("首次 ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -1566,7 +1565,7 @@ func TestDeepAgent_hotReloadRails_部分更新(t *testing.T) {
 	// 热重配置，带新 Rails（同类型替换）
 	fr2 := &fakeAgentRailWithType{}
 	cfg2 := schema.NewDeepAgentConfig()
-	cfg2.Rails = []rail.AgentRail{fr2}
+	cfg2.Rails = []agentinterfaces.AgentRail{fr2}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg2); err != nil {
 		t.Fatalf("热重配置返回错误: %v", err)
 	}
@@ -1588,7 +1587,7 @@ func TestDeepAgent_hotReloadRails_全量替换(t *testing.T) {
 	// 首次配置带 Rails
 	fr1 := &fakeAgentRailWithType{}
 	cfg1 := schema.NewDeepAgentConfig()
-	cfg1.Rails = []rail.AgentRail{fr1}
+	cfg1.Rails = []agentinterfaces.AgentRail{fr1}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg1); err != nil {
 		t.Fatalf("首次 ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -1675,9 +1674,9 @@ func TestDeepAgent_registerRailSelective_桥接事件(t *testing.T) {
 
 	// 创建带桥接回调的 Rail
 	fr := &fakeAgentRailWithCallbacks{
-		events: []rail.AgentCallbackEvent{
-			rail.CallbackBeforeModelCall,
-			rail.CallbackAfterModelCall,
+		events: []agentinterfaces.AgentCallbackEvent{
+			agentinterfaces.CallbackBeforeModelCall,
+			agentinterfaces.CallbackAfterModelCall,
 		},
 	}
 
@@ -1697,9 +1696,9 @@ func TestDeepAgent_registerRailSelective_外层事件(t *testing.T) {
 	}
 
 	fr := &fakeAgentRailWithCallbacks{
-		events: []rail.AgentCallbackEvent{
-			rail.CallbackBeforeInvoke,
-			rail.CallbackAfterInvoke,
+		events: []agentinterfaces.AgentCallbackEvent{
+			agentinterfaces.CallbackBeforeInvoke,
+			agentinterfaces.CallbackAfterInvoke,
 		},
 	}
 
@@ -1718,9 +1717,9 @@ func TestDeepAgent_registerRailSelective_Deep事件(t *testing.T) {
 	}
 
 	fr := &fakeAgentRailWithCallbacks{
-		events: []rail.AgentCallbackEvent{
-			rail.CallbackBeforeTaskIteration,
-			rail.CallbackAfterTaskIteration,
+		events: []agentinterfaces.AgentCallbackEvent{
+			agentinterfaces.CallbackBeforeTaskIteration,
+			agentinterfaces.CallbackAfterTaskIteration,
 		},
 	}
 
@@ -1802,7 +1801,7 @@ func TestDeepAgent_EnsureInitialized_带Rails(t *testing.T) {
 
 	cfg := schema.NewDeepAgentConfig()
 	fr := &fakeAgentRailWithType{}
-	cfg.Rails = []rail.AgentRail{fr}
+	cfg.Rails = []agentinterfaces.AgentRail{fr}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -1931,7 +1930,7 @@ func TestDeepAgent_EnsureInitialized_有废弃Rails(t *testing.T) {
 
 	cfg := schema.NewDeepAgentConfig()
 	fr := &fakeAgentRailWithType{}
-	cfg.Rails = []rail.AgentRail{fr}
+	cfg.Rails = []agentinterfaces.AgentRail{fr}
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -2322,19 +2321,19 @@ func (f *fakeSessionFacade) Interact(_ context.Context, _ any) error {
 var _ sessioninterfaces.SessionFacade = (*fakeSessionFacade)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRail) Init(_ rail.RailAgent) error {
+func (r *fakeAgentRail) Init(_ agentinterfaces.BaseAgent) error {
 	r.initCalled = true
 	return nil
 }
 
 // Uninit 实现 AgentRail 接口
-func (r *fakeAgentRail) Uninit(_ rail.RailAgent) error {
+func (r *fakeAgentRail) Uninit(_ agentinterfaces.BaseAgent) error {
 	r.uninitCalled = true
 	return nil
 }
 
 // GetCallbacks 实现 AgentRail 接口
-func (r *fakeAgentRail) GetCallbacks() map[rail.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+func (r *fakeAgentRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
 }
 
@@ -2344,254 +2343,254 @@ func (r *fakeAgentRail) Priority() int {
 }
 
 // BeforeInvoke 实现 AgentRail 接口
-func (r *fakeAgentRail) BeforeInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterInvoke 实现 AgentRail 接口
-func (r *fakeAgentRail) AfterInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRail) BeforeTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) BeforeTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRail) AfterTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) AfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeModelCall 实现 AgentRail 接口
-func (r *fakeAgentRail) BeforeModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterModelCall 实现 AgentRail 接口
-func (r *fakeAgentRail) AfterModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) AfterModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnModelException 实现 AgentRail 接口
-func (r *fakeAgentRail) OnModelException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) OnModelException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeToolCall 实现 AgentRail 接口
-func (r *fakeAgentRail) BeforeToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) BeforeToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterToolCall 实现 AgentRail 接口
-func (r *fakeAgentRail) AfterToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) AfterToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnToolException 实现 AgentRail 接口
-func (r *fakeAgentRail) OnToolException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRail) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // 确认 fakeAgentRail 满足 AgentRail 接口
-var _ rail.AgentRail = (*fakeAgentRail)(nil)
+var _ agentinterfaces.AgentRail = (*fakeAgentRail)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) Init(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithType) Init(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) Uninit(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithType) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
 func (r *fakeAgentRailWithType) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) BeforeInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) AfterInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) BeforeTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) BeforeTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) AfterTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) AfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) BeforeModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) AfterModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) AfterModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnModelException 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) OnModelException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) OnModelException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) BeforeToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) BeforeToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) AfterToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) AfterToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnToolException 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) OnToolException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // GetCallbacks 实现 AgentRail 接口
-func (r *fakeAgentRailWithType) GetCallbacks() map[rail.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+func (r *fakeAgentRailWithType) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
 }
 
 // 确认 fakeAgentRailWithType 满足 AgentRail 接口
-var _ rail.AgentRail = (*fakeAgentRailWithType)(nil)
+var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) Init(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithType2) Init(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) Uninit(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithType2) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
 func (r *fakeAgentRailWithType2) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) BeforeInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) AfterInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) BeforeTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) BeforeTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) AfterTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) AfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) BeforeModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) AfterModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) AfterModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnModelException 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) OnModelException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) OnModelException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) BeforeToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) BeforeToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) AfterToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) AfterToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnToolException 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) OnToolException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithType2) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // GetCallbacks 实现 AgentRail 接口
-func (r *fakeAgentRailWithType2) GetCallbacks() map[rail.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+func (r *fakeAgentRailWithType2) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	return nil
 }
 
 // 确认 fakeAgentRailWithType2 满足 AgentRail 接口
-var _ rail.AgentRail = (*fakeAgentRailWithType2)(nil)
+var _ agentinterfaces.AgentRail = (*fakeAgentRailWithType2)(nil)
 
 // Init 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) Init(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithCallbacks) Init(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Uninit 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) Uninit(_ rail.RailAgent) error { return nil }
+func (r *fakeAgentRailWithCallbacks) Uninit(_ agentinterfaces.BaseAgent) error { return nil }
 
 // Priority 实现 AgentRail 接口
 func (r *fakeAgentRailWithCallbacks) Priority() int { return r.base.Priority() }
 
 // BeforeInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) BeforeInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) BeforeInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterInvoke 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) AfterInvoke(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) AfterInvoke(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) BeforeTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) BeforeTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterTaskIteration 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) AfterTaskIteration(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) AfterTaskIteration(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) BeforeModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) BeforeModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterModelCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) AfterModelCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) AfterModelCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnModelException 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) OnModelException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) OnModelException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // BeforeToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) BeforeToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) BeforeToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // AfterToolCall 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) AfterToolCall(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) AfterToolCall(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // OnToolException 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) OnToolException(_ context.Context, _ *rail.AgentCallbackContext) error {
+func (r *fakeAgentRailWithCallbacks) OnToolException(_ context.Context, _ *agentinterfaces.AgentCallbackContext) error {
 	return nil
 }
 
 // GetCallbacks 实现 AgentRail 接口
-func (r *fakeAgentRailWithCallbacks) GetCallbacks() map[rail.AgentCallbackEvent]cb.PerAgentCallbackFunc {
-	result := make(map[rail.AgentCallbackEvent]cb.PerAgentCallbackFunc, len(r.events))
+func (r *fakeAgentRailWithCallbacks) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
+	result := make(map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc, len(r.events))
 	for _, event := range r.events {
 		result[event] = func(ctx context.Context, agentCallbackContext any) error { return nil }
 	}
@@ -3182,7 +3181,7 @@ func TestDeepAgent_ensureInitialized_有PendingRails(t *testing.T) {
 
 	cfg := schema.NewDeepAgentConfig()
 	fr := &fakeAgentRail{}
-	cfg.Rails = []rail.AgentRail{fr}
+	cfg.Rails = []agentinterfaces.AgentRail{fr}
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	// 首次初始化，应注册 pending Rails
@@ -3280,7 +3279,7 @@ func TestDeepAgent_SystemPromptBuilder_有RegisteredRails(t *testing.T) {
 
 	cfg := schema.NewDeepAgentConfig()
 	fr := &fakeAgentRail{}
-	cfg.Rails = []rail.AgentRail{fr}
+	cfg.Rails = []agentinterfaces.AgentRail{fr}
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	// 初始化以注册 Rails
@@ -3313,8 +3312,8 @@ func TestDeepAgent_runTaskLoopInvoke_非SessionFacade(t *testing.T) {
 
 	// 用 fakeSessionFacade 而非 *session.Session
 	fakeSess := newFakeSessionFacade("fake-1")
-	invokeInputs := &rail.InvokeInputs{Query: rail.InvokeQueryString("test")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, fakeSess)
+	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, invokeInputs, fakeSess)
 
 	_, err := agent.runTaskLoopInvoke(context.Background(), cbc, fakeSess)
 	assert.Error(t, err)
@@ -3331,8 +3330,8 @@ func TestDeepAgent_runTaskLoopInvoke_输入类型不匹配(t *testing.T) {
 
 	sess := session.NewSession()
 	// 传入非 InvokeInputs 类型的 cbc
-	mapInputs := &rail.MapInputs{Data: map[string]any{"query": "invalid"}}
-	cbc := rail.NewAgentCallbackContext(agent, mapInputs, sess)
+	mapInputs := &agentinterfaces.MapInputs{Data: map[string]any{"query": "invalid"}}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, mapInputs, sess)
 
 	_, err := agent.runTaskLoopInvoke(context.Background(), cbc, sess)
 	assert.Error(t, err)
@@ -3347,7 +3346,7 @@ func TestDeepAgent_runTaskLoopStream_无Session(t *testing.T) {
 	cfg.EnableTaskLoop = true
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	invokeInputs := &rail.InvokeInputs{Query: rail.InvokeQueryString("test")}
+	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
 	_, err := agent.runTaskLoopStream(context.Background(), invokeInputs, nil, nil)
 	assert.Error(t, err)
 }
@@ -3362,7 +3361,7 @@ func TestDeepAgent_runTaskLoopStream_有Session(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	sess := session.NewSession()
-	invokeInputs := &rail.InvokeInputs{Query: rail.InvokeQueryString("test")}
+	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
 	ch, err := agent.runTaskLoopStream(context.Background(), invokeInputs, sess, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, ch)
@@ -3381,8 +3380,8 @@ func TestDeepAgent_runSingleRoundInvoke_输入类型不匹配(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	sess := session.NewSession()
-	mapInputs := &rail.MapInputs{Data: map[string]any{"query": "invalid"}}
-	cbc := rail.NewAgentCallbackContext(agent, mapInputs, sess)
+	mapInputs := &agentinterfaces.MapInputs{Data: map[string]any{"query": "invalid"}}
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, mapInputs, sess)
 
 	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, sess)
 	assert.Error(t, err)
@@ -3394,9 +3393,9 @@ func TestDeepAgent_runSingleRoundInvoke_无ReactAgent(t *testing.T) {
 	agent := NewDeepAgent(card)
 
 	// 不配置，reactAgent 为 nil
-	invokeInputs := &rail.InvokeInputs{Query: rail.InvokeQueryString("test")}
+	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
 	fakeSess := newFakeSessionFacade("fake-1")
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, fakeSess)
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, invokeInputs, fakeSess)
 
 	_, err := agent.runSingleRoundInvoke(context.Background(), cbc, fakeSess)
 	assert.Error(t, err)
@@ -3407,7 +3406,7 @@ func TestDeepAgent_runSingleRoundStream_无ReactAgent(t *testing.T) {
 	card := makeTestCard("deep-srs-nr", "test-deep-srs-nr")
 	agent := NewDeepAgent(card)
 
-	invokeInputs := &rail.InvokeInputs{Query: rail.InvokeQueryString("test")}
+	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
 	_, err := agent.runSingleRoundStream(context.Background(), invokeInputs, nil, nil)
 	assert.Error(t, err)
 }

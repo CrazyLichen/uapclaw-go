@@ -1,10 +1,10 @@
-package rail
+package interfaces
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -295,9 +295,9 @@ func TestInvokeInputs_IsCron(t *testing.T) {
 
 // TestModelCallInputs_字段 验证 ModelCallInputs 各字段赋值
 func TestModelCallInputs_字段(t *testing.T) {
-	msgs := []schema.BaseMessage{schema.NewDefaultMessage(schema.RoleTypeUser, "hello")}
+	msgs := []llmschema.BaseMessage{llmschema.NewDefaultMessage(llmschema.RoleTypeUser, "hello")}
 	toolInfo := cschema.NewToolInfo("tool1", "", nil)
-	resp := &schema.AssistantMessage{}
+	resp := &llmschema.AssistantMessage{}
 
 	inputs := &ModelCallInputs{
 		Messages: msgs,
@@ -324,8 +324,8 @@ func TestModelCallInputs_默认零值(t *testing.T) {
 
 // TestToolCallInputs_字段 验证 ToolCallInputs 各字段赋值
 func TestToolCallInputs_字段(t *testing.T) {
-	tc := schema.NewToolCall("id1", "search", `{"q": "test"}`)
-	tm := schema.NewToolMessage("id1", "result")
+	tc := llmschema.NewToolCall("id1", "search", `{"q": "test"}`)
+	tm := llmschema.NewToolMessage("id1", "result")
 
 	inputs := &ToolCallInputs{
 		ToolCall:   tc,

@@ -4,7 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -17,9 +25,9 @@ import (
 // Go 没有装饰器语法，用结构体 + 闭包模式替代：
 //
 //	var modelCallRail = NewRailExecutor(
-//	    rail.CallbackBeforeModelCall,
-//	    rail.CallbackAfterModelCall,
-//	    rail.CallbackOnModelException,
+//	    interfaces.CallbackBeforeModelCall,
+//	    interfaces.CallbackAfterModelCall,
+//	    interfaces.CallbackOnModelException,
 //	)
 //	err := modelCallRail.Execute(ctx, cbc, func() error {
 //	    result, e = a.callModel(ctx, cbc)
@@ -35,11 +43,11 @@ import (
 //  6. after 钩子触发（finally 语义，始终执行）
 type RailExecutor struct {
 	// Before 方法执行前触发的事件（空字符串表示不触发）
-	Before AgentCallbackEvent
+	Before interfaces.AgentCallbackEvent
 	// After 方法执行后触发的事件（finally 语义，始终执行；空字符串表示不触发）
-	After AgentCallbackEvent
+	After interfaces.AgentCallbackEvent
 	// OnException 方法异常时触发的事件（空字符串表示不触发）
-	OnException AgentCallbackEvent
+	OnException interfaces.AgentCallbackEvent
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -50,9 +58,9 @@ var (
 	// 用法：
 	//   err := rail.ModelCallRail.Execute(ctx, cbc, func() error { ... })
 	ModelCallRail = NewRailExecutor(
-		CallbackBeforeModelCall,
-		CallbackAfterModelCall,
-		CallbackOnModelException,
+		interfaces.CallbackBeforeModelCall,
+		interfaces.CallbackAfterModelCall,
+		interfaces.CallbackOnModelException,
 	)
 	// ToolCallRail 工具调用的 Rail 执行器。
 	//
@@ -60,16 +68,16 @@ var (
 	// 用法：
 	//   err := rail.ToolCallRail.Execute(ctx, cbc, func() error { ... })
 	ToolCallRail = NewRailExecutor(
-		CallbackBeforeToolCall,
-		CallbackAfterToolCall,
-		CallbackOnToolException,
+		interfaces.CallbackBeforeToolCall,
+		interfaces.CallbackAfterToolCall,
+		interfaces.CallbackOnToolException,
 	)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewRailExecutor 创建 RailExecutor 实例。
-func NewRailExecutor(before, after, onException AgentCallbackEvent) *RailExecutor {
+func NewRailExecutor(before, after, onException interfaces.AgentCallbackEvent) *RailExecutor {
 	return &RailExecutor{
 		Before:      before,
 		After:       after,
@@ -105,7 +113,7 @@ func NewRailExecutor(before, after, onException AgentCallbackEvent) *RailExecuto
 //   - context 取消：跳过 after 事件（对齐 Python CancelledError 保护）
 func (re *RailExecutor) Execute(
 	ctx context.Context,
-	cbc *AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	fn func() error,
 ) error {
 	attempt := 0
@@ -197,7 +205,7 @@ func (re *RailExecutor) Execute(
 //
 // 对齐 Python: wrapper.rail_events = (before, after, on_exception)
 // 供反射/调试/测试使用。
-func (re *RailExecutor) RailEvents() (before, after, onException AgentCallbackEvent) {
+func (re *RailExecutor) RailEvents() (before, after, onException interfaces.AgentCallbackEvent) {
 	return re.Before, re.After, re.OnException
 }
 
@@ -212,7 +220,7 @@ func (re *RailExecutor) RailEvents() (before, after, onException AgentCallbackEv
 //   - after 回调出错且有原始异常时 → log 不掩盖原始异常
 //   - after 回调出错且无原始异常时 → 返回 after 回调的错误
 //   - 无 after 事件时 → 直接返回原始异常（可能为 nil）
-func (re *RailExecutor) fireAfter(ctx context.Context, cbc *AgentCallbackContext, origErr error) error {
+func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCallbackContext, origErr error) error {
 	// 无 after 事件
 	if re.After == "" {
 		return origErr

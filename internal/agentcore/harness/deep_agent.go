@@ -20,6 +20,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
@@ -35,7 +36,6 @@ import (
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -55,7 +55,7 @@ type DeepAgent struct {
 	// abilityManager 能力管理器
 	abilityManager agentinterfaces.AbilityManagerInterface
 	// callbackManager 回调管理器
-	callbackManager *rail.AgentCallbackManager
+	callbackManager *agentinterfaces.AgentCallbackManager
 
 	// reactAgent 内层 ReActAgent
 	reactAgent *agents.ReActAgent
@@ -75,14 +75,14 @@ type DeepAgent struct {
 	boundSessionID string
 	// taskCompletionRail 任务完成 Rail
 	// ⤵️ 9.11 回填：TaskCompletionRail 具体类型
-	taskCompletionRail rail.AgentRail
+	taskCompletionRail agentinterfaces.AgentRail
 
 	// pendingRails 待注册 Rail 列表
-	pendingRails []rail.AgentRail
+	pendingRails []agentinterfaces.AgentRail
 	// staleRails 已废弃 Rail 列表
-	staleRails []rail.AgentRail
+	staleRails []agentinterfaces.AgentRail
 	// registeredRails 已注册 Rail 列表
-	registeredRails []rail.AgentRail
+	registeredRails []agentinterfaces.AgentRail
 	// railsMu Rail 列表互斥锁
 	railsMu sync.Mutex
 
@@ -134,27 +134,27 @@ const (
 var (
 	// bridgeEvents 桥接到内层 ReActAgent 的事件集合
 	// 对齐 Python: _BRIDGE_EVENTS
-	bridgeEvents = map[rail.AgentCallbackEvent]bool{
-		rail.CallbackBeforeModelCall:  true,
-		rail.CallbackAfterModelCall:   true,
-		rail.CallbackOnModelException: true,
-		rail.CallbackBeforeToolCall:   true,
-		rail.CallbackAfterToolCall:    true,
-		rail.CallbackOnToolException:  true,
+	bridgeEvents = map[agentinterfaces.AgentCallbackEvent]bool{
+		agentinterfaces.CallbackBeforeModelCall:  true,
+		agentinterfaces.CallbackAfterModelCall:   true,
+		agentinterfaces.CallbackOnModelException: true,
+		agentinterfaces.CallbackBeforeToolCall:   true,
+		agentinterfaces.CallbackAfterToolCall:    true,
+		agentinterfaces.CallbackOnToolException:  true,
 	}
 
 	// outerOnlyEvents 仅注册到外层 DeepAgent 的事件集合
 	// 对齐 Python: _OUTER_ONLY_EVENTS
-	outerOnlyEvents = map[rail.AgentCallbackEvent]bool{
-		rail.CallbackBeforeInvoke: true,
-		rail.CallbackAfterInvoke:  true,
+	outerOnlyEvents = map[agentinterfaces.AgentCallbackEvent]bool{
+		agentinterfaces.CallbackBeforeInvoke: true,
+		agentinterfaces.CallbackAfterInvoke:  true,
 	}
 
 	// deepEvents DeepAgent 扩展事件集合
 	// 对齐 Python: _DEEP_EVENTS
-	deepEvents = map[rail.AgentCallbackEvent]bool{
-		rail.CallbackBeforeTaskIteration: true,
-		rail.CallbackAfterTaskIteration:  true,
+	deepEvents = map[agentinterfaces.AgentCallbackEvent]bool{
+		agentinterfaces.CallbackBeforeTaskIteration: true,
+		agentinterfaces.CallbackAfterTaskIteration:  true,
 	}
 
 	// 编译期接口检查
@@ -170,7 +170,7 @@ func NewDeepAgent(card *agentschema.AgentCard) *DeepAgent {
 	return &DeepAgent{
 		card:            card,
 		abilityManager:  ability.NewAbilityManager(nil),
-		callbackManager: rail.NewAgentCallbackManager(card.ID),
+		callbackManager: agentinterfaces.NewAgentCallbackManager(card.ID),
 	}
 }
 
@@ -227,7 +227,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
-	cbc := rail.NewAgentCallbackContext(d, invokeInputs, sess)
+	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	d.invokeActive.Store(true)
 	defer d.invokeActive.Store(false)
@@ -236,7 +236,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 	// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
-	if err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+	if err := cbc.FireLifecycle(agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 		if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
 			r, err := d.runTaskLoopInvoke(ctx, cbc, sess)
 			if err != nil {
@@ -289,7 +289,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 	sess := agentOpts.Session
 	streamModes := agentOpts.StreamModes
 
-	cbc := rail.NewAgentCallbackContext(d, invokeInputs, sess)
+	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	outCh := make(chan stream.Schema, 64)
 
@@ -301,7 +301,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 
 		// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
-		_ = cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+		_ = cbc.FireLifecycle(agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 			var streamResult map[string]any
 			var streamOutputParts []string
 
@@ -386,20 +386,20 @@ func (d *DeepAgent) SystemPromptBuilder() saprompts.SystemPromptBuilderInterface
 
 // CallbackManager 返回回调管理器。
 // 对齐 Python: BaseAgent.agent_callback_manager 属性
-func (d *DeepAgent) CallbackManager() *rail.AgentCallbackManager {
+func (d *DeepAgent) CallbackManager() *agentinterfaces.AgentCallbackManager {
 	return d.callbackManager
 }
 
 // RegisterCallback 注册回调。
 // 对齐 Python: BaseAgent.register_callback(event, callback, priority)
-func (d *DeepAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
+func (d *DeepAgent) RegisterCallback(ctx context.Context, event agentinterfaces.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
 	d.callbackManager.RegisterCallback(ctx, event, fn, opts...)
 	return nil
 }
 
 // RegisterRail 注册 Rail。
 // 对齐 Python: BaseAgent.register_rail(rail) (line 1187)
-func (d *DeepAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...cb.CallbackOption) error {
+func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	d.railsMu.Lock()
 	// 检查是否为 TaskCompletionRail
 	if isTaskCompletionRail(r) {
@@ -420,7 +420,7 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...
 
 // UnregisterRail 注销 Rail。
 // 对齐 Python: BaseAgent.unregister_rail(rail) (line 1198)
-func (d *DeepAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
+func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentRail) error {
 	d.railsMu.Lock()
 	// 从 pendingRails 中移除
 	d.pendingRails = removeRailByRef(d.pendingRails, r)
@@ -663,7 +663,7 @@ func (d *DeepAgent) IsInitialized() bool {
 
 // AddRail 同步排队一个 Rail 以便延迟注册。
 // 对齐 Python: DeepAgent.add_rail(rail) (line 1139)
-func (d *DeepAgent) AddRail(r rail.AgentRail) *DeepAgent {
+func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
 
@@ -677,14 +677,14 @@ func (d *DeepAgent) AddRail(r rail.AgentRail) *DeepAgent {
 
 // FindRailsByType 返回排队和已注册中匹配指定类型的 Rail。
 // 对齐 Python: DeepAgent.find_rails_by_type(rail_types) (line 1155)
-func (d *DeepAgent) FindRailsByType(railTypes ...reflect.Type) []rail.AgentRail {
+func (d *DeepAgent) FindRailsByType(railTypes ...reflect.Type) []agentinterfaces.AgentRail {
 	if len(railTypes) == 0 {
 		return nil
 	}
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
 
-	var result []rail.AgentRail
+	var result []agentinterfaces.AgentRail
 	for _, r := range d.pendingRails {
 		if matchType(r, railTypes) {
 			result = append(result, r)
@@ -711,7 +711,7 @@ func (d *DeepAgent) StripRailsByType(railTypes ...reflect.Type) int {
 
 	// 从 pendingRails 移除
 	before := len(d.pendingRails)
-	var newPending []rail.AgentRail
+	var newPending []agentinterfaces.AgentRail
 	for _, r := range d.pendingRails {
 		if matchType(r, railTypes) {
 			removed++
@@ -967,7 +967,7 @@ func (d *DeepAgent) ReactConfig() agentinterfaces.AgentConfig {
 }
 
 // AgentID 返回 Agent 唯一标识。
-// 实现 rail.RailAgent 接口。
+// 实现 agentinterfaces.BaseAgent 接口。
 func (d *DeepAgent) AgentID() string {
 	if d.card == nil {
 		return ""
@@ -1051,7 +1051,7 @@ func (d *DeepAgent) hotReloadRails(config *hschema.DeepAgentConfig) {
 		for _, r := range config.Rails {
 			replacingTypes[reflect.TypeOf(r)] = true
 		}
-		var retained []rail.AgentRail
+		var retained []agentinterfaces.AgentRail
 		for _, r := range d.registeredRails {
 			if replacingTypes[reflect.TypeOf(r)] {
 				d.staleRails = append(d.staleRails, r)
@@ -1061,7 +1061,7 @@ func (d *DeepAgent) hotReloadRails(config *hschema.DeepAgentConfig) {
 		}
 		d.registeredRails = retained
 
-		var newPending []rail.AgentRail
+		var newPending []agentinterfaces.AgentRail
 		for _, r := range d.pendingRails {
 			if !replacingTypes[reflect.TypeOf(r)] {
 				newPending = append(newPending, r)
@@ -1243,8 +1243,9 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	d.taskCompletionRail = nil
 
 	if config.ProgressiveToolEnabled {
-		// ⤵️ 9.11 回填：ProgressiveToolRail 创建
-		logger.Debug(logComponent).Msg("ProgressiveToolRail 待创建，⤵️ 9.11 回填")
+		// ⤴️ 9.11 回填：ProgressiveToolRail 创建
+		d.pendingRails = append(d.pendingRails, rails.NewProgressiveToolRail(config))
+		logger.Debug(logComponent).Msg("ProgressiveToolRail 已创建，⤴️ 9.11 回填")
 	}
 
 	if config.EnableTaskLoop {
@@ -1376,7 +1377,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 
 	d.railsMu.Lock()
 	// 注销废弃 Rail
-	var staleToUnregister []rail.AgentRail
+	var staleToUnregister []agentinterfaces.AgentRail
 	for _, staleRail := range d.staleRails {
 		// 跳过同时也在 pending 中的同名实例
 		found := false
@@ -1393,7 +1394,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 	d.staleRails = nil
 
 	// 注册待处理 Rail
-	pendingToRegister := make([]rail.AgentRail, len(d.pendingRails))
+	pendingToRegister := make([]agentinterfaces.AgentRail, len(d.pendingRails))
 	copy(pendingToRegister, d.pendingRails)
 	d.pendingRails = nil
 	d.railsMu.Unlock()
@@ -1459,35 +1460,35 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 
 // normalizeInputs 解析用户输入为 InvokeInputs。
 // 对齐 Python: DeepAgent._normalize_inputs(inputs) (line 1056)
-func (d *DeepAgent) normalizeInputs(inputs any) *rail.InvokeInputs {
+func (d *DeepAgent) normalizeInputs(inputs any) *agentinterfaces.InvokeInputs {
 	switch v := inputs.(type) {
 	case map[string]any:
-		var query rail.InvokeQuery
+		var query agentinterfaces.InvokeQuery
 		// query 字段可能是 string 或 InteractiveInput
 		if q, ok := v["query"]; ok {
 			switch qv := q.(type) {
 			case string:
-				query = rail.InvokeQueryString(qv)
+				query = agentinterfaces.InvokeQueryString(qv)
 			case *interaction.InteractiveInput:
 				query = qv
 			default:
-				query = rail.InvokeQueryString(fmt.Sprintf("%v", qv))
+				query = agentinterfaces.InvokeQueryString(fmt.Sprintf("%v", qv))
 			}
 		} else {
-			query = rail.InvokeQueryString("")
+			query = agentinterfaces.InvokeQueryString("")
 		}
 		conversationID, _ := v["conversation_id"].(string)
-		var runKind rail.RunKind
-		var runContext *rail.RunContext
+		var runKind agentinterfaces.RunKind
+		var runContext *agentinterfaces.RunContext
 		if run, ok := v["run"].(map[string]any); ok {
 			if kind, kOk := run["kind"].(string); kOk {
-				runKind = rail.RunKind(kind)
+				runKind = agentinterfaces.RunKind(kind)
 			}
 			if contextData, cOk := run["context"].(map[string]any); cOk {
 				// 对齐 Python: RunContext(**context_data) (line 1069)
-				runContext = &rail.RunContext{}
+				runContext = &agentinterfaces.RunContext{}
 				if reason, ok := contextData["reason"].(string); ok {
-					runContext.Reason = rail.HeartbeatReason(reason)
+					runContext.Reason = agentinterfaces.HeartbeatReason(reason)
 				}
 				if sessionID, ok := contextData["session_id"].(string); ok {
 					runContext.SessionID = sessionID
@@ -1500,25 +1501,25 @@ func (d *DeepAgent) normalizeInputs(inputs any) *rail.InvokeInputs {
 				}
 			}
 		}
-		return &rail.InvokeInputs{
+		return &agentinterfaces.InvokeInputs{
 			Query:          query,
 			ConversationID: conversationID,
 			RunKind:        runKind,
 			RunContext:     runContext,
 		}
 	case string:
-		return &rail.InvokeInputs{Query: rail.InvokeQueryString(v)}
+		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}
 	case *interaction.InteractiveInput:
 		// 对齐 Python: isinstance(inputs, InteractiveInput) → query = inputs
-		return &rail.InvokeInputs{Query: v}
+		return &agentinterfaces.InvokeInputs{Query: v}
 	default:
-		return &rail.InvokeInputs{Query: rail.InvokeQueryString(fmt.Sprintf("%v", v))}
+		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(fmt.Sprintf("%v", v))}
 	}
 }
 
 // toEffectiveInputs 将 InvokeInputs 转换为 ReAct 输入字典。
 // 对齐 Python: DeepAgent._to_effective_inputs(invoke_inputs) (line 1093)
-func toEffectiveInputs(invokeInputs *rail.InvokeInputs) map[string]any {
+func toEffectiveInputs(invokeInputs *agentinterfaces.InvokeInputs) map[string]any {
 	result := map[string]any{"query": invokeInputs.Query}
 	if invokeInputs.ConversationID != "" {
 		result["conversation_id"] = invokeInputs.ConversationID
@@ -1534,7 +1535,7 @@ func toEffectiveInputs(invokeInputs *rail.InvokeInputs) map[string]any {
 
 // isResumeInput 判断输入是否为中断恢复。
 // 对齐 Python: DeepAgent._is_resume_input(invoke_inputs) (line 1106)
-func isResumeInput(invokeInputs *rail.InvokeInputs) bool {
+func isResumeInput(invokeInputs *agentinterfaces.InvokeInputs) bool {
 	// 对齐 Python: isinstance(invoke_inputs.query, InteractiveInput)
 	return invokeInputs.Query != nil && invokeInputs.Query.IsInteractiveInput()
 }
@@ -1588,7 +1589,7 @@ func resultFromStreamChunk(chunk stream.Schema, outputParts *[]string) map[strin
 
 // registerRailSelective 选择性路由 Rail 回调到正确的 Agent。
 // 对齐 Python: DeepAgent._register_rail_selective(rail) (line 1626)
-func (d *DeepAgent) registerRailSelective(ctx context.Context, r rail.AgentRail) {
+func (d *DeepAgent) registerRailSelective(ctx context.Context, r agentinterfaces.AgentRail) {
 	callbacks := r.GetCallbacks()
 
 	for event, callback := range callbacks {
@@ -1619,8 +1620,8 @@ func (d *DeepAgent) registerRailSelective(ctx context.Context, r rail.AgentRail)
 
 // runSingleRoundInvoke 调用内层 ReActAgent 一次。
 // 对齐 Python: DeepAgent._run_single_round_invoke(ctx, session) (line 1647)
-func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *rail.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
-	modified, ok := cbc.Inputs().(*rail.InvokeInputs)
+func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+	modified, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
 			exception.WithMsg("ctx.inputs 必须为 InvokeInputs 类型"))
@@ -1643,7 +1644,7 @@ func (d *DeepAgent) runSingleRoundInvoke(ctx context.Context, cbc *rail.AgentCal
 // 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112)
 // runTaskLoopInvoke 执行外层任务循环，返回最后一轮结果。
 // 对齐 Python: DeepAgent._run_task_loop_invoke(ctx, session) (line 2112-2144)
-func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
+func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) (map[string]any, error) {
 	sessConcrete, ok := sess.(*session.Session)
 	if !ok || sessConcrete == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
@@ -1671,8 +1672,8 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *rail.AgentCallba
 // invoke 和 stream 共用此方法：
 //   invoke: 从 channel 读取最后一轮结果
 //   stream: 后台goroutine从channel读取，每轮写入session流
-func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *rail.AgentCallbackContext, sess *session.Session, isStreaming bool) (<-chan map[string]any, error) {
-	modified, ok := cbc.Inputs().(*rail.InvokeInputs)
+func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess *session.Session, isStreaming bool) (<-chan map[string]any, error) {
+	modified, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
 		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
 			exception.WithMsg("ctx.inputs 必须为 InvokeInputs 类型"))
@@ -1824,7 +1825,7 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 // 使用与 ReActAgent.Stream() 相同的"后台+前台"模式：
 //   后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
 //   前台: 从 session.StreamIterator() 读取chunk转发到 outCh
-func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
+func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
 	// 对齐 Python: _ = stream_modes（显式丢弃，task-loop stream 从 session.StreamIterator() 读取）
 	_ = streamModes
 
@@ -1840,7 +1841,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.In
 	}
 
 	// 构建 AgentCallbackContext
-	cbc := rail.NewAgentCallbackContext(d, invokeInputs, sess)
+	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
 	outCh := make(chan stream.Schema, 64)
 
@@ -1887,7 +1888,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *rail.In
 
 // runSingleRoundStream 流式调用内层 ReActAgent 一次。
 // 对齐 Python: DeepAgent._run_single_round_stream(ctx, session, stream_modes) (line 2234)
-func (d *DeepAgent) runSingleRoundStream(ctx context.Context, invokeInputs *rail.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
+func (d *DeepAgent) runSingleRoundStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
 	d.configMu.RLock()
 	reactAgent := d.reactAgent
 	d.configMu.RUnlock()
@@ -2281,14 +2282,14 @@ func joinStrings(parts []string) string {
 }
 
 // isTaskCompletionRail 判断 Rail 是否为 TaskCompletionRail 类型。
-func isTaskCompletionRail(r rail.AgentRail) bool {
+func isTaskCompletionRail(r agentinterfaces.AgentRail) bool {
 	// ⤵️ 9.11 回填：TaskCompletionRail 类型检查
 	return reflect.TypeOf(r).String() == "TaskCompletionRail"
 }
 
 // removeRailByRef 按引用移除 Rail。
-func removeRailByRef(rails []rail.AgentRail, target rail.AgentRail) []rail.AgentRail {
-	var result []rail.AgentRail
+func removeRailByRef(rails []agentinterfaces.AgentRail, target agentinterfaces.AgentRail) []agentinterfaces.AgentRail {
+	var result []agentinterfaces.AgentRail
 	for _, r := range rails {
 		if r != target {
 			result = append(result, r)
@@ -2298,8 +2299,8 @@ func removeRailByRef(rails []rail.AgentRail, target rail.AgentRail) []rail.Agent
 }
 
 // filterRailsNotType 按类型谓词过滤 Rail。
-func filterRailsNotType(rails []rail.AgentRail, predicate func(rail.AgentRail) bool) []rail.AgentRail {
-	var result []rail.AgentRail
+func filterRailsNotType(rails []agentinterfaces.AgentRail, predicate func(agentinterfaces.AgentRail) bool) []agentinterfaces.AgentRail {
+	var result []agentinterfaces.AgentRail
 	for _, r := range rails {
 		if !predicate(r) {
 			result = append(result, r)
@@ -2309,7 +2310,7 @@ func filterRailsNotType(rails []rail.AgentRail, predicate func(rail.AgentRail) b
 }
 
 // matchType 检查 Rail 是否匹配指定类型列表。
-func matchType(r rail.AgentRail, types []reflect.Type) bool {
+func matchType(r agentinterfaces.AgentRail, types []reflect.Type) bool {
 	rType := reflect.TypeOf(r)
 	for _, t := range types {
 		if rType == t {

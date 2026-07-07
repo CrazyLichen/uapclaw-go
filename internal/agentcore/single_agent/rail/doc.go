@@ -1,47 +1,23 @@
-// Package rail 提供 Agent 生命周期 Rail 系统的基础定义。
+// Package rail 提供 Agent 生命周期 Rail 执行器。
 //
-// Rail 是 class-based 的生命周期钩子机制，允许在 Agent 执行流程的
-// 特定时机注入拦截逻辑（重试、提前终止、steering 等）。
+// 本包仅保留 RailExecutor（@rail 装饰器的 Go 等价），
+// 将函数包裹在 before/after/on_exception 钩子中执行。
 //
-// 本包与框架层 callback/ 包的事件体系是不同层次：
-//   - 本包 AgentCallbackEvent = per-Agent 实例级生命周期事件
-//   - callback.GlobalAgentEventType = 框架级全局观测事件
-//
-// 两者不桥接，各自独立触发，与 Python 保持一致。
+// Rail 系统的核心类型（AgentCallbackEvent、AgentCallbackContext、
+// AgentCallbackManager、AgentRail、BaseRail 等）已迁至
+// single_agent/interfaces 包，以打破 rail ↔ interfaces 循环依赖。
 //
 // 文件目录：
 //
 //	rail/
 //	├── doc.go       # 包文档
-//	├── event.go     # AgentCallbackEvent 枚举定义
-//	├── context.go   # AgentCallbackContext 结构体与方法
-//	├── inputs.go    # EventInputs 接口及各事件 Inputs 结构体
-//	├── rail.go      # AgentRail 接口 + BaseRail 结构体 + CallbackFrom/BuildCallbacks
-//	├── executor.go  # RailExecutor 结构体（@rail 装饰器等价）+ ModelCallRail/ToolCallRail
-//	└── manager.go   # AgentCallbackManager 回调管理器
+//	└── executor.go  # RailExecutor 结构体（@rail 装饰器等价）+ ModelCallRail/ToolCallRail
 //
-// 核心类型/接口索引：
+// 核心类型索引：
 //
-//	AgentCallbackEvent       — 10 种生命周期事件枚举
-//	AgentCallbackContext     — Rail 系统核心中介对象（retry/force_finish/steering）
-//	AgentCallbackManager    — PerAgent 实例级回调管理器（注册/触发/注销）
-//	AgentRail                — Agent 生命周期 Rail 接口（10 个钩子 + Init/Uninit/GetCallbacks）
-//	BaseRail                 — AgentRail 的 no-op 默认实现（嵌入后只需覆盖关心的钩子）
-//	RailExecutor             — @rail 装饰器等价（before/gate/exception/retry/after 包裹执行）
-//	RailAgent                — Rail 包所需的最小 Agent 接口（打破循环依赖）
-//	EventInputs              — 回调事件输入接口
-//	InvokeQuery              — Invoke 阶段查询输入接口（IsInteractiveInput + PlainText）
-//	InvokeQueryString        — 普通字符串查询，实现 InvokeQuery
-//	InvokeInputs             — BEFORE/AFTER_INVOKE 事件输入（query/result/run_kind/run_context）
-//	ModelCallInputs          — BEFORE/AFTER_MODEL_CALL 事件输入（messages/tools/response）
-//	ToolCallInputs           — BEFORE/AFTER_TOOL_CALL 事件输入（tool_call/tool_name/tool_result/tool_msg）
-//	TaskIterationInputs      — BEFORE/AFTER_TASK_ITERATION 事件输入（iteration/query/is_follow_up）
-//	MapInputs                — 任意字典事件输入（Dict[str, Any] 兜底，对齐 Python EventInputs Union）
-//	RunKind                  — 运行模式枚举（normal/heartbeat/cron）
-//	RunContext               — 结构化运行时上下文（心跳等场景）
-//	HeartbeatReason          — 心跳触发原因枚举（interval/manual）
-//	RetryRequest             — 重试指令（delay_seconds）
-//	ForceFinishRequest       — 提前终止信号（result）
+//	RailExecutor — @rail 装饰器等价（before/gate/exception/retry/after 包裹执行）
+//	ModelCallRail — 模型调用 Rail 执行器
+//	ToolCallRail  — 工具调用 Rail 执行器
 //
-// 对应 Python 代码：openjiuwen/core/single_agent/rail/base.py
+// 对应 Python 代码：openjiuwen/core/single_agent/rail/base.py（RailExecutor 部分）
 package rail

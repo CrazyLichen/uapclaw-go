@@ -42,13 +42,13 @@ func NewInteractiveInput(rawInputs ...any) (*InteractiveInput, error) {
 	return input, nil
 }
 
-// IsInteractiveInput 实现 rail.InvokeQuery 接口，交互式输入始终返回 true。
+// IsInteractiveInput 实现 interfaces.InvokeQuery 接口，交互式输入始终返回 true。
 //
 // 对齐 Python: isinstance(query, InteractiveInput)
 // 当 InvokeInputs.Query 为 *InteractiveInput 时，表示这是一次中断恢复操作。
 func (i *InteractiveInput) IsInteractiveInput() bool { return true }
 
-// PlainText 实现 rail.InvokeQuery 接口，从 RawInputs 提取纯文本。
+// PlainText 实现 interfaces.InvokeQuery 接口，从 RawInputs 提取纯文本。
 //
 // 对齐 Python: _extract_plain_text(user_input)
 // - RawInputs 为 string → 返回该字符串

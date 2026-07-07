@@ -11,7 +11,7 @@ import (
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	security "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/security"
 	workspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	rail "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
@@ -84,7 +84,7 @@ type SubAgentConfig struct {
 	// Model 模型实例
 	Model *llm.Model `json:"model,omitempty"`
 	// Rails Rail 列表
-	Rails []rail.AgentRail `json:"-"`
+	Rails []sainterfaces.AgentRail `json:"-"`
 	// Skills 技能名称列表
 	Skills []string `json:"skills,omitempty"`
 	// Backend 后端协议实例（any 占位，P2 预留，等 Backend 实现时回填）
@@ -126,7 +126,7 @@ type SubagentCreateParams struct {
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig
 	// Rails Rail 列表
-	Rails []rail.AgentRail
+	Rails []sainterfaces.AgentRail
 	// EnableTaskLoop 是否启用任务循环
 	EnableTaskLoop bool
 	// MaxIterations 最大迭代次数
@@ -205,7 +205,7 @@ type DeepAgentConfig struct {
 	// EnableReadImageMultimodal 是否启用图片多模态读取
 	EnableReadImageMultimodal bool `json:"enable_read_image_multimodal"`
 	// Rails Rail 列表
-	Rails []rail.AgentRail `json:"-"`
+	Rails []sainterfaces.AgentRail `json:"-"`
 	// EnablePlanMode 是否启用规划模式
 	EnablePlanMode bool `json:"enable_plan_mode"`
 	// ModelSelection 模型选择列表

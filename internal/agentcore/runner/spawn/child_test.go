@@ -15,7 +15,6 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -512,16 +511,16 @@ func (a *stubBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...interfa
 func (a *stubBaseAgent) Card() *agentschema.AgentCard                       { return a.card }
 func (a *stubBaseAgent) Config() interfaces.AgentConfig                     { return nil }
 func (a *stubBaseAgent) AbilityManager() interfaces.AbilityManagerInterface { return nil }
-func (a *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
-	return rail.NewAgentCallbackManager("")
+func (a *stubBaseAgent) CallbackManager() *interfaces.AgentCallbackManager {
+	return interfaces.NewAgentCallbackManager("")
 }
-func (a *stubBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
+func (a *stubBaseAgent) RegisterCallback(_ context.Context, _ interfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
 }
-func (a *stubBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...cb.CallbackOption) error {
+func (a *stubBaseAgent) RegisterRail(_ context.Context, _ interfaces.AgentRail, _ ...cb.CallbackOption) error {
 	return nil
 }
-func (a *stubBaseAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+func (a *stubBaseAgent) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error {
 	return nil
 }
 

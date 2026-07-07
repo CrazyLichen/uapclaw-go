@@ -13,7 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -204,7 +203,7 @@ func (a *ReActAgent) CommitInterrupt(
 	intState *agentschema.ToolInterruptionState,
 	modelCtx ceinterface.ModelContext,
 	sess sessioninterfaces.SessionFacade,
-	invokeInputs *rail.InvokeInputs,
+	invokeInputs *interfaces.InvokeInputs,
 	subAgentOutputs []interrupt.PayloadEntry,
 ) (map[string]any, error) {
 	if a.hitlHandler == nil {
@@ -293,12 +292,12 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 	// 对齐 Python: 外部传入 session 时，不调 pre_run（由调用方负责）
 
-	invokeQuery := rail.QueryFromInputs(inputs)
-	invokeInputs := &rail.InvokeInputs{
+	invokeQuery := interfaces.QueryFromInputs(inputs)
+	invokeInputs := &interfaces.InvokeInputs{
 		Query:          invokeQuery,
 		ConversationID: sess.GetSessionID(),
 	}
-	cbc := rail.NewAgentCallbackContext(a, invokeInputs, sess)
+	cbc := interfaces.NewAgentCallbackContext(a, invokeInputs, sess)
 
 	// 设置 extra（对齐 Python L1289-1296）
 	if userID, ok := inputs["user_id"].(string); ok {
@@ -336,11 +335,11 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	var result map[string]any
 	var loopErr error
 
-	err := cbc.FireLifecycle(rail.CallbackBeforeInvoke, rail.CallbackAfterInvoke, func() error {
+	err := cbc.FireLifecycle(interfaces.CallbackBeforeInvoke, interfaces.CallbackAfterInvoke, func() error {
 		// 从 cbc 重新取 inputs（对齐 Python: user_input = ctx.inputs.query）
 		// before_invoke 钩子可能修改 cbc.inputs，必须从 cbc 重新取值
 		curInputs := invokeInputs
-		if ci, ok := cbc.Inputs().(*rail.InvokeInputs); ok && ci != nil {
+		if ci, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok && ci != nil {
 			curInputs = ci
 		}
 
@@ -437,7 +436,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	}
 
 	// 从 cbc 取最终结果（对齐 Python: invoke_inputs.result）
-	if curInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok && curInputs.Result != nil {
+	if curInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok && curInputs.Result != nil {
 		return curInputs.Result, nil
 	}
 	if invokeInputs.Result != nil {
@@ -573,7 +572,7 @@ func (a *ReActAgent) innerStream(
 // 注意：initContext 和 UserMessage 已在 invokeImpl 中完成，此处不再重复。
 func (a *ReActAgent) reactLoop(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,
 	startIteration int,
@@ -654,7 +653,7 @@ func (a *ReActAgent) reactLoop(
 			results, aiMsg.ToolCalls, aiMsg, iteration, originalQuery,
 		)
 		if hitlInterrupt != nil {
-			if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok {
+			if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
 				_, _ = a.CommitInterrupt(ctx, hitlInterrupt, modelCtx, sess, invokeInputs, nil)
 			}
 			break
@@ -668,7 +667,7 @@ func (a *ReActAgent) reactLoop(
 		iterResult = map[string]any{"output": "Max iterations reached without completion", "result_type": "error"}
 	}
 
-	if invokeInputs, ok := cbc.Inputs().(*rail.InvokeInputs); ok {
+	if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {
 		invokeInputs.Result = iterResult
 	}
 
@@ -678,7 +677,7 @@ func (a *ReActAgent) reactLoop(
 // executeToolCalls 执行工具调用列表。
 func (a *ReActAgent) executeToolCalls(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	modelCtx ceinterface.ModelContext,

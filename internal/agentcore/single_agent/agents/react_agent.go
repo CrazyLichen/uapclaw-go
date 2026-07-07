@@ -10,7 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -30,7 +29,7 @@ type ReActAgent struct {
 	// abilityManager 能力管理器
 	abilityManager interfaces.AbilityManagerInterface
 	// callbackManager 回调管理器
-	callbackManager *rail.AgentCallbackManager
+	callbackManager *interfaces.AgentCallbackManager
 	// config Agent 配置
 	config *saconfig.ReActAgentConfig
 	// contextEngine 上下文引擎
@@ -83,7 +82,7 @@ func NewReActAgent(
 	agent := &ReActAgent{
 		card:            card,
 		abilityManager:  ability.NewAbilityManager(nil),
-		callbackManager: rail.NewAgentCallbackManager(card.ID),
+		callbackManager: interfaces.NewAgentCallbackManager(card.ID),
 		config:          config,
 		promptBuilder:   prompts.NewSystemPromptBuilder(),
 	}

@@ -15,7 +15,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessionstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -155,7 +155,7 @@ func TestCommitInterrupt(t *testing.T) {
 			"tc1": {ToolCall: &llmschema.ToolCall{ID: "tc1"}},
 		},
 	}
-	invokeInputs := &rail.InvokeInputs{}
+	invokeInputs := &interfaces.InvokeInputs{}
 	subAgentOutputs := []PayloadEntry{
 		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
 			InterruptRequest: saschema.InterruptRequest{Message: "确认"},
@@ -235,9 +235,9 @@ func TestHandleResume_无新中断(t *testing.T) {
 		},
 		AutoConfirmMapping: map[string]string{},
 	}
-	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+	executeFn := func(ctx context.Context, cbc *interfaces.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
 		return []saschema.ExecuteResult{{Result: map[string]any{"result": "ok"}, ToolMsg: nil}}, nil
 	}
 
@@ -246,7 +246,7 @@ func TestHandleResume_无新中断(t *testing.T) {
 		UserInput:       "user_response",
 		Ctx:             cbc,
 		Session:         sess,
-		InvokeInputs:    &rail.InvokeInputs{},
+		InvokeInputs:    &interfaces.InvokeInputs{},
 		ExecuteToolCall: executeFn,
 	}
 
@@ -274,9 +274,9 @@ func TestHandleResume_有新中断(t *testing.T) {
 		},
 		AutoConfirmMapping: map[string]string{},
 	}
-	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 
-	executeFn := func(ctx context.Context, cbc *rail.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
+	executeFn := func(ctx context.Context, cbc *interfaces.AgentCallbackContext, toolCalls []*llmschema.ToolCall, sess sessioninterfaces.SessionFacade, modelCtx ceinterface.ModelContext) ([]saschema.ExecuteResult, error) {
 		return []saschema.ExecuteResult{{Result: &saschema.ToolInterruptException{Request: req, ToolCall: &llmschema.ToolCall{ID: "tc1"}}, ToolMsg: nil}}, nil
 	}
 
@@ -285,7 +285,7 @@ func TestHandleResume_有新中断(t *testing.T) {
 		UserInput:       "user_response",
 		Ctx:             cbc,
 		Session:         sess,
-		InvokeInputs:    &rail.InvokeInputs{},
+		InvokeInputs:    &interfaces.InvokeInputs{},
 		ExecuteToolCall: executeFn,
 	}
 

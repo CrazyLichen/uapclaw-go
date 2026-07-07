@@ -20,7 +20,6 @@ import (
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -480,8 +479,8 @@ func TestReActAgent_CommitInterrupt_有中断状态(t *testing.T) {
 			},
 		},
 	}
-	invokeInputs := &rail.InvokeInputs{
-		Query: rail.NewInvokeQueryString("test"),
+	invokeInputs := &interfaces.InvokeInputs{
+		Query: interfaces.NewInvokeQueryString("test"),
 	}
 	sess := session.NewSession(session.WithSessionID("test_commit"))
 
@@ -502,7 +501,7 @@ func TestReActAgent_executeToolCalls_无AbilityManager(t *testing.T) {
 	toolCalls := []*llmschema.ToolCall{
 		{ID: "tc1", Name: "test_tool", Arguments: "{}"},
 	}
-	cbc := rail.NewAgentCallbackContext(nil, nil, nil)
+	cbc := interfaces.NewAgentCallbackContext(nil, nil, nil)
 	// newTestAgent 创建的 agent 有 AbilityManager，不会返回 error
 	// 只需验证不 panic
 	results, _ := agent.executeToolCalls(context.Background(), cbc, toolCalls, nil, nil)
@@ -759,7 +758,7 @@ func TestReActAgent_executeToolCalls_有ToolCalls(t *testing.T) {
 	toolCalls := []*llmschema.ToolCall{
 		{ID: "tc1", Name: "test_tool", Arguments: `{"query": "test"}`},
 	}
-	cbc := rail.NewAgentCallbackContext(nil, &rail.InvokeInputs{}, nil)
+	cbc := interfaces.NewAgentCallbackContext(nil, &interfaces.InvokeInputs{}, nil)
 	sess := session.NewSession(session.WithSessionID("exec_tc_sess"))
 	fmc := &fakeModelContext{}
 	// newTestAgent 创建的 agent 有 AbilityManager，工具不存在时会返回错误结果
@@ -1315,8 +1314,8 @@ func TestReActAgent_reactLoop_无工具调用(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("loop_no_tool_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
 	assert.NoError(t, err)
@@ -1355,8 +1354,8 @@ func TestReActAgent_reactLoop_有工具调用(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("loop_tool_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
 	// 不 panic 即可，工具不存在会返回错误信息但不中断循环
@@ -1388,8 +1387,8 @@ func TestReActAgent_reactLoop_达到最大迭代(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("loop_max_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	result, err := agent.reactLoop(context.Background(), cbc, sess, fmc, 0)
 	assert.NoError(t, err)
@@ -1420,13 +1419,13 @@ func TestReActAgent_reactLoop_forceFinish(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("loop_ff_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	// 注册 before_model_call 回调来触发 force-finish
 	manager := agent.CallbackManager()
-	manager.RegisterCallback(context.Background(), rail.CallbackBeforeModelCall, func(_ context.Context, railCtx any) error {
-		if c, ok := railCtx.(*rail.AgentCallbackContext); ok {
+	manager.RegisterCallback(context.Background(), interfaces.CallbackBeforeModelCall, func(_ context.Context, railCtx any) error {
+		if c, ok := railCtx.(*interfaces.AgentCallbackContext); ok {
 			c.RequestForceFinish(map[string]any{"output": "提前结束", "result_type": "answer"})
 		}
 		return nil
@@ -1461,8 +1460,8 @@ func TestReActAgent_reactLoop_steering注入(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("loop_steer_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	// 注入 steering 消息
 	steerCh := make(chan string, 10)
@@ -1490,8 +1489,8 @@ func TestReActAgent_reactLoop_无配置(t *testing.T) {
 	agent.llm = model
 
 	sess := session.NewSession(session.WithSessionID("loop_nocfg_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	result, err := agent.reactLoop(context.Background(), cbc, sess, nil, 0)
 	// 无 modelCtx 时 LLM 调用路径不同
@@ -1509,8 +1508,8 @@ func TestReActAgent_reactLoop_模型调用失败(t *testing.T) {
 
 	// 不注入 LLM，getLLM 返回错误
 	sess := session.NewSession(session.WithSessionID("loop_err_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	result, err := agent.reactLoop(context.Background(), cbc, sess, nil, 0)
 	// getLLM 失败
@@ -1544,8 +1543,8 @@ func TestReActAgent_railedModelCall_基本调用(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("railed_basic_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
@@ -1573,8 +1572,8 @@ func TestReActAgent_railedModelCall_无ModelContext(t *testing.T) {
 	agent.llm = model
 
 	sess := session.NewSession(session.WithSessionID("railed_nil_mc_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	// 不设置 modelContext，保持 nil
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
@@ -1606,8 +1605,8 @@ func TestReActAgent_railedModelCall_流式模式(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("railed_stream_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 	cbc.Extra()["_streaming"] = true
 
@@ -1642,8 +1641,8 @@ func TestReActAgent_railedModelCall_KVCache配置(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("railed_kv_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
@@ -1679,8 +1678,8 @@ func TestReActAgent_railedModelCall_LLMLogprobs(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("railed_logprobs_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
@@ -1697,8 +1696,8 @@ func TestReActAgent_railedModelCall_无LLM(t *testing.T) {
 	agent := NewReActAgent(card, nil)
 
 	sess := session.NewSession(session.WithSessionID("railed_no_llm_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 
 	msg, err := agent.railedModelCall(context.Background(), cbc, sess)
 	assert.Error(t, err)
@@ -1991,8 +1990,8 @@ func TestReActAgent_callModel_基本调用(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("callmodel_basic_sess"))
-	invokeInputs := &rail.InvokeInputs{Query: rail.NewInvokeQueryString("hello")}
-	cbc := rail.NewAgentCallbackContext(agent, invokeInputs, sess)
+	invokeInputs := &interfaces.InvokeInputs{Query: interfaces.NewInvokeQueryString("hello")}
+	cbc := interfaces.NewAgentCallbackContext(agent, invokeInputs, sess)
 	cbc.SetModelContext(fmc)
 
 	tools := []cschema.ToolInfoInterface{}
@@ -2089,8 +2088,8 @@ func TestReActAgent_InvokeImpl_invokeResult优先(t *testing.T) {
 
 	// 通过 before_invoke 回调设置 invoke_result
 	manager := agent.CallbackManager()
-	manager.RegisterCallback(context.Background(), rail.CallbackBeforeInvoke, func(_ context.Context, railCtx any) error {
-		if c, ok := railCtx.(*rail.AgentCallbackContext); ok {
+	manager.RegisterCallback(context.Background(), interfaces.CallbackBeforeInvoke, func(_ context.Context, railCtx any) error {
+		if c, ok := railCtx.(*interfaces.AgentCallbackContext); ok {
 			c.Extra()["invoke_result"] = map[string]any{"output": "回调结果", "result_type": "answer"}
 		}
 		return nil

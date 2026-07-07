@@ -1,4 +1,4 @@
-package rail
+package interfaces
 
 import (
 	"testing"
@@ -38,8 +38,8 @@ func TestAgentCallbackEvent_String(t *testing.T) {
 
 // TestAgentCallbackEvent_GoString 验证 GoString() 方法返回带类型名前缀
 func TestAgentCallbackEvent_GoString(t *testing.T) {
-	if got := CallbackBeforeModelCall.GoString(); got != `rail.AgentCallbackEvent("before_model_call")` {
-		t.Errorf("CallbackBeforeModelCall.GoString() = %q, want %q", got, `rail.AgentCallbackEvent("before_model_call")`)
+	if got := CallbackBeforeModelCall.GoString(); got != `interfaces.AgentCallbackEvent("before_model_call")` {
+		t.Errorf("CallbackBeforeModelCall.GoString() = %q, want %q", got, `interfaces.AgentCallbackEvent("before_model_call")`)
 	}
 }
 

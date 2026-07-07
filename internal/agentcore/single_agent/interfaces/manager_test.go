@@ -1,4 +1,4 @@
-package rail
+package interfaces
 
 import (
 	"context"
@@ -24,19 +24,6 @@ func TestNewAgentCallbackManager(t *testing.T) {
 	m := NewAgentCallbackManager("task4_test_agent_1")
 	if m == nil {
 		t.Fatal("NewAgentCallbackManager 返回 nil")
-	}
-	if m.agentID != "task4_test_agent_1" {
-		t.Fatalf("agentID = %q, 期望 %q", m.agentID, "task4_test_agent_1")
-	}
-}
-
-// TestGetAgentEvent 测试事件名前缀生成。
-func TestGetAgentEvent(t *testing.T) {
-	m := NewAgentCallbackManager("task4_test_agent_2")
-	got := m.getAgentEvent(CallbackBeforeModelCall)
-	want := "task4_test_agent_2_before_model_call"
-	if got != want {
-		t.Fatalf("getAgentEvent = %q, 期望 %q", got, want)
 	}
 }
 

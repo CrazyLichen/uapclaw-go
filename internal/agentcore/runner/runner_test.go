@@ -13,7 +13,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -53,19 +52,19 @@ func (m *mockAgent) AbilityManager() interfaces.AbilityManagerInterface {
 	return nil
 }
 
-func (m *mockAgent) CallbackManager() *rail.AgentCallbackManager {
+func (m *mockAgent) CallbackManager() *interfaces.AgentCallbackManager {
 	return nil
 }
 
-func (m *mockAgent) RegisterCallback(ctx context.Context, event rail.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
+func (m *mockAgent) RegisterCallback(ctx context.Context, event interfaces.AgentCallbackEvent, fn cb.PerAgentCallbackFunc, opts ...cb.CallbackOption) error {
 	return nil
 }
 
-func (m *mockAgent) RegisterRail(ctx context.Context, r rail.AgentRail, opts ...cb.CallbackOption) error {
+func (m *mockAgent) RegisterRail(ctx context.Context, r interfaces.AgentRail, opts ...cb.CallbackOption) error {
 	return nil
 }
 
-func (m *mockAgent) UnregisterRail(ctx context.Context, r rail.AgentRail) error {
+func (m *mockAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail) error {
 	return nil
 }
 

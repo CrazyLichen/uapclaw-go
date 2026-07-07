@@ -10,7 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -73,19 +72,19 @@ func (s *stubBaseAgent) AbilityManager() sainterfaces.AbilityManagerInterface {
 	return nil
 }
 
-func (s *stubBaseAgent) CallbackManager() *rail.AgentCallbackManager {
+func (s *stubBaseAgent) CallbackManager() *sainterfaces.AgentCallbackManager {
 	return nil
 }
 
-func (s *stubBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+func (s *stubBaseAgent) RegisterCallback(_ context.Context, _ sainterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 
-func (s *stubBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+func (s *stubBaseAgent) RegisterRail(_ context.Context, _ sainterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
 
-func (s *stubBaseAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+func (s *stubBaseAgent) UnregisterRail(_ context.Context, _ sainterfaces.AgentRail) error {
 	return nil
 }
 

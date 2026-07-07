@@ -16,7 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
@@ -48,9 +48,9 @@ func newFakeTool(name string) *fakeTool {
 	}
 }
 
-// fakeRail 测试用的 Rail 桩，实现 rail.AgentRail 接口
+// fakeRail 测试用的 Rail 桩，实现 agentinterfaces.AgentRail 接口
 type fakeRail struct {
-	rail.BaseRail
+	agentinterfaces.BaseRail
 }
 
 // ──────────────────────────── normalizeTools 测试 ────────────────────────────
@@ -217,7 +217,7 @@ func TestBuildSysOperation_未提供时创建默认(t *testing.T) {
 // TestAlreadyProvided_匹配 同类型匹配
 func TestAlreadyProvided_匹配(t *testing.T) {
 	target := &fakeRail{}
-	rails := []rail.AgentRail{&fakeRail{}, rail.NewBaseRail()}
+	rails := []agentinterfaces.AgentRail{&fakeRail{}, agentinterfaces.NewBaseRail()}
 	assert.True(t, alreadyProvided(rails, target))
 }
 
@@ -225,7 +225,7 @@ func TestAlreadyProvided_匹配(t *testing.T) {
 func TestAlreadyProvided_空列表(t *testing.T) {
 	target := &fakeRail{}
 	assert.False(t, alreadyProvided(nil, target))
-	assert.False(t, alreadyProvided([]rail.AgentRail{}, target))
+	assert.False(t, alreadyProvided([]agentinterfaces.AgentRail{}, target))
 }
 
 // ──────────────────────────── collectDisabledSkillsFromState 测试 ────────────────────────────

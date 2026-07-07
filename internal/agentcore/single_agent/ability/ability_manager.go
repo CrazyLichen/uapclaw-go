@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/workflow"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -364,7 +365,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 // 对应 Python: AbilityManager.execute(ctx, tool_call, session, tag)
 func (am *AbilityManager) Execute(
 	ctx context.Context,
-	cbc *rail.AgentCallbackContext,
+	cbc *interfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
@@ -400,7 +401,7 @@ func (am *AbilityManager) Execute(
 
 	// 为每个 tool_call 创建隔离子上下文
 	// 对应 Python: tool_ctx = AgentCallbackContext(agent=ctx.agent, inputs=ToolCallInputs(...), extra=ctx.extra, ...)
-	toolCtxs := make([]*rail.AgentCallbackContext, len(toolCalls))
+	toolCtxs := make([]*interfaces.AgentCallbackContext, len(toolCalls))
 	for i, tc := range toolCalls {
 		toolCtxs[i] = cbc.ForkForToolCall(tc)
 	}
@@ -408,7 +409,7 @@ func (am *AbilityManager) Execute(
 	var wg sync.WaitGroup
 	for i, tc := range toolCalls {
 		wg.Add(1)
-		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *rail.AgentCallbackContext) {
+		go func(idx int, toolCall *llmschema.ToolCall, toolCtx *interfaces.AgentCallbackContext) {
 			defer wg.Done()
 			results[idx] = am.railedExecuteSingleToolCall(ctx, toolCtx, toolCall, sess, tag)
 		}(i, tc, toolCtxs[i])
@@ -447,7 +448,7 @@ func (am *AbilityManager) Execute(
 //	async def _railed_execute_single_tool_call(self, ctx, tool_call, session, tag=None): ...
 func (am *AbilityManager) railedExecuteSingleToolCall(
 	ctx context.Context,
-	toolCtx *rail.AgentCallbackContext,
+	toolCtx *interfaces.AgentCallbackContext,
 	toolCall *llmschema.ToolCall,
 	sess sessioninterfaces.SessionFacade,
 	tag string,
@@ -462,7 +463,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		if skipVal, exists := toolCtx.Extra()["_skip_tool"]; exists {
 			delete(toolCtx.Extra(), "_skip_tool") // pop 语义：一次性消费
 			if skipBool, ok := skipVal.(bool); ok && skipBool {
-				if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+				if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 					result = agentschema.ExecuteResult{Result: inputs.ToolResult, ToolMsg: inputs.ToolMsg}
 				}
 				return nil // before hook 正常返回 → 走正常路径 → after 触发
@@ -472,7 +473,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		// before 钩子已执行完毕，将 inputs 中被 before 钩子改写的 ToolName/ToolArgs 写回 toolCall
 		// 对齐 Python L669-673: if ctx.inputs.tool_name: tool_call.name = ctx.inputs.tool_name
 		// 对齐 Python L669-673: if ctx.inputs.tool_args is not None: tool_call.arguments = ctx.inputs.tool_args
-		if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+		if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 			if inputs.ToolName != "" {
 				toolCall.Name = inputs.ToolName
 			}
@@ -487,7 +488,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 		// 仅 err == nil 时回填结果到 inputs（D6）
 		// 对齐 Python L681-686：after 钩子触发时可通过 inputs 访问执行结果，也可改写
 		if err == nil {
-			if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+			if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 				inputs.ToolCall = toolCall
 				inputs.ToolName = toolCall.Name
 				inputs.ToolArgs = toolCall.Arguments
@@ -505,7 +506,7 @@ func (am *AbilityManager) railedExecuteSingleToolCall(
 
 	// railErr == nil，从 inputs 读取 after 钩子可能改写的值（D4）
 	// 对齐 Python L625-638：AFTER_TOOL_CALL rails can rewrite tool_result/tool_msg in ctx.inputs
-	if inputs, ok := toolCtx.Inputs().(*rail.ToolCallInputs); ok {
+	if inputs, ok := toolCtx.Inputs().(*interfaces.ToolCallInputs); ok {
 		if inputs.ToolResult != nil {
 			result.Result = inputs.ToolResult
 		}

@@ -55,7 +55,28 @@ var (
 //
 // 对应 Python: SystemPromptBuilder(language, mode)
 func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPromptBuilder {
-	base := saprompt.NewSystemPromptBuilderWithPromptMode(language, mode)
+	// 按 PromptMode 创建基础构建器（对齐 Python: harness/prompts/builder.py）
+	var base *saprompt.SystemPromptBuilder
+	switch mode {
+	case hschema.PromptModeFull:
+		base = saprompt.NewSystemPromptBuilderWithFilter(language, nil)
+	case hschema.PromptModeMinimal:
+		base = saprompt.NewSystemPromptBuilderWithFilter(language, func(sections []saprompt.PromptSection) []saprompt.PromptSection {
+			result := make([]saprompt.PromptSection, 0, len(sections))
+			for _, s := range sections {
+				if s.Priority <= 20 {
+					result = append(result, s)
+				}
+			}
+			return result
+		})
+	case hschema.PromptModeNone:
+		base = saprompt.NewSystemPromptBuilderWithFilter(language, func(_ []saprompt.PromptSection) []saprompt.PromptSection {
+			return nil
+		})
+	default:
+		base = saprompt.NewSystemPromptBuilderWithFilter(language, nil)
+	}
 	return &SystemPromptBuilder{
 		SystemPromptBuilder: base,
 		mode:                mode,

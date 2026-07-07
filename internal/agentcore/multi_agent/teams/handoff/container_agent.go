@@ -18,7 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -116,7 +116,16 @@ func (c *ContainerAgent) AbilityManager() agentinterfaces.AbilityManagerInterfac
 
 // CallbackManager 返回 nil（ContainerAgent 不直接管理回调）。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) CallbackManager() *rail.AgentCallbackManager {
+func (c *ContainerAgent) CallbackManager() *agentinterfaces.AgentCallbackManager {
+	return nil
+}
+
+// SystemPromptBuilder 返回目标 Agent 的系统提示词构建器。
+// 实现 BaseAgent 接口。
+func (c *ContainerAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	if c.targetInstance != nil {
+		return c.targetInstance.SystemPromptBuilder()
+	}
 	return nil
 }
 
@@ -130,19 +139,19 @@ func (c *ContainerAgent) Configure(_ context.Context, _ agentinterfaces.AgentCon
 
 // RegisterCallback 空操作，ContainerAgent 不支持回调注册。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+func (c *ContainerAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
 
 // RegisterRail 空操作，ContainerAgent 不支持 Rail 注册。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+func (c *ContainerAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
 
 // UnregisterRail 空操作，ContainerAgent 不支持 Rail 注销。
 // 实现 BaseAgent 接口。
-func (c *ContainerAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+func (c *ContainerAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
 

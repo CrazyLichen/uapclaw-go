@@ -12,7 +12,7 @@ import (
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	rail "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sasc "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 
@@ -125,7 +125,7 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 	// ⤵️ 9.38 回填：工具实例化实现后补全
 	resources := config.Resources
 	var tools []*tool.ToolCard
-	var extraRails []rail.AgentRail
+	var extraRails []interfaces.AgentRail
 	var mcps []*mcptypes.McpServerConfig
 	var skills []string
 	var sysOperation sysop.SysOperation
@@ -192,7 +192,7 @@ func GenerateHarnessConfigYAML(
 	card *sasc.AgentCard,
 	systemPrompt any,
 	tools []*tool.ToolCard,
-	rails []rail.AgentRail,
+	rails []interfaces.AgentRail,
 	language string,
 	maxIterations *int,
 	completionTimeout *float64,
@@ -336,11 +336,11 @@ func createSysOperation(card *sasc.AgentCard) (sysop.SysOperation, error) {
 }
 
 // resolveRails 从 resources.Rails 解析所有 Rail 实例
-func resolveRails(resources *ResourcesSchema) ([]rail.AgentRail, error) {
+func resolveRails(resources *ResourcesSchema) ([]interfaces.AgentRail, error) {
 	if resources == nil {
 		return nil, nil
 	}
-	var rails []rail.AgentRail
+	var rails []interfaces.AgentRail
 	for _, spec := range resources.Rails {
 		switch spec.Type {
 		case "builtin":
@@ -471,7 +471,7 @@ func toolsToYAMLSpecs(tools []*tool.ToolCard) []map[string]any {
 }
 
 // railsToYAMLSpecs 将 Rail 实例反向映射为 YAML RailResourceSchema 字典
-func railsToYAMLSpecs(rails []rail.AgentRail) []map[string]any {
+func railsToYAMLSpecs(rails []interfaces.AgentRail) []map[string]any {
 	specs := []map[string]any{}
 	for _, r := range rails {
 		dotted := fmt.Sprintf("%T", r)

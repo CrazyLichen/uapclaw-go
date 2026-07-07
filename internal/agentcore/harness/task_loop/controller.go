@@ -7,7 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -58,8 +58,8 @@ func (tc *TaskLoopController) SubmitRound(
 	query string,
 	isFollowUp bool,
 	isStreaming bool,
-	runKind rail.RunKind,
-	runContext *rail.RunContext,
+	runKind agentinterfaces.RunKind,
+	runContext *agentinterfaces.RunContext,
 ) error {
 	handler := tc.EventHandler()
 	if handler == nil {

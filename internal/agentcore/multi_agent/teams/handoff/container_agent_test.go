@@ -17,7 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -54,7 +53,7 @@ func newMockBaseAgent(id string) *mockBaseAgent {
 func (m *mockBaseAgent) Card() *agentschema.AgentCard                            { return m.card }
 func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }
 func (m *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return m.abilityMgr }
-func (m *mockBaseAgent) CallbackManager() *rail.AgentCallbackManager             { return nil }
+func (m *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager             { return nil }
 func (m *mockBaseAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -67,13 +66,13 @@ func (m *mockBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentin
 	close(ch)
 	return ch, nil
 }
-func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgent) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ rail.AgentRail) error { return nil }
+func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error { return nil }
 
 // mockContainerSessionFacade 模拟 SessionFacade 接口
 type mockContainerSessionFacade struct {
@@ -934,7 +933,7 @@ func TestContainerAgent_RegisterCallback(t *testing.T) {
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	err := agent.RegisterCallback(context.Background(), rail.AgentCallbackEvent(""), callback.PerAgentCallbackFunc(nil))
+	err := agent.RegisterCallback(context.Background(), agentinterfaces.AgentCallbackEvent(""), callback.PerAgentCallbackFunc(nil))
 	assert.NoError(t, err)
 }
 
@@ -946,7 +945,7 @@ func TestContainerAgent_RegisterRail(t *testing.T) {
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	err := agent.RegisterRail(context.Background(), rail.NewBaseRail(), nil)
+	err := agent.RegisterRail(context.Background(), agentinterfaces.NewBaseRail(), nil)
 	assert.NoError(t, err)
 }
 
@@ -958,7 +957,7 @@ func TestContainerAgent_UnregisterRail(t *testing.T) {
 	}
 	agent := NewContainerAgent(card, provider, nil, nil)
 
-	err := agent.UnregisterRail(context.Background(), rail.NewBaseRail())
+	err := agent.UnregisterRail(context.Background(), agentinterfaces.NewBaseRail())
 	assert.NoError(t, err)
 }
 
@@ -1262,7 +1261,7 @@ type mockBaseAgentNoAbility struct {
 func (m *mockBaseAgentNoAbility) Card() *agentschema.AgentCard                            { return m.card }
 func (m *mockBaseAgentNoAbility) Config() agentinterfaces.AgentConfig                     { return nil }
 func (m *mockBaseAgentNoAbility) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (m *mockBaseAgentNoAbility) CallbackManager() *rail.AgentCallbackManager             { return nil }
+func (m *mockBaseAgentNoAbility) CallbackManager() *agentinterfaces.AgentCallbackManager             { return nil }
 func (m *mockBaseAgentNoAbility) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -1275,13 +1274,13 @@ func (m *mockBaseAgentNoAbility) Stream(_ context.Context, _ map[string]any, _ .
 	close(ch)
 	return ch, nil
 }
-func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ rail.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgentNoAbility) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ rail.AgentRail, _ ...callback.CallbackOption) error {
+func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ rail.AgentRail) error {
+func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
 

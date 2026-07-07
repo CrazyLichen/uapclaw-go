@@ -20,7 +20,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -241,7 +241,7 @@ func injectGeneralPurposeSubagent(
 	subagents []hschema.SubagentSpec,
 	addGeneralPurposeAgent bool,
 	resolvedLanguage string,
-	rails []rail.AgentRail,
+	rails []agentinterfaces.AgentRail,
 	systemPrompt string,
 	toolInstances []tool.Tool,
 	mcps []*mcptypes.McpServerConfig,
@@ -276,7 +276,7 @@ func injectGeneralPurposeSubagent(
 
 	// 构建 gp_rails：过滤掉 SubagentRail，确保有 SysOperationRail
 	// ⤵️ 9.8-9.24 回填：SubagentRail/SysOperationRail 类型断言，当前跳过过滤
-	gpRails := make([]rail.AgentRail, 0, len(rails))
+	gpRails := make([]agentinterfaces.AgentRail, 0, len(rails))
 	for _, r := range rails {
 		gpRails = append(gpRails, r)
 	}
@@ -383,7 +383,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 //
 // 对应 Python: _already_provided(rail_cls) — Python 使用 issubclass 支持子类匹配，
 // Go 端当前使用精确匹配，后续需要可升级为接口断言。
-func alreadyProvided(rails []rail.AgentRail, target rail.AgentRail) bool {
+func alreadyProvided(rails []agentinterfaces.AgentRail, target agentinterfaces.AgentRail) bool {
 	targetType := reflect.TypeOf(target)
 	if targetType == nil {
 		return false
@@ -458,14 +458,14 @@ func addDefaultRails(
 	// SecurityRail — 始终添加
 	// ⤵️ 9.8-9.24 回填：SecurityRail 具体实例化
 	if !alreadyProvidedByType(userProvidedTypes, "SecurityRail") {
-		agent.AddRail(rail.NewBaseRail())
+		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).Msg("已添加默认 SecurityRail 占位，⤵️ 9.8-9.24 回填")
 	}
 
 	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加
 	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, "TaskPlanningRail") {
 		// ⤵️ 9.19-9.24 回填：TaskPlanningRail 具体实例化（含 model_selection）
-		agent.AddRail(rail.NewBaseRail())
+		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).Msg("已添加默认 TaskPlanningRail 占位，⤵️ 9.19-9.24 回填")
 	}
 
@@ -473,7 +473,7 @@ func addDefaultRails(
 	if (len(params.Skills) > 0 || config.EnableSkillDiscovery) &&
 		!alreadyProvidedByType(userProvidedTypes, "SkillUseRail") {
 		// ⤵️ 9.8-9.24 回填：SkillUseRail 具体实例化（含 skills_dir + disabled_skills）
-		agent.AddRail(rail.NewBaseRail())
+		agent.AddRail(agentinterfaces.NewBaseRail())
 		// 收集被禁用的技能名称（逻辑保留，后续 SkillUseRail 使用）
 		disabledSkills := collectDisabledSkillsFromState(params.Skills)
 		logger.Debug(logComponent).
@@ -485,7 +485,7 @@ func addDefaultRails(
 	// SubagentRail — 仅当有 subagents 时添加
 	if len(effectiveSubagents) > 0 && !alreadyProvidedByType(userProvidedTypes, "SubagentRail") {
 		// ⤵️ 9.8-9.24 回填：SubagentRail 具体实例化（含 enable_async_subagent）
-		agent.AddRail(rail.NewBaseRail())
+		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).
 			Bool("enable_async_subagent", params.EnableAsyncSubagent).
 			Int("subagent_count", len(effectiveSubagents)).

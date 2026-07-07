@@ -721,7 +721,7 @@ func (fw *CallbackFramework) OffAllPerAgent(event string) {
 
 // TriggerPerAgent 触发指定事件的所有 PerAgent 回调，按优先级顺序执行。
 //
-// agentCallbackContext 实际类型为 *rail.AgentCallbackContext。
+// agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext。
 // 任一回调返回 error 时停止后续执行并返回该 error。
 func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, agentCallbackContext any) error {
 	if ctx == nil {

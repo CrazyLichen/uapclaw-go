@@ -1,4 +1,4 @@
-package rail
+package interfaces
 
 import (
 	"context"
@@ -88,16 +88,18 @@ func TestBaseRail_GetCallbacks_返回空Map(t *testing.T) {
 	}
 }
 
-// TestCallbackFrom_单条映射 测试 CallbackFrom 构建单条映射。
+// TestCallbackFrom_单条映射 测试 CallbackFrom 构建单条映射并传给 BuildCallbacks。
 func TestCallbackFrom_单条映射(t *testing.T) {
 	r := NewBaseRail()
 	fn := func(_ context.Context, _ any) error { return nil }
 	entry := r.CallbackFrom(CallbackBeforeModelCall, fn)
-	if entry.event != CallbackBeforeModelCall {
-		t.Fatalf("event = %v, 期望 CallbackBeforeModelCall", entry.event)
+	// 验证 BuildCallbacks 能正确使用 entry
+	m := r.BuildCallbacks(entry)
+	if len(m) != 1 {
+		t.Fatalf("BuildCallbacks 返回 %d 条映射，期望 1", len(m))
 	}
-	if entry.fn == nil {
-		t.Fatal("fn 不应为 nil")
+	if _, ok := m[CallbackBeforeModelCall]; !ok {
+		t.Fatal("缺少 CallbackBeforeModelCall 映射")
 	}
 }
 
@@ -138,8 +140,8 @@ func TestAgentRail_接口满足(t *testing.T) {
 
 // TestRailAgent_接口满足 测试 BaseAgent 隐式满足 RailAgent 接口。
 func TestRailAgent_接口满足(t *testing.T) {
-	// 通过 fakeRailAgent 验证 RailAgent 接口可满足
-	_ = &fakeRailAgent{agentID: "test", cbMgr: nil}
+	// 通过 fakeBaseAgent 验证 BaseAgent 接口可满足
+	_ = &fakeBaseAgent{agentID: "test", cbMgr: nil}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

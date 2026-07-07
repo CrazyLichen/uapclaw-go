@@ -14,7 +14,6 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -159,14 +158,14 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	// 步骤 9：构建迭代输入和回调上下文
 	// ⤵️ 9.1 回填：agent 参数传 nil，Fire 为空操作
 	// 对齐 Python: iter_inputs = TaskIterationInputs(query=query, ...)
-	iterInputs := &rail.TaskIterationInputs{
+	iterInputs := &agentinterfaces.TaskIterationInputs{
 		Iteration:      iteration,
 		LoopEvent:      loopEvent,
 		ConversationID: cid,
 		Query:          query,
 		IsFollowUp:     isFollowUp,
 	}
-	cbCtx := rail.NewAgentCallbackContext(nil, iterInputs, sess)
+	cbCtx := agentinterfaces.NewAgentCallbackContext(nil, iterInputs, sess)
 
 	// 步骤 10：标记计划任务为进行中
 	if planTask != nil && state != nil && state.TaskPlan != nil {
@@ -179,7 +178,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 11：触发 before_task_iteration 回调
-	if fireErr := cbCtx.Fire(rail.CallbackBeforeTaskIteration); fireErr != nil {
+	if fireErr := cbCtx.Fire(agentinterfaces.CallbackBeforeTaskIteration); fireErr != nil {
 		logger.Warn(logComponent).
 			Err(fireErr).
 			Str("event_type", "before_task_iteration").
@@ -289,7 +288,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		// 更新回调上下文并触发 after_task_iteration
 		iterInputs.Result = resultMap
 		cbCtx.SetInputs(iterInputs)
-		if fireErr := cbCtx.Fire(rail.CallbackAfterTaskIteration); fireErr != nil {
+		if fireErr := cbCtx.Fire(agentinterfaces.CallbackAfterTaskIteration); fireErr != nil {
 			logger.Warn(logComponent).
 				Err(fireErr).
 				Str("event_type", "after_task_iteration").

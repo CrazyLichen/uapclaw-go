@@ -7,7 +7,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/rail"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
@@ -32,7 +32,7 @@ type CreateDeepAgentParams struct {
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent
 	Subagents []hschema.SubagentSpec
 	// Rails AgentRail 实例列表
-	Rails []rail.AgentRail
+	Rails []interfaces.AgentRail
 	// EnableTaskLoop 启用外层任务循环
 	EnableTaskLoop bool
 	// EnableAsyncSubagent 启用异步子 Agent 模式
