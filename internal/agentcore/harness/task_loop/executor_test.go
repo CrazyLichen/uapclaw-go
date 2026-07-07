@@ -486,6 +486,11 @@ func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
 // RequestAbort 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) RequestAbort() {}
 
+// GetCompletionPromiseEvaluator 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) GetCompletionPromiseEvaluator() interfaces.CompletionPromiseEvaluatorInterface {
+	return nil
+}
+
 // ReactAgent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent {
 	return f.reactAgent

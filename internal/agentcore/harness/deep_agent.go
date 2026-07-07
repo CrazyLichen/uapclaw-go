@@ -81,8 +81,8 @@ type DeepAgent struct {
 	loopSession *session.Session
 	// boundSessionID 绑定的会话标识
 	boundSessionID string
-	// taskCompletionRail 任务完成 Rail
-	// ⤴️ 9.12 回填：TaskCompletionRail 具体类型
+	// taskCompletionRail 任务完成 Rail（具体类型，BuildEvaluators 直接调用无需断言）
+	// ⤴️ 9.12 回填：TaskCompletionRail
 	taskCompletionRail *rails.TaskCompletionRail
 
 	// pendingRails 待注册 Rail 列表
@@ -416,8 +416,8 @@ func (d *DeepAgent) RegisterCallback(ctx context.Context, event agentinterfaces.
 func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRail, opts ...cb.CallbackOption) error {
 	d.railsMu.Lock()
 	// 检查是否为 TaskCompletionRail
-	if isTaskCompletionRail(r) {
-		d.taskCompletionRail = r.(*rails.TaskCompletionRail)
+	if tc, ok := r.(*rails.TaskCompletionRail); ok {
+		d.taskCompletionRail = tc
 	}
 	d.railsMu.Unlock()
 
@@ -442,7 +442,7 @@ func (d *DeepAgent) UnregisterRail(ctx context.Context, r agentinterfaces.AgentR
 	d.registeredRails = removeRailByRef(d.registeredRails, r)
 
 	// 检查 TaskCompletionRail
-	if isTaskCompletionRail(r) && d.taskCompletionRail == r {
+	if tc, ok := r.(*rails.TaskCompletionRail); ok && d.taskCompletionRail == tc {
 		d.taskCompletionRail = nil
 	}
 	d.railsMu.Unlock()
@@ -681,7 +681,7 @@ func (d *DeepAgent) AddRail(r agentinterfaces.AgentRail) *DeepAgent {
 	d.railsMu.Lock()
 	defer d.railsMu.Unlock()
 
-	if isTaskCompletionRail(r) {
+	if _, ok := r.(*rails.TaskCompletionRail); ok {
 		// 移除已有的 TaskCompletionRail
 		d.pendingRails = filterRailsNotType(d.pendingRails, isTaskCompletionRail)
 	}
@@ -1612,9 +1612,9 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 
 	// 注册待处理 Rail
 	for _, r := range pendingToRegister {
-		if isTaskCompletionRail(r) {
+		if tc, ok := r.(*rails.TaskCompletionRail); ok {
 			d.railsMu.Lock()
-			d.taskCompletionRail = r.(*rails.TaskCompletionRail)
+			d.taskCompletionRail = tc
 			d.railsMu.Unlock()
 		}
 		// 对齐 Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace

@@ -18,6 +18,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -73,6 +74,7 @@ func (m *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentR
 	return nil
 }
 func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error { return nil }
+func (m *mockBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // mockContainerSessionFacade 模拟 SessionFacade 接口
 type mockContainerSessionFacade struct {
@@ -1283,6 +1285,7 @@ func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ agentinterfac
 func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
+func (m *mockBaseAgentNoAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // mockContextEngine 模拟 ContextEngine 接口
 type mockContextEngine struct {

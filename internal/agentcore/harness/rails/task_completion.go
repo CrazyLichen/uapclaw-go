@@ -343,20 +343,25 @@ func notifyEvaluator(cbc *agentinterfaces.AgentCallbackContext, text string) {
 	// 通过 DeepAgentInterface 获取 LoopCoordinator
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok {
+		logger.Warn(taskCompLogComponent).
+			Str("event_type", "task_completion_notify_evaluator_skip").
+			Str("agent_type", fmt.Sprintf("%T", agent)).
+			Msg("agent 未实现 DeepAgentInterface，无法通知 CompletionPromiseEvaluator")
 		return
 	}
 	coord := deepAgent.LoopCoordinator()
 	if coord == nil {
+		logger.Warn(taskCompLogComponent).
+			Str("event_type", "task_completion_notify_evaluator_skip").
+			Msg("LoopCoordinator 为 nil，无法通知 CompletionPromiseEvaluator")
 		return
 	}
 
-	// 类型断言到 *task_loop.LoopCoordinator 以访问 GetCompletionPromiseEvaluator
-	coordConcrete, ok := coord.(*task_loop.LoopCoordinator)
-	if !ok {
-		return
-	}
-	ev := coordConcrete.GetCompletionPromiseEvaluator()
+	ev := coord.GetCompletionPromiseEvaluator()
 	if ev == nil {
+		logger.Warn(taskCompLogComponent).
+			Str("event_type", "task_completion_notify_evaluator_skip").
+			Msg("CompletionPromiseEvaluator 为 nil，无法通知")
 		return
 	}
 	ev.NotifyFulfilled(text)

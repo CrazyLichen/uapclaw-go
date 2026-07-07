@@ -303,11 +303,15 @@ func TestLoopCoordinator_ImportState_恢复(t *testing.T) {
 	if cpe2 == nil {
 		t.Fatal("GetCompletionPromiseEvaluator() returned nil")
 	}
-	if cpe2.Confirmations() != 1 {
-		t.Errorf("Confirmations after ImportState = %d, want 1", cpe2.Confirmations())
+	cpe2Concrete, ok := cpe2.(*CompletionPromiseEvaluator)
+	if !ok {
+		t.Fatal("GetCompletionPromiseEvaluator() returned unexpected type")
 	}
-	if cpe2.RequiredConfirmations() != 3 {
-		t.Errorf("RequiredConfirmations after ImportState = %d, want 3", cpe2.RequiredConfirmations())
+	if cpe2Concrete.Confirmations() != 1 {
+		t.Errorf("Confirmations after ImportState = %d, want 1", cpe2Concrete.Confirmations())
+	}
+	if cpe2Concrete.RequiredConfirmations() != 3 {
+		t.Errorf("RequiredConfirmations after ImportState = %d, want 3", cpe2Concrete.RequiredConfirmations())
 	}
 }
 
@@ -367,8 +371,11 @@ func TestLoopCoordinator_GetCompletionPromiseEvaluator_存在(t *testing.T) {
 	if found == nil {
 		t.Error("GetCompletionPromiseEvaluator() returned nil, want non-nil")
 	}
-	if found.Promise() != "<promise>" {
-		t.Errorf("Promise() = %q, want %q", found.Promise(), "<promise>")
+	foundConcrete, ok := found.(*CompletionPromiseEvaluator)
+	if !ok {
+		t.Error("GetCompletionPromiseEvaluator() returned unexpected type")
+	} else if foundConcrete.Promise() != "<promise>" {
+		t.Errorf("Promise() = %q, want %q", foundConcrete.Promise(), "<promise>")
 	}
 }
 

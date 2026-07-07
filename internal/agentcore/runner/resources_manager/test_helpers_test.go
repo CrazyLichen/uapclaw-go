@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/tracer/decorator"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -87,6 +88,7 @@ func (s *stubBaseAgent) RegisterRail(_ context.Context, _ sainterfaces.AgentRail
 func (s *stubBaseAgent) UnregisterRail(_ context.Context, _ sainterfaces.AgentRail) error {
 	return nil
 }
+func (s *stubBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // --- stubBaseModelClient 实现 model_clients.BaseModelClient ---
 

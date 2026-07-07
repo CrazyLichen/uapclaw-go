@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -67,6 +68,7 @@ func (m *mockAgent) RegisterRail(ctx context.Context, r interfaces.AgentRail, op
 func (m *mockAgent) UnregisterRail(ctx context.Context, r interfaces.AgentRail) error {
 	return nil
 }
+func (m *mockAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // mockWorkflow 模拟 Workflow
 type mockWorkflow struct {

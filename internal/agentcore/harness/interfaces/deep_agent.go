@@ -50,4 +50,16 @@ type LoopCoordinatorInterface interface {
 	Iteration() int
 	// RequestAbort 请求中止循环
 	RequestAbort()
+	// GetCompletionPromiseEvaluator 返回第一个 CompletionPromiseEvaluator（可能为 nil）
+	// 对齐 Python: LoopCoordinator.get_completion_promise_evaluator
+	GetCompletionPromiseEvaluator() CompletionPromiseEvaluatorInterface
+}
+
+// CompletionPromiseEvaluatorInterface 完成承诺评估器接口（最小集）。
+// 仅包含 TaskCompletionRail.notifyEvaluator 实际调用的方法。
+// 对齐 Python: CompletionPromiseEvaluator 的消费者方法子集。
+type CompletionPromiseEvaluatorInterface interface {
+	// NotifyFulfilled 标记 promise 已满足
+	// 对齐 Python: CompletionPromiseEvaluator.notify_fulfilled
+	NotifyFulfilled(matchedText string)
 }

@@ -162,15 +162,28 @@ func (r *TaskCompletionRail) GetCallbacks() map[...]cb.PerAgentCallbackFunc {
 | extractOutput(cbc) string | 从 TaskIterationInputs.Result["output"] 提取输出文本 | _extract_output |
 | notifyEvaluator(cbc, text) | 获取 LoopCoordinator → CompletionPromiseEvaluator → NotifyFulfilled | _notify_evaluator |
 
-### 6. LoopCoordinatorInterface 扩展
+### 6. LoopCoordinatorInterface 扩展（方案C：最小接口）
+
+由于 `interfaces` 包不能导入 `task_loop` 包（循环依赖：task_loop → interfaces），采用定义最小接口方式：
 
 ```go
+// CompletionPromiseEvaluatorInterface 完成承诺评估器接口（最小集）。
+type CompletionPromiseEvaluatorInterface interface {
+    NotifyFulfilled(matchedText string)
+}
+
 type LoopCoordinatorInterface interface {
     Iteration() int
     RequestAbort()
-    GetCompletionPromiseEvaluator() *task_loop.CompletionPromiseEvaluator
+    GetCompletionPromiseEvaluator() CompletionPromiseEvaluatorInterface
 }
 ```
+
+`*task_loop.CompletionPromiseEvaluator` 隐式满足 `CompletionPromiseEvaluatorInterface`（它已有 `NotifyFulfilled(string)` 方法）。
+
+`notifyEvaluator` 只需一层类型断言（DeepAgentInterface），通过接口直接调用 `GetCompletionPromiseEvaluator()`，无需断言 `*task_loop.LoopCoordinator`。
+
+所有断言失败路径均有 Warn 日志记录。
 
 使用具体类型 `*task_loop.CompletionPromiseEvaluator`，不引入额外接口。
 
@@ -178,7 +191,7 @@ type LoopCoordinatorInterface interface {
 
 | # | 行号 | 当前 | 回填为 |
 |---|------|------|--------|
-| R1 | 77 | `taskCompletionRail agentinterfaces.AgentRail` | `taskCompletionRail *rails.TaskCompletionRail` |
+| R1 | 77 | `taskCompletionRail agentinterfaces.AgentRail` | 保持接口类型，BuildEvaluators调用处类型断言 |
 | R2 | 1265 | 注释掉的 `NewTaskCompletionRail()` | `d.pendingRails = append(d.pendingRails, rails.NewTaskCompletionRail())` |
 | R3 | 1976 | `evaluators = []task_loop.StopConditionEvaluator{}` | `evaluators = taskCompRail.BuildEvaluators()` |
 | R4 | 1996 | `evaluators = []task_loop.StopConditionEvaluator{}` | `evaluators = taskCompRail.BuildEvaluators()` |

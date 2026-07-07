@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -233,8 +234,9 @@ func (lc *LoopCoordinator) ImportState(state LoopCoordinatorState) {
 }
 
 // GetCompletionPromiseEvaluator 返回第一个 CompletionPromiseEvaluator（如有）。
+// 返回接口类型以满足 LoopCoordinatorInterface 约束。
 // 对齐 Python: LoopCoordinator.get_completion_promise_evaluator
-func (lc *LoopCoordinator) GetCompletionPromiseEvaluator() *CompletionPromiseEvaluator {
+func (lc *LoopCoordinator) GetCompletionPromiseEvaluator() hinterfaces.CompletionPromiseEvaluatorInterface {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 

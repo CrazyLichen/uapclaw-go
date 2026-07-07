@@ -551,6 +551,11 @@ func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
 // RequestAbort 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) RequestAbort() {}
 
+// GetCompletionPromiseEvaluator 实现 LoopCoordinatorInterface 接口
+func (f *fakeLoopCoordinator) GetCompletionPromiseEvaluator() interfaces.CompletionPromiseEvaluatorInterface {
+	return nil
+}
+
 // TaskManager 实现 ControllerInterface 接口
 func (f *fakeController) TaskManager() *modules.TaskManager { return f.taskManager }
 

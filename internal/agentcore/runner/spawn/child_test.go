@@ -16,6 +16,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -523,6 +524,7 @@ func (a *stubBaseAgent) RegisterRail(_ context.Context, _ interfaces.AgentRail, 
 func (a *stubBaseAgent) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error {
 	return nil
 }
+func (a *stubBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // stubChildRunner 用于测试的模拟 ChildRunner
 type stubChildRunner struct {
