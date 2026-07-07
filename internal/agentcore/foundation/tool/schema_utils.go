@@ -5,6 +5,7 @@ import (
 	"math"
 	"regexp"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -63,11 +64,12 @@ func (su SchemaUtils) FormatWithSchema(data map[string]any, params []*schema.Par
 		}
 	}
 
-	// 3. 填充默认值
+	// 3. 填充默认值（递归）
 	result := make(map[string]any, len(data))
 	for _, p := range params {
 		if val, ok := data[p.Name]; ok {
-			result[p.Name] = val
+			// 递归填充嵌套默认值
+			result[p.Name] = su.fillDefaults(val, p)
 		} else if p.Default != nil {
 			result[p.Name] = p.Default
 		} else if p.Required {
@@ -115,34 +117,10 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 		}
 	}
 
-	// 提取 properties 和 required
+	// 提取 properties
 	properties, _ := schemaMap["properties"].(map[string]any)
-	requiredFields, _ := schemaMap["required"].([]any)
 
-	// 2. 可选：校验必填字段
-	if !o.skipValidate {
-		for _, r := range requiredFields {
-			name, ok := r.(string)
-			if !ok {
-				continue
-			}
-			if _, exists := data[name]; !exists {
-				// 检查是否有默认值可填充
-				if prop, ok := properties[name].(map[string]any); ok {
-					if _, hasDefault := prop["default"]; hasDefault {
-						continue
-					}
-				}
-				return nil, exception.BuildError(
-					exception.StatusSchemaFormatInvalid,
-					exception.WithParam("param", name),
-					exception.WithParam("reason", "missing required param"),
-				)
-			}
-		}
-	}
-
-	// 3. 填充默认值
+	// 2. 填充默认值（在校验之前，对齐 Python 逻辑）
 	result := make(map[string]any, len(data))
 	for name, prop := range properties {
 		propMap, ok := prop.(map[string]any)
@@ -156,10 +134,34 @@ func (su SchemaUtils) FormatWithSchemaMap(data map[string]any, schemaMap map[str
 		}
 	}
 
-	// 4. 保留额外字段（不在 properties 中的）
+	// 保留额外字段（不在 properties 中的）
 	for k, v := range data {
 		if _, ok := result[k]; !ok {
 			result[k] = v
+		}
+	}
+
+	// 3. 可选：用 jsonschema 库校验（校验填充默认值后的数据）
+	if !o.skipValidate {
+		c := jsonschema.NewCompiler()
+		if err := c.AddResource("schema.json", schemaMap); err != nil {
+			return nil, exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+			)
+		}
+		sch, err := c.Compile("schema.json")
+		if err != nil {
+			return nil, exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("reason", fmt.Sprintf("compile schema failed: %v", err)),
+			)
+		}
+		if err := sch.Validate(result); err != nil {
+			return nil, exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("reason", err.Error()),
+			)
 		}
 	}
 
@@ -294,20 +296,63 @@ func validateParamType(key string, val any, p *schema.Param) error {
 			)
 		}
 	case schema.ParamTypeArray:
-		if _, ok := val.([]any); !ok {
+		arr, ok := val.([]any)
+		if !ok {
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,
 				exception.WithParam("param", key),
 				exception.WithParam("reason", fmt.Sprintf("expected array, got %T", val)),
 			)
 		}
+		// 递归校验 array items
+		if p.Items != nil {
+			for i, item := range arr {
+				itemKey := fmt.Sprintf("%s[%d]", key, i)
+				if err := validateParamType(itemKey, item, p.Items); err != nil {
+					return err
+				}
+				if err := validateParamConstraints(itemKey, item, p.Items); err != nil {
+					return err
+				}
+			}
+		}
 	case schema.ParamTypeObject:
-		if _, ok := val.(map[string]any); !ok {
+		obj, ok := val.(map[string]any)
+		if !ok {
 			return exception.BuildError(
 				exception.StatusSchemaValidateInvalid,
 				exception.WithParam("param", key),
 				exception.WithParam("reason", fmt.Sprintf("expected object, got %T", val)),
 			)
+		}
+		// 递归校验 object properties
+		if len(p.Properties) > 0 {
+			propMap := make(map[string]*schema.Param, len(p.Properties))
+			for _, prop := range p.Properties {
+				propMap[prop.Name] = prop
+			}
+			for k, v := range obj {
+				if prop, ok := propMap[k]; ok {
+					if err := validateParamType(k, v, prop); err != nil {
+						return err
+					}
+					if err := validateParamConstraints(k, v, prop); err != nil {
+						return err
+					}
+				}
+			}
+			// 校验嵌套 required
+			for _, prop := range p.Properties {
+				if prop.Required {
+					if _, ok := obj[prop.Name]; !ok {
+						return exception.BuildError(
+							exception.StatusSchemaValidateInvalid,
+							exception.WithParam("param", prop.Name),
+							exception.WithParam("reason", "missing required param in nested object"),
+						)
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -371,6 +416,25 @@ func validateParamConstraints(key string, val any, p *schema.Param) error {
 				exception.WithParam("reason", fmt.Sprintf("value %v > maximum %v", f, p.Maximum)),
 			)
 		}
+	case schema.ParamTypeArray:
+		arr, ok := val.([]any)
+		if !ok {
+			return nil // 类型不匹配已在 validateParamType 中处理
+		}
+		if p.MinItems > 0 && len(arr) < p.MinItems {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("array length %d < minItems %d", len(arr), p.MinItems)),
+			)
+		}
+		if p.MaxItems > 0 && len(arr) > p.MaxItems {
+			return exception.BuildError(
+				exception.StatusSchemaValidateInvalid,
+				exception.WithParam("param", key),
+				exception.WithParam("reason", fmt.Sprintf("array length %d > maxItems %d", len(arr), p.MaxItems)),
+			)
+		}
 	}
 	return nil
 }
@@ -417,4 +481,38 @@ func removeNoneFromArray(arr []any) []any {
 		return nil
 	}
 	return result
+}
+
+// fillDefaults 递归填充嵌套默认值。
+func (su SchemaUtils) fillDefaults(val any, p *schema.Param) any {
+	switch p.Type {
+	case schema.ParamTypeObject:
+		obj, ok := val.(map[string]any)
+		if !ok || len(p.Properties) == 0 {
+			return val
+		}
+		result := make(map[string]any, len(obj))
+		for k, v := range obj {
+			result[k] = v
+		}
+		for _, prop := range p.Properties {
+			if _, ok := result[prop.Name]; !ok && prop.Default != nil {
+				result[prop.Name] = prop.Default
+			}
+		}
+		return result
+	case schema.ParamTypeArray:
+		arr, ok := val.([]any)
+		if !ok || p.Items == nil {
+			return val
+		}
+		// 递归填充数组中每个元素的默认值
+		result := make([]any, len(arr))
+		for i, item := range arr {
+			result[i] = su.fillDefaults(item, p.Items)
+		}
+		return result
+	default:
+		return val
+	}
 }

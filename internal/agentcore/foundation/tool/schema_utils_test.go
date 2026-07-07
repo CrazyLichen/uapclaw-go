@@ -509,3 +509,211 @@ func TestToFloat64(t *testing.T) {
 		})
 	}
 }
+
+// ──────────────────────────── 递归校验测试 ────────────────────────────
+
+func TestValidate_嵌套object必填校验(t *testing.T) {
+	params := []*schema.Param{
+		{
+			Name: "config", Type: schema.ParamTypeObject, Required: true,
+			Properties: []*schema.Param{
+				schema.NewStringParam("host", "主机", true),
+				schema.NewIntegerParam("port", "端口", false),
+			},
+		},
+	}
+	// 缺少嵌套的 host 字段
+	data := map[string]any{
+		"config": map[string]any{"port": float64(8080)},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("嵌套 required 字段缺失应返回错误")
+	}
+}
+
+func TestValidate_嵌套object类型校验(t *testing.T) {
+	params := []*schema.Param{
+		{
+			Name: "config", Type: schema.ParamTypeObject, Required: true,
+			Properties: []*schema.Param{
+				schema.NewStringParam("host", "主机", true),
+			},
+		},
+	}
+	// host 类型不匹配（给数字而非字符串）
+	data := map[string]any{
+		"config": map[string]any{"host": 123},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("嵌套属性类型不匹配应返回错误")
+	}
+}
+
+func TestValidate_数组items类型校验(t *testing.T) {
+	params := []*schema.Param{
+		schema.NewArrayParam("tags", "标签", true, schema.NewStringParam("tag", "标签", true)),
+	}
+	// 数组元素类型不匹配（含数字而非字符串）
+	data := map[string]any{
+		"tags": []any{"valid", 123},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("数组元素类型不匹配应返回错误")
+	}
+}
+
+func TestValidate_MinItems校验(t *testing.T) {
+	p := &schema.Param{
+		Name: "tags", Type: schema.ParamTypeArray, Required: true,
+		Items:    schema.NewStringParam("tag", "标签", true),
+		MinItems: 2,
+	}
+	params := []*schema.Param{p}
+	data := map[string]any{
+		"tags": []any{"only_one"},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("数组长度 < minItems 应返回错误")
+	}
+}
+
+func TestValidate_MaxItems校验(t *testing.T) {
+	p := &schema.Param{
+		Name: "tags", Type: schema.ParamTypeArray, Required: true,
+		Items:    schema.NewStringParam("tag", "标签", true),
+		MaxItems: 2,
+	}
+	params := []*schema.Param{p}
+	data := map[string]any{
+		"tags": []any{"a", "b", "c"},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("数组长度 > maxItems 应返回错误")
+	}
+}
+
+func TestFormatWithSchemaMap_jsonschema校验(t *testing.T) {
+	schemaMap := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"config": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"host": map[string]any{"type": "string"},
+					"port": map[string]any{"type": "integer"},
+				},
+				"required": []any{"host"},
+			},
+		},
+		"required": []any{"config"},
+	}
+
+	// 合法数据
+	result, err := SchemaUtils{}.FormatWithSchemaMap(map[string]any{
+		"config": map[string]any{"host": "localhost", "port": 8080},
+	}, schemaMap)
+	if err != nil {
+		t.Fatalf("合法数据不应报错: %v", err)
+	}
+	configObj := result["config"].(map[string]any)
+	if configObj["host"] != "localhost" {
+		t.Errorf("host 期望 localhost，实际 %v", configObj["host"])
+	}
+
+	// 嵌套 required 缺失
+	_, err = SchemaUtils{}.FormatWithSchemaMap(map[string]any{
+		"config": map[string]any{"port": 8080},
+	}, schemaMap)
+	if err == nil {
+		t.Error("嵌套 required 缺失应返回错误")
+	}
+}
+
+func TestFormatWithSchema_递归默认值填充(t *testing.T) {
+	params := []*schema.Param{
+		{
+			Name: "config", Type: schema.ParamTypeObject, Required: true,
+			Properties: []*schema.Param{
+				schema.NewStringParam("host", "主机", true),
+				{Name: "port", Type: schema.ParamTypeInteger, Required: false, Default: 8080},
+			},
+		},
+	}
+
+	// 传入 host 但不传 port，应自动填充 port 默认值
+	data := map[string]any{
+		"config": map[string]any{"host": "localhost"},
+	}
+	result, err := SchemaUtils{}.FormatWithSchema(data, params)
+	if err != nil {
+		t.Fatalf("递归默认值填充失败: %v", err)
+	}
+	configObj := result["config"].(map[string]any)
+	if configObj["host"] != "localhost" {
+		t.Errorf("host 期望 localhost，实际 %v", configObj["host"])
+	}
+	if configObj["port"] != 8080 {
+		t.Errorf("port 期望 8080（默认值），实际 %v", configObj["port"])
+	}
+}
+
+func TestValidate_数组items约束校验(t *testing.T) {
+	params := []*schema.Param{
+		{
+			Name: "scores", Type: schema.ParamTypeArray, Required: true,
+			Items: &schema.Param{
+				Name: "score", Type: schema.ParamTypeInteger, Required: true,
+				Minimum: 0, Maximum: 100,
+			},
+		},
+	}
+	// 数组元素超出 maximum
+	data := map[string]any{
+		"scores": []any{float64(50), float64(150)},
+	}
+	err := SchemaUtils{}.Validate(data, params)
+	if err == nil {
+		t.Error("数组元素约束不满足应返回错误")
+	}
+}
+
+func TestFormatWithSchema_数组items递归默认值(t *testing.T) {
+	params := []*schema.Param{
+		{
+			Name: "users", Type: schema.ParamTypeArray, Required: true,
+			Items: &schema.Param{
+				Name: "user", Type: schema.ParamTypeObject, Required: true,
+				Properties: []*schema.Param{
+					schema.NewStringParam("name", "名称", true),
+					{Name: "role", Type: schema.ParamTypeString, Required: false, Default: "user"},
+				},
+			},
+		},
+	}
+
+	// 数组中的对象缺少 role，应自动填充默认值
+	data := map[string]any{
+		"users": []any{
+			map[string]any{"name": "Alice"},
+			map[string]any{"name": "Bob", "role": "admin"},
+		},
+	}
+	result, err := SchemaUtils{}.FormatWithSchema(data, params, WithFormatSkipValidate(true))
+	if err != nil {
+		t.Fatalf("数组 items 递归默认值填充失败: %v", err)
+	}
+	users := result["users"].([]any)
+	alice := users[0].(map[string]any)
+	if alice["role"] != "user" {
+		t.Errorf("Alice.role 期望 'user'（默认值），实际 %v", alice["role"])
+	}
+	bob := users[1].(map[string]any)
+	if bob["role"] != "admin" {
+		t.Errorf("Bob.role 期望 'admin'，实际 %v", bob["role"])
+	}
+}
