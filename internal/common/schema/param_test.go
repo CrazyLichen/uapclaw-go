@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -782,4 +783,463 @@ func TestParam_Validate_Array有AdditionalProperties非法(t *testing.T) {
 	if err == nil {
 		t.Error("Array 类型设置 AdditionalProperties 应返回错误")
 	}
+}
+
+// ──────────────────────────── ParseJSONSchemaMap 测试 ────────────────────────────
+
+func TestParseJSONSchemaMap_空对象(t *testing.T) {
+	schema := map[string]any{"type": "object", "properties": map[string]any{}, "required": []any{}}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析空对象失败: %v", err)
+	}
+	if len(params) != 0 {
+		t.Errorf("期望 0 个参数，实际 %d", len(params))
+	}
+}
+
+func TestParseJSONSchemaMap_简单参数(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name":  map[string]any{"type": "string", "description": "名称"},
+			"count": map[string]any{"type": "integer", "description": "数量"},
+		},
+		"required": []any{"name"},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 2 {
+		t.Fatalf("期望 2 个参数，实际 %d", len(params))
+	}
+
+	// 找 name 参数
+	var nameParam *Param
+	for _, p := range params {
+		if p.Name == "name" {
+			nameParam = p
+			break
+		}
+	}
+	if nameParam == nil {
+		t.Fatal("未找到 name 参数")
+	}
+	if nameParam.Type != ParamTypeString {
+		t.Errorf("name.Type 期望 %v，实际 %v", ParamTypeString, nameParam.Type)
+	}
+	if !nameParam.Required {
+		t.Error("name 应为 required")
+	}
+
+	// 找 count 参数
+	var countParam *Param
+	for _, p := range params {
+		if p.Name == "count" {
+			countParam = p
+			break
+		}
+	}
+	if countParam == nil {
+		t.Fatal("未找到 count 参数")
+	}
+	if countParam.Type != ParamTypeInteger {
+		t.Errorf("count.Type 期望 %v，实际 %v", ParamTypeInteger, countParam.Type)
+	}
+	if countParam.Required {
+		t.Error("count 不应为 required")
+	}
+}
+
+func TestParseJSONSchemaMap_属性缺type报错(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"bad": map[string]any{"description": "没有type"},
+		},
+	}
+	_, err := ParseJSONSchemaMap(schema)
+	if err == nil {
+		t.Error("属性缺 type 应返回错误")
+	}
+	if err != nil && !containsStr(err.Error(), "missing required 'type' field") {
+		t.Errorf("错误信息应包含 'missing required type field'，实际: %v", err)
+	}
+}
+
+func TestParseJSONSchemaMap_布尔和数组参数(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"verbose": map[string]any{"type": "boolean", "description": "详细模式"},
+			"tags": map[string]any{
+				"type":        "array",
+				"description": "标签列表",
+				"items":       map[string]any{"type": "string", "description": "标签"},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 2 {
+		t.Fatalf("期望 2 个参数，实际 %d", len(params))
+	}
+
+	for _, p := range params {
+		if p.Name == "verbose" && p.Type != ParamTypeBoolean {
+			t.Errorf("verbose.Type 期望 %v，实际 %v", ParamTypeBoolean, p.Type)
+		}
+		if p.Name == "tags" {
+			if p.Type != ParamTypeArray {
+				t.Errorf("tags.Type 期望 %v，实际 %v", ParamTypeArray, p.Type)
+			}
+			if p.Items == nil {
+				t.Error("tags.Items 不应为 nil")
+			} else if p.Items.Type != ParamTypeString {
+				t.Errorf("tags.Items.Type 期望 %v，实际 %v", ParamTypeString, p.Items.Type)
+			}
+		}
+	}
+}
+
+func TestParseJSONSchemaMap_enum枚举(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"description": "操作",
+				"enum":        []any{"add", "remove", "list"},
+			},
+		},
+		"required": []any{"action"},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("期望 1 个参数，实际 %d", len(params))
+	}
+	if len(params[0].Enum) != 3 {
+		t.Errorf("期望 3 个枚举值，实际 %d", len(params[0].Enum))
+	}
+}
+
+func TestParseJSONSchemaMap_default默认值(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"limit":   map[string]any{"type": "integer", "description": "数量限制", "default": 10},
+			"enabled": map[string]any{"type": "boolean", "description": "是否启用", "default": true},
+			"name":    map[string]any{"type": "string", "description": "名称", "default": "default"},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	for _, p := range params {
+		switch p.Name {
+		case "limit":
+			if p.Default != 10 {
+				t.Errorf("limit.Default 期望 10，实际 %v", p.Default)
+			}
+		case "enabled":
+			if p.Default != true {
+				t.Errorf("enabled.Default 期望 true，实际 %v", p.Default)
+			}
+		case "name":
+			if p.Default != "default" {
+				t.Errorf("name.Default 期望 'default'，实际 %v", p.Default)
+			}
+		}
+	}
+}
+
+func TestParseJSONSchemaMap_约束字段(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"age":     map[string]any{"type": "integer", "minimum": 0, "maximum": 150},
+			"pattern": map[string]any{"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[a-z]+$"},
+			"email":   map[string]any{"type": "string", "format": "email"},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	for _, p := range params {
+		switch p.Name {
+		case "age":
+			if p.Minimum != 0 {
+				t.Errorf("age.Minimum 期望 0，实际 %v", p.Minimum)
+			}
+			if p.Maximum != 150 {
+				t.Errorf("age.Maximum 期望 150，实际 %v", p.Maximum)
+			}
+		case "pattern":
+			if p.MinLength != 1 {
+				t.Errorf("pattern.MinLength 期望 1，实际 %d", p.MinLength)
+			}
+			if p.MaxLength != 100 {
+				t.Errorf("pattern.MaxLength 期望 100，实际 %d", p.MaxLength)
+			}
+			if p.Pattern != "^[a-z]+$" {
+				t.Errorf("pattern.Pattern 期望 '^[a-z]+$'，实际 %q", p.Pattern)
+			}
+		case "email":
+			if p.Format != "email" {
+				t.Errorf("email.Format 期望 'email'，实际 %q", p.Format)
+			}
+		}
+	}
+}
+
+func TestParseJSONSchemaMap_嵌套object(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"config": map[string]any{
+				"type":                 "object",
+				"description":          "配置",
+				"additionalProperties": true,
+				"properties": map[string]any{
+					"host": map[string]any{"type": "string", "description": "主机"},
+					"port": map[string]any{"type": "integer", "description": "端口", "default": 8080},
+				},
+				"required": []any{"host"},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("期望 1 个参数，实际 %d", len(params))
+	}
+	p := params[0]
+	if p.Type != ParamTypeObject {
+		t.Errorf("config.Type 期望 %v，实际 %v", ParamTypeObject, p.Type)
+	}
+	if !p.AdditionalProperties {
+		t.Error("config.AdditionalProperties 期望 true")
+	}
+	if len(p.Properties) != 2 {
+		t.Fatalf("期望 2 个嵌套属性，实际 %d", len(p.Properties))
+	}
+
+	// 检查 host 是否为 required
+	var hostParam *Param
+	for _, prop := range p.Properties {
+		if prop.Name == "host" {
+			hostParam = prop
+			break
+		}
+	}
+	if hostParam == nil {
+		t.Fatal("未找到 host 属性")
+	}
+	if !hostParam.Required {
+		t.Error("host 应为 required")
+	}
+}
+
+func TestParseJSONSchemaMap_数组items嵌套(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"users": map[string]any{
+				"type":        "array",
+				"description": "用户列表",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"name": map[string]any{"type": "string", "description": "用户名"},
+					},
+					"required": []any{"name"},
+				},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 1 {
+		t.Fatalf("期望 1 个参数，实际 %d", len(params))
+	}
+	p := params[0]
+	if p.Type != ParamTypeArray {
+		t.Errorf("users.Type 期望 %v，实际 %v", ParamTypeArray, p.Type)
+	}
+	if p.Items == nil {
+		t.Fatal("users.Items 不应为 nil")
+	}
+	if p.Items.Type != ParamTypeObject {
+		t.Errorf("items.Type 期望 %v，实际 %v", ParamTypeObject, p.Items.Type)
+	}
+	if len(p.Items.Properties) != 1 {
+		t.Fatalf("期望 1 个嵌套属性，实际 %d", len(p.Items.Properties))
+	}
+}
+
+func TestParseJSONSchemaMap_additionalProperties(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"extra": map[string]any{
+				"type":                 "object",
+				"additionalProperties": true,
+				"properties":           map[string]any{},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if !params[0].AdditionalProperties {
+		t.Error("extra.AdditionalProperties 期望 true")
+	}
+}
+
+func TestParseJSONSchemaMap_minItemsMaxItems(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"tags": map[string]any{
+				"type":     "array",
+				"minItems": 1,
+				"maxItems": 10,
+				"items":    map[string]any{"type": "string"},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if params[0].MinItems != 1 {
+		t.Errorf("tags.MinItems 期望 1，实际 %d", params[0].MinItems)
+	}
+	if params[0].MaxItems != 10 {
+		t.Errorf("tags.MaxItems 期望 10，实际 %d", params[0].MaxItems)
+	}
+}
+
+func TestParseJSONSchemaMap_anyOf组合(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"value": map[string]any{
+				"description": "可以是字符串或整数",
+				"anyOf": []any{
+					map[string]any{"type": "string"},
+					map[string]any{"type": "integer"},
+				},
+			},
+		},
+	}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params[0].AnyOf) != 2 {
+		t.Fatalf("期望 2 个 AnyOf，实际 %d", len(params[0].AnyOf))
+	}
+	if params[0].AnyOf[0].Type != ParamTypeString {
+		t.Errorf("anyOf[0].Type 期望 %v，实际 %v", ParamTypeString, params[0].AnyOf[0].Type)
+	}
+}
+
+func TestParseJSONSchemaMap_顶层非object报错(t *testing.T) {
+	schema := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	_, err := ParseJSONSchemaMap(schema)
+	if err == nil {
+		t.Error("顶层 type 非 object 应返回错误")
+	}
+}
+
+func TestParseJSONSchemaMap_无properties返回空(t *testing.T) {
+	schema := map[string]any{"type": "object"}
+	params, err := ParseJSONSchemaMap(schema)
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(params) != 0 {
+		t.Errorf("期望 0 个参数，实际 %d", len(params))
+	}
+}
+
+func TestParseJSONSchemaMap_RoundTrip(t *testing.T) {
+	// 验证 ParseJSONSchemaMap(ToJSONSchemaMap(params)) 逻辑等价
+	originalParams := []*Param{
+		NewStringParam("query", "搜索查询", true),
+		{
+			Name:        "limit",
+			Type:        ParamTypeInteger,
+			Description: "数量限制",
+			Required:    false,
+			Default:     10,
+			Minimum:     1,
+			Maximum:     100,
+		},
+	}
+
+	schemaMap := ToJSONSchemaMap(originalParams)
+	parsedParams, err := ParseJSONSchemaMap(schemaMap)
+	if err != nil {
+		t.Fatalf("Round-trip 解析失败: %v", err)
+	}
+
+	if len(parsedParams) != len(originalParams) {
+		t.Fatalf("Round-trip 参数数量不一致: 期望 %d，实际 %d", len(originalParams), len(parsedParams))
+	}
+
+	// 按 name 查找比较
+	findByName := func(params []*Param, name string) *Param {
+		for _, p := range params {
+			if p.Name == name {
+				return p
+			}
+		}
+		return nil
+	}
+
+	for _, orig := range originalParams {
+		parsed := findByName(parsedParams, orig.Name)
+		if parsed == nil {
+			t.Errorf("Round-trip 未找到参数 %q", orig.Name)
+			continue
+		}
+		if parsed.Type != orig.Type {
+			t.Errorf("Round-trip %q.Type 期望 %v，实际 %v", orig.Name, orig.Type, parsed.Type)
+		}
+		if parsed.Required != orig.Required {
+			t.Errorf("Round-trip %q.Required 期望 %v，实际 %v", orig.Name, orig.Required, parsed.Required)
+		}
+		if parsed.Description != orig.Description {
+			t.Errorf("Round-trip %q.Description 期望 %q，实际 %q", orig.Name, orig.Description, parsed.Description)
+		}
+	}
+}
+
+// containsStr 检查字符串是否包含子串
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || fmt.Sprintf("%s", s) != "" && containsSubstring(s, sub))
+}
+
+func containsSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }

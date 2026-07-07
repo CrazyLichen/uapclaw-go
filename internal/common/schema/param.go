@@ -520,6 +520,264 @@ func paramToSchema(p *Param) map[string]any {
 	return s
 }
 
+// ParseJSONSchemaMap 将 JSON Schema dict 转换为 []*Param。
+//
+// 输入格式为 MetadataProvider.GetInputParams() 返回的 map[string]any，
+// 即标准 JSON Schema object 定义。
+//
+// 对应 Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
+// Go 因 ToolCard.InputParams 类型为 []*Param 需要此转换。
+func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
+	// 1. 校验顶层 type == "object"
+	typ, _ := schemaMap["type"].(string)
+	if typ != "object" {
+		return nil, fmt.Errorf("schema must have type 'object', got %q", typ)
+	}
+
+	// 2. 提取 properties
+	propsVal, ok := schemaMap["properties"].(map[string]any)
+	if !ok || propsVal == nil {
+		return nil, nil
+	}
+
+	// 3. 提取 required set（支持 []any 和 []string）
+	requiredSet := make(map[string]bool)
+	if req, ok := schemaMap["required"]; ok {
+		switch r := req.(type) {
+		case []any:
+			for _, v := range r {
+				if s, ok := v.(string); ok {
+					requiredSet[s] = true
+				}
+			}
+		case []string:
+			for _, s := range r {
+				requiredSet[s] = true
+			}
+		}
+	}
+
+	// 4. 遍历 properties，调用 parsePropertyToParam
+	params := make([]*Param, 0, len(propsVal))
+	for name, prop := range propsVal {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("property %q is not a map", name)
+		}
+		p, err := parsePropertyToParam(name, propMap, requiredSet)
+		if err != nil {
+			return nil, err
+		}
+		params = append(params, p)
+	}
+	return params, nil
+}
+
+// parsePropertyToParam 将单个 JSON Schema 属性定义解析为 *Param。
+func parsePropertyToParam(name string, prop map[string]any, requiredSet map[string]bool) (*Param, error) {
+	// 1. 解析 type（可选：当有 anyOf/allOf/oneOf 时可省略 type）
+	typeStr, hasType := prop["type"].(string)
+	var paramType ParamType
+	if hasType {
+		var ok bool
+		paramType, ok = parseParamType(typeStr)
+		if !ok {
+			return nil, fmt.Errorf("property %q has unsupported type %q", name, typeStr)
+		}
+	} else {
+		// 无 type 字段时，检查是否有组合 schema，默认使用 String 类型
+		if _, hasAnyOf := prop["anyOf"]; hasAnyOf {
+			paramType = ParamTypeString // anyOf 组合时的占位类型
+		} else if _, hasAllOf := prop["allOf"]; hasAllOf {
+			paramType = ParamTypeObject // allOf 通常用于 object
+		} else if _, hasOneOf := prop["oneOf"]; hasOneOf {
+			paramType = ParamTypeString // oneOf 组合时的占位类型
+		} else {
+			return nil, fmt.Errorf("property %q missing required 'type' field", name)
+		}
+	}
+
+	p := &Param{Name: name, Type: paramType, Required: requiredSet[name]}
+
+	// 2. 解析 description
+	if desc, ok := prop["description"].(string); ok {
+		p.Description = desc
+	}
+
+	// 3. 解析 enum
+	if enum, ok := prop["enum"].([]any); ok {
+		p.Enum = enum
+	}
+
+	// 4. 解析 default
+	if def, ok := prop["default"]; ok {
+		p.Default = def
+	}
+
+	// 5. 解析 nullable
+	if nullable, ok := prop["nullable"].(bool); ok {
+		p.Nullable = nullable
+	}
+
+	// 6. 解析数值/字符串约束
+	if min, ok := prop["minimum"]; ok {
+		p.Minimum = toFloat64(min)
+	}
+	if max, ok := prop["maximum"]; ok {
+		p.Maximum = toFloat64(max)
+	}
+	if minLen, ok := toInt(prop["minLength"]); ok {
+		p.MinLength = minLen
+	}
+	if maxLen, ok := toInt(prop["maxLength"]); ok {
+		p.MaxLength = maxLen
+	}
+	if pattern, ok := prop["pattern"].(string); ok {
+		p.Pattern = pattern
+	}
+	if format, ok := prop["format"].(string); ok {
+		p.Format = format
+	}
+
+	// 7. 解析 array 约束
+	if paramType == ParamTypeArray {
+		if items, ok := prop["items"].(map[string]any); ok {
+			item, err := parsePropertyToParam("item", items, nil)
+			if err != nil {
+				return nil, fmt.Errorf("property %q items: %w", name, err)
+			}
+			p.Items = item
+		}
+		if mi, ok := toInt(prop["minItems"]); ok {
+			p.MinItems = mi
+		}
+		if mi, ok := toInt(prop["maxItems"]); ok {
+			p.MaxItems = mi
+		}
+	}
+
+	// 8. 解析 object 约束
+	if paramType == ParamTypeObject {
+		if ap, ok := prop["additionalProperties"].(bool); ok {
+			p.AdditionalProperties = ap
+		}
+		if nestedProps, ok := prop["properties"].(map[string]any); ok {
+			nestedRequired := make(map[string]bool)
+			if req, ok2 := prop["required"]; ok2 {
+				switch r := req.(type) {
+				case []any:
+					for _, v := range r {
+						if s, ok2 := v.(string); ok2 {
+							nestedRequired[s] = true
+						}
+					}
+				case []string:
+					for _, s := range r {
+						nestedRequired[s] = true
+					}
+				}
+			}
+			props := make([]*Param, 0, len(nestedProps))
+			for propName, propDef := range nestedProps {
+				propMap, ok := propDef.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("property %q.%q is not a map", name, propName)
+				}
+				nested, err := parsePropertyToParam(propName, propMap, nestedRequired)
+				if err != nil {
+					return nil, fmt.Errorf("property %q.%q: %w", name, propName, err)
+				}
+				props = append(props, nested)
+			}
+			p.Properties = props
+		}
+	}
+
+	// 9. 解析组合 schema
+	for _, keyword := range []string{"anyOf", "allOf", "oneOf"} {
+		if subs, ok := prop[keyword].([]any); ok {
+			subParams := make([]*Param, 0, len(subs))
+			for i, sub := range subs {
+				subMap, ok := sub.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("property %q %s[%d] is not a map", name, keyword, i)
+				}
+				sp, err := parsePropertyToParam(fmt.Sprintf("%s_%d", keyword, i), subMap, nil)
+				if err != nil {
+					return nil, fmt.Errorf("property %q %s[%d]: %w", name, keyword, i, err)
+				}
+				subParams = append(subParams, sp)
+			}
+			switch keyword {
+			case "anyOf":
+				p.AnyOf = subParams
+			case "allOf":
+				p.AllOf = subParams
+			case "oneOf":
+				p.OneOf = subParams
+			}
+		}
+	}
+
+	return p, nil
+}
+
+// parseParamType 将 JSON Schema 类型字符串转换为 ParamType。
+func parseParamType(typeStr string) (ParamType, bool) {
+	switch typeStr {
+	case "string":
+		return ParamTypeString, true
+	case "boolean":
+		return ParamTypeBoolean, true
+	case "integer":
+		return ParamTypeInteger, true
+	case "number":
+		return ParamTypeNumber, true
+	case "array":
+		return ParamTypeArray, true
+	case "object":
+		return ParamTypeObject, true
+	default:
+		return ParamType(-1), false
+	}
+}
+
+// toFloat64 将 any 值转换为 float64，支持 int/float64/float32 等数值类型。
+func toFloat64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case int32:
+		return float64(n)
+	default:
+		return math.NaN()
+	}
+}
+
+// toInt 将 any 值转换为 int，支持 int/float64（整数）等类型。
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case int32:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	default:
+		return 0, false
+	}
+}
+
 // init 初始化 paramTypeMap 映射表
 func init() {
 	// 初始化 paramTypeMap，用于 JSON 反序列化
