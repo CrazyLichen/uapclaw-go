@@ -335,7 +335,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	var result map[string]any
 	var loopErr error
 
-	err := cbc.FireLifecycle(interfaces.CallbackBeforeInvoke, interfaces.CallbackAfterInvoke, func() error {
+	err := cbc.FireLifecycle(ctx, interfaces.CallbackBeforeInvoke, interfaces.CallbackAfterInvoke, func() error {
 		// 从 cbc 重新取 inputs（对齐 Python: user_input = ctx.inputs.query）
 		// before_invoke 钩子可能修改 cbc.inputs，必须从 cbc 重新取值
 		curInputs := invokeInputs

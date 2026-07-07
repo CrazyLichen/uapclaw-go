@@ -223,7 +223,10 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 			exception.WithMsg("DeepAgent 未配置，请先调用 Configure()"))
 	}
 
-	invokeInputs := d.normalizeInputs(inputs)
+	invokeInputs, normErr := d.normalizeInputs(inputs)
+	if normErr != nil {
+		return nil, normErr
+	}
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 
@@ -236,7 +239,7 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 
 	// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 	// 使用 FireLifecycle 包裹核心执行逻辑，保证 AFTER_INVOKE 必定触发
-	if err := cbc.FireLifecycle(agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
+	if err := cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 		if deepConfig != nil && deepConfig.EnableTaskLoop && !isResumeInput(invokeInputs) {
 			r, err := d.runTaskLoopInvoke(ctx, cbc, sess)
 			if err != nil {
@@ -284,7 +287,10 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 			exception.WithMsg("DeepAgent 未配置，请先调用 Configure()"))
 	}
 
-	invokeInputs := d.normalizeInputs(inputs)
+	invokeInputs, normErr := d.normalizeInputs(inputs)
+	if normErr != nil {
+		return nil, normErr
+	}
 	agentOpts := agentinterfaces.NewAgentOptions(opts...)
 	sess := agentOpts.Session
 	streamModes := agentOpts.StreamModes
@@ -301,7 +307,7 @@ func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...a
 
 		// 对齐 Python: async with ctx.lifecycle(BEFORE_INVOKE, AFTER_INVOKE):
 		// 使用 FireLifecycle 包裹 chunk 循环，保证 AFTER_INVOKE 必定触发
-		_ = cbc.FireLifecycle(agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
+		_ = cbc.FireLifecycle(ctx, agentinterfaces.CallbackBeforeInvoke, agentinterfaces.CallbackAfterInvoke, func() error {
 			var streamResult map[string]any
 			var streamOutputParts []string
 
@@ -709,18 +715,15 @@ func (d *DeepAgent) StripRailsByType(railTypes ...reflect.Type) int {
 
 	removed := 0
 
-	// 从 pendingRails 移除
+	// 从 pendingRails 移除（对齐 Python 差值计算）
 	before := len(d.pendingRails)
 	var newPending []agentinterfaces.AgentRail
 	for _, r := range d.pendingRails {
-		if matchType(r, railTypes) {
-			removed++
-		} else {
+		if !matchType(r, railTypes) {
 			newPending = append(newPending, r)
 		}
 	}
 	d.pendingRails = newPending
-	removed -= (before - len(d.pendingRails) - (before - len(newPending)))
 	removed = before - len(newPending)
 
 	// 将已注册 Rail 标记为废弃
@@ -800,19 +803,24 @@ func (d *DeepAgent) FollowUp(ctx context.Context, msg string, taskID string, ses
 	if ctrl == nil {
 		return
 	}
-	s := sess
-	if s == nil {
-		s = loopSess
+	sessToUse := sess
+	if sessToUse == nil {
+		sessToUse = loopSess
 	}
-	if s == nil {
+	if sessToUse == nil {
 		return
 	}
 
 	// 对齐 Python: FollowUpEvent.from_text(msg)
-	// ⤵️ 9.6 回填：FollowUpEvent 构建逻辑
-	_ = ctrl
-	_ = taskID
-	logger.Debug(logComponent).Str("msg", msg).Msg("FollowUp: 走 channel，天然安全")
+	event := cschema.FromText(msg)
+	if taskID != "" {
+		event.SetMetadata(map[string]any{"task_id": taskID})
+	}
+
+	// 对齐 Python: controller.event_queue.publish_event_async(card.id, sess, event)
+	if err := ctrl.PublishEventAsync(ctx, sessToUse, event); err != nil {
+		logger.Error(logComponent).Err(err).Str("msg", msg).Msg("FollowUp 发布事件失败")
+	}
 }
 
 // Steer 发布 TaskInteraction 事件到任务循环。
@@ -1037,6 +1045,11 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	d.queuePendingRails(config)
+
+	// 注：Python 在 hotReconfigure 后调用 _sync_builder_to_active_rails() 将新 builder
+	// 同步到已注册 rail。Go 的策略不同：agent 通过 SystemPromptBuilder() 接口返回最新
+	// builder，rail 调用接口获取，无需显式同步。若后续 rail 体系需要持有 builder 引用，
+	// 再补充 syncBuilderToActiveRails 逻辑。
 }
 
 // hotReloadRails 热重配置时循环废弃旧 Rail。
@@ -1460,7 +1473,7 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 
 // normalizeInputs 解析用户输入为 InvokeInputs。
 // 对齐 Python: DeepAgent._normalize_inputs(inputs) (line 1056)
-func (d *DeepAgent) normalizeInputs(inputs any) *agentinterfaces.InvokeInputs {
+func (d *DeepAgent) normalizeInputs(inputs any) (*agentinterfaces.InvokeInputs, error) {
 	switch v := inputs.(type) {
 	case map[string]any:
 		var query agentinterfaces.InvokeQuery
@@ -1481,8 +1494,10 @@ func (d *DeepAgent) normalizeInputs(inputs any) *agentinterfaces.InvokeInputs {
 		var runKind agentinterfaces.RunKind
 		var runContext *agentinterfaces.RunContext
 		if run, ok := v["run"].(map[string]any); ok {
-			if kind, kOk := run["kind"].(string); kOk {
+			if kind, kOk := run["kind"].(string); kOk && kind != "" {
 				runKind = agentinterfaces.RunKind(kind)
+			} else {
+				runKind = agentinterfaces.RunKindNormal
 			}
 			if contextData, cOk := run["context"].(map[string]any); cOk {
 				// 对齐 Python: RunContext(**context_data) (line 1069)
@@ -1506,14 +1521,15 @@ func (d *DeepAgent) normalizeInputs(inputs any) *agentinterfaces.InvokeInputs {
 			ConversationID: conversationID,
 			RunKind:        runKind,
 			RunContext:     runContext,
-		}
+		}, nil
 	case string:
-		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}
+		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(v)}, nil
 	case *interaction.InteractiveInput:
 		// 对齐 Python: isinstance(inputs, InteractiveInput) → query = inputs
-		return &agentinterfaces.InvokeInputs{Query: v}
+		return &agentinterfaces.InvokeInputs{Query: v}, nil
 	default:
-		return &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString(fmt.Sprintf("%v", v))}
+		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
+			exception.WithMsg(fmt.Sprintf("不支持的输入类型: %T，必须是 string、[]Message、map 或 InvokeInputs", v)))
 	}
 }
 
@@ -1738,8 +1754,19 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 		for coord.ShouldContinue() {
 			outerRound++
 
-			// 排空 follow-up（对齐 Python line 2026-2040）
-			_ = ctrl.DrainFollowUp()
+				// 排空 follow-up，合并到 state 缓冲（对齐 Python line 2026-2040）
+			newFollowUps := ctrl.DrainFollowUp()
+			st := d.LoadState(sess)
+			if len(newFollowUps) > 0 {
+				st.PendingFollowUps = append(st.PendingFollowUps, newFollowUps...)
+			}
+			// 弹出第一个缓冲的 follow-up 作为当前查询
+			isFollowUp := len(st.PendingFollowUps) > 0
+			if isFollowUp {
+				currentQuery = agentinterfaces.InvokeQueryString(st.PendingFollowUps[0])
+				st.PendingFollowUps = st.PendingFollowUps[1:]
+				d.saveState(sess, st)
+			}
 
 			queryPreview := currentQuery.PlainText()
 			if len(queryPreview) > 120 {
@@ -1747,18 +1774,15 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 			}
 			logLoop("round=%d started", fmt.Sprintf(", query=%s", queryPreview), outerRound)
 
-			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), false, isStreaming, modified.RunKind, modified.RunContext); err != nil {
+			if err = ctrl.SubmitRound(ctx, sess, string(currentQuery.PlainText()), isFollowUp, isStreaming, modified.RunKind, modified.RunContext); err != nil {
 				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("提交轮次失败")
 				break
 			}
 
 			result := ctrl.WaitRoundCompletion(ctx, &timeout)
 			resultType, _ := result["result_type"].(string)
-			if resultType == "error" {
-				errOutput, _ := result["output"].(string)
-				err = fmt.Errorf("轮次完成返回错误: %s", errOutput)
-				logger.Error(logComponent).Err(err).Int("round", outerRound).Msg("等待轮次完成失败")
-				break
+			if resultType == "" {
+				resultType = "N/A"
 			}
 
 			outputPreview := ""
@@ -1781,7 +1805,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 			coord.SetLastResult(result)
 
 			// 更新状态
-			st := d.LoadState(sess)
+			st = d.LoadState(sess)
 			exported := coord.ExportState()
 			st.StopConditionState = map[string]any{
 				"iteration":        exported.Iteration,
@@ -1800,7 +1824,23 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 				break
 			}
 
+			// 对齐 Python line 2079-2086: 退出条件检查
+			st = d.LoadState(sess)
+			if ctrl.HasFollowUp() || len(st.PendingFollowUps) > 0 {
+				continue
+			}
+			if !d.hasRemainingTasks(sess) {
+				logLoop("no remaining tasks, loop finished", "", 0)
+				break
+			}
+
 			currentQuery = modified.Query
+		}
+
+		// 对齐 Python line 2090-2094: 循环结束后记录 stop_reason
+		stopReason := coord.StopReason()
+		if stopReason != "" {
+			logLoop("loop stopped by: %s", "", stopReason)
 		}
 	}()
 
@@ -1843,6 +1883,13 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	// 构建 AgentCallbackContext
 	cbc := agentinterfaces.NewAgentCallbackContext(d, invokeInputs, sess)
 
+	// 派生子 context，用于取消后台 goroutine
+	// 对齐 Python: asyncio.create_task(_stream_process()) + CancelledError 处理
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	d.streamMu.Lock()
+	d.streamCancel = streamCancel
+	d.streamMu.Unlock()
+
 	outCh := make(chan stream.Schema, 64)
 
 	// 后台 goroutine: 运行任务循环，每轮结果写入session流
@@ -1850,13 +1897,16 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	go func() {
 		// 对齐 Python line 2190-2194: finally → session.close_stream()
 		defer func() {
+			d.streamMu.Lock()
+			d.streamCancel = nil
+			d.streamMu.Unlock()
 			_ = sessConcrete.CloseStream()
 		}()
 
-		loopCh, loopErr := d.runTaskLoop(ctx, cbc, sessConcrete, true)
+		loopCh, loopErr := d.runTaskLoop(streamCtx, cbc, sessConcrete, true)
 		if loopErr != nil {
 			// 对齐 Python line 2187-2189: except → 写入错误结果到流
-			d.writeRoundResultToStream(ctx, map[string]any{
+			d.writeRoundResultToStream(streamCtx, map[string]any{
 				"output":      loopErr.Error(),
 				"result_type": "error",
 			}, sessConcrete)
@@ -1866,7 +1916,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 		// 对齐 Python line 2184-2185:
 		// async for result in _run_task_loop(): _write_round_result_to_stream(result, session)
 		for result := range loopCh {
-			d.writeRoundResultToStream(ctx, result, sessConcrete)
+			d.writeRoundResultToStream(streamCtx, result, sessConcrete)
 		}
 	}()
 
@@ -1874,6 +1924,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 	// 对齐 Python line 2199-2200: async for chunk in session.stream_iterator(): yield chunk
 	go func() {
 		defer close(outCh)
+		defer d.cancelStreamProcess() // 前台退出时取消后台
 		for chunk := range sessConcrete.StreamIterator() {
 			select {
 			case outCh <- chunk:

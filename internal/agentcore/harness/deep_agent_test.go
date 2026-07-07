@@ -1004,7 +1004,10 @@ func TestNormalizeInputs_MapStringAny(t *testing.T) {
 		"conversation_id": "conv-1",
 	}
 
-	result := d.normalizeInputs(inputs)
+	result, err := d.normalizeInputs(inputs)
+	if err != nil {
+		t.Fatalf("normalizeInputs 返回错误: %v", err)
+	}
 	if result.Query.PlainText() != "hello world" {
 		t.Errorf("Query=%q，期望 %q", result.Query.PlainText(), "hello world")
 	}
@@ -1026,7 +1029,10 @@ func TestNormalizeInputs_MapStringAny_带Run(t *testing.T) {
 		},
 	}
 
-	result := d.normalizeInputs(inputs)
+	result, err := d.normalizeInputs(inputs)
+	if err != nil {
+		t.Fatalf("normalizeInputs 返回错误: %v", err)
+	}
 	if result.RunKind != "heartbeat" {
 		t.Errorf("RunKind=%q，期望 %q", result.RunKind, "heartbeat")
 	}
@@ -1038,18 +1044,24 @@ func TestNormalizeInputs_MapStringAny_带Run(t *testing.T) {
 // TestNormalizeInputs_String 字符串输入直接转为 Query
 func TestNormalizeInputs_String(t *testing.T) {
 	d := newTestDeepAgent()
-	result := d.normalizeInputs("plain text query")
+	result, err := d.normalizeInputs("plain text query")
+	if err != nil {
+		t.Fatalf("normalizeInputs 返回错误: %v", err)
+	}
 	if result.Query.PlainText() != "plain text query" {
 		t.Errorf("Query=%q，期望 %q", result.Query.PlainText(), "plain text query")
 	}
 }
 
-// TestNormalizeInputs_Default 其他类型用 fmt.Sprintf 转字符串
+// TestNormalizeInputs_Default 不支持类型返回错误（对齐 Python）
 func TestNormalizeInputs_Default(t *testing.T) {
 	d := newTestDeepAgent()
-	result := d.normalizeInputs(42)
-	if result.Query.PlainText() != "42" {
-		t.Errorf("Query=%q，期望 %q", result.Query.PlainText(), "42")
+	result, err := d.normalizeInputs(42)
+	if err == nil {
+		t.Error("期望返回错误，实际 err=nil, result=%v", result)
+	}
+	if result != nil {
+		t.Errorf("期望 result=nil，实际 result=%v", result)
 	}
 }
 

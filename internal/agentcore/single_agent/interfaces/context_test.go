@@ -181,7 +181,7 @@ func TestFireLifecycle_正常流程(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, origInputs, nil)
 
 	executed := false
-	err := ctx.FireLifecycle(CallbackBeforeInvoke, CallbackAfterInvoke, func() error {
+	err := ctx.FireLifecycle(context.Background(), CallbackBeforeInvoke, CallbackAfterInvoke, func() error {
 		executed = true
 		// fn 内修改 inputs
 		ctx.SetInputs(&ModelCallInputs{})
@@ -199,7 +199,7 @@ func TestFireLifecycle_异常时设置Exception(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, &InvokeInputs{}, nil)
 
 	testErr := assert.AnError
-	err := ctx.FireLifecycle(CallbackBeforeModelCall, CallbackAfterModelCall, func() error {
+	err := ctx.FireLifecycle(context.Background(), CallbackBeforeModelCall, CallbackAfterModelCall, func() error {
 		return testErr
 	})
 
@@ -212,7 +212,7 @@ func TestFireLifecycle_恢复Inputs(t *testing.T) {
 	origInputs := &InvokeInputs{}
 	ctx := NewAgentCallbackContext(nil, origInputs, nil)
 
-	_ = ctx.FireLifecycle(CallbackBeforeToolCall, CallbackAfterToolCall, func() error {
+	_ = ctx.FireLifecycle(context.Background(), CallbackBeforeToolCall, CallbackAfterToolCall, func() error {
 		ctx.SetInputs(&ToolCallInputs{})
 		assert.IsType(t, &ToolCallInputs{}, ctx.Inputs()) // fn 内 inputs 已变
 		return nil

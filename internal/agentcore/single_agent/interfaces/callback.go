@@ -480,6 +480,7 @@ func (c *AgentCallbackContext) SteeringQueue() chan string {
 //
 // 对齐 Python: AgentCallbackContext.lifecycle() async context manager
 func (c *AgentCallbackContext) FireLifecycle(
+	ctx context.Context,
 	before, after AgentCallbackEvent,
 	fn func() error,
 ) error {
@@ -497,7 +498,29 @@ func (c *AgentCallbackContext) FireLifecycle(
 	}
 
 	c.inputs = savedInputs
-	_ = c.Fire(after)
+
+	// context 已取消 → 跳过 after 事件（对齐 Python CancelledError 保护）
+	if ctx.Err() != nil {
+		if origErr != nil {
+			return origErr
+		}
+		return nil
+	}
+
+	// 触发 after 钩子，对齐 Python lifecycle() 错误处理
+	afterErr := c.Fire(after)
+	if afterErr != nil {
+		if origErr != nil {
+			// after 回调出错但有原始异常 → log 不掩盖
+			logger.Error(logger.ComponentAgentCore).
+				Str("event", string(after)).
+				Err(afterErr).
+				Msg("after 回调出错，掩盖原始异常")
+			return origErr
+		}
+		// after 回调出错且无原始异常 → 返回 after 错误
+		return afterErr
+	}
 
 	if origErr != nil {
 		return origErr

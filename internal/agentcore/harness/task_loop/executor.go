@@ -156,7 +156,6 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	cid := sess.GetSessionID()
 
 	// 步骤 9：构建迭代输入和回调上下文
-	// ⤵️ 9.1 回填：agent 参数传 nil，Fire 为空操作
 	// 对齐 Python: iter_inputs = TaskIterationInputs(query=query, ...)
 	iterInputs := &agentinterfaces.TaskIterationInputs{
 		Iteration:      iteration,
@@ -165,7 +164,15 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		Query:          query,
 		IsFollowUp:     isFollowUp,
 	}
-	cbCtx := agentinterfaces.NewAgentCallbackContext(nil, iterInputs, sess)
+	// 对齐 Python: AgentCallbackContext(agent=agent, inputs=iter_inputs, session=session)
+	// 运行时 provider 为 *DeepAgent，满足 BaseAgent 接口
+	var baseAgent agentinterfaces.BaseAgent
+	if ba, ok := e.provider.(agentinterfaces.BaseAgent); ok {
+		baseAgent = ba
+	} else {
+		logger.Warn(logComponent).Msg("provider 不满足 BaseAgent 接口，回调将不触发")
+	}
+	cbCtx := agentinterfaces.NewAgentCallbackContext(baseAgent, iterInputs, sess)
 
 	// 步骤 10：标记计划任务为进行中
 	if planTask != nil && state != nil && state.TaskPlan != nil {

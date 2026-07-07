@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -26,7 +27,6 @@ type TaskLoopEventHandler struct {
 	// base 基础依赖容器
 	base modules.EventHandlerBase
 	// provider 深层 Agent 提供者
-	// ⤵️ 9.1 回填：用 *DeepAgent 替换 DeepAgentInterface
 	provider interfaces.DeepAgentInterface
 	// mu 保护轮次状态的互斥锁
 	mu sync.Mutex
@@ -92,29 +92,41 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 		defer timer.Stop()
 		select {
 		case result := <-ch:
+			if result == nil || len(result) == 0 {
+				result = map[string]any{"status": "completed"}
+			}
+			h.mu.Lock()
+			h.lastResult = result
+			h.mu.Unlock()
 			return result
 		case <-ctx.Done():
 			logger.Warn(logComponent).
 				Err(ctx.Err()).
 				Msg("等待轮次完成：上下文取消")
-			return map[string]any{"status": "cancelled", "error": ctx.Err().Error()}
+			return map[string]any{"status": "cancelled", "result_type": "error", "error": ctx.Err().Error()}
 		case <-timer.C:
 			logger.Warn(logComponent).
 				Str("timeout", timeout.String()).
 				Msg("等待轮次完成：超时")
-			return map[string]any{"status": "timeout"}
+			return map[string]any{"status": "timeout", "result_type": "error"}
 		}
 	}
 
 	// 无超时：只等待 channel 或上下文取消
 	select {
 	case result := <-ch:
+		if result == nil || len(result) == 0 {
+			result = map[string]any{"status": "completed"}
+		}
+		h.mu.Lock()
+		h.lastResult = result
+		h.mu.Unlock()
 		return result
 	case <-ctx.Done():
 		logger.Warn(logComponent).
 			Err(ctx.Err()).
 			Msg("等待轮次完成：上下文取消")
-		return map[string]any{"status": "cancelled", "error": ctx.Err().Error()}
+		return map[string]any{"status": "cancelled", "result_type": "error", "error": ctx.Err().Error()}
 	}
 }
 
@@ -136,7 +148,9 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	query := extractQuery(event)
 
 	// 从元数据读取运行时上下文
-	var taskID, runKind, runContext string
+	var taskID string
+	var runKind string
+	var runContext *agentinterfaces.RunContext
 	if v, ok := metadata["task_id"]; ok {
 		taskID, _ = v.(string)
 	}
@@ -144,7 +158,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		runKind, _ = v.(string)
 	}
 	if v, ok := metadata["run_context"]; ok {
-		runContext, _ = v.(string)
+		runContext, _ = v.(*agentinterfaces.RunContext)
 	}
 
 	// 获取协调器，nil 检查
@@ -200,7 +214,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 	if runKind != "" {
 		coreTask.Metadata["run_kind"] = runKind
 	}
-	if runContext != "" {
+	if runContext != nil {
 		coreTask.Metadata["run_context"] = runContext
 	}
 	if isFollowUp {
