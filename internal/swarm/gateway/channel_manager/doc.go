@@ -9,7 +9,7 @@
 //	├── doc.go              # 包文档
 //	├── base.go             # BaseChannel 接口 + ChannelType + ChannelMetadata
 //	├── channel_manager.go  # ChannelManager 注册/分发
-//	└── web/                # Web 渠道实现
+//	└── web/                # Web 渠道实现（WebSocket + RPC 分发 + 帧协议）
 //
 // 对应 Python 代码：jiuwenswarm/gateway/channel_manager/
 package channel_manager
