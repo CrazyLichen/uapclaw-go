@@ -643,7 +643,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.14 | ☐ | TenantAgentPool | 多租户 Agent 池化 | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
 | 10.3.15-18 | 🔄 | 会话管理 | SessionManager(LIFO)✅ / SessionHistory(JSONL)☐ / SessionMetadata☐ / SessionRename☐ | `jiuwenswarm/server/runtime/session/` |
 | 10.3.19-20 | ☐ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
-| 10.3.21-22 | ☐ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
+| 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
 | 10.3.23-26 | ☐ | 服务端辅助 | Hooks/Sandbox/Utils/入口 | `jiuwenswarm/server/hooks/` · `sandbox/` · `utils/` · `app_agentserver.py` |
 | **10.4 独立交互入口** | — | | | |
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |
@@ -672,21 +672,21 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **11.x Gateway 核心** | — | | | |
-| 11.1 | ☐ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
-| 11.2 | ☐ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
-| 11.3 | ☐ | MessageHandler | 入站→AgentServer，出站→Channel | `jiuwenswarm/gateway/message_handler/message_handler.py` |
+| 11.1 | ✅ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
+| 11.2 | ✅ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
+| 11.3 | 🔄 | MessageHandler | 入站→AgentServer，出站→Channel（骨架实现） | `jiuwenswarm/gateway/message_handler/message_handler.py` |
 | 11.4 | ☐ | Slash Command Parser | Slash 命令解析 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
-| 11.5 | ☐ | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连 | `jiuwenswarm/gateway/routing/agent_client.py` |
+| 11.5 | 🔄 | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连（骨架实现） | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ☐ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
 | 11.7 | ☐ | SessionMap | 会话映射 | `jiuwenswarm/gateway/routing/session_map.py` |
 | 11.8 | ☐ | InteractionContext | 交互上下文 | `jiuwenswarm/gateway/routing/interaction_context.py` |
-| 11.9 | ☐ | GatewayServer | 多路由 WS 服务器组装 | `jiuwenswarm/gateway/app_gateway.py` |
+| 11.9 | 🔄 | GatewayServer | 多路由 WS 服务器组装（WebChannel 部分 ✅） | `jiuwenswarm/gateway/app_gateway.py` |
 | 11.10 | ☐ | Cron 调度服务 | Cron 表达式，Job 持久化，调度执行 | `jiuwenswarm/gateway/cron/` |
 | 11.11 | ☐ | 心跳服务 | 定时心跳，活跃时段控制 | `jiuwenswarm/gateway/heartbeat/heartbeat.py` |
 | 11.12 | ☐ | IM Pipeline | 数字人入站/出站管道 | `jiuwenswarm/gateway/im_pipeline/` |
 | 11.13 | ☐ | Gateway Hook | 钩子处理 | `jiuwenswarm/gateway/hooks/` |
 | **11.x IM 渠道** | — | | | |
-| 11.14 | ☐ | Web 通道 | WebSocket + HTTP RPC | `jiuwenswarm/gateway/channel_manager/web/` |
+| 11.14 | ✅ | Web 通道 | WebSocket + HTTP RPC | `jiuwenswarm/gateway/channel_manager/web/` |
 | 11.15 | ☐ | TUI 通道 | 终端 UI 交互 | `jiuwenswarm/gateway/channel_manager/tui/` |
 | 11.16 | ☐ | 飞书通道 | 事件回调，企业多机器人 | `jiuwenswarm/gateway/channel_manager/im_platforms/feishu/` |
 | 11.17 | ☐ | 钉钉通道 | DingTalk Stream 协议 | `jiuwenswarm/gateway/channel_manager/im_platforms/dingtalk/` |
@@ -716,7 +716,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 12.5 | ☐ | 沙箱 HTTP 服务 | API 路由（sandbox/proxy/policy） | `jiuwenbox/server/` |
 | 12.6 | ☐ | JiuwenBox CLI | 命令行工具 | `jiuwenbox/cli/` |
 | **12.x CLI 入口** | — | | | |
-| 12.7 | ☐ | 统一启动器 | `uapclaw app`：同时启动 AgentServer + Gateway | `jiuwenswarm/app.py` |
+| 12.7 | 🔄 | 统一启动器 | `uapclaw app`：启动 Gateway + 静态文件服务（WebChannel ✅，AgentServer stub） | `jiuwenswarm/app.py` |
 | 12.8 | ☐ | AgentServer 启动 | `uapclaw agentserver` | `jiuwenswarm/server/app_agentserver.py` |
 | 12.9 | ☐ | Gateway 启动 | `uapclaw gateway` | `jiuwenswarm/gateway/app_gateway.py` |
 | 12.10 | ☐ | Web UI 启动 | `uapclaw web` | `jiuwenswarm/channels/web/app_web.py` |
