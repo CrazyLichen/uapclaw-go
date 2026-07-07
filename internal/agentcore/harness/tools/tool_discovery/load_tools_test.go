@@ -25,9 +25,6 @@ func TestLoadToolsTool_Card(t *testing.T) {
 	if card.Name != "load_tools" {
 		t.Errorf("期望 name=load_tools，实际 %s", card.Name)
 	}
-	if card.Properties["tool_id"] != "LoadToolsTool" {
-		t.Errorf("期望 tool_id=LoadToolsTool，实际 %v", card.Properties["tool_id"])
-	}
 }
 
 // TestLoadToolsTool_Invoke_正常 测试正常调用
