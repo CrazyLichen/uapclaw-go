@@ -282,11 +282,47 @@ type SessionsCancelInput struct {
 - `SearchToolsTool` 的 `next_step_hint` → Python 原文："If the result is clear enough, call load_tools directly. Increase detail_level to 2 or 3 when you need more parameter detail."
 - 删除 `buildCallabilityNote()` / `buildNextStepHint()` 中英文分支
 
+### 2.3 SchemaUtils 递归校验补齐
+
+当前 `SchemaUtils.Validate` 和 `FormatWithSchema` **只做顶层扁平校验**，不递归校验嵌套 object 的 properties 和 array 的 items，不校验新增的 MinItems/MaxItems/AdditionalProperties，不递归填充嵌套默认值。
+
+Python 的 `validate_with_schema` 有两个分支：
+- `schema: Dict[str,Any]` → 用 `jsonschema` 库完整校验（完全支持嵌套/约束/组合schema）
+- `schema: Type[BaseModel]` → 用 Pydantic `model_validate` 校验（同样完全支持）
+
+Go 对应两个入口，采用**两种路径并存**策略：
+
+| Go 入口 | 对齐 Python 路径 | 校验方式 |
+|---------|----------------|---------|
+| `FormatWithSchema(data, []*Param)` | Pydantic Model 路径 | 手写递归校验（Go 无 Pydantic，手写对等） |
+| `FormatWithSchemaMap(data, map[string]any)` | dict 路径 | `santhosh-tekuri/jsonschema/v6` 库校验 |
+
+#### FormatWithSchemaMap 改用 jsonschema 库
+
+项目已有 `santhosh-tekuri/jsonschema/v6` 依赖（go.mod indirect），可直接使用：
+
+```go
+c := jsonschema.NewCompiler()
+c.AddResource("schema.json", schemaMap)
+sch, _ := c.Compile("schema.json")
+err := sch.Validate(data)
+```
+
+替换当前 `FormatWithSchemaMap` 中的手写校验逻辑。
+
+#### FormatWithSchema 手写递归校验增强
+
+1. `validateParamType` 增加 Array 递归校验 items、Object 递归校验 properties
+2. `validateParamConstraints` 增加 MinItems/MaxItems 校验
+3. `FormatWithSchema` 增加递归默认值填充（嵌套 object 的 properties 默认值）
+
 ## 3. 影响范围
 
 | 文件 | 变更类型 | 说明 |
 |------|---------|------|
 | `common/schema/param.go` | 修改 | 新增 3 字段 + ParseJSONSchemaMap + 修改 paramToSchema/Validate |
+| `foundation/tool/schema_utils.go` | 修改 | 递归校验 + FormatWithSchemaMap 用 jsonschema 库 + 递归默认值填充 |
+| `foundation/tool/schema_utils_test.go` | 修改 | 新增递归校验测试 |
 | `common/schema/param_test.go` | 修改 | 新增测试 |
 | `harness/prompts/tools/registry.go` | 修改 | 新增 BuildToolCard |
 | `harness/prompts/tools/cron.go` | 修改 | 补 type 字段 |
