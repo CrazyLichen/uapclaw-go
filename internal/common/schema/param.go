@@ -599,6 +599,13 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 
 	p := &Param{Name: name, Type: paramType, Required: requiredSet[name]}
 
+	// 对 integer/number 类型，初始化 Minimum/Maximum 为 NaN（表示未设置）
+	// 零值 0 是合法约束值，必须用 NaN 区分"未设置"和"约束为 0"
+	if paramType == ParamTypeInteger || paramType == ParamTypeNumber {
+		p.Minimum = math.NaN()
+		p.Maximum = math.NaN()
+	}
+
 	// 2. 解析 description
 	if desc, ok := prop["description"].(string); ok {
 		p.Description = desc

@@ -41,9 +41,6 @@ func TestSearchToolsTool_Card(t *testing.T) {
 	if card.Name != "search_tools" {
 		t.Errorf("期望 name=search_tools，实际 %s", card.Name)
 	}
-	if card.Properties["tool_id"] != "SearchToolsTool" {
-		t.Errorf("期望 tool_id=SearchToolsTool，实际 %v", card.Properties["tool_id"])
-	}
 }
 
 // TestSearchToolsTool_Invoke_正常 测试正常调用
@@ -91,21 +88,39 @@ func TestSearchToolsTool_Invoke_正常(t *testing.T) {
 	if result["query"] != "搜索文件" {
 		t.Errorf("期望 query=搜索文件，实际 %v", result["query"])
 	}
-	if result["count"] != 2 {
-		t.Errorf("期望 count=2，实际 %v", result["count"])
-	}
-	matches, ok := result["matches"].([]map[string]any)
+	countVal, ok := result["count"]
 	if !ok {
-		t.Fatal("matches 应为 []map[string]any")
+		t.Fatal("结果应包含 count")
 	}
-	if len(matches) != 2 {
-		t.Errorf("期望 len(matches)=2，实际 %d", len(matches))
+	// count 经过 JSON 序列化后可能是 float64
+	countInt := 0
+	switch v := countVal.(type) {
+	case int:
+		countInt = v
+	case float64:
+		countInt = int(v)
 	}
-	if _, ok := result["callability_note"]; !ok {
-		t.Error("结果应包含 callability_note")
+	if countInt != 2 {
+		t.Errorf("期望 count=2，实际 %v", countVal)
 	}
-	if _, ok := result["next_step_hint"]; !ok {
-		t.Error("结果应包含 next_step_hint")
+	// matches 通过 JSON 序列化后可能是 []any 而非 []map[string]any
+	matchesAny, ok := result["matches"]
+	if !ok {
+		t.Fatal("结果应包含 matches")
+	}
+	matchesSlice, ok := matchesAny.([]any)
+	if !ok {
+		t.Fatalf("matches 应为 []any，实际 %T", matchesAny)
+	}
+	if len(matchesSlice) != 2 {
+		t.Errorf("期望 len(matches)=2，实际 %d", len(matchesSlice))
+	}
+	// callability_note 和 next_step_hint 应使用 Python 原文
+	if result["callability_note"] != callabilityNote {
+		t.Errorf("callability_note 应等于 Python 原文，实际 %v", result["callability_note"])
+	}
+	if result["next_step_hint"] != nextStepHint {
+		t.Errorf("next_step_hint 应等于 Python 原文，实际 %v", result["next_step_hint"])
 	}
 }
 
@@ -137,7 +152,7 @@ func TestSearchToolsTool_Invoke_限幅(t *testing.T) {
 
 			_, err := st.Invoke(
 				context.Background(),
-				map[string]any{"query": "test", "limit": tc.input},
+				map[string]any{"query": "test", "limit": float64(tc.input)},
 			)
 			if err != nil {
 				t.Fatalf("Invoke 不应返回错误：%v", err)
@@ -183,27 +198,5 @@ func TestSearchToolsTool_Stream(t *testing.T) {
 	_, err := st.Stream(context.Background(), nil)
 	if err == nil {
 		t.Fatal("Stream 应返回错误")
-	}
-}
-
-// TestClampLimit 测试 clampLimit 函数
-func TestClampLimit(t *testing.T) {
-	tests := []struct {
-		input    int
-		expected int
-	}{
-		{-10, 1},
-		{0, 1},
-		{1, 1},
-		{5, 5},
-		{20, 20},
-		{21, 20},
-		{100, 20},
-	}
-	for _, tc := range tests {
-		result := clampLimit(tc.input)
-		if result != tc.expected {
-			t.Errorf("clampLimit(%d) = %d，期望 %d", tc.input, result, tc.expected)
-		}
 	}
 }

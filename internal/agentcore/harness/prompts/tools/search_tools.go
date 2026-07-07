@@ -36,8 +36,8 @@ func GetSearchToolsMetadataProviderInputParams(language string) map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"query":        map[string]any{"type": "string", "description": d("query")},
-			"limit":        map[string]any{"type": "integer", "description": d("limit")},
-			"detail_level": map[string]any{"type": "integer", "description": d("detail_level")},
+			"limit":        map[string]any{"type": "integer", "description": d("limit"), "default": 10},
+			"detail_level": map[string]any{"type": "integer", "description": d("detail_level"), "default": 1},
 		},
 		"required": []any{"query"},
 	}
