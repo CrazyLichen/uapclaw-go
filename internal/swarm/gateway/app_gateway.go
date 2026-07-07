@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -240,7 +242,11 @@ func zerologMiddleware(next http.Handler) http.Handler {
 }
 
 // defaultHost 从配置获取默认监听地址。
+// 优先级：环境变量 UAPCLAW_GATEWAY_HOST > config.yaml gateway.host > 默认 127.0.0.1
 func defaultHost(cfg *config.Config) string {
+	if v := os.Getenv("UAPCLAW_GATEWAY_HOST"); v != "" {
+		return v
+	}
 	if cfg != nil {
 		if v := cfg.Get("gateway.host"); v != nil {
 			if s, ok := v.(string); ok && s != "" {
@@ -252,7 +258,13 @@ func defaultHost(cfg *config.Config) string {
 }
 
 // defaultPort 从配置获取默认监听端口。
+// 优先级：环境变量 UAPCLAW_GATEWAY_PORT > config.yaml gateway.port > 默认 19000
 func defaultPort(cfg *config.Config) int {
+	if v := os.Getenv("UAPCLAW_GATEWAY_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			return p
+		}
+	}
 	if cfg != nil {
 		if v := cfg.Get("gateway.port"); v != nil {
 			switch p := v.(type) {
