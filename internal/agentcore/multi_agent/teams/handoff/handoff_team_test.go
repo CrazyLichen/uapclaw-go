@@ -855,7 +855,7 @@ func TestHandoffTeam_Invoke_PreRun失败(t *testing.T) {
 	_ = err
 }
 
-// TestHandoffTeam_Stream_Invoke失败 测试 Stream 在 Invoke 失败时返回错误
+// TestHandoffTeam_Stream_Invoke失败 测试 Stream 在 Invoke 失败时返回流 channel（错误在后台 goroutine 中处理）
 func TestHandoffTeam_Stream_Invoke失败(t *testing.T) {
 	agent1 := agentschema.NewAgentCard(
 		agentschema.WithAgentID("agent1"),
@@ -880,9 +880,14 @@ func TestHandoffTeam_Stream_Invoke失败(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := team.Stream(ctx, map[string]any{"query": "hello"})
-	// 预期超时错误（Invoke 内部超时）
-	assert.Error(t, err)
+	streamCh, err := team.Stream(ctx, map[string]any{"query": "hello"})
+	// Stream 是异步的，始终返回 channel 且 err 为 nil；
+	// runChain 失败在后台 goroutine 中处理，不会传播到 Stream 返回值。
+	assert.NoError(t, err)
+	assert.NotNil(t, streamCh)
+	// 等待 channel 关闭（runChain 失败后 CloseStream 会关闭 channel）
+	for range streamCh {
+	}
 }
 
 // TestHandoffTeam_runChain_ensureInternalAgents失败 测试 runChain 内部 Agent 初始化失败

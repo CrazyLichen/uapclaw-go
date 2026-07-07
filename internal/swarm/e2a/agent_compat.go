@@ -89,15 +89,15 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 	}
 
 	return &schema.AgentRequest{
-		RequestID:  env.RequestID,
-		ChannelID:  channelID,
-		SessionID:  sessionID,
-		ChatID:     chatID,
-		ReqMethod:  reqMethod,
-		Params:     params,
-		IsStream:   env.IsStream,
-		Timestamp:  e2aTimestampToFloat(env.Timestamp),
-		Metadata:   metadata,
+		RequestID: env.RequestID,
+		ChannelID: channelID,
+		SessionID: sessionID,
+		ChatID:    chatID,
+		ReqMethod: reqMethod,
+		Params:    params,
+		IsStream:  env.IsStream,
+		Timestamp: e2aTimestampToFloat(env.Timestamp),
+		Metadata:  metadata,
 	}, nil
 }
 

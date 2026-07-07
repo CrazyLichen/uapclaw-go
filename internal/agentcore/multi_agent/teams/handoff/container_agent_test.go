@@ -17,8 +17,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -54,7 +54,7 @@ func newMockBaseAgent(id string) *mockBaseAgent {
 func (m *mockBaseAgent) Card() *agentschema.AgentCard                            { return m.card }
 func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }
 func (m *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return m.abilityMgr }
-func (m *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager             { return nil }
+func (m *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager  { return nil }
 func (m *mockBaseAgent) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -73,7 +73,9 @@ func (m *mockBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.Ag
 func (m *mockBaseAgent) RegisterRail(_ context.Context, _ agentinterfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error { return nil }
+func (m *mockBaseAgent) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
+	return nil
+}
 func (m *mockBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 
 // mockContainerSessionFacade 模拟 SessionFacade 接口
@@ -1263,7 +1265,7 @@ type mockBaseAgentNoAbility struct {
 func (m *mockBaseAgentNoAbility) Card() *agentschema.AgentCard                            { return m.card }
 func (m *mockBaseAgentNoAbility) Config() agentinterfaces.AgentConfig                     { return nil }
 func (m *mockBaseAgentNoAbility) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (m *mockBaseAgentNoAbility) CallbackManager() *agentinterfaces.AgentCallbackManager             { return nil }
+func (m *mockBaseAgentNoAbility) CallbackManager() *agentinterfaces.AgentCallbackManager  { return nil }
 func (m *mockBaseAgentNoAbility) Configure(_ context.Context, _ agentinterfaces.AgentConfig) error {
 	return nil
 }
@@ -1285,7 +1287,9 @@ func (m *mockBaseAgentNoAbility) RegisterRail(_ context.Context, _ agentinterfac
 func (m *mockBaseAgentNoAbility) UnregisterRail(_ context.Context, _ agentinterfaces.AgentRail) error {
 	return nil
 }
-func (m *mockBaseAgentNoAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
+func (m *mockBaseAgentNoAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
 
 // mockContextEngine 模拟 ContextEngine 接口
 type mockContextEngine struct {

@@ -143,10 +143,10 @@ func TestMessageToE2A_正常(t *testing.T) {
 func TestMessageToE2A_EnableMemory逻辑(t *testing.T) {
 	// 场景1：enable_memory=true → final_enable_memory=true
 	msg := &schema.Message{
-		ID:             "r1",
-		ChannelID:      "ch",
-		EnableMemory:   true,
-		Metadata:       map[string]any{"avatar_mode": true},
+		ID:                 "r1",
+		ChannelID:          "ch",
+		EnableMemory:       true,
+		Metadata:           map[string]any{"avatar_mode": true},
 		GroupDigitalAvatar: true,
 	}
 	env, _ := MessageToE2A(msg)
@@ -190,7 +190,7 @@ func TestMessageToE2AOrFallback_成功(t *testing.T) {
 // TestMessageToE2AOrFallback_失败Fallback 验证空 request_id 触发 fallback
 func TestMessageToE2AOrFallback_失败Fallback(t *testing.T) {
 	msg := &schema.Message{
-		ID:        "",  // 空 ID 会导致 fallback
+		ID:        "", // 空 ID 会导致 fallback
 		ChannelID: "ch-1",
 		ReqMethod: schema.ReqMethod("chat.send"),
 	}
@@ -239,7 +239,7 @@ func TestChannelContextForChannelReply_去掉内部键(t *testing.T) {
 	env := &E2AEnvelope{
 		ChannelContext: map[string]any{
 			e2aInternalContextKey: map[string]any{"foo": "bar"},
-			"trace_id":           "t1",
+			"trace_id":            "t1",
 		},
 	}
 	ctx := ChannelContextForChannelReply(env)
@@ -452,8 +452,8 @@ func TestE2AResponseFromAgentChunk_中间帧Custom(t *testing.T) {
 // TestE2AResponseFromAgentChunk_保留RoleMemberName 验证 role/member_name 透传
 func TestE2AResponseFromAgentChunk_保留RoleMemberName(t *testing.T) {
 	chunk := &schema.AgentResponseChunk{
-		RequestID:  "r1",
-		ChannelID:  "ch1",
+		RequestID: "r1",
+		ChannelID: "ch1",
 		Payload: map[string]any{
 			"event_type":        "chat.delta",
 			"content":           "hi",

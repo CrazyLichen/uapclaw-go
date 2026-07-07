@@ -12,9 +12,9 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -549,7 +549,7 @@ func TestNotifyEvaluator_完整链路(t *testing.T) {
 
 	agent := &fakeDeepAgentForNotify{
 		fakeBaseAgent: *newFakeBaseAgent(),
-		coord:        coord,
+		coord:         coord,
 	}
 	inputs := &agentinterfaces.TaskIterationInputs{
 		Result: map[string]any{"output": "<promise>task_done</promise>"},
@@ -570,17 +570,19 @@ type fakeDeepAgentForNotify struct {
 	coord *task_loop.LoopCoordinator
 }
 
-func (f *fakeDeepAgentForNotify) ReactAgent() *agents.ReActAgent                      { return nil }
-func (f *fakeDeepAgentForNotify) LoopCoordinator() hinterfaces.LoopCoordinatorInterface { return f.coord }
-func (f *fakeDeepAgentForNotify) LoopController() controller.ControllerInterface        { return nil }
-func (f *fakeDeepAgentForNotify) EventHandler() modules.EventHandler                    { return nil }
+func (f *fakeDeepAgentForNotify) ReactAgent() *agents.ReActAgent { return nil }
+func (f *fakeDeepAgentForNotify) LoopCoordinator() hinterfaces.LoopCoordinatorInterface {
+	return f.coord
+}
+func (f *fakeDeepAgentForNotify) LoopController() controller.ControllerInterface { return nil }
+func (f *fakeDeepAgentForNotify) EventHandler() modules.EventHandler             { return nil }
 func (f *fakeDeepAgentForNotify) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return nil
 }
-func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig { return nil }
-func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                  { return false }
-func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool           { return false }
-func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)         {}
+func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig         { return nil }
+func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                         { return false }
+func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool                  { return false }
+func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)                {}
 func (f *fakeDeepAgentForNotify) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
 func (f *fakeDeepAgentForNotify) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil

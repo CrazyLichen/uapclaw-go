@@ -165,16 +165,16 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 	}
 
 	result := &CreateDeepAgentParams{
-		Model:            model,
-		Card:             card,
-		SystemPrompt:     systemPrompt,
-		Mcps:             mcps,
-		Rails:            extraRails,
-		MaxIterations:    maxIter,
-		Workspace:        ws,
-		Skills:           skills,
-		SysOperation:     sysOperation,
-		Language:         resolvedLanguage,
+		Model:             model,
+		Card:              card,
+		SystemPrompt:      systemPrompt,
+		Mcps:              mcps,
+		Rails:             extraRails,
+		MaxIterations:     maxIter,
+		Workspace:         ws,
+		Skills:            skills,
+		SysOperation:      sysOperation,
+		Language:          resolvedLanguage,
 		RestrictToWorkDir: true,
 	}
 

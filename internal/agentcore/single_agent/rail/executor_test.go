@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,8 +30,8 @@ func (f *fakeRailAgent) Invoke(_ context.Context, _ map[string]any, _ ...interfa
 func (f *fakeRailAgent) Stream(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeRailAgent) Card() *agentschema.AgentCard                              { return nil }
-func (f *fakeRailAgent) Config() interfaces.AgentConfig                            { return nil }
+func (f *fakeRailAgent) Card() *agentschema.AgentCard                               { return nil }
+func (f *fakeRailAgent) Config() interfaces.AgentConfig                             { return nil }
 func (f *fakeRailAgent) AbilityManager() interfaces.AbilityManagerInterface         { return nil }
 func (f *fakeRailAgent) CallbackManager() *interfaces.AgentCallbackManager          { return f.cbMgr }
 func (f *fakeRailAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }

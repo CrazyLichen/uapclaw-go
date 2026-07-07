@@ -366,12 +366,12 @@ func (AudioModelConfig) FromEnv() AudioModelConfig {
 // 对齐 Python: DeepAgentConfig 字段默认值（max_iterations=15, completion_timeout=600.0 等）
 func NewDeepAgentConfig() *DeepAgentConfig {
 	return &DeepAgentConfig{
-		AutoCreateWorkspace:       true,
-		EnableReadImageMultimodal: true,
-		MaxIterations:             DefaultMaxIterations,
-		CompletionTimeout:         DefaultCompletionTimeout,
+		AutoCreateWorkspace:           true,
+		EnableReadImageMultimodal:     true,
+		MaxIterations:                 DefaultMaxIterations,
+		CompletionTimeout:             DefaultCompletionTimeout,
 		ProgressiveToolMaxLoadedTools: DefaultProgressiveToolMax,
-		Language:                  DefaultLanguage,
+		Language:                      DefaultLanguage,
 	}
 }
 

@@ -147,14 +147,14 @@ func TestInjectGeneralPurposeSubagent_注入到头部(t *testing.T) {
 	subagents := []schema.SubagentSpec{subCfg}
 	result := injectGeneralPurposeSubagent(
 		subagents,
-		true,  // addGeneralPurposeAgent
-		"cn",  // resolvedLanguage
-		nil,   // rails
-		"",    // systemPrompt
-		nil,   // toolInstances
-		nil,   // mcps
-		nil,   // model
-		nil,   // skills
+		true, // addGeneralPurposeAgent
+		"cn", // resolvedLanguage
+		nil,  // rails
+		"",   // systemPrompt
+		nil,  // toolInstances
+		nil,  // mcps
+		nil,  // model
+		nil,  // skills
 	)
 	require.Len(t, result, 2)
 	// 注入的 general-purpose 应在头部
@@ -178,14 +178,14 @@ func TestInjectGeneralPurposeSubagent_已存在不注入(t *testing.T) {
 	subagents := []schema.SubagentSpec{subCfg}
 	result := injectGeneralPurposeSubagent(
 		subagents,
-		true,  // addGeneralPurposeAgent，但已存在
-		"cn",  // resolvedLanguage
-		nil,   // rails
-		"",    // systemPrompt
-		nil,   // toolInstances
-		nil,   // mcps
-		nil,   // model
-		nil,   // skills
+		true, // addGeneralPurposeAgent，但已存在
+		"cn", // resolvedLanguage
+		nil,  // rails
+		"",   // systemPrompt
+		nil,  // toolInstances
+		nil,  // mcps
+		nil,  // model
+		nil,  // skills
 	)
 	assert.Len(t, result, 1)
 }

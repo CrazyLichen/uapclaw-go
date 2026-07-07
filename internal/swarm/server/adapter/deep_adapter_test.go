@@ -305,9 +305,9 @@ func TestDeepAdapter_CreateInstance_dreamingMode(t *testing.T) {
 	}{
 		{"agent.plan", "agent.plan"},
 		{"agent.fast", "agent.fast"},
-		{"code", "agent"},   // 非 "agent" 前缀 → 默认 "agent"
-		{"", "agent"},       // 空 mode → 默认 "agent"
-		{"team", "agent"},   // 非 "agent" 前缀 → 默认 "agent"
+		{"code", "agent"}, // 非 "agent" 前缀 → 默认 "agent"
+		{"", "agent"},     // 空 mode → 默认 "agent"
+		{"team", "agent"}, // 非 "agent" 前缀 → 默认 "agent"
 	}
 
 	for _, tt := range tests {
@@ -330,7 +330,7 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 	ctx := t.Context()
 
 	config := map[string]any{
-		"agent_name": "custom_agent",
+		"agent_name":  "custom_agent",
 		"project_dir": "/tmp/project",
 	}
 	err := d.CreateInstance(ctx, config, "agent.plan", "")

@@ -125,16 +125,16 @@ func TestAgentRequest_JSON往返(t *testing.T) {
 	chatID := "chat-1"
 	enableMemory := true
 	original := &AgentRequest{
-		RequestID:        "req-1",
-		ChannelID:        "web",
-		SessionID:        &sessionID,
-		ChatID:           &chatID,
-		ReqMethod:        ReqMethodChatSend,
-		Params:           json.RawMessage(`{"query":"hello"}`),
-		IsStream:         true,
-		Timestamp:        1712345678.123,
-		Metadata:         map[string]any{"method": "chat.send"},
-		EnableMemory:     &enableMemory,
+		RequestID:    "req-1",
+		ChannelID:    "web",
+		SessionID:    &sessionID,
+		ChatID:       &chatID,
+		ReqMethod:    ReqMethodChatSend,
+		Params:       json.RawMessage(`{"query":"hello"}`),
+		IsStream:     true,
+		Timestamp:    1712345678.123,
+		Metadata:     map[string]any{"method": "chat.send"},
+		EnableMemory: &enableMemory,
 		PermissionContext: &PermissionContext{
 			PrincipalUserID:  "user-1",
 			TriggeringUserID: "sender-1",

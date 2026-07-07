@@ -8,15 +8,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -356,12 +356,12 @@ func TestToolGroupForNavigation(t *testing.T) {
 		{"write_file", "写入文件", "runtime"},
 		{"bash", "执行命令", "runtime"},
 		{"code_execute", "执行代码", "runtime"},
-		{"pdf_reader", "读取PDF", "runtime"},     // "read" in name matches runtime first
+		{"pdf_reader", "读取PDF", "runtime"}, // "read" in name matches runtime first
 		{"invoice_parser", "解析发票", "document"},
 		{"pdf_process", "处理PDF文档", "document"},
 		{"xlsx_generate", "生成表格", "spreadsheet"},
-		{"xlsx_writer", "写入表格", "runtime"},    // "write" in name matches runtime first
-		{"excel_reader", "读取Excel", "runtime"},  // "read" in name matches runtime first
+		{"xlsx_writer", "写入表格", "runtime"},     // "write" in name matches runtime first
+		{"excel_reader", "读取Excel", "runtime"}, // "read" in name matches runtime first
 		{"list_skill", "列出技能", "skill"},
 		{"general_tool", "通用工具", "general"},
 	}
@@ -639,19 +639,19 @@ func (m *mockSession) GetState(key state.StateKey) (any, error) {
 	return nil, nil
 }
 
-func (m *mockSession) DumpState() map[string]any            { return m.state }
-func (m *mockSession) WriteStream(_ context.Context, _ any) error { return nil }
+func (m *mockSession) DumpState() map[string]any                        { return m.state }
+func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return nil }
 func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *mockSession) GetEnv(_ string, _ ...any) any        { return nil }
-func (m *mockSession) Interact(_ context.Context, _ any) error    { return nil }
+func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
 
 // 编译时验证 mockSession 满足 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSession)(nil)
 
 // fakeBaseAgent 满足 BaseAgent 接口的测试 mock
 type fakeBaseAgent struct {
-	cbMgr    *agentinterfaces.AgentCallbackManager
-	builder  *saprompt.SystemPromptBuilder
+	cbMgr   *agentinterfaces.AgentCallbackManager
+	builder *saprompt.SystemPromptBuilder
 }
 
 func newFakeBaseAgent() *fakeBaseAgent {
@@ -675,9 +675,9 @@ func (f *fakeBaseAgent) Card() *agentschema.AgentCard {
 		BaseCard: cschema2.BaseCard{ID: "test-agent", Name: "TestAgent"},
 	}
 }
-func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
+func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }
 func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager { return f.cbMgr }
+func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager  { return f.cbMgr }
 func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
 	if f.builder == nil {
 		return nil

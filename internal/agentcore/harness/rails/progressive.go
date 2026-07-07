@@ -12,10 +12,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/tool_discovery"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -61,11 +61,11 @@ const (
 	discoveryTraceKey = "__progressive_tool_discovery_trace__"
 
 	// 搜索评分权重
-	scoreExactMatch     = 100
-	scoreNameContains   = 40
-	scoreDescContains   = 25
-	scoreHaystackMatch  = 10
-	scoreTokenMatch     = 3
+	scoreExactMatch    = 100
+	scoreNameContains  = 40
+	scoreDescContains  = 25
+	scoreHaystackMatch = 10
+	scoreTokenMatch    = 3
 
 	// 导航工具摘要最大长度
 	navigationSummaryMaxLen = 160
@@ -86,20 +86,20 @@ var navigationBaselineTools = map[string]struct{}{
 
 // toolGroupOrder 工具分组排序权重
 var toolGroupOrder = map[string]int{
-	"skill":      0,
-	"runtime":    1,
-	"document":   2,
+	"skill":       0,
+	"runtime":     1,
+	"document":    2,
 	"spreadsheet": 3,
-	"general":    9,
+	"general":     9,
 }
 
 // toolGroupCN 工具分组中文映射
 var toolGroupCN = map[string]string{
-	"skill":      "技能",
-	"runtime":    "运行时",
-	"document":   "文档",
+	"skill":       "技能",
+	"runtime":     "运行时",
+	"document":    "文档",
 	"spreadsheet": "表格",
-	"general":    "通用",
+	"general":     "通用",
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -109,8 +109,8 @@ var toolGroupCN = map[string]string{
 // 对齐 Python: ProgressiveToolRail.__init__(config)
 func NewProgressiveToolRail(config *schema.DeepAgentConfig) *ProgressiveToolRail {
 	r := &ProgressiveToolRail{
-		DeepAgentRail: *NewDeepAgentRail(),
-		config:        config,
+		DeepAgentRail:  *NewDeepAgentRail(),
+		config:         config,
 		defaultVisible: toSet(config.ProgressiveToolDefaultVisibleTools),
 		alwaysVisible:  toSet(config.ProgressiveToolAlwaysVisibleTools),
 		maxLoadedTools: config.EffectiveProgressiveToolMaxLoadedTools(),
@@ -502,13 +502,13 @@ func (r *ProgressiveToolRail) loadTools(_ context.Context, sess sessioninterface
 
 	// 步骤 4：记录轨迹
 	r.appendTrace(sess, map[string]any{
-		"action":        "load_tools",
-		"requested":     requested,
-		"loaded":        validNames,
+		"action":         "load_tools",
+		"requested":      requested,
+		"loaded":         validNames,
 		"visible_before": currentVisible,
 		"visible_after":  nextVisible,
-		"skipped":       skippedNames,
-		"replace":       replace,
+		"skipped":        skippedNames,
+		"replace":        replace,
 	})
 
 	// 步骤 5：返回结果

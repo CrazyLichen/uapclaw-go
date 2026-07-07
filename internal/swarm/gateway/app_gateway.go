@@ -14,8 +14,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 

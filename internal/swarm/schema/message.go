@@ -242,14 +242,14 @@ func WithEventType(et EventType) MessageOption {
 // 工厂函数保证：event_type=零值, payload=nil, mode=零值, is_stream=false。
 func NewReqMessage(channelID, sessionID string, reqMethod ReqMethod, params json.RawMessage, opts ...MessageOption) *Message {
 	msg := &Message{
-		ID:             NewMessageID(),
-		Type:           MessageTypeReq,
-		ChannelID:      channelID,
-		SessionID:      sessionID,
-		Params:         params,
-		Timestamp:      NowTimestamp(),
-		OK:             true,
-		ReqMethod:      reqMethod,
+		ID:              NewMessageID(),
+		Type:            MessageTypeReq,
+		ChannelID:       channelID,
+		SessionID:       sessionID,
+		Params:          params,
+		Timestamp:       NowTimestamp(),
+		OK:              true,
+		ReqMethod:       reqMethod,
 		EnableStreaming: true,
 	}
 	for _, opt := range opts {
@@ -264,13 +264,13 @@ func NewReqMessage(channelID, sessionID string, reqMethod ReqMethod, params json
 // 工厂函数保证：req_method=零值, mode=零值, is_stream=false, params=nil。
 func NewResMessage(channelID, sessionID string, ok bool, payload map[string]any, opts ...MessageOption) *Message {
 	msg := &Message{
-		ID:             NewMessageID(),
-		Type:           MessageTypeRes,
-		ChannelID:      channelID,
-		SessionID:      sessionID,
-		Timestamp:      NowTimestamp(),
-		OK:             ok,
-		Payload:        payload,
+		ID:              NewMessageID(),
+		Type:            MessageTypeRes,
+		ChannelID:       channelID,
+		SessionID:       sessionID,
+		Timestamp:       NowTimestamp(),
+		OK:              ok,
+		Payload:         payload,
 		EnableStreaming: true,
 	}
 	for _, opt := range opts {
@@ -285,14 +285,14 @@ func NewResMessage(channelID, sessionID string, ok bool, payload map[string]any,
 // 工厂函数保证：req_method=零值, mode=零值, is_stream=false, params=nil。
 func NewEventMessage(channelID, sessionID string, eventType EventType, payload map[string]any, opts ...MessageOption) *Message {
 	msg := &Message{
-		ID:             NewMessageID(),
-		Type:           MessageTypeEvent,
-		ChannelID:      channelID,
-		SessionID:      sessionID,
-		Timestamp:      NowTimestamp(),
-		OK:             true,
-		EventType:      eventType,
-		Payload:        payload,
+		ID:              NewMessageID(),
+		Type:            MessageTypeEvent,
+		ChannelID:       channelID,
+		SessionID:       sessionID,
+		Timestamp:       NowTimestamp(),
+		OK:              true,
+		EventType:       eventType,
+		Payload:         payload,
 		EnableStreaming: true,
 	}
 	for _, opt := range opts {

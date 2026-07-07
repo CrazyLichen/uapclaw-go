@@ -30,9 +30,17 @@ func newStubChannel(id string, chType ChannelType) *stubChannel {
 	}
 }
 
-func (s *stubChannel) Config() any                  { return s.config }
-func (s *stubChannel) Start(_ context.Context) error { s.startCalled = true; s.running = true; return nil }
-func (s *stubChannel) Stop(_ context.Context) error  { s.stopCalled = true; s.running = false; return nil }
+func (s *stubChannel) Config() any { return s.config }
+func (s *stubChannel) Start(_ context.Context) error {
+	s.startCalled = true
+	s.running = true
+	return nil
+}
+func (s *stubChannel) Stop(_ context.Context) error {
+	s.stopCalled = true
+	s.running = false
+	return nil
+}
 func (s *stubChannel) Send(_ context.Context, msg *schema.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -40,9 +48,9 @@ func (s *stubChannel) Send(_ context.Context, msg *schema.Message) error {
 	return nil
 }
 func (s *stubChannel) OnMessage(callback func(*schema.Message)) { s.onMsgCb = callback }
-func (s *stubChannel) IsRunning() bool                         { return s.running }
-func (s *stubChannel) ChannelID() string                       { return s.id }
-func (s *stubChannel) ChannelType() ChannelType                { return s.chType }
+func (s *stubChannel) IsRunning() bool                          { return s.running }
+func (s *stubChannel) ChannelID() string                        { return s.id }
+func (s *stubChannel) ChannelType() ChannelType                 { return s.chType }
 
 func (s *stubChannel) getSentMsgs() []*schema.Message {
 	s.mu.Lock()
@@ -218,7 +226,7 @@ func TestChannelManager_SetConfig_整体替换(t *testing.T) {
 	})
 
 	newConf := map[string]map[string]any{
-		"web-001":   {"port": 8080},
+		"web-001":    {"port": 8080},
 		"feishu-001": {"app_id": "cli_xxx"},
 	}
 	cm.SetConfig(newConf)

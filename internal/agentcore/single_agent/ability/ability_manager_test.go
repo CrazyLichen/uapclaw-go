@@ -933,10 +933,14 @@ type fakeRailAgentForAbility struct {
 	agentID string
 }
 
-func (f *fakeRailAgentForAbility) CallbackManager() *interfaces.AgentCallbackManager                { return f.cbMgr }
-func (f *fakeRailAgentForAbility) AgentID() string                                                 { return f.agentID }
-func (f *fakeRailAgentForAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface      { return nil }
-func (f *fakeRailAgentForAbility) Configure(_ context.Context, _ interfaces.AgentConfig) error      { return nil }
+func (f *fakeRailAgentForAbility) CallbackManager() *interfaces.AgentCallbackManager { return f.cbMgr }
+func (f *fakeRailAgentForAbility) AgentID() string                                   { return f.agentID }
+func (f *fakeRailAgentForAbility) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	return nil
+}
+func (f *fakeRailAgentForAbility) Configure(_ context.Context, _ interfaces.AgentConfig) error {
+	return nil
+}
 func (f *fakeRailAgentForAbility) Invoke(_ context.Context, _ map[string]any, _ ...interfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
@@ -950,7 +954,7 @@ func (f *fakeRailAgentForAbility) Card() *agentschema.AgentCard {
 	card.ID = f.agentID
 	return card
 }
-func (f *fakeRailAgentForAbility) Config() interfaces.AgentConfig    { return nil }
+func (f *fakeRailAgentForAbility) Config() interfaces.AgentConfig                     { return nil }
 func (f *fakeRailAgentForAbility) AbilityManager() interfaces.AbilityManagerInterface { return nil }
 func (f *fakeRailAgentForAbility) RegisterCallback(_ context.Context, _ interfaces.AgentCallbackEvent, _ callback.PerAgentCallbackFunc, _ ...callback.CallbackOption) error {
 	return nil
@@ -958,7 +962,9 @@ func (f *fakeRailAgentForAbility) RegisterCallback(_ context.Context, _ interfac
 func (f *fakeRailAgentForAbility) RegisterRail(_ context.Context, _ interfaces.AgentRail, _ ...callback.CallbackOption) error {
 	return nil
 }
-func (f *fakeRailAgentForAbility) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error { return nil }
+func (f *fakeRailAgentForAbility) UnregisterRail(_ context.Context, _ interfaces.AgentRail) error {
+	return nil
+}
 
 // TestAbilityManager_Execute_forceFinish传播 验证子 toolCtx 的 force-finish 信号传播到父 cbc
 func TestAbilityManager_Execute_forceFinish传播(t *testing.T) {

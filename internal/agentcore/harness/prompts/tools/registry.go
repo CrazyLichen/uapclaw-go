@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────

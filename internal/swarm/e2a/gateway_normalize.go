@@ -58,13 +58,13 @@ func MessageToLegacyAgentDict(msg *schema.Message) map[string]any {
 	}
 
 	out := map[string]any{
-		"request_id":  msg.ID,
-		"channel_id":  msg.ChannelID,
-		"session_id":  msg.SessionID,
-		"req_method":  rmVal,
-		"params":      params,
-		"is_stream":   msg.IsStream,
-		"timestamp":   msg.Timestamp,
+		"request_id": msg.ID,
+		"channel_id": msg.ChannelID,
+		"session_id": msg.SessionID,
+		"req_method": rmVal,
+		"params":     params,
+		"is_stream":  msg.IsStream,
+		"timestamp":  msg.Timestamp,
 	}
 	if msg.Metadata != nil {
 		meta := make(map[string]any, len(msg.Metadata))

@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
-	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
-	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	ctrlmodules "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
@@ -31,8 +31,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/task_loop"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
@@ -955,13 +955,13 @@ func (d *DeepAgent) GetContextUsage(ctx context.Context, sessionID string, conte
 		"usage_ratio":           usageRatio,
 		"usage_percent":         math.Round(usageRatio*10000) / 100,
 		"stats": map[string]any{
-			"total_messages":    stats.TotalMessages,
-			"total_tokens":      stats.TotalTokens,
-			"total_dialogues":   stats.TotalDialogues,
-			"system_messages":   stats.SystemMessages,
-			"user_messages":     stats.UserMessages,
+			"total_messages":     stats.TotalMessages,
+			"total_tokens":       stats.TotalTokens,
+			"total_dialogues":    stats.TotalDialogues,
+			"system_messages":    stats.SystemMessages,
+			"user_messages":      stats.UserMessages,
 			"assistant_messages": stats.AssistantMessages,
-			"tool_messages":     stats.ToolMessages,
+			"tool_messages":      stats.ToolMessages,
 		},
 	}, nil
 }
@@ -1932,8 +1932,9 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.
 // runTaskLoop 任务循环生成器，每轮完成后将 result 发送到 channel。
 // 对齐 Python: DeepAgent._run_task_loop(ctx, session) (line 1991-2110)
 // invoke 和 stream 共用此方法：
-//   invoke: 从 channel 读取最后一轮结果
-//   stream: 后台goroutine从channel读取，每轮写入session流
+//
+//	invoke: 从 channel 读取最后一轮结果
+//	stream: 后台goroutine从channel读取，每轮写入session流
 func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext, sess *session.Session, isStreaming bool) (<-chan map[string]any, error) {
 	modified, ok := cbc.Inputs().(*agentinterfaces.InvokeInputs)
 	if !ok {
@@ -2000,7 +2001,7 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 		for coord.ShouldContinue() {
 			outerRound++
 
-				// 排空 follow-up，合并到 state 缓冲（对齐 Python line 2026-2040）
+			// 排空 follow-up，合并到 state 缓冲（对齐 Python line 2026-2040）
 			newFollowUps := ctrl.DrainFollowUp()
 			st := d.LoadState(sess)
 			if len(newFollowUps) > 0 {
@@ -2109,8 +2110,9 @@ func (d *DeepAgent) writeRoundResultToStream(ctx context.Context, result map[str
 // 对齐 Python: DeepAgent._run_task_loop_stream(ctx, session, stream_modes) (line 2146-2212)
 //
 // 使用与 ReActAgent.Stream() 相同的"后台+前台"模式：
-//   后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
-//   前台: 从 session.StreamIterator() 读取chunk转发到 outCh
+//
+//	后台goroutine: 运行 _run_task_loop，每轮结果写入session流，最终 close_stream
+//	前台: 从 session.StreamIterator() 读取chunk转发到 outCh
 func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentinterfaces.InvokeInputs, sess sessioninterfaces.SessionFacade, streamModes []stream.StreamMode) (<-chan stream.Schema, error) {
 	// 对齐 Python: _ = stream_modes（显式丢弃，task-loop stream 从 session.StreamIterator() 读取）
 	_ = streamModes

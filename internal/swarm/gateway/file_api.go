@@ -76,8 +76,8 @@ func HandleFileContentGet(w http.ResponseWriter, r *http.Request) {
 	encoding := r.URL.Query().Get("encoding")
 	if encoding == "base64" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"path":    filePath,
-			"content": data,
+			"path":     filePath,
+			"content":  data,
 			"encoding": "base64",
 		})
 		return

@@ -13,15 +13,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -40,6 +40,7 @@ import (
 //  7. DeepAgentConfig 组装
 //  8. DeepAgent 实例化 (NewDeepAgent + ConfigureDeepConfig)
 //  9. 工具注册 (registerToolInstances + ability_manager.add)
+//
 // 10. Rail 注册 (显式 + 默认自动添加)
 //
 // 对应 Python: openjiuwen/harness/factory.py create_deep_agent()
@@ -563,25 +564,25 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		return hconfig.CreateDeepAgentParams{}
 	}
 	return hconfig.CreateDeepAgentParams{
-		Model:                     kwargs.Model,
-		Card:                      kwargs.Card,
-		SystemPrompt:              kwargs.SystemPrompt,
+		Model:        kwargs.Model,
+		Card:         kwargs.Card,
+		SystemPrompt: kwargs.SystemPrompt,
 		// Tools 是 []*tool.ToolCard，不是 []tool.Tool，
 		// SubagentCreateParams 只有 Card 没有 Tool 实例，无法反向构造
 		// 这里留空，ToolCard 通过 DeepAgentConfig.Tools 传入
-		Mcps:                      kwargs.Mcps,
-		Rails:                     kwargs.Rails,
-		EnableTaskLoop:            kwargs.EnableTaskLoop,
-		MaxIterations:             kwargs.MaxIterations,
-		Workspace:                 kwargs.Workspace,
-		Skills:                    kwargs.Skills,
-		Backend:                   kwargs.Backend,
-		SysOperation:              kwargs.SysOperation,
-		Language:                  kwargs.Language,
-		PromptMode:                kwargs.PromptMode,
-		EnableTaskPlanning:        kwargs.EnablePlanMode,
-		RestrictToWorkDir:         kwargs.RestrictToWorkDir,
-		EnableAsyncSubagent:       kwargs.EnableAsyncSubagent,
-		AddGeneralPurposeAgent:    kwargs.AddGeneralPurposeAgent,
+		Mcps:                   kwargs.Mcps,
+		Rails:                  kwargs.Rails,
+		EnableTaskLoop:         kwargs.EnableTaskLoop,
+		MaxIterations:          kwargs.MaxIterations,
+		Workspace:              kwargs.Workspace,
+		Skills:                 kwargs.Skills,
+		Backend:                kwargs.Backend,
+		SysOperation:           kwargs.SysOperation,
+		Language:               kwargs.Language,
+		PromptMode:             kwargs.PromptMode,
+		EnableTaskPlanning:     kwargs.EnablePlanMode,
+		RestrictToWorkDir:      kwargs.RestrictToWorkDir,
+		EnableAsyncSubagent:    kwargs.EnableAsyncSubagent,
+		AddGeneralPurposeAgent: kwargs.AddGeneralPurposeAgent,
 	}
 }

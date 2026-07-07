@@ -6,11 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,11 +30,11 @@ func (f *fakeBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...AgentOp
 func (f *fakeBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeBaseAgent) Card() *agentschema.AgentCard                                       { return nil }
-func (f *fakeBaseAgent) Config() AgentConfig                                                { return nil }
-func (f *fakeBaseAgent) AbilityManager() AbilityManagerInterface                             { return nil }
-func (f *fakeBaseAgent) CallbackManager() *AgentCallbackManager                              { return f.cbMgr }
-func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface          { return nil }
+func (f *fakeBaseAgent) Card() *agentschema.AgentCard                               { return nil }
+func (f *fakeBaseAgent) Config() AgentConfig                                        { return nil }
+func (f *fakeBaseAgent) AbilityManager() AbilityManagerInterface                    { return nil }
+func (f *fakeBaseAgent) CallbackManager() *AgentCallbackManager                     { return f.cbMgr }
+func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return nil }
 func (f *fakeBaseAgent) RegisterCallback(_ context.Context, _ AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
 }
