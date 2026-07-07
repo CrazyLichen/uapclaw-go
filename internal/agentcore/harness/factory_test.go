@@ -75,12 +75,28 @@ func TestNormalizeTools_提取Card(t *testing.T) {
 
 // ──────────────────────────── isDisabledFreeSearchTool 测试 ────────────────────────────
 
-// TestIsDisabledFreeSearchTool_当前始终返回False 当前实现始终返回 false
-func TestIsDisabledFreeSearchTool_当前始终返回False(t *testing.T) {
-	card := tool.NewToolCard("free_search", "free search tool", nil, nil)
+// TestIsDisabledFreeSearchTool_非freeSearch工具 非搜索工具始终返回 false
+func TestIsDisabledFreeSearchTool_非freeSearch工具(t *testing.T) {
+	card := tool.NewToolCard("other_tool", "other tool", nil, nil)
 	assert.False(t, isDisabledFreeSearchTool(card))
 	// nil 卡片也返回 false
 	assert.False(t, isDisabledFreeSearchTool(nil))
+}
+
+// TestIsDisabledFreeSearchTool_freeSearch启用时 当免费搜索启用时不过滤
+func TestIsDisabledFreeSearchTool_freeSearch启用时(t *testing.T) {
+	// 默认环境变量未设置，is_free_search_enabled 返回 false
+	// 因此 free_search 工具应被禁用
+	card := tool.NewToolCard("free_search", "free search tool", nil, nil)
+	assert.True(t, isDisabledFreeSearchTool(card))
+}
+
+// TestIsDisabledFreeSearchTool_freeSearch禁用时 当免费搜索禁用时过滤
+func TestIsDisabledFreeSearchTool_freeSearch禁用时(t *testing.T) {
+	// 设置环境变量启用 DDG
+	t.Setenv("FREE_SEARCH_DDG_ENABLED", "true")
+	card := tool.NewToolCard("free_search", "free search tool", nil, nil)
+	assert.False(t, isDisabledFreeSearchTool(card))
 }
 
 // ──────────────────────────── registerToolInstances 测试 ────────────────────────────
@@ -106,9 +122,8 @@ func TestRegisterToolInstances_正常注册(t *testing.T) {
 
 // TestInjectGeneralPurposeSubagent_不注入 add=false 时不变
 func TestInjectGeneralPurposeSubagent_不注入(t *testing.T) {
-	subagents := []schema.SubAgentConfig{
-		{SystemPrompt: "existing"},
-	}
+	subCfg := &schema.SubAgentConfig{SystemPrompt: "existing"}
+	subagents := []schema.SubagentSpec{subCfg}
 	result := injectGeneralPurposeSubagent(
 		subagents,
 		false, // addGeneralPurposeAgent
@@ -121,14 +136,15 @@ func TestInjectGeneralPurposeSubagent_不注入(t *testing.T) {
 		nil,   // skills
 	)
 	assert.Len(t, result, 1)
-	assert.Equal(t, "existing", result[0].SystemPrompt)
+	cfg, ok := result[0].(*schema.SubAgentConfig)
+	require.True(t, ok)
+	assert.Equal(t, "existing", cfg.SystemPrompt)
 }
 
 // TestInjectGeneralPurposeSubagent_注入到头部 add=true 时注入到列表头部
 func TestInjectGeneralPurposeSubagent_注入到头部(t *testing.T) {
-	subagents := []schema.SubAgentConfig{
-		{SystemPrompt: "existing"},
-	}
+	subCfg := &schema.SubAgentConfig{SystemPrompt: "existing"}
+	subagents := []schema.SubagentSpec{subCfg}
 	result := injectGeneralPurposeSubagent(
 		subagents,
 		true,  // addGeneralPurposeAgent
@@ -142,21 +158,24 @@ func TestInjectGeneralPurposeSubagent_注入到头部(t *testing.T) {
 	)
 	require.Len(t, result, 2)
 	// 注入的 general-purpose 应在头部
-	require.NotNil(t, result[0].AgentCard)
-	assert.Equal(t, "general-purpose", result[0].AgentCard.GetName())
+	cfg0, ok := result[0].(*schema.SubAgentConfig)
+	require.True(t, ok)
+	require.NotNil(t, cfg0.AgentCard)
+	assert.Equal(t, "general-purpose", cfg0.AgentCard.GetName())
 	// 原有子 Agent 在尾部
-	assert.Equal(t, "existing", result[1].SystemPrompt)
+	cfg1, ok := result[1].(*schema.SubAgentConfig)
+	require.True(t, ok)
+	assert.Equal(t, "existing", cfg1.SystemPrompt)
 }
 
 // TestInjectGeneralPurposeSubagent_已存在不注入 已有 general-purpose 时不重复注入
 func TestInjectGeneralPurposeSubagent_已存在不注入(t *testing.T) {
-	subagents := []schema.SubAgentConfig{
-		{
-			AgentCard: agentschema.NewAgentCard(
-				agentschema.WithAgentName("general-purpose"),
-			),
-		},
+	subCfg := &schema.SubAgentConfig{
+		AgentCard: agentschema.NewAgentCard(
+			agentschema.WithAgentName("general-purpose"),
+		),
 	}
+	subagents := []schema.SubagentSpec{subCfg}
 	result := injectGeneralPurposeSubagent(
 		subagents,
 		true,  // addGeneralPurposeAgent，但已存在

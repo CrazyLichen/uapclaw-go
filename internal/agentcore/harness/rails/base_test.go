@@ -8,6 +8,7 @@ import (
 
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -33,7 +34,8 @@ func TestDeepAgentRail_SetWorkspace(t *testing.T) {
 func TestDeepAgentRail_SetSysOperation(t *testing.T) {
 	r := NewDeepAgentRail()
 	assert.Nil(t, r.SysOperation())
-	r.SetSysOperation(nil)
+	var nilOp sys_operation.SysOperation
+	r.SetSysOperation(nilOp)
 	assert.Nil(t, r.SysOperation())
 }
 

@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -10,12 +11,17 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine"
+	ceschema "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/schema"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/config"
 	cschema "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/schema"
 	ctrlmodules "github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
@@ -26,6 +32,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
@@ -74,8 +82,8 @@ type DeepAgent struct {
 	// boundSessionID 绑定的会话标识
 	boundSessionID string
 	// taskCompletionRail 任务完成 Rail
-	// ⤵️ 9.11 回填：TaskCompletionRail 具体类型
-	taskCompletionRail agentinterfaces.AgentRail
+	// ⤴️ 9.12 回填：TaskCompletionRail 具体类型
+	taskCompletionRail *rails.TaskCompletionRail
 
 	// pendingRails 待注册 Rail 列表
 	pendingRails []agentinterfaces.AgentRail
@@ -409,7 +417,7 @@ func (d *DeepAgent) RegisterRail(ctx context.Context, r agentinterfaces.AgentRai
 	d.railsMu.Lock()
 	// 检查是否为 TaskCompletionRail
 	if isTaskCompletionRail(r) {
-		d.taskCompletionRail = r
+		d.taskCompletionRail = r.(*rails.TaskCompletionRail)
 	}
 	d.railsMu.Unlock()
 
@@ -545,7 +553,7 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 }
 
 // ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke。
-// ⤵️ 9.1 回填：实现 SessionSpawn 完成后的自动 invoke 调度
+// 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
 // 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
 func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string) error {
 	d.autoInvokeScheduled.Store(true)
@@ -925,8 +933,37 @@ func (d *DeepAgent) InitWorkspace(ctx context.Context) error {
 // GetContextUsage 获取当前上下文占用统计。
 // 对齐 Python: DeepAgent.get_context_usage(session_id, context_id) (line 566)
 func (d *DeepAgent) GetContextUsage(ctx context.Context, sessionID string, contextID string) (map[string]any, error) {
-	// ⤵️ 9.1 回填：需要 ContextEngine 集成
-	return nil, fmt.Errorf("get_context_usage 尚未实现，⤵️ 9.1 回填")
+	modelCtx, err := d.getContextOrError(sessionID, contextID)
+	if err != nil {
+		return nil, err
+	}
+	resolvedSessionID, err := d.resolveContextSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	stats := modelCtx.Statistic()
+	contextWindowTokens := d.resolveContextWindowTokens()
+	var usageRatio float64
+	if contextWindowTokens > 0 {
+		usageRatio = float64(stats.TotalTokens) / float64(contextWindowTokens)
+	}
+	return map[string]any{
+		"session_id":            resolvedSessionID,
+		"context_id":            modelCtx.ContextID(),
+		"total_tokens":          stats.TotalTokens,
+		"context_window_tokens": contextWindowTokens,
+		"usage_ratio":           usageRatio,
+		"usage_percent":         math.Round(usageRatio*10000) / 100,
+		"stats": map[string]any{
+			"total_messages":    stats.TotalMessages,
+			"total_tokens":      stats.TotalTokens,
+			"total_dialogues":   stats.TotalDialogues,
+			"system_messages":   stats.SystemMessages,
+			"user_messages":     stats.UserMessages,
+			"assistant_messages": stats.AssistantMessages,
+			"tool_messages":     stats.ToolMessages,
+		},
+	}, nil
 }
 
 // GetContextOccupancy GetContextUsage 的别名。
@@ -938,15 +975,50 @@ func (d *DeepAgent) GetContextOccupancy(ctx context.Context, sessionID string, c
 // GetCurrentContext 返回当前上下文消息。
 // 对齐 Python: DeepAgent.get_current_context(session_id, context_id) (line 604)
 func (d *DeepAgent) GetCurrentContext(ctx context.Context, sessionID string, contextID string) ([]llmschema.BaseMessage, error) {
-	// ⤵️ 9.1 回填：需要 ContextEngine 集成
-	return nil, fmt.Errorf("get_current_context 尚未实现，⤵️ 9.1 回填")
+	modelCtx, err := d.getContextOrError(sessionID, contextID)
+	if err != nil {
+		return nil, err
+	}
+	// 对齐 Python: context.get_messages() → size=0, withHistory=true
+	messages, err := modelCtx.GetMessages(0, true)
+	if err != nil {
+		return nil, err
+	}
+	return messages, nil
 }
 
 // CreateNewContextEngine 创建新的上下文引擎。
 // 对齐 Python: DeepAgent.create_new_context_engine(session_id, messages) (line 643)
 func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string, messages []llmschema.BaseMessage) (string, error) {
-	// ⤵️ 9.1 回填：需要 ContextEngine 集成
-	return "", fmt.Errorf("create_new_context_engine 尚未实现，⤵️ 9.1 回填")
+	d.configMu.RLock()
+	reactAgent := d.reactAgent
+	card := d.card
+	d.configMu.RUnlock()
+
+	if reactAgent == nil {
+		return "", exception.BuildError(exception.StatusDeepagentRuntimeError,
+			exception.WithMsg("DeepAgent not configured. Call configure() first."))
+	}
+
+	// 对齐 Python: new_session_id = session_id or str(uuid.uuid4())
+	newSessionID := sessionID
+	if newSessionID == "" {
+		newSessionID = uuid.New().String()
+	}
+
+	normalizedMessages := normalizeContextMessages(messages)
+
+	// 对齐 Python: await self._react_agent.context_engine.create_context(
+	//     session=Session(session_id=new_session_id, card=self.card),
+	//     history_messages=normalized_messages,
+	// )
+	sess := session.NewSession(session.WithSessionID(newSessionID), session.WithCard(card))
+	_, err := reactAgent.ContextEngine().CreateContext(ctx, "default_context_id", sess,
+		ceinterface.WithHistoryMessages(normalizedMessages))
+	if err != nil {
+		return "", err
+	}
+	return newSessionID, nil
 }
 
 // NewContextEngine CreateNewContextEngine 的别名。
@@ -995,14 +1067,133 @@ func (d *DeepAgent) SpecName() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// deepAgentRailProvider DeepAgentRail 提供者接口。
+// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
+// 嵌入 DeepAgentRail 的子类自动满足此接口。
+type deepAgentRailProvider interface {
+	SetSysOperation(op sysop.SysOperation)
+	SetWorkspace(w *workspace.Workspace)
+}
+
+// resolveContextSessionID 解析上下文 API 使用的会话 ID。
+// 对齐 Python: DeepAgent._resolve_context_session_id(session_id) (line 483)
+func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
+	if sessionID != "" {
+		return sessionID, nil
+	}
+	d.configMu.RLock()
+	boundID := d.boundSessionID
+	loopSess := d.loopSession
+	d.configMu.RUnlock()
+	if boundID != "" {
+		return boundID, nil
+	}
+	if loopSess != nil {
+		return loopSess.GetSessionID(), nil
+	}
+	return "", exception.BuildError(exception.StatusDeepagentContextParamError,
+		exception.WithMsg("session_id is required when no context is bound."))
+}
+
+// getContextOrError 获取内部 ReAct 上下文，不存在则返回错误。
+// 对齐 Python: DeepAgent._get_context_or_error(session_id, context_id) (line 501)
+func (d *DeepAgent) getContextOrError(sessionID string, contextID string) (ceinterface.ModelContext, error) {
+	d.configMu.RLock()
+	reactAgent := d.reactAgent
+	d.configMu.RUnlock()
+
+	if reactAgent == nil {
+		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
+			exception.WithMsg("DeepAgent not configured. Call configure() first."))
+	}
+
+	resolvedSessionID, err := d.resolveContextSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	ce := reactAgent.ContextEngine()
+	if ce == nil {
+		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
+			exception.WithMsg("ContextEngine not available. Call ensureInitialized() first."))
+	}
+
+	mc := ce.GetContext(contextID, resolvedSessionID)
+	if mc == nil {
+		return nil, exception.BuildError(exception.StatusDeepagentContextParamError,
+			exception.WithMsg(fmt.Sprintf("cannot find context '%s' in session '%s'", contextID, resolvedSessionID)))
+	}
+	return mc, nil
+}
+
+// resolveContextWindowTokens 解析配置的模型上下文窗口大小。
+// 对齐 Python: DeepAgent._resolve_context_window_tokens() (line 547)
+func (d *DeepAgent) resolveContextWindowTokens() int {
+	d.configMu.RLock()
+	reactAgent := d.reactAgent
+	deepCfg := d.deepConfig
+	d.configMu.RUnlock()
+
+	var modelName string
+	var ceConfig *ceschema.ContextEngineConfig
+
+	if reactAgent != nil {
+		if reactCfg, ok := reactAgent.Config().(*saconfig.ReActAgentConfig); ok && reactCfg != nil {
+			ceConfig = &reactCfg.ContextEngineConfig
+			modelName = reactCfg.ModelNameVal
+		}
+	}
+	if deepCfg != nil && deepCfg.ContextEngineConfig != nil {
+		if deepCfg.ContextEngineConfig.ModelName != "" {
+			modelName = deepCfg.ContextEngineConfig.ModelName
+		}
+		ceConfig = deepCfg.ContextEngineConfig
+	}
+
+	var fallbackTokens int
+	var modelContextWindowTokens map[string]int
+	if ceConfig != nil {
+		fallbackTokens = ceConfig.ContextWindowTokens
+		modelContextWindowTokens = ceConfig.ModelContextWindowTokens
+	}
+
+	return cecontext.ResolveContextMax(modelName, fallbackTokens, modelContextWindowTokens)
+}
+
+// normalizeContextMessages 规范化上下文消息输入。
+// 对齐 Python: DeepAgent._normalize_context_messages(messages) (line 614)
+func normalizeContextMessages(messages []llmschema.BaseMessage) []llmschema.BaseMessage {
+	if messages == nil {
+		return nil
+	}
+	return messages
+}
+
 // filterDisabledTools 过滤掉被禁用的工具。
 // 对齐 Python: DeepAgent._filter_disabled_tools(config) (line 162)
 func (d *DeepAgent) filterDisabledTools(config *hschema.DeepAgentConfig) {
 	if config.Tools == nil {
 		return
 	}
-	// ⤵️ 9.1 回填：is_free_search_enabled / is_paid_search_enabled 检查逻辑
-	// 当前总是保留所有工具
+	// 对齐 Python: disabled_tool_names 集合
+	disabledNames := make(map[string]bool)
+	if !IsFreeSearchEnabled() {
+		disabledNames["free_search"] = true
+	}
+	if !IsPaidSearchEnabled() {
+		disabledNames["paid_search"] = true
+	}
+	if len(disabledNames) == 0 {
+		return
+	}
+	// 对齐 Python: config.tools = [card for card in config.tools if ...]
+	var filtered []*tool.ToolCard
+	for _, card := range config.Tools {
+		if !disabledNames[card.Name] {
+			filtered = append(filtered, card)
+		}
+	}
+	config.Tools = filtered
 }
 
 // initialConfigure 首次配置：持久化配置、创建内层 ReActAgent、排队 Rails。
@@ -1262,9 +1453,9 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 	}
 
 	if config.EnableTaskLoop {
-		// ⤵️ 9.11 回填：TaskCompletionRail 创建
-		// d.pendingRails = append(d.pendingRails, NewTaskCompletionRail())
-		logger.Debug(logComponent).Msg("TaskCompletionRail 待创建，⤵️ 9.11 回填")
+		// ⤴️ 9.12 回填：TaskCompletionRail 创建
+		d.pendingRails = append(d.pendingRails, rails.NewTaskCompletionRail())
+		logger.Debug(logComponent).Msg("TaskCompletionRail 已创建，⤴️ 9.12 回填")
 	}
 
 	if config.Permissions != nil {
@@ -1423,10 +1614,19 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 	for _, r := range pendingToRegister {
 		if isTaskCompletionRail(r) {
 			d.railsMu.Lock()
-			d.taskCompletionRail = r
+			d.taskCompletionRail = r.(*rails.TaskCompletionRail)
 			d.railsMu.Unlock()
 		}
-		// ⤵️ 9.1 回填：DeepAgentRail.set_sys_operation / set_workspace
+		// 对齐 Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace
+		if provider, ok := r.(deepAgentRailProvider); ok {
+			d.configMu.RLock()
+			cfg := d.deepConfig
+			d.configMu.RUnlock()
+			if cfg != nil {
+				provider.SetSysOperation(cfg.SysOperation)
+				provider.SetWorkspace(cfg.Workspace)
+			}
+		}
 		if err := r.Init(d); err != nil {
 			logger.Warn(logComponent).Err(err).Str("rail_type", reflect.TypeOf(r).String()).Msg("Rail 初始化失败")
 			continue
@@ -1464,11 +1664,57 @@ func (d *DeepAgent) registerPendingMCPs(ctx context.Context) {
 		return
 	}
 
-	// ⤵️ 9.1 回填：MCP 服务器注册逻辑
+	resourceMgr := runner.GetResourceMgr()
+
 	for _, mcpConfig := range cfg.Mcps {
+		existingConfig, getErr := resourceMgr.GetMcpServerConfig(mcpConfig.ServerID)
+
+		if getErr != nil || existingConfig == nil {
+			// 对齐 Python: existing_config is None → add_mcp_server
+			_, addErr := resourceMgr.AddMcpServer(ctx, mcpConfig, resources_manager.WithMcpTag(resources_manager.Tag(d.card.ID)))
+			if addErr != nil {
+				logger.Error(logComponent).Err(addErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 服务器注册失败")
+				continue
+			}
+		} else {
+			// 对齐 Python: existing_config.model_dump() != mcp_config.model_dump() → error
+			if !mcpConfigEqual(existingConfig, mcpConfig) {
+				logger.Error(logComponent).
+					Str("server_id", mcpConfig.ServerID).
+					Msg("MCP 服务器已存在但配置不同，跳过")
+				continue
+			}
+
+			// 对齐 Python: add_resource_tag(server_id, self.card.id)
+			_, tagErr := resourceMgr.AddResourceTag(mcpConfig.ServerID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
+			if tagErr != nil {
+				logger.Warn(logComponent).Err(tagErr).Str("server_id", mcpConfig.ServerID).Msg("MCP 资源标签添加失败")
+			}
+
+			// 对齐 Python: for tool_id in get_mcp_tool_ids → add_resource_tag
+			for _, toolID := range resourceMgr.GetMcpToolIDs(mcpConfig.ServerID) {
+				_, tagErr := resourceMgr.AddResourceTag(toolID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
+				if tagErr != nil {
+					logger.Warn(logComponent).Err(tagErr).Str("tool_id", toolID).Msg("MCP 工具标签添加失败")
+				}
+			}
+		}
+
+		// 对齐 Python: self.ability_manager.add(mcp_config)
 		d.abilityManager.Add(mcpConfig)
-		logger.Debug(logComponent).Str("server_id", mcpConfig.ServerID).Msg("MCP 配置已添加到 AbilityManager")
+		logger.Debug(logComponent).Str("server_id", mcpConfig.ServerID).Msg("MCP 配置已注册")
 	}
+}
+
+// mcpConfigEqual 比较两个 McpServerConfig 是否等价。
+// 对齐 Python: existing_config.model_dump() != mcp_config.model_dump()
+func mcpConfigEqual(a, b *mcptypes.McpServerConfig) bool {
+	aJSON, aErr := json.Marshal(a)
+	bJSON, bErr := json.Marshal(b)
+	if aErr != nil || bErr != nil {
+		return false
+	}
+	return string(aJSON) == string(bJSON)
 }
 
 // normalizeInputs 解析用户输入为 InvokeInputs。
@@ -1973,8 +2219,8 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 			// 构建评估器
 			var evaluators []task_loop.StopConditionEvaluator
 			if taskCompRail != nil {
-				// ⤵️ 9.11 回填：taskCompletionRail.buildEvaluators()
-				evaluators = []task_loop.StopConditionEvaluator{}
+				// ⤴️ 9.12 回填：taskCompletionRail.BuildEvaluators()
+				evaluators = taskCompRail.BuildEvaluators()
 			}
 			coord = task_loop.NewLoopCoordinator(evaluators)
 			d.configMu.Lock()
@@ -1993,8 +2239,8 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	// 构建评估器
 	var evaluators []task_loop.StopConditionEvaluator
 	if taskCompRail != nil {
-		// ⤵️ 9.11 回填：taskCompletionRail.buildEvaluators()
-		evaluators = []task_loop.StopConditionEvaluator{}
+		// ⤴️ 9.12 回填：taskCompletionRail.BuildEvaluators()
+		evaluators = taskCompRail.BuildEvaluators()
 	}
 	coord = task_loop.NewLoopCoordinator(evaluators)
 	coord.Reset()
@@ -2006,8 +2252,8 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 	}
 
 	// 创建 ContextEngine
-	// ⤵️ 9.1 回填：ContextEngine 实例创建
-	var ce ceinterface.ContextEngine
+	// 对齐 Python: context_engine = ContextEngine() (line 1717)
+	ce := context_engine.NewContextEngine(ceschema.NewContextEngineConfig())
 
 	ctrl := task_loop.NewTaskLoopController()
 	ctrl.Init(d.card, ctrlConfig, d.abilityManager, ce)
@@ -2286,15 +2532,79 @@ func (d *DeepAgent) clearState(sess sessioninterfaces.SessionFacade, clearPersis
 // unregisterToolResource 注销工具资源。
 // 对齐 Python: DeepAgent._unregister_tool_resource(card) (line 178)
 func (d *DeepAgent) unregisterToolResource(card *tool.ToolCard) {
-	// ⤵️ 9.1 回填：Runner.resource_mgr.remove_tool / remove_resource_tag
-	logger.Debug(logComponent).Str("tool_name", card.Name).Str("tool_id", card.ID).Msg("unregisterToolResource 待补全")
+	// 对齐 Python: card.name not in {"free_search", "paid_search"} → return
+	if card.Name != "free_search" && card.Name != "paid_search" {
+		return
+	}
+	// 对齐 Python: if not getattr(card, "id", None) → return
+	if card.ID == "" {
+		return
+	}
+
+	resourceMgr := runner.GetResourceMgr()
+
+	// 对齐 Python: if Runner.resource_mgr.get_tool(card.id) is None → return
+	tools, getErr := resourceMgr.GetTool([]string{card.ID})
+	if getErr != nil || len(tools) == 0 {
+		return
+	}
+
+	// 对齐 Python: tags = Runner.resource_mgr.get_resource_tag(card.id) or []
+	tags := resourceMgr.GetResourceTag(card.ID)
+
+	// 对齐 Python: if self.card.id in tags and len(tags) > 1
+	agentTag := resources_manager.Tag(d.card.ID)
+	agentInTags := false
+	for _, t := range tags {
+		if t == agentTag {
+			agentInTags = true
+			break
+		}
+	}
+	if agentInTags && len(tags) > 1 {
+		// 对齐 Python: remove_resource_tag(card.id, self.card.id, skip_if_tag_not_exists=True)
+		_, err := resourceMgr.RemoveResourceTag(card.ID, []resources_manager.Tag{agentTag}, resources_manager.WithTagSkipIfNotExists())
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("移除工具标签失败")
+		}
+		return
+	}
+
+	// 对齐 Python: if self.card.id in tags or not tags
+	if agentInTags || len(tags) == 0 {
+		_, err := resourceMgr.RemoveTool([]string{card.ID})
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("tool_id", card.ID).Msg("注销工具失败")
+		}
+	}
 }
 
 // ensureBuiltinToolResource 确保内置工具资源已注册。
 // 对齐 Python: DeepAgent._ensure_builtin_tool_resource(card, config) (line 206)
 func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hschema.DeepAgentConfig) {
-	// ⤵️ 9.1 回填：free_search / paid_search 资源注册
-	logger.Debug(logComponent).Str("tool_name", card.Name).Msg("ensureBuiltinToolResource 待补全")
+	// 对齐 Python: card.name not in {"free_search", "paid_search"} → return
+	if card.Name != "free_search" && card.Name != "paid_search" {
+		return
+	}
+
+	resourceMgr := runner.GetResourceMgr()
+
+	// 对齐 Python: existing_tool = Runner.resource_mgr.get_tool(card.id)
+	tools, getErr := resourceMgr.GetTool([]string{card.ID})
+	if getErr == nil && len(tools) > 0 {
+		// 对齐 Python: add_resource_tag(card.id, self.card.id)
+		_, tagErr := resourceMgr.AddResourceTag(card.ID, []resources_manager.Tag{resources_manager.Tag(d.card.ID)})
+		if tagErr != nil {
+			logger.Warn(logComponent).Err(tagErr).Str("tool_id", card.ID).Msg("标记已存在的搜索工具失败")
+		}
+		return
+	}
+
+	// ⤵️ 9.1 回填：WebFreeSearchTool / WebPaidSearchTool Go 实现后补全
+	// 对齐 Python: tool_cls = WebPaidSearchTool if card.name == "paid_search" else WebFreeSearchTool
+	// tool = tool_cls(language=resolve_language(config.language), card=card)
+	// result = Runner.resource_mgr.add_tool(tool, tag=self.card.id)
+	logger.Debug(logComponent).Str("tool_name", card.Name).Msg("WebSearchTool Go 实现尚未完成，跳过工具注册")
 }
 
 // logLoop 记录外层循环日志。
@@ -2334,8 +2644,9 @@ func joinStrings(parts []string) string {
 
 // isTaskCompletionRail 判断 Rail 是否为 TaskCompletionRail 类型。
 func isTaskCompletionRail(r agentinterfaces.AgentRail) bool {
-	// ⤵️ 9.11 回填：TaskCompletionRail 类型检查
-	return reflect.TypeOf(r).String() == "TaskCompletionRail"
+	// ⤴️ 9.12 回填：TaskCompletionRail 类型检查
+	_, ok := r.(*rails.TaskCompletionRail)
+	return ok
 }
 
 // removeRailByRef 按引用移除 Rail。

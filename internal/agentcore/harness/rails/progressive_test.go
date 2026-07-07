@@ -678,7 +678,12 @@ func (f *fakeBaseAgent) Card() *agentschema.AgentCard {
 func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
 func (f *fakeBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
 func (f *fakeBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager { return f.cbMgr }
-func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface { return f.builder }
+func (f *fakeBaseAgent) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
+	if f.builder == nil {
+		return nil
+	}
+	return f.builder
+}
 func (f *fakeBaseAgent) RegisterCallback(_ context.Context, _ agentinterfaces.AgentCallbackEvent, _ cb.PerAgentCallbackFunc, _ ...cb.CallbackOption) error {
 	return nil
 }

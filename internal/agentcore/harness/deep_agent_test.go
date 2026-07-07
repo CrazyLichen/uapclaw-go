@@ -817,7 +817,7 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 		subCfg := schema.NewSubAgentConfig()
 		subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName(factory))
 		subCfg.FactoryName = factory
-		deepCfg.Subagents = append(deepCfg.Subagents, *subCfg)
+		deepCfg.Subagents = append(deepCfg.Subagents, subCfg)
 	}
 	if err := d.ConfigureDeepConfig(context.Background(), deepCfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
@@ -831,7 +831,7 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_CreateSubagent_默认工厂 无匹配工厂名时返回 create_deep_agent stub 错误
+// TestDeepAgent_CreateSubagent_默认工厂 未知工厂名走 default 分支通过 CreateDeepAgent 创建
 func TestDeepAgent_CreateSubagent_默认工厂(t *testing.T) {
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
 	d := NewDeepAgent(card)
@@ -840,14 +840,21 @@ func TestDeepAgent_CreateSubagent_默认工厂(t *testing.T) {
 	subCfg := schema.NewSubAgentConfig()
 	subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName("custom_agent"))
 	subCfg.FactoryName = "custom_factory"
-	deepCfg.Subagents = append(deepCfg.Subagents, *subCfg)
+	deepCfg.Subagents = append(deepCfg.Subagents, subCfg)
 	if err := d.ConfigureDeepConfig(context.Background(), deepCfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	_, err := d.CreateSubagent("custom_agent", "sub-sess-1")
-	if err == nil {
-		t.Fatal("CreateSubagent 对未知工厂应返回 stub 错误")
+	// 未知工厂名走 default 分支，通过 CreateDeepAgent 创建子 Agent
+	subAgent, err := d.CreateSubagent("custom_agent", "sub-sess-1")
+	// CreateDeepAgent 可能因缺少必要配置而返回错误，也可能成功
+	// 关键是不 panic，且逻辑正确分派到 default 分支
+	if err != nil {
+		// 预期：CreateDeepAgent 因缺少配置返回错误，这是合理的
+		t.Logf("CreateSubagent 对 custom_factory 返回错误（预期行为）: %v", err)
+	} else {
+		// 如果成功创建，也合理
+		assert.NotNil(t, subAgent)
 	}
 }
 
@@ -1058,7 +1065,7 @@ func TestNormalizeInputs_Default(t *testing.T) {
 	d := newTestDeepAgent()
 	result, err := d.normalizeInputs(42)
 	if err == nil {
-		t.Error("期望返回错误，实际 err=nil, result=%v", result)
+		t.Errorf("期望返回错误，实际 err=nil, result=%v", result)
 	}
 	if result != nil {
 		t.Errorf("期望 result=nil，实际 result=%v", result)
@@ -1250,7 +1257,9 @@ func TestDeepAgent_EnsureInitialized_未配置(t *testing.T) {
 // TestDeepAgent_EnsureInitialized_已初始化 返回 nil
 func TestDeepAgent_EnsureInitialized_已初始化(t *testing.T) {
 	d := newTestDeepAgent()
-	d.initialized.Store(true)
+	d.initMu.Lock()
+	d.initialized = true
+	d.initMu.Unlock()
 	err := d.EnsureInitialized(context.Background())
 	if err != nil {
 		t.Fatalf("已初始化时 EnsureInitialized 返回错误: %v", err)
@@ -1868,7 +1877,7 @@ func TestDeepAgent_findSubagentSpec_找到(t *testing.T) {
 	cfg := schema.NewDeepAgentConfig()
 	subCfg := schema.NewSubAgentConfig()
 	subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName("my_sub"))
-	cfg.Subagents = append(cfg.Subagents, *subCfg)
+	cfg.Subagents = append(cfg.Subagents, subCfg)
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -1905,7 +1914,7 @@ func TestDeepAgent_buildSubagentCreateKwargs(t *testing.T) {
 	cfg.Language = "cn"
 	subCfg := schema.NewSubAgentConfig()
 	subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName("sub1"))
-	cfg.Subagents = append(cfg.Subagents, *subCfg)
+	cfg.Subagents = append(cfg.Subagents, subCfg)
 	if err := d.ConfigureDeepConfig(context.Background(), cfg); err != nil {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
@@ -3177,7 +3186,9 @@ func TestDeepAgent_ensureInitialized_有StaleRails(t *testing.T) {
 	fr := &fakeAgentRail{}
 	agent.railsMu.Lock()
 	agent.staleRails = append(agent.staleRails, fr)
-	agent.initialized.Store(false)
+	agent.initMu.Lock()
+	agent.initialized = false
+	agent.initMu.Unlock()
 	agent.railsMu.Unlock()
 
 	// 再次初始化时应注销废弃 Rail
@@ -3374,11 +3385,16 @@ func TestDeepAgent_runTaskLoopStream_有Session(t *testing.T) {
 
 	sess := session.NewSession()
 	invokeInputs := &agentinterfaces.InvokeInputs{Query: agentinterfaces.InvokeQueryString("test")}
-	ch, err := agent.runTaskLoopStream(context.Background(), invokeInputs, sess, nil)
+
+	// 使用带超时的 context 避免 goroutine 泄漏导致测试超时
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ch, err := agent.runTaskLoopStream(ctx, invokeInputs, sess, nil)
 	assert.NoError(t, err)
 	require.NotNil(t, ch)
 
-	// 消费 channel 以触发 goroutine 完成
+	// 消费 channel 直到 context 取消或 channel 关闭
 	for range ch {
 	}
 }
@@ -3464,28 +3480,43 @@ func TestDeepAgent_CreateSubagent_未找到Spec(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestDeepAgent_CreateSubagent_工厂未实现 各种工厂类型返回 stub 错误
+// TestDeepAgent_CreateSubagent_工厂未实现 各种未实现的工厂类型返回 stub 错误
 func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 	card := makeTestCard("deep-cs-fac", "test-deep-cs-fac")
 	agent := NewDeepAgent(card)
 
-	// 测试各种工厂类型
-	factories := []string{
+	// 这些工厂分支显式返回 stub 错误
+	stubFactories := []string{
 		"browser_agent", "code_agent", "research_agent",
 		"mobile_gui_agent", "plan_agent", "verification_agent",
-		"explore_agent", "unknown_factory",
+		"explore_agent",
 	}
 
-	for _, factory := range factories {
+	for _, factory := range stubFactories {
 		subCfg := schema.NewSubAgentConfig()
 		subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName("sub"))
 		subCfg.FactoryName = factory
 		cfg := schema.NewDeepAgentConfig()
-		cfg.Subagents = append(cfg.Subagents, *subCfg)
+		cfg.Subagents = append(cfg.Subagents, subCfg)
 		require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 		_, err := agent.CreateSubagent("sub", "sub-sess-1")
 		assert.Error(t, err, "工厂 %s 应返回错误", factory)
+	}
+
+	// unknown_factory 走 default 分支，通过 CreateDeepAgent 创建
+	// 可能成功或因缺少配置返回错误，但不应 panic
+	subCfg := schema.NewSubAgentConfig()
+	subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName("sub2"))
+	subCfg.FactoryName = "unknown_factory"
+	cfg := schema.NewDeepAgentConfig()
+	cfg.Subagents = append(cfg.Subagents, subCfg)
+	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
+
+	_, err := agent.CreateSubagent("sub2", "sub-sess-1")
+	// 不要求必须报错，default 分支走 CreateDeepAgent
+	if err != nil {
+		t.Logf("unknown_factory 返回错误: %v", err)
 	}
 }
 

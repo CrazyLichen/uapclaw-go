@@ -38,14 +38,14 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	if cfg.AddGeneralPurposeAgent {
 		t.Error("AddGeneralPurposeAgent 应为 false")
 	}
-	if cfg.MaxIterations != 0 {
-		t.Error("MaxIterations 应为 0（使用默认值）")
+	if cfg.MaxIterations != DefaultMaxIterations {
+		t.Errorf("MaxIterations 应为 %d（默认值），实际为 %d", DefaultMaxIterations, cfg.MaxIterations)
 	}
-	if cfg.CompletionTimeout != 0 {
-		t.Error("CompletionTimeout 应为 0（使用默认值）")
+	if cfg.CompletionTimeout != DefaultCompletionTimeout {
+		t.Errorf("CompletionTimeout 应为 %v（默认值），实际为 %v", DefaultCompletionTimeout, cfg.CompletionTimeout)
 	}
-	if cfg.Language != "" {
-		t.Error("Language 应为空（使用默认值）")
+	if cfg.Language != DefaultLanguage {
+		t.Errorf("Language 应为 %q（默认值），实际为 %q", DefaultLanguage, cfg.Language)
 	}
 	if cfg.PromptMode != PromptModeFull {
 		t.Errorf("PromptMode 应为 PromptModeFull，实际为 %d", cfg.PromptMode)
@@ -62,8 +62,8 @@ func TestNewDeepAgentConfig(t *testing.T) {
 	if cfg.ProgressiveToolEnabled {
 		t.Error("ProgressiveToolEnabled 应为 false")
 	}
-	if cfg.ProgressiveToolMaxLoadedTools != 0 {
-		t.Error("ProgressiveToolMaxLoadedTools 应为 0（使用默认值）")
+	if cfg.ProgressiveToolMaxLoadedTools != DefaultProgressiveToolMax {
+		t.Errorf("ProgressiveToolMaxLoadedTools 应为 %d（默认值），实际为 %d", DefaultProgressiveToolMax, cfg.ProgressiveToolMaxLoadedTools)
 	}
 	if cfg.DefaultMode != AgentModeNormal {
 		t.Errorf("DefaultMode 应为 AgentModeNormal，实际为 %d", cfg.DefaultMode)

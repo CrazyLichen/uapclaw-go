@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -173,17 +174,67 @@ func normalizeTools(tools []tool.Tool) (normalizedCards []*tool.ToolCard, toolIn
 	return
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// freeSearchDDGEnabledEnv 免费搜索 DDG 启用环境变量
+	// 对齐 Python: _FREE_SEARCH_DDG_ENABLED_ENV
+	freeSearchDDGEnabledEnv = "FREE_SEARCH_DDG_ENABLED"
+	// freeSearchBingEnabledEnv 免费搜索 Bing 启用环境变量
+	// 对齐 Python: _FREE_SEARCH_BING_ENABLED_ENV
+	freeSearchBingEnabledEnv = "FREE_SEARCH_BING_ENABLED"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// paidSearchAPIKeyEnvs 付费搜索 API Key 环境变量列表
+	// 对齐 Python: _PAID_SEARCH_API_KEY_ENVS
+	paidSearchAPIKeyEnvs = []string{
+		"PERPLEXITY_API_KEY",
+		"BOCHA_API_KEY",
+		"JINA_API_KEY",
+		"SERPER_API_KEY",
+	}
+)
+
 // isDisabledFreeSearchTool 检查工具是否为被禁用的 free_search 工具。
-//
-// 对应 Python: _is_disabled_free_search_tool(tool)
-// ⤵️ 9.1 回填：is_free_search_enabled 检查逻辑
+// 对齐 Python: _is_disabled_free_search_tool(tool)
 func isDisabledFreeSearchTool(card *tool.ToolCard) bool {
 	if card == nil {
 		return false
 	}
-	// 当前 free_search 始终视为启用，不过滤
-	// 后续接入 is_free_search_enabled 配置后补全
+	if card.GetName() != "free_search" {
+		return false
+	}
+	return !IsFreeSearchEnabled()
+}
+
+// IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。
+// 对齐 Python: is_free_search_enabled() (web_tools.py line 444)
+func IsFreeSearchEnabled() bool {
+	return envFlag(freeSearchDDGEnabledEnv, false) || envFlag(freeSearchBingEnabledEnv, false)
+}
+
+// IsPaidSearchEnabled 检查是否至少配置一个付费搜索 API Key。
+// 对齐 Python: is_paid_search_enabled() (web_tools.py line 452)
+func IsPaidSearchEnabled() bool {
+	for _, key := range paidSearchAPIKeyEnvs {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return true
+		}
+	}
 	return false
+}
+
+// envFlag 解析布尔型环境变量值，保留空值时的默认值。
+// 对齐 Python: _env_flag(name, default) (web_tools.py line 436)
+func envFlag(name string, defaultVal bool) bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
+	if raw == "" {
+		return defaultVal
+	}
+	return raw == "1" || raw == "true" || raw == "yes" || raw == "on" || raw == "enabled"
 }
 
 // registerToolInstances 将 Tool 实例注册到全局资源管理器，

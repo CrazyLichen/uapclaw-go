@@ -542,7 +542,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.10 | ☐ | 主机校验 | URL/域名白名单 | `openjiuwen/harness/security/` |
 | **9.x 功能 Rails** | — | | | |
 | 9.11 | ✅ | ProgressiveToolRail | 渐进式工具权限 | `openjiuwen/harness/rails/` |
-| 9.12 | ☐ | TaskCompletionRail | 任务完成检测 | `openjiuwen/harness/rails/` |
+| 9.12 | ✅ | TaskCompletionRail | 任务完成检测 | `openjiuwen/harness/rails/` |
 | 9.13 | ☐ | TaskPlanningRail | 任务规划 | `openjiuwen/harness/rails/` |
 | 9.14 | ☐ | AgentModeRail | Agent 模式切换 | `openjiuwen/harness/rails/` |
 | 9.15 | ☐ | HeartbeatRail | 心跳 | `openjiuwen/harness/rails/` |

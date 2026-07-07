@@ -64,8 +64,10 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		logger.Warn(logComponent).
 			Str("task_id", taskID).
 			Msg("未找到任务")
+		// 对齐 Python：通过 channel 发送 TaskFailed，而非返回 error
+		ch <- e.buildErrorChunk(taskID, fmt.Sprintf("task %s not found", taskID))
 		close(ch)
-		return nil, fmt.Errorf("task %s not found", taskID)
+		return ch, nil
 	}
 
 	task := tasks[0]

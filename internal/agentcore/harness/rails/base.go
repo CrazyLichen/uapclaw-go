@@ -27,8 +27,8 @@ type DeepAgentRail struct {
 	agentinterfaces.BaseRail
 	// workspace 工作空间引用
 	workspace *workspace.Workspace
-	// sysOperation 系统操作引用
-	sysOperation *sys_operation.SysOperation
+	// sysOperation 系统操作引用（接口值，无需取地址）
+	sysOperation sys_operation.SysOperation
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -57,12 +57,12 @@ func (d *DeepAgentRail) Workspace() *workspace.Workspace {
 // SetSysOperation 设置系统操作引用。
 //
 // 对应 Python: DeepAgentRail.set_sys_operation(sys_operation)
-func (d *DeepAgentRail) SetSysOperation(op *sys_operation.SysOperation) {
+func (d *DeepAgentRail) SetSysOperation(op sys_operation.SysOperation) {
 	d.sysOperation = op
 }
 
 // SysOperation 返回系统操作引用。
-func (d *DeepAgentRail) SysOperation() *sys_operation.SysOperation {
+func (d *DeepAgentRail) SysOperation() sys_operation.SysOperation {
 	return d.sysOperation
 }
 
