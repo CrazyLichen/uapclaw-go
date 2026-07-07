@@ -636,7 +636,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.1 | ☐ | AgentWebSocketServer | WS 服务端，~100 个 RPC 方法分发 | `jiuwenswarm/server/agent_ws_server.py` |
 | 10.3.2 | ☐ | JiuWenClaw 门面 | SDK 路由，会话队列，流式包装，中断处理 | `jiuwenswarm/server/runtime/agent_adapter/interface.py` |
 | 10.3.3 | ✅ | AgentAdapter 接口与工厂 | AgentAdapter ABC，`create_adapter()` | `jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py` |
-| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器 | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
+| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
 | 10.3.7-11 | ☐ | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers/RecapPrompts/SysOpBuilder | `jiuwenswarm/server/runtime/agent_adapter/` |
 | 10.3.12 | ☐ | AgentManager | 多实例管理（按通道/模式） | `jiuwenswarm/server/runtime/agent_manager.py` |
 | 10.3.13 | ☐ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |

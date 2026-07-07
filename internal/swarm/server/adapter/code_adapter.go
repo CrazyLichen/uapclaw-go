@@ -2,8 +2,11 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 
+	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -29,16 +32,16 @@ type CodeAdapter struct {
 	// ─── Code 模式专有 Rails ───
 
 	// lspRail LSP 护栏
-	// ⤵️ 10.3.7-11: LspRail
+	// ⤵️ 10.6.3-10: LspRail
 	lspRail interface{}
 	// projectMemoryRail 项目记忆护栏
-	// ⤵️ 10.3.7-11: ProjectMemoryRail
+	// ⤵️ 10.6.3-10: ProjectMemoryRail
 	projectMemoryRail interface{}
 	// codingMemoryRail 编码记忆护栏
-	// ⤵️ 10.3.7-11: CodingMemoryRail
+	// ⤵️ 10.6.3-10: CodingMemoryRail
 	codingMemoryRail interface{}
 	// worktreeRail 工作树护栏
-	// ⤵️ 10.3.7-11: WorktreeRail
+	// ⤵️ 10.6.3-10: WorktreeRail
 	worktreeRail interface{}
 	// codeAgentRail 编码 Agent 护栏（管理 /agents 创建的自定义 agent）
 	// ⤵️ 10.3.7-11: CodeAgentRail
@@ -99,7 +102,10 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 11: dreaming_mode = "code"（Python 中在步骤 11，此处提前设置，其余步骤仍按 Python 编号）
 	c.deep.dreamingMode = "code"
 
-	// ⤵️ 10.3.7-11: 步骤 1  set_checkpoint
+	// 步骤 1: set_checkpoint
+	if err := c.deep.setCheckpoint(); err != nil {
+		return fmt.Errorf("set_checkpoint 失败: %w", err)
+	}
 	// 步骤 2: instanceOverrides 初始化
 	if config != nil {
 		c.deep.instanceOverrides = make(map[string]any, len(config))
@@ -109,49 +115,92 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	} else {
 		c.deep.instanceOverrides = make(map[string]any)
 	}
-	// ⤵️ 10.3.7-11: 步骤 3  get_config → configBase
-	// ⤵️ 10.3.7-11: 步骤 4  _refresh_multimodal_configs(configBase)
-	// ⤵️ 10.3.7-11: 步骤 5-6 读取 react 配置段，缓存到 configCache
 
-	// 步骤 7: agentName
+	// 步骤 3: get_config → configBase（委托 DeepAdapter 步骤 5）
+	cfg, err := cfgPkg.New("")
+	if err != nil {
+		return fmt.Errorf("创建配置管理器失败: %w", err)
+	}
+	configBase, err := cfg.Load()
+	if err != nil {
+		return fmt.Errorf("加载配置失败: %w", err)
+	}
+
+	// 步骤 4: ⤵️ 10.3.7-11: _refresh_multimodal_configs(configBase)
+
+	// 步骤 5-6: 读取 react 配置段，缓存到 configCache（委托 DeepAdapter 步骤 7-8）
+	if reactRaw, ok := configBase["react"]; ok {
+		if reactMap, ok := reactRaw.(map[string]any); ok {
+			c.deep.configCache = make(map[string]any, len(reactMap))
+			for k, v := range reactMap {
+				c.deep.configCache[k] = v
+			}
+		}
+	} else {
+		c.deep.configCache = make(map[string]any)
+	}
+
+	// 步骤 7: agentName（完整版：优先 overrides，其次 configCache）
 	if v, ok := c.deep.instanceOverrides["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			c.deep.agentName = s
 		}
+	} else if v, ok := c.deep.configCache["agent_name"]; ok {
+		if s, ok := v.(string); ok {
+			c.deep.agentName = s
+		}
 	}
-	// ⤵️ 10.3.7-11: 步骤 7 完整版需从 configCache 取默认值
 
-	// 步骤 8: projectDir
+	// 步骤 8: projectDir（完整版：优先 overrides，其次 configCache）
 	if v, ok := c.deep.instanceOverrides["project_dir"]; ok {
 		if s, ok := v.(string); ok {
 			c.deep.projectDir = s
 		}
+	} else if v, ok := c.deep.configCache["project_dir"]; ok {
+		if s, ok := v.(string); ok {
+			c.deep.projectDir = s
+		}
 	}
-	// ⤵️ 10.3.7-11: 步骤 8 完整版需从 configCache 取默认值
 
-	// ⤵️ 10.3.7-11: 步骤 9  workspaceDir 优先使用 projectDir
-	// ⤵️ 10.3.7-11: 步骤 10 agentWorkspaceDir 始终指向系统 workspace
-	// ⤵️ 10.3.7-11: 步骤 12 model = _create_model(configBase)  — 不传多模态配置
-	// ⤵️ 10.3.7-11: 步骤 13 agentCard = AgentCard{name, id}
-	// ⤵️ 10.3.7-11: 步骤 14 toolCards = _get_tool_cards("jiuwenswarm") — 编码 tools
-	// ⤵️ 10.3.7-11: 步骤 15 railsList = _build_agent_rails(config, configBase, mode="code")
+	// 步骤 9: workspaceDir 优先使用 projectDir
+	if c.deep.projectDir != "" {
+		c.deep.workspaceDir = c.deep.projectDir
+	} else if v, ok := c.deep.configCache["workspace_dir"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			c.deep.workspaceDir = s
+		}
+	}
+	if c.deep.workspaceDir == "" {
+		c.deep.workspaceDir = workspace.AgentRootDir()
+	}
+
+	// 步骤 10: agentWorkspaceDir 始终指向系统 workspace
+	// （Go 中 workspace.AgentRootDir() 即为系统 workspace）
+
+	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
+	c.deep.model = c.deep.createModel(configBase)
+
+	// ⤵️ A2X: 步骤 13 _try_init_a2x_client(configBase)
+	// 步骤 14: ⤵️ agentcore.DeepAgent: agentCard = AgentCard{name, id}
+	// 步骤 15: ⤵️ agentcore.DeepAgent: _get_tool_cards("jiuwenswarm") — 编码 tools
+	// 步骤 16: ⤵️ 10.6.3-10: _build_agent_rails(config, configBase, mode="code")
 	//              编码专有 rails：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
 	//              ConfirmInterruptRail, FileSystemRail
-	// ⤵️ 10.3.7-11: 步骤 16 sysOperation = _create_sys_operation()
-	// ⤵️ 10.3.7-11: 步骤 17 subagents = _build_configured_subagents(model, config, configBase)
+	// 步骤 17: ⤵️ 10.3.7-11: _create_sys_operation()
+	// 步骤 18: ⤵️ agentcore.DeepAgent: _build_configured_subagents(model, config, configBase)
 	//              固定: explore_agent + plan_agent
 	//              按配置: code_agent + browser_agent
-	// ⤵️ 10.3.7-11: 步骤 18 c.deep.instance = create_deep_agent(
-	//              model, card, system_prompt=build_code_system_prompt(),
-	//              tools, subagents, rails,
-	//              enable_task_loop, max_iterations, workspace, sys_operation, language,
-	//              // 不传: vision_model_config, audio_model_config,
-	//              //       context_engine_config, completion_timeout
-	//            )
-	// ⤵️ 10.3.7-11: 步骤 19 instance.ensure_initialized()
-	// ⤵️ 10.3.7-11: 步骤 20-21 同 DeepAdapter (seed_cwd, coding_memory workspace, setattr)
-	// ⤵️ 10.3.7-11: 步骤 22-24 MCP 重新注册 + load_user_rails
+	// 步骤 19: ⤵️ agentcore.DeepAgent: c.deep.instance = create_deep_agent(...)
+	// 步骤 20: ⤵️ agentcore.DeepAgent: instance.ensure_initialized()
+	// 步骤 21: ⤵️ agentcore.DeepAgent: seed_cwd + coding_memory workspace
+
+	// 步骤 22: c.deep.registeredMCPServerIDs = make(map[string]bool)
+	c.deep.registeredMCPServerIDs = make(map[string]bool)
+	c.deep.registeredMCPServers = make(map[string]any)
+
+	// 步骤 23: ⤵️ agentcore MCP: _register_mcp_servers_from_config(configBase, tag="code")
+	// 步骤 24: ⤵️ 10.6.3-10: load_user_rails()
 
 	// 存储 mode/subMode
 	c.deep.mode = mode
