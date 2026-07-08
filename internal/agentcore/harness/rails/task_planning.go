@@ -275,13 +275,17 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 //
 // 对齐 Python: TaskPlanningRail.before_model_call() L153-184
 func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
-	// 对齐 Python L155-156: 注入 todo 提示词节
-	if sb := cbc.Agent().SystemPromptBuilder(); sb != nil {
-		lang := sb.Language()
-		modelSelStr := r.buildModelSelectionString()
-		section := sections.BuildTodoSection(modelSelStr, lang)
-		sb.AddSection(section)
+	// 对齐 Python L155-156: system_prompt_builder 为 nil 时整体 return
+	sb := cbc.Agent().SystemPromptBuilder()
+	if sb == nil {
+		return nil
 	}
+
+	// 对齐 Python L157-162: 注入 todo 提示词节
+	lang := sb.Language()
+	modelSelStr := r.buildModelSelectionString()
+	section := sections.BuildTodoSection(modelSelStr, lang)
+	sb.AddSection(section)
 
 	// 对齐 Python L167-168: 若无模型选择配置则跳过模型切换
 	if len(r.modelSelection) == 0 {
