@@ -1059,7 +1059,7 @@ func (fcp *FullCompactProcessor) _isSessionMemorySummaryMessage(msg llm_schema.B
 
 // _isSyntheticMarkerMessage 判断是否为合成标记消息。
 //
-// UserMessage && Content == SyntheticUserMarker
+// 用户消息且内容为合成标记
 func (fcp *FullCompactProcessor) _isSyntheticMarkerMessage(msg llm_schema.BaseMessage) bool {
 	_, ok := msg.(*llm_schema.UserMessage)
 	return ok && msg.GetContent().Text() == fcp.fcpConfig.SyntheticUserMarker

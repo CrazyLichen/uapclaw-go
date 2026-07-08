@@ -13,14 +13,25 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// modelSwitcher 模型切换能力接口
+type modelSwitcher interface {
+	SwitchModel(model *llm.Model)
+	GetLLM() (*llm.Model, error)
+}
+
+// deepStateLoader DeepAgent 状态加载能力接口
+type deepStateLoader interface {
+	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
+}
 
 // TaskPlanningRail 任务规划 Rail，注册 todo 工具并提供 7 个钩子。
 //
@@ -60,19 +71,6 @@ type TaskPlanningRail struct {
 	language string
 	// agentID Agent 标识
 	agentID string
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// modelSwitcher 模型切换能力接口
-type modelSwitcher interface {
-	SwitchModel(model *llm.Model)
-	GetLLM() (*llm.Model, error)
-}
-
-// deepStateLoader DeepAgent 状态加载能力接口
-type deepStateLoader interface {
-	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -133,7 +131,7 @@ func WithAgentID(id string) TaskPlanningOption {
 // 对齐 Python: TaskPlanningRail.__init__()
 func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	r := &TaskPlanningRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
+		DeepAgentRail:        *NewDeepAgentRail(),
 		listToolCallInterval: 20,
 		toolCallCounts:       make(map[string]int),
 		todosCache:           make(map[string][]hschema.TodoItem),
@@ -682,4 +680,3 @@ func (r *TaskPlanningRail) buildModelSelectionString() string {
 	}
 	return strings.Join(lines, "\n")
 }
-

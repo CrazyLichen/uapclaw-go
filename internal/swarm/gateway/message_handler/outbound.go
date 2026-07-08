@@ -8,6 +8,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ensureOutboundInterfaces 确保接口实现
+var _ = (*schema.Message)(nil) // 确保 schema import 可用
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // HandleServerPush 处理 AgentServer 主动推送的消息（回调入口）
@@ -107,6 +112,3 @@ func isCronPayload(msg map[string]any) bool {
 	}
 	return false
 }
-
-// ensureOutboundInterfaces 确保接口实现
-var _ = (*schema.Message)(nil) // 确保 schema import 可用

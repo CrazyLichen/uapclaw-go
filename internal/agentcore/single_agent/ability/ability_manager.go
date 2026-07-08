@@ -350,36 +350,36 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 	if am.resourceMgr != nil && len(am.mcpServers) > 0 {
 		for mcpServerName, mcpServer := range am.mcpServers {
 			mcpServerID := mcpServer.ServerID
-		mcpToolInfos, mcpErr := am.resourceMgr.GetMcpToolInfos(ctx, "", mcpServerID)
-		if mcpErr != nil {
-			logger.Warn(logger.ComponentAgentCore).
-				Str("event_type", "mcp_lazy_load_error").
-				Str("server_name", mcpServerName).
-				Str("server_id", mcpServerID).
-				Err(mcpErr).
-				Msg("获取 MCP 工具信息失败")
-			continue
-		}
-		for _, mcpToolInfo := range mcpToolInfos {
-			originalName := mcpToolInfo.GetName()
-			mcpToolName := "mcp_" + mcpServerName + "_" + originalName
-			mcpToolID := mcpServerID + "." + mcpServerName + "." + originalName
-
-			// 创建 ToolCard 并注册到 am.tools
-			mcpParams, _ := schema.ParseJSONSchemaMap(mcpToolInfo.GetParameters())
-			mcpCard := tool.NewToolCardWithID(mcpToolID, mcpToolName, mcpToolInfo.GetDescription(), mcpParams, nil)
-			am.tools[mcpToolName] = mcpCard
-
-			// 重命名 ToolInfo（修改 Name 字段）
-			switch ti := mcpToolInfo.(type) {
-			case *schema.ToolInfo:
-				ti.Name = mcpToolName
-			case *schema.McpToolInfo:
-				ti.Name = mcpToolName
+			mcpToolInfos, mcpErr := am.resourceMgr.GetMcpToolInfos(ctx, "", mcpServerID)
+			if mcpErr != nil {
+				logger.Warn(logger.ComponentAgentCore).
+					Str("event_type", "mcp_lazy_load_error").
+					Str("server_name", mcpServerName).
+					Str("server_id", mcpServerID).
+					Err(mcpErr).
+					Msg("获取 MCP 工具信息失败")
+				continue
 			}
-			toolInfos = append(toolInfos, mcpToolInfo)
+			for _, mcpToolInfo := range mcpToolInfos {
+				originalName := mcpToolInfo.GetName()
+				mcpToolName := "mcp_" + mcpServerName + "_" + originalName
+				mcpToolID := mcpServerID + "." + mcpServerName + "." + originalName
+
+				// 创建 ToolCard 并注册到 am.tools
+				mcpParams, _ := schema.ParseJSONSchemaMap(mcpToolInfo.GetParameters())
+				mcpCard := tool.NewToolCardWithID(mcpToolID, mcpToolName, mcpToolInfo.GetDescription(), mcpParams, nil)
+				am.tools[mcpToolName] = mcpCard
+
+				// 重命名 ToolInfo（修改 Name 字段）
+				switch ti := mcpToolInfo.(type) {
+				case *schema.ToolInfo:
+					ti.Name = mcpToolName
+				case *schema.McpToolInfo:
+					ti.Name = mcpToolName
+				}
+				toolInfos = append(toolInfos, mcpToolInfo)
+			}
 		}
-	}
 	}
 
 	return toolInfos, nil

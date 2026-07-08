@@ -9,11 +9,11 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
@@ -44,9 +44,9 @@ func (f *fakeDeepAgentForHeartbeat) LoadState(_ sessioninterfaces.SessionFacade)
 	return nil
 }
 func (f *fakeDeepAgentForHeartbeat) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
-func (f *fakeDeepAgentForHeartbeat) IsInvokeActive() bool                   { return false }
-func (f *fakeDeepAgentForHeartbeat) IsAutoInvokeScheduled() bool            { return false }
-func (f *fakeDeepAgentForHeartbeat) SetAutoInvokeScheduled(_ bool)          {}
+func (f *fakeDeepAgentForHeartbeat) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForHeartbeat) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForHeartbeat) SetAutoInvokeScheduled(_ bool)        {}
 func (f *fakeDeepAgentForHeartbeat) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
@@ -56,12 +56,13 @@ func (f *fakeDeepAgentForHeartbeat) CreateSubagent(_ string, _ string) (hinterfa
 func (f *fakeDeepAgentForHeartbeat) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
-func (f *fakeDeepAgentForHeartbeat) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+func (f *fakeDeepAgentForHeartbeat) SwitchMode(_ sessioninterfaces.SessionFacade, _ string)     {}
 func (f *fakeDeepAgentForHeartbeat) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
 func (f *fakeDeepAgentForHeartbeat) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string {
 	return ""
 }
-func (f *fakeDeepAgentForHeartbeat) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentForHeartbeat) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForHeartbeat)(nil)
@@ -101,10 +102,10 @@ type fakeSysOperation struct {
 }
 
 func (f *fakeSysOperation) Card() *sys_operation.SysOperationCard { return nil }
-func (f *fakeSysOperation) Fs() sys_operation.FsOperation          { return f.fsOp }
-func (f *fakeSysOperation) Shell() sys_operation.ShellOperation    { return nil }
-func (f *fakeSysOperation) Code() sys_operation.CodeOperation      { return nil }
-func (f *fakeSysOperation) IsolationKeyTemplate() string           { return "" }
+func (f *fakeSysOperation) Fs() sys_operation.FsOperation         { return f.fsOp }
+func (f *fakeSysOperation) Shell() sys_operation.ShellOperation   { return nil }
+func (f *fakeSysOperation) Code() sys_operation.CodeOperation     { return nil }
+func (f *fakeSysOperation) IsolationKeyTemplate() string          { return "" }
 
 // 编译时验证
 var _ sys_operation.SysOperation = (*fakeSysOperation)(nil)

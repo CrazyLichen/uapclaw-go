@@ -12,11 +12,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -480,6 +480,11 @@ func (f *fakeLoopCoordinator) GetCompletionPromiseEvaluator() interfaces.Complet
 	return nil
 }
 
+// Card 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) Card() *agentschema.AgentCard {
+	return nil
+}
+
 // ReactAgent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent {
 	return f.reactAgent
@@ -550,7 +555,8 @@ func (f *fakeDeepAgentProvider) RestoreModeAfterPlanExit(_ sessioninterfaces.Ses
 func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
 
 // SaveState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeSessionFacade) GetSessionID() string {

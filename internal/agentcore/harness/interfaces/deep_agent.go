@@ -12,7 +12,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // DeepAgentInterface DeepAgent 运行时能力接口。
 // 提供 Executor/Handler/Tool 所需的运行时访问。

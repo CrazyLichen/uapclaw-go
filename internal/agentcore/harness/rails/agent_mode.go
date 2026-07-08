@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
@@ -118,17 +118,6 @@ var defaultPlanModeAllowedTools = map[string]struct{}{
 	"switch_mode": {}, "enter_plan_mode": {}, "exit_plan_mode": {},
 	"ask_user": {}, "task_tool": {}, "read_file": {}, "grep": {},
 	"list_files": {}, "glob": {}, "bash": {}, "write_file": {}, "edit_file": {},
-}
-
-func init() {
-	// 构建 hiddenInPlan = todoToolNames ∪ sessionToolNames
-	hiddenInPlan = make(map[string]struct{}, len(todoToolNames)+len(sessionToolNames))
-	for k := range todoToolNames {
-		hiddenInPlan[k] = struct{}{}
-	}
-	for k := range sessionToolNames {
-		hiddenInPlan[k] = struct{}{}
-	}
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -480,6 +469,17 @@ func (r *AgentModeRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func init() {
+	// 构建 hiddenInPlan = todoToolNames ∪ sessionToolNames
+	hiddenInPlan = make(map[string]struct{}, len(todoToolNames)+len(sessionToolNames))
+	for k := range todoToolNames {
+		hiddenInPlan[k] = struct{}{}
+	}
+	for k := range sessionToolNames {
+		hiddenInPlan[k] = struct{}{}
+	}
+}
 
 // rejectTool 轻量级工具拒绝——设置 _skip_tool 并注入错误结果。
 //

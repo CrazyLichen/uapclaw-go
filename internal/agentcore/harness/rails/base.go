@@ -12,6 +12,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// DeepAgentRailProvider DeepAgentRail 提供者接口。
+// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
+// 嵌入 DeepAgentRail 的子类自动满足此接口。
+type DeepAgentRailProvider interface {
+	SetSysOperation(op sys_operation.SysOperation)
+	SetWorkspace(w *workspace.Workspace)
+}
+
 // DeepAgentRail DeepAgent 扩展 Rail 基类。
 //
 // 在核心层 AgentRail（10 个钩子）基础上增加：
@@ -29,16 +37,6 @@ type DeepAgentRail struct {
 	workspace *workspace.Workspace
 	// sysOperation 系统操作引用（接口值，无需取地址）
 	sysOperation sys_operation.SysOperation
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
-// DeepAgentRailProvider DeepAgentRail 提供者接口。
-// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
-// 嵌入 DeepAgentRail 的子类自动满足此接口。
-type DeepAgentRailProvider interface {
-	SetSysOperation(op sys_operation.SysOperation)
-	SetWorkspace(w *workspace.Workspace)
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

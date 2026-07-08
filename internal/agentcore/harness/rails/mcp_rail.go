@@ -4,8 +4,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	mcptools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/mcp"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -42,6 +42,9 @@ var _ agentinterfaces.AgentRail = (*McpRail)(nil)
 
 // mcpRailLogComponent 日志组件标识
 var mcpRailLogComponent = logger.ComponentAgentCore
+
+// init 确保编译时引用 hinterfaces 包（McpRail 不直接使用但子类可能需要）
+var _ hinterfaces.DeepAgentInterface
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -142,6 +145,3 @@ func (r *McpRail) Uninit(agent agentinterfaces.BaseAgent) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// init 确保编译时引用 hinterfaces 包（McpRail 不直接使用但子类可能需要）
-var _ hinterfaces.DeepAgentInterface

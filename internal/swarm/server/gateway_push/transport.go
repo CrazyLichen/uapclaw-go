@@ -31,7 +31,7 @@ type AgentTransport interface {
 // 对应 Python GatewayPushTransport protocol 的 send_push + set_server_push_handler。
 //
 // 对应 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
-//           + jiuwenswarm/gateway/routing/agent_client.py (set_server_push_handler)
+//   - jiuwenswarm/gateway/routing/agent_client.py (set_server_push_handler)
 type GatewayPushTransport interface {
 	// SendPush 向 Gateway 推送消息（AgentServer → Gateway 方向）
 	// 对齐 Python GatewayPushTransport.send_push

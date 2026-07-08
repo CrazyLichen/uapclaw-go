@@ -13,7 +13,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // ControllerInterface 控制器接口，定义事件驱动任务编排的核心能力。
 // Controller 和 TaskLoopController 均实现此接口。

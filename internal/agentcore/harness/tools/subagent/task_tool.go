@@ -92,8 +92,8 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 		}
 
 		return map[string]any{
-			"output":    output,
-			"agent_id":  subAgentID,
+			"output":   output,
+			"agent_id": subAgentID,
 		}, nil
 	}
 

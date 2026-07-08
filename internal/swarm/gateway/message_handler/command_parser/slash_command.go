@@ -44,19 +44,19 @@ type SlashCommandEntry struct {
 type GatewaySlashCommand int
 
 const (
-	// SlashNewSession /new_session
+	// SlashNewSession 新建会话
 	SlashNewSession GatewaySlashCommand = iota
-	// SlashMode /mode
+	// SlashMode 模式切换
 	SlashMode
-	// SlashSwitch /switch
+	// SlashSwitch 切换
 	SlashSwitch
-	// SlashSkills /skills
+	// SlashSkills 技能
 	SlashSkills
-	// SlashSkillsList /skills list
+	// SlashSkillsList 技能列表
 	SlashSkillsList
-	// SlashBranch /branch
+	// SlashBranch 分支
 	SlashBranch
-	// SlashRewind /rewind
+	// SlashRewind 回退
 	SlashRewind
 )
 
@@ -64,21 +64,21 @@ const (
 type ModeSubcommand int
 
 const (
-	// ModeAgent agent
+	// ModeAgent 代理模式
 	ModeAgent ModeSubcommand = iota
-	// ModeCode code
+	// ModeCode 代码模式
 	ModeCode
-	// ModeTeam team
+	// ModeTeam 团队模式
 	ModeTeam
-	// ModeAgentPlan agent.plan
+	// ModeAgentPlan 代理规划模式
 	ModeAgentPlan
-	// ModeAgentFast agent.fast
+	// ModeAgentFast 代理快速模式
 	ModeAgentFast
-	// ModeCodePlan code.plan
+	// ModeCodePlan 代码规划模式
 	ModeCodePlan
-	// ModeCodeNormal code.normal
+	// ModeCodeNormal 代码普通模式
 	ModeCodeNormal
-	// ModeCodeTeam code.team
+	// ModeCodeTeam 代码团队模式
 	ModeCodeTeam
 )
 
@@ -86,13 +86,13 @@ const (
 type SwitchSubcommand int
 
 const (
-	// SwitchPlan plan
+	// SwitchPlan 规划
 	SwitchPlan SwitchSubcommand = iota
-	// SwitchFast fast
+	// SwitchFast 快速
 	SwitchFast
-	// SwitchNormal normal
+	// SwitchNormal 普通
 	SwitchNormal
-	// SwitchTeam team
+	// SwitchTeam 团队
 	SwitchTeam
 )
 

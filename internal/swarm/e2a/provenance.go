@@ -70,7 +70,7 @@ const (
 	IdentityOriginSystem IdentityOrigin = "system"
 	// IdentityOriginUser 用户
 	IdentityOriginUser IdentityOrigin = "user"
-	// IdentityOriginAgent Agent
+	// IdentityOriginAgent 代理
 	IdentityOriginAgent IdentityOrigin = "agent"
 	// IdentityOriginService 服务
 	IdentityOriginService IdentityOrigin = "service"

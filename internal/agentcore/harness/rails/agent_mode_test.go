@@ -15,13 +15,13 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -53,9 +53,9 @@ func (f *fakeDeepAgentForAgentMode) LoadState(_ sessioninterfaces.SessionFacade)
 	return f.deepState
 }
 func (f *fakeDeepAgentForAgentMode) DeepConfig() *hschema.DeepAgentConfig { return nil }
-func (f *fakeDeepAgentForAgentMode) IsInvokeActive() bool                   { return false }
-func (f *fakeDeepAgentForAgentMode) IsAutoInvokeScheduled() bool            { return false }
-func (f *fakeDeepAgentForAgentMode) SetAutoInvokeScheduled(_ bool)          {}
+func (f *fakeDeepAgentForAgentMode) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForAgentMode) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForAgentMode) SetAutoInvokeScheduled(_ bool)        {}
 func (f *fakeDeepAgentForAgentMode) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
@@ -65,12 +65,13 @@ func (f *fakeDeepAgentForAgentMode) CreateSubagent(_ string, _ string) (hinterfa
 func (f *fakeDeepAgentForAgentMode) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
-func (f *fakeDeepAgentForAgentMode) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+func (f *fakeDeepAgentForAgentMode) SwitchMode(_ sessioninterfaces.SessionFacade, _ string)     {}
 func (f *fakeDeepAgentForAgentMode) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
 func (f *fakeDeepAgentForAgentMode) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string {
 	return f.planFilePath
 }
-func (f *fakeDeepAgentForAgentMode) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentForAgentMode) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForAgentMode)(nil)
@@ -996,7 +997,7 @@ func TestFilterHiddenTools(t *testing.T) {
 
 	hidden := map[string]struct{}{
 		"todo_create": {},
-		"bash":       {},
+		"bash":        {},
 	}
 
 	tools := []cschema.ToolInfoInterface{

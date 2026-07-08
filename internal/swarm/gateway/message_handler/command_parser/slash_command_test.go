@@ -270,7 +270,7 @@ func TestIsControlLikeForIMBatching(t *testing.T) {
 	prefixTexts := []string{
 		"/mode foo", "/switch bar", "/new_session extra",
 		"/branch my-branch", "/rewind 5",
-		"/switch",  // 仅 /switch 本身
+		"/switch", // 仅 /switch 本身
 	}
 	for _, text := range prefixTexts {
 		if !IsControlLikeForIMBatching(text) {

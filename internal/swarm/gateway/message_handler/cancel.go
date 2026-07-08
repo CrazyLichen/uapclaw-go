@@ -44,7 +44,7 @@ func (mh *MessageHandler) SendProcessingStatus(sessionID string, isProcessing bo
 	msg := schema.NewEventMessage("", sessionID, schema.EventTypeChatProcessingStatus,
 		map[string]any{
 			"is_processing": isProcessing,
-			"session_id":   sessionID,
+			"session_id":    sessionID,
 		},
 	)
 	mh.enqueueOutbound(msg)
@@ -125,9 +125,9 @@ func (mh *MessageHandler) sendStreamCancelledNotification(sessionID string) {
 func (mh *MessageHandler) publishStreamCancelledFinal(sessionID string) {
 	msg := schema.NewEventMessage("", sessionID, schema.EventTypeChatFinal,
 		map[string]any{
-			"content":     "",
+			"content":      "",
 			"is_cancelled": true,
-			"session_id":  sessionID,
+			"session_id":   sessionID,
 		},
 	)
 	mh.enqueueOutbound(msg)

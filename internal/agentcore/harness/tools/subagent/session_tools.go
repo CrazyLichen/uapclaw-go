@@ -17,13 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SessionsListInput sessions_list 工具的输入参数（无参数）。
@@ -68,6 +61,13 @@ type SessionToolkit struct {
 	// mu 读写互斥锁
 	mu sync.RWMutex
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

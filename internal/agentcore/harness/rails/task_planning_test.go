@@ -10,24 +10,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
-	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── Mock 实现 ────────────────────────────
@@ -86,9 +86,9 @@ func (f *fakeDeepAgentForTaskPlanning) LoadState(_ sessioninterfaces.SessionFaca
 	return nil
 }
 func (f *fakeDeepAgentForTaskPlanning) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
-func (f *fakeDeepAgentForTaskPlanning) IsInvokeActive() bool                   { return false }
-func (f *fakeDeepAgentForTaskPlanning) IsAutoInvokeScheduled() bool            { return false }
-func (f *fakeDeepAgentForTaskPlanning) SetAutoInvokeScheduled(_ bool)          {}
+func (f *fakeDeepAgentForTaskPlanning) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForTaskPlanning) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForTaskPlanning) SetAutoInvokeScheduled(_ bool)        {}
 func (f *fakeDeepAgentForTaskPlanning) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
@@ -108,10 +108,13 @@ func (f *fakeDeepAgentForTaskPlanning) SwitchMode(_ sessioninterfaces.SessionFac
 func (f *fakeDeepAgentForTaskPlanning) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
 
 // GetPlanFilePath 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentForTaskPlanning) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+func (f *fakeDeepAgentForTaskPlanning) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string {
+	return ""
+}
 
 // SaveState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentForTaskPlanning) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentForTaskPlanning) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTaskPlanning)(nil)
@@ -151,7 +154,7 @@ func (f *fakeModelContext) Len() int { return 0 }
 func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, error) {
 	return nil, nil
 }
-func (f *fakeModelContext) SetMessages(_ []llmschema.BaseMessage, _ bool) {}
+func (f *fakeModelContext) SetMessages(_ []llmschema.BaseMessage, _ bool)     {}
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llmschema.BaseMessage { return nil }
 func (f *fakeModelContext) AddMessages(_ context.Context, message llmschema.BaseMessage, _ ...any) ([]llmschema.BaseMessage, error) {
 	f.addMessagesCalls = append(f.addMessagesCalls, message)
@@ -170,10 +173,10 @@ func newFakeSession(id string) *fakeSession {
 	return &fakeSession{sessionID: id}
 }
 
-func (s *fakeSession) GetSessionID() string                     { return s.sessionID }
-func (s *fakeSession) UpdateState(_ map[string]any)             {}
-func (s *fakeSession) GetState(_ state.StateKey) (any, error)   { return nil, nil }
-func (s *fakeSession) DumpState() map[string]any                { return nil }
+func (s *fakeSession) GetSessionID() string                             { return s.sessionID }
+func (s *fakeSession) UpdateState(_ map[string]any)                     {}
+func (s *fakeSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }
+func (s *fakeSession) DumpState() map[string]any                        { return nil }
 func (s *fakeSession) WriteStream(_ context.Context, _ any) error       { return nil }
 func (s *fakeSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
 func (s *fakeSession) GetEnv(_ string, _ ...any) any                    { return nil }
@@ -1371,7 +1374,7 @@ func TestTaskPlanningRail_Uninit_有工具时移除(t *testing.T) {
 	am := &fakeAbilityManager{}
 	agent := &fakeBaseAgentWithAm{
 		fakeBaseAgent: *newFakeBaseAgent(),
-		am:           am,
+		am:            am,
 	}
 
 	err := r.Uninit(agent)
@@ -1511,8 +1514,8 @@ func (f *fakeAbilityManager) Remove(name string) cschema2.Ability {
 	return nil
 }
 func (f *fakeAbilityManager) RemoveMany(names []string) []cschema2.Ability { return nil }
-func (f *fakeAbilityManager) Get(name string) cschema2.Ability               { return nil }
-func (f *fakeAbilityManager) List() []cschema2.Ability                       { return nil }
+func (f *fakeAbilityManager) Get(name string) cschema2.Ability             { return nil }
+func (f *fakeAbilityManager) List() []cschema2.Ability                     { return nil }
 func (f *fakeAbilityManager) ListToolInfo(_ context.Context, _ []string, _ ...string) ([]cschema2.ToolInfoInterface, error) {
 	return nil, nil
 }
@@ -1520,7 +1523,7 @@ func (f *fakeAbilityManager) Execute(_ context.Context, _ *agentinterfaces.Agent
 	return nil
 }
 func (f *fakeAbilityManager) SetContextEngine(_ ceinterface.ContextEngine) {}
-func (f *fakeAbilityManager) ReorderTools(_ []string)                     {}
+func (f *fakeAbilityManager) ReorderTools(_ []string)                      {}
 
 // fakeDeepAgentWithAm 有 AbilityManager 的 fakeBaseAgent
 type fakeDeepAgentWithAm struct {
@@ -1529,7 +1532,7 @@ type fakeDeepAgentWithAm struct {
 }
 
 func (f *fakeDeepAgentWithAm) AbilityManager() agentinterfaces.AbilityManagerInterface { return f.am }
-func (f *fakeDeepAgentWithAm) ReactAgent() *agents.ReActAgent                         { return nil }
+func (f *fakeDeepAgentWithAm) ReactAgent() *agents.ReActAgent                          { return nil }
 func (f *fakeDeepAgentWithAm) LoopCoordinator() hinterfaces.LoopCoordinatorInterface   { return nil }
 func (f *fakeDeepAgentWithAm) LoopController() controller.ControllerInterface          { return nil }
 func (f *fakeDeepAgentWithAm) EventHandler() modules.EventHandler                      { return nil }
@@ -1537,9 +1540,9 @@ func (f *fakeDeepAgentWithAm) LoadState(_ sessioninterfaces.SessionFacade) *hsch
 	return nil
 }
 func (f *fakeDeepAgentWithAm) DeepConfig() *hschema.DeepAgentConfig { return nil }
-func (f *fakeDeepAgentWithAm) IsInvokeActive() bool                   { return false }
-func (f *fakeDeepAgentWithAm) IsAutoInvokeScheduled() bool            { return false }
-func (f *fakeDeepAgentWithAm) SetAutoInvokeScheduled(_ bool)          {}
+func (f *fakeDeepAgentWithAm) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentWithAm) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentWithAm) SetAutoInvokeScheduled(_ bool)        {}
 func (f *fakeDeepAgentWithAm) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
@@ -1562,7 +1565,8 @@ func (f *fakeDeepAgentWithAm) RestoreModeAfterPlanExit(_ sessioninterfaces.Sessi
 func (f *fakeDeepAgentWithAm) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
 
 // SaveState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentWithAm) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentWithAm) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentWithAm)(nil)

@@ -10,22 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ChannelMetadata Channel 元数据，标识一条通道实例的来源与归属。
-//
-// 对应 Python: jiuwenswarm/gateway/channel_manager/base.py (ChannelMetadata)
-type ChannelMetadata struct {
-	// ChannelID 渠道实例唯一标识
-	ChannelID string `json:"channel_id"`
-	// Source 来源平台标识（如 feishu/dingtalk/web）
-	Source string `json:"source"`
-	// UserID 用户标识（可选）
-	UserID string `json:"user_id,omitempty"`
-	// Extra 扩展字段（可选）
-	Extra map[string]any `json:"extra,omitempty"`
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // BaseChannel Channel 实现的抽象接口。
 //
 // 每个 Channel 都应实现此接口以集成到 Gateway 消息总线中。
@@ -49,6 +33,20 @@ type BaseChannel interface {
 	ChannelID() string
 	// ChannelType 返回 Channel 类型
 	ChannelType() ChannelType
+}
+
+// ChannelMetadata Channel 元数据，标识一条通道实例的来源与归属。
+//
+// 对应 Python: jiuwenswarm/gateway/channel_manager/base.py (ChannelMetadata)
+type ChannelMetadata struct {
+	// ChannelID 渠道实例唯一标识
+	ChannelID string `json:"channel_id"`
+	// Source 来源平台标识（如 feishu/dingtalk/web）
+	Source string `json:"source"`
+	// UserID 用户标识（可选）
+	UserID string `json:"user_id,omitempty"`
+	// Extra 扩展字段（可选）
+	Extra map[string]any `json:"extra,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

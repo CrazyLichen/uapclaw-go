@@ -140,9 +140,9 @@ func (m *TodoLockManager) CleanupSession(sessionID string) {
 // 对齐 Python: TodoTool.__init__
 func newTodoTool(workspace string, fs sys_operation.FsOperation, lockManager *TodoLockManager) TodoTool {
 	return TodoTool{
-		workspace:    workspace,
-		fs:           fs,
-		lockManager:  lockManager,
+		workspace:   workspace,
+		fs:          fs,
+		lockManager: lockManager,
 	}
 }
 

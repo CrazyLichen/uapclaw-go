@@ -982,7 +982,7 @@ func TestNewTodoModifyTool_Invoke(t *testing.T) {
 	// append
 	result, err = modifyTool.Invoke(context.Background(), map[string]any{
 		"action": "append",
-		"todos": []any{map[string]any{"id": "t4", "content": "追加任务", "activeForm": "执行追加", "description": "追加描述", "status": "pending"}},
+		"todos":  []any{map[string]any{"id": "t4", "content": "追加任务", "activeForm": "执行追加", "description": "追加描述", "status": "pending"}},
 	}, sessOpt)
 	if err != nil {
 		t.Fatalf("append 操作返回错误: %v", err)
@@ -1013,7 +1013,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 		"action": "insert_after",
 		"todo_data": map[string]any{
 			"target_id": "t1",
-			"items": []any{map[string]any{"id": "t2", "content": "插入任务", "status": "pending"}},
+			"items":     []any{map[string]any{"id": "t2", "content": "插入任务", "status": "pending"}},
 		},
 	}, sessOpt)
 	if err != nil {
@@ -1026,7 +1026,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 		"action": "insert_before",
 		"todo_data": map[string]any{
 			"target_id": "t3",
-			"items": []any{map[string]any{"id": "t2b", "content": "前插任务", "status": "pending"}},
+			"items":     []any{map[string]any{"id": "t2b", "content": "前插任务", "status": "pending"}},
 		},
 	}, sessOpt)
 	if err != nil {

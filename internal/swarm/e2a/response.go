@@ -37,7 +37,7 @@ type E2AResponse struct {
 	Body map[string]any `json:"body"`
 
 	// ─── 关联字段 ───
-	// JSONRPCID JSON-RPC id（str / int / None）
+	// JSONRPCID JSON-RPC 标识（str / int / None）
 	JSONRPCID any `json:"jsonrpc_id"`
 	// CorrelationID 分布式追踪 id
 	CorrelationID string `json:"correlation_id"`

@@ -44,6 +44,8 @@ const (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // channelModeStrings ChannelMode 到字符串的映射
 var channelModeStrings = map[ChannelMode]string{
 	ChannelModeAgentPlan:  "agent.plan",
@@ -59,8 +61,6 @@ var channelModeLookup map[string]ChannelMode
 
 // controlChannelTypes 受控渠道类型集合（slash 命令仅在受控渠道上生效）
 var controlChannelTypes map[string]bool
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -207,17 +207,17 @@ func getChannelStateKey(channelID, sessionID string) string {
 func inferChannelTypeFromID(channelID string) channel_manager.ChannelType {
 	lower := strings.ToLower(channelID)
 	prefixes := map[string]channel_manager.ChannelType{
-		"web":     channel_manager.ChannelTypeWeb,
-		"feishu":  channel_manager.ChannelTypeFeishu,
-		"xiaoyi":  channel_manager.ChannelTypeXiaoyi,
+		"web":      channel_manager.ChannelTypeWeb,
+		"feishu":   channel_manager.ChannelTypeFeishu,
+		"xiaoyi":   channel_manager.ChannelTypeXiaoyi,
 		"dingtalk": channel_manager.ChannelTypeDingTalk,
 		"telegram": channel_manager.ChannelTypeTelegram,
 		"discord":  channel_manager.ChannelTypeDiscord,
 		"whatsapp": channel_manager.ChannelTypeWhatsApp,
-		"wecom":   channel_manager.ChannelTypeWeCom,
-		"wechat":  channel_manager.ChannelTypeWeChat,
-		"tui":     channel_manager.ChannelTypeCLI,
-		"acp":     channel_manager.ChannelTypeACP,
+		"wecom":    channel_manager.ChannelTypeWeCom,
+		"wechat":   channel_manager.ChannelTypeWeChat,
+		"tui":      channel_manager.ChannelTypeCLI,
+		"acp":      channel_manager.ChannelTypeACP,
 	}
 	for prefix, ct := range prefixes {
 		if strings.HasPrefix(lower, prefix) {
@@ -247,8 +247,8 @@ func init() {
 	// 构建受控渠道类型集合
 	// 对齐 Python _control_channel_types：feishu, xiaoyi, dingtalk, whatsapp, wecom, wechat
 	controlChannelTypes = map[string]bool{
-		string(channel_manager.ChannelTypeFeishu):  true,
-		string(channel_manager.ChannelTypeXiaoyi):  true,
+		string(channel_manager.ChannelTypeFeishu):   true,
+		string(channel_manager.ChannelTypeXiaoyi):   true,
 		string(channel_manager.ChannelTypeDingTalk): true,
 		string(channel_manager.ChannelTypeWhatsApp): true,
 		string(channel_manager.ChannelTypeWeCom):    true,

@@ -450,10 +450,10 @@ type fakeToolInfo struct {
 	parameters  map[string]any
 }
 
-func (f *fakeToolInfo) GetType() string                { return "function" }
-func (f *fakeToolInfo) GetName() string                { return f.name }
-func (f *fakeToolInfo) GetDescription() string         { return f.description }
-func (f *fakeToolInfo) GetParameters() map[string]any  { return f.parameters }
+func (f *fakeToolInfo) GetType() string               { return "function" }
+func (f *fakeToolInfo) GetName() string               { return f.name }
+func (f *fakeToolInfo) GetDescription() string        { return f.description }
+func (f *fakeToolInfo) GetParameters() map[string]any { return f.parameters }
 
 // ──────────────────────────── TokenCounter mock 测试辅助 ────────────────────────────
 

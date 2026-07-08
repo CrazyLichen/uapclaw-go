@@ -603,7 +603,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}
 	}
 
-	// e2a.complete + is_final
+	// e2a.complete + is_final 条件分支
 	if kind == E2AResponseKindE2AComplete && e2a.IsFinal {
 		res := body["result"]
 		if emptyCompleteMarker(body, res) {
@@ -626,7 +626,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// e2a.error + is_final
+	// e2a.error + is_final 条件分支
 	if kind == E2AResponseKindE2AError && e2a.IsFinal {
 		det := body["details"]
 		var pl map[string]any
@@ -646,7 +646,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// e2a.chunk + !is_final
+	// e2a.chunk + !is_final 条件分支
 	if kind == E2AResponseKindE2AChunk && !e2a.IsFinal {
 		dk, _ := body["delta_kind"].(string)
 		et, _ := body["event_type"].(string)
@@ -705,7 +705,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// cron
+	// 定时任务
 	if kind == E2AResponseKindCron {
 		bodyPayload := map[string]any{
 			"event_type": "cron.response",
@@ -722,7 +722,7 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 		}, nil
 	}
 
-	// acp.output_request
+	// acp.output_request 请求
 	if kind == E2AResponseKindACPOutputRequest {
 		jsonrpc := map[string]any{}
 		if e2a.Body != nil {
@@ -799,7 +799,7 @@ func isTerminalPayload(pl map[string]any) bool {
 // emptyCompleteMarker 判断 e2a.complete body 是否表示空终止帧。
 // 对应 Python: _empty_complete_marker(b, r)
 func emptyCompleteMarker(body map[string]any, res any) bool {
-	// body == {"result": {}}
+	// body 等于 {"result": {}} 判断
 	if len(body) == 1 {
 		if v, ok := body["result"]; ok {
 			if m, ok := v.(map[string]any); ok && len(m) == 0 {

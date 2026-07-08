@@ -504,6 +504,11 @@ func TestJoinLines(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// Card 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) Card() *agentschema.AgentCard {
+	return nil
+}
+
 // ReactAgent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) ReactAgent() *agents.ReActAgent { return f.reactAgent }
 
@@ -562,7 +567,8 @@ func (f *fakeDeepAgentProvider) RestoreModeAfterPlanExit(_ sessioninterfaces.Ses
 func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
 
 // SaveState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }

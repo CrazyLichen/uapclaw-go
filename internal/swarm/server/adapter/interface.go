@@ -6,7 +6,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // AgentAdapter Agent 适配器接口（swarm 侧定义）。
 //

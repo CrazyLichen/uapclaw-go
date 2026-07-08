@@ -36,7 +36,7 @@ type E2AEnvelope struct {
 	Provenance E2AProvenance `json:"provenance"`
 	// RequestID 网关↔AgentServer 主请求 id（流式 chunk 关联）
 	RequestID string `json:"request_id"`
-	// JSONRPCID JSON-RPC id（str / int / None）
+	// JSONRPCID JSON-RPC 标识（str / int / None）
 	JSONRPCID any `json:"jsonrpc_id"`
 	// CorrelationID 分布式追踪 id
 	CorrelationID string `json:"correlation_id"`

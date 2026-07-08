@@ -196,13 +196,13 @@ type ShellType int
 const (
 	// ShellTypeAuto 自动检测
 	ShellTypeAuto ShellType = 0
-	// ShellTypeCmd Windows CMD
+	// ShellTypeCmd Windows 命令提示符
 	ShellTypeCmd ShellType = 1
 	// ShellTypePowerShell Windows PowerShell
 	ShellTypePowerShell ShellType = 2
-	// ShellTypeBash Bash
+	// ShellTypeBash Bash Shell
 	ShellTypeBash ShellType = 3
-	// ShellTypeSh POSIX Sh
+	// ShellTypeSh POSIX Shell
 	ShellTypeSh ShellType = 4
 )
 

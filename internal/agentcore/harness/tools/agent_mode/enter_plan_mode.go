@@ -12,7 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 对齐 Python L114-138: enter_plan_mode 中英文消息
 var (

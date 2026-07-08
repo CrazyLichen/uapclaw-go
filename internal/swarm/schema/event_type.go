@@ -66,17 +66,17 @@ const (
 	// EventTypeChatSessionResult 会话结果
 	EventTypeChatSessionResult EventType = "chat.session_result"
 
-	// ─── context ───
+	// ─── 上下文 ───
 
 	// EventTypeContextUsage 上下文用量
 	EventTypeContextUsage EventType = "context.usage"
 
-	// ─── todo ───
+	// ─── 待办 ───
 
 	// EventTypeTodoUpdated 待办更新
 	EventTypeTodoUpdated EventType = "todo.updated"
 
-	// ─── team ───
+	// ─── 团队 ───
 
 	// EventTypeTeamMember 团队成员
 	EventTypeTeamMember EventType = "team.member"
@@ -85,12 +85,12 @@ const (
 	// EventTypeTeamMessage 团队消息
 	EventTypeTeamMessage EventType = "team.message"
 
-	// ─── heartbeat ───
+	// ─── 心跳 ───
 
 	// EventTypeHeartbeatRelay 心跳中继
 	EventTypeHeartbeatRelay EventType = "heartbeat.relay"
 
-	// ─── history ───
+	// ─── 历史 ───
 
 	// EventTypeHistoryGet 历史消息
 	EventTypeHistoryGet EventType = "history.message"
@@ -132,17 +132,17 @@ func AllEventTypes() []EventType {
 		EventTypeChatSubtaskUpdate,
 		EventTypeChatAskUserQuestion,
 		EventTypeChatSessionResult,
-		// context
+		// 上下文
 		EventTypeContextUsage,
-		// todo
+		// 待办
 		EventTypeTodoUpdated,
-		// team
+		// 团队
 		EventTypeTeamMember,
 		EventTypeTeamTask,
 		EventTypeTeamMessage,
-		// heartbeat
+		// 心跳
 		EventTypeHeartbeatRelay,
-		// history
+		// 历史
 		EventTypeHistoryGet,
 	}
 }

@@ -325,7 +325,7 @@ const (
 	// ReqMethodUpdaterSetConf 设置更新器配置
 	ReqMethodUpdaterSetConf ReqMethod = "updater.set_conf"
 
-	// ─── Harness ───
+	// ─── Harness 工具包 ───
 
 	// ReqMethodHarnessPackagesGet 获取 Harness 包
 	ReqMethodHarnessPackagesGet ReqMethod = "harness.packages.get"
@@ -522,7 +522,7 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodUpdaterDownload,
 		ReqMethodUpdaterGetConf,
 		ReqMethodUpdaterSetConf,
-		// Harness
+		// Harness 工具包
 		ReqMethodHarnessPackagesGet,
 		ReqMethodHarnessPackagesScan,
 		ReqMethodHarnessPackagesActivate,

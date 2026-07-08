@@ -323,7 +323,7 @@ func (b *ContextMessageBuffer) getBackInternal(size int, withHistory bool) []llm
 		return messages[contextStart:]
 	}
 
-	// size > 0
+	// size 大于 0 的分支
 	requestedSize := size
 	if !withHistory {
 		contextStart := b.historyMessagesSize

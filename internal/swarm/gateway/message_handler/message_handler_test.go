@@ -245,4 +245,5 @@ func channelManagerForTest() *channel_manager.ChannelManager {
 func createTestMessageHandlerWithTransport() *MessageHandler {
 	transport := gateway_push.NewChannelTransport()
 	cm := channelManagerForTest()
-	return NewMessageHandler(transport, transport, cm)}
+	return NewMessageHandler(transport, transport, cm)
+}

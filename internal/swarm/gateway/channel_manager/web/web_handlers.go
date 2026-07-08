@@ -109,11 +109,11 @@ var configEnvMap = map[string]string{
 	"free_search_ddg_enabled":           "FREE_SEARCH_DDG_ENABLED",
 	"free_search_bing_enabled":          "FREE_SEARCH_BING_ENABLED",
 	"free_search_proxy_url":             "FREE_SEARCH_PROXY_URL",
-	// agents
+	// 代理
 	"skills":             "SKILLS",
 	"max_iterations":     "MAX_ITERATIONS",
 	"completion_timeout": "COMPLETION_TIMEOUT",
-	// team
+	// 团队
 	"team_name":     "TEAM_NAME",
 	"lifecycle":     "LIFECYCLE",
 	"teammate_mode": "TEAMATE_MODE",
@@ -263,15 +263,15 @@ func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *
 	forwardStubs := map[string]map[string]any{
 		"initialize":        {},
 		"acp.tool_response": {},
-		// team
+		// 团队
 		"team.delete":      {},
 		"team.snapshot":    {},
 		"team.history.get": {},
-		// history
+		// 历史
 		"history.get": {},
-		// browser
+		// 浏览器
 		"browser.start": {},
-		// skills
+		// 技能
 		"skills.marketplace.list":   {"skills": []any{}},
 		"skills.list":               {"skills": []any{}},
 		"skills.installed":          {"skills": []any{}},
@@ -283,17 +283,17 @@ func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *
 		"skills.marketplace.add":    {"ok": true},
 		"skills.marketplace.remove": {"ok": true},
 		"skills.marketplace.toggle": {"ok": true},
-		// skillnet
+		// 技能网络
 		"skills.skillnet.search":         {"skills": []any{}},
 		"skills.skillnet.install":        {"ok": true},
 		"skills.skillnet.install_status": {"status": "not_installed"},
 		"skills.skillnet.evaluate":       {},
-		// clawhub
+		// ClawHub
 		"skills.clawhub.get_token": {"token": ""},
 		"skills.clawhub.set_token": {"ok": true},
 		"skills.clawhub.search":    {"skills": []any{}},
 		"skills.clawhub.download":  {"ok": true},
-		// teamskillshub
+		// 团队技能中心
 		"skills.teamskillshub.info":     {},
 		"skills.teamskillshub.init":     {"ok": true},
 		"skills.teamskillshub.validate": {"ok": true},
@@ -302,23 +302,23 @@ func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *
 		"skills.teamskillshub.install":  {"ok": true},
 		"skills.teamskillshub.publish":  {"ok": true},
 		"skills.teamskillshub.delete":   {"ok": true},
-		// evolution
+		// 进化
 		"skills.evolution.status": {"status": "idle"},
 		"skills.evolution.get":    {},
 		"skills.evolution.save":   {"ok": true},
-		// plugins
+		// 插件
 		"plugins.list":      {"plugins": []any{}},
 		"plugins.install":   {"ok": true},
 		"plugins.uninstall": {"ok": true},
 		"plugins.enable":    {"ok": true},
 		"plugins.disable":   {"ok": true},
 		"plugins.reload":    {"ok": true},
-		// extensions
+		// 扩展
 		"extensions.list":   {"extensions": []any{}},
 		"extensions.import": {"ok": true},
 		"extensions.delete": {"ok": true},
 		"extensions.toggle": {"ok": true},
-		// agents
+		// 代理
 		"agents.list":       {"agents": []any{}},
 		"agents.get":        {},
 		"agents.create":     {"ok": true},
@@ -327,7 +327,7 @@ func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *
 		"agents.enable":     {"ok": true},
 		"agents.disable":    {"ok": true},
 		"agents.tools_list": {"tools": []any{}},
-		// schedule
+		// 调度
 		"schedule.check_config":  {},
 		"schedule.update_config": {"ok": true},
 		"schedule.create":        {"ok": true},
@@ -419,7 +419,7 @@ func handleConfigGet(_ context.Context, _ map[string]any, _ string) (map[string]
 		result[key] = os.Getenv(envVar)
 	}
 
-	// app_version
+	// 应用版本
 	result["app_version"] = version.Version
 
 	// config.yaml 补充字段
@@ -430,11 +430,11 @@ func handleConfigGet(_ context.Context, _ map[string]any, _ string) (map[string]
 			Msg("config.get 加载 config.yaml 失败，使用默认值")
 	}
 
-	// context_engine_enabled
+	// 上下文引擎启用
 	result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
-	// kv_cache_affinity_enabled
+	// KV 缓存亲和启用
 	result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
-	// permissions_enabled
+	// 权限启用
 	result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
 	// skill_create: 环境变量优先，fallback config.yaml
 	if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
@@ -448,9 +448,9 @@ func handleConfigGet(_ context.Context, _ map[string]any, _ string) (map[string]
 	} else {
 		result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
 	}
-	// memory_forbidden_enabled
+	// 记忆禁止启用
 	result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
-	// memory_forbidden_description
+	// 记忆禁止描述
 	result["memory_forbidden_description"] = getConfigString(cfg, "memory.forbidden_memory_definition.description", "")
 
 	// 默认值填充（仅当环境变量为空时）

@@ -39,7 +39,7 @@ func TestParseChannelMode(t *testing.T) {
 		"code.team":   ChannelModeCodeTeam,
 		"team":        ChannelModeTeam,
 		// 大小写无关
-		"AGENT.PLAN": ChannelModeAgentPlan,
+		"AGENT.PLAN":  ChannelModeAgentPlan,
 		" Code.Plan ": ChannelModeCodePlan,
 	}
 	for input, expected := range tests {

@@ -11,7 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // 对齐 Python L140-162: exit_plan_mode 中英文消息
 var (

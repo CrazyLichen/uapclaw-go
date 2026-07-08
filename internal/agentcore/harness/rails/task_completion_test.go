@@ -579,10 +579,10 @@ func (f *fakeDeepAgentForNotify) EventHandler() modules.EventHandler            
 func (f *fakeDeepAgentForNotify) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return nil
 }
-func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig         { return nil }
-func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                         { return false }
-func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool                  { return false }
-func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)                {}
+func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig                    { return nil }
+func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                                    { return false }
+func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool                             { return false }
+func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)                           {}
 func (f *fakeDeepAgentForNotify) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error { return nil }
 func (f *fakeDeepAgentForNotify) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
@@ -603,7 +603,8 @@ func (f *fakeDeepAgentForNotify) RestoreModeAfterPlanExit(_ sessioninterfaces.Se
 func (f *fakeDeepAgentForNotify) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
 
 // SaveState 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentForNotify) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+func (f *fakeDeepAgentForNotify) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {
+}
 
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)
