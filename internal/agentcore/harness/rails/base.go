@@ -31,6 +31,16 @@ type DeepAgentRail struct {
 	sysOperation sys_operation.SysOperation
 }
 
+// ──────────────────────────── 接口 ────────────────────────────
+
+// DeepAgentRailProvider DeepAgentRail 提供者接口。
+// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
+// 嵌入 DeepAgentRail 的子类自动满足此接口。
+type DeepAgentRailProvider interface {
+	SetSysOperation(op sys_operation.SysOperation)
+	SetWorkspace(w *workspace.Workspace)
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewDeepAgentRail 创建 DeepAgentRail 实例（默认优先级 50）。

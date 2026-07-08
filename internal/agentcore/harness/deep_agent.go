@@ -1067,14 +1067,6 @@ func (d *DeepAgent) SpecName() string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// deepAgentRailProvider DeepAgentRail 提供者接口。
-// 对齐 Python: isinstance(rail_inst, DeepAgentRail) 类型检查。
-// 嵌入 DeepAgentRail 的子类自动满足此接口。
-type deepAgentRailProvider interface {
-	SetSysOperation(op sysop.SysOperation)
-	SetWorkspace(w *workspace.Workspace)
-}
-
 // resolveContextSessionID 解析上下文 API 使用的会话 ID。
 // 对齐 Python: DeepAgent._resolve_context_session_id(session_id) (line 483)
 func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
@@ -1618,7 +1610,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 			d.railsMu.Unlock()
 		}
 		// 对齐 Python: isinstance(rail_inst, DeepAgentRail) → set_sys_operation / set_workspace
-		if provider, ok := r.(deepAgentRailProvider); ok {
+		if provider, ok := r.(rails.DeepAgentRailProvider); ok {
 			d.configMu.RLock()
 			cfg := d.deepConfig
 			d.configMu.RUnlock()
