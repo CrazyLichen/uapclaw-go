@@ -9,7 +9,8 @@
 //
 //	subagent/
 //	├── doc.go              # 包文档
-//	└── session_tools.go    # SessionTaskRow + SessionToolkit + SessionsList/Spawn/Cancel 工具
+//	├── session_tools.go    # SessionTaskRow + SessionToolkit + SessionsList/Spawn/Cancel 工具
+//	└── task_tool.go        # TaskTool 子代理委托工具 + CreateTaskTool 工厂
 //
-// 对应 Python 代码：openjiuwen/harness/tools/subagent/session_tools.py
+// 对应 Python 代码：openjiuwen/harness/tools/subagent/
 package subagent

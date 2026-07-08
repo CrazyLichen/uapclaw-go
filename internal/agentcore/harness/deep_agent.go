@@ -784,7 +784,7 @@ func (d *DeepAgent) GetPlanFilePath(sess sessioninterfaces.SessionFacade) string
 	if cfg == nil || cfg.Workspace == nil {
 		return ""
 	}
-	// ⤵️ 9.3 回填：resolve_plan_file_path 工具实现后补全
+	// resolvePlanFilePath 已在 tools/agent_mode/slug.go 中实现
 	return filepath.Join(cfg.Workspace.RootPath, slug+".md")
 }
 

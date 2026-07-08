@@ -544,7 +544,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.11 | ✅ | ProgressiveToolRail | 渐进式工具权限 | `openjiuwen/harness/rails/` |
 | 9.12 | ✅ | TaskCompletionRail | 任务完成检测 | `openjiuwen/harness/rails/` |
 | 9.13 | ✅ | TaskPlanningRail | 任务规划 | `openjiuwen/harness/rails/` |
-| 9.14 | ☐ | AgentModeRail | Agent 模式切换 | `openjiuwen/harness/rails/` |
+| 9.14 | ✅ | AgentModeRail | Agent 模式切换 | `openjiuwen/harness/rails/` |
 | 9.15 | ☐ | HeartbeatRail | 心跳 | `openjiuwen/harness/rails/` |
 | 9.16 | ☐ | McpRail | MCP 工具管理 | `openjiuwen/harness/rails/` |
 | 9.17 | ☐ | LSPRail | LSP 集成 | `openjiuwen/harness/lsp/` |
