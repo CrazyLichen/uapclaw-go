@@ -236,3 +236,62 @@ func TestResolvedPaths_Fallback字段(t *testing.T) {
 		t.Error("回退场景 Fallback 应为 true")
 	}
 }
+
+func TestPathHelpers(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
+	ResetCache()
+
+	tests := []struct {
+		name     string
+		got      string
+		expected string
+	}{
+		{"AgentRootDir", AgentRootDir(), filepath.Join(tmpDir, "agent")},
+		{"AgentMemoryDir", AgentMemoryDir(), filepath.Join(tmpDir, "agent", "workspace", "memory")},
+		{"AgentSkillsDir", AgentSkillsDir(), filepath.Join(tmpDir, "agent", "workspace", "skills")},
+		{"AgentSessionsDir", AgentSessionsDir(), filepath.Join(tmpDir, "agent", "sessions")},
+		{"AgentInteractionsDir", AgentInteractionsDir(), filepath.Join(tmpDir, "agent", "workspace", "interactions")},
+		{"CheckpointDir", CheckpointDir(), filepath.Join(tmpDir, "agent", ".checkpoint")},
+		{"LogsDir", LogsDir(), filepath.Join(tmpDir, "agent", ".logs")},
+		{"DeepAgentTodoDir", DeepAgentTodoDir(), filepath.Join(tmpDir, "agent", "workspace", "todo")},
+		{"DeepAgentMessagesDir", DeepAgentMessagesDir(), filepath.Join(tmpDir, "agent", "workspace", "messages")},
+		{"DeepAgentAgentsDir", DeepAgentAgentsDir(), filepath.Join(tmpDir, "agent", "workspace", "agents")},
+		{"DeepAgentHeartbeatPath", DeepAgentHeartbeatPath(), filepath.Join(tmpDir, "agent", "workspace", "HEARTBEAT.md")},
+		{"DeepAgentAgentMDPath", DeepAgentAgentMDPath(), filepath.Join(tmpDir, "agent", "workspace", "AGENT.md")},
+		{"DeepAgentSoulMDPath", DeepAgentSoulMDPath(), filepath.Join(tmpDir, "agent", "workspace", "SOUL.md")},
+		{"DeepAgentIdentityMDPath", DeepAgentIdentityMDPath(), filepath.Join(tmpDir, "agent", "workspace", "IDENTITY.md")},
+		{"DeepAgentUserMDPath", DeepAgentUserMDPath(), filepath.Join(tmpDir, "agent", "workspace", "USER.md")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.expected {
+				t.Errorf("期望 %q，实际 %q", tt.expected, tt.got)
+			}
+		})
+	}
+}
+
+func TestConfigDir_已初始化_无回退(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
+	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	ResetCache()
+
+	paths := getResolvedPaths()
+	if paths.Fallback {
+		t.Error("已初始化场景 Fallback 应为 false")
+	}
+}
+
+func TestResourcesDir_环境变量不存在(t *testing.T) {
+	_ = os.Setenv(EnvResourcesDir, "/nonexistent/path")
+	defer func() { _ = os.Unsetenv(EnvResourcesDir) }()
+
+	_, err := ResourcesDir()
+	if err == nil {
+		t.Error("环境变量指向不存在的目录应返回错误")
+	}
+}
