@@ -958,7 +958,7 @@ func TestOpenAIModelClient_Stream_Context取消(t *testing.T) {
 // TestOpenAIModelClient_SupportsKVCacheRelease 验证 OpenAI 客户端不支持 KV Cache 释放。
 func TestOpenAIModelClient_SupportsKVCacheRelease(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("gpt-4"))
-	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1")
+	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1", llmschema.WithVerifySSL(false))
 	client, err := NewOpenAIModelClient(mc, cc)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)

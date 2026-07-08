@@ -150,7 +150,8 @@ func TestMessageToE2A_EnableMemory逻辑(t *testing.T) {
 		GroupDigitalAvatar: true,
 	}
 	env, _ := MessageToE2A(msg)
-	_, _ = env.ChannelContext["enable_memory"]
+	enableMem := env.ChannelContext["enable_memory"]
+	_ = enableMem
 	// metadata 会合并到 channel_context
 	if env.RequestID != "r1" {
 		t.Errorf("RequestID 不匹配: %q", env.RequestID)

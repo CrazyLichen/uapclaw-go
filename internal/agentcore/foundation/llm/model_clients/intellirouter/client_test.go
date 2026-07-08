@@ -946,3 +946,12 @@ func TestConvertChunk_空Content(t *testing.T) {
 		t.Errorf("Content = %q, 期望空字符串", chunk.Content.Text())
 	}
 }
+
+// TestIntelliRouterModelClient_SupportsKVCacheRelease_不支持 验证不支持 KV Cache 释放
+func TestIntelliRouterModelClient_SupportsKVCacheRelease_不支持(t *testing.T) {
+	// 创建最简 client
+	client := &IntelliRouterModelClient{}
+	if client.SupportsKVCacheRelease() {
+		t.Error("期望 SupportsKVCacheRelease 返回 false")
+	}
+}

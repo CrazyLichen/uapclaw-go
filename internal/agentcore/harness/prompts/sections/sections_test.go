@@ -658,8 +658,12 @@ func TestScanDirectoryStructure_不存在的路径(t *testing.T) {
 func TestScanDirectoryStructure_临时目录(t *testing.T) {
 	dir := t.TempDir()
 	// 创建子目录和文件
-	os.Mkdir(dir+"/subdir", 0o755)
-	os.WriteFile(dir+"/file.txt", []byte("test"), 0o644)
+	if err := os.Mkdir(dir+"/subdir", 0o755); err != nil {
+		t.Fatalf("创建子目录失败: %v", err)
+	}
+	if err := os.WriteFile(dir+"/file.txt", []byte("test"), 0o644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
 
 	result := ScanDirectoryStructure(dir, 0, 2, "cn")
 	if len(result) == 0 {

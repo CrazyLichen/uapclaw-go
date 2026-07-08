@@ -106,7 +106,7 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 	}
 
 	// 将 mode 写入 params，后续 E2A / Agent 侧从 params["mode"] 读取
-	if msg.Params == nil || len(msg.Params) == 0 {
+	if len(msg.Params) == 0 {
 		msg.Params = json.RawMessage(`{}`)
 	}
 

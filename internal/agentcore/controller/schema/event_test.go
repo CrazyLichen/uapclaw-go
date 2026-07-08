@@ -358,3 +358,30 @@ func TestFollowUpEvent_MarshalJSON(t *testing.T) {
 		t.Errorf("event_type = %q, want %q", parsed.EventType, "follow_up")
 	}
 }
+
+// TestUnmarshalEvents_成功 测试 UnmarshalEvents 正常反序列化
+func TestUnmarshalEvents_成功(t *testing.T) {
+	events := []Event{
+		&InputEvent{BaseEvent: BaseEvent{EventID: "e1", EventTypeField: EventInput}},
+		&InputEvent{BaseEvent: BaseEvent{EventID: "e2", EventTypeField: EventInput}},
+	}
+	data, err := MarshalEvents(events)
+	if err != nil {
+		t.Fatalf("MarshalEvents 失败: %v", err)
+	}
+	got, err := UnmarshalEvents(data)
+	if err != nil {
+		t.Fatalf("UnmarshalEvents 失败: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("期望 2 个事件，实际 %d", len(got))
+	}
+}
+
+// TestUnmarshalEvents_无效JSON 测试 UnmarshalEvents 处理无效 JSON
+func TestUnmarshalEvents_无效JSON(t *testing.T) {
+	_, err := UnmarshalEvents([]byte("invalid json"))
+	if err == nil {
+		t.Error("期望返回错误，实际返回 nil")
+	}
+}

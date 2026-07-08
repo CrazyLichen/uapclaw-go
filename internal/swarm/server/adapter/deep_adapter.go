@@ -637,21 +637,11 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 		// ⤵️ 10.6.3-10: if sessionActive && d.streamEventRail != nil { d.streamEventRail.resume(normalizedSID) }
 		logger.Info(logComponent).Str("intent", "resume").Msg("中断: 已恢复执行")
 	case "supplement":
-		if sessionActive {
-			// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.abort(normalizedSID) }
-			// ⤵️ agentcore.DeepAgent: collect cancelled tool results
-			// ⤵️ agentcore.DeepAgent: if d.otherActiveSessions(normalizedSID) == 0 && d.instance != nil { d.instance.abort() }
-		}
 		if newInput != nil {
 			d.markSessionActive(normalizedSID)
 		}
 		logger.Info(logComponent).Str("intent", "supplement").Msg("中断: supplement 处理")
 	case "cancel":
-		if sessionActive {
-			// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.abort(normalizedSID) }
-			// ⤵️ agentcore.DeepAgent: collect cancelled tool results
-			// ⤵️ agentcore.DeepAgent: if d.otherActiveSessions(normalizedSID) == 0 && d.instance != nil { d.instance.abort() }
-		}
 		d.unmarkSessionActive(normalizedSID)
 		logger.Info(logComponent).Str("intent", "cancel").Msg("中断: cancel 处理")
 	}
@@ -685,11 +675,12 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	resolved := false
 
 	// 步骤 5-7: 按 request_id 前缀分发
-	if strings.HasPrefix(requestID, "team_skill_evolve_") {
+	switch {
+	case strings.HasPrefix(requestID, "team_skill_evolve_"):
 		// ⤵️ 10.3.7-11: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
-	} else if strings.HasPrefix(requestID, "evolve_simplify_") {
+	case strings.HasPrefix(requestID, "evolve_simplify_"):
 		// ⤵️ 10.3.7-11: _handle_governance_approval(requestID, answers, "simplify")
-	} else if strings.HasPrefix(requestID, "skill_evolve_") {
+	case strings.HasPrefix(requestID, "skill_evolve_"):
 		// ⤵️ 10.3.7-11: _handle_evolution_approval(requestID, answers)
 	}
 

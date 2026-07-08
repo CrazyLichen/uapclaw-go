@@ -82,3 +82,88 @@ func TestTrySetEnv_直接float64值(t *testing.T) {
 
 	assert.Equal(t, 99.5, envs[constants.WorkflowExecuteTimeoutKey])
 }
+
+// TestTrySetEnv_无类型映射直接设置 测试没有类型映射时直接设置值
+func TestTrySetEnv_无类型映射直接设置(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetEnv(envs, "unknown_key", "UNKNOWN_ENV_KEY", "some_value")
+
+	assert.Equal(t, "some_value", envs["unknown_key"])
+}
+
+// TestTrySetEnv_无效int跳过 测试无效 int 值跳过
+func TestTrySetEnv_无效int跳过(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetEnv(envs, constants.LoopNumberMaxLimitKey, constants.LoopNumberMaxLimitEnvKey, "not_an_int")
+
+	_, exists := envs[constants.LoopNumberMaxLimitKey]
+	assert.False(t, exists)
+}
+
+// TestTrySetFloat_float32值 测试 float32 类型转换
+func TestTrySetFloat_float32值(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetFloat(envs, "key", "env_key", float32(1.5))
+
+	assert.Equal(t, float64(1.5), envs["key"])
+}
+
+// TestTrySetFloat_int值 测试 int 类型转 float
+func TestTrySetFloat_int值(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetFloat(envs, "key", "env_key", 42)
+
+	assert.Equal(t, float64(42), envs["key"])
+}
+
+// TestTrySetFloat_不支持的类型 测试不支持的类型跳过
+func TestTrySetFloat_不支持的类型(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetFloat(envs, "key", "env_key", true)
+
+	_, exists := envs["key"]
+	assert.False(t, exists)
+}
+
+// TestTrySetInt_直接int值 测试直接传入 int
+func TestTrySetInt_直接int值(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetInt(envs, "key", "env_key", 42)
+
+	assert.Equal(t, 42, envs["key"])
+}
+
+// TestTrySetInt_不支持的类型 测试不支持的类型跳过
+func TestTrySetInt_不支持的类型(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetInt(envs, "key", "env_key", 3.14)
+
+	_, exists := envs["key"]
+	assert.False(t, exists)
+}
+
+// TestTrySetBool_直接bool值 测试直接传入 bool
+func TestTrySetBool_直接bool值(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetBool(envs, "key", "env_key", true)
+
+	assert.Equal(t, true, envs["key"])
+}
+
+// TestTrySetBool_不支持的类型 测试不支持的类型跳过
+func TestTrySetBool_不支持的类型(t *testing.T) {
+	envs := make(map[string]any)
+
+	trySetBool(envs, "key", "env_key", 123)
+
+	_, exists := envs["key"]
+	assert.False(t, exists)
+}

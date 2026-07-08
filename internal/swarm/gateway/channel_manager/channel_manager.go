@@ -55,10 +55,8 @@ const logComponent = logger.ComponentChannel
 //   - onConfigUpdated：配置更新回调，可为 nil
 func NewChannelManager(config map[string]map[string]any, onConfigUpdated OnConfigUpdatedFunc) *ChannelManager {
 	cfg := make(map[string]map[string]any)
-	if config != nil {
-		for k, v := range config {
-			cfg[k] = v
-		}
+	for k, v := range config {
+		cfg[k] = v
 	}
 	return &ChannelManager{
 		channels:              make(map[string]BaseChannel),

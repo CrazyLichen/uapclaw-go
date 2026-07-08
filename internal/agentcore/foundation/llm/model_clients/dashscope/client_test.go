@@ -1195,7 +1195,7 @@ func TestGenerateSpeech_WithExtraParams(t *testing.T) {
 // TestDashScopeModelClient_SupportsKVCacheRelease 验证 DashScope 客户端不支持 KV Cache 释放。
 func TestDashScopeModelClient_SupportsKVCacheRelease(t *testing.T) {
 	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("qwen-max"))
-	cc := llmschema.NewModelClientConfig("DashScope", "test-key", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+	cc := llmschema.NewModelClientConfig("DashScope", "test-key", "https://dashscope.aliyuncs.com/compatible-mode/v1", llmschema.WithVerifySSL(false))
 	client, err := NewDashScopeModelClient(mc, cc)
 	if err != nil {
 		t.Fatalf("创建客户端失败: %v", err)

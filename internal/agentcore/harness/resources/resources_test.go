@@ -56,6 +56,27 @@ func TestParseBuiltinRules_目标工具包含Bash(t *testing.T) {
 	}
 }
 
+// TestContainsString_存在 验证目标字符串存在时返回 true
+func TestContainsString_存在(t *testing.T) {
+	if !containsString([]string{"a", "b", "c"}, "b") {
+		t.Error("期望 containsString 返回 true")
+	}
+}
+
+// TestContainsString_不存在 验证目标字符串不存在时返回 false
+func TestContainsString_不存在(t *testing.T) {
+	if containsString([]string{"a", "b", "c"}, "d") {
+		t.Error("期望 containsString 返回 false")
+	}
+}
+
+// TestContainsString_空切片 验证空切片返回 false
+func TestContainsString_空切片(t *testing.T) {
+	if containsString([]string{}, "a") {
+		t.Error("期望空切片返回 false")
+	}
+}
+
 // TestParseBuiltinRules_最后规则动作 验证最后一条规则的 action 为 deny
 func TestParseBuiltinRules_最后规则动作(t *testing.T) {
 	rules, err := ParseBuiltinRules()

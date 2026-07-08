@@ -109,9 +109,10 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ comma
 func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
 	// 确定新模式
 	var newMode ChannelMode
-	if parsed.Action == command_parser.ActionModeOK {
+	switch parsed.Action {
+	case command_parser.ActionModeOK:
 		newMode = ParseChannelMode(parsed.ModeSubcommand)
-	} else if parsed.Action == command_parser.ActionSwitchOK {
+	case command_parser.ActionSwitchOK:
 		switch parsed.SwitchSubcommand {
 		case "plan":
 			newMode = ChannelModeAgentPlan
@@ -124,7 +125,7 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 		default:
 			newMode = ChannelModeAgentPlan
 		}
-	} else {
+	default:
 		return
 	}
 

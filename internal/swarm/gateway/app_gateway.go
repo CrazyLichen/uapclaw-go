@@ -77,8 +77,7 @@ func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport,
 	msgHandler := mh.NewMessageHandler(transport, pushTransport, channelMgr)
 
 	// 创建 onMessage 回调：WebChannel → MessageHandler.HandleInbound
-	var onMessageCb func(*schema.Message)
-	onMessageCb = func(msg *schema.Message) {
+	onMessageCb := func(msg *schema.Message) {
 		if err := msgHandler.HandleInbound(context.Background(), msg); err != nil {
 			logger.Warn(logComponentAppGateway).
 				Err(err).
