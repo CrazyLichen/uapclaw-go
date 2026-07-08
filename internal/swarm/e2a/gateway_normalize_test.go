@@ -150,12 +150,11 @@ func TestMessageToE2A_EnableMemory逻辑(t *testing.T) {
 		GroupDigitalAvatar: true,
 	}
 	env, _ := MessageToE2A(msg)
-	meta, _ := env.ChannelContext["enable_memory"]
+	_, _ = env.ChannelContext["enable_memory"]
 	// metadata 会合并到 channel_context
 	if env.RequestID != "r1" {
 		t.Errorf("RequestID 不匹配: %q", env.RequestID)
 	}
-	_ = meta
 
 	// 场景2：enable_memory=false, group_digital_avatar=true, avatar_mode=true → final=false
 	msg2 := &schema.Message{
@@ -1035,5 +1034,32 @@ func TestReqMethodToString(t *testing.T) {
 	}
 	if reqMethodToString(schema.ReqMethod("chat.send")) != "chat.send" {
 		t.Error("chat.send 应返回 chat.send")
+	}
+}
+
+// TestWithFieldParams 验证 WithFieldParams 选项设置 params
+func TestWithFieldParams(t *testing.T) {
+	d := map[string]any{}
+	WithFieldParams(map[string]any{"key": "val"})(d)
+	if d["params"] == nil {
+		t.Error("WithFieldParams 应设置 params")
+	}
+}
+
+// TestWithFieldIsStream 验证 WithFieldIsStream 选项设置 is_stream
+func TestWithFieldIsStream(t *testing.T) {
+	d := map[string]any{}
+	WithFieldIsStream(true)(d)
+	if d["is_stream"] != true {
+		t.Error("WithFieldIsStream 应设置 is_stream=true")
+	}
+}
+
+// TestWithFieldTimestamp 验证 WithFieldTimestamp 选项设置 timestamp
+func TestWithFieldTimestamp(t *testing.T) {
+	d := map[string]any{}
+	WithFieldTimestamp(1.5)(d)
+	if d["timestamp"] != 1.5 {
+		t.Error("WithFieldTimestamp 应设置 timestamp=1.5")
 	}
 }

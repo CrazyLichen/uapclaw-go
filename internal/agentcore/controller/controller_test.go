@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	ability "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
 // ──────────────────────────── 测试辅助 ────────────────────────────
@@ -447,4 +448,44 @@ func (m *mockTaskExecutor) CanCancel(_ context.Context, _ string, _ sessioninter
 }
 func (m *mockTaskExecutor) Cancel(_ context.Context, _ string, _ sessioninterfaces.SessionFacade) (bool, error) {
 	return false, nil
+}
+
+// TestSendStreamError_BaseError 验证 BaseError 直接透传
+func TestSendStreamError_BaseError(t *testing.T) {
+	errCh := make(chan error, 1)
+	baseErr := exception.NewBaseError(exception.StatusAgentControllerRuntimeError, exception.WithMsg("测试错误"))
+	sendStreamError(errCh, baseErr)
+	select {
+	case err := <-errCh:
+		assert.Equal(t, baseErr, err)
+	default:
+		t.Error("应发送错误到 errCh")
+	}
+}
+
+// TestSendStreamError_普通错误 验证普通 error 包装为 BaseError
+func TestSendStreamError_普通错误(t *testing.T) {
+	errCh := make(chan error, 1)
+	normalErr := fmt.Errorf("普通错误")
+	sendStreamError(errCh, normalErr)
+	select {
+	case err := <-errCh:
+		assert.NotNil(t, err)
+		_, ok := err.(*exception.BaseError)
+		assert.True(t, ok, "普通错误应被包装为 BaseError")
+	default:
+		t.Error("应发送错误到 errCh")
+	}
+}
+
+// TestFormatError_非空 验证非空错误格式化
+func TestFormatError_非空(t *testing.T) {
+	got := formatError(fmt.Errorf("test"))
+	assert.Equal(t, "test", got)
+}
+
+// TestFormatError_空 验证 nil 错误返回空字符串
+func TestFormatError_空(t *testing.T) {
+	got := formatError(nil)
+	assert.Equal(t, "", got)
 }

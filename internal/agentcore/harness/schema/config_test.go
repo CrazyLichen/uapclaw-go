@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	sap_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -508,6 +510,23 @@ func TestNewSubAgentConfig(t *testing.T) {
 	scfg := NewSubAgentConfig()
 	if !scfg.RestrictToWorkDir {
 		t.Error("NewSubAgentConfig() 的 RestrictToWorkDir 应为 true")
+	}
+}
+
+// TestSubAgentConfig_SpecName_NilCard 验证 AgentCard 为 nil 时 SpecName 返回空串
+func TestSubAgentConfig_SpecName_NilCard(t *testing.T) {
+	scfg := NewSubAgentConfig()
+	if scfg.SpecName() != "" {
+		t.Errorf("AgentCard 为 nil 时 SpecName 应为空串，实际 %q", scfg.SpecName())
+	}
+}
+
+// TestSubAgentConfig_SpecName_有Name 验证 AgentCard 有名称时 SpecName 返回名称
+func TestSubAgentConfig_SpecName_有Name(t *testing.T) {
+	scfg := NewSubAgentConfig()
+	scfg.AgentCard = sap_schema.NewAgentCard(sap_schema.WithAgentName("test-agent"))
+	if scfg.SpecName() != "test-agent" {
+		t.Errorf("SpecName 期望 %q，实际 %q", "test-agent", scfg.SpecName())
 	}
 }
 

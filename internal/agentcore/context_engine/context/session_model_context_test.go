@@ -1513,3 +1513,25 @@ func TestStatTools_有工具(t *testing.T) {
 		t.Errorf("期望 TotalTokens > 0，实际 %d", stat.TotalTokens)
 	}
 }
+
+// TestCountDialogueRounds_空消息 验证空消息列表的对话轮次为 0
+func TestCountDialogueRounds_空消息(t *testing.T) {
+	mc := &SessionModelContext{}
+	result := mc.countDialogueRounds(nil)
+	if result != 0 {
+		t.Errorf("空消息列表对话轮次 = %d, want 0", result)
+	}
+}
+
+// TestCountDialogueRounds_单轮对话 验证单轮对话
+func TestCountDialogueRounds_单轮对话(t *testing.T) {
+	mc := &SessionModelContext{}
+	messages := []llm_schema.BaseMessage{
+		llm_schema.NewUserMessage("hello"),
+		llm_schema.NewDefaultMessage(llm_schema.RoleTypeAssistant, "hi"),
+	}
+	result := mc.countDialogueRounds(messages)
+	if result != 1 {
+		t.Errorf("单轮对话轮次 = %d, want 1", result)
+	}
+}

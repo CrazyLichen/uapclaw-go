@@ -407,3 +407,24 @@ func TestGlobalAgentEventData_NilString(t *testing.T) {
 		t.Errorf("nil String() = %q, want nil", d.String())
 	}
 }
+
+// TestLLMCallEventData_String 测试 LLMCallEventData.String()
+func TestLLMCallEventData_String(t *testing.T) {
+	data := &LLMCallEventData{
+		Event:         "test_event",
+		ModelName:     "gpt-4",
+		ModelProvider: "openai",
+	}
+	result := data.String()
+	if result == "" {
+		t.Error("String() 不应返回空字符串")
+	}
+}
+
+// TestLLMCallEventData_NilString 测试 nil LLMCallEventData.String()
+func TestLLMCallEventData_NilString(t *testing.T) {
+	var d *LLMCallEventData
+	if d.String() != "nil" {
+		t.Errorf("nil String() = %q, want nil", d.String())
+	}
+}

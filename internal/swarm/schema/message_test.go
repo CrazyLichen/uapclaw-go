@@ -664,3 +664,30 @@ func TestMessageJSON_omitempty_metadata非nil(t *testing.T) {
 		t.Errorf("Metadata 非 nil 时 JSON 应包含 metadata 字段，实际: %s", jsonStr)
 	}
 }
+
+// TestWithSessionID 验证 WithSessionID 选项设置会话标识
+func TestWithSessionID(t *testing.T) {
+	msg := &Message{}
+	WithSessionID("sess-1")(msg)
+	if msg.SessionID != "sess-1" {
+		t.Errorf("期望 SessionID=sess-1，实际 %s", msg.SessionID)
+	}
+}
+
+// TestWithStreamSeq 验证 WithStreamSeq 选项设置流式序号
+func TestWithStreamSeq(t *testing.T) {
+	msg := &Message{}
+	WithStreamSeq(42)(msg)
+	if msg.StreamSeq != 42 {
+		t.Errorf("期望 StreamSeq=42，实际 %d", msg.StreamSeq)
+	}
+}
+
+// TestWithStreamID 验证 WithStreamID 选项设置流式标识
+func TestWithStreamID(t *testing.T) {
+	msg := &Message{}
+	WithStreamID("stream-1")(msg)
+	if msg.StreamID != "stream-1" {
+		t.Errorf("期望 StreamID=stream-1，实际 %s", msg.StreamID)
+	}
+}

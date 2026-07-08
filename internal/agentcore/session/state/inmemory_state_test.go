@@ -267,3 +267,33 @@ func TestInMemoryStateLike_Dump_委托GetState(t *testing.T) {
 		t.Errorf("Dump()[\"a\"] = %v, 期望 1", dump["a"])
 	}
 }
+
+// TestInMemoryStateLike_SetGlobal 验证 SetGlobal 空操作不 panic
+func TestInMemoryStateLike_SetGlobal(t *testing.T) {
+	s := NewInMemoryStateLike()
+	s.SetGlobal(map[string]any{"key": "val"})
+	// 空操作，不 panic 即可
+}
+
+// TestInMemoryStateLike_UpdateGlobal 验证 UpdateGlobal 空操作不 panic
+func TestInMemoryStateLike_UpdateGlobal(t *testing.T) {
+	s := NewInMemoryStateLike()
+	s.UpdateGlobal(map[string]any{"key": "val"})
+	// 空操作，不 panic 即可
+}
+
+// TestInMemoryStateLike_UpdateTrace 验证 UpdateTrace 空操作不 panic
+func TestInMemoryStateLike_UpdateTrace(t *testing.T) {
+	s := NewInMemoryStateLike()
+	s.UpdateTrace(nil)
+	// 空操作，不 panic 即可
+}
+
+// TestInMemoryStateLike_GetGlobal 验证 GetGlobal 返回 nil
+func TestInMemoryStateLike_GetGlobal(t *testing.T) {
+	s := NewInMemoryStateLike()
+	result := s.GetGlobal(StateKey{})
+	if result != nil {
+		t.Errorf("GetGlobal 应返回 nil，实际 %v", result)
+	}
+}

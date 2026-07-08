@@ -110,7 +110,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 				// channel 已关闭（旧轮次被 PrepareRound 取消），对齐 Python: CancelledError
 				return map[string]any{"error": "cancelled"}
 			}
-			if result == nil || len(result) == 0 {
+			if len(result) == 0 {
 				result = map[string]any{"status": "completed"}
 			}
 			h.mu.Lock()
@@ -137,7 +137,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 			// channel 已关闭（旧轮次被 PrepareRound 取消），对齐 Python: CancelledError
 			return map[string]any{"error": "cancelled"}
 		}
-		if result == nil || len(result) == 0 {
+		if len(result) == 0 {
 			result = map[string]any{"status": "completed"}
 		}
 		h.mu.Lock()

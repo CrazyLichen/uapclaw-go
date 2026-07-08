@@ -1,6 +1,7 @@
 package sections
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -634,5 +635,167 @@ func TestBuildWorkspaceSection_英文内容(t *testing.T) {
 	s := BuildWorkspaceSection("/home/user", "", "en")
 	if !strings.Contains(s.Content["en"], "/home/user") {
 		t.Error("Content[en] 应包含工作目录路径")
+	}
+}
+
+// TestScanDirectoryStructure_超出最大深度 验证超出最大深度返回 nil。
+func TestScanDirectoryStructure_超出最大深度(t *testing.T) {
+	result := ScanDirectoryStructure("/tmp", 3, 2, "cn")
+	if result != nil {
+		t.Errorf("超出最大深度应返回 nil，实际 %v", result)
+	}
+}
+
+// TestScanDirectoryStructure_不存在的路径 验证不存在的路径返回 nil。
+func TestScanDirectoryStructure_不存在的路径(t *testing.T) {
+	result := ScanDirectoryStructure("/nonexistent_path_12345", 0, 2, "cn")
+	if result != nil {
+		t.Errorf("不存在的路径应返回 nil，实际 %v", result)
+	}
+}
+
+// TestScanDirectoryStructure_临时目录 验证扫描临时目录。
+func TestScanDirectoryStructure_临时目录(t *testing.T) {
+	dir := t.TempDir()
+	// 创建子目录和文件
+	os.Mkdir(dir+"/subdir", 0o755)
+	os.WriteFile(dir+"/file.txt", []byte("test"), 0o644)
+
+	result := ScanDirectoryStructure(dir, 0, 2, "cn")
+	if len(result) == 0 {
+		t.Error("应至少返回 1 个节点")
+	}
+}
+
+// TestGetDirectoryDescription_中文 验证中文描述。
+func TestGetDirectoryDescription_中文(t *testing.T) {
+	desc := GetDirectoryDescription("src", "cn")
+	// 不论是否有描述，都不应 panic
+	_ = desc
+}
+
+// TestGetDirectoryDescription_英文 验证英文描述。
+func TestGetDirectoryDescription_英文(t *testing.T) {
+	desc := GetDirectoryDescription("src", "en")
+	_ = desc
+}
+
+// TestGetDirectoryDescription_未知目录 验证未知目录返回空字符串。
+func TestGetDirectoryDescription_未知目录(t *testing.T) {
+	desc := GetDirectoryDescription("unknown_dir_xyz", "cn")
+	if desc != "" {
+		t.Errorf("未知目录应返回空字符串，实际 %q", desc)
+	}
+}
+
+// TestFormatTree_空列表 验证空列表返回空字符串。
+func TestFormatTree_空列表(t *testing.T) {
+	result := FormatTree(nil, "cn")
+	if result != "" {
+		t.Errorf("空列表应返回空字符串，实际 %q", result)
+	}
+}
+
+// TestFormatTree_单节点 验证单节点格式化。
+func TestFormatTree_单节点(t *testing.T) {
+	nodes := []DirNode{
+		{Name: "src", Path: "/src", Description: "源码", IsFile: false},
+	}
+	result := FormatTree(nodes, "cn")
+	if !strings.Contains(result, "src/") {
+		t.Errorf("应包含 src/，实际 %q", result)
+	}
+	if !strings.Contains(result, "源码") {
+		t.Errorf("应包含描述，实际 %q", result)
+	}
+}
+
+// TestFormatTree_文件节点 验证文件节点格式化。
+func TestFormatTree_文件节点(t *testing.T) {
+	nodes := []DirNode{
+		{Name: "main.go", Path: "/main.go", IsFile: true},
+	}
+	result := FormatTree(nodes, "cn")
+	if !strings.Contains(result, "main.go") {
+		t.Errorf("应包含 main.go，实际 %q", result)
+	}
+}
+
+// TestFormatTree_带子节点 验证带子节点格式化。
+func TestFormatTree_带子节点(t *testing.T) {
+	nodes := []DirNode{
+		{
+			Name: "src", Path: "/src", Description: "源码", IsFile: false,
+			Children: []DirNode{
+				{Name: "main.go", Path: "/src/main.go", IsFile: true},
+			},
+		},
+	}
+	result := FormatTree(nodes, "cn")
+	if !strings.Contains(result, "src/") {
+		t.Errorf("应包含 src/，实际 %q", result)
+	}
+	if !strings.Contains(result, "main.go") {
+		t.Errorf("应包含 main.go，实际 %q", result)
+	}
+}
+
+// TestBuildToolsContent_空工具 验证空工具列表返回空字符串。
+func TestBuildToolsContent_空工具(t *testing.T) {
+	result := BuildToolsContent(nil, "cn")
+	if result != "" {
+		t.Errorf("空工具列表应返回空字符串，实际 %q", result)
+	}
+}
+
+// TestBuildToolsContent_有工具中文 验证中文工具列表。
+func TestBuildToolsContent_有工具中文(t *testing.T) {
+	tools := map[string]string{"bash": "执行命令", "grep": "搜索"}
+	result := BuildToolsContent(tools, "cn")
+	if !strings.Contains(result, "可用工具") {
+		t.Errorf("应包含可用工具标题，实际 %q", result)
+	}
+}
+
+// TestBuildToolsContent_有工具英文 验证英文工具列表。
+func TestBuildToolsContent_有工具英文(t *testing.T) {
+	tools := map[string]string{"bash": "execute commands", "grep": "search"}
+	result := BuildToolsContent(tools, "en")
+	if !strings.Contains(result, "Available Tools") {
+		t.Errorf("应包含 Available Tools 标题，实际 %q", result)
+	}
+}
+
+// TestExtractTaskToolAgentLines_空描述 验证空描述返回 nil。
+func TestExtractTaskToolAgentLines_空描述(t *testing.T) {
+	result := extractTaskToolAgentLines("", "cn")
+	if result != nil {
+		t.Errorf("空描述应返回 nil，实际 %v", result)
+	}
+}
+
+// TestExtractTaskToolAgentLines_无标记 验证不含标记返回 nil。
+func TestExtractTaskToolAgentLines_无标记(t *testing.T) {
+	result := extractTaskToolAgentLines("普通描述", "cn")
+	if result != nil {
+		t.Errorf("不含标记应返回 nil，实际 %v", result)
+	}
+}
+
+// TestExtractTaskToolAgentLines_中文 验证中文提取。
+func TestExtractTaskToolAgentLines_中文(t *testing.T) {
+	desc := "可用代理类型及对应工具：\n- code: 编码\n- plan: 规划\n重要：注意"
+	result := extractTaskToolAgentLines(desc, "cn")
+	if len(result) == 0 {
+		t.Error("应至少提取 1 行")
+	}
+}
+
+// TestExtractTaskToolAgentLines_英文 验证英文提取。
+func TestExtractTaskToolAgentLines_英文(t *testing.T) {
+	desc := "Available agent types and the tools they have access to:\n- code: coding\n- plan: planning\nImportant: note"
+	result := extractTaskToolAgentLines(desc, "en")
+	if len(result) == 0 {
+		t.Error("应至少提取 1 行")
 	}
 }

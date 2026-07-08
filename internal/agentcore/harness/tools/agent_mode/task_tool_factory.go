@@ -17,8 +17,5 @@ func CreateTaskTool(parentAgent hinterfaces.DeepAgentInterface, availableAgents,
 		agentID = card.ID
 	}
 	t := subagent.NewTaskTool(parentAgent, availableAgents, language, agentID)
-	if t == nil {
-		return nil
-	}
 	return []tool.Tool{t}
 }

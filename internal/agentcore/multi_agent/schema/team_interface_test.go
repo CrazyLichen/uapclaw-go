@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
@@ -190,6 +191,23 @@ func TestWithTeamStreamModes_设置流模式(t *testing.T) {
 	opts := NewTeamOptions(WithTeamStreamModes(modes))
 	if len(opts.StreamModes) != 1 || opts.StreamModes[0].Mode() != stream.StreamModeOutput.Mode() {
 		t.Errorf("StreamModes 期望 [StreamModeOutput], 实际 %v", opts.StreamModes)
+	}
+}
+
+// TestWithTeamSession_设置会话 测试 WithTeamSession 选项。
+func TestWithTeamSession_设置会话(t *testing.T) {
+	sess := &session.AgentTeamSession{}
+	opts := NewTeamOptions(WithTeamSession(sess))
+	if opts.Session != sess {
+		t.Error("Session 期望为设置的会话实例")
+	}
+}
+
+// TestWithParentAgentID_设置父AgentID 测试 WithParentAgentID 选项。
+func TestWithParentAgentID_设置父AgentID(t *testing.T) {
+	opts := NewTeamOptions(WithParentAgentID("parent_123"))
+	if opts.ParentAgentID != "parent_123" {
+		t.Errorf("ParentAgentID 期望 parent_123, 实际 %s", opts.ParentAgentID)
 	}
 }
 

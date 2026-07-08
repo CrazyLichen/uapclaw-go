@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -246,5 +247,14 @@ func TestGetExecutableID_不满足接口(t *testing.T) {
 	id := getExecutableID(session)
 	if id != "" {
 		t.Errorf("不满足 ExecutableIDProvider 时应返回空字符串，实际=%s", id)
+	}
+}
+
+// TestAgentInterrupt_Error 验证 AgentInterrupt.Error() 返回格式化消息
+func TestAgentInterrupt_Error(t *testing.T) {
+	interrupt := &AgentInterrupt{Message: "测试中断"}
+	errStr := interrupt.Error()
+	if !strings.Contains(errStr, "测试中断") {
+		t.Errorf("Error() 应包含消息，实际=%s", errStr)
 	}
 }

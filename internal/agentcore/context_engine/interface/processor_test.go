@@ -3,6 +3,11 @@ package iface
 import (
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── ProcessorConfig 测试 ────────────────────────────
@@ -47,4 +52,26 @@ func (f *fakeProcessorConfig) Validate() error {
 		return errFakeValidate
 	}
 	return nil
+}
+
+// TestWithSysOperation 验证 WithSysOperation 选项函数
+func TestWithSysOperation(t *testing.T) {
+	var op sys_operation.SysOperation = nil
+	opt := WithSysOperation(op)
+	o := &ProcessorOption{}
+	opt(o)
+	assert.Nil(t, o.SysOperation)
+}
+
+// TestWithModel 验证 WithModel 选项函数
+func TestWithModel(t *testing.T) {
+	clientCfg := &llmschema.ModelClientConfig{ClientProvider: "llm_OpenAI", ClientID: "llm_OpenAI"}
+	modelCfg := &llmschema.ModelRequestConfig{ModelName: "gpt-4"}
+	m, err := llm.NewModel(clientCfg, modelCfg)
+	assert.NoError(t, err)
+
+	opt := WithModel(m)
+	o := &ProcessorOption{}
+	opt(o)
+	assert.Equal(t, m, o.Model)
 }

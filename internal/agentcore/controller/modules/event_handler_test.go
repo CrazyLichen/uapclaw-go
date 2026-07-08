@@ -90,3 +90,10 @@ func TestEventHandlerBase_字段类型验证(t *testing.T) {
 	var _ = base.ContextEngine
 	var _ sessioninterfaces.SessionFacade = nil
 }
+
+// TestEventHandlerBase_OnAbort 验证 OnAbort 空操作不 panic
+func TestEventHandlerBase_OnAbort(t *testing.T) {
+	base := &EventHandlerBase{}
+	base.OnAbort()
+	// 空操作，不 panic 即可
+}

@@ -170,7 +170,7 @@ func EncodeAgentResponseForWire(resp *schema.AgentResponse, responseID string, s
 	e2a := E2AResponseFromAgentResponse(resp, responseID, sequence)
 
 	wire := e2a.ToMap()
-	if wire == nil || len(wire) == 0 {
+	if len(wire) == 0 {
 		exc := fmt.Errorf("ToMap 返回空")
 		logger.Error(logComponent).
 			Err(exc).
@@ -198,7 +198,7 @@ func EncodeAgentChunkForWire(chunk *schema.AgentResponseChunk, responseID string
 	e2a := E2AResponseFromAgentChunk(chunk, responseID, sequence, isStream)
 
 	wire := e2a.ToMap()
-	if wire == nil || len(wire) == 0 {
+	if len(wire) == 0 {
 		exc := fmt.Errorf("ToMap 返回空")
 		logger.Error(logComponent).
 			Err(exc).

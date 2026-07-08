@@ -378,3 +378,13 @@ func TestEventQueue_订阅无Handler报错(t *testing.T) {
 	err := eq.Subscribe(context.Background(), "agent-1", "sess-1")
 	assert.Error(t, err)
 }
+
+// TestEventQueue_EventHandler 验证 EventHandler 返回事件处理器
+func TestEventQueue_EventHandler(t *testing.T) {
+	cfg := config.DefaultControllerConfig()
+	eq := NewEventQueue(cfg)
+	// EventHandler 可能返回 nil（尚未设置）
+	eh := eq.EventHandler()
+	// 验证方法可调用且不 panic
+	_ = eh
+}

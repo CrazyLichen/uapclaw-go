@@ -139,3 +139,11 @@ func TestTeamConfig_JSON序列化_omitempty(t *testing.T) {
 		t.Error("max_agents 应出现在 JSON 中（非零值）")
 	}
 }
+
+// TestNewTeamConfig_包级别 验证包级别 NewTeamConfig 返回正确默认值
+func TestNewTeamConfig_包级别(t *testing.T) {
+	cfg := NewTeamConfig()
+	if cfg.MaxAgents != 10 {
+		t.Errorf("期望 MaxAgents=10，实际 %d", cfg.MaxAgents)
+	}
+}

@@ -410,3 +410,14 @@ func TestDashScopeReranker_WithOption(t *testing.T) {
 		t.Error("额外请求头未设置")
 	}
 }
+
+// TestWithDashScopeHTTPClient 验证 WithDashScopeHTTPClient 设置自定义 HTTP 客户端
+func TestWithDashScopeHTTPClient(t *testing.T) {
+	customClient := &http.Client{Timeout: 5 * time.Second}
+	opt := WithDashScopeHTTPClient(customClient)
+	r := &DashScopeReranker{}
+	opt(r)
+	if r.httpClient != customClient {
+		t.Error("应使用自定义 HTTP 客户端")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/uapclaw/uapclaw-go/internal/common/config"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -457,4 +458,80 @@ func TestLevels_未初始化(t *testing.T) {
 	levels := Levels()
 	// 应返回默认级别，不 panic
 	_ = levels
+}
+
+// TestWithConfig_配置读取成功 验证 WithConfig 选项函数在配置有效时设置日志级别
+func TestWithConfig_配置读取成功(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	cfg, err := config.New("")
+	if err != nil {
+		t.Fatalf("config.New 失败: %v", err)
+	}
+
+	err = Setup(WithOutputDir(tmpDir), WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	if !IsSetup() {
+		t.Error("期望 IsSetup() 返回 true")
+	}
+}
+
+// TestWithConfig_空配置 验证 WithConfig 使用空配置时不 panic
+func TestWithConfig_空配置(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	cfg, err := config.New("")
+	if err != nil {
+		t.Fatalf("config.New 失败: %v", err)
+	}
+
+	// 空配置不应 panic，GetLoggingConfig 返回默认值
+	err = Setup(WithOutputDir(tmpDir), WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	if !IsSetup() {
+		t.Error("期望 IsSetup() 返回 true")
+	}
+}
+
+// TestWithLogLevel_选项应用 验证 WithLogLevel 选项在 Logger 实例上正确设置级别
+func TestWithLogLevel_选项应用(t *testing.T) {
+	l := &Logger{}
+	opt := WithLogLevel("debug")
+	opt(l)
+	// 验证 levels 被设置
+	levels := l.levels
+	if levels.Console != LogLevelDebug {
+		t.Errorf("期望 Console = debug，实际 %s", levels.Console)
+	}
+}
+
+// TestWithOutputDir_选项应用 验证 WithOutputDir 选项正确设置输出目录
+func TestWithOutputDir_选项应用(t *testing.T) {
+	l := &Logger{}
+	opt := WithOutputDir("/tmp/test-logs")
+	opt(l)
+	if l.outputDir != "/tmp/test-logs" {
+		t.Errorf("期望 outputDir = /tmp/test-logs，实际 %s", l.outputDir)
+	}
+}
+
+// TestWithLoggingLevels_选项应用 验证 WithLoggingLevels 选项正确设置日志级别
+func TestWithLoggingLevels_选项应用(t *testing.T) {
+	l := &Logger{}
+	customLevels := ResolveLoggingLevels(nil, "", "warn")
+	opt := WithLoggingLevels(customLevels)
+	opt(l)
+	if l.levels.Console != LogLevelWarn {
+		t.Errorf("期望 Console = warn，实际 %s", l.levels.Console)
+	}
 }

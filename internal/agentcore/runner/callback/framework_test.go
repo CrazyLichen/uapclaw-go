@@ -1848,3 +1848,22 @@ func TestCallbackFramework_GetStatistics(t *testing.T) {
 		t.Errorf("session_callbacks 期望 0，实际 %v", stats["session_callbacks"])
 	}
 }
+
+// TestSplitCircuitBreakerKey 测试 splitCircuitBreakerKey 拆分熔断器键
+func TestSplitCircuitBreakerKey(t *testing.T) {
+	// 正常拆分
+	result := splitCircuitBreakerKey("event:callback")
+	assert.Equal(t, [2]string{"event", "callback"}, result)
+
+	// 多个冒号，取最后一个
+	result = splitCircuitBreakerKey("ns:event:callback")
+	assert.Equal(t, [2]string{"ns:event", "callback"}, result)
+
+	// 无冒号
+	result = splitCircuitBreakerKey("nokey")
+	assert.Equal(t, [2]string{"nokey", ""}, result)
+
+	// 空字符串
+	result = splitCircuitBreakerKey("")
+	assert.Equal(t, [2]string{"", ""}, result)
+}

@@ -206,3 +206,25 @@ func TestToolCard_AbilityKind(t *testing.T) {
 		t.Errorf("AbilityKind() = %v, want %v", got, schema.AbilityKindTool)
 	}
 }
+
+// TestWithToolSession 验证 WithToolSession 选项函数
+func TestWithToolSession(t *testing.T) {
+	sess := "fake_session"
+	opt := WithToolSession(sess)
+	o := &ToolCallOptions{}
+	opt(o)
+	if o.Session != sess {
+		t.Errorf("Session = %v, want %v", o.Session, sess)
+	}
+}
+
+// TestNewToolCardWithID 验证 NewToolCardWithID 创建指定 ID 的 ToolCard
+func TestNewToolCardWithID(t *testing.T) {
+	card := NewToolCardWithID("custom_id", "weather", "查询天气", nil, nil)
+	if card.ID != "custom_id" {
+		t.Errorf("ID = %q, want %q", card.ID, "custom_id")
+	}
+	if card.Name != "weather" {
+		t.Errorf("Name = %q, want %q", card.Name, "weather")
+	}
+}

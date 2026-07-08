@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -346,3 +347,29 @@ func TestDeepAdapter_CreateInstance_config覆盖(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestHasValidModelConfig_空字符串 验证空字符串返回 true
+func TestHasValidModelConfig_空字符串(t *testing.T) {
+	d := NewDeepAdapter()
+	if !d.hasValidModelConfig("") {
+		t.Error("空字符串应返回 true（使用默认模型）")
+	}
+}
+
+// TestHasValidModelConfig_缓存中存在 验证缓存中存在的模型返回 true
+func TestHasValidModelConfig_缓存中存在(t *testing.T) {
+	d := NewDeepAdapter()
+	// 模拟 modelCache 中存在模型
+	d.modelCache = map[string]*llm.Model{"gpt-4": nil}
+	if !d.hasValidModelConfig("gpt-4") {
+		t.Error("缓存中存在的模型应返回 true")
+	}
+}
+
+// TestHasValidModelConfig_缓存中不存在 验证缓存中不存在的模型返回 false
+func TestHasValidModelConfig_缓存中不存在(t *testing.T) {
+	d := NewDeepAdapter()
+	if d.hasValidModelConfig("nonexistent") {
+		t.Error("缓存中不存在的模型应返回 false")
+	}
+}

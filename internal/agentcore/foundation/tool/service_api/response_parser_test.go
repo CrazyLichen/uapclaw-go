@@ -354,3 +354,48 @@ func TestExtractCharset(t *testing.T) {
 		})
 	}
 }
+
+// TestDecompressRawDeflate 验证 decompressRawDeflate 解压 raw deflate 数据
+func TestDecompressRawDeflate(t *testing.T) {
+	// 先压缩一段数据
+	var buf bytes.Buffer
+	writer, _ := flate.NewWriter(&buf, flate.DefaultCompression)
+	_, _ = writer.Write([]byte("hello deflate"))
+	_ = writer.Close()
+
+	// 解压
+	decompressed, err := decompressRawDeflate(buf.Bytes())
+	if err != nil {
+		t.Fatalf("decompressRawDeflate 失败: %v", err)
+	}
+	if string(decompressed) != "hello deflate" {
+		t.Errorf("期望 'hello deflate'，实际 %q", string(decompressed))
+	}
+}
+
+// TestGetEncoder 验证 getEncoder 返回正确的编码器
+func TestGetEncoder(t *testing.T) {
+	cases := []struct {
+		name     string
+		expected bool
+	}{
+		{"gbk", true},
+		{"gb2312", true},
+		{"big5", true},
+		{"shift_jis", true},
+		{"euc-kr", true},
+		{"iso-8859-1", true},
+		{"utf-8", false}, // utf-8 返回 nil
+		{"unknown", false},
+		{"gbk-bom", true}, // 去除 -bom 后缀
+	}
+	for _, tc := range cases {
+		enc := getEncoder(tc.name)
+		if tc.expected && enc == nil {
+			t.Errorf("getEncoder(%q) 期望非 nil", tc.name)
+		}
+		if !tc.expected && enc != nil {
+			t.Errorf("getEncoder(%q) 期望 nil，实际非 nil", tc.name)
+		}
+	}
+}

@@ -23,6 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/skills"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
@@ -2549,4 +2550,82 @@ func TestBuildMultimodalToolResultsMessage_无sourcePath(t *testing.T) {
 	}
 	msg := agent.buildMultimodalToolResultsMessage(results)
 	assert.NotNil(t, msg)
+}
+
+// TestReActAgent_RegisterCallback_无管理器 验证无回调管理器时注册回调不 panic
+func TestReActAgent_RegisterCallback_无管理器(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("reg_cb"),
+		agentschema.WithAgentDescription("注册回调测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	err := agent.RegisterCallback(context.Background(), interfaces.CallbackBeforeInvoke, nil)
+	assert.NoError(t, err)
+}
+
+// TestReActAgent_RegisterRail_无管理器 验证无回调管理器时注册 Rail 不 panic
+func TestReActAgent_RegisterRail_无管理器(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("reg_rail"),
+		agentschema.WithAgentDescription("注册 Rail 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	agent.callbackManager = nil
+	// callbackManager 为 nil 时 RegisterRail 直接返回 nil
+	err := agent.RegisterRail(context.Background(), nil)
+	assert.NoError(t, err)
+}
+
+// TestReActAgent_UnregisterRail_无管理器 验证无回调管理器时注销 Rail 不 panic
+func TestReActAgent_UnregisterRail_无管理器(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("unreg_rail"),
+		agentschema.WithAgentDescription("注销 Rail 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	agent.callbackManager = nil
+	// callbackManager 为 nil 时 UnregisterRail 直接返回 nil
+	err := agent.UnregisterRail(context.Background(), nil)
+	assert.NoError(t, err)
+}
+
+// TestReActAgent_SkillUtil 验证 SkillUtil 和 SetSkillUtil
+func TestReActAgent_SkillUtil(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("skill_util"),
+		agentschema.WithAgentDescription("技能工具测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	// 初始为 nil
+	assert.Nil(t, agent.SkillUtil())
+
+	// 设置后可获取
+	su := skills.NewSkillUtil("test")
+	agent.SetSkillUtil(su)
+	assert.Equal(t, su, agent.SkillUtil())
+}
+
+// TestReActAgent_SystemPromptBuilder 验证 SystemPromptBuilder
+func TestReActAgent_SystemPromptBuilder(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("sys_pb"),
+		agentschema.WithAgentDescription("系统提示词构建器测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	// 有 promptBuilder 时返回接口
+	spb := agent.SystemPromptBuilder()
+	assert.NotNil(t, spb)
+}
+
+// TestReActAgent_SystemPromptBuilder_nil 验证 promptBuilder 为 nil 时返回 nil
+func TestReActAgent_SystemPromptBuilder_nil(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("sys_pb_nil"),
+		agentschema.WithAgentDescription("系统提示词构建器 nil 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	agent.SetPromptBuilder(nil)
+	assert.Nil(t, agent.SystemPromptBuilder())
 }

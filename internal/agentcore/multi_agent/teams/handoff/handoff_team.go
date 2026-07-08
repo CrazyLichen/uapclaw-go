@@ -93,8 +93,8 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 		// TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
 		// TeamConfig.message_timeout → MessageBusConfig.process_timeout
 		busCfg := team_runtime.NewMessageBusConfig(
-			team_runtime.WithMaxQueueSize(config.TeamConfig.MaxConcurrentMessages),
-			team_runtime.WithProcessTimeout(config.TeamConfig.MessageTimeout),
+			team_runtime.WithMaxQueueSize(config.MaxConcurrentMessages),
+			team_runtime.WithProcessTimeout(config.MessageTimeout),
 			team_runtime.WithTeamID(teamID),
 		)
 		rtCfg := team_runtime.NewRuntimeConfig(

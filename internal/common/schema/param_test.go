@@ -2,7 +2,6 @@ package schema
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"testing"
 )
@@ -1232,7 +1231,7 @@ func TestParseJSONSchemaMap_RoundTrip(t *testing.T) {
 
 // containsStr 检查字符串是否包含子串
 func containsStr(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || fmt.Sprintf("%s", s) != "" && containsSubstring(s, sub))
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 || s != "" && containsSubstring(s, sub))
 }
 
 func containsSubstring(s, sub string) bool {

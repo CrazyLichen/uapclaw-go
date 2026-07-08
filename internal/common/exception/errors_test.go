@@ -342,3 +342,48 @@ func TestErrorCategory_String_越界(t *testing.T) {
 		t.Errorf("ErrorCategory(99).String() = %q, want %q", got, want)
 	}
 }
+
+// TestBaseError_SetCategory 验证 SetCategory 覆盖自动解析的类别。
+func TestBaseError_SetCategory(t *testing.T) {
+	// StatusError 默认命中 "ERROR" → Execution
+	err := NewBaseError(StatusError)
+	if err.Category() != ErrorCategoryExecution {
+		t.Errorf("默认 Category 期望 Execution，实际 %v", err.Category())
+	}
+
+	// 覆盖为 Framework
+	err.SetCategory(ErrorCategoryFramework)
+	if err.Category() != ErrorCategoryFramework {
+		t.Errorf("SetCategory 后期望 Framework，实际 %v", err.Category())
+	}
+	if !err.IsFatal() {
+		t.Error("Framework 类别应为 fatal")
+	}
+
+	// 覆盖为 Validation
+	err.SetCategory(ErrorCategoryValidation)
+	if err.Category() != ErrorCategoryValidation {
+		t.Errorf("SetCategory 后期望 Validation，实际 %v", err.Category())
+	}
+	if err.IsRecoverable() {
+		t.Error("Validation 类别不应 recoverable")
+	}
+
+	// 覆盖为 Termination
+	err.SetCategory(ErrorCategoryTermination)
+	if err.Category() != ErrorCategoryTermination {
+		t.Errorf("SetCategory 后期望 Termination，实际 %v", err.Category())
+	}
+	if err.IsFatal() {
+		t.Error("Termination 类别不应 fatal")
+	}
+
+	// 覆盖为 Execution
+	err.SetCategory(ErrorCategoryExecution)
+	if err.Category() != ErrorCategoryExecution {
+		t.Errorf("SetCategory 后期望 Execution，实际 %v", err.Category())
+	}
+	if !err.IsRecoverable() {
+		t.Error("Execution 类别应 recoverable")
+	}
+}
