@@ -329,12 +329,12 @@ func (c *OpenApiClient) GetToolInfo(_ context.Context, toolName string) (*types.
 }
 
 // ListResources OpenAPI 客户端不支持 MCP 资源。
-func (c *OpenApiClient) ListResources(_ context.Context) ([]any, error) {
+func (c *OpenApiClient) ListResources(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }
 
 // ReadResource OpenAPI 客户端不支持 MCP 资源。
-func (c *OpenApiClient) ReadResource(_ context.Context, _ string) (any, error) {
+func (c *OpenApiClient) ReadResource(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }
 

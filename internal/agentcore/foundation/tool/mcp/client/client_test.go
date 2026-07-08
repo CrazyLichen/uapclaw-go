@@ -900,11 +900,11 @@ func (f *fakeMcpClient) GetToolInfo(_ context.Context, toolName string) (*types.
 	return nil, fmt.Errorf("tool %q not found", toolName)
 }
 
-func (f *fakeMcpClient) ListResources(_ context.Context) ([]any, error) {
+func (f *fakeMcpClient) ListResources(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }
 
-func (f *fakeMcpClient) ReadResource(_ context.Context, _ string) (any, error) {
+func (f *fakeMcpClient) ReadResource(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }
 

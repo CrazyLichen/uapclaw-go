@@ -240,8 +240,8 @@ func (f *fakeMcpClient) CallTool(ctx context.Context, toolName string, arguments
 func (f *fakeMcpClient) GetToolInfo(_ context.Context, _ string) (*types.McpToolCard, error) {
 	return nil, nil
 }
-func (f *fakeMcpClient) ListResources(_ context.Context) ([]any, error) { return nil, nil }
-func (f *fakeMcpClient) ReadResource(_ context.Context, _ string) (any, error) {
+func (f *fakeMcpClient) ListResources(_ context.Context) ([]map[string]any, error) { return nil, nil }
+func (f *fakeMcpClient) ReadResource(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }
 func (f *fakeMcpClient) Close() error { return nil }

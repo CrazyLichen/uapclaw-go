@@ -121,7 +121,7 @@ func (c *PlaywrightClient) GetToolInfo(ctx context.Context, toolName string) (*t
 }
 
 // ListResources 列出资源（委托给 delegate）。
-func (c *PlaywrightClient) ListResources(ctx context.Context) ([]any, error) {
+func (c *PlaywrightClient) ListResources(ctx context.Context) ([]map[string]any, error) {
 	if c.delegate == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -132,7 +132,7 @@ func (c *PlaywrightClient) ListResources(ctx context.Context) ([]any, error) {
 }
 
 // ReadResource 读取资源（委托给 delegate）。
-func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) (any, error) {
+func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	if c.delegate == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,

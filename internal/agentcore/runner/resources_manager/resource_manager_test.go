@@ -725,9 +725,9 @@ type rmMockMcpClient struct {
 	// tools 返回的工具列表
 	tools []*types.McpToolCard
 	// listResourcesResult ListResources 返回结果
-	listResourcesResult []any
+	listResourcesResult []map[string]any
 	// readResourceResult ReadResource 返回结果
-	readResourceResult any
+	readResourceResult []map[string]any
 }
 
 func (m *rmMockMcpClient) Connect(_ context.Context, _ ...types.ConnectOption) error {
@@ -752,11 +752,11 @@ func (m *rmMockMcpClient) GetToolInfo(_ context.Context, _ string) (*types.McpTo
 	return nil, nil
 }
 
-func (m *rmMockMcpClient) ListResources(_ context.Context) ([]any, error) {
+func (m *rmMockMcpClient) ListResources(_ context.Context) ([]map[string]any, error) {
 	return m.listResourcesResult, nil
 }
 
-func (m *rmMockMcpClient) ReadResource(_ context.Context, _ string) (any, error) {
+func (m *rmMockMcpClient) ReadResource(_ context.Context, _ string) ([]map[string]any, error) {
 	return m.readResourceResult, nil
 }
 
@@ -1225,7 +1225,7 @@ func TestResourceMgr_GetMcpToolIDs_不存在(t *testing.T) {
 func TestResourceMgr_ListMcpResources_使用Mock(t *testing.T) {
 	mgr := newTestResourceMgr()
 	mockClient := setupMcpServer(mgr, "srv-res", "res_server", []string{"tool1"})
-	mockClient.listResourcesResult = []any{"resource1", "resource2"}
+	mockClient.listResourcesResult = []map[string]any{{"uri": "resource1"}, {"uri": "resource2"}}
 
 	resources, err := mgr.ListMcpResources(context.Background(), "srv-res")
 	if err != nil {
@@ -1249,7 +1249,7 @@ func TestResourceMgr_ListMcpResources_不存在(t *testing.T) {
 func TestResourceMgr_ReadMcpResource_使用Mock(t *testing.T) {
 	mgr := newTestResourceMgr()
 	mockClient := setupMcpServer(mgr, "srv-read", "read_server", []string{"tool1"})
-	mockClient.readResourceResult = map[string]any{"content": "test data"}
+	mockClient.readResourceResult = []map[string]any{{"uri": "test://resource", "text": "test data"}}
 
 	result, err := mgr.ReadMcpResource(context.Background(), "srv-read", "test://resource")
 	if err != nil {

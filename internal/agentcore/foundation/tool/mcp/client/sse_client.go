@@ -381,7 +381,7 @@ func (c *SseClient) GetToolInfo(ctx context.Context, toolName string) (*types.Mc
 }
 
 // ListResources 列出服务器提供的资源。
-func (c *SseClient) ListResources(ctx context.Context) ([]any, error) {
+func (c *SseClient) ListResources(ctx context.Context) ([]map[string]any, error) {
 	if !c.isConnected {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -403,15 +403,15 @@ func (c *SseClient) ListResources(ctx context.Context) ([]any, error) {
 		)
 	}
 
-	result := make([]any, 0, len(resp.Resources))
+	result := make([]map[string]any, 0, len(resp.Resources))
 	for _, r := range resp.Resources {
-		result = append(result, r)
+		result = append(result, resourceToMap(r))
 	}
 	return result, nil
 }
 
 // ReadResource 读取指定资源。
-func (c *SseClient) ReadResource(ctx context.Context, uri string) (any, error) {
+func (c *SseClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	if !c.isConnected {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -438,7 +438,7 @@ func (c *SseClient) ReadResource(ctx context.Context, uri string) (any, error) {
 		)
 	}
 
-	return resp, nil
+	return readResourceResultToMap(resp), nil
 }
 
 // Close 关闭客户端（等价于 Disconnect）。

@@ -74,11 +74,11 @@ func (m *mockMcpClient) GetToolInfo(_ context.Context, _ string) (*types.McpTool
 	return nil, nil
 }
 
-func (m *mockMcpClient) ListResources(_ context.Context) ([]any, error) {
+func (m *mockMcpClient) ListResources(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }
 
-func (m *mockMcpClient) ReadResource(_ context.Context, _ string) (any, error) {
+func (m *mockMcpClient) ReadResource(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }
 

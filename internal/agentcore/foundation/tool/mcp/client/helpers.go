@@ -76,6 +76,17 @@ func contentToMap(c mcp.Content) map[string]any {
 	}
 }
 
+// resourceToMap 将 mcp.Resource 转为 map[string]any，
+// 对齐 Python: ListMcpResourcesTool.invoke 中 getattr(r, "uri", str(r)) 等属性提取。
+func resourceToMap(r mcp.Resource) map[string]any {
+	return map[string]any{
+		"uri":         r.URI,
+		"name":        r.Name,
+		"mimeType":    r.MIMEType,
+		"description": r.Description,
+	}
+}
+
 // resourceContentsToMap 将 ResourceContents 接口转为 map[string]any。
 func resourceContentsToMap(rc mcp.ResourceContents) map[string]any {
 	if rc == nil {
@@ -100,6 +111,19 @@ func resourceContentsToMap(rc mcp.ResourceContents) map[string]any {
 			"type": "unknown",
 		}
 	}
+}
+
+// readResourceResultToMap 将 *mcp.ReadResourceResult 转为 []map[string]any，
+// 对齐 Python: ReadMcpResourceTool.invoke 中遍历 contents 提取 uri/mimeType/text。
+func readResourceResultToMap(result *mcp.ReadResourceResult) []map[string]any {
+	if result == nil {
+		return nil
+	}
+	items := make([]map[string]any, 0, len(result.Contents))
+	for _, c := range result.Contents {
+		items = append(items, resourceContentsToMap(c))
+	}
+	return items
 }
 
 // jsonSchemaToParams 将 JSON Schema 转换为参数列表。

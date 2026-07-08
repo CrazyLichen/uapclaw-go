@@ -782,8 +782,7 @@ func (m *ResourceMgr) GetMcpToolIDs(serverID string) []string {
 // ListMcpResources 列出 MCP 服务器资源。
 //
 // 对应 Python: ResourceManager.list_mcp_resources(server_id)
-// ⤵️ 预留：等 MCP ListResources 实现后回填
-func (m *ResourceMgr) ListMcpResources(ctx context.Context, serverID string) ([]any, error) {
+func (m *ResourceMgr) ListMcpResources(ctx context.Context, serverID string) ([]map[string]any, error) {
 	client, err := m.registry.Tool().GetMcpClient(serverID)
 	if err != nil {
 		return nil, err
@@ -794,8 +793,7 @@ func (m *ResourceMgr) ListMcpResources(ctx context.Context, serverID string) ([]
 // ReadMcpResource 读取 MCP 服务器资源。
 //
 // 对应 Python: ResourceManager.read_mcp_resource(server_id, uri)
-// ⤵️ 预留：等 MCP ReadResource 实现后回填
-func (m *ResourceMgr) ReadMcpResource(ctx context.Context, serverID, uri string) (any, error) {
+func (m *ResourceMgr) ReadMcpResource(ctx context.Context, serverID, uri string) ([]map[string]any, error) {
 	client, err := m.registry.Tool().GetMcpClient(serverID)
 	if err != nil {
 		return nil, err

@@ -25,10 +25,10 @@ type McpClient interface {
 	CallTool(ctx context.Context, toolName string, arguments map[string]any) (any, error)
 	// GetToolInfo 获取指定工具信息
 	GetToolInfo(ctx context.Context, toolName string) (*McpToolCard, error)
-	// ListResources 列出服务器提供的资源
-	ListResources(ctx context.Context) ([]any, error)
-	// ReadResource 读取指定资源
-	ReadResource(ctx context.Context, uri string) (any, error)
+	// ListResources 列出服务器提供的资源，返回 map 切片（每个 map 含 uri/name/mimeType/description）
+	ListResources(ctx context.Context) ([]map[string]any, error)
+	// ReadResource 读取指定资源，返回 map 切片（每个 map 含 uri/mimeType/text 或 uri/mimeType/blob）
+	ReadResource(ctx context.Context, uri string) ([]map[string]any, error)
 	// Close 关闭客户端（等价于 Disconnect）
 	Close() error
 }

@@ -364,7 +364,7 @@ func (c *StreamableHttpClient) GetToolInfo(ctx context.Context, toolName string)
 }
 
 // ListResources 列出 MCP 服务器提供的资源。
-func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]any, error) {
+func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]map[string]any, error) {
 	if !c.isConnected || c.client == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -382,15 +382,15 @@ func (c *StreamableHttpClient) ListResources(ctx context.Context) ([]any, error)
 		return nil, err
 	}
 
-	resources := make([]any, 0, len(result.Resources))
+	resources := make([]map[string]any, 0, len(result.Resources))
 	for _, res := range result.Resources {
-		resources = append(resources, res)
+		resources = append(resources, resourceToMap(res))
 	}
 	return resources, nil
 }
 
 // ReadResource 读取指定资源。
-func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) (any, error) {
+func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]map[string]any, error) {
 	if !c.isConnected || c.client == nil {
 		return nil, exception.BuildError(
 			exception.StatusToolMcpNotConnected,
@@ -412,7 +412,7 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) (an
 			Msg("StreamableHTTP 读取资源失败")
 		return nil, err
 	}
-	return result, nil
+	return readResourceResultToMap(result), nil
 }
 
 // Close 关闭客户端（等价于 Disconnect）。
