@@ -269,11 +269,11 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 			r.systemPromptBuilder.RemoveSection(sections.SectionModeInstructions)
 		}
 
+		// 对齐 Python L163: 同步 task_tool 可见性
+		r.syncTaskToolForModelToolInputs(cbc)
+
 		// 对齐 Python L164-168: 过滤 hiddenInNormal 工具
 		r.filterHiddenTools(cbc, hiddenInNormal)
-
-		// 对齐 Python L196: 同步 task_tool 可见性
-		r.syncTaskToolForModelToolInputs(cbc)
 
 		return nil
 	}
@@ -788,19 +788,32 @@ func (r *AgentModeRail) syncTaskToolForModelToolInputs(cbc *agentinterfaces.Agen
 func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) string {
 	var lines []string
 	for _, spec := range subagents {
-		// 检查是否为 SubAgentConfig
+		// 对齐 Python L424: isinstance(spec, SubAgentConfig)
 		if saConfig, ok := spec.(*hschema.SubAgentConfig); ok && saConfig != nil {
-			name := "general-purpose"
-			desc := "DeepAgent instance"
-			if saConfig.AgentCard != nil {
-				name = saConfig.AgentCard.Name
-				desc = saConfig.AgentCard.Description
-			}
+			name := saConfig.AgentCard.Name
+			desc := saConfig.AgentCard.Description
 			lines = append(lines, fmt.Sprintf("%q: %s", name, desc))
 		} else {
-			// 非 SubAgentConfig 类型（如 DeepAgent 实例）
-			name := spec.SpecName()
-			lines = append(lines, fmt.Sprintf("%q: DeepAgent instance", name))
+			// 对齐 Python L427-430: getattr(spec, "card", None) → getattr(card, "name", None) or "general-purpose"
+			name := "general-purpose"
+			desc := "DeepAgent instance"
+			if baseAgent, ok := spec.(agentinterfaces.BaseAgent); ok {
+				if card := baseAgent.Card(); card != nil {
+					if card.Name != "" {
+						name = card.Name
+					}
+					if card.Description != "" {
+						desc = card.Description
+					}
+				}
+			}
+			if name == "general-purpose" {
+				// 尝试 SpecName 作为 fallback
+				if specName := spec.SpecName(); specName != "" {
+					name = specName
+				}
+			}
+			lines = append(lines, fmt.Sprintf("%q: %s", name, desc))
 		}
 	}
 	if len(lines) == 0 {
