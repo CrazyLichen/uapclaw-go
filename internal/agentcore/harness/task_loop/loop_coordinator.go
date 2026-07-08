@@ -57,8 +57,6 @@ func NewLoopCoordinator(evaluators []StopConditionEvaluator) *LoopCoordinator {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ShouldContinue 评估是否应该继续循环。
 // 先检查中止标记，再遍历评估器（OR 语义：第一个 ShouldStop=true 即停止）。
 // 对齐 Python: LoopCoordinator.should_continue
@@ -77,7 +75,7 @@ func (lc *LoopCoordinator) ShouldContinue() bool {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					buf := make([]byte, 4096)
+					buf := make([]byte, 1024)
 					n := runtime.Stack(buf, false)
 					logger.Warn(logComponent).
 						Str("evaluator", ev.Name()).
@@ -256,6 +254,8 @@ func (lc *LoopCoordinator) Evaluators() []StopConditionEvaluator {
 	copy(result, lc.evaluators)
 	return result
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildEvalContext 构建评估上下文（调用者需持有锁）。
 // 对齐 Python: LoopCoordinator._build_eval_context

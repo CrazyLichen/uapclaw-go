@@ -114,7 +114,11 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 	}
 
-	// 步骤 5：判断是否为 follow-up
+	// 步骤 5：获取 conversationID
+	// 对齐 Python: cid = session.get_session_id() (line 119，在 is_follow_up 之前)
+	cid := sess.GetSessionID()
+
+	// 步骤 6：判断是否为 follow-up
 	isFollowUp := false
 	if task.Metadata != nil {
 		if v, ok := task.Metadata["is_follow_up"]; ok {
@@ -122,7 +126,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 	}
 
-	// 步骤 6：获取迭代次数
+	// 步骤 7：获取迭代次数
 	var iteration int
 	coordinator := agent.LoopCoordinator()
 	if coordinator != nil {
@@ -131,7 +135,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		iteration = 1
 	}
 
-	// 步骤 7：日志（敏感/非敏感双模式）
+	// 步骤 8：日志（敏感/非敏感双模式）
 	if isSensitive() {
 		logger.Info(logComponent).
 			Str("task_id", taskID).
@@ -151,11 +155,10 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Msg("开始执行任务迭代")
 	}
 
-	// 步骤 8：构建 loopEvent 和 conversationID
+	// 步骤 9：构建 loopEvent
 	loopEvent, _ := cschema.FromUserInput(query)
-	cid := sess.GetSessionID()
 
-	// 步骤 9：构建迭代输入和回调上下文
+	// 步骤 10：构建迭代输入和回调上下文
 	// 对齐 Python: iter_inputs = TaskIterationInputs(query=query, ...)
 	iterInputs := &agentinterfaces.TaskIterationInputs{
 		Iteration:      iteration,
@@ -174,7 +177,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 	cbCtx := agentinterfaces.NewAgentCallbackContext(baseAgent, iterInputs, sess)
 
-	// 步骤 10：标记计划任务为进行中
+	// 步骤 11：标记计划任务为进行中
 	if planTask != nil && state != nil && state.TaskPlan != nil {
 		if markErr := state.TaskPlan.MarkInProgress(taskID); markErr != nil {
 			logger.Warn(logComponent).
@@ -184,7 +187,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 	}
 
-	// 步骤 11：触发 before_task_iteration 回调
+	// 步骤 12：触发 before_task_iteration 回调
 	if fireErr := cbCtx.Fire(agentinterfaces.CallbackBeforeTaskIteration); fireErr != nil {
 		logger.Warn(logComponent).
 			Err(fireErr).
@@ -192,7 +195,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 			Msg("触发前置回调失败")
 	}
 
-	// 步骤 12：确定有效查询
+	// 步骤 13：确定有效查询
 	// 对齐 Python: effective_query = raw_input or iter_inputs.query or query
 	var effectiveQuery any = query
 	if rawInput != nil {
@@ -201,7 +204,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		effectiveQuery = iterInputs.Query
 	}
 
-	// 步骤 13：构建有效输入
+	// 步骤 14：构建有效输入
 	effective := map[string]any{
 		"query":           effectiveQuery,
 		"conversation_id": cid,
@@ -215,13 +218,13 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 		// 对齐 Python: _streaming=True 传递给 ReActAgent.invoke
 		// Python 中 task_loop_event_executor 始终传 _streaming=True，
-		// Go 中按 DeepAgent 调用模式区分：stream=true, invoke=false
+		// [Go 扩展] Go 特有 isStreaming 参数，用于区分 invoke/stream 调用模式，
 		if sv, ok := task.Metadata["_streaming"]; ok {
 			effective["_streaming"] = sv
 		}
 	}
 
-	// 步骤 14：注入 steering_queue
+	// 步骤 15：注入 steering_queue
 	handler := agent.EventHandler()
 	if handler != nil {
 		if provider, ok := handler.(interactionQueuesProvider); ok {
@@ -232,7 +235,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		}
 	}
 
-	// 步骤 15-17：异步执行 ReActAgent 并发送结果
+	// 步骤 16-18：异步执行 ReActAgent 并发送结果
 	go func() {
 		defer close(ch)
 

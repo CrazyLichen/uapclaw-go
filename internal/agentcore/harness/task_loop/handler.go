@@ -135,9 +135,9 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
-	// 从元数据读取轮次编号
+	// 从元数据读取轮次编号（fallback 到当前 roundID，对齐 Python）
 	metadata := event.GetMetadata()
-	var currentRound int
+	currentRound := h.currentRoundID()
 	if v, ok := metadata["_handler_round_id"]; ok {
 		if r, ok := v.(int); ok {
 			currentRound = r
@@ -169,7 +169,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 			Str("method", "HandleInput").
 			Msg("LoopCoordinator 为 nil，无法执行任务")
 		h.resolveRound(map[string]any{"error": "coordinator is nil"}, currentRound)
-		return map[string]any{"status": "error", "error": "coordinator is nil"}, nil
+		return map[string]any{"status": "failed", "error": "coordinator is nil"}, nil
 	}
 
 	// 判断是否为 follow-up
@@ -178,8 +178,9 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		isFollowUp, _ = v.(bool)
 	}
 
-	// 非 follow-up 时从 TaskPlan 获取下一个任务的 ID
-	if !isFollowUp {
+	// 非 follow-up 且 taskID 为空时，从 TaskPlan 获取下一个任务的 ID
+	// 对齐 Python: if not task_id and not is_follow_up and session is not None
+	if taskID == "" && !isFollowUp {
 		state := h.provider.LoadState(input.Session)
 		if state != nil && state.TaskPlan != nil {
 			nextTask := state.TaskPlan.GetNextTask()
@@ -229,6 +230,15 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 		Msg("提交深层 Agent 任务")
 
 	// 添加任务到管理器
+	// 对齐 Python: if self._task_manager is not None: add_task else: resolve + return failed
+	if h.base.TaskManager == nil {
+		logger.Warn(logComponent).
+			Str("event_type", "LLM_CALL_ERROR").
+			Str("method", "HandleInput").
+			Msg("TaskManager 为 nil，无法添加任务")
+		h.resolveRound(map[string]any{"error": "task_manager is nil"}, currentRound)
+		return map[string]any{"status": "failed", "error": "task_manager is nil"}, nil
+	}
 	if err := h.base.TaskManager.AddTask(ctx, coreTask); err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -237,7 +247,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 			Str("method", "HandleInput").
 			Msg("添加任务失败")
 		h.resolveRound(map[string]any{"error": err.Error()}, currentRound)
-		return nil, fmt.Errorf("添加任务失败: %w", err)
+		return map[string]any{"status": "failed", "error": err.Error()}, fmt.Errorf("添加任务失败: %w", err)
 	}
 
 	return map[string]any{
@@ -248,6 +258,7 @@ func (h *TaskLoopEventHandler) HandleInput(ctx context.Context, input *modules.E
 
 // HandleTaskInteraction 处理任务交互事件：提取引导指令 → 推入 steering 队列。
 // 对齐 Python: TaskLoopEventHandler.handle_task_interaction
+// Python 无论如何都返回 {"status": "steer_injected", "msg": msg}。
 func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
@@ -262,24 +273,21 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 		}
 	}
 
-	if steerText == "" {
-		logger.Warn(logComponent).Msg("HandleTaskInteraction: 未提取到引导文本")
-		return map[string]any{"status": "no_steer"}, nil
-	}
-
-	// 推入 steering 队列
-	if h.interactionQueues != nil {
+	// 推入 steering 队列（对齐 Python: if msg and self.interaction_queues is not None: push_steer）
+	if steerText != "" && h.interactionQueues != nil {
 		h.interactionQueues.PushSteer(steerText)
-		logger.Info(logComponent).
-			Str("steer_text", steerText).
-			Msg("引导指令已注入")
-	} else {
-		logger.Warn(logComponent).
-			Str("steer_text", steerText).
-			Msg("InteractionQueues 为 nil，引导指令丢弃")
 	}
 
-	return map[string]any{"status": "steer_injected"}, nil
+	// 对齐 Python: 始终返回 steer_injected + msg，始终打 info 日志
+	steerPreview := steerText
+	if len(steerPreview) > 100 {
+		steerPreview = steerPreview[:100]
+	}
+	logger.Info(logComponent).
+		Str("steer_text", steerPreview).
+		Msg("引导指令注入")
+
+	return map[string]any{"status": "steer_injected", "msg": steerText}, nil
 }
 
 // HandleTaskCompletion 处理任务完成事件：提取结果 → resolveRound。
@@ -287,21 +295,31 @@ func (h *TaskLoopEventHandler) HandleTaskInteraction(ctx context.Context, input 
 func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
+	// 从元数据获取 task_id 和 task_type
+	taskID, _ := event.GetMetadata()["task_id"].(string)
+
 	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == hschema.SessionSpawnTaskType {
-			taskID, _ := event.GetMetadata()["task_id"].(string)
 			h.completeSessionSpawn(taskID, input, false)
 			return map[string]any{"status": "session_spawn_completed", "task_id": taskID}, nil
 		}
 	}
 
 	// 从 TaskCompletionEvent 提取结果
+	// 对齐 Python: 同时处理 JsonDataFrame(data=dict) 和 TextDataFrame(text=str)
 	var result map[string]any
 	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
 		for _, df := range tce.TaskResult {
 			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
 				result = jsonDF.Data
+				break
+			}
+			if textDF, ok := df.(*cschema.TextDataFrame); ok {
+				if result == nil {
+					result = make(map[string]any)
+				}
+				result["output"] = textDF.Text
 				break
 			}
 		}
@@ -311,8 +329,8 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 		result = make(map[string]any)
 	}
 
-	// 从元数据获取轮次编号
-	var roundID int
+	// 从元数据获取轮次编号（fallback 到当前 roundID，对齐 Python）
+	roundID := h.currentRoundID()
 	if v, ok := event.GetMetadata()["_handler_round_id"]; ok {
 		if r, ok := v.(int); ok {
 			roundID = r
@@ -324,7 +342,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 		Msg("任务完成，解析轮次")
 
 	h.resolveRound(result, roundID)
-	return result, nil
+	return map[string]any{"status": "completed", "task_id": taskID}, nil
 }
 
 // HandleTaskFailed 处理任务失败事件：resolveRound with error。
@@ -332,23 +350,28 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
-	// SessionSpawn 分支：调用 completeSessionSpawn 处理
-	if taskType, ok := event.GetMetadata()["task_type"]; ok {
-		if taskType == hschema.SessionSpawnTaskType {
-			taskID, _ := event.GetMetadata()["task_id"].(string)
-			h.completeSessionSpawn(taskID, input, true)
-			return map[string]any{"status": "session_spawn_failed", "task_id": taskID}, nil
+	// 从元数据获取 task_id
+	taskID, _ := event.GetMetadata()["task_id"].(string)
+
+	// 提取错误消息
+	errMsg := "unknown"
+	if tfe, ok := event.(*cschema.TaskFailedEvent); ok {
+		if tfe.ErrorMessage != "" {
+			errMsg = tfe.ErrorMessage
 		}
 	}
 
-	// 提取错误消息
-	var errMsg string
-	if tfe, ok := event.(*cschema.TaskFailedEvent); ok {
-		errMsg = tfe.ErrorMessage
+	// SessionSpawn 分支：调用 completeSessionSpawn 处理
+	// 对齐 Python: return {"status": "session_spawn_failed", "task_id": task_id, "error": str(error_msg)}
+	if taskType, ok := event.GetMetadata()["task_type"]; ok {
+		if taskType == hschema.SessionSpawnTaskType {
+			h.completeSessionSpawn(taskID, input, true)
+			return map[string]any{"status": "session_spawn_failed", "task_id": taskID, "error": errMsg}, nil
+		}
 	}
 
-	// 从元数据获取轮次编号
-	var roundID int
+	// 从元数据获取轮次编号（fallback 到当前 roundID，对齐 Python）
+	roundID := h.currentRoundID()
 	if v, ok := event.GetMetadata()["_handler_round_id"]; ok {
 		if r, ok := v.(int); ok {
 			roundID = r
@@ -362,15 +385,19 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 		Str("method", "HandleTaskFailed").
 		Msg("任务失败")
 
+	// 对齐 Python: return {"status": "failed", "task_id": task_id, "error": str(error_msg)}
 	result := map[string]any{
-		"error": errMsg,
+		"status":  "failed",
+		"task_id": taskID,
+		"error":   errMsg,
 	}
-	h.resolveRound(result, roundID)
+	h.resolveRound(map[string]any{"error": errMsg}, roundID)
 	return result, nil
 }
 
 // HandleFollowUp 处理跟进事件：提取文本 → 推入 follow-up 队列。
 // 对齐 Python: TaskLoopEventHandler.handle_follow_up
+// Python 无论如何都返回 {"status": "follow_up_queued", "msg": msg}。
 func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *modules.EventHandlerInput) (map[string]any, error) {
 	event := input.Event
 
@@ -385,24 +412,21 @@ func (h *TaskLoopEventHandler) HandleFollowUp(ctx context.Context, input *module
 		}
 	}
 
-	if followUpText == "" {
-		logger.Warn(logComponent).Msg("HandleFollowUp: 未提取到跟进文本")
-		return map[string]any{"status": "no_follow_up"}, nil
-	}
-
-	// 推入 follow-up 队列
-	if h.interactionQueues != nil {
+	// 推入 follow-up 队列（对齐 Python: if msg and self.interaction_queues is not None: push_follow_up）
+	if followUpText != "" && h.interactionQueues != nil {
 		h.interactionQueues.PushFollowUp(followUpText)
-		logger.Info(logComponent).
-			Str("follow_up_text", followUpText).
-			Msg("跟进消息已入队")
-	} else {
-		logger.Warn(logComponent).
-			Str("follow_up_text", followUpText).
-			Msg("InteractionQueues 为 nil，跟进消息丢弃")
 	}
 
-	return map[string]any{"status": "follow_up_queued"}, nil
+	// 对齐 Python: 始终返回 follow_up_queued + msg，始终打 info 日志
+	followUpPreview := followUpText
+	if len(followUpPreview) > 100 {
+		followUpPreview = followUpPreview[:100]
+	}
+	logger.Info(logComponent).
+		Str("follow_up_text", followUpPreview).
+		Msg("跟进消息入队")
+
+	return map[string]any{"status": "follow_up_queued", "msg": followUpText}, nil
 }
 
 // OnAbort 中止回调：resolveRound with aborted。
@@ -450,6 +474,14 @@ func (h *TaskLoopEventHandler) LastResult() map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// currentRoundID 返回当前轮次编号（加锁读取）。
+// 用于 _handler_round_id 元数据缺失时的 fallback，对齐 Python: self._round_id。
+func (h *TaskLoopEventHandler) currentRoundID() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.roundID
+}
 
 // resolveRound 解析轮次：将结果非阻塞写入当前轮次的完成 channel。
 // 若 roundID 不匹配则丢弃（过期轮次的结果）。

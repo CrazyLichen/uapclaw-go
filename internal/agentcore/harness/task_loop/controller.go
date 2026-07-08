@@ -52,6 +52,9 @@ func NewTaskLoopController() *TaskLoopController {
 // runKind 为运行模式（normal/heartbeat/cron），零值空串表示未设置。
 // runContext 为结构化运行时上下文（心跳等场景），nil 表示无上下文。
 // 对齐 Python: TaskLoopController.submit_round
+// [Go 扩展] isStreaming 参数：Python 中 _streaming=True 在 executor 内硬编码，
+// Go 特有此参数用于区分 invoke(非流式) / stream(流式) 调用模式，
+// 因为 Go 的 buffered channel 需要显式区分以避免阻塞。
 func (tc *TaskLoopController) SubmitRound(
 	ctx context.Context,
 	sess *session.Session,
