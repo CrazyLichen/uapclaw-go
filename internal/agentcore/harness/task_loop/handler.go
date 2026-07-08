@@ -49,8 +49,9 @@ type TaskLoopEventHandler struct {
 // 对齐 Python: TaskLoopEventHandler.__init__
 func NewTaskLoopEventHandler(provider interfaces.DeepAgentInterface) *TaskLoopEventHandler {
 	return &TaskLoopEventHandler{
-		provider:  provider,
-		currentCh: make(chan map[string]any, 1),
+		provider: provider,
+		// currentCh 初始为 nil，对齐 Python: _current_future = None
+		// PrepareRound 时才创建，WaitCompletion 检测 nil 返回 {"error": "no active round"}
 	}
 }
 
@@ -87,6 +88,12 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 	ch := h.currentCh
 	h.mu.Unlock()
 
+	// 对齐 Python: if self._current_future is None: return {"error": "no active round"}
+	if ch == nil {
+		logger.Warn(logComponent).Msg("等待轮次完成：无活跃轮次")
+		return map[string]any{"error": "no active round"}
+	}
+
 	if timeout > 0 {
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
@@ -103,12 +110,12 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 			logger.Warn(logComponent).
 				Err(ctx.Err()).
 				Msg("等待轮次完成：上下文取消")
-			return map[string]any{"status": "cancelled", "result_type": "error", "error": ctx.Err().Error()}
+			return map[string]any{"error": "cancelled"}
 		case <-timer.C:
 			logger.Warn(logComponent).
 				Str("timeout", timeout.String()).
 				Msg("等待轮次完成：超时")
-			return map[string]any{"status": "timeout", "result_type": "error"}
+			return map[string]any{"error": "completion_timeout"}
 		}
 	}
 
@@ -126,7 +133,7 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 		logger.Warn(logComponent).
 			Err(ctx.Err()).
 			Msg("等待轮次完成：上下文取消")
-		return map[string]any{"status": "cancelled", "result_type": "error", "error": ctx.Err().Error()}
+		return map[string]any{"error": "cancelled"}
 	}
 }
 
@@ -306,8 +313,17 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 		}
 	}
 
+	// 从元数据获取轮次编号（fallback 到当前 roundID，对齐 Python）
+	roundID := h.currentRoundID()
+	if v, ok := event.GetMetadata()["_handler_round_id"]; ok {
+		if r, ok := v.(int); ok {
+			roundID = r
+		}
+	}
+
 	// 从 TaskCompletionEvent 提取结果
 	// 对齐 Python: 同时处理 JsonDataFrame(data=dict) 和 TextDataFrame(text=str)
+	// 注意：TextDataFrame 后不 break，对齐 Python（后续 JsonDataFrame 可覆盖 result）
 	var result map[string]any
 	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
 		for _, df := range tce.TaskResult {
@@ -320,21 +336,12 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 					result = make(map[string]any)
 				}
 				result["output"] = textDF.Text
-				break
 			}
 		}
 	}
 
 	if result == nil {
 		result = make(map[string]any)
-	}
-
-	// 从元数据获取轮次编号（fallback 到当前 roundID，对齐 Python）
-	roundID := h.currentRoundID()
-	if v, ok := event.GetMetadata()["_handler_round_id"]; ok {
-		if r, ok := v.(int); ok {
-			roundID = r
-		}
 	}
 
 	logger.Info(logComponent).
@@ -594,13 +601,17 @@ func extractResultFromEvent(input *modules.EventHandlerInput) string {
 	if tce, ok := event.(*cschema.TaskCompletionEvent); ok {
 		for _, df := range tce.TaskResult {
 			if jsonDF, ok := df.(*cschema.JsonDataFrame); ok {
-				if output, ok := jsonDF.Data["output"]; ok {
-					s := fmt.Sprintf("%v", output)
-					if len(s) > 500 {
-						s = s[:500]
-					}
-					return s
+				// 对齐 Python: output = data.get("output", "")
+				// 无 output 键时返回空字符串，不再继续遍历
+				var s string
+				if output, ok := jsonDF.Data["output"]; ok && output != nil {
+					s = fmt.Sprintf("%v", output)
 				}
+				// output 不存在或为 nil 时 s 保持空字符串，对齐 Python data.get("output", "")
+				if len(s) > 500 {
+					s = s[:500]
+				}
+				return s
 			}
 			if textDF, ok := df.(*cschema.TextDataFrame); ok {
 				s := textDF.Text

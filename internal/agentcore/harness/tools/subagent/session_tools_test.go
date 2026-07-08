@@ -545,6 +545,23 @@ func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.D
 	return f.subagent, f.createSubagentErr
 }
 
+// Invoke 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+
+// SwitchMode 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+
+// RestoreModeAfterPlanExit 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
+
+// GetPlanFilePath 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+
+// SaveState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+
 // Iteration 实现 LoopCoordinatorInterface 接口
 func (f *fakeLoopCoordinator) Iteration() int { return f.iteration }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
@@ -544,6 +545,11 @@ func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error {
 // CreateSubagent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.DeepAgentInterface, error) {
 	return f.subagent, f.createSubagentErr
+}
+
+// Invoke 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
 }
 
 // GetSessionID 实现 SessionFacade 接口

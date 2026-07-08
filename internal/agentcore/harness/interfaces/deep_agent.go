@@ -1,11 +1,14 @@
 package interfaces
 
 import (
+	"context"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -40,6 +43,21 @@ type DeepAgentInterface interface {
 	// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，由 *DeepAgent.CreateSubagent 实现。
 	// 对齐 Python: DeepAgent.create_subagent
 	CreateSubagent(subagentType string, subSessionID string) (DeepAgentInterface, error)
+	// Invoke 执行 Agent：若 enable_task_loop=true 走完整多轮循环，否则走单轮 ReAct。
+	// 对齐 Python: DeepAgent.invoke
+	Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)
+	// SwitchMode 切换当前会话模式（normal/plan）。
+	// 对齐 Python: DeepAgent.switch_mode
+	SwitchMode(sess sessioninterfaces.SessionFacade, mode string)
+	// RestoreModeAfterPlanExit 退出 plan 模式后恢复之前模式。
+	// 对齐 Python: DeepAgent.restore_mode_after_plan_exit
+	RestoreModeAfterPlanExit(sess sessioninterfaces.SessionFacade)
+	// GetPlanFilePath 返回当前 plan 文件路径（空字符串表示无 plan）。
+	// 对齐 Python: DeepAgent.get_plan_file_path
+	GetPlanFilePath(sess sessioninterfaces.SessionFacade) string
+	// SaveState 保存 DeepAgentState 到会话。
+	// 对齐 Python: DeepAgent.save_state
+	SaveState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState)
 }
 
 // LoopCoordinatorInterface 循环协调器接口（最小集）。

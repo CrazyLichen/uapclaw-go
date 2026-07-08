@@ -206,8 +206,11 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 
 	// 步骤 14：构建有效输入
 	effective := map[string]any{
-		"query":           effectiveQuery,
-		"conversation_id": cid,
+		"query": effectiveQuery,
+	}
+	// 对齐 Python: if cid: effective["conversation_id"] = cid
+	if cid != "" {
+		effective["conversation_id"] = cid
 	}
 	if task.Metadata != nil {
 		if rk, ok := task.Metadata["run_kind"]; ok {
@@ -367,7 +370,7 @@ func (e *TaskLoopEventExecutor) Cancel(_ context.Context, taskID string, sess se
 	state := e.getState(sess)
 	if e.getPlanTask(state, taskID) != nil {
 		if state != nil && state.TaskPlan != nil {
-			_ = state.TaskPlan.MarkCancelled(taskID, "用户取消")
+			_ = state.TaskPlan.MarkCancelled(taskID, "cancelled")
 		}
 	}
 	coordinator := e.provider.LoopCoordinator()

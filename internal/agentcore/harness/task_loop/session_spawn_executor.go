@@ -109,11 +109,14 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		}
 
 		// 步骤 5：调用子 Agent
+		// 对齐 Python: result = await subagent.invoke({"query": query, "conversation_id": cid})
+		// 使用 subAgent.Invoke 而非 ReactAgent().Invoke，使子 Agent
+		// 在 enable_task_loop=True 时走完整多轮循环（对齐 Python）。
 		effective := map[string]any{
 			"query":           query,
 			"conversation_id": cid,
 		}
-		result, invokeErr := subAgent.ReactAgent().Invoke(ctx, effective, agentinterfaces.WithSession(sess))
+		result, invokeErr := subAgent.Invoke(ctx, effective, agentinterfaces.WithSession(sess))
 
 		if invokeErr != nil {
 			// 异常路径
