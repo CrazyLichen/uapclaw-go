@@ -678,10 +678,13 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	switch {
 	case strings.HasPrefix(requestID, "team_skill_evolve_"):
 		// ⤵️ 10.3.7-11: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
+		resolved = false
 	case strings.HasPrefix(requestID, "evolve_simplify_"):
 		// ⤵️ 10.3.7-11: _handle_governance_approval(requestID, answers, "simplify")
+		resolved = false
 	case strings.HasPrefix(requestID, "skill_evolve_"):
 		// ⤵️ 10.3.7-11: _handle_evolution_approval(requestID, answers)
+		resolved = false
 	}
 
 	// 步骤 8: 构造响应

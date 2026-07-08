@@ -83,6 +83,9 @@ func TestNewSessionConfig_WorkflowConfig(t *testing.T) {
 	// 空字符串 workflowID 跳过
 	cfg.AddWorkflowConfig("", "some_config")
 
+	// 空 workflowID 的 GetWorkflowConfig 返回 nil
+	assert.Nil(t, cfg.GetWorkflowConfig(""))
+
 	// 添加有效配置
 	cfg.AddWorkflowConfig("wf1", "test_workflow_config")
 	assert.Equal(t, "test_workflow_config", cfg.GetWorkflowConfig("wf1"))

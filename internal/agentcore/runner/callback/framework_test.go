@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -1866,4 +1867,63 @@ func TestSplitCircuitBreakerKey(t *testing.T) {
 	// 空字符串
 	result = splitCircuitBreakerKey("")
 	assert.Equal(t, [2]string{"", ""}, result)
+}
+
+// TestGetEventHistory_基本功能 测试 GetEventHistory 过滤功能
+func TestGetEventHistory_基本功能(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.EnableEventHistory(true)
+
+	ctx := context.Background()
+	fw.OnCustom("test:event", func(ctx context.Context, data map[string]any) any { return nil })
+	fw.TriggerCustom(ctx, "test:event", map[string]any{"key": "val"})
+
+	history := fw.GetEventHistory("", time.Time{})
+	assert.Len(t, history, 1)
+
+	historyFiltered := fw.GetEventHistory("test:event", time.Time{})
+	assert.Len(t, historyFiltered, 1)
+
+	historyOther := fw.GetEventHistory("other:event", time.Time{})
+	assert.Len(t, historyOther, 0)
+}
+
+// TestListEvents_基本功能 测试 ListEvents 返回已注册事件
+func TestListEvents_基本功能(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnCustom("ns:event1", func(ctx context.Context, data map[string]any) any { return nil })
+	fw.OnCustom("ns:event2", func(ctx context.Context, data map[string]any) any { return nil })
+
+	events := fw.ListEvents("ns")
+	assert.Len(t, events, 2)
+
+	allEvents := fw.ListEvents("")
+	assert.GreaterOrEqual(t, len(allEvents), 2)
+}
+
+// TestListCallbacks_基本功能 测试 ListCallbacks 返回回调信息
+func TestListCallbacks_基本功能(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnCustom("test:event", func(ctx context.Context, data map[string]any) any { return nil })
+
+	callbacks := fw.ListCallbacks("test:event")
+	assert.Len(t, callbacks, 1)
+}
+
+// TestUnregisterNamespace_基本功能 测试 UnregisterNamespace 注销指定命名空间
+func TestUnregisterNamespace_基本功能(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnCustom("ns:event1", func(ctx context.Context, data map[string]any) any { return nil }, WithNamespace("ns"))
+	fw.OnCustom("other:event2", func(ctx context.Context, data map[string]any) any { return nil }, WithNamespace("other"))
+
+	fw.UnregisterNamespace("ns")
+	callbacks := fw.ListCallbacks("ns:event1")
+	assert.Len(t, callbacks, 0)
+}
+
+// TestOnChain_基本功能 测试 OnChain 注册链式回调
+func TestOnChain_基本功能(t *testing.T) {
+	fw := NewCallbackFramework()
+	fw.OnChain("test:chain", nil, nil)
+	// 不 panic 即通过
 }

@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -113,4 +114,56 @@ func TestScopeUserMappingManager_空结果查询(t *testing.T) {
 	results, err := m.GetByScopeID(ctx, "nonexistent")
 	assert.NoError(t, err)
 	assert.Nil(t, results)
+}
+
+// TestSqlDbStore_CountWithTimeRange 验证 CountWithTimeRange 基本功能
+func TestSqlDbStore_CountWithTimeRange(t *testing.T) {
+	store, gormDB := newTestSqlDbStore(t)
+	if err := CreateTables(gormDB); err != nil {
+		t.Fatalf("CreateTables 失败: %v", err)
+	}
+
+	ctx := context.Background()
+	// 写入一条记录
+	err := store.Write(ctx, "user_message", map[string]any{
+		"message_id": "msg1",
+		"user_id":    "user1",
+		"scope_id":   "scope1",
+		"content":    "hello",
+		"session_id": "sess1",
+		"role":       "user",
+		"timestamp":  time.Now().Format(time.RFC3339),
+	})
+	assert.NoError(t, err)
+
+	// 不加时间范围
+	count, err := store.CountWithTimeRange(ctx, "user_message", nil, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+
+	// 加时间范围（包含当前时间）
+	now := time.Now()
+	start := now.Add(-time.Hour)
+	end := now.Add(time.Hour)
+	count2, err := store.CountWithTimeRange(ctx, "user_message", nil, &start, &end)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count2)
+
+	// 时间范围不包含（在当前时间之后才开始）
+	futureStart := now.Add(time.Hour * 24)
+	count3, err := store.CountWithTimeRange(ctx, "user_message", nil, &futureStart, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), count3)
+}
+
+// TestSqlDbStore_CountWithTimeRange_无效列名 验证 CountWithTimeRange 校验列名
+func TestSqlDbStore_CountWithTimeRange_无效列名(t *testing.T) {
+	store, gormDB := newTestSqlDbStore(t)
+	if err := CreateTables(gormDB); err != nil {
+		t.Fatalf("CreateTables 失败: %v", err)
+	}
+
+	ctx := context.Background()
+	_, err := store.CountWithTimeRange(ctx, "user_message", map[string]any{"invalid;col": "val"}, nil, nil)
+	assert.Error(t, err)
 }
