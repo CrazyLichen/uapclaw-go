@@ -54,6 +54,7 @@ DeepAgent.Invoke()
 
 | 文件 | 修改内容 |
 |------|---------|
+| `single_agent/config/agent_config.go` | 新增 `ReActAgentConfig.SetModelName(name string)` 方法 |
 | `harness/deep_agent.go` | 删除 `deepAgentRailProvider` 定义（迁移到 rails/base.go） |
 | `harness/rails/base.go` | 新增导出接口 `DeepAgentRailProvider`（从 deep_agent.go 移入） |
 | `harness/factory.go` | L518-520：NewBaseRail() 占位 → NewTaskPlanningRail() |
@@ -63,7 +64,7 @@ DeepAgent.Invoke()
 
 ## 回调路由：Bridge 事件与 ctx.Agent() 身份
 
-Go 端使用与 Python 完全一致的 **Bridge 模式**：
+Go 端使用与 Python 完全一致的 **Bridge 模式**。同一个 Rail 实例的回调被拆分到两个 CallbackManager：
 
 | 事件类别 | 事件 | 注册位置 | `cbc.Agent()` 返回 |
 |---------|------|---------|-------------------|
@@ -75,11 +76,38 @@ Go 端使用与 Python 完全一致的 **Bridge 模式**：
 而 ReActAgent.invokeImpl 中创建的 `AgentCallbackContext` 以 `agent=self`(ReActAgent) 构造，
 所以 bridge 事件钩子中 `cbc.Agent()` 返回 ReActAgent。
 
+### 完整事件流（TaskPlanningRail 视角）
+
+```
+1. DeepAgent BEFORE_INVOKE    → TaskPlanningRail 无此钩子
+2.   ReActAgent BEFORE_INVOKE → TaskPlanningRail 无此钩子（outerOnly，不桥接）
+3.     [每次 ReAct 迭代]
+4.       ReActAgent BEFORE_MODEL_CALL → 🎯 ctx.agent=ReActAgent（bridge）
+5.       [LLM 调用]
+6.       ReActAgent AFTER_MODEL_CALL  → 🎯 ctx.agent=ReActAgent（bridge）
+7.       ReActAgent AFTER_TOOL_CALL   → 🎯 ctx.agent=ReActAgent（bridge）
+8.   ReActAgent AFTER_INVOKE  → TaskPlanningRail 无此钩子
+9. DeepAgent AFTER_INVOKE     → 🎯 ctx.agent=DeepAgent（outerOnly）
+```
+
+Task-Loop 模式额外触发：
+```
+3a. DeepAgent BEFORE_TASK_ITERATION → TaskPlanningRail 无此钩子
+3b.   [上述 2-8]
+3c. DeepAgent AFTER_TASK_ITERATION  → 🎯 ctx.agent=DeepAgent（deep）
+```
+
 ### 对 TaskPlanningRail 各钩子的影响
 
 | 钩子 | `cbc.Agent()` 是 | 操作 | 实现方式 |
 |------|-----------------|------|---------|
-| `Init(agent)` | DeepAgent（传入参数） | 注册工具 | `agent.(DeepAgentInterface)` |
+| `Init(agent)` | DeepAgent（传入参数） | 注册工具 | BaseAgent 方法 + 最小接口断言 |
+| `Uninit(agent)` | DeepAgent（传入参数） | 移除工具 | BaseAgent 方法 + 最小接口断言 |
+| `BeforeModelCall` | **ReActAgent** | 注入提示词 + 模型切换 | BaseAgent 方法 + `modelSwitcher` 断言 |
+| `AfterToolCall` | **ReActAgent** | 刷新缓存 + 进度提醒 | cbc.Session()/Inputs()，无需 agent |
+| `AfterModelCall` | **ReActAgent** | 读取 LLM + UsageMetadata | `modelSwitcher` 断言 |
+| `AfterTaskIteration` | **DeepAgent** | LoadState + 同步 TaskPlan | `stateLoader` 断言 |
+| `AfterInvoke` | **DeepAgent** | token 汇总 + 清理 | 直接操作字段，无需 agent 方法 |
 | `Uninit(agent)` | DeepAgent（传入参数） | 移除工具 | `agent.(DeepAgentInterface)` |
 | `BeforeModelCall` | **ReActAgent** | 注入提示词 + 模型切换 | 直接操作 ReActAgent（见 D3） |
 | `AfterToolCall` | **ReActAgent** | 刷新缓存 + 进度提醒 | 使用 cbc.Session()/Inputs() |
@@ -106,29 +134,102 @@ session 级 sync.Mutex 保证同 session 内文件串行读写
 
 对齐 Python `TodoLockManager` 的 session 隔离语义，全局 RWMutex 优化多 session 并发读。
 
-### D3：模型切换 — 直接在 ReActAgent 上操作（对齐 Python 鸭子类型）
+### D3：模型切换 — 最小接口断言（对齐 Python getattr 鸭子类型）
 
-Python 中 `before_model_call()` 通过 `ctx.agent.set_llm(target_model)` 和
-`ctx.agent.config.model_name = target_model.model_config.model_name` 切换模型，
-其中 `ctx.agent` 是 ReActAgent（bridge 事件），使用鸭子类型直接调用。
+Python 中 `before_model_call()` 通过鸭子类型直接调用：
+- `getattr(ctx.agent, "_llm", None)` → 有 `_llm` 就用，没有返回 None
+- `ctx.agent.set_llm(target_model)` → 有 `set_llm` 就调
+- `ctx.agent.config.model_name = ...` → 直接写属性
 
-Go 端对齐实现：
+Go 端不依赖具体类型（`*ReActAgent`），也不依赖大接口（`DeepAgentInterface`），
+而是在 `harness/rails/` 包内定义**非导出最小接口**，通过接口断言获取能力，
+与 Python `getattr` + `isinstance` 的鸭子类型精神完全对齐：
+
 ```go
-// BeforeModelCall — cbc.Agent() 是 ReActAgent
-reactAgent, ok := cbc.Agent().(*agents.ReActAgent)
-if !ok {
-    return nil
+// modelSwitcher 模型切换能力接口。
+// 对齐 Python: getattr(ctx.agent, "_llm", None) + ctx.agent.set_llm()
+// ReActAgent 自动满足此接口。
+type modelSwitcher interface {
+    SetLLM(m *llm.Model)
+    GetLLM() (*llm.Model, error)
+    Config() agentinterfaces.AgentConfig
 }
-reactAgent.SetLLM(targetModel)
-// 同步 config.model_name
-if config, ok := reactAgent.Config().(*saconfig.ReActAgentConfig); ok {
-    config.ModelNameVal = targetModel.ModelConfig().ModelName
+
+// modelConfigSetter 可修改模型名称的配置接口。
+// 对齐 Python: ctx.agent.config.model_name = value
+// ReActAgentConfig 自动满足此接口（需新增 SetModelName 方法）。
+type modelConfigSetter interface {
+    SetModelName(name string)
+}
+
+// stateLoader 状态加载能力接口。
+// 对齐 Python: ctx.agent.load_state(session)  [type: ignore[attr-defined]]
+// DeepAgent 自动满足此接口。
+type stateLoader interface {
+    LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
 ```
 
-**不需要在 DeepAgentInterface 上新增 SwitchModel 方法**。
-ReActAgent 已有 `SetLLM()`/`GetLLM()`/`Config()` 导出方法。
-从修改文件列表中移除 `harness/interfaces/deep_agent.go` 和 `harness/deep_agent.go` 的 SwitchModel 相关修改。
+**使用示例**：
+
+```go
+// BeforeModelCall — cbc.Agent() 是 ReActAgent
+func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+    // BaseAgent 已有的方法直接用，无需断言
+    builder := cbc.Agent().SystemPromptBuilder()
+
+    // 需要模型切换能力 — 断言最小接口
+    switcher, ok := cbc.Agent().(modelSwitcher)
+    if !ok {
+        logger.Warn(logComponent).Msg("agent 不满足 modelSwitcher，跳过模型切换")
+        return nil
+    }
+    if r.defaultLLM == nil {
+        llm, _ := switcher.GetLLM()   // 对齐 Python: getattr(ctx.agent, "_llm", None)
+        r.defaultLLM = llm
+    }
+    // ... 选择 targetModel ...
+    switcher.SetLLM(targetModel)       // 对齐 Python: ctx.agent.set_llm(target_model)
+
+    // 同步 config.model_name — 断言最小接口
+    if cfg, ok := switcher.Config().(modelConfigSetter); ok {
+        cfg.SetModelName(targetModel.ModelConfig().ModelName)
+        // 对齐 Python: ctx.agent.config.model_name = target_model.model_config.model_name
+    }
+    return nil
+}
+
+// AfterTaskIteration — cbc.Agent() 是 DeepAgent
+func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
+    // 需要状态加载能力 — 断言最小接口
+    loader, ok := cbc.Agent().(stateLoader)
+    if !ok {
+        logger.Debug(logComponent).Msg("agent 不满足 stateLoader，跳过 TaskPlan 同步")
+        return nil
+    }
+    state := loader.LoadState(cbc.Session())  // 对齐 Python: ctx.agent.load_state(ctx.session)
+    // ... sync todos from plan ...
+}
+```
+
+**最小接口满足性**：
+
+| 最小接口 | 方法 | ReActAgent 满足 | DeepAgent 满足 |
+|---------|------|:---:|:---:|
+| `modelSwitcher` | `SetLLM(m *llm.Model)` | ✅ `react_helpers.go:117` | — |
+| `modelSwitcher` | `GetLLM() (*llm.Model, error)` | ✅ `react_helpers.go:125` | — |
+| `modelSwitcher` | `Config() AgentConfig` | ✅ `react_prompt.go:89` | — |
+| `modelConfigSetter` | `SetModelName(name string)` | ✅ **需新增**（见下） | — |
+| `stateLoader` | `LoadState(sess) *DeepAgentState` | — | ✅ `deep_agent.go:508` |
+
+**需新增 `ReActAgentConfig.SetModelName(name string)`**：
+在 `single_agent/config/agent_config.go` 上新增此方法，
+将 `c.ModelNameVal = name`。对齐 Python `ctx.agent.config.model_name = value` 的可变语义。
+
+**对 TaskCompletionRail 的影响**（优化建议，本次不改）：
+TaskCompletionRail 当前用 `agent.(DeepAgentInterface)` 断言 10+ 方法的大接口，
+可优化为 `agent.(loopCoordinatorAccessor)` 断言仅 `LoopCoordinator()` 的最小接口。
+此项记为后续优化，不在 9.13 范围内。
 
 ### D4：DeepAgentRailProvider 迁移到 rails/base.go
 
@@ -294,7 +395,8 @@ type TodoTool struct {
 
 ## DeepAgentInterface 扩展
 
-无需扩展。模型切换通过直接操作 ReActAgent 实现（见 D3）。
+无需扩展。模型切换通过最小接口断言（`modelSwitcher`/`modelConfigSetter`）实现，
+状态加载通过最小接口断言（`stateLoader`）实现。不依赖具体类型，不依赖大接口。
 
 ## DeepAgentRailProvider 迁移
 
@@ -319,8 +421,8 @@ type DeepAgentRailProvider interface {
 - `rails/base.go` — DeepAgentRail 基类 ✅
 - `sys_operation.SysOperation.Fs()` — 文件系统操作接口 ✅
 - `DeepAgentInterface.LoadState` — 获取 DeepAgentState ✅
-- `ReActAgent.SetLLM/GetLLM/Config` — 模型切换和配置 ✅
-- `ReActAgentConfig.ModelNameVal` — 模型名称设置 ✅
+- `ReActAgent.SetLLM/GetLLM/Config` — 模型切换和配置 ✅（满足 `modelSwitcher`）
+- `ReActAgentConfig.SetModelName` — 模型名称设置 ❌ **需新增**（满足 `modelConfigSetter`）
 - `ModelContext.AddMessages` — 追加 UserMessage ✅
 - `UsageMetadata.InputTokens/OutputTokens` — token 使用量 ✅
 - `ToolCallInputs.ToolName` — 工具名称（`todo_` 前缀匹配） ✅
