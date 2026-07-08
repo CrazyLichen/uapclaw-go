@@ -229,6 +229,15 @@ func IsPaidSearchEnabled() bool {
 	return false
 }
 
+// ResetFreeSearchRuntimeFlags 重置免费搜索运行时标志为禁用。
+//
+// 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
+// 对应 Python: reset_free_search_runtime_flags()
+func ResetFreeSearchRuntimeFlags() {
+	os.Setenv(freeSearchDDGEnabledEnv, "false")
+	os.Setenv(freeSearchBingEnabledEnv, "false")
+}
+
 // envFlag 解析布尔型环境变量值，保留空值时的默认值。
 // 对齐 Python: _env_flag(name, default) (web_tools.py line 436)
 func envFlag(name string, defaultVal bool) bool {

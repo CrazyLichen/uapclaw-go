@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn/factory"
@@ -18,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
@@ -116,32 +118,64 @@ Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 
 // runAppCmd 执行 app 子命令。
 //
-// 加载配置 → 创建 GatewayServer → 启动 → 等待退出信号。
+// 启动流程对齐 Python app.py / app_gateway.py：
+//
+//	1. ParseEarly        → 早期 dotenv（--dotenv/--name，在 PreRunE 中）
+//	2. workspace.Prepare → workspace 自动初始化
+//	3. logger.Setup      → 日志初始化（尽早，后续步骤的日志可写文件）
+//	4. dotenv.Load       → 加载主 .env（~/.uapclaw/config/.env）
+//	5. config.New+Load   → 完整配置加载
+//	6. ResetFlags        → 重置免费搜索运行时标志
 func runAppCmd(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// 读取 flags
+	// CLI flags 覆写环境变量（优先于配置文件）
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")
-
-	// 设置环境变量覆盖（优先于配置文件）
 	if host != "" {
-		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
-			return fmt.Errorf("设置环境变量 UAPCLAW_GATEWAY_HOST 失败: %w", err)
-		}
+		os.Setenv("UAPCLAW_GATEWAY_HOST", host)
 	}
 	if port > 0 {
-		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
-			return fmt.Errorf("设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %w", err)
+		os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port))
+	}
+
+	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
+	if !workspace.IsInitialized() {
+		if _, err := workspace.Prepare(workspace.InitOption{
+			Overwrite: false,
+			Language:  "zh",
+		}); err != nil {
+			return fmt.Errorf("初始化工作区失败: %w", err)
 		}
 	}
 
-	// 加载配置
-	cfg, err := config.New("")
-	if err != nil {
-		return fmt.Errorf("加载配置失败: %w", err)
+	// 3. 日志初始化（等价 Python: configure_log() / setup_logger()）
+	//    尽早初始化，让后续步骤的日志能正确输出到文件。
+	//    WithConfigFile() 自己读 config.yaml 的 logging 段，不依赖 Config 对象。
+	if err := logger.Setup(logger.WithConfigFile()); err != nil {
+		return fmt.Errorf("初始化日志系统失败: %w", err)
 	}
+
+	// 4. 加载主 .env 文件（等价 Python: load_dotenv(dotenv_path=get_env_file(), override=True)）
+	envFile := workspace.EnvFile()
+	if _, err := os.Stat(envFile); err == nil {
+		if err := dotenv.Load(envFile); err != nil {
+			return fmt.Errorf("加载 .env 文件失败: %w", err)
+		}
+	}
+
+	// 5. 完整配置加载（等价 Python: get_config()）
+	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
+	if err != nil {
+		return fmt.Errorf("创建配置失败: %w", err)
+	}
+	if _, err := cfg.Load(); err != nil {
+		return fmt.Errorf("加载配置文件失败: %w", err)
+	}
+
+	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
+	harness.ResetFreeSearchRuntimeFlags()
 
 	// 创建 ChannelTransport（进程内传输）
 	transport := gateway_push.NewChannelTransport()

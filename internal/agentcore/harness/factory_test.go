@@ -358,6 +358,20 @@ func TestCreateDeepAgent_自定义Card(t *testing.T) {
 	assert.Equal(t, "my_agent", agent.Card().GetName())
 }
 
+// TestResetFreeSearchRuntimeFlags 验证重置免费搜索运行时标志。
+func TestResetFreeSearchRuntimeFlags(t *testing.T) {
+	// 先设置为 true
+	t.Setenv(freeSearchDDGEnabledEnv, "true")
+	t.Setenv(freeSearchBingEnabledEnv, "true")
+
+	// 调用重置
+	ResetFreeSearchRuntimeFlags()
+
+	// 验证已重置为 false
+	assert.Equal(t, "false", os.Getenv(freeSearchDDGEnabledEnv))
+	assert.Equal(t, "false", os.Getenv(freeSearchBingEnabledEnv))
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureResourceMgr 确保全局资源管理器已初始化，返回其指针
