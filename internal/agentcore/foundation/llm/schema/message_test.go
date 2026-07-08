@@ -363,6 +363,127 @@ func TestMessageContent_String(t *testing.T) {
 	}
 }
 
+// TestDefaultMessage_GettersSetters 验证 BaseMessage 接口的 getter/setter 方法。
+func TestDefaultMessage_GettersSetters(t *testing.T) {
+	msg := NewDefaultMessage(RoleTypeUser, "hello")
+
+	// GetRole / SetRole
+	if msg.GetRole() != RoleTypeUser {
+		t.Errorf("GetRole() = %v, want %v", msg.GetRole(), RoleTypeUser)
+	}
+	msg.SetRole(RoleTypeSystem)
+	if msg.GetRole() != RoleTypeSystem {
+		t.Errorf("SetRole 后 GetRole() = %v, want %v", msg.GetRole(), RoleTypeSystem)
+	}
+
+	// GetContent / SetContent
+	if msg.GetContent().Text() != "hello" {
+		t.Errorf("GetContent().Text() = %q, want %q", msg.GetContent().Text(), "hello")
+	}
+	msg.SetContent(NewTextContent("world"))
+	if msg.GetContent().Text() != "world" {
+		t.Errorf("SetContent 后 GetContent().Text() = %q, want %q", msg.GetContent().Text(), "world")
+	}
+
+	// GetName / SetName
+	if msg.GetName() != "" {
+		t.Errorf("GetName() = %q, want 空", msg.GetName())
+	}
+	msg.SetName("alice")
+	if msg.GetName() != "alice" {
+		t.Errorf("SetName 后 GetName() = %q, want %q", msg.GetName(), "alice")
+	}
+
+	// GetMetadata / SetMetadata
+	if msg.GetMetadata() != nil {
+		t.Errorf("GetMetadata() = %v, want nil", msg.GetMetadata())
+	}
+	meta := map[string]any{"key": "value"}
+	msg.SetMetadata(meta)
+	if msg.GetMetadata()["key"] != "value" {
+		t.Errorf("SetMetadata 后 GetMetadata()[key] = %v, want %q", msg.GetMetadata()["key"], "value")
+	}
+}
+
+// TestUnmarshalMessage_User 验证 UnmarshalMessage 反序列化用户消息。
+func TestUnmarshalMessage_User(t *testing.T) {
+	data := []byte(`{"role":"user","content":"你好"}`)
+	msg, err := UnmarshalMessage(data)
+	if err != nil {
+		t.Fatalf("UnmarshalMessage 失败: %v", err)
+	}
+	if msg.GetRole() != RoleTypeUser {
+		t.Errorf("Role = %v, want %v", msg.GetRole(), RoleTypeUser)
+	}
+	if msg.GetContent().Text() != "你好" {
+		t.Errorf("Content = %q, want %q", msg.GetContent().Text(), "你好")
+	}
+}
+
+// TestUnmarshalMessage_System 验证 UnmarshalMessage 反序列化系统消息。
+func TestUnmarshalMessage_System(t *testing.T) {
+	data := []byte(`{"role":"system","content":"系统提示"}`)
+	msg, err := UnmarshalMessage(data)
+	if err != nil {
+		t.Fatalf("UnmarshalMessage 失败: %v", err)
+	}
+	if msg.GetRole() != RoleTypeSystem {
+		t.Errorf("Role = %v, want %v", msg.GetRole(), RoleTypeSystem)
+	}
+}
+
+// TestUnmarshalMessage_Assistant 验证 UnmarshalMessage 反序列化助手消息。
+func TestUnmarshalMessage_Assistant(t *testing.T) {
+	data := []byte(`{"role":"assistant","content":"回复内容"}`)
+	msg, err := UnmarshalMessage(data)
+	if err != nil {
+		t.Fatalf("UnmarshalMessage 失败: %v", err)
+	}
+	if msg.GetRole() != RoleTypeAssistant {
+		t.Errorf("Role = %v, want %v", msg.GetRole(), RoleTypeAssistant)
+	}
+}
+
+// TestUnmarshalMessage_Tool 验证 UnmarshalMessage 反序列化工具消息。
+func TestUnmarshalMessage_Tool(t *testing.T) {
+	data := []byte(`{"role":"tool","content":"工具结果"}`)
+	msg, err := UnmarshalMessage(data)
+	if err != nil {
+		t.Fatalf("UnmarshalMessage 失败: %v", err)
+	}
+	if msg.GetRole() != RoleTypeTool {
+		t.Errorf("Role = %v, want %v", msg.GetRole(), RoleTypeTool)
+	}
+}
+
+// TestUnmarshalMessage_未知角色 验证 UnmarshalMessage 对未知角色报错。
+func TestUnmarshalMessage_未知角色(t *testing.T) {
+	data := []byte(`{"role":"unknown","content":"test"}`)
+	_, err := UnmarshalMessage(data)
+	if err == nil {
+		t.Error("未知角色应返回错误")
+	}
+}
+
+// TestUnmarshalMessage_无效JSON 验证 UnmarshalMessage 对无效 JSON 报错。
+func TestUnmarshalMessage_无效JSON(t *testing.T) {
+	data := []byte(`invalid json`)
+	_, err := UnmarshalMessage(data)
+	if err == nil {
+		t.Error("无效 JSON 应返回错误")
+	}
+}
+
+// TestRoleType_String_越界 验证越界 RoleType 的字符串表示。
+func TestRoleType_String_越界(t *testing.T) {
+	role := RoleType(100)
+	got := role.String()
+	want := "RoleType(100)"
+	if got != want {
+		t.Errorf("越界 RoleType.String() = %q, want %q", got, want)
+	}
+}
+
 // TestDefaultMessage_EmptyContent 验证空内容消息的序列化。
 func TestBaseMessage_EmptyContent(t *testing.T) {
 	msg := NewUserMessage("")

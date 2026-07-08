@@ -324,7 +324,7 @@ func extractOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	if result == nil {
 		return ""
 	}
-	output, _ := result["output"]
+	output := result["output"]
 	if output == nil {
 		return ""
 	}

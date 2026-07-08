@@ -271,7 +271,7 @@ func TestChannelTransport_完整收发流程(t *testing.T) {
 // TestChannelTransport_SetServerPushHandler 测试 SetServerPushHandler 回调投递
 func TestChannelTransport_SetServerPushHandler(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	received := make(chan map[string]any, 1)
 
@@ -301,7 +301,7 @@ func TestChannelTransport_SetServerPushHandler(t *testing.T) {
 // TestChannelTransport_SendPush 测试 SendPush 基本功能
 func TestChannelTransport_SendPush(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	defer ct.Close()
+	defer func() { _ = ct.Close() }()
 
 	msg := map[string]any{"key": "value"}
 	err := ct.SendPush(msg)
@@ -313,7 +313,7 @@ func TestChannelTransport_SendPush(t *testing.T) {
 // TestChannelTransport_SendPush_关闭后返回错误 测试关闭后 SendPush 返回错误
 func TestChannelTransport_SendPush_关闭后返回错误(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
-	ct.Close()
+	_ = ct.Close()
 
 	err := ct.SendPush(map[string]any{})
 	if err != ErrTransportClosed {

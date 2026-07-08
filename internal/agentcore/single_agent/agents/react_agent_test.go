@@ -17,9 +17,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/ability"
 	saconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/config"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -2324,4 +2326,227 @@ func TestReActAgent_WriteInvokeResultToStream_nilHandler(t *testing.T) {
 		"interrupt_ids": []string{"id1"},
 	}
 	agent.WriteInvokeResultToStream(context.Background(), result, sess)
+}
+
+// TestReActAgent_SetAbilityManager 验证 SetAbilityManager 设置能力管理器
+func TestReActAgent_SetAbilityManager(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("set_am"),
+		agentschema.WithAgentDescription("设置能力管理器测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	// 初始非 nil（构造时自动初始化）
+	assert.NotNil(t, agent.AbilityManager())
+
+	// 设置新的能力管理器后可获取
+	newAM := ability.NewAbilityManager(nil)
+	agent.SetAbilityManager(newAM)
+	assert.Equal(t, newAM, agent.AbilityManager())
+}
+
+// TestReActAgent_SetPromptBuilder 验证 SetPromptBuilder 设置提示词构建器
+func TestReActAgent_SetPromptBuilder(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("set_pb"),
+		agentschema.WithAgentDescription("设置提示词构建器测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	pb := agent.PromptBuilder()
+	assert.NotNil(t, pb)
+
+	// 设置新的 promptBuilder
+	newPB := prompts.NewSystemPromptBuilder()
+	agent.SetPromptBuilder(newPB)
+	assert.Equal(t, newPB, agent.PromptBuilder())
+}
+
+// TestReActAgent_Card 验证 Card 返回身份卡片
+func TestReActAgent_Card(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("card_test"),
+		agentschema.WithAgentDescription("Card 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	assert.Equal(t, card, agent.Card())
+}
+
+// TestReActAgent_Config 验证 Config 返回配置
+func TestReActAgent_Config(t *testing.T) {
+	config := saconfig.NewReActAgentConfig(
+		saconfig.WithModelName("test-model"),
+	)
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("config_test"),
+		agentschema.WithAgentDescription("Config 测试"),
+	)
+	agent := NewReActAgent(card, config)
+	assert.Equal(t, config, agent.Config())
+}
+
+// TestReActAgent_AbilityManager_nil 验证构造时自动初始化能力管理器
+func TestReActAgent_AbilityManager_nil(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("am_nil"),
+		agentschema.WithAgentDescription("能力管理器 nil 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+	// 构造时自动初始化 AbilityManager，不为 nil
+	assert.NotNil(t, agent.AbilityManager())
+}
+
+// TestHasImagePrefix 验证 hasImagePrefix 检查 data:image/ 前缀
+func TestHasImagePrefix(t *testing.T) {
+	assert.True(t, hasImagePrefix("data:image/png;base64,abc"))
+	assert.True(t, hasImagePrefix("data:image/jpeg;..."))
+	assert.False(t, hasImagePrefix("data:text/plain;base64,abc"))
+	assert.False(t, hasImagePrefix("http://example.com/image.png"))
+	assert.False(t, hasImagePrefix(""))
+	assert.False(t, hasImagePrefix("data:imag"))
+}
+
+// TestIterMultimodalImageItems_非map 验证非 map 类型输入返回 nil
+func TestIterMultimodalImageItems_非map(t *testing.T) {
+	result := iterMultimodalImageItems("not a map")
+	assert.Nil(t, result)
+}
+
+// TestIterMultimodalImageItems_无data字段 验证无 data 字段返回 nil
+func TestIterMultimodalImageItems_无data字段(t *testing.T) {
+	result := iterMultimodalImageItems(map[string]any{"other": "value"})
+	assert.Nil(t, result)
+}
+
+// TestIterMultimodalImageItems_无multimodal字段 验证无 multimodal 字段返回 nil
+func TestIterMultimodalImageItems_无multimodal字段(t *testing.T) {
+	result := iterMultimodalImageItems(map[string]any{
+		"data": map[string]any{"other": "value"},
+	})
+	assert.Nil(t, result)
+}
+
+// TestIterMultimodalImageItems_有图片项 验证提取 image 类型且 data:image/ 前缀的项
+func TestIterMultimodalImageItems_有图片项(t *testing.T) {
+	input := map[string]any{
+		"data": map[string]any{
+			"multimodal": []any{
+				map[string]any{
+					"type":        "image",
+					"data_url":    "data:image/png;base64,abc",
+					"source_path": "/path/to/image.png",
+				},
+				map[string]any{
+					"type":     "text",
+					"data_url": "data:text/plain;base64,abc",
+				},
+				map[string]any{
+					"type":     "image",
+					"data_url": "http://example.com/image.png",
+				},
+			},
+		},
+	}
+	result := iterMultimodalImageItems(input)
+	assert.Equal(t, 1, len(result))
+	assert.Equal(t, "image", result[0]["type"])
+	assert.Equal(t, "data:image/png;base64,abc", result[0]["data_url"])
+}
+
+// TestBuildMultimodalToolResultsMessage_空结果 验证空工具结果返回 nil
+func TestBuildMultimodalToolResultsMessage_空结果(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("mm_empty"),
+		agentschema.WithAgentDescription("多模态空测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	results := []agentschema.ExecuteResult{{Result: "not a map"}}
+	msg := agent.buildMultimodalToolResultsMessage(results)
+	assert.Nil(t, msg)
+}
+
+// TestBuildMultimodalToolResultsMessage_有图片 验证含图片结果返回 UserMessage
+func TestBuildMultimodalToolResultsMessage_有图片(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("mm_img"),
+		agentschema.WithAgentDescription("多模态图片测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	results := []agentschema.ExecuteResult{
+		{
+			Result: map[string]any{
+				"data": map[string]any{
+					"multimodal": []any{
+						map[string]any{
+							"type":        "image",
+							"data_url":    "data:image/png;base64,abc",
+							"source_path": "/path/to/img.png",
+						},
+					},
+				},
+			},
+		},
+	}
+	msg := agent.buildMultimodalToolResultsMessage(results)
+	assert.NotNil(t, msg)
+}
+
+// TestBuildMultimodalToolResultsMessage_多张图片 验证多张图片添加摘要
+func TestBuildMultimodalToolResultsMessage_多张图片(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("mm_multi"),
+		agentschema.WithAgentDescription("多模态多图片测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	results := []agentschema.ExecuteResult{
+		{
+			Result: map[string]any{
+				"data": map[string]any{
+					"multimodal": []any{
+						map[string]any{
+							"type":        "image",
+							"data_url":    "data:image/png;base64,abc1",
+							"source_path": "/path/1.png",
+						},
+						map[string]any{
+							"type":        "image",
+							"data_url":    "data:image/jpeg;base64,abc2",
+							"source_path": "/path/2.png",
+						},
+					},
+				},
+			},
+		},
+	}
+	msg := agent.buildMultimodalToolResultsMessage(results)
+	assert.NotNil(t, msg)
+}
+
+// TestBuildMultimodalToolResultsMessage_无sourcePath 验证无 source_path 时使用 unknown image
+func TestBuildMultimodalToolResultsMessage_无sourcePath(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("mm_nopath"),
+		agentschema.WithAgentDescription("多模态无路径测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	results := []agentschema.ExecuteResult{
+		{
+			Result: map[string]any{
+				"data": map[string]any{
+					"multimodal": []any{
+						map[string]any{
+							"type":     "image",
+							"data_url": "data:image/png;base64,abc",
+						},
+					},
+				},
+			},
+		},
+	}
+	msg := agent.buildMultimodalToolResultsMessage(results)
+	assert.NotNil(t, msg)
 }

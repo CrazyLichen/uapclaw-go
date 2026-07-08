@@ -329,10 +329,7 @@ func injectGeneralPurposeSubagent(
 
 	// 构建 gp_rails：过滤掉 SubagentRail，确保有 SysOperationRail
 	// ⤵️ 9.8-9.24 回填：SubagentRail/SysOperationRail 类型断言，当前跳过过滤
-	gpRails := make([]agentinterfaces.AgentRail, 0, len(rails))
-	for _, r := range rails {
-		gpRails = append(gpRails, r)
-	}
+	gpRails := append(make([]agentinterfaces.AgentRail, 0, len(rails)), rails...)
 	// ⤵️ 9.8-9.24 回填：确保 gpRails 中有 SysOperationRail，当前跳过
 
 	// 从 Tool 实例提取 ToolCard

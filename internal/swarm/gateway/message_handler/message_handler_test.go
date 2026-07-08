@@ -71,7 +71,7 @@ func TestStartForwarding_重复启动(t *testing.T) {
 	err = mh.StartForwarding(ctx)
 	assert.NoError(t, err)
 
-	mh.StopForwarding()
+	_ = mh.StopForwarding()
 }
 
 // TestCancelAgentWorkForSession_空Session 测试空 sessionID

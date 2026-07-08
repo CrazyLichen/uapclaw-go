@@ -395,3 +395,66 @@ func TestReconfigure_WithLoggingLevels(t *testing.T) {
 		t.Errorf("期望 Gateway = debug，实际 %s", levels.Gateway)
 	}
 }
+
+// TestWithRotationConfig 验证 WithRotationConfig 选项函数
+func TestWithRotationConfig(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	rotCfg := NewRotationConfig()
+	rotCfg.MaxSize = 50 * 1024 * 1024
+	rotCfg.MaxBackups = 10
+
+	err := Setup(WithOutputDir(tmpDir), WithRotationConfig(rotCfg))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	// 验证日志系统已初始化
+	if !IsSetup() {
+		t.Error("期望 IsSetup() 返回 true")
+	}
+}
+
+// TestGetLogConfigSnapshot_未初始化 验证未初始化时返回空快照
+func TestGetLogConfigSnapshot_未初始化(t *testing.T) {
+	resetGlobal()
+
+	snapshot := GetLogConfigSnapshot()
+	if len(snapshot) != 0 {
+		t.Errorf("期望空快照，实际 %v", snapshot)
+	}
+}
+
+// TestGetLogConfigSnapshot_已初始化 验证已初始化时返回完整快照
+func TestGetLogConfigSnapshot_已初始化(t *testing.T) {
+	resetGlobal()
+	tmpDir := t.TempDir()
+
+	err := Setup(WithOutputDir(tmpDir), WithLogLevel("debug"))
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer func() { _ = Close() }()
+
+	snapshot := GetLogConfigSnapshot()
+	if len(snapshot) == 0 {
+		t.Error("期望非空快照")
+	}
+	// 验证关键字段存在
+	for _, key := range []string{"logger", "console", "common", "gateway", "channel", "agent_server", "permissions", "agent_core", "full", "output_dir"} {
+		if _, ok := snapshot[key]; !ok {
+			t.Errorf("快照缺少字段 %s", key)
+		}
+	}
+}
+
+// TestLevels_未初始化 验证未初始化时 Levels 返回默认值
+func TestLevels_未初始化(t *testing.T) {
+	resetGlobal()
+
+	levels := Levels()
+	// 应返回默认级别，不 panic
+	_ = levels
+}

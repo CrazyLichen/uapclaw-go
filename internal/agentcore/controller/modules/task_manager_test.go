@@ -795,3 +795,34 @@ func TestTaskManager_RemoveTask_删除父任务子任务提升为根(t *testing.
 	assert.Len(t, children, 1)
 	assert.Equal(t, "grandchild", children[0].TaskID)
 }
+
+// TestTaskManagerState_ToMap 验证 TaskManagerState 序列化为 map
+func TestTaskManagerState_ToMap(t *testing.T) {
+	state := &TaskManagerState{
+		Tasks:            map[string]*schema.Task{},
+		PriorityIndex:    map[int][]string{0: {"task1"}},
+		ParentToChildren: map[string]map[string]struct{}{},
+		ChildrenToParent: map[string]string{},
+		RootTasks:        map[string]struct{}{"task1": {}},
+	}
+	result := state.ToMap()
+	require.NotNil(t, result)
+	_, hasTasks := result["tasks"]
+	assert.True(t, hasTasks)
+	_, hasPriority := result["priority_index"]
+	assert.True(t, hasPriority)
+}
+
+// TestTaskManagerStateFromMap_正常 验证从 map 反序列化 TaskManagerState
+func TestTaskManagerStateFromMap_正常(t *testing.T) {
+	data := map[string]any{
+		"tasks":              map[string]any{},
+		"priority_index":     map[string]any{},
+		"parent_to_children": map[string]any{},
+		"children_to_parent": map[string]any{},
+		"root_tasks":         map[string]any{},
+	}
+	state, err := TaskManagerStateFromMap(data)
+	require.NoError(t, err)
+	require.NotNil(t, state)
+}

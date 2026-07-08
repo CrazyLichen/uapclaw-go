@@ -565,6 +565,72 @@ func TestSkillManager_Register_空目录名跳过(t *testing.T) {
 	}
 }
 
+// TestSkillManager_SetFsProvider 设置自定义 FsProvider
+func TestSkillManager_SetFsProvider(t *testing.T) {
+	sm := NewSkillManager("op-123")
+	provider := newMockFsProvider()
+	sm.SetFsProvider(provider)
+	if sm.fsProvider != provider {
+		t.Error("期望 fsProvider 被设置为自定义 provider")
+	}
+}
+
+// TestSkillManager_Register_注册失败时返回错误 注册失败时返回聚合错误
+func TestSkillManager_Register_注册失败时返回错误(t *testing.T) {
+	provider := newMockFsProvider()
+	// /skills 有子目录但子目录没有 SKILL.md
+	provider.dirs["/skills"] = []DirInfo{
+		{Name: "bad", Path: "/skills/bad"},
+	}
+	provider.dirs["/skills/bad"] = []DirInfo{}
+	provider.dirFiles["/skills/bad"] = []FileInfo{} // 无 SKILL.md
+
+	sm := NewSkillManagerWithProvider("op-123", provider)
+	err := sm.Register([]string{"/skills"}, false)
+	// 无 SKILL.md 不会报错，只是跳过
+	if err != nil {
+		t.Fatalf("期望无错误（跳过无 SKILL.md 的目录），实际: %v", err)
+	}
+	if sm.Count() != 0 {
+		t.Errorf("期望 Count=0，实际 %d", sm.Count())
+	}
+}
+
+// TestSkillManager_registerSkillFromMD_从MD注册 注册 SKILL.md 文件
+func TestSkillManager_registerSkillFromMD_从MD注册(t *testing.T) {
+	provider := newMockFsProvider()
+	provider.files["/skills/translate/SKILL.md"] = "---\ndescription: 翻译技能\n---\n# 翻译技能\n"
+
+	sm := NewSkillManagerWithProvider("op-123", provider)
+	err := sm.registerSkillFromMD("/skills/translate/SKILL.md", false)
+	if err != nil {
+		t.Fatalf("registerSkillFromMD 失败: %v", err)
+	}
+	if sm.Count() != 1 {
+		t.Errorf("期望 Count=1，实际 %d", sm.Count())
+	}
+}
+
+// TestSkillManager_registerSkillFromMD_文件不存在 文件不存在时返回错误
+func TestSkillManager_registerSkillFromMD_文件不存在(t *testing.T) {
+	provider := newMockFsProvider()
+	sm := NewSkillManagerWithProvider("op-123", provider)
+	err := sm.registerSkillFromMD("/nonexistent/SKILL.md", false)
+	if err == nil {
+		t.Error("期望返回错误")
+	}
+}
+
+// TestSkillManager_loadYAML_文件不存在 文件不存在时返回错误
+func TestSkillManager_loadYAML_文件不存在(t *testing.T) {
+	provider := newMockFsProvider()
+	sm := NewSkillManagerWithProvider("op-123", provider)
+	_, _, err := sm.loadYAML("/nonexistent/SKILL.md")
+	if err == nil {
+		t.Error("期望返回错误")
+	}
+}
+
 // ensure 编译检查
 var _ = errors.New
 var _ = fmt.Sprintf

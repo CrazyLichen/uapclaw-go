@@ -190,7 +190,7 @@ func TestBeforeModelCall_无Promise时跳过(t *testing.T) {
 
 	r := NewTaskCompletionRail()
 	// completionPromise 为空，BeforeModelCall 直接返回 nil
-	err := r.BeforeModelCall(nil, nil)
+	err := r.BeforeModelCall(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 
@@ -210,7 +210,7 @@ func TestBeforeTaskIteration_无TaskInstruction时跳过(t *testing.T) {
 	t.Parallel()
 
 	r := NewTaskCompletionRail()
-	err := r.BeforeTaskIteration(nil, nil)
+	err := r.BeforeTaskIteration(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 
@@ -230,7 +230,7 @@ func TestAfterTaskIteration_无Promise时跳过(t *testing.T) {
 	t.Parallel()
 
 	r := NewTaskCompletionRail()
-	err := r.AfterTaskIteration(nil, nil)
+	err := r.AfterTaskIteration(context.TODO(), nil)
 	assert.NoError(t, err)
 }
 

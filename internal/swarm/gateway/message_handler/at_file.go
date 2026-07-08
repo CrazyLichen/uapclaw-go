@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/dlclark/regexp2"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -96,7 +98,11 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 			if ferr != nil {
 				return m.String()
 			}
-			defer f.Close()
+			defer func() {
+				if closeErr := f.Close(); closeErr != nil {
+					logger.Warn(logComponent).Err(closeErr).Str("file", resolved).Msg("关闭文件失败")
+				}
+			}()
 
 			buf := make([]byte, maxFileSize+1)
 			n, _ := f.Read(buf)

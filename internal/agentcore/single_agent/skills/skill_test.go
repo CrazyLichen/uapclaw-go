@@ -86,6 +86,39 @@ func TestSkill_GoString_长描述(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// TestTruncateDescription_短描述 短描述不截断
+func TestTruncateDescription_短描述(t *testing.T) {
+	desc := "翻译技能"
+	got := truncateDescription(desc)
+	if got != desc {
+		t.Errorf("短描述不应截断: got %q, want %q", got, desc)
+	}
+}
+
+// TestTruncateDescription_长描述 长描述截断至30字符
+func TestTruncateDescription_长描述(t *testing.T) {
+	desc := "这是一个非常非常非常非常非常非常非常非常非常非常非常非常长的描述"
+	got := truncateDescription(desc)
+	if len(got) != descriptionTruncateLen+3 { // 30 + len("...")
+		t.Errorf("长描述应截断至 %d+3 字符: got len=%d, content=%q", descriptionTruncateLen, len(got), got)
+	}
+	if got[:descriptionTruncateLen] != desc[:descriptionTruncateLen] {
+		t.Errorf("截断前缀不匹配: got %q, want %q", got[:descriptionTruncateLen], desc[:descriptionTruncateLen])
+	}
+	if got[descriptionTruncateLen:] != "..." {
+		t.Errorf("截断后缀应为 ...: got %q", got[descriptionTruncateLen:])
+	}
+}
+
+// TestTruncateDescription_恰好30字符 恰好30字符不截断
+func TestTruncateDescription_恰好30字符(t *testing.T) {
+	desc := "123456789012345678901234567890" // 30 chars
+	got := truncateDescription(desc)
+	if got != desc {
+		t.Errorf("恰好30字符不应截断: got %q, want %q", got, desc)
+	}
+}
+
 // contains 检查字符串是否包含子串
 func contains(s, sub string) bool {
 	for i := 0; i <= len(s)-len(sub); i++ {

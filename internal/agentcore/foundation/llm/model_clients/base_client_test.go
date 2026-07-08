@@ -486,3 +486,34 @@ func TestWithSkipValidate_直接校验配置(t *testing.T) {
 		t.Error("skipValidate=false 且 api_key/api_base 为空时应报错")
 	}
 }
+
+// TestGetModelName_有ModelConfig 验证 GetModelName 优先返回 ModelConfig.ModelName。
+func TestGetModelName_有ModelConfig(t *testing.T) {
+	e := newTestClientEmbed()
+	got := e.GetModelName()
+	if got != "gpt-4" {
+		t.Errorf("GetModelName() = %q, want %q", got, "gpt-4")
+	}
+}
+
+// TestGetModelName_无ModelConfig 验证 GetModelName 降级返回 clientName。
+func TestGetModelName_无ModelConfig(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig() // 无 ModelName
+	cc := llmschema.NewModelClientConfig("OpenAI", "test-key", "https://api.openai.com/v1",
+		llmschema.WithVerifySSL(false),
+	)
+	e, _ := NewBaseClientEmbed(mc, cc, WithClientName("MyClient"))
+	got := e.GetModelName()
+	if got != "MyClient" {
+		t.Errorf("GetModelName() = %q, want %q", got, "MyClient")
+	}
+}
+
+// TestGetModelName_全部为空 验证 GetModelName 最终降级返回 BaseModelClient。
+func TestGetModelName_全部为空(t *testing.T) {
+	e := &BaseClientEmbed{}
+	got := e.GetModelName()
+	if got != "BaseModelClient" {
+		t.Errorf("GetModelName() = %q, want %q", got, "BaseModelClient")
+	}
+}

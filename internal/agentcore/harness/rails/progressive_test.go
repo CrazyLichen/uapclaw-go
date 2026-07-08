@@ -17,7 +17,6 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -672,7 +671,7 @@ func (f *fakeBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentin
 }
 func (f *fakeBaseAgent) Card() *agentschema.AgentCard {
 	return &agentschema.AgentCard{
-		BaseCard: cschema2.BaseCard{ID: "test-agent", Name: "TestAgent"},
+		BaseCard: cschema.BaseCard{ID: "test-agent", Name: "TestAgent"},
 	}
 }
 func (f *fakeBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }

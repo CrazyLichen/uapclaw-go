@@ -1243,3 +1243,152 @@ func containsSubstring(s, sub string) bool {
 	}
 	return false
 }
+
+// TestNewBooleanParam_带默认值 验证带默认值的布尔参数
+func TestNewBooleanParam_带默认值(t *testing.T) {
+	p := NewBooleanParam("flag", "标志", false, true)
+	if p.Default != true {
+		t.Errorf("期望 Default true，实际 %v", p.Default)
+	}
+}
+
+// TestNewArrayParam_带默认值 验证带默认值的数组参数
+func TestNewArrayParam_带默认值(t *testing.T) {
+	items := NewStringParam("item", "数组元素", false)
+	defaultVal := []any{"a", "b"}
+	p := NewArrayParam("tags", "标签", false, items, defaultVal)
+	if p.Default == nil {
+		t.Error("期望 Default 不为 nil")
+	}
+	if p.Items != items {
+		t.Error("期望 Items 一致")
+	}
+}
+
+// TestNewObjectParam_带默认值 验证带默认值的对象参数
+func TestNewObjectParam_带默认值(t *testing.T) {
+	props := []*Param{NewStringParam("name", "名称", true)}
+	defaultVal := map[string]any{"name": "test"}
+	p := NewObjectParam("config", "配置", false, props, defaultVal)
+	if p.Default == nil {
+		t.Error("期望 Default 不为 nil")
+	}
+	if len(p.Properties) != 1 {
+		t.Errorf("期望 Properties 长度 1，实际 %d", len(p.Properties))
+	}
+}
+
+// TestParamType_String_越界 验证越界 ParamType 的 String 方法
+func TestParamType_String_越界(t *testing.T) {
+	pt := ParamType(100)
+	s := pt.String()
+	if s != "ParamType(100)" {
+		t.Errorf("期望 %q，实际 %q", "ParamType(100)", s)
+	}
+}
+
+// TestParam_MarshalJSON_完整字段 验证 Param.MarshalJSON 处理所有可选字段
+func TestParam_MarshalJSON_完整字段(t *testing.T) {
+	p := &Param{
+		Name:                 "test",
+		Description:          "测试参数",
+		Type:                 ParamTypeInteger,
+		Required:             true,
+		Default:              10,
+		Enum:                 []any{1, 2, 3},
+		MinLength:            1,
+		MaxLength:            100,
+		Pattern:              "^[a-z]+$",
+		Minimum:              0,
+		Maximum:              100,
+		Format:               "int32",
+		Nullable:             true,
+		Items:                NewStringParam("item", "元素", false),
+		Properties:           []*Param{NewStringParam("sub", "子参数", false)},
+		AdditionalProperties: true,
+		MinItems:             1,
+		MaxItems:             10,
+		AnyOf:                []*Param{NewStringParam("any", "任意", false)},
+		AllOf:                []*Param{NewStringParam("all", "全部", false)},
+		OneOf:                []*Param{NewStringParam("one", "单一", false)},
+	}
+
+	data, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("MarshalJSON 失败: %v", err)
+	}
+
+	// 验证关键字段出现在 JSON 中
+	s := string(data)
+	for _, key := range []string{`"default"`, `"enum"`, `"minLength"`, `"maxLength"`, `"pattern"`, `"minimum"`, `"maximum"`, `"format"`, `"nullable"`, `"items"`, `"properties"`, `"additionalProperties"`, `"minItems"`, `"maxItems"`, `"anyOf"`, `"allOf"`, `"oneOf"`} {
+		if !containsSubstring(s, key) {
+			t.Errorf("JSON 中缺少字段 %s", key)
+		}
+	}
+}
+
+// TestToFloat64 验证 toFloat64 类型转换
+func TestToFloat64(t *testing.T) {
+	if v := toFloat64(float64(3.14)); v != 3.14 {
+		t.Errorf("float64(3.14) 期望 3.14，实际 %v", v)
+	}
+	if v := toFloat64(float32(2.5)); v != float64(float32(2.5)) {
+		t.Errorf("float32(2.5) 期望 %v，实际 %v", float64(float32(2.5)), v)
+	}
+	if v := toFloat64(int(42)); v != 42.0 {
+		t.Errorf("int(42) 期望 42.0，实际 %v", v)
+	}
+	if v := toFloat64(int64(100)); v != 100.0 {
+		t.Errorf("int64(100) 期望 100.0，实际 %v", v)
+	}
+	if v := toFloat64(int32(50)); v != 50.0 {
+		t.Errorf("int32(50) 期望 50.0，实际 %v", v)
+	}
+	if !math.IsNaN(toFloat64("not a number")) {
+		t.Error("string 类型应返回 NaN")
+	}
+}
+
+// TestToInt 验证 toInt 类型转换
+func TestToInt(t *testing.T) {
+	if v, ok := toInt(int(42)); !ok || v != 42 {
+		t.Errorf("int(42) 期望 (42, true)，实际 (%v, %v)", v, ok)
+	}
+	if v, ok := toInt(int64(100)); !ok || v != 100 {
+		t.Errorf("int64(100) 期望 (100, true)，实际 (%v, %v)", v, ok)
+	}
+	if v, ok := toInt(int32(50)); !ok || v != 50 {
+		t.Errorf("int32(50) 期望 (50, true)，实际 (%v, %v)", v, ok)
+	}
+	if v, ok := toInt(float64(7.0)); !ok || v != 7 {
+		t.Errorf("float64(7.0) 期望 (7, true)，实际 (%v, %v)", v, ok)
+	}
+	if v, ok := toInt(float32(3.0)); !ok || v != 3 {
+		t.Errorf("float32(3.0) 期望 (3, true)，实际 (%v, %v)", v, ok)
+	}
+	if _, ok := toInt("not a number"); ok {
+		t.Error("string 类型应返回 false")
+	}
+}
+
+// TestParseParamType 验证 parseParamType 类型解析
+func TestParseParamType(t *testing.T) {
+	cases := map[string]ParamType{
+		"string":  ParamTypeString,
+		"boolean": ParamTypeBoolean,
+		"integer": ParamTypeInteger,
+		"number":  ParamTypeNumber,
+		"array":   ParamTypeArray,
+		"object":  ParamTypeObject,
+	}
+	for input, expected := range cases {
+		got, ok := parseParamType(input)
+		if !ok || got != expected {
+			t.Errorf("parseParamType(%q) 期望 (%v, true)，实际 (%v, %v)", input, expected, got, ok)
+		}
+	}
+	// 未知类型
+	if _, ok := parseParamType("unknown"); ok {
+		t.Error("未知类型应返回 false")
+	}
+}

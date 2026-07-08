@@ -263,6 +263,21 @@ func TestBaseVariable_NameValueInputKeys(t *testing.T) {
 	}
 }
 
+// TestBaseVariable_Eval 验证 baseVariable.Eval 方法。
+func TestBaseVariable_Eval(t *testing.T) {
+	b := baseVariable{
+		name:      "test_var",
+		inputKeys: []string{"key1"},
+		value:     "initial",
+	}
+
+	// Eval 对 baseVariable 而言仅过滤参数并返回 Value（不调用 Update）
+	result := b.Eval(map[string]any{"key1": "value1", "key2": "ignored"})
+	if result != "initial" {
+		t.Errorf("Eval() = %v, want %q", result, "initial")
+	}
+}
+
 // ────────────────────── splitDotPath 测试 ──────────────────────
 
 // TestSplitDotPath_Normal 验证正常路径拆分。

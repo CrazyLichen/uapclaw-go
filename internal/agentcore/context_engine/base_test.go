@@ -9,6 +9,17 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
+// mockTokenCounter 用于测试的模拟 Token 计数器
+type mockTokenCounter struct{}
+
+func (m *mockTokenCounter) Count(_ string, _ string) (int, error) { return 0, nil }
+func (m *mockTokenCounter) CountMessages(_ []llm_schema.BaseMessage, _ string) (int, error) {
+	return 0, nil
+}
+func (m *mockTokenCounter) CountTools(_ []schema.ToolInfoInterface, _ string) (int, error) {
+	return 0, nil
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // TestContextWindow_GetMessages_空窗口 测试空窗口的 GetMessages
@@ -203,7 +214,37 @@ func TestNewContextWindow(t *testing.T) {
 	}
 }
 
-// TestNewContextWindow_JSON序列化 测试 NewContextWindow 的 JSON 序列化
+// TestStatContextWindow_空窗口 验证空窗口统计。
+func TestStatContextWindow_空窗口(t *testing.T) {
+	w := iface.NewContextWindow()
+	counter := &mockTokenCounter{}
+	StatContextWindow(w, counter)
+	if w.Statistic.TotalMessages != 0 {
+		t.Errorf("TotalMessages = %d, want 0", w.Statistic.TotalMessages)
+	}
+	if w.Statistic.TotalDialogues != 0 {
+		t.Errorf("TotalDialogues = %d, want 0", w.Statistic.TotalDialogues)
+	}
+}
+
+// TestStatContextWindow_有消息 验证有消息时的统计。
+func TestStatContextWindow_有消息(t *testing.T) {
+	w := &iface.ContextWindow{
+		SystemMessages:  []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeSystem, "系统提示")},
+		ContextMessages: []llm_schema.BaseMessage{llm_schema.NewDefaultMessage(llm_schema.RoleTypeUser, "你好")},
+	}
+	counter := &mockTokenCounter{}
+	StatContextWindow(w, counter)
+	if w.Statistic.TotalMessages != 2 {
+		t.Errorf("TotalMessages = %d, want 2", w.Statistic.TotalMessages)
+	}
+	if w.Statistic.SystemMessages != 1 {
+		t.Errorf("SystemMessages = %d, want 1", w.Statistic.SystemMessages)
+	}
+	if w.Statistic.UserMessages != 1 {
+		t.Errorf("UserMessages = %d, want 1", w.Statistic.UserMessages)
+	}
+}
 func TestNewContextWindow_JSON序列化(t *testing.T) {
 	w := iface.NewContextWindow()
 

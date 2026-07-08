@@ -409,4 +409,111 @@ func TestAgentCallbackContext_ModelContext_SetModelContext(t *testing.T) {
 	assert.Nil(t, ctx.ModelContext())
 }
 
+// TestAllBaseCallbackEvents 验证 AllBaseCallbackEvents 返回 8 个基础事件
+func TestAllBaseCallbackEvents(t *testing.T) {
+	events := AllBaseCallbackEvents()
+	assert.Equal(t, 8, len(events))
+
+	// 验证包含基础事件
+	seen := make(map[AgentCallbackEvent]bool)
+	for _, e := range events {
+		seen[e] = true
+	}
+	assert.True(t, seen[CallbackBeforeInvoke])
+	assert.True(t, seen[CallbackAfterInvoke])
+	assert.True(t, seen[CallbackBeforeModelCall])
+	assert.True(t, seen[CallbackAfterModelCall])
+	assert.True(t, seen[CallbackOnModelException])
+	assert.True(t, seen[CallbackBeforeToolCall])
+	assert.True(t, seen[CallbackAfterToolCall])
+	assert.True(t, seen[CallbackOnToolException])
+	// 不应包含 task-iteration 事件
+	assert.False(t, seen[CallbackBeforeTaskIteration])
+	assert.False(t, seen[CallbackAfterTaskIteration])
+}
+
+// TestAllDeepCallbackEvents 验证 AllDeepCallbackEvents 返回 2 个 Deep 扩展事件
+func TestAllDeepCallbackEvents(t *testing.T) {
+	events := AllDeepCallbackEvents()
+	assert.Equal(t, 2, len(events))
+	assert.Equal(t, CallbackBeforeTaskIteration, events[0])
+	assert.Equal(t, CallbackAfterTaskIteration, events[1])
+}
+
+// TestWithSession 验证 WithSession 选项函数
+func TestWithSession(t *testing.T) {
+	sess := session.NewSession(session.WithSessionID("test_sess"))
+	opt := WithSession(sess)
+	o := &AgentOptions{}
+	opt(o)
+	assert.Equal(t, sess, o.Session)
+}
+
+// TestWithStreamModes 验证 WithStreamModes 选项函数
+func TestWithStreamModes(t *testing.T) {
+	modes := []stream.StreamMode{stream.StreamModeOutput}
+	opt := WithStreamModes(modes)
+	o := &AgentOptions{}
+	opt(o)
+	assert.Equal(t, modes, o.StreamModes)
+}
+
+// TestNewAgentOptions 验证 NewAgentOptions 构建函数
+func TestNewAgentOptions(t *testing.T) {
+	sess := session.NewSession(session.WithSessionID("test_sess"))
+	modes := []stream.StreamMode{stream.StreamModeOutput}
+
+	opts := NewAgentOptions(
+		WithSession(sess),
+		WithStreamModes(modes),
+	)
+	assert.Equal(t, sess, opts.Session)
+	assert.Equal(t, modes, opts.StreamModes)
+}
+
+// TestNewAgentOptions_空选项 验证无选项时返回零值
+func TestNewAgentOptions_空选项(t *testing.T) {
+	opts := NewAgentOptions()
+	assert.Nil(t, opts.Session)
+	assert.Nil(t, opts.StreamModes)
+}
+
+// TestWithWorkflowSession 验证 WithWorkflowSession 选项函数
+func TestWithWorkflowSession(t *testing.T) {
+	sess := &session.WorkflowSession{}
+	opt := WithWorkflowSession(sess)
+	o := &WorkflowOptions{}
+	opt(o)
+	assert.Equal(t, sess, o.Session)
+}
+
+// TestWithWorkflowContext 验证 WithWorkflowContext 选项函数
+func TestWithWorkflowContext(t *testing.T) {
+	ctx := map[string]any{"key": "value"}
+	opt := WithWorkflowContext(ctx)
+	o := &WorkflowOptions{}
+	opt(o)
+	assert.Equal(t, ctx, o.Context)
+}
+
+// TestNewWorkflowOptions 验证 NewWorkflowOptions 构建函数
+func TestNewWorkflowOptions(t *testing.T) {
+	sess := &session.WorkflowSession{}
+	ctx := map[string]any{"key": "value"}
+
+	opts := NewWorkflowOptions(
+		WithWorkflowSession(sess),
+		WithWorkflowContext(ctx),
+	)
+	assert.Equal(t, sess, opts.Session)
+	assert.Equal(t, ctx, opts.Context)
+}
+
+// TestNewWorkflowOptions_空选项 验证无选项时返回零值
+func TestNewWorkflowOptions_空选项(t *testing.T) {
+	opts := NewWorkflowOptions()
+	assert.Nil(t, opts.Session)
+	assert.Nil(t, opts.Context)
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────

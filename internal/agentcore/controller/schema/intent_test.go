@@ -134,3 +134,56 @@ func TestValidate_各类型合法(t *testing.T) {
 		})
 	}
 }
+
+// TestWithTargetTaskID 验证 WithTargetTaskID 选项。
+func TestWithTargetTaskID(t *testing.T) {
+	event := &InputEvent{BaseEvent: BaseEvent{EventID: "e1"}}
+	intent, err := NewIntent(IntentPauseTask, event,
+		WithTargetTaskID("task-1"),
+		WithTargetTaskDescription("暂停"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "task-1", intent.TargetTaskID)
+}
+
+// TestWithDependTaskID 验证 WithDependTaskID 选项。
+func TestWithDependTaskID(t *testing.T) {
+	event := &InputEvent{BaseEvent: BaseEvent{EventID: "e1"}}
+	intent, err := NewIntent(IntentContinueTask, event,
+		WithDependTaskID([]string{"t1", "t2"}),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"t1", "t2"}, intent.DependTaskID)
+}
+
+// TestWithSupplementaryInfo 验证 WithSupplementaryInfo 选项。
+func TestWithSupplementaryInfo(t *testing.T) {
+	event := &InputEvent{BaseEvent: BaseEvent{EventID: "e1"}}
+	intent, err := NewIntent(IntentSupplementTask, event,
+		WithTargetTaskID("t1"),
+		WithSupplementaryInfo("补充信息"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "补充信息", intent.SupplementaryInfo)
+}
+
+// TestWithModificationDetails 验证 WithModificationDetails 选项。
+func TestWithModificationDetails(t *testing.T) {
+	event := &InputEvent{BaseEvent: BaseEvent{EventID: "e1"}}
+	intent, err := NewIntent(IntentModifyTask, event,
+		WithTargetTaskID("t1"),
+		WithModificationDetails("修改详情"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "修改详情", intent.ModificationDetails)
+}
+
+// TestWithClarificationPrompt 验证 WithClarificationPrompt 选项。
+func TestWithClarificationPrompt(t *testing.T) {
+	event := &InputEvent{BaseEvent: BaseEvent{EventID: "e1"}}
+	intent, err := NewIntent(IntentUnknownTask, event,
+		WithClarificationPrompt("请提供更多信息"),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "请提供更多信息", intent.ClarificationPrompt)
+}
