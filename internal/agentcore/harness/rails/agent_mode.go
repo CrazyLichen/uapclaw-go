@@ -812,41 +812,43 @@ func (r *AgentModeRail) languageIsCN() bool {
 
 // buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
 //
-// 对齐 Python: _build_enter_plan_mode_status()
+// 对齐 Python: _build_enter_plan_mode_status() L200-223
+// 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
 func (r *AgentModeRail) buildEnterPlanModeStatus(planFilePath string, planExists bool) string {
 	if r.languageIsCN() {
-		if planExists {
-			return "plan 文件已存在，路径：" + planFilePath + "。你可以阅读并做增量修改。"
+		if planFilePath != "" {
+			return "enter_plan_mode 已调用完成。请继续工作流。"
 		}
-		return "请先调用 enter_plan_mode 工具创建 plan 文件。"
+		return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
 	}
 	// 英文
-	if planExists {
-		return "Plan file already exists at: " + planFilePath + ". You can read it and make incremental edits."
+	if planFilePath != "" {
+		return "enter_plan_mode has been called. Proceed with the workflow."
 	}
-	return "Please call the enter_plan_mode tool first to create the plan file."
+	return "You have NOT called enter_plan_mode yet. Call it NOW as your first action."
 }
 
 // buildPlanFileInfo 构建 plan 文件信息描述。
 //
-// 对齐 Python: _build_plan_file_info()
+// 对齐 Python: _build_plan_file_info() L226-257
+// 三状态分支 + 提示词一比一复刻 Python（含 edit_file/write_file 工具名引用）
 func (r *AgentModeRail) buildPlanFileInfo(planFilePath string, planExists bool) string {
 	if planFilePath == "" {
 		if r.languageIsCN() {
-			return "Plan 文件路径尚未确定（调用 enter_plan_mode 后将获得）。"
+			return "尚无 plan 文件。请先调用 enter_plan_mode 创建。"
 		}
-		return "Plan file path is not yet determined (will be available after calling enter_plan_mode)."
+		return "No plan file yet. Call enter_plan_mode first to create one."
 	}
 	if planExists {
 		if r.languageIsCN() {
-			return fmt.Sprintf("Plan 文件路径：%s（已存在，可做增量修改）", planFilePath)
+			return fmt.Sprintf("计划文件已存在于 %s。你可以使用 edit_file 工具读取并增量编辑它。", planFilePath)
 		}
-		return fmt.Sprintf("Plan file path: %s (already exists, can make incremental edits)", planFilePath)
+		return fmt.Sprintf("A plan file already exists at %s. You can read it and make incremental edits using the edit_file tool.", planFilePath)
 	}
 	if r.languageIsCN() {
-		return fmt.Sprintf("Plan 文件路径：%s（尚未创建，调用 enter_plan_mode 后创建）", planFilePath)
+		return fmt.Sprintf("计划文件尚不存在。你应该使用 write_file 工具在 %s 创建计划。", planFilePath)
 	}
-	return fmt.Sprintf("Plan file path: %s (not yet created, will be created after calling enter_plan_mode)", planFilePath)
+	return fmt.Sprintf("No plan file exists yet. You should create your plan at %s using the write_file tool.", planFilePath)
 }
 
 // filterHiddenTools 从 ModelCallInputs.Tools 中过滤掉指定名称集合的工具。
