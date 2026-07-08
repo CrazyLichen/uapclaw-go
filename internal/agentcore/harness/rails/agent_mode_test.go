@@ -936,12 +936,12 @@ func TestBuildEnterPlanModeStatus(t *testing.T) {
 	// 中文：builder 为 nil 时默认中文
 	r.systemPromptBuilder = nil
 
-	// plan 文件已存在
+	// 路径已设置（enter_plan_mode 已调用）
 	s := r.buildEnterPlanModeStatus("/tmp/plan.md", true)
-	assert.Contains(t, s, "/tmp/plan.md")
-	assert.Contains(t, s, "增量修改")
+	assert.Contains(t, s, "enter_plan_mode")
+	assert.Contains(t, s, "工作流")
 
-	// plan 文件不存在
+	// 路径未设置（enter_plan_mode 未调用）
 	s2 := r.buildEnterPlanModeStatus("", false)
 	assert.Contains(t, s2, "enter_plan_mode")
 }
@@ -954,19 +954,20 @@ func TestBuildPlanFileInfo(t *testing.T) {
 	// 中文：builder 为 nil 时默认中文
 	r.systemPromptBuilder = nil
 
-	// 路径为空
+	// 路径为空（未调用 enter_plan_mode）
 	s := r.buildPlanFileInfo("", false)
-	assert.Contains(t, s, "尚未确定")
+	assert.Contains(t, s, "plan 文件")
+	assert.Contains(t, s, "enter_plan_mode")
 
 	// 路径存在
 	s2 := r.buildPlanFileInfo("/tmp/plan.md", true)
 	assert.Contains(t, s2, "/tmp/plan.md")
-	assert.Contains(t, s2, "已存在")
+	assert.Contains(t, s2, "edit_file")
 
 	// 路径不存在
 	s3 := r.buildPlanFileInfo("/tmp/plan.md", false)
 	assert.Contains(t, s3, "/tmp/plan.md")
-	assert.Contains(t, s3, "尚未创建")
+	assert.Contains(t, s3, "write_file")
 }
 
 // TestParseToolArgs 验证工具参数解析
@@ -1420,12 +1421,12 @@ func TestBuildEnterPlanModeStatus_英文(t *testing.T) {
 	r.systemPromptBuilder = builder
 	builder.SetLanguage("en")
 
-	// plan 文件已存在
+	// 路径已设置（enter_plan_mode 已调用）
 	s := r.buildEnterPlanModeStatus("/tmp/plan.md", true)
-	assert.Contains(t, s, "/tmp/plan.md")
-	assert.Contains(t, s, "incremental")
+	assert.Contains(t, s, "enter_plan_mode")
+	assert.Contains(t, s, "workflow")
 
-	// plan 文件不存在
+	// 路径未设置（enter_plan_mode 未调用）
 	s2 := r.buildEnterPlanModeStatus("", false)
 	assert.Contains(t, s2, "enter_plan_mode")
 }
@@ -1440,19 +1441,20 @@ func TestBuildPlanFileInfo_英文(t *testing.T) {
 	r.systemPromptBuilder = builder
 	builder.SetLanguage("en")
 
-	// 路径为空
+	// 路径为空（未调用 enter_plan_mode）
 	s := r.buildPlanFileInfo("", false)
-	assert.Contains(t, s, "not yet determined")
+	assert.Contains(t, s, "plan file")
+	assert.Contains(t, s, "enter_plan_mode")
 
 	// 路径存在
 	s2 := r.buildPlanFileInfo("/tmp/plan.md", true)
 	assert.Contains(t, s2, "/tmp/plan.md")
-	assert.Contains(t, s2, "already exists")
+	assert.Contains(t, s2, "edit_file")
 
 	// 路径不存在
 	s3 := r.buildPlanFileInfo("/tmp/plan.md", false)
 	assert.Contains(t, s3, "/tmp/plan.md")
-	assert.Contains(t, s3, "not yet created")
+	assert.Contains(t, s3, "write_file")
 }
 
 // --- rejectTool 边界测试 ---

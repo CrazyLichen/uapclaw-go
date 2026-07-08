@@ -795,8 +795,14 @@ func (r *AgentModeRail) buildAvailableAgents(subagents []hschema.SubagentSpec) s
 	for _, spec := range subagents {
 		// 对齐 Python L424: isinstance(spec, SubAgentConfig)
 		if saConfig, ok := spec.(*hschema.SubAgentConfig); ok && saConfig != nil {
-			name := saConfig.AgentCard.Name
-			desc := saConfig.AgentCard.Description
+			// 对齐 Python L425-426: spec.agent_card.name / spec.agent_card.description
+			// Python 不防御 nil agent_card，Go 需防御
+			name := "general-purpose"
+			desc := "DeepAgent instance"
+			if saConfig.AgentCard != nil {
+				name = saConfig.AgentCard.Name
+				desc = saConfig.AgentCard.Description
+			}
 			lines = append(lines, fmt.Sprintf("%q: %s", name, desc))
 		} else {
 			// 对齐 Python L427-430: getattr(spec, "card", None) → getattr(card, "name", None) or "general-purpose"
