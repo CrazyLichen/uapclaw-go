@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 )
@@ -349,10 +350,10 @@ func GetLogConfigSnapshot() map[string]any {
 // loadLoggingConfigFromYAML 读取 config.yaml 中的 logging 段。
 //
 // 不做 ${VAR:-default} 解析，仅取字面量值。
-// 自己解析配置文件路径，不依赖 workspace 包（避免 logger↔workspace 循环依赖）。
+// 通过 utils/path 包获取配置文件路径，对齐 Python: get_config_file()。
 // 对应 Python: _load_logging_config_from_yaml()
 func loadLoggingConfigFromYAML() *config.LoggingConfig {
-	configPath := resolveConfigFilePath()
+	configPath := pathutil.ConfigFile()
 	if configPath == "" {
 		return nil
 	}
@@ -383,23 +384,6 @@ func loadLoggingConfigFromYAML() *config.LoggingConfig {
 	}
 
 	return &cfg
-}
-
-// resolveConfigFilePath 解析配置文件路径。
-//
-// 等价于 workspace.ConfigFile()，但自包含实现避免循环依赖。
-// 优先级：
-//  1. UAPCLAW_CONFIG_DIR 环境变量 + /config.yaml
-//  2. ~/.uapclaw/config/config.yaml
-func resolveConfigFilePath() string {
-	if envDir := os.Getenv("UAPCLAW_CONFIG_DIR"); envDir != "" {
-		return filepath.Join(envDir, "config.yaml")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".uapclaw", "config", "config.yaml")
 }
 
 // getLogger 获取指定组件的 Logger 实例指针（非导出）。

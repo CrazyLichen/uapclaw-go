@@ -9,6 +9,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -537,7 +538,7 @@ func TestWithLoggingLevels_选项应用(t *testing.T) {
 }
 
 func TestWithConfigFile(t *testing.T) {
-	// 创建临时 config 目录和 config.yaml
+	// 创建临时 workspace 目录和 config/config.yaml
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
@@ -560,10 +561,11 @@ func TestWithConfigFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 设置 UAPCLAW_CONFIG_DIR 指向临时目录
-	t.Setenv("UAPCLAW_CONFIG_DIR", configDir)
+	// 设置 UAPCLAW_DATA_DIR 指向临时目录（对齐 path.ConfigFile 逻辑）
+	t.Setenv("UAPCLAW_DATA_DIR", dir)
 
-	// 先重置
+	// 重置 path 缓存和 logger
+	pathutil.ResetCache()
 	resetGlobal()
 
 	// 使用 WithConfigFile 初始化
@@ -588,8 +590,9 @@ func TestWithConfigFile(t *testing.T) {
 
 func TestWithConfigFile_文件不存在(t *testing.T) {
 	// 指向不存在的目录
-	t.Setenv("UAPCLAW_CONFIG_DIR", "/nonexistent/path/config")
+	t.Setenv("UAPCLAW_DATA_DIR", "/nonexistent/path")
 
+	pathutil.ResetCache()
 	resetGlobal()
 
 	// 文件不存在时应使用默认级别，不报错
@@ -604,23 +607,4 @@ func TestWithConfigFile_文件不存在(t *testing.T) {
 	if levels.Gateway != LogLevelInfo {
 		t.Errorf("期望 Gateway = info（默认），实际 %s", levels.Gateway)
 	}
-}
-
-func TestResolveConfigFilePath(t *testing.T) {
-	t.Run("UAPCLAW_CONFIG_DIR优先", func(t *testing.T) {
-		t.Setenv("UAPCLAW_CONFIG_DIR", "/custom/config/dir")
-		path := resolveConfigFilePath()
-		expected := filepath.Join("/custom/config/dir", "config.yaml")
-		if path != expected {
-			t.Errorf("期望 %s，实际 %s", expected, path)
-		}
-	})
-
-	t.Run("默认路径", func(t *testing.T) {
-		// 不设置 UAPCLAW_CONFIG_DIR
-		path := resolveConfigFilePath()
-		if !strings.HasSuffix(path, filepath.Join(".uapclaw", "config", "config.yaml")) {
-			t.Errorf("期望以 .uapclaw/config/config.yaml 结尾，实际 %s", path)
-		}
-	})
 }
