@@ -25,6 +25,17 @@ type AgentTransport interface {
 	Close() error
 }
 
+// GatewayPushTransport AgentServer → Gateway 的推送传输抽象。
+//
+// AgentServer 主动推送消息到 Gateway（如 server_push、cron 推送等），
+// 对应 Python GatewayPushTransport protocol 的 send_push 方法。
+//
+// 对应 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
+type GatewayPushTransport interface {
+	// SendPush 向 Gateway 推送消息（AgentServer → Gateway 方向）
+	SendPush(msg map[string]any) error
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────

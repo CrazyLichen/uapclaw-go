@@ -8,7 +8,17 @@
 //
 //	message_handler/
 //	├── doc.go              # 包文档
-//	└── message_handler.go  # MessageHandler 骨架实现
+//	├── message_handler.go  # MessageHandler 核心结构（双 channel、transport、state）
+//	├── forward_loop.go     # 入站转发循环（forwardLoop + processStream + processNonStreamRequest）
+//	├── outbound.go         # 出站循环 + push 消费 + cron push
+//	├── channel_state.go    # ChannelControlState + ChannelMode + ApplyChannelState
+//	├── convert.go          # E2AResponse→Message 转换函数（ResponseToMessage、ChunkToMessage）
+//	├── cancel.go           # 取消/中断逻辑（CancelAgentWorkForSession）
+//	├── slash_cmd.go        # Slash 命令处理（handleChannelControl）
+//	├── at_file.go          # @file 引用解析 + @agent 提及
+//	└── command_parser/     # Slash 命令解析器子包
+//	    ├── doc.go
+//	    └── slash_command.go
 //
 // 对应 Python 代码：jiuwenswarm/gateway/message_handler/
 package message_handler

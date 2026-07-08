@@ -81,7 +81,7 @@ const (
 // NewWebChannel 创建 Web 通道实例。
 //
 // 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
-func NewWebChannel(cfg WebChannelConfig) *WebChannel {
+func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message)) *WebChannel {
 	// 填充默认值
 	if cfg.Host == "" {
 		cfg.Host = defaultWebHost
@@ -99,6 +99,7 @@ func NewWebChannel(cfg WebChannelConfig) *WebChannel {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
+		onMessageCb: onMessage,
 	}
 
 	// 创建事件推送回调：向所有客户端广播事件帧
@@ -106,7 +107,7 @@ func NewWebChannel(cfg WebChannelConfig) *WebChannel {
 		wc.broadcastEvent(event, payload)
 	}
 
-	wc.dispatcher = NewAppRPCHandlers(sendEvent)
+	wc.dispatcher = NewAppRPCHandlers(sendEvent, onMessage)
 
 	return wc
 }
@@ -270,19 +271,56 @@ func (wc *WebChannel) Stop(_ context.Context) error {
 	return nil
 }
 
-// Send 向所有客户端广播消息。
+// Send 向所有客户端广播消息，根据事件类型选择 full-payload 或 pure-text 路由。
 //
-// 将 schema.Message 转为事件帧推送到所有 WebSocket 连接。
+// 对齐 Python web_connect.py send() (L313-L414)：
+//   - msg.type == "res" → 构造 res 帧
+//   - 确定事件名（默认 chat.final，优先 msg.EventType，fallback payload.event_type）
+//   - full-payload 事件：透传完整 payload
+//   - pure-text 事件：提取 content + session_id + role + member_name
+//   - interrupt_result 副作用：自动广播 processing_status
 func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
-	payload := map[string]any{
-		"session_id": msg.SessionID,
-		"event_type": string(msg.EventType),
-	}
-	if msg.OK {
-		payload["ok"] = true
+	if msg == nil {
+		return nil
 	}
 
-	wc.broadcastEvent(string(msg.EventType), payload)
+	// 响应消息：构造 res 帧（后续通过 RPC response 路径发送，此处为 fallback）
+	if msg.Type == schema.MessageTypeRes {
+		payload := msg.Payload
+		if payload == nil {
+			payload = make(map[string]any)
+		}
+		payload["session_id"] = msg.SessionID
+		wc.broadcastEvent(string(msg.EventType), payload)
+		return nil
+	}
+
+	// 确定事件名
+	eventName := determineEventName(msg)
+
+	// 判断是否为 full-payload 事件
+	if isFullPayloadEvent(eventName) {
+		// full-payload：透传完整 payload
+		payload := msg.Payload
+		if payload == nil {
+			payload = make(map[string]any)
+		}
+		// 确保 session_id 存在
+		if _, ok := payload["session_id"]; !ok {
+			payload["session_id"] = msg.SessionID
+		}
+		wc.broadcastEvent(eventName, payload)
+	} else {
+		// pure-text：提取核心字段
+		payload := extractPureTextPayload(msg)
+		wc.broadcastEvent(eventName, payload)
+	}
+
+	// interrupt_result 副作用：自动广播 processing_status
+	if eventName == string(schema.EventTypeChatInterruptResult) {
+		wc.broadcastInterruptSideEffect(msg)
+	}
+
 	return nil
 }
 
@@ -361,4 +399,106 @@ func (wc *WebChannel) clientCount() int {
 	wc.clientsMu.RLock()
 	defer wc.clientsMu.RUnlock()
 	return len(wc.clients)
+}
+
+// determineEventName 确定消息的事件名
+//
+// 优先级：msg.EventType → payload.event_type → 默认 chat.final
+func determineEventName(msg *schema.Message) string {
+	if msg.EventType != "" {
+		return string(msg.EventType)
+	}
+	if msg.Payload != nil {
+		if et, ok := msg.Payload["event_type"]; ok {
+			if s, isStr := et.(string); isStr && s != "" {
+				return s
+			}
+		}
+	}
+	return "chat.final"
+}
+
+// isFullPayloadEvent 判断事件是否需要透传完整 payload
+//
+// 对齐 Python web_connect.py send() 中的 full-payload 事件列表
+func isFullPayloadEvent(eventName string) bool {
+	// full-payload 事件白名单
+	fullPayloadEvents := map[string]bool{
+		"connection.ack":          true,
+		"todo.updated":           true,
+		"chat.tool_call":         true,
+		"chat.tool_result":       true,
+		"chat.processing_status": true,
+		"chat.interrupt_result":  true,
+		"chat.evolution_status":  true,
+		"chat.error":             true,
+		"heartbeat.relay":        true,
+		"context.usage":          true,
+		"context.compression_state": true,
+		"chat.ask_user_question": true,
+		"chat.subtask_update":    true,
+		"history.message":        true,
+		"chat.session_result":    true,
+		"chat.usage_metadata":    true,
+		"chat.usage_summary":     true,
+		"chat.file":              true,
+	}
+
+	if fullPayloadEvents[eventName] {
+		return true
+	}
+
+	// 通配符前缀匹配：team.*, harness.*
+	if strings.HasPrefix(eventName, "team.") || strings.HasPrefix(eventName, "harness.") {
+		return true
+	}
+
+	return false
+}
+
+// extractPureTextPayload 提取纯文本事件的核心字段
+//
+// 对齐 Python web_connect.py send() 中的 pure-text 路径：
+// 仅提取 content + session_id + role + member_name
+func extractPureTextPayload(msg *schema.Message) map[string]any {
+	payload := map[string]any{
+		"session_id": msg.SessionID,
+	}
+
+	if msg.Payload != nil {
+		if content, ok := msg.Payload["content"]; ok {
+			payload["content"] = content
+		}
+		if role, ok := msg.Payload["role"]; ok {
+			payload["role"] = role
+		}
+		if memberName, ok := msg.Payload["member_name"]; ok {
+			payload["member_name"] = memberName
+		}
+	}
+
+	return payload
+}
+
+// broadcastInterruptSideEffect interrupt_result 事件的副作用：
+// 自动广播 processing_status 事件
+//
+// 对齐 Python web_connect.py send() 中 interrupt_result 后的处理：
+//   - intent=pause/supplement/resume → is_processing=true
+//   - intent=cancel → is_processing=false
+func (wc *WebChannel) broadcastInterruptSideEffect(msg *schema.Message) {
+	isProcessing := true // 默认 true（pause/supplement/resume）
+	if msg.Payload != nil {
+		if intent, ok := msg.Payload["intent"]; ok {
+			if s, isStr := intent.(string); isStr && s == "cancel" {
+				isProcessing = false
+			}
+		}
+	}
+
+	statusPayload := map[string]any{
+		"is_processing": isProcessing,
+		"session_id":    msg.SessionID,
+	}
+	wc.broadcastEvent("chat.processing_status", statusPayload)
 }

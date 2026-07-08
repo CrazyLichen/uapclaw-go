@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +69,7 @@ func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
 }
 
 func TestNewAppRPCHandlers_全量注册(t *testing.T) {
-	d := NewAppRPCHandlers(nil)
+	d := NewAppRPCHandlers(nil, nil)
 
 	// 验证核心方法已注册
 	expectedMethods := []string{
@@ -257,44 +256,30 @@ func TestStubHandler(t *testing.T) {
 }
 
 func TestChatMethods_Ack响应(t *testing.T) {
-	var receivedEvents []string
-	var mu sync.Mutex
-	sendEvent := func(event string, _ map[string]any) {
-		mu.Lock()
-		receivedEvents = append(receivedEvents, event)
-		mu.Unlock()
-	}
-
 	// chat.send
-	result, err := handleChatSend(sendEvent)(context.Background(), nil, "sess_1")
+	result, err := handleChatSend(nil)(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.resume
-	result, err = handleChatResume(sendEvent)(context.Background(), nil, "sess_1")
+	result, err = handleChatResume(nil)(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 
 	// chat.interrupt
-	result, err = handleChatInterrupt(sendEvent)(context.Background(), nil, "sess_1")
+	result, err = handleChatInterrupt(nil)(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "interrupt", result["intent"])
 
 	// chat.user_answer
-	result, err = handleChatUserAnswer(sendEvent)(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
+	result, err = handleChatUserAnswer(nil)(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "req_1", result["request_id"])
 
-	// 等待模拟事件发送
-	time.Sleep(600 * time.Millisecond)
-
-	mu.Lock()
-	assert.Contains(t, receivedEvents, "chat.final")
-	assert.Contains(t, receivedEvents, "chat.interrupt_result")
-	mu.Unlock()
+	// chat handlers 现在通过 OnMessage 回调转发，不再发送模拟事件
 }
 
 func TestConfigEnvMap_条目数(t *testing.T) {

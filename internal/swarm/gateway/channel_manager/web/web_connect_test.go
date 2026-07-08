@@ -19,7 +19,7 @@ import (
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestNewWebChannel_默认配置(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 	assert.Equal(t, "127.0.0.1", wc.config.Host)
 	assert.Equal(t, 19000, wc.config.Port)
 	assert.Equal(t, "/ws", wc.config.Path)
@@ -33,14 +33,14 @@ func TestNewWebChannel_自定义配置(t *testing.T) {
 		Host:    "0.0.0.0",
 		Port:    8080,
 		Path:    "/custom-ws",
-	})
+	}, nil)
 	assert.Equal(t, "0.0.0.0", wc.config.Host)
 	assert.Equal(t, 8080, wc.config.Port)
 	assert.Equal(t, "/custom-ws", wc.config.Path)
 }
 
 func TestWebChannel_BaseChannel接口(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 
 	// 验证 WebChannel 实现 BaseChannel 接口
 	var _ channel_manager.BaseChannel = wc
@@ -51,7 +51,7 @@ func TestWebChannel_BaseChannel接口(t *testing.T) {
 }
 
 func TestWebChannel_StartStop(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 
 	err := wc.Start(context.Background())
 	require.NoError(t, err)
@@ -67,17 +67,17 @@ func TestWebChannel_Addr(t *testing.T) {
 		Enabled: true,
 		Host:    "0.0.0.0",
 		Port:    9090,
-	})
+	}, nil)
 	assert.Equal(t, "0.0.0.0:9090", wc.Addr())
 }
 
 func TestWebChannel_ClientCount(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 	assert.Equal(t, 0, wc.ClientCount())
 }
 
 func TestWebChannel_OnMessage(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 	called := false
 	wc.OnMessage(func(_ *schema.Message) {
 		called = true
@@ -89,7 +89,7 @@ func TestWebChannel_OnMessage(t *testing.T) {
 
 func TestWebChannel_Config(t *testing.T) {
 	cfg := WebChannelConfig{Enabled: true, Host: "localhost", Port: 3000}
-	wc := NewWebChannel(cfg)
+	wc := NewWebChannel(cfg, nil)
 	result := wc.Config()
 	retCfg, ok := result.(WebChannelConfig)
 	require.True(t, ok)
@@ -97,7 +97,7 @@ func TestWebChannel_Config(t *testing.T) {
 }
 
 func TestWebChannel_Send(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 	// 无客户端时 Send 不应报错
 	msg := &schema.Message{
 		SessionID: "sess_1",
@@ -109,7 +109,7 @@ func TestWebChannel_Send(t *testing.T) {
 }
 
 func TestWebChannel_WebSocket连接生命周期(t *testing.T) {
-	wc := NewWebChannel(WebChannelConfig{Enabled: true})
+	wc := NewWebChannel(WebChannelConfig{Enabled: true}, nil)
 	require.NoError(t, wc.Start(context.Background()))
 	defer func() { _ = wc.Stop(context.Background()) }()
 

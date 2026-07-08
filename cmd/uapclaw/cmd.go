@@ -19,6 +19,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -142,8 +143,12 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
+	// 创建 ChannelTransport（进程内传输）
+	transport := gateway_push.NewChannelTransport()
+	pushTransport := transport // ChannelTransport 同时实现 AgentTransport + GatewayPushTransport
+
 	// 创建 GatewayServer
-	gs, err := gateway.NewGatewayServer(cfg)
+	gs, err := gateway.NewGatewayServer(cfg, transport, pushTransport)
 	if err != nil {
 		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
 	}

@@ -9,28 +9,33 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
+
+// newTestGatewayServer 创建测试用 GatewayServer
+func newTestGatewayServer(t *testing.T) *GatewayServer {
+	t.Helper()
+	cfg, err := config.New("")
+	require.NoError(t, err)
+	transport := gateway_push.NewChannelTransport()
+	gs, err := NewGatewayServer(cfg, transport, transport)
+	require.NoError(t, err)
+	return gs
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 func TestNewGatewayServer(t *testing.T) {
-	cfg, err := config.New("")
-	require.NoError(t, err)
-
-	gs, err := NewGatewayServer(cfg)
-	require.NoError(t, err)
+	gs := newTestGatewayServer(t)
 	assert.NotNil(t, gs)
 	assert.NotNil(t, gs.router)
 	assert.NotNil(t, gs.webChannel)
 	assert.NotNil(t, gs.channelMgr)
+	assert.NotNil(t, gs.msgHandler)
 }
 
 func TestGatewayServer_Router路由(t *testing.T) {
-	cfg, err := config.New("")
-	require.NoError(t, err)
-
-	gs, err := NewGatewayServer(cfg)
-	require.NoError(t, err)
+	gs := newTestGatewayServer(t)
 
 	// 启动测试服务器
 	server := httptest.NewServer(gs.router)
@@ -53,14 +58,10 @@ func TestGatewayServer_Router路由(t *testing.T) {
 }
 
 func TestGatewayServer_Stop(t *testing.T) {
-	cfg, err := config.New("")
-	require.NoError(t, err)
-
-	gs, err := NewGatewayServer(cfg)
-	require.NoError(t, err)
+	gs := newTestGatewayServer(t)
 
 	// 验证 Stop 不崩溃（httpServer 为 nil 的情况）
-	err = gs.Stop()
+	err := gs.Stop()
 	assert.NoError(t, err)
 }
 

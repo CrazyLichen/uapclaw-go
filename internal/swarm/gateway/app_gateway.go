@@ -16,12 +16,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
+	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// GatewayServer Gateway 服务器，整合 HTTP 路由、WebChannel、ChannelManager。
+// GatewayServer Gateway 服务器，整合 HTTP 路由、WebChannel、ChannelManager、MessageHandler。
 //
 // 提供 WebSocket RPC 端点、静态文件服务和文件操作 HTTP API，
 // 通过 Transport 抽象与 AgentServer 通信。
@@ -34,6 +36,10 @@ type GatewayServer struct {
 	webChannel *web.WebChannel
 	// channelMgr 渠道管理器
 	channelMgr *cm.ChannelManager
+	// msgHandler 消息处理器
+	msgHandler *mh.MessageHandler
+	// transport Agent 传输层
+	transport gateway_push.AgentTransport
 	// httpServer HTTP 服务器
 	httpServer *http.Server
 }
@@ -54,8 +60,8 @@ const shutdownTimeout = 5 * time.Second
 
 // NewGatewayServer 创建 Gateway 服务器实例。
 //
-// 初始化 WebChannel、ChannelManager，组装 chi 路由。
-func NewGatewayServer(cfg *config.Config) (*GatewayServer, error) {
+// 初始化 WebChannel、ChannelManager、MessageHandler，组装 chi 路由。
+func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport, pushTransport gateway_push.GatewayPushTransport) (*GatewayServer, error) {
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
 		Enabled: true,
@@ -64,15 +70,31 @@ func NewGatewayServer(cfg *config.Config) (*GatewayServer, error) {
 		Path:    "/ws",
 	}
 
-	wc := web.NewWebChannel(webCfg)
-
 	// 创建 ChannelManager
 	channelMgr := cm.NewChannelManager(nil, nil)
+
+	// 创建 MessageHandler
+	msgHandler := mh.NewMessageHandler(transport, pushTransport, channelMgr)
+
+	// 创建 onMessage 回调：WebChannel → MessageHandler.HandleInbound
+	var onMessageCb func(*schema.Message)
+	onMessageCb = func(msg *schema.Message) {
+		if err := msgHandler.HandleInbound(context.Background(), msg); err != nil {
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Str("msg_id", msg.ID).
+				Msg("HandleInbound 失败")
+		}
+	}
+
+	wc := web.NewWebChannel(webCfg, onMessageCb)
 
 	s := &GatewayServer{
 		config:     cfg,
 		webChannel: wc,
 		channelMgr: channelMgr,
+		msgHandler: msgHandler,
+		transport:  transport,
 	}
 
 	// 组装路由
@@ -83,15 +105,22 @@ func NewGatewayServer(cfg *config.Config) (*GatewayServer, error) {
 
 // Start 启动 Gateway 服务器。
 //
-// 启动 WebChannel 和 HTTP 服务器。
+// 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
 func (s *GatewayServer) Start(ctx context.Context) error {
-	// 注册并启动 WebChannel
-	s.channelMgr.Register(s.webChannel, func(_ *schema.Message) {
-		logger.Debug(logComponentAppGateway).Msg("收到入站消息（暂不转发）")
-	})
+	// 注册并启动 WebChannel（OnMessage 回调已通过 NewWebChannel 注入）
+	s.channelMgr.Register(s.webChannel, nil)
 
 	if err := s.webChannel.Start(ctx); err != nil {
 		return err
+	}
+
+	// 启动 MessageHandler 转发循环
+	if s.msgHandler != nil {
+		if err := s.msgHandler.StartForwarding(ctx); err != nil {
+			logger.Error(logComponentAppGateway).
+				Err(err).
+				Msg("启动 MessageHandler 转发循环失败")
+		}
 	}
 
 	// 启动 HTTP 服务器
@@ -130,6 +159,8 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 }
 
 // Stop 优雅关闭 Gateway 服务器。
+//
+// 停止顺序：WebChannel → MessageHandler → Transport → HTTP Server。
 func (s *GatewayServer) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
@@ -139,6 +170,24 @@ func (s *GatewayServer) Stop() error {
 		logger.Error(logComponentAppGateway).
 			Err(err).
 			Msg("关闭 WebChannel 失败")
+	}
+
+	// 停止 MessageHandler
+	if s.msgHandler != nil {
+		if err := s.msgHandler.StopForwarding(); err != nil {
+			logger.Error(logComponentAppGateway).
+				Err(err).
+				Msg("停止 MessageHandler 失败")
+		}
+	}
+
+	// 关闭 Transport
+	if s.transport != nil {
+		if err := s.transport.Close(); err != nil {
+			logger.Error(logComponentAppGateway).
+				Err(err).
+				Msg("关闭 Transport 失败")
+		}
 	}
 
 	// 关闭 HTTP 服务器

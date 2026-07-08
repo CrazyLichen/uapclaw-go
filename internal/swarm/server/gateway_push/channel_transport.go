@@ -21,6 +21,8 @@ type ChannelTransport struct {
 	sendCh chan *e2a.E2AEnvelope
 	// recvCh 响应通道：AgentServer → Gateway
 	recvCh chan *e2a.E2AResponse
+	// pushCh 推送通道：AgentServer → Gateway（server_push 主动推送）
+	pushCh chan map[string]any
 	// mu 保护 closed 标志的并发访问
 	mu sync.Mutex
 	// closed 是否已关闭
@@ -36,6 +38,8 @@ const (
 	defaultSendBufferSize = 64
 	// defaultRecvBufferSize 响应通道默认缓冲大小
 	defaultRecvBufferSize = 128
+	// defaultPushBufferSize 推送通道默认缓冲大小
+	defaultPushBufferSize = 128
 )
 
 // logComponent 日志组件
@@ -66,6 +70,7 @@ func NewChannelTransportWithBuffer(sendBuf, recvBuf int) *ChannelTransport {
 	t := &ChannelTransport{
 		sendCh: make(chan *e2a.E2AEnvelope, sendBuf),
 		recvCh: make(chan *e2a.E2AResponse, recvBuf),
+		pushCh: make(chan map[string]any, defaultPushBufferSize),
 	}
 	logger.Info(logComponent).
 		Str("event_type", "channel_transport_created").
@@ -131,6 +136,7 @@ func (t *ChannelTransport) Close() error {
 	t.closed = true
 	close(t.sendCh)
 	close(t.recvCh)
+	close(t.pushCh)
 	logger.Info(logComponent).
 		Str("event_type", "channel_transport_closed").
 		Msg("ChannelTransport 已关闭")
@@ -147,6 +153,39 @@ func (t *ChannelTransport) SendCh() <-chan *e2a.E2AEnvelope {
 // AgentServer 通过此通道向 Gateway 发送 E2AResponse。
 func (t *ChannelTransport) RecvCh() chan<- *e2a.E2AResponse {
 	return t.recvCh
+}
+
+// PushCh 返回推送通道的读取端，供 MessageHandler 消费。
+// MessageHandler 通过此通道读取 AgentServer 推送的消息。
+func (t *ChannelTransport) PushCh() <-chan map[string]any {
+	return t.pushCh
+}
+
+// SendPush 实现 GatewayPushTransport 接口，向 Gateway 推送消息。
+// AgentServer 通过此方法主动推送消息到 Gateway。
+func (t *ChannelTransport) SendPush(msg map[string]any) error {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		logger.Warn(logComponent).
+			Str("event_type", "channel_transport_send_push_closed").
+			Msg("推送失败：传输已关闭")
+		return ErrTransportClosed
+	}
+	t.mu.Unlock()
+
+	select {
+	case t.pushCh <- msg:
+		logger.Debug(logComponent).
+			Str("event_type", "channel_transport_send_push").
+			Msg("推送消息已发送")
+		return nil
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "channel_transport_send_push_full").
+			Msg("推送失败：通道已满，丢弃消息")
+		return nil
+	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

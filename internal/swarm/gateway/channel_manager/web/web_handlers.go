@@ -17,6 +17,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -153,7 +154,7 @@ func NewRPCDispatcher() *RPCDispatcher {
 //
 // 对齐 Python app_web_handlers.py 中全量 RPC 方法注册，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
-func NewAppRPCHandlers(sendEvent EventSender) *RPCDispatcher {
+func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *RPCDispatcher {
 	d := NewRPCDispatcher()
 
 	// ─── 本地实现方法 ───
@@ -177,10 +178,10 @@ func NewAppRPCHandlers(sendEvent EventSender) *RPCDispatcher {
 	d.Register("session.switch", stubHandler("session.switch", map[string]any{"ok": true}))
 
 	// ─── chat 类方法（本地 ack + 延时模拟 event）───
-	d.Register("chat.send", handleChatSend(sendEvent))
-	d.Register("chat.resume", handleChatResume(sendEvent))
-	d.Register("chat.interrupt", handleChatInterrupt(sendEvent))
-	d.Register("chat.user_answer", handleChatUserAnswer(sendEvent))
+	d.Register("chat.send", handleChatSend(onMessage))
+	d.Register("chat.resume", handleChatResume(onMessage))
+	d.Register("chat.interrupt", handleChatInterrupt(onMessage))
+	d.Register("chat.user_answer", handleChatUserAnswer(onMessage))
 
 	// ─── 路径配置 ───
 	d.Register("path.get", stubHandler("path.get", map[string]any{"path": ""}))
@@ -639,65 +640,66 @@ func handleSessionDelete(_ context.Context, params map[string]any, _ string) (ma
 
 // handleChatSend 处理 chat.send 请求。
 //
-// 返回即时 ack 响应，启动 goroutine 在 500ms 后发送模拟 chat.final 事件。
-func handleChatSend(sendEvent EventSender) RPCHandlerFunc {
+// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
+func handleChatSend(onMessage func(*schema.Message)) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		go func() {
-			// [模拟事件] 后续替换为真实 AgentServer 响应
-			time.Sleep(500 * time.Millisecond)
-			if sendEvent != nil {
-				sendEvent("chat.final", map[string]any{"content": "此功能尚未实现"})
-			}
-		}()
+		if onMessage != nil {
+			paramsJSON, _ := json.Marshal(params)
+			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatSend, paramsJSON,
+				schema.WithSessionID(sessionID),
+				schema.WithIsStream(true),
+			)
+			onMessage(msg)
+		}
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
 // handleChatResume 处理 chat.resume 请求。
 //
-// 返回即时 ack 响应，启动 goroutine 在 500ms 后发送模拟 chat.final 事件。
-func handleChatResume(sendEvent EventSender) RPCHandlerFunc {
+// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
+func handleChatResume(onMessage func(*schema.Message)) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		go func() {
-			// [模拟事件] 后续替换为真实 AgentServer 响应
-			time.Sleep(500 * time.Millisecond)
-			if sendEvent != nil {
-				sendEvent("chat.final", map[string]any{"content": "此功能尚未实现"})
-			}
-		}()
+		if onMessage != nil {
+			paramsJSON, _ := json.Marshal(params)
+			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatResume, paramsJSON,
+				schema.WithSessionID(sessionID),
+			)
+			onMessage(msg)
+		}
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
 // handleChatInterrupt 处理 chat.interrupt 请求。
 //
-// 返回即时 ack 响应，启动 goroutine 在 500ms 后发送模拟 chat.interrupt_result 事件。
-func handleChatInterrupt(sendEvent EventSender) RPCHandlerFunc {
+// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
+func handleChatInterrupt(onMessage func(*schema.Message)) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		go func() {
-			// [模拟事件] 后续替换为真实 AgentServer 响应
-			time.Sleep(500 * time.Millisecond)
-			if sendEvent != nil {
-				sendEvent("chat.interrupt_result", map[string]any{"success": true})
-			}
-		}()
+		if onMessage != nil {
+			paramsJSON, _ := json.Marshal(params)
+			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatCancel, paramsJSON,
+				schema.WithSessionID(sessionID),
+			)
+			onMessage(msg)
+		}
 		return map[string]any{"accepted": true, "session_id": sessionID, "intent": "interrupt"}, nil
 	}
 }
 
 // handleChatUserAnswer 处理 chat.user_answer 请求。
 //
-// 返回即时 ack 响应，启动 goroutine 在 500ms 后发送模拟 chat.final 事件。
-func handleChatUserAnswer(sendEvent EventSender) RPCHandlerFunc {
+// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
+func handleChatUserAnswer(onMessage func(*schema.Message)) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		requestID, _ := params["request_id"].(string)
-		go func() {
-			// [模拟事件] 后续替换为真实 AgentServer 响应
-			time.Sleep(500 * time.Millisecond)
-			if sendEvent != nil {
-				sendEvent("chat.final", map[string]any{"content": "此功能尚未实现"})
-			}
-		}()
+		if onMessage != nil {
+			paramsJSON, _ := json.Marshal(params)
+			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatAnswer, paramsJSON,
+				schema.WithSessionID(sessionID),
+			)
+			onMessage(msg)
+		}
 		return map[string]any{"accepted": true, "session_id": sessionID, "request_id": requestID}, nil
 	}
 }

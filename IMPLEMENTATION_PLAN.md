@@ -674,13 +674,13 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **11.x Gateway 核心** | — | | | |
 | 11.1 | ✅ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
 | 11.2 | ✅ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
-| 11.3 | 🔄 | MessageHandler | 入站→AgentServer，出站→Channel（骨架实现） | `jiuwenswarm/gateway/message_handler/message_handler.py` |
+| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路） | `jiuwenswarm/gateway/message_handler/message_handler.py` |
 | 11.4 | ☐ | Slash Command Parser | Slash 命令解析 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 11.5 | 🔄 | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连（骨架实现） | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ☐ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
 | 11.7 | ☐ | SessionMap | 会话映射 | `jiuwenswarm/gateway/routing/session_map.py` |
 | 11.8 | ☐ | InteractionContext | 交互上下文 | `jiuwenswarm/gateway/routing/interaction_context.py` |
-| 11.9 | 🔄 | GatewayServer | 多路由 WS 服务器组装（WebChannel 部分 ✅） | `jiuwenswarm/gateway/app_gateway.py` |
+| 11.9 | ✅ | GatewayServer | 多路由 WS 服务器组装 + Transport/MessageHandler 注入 | `jiuwenswarm/gateway/app_gateway.py` |
 | 11.10 | ☐ | Cron 调度服务 | Cron 表达式，Job 持久化，调度执行 | `jiuwenswarm/gateway/cron/` |
 | 11.11 | ☐ | 心跳服务 | 定时心跳，活跃时段控制 | `jiuwenswarm/gateway/heartbeat/heartbeat.py` |
 | 11.12 | ☐ | IM Pipeline | 数字人入站/出站管道 | `jiuwenswarm/gateway/im_pipeline/` |
