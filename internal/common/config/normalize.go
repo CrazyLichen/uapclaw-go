@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -64,7 +65,7 @@ func NormalizeConfig(data map[string]any) {
 // 如果输入已经是 map 类型则原样返回；如果是 JSON 字符串则解析为 map；
 // 其他类型或解析失败返回 nil。
 // 对应 Python: _parse_custom_headers(value)
-func ParseCustomHeaders(value any) any {
+func ParseCustomHeaders(value any) map[string]any {
 	if value == nil {
 		return nil
 	}
@@ -85,7 +86,20 @@ func ParseCustomHeaders(value any) any {
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(s), &result); err != nil {
+		// 对齐 Python: logger.warning(f"custom_headers JSON parse failed: {e}")
+		// config 包因循环依赖（logger → config）不能导入 logger，改用标准库 log.Printf
+		log.Printf("[config] custom_headers JSON 解析失败: value=%s, err=%v", truncateString(s, 100), err)
 		return nil
 	}
 	return result
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// truncateString 截断字符串到指定长度。
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }

@@ -30,10 +30,9 @@ func TestParseCustomHeaders(t *testing.T) {
 	t.Run("JSON字符串解析为map", func(t *testing.T) {
 		input := `{"X-Trace-Id": "abc", "X-Request": "req"}`
 		result := ParseCustomHeaders(input)
-		m, ok := result.(map[string]any)
-		assert.True(t, ok)
-		assert.Equal(t, "abc", m["X-Trace-Id"])
-		assert.Equal(t, "req", m["X-Request"])
+		// 返回值已是 map[string]any，无需断言
+		assert.Equal(t, "abc", result["X-Trace-Id"])
+		assert.Equal(t, "req", result["X-Request"])
 	})
 
 	t.Run("无效JSON返回nil", func(t *testing.T) {
