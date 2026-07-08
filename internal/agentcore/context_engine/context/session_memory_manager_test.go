@@ -106,6 +106,7 @@ func TestNewSessionMemoryDirectUpdater(t *testing.T) {
 	updater := NewSessionMemoryDirectUpdater(cfg)
 	if updater == nil {
 		t.Fatal("NewSessionMemoryDirectUpdater 不应返回 nil")
+		return
 	}
 	if updater.config.TriggerTokens != cfg.TriggerTokens {
 		t.Errorf("config 未正确传递")
@@ -196,6 +197,7 @@ func TestNewSessionMemoryAgentUpdater(t *testing.T) {
 	updater := NewSessionMemoryAgentUpdater(cfg)
 	if updater == nil {
 		t.Fatal("NewSessionMemoryAgentUpdater 不应返回 nil")
+		return
 	}
 	if updater.config.TriggerTokens != cfg.TriggerTokens {
 		t.Errorf("config 未正确传递")

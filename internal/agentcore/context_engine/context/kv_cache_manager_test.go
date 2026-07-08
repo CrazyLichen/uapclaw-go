@@ -57,6 +57,7 @@ func TestNewKVCacheManager(t *testing.T) {
 	mgr := NewKVCacheManager("session-1")
 	if mgr == nil {
 		t.Fatal("NewKVCacheManager 返回 nil")
+		return
 	}
 	if mgr.sessionID != "session-1" {
 		t.Errorf("sessionID = %q, want %q", mgr.sessionID, "session-1")

@@ -589,6 +589,7 @@ func TestBuildSaved_节省百分比计算(t *testing.T) {
 
 	if saved == nil {
 		t.Fatal("Saved 不应为 nil")
+		return
 	}
 	if saved.Percent != 75.0 {
 		t.Errorf("Saved.Percent = %.1f, 期望 75.0", saved.Percent)
