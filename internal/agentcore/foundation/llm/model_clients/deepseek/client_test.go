@@ -826,3 +826,16 @@ func TestInit_注册DeepSeek(t *testing.T) {
 		t.Errorf("ClientName = %q, want %q", deepseekClient.GetClientName(), "DeepSeek client")
 	}
 }
+
+// TestDeepSeekModelClient_SupportsKVCacheRelease 验证 DeepSeek 客户端不支持 KV Cache 释放。
+func TestDeepSeekModelClient_SupportsKVCacheRelease(t *testing.T) {
+	mc := llmschema.NewModelRequestConfig(llmschema.WithModelName("deepseek-chat"))
+	cc := llmschema.NewModelClientConfig("DeepSeek", "test-key", "https://api.deepseek.com/v1")
+	client, err := NewDeepSeekModelClient(mc, cc)
+	if err != nil {
+		t.Fatalf("创建客户端失败: %v", err)
+	}
+	if client.SupportsKVCacheRelease() {
+		t.Error("DeepSeek 客户端不应支持 KV Cache 释放")
+	}
+}

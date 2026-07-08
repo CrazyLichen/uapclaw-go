@@ -399,3 +399,40 @@ func TestToStr_类型分支(t *testing.T) {
 		t.Errorf("toStr(42) = %q, 期望 \"42\"", toStr(42))
 	}
 }
+
+// TestMaxRoundsEvaluator_ImportStateReset 验证 ImportState 和 Reset 为无操作
+func TestMaxRoundsEvaluator_ImportStateReset(t *testing.T) {
+	e := &MaxRoundsEvaluator{maxRounds: 5}
+	// ImportState 不应 panic
+	e.ImportState(map[string]any{"key": "value"})
+	// Reset 不应 panic
+	e.Reset()
+}
+
+// TestTokenBudgetEvaluator_ImportStateReset 验证 ImportState 和 Reset 为无操作
+func TestTokenBudgetEvaluator_ImportStateReset(t *testing.T) {
+	e := &TokenBudgetEvaluator{maxTokens: 1000}
+	e.ImportState(map[string]any{"key": "value"})
+	e.Reset()
+}
+
+// TestTimeoutEvaluator_ImportStateReset 验证 ImportState 和 Reset
+func TestTimeoutEvaluator_ImportStateReset(t *testing.T) {
+	e := &TimeoutEvaluator{timeoutSeconds: 30}
+	e.ImportState(map[string]any{"key": "value"})
+	e.Reset()
+}
+
+// TestCompletionPromiseEvaluator_ImportStateReset 验证 ImportState 和 Reset
+func TestCompletionPromiseEvaluator_ImportStateReset(t *testing.T) {
+	e := &CompletionPromiseEvaluator{}
+	e.ImportState(map[string]any{"key": "value"})
+	e.Reset()
+}
+
+// TestCustomPredicateEvaluator_ImportStateReset 验证 ImportState 和 Reset
+func TestCustomPredicateEvaluator_ImportStateReset(t *testing.T) {
+	e := &CustomPredicateEvaluator{}
+	e.ImportState(map[string]any{"key": "value"})
+	e.Reset()
+}
