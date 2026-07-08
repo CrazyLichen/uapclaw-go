@@ -5,20 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // TestUserHomeDir_默认 测试默认用户主目录
 func TestUserHomeDir_默认(t *testing.T) {
-	// 清除环境变量和缓存
 	_ = os.Unsetenv(EnvHome)
-	SetUserHome("")
+	path.ResetCache()
 
 	home := UserHomeDir()
 	if home == "" {
 		t.Error("UserHomeDir 不应返回空字符串")
 	}
 	if home == "." {
-		// 降级到当前目录也是合法的
 		t.Log("UserHomeDir 降级到当前目录")
 	}
 }
@@ -31,22 +31,19 @@ func TestUserHomeDir_环境变量(t *testing.T) {
 
 	_ = os.Setenv(EnvHome, customHome)
 	defer func() { _ = os.Unsetenv(EnvHome) }()
-	SetUserHome("") // 重置缓存
+	path.ResetCache()
 
 	home := UserHomeDir()
 	if home != customHome {
 		t.Errorf("UserHomeDir 期望 %q，实际 %q", customHome, home)
 	}
-
-	// 清理
-	SetUserHome("")
 }
 
 // TestWorkspaceDir_默认 测试默认工作区目录
 func TestWorkspaceDir_默认(t *testing.T) {
 	_ = os.Unsetenv(EnvDataDir)
 	_ = os.Unsetenv(EnvHome)
-	SetUserHome("")
+	path.ResetCache()
 
 	ws := WorkspaceDir()
 	if !strings.HasSuffix(ws, DefaultDir) {
@@ -62,15 +59,12 @@ func TestWorkspaceDir_环境变量(t *testing.T) {
 
 	_ = os.Setenv(EnvDataDir, customDir)
 	defer func() { _ = os.Unsetenv(EnvDataDir) }()
-	SetUserHome("") // 重置缓存
+	path.ResetCache()
 
 	ws := WorkspaceDir()
 	if ws != customDir {
 		t.Errorf("WorkspaceDir 期望 %q，实际 %q", customDir, ws)
 	}
-
-	// 清理
-	SetUserHome("")
 }
 
 // TestConfigDir_已初始化 测试已初始化时 ConfigDir 返回用户目录
@@ -79,18 +73,15 @@ func TestConfigDir_已初始化(t *testing.T) {
 
 	_ = os.Setenv(EnvDataDir, tmpDir)
 	defer func() { _ = os.Unsetenv(EnvDataDir) }()
-	SetUserHome("") // 重置缓存
-
 	// 模拟已初始化：创建 config 目录
 	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	path.ResetCache()
 
 	configDir := ConfigDir()
 	expected := filepath.Join(tmpDir, "config")
 	if configDir != expected {
 		t.Errorf("ConfigDir 期望 %q，实际 %q", expected, configDir)
 	}
-
-	SetUserHome("")
 }
 
 // TestConfigDir_未初始化_回退到resources 测试未初始化时回退到 resources
@@ -102,22 +93,18 @@ func TestConfigDir_未初始化_回退到resources(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(resDir, "agent", "workspace"), 0o755)
 	_ = os.WriteFile(filepath.Join(resDir, "config.yaml"), []byte("test"), 0o644)
 
-	// 设置环境变量
 	_ = os.Setenv(EnvDataDir, filepath.Join(t.TempDir(), "nonexistent"))
 	_ = os.Setenv(EnvResourcesDir, resDir)
 	defer func() {
 		_ = os.Unsetenv(EnvDataDir)
 		_ = os.Unsetenv(EnvResourcesDir)
-		SetUserHome("")
 	}()
-	SetUserHome("")
+	path.ResetCache()
 
 	configDir := ConfigDir()
 	if configDir != resDir {
 		t.Errorf("ConfigDir 未初始化时应回退到 resources %q，实际 %q", resDir, configDir)
 	}
-
-	SetUserHome("")
 }
 
 // TestAgentWorkspaceDir_已初始化 测试已初始化时的 Agent 工作空间路径
@@ -126,18 +113,14 @@ func TestAgentWorkspaceDir_已初始化(t *testing.T) {
 
 	_ = os.Setenv(EnvDataDir, tmpDir)
 	defer func() { _ = os.Unsetenv(EnvDataDir) }()
-	SetUserHome("")
-
-	// 模拟已初始化
 	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	path.ResetCache()
 
 	wsDir := AgentWorkspaceDir()
 	expected := filepath.Join(tmpDir, "agent", "workspace")
 	if wsDir != expected {
 		t.Errorf("AgentWorkspaceDir 期望 %q，实际 %q", expected, wsDir)
 	}
-
-	SetUserHome("")
 }
 
 // TestIsInitialized 测试初始化状态判断
@@ -146,7 +129,7 @@ func TestIsInitialized(t *testing.T) {
 
 	_ = os.Setenv(EnvDataDir, tmpDir)
 	defer func() { _ = os.Unsetenv(EnvDataDir) }()
-	SetUserHome("")
+	path.ResetCache()
 
 	// 未初始化
 	if IsInitialized() {
@@ -155,14 +138,11 @@ func TestIsInitialized(t *testing.T) {
 
 	// 创建 config 目录模拟已初始化
 	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
-	// 需要重置缓存
-	SetUserHome("")
+	path.ResetCache()
 
 	if !IsInitialized() {
 		t.Error("创建 config 目录后应已初始化")
 	}
-
-	SetUserHome("")
 }
 
 // TestResourcesDir_环境变量 测试 ResourcesDir 环境变量优先级
@@ -199,15 +179,19 @@ func TestPathHelpers(t *testing.T) {
 
 	_ = os.Setenv(EnvDataDir, tmpDir)
 	defer func() { _ = os.Unsetenv(EnvDataDir) }()
-	SetUserHome("")
+	// 创建 config 目录使 ConfigDir 不回退
+	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	path.ResetCache()
 
 	tests := []struct {
 		name     string
 		got      string
 		expected string
 	}{
+		// ConfigFile/EnvFile 基于 ConfigDir()
 		{"ConfigFile", ConfigFile(), filepath.Join(tmpDir, "config", "config.yaml")},
 		{"EnvFile", EnvFile(), filepath.Join(tmpDir, "config", ".env")},
+		// 其他路径基于 WorkspaceDir()
 		{"AgentRootDir", AgentRootDir(), filepath.Join(tmpDir, "agent")},
 		{"AgentMemoryDir", AgentMemoryDir(), filepath.Join(tmpDir, "agent", "workspace", "memory")},
 		{"AgentSkillsDir", AgentSkillsDir(), filepath.Join(tmpDir, "agent", "workspace", "skills")},
@@ -232,14 +216,10 @@ func TestPathHelpers(t *testing.T) {
 			}
 		})
 	}
-
-	SetUserHome("")
 }
 
 // TestSetUserHome_重置缓存 测试 SetUserHome 正确重置所有缓存
 func TestSetUserHome_重置缓存(t *testing.T) {
-	// 第一次调用
-	SetUserHome("")
 	ws1 := WorkspaceDir()
 
 	// 设置新 home
@@ -262,15 +242,13 @@ func TestSetUserHome_重置缓存(t *testing.T) {
 func TestGetResolvedPaths_未初始化无resources(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// 设置一个不存在的 data dir 和不存在的 resources
 	_ = os.Setenv(EnvDataDir, filepath.Join(tmpDir, "data"))
 	_ = os.Setenv(EnvResourcesDir, filepath.Join(tmpDir, "nonexistent"))
 	defer func() {
 		_ = os.Unsetenv(EnvDataDir)
 		_ = os.Unsetenv(EnvResourcesDir)
-		SetUserHome("")
 	}()
-	SetUserHome("")
+	path.ResetCache()
 
 	// 未初始化且无 resources 时应降级到用户目录
 	configDir := ConfigDir()
@@ -297,7 +275,6 @@ func TestResourcesDir_环境变量不存在(t *testing.T) {
 
 // TestResourcesDir_可执行文件同目录 测试从可执行文件同目录查找 resources
 func TestResourcesDir_可执行文件同目录(t *testing.T) {
-	// 创建可执行文件同目录的 resources
 	execPath, _ := os.Executable()
 	execDir := filepath.Dir(execPath)
 	resDir := filepath.Join(execDir, "resources")
@@ -305,15 +282,41 @@ func TestResourcesDir_可执行文件同目录(t *testing.T) {
 	defer func() { _ = os.RemoveAll(resDir) }()
 
 	_ = os.Unsetenv(EnvResourcesDir)
-	defer func() {
-		// 恢复环境变量
-	}()
 
 	dir, err := ResourcesDir()
 	if err != nil {
-		// 在某些环境中可执行文件目录可能不可写，这是预期的
 		t.Logf("ResourcesDir 在可执行文件目录查找失败: %v", err)
 	} else if dir != resDir {
 		t.Errorf("ResourcesDir 期望 %q，实际 %q", resDir, dir)
+	}
+}
+
+// TestConfigFile_基于ConfigDir 测试 ConfigFile 基于 ConfigDir
+func TestConfigFile_基于ConfigDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
+	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	path.ResetCache()
+
+	cf := ConfigFile()
+	expected := filepath.Join(ConfigDir(), "config.yaml")
+	if cf != expected {
+		t.Errorf("ConfigFile 期望 %q，实际 %q", expected, cf)
+	}
+}
+
+// TestEnvFile_基于ConfigDir 测试 EnvFile 基于 ConfigDir
+func TestEnvFile_基于ConfigDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv(EnvDataDir, tmpDir)
+	defer func() { _ = os.Unsetenv(EnvDataDir) }()
+	_ = os.MkdirAll(filepath.Join(tmpDir, "config"), 0o755)
+	path.ResetCache()
+
+	ef := EnvFile()
+	expected := filepath.Join(ConfigDir(), ".env")
+	if ef != expected {
+		t.Errorf("EnvFile 期望 %q，实际 %q", expected, ef)
 	}
 }

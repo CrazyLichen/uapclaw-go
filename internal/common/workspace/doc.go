@@ -12,6 +12,8 @@
 //
 //	WorkspaceDir()  → 数据根目录 ~/.uapclaw/（永不回退）
 //	ConfigDir()     → 配置目录 ~/.uapclaw/config/（未初始化时回退到 ResourcesDir）
+//	ConfigFile()    → 配置文件 ConfigDir()/config.yaml（基于 ConfigDir，有回退）
+//	EnvFile()       → 环境变量文件 ConfigDir()/.env（基于 ConfigDir，有回退）
 //	AgentWorkspaceDir() → Agent工作区 ~/.uapclaw/agent/workspace/（未初始化时回退到 ResourcesDir）
 //
 // ConfigDir 和 AgentWorkspaceDir 的回退逻辑与 Python 版本一致：当 config/ 目录不存在时，
@@ -46,7 +48,7 @@
 //
 //	workspace/
 //	├── doc.go           # 包文档
-//	├── paths.go         # 路径解析与回退逻辑、18个路径辅助函数
+//	├── paths.go         # 路径薄代理层（调用 utils/path 包 + 补日志）
 //	├── init.go          # 工作区初始化（Init/Prepare/语言选择/多语言文件映射）
 //	├── instance.go      # 命名实例：配置模型、名称验证、端口分配、instances.yaml 管理
 //	├── bootstrap.go     # 实例 bootstrap .env 生成
