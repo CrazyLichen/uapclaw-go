@@ -10,6 +10,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
@@ -116,8 +117,8 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: 防止重复注册
 	externalMemoryRailRegistered bool
 	// heartbeatRail 心跳护栏
-	// ⤵️ 10.6.3-10: HeartbeatRail
-	heartbeatRail interface{}
+	// ⤴️ 9.15 回填：HeartbeatRail
+	heartbeatRail *rails.HeartbeatRail
 	// skillEvolutionRail 技能演进护栏
 	// ⤵️ 10.6.3-10: SkillEvolutionRail
 	skillEvolutionRail interface{}
