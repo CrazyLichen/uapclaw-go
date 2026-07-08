@@ -705,15 +705,31 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 	r.ownsTaskTool = false
 }
 
-// isTaskToolRegistered 检查 task_tool 是否已在 ResourceMgr 中注册。
+// isTaskToolRegistered 检查 task_tool 是否已在 AbilityManager 中注册。
 //
 // 对齐 Python: AgentModeRail._is_task_tool_registered() L346-356
 func (r *AgentModeRail) isTaskToolRegistered() bool {
 	// 对齐 Python L348-356: 在已注册工具中搜索 "task_tool" 名称
-	// 由于 task_tool 由本 rail 注册，若 ownsTaskTool 已为 true 则已注册
-	// 若其他 rail 注册了同名工具，通过 ownsTaskTool=false + ownedTaskToolNames 检查
 	if r.ownsTaskTool {
 		return true
+	}
+	if r.agent == nil {
+		return false
+	}
+	// 对齐 Python: Runner.resource_mgr.get_tool() → 遍历已注册工具
+	// Go 等价: 通过 ReactAgent 获取 AbilityManager
+	reactAgent := r.agent.ReactAgent()
+	if reactAgent == nil {
+		return false
+	}
+	am := reactAgent.AbilityManager()
+	if am == nil {
+		return false
+	}
+	for _, ability := range am.List() {
+		if ability.AbilityName() == "task_tool" {
+			return true
+		}
 	}
 	return false
 }
