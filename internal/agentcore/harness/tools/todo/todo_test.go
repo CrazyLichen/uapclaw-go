@@ -627,7 +627,7 @@ func TestTodoItemFromMap_缺省ID(t *testing.T) {
 // TestCreateTodosTool 测试创建待办事项工具集
 func TestCreateTodosTool(t *testing.T) {
 	fs := NewMockFsOperation()
-	tools := CreateTodosTool("/tmp/workspace", fs, "cn", "agent1")
+	tools, _ := CreateTodosTool("/tmp/workspace", fs, "cn", "agent1")
 	if len(tools) != 4 {
 		t.Fatalf("期望 4 个工具，实际 %d", len(tools))
 	}

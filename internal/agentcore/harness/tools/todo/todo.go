@@ -509,17 +509,18 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 	return invokeFn
 }
 
-// CreateTodosTool 创建全部待办事项工具集。
+// CreateTodosTool 创建全部待办事项工具集，同时返回 TodoTool 基类供 Rail 调用 LoadTodos/SaveTodos/CleanupSession。
 // 对齐 Python: create_todos_tool
-func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, agentID string) []tool.Tool {
+func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, agentID string) ([]tool.Tool, TodoTool) {
 	lockManager := NewTodoLockManager()
 	todoTool := newTodoTool(workspace, fs, lockManager)
-	return []tool.Tool{
+	tools := []tool.Tool{
 		NewTodoCreateTool(todoTool, language, agentID),
 		NewTodoListTool(todoTool, language, agentID),
 		NewTodoGetTool(todoTool, language, agentID),
 		NewTodoModifyTool(todoTool, language, agentID),
 	}
+	return tools, todoTool
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -17,6 +17,7 @@ import (
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	resourcesmanager "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/resources_manager"
@@ -516,9 +517,20 @@ func addDefaultRails(
 
 	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加
 	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, "TaskPlanningRail") {
-		// ⤵️ 9.19-9.24 回填：TaskPlanningRail 具体实例化（含 model_selection）
-		agent.AddRail(agentinterfaces.NewBaseRail())
-		logger.Debug(logComponent).Msg("已添加默认 TaskPlanningRail 占位，⤵️ 9.19-9.24 回填")
+		modelSelMap := make(map[*llm.Model]string, len(params.ModelSelection))
+		for _, entry := range params.ModelSelection {
+			if entry.Model != nil {
+				modelSelMap[entry.Model] = entry.ModeName
+			}
+		}
+		taskPlanningRail := rails.NewTaskPlanningRail(
+			rails.WithModelSelection(modelSelMap),
+			rails.WithLanguage(resolvedLanguage),
+		)
+		agent.AddRail(taskPlanningRail)
+		logger.Debug(logComponent).
+			Int("model_selection_count", len(modelSelMap)).
+			Msg("已添加 TaskPlanningRail")
 	}
 
 	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加
