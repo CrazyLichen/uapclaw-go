@@ -807,9 +807,6 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 		"code_agent",
 		"research_agent",
 		"mobile_gui_agent",
-		"plan_agent",
-		"verification_agent",
-		"explore_agent",
 	}
 
 	deepCfg := schema.NewDeepAgentConfig()
@@ -3488,8 +3485,7 @@ func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 	// 这些工厂分支显式返回 stub 错误
 	stubFactories := []string{
 		"browser_agent", "code_agent", "research_agent",
-		"mobile_gui_agent", "plan_agent", "verification_agent",
-		"explore_agent",
+		"mobile_gui_agent",
 	}
 
 	for _, factory := range stubFactories {
