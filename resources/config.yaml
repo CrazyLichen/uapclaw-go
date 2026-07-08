@@ -16,6 +16,15 @@ server:
 logging:
   level: "info"
   format: "json"
+  console_level: "info"
+  # 各通道独立级别（未配置时跟随 level）
+  common: "info"
+  gateway: "info"
+  channel: "info"
+  agent_server: "info"
+  permissions: "info"
+  agent_core: "info"
+  full: "debug"
 
 # 工作区配置
 workspace:
