@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,8 +43,6 @@ const (
 	DefaultConfigDir = ".uapclaw/config"
 	// DefaultConfigFile 默认配置文件名。
 	DefaultConfigFile = "config.yaml"
-	// EnvConfigDir 配置目录环境变量名。
-	EnvConfigDir = "UAPCLAW_CONFIG_DIR"
 	// EnvDataDir 数据目录环境变量名。
 	EnvDataDir = "UAPCLAW_DATA_DIR"
 )
@@ -52,9 +51,7 @@ const (
 
 // New 创建配置管理器。
 //
-// path: 配置文件路径，为空时按以下优先级解析：
-//  1. UAPCLAW_CONFIG_DIR 环境变量指向的 config.yaml
-//  2. ~/.uapclaw/config/config.yaml
+// path: 配置文件路径，为空时使用 path.ConfigFile() 解析（对齐 Python get_config_file()）。
 //
 // opts: 可选配置，如 WithDecrypt、WithNormalize。
 func New(path string, opts ...Option) (*Config, error) {
@@ -67,11 +64,7 @@ func New(path string, opts ...Option) (*Config, error) {
 
 	// 解析配置文件路径
 	if path == "" {
-		p, err := resolveConfigPath()
-		if err != nil {
-			return nil, fmt.Errorf("解析配置路径失败: %w", err)
-		}
-		path = p
+		path = pathutil.ConfigFile()
 	}
 	cfg.path = path
 
@@ -242,26 +235,6 @@ func (c *Config) Reload() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// resolveConfigPath 按优先级解析配置文件路径。
-//
-// 优先级：
-//  1. UAPCLAW_CONFIG_DIR 环境变量指向的 config.yaml
-//  2. ~/.uapclaw/config/config.yaml
-func resolveConfigPath() (string, error) {
-	// 优先使用环境变量
-	if envDir := os.Getenv(EnvConfigDir); envDir != "" {
-		return filepath.Join(envDir, DefaultConfigFile), nil
-	}
-
-	// 默认使用用户主目录下的配置目录
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("获取用户主目录失败: %w", err)
-	}
-
-	return filepath.Join(home, DefaultConfigDir, DefaultConfigFile), nil
-}
 
 // saveLocked 将配置写入文件（调用方必须持有锁）。
 func (c *Config) saveLocked(data map[string]any) error {

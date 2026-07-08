@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -29,14 +31,23 @@ func TestNew_指定路径(t *testing.T) {
 }
 
 func TestNew_环境变量覆盖路径(t *testing.T) {
-	_ = os.Setenv(EnvConfigDir, "/custom/config/dir")
-	defer func() { _ = os.Unsetenv(EnvConfigDir) }()
+	tmpDir := t.TempDir()
+	// 创建 config 目录使 path.ConfigFile() 能找到
+	configDir := filepath.Join(tmpDir, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+
+	pathutil.ResetCache()
 
 	cfg, err := New("")
 	if err != nil {
 		t.Fatalf("New 失败: %v", err)
 	}
-	expected := filepath.Join("/custom/config/dir", DefaultConfigFile)
+	expected := filepath.Join(configDir, DefaultConfigFile)
 	if cfg.Path() != expected {
 		t.Errorf("期望 %s，实际 %s", expected, cfg.Path())
 	}
