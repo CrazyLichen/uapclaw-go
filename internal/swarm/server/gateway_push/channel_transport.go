@@ -23,6 +23,10 @@ type ChannelTransport struct {
 	recvCh chan *e2a.E2AResponse
 	// pushCh 推送通道：AgentServer → Gateway（server_push 主动推送）
 	pushCh chan map[string]any
+	// onServerPushCb push 消息回调，对齐 Python set_server_push_handler
+	onServerPushCb func(msg map[string]any)
+	// pushCancel push 消费 goroutine 的取消函数
+	pushCancel context.CancelFunc
 	// mu 保护 closed 标志的并发访问
 	mu sync.Mutex
 	// closed 是否已关闭
@@ -134,6 +138,12 @@ func (t *ChannelTransport) Close() error {
 		return nil
 	}
 	t.closed = true
+
+	// 停止 push 消费 goroutine
+	if t.pushCancel != nil {
+		t.pushCancel()
+	}
+
 	close(t.sendCh)
 	close(t.recvCh)
 	close(t.pushCh)
@@ -155,10 +165,31 @@ func (t *ChannelTransport) RecvCh() chan<- *e2a.E2AResponse {
 	return t.recvCh
 }
 
-// PushCh 返回推送通道的读取端，供 MessageHandler 消费。
-// MessageHandler 通过此通道读取 AgentServer 推送的消息。
+// PushCh 返回推送通道的读取端，供内部 goroutine 消费。
 func (t *ChannelTransport) PushCh() <-chan map[string]any {
 	return t.pushCh
+}
+
+// SetServerPushHandler 实现 GatewayPushTransport 接口，注册 push 回调。
+// 对齐 Python WebSocketAgentServerClient.set_server_push_handler：
+// 注册回调后，从 pushCh 读取的消息将通过回调投递。
+func (t *ChannelTransport) SetServerPushHandler(handler func(msg map[string]any)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onServerPushCb = handler
+
+	// 停止旧的 push 消费 goroutine
+	if t.pushCancel != nil {
+		t.pushCancel()
+	}
+
+	// 启动新的 push 消费 goroutine：从 pushCh 读取 → 调回调
+	ctx, cancel := context.WithCancel(context.Background())
+	t.pushCancel = cancel
+	go t.drainPushCh(ctx, handler)
+	logger.Info(logComponent).
+		Str("event_type", "server_push_handler_set").
+		Msg("ServerPushHandler 已注册")
 }
 
 // SendPush 实现 GatewayPushTransport 接口，向 Gateway 推送消息。
@@ -189,3 +220,22 @@ func (t *ChannelTransport) SendPush(msg map[string]any) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// drainPushCh 持续从 pushCh 读取消息并通过回调投递。
+// 对齐 Python _message_receiver_loop 中 push 帧的分发逻辑：
+// push 帧绕过 per-request 队列，直接通过回调投递。
+func (t *ChannelTransport) drainPushCh(ctx context.Context, handler func(msg map[string]any)) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-t.pushCh:
+			if !ok {
+				return
+			}
+			if handler != nil && msg != nil {
+				handler(msg)
+			}
+		}
+	}
+}

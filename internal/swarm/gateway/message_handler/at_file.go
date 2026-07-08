@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/dlclark/regexp2"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -16,16 +17,18 @@ const defaultInlineFileSizeLimit = 128 * 1024
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // atFilePattern 匹配 @path 或 @"quoted path" 的正则
-// Go regexp 不支持 lookbehind，改用前导空白/行首捕获组
-var atFilePattern = regexp.MustCompile(
-	`(?:^|\s)@(?:"([^"]+)"|([^\s#]+))(?:#[^#\s]*)?`,
+// 对齐 Python re.compile(r'(?P<prefix>(?:^|(?<=\s)))@(?:"(?P<quoted>[^"]+)"|(?P<plain>[^\s#]+))(?:#[^#\s]*)?')
+// 使用 regexp2 支持 lookbehind (?<=\s)，命名组用 .NET 语法 (?<name>...) 而非 Python (?P<name>...)
+var atFilePattern = regexp2.MustCompile(
+	`(?<prefix>(?:^|(?<=\s)))@(?:"(?<quoted>[^"]+)"|(?<plain>[^\s#]+))(?:#[^#\s]*)?`,
+	0,
 )
 
 // agentMentionQuotedPattern 匹配 @"<type> (agent)" 格式
-var agentMentionQuotedPattern = regexp.MustCompile(`(?:^|\s)@"([\w:.@-]+)\s+\(agent\)"`)
+var agentMentionQuotedPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@"(?<name>[\w:.@-]+)\s+\(agent\)"`, 0)
 
 // agentMentionPlainPattern 匹配 @agent-<type> 格式
-var agentMentionPlainPattern = regexp.MustCompile(`(?:^|\s)@(agent-[\w:.@-]+)`)
+var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<name>agent-[\w:.@-]+)`, 0)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -48,22 +51,21 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 		maxFileSize = defaultInlineFileSizeLimit
 	}
 
-	result := atFilePattern.ReplaceAllStringFunc(content, func(match string) string {
+	result, _ := atFilePattern.ReplaceFunc(content, func(m regexp2.Match) string {
 		// 提取路径：尝试 quoted 组，否则 plain 组
-		submatches := atFilePattern.FindStringSubmatch(match)
 		raw := ""
-		if len(submatches) >= 2 && submatches[1] != "" {
-			raw = submatches[1] // quoted
-		} else if len(submatches) >= 3 && submatches[2] != "" {
-			raw = submatches[2] // plain
+		if g := m.GroupByName("quoted"); g != nil && g.String() != "" {
+			raw = g.String()
+		} else if g := m.GroupByName("plain"); g != nil && g.String() != "" {
+			raw = g.String()
 		}
 		if raw == "" {
-			return match
+			return m.String()
 		}
 
 		// 跳过 @agent-xxx / @agent:xxx 提及（不是文件引用）
 		if strings.HasPrefix(raw, "agent-") || strings.HasPrefix(raw, "agent:") {
-			return match
+			return m.String()
 		}
 
 		// 解析路径
@@ -80,7 +82,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 		// 读取文件
 		info, err := os.Stat(resolved)
 		if err != nil || info.IsDir() {
-			return match
+			return m.String()
 		}
 
 		fileSize := info.Size()
@@ -92,7 +94,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 		} else {
 			f, ferr := os.Open(resolved)
 			if ferr != nil {
-				return match
+				return m.String()
 			}
 			defer f.Close()
 
@@ -109,7 +111,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 		}
 
 		if err != nil {
-			return match
+			return m.String()
 		}
 
 		text := string(data)
@@ -118,7 +120,7 @@ func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string
 		}
 
 		return fmt.Sprintf("\n<file-content path=\"%s\">\n%s\n</file-content>\n", raw, text)
-	})
+	}, 0, -1)
 
 	return result
 }
@@ -136,18 +138,22 @@ func ExtractAgentMentions(content string) []string {
 	var results []string
 
 	// 匹配引号格式：@"<type> (agent)"
-	for _, m := range agentMentionQuotedPattern.FindAllStringSubmatch(content, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			results = append(results, m[1])
+	mQuoted, _ := agentMentionQuotedPattern.FindStringMatch(content)
+	for mQuoted != nil {
+		if g := mQuoted.GroupByName("name"); g != nil && g.String() != "" {
+			results = append(results, g.String())
 		}
+		mQuoted, _ = agentMentionQuotedPattern.FindNextMatch(mQuoted)
 	}
 
 	// 匹配非引号格式：@agent-<type>
-	for _, m := range agentMentionPlainPattern.FindAllStringSubmatch(content, -1) {
-		if len(m) >= 2 && m[1] != "" {
-			name := m[1]
+	mPlain, _ := agentMentionPlainPattern.FindStringMatch(content)
+	for mPlain != nil {
+		if g := mPlain.GroupByName("name"); g != nil && g.String() != "" {
+			name := g.String()
 			results = append(results, name[len("agent-"):])
 		}
+		mPlain, _ = agentMentionPlainPattern.FindNextMatch(mPlain)
 	}
 
 	// 去重保序

@@ -202,6 +202,12 @@ func TestChannelTransport_实现AgentTransport接口(t *testing.T) {
 	var _ AgentTransport = (*ChannelTransport)(nil)
 }
 
+// TestChannelTransport_实现GatewayPushTransport接口 测试 ChannelTransport 实现 GatewayPushTransport 接口
+func TestChannelTransport_实现GatewayPushTransport接口(t *testing.T) {
+	// 编译期接口断言
+	var _ GatewayPushTransport = (*ChannelTransport)(nil)
+}
+
 // TestChannelTransport_完整收发流程 测试完整收发流程
 func TestChannelTransport_完整收发流程(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(4, 4)
@@ -259,5 +265,58 @@ func TestChannelTransport_完整收发流程(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("Gateway 超时：未收到第 %d 个响应", i)
 		}
+	}
+}
+
+// TestChannelTransport_SetServerPushHandler 测试 SetServerPushHandler 回调投递
+func TestChannelTransport_SetServerPushHandler(t *testing.T) {
+	ct := NewChannelTransportWithBuffer(1, 1)
+	defer ct.Close()
+
+	received := make(chan map[string]any, 1)
+
+	// 注册回调
+	ct.SetServerPushHandler(func(msg map[string]any) {
+		received <- msg
+	})
+
+	// SendPush 写入消息
+	msg := map[string]any{"event_type": "server_push", "content": "hello"}
+	err := ct.SendPush(msg)
+	if err != nil {
+		t.Fatalf("SendPush 失败: %v", err)
+	}
+
+	// 回调应被调用
+	select {
+	case got := <-received:
+		if got["event_type"] != "server_push" {
+			t.Fatalf("回调收到错误 event_type: %v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("超时：回调未被调用")
+	}
+}
+
+// TestChannelTransport_SendPush 测试 SendPush 基本功能
+func TestChannelTransport_SendPush(t *testing.T) {
+	ct := NewChannelTransportWithBuffer(1, 1)
+	defer ct.Close()
+
+	msg := map[string]any{"key": "value"}
+	err := ct.SendPush(msg)
+	if err != nil {
+		t.Fatalf("SendPush 失败: %v", err)
+	}
+}
+
+// TestChannelTransport_SendPush_关闭后返回错误 测试关闭后 SendPush 返回错误
+func TestChannelTransport_SendPush_关闭后返回错误(t *testing.T) {
+	ct := NewChannelTransportWithBuffer(1, 1)
+	ct.Close()
+
+	err := ct.SendPush(map[string]any{})
+	if err != ErrTransportClosed {
+		t.Fatalf("期望 ErrTransportClosed, 实际: %v", err)
 	}
 }

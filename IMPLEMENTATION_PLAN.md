@@ -674,8 +674,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **11.x Gateway 核心** | — | | | |
 | 11.1 | ✅ | BaseChannel 接口 | `Config/Start/Stop/Send/OnMessage` | `jiuwenswarm/gateway/channel_manager/base.py` |
 | 11.2 | ✅ | ChannelManager | 注册/注销/分发/配置热更新回调 | `jiuwenswarm/gateway/channel_manager/channel_manager.py` |
-| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路） | `jiuwenswarm/gateway/message_handler/message_handler.py` |
-| 11.4 | ☐ | Slash Command Parser | Slash 命令解析 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
+| 11.3 | ✅ | MessageHandler | 入站→AgentServer，出站→Channel（完整转发链路）；stub：handleCronPushPayload→11.10，skillsSlashNotice/branchSlashNotice/rewindSlashNotice→AgentServer RPC | `jiuwenswarm/gateway/message_handler/message_handler.py` |
+| 11.4 | ✅ | Slash Command Parser | Slash 命令解析（command_parser 子包） | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 11.5 | 🔄 | WebSocketAgentServerClient | WS 客户端，请求/响应路由，流式，自动重连（骨架实现） | `jiuwenswarm/gateway/routing/agent_client.py` |
 | 11.6 | ☐ | RouteBinding | 路由绑定 | `jiuwenswarm/gateway/routing/route_binding.py` |
 | 11.7 | ☐ | SessionMap | 会话映射 | `jiuwenswarm/gateway/routing/session_map.py` |

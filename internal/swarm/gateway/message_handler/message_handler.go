@@ -107,7 +107,8 @@ func (mh *MessageHandler) HandleInbound(_ context.Context, msg *schema.Message) 
 
 // StartForwarding 启动入站转发和出站循环
 //
-// 对齐 Python start_forwarding：启动 forwardLoop + outboundLoop + pushLoop 三个 goroutine。
+// 对齐 Python start_forwarding：启动 forwardLoop + outboundLoop，
+// 并通过 SetServerPushHandler 注册 push 回调（对齐 Python set_server_push_handler）。
 func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	if mh.running.Load() {
 		logger.Warn(logComponent).Msg("MessageHandler 已在运行")
@@ -124,9 +125,11 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	// 启动出站消息循环
 	go mh.outboundLoop(ctx)
 
-	// 启动 push 消费循环（如果有 pushTransport）
+	// 注册 push 回调（对齐 Python set_server_push_handler）
 	if mh.pushTransport != nil {
-		go mh.pushLoop(ctx)
+		mh.pushTransport.SetServerPushHandler(func(msg map[string]any) {
+			mh.HandleServerPush(msg)
+		})
 	}
 
 	logger.Info(logComponent).

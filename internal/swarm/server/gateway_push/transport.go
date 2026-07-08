@@ -28,12 +28,17 @@ type AgentTransport interface {
 // GatewayPushTransport AgentServer → Gateway 的推送传输抽象。
 //
 // AgentServer 主动推送消息到 Gateway（如 server_push、cron 推送等），
-// 对应 Python GatewayPushTransport protocol 的 send_push 方法。
+// 对应 Python GatewayPushTransport protocol 的 send_push + set_server_push_handler。
 //
 // 对应 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)
+//           + jiuwenswarm/gateway/routing/agent_client.py (set_server_push_handler)
 type GatewayPushTransport interface {
 	// SendPush 向 Gateway 推送消息（AgentServer → Gateway 方向）
+	// 对齐 Python GatewayPushTransport.send_push
 	SendPush(msg map[string]any) error
+	// SetServerPushHandler 注册 AgentServer 主动推送处理回调
+	// 对齐 Python WebSocketAgentServerClient.set_server_push_handler
+	SetServerPushHandler(handler func(msg map[string]any))
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
