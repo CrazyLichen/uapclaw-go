@@ -13,7 +13,7 @@ import (
 // 对齐 Python: create_task_tool(parent_agent, available_agents, language, agent_id) L127-152
 func CreateTaskTool(parentAgent hinterfaces.DeepAgentInterface, availableAgents, language string) []tool.Tool {
 	agentID := ""
-	if card := parentAgent.ReactAgent().Card(); card != nil {
+	if card := parentAgent.Card(); card != nil {
 		agentID = card.ID
 	}
 	t := subagent.NewTaskTool(parentAgent, availableAgents, language, agentID)

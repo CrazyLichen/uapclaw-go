@@ -9,6 +9,7 @@ import (
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 接口 ────────────────────────────
@@ -20,6 +21,9 @@ import (
 type DeepAgentInterface interface {
 	// ReactAgent 返回内层 ReActAgent 实例
 	ReactAgent() *agents.ReActAgent
+	// Card 返回 Agent 身份卡片。
+	// 对齐 Python: DeepAgent.card 属性
+	Card() *agentschema.AgentCard
 	// LoopCoordinator 返回循环协调器（可能为 nil）
 	LoopCoordinator() LoopCoordinatorInterface
 	// LoopController 返回任务循环控制器（对齐 Python: DeepAgent.loop_controller）

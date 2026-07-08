@@ -87,7 +87,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			output = fmt.Sprintf("%v", v)
 		}
 		subAgentID := ""
-		if subagentCard := subagent.ReactAgent().Card(); subagentCard != nil {
+		if subagentCard := subagent.Card(); subagentCard != nil {
 			subAgentID = subagentCard.ID
 		}
 
