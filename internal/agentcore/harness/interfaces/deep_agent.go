@@ -16,7 +16,7 @@ import (
 // DeepAgentInterface DeepAgent 运行时能力接口。
 // 提供 Executor/Handler/Tool 所需的运行时访问。
 // 对齐 Python: DeepAgent 的公开方法集（TYPE_CHECKING 引用）。
-// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，由 *DeepAgent 直接实现此接口。
+// 由 *DeepAgent 直接实现此接口。
 type DeepAgentInterface interface {
 	// ReactAgent 返回内层 ReActAgent 实例
 	ReactAgent() *agents.ReActAgent
@@ -37,10 +37,8 @@ type DeepAgentInterface interface {
 	// SetAutoInvokeScheduled 设置自动 invoke 调度标记
 	SetAutoInvokeScheduled(scheduled bool)
 	// ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke
-	// ⤵️ 9.1 回填：实现 SessionSpawn 完成后的自动 invoke 调度
 	ScheduleAutoInvokeOnSpawnDone(steerText string) error
 	// CreateSubagent 创建子 Agent 实例。
-	// ⤵️ 9.1 回填：9.1 实现 DeepAgent 后，由 *DeepAgent.CreateSubagent 实现。
 	// 对齐 Python: DeepAgent.create_subagent
 	CreateSubagent(subagentType string, subSessionID string) (DeepAgentInterface, error)
 	// Invoke 执行 Agent：若 enable_task_loop=true 走完整多轮循环，否则走单轮 ReAct。

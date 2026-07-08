@@ -22,7 +22,7 @@ var (
 	}
 	enterPlanCreatedMsg = map[string]string{
 		"cn": "计划文件已创建于：{plan_path}\n请按照提示词中的Plan工作流继续制定计划，初始理解-方案设计-审查-撰写计划-结束规划。\n除计划文件外，请勿编辑任何其他文件。\n",
-		"en": "Plan file created at: {plan_path}\nContinue the 5-phase Plan workflow in your instructions, initial understanding-design-review-final plan-end.DO NOT edit any files except the plan file.\n",
+		"en": "Plan file created at: {plan_path}\nContinue the 5-phase Plan workflow in your instructions, initial understanding-design-review-final plan-end. DO NOT edit any files except the plan file.\n",
 	}
 )
 
