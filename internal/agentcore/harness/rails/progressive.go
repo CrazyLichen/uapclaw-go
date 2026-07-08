@@ -796,14 +796,13 @@ func (r *ProgressiveToolRail) initVisibleTools(sess sessioninterfaces.SessionFac
 		}
 	}
 
-	// 合并 always_visible + default_visible
+	// 合并 always_visible + default_visible（对齐 Python: [*always_visible, *default_visible]）
+	// 先收集 always（保证排序稳定），再收集 default
+	alwaysSlice := setToSortedSlice(r.alwaysVisible)
+	defaultSlice := setToSortedSlice(defaultVisible)
 	var initial []string
-	for k := range r.alwaysVisible {
-		initial = append(initial, k)
-	}
-	for k := range defaultVisible {
-		initial = append(initial, k)
-	}
+	initial = append(initial, alwaysSlice...)
+	initial = append(initial, defaultSlice...)
 	initial = dedupPreserveOrder(initial)
 
 	sess.UpdateState(map[string]any{
