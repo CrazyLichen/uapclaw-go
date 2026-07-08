@@ -588,7 +588,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string, delay float6
 }
 
 // CreateSubagent 创建子 Agent 实例。
-// ⤵️ 9.3 / 9.25-9.31 回填：工厂分派所有分支返回 stub 错误
+// ⤵️ 9.3 / 9.25-9.27 / 9.31 回填：browser/code/research/mobile_gui 工厂待实现
 // 对齐 Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
 func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	spec := d.findSubagentSpec(subagentType)
@@ -628,12 +628,6 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hi
 		return nil, fmt.Errorf("research_agent 工厂尚未实现，⤵️ 9.25 回填")
 	case "mobile_gui_agent", "mobile_agent":
 		return nil, fmt.Errorf("mobile_gui_agent 工厂尚未实现，⤵️ 9.31 回填")
-	case "plan_agent":
-		return nil, fmt.Errorf("plan_agent 工厂尚未实现，⤵️ 9.28 回填")
-	case "verification_agent":
-		return nil, fmt.Errorf("verification_agent 工厂尚未实现，⤵️ 9.29 回填")
-	case "explore_agent":
-		return nil, fmt.Errorf("explore_agent 工厂尚未实现，⤵️ 9.30 回填")
 	default:
 		// 通过 CreateDeepAgent 工厂创建子 Agent 实例
 		kwargs := d.buildSubagentCreateKwargs(subCfg, subSessionID)
