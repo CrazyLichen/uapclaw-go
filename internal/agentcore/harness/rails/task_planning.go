@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/todo"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -223,10 +224,15 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 	r.tools = tools
 	r.todoTool = &todoTool
 
-	// 注册每个工具的 Card 到 ability_manager
+	// 注册每个工具的 Card 到 ability_manager 和 ResourceMgr
+	// 对齐 Python L128-129: Runner.resource_mgr.add_tool(tool) + agent.ability_manager.add(tool.card)
+	resourceMgr := runner.GetResourceMgr()
 	for _, t := range tools {
 		if t != nil {
 			am.Add(t.Card())
+			if resourceMgr != nil {
+				_ = resourceMgr.AddTool(t)
+			}
 		}
 	}
 
@@ -246,12 +252,16 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		sb.RemoveSection(sections.SectionTodo)
 	}
 
-	// 对齐 Python L140-148: 从 ability_manager 移除工具
+	// 对齐 Python L140-148: 从 ability_manager 和 resource_mgr 移除工具
 	am := agent.AbilityManager()
+	resourceMgr := runner.GetResourceMgr()
 	if am != nil && len(r.tools) > 0 {
 		for _, t := range r.tools {
 			if t != nil && t.Card() != nil {
 				am.Remove(t.Card().Name)
+				if resourceMgr != nil {
+					_, _ = resourceMgr.RemoveTool([]string{t.Card().ID})
+				}
 			}
 		}
 	}

@@ -231,6 +231,24 @@ func (r *ProgressiveToolRail) Uninit(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
+	// 对齐 Python: 从 ResourceMgr 移除已注册工具
+	resourceMgr := runner.GetResourceMgr()
+	if resourceMgr != nil {
+		for toolID := range r.ownedToolIDs {
+			func(toolID string) {
+				defer func() {
+					if rec := recover(); rec != nil {
+						logger.Warn(progressiveLogComponent).
+							Str("event_type", "progressive_rail_uninit").
+							Str("tool_id", toolID).
+							Msgf("从 resource_mgr 移除工具失败: %v", rec)
+					}
+				}()
+				_, _ = resourceMgr.RemoveTool([]string{toolID})
+			}(toolID)
+		}
+	}
+
 	r.ownedToolNames = make(map[string]struct{})
 	r.ownedToolIDs = make(map[string]struct{})
 	r.metaToolNames = make(map[string]struct{})

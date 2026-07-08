@@ -344,11 +344,43 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 		}
 	}
 
-	// 4. MCP 懒加载：⤵️ 预留，等 ResourceManager 实现后回填
-	// for mcpServerName, mcpServer := range am.mcpServers {
-	//     mcpToolInfos, err := am.resourceMgr.GetMcpToolInfos(mcpServer.ServerID)
-	//     ...
-	// }
+	// 4. MCP 懒加载：遍历 mcpServers，通过 ResourceMgr 获取 MCP 工具信息，
+	//    重命名为 mcp_{serverName}_{toolName}，注册到 am.tools 并追加到结果。
+	// 对齐 Python: AbilityManager.list_tool_info() L506-518
+	if am.resourceMgr != nil && len(am.mcpServers) > 0 {
+		for mcpServerName, mcpServer := range am.mcpServers {
+			mcpServerID := mcpServer.ServerID
+		mcpToolInfos, mcpErr := am.resourceMgr.GetMcpToolInfos(ctx, "", mcpServerID)
+		if mcpErr != nil {
+			logger.Warn(logger.ComponentAgentCore).
+				Str("event_type", "mcp_lazy_load_error").
+				Str("server_name", mcpServerName).
+				Str("server_id", mcpServerID).
+				Err(mcpErr).
+				Msg("获取 MCP 工具信息失败")
+			continue
+		}
+		for _, mcpToolInfo := range mcpToolInfos {
+			originalName := mcpToolInfo.GetName()
+			mcpToolName := "mcp_" + mcpServerName + "_" + originalName
+			mcpToolID := mcpServerID + "." + mcpServerName + "." + originalName
+
+			// 创建 ToolCard 并注册到 am.tools
+			mcpParams, _ := schema.ParseJSONSchemaMap(mcpToolInfo.GetParameters())
+			mcpCard := tool.NewToolCardWithID(mcpToolID, mcpToolName, mcpToolInfo.GetDescription(), mcpParams, nil)
+			am.tools[mcpToolName] = mcpCard
+
+			// 重命名 ToolInfo（修改 Name 字段）
+			switch ti := mcpToolInfo.(type) {
+			case *schema.ToolInfo:
+				ti.Name = mcpToolName
+			case *schema.McpToolInfo:
+				ti.Name = mcpToolName
+			}
+			toolInfos = append(toolInfos, mcpToolInfo)
+		}
+	}
+	}
 
 	return toolInfos, nil
 }
@@ -558,13 +590,15 @@ func (am *AbilityManager) executeSingleToolCall(
 		return am.executeAgent(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 	if _, ok := am.mcpServers[toolName]; ok {
-		execErr := NewAbilityExecutionError(
-			exception.StatusAbilityExecutionError,
-			toolCall.ID,
-			"MCP 工具执行暂未实现: "+toolName,
-			exception.WithParam("tool_name", toolName),
-		)
-		return agentschema.ExecuteResult{}, execErr
+		// MCP 工具正常走 tools 路径（通过懒加载重命名后注册），
+		// 命中此分支说明 toolName 恰好等于 serverName（非 mcp_ 前缀），
+		// 记录 warning 后走 fallback 尝试查找。
+		// 对齐 Python: AbilityManager._execute_single_tool_call L815-824
+		logger.Warn(logger.ComponentAgentCore).
+			Str("event_type", "mcp_tool_direct_server_name_call").
+			Str("tool_name", toolName).
+			Msg("MCP 工具调用使用了 server_name 而非 mcp_ 前缀工具名，尝试 fallback")
+		return am.executeFallbackTool(ctx, toolCall, toolName, toolArgs, sess, tag)
 	}
 
 	// 兜底：尝试从 ResourceManager 按 name 获取 Tool
