@@ -49,7 +49,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 	ch := make(chan *stream.OutputSchema, 1)
 
 	// 步骤 1：获取任务元数据
-	tasks, err := e.deps.TaskManager.GetTask(ctx, MakeFilter(taskID))
+	tasks, err := e.deps.TaskManager.GetTask(ctx, &modules.TaskFilter{TaskID: taskID})
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).

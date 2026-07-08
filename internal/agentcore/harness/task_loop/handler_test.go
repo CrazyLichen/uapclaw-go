@@ -75,22 +75,21 @@ func TestTaskLoopEventHandler_WaitCompletion_超时(t *testing.T) {
 	h.PrepareRound()
 	ctx := context.Background()
 	result := h.WaitCompletion(ctx, 100*time.Millisecond)
-	if result["status"] != "timeout" {
-		t.Errorf("WaitCompletion 超时返回 status=%v，期望 timeout", result["status"])
+	if result["error"] != "completion_timeout" {
+		t.Errorf("WaitCompletion 超时返回 error=%v，期望 completion_timeout", result["error"])
 	}
 }
 
-// TestTaskLoopEventHandler_WaitCompletion_无活跃轮次 无 PrepareRound 时返回 {"status": "timeout"}
-// 说明：初始 channel 虽已创建但无数据写入，超时后返回 timeout 状态
+// TestTaskLoopEventHandler_WaitCompletion_无活跃轮次 无 PrepareRound 时返回 {"error": "no active round"}
 func TestTaskLoopEventHandler_WaitCompletion_无活跃轮次(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	h := NewTaskLoopEventHandler(provider)
 
-	// 不调用 PrepareRound，使用初始 channel
+	// 不调用 PrepareRound，channel 为 nil
 	ctx := context.Background()
 	result := h.WaitCompletion(ctx, 50*time.Millisecond)
-	if result["status"] != "timeout" {
-		t.Errorf("WaitCompletion 无活跃轮次返回 status=%v，期望 timeout", result["status"])
+	if result["error"] != "no active round" {
+		t.Errorf("WaitCompletion 无活跃轮次返回 error=%v，期望 no active round", result["error"])
 	}
 }
 
@@ -354,8 +353,8 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_正常完成(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleTaskCompletion 返回错误: %v", err)
 	}
-	if result["output"] != "done" {
-		t.Errorf("HandleTaskCompletion 返回 output=%v，期望 done", result["output"])
+	if result["status"] != "completed" {
+		t.Errorf("HandleTaskCompletion 返回 status=%v，期望 completed", result["status"])
 	}
 
 	// 验证 WaitCompletion 收到结果
@@ -488,8 +487,8 @@ func TestTaskLoopEventHandler_HandleInput_Coordinator为nil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleInput 返回错误: %v", err)
 	}
-	if result["status"] != "error" {
-		t.Errorf("HandleInput 返回 status=%v，期望 error", result["status"])
+	if result["status"] != "failed" {
+		t.Errorf("HandleInput 返回 status=%v，期望 failed", result["status"])
 	}
 	if result["error"] != "coordinator is nil" {
 		t.Errorf("HandleInput 返回 error=%v，期望 coordinator is nil", result["error"])
@@ -544,8 +543,8 @@ func TestTaskLoopEventHandler_WaitCompletion_上下文取消(t *testing.T) {
 	cancel()
 
 	result := h.WaitCompletion(ctx, 2*time.Second)
-	if result["status"] != "cancelled" {
-		t.Errorf("WaitCompletion 上下文取消返回 status=%v，期望 cancelled", result["status"])
+	if result["error"] != "cancelled" {
+		t.Errorf("WaitCompletion 上下文取消返回 error=%v，期望 cancelled", result["error"])
 	}
 }
 
@@ -590,8 +589,8 @@ func TestTaskLoopEventHandler_HandleTaskInteraction_空文本(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleTaskInteraction 返回错误: %v", err)
 	}
-	if result["status"] != "no_steer" {
-		t.Errorf("HandleTaskInteraction 空文本返回 status=%v，期望 no_steer", result["status"])
+	if result["status"] != "steer_injected" {
+		t.Errorf("HandleTaskInteraction 空文本返回 status=%v，期望 steer_injected", result["status"])
 	}
 }
 
@@ -639,8 +638,8 @@ func TestTaskLoopEventHandler_HandleFollowUp_空文本(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleFollowUp 返回错误: %v", err)
 	}
-	if result["status"] != "no_follow_up" {
-		t.Errorf("HandleFollowUp 空文本返回 status=%v，期望 no_follow_up", result["status"])
+	if result["status"] != "follow_up_queued" {
+		t.Errorf("HandleFollowUp 空文本返回 status=%v，期望 follow_up_queued", result["status"])
 	}
 }
 
@@ -711,8 +710,8 @@ func TestTaskLoopEventHandler_HandleTaskCompletion_无结果(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleTaskCompletion 返回错误: %v", err)
 	}
-	if len(result) != 0 {
-		t.Errorf("HandleTaskCompletion 无结果时返回 %v，期望空 map", result)
+	if result["status"] != "completed" {
+		t.Errorf("HandleTaskCompletion 无结果时返回 status=%v，期望 completed", result["status"])
 	}
 }
 

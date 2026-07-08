@@ -17,6 +17,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultAutoInvokeDelay 自动 invoke 延迟秒数，对齐 Python: delay=0.5
+	defaultAutoInvokeDelay = 0.5
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskLoopEventHandler 任务循环事件处理器。
@@ -98,7 +105,11 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
 		select {
-		case result := <-ch:
+		case result, ok := <-ch:
+			if !ok {
+				// channel 已关闭（旧轮次被 PrepareRound 取消），对齐 Python: CancelledError
+				return map[string]any{"error": "cancelled"}
+			}
 			if result == nil || len(result) == 0 {
 				result = map[string]any{"status": "completed"}
 			}
@@ -121,7 +132,11 @@ func (h *TaskLoopEventHandler) WaitCompletion(ctx context.Context, timeout time.
 
 	// 无超时：只等待 channel 或上下文取消
 	select {
-	case result := <-ch:
+	case result, ok := <-ch:
+		if !ok {
+			// channel 已关闭（旧轮次被 PrepareRound 取消），对齐 Python: CancelledError
+			return map[string]any{"error": "cancelled"}
+		}
 		if result == nil || len(result) == 0 {
 			result = map[string]any{"status": "completed"}
 		}
@@ -579,7 +594,7 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *module
 		// 路径 2：无活跃 invoke → 调度延迟 auto-invoke
 		if !h.provider.IsAutoInvokeScheduled() {
 			h.provider.SetAutoInvokeScheduled(true)
-			if schedErr := h.provider.ScheduleAutoInvokeOnSpawnDone(steerText); schedErr != nil {
+			if schedErr := h.provider.ScheduleAutoInvokeOnSpawnDone(steerText, defaultAutoInvokeDelay); schedErr != nil {
 				logger.Error(logComponent).
 					Err(schedErr).
 					Str("task_id", taskID).

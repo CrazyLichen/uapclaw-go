@@ -56,7 +56,7 @@ func (f *fakeDeepAgentForAgentMode) DeepConfig() *hschema.DeepAgentConfig { retu
 func (f *fakeDeepAgentForAgentMode) IsInvokeActive() bool                   { return false }
 func (f *fakeDeepAgentForAgentMode) IsAutoInvokeScheduled() bool            { return false }
 func (f *fakeDeepAgentForAgentMode) SetAutoInvokeScheduled(_ bool)          {}
-func (f *fakeDeepAgentForAgentMode) ScheduleAutoInvokeOnSpawnDone(_ string) error {
+func (f *fakeDeepAgentForAgentMode) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
 func (f *fakeDeepAgentForAgentMode) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {

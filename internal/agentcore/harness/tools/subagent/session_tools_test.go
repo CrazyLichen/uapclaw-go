@@ -190,7 +190,7 @@ func TestSessionSpawnTaskTypeConstant(t *testing.T) {
 // TestSessionsListTool_Invoke_空列表 toolkit 为空时返回默认消息
 func TestSessionsListTool_Invoke_空列表(t *testing.T) {
 	tk := NewSessionToolkit()
-	tl := NewSessionsListTool(tk, "cn")
+	tl := NewSessionsListTool(tk, "cn", "")
 	result, err := tl.Invoke(context.Background(), map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
@@ -208,7 +208,7 @@ func TestSessionsListTool_Invoke_空列表(t *testing.T) {
 func TestSessionsListTool_Invoke_有任务(t *testing.T) {
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "研究A方向")
-	tl := NewSessionsListTool(tk, "cn")
+	tl := NewSessionsListTool(tk, "cn", "")
 	result, err := tl.Invoke(context.Background(), map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
@@ -225,7 +225,7 @@ func TestSessionsListTool_Invoke_有任务(t *testing.T) {
 // TestSessionsListTool_Invoke_英文 语言为 en 时返回英文消息
 func TestSessionsListTool_Invoke_英文(t *testing.T) {
 	tk := NewSessionToolkit()
-	tl := NewSessionsListTool(tk, "en")
+	tl := NewSessionsListTool(tk, "en", "")
 	result, err := tl.Invoke(context.Background(), map[string]any{}, nil)
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
@@ -239,7 +239,7 @@ func TestSessionsListTool_Invoke_英文(t *testing.T) {
 // TestSessionsListTool_Card 卡片名称正确
 func TestSessionsListTool_Card(t *testing.T) {
 	tk := NewSessionToolkit()
-	tl := NewSessionsListTool(tk, "cn")
+	tl := NewSessionsListTool(tk, "cn", "")
 	if tl.Card().Name != "sessions_list" {
 		t.Errorf("期望 sessions_list, 实际 %s", tl.Card().Name)
 	}
@@ -292,7 +292,7 @@ func TestSessionsSpawnTool_Invoke_LoopController为nil(t *testing.T) {
 func TestSessionsCancelTool_Card(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
-	tl := NewSessionsCancelTool(provider, tk, "cn")
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
 	if tl.Card().Name != "sessions_cancel" {
 		t.Errorf("期望 sessions_cancel, 实际 %s", tl.Card().Name)
 	}
@@ -302,7 +302,7 @@ func TestSessionsCancelTool_Card(t *testing.T) {
 func TestSessionsCancelTool_Invoke_缺少TaskID(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
-	tl := NewSessionsCancelTool(provider, tk, "cn")
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
 	_, err := tl.Invoke(context.Background(), map[string]any{}, nil)
 	if err == nil {
 		t.Fatal("期望返回错误")
@@ -313,7 +313,7 @@ func TestSessionsCancelTool_Invoke_缺少TaskID(t *testing.T) {
 func TestSessionsCancelTool_Invoke_任务不存在(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
-	tl := NewSessionsCancelTool(provider, tk, "cn")
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
 	_, err := tl.Invoke(context.Background(), map[string]any{"task_id": "nonexistent"}, nil)
 	if err == nil {
 		t.Fatal("期望返回错误")
@@ -351,7 +351,7 @@ func TestGenerateTokenHex(t *testing.T) {
 // TestSessionsListTool_Stream 返回 Stream 不支持错误
 func TestSessionsListTool_Stream(t *testing.T) {
 	tk := NewSessionToolkit()
-	tl := NewSessionsListTool(tk, "cn")
+	tl := NewSessionsListTool(tk, "cn", "")
 	_, err := tl.Stream(context.Background(), map[string]any{}, nil)
 	if err == nil {
 		t.Fatal("期望返回 Stream 不支持错误")
@@ -373,7 +373,7 @@ func TestSessionsSpawnTool_Stream(t *testing.T) {
 func TestSessionsCancelTool_Stream(t *testing.T) {
 	provider := &fakeDeepAgentProvider{}
 	tk := NewSessionToolkit()
-	tl := NewSessionsCancelTool(provider, tk, "cn")
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
 	_, err := tl.Stream(context.Background(), map[string]any{}, nil)
 	if err == nil {
 		t.Fatal("期望返回 Stream 不支持错误")
@@ -420,8 +420,9 @@ func TestSessionsSpawnTool_Invoke_成功(t *testing.T) {
 	if result["success"] != true {
 		t.Error("期望 success=true")
 	}
-	if result["status"] != "pending" {
-		t.Errorf("期望 pending, 实际 %v", result["status"])
+	data, _ := result["data"].(map[string]any)
+	if data["status"] != "pending" {
+		t.Errorf("期望 pending, 实际 %v", data["status"])
 	}
 	// 验证 toolkit 中有任务
 	all := tk.ListAll()
@@ -448,7 +449,8 @@ func TestSessionsSpawnTool_Invoke_英文语言(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
-	msg, _ := result["message"].(string)
+	data, _ := result["data"].(map[string]any)
+	msg, _ := data["message"].(string)
 	if msg == "" {
 		t.Error("期望有英文消息")
 	}
@@ -485,7 +487,7 @@ func TestSessionsCancelTool_Invoke_Scheduler为nil(t *testing.T) {
 	}
 	tk := NewSessionToolkit()
 	tk.UpsertRunning("task-1", "sub-1", "测试任务")
-	tl := NewSessionsCancelTool(provider, tk, "cn")
+	tl := NewSessionsCancelTool(provider, tk, "cn", "")
 	_, err := tl.Invoke(context.Background(), map[string]any{"task_id": "task-1"}, nil)
 	if err == nil {
 		t.Fatal("期望返回错误")
@@ -538,7 +540,7 @@ func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
 }
 
 // ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error { return nil }
+func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error { return nil }
 
 // CreateSubagent 实现 DeepAgentInterface 接口
 func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.DeepAgentInterface, error) {

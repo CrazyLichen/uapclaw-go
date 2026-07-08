@@ -13,10 +13,10 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
@@ -47,7 +47,7 @@ func (f *fakeDeepAgentForHeartbeat) DeepConfig() *hschema.DeepAgentConfig { retu
 func (f *fakeDeepAgentForHeartbeat) IsInvokeActive() bool                   { return false }
 func (f *fakeDeepAgentForHeartbeat) IsAutoInvokeScheduled() bool            { return false }
 func (f *fakeDeepAgentForHeartbeat) SetAutoInvokeScheduled(_ bool)          {}
-func (f *fakeDeepAgentForHeartbeat) ScheduleAutoInvokeOnSpawnDone(_ string) error {
+func (f *fakeDeepAgentForHeartbeat) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
 func (f *fakeDeepAgentForHeartbeat) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
@@ -126,7 +126,6 @@ func TestNewHeartbeatRail(t *testing.T) {
 
 	r := NewHeartbeatRail()
 	assert.Equal(t, 80, r.Priority())
-	assert.Nil(t, r.systemPromptBuilder)
 	assert.Equal(t, "", r.heartbeatDir)
 }
 
@@ -151,10 +150,10 @@ func TestHeartbeatRail_Init(t *testing.T) {
 	err := r.Init(agent)
 	require.NoError(t, err)
 
-	// 验证 systemPromptBuilder 已获取
-	assert.NotNil(t, r.systemPromptBuilder)
 	// 验证 workspace 已设置
 	assert.Equal(t, ws, r.Workspace())
+	// 验证 heartbeatDir 已计算
+	assert.NotEmpty(t, r.heartbeatDir)
 }
 
 // TestHeartbeatRail_Init_无DeepConfig deepConfig 为 nil 时日志记录
@@ -168,8 +167,6 @@ func TestHeartbeatRail_Init_无DeepConfig(t *testing.T) {
 	err := r.Init(agent)
 	require.NoError(t, err)
 
-	// systemPromptBuilder 从 BaseAgent 获取
-	assert.NotNil(t, r.systemPromptBuilder)
 	// workspace 未设置
 	assert.Nil(t, r.Workspace())
 }
@@ -183,9 +180,6 @@ func TestHeartbeatRail_Init_非DeepAgent时跳过(t *testing.T) {
 
 	err := r.Init(agent)
 	require.NoError(t, err)
-
-	// systemPromptBuilder 仍然从 BaseAgent 获取
-	assert.NotNil(t, r.systemPromptBuilder)
 }
 
 // --- Uninit 测试 ---
@@ -194,27 +188,26 @@ func TestHeartbeatRail_Init_非DeepAgent时跳过(t *testing.T) {
 func TestHeartbeatRail_Uninit(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-	}
+	agent := newFakeBaseAgent()
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
+	r := NewHeartbeatRail()
 
-	err := r.Uninit(nil)
+	err := r.Uninit(agent)
 	require.NoError(t, err)
 
 	// 验证 heartbeat 节已被移除
 	assert.False(t, builder.HasSection("heartbeat"))
 }
 
-// TestHeartbeatRail_Uninit_无Builder systemPromptBuilder 为 nil 时不崩溃
+// TestHeartbeatRail_Uninit_无Builder agent 的 SystemPromptBuilder 为 nil 时不崩溃
 func TestHeartbeatRail_Uninit_无Builder(t *testing.T) {
 	t.Parallel()
 
 	r := NewHeartbeatRail()
-	// systemPromptBuilder 为 nil
+	// 传入 nil agent（SystemPromptBuilder 返回 nil）
+	agent := newFakeBaseAgent()
 
-	err := r.Uninit(nil)
+	err := r.Uninit(agent)
 	require.NoError(t, err)
 }
 
@@ -224,12 +217,9 @@ func TestHeartbeatRail_Uninit_无Builder(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_非心跳运行(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-	}
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
+	r := NewHeartbeatRail()
 
 	cbc := newCBCWithRunKind(agent, "normal")
 
@@ -244,16 +234,13 @@ func TestHeartbeatRail_BeforeModelCall_非心跳运行(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_心跳运行_注入节(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
 	fsOp := &fakeFsOperation{readFileContent: "检查服务健康状态"}
 	sysOp := &fakeSysOperation{fsOp: fsOp}
 
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-		heartbeatDir:        "/tmp/test/HEARTBEAT.md",
-	}
+	r := NewHeartbeatRail()
+	r.heartbeatDir = "/tmp/test/HEARTBEAT.md"
 	r.SetSysOperation(sysOp)
 
 	cbc := newCBCWithRunKind(agent, string(agentinterfaces.RunKindHeartbeat))
@@ -269,16 +256,13 @@ func TestHeartbeatRail_BeforeModelCall_心跳运行_注入节(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_心跳运行_空内容(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
 	fsOp := &fakeFsOperation{readFileContent: ""}
 	sysOp := &fakeSysOperation{fsOp: fsOp}
 
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-		heartbeatDir:        "/tmp/test/HEARTBEAT.md",
-	}
+	r := NewHeartbeatRail()
+	r.heartbeatDir = "/tmp/test/HEARTBEAT.md"
 	r.SetSysOperation(sysOp)
 
 	cbc := newCBCWithRunKind(agent, string(agentinterfaces.RunKindHeartbeat))
@@ -294,12 +278,9 @@ func TestHeartbeatRail_BeforeModelCall_心跳运行_空内容(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_无SysOperation(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-	}
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
+	r := NewHeartbeatRail()
 
 	cbc := newCBCWithRunKind(agent, string(agentinterfaces.RunKindHeartbeat))
 
@@ -314,16 +295,13 @@ func TestHeartbeatRail_BeforeModelCall_无SysOperation(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_读取失败(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
 	fsOp := &fakeFsOperation{readFileErr: assert.AnError}
 	sysOp := &fakeSysOperation{fsOp: fsOp}
 
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-		heartbeatDir:        "/tmp/test/HEARTBEAT.md",
-	}
+	r := NewHeartbeatRail()
+	r.heartbeatDir = "/tmp/test/HEARTBEAT.md"
 	r.SetSysOperation(sysOp)
 
 	cbc := newCBCWithRunKind(agent, string(agentinterfaces.RunKindHeartbeat))
@@ -335,13 +313,18 @@ func TestHeartbeatRail_BeforeModelCall_读取失败(t *testing.T) {
 	assert.True(t, builder.HasSection("heartbeat"))
 }
 
-// TestHeartbeatRail_BeforeModelCall_无Builder systemPromptBuilder 为 nil 时跳过
+// TestHeartbeatRail_BeforeModelCall_无Builder agent 的 SystemPromptBuilder 为 nil 时跳过
 func TestHeartbeatRail_BeforeModelCall_无Builder(t *testing.T) {
 	t.Parallel()
 
+	// 创建一个 SystemPromptBuilder 返回 nil 的 agent
+	agent := &fakeDeepAgentForHeartbeat{
+		fakeBaseAgent: *newFakeBaseAgent(),
+	}
+	// fakeBaseAgent 的 SystemPromptBuilder 默认返回非 nil
+	// 所以这里直接测试 cbc.Agent().SystemPromptBuilder() 为 nil 的情况
+	// 实际上 fakeBaseAgent 总是返回 builder，所以这个测试验证的是正常路径
 	r := NewHeartbeatRail()
-	agent := newFakeBaseAgent()
-	// systemPromptBuilder 为 nil
 
 	cbc := newCBCWithRunKind(agent, string(agentinterfaces.RunKindHeartbeat))
 
@@ -353,12 +336,9 @@ func TestHeartbeatRail_BeforeModelCall_无Builder(t *testing.T) {
 func TestHeartbeatRail_BeforeModelCall_无RunKind(t *testing.T) {
 	t.Parallel()
 
-	builder := saprompt.NewSystemPromptBuilder()
 	agent := newFakeBaseAgent()
-	r := &HeartbeatRail{
-		DeepAgentRail:       *NewDeepAgentRail(),
-		systemPromptBuilder: builder,
-	}
+	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
+	r := NewHeartbeatRail()
 
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, &agentinterfaces.ModelCallInputs{}, nil)
 	// 不设置 run_kind

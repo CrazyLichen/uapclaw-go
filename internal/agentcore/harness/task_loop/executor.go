@@ -69,7 +69,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 2：查询任务
-	tasks, err := e.deps.TaskManager.GetTask(ctx, MakeFilter(taskID))
+	tasks, err := e.deps.TaskManager.GetTask(ctx, &modules.TaskFilter{TaskID: taskID})
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -386,13 +386,6 @@ func (e *TaskLoopEventExecutor) Cancel(_ context.Context, taskID string, sess se
 func BuildDeepExecutor(provider interfaces.DeepAgentInterface) func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 	return func(deps *modules.TaskExecutorDependencies) modules.TaskExecutor {
 		return NewTaskLoopEventExecutor(deps, provider)
-	}
-}
-
-// MakeFilter 创建按任务 ID 过滤的 TaskFilter。
-func MakeFilter(taskID string) *modules.TaskFilter {
-	return &modules.TaskFilter{
-		TaskID: taskID,
 	}
 }
 

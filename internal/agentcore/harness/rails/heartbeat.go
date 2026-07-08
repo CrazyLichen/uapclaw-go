@@ -7,7 +7,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -16,7 +15,7 @@ import (
 // HeartbeatRail 心跳护栏，在心跳运行时注入 HEARTBEAT.md 内容到系统提示词。
 //
 // 职责：
-//   - Init:               获取 systemPromptBuilder、sysOperation、workspace、heartbeatDir
+//   - Init:               获取 sysOperation、workspace、heartbeatDir
 //   - BeforeModelCall:    若 run_kind=heartbeat，读取 HEARTBEAT.md 并注入心跳提示词节
 //   - Uninit:             移除心跳提示词节
 //
@@ -24,11 +23,12 @@ import (
 // HeartbeatRail 在 BeforeModelCall 中将 HEARTBEAT.md 的内容注入系统提示词，
 // 使 LLM 根据内容是否为空决定输出 HEARTBEAT_OK（存活确认）还是执行具体任务指令。
 //
+// systemPromptBuilder 不作为字段存储，而是在使用时从 agent/cbc.Agent() 实时获取，
+// 与 TaskPlanningRail 模式一致。
+//
 // 对齐 Python: openjiuwen/harness/rails/heartbeat_rail.py HeartbeatRail
 type HeartbeatRail struct {
 	DeepAgentRail
-	// systemPromptBuilder 系统提示词构建器
-	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// heartbeatDir HEARTBEAT.md 文件路径
 	heartbeatDir string
 }
@@ -64,12 +64,9 @@ func NewHeartbeatRail() *HeartbeatRail {
 
 // Init 初始化 HeartbeatRail。
 //
-// 获取 systemPromptBuilder、sysOperation、workspace、heartbeatDir。
+// 获取 sysOperation、workspace、heartbeatDir。
 // 对齐 Python: HeartbeatRail.init() L25-38
 func (r *HeartbeatRail) Init(agent agentinterfaces.BaseAgent) error {
-	// 对齐 Python L26: self.system_prompt_builder = getattr(agent, "system_prompt_builder", None)
-	r.systemPromptBuilder = agent.SystemPromptBuilder()
-
 	// 对齐 Python L28-29: if not agent.deep_config → log + return
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
 	if !ok || deepAgent.DeepConfig() == nil {
@@ -105,9 +102,10 @@ func (r *HeartbeatRail) Init(agent agentinterfaces.BaseAgent) error {
 // Uninit 移除心跳提示词节。
 //
 // 对齐 Python: HeartbeatRail.uninit() L40-42
-func (r *HeartbeatRail) Uninit(_ agentinterfaces.BaseAgent) error {
-	if r.systemPromptBuilder != nil {
-		r.systemPromptBuilder.RemoveSection(sections.SectionHeartbeat)
+func (r *HeartbeatRail) Uninit(agent agentinterfaces.BaseAgent) error {
+	// 对齐 Python L41-42: if system_prompt_builder → remove_section("heartbeat")
+	if sb := agent.SystemPromptBuilder(); sb != nil {
+		sb.RemoveSection(sections.SectionHeartbeat)
 	}
 	return nil
 }
@@ -117,7 +115,8 @@ func (r *HeartbeatRail) Uninit(_ agentinterfaces.BaseAgent) error {
 // 对齐 Python: HeartbeatRail.before_model_call() L44-63
 func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L45-46: if system_prompt_builder is None or run_kind != HEARTBEAT → return
-	if r.systemPromptBuilder == nil {
+	sb := cbc.Agent().SystemPromptBuilder()
+	if sb == nil {
 		return nil
 	}
 
@@ -162,8 +161,8 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 	// Go 的 BuildHeartbeatSection 总是返回有效的 PromptSection（与 Python 不同，
 	// Python 在 heartbeat_content 为 None 时可能返回 None）。
 	// 因此始终调用 AddSection。
-	heartbeatSection := sections.BuildHeartbeatSection(content, r.systemPromptBuilder.Language())
-	r.systemPromptBuilder.AddSection(heartbeatSection)
+	heartbeatSection := sections.BuildHeartbeatSection(content, sb.Language())
+	sb.AddSection(heartbeatSection)
 
 	return nil
 }

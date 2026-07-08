@@ -554,12 +554,11 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 
 // ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke。
 // 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
-// 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
-func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string) error {
+func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
 	go func() {
-		time.Sleep(time.Duration(defaultAutoInvokeDelay * float64(time.Second)))
+		time.Sleep(time.Duration(delay * float64(time.Second)))
 		d.autoInvokeScheduled.Store(false)
 
 		if d.invokeActive.Load() {
@@ -2019,9 +2018,12 @@ func (d *DeepAgent) runTaskLoop(ctx context.Context, cbc *agentinterfaces.AgentC
 			}
 
 			result := ctrl.WaitRoundCompletion(ctx, &timeout)
-			resultType, _ := result["result_type"].(string)
-			if resultType == "" {
-				resultType = "N/A"
+			// 判断结果类型（对齐 Python: result 中有 "error" key 表示失败）
+			resultType := "N/A"
+			if _, hasErr := result["error"]; hasErr {
+				resultType = "error"
+			} else if _, hasStatus := result["status"]; hasStatus {
+				resultType = "completed"
 			}
 
 			outputPreview := ""

@@ -182,18 +182,6 @@ func TestBuildDeepExecutor(t *testing.T) {
 	}
 }
 
-// TestMakeFilter MakeFilter 构建正确的 TaskFilter（TaskID 字段等于输入）
-func TestMakeFilter(t *testing.T) {
-	taskID := "filter-task-123"
-	filter := MakeFilter(taskID)
-	if filter == nil {
-		t.Fatal("MakeFilter 返回 nil，期望非 nil")
-	}
-	if filter.TaskID != taskID {
-		t.Errorf("MakeFilter 返回 TaskID=%v，期望 %q", filter.TaskID, taskID)
-	}
-}
-
 // TestExtractInteractiveInput_Nil事件 nil 事件返回 nil
 func TestExtractInteractiveInput_Nil事件(t *testing.T) {
 	result := ExtractInteractiveInput(nil)
@@ -538,7 +526,7 @@ func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
 }
 
 // ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string) error {
+func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
 	return nil
 }
 
@@ -551,6 +539,18 @@ func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.D
 func (f *fakeDeepAgentProvider) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
 	return nil, nil
 }
+
+// SwitchMode 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+
+// RestoreModeAfterPlanExit 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
+
+// GetPlanFilePath 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+
+// SaveState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentProvider) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
 
 // GetSessionID 实现 SessionFacade 接口
 func (f *fakeSessionFacade) GetSessionID() string {

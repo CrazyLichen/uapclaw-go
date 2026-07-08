@@ -153,8 +153,8 @@ func (t *SessionToolkit) Clear() {
 
 // NewSessionsListTool 创建查看子任务列表工具。
 // 对齐 Python: SessionsListTool.__init__
-func NewSessionsListTool(toolkit *SessionToolkit, language string) tool.Tool {
-	card, _ := tools.BuildToolCard("sessions_list", "sessions_list", language, nil, "")
+func NewSessionsListTool(toolkit *SessionToolkit, language, agentID string) tool.Tool {
+	card, _ := tools.BuildToolCard("sessions_list", "sessions_list", language, nil, agentID)
 
 	fn := func(_ context.Context, _ SessionsListInput, _ ...tool.ToolOption) (map[string]any, error) {
 		lines := make([]string, 0)
@@ -261,13 +261,20 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 			Str("subagent_type", input.SubagentType).
 			Msg("SessionsSpawnTool 提交异步子任务")
 
-		// 步骤 7：返回结果
-		message := fmt.Sprintf("Task %s submitted to background, you can continue to send other questions", input.TaskDescription)
+		// 步骤 7：返回结果（嵌套结构，对齐 Python: ToolOutput(success=True, data={...})）
+		var message string
+		if language == "cn" {
+			message = fmt.Sprintf("子任务 %s 已提交后台执行，你可以继续发送其他问题", input.TaskDescription)
+		} else {
+			message = fmt.Sprintf("Task %s submitted to background, you can continue to send other questions", input.TaskDescription)
+		}
 
 		return map[string]any{
 			"success": true,
-			"status":  "pending",
-			"message": message,
+			"data": map[string]any{
+				"status":  "pending",
+				"message": message,
+			},
 		}, nil
 	}
 
@@ -277,11 +284,19 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 
 // NewSessionsCancelTool 创建取消子代理任务工具。
 // 对齐 Python: SessionsCancelTool.__init__
-func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language string) tool.Tool {
-	card, _ := tools.BuildToolCard("sessions_cancel", "sessions_cancel", language, nil, "")
+func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language, agentID string) tool.Tool {
+	card, _ := tools.BuildToolCard("sessions_cancel", "sessions_cancel", language, nil, agentID)
 
 	fn := func(ctx context.Context, input SessionsCancelInput, _ ...tool.ToolOption) (map[string]any, error) {
-		// 步骤 1：校验任务存在于 toolkit
+		// 步骤 1：校验 task_id 非空（对齐 Python: if not task_id）
+		if input.TaskID == "" {
+			return nil, exception.BuildError(
+				exception.StatusToolSessionToolInvoked,
+				exception.WithParam("reason", "task_id is required"),
+			)
+		}
+
+		// 步骤 2：校验任务存在于 toolkit
 		task := toolkit.Get(input.TaskID)
 		if task == nil {
 			return nil, exception.BuildError(
@@ -315,12 +330,19 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 			)
 		}
 		if !success {
-			msg := fmt.Sprintf("Task %s cancel failed", input.TaskID)
+			var msg string
+			if language == "cn" {
+				msg = fmt.Sprintf("任务 %s 取消失败", input.TaskID)
+			} else {
+				msg = fmt.Sprintf("Task %s cancel failed", input.TaskID)
+			}
 			return map[string]any{
 				"success": false,
-				"task_id": input.TaskID,
-				"status":  task.Status,
-				"message": msg,
+				"data": map[string]any{
+					"task_id": input.TaskID,
+					"status":  task.Status,
+					"message": msg,
+				},
 			}, nil
 		}
 
@@ -332,13 +354,20 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 			Str("task_id", input.TaskID).
 			Msg("SessionsCancelTool 取消任务成功")
 
-		// 步骤 6：返回结果
-		msg := fmt.Sprintf("Task %s cancel success", input.TaskID)
+		// 步骤 6：返回结果（嵌套结构，对齐 Python: ToolOutput(success=True, data={...})）
+		var msg string
+		if language == "cn" {
+			msg = fmt.Sprintf("任务 %s 取消成功", input.TaskID)
+		} else {
+			msg = fmt.Sprintf("Task %s cancel success", input.TaskID)
+		}
 		return map[string]any{
 			"success": true,
-			"task_id": input.TaskID,
-			"status":  "canceled",
-			"message": msg,
+			"data": map[string]any{
+				"task_id": input.TaskID,
+				"status":  "canceled",
+				"message": msg,
+			},
 		}, nil
 	}
 
@@ -356,9 +385,9 @@ func BuildSessionTools(
 	agentID string,
 ) []tool.Tool {
 	return []tool.Tool{
-		NewSessionsListTool(toolkit, language),
+		NewSessionsListTool(toolkit, language, agentID),
 		NewSessionsSpawnTool(provider, toolkit, language, availableAgents, agentID),
-		NewSessionsCancelTool(provider, toolkit, language),
+		NewSessionsCancelTool(provider, toolkit, language, agentID),
 	}
 }
 

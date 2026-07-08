@@ -1443,7 +1443,7 @@ func TestDeepAgent_hotReloadSystemPrompt_更新提示词(t *testing.T) {
 func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone(t *testing.T) {
 	d := newTestDeepAgent()
 
-	err := d.ScheduleAutoInvokeOnSpawnDone("测试查询")
+	err := d.ScheduleAutoInvokeOnSpawnDone("测试查询", 0.5)
 	if err != nil {
 		t.Fatalf("ScheduleAutoInvokeOnSpawnDone 返回错误: %v", err)
 	}
@@ -2767,7 +2767,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_活跃Invoke(t *testing.T) {
 	agent := NewDeepAgent(card)
 	agent.invokeActive.Store(true)
 
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test steer text")
+	err := agent.ScheduleAutoInvokeOnSpawnDone("test steer text", 0.5)
 	assert.NoError(t, err)
 	assert.True(t, agent.IsAutoInvokeScheduled())
 }
@@ -2991,7 +2991,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_无LoopSession(t *testing.T) {
 	agent := NewDeepAgent(card)
 
 	// 不设置 loopSession，ScheduleAutoInvokeOnSpawnDone 延迟后应跳过
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test query")
+	err := agent.ScheduleAutoInvokeOnSpawnDone("test query", 0.5)
 	assert.NoError(t, err)
 	assert.True(t, agent.IsAutoInvokeScheduled())
 
@@ -3012,7 +3012,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_有LoopSession(t *testing.T) {
 
 	// 设置 invokeActive=true，延迟后应跳过 invoke
 	agent.invokeActive.Store(true)
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test query")
+	err := agent.ScheduleAutoInvokeOnSpawnDone("test query", 0.5)
 	assert.NoError(t, err)
 
 	// 等待延迟过去
