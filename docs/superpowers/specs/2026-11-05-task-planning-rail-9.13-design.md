@@ -54,13 +54,38 @@ DeepAgent.Invoke()
 
 | 文件 | 修改内容 |
 |------|---------|
-| `harness/interfaces/deep_agent.go` | 新增 `SwitchModel(model *llm.Model)` 方法 |
-| `harness/deep_agent.go` | 实现 SwitchModel；删除 `deepAgentRailProvider` 定义 |
+| `harness/deep_agent.go` | 删除 `deepAgentRailProvider` 定义（迁移到 rails/base.go） |
 | `harness/rails/base.go` | 新增导出接口 `DeepAgentRailProvider`（从 deep_agent.go 移入） |
 | `harness/factory.go` | L518-520：NewBaseRail() 占位 → NewTaskPlanningRail() |
 | `harness/rails/doc.go` | 文件目录新增 task_planning.go |
 | `harness/tools/doc.go` 或父级 | 文件目录新增 todo/ 子包 |
 | `IMPLEMENTATION_PLAN.md` | 9.13 状态 ☐ → ✅ |
+
+## 回调路由：Bridge 事件与 ctx.Agent() 身份
+
+Go 端使用与 Python 完全一致的 **Bridge 模式**：
+
+| 事件类别 | 事件 | 注册位置 | `cbc.Agent()` 返回 |
+|---------|------|---------|-------------------|
+| Bridge 事件 | `BeforeModelCall`/`AfterModelCall`/`BeforeToolCall`/`AfterToolCall` | ReActAgent 的 CallbackManager | **ReActAgent** |
+| Deep 事件 | `BeforeTaskIteration`/`AfterTaskIteration` | DeepAgent 的 CallbackManager | **DeepAgent** |
+| Outer 事件 | `BeforeInvoke`/`AfterInvoke` | DeepAgent 的 CallbackManager | **DeepAgent** |
+
+**原因**：`registerRailSelective` 将 bridge 事件回调注册到 ReActAgent 的 CallbackManager，
+而 ReActAgent.invokeImpl 中创建的 `AgentCallbackContext` 以 `agent=self`(ReActAgent) 构造，
+所以 bridge 事件钩子中 `cbc.Agent()` 返回 ReActAgent。
+
+### 对 TaskPlanningRail 各钩子的影响
+
+| 钩子 | `cbc.Agent()` 是 | 操作 | 实现方式 |
+|------|-----------------|------|---------|
+| `Init(agent)` | DeepAgent（传入参数） | 注册工具 | `agent.(DeepAgentInterface)` |
+| `Uninit(agent)` | DeepAgent（传入参数） | 移除工具 | `agent.(DeepAgentInterface)` |
+| `BeforeModelCall` | **ReActAgent** | 注入提示词 + 模型切换 | 直接操作 ReActAgent（见 D3） |
+| `AfterToolCall` | **ReActAgent** | 刷新缓存 + 进度提醒 | 使用 cbc.Session()/Inputs() |
+| `AfterModelCall` | **ReActAgent** | 读取 LLM + UsageMetadata | `cbc.Agent().(*ReActAgent).GetLLM()` |
+| `AfterTaskIteration` | **DeepAgent** | LoadState + 同步 TaskPlan | `cbc.Agent().(DeepAgentInterface).LoadState()` |
+| `AfterInvoke` | **DeepAgent** | token 汇总 + 清理 | 直接操作 |
 
 ## 设计决策
 
@@ -81,11 +106,29 @@ session 级 sync.Mutex 保证同 session 内文件串行读写
 
 对齐 Python `TodoLockManager` 的 session 隔离语义，全局 RWMutex 优化多 session 并发读。
 
-### D3：SwitchModel — 单一方法封装
+### D3：模型切换 — 直接在 ReActAgent 上操作（对齐 Python 鸭子类型）
 
-在 `DeepAgentInterface` 上新增 `SwitchModel(model *llm.Model)` 一个方法，
-内部同时调用 `reactAgent.SetLLM(model)` + 同步 `reactAgent.config.ModelNameVal`。
-调用方只需关心传入目标 Model，实现细节封装在 DeepAgent 内部。
+Python 中 `before_model_call()` 通过 `ctx.agent.set_llm(target_model)` 和
+`ctx.agent.config.model_name = target_model.model_config.model_name` 切换模型，
+其中 `ctx.agent` 是 ReActAgent（bridge 事件），使用鸭子类型直接调用。
+
+Go 端对齐实现：
+```go
+// BeforeModelCall — cbc.Agent() 是 ReActAgent
+reactAgent, ok := cbc.Agent().(*agents.ReActAgent)
+if !ok {
+    return nil
+}
+reactAgent.SetLLM(targetModel)
+// 同步 config.model_name
+if config, ok := reactAgent.Config().(*saconfig.ReActAgentConfig); ok {
+    config.ModelNameVal = targetModel.ModelConfig().ModelName
+}
+```
+
+**不需要在 DeepAgentInterface 上新增 SwitchModel 方法**。
+ReActAgent 已有 `SetLLM()`/`GetLLM()`/`Config()` 导出方法。
+从修改文件列表中移除 `harness/interfaces/deep_agent.go` 和 `harness/deep_agent.go` 的 SwitchModel 相关修改。
 
 ### D4：DeepAgentRailProvider 迁移到 rails/base.go
 
@@ -251,11 +294,7 @@ type TodoTool struct {
 
 ## DeepAgentInterface 扩展
 
-新增方法：
-```go
-SwitchModel(model *llm.Model)
-```
-实现中同时调用 `reactAgent.SetLLM(model)` + 同步 `reactAgent.config.ModelNameVal`。
+无需扩展。模型切换通过直接操作 ReActAgent 实现（见 D3）。
 
 ## DeepAgentRailProvider 迁移
 
@@ -280,6 +319,8 @@ type DeepAgentRailProvider interface {
 - `rails/base.go` — DeepAgentRail 基类 ✅
 - `sys_operation.SysOperation.Fs()` — 文件系统操作接口 ✅
 - `DeepAgentInterface.LoadState` — 获取 DeepAgentState ✅
+- `ReActAgent.SetLLM/GetLLM/Config` — 模型切换和配置 ✅
+- `ReActAgentConfig.ModelNameVal` — 模型名称设置 ✅
 - `ModelContext.AddMessages` — 追加 UserMessage ✅
 - `UsageMetadata.InputTokens/OutputTokens` — token 使用量 ✅
 - `ToolCallInputs.ToolName` — 工具名称（`todo_` 前缀匹配） ✅
