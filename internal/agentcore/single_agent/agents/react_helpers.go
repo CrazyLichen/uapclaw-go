@@ -126,6 +126,16 @@ func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 	return a.getLLM()
 }
 
+// SwitchModel 切换模型并同步配置。
+// 对齐 Python: ctx.agent.set_llm(target_model) + ctx.agent.config.model_name = target_model.model_config.model_name
+// 封装 SetLLM + Config.ModelNameVal 同步，供 TaskPlanningRail 通过 modelSwitcher 最小接口调用。
+func (a *ReActAgent) SwitchModel(model *llm.Model) {
+	a.SetLLM(model)
+	if a.config != nil && model != nil && model.ModelConfig != nil {
+		a.config.ModelNameVal = model.ModelConfig.ModelName
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getAbilityManager 返回能力管理器。

@@ -2000,6 +2000,76 @@ func TestReActAgent_callModel_基本调用(t *testing.T) {
 	assert.NotNil(t, msg)
 }
 
+// ──────────────────────────── 新增测试：SwitchModel ────────────────────────────
+
+// TestReActAgent_SwitchModel 验证 SwitchModel 同时切换 LLM 和同步 Config.ModelNameVal
+func TestReActAgent_SwitchModel(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("switch_model"),
+		agentschema.WithAgentDescription("SwitchModel 测试"),
+	)
+	config := saconfig.NewReActAgentConfig(
+		saconfig.WithModelName("old-model"),
+	)
+	agent := NewReActAgent(card, config)
+
+	initFakeModelClient()
+	clientCfg := &llmschema.ModelClientConfig{ClientProvider: fakeClientProvider, ClientID: fakeClientProvider}
+	modelCfg := &llmschema.ModelRequestConfig{ModelName: "new-model"}
+	newModel, err := llm.NewModel(clientCfg, modelCfg)
+	assert.NoError(t, err)
+
+	agent.SwitchModel(newModel)
+
+	got, err := agent.GetLLM()
+	assert.NoError(t, err)
+	assert.Equal(t, newModel, got)
+	assert.Equal(t, "new-model", config.ModelNameVal)
+}
+
+// TestReActAgent_SwitchModel_nilModel 验证 SwitchModel 传入 nil 时不 panic
+func TestReActAgent_SwitchModel_nilModel(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("switch_nil"),
+		agentschema.WithAgentDescription("SwitchModel nil 测试"),
+	)
+	config := saconfig.NewReActAgentConfig(
+		saconfig.WithModelName("old-model"),
+	)
+	agent := NewReActAgent(card, config)
+
+	agent.SwitchModel(nil)
+
+	// LLM 被设为 nil，GetLLM 返回错误
+	got, err := agent.GetLLM()
+	assert.Error(t, err)
+	assert.Nil(t, got)
+	// Config.ModelNameVal 未变（model 为 nil，不进入设置分支）
+	assert.Equal(t, "old-model", config.ModelNameVal)
+}
+
+// TestReActAgent_SwitchModel_nilConfig 验证 SwitchModel 在 nil config 时不 panic
+func TestReActAgent_SwitchModel_nilConfig(t *testing.T) {
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName("switch_nocfg"),
+		agentschema.WithAgentDescription("SwitchModel nil config 测试"),
+	)
+	agent := NewReActAgent(card, nil)
+
+	initFakeModelClient()
+	clientCfg := &llmschema.ModelClientConfig{ClientProvider: fakeClientProvider, ClientID: fakeClientProvider}
+	modelCfg := &llmschema.ModelRequestConfig{ModelName: "new-model"}
+	newModel, err := llm.NewModel(clientCfg, modelCfg)
+	assert.NoError(t, err)
+
+	// 不 panic
+	agent.SwitchModel(newModel)
+
+	got, err := agent.GetLLM()
+	assert.NoError(t, err)
+	assert.Equal(t, newModel, got)
+}
+
 // ──────────────────────────── 新增测试：InvokeImpl 完整路径 ────────────────────────────
 
 // TestReActAgent_InvokeImpl_完整路径 验证完整 invoke 路径（有 LLM + ContextEngine + Session）
