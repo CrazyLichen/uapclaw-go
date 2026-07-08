@@ -65,8 +65,8 @@ func TestSearchToolsTool_Invoke_正常(t *testing.T) {
 	traceCalled := false
 	traceFn := func(_ interfaces.SessionFacade, event map[string]any) {
 		traceCalled = true
-		if event["event_type"] != "tool_search" {
-			t.Errorf("期望 event_type=tool_search，实际 %v", event["event_type"])
+		if event["action"] != "search_tools" {
+			t.Errorf("期望 action=search_tools，实际 %v", event["action"])
 		}
 	}
 	st := NewSearchToolsTool(searchFn, traceFn, "cn", "agent-1")

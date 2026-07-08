@@ -86,11 +86,11 @@ func NewSearchToolsTool(
 		if traceFn != nil && callOpts.Session != nil {
 			if sess, ok := callOpts.Session.(interfaces.SessionFacade); ok {
 				traceFn(sess, map[string]any{
-					"event_type": "tool_search",
-					"query":      input.Query,
-					"limit":      limit,
-					"count":      len(matches),
-					"agent_id":   agentID,
+					"action":       "search_tools",
+					"query":        input.Query,
+					"limit":        limit,
+					"detail_level": input.DetailLevel,
+					"match_count":  len(matches),
 				})
 			}
 		}
