@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -69,6 +70,21 @@ func WithConfig(cfg *config.Config) Option {
 			// 配置读取失败，使用默认值
 			return
 		}
+		envLevel := os.Getenv("LOG_LEVEL")
+		l.levels = ResolveLoggingLevels(loggingCfg, envLevel, "")
+	}
+}
+
+// WithConfigFile 从 config.yaml 文件自动加载 logging 段。
+//
+// 不依赖 config.Config 对象，自己读取和解析 YAML 文件。
+// 日志可以在 config.New()/config.Load() 之前初始化，和 Python 的
+// configure_log() / setup_logger() 行为一致。
+//
+// 对应 Python: _load_logging_config_from_yaml() + _resolve_logging_levels()
+func WithConfigFile() Option {
+	return func(l *Logger) {
+		loggingCfg := loadLoggingConfigFromYAML()
 		envLevel := os.Getenv("LOG_LEVEL")
 		l.levels = ResolveLoggingLevels(loggingCfg, envLevel, "")
 	}
@@ -329,6 +345,62 @@ func GetLogConfigSnapshot() map[string]any {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// loadLoggingConfigFromYAML 读取 config.yaml 中的 logging 段。
+//
+// 不做 ${VAR:-default} 解析，仅取字面量值。
+// 自己解析配置文件路径，不依赖 workspace 包（避免 logger↔workspace 循环依赖）。
+// 对应 Python: _load_logging_config_from_yaml()
+func loadLoggingConfigFromYAML() *config.LoggingConfig {
+	configPath := resolveConfigFilePath()
+	if configPath == "" {
+		return nil
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+
+	var raw map[string]any
+	if err := yaml.Unmarshal(content, &raw); err != nil {
+		return nil
+	}
+
+	loggingVal, ok := raw["logging"]
+	if !ok {
+		return nil
+	}
+
+	bytes, err := yaml.Marshal(loggingVal)
+	if err != nil {
+		return nil
+	}
+
+	var cfg config.LoggingConfig
+	if err := yaml.Unmarshal(bytes, &cfg); err != nil {
+		return nil
+	}
+
+	return &cfg
+}
+
+// resolveConfigFilePath 解析配置文件路径。
+//
+// 等价于 workspace.ConfigFile()，但自包含实现避免循环依赖。
+// 优先级：
+//  1. UAPCLAW_CONFIG_DIR 环境变量 + /config.yaml
+//  2. ~/.uapclaw/config/config.yaml
+func resolveConfigFilePath() string {
+	if envDir := os.Getenv("UAPCLAW_CONFIG_DIR"); envDir != "" {
+		return filepath.Join(envDir, "config.yaml")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".uapclaw", "config", "config.yaml")
+}
 
 // getLogger 获取指定组件的 Logger 实例指针（非导出）。
 // 对应 Python: logging.getLogger(__name__)

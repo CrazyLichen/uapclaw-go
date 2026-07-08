@@ -535,3 +535,92 @@ func TestWithLoggingLevels_选项应用(t *testing.T) {
 		t.Errorf("期望 Console = warn，实际 %s", l.levels.Console)
 	}
 }
+
+func TestWithConfigFile(t *testing.T) {
+	// 创建临时 config 目录和 config.yaml
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	yamlContent := `logging:
+  level: "debug"
+  format: "json"
+  console_level: "info"
+  gateway: "debug"
+  channel: "info"
+  agent_server: "warn"
+  common: "info"
+  agent_core: "info"
+  full: "debug"
+`
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 设置 UAPCLAW_CONFIG_DIR 指向临时目录
+	t.Setenv("UAPCLAW_CONFIG_DIR", configDir)
+
+	// 先重置
+	resetGlobal()
+
+	// 使用 WithConfigFile 初始化
+	err := Setup(WithConfigFile())
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	// 验证日志级别被正确设置
+	levels := Levels()
+	if levels.Gateway != LogLevelDebug {
+		t.Errorf("期望 Gateway = debug，实际 %s", levels.Gateway)
+	}
+	if levels.Channel != LogLevelInfo {
+		t.Errorf("期望 Channel = info，实际 %s", levels.Channel)
+	}
+	if levels.AgentServer != LogLevelWarn {
+		t.Errorf("期望 AgentServer = warn，实际 %s", levels.AgentServer)
+	}
+}
+
+func TestWithConfigFile_文件不存在(t *testing.T) {
+	// 指向不存在的目录
+	t.Setenv("UAPCLAW_CONFIG_DIR", "/nonexistent/path/config")
+
+	resetGlobal()
+
+	// 文件不存在时应使用默认级别，不报错
+	err := Setup(WithConfigFile())
+	if err != nil {
+		t.Fatalf("Setup 失败: %v", err)
+	}
+	defer Close()
+
+	levels := Levels()
+	// 默认应为 INFO
+	if levels.Gateway != LogLevelInfo {
+		t.Errorf("期望 Gateway = info（默认），实际 %s", levels.Gateway)
+	}
+}
+
+func TestResolveConfigFilePath(t *testing.T) {
+	t.Run("UAPCLAW_CONFIG_DIR优先", func(t *testing.T) {
+		t.Setenv("UAPCLAW_CONFIG_DIR", "/custom/config/dir")
+		path := resolveConfigFilePath()
+		expected := filepath.Join("/custom/config/dir", "config.yaml")
+		if path != expected {
+			t.Errorf("期望 %s，实际 %s", expected, path)
+		}
+	})
+
+	t.Run("默认路径", func(t *testing.T) {
+		// 不设置 UAPCLAW_CONFIG_DIR
+		path := resolveConfigFilePath()
+		if !strings.HasSuffix(path, filepath.Join(".uapclaw", "config", "config.yaml")) {
+			t.Errorf("期望以 .uapclaw/config/config.yaml 结尾，实际 %s", path)
+		}
+	})
+}
