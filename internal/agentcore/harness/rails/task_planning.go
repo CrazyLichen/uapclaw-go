@@ -210,6 +210,22 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
+	// 对齐 Python L108-119: 检查已有 todo 工具，避免重复注册
+	existingTodoNames := make(map[string]struct{})
+	for _, ability := range am.List() {
+		name := ability.AbilityName()
+		if name == "todo_create" || name == "todo_list" || name == "todo_get" || name == "todo_modify" {
+			existingTodoNames[name] = struct{}{}
+		}
+	}
+	if len(existingTodoNames) == 4 {
+		// 4 个 todo 工具都已存在，跳过创建但仍需要设置 todoTool 引用
+		logger.Debug(taskPlanLogComponent).
+			Str("event_type", "task_planning_init_skip_existing").
+			Msg("todo 工具已全部注册，跳过创建")
+		return nil
+	}
+
 	// 创建 todo 工具集
 	// 对齐 Python L124-131: 创建工具并注册
 	fsOp := r.SysOperation()
