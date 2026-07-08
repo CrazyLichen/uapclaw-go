@@ -96,6 +96,23 @@ func (f *fakeDeepAgentForTaskPlanning) CreateSubagent(_ string, _ string) (hinte
 	return nil, nil
 }
 
+// Invoke 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+
+// SwitchMode 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+
+// RestoreModeAfterPlanExit 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
+
+// GetPlanFilePath 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+
+// SaveState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForTaskPlanning) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForTaskPlanning)(nil)
 
@@ -293,7 +310,7 @@ func TestTaskPlanningRail_Init_AbilityManager为nil时跳过(t *testing.T) {
 	assert.Nil(t, r.tools)
 }
 
-// TestTaskPlanningRail_Init_设置SysOpWorkspace 验证 Init 设置 systemPromptBuilder/sysOp/workspace
+// TestTaskPlanningRail_Init_设置SysOpWorkspace 验证 Init 设置 sysOp/workspace
 func TestTaskPlanningRail_Init_设置SysOpWorkspace(t *testing.T) {
 	t.Parallel()
 
@@ -302,8 +319,6 @@ func TestTaskPlanningRail_Init_设置SysOpWorkspace(t *testing.T) {
 	// fakeBaseAgent 不实现 DeepAgentInterface，Init 直接返回 nil
 	err := r.Init(agent)
 	assert.NoError(t, err)
-	// systemPromptBuilder 在 DeepAgentInterface 分支内设置
-	assert.Nil(t, r.systemPromptBuilder)
 }
 
 // TestTaskPlanningRail_Uninit_移除工具 验证 Uninit 清理 tools 和 todoTool
@@ -312,8 +327,6 @@ func TestTaskPlanningRail_Uninit_移除工具(t *testing.T) {
 
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
-	// 手动设置 systemPromptBuilder
-	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	err := r.Uninit(agent)
 	assert.NoError(t, err)
 	assert.Nil(t, r.tools)
@@ -329,7 +342,6 @@ func TestTaskPlanningRail_Uninit_移除提示词节(t *testing.T) {
 	builder := agent.SystemPromptBuilder()
 	// 先添加 todo 节
 	builder.AddSection(saprompt.PromptSection{Name: sections.SectionTodo, Content: map[string]string{"cn": "test"}})
-	r.systemPromptBuilder = builder
 	assert.True(t, builder.HasSection(sections.SectionTodo))
 
 	err := r.Uninit(agent)
@@ -346,7 +358,6 @@ func TestTaskPlanningRail_BeforeModelCall_注入提示词(t *testing.T) {
 	r := NewTaskPlanningRail()
 	agent := newFakeBaseAgent()
 	builder := agent.SystemPromptBuilder()
-	r.systemPromptBuilder = builder
 
 	inputs := &agentinterfaces.ModelCallInputs{}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
@@ -370,8 +381,6 @@ func TestTaskPlanningRail_BeforeModelCall_模型切换(t *testing.T) {
 	r := NewTaskPlanningRail(
 		WithModelSelection(map[*llm.Model]string{model: "目标模型"}),
 	)
-	// 手动设置 systemPromptBuilder 以跳过提示词注入检查
-	r.systemPromptBuilder = nil
 
 	agent := newFakeModelSwitcherAgent()
 	agent.currentLLM = defaultModel
@@ -1222,9 +1231,8 @@ func TestTaskPlanningRail_BeforeModelCall_builder为nil时跳过(t *testing.T) {
 	t.Parallel()
 
 	r := NewTaskPlanningRail()
-	r.systemPromptBuilder = nil
 
-	agent := newFakeBaseAgent()
+	agent := &fakeBaseAgent{cbMgr: agentinterfaces.NewAgentCallbackManager("test"), builder: nil}
 	inputs := &agentinterfaces.ModelCallInputs{}
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, nil)
 
@@ -1321,7 +1329,8 @@ func TestTaskPlanningRail_AfterToolCall_进度提醒触发(t *testing.T) {
 
 	inputs := &agentinterfaces.ToolCallInputs{ToolName: "todo_modify"}
 	sess := newFakeSession("sess-remind")
-	cbc := agentinterfaces.NewAgentCallbackContext(nil, inputs, sess)
+	agent := newFakeBaseAgent()
+	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, sess)
 
 	err := r.AfterToolCall(context.Background(), cbc)
 	require.NoError(t, err)
@@ -1348,8 +1357,6 @@ func TestTaskPlanningRail_Init_完整路径(t *testing.T) {
 
 	err := r.Init(agent)
 	require.NoError(t, err)
-	// systemPromptBuilder 应被设置
-	assert.NotNil(t, r.systemPromptBuilder)
 }
 
 // TestTaskPlanningRail_Uninit_有工具时移除 验证 Uninit 有工具时调用 Remove
@@ -1360,7 +1367,6 @@ func TestTaskPlanningRail_Uninit_有工具时移除(t *testing.T) {
 	tools, _ := todo.CreateTodosTool("/tmp/test-workspace", fs, "cn", "test-agent")
 	r := NewTaskPlanningRail()
 	r.tools = tools
-	r.systemPromptBuilder = nil
 
 	am := &fakeAbilityManager{}
 	agent := &fakeBaseAgentWithAm{
@@ -1540,6 +1546,23 @@ func (f *fakeDeepAgentWithAm) ScheduleAutoInvokeOnSpawnDone(_ string) error {
 func (f *fakeDeepAgentWithAm) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
 }
+
+// Invoke 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+
+// SwitchMode 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+
+// RestoreModeAfterPlanExit 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
+
+// GetPlanFilePath 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+
+// SaveState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentWithAm) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
 
 // 编译时验证
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentWithAm)(nil)

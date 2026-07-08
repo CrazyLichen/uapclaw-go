@@ -15,7 +15,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -56,8 +55,6 @@ type TaskPlanningRail struct {
 	usageRecords map[string]*hschema.ModelUsageRecord
 	// defaultLLM 默认 LLM 实例（首次调用时捕获）
 	defaultLLM *llm.Model
-	// systemPromptBuilder 系统提示词构建器
-	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// language 语言
 	language string
 	// agentID Agent 标识
@@ -172,10 +169,6 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 		return nil
 	}
 
-	// 设置 systemPromptBuilder
-	// 对齐 Python L94: self.system_prompt_builder = getattr(agent, "system_prompt_builder", None)
-	r.systemPromptBuilder = agent.SystemPromptBuilder()
-
 	// 设置 sysOperation 和 workspace
 	if r.SysOperation() == nil {
 		// 对齐 Python L96-97: self.set_sys_operation(agent.deep_config.sys_operation)
@@ -209,8 +202,8 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 	// 对齐 Python L103: language = self.system_prompt_builder.language if self.system_prompt_builder else "cn"
 	language := r.language
 	if language == "" {
-		if r.systemPromptBuilder != nil {
-			language = r.systemPromptBuilder.Language()
+		if sb := agent.SystemPromptBuilder(); sb != nil {
+			language = sb.Language()
 		} else {
 			language = "cn"
 		}
@@ -249,8 +242,8 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 // 对齐 Python: TaskPlanningRail.uninit() L135-149
 func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// 对齐 Python L138-139: 移除 todo 提示词节
-	if r.systemPromptBuilder != nil {
-		r.systemPromptBuilder.RemoveSection(sections.SectionTodo)
+	if sb := agent.SystemPromptBuilder(); sb != nil {
+		sb.RemoveSection(sections.SectionTodo)
 	}
 
 	// 对齐 Python L140-148: 从 ability_manager 移除工具
@@ -273,11 +266,11 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 // 对齐 Python: TaskPlanningRail.before_model_call() L153-184
 func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L155-156: 注入 todo 提示词节
-	if r.systemPromptBuilder != nil {
-		lang := r.systemPromptBuilder.Language()
+	if sb := cbc.Agent().SystemPromptBuilder(); sb != nil {
+		lang := sb.Language()
 		modelSelStr := r.buildModelSelectionString()
 		section := sections.BuildTodoSection(modelSelStr, lang)
-		r.systemPromptBuilder.AddSection(section)
+		sb.AddSection(section)
 	}
 
 	// 对齐 Python L167-168: 若无模型选择配置则跳过模型切换
@@ -382,8 +375,8 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	// 对齐 Python L234-241: 构造进度提醒并注入消息
 	tasksStr, inProgressTask := r.formatTaskContent(todos)
 	var lang string
-	if r.systemPromptBuilder != nil {
-		lang = r.systemPromptBuilder.Language()
+	if sb := cbc.Agent().SystemPromptBuilder(); sb != nil {
+		lang = sb.Language()
 	} else {
 		lang = "cn"
 	}

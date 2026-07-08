@@ -588,5 +588,22 @@ func (f *fakeDeepAgentForNotify) CreateSubagent(_ string, _ string) (hinterfaces
 	return nil, nil
 }
 
+// Invoke 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {
+	return nil, nil
+}
+
+// SwitchMode 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) SwitchMode(_ sessioninterfaces.SessionFacade, _ string) {}
+
+// RestoreModeAfterPlanExit 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) RestoreModeAfterPlanExit(_ sessioninterfaces.SessionFacade) {}
+
+// GetPlanFilePath 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) GetPlanFilePath(_ sessioninterfaces.SessionFacade) string { return "" }
+
+// SaveState 实现 DeepAgentInterface 接口
+func (f *fakeDeepAgentForNotify) SaveState(_ sessioninterfaces.SessionFacade, _ *hschema.DeepAgentState) {}
+
 // 确保编译时 fakeDeepAgentForNotify 满足必要的接口
 var _ hinterfaces.DeepAgentInterface = (*fakeDeepAgentForNotify)(nil)
