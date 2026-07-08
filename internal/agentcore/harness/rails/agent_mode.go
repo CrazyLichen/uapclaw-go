@@ -554,12 +554,17 @@ func (r *AgentModeRail) isPlanFile(filePath, planPath string) bool {
 		return false
 	}
 	// 对齐 Python L503-505: Path(file_path).resolve() == Path(plan_path).resolve()
+	// resolve = Abs + EvalSymlinks（与 Python Path.resolve() 行为一致）
 	tryResolve := func(p string) string {
 		abs, err := filepath.Abs(p)
 		if err != nil {
 			return p
 		}
-		return abs
+		resolved, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			return abs
+		}
+		return resolved
 	}
 	return tryResolve(filePath) == tryResolve(planPath)
 }
