@@ -187,6 +187,10 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
 	harness.ResetFreeSearchRuntimeFlags()
 
+	// TODO(⤵️ 扩展系统): 初始化 ExtensionRegistry + ExtensionManager + load_all_extensions
+	// 对齐 Python: app_gateway.py L814-822, app_agentserver.py L131-141
+	// 单体架构中只需初始化一次，等扩展系统实现后回填
+
 	// 7. 配置热重载器（对齐 Python: config/reloader.go fsnotify 监听）
 	//    reloader 在 AgentServer 启动后注册回调（需要 agentClient 就绪）
 	reloader, reloaderErr := config.NewReloader(cfg)
