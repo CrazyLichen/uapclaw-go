@@ -193,7 +193,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	//              按配置: code_agent + browser_agent
 	// 步骤 19: ⤵️ agentcore.DeepAgent: c.deep.instance = create_deep_agent(...)
 	// 步骤 20: ⤵️ agentcore.DeepAgent: instance.ensure_initialized()
-	// 步骤 21: ⤵️ agentcore.DeepAgent: seed_cwd + coding_memory workspace
+	// 步骤 20.5: _seed_runtime_cwd(c.projectDir or c.workspaceDir)
+	// 对齐 Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir) (interface_code.py:1131)
+	initCwd := c.deep.projectDir
+	if initCwd == "" {
+		initCwd = c.deep.workspaceDir
+	}
+	ctx = c.deep.seedRuntimeCwd(ctx, initCwd)
+	// 步骤 21: ⤵️ agentcore.DeepAgent: coding_memory workspace
 
 	// 步骤 22: c.deep.registeredMCPServerIDs = make(map[string]bool)
 	c.deep.registeredMCPServerIDs = make(map[string]bool)

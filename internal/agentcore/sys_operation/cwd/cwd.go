@@ -215,13 +215,18 @@ func (s *CwdState) GetOriginalCwd() string {
 // GetProjectRoot 获取项目根目录。
 // 对齐 Python: get_project_root() (cwd.py:115-121)
 // 读取优先级：projectRoot -> originalCwd -> os.Getwd()
+// 注意：内联读取 originalCwd 而非调用 GetOriginalCwd()，避免嵌套加锁风险。
 func (s *CwdState) GetProjectRoot() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.projectRoot != "" {
 		return s.projectRoot
 	}
-	return s.GetOriginalCwd()
+	if s.originalCwd != "" {
+		return s.originalCwd
+	}
+	wd, _ := os.Getwd()
+	return wd
 }
 
 // GetWorkspace 获取 agent workspace。

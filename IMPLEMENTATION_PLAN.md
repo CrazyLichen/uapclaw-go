@@ -529,7 +529,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 步骤 | 状态 | 内容 | 产出 | Python 参考路径 |
 |------|------|------|------|-----------------|
 | **9.x DeepAgent** | — | | | |
-| 9.1 | ✅ | DeepAgent | 包装 ReActAgent + 任务循环 + Rails + 技能 + 子 Agent | `openjiuwen/harness/deep_agent.py` |
+| 9.1 | ✅ | DeepAgent | 包装 ReActAgent + 任务循环 + Rails + 技能 + 子 Agent；✅ init_cwd 在 ensureInitialized 中默认兜底，adapter 层 seedRuntimeCwd 覆盖（对齐 Python 两层 init_cwd） | `openjiuwen/harness/deep_agent.py` |
 | 9.2 | ✅ | DeepAgentConfig | DeepAgent 配置 | `openjiuwen/harness/harness_config/` |
 | 9.3 | ✅ | DeepAgent Factory | 创建 DeepAgent 实例 | `openjiuwen/harness/factory.py` |
 | 9.4 | ✅ | TaskLoopController | 任务循环控制器 | `openjiuwen/harness/task_loop/` |
@@ -636,7 +636,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.1 | ☐ | AgentWebSocketServer | WS 服务端，~100 个 RPC 方法分发 | `jiuwenswarm/server/agent_ws_server.py` |
 | 10.3.2 | ☐ | JiuWenClaw 门面 | SDK 路由，会话队列，流式包装，中断处理 | `jiuwenswarm/server/runtime/agent_adapter/interface.py` |
 | 10.3.3 | ✅ | AgentAdapter 接口与工厂 | AgentAdapter ABC，`create_adapter()` | `jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py` |
-| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
+| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；✅ 已回填 seedRuntimeCwd（对齐 Python _seed_runtime_cwd，步骤 21 CWD 种子 + ProcessMessage 请求级 CWD 注入）；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
 | 10.3.7-11 | ☐ | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers/RecapPrompts/SysOpBuilder | `jiuwenswarm/server/runtime/agent_adapter/` |
 | 10.3.12 | ☐ | AgentManager | 多实例管理（按通道/模式） | `jiuwenswarm/server/runtime/agent_manager.py` |
 | 10.3.13 | ☐ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |

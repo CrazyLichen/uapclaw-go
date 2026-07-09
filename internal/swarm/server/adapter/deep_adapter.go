@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -371,7 +373,13 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 步骤 18: ⤵️ agentcore.DeepAgent: _build_configured_subagents(model, config, configBase)
 	// 步骤 19: ⤵️ agentcore.DeepAgent: d.instance = create_deep_agent(...)
 	// 步骤 20: ⤵️ agentcore.DeepAgent: d.instance.ensure_initialized()
-	// 步骤 21: ⤵️ agentcore.DeepAgent: _seed_runtime_cwd(d.projectDir or d.workspaceDir)
+	// 步骤 21: _seed_runtime_cwd(d.projectDir or d.workspaceDir)
+	// 对齐 Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir) (interface_deep.py:2608)
+	initCwd := d.projectDir
+	if initCwd == "" {
+		initCwd = d.workspaceDir
+	}
+	ctx = d.seedRuntimeCwd(ctx, initCwd)
 	// 步骤 22: ⤵️ A2X: _sync_a2x_runtime_state()
 
 	// 步骤 23: d.registeredMCPServerIDs = make(map[string]bool)（可回填）
@@ -492,7 +500,22 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	d.markSessionActive(sessionID)
 
 	// ⤵️ 10.6.3-10: 步骤 15 streamEventRail.reset_abort(sessionID)
-	// ⤵️ agentcore.DeepAgent: 步骤 16-17 update_runtime_config
+	// 步骤 16-17: update_runtime_config
+	// 对齐 Python: await self._update_runtime_config(runtimeConfig) (interface_deep.py:4517)
+	// _update_runtime_config 首步调用 _seed_runtime_cwd，注入请求级 CWD
+	// ⤵️ agentcore.DeepAgent: 完整 update_runtime_config 实现
+	// 步骤 17 的 CWD 部分：从请求参数提取 cwd，调用 seedRuntimeCwd
+	requestCwd := paramsString(params, "cwd", "")
+	if requestCwd == "" {
+		if v, ok := params["project_dir"]; ok {
+			if s, ok := v.(string); ok {
+				requestCwd = s
+			}
+		}
+	}
+	if requestCwd != "" {
+		ctx = d.seedRuntimeCwd(ctx, requestCwd)
+	}
 	// ⤵️ agentcore.Runner: 步骤 18 Runner.run_agent
 	// ⤵️ 10.6.3-10: 步骤 19-20 异常处理 + 清理（unmark_session_active）
 
@@ -575,7 +598,22 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
 
-	// ⤵️ agentcore.DeepAgent: 步骤 16-17 update_runtime_config
+	// 步骤 16-17: update_runtime_config
+	// 对齐 Python: await self._update_runtime_config(runtimeConfig) (interface_deep.py:4533)
+	// _update_runtime_config 首步调用 _seed_runtime_cwd，注入请求级 CWD
+	// ⤵️ agentcore.DeepAgent: 完整 update_runtime_config 实现
+	// 步骤 17 的 CWD 部分：从请求参数提取 cwd，调用 seedRuntimeCwd
+	requestCwd := paramsString(params, "cwd", "")
+	if requestCwd == "" {
+		if v, ok := params["project_dir"]; ok {
+			if s, ok := v.(string); ok {
+				requestCwd = s
+			}
+		}
+	}
+	if requestCwd != "" {
+		ctx = d.seedRuntimeCwd(ctx, requestCwd)
+	}
 	// ⤵️ agentcore.Runner: 步骤 18-19 Runner.run_agent_streaming
 	// ⤵️ 10.6.3-10: 步骤 20-21 异常处理 + 清理
 
@@ -757,6 +795,54 @@ func (d *DeepAdapter) Cleanup() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// seedRuntimeCwd 从请求/运行时 CWD 种子 CwdState。
+// 对齐 Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)
+//
+// 解析优先级：
+//   - runtimeCwd：传入的 cwd 参数
+//   - → d.projectDir：项目目录
+//   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
+//
+// workspace_root = workspaceDir or projectDir or os.Getwd()
+func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
+	// workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
+	workspaceRoot := d.workspaceDir
+	if workspaceRoot == "" {
+		workspaceRoot = d.projectDir
+	}
+	if workspaceRoot == "" {
+		workspaceRoot, _ = os.Getwd()
+	}
+
+	// runtime_cwd = str(cwd or "").strip()
+	runtimeCwd := strings.TrimSpace(cwdArg)
+	// if not runtime_cwd or not os.path.isdir(runtime_cwd):
+	if runtimeCwd == "" || !isDir(runtimeCwd) {
+		runtimeCwd = strings.TrimSpace(d.projectDir)
+	}
+	if runtimeCwd == "" || !isDir(runtimeCwd) {
+		runtimeCwd = workspaceRoot
+	}
+
+	// init_cwd(runtime_cwd, workspace=workspace_root)
+	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
+	ctx = cwd.WithCwdState(ctx, cwdState)
+
+	logger.Info(logComponent).
+		Str("runtime_cwd", runtimeCwd).
+		Str("workspace_root", workspaceRoot).
+		Msg("CWD 已从 runtime 种子初始化")
+
+	return ctx
+}
+
+// isDir 检查路径是否为有效目录。
+// 对齐 Python: os.path.isdir(path)
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
 
 // ensurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
 //
