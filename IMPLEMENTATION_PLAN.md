@@ -563,7 +563,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.16 | ✅ | McpRail | MCP 工具管理 | `openjiuwen/harness/rails/` |
 | 9.17 | ☐ | LSPRail | LSP 集成 | `openjiuwen/harness/lsp/` |
 | 9.18 | ✅ | SysOperationRail | 系统操作管理 | `openjiuwen/harness/rails/` |
-| 9.19-24 | ☐ | 其他 Rails | Security/Interrupt/Skill/ContextEngine/Memory/Evolution Rails | `openjiuwen/harness/rails/` |
+| 9.19-24 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(☐)/Memory(☐)/Evolution(☐) Rails | `openjiuwen/harness/rails/` |
 | **9.x 子 Agent** | — | | | |
 | 9.25 | ☐ | ResearchAgent | 研究子 Agent | `openjiuwen/harness/subagents/` |
 | 9.26 | ☐ | BrowserAgent | 浏览器子 Agent | `openjiuwen/harness/subagents/` |

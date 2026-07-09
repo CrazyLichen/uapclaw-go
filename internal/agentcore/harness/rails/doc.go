@@ -9,6 +9,7 @@
 //   - HeartbeatRail：心跳护栏 Rail（心跳运行时注入 HEARTBEAT.md 内容到系统提示词，非心跳运行时静默跳过）
 //   - McpRail：MCP 资源浏览工具注册 Rail（注册 ListMcpResources/ReadMcpResource 到 ResourceMgr + AbilityManager）
 //   - SysOperationRail：系统操作护栏 Rail（注册文件系统、Shell 和代码工具到 ResourceMgr + AbilityManager）
+//   - interrupt 子包：中断-恢复（HITL）Rail 实现（BaseInterruptRail/AskUserRail/ConfirmInterruptRail）
 //
 // 文件目录：
 //
@@ -21,7 +22,12 @@
 //	├── task_planning.go    # TaskPlanningRail 任务规划（7个钩子）
 //	├── agent_mode.go       # AgentModeRail plan 模式约束（3个钩子）
 //	├── heartbeat.go        # HeartbeatRail 心跳护栏（3个钩子）
-//	└── mcp_rail.go         # McpRail MCP 资源浏览工具注册（2个钩子：Init/Uninit）
+//	├── mcp_rail.go         # McpRail MCP 资源浏览工具注册（2个钩子：Init/Uninit）
+//	└── interrupt/          # 中断-恢复（HITL）Rail 子包
+//	    ├── doc.go              # 包文档
+//	    ├── interrupt_base.go   # BaseInterruptRail + 决策类型
+//	    ├── ask_user_rail.go    # AskUserRail + AskUserPayload/AskUserRequest
+//	    └── confirm_rail.go     # ConfirmInterruptRail + ConfirmPayload/ConfirmRequest
 //
 // 对应 Python 代码：openjiuwen/harness/rails/
 package rails

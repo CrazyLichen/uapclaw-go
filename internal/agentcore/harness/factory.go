@@ -17,6 +17,7 @@ import (
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -534,6 +535,12 @@ func addDefaultRails(
 	if !alreadyProvidedByType(userProvidedTypes, nil) {
 		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).Msg("已添加默认 SecurityRail 占位，⤵️ 9.8-9.24 回填")
+	}
+
+	// AskUserRail — 始终添加（拦截 ask_user 工具，实现 HITL 用户交互）
+	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&interrupt.AskUserRail{})) {
+		agent.AddRail(interrupt.NewAskUserRail())
+		logger.Debug(logComponent).Msg("已添加 AskUserRail")
 	}
 
 	// SysOperationRail — 始终添加（系统操作工具注册）
