@@ -26,6 +26,7 @@ type Reloader struct {
 	debounce time.Duration          // 防抖间隔
 	handlers []func(map[string]any) // 变更回调列表
 	done     chan struct{}          // 监听协程退出信号
+	started  bool                  // 是否已启动
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -66,12 +67,20 @@ func (r *Reloader) OnReload(fn func(map[string]any)) {
 // Start 启动文件监听。
 // 监听配置文件所在目录，目录下文件变更时触发重载。
 func (r *Reloader) Start() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.started {
+		return nil
+	}
+
 	// 监听配置文件所在目录
 	dir := filepath.Dir(r.config.Path())
 	if err := r.watcher.Add(dir); err != nil {
 		return fmt.Errorf("监听配置目录失败: %w", err)
 	}
 
+	r.started = true
 	go r.watchLoop()
 
 	log.Printf("[config] 已启动配置热重载监听，目录: %s", dir)
@@ -80,6 +89,16 @@ func (r *Reloader) Start() error {
 
 // Stop 停止文件监听。
 func (r *Reloader) Stop() error {
+	r.mu.Lock()
+	wasStarted := r.started
+	r.mu.Unlock()
+
+	if !wasStarted {
+		// 未启动时直接关闭 watcher 即可，不需要等待 done
+		_ = r.watcher.Close()
+		return nil
+	}
+
 	close(r.stopCh)
 	_ = r.watcher.Close()
 	// 等待监听协程退出

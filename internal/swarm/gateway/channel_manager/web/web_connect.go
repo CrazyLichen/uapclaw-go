@@ -58,6 +58,8 @@ type WebChannel struct {
 	onMessageCb func(*schema.Message)
 	// agentClient AgentServer 客户端（nil 表示无需等待，直接发 connection.ack）
 	agentClient *routing.AgentClient
+	// onConfigSavedCb 配置保存回调
+	onConfigSavedCb OnConfigSavedFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -84,7 +86,8 @@ const (
 // NewWebChannel 创建 Web 通道实例。
 //
 // 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
-func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message)) *WebChannel {
+// 对齐 Python: WebChannel.__init__ + _register_web_handlers(bind)。
+func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message), onConfigSaved OnConfigSavedFunc) *WebChannel {
 	// 填充默认值
 	if cfg.Host == "" {
 		cfg.Host = defaultWebHost
@@ -97,12 +100,13 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message)) *WebCh
 	}
 
 	wc := &WebChannel{
-		config:  cfg,
-		clients: make(map[*websocket.Conn]bool),
+		config:          cfg,
+		clients:         make(map[*websocket.Conn]bool),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
-		onMessageCb: onMessage,
+		onMessageCb:    onMessage,
+		onConfigSavedCb: onConfigSaved,
 	}
 
 	// 创建事件推送回调：向所有客户端广播事件帧
@@ -110,7 +114,7 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message)) *WebCh
 		wc.broadcastEvent(event, payload)
 	}
 
-	wc.dispatcher = NewAppRPCHandlers(sendEvent, onMessage)
+	wc.dispatcher = RegisterWebHandlers(sendEvent, onMessage, onConfigSaved)
 
 	return wc
 }

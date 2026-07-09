@@ -42,6 +42,8 @@ type GatewayServer struct {
 	agentClient *routing.AgentClient
 	// httpServer HTTP 服务器
 	httpServer *http.Server
+	// reloader 配置热重载监听器
+	reloader *config.Reloader
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -76,6 +78,26 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 	// 创建 MessageHandler
 	msgHandler := mh.NewMessageHandler(agentClient, channelMgr)
 
+	// 先创建 GatewayServer（onConfigSavedImpl 需要 agentClient 和 config）
+	s := &GatewayServer{
+		config:      cfg,
+		channelMgr:  channelMgr,
+		msgHandler:  msgHandler,
+		agentClient: agentClient,
+	}
+
+	// 创建配置热重载器（对齐 Python 无 fsnotify，Go 补充）
+	// 监听 config.yaml 变更，触发 onConfigSavedImpl
+	if cfg != nil {
+		if reloader, err := config.NewReloader(cfg); err != nil {
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Msg("创建配置热重载器失败，fsnotify 触发路径不可用")
+		} else {
+			s.reloader = reloader
+		}
+	}
+
 	// 创建 onMessage 回调：WebChannel → MessageHandler.HandleInbound
 	onMessageCb := func(msg *schema.Message) {
 		if err := msgHandler.HandleInbound(context.Background(), msg); err != nil {
@@ -86,20 +108,18 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		}
 	}
 
-	wc := web.NewWebChannel(webCfg, onMessageCb)
+	// 创建 onConfigSaved 回调：WebHandler → GatewayServer.onConfigSavedImpl
+	// 对齐 Python: WebHandlersBindParams(on_config_saved=_on_config_saved)
+	onConfigSavedCb := s.OnConfigSaved()
+
+	wc := web.NewWebChannel(webCfg, onMessageCb, onConfigSavedCb)
 
 	// 注入 AgentClient（用于等待 AgentServer 就绪）
 	if agentClient != nil {
 		wc.SetAgentClient(agentClient)
 	}
 
-	s := &GatewayServer{
-		config:      cfg,
-		webChannel:  wc,
-		channelMgr:  channelMgr,
-		msgHandler:  msgHandler,
-		agentClient: agentClient,
-	}
+	s.webChannel = wc
 
 	// 组装路由
 	s.setupRouter()
@@ -145,15 +165,22 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		}
 	}
 
-	// 启动时推送初始配置给 AgentServer（对齐 Python: set_or_update_server_config + agent.reload_config）
-	// 对齐 Python: app_gateway.py L879-882
-	if s.agentClient != nil && s.agentClient.ServerReady() {
-		if err := s.PushInitialConfig(ctx); err != nil {
+	// 启动配置热重载监听（对齐 Python 无 fsnotify，Go 补充）
+	if s.reloader != nil {
+		s.reloader.OnReload(func(data map[string]any) {
+			// fsnotify 检测到 config.yaml 变更，用最新配置快照调用 onConfigSaved
+			configData, _ := s.config.Raw()
+			if configData == nil {
+				configData = make(map[string]any)
+			}
+			_ = s.onConfigSavedImpl(nil, BuildEnvMap(), configData)
+		})
+		if err := s.reloader.Start(); err != nil {
 			logger.Warn(logComponentAppGateway).
 				Err(err).
-				Msg("启动时推送初始配置给 AgentServer 失败")
+				Msg("启动配置热重载监听失败")
 		} else {
-			logger.Info(logComponentAppGateway).Msg("初始配置已推送给 AgentServer")
+			logger.Info(logComponentAppGateway).Msg("配置热重载监听已启动")
 		}
 	}
 
@@ -218,6 +245,15 @@ func (s *GatewayServer) Stop() error {
 	// 断开 AgentClient
 	if s.agentClient != nil {
 		s.agentClient.Disconnect()
+	}
+
+	// 停止配置热重载监听
+	if s.reloader != nil {
+		if err := s.reloader.Stop(); err != nil {
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Msg("停止配置热重载监听失败")
+		}
 	}
 
 	// 关闭 HTTP 服务器

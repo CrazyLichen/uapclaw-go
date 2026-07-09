@@ -22,6 +22,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// OnConfigSavedFunc 配置保存回调函数类型。
+// 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
+//
+// 参数说明：
+//   - updatedKeys: 变更的环境变量键集合
+//   - envUpdates: 增量环境变量更新
+//   - configPayload: 完整配置快照
+type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
+
 // RPCDispatcher RPC 方法注册与分发。
 //
 // 对齐 Python app_web_handlers.py 中的方法注册模式：
@@ -150,16 +159,17 @@ func NewRPCDispatcher() *RPCDispatcher {
 	}
 }
 
-// NewAppRPCHandlers 创建 RPC 分发器并注册所有应用方法。
+// RegisterWebHandlers 创建 RPC 分发器并注册所有应用方法。
 //
-// 对齐 Python app_web_handlers.py 中全量 RPC 方法注册，
+// 对齐 Python app_web_handlers.py 中 _register_web_handlers(bind)，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
-func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *RPCDispatcher {
+// Go 使用显式参数传递替代 Python WebHandlersBindParams 闭包捕获。
+func RegisterWebHandlers(sendEvent EventSender, onMessage func(*schema.Message), onConfigSaved OnConfigSavedFunc) *RPCDispatcher {
 	d := NewRPCDispatcher()
 
 	// ─── 本地实现方法 ───
 	d.Register("config.get", handleConfigGet)
-	d.Register("config.set", handleConfigSet(sendEvent))
+	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved))
 	d.Register("models.list", handleModelsList)
 	d.Register("channel.get", handleChannelGet)
 	d.Register("session.list", handleSessionList)
@@ -167,7 +177,7 @@ func NewAppRPCHandlers(sendEvent EventSender, onMessage func(*schema.Message)) *
 	d.Register("session.delete", handleSessionDelete)
 
 	// ─── config 辅助方法 ───
-	d.Register("config.save_all", stubHandler("config.save_all", map[string]any{"updated": []any{}}))
+	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved))
 	d.Register("config.validate_model", stubHandler("config.validate_model", map[string]any{"ok": true}))
 
 	// ─── models 辅助方法 ───
@@ -469,50 +479,147 @@ func handleConfigGet(_ context.Context, _ map[string]any, _ string) (map[string]
 
 // handleConfigSet 处理 config.set 请求。
 //
-// 全量实现：反向映射前端参数 → 环境变量名 → os.Setenv + 持久化 .env。
-// AgentServer reload 通知本次 stub。
-func handleConfigSet(sendEvent EventSender) RPCHandlerFunc {
+// 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
+// 对齐 Python: _config_set (app_web_handlers.py L870-895)。
+func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
 		}
 
-		updated := make(map[string]string)
+		// 步骤1-5: applyConfigPayload 统一处理
+		envUpdates, yamlUpdated, err := ApplyConfigPayload(params)
+		if err != nil {
+			// 区分 BadRequest 和 InternalError
+			if _, ok := err.(*ConfigBadRequest); ok {
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+			}
+			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+		}
 
-		// 反向查找 configEnvMap，将前端参数映射到环境变量
-		for key, val := range params {
-			envVar, ok := configEnvMap[key]
+		// 步骤6: 回包给前端（对齐 Python: 先回包后通知）
+		appliedWithoutRestart := true
+		updatedParamKeys := make([]string, 0)
+		for k, e := range configEnvMap {
+			if _, ok := envUpdates[e]; ok {
+				updatedParamKeys = append(updatedParamKeys, k)
+			}
+		}
+		updatedParamKeys = append(updatedParamKeys, yamlUpdated...)
+
+		// 步骤7: 触发热重载（对齐 Python: _notify_config_saved_once）
+		if len(envUpdates) > 0 || len(yamlUpdated) > 0 {
+			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, false)
+		}
+
+		return map[string]any{
+			"ok":                      true,
+			"updated":                 updatedParamKeys,
+			"applied_without_restart": appliedWithoutRestart,
+		}, nil
+	}
+}
+
+// handleConfigSaveAll 处理 config.save_all 请求。
+//
+// 批量保存配置面板变更并触发热重载。
+// 对齐 Python: _config_save_all (app_web_handlers.py L1086-1151)。
+//
+// 支持子载荷：config、models、agents、team。
+func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return map[string]any{"ok": false, "error": "params must be object", "code": WsErrBadRequest}, nil
+		}
+
+		envUpdates := make(map[string]string)
+		yamlUpdated := make([]string, 0)
+		var modelsCount *int
+
+		// models 子载荷
+		var newModels []map[string]any
+		if modelsVal, ok := params["models"]; ok && modelsVal != nil {
+			// 将 []any 转为 []map[string]any
+			parsed, err := buildModelsDefaultsFromFrontend(modelsVal)
+			if err != nil {
+				if _, ok := err.(*ConfigBadRequest); ok {
+					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+				}
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			}
+			newModels = parsed
+		}
+
+		// config 子载荷 + agents/team 合并
+		configParams := make(map[string]any)
+		if rawConfig, ok := params["config"]; ok && rawConfig != nil {
+			configMap, ok := rawConfig.(map[string]any)
 			if !ok {
-				// 非环境变量映射的键，跳过（后续可扩展写入 config.yaml）
-				continue
+				return map[string]any{"ok": false, "error": "config must be object", "code": WsErrBadRequest}, nil
 			}
-			strVal := fmt.Sprintf("%v", val)
-			if err := os.Setenv(envVar, strVal); err != nil {
-				logger.Error(logComponent).
-					Str("env_var", envVar).
-					Str("value", strVal).
-					Err(err).
-					Msg("设置环境变量失败")
-				continue
-			}
-			updated[envVar] = strVal
-		}
-
-		// 持久化到 .env 文件
-		if len(updated) > 0 {
-			if err := persistEnvUpdates(updated); err != nil {
-				logger.Error(logComponent).
-					Err(err).
-					Msg("持久化 .env 文件失败")
+			for k, v := range configMap {
+				configParams[k] = v
 			}
 		}
+		if agents, ok := params["agents"]; ok {
+			configParams["agents"] = agents
+		}
+		if team, ok := params["team"]; ok {
+			configParams["team"] = team
+		}
 
-		// AgentServer reload 通知 stub
-		logger.Info(logComponent).
-			Str("event_type", "config_set_reload_stub").
-			Msg("[config.set] AgentServer reload 通知已跳过（stub）")
+		// 应用 config 子载荷
+		if len(configParams) > 0 {
+			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams)
+			if err != nil {
+				if _, ok := err.(*ConfigBadRequest); ok {
+					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+				}
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			}
+			for k, v := range appliedEnv {
+				envUpdates[k] = v
+			}
+			yamlUpdated = append(yamlUpdated, appliedYAML...)
+		}
 
-		return map[string]any{"ok": true, "updated": updated}, nil
+		// 应用 models 子载荷
+		if newModels != nil {
+			if err := updateDefaultModelsInConfig(newModels); err != nil {
+				logger.Warn(logComponent).
+					Err(err).
+					Msg("写入 models.defaults 失败")
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+			}
+			yamlUpdated = append(yamlUpdated, "models.defaults")
+			count := len(newModels)
+			modelsCount = &count
+		}
+
+		// 回包给前端
+		updatedParamKeys := make([]string, 0)
+		for k, e := range configEnvMap {
+			if _, ok := envUpdates[e]; ok {
+				updatedParamKeys = append(updatedParamKeys, k)
+			}
+		}
+		updatedParamKeys = append(updatedParamKeys, yamlUpdated...)
+
+		result := map[string]any{
+			"ok":                      true,
+			"updated":                 updatedParamKeys,
+			"applied_without_restart": true,
+		}
+		if modelsCount != nil {
+			result["models_count"] = *modelsCount
+		}
+
+		// 触发热重载（force=true，对齐 Python: _notify_config_saved_once(force=True)）
+		if len(envUpdates) > 0 || len(yamlUpdated) > 0 {
+			NotifyConfigSavedOnce(onConfigSaved, envUpdates, yamlUpdated, true)
+		}
+
+		return result, nil
 	}
 }
 

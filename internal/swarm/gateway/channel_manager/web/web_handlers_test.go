@@ -68,8 +68,8 @@ func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
 	wg.Wait()
 }
 
-func TestNewAppRPCHandlers_全量注册(t *testing.T) {
-	d := NewAppRPCHandlers(nil, nil)
+func TestRegisterWebHandlers_全量注册(t *testing.T) {
+	d := RegisterWebHandlers(nil, nil, nil)
 
 	// 验证核心方法已注册
 	expectedMethods := []string{
@@ -127,17 +127,20 @@ func TestHandleConfigGet(t *testing.T) {
 }
 
 func TestHandleConfigSet(t *testing.T) {
-	// 测试 handleConfigSet 逻辑
-	handler := handleConfigSet(nil)
+	// 测试 handleConfigSet 逻辑（onConfigSaved 为 nil，跳过热重载）
+	handler := handleConfigSet(nil, nil)
 	result, err := handler(context.Background(), map[string]any{
-		"model_provider": "anthropic",
+		"model_provider": "OpenAI",
+		"model":          "gpt-4",
 	}, "sess_test")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
 
 	// 验证环境变量已更新
-	assert.Equal(t, "anthropic", os.Getenv("MODEL_PROVIDER"))
+	assert.Equal(t, "OpenAI", os.Getenv("MODEL_PROVIDER"))
+	assert.Equal(t, "gpt-4", os.Getenv("MODEL_NAME"))
 	_ = os.Unsetenv("MODEL_PROVIDER")
+	_ = os.Unsetenv("MODEL_NAME")
 }
 
 func TestHandleChannelGet(t *testing.T) {

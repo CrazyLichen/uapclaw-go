@@ -9,6 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -24,57 +25,13 @@ const configReloadTimeout = 10 * time.Second
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// OnConfigSavedFunc 配置保存回调函数类型。
-// 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
-//
-// 参数说明：
-//   - updatedKeys: 变更的环境变量键集合
-//   - envUpdates: 增量环境变量更新
-//   - configPayload: 完整配置快照
-type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
-
-// PushInitialConfig 推送初始配置给 AgentServer。
-// 在 GatewayServer.Start() 中，AgentClient 连接成功后调用。
-// 对齐 Python: app_gateway.py L879-882 set_or_update_server_config + agent.reload_config。
-func (s *GatewayServer) PushInitialConfig(ctx context.Context) error {
-	return s.pushConfigToAgentServer(ctx)
-}
-
 // OnConfigSaved 返回配置保存回调，供 WebHandler 注册。
 // 对齐 Python: WebHandlersBindParams(on_config_saved=_on_config_saved)。
-func (s *GatewayServer) OnConfigSaved() OnConfigSavedFunc {
+func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 	return s.onConfigSavedImpl
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// pushConfigToAgentServer 构造 agent.reload_config E2A 请求并发送给 AgentServer。
-// 对齐 Python: _on_config_saved → client.send_request(reload_env)。
-// 配置始终通过 E2A 请求传递，AgentServer 不共享 Config 指针。
-func (s *GatewayServer) pushConfigToAgentServer(ctx context.Context) error {
-	configData, _ := s.config.Raw()
-	if configData == nil {
-		configData = make(map[string]any)
-	}
-
-	requestID := "config-reload-" + uuid.New().String()[:8]
-	envelope := e2a.E2AFromAgentFields(requestID,
-		e2a.WithFieldReqMethod(string(schema.ReqMethodAgentReloadConfig)),
-		e2a.WithFieldParams(map[string]any{
-			"config": configData,
-			"env":    BuildEnvMap(),
-		}),
-	)
-
-	resp, err := s.agentClient.SendRequest(ctx, envelope)
-	if err != nil {
-		return fmt.Errorf("发送 agent.reload_config 失败: %w", err)
-	}
-	if !resp.OK {
-		return fmt.Errorf("AgentServer 拒绝配置重载: %v", resp.Payload)
-	}
-	return nil
-}
 
 // onConfigSavedImpl 配置保存回调实现。
 // 对齐 Python: _on_config_saved (app_gateway.py L919-989)。

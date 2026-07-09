@@ -3,10 +3,11 @@
 // Gateway 是 uapclaw 的统一入口，同时提供 WebSocket RPC 端点、
 // 静态文件服务和文件操作 HTTP API。通过 Transport 抽象与 AgentServer 通信。
 //
-// 配置推送（agent.reload_config）在 Gateway 层实现：
-//   - 启动时推送初始配置给 AgentServer（PushInitialConfig）
-//   - 配置变更回调（OnConfigSaved），由 WebHandler 的 config.set/config.save_all 触发
-//   - 条件触发 browser.runtime_restart
+// 配置热重载机制：
+//   - API 触发：WebHandler config.set/config.save_all → NotifyConfigSavedOnce → onConfigSavedImpl
+//   - fsnotify 触发：reloader 监听 config.yaml 变更 → onConfigSavedImpl
+//   - onConfigSavedImpl 构造 agent.reload_config E2A 请求 → AgentServer 热更新
+//   - 条件触发 browser.runtime_restart（browserRuntimeKeys 匹配）
 //
 // 对齐 Python: jiuwenswarm/gateway/app_gateway.py (_on_config_saved)
 //
@@ -14,8 +15,8 @@
 //
 //	gateway/
 //	├── doc.go              # 包文档
-//	├── app_gateway.go      # GatewayServer 启动入口，chi router 组装
-//	├── config_push.go      # 配置推送（onConfigSaved、PushInitialConfig）
+//	├── app_gateway.go      # GatewayServer 启动入口，chi router 组装，reloader 管理
+//	├── config_push.go      # 配置热重载回调（onConfigSavedImpl）
 //	├── config_env_map.go   # 配置键→环境变量映射 + browserRuntimeKeys
 //	├── embed.go            # go:embed 前端静态资源
 //	├── file_api.go         # /file-api/* HTTP 路由处理
