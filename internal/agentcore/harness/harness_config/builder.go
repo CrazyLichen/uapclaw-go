@@ -330,10 +330,10 @@ func resolveTools(resources *ResourcesSchema, sysOperation sysop.SysOperation) (
 
 // createSysOperation 创建并注册本地 SysOperation，以 AgentCard 为键
 //
-// ⤵️ 9.32 回填：SysOperation 具体实现（LocalSysOperation）完成后补全。
 // 对齐 Python: create_sys_operation → LocalSysOperation(card, workspace)。
 func createSysOperation(card *sasc.AgentCard) (sysop.SysOperation, error) {
-	return nil, fmt.Errorf("createSysOperation 尚未实现，⤵️ 9.32 回填")
+	sysOpCard := sysop.NewSysOperationCard(sysop.WithSysOpMode(sysop.OperationModeLocal))
+	return sysop.NewLocalSysOperation(sysOpCard), nil
 }
 
 // resolveRails 从 resources.Rails 解析所有 Rail 实例

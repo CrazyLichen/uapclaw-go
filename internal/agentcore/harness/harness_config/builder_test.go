@@ -299,11 +299,13 @@ func TestHarnessConfigBuilder_Build(t *testing.T) {
 	assert.True(t, result.RestrictToWorkDir)
 }
 
-// TestCreateSysOperation 测试 createSysOperation 桩实现
+// TestCreateSysOperation 测试 createSysOperation 实现
 func TestCreateSysOperation(t *testing.T) {
-	_, err := createSysOperation(nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "尚未实现")
+	op, err := createSysOperation(nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, op)
+	// 验证返回的是 LocalSysOperation 实例
+	assert.NotNil(t, op.Card())
 }
 
 // TestGenerateHarnessConfigYAML_基本 测试基本 YAML 生成

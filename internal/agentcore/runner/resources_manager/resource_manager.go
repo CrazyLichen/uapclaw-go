@@ -601,9 +601,7 @@ func (m *ResourceMgr) GetPrompt(promptIDs []string, opts ...ResourceOption) ([]*
 
 // --- SysOperation 操作（部分 ⤵️ 预留）---
 
-// AddSysOperation 注册系统操作。
-//
-// 对应 Python: ResourceManager.add_sys_operation(sys_operation_id, instance, **kwargs)
+// AddSysOperation 注册系统操作，并自动注册关联工具。
 //
 // 对应 Python: ResourceManager.add_sys_operation(card, *, tag=None)
 func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysOperation, opts ...ResourceOption) error {
@@ -611,21 +609,37 @@ func (m *ResourceMgr) AddSysOperation(sysOperationID string, instance sysop.SysO
 	if err := m.innerValidateResourceID(sysOperationID, "sys_operation"); err != nil {
 		return err
 	}
-	return m.innerAddResource(sysOperationID, "sys_operation", instance, nil, o.Tag, "")
+	if err := m.innerAddResource(sysOperationID, "sys_operation", instance, nil, o.Tag, ""); err != nil {
+		return err
+	}
+	// 注册关联工具
+	m.registerSysOperationTools(sysOperationID, instance, o.Tag)
+	return nil
 }
 
-// RemoveSysOperation 注销系统操作。
-//
-// ⤵️ 预留：9.32 实现后补充关联工具清理逻辑。
-// Python 逻辑：remove 后调用 tool.remove_sys_operation_tools(op_id) 获取关联工具 ID，
-// 再调用 _inner_remove_resources(tool_ids, resource_type="tool") 清理关联工具。
-// 当前缺少该步骤，等 SysOperationToolAdapter 实现后回填。
+// RemoveSysOperation 注销系统操作，并清理关联工具。
 //
 // 对应 Python: ResourceManager.remove_sys_operation(sys_operation_id, **kwargs)
 func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...ResourceOption) error {
 	o := applyResourceOptions(opts...)
-	_, err := m.innerRemoveResources(sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
-	return err
+	// 先删除 sys_operation 本身
+	results, err := m.innerRemoveResources(sysOperationIDs, "sys_operation", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
+	if err != nil {
+		return err
+	}
+	// 清理关联工具
+	var toolIDsToRemove []string
+	for _, opID := range sysOperationIDs {
+		ids := m.registry.Tool().RemoveSysOperationTools(opID)
+		if len(ids) > 0 {
+			toolIDsToRemove = append(toolIDsToRemove, ids...)
+		}
+	}
+	if len(toolIDsToRemove) > 0 {
+		m.innerRemoveResources(toolIDsToRemove, "tool", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
+	}
+	_ = results
+	return nil
 }
 
 // GetSysOperation 获取系统操作实例列表。
@@ -650,16 +664,48 @@ func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...Resource
 
 // GetSysOpToolCards 获取系统操作的工具卡片。
 //
-// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//  1. 获取 SysOperation 实例
-//  2. 通过 OperationRegistry 获取支持的 operation_name 列表
-//  3. 按 operation_name + tool_name 过滤 idToCard 查找 ToolCard
-//  4. 当 operation_name 为列表时不允许同时指定 tool_name
-//
 // 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)
-func (m *ResourceMgr) GetSysOpToolCards(_ string, _ string, _ string) ([]schema.CardInterface, error) {
-	// ⤵️ 预留：9.32 实现后回填
-	return nil, fmt.Errorf("GetSysOpToolCards 尚未实现：等待 9.32 SysOperation 接口")
+func (m *ResourceMgr) GetSysOpToolCards(sysOperationID string, operationName string, toolName string) ([]schema.CardInterface, error) {
+	// 获取已注册的工具 ID 列表
+	toolIDs := m.registry.Tool().GetSysOperationToolIDs(sysOperationID)
+	if len(toolIDs) == 0 {
+		return nil, nil
+	}
+
+	var cards []schema.CardInterface
+
+	if toolName != "" {
+		// 指定了 toolName：通过 GenerateToolID 生成精确 key，从 idToCard 取
+		var opNames []string
+		if operationName != "" {
+			opNames = []string{operationName}
+		} else {
+			// 未指定 operationName 时，从 toolIDs 前缀推导
+			opNames = []string{"fs", "shell", "code"}
+		}
+		for _, opName := range opNames {
+			preciseID := sysop.GenerateStaticToolID(sysOperationID, opName, toolName)
+			if card := m.idToCard.Get(preciseID); card != nil {
+				cards = append(cards, card)
+			}
+		}
+	} else {
+		// 未指定 toolName：按 operationName 前缀过滤
+		prefix := sysOperationID + "."
+		if operationName != "" {
+			prefix = sysOperationID + "." + operationName + "."
+		}
+		for _, tid := range toolIDs {
+			if operationName != "" && !strings.HasPrefix(tid, prefix) {
+				continue
+			}
+			if card := m.idToCard.Get(tid); card != nil {
+				cards = append(cards, card)
+			}
+		}
+	}
+
+	return cards, nil
 }
 
 // --- MCP Server 操作 ---
@@ -1014,15 +1060,32 @@ func (m *ResourceMgr) GetAgentTeam(ctx context.Context, agentTeamIDs []string, o
 
 // registerSysOperationTools 自动注册系统操作的方法为工具。
 //
-// ⤵️ 预留：9.32 SysOperation 接口实现后回填。回填内容：
-//  1. 调用 SysOperationToolAdapter.ExtractTools(card, instance) 提取 (toolID, LocalFunction) 列表
-//  2. 对每个工具调用 innerAddResource 注册到 ToolMgr
-//  3. 调用 ToolMgr.AddSysOperationTools(card.ID, toolIDs) 维护关联索引
-//
 // 对应 Python: ResourceManager._register_sys_operation_tools(card, instance, tag=tag)
-func (m *ResourceMgr) registerSysOperationTools(_ string, _ sysop.SysOperation, _ Tag) {
-	// ⤵️ 预留：9.32 实现后回填
-	// 需要：SysOperationToolAdapter, LocalFunction, OperationRegistry
+func (m *ResourceMgr) registerSysOperationTools(sysOperationID string, instance sysop.SysOperation, tag Tag) {
+	// 获取 SysOperation 的 Card
+	card := instance.Card()
+	if card == nil {
+		return
+	}
+
+	// 调用 SysOperationToolAdapter.ExtractTools 提取 (toolID, Tool) 列表
+	adapter := sysop.SysOperationToolAdapter{}
+	entries, err := adapter.ExtractTools(card, instance, "", "")
+	if err != nil {
+		return
+	}
+
+	// 对每个工具调用 innerAddResource 注册到 ToolMgr
+	var toolIDs []string
+	for _, entry := range entries {
+		m.innerAddResource(entry.ToolID, "tool", entry.Tool, entry.Tool.Card(), tag, "")
+		toolIDs = append(toolIDs, entry.ToolID)
+	}
+
+	// 维护关联索引
+	if len(toolIDs) > 0 {
+		m.registry.Tool().AddSysOperationTools(sysOperationID, toolIDs)
+	}
 }
 
 // applyResourceOptions 应用资源选项。

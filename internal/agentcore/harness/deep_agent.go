@@ -2265,7 +2265,13 @@ func (d *DeepAgent) setupTaskLoop(ctx context.Context, sess *session.Session) (*
 
 	// 创建 ContextEngine
 	// 对齐 Python: context_engine = ContextEngine() (line 1717)
-	ce := context_engine.NewContextEngine(ceschema.NewContextEngineConfig())
+	var ceOpts []ceinterface.ContextEngineOption
+	d.configMu.RLock()
+	if d.deepConfig != nil && d.deepConfig.SysOperation != nil {
+		ceOpts = append(ceOpts, ceinterface.WithEngineSysOperation(d.deepConfig.SysOperation))
+	}
+	d.configMu.RUnlock()
+	ce := context_engine.NewContextEngine(ceschema.NewContextEngineConfig(), ceOpts...)
 
 	ctrl := task_loop.NewTaskLoopController()
 	ctrl.Init(d.card, ctrlConfig, d.abilityManager, ce)

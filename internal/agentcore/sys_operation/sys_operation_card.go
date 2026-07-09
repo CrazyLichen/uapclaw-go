@@ -66,6 +66,12 @@ func (c *SysOperationCard) GenerateToolID(opType, methodName string) string {
 	return fmt.Sprintf("%s.%s.%s", c.ID, opType, methodName)
 }
 
+// GenerateStaticToolID 生成工具标识的包级函数，无需 SysOperationCard 实例。
+// 对齐 Python SysOperationCard.generate_tool_id(sys_op_id, op_type, tool_name) 静态方法。
+func GenerateStaticToolID(sysOpID, opType, methodName string) string {
+	return fmt.Sprintf("%s.%s.%s", sysOpID, opType, methodName)
+}
+
 // IsolationKeyTemplate 返回隔离键模板。
 func (c *SysOperationCard) IsolationKeyTemplate() string {
 	return c.isolationKeyTemplate
