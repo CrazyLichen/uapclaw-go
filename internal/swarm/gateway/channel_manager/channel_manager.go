@@ -11,11 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// OnConfigUpdatedFunc 配置更新回调函数类型。
-//
-// 当 Channel 配置发生变更时触发，由外部实现具体的 Channel 重新实例化逻辑。
-type OnConfigUpdatedFunc func(config map[string]map[string]any)
-
 // ChannelManager 负责 Channel 的注册、注销、查找与消息分发。
 //
 // 核心职责：
@@ -38,6 +33,11 @@ type ChannelManager struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// OnConfigUpdatedFunc 配置更新回调函数类型。
+//
+// 当 Channel 配置发生变更时触发，由外部实现具体的 Channel 重新实例化逻辑。
+type OnConfigUpdatedFunc func(config map[string]map[string]any)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

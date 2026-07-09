@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

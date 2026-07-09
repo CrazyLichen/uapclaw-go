@@ -16,20 +16,75 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentCallbackEvent Agent 生命周期回调事件类型。
+// AgentRail Agent 生命周期 Rail 接口。
 //
-// 定义 per-Agent 实例级的 10 个生命周期事件，
-// 供 AgentCallbackManager 注册回调和 AgentRail 钩子使用。
-// 与框架层 GlobalAgentEventType（全局观测事件）是不同层次：
-//   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
-//   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
+// Rail 是 class-based 的生命周期钩子容器，允许在 Agent 执行流程的
+// 特定时机注入拦截逻辑（重试、提前终止、steering 等）。
+// 嵌入 BaseRail 后只需覆盖关心的钩子方法，并在 GetCallbacks() 中
+// 声明已覆盖的事件映射。
 //
-// 事件值即 Python AgentRail 对应方法名，无需额外 EVENT_METHOD_MAP 映射。
-// AgentCallbackManager 注册时通过 agentID 前缀构造唯一事件名
-// （如 "{agentID}_before_invoke"），与框架层事件互不冲突。
+// 对应 Python: AgentRail(ABC) (openjiuwen/core/single_agent/rail/base.py L451-573)
+type AgentRail interface {
+	// Priority 返回执行优先级（数值越大越先执行）
+	Priority() int
+	// Init Rail 初始化钩子（注册时调用，用于工具自注册等）
+	Init(agent BaseAgent) error
+	// Uninit Rail 注销钩子（注销时调用，用于工具清理等）
+	Uninit(agent BaseAgent) error
+
+	// ── 10 个生命周期钩子方法 ──
+
+	// BeforeInvoke invoke 开始前
+	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterInvoke invoke 完成后
+	AfterInvoke(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeTaskIteration 外层任务循环迭代开始前
+	BeforeTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterTaskIteration 外层任务循环迭代完成后
+	AfterTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeModelCall LLM 调用前
+	BeforeModelCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterModelCall LLM 响应后
+	AfterModelCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnModelException LLM 调用异常
+	OnModelException(ctx context.Context, cbc *AgentCallbackContext) error
+	// BeforeToolCall 工具执行前
+	BeforeToolCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// AfterToolCall 工具执行后
+	AfterToolCall(ctx context.Context, cbc *AgentCallbackContext) error
+	// OnToolException 工具执行异常
+	OnToolException(ctx context.Context, cbc *AgentCallbackContext) error
+
+	// GetCallbacks 提取已覆盖的钩子方法映射，供 RegisterRail 批量注册。
+	GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc
+}
+
+// EventInputs 回调事件输入接口。
 //
-// 对应 Python: openjiuwen/core/single_agent/rail/base.py (AgentCallbackEvent)
-type AgentCallbackEvent string
+// 各事件类型对应不同的 Inputs 结构体，均实现此接口。
+// 调用方通过 type switch 获取具体类型。
+//
+// 对应 Python: EventInputs = Union[InvokeInputs, ModelCallInputs, ToolCallInputs, TaskIterationInputs, Dict]
+type EventInputs interface {
+	// EventKind 返回事件输入的种类标识
+	EventKind() string
+}
+
+// InvokeQuery Invoke 阶段的查询输入接口。
+//
+// 对齐 Python: InvokeInputs.query: Optional[str, InteractiveInput]
+// InvokeQueryString（普通字符串）和 *InteractiveInput（中断恢复）均实现此接口。
+type InvokeQuery interface {
+	// IsInteractiveInput 检查是否为交互式输入（中断恢复）
+	IsInteractiveInput() bool
+	// PlainText 提取纯文本表示。
+	PlainText() string
+}
+
+// railConfig Rail 包所需的最小 Config 接口。
+//
+// 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法。
+type railConfig interface{}
 
 // AgentCallbackContext Rail 系统与 Agent 运行时之间的核心中介对象。
 //
@@ -75,49 +130,6 @@ type AgentCallbackManager struct {
 	agentID string
 }
 
-// AgentRail Agent 生命周期 Rail 接口。
-//
-// Rail 是 class-based 的生命周期钩子容器，允许在 Agent 执行流程的
-// 特定时机注入拦截逻辑（重试、提前终止、steering 等）。
-// 嵌入 BaseRail 后只需覆盖关心的钩子方法，并在 GetCallbacks() 中
-// 声明已覆盖的事件映射。
-//
-// 对应 Python: AgentRail(ABC) (openjiuwen/core/single_agent/rail/base.py L451-573)
-type AgentRail interface {
-	// Priority 返回执行优先级（数值越大越先执行）
-	Priority() int
-	// Init Rail 初始化钩子（注册时调用，用于工具自注册等）
-	Init(agent BaseAgent) error
-	// Uninit Rail 注销钩子（注销时调用，用于工具清理等）
-	Uninit(agent BaseAgent) error
-
-	// ── 10 个生命周期钩子方法 ──
-
-	// BeforeInvoke invoke 开始前
-	BeforeInvoke(ctx context.Context, cbc *AgentCallbackContext) error
-	// AfterInvoke invoke 完成后
-	AfterInvoke(ctx context.Context, cbc *AgentCallbackContext) error
-	// BeforeTaskIteration 外层任务循环迭代开始前
-	BeforeTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
-	// AfterTaskIteration 外层任务循环迭代完成后
-	AfterTaskIteration(ctx context.Context, cbc *AgentCallbackContext) error
-	// BeforeModelCall LLM 调用前
-	BeforeModelCall(ctx context.Context, cbc *AgentCallbackContext) error
-	// AfterModelCall LLM 响应后
-	AfterModelCall(ctx context.Context, cbc *AgentCallbackContext) error
-	// OnModelException LLM 调用异常
-	OnModelException(ctx context.Context, cbc *AgentCallbackContext) error
-	// BeforeToolCall 工具执行前
-	BeforeToolCall(ctx context.Context, cbc *AgentCallbackContext) error
-	// AfterToolCall 工具执行后
-	AfterToolCall(ctx context.Context, cbc *AgentCallbackContext) error
-	// OnToolException 工具执行异常
-	OnToolException(ctx context.Context, cbc *AgentCallbackContext) error
-
-	// GetCallbacks 提取已覆盖的钩子方法映射，供 RegisterRail 批量注册。
-	GetCallbacks() map[AgentCallbackEvent]cb.PerAgentCallbackFunc
-}
-
 // BaseRail AgentRail 的 no-op 默认实现。
 //
 // 用户嵌入此结构体后只需覆盖关心的钩子方法，并在 GetCallbacks() 中
@@ -127,28 +139,6 @@ type AgentRail interface {
 type BaseRail struct {
 	// priority 执行优先级（数值越大越先执行），默认 50
 	priority int
-}
-
-// EventInputs 回调事件输入接口。
-//
-// 各事件类型对应不同的 Inputs 结构体，均实现此接口。
-// 调用方通过 type switch 获取具体类型。
-//
-// 对应 Python: EventInputs = Union[InvokeInputs, ModelCallInputs, ToolCallInputs, TaskIterationInputs, Dict]
-type EventInputs interface {
-	// EventKind 返回事件输入的种类标识
-	EventKind() string
-}
-
-// InvokeQuery Invoke 阶段的查询输入接口。
-//
-// 对齐 Python: InvokeInputs.query: Optional[str, InteractiveInput]
-// InvokeQueryString（普通字符串）和 *InteractiveInput（中断恢复）均实现此接口。
-type InvokeQuery interface {
-	// IsInteractiveInput 检查是否为交互式输入（中断恢复）
-	IsInteractiveInput() bool
-	// PlainText 提取纯文本表示。
-	PlainText() string
 }
 
 // RunContext 结构化运行时上下文（心跳等场景）。
@@ -253,6 +243,29 @@ type ForceFinishRequest struct {
 	Result map[string]any
 }
 
+// callbackEntry 事件→回调映射条目，BuildCallbacks 的参数。
+type callbackEntry struct {
+	event AgentCallbackEvent
+	fn    cb.PerAgentCallbackFunc
+}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// AgentCallbackEvent Agent 生命周期回调事件类型。
+//
+// 定义 per-Agent 实例级的 10 个生命周期事件，
+// 供 AgentCallbackManager 注册回调和 AgentRail 钩子使用。
+// 与框架层 GlobalAgentEventType（全局观测事件）是不同层次：
+//   - AgentCallbackEvent = 实例级 Rail 拦截/控制（重试/提前终止/steering）
+//   - GlobalAgentEventType = 框架级全局观测（日志/监控/transform_io）
+//
+// 事件值即 Python AgentRail 对应方法名，无需额外 EVENT_METHOD_MAP 映射。
+// AgentCallbackManager 注册时通过 agentID 前缀构造唯一事件名
+// （如 "{agentID}_before_invoke"），与框架层事件互不冲突。
+//
+// 对应 Python: openjiuwen/core/single_agent/rail/base.py (AgentCallbackEvent)
+type AgentCallbackEvent string
+
 // InvokeQueryString 普通字符串查询，实现 InvokeQuery 接口。
 type InvokeQueryString string
 
@@ -261,17 +274,6 @@ type RunKind string
 
 // HeartbeatReason 心跳触发原因枚举。
 type HeartbeatReason string
-
-// callbackEntry 事件→回调映射条目，BuildCallbacks 的参数。
-type callbackEntry struct {
-	event AgentCallbackEvent
-	fn    cb.PerAgentCallbackFunc
-}
-
-// railConfig Rail 包所需的最小 Config 接口。
-//
-// 预留接口，当前无方法。未来 Rail 需要访问配置时在此添加方法。
-type railConfig interface{}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -297,32 +299,6 @@ const (
 	// CallbackOnToolException 工具执行异常
 	CallbackOnToolException AgentCallbackEvent = "on_tool_exception"
 )
-
-// ──────────────────────────── 全局变量（事件分组） ────────────────────────────
-
-// BaseEventMethodMap 基础事件→方法名映射（8个，不含 task-iteration）。
-//
-// 对齐 Python: EVENT_METHOD_MAP (openjiuwen/core/single_agent/rail/base.py L434-442)
-// 注意：Python 的 EVENT_METHOD_MAP 含 10 个事件（含 task-iteration），
-// Go 核心层将 10 个事件均定义在接口中，此映射仅用于 DeepAgentRail.get_callbacks 分层。
-var BaseEventMethodMap = map[AgentCallbackEvent]string{
-	CallbackBeforeInvoke:     "BeforeInvoke",
-	CallbackAfterInvoke:      "AfterInvoke",
-	CallbackBeforeModelCall:  "BeforeModelCall",
-	CallbackAfterModelCall:   "AfterModelCall",
-	CallbackOnModelException: "OnModelException",
-	CallbackBeforeToolCall:   "BeforeToolCall",
-	CallbackAfterToolCall:    "AfterToolCall",
-	CallbackOnToolException:  "OnToolException",
-}
-
-// DeepEventMethodMap DeepAgent 扩展事件→方法名映射（2个 task-iteration hooks）。
-//
-// 对齐 Python: DEEP_EVENT_METHOD_MAP (openjiuwen/harness/rails/base.py L22-25)
-var DeepEventMethodMap = map[AgentCallbackEvent]string{
-	CallbackBeforeTaskIteration: "BeforeTaskIteration",
-	CallbackAfterTaskIteration:  "AfterTaskIteration",
-}
 
 const (
 	// RunKindNormal 正常运行
@@ -351,6 +327,30 @@ const (
 
 // ErrSteeringQueueFull steering 队列已满
 var ErrSteeringQueueFull = errors.New("steering queue full")
+
+// BaseEventMethodMap 基础事件→方法名映射（8个，不含 task-iteration）。
+//
+// 对齐 Python: EVENT_METHOD_MAP (openjiuwen/core/single_agent/rail/base.py L434-442)
+// 注意：Python 的 EVENT_METHOD_MAP 含 10 个事件（含 task-iteration），
+// Go 核心层将 10 个事件均定义在接口中，此映射仅用于 DeepAgentRail.get_callbacks 分层。
+var BaseEventMethodMap = map[AgentCallbackEvent]string{
+	CallbackBeforeInvoke:     "BeforeInvoke",
+	CallbackAfterInvoke:      "AfterInvoke",
+	CallbackBeforeModelCall:  "BeforeModelCall",
+	CallbackAfterModelCall:   "AfterModelCall",
+	CallbackOnModelException: "OnModelException",
+	CallbackBeforeToolCall:   "BeforeToolCall",
+	CallbackAfterToolCall:    "AfterToolCall",
+	CallbackOnToolException:  "OnToolException",
+}
+
+// DeepEventMethodMap DeepAgent 扩展事件→方法名映射（2个 task-iteration hooks）。
+//
+// 对齐 Python: DEEP_EVENT_METHOD_MAP (openjiuwen/harness/rails/base.py L22-25)
+var DeepEventMethodMap = map[AgentCallbackEvent]string{
+	CallbackBeforeTaskIteration: "BeforeTaskIteration",
+	CallbackAfterTaskIteration:  "AfterTaskIteration",
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

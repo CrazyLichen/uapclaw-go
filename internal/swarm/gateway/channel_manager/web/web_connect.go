@@ -100,12 +100,12 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message), onConf
 	}
 
 	wc := &WebChannel{
-		config:          cfg,
-		clients:         make(map[*websocket.Conn]bool),
+		config:  cfg,
+		clients: make(map[*websocket.Conn]bool),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
-		onMessageCb:    onMessage,
+		onMessageCb:     onMessage,
 		onConfigSavedCb: onConfigSaved,
 	}
 

@@ -12,23 +12,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// terminateGracePeriod 优雅终止等待时间，对齐 Python 的 3 秒
-	terminateGracePeriod = 3 * time.Second
-	// forceKillWait 强制杀死后等待时间，对齐 Python 的 1 秒
-	forceKillWait = 1 * time.Second
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent 日志组件常量，对齐 Python 的 sys_operation_logger
-const logComponent = logger.ComponentAgentCore
-
-// DefaultRegistry 全局 Shell 进程注册表实例
-var DefaultRegistry = NewShellProcessRegistry()
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ShellProcessRegistry 会话级别的 Shell 子进程注册表，追踪在途进程以支持用户中断时批量终止。
@@ -40,6 +23,23 @@ type ShellProcessRegistry struct {
 	// cancelledSessions 已取消的会话集合
 	cancelledSessions map[string]struct{}
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// terminateGracePeriod 优雅终止等待时间，对齐 Python 的 3 秒
+	terminateGracePeriod = 3 * time.Second
+	// forceKillWait 强制杀死后等待时间，对齐 Python 的 1 秒
+	forceKillWait = 1 * time.Second
+)
+
+// logComponent 日志组件常量，对齐 Python 的 sys_operation_logger
+const logComponent = logger.ComponentAgentCore
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// DefaultRegistry 全局 Shell 进程注册表实例
+var DefaultRegistry = NewShellProcessRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

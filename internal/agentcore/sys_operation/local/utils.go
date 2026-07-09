@@ -93,6 +93,11 @@ const (
 	defaultEncoding = "utf-8"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// safePathPattern 安全路径模式
+var safePathPattern = regexp.MustCompile(`[^\w.-]`)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回 StreamEventType 的字符串表示
@@ -439,6 +444,3 @@ func readPipe(r io.Reader, encoding string) <-chan string {
 	}()
 	return ch
 }
-
-// safePathPattern 安全路径模式
-var safePathPattern = regexp.MustCompile(`[^\w.-]`)

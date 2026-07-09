@@ -23,9 +23,9 @@ func TestService_Handle_Dispatch(t *testing.T) {
 
 	// 测试未知 method
 	req := &schema.AgentRequest{
-		RequestID:  "req-1",
-		ChannelID:  "ch-1",
-		ReqMethod:  schema.ReqMethod("unknown.method"),
+		RequestID: "req-1",
+		ChannelID: "ch-1",
+		ReqMethod: schema.ReqMethod("unknown.method"),
 	}
 	results, err := svc.Handle(context.Background(), req)
 	if err != nil {
@@ -274,10 +274,10 @@ func TestService_Handle_Status_WithReqMethod(t *testing.T) {
 	// 通过 Handle 入口调用
 	paramsJSON, _ := json.Marshal(map[string]any{"task_id": "task-handle"})
 	req := &schema.AgentRequest{
-		RequestID:  "req-9",
-		ChannelID:  "ch-9",
-		ReqMethod:  schema.ReqMethodSkilldevStatus,
-		Params:     paramsJSON,
+		RequestID: "req-9",
+		ChannelID: "ch-9",
+		ReqMethod: schema.ReqMethodSkilldevStatus,
+		Params:    paramsJSON,
 	}
 	results, err := svc.Handle(context.Background(), req)
 	if err != nil {

@@ -19,7 +19,7 @@ type ResolvedPaths struct {
 	ConfigDir string
 	// WorkspaceDir Agent 工作空间目录
 	WorkspaceDir string
-	// Fallback true 表示 ConfigDir 来自 resources 回退而非用户目录
+	// Fallback 为 true 表示 ConfigDir 来自 resources 回退而非用户目录
 	Fallback bool
 }
 

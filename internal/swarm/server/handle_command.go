@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -88,7 +88,7 @@ func (s *AgentServer) handleCommandChrome(_ context.Context, request *schema.Age
 func (s *AgentServer) handleCommandCompact(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"ok":        true,
+			"ok":         true,
 			"compressed": false,
 		}),
 	), nil

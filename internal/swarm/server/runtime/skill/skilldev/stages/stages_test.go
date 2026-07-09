@@ -311,8 +311,8 @@ func TestGenerateStageHandler_Execute(t *testing.T) {
 	state.Plan = map[string]any{
 		"skill_name": "test-skill",
 		"directory_structure": map[string]any{
-			"SKILL.md":        "主指令文件",
-			"scripts/run.py":  "运行脚本",
+			"SKILL.md":       "主指令文件",
+			"scripts/run.py": "运行脚本",
 		},
 	}
 
@@ -353,10 +353,10 @@ func TestGenerateStageHandler_生成顺序(t *testing.T) {
 	handler := &GenerateStageHandler{}
 	plan := map[string]any{
 		"directory_structure": map[string]any{
-			"SKILL.md":         "主指令文件",
-			"scripts/run.py":   "运行脚本",
+			"SKILL.md":          "主指令文件",
+			"scripts/run.py":    "运行脚本",
 			"references/doc.md": "参考文档",
-			"assets/icon.png":  "图标",
+			"assets/icon.png":   "图标",
 		},
 	}
 
@@ -557,8 +557,8 @@ func TestPackageStageHandler_Execute(t *testing.T) {
 func TestShouldExclude(t *testing.T) {
 	skillDir := "/tmp/skill"
 	tests := []struct {
-		path     string
-		exclude  bool
+		path    string
+		exclude bool
 	}{
 		{"/tmp/skill/SKILL.md", false},
 		{"/tmp/skill/__pycache__/cache.pyc", true},
@@ -737,8 +737,8 @@ func TestReadJSONMap(t *testing.T) {
 
 func TestSystemPrompts非空(t *testing.T) {
 	prompts := []struct {
-		name   string
-		value  string
+		name  string
+		value string
 	}{
 		{"PlanSystemPrompt", PlanSystemPrompt},
 		{"GenerateSystemPrompt", GenerateSystemPrompt},
@@ -853,7 +853,7 @@ func TestInitStageHandler_已有Skill(t *testing.T) {
 	handler := &InitStageHandler{}
 	state := skilldev.NewSkillDevState("test-task")
 	state.Input = map[string]any{
-		"query":         "修改技能",
+		"query":          "修改技能",
 		"existing_skill": map[string]any{"content_base64": "placeholder"},
 	}
 
@@ -907,7 +907,7 @@ func TestPlanStageHandler_buildMessages(t *testing.T) {
 func TestGenerateStageHandler_空directory_structure(t *testing.T) {
 	handler := &GenerateStageHandler{}
 	plan := map[string]any{
-		"skill_name":         "test-skill",
+		"skill_name":          "test-skill",
 		"directory_structure": map[string]any{},
 	}
 	order := handler.resolveGenerationOrder(plan)

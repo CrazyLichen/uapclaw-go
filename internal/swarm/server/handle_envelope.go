@@ -119,12 +119,12 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleBrowserStart(ctx, request)
 	case schema.ReqMethodBrowserRuntimeRestart:
 		resp, err = s.handleBrowserRuntimeRestart(ctx, request)
-	// Config/Agent Reload
+	// 配置/Agent 重载
 	case schema.ReqMethodConfigCacheClear:
 		resp, err = s.handleConfigCacheClear(ctx, request)
 	case schema.ReqMethodAgentReloadConfig:
 		resp, err = s.handleAgentReloadConfig(ctx, request)
-	// Extensions/Hooks
+	// 扩展/钩子
 	case schema.ReqMethodExtensionsList:
 		resp, err = s.handleExtensionsList(ctx, request)
 	case schema.ReqMethodExtensionsImport:
@@ -189,7 +189,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		schema.ReqMethodPermissionsRulesUpdate, schema.ReqMethodPermissionsRulesDelete,
 		schema.ReqMethodPermissionsApprovalOverridesGet, schema.ReqMethodPermissionsApprovalOverridesDelete:
 		resp, err = s.handlePermissionsConfig(ctx, request)
-	// Chat Interrupt
+	// 聊天中断
 	case schema.ReqMethodChatCancel:
 		s.handleCancel(ctx, request)
 		return // handleCancel 自己写响应
@@ -599,4 +599,3 @@ func notImplementedResponse(request *schema.AgentRequest) (*schema.AgentResponse
 		}),
 	), nil
 }
-

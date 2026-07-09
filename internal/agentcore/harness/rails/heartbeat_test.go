@@ -18,6 +18,7 @@ import (
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -74,22 +75,37 @@ type fakeFsOperation struct {
 	readFileErr     error
 }
 
-func (f *fakeFsOperation) ReadFile(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ReadFileResult, error) {
+func (f *fakeFsOperation) ReadFile(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ReadFileResult, error) {
 	if f.readFileErr != nil {
 		return nil, f.readFileErr
 	}
-	return &sys_operation.ReadFileResult{Code: 0, Data: f.readFileContent}, nil
+	return &result.ReadFileResult{BaseResult: result.BaseResult{Code: 0}, Data: &result.ReadFileData{Content: f.readFileContent}}, nil
 }
-func (f *fakeFsOperation) WriteFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*sys_operation.WriteFileResult, error) {
+func (f *fakeFsOperation) WriteFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.WriteFileResult, error) {
 	return nil, nil
 }
-func (f *fakeFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListFilesResult, error) {
+func (f *fakeFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListFilesResult, error) {
 	return nil, nil
 }
-func (f *fakeFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListDirsResult, error) {
+func (f *fakeFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListDirsResult, error) {
 	return nil, nil
 }
-func (f *fakeFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*sys_operation.SearchFilesResult, error) {
+func (f *fakeFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.SearchFilesResult, error) {
+	return nil, nil
+}
+func (f *fakeFsOperation) ReadFileStream(_ context.Context, _ string, _ ...sys_operation.FsOption) (<-chan result.ReadFileStreamResult, error) {
+	return nil, nil
+}
+func (f *fakeFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.UploadFileResult, error) {
+	return nil, nil
+}
+func (f *fakeFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.UploadFileStreamResult, error) {
+	return nil, nil
+}
+func (f *fakeFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.DownloadFileResult, error) {
+	return nil, nil
+}
+func (f *fakeFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	return nil, nil
 }
 func (f *fakeFsOperation) ListTools() []*tool.ToolCard {

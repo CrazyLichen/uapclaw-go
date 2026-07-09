@@ -10,6 +10,17 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// CodeOperation 代码执行接口，定义代码执行操作。
+// 对齐 Python BaseCodeOperation：execute_code, execute_code_stream, list_tools。
+type CodeOperation interface {
+	// ExecuteCode 执行代码
+	ExecuteCode(ctx context.Context, code string, opts ...CodeOption) (*result.ExecuteCodeResult, error)
+	// ExecuteCodeStream 流式执行代码
+	ExecuteCodeStream(ctx context.Context, code string, opts ...CodeOption) (<-chan result.ExecuteCodeStreamResult, error)
+	// ListTools 返回代码执行的工具卡片列表
+	ListTools() []*tool.ToolCard
+}
+
 // CodeOption 代码执行选项函数
 type CodeOption func(*CodeOptions)
 
@@ -31,17 +42,6 @@ type CodeOptions struct {
 // BaseCodeOperation CodeOperation 的空操作桩实现
 type BaseCodeOperation struct {
 	BaseOperation
-}
-
-// CodeOperation 代码执行接口，定义代码执行操作。
-// 对齐 Python BaseCodeOperation：execute_code, execute_code_stream, list_tools。
-type CodeOperation interface {
-	// ExecuteCode 执行代码
-	ExecuteCode(ctx context.Context, code string, opts ...CodeOption) (*result.ExecuteCodeResult, error)
-	// ExecuteCodeStream 流式执行代码
-	ExecuteCodeStream(ctx context.Context, code string, opts ...CodeOption) (<-chan result.ExecuteCodeStreamResult, error)
-	// ListTools 返回代码执行的工具卡片列表
-	ListTools() []*tool.ToolCard
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

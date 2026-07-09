@@ -130,6 +130,8 @@ const (
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // GatewaySlashCommand 的字符串值
 var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashNewSession: "/new_session",

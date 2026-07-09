@@ -22,14 +22,6 @@ var visualQuestionAnsweringDescription = map[string]string{
 	"en": "Understand an image and answer questions, optionally grounding the answer with OCR first.",
 }
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ImageOCRMetadataProvider image_ocr 工具元数据提供者
-type ImageOCRMetadataProvider struct{}
-
-// VisualQuestionAnsweringMetadataProvider visual_question_answering 工具元数据提供者
-type VisualQuestionAnsweringMetadataProvider struct{}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetImageOCRMetadataProviderInputParams 构建 image_ocr 工具的参数 Schema
@@ -88,26 +80,36 @@ func GetVisualQuestionAnsweringMetadataProviderInputParams(language string) map[
 	}
 }
 
+// GetName 返回工具名称
 func (p *ImageOCRMetadataProvider) GetName() string { return "image_ocr" }
+
+// GetDescription 返回工具描述
 func (p *ImageOCRMetadataProvider) GetDescription(language string) string {
 	if d, ok := imageOCRDescription[language]; ok {
 		return d
 	}
 	return imageOCRDescription["cn"]
 }
+
+// GetInputParams 返回工具输入参数
 func (p *ImageOCRMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetImageOCRMetadataProviderInputParams(language)
 }
 
+// GetName 返回工具名称
 func (p *VisualQuestionAnsweringMetadataProvider) GetName() string {
 	return "visual_question_answering"
 }
+
+// GetDescription 返回工具描述
 func (p *VisualQuestionAnsweringMetadataProvider) GetDescription(language string) string {
 	if d, ok := visualQuestionAnsweringDescription[language]; ok {
 		return d
 	}
 	return visualQuestionAnsweringDescription["cn"]
 }
+
+// GetInputParams 返回工具输入参数
 func (p *VisualQuestionAnsweringMetadataProvider) GetInputParams(language string) map[string]any {
 	return GetVisualQuestionAnsweringMetadataProviderInputParams(language)
 }

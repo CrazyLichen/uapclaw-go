@@ -209,4 +209,3 @@ func (s *AgentServer) cancelAllStreamTasks() {
 	}
 	s.sessionStreamTasks = make(map[string]context.CancelFunc)
 }
-

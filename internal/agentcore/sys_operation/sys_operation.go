@@ -56,8 +56,8 @@ var _ SysOperation = (*LocalSysOperation)(nil)
 
 // NewSysOperation 系统操作工厂函数，根据 card.Mode 决定构造类型。
 // 对齐 Python SysOperation(card) 构造函数的 mode 分支：
-//  - OperationModeLocal → NewLocalSysOperation
-//  - OperationModeSandbox → NewLocalSysOperation（sandbox 预留，当前 fallback）
+//   - OperationModeLocal → NewLocalSysOperation
+//   - OperationModeSandbox → NewLocalSysOperation（sandbox 预留，当前 fallback）
 func NewSysOperation(card *SysOperationCard) SysOperation {
 	if card == nil {
 		card = NewSysOperationCard()

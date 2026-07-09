@@ -2,7 +2,7 @@ package gateway
 
 import "os"
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // configSetEnvMap 配置键到环境变量的映射。
 // 对齐 Python: _CONFIG_SET_ENV_MAP (app_web_handlers.py L310-367)
@@ -45,9 +45,9 @@ var configSetEnvMap = map[string]string{
 	"teamskills_user_token":             "TEAM_SKILLS_HUB_USER_TOKEN",
 	"teamskills_system_token":           "TEAM_SKILLS_HUB_SYSTEM_TOKEN",
 	"teamskills_allowed_download_hosts": "TEAM_SKILLS_HUB_ALLOWED_DOWNLOAD_HOSTS",
-	"free_search_ddg_enabled":          "FREE_SEARCH_DDG_ENABLED",
-	"free_search_bing_enabled":         "FREE_SEARCH_BING_ENABLED",
-	"free_search_proxy_url":            "FREE_SEARCH_PROXY_URL",
+	"free_search_ddg_enabled":           "FREE_SEARCH_DDG_ENABLED",
+	"free_search_bing_enabled":          "FREE_SEARCH_BING_ENABLED",
+	"free_search_proxy_url":             "FREE_SEARCH_PROXY_URL",
 	// agents
 	"skills":             "SKILLS",
 	"max_iterations":     "MAX_ITERATIONS",
@@ -65,6 +65,27 @@ var configSetEnvMap = map[string]string{
 	"prompt_hint":   "PROMPT_HINT",
 }
 
+// browserRuntimeKeys 触发 browser.runtime_restart 的环境变量集合。
+// 对齐 Python: browser_runtime_keys (app_gateway.py L920-935)。
+var browserRuntimeKeys = map[string]bool{
+	"MODEL_PROVIDER":    true,
+	"MODEL_NAME":        true,
+	"API_BASE":          true,
+	"API_KEY":           true,
+	"VIDEO_PROVIDER":    true,
+	"VIDEO_MODEL_NAME":  true,
+	"VIDEO_API_BASE":    true,
+	"VIDEO_API_KEY":     true,
+	"AUDIO_PROVIDER":    true,
+	"AUDIO_MODEL_NAME":  true,
+	"AUDIO_API_BASE":    true,
+	"AUDIO_API_KEY":     true,
+	"VISION_PROVIDER":   true,
+	"VISION_MODEL_NAME": true,
+	"VISION_API_BASE":   true,
+	"VISION_API_KEY":    true,
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildEnvMap 收集 configSetEnvMap 中各环境变量的当前值。
@@ -75,27 +96,6 @@ func BuildEnvMap() map[string]any {
 		env[envKey] = os.Getenv(envKey)
 	}
 	return env
-}
-
-// browserRuntimeKeys 触发 browser.runtime_restart 的环境变量集合。
-// 对齐 Python: browser_runtime_keys (app_gateway.py L920-935)。
-var browserRuntimeKeys = map[string]bool{
-	"MODEL_PROVIDER":   true,
-	"MODEL_NAME":       true,
-	"API_BASE":         true,
-	"API_KEY":          true,
-	"VIDEO_PROVIDER":   true,
-	"VIDEO_MODEL_NAME": true,
-	"VIDEO_API_BASE":   true,
-	"VIDEO_API_KEY":    true,
-	"AUDIO_PROVIDER":   true,
-	"AUDIO_MODEL_NAME": true,
-	"AUDIO_API_BASE":   true,
-	"AUDIO_API_KEY":    true,
-	"VISION_PROVIDER":   true,
-	"VISION_MODEL_NAME": true,
-	"VISION_API_BASE":   true,
-	"VISION_API_KEY":    true,
 }
 
 // ShouldBrowserRestart 判断变更的环境变量是否需要触发 browser.runtime_restart。

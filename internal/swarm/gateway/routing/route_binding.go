@@ -2,15 +2,6 @@ package routing
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// InterceptorFunc 入站/出站拦截器函数类型。
-type InterceptorFunc func(channel any, data []byte) ([]byte, error)
-
-// DisconnectFunc 连接断开回调类型。
-type DisconnectFunc func(channel any, sessionKeys []string)
-
-// InstallFunc 在 GatewayServer 上注册本地 handler 的钩子类型。
-type InstallFunc func(server any)
-
 // RouteBinding 描述一个 WS 路径的完整消息处理策略。
 // 对齐 Python: GatewayRouteBinding (routing/route_binding.py)。
 // 预留多路径 WS 框架（/ws、/acp、/tui），当前仅实现 /ws（web 通道）。
@@ -32,6 +23,17 @@ type RouteBinding struct {
 	// Install 在 GatewayServer 上注册本地 handler 的钩子
 	Install InstallFunc
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// InterceptorFunc 入站/出站拦截器函数类型。
+type InterceptorFunc func(channel any, data []byte) ([]byte, error)
+
+// DisconnectFunc 连接断开回调类型。
+type DisconnectFunc func(channel any, sessionKeys []string)
+
+// InstallFunc 在 GatewayServer 上注册本地 handler 的钩子类型。
+type InstallFunc func(server any)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

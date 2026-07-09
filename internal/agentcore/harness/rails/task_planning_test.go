@@ -27,7 +27,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	cschema2 "github.com/uapclaw/uapclaw-go/internal/common/schema"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 )
 
 // ──────────────────────────── Mock 实现 ────────────────────────────
@@ -156,12 +159,29 @@ func (f *fakeModelContext) GetMessages(_ int, _ bool) ([]llmschema.BaseMessage, 
 }
 func (f *fakeModelContext) SetMessages(_ []llmschema.BaseMessage, _ bool)     {}
 func (f *fakeModelContext) PopMessages(_ int, _ bool) []llmschema.BaseMessage { return nil }
-func (f *fakeModelContext) AddMessages(_ context.Context, message llmschema.BaseMessage, _ ...any) ([]llmschema.BaseMessage, error) {
+func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...ceinterface.Option) error {
+	return nil
+}
+func (f *fakeModelContext) AddMessages(_ context.Context, message llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
 	f.addMessagesCalls = append(f.addMessagesCalls, message)
 	return nil, nil
 }
-func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema2.ToolInfoInterface, _, _ int, _ ...any) (*any, error) {
+func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema2.ToolInfoInterface, _, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
 	return nil, nil
+}
+func (f *fakeModelContext) Statistic() *ceinterface.ContextStats                { return nil }
+func (f *fakeModelContext) SessionID() string                                   { return "" }
+func (f *fakeModelContext) ContextID() string                                   { return "" }
+func (f *fakeModelContext) TokenCounter() token.TokenCounter                    { return nil }
+func (f *fakeModelContext) ReloaderTool() tool.Tool                             { return nil }
+func (f *fakeModelContext) WorkspaceDir() string                                { return "" }
+func (f *fakeModelContext) SetSessionRef(_ sessioninterfaces.SessionFacade)     {}
+func (f *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade      { return nil }
+func (f *fakeModelContext) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
+func (f *fakeModelContext) SaveState() map[string]any                           { return nil }
+func (f *fakeModelContext) LoadState(_ map[string]any)                          {}
+func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (string, error) {
+	return "", nil
 }
 
 // fakeSession 简单的 SessionFacade mock
@@ -203,32 +223,52 @@ func newMockFsOperation() *mockFsOperation {
 	return &mockFsOperation{data: make(map[string]string)}
 }
 
-func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_operation.FsOption) (*sys_operation.ReadFileResult, error) {
+func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_operation.FsOption) (*result.ReadFileResult, error) {
 	content, ok := m.data[path]
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", path)
 	}
-	return &sys_operation.ReadFileResult{Code: 0, Data: content}, nil
+	return &result.ReadFileResult{BaseResult: result.BaseResult{Code: 0}, Data: &result.ReadFileData{Content: content}}, nil
 }
 
-func (m *mockFsOperation) WriteFile(_ context.Context, path string, content string, _ ...sys_operation.FsOption) (*sys_operation.WriteFileResult, error) {
+func (m *mockFsOperation) WriteFile(_ context.Context, path string, content string, _ ...sys_operation.FsOption) (*result.WriteFileResult, error) {
 	m.data[path] = content
-	return &sys_operation.WriteFileResult{Code: 0}, nil
+	return &result.WriteFileResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
-func (m *mockFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListFilesResult, error) {
-	return &sys_operation.ListFilesResult{Code: 0}, nil
+func (m *mockFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListFilesResult, error) {
+	return &result.ListFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
-func (m *mockFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListDirsResult, error) {
-	return &sys_operation.ListDirsResult{Code: 0}, nil
+func (m *mockFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListDirsResult, error) {
+	return &result.ListDirsResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
-func (m *mockFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*sys_operation.SearchFilesResult, error) {
-	return &sys_operation.SearchFilesResult{Code: 0}, nil
+func (m *mockFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.SearchFilesResult, error) {
+	return &result.SearchFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
 func (m *mockFsOperation) ListTools() []*tool.ToolCard { return nil }
+
+func (m *mockFsOperation) ReadFileStream(_ context.Context, _ string, _ ...sys_operation.FsOption) (<-chan result.ReadFileStreamResult, error) {
+	return nil, nil
+}
+
+func (m *mockFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.UploadFileResult, error) {
+	return nil, nil
+}
+
+func (m *mockFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.UploadFileStreamResult, error) {
+	return nil, nil
+}
+
+func (m *mockFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.DownloadFileResult, error) {
+	return nil, nil
+}
+
+func (m *mockFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.DownloadFileStreamResult, error) {
+	return nil, nil
+}
 
 // 编译时验证
 var _ sys_operation.FsOperation = (*mockFsOperation)(nil)
@@ -1298,6 +1338,10 @@ func TestTaskPlanningRail_AfterToolCall_todo工具刷新缓存(t *testing.T) {
 	t.Parallel()
 
 	fs := newMockFsOperation()
+	// 预写 todo 数据，否则 LoadTodos 文件不存在会报错，缓存不会被设置
+	todoData := `[{"id":"1","content":"任务1","status":"in_progress","activeForm":"执行任务1","description":"描述1"}]`
+	fs.data["/tmp/test-workspace/sess-refresh/todo.json"] = todoData
+
 	tools, tt := todo.CreateTodosTool("/tmp/test-workspace", fs, "cn", "test-agent")
 	r := NewTaskPlanningRail()
 	r.todoTool = &tt
@@ -1309,7 +1353,7 @@ func TestTaskPlanningRail_AfterToolCall_todo工具刷新缓存(t *testing.T) {
 
 	err := r.AfterToolCall(context.Background(), cbc)
 	require.NoError(t, err)
-	// 缓存应被设置（即使 LoadTodos 返回空列表）
+	// 缓存应被设置
 	assert.Contains(t, r.todosCache, "sess-refresh")
 }
 
@@ -1334,6 +1378,7 @@ func TestTaskPlanningRail_AfterToolCall_进度提醒触发(t *testing.T) {
 	sess := newFakeSession("sess-remind")
 	agent := newFakeBaseAgent()
 	cbc := agentinterfaces.NewAgentCallbackContext(agent, inputs, sess)
+	cbc.SetModelContext(&fakeModelContext{}) // 必须设置 ModelContext，否则进度提醒逻辑会提前返回
 
 	err := r.AfterToolCall(context.Background(), cbc)
 	require.NoError(t, err)

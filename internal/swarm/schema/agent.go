@@ -91,7 +91,14 @@ type AgentResponseChunk struct {
 	IsComplete bool `json:"is_complete"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
+// AgentRequestOption Agent 请求可选配置函数。
+type AgentRequestOption func(*AgentRequest)
+
+// AgentResponseOption Agent 响应可选配置函数。
+type AgentResponseOption func(*AgentResponse)
+
+// AgentResponseChunkOption Agent 响应片段可选配置函数。
+type AgentResponseChunkOption func(*AgentResponseChunk)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -169,9 +176,6 @@ func NewTerminalChunk(requestID, channelID string) *AgentResponseChunk {
 	}
 }
 
-// AgentRequestOption Agent 请求可选配置函数。
-type AgentRequestOption func(*AgentRequest)
-
 // WithAgentSessionID 设置会话标识。
 func WithAgentSessionID(id string) AgentRequestOption {
 	return func(req *AgentRequest) { req.SessionID = &id }
@@ -202,9 +206,6 @@ func WithAgentPermissionContext(pc *PermissionContext) AgentRequestOption {
 	return func(req *AgentRequest) { req.PermissionContext = pc }
 }
 
-// AgentResponseOption Agent 响应可选配置函数。
-type AgentResponseOption func(*AgentResponse)
-
 // WithResponseOK 设置是否成功。
 func WithResponseOK(v bool) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.OK = v }
@@ -224,9 +225,6 @@ func WithResponsePayload(p map[string]any) AgentResponseOption {
 func WithResponseMetadata(m map[string]any) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.Metadata = m }
 }
-
-// AgentResponseChunkOption Agent 响应片段可选配置函数。
-type AgentResponseChunkOption func(*AgentResponseChunk)
 
 // WithChunkIsComplete 设置是否为最后片段。
 func WithChunkIsComplete(v bool) AgentResponseChunkOption {

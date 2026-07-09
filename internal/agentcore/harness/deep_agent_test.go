@@ -3009,7 +3009,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_有LoopSession(t *testing.T) {
 
 	// 设置 invokeActive=true，延迟后应跳过 invoke
 	agent.invokeActive.Store(true)
-	err = agent.ScheduleAutoInvokeOnSpawnDone(context.Background(), "test query", 0.5)
+	err := agent.ScheduleAutoInvokeOnSpawnDone(context.Background(), "test query", 0.5)
 	assert.NoError(t, err)
 
 	// 等待延迟过去

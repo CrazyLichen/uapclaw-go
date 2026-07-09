@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ImageExtensions 图片文件扩展名集合
 // 对齐 Python: ReadFileTool._IMAGE_EXTENSIONS (filesystem.py L279)
@@ -87,6 +87,9 @@ var destructivePatterns = []struct {
 	{regexp.MustCompile(`\bsudo\b`), "sudo may require a password in non-interactive mode; configure NOPASSWD or run as root"},
 }
 
+// braceRe 匹配花括号组内容的正则。
+var braceRe = regexp.MustCompile(`\{([^{}]*)\}`)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ExpandBracePattern 展开花括号模式。
@@ -122,7 +125,7 @@ func IsBlockedDevice(path string) bool {
 	if blockedDevicePaths[path] {
 		return true
 	}
-	// Linux /proc/<pid>/fd/0-2 aliases for stdio
+	// Linux /proc/<pid>/fd/0-2 标准输入输出的别名
 	if strings.HasPrefix(path, "/proc/") {
 		for _, suffix := range []string{"/fd/0", "/fd/1", "/fd/2"} {
 			if strings.HasSuffix(path, suffix) {
@@ -234,9 +237,6 @@ func GetDestructiveWarning(command string) string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// braceRe 匹配花括号组内容的正则。
-var braceRe = regexp.MustCompile(`\{([^{}]*)\}`)
 
 // expandGroup 递归展开花括号组。
 // 对齐 Python: GlobTool._expand_brace_pattern 内的 expand_group (filesystem.py L1433-1443)

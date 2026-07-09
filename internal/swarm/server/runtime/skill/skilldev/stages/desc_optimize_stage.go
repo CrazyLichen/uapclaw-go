@@ -12,6 +12,39 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// optimizationLoopInput 描述优化循环的输入参数封装。
+type optimizationLoopInput struct {
+	// SkillName 技能名称
+	SkillName string
+	// SkillBody SKILL.md 正文内容
+	SkillBody string
+	// CurrentDesc 当前描述
+	CurrentDesc string
+	// TrainSet 训练集
+	TrainSet []skilldev.TriggerEvalQuery
+	// TestSet 测试集
+	TestSet []skilldev.TriggerEvalQuery
+}
+
+// improveDescriptionInput 描述改进步骤的输入参数封装。
+type improveDescriptionInput struct {
+	// SkillName 技能名称
+	SkillName string
+	// SkillBody SKILL.md 正文内容
+	SkillBody string
+	// CurrentDesc 当前描述
+	CurrentDesc string
+	// TrainResults 训练集评估结果
+	TrainResults []map[string]any
+	// History 历史迭代
+	History []skilldev.DescOptimizeIteration
+}
+
+// DescOptimizeStageHandler DESC_OPTIMIZE 阶段：优化 SKILL.md 的 description 以提高触发准确率。
+type DescOptimizeStageHandler struct{}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // MaxIterations 描述优化最大迭代次数。
@@ -69,39 +102,6 @@ description 出现在模型的 available_skills 列表中，模型仅凭 descrip
 <new_description>新描述内容</new_description>
 `
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// optimizationLoopInput 描述优化循环的输入参数封装。
-type optimizationLoopInput struct {
-	// SkillName 技能名称
-	SkillName string
-	// SkillBody SKILL.md 正文内容
-	SkillBody string
-	// CurrentDesc 当前描述
-	CurrentDesc string
-	// TrainSet 训练集
-	TrainSet []skilldev.TriggerEvalQuery
-	// TestSet 测试集
-	TestSet []skilldev.TriggerEvalQuery
-}
-
-// improveDescriptionInput 描述改进步骤的输入参数封装。
-type improveDescriptionInput struct {
-	// SkillName 技能名称
-	SkillName string
-	// SkillBody SKILL.md 正文内容
-	SkillBody string
-	// CurrentDesc 当前描述
-	CurrentDesc string
-	// TrainResults 训练集评估结果
-	TrainResults []map[string]any
-	// History 历史迭代
-	History []skilldev.DescOptimizeIteration
-}
-
-// DescOptimizeStageHandler DESC_OPTIMIZE 阶段：优化 SKILL.md 的 description 以提高触发准确率。
-type DescOptimizeStageHandler struct{}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 DESC_OPTIMIZE 阶段逻辑。
@@ -116,18 +116,18 @@ func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.Ski
 
 	skillName, currentDesc, body := ParseSkillFrontmatter(skillMD)
 
-	// Step 1: 生成触发测试查询
+	// 步骤 1：生成触发测试查询
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在生成触发测试查询集..."})
 	queries := h.generateTriggerQueries(sctx, skillName, currentDesc)
 
-	// Step 2: Train/test split
+	// 步骤 2：训练/测试集切分
 	trainSet, testSet := SplitEvalSet(queries, HoldoutRatio, 42)
 
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
 		"message": fmt.Sprintf("开始描述优化循环（train=%d, test=%d）", len(trainSet), len(testSet)),
 	})
 
-	// Step 3: 优化循环
+	// 步骤 3：优化循环
 	loopInput := optimizationLoopInput{
 		SkillName:   skillName,
 		SkillBody:   body,
@@ -137,12 +137,12 @@ func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.Ski
 	}
 	bestDesc, history := h.optimizationLoop(sctx, loopInput)
 
-	// Step 4: 写回 SKILL.md
+	// 步骤 4：写回 SKILL.md
 	if bestDesc != "" && bestDesc != currentDesc {
 		applyDescription(skillMD, currentDesc, bestDesc)
 	}
 
-	// Step 5: 结果
+	// 步骤 5：结果
 	result := buildDescOptResult(currentDesc, bestDesc, history, testSet)
 	sctx.State.DescOptimizeResult = result
 

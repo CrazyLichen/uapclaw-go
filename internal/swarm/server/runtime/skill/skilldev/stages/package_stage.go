@@ -12,12 +12,17 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// PackageStageHandler PACKAGE 阶段：打包 skill/ 为 .skill (zip) 文件。
+type PackageStageHandler struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
 	// excludeDirs 目录级排除规则
 	excludeDirs = map[string]bool{
-		"__pycache__": true,
+		"__pycache__":  true,
 		"node_modules": true,
 		".git":         true,
 	}
@@ -32,11 +37,6 @@ var (
 		"evals": true,
 	}
 )
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// PackageStageHandler PACKAGE 阶段：打包 skill/ 为 .skill (zip) 文件。
-type PackageStageHandler struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -71,11 +71,11 @@ func (h *PackageStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 
 	sctx.Emit(skilldev.SkillDevEventTypeArtifactReady, map[string]any{
 		"artifact": map[string]any{
-			"id":          "skill_package",
-			"name":        skillFilename,
-			"type":        "skill_package",
-			"size_bytes":  sctx.State.ZipSize,
-			"browsable":   true,
+			"id":           "skill_package",
+			"name":         skillFilename,
+			"type":         "skill_package",
+			"size_bytes":   sctx.State.ZipSize,
+			"browsable":    true,
 			"downloadable": true,
 		},
 	})

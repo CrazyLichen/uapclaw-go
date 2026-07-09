@@ -137,16 +137,6 @@ func (m *TodoLockManager) CleanupSession(sessionID string) {
 	delete(m.locks, sessionID)
 }
 
-// newTodoTool 创建待办事项工具基类。
-// 对齐 Python: TodoTool.__init__
-func newTodoTool(workspace string, fs sys_operation.FsOperation, lockManager *TodoLockManager) TodoTool {
-	return TodoTool{
-		workspace:   workspace,
-		fs:          fs,
-		lockManager: lockManager,
-	}
-}
-
 // GetFilePath 返回指定会话的待办事项文件绝对路径。
 // 对齐 Python: TodoTool._get_file_path + os.path.abspath
 func (t *TodoTool) GetFilePath(sessionID string) string {
@@ -535,6 +525,16 @@ func CreateTodosTool(workspace string, fs sys_operation.FsOperation, language, a
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// newTodoTool 创建待办事项工具基类。
+// 对齐 Python: TodoTool.__init__
+func newTodoTool(workspace string, fs sys_operation.FsOperation, lockManager *TodoLockManager) TodoTool {
+	return TodoTool{
+		workspace:   workspace,
+		fs:          fs,
+		lockManager: lockManager,
+	}
+}
 
 // extractSessionID 从工具选项中提取会话 ID
 func extractSessionID(opts []tool.ToolOption) (string, error) {

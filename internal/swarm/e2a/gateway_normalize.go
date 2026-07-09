@@ -14,15 +14,15 @@ import (
 // AgentFieldOption E2AFromAgentFields 的可选配置函数。
 type AgentFieldOption func(map[string]any)
 
-// ResponseNormOption 响应规范化可选配置函数。
-type ResponseNormOption func(*responseNormConfig)
-
 // responseNormConfig 响应规范化内部配置。
 type responseNormConfig struct {
 	timestamp string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ResponseNormOption 响应规范化可选配置函数。
+type ResponseNormOption func(*responseNormConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

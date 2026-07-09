@@ -144,14 +144,14 @@ func (sm *SkillManager) HandleSkillsInstalled(ctx context.Context, params map[st
 			spec = name + "@" + marketplace
 		}
 		plugin := map[string]any{
-			"plugin_name": name,
-			"marketplace": marketplace,
-			"spec":        spec,
-			"version":     toString(p["version"]),
+			"plugin_name":  name,
+			"marketplace":  marketplace,
+			"spec":         spec,
+			"version":      toString(p["version"]),
 			"installed_at": toString(p["installed_at"]),
-			"git_commit":  toString(p["commit"]),
-			"enabled":     GetSkillEnabled(sm.state, name),
-			"skills":      []string{name},
+			"git_commit":   toString(p["commit"]),
+			"enabled":      GetSkillEnabled(sm.state, name),
+			"skills":       []string{name},
 		}
 		plugins = append(plugins, plugin)
 	}
@@ -268,13 +268,13 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 	evoPath := sm.getSkillEvolutionPath(safeName)
 	if evoPath == "" || !fileExists(evoPath) {
 		return map[string]any{
-			"name":      safeName,
-			"exists":    false,
-			"valid":     true,
-			"skill_id":  safeName,
-			"version":   "1.0.0",
+			"name":       safeName,
+			"exists":     false,
+			"valid":      true,
+			"skill_id":   safeName,
+			"version":    "1.0.0",
 			"updated_at": "",
-			"entries":   []any{},
+			"entries":    []any{},
 		}, nil
 	}
 
@@ -282,14 +282,14 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 	if err != nil {
 		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("读取 evolutions.json 失败")
 		return map[string]any{
-			"name":      safeName,
-			"exists":    true,
-			"valid":     false,
-			"detail":    "evolutions.json 格式错误或读取失败",
-			"skill_id":  safeName,
-			"version":   "1.0.0",
+			"name":       safeName,
+			"exists":     true,
+			"valid":      false,
+			"detail":     "evolutions.json 格式错误或读取失败",
+			"skill_id":   safeName,
+			"version":    "1.0.0",
 			"updated_at": "",
-			"entries":   []any{},
+			"entries":    []any{},
 		}, nil
 	}
 
@@ -297,14 +297,14 @@ func (sm *SkillManager) HandleSkillsEvolutionGet(ctx context.Context, params map
 	if err := json.Unmarshal(data, &evoData); err != nil {
 		logger.Warn(logComponent).Str("skill", safeName).Err(err).Msg("解析 evolutions.json 失败")
 		return map[string]any{
-			"name":      safeName,
-			"exists":    true,
-			"valid":     false,
-			"detail":    "evolutions.json 格式错误或读取失败",
-			"skill_id":  safeName,
-			"version":   "1.0.0",
+			"name":       safeName,
+			"exists":     true,
+			"valid":      false,
+			"detail":     "evolutions.json 格式错误或读取失败",
+			"skill_id":   safeName,
+			"version":    "1.0.0",
 			"updated_at": "",
-			"entries":   []any{},
+			"entries":    []any{},
 		}, nil
 	}
 
@@ -404,10 +404,10 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 	}
 
 	return map[string]any{
-		"success":    true,
-		"name":       safeName,
+		"success":     true,
+		"name":        safeName,
 		"entry_count": len(normalizedEntries),
-		"updated_at": evoFile["updated_at"],
+		"updated_at":  evoFile["updated_at"],
 	}, nil
 }
 
@@ -421,8 +421,8 @@ func (sm *SkillManager) HandleSkillsMarketplaceList(ctx context.Context, params 
 	result := make([]map[string]any, 0, len(marketplaces))
 	for _, m := range marketplaces {
 		item := map[string]any{
-			"name":   toString(m["name"]),
-			"url":    toString(m["url"]),
+			"name":    toString(m["name"]),
+			"url":     toString(m["url"]),
 			"enabled": toBoolWithDefault(m["enabled"], true),
 		}
 		if v, ok := m["install_location"]; ok {
@@ -543,11 +543,11 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 	meta := sm.parseSkillMD(sm.tryFindSkillFile(dest))
 	commitHash := sm.gitGetCommit(repoDir)
 	sm.addInstalledPlugin(map[string]any{
-		"name":        safePlugin,
-		"marketplace": safeMarket,
-		"version":     toString(meta["version"]),
-		"commit":      commitHash,
-		"source":      safeMarket,
+		"name":         safePlugin,
+		"marketplace":  safeMarket,
+		"version":      toString(meta["version"]),
+		"commit":       commitHash,
+		"source":       safeMarket,
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()
@@ -592,11 +592,11 @@ func (sm *SkillManager) HandleSkillsInstallBuiltin(ctx context.Context, params m
 	meta := sm.parseSkillMD(sm.tryFindSkillFile(dest))
 	sm.mu.Lock()
 	sm.addInstalledPlugin(map[string]any{
-		"name":        safeName,
-		"marketplace": "builtin",
-		"version":     toString(meta["version"]),
-		"commit":      "",
-		"source":      "builtin",
+		"name":         safeName,
+		"marketplace":  "builtin",
+		"version":      toString(meta["version"]),
+		"commit":       "",
+		"source":       "builtin",
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()
@@ -692,9 +692,9 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 	}
 
 	sm.addLocalSkill(map[string]any{
-		"name":        safeSkillName,
-		"origin":      absPath,
-		"source":      "local",
+		"name":         safeSkillName,
+		"origin":       absPath,
+		"source":       "local",
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
 	})
 	sm.refreshAgentDataIndexes()

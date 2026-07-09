@@ -10,21 +10,21 @@ import (
 
 func TestSkillDevStage_Values(t *testing.T) {
 	stages := map[string]SkillDevStage{
-		"init":                 SkillDevStageInit,
-		"plan":                 SkillDevStagePlan,
-		"plan_confirm":         SkillDevStagePlanConfirm,
-		"generate":             SkillDevStageGenerate,
-		"validate":             SkillDevStageValidate,
-		"test_design":          SkillDevStageTestDesign,
-		"test_run":             SkillDevStageTestRun,
-		"evaluate":             SkillDevStageEvaluate,
-		"review":               SkillDevStageReview,
-		"improve":              SkillDevStageImprove,
-		"package":              SkillDevStagePackage,
+		"init":                  SkillDevStageInit,
+		"plan":                  SkillDevStagePlan,
+		"plan_confirm":          SkillDevStagePlanConfirm,
+		"generate":              SkillDevStageGenerate,
+		"validate":              SkillDevStageValidate,
+		"test_design":           SkillDevStageTestDesign,
+		"test_run":              SkillDevStageTestRun,
+		"evaluate":              SkillDevStageEvaluate,
+		"review":                SkillDevStageReview,
+		"improve":               SkillDevStageImprove,
+		"package":               SkillDevStagePackage,
 		"desc_optimize_confirm": SkillDevStageDescOptimizeConfirm,
-		"desc_optimize":        SkillDevStageDescOptimize,
-		"completed":            SkillDevStageCompleted,
-		"error":                SkillDevStageError,
+		"desc_optimize":         SkillDevStageDescOptimize,
+		"completed":             SkillDevStageCompleted,
+		"error":                 SkillDevStageError,
 	}
 	for expected, stage := range stages {
 		if string(stage) != expected {
@@ -38,9 +38,9 @@ func TestSkillDevStage_Values(t *testing.T) {
 
 func TestSkillDevTaskMode_Values(t *testing.T) {
 	modes := map[string]SkillDevTaskMode{
-		"create":              SkillDevTaskModeCreate,
+		"create":                SkillDevTaskModeCreate,
 		"create_with_resources": SkillDevTaskModeCreateWithResources,
-		"modify":              SkillDevTaskModeModify,
+		"modify":                SkillDevTaskModeModify,
 	}
 	for expected, mode := range modes {
 		if string(mode) != expected {
@@ -54,17 +54,17 @@ func TestSkillDevTaskMode_Values(t *testing.T) {
 
 func TestSkillDevEventType_Values(t *testing.T) {
 	types := map[string]SkillDevEventType{
-		"skilldev.stage_changed":    SkillDevEventTypeStageChanged,
-		"skilldev.progress":         SkillDevEventTypeProgress,
-		"skilldev.error":            SkillDevEventTypeError,
-		"skilldev.agent_thinking":   SkillDevEventTypeAgentThinking,
-		"skilldev.test_progress":    SkillDevEventTypeTestProgress,
-		"skilldev.confirm_request":  SkillDevEventTypeConfirmRequest,
-		"skilldev.todos_update":     SkillDevEventTypeTodosUpdate,
-		"skilldev.artifact_ready":   SkillDevEventTypeArtifactReady,
-		"skilldev.eval_ready":       SkillDevEventTypeEvalReady,
-		"skilldev.validate_result":  SkillDevEventTypeValidateResult,
-		"skilldev.desc_opt_ready":   SkillDevEventTypeDescOptReady,
+		"skilldev.stage_changed":   SkillDevEventTypeStageChanged,
+		"skilldev.progress":        SkillDevEventTypeProgress,
+		"skilldev.error":           SkillDevEventTypeError,
+		"skilldev.agent_thinking":  SkillDevEventTypeAgentThinking,
+		"skilldev.test_progress":   SkillDevEventTypeTestProgress,
+		"skilldev.confirm_request": SkillDevEventTypeConfirmRequest,
+		"skilldev.todos_update":    SkillDevEventTypeTodosUpdate,
+		"skilldev.artifact_ready":  SkillDevEventTypeArtifactReady,
+		"skilldev.eval_ready":      SkillDevEventTypeEvalReady,
+		"skilldev.validate_result": SkillDevEventTypeValidateResult,
+		"skilldev.desc_opt_ready":  SkillDevEventTypeDescOptReady,
 	}
 	for expected, et := range types {
 		if string(et) != expected {
@@ -252,12 +252,12 @@ func TestFromCheckpointDict_默认值(t *testing.T) {
 
 func TestFromCheckpointDict_空值(t *testing.T) {
 	data := map[string]any{
-		"task_id":              "test",
-		"stage":                "init",
-		"existing_skill_md":    nil,
-		"plan_confirmed_at":    nil,
-		"zip_path":             nil,
-		"error":                nil,
+		"task_id":           "test",
+		"stage":             "init",
+		"existing_skill_md": nil,
+		"plan_confirmed_at": nil,
+		"zip_path":          nil,
+		"error":             nil,
 	}
 
 	state := FromCheckpointDict(data)
@@ -630,11 +630,11 @@ func TestNewEvalSetFromDict(t *testing.T) {
 		"skill_name": "test_skill",
 		"evals": []any{
 			map[string]any{
-				"id":             float64(1),
-				"prompt":         "p1",
+				"id":              float64(1),
+				"prompt":          "p1",
 				"expected_output": "e1",
-				"files":          []any{"f1"},
-				"expectations":   []any{"exp1"},
+				"files":           []any{"f1"},
+				"expectations":    []any{"exp1"},
 			},
 		},
 	}

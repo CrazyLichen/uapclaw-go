@@ -335,7 +335,7 @@ func (r *RemoteSkillUtil) recursivelyListGitHubFiles(tree *GitHubTree, currentDi
 	relativeDirectory := tree.Directory
 
 	if relativeDirectory == "" || relativeDirectory == "." {
-		// Fetch entire tree — 使用 recursive 参数
+		// 获取整棵树 — 使用 recursive 参数
 		respData, err := r.fetchGitHubTree(url, token, true)
 		if err != nil {
 			return nil, false, err

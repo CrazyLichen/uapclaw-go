@@ -16,6 +16,9 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// TaskCompletionOption TaskCompletionRail 构造选项函数。
+type TaskCompletionOption func(*TaskCompletionRail)
+
 // TaskCompletionRail 任务完成检测 Rail。
 //
 // 负责三件事：
@@ -64,9 +67,6 @@ var taskCompLogComponent = logger.ComponentAgentCore
 var promiseTagPattern = regexp.MustCompile(`(?i)(?s)<promise>\s*(.*?)\s*</promise>`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TaskCompletionOption TaskCompletionRail 构造选项函数。
-type TaskCompletionOption func(*TaskCompletionRail)
 
 // WithTaskInstruction 设置任务指令模板。
 func WithTaskInstruction(template string) TaskCompletionOption {
@@ -260,14 +260,6 @@ func (r *TaskCompletionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 	return callbacks
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// normalizePromiseText 折叠空白字符用于 promise 比较。
-// 对齐 Python: _normalize(text)
-func normalizePromiseText(text string) string {
-	return strings.Join(strings.Fields(text), " ")
-}
-
 // ExtractPromiseBlock 用正则提取 <promise>...</promise> 内容。
 // 导出供测试使用。
 // 对齐 Python: extract_promise_block(text)
@@ -311,6 +303,14 @@ func PromiseMatches(block string, expected string) bool {
 		return true
 	}
 	return strings.HasPrefix(firstNorm, expectedNorm+" ")
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// normalizePromiseText 折叠空白字符用于 promise 比较。
+// 对齐 Python: _normalize(text)
+func normalizePromiseText(text string) string {
+	return strings.Join(strings.Fields(text), " ")
 }
 
 // extractOutput 从 TaskIterationInputs.Result["output"] 提取输出文本。

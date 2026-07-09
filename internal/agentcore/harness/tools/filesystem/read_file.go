@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	_ "image/gif" // GIF 解码器注册
 	"image/jpeg"
-	_ "image/png"  // PNG 解码器注册
-	_ "image/gif"  // GIF 解码器注册
+	_ "image/png" // PNG 解码器注册
 	"math"
 	"os"
 	"path/filepath"
@@ -218,7 +218,7 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 func readText(ctx context.Context, op sys_operation.SysOperation, filePath string, offset, limit int, applySizeCap bool) (map[string]any, error) {
 	// 将 offset/limit 转为行号 start/end
 	// 对齐 Python L460-461
-	start := max(0, offset) + 1 // 0-based skip → 1-indexed start
+	start := max(0, offset) + 1 // 0 基偏移 → 1 索引起始
 	end := start + max(0, limit) - 1
 
 	// 调用 Fs().ReadFile 读取文件
@@ -512,7 +512,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 	var dimensions string
 
-	// Step 1: 标准缩略图 (thumbnail to 1536×1536)
+	// 步骤 1：标准缩略图 (thumbnail to 1536×1536)
 	// 对齐 Python L619-638
 	resized := raw
 	img, detectedFmt, decodeErr := image.Decode(bytes.NewReader(raw))
@@ -541,7 +541,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 		}
 	}
 
-	// Step 2: token 预算检查 — base64 byte count × 0.125 ≈ tokens
+	// 步骤 2：token 预算检查 — base64 byte count × 0.125 ≈ tokens
 	// 对齐 Python L640-654
 	estimatedTokens := estimateImageTokens(resized)
 	if estimatedTokens > maxTokens {
@@ -577,7 +577,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 			"If a vision tool is configured, call image_ocr or visual_question_answering with this file path.",
 		)
 		return map[string]any{
-			"content":   strings.Join(parts, "\n"),
+			"content":    strings.Join(parts, "\n"),
 			"multimodal": []map[string]any{},
 		}, nil
 	}

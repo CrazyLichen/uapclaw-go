@@ -159,7 +159,7 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 // 格式：{channelID}_{hex_timestamp}_{6_random_hex}
 func GenerateChannelSessionID(channelID string) string {
 	ts := fmt.Sprintf("%x", time.Now().UnixMilli())
-	suffix := generateRandomHex(3) // 3 bytes = 6 hex chars
+	suffix := generateRandomHex(3) // 3 字节 = 6 个十六进制字符
 	return fmt.Sprintf("%s_%s_%s", channelID, ts, suffix)
 }
 

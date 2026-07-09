@@ -8,26 +8,35 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// DefaultReadChunkSize 默认读取块大小
-	DefaultReadChunkSize = 0
-	// DefaultReadStreamChunkSize 默认流式读取块大小
-	DefaultReadStreamChunkSize = 8192
-	// DefaultUploadChunkSize 默认上传块大小
-	DefaultUploadChunkSize = 0
-	// DefaultUploadStreamChunkSize 默认流式上传块大小
-	DefaultUploadStreamChunkSize = 1024 * 1024
-	// DefaultDownloadChunkSize 默认下载块大小
-	DefaultDownloadChunkSize = 0
-	// DefaultDownloadStreamChunkSize 默认流式下载块大小
-	DefaultDownloadStreamChunkSize = 1024 * 1024
-	// TailChunkSize tail 读取块大小
-	TailChunkSize = 1024
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// FsOperation 文件系统操作接口，定义读取、写入、列表、搜索等文件系统操作。
+// 对齐 Python BaseFsOperation：read_file, read_file_stream, write_file, upload_file,
+// upload_file_stream, download_file, download_file_stream, list_files, list_directories, search_files。
+type FsOperation interface {
+	// ReadFile 读取文件内容
+	ReadFile(ctx context.Context, path string, opts ...FsOption) (*result.ReadFileResult, error)
+	// ReadFileStream 流式读取文件
+	ReadFileStream(ctx context.Context, path string, opts ...FsOption) (<-chan result.ReadFileStreamResult, error)
+	// WriteFile 写入文件内容
+	WriteFile(ctx context.Context, path string, content string, opts ...FsOption) (*result.WriteFileResult, error)
+	// UploadFile 上传文件
+	UploadFile(ctx context.Context, localPath string, targetPath string, opts ...FsOption) (*result.UploadFileResult, error)
+	// UploadFileStream 流式上传文件
+	UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...FsOption) (<-chan result.UploadFileStreamResult, error)
+	// DownloadFile 下载文件
+	DownloadFile(ctx context.Context, sourcePath string, localPath string, opts ...FsOption) (*result.DownloadFileResult, error)
+	// DownloadFileStream 流式下载文件
+	DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...FsOption) (<-chan result.DownloadFileStreamResult, error)
+	// ListFiles 列出目录下文件
+	ListFiles(ctx context.Context, path string, opts ...FsOption) (*result.ListFilesResult, error)
+	// ListDirectories 列出目录下子目录
+	ListDirectories(ctx context.Context, path string, opts ...FsOption) (*result.ListDirsResult, error)
+	// SearchFiles 搜索匹配模式的文件
+	SearchFiles(ctx context.Context, path string, pattern string, opts ...FsOption) (*result.SearchFilesResult, error)
+	// ListTools 返回文件系统操作的工具卡片列表
+	ListTools() []*tool.ToolCard
+}
 
 // FsOption 文件系统操作选项函数
 type FsOption func(*FsOptions)
@@ -92,33 +101,24 @@ type BaseFsOperation struct {
 	BaseOperation
 }
 
-// FsOperation 文件系统操作接口，定义读取、写入、列表、搜索等文件系统操作。
-// 对齐 Python BaseFsOperation：read_file, read_file_stream, write_file, upload_file,
-// upload_file_stream, download_file, download_file_stream, list_files, list_directories, search_files。
-type FsOperation interface {
-	// ReadFile 读取文件内容
-	ReadFile(ctx context.Context, path string, opts ...FsOption) (*result.ReadFileResult, error)
-	// ReadFileStream 流式读取文件
-	ReadFileStream(ctx context.Context, path string, opts ...FsOption) (<-chan result.ReadFileStreamResult, error)
-	// WriteFile 写入文件内容
-	WriteFile(ctx context.Context, path string, content string, opts ...FsOption) (*result.WriteFileResult, error)
-	// UploadFile 上传文件
-	UploadFile(ctx context.Context, localPath string, targetPath string, opts ...FsOption) (*result.UploadFileResult, error)
-	// UploadFileStream 流式上传文件
-	UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...FsOption) (<-chan result.UploadFileStreamResult, error)
-	// DownloadFile 下载文件
-	DownloadFile(ctx context.Context, sourcePath string, localPath string, opts ...FsOption) (*result.DownloadFileResult, error)
-	// DownloadFileStream 流式下载文件
-	DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...FsOption) (<-chan result.DownloadFileStreamResult, error)
-	// ListFiles 列出目录下文件
-	ListFiles(ctx context.Context, path string, opts ...FsOption) (*result.ListFilesResult, error)
-	// ListDirectories 列出目录下子目录
-	ListDirectories(ctx context.Context, path string, opts ...FsOption) (*result.ListDirsResult, error)
-	// SearchFiles 搜索匹配模式的文件
-	SearchFiles(ctx context.Context, path string, pattern string, opts ...FsOption) (*result.SearchFilesResult, error)
-	// ListTools 返回文件系统操作的工具卡片列表
-	ListTools() []*tool.ToolCard
-}
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// DefaultReadChunkSize 默认读取块大小
+	DefaultReadChunkSize = 0
+	// DefaultReadStreamChunkSize 默认流式读取块大小
+	DefaultReadStreamChunkSize = 8192
+	// DefaultUploadChunkSize 默认上传块大小
+	DefaultUploadChunkSize = 0
+	// DefaultUploadStreamChunkSize 默认流式上传块大小
+	DefaultUploadStreamChunkSize = 1024 * 1024
+	// DefaultDownloadChunkSize 默认下载块大小
+	DefaultDownloadChunkSize = 0
+	// DefaultDownloadStreamChunkSize 默认流式下载块大小
+	DefaultDownloadStreamChunkSize = 1024 * 1024
+	// TailChunkSize tail 读取块大小
+	TailChunkSize = 1024
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

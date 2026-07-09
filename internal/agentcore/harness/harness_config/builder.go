@@ -94,7 +94,7 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 	config := resolved.Config
 	language := config.Language
 
-	// ── 1. Agent card ──
+	// ── 1. Agent 卡片 ──
 	var agentName, agentDesc, agentID string
 	if config.Name != nil {
 		agentName = *config.Name
@@ -114,7 +114,7 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 	// ── 2. 语言解析（校验 + 回退） ──
 	resolvedLanguage := hprompts.ResolveLanguage(language)
 
-	// ── 3. Workspace ──
+	// ── 3. 工作空间 ──
 	wsRoot := "./"
 	if len(workspaceRoot) > 0 && workspaceRoot[0] != "" {
 		wsRoot = workspaceRoot[0]

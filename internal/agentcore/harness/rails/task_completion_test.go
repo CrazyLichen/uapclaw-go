@@ -579,11 +579,13 @@ func (f *fakeDeepAgentForNotify) EventHandler() modules.EventHandler            
 func (f *fakeDeepAgentForNotify) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return nil
 }
-func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig                    { return nil }
-func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                                    { return false }
-func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool                             { return false }
-func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)                           {}
-func (f *fakeDeepAgentForNotify) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error { return nil }
+func (f *fakeDeepAgentForNotify) DeepConfig() *hschema.DeepAgentConfig { return nil }
+func (f *fakeDeepAgentForNotify) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForNotify) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForNotify) SetAutoInvokeScheduled(_ bool)        {}
+func (f *fakeDeepAgentForNotify) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
+	return nil
+}
 func (f *fakeDeepAgentForNotify) CreateSubagent(_ context.Context, _ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
 }

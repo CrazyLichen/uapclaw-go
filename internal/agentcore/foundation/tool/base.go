@@ -68,7 +68,7 @@ type StreamChunk struct {
 	Data map[string]any
 	// Error 非 nil 表示流结束且出错
 	Error error
-	// Done true 表示流正常结束（Data 为空）
+	// Done 为 true 表示流正常结束（Data 为空）
 	Done bool
 }
 

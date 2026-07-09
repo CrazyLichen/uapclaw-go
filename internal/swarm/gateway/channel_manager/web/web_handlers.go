@@ -22,15 +22,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// OnConfigSavedFunc 配置保存回调函数类型。
-// 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
-//
-// 参数说明：
-//   - updatedKeys: 变更的环境变量键集合
-//   - envUpdates: 增量环境变量更新
-//   - configPayload: 完整配置快照
-type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
-
 // RPCDispatcher RPC 方法注册与分发。
 //
 // 对齐 Python app_web_handlers.py 中的方法注册模式：
@@ -43,6 +34,30 @@ type RPCDispatcher struct {
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// OnConfigSavedFunc 配置保存回调函数类型。
+// 对齐 Python: _on_config_saved(updated_env_keys, env_updates=..., config_payload=...)。
+//
+// 参数说明：
+//   - updatedKeys: 变更的环境变量键集合
+//   - envUpdates: 增量环境变量更新
+//   - configPayload: 完整配置快照
+type OnConfigSavedFunc func(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error
+
+// RPCHandlerFunc RPC 方法处理函数签名。
+//
+// 参数：
+//   - ctx：请求上下文
+//   - params：RPC 请求参数
+//   - sessionID：会话标识
+//
+// 返回值：
+//   - map[string]any：响应负载
+//   - error：处理错误
+type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
+
+// EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
+type EventSender func(event string, payload map[string]any)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -136,21 +151,6 @@ var configEnvMap = map[string]string{
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// RPCHandlerFunc RPC 方法处理函数签名。
-//
-// 参数：
-//   - ctx：请求上下文
-//   - params：RPC 请求参数
-//   - sessionID：会话标识
-//
-// 返回值：
-//   - map[string]any：响应负载
-//   - error：处理错误
-type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID string) (map[string]any, error)
-
-// EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
-type EventSender func(event string, payload map[string]any)
 
 // NewRPCDispatcher 创建空的 RPC 分发器。
 func NewRPCDispatcher() *RPCDispatcher {

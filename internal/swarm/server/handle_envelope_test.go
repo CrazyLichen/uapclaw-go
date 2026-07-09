@@ -50,10 +50,10 @@ func makeTestEnvelope(method string, isStream bool) *e2a.E2AEnvelope {
 // TestApplyResolvedModeToRequest 验证 mode 解析。
 func TestApplyResolvedModeToRequest(t *testing.T) {
 	tests := []struct {
-		name      string
-		params    json.RawMessage
-		wantMode  string
-		wantSub   string
+		name     string
+		params   json.RawMessage
+		wantMode string
+		wantSub  string
 	}{
 		{
 			name:     "空参数默认agent.plan",
@@ -68,28 +68,28 @@ func TestApplyResolvedModeToRequest(t *testing.T) {
 			wantSub:  "plan",
 		},
 		{
-			name:      "code.normal模式",
-			params:    json.RawMessage(`{"mode": "code.normal"}`),
-			wantMode:  "code",
-			wantSub:   "normal",
+			name:     "code.normal模式",
+			params:   json.RawMessage(`{"mode": "code.normal"}`),
+			wantMode: "code",
+			wantSub:  "normal",
 		},
 		{
-			name:      "agent.plan模式",
-			params:    json.RawMessage(`{"mode": "agent.plan"}`),
-			wantMode:  "agent",
-			wantSub:   "plan",
+			name:     "agent.plan模式",
+			params:   json.RawMessage(`{"mode": "agent.plan"}`),
+			wantMode: "agent",
+			wantSub:  "plan",
 		},
 		{
-			name:      "仅mode无subMode",
-			params:    json.RawMessage(`{"mode": "code"}`),
-			wantMode:  "code",
-			wantSub:   "plan",
+			name:     "仅mode无subMode",
+			params:   json.RawMessage(`{"mode": "code"}`),
+			wantMode: "code",
+			wantSub:  "plan",
 		},
 		{
-			name:      "空mode字符串",
-			params:    json.RawMessage(`{"mode": ""}`),
-			wantMode:  "agent",
-			wantSub:   "plan",
+			name:     "空mode字符串",
+			params:   json.RawMessage(`{"mode": ""}`),
+			wantMode: "agent",
+			wantSub:  "plan",
 		},
 	}
 

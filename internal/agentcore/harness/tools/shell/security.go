@@ -95,7 +95,7 @@ func CheckBashInjection(command string) (bool, string) {
 // 检测 4 种模式:
 // 1. Invoke-Expression / iex
 // 2. powershell/pwsh -EncodedCommand
-// 3. & ( 或 & $ (动态调用运算符)
+// 3. & ( 或 & $（动态调用运算符）
 // 4. [ScriptBlock]::Create(
 func CheckPowerShellInjection(command string) (bool, string) {
 	if psInvokeExprRe.MatchString(command) {

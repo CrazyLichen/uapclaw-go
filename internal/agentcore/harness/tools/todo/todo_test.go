@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
@@ -43,7 +44,7 @@ func NewMockFsOperation() *mockFsOperation {
 }
 
 // ReadFile 实现 FsOperation 接口
-func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_operation.FsOption) (*sys_operation.ReadFileResult, error) {
+func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_operation.FsOption) (*result.ReadFileResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.readErr != nil {
@@ -53,38 +54,63 @@ func (m *mockFsOperation) ReadFile(_ context.Context, path string, _ ...sys_oper
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", path)
 	}
-	return &sys_operation.ReadFileResult{Code: 0, Data: content}, nil
+	return &result.ReadFileResult{BaseResult: result.BaseResult{Code: 0}, Data: &result.ReadFileData{Content: content}}, nil
 }
 
 // WriteFile 实现 FsOperation 接口
-func (m *mockFsOperation) WriteFile(_ context.Context, path string, content string, _ ...sys_operation.FsOption) (*sys_operation.WriteFileResult, error) {
+func (m *mockFsOperation) WriteFile(_ context.Context, path string, content string, _ ...sys_operation.FsOption) (*result.WriteFileResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.writeErr != nil {
 		return nil, m.writeErr
 	}
 	m.data[path] = content
-	return &sys_operation.WriteFileResult{Code: 0}, nil
+	return &result.WriteFileResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
 // ListFiles 实现 FsOperation 接口
-func (m *mockFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListFilesResult, error) {
-	return &sys_operation.ListFilesResult{Code: 0}, nil
+func (m *mockFsOperation) ListFiles(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListFilesResult, error) {
+	return &result.ListFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
 // ListDirectories 实现 FsOperation 接口
-func (m *mockFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*sys_operation.ListDirsResult, error) {
-	return &sys_operation.ListDirsResult{Code: 0}, nil
+func (m *mockFsOperation) ListDirectories(_ context.Context, _ string, _ ...sys_operation.FsOption) (*result.ListDirsResult, error) {
+	return &result.ListDirsResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
 // SearchFiles 实现 FsOperation 接口
-func (m *mockFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*sys_operation.SearchFilesResult, error) {
-	return &sys_operation.SearchFilesResult{Code: 0}, nil
+func (m *mockFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.SearchFilesResult, error) {
+	return &result.SearchFilesResult{BaseResult: result.BaseResult{Code: 0}}, nil
 }
 
 // ListTools 实现 FsOperation 接口
 func (m *mockFsOperation) ListTools() []*tool.ToolCard {
 	return nil
+}
+
+// ReadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) ReadFileStream(_ context.Context, _ string, _ ...sys_operation.FsOption) (<-chan result.ReadFileStreamResult, error) {
+	return nil, nil
+}
+
+// UploadFile 实现 FsOperation 接口
+func (m *mockFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.UploadFileResult, error) {
+	return nil, nil
+}
+
+// UploadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.UploadFileStreamResult, error) {
+	return nil, nil
+}
+
+// DownloadFile 实现 FsOperation 接口
+func (m *mockFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (*result.DownloadFileResult, error) {
+	return nil, nil
+}
+
+// DownloadFileStream 实现 FsOperation 接口
+func (m *mockFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.DownloadFileStreamResult, error) {
+	return nil, nil
 }
 
 // GetSessionID 实现 session 接口
@@ -162,14 +188,12 @@ func TestTodoTool_GetFilePath(t *testing.T) {
 }
 
 // TestTodoTool_LoadTodos_空文件 测试加载空文件
+// 文件不存在时 LoadTodos 返回错误，对齐 Python 抛异常行为
 func TestTodoTool_LoadTodos_空文件(t *testing.T) {
 	todoTool, _ := newTestTodoTool()
-	items, err := todoTool.LoadTodos(context.Background(), "session1")
-	if err != nil {
-		t.Fatalf("LoadTodos 返回错误: %v", err)
-	}
-	if len(items) != 0 {
-		t.Fatalf("期望空列表，实际 %d 项", len(items))
+	_, err := todoTool.LoadTodos(context.Background(), "session1")
+	if err == nil {
+		t.Fatal("期望返回错误，实际为 nil")
 	}
 }
 
@@ -375,7 +399,7 @@ func TestValidateTargetTaskStatus(t *testing.T) {
 
 // TestValidateSingleTodoItem 测试单任务校验
 func TestValidateSingleTodoItem(t *testing.T) {
-	err := validateSingleTodoItem(map[string]any{"id": "task1"})
+	err := validateSingleTodoItem(map[string]any{"id": "task1", "content": "内容", "activeForm": "进行中", "description": "描述", "status": "pending"})
 	if err != nil {
 		t.Fatalf("期望通过，实际错误: %v", err)
 	}
@@ -393,7 +417,7 @@ func TestTodoModifyUpdate(t *testing.T) {
 		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusPending},
 	}
 
-	result, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "t1", "status": "completed"},
 		{"id": "t2", "status": "in_progress"},
 	})
@@ -415,7 +439,7 @@ func TestTodoModifyUpdate_重复InProgress(t *testing.T) {
 		{ID: "t2", Status: hschema.TodoStatusPending},
 	}
 
-	_, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "t2", "status": "in_progress"},
 	})
 	if err == nil {
@@ -427,7 +451,7 @@ func TestTodoModifyUpdate_重复InProgress(t *testing.T) {
 func TestTodoModifyUpdate_不存在的ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
 
-	_, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "nonexistent", "status": "completed"},
 	})
 	if err == nil {
@@ -443,7 +467,7 @@ func TestTodoModifyDelete(t *testing.T) {
 		{ID: "t3", Content: "任务3"},
 	}
 
-	result, err := todoModifyDelete(todos, []string{"t2"})
+	result, _, err := todoModifyDelete(todos, []string{"t2"})
 	if err != nil {
 		t.Fatalf("todoModifyDelete 返回错误: %v", err)
 	}
@@ -458,7 +482,7 @@ func TestTodoModifyDelete(t *testing.T) {
 // TestTodoModifyDelete_空IDs 测试 delete 操作空 IDs
 func TestTodoModifyDelete_空IDs(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyDelete(todos, nil)
+	_, _, err := todoModifyDelete(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -471,7 +495,7 @@ func TestTodoModifyCancel(t *testing.T) {
 		{ID: "t2", Status: hschema.TodoStatusInProgress},
 	}
 
-	result, err := todoModifyCancel(todos, []string{"t1"})
+	result, _, err := todoModifyCancel(todos, []string{"t1"})
 	if err != nil {
 		t.Fatalf("todoModifyCancel 返回错误: %v", err)
 	}
@@ -484,11 +508,18 @@ func TestTodoModifyCancel(t *testing.T) {
 }
 
 // TestTodoModifyCancel_不存在的ID 测试 cancel 操作不存在的 ID
+// 对齐 Python: 不存在的 ID 静默跳过，返回提示消息而非错误
 func TestTodoModifyCancel_不存在的ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyCancel(todos, []string{"nonexistent"})
-	if err == nil {
-		t.Fatal("期望返回错误，实际为 nil")
+	result, msg, err := todoModifyCancel(todos, []string{"nonexistent"})
+	if err != nil {
+		t.Fatalf("期望无错误（静默跳过），实际错误: %v", err)
+	}
+	if result[0].Status != hschema.TodoStatusPending {
+		t.Fatal("t1 应保持 pending")
+	}
+	if msg == "" {
+		t.Fatal("期望返回提示消息")
 	}
 }
 
@@ -498,7 +529,7 @@ func TestTodoModifyAppend(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
 	}
 
-	result, err := todoModifyAppend(todos, []map[string]any{
+	result, _, err := todoModifyAppend(todos, []map[string]any{
 		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
@@ -516,7 +547,7 @@ func TestTodoModifyAppend(t *testing.T) {
 func TestTodoModifyAppend_重复ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
 
-	_, err := todoModifyAppend(todos, []map[string]any{
+	_, _, err := todoModifyAppend(todos, []map[string]any{
 		{"id": "t1", "content": "重复", "status": "pending"},
 	})
 	if err == nil {
@@ -531,8 +562,8 @@ func TestTodoModifyInsertAfter(t *testing.T) {
 		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
 	}
 
-	result, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
-		{"id": "t2", "content": "任务2", "status": "pending"},
+	result, _, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
 		t.Fatalf("todoModifyInsertAfter 返回错误: %v", err)
@@ -551,8 +582,8 @@ func TestTodoModifyInsertAfter_无效目标状态(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusCompleted},
 	}
 
-	_, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
-		{"id": "t2", "content": "任务2", "status": "pending"},
+	_, _, err := todoModifyInsertAfter(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err == nil {
 		t.Fatal("期望返回错误（目标状态无效），实际为 nil")
@@ -566,8 +597,8 @@ func TestTodoModifyInsertBefore(t *testing.T) {
 		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusPending},
 	}
 
-	result, err := todoModifyInsertBefore(todos, "t3", []map[string]any{
-		{"id": "t2", "content": "任务2", "status": "pending"},
+	result, _, err := todoModifyInsertBefore(todos, "t3", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err != nil {
 		t.Fatalf("todoModifyInsertBefore 返回错误: %v", err)
@@ -586,8 +617,8 @@ func TestTodoModifyInsertBefore_无效目标状态(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
 	}
 
-	_, err := todoModifyInsertBefore(todos, "t1", []map[string]any{
-		{"id": "t2", "content": "任务2", "status": "pending"},
+	_, _, err := todoModifyInsertBefore(todos, "t1", []map[string]any{
+		{"id": "t2", "content": "任务2", "activeForm": "执行任务2", "description": "描述2", "status": "pending"},
 	})
 	if err == nil {
 		t.Fatal("期望返回错误（目标状态无效），实际为 nil")
@@ -644,7 +675,7 @@ func TestTodoModifyUpdate_部分字段更新(t *testing.T) {
 		{ID: "t1", Content: "旧内容", ActiveForm: "旧进行中", Description: "旧描述", Status: hschema.TodoStatusPending},
 	}
 
-	result, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "t1", "content": "新内容"},
 	})
 	if err != nil {
@@ -667,7 +698,7 @@ func TestTodoModifyUpdate_selectedModelID(t *testing.T) {
 		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusPending, SelectedModelID: "fast"},
 	}
 
-	result, err := todoModifyUpdate(todos, []map[string]any{
+	result, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "t1", "selected_model_id": "smart"},
 	})
 	if err != nil {
@@ -681,7 +712,7 @@ func TestTodoModifyUpdate_selectedModelID(t *testing.T) {
 // TestTodoModifyUpdate_空更新列表 测试 update 操作空更新列表
 func TestTodoModifyUpdate_空更新列表(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyUpdate(todos, nil)
+	_, _, err := todoModifyUpdate(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -696,7 +727,7 @@ func TestTodoModifyUpdate_空更新列表(t *testing.T) {
 // TestTodoModifyCancel_空IDs 测试 cancel 操作空 IDs
 func TestTodoModifyCancel_空IDs(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyCancel(todos, nil)
+	_, _, err := todoModifyCancel(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -705,7 +736,7 @@ func TestTodoModifyCancel_空IDs(t *testing.T) {
 // TestTodoModifyAppend_空列表 测试 append 操作空列表
 func TestTodoModifyAppend_空列表(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyAppend(todos, nil)
+	_, _, err := todoModifyAppend(todos, nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -714,7 +745,7 @@ func TestTodoModifyAppend_空列表(t *testing.T) {
 // TestTodoModifyInsertAfter_空Items 测试 insert_after 操作空 items
 func TestTodoModifyInsertAfter_空Items(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
-	_, err := todoModifyInsertAfter(todos, "t1", nil)
+	_, _, err := todoModifyInsertAfter(todos, "t1", nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -723,7 +754,7 @@ func TestTodoModifyInsertAfter_空Items(t *testing.T) {
 // TestTodoModifyInsertBefore_空Items 测试 insert_before 操作空 items
 func TestTodoModifyInsertBefore_空Items(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, err := todoModifyInsertBefore(todos, "t1", nil)
+	_, _, err := todoModifyInsertBefore(todos, "t1", nil)
 	if err == nil {
 		t.Fatal("期望返回错误，实际为 nil")
 	}
@@ -732,7 +763,7 @@ func TestTodoModifyInsertBefore_空Items(t *testing.T) {
 // TestTodoModifyInsertAfter_不存在的目标 测试 insert_after 操作不存在的目标
 func TestTodoModifyInsertAfter_不存在的目标(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusInProgress}}
-	_, err := todoModifyInsertAfter(todos, "nonexistent", []map[string]any{
+	_, _, err := todoModifyInsertAfter(todos, "nonexistent", []map[string]any{
 		{"id": "t2", "content": "任务2", "status": "pending"},
 	})
 	if err == nil {
@@ -743,7 +774,7 @@ func TestTodoModifyInsertAfter_不存在的目标(t *testing.T) {
 // TestTodoModifyInsertBefore_不存在的目标 测试 insert_before 操作不存在的目标
 func TestTodoModifyInsertBefore_不存在的目标(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, err := todoModifyInsertBefore(todos, "nonexistent", []map[string]any{
+	_, _, err := todoModifyInsertBefore(todos, "nonexistent", []map[string]any{
 		{"id": "t2", "content": "任务2", "status": "pending"},
 	})
 	if err == nil {
@@ -754,7 +785,7 @@ func TestTodoModifyInsertBefore_不存在的目标(t *testing.T) {
 // TestTodoModifyUpdate_无效状态 测试 update 操作无效状态
 func TestTodoModifyUpdate_无效状态(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1", Status: hschema.TodoStatusPending}}
-	_, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"id": "t1", "status": "invalid_status"},
 	})
 	if err == nil {
@@ -765,7 +796,7 @@ func TestTodoModifyUpdate_无效状态(t *testing.T) {
 // TestTodoModifyUpdate_缺少ID 测试 update 操作缺少 ID
 func TestTodoModifyUpdate_缺少ID(t *testing.T) {
 	todos := []hschema.TodoItem{{ID: "t1"}}
-	_, err := todoModifyUpdate(todos, []map[string]any{
+	_, _, err := todoModifyUpdate(todos, []map[string]any{
 		{"status": "completed"},
 	})
 	if err == nil {
@@ -789,8 +820,8 @@ func TestNewTodoCreateTool_Invoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Fatal("期望 success=true")
+	if _, ok := result["message"].(string); !ok {
+		t.Fatal("期望 message 字段存在且为字符串")
 	}
 }
 
@@ -859,9 +890,9 @@ func TestNewTodoListTool_Invoke(t *testing.T) {
 
 	// 预写数据
 	items := []hschema.TodoItem{
-		{ID: "t1", Content: "任务1", Status: hschema.TodoStatusInProgress},
-		{ID: "t2", Content: "任务2", Status: hschema.TodoStatusPending},
-		{ID: "t3", Content: "任务3", Status: hschema.TodoStatusCompleted},
+		{ID: "t1", Content: "任务1", ActiveForm: "执行任务1", Description: "描述1", Status: hschema.TodoStatusInProgress},
+		{ID: "t2", Content: "任务2", ActiveForm: "执行任务2", Description: "描述2", Status: hschema.TodoStatusPending},
+		{ID: "t3", Content: "任务3", ActiveForm: "执行任务3", Description: "描述3", Status: hschema.TodoStatusCompleted},
 	}
 	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
 
@@ -870,24 +901,28 @@ func TestNewTodoListTool_Invoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Fatal("期望 success=true")
+	if _, ok := result["tasks"]; !ok {
+		t.Fatal("期望 tasks 字段存在")
 	}
 }
 
 // TestNewTodoListTool_Invoke_空列表 测试 TodoListTool 空列表
+// 需要预写空数组，因为 LoadTodos 文件不存在时返回错误
 func TestNewTodoListTool_Invoke_空列表(t *testing.T) {
 	fs := NewMockFsOperation()
 	lockMgr := NewTodoLockManager()
 	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
-	tl := NewTodoListTool(todoTool, "cn", "agent1")
 
+	// 预写空数组
+	_ = todoTool.SaveTodos(context.Background(), "sess1", nil)
+
+	tl := NewTodoListTool(todoTool, "cn", "agent1")
 	result, err := tl.Invoke(context.Background(), map[string]any{}, tool.WithToolSession(&mockSession{sessionID: "sess1"}))
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Fatal("期望 success=true")
+	if _, ok := result["tasks"]; !ok {
+		t.Fatal("期望 tasks 字段存在")
 	}
 }
 
@@ -897,7 +932,7 @@ func TestNewTodoGetTool_Invoke(t *testing.T) {
 	lockMgr := NewTodoLockManager()
 	todoTool := newTodoTool("/tmp/workspace", fs, lockMgr)
 
-	items := []hschema.TodoItem{{ID: "t1", Content: "任务1", Status: hschema.TodoStatusPending}}
+	items := []hschema.TodoItem{{ID: "t1", Content: "任务1", ActiveForm: "执行任务1", Description: "描述1", Status: hschema.TodoStatusPending}}
 	_ = todoTool.SaveTodos(context.Background(), "sess1", items)
 
 	tl := NewTodoGetTool(todoTool, "cn", "agent1")
@@ -905,8 +940,8 @@ func TestNewTodoGetTool_Invoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Invoke 返回错误: %v", err)
 	}
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Fatal("期望 success=true")
+	if _, ok := result["todo"]; !ok {
+		t.Fatal("期望 todo 字段存在")
 	}
 }
 
@@ -952,8 +987,8 @@ func TestNewTodoModifyTool_Invoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update 操作返回错误: %v", err)
 	}
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Fatal("期望 success=true")
+	if _, ok := result["message"].(string); !ok {
+		t.Fatal("期望 message 字段存在且为字符串")
 	}
 
 	// cancel
@@ -1013,7 +1048,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 		"action": "insert_after",
 		"todo_data": map[string]any{
 			"target_id": "t1",
-			"items":     []any{map[string]any{"id": "t2", "content": "插入任务", "status": "pending"}},
+			"items":     []any{map[string]any{"id": "t2", "content": "插入任务", "activeForm": "执行插入", "description": "插入描述", "status": "pending"}},
 		},
 	}, sessOpt)
 	if err != nil {
@@ -1026,7 +1061,7 @@ func TestNewTodoModifyTool_InsertActions(t *testing.T) {
 		"action": "insert_before",
 		"todo_data": map[string]any{
 			"target_id": "t3",
-			"items":     []any{map[string]any{"id": "t2b", "content": "前插任务", "status": "pending"}},
+			"items":     []any{map[string]any{"id": "t2b", "content": "前插任务", "activeForm": "执行前插", "description": "前插描述", "status": "pending"}},
 		},
 	}, sessOpt)
 	if err != nil {

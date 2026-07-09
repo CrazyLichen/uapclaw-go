@@ -8,18 +8,6 @@ import (
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// OperationMode 操作模式枚举
-type OperationMode int
-
-const (
-	// OperationModeLocal 本地执行模式
-	OperationModeLocal OperationMode = 0
-	// OperationModeSandbox 沙箱执行模式
-	OperationModeSandbox OperationMode = 1
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseOperation 操作基类，所有子操作（fs/shell/code）的公共父类。
@@ -34,6 +22,18 @@ type BaseOperation struct {
 	// runConfig 运行配置（LocalWorkConfig 或 SandboxGatewayConfig）
 	runConfig any
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// OperationMode 操作模式枚举
+type OperationMode int
+
+const (
+	// OperationModeLocal 本地执行模式
+	OperationModeLocal OperationMode = 0
+	// OperationModeSandbox 沙箱执行模式
+	OperationModeSandbox OperationMode = 1
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -131,15 +131,15 @@ func (b *BaseOperation) createSysOperationEvent(
 	execTimeMs float64,
 ) map[string]any {
 	return map[string]any{
-		"module_id":       "sys_operation",
-		"module_name":     "sys_operation",
-		"operation_name":  b.name,
-		"operation_mode":  b.mode.String(),
-		"operation_desc":  b.description,
-		"event_type":      eventType,
-		"method_name":     methodName,
-		"method_params":   methodParams,
-		"method_result":   methodResult,
+		"module_id":           "sys_operation",
+		"module_name":         "sys_operation",
+		"operation_name":      b.name,
+		"operation_mode":      b.mode.String(),
+		"operation_desc":      b.description,
+		"event_type":          eventType,
+		"method_name":         methodName,
+		"method_params":       methodParams,
+		"method_result":       methodResult,
 		"method_exec_time_ms": execTimeMs,
 	}
 }

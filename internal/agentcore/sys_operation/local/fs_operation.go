@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -391,11 +391,11 @@ func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, ta
 			ch <- result.UploadFileStreamResult{
 				BaseResult: result.BaseResult{Code: 0, Message: "success"},
 				Data: &result.UploadFileChunkData{
-					LocalPath:    resolvedLocal,
-					TargetPath:   resolvedTarget,
-					ChunkSize:    len(chunk),
-					ChunkIndex:   index,
-					IsLastChunk:  isLast,
+					LocalPath:   resolvedLocal,
+					TargetPath:  resolvedTarget,
+					ChunkSize:   len(chunk),
+					ChunkIndex:  index,
+					IsLastChunk: isLast,
 				},
 			}
 
@@ -512,11 +512,11 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 			ch <- result.DownloadFileStreamResult{
 				BaseResult: result.BaseResult{Code: 0, Message: "success"},
 				Data: &result.DownloadFileChunkData{
-					SourcePath:   resolvedSource,
-					LocalPath:    localPath,
-					ChunkSize:    len(chunk),
-					ChunkIndex:   index,
-					IsLastChunk:  isLast,
+					SourcePath:  resolvedSource,
+					LocalPath:   localPath,
+					ChunkSize:   len(chunk),
+					ChunkIndex:  index,
+					IsLastChunk: isLast,
 				},
 			}
 
@@ -785,18 +785,6 @@ func (f *FsOperation) resolvePath(path string, createParent bool) (string, error
 	return resolved, nil
 }
 
-// expandUser 展开 ~ 为用户主目录
-func expandUser(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
-}
-
 // listItems 列出文件/目录项
 func (f *FsOperation) listItems(ctx context.Context, path string, dirsOnly bool, o *sysop.FsOptions) (*result.ListFilesResult, error) {
 	resolvedPath, err := f.resolvePath(path, false)
@@ -917,6 +905,18 @@ func (f *FsOperation) createErrorResult(methodName string, errMsg string, startT
 			errMsg,
 		),
 	}
+}
+
+// expandUser 展开 ~ 为用户主目录
+func expandUser(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return filepath.Join(home, path[2:])
+	}
+	return path
 }
 
 // parsePermissions 将权限字符串（如 "644"）解析为 os.FileMode。

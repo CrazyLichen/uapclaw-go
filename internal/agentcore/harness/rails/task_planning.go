@@ -33,6 +33,9 @@ type deepStateLoader interface {
 	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
 
+// TaskPlanningOption TaskPlanningRail 构造选项函数。
+type TaskPlanningOption func(*TaskPlanningRail)
+
 // TaskPlanningRail 任务规划 Rail，注册 todo 工具并提供 7 个钩子。
 //
 // 负责五件事：
@@ -90,9 +93,6 @@ var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 var taskPlanLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TaskPlanningOption TaskPlanningRail 构造选项函数。
-type TaskPlanningOption func(*TaskPlanningRail)
 
 // WithEnableProgressRepeat 设置是否注入周期性进度提醒。
 func WithEnableProgressRepeat(enable bool) TaskPlanningOption {

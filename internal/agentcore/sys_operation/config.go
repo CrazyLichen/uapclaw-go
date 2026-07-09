@@ -2,21 +2,6 @@ package sys_operation
 
 import "fmt"
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ContainerScope 容器作用域枚举。
-// 对齐 Python ContainerScope：SYSTEM, SESSION, CUSTOM。
-type ContainerScope int
-
-const (
-	// ContainerScopeSystem 系统级容器
-	ContainerScopeSystem ContainerScope = 0
-	// ContainerScopeSession 会话级容器
-	ContainerScopeSession ContainerScope = 1
-	// ContainerScopeCustom 自定义容器
-	ContainerScopeCustom ContainerScope = 2
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // LocalWorkConfig 本地工作目录配置，控制 Shell 命令执行的安全边界。
@@ -49,6 +34,21 @@ type SandboxGatewayConfig struct {
 	// TimeoutSeconds 超时时间（秒）
 	TimeoutSeconds float64 `yaml:"timeout_seconds" json:"timeout_seconds"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ContainerScope 容器作用域枚举。
+// 对齐 Python ContainerScope：SYSTEM, SESSION, CUSTOM。
+type ContainerScope int
+
+const (
+	// ContainerScopeSystem 系统级容器
+	ContainerScopeSystem ContainerScope = 0
+	// ContainerScopeSession 会话级容器
+	ContainerScopeSession ContainerScope = 1
+	// ContainerScopeCustom 自定义容器
+	ContainerScopeCustom ContainerScope = 2
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

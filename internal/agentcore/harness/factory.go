@@ -27,6 +27,30 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// freeSearchDDGEnabledEnv 免费搜索 DDG 启用环境变量
+	// 对齐 Python: _FREE_SEARCH_DDG_ENABLED_ENV
+	freeSearchDDGEnabledEnv = "FREE_SEARCH_DDG_ENABLED"
+	// freeSearchBingEnabledEnv 免费搜索 Bing 启用环境变量
+	// 对齐 Python: _FREE_SEARCH_BING_ENABLED_ENV
+	freeSearchBingEnabledEnv = "FREE_SEARCH_BING_ENABLED"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// paidSearchAPIKeyEnvs 付费搜索 API Key 环境变量列表
+	// 对齐 Python: _PAID_SEARCH_API_KEY_ENVS
+	paidSearchAPIKeyEnvs = []string{
+		"PERPLEXITY_API_KEY",
+		"BOCHA_API_KEY",
+		"JINA_API_KEY",
+		"SERPER_API_KEY",
+	}
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateDeepAgent 创建并配置 DeepAgent 实例。
@@ -157,6 +181,34 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	return agent, nil
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。
+// 对齐 Python: is_free_search_enabled() (web_tools.py line 444)
+func IsFreeSearchEnabled() bool {
+	return envFlag(freeSearchDDGEnabledEnv, false) || envFlag(freeSearchBingEnabledEnv, false)
+}
+
+// IsPaidSearchEnabled 检查是否至少配置一个付费搜索 API Key。
+// 对齐 Python: is_paid_search_enabled() (web_tools.py line 452)
+func IsPaidSearchEnabled() bool {
+	for _, key := range paidSearchAPIKeyEnvs {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// ResetFreeSearchRuntimeFlags 重置免费搜索运行时标志为禁用。
+//
+// 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
+// 对应 Python: reset_free_search_runtime_flags()
+func ResetFreeSearchRuntimeFlags() {
+	os.Setenv(freeSearchDDGEnabledEnv, "false")
+	os.Setenv(freeSearchBingEnabledEnv, "false")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // normalizeTools 将 ToolCard 列表和 Tool 实例列表统一规范化，
@@ -184,30 +236,6 @@ func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (norm
 	return
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// freeSearchDDGEnabledEnv 免费搜索 DDG 启用环境变量
-	// 对齐 Python: _FREE_SEARCH_DDG_ENABLED_ENV
-	freeSearchDDGEnabledEnv = "FREE_SEARCH_DDG_ENABLED"
-	// freeSearchBingEnabledEnv 免费搜索 Bing 启用环境变量
-	// 对齐 Python: _FREE_SEARCH_BING_ENABLED_ENV
-	freeSearchBingEnabledEnv = "FREE_SEARCH_BING_ENABLED"
-)
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// paidSearchAPIKeyEnvs 付费搜索 API Key 环境变量列表
-	// 对齐 Python: _PAID_SEARCH_API_KEY_ENVS
-	paidSearchAPIKeyEnvs = []string{
-		"PERPLEXITY_API_KEY",
-		"BOCHA_API_KEY",
-		"JINA_API_KEY",
-		"SERPER_API_KEY",
-	}
-)
-
 // isDisabledFreeSearchTool 检查工具是否为被禁用的 free_search 工具。
 // 对齐 Python: _is_disabled_free_search_tool(tool)
 func isDisabledFreeSearchTool(card *tool.ToolCard) bool {
@@ -218,32 +246,6 @@ func isDisabledFreeSearchTool(card *tool.ToolCard) bool {
 		return false
 	}
 	return !IsFreeSearchEnabled()
-}
-
-// IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。
-// 对齐 Python: is_free_search_enabled() (web_tools.py line 444)
-func IsFreeSearchEnabled() bool {
-	return envFlag(freeSearchDDGEnabledEnv, false) || envFlag(freeSearchBingEnabledEnv, false)
-}
-
-// IsPaidSearchEnabled 检查是否至少配置一个付费搜索 API Key。
-// 对齐 Python: is_paid_search_enabled() (web_tools.py line 452)
-func IsPaidSearchEnabled() bool {
-	for _, key := range paidSearchAPIKeyEnvs {
-		if strings.TrimSpace(os.Getenv(key)) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// ResetFreeSearchRuntimeFlags 重置免费搜索运行时标志为禁用。
-//
-// 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
-// 对应 Python: reset_free_search_runtime_flags()
-func ResetFreeSearchRuntimeFlags() {
-	os.Setenv(freeSearchDDGEnabledEnv, "false")
-	os.Setenv(freeSearchBingEnabledEnv, "false")
 }
 
 // envFlag 解析布尔型环境变量值，保留空值时的默认值。
@@ -369,7 +371,7 @@ func injectGeneralPurposeSubagent(
 		),
 		SystemPrompt:      systemPrompt,
 		Tools:             toolCards,
-		ToolInstances:      toolInstances,
+		ToolInstances:     toolInstances,
 		Mcps:              mcps,
 		Model:             model,
 		Rails:             gpRails,
@@ -602,11 +604,11 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		return hconfig.CreateDeepAgentParams{}
 	}
 	return hconfig.CreateDeepAgentParams{
-		Model:         kwargs.Model,
-		Card:          kwargs.Card,
-		SystemPrompt:  kwargs.SystemPrompt,
-		ToolCards:     kwargs.Tools,         // ToolCard 列表，注册到 AbilityManager 提供 schema
-		ToolInstances: kwargs.ToolInstances, // Tool 实例列表，注册到 resource_mgr
+		Model:                  kwargs.Model,
+		Card:                   kwargs.Card,
+		SystemPrompt:           kwargs.SystemPrompt,
+		ToolCards:              kwargs.Tools,         // ToolCard 列表，注册到 AbilityManager 提供 schema
+		ToolInstances:          kwargs.ToolInstances, // Tool 实例列表，注册到 resource_mgr
 		Mcps:                   kwargs.Mcps,
 		Rails:                  kwargs.Rails,
 		EnableTaskLoop:         kwargs.EnableTaskLoop,

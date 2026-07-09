@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -195,7 +195,7 @@ func (c *CodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts
 					BaseResult: result.BaseResult{Code: 0, Message: "success"},
 					Data: &result.ExecuteCodeChunkData{
 						ChunkIndex: chunkIndex,
-						ExitCode:  &event.ExitCode,
+						ExitCode:   &event.ExitCode,
 					},
 				}
 				return
@@ -283,15 +283,6 @@ func (c *CodeOperation) buildSubprocessCmd(code string, language string, forceFi
 	}
 }
 
-// getDefaultCmdLimit 获取当前平台的命令行长度限制。
-// 对齐 Python：Windows = 8000，Unix = 100000。
-func getDefaultCmdLimit() int {
-	if runtime.GOOS == "windows" {
-		return windowsCmdLimit
-	}
-	return unixCmdLimit
-}
-
 // prepareCodeEnv 准备代码执行环境变量。
 // 对齐 Python 中的 PYTHONIOENCODING/PYTHONUTF8/NODE_DISABLE_COLORS。
 func (c *CodeOperation) prepareCodeEnv(customEnv map[string]string, language string) []string {
@@ -312,6 +303,15 @@ func (c *CodeOperation) prepareCodeEnv(customEnv map[string]string, language str
 	}
 
 	return env
+}
+
+// getDefaultCmdLimit 获取当前平台的命令行长度限制。
+// 对齐 Python：Windows = 8000，Unix = 100000。
+func getDefaultCmdLimit() int {
+	if runtime.GOOS == "windows" {
+		return windowsCmdLimit
+	}
+	return unixCmdLimit
 }
 
 // init 注册到 GlobalRegistry

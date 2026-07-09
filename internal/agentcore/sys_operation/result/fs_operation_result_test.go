@@ -93,10 +93,10 @@ func TestFileSystemData_构造(t *testing.T) {
 // TestSearchFilesData_构造 测试 SearchFilesData 构造
 func TestSearchFilesData_构造(t *testing.T) {
 	data := SearchFilesData{
-		TotalMatches:   1,
-		MatchingFiles:  []FileSystemItem{{Name: "found.txt", Path: "/tmp/found.txt"}},
-		SearchPath:     "/tmp",
-		SearchPattern:  "*.txt",
+		TotalMatches:    1,
+		MatchingFiles:   []FileSystemItem{{Name: "found.txt", Path: "/tmp/found.txt"}},
+		SearchPath:      "/tmp",
+		SearchPattern:   "*.txt",
 		ExcludePatterns: []string{"*.log"},
 	}
 	if data.TotalMatches != 1 {

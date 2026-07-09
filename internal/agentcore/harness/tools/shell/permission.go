@@ -45,23 +45,23 @@ var bashFileOpCommands = map[string]bool{
 // bash 已知安全命令集
 // 对齐 Python: _KNOWN_SAFE_COMMANDS (bash/_permission.py L49-75)
 var bashKnownSafeCommands = map[string]bool{
-	// search
+	// 搜索命令
 	"find": true, "grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true, "ack": true,
 	"locate": true, "which": true, "whereis": true, "type": true, "command": true,
-	// read
+	// 读取命令
 	"cat": true, "head": true, "tail": true, "less": true, "more": true, "wc": true, "stat": true,
 	"file": true, "strings": true, "jq": true, "yq": true, "awk": true, "gawk": true, "cut": true,
 	"sort": true, "uniq": true, "tr": true, "tee": true, "od": true, "xxd": true, "hexdump": true,
 	"sha256sum": true, "sha1sum": true, "md5sum": true, "md5": true, "shasum": true,
-	// list
+	// 列表命令
 	"ls": true, "tree": true, "du": true, "df": true, "lsof": true,
-	// neutral
+	// 中性命令
 	"echo": true, "printf": true, "true": true, "false": true, ":": true, "test": true, "[": true,
-	// silent / file ops
+	// 静默/文件操作命令
 	"mkdir": true, "touch": true, "rm": true, "rmdir": true, "mv": true, "cp": true,
 	"sed": true, "chmod": true, "chown": true, "chgrp": true, "ln": true,
 	"cd": true, "export": true, "unset": true, "source": true, ".": true, "wait": true, "pushd": true, "popd": true,
-	// common dev tools
+	// 常用开发工具
 	"git": true, "python": true, "python3": true, "pip": true, "pip3": true, "uv": true,
 	"node": true, "npm": true, "npx": true, "yarn": true, "pnpm": true,
 	"make": true, "cmake": true, "cargo": true, "go": true, "java": true, "javac": true, "mvn": true, "gradle": true,
@@ -105,27 +105,27 @@ var psKnownSafeCommands = map[string]bool{
 // NewPermissionConfig 创建权限配置
 func NewPermissionConfig(mode PermissionMode, denyPatterns, allowPatterns []string) PermissionConfig {
 	return PermissionConfig{
-		Mode:           mode,
-		DenyPatterns:   CompilePatterns(denyPatterns),
-		AllowPatterns:  CompilePatterns(allowPatterns),
+		Mode:          mode,
+		DenyPatterns:  CompilePatterns(denyPatterns),
+		AllowPatterns: CompilePatterns(allowPatterns),
 	}
 }
 
 // CheckPermission 5层权限检查管道。
 // 对齐 Python: check_permission (bash/_permission.py L94-155)
-// Layer 1: BYPASS → 直接放行
-// Layer 2: denyPatterns → 任一 segment 命中任一 pattern → 拒绝
-// Layer 3: allowPatterns → 任一 pattern 命中整个命令 → 放行
-// Layer 4: READ_ONLY 模式 → 每个 segment 必须属于只读命令集
-// Layer 4: ACCEPT_EDITS 模式 → 每个 segment 必须在文件操作或已知安全命令集中
-// Layer 5: AUTO 模式 → advisory only (bash), 直接放行 (powershell)
+// 第一层: BYPASS → 直接放行
+// 第二层: denyPatterns → 任一 segment 命中任一 pattern → 拒绝
+// 第三层: allowPatterns → 任一 pattern 命中整个命令 → 放行
+// 第四层: READ_ONLY 模式 → 每个 segment 必须属于只读命令集
+// 第四层: ACCEPT_EDITS 模式 → 每个 segment 必须在文件操作或已知安全命令集中
+// 第五层: AUTO 模式 → bash 仅建议性检查，powershell 直接放行
 func CheckPermission(command string, config PermissionConfig, isPowerShell bool) (bool, string) {
-	// Layer 1: bypass
+	// 第一层：绕过
 	if config.Mode == PermissionModeBypass {
 		return true, ""
 	}
 
-	// Layer 2: deny patterns (checked against each sub-command)
+	// 第二层：拒绝模式（逐个子命令检查）
 	if len(config.DenyPatterns) > 0 {
 		for _, segment := range SplitPipeline(command, isPowerShell) {
 			for _, pattern := range config.DenyPatterns {
@@ -136,7 +136,7 @@ func CheckPermission(command string, config PermissionConfig, isPowerShell bool)
 		}
 	}
 
-	// Layer 3: allow patterns (any match → allow whole command)
+	// 第三层：允许模式（任一匹配 → 放行整条命令）
 	if len(config.AllowPatterns) > 0 {
 		for _, pattern := range config.AllowPatterns {
 			if pattern.MatchString(command) {
@@ -145,7 +145,7 @@ func CheckPermission(command string, config PermissionConfig, isPowerShell bool)
 		}
 	}
 
-	// Layer 4: mode-specific check
+	// 第四层：模式特定检查
 	if config.Mode == PermissionModeReadOnly {
 		if IsReadOnlyCommand(command, isPowerShell) {
 			return true, ""
@@ -173,11 +173,11 @@ func CheckPermission(command string, config PermissionConfig, isPowerShell bool)
 		return true, ""
 	}
 
-	// Layer 5 (AUTO mode): advisory only for bash, direct allow for powershell
+	// 第五层（AUTO 模式）：bash 仅建议性检查，powershell 直接放行
 	if isPowerShell {
 		return true, ""
 	}
-	// bash AUTO: pipeline sub-command validation (advisory, always allow)
+	// bash AUTO：管道子命令验证（建议性，始终放行）
 	return true, ""
 }
 

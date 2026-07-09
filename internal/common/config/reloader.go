@@ -26,7 +26,7 @@ type Reloader struct {
 	debounce time.Duration          // 防抖间隔
 	handlers []func(map[string]any) // 变更回调列表
 	done     chan struct{}          // 监听协程退出信号
-	started  bool                  // 是否已启动
+	started  bool                   // 是否已启动
 }
 
 // ──────────────────────────── 常量 ────────────────────────────

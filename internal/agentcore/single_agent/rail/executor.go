@@ -8,13 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// logComponent 日志组件标识
-	logComponent = logger.ComponentAgentCore
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // RailExecutor @rail 装饰器的 Go 等价：将函数包裹在 before/after/on_exception 钩子中。
@@ -49,6 +42,13 @@ type RailExecutor struct {
 	// OnException 方法异常时触发的事件（空字符串表示不触发）
 	OnException interfaces.AgentCallbackEvent
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentAgentCore
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 var (

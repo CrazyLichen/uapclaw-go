@@ -141,7 +141,7 @@ type EvalSet struct {
 
 // GradingExpectation 单条 assertion 的评分结果。
 type GradingExpectation struct {
-	// Text assertion 原文
+	// Text 断言原文
 	Text string `json:"text"`
 	// Passed 是否通过
 	Passed bool `json:"passed"`
@@ -197,7 +197,7 @@ type BenchmarkRun struct {
 	PassRate float64 `json:"pass_rate"`
 	// TimeSeconds 耗时秒
 	TimeSeconds float64 `json:"time_seconds"`
-	// Tokens token 数
+	// Tokens token 数量
 	Tokens int `json:"tokens"`
 	// Expectations 期望详情列表
 	Expectations []map[string]any `json:"expectations"`
@@ -342,11 +342,11 @@ const (
 var (
 	// AllowedFrontmatterKeys SKILL.md 允许的 frontmatter 键集合
 	AllowedFrontmatterKeys = map[string]bool{
-		"name":        true,
-		"description": true,
-		"license":     true,
+		"name":          true,
+		"description":   true,
+		"license":       true,
 		"allowed-tools": true,
-		"metadata":    true,
+		"metadata":      true,
 		"compatibility": true,
 	}
 
@@ -457,24 +457,24 @@ var (
 func NewSkillDevState(taskID string) *SkillDevState {
 	now := nowISO()
 	return &SkillDevState{
-		TaskID:           taskID,
-		Stage:            SkillDevStageInit,
-		Mode:             SkillDevTaskModeCreate,
-		Iteration:        0,
-		Input:            make(map[string]any),
-		ReferenceTexts:   []string{},
-		ExistingSkillMD:  nil,
-		Plan:             nil,
-		PlanConfirmedAt:  nil,
-		Evals:            nil,
-		EvalResults:      nil,
-		FeedbackHistory:  []map[string]any{},
+		TaskID:             taskID,
+		Stage:              SkillDevStageInit,
+		Mode:               SkillDevTaskModeCreate,
+		Iteration:          0,
+		Input:              make(map[string]any),
+		ReferenceTexts:     []string{},
+		ExistingSkillMD:    nil,
+		Plan:               nil,
+		PlanConfirmedAt:    nil,
+		Evals:              nil,
+		EvalResults:        nil,
+		FeedbackHistory:    []map[string]any{},
 		DescOptimizeResult: nil,
-		ZipPath:          nil,
-		ZipSize:          0,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		Error:            nil,
+		ZipPath:            nil,
+		ZipSize:            0,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		Error:              nil,
 	}
 }
 
@@ -552,11 +552,11 @@ func (s *SkillDevState) ToStatusDict() map[string]any {
 // ToDict 序列化 EvalCase 为字典。
 func (e *EvalCase) ToDict() map[string]any {
 	return map[string]any{
-		"id":             e.ID,
-		"prompt":         e.Prompt,
+		"id":              e.ID,
+		"prompt":          e.Prompt,
 		"expected_output": e.ExpectedOutput,
-		"files":          e.Files,
-		"expectations":   e.Expectations,
+		"files":           e.Files,
+		"expectations":    e.Expectations,
 	}
 }
 

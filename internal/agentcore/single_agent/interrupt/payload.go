@@ -10,7 +10,7 @@ package interrupt
 type PayloadEntry struct {
 	// InnerID 内部工具调用 ID
 	InnerID string
-	// Payload payload 对象，可能的类型：
+	// Payload 负载对象，可能的类型：
 	//   - *ToolCallInterruptRequest
 	//   - *stream.OutputSchema（子 Agent 中断）
 	Payload any

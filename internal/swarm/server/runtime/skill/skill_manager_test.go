@@ -509,11 +509,11 @@ func TestHandleSkillsInstalled_有插件(t *testing.T) {
 	// 添加插件到状态
 	sm.mu.Lock()
 	sm.addInstalledPlugin(map[string]any{
-		"name":        "test-plugin",
-		"marketplace": "test-market",
-		"version":     "1.0.0",
-		"commit":      "abc123",
-		"source":      "test-market",
+		"name":         "test-plugin",
+		"marketplace":  "test-market",
+		"version":      "1.0.0",
+		"commit":       "abc123",
+		"source":       "test-market",
 		"installed_at": "2025-01-01T00:00:00Z",
 	})
 	sm.saveState()
@@ -1821,7 +1821,7 @@ func TestHandleSkillsImportLocal_强制覆盖(t *testing.T) {
 
 	// 强制导入
 	result, _ = sm.HandleSkillsImportLocal(context.Background(), map[string]any{
-		"path": srcDir,
+		"path":  srcDir,
 		"force": true,
 	})
 	if toBool(result["success"]) != true {
@@ -2273,7 +2273,7 @@ func TestHandleSkillsInstall_force覆盖(t *testing.T) {
 
 	// force 时应成功（但 gitPull 未实现，不会影响 copy 逻辑）
 	result, _ = sm.HandleSkillsInstall(context.Background(), map[string]any{
-		"spec": "my-plugin@test-market",
+		"spec":  "my-plugin@test-market",
 		"force": true,
 	})
 	if toBool(result["success"]) != true {

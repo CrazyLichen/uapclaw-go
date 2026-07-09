@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -169,10 +169,10 @@ func (s *ShellOperation) ExecuteCmd(ctx context.Context, command string, opts ..
 		return createErrResult(fmt.Sprintf("execution error: %s", invokeData.Exception),
 			&result.ExecuteCmdData{
 				Command:  command,
-				Cwd:     actualCwd,
+				Cwd:      actualCwd,
 				ExitCode: &invokeData.ExitCode,
-				Stdout:  invokeData.Stdout,
-				Stderr:  invokeData.Stderr,
+				Stdout:   invokeData.Stdout,
+				Stderr:   invokeData.Stderr,
 			}), nil
 	}
 
@@ -181,10 +181,10 @@ func (s *ShellOperation) ExecuteCmd(ctx context.Context, command string, opts ..
 		BaseResult: result.BaseResult{Code: 0, Message: "Command executed successfully"},
 		Data: &result.ExecuteCmdData{
 			Command:  command,
-			Cwd:     actualCwd,
+			Cwd:      actualCwd,
 			ExitCode: &exitCode,
-			Stdout:  invokeData.Stdout,
-			Stderr:  invokeData.Stderr,
+			Stdout:   invokeData.Stdout,
+			Stderr:   invokeData.Stderr,
 		},
 	}
 
@@ -269,7 +269,7 @@ func (s *ShellOperation) ExecuteCmdStream(ctx context.Context, command string, o
 					BaseResult: result.BaseResult{Code: 0, Message: "Command executed successfully"},
 					Data: &result.ExecuteCmdChunkData{
 						ChunkIndex: chunkIndex,
-						ExitCode:  &event.ExitCode,
+						ExitCode:   &event.ExitCode,
 					},
 				}
 				return
@@ -349,8 +349,8 @@ func (s *ShellOperation) ExecuteCmdBackground(ctx context.Context, command strin
 		BaseResult: result.BaseResult{Code: 0, Message: "Background command started successfully"},
 		Data: &result.ExecuteCmdBackgroundData{
 			Command: command,
-			Cwd:    actualCwd,
-			Pid:    &pid,
+			Cwd:     actualCwd,
+			Pid:     &pid,
 		},
 	}, nil
 }
@@ -402,6 +402,51 @@ func (s *ShellOperation) ListTools() []*tool.ToolCard {
 			nil,
 		),
 	}
+}
+
+// WriteStdin 向后台进程写入标准输入。
+// 对齐 Python ShellOperation.write_stdin：通过 ShellProcessRegistry 查找进程并写入 stdin。
+func (s *ShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	if sessionID == "" {
+		return &result.ExecuteCmdResult{
+			BaseResult: result.BuildOperationErrorResult(
+				exception.StatusSysOperationShellExecutionError.Code(),
+				"write_stdin: session_id can not be empty",
+			),
+		}, nil
+	}
+	// 当前实现：ShellProcessRegistry 追踪的是 *os.Process，没有 stdin pipe 引用。
+	// 返回未实现错误，待后续迭代补充 stdin pipe 追踪。
+	return nil, fmt.Errorf("未实现: WriteStdin（需补充 stdin pipe 追踪）")
+}
+
+// KillProcess 终止指定后台进程。
+// 对齐 Python ShellOperation.kill_process：通过 ShellProcessRegistry 查找并终止进程。
+func (s *ShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	if sessionID == "" {
+		return &result.ExecuteCmdResult{
+			BaseResult: result.BuildOperationErrorResult(
+				exception.StatusSysOperationShellExecutionError.Code(),
+				"kill_process: session_id can not be empty",
+			),
+		}, nil
+	}
+	_ = sysop.KillShellProcessesForSession(sessionID)
+	return &result.ExecuteCmdResult{
+		BaseResult: result.BaseResult{Code: 0, Message: "Process killed successfully"},
+		Data: &result.ExecuteCmdData{
+			ExitCode: intPtr(0),
+		},
+	}, nil
+}
+
+// ListProcesses 列出所有后台进程。
+// 对齐 Python ShellOperation.list_processes：返回 ShellProcessRegistry 中当前所有进程信息。
+func (s *ShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	// 当前实现：ShellProcessRegistry 未暴露列举接口，返回空列表。
+	return &result.ExecuteCmdResult{
+		BaseResult: result.BaseResult{Code: 0, Message: "ListProcesses not fully implemented"},
+	}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -538,6 +583,8 @@ func (s *ShellOperation) resolveExecutionPlan(command string, shellType sysop.Sh
 	}
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // envMapToSlice 环境变量 map → slice
 func envMapToSlice(env map[string]string) []string {
 	slice := make([]string, 0, len(env))
@@ -553,51 +600,6 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen]
-}
-
-// WriteStdin 向后台进程写入标准输入。
-// 对齐 Python ShellOperation.write_stdin：通过 ShellProcessRegistry 查找进程并写入 stdin。
-func (s *ShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
-	if sessionID == "" {
-		return &result.ExecuteCmdResult{
-			BaseResult: result.BuildOperationErrorResult(
-				exception.StatusSysOperationShellExecutionError.Code(),
-				"write_stdin: session_id can not be empty",
-			),
-		}, nil
-	}
-	// 当前实现：ShellProcessRegistry 追踪的是 *os.Process，没有 stdin pipe 引用。
-	// 返回未实现错误，待后续迭代补充 stdin pipe 追踪。
-	return nil, fmt.Errorf("未实现: WriteStdin（需补充 stdin pipe 追踪）")
-}
-
-// KillProcess 终止指定后台进程。
-// 对齐 Python ShellOperation.kill_process：通过 ShellProcessRegistry 查找并终止进程。
-func (s *ShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
-	if sessionID == "" {
-		return &result.ExecuteCmdResult{
-			BaseResult: result.BuildOperationErrorResult(
-				exception.StatusSysOperationShellExecutionError.Code(),
-				"kill_process: session_id can not be empty",
-			),
-		}, nil
-	}
-	_ = sysop.KillShellProcessesForSession(sessionID)
-	return &result.ExecuteCmdResult{
-		BaseResult: result.BaseResult{Code: 0, Message: "Process killed successfully"},
-		Data: &result.ExecuteCmdData{
-			ExitCode: intPtr(0),
-		},
-	}, nil
-}
-
-// ListProcesses 列出所有后台进程。
-// 对齐 Python ShellOperation.list_processes：返回 ShellProcessRegistry 中当前所有进程信息。
-func (s *ShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
-	// 当前实现：ShellProcessRegistry 未暴露列举接口，返回空列表。
-	return &result.ExecuteCmdResult{
-		BaseResult: result.BaseResult{Code: 0, Message: "ListProcesses not fully implemented"},
-	}, nil
 }
 
 // intPtr 返回 int 的指针

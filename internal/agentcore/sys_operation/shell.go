@@ -8,25 +8,30 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ShellType Shell 类型枚举
-type ShellType int
-
-const (
-	// ShellTypeAuto 自动检测
-	ShellTypeAuto ShellType = 0
-	// ShellTypeCmd Windows 命令提示符
-	ShellTypeCmd ShellType = 1
-	// ShellTypePowerShell Windows PowerShell
-	ShellTypePowerShell ShellType = 2
-	// ShellTypeBash Bash Shell
-	ShellTypeBash ShellType = 3
-	// ShellTypeSh POSIX Shell
-	ShellTypeSh ShellType = 4
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// ShellOperation Shell 操作接口，定义命令执行等操作。
+// 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
+// write_stdin, kill_process, list_processes, list_tools。
+type ShellOperation interface {
+	// ExecuteCmd 执行 Shell 命令
+	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// ExecuteCmdStream 流式执行 Shell 命令，返回命令输出块通道
+	ExecuteCmdStream(ctx context.Context, command string, opts ...ShellOption) (<-chan result.ExecuteCmdStreamResult, error)
+	// ExecuteCmdBackground 后台执行 Shell 命令，立即返回进程 PID
+	ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdBackgroundResult, error)
+	// WriteStdin 向后台进程写入标准输入。
+	// 对齐 Python ShellOperation.write_stdin。
+	WriteStdin(ctx context.Context, sessionID string, data string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// KillProcess 终止指定后台进程。
+	// 对齐 Python ShellOperation.kill_process。
+	KillProcess(ctx context.Context, sessionID string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// ListProcesses 列出所有后台进程。
+	// 对齐 Python ShellOperation.list_processes。
+	ListProcesses(ctx context.Context, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// ListTools 返回 Shell 操作的工具卡片列表
+	ListTools() []*tool.ToolCard
+}
 
 // ShellOption Shell 操作选项函数
 type ShellOption func(*ShellOptions)
@@ -51,28 +56,23 @@ type BaseShellOperation struct {
 	BaseOperation
 }
 
-// ShellOperation Shell 操作接口，定义命令执行等操作。
-// 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
-// write_stdin, kill_process, list_processes, list_tools。
-type ShellOperation interface {
-	// ExecuteCmd 执行 Shell 命令
-	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
-	// ExecuteCmdStream 流式执行 Shell 命令，返回命令输出块通道
-	ExecuteCmdStream(ctx context.Context, command string, opts ...ShellOption) (<-chan result.ExecuteCmdStreamResult, error)
-	// ExecuteCmdBackground 后台执行 Shell 命令，立即返回进程 PID
-	ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdBackgroundResult, error)
-	// WriteStdin 向后台进程写入标准输入。
-	// 对齐 Python ShellOperation.write_stdin。
-	WriteStdin(ctx context.Context, sessionID string, data string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
-	// KillProcess 终止指定后台进程。
-	// 对齐 Python ShellOperation.kill_process。
-	KillProcess(ctx context.Context, sessionID string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
-	// ListProcesses 列出所有后台进程。
-	// 对齐 Python ShellOperation.list_processes。
-	ListProcesses(ctx context.Context, opts ...ShellOption) (*result.ExecuteCmdResult, error)
-	// ListTools 返回 Shell 操作的工具卡片列表
-	ListTools() []*tool.ToolCard
-}
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ShellType Shell 类型枚举
+type ShellType int
+
+const (
+	// ShellTypeAuto 自动检测
+	ShellTypeAuto ShellType = 0
+	// ShellTypeCmd Windows 命令提示符
+	ShellTypeCmd ShellType = 1
+	// ShellTypePowerShell Windows PowerShell
+	ShellTypePowerShell ShellType = 2
+	// ShellTypeBash Bash Shell
+	ShellTypeBash ShellType = 3
+	// ShellTypeSh POSIX Shell
+	ShellTypeSh ShellType = 4
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

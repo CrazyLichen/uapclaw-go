@@ -34,9 +34,9 @@ func TestNormalizeSkillConfigs_正常输入(t *testing.T) {
 // TestNormalizeSkillConfigs_空名称 验证空名称被跳过
 func TestNormalizeSkillConfigs_空名称(t *testing.T) {
 	raw := map[string]any{
-		"":    map[string]any{"enabled": true},
-		"  ":  map[string]any{"enabled": true},
-		"ok":  map[string]any{"enabled": true},
+		"":   map[string]any{"enabled": true},
+		"  ": map[string]any{"enabled": true},
+		"ok": map[string]any{"enabled": true},
 	}
 	result := NormalizeSkillConfigs(raw)
 	if len(result) != 1 {

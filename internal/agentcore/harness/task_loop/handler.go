@@ -17,13 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-const (
-	// defaultAutoInvokeDelay 自动 invoke 延迟秒数，对齐 Python: delay=0.5
-	defaultAutoInvokeDelay = 0.5
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TaskLoopEventHandler 任务循环事件处理器。
@@ -53,6 +46,11 @@ type TaskLoopEventHandler struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// defaultAutoInvokeDelay 自动 invoke 延迟秒数，对齐 Python: delay=0.5
+	defaultAutoInvokeDelay = 0.5
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

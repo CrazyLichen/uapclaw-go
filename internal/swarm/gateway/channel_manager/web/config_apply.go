@@ -29,13 +29,18 @@ type ConfigInternalError struct {
 
 // ──────────────────────────── 常量 ────────────────────────────
 
+// logComponentConfigApply 本文件日志组件
+const logComponentConfigApply = logger.ComponentGateway
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // configYAMLKeys 需要写入 config.yaml 的配置键集合。
 // 对齐 Python: _CONFIG_YAML_KEYS (app_web_handlers.py L371-377)。
 var configYAMLKeys = map[string]bool{
-	"context_engine_enabled":   true,
-	"kv_cache_affinity_enabled": true,
-	"permissions_enabled":      true,
-	"memory_forbidden_enabled":  true,
+	"context_engine_enabled":       true,
+	"kv_cache_affinity_enabled":    true,
+	"permissions_enabled":          true,
+	"memory_forbidden_enabled":     true,
 	"memory_forbidden_description": true,
 }
 
@@ -50,11 +55,6 @@ var availableModelProviders = []string{
 	"InferenceAffinity",
 	"intelli_router",
 }
-
-// logComponentConfigApply 本文件日志组件
-const logComponentConfigApply = logger.ComponentGateway
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -376,16 +376,16 @@ func buildModelsDefaultsFromFrontend(rawModels any) ([]map[string]any, error) {
 		entry := map[string]any{
 			"model_client_config": map[string]any{
 				"model_name":      modelName,
-				"api_base":         apiBase,
-				"api_key":          apiKey,
-				"client_provider":  modelProvider,
-				"timeout":          timeout,
+				"api_base":        apiBase,
+				"api_key":         apiKey,
+				"client_provider": modelProvider,
+				"timeout":         timeout,
 			},
 			"model_config_obj": map[string]any{
 				"temperature": temperature,
 			},
-			"is_default":  isDefault,
-			"alias":       alias,
+			"is_default": isDefault,
+			"alias":      alias,
 		}
 		if originIndex != nil {
 			entry["origin_index"] = originIndex

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/dlclark/regexp2"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -62,7 +62,8 @@ var (
 
 	// sudoNeedsNRe 匹配需要注入 -n 的 sudo。
 	// 对齐 Python: _SUDO_NEEDS_N_RE (bash/_tool.py L47-49)
-	sudoNeedsNRe = regexp.MustCompile(`\bsudo\b(?!(?:\s+-[a-zA-Z]*n|\s+--non-interactive))(?=\s)`)
+	// 使用 regexp2 支持 Perl lookahead 语法 (?!...) 和 (?=...)
+	sudoNeedsNRe = regexp2.MustCompile(`\bsudo\b(?!(?:\s+-[a-zA-Z]*n|\s+--non-interactive))(?=\s)`, 0)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -272,7 +273,11 @@ func NewBashTool(op sys_operation.SysOperation, language, agentID string, permCo
 // makeSudoNoninteractive 注入 sudo -n 标志，让 sudo 非交互失败而非挂起等密码。
 // 对齐 Python: _make_sudo_noninteractive (bash/_tool.py L52-54)
 func makeSudoNoninteractive(command string) string {
-	return sudoNeedsNRe.ReplaceAllString(command, "sudo -n")
+	result, err := sudoNeedsNRe.Replace(command, "sudo -n", 0, -1)
+	if err != nil {
+		return command
+	}
+	return result
 }
 
 // resolveBashTimeout 解析并钳制超时值。

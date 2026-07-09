@@ -21,11 +21,11 @@ type mockSysOperation struct {
 	codeOp  CodeOperation
 }
 
-func (m *mockSysOperation) Card() *SysOperationCard          { return m.card }
-func (m *mockSysOperation) Fs() FsOperation                  { return m.fsOp }
-func (m *mockSysOperation) Shell() ShellOperation            { return m.shellOp }
-func (m *mockSysOperation) Code() CodeOperation              { return m.codeOp }
-func (m *mockSysOperation) IsolationKeyTemplate() string     { return "" }
+func (m *mockSysOperation) Card() *SysOperationCard      { return m.card }
+func (m *mockSysOperation) Fs() FsOperation              { return m.fsOp }
+func (m *mockSysOperation) Shell() ShellOperation        { return m.shellOp }
+func (m *mockSysOperation) Code() CodeOperation          { return m.codeOp }
+func (m *mockSysOperation) IsolationKeyTemplate() string { return "" }
 
 // mockFsOperation 用于测试的 FsOperation 模拟实现
 type mockFsOperation struct{}
@@ -250,10 +250,10 @@ func TestDispatchShellMethod_带选项(t *testing.T) {
 	ctx := context.Background()
 
 	res, err := dispatchShellMethod(shellOp, ctx, "execute_cmd", map[string]any{
-		"command":     "ls",
-		"cwd":         "/tmp",
-		"timeout":     float64(60),
-		"shell_type":  "bash",
+		"command":    "ls",
+		"cwd":        "/tmp",
+		"timeout":    float64(60),
+		"shell_type": "bash",
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)

@@ -119,8 +119,8 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 			return map[string]any{
 				"success": success,
 				"data": map[string]any{
-					"stdout":   res.Data.Stdout,
-					"stderr":   res.Data.Stderr,
+					"stdout":    res.Data.Stdout,
+					"stderr":    res.Data.Stderr,
 					"exit_code": exitCode,
 				},
 				"error": errMsg,
@@ -135,8 +135,8 @@ func NewCodeTool(op sys_operation.SysOperation, language, agentID string) tool.T
 		return map[string]any{
 			"success": false,
 			"data": map[string]any{
-				"stdout":   "",
-				"stderr":   "",
+				"stdout":    "",
+				"stderr":    "",
 				"exit_code": -1,
 			},
 		}, nil

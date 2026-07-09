@@ -3,6 +3,8 @@ package shell
 import (
 	"regexp"
 	"strings"
+
+	"github.com/dlclark/regexp2"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -15,7 +17,8 @@ var (
 	// errorActionRe 匹配 -ErrorAction <value>
 	errorActionRe = regexp.MustCompile(`(?i)-ErrorAction\s+\S+`)
 	// pathFlagRe 匹配 -Path 或 -LiteralPath 参数
-	pathFlagRe = regexp.MustCompile(`(?i)-(?:Path|LiteralPath)\s+(["\']?)(.+?)\1(?:\s|$)`)
+	// 使用 regexp2 支持 Perl backreference 语法 \1
+	pathFlagRe = regexp2.MustCompile(`(?i)-(?:Path|LiteralPath)\s+(["\']?)(.+?)\1(?:\s|$)`, 0)
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -107,13 +110,16 @@ func ParsePSRemoveTargets(command string) []string {
 	rest = stripErrorAction(rest)
 
 	// 处理 -Path 或 -LiteralPath 命名参数
-	pathMatch := pathFlagRe.FindStringSubmatch(rest)
-	if pathMatch != nil {
-		path := strings.TrimSpace(pathMatch[2])
-		if strings.ContainsAny(path, "*?[") {
-			return nil
+	pathMatch, err := pathFlagRe.FindStringMatch(rest)
+	if err == nil && pathMatch != nil {
+		group2 := pathMatch.GroupByNumber(2)
+		if group2 != nil {
+			path := strings.TrimSpace(group2.String())
+			if strings.ContainsAny(path, "*?[") {
+				return nil
+			}
+			return []string{path}
 		}
-		return []string{path}
 	}
 
 	// 位置参数路径

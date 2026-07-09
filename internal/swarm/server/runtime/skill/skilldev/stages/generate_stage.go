@@ -11,6 +11,11 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// GenerateStageHandler GENERATE 阶段：Agent 按 plan 生成完整 skill 文件集。
+type GenerateStageHandler struct{}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // GenerateSystemPrompt GENERATE 阶段 Agent 系统 Prompt。
@@ -73,11 +78,6 @@ ALWAYS use this exact template:
 除了说明 skill 做什么，还要列举具体触发场景，即使用户没有明确提到 skill 名称。
 `
 
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// GenerateStageHandler GENERATE 阶段：Agent 按 plan 生成完整 skill 文件集。
-type GenerateStageHandler struct{}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 GENERATE 阶段逻辑。
@@ -106,11 +106,11 @@ func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 
 	sctx.Emit(skilldev.SkillDevEventTypeArtifactReady, map[string]any{
 		"artifact": map[string]any{
-			"id":          "skill_files",
-			"name":        skillName,
-			"type":        "skill_md",
-			"files":       generatedFiles,
-			"browsable":   true,
+			"id":           "skill_files",
+			"name":         skillName,
+			"type":         "skill_md",
+			"files":        generatedFiles,
+			"browsable":    true,
 			"downloadable": false,
 		},
 	})

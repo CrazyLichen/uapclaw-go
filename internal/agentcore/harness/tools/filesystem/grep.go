@@ -517,7 +517,7 @@ func buildSelectStringCommand(
 	// 构建管道
 	var pipeline []string
 
-	// Stage 1: 文件枚举 + VCS 排除
+	// 第一阶段：文件枚举 + VCS 排除
 	isFile := false
 	if fi, err := os.Stat(path); err == nil && !fi.IsDir() {
 		isFile = true
@@ -529,7 +529,7 @@ func buildSelectStringCommand(
 		pipeline = append(pipeline, fmt.Sprintf("Where-Object { $_.FullName -notmatch %s }", vcsPat))
 	}
 
-	// Stage 2: glob 过滤
+	// 第二阶段：glob 过滤
 	if len(expandedGlobs) > 0 && !isFile {
 		conds := make([]string, len(expandedGlobs))
 		for i, p := range expandedGlobs {
@@ -538,7 +538,7 @@ func buildSelectStringCommand(
 		pipeline = append(pipeline, fmt.Sprintf("Where-Object { %s }", strings.Join(conds, " -or ")))
 	}
 
-	// Stage 3: Select-String
+	// 第三阶段：Select-String
 	csFlag := " -CaseSensitive"
 	if caseInsensitive {
 		csFlag = ""
@@ -549,7 +549,7 @@ func buildSelectStringCommand(
 	}
 	pipeline = append(pipeline, fmt.Sprintf("Select-String -Pattern %s%s%s", sq(pattern), csFlag, ctxFlag))
 
-	// Stage 4: 输出格式化
+	// 第四阶段：输出格式化
 	switch outputMode {
 	case "files_with_matches":
 		pipeline = append(pipeline, "Select-Object -ExpandProperty Path -Unique")
@@ -676,10 +676,10 @@ func buildStructuredOutput(
 	content := strings.Join(finalLines, "\n")
 
 	data := map[string]any{
-		"stdout":  content,
-		"stderr":  stderr,
-		"exit_code": exitCode,
-		"mode":    outputMode,
+		"stdout":        content,
+		"stderr":        stderr,
+		"exit_code":     exitCode,
+		"mode":          outputMode,
 		"appliedOffset": nil,
 		"appliedLimit":  nil,
 	}

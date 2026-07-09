@@ -252,8 +252,8 @@ func TestBuildSysOperation_未提供时创建默认(t *testing.T) {
 	result, err := buildSysOperation(card, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// 返回的是 BaseSysOperation 桩实例
-	_, ok := result.(*sysop.BaseSysOperation)
+	// 返回的是 LocalSysOperation 实例
+	_, ok := result.(*sysop.LocalSysOperation)
 	assert.True(t, ok)
 }
 

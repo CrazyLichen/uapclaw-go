@@ -357,6 +357,59 @@ func (p *Param) String() string {
 	return fmt.Sprintf("%s(%s, required=%v)", p.Name, p.Type, p.Required)
 }
 
+// ParseJSONSchemaMap 将 JSON Schema dict 转换为 []*Param。
+//
+// 输入格式为 MetadataProvider.GetInputParams() 返回的 map[string]any，
+// 即标准 JSON Schema object 定义。
+//
+// 对应 Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
+// Go 因 ToolCard.InputParams 类型为 []*Param 需要此转换。
+func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
+	// 1. 校验顶层 type == "object"
+	typ, _ := schemaMap["type"].(string)
+	if typ != "object" {
+		return nil, fmt.Errorf("schema must have type 'object', got %q", typ)
+	}
+
+	// 2. 提取 properties
+	propsVal, ok := schemaMap["properties"].(map[string]any)
+	if !ok || propsVal == nil {
+		return nil, nil
+	}
+
+	// 3. 提取 required set（支持 []any 和 []string）
+	requiredSet := make(map[string]bool)
+	if req, ok := schemaMap["required"]; ok {
+		switch r := req.(type) {
+		case []any:
+			for _, v := range r {
+				if s, ok := v.(string); ok {
+					requiredSet[s] = true
+				}
+			}
+		case []string:
+			for _, s := range r {
+				requiredSet[s] = true
+			}
+		}
+	}
+
+	// 4. 遍历 properties，调用 parsePropertyToParam
+	params := make([]*Param, 0, len(propsVal))
+	for name, prop := range propsVal {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("property %q is not a map", name)
+		}
+		p, err := parsePropertyToParam(name, propMap, requiredSet)
+		if err != nil {
+			return nil, err
+		}
+		params = append(params, p)
+	}
+	return params, nil
+}
+
 // MarshalJSON 实现 json.Marshaler 接口，处理 NaN 值的 Minimum/Maximum。
 // NaN 表示未设置，不输出到 JSON；非 NaN（包括 0）正常输出。
 func (p *Param) MarshalJSON() ([]byte, error) {
@@ -518,59 +571,6 @@ func paramToSchema(p *Param) map[string]any {
 		s["oneOf"] = items
 	}
 	return s
-}
-
-// ParseJSONSchemaMap 将 JSON Schema dict 转换为 []*Param。
-//
-// 输入格式为 MetadataProvider.GetInputParams() 返回的 map[string]any，
-// 即标准 JSON Schema object 定义。
-//
-// 对应 Python: 无直接等价物（Python ToolCard.input_params 直接用 Dict[str, Any]）。
-// Go 因 ToolCard.InputParams 类型为 []*Param 需要此转换。
-func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
-	// 1. 校验顶层 type == "object"
-	typ, _ := schemaMap["type"].(string)
-	if typ != "object" {
-		return nil, fmt.Errorf("schema must have type 'object', got %q", typ)
-	}
-
-	// 2. 提取 properties
-	propsVal, ok := schemaMap["properties"].(map[string]any)
-	if !ok || propsVal == nil {
-		return nil, nil
-	}
-
-	// 3. 提取 required set（支持 []any 和 []string）
-	requiredSet := make(map[string]bool)
-	if req, ok := schemaMap["required"]; ok {
-		switch r := req.(type) {
-		case []any:
-			for _, v := range r {
-				if s, ok := v.(string); ok {
-					requiredSet[s] = true
-				}
-			}
-		case []string:
-			for _, s := range r {
-				requiredSet[s] = true
-			}
-		}
-	}
-
-	// 4. 遍历 properties，调用 parsePropertyToParam
-	params := make([]*Param, 0, len(propsVal))
-	for name, prop := range propsVal {
-		propMap, ok := prop.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("property %q is not a map", name)
-		}
-		p, err := parsePropertyToParam(name, propMap, requiredSet)
-		if err != nil {
-			return nil, err
-		}
-		params = append(params, p)
-	}
-	return params, nil
 }
 
 // parsePropertyToParam 将单个 JSON Schema 属性定义解析为 *Param。

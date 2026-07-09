@@ -17,9 +17,10 @@ import (
 //   - 子 Agent 调用 InitCwd 创建新 CwdState + WithCwdState 派生新 ctx，父不受影响
 //
 // 三层 CWD 模型：
-//   Layer 1 — projectRoot:  项目身份锚点（设置一次，沙箱边界依据）
-//   Layer 2 — originalCwd:  会话起始点（worktree 退出时的恢复目标）
-//   Layer 3 — cwd:          当前工作目录（高频更新，所有工具的路径锚点）
+//
+//	Layer 1 — projectRoot:  项目身份锚点（设置一次，沙箱边界依据）
+//	Layer 2 — originalCwd:  会话起始点（worktree 退出时的恢复目标）
+//	Layer 3 — cwd:          当前工作目录（高频更新，所有工具的路径锚点）
 //
 // 并发安全：所有字段读写通过 sync.RWMutex 保护。
 // Python 不需要锁因为 asyncio 是单线程协程。
@@ -32,11 +33,13 @@ type CwdState struct {
 	teamWorkspace string
 }
 
-// cwdOption InitCwd 的选项函数。
-type cwdOption func(s *CwdState)
-
 // cwdStateKeyType CwdState 的 context key 类型。
 type cwdStateKeyType struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// cwdOption InitCwd 的选项函数。
+type cwdOption func(s *CwdState)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -158,9 +161,9 @@ func GetTeamWorkspace(ctx context.Context) string {
 // 对齐 Python: ShellOperation._resolve_cwd(cwd) (shell_operation.py:864-874)
 //
 // 解析优先级：
-//   1. explicitCwd 非空且为绝对路径 → 直接使用（resolve）
-//   2. explicitCwd 非空且为相对路径 → 基于 GetCwd(ctx) 解析
-//   3. explicitCwd 为空 → 使用 GetCwd(ctx)
+//  1. explicitCwd 非空且为绝对路径 → 直接使用（resolve）
+//  2. explicitCwd 非空且为相对路径 → 基于 GetCwd(ctx) 解析
+//  3. explicitCwd 为空 → 使用 GetCwd(ctx)
 func ResolveCwd(ctx context.Context, explicitCwd string) string {
 	if explicitCwd == "" {
 		return GetCwd(ctx)

@@ -17,8 +17,8 @@ import (
 	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
