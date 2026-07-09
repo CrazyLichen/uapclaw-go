@@ -235,6 +235,23 @@ const (
 	// ReqMethodPluginsReload 重载插件
 	ReqMethodPluginsReload ReqMethod = "plugins.reload"
 
+	// ─── 技能开发 ───
+
+	// ReqMethodSkilldevStart 启动技能开发任务
+	ReqMethodSkilldevStart ReqMethod = "skilldev.start"
+	// ReqMethodSkilldevRespond 响应挂起点确认
+	ReqMethodSkilldevRespond ReqMethod = "skilldev.respond"
+	// ReqMethodSkilldevStatus 查询技能开发状态
+	ReqMethodSkilldevStatus ReqMethod = "skilldev.status"
+	// ReqMethodSkilldevDownload 下载技能开发产物
+	ReqMethodSkilldevDownload ReqMethod = "skilldev.download"
+	// ReqMethodSkilldevCancel 取消技能开发任务
+	ReqMethodSkilldevCancel ReqMethod = "skilldev.cancel"
+	// ReqMethodSkilldevFileList 获取工作区文件列表
+	ReqMethodSkilldevFileList ReqMethod = "skilldev.file.list"
+	// ReqMethodSkilldevFileRead 读取工作区文件内容
+	ReqMethodSkilldevFileRead ReqMethod = "skilldev.file.read"
+
 	// ─── 扩展 ───
 
 	// ReqMethodExtensionsList 扩展列表
@@ -480,6 +497,14 @@ func AllReqMethods() []ReqMethod {
 		ReqMethodPluginsEnable,
 		ReqMethodPluginsDisable,
 		ReqMethodPluginsReload,
+		// 技能开发
+		ReqMethodSkilldevStart,
+		ReqMethodSkilldevRespond,
+		ReqMethodSkilldevStatus,
+		ReqMethodSkilldevDownload,
+		ReqMethodSkilldevCancel,
+		ReqMethodSkilldevFileList,
+		ReqMethodSkilldevFileRead,
 		// 扩展
 		ReqMethodExtensionsList,
 		ReqMethodExtensionsImport,
