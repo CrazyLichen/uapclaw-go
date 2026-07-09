@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -92,7 +91,7 @@ const (
 // 扫描 ~/.uapclaw/agent/sessions/ 目录，读取每个子目录的 metadata.json，
 // 按 last_message_at 降序排列，返回会话列表。
 func (s *AgentServer) handleSessionList(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	sessionsDir := workspace.AgentSessionsDir()
+	sessionsDir := s.sessionsDir
 
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
@@ -185,7 +184,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 	}
 
 	// 读取当前 metadata
-	sessionsDir := workspace.AgentSessionsDir()
+	sessionsDir := s.sessionsDir
 	meta := readSessionMetadata(sessionsDir, target)
 
 	// title 为 nil：查询模式
@@ -289,7 +288,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		), nil
 	}
 
-	sessionsDir := workspace.AgentSessionsDir()
+	sessionsDir := s.sessionsDir
 	sessionDir := filepath.Join(sessionsDir, params.SessionID)
 
 	if err := os.RemoveAll(sessionDir); err != nil {
@@ -344,7 +343,7 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 		sessionID = makeSessionID()
 	}
 
-	sessionsDir := workspace.AgentSessionsDir()
+	sessionsDir := s.sessionsDir
 	sessionDir := filepath.Join(sessionsDir, sessionID)
 
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {

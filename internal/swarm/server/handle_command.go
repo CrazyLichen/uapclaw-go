@@ -1,0 +1,211 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/version"
+	pathutil "github.com/uapclaw/uapclaw-go/internal/common/utils/path"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+)
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// handleCommandAddDir 处理 command.add_dir 请求。写入受信目录配置，返回 ok=true。
+func (s *AgentServer) handleCommandAddDir(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 解析 params 获取目录路径
+	var params struct {
+		Dir string `json:"dir"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("request_id", request.RequestID).
+				Msg("command.add_dir 参数解析失败")
+		}
+	}
+
+	if params.Dir != "" && s.config != nil {
+		// 将目录添加到 trusted_directories 配置
+		trustedDirs := s.config.Get("trusted_directories")
+		var dirs []string
+		if arr, ok := trustedDirs.([]any); ok {
+			for _, d := range arr {
+				if s, ok := d.(string); ok {
+					dirs = append(dirs, s)
+				}
+			}
+		}
+		dirs = append(dirs, params.Dir)
+		if err := s.config.Set("trusted_directories", dirs); err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("request_id", request.RequestID).
+				Str("dir", params.Dir).
+				Msg("写入受信目录配置失败")
+			return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+				schema.WithResponseOK(false),
+				schema.WithPayload(map[string]any{
+					"error": map[string]any{
+						"code":    "CONFIG_WRITE_ERROR",
+						"message": "写入受信目录配置失败",
+					},
+				}),
+			), nil
+		}
+	}
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"ok": true,
+		}),
+	), nil
+}
+
+// handleCommandChrome 处理 command.chrome 请求。空操作，返回 ok=true。
+func (s *AgentServer) handleCommandChrome(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"ok": true,
+		}),
+	), nil
+}
+
+// handleCommandCompact 处理 command.compact 请求。stub：返回 compressed=false。
+func (s *AgentServer) handleCommandCompact(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"ok":        true,
+			"compressed": false,
+		}),
+	), nil
+}
+
+// handleCommandContext 处理 command.context 请求。stub：返回 usage=0, limit=0。
+func (s *AgentServer) handleCommandContext(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"usage": 0,
+			"limit": 0,
+		}),
+	), nil
+}
+
+// handleCommandRecap 处理 command.recap 请求。stub：返回空回顾。
+func (s *AgentServer) handleCommandRecap(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"recap": "",
+		}),
+	), nil
+}
+
+// handleCommandDiff 处理 command.diff 请求。stub：返回空差异列表。
+func (s *AgentServer) handleCommandDiff(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"diffs": []any{},
+		}),
+	), nil
+}
+
+// handleCommandModel 处理 command.model 请求。stub：从 params 读取 action/model，返回 ok=true。
+func (s *AgentServer) handleCommandModel(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	var params struct {
+		Action string `json:"action"`
+		Model  string `json:"model"`
+	}
+	if request.Params != nil {
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Str("request_id", request.RequestID).
+				Msg("command.model 参数解析失败")
+		}
+	}
+
+	logger.Debug(logComponent).
+		Str("request_id", request.RequestID).
+		Str("action", params.Action).
+		Str("model", params.Model).
+		Msg("command.model 请求")
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"ok": true,
+		}),
+	), nil
+}
+
+// handleCommandMCP 处理 command.mcp 请求。stub：返回空服务器列表。
+func (s *AgentServer) handleCommandMCP(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"servers": []any{},
+		}),
+	), nil
+}
+
+// handleCommandSandbox 处理 command.sandbox 请求。stub：返回 NOT_IMPLEMENTED。
+func (s *AgentServer) handleCommandSandbox(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return notImplementedResponse(request)
+}
+
+// handleCommandResume 处理 command.resume 请求。stub：返回 ok=true。
+func (s *AgentServer) handleCommandResume(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"ok": true,
+		}),
+	), nil
+}
+
+// handleCommandSession 处理 command.session 请求。stub：返回空 URL。
+func (s *AgentServer) handleCommandSession(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(map[string]any{
+			"url": "",
+		}),
+	), nil
+}
+
+// handleCommandStatus 处理 command.status 请求。返回版本、配置路径、模型信息等诊断信息。
+//
+// 对齐 Python _handle_command_status。
+func (s *AgentServer) handleCommandStatus(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	status := map[string]any{
+		"version":       version.Version,
+		"project_name":  version.ProjectName,
+		"build_info":    version.BuildInfo(),
+		"config_path":   "",
+		"config_dir":    pathutil.ConfigDir(),
+		"workspace_dir": pathutil.WorkspaceDir(),
+		"model_name":    "",
+		"initialized":   pathutil.IsInitialized(),
+	}
+
+	// 从配置读取模型名称
+	if s.config != nil {
+		status["config_path"] = s.config.Path()
+		if modelName := s.config.Get("model.name"); modelName != nil {
+			status["model_name"] = fmt.Sprintf("%v", modelName)
+		}
+	}
+
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithPayload(status),
+	), nil
+}

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -23,28 +22,18 @@ import (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// setupTestSessionsDir 设置测试用的 sessions 目录，返回清理函数。
-func setupTestSessionsDir(t *testing.T) (sessionsDir string, cleanup func()) {
+// setupTestSessionsDir 设置测试用的 sessions 目录，返回（sessionsDir, 设置好 sessionsDir 的 AgentServer, cleanup）。
+func setupTestSessionsDir(t *testing.T) (sessionsDir string, s *AgentServer, cleanup func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	workspaceDir := filepath.Join(tmpDir, ".uapclaw")
-	sessionsDir = filepath.Join(workspaceDir, "agent", "sessions")
+	sessionsDir = filepath.Join(tmpDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
 		t.Fatalf("创建 sessions 目录失败: %v", err)
 	}
-	// 使用 UAPCLAW_DATA_DIR 环境变量直接指定工作区目录
-	origDataDirEnv := os.Getenv(path.EnvDataDir)
-	_ = os.Setenv(path.EnvDataDir, workspaceDir)
-	path.ResetCache()
-	cleanup = func() {
-		if origDataDirEnv != "" {
-			_ = os.Setenv(path.EnvDataDir, origDataDirEnv)
-		} else {
-			_ = os.Unsetenv(path.EnvDataDir)
-		}
-		path.ResetCache()
-	}
-	return sessionsDir, cleanup
+	server, _ := newTestServer()
+	server.SetSessionsDir(sessionsDir)
+	cleanup = func() {}
+	return sessionsDir, server, cleanup
 }
 
 // writeTestMetadata 写入测试用 metadata.json。
@@ -92,10 +81,9 @@ func toSessionSlice(t *testing.T, payload map[string]any) []map[string]any {
 
 // TestHandleSessionList_空目录 验证 sessions 目录不存在时返回空列表。
 func TestHandleSessionList_空目录(t *testing.T) {
-	_, cleanup := setupTestSessionsDir(t)
+	_, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionList, nil)
 
 	resp, err := s.handleSessionList(context.Background(), req)
@@ -113,7 +101,7 @@ func TestHandleSessionList_空目录(t *testing.T) {
 
 // TestHandleSessionList_正常返回 验证扫描 sessions 目录并按 mtime 降序排列。
 func TestHandleSessionList_正常返回(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	// 创建两个会话
@@ -128,7 +116,6 @@ func TestHandleSessionList_正常返回(t *testing.T) {
 		"last_message_at": 2000.0,
 	})
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionList, nil)
 
 	resp, err := s.handleSessionList(context.Background(), req)
@@ -148,7 +135,7 @@ func TestHandleSessionList_正常返回(t *testing.T) {
 
 // TestHandleSessionList_跳过心跳会话 验证 heartbeat_ 前缀的会话被跳过。
 func TestHandleSessionList_跳过心跳会话(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	writeTestMetadata(t, sessionsDir, "heartbeat_task1", map[string]any{
@@ -160,7 +147,6 @@ func TestHandleSessionList_跳过心跳会话(t *testing.T) {
 		"title":      "普通会话",
 	})
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionList, nil)
 
 	resp, err := s.handleSessionList(context.Background(), req)
@@ -178,7 +164,7 @@ func TestHandleSessionList_跳过心跳会话(t *testing.T) {
 
 // TestHandleSessionList_无Metadata 验证无 metadata.json 的会话用默认值。
 func TestHandleSessionList_无Metadata(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	// 创建目录但不写 metadata.json
@@ -186,7 +172,6 @@ func TestHandleSessionList_无Metadata(t *testing.T) {
 		t.Fatalf("创建目录失败: %v", err)
 	}
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionList, nil)
 
 	resp, err := s.handleSessionList(context.Background(), req)
@@ -204,7 +189,7 @@ func TestHandleSessionList_无Metadata(t *testing.T) {
 
 // TestHandleSessionRename_设置标题 验证设置标题。
 func TestHandleSessionRename_设置标题(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	writeTestMetadata(t, sessionsDir, "sess_1", map[string]any{
@@ -213,7 +198,6 @@ func TestHandleSessionRename_设置标题(t *testing.T) {
 		"last_message_at": 1000.0,
 	})
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRename,
 		json.RawMessage(`{"session_id": "sess_1", "title": "新标题"}`))
 
@@ -234,7 +218,7 @@ func TestHandleSessionRename_设置标题(t *testing.T) {
 
 // TestHandleSessionRename_查询标题 验证 title 为 nil 时返回当前标题。
 func TestHandleSessionRename_查询标题(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	writeTestMetadata(t, sessionsDir, "sess_1", map[string]any{
@@ -242,7 +226,6 @@ func TestHandleSessionRename_查询标题(t *testing.T) {
 		"title":      "当前标题",
 	})
 
-	s, _ := newTestServer()
 	// 不传 title 字段 → 查询模式
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRename,
 		json.RawMessage(`{"session_id": "sess_1"}`))
@@ -258,10 +241,9 @@ func TestHandleSessionRename_查询标题(t *testing.T) {
 
 // TestHandleSessionRename_缺少SessionID 验证缺少 session_id 时返回错误。
 func TestHandleSessionRename_缺少SessionID(t *testing.T) {
-	_, cleanup := setupTestSessionsDir(t)
+	_, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionRename,
 		json.RawMessage(`{}`))
 
@@ -276,14 +258,13 @@ func TestHandleSessionRename_缺少SessionID(t *testing.T) {
 
 // TestHandleSessionDelete_正常删除 验证删除会话目录。
 func TestHandleSessionDelete_正常删除(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
 	writeTestMetadata(t, sessionsDir, "sess_del", map[string]any{
 		"session_id": "sess_del",
 	})
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
 		json.RawMessage(`{"session_id": "sess_del"}`))
 
@@ -303,10 +284,9 @@ func TestHandleSessionDelete_正常删除(t *testing.T) {
 
 // TestHandleSessionDelete_缺少SessionID 验证缺少 session_id 时返回错误。
 func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
-	_, cleanup := setupTestSessionsDir(t)
+	_, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionDelete,
 		json.RawMessage(`{}`))
 
@@ -321,10 +301,9 @@ func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
 
 // TestHandleSessionCreate_自动生成ID 验证不传 session_id 时自动生成。
 func TestHandleSessionCreate_自动生成ID(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
 		json.RawMessage(`{}`))
 
@@ -350,10 +329,9 @@ func TestHandleSessionCreate_自动生成ID(t *testing.T) {
 
 // TestHandleSessionCreate_指定ID 验证传入 session_id 时使用指定值。
 func TestHandleSessionCreate_指定ID(t *testing.T) {
-	sessionsDir, cleanup := setupTestSessionsDir(t)
+	sessionsDir, s, cleanup := setupTestSessionsDir(t)
 	defer cleanup()
 
-	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodSessionCreate,
 		json.RawMessage(`{"session_id": "my_custom_id"}`))
 

@@ -6,8 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
@@ -37,6 +36,8 @@ type AgentServer struct {
 	serverReadyMu sync.RWMutex
 	// serverReadyCh 就绪通知通道（close 通知所有等待者）
 	serverReadyCh chan struct{}
+	// sessionsDir Agent 会话目录路径（默认从 workspace 获取，测试时可注入）
+	sessionsDir string
 	// running 是否正在运行
 	running bool
 	// runningMu 保护 running 的读写锁
@@ -61,7 +62,18 @@ func NewAgentServer(cfg *config.Config, transport *gateway_push.ChannelTransport
 		transport:          transport,
 		sessionStreamTasks: make(map[string]context.CancelFunc),
 		serverReadyCh:      make(chan struct{}),
+		sessionsDir:        workspace.AgentSessionsDir(),
 	}
+}
+
+// SetSessionsDir 设置会话目录路径（供测试注入）。
+func (s *AgentServer) SetSessionsDir(dir string) {
+	s.sessionsDir = dir
+}
+
+// SessionsDir 返回会话目录路径。
+func (s *AgentServer) SessionsDir() string {
+	return s.sessionsDir
 }
 
 // Start 启动 AgentServer：初始化 AgentManager → 标记就绪 → 进入消费循环 → 阻塞直到 ctx 取消。
@@ -202,22 +214,3 @@ func (s *AgentServer) cancelAllStreamTasks() {
 	s.sessionStreamTasks = make(map[string]context.CancelFunc)
 }
 
-// handleEnvelope 处理单个 E2A 请求信封。
-// 实际逻辑在 handle_envelope.go 中实现。
-func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvelope) {
-	// 将在 handle_envelope.go 中实现
-	// 当前为占位，直接返回 stub 响应
-	request, err := e2a.E2AToAgentRequest(envelope)
-	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("E2AEnvelope 转换 AgentRequest 失败")
-		return
-	}
-	// stub: 返回简单响应
-	resp := schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithResponseOK(true),
-		schema.WithPayload(map[string]any{"stub": true}),
-	)
-	wire := e2a.EncodeAgentResponseForWire(resp, request.RequestID, 0)
-	e2aResp := e2a.ResponseFromMap(wire)
-	s.transport.RecvCh() <- e2aResp
-}
