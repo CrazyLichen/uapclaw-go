@@ -10,21 +10,22 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── AgentClient 测试 ────────────────────────────
 
 // newTestAgentClientWithTransport 创建测试用 AgentClient 和 ChannelTransport。
 func newTestAgentClientWithTransport() (*AgentClient, *gateway_push.ChannelTransport) {
-	transport := gateway_push.NewChannelTransport()
-	agentClient := NewAgentClient(transport)
-	return agentClient, transport
+	chTransport := gateway_push.NewChannelTransport()
+	agentClient := NewAgentClient(chTransport)
+	return agentClient, chTransport
 }
 
 // TestNewAgentClient 创建 AgentClient 实例
 func TestNewAgentClient(t *testing.T) {
-	transport := gateway_push.NewChannelTransport()
-	ac := NewAgentClient(transport)
+	chTransport := gateway_push.NewChannelTransport()
+	ac := NewAgentClient(chTransport)
 	if ac == nil {
 		t.Fatal("NewAgentClient() 返回 nil，期望非 nil")
 	}
@@ -43,15 +44,15 @@ func TestAgentClient_ServerReady_初始为false(t *testing.T) {
 
 // TestAgentClient_Connect_收到ConnectionAck 收到 connection.ack 后 ServerReady 为 true
 func TestAgentClient_Connect_收到ConnectionAck(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	// 在另一个 goroutine 中模拟 AgentServer 发送 connection.ack
 	go func() {
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		data, _ := json.Marshal(ackFrame)
 		// 短暂等待确保 Connect 已启动 receiverLoop
 		time.Sleep(50 * time.Millisecond)
-		transport.RecvCh() <- data
+		chTransport.RecvCh() <- data
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -94,14 +95,14 @@ func TestAgentClient_Connect_超时不报错(t *testing.T) {
 
 // TestAgentClient_SendRequest_非流式 round-trip 非流式请求
 func TestAgentClient_SendRequest_非流式(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	// 先发送 connection.ack 使 AgentClient 就绪
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		ackData, _ := json.Marshal(ackFrame)
-		transport.RecvCh() <- ackData
+		chTransport.RecvCh() <- ackData
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -117,7 +118,7 @@ func TestAgentClient_SendRequest_非流式(t *testing.T) {
 	go func() {
 		// 从 sendCh 读取请求
 		select {
-		case reqData := <-transport.SendCh():
+		case reqData := <-chTransport.SendCh():
 			var reqMap map[string]any
 			if err := json.Unmarshal(reqData, &reqMap); err != nil {
 				t.Logf("AgentServer 解码请求失败: %v", err)
@@ -134,7 +135,7 @@ func TestAgentClient_SendRequest_非流式(t *testing.T) {
 			}
 			wire := e2a.EncodeAgentResponseForWire(resp, reqID, 0)
 			respData, _ := json.Marshal(wire)
-			transport.RecvCh() <- respData
+			chTransport.RecvCh() <- respData
 		case <-time.After(3 * time.Second):
 			t.Log("AgentServer 等待请求超时")
 		}
@@ -163,13 +164,13 @@ func TestAgentClient_SendRequest_非流式(t *testing.T) {
 
 // TestAgentClient_SendRequest_重复requestID 同一 request_id 重复发送应报错
 func TestAgentClient_SendRequest_重复requestID(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		ackData, _ := json.Marshal(ackFrame)
-		transport.RecvCh() <- ackData
+		chTransport.RecvCh() <- ackData
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -207,14 +208,14 @@ func TestAgentClient_SendRequest_重复requestID(t *testing.T) {
 
 // TestAgentClient_SetServerPushHandler server_push 消息通过 recvCh 到达回调
 func TestAgentClient_SetServerPushHandler(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	// 先发送 connection.ack
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		ackData, _ := json.Marshal(ackFrame)
-		transport.RecvCh() <- ackData
+		chTransport.RecvCh() <- ackData
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -244,7 +245,7 @@ func TestAgentClient_SetServerPushHandler(t *testing.T) {
 		"body": map[string]any{"event": "status_update"},
 	}
 	pushData, _ := json.Marshal(pushMsg)
-	transport.RecvCh() <- pushData
+	chTransport.RecvCh() <- pushData
 
 	// 等待回调触发
 	time.Sleep(200 * time.Millisecond)
@@ -265,13 +266,13 @@ func TestAgentClient_SetServerPushHandler(t *testing.T) {
 
 // TestAgentClient_Disconnect 验证 receiverLoop 停止
 func TestAgentClient_Disconnect(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		ackData, _ := json.Marshal(ackFrame)
-		transport.RecvCh() <- ackData
+		chTransport.RecvCh() <- ackData
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -301,13 +302,13 @@ func TestAgentClient_Disconnect(t *testing.T) {
 
 // TestAgentClient_SendRequestStream_流式 round-trip 流式请求
 func TestAgentClient_SendRequestStream_流式(t *testing.T) {
-	ac, transport := newTestAgentClientWithTransport()
+	ac, chTransport := newTestAgentClientWithTransport()
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		ackFrame := gateway_push.BuildConnectionAckFrame()
+		ackFrame := transport.BuildConnectionAckFrame()
 		ackData, _ := json.Marshal(ackFrame)
-		transport.RecvCh() <- ackData
+		chTransport.RecvCh() <- ackData
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -322,7 +323,7 @@ func TestAgentClient_SendRequestStream_流式(t *testing.T) {
 	// 模拟 AgentServer 处理流式请求
 	go func() {
 		select {
-		case reqData := <-transport.SendCh():
+		case reqData := <-chTransport.SendCh():
 			var reqMap map[string]any
 			if err := json.Unmarshal(reqData, &reqMap); err != nil {
 				t.Logf("AgentServer 解码请求失败: %v", err)
@@ -341,7 +342,7 @@ func TestAgentClient_SendRequestStream_流式(t *testing.T) {
 				}
 				wire := e2a.EncodeAgentChunkForWire(chunk, reqID, i, true)
 				respData, _ := json.Marshal(wire)
-				transport.RecvCh() <- respData
+				chTransport.RecvCh() <- respData
 			}
 		case <-time.After(3 * time.Second):
 			t.Log("AgentServer 等待请求超时")

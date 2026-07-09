@@ -10,7 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -25,7 +25,7 @@ import (
 //   - receiverLoop: 统一消费 transport.Recv()，区分事件帧/server_push/正常响应
 type AgentClient struct {
 	// transport 传输层（byte 管道）
-	transport gateway_push.AgentTransport
+	transport transport.AgentTransport
 	// serverReady AgentServer 是否已发送 connection.ack
 	serverReady bool
 	// serverReadyMu 保护 serverReady
@@ -75,7 +75,7 @@ const logComponentRouting = logger.ComponentGateway
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentClient 创建 AgentServer 客户端实例。
-func NewAgentClient(transport gateway_push.AgentTransport) *AgentClient {
+func NewAgentClient(transport transport.AgentTransport) *AgentClient {
 	return &AgentClient{
 		transport:         transport,
 		messageQueues:     make(map[string]chan map[string]any),
@@ -213,7 +213,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 
 	// 强制非流式（对齐 Python envelope.is_stream = False）
 	envelope.IsStream = false
-	rid := gateway_push.WireRequestIDKey(envelope.RequestID)
+	rid := transport.WireRequestIDKey(envelope.RequestID)
 
 	logger.Info(logComponentRouting).
 		Str("event_type", "E2A_OUT_NOSTREAM").
@@ -274,7 +274,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 
 	// 强制流式（对齐 Python envelope.is_stream = True）
 	envelope.IsStream = true
-	rid := gateway_push.WireRequestIDKey(envelope.RequestID)
+	rid := transport.WireRequestIDKey(envelope.RequestID)
 
 	logger.Info(logComponentRouting).
 		Str("event_type", "E2A_OUT_STREAM").
@@ -320,23 +320,6 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 // 对齐 Python: WebSocketAgentServerClient.set_server_push_handler(handler)
 func (ac *AgentClient) SetServerPushHandler(handler func(msg map[string]any)) {
 	ac.onServerPush = handler
-}
-
-// SendFireAndForget 发送请求但不等待响应（即发即弃）。
-//
-// 用于取消请求等无需等待响应的场景，仅将请求序列化后写入 transport。
-func (ac *AgentClient) SendFireAndForget(ctx context.Context, envelope *e2a.E2AEnvelope) error {
-	data, err := json.Marshal(envelope)
-	if err != nil {
-		return fmt.Errorf("序列化 E2AEnvelope 失败: %w", err)
-	}
-	ac.sendMu.Lock()
-	err = ac.transport.Send(ctx, data)
-	ac.sendMu.Unlock()
-	if err != nil {
-		return fmt.Errorf("发送请求失败: %w", err)
-	}
-	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -436,7 +419,7 @@ func (ac *AgentClient) handleEventFrame(msg map[string]any) {
 //
 // 对齐 Python: _message_receiver_loop 中的 request_id 路由逻辑
 func (ac *AgentClient) routeToQueue(msg map[string]any) {
-	rid := gateway_push.WireRequestIDKey(msg["request_id"])
+	rid := transport.WireRequestIDKey(msg["request_id"])
 
 	ac.messageQueuesMu.Lock()
 	// 检查是否是已取消的请求，静默丢弃消息（对齐 Python）

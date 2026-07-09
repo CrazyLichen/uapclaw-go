@@ -1,19 +1,17 @@
-// Package gateway_push 提供 Gateway ↔ AgentServer 的传输抽象与实现。
+// Package gateway_push 提供 Gateway ↔ AgentServer 的进程内传输实现。
 //
-// 本包定义 AgentTransport 接口（Send/Recv/Close），对齐 Python WebSocket 单连接模型：
-// Send 发送 JSON 字节（对齐 ws.send(json_str)），Recv 返回 JSON 字节接收通道（对齐 ws.recv()）。
-// 不感知 E2A 协议语义，所有协议逻辑在 AgentClient 侧。
-// 进程内实现 ChannelTransport（基于 Go channel），用于 chat/serve/acp/app 等单进程模式。
-// 跨进程模式（WebSocketTransport）将在后续领域实现。
+// 本包提供 ChannelTransport（基于 Go channel），对齐 Python WebSocket 单连接模型。
+// 传输接口定义在 swarm/transport 包（AgentTransport），本包仅提供进程内实现。
+// Wire 编码工具（BuildServerPushWire、BuildConnectionAckFrame、WireRequestIDKey）
+// 也已迁移到 swarm/transport 包。
 //
 // 文件目录：
 //
 //	gateway_push/
 //	├── doc.go                 # 包文档
-//	├── transport.go           # AgentTransport 接口定义
+//	├── transport.go           # 接口合规声明（ChannelTransport 实现 transport.AgentTransport）
 //	├── channel_transport.go   # ChannelTransport 进程内实现
-//	├── wire.go                # server_push wire 编码（对齐 Python gateway_push/wire.py）
-//	└── wire_test.go           # wire 编码测试
+//	└── channel_transport_test.go # ChannelTransport 测试
 //
-// 对应 Python 代码：jiuwenswarm/server/gateway_push/
+// 对应 Python 代码：jiuwenswarm/server/gateway_push/transport.py (进程内路径)
 package gateway_push

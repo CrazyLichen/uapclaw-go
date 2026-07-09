@@ -21,10 +21,10 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, session
 	// 1. 收集该 session 关联的流式任务
 	requestIDs := mh.collectStreamTasksForSession(sessionID)
 
-	// 2. 构造 cancel 请求 → AgentClient.SendFireAndForget
+	// 2. 构造 cancel 请求 → _send_interrupt_to_agent（对齐 Python）
 	if mh.agentClient != nil && mh.agentClient.IsConnected() && len(requestIDs) > 0 {
 		for _, reqID := range requestIDs {
-			mh.sendCancelToAgent(ctx, reqID, sessionID, intent)
+			mh.sendInterruptToAgent(ctx, reqID, sessionID, intent)
 		}
 	}
 
@@ -87,8 +87,10 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 	}
 }
 
-// sendCancelToAgent 发送取消请求到 AgentServer
-func (mh *MessageHandler) sendCancelToAgent(ctx context.Context, requestID, sessionID, intent string) {
+// sendInterruptToAgent 发送中断请求到 AgentServer，等响应后丢弃。
+//
+// 对齐 Python: _send_interrupt_to_agent — 调 send_request 等响应后丢弃。
+func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, requestID, sessionID, intent string) {
 	// 构造 chat.cancel 消息
 	msg := schema.NewReqMessage("", sessionID, schema.ReqMethodChatCancel,
 		nil,
@@ -97,14 +99,21 @@ func (mh *MessageHandler) sendCancelToAgent(ctx context.Context, requestID, sess
 
 	envelope := e2a.MessageToE2AOrFallback(msg)
 	envelope.IsStream = false
-	// 即发即弃发送取消请求（不等待响应）
-	if err := mh.agentClient.SendFireAndForget(ctx, envelope); err != nil {
+
+	resp, err := mh.agentClient.SendRequest(ctx, envelope)
+	if err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "cancel_send_error").
 			Err(err).
 			Str("request_id", requestID).
-			Msg("发送取消请求到 AgentServer 失败")
+			Msg("AgentServer 中断请求失败(忽略)")
+		return
 	}
+	logger.Info(logComponent).
+		Str("event_type", "cancel_response_discarded").
+		Str("request_id", resp.RequestID).
+		Bool("ok", resp.OK).
+		Msg("AgentServer 中断响应(已丢弃)")
 }
 
 // sendInterruptResultNotification 发送 interrupt_result 事件通知
