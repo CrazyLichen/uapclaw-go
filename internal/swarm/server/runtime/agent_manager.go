@@ -45,9 +45,30 @@ func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode stri
 }
 
 // ReloadAgentsConfig 重载 Agent 配置。
-// 对齐 Python AgentManager.reload_agents_config。
-// stub：直接返回 nil。
+// 对齐 Python AgentManager.reload_agents_config (agent_manager.py L308-340)。
+// 当前实现：env 注入 os.environ；agent reload 和 team evolution 标记 TODO。
 func (am *AgentManager) ReloadAgentsConfig(configPayload map[string]any, envOverrides map[string]any) error {
+	// 1. env 注入 os.environ（对齐 Python: for env_key, env_value in env_overrides.items(): os.environ[key] = str(env_value)）
+	for key, val := range envOverrides {
+		s, ok := val.(string)
+		if !ok && val != nil {
+			s = fmt.Sprintf("%v", val)
+		}
+		if val == nil || s == "" {
+			_ = os.Unsetenv(key)
+		} else {
+			_ = os.Setenv(key, s)
+		}
+	}
+
+	// TODO(⤵️ agent reload): 遍历所有 agent 调用 reload_agent_config
+	// 对齐 Python: for channel_id, agents in self.agents.items():
+	//     for _, agent in agents.items():
+	//         await agent.reload_agent_config(config_base=config, env_overrides=env)
+
+	// TODO(⤵️ team evolution): 更新 team evolution config
+	// 对齐 Python: team_manager.update_evolution_config(team_config)
+
 	return nil
 }
 
