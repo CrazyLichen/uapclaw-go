@@ -125,12 +125,10 @@ func TestFsOption_默认值(t *testing.T) {
 func TestShellOption(t *testing.T) {
 	env := map[string]string{"FOO": "bar"}
 	opts := NewShellOptions(
-		WithShellCwd("/tmp"),
 		WithShellTimeout(60),
 		WithShellEnvironment(env),
 		WithShellType(ShellTypeBash),
 	)
-	assert.Equal(t, "/tmp", opts.Cwd)
 	assert.Equal(t, 60, opts.Timeout)
 	assert.Equal(t, env, opts.Environment)
 	assert.Equal(t, ShellTypeBash, opts.ShellType)
@@ -139,7 +137,6 @@ func TestShellOption(t *testing.T) {
 // TestShellOption_默认值 测试 Shell 操作选项默认值
 func TestShellOption_默认值(t *testing.T) {
 	opts := NewShellOptions()
-	assert.Equal(t, "", opts.Cwd)
 	assert.Equal(t, 0, opts.Timeout)
 	assert.Nil(t, opts.Environment)
 	assert.Equal(t, ShellTypeAuto, opts.ShellType)
@@ -154,12 +151,10 @@ func TestCodeOption(t *testing.T) {
 		WithCodeLanguage("python"),
 		WithCodeTimeout(30),
 		WithCodeEnvironment(env),
-		WithCodeCwd("/home/user"),
 	)
 	assert.Equal(t, "python", opts.Language)
 	assert.Equal(t, 30, opts.Timeout)
 	assert.Equal(t, env, opts.Environment)
-	assert.Equal(t, "/home/user", opts.Cwd)
 }
 
 // TestCodeOption_默认值 测试代码执行选项默认值
@@ -168,7 +163,6 @@ func TestCodeOption_默认值(t *testing.T) {
 	assert.Equal(t, "", opts.Language)
 	assert.Equal(t, 0, opts.Timeout)
 	assert.Nil(t, opts.Environment)
-	assert.Equal(t, "", opts.Cwd)
 }
 
 // ──────────────────────────── Base*Operation 桩实现 ────────────────────────────

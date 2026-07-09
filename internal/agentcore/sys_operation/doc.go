@@ -10,7 +10,8 @@
 //	├── doc.go                         # 包文档
 //	├── sys_operation.go               # SysOperation/FsOperation/ShellOperation/CodeOperation 接口 + 枚举 + 结果类型
 //	├── sys_operation_card.go         # SysOperationCard + WorkConfig 类型
-//	└── shell_process_registry.go     # ShellProcessRegistry 会话级进程追踪 + 两阶段终止
+//	├── shell_process_registry.go     # ShellProcessRegistry 会话级进程追踪 + 两阶段终止
+//	└── cwd/                           # CWD 状态管理（三层 CWD 模型 + context 传播）
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/
 package sys_operation

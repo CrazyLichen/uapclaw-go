@@ -186,8 +186,6 @@ type FsOptions struct {
 
 // ShellOptions Shell 操作选项
 type ShellOptions struct {
-	// Cwd 工作目录
-	Cwd string
 	// Timeout 超时时间（秒）
 	Timeout int
 	// Environment 环境变量
@@ -204,8 +202,6 @@ type CodeOptions struct {
 	Timeout int
 	// Environment 环境变量
 	Environment map[string]string
-	// Cwd 工作目录
-	Cwd string
 }
 
 // OperationMode 操作模式枚举
@@ -389,11 +385,6 @@ func WithFsEncoding(encoding string) FsOption {
 	return func(o *FsOptions) { o.Encoding = encoding }
 }
 
-// WithShellCwd 设置 Shell 操作工作目录
-func WithShellCwd(cwd string) ShellOption {
-	return func(o *ShellOptions) { o.Cwd = cwd }
-}
-
 // WithShellTimeout 设置 Shell 操作超时时间
 func WithShellTimeout(timeout int) ShellOption {
 	return func(o *ShellOptions) { o.Timeout = timeout }
@@ -422,11 +413,6 @@ func WithCodeTimeout(timeout int) CodeOption {
 // WithCodeEnvironment 设置代码执行环境变量
 func WithCodeEnvironment(env map[string]string) CodeOption {
 	return func(o *CodeOptions) { o.Environment = env }
-}
-
-// WithCodeCwd 设置代码执行工作目录
-func WithCodeCwd(cwd string) CodeOption {
-	return func(o *CodeOptions) { o.Cwd = cwd }
 }
 
 // NewFsOptions 从选项列表构造 FsOptions
