@@ -1,16 +1,22 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png"  // PNG 解码器注册
+	_ "image/gif"  // GIF 解码器注册
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
+	pdf "github.com/ledongthuc/pdf"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -364,9 +370,10 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 
 // readPDF 读取 PDF 文件。
 // 对齐 Python: ReadFileTool._read_pdf (filesystem.py L547-583)
-// ⤵️ Go 端暂无 pdfplumber 等价库，先用 Fs().ReadFile 读取文本模式
+// 使用 github.com/ledongthuc/pdf 作为 pdfplumber 等价库
 func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string, pages string) (map[string]any, error) {
-	res, err := op.Fs().ReadFile(ctx, filePath)
+	// 以 bytes 模式读取
+	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
 	if err != nil {
 		return nil, fmt.Errorf("读取 PDF 失败: %w", err)
 	}
@@ -374,23 +381,105 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 		return nil, fmt.Errorf("%s", res.Message)
 	}
 
-	content := ""
+	rawContent := ""
 	if res.Data != nil {
-		content = res.Data.Content
+		rawContent = res.Data.Content
 	}
 
-	// ⤵️ 后续补充 PDF 解析：pdfplumber 等价库、页码范围、每页提取文本
+	// base64 解码原始字节（Fs ReadFile bytes 模式返回 base64 编码内容）
+	rawBytes, err := base64.StdEncoding.DecodeString(rawContent)
+	if err != nil {
+		rawBytes = []byte(rawContent)
+	}
+
+	// 打开 PDF
+	reader, err := pdf.NewReader(bytes.NewReader(rawBytes), int64(len(rawBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("解析 PDF 失败: %w", err)
+	}
+
+	totalPages := reader.NumPage()
+
+	// 当文档过长时要求指定页码范围
+	// 对齐 Python L558-564
+	if pages == "" && totalPages > pdfAtMentionInlineThreshold {
+		return nil, fmt.Errorf(
+			"This PDF has %d pages, which is too many to read at once. "+
+				"Use the pages parameter to specify a range (e.g., pages='1-10'). "+
+				"Maximum %d pages per request.",
+			totalPages, pdfMaxPagesPerRead,
+		)
+	}
+
+	// 解析页码范围
+	// 对齐 Python L566-569
+	parsed := parsePDFPageRange(pages, totalPages)
+	if parsed == nil {
+		return nil, fmt.Errorf("Invalid or empty PDF page range: '%s'", pages)
+	}
+	startPg, endPg := parsed[0], parsed[1]
+
+	// 每次最多读取页数检查
+	// 对齐 Python L571-577
+	pageCount := endPg - startPg + 1
+	if pageCount > pdfMaxPagesPerRead {
+		return nil, fmt.Errorf(
+			"Requested %d pages exceeds the maximum of %d pages per read. Narrow the pages parameter range.",
+			pageCount, pdfMaxPagesPerRead,
+		)
+	}
+
+	// 预加载字体缓存（跨页共享）
+	fonts := make(map[string]*pdf.Font)
+
+	// 按页提取文本
+	// 对齐 Python L579-583
+	var parts []string
+	for pageNo := startPg; pageNo <= endPg; pageNo++ {
+		page := reader.Page(pageNo)
+		if page.V.IsNull() {
+			parts = append(parts, fmt.Sprintf("## Page %d\n", pageNo))
+			continue
+		}
+
+		// 缓存当前页字体
+		for _, name := range page.Fonts() {
+			if _, ok := fonts[name]; !ok {
+				f := page.Font(name)
+				fonts[name] = &f
+			}
+		}
+
+		pageText, err := page.GetPlainText(fonts)
+		if err != nil {
+			logger.Debug(logComponent).
+				Str("file_path", filePath).
+				Int("page_no", pageNo).
+				Err(err).
+				Msg("ReadFileTool PDF 页面文本提取失败")
+			pageText = ""
+		}
+
+		// 对齐 Python: parts.append(f"## Page {page_no}\n{page_text}".rstrip())
+		block := fmt.Sprintf("## Page %d\n%s", pageNo, pageText)
+		parts = append(parts, strings.TrimRight(block, " \t\n\r"))
+	}
+
+	content := strings.TrimSpace(strings.Join(parts, "\n\n"))
+
 	logger.Info(logComponent).
 		Str("file_path", filePath).
-		Str("pages", pages).
-		Msg("ReadFileTool PDF 读取（暂用文本模式，后续补充 PDF 解析）")
+		Int("total_pages", totalPages).
+		Int("start_page", startPg).
+		Int("end_page", endPg).
+		Msg("ReadFileTool PDF 读取完成")
 
 	return map[string]any{"content": content}, nil
 }
 
 // readImage 读取图片文件。
 // 对齐 Python: ReadFileTool._read_image (filesystem.py L604-692)
-// ⤵️ Go 端暂无 Pillow 等价缩略图，先返回原始图片 base64
+// 实现缩略图、token 预算检查、图片压缩三级降级策略
 func readImage(ctx context.Context, op sys_operation.SysOperation, filePath string, enableImageMultimodal bool) (map[string]any, error) {
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
@@ -407,13 +496,12 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 
 	// base64 解码原始字节（Fs ReadFile bytes 模式返回 base64 编码内容）
-	rawBytes, err := base64.StdEncoding.DecodeString(rawContent)
+	raw, err := base64.StdEncoding.DecodeString(rawContent)
 	if err != nil {
-		// 如果不是 base64，直接用原始字节
-		rawBytes = []byte(rawContent)
+		raw = []byte(rawContent)
 	}
 
-	if len(rawBytes) == 0 {
+	if len(raw) == 0 {
 		return nil, fmt.Errorf("Image file is empty: %s", filePath)
 	}
 
@@ -422,13 +510,65 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	if imageType == "" {
 		imageType = "png"
 	}
+	var dimensions string
+
+	// Step 1: 标准缩略图 (thumbnail to 1536×1536)
+	// 对齐 Python L619-638
+	resized := raw
+	img, detectedFmt, decodeErr := image.Decode(bytes.NewReader(raw))
+	if decodeErr != nil {
+		logger.Debug(logComponent).
+			Str("file_path", filePath).
+			Err(decodeErr).
+			Msg("ReadFileTool 图片解码失败，使用原始字节")
+	} else {
+		// 检测原始格式并优先使用
+		if detectedFmt != "" {
+			imageType = detectedFmt
+		} else {
+			detectedFormat := detectImageFormat(raw, ext)
+			if detectedFormat != "" {
+				imageType = detectedFormat
+			}
+		}
+		dimensions = fmt.Sprintf("%dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+
+		// 缩略图到 1536×1536
+		thumbnailImg := thumbnailImage(img, 1536, 1536)
+		candidate, encodeErr := encodeImage(thumbnailImg, imageType)
+		if encodeErr == nil && len(candidate) < len(raw) {
+			resized = candidate
+		}
+	}
+
+	// Step 2: token 预算检查 — base64 byte count × 0.125 ≈ tokens
+	// 对齐 Python L640-654
+	estimatedTokens := estimateImageTokens(resized)
+	if estimatedTokens > maxTokens {
+		// 激进压缩 (800×800, quality=40)
+		compressed := compressImageBytes(raw, 800, 800, 40)
+		if compressed != nil && estimateImageTokens(compressed) <= maxTokens {
+			resized = compressed
+			imageType = "jpeg"
+		} else {
+			// 最终降级压缩 (400×400, quality=20)
+			fallback := compressImageBytes(raw, 400, 400, 20)
+			if fallback != nil {
+				resized = fallback
+				imageType = "jpeg"
+			}
+		}
+	}
 
 	mimeType := "image/" + imageType
 	parts := []string{
 		fmt.Sprintf("Image file read: %s", filePath),
 		fmt.Sprintf("format: %s", imageType),
-		fmt.Sprintf("size_bytes: %d", len(rawBytes)),
-		fmt.Sprintf("transmitted_size_bytes: %d", len(rawBytes)),
+		fmt.Sprintf("size_bytes: %d", len(raw)),
+		fmt.Sprintf("transmitted_size_bytes: %d", len(resized)),
+	}
+	if dimensions != "" {
+		parts = append(parts, fmt.Sprintf("dimensions: %s", dimensions))
 	}
 
 	if !enableImageMultimodal {
@@ -437,21 +577,22 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 			"If a vision tool is configured, call image_ocr or visual_question_answering with this file path.",
 		)
 		return map[string]any{
-			"content":  strings.Join(parts, "\n"),
-			"multimodal": []any{},
+			"content":   strings.Join(parts, "\n"),
+			"multimodal": []map[string]any{},
 		}, nil
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(rawBytes)
+	encoded := base64.StdEncoding.EncodeToString(resized)
 	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
 	parts = append(parts, "Image bytes are attached as multimodal input and omitted from this tool result.")
 
-	// ⤵️ 后续补充 Pillow 等价缩略图、token 预算检查、图片压缩
 	logger.Info(logComponent).
 		Str("file_path", filePath).
 		Str("image_type", imageType).
-		Int("size_bytes", len(rawBytes)).
-		Msg("ReadFileTool 图片读取（暂用原始 base64，后续补充缩略图）")
+		Int("size_bytes", len(raw)).
+		Int("transmitted_size_bytes", len(resized)).
+		Str("dimensions", dimensions).
+		Msg("ReadFileTool 图片读取完成")
 
 	return map[string]any{
 		"content": strings.Join(parts, "\n"),
@@ -672,4 +813,140 @@ func extractOutputText(out map[string]json.RawMessage) string {
 	}
 
 	return ""
+}
+
+// estimateImageTokens 估算图片 base64 编码后的 token 数量。
+// 对齐 Python: max(1, int(len(base64.b64encode(resized)) * 0.125))
+// 即 base64 字节数 / 8
+func estimateImageTokens(data []byte) int {
+	encodedLen := base64.StdEncoding.EncodedLen(len(data))
+	tokens := encodedLen / 8
+	if tokens < 1 {
+		tokens = 1
+	}
+	return tokens
+}
+
+// thumbnailImage 将图片缩放到指定最大尺寸内，保持宽高比。
+// 对齐 Python: img.thumbnail((maxW, maxH))
+func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
+	bounds := img.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	// 如果已经在范围内，直接返回
+	if w <= maxW && h <= maxH {
+		return img
+	}
+
+	// 计算缩放比例，保持宽高比
+	ratioW := float64(maxW) / float64(w)
+	ratioH := float64(maxH) / float64(h)
+	ratio := ratioW
+	if ratioH < ratioW {
+		ratio = ratioH
+	}
+
+	newW := int(float64(w) * ratio)
+	newH := int(float64(h) * ratio)
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+
+	// 使用近似缩放（box filter）
+	return imageResize(img, newW, newH)
+}
+
+// imageResize 简单的最近邻缩放实现
+func imageResize(img image.Image, newW, newH int) image.Image {
+	srcBounds := img.Bounds()
+	srcW := srcBounds.Dx()
+	srcH := srcBounds.Dy()
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+
+	for y := 0; y < newH; y++ {
+		srcY := y * srcH / newH
+		for x := 0; x < newW; x++ {
+			srcX := x * srcW / newW
+			dst.Set(x, y, img.At(srcBounds.Min.X+srcX, srcBounds.Min.Y+srcY))
+		}
+	}
+	return dst
+}
+
+// compressImageBytes 压缩图片到指定尺寸和质量，输出 JPEG。
+// 对齐 Python: _compress_image_bytes(raw, size=(w, h), quality=q)
+func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
+	img, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		logger.Debug(logComponent).
+			Err(err).
+			Msg("compressImageBytes 解码失败")
+		return nil
+	}
+
+	// 转为 RGBA（确保兼容 JPEG 编码）
+	rgba := image.NewRGBA(img.Bounds())
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			rgba.Set(x, y, img.At(x, y))
+		}
+	}
+
+	// 缩略图
+	thumb := thumbnailImage(rgba, maxW, maxH)
+
+	// 编码为 JPEG
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, thumb, &jpeg.Options{Quality: quality}); err != nil {
+		logger.Debug(logComponent).
+			Err(err).
+			Msg("compressImageBytes JPEG 编码失败")
+		return nil
+	}
+
+	return buf.Bytes()
+}
+
+// encodeImage 将图片编码为指定格式的字节切片。
+// 对齐 Python: img.save(out, format=detected_format.upper())
+func encodeImage(img image.Image, format string) ([]byte, error) {
+	var buf bytes.Buffer
+	switch strings.ToLower(format) {
+	case "jpeg", "jpg":
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+			return nil, err
+		}
+	default:
+		// PNG 作为默认格式
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+// detectImageFormat 从文件头字节检测图片格式。
+// 对齐 Python: img.format
+func detectImageFormat(raw []byte, ext string) string {
+	// 从文件头魔数检测
+	if len(raw) >= 8 {
+		switch {
+		case bytes.HasPrefix(raw, []byte{0x89, 0x50, 0x4E, 0x47}):
+			return "png"
+		case bytes.HasPrefix(raw, []byte{0xFF, 0xD8}):
+			return "jpeg"
+		case bytes.HasPrefix(raw, []byte{0x47, 0x49, 0x46}):
+			return "gif"
+		case bytes.HasPrefix(raw, []byte{0x42, 0x4D}):
+			return "bmp"
+		case len(raw) >= 12 && string(raw[8:12]) == "WEBP":
+			return "webp"
+		}
+	}
+	// 回退到扩展名
+	return strings.TrimPrefix(ext, ".")
 }

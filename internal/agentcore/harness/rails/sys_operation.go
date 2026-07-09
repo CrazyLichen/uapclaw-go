@@ -28,6 +28,15 @@ type SysOperationRail struct {
 	readOnly bool
 	// enableReadImageMultimodal nil=从配置推断, true/false=显式设置
 	enableReadImageMultimodal *bool
+	// permissionMode Shell 工具权限模式，默认 Auto
+	// 对齐 Python: BashTool(permission_mode="auto") / PowerShellTool(permission_mode="auto")
+	permissionMode shell.PermissionMode
+	// denyPatterns Shell 工具拒绝模式列表
+	// 对齐 Python: BashTool(deny_patterns=...)
+	denyPatterns []string
+	// allowPatterns Shell 工具允许模式列表
+	// 对齐 Python: BashTool(allow_patterns=...)
+	allowPatterns []string
 }
 
 // SysOperationRailOption 配置选项函数
@@ -69,11 +78,30 @@ func WithEnableReadImageMultimodal(enabled bool) SysOperationRailOption {
 	return func(r *SysOperationRail) { r.enableReadImageMultimodal = &enabled }
 }
 
+// WithPermissionMode 设置 Shell 工具权限模式。
+// 对齐 Python: BashTool(permission_mode=...) / PowerShellTool(permission_mode=...)
+func WithPermissionMode(mode shell.PermissionMode) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.permissionMode = mode }
+}
+
+// WithDenyPatterns 设置 Shell 工具拒绝模式列表。
+// 对齐 Python: BashTool(deny_patterns=...) / PowerShellTool(deny_patterns=...)
+func WithDenyPatterns(patterns []string) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.denyPatterns = patterns }
+}
+
+// WithAllowPatterns 设置 Shell 工具允许模式列表。
+// 对齐 Python: BashTool(allow_patterns=...) / PowerShellTool(allow_patterns=...)
+func WithAllowPatterns(patterns []string) SysOperationRailOption {
+	return func(r *SysOperationRail) { r.allowPatterns = patterns }
+}
+
 // NewSysOperationRail 创建系统操作护栏实例。
 // 对齐 Python: SysOperationRail.__init__()
 func NewSysOperationRail(opts ...SysOperationRailOption) *SysOperationRail {
 	r := &SysOperationRail{
-		DeepAgentRail: *NewDeepAgentRail(),
+		DeepAgentRail:  *NewDeepAgentRail(),
+		permissionMode: shell.PermissionModeAuto,
 	}
 	r.WithPriority(sysOpRailPriority)
 	for _, opt := range opts {
@@ -124,7 +152,8 @@ func (r *SysOperationRail) Init(agent agentinterfaces.BaseAgent) error {
 	globTool := filesystem.NewGlobTool(op, language, agentID)
 	listDirTool := filesystem.NewListDirTool(op, language, agentID)
 	grepTool := filesystem.NewGrepTool(op, language, agentID)
-	permConfig := shell.NewPermissionConfig(shell.PermissionModeBypass, nil, nil)
+	// 构建权限配置，对齐 Python: BashTool(permission_mode="auto", deny_patterns=..., allow_patterns=...)
+	permConfig := shell.NewPermissionConfig(r.permissionMode, r.denyPatterns, r.allowPatterns)
 	bashTool := shell.NewBashTool(op, language, agentID, permConfig)
 
 	// 构建工具列表

@@ -298,13 +298,12 @@ func rgAvailable() bool {
 
 // shellQuote 对值进行 Shell 引号包裹。
 // 对齐 Python: GrepTool._shell_quote (filesystem.py L1544-1549)
-func shellQuote(value any) string {
-	text := fmt.Sprintf("%v", value)
+func shellQuote(value string) string {
 	if runtime.GOOS == "windows" {
-		return "'" + strings.ReplaceAll(text, "'", "''") + "'"
+		return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 	}
 	// POSIX: 单引号包裹，内部 ' 替换为 '\''
-	return "'" + strings.ReplaceAll(text, "'", "'\\''") + "'"
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 // splitGlobPatterns 拆分 glob 模式字符串。

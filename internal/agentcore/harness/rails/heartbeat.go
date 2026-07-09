@@ -147,7 +147,9 @@ func (r *HeartbeatRail) BeforeModelCall(ctx context.Context, cbc *agentinterface
 	content := ""
 	if err == nil && readRes != nil {
 		// 对齐 Python L54: content = read_res.data.content
-		content = readRes.Data
+		if readRes.Data != nil {
+			content = readRes.Data.Content
+		}
 	} else {
 		// 对齐 Python L56: logger.warning("HeartbeatRail: failed to read HEARTBEAT.md")
 		logger.Warn(heartbeatLogComponent).

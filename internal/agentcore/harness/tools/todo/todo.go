@@ -175,7 +175,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 			exception.WithParam("reason", fmt.Sprintf("Todo file not found: %s", filePath)),
 		)
 	}
-	if result == nil || result.Data == "" {
+	if result == nil || result.Data == nil || result.Data.Content == "" {
 		// 对齐 Python L123-127: 空内容视为文件不存在
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
@@ -184,7 +184,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 	}
 
 	var rawList []map[string]any
-	if err := json.Unmarshal([]byte(result.Data), &rawList); err != nil {
+	if err := json.Unmarshal([]byte(result.Data.Content), &rawList); err != nil {
 		logger.Error(logComponent).
 			Str("file_path", filePath).
 			Err(err).
