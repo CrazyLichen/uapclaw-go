@@ -18,8 +18,7 @@ import (
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -27,7 +26,7 @@ import (
 // GatewayServer Gateway 服务器，整合 HTTP 路由、WebChannel、ChannelManager、MessageHandler。
 //
 // 提供 WebSocket RPC 端点、静态文件服务和文件操作 HTTP API，
-// 通过 Transport 抽象与 AgentServer 通信。
+// 通过 AgentClient 与 AgentServer 通信。
 type GatewayServer struct {
 	// config 配置管理器
 	config *config.Config
@@ -39,12 +38,10 @@ type GatewayServer struct {
 	channelMgr *cm.ChannelManager
 	// msgHandler 消息处理器
 	msgHandler *mh.MessageHandler
-	// transport Agent 传输层
-	transport gateway_push.AgentTransport
+	// agentClient AgentServer 客户端
+	agentClient *routing.AgentClient
 	// httpServer HTTP 服务器
 	httpServer *http.Server
-	// agentServer Agent 核心服务引用（用于 serverReady 等机制）
-	agentServer *server.AgentServer
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -64,8 +61,7 @@ const shutdownTimeout = 5 * time.Second
 // NewGatewayServer 创建 Gateway 服务器实例。
 //
 // 初始化 WebChannel、ChannelManager、MessageHandler，组装 chi 路由。
-// agentServer 可为 nil（独立 Gateway 进程模式），此时 WebChannel 不等待 serverReady。
-func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport, pushTransport gateway_push.GatewayPushTransport, agentServer *server.AgentServer) (*GatewayServer, error) {
+func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*GatewayServer, error) {
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
 		Enabled: true,
@@ -78,7 +74,7 @@ func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport,
 	channelMgr := cm.NewChannelManager(nil, nil)
 
 	// 创建 MessageHandler
-	msgHandler := mh.NewMessageHandler(transport, pushTransport, channelMgr)
+	msgHandler := mh.NewMessageHandler(agentClient, channelMgr)
 
 	// 创建 onMessage 回调：WebChannel → MessageHandler.HandleInbound
 	onMessageCb := func(msg *schema.Message) {
@@ -92,9 +88,9 @@ func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport,
 
 	wc := web.NewWebChannel(webCfg, onMessageCb)
 
-	// 注入 AgentServer 就绪等待器（单进程模式）
-	if agentServer != nil {
-		wc.SetServerReadyWaiter(agentServer)
+	// 注入 AgentClient（用于等待 AgentServer 就绪）
+	if agentClient != nil {
+		wc.SetAgentClient(agentClient)
 	}
 
 	s := &GatewayServer{
@@ -102,8 +98,7 @@ func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport,
 		webChannel:  wc,
 		channelMgr:  channelMgr,
 		msgHandler:  msgHandler,
-		transport:   transport,
-		agentServer: agentServer,
+		agentClient: agentClient,
 	}
 
 	// 组装路由
@@ -121,6 +116,15 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 
 	if err := s.webChannel.Start(ctx); err != nil {
 		return err
+	}
+
+	// 启动 AgentClient 接收循环（对齐 Python connect 启动 _message_receiver_loop）
+	if s.agentClient != nil {
+		if err := s.agentClient.Connect(ctx); err != nil {
+			logger.Error(logComponentAppGateway).
+				Err(err).
+				Msg("启动 AgentClient 接收循环失败")
+		}
 	}
 
 	// 启动 MessageHandler 转发循环
@@ -190,13 +194,9 @@ func (s *GatewayServer) Stop() error {
 		}
 	}
 
-	// 关闭 Transport
-	if s.transport != nil {
-		if err := s.transport.Close(); err != nil {
-			logger.Error(logComponentAppGateway).
-				Err(err).
-				Msg("关闭 Transport 失败")
-		}
+	// 断开 AgentClient
+	if s.agentClient != nil {
+		s.agentClient.Disconnect()
 	}
 
 	// 关闭 HTTP 服务器

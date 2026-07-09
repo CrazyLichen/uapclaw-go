@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
@@ -180,13 +181,15 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 
 	// 创建 ChannelTransport（进程内传输）
 	transport := gateway_push.NewChannelTransport()
-	pushTransport := transport // ChannelTransport 同时实现 AgentTransport + GatewayPushTransport
+
+	// 创建 AgentClient（对齐 Python WebSocketAgentServerClient）
+	agentClient := routing.NewAgentClient(transport)
 
 	// 创建 AgentServer（对齐 Python AgentWebSocketServer，单进程内与 Gateway 共存）
 	agentServer := server.NewAgentServer(cfg, transport)
 
-	// 创建 GatewayServer，注入 AgentServer 引用（用于 serverReady 等待）
-	gs, err := gateway.NewGatewayServer(cfg, transport, pushTransport, agentServer)
+	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
+	gs, err := gateway.NewGatewayServer(cfg, agentClient)
 	if err != nil {
 		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
 	}

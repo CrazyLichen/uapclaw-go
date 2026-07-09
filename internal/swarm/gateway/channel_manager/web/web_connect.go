@@ -12,8 +12,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -56,8 +56,8 @@ type WebChannel struct {
 	runningMu sync.RWMutex
 	// onMessageCb 入站消息回调
 	onMessageCb func(*schema.Message)
-	// serverReadyWaiter AgentServer 就绪等待器（nil 表示无需等待，直接发 connection.ack）
-	serverReadyWaiter server.ServerReadyWaiter
+	// agentClient AgentServer 客户端（nil 表示无需等待，直接发 connection.ack）
+	agentClient *routing.AgentClient
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -144,8 +144,8 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// 等待 AgentServer 就绪后再发 connection.ack
 	// 对齐 Python: _on_connect 中检查 agent_client.server_ready
-	if wc.serverReadyWaiter != nil {
-		if !wc.serverReadyWaiter.WaitServerReady(r.Context()) {
+	if wc.agentClient != nil {
+		if !wc.agentClient.WaitServerReady(r.Context()) {
 			logger.Warn(logComponent).Msg("AgentServer 未就绪，关闭 WebSocket 连接")
 			_ = conn.Close()
 			wc.clientsMu.Lock()
@@ -345,12 +345,12 @@ func (wc *WebChannel) OnMessage(callback func(*schema.Message)) {
 	wc.onMessageCb = callback
 }
 
-// SetServerReadyWaiter 设置 AgentServer 就绪等待器。
+// SetAgentClient 设置 AgentServer 客户端。
 //
 // 在 HandleWebSocket 中等待 AgentServer 就绪后再发送 connection.ack，
 // 对齐 Python: _on_connect 中检查 agent_client.server_ready。
-func (wc *WebChannel) SetServerReadyWaiter(waiter server.ServerReadyWaiter) {
-	wc.serverReadyWaiter = waiter
+func (wc *WebChannel) SetAgentClient(client *routing.AgentClient) {
+	wc.agentClient = client
 }
 
 // IsRunning 返回通道是否正在运行。
