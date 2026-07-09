@@ -32,7 +32,7 @@
 - Create: `internal/swarm/server/runtime/build_user_prompt.go`
 - Create: `internal/swarm/server/runtime/build_user_prompt_test.go`
 
-- [ ] **Step 1: 写 build_user_prompt_test.go 的失败测试**
+- [x] **Step 1: 写 build_user_prompt_test.go 的失败测试**
 
 ```go
 package runtime
@@ -132,12 +132,12 @@ func TestBuildUserPrompt_输出为合法JSON(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run TestBuildUserPrompt -v -count=1 2>&1 | head -20`
 Expected: 编译错误（BuildUserPrompt 未定义）
 
-- [ ] **Step 3: 写 build_user_prompt.go 实现**
+- [x] **Step 3: 写 build_user_prompt.go 实现**
 
 ```go
 package runtime
@@ -271,12 +271,12 @@ func handleSkillsUseSlashCommand(query string) (skillsToUse []string, newQuery s
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run TestBuildUserPrompt -v -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/build_user_prompt.go internal/swarm/server/runtime/build_user_prompt_test.go
@@ -291,7 +291,7 @@ git commit -m "feat(runtime): add BuildUserPrompt function aligned with Python b
 - Create: `internal/swarm/server/runtime/session_history.go`
 - Create: `internal/swarm/server/runtime/session_history_test.go`
 
-- [ ] **Step 1: 写 session_history_test.go 的失败测试**
+- [x] **Step 1: 写 session_history_test.go 的失败测试**
 
 ```go
 package runtime
@@ -435,12 +435,12 @@ func TestHistoryFilePath(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run "TestAppend|TestTruncate|TestHistoryFile" -v -count=1 2>&1 | head -20`
 Expected: 编译错误
 
-- [ ] **Step 3: 写 session_history.go 实现**
+- [x] **Step 3: 写 session_history.go 实现**
 
 ```go
 package runtime
@@ -663,12 +663,12 @@ func normalizeSessionID(sessionID string) string {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run "TestAppend|TestTruncate|TestHistoryFile" -v -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/session_history.go internal/swarm/server/runtime/session_history_test.go
@@ -683,7 +683,7 @@ git commit -m "feat(runtime): add session history persistence (AppendHistoryReco
 - Create: `internal/swarm/server/runtime/build_inputs.go`
 - Create: `internal/swarm/server/runtime/build_inputs_test.go`
 
-- [ ] **Step 1: 写 build_inputs_test.go 的失败测试**
+- [x] **Step 1: 写 build_inputs_test.go 的失败测试**
 
 ```go
 package runtime
@@ -767,12 +767,12 @@ func TestJiuWenClaw_BuildInputs_trustedDirs提取(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run "TestJiuWenClaw_BuildInputs" -v -count=1 2>&1 | head -20`
 Expected: 编译错误
 
-- [ ] **Step 3: 写 build_inputs.go 实现**
+- [x] **Step 3: 写 build_inputs.go 实现**
 
 ```go
 package runtime
@@ -945,12 +945,12 @@ func extractStringWithFallback(params map[string]any, paramKey string, metadata 
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -run "TestJiuWenClaw_BuildInputs" -v -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/build_inputs.go internal/swarm/server/runtime/build_inputs_test.go
@@ -965,7 +965,7 @@ git commit -m "feat(runtime): add BuildInputs method aligned with Python _build_
 - Modify: `internal/swarm/server/runtime/jiowenclaw.go`
 - Modify: `internal/swarm/server/runtime/jiowenclaw_test.go`
 
-- [ ] **Step 1: 重写 jiowenclaw.go — 结构体 + 全部方法**
+- [x] **Step 1: 重写 jiowenclaw.go — 结构体 + 全部方法**
 
 将 `JiuWenClaw struct{}` 替换为：
 
@@ -1420,12 +1420,12 @@ func shouldRecordHistory(eventType string) bool {
 }
 ```
 
-- [ ] **Step 2: 运行编译确认通过**
+- [x] **Step 2: 运行编译确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/swarm/server/runtime/`
 Expected: 编译成功
 
-- [ ] **Step 3: 重写 jiowenclaw_test.go — 更新测试**
+- [x] **Step 3: 重写 jiowenclaw_test.go — 更新测试**
 
 更新测试使用 fakeAdapter mock 来验证分流逻辑。保留原有基本测试并新增：
 
@@ -1600,12 +1600,12 @@ func TestJiuWenClaw_GenerateRecap(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 运行全部 runtime 测试确认通过**
+- [x] **Step 4: 运行全部 runtime 测试确认通过**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -v -count=1`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/jiowenclaw.go internal/swarm/server/runtime/jiowenclaw_test.go
@@ -1619,7 +1619,7 @@ git commit -m "feat(runtime): implement JiuWenClaw facade with real logic (level
 **Files:**
 - Modify: `internal/swarm/server/runtime/doc.go`
 
-- [ ] **Step 1: 更新 doc.go 文件目录**
+- [x] **Step 1: 更新 doc.go 文件目录**
 
 ```go
 // Package runtime 提供 AgentServer 运行时管理组件。
@@ -1643,17 +1643,17 @@ git commit -m "feat(runtime): implement JiuWenClaw facade with real logic (level
 package runtime
 ```
 
-- [ ] **Step 2: 运行完整包测试**
+- [x] **Step 2: 运行完整包测试**
 
 Run: `cd /home/opensource/uapclaw-gateway && go test ./internal/swarm/server/runtime/ -v -count=1`
 Expected: PASS
 
-- [ ] **Step 3: 运行编译检查（确认没有破坏其他包）**
+- [x] **Step 3: 运行编译检查（确认没有破坏其他包）**
 
 Run: `cd /home/opensource/uapclaw-gateway && go build ./internal/swarm/server/...`
 Expected: 编译成功
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/swarm/server/runtime/doc.go
