@@ -231,3 +231,76 @@ func Test父改子可见(t *testing.T) {
 	// 同一 ctx 读取可见
 	assert.Equal(t, resolve("/project/worktree"), GetCwd(ctx))
 }
+
+// TestGetOriginalCwd_从上下文获取 测试 GetOriginalCwd(ctx)
+func TestGetOriginalCwd_从上下文获取(t *testing.T) {
+	state := InitCwd("/project")
+	ctx := WithCwdState(context.Background(), state)
+	assert.Equal(t, resolve("/project"), GetOriginalCwd(ctx))
+}
+
+// TestGetOriginalCwd_上下文无CwdState回退 测试 ctx 无 CwdState 时回退
+func TestGetOriginalCwd_上下文无CwdState回退(t *testing.T) {
+	cwd := GetOriginalCwd(context.Background())
+	wd, _ := os.Getwd()
+	assert.Equal(t, wd, cwd)
+}
+
+// TestGetProjectRoot_从上下文获取 测试 GetProjectRoot(ctx)
+func TestGetProjectRoot_从上下文获取(t *testing.T) {
+	state := InitCwd("/project", WithProjectRoot("/root"))
+	ctx := WithCwdState(context.Background(), state)
+	assert.Equal(t, resolve("/root"), GetProjectRoot(ctx))
+}
+
+// TestGetProjectRoot_上下文无CwdState回退 测试 ctx 无 CwdState 时回退
+func TestGetProjectRoot_上下文无CwdState回退(t *testing.T) {
+	root := GetProjectRoot(context.Background())
+	wd, _ := os.Getwd()
+	assert.Equal(t, wd, root)
+}
+
+// TestGetTeamWorkspace_从上下文获取 测试 GetTeamWorkspace(ctx)
+func TestGetTeamWorkspace_从上下文获取(t *testing.T) {
+	state := InitCwd("/project", WithTeamWorkspace("/team"))
+	ctx := WithCwdState(context.Background(), state)
+	assert.Equal(t, resolve("/team"), GetTeamWorkspace(ctx))
+}
+
+// TestGetTeamWorkspace_未设置返回空 测试 team_workspace 未设置时返回空字符串
+func TestGetTeamWorkspace_未设置返回空(t *testing.T) {
+	state := InitCwd("/project")
+	ctx := WithCwdState(context.Background(), state)
+	assert.Equal(t, "", GetTeamWorkspace(ctx))
+}
+
+// TestCwdState_SetProjectRoot 测试设置项目根目录
+// 对齐 Python: set_project_root(root)
+func TestCwdState_SetProjectRoot(t *testing.T) {
+	state := InitCwd("/project")
+	state.SetProjectRoot("/newroot")
+	assert.Equal(t, resolve("/newroot"), state.GetProjectRoot())
+}
+
+// TestCwdState_SetWorkspace 测试设置 workspace
+// 对齐 Python: set_workspace(path)
+func TestCwdState_SetWorkspace(t *testing.T) {
+	state := InitCwd("/project")
+	assert.Equal(t, "", state.GetWorkspace())
+	state.SetWorkspace("/workspace")
+	assert.Equal(t, resolve("/workspace"), state.GetWorkspace())
+}
+
+// TestCwdState_SetTeamWorkspace 测试设置团队 workspace
+// 对齐 Python: set_team_workspace(path)
+func TestCwdState_SetTeamWorkspace(t *testing.T) {
+	state := InitCwd("/project")
+	assert.Equal(t, "", state.GetTeamWorkspace())
+	state.SetTeamWorkspace("/team")
+	assert.Equal(t, resolve("/team"), state.GetTeamWorkspace())
+}
+
+// TestResolve_空路径 测试空路径返回空字符串
+func TestResolve_空路径(t *testing.T) {
+	assert.Equal(t, "", resolve(""))
+}
