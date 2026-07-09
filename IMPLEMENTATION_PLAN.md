@@ -559,10 +559,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.30 | ☐ | ExploreAgent | 探索子 Agent | `openjiuwen/harness/subagents/` |
 | 9.31 | ☐ | MobileGUIAgent | 移动端 GUI Agent | `openjiuwen/harness/subagents/` |
 | **9.x 系统操作** | — | | | |
-| 9.32 | ☐ | SysOperation 接口 | 系统操作抽象 | `openjiuwen/core/sys_operation/` |
+| 9.32 | ✅ | SysOperation 接口 | 系统操作抽象 | `openjiuwen/core/sys_operation/` |
 | 9.33 | ☐ | LocalSysOperation | 本地执行 | `openjiuwen/core/sys_operation/` |
 | 9.34 | ☐ | SandboxSysOperation | 沙箱执行 | `openjiuwen/core/sys_operation/` |
-| 9.35 | ☐ | Shell Process Registry | Shell 进程管理 | `openjiuwen/core/sys_operation/` |
+| 9.35 | ✅ | Shell Process Registry | Shell 进程管理 | `openjiuwen/core/sys_operation/` |
 | 9.36 | ☐ | JiuwenBoxProvider | JiuwenBox 沙箱 Provider | `openjiuwen/extensions/sys_operation/` |
 | 9.37 | ☐ | AioProvider | Aio 沙箱 Provider | `openjiuwen/extensions/sys_operation/` |
 | **9.x 内置工具集** | — | | | |
