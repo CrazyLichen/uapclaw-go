@@ -8,8 +8,8 @@ import (
 // TestAllReqMethods 验证 AllReqMethods 返回全部 142 个枚举值
 func TestAllReqMethods(t *testing.T) {
 	methods := AllReqMethods()
-	if len(methods) != 142 {
-		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 142", len(methods))
+	if len(methods) != 149 {
+		t.Fatalf("AllReqMethods() 返回 %d 个方法，want 149", len(methods))
 	}
 
 	// 验证无重复
@@ -249,6 +249,14 @@ func TestReqMethod常量值与Python对齐(t *testing.T) {
 		{ReqMethodPluginsEnable, "plugins.enable"},
 		{ReqMethodPluginsDisable, "plugins.disable"},
 		{ReqMethodPluginsReload, "plugins.reload"},
+		// 技能开发
+		{ReqMethodSkilldevStart, "skilldev.start"},
+		{ReqMethodSkilldevRespond, "skilldev.respond"},
+		{ReqMethodSkilldevStatus, "skilldev.status"},
+		{ReqMethodSkilldevDownload, "skilldev.download"},
+		{ReqMethodSkilldevCancel, "skilldev.cancel"},
+		{ReqMethodSkilldevFileList, "skilldev.file.list"},
+		{ReqMethodSkilldevFileRead, "skilldev.file.read"},
 		{ReqMethodExtensionsList, "extensions.list"},
 		{ReqMethodExtensionsImport, "extensions.import"},
 		{ReqMethodExtensionsDelete, "extensions.delete"},
@@ -307,8 +315,8 @@ func TestReqMethod常量值与Python对齐(t *testing.T) {
 			t.Errorf("常量值 = %q, want %q", tt.got, tt.want)
 		}
 	}
-	// 验证测试覆盖全部 142 个常量
-	if len(tests) != 142 {
-		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 142", len(tests))
+	// 验证测试覆盖全部 149 个常量
+	if len(tests) != 149 {
+		t.Errorf("Python 对齐测试覆盖 %d 个常量，want 149", len(tests))
 	}
 }

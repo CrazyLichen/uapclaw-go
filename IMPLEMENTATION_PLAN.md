@@ -656,7 +656,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.13 | ☐ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |
 | 10.3.14 | ☐ | TenantAgentPool | 多租户 Agent 池化 | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
 | 10.3.15-18 | 🔄 | 会话管理 | SessionManager(LIFO)✅ / SessionHistory(JSONL)☐ / SessionMetadata✅ / SessionRename✅ | `jiuwenswarm/server/runtime/session/` |
-| 10.3.19-20 | ☐ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
+| 10.3.19-20 | ✅ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
 | 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |
 | 10.3.23-26 | ☐ | 服务端辅助 | Hooks/Sandbox/Utils/入口 | `jiuwenswarm/server/hooks/` · `sandbox/` · `utils/` · `app_agentserver.py` |
 | **10.4 独立交互入口** | — | | | |
