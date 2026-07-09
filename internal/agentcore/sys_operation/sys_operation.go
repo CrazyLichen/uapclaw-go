@@ -30,6 +30,10 @@ type FsOperation interface {
 type ShellOperation interface {
 	// ExecuteCmd 执行 Shell 命令
 	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*ExecuteCmdResult, error)
+	// ExecuteCmdStream 流式执行 Shell 命令，返回命令输出块通道
+	ExecuteCmdStream(ctx context.Context, command string, opts ...ShellOption) (<-chan ExecuteCmdStreamChunk, error)
+	// ExecuteCmdBackground 后台执行 Shell 命令，立即返回进程 PID
+	ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*ExecuteCmdBackgroundResult, error)
 	// ListTools 返回 Shell 操作的工具卡片列表
 	ListTools() []*tool.ToolCard
 }
@@ -122,6 +126,36 @@ type ExecuteCmdResult struct {
 	Stderr string
 	// ExitCode 退出码
 	ExitCode int
+}
+
+// ExecuteCmdStreamChunk Shell 命令流式输出块
+type ExecuteCmdStreamChunk struct {
+	// Code 状态码
+	Code int
+	// Message 状态消息
+	Message string
+	// Type 输出类型（stdout/stderr/exit/error）
+	Type string
+	// Text 输出文本
+	Text string
+	// ChunkIndex 块序号
+	ChunkIndex int
+	// ExitCode 退出码（仅 exit 类型有效）
+	ExitCode int
+}
+
+// ExecuteCmdBackgroundResult 后台执行命令结果
+type ExecuteCmdBackgroundResult struct {
+	// Code 状态码
+	Code int
+	// Message 状态消息
+	Message string
+	// PID 后台进程标识
+	PID int
+	// Command 执行的命令
+	Command string
+	// Cwd 工作目录
+	Cwd string
 }
 
 // ExecuteCodeResult 执行代码结果
@@ -468,6 +502,16 @@ func (b *BaseFsOperation) ListTools() []*tool.ToolCard { return nil }
 // ExecuteCmd 执行命令（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ExecuteCmd(_ context.Context, _ string, _ ...ShellOption) (*ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCmd")
+}
+
+// ExecuteCmdStream 流式执行命令（BaseShellOperation 空实现）
+func (b *BaseShellOperation) ExecuteCmdStream(_ context.Context, _ string, _ ...ShellOption) (<-chan ExecuteCmdStreamChunk, error) {
+	return nil, fmt.Errorf("未实现: ExecuteCmdStream")
+}
+
+// ExecuteCmdBackground 后台执行命令（BaseShellOperation 空实现）
+func (b *BaseShellOperation) ExecuteCmdBackground(_ context.Context, _ string, _ ...ShellOption) (*ExecuteCmdBackgroundResult, error) {
+	return nil, fmt.Errorf("未实现: ExecuteCmdBackground")
 }
 
 // ListTools 返回工具卡片列表（BaseShellOperation 空实现）

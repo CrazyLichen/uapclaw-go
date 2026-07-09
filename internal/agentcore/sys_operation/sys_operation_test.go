@@ -233,6 +233,16 @@ func TestBaseShellOperation_桩方法返回错误(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "未实现")
 
+	resStream, err := b.ExecuteCmdStream(ctx, "ls")
+	assert.Nil(t, resStream)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
+	resBg, err := b.ExecuteCmdBackground(ctx, "ls")
+	assert.Nil(t, resBg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "未实现")
+
 	tools := b.ListTools()
 	assert.Nil(t, tools)
 }
