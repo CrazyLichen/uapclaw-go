@@ -10,11 +10,19 @@ import (
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // SysOperationCard 系统操作配置卡片，嵌入 BaseCard 提供身份标识，
-// 并携带操作模式、工作目录配置和沙箱网关配置。
+// 并携带操作模式、隔离配置、工作目录配置和沙箱网关配置。
+// 对齐 Python SysOperationCard：mode, isolation_prefix, container_scope, custom_id,
+// work_config(local_work_config), gateway_config(sandbox_gateway_config)。
 type SysOperationCard struct {
 	schema.BaseCard
 	// Mode 操作模式
 	Mode OperationMode `json:"mode"`
+	// IsolationPrefix 隔离键前缀（对齐 Python isolation_prefix）
+	IsolationPrefix string `json:"isolation_prefix,omitempty"`
+	// ContainerScope 容器作用域（对齐 Python container_scope）
+	ContainerScope ContainerScope `json:"container_scope,omitempty"`
+	// CustomID 自定义容器标识（对齐 Python custom_id）
+	CustomID string `json:"custom_id,omitempty"`
 	// WorkConfig 本地工作目录配置
 	WorkConfig *LocalWorkConfig `json:"work_config,omitempty"`
 	// GatewayConfig 沙箱网关配置
@@ -91,6 +99,24 @@ func (p *ToolIdProxy) ToolID(methodName string) string {
 // WithSysOpMode 设置操作模式。
 func WithSysOpMode(mode OperationMode) SysOperationCardOption {
 	return func(c *SysOperationCard) { c.Mode = mode }
+}
+
+// WithSysOpIsolationPrefix 设置隔离键前缀。
+// 对齐 Python SysOperationCard.isolation_prefix。
+func WithSysOpIsolationPrefix(prefix string) SysOperationCardOption {
+	return func(c *SysOperationCard) { c.IsolationPrefix = prefix }
+}
+
+// WithSysOpContainerScope 设置容器作用域。
+// 对齐 Python SysOperationCard.container_scope。
+func WithSysOpContainerScope(scope ContainerScope) SysOperationCardOption {
+	return func(c *SysOperationCard) { c.ContainerScope = scope }
+}
+
+// WithSysOpCustomID 设置自定义容器标识。
+// 对齐 Python SysOperationCard.custom_id。
+func WithSysOpCustomID(id string) SysOperationCardOption {
+	return func(c *SysOperationCard) { c.CustomID = id }
 }
 
 // WithSysOpWorkConfig 设置本地工作目录配置。

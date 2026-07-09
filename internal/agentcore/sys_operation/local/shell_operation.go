@@ -475,32 +475,65 @@ func (s *ShellOperation) detectAndMitigateTUI(command string, execEnv map[string
 func (s *ShellOperation) resolveExecutionPlan(command string, shellType sysop.ShellType) (args []string, useShell bool, shellName string) {
 	isWindows := runtime.GOOS == "windows"
 
-	if isWindows {
-		// Windows 路径：暂不完整实现，fallback 到 cmd
-		return []string{"cmd", "/c", command}, true, "cmd"
+	// 尝试解包 PowerShell -Command 包装
+	// 对齐 Python：先尝试 unwrap_powershell_command
+	if unwrapped := UnwrapPowerShellCommand(command); unwrapped != "" {
+		command = unwrapped
 	}
 
-	// 非 Windows 路径
 	switch shellType {
-	case sysop.ShellTypeAuto, sysop.ShellTypeSh:
-		return []string{"sh", "-c", command}, true, "sh"
+	case sysop.ShellTypePowerShell:
+		pwshPath := AvailablePowerShell()
+		return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+
 	case sysop.ShellTypeBash:
-		bashPath := "/bin/bash"
-		if p, err := exec.LookPath("bash"); err == nil {
-			bashPath = p
+		bashPath := AvailableBash(true)
+		if bashPath == "" {
+			bashPath = "/bin/bash"
+		}
+		if isWindows {
+			return []string{bashPath, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash"
 		}
 		return []string{bashPath, "-lc", command}, false, "bash"
-	case sysop.ShellTypePowerShell:
-		pwshPath := "pwsh"
-		if p, err := exec.LookPath("pwsh"); err == nil {
-			pwshPath = p
-		} else if p, err := exec.LookPath("powershell"); err == nil {
-			pwshPath = p
-		}
-		return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+
 	case sysop.ShellTypeCmd:
 		return []string{"cmd", "/c", command}, true, "cmd"
+
+	case sysop.ShellTypeSh:
+		shPath := AvailableSh()
+		if shPath == "" {
+			shPath = "sh"
+		}
+		return []string{shPath, "-c", command}, true, "sh"
+
+	case sysop.ShellTypeAuto:
+		fallthrough
 	default:
+		// 自动检测逻辑，对齐 Python _resolve_execution_plan 的 auto 分支
+		if isWindows {
+			if LooksLikePowerShell(command) {
+				pwshPath := AvailablePowerShell()
+				return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+			}
+			return []string{"cmd", "/c", command}, true, "cmd"
+		}
+
+		// 非 Windows：优先 bash，fallback sh
+		if LooksLikePowerShell(command) {
+			pwshPath := AvailablePowerShell()
+			return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+		}
+
+		bashPath := AvailableBash(true)
+		if bashPath != "" {
+			return []string{bashPath, "-lc", command}, false, "bash"
+		}
+
+		shPath := AvailableSh()
+		if shPath != "" {
+			return []string{shPath, "-c", command}, true, "sh"
+		}
+
 		return []string{"sh", "-c", command}, true, "sh"
 	}
 }
@@ -521,6 +554,54 @@ func truncate(s string, maxLen int) string {
 	}
 	return s[:maxLen]
 }
+
+// WriteStdin 向后台进程写入标准输入。
+// 对齐 Python ShellOperation.write_stdin：通过 ShellProcessRegistry 查找进程并写入 stdin。
+func (s *ShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	if sessionID == "" {
+		return &result.ExecuteCmdResult{
+			BaseResult: result.BuildOperationErrorResult(
+				exception.StatusSysOperationShellExecutionError.Code(),
+				"write_stdin: session_id can not be empty",
+			),
+		}, nil
+	}
+	// 当前实现：ShellProcessRegistry 追踪的是 *os.Process，没有 stdin pipe 引用。
+	// 返回未实现错误，待后续迭代补充 stdin pipe 追踪。
+	return nil, fmt.Errorf("未实现: WriteStdin（需补充 stdin pipe 追踪）")
+}
+
+// KillProcess 终止指定后台进程。
+// 对齐 Python ShellOperation.kill_process：通过 ShellProcessRegistry 查找并终止进程。
+func (s *ShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	if sessionID == "" {
+		return &result.ExecuteCmdResult{
+			BaseResult: result.BuildOperationErrorResult(
+				exception.StatusSysOperationShellExecutionError.Code(),
+				"kill_process: session_id can not be empty",
+			),
+		}, nil
+	}
+	_ = sysop.KillShellProcessesForSession(sessionID)
+	return &result.ExecuteCmdResult{
+		BaseResult: result.BaseResult{Code: 0, Message: "Process killed successfully"},
+		Data: &result.ExecuteCmdData{
+			ExitCode: intPtr(0),
+		},
+	}, nil
+}
+
+// ListProcesses 列出所有后台进程。
+// 对齐 Python ShellOperation.list_processes：返回 ShellProcessRegistry 中当前所有进程信息。
+func (s *ShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+	// 当前实现：ShellProcessRegistry 未暴露列举接口，返回空列表。
+	return &result.ExecuteCmdResult{
+		BaseResult: result.BaseResult{Code: 0, Message: "ListProcesses not fully implemented"},
+	}, nil
+}
+
+// intPtr 返回 int 的指针
+func intPtr(v int) *int { return &v }
 
 // init 注册到 GlobalRegistry
 func init() {

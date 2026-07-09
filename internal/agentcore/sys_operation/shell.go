@@ -52,7 +52,8 @@ type BaseShellOperation struct {
 }
 
 // ShellOperation Shell 操作接口，定义命令执行等操作。
-// 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background, list_tools。
+// 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
+// write_stdin, kill_process, list_processes, list_tools。
 type ShellOperation interface {
 	// ExecuteCmd 执行 Shell 命令
 	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
@@ -60,6 +61,15 @@ type ShellOperation interface {
 	ExecuteCmdStream(ctx context.Context, command string, opts ...ShellOption) (<-chan result.ExecuteCmdStreamResult, error)
 	// ExecuteCmdBackground 后台执行 Shell 命令，立即返回进程 PID
 	ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdBackgroundResult, error)
+	// WriteStdin 向后台进程写入标准输入。
+	// 对齐 Python ShellOperation.write_stdin。
+	WriteStdin(ctx context.Context, sessionID string, data string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// KillProcess 终止指定后台进程。
+	// 对齐 Python ShellOperation.kill_process。
+	KillProcess(ctx context.Context, sessionID string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
+	// ListProcesses 列出所有后台进程。
+	// 对齐 Python ShellOperation.list_processes。
+	ListProcesses(ctx context.Context, opts ...ShellOption) (*result.ExecuteCmdResult, error)
 	// ListTools 返回 Shell 操作的工具卡片列表
 	ListTools() []*tool.ToolCard
 }
@@ -154,3 +164,18 @@ func (b *BaseShellOperation) ExecuteCmdBackground(_ context.Context, _ string, _
 
 // ListTools 返回工具卡片列表（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ListTools() []*tool.ToolCard { return nil }
+
+// WriteStdin 向后台进程写入标准输入（BaseShellOperation 空实现）
+func (b *BaseShellOperation) WriteStdin(_ context.Context, _ string, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return nil, fmt.Errorf("未实现: WriteStdin")
+}
+
+// KillProcess 终止指定后台进程（BaseShellOperation 空实现）
+func (b *BaseShellOperation) KillProcess(_ context.Context, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return nil, fmt.Errorf("未实现: KillProcess")
+}
+
+// ListProcesses 列出所有后台进程（BaseShellOperation 空实现）
+func (b *BaseShellOperation) ListProcesses(_ context.Context, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return nil, fmt.Errorf("未实现: ListProcesses")
+}

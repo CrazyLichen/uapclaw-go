@@ -1,6 +1,7 @@
 package sys_operation
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"runtime"
@@ -363,4 +364,49 @@ func startSleepProcess(t *testing.T) *os.Process {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(t, cmd.Start())
 	return cmd.Process
+}
+
+// ──────────────────────────── Session ID Context 传递 ────────────────────────────
+
+// TestSetShellSessionID 测试设置 session ID 到 context
+func TestSetShellSessionID(t *testing.T) {
+	ctx := context.Background()
+	ctx = SetShellSessionID(ctx, "test-session-123")
+	assert.Equal(t, "test-session-123", GetShellSessionID(ctx))
+}
+
+// TestGetShellSessionID_未设置 测试未设置时返回空字符串
+func TestGetShellSessionID_未设置(t *testing.T) {
+	ctx := context.Background()
+	assert.Equal(t, "", GetShellSessionID(ctx))
+}
+
+// TestResetShellSessionID 测试重置 session ID
+func TestResetShellSessionID(t *testing.T) {
+	ctx := context.Background()
+	ctx = SetShellSessionID(ctx, "test-session-123")
+	assert.Equal(t, "test-session-123", GetShellSessionID(ctx))
+
+	ctx = ResetShellSessionID(ctx)
+	assert.Equal(t, "", GetShellSessionID(ctx))
+}
+
+// TestResolveShellSessionID_从Context 测试从 context 解析 session ID
+func TestResolveShellSessionID_从Context(t *testing.T) {
+	ctx := context.Background()
+	ctx = SetShellSessionID(ctx, "resolved-session")
+	assert.Equal(t, "resolved-session", ResolveShellSessionID(ctx))
+}
+
+// TestResolveShellSessionID_未设置 测试未设置时返回空字符串
+func TestResolveShellSessionID_未设置(t *testing.T) {
+	ctx := context.Background()
+	assert.Equal(t, "", ResolveShellSessionID(ctx))
+}
+
+// TestResolveShellSessionID_空白 测试空白字符串被 trim 后返回空
+func TestResolveShellSessionID_空白(t *testing.T) {
+	ctx := context.Background()
+	ctx = SetShellSessionID(ctx, "   ")
+	assert.Equal(t, "", ResolveShellSessionID(ctx))
 }

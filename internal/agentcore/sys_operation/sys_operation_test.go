@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 )
 
 // ──────────────────────────── OperationMode 枚举 ────────────────────────────
@@ -111,12 +112,13 @@ func TestFsOption(t *testing.T) {
 }
 
 // TestFsOption_默认值 测试文件系统操作选项默认值
+// 对齐 Python：mode 默认 "text"，encoding 默认 "utf-8"。
 func TestFsOption_默认值(t *testing.T) {
 	opts := NewFsOptions()
-	assert.Equal(t, "", opts.Mode)
+	assert.Equal(t, "text", opts.Mode)
 	assert.Equal(t, 0, opts.Head)
 	assert.Equal(t, 0, opts.Tail)
-	assert.Equal(t, "", opts.Encoding)
+	assert.Equal(t, "utf-8", opts.Encoding)
 }
 
 // ──────────────────────────── ShellOption 函数选项 ────────────────────────────
@@ -135,9 +137,10 @@ func TestShellOption(t *testing.T) {
 }
 
 // TestShellOption_默认值 测试 Shell 操作选项默认值
+// 对齐 Python：timeout 默认 300。
 func TestShellOption_默认值(t *testing.T) {
 	opts := NewShellOptions()
-	assert.Equal(t, 0, opts.Timeout)
+	assert.Equal(t, 300, opts.Timeout)
 	assert.Nil(t, opts.Environment)
 	assert.Equal(t, ShellTypeAuto, opts.ShellType)
 }
@@ -158,10 +161,11 @@ func TestCodeOption(t *testing.T) {
 }
 
 // TestCodeOption_默认值 测试代码执行选项默认值
+// 对齐 Python：language 默认 "python"，timeout 默认 300。
 func TestCodeOption_默认值(t *testing.T) {
 	opts := NewCodeOptions()
-	assert.Equal(t, "", opts.Language)
-	assert.Equal(t, 0, opts.Timeout)
+	assert.Equal(t, "python", opts.Language)
+	assert.Equal(t, 300, opts.Timeout)
 	assert.Nil(t, opts.Environment)
 }
 
@@ -270,35 +274,28 @@ func TestBaseSysOperation_桩方法返回零值(t *testing.T) {
 
 // TestReadFileResult_默认值 测试 ReadFileResult 默认值
 func TestReadFileResult_默认值(t *testing.T) {
-	var r ReadFileResult
+	var r result.ReadFileResult
 	assert.Equal(t, 0, r.Code)
 	assert.Equal(t, "", r.Message)
-	assert.Equal(t, "", r.Data)
 }
 
 // TestWriteFileResult_默认值 测试 WriteFileResult 默认值
 func TestWriteFileResult_默认值(t *testing.T) {
-	var r WriteFileResult
+	var r result.WriteFileResult
 	assert.Equal(t, 0, r.Code)
 	assert.Equal(t, "", r.Message)
 }
 
 // TestExecuteCmdResult_默认值 测试 ExecuteCmdResult 默认值
 func TestExecuteCmdResult_默认值(t *testing.T) {
-	var r ExecuteCmdResult
+	var r result.ExecuteCmdResult
 	assert.Equal(t, 0, r.Code)
 	assert.Equal(t, "", r.Message)
-	assert.Equal(t, "", r.Stdout)
-	assert.Equal(t, "", r.Stderr)
-	assert.Equal(t, 0, r.ExitCode)
 }
 
 // TestExecuteCodeResult_默认值 测试 ExecuteCodeResult 默认值
 func TestExecuteCodeResult_默认值(t *testing.T) {
-	var r ExecuteCodeResult
+	var r result.ExecuteCodeResult
 	assert.Equal(t, 0, r.Code)
 	assert.Equal(t, "", r.Message)
-	assert.Equal(t, "", r.Stdout)
-	assert.Equal(t, "", r.Stderr)
-	assert.Equal(t, 0, r.ExitCode)
 }

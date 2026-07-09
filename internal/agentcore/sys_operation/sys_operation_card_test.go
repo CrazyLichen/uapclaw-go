@@ -10,22 +10,27 @@ import (
 // ──────────────────────────── NewLocalWorkConfig ────────────────────────────
 
 // TestNewLocalWorkConfig 测试本地工作目录配置默认值
+// 对齐 Python LocalWorkConfig：shell_allowlist 有默认列表，restrict_to_sandbox=False。
 func TestNewLocalWorkConfig(t *testing.T) {
 	cfg := NewLocalWorkConfig()
-	assert.True(t, cfg.RestrictToSandbox)
-	assert.Nil(t, cfg.ShellAllowlist)
-	assert.Equal(t, "", cfg.SandboxRoot)
+	assert.False(t, cfg.RestrictToSandbox, "RestrictToSandbox 默认应为 false，对齐 Python")
+	assert.NotEmpty(t, cfg.ShellAllowlist, "ShellAllowlist 应有默认白名单")
+	assert.Contains(t, cfg.ShellAllowlist, "echo")
+	assert.Contains(t, cfg.ShellAllowlist, "git")
+	assert.Contains(t, cfg.ShellAllowlist, "python3")
 	assert.Nil(t, cfg.DangerousPatterns)
 }
 
 // ──────────────────────────── NewSandboxGatewayConfig ────────────────────────────
 
 // TestNewSandboxGatewayConfig 测试沙箱网关配置默认值
+// 对齐 Python SandboxGatewayConfig：gateway_url, launcher_type, sandbox_type, timeout。
 func TestNewSandboxGatewayConfig(t *testing.T) {
 	cfg := NewSandboxGatewayConfig()
-	assert.Equal(t, 30.0, cfg.TimeoutSeconds)
-	assert.Nil(t, cfg.AuthHeaders)
-	assert.Nil(t, cfg.AuthQueryParams)
+	assert.Equal(t, "http://localhost:8080", cfg.GatewayURL, "GatewayURL 默认应对齐 Python")
+	assert.Equal(t, "pre_deploy", cfg.LauncherType, "LauncherType 默认应对齐 Python")
+	assert.Equal(t, "aio", cfg.SandboxType, "SandboxType 默认应对齐 Python")
+	assert.Equal(t, 300.0, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 300.0，对齐 Python")
 }
 
 // ──────────────────────────── NewSysOperationCard ────────────────────────────
@@ -55,11 +60,11 @@ func TestWithSysOpMode(t *testing.T) {
 // TestWithSysOpWorkConfig 测试设置本地工作目录配置选项
 func TestWithSysOpWorkConfig(t *testing.T) {
 	workCfg := NewLocalWorkConfig()
-	workCfg.SandboxRoot = "/tmp/sandbox"
+	workCfg.SandboxRoot = []string{"/tmp/sandbox"}
 	card := NewSysOperationCard(WithSysOpWorkConfig(workCfg))
 	require.NotNil(t, card.WorkConfig)
-	assert.Equal(t, "/tmp/sandbox", card.WorkConfig.SandboxRoot)
-	assert.True(t, card.WorkConfig.RestrictToSandbox)
+	assert.Equal(t, []string{"/tmp/sandbox"}, card.WorkConfig.SandboxRoot)
+	assert.False(t, card.WorkConfig.RestrictToSandbox, "RestrictToSandbox 应为 false")
 }
 
 // TestWithSysOpGatewayConfig 测试设置沙箱网关配置选项

@@ -104,6 +104,24 @@ func (SysOperationToolAdapter) ExtractTools(
 	return entries, nil
 }
 
+// GetToolIDPrefix 获取工具标识前缀。
+// 对齐 Python SysOperationToolAdapter.get_tool_id_prefix（Deprecated 但保留）。
+// 输入 string → 返回 "{id}."；输入 []string → 返回每项加 "."；其他 → 返回 ""。
+func (SysOperationToolAdapter) GetToolIDPrefix(sysOperationID any) any {
+	switch v := sysOperationID.(type) {
+	case string:
+		return v + "."
+	case []string:
+		result := make([]string, len(v))
+		for i, id := range v {
+			result[i] = id + "."
+		}
+		return result
+	default:
+		return ""
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // dispatchOperationMethod 分发操作方法调用
@@ -172,6 +190,27 @@ func dispatchShellMethod(shellOp ShellOperation, ctx context.Context, methodName
 			opts = append(opts, WithShellCwd(cwd))
 		}
 		r, err := shellOp.ExecuteCmdBackground(ctx, command, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return structToMap(r), nil
+	case "write_stdin":
+		sessionID, _ := params["session_id"].(string)
+		data, _ := params["data"].(string)
+		r, err := shellOp.WriteStdin(ctx, sessionID, data)
+		if err != nil {
+			return nil, err
+		}
+		return structToMap(r), nil
+	case "kill_process":
+		sessionID, _ := params["session_id"].(string)
+		r, err := shellOp.KillProcess(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return structToMap(r), nil
+	case "list_processes":
+		r, err := shellOp.ListProcesses(ctx)
 		if err != nil {
 			return nil, err
 		}

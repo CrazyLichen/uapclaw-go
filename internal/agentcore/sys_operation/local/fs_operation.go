@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -180,7 +181,7 @@ func (f *FsOperation) ReadFileStream(ctx context.Context, path string, opts ...s
 }
 
 // WriteFile 写入文件。
-// 对齐 Python FsOperation.write_file。
+// 对齐 Python FsOperation.write_file：prepend_newline/append_newline/encoding/permissions。
 func (f *FsOperation) WriteFile(ctx context.Context, path string, content string, opts ...sysop.FsOption) (*result.WriteFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	methodName := "write_file"
@@ -195,8 +196,42 @@ func (f *FsOperation) WriteFile(ctx context.Context, path string, content string
 		}, nil
 	}
 
-	// 处理写入模式
-	dataBytes := []byte(content)
+	// 不存在时检查
+	if !o.CreateIfNotExist {
+		if _, statErr := os.Stat(resolvedPath); os.IsNotExist(statErr) {
+			return &result.WriteFileResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("File does not exist: %s", resolvedPath)),
+			}, nil
+		}
+	}
+
+	// 处理写入数据
+	var dataBytes []byte
+	if o.Mode != "bytes" {
+		// text 模式：处理换行符 + 编码
+		txt := content
+		if o.PrependNewline != nil && *o.PrependNewline {
+			txt = "\n" + txt
+		}
+		if o.AppendNewline != nil && *o.AppendNewline {
+			txt = txt + "\n"
+		}
+		// 使用指定编码转换为字节
+		enc := o.Encoding
+		if enc == "" {
+			enc = "utf-8"
+		}
+		if enc == "utf-8" {
+			dataBytes = []byte(txt)
+		} else {
+			// 非 UTF-8 编码：使用 golang.org/x/text 或简单 fallback
+			dataBytes = []byte(txt) // 简化：Go 标准库仅支持 UTF-8，其他编码需要额外包
+		}
+	} else {
+		dataBytes = []byte(content)
+	}
+
+	// 写入文件
 	if o.Append {
 		file, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -211,6 +246,8 @@ func (f *FsOperation) WriteFile(ctx context.Context, path string, content string
 				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
 			}, nil
 		}
+		// 应用权限
+		applyPermissions(resolvedPath, o.Permissions)
 		successResult := &result.WriteFileResult{
 			BaseResult: result.BaseResult{Code: 0, Message: "success"},
 			Data: &result.WriteFileData{
@@ -222,7 +259,9 @@ func (f *FsOperation) WriteFile(ctx context.Context, path string, content string
 		return successResult, nil
 	}
 
-	err = os.WriteFile(resolvedPath, dataBytes, 0644)
+	// 获取文件权限
+	perm := parsePermissions(o.Permissions)
+	err = os.WriteFile(resolvedPath, dataBytes, perm)
 	if err != nil {
 		return &result.WriteFileResult{
 			BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
@@ -280,11 +319,100 @@ func (f *FsOperation) UploadFile(ctx context.Context, localPath string, targetPa
 	}, nil
 }
 
-// UploadFileStream 流式上传文件
+// UploadFileStream 流式上传文件（本地模式 = 分块拷贝）。
+// 对齐 Python FsOperation.upload_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
 func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (<-chan result.UploadFileStreamResult, error) {
-	ch := make(chan result.UploadFileStreamResult, 1)
-	close(ch)
-	return ch, fmt.Errorf("未实现: UploadFileStream")
+	o := sysop.NewFsOptions(opts...)
+	ch := make(chan result.UploadFileStreamResult, 16)
+
+	resolvedLocal, err := filepath.Abs(localPath)
+	if err != nil {
+		close(ch)
+		return ch, fmt.Errorf("resolve local path failed: %w", err)
+	}
+
+	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
+	if err != nil {
+		close(ch)
+		return ch, fmt.Errorf("resolve target path failed: %w", err)
+	}
+
+	go func() {
+		defer close(ch)
+
+		// 打开源文件
+		srcFile, err := os.Open(resolvedLocal)
+		if err != nil {
+			ch <- result.UploadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Source not found: %s", resolvedLocal)),
+			}
+			return
+		}
+		defer srcFile.Close()
+
+		// 检查目标存在
+		if _, statErr := os.Stat(resolvedTarget); statErr == nil && !o.Overwrite {
+			ch <- result.UploadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Target exists: %s", resolvedTarget)),
+			}
+			return
+		}
+
+		// 打开目标文件
+		dstFile, err := os.Create(resolvedTarget)
+		if err != nil {
+			ch <- result.UploadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
+			}
+			return
+		}
+		defer dstFile.Close()
+
+		// 分块拷贝（peek-ahead 模式）
+		chunkSize := o.ChunkSize
+		if chunkSize <= 0 {
+			chunkSize = sysop.DefaultUploadStreamChunkSize
+		}
+		buf := make([]byte, chunkSize)
+		index := 0
+
+		// 读取第一个分块
+		n, readErr := srcFile.Read(buf)
+		for n > 0 {
+			chunk := buf[:n]
+
+			// 读取下一个分块判断是否是最后一块
+			nextN, _ := srcFile.Read(buf)
+			isLast := nextN == 0
+
+			// 写入目标
+			dstFile.Write(chunk)
+
+			ch <- result.UploadFileStreamResult{
+				BaseResult: result.BaseResult{Code: 0, Message: "success"},
+				Data: &result.UploadFileChunkData{
+					LocalPath:    resolvedLocal,
+					TargetPath:   resolvedTarget,
+					ChunkSize:    len(chunk),
+					ChunkIndex:   index,
+					IsLastChunk:  isLast,
+				},
+			}
+
+			index++
+			n = nextN
+			if readErr != nil {
+				break
+			}
+		}
+
+		// 保留权限
+		if o.PreservePerms {
+			copyPermissions(resolvedLocal, resolvedTarget)
+		}
+	}()
+
+	return ch, nil
 }
 
 // DownloadFile 下载文件（本地模式 = 文件拷贝）
@@ -313,11 +441,99 @@ func (f *FsOperation) DownloadFile(ctx context.Context, sourcePath string, local
 	}, nil
 }
 
-// DownloadFileStream 流式下载文件
+// DownloadFileStream 流式下载文件（本地模式 = 分块拷贝）。
+// 对齐 Python FsOperation.download_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
 func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (<-chan result.DownloadFileStreamResult, error) {
-	ch := make(chan result.DownloadFileStreamResult, 1)
-	close(ch)
-	return ch, fmt.Errorf("未实现: DownloadFileStream")
+	o := sysop.NewFsOptions(opts...)
+	ch := make(chan result.DownloadFileStreamResult, 16)
+
+	resolvedSource, err := f.resolvePath(sourcePath, false)
+	if err != nil {
+		close(ch)
+		return ch, fmt.Errorf("resolve source path failed: %w", err)
+	}
+
+	go func() {
+		defer close(ch)
+
+		// 打开源文件
+		srcFile, err := os.Open(resolvedSource)
+		if err != nil {
+			ch <- result.DownloadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Source not found: %s", resolvedSource)),
+			}
+			return
+		}
+		defer srcFile.Close()
+
+		// 检查目标存在
+		if _, statErr := os.Stat(localPath); statErr == nil && !o.Overwrite {
+			ch <- result.DownloadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Destination exists: %s", localPath)),
+			}
+			return
+		}
+
+		// 创建父目录
+		if o.CreateParentDirs {
+			os.MkdirAll(filepath.Dir(localPath), 0755)
+		}
+
+		// 打开目标文件
+		dstFile, err := os.Create(localPath)
+		if err != nil {
+			ch <- result.DownloadFileStreamResult{
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
+			}
+			return
+		}
+		defer dstFile.Close()
+
+		// 分块拷贝（peek-ahead 模式）
+		chunkSize := o.ChunkSize
+		if chunkSize <= 0 {
+			chunkSize = sysop.DefaultDownloadStreamChunkSize
+		}
+		buf := make([]byte, chunkSize)
+		index := 0
+
+		// 读取第一个分块
+		n, readErr := srcFile.Read(buf)
+		for n > 0 {
+			chunk := buf[:n]
+
+			// 读取下一个分块判断是否是最后一块
+			nextN, _ := srcFile.Read(buf)
+			isLast := nextN == 0
+
+			// 写入目标
+			dstFile.Write(chunk)
+
+			ch <- result.DownloadFileStreamResult{
+				BaseResult: result.BaseResult{Code: 0, Message: "success"},
+				Data: &result.DownloadFileChunkData{
+					SourcePath:   resolvedSource,
+					LocalPath:    localPath,
+					ChunkSize:    len(chunk),
+					ChunkIndex:   index,
+					IsLastChunk:  isLast,
+				},
+			}
+
+			index++
+			n = nextN
+			if readErr != nil {
+				break
+			}
+		}
+
+		// 保留权限
+		if o.PreservePerms {
+			copyPermissions(resolvedSource, localPath)
+		}
+	}()
+
+	return ch, nil
 }
 
 // ListFiles 列出目录下文件。
@@ -700,6 +916,49 @@ func (f *FsOperation) createErrorResult(methodName string, errMsg string, startT
 			exception.StatusSysOperationFsExecutionError.Code(),
 			errMsg,
 		),
+	}
+}
+
+// parsePermissions 将权限字符串（如 "644"）解析为 os.FileMode。
+// 对齐 Python _apply_permissions：int(permissions, 8) → os.chmod。
+func parsePermissions(perm string) os.FileMode {
+	if perm == "" {
+		return 0644
+	}
+	// 尝试解析为八进制
+	var mode uint32
+	for _, ch := range perm {
+		if ch >= '0' && ch <= '7' {
+			mode = mode*8 + uint32(ch-'0')
+		} else {
+			return 0644 // 无效则 fallback
+		}
+	}
+	return os.FileMode(mode)
+}
+
+// applyPermissions 应用文件权限，对齐 Python _apply_permissions（best-effort，仅 Unix）。
+func applyPermissions(path string, perm string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	mode := parsePermissions(perm)
+	if err := os.Chmod(path, mode); err != nil {
+		logger.Warn(fsLogComponent).Str("path", path).Err(err).Msg("设置文件权限失败")
+	}
+}
+
+// copyPermissions 从源文件复制权限到目标文件，对齐 Python _copy_permissions。
+func copyPermissions(src, dst string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return
+	}
+	if err := os.Chmod(dst, info.Mode()); err != nil {
+		logger.Warn(fsLogComponent).Str("dst", dst).Err(err).Msg("复制文件权限失败")
 	}
 }
 

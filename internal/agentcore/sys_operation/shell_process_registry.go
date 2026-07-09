@@ -1,6 +1,7 @@
 package sys_operation
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"strings"
@@ -310,4 +311,42 @@ func waitProcessWithTimeout(proc *os.Process, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return false
 	}
+}
+
+// ──────────────────────────── Session ID Context 传递 ────────────────────────────
+
+// shellSessionIDKey context key 用于传递 Shell session ID。
+// 对齐 Python _shell_session_id: contextvars.ContextVar。
+type shellSessionIDKey struct{}
+
+// SetShellSessionID 将 session ID 绑定到 context。
+// 对齐 Python set_shell_session_id。
+func SetShellSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, shellSessionIDKey{}, sessionID)
+}
+
+// GetShellSessionID 从 context 获取 session ID。
+// 对齐 Python get_shell_session_id。
+func GetShellSessionID(ctx context.Context) string {
+	if v, ok := ctx.Value(shellSessionIDKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// ResetShellSessionID 重置 context 中的 session ID。
+// 对齐 Python reset_shell_session_id（Go 中通过覆盖 WithValue 实现）。
+func ResetShellSessionID(ctx context.Context) context.Context {
+	return context.WithValue(ctx, shellSessionIDKey{}, "")
+}
+
+// ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到空。
+// 对齐 Python resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
+// Go 版本简化了 fallback 路径：当前 logger 包无 trace ID 机制，后续可补充。
+func ResolveShellSessionID(ctx context.Context) string {
+	sid := strings.TrimSpace(GetShellSessionID(ctx))
+	if sid != "" {
+		return sid
+	}
+	return ""
 }

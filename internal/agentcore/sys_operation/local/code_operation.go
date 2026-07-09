@@ -2,9 +2,11 @@ package local
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"time"
 
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
@@ -27,6 +29,12 @@ type CodeOperation struct {
 
 const (
 	codeLogComponent = logger.ComponentAgentCore
+	// windowsCmdLimit Windows 命令行长度限制。
+	// 对齐 Python _WINDOWS_CMD_LIMIT = 8000。
+	windowsCmdLimit = 8000
+	// unixCmdLimit Unix 命令行长度限制。
+	// 对齐 Python _UNIX_CMD_LIMIT = 100000。
+	unixCmdLimit = 100000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -42,7 +50,7 @@ func NewCodeOperation(runConfig any) sysop.SysSubOperation {
 
 // ExecuteCode 执行代码。
 // 对齐 Python CodeOperation.execute_code：参数校验 → 语言支持检查 →
-// buildSubprocessCmd → 环境变量 → 子进程执行 → 结果构造 → 日志记录。
+// buildSubprocessCmd → 环境变量 → 子进程执行 → FileNotFoundError 处理 → 结果构造 → 日志记录。
 func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sysop.CodeOption) (*result.ExecuteCodeResult, error) {
 	o := sysop.NewCodeOptions(opts...)
 	methodName := "execute_code"
@@ -59,8 +67,20 @@ func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sy
 		}, nil
 	}
 
+	// 从 options 中读取 force_file 和 encoding
+	forceFile := false
+	encoding := defaultShellEncoding
+	if o.Options != nil {
+		if ff, ok := o.Options["force_file"].(bool); ok {
+			forceFile = ff
+		}
+		if enc, ok := o.Options["encoding"].(string); ok && enc != "" {
+			encoding = enc
+		}
+	}
+
 	// 构建子进程命令
-	cmdArgs, tmpFile, err := c.buildSubprocessCmd(code, o.Language)
+	cmdArgs, tmpFile, err := c.buildSubprocessCmd(code, o.Language, forceFile)
 	if err != nil {
 		return &result.ExecuteCodeResult{
 			BaseResult: result.BuildOperationErrorResult(
@@ -82,11 +102,20 @@ func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sy
 	cmd.Env = c.prepareCodeEnv(o.Environment, o.Language)
 
 	// 创建进程处理器
-	handler := NewAsyncProcessHandler(cmd, defaultChunkSize, defaultShellEncoding, o.Timeout)
+	handler := NewAsyncProcessHandler(cmd, defaultChunkSize, encoding, o.Timeout)
 
 	// 执行
 	invokeData, err := handler.Invoke(ctx)
 	if err != nil {
+		// FileNotFoundError 友好处理，对齐 Python
+		if errors.Is(err, exec.ErrNotFound) {
+			return &result.ExecuteCodeResult{
+				BaseResult: result.BuildOperationErrorResult(
+					exception.StatusSysOperationCodeExecutionError.Code(),
+					fmt.Sprintf("%s file not found error, please install and add it to your system environment variable PATH.", o.Language),
+				),
+			}, nil
+		}
 		return &result.ExecuteCodeResult{
 			BaseResult: result.BuildOperationErrorResult(
 				exception.StatusSysOperationCodeExecutionError.Code(),
@@ -124,7 +153,7 @@ func (c *CodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts
 	ch := make(chan result.ExecuteCodeStreamResult, 64)
 
 	o := sysop.NewCodeOptions(opts...)
-	cmdArgs, tmpFile, err := c.buildSubprocessCmd(code, o.Language)
+	cmdArgs, tmpFile, err := c.buildSubprocessCmd(code, o.Language, false)
 	if err != nil {
 		close(ch)
 		return ch, err
@@ -225,20 +254,23 @@ func (c *CodeOperation) ListTools() []*tool.ToolCard {
 
 // buildSubprocessCmd 构建代码执行子进程命令。
 // 对齐 Python CodeOperation 的 supportLanguageConfigDict + buildSubprocessCmd。
-func (c *CodeOperation) buildSubprocessCmd(code string, language string) ([]string, string, error) {
+// 修改点：命令长度限制对齐 Python（8000/100000），Python 加 -u 参数，force_file 支持。
+func (c *CodeOperation) buildSubprocessCmd(code string, language string, forceFile bool) ([]string, string, error) {
+	cmdLimit := getDefaultCmdLimit()
+
 	switch language {
 	case "python", "python3":
-		// 短代码用 -c，长代码写临时文件
-		if len(code) < 4000 {
-			return []string{"python3", "-c", code}, "", nil
+		// Python 执行加 -u 参数（unbuffered），对齐 Python _SUPPORT_LANGUAGE_CONFIG_DICT
+		if !forceFile && len(code) <= cmdLimit {
+			return []string{"python3", "-u", "-c", code}, "", nil
 		}
 		tmpFile, err := (&OperationUtils{}).CreateTmpFile(code, ".py")
 		if err != nil {
 			return nil, "", err
 		}
-		return []string{"python3", tmpFile}, tmpFile, nil
+		return []string{"python3", "-u", tmpFile}, tmpFile, nil
 	case "javascript", "node":
-		if len(code) < 4000 {
+		if !forceFile && len(code) <= cmdLimit {
 			return []string{"node", "-e", code}, "", nil
 		}
 		tmpFile, err := (&OperationUtils{}).CreateTmpFile(code, ".js")
@@ -249,6 +281,15 @@ func (c *CodeOperation) buildSubprocessCmd(code string, language string) ([]stri
 	default:
 		return nil, "", fmt.Errorf("unsupported language: %s (supported: python, javascript)", language)
 	}
+}
+
+// getDefaultCmdLimit 获取当前平台的命令行长度限制。
+// 对齐 Python：Windows = 8000，Unix = 100000。
+func getDefaultCmdLimit() int {
+	if runtime.GOOS == "windows" {
+		return windowsCmdLimit
+	}
+	return unixCmdLimit
 }
 
 // prepareCodeEnv 准备代码执行环境变量。

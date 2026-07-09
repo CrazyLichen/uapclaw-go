@@ -95,6 +95,15 @@ func (m *mockShellOperation) ExecuteCmdStream(ctx context.Context, command strin
 func (m *mockShellOperation) ExecuteCmdBackground(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdBackgroundResult, error) {
 	return &result.ExecuteCmdBackgroundResult{BaseResult: result.BaseResult{Code: 0, Message: "ok"}}, nil
 }
+func (m *mockShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return &result.ExecuteCmdResult{BaseResult: result.BaseResult{Code: 0, Message: "ok"}}, nil
+}
+func (m *mockShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return &result.ExecuteCmdResult{BaseResult: result.BaseResult{Code: 0, Message: "ok"}}, nil
+}
+func (m *mockShellOperation) ListProcesses(ctx context.Context, opts ...ShellOption) (*result.ExecuteCmdResult, error) {
+	return &result.ExecuteCmdResult{BaseResult: result.BaseResult{Code: 0, Message: "ok"}}, nil
+}
 func (m *mockShellOperation) ListTools() []*tool.ToolCard {
 	return []*tool.ToolCard{
 		tool.NewToolCard("execute_cmd", "Execute a command", nil, nil),
@@ -403,6 +412,63 @@ func TestDispatchCodeMethod_带选项(t *testing.T) {
 		"code":     "print(1)",
 		"language": "node",
 	})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+}
+
+// ──────────────────────────── GetToolIDPrefix ────────────────────────────
+
+// TestGetToolIDPrefix_字符串 测试字符串输入
+func TestGetToolIDPrefix_字符串(t *testing.T) {
+	adapter := SysOperationToolAdapter{}
+	result := adapter.GetToolIDPrefix("my_op")
+	assert.Equal(t, "my_op.", result)
+}
+
+// TestGetToolIDPrefix_字符串列表 测试字符串列表输入
+func TestGetToolIDPrefix_字符串列表(t *testing.T) {
+	adapter := SysOperationToolAdapter{}
+	result := adapter.GetToolIDPrefix([]string{"op1", "op2"})
+	assert.Equal(t, []string{"op1.", "op2."}, result)
+}
+
+// TestGetToolIDPrefix_其他类型 测试其他类型返回空字符串
+func TestGetToolIDPrefix_其他类型(t *testing.T) {
+	adapter := SysOperationToolAdapter{}
+	assert.Equal(t, "", adapter.GetToolIDPrefix(123))
+	assert.Equal(t, "", adapter.GetToolIDPrefix(nil))
+}
+
+// ──────────────────────────── dispatchShellMethod 新方法 ────────────────────────────
+
+// TestDispatchShellMethod_WriteStdin 测试 write_stdin 分发
+func TestDispatchShellMethod_WriteStdin(t *testing.T) {
+	shellOp := &mockShellOperation{}
+	ctx := context.Background()
+	res, err := dispatchShellMethod(shellOp, ctx, "write_stdin", map[string]any{
+		"session_id": "sess1",
+		"data":       "hello",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+}
+
+// TestDispatchShellMethod_KillProcess 测试 kill_process 分发
+func TestDispatchShellMethod_KillProcess(t *testing.T) {
+	shellOp := &mockShellOperation{}
+	ctx := context.Background()
+	res, err := dispatchShellMethod(shellOp, ctx, "kill_process", map[string]any{
+		"session_id": "sess1",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+}
+
+// TestDispatchShellMethod_ListProcesses 测试 list_processes 分发
+func TestDispatchShellMethod_ListProcesses(t *testing.T) {
+	shellOp := &mockShellOperation{}
+	ctx := context.Background()
+	res, err := dispatchShellMethod(shellOp, ctx, "list_processes", map[string]any{})
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
 }
