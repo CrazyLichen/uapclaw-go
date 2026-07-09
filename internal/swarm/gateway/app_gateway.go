@@ -111,6 +111,15 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 //
 // 注册 WebChannel、启动 MessageHandler 转发循环、启动 HTTP 服务器。
 func (s *GatewayServer) Start(ctx context.Context) error {
+	// TODO(⤵️ 领域11): 初始化 IMInboundPipeline + IMOutboundPipeline，注册到 MessageHandler
+	// 对齐 Python: app_gateway.py L851-856
+
+	// TODO(⤵️ Cron): 初始化 CronJobStore + CronSchedulerService + CronController，启动 cron_scheduler
+	// 对齐 Python: app_gateway.py L858-865, L1615
+
+	// TODO(⤵️ Heartbeat): 初始化 GatewayHeartbeatService（配置 interval/timeout/active_hours），启动
+	// 对齐 Python: app_gateway.py L884-913
+
 	// 注册并启动 WebChannel（OnMessage 回调已通过 NewWebChannel 注入）
 	s.channelMgr.Register(s.webChannel, nil)
 

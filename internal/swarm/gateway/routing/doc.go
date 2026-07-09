@@ -6,13 +6,16 @@
 //   - SendRequestStream: 流式请求，持续接收 chunk 直到 is_complete
 //   - receiverLoop: 统一消费 transport.Recv()，区分事件帧/server_push/正常响应
 //
+// RouteBinding 描述 WS 路径的消息处理策略，预留多路径框架（/ws、/acp、/tui）。
+//
 // 对齐 Python: jiuwenswarm/gateway/routing/agent_client.py (WebSocketAgentServerClient)
 //
 // 文件目录：
 //
 //	routing/
 //	├── doc.go              # 包文档
-//	└── agent_client.go     # AgentClient 完整实现
+//	├── agent_client.go     # AgentClient 完整实现
+//	└── route_binding.go    # RouteBinding 多路径 WS 路由绑定
 //
 // 对应 Python 代码：jiuwenswarm/gateway/routing/
 package routing
