@@ -105,13 +105,13 @@ type DescOptimizeStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 DESC_OPTIMIZE 阶段逻辑。
-func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	skillDir := filepathJoin(sctx.Workspace, "skill")
 	skillMD := filepathJoin(skillDir, "SKILL.md")
 
 	if _, err := os.Stat(skillMD); os.IsNotExist(err) {
 		sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "未找到 SKILL.md，跳过描述优化"})
-		return &StageResult{NextStage: skilldev.SkillDevStageCompleted}, nil
+		return &skilldev.StageResult{NextStage: skilldev.SkillDevStageCompleted}, nil
 	}
 
 	skillName, currentDesc, body := ParseSkillFrontmatter(skillMD)
@@ -147,7 +147,7 @@ func (h *DescOptimizeStageHandler) Execute(_ context.Context, sctx *skilldev.Ski
 	sctx.State.DescOptimizeResult = result
 
 	sctx.Emit(skilldev.SkillDevEventTypeDescOptReady, result)
-	return &StageResult{NextStage: skilldev.SkillDevStageCompleted}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageCompleted}, nil
 }
 
 // SplitEvalSet 按 should_trigger 分层切分 train/test。

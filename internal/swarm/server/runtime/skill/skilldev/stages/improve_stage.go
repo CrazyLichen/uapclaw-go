@@ -71,7 +71,7 @@ type ImproveStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 IMPROVE 阶段逻辑。
-func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	if len(sctx.State.FeedbackHistory) == 0 {
 		return nil, fmt.Errorf("IMPROVE 阶段缺少反馈历史，请先完成 REVIEW 阶段")
 	}
@@ -101,7 +101,7 @@ func (h *ImproveStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
 		"message": fmt.Sprintf("改进完成，开始第 %d 轮测试", sctx.State.Iteration),
 	})
-	return &StageResult{NextStage: skilldev.SkillDevStageTestRun}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageTestRun}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -20,7 +20,7 @@ type ValidateStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 VALIDATE 阶段逻辑。
-func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	skillMDPath := fmt.Sprintf("%s/skill/SKILL.md", sctx.Workspace)
 
 	if _, err := os.Stat(skillMDPath); os.IsNotExist(err) {
@@ -28,7 +28,7 @@ func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 			"valid":   false,
 			"message": "SKILL.md 未生成",
 		})
-		return &StageResult{NextStage: skilldev.SkillDevStageGenerate}, nil
+		return &skilldev.StageResult{NextStage: skilldev.SkillDevStageGenerate}, nil
 	}
 
 	valid, message := ValidateSkillMD(skillMDPath)
@@ -41,10 +41,10 @@ func (h *ValidateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 		logger.Warn(logComponent).
 			Str("message", message).
 			Msg("[ValidateStage] 校验失败，回退到 GENERATE")
-		return &StageResult{NextStage: skilldev.SkillDevStageGenerate}, nil
+		return &skilldev.StageResult{NextStage: skilldev.SkillDevStageGenerate}, nil
 	}
 
-	return &StageResult{NextStage: skilldev.SkillDevStageTestDesign}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageTestDesign}, nil
 }
 
 // ValidateSkillMD 校验 SKILL.md 的 YAML frontmatter 格式。

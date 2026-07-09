@@ -23,7 +23,7 @@ func newTestContext(state *skilldev.SkillDevState, workspace string) *skilldev.S
 // ──────────────────────────── StageResult 测试 ────────────────────────────
 
 func TestStageResult(t *testing.T) {
-	result := &StageResult{NextStage: skilldev.SkillDevStagePlan}
+	result := &skilldev.StageResult{NextStage: skilldev.SkillDevStagePlan}
 	if result.NextStage != skilldev.SkillDevStagePlan {
 		t.Errorf("期望 NextStage=%s, 实际=%s", skilldev.SkillDevStagePlan, result.NextStage)
 	}

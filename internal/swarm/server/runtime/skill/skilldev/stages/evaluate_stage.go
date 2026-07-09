@@ -65,7 +65,7 @@ type EvaluateStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 EVALUATE 阶段逻辑。
-func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	iteration := sctx.State.Iteration
 	iterDir := filepath.Join(sctx.Workspace, "evals", fmt.Sprintf("iteration-%d", iteration))
 
@@ -97,7 +97,7 @@ func (h *EvaluateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 		"benchmark": benchmarkDict,
 		"iteration": iteration,
 	})
-	return &StageResult{NextStage: skilldev.SkillDevStageReview}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageReview}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

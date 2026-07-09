@@ -41,7 +41,7 @@ type PackageStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 PACKAGE 阶段逻辑。
-func (h *PackageStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *PackageStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	skillDir := filepath.Join(sctx.Workspace, "skill")
 	outputDir := filepath.Join(sctx.Workspace, "output")
 	_ = os.MkdirAll(outputDir, 0o755)
@@ -79,7 +79,7 @@ func (h *PackageStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 			"downloadable": true,
 		},
 	})
-	return &StageResult{NextStage: skilldev.SkillDevStageDescOptimizeConfirm}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageDescOptimizeConfirm}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

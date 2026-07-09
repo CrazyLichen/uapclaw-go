@@ -14,16 +14,20 @@
 // 文件目录：
 //
 //	skilldev/
-//	├── doc.go           # 包文档
-//	├── schema.go        # 核心数据模型：阶段枚举、状态、事件、挂起配置、评测模型
-//	├── schema_test.go   # schema 测试
-//	├── deps.go          # SkillDevDeps：最小外部依赖定义
-//	├── store.go         # StateStore：任务状态持久化（本地文件实现）
-//	├── store_test.go    # store 测试
-//	├── workspace.go     # WorkspaceProvider：工作区目录管理
+//	├── doc.go            # 包文档
+//	├── schema.go         # 核心数据模型：阶段枚举、状态、事件、挂起配置、评测模型
+//	├── schema_test.go    # schema 测试
+//	├── deps.go           # SkillDevDeps：最小外部依赖定义
+//	├── store.go          # StateStore：任务状态持久化（本地文件实现）
+//	├── store_test.go     # store 测试
+//	├── workspace.go      # WorkspaceProvider：工作区目录管理
 //	├── workspace_test.go # workspace 测试
-//	├── context.go       # SkillDevContext：阶段执行上下文（emit/agent 创建）
-//	└── stages/          # 阶段处理器实现
+//	├── context.go        # SkillDevContext：阶段执行上下文（emit/agent 创建）
+//	├── pipeline.go       # SkillDevPipeline：确定性状态机编排器（Run/Resume/checkpoint）
+//	├── pipeline_test.go  # pipeline 测试
+//	├── service.go        # SkillDevService：无状态服务入口（Handle 分发/7 个方法 handler）
+//	├── service_test.go   # service 测试
+//	└── stages/           # 阶段处理器实现
 //
 // 对应 Python 代码：jiwenswarm/server/runtime/skill/skilldev/
 package skilldev

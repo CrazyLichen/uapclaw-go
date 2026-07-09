@@ -19,7 +19,7 @@ type TestRunStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 TEST_RUN 阶段逻辑。
-func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	evals := sctx.State.Evals
 	if evals == nil {
 		return nil, fmt.Errorf("TEST_RUN 阶段缺少测试用例，请先完成 TEST_DESIGN 阶段")
@@ -48,7 +48,7 @@ func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 		"message":   "测试执行完成",
 	})
 
-	return &StageResult{NextStage: skilldev.SkillDevStageEvaluate}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageEvaluate}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -87,7 +87,7 @@ type PlanStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 PLAN 阶段逻辑。
-func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在分析需求并生成开发计划..."})
 
 	plan, err := h.generatePlan(sctx)
@@ -97,7 +97,7 @@ func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 	sctx.State.Plan = plan
 
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "开发计划已生成，等待确认"})
-	return &StageResult{NextStage: skilldev.SkillDevStagePlanConfirm}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStagePlanConfirm}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

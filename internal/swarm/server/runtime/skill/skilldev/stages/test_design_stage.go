@@ -58,7 +58,7 @@ type TestDesignStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 TEST_DESIGN 阶段逻辑。
-func (h *TestDesignStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *TestDesignStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在设计测试用例..."})
 
 	skillContent := h.readSkillFiles(filepath.Join(sctx.Workspace, "skill"))
@@ -81,7 +81,7 @@ func (h *TestDesignStageHandler) Execute(_ context.Context, sctx *skilldev.Skill
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{
 		"message": fmt.Sprintf("已设计 %d 个测试用例", count),
 	})
-	return &StageResult{NextStage: skilldev.SkillDevStageTestRun}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageTestRun}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

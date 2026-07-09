@@ -1,6 +1,7 @@
 package skilldev
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -103,4 +104,29 @@ func (c *SkillDevContext) CreateStageAgent(
 // 待实现: 接入实际工具注册逻辑
 func (c *SkillDevContext) RegisterTools(_ any, _ []string) error {
 	return fmt.Errorf("_register_tools 尚未实现")
+}
+
+// StageResult 阶段执行结果，由 Pipeline 读取以驱动状态跳转。
+type StageResult struct {
+	// NextStage 下一个跳转阶段
+	NextStage SkillDevStage
+}
+
+// ──────────────────────────── 接口 ────────────────────────────
+
+// StageHandler SkillDev Pipeline 阶段处理器接口。
+//
+// 每个阶段独立实现，通过 Execute() 与 Pipeline 交互。
+// 处理器不应持有跨请求的状态——所有状态均通过 SkillDevContext 传入。
+type StageHandler interface {
+	// Execute 执行阶段逻辑。
+	//
+	// 参数：
+	//   - ctx:  上下文（控制生命周期）
+	//   - sctx: SkillDevContext，包含 state、workspace、emit、create_stage_agent 等
+	//
+	// 返回值：
+	//   - StageResult：Pipeline 据此跳转到下一阶段
+	//   - error：执行错误
+	Execute(ctx context.Context, sctx *SkillDevContext) (*StageResult, error)
 }

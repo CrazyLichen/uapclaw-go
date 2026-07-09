@@ -20,7 +20,7 @@ type InitStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 INIT 阶段逻辑。
-func (h *InitStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *InitStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "正在初始化工作区..."})
 
 	// 判断任务模式
@@ -55,7 +55,7 @@ func (h *InitStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 	}
 
 	sctx.Emit(skilldev.SkillDevEventTypeProgress, map[string]any{"message": "初始化完成，准备生成开发计划"})
-	return &StageResult{NextStage: skilldev.SkillDevStagePlan}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStagePlan}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -81,7 +81,7 @@ type GenerateStageHandler struct{}
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Execute 执行 GENERATE 阶段逻辑。
-func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*StageResult, error) {
+func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevContext) (*skilldev.StageResult, error) {
 	plan := sctx.State.Plan
 	if plan == nil {
 		return nil, fmt.Errorf("GENERATE 阶段缺少 plan，请先完成 PLAN 阶段")
@@ -114,7 +114,7 @@ func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 			"downloadable": false,
 		},
 	})
-	return &StageResult{NextStage: skilldev.SkillDevStageValidate}, nil
+	return &skilldev.StageResult{NextStage: skilldev.SkillDevStageValidate}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
