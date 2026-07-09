@@ -5,11 +5,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -20,8 +23,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
@@ -182,6 +187,15 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 6. 重置免费搜索运行时标志（等价 Python: reset_free_search_runtime_flags()）
 	harness.ResetFreeSearchRuntimeFlags()
 
+	// 7. 配置热重载器（对齐 Python: config/reloader.go fsnotify 监听）
+	//    reloader 在 AgentServer 启动后注册回调（需要 agentClient 就绪）
+	reloader, reloaderErr := config.NewReloader(cfg)
+	if reloaderErr != nil {
+		logger.Warn(logger.ComponentGateway).
+			Err(reloaderErr).
+			Msg("创建配置热重载器失败，热重载不可用")
+	}
+
 	// 创建 ChannelTransport（进程内传输）
 	transport := gateway_push.NewChannelTransport()
 
@@ -216,13 +230,78 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
 	}
 
+	// 8. 启动时推送初始配置给 AgentServer（对齐 Python: set_or_update_server_config + agent.reload_config）
+	//    等待 AgentServer 就绪后发送
+	if agentClient.WaitServerReady(ctx) {
+		if err := pushConfigToAgentServer(ctx, cfg, agentClient); err != nil {
+			logger.Warn(logger.ComponentGateway).
+				Err(err).
+				Msg("启动时推送初始配置给 AgentServer 失败")
+		} else {
+			logger.Info(logger.ComponentGateway).Msg("初始配置已推送给 AgentServer")
+		}
+	}
+
+	// 9. 启动配置热重载监听
+	if reloader != nil {
+		reloader.OnReload(func(_ map[string]any) {
+			reloadCtx, reloadCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer reloadCancel()
+			if err := pushConfigToAgentServer(reloadCtx, cfg, agentClient); err != nil {
+				logger.Warn(logger.ComponentGateway).
+					Err(err).
+					Msg("配置热重载：推送配置给 AgentServer 失败")
+			} else {
+				logger.Info(logger.ComponentGateway).Msg("配置热重载成功，已通知 AgentServer")
+			}
+		})
+		if err := reloader.Start(); err != nil {
+			logger.Warn(logger.ComponentGateway).
+				Err(err).
+				Msg("配置文件监听启动失败，热重载不可用")
+		}
+	}
+
 	// 等待退出信号
 	<-ctx.Done()
 	logger.Info(logger.ComponentGateway).Msg("收到退出信号，正在关闭...")
 
+	// 停止配置热重载监听
+	if reloader != nil {
+		_ = reloader.Stop()
+	}
+
 	// 停止顺序：AgentServer（取消流式任务 + 清理）→ GatewayServer（HTTP 优雅关闭）
 	_ = agentServer.Stop()
 	return gs.Stop()
+}
+
+// pushConfigToAgentServer 构造 agent.reload_config E2A 请求并发送给 AgentServer。
+// 对齐 Python: _on_config_saved → client.send_request(reload_env)。
+// 配置始终通过 E2A 请求传递，AgentServer 不共享 Config 指针。
+func pushConfigToAgentServer(ctx context.Context, cfg *config.Config, agentClient *routing.AgentClient) error {
+	configData, _ := cfg.Raw()
+	if configData == nil {
+		configData = make(map[string]any)
+	}
+
+	requestID := "config-reload-" + uuid.New().String()[:8]
+	envelope := e2a.E2AFromAgentFields(requestID,
+		e2a.WithFieldReqMethod(string(schema.ReqMethodAgentReloadConfig)),
+		e2a.WithFieldParams(map[string]any{
+			"config": configData,
+			"env":    gateway.BuildEnvMap(),
+		}),
+	)
+
+	resp, err := agentClient.SendRequest(ctx, envelope)
+	if err != nil {
+		return fmt.Errorf("发送 agent.reload_config 失败: %w", err)
+	}
+	if !resp.OK {
+		return fmt.Errorf("AgentServer 拒绝配置重载: %v", resp.Payload)
+	}
+	return nil
 }
 
 // newAgentServerCmd 创建 agentserver 子命令
