@@ -278,6 +278,8 @@ func GenerateHarnessConfigYAML(
 	return yamlStr, nil
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // resolveBuiltinTools 按组名实例化内置工具。
 //
 // ⤵️ 9.38 回填：内置工具集实现后补全实例化逻辑。
@@ -490,8 +492,6 @@ func railsToYAMLSpecs(rails []interfaces.AgentRail) []map[string]any {
 	}
 	return specs
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildToolDottedToGroup 构建反转工具注册表
 func buildToolDottedToGroup() map[string]string {

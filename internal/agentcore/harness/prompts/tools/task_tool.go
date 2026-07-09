@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// TaskMetadataProvider task_tool 工具元数据提供者
+type TaskMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // GeneralPurposeAgentDesc 通用型子代理描述双语常量
@@ -17,8 +22,6 @@ var GeneralPurposeAgentDesc = map[string]string{
 		"or file and are not confident you will find the right match in the first " +
 		"few tries, use this subagent to perform the search for you.",
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // taskToolDescription task_tool 工具双语描述
 var taskToolDescription = map[string]string{
@@ -80,11 +83,6 @@ var taskToolDescription = map[string]string{
 		"Terse command-style prompts produce shallow, generic work.\n\n" +
 		"**Never delegate understanding.** Don't write \"based on your findings, fix the bug\" or \"based on the research, implement it.\" Those phrases push synthesis onto the subagent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// TaskMetadataProvider task_tool 工具元数据提供者
-type TaskMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -57,6 +57,9 @@ const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// 确保 Controller 满足 ControllerInterface
+var _ ControllerInterface = (*Controller)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewController 创建空壳 Controller。
@@ -597,6 +600,3 @@ func formatError(err error) string {
 	}
 	return fmt.Sprintf("%v", err)
 }
-
-// 确保 Controller 满足 ControllerInterface
-var _ ControllerInterface = (*Controller)(nil)

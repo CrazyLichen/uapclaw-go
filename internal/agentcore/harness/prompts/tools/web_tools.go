@@ -1,5 +1,16 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// FreeSearchMetadataProvider free_search 工具元数据提供者
+type FreeSearchMetadataProvider struct{}
+
+// PaidSearchMetadataProvider paid_search 工具元数据提供者
+type PaidSearchMetadataProvider struct{}
+
+// FetchWebpageMetadataProvider fetch_webpage 工具元数据提供者
+type FetchWebpageMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // freeSearchDescription free_search 工具双语描述
@@ -35,17 +46,6 @@ Usually used after paid_search or free_search: search first, then fetch the top 
 Best fit: documentation, blog posts, news, API references, and similar general web content.
 Git repository URLs (GitHub/GitLab/Gitee/Gitcode/Bitbucket, etc.) are usually a poor fit - the webpage only shows a rendered file tree, while reading source, history, or searching across files is far easier after a local ` + "`git clone`" + ` via the shell tool (bash or powershell).`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// FreeSearchMetadataProvider free_search 工具元数据提供者
-type FreeSearchMetadataProvider struct{}
-
-// PaidSearchMetadataProvider paid_search 工具元数据提供者
-type PaidSearchMetadataProvider struct{}
-
-// FetchWebpageMetadataProvider fetch_webpage 工具元数据提供者
-type FetchWebpageMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

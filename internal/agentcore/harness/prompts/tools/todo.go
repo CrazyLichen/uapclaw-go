@@ -1,5 +1,19 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// TodoCreateMetadataProvider todo_create 工具元数据提供者
+type TodoCreateMetadataProvider struct{}
+
+// TodoListMetadataProvider todo_list 工具元数据提供者
+type TodoListMetadataProvider struct{}
+
+// TodoModifyMetadataProvider todo_modify 工具元数据提供者
+type TodoModifyMetadataProvider struct{}
+
+// TodoGetMetadataProvider todo_get 工具元数据提供者
+type TodoGetMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // todoCreateDescription todo_create 工具双语描述
@@ -197,20 +211,6 @@ var todoGetDescription = map[string]string{
 		"Input: id (unique task identifier)\n\n" +
 		"Returns: complete task info including id, content (task summary), activeForm, description (detailed content), status, depends_on, result_summary, meta_data, selected_model_id.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// TodoCreateMetadataProvider todo_create 工具元数据提供者
-type TodoCreateMetadataProvider struct{}
-
-// TodoListMetadataProvider todo_list 工具元数据提供者
-type TodoListMetadataProvider struct{}
-
-// TodoModifyMetadataProvider todo_modify 工具元数据提供者
-type TodoModifyMetadataProvider struct{}
-
-// TodoGetMetadataProvider todo_get 工具元数据提供者
-type TodoGetMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

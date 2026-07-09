@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// VideoUnderstandingMetadataProvider video_understanding 工具元数据提供者
+type VideoUnderstandingMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // videoUnderstandingDescription video_understanding 工具双语描述
@@ -7,11 +12,6 @@ var videoUnderstandingDescription = map[string]string{
 	"cn": "理解视频内容并回答用户问题，支持远程视频 URL 或本地视频文件路径。",
 	"en": "Understand video content and answer user queries. Supports remote video URLs or local video file paths.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// VideoUnderstandingMetadataProvider video_understanding 工具元数据提供者
-type VideoUnderstandingMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

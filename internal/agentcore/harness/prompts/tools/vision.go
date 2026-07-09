@@ -1,5 +1,13 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ImageOCRMetadataProvider image_ocr 工具元数据提供者
+type ImageOCRMetadataProvider struct{}
+
+// VisualQuestionAnsweringMetadataProvider visual_question_answering 工具元数据提供者
+type VisualQuestionAnsweringMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // imageOCRDescription image_ocr 工具双语描述

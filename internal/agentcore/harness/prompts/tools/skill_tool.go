@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SkillToolMetadataProvider skill_tool 工具元数据提供者
+type SkillToolMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // skillToolDescription skill_tool 工具双语描述
@@ -7,11 +12,6 @@ var skillToolDescription = map[string]string{
 	"cn": "使用此工具查看特定技能的内容",
 	"en": "Use this tool to view the skill contents of a certain skill",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// SkillToolMetadataProvider skill_tool 工具元数据提供者
-type SkillToolMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
