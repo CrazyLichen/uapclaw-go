@@ -15,7 +15,7 @@ import (
 // 对齐 Python: JiuWenClaw._build_inputs(request) -> (inputs, memoryMode, rawQuery)
 //
 // 返回: inputs 字典、memoryMode 字符串、原始 query。
-func (jw *JiuWenClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, string, string) {
+func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, string, string) {
 	// 1. 获取配置
 	var configBase map[string]any
 	if cfg, err := config.New(""); err == nil {

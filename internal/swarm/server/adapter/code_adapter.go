@@ -14,7 +14,7 @@ import (
 
 // CodeAdapter Code 模式适配器，组合委托 DeepAdapter。
 //
-// 继承 JiuWenClawDeepAdapter 的全部接口方法，仅覆盖 CreateInstance。
+// 继承 UapClawDeepAdapter 的全部接口方法，仅覆盖 CreateInstance。
 // Go 中通过内嵌 *DeepAdapter 实现组合委托。
 //
 // Code 模式差异点（对齐 Python JiuwenClawCodeAdapter）：

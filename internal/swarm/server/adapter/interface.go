@@ -10,7 +10,7 @@ import (
 
 // AgentAdapter Agent 适配器接口（swarm 侧定义）。
 //
-// 最小能力集，JiuWenClaw 门面仅依赖此接口驱动任意 SDK 后端，
+// 最小能力集，UapClaw 门面仅依赖此接口驱动任意 SDK 后端，
 // 不耦合其内部结构。
 //
 // 对应 Python: jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py (AgentAdapter)

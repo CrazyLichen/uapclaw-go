@@ -13,13 +13,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// JiuWenClaw Agent 统一门面。
+// UapClaw Agent 统一门面。
 //
 // 提供：SDK 适配器路由、统一对外 API、公共编排
 // （session 队列、Skills 路由、heartbeat、流式包装）。
 //
 // 对齐 Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
-type JiuWenClaw struct {
+type UapClaw struct {
 	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
 	adapter adapter.AgentAdapter
 
@@ -40,11 +40,11 @@ type JiuWenClaw struct {
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewJiuWenClaw 创建 JiuWenClaw 实例。
+// NewUapClaw 创建 UapClaw 实例。
 //
 // 对齐 Python: JiuWenClaw.__init__()
-func NewJiuWenClaw() *JiuWenClaw {
-	return &JiuWenClaw{
+func NewUapClaw() *UapClaw {
+	return &UapClaw{
 		sessionManager: NewSessionManager(),
 	}
 }
@@ -52,15 +52,15 @@ func NewJiuWenClaw() *JiuWenClaw {
 // ProcessMessage 处理非流式 Agent 请求。
 //
 // 对齐 Python: JiuWenClaw.process_message(request)
-func (jw *JiuWenClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 1. CANCEL 分支 → 委托 ProcessInterrupt
 	if request.ReqMethod == schema.ReqMethodChatCancel {
-		return jw.ProcessInterrupt(ctx, request)
+		return uc.ProcessInterrupt(ctx, request)
 	}
 
 	// 2. 确保 adapter
-	mode := jw.adapterModeForRequest(request)
-	a, err := jw.ensureAdapter(mode)
+	mode := uc.adapterModeForRequest(request)
+	a, err := uc.ensureAdapter(mode)
 	if err != nil {
 		return nil, err
 	}
@@ -81,20 +81,20 @@ func (jw *JiuWenClaw) ProcessMessage(ctx context.Context, request *schema.AgentR
 	// ⤵️ 10.3.2: handlePluginsRequest(request) — 当前 stub，返回 nil 不拦截
 
 	// 6. 常规对话
-	sessionID := normalizeSessionID(jw.extractSessionID(request))
+	sessionID := normalizeSessionID(uc.extractSessionID(request))
 
 	// 记录 user 历史
 	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
-		"user", jw.extractQuery(request), float64(time.Now().UnixMilli())/1000,
+		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
 		"", nil, nil, "")
 
 	// 构建 inputs
-	inputs, _, _ := jw.BuildInputs(request)
+	inputs, _, _ := uc.BuildInputs(request)
 
 	// ⤵️ 10.3.2: cloud memory before-chat hook（ExtensionRegistry）
 
 	// 提交到 session 队列并等待结果
-	result, err := jw.sessionManager.SubmitAndWait(ctx, sessionID, func(taskCtx context.Context) (any, error) {
+	result, err := uc.sessionManager.SubmitAndWait(ctx, sessionID, func(taskCtx context.Context) (any, error) {
 		return a.ProcessMessageImpl(taskCtx, request, inputs)
 	})
 	if err != nil {
@@ -110,7 +110,7 @@ func (jw *JiuWenClaw) ProcessMessage(ctx context.Context, request *schema.AgentR
 
 	// 记录 assistant 历史
 	if resp.OK {
-		content := jw.extractResponseContent(resp)
+		content := uc.extractResponseContent(resp)
 		AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 			"assistant", content, float64(time.Now().UnixMilli())/1000,
 			"chat.final", nil, nil, "")
@@ -124,30 +124,30 @@ func (jw *JiuWenClaw) ProcessMessage(ctx context.Context, request *schema.AgentR
 // ProcessMessageStream 处理流式 Agent 请求。
 //
 // 对齐 Python: JiuWenClaw.process_message_stream(request)
-func (jw *JiuWenClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// 1. SkillDev 流式分支
 	// ⤵️ 10.3.2: handleSkillDevStreamRequest(request) — 当前 stub
 
 	// 2. 确保 adapter
-	mode := jw.adapterModeForRequest(request)
-	a, err := jw.ensureAdapter(mode)
+	mode := uc.adapterModeForRequest(request)
+	a, err := uc.ensureAdapter(mode)
 	if err != nil {
 		return nil, err
 	}
 
 	// 3. 提取 sessionID
-	sessionID := normalizeSessionID(jw.extractSessionID(request))
+	sessionID := normalizeSessionID(uc.extractSessionID(request))
 
 	// ⤵️ 10.3.2: Team 模式判断（isTeamMode / isAutoHarnessResume）
 	// ⤵️ 10.3.2: Team 模式使用原始 query（不经过 BuildUserPrompt 包装）
 
 	// 4. 记录 user 历史
 	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
-		"user", jw.extractQuery(request), float64(time.Now().UnixMilli())/1000,
+		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
 		"", nil, nil, "")
 
 	// 5. 构建 inputs
-	inputs, _, _ := jw.BuildInputs(request)
+	inputs, _, _ := uc.BuildInputs(request)
 
 	// ⤵️ 10.3.2: cloud memory before-chat hook
 
@@ -219,7 +219,7 @@ func (jw *JiuWenClaw) ProcessMessageStream(ctx context.Context, request *schema.
 
 	// 9. 提交流式任务
 	// ⤵️ 10.3.2: Team 后续请求 / Auto-Harness resume 绕过 Session 队列
-	_ = jw.sessionManager.EnsureSessionProcessor(ctx, sessionID)
+	_ = uc.sessionManager.EnsureSessionProcessor(ctx, sessionID)
 
 	return resultCh, nil
 }
@@ -227,14 +227,14 @@ func (jw *JiuWenClaw) ProcessMessageStream(ctx context.Context, request *schema.
 // ProcessInterrupt 处理中断请求。
 //
 // 对齐 Python: JiuWenClaw._process_interrupt(request)
-func (jw *JiuWenClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	intent := jw.extractIntent(request)
-	sessionID := normalizeSessionID(jw.extractSessionID(request))
+func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	intent := uc.extractIntent(request)
+	sessionID := normalizeSessionID(uc.extractSessionID(request))
 
 	// ⤵️ 10.3.2: Team 模式分流（_processTeamInterrupt）
 
-	mode := jw.adapterModeForRequest(request)
-	a, err := jw.ensureAdapter(mode)
+	mode := uc.adapterModeForRequest(request)
+	a, err := uc.ensureAdapter(mode)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (jw *JiuWenClaw) ProcessInterrupt(ctx context.Context, request *schema.Agen
 	// supplement
 	if intent == "supplement" {
 		resp, err := a.ProcessInterrupt(ctx, request)
-		_ = jw.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(supplement)", nil)
+		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(supplement)", nil)
 		return resp, err
 	}
 
@@ -255,37 +255,37 @@ func (jw *JiuWenClaw) ProcessInterrupt(ctx context.Context, request *schema.Agen
 	resp, err := a.ProcessInterrupt(ctx, request)
 	// ⤵️ 10.3.2: cancelTeamWorkForSession(sessionID, channelID)
 	waitTimeout := 5 * time.Second
-	_ = jw.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", &waitTimeout)
+	_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", &waitTimeout)
 	return resp, err
 }
 
 // GetContextUsage 获取上下文使用量。
 // ⤵️ 10.3.2: 需要从 adapter 获取 DeepAgent 实例后调用 GetContextUsage
-func (jw *JiuWenClaw) GetContextUsage(_ string) (map[string]any, error) {
+func (uc *UapClaw) GetContextUsage(_ string) (map[string]any, error) {
 	return map[string]any{"usage": 0, "limit": 0}, nil
 }
 
 // CompressContext 压缩上下文。
 // ⤵️ 10.3.2: 需要调用 DeepAgent 的压缩逻辑
-func (jw *JiuWenClaw) CompressContext(_ string) (map[string]any, error) {
+func (uc *UapClaw) CompressContext(_ string) (map[string]any, error) {
 	return map[string]any{"ok": true, "compressed": false}, nil
 }
 
 // GenerateRecap 生成会话回顾。
 // ⤵️ 10.3.2: 需要调用 DeepAgent 的回顾逻辑
-func (jw *JiuWenClaw) GenerateRecap(_ string) (map[string]any, error) {
+func (uc *UapClaw) GenerateRecap(_ string) (map[string]any, error) {
 	return map[string]any{"recap": ""}, nil
 }
 
 // SwitchMode 切换运行模式。
 // ⤵️ 10.3.2: 完整实现需要 DeepAdapter 支撑（session 持久化 + switch_mode + load_state）
-func (jw *JiuWenClaw) SwitchMode(_, _ string) error { return nil }
+func (uc *UapClaw) SwitchMode(_, _ string) error { return nil }
 
 // CreateInstance 创建 Agent 实例。
 //
 // 对齐 Python: JiuWenClaw.create_instance(config, mode, sub_mode)
-func (jw *JiuWenClaw) CreateInstance(config map[string]any, mode string, subMode string) error {
-	a, err := jw.ensureAdapter(mode)
+func (uc *UapClaw) CreateInstance(config map[string]any, mode string, subMode string) error {
+	a, err := uc.ensureAdapter(mode)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (jw *JiuWenClaw) CreateInstance(config map[string]any, mode string, subMode
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", mode).
 		Str("sub_mode", subMode).
-		Msg("JiuWenClaw Agent 实例已创建")
+		Msg("UapClaw Agent 实例已创建")
 	// ⤵️ 10.3.2: 启动 dreaming 后台任务（adapter.TryStartDreaming）
 	return nil
 }
@@ -305,10 +305,10 @@ func (jw *JiuWenClaw) CreateInstance(config map[string]any, mode string, subMode
 // ReloadAgentConfig 重载 Agent 配置。
 //
 // 对齐 Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
-func (jw *JiuWenClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
-	jw.adapterMu.Lock()
-	a := jw.adapter
-	jw.adapterMu.Unlock()
+func (uc *UapClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
+	uc.adapterMu.Lock()
+	a := uc.adapter
+	uc.adapterMu.Unlock()
 	if a == nil {
 		return nil
 	}
@@ -323,11 +323,11 @@ func (jw *JiuWenClaw) ReloadAgentConfig(configBase map[string]any, envOverrides 
 // CancelInflightWork 取消在途任务。
 //
 // 对齐 Python: JiuWenClaw.cancel_inflight_work()
-func (jw *JiuWenClaw) CancelInflightWork() error {
-	_ = jw.sessionManager.CancelAllSessionTasks(context.Background(), "[gateway disconnect]")
-	jw.adapterMu.Lock()
-	a := jw.adapter
-	jw.adapterMu.Unlock()
+func (uc *UapClaw) CancelInflightWork() error {
+	_ = uc.sessionManager.CancelAllSessionTasks(context.Background(), "[gateway disconnect]")
+	uc.adapterMu.Lock()
+	a := uc.adapter
+	uc.adapterMu.Unlock()
 	if a == nil {
 		return nil
 	}
@@ -338,11 +338,11 @@ func (jw *JiuWenClaw) CancelInflightWork() error {
 // Cleanup 清理资源。
 //
 // 对齐 Python: JiuWenClaw.cleanup()
-func (jw *JiuWenClaw) Cleanup() error {
-	jw.adapterMu.Lock()
-	a := jw.adapter
-	jw.adapter = nil
-	jw.adapterMu.Unlock()
+func (uc *UapClaw) Cleanup() error {
+	uc.adapterMu.Lock()
+	a := uc.adapter
+	uc.adapter = nil
+	uc.adapterMu.Unlock()
 	if a != nil {
 		_ = a.Cleanup()
 	}
@@ -351,16 +351,16 @@ func (jw *JiuWenClaw) Cleanup() error {
 
 // GetInstance 获取底层 Agent 实例。
 // ⤵️ 10.3.2: 需要返回 adapter 内部的 DeepAgent 实例
-func (jw *JiuWenClaw) GetInstance() any { return nil }
+func (uc *UapClaw) GetInstance() any { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureAdapter 确保 SDK adapter 已初始化，幂等。
-func (jw *JiuWenClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
-	jw.adapterMu.Lock()
-	defer jw.adapterMu.Unlock()
-	if jw.adapter != nil {
-		return jw.adapter, nil
+func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
+	uc.adapterMu.Lock()
+	defer uc.adapterMu.Unlock()
+	if uc.adapter != nil {
+		return uc.adapter, nil
 	}
 	a, err := adapter.CreateAdapter("", mode)
 	if err != nil {
@@ -368,16 +368,16 @@ func (jw *JiuWenClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	}
 	// ⤵️ 10.3.2: 若 adapter 有 SetSkillManager 方法，注入 skillManager
 	// ⤵️ 10.3.2: 设置 skillManager 的 skillnet_install_complete_hook
-	jw.adapter = a
+	uc.adapter = a
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
 		Str("mode", mode).
-		Msg("JiuWenClaw adapter 已初始化")
+		Msg("UapClaw adapter 已初始化")
 	return a, nil
 }
 
 // adapterModeForRequest 从请求参数中提取 adapter mode。
-func (jw *JiuWenClaw) adapterModeForRequest(request *schema.AgentRequest) string {
+func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if modeVal, ok := params["mode"]; ok {
 		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
@@ -389,7 +389,7 @@ func (jw *JiuWenClaw) adapterModeForRequest(request *schema.AgentRequest) string
 }
 
 // extractSessionID 从请求中提取 sessionID 字符串。
-func (jw *JiuWenClaw) extractSessionID(request *schema.AgentRequest) string {
+func (uc *UapClaw) extractSessionID(request *schema.AgentRequest) string {
 	if request.SessionID != nil {
 		return *request.SessionID
 	}
@@ -397,7 +397,7 @@ func (jw *JiuWenClaw) extractSessionID(request *schema.AgentRequest) string {
 }
 
 // extractQuery 从请求参数中提取 query 字段。
-func (jw *JiuWenClaw) extractQuery(request *schema.AgentRequest) string {
+func (uc *UapClaw) extractQuery(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if q, ok := params["query"]; ok {
 		if qStr, ok := q.(string); ok {
@@ -408,7 +408,7 @@ func (jw *JiuWenClaw) extractQuery(request *schema.AgentRequest) string {
 }
 
 // extractResponseContent 从响应中提取 content。
-func (jw *JiuWenClaw) extractResponseContent(resp *schema.AgentResponse) string {
+func (uc *UapClaw) extractResponseContent(resp *schema.AgentResponse) string {
 	if resp.Payload == nil {
 		return ""
 	}
@@ -421,7 +421,7 @@ func (jw *JiuWenClaw) extractResponseContent(resp *schema.AgentResponse) string 
 }
 
 // extractIntent 从请求参数中提取 intent（默认 "cancel"）。
-func (jw *JiuWenClaw) extractIntent(request *schema.AgentRequest) string {
+func (uc *UapClaw) extractIntent(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if intent, ok := params["intent"]; ok {
 		if intentStr, ok := intent.(string); ok && intentStr != "" {

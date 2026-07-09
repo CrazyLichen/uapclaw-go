@@ -84,7 +84,7 @@ func (c *SkillDevContext) Emit(eventType SkillDevEventType, payload map[string]a
 //
 // 返回：配置完毕的 ReActAgent 实例（尚未执行）
 //
-// 待实现: 接入 openjiuwen ReActAgent 的实际构造逻辑，参考 JiuWenClaw.create_instance()
+// 待实现: 接入 openjiuwen ReActAgent 的实际构造逻辑，参考 UapClaw.create_instance()
 func (c *SkillDevContext) CreateStageAgent(
 	stageName string,
 	systemPrompt string,

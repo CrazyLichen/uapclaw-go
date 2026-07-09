@@ -2,12 +2,12 @@ package skilldev
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SkillDevDeps SkillDevService 的全部外部依赖（由 JiuWenClaw 构造并注入）。
+// SkillDevDeps SkillDevService 的全部外部依赖（由 UapClaw 构造并注入）。
 //
-// 设计原则：SkillDevService 不依赖 JiuWenClaw 实例，
-// 只接收以下最小依赖集，由 JiuWenClaw 在初始化时注入。
+// 设计原则：SkillDevService 不依赖 UapClaw 实例，
+// 只接收以下最小依赖集，由 UapClaw 在初始化时注入。
 //
-// JiuWenClaw 内部的 SkillManager、EvolutionService、对话历史等
+// UapClaw 内部的 SkillManager、EvolutionService、对话历史等
 // 对 SkillDev 完全不可见，确保模块边界清晰。
 type SkillDevDeps struct {
 	// ModelName 模型名称

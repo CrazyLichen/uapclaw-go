@@ -14,12 +14,12 @@ import (
 
 // AgentManager Agent 实例管理器（stub，10.3.12）。
 //
-// 管理 JiuWenClaw 实例的创建、获取和配置重载。
+// 管理 UapClaw 实例的创建、获取和配置重载。
 // 当前为 stub 实现，后续替换为完整逻辑。
 // 对齐 Python AgentManager：jiuwenswarm/server/runtime/agent_manager.py
 type AgentManager struct {
 	// stubAgent 默认 stub Agent 实例
-	stubAgent *JiuWenClaw
+	stubAgent *UapClaw
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -27,20 +27,20 @@ type AgentManager struct {
 // NewAgentManager 创建 AgentManager stub 实例。
 func NewAgentManager() *AgentManager {
 	return &AgentManager{
-		stubAgent: NewJiuWenClaw(),
+		stubAgent: NewUapClaw(),
 	}
 }
 
 // GetAgent 获取 Agent 实例，不存在则自动创建 stub 实例。
 // 对齐 Python AgentManager.get_agent：异步，自动创建。
-func (am *AgentManager) GetAgent(channelID, mode, projectDir, subMode string) (*JiuWenClaw, error) {
+func (am *AgentManager) GetAgent(channelID, mode, projectDir, subMode string) (*UapClaw, error) {
 	return am.stubAgent, nil
 }
 
 // GetAgentNoWait 获取已有 Agent 实例，不自动创建。
 // 对齐 Python AgentManager.get_agent_nowait：同步，不创建。
 // 找不到时返回 nil。
-func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode string) *JiuWenClaw {
+func (am *AgentManager) GetAgentNoWait(channelID, mode, projectDir, subMode string) *UapClaw {
 	return am.stubAgent
 }
 

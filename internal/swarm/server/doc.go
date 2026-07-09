@@ -23,7 +23,7 @@
 //	├── handle_initialize.go   # Initialize + ACP handler（initialize/acp_tool_response）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
 //	├── gateway_push/          # 进程内传输（ChannelTransport）
-//	└── runtime/               # Agent 运行时（AgentManager/JiuWenClaw/SessionManager）
+//	└── runtime/               # Agent 运行时（AgentManager/UapClaw/SessionManager）
 //
 // 对应 Python 代码：jiuwenswarm/server/agent_server.py
 package server

@@ -9,15 +9,15 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-func TestJiuWenClaw_BuildInputs_基本字段提取(t *testing.T) {
-	jw := NewJiuWenClaw()
+func TestUapClaw_BuildInputs_基本字段提取(t *testing.T) {
+	uc := NewUapClaw()
 	params := map[string]any{
 		"query": "你好世界",
 	}
 	paramsJSON, _ := json.Marshal(params)
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, paramsJSON)
 
-	inputs, memoryMode, rawQuery := jw.BuildInputs(req)
+	inputs, memoryMode, rawQuery := uc.BuildInputs(req)
 
 	assert.Equal(t, "你好世界", rawQuery)
 	_ = memoryMode // memoryMode 依赖 config，当前可能为空
@@ -27,8 +27,8 @@ func TestJiuWenClaw_BuildInputs_基本字段提取(t *testing.T) {
 	assert.NotNil(t, inputs["language"])
 }
 
-func TestJiuWenClaw_BuildInputs_projectDir优先级(t *testing.T) {
-	jw := NewJiuWenClaw()
+func TestUapClaw_BuildInputs_projectDir优先级(t *testing.T) {
+	uc := NewUapClaw()
 	params := map[string]any{
 		"query":       "test",
 		"project_dir": "/path/from/params",
@@ -38,14 +38,14 @@ func TestJiuWenClaw_BuildInputs_projectDir优先级(t *testing.T) {
 	req := schema.NewAgentRequest("req-2", "web", schema.ReqMethodChatSend, paramsJSON,
 		schema.WithAgentMetadata(metadata))
 
-	inputs, _, _ := jw.BuildInputs(req)
+	inputs, _, _ := uc.BuildInputs(req)
 
 	// params 优先
 	assert.Equal(t, "/path/from/params", inputs["project_dir"])
 }
 
-func TestJiuWenClaw_BuildInputs_cron字段转换(t *testing.T) {
-	jw := NewJiuWenClaw()
+func TestUapClaw_BuildInputs_cron字段转换(t *testing.T) {
+	uc := NewUapClaw()
 	params := map[string]any{
 		"query": "定时任务",
 		"cron":  map[string]any{"schedule": "0 9 * * *"},
@@ -53,7 +53,7 @@ func TestJiuWenClaw_BuildInputs_cron字段转换(t *testing.T) {
 	paramsJSON, _ := json.Marshal(params)
 	req := schema.NewAgentRequest("req-3", "cron", schema.ReqMethodChatSend, paramsJSON)
 
-	inputs, _, _ := jw.BuildInputs(req)
+	inputs, _, _ := uc.BuildInputs(req)
 
 	runVal, hasRun := inputs["run"]
 	assert.True(t, hasRun)
@@ -62,8 +62,8 @@ func TestJiuWenClaw_BuildInputs_cron字段转换(t *testing.T) {
 	assert.Equal(t, "cron", runMap["kind"])
 }
 
-func TestJiuWenClaw_BuildInputs_trustedDirs提取(t *testing.T) {
-	jw := NewJiuWenClaw()
+func TestUapClaw_BuildInputs_trustedDirs提取(t *testing.T) {
+	uc := NewUapClaw()
 	params := map[string]any{
 		"query":        "test",
 		"trusted_dirs": []any{"/home/user/proj1", "/home/user/proj2"},
@@ -71,7 +71,7 @@ func TestJiuWenClaw_BuildInputs_trustedDirs提取(t *testing.T) {
 	paramsJSON, _ := json.Marshal(params)
 	req := schema.NewAgentRequest("req-4", "web", schema.ReqMethodChatSend, paramsJSON)
 
-	inputs, _, _ := jw.BuildInputs(req)
+	inputs, _, _ := uc.BuildInputs(req)
 
 	dirs, ok := inputs["trusted_dirs"].([]string)
 	assert.True(t, ok)
