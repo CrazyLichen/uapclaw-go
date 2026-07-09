@@ -58,16 +58,30 @@ Gateway 与 AgentServer 之间，无论进程内还是跨进程，**统一经过
 | 单进程（chat/serve/acp/app） | ✅ 必经 | Go channel | `ChannelTransport` |
 | 跨进程（gateway + agentserver 独立部署） | ✅ 必经 | WebSocket | `WebSocketTransport` |
 
-**Transport 抽象接口：**
+**Transport 抽象接口（定义在 `swarm/transport` 包）：**
 
 ```go
-// AgentTransport Gateway → AgentServer 的传输抽象
+// AgentTransport Gateway ↔ AgentServer 的传输抽象
+// 对齐 Python WebSocket: send(json_str) / recv() → json_str
+// 不感知 E2A 协议语义，只负责 JSON 字节传输
 type AgentTransport interface {
-    Send(ctx context.Context, envelope *E2AEnvelope) error
-    Recv() (<-chan *E2AResponse, error)
+    Send(ctx context.Context, data []byte) error   // 对齐 Python ws.send(json_str)
+    Recv() (<-chan []byte, error)                   // 对齐 Python ws.recv()
     Close() error
 }
 ```
+
+**包依赖方向（单向，无循环）：**
+
+```
+swarm/transport       ← AgentTransport 接口 + Wire 编码工具（BuildServerPushWire/WireRequestIDKey/BuildConnectionAckFrame）
+  ↑                         ↑
+  |                         |
+swarm/server/gateway_push  swarm/gateway/routing
+  (ChannelTransport 实现)    (AgentClient 使用接口)
+```
+
+Gateway 侧**禁止** import `swarm/server/` 下任何包。
 
 **为什么统一走 E2A 而非进程内直连？**
 
