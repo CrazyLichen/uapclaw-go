@@ -116,26 +116,48 @@ AgentServer 启动 → WS 监听
 
 ### 3.2 Go 机制（单进程）
 
+Python 中 connection.ack 是一条**独立的连接握手路径**，不走 req/res 通道（无 request_id），不走 server_push 通道（无 `_jiuwenswarm_server_push` 标记）。它在 `_message_receiver_loop` 启动之前就被 `connect()` 首帧读取消费掉。
+
+Go 单进程中，AgentServer 和 Gateway 在同一进程，**无需通过 transport 的 sendCh/recvCh/pushCh 发"就绪通知"**，而是通过进程内的 `serverReadyCh`（`chan struct{}`，容量 1）直接通知：
+
 ```
 runAppCmd 启动:
   1. transport := NewChannelTransport()
   2. agentServer := NewAgentServer(cfg, transport)
-  3. go agentServer.Start(ctx)              // 先启动 AgentServer
+  3. go agentServer.Start(ctx)              // 先启动 AgentServer（goroutine）
   4. gatewayServer := NewGatewayServer(cfg, transport, pushTransport, agentServer)
   5. gatewayServer.Start(ctx)               // 再启动 Gateway
 
 AgentServer.Start():
   → 初始化 AgentManager(stub)
   → 设置 serverReady = true
-  → serverReadyCh <- struct{}{}              // 通知 Gateway
+  → close(serverReadyCh)                    // 通知 Gateway（关闭 channel，所有等待者收到信号）
   → 进入 SendCh 消费循环
 
 WebChannel.HandleWebSocket():
-  → 等待 agentServer.WaitServerReady(ctx)   // 阻塞等待
+  → 等待 agentServer.WaitServerReady(ctx)   // 阻塞等待 serverReadyCh 关闭
   → 发 connection.ack {session_id, mode, tools, protocol_version} 给前端
 ```
 
-### 3.3 前端收到的 connection.ack 帧格式（对齐 Python）
+**为什么不走 transport 的任何 channel**：
+- `sendCh`：Gateway → AgentServer 方向（请求），不能反向发
+- `recvCh`：AgentServer → Gateway 方向（响应），用于业务 E2AResponse，不是握手信号
+- `pushCh`：AgentServer → Gateway 方向（推送），带 `_jiuwenswarm_server_push` 标记，语义不同
+
+对齐 Python 的独立握手路径，Go 用进程内 `serverReadyCh` 替代 WS 首帧握手。
+
+### 3.3 connection.ack payload 字段来源（全部 Gateway 本地构造）
+
+| 字段 | 来源 | Python 对应 |
+|------|------|------------|
+| `session_id` | Gateway 本地 `MakeSessionID()` 随机生成 | `_make_session_id()` — `secrets.token_hex(3)` |
+| `mode` | 硬编码 `"BUILD"` | 硬编码 `"BUILD"` |
+| `tools` | 硬编码 `[]` | 硬编码 `[]` |
+| `protocol_version` | 硬编码 `"1.0"` | 硬编码 `"1.0"` |
+
+**不依赖 AgentServer 的任何数据**。`serverReady` 只是守卫条件（控制"发不发"），不参与 payload 构造。
+
+### 3.4 前端收到的 connection.ack 帧格式（对齐 Python）
 
 ```json
 {
@@ -150,11 +172,7 @@ WebChannel.HandleWebSocket():
 }
 ```
 
-对齐 Python `app_web_handlers._on_connect` 中的 payload 字段：
-- `session_id`：由 `MakeSessionID()` 生成，格式 `sess_{hex_ts}_{6位随机hex}`
-- `mode`：硬编码 `"BUILD"`（Python 也是硬编码）
-- `tools`：空列表 `[]`（Python 也是空列表）
-- `protocol_version`：硬编码 `"1.0"`
+对齐 Python `app_web_handlers._on_connect` 中硬编码的 payload 字段。
 
 ---
 
