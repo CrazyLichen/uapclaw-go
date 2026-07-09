@@ -224,7 +224,7 @@ func TestFireLifecycle_恢复Inputs(t *testing.T) {
 // TestFire_无回调管理器 agent 为 nil 时 Fire 返回 nil（无 panic）
 func TestFire_无回调管理器(t *testing.T) {
 	ctx := NewAgentCallbackContext(nil, nil, nil)
-	err := ctx.Fire(CallbackBeforeModelCall)
+	err := ctx.Fire(context.Background(), CallbackBeforeModelCall)
 	assert.NoError(t, err)
 }
 
@@ -232,7 +232,7 @@ func TestFire_无回调管理器(t *testing.T) {
 func TestFire_回调管理器为nil(t *testing.T) {
 	agent := &fakeBaseAgent{cbMgr: nil}
 	ctx := NewAgentCallbackContext(agent, nil, nil)
-	err := ctx.Fire(CallbackBeforeModelCall)
+	err := ctx.Fire(context.Background(), CallbackBeforeModelCall)
 	assert.NoError(t, err)
 }
 
@@ -250,7 +250,7 @@ func TestFire_正常触发(t *testing.T) {
 
 	agent := &fakeBaseAgent{cbMgr: mgr}
 	ctx := NewAgentCallbackContext(agent, nil, nil)
-	err := ctx.Fire(CallbackBeforeModelCall)
+	err := ctx.Fire(context.Background(), CallbackBeforeModelCall)
 	assert.NoError(t, err)
 	assert.True(t, called)
 }

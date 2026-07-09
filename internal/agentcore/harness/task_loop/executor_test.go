@@ -531,12 +531,12 @@ func (f *fakeDeepAgentProvider) SetAutoInvokeScheduled(scheduled bool) {
 }
 
 // ScheduleAutoInvokeOnSpawnDone 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
+func (f *fakeDeepAgentProvider) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
 	return nil
 }
 
 // CreateSubagent 实现 DeepAgentInterface 接口
-func (f *fakeDeepAgentProvider) CreateSubagent(_ string, _ string) (interfaces.DeepAgentInterface, error) {
+func (f *fakeDeepAgentProvider) CreateSubagent(_ context.Context, _ string, _ string) (interfaces.DeepAgentInterface, error) {
 	return f.subagent, f.createSubagentErr
 }
 

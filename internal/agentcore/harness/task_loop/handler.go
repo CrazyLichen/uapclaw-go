@@ -323,7 +323,7 @@ func (h *TaskLoopEventHandler) HandleTaskCompletion(ctx context.Context, input *
 	// SessionSpawn 分支：调用 completeSessionSpawn 处理
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == hschema.SessionSpawnTaskType {
-			h.completeSessionSpawn(taskID, input, false)
+			h.completeSessionSpawn(ctx, taskID, input, false)
 			return map[string]any{"status": "session_spawn_completed", "task_id": taskID}, nil
 		}
 	}
@@ -387,7 +387,7 @@ func (h *TaskLoopEventHandler) HandleTaskFailed(ctx context.Context, input *modu
 	// 对齐 Python: return {"status": "session_spawn_failed", "task_id": task_id, "error": str(error_msg)}
 	if taskType, ok := event.GetMetadata()["task_type"]; ok {
 		if taskType == hschema.SessionSpawnTaskType {
-			h.completeSessionSpawn(taskID, input, true)
+			h.completeSessionSpawn(ctx, taskID, input, true)
 			return map[string]any{"status": "session_spawn_failed", "task_id": taskID, "error": errMsg}, nil
 		}
 	}
@@ -541,7 +541,7 @@ func (h *TaskLoopEventHandler) resolveRound(result map[string]any, roundID int) 
 //   - 无活跃 invoke：调度延迟 auto-invoke
 //
 // 对齐 Python: TaskLoopEventHandler._complete_session_spawn
-func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *modules.EventHandlerInput, isError bool) {
+func (h *TaskLoopEventHandler) completeSessionSpawn(ctx context.Context, taskID string, input *modules.EventHandlerInput, isError bool) {
 	// 加锁读取 sessionToolkit 和 interactionQueues（对齐 SetSessionToolkit/SetInteractionQueues 的锁模式）
 	h.mu.Lock()
 	sessionToolkit := h.sessionToolkit
@@ -594,7 +594,7 @@ func (h *TaskLoopEventHandler) completeSessionSpawn(taskID string, input *module
 		// 路径 2：无活跃 invoke → 调度延迟 auto-invoke
 		if !h.provider.IsAutoInvokeScheduled() {
 			h.provider.SetAutoInvokeScheduled(true)
-			if schedErr := h.provider.ScheduleAutoInvokeOnSpawnDone(steerText, defaultAutoInvokeDelay); schedErr != nil {
+			if schedErr := h.provider.ScheduleAutoInvokeOnSpawnDone(ctx, steerText, defaultAutoInvokeDelay); schedErr != nil {
 				logger.Error(logComponent).
 					Err(schedErr).
 					Str("task_id", taskID).

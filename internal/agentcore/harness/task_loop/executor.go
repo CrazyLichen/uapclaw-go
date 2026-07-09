@@ -188,7 +188,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 	}
 
 	// 步骤 12：触发 before_task_iteration 回调
-	if fireErr := cbCtx.Fire(agentinterfaces.CallbackBeforeTaskIteration); fireErr != nil {
+	if fireErr := cbCtx.Fire(ctx, agentinterfaces.CallbackBeforeTaskIteration); fireErr != nil {
 		logger.Warn(logComponent).
 			Err(fireErr).
 			Str("event_type", "before_task_iteration").
@@ -301,7 +301,7 @@ func (e *TaskLoopEventExecutor) ExecuteAbility(
 		// 更新回调上下文并触发 after_task_iteration
 		iterInputs.Result = resultMap
 		cbCtx.SetInputs(iterInputs)
-		if fireErr := cbCtx.Fire(agentinterfaces.CallbackAfterTaskIteration); fireErr != nil {
+		if fireErr := cbCtx.Fire(ctx, agentinterfaces.CallbackAfterTaskIteration); fireErr != nil {
 			logger.Warn(logComponent).
 				Err(fireErr).
 				Str("event_type", "after_task_iteration").

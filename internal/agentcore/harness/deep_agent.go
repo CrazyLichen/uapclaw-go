@@ -46,6 +46,7 @@ import (
 	saprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -192,7 +193,7 @@ func (d *DeepAgent) ConfigureDeepConfig(ctx context.Context, deepCfg *hschema.De
 	d.filterDisabledTools(deepCfg)
 
 	if d.deepConfig == nil {
-		d.initialConfigure(deepCfg)
+		d.initialConfigure(ctx, deepCfg)
 	} else {
 		d.hotReconfigure(ctx, deepCfg)
 	}
@@ -217,8 +218,10 @@ func (d *DeepAgent) Configure(ctx context.Context, config agentinterfaces.AgentC
 // Invoke 非流式执行 Agent。
 // 对齐 Python: DeepAgent.invoke(inputs, session) (line 2261)
 func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error) {
-	if err := d.ensureInitialized(ctx); err != nil {
-		return nil, err
+	var initErr error
+	ctx, initErr = d.ensureInitialized(ctx)
+	if initErr != nil {
+		return nil, initErr
 	}
 
 	d.configMu.RLock()
@@ -277,8 +280,10 @@ func (d *DeepAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...a
 // Stream 流式执行 Agent。
 // 对齐 Python: DeepAgent.stream(inputs, session, stream_modes) (line 2302)
 func (d *DeepAgent) Stream(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
-	if err := d.ensureInitialized(ctx); err != nil {
-		return nil, err
+	var initErr error
+	ctx, initErr = d.ensureInitialized(ctx)
+	if initErr != nil {
+		return nil, initErr
 	}
 
 	if err := d.drainPendingHarnessConfigs(ctx); err != nil {
@@ -554,7 +559,7 @@ func (d *DeepAgent) SetAutoInvokeScheduled(scheduled bool) {
 
 // ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke。
 // 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay) (line 1959)
-func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string, delay float64) error {
+func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error {
 	d.autoInvokeScheduled.Store(true)
 
 	go func() {
@@ -574,10 +579,10 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string, delay float6
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		invokeCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
 
-		_, err := d.Invoke(ctx, map[string]any{"query": steerText},
+		_, err := d.Invoke(invokeCtx, map[string]any{"query": steerText},
 			agentinterfaces.WithSession(loopSess))
 		if err != nil {
 			logger.Error(logComponent).Err(err).Msg("[AutoInvoke] 自动 invoke 失败")
@@ -590,7 +595,7 @@ func (d *DeepAgent) ScheduleAutoInvokeOnSpawnDone(steerText string, delay float6
 // CreateSubagent 创建子 Agent 实例。
 // ⤵️ 9.3 / 9.25-9.27 / 9.31 回填：browser/code/research/mobile_gui 工厂待实现
 // 对齐 Python: DeepAgent.create_subagent(subagent_type, subsession_id) (line 898)
-func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
+func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
 	spec := d.findSubagentSpec(subagentType)
 	if spec == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentCreateSubagentNotFound,
@@ -631,7 +636,18 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hi
 	default:
 		// 通过 CreateDeepAgent 工厂创建子 Agent 实例
 		createParams := buildCreateParamsFromSubagentKwargs(kwargs)
-		subAgent, createErr := CreateDeepAgent(context.Background(), createParams)
+		// 子 Agent 创建独立 CwdState，实现 inter-Agent 隔离
+		// 对齐 Python: DeepAgent.create_subagent 中 init_cwd 调用
+		var subWwRootPath string
+		if createParams.Workspace != nil {
+			subWwRootPath = createParams.Workspace.RootPath
+		}
+		if subWwRootPath == "" {
+			subWwRootPath = cwd.GetCwd(ctx)
+		}
+		subCwdState := cwd.InitCwd(subWwRootPath, cwd.WithWorkspace(subWwRootPath))
+		subCtx := cwd.WithCwdState(ctx, subCwdState)
+		subAgent, createErr := CreateDeepAgent(subCtx, createParams)
 		if createErr != nil {
 			return nil, fmt.Errorf("创建子 Agent 失败: %w", createErr)
 		}
@@ -902,7 +918,7 @@ func (d *DeepAgent) UnloadHarnessConfig(ctx context.Context, configPath string) 
 
 // EnsureInitialized 执行懒初始化（仅用于测试）。
 // 对齐 Python: DeepAgent.ensure_initialized() (line 865)
-func (d *DeepAgent) EnsureInitialized(ctx context.Context) error {
+func (d *DeepAgent) EnsureInitialized(ctx context.Context) (context.Context, error) {
 	return d.ensureInitialized(ctx)
 }
 
@@ -1182,13 +1198,13 @@ func (d *DeepAgent) filterDisabledTools(config *hschema.DeepAgentConfig) {
 
 // initialConfigure 首次配置：持久化配置、创建内层 ReActAgent、排队 Rails。
 // 对齐 Python: DeepAgent._initial_configure(config) (line 230)
-func (d *DeepAgent) initialConfigure(config *hschema.DeepAgentConfig) {
+func (d *DeepAgent) initialConfigure(ctx context.Context, config *hschema.DeepAgentConfig) {
 	d.deepConfig = config
 	if config.Card != nil {
 		d.card = config.Card
 	}
 
-	d.reactAgent = d.createReactAgent()
+	d.reactAgent = d.createReactAgent(ctx)
 	d.queuePendingRails(config)
 }
 
@@ -1216,7 +1232,7 @@ func (d *DeepAgent) hotReconfigure(ctx context.Context, config *hschema.DeepAgen
 	}
 
 	if config.SystemPrompt != "" && d.reactAgent != nil {
-		d.hotReloadSystemPrompt(config)
+		d.hotReloadSystemPrompt(ctx, config)
 	}
 
 	d.queuePendingRails(config)
@@ -1380,7 +1396,7 @@ func (d *DeepAgent) hotReloadTools(config *hschema.DeepAgentConfig, previousTool
 
 // hotReloadSystemPrompt 重建 SystemPromptBuilder。
 // 对齐 Python: DeepAgent._hot_reload_system_prompt(config) (line 370)
-func (d *DeepAgent) hotReloadSystemPrompt(config *hschema.DeepAgentConfig) {
+func (d *DeepAgent) hotReloadSystemPrompt(ctx context.Context, config *hschema.DeepAgentConfig) {
 	language := hprompts.ResolveLanguage(config.Language)
 	mode := hprompts.ResolveMode(config.PromptMode.String())
 	promptBuilder := hprompts.NewSystemPromptBuilder(language, mode)
@@ -1404,7 +1420,7 @@ func (d *DeepAgent) hotReloadSystemPrompt(config *hschema.DeepAgentConfig) {
 			newReactConfig.PromptTemplate = []map[string]any{
 				{"role": "system", "content": prompt},
 			}
-			if err := d.reactAgent.Configure(context.Background(), &newReactConfig); err != nil {
+			if err := d.reactAgent.Configure(ctx, &newReactConfig); err != nil {
 				logger.Error(logComponent).Err(err).Msg("热重配置系统提示词失败")
 			}
 		}
@@ -1450,7 +1466,7 @@ func (d *DeepAgent) queuePendingRails(config *hschema.DeepAgentConfig) {
 
 // createReactAgent 从当前 DeepAgentConfig 构建内层 ReActAgent。
 // 对齐 Python: DeepAgent._create_react_agent() (line 703)
-func (d *DeepAgent) createReactAgent() *agents.ReActAgent {
+func (d *DeepAgent) createReactAgent(ctx context.Context) *agents.ReActAgent {
 	cfg := d.deepConfig
 	if cfg == nil {
 		panic("DeepAgentConfig 为空，请先调用 Configure()")
@@ -1515,7 +1531,7 @@ func (d *DeepAgent) createReactAgent() *agents.ReActAgent {
 	agent := agents.NewReActAgent(innerCard, reactConfig)
 
 	// Configure 内部会覆盖 promptBuilder
-	if err := agent.Configure(context.Background(), reactConfig); err != nil {
+	if err := agent.Configure(ctx, reactConfig); err != nil {
 		logger.Error(logComponent).Err(err).Msg("内层 ReActAgent Configure 失败")
 	}
 
@@ -1538,20 +1554,27 @@ func (d *DeepAgent) createReactAgent() *agents.ReActAgent {
 
 // ensureInitialized 执行懒初始化。
 // 对齐 Python: DeepAgent._ensure_initialized() (line 813)
-func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
+func (d *DeepAgent) ensureInitialized(ctx context.Context) (context.Context, error) {
 	d.initMu.Lock()
 	if d.initialized {
 		d.initMu.Unlock()
-		return nil
+		return ctx, nil
 	}
 	// 整个初始化过程在锁内执行，防止并发重复初始化
 	defer d.initMu.Unlock()
 
 	d.configMu.RLock()
-	_ = d.deepConfig // ⤵️ 9.1 回填：init_cwd 逻辑（cfg.Workspace 非空时待实现）
+	cfg := d.deepConfig
 	d.configMu.RUnlock()
 
 	// 初始化工作空间 CWD
+	// 对齐 Python: DeepAgent._ensure_initialized() 中 init_cwd 调用 (line 813-828)
+	if cfg != nil && cfg.Workspace != nil && cfg.Workspace.RootPath != "" {
+		initRoot := cfg.Workspace.RootPath
+		cwdState := cwd.InitCwd(initRoot, cwd.WithWorkspace(initRoot))
+		ctx = cwd.WithCwdState(ctx, cwdState)
+		logger.Info(logComponent).Str("init_root", initRoot).Msg("CWD 已初始化")
+	}
 
 	// 注册待处理的 MCP 服务器
 	d.registerPendingMCPs(ctx)
@@ -1622,7 +1645,7 @@ func (d *DeepAgent) ensureInitialized(ctx context.Context) error {
 	}
 
 	d.initialized = true
-	return nil
+	return ctx, nil
 }
 
 // needsWorkspaceInit 检查是否需要工作空间初始化。

@@ -128,7 +128,7 @@ func (re *RailExecutor) Execute(
 
 		// 3. 触发 before 钩子（对齐 Python: before 在 try 块内）
 		if re.Before != "" {
-			if err := cbc.Fire(re.Before); err != nil {
+			if err := cbc.Fire(ctx, re.Before); err != nil {
 				excToRaise = err
 				goto handleException
 			}
@@ -157,7 +157,7 @@ func (re *RailExecutor) Execute(
 		// 7a. 触发 on_exception 钩子
 		if re.OnException != "" {
 			// on_exception 回调出错时 log 不掩盖原始异常（对齐 Python L624-630）
-			if cbErr := cbc.Fire(re.OnException); cbErr != nil {
+			if cbErr := cbc.Fire(ctx, re.OnException); cbErr != nil {
 				logger.Error(logComponent).
 					Str("event", string(re.OnException)).
 					Err(cbErr).
@@ -233,7 +233,7 @@ func (re *RailExecutor) fireAfter(ctx context.Context, cbc *interfaces.AgentCall
 	}
 
 	// 触发 after 钩子
-	afterErr := cbc.Fire(re.After)
+	afterErr := cbc.Fire(ctx, re.After)
 	if afterErr != nil {
 		if origErr != nil {
 			// after 回调出错但有原始异常 → log 不掩盖

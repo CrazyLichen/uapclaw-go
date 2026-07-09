@@ -47,10 +47,10 @@ func (f *fakeDeepAgentForHeartbeat) DeepConfig() *hschema.DeepAgentConfig { retu
 func (f *fakeDeepAgentForHeartbeat) IsInvokeActive() bool                 { return false }
 func (f *fakeDeepAgentForHeartbeat) IsAutoInvokeScheduled() bool          { return false }
 func (f *fakeDeepAgentForHeartbeat) SetAutoInvokeScheduled(_ bool)        {}
-func (f *fakeDeepAgentForHeartbeat) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
+func (f *fakeDeepAgentForHeartbeat) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
 	return nil
 }
-func (f *fakeDeepAgentForHeartbeat) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
+func (f *fakeDeepAgentForHeartbeat) CreateSubagent(_ context.Context, _ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
 }
 func (f *fakeDeepAgentForHeartbeat) Invoke(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (map[string]any, error) {

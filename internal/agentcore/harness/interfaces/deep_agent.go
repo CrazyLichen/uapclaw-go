@@ -42,10 +42,10 @@ type DeepAgentInterface interface {
 	SetAutoInvokeScheduled(scheduled bool)
 	// ScheduleAutoInvokeOnSpawnDone 延迟调度自动 invoke。
 	// 对齐 Python: DeepAgent.schedule_auto_invoke_on_spawn_done(query, delay=0.5)
-	ScheduleAutoInvokeOnSpawnDone(steerText string, delay float64) error
+	ScheduleAutoInvokeOnSpawnDone(ctx context.Context, steerText string, delay float64) error
 	// CreateSubagent 创建子 Agent 实例。
 	// 对齐 Python: DeepAgent.create_subagent
-	CreateSubagent(subagentType string, subSessionID string) (DeepAgentInterface, error)
+	CreateSubagent(ctx context.Context, subagentType string, subSessionID string) (DeepAgentInterface, error)
 	// Invoke 执行 Agent：若 enable_task_loop=true 走完整多轮循环，否则走单轮 ReAct。
 	// 对齐 Python: DeepAgent.invoke
 	Invoke(ctx context.Context, inputs map[string]any, opts ...agentinterfaces.AgentOption) (map[string]any, error)

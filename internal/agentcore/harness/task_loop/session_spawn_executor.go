@@ -96,7 +96,7 @@ func (e *SessionSpawnExecutor) ExecuteAbility(
 		defer close(ch)
 
 		// 步骤 4：创建子 Agent
-		subAgent, createErr := e.provider.CreateSubagent(subagentType, cid)
+		subAgent, createErr := e.provider.CreateSubagent(ctx, subagentType, cid)
 		if createErr != nil {
 			logger.Error(logComponent).
 				Err(createErr).

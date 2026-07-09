@@ -788,7 +788,7 @@ func TestDeepAgent_GetPlanFilePath_无Workspace(t *testing.T) {
 // TestDeepAgent_CreateSubagent_规格未找到 返回错误
 func TestDeepAgent_CreateSubagent_规格未找到(t *testing.T) {
 	d := newTestDeepAgent()
-	_, err := d.CreateSubagent("nonexistent", "sub-sess-1")
+	_, err := d.CreateSubagent(context.Background(), "nonexistent", "sub-sess-1")
 	if err == nil {
 		t.Fatal("CreateSubagent 对不存在的规格应返回错误")
 	}
@@ -821,7 +821,7 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 	}
 
 	for _, factory := range factories {
-		_, err := d.CreateSubagent(factory, "sub-sess-1")
+		_, err := d.CreateSubagent(context.Background(), factory, "sub-sess-1")
 		if err == nil {
 			t.Errorf("CreateSubagent(%q) 应返回 stub 错误", factory)
 		}
@@ -843,7 +843,7 @@ func TestDeepAgent_CreateSubagent_默认工厂(t *testing.T) {
 	}
 
 	// 未知工厂名走 default 分支，通过 CreateDeepAgent 创建子 Agent
-	subAgent, err := d.CreateSubagent("custom_agent", "sub-sess-1")
+	subAgent, err := d.CreateSubagent(context.Background(), "custom_agent", "sub-sess-1")
 	// CreateDeepAgent 可能因缺少必要配置而返回错误，也可能成功
 	// 关键是不 panic，且逻辑正确分派到 default 分支
 	if err != nil {
@@ -1245,7 +1245,7 @@ func TestDeepAgent_SetSessionToolkit(t *testing.T) {
 // TestDeepAgent_EnsureInitialized_未配置 未配置时 EnsureInitialized 不 panic
 func TestDeepAgent_EnsureInitialized_未配置(t *testing.T) {
 	d := newTestDeepAgent()
-	err := d.EnsureInitialized(context.Background())
+	_, err := d.EnsureInitialized(context.Background())
 	if err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
@@ -1257,7 +1257,7 @@ func TestDeepAgent_EnsureInitialized_已初始化(t *testing.T) {
 	d.initMu.Lock()
 	d.initialized = true
 	d.initMu.Unlock()
-	err := d.EnsureInitialized(context.Background())
+	_, err := d.EnsureInitialized(context.Background())
 	if err != nil {
 		t.Fatalf("已初始化时 EnsureInitialized 返回错误: %v", err)
 	}
@@ -1440,7 +1440,7 @@ func TestDeepAgent_hotReloadSystemPrompt_更新提示词(t *testing.T) {
 func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone(t *testing.T) {
 	d := newTestDeepAgent()
 
-	err := d.ScheduleAutoInvokeOnSpawnDone("测试查询", 0.5)
+	err := d.ScheduleAutoInvokeOnSpawnDone(context.Background(), "测试查询", 0.5)
 	if err != nil {
 		t.Fatalf("ScheduleAutoInvokeOnSpawnDone 返回错误: %v", err)
 	}
@@ -1536,7 +1536,7 @@ func TestDeepAgent_SystemPromptBuilder(t *testing.T) {
 	if d.SystemPromptBuilder() == nil {
 		t.Error("配置后 SystemPromptBuilder() 不应返回 nil")
 	}
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -1576,7 +1576,7 @@ func TestDeepAgent_hotReloadRails_部分更新(t *testing.T) {
 	}
 
 	// 初始化以注册 Rails
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 
@@ -1611,7 +1611,7 @@ func TestDeepAgent_hotReloadRails_全量替换(t *testing.T) {
 	}
 
 	// 初始化以注册 Rails
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 
@@ -1824,7 +1824,7 @@ func TestDeepAgent_EnsureInitialized_带Rails(t *testing.T) {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 
@@ -1954,7 +1954,7 @@ func TestDeepAgent_EnsureInitialized_有废弃Rails(t *testing.T) {
 	}
 
 	// 先初始化注册 Rails
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 
@@ -1965,7 +1965,7 @@ func TestDeepAgent_EnsureInitialized_有废弃Rails(t *testing.T) {
 	}
 
 	// 再次初始化，应注销废弃 Rails
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -2057,7 +2057,7 @@ func TestDeepAgent_EnsureInitialized_带MCPs(t *testing.T) {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -2074,7 +2074,7 @@ func TestDeepAgent_EnsureInitialized_有Workspace(t *testing.T) {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -2123,10 +2123,10 @@ func TestDeepAgent_EnsureInitialized_二次调用(t *testing.T) {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("首次 EnsureInitialized 返回错误: %v", err)
 	}
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("二次 EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -2230,7 +2230,7 @@ func TestDeepAgent_EnsureInitialized_有PendingHarnessConfig(t *testing.T) {
 	}
 
 	// EnsureInitialized 不会自动 drain，Stream 才会
-	if err := d.EnsureInitialized(context.Background()); err != nil {
+	if _, err := d.EnsureInitialized(context.Background()); err != nil {
 		t.Fatalf("EnsureInitialized 返回错误: %v", err)
 	}
 }
@@ -2750,11 +2750,11 @@ func TestDeepAgent_ensureInitialized_完整路径(t *testing.T) {
 	config.Card = card
 	_ = agent.ConfigureDeepConfig(context.Background(), config)
 
-	err := agent.ensureInitialized(context.Background())
+	_, err := agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, agent.IsInitialized())
 
-	err = agent.ensureInitialized(context.Background())
+	_, err = agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -2764,7 +2764,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_活跃Invoke(t *testing.T) {
 	agent := NewDeepAgent(card)
 	agent.invokeActive.Store(true)
 
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test steer text", 0.5)
+	err := agent.ScheduleAutoInvokeOnSpawnDone(context.Background(), "test steer text", 0.5)
 	assert.NoError(t, err)
 	assert.True(t, agent.IsAutoInvokeScheduled())
 }
@@ -2988,7 +2988,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_无LoopSession(t *testing.T) {
 	agent := NewDeepAgent(card)
 
 	// 不设置 loopSession，ScheduleAutoInvokeOnSpawnDone 延迟后应跳过
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test query", 0.5)
+	err := agent.ScheduleAutoInvokeOnSpawnDone(context.Background(), "test query", 0.5)
 	assert.NoError(t, err)
 	assert.True(t, agent.IsAutoInvokeScheduled())
 
@@ -3009,7 +3009,7 @@ func TestDeepAgent_ScheduleAutoInvokeOnSpawnDone_有LoopSession(t *testing.T) {
 
 	// 设置 invokeActive=true，延迟后应跳过 invoke
 	agent.invokeActive.Store(true)
-	err := agent.ScheduleAutoInvokeOnSpawnDone("test query", 0.5)
+	err = agent.ScheduleAutoInvokeOnSpawnDone(context.Background(), "test query", 0.5)
 	assert.NoError(t, err)
 
 	// 等待延迟过去
@@ -3177,7 +3177,8 @@ func TestDeepAgent_ensureInitialized_有StaleRails(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	// 初始化一次
-	require.NoError(t, agent.ensureInitialized(context.Background()))
+	_, err := agent.ensureInitialized(context.Background())
+	require.NoError(t, err)
 
 	// 注入 stale Rails
 	fr := &fakeAgentRail{}
@@ -3189,7 +3190,7 @@ func TestDeepAgent_ensureInitialized_有StaleRails(t *testing.T) {
 	agent.railsMu.Unlock()
 
 	// 再次初始化时应注销废弃 Rail
-	err := agent.ensureInitialized(context.Background())
+	_, err = agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, agent.IsInitialized())
 }
@@ -3205,7 +3206,7 @@ func TestDeepAgent_ensureInitialized_有PendingRails(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	// 首次初始化，应注册 pending Rails
-	err := agent.ensureInitialized(context.Background())
+	_, err := agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, agent.IsInitialized())
 
@@ -3226,7 +3227,7 @@ func TestDeepAgent_ensureInitialized_有Workspace(t *testing.T) {
 	cfg.AutoCreateWorkspace = true
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	err := agent.ensureInitialized(context.Background())
+	_, err := agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -3241,7 +3242,7 @@ func TestDeepAgent_ensureInitialized_有MCPs(t *testing.T) {
 	}
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	err := agent.ensureInitialized(context.Background())
+	_, err := agent.ensureInitialized(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -3303,7 +3304,8 @@ func TestDeepAgent_SystemPromptBuilder_有RegisteredRails(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	// 初始化以注册 Rails
-	require.NoError(t, agent.EnsureInitialized(context.Background()))
+	_, err := agent.EnsureInitialized(context.Background())
+	require.NoError(t, err)
 
 	// 热重配置后 SystemPromptBuilder 仍可访问
 	cfg2 := schema.NewDeepAgentConfig()
@@ -3445,7 +3447,7 @@ func TestDeepAgent_ensureInitialized_重复调用幂等(t *testing.T) {
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
 	for i := 0; i < 3; i++ {
-		err := agent.ensureInitialized(context.Background())
+		_, err := agent.ensureInitialized(context.Background())
 		assert.NoError(t, err)
 	}
 	assert.True(t, agent.IsInitialized())
@@ -3460,7 +3462,7 @@ func TestDeepAgent_EnsureInitialized_配置后调用(t *testing.T) {
 	cfg.Workspace = &workspace.Workspace{RootPath: "/tmp/ws3"}
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	err := agent.EnsureInitialized(context.Background())
+	_, err := agent.EnsureInitialized(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, agent.IsInitialized())
 }
@@ -3473,7 +3475,7 @@ func TestDeepAgent_CreateSubagent_未找到Spec(t *testing.T) {
 	cfg := schema.NewDeepAgentConfig()
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	_, err := agent.CreateSubagent("nonexistent_type", "sub-sess-1")
+	_, err := agent.CreateSubagent(context.Background(), "nonexistent_type", "sub-sess-1")
 	assert.Error(t, err)
 }
 
@@ -3496,7 +3498,7 @@ func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 		cfg.Subagents = append(cfg.Subagents, subCfg)
 		require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-		_, err := agent.CreateSubagent("sub", "sub-sess-1")
+		_, err := agent.CreateSubagent(context.Background(), "sub", "sub-sess-1")
 		assert.Error(t, err, "工厂 %s 应返回错误", factory)
 	}
 
@@ -3509,7 +3511,7 @@ func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 	cfg.Subagents = append(cfg.Subagents, subCfg)
 	require.NoError(t, agent.ConfigureDeepConfig(context.Background(), cfg))
 
-	_, err := agent.CreateSubagent("sub2", "sub-sess-1")
+	_, err := agent.CreateSubagent(context.Background(), "sub2", "sub-sess-1")
 	// 不要求必须报错，default 分支走 CreateDeepAgent
 	if err != nil {
 		t.Logf("unknown_factory 返回错误: %v", err)

@@ -89,10 +89,10 @@ func (f *fakeDeepAgentForTaskPlanning) DeepConfig() *hschema.DeepAgentConfig { r
 func (f *fakeDeepAgentForTaskPlanning) IsInvokeActive() bool                 { return false }
 func (f *fakeDeepAgentForTaskPlanning) IsAutoInvokeScheduled() bool          { return false }
 func (f *fakeDeepAgentForTaskPlanning) SetAutoInvokeScheduled(_ bool)        {}
-func (f *fakeDeepAgentForTaskPlanning) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
+func (f *fakeDeepAgentForTaskPlanning) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
 	return nil
 }
-func (f *fakeDeepAgentForTaskPlanning) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
+func (f *fakeDeepAgentForTaskPlanning) CreateSubagent(_ context.Context, _ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
 }
 
@@ -1543,10 +1543,10 @@ func (f *fakeDeepAgentWithAm) DeepConfig() *hschema.DeepAgentConfig { return nil
 func (f *fakeDeepAgentWithAm) IsInvokeActive() bool                 { return false }
 func (f *fakeDeepAgentWithAm) IsAutoInvokeScheduled() bool          { return false }
 func (f *fakeDeepAgentWithAm) SetAutoInvokeScheduled(_ bool)        {}
-func (f *fakeDeepAgentWithAm) ScheduleAutoInvokeOnSpawnDone(_ string, _ float64) error {
+func (f *fakeDeepAgentWithAm) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
 	return nil
 }
-func (f *fakeDeepAgentWithAm) CreateSubagent(_ string, _ string) (hinterfaces.DeepAgentInterface, error) {
+func (f *fakeDeepAgentWithAm) CreateSubagent(_ context.Context, _ string, _ string) (hinterfaces.DeepAgentInterface, error) {
 	return nil, nil
 }
 

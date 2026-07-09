@@ -486,7 +486,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 ) error {
 	savedInputs := c.inputs
 
-	if err := c.Fire(before); err != nil {
+	if err := c.Fire(ctx, before); err != nil {
 		return err
 	}
 
@@ -508,7 +508,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 	}
 
 	// 触发 after 钩子，对齐 Python lifecycle() 错误处理
-	afterErr := c.Fire(after)
+	afterErr := c.Fire(ctx, after)
 	if afterErr != nil {
 		if origErr != nil {
 			// after 回调出错但有原始异常 → log 不掩盖
@@ -531,7 +531,7 @@ func (c *AgentCallbackContext) FireLifecycle(
 // Fire 触发回调事件。
 //
 // 对应 Python: AgentCallbackContext.fire(event)
-func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
+func (c *AgentCallbackContext) Fire(ctx context.Context, event AgentCallbackEvent) error {
 	c.event = event
 	if c.agent == nil {
 		return nil
@@ -540,7 +540,7 @@ func (c *AgentCallbackContext) Fire(event AgentCallbackEvent) error {
 	if manager == nil {
 		return nil
 	}
-	return manager.Execute(context.Background(), event, c)
+	return manager.Execute(ctx, event, c)
 }
 
 // RequestRetry 请求重试。

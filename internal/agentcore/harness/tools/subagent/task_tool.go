@@ -58,7 +58,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 			Msg("TaskTool 创建子代理")
 
 		// 对齐 Python L100-107: 创建子代理
-		subagent, err := parentAgent.CreateSubagent(input.SubagentType, subSessionID)
+		subagent, err := parentAgent.CreateSubagent(ctx, input.SubagentType, subSessionID)
 		if err != nil {
 			logger.Error(logger.ComponentAgentCore).
 				Str("event_type", "LLM_CALL_ERROR").
