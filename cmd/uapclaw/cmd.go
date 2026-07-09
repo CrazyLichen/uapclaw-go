@@ -21,6 +21,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
@@ -181,8 +182,11 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	transport := gateway_push.NewChannelTransport()
 	pushTransport := transport // ChannelTransport 同时实现 AgentTransport + GatewayPushTransport
 
-	// 创建 GatewayServer
-	gs, err := gateway.NewGatewayServer(cfg, transport, pushTransport)
+	// 创建 AgentServer（对齐 Python AgentWebSocketServer，单进程内与 Gateway 共存）
+	agentServer := server.NewAgentServer(cfg, transport)
+
+	// 创建 GatewayServer，注入 AgentServer 引用（用于 serverReady 等待）
+	gs, err := gateway.NewGatewayServer(cfg, transport, pushTransport, agentServer)
 	if err != nil {
 		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
 	}
@@ -191,7 +195,17 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		Str("version", version.Version).
 		Msg("uapclaw app 启动中")
 
-	// 启动服务器
+	// 先启动 AgentServer（goroutine），它会 Init AgentManager → 标记 serverReady → 进入消费循环
+	go func() {
+		if err := agentServer.Start(ctx); err != nil {
+			logger.Error(logger.ComponentAgentServer).
+				Err(err).
+				Msg("AgentServer 启动失败")
+		}
+	}()
+
+	// 启动 GatewayServer（HTTP + WebSocket）
+	// WebChannel.HandleWebSocket 会等待 AgentServer.WaitServerReady 后再发 connection.ack
 	if err := gs.Start(ctx); err != nil {
 		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
 	}
@@ -200,6 +214,8 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	<-ctx.Done()
 	logger.Info(logger.ComponentGateway).Msg("收到退出信号，正在关闭...")
 
+	// 停止顺序：AgentServer（取消流式任务 + 清理）→ GatewayServer（HTTP 优雅关闭）
+	_ = agentServer.Stop()
 	return gs.Stop()
 }
 

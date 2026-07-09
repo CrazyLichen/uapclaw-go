@@ -18,6 +18,7 @@ import (
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
@@ -42,6 +43,8 @@ type GatewayServer struct {
 	transport gateway_push.AgentTransport
 	// httpServer HTTP 服务器
 	httpServer *http.Server
+	// agentServer Agent 核心服务引用（用于 serverReady 等机制）
+	agentServer *server.AgentServer
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -61,7 +64,8 @@ const shutdownTimeout = 5 * time.Second
 // NewGatewayServer 创建 Gateway 服务器实例。
 //
 // 初始化 WebChannel、ChannelManager、MessageHandler，组装 chi 路由。
-func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport, pushTransport gateway_push.GatewayPushTransport) (*GatewayServer, error) {
+// agentServer 可为 nil（独立 Gateway 进程模式），此时 WebChannel 不等待 serverReady。
+func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport, pushTransport gateway_push.GatewayPushTransport, agentServer *server.AgentServer) (*GatewayServer, error) {
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
 		Enabled: true,
@@ -88,12 +92,18 @@ func NewGatewayServer(cfg *config.Config, transport gateway_push.AgentTransport,
 
 	wc := web.NewWebChannel(webCfg, onMessageCb)
 
+	// 注入 AgentServer 就绪等待器（单进程模式）
+	if agentServer != nil {
+		wc.SetServerReadyWaiter(agentServer)
+	}
+
 	s := &GatewayServer{
-		config:     cfg,
-		webChannel: wc,
-		channelMgr: channelMgr,
-		msgHandler: msgHandler,
-		transport:  transport,
+		config:      cfg,
+		webChannel:  wc,
+		channelMgr:  channelMgr,
+		msgHandler:  msgHandler,
+		transport:   transport,
+		agentServer: agentServer,
 	}
 
 	// 组装路由

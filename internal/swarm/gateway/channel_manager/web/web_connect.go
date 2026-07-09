@@ -13,6 +13,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -55,6 +56,8 @@ type WebChannel struct {
 	runningMu sync.RWMutex
 	// onMessageCb 入站消息回调
 	onMessageCb func(*schema.Message)
+	// serverReadyWaiter AgentServer 就绪等待器（nil 表示无需等待，直接发 connection.ack）
+	serverReadyWaiter server.ServerReadyWaiter
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -114,8 +117,8 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message)) *WebCh
 
 // HandleWebSocket 处理 WebSocket 连接。
 //
-// 升级 HTTP 连接为 WebSocket，发送 connection.ack，进入消息读取循环。
-// 对齐 Python WebChannel._handle_connection 逻辑。
+// 升级 HTTP 连接为 WebSocket，等待 AgentServer 就绪后发送 connection.ack，进入消息读取循环。
+// 对齐 Python WebChannel._handle_connection 逻辑（_on_connect 中检查 server_ready）。
 func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := wc.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -138,6 +141,19 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Str("remote_addr", conn.RemoteAddr().String()).
 		Int("total_clients", wc.clientCount()).
 		Msg("WebSocket 客户端已连接")
+
+	// 等待 AgentServer 就绪后再发 connection.ack
+	// 对齐 Python: _on_connect 中检查 agent_client.server_ready
+	if wc.serverReadyWaiter != nil {
+		if !wc.serverReadyWaiter.WaitServerReady(r.Context()) {
+			logger.Warn(logComponent).Msg("AgentServer 未就绪，关闭 WebSocket 连接")
+			_ = conn.Close()
+			wc.clientsMu.Lock()
+			delete(wc.clients, conn)
+			wc.clientsMu.Unlock()
+			return
+		}
+	}
 
 	// 发送 connection.ack 事件
 	sessionID := MakeSessionID()
@@ -327,6 +343,14 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 // OnMessage 注册入站消息回调。
 func (wc *WebChannel) OnMessage(callback func(*schema.Message)) {
 	wc.onMessageCb = callback
+}
+
+// SetServerReadyWaiter 设置 AgentServer 就绪等待器。
+//
+// 在 HandleWebSocket 中等待 AgentServer 就绪后再发送 connection.ack，
+// 对齐 Python: _on_connect 中检查 agent_client.server_ready。
+func (wc *WebChannel) SetServerReadyWaiter(waiter server.ServerReadyWaiter) {
+	wc.serverReadyWaiter = waiter
 }
 
 // IsRunning 返回通道是否正在运行。

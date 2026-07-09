@@ -13,6 +13,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ServerReadyWaiter AgentServer 就绪等待接口，供 WebChannel 等待 AgentServer 启动完成。
+//
+// 使用接口而非直接依赖 *AgentServer，避免 server → web → server 循环依赖。
+// AgentServer 已实现此接口（WaitServerReady 方法）。
+type ServerReadyWaiter interface {
+	// WaitServerReady 阻塞等待 AgentServer 就绪，或 ctx 取消时返回 false。
+	WaitServerReady(ctx context.Context) bool
+}
+
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，适配单进程 ChannelTransport 模式。
 //
 // 从 ChannelTransport.SendCh() 消费 E2AEnvelope，每个请求独立 goroutine 处理。

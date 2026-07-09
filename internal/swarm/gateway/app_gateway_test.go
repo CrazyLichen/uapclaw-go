@@ -18,7 +18,7 @@ func newTestGatewayServer(t *testing.T) *GatewayServer {
 	cfg, err := config.New("")
 	require.NoError(t, err)
 	transport := gateway_push.NewChannelTransport()
-	gs, err := NewGatewayServer(cfg, transport, transport)
+	gs, err := NewGatewayServer(cfg, transport, transport, nil)
 	require.NoError(t, err)
 	return gs
 }
