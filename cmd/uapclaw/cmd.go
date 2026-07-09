@@ -142,6 +142,9 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port))
 	}
 
+	// 设置启动命令环境变量（对齐 Python: os.environ["JIUWENSWARM_START_CMD"] = "uapclaw app"）
+	os.Setenv("UAPCLAW_START_CMD", "uapclaw app")
+
 	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
 	if !workspace.IsInitialized() {
 		if _, err := workspace.Prepare(workspace.InitOption{
