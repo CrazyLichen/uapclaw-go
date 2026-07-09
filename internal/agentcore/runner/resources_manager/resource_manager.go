@@ -636,7 +636,12 @@ func (m *ResourceMgr) RemoveSysOperation(sysOperationIDs []string, opts ...Resou
 		}
 	}
 	if len(toolIDsToRemove) > 0 {
-		m.innerRemoveResources(toolIDsToRemove, "tool", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists)
+		if _, rmErr := m.innerRemoveResources(toolIDsToRemove, "tool", o.Tag, o.TagMatchStrategy, o.SkipIfTagNotExists); rmErr != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "RESOURCE_MGR_REMOVE_SYS_OP_TOOLS_ERROR").
+				Err(rmErr).
+				Msg("移除系统操作关联工具失败")
+		}
 	}
 	_ = results
 	return nil
@@ -1078,7 +1083,14 @@ func (m *ResourceMgr) registerSysOperationTools(sysOperationID string, instance 
 	// 对每个工具调用 innerAddResource 注册到 ToolMgr
 	var toolIDs []string
 	for _, entry := range entries {
-		m.innerAddResource(entry.ToolID, "tool", entry.Tool, entry.Tool.Card(), tag, "")
+		if addErr := m.innerAddResource(entry.ToolID, "tool", entry.Tool, entry.Tool.Card(), tag, ""); addErr != nil {
+			logger.Error(logger.ComponentAgentCore).
+				Str("event_type", "RESOURCE_MGR_REGISTER_SYS_OP_TOOL_ERROR").
+				Str("tool_id", entry.ToolID).
+				Err(addErr).
+				Msg("注册系统操作工具失败")
+			continue
+		}
 		toolIDs = append(toolIDs, entry.ToolID)
 	}
 

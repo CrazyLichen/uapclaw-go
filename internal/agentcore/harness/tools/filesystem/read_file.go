@@ -803,10 +803,10 @@ func extractOutputText(out map[string]json.RawMessage) string {
 	ename := ""
 	evalue := ""
 	if enameRaw, ok := out["ename"]; ok {
-		json.Unmarshal(enameRaw, &ename)
+		_ = json.Unmarshal(enameRaw, &ename)
 	}
 	if evalueRaw, ok := out["evalue"]; ok {
-		json.Unmarshal(evalueRaw, &evalue)
+		_ = json.Unmarshal(evalueRaw, &evalue)
 	}
 	if ename != "" || evalue != "" {
 		return ename + ": " + evalue

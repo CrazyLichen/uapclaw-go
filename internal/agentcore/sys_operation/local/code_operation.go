@@ -90,7 +90,7 @@ func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sy
 		}, nil
 	}
 	if tmpFile != "" {
-		defer os.Remove(tmpFile)
+		defer func() { _ = os.Remove(tmpFile) }()
 	}
 
 	// 解析 CWD
@@ -159,7 +159,7 @@ func (c *CodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts
 		return ch, err
 	}
 	if tmpFile != "" {
-		defer os.Remove(tmpFile)
+		defer func() { _ = os.Remove(tmpFile) }()
 	}
 
 	actualCwd := ResolveCwd(o.Cwd)

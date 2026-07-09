@@ -365,10 +365,10 @@ func (OperationUtils) CreateTmpFile(content string, suffix string) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("创建临时文件失败: %w", err)
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.WriteString(content); err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		return "", fmt.Errorf("写入临时文件失败: %w", err)
 	}
 	return tmpFile.Name(), nil

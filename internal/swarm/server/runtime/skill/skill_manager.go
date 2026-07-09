@@ -86,7 +86,9 @@ func NewSkillManager(workspaceDir string) *SkillManager {
 	}
 
 	// 确保技能目录存在
-	os.MkdirAll(sm.skillsDir, 0o755)
+	if err := os.MkdirAll(sm.skillsDir, 0o755); err != nil {
+		logger.Warn(logComponent).Err(err).Str("path", sm.skillsDir).Msg("创建技能目录失败")
+	}
 
 	sm.state = sm.loadState()
 	return sm
@@ -397,7 +399,9 @@ func (sm *SkillManager) HandleSkillsEvolutionSave(ctx context.Context, params ma
 		evoFile["skill_id"] = safeName
 	}
 
-	os.MkdirAll(filepath.Dir(evoPath), 0o755)
+	if err := os.MkdirAll(filepath.Dir(evoPath), 0o755); err != nil {
+		return nil, fmt.Errorf("创建目录失败: %w", err)
+	}
 	data, _ := json.MarshalIndent(evoFile, "", "  ")
 	if err := os.WriteFile(evoPath, data, 0o644); err != nil {
 		return nil, fmt.Errorf("写入 evolutions.json 失败: %w", err)
@@ -533,7 +537,9 @@ func (sm *SkillManager) HandleSkillsInstall(ctx context.Context, params map[stri
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("skill %s 已存在", safePlugin)}, nil
 		}
-		os.RemoveAll(dest)
+		if err := os.RemoveAll(dest); err != nil {
+			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+		}
 	}
 	if err := copyDir(pluginSrc, dest); err != nil {
 		return map[string]any{"success": false, "detail": fmt.Sprintf("安装失败: %s", err)}, nil
@@ -684,7 +690,9 @@ func (sm *SkillManager) HandleSkillsImportLocal(ctx context.Context, params map[
 		if !force {
 			return map[string]any{"success": false, "detail": fmt.Sprintf("技能 %s 已存在", safeSkillName)}, nil
 		}
-		os.RemoveAll(dest)
+		if err := os.RemoveAll(dest); err != nil {
+			logger.Warn(logComponent).Err(err).Str("path", dest).Msg("移除已存在技能目录失败")
+		}
 	}
 
 	if err := copyDir(absPath, dest); err != nil {
@@ -1059,7 +1067,10 @@ func (sm *SkillManager) saveState() {
 		logger.Error(logComponent).Err(err).Msg("序列化技能状态失败")
 		return
 	}
-	os.MkdirAll(filepath.Dir(sm.stateFile), 0o755)
+	if err := os.MkdirAll(filepath.Dir(sm.stateFile), 0o755); err != nil {
+		logger.Error(logComponent).Err(err).Msg("创建技能状态目录失败")
+		return
+	}
 	if err := os.WriteFile(sm.stateFile, data, 0o644); err != nil {
 		logger.Error(logComponent).Err(err).Msg("保存技能状态文件失败")
 	}
@@ -1417,7 +1428,9 @@ func (sm *SkillManager) syncMarketplaceRepos(ctx context.Context) error {
 		if dirExists(repoDir) {
 			sm.gitPull(ctx, repoDir)
 		} else {
-			sm.gitClone(ctx, url, repoDir)
+			if err := sm.gitClone(ctx, url, repoDir); err != nil {
+				logger.Warn(logComponent).Err(err).Str("url", url).Str("dir", repoDir).Msg("同步 marketplace 仓库 git clone 失败")
+			}
 		}
 	}
 	return nil

@@ -239,7 +239,7 @@ func (f *FsOperation) WriteFile(ctx context.Context, path string, content string
 				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
 			}, nil
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		n, err := file.Write(dataBytes)
 		if err != nil {
 			return &result.WriteFileResult{
@@ -348,8 +348,7 @@ func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, ta
 			}
 			return
 		}
-		defer srcFile.Close()
-
+		defer func() { _ = srcFile.Close() }()
 		// 检查目标存在
 		if _, statErr := os.Stat(resolvedTarget); statErr == nil && !o.Overwrite {
 			ch <- result.UploadFileStreamResult{
@@ -366,8 +365,7 @@ func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, ta
 			}
 			return
 		}
-		defer dstFile.Close()
-
+		defer func() { _ = dstFile.Close() }()
 		// 分块拷贝（peek-ahead 模式）
 		chunkSize := o.ChunkSize
 		if chunkSize <= 0 {
@@ -386,7 +384,12 @@ func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, ta
 			isLast := nextN == 0
 
 			// 写入目标
-			dstFile.Write(chunk)
+			if _, writeErr := dstFile.Write(chunk); writeErr != nil {
+				ch <- result.UploadFileStreamResult{
+					BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), writeErr.Error()),
+				}
+				return
+			}
 
 			ch <- result.UploadFileStreamResult{
 				BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -464,8 +467,7 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 			}
 			return
 		}
-		defer srcFile.Close()
-
+		defer func() { _ = srcFile.Close() }()
 		// 检查目标存在
 		if _, statErr := os.Stat(localPath); statErr == nil && !o.Overwrite {
 			ch <- result.DownloadFileStreamResult{
@@ -476,7 +478,12 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 
 		// 创建父目录
 		if o.CreateParentDirs {
-			os.MkdirAll(filepath.Dir(localPath), 0755)
+			if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+				ch <- result.DownloadFileStreamResult{
+					BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), err.Error()),
+				}
+				return
+			}
 		}
 
 		// 打开目标文件
@@ -487,8 +494,7 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 			}
 			return
 		}
-		defer dstFile.Close()
-
+		defer func() { _ = dstFile.Close() }()
 		// 分块拷贝（peek-ahead 模式）
 		chunkSize := o.ChunkSize
 		if chunkSize <= 0 {
@@ -507,7 +513,12 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 			isLast := nextN == 0
 
 			// 写入目标
-			dstFile.Write(chunk)
+			if _, writeErr := dstFile.Write(chunk); writeErr != nil {
+				ch <- result.DownloadFileStreamResult{
+					BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), writeErr.Error()),
+				}
+				return
+			}
 
 			ch <- result.DownloadFileStreamResult{
 				BaseResult: result.BaseResult{Code: 0, Message: "success"},

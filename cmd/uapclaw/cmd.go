@@ -136,14 +136,20 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")
 	if host != "" {
-		os.Setenv("UAPCLAW_GATEWAY_HOST", host)
+		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
+			logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_GATEWAY_HOST").Msg("设置环境变量失败")
+		}
 	}
 	if port > 0 {
-		os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port))
+		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
+			logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_GATEWAY_PORT").Msg("设置环境变量失败")
+		}
 	}
 
 	// 设置启动命令环境变量（对齐 Python: os.environ["JIUWENSWARM_START_CMD"] = "uapclaw app"）
-	os.Setenv("UAPCLAW_START_CMD", "uapclaw app")
+	if err := os.Setenv("UAPCLAW_START_CMD", "uapclaw app"); err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_START_CMD").Msg("设置环境变量失败")
+	}
 
 	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
 	if !workspace.IsInitialized() {

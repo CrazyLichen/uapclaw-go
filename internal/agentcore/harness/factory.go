@@ -205,8 +205,8 @@ func IsPaidSearchEnabled() bool {
 // 每次启动时调用，确保进程以禁用状态开始，后续 .env 加载或 UI 操作会覆盖。
 // 对应 Python: reset_free_search_runtime_flags()
 func ResetFreeSearchRuntimeFlags() {
-	os.Setenv(freeSearchDDGEnabledEnv, "false")
-	os.Setenv(freeSearchBingEnabledEnv, "false")
+	_ = os.Setenv(freeSearchDDGEnabledEnv, "false")
+	_ = os.Setenv(freeSearchBingEnabledEnv, "false")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -45,7 +45,6 @@ func (h *PackageStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 	skillDir := filepath.Join(sctx.Workspace, "skill")
 	outputDir := filepath.Join(sctx.Workspace, "output")
 	_ = os.MkdirAll(outputDir, 0o755)
-
 	skillName := "skill"
 	if sctx.State.Plan != nil {
 		if sn, ok := sctx.State.Plan["skill_name"].(string); ok {
@@ -90,10 +89,10 @@ func (h *PackageStageHandler) zipSkillDir(skillDir, zipPath string) error {
 	if err != nil {
 		return err
 	}
-	defer zf.Close()
+	defer func() { _ = zf.Close() }()
 
 	w := zip.NewWriter(zf)
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	err = filepath.Walk(skillDir, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
