@@ -34,7 +34,7 @@ func TestHandleConfigCacheClear(t *testing.T) {
 	}
 }
 
-// TestHandleAgentReloadConfig 验证 agent.reload_config 返回 ok=true。
+// TestHandleAgentReloadConfig 验证 agent.reload_config 正常返回。
 func TestHandleAgentReloadConfig(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodAgentReloadConfig, json.RawMessage(`{}`))
@@ -43,7 +43,25 @@ func TestHandleAgentReloadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleAgentReloadConfig 返回错误: %v", err)
 	}
-	if ok, _ := resp.Payload["ok"]; ok != true {
-		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
+	if !resp.OK {
+		t.Errorf("期望 ok=true，实际 false")
+	}
+	if reloaded, _ := resp.Payload["reloaded"]; reloaded != true {
+		t.Errorf("期望 payload.reloaded=true，实际 %v", reloaded)
+	}
+}
+
+// TestHandleAgentReloadConfig_带参数 验证 agent.reload_config 带配置参数。
+func TestHandleAgentReloadConfig_带参数(t *testing.T) {
+	s, _ := newTestServer()
+	params := json.RawMessage(`{"config": {"models": {}}, "env": {"MODEL_PROVIDER": "openai"}}`)
+	req := schema.NewAgentRequest("req-2", "web", schema.ReqMethodAgentReloadConfig, params)
+
+	resp, err := s.handleAgentReloadConfig(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleAgentReloadConfig 返回错误: %v", err)
+	}
+	if !resp.OK {
+		t.Errorf("期望 ok=true，实际 false，payload: %v", resp.Payload)
 	}
 }

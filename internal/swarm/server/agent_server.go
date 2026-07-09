@@ -11,6 +11,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	transportpkg "github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -87,7 +88,7 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	logger.Info(logComponent).Msg("AgentManager 已初始化")
 
 	// 发送 connection.ack 事件帧（对齐 Python AgentWebSocketServer._connection_handler 首帧）
-	ackFrame := gateway_push.BuildConnectionAckFrame()
+	ackFrame := transportpkg.BuildConnectionAckFrame()
 	ackData, err := json.Marshal(ackFrame)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("编码 connection.ack 失败")

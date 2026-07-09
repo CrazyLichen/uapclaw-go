@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -31,12 +32,41 @@ func (s *AgentServer) handleConfigCacheClear(_ context.Context, request *schema.
 	), nil
 }
 
-// handleAgentReloadConfig 处理 agent.reload_config 请求。stub：返回 ok=true。
+// handleAgentReloadConfig 处理 agent.reload_config 请求。
+// 从 request.Params 提取 config 和 env，调用 AgentManager.ReloadAgentsConfig。
+// 对齐 Python: _handle_agent_reload_config (agent_ws_server.py L4147-4171)
 func (s *AgentServer) handleAgentReloadConfig(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// TODO: 实现配置热重载逻辑
+	var configPayload map[string]any
+	var envOverrides map[string]any
+
+	if len(request.Params) > 0 {
+		var params map[string]any
+		if err := json.Unmarshal(request.Params, &params); err == nil {
+			if c, ok := params["config"]; ok {
+				if m, ok := c.(map[string]any); ok {
+					configPayload = m
+				}
+			}
+			if e, ok := params["env"]; ok {
+				if m, ok := e.(map[string]any); ok {
+					envOverrides = m
+				}
+			}
+		}
+	}
+
+	if err := s.agentManager.ReloadAgentsConfig(configPayload, envOverrides); err != nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": err.Error(),
+			}),
+		), nil
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"ok": true,
+			"reloaded": true,
 		}),
 	), nil
 }
