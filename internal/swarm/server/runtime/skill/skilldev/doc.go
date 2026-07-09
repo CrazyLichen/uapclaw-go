@@ -22,7 +22,8 @@
 //	├── store_test.go    # store 测试
 //	├── workspace.go     # WorkspaceProvider：工作区目录管理
 //	├── workspace_test.go # workspace 测试
-//	└── context.go       # SkillDevContext：阶段执行上下文（emit/agent 创建）
+//	├── context.go       # SkillDevContext：阶段执行上下文（emit/agent 创建）
+//	└── stages/          # 阶段处理器实现
 //
 // 对应 Python 代码：jiwenswarm/server/runtime/skill/skilldev/
 package skilldev
