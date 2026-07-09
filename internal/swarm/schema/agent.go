@@ -215,6 +215,11 @@ func WithPayload(p map[string]any) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.Payload = p }
 }
 
+// WithResponsePayload 设置响应负载（WithPayload 的别名，语义更明确）。
+func WithResponsePayload(p map[string]any) AgentResponseOption {
+	return WithPayload(p)
+}
+
 // WithResponseMetadata 设置扩展元数据。
 func WithResponseMetadata(m map[string]any) AgentResponseOption {
 	return func(resp *AgentResponse) { resp.Metadata = m }

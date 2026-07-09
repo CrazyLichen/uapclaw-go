@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -24,15 +27,13 @@ type UapClaw struct {
 	adapter adapter.AgentAdapter
 
 	// skillManager 技能管理器（server 层）。
-	// ⤵️ 10.3.2: 替换为 swarm/server/runtime/skill.SkillManager 实例
-	skillManager interface{}
+	skillManager *skill.SkillManager
 
 	// sessionManager 会话任务队列管理器。
 	sessionManager *SessionManager
 
 	// skilldevService SkillDev 服务（懒初始化）。
-	// ⤵️ 10.3.2: 替换为 SkillDevService 实例
-	skilldevService interface{}
+	skilldevService *skilldev.SkillDevService
 
 	// adapterMu 保护 adapter 字段的并发访问。
 	adapterMu sync.Mutex
@@ -46,6 +47,7 @@ type UapClaw struct {
 func NewUapClaw() *UapClaw {
 	return &UapClaw{
 		sessionManager: NewSessionManager(),
+		skillManager:   skill.NewSkillManager(""),
 	}
 }
 
@@ -75,12 +77,20 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 		return resp, herr
 	}
 
-	// 5. Skills / SkillDev / Plugins 分支
-	// ⤵️ 10.3.2: handleSkillsRequest(request) — 当前 stub，返回 nil 不拦截
-	// ⤵️ 10.3.2: handleSkillDevRequest(request) — 当前 stub，返回 nil 不拦截
-	// ⤵️ 10.3.2: handlePluginsRequest(request) — 当前 stub，返回 nil 不拦截
+	// 5. Skills 分支
+	if resp, err := uc.handleSkillsRequest(ctx, request); resp != nil {
+		return resp, err
+	}
+	// 6. SkillDev 分支（非流式）
+	if resp, err := uc.handleSkillDevRequest(ctx, request); resp != nil {
+		return resp, err
+	}
+	// 7. Plugins 分支
+	if resp, err := uc.handlePluginsRequest(ctx, request); resp != nil {
+		return resp, err
+	}
 
-	// 6. 常规对话
+	// 8. 常规对话
 	sessionID := normalizeSessionID(uc.extractSessionID(request))
 
 	// 记录 user 历史
@@ -126,7 +136,9 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 // 对齐 Python: JiuWenClaw.process_message_stream(request)
 func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// 1. SkillDev 流式分支
-	// ⤵️ 10.3.2: handleSkillDevStreamRequest(request) — 当前 stub
+	if skill.IsSkillDevMethod(request.ReqMethod) {
+		return uc.handleSkillDevStreamRequest(ctx, request)
+	}
 
 	// 2. 确保 adapter
 	mode := uc.adapterModeForRequest(request)
@@ -366,8 +378,10 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	if err != nil {
 		return nil, err
 	}
-	// ⤵️ 10.3.2: 若 adapter 有 SetSkillManager 方法，注入 skillManager
-	// ⤵️ 10.3.2: 设置 skillManager 的 skillnet_install_complete_hook
+	// 若 adapter 有 SetSkillManager 方法，注入 skillManager
+	if setter, ok := a.(interface{ SetSkillManager(*skill.SkillManager) }); ok {
+		setter.SetSkillManager(uc.skillManager)
+	}
 	uc.adapter = a
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).
@@ -444,4 +458,107 @@ func extractChunkContent(payload map[string]any) string {
 // shouldRecordHistory 判断 event_type 是否需要记录到 history。
 func shouldRecordHistory(eventType string) bool {
 	return strings.HasPrefix(eventType, "chat.")
+}
+
+// handleSkillsRequest 处理 skills.* 请求。
+func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	if uc.skillManager == nil {
+		return nil, nil
+	}
+	handler, ok := skill.SkillRoutes[request.ReqMethod]
+	if !ok {
+		return nil, nil
+	}
+	var params map[string]any
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		params = make(map[string]any)
+	}
+	result, err := handler(uc.skillManager, ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	// 若方法需要重建 Agent 实例
+	if skill.NeedsRebuild(request.ReqMethod) {
+		_ = uc.CreateInstance(nil, "", "")
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(true),
+		schema.WithResponsePayload(result),
+	), nil
+}
+
+// handleSkillDevRequest 处理 skilldev.* 请求（非流式）。
+func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	if !skill.IsSkillDevMethod(request.ReqMethod) {
+		return nil, nil
+	}
+	if uc.skilldevService == nil {
+		return nil, nil
+	}
+	events, err := uc.skilldevService.Handle(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	// 将事件列表打包为响应
+	payload := map[string]any{
+		"ok":     true,
+		"events": events,
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(true),
+		schema.WithResponsePayload(payload),
+	), nil
+}
+
+// handlePluginsRequest 处理 plugins.* 请求。
+func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	if uc.skillManager == nil {
+		return nil, nil
+	}
+	handler, ok := skill.PluginRoutes[request.ReqMethod]
+	if !ok {
+		return nil, nil
+	}
+	var params map[string]any
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		params = make(map[string]any)
+	}
+	result, err := handler(uc.skillManager, ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if skill.NeedsRebuild(request.ReqMethod) {
+		_ = uc.CreateInstance(nil, "", "")
+	}
+	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+		schema.WithResponseOK(true),
+		schema.WithResponsePayload(result),
+	), nil
+}
+
+// handleSkillDevStreamRequest 处理 skilldev.* 流式请求。
+func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	if uc.skilldevService == nil {
+		ch := make(chan *schema.AgentResponseChunk, 1)
+		ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
+		close(ch)
+		return ch, nil
+	}
+	events, err := uc.skilldevService.Handle(ctx, request)
+	if err != nil {
+		ch := make(chan *schema.AgentResponseChunk, 1)
+		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
+			map[string]any{"event_type": "skilldev.error", "error": err.Error()},
+		)
+		ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
+		close(ch)
+		return ch, nil
+	}
+	ch := make(chan *schema.AgentResponseChunk, len(events)+1)
+	for _, evt := range events {
+		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, evt)
+	}
+	ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
+	close(ch)
+	return ch, nil
 }

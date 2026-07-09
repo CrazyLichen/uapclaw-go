@@ -1,8 +1,15 @@
 package skill
 
 import (
+	"context"
+
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SkillHandler skills/plugins 请求处理函数签名。
+type SkillHandler func(sm *SkillManager, ctx context.Context, params map[string]any) (map[string]any, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -69,6 +76,61 @@ var (
 		schema.ReqMethodPluginsUninstall:             true,
 		schema.ReqMethodPluginsReload:                true,
 	}
+
+	// skilldevMethods skilldev.* 请求方法集合
+	skilldevMethods = map[schema.ReqMethod]bool{
+		schema.ReqMethodSkilldevStart:    true,
+		schema.ReqMethodSkilldevRespond:  true,
+		schema.ReqMethodSkilldevStatus:   true,
+		schema.ReqMethodSkilldevDownload: true,
+		schema.ReqMethodSkilldevCancel:   true,
+		schema.ReqMethodSkilldevFileList: true,
+		schema.ReqMethodSkilldevFileRead: true,
+	}
+
+	// SkillRoutes skills.* 请求方法 → handler 函数映射（导出，供 UapClaw 调用）。
+	SkillRoutes = map[schema.ReqMethod]SkillHandler{
+		schema.ReqMethodSkillsList:                   (*SkillManager).HandleSkillsList,
+		schema.ReqMethodSkillsInstalled:              (*SkillManager).HandleSkillsInstalled,
+		schema.ReqMethodSkillsGet:                    (*SkillManager).HandleSkillsGet,
+		schema.ReqMethodSkillsToggle:                 (*SkillManager).HandleSkillsToggle,
+		schema.ReqMethodSkillsMarketplaceList:        (*SkillManager).HandleSkillsMarketplaceList,
+		schema.ReqMethodSkillsInstall:                (*SkillManager).HandleSkillsInstall,
+		schema.ReqMethodSkillsUninstall:              (*SkillManager).HandleSkillsUninstall,
+		schema.ReqMethodSkillsImportLocal:            (*SkillManager).HandleSkillsImportLocal,
+		schema.ReqMethodSkillsMarketplaceAdd:         (*SkillManager).HandleSkillsMarketplaceAdd,
+		schema.ReqMethodSkillsMarketplaceRemove:      (*SkillManager).HandleSkillsMarketplaceRemove,
+		schema.ReqMethodSkillsMarketplaceToggle:      (*SkillManager).HandleSkillsMarketplaceToggle,
+		schema.ReqMethodSkillsSkillnetSearch:         (*SkillManager).HandleSkillsSkillnetSearch,
+		schema.ReqMethodSkillsSkillnetInstall:        (*SkillManager).HandleSkillsSkillnetInstall,
+		schema.ReqMethodSkillsSkillnetInstallStatus:  (*SkillManager).HandleSkillsSkillnetInstallStatus,
+		schema.ReqMethodSkillsSkillnetEvaluate:       (*SkillManager).HandleSkillsSkillnetEvaluate,
+		schema.ReqMethodSkillsClawhubGetToken:        (*SkillManager).HandleSkillsClawhubGetToken,
+		schema.ReqMethodSkillsClawhubSetToken:        (*SkillManager).HandleSkillsClawhubSetToken,
+		schema.ReqMethodSkillsClawhubSearch:          (*SkillManager).HandleSkillsClawhubSearch,
+		schema.ReqMethodSkillsClawhubDownload:        (*SkillManager).HandleSkillsClawhubDownload,
+		schema.ReqMethodSkillsTeamSkillsHubInfo:      (*SkillManager).HandleSkillsTeamSkillsHubInfo,
+		schema.ReqMethodSkillsTeamSkillsHubInit:      (*SkillManager).HandleSkillsTeamSkillsHubInit,
+		schema.ReqMethodSkillsTeamSkillsHubValidate:  (*SkillManager).HandleSkillsTeamSkillsHubValidate,
+		schema.ReqMethodSkillsTeamSkillsHubPack:      (*SkillManager).HandleSkillsTeamSkillsHubPack,
+		schema.ReqMethodSkillsTeamSkillsHubSearch:    (*SkillManager).HandleSkillsTeamSkillsHubSearch,
+		schema.ReqMethodSkillsTeamSkillsHubInstall:   (*SkillManager).HandleSkillsTeamSkillsHubInstall,
+		schema.ReqMethodSkillsTeamSkillsHubPublish:   (*SkillManager).HandleSkillsTeamSkillsHubPublish,
+		schema.ReqMethodSkillsTeamSkillsHubDelete:    (*SkillManager).HandleSkillsTeamSkillsHubDelete,
+		schema.ReqMethodSkillsEvolutionStatus:        (*SkillManager).HandleSkillsEvolutionStatus,
+		schema.ReqMethodSkillsEvolutionGet:           (*SkillManager).HandleSkillsEvolutionGet,
+		schema.ReqMethodSkillsEvolutionSave:          (*SkillManager).HandleSkillsEvolutionSave,
+	}
+
+	// PluginRoutes plugins.* 请求方法 → handler 函数映射（导出，供 UapClaw 调用）。
+	PluginRoutes = map[schema.ReqMethod]SkillHandler{
+		schema.ReqMethodPluginsList:      (*SkillManager).HandlePluginsList,
+		schema.ReqMethodPluginsInstall:   (*SkillManager).HandlePluginsInstall,
+		schema.ReqMethodPluginsUninstall: (*SkillManager).HandlePluginsUninstall,
+		schema.ReqMethodPluginsEnable:    (*SkillManager).HandlePluginsEnable,
+		schema.ReqMethodPluginsDisable:   (*SkillManager).HandlePluginsDisable,
+		schema.ReqMethodPluginsReload:    (*SkillManager).HandlePluginsReload,
+	}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -113,4 +175,9 @@ func SkillRouteCount() int {
 // PluginRouteCount 返回 plugins.* 路由数量
 func PluginRouteCount() int {
 	return len(pluginRoutes)
+}
+
+// IsSkillDevMethod 判断请求方法是否属于 skilldev.* 路由。
+func IsSkillDevMethod(method schema.ReqMethod) bool {
+	return skilldevMethods[method]
 }
