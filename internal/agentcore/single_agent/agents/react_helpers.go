@@ -86,12 +86,12 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 }
 
 // getTools 获取工具列表。
-func (a *ReActAgent) getTools() ([]cschema.ToolInfoInterface, error) {
+func (a *ReActAgent) getTools(ctx context.Context) ([]cschema.ToolInfoInterface, error) {
 	am := a.getAbilityManager()
 	if am == nil {
 		return nil, nil
 	}
-	tools, _ := am.ListToolInfo(context.Background(), nil)
+	tools, _ := am.ListToolInfo(ctx, nil)
 	return tools, nil
 }
 
@@ -147,11 +147,11 @@ func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {
 }
 
 // saveContexts 保存上下文。
-func (a *ReActAgent) saveContexts(sess sessioninterfaces.SessionFacade) {
+func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil || sess == nil {
 		return
 	}
-	if _, err := a.contextEngine.SaveContexts(context.Background(), sess, nil); err != nil {
+	if _, err := a.contextEngine.SaveContexts(ctx, sess, nil); err != nil {
 		logger.Warn(logComponent).Str("event_type", "save_contexts_error").Err(err).Msg("保存上下文失败")
 	}
 }

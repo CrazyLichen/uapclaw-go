@@ -56,7 +56,7 @@ func (a *ReActAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...
 	if err != nil {
 		// context.Canceled 时清除上下文消息
 		if ctx.Err() == context.Canceled {
-			a.ClearContextMessages(agentOpts.Session)
+			a.ClearContextMessages(ctx, agentOpts.Session)
 		}
 		if _, ok := err.(*exception.BaseError); ok {
 			return nil, err
@@ -215,11 +215,10 @@ func (a *ReActAgent) CommitInterrupt(
 // ClearContextMessages 清除当前上下文消息（保留历史）。
 //
 // 对应 Python: ReActAgent.clear_context_messages(with_history=False)
-func (a *ReActAgent) ClearContextMessages(sess sessioninterfaces.SessionFacade) {
+func (a *ReActAgent) ClearContextMessages(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil {
 		return
 	}
-	ctx := context.Background()
 	sessionID := sess.GetSessionID()
 	mc := a.contextEngine.GetContext(
 		"default_context", sessionID,
@@ -323,7 +322,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	// 对齐 Python try/finally: cleanup 始终执行（无论 FireLifecycle 是否返回错误）
 	if needCleanup {
 		defer func() {
-			a.saveContexts(sess)
+			a.saveContexts(ctx, sess)
 			// 对齐 Python: session.close_stream() + session.commit()
 			if as, ok := sess.(*session.Session); ok {
 				_ = as.CloseStream()
@@ -423,7 +422,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 	// 合并错误判断：context.Canceled 时清除上下文消息
 	if err != nil {
 		if ctx.Err() == context.Canceled {
-			a.ClearContextMessages(sess)
+			a.ClearContextMessages(ctx, sess)
 		}
 		return nil, err
 	}
@@ -516,7 +515,7 @@ func (a *ReActAgent) innerStream(
 		defer func() {
 			// finally: 清理（对齐 Python L1555-1560）
 			if needCleanup {
-				a.saveContexts(sess)
+				a.saveContexts(ctx, sess)
 			}
 			// 对齐 Python: if self.is_agent_session: session.close_stream() + session.commit()
 			if isAgentSess {
@@ -582,7 +581,7 @@ func (a *ReActAgent) reactLoop(
 		maxIter = a.config.MaxIterations
 	}
 
-	tools, _ := a.getTools()
+	tools, _ := a.getTools(ctx)
 
 	var iterResult map[string]any
 	for iteration := startIteration; iteration < maxIter; iteration++ {
@@ -607,7 +606,7 @@ func (a *ReActAgent) reactLoop(
 
 		// 强制完成 #1
 		if finish := cbc.ConsumeForceFinish(); finish != nil {
-			a.saveContexts(sess)
+			a.saveContexts(ctx, sess)
 			iterResult = finish.Result
 			break
 		}
@@ -625,7 +624,7 @@ func (a *ReActAgent) reactLoop(
 			if aiMsg != nil {
 				content = aiMsg.Content.Text()
 			}
-			a.saveContexts(sess)
+			a.saveContexts(ctx, sess)
 			iterResult = map[string]any{"output": content, "result_type": "answer"}
 			break
 		}
@@ -639,7 +638,7 @@ func (a *ReActAgent) reactLoop(
 
 		// 强制完成 #2
 		if finish := cbc.ConsumeForceFinish(); finish != nil {
-			a.saveContexts(sess)
+			a.saveContexts(ctx, sess)
 			iterResult = finish.Result
 			break
 		}
@@ -663,7 +662,7 @@ func (a *ReActAgent) reactLoop(
 
 	if iterResult == nil {
 		// 对齐 Python for-else: max iterations 时执行 save_contexts
-		a.saveContexts(sess)
+		a.saveContexts(ctx, sess)
 		iterResult = map[string]any{"output": "Max iterations reached without completion", "result_type": "error"}
 	}
 

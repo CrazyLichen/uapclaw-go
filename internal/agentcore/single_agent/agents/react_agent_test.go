@@ -405,7 +405,7 @@ func TestReActAgent_saveContexts_引擎保存出错(t *testing.T) {
 	fce := &fakeContextEngine{saveContextsErr: context.DeadlineExceeded}
 	agent.contextEngine = fce
 	sess := session.NewSession(session.WithSessionID("test_save_err"))
-	agent.saveContexts(sess)
+	agent.saveContexts(context.Background(), sess)
 }
 
 // TestReActAgent_ClearContextMessages_有引擎 验证有 context engine 时清除消息
@@ -421,7 +421,7 @@ func TestReActAgent_ClearContextMessages_有引擎(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("test_clear"))
-	agent.ClearContextMessages(sess)
+	agent.ClearContextMessages(context.Background(), sess)
 }
 
 // TestReActAgent_ClearContextMessages_引擎返回nil 验证 GetContext 返回 nil 时不 panic
@@ -436,7 +436,7 @@ func TestReActAgent_ClearContextMessages_引擎返回nil(t *testing.T) {
 	agent.contextEngine = fce
 
 	sess := session.NewSession(session.WithSessionID("test_clear_nil"))
-	agent.ClearContextMessages(sess)
+	agent.ClearContextMessages(context.Background(), sess)
 }
 
 // TestReActAgent_AfterExecuteToolCallForHITL_有中断 验证 HITL 检测到中断
@@ -2275,13 +2275,13 @@ func TestReActAgent_CommitInterrupt_nilHandler(t *testing.T) {
 func TestReActAgent_ClearContextMessages_无引擎(t *testing.T) {
 	agent := newTestAgent("clear_no_ce")
 	sess := session.NewSession(session.WithSessionID("clear_no_ce_sess"))
-	agent.ClearContextMessages(sess)
+	agent.ClearContextMessages(context.Background(), sess)
 }
 
 // TestReActAgent_ClearContextMessages_nilSession sess 为 nil 时不 panic
 func TestReActAgent_ClearContextMessages_nilSession(t *testing.T) {
 	agent := newTestAgent("clear_nil2")
-	agent.ClearContextMessages(nil)
+	agent.ClearContextMessages(context.Background(), nil)
 }
 
 // TestReActAgent_executeToolCalls_空列表 空工具调用列表返回 nil
@@ -2295,9 +2295,9 @@ func TestReActAgent_executeToolCalls_空列表(t *testing.T) {
 // TestReActAgent_saveContexts_无引擎 无 context engine 时不 panic
 func TestReActAgent_saveContexts_无引擎(t *testing.T) {
 	agent := newTestAgent("save_no_ce")
-	agent.saveContexts(nil)
+	agent.saveContexts(context.Background(), nil)
 	sess := session.NewSession(session.WithSessionID("save_no_ce_sess"))
-	agent.saveContexts(sess)
+	agent.saveContexts(context.Background(), sess)
 }
 
 // TestReActAgent_getAbilityManager 正常返回 AbilityManager
@@ -2310,7 +2310,7 @@ func TestReActAgent_getAbilityManager(t *testing.T) {
 // TestReActAgent_getTools 正常返回工具列表
 func TestReActAgent_getTools(t *testing.T) {
 	agent := newTestAgent("get_tools2")
-	tools, err := agent.getTools()
+	tools, err := agent.getTools(context.Background())
 	assert.NoError(t, err)
 	_ = tools
 }
