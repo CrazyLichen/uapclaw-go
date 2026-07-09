@@ -1,5 +1,22 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// MemorySearchMetadataProvider memory_search 工具元数据提供者
+type MemorySearchMetadataProvider struct{}
+
+// MemoryGetMetadataProvider memory_get 工具元数据提供者
+type MemoryGetMetadataProvider struct{}
+
+// WriteMemoryMetadataProvider write_memory 工具元数据提供者
+type WriteMemoryMetadataProvider struct{}
+
+// EditMemoryMetadataProvider edit_memory 工具元数据提供者
+type EditMemoryMetadataProvider struct{}
+
+// ReadMemoryMetadataProvider read_memory 工具元数据提供者
+type ReadMemoryMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // memorySearchDescription memory_search 工具双语描述
@@ -31,23 +48,6 @@ var readMemoryDescription = map[string]string{
 	"cn": "按 offset/limit 读取 memory/ 下记忆文件的部分内容（用于分页阅读）。",
 	"en": "Read a portion of a memory file under memory/ using offset/limit (for paging).",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// MemorySearchMetadataProvider memory_search 工具元数据提供者
-type MemorySearchMetadataProvider struct{}
-
-// MemoryGetMetadataProvider memory_get 工具元数据提供者
-type MemoryGetMetadataProvider struct{}
-
-// WriteMemoryMetadataProvider write_memory 工具元数据提供者
-type WriteMemoryMetadataProvider struct{}
-
-// EditMemoryMetadataProvider edit_memory 工具元数据提供者
-type EditMemoryMetadataProvider struct{}
-
-// ReadMemoryMetadataProvider read_memory 工具元数据提供者
-type ReadMemoryMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -3,7 +3,7 @@
 // 所有子命令和构建脚本通过此包获取当前版本号，
 // 确保整个项目版本信息单一来源。
 //
-// 编译时可通过 -ldflags 注入版本信息：
+// 编译时可通过 -ldflags 注入版本信息（构建命令示例）：
 //
 //	go build -ldflags "\
 //	  -X github.com/uapclaw/uapclaw-go/internal/common/version.Version=0.2.0 \

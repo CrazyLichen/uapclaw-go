@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SearchToolsMetadataProvider search_tools 工具元数据提供者
+type SearchToolsMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // searchToolsDescription search_tools 工具双语描述
@@ -7,11 +12,6 @@ var searchToolsDescription = map[string]string{
 	"cn": "根据能力、名称、描述或参数提示搜索候选工具。仅用于发现，不会直接调用工具。",
 	"en": "Search candidate tools by capability, name, description, or parameter hints. Discovery only; tools are not directly callable.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// SearchToolsMetadataProvider search_tools 工具元数据提供者
-type SearchToolsMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

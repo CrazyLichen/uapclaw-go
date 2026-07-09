@@ -223,7 +223,7 @@ func BuildToolsContent(tools map[string]string, lang string) string {
 		}
 	}
 
-	// list_skill 工具
+	// 技能列表
 	if _, hasTool := tools["list_skill"]; hasTool && !hiddenTools["list_skill"] && !renderedNames["list_skill"] {
 		lines = append(lines, fmt.Sprintf("- list_skill: %s", toolSummary("list_skill")))
 		renderedNames["list_skill"] = true
@@ -258,7 +258,7 @@ func BuildToolsContent(tools map[string]string, lang string) string {
 		}
 	}
 
-	// task_tool 工具
+	// 任务工具
 	if _, hasTool := tools["task_tool"]; hasTool && !hiddenTools["task_tool"] && !renderedNames["task_tool"] {
 		lines = append(lines, fmt.Sprintf("- task_tool: %s", toolSummary("task_tool")))
 		renderedNames["task_tool"] = true

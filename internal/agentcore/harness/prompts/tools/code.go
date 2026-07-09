@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// CodeMetadataProvider code 工具元数据提供者
+type CodeMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // codeDescription code 工具双语描述
@@ -7,11 +12,6 @@ var codeDescription = map[string]string{
 	"cn": `执行代码（Python 或 JavaScript）。`,
 	"en": `Execute code (Python or JavaScript).`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// CodeMetadataProvider code 工具元数据提供者
-type CodeMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -1,5 +1,16 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// CodingMemoryReadMetadataProvider coding_memory_read 工具元数据提供者
+type CodingMemoryReadMetadataProvider struct{}
+
+// CodingMemoryWriteMetadataProvider coding_memory_write 工具元数据提供者
+type CodingMemoryWriteMetadataProvider struct{}
+
+// CodingMemoryEditMetadataProvider coding_memory_edit 工具元数据提供者
+type CodingMemoryEditMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // codingMemoryReadDescription coding_memory_read 工具双语描述
@@ -19,17 +30,6 @@ var codingMemoryEditDescription = map[string]string{
 	"cn": "在 coding_memory/ 下的记忆文件中做精确字符串替换（old_text → new_text）。",
 	"en": "Perform an exact string replacement inside a coding memory file (old_text → new_text).",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// CodingMemoryReadMetadataProvider coding_memory_read 工具元数据提供者
-type CodingMemoryReadMetadataProvider struct{}
-
-// CodingMemoryWriteMetadataProvider coding_memory_write 工具元数据提供者
-type CodingMemoryWriteMetadataProvider struct{}
-
-// CodingMemoryEditMetadataProvider coding_memory_edit 工具元数据提供者
-type CodingMemoryEditMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

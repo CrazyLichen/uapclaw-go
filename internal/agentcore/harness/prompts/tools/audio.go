@@ -1,5 +1,16 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AudioTranscriptionMetadataProvider 工具元数据提供者
+type AudioTranscriptionMetadataProvider struct{}
+
+// AudioQuestionAnsweringMetadataProvider 工具元数据提供者
+type AudioQuestionAnsweringMetadataProvider struct{}
+
+// AudioMetadataMetadataProvider 工具元数据提供者
+type AudioMetadataMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // audioTranscriptionDescription audio_transcription 工具双语描述
@@ -19,17 +30,6 @@ var audioMetadataDescription = map[string]string{
 	"cn": "识别音频时长，并在配置了 ACR 信息时尝试识别歌曲标题、歌手和发布时间。",
 	"en": "Inspect audio duration and optionally identify song metadata when ACR credentials are configured.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// AudioTranscriptionMetadataProvider 工具元数据提供者
-type AudioTranscriptionMetadataProvider struct{}
-
-// AudioQuestionAnsweringMetadataProvider 工具元数据提供者
-type AudioQuestionAnsweringMetadataProvider struct{}
-
-// AudioMetadataMetadataProvider 工具元数据提供者
-type AudioMetadataMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

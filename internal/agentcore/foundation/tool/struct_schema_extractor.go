@@ -22,7 +22,7 @@ import (
 //   - openjiuwen/core/foundation/tool/utils/type_schema_extractor.py (TypeSchemaExtractor 注册表)
 //
 // TODO: 当前仅支持 struct 反射提取，Python 有 12 种 TypeSchemaExtractor
-// （Optional/Union/Literal/List/Dict/Tuple/Set/Enum/Any/Date/Datetime/TypedDict），
+// （可选类型/联合类型/字面量/列表/字典/元组/集合/枚举/任意类型/日期/日期时间/类型字典），
 // 后续可添加 TypeSchemaExtractor 注册表机制，按类型选择提取器，
 // 支持 Optional → Nullable、Union → anyOf、Literal → enum 等高级类型的 Schema 生成。
 type StructSchemaExtractor struct{}

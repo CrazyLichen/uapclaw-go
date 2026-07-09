@@ -27,6 +27,15 @@ type SessionSpawnExecutor struct {
 	provider interfaces.DeepAgentInterface
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口检查：SessionSpawnExecutor 必须满足 modules.TaskExecutor
+var _ modules.TaskExecutor = (*SessionSpawnExecutor)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionSpawnExecutor 创建会话子进程执行器。
@@ -215,8 +224,3 @@ func (e *SessionSpawnExecutor) buildErrorChunk(taskID string, errMsg string) *st
 		IsLastSchema: true,
 	}
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 编译时接口检查：SessionSpawnExecutor 必须满足 modules.TaskExecutor
-var _ modules.TaskExecutor = (*SessionSpawnExecutor)(nil)

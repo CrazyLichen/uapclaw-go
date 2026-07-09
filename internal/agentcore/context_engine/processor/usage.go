@@ -46,7 +46,7 @@ func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 // 提取结果映射：
 //
 //	calls=1, input_tokens, output_tokens, total_tokens, cache_tokens,
-//	input_cost, output_cost, total_cost, model_name, details=[data]
+//	输入成本、输出成本、总成本、模型名称、详情=[data]
 //
 // 对应 Python: ContextProcessor._extract_usage_metadata(response)
 func ExtractUsageMetadata(msg *llm_schema.AssistantMessage) map[string]any {

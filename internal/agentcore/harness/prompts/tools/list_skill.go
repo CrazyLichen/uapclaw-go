@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ListSkillMetadataProvider list_skill 工具元数据提供者
+type ListSkillMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // listSkillDescription list_skill 工具双语描述
@@ -7,11 +12,6 @@ var listSkillDescription = map[string]string{
 	"cn": "列出可用技能或为当前任务选择相关技能。",
 	"en": "List available skills or select relevant skills for the current task.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ListSkillMetadataProvider list_skill 工具元数据提供者
-type ListSkillMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

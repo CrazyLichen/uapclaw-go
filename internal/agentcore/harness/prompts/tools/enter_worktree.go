@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// EnterWorktreeMetadataProvider enter_worktree 工具元数据提供者
+type EnterWorktreeMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // enterWorktreeDescription enter_worktree 工具双语描述
@@ -64,11 +69,6 @@ var enterWorktreeDescription = map[string]string{
 
 - ` + "`name`" + ` (optional): Worktree name. Pass a retained name to re-enter that worktree; if omitted, the current session's default name is used.`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// EnterWorktreeMetadataProvider enter_worktree 工具元数据提供者
-type EnterWorktreeMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

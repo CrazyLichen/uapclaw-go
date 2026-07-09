@@ -34,7 +34,7 @@ func GetToolCallID(msg llm_schema.BaseMessage) string {
 //
 // 对应 Python: openjiuwen/core/context_engine/context/session_memory_manager.py
 //
-//	(group_completed_api_rounds)
+//	(已完成API轮次分组)
 func GroupCompletedAPIRounds(messages []llm_schema.BaseMessage) [][2]int {
 	var rounds [][2]int
 	currentStart := -1

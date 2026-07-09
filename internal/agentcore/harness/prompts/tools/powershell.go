@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// PowerShellMetadataProvider powershell 工具元数据提供者
+type PowerShellMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // powershellDescription powershell 工具双语描述
@@ -194,11 +199,6 @@ var powershellDescription = map[string]string{
 		"read_file/grep/glob on the working tree - it gives you far more " +
 		"than the rendered repository page would.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// PowerShellMetadataProvider powershell 工具元数据提供者
-type PowerShellMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

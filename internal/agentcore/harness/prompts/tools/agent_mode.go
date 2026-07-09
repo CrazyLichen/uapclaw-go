@@ -1,5 +1,16 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SwitchModeMetadataProvider switch_mode 工具元数据提供者
+type SwitchModeMetadataProvider struct{}
+
+// EnterPlanModeMetadataProvider enter_plan_mode 工具元数据提供者
+type EnterPlanModeMetadataProvider struct{}
+
+// ExitPlanModeMetadataProvider exit_plan_mode 工具元数据提供者
+type ExitPlanModeMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // switchModeDescription switch_mode 工具双语描述
@@ -43,17 +54,6 @@ var exitPlanModeDescription = map[string]string{
 	"cn": "读取 plan 文件全文并直接返回给用户，结束规划阶段，请求用户审批是否要切换到 normal 模式执行。当你对最终 plan 文件满意时，必须调用此工具结束规划阶段。tool_result 中包含完整计划内容。",
 	"en": "Read the full plan file and return the plan directly, ending the planning phase. Request user approval before switching to normal mode for execution. Call this when you are satisfied with the final plan. The tool result contains the complete plan content.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// SwitchModeMetadataProvider switch_mode 工具元数据提供者
-type SwitchModeMetadataProvider struct{}
-
-// EnterPlanModeMetadataProvider enter_plan_mode 工具元数据提供者
-type EnterPlanModeMetadataProvider struct{}
-
-// ExitPlanModeMetadataProvider exit_plan_mode 工具元数据提供者
-type ExitPlanModeMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

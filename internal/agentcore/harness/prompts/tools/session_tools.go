@@ -1,5 +1,16 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// SessionsListMetadataProvider sessions_list 工具元数据提供者
+type SessionsListMetadataProvider struct{}
+
+// SessionsSpawnMetadataProvider sessions_spawn 工具元数据提供者
+type SessionsSpawnMetadataProvider struct{}
+
+// SessionsCancelMetadataProvider sessions_cancel 工具元数据提供者
+type SessionsCancelMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // sessionsListDescription sessions_list 工具双语描述
@@ -99,17 +110,6 @@ var sessionsCancelDescription = map[string]string{
 	"cn": "取消后台异步子任务。此操作会同步阻塞直到任务取消完成。",
 	"en": "Cancel background async task. This operation blocks synchronously until cancellation completes.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// SessionsListMetadataProvider sessions_list 工具元数据提供者
-type SessionsListMetadataProvider struct{}
-
-// SessionsSpawnMetadataProvider sessions_spawn 工具元数据提供者
-type SessionsSpawnMetadataProvider struct{}
-
-// SessionsCancelMetadataProvider sessions_cancel 工具元数据提供者
-type SessionsCancelMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

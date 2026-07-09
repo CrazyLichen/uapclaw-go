@@ -318,7 +318,7 @@ func (p *Param) Validate() error {
 // 生成格式：
 //
 //	{
-//	  "type": "object",
+//	  "type": "object",  ← JSON Schema 对象类型
 //	  "properties": { <每个 Param 的 JSON Schema> },
 //	  "required": [ <必填参数名列表> ]
 //	}

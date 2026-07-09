@@ -159,7 +159,7 @@ func (a *ReActAgent) Stream(ctx context.Context, inputs map[string]any, opts ...
 						Msg("TransformIO 返回类型不匹配，使用原始输出")
 				}
 			}
-			// ④ emit_after (per_item)
+			// ④ 发射后置事件 (逐项)
 			fw.TriggerGlobalAgent(ctx, &callback.GlobalAgentEventData{
 				Event:     callback.GlobalAgentStreamOutput,
 				AgentID:   a.card.ID,

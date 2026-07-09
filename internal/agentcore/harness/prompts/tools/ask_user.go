@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// AskUserMetadataProvider ask_user 工具元数据提供者
+type AskUserMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // askUserDescription ask_user 工具双语描述
@@ -19,11 +24,6 @@ FORBIDDEN: Adding 'Other', 'Custom' etc. as options — system provides this aut
 RECOMMENDED: Place recommended option first, append '(Recommended)' to its label.
 Preview field is only for single-select questions with visual comparison needs.`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// AskUserMetadataProvider ask_user 工具元数据提供者
-type AskUserMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

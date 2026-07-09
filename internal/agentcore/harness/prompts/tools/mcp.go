@@ -1,5 +1,13 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ListMcpResourcesMetadataProvider list_mcp_resources 工具元数据提供者
+type ListMcpResourcesMetadataProvider struct{}
+
+// ReadMcpResourceMetadataProvider read_mcp_resource 工具元数据提供者
+type ReadMcpResourceMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // listMcpResourcesDescription list_mcp_resources 工具双语描述
@@ -13,14 +21,6 @@ var readMcpResourceDescription = map[string]string{
 	"cn": "读取指定 MCP 服务器上某个资源的内容。",
 	"en": "Read the content of a specific resource from the specified MCP server.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ListMcpResourcesMetadataProvider list_mcp_resources 工具元数据提供者
-type ListMcpResourcesMetadataProvider struct{}
-
-// ReadMcpResourceMetadataProvider read_mcp_resource 工具元数据提供者
-type ReadMcpResourceMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

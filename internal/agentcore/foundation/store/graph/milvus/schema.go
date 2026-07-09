@@ -277,7 +277,7 @@ func buildIndexOptions(indexCfg *graph.GraphStoreIndexConfig, collection string,
 // addCommonFields 向 Schema 添加三个集合共有的通用字段。
 //
 // 通用字段：uuid(PK), created_at, user_id, obj_type, language, metadata, content,
-// content_embedding, content_bm25
+// 内容嵌入向量字段和BM25全文索引字段
 func addCommonFields(schema *entity.Schema, storageCfg *graph.GraphStoreStorageConfig, embedDim int) {
 	// uuid — 主键
 	schema = schema.WithField(

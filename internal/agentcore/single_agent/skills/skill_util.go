@@ -34,7 +34,7 @@ type SkillUtil struct {
 //
 // 对应 Python: SKILL_PROMPT_CONTENT
 const skillPromptContent = `
-To help you better complete tasks, the following skill knowledge is equipped:
+为了帮助你更好地完成任务，已装备以下技能知识：
 {{skills}}
 You can use the read_file tool to read the corresponding SKILL.md file to obtain the relevant skill.
 `

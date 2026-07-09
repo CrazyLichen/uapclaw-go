@@ -48,7 +48,7 @@ func ReplaceMessages(messages []llm_schema.BaseMessage, replacements []Replaceme
 		if r.StartIdx < 0 || r.EndIdx >= len(updated) || r.StartIdx > r.EndIdx {
 			continue // 跳过无效索引
 		}
-		// 切片替换：messages[:start] + replacement + messages[end+1:]
+		// 用替换内容拼接消息切片
 		replacement := make([]llm_schema.BaseMessage, len(r.Messages))
 		copy(replacement, r.Messages)
 		updated = append(updated[:r.StartIdx], append(replacement, updated[r.EndIdx+1:]...)...)

@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ExitWorktreeMetadataProvider exit_worktree 工具元数据提供者
+type ExitWorktreeMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // exitWorktreeDescription exit_worktree 工具双语描述
@@ -61,11 +66,6 @@ Calling outside an enter_worktree session is a no-op.
 - On action=remove, detects uncommitted changes and new commits first; refuses unless discard_changes=true
 - After exit, enter_worktree can be called again to create a fresh worktree`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ExitWorktreeMetadataProvider exit_worktree 工具元数据提供者
-type ExitWorktreeMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

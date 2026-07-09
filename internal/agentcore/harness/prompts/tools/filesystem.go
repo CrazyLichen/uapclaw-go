@@ -1,5 +1,25 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ReadFileMetadataProvider 工具元数据提供者
+type ReadFileMetadataProvider struct{}
+
+// WriteFileMetadataProvider 工具元数据提供者
+type WriteFileMetadataProvider struct{}
+
+// EditFileMetadataProvider 工具元数据提供者
+type EditFileMetadataProvider struct{}
+
+// GlobMetadataProvider 工具元数据提供者
+type GlobMetadataProvider struct{}
+
+// ListDirMetadataProvider 工具元数据提供者
+type ListDirMetadataProvider struct{}
+
+// GrepMetadataProvider 工具元数据提供者
+type GrepMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // readFileDescription read_file 工具双语描述
@@ -37,26 +57,6 @@ var grepDescription = map[string]string{
 	"cn": "在文件中搜索内容。支持正则表达式。",
 	"en": "Search file contents with regex, structured output modes, pagination, context lines, file-type filters, and glob filters.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// ReadFileMetadataProvider 工具元数据提供者
-type ReadFileMetadataProvider struct{}
-
-// WriteFileMetadataProvider 工具元数据提供者
-type WriteFileMetadataProvider struct{}
-
-// EditFileMetadataProvider 工具元数据提供者
-type EditFileMetadataProvider struct{}
-
-// GlobMetadataProvider 工具元数据提供者
-type GlobMetadataProvider struct{}
-
-// ListDirMetadataProvider 工具元数据提供者
-type ListDirMetadataProvider struct{}
-
-// GrepMetadataProvider 工具元数据提供者
-type GrepMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

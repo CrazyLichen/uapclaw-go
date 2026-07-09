@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// LspToolMetadataProvider lsp 工具元数据提供者
+type LspToolMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // lspToolDescription lsp 工具双语描述
@@ -49,11 +54,6 @@ Large files (exceeding 10MB) are not sent to the LSP server.
 
 Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// LspToolMetadataProvider lsp 工具元数据提供者
-type LspToolMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

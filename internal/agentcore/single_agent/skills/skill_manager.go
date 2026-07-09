@@ -264,7 +264,7 @@ func (p *osFsProvider) WriteFile(path string, data []byte) error {
 // loadYAML 从文件读取 YAML front-matter。
 //
 // 如果文件以 "---" 开头，则按 YAML front-matter 格式解析：
-// ---\nyaml_metadata\n---\nbody_content
+// ---\nyaml_metadata\n---\nbody_content  ← YAML前置元数据与正文内容的分隔格式
 // 返回 (yamlData, body, error)。
 //
 // 如果不以 "---" 开头，返回 (nil, text, nil)。

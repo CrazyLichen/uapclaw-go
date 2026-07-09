@@ -50,6 +50,18 @@ type TaskLoopEventHandler struct {
 	sessionToolkit *subagent.SessionToolkit
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 编译时接口检查：TaskLoopEventHandler 必须满足 modules.EventHandler
+var _ modules.EventHandler = (*TaskLoopEventHandler)(nil)
+
+// 编译时接口检查：TaskLoopEventHandler 必须满足 interactionQueuesProvider
+var _ interactionQueuesProvider = (*TaskLoopEventHandler)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTaskLoopEventHandler 创建任务循环事件处理器。
@@ -719,11 +731,3 @@ func extractQuery(event cschema.Event) string {
 	}
 	return ""
 }
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// 编译时接口检查：TaskLoopEventHandler 必须满足 modules.EventHandler
-var _ modules.EventHandler = (*TaskLoopEventHandler)(nil)
-
-// 编译时接口检查：TaskLoopEventHandler 必须满足 interactionQueuesProvider
-var _ interactionQueuesProvider = (*TaskLoopEventHandler)(nil)

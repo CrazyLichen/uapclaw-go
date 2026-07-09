@@ -14,7 +14,7 @@ import (
 //
 //	data: {"id":"...","choices":[...]}\n\n
 //	data: {"id":"...","choices":[...]}\n\n
-//	data: [DONE]\n\n
+//	data: [DONE]\n\n  ← SSE 流结束标记
 //
 // 本读取器：
 //   - 逐行读取，提取 "data: " 前缀后的 JSON 内容

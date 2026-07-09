@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// LoadToolsMetadataProvider load_tools 工具元数据提供者
+type LoadToolsMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // loadToolsDescription load_tools 工具双语描述
@@ -7,11 +12,6 @@ var loadToolsDescription = map[string]string{
 	"cn": "将选定的真实工具加载到当前 session 可见工具集合中。",
 	"en": "Load selected real tools into the current session-visible tool set.",
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// LoadToolsMetadataProvider load_tools 工具元数据提供者
-type LoadToolsMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

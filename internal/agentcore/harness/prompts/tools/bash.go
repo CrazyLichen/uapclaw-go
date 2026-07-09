@@ -1,5 +1,10 @@
 package tools
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// BashMetadataProvider bash 工具元数据提供者
+type BashMetadataProvider struct{}
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // bashDescription bash 工具双语描述
@@ -83,11 +88,6 @@ While the bash tool can do similar things, it is better to use the built-in tool
    - If you must poll an external process, use a check command (e.g. ` + "`gh run view`" + `) rather than sleeping first.
    - If you must sleep, keep the duration short (1-5 seconds) to avoid blocking the user.`,
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
-
-// BashMetadataProvider bash 工具元数据提供者
-type BashMetadataProvider struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

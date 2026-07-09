@@ -485,7 +485,7 @@ func executeChildAgent(
 // 对齐 Python: child_process.py L22-27
 //
 //	_logging_config_json = os.environ.pop("OPENJIUWEN_SPAWN_LOGGING_CONFIG", None)
-//	if _logging_config_json:
+//	如果存在日志配置JSON
 //	    configure_log_config(_json.loads(_logging_config_json))
 //
 // 子进程首次初始化时调用 logger.Setup()，后续调用 logger.Reconfigure()。
