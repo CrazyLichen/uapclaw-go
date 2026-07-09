@@ -303,15 +303,14 @@ func registerToolInstances(toolInstances []tool.Tool, tag string) error {
 
 // injectGeneralPurposeSubagent 当 addGeneralPurposeAgent=True 时注入通用子 Agent。
 // 已存在名为 general-purpose 的子 Agent 时不重复注入。
-// 从调用方的 rails 中过滤掉 SubagentRail，确保有 SysOperationRail。
+// 从调用方的 agentRails 中过滤掉 SubagentRail，确保有 SysOperationRail。
 //
 // 对应 Python: _inject_general_purpose_subagent()
-// ⤵️ 9.8-9.24 回填：SubagentRail/SysOperationRail 类型断言，当前跳过过滤
 func injectGeneralPurposeSubagent(
 	subagents []hschema.SubagentSpec,
 	addGeneralPurposeAgent bool,
 	resolvedLanguage string,
-	rails []agentinterfaces.AgentRail,
+	agentRails []agentinterfaces.AgentRail,
 	systemPrompt string,
 	toolCards []*tool.ToolCard,
 	toolInstances []tool.Tool,
@@ -346,9 +345,19 @@ func injectGeneralPurposeSubagent(
 	}
 
 	// 构建 gp_rails：过滤掉 SubagentRail，确保有 SysOperationRail
-	// ⤵️ 9.8-9.24 回填：SubagentRail/SysOperationRail 类型断言，当前跳过过滤
-	gpRails := append(make([]agentinterfaces.AgentRail, 0, len(rails)), rails...)
-	// ⤵️ 9.8-9.24 回填：确保 gpRails 中有 SysOperationRail，当前跳过
+	gpRails := make([]agentinterfaces.AgentRail, 0, len(agentRails))
+	hasSysOpRail := false
+	for _, r := range agentRails {
+		// ⤵️ SubagentRail 类型断言待回填：SubagentRail 尚未实现，暂不过滤
+		if _, ok := r.(*rails.SysOperationRail); ok {
+			hasSysOpRail = true
+		}
+		gpRails = append(gpRails, r)
+	}
+	// 确保 gpRails 中有 SysOperationRail
+	if !hasSysOpRail {
+		gpRails = append(gpRails, rails.NewSysOperationRail())
+	}
 
 	// 注入到列表头部
 	// 对齐 Python: SubAgentConfig(tools=list(tools or []))
@@ -420,10 +429,10 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 	// 注册到全局资源管理器
 	// 对齐 Python: Runner.resource_mgr.add_sys_operation(sysop_card)
 	// Go 签名：AddSysOperation(id, instance)
+	localSysOp := sysop.NewLocalSysOperation(sysopCard)
 	rm := runner.GetResourceMgr()
 	if rm != nil {
-		baseSysOp := &sysop.BaseSysOperation{}
-		if addErr := rm.AddSysOperation(sysopID, baseSysOp); addErr != nil {
+		if addErr := rm.AddSysOperation(sysopID, localSysOp); addErr != nil {
 			logger.Error(logComponent).
 				Str("event_type", "SYS_OPERATION_REGISTER_ERROR").
 				Str("sysop_id", sysopID).
@@ -438,9 +447,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 		logger.Warn(logComponent).Msg("全局资源管理器未初始化，跳过 SysOperation 注册")
 	}
 
-	// ⤵️ 9.32 回填：LocalSysOperation 实现后，从 resource_mgr 取回真实实例
-	// 当前返回 BaseSysOperation 空桩
-	return &sysop.BaseSysOperation{}, nil
+	return localSysOp, nil
 }
 
 // alreadyProvided 检查调用方是否已显式提供了指定类型的 Rail。
@@ -522,13 +529,20 @@ func addDefaultRails(
 
 	// SecurityRail — 始终添加
 	// ⤵️ 9.8-9.24 回填：SecurityRail 具体实例化
-	if !alreadyProvidedByType(userProvidedTypes, "SecurityRail") {
+	if !alreadyProvidedByType(userProvidedTypes, nil) {
 		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).Msg("已添加默认 SecurityRail 占位，⤵️ 9.8-9.24 回填")
 	}
 
+	// SysOperationRail — 始终添加（系统操作工具注册）
+	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{})) {
+		sysOpRail := rails.NewSysOperationRail()
+		agent.AddRail(sysOpRail)
+		logger.Debug(logComponent).Msg("已添加 SysOperationRail")
+	}
+
 	// TaskPlanningRail — 仅当 enable_task_planning=True 时添加
-	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, "TaskPlanningRail") {
+	if params.EnableTaskPlanning && !alreadyProvidedByType(userProvidedTypes, nil) {
 		modelSelMap := make(map[*llm.Model]string, len(params.ModelSelection))
 		for _, entry := range params.ModelSelection {
 			if entry.Model != nil {
@@ -547,7 +561,7 @@ func addDefaultRails(
 
 	// SkillUseRail — 仅当有 skills 或启用了 skill_discovery 时添加
 	if (len(params.Skills) > 0 || config.EnableSkillDiscovery) &&
-		!alreadyProvidedByType(userProvidedTypes, "SkillUseRail") {
+		!alreadyProvidedByType(userProvidedTypes, nil) {
 		// ⤵️ 9.8-9.24 回填：SkillUseRail 具体实例化（含 skills_dir + disabled_skills）
 		agent.AddRail(agentinterfaces.NewBaseRail())
 		// 收集被禁用的技能名称（逻辑保留，后续 SkillUseRail 使用）
@@ -559,7 +573,7 @@ func addDefaultRails(
 	}
 
 	// SubagentRail — 仅当有 subagents 时添加
-	if len(effectiveSubagents) > 0 && !alreadyProvidedByType(userProvidedTypes, "SubagentRail") {
+	if len(effectiveSubagents) > 0 && !alreadyProvidedByType(userProvidedTypes, nil) {
 		// ⤵️ 9.8-9.24 回填：SubagentRail 具体实例化（含 enable_async_subagent）
 		agent.AddRail(agentinterfaces.NewBaseRail())
 		logger.Debug(logComponent).
@@ -569,13 +583,13 @@ func addDefaultRails(
 	}
 }
 
-// alreadyProvidedByType 检查用户提供的 Rail 类型映射中是否包含指定类型名称。
-// 使用字符串名称而非 reflect.Type，因为具体 Rail 类型尚未定义。
-//
-// ⤵️ 9.8-9.24 回填：替换为 alreadyProvided(rails, &ConcreteRail{}) 精确类型匹配
-func alreadyProvidedByType(typeMap map[reflect.Type]bool, _ string) bool {
-	// 当前所有具体 Rail 都未实现，userProvidedTypes 中不会有匹配
-	// 等 Rail 实现后，此函数改为真正的类型检查
+// alreadyProvidedByType 检查用户提供的 Rail 类型映射中是否包含指定类型。
+// 当 target 为具体 reflect.Type 时执行精确匹配；当 target 为 nil 时按字符串名称回退。
+func alreadyProvidedByType(typeMap map[reflect.Type]bool, target reflect.Type) bool {
+	if target != nil {
+		return typeMap[target]
+	}
+	// 字符串名称回退：当前未实现
 	return false
 }
 

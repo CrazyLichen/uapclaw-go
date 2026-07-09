@@ -8,12 +8,14 @@
 //   - AgentModeRail：三层防御式 plan 模式约束 Rail（模式切换工具注册、plan 模式提示词注入、白名单+路径校验拦截、task_tool 动态注册）
 //   - HeartbeatRail：心跳护栏 Rail（心跳运行时注入 HEARTBEAT.md 内容到系统提示词，非心跳运行时静默跳过）
 //   - McpRail：MCP 资源浏览工具注册 Rail（注册 ListMcpResources/ReadMcpResource 到 ResourceMgr + AbilityManager）
+//   - SysOperationRail：系统操作护栏 Rail（注册文件系统、Shell 和代码工具到 ResourceMgr + AbilityManager）
 //
 // 文件目录：
 //
 //	rails/
 //	├── doc.go              # 包文档
 //	├── base.go             # DeepAgentRail 基类 + DeepAgentRailProvider 接口
+//	├── sys_operation.go    # SysOperationRail 系统操作工具注册（Init/Uninit + 幂等注册）
 //	├── progressive.go      # ProgressiveToolRail 渐进式工具发现和可调用工具过滤
 //	├── task_completion.go  # TaskCompletionRail 任务完成检测
 //	├── task_planning.go    # TaskPlanningRail 任务规划（7个钩子）
