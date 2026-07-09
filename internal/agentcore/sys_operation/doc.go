@@ -7,9 +7,10 @@
 // 文件目录：
 //
 //	sys_operation/
-//	├── doc.go                   # 包文档
-//	├── sys_operation.go         # SysOperation/FsOperation/ShellOperation/CodeOperation 接口 + 枚举
-//	└── sys_operation_card.go   # SysOperationCard + WorkConfig 类型
+//	├── doc.go                         # 包文档
+//	├── sys_operation.go               # SysOperation/FsOperation/ShellOperation/CodeOperation 接口 + 枚举 + 结果类型
+//	├── sys_operation_card.go         # SysOperationCard + WorkConfig 类型
+//	└── shell_process_registry.go     # ShellProcessRegistry 会话级进程追踪 + 两阶段终止
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/
 package sys_operation
