@@ -57,8 +57,8 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	}
 
 	// ── 步骤 2：工具规范化 ──
-	// 对齐 Python: factory.py L225-230
-	normalizedCards, toolInstances := normalizeTools(params.ToolInstances)
+	// 对齐 Python: factory.py _normalize_tools(tools: List[Tool | ToolCard])
+	normalizedCards, toolInstances := normalizeTools(params.ToolCards, params.ToolInstances)
 
 	// ── 步骤 3：语言解析 ──
 	// 对齐 Python: factory.py L232-233
@@ -72,6 +72,7 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 		resolvedLanguage,
 		params.Rails,
 		params.SystemPrompt,
+		params.ToolCards,
 		params.ToolInstances,
 		params.Mcps,
 		params.Model,
@@ -158,20 +159,27 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// normalizeTools 将 Tool 实例列表拆分为 ToolCard 列表和 Tool 实例列表，
-// 同时过滤被禁用的 free_search 工具。
-//
-// 对应 Python: _normalize_tools(tools)
-// 决策5：只接受 []tool.Tool，不支持纯 ToolCard 输入
-func normalizeTools(tools []tool.Tool) (normalizedCards []*tool.ToolCard, toolInstances []tool.Tool) {
-	for _, t := range tools {
+// normalizeTools 将 ToolCard 列表和 Tool 实例列表统一规范化，
+// 合并为 ToolCard 列表和 Tool 实例列表，同时过滤被禁用的 free_search 工具。
+// 对齐 Python: _normalize_tools(tools: List[Tool | ToolCard])
+func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
+	// 纯 ToolCard 直接加入 normalizedCards
+	for _, tc := range toolCards {
+		if isDisabledFreeSearchTool(tc) {
+			logger.Debug(logComponent).Str("tool_name", tc.GetName()).Msg("跳过被禁用的 free_search 工具")
+			continue
+		}
+		normalizedCards = append(normalizedCards, tc)
+	}
+	// Tool 实例：card 加入 normalizedCards，实例加入 mergedInstances
+	for _, t := range toolInstances {
 		card := t.Card()
 		if isDisabledFreeSearchTool(card) {
 			logger.Debug(logComponent).Str("tool_name", card.GetName()).Msg("跳过被禁用的 free_search 工具")
 			continue
 		}
 		normalizedCards = append(normalizedCards, card)
-		toolInstances = append(toolInstances, t)
+		mergedInstances = append(mergedInstances, t)
 	}
 	return
 }
@@ -305,6 +313,7 @@ func injectGeneralPurposeSubagent(
 	resolvedLanguage string,
 	rails []agentinterfaces.AgentRail,
 	systemPrompt string,
+	toolCards []*tool.ToolCard,
 	toolInstances []tool.Tool,
 	mcps []*mcptypes.McpServerConfig,
 	model *llm.Model,
@@ -341,13 +350,9 @@ func injectGeneralPurposeSubagent(
 	gpRails := append(make([]agentinterfaces.AgentRail, 0, len(rails)), rails...)
 	// ⤵️ 9.8-9.24 回填：确保 gpRails 中有 SysOperationRail，当前跳过
 
-	// 从 Tool 实例提取 ToolCard
-	toolCards := make([]*tool.ToolCard, 0, len(toolInstances))
-	for _, t := range toolInstances {
-		toolCards = append(toolCards, t.Card())
-	}
-
 	// 注入到列表头部
+	// 对齐 Python: SubAgentConfig(tools=list(tools or []))
+	// toolCards 和 toolInstances 原样透传，后续 normalizeTools 统一拆分
 	gpConfig := hschema.SubAgentConfig{
 		AgentCard: agentschema.NewAgentCard(
 			agentschema.WithAgentName("general-purpose"),
@@ -355,6 +360,7 @@ func injectGeneralPurposeSubagent(
 		),
 		SystemPrompt:      systemPrompt,
 		Tools:             toolCards,
+		ToolInstances:      toolInstances,
 		Mcps:              mcps,
 		Model:             model,
 		Rails:             gpRails,
@@ -582,12 +588,11 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		return hconfig.CreateDeepAgentParams{}
 	}
 	return hconfig.CreateDeepAgentParams{
-		Model:        kwargs.Model,
-		Card:         kwargs.Card,
-		SystemPrompt: kwargs.SystemPrompt,
-		// Tools 是 []*tool.ToolCard，不是 []tool.Tool，
-		// SubagentCreateParams 只有 Card 没有 Tool 实例，无法反向构造
-		// 这里留空，ToolCard 通过 DeepAgentConfig.Tools 传入
+		Model:         kwargs.Model,
+		Card:          kwargs.Card,
+		SystemPrompt:  kwargs.SystemPrompt,
+		ToolCards:     kwargs.Tools,         // ToolCard 列表，注册到 AbilityManager 提供 schema
+		ToolInstances: kwargs.ToolInstances, // Tool 实例列表，注册到 resource_mgr
 		Mcps:                   kwargs.Mcps,
 		Rails:                  kwargs.Rails,
 		EnableTaskLoop:         kwargs.EnableTaskLoop,

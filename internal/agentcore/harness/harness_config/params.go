@@ -27,6 +27,9 @@ type CreateDeepAgentParams struct {
 	SystemPrompt string
 	// ToolInstances Tool 实例列表，从中提取 ToolCard + 注册到 resource_mgr
 	ToolInstances []tool.Tool
+	// ToolCards 纯 ToolCard 列表（不含 Tool 实例），注册到 AbilityManager 提供 schema
+	// 对齐 Python: _normalize_tools 返回的 normalized_cards 中来自纯 ToolCard 的部分
+	ToolCards []*tool.ToolCard
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig
 	// Subagents 子 Agent 规格列表，支持 *SubAgentConfig 和 *DeepAgent

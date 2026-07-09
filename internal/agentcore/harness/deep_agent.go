@@ -611,9 +611,9 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hi
 	}
 
 	// 配置合并逻辑 — 对齐 Python L938-982
-	_ = d.buildSubagentCreateKwargs(subCfg, subSessionID)
+	kwargs := d.buildSubagentCreateKwargs(subCfg, subSessionID)
 
-	// 工厂分派 — 所有分支返回 stub 错误
+	// 工厂分派
 	normalizedFactory := ""
 	if subCfg.FactoryName != "" {
 		normalizedFactory = normalizeFactoryName(subCfg.FactoryName)
@@ -630,7 +630,6 @@ func (d *DeepAgent) CreateSubagent(subagentType string, subSessionID string) (hi
 		return nil, fmt.Errorf("mobile_gui_agent 工厂尚未实现，⤵️ 9.31 回填")
 	default:
 		// 通过 CreateDeepAgent 工厂创建子 Agent 实例
-		kwargs := d.buildSubagentCreateKwargs(subCfg, subSessionID)
 		createParams := buildCreateParamsFromSubagentKwargs(kwargs)
 		subAgent, createErr := CreateDeepAgent(context.Background(), createParams)
 		if createErr != nil {
@@ -2419,6 +2418,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		Card:                   subCfg.AgentCard,
 		SystemPrompt:           subCfg.SystemPrompt,
 		Tools:                  subCfg.Tools,
+		ToolInstances:          subCfg.ToolInstances,
 		Mcps:                   subCfg.Mcps,
 		Rails:                  subCfg.Rails,
 		EnableTaskLoop:         subCfg.EnableTaskLoop,

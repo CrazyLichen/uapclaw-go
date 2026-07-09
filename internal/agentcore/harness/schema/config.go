@@ -78,7 +78,11 @@ type SubAgentConfig struct {
 	// SystemPrompt 系统提示词
 	SystemPrompt string `json:"system_prompt"`
 	// Tools 工具卡片列表
+	// 对齐 Python: SubAgentConfig.tools 中 List[ToolCard] 部分
 	Tools []*tool.ToolCard `json:"tools,omitempty"`
+	// ToolInstances 工具实例列表，对齐 Python: SubAgentConfig.tools 中 List[Tool] 部分
+	// 运行时注入，不从 YAML 反序列化
+	ToolInstances []tool.Tool `json:"-"`
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
 	// Model 模型实例
@@ -122,7 +126,10 @@ type SubagentCreateParams struct {
 	// SystemPrompt 系统提示词
 	SystemPrompt string
 	// Tools 工具卡片列表
+	// 对齐 Python: create_kwargs["tools"] 中 List[ToolCard] 部分
 	Tools []*tool.ToolCard
+	// ToolInstances 工具实例列表，对齐 Python: create_kwargs["tools"] 中 List[Tool] 部分
+	ToolInstances []tool.Tool
 	// Mcps MCP 服务器配置列表
 	Mcps []*mcptypes.McpServerConfig
 	// Rails Rail 列表

@@ -178,9 +178,10 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 		RestrictToWorkDir: true,
 	}
 
-	// 将解析出的 ToolCard 设置到 config.Tools 供后续使用
+	// 将解析出的 ToolCard 传递给 ToolCards，供 CreateDeepAgent 注册到 AbilityManager
 	if len(tools) > 0 {
-		result.ToolInstances = nil // ToolCard → Tool 实例化待 9.38 回填
+		result.ToolCards = tools // ToolCard → AbilityManager schema 注册
+		// ToolInstances 留空，ToolCard → Tool 实例化待 9.38 回填
 	}
 
 	return result, nil

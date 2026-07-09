@@ -57,7 +57,7 @@ type fakeRail struct {
 
 // TestNormalizeTools_空输入 nil 输入返回空列表
 func TestNormalizeTools_空输入(t *testing.T) {
-	cards, instances := normalizeTools(nil)
+	cards, instances := normalizeTools(nil, nil)
 	assert.Empty(t, cards)
 	assert.Empty(t, instances)
 }
@@ -65,10 +65,33 @@ func TestNormalizeTools_空输入(t *testing.T) {
 // TestNormalizeTools_提取Card 输入 Tool 实例，验证 Card 提取
 func TestNormalizeTools_提取Card(t *testing.T) {
 	ft := newFakeTool("test_tool")
-	cards, instances := normalizeTools([]tool.Tool{ft})
+	cards, instances := normalizeTools(nil, []tool.Tool{ft})
 
 	require.Len(t, cards, 1)
 	assert.Equal(t, "test_tool", cards[0].GetName())
+	require.Len(t, instances, 1)
+	assert.Same(t, ft, instances[0])
+}
+
+// TestNormalizeTools_纯ToolCard 输入纯 ToolCard，验证直接加入 normalizedCards
+func TestNormalizeTools_纯ToolCard(t *testing.T) {
+	tc := tool.NewToolCard("card_tool", "card tool", nil, nil)
+	cards, instances := normalizeTools([]*tool.ToolCard{tc}, nil)
+
+	require.Len(t, cards, 1)
+	assert.Equal(t, "card_tool", cards[0].GetName())
+	assert.Empty(t, instances)
+}
+
+// TestNormalizeTools_混合输入 ToolCard + Tool 实例混合输入
+func TestNormalizeTools_混合输入(t *testing.T) {
+	tc := tool.NewToolCard("card_tool", "card tool", nil, nil)
+	ft := newFakeTool("instance_tool")
+	cards, instances := normalizeTools([]*tool.ToolCard{tc}, []tool.Tool{ft})
+
+	require.Len(t, cards, 2)
+	assert.Equal(t, "card_tool", cards[0].GetName())
+	assert.Equal(t, "instance_tool", cards[1].GetName())
 	require.Len(t, instances, 1)
 	assert.Same(t, ft, instances[0])
 }
@@ -130,6 +153,7 @@ func TestInjectGeneralPurposeSubagent_不注入(t *testing.T) {
 		"cn",  // resolvedLanguage
 		nil,   // rails
 		"",    // systemPrompt
+		nil,   // toolCards
 		nil,   // toolInstances
 		nil,   // mcps
 		nil,   // model
@@ -151,6 +175,7 @@ func TestInjectGeneralPurposeSubagent_注入到头部(t *testing.T) {
 		"cn", // resolvedLanguage
 		nil,  // rails
 		"",   // systemPrompt
+		nil,  // toolCards
 		nil,  // toolInstances
 		nil,  // mcps
 		nil,  // model
@@ -182,6 +207,7 @@ func TestInjectGeneralPurposeSubagent_已存在不注入(t *testing.T) {
 		"cn", // resolvedLanguage
 		nil,  // rails
 		"",   // systemPrompt
+		nil,  // toolCards
 		nil,  // toolInstances
 		nil,  // mcps
 		nil,  // model
