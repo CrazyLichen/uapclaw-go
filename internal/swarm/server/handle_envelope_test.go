@@ -168,7 +168,12 @@ func TestHandleEnvelope_UnknownMethod_Unary(t *testing.T) {
 
 	// 从 RecvCh 读取响应
 	select {
-	case resp := <-recvCh:
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("响应 JSON 解码失败: %v", err)
+		}
+		resp := e2a.ResponseFromMap(m)
 		if resp.RequestID != "test-req-1" {
 			t.Errorf("RequestID = %q, 期望 %q", resp.RequestID, "test-req-1")
 		}
@@ -229,7 +234,12 @@ func TestHandleEnvelope_SessionList(t *testing.T) {
 	go s.handleEnvelope(ctx, env)
 
 	select {
-	case resp := <-recvCh:
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("响应 JSON 解码失败: %v", err)
+		}
+		resp := e2a.ResponseFromMap(m)
 		if resp.RequestID != "test-req-1" {
 			t.Errorf("RequestID = %q, 期望 %q", resp.RequestID, "test-req-1")
 		}
@@ -259,7 +269,12 @@ func TestHandleEnvelope_ChatCancel(t *testing.T) {
 	go s.handleEnvelope(ctx, env)
 
 	select {
-	case resp := <-recvCh:
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("响应 JSON 解码失败: %v", err)
+		}
+		resp := e2a.ResponseFromMap(m)
 		if resp.RequestID != "test-req-1" {
 			t.Errorf("RequestID = %q, 期望 %q", resp.RequestID, "test-req-1")
 		}
@@ -284,7 +299,12 @@ func TestWriteErrorResponse(t *testing.T) {
 	s.writeErrorResponse("req-err-1", "web", "测试错误", "TEST_ERROR")
 
 	select {
-	case resp := <-recvCh:
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("响应 JSON 解码失败: %v", err)
+		}
+		resp := e2a.ResponseFromMap(m)
 		if resp.RequestID != "req-err-1" {
 			t.Errorf("RequestID = %q, 期望 %q", resp.RequestID, "req-err-1")
 		}

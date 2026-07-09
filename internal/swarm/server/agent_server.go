@@ -2,25 +2,18 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// ServerReadyWaiter AgentServer 就绪等待接口，供 WebChannel 等待 AgentServer 启动完成。
-//
-// 使用接口而非直接依赖 *AgentServer，避免 server → web → server 循环依赖。
-// AgentServer 已实现此接口（WaitServerReady 方法）。
-type ServerReadyWaiter interface {
-	// WaitServerReady 阻塞等待 AgentServer 就绪，或 ctx 取消时返回 false。
-	WaitServerReady(ctx context.Context) bool
-}
 
 // AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，适配单进程 ChannelTransport 模式。
 //
@@ -39,12 +32,6 @@ type AgentServer struct {
 	sessionStreamTasks map[string]context.CancelFunc
 	// sessionStreamTasksMu 保护 sessionStreamTasks 的读写锁
 	sessionStreamTasksMu sync.RWMutex
-	// serverReady 是否已就绪
-	serverReady bool
-	// serverReadyMu 保护 serverReady 的读写锁
-	serverReadyMu sync.RWMutex
-	// serverReadyCh 就绪通知通道（close 通知所有等待者）
-	serverReadyCh chan struct{}
 	// sessionsDir Agent 会话目录路径（默认从 workspace 获取，测试时可注入）
 	sessionsDir string
 	// running 是否正在运行
@@ -70,7 +57,6 @@ func NewAgentServer(cfg *config.Config, transport *gateway_push.ChannelTransport
 		config:             cfg,
 		transport:          transport,
 		sessionStreamTasks: make(map[string]context.CancelFunc),
-		serverReadyCh:      make(chan struct{}),
 		sessionsDir:        workspace.AgentSessionsDir(),
 	}
 }
@@ -85,7 +71,7 @@ func (s *AgentServer) SessionsDir() string {
 	return s.sessionsDir
 }
 
-// Start 启动 AgentServer：初始化 AgentManager → 标记就绪 → 进入消费循环 → 阻塞直到 ctx 取消。
+// Start 启动 AgentServer：初始化 AgentManager → 发送 connection.ack → 进入消费循环 → 阻塞直到 ctx 取消。
 func (s *AgentServer) Start(ctx context.Context) error {
 	s.runningMu.Lock()
 	if s.running {
@@ -100,12 +86,19 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	s.agentManager = runtime.NewAgentManager()
 	logger.Info(logComponent).Msg("AgentManager 已初始化")
 
-	// 标记就绪
-	s.serverReadyMu.Lock()
-	s.serverReady = true
-	s.serverReadyMu.Unlock()
-	close(s.serverReadyCh)
-	logger.Info(logComponent).Msg("AgentServer 已就绪")
+	// 发送 connection.ack 事件帧（对齐 Python AgentWebSocketServer._connection_handler 首帧）
+	ackFrame := gateway_push.BuildConnectionAckFrame()
+	ackData, err := json.Marshal(ackFrame)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("编码 connection.ack 失败")
+	} else {
+		select {
+		case s.transport.RecvCh() <- ackData:
+			logger.Info(logComponent).Msg("AgentServer 已就绪（connection.ack 已发送）")
+		default:
+			logger.Warn(logComponent).Msg("RecvCh 已满，connection.ack 发送失败")
+		}
+	}
 
 	// 进入消费循环（阻塞直到 ctx 取消）
 	s.startConsumeLoop(ctx)
@@ -134,24 +127,6 @@ func (s *AgentServer) Stop() error {
 	return nil
 }
 
-// ServerReady 返回 AgentServer 是否已就绪。
-func (s *AgentServer) ServerReady() bool {
-	s.serverReadyMu.RLock()
-	defer s.serverReadyMu.RUnlock()
-	return s.serverReady
-}
-
-// WaitServerReady 阻塞等待 AgentServer 就绪，或 ctx 取消时返回 false。
-// serverReadyCh 只 close 一次，通过 select 检测。
-func (s *AgentServer) WaitServerReady(ctx context.Context) bool {
-	select {
-	case <-s.serverReadyCh:
-		return true
-	case <-ctx.Done():
-		return false
-	}
-}
-
 // AgentManager 返回 AgentManager 实例，供 handler 使用。
 func (s *AgentServer) AgentManager() *runtime.AgentManager {
 	return s.agentManager
@@ -164,7 +139,7 @@ func (s *AgentServer) Transport() *gateway_push.ChannelTransport {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// startConsumeLoop 从 transport.SendCh() 持续读取 E2AEnvelope 并分发处理。
+// startConsumeLoop 从 transport.SendCh() 持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。
 // 阻塞直到 ctx 取消或通道关闭。
 func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 	sendCh := s.transport.SendCh()
@@ -173,10 +148,21 @@ func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			logger.Info(logComponent).Msg("AgentServer 消费循环退出（上下文取消）")
 			return
-		case envelope, ok := <-sendCh:
+		case data, ok := <-sendCh:
 			if !ok {
 				logger.Info(logComponent).Msg("AgentServer 消费循环退出（通道已关闭）")
 				return
+			}
+			// JSON 字节 → map → E2AEnvelope（对齐 Python json.loads → E2AEnvelope.from_dict）
+			var m map[string]any
+			if err := json.Unmarshal(data, &m); err != nil {
+				logger.Warn(logComponent).Err(err).Msg("消费循环：请求 JSON 解码失败")
+				continue
+			}
+			envelope := e2a.EnvelopeFromMap(m)
+			if envelope == nil {
+				logger.Warn(logComponent).Msg("消费循环：E2AEnvelope 反序列化失败")
+				continue
 			}
 			logger.Debug(logComponent).
 				Str("request_id", envelope.RequestID).

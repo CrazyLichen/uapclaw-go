@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -23,9 +24,6 @@ func newTestAgentServer() *AgentServer {
 func TestNewAgentServer(t *testing.T) {
 	s := newTestAgentServer()
 
-	if s.ServerReady() {
-		t.Error("新建 AgentServer 不应已就绪")
-	}
 	s.runningMu.RLock()
 	running := s.running
 	s.runningMu.RUnlock()
@@ -34,9 +32,11 @@ func TestNewAgentServer(t *testing.T) {
 	}
 }
 
-// TestAgentServer_Start_ServerReady 测试启动后 ServerReady 为 true 且 WaitServerReady 不阻塞。
-func TestAgentServer_Start_ServerReady(t *testing.T) {
-	s := newTestAgentServer()
+// TestAgentServer_Start_发送ConnectionAck 测试启动后 recvCh 收到 connection.ack 事件帧 JSON。
+func TestAgentServer_Start_发送ConnectionAck(t *testing.T) {
+	cfg, _ := config.New("")
+	transport := gateway_push.NewChannelTransport()
+	s := NewAgentServer(cfg, transport)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -48,32 +48,31 @@ func TestAgentServer_Start_ServerReady(t *testing.T) {
 		_ = s.Start(ctx)
 	}()
 
-	// 等待就绪
-	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer readyCancel()
-
-	if !s.WaitServerReady(readyCtx) {
-		t.Fatal("AgentServer 应在超时前就绪")
+	// 从 RecvCh 读取 connection.ack
+	recvCh, err := transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
 	}
-	if !s.ServerReady() {
-		t.Error("AgentServer 启动后 ServerReady 应为 true")
+
+	select {
+	case data := <-recvCh:
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("connection.ack JSON 解码失败: %v", err)
+		}
+		if m["type"] != "event" {
+			t.Errorf("type = %v, 期望 event", m["type"])
+		}
+		if m["event"] != "connection.ack" {
+			t.Errorf("event = %v, 期望 connection.ack", m["event"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到 connection.ack")
 	}
 
 	// 停止 AgentServer
 	cancel()
 	<-done
-}
-
-// TestAgentServer_WaitServerReady_Timeout 测试未启动时 WaitServerReady 在 ctx 超时后返回 false。
-func TestAgentServer_WaitServerReady_Timeout(t *testing.T) {
-	s := newTestAgentServer()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	if s.WaitServerReady(ctx) {
-		t.Error("未启动的 AgentServer 不应就绪")
-	}
 }
 
 // TestAgentServer_Stop 测试启动后 Stop 不报错。
@@ -90,11 +89,16 @@ func TestAgentServer_Stop(t *testing.T) {
 		_ = s.Start(ctx)
 	}()
 
-	// 等待就绪
-	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer readyCancel()
-	if !s.WaitServerReady(readyCtx) {
-		t.Fatal("AgentServer 应在超时前就绪")
+	// 等待 connection.ack 确认启动完成
+	recvCh, err := s.transport.Recv()
+	if err != nil {
+		t.Fatalf("获取接收通道失败: %v", err)
+	}
+	select {
+	case <-recvCh:
+		// 收到 connection.ack，启动完成
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到 connection.ack")
 	}
 
 	// 停止
@@ -174,35 +178,43 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 		_ = s.Start(ctx)
 	}()
 
-	// 等待就绪
-	readyCtx, readyCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer readyCancel()
-	if !s.WaitServerReady(readyCtx) {
-		t.Fatal("AgentServer 应在超时前就绪")
-	}
-
-	// 发送信封
-	envelope := e2a.NewE2AEnvelope()
-	envelope.RequestID = "test-req-1"
-	envelope.Channel = "test-channel"
-	envelope.Method = "chat.send"
-
-	sendCtx, sendCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer sendCancel()
-	if err := transport.Send(sendCtx, envelope); err != nil {
-		t.Fatalf("发送信封失败: %v", err)
-	}
-
-	// 从 RecvCh 读取响应
+	// 等待 connection.ack 确认启动完成
 	recvCh, err := transport.Recv()
 	if err != nil {
 		t.Fatalf("获取接收通道失败: %v", err)
 	}
-
 	select {
-	case resp := <-recvCh:
-		if resp == nil {
+	case <-recvCh:
+		// 收到 connection.ack，启动完成
+	case <-time.After(2 * time.Second):
+		t.Fatal("超时：未收到 connection.ack")
+	}
+
+	// 发送信封（JSON 字节）
+	envelope := e2a.NewE2AEnvelope()
+	envelope.RequestID = "test-req-1"
+	envelope.Channel = "test-channel"
+	envelope.Method = "chat.send"
+	envelopeData, err := json.Marshal(envelope.ToMap())
+	if err != nil {
+		t.Fatalf("信封 JSON 编码失败: %v", err)
+	}
+
+	sendCtx, sendCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer sendCancel()
+	if err := transport.Send(sendCtx, envelopeData); err != nil {
+		t.Fatalf("发送信封失败: %v", err)
+	}
+
+	// 从 RecvCh 读取响应
+	select {
+	case data := <-recvCh:
+		if data == nil {
 			t.Error("响应不应为 nil")
+		}
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Errorf("响应 JSON 解码失败: %v", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("超时：未收到响应")

@@ -418,9 +418,13 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 // writeResponse 构造 E2AResponse wire 写入 RecvCh。
 func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.AgentResponse) {
 	wire := e2a.EncodeAgentResponseForWire(resp, requestID, 0)
-	e2aResp := e2a.ResponseFromMap(wire)
+	data, err := json.Marshal(wire)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("响应 JSON 编码失败")
+		return
+	}
 	select {
-	case s.transport.RecvCh() <- e2aResp:
+	case s.transport.RecvCh() <- data:
 	default:
 		logger.Warn(logComponent).
 			Str("request_id", requestID).
@@ -431,9 +435,13 @@ func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.Ag
 // writeChunk 构造 E2AResponse chunk wire 写入 RecvCh。
 func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.AgentResponseChunk, sequence int, isStream bool) {
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, sequence, isStream)
-	e2aResp := e2a.ResponseFromMap(wire)
+	data, err := json.Marshal(wire)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Int("sequence", sequence).Msg("流式块 JSON 编码失败")
+		return
+	}
 	select {
-	case s.transport.RecvCh() <- e2aResp:
+	case s.transport.RecvCh() <- data:
 	default:
 		logger.Warn(logComponent).
 			Str("request_id", requestID).
@@ -450,9 +458,13 @@ func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 		},
 	)
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, -1, true)
-	e2aResp := e2a.ResponseFromMap(wire)
+	data, err := json.Marshal(wire)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("keepalive JSON 编码失败")
+		return
+	}
 	select {
-	case s.transport.RecvCh() <- e2aResp:
+	case s.transport.RecvCh() <- data:
 	default:
 		logger.Warn(logComponent).
 			Str("request_id", requestID).
