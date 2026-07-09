@@ -39,3 +39,33 @@ func TestConfigSetEnvMap_条目数量(t *testing.T) {
 		t.Errorf("configSetEnvMap 条目数过少: %d，期望至少 30", len(configSetEnvMap))
 	}
 }
+
+func TestShouldBrowserRestart_需要重启(t *testing.T) {
+	keys := []string{"MODEL_PROVIDER", "SOME_OTHER_KEY"}
+	if !ShouldBrowserRestart(keys) {
+		t.Error("MODEL_PROVIDER 变更应触发 browser.runtime_restart")
+	}
+}
+
+func TestShouldBrowserRestart_不需要重启(t *testing.T) {
+	keys := []string{"EMAIL_ADDRESS", "GITHUB_TOKEN"}
+	if ShouldBrowserRestart(keys) {
+		t.Error("EMAIL_ADDRESS + GITHUB_TOKEN 变更不应触发 browser.runtime_restart")
+	}
+}
+
+func TestShouldBrowserRestart_空键集合(t *testing.T) {
+	if ShouldBrowserRestart(nil) {
+		t.Error("nil 键集合不应触发 browser.runtime_restart")
+	}
+	if ShouldBrowserRestart([]string{}) {
+		t.Error("空键集合不应触发 browser.runtime_restart")
+	}
+}
+
+func TestBrowserRuntimeKeys_条目数量(t *testing.T) {
+	// 对齐 Python browser_runtime_keys（16 个模型相关键）
+	if len(browserRuntimeKeys) != 16 {
+		t.Errorf("browserRuntimeKeys 条目数: %d，期望 16", len(browserRuntimeKeys))
+	}
+}

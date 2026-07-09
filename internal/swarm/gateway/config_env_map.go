@@ -76,3 +76,35 @@ func BuildEnvMap() map[string]any {
 	}
 	return env
 }
+
+// browserRuntimeKeys 触发 browser.runtime_restart 的环境变量集合。
+// 对齐 Python: browser_runtime_keys (app_gateway.py L920-935)。
+var browserRuntimeKeys = map[string]bool{
+	"MODEL_PROVIDER":   true,
+	"MODEL_NAME":       true,
+	"API_BASE":         true,
+	"API_KEY":          true,
+	"VIDEO_PROVIDER":   true,
+	"VIDEO_MODEL_NAME": true,
+	"VIDEO_API_BASE":   true,
+	"VIDEO_API_KEY":    true,
+	"AUDIO_PROVIDER":   true,
+	"AUDIO_MODEL_NAME": true,
+	"AUDIO_API_BASE":   true,
+	"AUDIO_API_KEY":    true,
+	"VISION_PROVIDER":   true,
+	"VISION_MODEL_NAME": true,
+	"VISION_API_BASE":   true,
+	"VISION_API_KEY":    true,
+}
+
+// ShouldBrowserRestart 判断变更的环境变量是否需要触发 browser.runtime_restart。
+// 对齐 Python: browser_runtime_keys & set(updated_env_keys)。
+func ShouldBrowserRestart(updatedKeys []string) bool {
+	for _, k := range updatedKeys {
+		if browserRuntimeKeys[k] {
+			return true
+		}
+	}
+	return false
+}

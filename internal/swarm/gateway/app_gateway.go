@@ -145,6 +145,18 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 		}
 	}
 
+	// 启动时推送初始配置给 AgentServer（对齐 Python: set_or_update_server_config + agent.reload_config）
+	// 对齐 Python: app_gateway.py L879-882
+	if s.agentClient != nil && s.agentClient.ServerReady() {
+		if err := s.PushInitialConfig(ctx); err != nil {
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Msg("启动时推送初始配置给 AgentServer 失败")
+		} else {
+			logger.Info(logComponentAppGateway).Msg("初始配置已推送给 AgentServer")
+		}
+	}
+
 	// 启动 HTTP 服务器
 	addr := s.webChannel.Addr()
 	s.httpServer = &http.Server{
