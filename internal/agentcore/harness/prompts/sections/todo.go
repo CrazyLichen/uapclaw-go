@@ -167,11 +167,13 @@ All tasks will be executed using the Agent's default model.
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTodoSection 构建待办节（Priority 90）
+// BuildTodoSection 构建待办节（Priority 90）。
 //
+// 返回 *PromptSection，对齐 Python build_todo_section 返回 Optional[PromptSection]。
+// 当无内容可注入时返回 nil，调用方应判断 nil 并调用 RemoveSection。
 // modelSelection 为预构建的模型列表字符串（可为空）。
 // 若非空则追加模型选择提示词，否则追加"无模型选择"提示词。
-func BuildTodoSection(modelSelection string, lang string) saprompt.PromptSection {
+func BuildTodoSection(modelSelection string, lang string) *saprompt.PromptSection {
 	var content string
 	if lang == "en" {
 		content = todoSystemPromptEN
@@ -191,11 +193,12 @@ func BuildTodoSection(modelSelection string, lang string) saprompt.PromptSection
 		}
 	}
 
-	return saprompt.PromptSection{
+	section := saprompt.PromptSection{
 		Name:     SectionTodo,
 		Content:  map[string]string{lang: content},
 		Priority: 90,
 	}
+	return &section
 }
 
 // BuildProgressReminderUserPrompt 构建进度提醒用户提示词

@@ -852,12 +852,13 @@ func (r *AgentModeRail) languageIsCN() bool {
 
 // buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
 //
-// 对齐 Python: _build_enter_plan_mode_status() L200-223
+// 对齐 Python: _build_enter_plan_mode_status() L200-223 + L309
 // 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
 func (r *AgentModeRail) buildEnterPlanModeStatus(planFilePath string, planExists bool) string {
 	if r.languageIsCN() {
 		if planFilePath != "" {
-			return "enter_plan_mode 已调用完成。请继续工作流。"
+			// 对齐 Python L309: 中文版包含 Plan 文件路径
+			return fmt.Sprintf("enter_plan_mode 已调用完成。Plan 文件：%s。请继续工作流。", planFilePath)
 		}
 		return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
 	}

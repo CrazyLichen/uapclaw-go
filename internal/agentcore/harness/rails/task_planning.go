@@ -208,24 +208,20 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 		}
 	}
 
-	// 对齐 Python L108-119: 检查已有 todo 工具，避免重复注册
-	existingTodoNames := make(map[string]struct{})
+	// 对齐 Python L105-131: 检查已有 todo 工具，已有的保留，缺失的创建
+	todoToolNames := []string{"todo_create", "todo_list", "todo_get", "todo_modify"}
+	foundTools := make(map[string]bool, 4)
 	for _, ability := range am.List() {
 		name := ability.AbilityName()
-		if name == "todo_create" || name == "todo_list" || name == "todo_get" || name == "todo_modify" {
-			existingTodoNames[name] = struct{}{}
+		for _, todoName := range todoToolNames {
+			if name == todoName {
+				foundTools[todoName] = true
+				break
+			}
 		}
 	}
-	if len(existingTodoNames) == 4 {
-		// 4 个 todo 工具都已存在，跳过创建但仍需要设置 todoTool 引用
-		logger.Debug(taskPlanLogComponent).
-			Str("event_type", "task_planning_init_skip_existing").
-			Msg("todo 工具已全部注册，跳过创建")
-		return nil
-	}
 
-	// 创建 todo 工具集
-	// 对齐 Python L124-131: 创建工具并注册
+	// 创建 todo 工具集（共享 TodoTool 基类实例）
 	fsOp := r.SysOperation()
 	if fsOp == nil || workspaceDir == "" {
 		logger.Warn(taskPlanLogComponent).
@@ -234,25 +230,35 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 		return nil
 	}
 
-	tools, todoTool := todo.CreateTodosTool(workspaceDir, fsOp.Fs(), language, agentID)
-	r.tools = tools
-	r.todoTool = &todoTool
+	allTools, todoToolBase := todo.CreateTodosTool(workspaceDir, fsOp.Fs(), language, agentID)
+	r.todoTool = &todoToolBase
 
-	// 注册每个工具的 Card 到 ability_manager 和 ResourceMgr
-	// 对齐 Python L128-129: Runner.resource_mgr.add_tool(tool) + agent.ability_manager.add(tool.card)
 	resourceMgr := runner.GetResourceMgr()
-	for _, t := range tools {
-		if t != nil {
-			am.Add(t.Card())
-			if resourceMgr != nil {
-				_ = resourceMgr.AddTool(t)
-			}
+
+	// 对齐 Python L124-131: 只注册尚未存在的工具，已有的保留
+	var registeredTools []tool.Tool
+	for i, t := range allTools {
+		if t == nil {
+			continue
 		}
+		toolName := todoToolNames[i]
+		if foundTools[toolName] {
+			// 已存在，跳过注册但保留引用
+			registeredTools = append(registeredTools, t)
+			continue
+		}
+		// 不存在，注册新工具
+		am.Add(t.Card())
+		if resourceMgr != nil {
+			_ = resourceMgr.AddTool(t)
+		}
+		registeredTools = append(registeredTools, t)
 	}
+	r.tools = registeredTools
 
 	logger.Debug(taskPlanLogComponent).
 		Str("event_type", "task_planning_init").
-		Int("tool_count", len(tools)).
+		Int("tool_count", len(registeredTools)).
 		Msg("TaskPlanningRail 已注册 todo 工具")
 	return nil
 }
@@ -295,11 +301,16 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 		return nil
 	}
 
-	// 对齐 Python L157-162: 注入 todo 提示词节
+	// 对齐 Python L157-165: 注入 todo 提示词节
 	lang := sb.Language()
 	modelSelStr := r.buildModelSelectionString()
 	section := sections.BuildTodoSection(modelSelStr, lang)
-	sb.AddSection(section)
+	if section != nil {
+		sb.AddSection(*section)
+	} else {
+		// 对齐 Python L165: section 为 nil 时移除旧 todo 节
+		sb.RemoveSection(sections.SectionTodo)
+	}
 
 	// 对齐 Python L167-168: 若无模型选择配置则跳过模型切换
 	if len(r.modelSelection) == 0 {
@@ -375,8 +386,12 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 		}
 	}
 
-	// 对齐 Python L214-215: 若未启用进度提醒则跳过
+	// 对齐 Python L214-215: 若未启用进度提醒或缺少 session/context 则跳过
 	if !r.enableProgressRepeat || sess == nil {
+		return nil
+	}
+	modelCtx := cbc.ModelContext()
+	if modelCtx == nil {
 		return nil
 	}
 
@@ -411,11 +426,8 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	prompt := sections.BuildProgressReminderUserPrompt(tasksStr, inProgressTask, lang)
 
 	// 对齐 Python L240-242: 向上下文注入 UserMessage
-	modelCtx := cbc.ModelContext()
-	if modelCtx != nil {
-		userMsg := llmschema.NewUserMessage(prompt)
-		_, _ = modelCtx.AddMessages(ctx, userMsg)
-	}
+	userMsg := llmschema.NewUserMessage(prompt)
+	_, _ = modelCtx.AddMessages(ctx, userMsg)
 
 	return nil
 }
