@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -59,16 +57,14 @@ func TestNewChannelTransportWithBuffer_零值使用默认缓冲(t *testing.T) {
 	}
 }
 
-// TestChannelTransport_Send 测试发送 E2AEnvelope
+// TestChannelTransport_Send 测试发送 JSON 字节
 func TestChannelTransport_Send(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
 	defer func() { _ = ct.Close() }()
 
-	env := e2a.NewE2AEnvelope()
-	env.RequestID = "test-req-001"
-	env.Method = "session/prompt"
+	data := []byte(`{"request_id":"test-req-001","method":"session/prompt"}`)
 
-	err := ct.Send(context.Background(), env)
+	err := ct.Send(context.Background(), data)
 	if err != nil {
 		t.Fatalf("Send 失败: %v", err)
 	}
@@ -76,14 +72,11 @@ func TestChannelTransport_Send(t *testing.T) {
 	// 验证 AgentServer 端能收到
 	select {
 	case received := <-ct.SendCh():
-		if received.RequestID != "test-req-001" {
-			t.Fatalf("接收到的 RequestID 错误: 期望 test-req-001, 实际 %s", received.RequestID)
-		}
-		if received.Method != "session/prompt" {
-			t.Fatalf("接收到的 Method 错误: 期望 session/prompt, 实际 %s", received.Method)
+		if string(received) != string(data) {
+			t.Fatalf("接收到的数据错误: 期望 %s, 实际 %s", string(data), string(received))
 		}
 	case <-time.After(time.Second):
-		t.Fatal("超时：未收到发送的信封")
+		t.Fatal("超时：未收到发送的数据")
 	}
 }
 
@@ -92,10 +85,7 @@ func TestChannelTransport_Send_关闭后返回错误(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
 	_ = ct.Close()
 
-	env := e2a.NewE2AEnvelope()
-	env.RequestID = "test-req-closed"
-
-	err := ct.Send(context.Background(), env)
+	err := ct.Send(context.Background(), []byte("test"))
 	if err != ErrTransportClosed {
 		t.Fatalf("期望 ErrTransportClosed, 实际: %v", err)
 	}
@@ -107,24 +97,19 @@ func TestChannelTransport_Send_上下文取消(t *testing.T) {
 	defer func() { _ = ct.Close() }()
 
 	// 先填满 sendCh 缓冲，使下一次 Send 阻塞
-	env0 := e2a.NewE2AEnvelope()
-	env0.RequestID = "fill"
-	_ = ct.Send(context.Background(), env0)
+	_ = ct.Send(context.Background(), []byte("fill"))
 
 	// 创建已取消的上下文
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	env := e2a.NewE2AEnvelope()
-	env.RequestID = "test-req-cancel"
-
-	err := ct.Send(ctx, env)
+	err := ct.Send(ctx, []byte("test-cancel"))
 	if err == nil {
 		t.Fatal("期望返回上下文取消错误, 实际 nil")
 	}
 }
 
-// TestChannelTransport_Recv 测试接收 E2AResponse
+// TestChannelTransport_Recv 测试接收 JSON 字节
 func TestChannelTransport_Recv(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(1, 1)
 	defer func() { _ = ct.Close() }()
@@ -137,21 +122,15 @@ func TestChannelTransport_Recv(t *testing.T) {
 		t.Fatal("Recv 返回 nil 通道")
 	}
 
-	// 模拟 AgentServer 写入响应
-	resp := e2a.NewE2AResponse()
-	resp.RequestID = "test-req-001"
-	resp.Status = e2a.E2AResponseStatusSucceeded
-
-	ct.RecvCh() <- resp
+	// 模拟 AgentServer 写入 JSON 字节
+	data := []byte(`{"request_id":"test-req-001","status":"succeeded"}`)
+	ct.RecvCh() <- data
 
 	// Gateway 端读取
 	select {
 	case received := <-recvCh:
-		if received.RequestID != "test-req-001" {
-			t.Fatalf("接收到的 RequestID 错误: 期望 test-req-001, 实际 %s", received.RequestID)
-		}
-		if received.Status != e2a.E2AResponseStatusSucceeded {
-			t.Fatalf("接收到的 Status 错误: 期望 %s, 实际 %s", e2a.E2AResponseStatusSucceeded, received.Status)
+		if string(received) != string(data) {
+			t.Fatalf("接收到的数据错误: 期望 %s, 实际 %s", string(data), string(received))
 		}
 	case <-time.After(time.Second):
 		t.Fatal("超时：未收到响应")
@@ -202,25 +181,14 @@ func TestChannelTransport_实现AgentTransport接口(t *testing.T) {
 	var _ AgentTransport = (*ChannelTransport)(nil)
 }
 
-// TestChannelTransport_实现GatewayPushTransport接口 测试 ChannelTransport 实现 GatewayPushTransport 接口
-func TestChannelTransport_实现GatewayPushTransport接口(t *testing.T) {
-	// 编译期接口断言
-	var _ GatewayPushTransport = (*ChannelTransport)(nil)
-}
-
 // TestChannelTransport_完整收发流程 测试完整收发流程
 func TestChannelTransport_完整收发流程(t *testing.T) {
 	ct := NewChannelTransportWithBuffer(4, 4)
 	defer func() { _ = ct.Close() }()
 
-	// Gateway 端发送请求
-	env := e2a.NewE2AEnvelope()
-	env.RequestID = "flow-req-001"
-	env.Method = "session/prompt"
-	env.SessionID = "sess-001"
-	env.IsStream = true
-
-	err := ct.Send(context.Background(), env)
+	// Gateway 端发送请求 JSON
+	reqData := []byte(`{"request_id":"flow-req-001","method":"session/prompt","session_id":"sess-001","is_stream":true}`)
+	err := ct.Send(context.Background(), reqData)
 	if err != nil {
 		t.Fatalf("Send 失败: %v", err)
 	}
@@ -228,95 +196,37 @@ func TestChannelTransport_完整收发流程(t *testing.T) {
 	// AgentServer 端接收请求
 	select {
 	case received := <-ct.SendCh():
-		if received.RequestID != "flow-req-001" {
-			t.Fatalf("AgentServer 收到的 RequestID 错误: %s", received.RequestID)
-		}
-		if received.SessionID != "sess-001" {
-			t.Fatalf("AgentServer 收到的 SessionID 错误: %s", received.SessionID)
+		if string(received) != string(reqData) {
+			t.Fatalf("AgentServer 收到的数据错误: %s", string(received))
 		}
 	case <-time.After(time.Second):
 		t.Fatal("AgentServer 超时：未收到请求")
 	}
 
-	// AgentServer 端写入流式响应
+	// AgentServer 端写入流式响应 JSON
 	recvCh, err := ct.Recv()
 	if err != nil {
 		t.Fatalf("Recv 失败: %v", err)
 	}
 
-	for i := 0; i < 3; i++ {
-		resp := e2a.NewE2AResponse()
-		resp.RequestID = "flow-req-001"
-		resp.Sequence = i
-		resp.IsFinal = i == 2
+	responses := [][]byte{
+		[]byte(`{"request_id":"flow-req-001","sequence":0,"is_final":false}`),
+		[]byte(`{"request_id":"flow-req-001","sequence":1,"is_final":false}`),
+		[]byte(`{"request_id":"flow-req-001","sequence":2,"is_final":true}`),
+	}
+	for _, resp := range responses {
 		ct.RecvCh() <- resp
 	}
 
 	// Gateway 端接收所有响应
 	for i := 0; i < 3; i++ {
 		select {
-		case resp := <-recvCh:
-			if resp.Sequence != i {
-				t.Fatalf("响应序号错误: 期望 %d, 实际 %d", i, resp.Sequence)
-			}
-			if resp.IsFinal != (i == 2) {
-				t.Fatalf("IsFinal 标志错误: 序号 %d", i)
+		case received := <-recvCh:
+			if string(received) != string(responses[i]) {
+				t.Fatalf("响应错误: 期望 %s, 实际 %s", string(responses[i]), string(received))
 			}
 		case <-time.After(time.Second):
 			t.Fatalf("Gateway 超时：未收到第 %d 个响应", i)
 		}
-	}
-}
-
-// TestChannelTransport_SetServerPushHandler 测试 SetServerPushHandler 回调投递
-func TestChannelTransport_SetServerPushHandler(t *testing.T) {
-	ct := NewChannelTransportWithBuffer(1, 1)
-	defer func() { _ = ct.Close() }()
-
-	received := make(chan map[string]any, 1)
-
-	// 注册回调
-	ct.SetServerPushHandler(func(msg map[string]any) {
-		received <- msg
-	})
-
-	// SendPush 写入消息
-	msg := map[string]any{"event_type": "server_push", "content": "hello"}
-	err := ct.SendPush(msg)
-	if err != nil {
-		t.Fatalf("SendPush 失败: %v", err)
-	}
-
-	// 回调应被调用
-	select {
-	case got := <-received:
-		if got["event_type"] != "server_push" {
-			t.Fatalf("回调收到错误 event_type: %v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("超时：回调未被调用")
-	}
-}
-
-// TestChannelTransport_SendPush 测试 SendPush 基本功能
-func TestChannelTransport_SendPush(t *testing.T) {
-	ct := NewChannelTransportWithBuffer(1, 1)
-	defer func() { _ = ct.Close() }()
-
-	msg := map[string]any{"key": "value"}
-	err := ct.SendPush(msg)
-	if err != nil {
-		t.Fatalf("SendPush 失败: %v", err)
-	}
-}
-
-// TestChannelTransport_SendPush_关闭后返回错误 测试关闭后 SendPush 返回错误
-func TestChannelTransport_SendPush_关闭后返回错误(t *testing.T) {
-	ct := NewChannelTransportWithBuffer(1, 1)
-	_ = ct.Close()
-
-	err := ct.SendPush(map[string]any{})
-	if err != ErrTransportClosed {
-		t.Fatalf("期望 ErrTransportClosed, 实际: %v", err)
 	}
 }
