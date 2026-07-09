@@ -29,7 +29,7 @@ func TestHandleConfigCacheClear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleConfigCacheClear 返回错误: %v", err)
 	}
-	if ok, _ := resp.Payload["ok"]; ok != true {
+	if ok := resp.Payload["ok"]; ok != true {
 		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
 	}
 }
@@ -46,7 +46,7 @@ func TestHandleAgentReloadConfig(t *testing.T) {
 	if !resp.OK {
 		t.Errorf("期望 ok=true，实际 false")
 	}
-	if reloaded, _ := resp.Payload["reloaded"]; reloaded != true {
+	if reloaded := resp.Payload["reloaded"]; reloaded != true {
 		t.Errorf("期望 payload.reloaded=true，实际 %v", reloaded)
 	}
 }

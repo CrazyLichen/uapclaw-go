@@ -379,7 +379,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	if initCwd == "" {
 		initCwd = d.workspaceDir
 	}
-	ctx = d.seedRuntimeCwd(ctx, initCwd)
+	d.seedRuntimeCwd(ctx, initCwd)
 	// 步骤 22: ⤵️ A2X: _sync_a2x_runtime_state()
 
 	// 步骤 23: d.registeredMCPServerIDs = make(map[string]bool)（可回填）
@@ -514,7 +514,7 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		}
 	}
 	if requestCwd != "" {
-		ctx = d.seedRuntimeCwd(ctx, requestCwd)
+		d.seedRuntimeCwd(ctx, requestCwd)
 	}
 	// ⤵️ agentcore.Runner: 步骤 18 Runner.run_agent
 	// ⤵️ 10.6.3-10: 步骤 19-20 异常处理 + 清理（unmark_session_active）
@@ -612,7 +612,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		}
 	}
 	if requestCwd != "" {
-		ctx = d.seedRuntimeCwd(ctx, requestCwd)
+		d.seedRuntimeCwd(ctx, requestCwd)
 	}
 	// ⤵️ agentcore.Runner: 步骤 18-19 Runner.run_agent_streaming
 	// ⤵️ 10.6.3-10: 步骤 20-21 异常处理 + 清理

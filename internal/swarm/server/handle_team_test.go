@@ -29,7 +29,7 @@ func TestHandleTeamDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleTeamDelete 返回错误: %v", err)
 	}
-	if ok, _ := resp.Payload["ok"]; ok != true {
+	if ok := resp.Payload["ok"]; ok != true {
 		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
 	}
 }

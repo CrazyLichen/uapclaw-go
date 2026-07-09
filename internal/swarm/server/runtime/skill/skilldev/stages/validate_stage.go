@@ -132,8 +132,8 @@ func ParseSkillFrontmatter(skillMDPath string) (string, string, string) {
 	}
 
 	fm := parseFrontmatter(match[1])
-	name, _ := fm["name"]
-	desc, _ := fm["description"]
+	name := fm["name"]
+	desc := fm["description"]
 	return name, desc, match[2]
 }
 

@@ -175,7 +175,7 @@ func parsePlanJSON(text string) (map[string]any, error) {
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start == -1 || end == -1 || end < start {
-		return nil, fmt.Errorf("Agent 未输出有效的 JSON plan")
+		return nil, fmt.Errorf("agent 未输出有效的 JSON plan")
 	}
 	var plan map[string]any
 	if err := json.Unmarshal([]byte(text[start:end+1]), &plan); err != nil {

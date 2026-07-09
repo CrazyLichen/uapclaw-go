@@ -87,7 +87,7 @@ func TestHandleCommandModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleCommandModel 返回错误: %v", err)
 	}
-	if ok, _ := resp.Payload["ok"]; ok != true {
+	if ok := resp.Payload["ok"]; ok != true {
 		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
 	}
 }
@@ -116,7 +116,7 @@ func TestHandleCommandAddDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleCommandAddDir 返回错误: %v", err)
 	}
-	if ok, _ := resp.Payload["ok"]; ok != true {
+	if ok := resp.Payload["ok"]; ok != true {
 		t.Errorf("payload.ok 应为 true, 实际: %v", ok)
 	}
 }

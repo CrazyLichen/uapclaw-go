@@ -254,9 +254,10 @@ func SplitShellSegments(command string) []string {
 		char := command[i]
 		// 引号处理
 		if char == '"' || char == '\'' {
-			if quote == char {
+			switch quote {
+			case char:
 				quote = 0
-			} else if quote == 0 {
+			case 0:
 				quote = char
 			}
 		}
@@ -310,9 +311,7 @@ func SegmentBaseCommand(segment string) string {
 	base = filepath.Base(base)
 	base = strings.ToLower(base)
 	// 去掉 .exe 后缀
-	if strings.HasSuffix(base, ".exe") {
-		base = base[:len(base)-4]
-	}
+	base = strings.TrimSuffix(base, ".exe")
 	return base
 }
 
@@ -392,17 +391,18 @@ func simpleShellSplit(s string) []string {
 	for i := 0; i < len(s); i++ {
 		char := s[i]
 		if char == '"' || char == '\'' {
-			if quote == char {
+			switch quote {
+			case char:
 				quote = 0
 				tokens = append(tokens, current.String())
 				current.Reset()
-			} else if quote == 0 {
+			case 0:
 				if current.Len() > 0 {
 					tokens = append(tokens, current.String())
 					current.Reset()
 				}
 				quote = char
-			} else {
+			default:
 				current.WriteByte(char)
 			}
 			continue

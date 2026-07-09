@@ -332,9 +332,7 @@ func extractBashBaseCommand(segment string) string {
 			base = base[idx+1:]
 		}
 		base = strings.ToLower(base)
-		if strings.HasSuffix(base, ".exe") {
-			base = base[:len(base)-4]
-		}
+		base = strings.TrimSuffix(base, ".exe")
 		return base
 	}
 	return ""
@@ -364,10 +362,8 @@ func extractPSBaseCommand(segment string) string {
 		if idx := strings.LastIndex(base, "/"); idx >= 0 {
 			base = base[idx+1:]
 		}
-		if strings.HasSuffix(strings.ToLower(base), ".exe") {
-			base = base[:len(base)-4]
-		}
-		return strings.ToLower(base)
+		base = strings.TrimSuffix(strings.ToLower(base), ".exe")
+		return base
 	}
 	return ""
 }

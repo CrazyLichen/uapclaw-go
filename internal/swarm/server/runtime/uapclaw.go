@@ -202,11 +202,12 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
 								eventType, nil, nil, "")
 						}
-						if eventType == "chat.final" {
+						switch eventType {
+						case "chat.final":
 							if c, ok := payload["content"].(string); ok {
 								finalAnswerContent = c
 							}
-						} else if eventType == "chat.delta" {
+						case "chat.delta":
 							if c, ok := payload["content"].(string); ok {
 								finalAnswerChunks = append(finalAnswerChunks, c)
 							}

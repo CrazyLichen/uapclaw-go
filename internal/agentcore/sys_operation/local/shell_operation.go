@@ -320,8 +320,7 @@ func (s *ShellOperation) ExecuteCmdBackground(ctx context.Context, command strin
 	// 创建后台子进程
 	args, _, _ := s.resolveExecutionPlan(command, o.ShellType)
 
-	var cmd *exec.Cmd
-	cmd = exec.Command(args[0], args[1:]...)
+	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = actualCwd
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

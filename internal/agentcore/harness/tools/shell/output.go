@@ -201,9 +201,9 @@ func buildPersistedMessage(filepath string, originalSize int, preview string, ha
 	var sb strings.Builder
 	sb.WriteString(persistedOutputTag)
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Output too large (%s). Full output saved to: %s", formatFileSize(float64(originalSize)), filepath))
+	fmt.Fprintf(&sb, "Output too large (%s). Full output saved to: %s", formatFileSize(float64(originalSize)), filepath)
 	sb.WriteString("\n\n")
-	sb.WriteString(fmt.Sprintf("Preview (first %s):", formatFileSize(float64(previewSizeBytes))))
+	fmt.Fprintf(&sb, "Preview (first %s):", formatFileSize(float64(previewSizeBytes)))
 	sb.WriteString("\n")
 	sb.WriteString(preview)
 	if hasMore {

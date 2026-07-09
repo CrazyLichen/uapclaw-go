@@ -199,7 +199,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	if initCwd == "" {
 		initCwd = c.deep.workspaceDir
 	}
-	ctx = c.deep.seedRuntimeCwd(ctx, initCwd)
+	c.deep.seedRuntimeCwd(ctx, initCwd)
 	// 步骤 21: ⤵️ agentcore.DeepAgent: coding_memory workspace
 
 	// 步骤 22: c.deep.registeredMCPServerIDs = make(map[string]bool)

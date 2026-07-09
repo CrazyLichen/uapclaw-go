@@ -127,7 +127,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 
 // parseRequestParams 解析 AgentRequest.Params（json.RawMessage）为 map。
 func parseRequestParams(request *schema.AgentRequest) map[string]any {
-	if request.Params == nil || len(request.Params) == 0 {
+	if len(request.Params) == 0 {
 		return make(map[string]any)
 	}
 	var params map[string]any
