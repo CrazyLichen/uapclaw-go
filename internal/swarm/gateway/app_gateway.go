@@ -72,11 +72,15 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		Path:    "/ws",
 	}
 
-	// 创建 ChannelManager
-	channelMgr := cm.NewChannelManager(nil, nil)
+	// 创建 ChannelManager（先占位，后面设置 inboundHandler/consumeProvider）
+	// 对齐 Python ChannelManager(message_handler, config, on_config_updated)
+	channelMgr := cm.NewChannelManager(nil, nil, nil, nil)
 
 	// 创建 MessageHandler
 	msgHandler := mh.NewMessageHandler(agentClient, channelMgr)
+
+	// 回填 MessageHandler 到 ChannelManager（msgHandler 同时实现 InboundMessageHandler + RobotMessageConsumer）
+	channelMgr.SetMessageHandler(msgHandler, msgHandler)
 
 	// 先创建 GatewayServer（onConfigSavedImpl 需要 agentClient 和 config）
 	s := &GatewayServer{
@@ -98,14 +102,10 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		}
 	}
 
-	// 创建 onMessage 回调：WebChannel → MessageHandler.HandleInbound
+	// 创建 onMessage 回调：WebChannel → ChannelManager.DeliverToMessageHandler
+	// 对齐 Python: web_norm_and_forward → channel_manager.deliver_to_message_handler
 	onMessageCb := func(msg *schema.Message) {
-		if err := msgHandler.HandleInbound(context.Background(), msg); err != nil {
-			logger.Warn(logComponentAppGateway).
-				Err(err).
-				Str("msg_id", msg.ID).
-				Msg("HandleInbound 失败")
-		}
+		msgHandler.HandleMessage(msg)
 	}
 
 	// 创建 onConfigSaved 回调：WebHandler → GatewayServer.onConfigSavedImpl
@@ -140,8 +140,8 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 	// TODO(⤵️ Heartbeat): 初始化 GatewayHeartbeatService（配置 interval/timeout/active_hours），启动
 	// 对齐 Python: app_gateway.py L884-913
 
-	// 注册并启动 WebChannel（OnMessage 回调已通过 NewWebChannel 注入）
-	s.channelMgr.Register(s.webChannel, nil)
+	// 登记 WebChannel（OnMessage 回调已通过 NewWebChannel 注入，对齐 Python register_channel_with_inbound）
+	s.channelMgr.RegisterExternalChannel("web", s.webChannel)
 
 	if err := s.webChannel.Start(ctx); err != nil {
 		return err
@@ -162,6 +162,15 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 			logger.Error(logComponentAppGateway).
 				Err(err).
 				Msg("启动 MessageHandler 转发循环失败")
+		}
+	}
+
+	// 启动出站派发循环（对齐 Python channel_manager.start_dispatch()）
+	if s.channelMgr != nil {
+		if err := s.channelMgr.StartDispatch(ctx); err != nil {
+			logger.Error(logComponentAppGateway).
+				Err(err).
+				Msg("启动 ChannelManager 出站派发循环失败")
 		}
 	}
 
@@ -231,6 +240,15 @@ func (s *GatewayServer) Stop() error {
 		logger.Error(logComponentAppGateway).
 			Err(err).
 			Msg("关闭 WebChannel 失败")
+	}
+
+	// 停止出站派发循环（对齐 Python channel_manager.stop_dispatch()）
+	if s.channelMgr != nil {
+		if err := s.channelMgr.StopDispatch(); err != nil {
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Msg("停止 ChannelManager 出站派发循环失败")
+		}
 	}
 
 	// 停止 MessageHandler

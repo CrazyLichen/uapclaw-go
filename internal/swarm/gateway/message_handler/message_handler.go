@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
@@ -15,7 +16,7 @@ import (
 
 // MessageHandler 消息处理器
 // 入站：Channel → MessageHandler → AgentClient → AgentServer
-// 出站：AgentServer → AgentClient → MessageHandler → Channel
+// 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
 type MessageHandler struct {
 	// agentClient AgentServer 客户端（封装 Transport 通信）
 	agentClient *routing.AgentClient
@@ -24,7 +25,7 @@ type MessageHandler struct {
 
 	// userMessages 入站消息 channel（Channel → MessageHandler）
 	userMessages chan *schema.Message
-	// robotMessages 出站消息 channel（MessageHandler → Channel）
+	// robotMessages 出站消息 channel（MessageHandler → ChannelManager）
 	robotMessages chan *schema.Message
 
 	// running 是否正在运行
@@ -77,13 +78,15 @@ func NewMessageHandler(agentClient *routing.AgentClient, channelMgr *channel_man
 	}
 }
 
-// HandleInbound 处理入站消息（用户→Agent）
+// HandleMessage 处理入站消息（用户→Agent）。
 //
 // 将消息写入 userMessages channel，由 forwardLoop 异步消费。
 // 对齐 Python handle_message：非阻塞写入，channel 满时丢弃并记录警告。
-func (mh *MessageHandler) HandleInbound(_ context.Context, msg *schema.Message) error {
+//
+// 对齐 Python: MessageHandler.handle_message()
+func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	if msg == nil {
-		return nil
+		return
 	}
 	select {
 	case mh.userMessages <- msg:
@@ -92,20 +95,61 @@ func (mh *MessageHandler) HandleInbound(_ context.Context, msg *schema.Message) 
 			Str("msg_id", msg.ID).
 			Str("session_id", msg.SessionID).
 			Msg("入站消息已入队")
-		return nil
 	default:
 		logger.Warn(logComponent).
 			Str("event_type", "handle_inbound_dropped").
 			Str("msg_id", msg.ID).
 			Msg("入站消息队列已满，丢弃消息")
+	}
+}
+
+// ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
+//
+// 供 ChannelManager 的出站派发循环调用。
+// 对齐 Python: MessageHandler.consume_robot_messages()
+func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Message {
+	select {
+	case msg := <-mh.robotMessages:
+		return msg
+	case <-time.After(timeout):
 		return nil
 	}
 }
 
-// StartForwarding 启动入站转发和出站循环
+// ConsumeUserMessages 从入站队列消费一条消息，超时返回 nil。
 //
-// 对齐 Python start_forwarding：启动 forwardLoop + outboundLoop，
+// 对齐 Python: MessageHandler.consume_user_messages()
+func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Message {
+	select {
+	case msg := <-mh.userMessages:
+		return msg
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+// PublishUserMessagesNowait 将消息同步写入入站队列，满时丢弃。
+//
+// 对齐 Python: MessageHandler.publish_user_messages_nowait()
+func (mh *MessageHandler) PublishUserMessagesNowait(msg *schema.Message) {
+	if msg == nil {
+		return
+	}
+	select {
+	case mh.userMessages <- msg:
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "inbound_queue_full").
+			Str("msg_id", msg.ID).
+			Msg("入站消息队列已满，丢弃消息")
+	}
+}
+
+// StartForwarding 启动入站转发循环。
+//
+// 对齐 Python start_forwarding：启动 forwardLoop，
 // 并通过 SetServerPushHandler 注册 push 回调（对齐 Python set_server_push_handler）。
+// 出站派发循环由 ChannelManager.StartDispatch 启动。
 func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	if mh.running.Load() {
 		logger.Warn(logComponent).Msg("MessageHandler 已在运行")
@@ -118,9 +162,6 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 
 	// 启动入站转发循环
 	go mh.forwardLoop(ctx)
-
-	// 启动出站消息循环
-	go mh.outboundLoop(ctx)
 
 	// 注册 push 回调（对齐 Python set_server_push_handler）
 	if mh.agentClient != nil {
@@ -156,49 +197,6 @@ func (mh *MessageHandler) StopForwarding() error {
 		Str("event_type", "message_handler_stopped").
 		Msg("MessageHandler 转发循环已停止")
 	return nil
-}
-
-// StartOutboundLoop 启动出站消息循环（Agent→用户）
-//
-// 从 robotMessages channel 读取消息，通过 ChannelManager 广播到各渠道。
-// 对齐 Python publish_robot_messages。
-func (mh *MessageHandler) StartOutboundLoop(ctx context.Context) error {
-	go mh.outboundLoop(ctx)
-	return nil
-}
-
-// outboundLoop 出站消息主循环
-func (mh *MessageHandler) outboundLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info(logComponent).Msg("出站循环退出")
-			return
-		case msg := <-mh.robotMessages:
-			if msg == nil {
-				continue
-			}
-			mh.dispatchOutbound(ctx, msg)
-		}
-	}
-}
-
-// dispatchOutbound 分发出站消息到渠道
-func (mh *MessageHandler) dispatchOutbound(ctx context.Context, msg *schema.Message) {
-	if mh.channelMgr == nil {
-		logger.Warn(logComponent).
-			Str("event_type", "dispatch_outbound_no_channel_mgr").
-			Msg("ChannelManager 为空，无法分发出站消息")
-		return
-	}
-
-	if err := mh.channelMgr.BroadcastToChannels(ctx, msg); err != nil {
-		logger.Warn(logComponent).
-			Str("event_type", "dispatch_outbound_error").
-			Err(err).
-			Str("msg_id", msg.ID).
-			Msg("分发出站消息失败")
-	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

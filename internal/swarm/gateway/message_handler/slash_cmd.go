@@ -145,7 +145,7 @@ func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, notice string) 
 			"session_id": msg.SessionID,
 		},
 	)
-	mh.enqueueOutbound(noticeMsg)
+	mh.PublishRobotMessages(noticeMsg)
 }
 
 // skillsSlashNotice 处理 /skills list 命令

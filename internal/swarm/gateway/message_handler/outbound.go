@@ -67,7 +67,7 @@ func (mh *MessageHandler) HandleServerPush(msg map[string]any) {
 
 	// AgentResponseChunk → Message → robotMessages
 	outMsg := ChunkToMessage(chunk, sessionID, metadata)
-	mh.enqueueOutbound(outMsg)
+	mh.PublishRobotMessages(outMsg)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

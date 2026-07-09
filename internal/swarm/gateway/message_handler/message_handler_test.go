@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,20 +31,18 @@ func TestNewMessageHandler_完整初始化(t *testing.T) {
 	assert.NotNil(t, mh.channelStates)
 }
 
-// TestHandleInbound_正常入队 测试正常消息入队
-func TestHandleInbound_正常入队(t *testing.T) {
+// TestHandleMessage_正常入队 测试正常消息入队
+func TestHandleMessage_正常入队(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
 
-	err := mh.HandleInbound(context.Background(), msg)
-	assert.NoError(t, err)
+	mh.HandleMessage(msg)
 }
 
-// TestHandleInbound_空消息 测试空消息
-func TestHandleInbound_空消息(t *testing.T) {
+// TestHandleMessage_空消息 测试空消息
+func TestHandleMessage_空消息(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	err := mh.HandleInbound(context.Background(), nil)
-	assert.NoError(t, err)
+	mh.HandleMessage(nil)
 }
 
 // TestStartForwarding_启动停止 测试启动和停止
@@ -140,15 +139,15 @@ func TestRegisterStreamTask(t *testing.T) {
 	assert.Equal(t, "", sid)
 }
 
-// TestEnqueueOutbound 测试出站消息入队
-func TestEnqueueOutbound(t *testing.T) {
+// TestPublishRobotMessages 测试出站消息入队
+func TestPublishRobotMessages(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	msg := schema.NewEventMessage("web", "sess-1", schema.EventTypeChatDelta,
 		map[string]any{"content": "hello"})
 	go func() {
 		<-mh.robotMessages
 	}()
-	mh.enqueueOutbound(msg)
+	mh.PublishRobotMessages(msg)
 }
 
 // TestCollectStreamTasksForSession 测试收集 session 的流式任务
@@ -222,6 +221,38 @@ func TestE2AResponseToAgentRoundTrip(t *testing.T) {
 	assert.Equal(t, "web", chunk.ChannelID)
 }
 
+// TestConsumeRobotMessages_超时返回nil 测试空队列超时
+func TestConsumeRobotMessages_超时返回nil(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := mh.ConsumeRobotMessages(10 * time.Millisecond)
+	assert.Nil(t, msg)
+}
+
+// TestConsumeRobotMessages_正常消费 测试消费出站消息
+func TestConsumeRobotMessages_正常消费(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	testMsg := schema.NewEventMessage("web", "sess-1", schema.EventTypeChatDelta, map[string]any{"content": "hello"})
+	mh.PublishRobotMessages(testMsg)
+	msg := mh.ConsumeRobotMessages(100 * time.Millisecond)
+	assert.NotNil(t, msg)
+}
+
+// TestConsumeUserMessages_超时返回nil 测试空入站队列超时
+func TestConsumeUserMessages_超时返回nil(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	msg := mh.ConsumeUserMessages(10 * time.Millisecond)
+	assert.Nil(t, msg)
+}
+
+// TestPublishUserMessagesNowait_正常写入 测试同步入站写入
+func TestPublishUserMessagesNowait_正常写入(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	testMsg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
+	mh.PublishUserMessagesNowait(testMsg)
+	msg := mh.ConsumeUserMessages(100 * time.Millisecond)
+	assert.NotNil(t, msg)
+}
+
 // TestCancelAllStreamTasks 测试取消所有流式任务
 func TestCancelAllStreamTasks(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
@@ -240,7 +271,7 @@ func TestCancelAllStreamTasks(t *testing.T) {
 
 // channelManagerForTest 创建测试用 ChannelManager
 func channelManagerForTest() *channel_manager.ChannelManager {
-	return channel_manager.NewChannelManager(nil, nil)
+	return channel_manager.NewChannelManager(nil, nil, nil, nil)
 }
 
 // createTestMessageHandlerWithTransport 创建带 AgentClient 的测试 MessageHandler

@@ -128,24 +128,3 @@ func TestMessageToE2A(t *testing.T) {
 	assert.Equal(t, "sess-1", envelope.SessionID)
 }
 
-// TestOutboundLoop_退出 测试 outboundLoop 退出
-func TestOutboundLoop_退出(t *testing.T) {
-	mh := createTestMessageHandlerWithTransport()
-	ctx, cancel := context.WithCancel(context.Background())
-
-	done := make(chan struct{})
-	go func() {
-		mh.outboundLoop(ctx)
-		close(done)
-	}()
-
-	// 取消上下文
-	cancel()
-
-	select {
-	case <-done:
-		// 正常退出
-	case <-time.After(time.Second):
-		t.Fatal("outboundLoop 未在超时内退出")
-	}
-}

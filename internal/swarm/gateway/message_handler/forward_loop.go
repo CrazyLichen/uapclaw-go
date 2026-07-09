@@ -153,7 +153,7 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 			// AgentResponseChunk → Message → robotMessages
 			reqMetadata := mh.getStreamMetadata(requestID)
 			outMsg := ChunkToMessage(chunk, mh.getStreamSessionID(requestID), reqMetadata)
-			mh.enqueueOutbound(outMsg)
+			mh.PublishRobotMessages(outMsg)
 		}
 	}
 }
@@ -177,11 +177,14 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 
 	// AgentResponse → Message → robotMessages
 	outMsg := ResponseToMessage(resp, msg.SessionID, msg.Metadata)
-	mh.enqueueOutbound(outMsg)
+	mh.PublishRobotMessages(outMsg)
 }
 
-// enqueueOutbound 将消息写入出站 channel
-func (mh *MessageHandler) enqueueOutbound(msg *schema.Message) {
+// PublishRobotMessages 将 Agent 响应写入出站 channel。
+//
+// 非阻塞写入，channel 满时丢弃并记录警告。
+// 对齐 Python: MessageHandler.publish_robot_messages()
+func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 	select {
 	case mh.robotMessages <- msg:
 	default:

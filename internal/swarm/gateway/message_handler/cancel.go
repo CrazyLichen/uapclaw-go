@@ -47,7 +47,7 @@ func (mh *MessageHandler) SendProcessingStatus(sessionID string, isProcessing bo
 			"session_id":    sessionID,
 		},
 	)
-	mh.enqueueOutbound(msg)
+	mh.PublishRobotMessages(msg)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -124,7 +124,7 @@ func (mh *MessageHandler) sendInterruptResultNotification(sessionID, intent stri
 			"session_id": sessionID,
 		},
 	)
-	mh.enqueueOutbound(msg)
+	mh.PublishRobotMessages(msg)
 }
 
 // sendStreamCancelledNotification 发送流式取消通知
@@ -141,5 +141,5 @@ func (mh *MessageHandler) publishStreamCancelledFinal(sessionID string) {
 			"session_id":   sessionID,
 		},
 	)
-	mh.enqueueOutbound(msg)
+	mh.PublishRobotMessages(msg)
 }
