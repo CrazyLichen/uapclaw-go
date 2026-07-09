@@ -16,7 +16,9 @@
 //	├── shell.go                     # ShellOperation 接口 + BaseShellOperation + ShellOptions + ShellType
 //	├── code.go                      # CodeOperation 接口 + BaseCodeOperation + CodeOptions
 //	├── registry.go                  # OperationRegistry + OperationDef + GlobalRegistry
-//	├── shell_process_registry.go    # ShellProcessRegistry 会话级进程追踪 + 两阶段终止 + SessionID context
+//	├── shell_process_registry.go    # ShellProcessRegistry 会话级进程追踪 + SessionID context
+//	├── shell_process_registry_unix.go    # POSIX 平台进程终止与等待实现（syscall.Kill/Wait4）
+//	├── shell_process_registry_windows.go # Windows 平台进程终止与等待实现（proc.Wait）
 //	├── tool_adapter.go              # SysOperationToolAdapter + ExtractTools + GetToolIDPrefix
 //	├── cwd/                         # CWD 状态管理（三层 CWD 模型 + context 传播）
 //	├── result/                      # 操作结果类型（BaseResult/ExecuteCmdResult/ReadFileResult/...）

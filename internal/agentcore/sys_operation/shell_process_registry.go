@@ -3,10 +3,8 @@ package sys_operation
 import (
 	"context"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -182,10 +180,7 @@ func TerminateShellProcess(proc *os.Process) bool {
 		return false
 	}
 
-	if runtime.GOOS == "windows" {
-		return terminateShellProcessWindows(proc)
-	}
-	return terminateShellProcessPOSIX(proc)
+	return terminateShellProcessPlatform(proc)
 }
 
 // RegisterShellProcess 向全局注册表注册 Shell 进程。⤵️ 9.33 回填：LocalShellOperation 调用
@@ -217,100 +212,7 @@ func ConsumeShellSessionCancelled(sessionID string) bool {
 
 // isProcessExited 检查进程是否已退出（非阻塞）
 func isProcessExited(proc *os.Process) bool {
-	// 尝试用 Signal(0) 探测进程是否存活（POSIX 标准）
-	if runtime.GOOS != "windows" {
-		if err := proc.Signal(syscall.Signal(0)); err != nil {
-			return true // 进程不存在
-		}
-		return false
-	}
-	// Windows: Signal(0) 不可用，保守返回 false，让后续 terminate 路径自行处理
-	return false
-}
-
-// terminateShellProcessPOSIX POSIX 平台两阶段终止：先 SIGTERM 进程组，等 3 秒后 SIGKILL
-func terminateShellProcessPOSIX(proc *os.Process) bool {
-	pid := proc.Pid
-	if pid <= 0 {
-		return false
-	}
-
-	// 阶段 1：SIGTERM 整个进程组
-	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-		// 进程组 SIGTERM 失败，尝试单进程 Signal
-		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("进程组 SIGTERM 失败，尝试单进程终止")
-		if sigErr := proc.Signal(syscall.SIGTERM); sigErr != nil {
-			// 单进程也失败，尝试 SIGKILL
-			return forceKillPOSIX(proc)
-		}
-	}
-
-	// 等待进程退出
-	if waitProcessWithTimeout(proc, terminateGracePeriod) {
-		return true
-	}
-
-	// 阶段 2：超时，SIGKILL 整个进程组
-	return forceKillPOSIX(proc)
-}
-
-// forceKillPOSIX 强制杀死 POSIX 进程组
-func forceKillPOSIX(proc *os.Process) bool {
-	pid := proc.Pid
-	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-		logger.Warn(logComponent).Int("pid", pid).Err(err).Msg("进程组 SIGKILL 失败，尝试单进程 Kill")
-		if killErr := proc.Kill(); killErr != nil {
-			logger.Warn(logComponent).Int("pid", pid).Err(killErr).Msg("单进程 Kill 也失败")
-			return false
-		}
-	}
-	// 等待进程退出
-	waitProcessWithTimeout(proc, forceKillWait)
-	return true
-}
-
-// terminateShellProcessWindows Windows 平台两阶段终止：先 Interrupt，等 3 秒后 Kill
-func terminateShellProcessWindows(proc *os.Process) bool {
-	// 阶段 1：发送 os.Interrupt（等价于 Python 的 proc.terminate()）
-	if err := proc.Signal(os.Interrupt); err != nil {
-		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows Interrupt 失败，尝试直接 Kill")
-		if killErr := proc.Kill(); killErr != nil {
-			logger.Warn(logComponent).Int("pid", proc.Pid).Err(killErr).Msg("Windows Kill 失败")
-			return false
-		}
-		waitProcessWithTimeout(proc, forceKillWait)
-		return true
-	}
-
-	// 等待进程退出
-	if waitProcessWithTimeout(proc, terminateGracePeriod) {
-		return true
-	}
-
-	// 阶段 2：超时，强制 Kill
-	if err := proc.Kill(); err != nil {
-		logger.Warn(logComponent).Int("pid", proc.Pid).Err(err).Msg("Windows 强制 Kill 失败")
-		return false
-	}
-	waitProcessWithTimeout(proc, forceKillWait)
-	return true
-}
-
-// waitProcessWithTimeout 带超时等待进程退出。返回 true 表示进程已退出。
-func waitProcessWithTimeout(proc *os.Process, timeout time.Duration) bool {
-	done := make(chan struct{}, 1)
-	go func() {
-		var status syscall.WaitStatus
-		_, _ = syscall.Wait4(proc.Pid, &status, 0, nil)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		return true
-	case <-time.After(timeout):
-		return false
-	}
+	return isProcessExitedPlatform(proc)
 }
 
 // ──────────────────────────── Session ID Context 传递 ────────────────────────────
