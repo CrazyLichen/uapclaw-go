@@ -2,123 +2,446 @@ package runtime
 
 import (
 	"context"
+	"strings"
+	"sync"
+	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// JiuWenClaw Agent 门面（stub，10.3.2）。
+// JiuWenClaw Agent 统一门面。
 //
-// 统一 Agent 请求入口，管理会话队列和 SDK 适配器路由。
-// 当前为 stub 实现，后续替换为完整逻辑。
-// 对齐 Python JiuWenClaw：jiuwenswarm/server/runtime/agent_adapter/interface.py
-type JiuWenClaw struct{}
+// 提供：SDK 适配器路由、统一对外 API、公共编排
+// （session 队列、Skills 路由、heartbeat、流式包装）。
+//
+// 对齐 Python: jiuwenswarm/server/runtime/agent_adapter/interface.py (JiuWenClaw)
+type JiuWenClaw struct {
+	// adapter SDK 适配器（延迟初始化，ensureAdapter 时创建）。
+	adapter adapter.AgentAdapter
+
+	// skillManager 技能管理器（server 层）。
+	// ⤵️ 10.3.2: 替换为 swarm/server/runtime/skill.SkillManager 实例
+	skillManager interface{}
+
+	// sessionManager 会话任务队列管理器。
+	sessionManager *SessionManager
+
+	// skilldevService SkillDev 服务（懒初始化）。
+	// ⤵️ 10.3.2: 替换为 SkillDevService 实例
+	skilldevService interface{}
+
+	// adapterMu 保护 adapter 字段的并发访问。
+	adapterMu sync.Mutex
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewJiuWenClaw 创建 JiuWenClaw stub 实例。
+// NewJiuWenClaw 创建 JiuWenClaw 实例。
+//
+// 对齐 Python: JiuWenClaw.__init__()
 func NewJiuWenClaw() *JiuWenClaw {
-	return &JiuWenClaw{}
+	return &JiuWenClaw{
+		sessionManager: NewSessionManager(),
+	}
 }
 
 // ProcessMessage 处理非流式 Agent 请求。
-// 对齐 Python JiuWenClaw.process_message(request) -> AgentResponse。
-// stub：返回固定响应 {accepted: true}。
-func (jw *JiuWenClaw) ProcessMessage(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithResponseOK(true),
-		schema.WithPayload(map[string]any{"accepted": true}),
-	), nil
+//
+// 对齐 Python: JiuWenClaw.process_message(request)
+func (jw *JiuWenClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 1. CANCEL 分支 → 委托 ProcessInterrupt
+	if request.ReqMethod == schema.ReqMethodChatCancel {
+		return jw.ProcessInterrupt(ctx, request)
+	}
+
+	// 2. 确保 adapter
+	mode := jw.adapterModeForRequest(request)
+	a, err := jw.ensureAdapter(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. ANSWER 分支
+	if request.ReqMethod == schema.ReqMethodChatAnswer {
+		return a.HandleUserAnswer(ctx, request)
+	}
+
+	// 4. heartbeat 分支
+	if resp, herr := a.HandleHeartbeat(ctx, request); resp != nil {
+		return resp, herr
+	}
+
+	// 5. Skills / SkillDev / Plugins 分支
+	// ⤵️ 10.3.2: handleSkillsRequest(request) — 当前 stub，返回 nil 不拦截
+	// ⤵️ 10.3.2: handleSkillDevRequest(request) — 当前 stub，返回 nil 不拦截
+	// ⤵️ 10.3.2: handlePluginsRequest(request) — 当前 stub，返回 nil 不拦截
+
+	// 6. 常规对话
+	sessionID := normalizeSessionID(jw.extractSessionID(request))
+
+	// 记录 user 历史
+	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+		"user", jw.extractQuery(request), float64(time.Now().UnixMilli())/1000,
+		"", nil, nil, "")
+
+	// 构建 inputs
+	inputs, _, _ := jw.BuildInputs(request)
+
+	// ⤵️ 10.3.2: cloud memory before-chat hook（ExtensionRegistry）
+
+	// 提交到 session 队列并等待结果
+	result, err := jw.sessionManager.SubmitAndWait(ctx, sessionID, func(taskCtx context.Context) (any, error) {
+		return a.ProcessMessageImpl(taskCtx, request, inputs)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, ok := result.(*schema.AgentResponse)
+	if !ok || resp == nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(true),
+		), nil
+	}
+
+	// 记录 assistant 历史
+	if resp.OK {
+		content := jw.extractResponseContent(resp)
+		AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+			"assistant", content, float64(time.Now().UnixMilli())/1000,
+			"chat.final", nil, nil, "")
+	}
+
+	// ⤵️ 10.3.2: cloud memory after-chat hook
+
+	return resp, nil
 }
 
 // ProcessMessageStream 处理流式 Agent 请求。
-// 对齐 Python JiuWenClaw.process_message_stream(request) -> AsyncIterator[AgentResponseChunk]。
-// stub：发送一个 stub chunk + terminal chunk，然后关闭 channel。
-func (jw *JiuWenClaw) ProcessMessageStream(_ context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
-	ch := make(chan *schema.AgentResponseChunk, 2)
-	// 发送 stub 内容 chunk
-	ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
-		map[string]any{
-			"event_type": "chat.delta",
-			"content":    "[stub] Agent 处理中",
-		},
-		schema.WithChunkIsComplete(false),
-	)
-	// 发送终止标记
-	ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
-	close(ch)
-	return ch, nil
+//
+// 对齐 Python: JiuWenClaw.process_message_stream(request)
+func (jw *JiuWenClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	// 1. SkillDev 流式分支
+	// ⤵️ 10.3.2: handleSkillDevStreamRequest(request) — 当前 stub
+
+	// 2. 确保 adapter
+	mode := jw.adapterModeForRequest(request)
+	a, err := jw.ensureAdapter(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 提取 sessionID
+	sessionID := normalizeSessionID(jw.extractSessionID(request))
+
+	// ⤵️ 10.3.2: Team 模式判断（isTeamMode / isAutoHarnessResume）
+	// ⤵️ 10.3.2: Team 模式使用原始 query（不经过 BuildUserPrompt 包装）
+
+	// 4. 记录 user 历史
+	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+		"user", jw.extractQuery(request), float64(time.Now().UnixMilli())/1000,
+		"", nil, nil, "")
+
+	// 5. 构建 inputs
+	inputs, _, _ := jw.BuildInputs(request)
+
+	// ⤵️ 10.3.2: cloud memory before-chat hook
+
+	// 6. 创建中转 channel
+	outCh := make(chan *schema.AgentResponseChunk, 64)
+	streamDone := make(chan struct{})
+
+	// 7. 生产者 goroutine
+	go func() {
+		defer close(streamDone)
+		chunkCh, streamErr := a.ProcessMessageStreamImpl(ctx, request, inputs)
+		if streamErr != nil {
+			outCh <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
+				map[string]any{"event_type": "chat.error", "error": streamErr.Error()},
+			)
+			return
+		}
+		for chunk := range chunkCh {
+			outCh <- chunk
+		}
+	}()
+
+	// 8. 消费者 goroutine
+	resultCh := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(resultCh)
+		var finalAnswerContent string
+		var finalAnswerChunks []string
+
+		for {
+			select {
+			case chunk, ok := <-outCh:
+				if !ok {
+					goto streamComplete
+				}
+				if payload := chunk.Payload; payload != nil {
+					if eventType, _ := payload["event_type"].(string); eventType != "" {
+						if shouldRecordHistory(eventType) {
+							AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
+								eventType, nil, nil, "")
+						}
+						if eventType == "chat.final" {
+							if c, ok := payload["content"].(string); ok {
+								finalAnswerContent = c
+							}
+						} else if eventType == "chat.delta" {
+							if c, ok := payload["content"].(string); ok {
+								finalAnswerChunks = append(finalAnswerChunks, c)
+							}
+						}
+					}
+				}
+				resultCh <- chunk
+			case <-streamDone:
+				for len(outCh) > 0 {
+					resultCh <- <-outCh
+				}
+				goto streamComplete
+			}
+		}
+
+	streamComplete:
+		// ⤵️ 10.3.2: cloud memory after-chat hook
+		_ = finalAnswerContent
+		_ = finalAnswerChunks
+		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
+	}()
+
+	// 9. 提交流式任务
+	// ⤵️ 10.3.2: Team 后续请求 / Auto-Harness resume 绕过 Session 队列
+	_ = jw.sessionManager.EnsureSessionProcessor(ctx, sessionID)
+
+	return resultCh, nil
 }
 
 // ProcessInterrupt 处理中断请求。
-// 对齐 Python JiuWenClaw cancel_inflight_work + process_message(interrupt)。
-// stub：返回 ok=true。
-func (jw *JiuWenClaw) ProcessInterrupt(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithResponseOK(true),
-	), nil
+//
+// 对齐 Python: JiuWenClaw._process_interrupt(request)
+func (jw *JiuWenClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	intent := jw.extractIntent(request)
+	sessionID := normalizeSessionID(jw.extractSessionID(request))
+
+	// ⤵️ 10.3.2: Team 模式分流（_processTeamInterrupt）
+
+	mode := jw.adapterModeForRequest(request)
+	a, err := jw.ensureAdapter(mode)
+	if err != nil {
+		return nil, err
+	}
+
+	// pause / resume
+	if intent == "pause" || intent == "resume" {
+		return a.ProcessInterrupt(ctx, request)
+	}
+
+	// supplement
+	if intent == "supplement" {
+		resp, err := a.ProcessInterrupt(ctx, request)
+		_ = jw.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(supplement)", nil)
+		return resp, err
+	}
+
+	// cancel（默认）
+	resp, err := a.ProcessInterrupt(ctx, request)
+	// ⤵️ 10.3.2: cancelTeamWorkForSession(sessionID, channelID)
+	waitTimeout := 5 * time.Second
+	_ = jw.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(cancel)", &waitTimeout)
+	return resp, err
 }
 
 // GetContextUsage 获取上下文使用量。
-// 对齐 Python JiuWenClaw.get_context_usage(session_id)。
-// stub：返回 {usage: 0, limit: 0}。
+// ⤵️ 10.3.2: 需要从 adapter 获取 DeepAgent 实例后调用 GetContextUsage
 func (jw *JiuWenClaw) GetContextUsage(_ string) (map[string]any, error) {
 	return map[string]any{"usage": 0, "limit": 0}, nil
 }
 
 // CompressContext 压缩上下文。
-// 对齐 Python JiuWenClaw.compress_context(session_id)。
-// stub：返回 {ok: true, compressed: false}。
+// ⤵️ 10.3.2: 需要调用 DeepAgent 的压缩逻辑
 func (jw *JiuWenClaw) CompressContext(_ string) (map[string]any, error) {
 	return map[string]any{"ok": true, "compressed": false}, nil
 }
 
 // GenerateRecap 生成会话回顾。
-// 对齐 Python JiuWenClaw.generate_recap(session_id)。
-// stub：返回空回顾。
+// ⤵️ 10.3.2: 需要调用 DeepAgent 的回顾逻辑
 func (jw *JiuWenClaw) GenerateRecap(_ string) (map[string]any, error) {
 	return map[string]any{"recap": ""}, nil
 }
 
 // SwitchMode 切换运行模式。
-// 对齐 Python JiuWenClaw / DeepAdapter switch_mode。
-// stub：直接返回 nil。
-func (jw *JiuWenClaw) SwitchMode(_, _ string) error {
-	return nil
-}
+// ⤵️ 10.3.2: 完整实现需要 DeepAdapter 支撑（session 持久化 + switch_mode + load_state）
+func (jw *JiuWenClaw) SwitchMode(_, _ string) error { return nil }
 
 // CreateInstance 创建 Agent 实例。
-// 对齐 Python JiuWenClaw.create_instance(config, mode, sub_mode)。
-// stub：直接返回 nil。
-func (jw *JiuWenClaw) CreateInstance(_ map[string]any, _ string, _ string) error {
+//
+// 对齐 Python: JiuWenClaw.create_instance(config, mode, sub_mode)
+func (jw *JiuWenClaw) CreateInstance(config map[string]any, mode string, subMode string) error {
+	a, err := jw.ensureAdapter(mode)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	if err := a.CreateInstance(ctx, config, mode, subMode); err != nil {
+		return err
+	}
+	logger.Info(logComponent).
+		Str("sdk", adapter.ResolveSDKChoice()).
+		Str("mode", mode).
+		Str("sub_mode", subMode).
+		Msg("JiuWenClaw Agent 实例已创建")
+	// ⤵️ 10.3.2: 启动 dreaming 后台任务（adapter.TryStartDreaming）
 	return nil
 }
 
 // ReloadAgentConfig 重载 Agent 配置。
-// 对齐 Python JiuWenClaw.reload_agent_config(config_base, env_overrides)。
-// stub：直接返回 nil。
-func (jw *JiuWenClaw) ReloadAgentConfig(_, _ map[string]any) error {
+//
+// 对齐 Python: JiuWenClaw.reload_agent_config(config_base, env_overrides)
+func (jw *JiuWenClaw) ReloadAgentConfig(configBase map[string]any, envOverrides map[string]any) error {
+	jw.adapterMu.Lock()
+	a := jw.adapter
+	jw.adapterMu.Unlock()
+	if a == nil {
+		return nil
+	}
+	// ⤵️ 10.3.2: adapter.TryStopDreaming()
+	if err := a.ReloadAgentConfig(context.Background(), configBase, envOverrides); err != nil {
+		return err
+	}
+	// ⤵️ 10.3.2: adapter.TryStartDreaming()
 	return nil
 }
 
 // CancelInflightWork 取消在途任务。
-// 对齐 Python JiuWenClaw.cancel_inflight_work()。
-// stub：直接返回 nil。
+//
+// 对齐 Python: JiuWenClaw.cancel_inflight_work()
 func (jw *JiuWenClaw) CancelInflightWork() error {
+	_ = jw.sessionManager.CancelAllSessionTasks(context.Background(), "[gateway disconnect]")
+	jw.adapterMu.Lock()
+	a := jw.adapter
+	jw.adapterMu.Unlock()
+	if a == nil {
+		return nil
+	}
+	// ⤵️ 10.3.2: adapter.AbortOnGatewayDisconnect()
 	return nil
 }
 
 // Cleanup 清理资源。
-// 对齐 Python JiuWenClaw.cleanup()。
-// stub：直接返回 nil。
+//
+// 对齐 Python: JiuWenClaw.cleanup()
 func (jw *JiuWenClaw) Cleanup() error {
+	jw.adapterMu.Lock()
+	a := jw.adapter
+	jw.adapter = nil
+	jw.adapterMu.Unlock()
+	if a != nil {
+		_ = a.Cleanup()
+	}
 	return nil
 }
 
 // GetInstance 获取底层 Agent 实例。
-// 对齐 Python JiuWenClaw.get_instance()。
-// stub：返回 nil。
-func (jw *JiuWenClaw) GetInstance() any {
-	return nil
+// ⤵️ 10.3.2: 需要返回 adapter 内部的 DeepAgent 实例
+func (jw *JiuWenClaw) GetInstance() any { return nil }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// ensureAdapter 确保 SDK adapter 已初始化，幂等。
+func (jw *JiuWenClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
+	jw.adapterMu.Lock()
+	defer jw.adapterMu.Unlock()
+	if jw.adapter != nil {
+		return jw.adapter, nil
+	}
+	a, err := adapter.CreateAdapter("", mode)
+	if err != nil {
+		return nil, err
+	}
+	// ⤵️ 10.3.2: 若 adapter 有 SetSkillManager 方法，注入 skillManager
+	// ⤵️ 10.3.2: 设置 skillManager 的 skillnet_install_complete_hook
+	jw.adapter = a
+	logger.Info(logComponent).
+		Str("sdk", adapter.ResolveSDKChoice()).
+		Str("mode", mode).
+		Msg("JiuWenClaw adapter 已初始化")
+	return a, nil
+}
+
+// adapterModeForRequest 从请求参数中提取 adapter mode。
+func (jw *JiuWenClaw) adapterModeForRequest(request *schema.AgentRequest) string {
+	params := parseRequestParams(request)
+	if modeVal, ok := params["mode"]; ok {
+		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
+			parts := strings.SplitN(modeStr, ".", 2)
+			return parts[0]
+		}
+	}
+	return "agent"
+}
+
+// extractSessionID 从请求中提取 sessionID 字符串。
+func (jw *JiuWenClaw) extractSessionID(request *schema.AgentRequest) string {
+	if request.SessionID != nil {
+		return *request.SessionID
+	}
+	return ""
+}
+
+// extractQuery 从请求参数中提取 query 字段。
+func (jw *JiuWenClaw) extractQuery(request *schema.AgentRequest) string {
+	params := parseRequestParams(request)
+	if q, ok := params["query"]; ok {
+		if qStr, ok := q.(string); ok {
+			return qStr
+		}
+	}
+	return ""
+}
+
+// extractResponseContent 从响应中提取 content。
+func (jw *JiuWenClaw) extractResponseContent(resp *schema.AgentResponse) string {
+	if resp.Payload == nil {
+		return ""
+	}
+	if content, ok := resp.Payload["content"]; ok {
+		if cStr, ok := content.(string); ok {
+			return cStr
+		}
+	}
+	return ""
+}
+
+// extractIntent 从请求参数中提取 intent（默认 "cancel"）。
+func (jw *JiuWenClaw) extractIntent(request *schema.AgentRequest) string {
+	params := parseRequestParams(request)
+	if intent, ok := params["intent"]; ok {
+		if intentStr, ok := intent.(string); ok && intentStr != "" {
+			return intentStr
+		}
+	}
+	return "cancel"
+}
+
+// extractChunkContent 从 chunk payload 中提取 content。
+func extractChunkContent(payload map[string]any) string {
+	if content, ok := payload["content"]; ok {
+		if cStr, ok := content.(string); ok {
+			return cStr
+		}
+	}
+	return ""
+}
+
+// shouldRecordHistory 判断 event_type 是否需要记录到 history。
+func shouldRecordHistory(eventType string) bool {
+	return strings.HasPrefix(eventType, "chat.")
 }
