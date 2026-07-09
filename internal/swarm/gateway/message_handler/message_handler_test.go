@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
@@ -18,8 +19,9 @@ import (
 // TestNewMessageHandler_完整初始化 测试完整初始化
 func TestNewMessageHandler_完整初始化(t *testing.T) {
 	transport := gateway_push.NewChannelTransport()
+	agentClient := routing.NewAgentClient(transport)
 	cm := channelManagerForTest()
-	mh := NewMessageHandler(transport, transport, cm)
+	mh := NewMessageHandler(agentClient, cm)
 
 	assert.NotNil(t, mh)
 	assert.NotNil(t, mh.userMessages)
@@ -166,8 +168,8 @@ func TestCollectStreamTasksForSession(t *testing.T) {
 	assert.Len(t, reqIDs, 0)
 }
 
-// TestForwardToAgent_无Transport 测试无 Transport 时转发
-func TestForwardToAgent_无Transport(t *testing.T) {
+// TestForwardToAgent_无AgentClient 测试无 AgentClient 时转发
+func TestForwardToAgent_无AgentClient(t *testing.T) {
 	mh := createTestMessageHandler()
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
 	mh.forwardToAgent(context.Background(), msg)
@@ -241,9 +243,10 @@ func channelManagerForTest() *channel_manager.ChannelManager {
 	return channel_manager.NewChannelManager(nil, nil)
 }
 
-// createTestMessageHandlerWithTransport 创建带 Transport 的测试 MessageHandler
+// createTestMessageHandlerWithTransport 创建带 AgentClient 的测试 MessageHandler
 func createTestMessageHandlerWithTransport() *MessageHandler {
 	transport := gateway_push.NewChannelTransport()
+	agentClient := routing.NewAgentClient(transport)
 	cm := channelManagerForTest()
-	return NewMessageHandler(transport, transport, cm)
+	return NewMessageHandler(agentClient, cm)
 }

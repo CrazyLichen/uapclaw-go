@@ -175,6 +175,13 @@ func (ac *AgentClient) ServerReady() bool {
 	return ac.serverReady
 }
 
+// IsConnected 检查 AgentClient 是否已连接（接收循环正在运行）。
+func (ac *AgentClient) IsConnected() bool {
+	ac.runningMu.RLock()
+	defer ac.runningMu.RUnlock()
+	return ac.running
+}
+
 // WaitServerReady 阻塞等待 AgentServer 就绪，返回是否就绪。
 //
 // 若 AgentClient 未运行或已断开，立即返回 false。
@@ -313,6 +320,23 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 // 对齐 Python: WebSocketAgentServerClient.set_server_push_handler(handler)
 func (ac *AgentClient) SetServerPushHandler(handler func(msg map[string]any)) {
 	ac.onServerPush = handler
+}
+
+// SendFireAndForget 发送请求但不等待响应（即发即弃）。
+//
+// 用于取消请求等无需等待响应的场景，仅将请求序列化后写入 transport。
+func (ac *AgentClient) SendFireAndForget(ctx context.Context, envelope *e2a.E2AEnvelope) error {
+	data, err := json.Marshal(envelope)
+	if err != nil {
+		return fmt.Errorf("序列化 E2AEnvelope 失败: %w", err)
+	}
+	ac.sendMu.Lock()
+	err = ac.transport.Send(ctx, data)
+	ac.sendMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("发送请求失败: %w", err)
+	}
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

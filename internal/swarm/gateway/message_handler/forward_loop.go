@@ -85,11 +85,19 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 
 // forwardToAgent 转发消息到 AgentServer
 func (mh *MessageHandler) forwardToAgent(ctx context.Context, msg *schema.Message) {
-	if mh.transport == nil {
+	if mh.agentClient == nil {
 		logger.Warn(logComponent).
-			Str("event_type", "forward_no_transport").
+			Str("event_type", "forward_no_agent_client").
 			Str("msg_id", msg.ID).
-			Msg("Transport 为空，无法转发")
+			Msg("AgentClient 为空，无法转发")
+		return
+	}
+
+	if !mh.agentClient.IsConnected() {
+		logger.Warn(logComponent).
+			Str("event_type", "forward_agent_client_not_connected").
+			Str("msg_id", msg.ID).
+			Msg("AgentClient 未连接，无法转发")
 		return
 	}
 
@@ -113,46 +121,27 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 	mh.registerStreamTask(requestID, msg.SessionID, msg.Metadata, streamCancel)
 	defer mh.unregisterStreamTask(requestID)
 
-	// 发送请求
-	if err := mh.transport.Send(streamCtx, envelope); err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "stream_send_error").
-			Err(err).
-			Str("request_id", requestID).
-			Msg("流式请求发送失败")
-		return
-	}
-
-	// 读取响应通道
-	recvCh, err := mh.transport.Recv()
+	// 通过 AgentClient 发送流式请求
+	chunkCh, err := mh.agentClient.SendRequestStream(streamCtx, envelope)
 	if err != nil {
 		logger.Error(logComponent).
-			Str("event_type", "stream_recv_error").
+			Str("event_type", "stream_error").
 			Err(err).
 			Str("request_id", requestID).
-			Msg("获取响应通道失败")
+			Msg("流式请求失败")
 		return
 	}
 
+	// 持续读取响应 chunk
 	for {
 		select {
 		case <-streamCtx.Done():
 			return
-		case resp, ok := <-recvCh:
+		case chunk, ok := <-chunkCh:
 			if !ok {
 				return
 			}
-			if resp == nil {
-				continue
-			}
-
-			// E2AResponse → AgentResponseChunk
-			chunk, err := e2a.E2AResponseToAgentChunk(resp)
-			if err != nil {
-				logger.Warn(logComponent).
-					Str("event_type", "stream_chunk_parse_error").
-					Err(err).
-					Msg("流式 chunk 解析失败")
+			if chunk == nil {
 				continue
 			}
 
@@ -175,49 +164,20 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) {
 	requestID := envelope.RequestID
 
-	// 发送请求
-	if err := mh.transport.Send(ctx, envelope); err != nil {
-		logger.Error(logComponent).
-			Str("event_type", "non_stream_send_error").
-			Err(err).
-			Str("request_id", requestID).
-			Msg("非流式请求发送失败")
-		return
-	}
-
-	// 读取响应通道
-	recvCh, err := mh.transport.Recv()
+	// 通过 AgentClient 发送非流式请求
+	resp, err := mh.agentClient.SendRequest(ctx, envelope)
 	if err != nil {
 		logger.Error(logComponent).
-			Str("event_type", "non_stream_recv_error").
+			Str("event_type", "non_stream_error").
 			Err(err).
 			Str("request_id", requestID).
-			Msg("获取响应通道失败")
+			Msg("非流式请求失败")
 		return
 	}
 
-	select {
-	case <-ctx.Done():
-		return
-	case resp, ok := <-recvCh:
-		if !ok || resp == nil {
-			return
-		}
-
-		// E2AResponse → AgentResponse
-		agentResp, err := e2a.E2AResponseToAgentResponse(resp)
-		if err != nil {
-			logger.Warn(logComponent).
-				Str("event_type", "non_stream_parse_error").
-				Err(err).
-				Msg("非流式响应解析失败")
-			return
-		}
-
-		// AgentResponse → Message → robotMessages
-		outMsg := ResponseToMessage(agentResp, msg.SessionID, msg.Metadata)
-		mh.enqueueOutbound(outMsg)
-	}
+	// AgentResponse → Message → robotMessages
+	outMsg := ResponseToMessage(resp, msg.SessionID, msg.Metadata)
+	mh.enqueueOutbound(outMsg)
 }
 
 // enqueueOutbound 将消息写入出站 channel

@@ -7,20 +7,18 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MessageHandler 消息处理器
-// 入站：Channel → MessageHandler → Transport → AgentServer
-// 出站：AgentServer → Transport → MessageHandler → Channel
+// 入站：Channel → MessageHandler → AgentClient → AgentServer
+// 出站：AgentServer → AgentClient → MessageHandler → Channel
 type MessageHandler struct {
-	// transport Agent 传输层（Gateway → AgentServer 请求方向）
-	transport gateway_push.AgentTransport
-	// pushTransport 推送传输层（AgentServer → Gateway 推送方向）
-	pushTransport gateway_push.GatewayPushTransport
+	// agentClient AgentServer 客户端（封装 Transport 通信）
+	agentClient *routing.AgentClient
 	// channelMgr 渠道管理器
 	channelMgr *channel_manager.ChannelManager
 
@@ -65,10 +63,9 @@ const logComponent = logger.ComponentGateway
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessageHandler 创建消息处理器
-func NewMessageHandler(transport gateway_push.AgentTransport, pushTransport gateway_push.GatewayPushTransport, channelMgr *channel_manager.ChannelManager) *MessageHandler {
+func NewMessageHandler(agentClient *routing.AgentClient, channelMgr *channel_manager.ChannelManager) *MessageHandler {
 	return &MessageHandler{
-		transport:      transport,
-		pushTransport:  pushTransport,
+		agentClient:    agentClient,
 		channelMgr:     channelMgr,
 		userMessages:   make(chan *schema.Message, 256),
 		robotMessages:  make(chan *schema.Message, 256),
@@ -126,8 +123,8 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	go mh.outboundLoop(ctx)
 
 	// 注册 push 回调（对齐 Python set_server_push_handler）
-	if mh.pushTransport != nil {
-		mh.pushTransport.SetServerPushHandler(func(msg map[string]any) {
+	if mh.agentClient != nil {
+		mh.agentClient.SetServerPushHandler(func(msg map[string]any) {
 			mh.HandleServerPush(msg)
 		})
 	}

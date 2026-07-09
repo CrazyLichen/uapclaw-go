@@ -21,8 +21,8 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, session
 	// 1. 收集该 session 关联的流式任务
 	requestIDs := mh.collectStreamTasksForSession(sessionID)
 
-	// 2. 构造 cancel 请求 → Transport.Send
-	if mh.transport != nil && len(requestIDs) > 0 {
+	// 2. 构造 cancel 请求 → AgentClient.SendFireAndForget
+	if mh.agentClient != nil && mh.agentClient.IsConnected() && len(requestIDs) > 0 {
 		for _, reqID := range requestIDs {
 			mh.sendCancelToAgent(ctx, reqID, sessionID, intent)
 		}
@@ -89,14 +89,16 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 
 // sendCancelToAgent 发送取消请求到 AgentServer
 func (mh *MessageHandler) sendCancelToAgent(ctx context.Context, requestID, sessionID, intent string) {
-	// 构造 chat.interrupt 消息
+	// 构造 chat.cancel 消息
 	msg := schema.NewReqMessage("", sessionID, schema.ReqMethodChatCancel,
 		nil,
 		schema.WithSessionID(sessionID),
 	)
 
 	envelope := e2a.MessageToE2AOrFallback(msg)
-	if err := mh.transport.Send(ctx, envelope); err != nil {
+	envelope.IsStream = false
+	// 即发即弃发送取消请求（不等待响应）
+	if err := mh.agentClient.SendFireAndForget(ctx, envelope); err != nil {
 		logger.Warn(logComponent).
 			Str("event_type", "cancel_send_error").
 			Err(err).

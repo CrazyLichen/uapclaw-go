@@ -17,7 +17,7 @@ var _ = (*schema.Message)(nil) // 确保 schema import 可用
 
 // HandleServerPush 处理 AgentServer 主动推送的消息（回调入口）
 //
-// 由 GatewayPushTransport.SetServerPushHandler 注册，
+// 由 AgentClient.SetServerPushHandler 注册，
 // 对齐 Python _handle_agent_server_push (L1610-L1672)：
 //  1. 解析 wire → AgentResponseChunk
 //  2. 判断是否 cron push → handleCronPushPayload
