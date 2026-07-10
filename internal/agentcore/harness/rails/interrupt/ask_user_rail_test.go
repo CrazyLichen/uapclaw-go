@@ -1,6 +1,7 @@
 package interrupt
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestAskUserRail_resolveInterrupt_无输入中断(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{"questions":[{"question":"你喜欢什么？"}]}`}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, nil, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 	interruptResult := decision.(*InterruptResult)
 	assert.Equal(t, "", interruptResult.Request.Message) // AskUserRequest message 为空
@@ -50,7 +51,7 @@ func TestAskUserRail_resolveInterrupt_有效输入拒绝(t *testing.T) {
 	}
 	userInput := &AskUserPayload{Answers: map[string]string{"你喜欢什么？": "Go"}}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
 	assert.Contains(t, rejectResult.ToolResult, "用户已回答")
@@ -66,7 +67,7 @@ func TestAskUserRail_resolveInterrupt_字符串输入(t *testing.T) {
 		Arguments: `{"questions":[{"question":"你的名字？"}]}`,
 	}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, "Alice", nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, "Alice", nil)
 	assert.IsType(t, &RejectResult{}, decision)
 }
 
@@ -75,7 +76,7 @@ func TestAskUserRail_resolveInterrupt_空字符串中断(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{}`}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, "", nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, "", nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
@@ -89,7 +90,7 @@ func TestAskUserRail_resolveInterrupt_Dict输入(t *testing.T) {
 		},
 	}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 }
 
@@ -101,7 +102,7 @@ func TestAskUserRail_resolveInterrupt_Dict输入无Answers(t *testing.T) {
 		"other": "value",
 	}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	// 无 answers 字段 → 空的 AskUserPayload → 无有效答案 → 中断
 	assert.IsType(t, &InterruptResult{}, decision)
 }
@@ -111,7 +112,7 @@ func TestAskUserRail_resolveInterrupt_无效类型(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{}`}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, 42, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, 42, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
@@ -120,7 +121,7 @@ func TestAskUserRail_resolveInterrupt_字符串输入无问题(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{}`}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, "回答", nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, "回答", nil)
 	// 字符串输入但无 questions → 空 AskUserPayload → 中断
 	assert.IsType(t, &InterruptResult{}, decision)
 }
@@ -188,7 +189,7 @@ func TestAskUserRail_resolveInterrupt_Dict输入Answers非Dict(t *testing.T) {
 		"answers": "not_a_dict",
 	}
 
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	// answers 非 dict → parseUserInputDict 返回空 AskUserPayload → 中断
 	assert.IsType(t, &InterruptResult{}, decision)
 }
@@ -276,7 +277,7 @@ func TestAskUserPayloadSchema(t *testing.T) {
 func TestAskUserRail_InterruptRequest接口(t *testing.T) {
 	r := NewAskUserRail()
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "ask_user", Arguments: `{}`}
-	decision := r.resolveAskUserInterrupt(nil, nil, toolCall, nil, nil)
+	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	interruptResult, ok := decision.(*InterruptResult)
 	assert.True(t, ok)
 	// InterruptRequest 满足 InterruptRequester 接口

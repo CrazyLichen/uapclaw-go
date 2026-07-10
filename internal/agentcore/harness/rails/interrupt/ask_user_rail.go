@@ -290,14 +290,8 @@ func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *As
 //
 // 对齐 Python: AskUserRail._build_ask_request(tool_call)
 func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *saschema.InterruptRequest {
-	args := parseToolArgs(toolCall)
-	questions, _ := args["questions"].([]any)
-	questionsAny := make([]map[string]any, 0, len(questions))
-	for _, q := range questions {
-		if qMap, ok := q.(map[string]any); ok {
-			questionsAny = append(questionsAny, qMap)
-		}
-	}
+	_ = parseToolArgs(toolCall)
+	// TODO: 对齐 Python AskUserRequest.questions 字段后，将 args["questions"] 传入 InterruptRequest
 
 	return &saschema.InterruptRequest{
 		Message:        "",
