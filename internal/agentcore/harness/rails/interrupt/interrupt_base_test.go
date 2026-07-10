@@ -10,9 +10,9 @@ import (
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sessioninteraction "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interaction"
 )
 
 // ──────────────────────────── 构造函数 ────────────────────────────

@@ -127,4 +127,3 @@ func TestMessageToE2A(t *testing.T) {
 	assert.NotNil(t, envelope)
 	assert.Equal(t, "sess-1", envelope.SessionID)
 }
-

@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 )
 
 // TestAskUserRail_Init_Integration 集成测试 AskUserRail.Init
@@ -72,8 +72,10 @@ func (m *mockBaseAgent) Invoke(_ context.Context, _ map[string]any, _ ...agentin
 func (m *mockBaseAgent) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan any, error) {
 	return nil, nil
 }
-func (m *mockBaseAgent) Card() *agentschema.AgentCard    { return m.card }
-func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig { return nil }
+func (m *mockBaseAgent) Card() *agentschema.AgentCard                            { return m.card }
+func (m *mockBaseAgent) Config() agentinterfaces.AgentConfig                     { return nil }
 func (m *mockBaseAgent) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
 func (m *mockBaseAgent) CallbackManager() *agentinterfaces.AgentCallbackManager  { return nil }
-func (m *mockBaseAgent) SystemPromptBuilder() agentinterfaces.SystemPromptBuilderInterface { return nil }
+func (m *mockBaseAgent) SystemPromptBuilder() agentinterfaces.SystemPromptBuilderInterface {
+	return nil
+}

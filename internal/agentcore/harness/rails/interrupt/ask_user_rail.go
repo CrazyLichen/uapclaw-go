@@ -7,10 +7,10 @@ import (
 
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
-	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
-	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	saschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -300,10 +300,10 @@ func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *saschema.In
 	}
 
 	return &saschema.InterruptRequest{
-		Message:       "",
-		PayloadSchema: askUserPayloadSchema(),
+		Message:        "",
+		PayloadSchema:  askUserPayloadSchema(),
 		AutoConfirmKey: "",
-		UIOptions:     nil,
+		UIOptions:      nil,
 	}
 }
 

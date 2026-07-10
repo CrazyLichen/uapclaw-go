@@ -37,7 +37,6 @@ type RobotMessageConsumer interface {
 	ConsumeRobotMessages(timeout time.Duration) *schema.Message
 }
 
-
 // ChannelManager 负责 Channel 的注册、注销、查找与消息分发。
 //
 // 核心职责：
