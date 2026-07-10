@@ -1,6 +1,7 @@
 package interrupt
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testin
 	r := NewConfirmInterruptRail("write_file")
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, nil, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 	interruptResult := decision.(*InterruptResult)
 	assert.Equal(t, "请确认或拒绝?", interruptResult.Request.Message)
@@ -40,7 +41,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入有AutoConfirm(t *testin
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	autoConfirmConfig := map[string]any{"write_file": true}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, nil, autoConfirmConfig)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, autoConfirmConfig)
 	assert.IsType(t, &ApproveResult{}, decision)
 }
 
@@ -50,7 +51,7 @@ func TestConfirmInterruptRail_resolveInterrupt_批准(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: true}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &ApproveResult{}, decision)
 }
 
@@ -60,7 +61,7 @@ func TestConfirmInterruptRail_resolveInterrupt_拒绝(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: false, Feedback: "文件过大"}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
 	assert.Equal(t, "文件过大", rejectResult.ToolResult)
@@ -72,7 +73,7 @@ func TestConfirmInterruptRail_resolveInterrupt_拒绝无Feedback(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := &ConfirmPayload{Approved: false}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
 	assert.Equal(t, "用户反馈: 拒绝操作", rejectResult.ToolResult)
@@ -85,7 +86,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无效输入(t *testing.T) {
 	// 不支持的输入类型
 	userInput := 42
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
@@ -95,7 +96,7 @@ func TestConfirmInterruptRail_resolveInterrupt_Dict批准(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := map[string]any{"approved": true, "feedback": ""}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &ApproveResult{}, decision)
 }
 
@@ -105,7 +106,7 @@ func TestConfirmInterruptRail_resolveInterrupt_Dict拒绝(t *testing.T) {
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 	userInput := map[string]any{"approved": false, "feedback": "不安全"}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, userInput, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
 	assert.Equal(t, "不安全", rejectResult.ToolResult)
@@ -191,7 +192,7 @@ func TestConfirmPayloadSchema(t *testing.T) {
 func TestConfirmInterruptRail_InterruptRequester接口(t *testing.T) {
 	r := NewConfirmInterruptRail("write_file")
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, nil, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	interruptResult, ok := decision.(*InterruptResult)
 	assert.True(t, ok)
 	// InterruptRequest 满足 InterruptRequester 接口
@@ -203,7 +204,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无效类型(t *testing.T) {
 	r := NewConfirmInterruptRail("write_file")
 	toolCall := &llmschema.ToolCall{ID: "tc1", Name: "write_file", Arguments: `{}`}
 
-	decision := r.resolveConfirmInterrupt(nil, nil, toolCall, 42, nil)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, 42, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 }
 
@@ -213,7 +214,7 @@ func TestConfirmInterruptRail_resolveInterrupt_AutoConfirmKeyNilToolCall(t *test
 	autoConfirmConfig := map[string]any{"": true}
 
 	// nil toolCall → autoConfirmKey="" → config[""]=true → Approve
-	decision := r.resolveConfirmInterrupt(nil, nil, nil, nil, autoConfirmConfig)
+	decision := r.resolveConfirmInterrupt(context.TODO(), nil, nil, nil, autoConfirmConfig)
 	assert.IsType(t, &ApproveResult{}, decision)
 }
 
