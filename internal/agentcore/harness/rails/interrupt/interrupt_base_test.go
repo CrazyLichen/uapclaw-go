@@ -396,10 +396,8 @@ var _ cb.AbortError
 // newTestCBC 创建测试用 AgentCallbackContext，可选预填充 extra
 func newTestCBC(extra map[string]any) *agentinterfaces.AgentCallbackContext {
 	cbc := agentinterfaces.NewAgentCallbackContext(nil, nil, nil)
-	if extra != nil {
-		for k, v := range extra {
-			cbc.Extra()[k] = v
-		}
+	for k, v := range extra {
+		cbc.Extra()[k] = v
 	}
 	return cbc
 }
