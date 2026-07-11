@@ -27,11 +27,14 @@
 //	│   ├── doc.go                          # 子包文档
 //	│   ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器
 //	│   ├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
+//	│   ├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
 //	│   ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
 //	│   └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
 //	└── offloader/      # 卸载处理器子包
-//	    ├── doc.go                     # 子包文档
-//	    └── message_offloader.go       # MessageOffloader 消息卸载器
+//	    ├── doc.go                          # 子包文档
+//	    ├── message_offloader.go            # MessageOffloader 消息卸载器
+//	    ├── message_summary_offloader.go    # MessageSummaryOffloader 摘要卸载器
+//	    └── tool_result_budget_processor.go # ToolResultBudgetProcessor 工具结果预算处理器
 //
 // 对应 Python 代码：openjiuwen/core/context_engine/processor/
 package processor

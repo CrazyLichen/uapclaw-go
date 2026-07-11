@@ -1,18 +1,15 @@
 package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
 var (
 	// StatusSuccess 成功
 	StatusSuccess = NewStatusCode("SUCCESS", 0, "success")
 	// StatusError 通用错误
 	StatusError = NewStatusCode("ERROR", -1, "error")
-)
 
-// =============================================================================================================
-// 180. 基础层 — 提示词 180000–180999
-// =============================================================================================================
+	// 180. 基础层 — 提示词 180000–180999
 
-var (
 	// StatusPromptAssemblerVariableInitFailed prompt assembler 变量初始化失败
 	StatusPromptAssemblerVariableInitFailed = NewStatusCode(
 		"PROMPT_ASSEMBLER_VARIABLE_INIT_FAILED", 180000,
@@ -33,13 +30,9 @@ var (
 	StatusPromptTemplateInvalid = NewStatusCode(
 		"PROMPT_TEMPLATE_INVALID", 180004,
 		"prompt template is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 181. 基础层 — 模型 API 181000–181999
-// =============================================================================================================
+	// 181. 基础层 — 模型 API 181000–181999
 
-var (
 	// StatusModelProviderInvalid 模型 provider 无效
 	StatusModelProviderInvalid = NewStatusCode(
 		"MODEL_PROVIDER_INVALID", 181000,
@@ -64,13 +57,9 @@ var (
 	StatusModelClientConfigInvalid = NewStatusCode(
 		"MODEL_CLIENT_CONFIG_INVALID", 181005,
 		"model client_config is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 183. 基础层 — 日志 183000–183999
-// =============================================================================================================
+	// 183. 基础层 — 日志 183000–183999
 
-var (
 	// StatusCommonLogPathInvalid 日志路径无效
 	StatusCommonLogPathInvalid = NewStatusCode(
 		"COMMON_LOG_PATH_INVALID", 183000,
@@ -91,13 +80,9 @@ var (
 	StatusCommonLogExecutionRuntimeError = NewStatusCode(
 		"COMMON_LOG_EXECUTION_RUNTIME_ERROR", 183004,
 		"common log_execution runtime error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 184. 基础层 — 任务管理器 184000–184999
-// =============================================================================================================
+	// 184. 基础层 — 任务管理器 184000–184999
 
-var (
 	// StatusCommonTaskConfigError 协程任务配置错误
 	StatusCommonTaskConfigError = NewStatusCode(
 		"COMMON_TASK_CONFIG_ERROR", 184000,
@@ -106,17 +91,11 @@ var (
 	StatusCommonTaskNotFound = NewStatusCode(
 		"COMMON_TASK_NOT_FOUND", 184001,
 		"common coroutine task not found, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 185. 基础层 — MCP 工具支持 185000–185999
-// =============================================================================================================
+	// 185. 基础层 — MCP 工具支持 185000–185999
 
-// =============================================================================================================
-// 186. 基础层 — 存储支持 186000–186100
-// =============================================================================================================
+	// 186. 基础层 — 存储支持 186000–186100
 
-var (
 	// StatusStoreVectorSchemaInvalid 向量 Schema 无效
 	StatusStoreVectorSchemaInvalid = NewStatusCode(
 		"STORE_VECTOR_SCHEMA_INVALID", 186000,
@@ -185,13 +164,9 @@ var (
 	StatusStoreObjectConfigInvalid = NewStatusCode(
 		"STORE_OBJECT_CONFIG_INVALID", 186016,
 		"store object config is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 187. 基础层 — 消息存储 187000–187999
-// =============================================================================================================
+	// 187. 基础层 — 消息存储 187000–187999
 
-var (
 	// StatusStoreMessageGetExecutionError 消息获取执行错误
 	StatusStoreMessageGetExecutionError = NewStatusCode(
 		"STORE_MESSAGE_GET_EXECUTION_ERROR", 187000,
@@ -216,13 +191,9 @@ var (
 	StatusStoreMessageCountExecutionError = NewStatusCode(
 		"STORE_MESSAGE_COUNT_EXECUTION_ERROR", 187005,
 		"store message count execution error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 188. 基础层 — 通用 188000–188999
-// =============================================================================================================
+	// 188. 基础层 — 通用 188000–188999
 
-var (
 	// StatusCommonSSLContextInitFailed SSL 上下文初始化失败
 	StatusCommonSSLContextInitFailed = NewStatusCode(
 		"COMMON_SSL_CONTEXT_INIT_FAILED", 188000,
@@ -255,13 +226,9 @@ var (
 	StatusCommonDecryptionError = NewStatusCode(
 		"COMMON_DECRYPTION_ERROR", 188007,
 		"decryption failed, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 189. 基础层 — 模式 189000–189999
-// =============================================================================================================
+	// 189. 基础层 — 模式 189000–189999
 
-var (
 	// StatusSchemaValidateInvalid Schema 验证无效
 	StatusSchemaValidateInvalid = NewStatusCode(
 		"SCHEMA_VALIDATE_INVALID", 189001,

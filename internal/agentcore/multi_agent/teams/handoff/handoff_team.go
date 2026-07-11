@@ -90,8 +90,8 @@ func NewHandoffTeam(card maschema.TeamCardInterface, config *HandoffTeamConfig, 
 		tr = runtime
 	} else {
 		// 对齐 Python: BaseTeam._create_default_runtime()
-		// TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
-		// TeamConfig.message_timeout → MessageBusConfig.process_timeout
+		// 字段映射：TeamConfig.max_concurrent_messages → MessageBusConfig.max_queue_size
+		// 字段映射：TeamConfig.message_timeout → MessageBusConfig.process_timeout
 		busCfg := team_runtime.NewMessageBusConfig(
 			team_runtime.WithMaxQueueSize(config.MaxConcurrentMessages),
 			team_runtime.WithProcessTimeout(config.MessageTimeout),

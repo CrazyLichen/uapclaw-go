@@ -2,32 +2,23 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 组件会话 111000–111009
-// =============================================================================================================
 var (
+	// 组件会话 111000–111009
+
 	// StatusCompSessionInteractError 组件交互不支持
 	StatusCompSessionInteractError = NewStatusCode(
 		"COMP_SESSION_INTERACT_ERROR", 111005,
 		"interact is not support, error='{reason}', comp_id={comp_id}, workflow={workflow}")
-)
 
-// =============================================================================================================
-// 交互 111110–111119
-// =============================================================================================================
+	// 交互 111110–111119
 
-var (
 	// StatusInteractionInputInvalid 交互输入无效
 	StatusInteractionInputInvalid = NewStatusCode(
 		"INTERACTION_INPUT_INVALID", 111110,
 		"interaction input is invalid, reason={reason}")
-)
 
-// =============================================================================================================
-// 检查点 111120–111129
-// =============================================================================================================
+	// 检查点 111120–111129
 
-var (
 	// StatusCheckpointerPostWorkflowExecutionError 检查点后置工作流执行错误
 	StatusCheckpointerPostWorkflowExecutionError = NewStatusCode(
 		"CHECKPOINTER_POST_WORKFLOW_EXECUTION_ERROR", 111120,
@@ -48,13 +39,9 @@ var (
 	StatusCheckpointerConfigError = NewStatusCode(
 		"CHECKPOINTER_CONFIG_ERROR", 111124,
 		"checkpointer config error, session_id={session_id}, error='{reason}'")
-)
 
-// =============================================================================================================
-// 流写入器 111130–111139
-// =============================================================================================================
+	// 流写入器 111130–111139
 
-var (
 	// StatusStreamWriterManagerAddWriterError 添加流写入器错误
 	StatusStreamWriterManagerAddWriterError = NewStatusCode(
 		"STREAM_WRITER_MANAGER_ADD_WRITER_ERROR", 111130,
@@ -79,13 +66,9 @@ var (
 	StatusStreamOutputChunkIntervalTimeout = NewStatusCode(
 		"STREAM_OUTPUT_CHUNK_INTERVAL_TIMEOUT", 111135,
 		"stream output next stream chunk timeout, interval_timeout={timeout}s, error='{reason}'")
-)
 
-// =============================================================================================================
-// 追踪器 111140–111149
-// =============================================================================================================
+	// 追踪器 111140–111149
 
-var (
 	// StatusTracerWorkflowTraceError 工作流追踪错误
 	StatusTracerWorkflowTraceError = NewStatusCode(
 		"TRACER_WORKFLOW_TRACE_ERROR", 111140,

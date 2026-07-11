@@ -9,11 +9,9 @@
 //	object/
 //	├── doc.go         # 包文档
 //	├── base.go        # BaseObjectStorage 接口 + ObjectStorageConfig + ListOption
-//	├── base_test.go   # 接口与配置的单元测试
 //	└── s3/            # S3 兼容后端实现子包
 //	    ├── doc.go     # 子包文档
-//	    ├── s3.go      # S3Client 实现（NewS3Client + 6 个接口方法）
-//	    └── s3_test.go # S3Client 单元测试（httptest 模拟）
+//	    └── s3.go      # S3Client 实现（NewS3Client + 6 个接口方法）
 //
 // 对应 Python 代码：
 //

@@ -19,14 +19,14 @@ import (
 //
 // 与 interfaces.InnerSession + Provider 的映射关系：
 //
-//	Tracer()       → InnerSession.Tracer()
-//	State()        → InnerSession.State()
-//	Config()       → InnerSession.Config()
-//	WorkflowID()   → WorkflowIDProvider.WorkflowID()
-//	ExecutableID() → ExecutableIDProvider.ExecutableID()
-//	NodeID()       → 无对应 Provider（需补充）
-//	NodeType()     → 无对应 Provider（需补充）
-//	ParentID()     → 无对应 Provider（需补充）
+//	委托调用：Tracer()       → InnerSession.Tracer()
+//	委托调用：State()        → InnerSession.State()
+//	委托调用：Config()       → InnerSession.Config()
+//	委托调用：WorkflowID()   → WorkflowIDProvider.WorkflowID()
+//	委托调用：ExecutableID() → ExecutableIDProvider.ExecutableID()
+//	委托调用：NodeID()       → 无对应 Provider（需补充）
+//	委托调用：NodeType()     → 无对应 Provider（需补充）
+//	委托调用：ParentID()     → 无对应 Provider（需补充）
 //
 // 此接口定义在 tracer 包内（而非 interfaces 包），因为 Tracer() 返回 *Tracer
 // 导致 tracer 无法导入 interfaces（interfaces 已导入 tracer，会形成循环）。

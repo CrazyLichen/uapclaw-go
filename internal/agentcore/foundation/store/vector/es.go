@@ -544,9 +544,9 @@ func (s *ESVectorStore) Search(ctx context.Context, collectionName string, query
 
 		// 提取分数
 		// ES k-NN 的 _score 已经是 [0,1] 归一化的相似度分数，直接使用原始值。
-		// COSINE: _score = (1 + cosine) / 2 ∈ (0,1]
-		// L2: _score = 1 / (1 + dist²) ∈ (0,1]
-		// DOT_PRODUCT: _score = (1 + dp) / 2 ∈ [0,1]
+		// 余弦相似度：_score = (1 + cosine) / 2 ∈ (0,1]
+		// L2 距离：_score = 1 / (1 + dist²) ∈ (0,1]
+		// 点积：_score = (1 + dp) / 2 ∈ [0,1]
 		// 注意：不可再做 esNormalizeScore 转换，否则双重归一化且公式不匹配。
 		score, _ := hit["_score"].(float64)
 

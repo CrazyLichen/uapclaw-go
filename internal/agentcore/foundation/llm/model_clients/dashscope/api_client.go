@@ -17,6 +17,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveDashScopeBaseURL 从 api_base 推导 DashScope 原生 API 的 base URL。
@@ -27,6 +33,8 @@ import (
 //   - 否则直接使用 api_base 作为原生 API 的 base
 //
 // 示例：
+//
+// URL 转换：
 //
 //	https://dashscope.aliyuncs.com/compatible-mode/v1 → https://dashscope.aliyuncs.com
 //	https://dashscope.aliyuncs.com                    → https://dashscope.aliyuncs.com

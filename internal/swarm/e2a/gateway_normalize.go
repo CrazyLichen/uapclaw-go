@@ -586,7 +586,7 @@ func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error)
 	)
 }
 
-// E2AResponseToAgentChunk E2AResponse → AgentResponseChunk。
+// E2AResponseToAgentChunk 将 E2A 响应转为 Agent 响应块。
 //
 // 覆盖：流式 e2a.chunk、终止 e2a.complete / e2a.error、cron、acp.output_request。
 //

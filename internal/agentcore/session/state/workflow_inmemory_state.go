@@ -19,13 +19,13 @@ func NewInMemoryWorkflowState(globalState ...CommitStateLike) *WorkflowCommitSta
 	}
 	workflowOnly := len(globalState) == 0 || globalState[0] == nil
 	return NewWorkflowCommitState(
-		NewInMemoryCommitState(), // ioState
-		gs,                       // globalState
-		NewInMemoryCommitState(), // compState
-		NewInMemoryCommitState(), // workflowState
-		make(map[string]any),     // traceState
-		"",                       // parentID
-		DefaultNodeID,            // nodeID
+		NewInMemoryCommitState(), // I/O 状态
+		gs,                       // 全局状态
+		NewInMemoryCommitState(), // 组件状态
+		NewInMemoryCommitState(), // 工作流状态
+		make(map[string]any),     // 追踪状态
+		"",                       // 父节点 ID
+		DefaultNodeID,            // 节点 ID
 		workflowOnly,
 	)
 }

@@ -2,21 +2,16 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 图状态提交 112030–112039
-// =============================================================================================================
 var (
+	// 图状态提交 112030–112039
+
 	// StatusGraphStateCommitError 图状态提交错误
 	StatusGraphStateCommitError = NewStatusCode(
 		"GRAPH_STATE_COMMIT_ERROR", 112030,
 		"graph commit state error, error='{reason}'")
-)
 
-// =============================================================================================================
-// 可绘制图 112020–112029
-// =============================================================================================================
+	// 可绘制图 112020–112029
 
-var (
 	// StatusDrawableGraphStartNodeInvalid drawable_graph 起始节点无效
 	StatusDrawableGraphStartNodeInvalid = NewStatusCode(
 		"DRAWABLE_GRAPH_START_NODE_INVALID", 112020,
@@ -33,24 +28,16 @@ var (
 	StatusDrawableGraphToMermaidInvalid = NewStatusCode(
 		"DRAWABLE_GRAPH_TO_MERMAID_INVALID", 112043,
 		"drawable_graph to_mermaid error, reason={reason}")
-)
 
-// =============================================================================================================
-// 流图执行 112030–112049
-// =============================================================================================================
+	// 流图执行 112030–112049
 
-var (
 	// StatusGraphStreamActorExecutionError 图流 actor 执行错误
 	StatusGraphStreamActorExecutionError = NewStatusCode(
 		"GRAPH_STREAM_ACTOR_EXECUTION_ERROR", 112030,
 		"actor manager execute error, error='{reason}'")
-)
 
-// =============================================================================================================
-// 图顶点执行 112050–112069
-// =============================================================================================================
+	// 图顶点执行 112050–112069
 
-var (
 	// StatusGraphVertexExecutionError 图顶点执行错误
 	StatusGraphVertexExecutionError = NewStatusCode(
 		"GRAPH_VERTEX_EXECUTION_ERROR", 112050,
@@ -63,13 +50,9 @@ var (
 	StatusGraphVertexStreamCallError = NewStatusCode(
 		"GRAPH_VERTEX_STREAM_CALL_ERROR", 112052,
 		"vertex stream call error, error='{reason}', node_id={node_id}")
-)
 
-// =============================================================================================================
-// Pregel 图 112100–112199
-// =============================================================================================================
+	// Pregel 图 112100–112199
 
-var (
 	// StatusPregelGraphNodeIDInvalid Pregel 图节点 ID 无效
 	StatusPregelGraphNodeIDInvalid = NewStatusCode(
 		"PREGEL_GRAPH_NODE_ID_INVALID", 112100,

@@ -8,13 +8,14 @@
 // 文件目录：
 //
 //	vector/
-//	├── doc.go        # 包文档
-//	├── base.go       # VectorDataType + FieldSchema + CollectionSchema + VectorSearchResult + BaseVectorStore + Option
-//	├── utils.go      # 距离/相似度转换函数（L2/余弦/IP）
-//	├── milvus.go     # MilvusVectorStore 结构体 + BaseVectorStore 接口实现
-//	├── chroma.go     # ChromaVectorStore 结构体 + BaseVectorStore 接口实现
-//	├── gauss.go      # GaussVectorStore 结构体 + BaseVectorStore 接口实现（GaussDB DiskANN）
-//	└── es.go         # ESVectorStore 结构体 + BaseVectorStore 接口实现（Elasticsearch k-NN）
+//	├── doc.go              # 包文档
+//	├── base.go             # VectorDataType + FieldSchema + CollectionSchema + VectorSearchResult + BaseVectorStore + Option
+//	├── utils.go            # 距离/相似度转换函数（L2/余弦/IP）
+//	├── milvus.go           # MilvusVectorStore 结构体 + BaseVectorStore 接口实现
+//	├── milvus_adapter.go   # Milvus 适配器（类型转换与结果映射）
+//	├── chroma.go           # ChromaVectorStore 结构体 + BaseVectorStore 接口实现
+//	├── gauss.go            # GaussVectorStore 结构体 + BaseVectorStore 接口实现（GaussDB DiskANN）
+//	└── es.go               # ESVectorStore 结构体 + BaseVectorStore 接口实现（Elasticsearch k-NN）
 //
 // 对应 Python 代码：
 //

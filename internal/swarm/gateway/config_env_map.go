@@ -48,11 +48,11 @@ var configSetEnvMap = map[string]string{
 	"free_search_ddg_enabled":           "FREE_SEARCH_DDG_ENABLED",
 	"free_search_bing_enabled":          "FREE_SEARCH_BING_ENABLED",
 	"free_search_proxy_url":             "FREE_SEARCH_PROXY_URL",
-	// agents
+	// Agent 相关配置
 	"skills":             "SKILLS",
 	"max_iterations":     "MAX_ITERATIONS",
 	"completion_timeout": "COMPLETION_TIMEOUT",
-	// team
+	// 团队相关配置
 	"team_name":     "TEAM_NAME",
 	"lifecycle":     "LIFECYCLE",
 	"teammate_mode": "TEAMATE_MODE",

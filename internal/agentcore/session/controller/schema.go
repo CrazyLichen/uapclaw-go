@@ -69,7 +69,7 @@ func CreateNewSessionMeta(sessionID string, dataContainerType string) SessionMet
 	}
 }
 
-// ──────────────────────────── SessionMeta 方法 ────────────────────────────
+// ──── SessionMeta 方法 ────
 
 // UpdateTimestamp 更新时间戳为当前时间
 func (m *SessionMeta) UpdateTimestamp() {
@@ -81,7 +81,7 @@ func (m *SessionMeta) IncrementVersion() {
 	m.Version++
 }
 
-// ──────────────────────────── ScopeSessionsMeta 方法 ────────────────────────────
+// ──── ScopeSessionsMeta 方法 ────
 
 // GetSession 根据 sessionID 获取会话元数据，未找到返回 nil
 func (m *ScopeSessionsMeta) GetSession(sessionID string) *SessionMeta {

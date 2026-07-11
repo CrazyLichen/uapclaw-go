@@ -22,6 +22,10 @@ type ShellProcessRegistry struct {
 	cancelledSessions map[string]struct{}
 }
 
+// shellSessionIDKey context key 用于传递 Shell session ID。
+// 对齐 Python _shell_session_id: contextvars.ContextVar。
+type shellSessionIDKey struct{}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -165,8 +169,8 @@ func (r *ShellProcessRegistry) ConsumeCancelled(sessionID string) bool {
 
 // TerminateShellProcess 两阶段终止 Shell 进程。
 //
-// Linux: syscall.Kill(-pgid, SIGTERM) → wait 3s → syscall.Kill(-pgid, SIGKILL)
-// Windows: proc.Signal(os.Interrupt) → wait 3s → proc.Kill()
+// Linux：先 syscall.Kill(-pgid, SIGTERM) → 等待 3s → 再 syscall.Kill(-pgid, SIGKILL)
+// Windows：先 proc.Signal(os.Interrupt) → 等待 3s → 再 proc.Kill()
 //
 // 返回 true 表示成功终止，false 表示进程已退出或终止失败。
 // 对齐 Python: openjiuwen/core/sys_operation/shell_process_registry.py:terminate_shell_process
@@ -208,19 +212,6 @@ func ConsumeShellSessionCancelled(sessionID string) bool {
 	return DefaultRegistry.ConsumeCancelled(sessionID)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// isProcessExited 检查进程是否已退出（非阻塞）
-func isProcessExited(proc *os.Process) bool {
-	return isProcessExitedPlatform(proc)
-}
-
-// ──────────────────────────── Session ID Context 传递 ────────────────────────────
-
-// shellSessionIDKey context key 用于传递 Shell session ID。
-// 对齐 Python _shell_session_id: contextvars.ContextVar。
-type shellSessionIDKey struct{}
-
 // SetShellSessionID 将 session ID 绑定到 context。
 // 对齐 Python set_shell_session_id。
 func SetShellSessionID(ctx context.Context, sessionID string) context.Context {
@@ -251,4 +242,11 @@ func ResolveShellSessionID(ctx context.Context) string {
 		return sid
 	}
 	return ""
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isProcessExited 检查进程是否已退出（非阻塞）
+func isProcessExited(proc *os.Process) bool {
+	return isProcessExitedPlatform(proc)
 }

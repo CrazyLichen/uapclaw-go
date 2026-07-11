@@ -190,7 +190,7 @@ func Setup(opts ...Option) error {
 	return setupErr
 }
 
-// ──────────────────────────── 组件级日志函数 ────────────────────────────
+// ──── 组件级日志函数 ────
 
 // Info 输出 Info 级别日志。
 // 使用方式：logger.Info(logger.ComponentCommon).Str("key", "val").Msg("消息")
@@ -437,7 +437,7 @@ func (l *Logger) createComponentLogger(
 	// 组装多目标 writer
 	var writers []io.Writer
 	writers = append(writers, sanitizedCompWriter)    // 组件日志文件
-	writers = append(writers, sanitizedFullWriter)    // full.log
+	writers = append(writers, sanitizedFullWriter)    // 全量日志文件
 	writers = append(writers, sanitizedConsoleWriter) // 控制台
 
 	// Permissions 组件额外写入 agent_server.log

@@ -72,20 +72,20 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 	// 默认值处理（对齐 Python AgentSession.__init__）：
 
 	// checkpointer: nil 时从全局工厂获取
-	// Python: self._checkpointer = CheckpointerFactory.get_checkpointer() if checkpointer is None else checkpointer
+	// 对齐 Python：self._checkpointer = CheckpointerFactory.get_checkpointer() if checkpointer is None else checkpointer
 	if s.checkpointer == nil {
 		s.checkpointer = checkpointer.GetCheckpointer()
 	}
 
 	// streamWriterManager: nil 时自动创建默认实例
-	// Python: self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
+	// 对齐 Python：self._stream_writer_manager = StreamWriterManager(StreamEmitter()) if stream_writer_manager is None else stream_writer_manager
 	// ✅ 5.10 已回填：StreamWriterManager 包实现后，取消注释
 	if s.streamWriterManager == nil {
 		s.streamWriterManager = stream.NewStreamWriterManager(stream.NewStreamEmitter())
 	}
 
 	// tracer: nil 时自动创建并初始化
-	// Python: tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
+	// 对齐 Python：tracer = Tracer(); tracer.init(self._stream_writer_manager); self._tracer = tracer
 	// ✅ 5.11 已回填：Tracer 包实现后，自动创建并初始化
 	if s.tracer == nil {
 		s.tracer = tracer.NewTracer()
@@ -93,7 +93,7 @@ func NewAgentSession(sessionID string, opts ...AgentSessionOption) *AgentSession
 	}
 
 	// agentSpan: 从 tracer 创建
-	// Python: self._agent_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
+	// 对齐 Python：self._agent_span = self._tracer.tracer_agent_span_manager.create_agent_span() if self._tracer else None
 	// ✅ 5.11 已回填：Tracer 包实现后，自动创建
 	if s.agentSpan == nil && s.tracer != nil {
 		s.agentSpan = s.tracer.AgentSpanManager.CreateAgentSpan()

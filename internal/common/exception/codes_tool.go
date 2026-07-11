@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 工具 — 基础 182000–182099
-// =============================================================================================================
 var (
+	// 工具 — 基础 182000–182099
+
 	// StatusToolCardInvalid 工具卡片无效
 	StatusToolCardInvalid = NewStatusCode(
 		"TOOL_CARD_INVALID", 182000,
@@ -22,13 +21,9 @@ var (
 	StatusToolExecutionError = NewStatusCode(
 		"TOOL_EXECUTION_ERROR", 182012,
 		"tool execution error, too card={card}, reason={reason}")
-)
 
-// =============================================================================================================
-// 工具 — Restful API 182100–182199
-// =============================================================================================================
+	// 工具 — Restful API 182100–182199
 
-var (
 	// StatusToolRestfulApiCardConfigInvalid RestfulAPI 工具卡片配置无效
 	StatusToolRestfulApiCardConfigInvalid = NewStatusCode(
 		"TOOL_RESTFUL_API_CARD_CONFIG_INVALID", 182100,
@@ -53,13 +48,9 @@ var (
 	StatusToolRestfulApiResponseProcessError = NewStatusCode(
 		"TOOL_RESTFUL_API_RESPONSE_PROCESS_ERROR", 182105,
 		"RestfulApi parse response failed, error='{reason}', card=[{card}]")
-)
 
-// =============================================================================================================
-// 工具 — 本地函数 182200–182299
-// =============================================================================================================
+	// 工具 — 本地函数 182200–182299
 
-var (
 	// StatusToolLocalFunctionFuncNotSupported 本地函数不支持
 	StatusToolLocalFunctionFuncNotSupported = NewStatusCode(
 		"TOOL_LOCAL_FUNCTION_FUNC_NOT_SUPPORTED", 182200,
@@ -68,13 +59,9 @@ var (
 	StatusToolLocalFunctionExecutionError = NewStatusCode(
 		"TOOL_LOCAL_FUNCTION_EXECUTION_ERROR", 182205,
 		"execute {method} failed, error='{reason}', card={card}")
-)
 
-// =============================================================================================================
-// 工具 — MCP 182300–182399
-// =============================================================================================================
+	// 工具 — MCP 182300–182399
 
-var (
 	// StatusToolMcpClientNotSupported MCP 客户端不支持
 	StatusToolMcpClientNotSupported = NewStatusCode(
 		"TOOL_MCP_CLIENT_NOT_SUPPORTED", 182300,
@@ -91,24 +78,16 @@ var (
 	StatusToolMcpNotConnected = NewStatusCode(
 		"TOOL_MCP_NOT_CONNECTED", 182303,
 		"mcp client is not connected, server_name={server_name}")
-)
 
-// =============================================================================================================
-// 工具 — OpenAPI 182400–182499
-// =============================================================================================================
+	// 工具 — OpenAPI 182400–182499
 
-var (
 	// StatusToolOpenapiClientExecutionError OpenAPI 客户端执行错误
 	StatusToolOpenapiClientExecutionError = NewStatusCode(
 		"TOOL_OPENAPI_CLIENT_EXECUTION_ERROR", 182400,
 		"openapi client execute error, error='{reason}'")
-)
 
-// =============================================================================================================
-// 工具 — 沙箱 182500–182699
-// =============================================================================================================
+	// 工具 — 沙箱 182500–182699
 
-var (
 	// StatusToolTodosLoadFailed todo 工具加载失败
 	StatusToolTodosLoadFailed = NewStatusCode(
 		"TOOL_TODOS_LOAD_FAILED", 182500,
@@ -149,13 +128,9 @@ var (
 	StatusToolSessionToolInvoked = NewStatusCode(
 		"TOOL_SESSION_TOOL_INVOKED", 182509,
 		"session tool invoked failed, error='{reason}'")
-)
 
-// =============================================================================================================
-// 工具 — 工作树 182510–182519
-// =============================================================================================================
+	// 工具 — 工作树 182510–182519
 
-var (
 	// StatusToolWorktreeExitInvalid worktree 退出无效
 	StatusToolWorktreeExitInvalid = NewStatusCode(
 		"TOOL_WORKTREE_EXIT_INVALID", 182510,

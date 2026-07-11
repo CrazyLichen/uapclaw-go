@@ -40,6 +40,12 @@ type ReadFileInput struct {
 	Caption string `json:"caption"`
 }
 
+// rawTextState 读取原始文本状态结果
+type rawTextState struct {
+	content   string
+	lineCount int
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -711,12 +717,6 @@ func estimateTokens(text string) int {
 func isTextReadForEdit(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	return !ImageExtensions[ext] && ext != ".pdf" && ext != ".ipynb"
-}
-
-// rawTextState 读取原始文本状态结果
-type rawTextState struct {
-	content   string
-	lineCount int
 }
 
 // readRawTextForEditState 读取原始文本内容，用于 EditFileTool 过时写入检查。

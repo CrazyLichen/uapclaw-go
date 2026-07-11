@@ -17,8 +17,8 @@
 //	├── slash_cmd.go        # Slash 命令处理（handleChannelControl）
 //	├── at_file.go          # @file 引用解析 + @agent 提及
 //	└── command_parser/     # Slash 命令解析器子包
-//	    ├── doc.go
-//	    └── slash_command.go
+//	    ├── doc.go          # 子包文档
+//	    └── slash_command.go # Slash 命令解析实现
 //
 // 对应 Python 代码：jiuwenswarm/gateway/message_handler/
 package message_handler

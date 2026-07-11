@@ -43,7 +43,7 @@ func (mh *MessageHandler) HandleServerPush(msg map[string]any) {
 		return
 	}
 
-	// E2AResponse → AgentResponseChunk
+	// E2A 响应转为 Agent 响应块
 	chunk, err := e2a.E2AResponseToAgentChunk(e2aResp)
 	if err != nil {
 		logger.Warn(logComponent).
@@ -65,7 +65,7 @@ func (mh *MessageHandler) HandleServerPush(msg map[string]any) {
 		metadata = e2aResp.Metadata
 	}
 
-	// AgentResponseChunk → Message → robotMessages
+	// Agent 响应块转为消息再推送到机器人消息列表
 	outMsg := ChunkToMessage(chunk, sessionID, metadata)
 	mh.PublishRobotMessages(outMsg)
 }

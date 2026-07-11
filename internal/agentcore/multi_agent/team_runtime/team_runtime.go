@@ -112,7 +112,7 @@ func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 // NewTeamRuntime 创建团队运行时实例。
 //
 // 自动从 config 创建 MessageBus，对齐 Python TeamRuntime.__init__ 中
-// self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
+// 对齐 Python：self._message_bus = MessageBus(config=self._config.message_bus, runtime=self)。
 //
 // 对应 Python: TeamRuntime.__init__(config)
 func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {

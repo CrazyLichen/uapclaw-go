@@ -15,6 +15,53 @@ import (
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetAbilityManager 设置能力管理器，允许外部注入自定义实现。
+func (a *ReActAgent) SetAbilityManager(am interfaces.AbilityManagerInterface) {
+	a.abilityManager = am
+}
+
+// SetPromptBuilder 设置系统提示词构建器（由 DeepAgent 注入共享实例）。
+// 对齐 Python: agent.prompt_builder = prompt_builder / agent.system_prompt_builder = prompt_builder
+// 注意：Configure() 会覆盖此字段（新建 SystemPromptBuilder），
+// DeepAgent 需在每次调用 Configure 后重新调用此方法覆盖回共享实例。
+func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
+	a.promptBuilder = pb
+}
+
+// SetLLM 设置预构建的 LLM 模型实例（跳过延迟初始化）。
+// 对齐 Python: agent.set_llm(model)
+// 注意：Configure() 会重置 llmOnce，
+// DeepAgent 需在每次调用 Configure 后重新调用此方法确保注入生效。
+func (a *ReActAgent) SetLLM(m *llm.Model) {
+	a.llm = m
+	a.llmOnce = sync.Once{}
+}
+
+// GetLLM 返回 LLM 模型实例（延迟初始化）。
+// 对齐 Python: ReActAgent.get_llm()
+// 导出版本，供 DeepAgent 等外部消费者调用。
+func (a *ReActAgent) GetLLM() (*llm.Model, error) {
+	return a.getLLM()
+}
+
+// SwitchModel 切换模型并同步配置。
+// 对齐 Python: ctx.agent.set_llm(target_model) + ctx.agent.config.model_name = target_model.model_config.model_name
+// 封装 SetLLM + Config.ModelNameVal 同步，供 TaskPlanningRail 通过 modelSwitcher 最小接口调用。
+func (a *ReActAgent) SwitchModel(model *llm.Model) {
+	a.SetLLM(model)
+	if a.config != nil && model != nil && model.ModelConfig != nil {
+		a.config.ModelNameVal = model.ModelConfig.ModelName
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // initContext 初始化上下文引擎。
@@ -94,49 +141,6 @@ func (a *ReActAgent) getTools(ctx context.Context) ([]cschema.ToolInfoInterface,
 	tools, _ := am.ListToolInfo(ctx, nil)
 	return tools, nil
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// SetAbilityManager 设置能力管理器，允许外部注入自定义实现。
-func (a *ReActAgent) SetAbilityManager(am interfaces.AbilityManagerInterface) {
-	a.abilityManager = am
-}
-
-// SetPromptBuilder 设置系统提示词构建器（由 DeepAgent 注入共享实例）。
-// 对齐 Python: agent.prompt_builder = prompt_builder / agent.system_prompt_builder = prompt_builder
-// 注意：Configure() 会覆盖此字段（新建 SystemPromptBuilder），
-// DeepAgent 需在每次调用 Configure 后重新调用此方法覆盖回共享实例。
-func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
-	a.promptBuilder = pb
-}
-
-// SetLLM 设置预构建的 LLM 模型实例（跳过延迟初始化）。
-// 对齐 Python: agent.set_llm(model)
-// 注意：Configure() 会重置 llmOnce，
-// DeepAgent 需在每次调用 Configure 后重新调用此方法确保注入生效。
-func (a *ReActAgent) SetLLM(m *llm.Model) {
-	a.llm = m
-	a.llmOnce = sync.Once{}
-}
-
-// GetLLM 返回 LLM 模型实例（延迟初始化）。
-// 对齐 Python: ReActAgent.get_llm()
-// 导出版本，供 DeepAgent 等外部消费者调用。
-func (a *ReActAgent) GetLLM() (*llm.Model, error) {
-	return a.getLLM()
-}
-
-// SwitchModel 切换模型并同步配置。
-// 对齐 Python: ctx.agent.set_llm(target_model) + ctx.agent.config.model_name = target_model.model_config.model_name
-// 封装 SetLLM + Config.ModelNameVal 同步，供 TaskPlanningRail 通过 modelSwitcher 最小接口调用。
-func (a *ReActAgent) SwitchModel(model *llm.Model) {
-	a.SetLLM(model)
-	if a.config != nil && model != nil && model.ModelConfig != nil {
-		a.config.ModelNameVal = model.ModelConfig.ModelName
-	}
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // getAbilityManager 返回能力管理器。
 func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {

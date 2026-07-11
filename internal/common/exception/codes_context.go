@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 上下文引擎 150000–154999
-// =============================================================================================================
 var (
+	// 上下文引擎 150000–154999
+
 	// StatusContextMessageProcessError 上下文消息处理错误
 	StatusContextMessageProcessError = NewStatusCode(
 		"CONTEXT_MESSAGE_PROCESS_ERROR", 153000,
@@ -18,13 +17,9 @@ var (
 	StatusContextMessageInvalid = NewStatusCode(
 		"CONTEXT_MESSAGE_INVALID", 153003,
 		"context message is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 向量化 155000–155099
-// =============================================================================================================
+	// 知识库检索 — 向量化 155000–155099
 
-var (
 	// StatusRetrievalEmbeddingInputInvalid 检索 embedding 输入无效
 	StatusRetrievalEmbeddingInputInvalid = NewStatusCode(
 		"RETRIEVAL_EMBEDDING_INPUT_INVALID", 155000,
@@ -53,13 +48,9 @@ var (
 	StatusRetrievalEmbeddingCallbackInvalid = NewStatusCode(
 		"RETRIEVAL_EMBEDDING_CALLBACK_INVALID", 155006,
 		"retrieval embedding_callback is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 索引 155100–155199
-// =============================================================================================================
+	// 知识库检索 — 索引 155100–155199
 
-var (
 	// StatusRetrievalIndexingChunkSizeInvalid 检索索引分块大小无效
 	StatusRetrievalIndexingChunkSizeInvalid = NewStatusCode(
 		"RETRIEVAL_INDEXING_CHUNK_SIZE_INVALID", 155100,
@@ -104,13 +95,9 @@ var (
 	StatusRetrievalIndexingFetchError = NewStatusCode(
 		"RETRIEVAL_INDEXING_FETCH_ERROR", 155110,
 		"retrieval indexing fetch or parse error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 检索器 155200–155299
-// =============================================================================================================
+	// 知识库检索 — 检索器 155200–155299
 
-var (
 	// StatusRetrievalRetrieverModeNotSupport 检索 retriever 模式不支持
 	StatusRetrievalRetrieverModeNotSupport = NewStatusCode(
 		"RETRIEVAL_RETRIEVER_MODE_NOT_SUPPORT", 155200,
@@ -159,13 +146,9 @@ var (
 	StatusRetrievalRetrieverInvalid = NewStatusCode(
 		"RETRIEVAL_RETRIEVER_INVALID", 155211,
 		"retrieval retriever is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 工具 155300–155399
-// =============================================================================================================
+	// 知识库检索 — 工具 155300–155399
 
-var (
 	// StatusRetrievalUtilsConfigFileNotFound 检索工具配置文件未找到
 	StatusRetrievalUtilsConfigFileNotFound = NewStatusCode(
 		"RETRIEVAL_UTILS_CONFIG_FILE_NOT_FOUND", 155300,
@@ -186,13 +169,9 @@ var (
 	StatusRetrievalUtilsConfigProcessError = NewStatusCode(
 		"RETRIEVAL_UTILS_CONFIG_PROCESS_ERROR", 155304,
 		"retrieval utils_config process error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 向量存储 155400–155499
-// =============================================================================================================
+	// 知识库检索 — 向量存储 155400–155499
 
-var (
 	// StatusRetrievalVectorStorePathNotFound 检索向量存储路径未找到
 	StatusRetrievalVectorStorePathNotFound = NewStatusCode(
 		"RETRIEVAL_VECTOR_STORE_PATH_NOT_FOUND", 155400,
@@ -205,13 +184,9 @@ var (
 	StatusRetrievalVectorStoreProviderInvalid = NewStatusCode(
 		"RETRIEVAL_VECTOR_STORE_PROVIDER_INVALID", 155402,
 		"retrieval vector_store_provider is not supported, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 知识库 155500–155599
-// =============================================================================================================
+	// 知识库检索 — 知识库 155500–155599
 
-var (
 	// StatusRetrievalKbParserNotFound 检索知识库解析器未找到
 	StatusRetrievalKbParserNotFound = NewStatusCode(
 		"RETRIEVAL_KB_PARSER_NOT_FOUND", 155500,
@@ -248,13 +223,9 @@ var (
 	StatusRetrievalKbDatabaseConfigInvalid = NewStatusCode(
 		"RETRIEVAL_KB_DATABASE_CONFIG_INVALID", 155508,
 		"retrieval kb_database_config is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 重排序 155600–155699
-// =============================================================================================================
+	// 知识库检索 — 重排序 155600–155699
 
-var (
 	// StatusRetrievalRerankerRequestCallFailed 检索重排序请求调用失败
 	StatusRetrievalRerankerRequestCallFailed = NewStatusCode(
 		"RETRIEVAL_RERANKER_REQUEST_CALL_FAILED", 155600,
@@ -267,13 +238,9 @@ var (
 	StatusRetrievalRerankerInputInvalid = NewStatusCode(
 		"RETRIEVAL_RERANKER_INPUT_INVALID", 155602,
 		"retrieval reranker_input is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 知识库检索 — 查询改写 155603–155609
-// =============================================================================================================
+	// 知识库检索 — 查询改写 155603–155609
 
-var (
 	// StatusRetrievalQueryRewriterPromptNotFound 检索查询重写器提示词文件未找到
 	StatusRetrievalQueryRewriterPromptNotFound = NewStatusCode(
 		"RETRIEVAL_QUERY_REWRITER_PROMPT_NOT_FOUND", 155603,
@@ -290,13 +257,9 @@ var (
 	StatusRetrievalQueryRewriterInputInvalid = NewStatusCode(
 		"RETRIEVAL_QUERY_REWRITER_INPUT_INVALID", 155606,
 		"retrieval query_rewriter input is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 记忆引擎 158000–159999
-// =============================================================================================================
+	// 记忆引擎 158000–159999
 
-var (
 	// StatusMemoryRegisterStoreExecutionError 注册存储到记忆引擎失败
 	StatusMemoryRegisterStoreExecutionError = NewStatusCode(
 		"MEMORY_REGISTER_STORE_EXECUTION_ERROR", 158000,
@@ -345,13 +308,9 @@ var (
 	StatusMemoryBackupNotFound = NewStatusCode(
 		"MEMORY_BACKUP_NOT_FOUND", 158011,
 		"backup not found, backup_id: {backup_id}")
-)
 
-// =============================================================================================================
-// 记忆引擎 — 通用工具 158200–158299
-// =============================================================================================================
+	// 记忆引擎 — 通用工具 158200–158299
 
-var (
 	// StatusMemoryGraphLanguageInvalid 图记忆语言无效
 	StatusMemoryGraphLanguageInvalid = NewStatusCode(
 		"MEMORY_GRAPH_LANGUAGE_INVALID", 158200,

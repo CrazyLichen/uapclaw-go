@@ -10,6 +10,21 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// PublishRobotMessages 将 Agent 响应写入出站 channel。
+//
+// 非阻塞写入，channel 满时丢弃并记录警告。
+// 对齐 Python: MessageHandler.publish_robot_messages()
+func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
+	select {
+	case mh.robotMessages <- msg:
+	default:
+		logger.Warn(logComponent).
+			Str("event_type", "outbound_queue_full").
+			Str("msg_id", msg.ID).
+			Msg("出站消息队列已满，丢弃消息")
+	}
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // forwardLoop 入站转发主循环
@@ -101,7 +116,7 @@ func (mh *MessageHandler) forwardToAgent(ctx context.Context, msg *schema.Messag
 		return
 	}
 
-	// Message → E2AEnvelope
+	// 消息转为 E2A 信封
 	envelope := e2a.MessageToE2AOrFallback(msg)
 
 	// 根据是否流式选择处理方式
@@ -150,7 +165,7 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 				return
 			}
 
-			// AgentResponseChunk → Message → robotMessages
+			// Agent 响应块转为消息再推送到机器人消息列表
 			reqMetadata := mh.getStreamMetadata(requestID)
 			outMsg := ChunkToMessage(chunk, mh.getStreamSessionID(requestID), reqMetadata)
 			mh.PublishRobotMessages(outMsg)
@@ -175,24 +190,9 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 		return
 	}
 
-	// AgentResponse → Message → robotMessages
+	// Agent 响应转为消息再推送到机器人消息列表
 	outMsg := ResponseToMessage(resp, msg.SessionID, msg.Metadata)
 	mh.PublishRobotMessages(outMsg)
-}
-
-// PublishRobotMessages 将 Agent 响应写入出站 channel。
-//
-// 非阻塞写入，channel 满时丢弃并记录警告。
-// 对齐 Python: MessageHandler.publish_robot_messages()
-func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
-	select {
-	case mh.robotMessages <- msg:
-	default:
-		logger.Warn(logComponent).
-			Str("event_type", "outbound_queue_full").
-			Str("msg_id", msg.ID).
-			Msg("出站消息队列已满，丢弃消息")
-	}
 }
 
 // registerStreamTask 注册流式任务

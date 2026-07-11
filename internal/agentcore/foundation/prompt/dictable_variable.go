@@ -28,7 +28,7 @@ type DictableVariable struct {
 	placeholders []string       // 完整占位符路径列表（去重）
 }
 
-// ──────────────────────────── 构造选项 ────────────────────────────
+// ──── 构造选项 ────
 
 // DictableOption DictableVariable 构造选项函数。
 type DictableOption func(*DictableVariable)

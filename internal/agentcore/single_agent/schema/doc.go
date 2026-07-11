@@ -10,12 +10,13 @@
 // 文件目录：
 //
 //	schema/
-//	├── doc.go           # 包文档
-//	├── agent_card.go    # AgentCard 结构体 + 构造函数 + Ability 接口实现
-//	├── agent_result.go  # Part/Artifact/AgentResult 结果模型 + RawBytes 自定义 JSON marshal
-//	├── exception.go     # ToolInterruptException（实现 error 接口）
-//	├── response.go      # InterruptRequest + ToolCallInterruptRequest
-//	└── state.go         # 常量 + 中断状态类型（BaseInterruptionState/ToolInterruptionState 等）
+//	├── doc.go              # 包文档
+//	├── agent_card.go       # AgentCard 结构体 + 构造函数 + Ability 接口实现
+//	├── agent_result.go     # Part/Artifact/AgentResult 结果模型 + RawBytes 自定义 JSON marshal
+//	├── execute_result.go   # ExecuteResult 执行结果类型
+//	├── exception.go        # ToolInterruptException（实现 error 接口）
+//	├── response.go         # InterruptRequest + ToolCallInterruptRequest
+//	└── state.go            # 常量 + 中断状态类型（BaseInterruptionState/ToolInterruptionState 等）
 //
 // 对应 Python 代码：openjiuwen/core/single_agent/schema/ + openjiuwen/core/single_agent/interrupt/
 //

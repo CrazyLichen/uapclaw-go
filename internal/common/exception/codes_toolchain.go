@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 优化工具链 — 提示词自优化 170000–170999
-// =============================================================================================================
 var (
+	// 优化工具链 — 提示词自优化 170000–170999
+
 	// StatusToolchainAgentParamError 工具链 agent 参数错误
 	StatusToolchainAgentParamError = NewStatusCode(
 		"TOOLCHAIN_AGENT_PARAM_ERROR", 170000,
@@ -30,13 +29,9 @@ var (
 	StatusToolchainTrainerExecutionError = NewStatusCode(
 		"TOOLCHAIN_TRAINER_EXECUTION_ERROR", 170005,
 		"toolchain trainer execution error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 优化工具链 — AgentRL 172000–172999
-// =============================================================================================================
+	// 优化工具链 — AgentRL 172000–172999
 
-var (
 	// StatusAgentRlProxyNotInitialized AgentRL proxy 未初始化
 	StatusAgentRlProxyNotInitialized = NewStatusCode(
 		"AGENT_RL_PROXY_NOT_INITIALIZED", 172000,
@@ -89,13 +84,9 @@ var (
 	StatusAgentRlRewardNotFound = NewStatusCode(
 		"AGENT_RL_REWARD_NOT_FOUND", 172071,
 		"agent_rl reward function not found, name='{name}'")
-)
 
-// =============================================================================================================
-// 优化工具链 — 提示词构建器 173000–173999
-// =============================================================================================================
+	// 优化工具链 — 提示词构建器 173000–173999
 
-var (
 	// StatusToolchainMetaTemplateExecutionError 工具链 meta_template 执行错误
 	StatusToolchainMetaTemplateExecutionError = NewStatusCode(
 		"TOOLCHAIN_META_TEMPLATE_EXECUTION_ERROR", 173000,
@@ -108,13 +99,9 @@ var (
 	StatusToolchainBadCaseTemplateExecutionError = NewStatusCode(
 		"TOOLCHAIN_BAD_CASE_TEMPLATE_EXECUTION_ERROR", 173002,
 		"toolchain bad_case_template execution error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 优化工具链 — 任务记忆 174000–174025
-// =============================================================================================================
+	// 优化工具链 — 任务记忆 174000–174025
 
-var (
 	// StatusToolchainEvolvingMemoryRetrieveExecutionError 工具链演进记忆检索执行错误
 	StatusToolchainEvolvingMemoryRetrieveExecutionError = NewStatusCode(
 		"TOOLCHAIN_EVOLVING_MEMORY_RETRIEVE_EXECUTION_ERROR", 174000,
@@ -175,13 +162,9 @@ var (
 	StatusToolchainEvolvingMemoryInputInvalid = NewStatusCode(
 		"TOOLCHAIN_EVOLVING_MEMORY_INPUT_INVALID", 174014,
 		"toolchain evolving memory input is invalid, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 优化工具链 — 工具自优化 174025–174049
-// =============================================================================================================
+	// 优化工具链 — 工具自优化 174025–174049
 
-var (
 	// StatusToolchainEvolvingToolCallConfigError 工具链 tool_call 配置错误
 	StatusToolchainEvolvingToolCallConfigError = NewStatusCode(
 		"TOOLCHAIN_EVOLVING_TOOL_CALL_CONFIG_ERROR", 174025,

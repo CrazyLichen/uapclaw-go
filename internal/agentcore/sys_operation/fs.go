@@ -12,7 +12,7 @@ import (
 
 // FsOperation 文件系统操作接口，定义读取、写入、列表、搜索等文件系统操作。
 // 对齐 Python BaseFsOperation：read_file, read_file_stream, write_file, upload_file,
-// upload_file_stream, download_file, download_file_stream, list_files, list_directories, search_files。
+// 对齐 Python 方法：upload_file_stream, download_file, download_file_stream, list_files, list_directories, search_files。
 type FsOperation interface {
 	// ReadFile 读取文件内容
 	ReadFile(ctx context.Context, path string, opts ...FsOption) (*result.ReadFileResult, error)

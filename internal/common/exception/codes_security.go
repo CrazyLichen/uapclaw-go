@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 安全 / 护栏 190000–190999
-// =============================================================================================================
 var (
+	// 安全 / 护栏 190000–190999
+
 	// StatusGuardrailBlocked 安全护栏拦截
 	StatusGuardrailBlocked = NewStatusCode(
 		"GUARDRAIL_BLOCKED", 190000,
@@ -14,13 +13,9 @@ var (
 	StatusWsOriginDenied = NewStatusCode(
 		"WS_ORIGIN_DENIED", 190001,
 		"websocket origin denied: origin='{origin}', allowed_hosts='{allowed_hosts}'")
-)
 
-// =============================================================================================================
-// 系统操作 199000–199999
-// =============================================================================================================
+	// 系统操作 199000–199999
 
-var (
 	// StatusSysOperationManagerProcessError 系统操作管理器处理错误
 	StatusSysOperationManagerProcessError = NewStatusCode(
 		"SYS_OPERATION_MANAGER_PROCESS_ERROR", 199001,

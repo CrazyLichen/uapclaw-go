@@ -184,7 +184,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 14: ⤵️ agentcore.DeepAgent: agentCard = AgentCard{name, id}
 	// 步骤 15: ⤵️ agentcore.DeepAgent: _get_tool_cards("jiuwenswarm") — 编码 tools
 	// 步骤 16: ⤵️ 10.6.3-10: _build_agent_rails(config, configBase, mode="code")
-	//              编码专有 rails：LspRail, ProjectMemoryRail, CodingMemoryRail,
+	//              编码专有护栏：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
 	//              ConfirmInterruptRail, FileSystemRail
 	// 步骤 17: ⤵️ 10.3.7-11: _create_sys_operation()

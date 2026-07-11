@@ -26,7 +26,7 @@ type OperationDef struct {
 type OperationRegistry struct {
 	// mu 保护 repository
 	mu sync.RWMutex
-	// repository mode → name → OperationDef
+	// 仓库模式映射：mode → name → OperationDef
 	repository map[OperationMode]map[string]OperationDef
 }
 

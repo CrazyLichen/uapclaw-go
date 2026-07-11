@@ -14,7 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // InterruptDecision 中断决策接口，三种决策类型均实现此接口。
 //
@@ -22,8 +22,6 @@ import (
 type InterruptDecision interface {
 	isInterruptDecision()
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // ApproveResult 允许继续执行决策。
 //

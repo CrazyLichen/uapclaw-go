@@ -88,7 +88,7 @@ func ValidateSkillMD(skillMDPath string) (bool, string) {
 		return false, fmt.Sprintf("frontmatter 包含未允许的字段: %s", strings.Join(unexpected, ", "))
 	}
 
-	// name: kebab-case
+	// 命名格式：kebab-case
 	name := strings.TrimSpace(frontmatter["name"])
 	if name != "" {
 		kebabRe := regexp.MustCompile(`^[a-z0-9-]+$`)

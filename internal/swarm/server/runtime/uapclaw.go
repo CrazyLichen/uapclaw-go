@@ -252,7 +252,7 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 		return nil, err
 	}
 
-	// pause / resume
+	// 暂停/恢复
 	if intent == "pause" || intent == "resume" {
 		return a.ProcessInterrupt(ctx, request)
 	}

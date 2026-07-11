@@ -17,27 +17,42 @@
 //	│   ├── ability_types.go   # Ability 联合类型 + AddAbilityResult + AbilityExecutionError
 //	│   └── json_repair.go     # RepairToolArgumentsJSON + ParseToolArguments
 //	├── agents/
-//	│   └── react_agent.go     # ReActAgent — ReAct 循环 Agent（Think → Act → Observe）
+//	│   ├── doc.go             # 子包文档
+//	│   ├── react_agent.go     # ReActAgent — ReAct 循环 Agent（Think → Act → Observe）
+//	│   ├── react_helpers.go   # ReAct 辅助函数
+//	│   ├── react_invoke.go    # ReAct Invoke 执行逻辑
+//	│   ├── react_model_call.go # ReAct 模型调用逻辑
+//	│   └── react_prompt.go    # ReAct 提示词构建
 //	├── config/
 //	│   ├── doc.go             # 子包文档
 //	│   └── agent_config.go    # ReActAgentConfig 结构体 + Option + AgentConfig 接口实现 + Validate
 //	├── interfaces/
 //	│   ├── doc.go             # 子包文档
-//	│   └── interface.go       # Workflow/Agent 接口 + WorkflowOption/AgentOption 类型
+//	│   ├── abilitymgr.go      # AbilityManager 接口
+//	│   ├── agent.go           # Agent 接口 + AgentOption 类型
+//	│   ├── callback.go        # Callback 接口
+//	│   └── workflow.go        # Workflow 接口 + WorkflowOption 类型
 //	├── interrupt/
-//	│   └── ...                # HITL 中断处理
+//	│   ├── doc.go             # 子包文档
+//	│   ├── exception.go       # 中断异常类型
+//	│   ├── handler.go         # 中断处理器
+//	│   ├── payload.go         # 中断请求/响应载体
+//	│   ├── response.go        # 中断响应
+//	│   └── state.go           # 中断状态
+//	├── prompts/
+//	│   ├── doc.go             # 子包文档
+//	│   └── builder.go         # 提示词构建器
 //	├── rail/
 //	│   ├── doc.go             # 子包文档
-//	│   ├── context.go         # AgentCallbackContext 结构体与方法
-//	│   ├── event.go           # AgentCallbackEvent 枚举 — Agent 生命周期回调事件类型
-//	│   ├── executor.go        # RailExecutor 结构体 + ModelCallRail/ToolCallRail
-//	│   ├── inputs.go          # EventInputs 接口及各事件 Inputs 结构体
-//	│   ├── manager.go         # AgentCallbackManager 回调管理器
-//	│   └── rail.go            # AgentRail 接口 + BaseRail 结构体 + CallbackFrom/BuildCallbacks
+//	│   └── executor.go        # RailExecutor 执行器
 //	├── schema/
 //	│   ├── doc.go             # 子包文档
 //	│   ├── agent_card.go      # AgentCard 结构体 + 构造函数 + Ability 接口实现
-//	│   └── agent_result.go    # Part/Artifact/AgentResult 结果模型
+//	│   ├── agent_result.go    # Part/Artifact/AgentResult 结果模型
+//	│   ├── execute_result.go  # ExecuteResult 执行结果类型
+//	│   ├── exception.go       # ToolInterruptException（实现 error 接口）
+//	│   ├── response.go        # InterruptRequest + ToolCallInterruptRequest
+//	│   └── state.go           # 常量 + 中断状态类型
 //	└── skills/
 //	    ├── doc.go             # 子包文档
 //	    ├── skill.go           # Skill 模型 — 技能元数据结构体

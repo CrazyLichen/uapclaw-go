@@ -24,11 +24,11 @@ import (
 // 子类型独有的方法通过 *Provider 接口 + 类型断言获取，
 // 对齐 Python hasattr/isinstance 运行时探测模式：
 //
-//	AgentID      → AgentIDProvider       (Python: hasattr(session, "agent_id"))
-//	TeamID       → TeamIDProvider         (Python: hasattr(session, "team_id"))
-//	WorkflowID   → WorkflowIDProvider     (Python: hasattr(session, "workflow_id"))
-//	Parent       → ParentProvider         (Python: isinstance(session.parent(), AgentSession))
-//	ExecutableID → ExecutableIDProvider   (Python: hasattr(session, "executable_id"))
+//	接口映射：AgentID      → AgentIDProvider       (Python: hasattr(session, "agent_id"))
+//	接口映射：TeamID       → TeamIDProvider         (Python: hasattr(session, "team_id"))
+//	接口映射：WorkflowID   → WorkflowIDProvider     (Python: hasattr(session, "workflow_id"))
+//	接口映射：Parent       → ParentProvider         (Python: isinstance(session.parent(), AgentSession))
+//	接口映射：ExecutableID → ExecutableIDProvider   (Python: hasattr(session, "executable_id"))
 type InnerSession interface {
 	// Config 获取会话配置
 	Config() config.SessionConfig

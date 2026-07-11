@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// Agent 编排 — ReAct Agent 120000–120999
-// =============================================================================================================
 var (
+	// Agent 编排 — ReAct Agent 120000–120999
+
 	// StatusAgentToolNotFound Agent 工具未找到
 	StatusAgentToolNotFound = NewStatusCode(
 		"AGENT_TOOL_NOT_FOUND", 120000,
@@ -42,13 +41,9 @@ var (
 	StatusAgentNotConfigured = NewStatusCode(
 		"AGENT_NOT_CONFIGURED", 120008,
 		"agent not configured, invoker not set, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// Agent 控制器 123000–123999
-// =============================================================================================================
+	// Agent 控制器 123000–123999
 
-var (
 	// StatusAgentControllerInvokeCallFailed Agent controller invoke 调用失败
 	StatusAgentControllerInvokeCallFailed = NewStatusCode(
 		"AGENT_CONTROLLER_INVOKE_CALL_FAILED", 123000,
@@ -93,13 +88,9 @@ var (
 	StatusAgentControllerEventQueueError = NewStatusCode(
 		"AGENT_CONTROLLER_EVENT_QUEUE_ERROR", 123010,
 		"agent controller event queue execution error, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// DeepAgent 深层 Agent 123020–123039
-// =============================================================================================================
+	// DeepAgent 深层 Agent 123020–123039
 
-var (
 	// StatusDeepagentConfigParamError deepagent 配置参数错误
 	StatusDeepagentConfigParamError = NewStatusCode(
 		"DEEPAGENT_CONFIG_PARAM_ERROR", 123020,
@@ -124,13 +115,9 @@ var (
 	StatusDeepagentCreateSubagentNotFound = NewStatusCode(
 		"DEEPAGENT_CREATE_SUBAGENT_NOT_FOUND", 123025,
 		"subagent not found, reason: {error_msg}")
-)
 
-// =============================================================================================================
-// 多 Agent 130000–130999
-// =============================================================================================================
+	// 多 Agent 130000–130999
 
-var (
 	// StatusAgentTeamAddRuntimeError Agent team 添加运行时错误
 	StatusAgentTeamAddRuntimeError = NewStatusCode(
 		"AGENT_TEAM_ADD_RUNTIME_ERROR", 132000,
@@ -159,13 +146,9 @@ var (
 	StatusAgentTeamStateInvalid = NewStatusCode(
 		"AGENT_TEAM_STATE_INVALID", 132006,
 		"agent team state inconsistent, reason: {reason}")
-)
 
-// =============================================================================================================
-// 开发工具 / Agent 构建器 140000–140099
-// =============================================================================================================
+	// 开发工具 / Agent 构建器 140000–140099
 
-var (
 	// StatusAgentBuilderResourceParseError Agent builder 资源解析错误
 	StatusAgentBuilderResourceParseError = NewStatusCode(
 		"AGENT_BUILDER_RESOURCE_PARSE_ERROR", 140000,

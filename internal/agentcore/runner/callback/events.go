@@ -206,6 +206,8 @@ type GlobalAgentEventData struct {
 	Extra map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // LLMCallEventType LLM 调用事件类型。
 //
 // 事件名格式 "_framework:{event_name}"，与 Python EventBase.get_event() 构建规则一致。

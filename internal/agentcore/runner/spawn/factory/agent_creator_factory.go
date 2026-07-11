@@ -41,8 +41,6 @@ func SupportedAgentTypes() []string {
 	return []string{AgentTypeReAct}
 }
 
-// ──────────────────────────── 导出方法 ────────────────────────────
-
 // CreateByType 根据 agent_type 创建 Agent 实例。
 // 对齐 Python:
 //

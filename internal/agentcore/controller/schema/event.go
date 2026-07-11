@@ -125,6 +125,8 @@ type followUpEventJSON struct {
 	InputData      dataFrameSlice `json:"input_data"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // EventType 事件类型枚举，定义所有支持的事件类型。
 //
 // 对应 Python: openjiuwen/core/controller/schema/event.py (EventType)

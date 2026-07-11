@@ -667,7 +667,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 
 		switch payload.Type {
 		case payloadTypeTaskCompletion:
-			// TASK_COMPLETION → COMPLETED
+			// 任务完成转为已完成状态
 			if err := s.taskManager.UpdateTaskStatus(ctx, taskID, schema.TaskCompleted); err != nil {
 				logger.Error(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
@@ -684,7 +684,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			return
 
 		case payloadTypeTaskInteraction:
-			// TASK_INTERACTION → INPUT_REQUIRED
+			// 任务交互转为需要输入状态
 			if err := s.taskManager.UpdateTaskStatus(ctx, taskID, schema.TaskInputRequired); err != nil {
 				logger.Error(logComponent).
 					Str("event_type", "LLM_CALL_ERROR").
@@ -701,7 +701,7 @@ func (s *TaskScheduler) executeTask(ctx context.Context, taskID string, sess ses
 			return
 
 		case payloadTypeTaskFailed:
-			// TASK_FAILED → FAILED
+			// 任务失败转为失败状态
 			errMsg := ""
 			if payload.Metadata != nil {
 				if msg, ok := payload.Metadata["error_message"].(string); ok {

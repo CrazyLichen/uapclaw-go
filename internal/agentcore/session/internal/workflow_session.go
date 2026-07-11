@@ -122,7 +122,7 @@ func NewWorkflowSession(opts ...WorkflowSessionOption) *WorkflowSession {
 		if s.sessionID == "" {
 			s.sessionID = uuid.New().String()
 		}
-		// Python: self._config = Config()
+		// 对齐 Python：self._config = Config()
 		if s.config == nil {
 			s.config = config.NewSessionConfig(context.Background())
 		}

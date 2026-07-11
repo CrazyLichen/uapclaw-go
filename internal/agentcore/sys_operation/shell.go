@@ -12,7 +12,7 @@ import (
 
 // ShellOperation Shell 操作接口，定义命令执行等操作。
 // 对齐 Python BaseShellOperation：execute_cmd, execute_cmd_stream, execute_cmd_background,
-// write_stdin, kill_process, list_processes, list_tools。
+// 对齐 Python 方法：write_stdin, kill_process, list_processes, list_tools。
 type ShellOperation interface {
 	// ExecuteCmd 执行 Shell 命令
 	ExecuteCmd(ctx context.Context, command string, opts ...ShellOption) (*result.ExecuteCmdResult, error)
@@ -66,11 +66,11 @@ const (
 	ShellTypeAuto ShellType = 0
 	// ShellTypeCmd Windows 命令提示符
 	ShellTypeCmd ShellType = 1
-	// ShellTypePowerShell Windows PowerShell
+	// ShellTypePowerShell Windows PowerShell 命令行
 	ShellTypePowerShell ShellType = 2
-	// ShellTypeBash Bash Shell
+	// ShellTypeBash Bash 命令行
 	ShellTypeBash ShellType = 3
-	// ShellTypeSh POSIX Shell
+	// ShellTypeSh POSIX 命令行
 	ShellTypeSh ShellType = 4
 )
 

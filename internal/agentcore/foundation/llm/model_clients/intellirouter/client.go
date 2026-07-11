@@ -37,6 +37,10 @@ type IntelliRouterModelClient struct {
 	config *IntelliRouterClientConfig
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewIntelliRouterModelClient 创建 IntelliRouter 智能路由客户端。

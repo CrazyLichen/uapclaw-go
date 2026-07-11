@@ -34,6 +34,8 @@ type OpenAIModelClient struct {
 // logComponent openai 包统一使用 AgentCore 组件标识记录日志。
 const logComponent = logger.ComponentAgentCore
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewOpenAIModelClient 创建 OpenAI 兼容客户端。

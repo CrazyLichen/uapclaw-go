@@ -18,7 +18,13 @@
 //	├── engine.go        # ContextEngine 门面实现（上下文池管理、处理器创建、会话状态持久化）
 //	├── registry.go      # 处理器工厂注册表（Register/Get/List）
 //	├── context/
-//	│   └── （见 context/ 子包 doc.go）
+//	│   ├── doc.go                     # context 子包文档
+//	│   ├── session_model_context.go   # SessionModelContext 会话模型上下文
+//	│   ├── session_memory_manager.go  # SessionMemoryManager 会话内存管理
+//	│   ├── message_buffer.go          # MessageBuffer 消息缓冲
+//	│   ├── kv_cache_manager.go        # KvCacheManager KV 缓存管理
+//	│   ├── processor_state_recorder.go # ProcessorStateRecorder 处理器状态记录
+//	│   └── context_utils.go           # 上下文工具函数
 //	├── interface/
 //	│   ├── doc.go              # Interface 子包文档
 //	│   ├── types.go            # ModelContext/ContextEngine 接口 + ContextWindow/ContextStats + Option 类型 + ProcessorSpec
@@ -39,13 +45,18 @@
 //	│   ├── round.go            # GroupCompletedAPIRounds 函数
 //	│   ├── replace.go          # Replacement 结构体 + ReplaceMessages 通用替换函数
 //	│   ├── util.go             # 包级共享函数
-//	│   └── compressor/         # 压缩处理器子包
+//	│   ├── compressor/         # 压缩处理器子包
+//	│   │   ├── doc.go                          # 子包文档
+//	│   │   ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器
+//	│   │   ├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
+//	│   │   ├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
+//	│   │   ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
+//	│   │   └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	│   └── offloader/      # 卸载处理器子包
 //	│       ├── doc.go                          # 子包文档
-//	│       ├── dialogue_compressor.go          # DialogueCompressor 对话压缩器
-//	│       ├── current_round_compressor.go     # CurrentRoundCompressor 当轮增量压缩器
-//	│       ├── round_level_compressor.go       # RoundLevelCompressor 轮级渐进式压缩器
-//	│       ├── micro_compact_processor.go      # MicroCompactProcessor 微压缩处理器
-//	│       └── full_compact_processor.go       # FullCompactProcessor 全量压缩处理器
+//	│       ├── message_offloader.go            # MessageOffloader 消息卸载器
+//	│       ├── message_summary_offloader.go    # MessageSummaryOffloader 摘要卸载器
+//	│       └── tool_result_budget_processor.go # ToolResultBudgetProcessor 工具结果预算处理器
 //	└── token/
 //	    ├── doc.go              # Token 子包文档
 //	    ├── base.go             # TokenCounter 接口定义

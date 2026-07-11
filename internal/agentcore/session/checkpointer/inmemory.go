@@ -216,7 +216,7 @@ func (cp *InMemoryCheckpointer) PostWorkflowExecute(ctx context.Context, session
 	}
 
 	// 检查结果中是否有中断标记
-	// Python: result.get(TASK_STATUS_INTERRUPT) is None
+	// 对齐 Python：result.get(TASK_STATUS_INTERRUPT) is None
 	isInterrupted := isWorkflowInterrupted(result)
 
 	if !isInterrupted {
@@ -1074,7 +1074,7 @@ func isInteractiveInput(inputs any) bool {
 }
 
 // isWorkflowInterrupted 检查工作流结果是否为中断状态。
-// Python: result.get(TASK_STATUS_INTERRUPT) is None
+// 对齐 Python：result.get(TASK_STATUS_INTERRUPT) is None
 // Go 版本简化处理：检查 result 中的 interrupt 标记。
 func isWorkflowInterrupted(result any) bool {
 	if result == nil {

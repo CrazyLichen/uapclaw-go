@@ -50,6 +50,8 @@ const logComponent = logger.ComponentAgentCore
 // releaseKVCachePath vLLM KV Cache 释放 API 路径。
 const releaseKVCachePath = "/release_kv_cache"
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInferenceAffinityModelClient 创建 InferenceAffinity 客户端。

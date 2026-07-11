@@ -2,10 +2,9 @@ package exception
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// =============================================================================================================
-// 运行器执行 110000–110099
-// =============================================================================================================
 var (
+	// 运行器执行 110000–110099
+
 	// StatusRunnerTerminationError Runner 已终止
 	StatusRunnerTerminationError = NewStatusCode(
 		"RUNNER_TERMINATION_ERROR", 110002,
@@ -14,13 +13,9 @@ var (
 	StatusRunnerRunAgentError = NewStatusCode(
 		"RUNNER_RUN_AGENT_ERROR", 110022,
 		"runner run agent '{agent}' failed, error='{reason}'")
-)
 
-// =============================================================================================================
-// 分布式执行 110100–110199
-// =============================================================================================================
+	// 分布式执行 110100–110199
 
-var (
 	// StatusRemoteAgentExecutionTimeout 远程 agent 执行超时
 	StatusRemoteAgentExecutionTimeout = NewStatusCode(
 		"REMOTE_AGENT_EXECUTION_TIMEOUT", 110100,
@@ -33,13 +28,9 @@ var (
 	StatusRemoteAgentResponseProcessError = NewStatusCode(
 		"REMOTE_AGENT_RESPONSE_PROCESS_ERROR", 110102,
 		"remote agent request process error, message_id='{message_id}', process_id='{process_id}', response='{code={error_code}', msg='{error_msg}'")
-)
 
-// =============================================================================================================
-// 消息队列 110200–110299
-// =============================================================================================================
+	// 消息队列 110200–110299
 
-var (
 	// StatusMessageQueueInitiationError 消息队列初始化错误
 	StatusMessageQueueInitiationError = NewStatusCode(
 		"MESSAGE_QUEUE_INITIATION_ERROR", 110200,
@@ -60,24 +51,16 @@ var (
 	StatusMessageQueueMessageProcessExecutionError = NewStatusCode(
 		"MESSAGE_QUEUE_MESSAGE_PROCESS_EXECUTION_ERROR", 110213,
 		"process message error, error='{reason}'")
-)
 
-// =============================================================================================================
-// 分布式消息队列 110300–110399
-// =============================================================================================================
+	// 分布式消息队列 110300–110399
 
-var (
 	// StatusDistMessageQueueClientStartError 分布式消息队列客户端启动错误
 	StatusDistMessageQueueClientStartError = NewStatusCode(
 		"DIST_MESSAGE_QUEUE_CLIENT_START_ERROR", 110300,
 		"distribute message queue client start error, error='{reason}'")
-)
 
-// =============================================================================================================
-// 资源管理器 110400–110599
-// =============================================================================================================
+	// 资源管理器 110400–110599
 
-var (
 	// StatusResourceIDValueInvalid 资源 ID 无效
 	StatusResourceIDValueInvalid = NewStatusCode(
 		"RESOURCE_ID_VALUE_INVALID", 110400,
@@ -106,11 +89,9 @@ var (
 	StatusResourceGetError = NewStatusCode(
 		"RESOURCE_GET_ERROR", 110431,
 		"resource get failed, resource_id='{resource_id}', resource_type='{resource_type}', error='{reason}'")
-)
 
-// 标签管理器 110480–110499
+	// 标签管理器 110480–110499
 
-var (
 	// StatusResourceTagRemoveTagError 标签无效导致移除失败
 	StatusResourceTagRemoveTagError = NewStatusCode(
 		"RESOURCE_TAG_REMOVE_TAG_ERROR", 110480,
@@ -131,11 +112,9 @@ var (
 	StatusResourceTagFindResourceError = NewStatusCode(
 		"RESOURCE_TAG_FIND_RESOURCE_ERROR", 110484,
 		"replace resource tag failed, resource_id='{resource_id}', tags='{tags}', error='{reason}'")
-)
 
-// MCP 资源 110510–110519
+	// MCP 资源 110510–110519
 
-var (
 	// StatusResourceMCPServerParamInvalid MCP 服务器参数无效
 	StatusResourceMCPServerParamInvalid = NewStatusCode(
 		"RESOURCE_MCP_SERVER_PARAM_INVALID", 110510,
@@ -160,13 +139,9 @@ var (
 	StatusResourceMCPToolGetError = NewStatusCode(
 		"RESOURCE_MCP_TOOL_GET_ERROR", 110515,
 		"mcp server tool get failed, server_id={server_id}, error='{reason}'")
-)
 
-// =============================================================================================================
-// 回调框架 110600–110699
-// =============================================================================================================
+	// 回调框架 110600–110699
 
-var (
 	// StatusCallbackExecutionAborted 回调执行被中止
 	StatusCallbackExecutionAborted = NewStatusCode(
 		"CALLBACK_EXECUTION_ABORTED", 110600,

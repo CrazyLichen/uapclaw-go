@@ -22,8 +22,6 @@ var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 导出方法 ────────────────────────────
-
 // SetConfig 设置 Runner 配置。
 // 对齐 Python: Runner.set_config(config)
 func (c *ChildRunnerImpl) SetConfig(runnerConfig map[string]any) error {

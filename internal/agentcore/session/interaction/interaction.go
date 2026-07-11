@@ -175,7 +175,7 @@ func (w *WorkflowInteraction) UserLatestInput(ctx context.Context, value any) (a
 // WaitUserInputs 等待用户输入（简单模式）。
 // 保存检查点后触发 AgentInterrupt，无输入队列和流输出。
 // 对应 Python: SimpleAgentInteraction.wait_user_inputs(message)
-// Python: await self._agent_session.checkpointer().interrupt_agent_execute(self._agent_session)
+// 对齐 Python：await self._agent_session.checkpointer().interrupt_agent_execute(self._agent_session)
 func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any) error {
 	// 对齐 Python: session.checkpointer().interrupt_agent_execute(session)
 	if cp := s.session.Checkpointer(); cp != nil {
@@ -197,7 +197,7 @@ func (s *SimpleAgentInteraction) WaitUserInputs(ctx context.Context, message any
 // 1. 优先从输入队列获取（恢复场景）
 // 2. 队列为空时：保存检查点 → 写流输出 → panic AgentInterrupt
 // 对应 Python: AgentInteraction.wait_user_inputs(value)
-// Python: await self._agent_session.checkpointer().interrupt_agent_execute(self._session)
+// 对齐 Python：await self._agent_session.checkpointer().interrupt_agent_execute(self._session)
 func (a *AgentInteraction) WaitUserInputs(ctx context.Context, value any) (any, error) {
 	inputs := a.getNextInteractiveInput()
 	if inputs != nil {

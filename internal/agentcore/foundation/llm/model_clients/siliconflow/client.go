@@ -38,6 +38,8 @@ type SiliconFlowModelClient struct {
 // logComponent siliconflow 包日志组件标识（AgentCore 层）。
 const logComponent = logger.ComponentAgentCore
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSiliconFlowModelClient 创建 SiliconFlow 客户端。

@@ -94,6 +94,7 @@
 //	    ├── base.go                       # MCPTool + ExtractMCPToolResultContent + 类型重导出
 //	    ├── client.go                     # NewMcpClient 工厂函数
 //	    ├── types/
+//	    │   ├── doc.go                    # 共享类型子包文档
 //	    │   └── types.go                  # 共享类型（McpServerConfig/McpToolCard/McpClient 接口等）
 //	    └── client/
 //	        ├── doc.go                    # 客户端子包文档

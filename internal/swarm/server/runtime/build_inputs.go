@@ -85,7 +85,7 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 		"language":        language,
 	}
 
-	// enable_memory
+	// 是否启用记忆
 	enableMemory := true
 	if metadata != nil {
 		if em, ok := metadata["enable_memory"]; ok {

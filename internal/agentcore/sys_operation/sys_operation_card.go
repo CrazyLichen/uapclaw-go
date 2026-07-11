@@ -12,7 +12,7 @@ import (
 // SysOperationCard 系统操作配置卡片，嵌入 BaseCard 提供身份标识，
 // 并携带操作模式、隔离配置、工作目录配置和沙箱网关配置。
 // 对齐 Python SysOperationCard：mode, isolation_prefix, container_scope, custom_id,
-// work_config(local_work_config), gateway_config(sandbox_gateway_config)。
+// 对齐 Python 字段：work_config(local_work_config), gateway_config(sandbox_gateway_config)。
 type SysOperationCard struct {
 	schema.BaseCard
 	// Mode 操作模式

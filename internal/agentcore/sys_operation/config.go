@@ -71,7 +71,7 @@ func NewLocalWorkConfig() *LocalWorkConfig {
 
 // NewSandboxGatewayConfig 创建 SandboxGatewayConfig 实例。
 // 对齐 Python SandboxGatewayConfig 默认值：
-// gateway_url="http://localhost:8080", launcher_type="pre_deploy", sandbox_type="aio", timeout=300.0。
+// 对齐 Python 默认值：gateway_url="http://localhost:8080", launcher_type="pre_deploy", sandbox_type="aio", timeout=300.0。
 func NewSandboxGatewayConfig() *SandboxGatewayConfig {
 	return &SandboxGatewayConfig{
 		GatewayURL:     "http://localhost:8080",

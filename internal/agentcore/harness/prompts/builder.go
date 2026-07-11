@@ -132,18 +132,6 @@ func ResolveLanguage(configLanguage string) string {
 	return DefaultLanguage
 }
 
-// isSupportedLanguage 检查语言是否在支持列表中。
-//
-// 对应 Python: config_language in SUPPORTED_LANGUAGES
-func isSupportedLanguage(lang string) bool {
-	for _, supported := range SupportedLanguages {
-		if lang == supported {
-			return true
-		}
-	}
-	return false
-}
-
 // ResolveMode 从配置字符串解析 PromptMode，空串默认为 PromptModeFull。
 //
 // 对应 Python: resolve_mode()
@@ -159,6 +147,18 @@ func ResolveMode(configMode string) hschema.PromptMode {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// isSupportedLanguage 检查语言是否在支持列表中。
+//
+// 对应 Python: config_language in SUPPORTED_LANGUAGES
+func isSupportedLanguage(lang string) bool {
+	for _, supported := range SupportedLanguages {
+		if lang == supported {
+			return true
+		}
+	}
+	return false
+}
 
 // buildWithFilter 按过滤函数筛选节后构建提示词，不修改基础构建器的节注册。
 func (b *SystemPromptBuilder) buildWithFilter(keep func(saprompt.PromptSection) bool) string {
