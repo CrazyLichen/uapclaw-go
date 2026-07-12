@@ -373,3 +373,35 @@ func TestHasValidModelConfig_缓存中不存在(t *testing.T) {
 		t.Error("缓存中不存在的模型应返回 false")
 	}
 }
+
+// ──────────────────────────── 可选接口编译期检查 ────────────────────────────
+
+// TestDeepAdapter_实现ContextCompressor 编译期检查 DeepAdapter 实现 ContextCompressor。
+func TestDeepAdapter_实现ContextCompressor(t *testing.T) {
+	var _ ContextCompressor = (*DeepAdapter)(nil)
+}
+
+// TestDeepAdapter_实现DreamingController 编译期检查 DeepAdapter 实现 DreamingController。
+func TestDeepAdapter_实现DreamingController(t *testing.T) {
+	var _ DreamingController = (*DeepAdapter)(nil)
+}
+
+// TestDeepAdapter_实现GatewayDisconnectHandler 编译期检查 DeepAdapter 实现 GatewayDisconnectHandler。
+func TestDeepAdapter_实现GatewayDisconnectHandler(t *testing.T) {
+	var _ GatewayDisconnectHandler = (*DeepAdapter)(nil)
+}
+
+// TestCodeAdapter_实现ContextCompressor 编译期检查 CodeAdapter 实现 ContextCompressor。
+func TestCodeAdapter_实现ContextCompressor(t *testing.T) {
+	var _ ContextCompressor = (*CodeAdapter)(nil)
+}
+
+// TestCodeAdapter_实现DreamingController 编译期检查 CodeAdapter 实现 DreamingController。
+func TestCodeAdapter_实现DreamingController(t *testing.T) {
+	var _ DreamingController = (*CodeAdapter)(nil)
+}
+
+// TestCodeAdapter_实现GatewayDisconnectHandler 编译期检查 CodeAdapter 实现 GatewayDisconnectHandler。
+func TestCodeAdapter_实现GatewayDisconnectHandler(t *testing.T) {
+	var _ GatewayDisconnectHandler = (*CodeAdapter)(nil)
+}

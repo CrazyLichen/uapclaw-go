@@ -2,6 +2,8 @@
 //
 // 定义 AgentAdapter 接口——Agent SDK 后端的最小能力集，
 // 以及 CreateAdapter 工厂函数按 SDK+Mode 创建适配器实例。
+// 额外定义 3 个可选接口（ContextCompressor/DreamingController/GatewayDisconnectHandler），
+// DeepAdapter 和 CodeAdapter 均实现，JiuWenClaw 门面通过类型断言调用。
 //
 // 三种模式适配器：
 //   - DeepAdapter：Deep SDK 适配器，agent/plan/fast/team 模式均使用
@@ -11,15 +13,25 @@
 // 文件目录：
 //
 //	adapter/
-//	├── doc.go              # 包文档
-//	├── interface.go        # AgentAdapter 接口定义
-//	├── factory.go          # CreateAdapter 工厂 + ResolveSDKChoice
-//	├── deep_adapter.go     # DeepAdapter Deep SDK 适配器
-//	├── code_adapter.go     # CodeAdapter Code 模式适配器
-//	├── interface_test.go   # 接口编译期检查测试
-//	├── factory_test.go     # 工厂函数单元测试
-//	├── deep_adapter_test.go # DeepAdapter 单元测试
-//	└── code_adapter_test.go # CodeAdapter 单元测试
+//	├── doc.go                    # 包文档
+//	├── interface.go              # AgentAdapter 接口 + 3 个可选接口
+//	├── factory.go                # CreateAdapter 工厂 + ResolveSDKChoice
+//	├── deep_adapter.go           # DeepAdapter 核心结构体 + 8 接口方法 + 模型构建 + CWD 种子
+//	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + updateRailsForMode
+//	├── deep_adapter_mcp.go       # MCP 管理 6 方法
+//	├── deep_adapter_a2x.go       # A2X 客户端 5 方法 + Cron 上下文 2 方法（⤵️）
+//	├── deep_adapter_tools.go     # Tool 同步 + 多模态配置
+//	├── deep_adapter_slash.go     # Slash 命令 5 个 + governance approval（⤵️）
+//	├── deep_adapter_evolution.go # EvolutionWatcher + ContextCompressor + Recap（⤵️）
+//	├── deep_adapter_team.go      # TeamSkillApproval + team 分流（⤵️）
+//	├── deep_adapter_stream.go    # parseStreamChunk 15+ 种 chunk + usage 累加器
+//	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
+//	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent
+//	├── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
+//	├── interface_test.go         # 接口编译期检查测试
+//	├── factory_test.go           # 工厂函数单元测试
+//	├── deep_adapter_test.go      # DeepAdapter 单元测试
+//	└── code_adapter_test.go      # CodeAdapter 单元测试
 //
-// 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py
+// 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/interface_deep.py
 package adapter

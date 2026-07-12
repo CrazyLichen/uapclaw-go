@@ -256,3 +256,35 @@ func (c *CodeAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 func (c *CodeAdapter) Cleanup() error {
 	return c.deep.Cleanup()
 }
+
+// ──────────────────────────── 可选接口委托 ────────────────────────────
+
+// CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。
+func (c *CodeAdapter) CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error) {
+	return c.deep.CompressContext(ctx, sessionID, session, returnState)
+}
+
+// GetContextUsage 委托 DeepAdapter 的 ContextCompressor 接口。
+func (c *CodeAdapter) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
+	return c.deep.GetContextUsage(ctx, sessionID)
+}
+
+// GenerateRecap 委托 DeepAdapter 的 ContextCompressor 接口。
+func (c *CodeAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
+	return c.deep.GenerateRecap(ctx, sessionID)
+}
+
+// TryStartDreaming 委托 DeepAdapter 的 DreamingController 接口。
+func (c *CodeAdapter) TryStartDreaming(ctx context.Context, busyChecker func() bool) error {
+	return c.deep.TryStartDreaming(ctx, busyChecker)
+}
+
+// TryStopDreaming 委托 DeepAdapter 的 DreamingController 接口。
+func (c *CodeAdapter) TryStopDreaming(ctx context.Context) error {
+	return c.deep.TryStopDreaming(ctx)
+}
+
+// AbortOnGatewayDisconnect 委托 DeepAdapter 的 GatewayDisconnectHandler 接口。
+func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
+	c.deep.AbortOnGatewayDisconnect(ctx)
+}

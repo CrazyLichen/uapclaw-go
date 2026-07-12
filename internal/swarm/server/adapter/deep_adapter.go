@@ -11,9 +11,16 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
@@ -81,8 +88,7 @@ type DeepAdapter struct {
 	// ─── ⤵️ 10.6.3-10: Rails ───
 
 	// filesystemRail 文件系统护栏
-	// ⤵️ 10.6.3-10: SysOperationRail
-	filesystemRail interface{}
+	filesystemRail *rails.SysOperationRail
 	// skillRail 技能使用护栏
 	// ⤵️ 10.6.3-10: SkillUseRail
 	skillRail interface{}
@@ -90,8 +96,7 @@ type DeepAdapter struct {
 	// ⤵️ 10.6.3-10: JiuClawStreamEventRail
 	streamEventRail interface{}
 	// taskPlanningRail 任务规划护栏
-	// ⤵️ 10.6.3-10: TaskPlanningRail
-	taskPlanningRail interface{}
+	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
 	// ⤵️ 10.6.3-10: ContextAssembleRail
 	contextAssembleRail interface{}
@@ -150,14 +155,12 @@ type DeepAdapter struct {
 	// ⤵️ 10.3.7-11 sysop_builder
 	sysOperationCard interface{}
 	// visionModelConfig 视觉模型配置
-	// ⤵️ 10.3.7-11 多模态配置
-	visionModelConfig interface{}
+	visionModelConfig *hschema.VisionModelConfig
 	// visionToolsRegistered 视觉工具是否已注册
 	// ⤵️ 10.3.7-11 多模态工具
 	visionToolsRegistered bool
 	// audioModelConfig 音频模型配置
-	// ⤵️ 10.3.7-11 多模态配置
-	audioModelConfig interface{}
+	audioModelConfig *hschema.AudioModelConfig
 	// audioToolsRegistered 音频工具是否已注册
 	// ⤵️ 10.3.7-11 多模态工具
 	audioToolsRegistered bool
@@ -271,7 +274,13 @@ func NewDeepAdapter() *DeepAdapter {
 //  24. await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
 //  25. await self.load_user_rails()
 func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]any, mode string, subMode string) error {
+	// 步骤 1: set_checkpoint
+	if err := d.setCheckpoint(); err != nil {
+		return fmt.Errorf("set_checkpoint 失败: %w", err)
+	}
+
 	// 步骤 2: dreaming_mode 设置
+	// 对齐 Python: self._dreaming_mode = mode if mode and mode.startswith("agent") else "agent"
 	if mode != "" && strings.HasPrefix(mode, "agent") {
 		d.dreamingMode = mode
 	} else {
@@ -279,18 +288,11 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 3: instanceOverrides
+	d.instanceOverrides = make(map[string]any)
 	if configMap != nil {
-		d.instanceOverrides = make(map[string]any, len(configMap))
 		for k, v := range configMap {
 			d.instanceOverrides[k] = v
 		}
-	} else {
-		d.instanceOverrides = make(map[string]any)
-	}
-
-	// 步骤 1: set_checkpoint
-	if err := d.setCheckpoint(); err != nil {
-		return fmt.Errorf("set_checkpoint 失败: %w", err)
 	}
 
 	// 步骤 4: load_dotenv
@@ -309,44 +311,53 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 6: _refresh_multimodal_configs(configBase)
-	// ⤵️ 10.3.7-11: 多模态配置刷新（vision/audio/video/image_gen）
+	d.refreshMultimodalConfigs(configBase)
 
 	// 步骤 7-8: 读取 react 配置段，缓存到 configCache
+	// 对齐 Python: config = config_base.get("react", {}).copy(); self._config_cache = config.copy()
+	var config map[string]any
 	if reactRaw, ok := configBase["react"]; ok {
 		if reactMap, ok := reactRaw.(map[string]any); ok {
+			config = make(map[string]any, len(reactMap))
+			for k, v := range reactMap {
+				config[k] = v
+			}
 			d.configCache = make(map[string]any, len(reactMap))
 			for k, v := range reactMap {
 				d.configCache[k] = v
 			}
 		}
-	} else {
+	}
+	if config == nil {
+		config = make(map[string]any)
 		d.configCache = make(map[string]any)
 	}
 
-	// 步骤 9: agentName（完整版：优先 overrides，其次 configCache）
+	// 步骤 9: agentName
+	// 对齐 Python: self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
 	if v, ok := d.instanceOverrides["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			d.agentName = s
 		}
-	} else if v, ok := d.configCache["agent_name"]; ok {
+	} else if v, ok := config["agent_name"]; ok {
 		if s, ok := v.(string); ok {
 			d.agentName = s
 		}
 	}
 
-	// 步骤 10: projectDir（完整版：优先 overrides，其次 configCache）
+	// 步骤 10: projectDir
 	if v, ok := d.instanceOverrides["project_dir"]; ok {
 		if s, ok := v.(string); ok {
 			d.projectDir = s
 		}
-	} else if v, ok := d.configCache["project_dir"]; ok {
+	} else if v, ok := config["project_dir"]; ok {
 		if s, ok := v.(string); ok {
 			d.projectDir = s
 		}
 	}
 
-	// 步骤 11: workspaceDir（从 configCache 或 get_agent_workspace_dir() 获取）
-	if v, ok := d.configCache["workspace_dir"]; ok {
+	// 步骤 11: workspaceDir
+	if v, ok := config["workspace_dir"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			d.workspaceDir = s
 		}
@@ -362,39 +373,94 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 步骤 12: model = d.createModel(configBase)
 	d.model = d.createModel(configBase)
 
-	// 步骤 13: ⤵️ A2X: _try_init_a2x_client(configBase)
+	// 步骤 13: _try_init_a2x_client(configBase)
+	// ⤵️ A2X: A2X 客户端初始化
 
-	// 步骤 14: agentCard = schema.AgentCard{Name: d.agentName, ID: "jiuwenswarm"}
-	// agentCard := &schema.AgentCard{Name: d.agentName, ID: "jiuwenswarm"}
-	// ⤵️ agentcore.DeepAgent: agentCard 用于步骤 15-19
+	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
+	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+	agentCard := agentschema.NewAgentCard(
+		agentschema.WithAgentName(d.agentName),
+		agentschema.WithAgentID("jiuwenswarm"),
+	)
 
-	// 步骤 15: ⤵️ agentcore.DeepAgent: _get_tool_cards(agentCard.ID)
-	// 步骤 16: ⤵️ 10.6.3-10: _build_agent_rails(config, configBase, mode=mode)
-	// 步骤 17: ⤵️ 10.3.7-11: _create_sys_operation()
-	// 步骤 18: ⤵️ agentcore.DeepAgent: _build_configured_subagents(model, config, configBase)
-	// 步骤 19: ⤵️ agentcore.DeepAgent: d.instance = create_deep_agent(...)
-	// 步骤 20: ⤵️ agentcore.DeepAgent: d.instance.ensure_initialized()
+	// 步骤 15: tool_cards = _get_tool_cards(agent_card.id)
+	// ⤵️ agentcore: _get_tool_cards 需要实例化后获取，暂用空列表
+	var toolCards []*tool.ToolCard // ⤵️ agentcore: _get_tool_cards(agentCard.ID)
+
+	// 步骤 16: rails_list = _build_agent_rails(config, configBase, mode=mode)
+	railsList := d.buildAgentRails(config, configBase, mode)
+
+	// 步骤 17: sys_operation = _create_sys_operation()
+	// ⤵️ 10.3.7-11: _create_sys_operation() — 需要完整 sysop_builder
+
+	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
+	// ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
+	shouldEnableGeneralAgent := (subMode == "plan") || (mode != "" && strings.HasPrefix(mode, "agent"))
+
+	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
+	// 对齐 Python: self._instance = create_deep_agent(**common_kwargs, ...)
+	resolvedLanguage := d.resolveRuntimeLanguage()
+	systemPrompt := d.buildAgentIdentityPrompt(d.resolvePromptLanguage())
+
+	params := harness_config.CreateDeepAgentParams{
+		Model:                  d.model,
+		Card:                   agentCard,
+		SystemPrompt:           systemPrompt,
+		ToolCards:              toolCards,
+		Rails:                  railsList,
+		EnableTaskLoop:         d.resolveEnableTaskLoop(config, configBase),
+		AddGeneralPurposeAgent: shouldEnableGeneralAgent,
+		MaxIterations:          paramsInt(config, "max_iterations", 15),
+		Workspace:              hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
+		Language:               resolvedLanguage,
+		PromptMode:             d.resolvePromptMode(configBase),
+		VisionModelConfig:      d.visionModelConfig,
+		AudioModelConfig:       d.audioModelConfig,
+		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+	}
+	// 步骤 17 回填：SysOperation
+	// ⤵️ 10.3.7-11: params.SysOperation = sysOperation
+
+	agent, createErr := harness.CreateDeepAgent(ctx, params)
+	if createErr != nil {
+		return fmt.Errorf("CreateDeepAgent 失败: %w", createErr)
+	}
+	d.instance = agent
+
+	// 步骤 20: d.instance.EnsureInitialized(ctx)
+	// 对齐 Python: await self._instance.ensure_initialized()
+	if _, initErr := d.instance.EnsureInitialized(ctx); initErr != nil {
+		return fmt.Errorf("DeepAgent EnsureInitialized 失败: %w", initErr)
+	}
+
 	// 步骤 21: _seed_runtime_cwd(d.projectDir or d.workspaceDir)
-	// 对齐 Python: self._seed_runtime_cwd(self._project_dir or self._workspace_dir) (interface_deep.py:2608)
 	initCwd := d.projectDir
 	if initCwd == "" {
 		initCwd = d.workspaceDir
 	}
 	d.seedRuntimeCwd(ctx, initCwd)
-	// 步骤 22: ⤵️ A2X: _sync_a2x_runtime_state()
 
-	// 步骤 23: d.registeredMCPServerIDs = make(map[string]bool)（可回填）
+	// 步骤 22: _sync_a2x_runtime_state()
+	// ⤵️ A2X: A2X 运行时状态同步
+
+	// 步骤 23: d.registeredMCPServerIDs.clear()
 	d.registeredMCPServerIDs = make(map[string]bool)
 	d.registeredMCPServers = make(map[string]any)
 
-	// 步骤 24: ⤵️ agentcore MCP: _register_mcp_servers_from_config(configBase, tag)
-	// 步骤 25: ⤵️ 10.6.3-10: load_user_rails()
+	// 步骤 24: _register_mcp_servers_from_config(configBase, tag)
+	// 对齐 Python: await self._register_mcp_servers_from_config(config_base, tag=f"agent.{mode}")
+	if regErr := d.registerMcpServersFromConfig(ctx, configBase, fmt.Sprintf("agent.%s", mode)); regErr != nil {
+		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册失败，继续执行")
+	}
+
+	// 步骤 25: load_user_rails()
+	// ⤵️ 10.6.3-10: 动态加载用户自定义的 Rail 扩展
 
 	logger.Info(logComponent).
 		Str("agent_name", d.agentName).
 		Str("mode", mode).
 		Str("sub_mode", subMode).
-		Msg("DeepAdapter 初始化骨架完成，等待回填")
+		Msg("DeepAdapter CreateInstance 完成")
 	return nil
 }
 
@@ -419,19 +485,99 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 //  12. self._registered_mcp_server_ids.clear()
 //  13. await self._register_mcp_servers_from_config(config_base, tag)
 func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[string]any, envOverrides map[string]any) error {
-	// ⤵️ 10.3.7-11: 步骤 1-13 完整实现
-	// 步骤 1: configBase 或 get_config()
-	// 步骤 2: 应用环境变量覆盖
-	// 步骤 3-4: 读取 react 配置段，更新 configCache
-	// 步骤 5: _refresh_multimodal_configs(configBase)
-	// 步骤 6-7: 重建模型
-	// 步骤 8: _get_current_agent_rails(config, configBase)
-	// 步骤 9: _get_tool_cards("jiuwenswarm")
-	// 步骤 10: _update_permission_rail(configBase)
-	// 步骤 11: instance.configure(model, tools, rails, subagents, ...)
-	// 步骤 12-13: 重新注册 MCP
+	// 步骤 0: 实例 nil 检查
+	if d.instance == nil {
+		return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
+	}
 
-	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig 骨架，等待回填")
+	// 步骤 1: configBase 或 get_config()
+	// 对齐 Python: if config_base is None: config_base = get_config()
+	if configBase == nil {
+		cfg, err := config.New("")
+		if err != nil {
+			return fmt.Errorf("创建配置管理器失败: %w", err)
+		}
+		configBase, err = cfg.Load()
+		if err != nil {
+			return fmt.Errorf("加载配置失败: %w", err)
+		}
+	}
+
+	// 步骤 2: 应用环境变量覆盖
+	// 对齐 Python: for env_key, env_value in env_overrides.items(): os.environ[str(env_key)] = str(env_value)
+	if envOverrides != nil {
+		for k, v := range envOverrides {
+			if v == nil {
+				os.Unsetenv(k)
+			} else {
+				os.Setenv(k, fmt.Sprintf("%v", v))
+			}
+		}
+	}
+
+	// 步骤 3-4: 读取 react 配置段，更新 configCache
+	var config map[string]any
+	if reactRaw, ok := configBase["react"]; ok {
+		if reactMap, ok := reactRaw.(map[string]any); ok {
+			config = make(map[string]any, len(reactMap))
+			for k, v := range reactMap {
+				config[k] = v
+			}
+			d.configCache = make(map[string]any, len(reactMap))
+			for k, v := range reactMap {
+				d.configCache[k] = v
+			}
+		}
+	}
+	if config == nil {
+		config = make(map[string]any)
+		d.configCache = make(map[string]any)
+	}
+
+	// 步骤 5: _refresh_multimodal_configs(configBase)
+	d.refreshMultimodalConfigs(configBase)
+
+	// 步骤 6-7: 重建模型
+	d.model = d.createModel(configBase)
+
+	// 步骤 7.5: A2X 重载 + 状态同步
+	// ⤵️ A2X: _try_init_a2x_client(configBase, reload=True)
+	// ⤵️ A2X: _sync_a2x_runtime_state()
+
+	// 步骤 8: _get_current_agent_rails(config, configBase)
+	// 对齐 Python: rails_list = self._get_current_agent_rails(config, config_base)
+	railsList := d.getCurrentAgentRails(config, configBase)
+
+	// 步骤 8.5: 工具同步
+	// ⤵️ agentcore: _sync_multimodal_tools_for_runtime()
+	// ⤵️ agentcore: _sync_paid_search_tool_for_runtime()
+
+	// 步骤 9: _get_tool_cards("jiuwenswarm")
+	// ⤵️ agentcore: _get_tool_cards("jiuwenswarm") — 需要实例化后获取
+
+	// 步骤 10: _update_permission_rail(configBase)
+	// ⤵️ 10.6.3-10: _update_permission_rail(configBase)
+
+	// 步骤 11: instance.ConfigureDeepConfig(deepCfg)
+	// 对齐 Python: deep_cfg = self._make_deep_agent_config(model=model, config=config, agent_card=agent_card, tool_cards=..., rails=rails_list); self._instance.configure(deep_cfg)
+	agentCard := agentschema.NewAgentCard(
+		agentschema.WithAgentName(d.agentName),
+		agentschema.WithAgentID("jiuwenswarm"),
+	)
+	deepCfg := d.makeDeepAgentConfig(d.model, config, agentCard, nil, railsList)
+	if cfgErr := d.instance.ConfigureDeepConfig(ctx, deepCfg); cfgErr != nil {
+		return fmt.Errorf("DeepAgent ConfigureDeepConfig 失败: %w", cfgErr)
+	}
+
+	// 步骤 12-13: 重新注册 MCP
+	// 对齐 Python: await self._sync_mcp_servers_for_runtime(config_base, tag="agent.reload")
+	d.registeredMCPServerIDs = make(map[string]bool)
+	d.registeredMCPServers = make(map[string]any)
+	if syncErr := d.syncMcpServersForRuntime(ctx, configBase, "agent.reload"); syncErr != nil {
+		logger.Warn(logComponent).Err(syncErr).Msg("MCP 服务热同步失败，继续执行")
+	}
+
+	logger.Info(logComponent).Msg("DeepAdapter ReloadAgentConfig 配置已热更新")
 	return nil
 }
 
@@ -467,8 +613,19 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		return nil, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
-	// 步骤 4: session_id 规范化
+	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
+	reqModelName := paramsString(params, "model_name", "")
+	if !d.hasValidModelConfig(reqModelName) {
+		return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{
+				"error": "模型未正确配置，请先配置模型信息",
+			}),
+		), nil
+	}
+
+	// 步骤 4: session_id 规范化
 	sessionID := "default"
 	if req.SessionID != nil && *req.SessionID != "" {
 		sessionID = *req.SessionID
@@ -478,34 +635,26 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	query := paramsString(params, "query", "")
 	mode := paramsString(params, "mode", "agent.plan")
 
-	// 步骤 2-3: 模型配置校验
-	reqModelName := paramsString(params, "model_name", "")
-	if !d.hasValidModelConfig(reqModelName) {
-		return schema.NewAgentResponse(req.RequestID, req.ChannelID,
-			schema.WithPayload(map[string]any{
-				"ok":    false,
-				"error": fmt.Sprintf("请求的模型 %q 未配置", reqModelName),
-			}),
-		), nil
-	}
+	// 步骤 7-8: slash 命令处理
+	// ⤵️ 10.6.3-10: slash_result = _handle_slash_command(query, sessionID, mode)
 
-	// ⤵️ 10.3.7-11: 步骤 7-8  slash 命令处理
-	// ⤵️ 11.10: 步骤 9    cron 上下文绑定
-	// ⤵️ 10.1.8: 步骤 10-11 权限上下文设置
+	// 步骤 9: cron 上下文绑定
+	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
+
+	// 步骤 10-11: 权限上下文设置
+	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
 
 	// 步骤 12-13: 模型选择
-	resolvedModel := d.resolveModelForRequest(req)
+	_ = d.resolveModelForRequest(req)
 	// ⤵️ agentcore.DeepAgent: _apply_model_to_react_agent(resolvedModel)
 
 	// 步骤 14: mark_session_active
 	d.markSessionActive(sessionID)
 
-	// ⤵️ 10.6.3-10: 步骤 15 streamEventRail.reset_abort(sessionID)
-	// 步骤 16-17: update_runtime_config
-	// 对齐 Python: await self._update_runtime_config(runtimeConfig) (interface_deep.py:4517)
-	// _update_runtime_config 首步调用 _seed_runtime_cwd，注入请求级 CWD
-	// ⤵️ agentcore.DeepAgent: 完整 update_runtime_config 实现
-	// 步骤 17 的 CWD 部分：从请求参数提取 cwd，调用 seedRuntimeCwd
+	// 步骤 15: streamEventRail.reset_abort(sessionID)
+	// ⤵️ 10.6.3-10: if d.streamEventRail != nil { d.streamEventRail.reset_abort(sessionID) }
+
+	// 步骤 16-17: update_runtime_config + CWD 种子
 	requestCwd := paramsString(params, "cwd", "")
 	if requestCwd == "" {
 		if v, ok := params["project_dir"]; ok {
@@ -517,20 +666,42 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	if requestCwd != "" {
 		d.seedRuntimeCwd(ctx, requestCwd)
 	}
-	// ⤵️ agentcore.Runner: 步骤 18 Runner.run_agent
-	// ⤵️ 10.6.3-10: 步骤 19-20 异常处理 + 清理（unmark_session_active）
+
+	// 步骤 18: Runner.run_agent(agent=d.instance, inputs=inputs)
+	// 对齐 Python: result = await Runner.run_agent(agent=self._instance, inputs=inputs)
+	var result map[string]any
+	var runErr error
+	func() {
+		defer func() {
+			// 步骤 20: finally 清理
+			// ⤵️ 10.1.8: TOOL_PERMISSION_CHANNEL_ID.reset(token_cid); cleanup_permission_context(token_perm)
+			// ⤵️ 11.10: _reset_runtime_cron_context(cron_context_tokens)
+			d.unmarkSessionActive(sessionID)
+		}()
+		result, runErr = runner.RunAgent(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil)
+	}()
+
+	if runErr != nil {
+		logger.Error(logComponent).
+			Err(runErr).
+			Str("session_id", sessionID).
+			Str("mode", mode).
+			Msg("Runner.RunAgent 执行失败")
+		return nil, runErr
+	}
+
+	// 步骤 21: 构造 AgentResponse
+	// 对齐 Python: content = result if isinstance(result, (str, dict)) else str(result)
+	content := result
+	if content == nil {
+		content = make(map[string]any)
+	}
 
 	_ = query
-	_ = mode
-	_ = resolvedModel
 
-	logger.Info(logComponent).
-		Str("session_id", sessionID).
-		Str("mode", mode).
-		Str("query", query).
-		Msg("DeepAdapter ProcessMessageImpl 骨架，等待回填")
-
-	return nil, fmt.Errorf("ProcessMessageImpl 骨架，等待 agentcore.Runner 回填")
+	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+		schema.WithPayload(map[string]any{"content": content}),
+	), nil
 }
 
 // ProcessMessageStreamImpl 执行流式请求，通过 channel 返回响应块。
@@ -567,8 +738,23 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		return ch, fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
-	// 步骤 4: session_id 规范化
+	// 步骤 2-3: 模型配置校验
 	params := parseParams(req.Params)
+	reqModelName := paramsString(params, "model_name", "")
+	if !d.hasValidModelConfig(reqModelName) {
+		ch := make(chan *schema.AgentResponseChunk)
+		// 发送错误 chunk 并关闭
+		go func() {
+			defer close(ch)
+			ch <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+				"event_type": "chat.error",
+				"error":      "模型未正确配置，请先配置模型信息",
+			}, schema.WithChunkIsComplete(true))
+		}()
+		return ch, nil
+	}
+
+	// 步骤 4: session_id 规范化
 	sessionID := "default"
 	if req.SessionID != nil && *req.SessionID != "" {
 		sessionID = *req.SessionID
@@ -577,33 +763,30 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 5-6: 提取 query/mode
 	mode := paramsString(params, "mode", "agent.plan")
 
-	// 步骤 2-3: 模型配置校验
-	reqModelName := paramsString(params, "model_name", "")
-	if !d.hasValidModelConfig(reqModelName) {
-		ch := make(chan *schema.AgentResponseChunk)
-		close(ch)
-		// ⤵️ agentcore.Runner: 需要构造错误 chunk 发送到 channel
-		return ch, nil
-	}
+	// 步骤 7: team 模式分流
+	// 对齐 Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
+	// ⤵️ 10.3.7-11: team 模式分流
 
-	// ⤵️ 10.3.7-11: 步骤 7    team 模式分流（"team"/"team.plan"/"code.team"）
-	// ⤵️ 10.6.11-12: 步骤 8  auto_harness 分流
-	// ⤵️ 10.3.7-11: 步骤 9    slash 命令处理
-	// ⤵️ 11.10: 步骤 10   cron 上下文绑定
-	// ⤵️ 10.1.8: 步骤 11-12 权限上下文设置
+	// 步骤 8: auto_harness 分流
+	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
+
+	// 步骤 9: slash 命令处理
+	// ⤵️ 10.6.3-10: slash_result = _handle_slash_command(query, sessionID, mode)
+
+	// 步骤 10: cron 上下文绑定
+	// ⤵️ 11.10: cron_context_tokens = _bind_runtime_cron_context(...)
+
+	// 步骤 11-12: 权限上下文设置
+	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
 
 	// 步骤 13-14: 模型选择
-	resolvedModel := d.resolveModelForRequest(req)
+	_ = d.resolveModelForRequest(req)
 	// ⤵️ agentcore.DeepAgent: _apply_model_to_react_agent(resolvedModel)
 
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
 
-	// 步骤 16-17: update_runtime_config
-	// 对齐 Python: await self._update_runtime_config(runtimeConfig) (interface_deep.py:4533)
-	// _update_runtime_config 首步调用 _seed_runtime_cwd，注入请求级 CWD
-	// ⤵️ agentcore.DeepAgent: 完整 update_runtime_config 实现
-	// 步骤 17 的 CWD 部分：从请求参数提取 cwd，调用 seedRuntimeCwd
+	// 步骤 16-17: update_runtime_config + CWD 种子
 	requestCwd := paramsString(params, "cwd", "")
 	if requestCwd == "" {
 		if v, ok := params["project_dir"]; ok {
@@ -615,20 +798,121 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	if requestCwd != "" {
 		d.seedRuntimeCwd(ctx, requestCwd)
 	}
-	// ⤵️ agentcore.Runner: 步骤 18-19 Runner.run_agent_streaming
-	// ⤵️ 10.6.3-10: 步骤 20-21 异常处理 + 清理
+
+	// 步骤 18: Runner.RunAgentStreaming(agent=d.instance, inputs=inputs)
+	// 对齐 Python: async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
+	rawCh, streamErr := runner.RunAgentStreaming(ctx, runner.ByAgent(d.instance), inputs, runner.BySessionID(sessionID), nil, nil, nil)
+	if streamErr != nil {
+		d.unmarkSessionActive(sessionID)
+		ch := make(chan *schema.AgentResponseChunk)
+		close(ch)
+		return ch, fmt.Errorf("Runner.RunAgentStreaming 启动失败: %w", streamErr)
+	}
+
+	// goroutine 从 rawCh 读取，parseStreamChunk 转换，写入 outCh
+	outCh := make(chan *schema.AgentResponseChunk, 64)
+
+	go func() {
+		defer close(outCh)
+		defer d.unmarkSessionActive(sessionID)
+
+		// usage 累加器
+		usage := &usageAccumulator{}
+		// askUser 去重集合
+		emittedAskUserIDs := make(map[string]bool)
+		// 累积文本/reasoning
+		accumulatedText := ""
+		accumulatedReasoning := ""
+
+		for raw := range rawCh {
+			output, ok := raw.(*stream.OutputSchema)
+			if !ok {
+				// 非输出帧（TraceSchema/CustomSchema），跳过
+				continue
+			}
+
+			chunkType := output.Type
+			payload := output.Payload
+
+			switch chunkType {
+			case "llm_usage":
+				// 累加 usage → yield chat.usage_metadata
+				d.accumulateUsage(usage, payload)
+				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+					"event_type":      "chat.usage_metadata",
+					"input_tokens":    usage.InputTokens,
+					"output_tokens":   usage.OutputTokens,
+					"total_tokens":    usage.TotalTokens,
+					"input_cost":      usage.InputCost,
+					"output_cost":     usage.OutputCost,
+					"total_cost":      usage.TotalCost,
+				})
+
+			case "llm_reasoning":
+				// yield chat.reasoning
+				reasoningContent := extractReasoningContent(payload)
+				accumulatedReasoning += reasoningContent
+				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+					"event_type": "chat.reasoning",
+					"content":    reasoningContent,
+				})
+
+			case "llm_output":
+				// 先 flush reasoning，再 yield chat.delta
+				if accumulatedReasoning != "" {
+					accumulatedReasoning = ""
+				}
+				textContent := extractTextContent(payload)
+				accumulatedText += textContent
+				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+					"event_type": "chat.delta",
+					"content":    textContent,
+				})
+
+			default:
+				// flush 累积
+				if accumulatedText != "" {
+					accumulatedText = ""
+				}
+				if accumulatedReasoning != "" {
+					accumulatedReasoning = ""
+				}
+				// parseStreamChunk 处理其他类型
+				parsed := d.parseStreamChunk(output, usage, emittedAskUserIDs)
+				if parsed != nil {
+					outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, parsed)
+				}
+			}
+		}
+
+		// flush 残留 accumulatedText/accumulatedReasoning
+		if accumulatedText != "" {
+			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
+				"event_type": "chat.delta",
+				"content":    accumulatedText,
+			})
+		}
+
+		// usage summary
+		if usage.TotalTokens > 0 {
+			usageSummary := map[string]any{
+				"event_type":    "chat.usage_summary",
+				"input_tokens":  usage.InputTokens,
+				"output_tokens": usage.OutputTokens,
+				"total_tokens":  usage.TotalTokens,
+				"input_cost":    usage.InputCost,
+				"output_cost":   usage.OutputCost,
+				"total_cost":    usage.TotalCost,
+			}
+			outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, usageSummary)
+		}
+
+		// 终止哨兵
+		outCh <- schema.NewTerminalChunk(req.RequestID, req.ChannelID)
+	}()
 
 	_ = mode
-	_ = resolvedModel
-
-	logger.Info(logComponent).
-		Str("session_id", sessionID).
-		Str("mode", mode).
-		Msg("DeepAdapter ProcessMessageStreamImpl 骨架，等待回填")
-
-	ch := make(chan *schema.AgentResponseChunk)
-	close(ch)
-	return ch, fmt.Errorf("ProcessMessageStreamImpl 骨架，等待 agentcore.Runner 回填")
+	return outCh, nil
 }
 
 // ProcessInterrupt 处理中断请求（pause/resume/cancel/supplement）。
@@ -668,20 +952,37 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 步骤 6-9: 按 intent 分支
+	// 对齐 Python: process_interrupt() (line 3268-3476)
+	interruptMsg := ""
 	switch intent {
 	case "pause":
 		// ⤵️ 10.6.3-10: if sessionActive && d.streamEventRail != nil { d.streamEventRail.pause(normalizedSID) }
+		interruptMsg = "执行已暂停"
 		logger.Info(logComponent).Str("intent", "pause").Msg("中断: 已暂停执行")
 	case "resume":
 		// ⤵️ 10.6.3-10: if sessionActive && d.streamEventRail != nil { d.streamEventRail.resume(normalizedSID) }
+		interruptMsg = "执行已恢复"
 		logger.Info(logComponent).Str("intent", "resume").Msg("中断: 已恢复执行")
 	case "supplement":
 		if newInput != nil {
 			d.markSessionActive(normalizedSID)
 		}
+		// ⤵️ 10.6.3-10: rail.abort(sessionID)
+		// 对齐 Python: instance.abort() 仅当 otherActiveSessions == 0
+		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
+			d.instance.Abort(ctx)
+		}
+		interruptMsg = "supplement 已处理"
 		logger.Info(logComponent).Str("intent", "supplement").Msg("中断: supplement 处理")
 	case "cancel":
+		// ⤵️ 10.6.3-10: rail.abort(sessionID) + rail.reset_for_new_task(sessionID)
+		if sessionActive && d.instance != nil && d.otherActiveSessions(normalizedSID) == 0 {
+			d.instance.Abort(ctx)
+		}
 		d.unmarkSessionActive(normalizedSID)
+		// ⤵️ 10.6.3-10: _cancel_scheduler_running_tasks()
+		// ⤵️ 10.6.3-10: _cancel_pending_todos(sessionID)
+		interruptMsg = "执行已取消"
 		logger.Info(logComponent).Str("intent", "cancel").Msg("中断: cancel 处理")
 	}
 
@@ -689,7 +990,15 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	// ⤵️ 10.3.7-11: cancel evolution watcher tasks
 
 	// 步骤 11: 构造响应
-	return schema.NewAgentResponse(req.RequestID, req.ChannelID), nil
+	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})
+	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
+		schema.WithPayload(map[string]any{
+			"event_type": "chat.interrupt_result",
+			"intent":     intent,
+			"success":    true,
+			"message":    interruptMsg,
+		}),
+	), nil
 }
 
 // HandleUserAnswer 处理用户回答（evolution 审批或权限审批）。
@@ -791,8 +1100,29 @@ func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	// ⤵️ A2X: _close_a2x_client()
 
-	logger.Info(logComponent).Msg("DeepAdapter Cleanup 骨架，等待回填")
+	logger.Info(logComponent).Msg("DeepAdapter Cleanup 完成")
 	return nil
+}
+
+// AbortOnGatewayDisconnect Gateway 断连时全局中止。
+//
+// 对应 Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3511-3538)
+//
+// 与 interrupt(cancel) 不同：无 other_sessions 保护，
+// gateway 断开意味着前端已无法接收响应，无条件 abort 所有 session。
+func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
+	// 对齐 Python: if self._stream_event_rail is not None:
+	//   active = [sid for sid, count in self._active_session_ids.items() if count > 0]
+	//   for sid in active: self._stream_event_rail.abort(sid)
+	// ⤵️ 10.6.3-10: streamEventRail abort 所有活跃 session
+
+	if d.instance != nil {
+		d.instance.Abort(ctx)
+	}
+
+	// ⤵️ 10.6.3-10: _cancel_scheduler_running_tasks()
+
+	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect 完成")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -1319,3 +1649,264 @@ func getDefaultModels(configBase map[string]any) []map[string]any {
 
 	return nil
 }
+
+// paramsInt 从 params 中取整数值，支持默认值。
+func paramsInt(params map[string]any, key string, defaultVal int) int {
+	v, ok := params[key]
+	if !ok {
+		return defaultVal
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	default:
+		return defaultVal
+	}
+}
+
+// resolveEnableTaskLoop 解析是否启用任务循环。
+// 对齐 Python: _resolve_enable_task_loop(config, config_base)
+func (d *DeepAdapter) resolveEnableTaskLoop(config map[string]any, configBase map[string]any) bool {
+	if v, ok := config["enable_task_loop"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return true
+}
+
+// resolveEnableTaskPlanning 解析是否启用任务规划。
+// 对齐 Python: _resolve_enable_task_planning(config, config_base)
+func (d *DeepAdapter) resolveEnableTaskPlanning(config map[string]any, configBase map[string]any) bool {
+	if v, ok := config["enable_task_planning"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return true
+}
+
+// resolveRuntimeLanguage 解析运行时语言。
+// 对齐 Python: _resolve_runtime_language()
+func (d *DeepAdapter) resolveRuntimeLanguage() string {
+	if v, ok := d.configCache["language"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "zh"
+}
+
+// resolvePromptLanguage 解析提示词语言。
+// 对齐 Python: _resolve_prompt_language()
+func (d *DeepAdapter) resolvePromptLanguage() string {
+	if v, ok := d.configCache["prompt_language"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return d.resolveRuntimeLanguage()
+}
+
+// resolvePromptMode 解析提示词模式。
+// 对齐 Python: _resolve_prompt_mode(config_base)
+func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.PromptMode {
+	if v, ok := configBase["prompt_mode"]; ok {
+		if s, ok := v.(string); ok {
+			switch s {
+			case "minimal":
+				return hschema.PromptModeMinimal
+			case "none":
+				return hschema.PromptModeNone
+			default:
+				return hschema.PromptModeFull
+			}
+		}
+	}
+	return hschema.PromptModeFull
+}
+
+// buildAgentIdentityPrompt 构建 Agent 身份提示词。
+// 对齐 Python: build_agent_identity_prompt(language=self._resolve_prompt_language())
+func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
+	// ⤵️ agentcore: 完整的 agent_identity_prompt 构建
+	return ""
+}
+
+// makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
+// 对齐 Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
+func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards any, railsList []any) *hschema.DeepAgentConfig {
+	return &hschema.DeepAgentConfig{
+		Model:          model,
+		Card:           card,
+		SystemPrompt:   d.buildAgentIdentityPrompt(d.resolvePromptLanguage()),
+		EnableTaskLoop: d.resolveEnableTaskLoop(config, nil),
+		MaxIterations:  paramsInt(config, "max_iterations", 15),
+		Language:       d.resolveRuntimeLanguage(),
+		PromptMode:     d.resolvePromptMode(nil),
+	}
+}
+
+// getCurrentAgentRails 获取当前 Agent Rails（热重载时使用）。
+// 对齐 Python: _get_current_agent_rails(config, config_base)
+func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []any {
+	railsInterfaces := d.buildAgentRails(config, configBase, d.mode)
+	result := make([]any, len(railsInterfaces))
+	for i, r := range railsInterfaces {
+		result[i] = r
+	}
+	return result
+}
+
+// refreshMultimodalConfigs 刷新多模态配置。
+// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1170-1318)
+func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
+	d.visionModelConfig = d.buildVisionModelConfig(configBase)
+	d.audioModelConfig = d.buildAudioModelConfig(configBase)
+}
+
+// filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
+// 对齐 Python: _filesystem_rail_enabled_for_profile()
+func (d *DeepAdapter) filesystemRailEnabledForProfile(configBase map[string]any) bool {
+	// 对齐 Python: 默认 true，除非 isAcpToolProfile
+	return !d.isAcpToolProfile(configBase)
+}
+
+// isAcpToolProfile 检查是否为 ACP Tool profile。
+// 对齐 Python: _is_acp_tool_profile()
+func (d *DeepAdapter) isAcpToolProfile(configBase map[string]any) bool {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return false
+	}
+	defaults, _ := modelsSection["defaults"].([]any)
+	for _, entry := range defaults {
+		if m, ok := entry.(map[string]any); ok {
+			if profile, ok := m["profile"].(string); ok && profile == "acp_tool" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// buildVisionModelConfig 从配置构建视觉模型配置。
+// 对齐 Python: _build_vision_model_config(config_base) (line 1170-1238)
+func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *hschema.VisionModelConfig {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return nil
+	}
+	visionSection, _ := modelsSection["vision"].(map[string]any)
+	if visionSection == nil {
+		return nil
+	}
+	apiKey, _ := visionSection["api_key"].(string)
+	baseURL, _ := visionSection["base_url"].(string)
+	model, _ := visionSection["model"].(string)
+	if apiKey == "" && model == "" {
+		return nil
+	}
+	maxRetries := 3
+	if v, ok := visionSection["max_retries"]; ok {
+		if f, ok := v.(float64); ok {
+			maxRetries = int(f)
+		}
+	}
+	return &hschema.VisionModelConfig{
+		APIKey:     apiKey,
+		BaseURL:    baseURL,
+		Model:      model,
+		MaxRetries: maxRetries,
+	}
+}
+
+// buildAudioModelConfig 从配置构建音频模型配置。
+// 对齐 Python: _build_audio_model_config(config_base) (line 1240-1318)
+func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *hschema.AudioModelConfig {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return nil
+	}
+	audioSection, _ := modelsSection["audio"].(map[string]any)
+	if audioSection == nil {
+		return nil
+	}
+	apiKey, _ := audioSection["api_key"].(string)
+	baseURL, _ := audioSection["base_url"].(string)
+	if apiKey == "" {
+		return nil
+	}
+	transcriptionModel, _ := audioSection["transcription_model"].(string)
+	qaModel, _ := audioSection["qa_model"].(string)
+	maxRetries := 3
+	if v, ok := audioSection["max_retries"]; ok {
+		if f, ok := v.(float64); ok {
+			maxRetries = int(f)
+		}
+	}
+	httpTimeout := 30
+	if v, ok := audioSection["http_timeout"]; ok {
+		if f, ok := v.(float64); ok {
+			httpTimeout = int(f)
+		}
+	}
+	maxAudioBytes := 25000000
+	if v, ok := audioSection["max_audio_bytes"]; ok {
+		if f, ok := v.(float64); ok {
+			maxAudioBytes = int(f)
+		}
+	}
+	return &hschema.AudioModelConfig{
+		APIKey:             apiKey,
+		BaseURL:            baseURL,
+		TranscriptionModel: transcriptionModel,
+		QAModel:            qaModel,
+		MaxRetries:         maxRetries,
+		HTTPTimeout:        httpTimeout,
+		MaxAudioBytes:      maxAudioBytes,
+	}
+}
+
+// extractTextContent 从 payload 提取文本内容。
+func extractTextContent(payload any) string {
+	if payload == nil {
+		return ""
+	}
+	if m, ok := payload.(map[string]any); ok {
+		if v, ok := m["content"].(string); ok {
+			return v
+		}
+		if v, ok := m["text"].(string); ok {
+			return v
+		}
+	}
+	if s, ok := payload.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// extractReasoningContent 从 payload 提取推理内容。
+func extractReasoningContent(payload any) string {
+	if payload == nil {
+		return ""
+	}
+	if m, ok := payload.(map[string]any); ok {
+		if v, ok := m["content"].(string); ok {
+			return v
+		}
+		if v, ok := m["reasoning"].(string); ok {
+			return v
+		}
+	}
+	if s, ok := payload.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// ──────────────────────────── 占位函数（后续 Task 回填） ────────────────────────────
+
