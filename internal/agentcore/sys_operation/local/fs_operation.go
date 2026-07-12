@@ -24,6 +24,8 @@ import (
 // 对齐 Python local/fs_operation.py FsOperation。
 type LocalFsOperation struct {
 	sysop.BaseFsOperation
+	// runConfig 本地工作配置，对齐 Python self._run_config。
+	runConfig *sysop.LocalWorkConfig
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -39,8 +41,15 @@ var _ sysop.FsOperation = (*LocalFsOperation)(nil)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLocalFsOperation 创建本地文件系统操作实例（工厂函数，供 OperationRegistry 调用）。
+// 对齐 Python：run_config 传递到实例，用于 restrict_to_sandbox 和 sandbox_root。
 func NewLocalFsOperation(runConfig any) sysop.SysSubOperation {
-	return &LocalFsOperation{}
+	op := &LocalFsOperation{}
+	if rc, ok := runConfig.(*sysop.LocalWorkConfig); ok && rc != nil {
+		op.runConfig = rc
+	} else {
+		op.runConfig = sysop.NewLocalWorkConfig()
+	}
+	return op
 }
 
 // ReadFile 读取文件。
@@ -766,6 +775,7 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 
 // resolvePath 解析路径，基于 CWD 解析相对路径。
 // 对齐 Python FsOperation._resolve_path。
+// 对齐 Python：restrict_to_sandbox=True 时校验路径是否在 sandbox_root 范围内。
 func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path 不能为空")
@@ -784,6 +794,26 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 	resolved, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
+	}
+
+	// sandbox 限制校验，对齐 Python _resolve_path 中 restrict_to_sandbox 逻辑
+	if f.runConfig != nil && f.runConfig.RestrictToSandbox {
+		sandboxRoots := f.runConfig.SandboxRoot
+		if len(sandboxRoots) == 0 {
+			// fallback 到 CWD
+			sandboxRoots = []string{base}
+		}
+		allowed := false
+		for _, root := range sandboxRoots {
+			rootAbs, _ := filepath.Abs(root)
+			if strings.HasPrefix(resolved, rootAbs) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return "", fmt.Errorf("路径 %s 在沙箱根目录之外，访问被拒绝", resolved)
+		}
 	}
 
 	if createParent {

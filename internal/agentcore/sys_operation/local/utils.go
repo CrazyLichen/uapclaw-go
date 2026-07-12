@@ -18,23 +18,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// StreamEventType 流式事件类型枚举。
-// 对齐 Python StreamEventType：STDOUT, STDERR, EXIT, ERROR。
-type StreamEventType int
-
-const (
-	// StreamEventTypeStdout 标准输出事件
-	StreamEventTypeStdout StreamEventType = iota
-	// StreamEventTypeStderr 标准错误事件
-	StreamEventTypeStderr
-	// StreamEventTypeExit 进程退出事件
-	StreamEventTypeExit
-	// StreamEventTypeError 执行错误事件
-	StreamEventTypeError
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // StreamEvent 流式事件。
@@ -81,6 +64,23 @@ type AsyncProcessHandler struct {
 // OperationUtils 操作工具类。
 // 对齐 Python OperationUtils：prepare_environment, create_handler, create_tmp_file, delete_tmp_file。
 type OperationUtils struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// StreamEventType 流式事件类型枚举。
+// 对齐 Python StreamEventType：STDOUT, STDERR, EXIT, ERROR。
+type StreamEventType int
+
+const (
+	// StreamEventTypeStdout 标准输出事件
+	StreamEventTypeStdout StreamEventType = iota
+	// StreamEventTypeStderr 标准错误事件
+	StreamEventTypeStderr
+	// StreamEventTypeExit 进程退出事件
+	StreamEventTypeExit
+	// StreamEventTypeError 执行错误事件
+	StreamEventTypeError
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -168,27 +168,47 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 		defer cancel()
 	}
 
-	// 收集输出
-	stdoutCh := readPipe(stdoutPipe, h.encoding)
-	stderrCh := readPipe(stderrPipe, h.encoding)
-
+	// 并行收集 stdout/stderr
 	var stdoutBuf, stderrBuf strings.Builder
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdoutPipe)
+		for scanner.Scan() {
+			stdoutBuf.WriteString(scanner.Text())
+			stdoutBuf.WriteByte('\n')
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			stderrBuf.WriteString(scanner.Text())
+			stderrBuf.WriteByte('\n')
+		}
+	}()
+
+	// collectDone 在两个收集协程都完成后关闭
 	collectDone := make(chan struct{})
 	go func() {
-		for s := range stdoutCh {
-			stdoutBuf.WriteString(s)
-		}
-		for s := range stderrCh {
-			stderrBuf.WriteString(s)
-		}
+		wg.Wait()
 		close(collectDone)
 	}()
 
 	// 等待进程完成或超时
 	waitErr := h.waitProcess(ctx)
 
-	// 等待收集完成
-	<-collectDone
+	// 等待收集完成，加 30 秒 grace period 超时保护
+	select {
+	case <-collectDone:
+	case <-time.After(30 * time.Second):
+		logger.Warn(logComponent).
+			Str("event_type", "INVOKE_COLLECT_TIMEOUT").
+			Msg("等待输出收集超时 30 秒")
+	}
 
 	data := &InvokeData{
 		Stdout: stdoutBuf.String(),
@@ -212,7 +232,7 @@ func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 }
 
 // Stream 流式执行，通过 channel 逐块返回。
-// 对齐 Python AsyncProcessHandler.stream：reader 协程 + queue 逻辑。
+// 对齐 Python AsyncProcessHandler.stream：reader 协程 + queue 逻辑，支持超时控制。
 func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -243,57 +263,128 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 		return ch, fmt.Errorf("启动进程失败: %w", err)
 	}
 
-	// 流式读取
+	// 内部 queue channel，reader goroutine 写入，主协程消费
+	queue := make(chan StreamEvent, 128)
+
+	// reader goroutine: 读 pipe → 写 queue
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// stdout 读取
 	go func() {
-		defer close(ch)
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		// stdout 读取
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stdoutPipe)
-			scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
-			for scanner.Scan() {
-				ch <- StreamEvent{
-					Type:      StreamEventTypeStdout,
-					Data:      scanner.Text() + "\n",
-					Timestamp: time.Now(),
-				}
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdoutPipe)
+		scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
+		for scanner.Scan() {
+			queue <- StreamEvent{
+				Type:      StreamEventTypeStdout,
+				Data:      scanner.Text() + "\n",
+				Timestamp: time.Now(),
 			}
-		}()
-
-		// stderr 读取
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stderrPipe)
-			scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
-			for scanner.Scan() {
-				ch <- StreamEvent{
-					Type:      StreamEventTypeStderr,
-					Data:      scanner.Text() + "\n",
-					Timestamp: time.Now(),
-				}
+		}
+		if err := scanner.Err(); err != nil {
+			queue <- StreamEvent{
+				Type:      StreamEventTypeError,
+				Data:      fmt.Sprintf("stdout 读取错误: %v", err),
+				Timestamp: time.Now(),
 			}
-		}()
+		}
+	}()
 
+	// stderr 读取
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderrPipe)
+		scanner.Buffer(make([]byte, h.chunkSize), h.chunkSize)
+		for scanner.Scan() {
+			queue <- StreamEvent{
+				Type:      StreamEventTypeStderr,
+				Data:      scanner.Text() + "\n",
+				Timestamp: time.Now(),
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			queue <- StreamEvent{
+				Type:      StreamEventTypeError,
+				Data:      fmt.Sprintf("stderr 读取错误: %v", err),
+				Timestamp: time.Now(),
+			}
+		}
+	}()
+
+	// reader 完成后关闭 queue，并等 cmd.Wait() 发送 EXIT 事件
+	go func() {
 		wg.Wait()
-
-		// 等待进程退出
 		exitCode := 0
-		if err := h.cmd.Wait(); err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
+		if waitErr := h.cmd.Wait(); waitErr != nil {
+			if exitErr, ok := waitErr.(*exec.ExitError); ok {
 				exitCode = exitErr.ExitCode()
 			} else {
 				exitCode = -1
 			}
 		}
-		ch <- StreamEvent{
+		queue <- StreamEvent{
 			Type:      StreamEventTypeExit,
 			Data:      fmt.Sprintf("%d", exitCode),
 			ExitCode:  exitCode,
 			Timestamp: time.Now(),
+		}
+		close(queue)
+	}()
+
+	// 主协程：select 循环消费 queue，支持超时和 context 取消
+	go func() {
+		defer close(ch)
+
+		// 超时 ticker（1 秒间隔检查）
+		var ticker *time.Ticker
+		if h.overallTimeout > 0 {
+			ticker = time.NewTicker(time.Second)
+			defer ticker.Stop()
+		}
+		startTime := time.Now()
+
+		for {
+			select {
+			case event, ok := <-queue:
+				if !ok {
+					// queue 关闭，所有事件已处理完毕
+					return
+				}
+				ch <- event
+				// EXIT 事件表示流结束
+				if event.Type == StreamEventTypeExit {
+					return
+				}
+
+			case <-ticker.C:
+				// 检查 overallTimeout
+				if h.overallTimeout > 0 && time.Since(startTime) > time.Duration(h.overallTimeout)*time.Second {
+					logger.Warn(logComponent).
+						Str("event_type", "STREAM_TIMEOUT").
+						Int("overall_timeout", h.overallTimeout).
+						Msg("流式执行超时")
+					h.killProcessTree()
+					ch <- StreamEvent{
+						Type:      StreamEventTypeError,
+						Data:      fmt.Sprintf("执行超时 %d 秒", h.overallTimeout),
+						Timestamp: time.Now(),
+					}
+					return
+				}
+
+			case <-ctx.Done():
+				logger.Warn(logComponent).
+					Str("event_type", "STREAM_CANCELLED").
+					Msg("流式执行被取消")
+				h.killProcessTree()
+				ch <- StreamEvent{
+					Type:      StreamEventTypeError,
+					Data:      "执行被取消",
+					Timestamp: time.Now(),
+				}
+				return
+			}
 		}
 	}()
 
@@ -323,12 +414,42 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 
 	pid = h.cmd.Process.Pid
 
-	// grace 检测：等待一段时间检测早期失败
+	// grace 检测：用 goroutine+Wait+select/timer 等待进程在 grace 内是否退出
 	if grace > 0 {
-		time.Sleep(time.Duration(grace * float64(time.Second)))
-		// 检查进程是否已退出
-		if h.cmd.ProcessState != nil {
-			return pid, fmt.Errorf("后台进程早期退出")
+		waitCh := make(chan error, 1)
+		go func() { waitCh <- h.cmd.Wait() }()
+
+		timer := time.NewTimer(time.Duration(grace * float64(time.Second)))
+		defer timer.Stop()
+
+		select {
+		case waitErr := <-waitCh:
+			// 进程在 grace 内退出
+			if waitErr != nil {
+				if exitErr, ok := waitErr.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
+					logger.Warn(logComponent).
+						Str("event_type", "BACKGROUND_EARLY_EXIT").
+						Int("pid", pid).
+						Int("exit_code", exitErr.ExitCode()).
+						Msg("后台进程在 grace 内以非零退出码退出")
+					return pid, fmt.Errorf("process exited early with code %d", exitErr.ExitCode())
+				}
+				// 退出码 0 也视为成功
+				logger.Info(logComponent).
+					Str("event_type", "BACKGROUND_EARLY_EXIT_SUCCESS").
+					Int("pid", pid).
+					Msg("后台进程在 grace 内正常退出")
+				return pid, nil
+			}
+			return pid, nil
+		case <-timer.C:
+			// grace 超时，进程还在运行 → 成功
+			logger.Info(logComponent).
+				Str("event_type", "BACKGROUND_GRACE_TIMEOUT").
+				Int("pid", pid).
+				Float64("grace", grace).
+				Msg("后台进程 grace 检测超时，进程仍在运行")
+			return pid, nil
 		}
 	}
 

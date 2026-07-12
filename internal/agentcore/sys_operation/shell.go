@@ -37,7 +37,7 @@ type ShellOperation interface {
 type ShellOption func(*ShellOptions)
 
 // ShellOptions Shell 操作选项。
-// 对齐 Python execute_cmd 签名：command, cwd, timeout, environment, options, shell_type。
+// 对齐 Python execute_cmd 签名：command, cwd, timeout, environment, options, shell_type, grace。
 type ShellOptions struct {
 	// Cwd 工作目录
 	Cwd string
@@ -49,6 +49,8 @@ type ShellOptions struct {
 	ShellType ShellType
 	// Options 扩展配置选项
 	Options map[string]any
+	// Grace 后台命令早期失败检测时间（秒），对齐 Python execute_cmd_background.grace
+	Grace float64
 }
 
 // BaseShellOperation ShellOperation 的空操作桩实现
@@ -115,7 +117,7 @@ func ParseShellType(s string) ShellType {
 
 // NewShellOptions 从选项列表构造 ShellOptions
 func NewShellOptions(opts ...ShellOption) *ShellOptions {
-	o := &ShellOptions{Timeout: 300}
+	o := &ShellOptions{Timeout: 300, Grace: 3.0}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -145,6 +147,11 @@ func WithShellType(st ShellType) ShellOption {
 // WithShellOptions 设置扩展配置选项
 func WithShellOptions(options map[string]any) ShellOption {
 	return func(o *ShellOptions) { o.Options = options }
+}
+
+// WithShellGrace 设置后台命令早期失败检测时间
+func WithShellGrace(grace float64) ShellOption {
+	return func(o *ShellOptions) { o.Grace = grace }
 }
 
 // ExecuteCmd 执行命令（BaseShellOperation 空实现）
