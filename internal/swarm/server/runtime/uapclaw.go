@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
@@ -362,9 +363,10 @@ func (uc *UapClaw) Cleanup() error {
 	return nil
 }
 
-// GetInstance 获取底层 Agent 实例。
-// ⤵️ 10.3.2: 需要返回 adapter 内部的 DeepAgent 实例
-func (uc *UapClaw) GetInstance() any { return nil }
+// GetInstance 获取底层 DeepAgent 实例。
+//
+// 对齐 Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
+func (uc *UapClaw) GetInstance() *harness.DeepAgent { return nil }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 

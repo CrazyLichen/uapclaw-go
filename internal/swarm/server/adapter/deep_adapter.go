@@ -11,6 +11,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
@@ -36,9 +37,9 @@ import (
 type DeepAdapter struct {
 	// ─── 当前可用字段 ───
 
-	// instance DeepAgent 实例
-	// ⤵️ agentcore.DeepAgent
-	instance interface{}
+	// instance DeepAgent 实例。
+	// 对齐 Python: self._instance（create_deep_agent 返回的 DeepAgent）
+	instance *harness.DeepAgent
 	// agentName Agent 名称，默认 "main_agent"
 	agentName string
 	// projectDir 项目目录

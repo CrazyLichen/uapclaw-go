@@ -274,7 +274,7 @@ func TestUapClaw_ReloadAgentConfig_无Adapter(t *testing.T) {
 
 func TestUapClaw_GetInstance(t *testing.T) {
 	uc := NewUapClaw()
-	// ⤵️ 10.3.2: 当前 stub 返回 nil
+	// 当前 stub 返回 nil
 	assert.Nil(t, uc.GetInstance())
 }
 
