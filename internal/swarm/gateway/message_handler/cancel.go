@@ -249,13 +249,13 @@ func (mh *MessageHandler) sendInterruptResultNotification(requestID, channelID, 
 // payload 包含 is_processing 和 is_complete，消息 ID 使用 requestID。
 func (mh *MessageHandler) sendProcessingStatus(requestID, sessionID, channelID string, isProcessing bool) {
 	msg := &schema.Message{
-		ID:              requestID,
-		Type:            schema.MessageTypeEvent,
-		ChannelID:       channelID,
-		SessionID:       sessionID,
-		Timestamp:       schema.NowTimestamp(),
-		OK:              true,
-		EventType:       schema.EventTypeChatProcessingStatus,
+		ID:        requestID,
+		Type:      schema.MessageTypeEvent,
+		ChannelID: channelID,
+		SessionID: sessionID,
+		Timestamp: schema.NowTimestamp(),
+		OK:        true,
+		EventType: schema.EventTypeChatProcessingStatus,
 		Payload: map[string]any{
 			"is_processing": isProcessing,
 			"is_complete":   !isProcessing,
@@ -271,13 +271,13 @@ func (mh *MessageHandler) sendProcessingStatus(requestID, sessionID, channelID s
 // 对齐 Python: 构造 CHAT_INTERRUPT_RESULT 事件，payload 含 intent=cancel, success=true。
 func (mh *MessageHandler) sendStreamCancelledNotification(requestID, channelID, sessionID string) {
 	msg := &schema.Message{
-		ID:              requestID,
-		Type:            schema.MessageTypeEvent,
-		ChannelID:       channelID,
-		SessionID:       sessionID,
-		Timestamp:       schema.NowTimestamp(),
-		OK:              true,
-		EventType:       schema.EventTypeChatInterruptResult,
+		ID:        requestID,
+		Type:      schema.MessageTypeEvent,
+		ChannelID: channelID,
+		SessionID: sessionID,
+		Timestamp: schema.NowTimestamp(),
+		OK:        true,
+		EventType: schema.EventTypeChatInterruptResult,
 		Payload: map[string]any{
 			"event_type": string(schema.EventTypeChatInterruptResult),
 			"intent":     "cancel",
@@ -296,13 +296,13 @@ func (mh *MessageHandler) sendStreamCancelledNotification(requestID, channelID, 
 // 消息 ID 使用 requestID。
 func (mh *MessageHandler) publishStreamCancelledFinal(requestID, channelID, sessionID string, requestMetadata map[string]any) {
 	msg := &schema.Message{
-		ID:              requestID,
-		Type:            schema.MessageTypeRes,
-		ChannelID:       channelID,
-		SessionID:       sessionID,
-		Timestamp:       schema.NowTimestamp(),
-		OK:              true,
-		EventType:       schema.EventTypeChatFinal,
+		ID:        requestID,
+		Type:      schema.MessageTypeRes,
+		ChannelID: channelID,
+		SessionID: sessionID,
+		Timestamp: schema.NowTimestamp(),
+		OK:        true,
+		EventType: schema.EventTypeChatFinal,
 		Payload: map[string]any{
 			"content":      "",
 			"is_cancelled": true,

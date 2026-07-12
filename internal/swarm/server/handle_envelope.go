@@ -640,11 +640,11 @@ func writeCanonicalMode(params map[string]any, canonicalMode string, request *sc
 
 // resolveRequestProjectDir 从请求中读取项目目录，对齐 Python 5 级 fallback：
 //
-//	1. params["project_dir"]
-//	2. metadata["project_dir"]
-//	3. params["cwd"]
-//	4. metadata["cwd"]
-//	5. params["trusted_dirs"][0]
+//  1. params["project_dir"]
+//  2. metadata["project_dir"]
+//  3. params["cwd"]
+//  4. metadata["cwd"]
+//  5. params["trusted_dirs"][0]
 func resolveRequestProjectDir(request *schema.AgentRequest) string {
 	var params map[string]any
 	if request.Params != nil {

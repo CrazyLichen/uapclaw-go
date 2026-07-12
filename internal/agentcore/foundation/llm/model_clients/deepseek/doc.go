@@ -16,5 +16,5 @@
 //	├── doc.go        # 包文档
 //	└── client.go     # DeepSeek 客户端实现（覆写 Invoke/Stream 补充 reasoning_content）
 //
-// 对应 Python: openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py
+// 对应 Python 代码：openjiuwen/core/foundation/llm/model_clients/deepseek_model_client.py
 package deepseek

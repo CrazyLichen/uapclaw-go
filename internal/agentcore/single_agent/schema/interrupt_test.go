@@ -66,8 +66,8 @@ func TestInterruptRequester_接口满足(t *testing.T) {
 
 	// *ToolCallInterruptRequest 满足 InterruptRequester
 	var tcir InterruptRequester = &ToolCallInterruptRequest{
-		Request:    &InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
-		ToolName:   "sub_tool",
+		Request:  &InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
+		ToolName: "sub_tool",
 	}
 	assert.Equal(t, "子Agent确认", tcir.GetMessage())
 	assert.Equal(t, "sub_key", tcir.GetAutoConfirmKey())

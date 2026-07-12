@@ -378,8 +378,8 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 		e2a.WithFieldSessionID(targetSID),
 		e2a.WithFieldReqMethod(string(schema.ReqMethodSessionRewind)),
 		e2a.WithFieldParams(map[string]any{
-			"session_id":  targetSID,
-			"turn_index":  turn,
+			"session_id": targetSID,
+			"turn_index": turn,
 		}),
 		e2a.WithFieldIsStream(false),
 		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),

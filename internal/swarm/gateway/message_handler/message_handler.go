@@ -105,19 +105,19 @@ const logComponent = logger.ComponentGateway
 // 对齐 Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	return &MessageHandler{
-		agentClient:                agentClient,
-		userMessages:               make(chan *schema.Message, 256),
-		robotMessages:              make(chan *schema.Message, 256),
-		streamTasks:                make(map[string]context.CancelFunc),
-		streamSessions:             make(map[string]string),
-		streamMetadata:             make(map[string]map[string]any),
-		streamModes:                make(map[string]string),
-		channelStates:              make(map[string]*ChannelControlState),
-		pendingEvolutionApproval:   make(map[string]string),
-		queuedSupplementInput:      make(map[string]map[string]any),
-		sessionEvolutionInProgress: make(map[string]bool),
+		agentClient:                 agentClient,
+		userMessages:                make(chan *schema.Message, 256),
+		robotMessages:               make(chan *schema.Message, 256),
+		streamTasks:                 make(map[string]context.CancelFunc),
+		streamSessions:              make(map[string]string),
+		streamMetadata:              make(map[string]map[string]any),
+		streamModes:                 make(map[string]string),
+		channelStates:               make(map[string]*ChannelControlState),
+		pendingEvolutionApproval:    make(map[string]string),
+		queuedSupplementInput:       make(map[string]map[string]any),
+		sessionEvolutionInProgress:  make(map[string]bool),
 		streamEmitsProcessingStatus: make(map[string]bool),
-		sessionLastUserQuery:       make(map[string]string),
+		sessionLastUserQuery:        make(map[string]string),
 	}
 }
 

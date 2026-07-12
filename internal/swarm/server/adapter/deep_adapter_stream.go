@@ -108,14 +108,14 @@ func (d *DeepAdapter) parseStreamChunk(output *stream.OutputSchema, usage *usage
 
 	case "context.usage":
 		return map[string]any{
-			"event_type":   "chat.context_usage",
+			"event_type":    "chat.context_usage",
 			"context_usage": payload,
 		}
 
 	case "context.compression_state":
 		return map[string]any{
-			"event_type":             "chat.context_compression_state",
-			"compression_state":      payload,
+			"event_type":        "chat.context_compression_state",
+			"compression_state": payload,
 		}
 
 	case "ask_user_question":
@@ -128,7 +128,7 @@ func (d *DeepAdapter) parseStreamChunk(output *stream.OutputSchema, usage *usage
 			emittedAskUserIDs[requestID] = true
 		}
 		return map[string]any{
-			"event_type":       "chat.ask_user_question",
+			"event_type":        "chat.ask_user_question",
 			"ask_user_question": payload,
 		}
 

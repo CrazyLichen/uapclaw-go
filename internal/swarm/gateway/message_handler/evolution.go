@@ -64,11 +64,11 @@ func BuildQueuedChatSendMessage(msg *schema.Message, newInput string, attachment
 
 	query := BuildSupplementContinuationQuery(newInput, originalRequest)
 	params := map[string]any{
-		"query":             query,
-		"supplement_input":  newInput,
-		"original_request":  originalRequest,
-		"session_id":        msg.SessionID,
-		"is_supplement":     true,
+		"query":            query,
+		"supplement_input": newInput,
+		"original_request": originalRequest,
+		"session_id":       msg.SessionID,
+		"is_supplement":    true,
 	}
 	if len(attachments) > 0 {
 		params["attachments"] = attachments
@@ -327,4 +327,3 @@ func (mh *MessageHandler) maybeAutoAcceptReplacedEvolutionApproval(sessionID, in
 		Str("new_request_id", incomingRequestID).
 		Msg("自动接受被替换的 evolution 审批")
 }
-

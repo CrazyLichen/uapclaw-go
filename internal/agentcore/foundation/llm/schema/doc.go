@@ -46,17 +46,16 @@
 // 文件目录：
 //
 //	schema/
-//	  doc.go                  — 包文档（本文件）
-//	  tool_call.go            — ToolCall 结构体 + OpenAI 格式转换
-//	  usage_metadata.go       — UsageMetadata 结构体
-//	  message.go              — RoleType 枚举 + MessageContent + BaseMessage 接口 + DefaultMessage 默认实现 + UserMessage + SystemMessage
-//	  assistant_message.go    — AssistantMessage（嵌入 DefaultMessage + 扩展字段，自定义序列化）
-//	  tool_message.go         — ToolMessage（嵌入 DefaultMessage + 扩展字段）
-//	  message_factory.go      — UnmarshalMessage 通用消息反序列化工厂
-//	  message_chunk.go        — AssistantMessageChunk + ToolMessageChunk（流式消息块）
-//	  generation_response.go  — 多模态生成响应（图片/音频/视频）
-//	  config.go               — ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
-//	  model_info.go           — BaseModelInfo + ModelConfig
+//	├── doc.go               # 包文档
+//	├── tool_call.go         # ToolCall 结构体 + OpenAI 格式转换
+//	├── usage_metadata.go    # UsageMetadata 结构体
+//	├── message.go           # RoleType 枚举 + MessageContent + BaseMessage 接口 + DefaultMessage 默认实现 + UserMessage + SystemMessage
+//	├── assistant_message.go # AssistantMessage（嵌入 DefaultMessage + 扩展字段，自定义序列化）
+//	├── tool_message.go      # ToolMessage（嵌入 DefaultMessage + 扩展字段）
+//	├── message_chunk.go     # AssistantMessageChunk + ToolMessageChunk（流式消息块）
+//	├── generation_response.go # 多模态生成响应（图片/音频/视频）
+//	├── config.go            # ProviderType + ModelClientConfig + ModelRequestConfig + ProviderValidator
+//	└── model_info.go        # BaseModelInfo + ModelConfig
 //
 // 对应 Python 代码路径：
 //

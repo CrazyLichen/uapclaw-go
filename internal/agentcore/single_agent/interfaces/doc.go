@@ -25,4 +25,6 @@
 //	BaseRail                 — AgentRail 的 no-op 默认实现
 //	EventInputs              — 回调事件输入接口
 //	Workflow                 — 工作流执行接口
+//
+// 对应 Python 代码：openjiuwen/core/single_agent/interfaces/
 package interfaces

@@ -14,5 +14,13 @@
 //
 // 本包还提供 ParseEarly 函数，用于在 CLI 子命令执行前
 // 预解析 --dotenv/--name 参数，实现多实例隔离。
-// 对应 Python: jiuwenswarm/dotenv_early.py
+//
+// 文件目录：
+//
+//	dotenv/
+//	├── doc.go    # 包文档
+//	├── dotenv.go # .env 文件解析与加载
+//	└── early.go  # ParseEarly 预解析（多实例隔离）
+//
+// 对应 Python 代码：jiuwenswarm/dotenv_early.py
 package dotenv

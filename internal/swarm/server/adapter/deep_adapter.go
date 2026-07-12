@@ -13,14 +13,14 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
@@ -289,10 +289,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 3: instanceOverrides
 	d.instanceOverrides = make(map[string]any)
-	if configMap != nil {
-		for k, v := range configMap {
-			d.instanceOverrides[k] = v
-		}
+	for k, v := range configMap {
+		d.instanceOverrides[k] = v
 	}
 
 	// 步骤 4: load_dotenv
@@ -508,13 +506,11 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 
 	// 步骤 2: 应用环境变量覆盖
 	// 对齐 Python: for env_key, env_value in env_overrides.items(): os.environ[str(env_key)] = str(env_value)
-	if envOverrides != nil {
-		for k, v := range envOverrides {
-			if v == nil {
-				os.Unsetenv(k)
-			} else {
-				os.Setenv(k, fmt.Sprintf("%v", v))
-			}
+	for k, v := range envOverrides {
+		if v == nil {
+			os.Unsetenv(k)
+		} else {
+			os.Setenv(k, fmt.Sprintf("%v", v))
 		}
 	}
 
@@ -842,13 +838,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				// 累加 usage → yield chat.usage_metadata
 				d.accumulateUsage(usage, payload)
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
-					"event_type":      "chat.usage_metadata",
-					"input_tokens":    usage.InputTokens,
-					"output_tokens":   usage.OutputTokens,
-					"total_tokens":    usage.TotalTokens,
-					"input_cost":      usage.InputCost,
-					"output_cost":     usage.OutputCost,
-					"total_cost":      usage.TotalCost,
+					"event_type":    "chat.usage_metadata",
+					"input_tokens":  usage.InputTokens,
+					"output_tokens": usage.OutputTokens,
+					"total_tokens":  usage.TotalTokens,
+					"input_cost":    usage.InputCost,
+					"output_cost":   usage.OutputCost,
+					"total_cost":    usage.TotalCost,
 				})
 
 			case "llm_reasoning":
@@ -896,7 +892,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			})
 		}
 
-		// usage summary
+		// 用量摘要
 		if usage.TotalTokens > 0 {
 			usageSummary := map[string]any{
 				"event_type":    "chat.usage_summary",
@@ -1796,4 +1792,3 @@ func extractReasoningContent(payload any) string {
 }
 
 // ──────────────────────────── 占位函数（后续 Task 回填） ────────────────────────────
-

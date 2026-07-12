@@ -759,7 +759,7 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 	case sysop.ShellTypeCmd:
 		if !isWindows {
 			// 对齐 Python：cmd 仅 Windows 支持
-			return nil, false, fmt.Sprintf("shell_type 'cmd' is only supported on Windows")
+			return nil, false, "shell_type 'cmd' is only supported on Windows"
 		}
 		return []string{"cmd", "/c", command}, true, "cmd"
 
@@ -847,12 +847,12 @@ func detectShellEncoding() string {
 func getLangEncoding(encoding string) string {
 	// 简化实现：常见编码映射
 	encMap := map[string]string{
-		"cp936":  "GBK",
-		"gbk":    "GBK",
-		"gb2312": "GBK",
+		"cp936":   "GBK",
+		"gbk":     "GBK",
+		"gb2312":  "GBK",
 		"gb18030": "GB18030",
-		"utf-8":  "UTF-8",
-		"utf8":   "UTF-8",
+		"utf-8":   "UTF-8",
+		"utf8":    "UTF-8",
 		"latin-1": "ISO-8859-1",
 		"latin1":  "ISO-8859-1",
 	}

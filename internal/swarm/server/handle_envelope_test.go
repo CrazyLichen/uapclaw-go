@@ -83,7 +83,7 @@ func TestApplyResolvedModeToRequest(t *testing.T) {
 			name:     "仅mode无subMode",
 			params:   json.RawMessage(`{"mode": "code"}`),
 			wantMode: "code",
-			wantSub:  "plan",
+			wantSub:  "normal",
 		},
 		{
 			name:     "空mode字符串",
@@ -115,20 +115,20 @@ func TestResolveRequestProjectDir(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "从params读取workspace_dir",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"workspace_dir": "/tmp/project"}`)),
+			name:    "从params读取project_dir",
+			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"project_dir": "/tmp/project"}`)),
 			want:    "/tmp/project",
 		},
 		{
-			name: "从metadata读取workspace_dir",
+			name: "从metadata读取project_dir",
 			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{}`),
-				schema.WithAgentMetadata(map[string]any{"workspace_dir": "/tmp/meta-project"}),
+				schema.WithAgentMetadata(map[string]any{"project_dir": "/tmp/meta-project"}),
 			),
 			want: "/tmp/meta-project",
 		},
 		{
 			name:    "params优先于metadata",
-			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"workspace_dir": "/tmp/params"}`)),
+			request: schema.NewAgentRequest("req-1", "web", schema.ReqMethodChatSend, json.RawMessage(`{"project_dir": "/tmp/params"}`)),
 			want:    "/tmp/params",
 		},
 		{

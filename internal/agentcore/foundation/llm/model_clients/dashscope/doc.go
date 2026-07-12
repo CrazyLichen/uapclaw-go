@@ -14,13 +14,13 @@
 //   - 视频调用视频生成 API
 //   - 自动从 api_base 推导 DashScope 原生 API 的 base URL
 //
-// # 文件清单
+// 文件目录：
 //
 //	dashscope/
-//	  doc.go              — 包文档（本文件）
-//	  types.go            — DashScope API 响应 JSON 结构体定义 + 常量
-//	  api_client.go       — DashScope HTTP API 调用封装（认证、URL 推导、错误处理）
-//	  client.go           — DashScopeModelClient 主结构体 + GenerateImage/Speech/Video + init 注册
+//	├── doc.go        # 包文档
+//	├── types.go      # DashScope API 响应 JSON 结构体定义 + 常量
+//	├── api_client.go # DashScope HTTP API 调用封装（认证、URL 推导、错误处理）
+//	└── client.go     # DashScopeModelClient 主结构体 + GenerateImage/Speech/Video + init 注册
 //
 // # 注册
 //
@@ -32,7 +32,7 @@
 //
 //	import _ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/dashscope"
 //
-// # Python 对应路径
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/llm/model_clients/dashscope_model_client.py
 package dashscope

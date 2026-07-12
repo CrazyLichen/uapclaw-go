@@ -42,17 +42,18 @@
 //	step1, _ := tmpl.Format(map[string]any{"domain": "AI"})       // name 保留 {{name}}
 //	step2, _ := step1.Format(map[string]any{"name": "Bob"})       // 全部填充完成
 //
-// # 文件清单
+// 文件目录：
 //
 //	prompt/
-//	  doc.go                    — 包文档（本文件）
-//	  variable.go               — Variable 接口 + baseVariable
-//	  textable_variable.go      — TextableVariable
-//	  dictable_variable.go      — DictableVariable
-//	  assembler.go              — PromptAssembler
-//	  template.go               — PromptTemplate
+//	├── doc.go              # 包文档
+//	├── variable.go         # Variable 接口 + baseVariable
+//	├── textable_variable.go # TextableVariable
+//	├── dictable_variable.go # DictableVariable
+//	├── reflect_helper.go   # 反射辅助函数（嵌套属性解析）
+//	├── assembler.go        # PromptAssembler
+//	└── template.go         # PromptTemplate
 //
-// # Python 对应路径
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/prompt/assemble/variables/variable.py   — Variable
 //	openjiuwen/core/foundation/prompt/assemble/variables/textable.py   — TextableVariable

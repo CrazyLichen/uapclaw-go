@@ -169,6 +169,66 @@ func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMess
 	return sb.String()
 }
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。
+//
+// 对应 Python: ContextUtils.find_last_n_dialogue_round()
+func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
+	rounds := processor.FindAllDialogueRound(messages)
+	if len(rounds) == 0 {
+		return -1
+	}
+
+	// rounds 从新到旧排列，取 min(n, len(rounds))-1 得到目标轮次索引
+	targetIdx := n
+	if targetIdx > len(rounds) {
+		targetIdx = len(rounds)
+	}
+	targetRound := rounds[targetIdx-1]
+
+	// 返回 user 消息索引，如果 userIdx 为 nil → 返回 -1
+	userIdx := targetRound[0]
+	if userIdx == nil {
+		return -1
+	}
+	return *userIdx
+}
+
+// FindLastAIAbsentToolCall 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
+//
+// 对应 Python: ContextUtils.find_last_ai_message_without_tool_call()
+func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.GetRole() == llm_schema.RoleTypeAssistant {
+			am, ok := msg.(*llm_schema.AssistantMessage)
+			if ok && len(am.ToolCalls) == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// FindMessageIndexByContextMessageID 根据消息元数据中的 context_message_id 查找消息索引。
+//
+// 返回第一条匹配的消息索引，未找到返回 -1。
+//
+// 对应 Python: ContextUtils.find_message_index_by_context_message_id()
+func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id string) int {
+	for i, msg := range messages {
+		metadata := msg.GetMetadata()
+		if metadata == nil {
+			continue
+		}
+		if msgID, ok := metadata[ContextMessageIDKey].(string); ok && msgID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // messageToMap 将消息转换为 map，对齐 Python model_dump() 输出全部字段。
@@ -229,64 +289,4 @@ func messageToMap(msg llm_schema.BaseMessage) map[string]any {
 		}
 	}
 	return result
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。
-//
-// 对应 Python: ContextUtils.find_last_n_dialogue_round()
-func FindLastNDialogueRound(messages []llm_schema.BaseMessage, n int) int {
-	rounds := processor.FindAllDialogueRound(messages)
-	if len(rounds) == 0 {
-		return -1
-	}
-
-	// rounds 从新到旧排列，取 min(n, len(rounds))-1 得到目标轮次索引
-	targetIdx := n
-	if targetIdx > len(rounds) {
-		targetIdx = len(rounds)
-	}
-	targetRound := rounds[targetIdx-1]
-
-	// 返回 user 消息索引，如果 userIdx 为 nil → 返回 -1
-	userIdx := targetRound[0]
-	if userIdx == nil {
-		return -1
-	}
-	return *userIdx
-}
-
-// FindLastAIAbsentToolCall 从后往前查找最后一条不含 ToolCalls 的 AssistantMessage 索引。
-//
-// 对应 Python: ContextUtils.find_last_ai_message_without_tool_call()
-func FindLastAIAbsentToolCall(messages []llm_schema.BaseMessage) int {
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-		if msg.GetRole() == llm_schema.RoleTypeAssistant {
-			am, ok := msg.(*llm_schema.AssistantMessage)
-			if ok && len(am.ToolCalls) == 0 {
-				return i
-			}
-		}
-	}
-	return -1
-}
-
-// FindMessageIndexByContextMessageID 根据消息元数据中的 context_message_id 查找消息索引。
-//
-// 返回第一条匹配的消息索引，未找到返回 -1。
-//
-// 对应 Python: ContextUtils.find_message_index_by_context_message_id()
-func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id string) int {
-	for i, msg := range messages {
-		metadata := msg.GetMetadata()
-		if metadata == nil {
-			continue
-		}
-		if msgID, ok := metadata[ContextMessageIDKey].(string); ok && msgID == id {
-			return i
-		}
-	}
-	return -1
 }

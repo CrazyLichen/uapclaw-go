@@ -28,7 +28,13 @@
 //
 //	import _ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/inference_affinity"
 //
-// # Python 对应路径
+// 文件目录：
+//
+//	inference_affinity/
+//	├── doc.go   # 包文档
+//	└── client.go # InferenceAffinityModelClient + Invoke/Stream/Release + sanitize + init 注册
+//
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/llm/model_clients/inference_affinity_model_client.py
 package inferenceaffinity

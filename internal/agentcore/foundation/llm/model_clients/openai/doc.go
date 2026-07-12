@@ -10,16 +10,16 @@
 //   - 自实现 SSE (Server-Sent Events) 读取器解析流式响应
 //   - 兼容多种 OpenAI 兼容 API（OpenRouter、vLLM 等），自行控制更灵活
 //
-// # 文件清单
+// 文件目录：
 //
 //	openai/
-//	  doc.go                  — 包文档（本文件）
-//	  types.go                — OpenAI API 响应 JSON 结构体定义
-//	  sse_reader.go           — SSE 流读取器
-//	  request_builder.go      — 请求构建（headers、参数调整、SSL/代理）
-//	  parse_response.go       — 非流式响应解析
-//	  parse_stream_chunk.go   — 流式块解析
-//	  client.go               — OpenAIModelClient 主结构体 + Invoke/Stream + init 注册
+//	├── doc.go              # 包文档
+//	├── types.go            # OpenAI API 响应 JSON 结构体定义
+//	├── sse_reader.go       # SSE 流读取器
+//	├── request_builder.go  # 请求构建（headers、参数调整、SSL/代理）
+//	├── parse_response.go   # 非流式响应解析
+//	├── parse_stream_chunk.go # 流式块解析
+//	└── client.go           # OpenAIModelClient 主结构体 + Invoke/Stream + init 注册
 //
 // # 注册
 //
@@ -32,7 +32,7 @@
 //
 //	import _ "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients/openai"
 //
-// # Python 对应路径
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/llm/model_clients/openai_model_client.py
 package openai

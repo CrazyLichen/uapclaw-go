@@ -7,6 +7,41 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CompressContext 触发上下文压缩。
+// 对齐 Python: compress_context() (line 5380-5570)
+// ⤵️ SessionHistory(JSONL): 需要会话历史持久化
+func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error) {
+	// ⤵️ SessionHistory(JSONL): 实现上下文压缩
+	logger.Info(logComponent).Str("session_id", sessionID).Bool("return_state", returnState).Msg("CompressContext 等待 SessionHistory 回填")
+	return nil, nil
+}
+
+// GetContextUsage 获取上下文窗口占用率。
+// 对齐 Python: get_context_usage() (line 5572-5588)
+func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
+	if d.instance == nil {
+		return nil, nil
+	}
+	// 对齐 Python: 直接调 instance.get_context_usage()
+	usage, err := d.instance.GetContextUsage(ctx, sessionID, "")
+	if err != nil {
+		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("GetContextUsage 失败")
+		return nil, err
+	}
+	return usage, nil
+}
+
+// GenerateRecap 生成会话回顾摘要。
+// 对齐 Python: generate_recap() (line 5590-5663)
+// ⤵️ SessionHistory(JSONL): 需要会话历史持久化
+func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
+	// ⤵️ SessionHistory(JSONL): 实现 recap 生成
+	logger.Info(logComponent).Str("session_id", sessionID).Msg("GenerateRecap 等待 SessionHistory 回填")
+	return nil, nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // watchEvolutionAndPush 启动 evolution 观察任务。
@@ -42,43 +77,6 @@ func (d *DeepAdapter) handleEvolutionApproval(requestID string, answers any) boo
 	logger.Info(logComponent).Str("request_id", requestID).Msg("handleEvolutionApproval 等待 10.6.3-10 回填")
 	return false
 }
-
-// ──────────────────────────── ContextCompressor 接口实现 ────────────────────────────
-
-// CompressContext 触发上下文压缩。
-// 对齐 Python: compress_context() (line 5380-5570)
-// ⤵️ SessionHistory(JSONL): 需要会话历史持久化
-func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error) {
-	// ⤵️ SessionHistory(JSONL): 实现上下文压缩
-	logger.Info(logComponent).Str("session_id", sessionID).Bool("return_state", returnState).Msg("CompressContext 等待 SessionHistory 回填")
-	return nil, nil
-}
-
-// GetContextUsage 获取上下文窗口占用率。
-// 对齐 Python: get_context_usage() (line 5572-5588)
-func (d *DeepAdapter) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
-	if d.instance == nil {
-		return nil, nil
-	}
-	// 对齐 Python: 直接调 instance.get_context_usage()
-	usage, err := d.instance.GetContextUsage(ctx, sessionID, "")
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("GetContextUsage 失败")
-		return nil, err
-	}
-	return usage, nil
-}
-
-// GenerateRecap 生成会话回顾摘要。
-// 对齐 Python: generate_recap() (line 5590-5663)
-// ⤵️ SessionHistory(JSONL): 需要会话历史持久化
-func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
-	// ⤵️ SessionHistory(JSONL): 实现 recap 生成
-	logger.Info(logComponent).Str("session_id", sessionID).Msg("GenerateRecap 等待 SessionHistory 回填")
-	return nil, nil
-}
-
-// ──────────────────────────── Recap 辅助方法 ────────────────────────────
 
 // getRecentMessages 获取最近消息列表。
 // 对齐 Python: _get_recent_messages() (line 5665-5690)

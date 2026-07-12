@@ -522,6 +522,14 @@ func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
 }
 
+// setMessageBus 设置消息总线（仅测试使用）。
+// 生产代码中 MessageBus 由 NewTeamRuntime 自动创建，无需手动设置。
+func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
+	tr.messageBus = bus
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // ensureStarted 确保运行时已启动（懒启动）。
 // 对齐 Python: TeamRuntime._ensure_started() (line 153-159)
 func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
@@ -534,14 +542,6 @@ func (tr *TeamRuntime) ensureStarted(ctx context.Context) error {
 		return nil
 	}
 	return tr.Start(ctx)
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// setMessageBus 设置消息总线（仅测试使用）。
-// 生产代码中 MessageBus 由 NewTeamRuntime 自动创建，无需手动设置。
-func (tr *TeamRuntime) SetMessageBus(bus MessageBusInterface) {
-	tr.messageBus = bus
 }
 
 // isResourceAlreadyExistsError 判断是否为"资源已存在"类错误。

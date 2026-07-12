@@ -153,9 +153,9 @@ func (b *BaseSysOperation) IsolationKeyTemplate() string { return "" }
 
 // validateSandboxGatewayConfig 校验沙箱网关配置。
 // 对齐 Python SysOperation._validate_sandbox_gateway_config：
-//  - launcher_config 不能为 nil
-//  - launcher_type 不能为空
-//  - sandbox_type 不能为空
+//   - launcher_config 不能为 nil
+//   - launcher_type 不能为空
+//   - sandbox_type 不能为空
 func validateSandboxGatewayConfig(config *SandboxGatewayConfig) error {
 	if config == nil {
 		return fmt.Errorf("sandbox 模式需要 gateway_config")

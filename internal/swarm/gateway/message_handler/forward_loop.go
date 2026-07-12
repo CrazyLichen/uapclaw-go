@@ -12,6 +12,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// streamFinalState 流式任务结束状态追踪（供 defer 使用）
+type streamFinalState struct {
+	cancelled                bool
+	hasProcessingStatusFalse bool
+}
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // PublishRobotMessages 将 Agent 响应写入出站 channel。
@@ -625,12 +633,6 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 			mh.PublishRobotMessages(outMsg)
 		}
 	}
-}
-
-// streamFinalState 流式任务结束状态追踪（供 defer 使用）
-type streamFinalState struct {
-	cancelled                  bool
-	hasProcessingStatusFalse   bool
 }
 
 // streamFinalCleanup 流式任务结束后执行 finally 清理逻辑。

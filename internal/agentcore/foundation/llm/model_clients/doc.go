@@ -37,20 +37,16 @@
 //	  IsText  → 纯文本
 //	  Parts   → 多模态内容分片
 //
-// # 文件清单
+// 文件目录：
 //
 //	model_clients/
-//	  doc.go                 — 包文档（本文件）
-//	  base_client.go         — BaseModelClient 接口 + BaseOutputParser + BaseClientEmbed（Stream 返回纯 chunk channel）
-//	  base_client_test.go    — BaseClientEmbed 测试
-//	  registry.go            — ClientRegistry + CreateModelClient + ProviderValidator 桥接
-//	  registry_test.go       — 注册表测试
-//	  messages_param.go      — MessagesParam 输入侧三态消息参数
-//	  messages_param_test.go — MessagesParam 测试
-//	  invoke_params.go       — InvokeParams/StreamParams/Generate*Params + Functional Options
-//	  invoke_params_test.go  — 参数 Options 测试
+//	├── doc.go            # 包文档
+//	├── base_client.go    # BaseModelClient 接口 + BaseOutputParser + BaseClientEmbed（Stream 返回纯 chunk channel）
+//	├── registry.go       # ClientRegistry + CreateModelClient + ProviderValidator 桥接
+//	├── messages_param.go # MessagesParam 输入侧三态消息参数
+//	└── invoke_params.go  # InvokeParams/StreamParams/Generate*Params + Functional Options
 //
-// # Python 对应路径
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/llm/model_clients/base_model_client.py  — BaseModelClient
 //	openjiuwen/core/foundation/llm/model_clients/__init__.py           — create_model_client

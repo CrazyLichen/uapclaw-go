@@ -28,18 +28,16 @@
 //	    }
 //	}
 //
-// # 文件清单
+// 文件目录：
 //
 //	output_parsers/
-//	  doc.go                    — 包文档（本文件）
-//	  output_parser.go          — 重新导出类型 + 辅助函数
-//	  json_output_parser.go     — JsonOutputParser
-//	  json_output_parser_test.go
-//	  markdown_types.go         — MarkdownElementType/MarkdownElement/MarkdownContent
-//	  markdown_output_parser.go — MarkdownOutputParser
-//	  markdown_output_parser_test.go
+//	├── doc.go                   # 包文档
+//	├── output_parser.go         # 重新导出类型 + 辅助函数
+//	├── json_output_parser.go    # JsonOutputParser
+//	├── markdown_types.go        # MarkdownElementType/MarkdownElement/MarkdownContent
+//	└── markdown_output_parser.go # MarkdownOutputParser
 //
-// # Python 对应路径
+// 对应 Python 代码：
 //
 //	openjiuwen/core/foundation/llm/output_parsers/output_parser.py          — BaseOutputParser
 //	openjiuwen/core/foundation/llm/output_parsers/json_output_parser.py     — JsonOutputParser

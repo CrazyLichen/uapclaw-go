@@ -159,8 +159,8 @@ func TestCommitInterrupt(t *testing.T) {
 	subAgentOutputs := []PayloadEntry{
 		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
 			Request:    &saschema.InterruptRequest{Message: "确认"},
-			ToolName:         "tool1",
-			ToolCallID:       "tc1",
+			ToolName:   "tool1",
+			ToolCallID: "tc1",
 		}},
 	}
 
@@ -309,8 +309,8 @@ func TestBuildInterruptResult_ToolCallInterruptRequest(t *testing.T) {
 	payloads := []PayloadEntry{
 		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
 			Request:    &saschema.InterruptRequest{Message: "确认"},
-			ToolName:         "tool1",
-			ToolCallID:       "tc1",
+			ToolName:   "tool1",
+			ToolCallID: "tc1",
 		}},
 	}
 	result := BuildInterruptResult(payloads)
@@ -410,8 +410,8 @@ func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
 func TestHandleSubAgentInterrupt(t *testing.T) {
 	tcir := &saschema.ToolCallInterruptRequest{
 		Request:    &saschema.InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_auto"},
-		ToolName:         "sub_tool",
-		ToolCallID:       "inner_1",
+		ToolName:   "sub_tool",
+		ToolCallID: "inner_1",
 	}
 	subResult := map[string]any{
 		"result_type":   "interrupt",
@@ -576,8 +576,8 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 					ID: "inner_2",
 					Value: &saschema.ToolCallInterruptRequest{
 						Request:    &saschema.InterruptRequest{Message: "子Agent确认"},
-						ToolName:         "sub_tool",
-						ToolCallID:       "inner_2",
+						ToolName:   "sub_tool",
+						ToolCallID: "inner_2",
 					},
 				},
 			},

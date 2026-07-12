@@ -49,9 +49,9 @@ func (s *stubChannel) Send(_ context.Context, msg *schema.Message) error {
 	return nil
 }
 func (s *stubChannel) OnMessage(callback func(*schema.Message) bool) { s.onMsgCb = callback }
-func (s *stubChannel) IsRunning() bool                          { return s.running }
-func (s *stubChannel) ChannelID() string                        { return s.id }
-func (s *stubChannel) ChannelType() ChannelType                 { return s.chType }
+func (s *stubChannel) IsRunning() bool                               { return s.running }
+func (s *stubChannel) ChannelID() string                             { return s.id }
+func (s *stubChannel) ChannelType() ChannelType                      { return s.chType }
 
 func (s *stubChannel) getSentMsgs() []*schema.Message {
 	s.mu.Lock()
