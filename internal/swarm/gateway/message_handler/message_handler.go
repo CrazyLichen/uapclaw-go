@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -20,8 +19,6 @@ import (
 type MessageHandler struct {
 	// agentClient AgentServer 客户端（封装 Transport 通信）
 	agentClient *routing.AgentClient
-	// channelMgr 渠道管理器
-	channelMgr *channel_manager.ChannelManager
 
 	// userMessages 入站消息 channel（Channel → MessageHandler）
 	userMessages chan *schema.Message
@@ -63,11 +60,12 @@ const logComponent = logger.ComponentGateway
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewMessageHandler 创建消息处理器
-func NewMessageHandler(agentClient *routing.AgentClient, channelMgr *channel_manager.ChannelManager) *MessageHandler {
+// NewMessageHandler 创建消息处理器。
+//
+// 对齐 Python: MessageHandler(agent_client) — 只需 1 个参数。
+func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	return &MessageHandler{
 		agentClient:    agentClient,
-		channelMgr:     channelMgr,
 		userMessages:   make(chan *schema.Message, 256),
 		robotMessages:  make(chan *schema.Message, 256),
 		streamTasks:    make(map[string]context.CancelFunc),

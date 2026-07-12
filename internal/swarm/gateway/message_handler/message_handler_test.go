@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
@@ -21,8 +20,7 @@ import (
 func TestNewMessageHandler_完整初始化(t *testing.T) {
 	transport := gateway_push.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
-	cm := channelManagerForTest()
-	mh := NewMessageHandler(agentClient, cm)
+	mh := NewMessageHandler(agentClient)
 
 	assert.NotNil(t, mh)
 	assert.NotNil(t, mh.userMessages)
@@ -269,15 +267,9 @@ func TestCancelAllStreamTasks(t *testing.T) {
 
 // ──────────────────────────── 非导出函数测试 ────────────────────────────
 
-// channelManagerForTest 创建测试用 ChannelManager
-func channelManagerForTest() *channel_manager.ChannelManager {
-	return channel_manager.NewChannelManager(nil, nil, nil, nil)
-}
-
 // createTestMessageHandlerWithTransport 创建带 AgentClient 的测试 MessageHandler
 func createTestMessageHandlerWithTransport() *MessageHandler {
 	transport := gateway_push.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
-	cm := channelManagerForTest()
-	return NewMessageHandler(agentClient, cm)
+	return NewMessageHandler(agentClient)
 }

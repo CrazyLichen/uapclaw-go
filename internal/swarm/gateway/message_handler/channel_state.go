@@ -165,22 +165,17 @@ func GenerateChannelSessionID(channelID string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// resolveControlChannelType 解析消息对应的受控渠道类型
+// resolveControlChannelType 解析消息对应的受控渠道类型。
+//
+// 对齐 Python: _resolve_control_channel_type — 优先 msg.provider，fallback msg.channel_id。
+// Python 不查 ChannelManager，直接从消息字段推断。
 func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel_manager.ChannelType {
-	chID := msg.ChannelID
-	if chID == "" {
-		return ""
+	// 优先 msg.Provider（对齐 Python: msg.provider）
+	if msg.Provider != "" {
+		return channel_manager.ChannelType(msg.Provider)
 	}
-
-	// 尝试从 ChannelManager 中查找渠道类型
-	if mh.channelMgr != nil {
-		if ch := mh.channelMgr.GetChannel(chID); ch != nil {
-			return ch.ChannelType()
-		}
-	}
-
-	// fallback：从 channelID 前缀推断
-	return inferChannelTypeFromID(chID)
+	// fallback: 从 channelID 推断（对齐 Python: msg.channel_id）
+	return inferChannelTypeFromID(msg.ChannelID)
 }
 
 // getChannelDefaultState 从默认配置创建渠道状态
