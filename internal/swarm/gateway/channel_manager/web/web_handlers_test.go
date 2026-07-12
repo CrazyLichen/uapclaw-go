@@ -69,7 +69,7 @@ func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
 }
 
 func TestRegisterWebHandlers_全量注册(t *testing.T) {
-	d := RegisterWebHandlers(nil, nil, nil)
+	d := RegisterWebHandlers(nil, nil)
 
 	// 验证核心方法已注册
 	expectedMethods := []string{
@@ -260,29 +260,29 @@ func TestStubHandler(t *testing.T) {
 
 func TestChatMethods_Ack响应(t *testing.T) {
 	// chat.send
-	result, err := handleChatSend(nil)(context.Background(), nil, "sess_1")
+	result, err := handleChatSend()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "sess_1", result["session_id"])
 
 	// chat.resume
-	result, err = handleChatResume(nil)(context.Background(), nil, "sess_1")
+	result, err = handleChatResume()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 
 	// chat.interrupt
-	result, err = handleChatInterrupt(nil)(context.Background(), nil, "sess_1")
+	result, err = handleChatInterrupt()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "interrupt", result["intent"])
 
 	// chat.user_answer
-	result, err = handleChatUserAnswer(nil)(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
+	result, err = handleChatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 	assert.Equal(t, "req_1", result["request_id"])
 
-	// chat handlers 现在通过 OnMessage 回调转发，不再发送模拟事件
+	// chat handlers 仅返回 ack 响应，消息转发由两层架构第一层处理
 }
 
 func TestConfigEnvMap_条目数(t *testing.T) {

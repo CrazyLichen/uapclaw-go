@@ -18,7 +18,6 @@ import (
 	web "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager/web"
 	mh "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/message_handler"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -116,12 +115,8 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 	s.webChannel = wc
 
 	// 步骤4：注册 WebChannel（对齐 Python register_channel_with_inbound）
-	// web_norm_and_forward 回调：先 normalize 再转发到 MessageHandler
-	webNormAndForward := func(msg *schema.Message) bool {
-		// TODO(Task 4): 实现 NormalizeGatewayMessage（content→query, resume→cancel, is_stream 推断）
-		msgHandler.HandleMessage(msg)
-		return true
-	}
+	// web_norm_and_forward 回调：先 NormalizeGatewayMessage 再转发到 MessageHandler
+	webNormAndForward := web.MakeNormAndForward(channelMgr)
 	channelMgr.RegisterChannelWithInbound(wc, webNormAndForward)
 
 	// 组装路由

@@ -17,7 +17,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -161,10 +160,10 @@ func NewRPCDispatcher() *RPCDispatcher {
 
 // RegisterWebHandlers 创建 RPC 分发器并注册所有应用方法。
 //
-// onMessage 由 WebChannel.triggerOnMessage 提供，chat handler 通过此回调转发消息。
 // 对齐 Python app_web_handlers.py 中 _register_web_handlers(bind)，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
-func RegisterWebHandlers(sendEvent EventSender, onMessage func(*schema.Message), onConfigSaved OnConfigSavedFunc) *RPCDispatcher {
+// 消息转发由两层架构的第一层（normAndForward）处理，本地 handler 仅返回 ack。
+func RegisterWebHandlers(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) *RPCDispatcher {
 	d := NewRPCDispatcher()
 
 	// ─── 本地实现方法 ───
@@ -187,11 +186,11 @@ func RegisterWebHandlers(sendEvent EventSender, onMessage func(*schema.Message),
 	// ─── session 辅助方法 ───
 	d.Register("session.switch", stubHandler("session.switch", map[string]any{"ok": true}))
 
-	// ─── chat 类方法（本地 ack + 延时模拟 event）───
-	d.Register("chat.send", handleChatSend(onMessage))
-	d.Register("chat.resume", handleChatResume(onMessage))
-	d.Register("chat.interrupt", handleChatInterrupt(onMessage))
-	d.Register("chat.user_answer", handleChatUserAnswer(onMessage))
+	// ─── chat 类方法（本地 ack 响应，消息转发由两层架构第一层处理）───
+	d.Register("chat.send", handleChatSend())
+	d.Register("chat.resume", handleChatResume())
+	d.Register("chat.interrupt", handleChatInterrupt())
+	d.Register("chat.user_answer", handleChatUserAnswer())
 
 	// ─── 路径配置 ───
 	d.Register("path.get", stubHandler("path.get", map[string]any{"path": ""}))
@@ -747,66 +746,38 @@ func handleSessionDelete(_ context.Context, params map[string]any, _ string) (ma
 
 // handleChatSend 处理 chat.send 请求。
 //
-// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
-func handleChatSend(onMessage func(*schema.Message)) RPCHandlerFunc {
+// 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
+// 对齐 Python: chat.send handler 仅返回 ack。
+func handleChatSend() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		if onMessage != nil {
-			paramsJSON, _ := json.Marshal(params)
-			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatSend, paramsJSON,
-				schema.WithSessionID(sessionID),
-				schema.WithIsStream(true),
-			)
-			onMessage(msg)
-		}
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
 // handleChatResume 处理 chat.resume 请求。
 //
-// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
-func handleChatResume(onMessage func(*schema.Message)) RPCHandlerFunc {
+// 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
+func handleChatResume() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		if onMessage != nil {
-			paramsJSON, _ := json.Marshal(params)
-			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatResume, paramsJSON,
-				schema.WithSessionID(sessionID),
-			)
-			onMessage(msg)
-		}
 		return map[string]any{"accepted": true, "session_id": sessionID}, nil
 	}
 }
 
 // handleChatInterrupt 处理 chat.interrupt 请求。
 //
-// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
-func handleChatInterrupt(onMessage func(*schema.Message)) RPCHandlerFunc {
+// 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
+func handleChatInterrupt() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		if onMessage != nil {
-			paramsJSON, _ := json.Marshal(params)
-			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatCancel, paramsJSON,
-				schema.WithSessionID(sessionID),
-			)
-			onMessage(msg)
-		}
 		return map[string]any{"accepted": true, "session_id": sessionID, "intent": "interrupt"}, nil
 	}
 }
 
 // handleChatUserAnswer 处理 chat.user_answer 请求。
 //
-// 返回即时 ack 响应，通过 OnMessage 回调转发到 MessageHandler。
-func handleChatUserAnswer(onMessage func(*schema.Message)) RPCHandlerFunc {
+// 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
+func handleChatUserAnswer() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
 		requestID, _ := params["request_id"].(string)
-		if onMessage != nil {
-			paramsJSON, _ := json.Marshal(params)
-			msg := schema.NewReqMessage("web", sessionID, schema.ReqMethodChatAnswer, paramsJSON,
-				schema.WithSessionID(sessionID),
-			)
-			onMessage(msg)
-		}
 		return map[string]any{"accepted": true, "session_id": sessionID, "request_id": requestID}, nil
 	}
 }

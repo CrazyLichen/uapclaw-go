@@ -114,8 +114,8 @@ func NewWebChannel(cfg WebChannelConfig, onConfigSaved OnConfigSavedFunc) *WebCh
 		wc.broadcastEvent(event, payload)
 	}
 
-	// 注册 RPC handlers（onMessage 通过 OnMessage 方法设置，handler 内部通过 wc.onMessageCb 访问）
-	wc.dispatcher = RegisterWebHandlers(sendEvent, wc.triggerOnMessage, onConfigSaved)
+	// 注册 RPC handlers（消息转发由两层架构第一层处理，本地 handler 仅返回 ack）
+	wc.dispatcher = RegisterWebHandlers(sendEvent, onConfigSaved)
 
 	return wc
 }
@@ -230,6 +230,21 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			sid = s
 		}
 
+		// ─── 两层消息架构（对齐 Python _handle_raw_message）───
+		// 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发
+		handledByCallback := false
+		if wc.onMessageCb != nil {
+			userMessage := BuildUserMessage(req.ID, req.Method, params, sid)
+			handledByCallback = wc.onMessageCb(userMessage)
+		}
+
+		if handledByCallback {
+			// handledByCallback=true 时短路后续本地 handler
+			// 对齐 Python: if handled_by_callback: return
+			continue
+		}
+
+		// 第二层：本地 method handler（返回 ack 响应给客户端）
 		// 分发 RPC 请求
 		result, err := wc.dispatcher.Dispatch(req.Method, params, sid)
 		if err != nil {
@@ -388,16 +403,6 @@ func (wc *WebChannel) ClientCount() int {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// triggerOnMessage 触发入站消息回调。
-//
-// 供 RPC handler 内部调用，将消息转发到 MessageHandler。
-// 对齐 Python WebChannel.on_message → _on_message_cb。
-func (wc *WebChannel) triggerOnMessage(msg *schema.Message) {
-	if wc.onMessageCb != nil {
-		wc.onMessageCb(msg)
-	}
-}
 
 // broadcastEvent 向所有已连接客户端广播事件帧。
 func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {
