@@ -17,7 +17,7 @@ type stubChannel struct {
 	chType      ChannelType
 	running     bool
 	config      any
-	onMsgCb     func(*schema.Message)
+	onMsgCb     func(*schema.Message) bool
 	sentMsgs    []*schema.Message
 	mu          sync.Mutex
 	startCalled bool
@@ -48,7 +48,7 @@ func (s *stubChannel) Send(_ context.Context, msg *schema.Message) error {
 	s.sentMsgs = append(s.sentMsgs, msg)
 	return nil
 }
-func (s *stubChannel) OnMessage(callback func(*schema.Message)) { s.onMsgCb = callback }
+func (s *stubChannel) OnMessage(callback func(*schema.Message) bool) { s.onMsgCb = callback }
 func (s *stubChannel) IsRunning() bool                          { return s.running }
 func (s *stubChannel) ChannelID() string                        { return s.id }
 func (s *stubChannel) ChannelType() ChannelType                 { return s.chType }
@@ -63,7 +63,7 @@ func (s *stubChannel) getSentMsgs() []*schema.Message {
 
 // ──────────────────────────── stubMessageHandler 测试桩 ────────────────────────────
 
-// stubMessageHandler 用于测试的 InboundMessageHandler + RobotMessageConsumer 桩实现
+// stubMessageHandler 用于测试的 MessageHandlerInterface 桩实现
 type stubMessageHandler struct {
 	handledMessages []*schema.Message
 	consumeQueue    []*schema.Message
@@ -110,7 +110,7 @@ func (s *stubMessageHandler) enqueueConsume(msg *schema.Message) {
 // newTestCM 创建带默认 stubMessageHandler 的 ChannelManager
 func newTestCM() (*ChannelManager, *stubMessageHandler) {
 	mh := newStubMessageHandler()
-	cm := NewChannelManager(mh, mh, nil, nil)
+	cm := NewChannelManager(mh, nil, nil)
 	return cm, mh
 }
 
@@ -140,7 +140,9 @@ func TestChannelManager_RegisterChannel_默认回调转发(t *testing.T) {
 
 	// 模拟 Channel 收到消息触发回调
 	msg := &schema.Message{ID: "msg-1", ChannelID: "web-001"}
-	ch.onMsgCb(msg)
+	if ch.onMsgCb != nil {
+		ch.onMsgCb(msg)
+	}
 
 	handled := mh.getHandledMessages()
 	if len(handled) != 1 {
@@ -157,7 +159,9 @@ func TestChannelManager_RegisterChannel_存活检查(t *testing.T) {
 	// 注销后触发回调
 	cm.UnregisterChannel("web-001")
 	msg := &schema.Message{ID: "msg-2", ChannelID: "web-001"}
-	ch.onMsgCb(msg)
+	if ch.onMsgCb != nil {
+		ch.onMsgCb(msg)
+	}
 
 	handled := mh.getHandledMessages()
 	if len(handled) != 0 {
@@ -173,7 +177,10 @@ func TestChannelManager_RegisterChannelWithInbound_自定义回调(t *testing.T)
 	ch := newStubChannel("web-001", ChannelTypeWeb)
 
 	callbackCalled := false
-	cm.RegisterChannelWithInbound(ch, func(_ *schema.Message) { callbackCalled = true })
+	cm.RegisterChannelWithInbound(ch, func(_ *schema.Message) bool {
+		callbackCalled = true
+		return true
+	})
 
 	if cm.GetChannel("web-001") == nil {
 		t.Error("RegisterChannelWithInbound 后 GetChannel 应返回非 nil")
@@ -183,19 +190,6 @@ func TestChannelManager_RegisterChannelWithInbound_自定义回调(t *testing.T)
 		if !callbackCalled {
 			t.Error("自定义回调应被触发")
 		}
-	}
-}
-
-// ──────────────────────────── RegisterExternalChannel 测试 ────────────────────────────
-
-// TestChannelManager_RegisterExternalChannel_登记成功 测试外部登记
-func TestChannelManager_RegisterExternalChannel_登记成功(t *testing.T) {
-	cm, _ := newTestCM()
-	ch := newStubChannel("external-001", ChannelTypeWeb)
-
-	cm.RegisterExternalChannel("external-001", ch)
-	if cm.GetChannel("external-001") == nil {
-		t.Error("RegisterExternalChannel 后 GetChannel 应返回非 nil")
 	}
 }
 
@@ -333,7 +327,7 @@ func TestChannelManager_GetConf_存在(t *testing.T) {
 	initial := map[string]map[string]any{
 		"feishu-001": {"app_id": "cli_xxx", "secret": "yyy"},
 	}
-	cm := NewChannelManager(nil, nil, initial, nil)
+	cm := NewChannelManager(nil, initial, nil)
 
 	conf := cm.GetConf("feishu-001")
 	if conf["app_id"] != "cli_xxx" {
@@ -353,7 +347,7 @@ func TestChannelManager_GetConf_不存在(t *testing.T) {
 // TestChannelManager_SetConf_触发回调 测试 SetConf 触发配置更新回调
 func TestChannelManager_SetConf_触发回调(t *testing.T) {
 	var callbackConfig map[string]map[string]any
-	cm := NewChannelManager(nil, nil, nil, func(config map[string]map[string]any) {
+	cm := NewChannelManager(nil, nil, func(config map[string]map[string]any) {
 		callbackConfig = config
 	})
 
@@ -370,7 +364,7 @@ func TestChannelManager_SetConf_触发回调(t *testing.T) {
 // TestChannelManager_SetConfig_整体替换 测试 SetConfig 整体替换配置
 func TestChannelManager_SetConfig_整体替换(t *testing.T) {
 	var callbackConfig map[string]map[string]any
-	cm := NewChannelManager(nil, nil, nil, func(config map[string]map[string]any) {
+	cm := NewChannelManager(nil, nil, func(config map[string]map[string]any) {
 		callbackConfig = config
 	})
 

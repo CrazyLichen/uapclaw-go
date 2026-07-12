@@ -5,8 +5,7 @@
 // （存活检查+转发到 MessageHandler）和出站消息派发（按 channel_id 定向投递）。
 //
 // 核心接口：
-//   - InboundMessageHandler — 入站消息处理接口，由 MessageHandler 实现
-//   - RobotMessageConsumer — 出站消息消费接口，由 MessageHandler 实现
+//   - MessageHandlerInterface — 消息处理器接口（合并入站+出站），由 MessageHandler 实现
 //
 // 文件目录：
 //

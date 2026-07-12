@@ -54,8 +54,8 @@ type WebChannel struct {
 	running bool
 	// runningMu 保护 running 的并发访问
 	runningMu sync.RWMutex
-	// onMessageCb 入站消息回调
-	onMessageCb func(*schema.Message)
+	// onMessageCb 入站消息回调（返回 true 表示已处理，短路后续 handler）
+	onMessageCb func(*schema.Message) bool
 	// agentClient AgentServer 客户端（nil 表示无需等待，直接发 connection.ack）
 	agentClient *routing.AgentClient
 	// onConfigSavedCb 配置保存回调
@@ -86,8 +86,9 @@ const (
 // NewWebChannel 创建 Web 通道实例。
 //
 // 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
+// onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入。
 // 对齐 Python: WebChannel.__init__ + _register_web_handlers(bind)。
-func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message), onConfigSaved OnConfigSavedFunc) *WebChannel {
+func NewWebChannel(cfg WebChannelConfig, onConfigSaved OnConfigSavedFunc) *WebChannel {
 	// 填充默认值
 	if cfg.Host == "" {
 		cfg.Host = defaultWebHost
@@ -105,7 +106,6 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message), onConf
 		upgrader: websocket.Upgrader{
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
-		onMessageCb:     onMessage,
 		onConfigSavedCb: onConfigSaved,
 	}
 
@@ -114,7 +114,8 @@ func NewWebChannel(cfg WebChannelConfig, onMessage func(*schema.Message), onConf
 		wc.broadcastEvent(event, payload)
 	}
 
-	wc.dispatcher = RegisterWebHandlers(sendEvent, onMessage, onConfigSaved)
+	// 注册 RPC handlers（onMessage 通过 OnMessage 方法设置，handler 内部通过 wc.onMessageCb 访问）
+	wc.dispatcher = RegisterWebHandlers(sendEvent, wc.triggerOnMessage, onConfigSaved)
 
 	return wc
 }
@@ -345,7 +346,9 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 }
 
 // OnMessage 注册入站消息回调。
-func (wc *WebChannel) OnMessage(callback func(*schema.Message)) {
+//
+// 对齐 Python BaseChannel.on_message，返回 true 表示已处理。
+func (wc *WebChannel) OnMessage(callback func(*schema.Message) bool) {
 	wc.onMessageCb = callback
 }
 
@@ -385,6 +388,16 @@ func (wc *WebChannel) ClientCount() int {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// triggerOnMessage 触发入站消息回调。
+//
+// 供 RPC handler 内部调用，将消息转发到 MessageHandler。
+// 对齐 Python WebChannel.on_message → _on_message_cb。
+func (wc *WebChannel) triggerOnMessage(msg *schema.Message) {
+	if wc.onMessageCb != nil {
+		wc.onMessageCb(msg)
+	}
+}
 
 // broadcastEvent 向所有已连接客户端广播事件帧。
 func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {

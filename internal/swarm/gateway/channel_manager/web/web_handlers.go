@@ -161,9 +161,9 @@ func NewRPCDispatcher() *RPCDispatcher {
 
 // RegisterWebHandlers 创建 RPC 分发器并注册所有应用方法。
 //
+// onMessage 由 WebChannel.triggerOnMessage 提供，chat handler 通过此回调转发消息。
 // 对齐 Python app_web_handlers.py 中 _register_web_handlers(bind)，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
-// Go 使用显式参数传递替代 Python WebHandlersBindParams 闭包捕获。
 func RegisterWebHandlers(sendEvent EventSender, onMessage func(*schema.Message), onConfigSaved OnConfigSavedFunc) *RPCDispatcher {
 	d := NewRPCDispatcher()
 

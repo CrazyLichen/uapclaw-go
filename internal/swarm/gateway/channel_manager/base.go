@@ -25,8 +25,10 @@ type BaseChannel interface {
 	Stop(ctx context.Context) error
 	// Send 通过 Channel 发送消息到外部平台
 	Send(ctx context.Context, msg *schema.Message) error
-	// OnMessage 注册入站消息回调（Channel 收到外部平台消息时调用）
-	OnMessage(callback func(*schema.Message))
+	// OnMessage 注册入站消息回调，返回 true 表示已处理（短路后续 method handler）。
+	//
+	// 对齐 Python BaseChannel.on_message + _handle_raw_message 中 handled_by_callback 逻辑。
+	OnMessage(callback func(*schema.Message) bool)
 	// IsRunning 返回 Channel 是否正在运行
 	IsRunning() bool
 	// ChannelID 返回 Channel 唯一标识

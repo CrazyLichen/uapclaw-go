@@ -62,7 +62,12 @@ const shutdownTimeout = 5 * time.Second
 
 // NewGatewayServer 创建 Gateway 服务器实例。
 //
-// 初始化 WebChannel、ChannelManager、MessageHandler，组装 chi 路由。
+// 初始化 MessageHandler、ChannelManager、WebChannel，组装 chi 路由。
+// 创建顺序对齐 Python app_gateway.py：
+//  1. MessageHandler(agent_client)
+//  2. ChannelManager(message_handler, config, on_config_updated)
+//  3. WebChannel(config, on_config_saved)
+//  4. register_channel_with_inbound(web_channel, web_norm_and_forward)
 func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*GatewayServer, error) {
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{
@@ -72,15 +77,11 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		Path:    "/ws",
 	}
 
-	// 创建 ChannelManager（先占位，后面设置 inboundHandler/consumeProvider）
-	// 对齐 Python ChannelManager(message_handler, config, on_config_updated)
-	channelMgr := cm.NewChannelManager(nil, nil, nil, nil)
+	// 步骤1：创建 MessageHandler（1 参数，对齐 Python MessageHandler(agent_client)）
+	msgHandler := mh.NewMessageHandler(agentClient)
 
-	// 创建 MessageHandler
-	msgHandler := mh.NewMessageHandler(agentClient, channelMgr)
-
-	// 回填 MessageHandler 到 ChannelManager（msgHandler 同时实现 InboundMessageHandler + RobotMessageConsumer）
-	channelMgr.SetMessageHandler(msgHandler, msgHandler)
+	// 步骤2：创建 ChannelManager（3 参数，对齐 Python ChannelManager(message_handler, config, on_config_updated)）
+	channelMgr := cm.NewChannelManager(msgHandler, nil, nil)
 
 	// 先创建 GatewayServer（onConfigSavedImpl 需要 agentClient 和 config）
 	s := &GatewayServer{
@@ -102,17 +103,10 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		}
 	}
 
-	// 创建 onMessage 回调：WebChannel → ChannelManager.DeliverToMessageHandler
-	// 对齐 Python: web_norm_and_forward → channel_manager.deliver_to_message_handler
-	onMessageCb := func(msg *schema.Message) {
-		msgHandler.HandleMessage(msg)
-	}
-
-	// 创建 onConfigSaved 回调：WebHandler → GatewayServer.onConfigSavedImpl
-	// 对齐 Python: WebHandlersBindParams(on_config_saved=_on_config_saved)
+	// 步骤3：创建 WebChannel（2 参数，对齐 Python WebChannel(config, on_config_saved)）
+	// onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入
 	onConfigSavedCb := s.OnConfigSaved()
-
-	wc := web.NewWebChannel(webCfg, onMessageCb, onConfigSavedCb)
+	wc := web.NewWebChannel(webCfg, onConfigSavedCb)
 
 	// 注入 AgentClient（用于等待 AgentServer 就绪）
 	if agentClient != nil {
@@ -120,6 +114,15 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 	}
 
 	s.webChannel = wc
+
+	// 步骤4：注册 WebChannel（对齐 Python register_channel_with_inbound）
+	// web_norm_and_forward 回调：先 normalize 再转发到 MessageHandler
+	webNormAndForward := func(msg *schema.Message) bool {
+		// TODO(Task 4): 实现 NormalizeGatewayMessage（content→query, resume→cancel, is_stream 推断）
+		msgHandler.HandleMessage(msg)
+		return true
+	}
+	channelMgr.RegisterChannelWithInbound(wc, webNormAndForward)
 
 	// 组装路由
 	s.setupRouter()
@@ -140,8 +143,7 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 	// TODO(⤵️ Heartbeat): 初始化 GatewayHeartbeatService（配置 interval/timeout/active_hours），启动
 	// 对齐 Python: app_gateway.py L884-913
 
-	// 登记 WebChannel（OnMessage 回调已通过 NewWebChannel 注入，对齐 Python register_channel_with_inbound）
-	s.channelMgr.RegisterExternalChannel("web", s.webChannel)
+	// WebChannel 已通过 RegisterChannelWithInbound 注册（对齐 Python register_channel_with_inbound）
 
 	if err := s.webChannel.Start(ctx); err != nil {
 		return err
