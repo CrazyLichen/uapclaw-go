@@ -857,8 +857,8 @@ func (r *AgentModeRail) languageIsCN() bool {
 func (r *AgentModeRail) buildEnterPlanModeStatus(planFilePath string, planExists bool) string {
 	if r.languageIsCN() {
 		if planFilePath != "" {
-			// 对齐 Python L309: 中文版包含 Plan 文件路径
-			return fmt.Sprintf("enter_plan_mode 已调用完成。Plan 文件：%s。请继续工作流。", planFilePath)
+			// 对齐 Python L309: 中文分支不含 Plan 文件路径（路径由 _build_plan_file_info 单独返回）
+			return "enter_plan_mode 已调用完成。请继续工作流。"
 		}
 		return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
 	}

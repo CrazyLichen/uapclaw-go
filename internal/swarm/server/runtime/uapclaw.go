@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
@@ -48,7 +49,7 @@ type UapClaw struct {
 func NewUapClaw() *UapClaw {
 	return &UapClaw{
 		sessionManager: NewSessionManager(),
-		skillManager:   skill.NewSkillManager(""),
+		skillManager:   skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 	}
 }
 

@@ -273,16 +273,32 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	}
 
 	// 对齐 Python L140-148: 从 ability_manager 和 resource_mgr 移除工具
+	// 对齐 Python try/except：添加 recover 保护，防止注销工具时 panic
 	am := agent.AbilityManager()
 	resourceMgr := runner.GetResourceMgr()
 	if am != nil && len(r.tools) > 0 {
 		for _, t := range r.tools {
-			if t != nil && t.Card() != nil {
-				am.Remove(t.Card().Name)
-				if resourceMgr != nil {
-					_, _ = resourceMgr.RemoveTool([]string{t.Card().ID})
+			func(t tool.Tool) {
+				defer func() {
+					if rec := recover(); rec != nil {
+						logger.Warn(taskPlanLogComponent).
+							Str("event_type", "task_planning_uninit").
+							Str("tool_name", func() string {
+								if t != nil && t.Card() != nil {
+									return t.Card().Name
+								}
+								return ""
+							}()).
+							Msgf("注销工具失败: %v", rec)
+					}
+				}()
+				if t != nil && t.Card() != nil {
+					am.Remove(t.Card().Name)
+					if resourceMgr != nil {
+						_, _ = resourceMgr.RemoveTool([]string{t.Card().ID})
+					}
 				}
-			}
+			}(t)
 		}
 	}
 

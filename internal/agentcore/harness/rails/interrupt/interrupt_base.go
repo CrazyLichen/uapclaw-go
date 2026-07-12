@@ -323,21 +323,39 @@ func (r *BaseInterruptRail) getUserInput(cbc *agentinterfaces.AgentCallbackConte
 		return nil
 	}
 
-	logger.Debug(interruptLogComponent).
+	// 对齐 Python logger.info：提取用户输入日志
+	logger.Info(interruptLogComponent).
 		Str("tool_call_id", toolCallID).
 		Str("raw_input_type", fmt.Sprintf("%T", rawInput)).
 		Msg("提取用户输入")
 
 	// InteractiveInput 格式
 	if interactive, ok := rawInput.(*sessioninteraction.InteractiveInput); ok {
+		// 对齐 Python logger.info：记录 keys 列表
+		keys := make([]string, 0, len(interactive.UserInputs))
+		for k := range interactive.UserInputs {
+			keys = append(keys, k)
+		}
+		logger.Info(interruptLogComponent).
+			Str("tool_call_id", toolCallID).
+			Strs("keys", keys).
+			Msg("InteractiveInput.user_inputs")
+
 		if val, found := interactive.UserInputs[toolCallID]; found {
-			logger.Debug(interruptLogComponent).
+			// 对齐 Python logger.info：匹配成功，记录 value 截断
+			valRepr := fmt.Sprintf("%v", val)
+			if len(valRepr) > 200 {
+				valRepr = valRepr[:200]
+			}
+			logger.Info(interruptLogComponent).
 				Str("tool_call_id", toolCallID).
+				Str("value", valRepr).
 				Msg("InteractiveInput 匹配成功")
 			return val
 		}
 		logger.Warn(interruptLogComponent).
 			Str("tool_call_id", toolCallID).
+			Strs("keys", keys).
 			Msg("InteractiveInput 中未找到匹配的 tool_call_id")
 		return nil
 	}

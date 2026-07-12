@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 
@@ -183,11 +184,7 @@ func SplitEvalSet(queries []skilldev.TriggerEvalQuery, holdout float64, seed int
 
 // filepathJoin 拼接文件路径。
 func filepathJoin(parts ...string) string {
-	s := parts[0]
-	for _, p := range parts[1:] {
-		s = s + "/" + p
-	}
-	return s
+	return filepath.Join(parts...)
 }
 
 // generateTriggerQueries 调用 Agent 生成 ~20 个触发测试查询。

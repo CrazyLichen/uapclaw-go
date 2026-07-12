@@ -3,6 +3,7 @@ package skill
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -24,7 +25,7 @@ const (
 // GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json
 // 对应 Python: state_utils.get_state_file()
 func GetStateFile() string {
-	return getAgentSkillsDir() + "/" + stateFileName
+	return filepath.Join(getAgentSkillsDir(), stateFileName)
 }
 
 // NormalizeSkillConfigs 规范化每个技能的配置记录
