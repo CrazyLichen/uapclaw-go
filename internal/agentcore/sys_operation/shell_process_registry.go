@@ -227,20 +227,30 @@ func GetShellSessionID(ctx context.Context) string {
 	return ""
 }
 
-// ResetShellSessionID 重置 context 中的 session ID。
-// 对齐 Python reset_shell_session_id（Go 中通过覆盖 WithValue 实现）。
-func ResetShellSessionID(ctx context.Context) context.Context {
+// ClearShellSessionID 清除 context 中的 session ID，设为空字符串。
+// 对齐 Python reset_shell_session_id：Go 中无 Token 回退机制，
+// 调用方如需恢复旧值，应保存旧 context 后恢复。
+func ClearShellSessionID(ctx context.Context) context.Context {
 	return context.WithValue(ctx, shellSessionIDKey{}, "")
 }
 
-// ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到空。
+// ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到 trace_id。
 // 对齐 Python resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
-// Go 版本简化了 fallback 路径：当前 logger 包无 trace ID 机制，后续可补充。
+//
+// TODO: 补充 fallback 到 trace_id 的逻辑。Python 在 shell_session_id 为空时，
+// 会从 logging.utils.get_session_id() 获取 trace_id 并排除 "default_trace_id" 哨兵值。
+// Go 侧等 logger 包实现 GetTraceID(context.Context) 后，在此处补充等价 fallback：
+//
+//	traceID := logger.GetTraceID(ctx)
+//	if traceID != "" && traceID != "default_trace_id" {
+//	    return traceID
+//	}
 func ResolveShellSessionID(ctx context.Context) string {
 	sid := strings.TrimSpace(GetShellSessionID(ctx))
 	if sid != "" {
 		return sid
 	}
+	// TODO: fallback 到 trace_id（等 logger 包实现 GetTraceID 后补充）
 	return ""
 }
 

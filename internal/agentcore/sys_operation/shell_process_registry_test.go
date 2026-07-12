@@ -381,13 +381,13 @@ func TestGetShellSessionID_未设置(t *testing.T) {
 	assert.Equal(t, "", GetShellSessionID(ctx))
 }
 
-// TestResetShellSessionID 测试重置 session ID
-func TestResetShellSessionID(t *testing.T) {
+// TestClearShellSessionID 测试清除 session ID
+func TestClearShellSessionID(t *testing.T) {
 	ctx := context.Background()
 	ctx = SetShellSessionID(ctx, "test-session-123")
 	assert.Equal(t, "test-session-123", GetShellSessionID(ctx))
 
-	ctx = ResetShellSessionID(ctx)
+	ctx = ClearShellSessionID(ctx)
 	assert.Equal(t, "", GetShellSessionID(ctx))
 }
 

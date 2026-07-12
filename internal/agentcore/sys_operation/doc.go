@@ -16,7 +16,7 @@
 //	├── shell.go                     # ShellOperation 接口 + BaseShellOperation + ShellOptions + ShellType
 //	├── code.go                      # CodeOperation 接口 + BaseCodeOperation + CodeOptions
 //	├── registry.go                  # OperationRegistry + OperationDef + GlobalRegistry
-//	├── shell_process_registry.go    # ShellProcessRegistry 会话级进程追踪 + SessionID context
+//	├── shell_process_registry.go    # ShellProcessRegistry 会话级进程追踪 + SessionID context + TerminateShellProcess
 //	├── shell_process_registry_unix.go    # POSIX 平台进程终止与等待实现（syscall.Kill/Wait4）
 //	├── shell_process_registry_windows.go # Windows 平台进程终止与等待实现（proc.Wait）
 //	├── tool_adapter.go              # SysOperationToolAdapter + ExtractTools + GetToolIDPrefix
