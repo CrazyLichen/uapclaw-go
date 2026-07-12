@@ -56,15 +56,15 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	case command_parser.ActionNewSessionOK:
 		mh.newSessionCancelAndNotice(msg, parsed)
 	case command_parser.ActionNewSessionBad:
-		mh.sendChannelNotice(msg, "非法指令")
+		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 	case command_parser.ActionModeOK:
 		mh.modeChangeCancelAndNotice(msg, parsed)
 	case command_parser.ActionModeBad:
-		mh.sendChannelNotice(msg, "非法指令")
+		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 	case command_parser.ActionSwitchOK:
 		mh.modeChangeCancelAndNotice(msg, parsed)
 	case command_parser.ActionSwitchBad:
-		mh.sendChannelNotice(msg, "非法指令")
+		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 	case command_parser.ActionSkillsOK:
 		mh.skillsSlashNotice(msg)
 	case command_parser.ActionBranchOK:
@@ -72,11 +72,11 @@ func (mh *MessageHandler) handleChannelControl(msg *schema.Message) bool {
 	case command_parser.ActionRewindOK:
 		mh.rewindSlashConfirmPrompt(msg, parsed)
 	case command_parser.ActionRewindBad:
-		mh.sendChannelNotice(msg, "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2")
+		mh.sendChannelNotice(msg, map[string]any{"content": "非法指令，/rewind 须带正整数轮次编号，如 /rewind 2"})
 	case command_parser.ActionRewindConfirm:
 		mh.rewindSlashNotice(msg, parsed)
 	case command_parser.ActionRewindCancel:
-		mh.sendChannelNotice(msg, "[收到 /rewind cancel] 已取消回退操作。")
+		mh.sendChannelNotice(msg, map[string]any{"content": "[收到 /rewind cancel] 已取消回退操作。"})
 	default:
 		return false
 	}
@@ -110,7 +110,7 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ comma
 		go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
 	}
 
-	mh.sendChannelNotice(msg, fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID))
+	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], session_id 已变更为 %s", newSID)})
 }
 
 // modeChangeCancelAndNotice 处理 /mode 和 /switch 命令。
@@ -153,38 +153,22 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 		if oldSID != "" && mh.hasActiveStreamTaskForSession(oldSID) {
 			go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, false)
 		}
-		mh.sendChannelNotice(msg, fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel))
+		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
 	} else {
 		// 模式未变更：仅通知
-		mh.sendChannelNotice(msg, fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel))
+		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 CLI 指令], mode 已变更为 %s", modeLabel)})
 	}
 }
 
 // sendChannelNotice 发送渠道通知消息。
 //
 // 对齐 Python _send_channel_notice (L347-379)：
-// event_type 改为 CHAT_FINAL，payload key 改为 content，补齐 is_complete: true。
-func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, textOrPayload any) {
-	var payload map[string]any
-	switch v := textOrPayload.(type) {
-	case map[string]any:
-		payload = make(map[string]any, len(v))
-		for k, val := range v {
-			payload[k] = val
-		}
-		if _, has := payload["is_complete"]; !has {
-			payload["is_complete"] = true
-		}
-	case string:
-		payload = map[string]any{
-			"content":     v,
-			"is_complete": true,
-		}
-	default:
-		payload = map[string]any{
-			"content":     fmt.Sprintf("%v", v),
-			"is_complete": true,
-		}
+// event_type 为 CHAT_FINAL，payload 确保补齐 is_complete: true。
+// 传 string 时调用方应包装为 {"content": text}，此处仅接受 map[string]any。
+func (mh *MessageHandler) sendChannelNotice(msg *schema.Message, payload map[string]any) {
+	// 确保 is_complete 字段存在
+	if _, has := payload["is_complete"]; !has {
+		payload["is_complete"] = true
 	}
 
 	noticeMsg := &schema.Message{
@@ -347,7 +331,7 @@ func (mh *MessageHandler) branchSlashNotice(msg *schema.Message, parsed command_
 		go mh.CancelAgentWorkForSession(context.Background(), msg, oldSID, true)
 	}
 
-	mh.sendChannelNotice(msg, fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", forkTitle))
+	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /branch 指令] 已分叉会话「%s」，当前已切换到新会话。", forkTitle)})
 }
 
 // rewindSlashConfirmPrompt 发送 /rewind 确认提示。
@@ -359,7 +343,7 @@ func (mh *MessageHandler) rewindSlashConfirmPrompt(msg *schema.Message, parsed c
 	if turn == 0 {
 		turn = 1
 	}
-	mh.sendChannelNotice(msg, fmt.Sprintf("[收到 /rewind %d] 确认回退到第 %d 轮？发送 /rewind confirm 确认，/rewind cancel 取消。", turn, turn))
+	mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind %d] 确认回退到第 %d 轮？发送 /rewind confirm 确认，/rewind cancel 取消。", turn, turn)})
 }
 
 // rewindSlashNotice 处理 /rewind 命令（用户已确认）。
@@ -434,7 +418,7 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 				}
 			}
 		}
-		mh.sendChannelNotice(msg, fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining))
+		mh.sendChannelNotice(msg, map[string]any{"content": fmt.Sprintf("[收到 /rewind 指令] 已回退到第 %d 轮（\"%s\"），删除 %d 条记录，剩余 %d 条。", turn, preview, removed, remaining)})
 	} else {
 		errMsg := "session.rewind failed"
 		if resp.Payload != nil {

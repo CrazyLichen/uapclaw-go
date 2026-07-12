@@ -167,11 +167,12 @@ func TestCollectStreamTasksForSession(t *testing.T) {
 	assert.Len(t, reqIDs, 0)
 }
 
-// TestProcessForwardMessage_无AgentClient 测试无 AgentClient 时处理
-func TestProcessForwardMessage_无AgentClient(t *testing.T) {
+// TestHandleChatSend_无AgentClient 测试无 AgentClient 时处理
+func TestHandleChatSend_无AgentClient(t *testing.T) {
 	mh := createTestMessageHandler()
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
-	mh.processForwardMessage(context.Background(), msg)
+	agentMsg := mh.prepareAgentDispatchMessage(context.Background(), msg)
+	mh.handleChatSend(context.Background(), msg, agentMsg)
 }
 
 // TestExtractTextFromParams 测试从 params 提取文本

@@ -10,20 +10,18 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
-// PrepareAgentDispatchMessage 准备发往 AgentServer 的消息。
+// prepareAgentDispatchMessage 准备发往 AgentServer 的消息。
 //
 // 对齐 Python _prepare_agent_dispatch_message (L1287-1312)：
 // 当前实现为 identity return（直接返回 msg），ACP session alias 处理待后续回填。
-func (mh *MessageHandler) PrepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
+func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
 	// TODO: ACP session alias 处理（等 ACP 章节回填）
 	// Python: if msg.channel_id == _ACP_CHANNEL_ID:
 	//     msg = await self._ensure_acp_agent_session(msg)
 	return msg
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // shouldEmitProcessingStatusForStream 判断是否需要为流式请求发送 processing_status 事件。
 //

@@ -103,8 +103,8 @@ feat(message_handler): 新增 evolution/processing_status/query/config 字段
 9. `isSessionEvolutionInProgress(sessionID string) bool` — 查询
 10. `clearSessionEvolutionStates(sessionID string)` — 清除所有三种状态
 11. `handleEvolutionChunk(chunk *schema.AgentResponseChunk, sessionID string, metadata map[string]any)` — 处理 evolution_status chunk
-12. `buildAutoAcceptEvolutionAnswer(chunk *schema.AgentResponseChunk, sessionID string, metadata map[string]any) *schema.Message` — 自动接受
-13. `maybeAutoAcceptReplacedEvolutionApproval(sessionID, newRequestID string)` — 可能自动接受被替换的
+12. `buildAutoAcceptEvolutionAnswer(channelID, sessionID, requestID string, metadata map[string]any) *schema.Message` — 自动接受（对齐 Python 签名，直接传 channelID/requestID）
+13. `maybeAutoAcceptReplacedEvolutionApproval(sessionID, incomingRequestID, channelID string, metadata map[string]any)` — 可能自动接受被替换的（对齐 Python 签名，需要 channelID/metadata 构造 auto-accept 消息）
 14. `buildSupplementContinuationQuery(newInput, originalRequest string) string` — 构造续接查询
 15. `buildQueuedChatSendMessage(msg *schema.Message, input string, attachments []map[string]any, originalRequest string) *schema.Message` — 构造排队 chat.send
 
@@ -618,7 +618,15 @@ feat(message_handler): slash 命令 RPC 补齐 + sendChannelNotice 修正
 
 - [ ] **Step 4: 新增 SetOutboundPipeline 注入方法**
 
-在 `config_inject.go` 中实现，注入 `getConfigRaw` / `updateChannelInConfig`。
+在 `config_inject.go` 中实现，注入 `pipeline` / `getConfigRaw` / `updateChannelInConfig`。
+
+```go
+func (mh *MessageHandler) SetOutboundPipeline(
+    pipeline OutboundPipeline,
+    getConfigRaw func() map[string]any,
+    updateChannelInConfig func(channelID string, update map[string]any),
+)
+```
 
 - [ ] **Step 5: 更新测试**
 

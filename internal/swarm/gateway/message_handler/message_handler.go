@@ -14,6 +14,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// OutboundPipeline 出站管道接口，对齐 Python _outbound_pipeline。
+//
+// 预留给 11.12 IM Pipeline 回填，当前未使用。
+type OutboundPipeline interface {
+	// Apply 对出站消息应用管道处理
+	Apply(msg *schema.Message) (*schema.Message, error)
+}
+
 // MessageHandler 消息处理器
 // 入站：Channel → MessageHandler → AgentClient → AgentServer
 // 出站：AgentServer → AgentClient → MessageHandler → ChannelManager → Channel
@@ -76,6 +84,10 @@ type MessageHandler struct {
 	getConfigRaw func() map[string]any
 	// updateChannelInConfig 更新 config 中渠道配置回调（对齐 Python _update_channel_in_config，由外部注入）
 	updateChannelInConfig func(channelID string, update map[string]any)
+
+	// outboundPipeline 出站管道（对齐 Python _outbound_pipeline，预留给 11.12 IM Pipeline 回填）
+	// TODO: 实现 OutboundPipeline interface（等 11.12 IM Pipeline 回填）
+	outboundPipeline OutboundPipeline
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

@@ -38,8 +38,8 @@ func TestForwardLoop_消息处理(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-// TestProcessForwardMessage_ChatSend 测试 chat.send 入站处理
-func TestProcessForwardMessage_ChatSend(t *testing.T) {
+// TestHandleChatSend_ChatSend 测试 handleChatSend 处理 chat.send
+func TestHandleChatSend_ChatSend(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	go func() {
@@ -51,11 +51,12 @@ func TestProcessForwardMessage_ChatSend(t *testing.T) {
 		json.RawMessage(`{"content":"hello"}`),
 		schema.WithIsStream(true),
 	)
-	mh.processForwardMessage(context.Background(), msg)
+	agentMsg := mh.prepareAgentDispatchMessage(context.Background(), msg)
+	mh.handleChatSend(context.Background(), msg, agentMsg)
 }
 
-// TestProcessForwardMessage_ChatCancel 测试 chat.cancel 入站处理
-func TestProcessForwardMessage_ChatCancel(t *testing.T) {
+// TestHandleChatCancel_取消 测试 handleChatCancel 处理 chat.cancel
+func TestHandleChatCancel_取消(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	go func() {
@@ -66,26 +67,11 @@ func TestProcessForwardMessage_ChatCancel(t *testing.T) {
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatCancel,
 		json.RawMessage(`{"intent":"cancel"}`),
 	)
-	mh.processForwardMessage(context.Background(), msg)
+	mh.handleChatCancel(context.Background(), msg)
 }
 
-// TestProcessForwardMessage_ChatResume 测试 chat.resume 入站处理
-func TestProcessForwardMessage_ChatResume(t *testing.T) {
-	mh := createTestMessageHandlerWithTransport()
-
-	go func() {
-		for range mh.robotMessages {
-		}
-	}()
-
-	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatResume,
-		json.RawMessage(`{}`),
-	)
-	mh.processForwardMessage(context.Background(), msg)
-}
-
-// TestProcessForwardMessage_ChatUserAnswer 测试 chat.user_answer 入站处理
-func TestProcessForwardMessage_ChatUserAnswer(t *testing.T) {
+// TestHandleChatUserAnswer_回答 测试 handleChatUserAnswer 处理 chat.user_answer
+func TestHandleChatUserAnswer_回答(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	go func() {
@@ -96,11 +82,11 @@ func TestProcessForwardMessage_ChatUserAnswer(t *testing.T) {
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatAnswer,
 		json.RawMessage(`{"request_id":"req-1","answer":"yes"}`),
 	)
-	mh.processForwardMessage(context.Background(), msg)
+	mh.handleChatUserAnswer(context.Background(), msg)
 }
 
-// TestProcessForwardMessage_其他方法 测试其他方法入站处理
-func TestProcessForwardMessage_其他方法(t *testing.T) {
+// TestHandleChatSend_其他方法 测试 handleChatSend 处理其他方法
+func TestHandleChatSend_其他方法(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	go func() {
@@ -111,7 +97,8 @@ func TestProcessForwardMessage_其他方法(t *testing.T) {
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodCommandAddDir,
 		json.RawMessage(`{}`),
 	)
-	mh.processForwardMessage(context.Background(), msg)
+	agentMsg := mh.prepareAgentDispatchMessage(context.Background(), msg)
+	mh.handleChatSend(context.Background(), msg, agentMsg)
 }
 
 // TestMessageToE2A 测试 Message → E2A 转换

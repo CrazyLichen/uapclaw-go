@@ -178,15 +178,24 @@ func (mh *MessageHandler) buildCancelMessage(msg *schema.Message, sessionID stri
 
 // sendInterruptToAgent 发送中断请求到 AgentServer，等响应后丢弃。
 //
-// 对齐 Python: _send_interrupt_to_agent — 调 send_request 等响应后丢弃。
-func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, requestID, sessionID, intent string) {
-	// 构造 chat.cancel 消息
-	msg := schema.NewReqMessage("", sessionID, schema.ReqMethodChatCancel,
-		nil,
-		schema.WithSessionID(sessionID),
-	)
+// 对齐 Python _send_interrupt_to_agent (L2654-2691)：
+// 从 msg 中提取 mode/trusted_dirs 注入 cancel 请求参数。
+func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.Message, intent string) {
+	// 构造 chat.cancel 消息，注入 mode + trusted_dirs
+	cancelMsg := mh.buildCancelMessage(msg, msg.SessionID)
 
-	envelope := e2a.MessageToE2AOrFallback(msg)
+	// 在 params 中注入 intent
+	if len(cancelMsg.Params) > 0 {
+		var params map[string]any
+		if err := json.Unmarshal(cancelMsg.Params, &params); err == nil {
+			params["intent"] = intent
+			if updated, err := json.Marshal(params); err == nil {
+				cancelMsg.Params = json.RawMessage(updated)
+			}
+		}
+	}
+
+	envelope := e2a.MessageToE2AOrFallback(cancelMsg)
 	envelope.IsStream = false
 
 	resp, err := mh.agentClient.SendRequest(ctx, envelope)
@@ -194,7 +203,7 @@ func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, requestID, s
 		logger.Warn(logComponent).
 			Str("event_type", "cancel_send_error").
 			Err(err).
-			Str("request_id", requestID).
+			Str("session_id", msg.SessionID).
 			Msg("AgentServer 中断请求失败(忽略)")
 		return
 	}

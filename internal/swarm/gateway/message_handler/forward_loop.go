@@ -44,7 +44,7 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 //	步骤7:  resolveInboundReferences(msg)
 //	步骤8:  prepareAgentDispatchMessage(ctx, msg)
 //	步骤9:  before_chat_request hook（预留 TODO）
-//	步骤10: stream / non-stream 分发
+//	步骤10: handleChatSend(ctx, msg)
 //	步骤11: 异常 → buildErrorOutMessage → publishRobotMessages
 func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 	logger.Info(logComponent).Msg("入站转发循环已启动")
@@ -58,54 +58,60 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 			if msg == nil {
 				continue
 			}
-			mh.processForwardMessage(ctx, msg)
+
+			// 步骤1: 处理 slash 命令（仅受控渠道）
+			if mh.handleChannelControl(msg) {
+				continue
+			}
+
+			// 步骤2: 注入渠道状态（session_id / mode）
+			mh.ApplyChannelState(msg)
+
+			// TODO: 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
+			// Python: if self._gateway_hook_handler:
+			//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
+
+			// 步骤4: CHAT_ANSWER 分支
+			if msg.ReqMethod == schema.ReqMethodChatAnswer {
+				mh.handleChatUserAnswer(ctx, msg)
+				continue
+			}
+
+			// 步骤5: CHAT_CANCEL 分支
+			if msg.ReqMethod == schema.ReqMethodChatCancel {
+				mh.handleChatCancel(ctx, msg)
+				continue
+			}
+
+			// TODO: 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
+			// Python: if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
+			//     should_forward = await self._inbound_pipeline.apply(msg)
+			//     if not should_forward: continue
+
+			// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
+			if msg.ReqMethod == schema.ReqMethodChatSend {
+				mh.resolveInboundReferences(msg)
+			}
+
+			// 步骤8: 准备 Agent 派发消息
+			agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
+
+			// TODO: 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
+			// Python: await self._trigger_before_chat_request_hook(agent_msg)
+
+			// 步骤10: chat.send 分发
+			mh.handleChatSend(ctx, msg, agentMsg)
 		}
 	}
 }
 
-// processForwardMessage 处理单条入站消息，对齐 Python _forward_loop 主体逻辑。
-func (mh *MessageHandler) processForwardMessage(ctx context.Context, msg *schema.Message) {
-	// 步骤1: 处理 slash 命令（仅受控渠道）
-	if mh.handleChannelControl(msg) {
-		return
-	}
-
-	// 步骤2: 注入渠道状态（session_id / mode）
-	mh.ApplyChannelState(msg)
-
-	// TODO: 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
-	// Python: if self._gateway_hook_handler:
-	//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
-
-	// 步骤4: CHAT_ANSWER 分支
-	if msg.ReqMethod == schema.ReqMethodChatAnswer {
-		mh.handleChatUserAnswer(ctx, msg)
-		return
-	}
-
-	// 步骤5: CHAT_CANCEL 分支
-	if msg.ReqMethod == schema.ReqMethodChatCancel {
-		mh.handleChatCancel(ctx, msg)
-		return
-	}
-
-	// TODO: 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
-	// Python: if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
-	//     should_forward = await self._inbound_pipeline.apply(msg)
-	//     if not should_forward: continue
-
-	// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
-	if msg.ReqMethod == schema.ReqMethodChatSend {
-		mh.resolveInboundReferences(msg)
-	}
-
-	// 步骤8: 准备 Agent 派发消息
-	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
-
-	// TODO: 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
-	// Python: await self._trigger_before_chat_request_hook(agent_msg)
-
-	// 步骤10: stream / non-stream 分发
+// handleChatSend 处理 chat.send 请求的 stream/non-stream 分发。
+//
+// 对齐 Python _forward_loop 步骤10 (L2496-2558)：
+// 记住用户查询上下文已在 HandleMessage 入队前调过（对齐 Python handle_message），
+// 此处仅做 AgentClient 连接检查 + stream/non-stream 分发。
+func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Message, agentMsg *schema.Message) {
+	// 检查 AgentClient 可用性
 	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
 		logger.Warn(logComponent).
 			Str("event_type", "forward_no_agent_client").
@@ -170,7 +176,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 		return
 	}
 
-	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 	env := e2a.MessageToE2AOrFallback(agentMsg)
 	env.IsStream = false
 
@@ -342,7 +348,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "", true, nil)
 
 	// 3. 发送 supplement intent 到 AgentServer（取消任务但保留 todo）
-	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 	runtimeParams := mh.extractRuntimeParams(msg, paramsMap)
 
 	supplementParams := map[string]any{
@@ -415,7 +421,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 //
 // 对齐 Python _forward_loop L2408-2435。
 func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Message, intent string) {
-	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
 	// 确保 mode 信息存在，否则从 channelStates 注入
 	if len(agentMsg.Params) > 0 {
@@ -431,9 +437,9 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		}
 	}
 
-	env := e2a.MessageToE2AOrFallback(agentMsg)
-	// fire-and-forget
-	go mh.sendInterruptToAgent(ctx, env.RequestID, msg.SessionID, intent)
+	_ = e2a.MessageToE2AOrFallback(agentMsg)
+	// fire-and-forget：传入 msg 和 intent，sendInterruptToAgent 从 msg 提取 mode/trusted_dirs
+	go mh.sendInterruptToAgent(ctx, msg, intent)
 
 	// 检查当前 session 是否有活跃流式任务
 	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)

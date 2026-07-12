@@ -203,7 +203,7 @@ func TestSendChannelNotice(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
-	mh.sendChannelNotice(msg, "测试通知")
+	mh.sendChannelNotice(msg, map[string]any{"content": "测试通知"})
 
 	select {
 	case notice := <-mh.robotMessages:
