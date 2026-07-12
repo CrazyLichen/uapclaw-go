@@ -398,7 +398,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	// ─── 注册 onConnect 钩子：发送 connection.ack ───
 	// 对齐 Python WebChannel._connection_handler 中 _connect_hooks 逻辑
 	if channel != nil {
-		ch := channel  // 捕获循环变量
+		ch := channel // 捕获循环变量
 		ac := agentClient
 		ch.OnConnect(func(_ *websocket.Conn) error {
 			// AgentClient 未就绪时跳过 ack（对齐 Python: 仅 debug 日志，不断开连接）

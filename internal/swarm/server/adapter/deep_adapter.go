@@ -1129,9 +1129,7 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	// 步骤 2: 中止 DeepAgent 实例（协作式，无法中断进行中的 LLM HTTP 请求）
 	// 对齐 Python: await self._instance.abort()，try/except 捕获异常
 	if d.instance != nil {
-		if err := d.instance.Abort(ctx); err != nil {
-			logger.Warn(logComponent).Err(err).Msg("AbortOnGatewayDisconnect instance.Abort 失败")
-		}
+		d.instance.Abort(ctx)
 	}
 
 	// 步骤 3: 取消调度器任务，在 await 点注入 CancelledError
