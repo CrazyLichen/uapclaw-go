@@ -45,8 +45,8 @@ type RejectResult struct {
 //
 // 对齐 Python: InterruptResult(InterruptDecision)
 type InterruptResult struct {
-	// Request 中断请求，携带需要用户确认的信息
-	Request *saschema.InterruptRequest
+	// Request 中断请求接口，可存 InterruptRequest 或其子类（如 AskUserRequest）
+	Request saschema.InterruptRequester
 }
 
 // resolveInterruptFn 中断解析函数签名。
@@ -130,7 +130,7 @@ func (r *BaseInterruptRail) Reject(toolResult any) *RejectResult {
 // Interrupt 创建中断决策。
 //
 // 对齐 Python: BaseInterruptRail.interrupt(request)
-func (r *BaseInterruptRail) Interrupt(request *saschema.InterruptRequest) *InterruptResult {
+func (r *BaseInterruptRail) Interrupt(request saschema.InterruptRequester) *InterruptResult {
 	return &InterruptResult{Request: request}
 }
 
@@ -270,7 +270,7 @@ func (r *BaseInterruptRail) applyDecision(
 func (r *BaseInterruptRail) raiseInterrupt(
 	toolName string,
 	toolCall *llmschema.ToolCall,
-	request *saschema.InterruptRequest,
+	request saschema.InterruptRequester,
 ) {
 	exc := &saschema.ToolInterruptException{
 		Request:  request,

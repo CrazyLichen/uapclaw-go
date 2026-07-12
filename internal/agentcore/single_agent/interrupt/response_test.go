@@ -47,7 +47,7 @@ func TestToolCallInterruptRequest_从ToolCall创建(t *testing.T) {
 	}
 
 	tcReq := NewToolCallInterruptRequest(req, tc)
-	assert.Equal(t, "需要用户输入", tcReq.Message)
+	assert.Equal(t, "需要用户输入", tcReq.GetMessage())
 	assert.Equal(t, "search", tcReq.ToolName)
 	assert.Equal(t, "call_123", tcReq.ToolCallID)
 	assert.Equal(t, `{"query": "test"}`, tcReq.ToolArgs)

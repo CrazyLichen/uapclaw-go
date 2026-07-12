@@ -543,6 +543,11 @@ func addDefaultRails(
 		logger.Debug(logComponent).Msg("已添加 AskUserRail")
 	}
 
+	// ConfirmInterruptRail — 不自动添加（需指定拦截的工具名列表）
+	// 由具体场景（如 CLI、SecurityRail）显式提供，例如：
+	//   agent.AddRail(interrupt.NewConfirmInterruptRail("write_file", "edit_file"))
+	// 或由 PermissionInterruptRail（SecurityRail 体系）内部继承复用
+
 	// SysOperationRail — 始终添加（系统操作工具注册）
 	if !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&rails.SysOperationRail{})) {
 		sysOpRail := rails.NewSysOperationRail()

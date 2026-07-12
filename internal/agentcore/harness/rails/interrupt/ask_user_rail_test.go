@@ -38,7 +38,7 @@ func TestAskUserRail_resolveInterrupt_无输入中断(t *testing.T) {
 	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 	interruptResult := decision.(*InterruptResult)
-	assert.Equal(t, "", interruptResult.Request.Message) // AskUserRequest message 为空
+	assert.Equal(t, "", interruptResult.Request.GetMessage()) // AskUserRequest message 为空
 }
 
 // TestAskUserRail_resolveInterrupt_有效输入拒绝 验证 AskUserPayload 输入 → RejectResult
@@ -54,7 +54,7 @@ func TestAskUserRail_resolveInterrupt_有效输入拒绝(t *testing.T) {
 	decision := r.resolveAskUserInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
-	assert.Contains(t, rejectResult.ToolResult, "用户已回答")
+	assert.Contains(t, rejectResult.ToolResult, "User has answered")
 	assert.Contains(t, rejectResult.ToolResult, "Go")
 }
 
@@ -142,7 +142,7 @@ func TestAskUserRail_formatToolResult(t *testing.T) {
 	}}
 
 	result := r.formatToolResult(toolCall, payload)
-	assert.Contains(t, result, "用户已回答")
+	assert.Contains(t, result, "User has answered")
 	assert.Contains(t, result, `"你喜欢什么？"="Go"`)
 	assert.Contains(t, result, `"你的名字？"="Alice"`)
 }
@@ -169,7 +169,7 @@ func TestAskUserRail_formatToolResult_问题无Question字段(t *testing.T) {
 	payload := &AskUserPayload{Answers: map[string]string{}}
 
 	result := r.formatToolResult(toolCall, payload)
-	assert.Contains(t, result, "用户已回答")
+	assert.Contains(t, result, "User has answered")
 }
 
 // TestAskUserPayload_JSON序列化 验证 AskUserPayload JSON 序列化

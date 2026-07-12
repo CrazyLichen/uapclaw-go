@@ -74,5 +74,5 @@ func TestToolInterruptException_errors_As识别(t *testing.T) {
 
 	var tie *saschema.ToolInterruptException
 	assert.True(t, errors.As(wrapped, &tie))
-	assert.Equal(t, "中断", tie.Request.Message)
+	assert.Equal(t, "中断", tie.Request.GetMessage())
 }

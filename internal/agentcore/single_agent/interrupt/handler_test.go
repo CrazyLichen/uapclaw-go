@@ -87,9 +87,9 @@ func TestBuildInterruptState_子Agent中断(t *testing.T) {
 				Payload: &interaction.InteractionOutput{
 					ID: "inner_1",
 					Value: &saschema.ToolCallInterruptRequest{
-						InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认"},
-						ToolName:         "sub_tool",
-						ToolCallID:       "inner_1",
+						Request:    &saschema.InterruptRequest{Message: "子Agent确认"},
+						ToolName:   "sub_tool",
+						ToolCallID: "inner_1",
 					},
 				},
 			},
@@ -158,7 +158,7 @@ func TestCommitInterrupt(t *testing.T) {
 	invokeInputs := &interfaces.InvokeInputs{}
 	subAgentOutputs := []PayloadEntry{
 		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
-			InterruptRequest: saschema.InterruptRequest{Message: "确认"},
+			Request:    &saschema.InterruptRequest{Message: "确认"},
 			ToolName:         "tool1",
 			ToolCallID:       "tc1",
 		}},
@@ -308,7 +308,7 @@ func TestBuildInterruptResult_空Payloads(t *testing.T) {
 func TestBuildInterruptResult_ToolCallInterruptRequest(t *testing.T) {
 	payloads := []PayloadEntry{
 		{InnerID: "inner_1", Payload: &saschema.ToolCallInterruptRequest{
-			InterruptRequest: saschema.InterruptRequest{Message: "确认"},
+			Request:    &saschema.InterruptRequest{Message: "确认"},
 			ToolName:         "tool1",
 			ToolCallID:       "tc1",
 		}},
@@ -409,7 +409,7 @@ func TestHandleToolInterruptException_使用异常中的ToolCall(t *testing.T) {
 
 func TestHandleSubAgentInterrupt(t *testing.T) {
 	tcir := &saschema.ToolCallInterruptRequest{
-		InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_auto"},
+		Request:    &saschema.InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_auto"},
 		ToolName:         "sub_tool",
 		ToolCallID:       "inner_1",
 	}
@@ -575,7 +575,7 @@ func TestCollectInterrupts_混合结果(t *testing.T) {
 				Payload: &interaction.InteractionOutput{
 					ID: "inner_2",
 					Value: &saschema.ToolCallInterruptRequest{
-						InterruptRequest: saschema.InterruptRequest{Message: "子Agent确认"},
+						Request:    &saschema.InterruptRequest{Message: "子Agent确认"},
 						ToolName:         "sub_tool",
 						ToolCallID:       "inner_2",
 					},

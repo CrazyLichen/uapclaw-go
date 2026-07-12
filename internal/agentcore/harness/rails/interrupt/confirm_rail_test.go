@@ -31,8 +31,8 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testin
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 	interruptResult := decision.(*InterruptResult)
-	assert.Equal(t, "请确认或拒绝?", interruptResult.Request.Message)
-	assert.Equal(t, "write_file", interruptResult.Request.AutoConfirmKey)
+	assert.Equal(t, "请确认或拒绝?", interruptResult.Request.GetMessage())
+	assert.Equal(t, "write_file", interruptResult.Request.GetAutoConfirmKey())
 }
 
 // TestConfirmInterruptRail_resolveInterrupt_无输入有AutoConfirm 验证无输入有auto_confirm → ApproveResult

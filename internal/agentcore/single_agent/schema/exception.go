@@ -16,9 +16,12 @@ import (
 //   - railedExecuteSingleToolCall 通过 errors.As 识别
 //
 // 对应 Python: ToolInterruptException(AgentInterrupt)
+//
+// Request 字段使用 InterruptRequester 接口，支持存储 InterruptRequest 子类
+// （如 AskUserRequest），对齐 Python request: InterruptRequest 的多态语义。
 type ToolInterruptException struct {
-	// Request 中断请求
-	Request *InterruptRequest
+	// Request 中断请求接口，可存 InterruptRequest 或其子类
+	Request InterruptRequester
 	// ToolCall 关联的 ToolCall（由 hook 层通过 ctx 赋值，D3）
 	ToolCall *llmschema.ToolCall
 }
@@ -29,7 +32,7 @@ type ToolInterruptException struct {
 // 对齐 Python: super().__init__(str(request.message))
 func (e *ToolInterruptException) Error() string {
 	if e.Request != nil {
-		return e.Request.Message
+		return e.Request.GetMessage()
 	}
 	return "tool interrupt"
 }
@@ -39,9 +42,9 @@ func (e *ToolInterruptException) String() string {
 	if e.Request != nil {
 		if e.ToolCall != nil {
 			return fmt.Sprintf("tool interrupt: %s (tool=%s, call_id=%s)",
-				e.Request.Message, e.ToolCall.Name, e.ToolCall.ID)
+				e.Request.GetMessage(), e.ToolCall.Name, e.ToolCall.ID)
 		}
-		return fmt.Sprintf("tool interrupt: %s", e.Request.Message)
+		return fmt.Sprintf("tool interrupt: %s", e.Request.GetMessage())
 	}
 	return "tool interrupt"
 }

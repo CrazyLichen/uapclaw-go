@@ -53,7 +53,7 @@ func TestToolInterruptException_errors_As识别(t *testing.T) {
 	err := &ToolInterruptException{Request: &InterruptRequest{Message: "test"}}
 	var tie *ToolInterruptException
 	require.True(t, errors.As(err, &tie))
-	assert.Equal(t, "test", tie.Request.Message)
+	assert.Equal(t, "test", tie.Request.GetMessage())
 }
 
 // ──────────────────────────── response.go ────────────────────────────
@@ -66,8 +66,8 @@ func TestInterruptRequester_接口满足(t *testing.T) {
 
 	// *ToolCallInterruptRequest 满足 InterruptRequester
 	var tcir InterruptRequester = &ToolCallInterruptRequest{
-		InterruptRequest: InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
-		ToolName:         "sub_tool",
+		Request:    &InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
+		ToolName:   "sub_tool",
 	}
 	assert.Equal(t, "子Agent确认", tcir.GetMessage())
 	assert.Equal(t, "sub_key", tcir.GetAutoConfirmKey())
@@ -75,9 +75,9 @@ func TestInterruptRequester_接口满足(t *testing.T) {
 
 func TestInterruptRequester_类型断言(t *testing.T) {
 	var req InterruptRequester = &ToolCallInterruptRequest{
-		InterruptRequest: InterruptRequest{Message: "确认"},
-		ToolName:         "sub_tool",
-		ToolCallID:       "inner_1",
+		Request:    &InterruptRequest{Message: "确认"},
+		ToolName:   "sub_tool",
+		ToolCallID: "inner_1",
 	}
 	// 可断言回 *ToolCallInterruptRequest
 	tcir, ok := req.(*ToolCallInterruptRequest)
@@ -118,7 +118,7 @@ func TestToolCallInterruptRequest_从ToolCall创建(t *testing.T) {
 	req := &InterruptRequest{Message: "确认", AutoConfirmKey: "key"}
 	tc := &llmschema.ToolCall{ID: "call_1", Name: "tool_a", Arguments: `{"x":1}`, Index: 2}
 	tcir := NewToolCallInterruptRequest(req, tc)
-	assert.Equal(t, "确认", tcir.Message)
+	assert.Equal(t, "确认", tcir.GetMessage())
 	assert.Equal(t, "tool_a", tcir.ToolName)
 	assert.Equal(t, "call_1", tcir.ToolCallID)
 	assert.Equal(t, `{"x":1}`, tcir.ToolArgs)
@@ -158,9 +158,9 @@ func TestToolInterruptEntry(t *testing.T) {
 
 func TestToolInterruptEntry_子类存储(t *testing.T) {
 	tcir := &ToolCallInterruptRequest{
-		InterruptRequest: InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
-		ToolName:         "sub_tool",
-		ToolCallID:       "inner_1",
+		Request:    &InterruptRequest{Message: "子Agent确认", AutoConfirmKey: "sub_key"},
+		ToolName:   "sub_tool",
+		ToolCallID: "inner_1",
 	}
 	entry := &ToolInterruptEntry{
 		ToolCall: &llmschema.ToolCall{ID: "c1", Name: "tool1"},

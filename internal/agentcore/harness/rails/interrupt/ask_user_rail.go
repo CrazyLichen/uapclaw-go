@@ -26,6 +26,7 @@ type AskUserPayload struct {
 }
 
 // AskUserRequest 扩展 InterruptRequest，携带问题列表。
+// 满足 InterruptRequester 接口（通过嵌入 InterruptRequest 继承 GetMessage/GetAutoConfirmKey）。
 //
 // 对齐 Python: AskUserRequest(InterruptRequest)
 type AskUserRequest struct {
@@ -283,21 +284,33 @@ func (r *AskUserRail) formatToolResult(toolCall *llmschema.ToolCall, payload *As
 		}
 	}
 
-	return fmt.Sprintf("用户已回答你的问题: %s。你现在可以继续。", joinStrings(parts, ", "))
+	return fmt.Sprintf("User has answered your questions: %s. You can now continue with the user's answers in mind.", joinStrings(parts, ", "))
 }
 
 // buildAskRequest 构建 AskUserRequest。
+// 返回 *AskUserRequest（InterruptRequester 接口实现），携带 questions 字段。
+// JSON 序列化时，questions 自然出现在输出中（对齐 Python model_dump + extra="allow"）。
 //
 // 对齐 Python: AskUserRail._build_ask_request(tool_call)
-func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *saschema.InterruptRequest {
-	_ = parseToolArgs(toolCall)
-	// TODO: 对齐 Python AskUserRequest.questions 字段后，将 args["questions"] 传入 InterruptRequest
+func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequest {
+	args := parseToolArgs(toolCall)
+	questions, _ := args["questions"].([]any)
+	// 转换 []any → []map[string]any
+	questionsList := make([]map[string]any, 0, len(questions))
+	for _, q := range questions {
+		if qMap, ok := q.(map[string]any); ok {
+			questionsList = append(questionsList, qMap)
+		}
+	}
 
-	return &saschema.InterruptRequest{
-		Message:        "",
-		PayloadSchema:  askUserPayloadSchema(),
-		AutoConfirmKey: "",
-		UIOptions:      nil,
+	return &AskUserRequest{
+		InterruptRequest: saschema.InterruptRequest{
+			Message:        "",
+			PayloadSchema:  askUserPayloadSchema(),
+			AutoConfirmKey: "",
+			UIOptions:      nil,
+		},
+		Questions: questionsList,
 	}
 }
 

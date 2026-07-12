@@ -6,12 +6,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// InterruptRequester 中断请求接口，InterruptRequest 和 ToolCallInterruptRequest 均满足。
+// InterruptRequester 中断请求接口，InterruptRequest 及其子类均满足。
 //
 // 对齐 Python: isinstance(x, InterruptRequest) — Python 中 interrupt_requests 的值类型
-// 实际可存 InterruptRequest 或其子类 ToolCallInterruptRequest（多态）。
-// Go 中通过接口实现多态：handleToolInterruptException 存 *InterruptRequest，
-// handleSubAgentInterrupt 存 *ToolCallInterruptRequest，均满足此接口。
+// 实际可存 InterruptRequest 或其子类（如 AskUserRequest, ToolCallInterruptRequest）。
+// Go 中通过接口实现多态：handler 存接口值，JSON 序列化按运行时具体类型输出字段。
+//
+// 对齐 Python model_config = {"extra": "allow"}：子类扩展字段（如 questions）
+// 通过接口多态自然保留，序列化时由具体类型决定输出内容。
 type InterruptRequester interface {
 	// GetMessage 返回向用户展示的确认消息
 	GetMessage() string
@@ -38,31 +40,37 @@ type InterruptRequest struct {
 //
 // 对应 Python: ToolCallInterruptRequest(InterruptRequest)
 // + model_config = {"extra": "allow"} 保留子类额外字段
+//
+// Request 字段使用 InterruptRequester 接口，支持存储 InterruptRequest 子类
+// （如 AskUserRequest），JSON 序列化按运行时具体类型输出所有字段，
+// 对齐 Python model_dump() + extra="allow" 的子类字段透传行为。
 type ToolCallInterruptRequest struct {
-	// InterruptRequest 嵌入基础中断请求
-	InterruptRequest
+	// Request 中断请求接口，可存 InterruptRequest 或其子类（如 AskUserRequest）
+	Request InterruptRequester `json:"request"`
 	// ToolName 工具名称
-	ToolName string
+	ToolName string `json:"tool_name"`
 	// ToolCallID 工具调用 ID
-	ToolCallID string
+	ToolCallID string `json:"tool_call_id"`
 	// ToolArgs 工具参数 JSON 字符串（和 ToolCall.Arguments 一致）
-	ToolArgs string
+	ToolArgs string `json:"tool_args"`
 	// Index 工具调用索引（0 表示未设置，和 ToolCall.Index 语义一致）
-	Index int
+	Index int `json:"index"`
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewToolCallInterruptRequest 从 InterruptRequest 和 ToolCall 创建 ToolCallInterruptRequest。
+// NewToolCallInterruptRequest 从 InterruptRequester 和 ToolCall 创建 ToolCallInterruptRequest。
 //
 // 对应 Python: ToolCallInterruptRequest.from_tool_call(request, tool_call)
-func NewToolCallInterruptRequest(request *InterruptRequest, toolCall *llmschema.ToolCall) *ToolCallInterruptRequest {
+// request 参数接受 InterruptRequester 接口，支持传入子类（如 AskUserRequest），
+// 子类扩展字段通过接口多态保留在 Request 字段中。
+func NewToolCallInterruptRequest(request InterruptRequester, toolCall *llmschema.ToolCall) *ToolCallInterruptRequest {
 	return &ToolCallInterruptRequest{
-		InterruptRequest: *request,
-		ToolName:         toolCall.Name,
-		ToolCallID:       toolCall.ID,
-		ToolArgs:         toolCall.Arguments,
-		Index:            toolCall.Index,
+		Request:    request,
+		ToolName:   toolCall.Name,
+		ToolCallID: toolCall.ID,
+		ToolArgs:   toolCall.Arguments,
+		Index:      toolCall.Index,
 	}
 }
 
@@ -72,8 +80,18 @@ func (r *InterruptRequest) GetMessage() string { return r.Message }
 // GetAutoConfirmKey 实现 InterruptRequester 接口。
 func (r *InterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
 
-// GetMessage 实现 InterruptRequester 接口（覆盖嵌入实现，返回相同值）。
-func (r *ToolCallInterruptRequest) GetMessage() string { return r.Message }
+// GetMessage 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) GetMessage() string {
+	if r.Request != nil {
+		return r.Request.GetMessage()
+	}
+	return ""
+}
 
-// GetAutoConfirmKey 实现 InterruptRequester 接口（覆盖嵌入实现，返回相同值）。
-func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string { return r.AutoConfirmKey }
+// GetAutoConfirmKey 实现 InterruptRequester 接口，委托给 Request 字段。
+func (r *ToolCallInterruptRequest) GetAutoConfirmKey() string {
+	if r.Request != nil {
+		return r.Request.GetAutoConfirmKey()
+	}
+	return ""
+}
