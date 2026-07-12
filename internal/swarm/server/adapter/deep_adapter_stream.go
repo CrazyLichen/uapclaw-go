@@ -34,6 +34,9 @@ func (d *DeepAdapter) parseStreamChunk(output *stream.OutputSchema, usage *usage
 		payload = make(map[string]any)
 	}
 
+	// 注意：llm_usage/llm_reasoning/llm_output 三种类型在 ProcessMessageStreamImpl
+	// 的 goroutine 中直接处理（需要跨 chunk 累加状态），不经过 parseStreamChunk。
+
 	switch chunkType {
 	case "controller_output":
 		// 对齐 Python: _parse_stream_chunk controller_output 分支 (line 5003-5070)
@@ -53,18 +56,6 @@ func (d *DeepAdapter) parseStreamChunk(output *stream.OutputSchema, usage *usage
 				"event_type": "chat.delta",
 				"content":    payload,
 			}
-		}
-
-	case "llm_output":
-		return map[string]any{
-			"event_type": "chat.delta",
-			"content":    extractStringFromPayload(payload, "content"),
-		}
-
-	case "llm_reasoning":
-		return map[string]any{
-			"event_type": "chat.reasoning",
-			"content":    extractStringFromPayload(payload, "content"),
 		}
 
 	case "content_chunk":

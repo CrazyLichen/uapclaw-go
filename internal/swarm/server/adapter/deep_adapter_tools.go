@@ -1,6 +1,9 @@
 package adapter
 
 import (
+	"os"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -59,4 +62,127 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 	// ⤵️ agentcore: 付费搜索工具热同步
 	logger.Info(logComponent).Msg("syncPaidSearchToolForRuntime 等待回填")
+}
+
+// refreshMultimodalConfigs 刷新多模态配置。
+// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1170-1318)
+func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
+	d.visionModelConfig = d.buildVisionModelConfig(configBase)
+	d.audioModelConfig = d.buildAudioModelConfig(configBase)
+	d.videoToolRegistered = d.buildVideoModelConfig(configBase)
+	d.imageGenToolRegistered = d.buildImageGenModelConfig(configBase)
+}
+
+// buildVisionModelConfig 从配置构建视觉模型配置。
+// 对齐 Python: _build_vision_model_config(config_base) (line 1170-1238)
+func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *schema.VisionModelConfig {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return nil
+	}
+	visionSection, _ := modelsSection["vision"].(map[string]any)
+	if visionSection == nil {
+		return nil
+	}
+	apiKey, _ := visionSection["api_key"].(string)
+	baseURL, _ := visionSection["base_url"].(string)
+	model, _ := visionSection["model"].(string)
+	if apiKey == "" && model == "" {
+		return nil
+	}
+	maxRetries := 3
+	if v, ok := visionSection["max_retries"]; ok {
+		if f, ok := v.(float64); ok {
+			maxRetries = int(f)
+		}
+	}
+	return &schema.VisionModelConfig{
+		APIKey:     apiKey,
+		BaseURL:    baseURL,
+		Model:      model,
+		MaxRetries: maxRetries,
+	}
+}
+
+// buildAudioModelConfig 从配置构建音频模型配置。
+// 对齐 Python: _build_audio_model_config(config_base) (line 1240-1318)
+func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.AudioModelConfig {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return nil
+	}
+	audioSection, _ := modelsSection["audio"].(map[string]any)
+	if audioSection == nil {
+		return nil
+	}
+	apiKey, _ := audioSection["api_key"].(string)
+	baseURL, _ := audioSection["base_url"].(string)
+	if apiKey == "" {
+		return nil
+	}
+	transcriptionModel, _ := audioSection["transcription_model"].(string)
+	qaModel, _ := audioSection["qa_model"].(string)
+	maxRetries := 3
+	if v, ok := audioSection["max_retries"]; ok {
+		if f, ok := v.(float64); ok {
+			maxRetries = int(f)
+		}
+	}
+	httpTimeout := 30
+	if v, ok := audioSection["http_timeout"]; ok {
+		if f, ok := v.(float64); ok {
+			httpTimeout = int(f)
+		}
+	}
+	maxAudioBytes := 25000000
+	if v, ok := audioSection["max_audio_bytes"]; ok {
+		if f, ok := v.(float64); ok {
+			maxAudioBytes = int(f)
+		}
+	}
+	return &schema.AudioModelConfig{
+		APIKey:             apiKey,
+		BaseURL:            baseURL,
+		TranscriptionModel: transcriptionModel,
+		QAModel:            qaModel,
+		MaxRetries:         maxRetries,
+		HTTPTimeout:        httpTimeout,
+		MaxAudioBytes:      maxAudioBytes,
+	}
+}
+
+// buildVideoModelConfig 构建视频模型配置。
+// 对齐 Python: _build_video_model_config(config_base) (line 1244-1260)
+// 返回 bool 表示视频工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
+// ⤵️ 9.38-49 Harness 工具集: apply_video_model_config_from_yaml + dedicated_multimodal_model_configured
+func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) bool {
+	// ⤵️ 9.38-49: apply_video_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
+	// applyVideoModelConfigFromYAML(configBase)
+
+	// ⤵️ 9.38-49: dedicated_multimodal_model_configured(config_base, "video") — 检查 models.video 是否有独立 api_key
+	// if !dedicatedMultimodalModelConfigured(configBase, "video") {
+	// 	logger.Info(logComponent).Msg("skip video_understanding: models.video has no dedicated api_key in config.yaml")
+	// 	return false
+	// }
+
+	if os.Getenv("VIDEO_API_KEY") == "" {
+		logger.Info(logComponent).Msg("video tools skipped: incomplete config (VIDEO_API_KEY not set)")
+		return false
+	}
+	return true
+}
+
+// buildImageGenModelConfig 构建图片生成模型配置。
+// 对齐 Python: _build_image_gen_model_config(config_base) (line 1261-1270)
+// 返回 bool 表示图片生成工具是否启用（Python 原实现返回 bool，通过环境变量传递配置）。
+// ⤵️ 9.38-49 Harness 工具集: apply_image_gen_model_config_from_yaml
+func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
+	// ⤵️ 9.38-49: apply_image_gen_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
+	// applyImageGenModelConfigFromYAML(configBase)
+
+	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
+		logger.Info(logComponent).Msg("image_gen tool skipped: incomplete config (IMAGE_GEN_API_KEY not set)")
+		return false
+	}
+	return true
 }

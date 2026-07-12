@@ -114,3 +114,91 @@ func (d *DeepAdapter) writeRuntimeState(key string, value string) {
 	envKey := "JCLAW_RUNTIME_" + strings.ToUpper(key)
 	os.Setenv(envKey, value)
 }
+
+// skillIncludeToolsForProfile 检查当前 profile 下 skill 是否包含工具。
+// 对齐 Python: _skill_include_tools_for_profile() (line 722-726)
+// 逻辑：ACP tool profile 下不包含工具；否则取决于 filesystemRail 是否为 nil。
+func (d *DeepAdapter) skillIncludeToolsForProfile(configBase map[string]any) bool {
+	if d.isAcpToolProfile(configBase) {
+		return false
+	}
+	return d.filesystemRail == nil
+}
+
+// resolvePromptChannel 从 sessionID 解析 prompt channel。
+// 对齐 Python: _resolve_prompt_channel(session_id) (line 728-748)
+// 逻辑：从 sessionID 前缀解析 channel，支持 acp/cron/heartbeat/feishu/web/dingtalk/wecom。
+func resolvePromptChannel(sessionID string) string {
+	if sessionID == "" {
+		return "web"
+	}
+	// 提取前缀（下划线前的部分）
+	channel := sessionID
+	if idx := strings.Index(sessionID, "_"); idx > 0 {
+		channel = sessionID[:idx]
+	}
+	switch channel {
+	case "acp", "cron", "heartbeat", "feishu", "web", "dingtalk", "wecom":
+		return channel
+	default:
+		// "sess" 前缀或其他情况回退到 "web"
+		return "web"
+	}
+}
+
+// resolveModelName 从模型请求配置解析当前模型名称。
+// 对齐 Python: _resolve_model_name() (line 750-755)
+// 逻辑：从 modelRequestConfig.modelName 获取，默认 "unknown"。
+func (d *DeepAdapter) resolveModelName() string {
+	if d.modelRequestConfig != nil && d.modelRequestConfig.ModelName != "" {
+		return d.modelRequestConfig.ModelName
+	}
+	return "unknown"
+}
+
+// isAcpToolProfile 检查是否为 ACP Tool profile。
+// 对齐 Python: _is_acp_tool_profile()
+func (d *DeepAdapter) isAcpToolProfile(configBase map[string]any) bool {
+	modelsSection, _ := configBase["models"].(map[string]any)
+	if modelsSection == nil {
+		return false
+	}
+	defaults, _ := modelsSection["defaults"].([]any)
+	for _, entry := range defaults {
+		if m, ok := entry.(map[string]any); ok {
+			if profile, ok := m["profile"].(string); ok && profile == "acp_tool" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
+// 对齐 Python: _filesystem_rail_enabled_for_profile()
+func (d *DeepAdapter) filesystemRailEnabledForProfile(configBase map[string]any) bool {
+	// 对齐 Python: 默认 true，除非 isAcpToolProfile
+	return !d.isAcpToolProfile(configBase)
+}
+
+// resolveRuntimeLanguage 解析运行时语言。
+// 对齐 Python: _resolve_runtime_language()
+func (d *DeepAdapter) resolveRuntimeLanguage() string {
+	if v, ok := d.configCache["language"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return "zh"
+}
+
+// resolvePromptLanguage 解析提示词语言。
+// 对齐 Python: _resolve_prompt_language()
+func (d *DeepAdapter) resolvePromptLanguage() string {
+	if v, ok := d.configCache["prompt_language"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return d.resolveRuntimeLanguage()
+}

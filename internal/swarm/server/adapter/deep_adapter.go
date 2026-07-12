@@ -407,11 +407,14 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		Card:                   agentCard,
 		SystemPrompt:           systemPrompt,
 		ToolCards:              toolCards,
+		Mcps:                   nil, // 对齐 Python: mcps 在 create_deep_agent 之后通过 _register_mcp_servers_from_config 单独注册
+		Subagents:              nil, // ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
 		Rails:                  railsList,
 		EnableTaskLoop:         d.resolveEnableTaskLoop(config, configBase),
 		AddGeneralPurposeAgent: shouldEnableGeneralAgent,
 		MaxIterations:          paramsInt(config, "max_iterations", 15),
 		Workspace:              hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
+		Skills:                 nil, // ⤵️ P1: skills 预留功能，对齐 Python create_instance 不传 skills
 		Language:               resolvedLanguage,
 		PromptMode:             d.resolvePromptMode(configBase),
 		VisionModelConfig:      d.visionModelConfig,
@@ -1098,7 +1101,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //  1. await self._close_a2x_client()
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
-	// ⤵️ A2X: _close_a2x_client()
+	d.closeA2xClient()
 
 	logger.Info(logComponent).Msg("DeepAdapter Cleanup 完成")
 	return nil
@@ -1111,16 +1114,32 @@ func (d *DeepAdapter) Cleanup() error {
 // 与 interrupt(cancel) 不同：无 other_sessions 保护，
 // gateway 断开意味着前端已无法接收响应，无条件 abort 所有 session。
 func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
+	// 步骤 1: 中止 rail 上所有活跃 session
 	// 对齐 Python: if self._stream_event_rail is not None:
 	//   active = [sid for sid, count in self._active_session_ids.items() if count > 0]
 	//   for sid in active: self._stream_event_rail.abort(sid)
 	// ⤵️ 10.6.3-10: streamEventRail abort 所有活跃 session
-
-	if d.instance != nil {
-		d.instance.Abort(ctx)
+	if d.streamEventRail != nil {
+		// 快照收集所有活跃 session ID
+		var activeSIDs []string
+		for sid, count := range d.activeSessionIDs {
+			if count > 0 {
+				activeSIDs = append(activeSIDs, sid)
+			}
+		}
+		_ = activeSIDs // ⤵️ 10.6.3-10: for sid := range activeSIDs { d.streamEventRail.abort(sid) }
 	}
 
-	// ⤵️ 10.6.3-10: _cancel_scheduler_running_tasks()
+	// 步骤 2: 中止 DeepAgent 实例（协作式，无法中断进行中的 LLM HTTP 请求）
+	// 对齐 Python: await self._instance.abort()，try/except 捕获异常
+	if d.instance != nil {
+		if err := d.instance.Abort(ctx); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("AbortOnGatewayDisconnect instance.Abort 失败")
+		}
+	}
+
+	// 步骤 3: 取消调度器任务，在 await 点注入 CancelledError
+	// ⤵️ 11.10: _cancel_scheduler_running_tasks()
 
 	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect 完成")
 }
@@ -1688,28 +1707,6 @@ func (d *DeepAdapter) resolveEnableTaskPlanning(config map[string]any, configBas
 	return true
 }
 
-// resolveRuntimeLanguage 解析运行时语言。
-// 对齐 Python: _resolve_runtime_language()
-func (d *DeepAdapter) resolveRuntimeLanguage() string {
-	if v, ok := d.configCache["language"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return "zh"
-}
-
-// resolvePromptLanguage 解析提示词语言。
-// 对齐 Python: _resolve_prompt_language()
-func (d *DeepAdapter) resolvePromptLanguage() string {
-	if v, ok := d.configCache["prompt_language"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return d.resolveRuntimeLanguage()
-}
-
 // resolvePromptMode 解析提示词模式。
 // 对齐 Python: _resolve_prompt_mode(config_base)
 func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.PromptMode {
@@ -1758,116 +1755,6 @@ func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map
 		result[i] = r
 	}
 	return result
-}
-
-// refreshMultimodalConfigs 刷新多模态配置。
-// 对齐 Python: _refresh_multimodal_configs(config_base) (line 1170-1318)
-func (d *DeepAdapter) refreshMultimodalConfigs(configBase map[string]any) {
-	d.visionModelConfig = d.buildVisionModelConfig(configBase)
-	d.audioModelConfig = d.buildAudioModelConfig(configBase)
-}
-
-// filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
-// 对齐 Python: _filesystem_rail_enabled_for_profile()
-func (d *DeepAdapter) filesystemRailEnabledForProfile(configBase map[string]any) bool {
-	// 对齐 Python: 默认 true，除非 isAcpToolProfile
-	return !d.isAcpToolProfile(configBase)
-}
-
-// isAcpToolProfile 检查是否为 ACP Tool profile。
-// 对齐 Python: _is_acp_tool_profile()
-func (d *DeepAdapter) isAcpToolProfile(configBase map[string]any) bool {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
-		return false
-	}
-	defaults, _ := modelsSection["defaults"].([]any)
-	for _, entry := range defaults {
-		if m, ok := entry.(map[string]any); ok {
-			if profile, ok := m["profile"].(string); ok && profile == "acp_tool" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// buildVisionModelConfig 从配置构建视觉模型配置。
-// 对齐 Python: _build_vision_model_config(config_base) (line 1170-1238)
-func (d *DeepAdapter) buildVisionModelConfig(configBase map[string]any) *hschema.VisionModelConfig {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
-		return nil
-	}
-	visionSection, _ := modelsSection["vision"].(map[string]any)
-	if visionSection == nil {
-		return nil
-	}
-	apiKey, _ := visionSection["api_key"].(string)
-	baseURL, _ := visionSection["base_url"].(string)
-	model, _ := visionSection["model"].(string)
-	if apiKey == "" && model == "" {
-		return nil
-	}
-	maxRetries := 3
-	if v, ok := visionSection["max_retries"]; ok {
-		if f, ok := v.(float64); ok {
-			maxRetries = int(f)
-		}
-	}
-	return &hschema.VisionModelConfig{
-		APIKey:     apiKey,
-		BaseURL:    baseURL,
-		Model:      model,
-		MaxRetries: maxRetries,
-	}
-}
-
-// buildAudioModelConfig 从配置构建音频模型配置。
-// 对齐 Python: _build_audio_model_config(config_base) (line 1240-1318)
-func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *hschema.AudioModelConfig {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
-		return nil
-	}
-	audioSection, _ := modelsSection["audio"].(map[string]any)
-	if audioSection == nil {
-		return nil
-	}
-	apiKey, _ := audioSection["api_key"].(string)
-	baseURL, _ := audioSection["base_url"].(string)
-	if apiKey == "" {
-		return nil
-	}
-	transcriptionModel, _ := audioSection["transcription_model"].(string)
-	qaModel, _ := audioSection["qa_model"].(string)
-	maxRetries := 3
-	if v, ok := audioSection["max_retries"]; ok {
-		if f, ok := v.(float64); ok {
-			maxRetries = int(f)
-		}
-	}
-	httpTimeout := 30
-	if v, ok := audioSection["http_timeout"]; ok {
-		if f, ok := v.(float64); ok {
-			httpTimeout = int(f)
-		}
-	}
-	maxAudioBytes := 25000000
-	if v, ok := audioSection["max_audio_bytes"]; ok {
-		if f, ok := v.(float64); ok {
-			maxAudioBytes = int(f)
-		}
-	}
-	return &hschema.AudioModelConfig{
-		APIKey:             apiKey,
-		BaseURL:            baseURL,
-		TranscriptionModel: transcriptionModel,
-		QAModel:            qaModel,
-		MaxRetries:         maxRetries,
-		HTTPTimeout:        httpTimeout,
-		MaxAudioBytes:      maxAudioBytes,
-	}
 }
 
 // extractTextContent 从 payload 提取文本内容。
