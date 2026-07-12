@@ -15,6 +15,26 @@ import (
 
 // ──────────────────────────── AgentClient 测试 ────────────────────────────
 
+// mockTransport 不执行 Close 的 mock 传输（用于重连测试）。
+type mockTransport struct {
+	recvCh chan []byte
+	sendCh chan []byte
+}
+
+func (m *mockTransport) Send(_ context.Context, data []byte) error {
+	m.sendCh <- data
+	return nil
+}
+
+func (m *mockTransport) Recv() (<-chan []byte, error) {
+	return m.recvCh, nil
+}
+
+func (m *mockTransport) Close() error {
+	// no-op：不关闭底层 channel，避免 send on closed channel
+	return nil
+}
+
 // newTestAgentClientWithTransport 创建测试用 AgentClient 和 ChannelTransport。
 func newTestAgentClientWithTransport() (*AgentClient, *gateway_push.ChannelTransport) {
 	chTransport := gateway_push.NewChannelTransport()
@@ -373,6 +393,129 @@ func TestAgentClient_SendRequestStream_流式(t *testing.T) {
 	}
 	if lastChunk == nil || !lastChunk.IsComplete {
 		t.Error("最后一个 chunk 的 IsComplete 应为 true")
+	}
+
+	ac.Disconnect()
+}
+
+// TestAgentClient_SetOrUpdateServerConfig 验证 SetOrUpdateServerConfig 为 no-op 不 panic
+func TestAgentClient_SetOrUpdateServerConfig(t *testing.T) {
+	ac, _ := newTestAgentClientWithTransport()
+	// 调用 no-op 方法，不应 panic
+	ac.SetOrUpdateServerConfig(map[string]any{"key": "value"}, map[string]string{"ENV": "test"})
+}
+
+// TestAgentClient_Connect_重连先Disconnect 连续两次 Connect 应先 Disconnect 再 Connect
+func TestAgentClient_Connect_重连先Disconnect(t *testing.T) {
+	ac, chTransport := newTestAgentClientWithTransport()
+
+	// 第一次 Connect：发送 connection.ack
+	firstAckSent := make(chan struct{})
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		ackFrame := transport.BuildConnectionAckFrame()
+		ackData, _ := json.Marshal(ackFrame)
+		chTransport.RecvCh() <- ackData
+		close(firstAckSent)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+
+	err := ac.Connect(ctx)
+	if err != nil {
+		t.Fatalf("第一次 Connect() 返回错误: %v", err)
+	}
+
+	// 等待第一次 ack 发送完成
+	<-firstAckSent
+	time.Sleep(100 * time.Millisecond)
+
+	if !ac.IsConnected() {
+		t.Error("第一次 Connect() 后 IsConnected() 应为 true")
+	}
+
+	// 在第二次 Connect 之前替换 transport（Disconnect 会 Close 旧的）
+	// 必须在 Connect 调用 Disconnect 之后、receiverLoop 启动之前完成。
+	// 为简化测试：先手动 Disconnect，替换 transport，再 Connect
+	ac.Disconnect()
+	time.Sleep(100 * time.Millisecond)
+
+	newTransport := gateway_push.NewChannelTransport()
+	ac.transport = newTransport
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		ackFrame := transport.BuildConnectionAckFrame()
+		ackData, _ := json.Marshal(ackFrame)
+		newTransport.RecvCh() <- ackData
+	}()
+
+	// 验证 Disconnect + Connect 能正常工作
+	err = ac.Connect(ctx)
+	if err != nil {
+		t.Fatalf("Connect() 返回错误: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	if !ac.IsConnected() {
+		t.Error("Connect() 后 IsConnected() 应为 true")
+	}
+
+	ac.Disconnect()
+}
+
+// TestAgentClient_Connect_已运行时先Disconnect 验证 Connect 检测到 running==true 时先调 Disconnect
+func TestAgentClient_Connect_已运行时先Disconnect(t *testing.T) {
+	ac, chTransport := newTestAgentClientWithTransport()
+
+	// 第一次 Connect
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		ackFrame := transport.BuildConnectionAckFrame()
+		ackData, _ := json.Marshal(ackFrame)
+		chTransport.RecvCh() <- ackData
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+
+	err := ac.Connect(ctx)
+	if err != nil {
+		t.Fatalf("第一次 Connect() 返回错误: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// 验证第一次连接正常
+	if !ac.IsConnected() {
+		t.Fatal("第一次 Connect() 后 IsConnected() 应为 true")
+	}
+
+	// 替换 transport（Disconnect 会 Close 旧的，新 Connect 需要新 transport）
+	// 用 mockTransport 替代，其 Close 不关闭底层 channel，避免 send on closed channel
+	mt := &mockTransport{
+		recvCh: make(chan []byte, 128),
+		sendCh: make(chan []byte, 64),
+	}
+	ac.transport = mt
+
+	// 为新 transport 发送 connection.ack
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		ackFrame := transport.BuildConnectionAckFrame()
+		ackData, _ := json.Marshal(ackFrame)
+		mt.recvCh <- ackData
+	}()
+
+	// 第二次 Connect：应先 Disconnect 再 Connect
+	err = ac.Connect(ctx)
+	if err != nil {
+		t.Fatalf("第二次 Connect() 返回错误: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	if !ac.IsConnected() {
+		t.Error("第二次 Connect() 后 IsConnected() 应为 true")
 	}
 
 	ac.Disconnect()
