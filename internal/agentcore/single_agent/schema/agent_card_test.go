@@ -191,3 +191,25 @@ func TestAgentCard_ToolInfo与ToolCard一致(t *testing.T) {
 		t.Errorf("required 期望 [query]，实际 %v", required)
 	}
 }
+
+func TestWithAgentID(t *testing.T) {
+	card := NewAgentCard(WithAgentName("test"), WithAgentID("custom-id"))
+	if card.ID != "custom-id" {
+		t.Errorf("ID = %q, want custom-id", card.ID)
+	}
+}
+
+func TestWithInterfaceURL(t *testing.T) {
+	card := NewAgentCard(WithAgentName("test"), WithInterfaceURL("http://localhost:8080"))
+	if card.InterfaceURL != "http://localhost:8080" {
+		t.Errorf("InterfaceURL = %q, want http://localhost:8080", card.InterfaceURL)
+	}
+}
+
+func TestWithOutputParamsDirect(t *testing.T) {
+	params := []*schema.Param{{Name: "result", Description: "结果"}}
+	card := NewAgentCard(WithAgentName("test"), WithOutputParamsDirect(params))
+	if len(card.OutputParams) != 1 || card.OutputParams[0].Name != "result" {
+		t.Errorf("OutputParams 不正确，实际 %v", card.OutputParams)
+	}
+}

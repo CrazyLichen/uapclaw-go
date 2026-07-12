@@ -196,3 +196,83 @@ func TestSafeFilePath_路径穿越(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func TestHandleFileContentPost_缺少path(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	wsDir := workspace.AgentWorkspaceDir()
+	require.NoError(t, os.MkdirAll(wsDir, 0o755))
+
+	body := map[string]any{"content": "no path"}
+	bodyJSON, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/file-api/file-content", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	HandleFileContentPost(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleFileContentPost_无效JSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/file-api/file-content", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	HandleFileContentPost(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleListFiles_目录不存在(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	wsDir := workspace.AgentWorkspaceDir()
+	require.NoError(t, os.MkdirAll(wsDir, 0o755))
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/list-files?dir=/nonexistent", nil)
+	w := httptest.NewRecorder()
+	HandleListFiles(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestHandleListFiles_路径穿越(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/file-api/list-files?dir=../../etc", nil)
+	w := httptest.NewRecorder()
+	HandleListFiles(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestHandleListMarkdown_无dir参数(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	wsDir := workspace.AgentWorkspaceDir()
+	require.NoError(t, os.MkdirAll(wsDir, 0o755))
+
+	req := httptest.NewRequest(http.MethodGet, "/file-api/list-markdown", nil)
+	w := httptest.NewRecorder()
+	HandleListMarkdown(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandleWsDebugConfigPost_无效JSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/file-api/ws-debug-config", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	HandleWsDebugConfigPost(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWriteJSON(t *testing.T) {
+	w := httptest.NewRecorder()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	assert.True(t, result["ok"].(bool))
+}

@@ -406,3 +406,87 @@ func TestExpandUser(t *testing.T) {
 	result = expandUser("/tmp/test")
 	assert.Equal(t, "/tmp/test", result)
 }
+
+// TestParsePermissions 测试权限解析
+func TestParsePermissions(t *testing.T) {
+	assert.Equal(t, os.FileMode(0644), parsePermissions("644"))
+	assert.Equal(t, os.FileMode(0755), parsePermissions("755"))
+	assert.Equal(t, os.FileMode(0600), parsePermissions("600"))
+	assert.Equal(t, os.FileMode(0644), parsePermissions(""))
+	assert.Equal(t, os.FileMode(0644), parsePermissions("abc"))
+}
+
+// TestLocalFsOperation_sortItems 测试排序
+func TestLocalFsOperation_sortItems(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+
+	items := []result.FileSystemItem{
+		{Name: "c.txt", Size: 100, ModifiedTime: "2024-01-03 00:00:00"},
+		{Name: "a.txt", Size: 300, ModifiedTime: "2024-01-01 00:00:00"},
+		{Name: "b.txt", Size: 200, ModifiedTime: "2024-01-02 00:00:00"},
+	}
+
+	// 按名称升序
+	fsOp.sortItems(items, "name", false)
+	assert.Equal(t, "a.txt", items[0].Name)
+	assert.Equal(t, "b.txt", items[1].Name)
+	assert.Equal(t, "c.txt", items[2].Name)
+
+	// 按名称降序
+	fsOp.sortItems(items, "name", true)
+	assert.Equal(t, "c.txt", items[0].Name)
+
+	// 按大小升序
+	fsOp.sortItems(items, "size", false)
+	assert.Equal(t, int64(100), items[0].Size)
+
+	// 按修改时间升序
+	fsOp.sortItems(items, "modified_time", false)
+	assert.Equal(t, "a.txt", items[0].Name)
+
+	// 默认排序（按名称）
+	fsOp.sortItems(items, "unknown", false)
+	assert.Equal(t, "a.txt", items[0].Name)
+}
+
+// TestLocalFsOperation_resolvePath_空路径 测试空路径返回错误
+func TestLocalFsOperation_resolvePath_空路径(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	_, err := fsOp.resolvePath("", false)
+	assert.Error(t, err)
+}
+
+// TestLocalFsOperation_resolvePath_绝对路径 测试绝对路径
+func TestLocalFsOperation_resolvePath_绝对路径(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	resolved, err := fsOp.resolvePath("/tmp", false)
+	require.NoError(t, err)
+	assert.Equal(t, "/tmp", resolved)
+}
+
+// TestLocalFsOperation_resolvePath_创建父目录 测试 createParent 参数
+func TestLocalFsOperation_resolvePath_创建父目录(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	tmpDir := t.TempDir()
+	resolved, err := fsOp.resolvePath(filepath.Join(tmpDir, "subdir", "test.txt"), true)
+	require.NoError(t, err)
+	assert.DirExists(t, filepath.Dir(resolved))
+}
+
+// TestLocalFsOperation_WriteFile_创建父目录 测试写入时自动创建父目录
+func TestLocalFsOperation_WriteFile_创建父目录(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "subdir", "test.txt")
+
+	res, err := fsOp.WriteFile(ctx, testFile, "auto created parent")
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.Code)
+}
+
+// TestGetDefaultCmdLimit 测试默认命令限制
+func TestGetDefaultCmdLimit(t *testing.T) {
+	limit := getDefaultCmdLimit()
+	assert.True(t, limit > 0)
+}

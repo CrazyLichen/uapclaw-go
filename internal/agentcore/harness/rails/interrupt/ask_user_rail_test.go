@@ -281,5 +281,5 @@ func TestAskUserRail_InterruptRequest接口(t *testing.T) {
 	interruptResult, ok := decision.(*InterruptResult)
 	assert.True(t, ok)
 	// InterruptRequest 满足 InterruptRequester 接口
-	var _ saschema.InterruptRequester = interruptResult.Request
+	_ = saschema.InterruptRequester(interruptResult.Request)
 }

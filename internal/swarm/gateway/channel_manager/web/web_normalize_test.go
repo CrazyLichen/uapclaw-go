@@ -209,3 +209,47 @@ func TestForwardNoLocalHandlerMethods_chat方法不在集合中(t *testing.T) {
 		assert.False(t, ForwardNoLocalHandlerMethods[method], "方法 %q 不应在 ForwardNoLocalHandlerMethods 中（有本地 handler）", method)
 	}
 }
+
+// TestMakeNormAndForward_转发方法NoLocalHandler 测试 initialize 在 noLocalHandlerMethods 中
+func TestMakeNormAndForward_转发方法NoLocalHandler(t *testing.T) {
+	normFn := MakeNormAndForward(nil, ForwardReqMethods, ForwardNoLocalHandlerMethods)
+	// nil channelMgr 会 panic，仅验证函数创建成功
+	assert.NotNil(t, normFn)
+}
+
+// TestMakeNormAndForward_非转发方法有Metadata 测试非转发方法返回 false
+func TestMakeNormAndForward_非转发方法有Metadata(t *testing.T) {
+	normFn := MakeNormAndForward(nil, map[string]bool{}, map[string]bool{})
+
+	msg := &schema.Message{
+		ID:        "req-1",
+		ChannelID: "web",
+		Metadata:  map[string]any{"method": "config.get"},
+	}
+	result := normFn(msg)
+	assert.False(t, result)
+}
+
+// TestParseMode_有mode 测试 params 中有 mode
+func TestParseMode_有mode(t *testing.T) {
+	assert.Equal(t, schema.Mode("BUILD"), parseMode(map[string]any{"mode": "BUILD"}))
+}
+
+// TestParseMode_无mode 测试 params 中无 mode
+func TestParseMode_无mode(t *testing.T) {
+	assert.Equal(t, schema.ModeAgentPlan, parseMode(map[string]any{}))
+}
+
+// TestParseMode_nilParams 测试 params 为 nil
+func TestParseMode_nilParams(t *testing.T) {
+	assert.Equal(t, schema.ModeAgentPlan, parseMode(nil))
+}
+
+// TestBuildUserMessage_带Query 测试带 query 参数构造
+func TestBuildUserMessage_带Query(t *testing.T) {
+	params := map[string]any{"query": "你好"}
+	query := map[string][]string{"mode": {"BUILD"}}
+	msg := BuildUserMessage("req-1", "chat.send", params, "sess-1", query)
+	assert.Equal(t, "req-1", msg.ID)
+	assert.Equal(t, query, msg.Metadata["query"])
+}

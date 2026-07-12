@@ -508,9 +508,9 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// 对齐 Python: for env_key, env_value in env_overrides.items(): os.environ[str(env_key)] = str(env_value)
 	for k, v := range envOverrides {
 		if v == nil {
-			os.Unsetenv(k)
+			_ = os.Unsetenv(k)
 		} else {
-			os.Setenv(k, fmt.Sprintf("%v", v))
+			_ = os.Setenv(k, fmt.Sprintf("%v", v))
 		}
 	}
 
@@ -1097,7 +1097,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //  1. await self._close_a2x_client()
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
-	d.closeA2xClient()
+	_ = d.closeA2xClient()
 
 	logger.Info(logComponent).Msg("DeepAdapter Cleanup 完成")
 	return nil

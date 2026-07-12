@@ -119,3 +119,29 @@ func TestAgentManager_Cleanup(t *testing.T) {
 	err := am.Cleanup()
 	assert.NoError(t, err)
 }
+
+func TestAgentManager_RecreateAgent(t *testing.T) {
+	am := NewAgentManager()
+	result := am.RecreateAgent("web", false)
+	assert.Nil(t, result)
+}
+
+func TestAgentManager_CreateSession(t *testing.T) {
+	am := NewAgentManager()
+	sessionID, err := am.CreateSession("web", "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, sessionID)
+}
+
+func TestAgentManager_CreateSession_指定ID(t *testing.T) {
+	am := NewAgentManager()
+	sessionID, err := am.CreateSession("web", "my-custom-session")
+	require.NoError(t, err)
+	assert.Equal(t, "my-custom-session", sessionID)
+}
+
+func TestMakeSessionID(t *testing.T) {
+	id := makeSessionID()
+	assert.Contains(t, id, "sess_")
+	assert.True(t, len(id) > 10)
+}

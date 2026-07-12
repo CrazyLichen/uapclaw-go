@@ -218,7 +218,8 @@ func TestConfirmInterruptRail_InterruptRequester接口(t *testing.T) {
 	interruptResult, ok := decision.(*InterruptResult)
 	assert.True(t, ok)
 	// InterruptRequest 满足 InterruptRequester 接口
-	var _ saschema.InterruptRequester = interruptResult.Request
+	// InterruptRequest 满足 InterruptRequester 接口
+	_ = saschema.InterruptRequester(interruptResult.Request)
 }
 
 // TestConfirmInterruptRail_resolveInterrupt_无效类型 验证不支持的输入类型 → InterruptResult

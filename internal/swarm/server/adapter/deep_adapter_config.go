@@ -112,7 +112,7 @@ func (d *DeepAdapter) isSubagentDefaultEnabled(name string) bool {
 func (d *DeepAdapter) writeRuntimeState(key string, value string) {
 	// 对齐 Python: os.environ[f"JCLAW_RUNTIME_{key.upper()}"] = value
 	envKey := "JCLAW_RUNTIME_" + strings.ToUpper(key)
-	os.Setenv(envKey, value)
+	_ = os.Setenv(envKey, value)
 }
 
 // skillIncludeToolsForProfile 检查当前 profile 下 skill 是否包含工具。

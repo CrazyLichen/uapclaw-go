@@ -153,7 +153,7 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 			Msg("Stream 任务已启动（后台运行）")
 	} else if mh.nonStreamRPCMayRunParallel(env) {
 		// 非流式并行
-		go mh.processNonStreamRequest(ctx, msg, env)
+		go func() { _, _ = mh.processNonStreamRequest(ctx, msg, env) }()
 		logger.Info(logComponent).
 			Str("event_type", "non_stream_parallel").
 			Str("request_id", streamRid).

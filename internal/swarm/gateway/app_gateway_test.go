@@ -1,8 +1,10 @@
 package gateway
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -97,6 +99,46 @@ func TestDefaultHostPort(t *testing.T) {
 	cfg, _ := config.New("")
 	assert.Equal(t, "127.0.0.1", defaultHost(cfg))
 	assert.Equal(t, 19000, defaultPort(cfg))
+}
+
+func TestDefaultHost_环境变量优先(t *testing.T) {
+	_ = os.Setenv("UAPCLAW_GATEWAY_HOST", "0.0.0.0")
+	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_HOST") }()
+	assert.Equal(t, "0.0.0.0", defaultHost(nil))
+}
+
+func TestDefaultPort_环境变量优先(t *testing.T) {
+	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "8080")
+	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
+	assert.Equal(t, 8080, defaultPort(nil))
+}
+
+func TestDefaultPort_环境变量无效(t *testing.T) {
+	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "not-a-number")
+	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
+	assert.Equal(t, 19000, defaultPort(nil))
+}
+
+func TestDefaultPort_环境变量零值(t *testing.T) {
+	_ = os.Setenv("UAPCLAW_GATEWAY_PORT", "0")
+	defer func() { _ = os.Unsetenv("UAPCLAW_GATEWAY_PORT") }()
+	assert.Equal(t, 19000, defaultPort(nil))
+}
+
+func TestGatewayServer_StartStop(t *testing.T) {
+	gs := newTestGatewayServer(t)
+
+	err := gs.Start(context.Background())
+	require.NoError(t, err)
+
+	err = gs.Stop()
+	assert.NoError(t, err)
+}
+
+func TestGatewayServer_OnConfigSaved(t *testing.T) {
+	gs := newTestGatewayServer(t)
+	callback := gs.OnConfigSaved()
+	assert.NotNil(t, callback)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

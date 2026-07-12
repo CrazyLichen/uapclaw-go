@@ -299,3 +299,68 @@ func TestExecuteCodeResult_默认值(t *testing.T) {
 	assert.Equal(t, 0, r.Code)
 	assert.Equal(t, "", r.Message)
 }
+
+// ──────────────────────────── BaseOperation 方法 ────────────────────────────
+
+func TestNewBaseOperation(t *testing.T) {
+	b := NewBaseOperation("fs", OperationModeLocal, "文件操作", nil)
+	assert.Equal(t, "fs", b.Name())
+	assert.Equal(t, OperationModeLocal, b.Mode())
+	assert.Equal(t, "文件操作", b.Description())
+	assert.Nil(t, b.RunConfig())
+	assert.Nil(t, b.ListTools())
+}
+
+func TestNewBaseOperation_sandbox(t *testing.T) {
+	cfg := map[string]string{"host": "localhost"}
+	b := NewBaseOperation("shell", OperationModeSandbox, "Shell操作", cfg)
+	assert.Equal(t, "shell", b.Name())
+	assert.Equal(t, OperationModeSandbox, b.Mode())
+	assert.NotNil(t, b.RunConfig())
+}
+
+func TestFromOperationModeString(t *testing.T) {
+	assert.Equal(t, OperationModeLocal, FromOperationModeString("local"))
+	assert.Equal(t, OperationModeSandbox, FromOperationModeString("sandbox"))
+	assert.Equal(t, OperationModeLocal, FromOperationModeString("unknown"))
+}
+
+func TestCreateSysOperationEvent(t *testing.T) {
+	b := NewBaseOperation("fs", OperationModeLocal, "文件操作", nil)
+	event := b.createSysOperationEvent(
+		context.Background(),
+		"call",
+		"ReadFile",
+		map[string]any{"path": "/tmp"},
+		map[string]any{"content": "hello"},
+		10.5,
+	)
+	assert.Equal(t, "sys_operation", event["module_id"])
+	assert.Equal(t, "fs", event["operation_name"])
+	assert.Equal(t, "call", event["event_type"])
+	assert.Equal(t, "ReadFile", event["method_name"])
+}
+
+// ──────────────────────────── CodeOption 扩展 ────────────────────────────
+
+func TestWithCodeCwd(t *testing.T) {
+	opts := NewCodeOptions(WithCodeCwd("/tmp"))
+	assert.Equal(t, "/tmp", opts.Cwd)
+}
+
+// ──────────────────────────── FsOption 扩展 ────────────────────────────
+
+func TestWithFsAppend(t *testing.T) {
+	opts := NewFsOptions(WithFsAppend(true))
+	assert.True(t, opts.Append)
+}
+
+func TestWithFsRecursive(t *testing.T) {
+	opts := NewFsOptions(WithFsRecursive(true))
+	assert.True(t, opts.Recursive)
+}
+
+func TestWithFsPermissions(t *testing.T) {
+	opts := NewFsOptions(WithFsPermissions("755"))
+	assert.Equal(t, "755", opts.Permissions)
+}

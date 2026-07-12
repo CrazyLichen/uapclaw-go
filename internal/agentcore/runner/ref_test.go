@@ -2,6 +2,8 @@ package runner
 
 import (
 	"testing"
+
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -79,3 +81,30 @@ func TestWorkflowRef_ByWorkflow(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// TestSessionRef_BySessionID 按ID构造
+func TestSessionRef_BySessionID(t *testing.T) {
+	ref := BySessionID("sess-123")
+	if !ref.IsByID() {
+		t.Error("IsByID 应为 true")
+	}
+	if ref.IsByInstance() {
+		t.Error("IsByInstance 应为 false")
+	}
+	if ref.ID() != "sess-123" {
+		t.Errorf("ID = %q, want sess-123", ref.ID())
+	}
+}
+
+// TestSessionRef_空ID 按空ID构造时IsByID为false
+func TestSessionRef_空ID(t *testing.T) {
+	ref := BySessionID("")
+	if ref.IsByID() {
+		t.Error("空ID时 IsByID 应为 false")
+	}
+}
+
+// TestChildRunnerImpl_接口满足 编译时校验
+func TestChildRunnerImpl_接口满足(t *testing.T) {
+	var _ spawn.ChildRunner = (*ChildRunnerImpl)(nil)
+}
