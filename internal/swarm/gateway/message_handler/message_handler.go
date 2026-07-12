@@ -2,6 +2,8 @@ package message_handler
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,6 +48,9 @@ type MessageHandler struct {
 	// channelStates 渠道状态映射：channelKey → state
 	channelStates map[string]*ChannelControlState
 
+	// sessionLastUserQuery 最近用户查询文本：sessionID → query（对齐 Python _session_last_user_query）
+	sessionLastUserQuery map[string]string
+
 	// mu 互斥锁
 	mu sync.Mutex
 }
@@ -65,27 +70,30 @@ const logComponent = logger.ComponentGateway
 // 对齐 Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	return &MessageHandler{
-		agentClient:    agentClient,
-		userMessages:   make(chan *schema.Message, 256),
-		robotMessages:  make(chan *schema.Message, 256),
-		streamTasks:    make(map[string]context.CancelFunc),
-		streamSessions: make(map[string]string),
-		streamMetadata: make(map[string]map[string]any),
-		streamModes:    make(map[string]string),
-		channelStates:  make(map[string]*ChannelControlState),
+		agentClient:          agentClient,
+		userMessages:         make(chan *schema.Message, 256),
+		robotMessages:        make(chan *schema.Message, 256),
+		streamTasks:          make(map[string]context.CancelFunc),
+		streamSessions:       make(map[string]string),
+		streamMetadata:       make(map[string]map[string]any),
+		streamModes:          make(map[string]string),
+		channelStates:        make(map[string]*ChannelControlState),
+		sessionLastUserQuery: make(map[string]string),
 	}
 }
 
 // HandleMessage 处理入站消息（用户→Agent）。
 //
 // 将消息写入 userMessages channel，由 forwardLoop 异步消费。
-// 对齐 Python handle_message：非阻塞写入，channel 满时丢弃并记录警告。
+// 对齐 Python handle_message：先调用 _remember_user_query_context，再 put_nowait。
 //
 // 对齐 Python: MessageHandler.handle_message()
 func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	if msg == nil {
 		return
 	}
+	// 记录用户查询上下文（对齐 Python _remember_user_query_context）
+	mh.rememberUserQueryContextFromMsg(msg)
 	select {
 	case mh.userMessages <- msg:
 		logger.Debug(logComponent).
@@ -104,8 +112,21 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 // ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
 //
 // 供 ChannelManager 的出站派发循环调用。
+// timeout <= 0 时非阻塞：有消息立即返回，无消息返回 nil（对齐 Python get_nowait()）。
+// timeout > 0 时带超时等待。
+//
 // 对齐 Python: MessageHandler.consume_robot_messages()
 func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Message {
+	if timeout <= 0 {
+		// 非阻塞模式：对齐 Python get_nowait()，确定性读取
+		select {
+		case msg := <-mh.robotMessages:
+			return msg
+		default:
+			return nil
+		}
+	}
+	// 带超时模式
 	select {
 	case msg := <-mh.robotMessages:
 		return msg
@@ -116,8 +137,21 @@ func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Me
 
 // ConsumeUserMessages 从入站队列消费一条消息，超时返回 nil。
 //
+// timeout <= 0 时非阻塞：有消息立即返回，无消息返回 nil（对齐 Python get_nowait()）。
+// timeout > 0 时带超时等待。
+//
 // 对齐 Python: MessageHandler.consume_user_messages()
 func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Message {
+	if timeout <= 0 {
+		// 非阻塞模式：对齐 Python get_nowait()，确定性读取
+		select {
+		case msg := <-mh.userMessages:
+			return msg
+		default:
+			return nil
+		}
+	}
+	// 带超时模式
 	select {
 	case msg := <-mh.userMessages:
 		return msg
@@ -219,15 +253,71 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamModes = make(map[string]string)
 }
 
-// rememberUserQueryContext 记录用户查询上下文
+// GetSessionLastUserQuery 获取指定会话的最近用户查询文本。
+//
+// 对齐 Python: MessageHandler._get_session_last_user_query(session_id)
+func (mh *MessageHandler) GetSessionLastUserQuery(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+	return mh.sessionLastUserQuery[sessionID]
+}
+
+// rememberUserQueryContextFromMsg 从消息中提取并记录用户查询上下文。
+//
+// 对齐 Python: MessageHandler._remember_user_query_context(msg)
+// 仅对 chat.send 消息记录，跳过 is_supplement=True 的消息。
+func (mh *MessageHandler) rememberUserQueryContextFromMsg(msg *schema.Message) {
+	// 仅处理 chat.send
+	if msg.ReqMethod != schema.ReqMethodChatSend {
+		return
+	}
+	// 从 msg.Params 提取参数（Params 为 json.RawMessage）
+	params := make(map[string]any)
+	if len(msg.Params) == 0 || json.Unmarshal(msg.Params, &params) != nil {
+		return
+	}
+	// 跳过 supplement 消息
+	if isSupplement, _ := params["is_supplement"].(bool); isSupplement {
+		return
+	}
+	sessionID := strings.TrimSpace(msg.SessionID)
+	if sessionID == "" {
+		return
+	}
+	// 提取 query 或 content
+	var query string
+	if q, ok := params["query"].(string); ok && q != "" {
+		query = q
+	} else if c, ok := params["content"].(string); ok && c != "" {
+		query = c
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return
+	}
+	// 截断到 8000 字符（对齐 Python query[:8000]）
+	if len(query) > 8000 {
+		query = query[:8000]
+	}
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+	mh.sessionLastUserQuery[sessionID] = query
+}
+
+// rememberUserQueryContext 记录用户查询上下文（直接传参版本）
 //
 // 对齐 Python _remember_user_query_context：记录 chat.send 的 query 上下文。
 func (mh *MessageHandler) rememberUserQueryContext(sessionID, query string) {
 	if sessionID == "" || query == "" {
 		return
 	}
+	if len(query) > 8000 {
+		query = query[:8000]
+	}
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
-	// sessionLastUserQuery 在后续需要时扩展
-	_ = query
+	mh.sessionLastUserQuery[sessionID] = query
 }

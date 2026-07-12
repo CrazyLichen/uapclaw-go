@@ -242,3 +242,107 @@ func resolveReferencePath(rawPath, cwd string) string {
 	}
 	return filepath.Join(cwd, rawPath)
 }
+
+// ResolveStructuredAttachments 解析结构化附件列表，将文件内容内联到 content 中。
+//
+// 对齐 Python _resolve_structured_attachments：
+// 1. 规范化 attachments（去重、填充默认值）
+// 2. 构建 @path 前缀
+// 3. 从 content 中移除已附件化的 @path 引用
+// 4. 合并前缀和清理后的 content
+// 5. 调用 ResolveAtFileReferences 内联文件内容
+func ResolveStructuredAttachments(content string, attachments any, cwd string) string {
+	// 将 attachments 转为 []map[string]any
+	attachmentList := toAttachmentList(attachments)
+	normalized := NormalizeStructuredAttachments(attachmentList, cwd)
+	if len(normalized) == 0 {
+		return content
+	}
+
+	// 构建 @path 前缀（对齐 Python: ' '.join(f'@"{item["path"]}"' for item in normalized)）
+	prefixParts := make([]string, 0, len(normalized))
+	for _, item := range normalized {
+		if p, ok := item["path"].(string); ok && p != "" {
+			prefixParts = append(prefixParts, fmt.Sprintf("@\"%s\"", p))
+		}
+	}
+	prefix := strings.Join(prefixParts, " ")
+
+	// 从 content 中移除已附件化的 @path 引用
+	cleanedContent := StripAttachedMentions(content, normalized, cwd)
+
+	// 合并前缀和清理后的 content
+	mergedContent := strings.TrimSpace(prefix + " " + cleanedContent)
+
+	// 调用 ResolveAtFileReferences 内联文件内容
+	return ResolveAtFileReferences(mergedContent, cwd, 0)
+}
+
+// StripAttachedMentions 从 content 中移除已在 attachments 中的 @path 引用。
+//
+// 对齐 Python strip_attached_mentions：
+// 遍历 content 中的 @path 匹配，如果其解析路径在 attached_paths 中则移除。
+func StripAttachedMentions(content string, attachments []map[string]any, cwd string) string {
+	if content == "" || len(attachments) == 0 {
+		return content
+	}
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+
+	// 构建已附件路径集合
+	attachedPaths := make(map[string]bool)
+	for _, item := range attachments {
+		if p, ok := item["path"].(string); ok && strings.TrimSpace(p) != "" {
+			attachedPaths[p] = true
+		}
+	}
+	if len(attachedPaths) == 0 {
+		return content
+	}
+
+	// 替换：如果匹配的路径在 attachedPaths 中，则移除
+	result, _ := atFilePattern.ReplaceFunc(content, func(m regexp2.Match) string {
+		raw := ""
+		if g := m.GroupByName("quoted"); g != nil && g.String() != "" {
+			raw = g.String()
+		} else if g := m.GroupByName("plain"); g != nil && g.String() != "" {
+			raw = g.String()
+		}
+		if raw == "" {
+			return m.String()
+		}
+		// 跳过 @agent-xxx 提及
+		if strings.HasPrefix(raw, "agent-") || strings.HasPrefix(raw, "agent:") {
+			return m.String()
+		}
+		resolved := resolveReferencePath(raw, cwd)
+		if attachedPaths[resolved] {
+			return "" // 移除已附件化的引用
+		}
+		return m.String()
+	}, 0, -1)
+
+	return result
+}
+
+// toAttachmentList 将 any 类型的 attachments 转为 []map[string]any
+func toAttachmentList(attachments any) []map[string]any {
+	if attachments == nil {
+		return nil
+	}
+	switch a := attachments.(type) {
+	case []map[string]any:
+		return a
+	case []any:
+		result := make([]map[string]any, 0, len(a))
+		for _, item := range a {
+			if m, ok := item.(map[string]any); ok {
+				result = append(result, m)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}

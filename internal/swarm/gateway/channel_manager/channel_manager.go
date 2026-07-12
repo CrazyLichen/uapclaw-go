@@ -305,16 +305,17 @@ func (cm *ChannelManager) StartDispatch(ctx context.Context) error {
 
 // StopDispatch 停止出站派发循环。
 //
-// 对齐 Python: ChannelManager.stop_dispatch()
+// 先设 running=false，让 dispatchRobotMessages 循环在当前迭代完成后自然退出。
+// 不使用 cancel() 中断 context，保证进行中的 channel.Send 完整执行。
+// 对齐 Python: ChannelManager.stop_dispatch()（先设 _running=False，再 await task）
 func (cm *ChannelManager) StopDispatch() error {
 	if !cm.running.Load() {
 		return nil
 	}
 	cm.running.Store(false)
-	if cm.dispatchCancel != nil {
-		cm.dispatchCancel()
-		cm.dispatchCancel = nil
-	}
+	// 不调用 cancel()，让 dispatchRobotMessages 循环自然退出
+	// 当前迭代中的 channel.Send 会完整执行后再退出
+	cm.dispatchCancel = nil
 	logger.Info(logComponent).Msg("出站派发循环已停止")
 	return nil
 }

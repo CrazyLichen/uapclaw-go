@@ -76,7 +76,7 @@ func TestConfirmInterruptRail_resolveInterrupt_拒绝无Feedback(t *testing.T) {
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, userInput, nil)
 	assert.IsType(t, &RejectResult{}, decision)
 	rejectResult := decision.(*RejectResult)
-	assert.Equal(t, "用户反馈: 拒绝操作", rejectResult.ToolResult)
+	assert.Equal(t, "User feedback: rejected\n action", rejectResult.ToolResult)
 }
 
 // TestConfirmInterruptRail_resolveInterrupt_无效输入 验证无效输入 → InterruptResult
@@ -162,6 +162,28 @@ func TestConfirmInterruptRail_parseConfirmInput_Dict(t *testing.T) {
 	assert.False(t, payload.Approved)
 	assert.Equal(t, "拒绝原因", payload.Feedback)
 	assert.False(t, payload.AutoConfirm)
+}
+
+// TestConfirmInterruptRail_parseConfirmInput_Dict缺少Approved 验证缺少 approved 字段 → (nil, false) 重新中断
+func TestConfirmInterruptRail_parseConfirmInput_Dict缺少Approved(t *testing.T) {
+	r := NewConfirmInterruptRail()
+
+	// 缺少 approved 键 → 对齐 Python model_validate 失败
+	userInput := map[string]any{"feedback": "我同意"}
+	payload, ok := r.parseConfirmInput(userInput)
+	assert.False(t, ok)
+	assert.Nil(t, payload)
+}
+
+// TestConfirmInterruptRail_parseConfirmInput_DictApproved类型错误 验证 approved 类型不匹配 → (nil, false) 重新中断
+func TestConfirmInterruptRail_parseConfirmInput_DictApproved类型错误(t *testing.T) {
+	r := NewConfirmInterruptRail()
+
+	// approved 为字符串而非 bool → 对齐 Python model_validate 失败
+	userInput := map[string]any{"approved": "yes"}
+	payload, ok := r.parseConfirmInput(userInput)
+	assert.False(t, ok)
+	assert.Nil(t, payload)
 }
 
 // TestConfirmInterruptRail_parseConfirmInput_ConfirmPayload 验证 ConfirmPayload 直接传入

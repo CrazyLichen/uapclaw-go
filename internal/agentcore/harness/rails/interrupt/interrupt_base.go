@@ -277,7 +277,7 @@ func (r *BaseInterruptRail) raiseInterrupt(
 		ToolCall: toolCall,
 	}
 	panic(cb.NewAbortError(
-		fmt.Sprintf("工具执行中断: %s", toolName),
+		fmt.Sprintf("Tool execution interrupted: %s", toolName),
 		exc,
 	))
 }

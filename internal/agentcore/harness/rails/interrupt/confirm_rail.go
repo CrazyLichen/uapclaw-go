@@ -113,7 +113,7 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 	}
 	feedback := payload.Feedback
 	if feedback == "" {
-		feedback = "用户反馈: 拒绝操作"
+		feedback = "User feedback: rejected\n action"
 	}
 	return r.Reject(feedback)
 }
@@ -137,11 +137,16 @@ func (r *ConfirmInterruptRail) parseConfirmInput(userInput any) (*ConfirmPayload
 		return input, true
 	case map[string]any:
 		payload := &ConfirmPayload{}
-		if v, ok := input["approved"]; ok {
-			if b, ok := v.(bool); ok {
-				payload.Approved = b
-			}
+		// approved 为必填字段，缺少或类型不匹配时重新中断（对齐 Python model_validate 行为）
+		v, hasApproved := input["approved"]
+		if !hasApproved {
+			return nil, false
 		}
+		b, ok := v.(bool)
+		if !ok {
+			return nil, false
+		}
+		payload.Approved = b
 		if v, ok := input["feedback"]; ok {
 			if s, ok := v.(string); ok {
 				payload.Feedback = s
