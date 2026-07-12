@@ -1083,6 +1083,28 @@ func TestDeepCopyUpdates_nil(t *testing.T) {
 	}
 }
 
+// TestDeepCopyUpdates_基本 验证基本深拷贝。
+func TestDeepCopyUpdates_基本(t *testing.T) {
+	src := map[string][]map[string]any{
+		"key1": {{"a": 1}, {"b": "hello"}},
+	}
+	dst := DeepCopyUpdates(src)
+	if len(dst) != 1 {
+		t.Errorf("期望 len=1，实际=%d", len(dst))
+	}
+	if len(dst["key1"]) != 2 {
+		t.Errorf("期望 len=2，实际=%d", len(dst["key1"]))
+	}
+	if dst["key1"][0]["a"] != 1 {
+		t.Errorf("期望 a=1，实际=%v", dst["key1"][0]["a"])
+	}
+	// 验证深拷贝
+	dst["key1"][0]["a"] = 999
+	if src["key1"][0]["a"] != 1 {
+		t.Error("修改拷贝后源被影响，深拷贝失败")
+	}
+}
+
 // ──── SplitString 测试 ────
 
 // TestSplitString_空分隔符 验证空分隔符返回原字符串。
