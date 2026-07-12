@@ -29,7 +29,7 @@ func TestNewSandboxGatewayConfig(t *testing.T) {
 	cfg := NewSandboxGatewayConfig()
 	require.NotNil(t, cfg.LauncherConfig, "LauncherConfig 不应为 nil")
 	assert.Equal(t, "pre_deploy", cfg.LauncherConfig.LauncherType, "LauncherType 默认应对齐 Python")
-	assert.Equal(t, "mock", cfg.LauncherConfig.SandboxType, "SandboxType 默认应对齐 Python")
+	assert.Equal(t, "aio", cfg.LauncherConfig.SandboxType, "SandboxType 默认应对齐 Python PreDeployLauncherConfig")
 	assert.Equal(t, 30.0, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 30.0，对齐 Python")
 	assert.Equal(t, ContainerScopeSession, cfg.Isolation.ContainerScope, "ContainerScope 默认应对齐 Python SESSION")
 }

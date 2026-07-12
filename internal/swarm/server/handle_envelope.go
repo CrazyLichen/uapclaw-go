@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -378,7 +379,10 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 
 // handleCancel 处理取消/中断请求，对齐 Python _handle_cancel。
 //
-// 取消流式 goroutine → 获取 Agent → ProcessInterrupt → writeResponse。
+// 三级 fallback 策略（对齐 Python _handle_cancel L1061-1110）：
+// 1. GetAgentNoWait(channelID, mode) — 按 mode 查找已有 agent
+// 2. GetAgentNoWait(channelID, "", projectDir) — 不限 mode，按 projectDir 查任何已有 agent
+// 3. GetAgent(channelID, mode, projectDir) — 阻塞创建（fallback 兜底）
 func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentRequest) {
 	sessionID := ""
 	if request.SessionID != nil {
@@ -388,30 +392,55 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	// 1. 取消流式 goroutine
 	s.cancelStreamTask(sessionID)
 
-	// 2. 获取 Agent
+	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
 	mode, subMode := applyResolvedModeToRequest(request)
 	projectDir := resolveRequestProjectDir(request)
-	agent := s.agentManager.GetAgentNoWait(request.ChannelID, mode, projectDir, subMode)
 
-	// 3. 如果 Agent 存在：调用 ProcessInterrupt
-	if agent != nil {
-		resp, err := agent.ProcessInterrupt(ctx, request)
+	var agent *runtime.UapClaw
+
+	// 第1级：按 mode 查找已有 agent
+	if mode != "" {
+		agent = s.agentManager.GetAgentNoWait(request.ChannelID, mode, projectDir, subMode)
+	}
+
+	// 第2级：按 projectDir 查找任何已有 agent（不限 mode）
+	if agent == nil {
+		agent = s.agentManager.GetAgentNoWait(request.ChannelID, "", projectDir, "")
+		logger.Warn(logComponent).
+			Str("request_id", request.RequestID).
+			Str("channel_id", request.ChannelID).
+			Str("mode", mode).
+			Msg("cancel: 按 mode 未找到已有 agent，尝试不限 mode 查找")
+	}
+
+	// 第3级：fallback 创建（阻塞），对齐 Python get_agent 兜底
+	if agent == nil {
+		logger.Warn(logComponent).
+			Str("request_id", request.RequestID).
+			Str("channel_id", request.ChannelID).
+			Msg("cancel: 未找到已有 agent，fallback 创建")
+		var err error
+		agent, err = s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
 		if err != nil {
 			logger.Error(logComponent).
 				Err(err).
 				Str("request_id", request.RequestID).
-				Msg("Agent 中断处理失败")
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_INTERRUPT_ERROR")
+				Msg("cancel: fallback 创建 agent 失败")
+			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_GET_ERROR")
 			return
 		}
-		s.writeResponse(request.RequestID, request.ChannelID, resp)
-		return
 	}
 
-	// 4. 如果 Agent 不存在：返回 ok=true 响应
-	resp := schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithResponseOK(true),
-	)
+	// 3. 调用 ProcessInterrupt
+	resp, err := agent.ProcessInterrupt(ctx, request)
+	if err != nil {
+		logger.Error(logComponent).
+			Err(err).
+			Str("request_id", request.RequestID).
+			Msg("Agent 中断处理失败")
+		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_INTERRUPT_ERROR")
+		return
+	}
 	s.writeResponse(request.RequestID, request.ChannelID, resp)
 }
 

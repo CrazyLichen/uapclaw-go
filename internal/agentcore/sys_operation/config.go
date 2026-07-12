@@ -73,8 +73,9 @@ type PreDeployLauncherConfig struct {
 type SandboxGatewayConfig struct {
 	// Isolation 隔离与命名策略配置
 	Isolation SandboxIsolationConfig `yaml:"isolation" json:"isolation"`
-	// LauncherConfig 启动器配置（SandboxLauncherConfig 或 PreDeployLauncherConfig）
-	LauncherConfig *SandboxLauncherConfig `yaml:"launcher_config" json:"launcher_config"`
+	// LauncherConfig 启动器配置，对齐 Python Union[PreDeployLauncherConfig, SandboxLauncherConfig]。
+	// 生产中 100% 使用 PreDeployLauncherConfig，Go 用具体类型代替 Python Union。
+	LauncherConfig *PreDeployLauncherConfig `yaml:"launcher_config" json:"launcher_config"`
 	// TimeoutSeconds 统一超时时间（秒），包含请求+就绪检测
 	TimeoutSeconds float64 `yaml:"timeout_seconds" json:"timeout_seconds"`
 	// AuthHeaders 认证 HTTP 头
@@ -187,11 +188,11 @@ func NewPreDeployLauncherConfig(baseURL string) *PreDeployLauncherConfig {
 
 // NewSandboxGatewayConfig 创建 SandboxGatewayConfig 实例。
 // 对齐 Python SandboxGatewayConfig 默认值：
-// isolation=默认(SESSION), launcher_config=默认(pre_deploy+mock), timeout=30。
+// isolation=默认(SESSION), launcher_config=默认(pre_deploy+aio), timeout=30。
 func NewSandboxGatewayConfig() *SandboxGatewayConfig {
 	return &SandboxGatewayConfig{
 		Isolation:      NewSandboxIsolationConfig(),
-		LauncherConfig: NewSandboxLauncherConfig(),
+		LauncherConfig: NewPreDeployLauncherConfig(""),
 		TimeoutSeconds: 30.0,
 	}
 }

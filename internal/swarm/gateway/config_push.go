@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,6 +83,18 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 		if resp.Payload != nil {
 			errPayload = resp.Payload
 		}
+		// 对齐 Python：ValidationError 是配置格式问题，不需要重启 gateway
+		// 检查错误消息中是否包含 ValidationError / validation error / Field required
+		errStr := ""
+		if errMsg, ok := errPayload["error"]; ok {
+			errStr = fmt.Sprintf("%v", errMsg)
+		}
+		if isValidationError(errStr) {
+			logger.Warn(logComponentAppGateway).
+				Str("error", errStr).
+				Msg("agent.reload_config validation error (non-fatal)")
+			return nil
+		}
 		logger.Warn(logComponentAppGateway).
 			Bool("ok", resp.OK).
 			Interface("payload", errPayload).
@@ -107,4 +120,12 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 	}
 
 	return nil
+}
+
+// isValidationError 检查错误字符串是否为 ValidationError 类型。
+// 对齐 Python：any(kw in err_str for kw in ("ValidationError", "validation error", "Field required"))。
+func isValidationError(errStr string) bool {
+	return strings.Contains(errStr, "ValidationError") ||
+		strings.Contains(errStr, "validation error") ||
+		strings.Contains(errStr, "Field required")
 }

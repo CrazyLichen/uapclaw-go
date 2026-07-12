@@ -135,9 +135,10 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	mh.rememberUserQueryContext(msg)
 	select {
 	case mh.userMessages <- msg:
-		logger.Debug(logComponent).
+		logger.Info(logComponent).
 			Str("event_type", "handle_inbound").
 			Str("msg_id", msg.ID).
+			Str("channel_id", msg.ChannelID).
 			Str("session_id", msg.SessionID).
 			Msg("入站消息已入队")
 	default:

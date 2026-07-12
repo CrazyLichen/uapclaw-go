@@ -78,12 +78,12 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 		return resp, herr
 	}
 
-	// 5. Skills 分支
-	if resp, err := uc.handleSkillsRequest(ctx, request); resp != nil {
+	// 5. SkillDev 分支（非流式），对齐 Python：SkillDev 优先于 Skills 判断
+	if resp, err := uc.handleSkillDevRequest(ctx, request); resp != nil {
 		return resp, err
 	}
-	// 6. SkillDev 分支（非流式）
-	if resp, err := uc.handleSkillDevRequest(ctx, request); resp != nil {
+	// 6. Skills 分支
+	if resp, err := uc.handleSkillsRequest(ctx, request); resp != nil {
 		return resp, err
 	}
 	// 7. Plugins 分支
