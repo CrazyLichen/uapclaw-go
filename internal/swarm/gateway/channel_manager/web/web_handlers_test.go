@@ -69,7 +69,7 @@ func TestRPCDispatcher_Dispatch_并发安全(t *testing.T) {
 }
 
 func TestRegisterWebHandlers_全量注册(t *testing.T) {
-	d := RegisterWebHandlers(nil, nil)
+	d := RegisterWebHandlers(nil)
 
 	// 验证核心方法已注册
 	expectedMethods := []string{
@@ -110,7 +110,8 @@ func TestHandleConfigGet(t *testing.T) {
 		_ = os.Unsetenv("MODEL_NAME")
 	}()
 
-	result, err := handleConfigGet(context.Background(), nil, "")
+	handler := handleConfigGet(nil)
+	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
 	// 验证环境变量映射
@@ -144,14 +145,14 @@ func TestHandleConfigSet(t *testing.T) {
 }
 
 func TestHandleChannelGet(t *testing.T) {
-	result, err := handleChannelGet(context.Background(), nil, "")
+	handler := handleChannelGet(nil)
+	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
 	channels, ok := result["channels"].(map[string]any)
 	require.True(t, ok)
-	web, ok := channels["web"].(map[string]any)
-	require.True(t, ok)
-	assert.True(t, web["enabled"].(bool))
+	// 无 ChannelManager 时返回空 map
+	assert.Empty(t, channels)
 }
 
 func TestHandleSessionList_空目录(t *testing.T) {
@@ -179,19 +180,27 @@ func TestHandleSessionCreate(t *testing.T) {
 	workspace.SetUserHome(workspace.UserHomeDir())
 
 	result, err := handleSessionCreate(context.Background(), map[string]any{
-		"name": "test-session",
+		"session_id": "test-create-session",
+		"title":      "test-session",
 	}, "")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
 	sessionID, ok := result["session_id"].(string)
 	require.True(t, ok)
-	assert.NotEmpty(t, sessionID)
+	assert.Equal(t, "test-create-session", sessionID)
 
 	// 验证会话目录已创建
 	sessionsDir := workspace.AgentSessionsDir()
 	sessionDir := filepath.Join(sessionsDir, sessionID)
 	assert.DirExists(t, sessionDir)
 	assert.FileExists(t, filepath.Join(sessionDir, "metadata.json"))
+}
+
+func TestHandleSessionCreate_缺少SessionID(t *testing.T) {
+	result, err := handleSessionCreate(context.Background(), map[string]any{}, "")
+	require.NoError(t, err)
+	assert.False(t, result["ok"].(bool))
+	assert.Equal(t, WsErrBadRequest, result["code"])
 }
 
 func TestHandleSessionDelete(t *testing.T) {
@@ -208,7 +217,8 @@ func TestHandleSessionDelete(t *testing.T) {
 	sessionID := createResult["session_id"].(string)
 
 	// 删除会话
-	result, err := handleSessionDelete(context.Background(), map[string]any{
+	handler := handleSessionDelete(nil)
+	result, err := handler(context.Background(), map[string]any{
 		"session_id": sessionID,
 	}, "")
 	require.NoError(t, err)
@@ -220,8 +230,11 @@ func TestHandleSessionDelete(t *testing.T) {
 }
 
 func TestHandleSessionDelete_缺少SessionID(t *testing.T) {
-	_, err := handleSessionDelete(context.Background(), map[string]any{}, "")
-	assert.Error(t, err)
+	handler := handleSessionDelete(nil)
+	result, err := handler(context.Background(), map[string]any{}, "")
+	require.NoError(t, err)
+	assert.False(t, result["ok"].(bool))
+	assert.Equal(t, WsErrBadRequest, result["code"])
 }
 
 func TestMakeSessionID_格式(t *testing.T) {
@@ -270,11 +283,17 @@ func TestChatMethods_Ack响应(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
 
-	// chat.interrupt
+	// chat.interrupt（无 intent 参数时不设置 intent 键）
 	result, err = handleChatInterrupt()(context.Background(), nil, "sess_1")
 	require.NoError(t, err)
 	assert.True(t, result["accepted"].(bool))
-	assert.Equal(t, "interrupt", result["intent"])
+	assert.Equal(t, "sess_1", result["session_id"])
+
+	// chat.interrupt（有 intent 参数时包含 intent）
+	result, err = handleChatInterrupt()(context.Background(), map[string]any{"intent": "cancel"}, "sess_1")
+	require.NoError(t, err)
+	assert.True(t, result["accepted"].(bool))
+	assert.Equal(t, "cancel", result["intent"])
 
 	// chat.user_answer
 	result, err = handleChatUserAnswer()(context.Background(), map[string]any{"request_id": "req_1"}, "sess_1")

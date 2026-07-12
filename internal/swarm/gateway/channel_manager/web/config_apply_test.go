@@ -94,13 +94,13 @@ func TestNotifyConfigSavedOnce_nil回调不触发(t *testing.T) {
 }
 
 func TestBuildModelsDefaultsFromFrontend_无效类型(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend("not a list")
+	_, err := buildModelsDefaultsFromFrontend("not a list", nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be a non-empty list")
 }
 
 func TestBuildModelsDefaultsFromFrontend_空列表(t *testing.T) {
-	_, err := buildModelsDefaultsFromFrontend([]any{})
+	_, err := buildModelsDefaultsFromFrontend([]any{}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be a non-empty list")
 }
@@ -108,7 +108,7 @@ func TestBuildModelsDefaultsFromFrontend_空列表(t *testing.T) {
 func TestBuildModelsDefaultsFromFrontend_缺model_name(t *testing.T) {
 	_, err := buildModelsDefaultsFromFrontend([]any{
 		map[string]any{"api_key": "key1"},
-	})
+	}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "model_name is required")
 }
@@ -116,7 +116,7 @@ func TestBuildModelsDefaultsFromFrontend_缺model_name(t *testing.T) {
 func TestBuildModelsDefaultsFromFrontend_缺api_key和origin_index(t *testing.T) {
 	_, err := buildModelsDefaultsFromFrontend([]any{
 		map[string]any{"model_name": "gpt-4"},
-	})
+	}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "api_key is required")
 }
@@ -128,7 +128,7 @@ func TestBuildModelsDefaultsFromFrontend_无效provider(t *testing.T) {
 			"api_key":        "key1",
 			"model_provider": "InvalidProvider",
 		},
-	})
+	}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "model_provider must be one of")
 }
@@ -143,7 +143,7 @@ func TestBuildModelsDefaultsFromFrontend_正常(t *testing.T) {
 			"temperature":    0.7,
 			"is_default":     true,
 		},
-	})
+	}, nil)
 	assert.NoError(t, err)
 	assert.Len(t, result, 1)
 

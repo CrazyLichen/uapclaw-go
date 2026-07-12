@@ -13,10 +13,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -30,6 +35,23 @@ type RPCDispatcher struct {
 	handlers map[string]RPCHandlerFunc
 	// mu 保护 handlers 的并发访问
 	mu sync.RWMutex
+}
+
+// WebHandlersBindParams WebHandlers 绑定参数。
+//
+// 对齐 Python WebHandlersBindParams (app_web_handlers.py L512-522)，
+// 将 channel、agent_client、channel_manager、回调等统一注入。
+type WebHandlersBindParams struct {
+	// Channel Web 通道实例
+	Channel *WebChannel
+	// AgentClient AgentServer 客户端，可为 nil
+	AgentClient *routing.AgentClient
+	// ChannelManager 通道管理器，可为 nil
+	ChannelManager *cm.ChannelManager
+	// OnConfigSaved 配置保存回调
+	OnConfigSaved OnConfigSavedFunc
+	// CryptoProvider 加密/解密提供者，可为 nil
+	CryptoProvider CryptoProvider
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -58,7 +80,7 @@ type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID s
 // EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
 type EventSender func(event string, payload map[string]any)
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 常数 ────────────────────────────
 
 const (
 	// WsErrBadRequest 请求参数错误
@@ -83,6 +105,10 @@ const (
 
 // logComponent 本包日志组件
 const logComponent = logger.ComponentGateway
+
+// maxTeamsConfigPanel 配置面板最大团队数。
+// 对齐 Python _flatten_modes_team_for_config_panel 中 range(10)。
+const maxTeamsConfigPanel = 10
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -163,17 +189,35 @@ func NewRPCDispatcher() *RPCDispatcher {
 // 对齐 Python app_web_handlers.py 中 _register_web_handlers(bind)，
 // 包括本地实现方法、chat 类方法和 stub 占位方法。
 // 消息转发由两层架构的第一层（normAndForward）处理，本地 handler 仅返回 ack。
-func RegisterWebHandlers(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) *RPCDispatcher {
+func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d := NewRPCDispatcher()
 
+	// 从 bind 中提取事件发送器和配置保存回调（bind 可为 nil）
+	var sendEvent EventSender
+	var onConfigSaved OnConfigSavedFunc
+	var cryptoProv CryptoProvider
+	var channelMgr *cm.ChannelManager
+	var agentClient *routing.AgentClient
+	var channel *WebChannel
+	if bind != nil {
+		if bind.Channel != nil {
+			sendEvent = bind.Channel.broadcastEvent
+			channel = bind.Channel
+		}
+		onConfigSaved = bind.OnConfigSaved
+		cryptoProv = bind.CryptoProvider
+		channelMgr = bind.ChannelManager
+		agentClient = bind.AgentClient
+	}
+
 	// ─── 本地实现方法 ───
-	d.Register("config.get", handleConfigGet)
+	d.Register("config.get", handleConfigGet(cryptoProv))
 	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved))
-	d.Register("models.list", handleModelsList)
-	d.Register("channel.get", handleChannelGet)
+	d.Register("models.list", handleModelsList(cryptoProv))
+	d.Register("channel.get", handleChannelGet(channelMgr))
 	d.Register("session.list", handleSessionList)
 	d.Register("session.create", handleSessionCreate)
-	d.Register("session.delete", handleSessionDelete)
+	d.Register("session.delete", handleSessionDelete(agentClient))
 
 	// ─── config 辅助方法 ───
 	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved))
@@ -351,6 +395,48 @@ func RegisterWebHandlers(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 		d.Register(method, stubHandler(method, payload))
 	}
 
+	// ─── 注册 onConnect 钩子：发送 connection.ack ───
+	// 对齐 Python WebChannel._connection_handler 中 _connect_hooks 逻辑
+	if channel != nil {
+		ch := channel  // 捕获循环变量
+		ac := agentClient
+		ch.OnConnect(func(_ *websocket.Conn) error {
+			// AgentClient 未就绪时跳过 ack（对齐 Python: 仅 debug 日志，不断开连接）
+			if ac == nil || !ac.ServerReady() {
+				logger.Debug(logComponent).Msg("AgentClient 未就绪，跳过 connection.ack")
+				return nil
+			}
+			// 构造 connection.ack 消息并通过 Channel.Send 推送（对齐 Python _on_connect）
+			sid := MakeSessionID()
+			ackMsg := &schema.Message{
+				ID:        "ack-" + sid,
+				Type:      schema.MessageTypeEvent,
+				ChannelID: ch.ChannelID(),
+				SessionID: sid,
+				EventType: schema.EventTypeConnectionAck,
+				OK:        true,
+				Payload: map[string]any{
+					"session_id":       sid,
+					"mode":             "BUILD",
+					"tools":            []any{},
+					"protocol_version": protocolVersion,
+				},
+				Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
+			}
+			if err := ch.Send(context.Background(), ackMsg); err != nil {
+				logger.Warn(logComponent).
+					Err(err).
+					Msg("发送 connection.ack 失败")
+			}
+			return nil
+		})
+	}
+
+	// 将 dispatcher 设到 channel 上
+	if channel != nil {
+		channel.dispatcher = d
+	}
+
 	return d
 }
 
@@ -420,60 +506,75 @@ func stubHandler(_ string, payload map[string]any) RPCHandlerFunc {
 //
 // 全量实现：读取 configEnvMap 中 47 个环境变量 + config.yaml 补充字段 + app_version。
 // 对齐 Python config_get_handler 中 ~65 字段的返回。
-func handleConfigGet(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-	result := make(map[string]any, len(configEnvMap)+10)
+// crypto 用于解密 api_key/token 等敏感字段。
+func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		result := make(map[string]any, len(configEnvMap)+10)
 
-	// 从环境变量映射读取
-	for key, envVar := range configEnvMap {
-		result[key] = os.Getenv(envVar)
+		// 从环境变量映射读取
+		for key, envVar := range configEnvMap {
+			val := os.Getenv(envVar)
+			// 对齐 Python: 对包含 api_key 或 token 的键解密
+			if crypto != nil && val != "" && isSensitiveKey(key) {
+				val = crypto.Decrypt(val)
+			}
+			result[key] = val
+		}
+
+		// 应用版本
+		result["app_version"] = version.Version
+
+		// config.yaml 补充字段
+		cfg, err := loadAppConfig()
+		if err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("config.get 加载 config.yaml 失败，使用默认值")
+		}
+
+		// 上下文引擎启用
+		result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
+		// KV 缓存亲和启用
+		result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
+		// 权限启用
+		result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
+		// skill_create: 环境变量优先，fallback config.yaml
+		if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
+			result["skill_create"] = envVal
+		} else {
+			result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
+		}
+		// evolution_auto_scan: 环境变量优先，fallback config.yaml
+		if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
+			result["evolution_auto_scan"] = envVal
+		} else {
+			result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
+		}
+		// 记忆禁止启用
+		result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
+		// 记忆禁止描述：返回 dict（对齐 Python getConfigAny 而非 getConfigString）
+		result["memory_forbidden_description"] = getConfigAny(cfg, "memory.forbidden_memory_definition.description", map[string]any{})
+
+		// 默认值填充（仅当环境变量为空时）
+		if result["free_search_ddg_enabled"] == "" {
+			result["free_search_ddg_enabled"] = "false"
+		}
+		if result["free_search_bing_enabled"] == "" {
+			result["free_search_bing_enabled"] = "false"
+		}
+
+		// 展平 team 配置
+		flattenTeamConfig(cfg, result)
+
+		return result, nil
 	}
+}
 
-	// 应用版本
-	result["app_version"] = version.Version
-
-	// config.yaml 补充字段
-	cfg, err := loadAppConfig()
-	if err != nil {
-		logger.Warn(logComponent).
-			Err(err).
-			Msg("config.get 加载 config.yaml 失败，使用默认值")
-	}
-
-	// 上下文引擎启用
-	result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
-	// KV 缓存亲和启用
-	result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
-	// 权限启用
-	result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
-	// skill_create: 环境变量优先，fallback config.yaml
-	if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
-		result["skill_create"] = envVal
-	} else {
-		result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
-	}
-	// evolution_auto_scan: 环境变量优先，fallback config.yaml
-	if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
-		result["evolution_auto_scan"] = envVal
-	} else {
-		result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
-	}
-	// 记忆禁止启用
-	result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
-	// 记忆禁止描述
-	result["memory_forbidden_description"] = getConfigString(cfg, "memory.forbidden_memory_definition.description", "")
-
-	// 默认值填充（仅当环境变量为空时）
-	if result["free_search_ddg_enabled"] == "" {
-		result["free_search_ddg_enabled"] = "false"
-	}
-	if result["free_search_bing_enabled"] == "" {
-		result["free_search_bing_enabled"] = "false"
-	}
-
-	// 展平 team 配置
-	flattenTeamConfig(cfg, result)
-
-	return result, nil
+// isSensitiveKey 判断配置键是否为敏感字段（需要解密）。
+//
+// 对齐 Python: 包含 "api_key" 或 "token" 的键视为敏感字段。
+func isSensitiveKey(key string) bool {
+	return strings.Contains(key, "api_key") || strings.Contains(key, "token")
 }
 
 // handleConfigSet 处理 config.set 请求。
@@ -533,13 +634,13 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 
 		envUpdates := make(map[string]string)
 		yamlUpdated := make([]string, 0)
-		var modelsCount *int
+		modelsCount := 0
 
 		// models 子载荷
 		var newModels []map[string]any
 		if modelsVal, ok := params["models"]; ok && modelsVal != nil {
 			// 将 []any 转为 []map[string]any
-			parsed, err := buildModelsDefaultsFromFrontend(modelsVal)
+			parsed, err := buildModelsDefaultsFromFrontend(modelsVal, nil)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
@@ -591,11 +692,10 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
 			}
 			yamlUpdated = append(yamlUpdated, "models.defaults")
-			count := len(newModels)
-			modelsCount = &count
+			modelsCount = len(newModels)
 		}
 
-		// 回包给前端
+		// 回包给前端（始终设置 models_count 键，对齐 Python）
 		updatedParamKeys := make([]string, 0)
 		for k, e := range configEnvMap {
 			if _, ok := envUpdates[e]; ok {
@@ -608,9 +708,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 			"ok":                      true,
 			"updated":                 updatedParamKeys,
 			"applied_without_restart": true,
-		}
-		if modelsCount != nil {
-			result["models_count"] = *modelsCount
+			"models_count":            modelsCount,
 		}
 
 		// 触发热重载（force=true，对齐 Python: _notify_config_saved_once(force=True)）
@@ -624,27 +722,106 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 
 // handleModelsList 处理 models.list 请求。
 //
-// 从 config.yaml 读取 models.defaults 配置返回给前端。
-func handleModelsList(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-	cfg, err := loadAppConfig()
-	if err != nil {
-		logger.Warn(logComponent).Err(err).Msg("models.list 加载配置失败")
-		return map[string]any{"models": []any{}}, nil
-	}
+// 从 config.yaml 读取 models.defaults 配置，展平为前端格式。
+// 对齐 Python: _models_list_handler (app_web_handlers.py)。
+// crypto 用于解密 api_key 字段。
+func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		cfg, err := loadAppConfig()
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Msg("models.list 加载配置失败")
+			return map[string]any{"models": []any{}}, nil
+		}
 
-	models := getConfigAny(cfg, "models.defaults", []any{})
-	return map[string]any{"models": models}, nil
+		// 读取嵌套格式的 models.defaults
+		rawModels := getConfigAny(cfg, "models.defaults", nil)
+		if rawModels == nil {
+			return map[string]any{"models": []any{}}, nil
+		}
+		modelsList, ok := rawModels.([]any)
+		if !ok || len(modelsList) == 0 {
+			return map[string]any{"models": []any{}}, nil
+		}
+
+		// 展平为前端格式：从嵌套的 model_client_config/model_config_obj 提取字段
+		result := make([]map[string]any, 0, len(modelsList))
+		for idx, item := range modelsList {
+			itemMap, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			flat := map[string]any{
+				"origin_index": idx,
+			}
+
+			// 从 model_client_config 提取
+			if mcc, ok := itemMap["model_client_config"].(map[string]any); ok {
+				if v, ok := mcc["model_name"].(string); ok {
+					flat["model_name"] = v
+				}
+				if v, ok := mcc["api_base"].(string); ok {
+					flat["api_base"] = v
+				}
+				if v, ok := mcc["api_key"].(string); ok {
+					// 解密 api_key
+					if crypto != nil && v != "" {
+						flat["api_key"] = crypto.Decrypt(v)
+					} else {
+						flat["api_key"] = v
+					}
+				}
+				if v, ok := mcc["client_provider"].(string); ok {
+					flat["model_provider"] = v
+				}
+				if v, ok := mcc["timeout"]; ok {
+					flat["timeout"] = v
+				}
+			}
+
+			// 从 model_config_obj 提取
+			if mco, ok := itemMap["model_config_obj"].(map[string]any); ok {
+				if v, ok := mco["temperature"]; ok {
+					flat["temperature"] = v
+				}
+			}
+
+			// 顶层字段
+			if v, ok := itemMap["is_default"]; ok {
+				flat["is_default"] = v
+			}
+			if v, ok := itemMap["alias"].(string); ok {
+				flat["alias"] = v
+			}
+
+			// active_model: 第一个模型名称（对齐 Python）
+			if idx == 0 {
+				if name, ok := flat["model_name"].(string); ok {
+					flat["active_model"] = name
+				}
+			}
+
+			result = append(result, flat)
+		}
+
+		return map[string]any{"models": result}, nil
+	}
 }
 
 // handleChannelGet 处理 channel.get 请求。
 //
-// 返回当前渠道配置，Web 渠道始终启用。
-func handleChannelGet(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-	return map[string]any{
-		"channels": map[string]any{
-			"web": map[string]any{"enabled": true},
-		},
-	}, nil
+// 从 ChannelManager 动态读取已启用的渠道列表。
+// 对齐 Python: channel_get_handler，读取 ChannelManager.enabled_channels。
+func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
+	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+		channels := make(map[string]any)
+		if channelMgr != nil {
+			for _, cid := range channelMgr.GetEnabledChannels() {
+				channels[cid] = map[string]any{"enabled": true}
+			}
+		}
+		return map[string]any{"channels": channels}, nil
+	}
 }
 
 // handleSessionList 处理 session.list 请求。
@@ -692,29 +869,43 @@ func handleSessionList(_ context.Context, _ map[string]any, _ string) (map[strin
 // handleSessionCreate 处理 session.create 请求。
 //
 // 创建会话目录和 metadata.json。
+// 对齐 Python: session_create_handler，要求 session_id 非空，已存在则 ALREADY_EXISTS。
 func handleSessionCreate(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-	sessionID := MakeSessionID()
-	if params != nil {
-		if sid, ok := params["session_id"].(string); ok && sid != "" {
-			sessionID = sid
-		}
+	// 要求 session_id（对齐 Python: 必填参数）
+	sessionID, _ := params["session_id"].(string)
+	if sessionID == "" {
+		return map[string]any{"ok": false, "error": "session_id is required", "code": WsErrBadRequest}, nil
 	}
 
 	sessionsDir := workspace.AgentSessionsDir()
 	sessionDir := filepath.Join(sessionsDir, sessionID)
 
+	// 检查是否已存在（对齐 Python: ALREADY_EXISTS）
+	if _, err := os.Stat(sessionDir); err == nil {
+		return map[string]any{"ok": false, "error": "session already exists", "code": WsErrAlreadyExists}, nil
+	}
+
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建会话目录失败: %w", err)
 	}
 
-	// 写入 metadata.json
+	// 写入完整 metadata.json（对齐 Python: 写入 session_id, channel_id, user_id, title, mode）
 	meta := map[string]any{
 		"session_id": sessionID,
 		"created_at": time.Now().Format(time.RFC3339),
 	}
 	if params != nil {
-		if name, ok := params["name"].(string); ok {
-			meta["name"] = name
+		if v, ok := params["channel_id"].(string); ok && v != "" {
+			meta["channel_id"] = v
+		}
+		if v, ok := params["user_id"].(string); ok && v != "" {
+			meta["user_id"] = v
+		}
+		if v, ok := params["title"].(string); ok && v != "" {
+			meta["title"] = v
+		}
+		if v, ok := params["mode"].(string); ok && v != "" {
+			meta["mode"] = v
 		}
 	}
 	metaData, _ := json.MarshalIndent(meta, "", "  ")
@@ -727,21 +918,45 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 
 // handleSessionDelete 处理 session.delete 请求。
 //
-// 删除会话目录。
-func handleSessionDelete(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
-	sessionID, _ := params["session_id"].(string)
-	if sessionID == "" {
-		return nil, fmt.Errorf("session_id 不能为空")
+// 先尝试转发到 AgentServer，Agent 不可用且 team 模式返回 AGENT_UNAVAILABLE。
+// 检查目录存在后删除。
+// 对齐 Python: session_delete_handler。
+func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		sessionID, _ := params["session_id"].(string)
+		if sessionID == "" {
+			return map[string]any{"ok": false, "error": "session_id is required", "code": WsErrBadRequest}, nil
+		}
+
+		// 先尝试转发到 AgentServer（对齐 Python: 优先通过 AgentClient 转发）
+		if agentClient != nil && agentClient.ServerReady() {
+			// 构造 E2A envelope 转发 session.delete 请求
+			envelope := buildSessionDeleteEnvelope(sessionID, params)
+			if envelope != nil {
+				_, _ = agentClient.SendRequest(context.Background(), envelope)
+				// 转发后继续本地删除（对齐 Python 行为）
+			}
+		}
+
+		sessionsDir := workspace.AgentSessionsDir()
+		sessionDir := filepath.Join(sessionsDir, sessionID)
+
+		// 检查目录是否存在（对齐 Python: NOT_FOUND）
+		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
+			// 判断是否 team 模式 → AGENT_UNAVAILABLE
+			mode, _ := params["mode"].(string)
+			if mode == "team" && (agentClient == nil || !agentClient.ServerReady()) {
+				return map[string]any{"ok": false, "error": "agent unavailable for team session", "code": WsErrAgentUnavailable}, nil
+			}
+			return map[string]any{"ok": false, "error": "session not found", "code": WsErrNotFound}, nil
+		}
+
+		if err := os.RemoveAll(sessionDir); err != nil {
+			return nil, fmt.Errorf("删除会话目录失败: %w", err)
+		}
+
+		return map[string]any{"ok": true}, nil
 	}
-
-	sessionsDir := workspace.AgentSessionsDir()
-	sessionDir := filepath.Join(sessionsDir, sessionID)
-
-	if err := os.RemoveAll(sessionDir); err != nil {
-		return nil, fmt.Errorf("删除会话目录失败: %w", err)
-	}
-
-	return map[string]any{"ok": true}, nil
 }
 
 // handleChatSend 处理 chat.send 请求。
@@ -765,10 +980,18 @@ func handleChatResume() RPCHandlerFunc {
 
 // handleChatInterrupt 处理 chat.interrupt 请求。
 //
-// 返回即时 ack 响应。消息转发由两层架构第一层（normAndForward）处理。
+// 返回即时 ack 响应，从 params 中提取 intent。
+// 对齐 Python: chat.interrupt handler，intent 默认 "interrupt"，可从 params 覆写。
+// 消息转发由两层架构第一层（normAndForward）处理。
 func handleChatInterrupt() RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
-		return map[string]any{"accepted": true, "session_id": sessionID, "intent": "interrupt"}, nil
+		payload := map[string]any{"accepted": true, "session_id": sessionID}
+		if params != nil {
+			if intent, ok := params["intent"].(string); ok && intent != "" {
+				payload["intent"] = intent
+			}
+		}
+		return payload, nil
 	}
 }
 
@@ -837,22 +1060,113 @@ func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
 
 // flattenTeamConfig 展平 modes.team 配置到结果 map。
 //
-// 对齐 Python _flatten_modes_team_for_config_panel(raw)。
+// 对齐 Python _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
+// 遍历最多 10 个 team，提取 team_{idx}_* 前缀字段和 agent 详情。
 func flattenTeamConfig(cfg map[string]any, result map[string]any) {
 	team := getConfigAny(cfg, "modes.team", nil)
 	if team == nil {
 		return
 	}
-	teamMap, ok := team.(map[string]any)
+	teamList, ok := team.([]any)
 	if !ok {
 		return
 	}
-	for k, v := range teamMap {
-		// 仅当结果中对应键为空时才用 team 配置填充
-		if existing, exists := result[k]; !exists || existing == "" {
-			result[k] = v
+
+	// 读取 web_config_panel.agent_team_agents 用于 agent 详情补充
+	agentTeamAgents := getConfigAny(cfg, "web_config_panel.agent_team_agents", nil)
+	var agentList []map[string]any
+	if agentTeamAgents != nil {
+		if raw, ok := agentTeamAgents.([]any); ok {
+			for _, item := range raw {
+				if m, ok := item.(map[string]any); ok {
+					agentList = append(agentList, m)
+				}
+			}
 		}
 	}
+
+	for idx := 0; idx < maxTeamsConfigPanel && idx < len(teamList); idx++ {
+		teamItem, ok := teamList[idx].(map[string]any)
+		if !ok {
+			continue
+		}
+		prefix := fmt.Sprintf("team_%d", idx)
+
+		// 基础字段
+		if v, ok := teamItem["name"].(string); ok {
+			result[prefix+"_name"] = v
+		}
+		if v, ok := teamItem["lifecycle"].(string); ok {
+			result[prefix+"_lifecycle"] = v
+		}
+		if v, ok := teamItem["teammate_mode"].(string); ok {
+			result[prefix+"_teammate_mode"] = v
+		}
+		if v, ok := teamItem["spawn_mode"].(string); ok {
+			result[prefix+"_spawn_mode"] = v
+		}
+
+		// leader 信息
+		if leader, ok := teamItem["leader"].(map[string]any); ok {
+			if v, ok := leader["member_name"].(string); ok {
+				result[prefix+"_leader_member_name"] = v
+			}
+			if v, ok := leader["display_name"].(string); ok {
+				result[prefix+"_leader_display_name"] = v
+			}
+			if v, ok := leader["persona"].(string); ok {
+				result[prefix+"_leader_persona"] = v
+			}
+			if v, ok := leader["agent_key"].(string); ok {
+				result[prefix+"_leader_agent_key"] = v
+			}
+		}
+
+		// teammate 信息
+		if teammates, ok := teamItem["teammates"].([]any); ok && len(teammates) > 0 {
+			// 提取第一个 teammate 的 agent_key
+			if first, ok := teammates[0].(map[string]any); ok {
+				if v, ok := first["agent_key"].(string); ok {
+					result[prefix+"_teammate_agent_key"] = v
+				}
+			}
+		}
+
+		// predefined_members: JSON 序列化
+		if pm, ok := teamItem["predefined_members"]; ok && pm != nil {
+			if pmBytes, err := json.Marshal(pm); err == nil {
+				result[prefix+"_predefined_members"] = string(pmBytes)
+			}
+		}
+
+		// agent 详情（从 web_config_panel.agent_team_agents 提取）
+		if idx < len(agentList) {
+			agent := agentList[idx]
+			if v, ok := agent["model"].(string); ok {
+				result[prefix+"_model"] = v
+			}
+			if v, ok := agent["skills"]; ok {
+				result[prefix+"_skills"] = v
+			}
+			if v, ok := agent["max_iterations"]; ok {
+				result[prefix+"_max_iterations"] = v
+			}
+			if v, ok := agent["completion_timeout"]; ok {
+				result[prefix+"_completion_timeout"] = v
+			}
+		}
+	}
+}
+
+// buildSessionDeleteEnvelope 构建 session.delete 的 E2A envelope。
+//
+// 用于转发到 AgentServer，对齐 Python 中 session_delete_handler 的转发逻辑。
+func buildSessionDeleteEnvelope(sessionID string, params map[string]any) *e2a.E2AEnvelope {
+	envelope := e2a.NewE2AEnvelope()
+	envelope.Method = "session.delete"
+	envelope.SessionID = sessionID
+	envelope.Params = params
+	return envelope
 }
 
 // persistEnvUpdates 将更新的环境变量持久化到 .env 文件。

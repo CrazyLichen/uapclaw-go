@@ -11,8 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/wsorigin"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
+	cm "github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -33,6 +32,11 @@ type WebChannelConfig struct {
 	// AllowFrom Origin 白名单
 	AllowFrom []string
 }
+
+// ConnectHook 连接建立钩子函数。
+//
+// 对齐 Python WebChannel._connect_hooks 中的 ConnectHook 签名。
+type ConnectHook func(conn *websocket.Conn) error
 
 // WebChannel Web 通道，实现 BaseChannel 接口。
 //
@@ -56,10 +60,14 @@ type WebChannel struct {
 	runningMu sync.RWMutex
 	// onMessageCb 入站消息回调（返回 true 表示已处理，短路后续 handler）
 	onMessageCb func(*schema.Message) bool
-	// agentClient AgentServer 客户端（nil 表示无需等待，直接发 connection.ack）
-	agentClient *routing.AgentClient
 	// onConfigSavedCb 配置保存回调
 	onConfigSavedCb OnConfigSavedFunc
+	// channelMgr 通道管理器（fallback 路由用）
+	channelMgr *cm.ChannelManager
+	// connectHooks 连接建立钩子列表
+	connectHooks []ConnectHook
+	// connectHooksMu 保护 connectHooks 的并发访问
+	connectHooksMu sync.RWMutex
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -88,7 +96,7 @@ const (
 // 初始化 RPCDispatcher、WebSocket Upgrader 和连接管理。
 // onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入。
 // 对齐 Python: WebChannel.__init__ + _register_web_handlers(bind)。
-func NewWebChannel(cfg WebChannelConfig, onConfigSaved OnConfigSavedFunc) *WebChannel {
+func NewWebChannel(cfg WebChannelConfig, channelMgr *cm.ChannelManager, onConfigSaved OnConfigSavedFunc) *WebChannel {
 	// 填充默认值
 	if cfg.Host == "" {
 		cfg.Host = defaultWebHost
@@ -107,24 +115,26 @@ func NewWebChannel(cfg WebChannelConfig, onConfigSaved OnConfigSavedFunc) *WebCh
 			CheckOrigin: wsorigin.GorillaCheckOrigin(),
 		},
 		onConfigSavedCb: onConfigSaved,
+		channelMgr:      channelMgr,
 	}
-
-	// 创建事件推送回调：向所有客户端广播事件帧
-	sendEvent := func(event string, payload map[string]any) {
-		wc.broadcastEvent(event, payload)
-	}
-
-	// 注册 RPC handlers（消息转发由两层架构第一层处理，本地 handler 仅返回 ack）
-	wc.dispatcher = RegisterWebHandlers(sendEvent, onConfigSaved)
 
 	return wc
 }
 
 // HandleWebSocket 处理 WebSocket 连接。
 //
-// 升级 HTTP 连接为 WebSocket，等待 AgentServer 就绪后发送 connection.ack，进入消息读取循环。
-// 对齐 Python WebChannel._handle_connection 逻辑（_on_connect 中检查 server_ready）。
+// 升级 HTTP 连接为 WebSocket，触发 onConnect 钩子，进入消息读取循环。
+// 对齐 Python WebChannel._connection_handler 逻辑。
 func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// path 校验（对齐 Python _connection_handler 中 URL path 检查）
+	if r.URL.Path != wc.config.Path {
+		http.Error(w, fmt.Sprintf("unsupported path: %s", r.URL.Path), http.StatusNotFound)
+		return
+	}
+
+	// 解析 query 参数
+	query := r.URL.Query()
+
 	conn, err := wc.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Error(logComponent).
@@ -147,34 +157,21 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Int("total_clients", wc.clientCount()).
 		Msg("WebSocket 客户端已连接")
 
-	// 等待 AgentServer 就绪后再发 connection.ack
-	// 对齐 Python: _on_connect 中检查 agent_client.server_ready
-	if wc.agentClient != nil {
-		if !wc.agentClient.WaitServerReady(r.Context()) {
-			logger.Warn(logComponent).Msg("AgentServer 未就绪，关闭 WebSocket 连接")
-			_ = conn.Close()
-			wc.clientsMu.Lock()
-			delete(wc.clients, conn)
-			wc.clientsMu.Unlock()
-			return
+	// 触发 onConnect 钩子（对齐 Python _connection_handler 中 _connect_hooks 遍历）
+	wc.connectHooksMu.RLock()
+	hooks := make([]ConnectHook, len(wc.connectHooks))
+	copy(hooks, wc.connectHooks)
+	wc.connectHooksMu.RUnlock()
+	for _, hook := range hooks {
+		if err := hook(conn); err != nil {
+			logger.Warn(logComponent).
+				Err(err).
+				Msg("onConnect 钩子执行失败")
 		}
 	}
 
-	// 发送 connection.ack 事件
-	sessionID := MakeSessionID()
-	ackPayload := map[string]any{
-		"session_id":       sessionID,
-		"mode":             "BUILD",
-		"tools":            []any{},
-		"protocol_version": protocolVersion,
-	}
-	ackFrame := NewEventFrame("connection.ack", ackPayload, 0, "")
-	data, _ := ackFrame.Encode()
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		logger.Error(logComponent).
-			Err(err).
-			Msg("发送 connection.ack 失败")
-	}
+	// 生成默认 session_id（对齐 Python _handle_raw_message 中的 _make_session_id）
+	defaultSessionID := MakeSessionID()
 
 	// 消息读取循环
 	defer func() {
@@ -225,17 +222,24 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 自动生成 session_id
-		sid := sessionID
+		sid := defaultSessionID
 		if s, ok := params["session_id"].(string); ok && s != "" {
 			sid = s
 		}
+
+		// 处理文件下载（对齐 Python _process_files）
+		params = processFiles(params)
 
 		// ─── 两层消息架构（对齐 Python _handle_raw_message）───
 		// 第一层：构建 user_message 并通过 onMessageCb（normAndForward）转发
 		handledByCallback := false
 		if wc.onMessageCb != nil {
-			userMessage := BuildUserMessage(req.ID, req.Method, params, sid)
+			userMessage := BuildUserMessage(req.ID, req.Method, params, sid, query)
 			handledByCallback = wc.onMessageCb(userMessage)
+		} else if wc.channelMgr != nil {
+			// fallback: 对齐 Python self.bus.publish_user_messages
+			userMessage := BuildUserMessage(req.ID, req.Method, params, sid, query)
+			wc.channelMgr.DeliverToMessageHandler(userMessage)
 		}
 
 		if handledByCallback {
@@ -266,6 +270,16 @@ func (wc *WebChannel) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				Msg("写入响应失败")
 		}
 	}
+}
+
+// OnConnect 注册连接建立钩子。
+//
+// 对齐 Python WebChannel.on_connect(callback)，
+// 新客户端接入时依次调用所有已注册的钩子。
+func (wc *WebChannel) OnConnect(callback ConnectHook) {
+	wc.connectHooksMu.Lock()
+	defer wc.connectHooksMu.Unlock()
+	wc.connectHooks = append(wc.connectHooks, callback)
 }
 
 // Config 返回当前通道配置。
@@ -320,14 +334,31 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 		return nil
 	}
 
-	// 响应消息：构造 res 帧（后续通过 RPC response 路径发送，此处为 fallback）
+	// 响应消息：构造完整 res 帧（对齐 Python L319-341）
 	if msg.Type == schema.MessageTypeRes {
-		payload := msg.Payload
-		if payload == nil {
-			payload = make(map[string]any)
+		var resPayload map[string]any
+		if msg.Payload != nil {
+			// 浅拷贝，避免修改原始 payload
+			resPayload = make(map[string]any, len(msg.Payload))
+			for k, v := range msg.Payload {
+				resPayload[k] = v
+			}
+		} else {
+			resPayload = make(map[string]any)
 		}
-		payload["session_id"] = msg.SessionID
-		wc.broadcastEvent(string(msg.EventType), payload)
+
+		res := NewResFrame(msg.ID, msg.OK, resPayload, "", "")
+		if !msg.OK {
+			// ok=false 时从 payload 提取 error/code 到顶层
+			if errText, ok := resPayload["error"].(string); ok && errText != "" {
+				res.Error = errText
+			}
+			if codeText, ok := resPayload["code"].(string); ok && codeText != "" {
+				res.Code = codeText
+			}
+		}
+		resData, _ := res.Encode()
+		wc.broadcastRaw(resData)
 		return nil
 	}
 
@@ -348,7 +379,7 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 		wc.broadcastEvent(eventName, payload)
 	} else {
 		// pure-text：提取核心字段
-		payload := extractPureTextPayload(msg)
+		payload := extractPureTextPayload(msg, eventName)
 		wc.broadcastEvent(eventName, payload)
 	}
 
@@ -367,14 +398,6 @@ func (wc *WebChannel) OnMessage(callback func(*schema.Message) bool) {
 	wc.onMessageCb = callback
 }
 
-// SetAgentClient 设置 AgentServer 客户端。
-//
-// 在 HandleWebSocket 中等待 AgentServer 就绪后再发送 connection.ack，
-// 对齐 Python: _on_connect 中检查 agent_client.server_ready。
-func (wc *WebChannel) SetAgentClient(client *routing.AgentClient) {
-	wc.agentClient = client
-}
-
 // IsRunning 返回通道是否正在运行。
 func (wc *WebChannel) IsRunning() bool {
 	wc.runningMu.RLock()
@@ -388,8 +411,8 @@ func (wc *WebChannel) ChannelID() string {
 }
 
 // ChannelType 返回通道类型。
-func (wc *WebChannel) ChannelType() channel_manager.ChannelType {
-	return channel_manager.ChannelTypeWeb
+func (wc *WebChannel) ChannelType() cm.ChannelType {
+	return cm.ChannelTypeWeb
 }
 
 // Addr 返回监听地址字符串。
@@ -416,15 +439,19 @@ func (wc *WebChannel) broadcastEvent(event string, payload map[string]any) {
 		return
 	}
 
+	wc.broadcastRaw(data)
+}
+
+// broadcastRaw 向所有已连接客户端广播原始字节数据。
+func (wc *WebChannel) broadcastRaw(data []byte) {
 	wc.clientsMu.RLock()
 	defer wc.clientsMu.RUnlock()
 
 	for conn := range wc.clients {
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			logger.Warn(logComponent).
-				Str("event", event).
 				Err(err).
-				Msg("广播事件到客户端失败")
+				Msg("广播原始帧到客户端失败")
 		}
 	}
 }
@@ -505,21 +532,43 @@ func isFullPayloadEvent(eventName string) bool {
 // extractPureTextPayload 提取纯文本事件的核心字段
 //
 // 对齐 Python web_connect.py send() 中的 pure-text 路径：
-// 仅提取 content + session_id + role + member_name
-func extractPureTextPayload(msg *schema.Message) map[string]any {
+// 仅提取 content + session_id + role + member_name + cron(error fallback)
+func extractPureTextPayload(msg *schema.Message, eventName string) map[string]any {
 	payload := map[string]any{
 		"session_id": msg.SessionID,
 	}
 
 	if msg.Payload != nil {
+		// content 提取 + error fallback（对齐 Python L374-376）
 		if content, ok := msg.Payload["content"]; ok {
-			payload["content"] = content
+			contentStr := fmt.Sprintf("%v", content)
+			if contentStr != "" && contentStr != "<nil>" {
+				payload["content"] = content
+			} else if !msg.OK {
+				if errVal, ok := msg.Payload["error"]; ok {
+					payload["content"] = errVal
+				}
+			}
+		} else if !msg.OK {
+			// 无 content 且 ok=false，从 error 提取
+			if errVal, ok := msg.Payload["error"]; ok {
+				payload["content"] = errVal
+			}
 		}
+		// role + member_name
 		if role, ok := msg.Payload["role"]; ok {
 			payload["role"] = role
 		}
 		if memberName, ok := msg.Payload["member_name"]; ok {
 			payload["member_name"] = memberName
+		}
+		// cron 字段（对齐 Python L387-390）
+		if eventName == "chat.final" {
+			if cron, ok := msg.Payload["cron"]; ok {
+				if _, isDict := cron.(map[string]any); isDict {
+					payload["cron"] = cron
+				}
+			}
 		}
 	}
 

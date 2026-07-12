@@ -1,12 +1,18 @@
 package web
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -23,6 +29,16 @@ type ConfigBadRequest struct {
 type ConfigInternalError struct {
 	// Message 错误信息
 	Message string
+}
+
+// CryptoProvider 加密/解密提供者接口。
+//
+// 对齐 Python ExtensionRegistry.get_crypto_provider()。
+type CryptoProvider interface {
+	// Encrypt 加密明文
+	Encrypt(plaintext string) string
+	// Decrypt 解密密文
+	Decrypt(ciphertext string) string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -195,6 +211,68 @@ func NotifyConfigSavedOnce(
 	}
 }
 
+// ProcessFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
+//
+// 对齐 Python _process_files (web_connect.py L189-221)。
+func ProcessFiles(params map[string]any) map[string]any {
+	files, ok := params["files"]
+	if !ok {
+		return params
+	}
+	filesList, ok := files.([]any)
+	if !ok || len(filesList) == 0 {
+		return params
+	}
+
+	workspaceDir := workspace.AgentWorkspaceDir()
+	downloadedFiles := make([]any, 0, len(filesList))
+
+	for _, fileItem := range filesList {
+		fileInfo, ok := fileItem.(map[string]any)
+		if !ok {
+			downloadedFiles = append(downloadedFiles, fileItem)
+			continue
+		}
+
+		fileURL := ""
+		if u, ok := fileInfo["url"].(string); ok && u != "" {
+			fileURL = u
+		} else if u, ok := fileInfo["uri"].(string); ok && u != "" {
+			fileURL = u
+		}
+
+		fileName := "unknown_file"
+		if n, ok := fileInfo["name"].(string); ok && n != "" {
+			fileName = n
+		} else if n, ok := fileInfo["filename"].(string); ok && n != "" {
+			fileName = n
+		}
+
+		if fileURL != "" {
+			fileContent, err := downloadFile(fileURL)
+			if err != nil {
+				logger.Warn(logComponentConfigApply).
+					Str("url", fileURL).
+					Err(err).
+					Msg("文件下载失败")
+			} else if fileContent != nil {
+				if err := os.MkdirAll(workspaceDir, 0o755); err == nil {
+					filePath := filepath.Join(workspaceDir, fileName)
+					if err := os.WriteFile(filePath, fileContent, 0o644); err != nil {
+						logger.Warn(logComponentConfigApply).Err(err).Msg("文件保存失败")
+					} else {
+						fileInfo["path"] = filePath
+					}
+				}
+			}
+		}
+		downloadedFiles = append(downloadedFiles, fileInfo)
+	}
+
+	params["files"] = downloadedFiles
+	return params
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isAvailableProvider 检查 provider 是否在可用列表中。
@@ -216,7 +294,7 @@ func updateYAMLKeyInConfig(key string, value any) error {
 	}
 
 	// 加载当前配置
-	_, err = cfg.Load()
+	cfgData, err := cfg.Load()
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
@@ -234,9 +312,12 @@ func updateYAMLKeyInConfig(key string, value any) error {
 		return cfg.Set("memory.forbidden_memory_definition.enabled", parsed)
 	case "memory_forbidden_description":
 		descVal := strings.TrimSpace(fmt.Sprintf("%v", value))
-		// 对齐 Python: update_memory_forbidden_description_in_config
-		// description 是多语言字典，此处用默认语言 zh 覆盖
-		return cfg.Set("memory.forbidden_memory_definition.description.zh", descVal)
+		// 动态读取 preferred_language（对齐 Python L720-748）
+		preferredLang := "zh"
+		if lang, ok := cfgData["preferred_language"].(string); ok && lang != "" {
+			preferredLang = lang
+		}
+		return cfg.Set(fmt.Sprintf("memory.forbidden_memory_definition.description.%s", preferredLang), descVal)
 	default:
 		return fmt.Errorf("未知的 YAML 配置键: %s", key)
 	}
@@ -303,7 +384,8 @@ func updateDefaultModelsInConfig(models []map[string]any) error {
 
 // buildModelsDefaultsFromFrontend 从前端 models 参数构建 models.defaults 列表。
 // 对齐 Python: _build_models_defaults_from_frontend (app_web_handlers.py L784-868)。
-func buildModelsDefaultsFromFrontend(rawModels any) ([]map[string]any, error) {
+// crypto 用于加密 api_key；rawModels 中的 origin_index 用于匹配原始 YAML 条目。
+func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]map[string]any, error) {
 	modelsList, ok := rawModels.([]any)
 	if !ok || len(modelsList) == 0 {
 		return nil, &ConfigBadRequest{Message: "models must be a non-empty list"}
@@ -416,7 +498,13 @@ func buildModelsDefaultsFromFrontend(rawModels any) ([]map[string]any, error) {
 		}
 	}
 
-	return parsed, nil
+	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
+	merged := mergeModelsForReplaceAll(parsed, crypto)
+
+	// 推断 is_default（对齐 Python _infer_is_default）
+	merged = inferIsDefault(merged)
+
+	return merged, nil
 }
 
 // getConfigSnapshot 获取当前配置快照。
@@ -480,4 +568,259 @@ func parseInt(val any) (int, error) {
 	default:
 		return 0, fmt.Errorf("无法解析为整数: %v", val)
 	}
+}
+
+// processFiles 处理 params 中的 files 字段，下载 URL 文件到本地 workspace。
+//
+// 对齐 Python _process_files (web_connect.py L189-221)。
+// 供 HandleWebSocket 内部调用，外部请使用 ProcessFiles。
+func processFiles(params map[string]any) map[string]any {
+	return ProcessFiles(params)
+}
+
+// downloadFile 下载指定 URL 的文件内容。
+func downloadFile(url string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// valuesMatch 比较前端发送值与解析后的值是否相同。
+// 对齐 Python _values_match (app_web_handlers.py L63-79)。
+func valuesMatch(parsedVal, resolvedVal any) bool {
+	// bool 比较
+	if _, ok := parsedVal.(bool); ok {
+		return fmt.Sprintf("%v", parsedVal) == fmt.Sprintf("%v", resolvedVal)
+	}
+	if _, ok := resolvedVal.(bool); ok {
+		return fmt.Sprintf("%v", parsedVal) == fmt.Sprintf("%v", resolvedVal)
+	}
+	// nil 比较
+	if parsedVal == nil && resolvedVal == nil {
+		return true
+	}
+	// 数值比较
+	pF, pErr := parseFloat(parsedVal)
+	rF, rErr := parseFloat(resolvedVal)
+	if pErr == nil && rErr == nil {
+		return pF == rF
+	}
+	// 字符串比较
+	pStr := ""
+	if parsedVal != nil {
+		pStr = fmt.Sprintf("%v", parsedVal)
+	}
+	rStr := ""
+	if resolvedVal != nil {
+		rStr = fmt.Sprintf("%v", resolvedVal)
+	}
+	return pStr == rStr
+}
+
+// mergeModelsForReplaceAll 用 origin_index 匹配原始 YAML 条目，保留占位符和未暴露字段，仅覆写变化字段。
+// 对齐 Python _merge_models_for_replace_all (app_web_handlers.py L82-156)。
+//
+// 对每个前端条目：
+//   - 有 origin_index 指向已有原始条目：深拷贝原始条目，仅覆写与解析快照不同的字段
+//   - api_key 变更时加密，未变更时保留原始值
+//   - 新条目（无 origin_index）：加密 api_key 后原样存入
+func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []map[string]any {
+	// 读取原始 YAML 中的 models.defaults
+	rawModels := loadRawModelsDefaults()
+
+	result := make([]map[string]any, 0, len(parsed))
+
+	for _, entry := range parsed {
+		originIndexVal, hasOrigin := entry["origin_index"]
+		if !hasOrigin || originIndexVal == nil {
+			// 新条目：加密 api_key 后原样存入
+			newEntry := deepCopyMap(entry)
+			if crypto != nil {
+				if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
+					if apiKey, ok := mcc["api_key"].(string); ok && apiKey != "" {
+						mcc["api_key"] = crypto.Encrypt(apiKey)
+					}
+				}
+			}
+			result = append(result, newEntry)
+			continue
+		}
+
+		// 解析 origin_index
+		oi := -1
+		switch v := originIndexVal.(type) {
+		case int:
+			oi = v
+		case float64:
+			oi = int(v)
+		default:
+			if i, err := parseInt(v); err == nil {
+				oi = i
+			}
+		}
+
+		if oi < 0 || oi >= len(rawModels) {
+			// origin_index 越界，当作新条目处理
+			newEntry := deepCopyMap(entry)
+			if crypto != nil {
+				if mcc, ok := newEntry["model_client_config"].(map[string]any); ok {
+					if apiKey, ok := mcc["api_key"].(string); ok && apiKey != "" {
+						mcc["api_key"] = crypto.Encrypt(apiKey)
+					}
+				}
+			}
+			result = append(result, newEntry)
+			continue
+		}
+
+		// 深拷贝原始条目（保留占位符、custom_headers 等未暴露字段）
+		merged := deepCopyMap(rawModels[oi])
+
+		// 前端解析后的快照（即 entry 中的解析值）
+		// 仅覆写与原始快照不同的字段
+		if frontMCC, ok := entry["model_client_config"].(map[string]any); ok {
+			if mergedMCC, ok := merged["model_client_config"].(map[string]any); ok {
+				for k, parsedVal := range frontMCC {
+					rawVal := mergedMCC[k]
+					if !valuesMatch(parsedVal, rawVal) {
+						// 字段值不同，覆写
+						if k == "api_key" {
+							// api_key 特殊处理：加密后写入
+							if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && crypto != nil {
+								mergedMCC[k] = crypto.Encrypt(apiKeyStr)
+							} else {
+								mergedMCC[k] = parsedVal
+							}
+						} else {
+							mergedMCC[k] = parsedVal
+						}
+					}
+					// 字段值相同，保留原始值（含占位符等）
+				}
+			}
+		}
+
+		if frontMCO, ok := entry["model_config_obj"].(map[string]any); ok {
+			if mergedMCO, ok := merged["model_config_obj"].(map[string]any); ok {
+				for k, parsedVal := range frontMCO {
+					rawVal := mergedMCO[k]
+					if !valuesMatch(parsedVal, rawVal) {
+						mergedMCO[k] = parsedVal
+					}
+				}
+			}
+		}
+
+		// 覆写顶层字段
+		for _, k := range []string{"is_default", "alias"} {
+			parsedVal, hasParsed := entry[k]
+			rawVal, hasRaw := merged[k]
+			if hasParsed {
+				if !hasRaw || !valuesMatch(parsedVal, rawVal) {
+					merged[k] = parsedVal
+				}
+			}
+		}
+
+		// 移除 origin_index（不需要持久化到 YAML）
+		delete(merged, "origin_index")
+
+		result = append(result, merged)
+	}
+
+	return result
+}
+
+// inferIsDefault 确保模型列表中恰好一个 is_default=true。
+// 对齐 Python _infer_is_default。
+func inferIsDefault(models []map[string]any) []map[string]any {
+	if len(models) == 0 {
+		return models
+	}
+	hasDefault := false
+	for _, m := range models {
+		if isTruthy(m["is_default"]) {
+			if hasDefault {
+				// 后续 true 设为 false，确保恰好一个
+				m["is_default"] = false
+			} else {
+				hasDefault = true
+			}
+		}
+	}
+	if !hasDefault {
+		// 无 true 时，设第一个为 true
+		models[0]["is_default"] = true
+	}
+	return models
+}
+
+// loadRawModelsDefaults 从 config.yaml 加载原始 models.defaults 列表。
+func loadRawModelsDefaults() []map[string]any {
+	cfgData := getConfigSnapshot()
+	rawVal := getConfigAny(cfgData, "models.defaults", nil)
+	if rawVal == nil {
+		return nil
+	}
+	rawList, ok := rawVal.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(rawList))
+	for _, item := range rawList {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// deepCopyMap 深拷贝 map[string]any。
+func deepCopyMap(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]any, len(src))
+	for k, v := range src {
+		switch val := v.(type) {
+		case map[string]any:
+			dst[k] = deepCopyMap(val)
+		case []any:
+			dst[k] = deepCopySlice(val)
+		default:
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
+// deepCopySlice 深拷贝 []any。
+func deepCopySlice(src []any) []any {
+	if src == nil {
+		return nil
+	}
+	dst := make([]any, len(src))
+	for i, v := range src {
+		switch val := v.(type) {
+		case map[string]any:
+			dst[i] = deepCopyMap(val)
+		case []any:
+			dst[i] = deepCopySlice(val)
+		default:
+			dst[i] = v
+		}
+	}
+	return dst
 }

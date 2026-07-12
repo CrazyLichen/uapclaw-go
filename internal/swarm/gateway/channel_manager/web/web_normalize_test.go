@@ -170,7 +170,7 @@ func TestNormalizeGatewayMessage_默认reqMethod(t *testing.T) {
 // TestBuildUserMessage_基本构造 测试从 RPC 参数构造 Message
 func TestBuildUserMessage_基本构造(t *testing.T) {
 	params := map[string]any{"query": "你好", "session_id": "sess-1"}
-	msg := BuildUserMessage("req-1", "chat.send", params, "sess-1")
+	msg := BuildUserMessage("req-1", "chat.send", params, "sess-1", nil)
 
 	assert.Equal(t, "req-1", msg.ID)
 	assert.Equal(t, schema.MessageTypeReq, msg.Type)

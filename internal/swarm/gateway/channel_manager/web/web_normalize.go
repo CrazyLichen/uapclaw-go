@@ -14,7 +14,7 @@ import (
 // NormAndForwardFunc 标准化并转发消息的回调函数类型。
 //
 // 对齐 Python _normalize_and_forward_message：先 normalize 再 deliver_to_message_handler。
-// 始终返回 false（不短路后续本地 handler），由两层架构保证本地 handler 继续执行。
+// 返回 true 表示短路后续本地 handler，false 表示本地 handler 继续执行。
 type NormAndForwardFunc func(msg *schema.Message) bool
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -232,11 +232,31 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 
 // MakeNormAndForward 创建标准化+转发回调函数。
 //
-// 对齐 Python _normalize_and_forward_message：
-// 先 NormalizeGatewayMessage，再 ChannelManager.DeliverToMessageHandler。
-// 始终返回 false（不短路后续本地 handler）。
-func MakeNormAndForward(channelMgr *cm.ChannelManager) NormAndForwardFunc {
+// 对齐 Python _make_norm_and_forward (app_gateway.py)：
+// 三层路由逻辑：
+//   - 非 forwardMethods → 不转发，返回 false（让本地 handler 处理）
+//   - forwardMethods 中且有本地 handler → 转发 + 返回 false（本地 handler 继续执行）
+//   - noLocalHandlerMethods 中 → 仅转发 + 返回 true（短路本地 handler）
+func MakeNormAndForward(
+	channelMgr *cm.ChannelManager,
+	forwardMethods map[string]bool,
+	noLocalHandlerMethods map[string]bool,
+) NormAndForwardFunc {
 	return func(msg *schema.Message) bool {
+		// 从 metadata 获取 method
+		methodVal := ""
+		if msg.Metadata != nil {
+			if m, ok := msg.Metadata["method"].(string); ok {
+				methodVal = m
+			}
+		}
+
+		// 非 ForwardReqMethods → 不转发，让本地 handler 处理
+		if !forwardMethods[methodVal] {
+			return false
+		}
+
+		// 在 ForwardReqMethods 中 → 转发到 MessageHandler
 		normalized := NormalizeGatewayMessage(msg)
 		channelMgr.DeliverToMessageHandler(normalized)
 
@@ -244,8 +264,13 @@ func MakeNormAndForward(channelMgr *cm.ChannelManager) NormAndForwardFunc {
 			Str("event_type", "gateway_inbound").
 			Str("msg_id", msg.ID).
 			Str("channel_id", msg.ChannelID).
+			Str("method", methodVal).
 			Msg("Gateway inbound -> MessageHandler")
 
+		// ForwardNoLocalHandlerMethods → 短路本地 handler
+		if noLocalHandlerMethods[methodVal] {
+			return true
+		}
 		return false
 	}
 }
@@ -253,7 +278,7 @@ func MakeNormAndForward(channelMgr *cm.ChannelManager) NormAndForwardFunc {
 // BuildUserMessage 从 RPC 请求参数构建入站 Message。
 //
 // 对齐 Python WebChannel._handle_raw_message 中构建 user_message 的逻辑。
-func BuildUserMessage(reqID, method string, params map[string]any, sessionID string) *schema.Message {
+func BuildUserMessage(reqID, method string, params map[string]any, sessionID string, query map[string][]string) *schema.Message {
 	reqMethod, _ := schema.ParseReqMethod(method)
 	paramsJSON, _ := json.Marshal(params)
 
@@ -267,7 +292,7 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 		OK:        true,
 		ReqMethod: reqMethod,
 		Mode:      parseMode(params),
-		Metadata:  map[string]any{"method": method},
+		Metadata:  map[string]any{"method": method, "query": query},
 	}
 }
 
@@ -275,13 +300,12 @@ func BuildUserMessage(reqID, method string, params map[string]any, sessionID str
 
 // parseMode 从 params 解析运行模式。
 //
-// 对齐 Python WebChannel._parse_mode。
+// 对齐 Python WebChannel._parse_mode，默认 Mode.AGENT_PLAN。
 func parseMode(params map[string]any) schema.Mode {
-	if params == nil {
-		return ""
+	if params != nil {
+		if mode, ok := params["mode"].(string); ok && mode != "" {
+			return schema.Mode(mode)
+		}
 	}
-	if mode, ok := params["mode"].(string); ok && mode != "" {
-		return schema.Mode(mode)
-	}
-	return ""
+	return schema.ModeAgentPlan
 }

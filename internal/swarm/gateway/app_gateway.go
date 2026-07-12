@@ -102,22 +102,30 @@ func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*Ga
 		}
 	}
 
-	// 步骤3：创建 WebChannel（2 参数，对齐 Python WebChannel(config, on_config_saved)）
+	// 步骤3：创建 WebChannel（对齐 Python WebChannel(config, on_config_saved)）
 	// onMessage 通过 RegisterChannelWithInbound 设置，构造时不注入
 	onConfigSavedCb := s.OnConfigSaved()
-	wc := web.NewWebChannel(webCfg, onConfigSavedCb)
-
-	// 注入 AgentClient（用于等待 AgentServer 就绪）
-	if agentClient != nil {
-		wc.SetAgentClient(agentClient)
-	}
+	wc := web.NewWebChannel(webCfg, channelMgr, onConfigSavedCb)
 
 	s.webChannel = wc
 
 	// 步骤4：注册 WebChannel（对齐 Python register_channel_with_inbound）
-	// web_norm_and_forward 回调：先 NormalizeGatewayMessage 再转发到 MessageHandler
-	webNormAndForward := web.MakeNormAndForward(channelMgr)
+	// web_norm_and_forward 回调：三层路由逻辑，对齐 Python _make_norm_and_forward
+	webNormAndForward := web.MakeNormAndForward(
+		channelMgr,
+		web.ForwardReqMethods,
+		web.ForwardNoLocalHandlerMethods,
+	)
 	channelMgr.RegisterChannelWithInbound(wc, webNormAndForward)
+
+	// 步骤5：注册 Web RPC handlers + onConnect 钩子（对齐 Python _register_web_handlers(bind)）
+	// AgentClient 通过 BindParams 闭包捕获，不直接设到 WebChannel
+	web.RegisterWebHandlers(&web.WebHandlersBindParams{
+		Channel:        wc,
+		AgentClient:    agentClient,
+		ChannelManager: channelMgr,
+		OnConfigSaved:  onConfigSavedCb,
+	})
 
 	// 组装路由
 	s.setupRouter()
