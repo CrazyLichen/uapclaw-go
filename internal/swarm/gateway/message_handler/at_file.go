@@ -174,11 +174,61 @@ func ExtractAgentMentions(content string) []string {
 	return unique
 }
 
-// NormalizeStructuredAttachments 规范化结构化附件列表。
+// ResolveStructuredAttachments 解析结构化附件并内联文件内容。
 //
-// 对齐 Python _normalize_structured_attachments：
+// 对齐 Python _resolve_structured_attachments (L1513-1526)：
+//  1. normalized := normalizeStructuredAttachments(attachments, cwd)
+//  2. prefix := @"path1" @"path2" ...
+//  3. cleanedContent := stripAttachedMentions(content, normalized, cwd)
+//  4. mergedContent := prefix + " " + cleanedContent
+//  5. return ResolveAtFileReferences(mergedContent, cwd, 0)
+func ResolveStructuredAttachments(content string, attachments []map[string]any, cwd string) string {
+	normalized := normalizeStructuredAttachments(attachments, cwd)
+	if len(normalized) == 0 {
+		return content
+	}
+
+	// 构造前缀：@"path1" @"path2" ...
+	parts := make([]string, 0, len(normalized))
+	for _, item := range normalized {
+		if path, ok := item["path"].(string); ok && path != "" {
+			parts = append(parts, fmt.Sprintf(`@"%s"`, path))
+		}
+	}
+	prefix := strings.Join(parts, " ")
+
+	// 从 content 中移除已被 attachments 覆盖的 @ 引用
+	cleanedContent := stripAttachedMentions(content, normalized, cwd)
+
+	// 合并前缀和清理后的内容
+	mergedContent := strings.TrimSpace(fmt.Sprintf("%s %s", prefix, cleanedContent))
+
+	// 解析合并后内容中的 @file 引用
+	return ResolveAtFileReferences(mergedContent, cwd, 0)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveReferencePath 解析引用路径（相对/绝对/~/）
+//
+// 对齐 Python _resolve_reference_path (L1438-1444)。
+func resolveReferencePath(rawPath, cwd string) string {
+	if strings.HasPrefix(rawPath, "~/") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, rawPath[2:])
+	}
+	if filepath.IsAbs(rawPath) {
+		return rawPath
+	}
+	return filepath.Join(cwd, rawPath)
+}
+
+// normalizeStructuredAttachments 规范化结构化附件列表（非导出版本）。
+//
+// 对齐 Python _normalize_structured_attachments (L1447-1474)：
 // 去重（按 resolved path），填充默认 type/filename。
-func NormalizeStructuredAttachments(attachments []map[string]any, cwd string) []map[string]any {
+// 逻辑与原 NormalizeStructuredAttachments 完全相同，但改为非导出。
+func normalizeStructuredAttachments(attachments []map[string]any, cwd string) []map[string]any {
 	if len(attachments) == 0 {
 		return nil
 	}
@@ -229,18 +279,70 @@ func NormalizeStructuredAttachments(attachments []map[string]any, cwd string) []
 	return normalized
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
+// stripAttachedMentions 从 content 中移除已被 attachments 覆盖的 @ 引用。
+//
+// 对齐 Python strip_attached_mentions (L1477-1510)：
+// 对于 content 中匹配到 attachments 已包含路径的 @path 引用，
+// 将 @path 替换为 path（去掉 @ 前缀），保留 prefix（行首/空格）。
+// @agent-xxx 提及不受影响。
+func stripAttachedMentions(content string, attachments []map[string]any, cwd string) string {
+	if content == "" || len(attachments) == 0 {
+		return content
+	}
 
-// resolveReferencePath 解析引用路径（相对/绝对/~/）
-func resolveReferencePath(rawPath, cwd string) string {
-	if strings.HasPrefix(rawPath, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, rawPath[2:])
+	if cwd == "" {
+		cwd, _ = os.Getwd()
 	}
-	if filepath.IsAbs(rawPath) {
-		return rawPath
+
+	// 收集已附件的解析路径集合
+	attachedPaths := make(map[string]bool)
+	for _, item := range attachments {
+		rawPath := ""
+		if p, ok := item["path"]; ok {
+			rawPath = strings.TrimSpace(fmt.Sprintf("%v", p))
+		}
+		if rawPath == "" {
+			continue
+		}
+		attachedPaths[resolveReferencePath(rawPath, cwd)] = true
 	}
-	return filepath.Join(cwd, rawPath)
+	if len(attachedPaths) == 0 {
+		return content
+	}
+
+	// 替换 content 中属于 attachedPaths 的 @ 引用
+	result, _ := atFilePattern.ReplaceFunc(content, func(m regexp2.Match) string {
+		// 提取路径：尝试 quoted 组，否则 plain 组
+		raw := ""
+		if g := m.GroupByName("quoted"); g != nil && g.String() != "" {
+			raw = g.String()
+		} else if g := m.GroupByName("plain"); g != nil && g.String() != "" {
+			raw = g.String()
+		}
+		if raw == "" {
+			return m.String()
+		}
+
+		// 跳过 @agent-xxx / @agent:xxx 提及
+		if strings.HasPrefix(raw, "agent-") || strings.HasPrefix(raw, "agent:") {
+			return m.String()
+		}
+
+		// 检查解析后的路径是否在 attachedPaths 中
+		resolved := resolveReferencePath(raw, cwd)
+		if !attachedPaths[resolved] {
+			return m.String()
+		}
+
+		// 对齐 Python：将 @path 替换为 prefix + path（去掉 @）
+		prefix := ""
+		if g := m.GroupByName("prefix"); g != nil {
+			prefix = g.String()
+		}
+		return prefix + raw
+	}, 0, -1)
+
+	return result
 }
 
 // ResolveStructuredAttachments 解析结构化附件列表，将文件内容内联到 content 中。

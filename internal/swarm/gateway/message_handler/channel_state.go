@@ -123,12 +123,14 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 	}
 }
 
-// GetOrCreateChannelState 获取或创建消息对应 channel 状态
+// GetOrCreateChannelState 获取或创建消息对应 channel 状态。
 //
-// 对齐 Python _get_or_create_channel_state：使用 channel_id 作为 key。
+// 对齐 Python _get_or_create_channel_state (L278-299)：
+// 使用复合键 channelID:sessionID（对齐 Python _get_channel_state_key）。
+// TODO: SessionMap 集成（等 11.7 回填）。
 func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelControlState {
 	ch := msg.ChannelID
-	key := ch
+	key := getChannelStateKey(ch, msg.SessionID)
 
 	mh.statesMu.RLock()
 	state, exists := mh.channelStates[key]
@@ -138,7 +140,7 @@ func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelC
 		return state
 	}
 
-	// 创建默认状态
+	// 创建默认状态（从 config 读取）
 	state = mh.getChannelDefaultState(ch)
 
 	mh.statesMu.Lock()
@@ -178,11 +180,36 @@ func (mh *MessageHandler) resolveControlChannelType(msg *schema.Message) channel
 	return inferChannelTypeFromID(msg.ChannelID)
 }
 
-// getChannelDefaultState 从默认配置创建渠道状态
+// getChannelDefaultState 从默认配置创建渠道状态。
 //
-// 对齐 Python _get_channel_default_state：默认 mode 为 agent.plan，
-// 默认 session_id 为新生成的 ID。
+// 对齐 Python _get_channel_default_state (L247-270)：
+// 如果 getConfigRaw 不为 nil，从 config 中读取 channels[channelID] 的 default_session_id 和 default_mode；
+// 否则默认 mode 为 agent.plan，默认 session_id 为新生成的 ID。
 func (mh *MessageHandler) getChannelDefaultState(channelID string) *ChannelControlState {
+	if mh.getConfigRaw != nil {
+		if config := mh.getConfigRaw(); config != nil {
+			if channels, ok := config["channels"].(map[string]any); ok {
+				if chConfig, ok := channels[channelID].(map[string]any); ok {
+					sid := ""
+					if s, ok := chConfig["default_session_id"].(string); ok && s != "" {
+						sid = s
+					}
+					mode := ChannelModeAgentPlan
+					if m, ok := chConfig["default_mode"].(string); ok && m != "" {
+						mode = ParseChannelMode(m)
+					}
+					if sid == "" {
+						sid = GenerateChannelSessionID(channelID)
+					}
+					return &ChannelControlState{
+						SessionID: sid,
+						Mode:      mode,
+					}
+				}
+			}
+		}
+	}
+
 	sid := GenerateChannelSessionID(channelID)
 	return &ChannelControlState{
 		SessionID: sid,
@@ -196,6 +223,30 @@ func getChannelStateKey(channelID, sessionID string) string {
 		return fmt.Sprintf("%s:%s", channelID, sessionID)
 	}
 	return channelID
+}
+
+// saveChannelStateToConfig 保存渠道状态到 config。
+//
+// 对齐 Python _save_channel_state_to_config (L301-312)：
+// 调用 updateChannelInConfig 注入 default_session_id 和 default_mode。
+// 注：Python 中此方法当前未被调用（dead code），但补定义以对齐。
+func (mh *MessageHandler) saveChannelStateToConfig(channelID string) {
+	if mh.updateChannelInConfig == nil {
+		return
+	}
+
+	mh.statesMu.RLock()
+	state, exists := mh.channelStates[channelID]
+	mh.statesMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	mh.updateChannelInConfig(channelID, map[string]any{
+		"default_session_id": state.SessionID,
+		"default_mode":       ChannelModeString(state.Mode),
+	})
 }
 
 // inferChannelTypeFromID 从 channelID 推断渠道类型

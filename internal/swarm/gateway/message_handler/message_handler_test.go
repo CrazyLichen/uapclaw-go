@@ -76,7 +76,8 @@ func TestStartForwarding_重复启动(t *testing.T) {
 // TestCancelAgentWorkForSession_空Session 测试空 sessionID
 func TestCancelAgentWorkForSession_空Session(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	mh.CancelAgentWorkForSession(context.Background(), "", "cancel")
+	msg := schema.NewReqMessage("feishu_test", "", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
+	mh.CancelAgentWorkForSession(context.Background(), msg, "", true)
 }
 
 // TestCancelAgentWorkForSession_有流式任务 测试取消流式任务
@@ -84,7 +85,8 @@ func TestCancelAgentWorkForSession_有流式任务(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	mh.registerStreamTask("req-1", "sess-1", nil, func() {})
 
-	mh.CancelAgentWorkForSession(context.Background(), "sess-1", "cancel")
+	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
+	mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
 
 	mh.streamMu.RLock()
 	_, exists := mh.streamTasks["req-1"]
@@ -165,11 +167,11 @@ func TestCollectStreamTasksForSession(t *testing.T) {
 	assert.Len(t, reqIDs, 0)
 }
 
-// TestForwardToAgent_无AgentClient 测试无 AgentClient 时转发
-func TestForwardToAgent_无AgentClient(t *testing.T) {
+// TestProcessForwardMessage_无AgentClient 测试无 AgentClient 时处理
+func TestProcessForwardMessage_无AgentClient(t *testing.T) {
 	mh := createTestMessageHandler()
 	msg := schema.NewReqMessage("web", "sess-1", schema.ReqMethodChatSend, json.RawMessage(`{}`))
-	mh.forwardToAgent(context.Background(), msg)
+	mh.processForwardMessage(context.Background(), msg)
 }
 
 // TestExtractTextFromParams 测试从 params 提取文本
@@ -192,12 +194,16 @@ func TestExtractTextFromParams(t *testing.T) {
 	}
 }
 
-// TestIsCronPayload 测试 cron payload 判断
-func TestIsCronPayload(t *testing.T) {
-	assert.False(t, isCronPayload(nil))
-	assert.False(t, isCronPayload(map[string]any{}))
-	assert.True(t, isCronPayload(map[string]any{"metadata": map[string]any{"cron": true}}))
-	assert.True(t, isCronPayload(map[string]any{"body": map[string]any{"cron": true}}))
+// TestHandleAgentServerPush_CronPush 测试 cron push 通过 chunk payload 检测
+func TestHandleAgentServerPush_CronPush(t *testing.T) {
+	mh := createTestMessageHandlerWithTransport()
+	go func() {
+		for range mh.robotMessages {
+		}
+	}()
+	// cron 消息通过 chunk.Payload["event_type"] == "cron.response" 判断
+	// 此测试确保 handleAgentServerPush 不会 panic
+	mh.handleAgentServerPush(map[string]any{})
 }
 
 // TestE2AResponseToAgentRoundTrip 测试 E2A 转换往返一致性

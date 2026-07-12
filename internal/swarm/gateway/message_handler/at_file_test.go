@@ -133,9 +133,38 @@ func TestExtractAgentMentions_无提及(t *testing.T) {
 	}
 }
 
+// TestResolveStructuredAttachments_空附件 测试空附件列表
+func TestResolveStructuredAttachments_空附件(t *testing.T) {
+	result := ResolveStructuredAttachments("hello", nil, "/tmp")
+	if result != "hello" {
+		t.Errorf("空附件应返回原内容，实际：%q", result)
+	}
+}
+
+// TestResolveStructuredAttachments_有附件 测试有附件时的内容合并
+func TestResolveStructuredAttachments_有附件(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "data.txt")
+	if err := os.WriteFile(tmpFile, []byte("file data"), 0644); err != nil {
+		t.Fatalf("创建临时文件失败：%v", err)
+	}
+
+	attachments := []map[string]any{
+		{"path": tmpFile, "type": "file"},
+	}
+	result := ResolveStructuredAttachments("please help", attachments, tmpDir)
+
+	// 应包含 <file-content> 内联
+	if !strings.Contains(result, "<file-content") {
+		t.Errorf("应包含 file-content 标签，实际：%q", result)
+	}
+}
+
+// ──────────────────────────── 非导出函数测试 ────────────────────────────
+
 // TestNormalizeStructuredAttachments_空 测试空输入
 func TestNormalizeStructuredAttachments_空(t *testing.T) {
-	result := NormalizeStructuredAttachments(nil, "/tmp")
+	result := normalizeStructuredAttachments(nil, "/tmp")
 	if result != nil {
 		t.Errorf("nil 输入应返回 nil，实际：%v", result)
 	}
@@ -147,7 +176,7 @@ func TestNormalizeStructuredAttachments_基本(t *testing.T) {
 		{"path": "/tmp/file1.txt", "type": "file"},
 		{"path": "/tmp/file2.py"},
 	}
-	result := NormalizeStructuredAttachments(attachments, "/tmp")
+	result := normalizeStructuredAttachments(attachments, "/tmp")
 
 	if len(result) != 2 {
 		t.Fatalf("应返回 2 个附件，实际：%d", len(result))
@@ -169,7 +198,7 @@ func TestNormalizeStructuredAttachments_去重(t *testing.T) {
 		{"path": "/tmp/file.txt"},
 		{"path": "/tmp/file.txt"},
 	}
-	result := NormalizeStructuredAttachments(attachments, "/tmp")
+	result := normalizeStructuredAttachments(attachments, "/tmp")
 
 	if len(result) != 1 {
 		t.Errorf("重复路径应去重，实际：%d", len(result))
@@ -183,9 +212,51 @@ func TestNormalizeStructuredAttachments_跳过空路径(t *testing.T) {
 		{"other": "field"},
 		{"path": "/tmp/valid.txt"},
 	}
-	result := NormalizeStructuredAttachments(attachments, "/tmp")
+	result := normalizeStructuredAttachments(attachments, "/tmp")
 
 	if len(result) != 1 {
 		t.Errorf("空路径应跳过，实际：%d", len(result))
+	}
+}
+
+// TestStripAttachedMentions_空内容 测试空内容
+func TestStripAttachedMentions_空内容(t *testing.T) {
+	result := stripAttachedMentions("", []map[string]any{{"path": "/tmp/f.txt"}}, "/tmp")
+	if result != "" {
+		t.Errorf("空内容应返回空字符串，实际：%q", result)
+	}
+}
+
+// TestStripAttachedMentions_无附件 测试无附件
+func TestStripAttachedMentions_无附件(t *testing.T) {
+	result := stripAttachedMentions("hello @/tmp/f.txt", nil, "/tmp")
+	if result != "hello @/tmp/f.txt" {
+		t.Errorf("无附件应返回原内容，实际：%q", result)
+	}
+}
+
+// TestStripAttachedMentions_匹配移除 测试移除匹配的 @ 引用
+func TestStripAttachedMentions_匹配移除(t *testing.T) {
+	attachments := []map[string]any{
+		{"path": "/tmp/file.txt"},
+	}
+	// content 中 @/tmp/file.txt 应被替换为 /tmp/file.txt（去掉 @）
+	result := stripAttachedMentions("see @/tmp/file.txt for details", attachments, "/tmp")
+	if strings.Contains(result, "@/tmp/file.txt") {
+		t.Errorf("@ 引用应被移除，实际：%q", result)
+	}
+	if !strings.Contains(result, "/tmp/file.txt") {
+		t.Errorf("路径本身应保留，实际：%q", result)
+	}
+}
+
+// TestStripAttachedMentions_保留AgentMention 测试保留 @agent-xxx
+func TestStripAttachedMentions_保留AgentMention(t *testing.T) {
+	attachments := []map[string]any{
+		{"path": "/tmp/agent-coder"},
+	}
+	result := stripAttachedMentions("use @agent-coder please", attachments, "/tmp")
+	if !strings.Contains(result, "@agent-coder") {
+		t.Errorf("@agent-xxx 不应被移除，实际：%q", result)
 	}
 }

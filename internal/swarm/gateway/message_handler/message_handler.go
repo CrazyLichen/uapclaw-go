@@ -3,7 +3,6 @@ package message_handler
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,11 +47,35 @@ type MessageHandler struct {
 	// channelStates 渠道状态映射：channelKey → state
 	channelStates map[string]*ChannelControlState
 
-	// sessionLastUserQuery 最近用户查询文本：sessionID → query（对齐 Python _session_last_user_query）
-	sessionLastUserQuery map[string]string
-
 	// mu 互斥锁
 	mu sync.Mutex
+
+	// evolutionMu evolution 审批状态锁
+	evolutionMu sync.RWMutex
+	// pendingEvolutionApproval evolution 待审批映射：sessionID → approvalRequestID
+	// 对齐 Python _pending_evolution_approval
+	pendingEvolutionApproval map[string]string
+	// queuedSupplementInput 排队的补充输入：sessionID → {new_input, attachments}
+	// 对齐 Python _queued_supplement_input
+	queuedSupplementInput map[string]map[string]any
+	// sessionEvolutionInProgress 正在演进审批的 session 集合
+	// 对齐 Python _session_evolution_in_progress
+	sessionEvolutionInProgress map[string]bool
+
+	// streamEmitsProcessingStatus 流式 processing_status 追踪：requestID → should emit
+	// 对齐 Python _stream_emits_processing_status
+	streamEmitsProcessingStatus map[string]bool
+
+	// queryMu 用户查询上下文锁
+	queryMu sync.RWMutex
+	// sessionLastUserQuery 用户最近查询：sessionID → last query
+	// 对齐 Python _session_last_user_query
+	sessionLastUserQuery map[string]string
+
+	// getConfigRaw 读取 config 原始数据回调（对齐 Python _get_config_raw，由外部注入）
+	getConfigRaw func() map[string]any
+	// updateChannelInConfig 更新 config 中渠道配置回调（对齐 Python _update_channel_in_config，由外部注入）
+	updateChannelInConfig func(channelID string, update map[string]any)
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -70,30 +93,34 @@ const logComponent = logger.ComponentGateway
 // 对齐 Python: MessageHandler(agent_client) — 只需 1 个参数。
 func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 	return &MessageHandler{
-		agentClient:          agentClient,
-		userMessages:         make(chan *schema.Message, 256),
-		robotMessages:        make(chan *schema.Message, 256),
-		streamTasks:          make(map[string]context.CancelFunc),
-		streamSessions:       make(map[string]string),
-		streamMetadata:       make(map[string]map[string]any),
-		streamModes:          make(map[string]string),
-		channelStates:        make(map[string]*ChannelControlState),
-		sessionLastUserQuery: make(map[string]string),
+		agentClient:                agentClient,
+		userMessages:               make(chan *schema.Message, 256),
+		robotMessages:              make(chan *schema.Message, 256),
+		streamTasks:                make(map[string]context.CancelFunc),
+		streamSessions:             make(map[string]string),
+		streamMetadata:             make(map[string]map[string]any),
+		streamModes:                make(map[string]string),
+		channelStates:              make(map[string]*ChannelControlState),
+		pendingEvolutionApproval:   make(map[string]string),
+		queuedSupplementInput:      make(map[string]map[string]any),
+		sessionEvolutionInProgress: make(map[string]bool),
+		streamEmitsProcessingStatus: make(map[string]bool),
+		sessionLastUserQuery:       make(map[string]string),
 	}
 }
 
 // HandleMessage 处理入站消息（用户→Agent）。
 //
 // 将消息写入 userMessages channel，由 forwardLoop 异步消费。
-// 对齐 Python handle_message：先调用 _remember_user_query_context，再 put_nowait。
+// 对齐 Python handle_message：非阻塞写入，channel 满时丢弃并记录警告。
 //
 // 对齐 Python: MessageHandler.handle_message()
 func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 	if msg == nil {
 		return
 	}
-	// 记录用户查询上下文（对齐 Python _remember_user_query_context）
-	mh.rememberUserQueryContextFromMsg(msg)
+	// 对齐 Python handle_message：入队前记录用户查询上下文
+	mh.rememberUserQueryContext(msg)
 	select {
 	case mh.userMessages <- msg:
 		logger.Debug(logComponent).
@@ -112,21 +139,8 @@ func (mh *MessageHandler) HandleMessage(msg *schema.Message) {
 // ConsumeRobotMessages 从出站队列消费一条消息，超时返回 nil。
 //
 // 供 ChannelManager 的出站派发循环调用。
-// timeout <= 0 时非阻塞：有消息立即返回，无消息返回 nil（对齐 Python get_nowait()）。
-// timeout > 0 时带超时等待。
-//
 // 对齐 Python: MessageHandler.consume_robot_messages()
 func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Message {
-	if timeout <= 0 {
-		// 非阻塞模式：对齐 Python get_nowait()，确定性读取
-		select {
-		case msg := <-mh.robotMessages:
-			return msg
-		default:
-			return nil
-		}
-	}
-	// 带超时模式
 	select {
 	case msg := <-mh.robotMessages:
 		return msg
@@ -137,21 +151,8 @@ func (mh *MessageHandler) ConsumeRobotMessages(timeout time.Duration) *schema.Me
 
 // ConsumeUserMessages 从入站队列消费一条消息，超时返回 nil。
 //
-// timeout <= 0 时非阻塞：有消息立即返回，无消息返回 nil（对齐 Python get_nowait()）。
-// timeout > 0 时带超时等待。
-//
 // 对齐 Python: MessageHandler.consume_user_messages()
 func (mh *MessageHandler) ConsumeUserMessages(timeout time.Duration) *schema.Message {
-	if timeout <= 0 {
-		// 非阻塞模式：对齐 Python get_nowait()，确定性读取
-		select {
-		case msg := <-mh.userMessages:
-			return msg
-		default:
-			return nil
-		}
-	}
-	// 带超时模式
 	select {
 	case msg := <-mh.userMessages:
 		return msg
@@ -198,7 +199,7 @@ func (mh *MessageHandler) StartForwarding(ctx context.Context) error {
 	// 注册 push 回调（对齐 Python set_server_push_handler）
 	if mh.agentClient != nil {
 		mh.agentClient.SetServerPushHandler(func(msg map[string]any) {
-			mh.HandleServerPush(msg)
+			mh.handleAgentServerPush(msg)
 		})
 	}
 
@@ -234,6 +235,9 @@ func (mh *MessageHandler) StopForwarding() error {
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // cancelAllStreamTasks 取消所有流式任务
+//
+// 对齐 Python stop_forwarding (L2851-2883)：
+// 清理所有流式任务映射 + evolution/query/processing_status 状态。
 func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamMu.Lock()
 	defer mh.streamMu.Unlock()
@@ -251,73 +255,62 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamSessions = make(map[string]string)
 	mh.streamMetadata = make(map[string]map[string]any)
 	mh.streamModes = make(map[string]string)
+	mh.streamEmitsProcessingStatus = make(map[string]bool)
+
+	// 清理 evolution 状态
+	mh.evolutionMu.Lock()
+	mh.sessionEvolutionInProgress = make(map[string]bool)
+	mh.pendingEvolutionApproval = make(map[string]string)
+	mh.queuedSupplementInput = make(map[string]map[string]any)
+	mh.evolutionMu.Unlock()
+
+	// 清理用户查询上下文
+	mh.queryMu.Lock()
+	mh.sessionLastUserQuery = make(map[string]string)
+	mh.queryMu.Unlock()
 }
 
-// GetSessionLastUserQuery 获取指定会话的最近用户查询文本。
+// rememberUserQueryContext 记录用户查询上下文。
 //
-// 对齐 Python: MessageHandler._get_session_last_user_query(session_id)
-func (mh *MessageHandler) GetSessionLastUserQuery(sessionID string) string {
-	if sessionID == "" {
-		return ""
-	}
-	mh.mu.Lock()
-	defer mh.mu.Unlock()
-	return mh.sessionLastUserQuery[sessionID]
-}
-
-// rememberUserQueryContextFromMsg 从消息中提取并记录用户查询上下文。
-//
-// 对齐 Python: MessageHandler._remember_user_query_context(msg)
-// 仅对 chat.send 消息记录，跳过 is_supplement=True 的消息。
-func (mh *MessageHandler) rememberUserQueryContextFromMsg(msg *schema.Message) {
-	// 仅处理 chat.send
-	if msg.ReqMethod != schema.ReqMethodChatSend {
+// 对齐 Python _remember_user_query_context (L223-235)：
+// 记录 chat.send 的 query 上下文，供 supplement 构造 continuation query 使用。
+func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
+	if msg == nil || msg.SessionID == "" {
 		return
 	}
-	// 从 msg.Params 提取参数（Params 为 json.RawMessage）
-	params := make(map[string]any)
-	if len(msg.Params) == 0 || json.Unmarshal(msg.Params, &params) != nil {
+	if len(msg.Params) == 0 {
 		return
 	}
-	// 跳过 supplement 消息
-	if isSupplement, _ := params["is_supplement"].(bool); isSupplement {
+	var paramsMap map[string]any
+	if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
 		return
 	}
-	sessionID := strings.TrimSpace(msg.SessionID)
-	if sessionID == "" {
-		return
+	query := ""
+	if q, ok := paramsMap["query"]; ok {
+		if s, isStr := q.(string); isStr && s != "" {
+			query = s
+		}
 	}
-	// 提取 query 或 content
-	var query string
-	if q, ok := params["query"].(string); ok && q != "" {
-		query = q
-	} else if c, ok := params["content"].(string); ok && c != "" {
-		query = c
+	if query == "" {
+		if c, ok := paramsMap["content"]; ok {
+			if s, isStr := c.(string); isStr && s != "" {
+				query = s
+			}
+		}
 	}
-	query = strings.TrimSpace(query)
 	if query == "" {
 		return
 	}
-	// 截断到 8000 字符（对齐 Python query[:8000]）
-	if len(query) > 8000 {
-		query = query[:8000]
-	}
-	mh.mu.Lock()
-	defer mh.mu.Unlock()
-	mh.sessionLastUserQuery[sessionID] = query
+	mh.queryMu.Lock()
+	mh.sessionLastUserQuery[msg.SessionID] = query
+	mh.queryMu.Unlock()
 }
 
-// rememberUserQueryContext 记录用户查询上下文（直接传参版本）
+// getSessionLastUserQuery 获取指定 session 的最近一次用户查询。
 //
-// 对齐 Python _remember_user_query_context：记录 chat.send 的 query 上下文。
-func (mh *MessageHandler) rememberUserQueryContext(sessionID, query string) {
-	if sessionID == "" || query == "" {
-		return
-	}
-	if len(query) > 8000 {
-		query = query[:8000]
-	}
-	mh.mu.Lock()
-	defer mh.mu.Unlock()
-	mh.sessionLastUserQuery[sessionID] = query
+// 对齐 Python _get_session_last_user_query (L236-237)。
+func (mh *MessageHandler) getSessionLastUserQuery(sessionID string) string {
+	mh.queryMu.RLock()
+	defer mh.queryMu.RUnlock()
+	return mh.sessionLastUserQuery[sessionID]
 }

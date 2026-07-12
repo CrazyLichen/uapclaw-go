@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
@@ -32,12 +33,19 @@ func (mh *MessageHandler) PublishRobotMessages(msg *schema.Message) {
 
 // forwardLoop 入站转发主循环
 //
-// 从 userMessages channel 持续读取消息，依次处理：
-//  1. _handle_channel_control(msg) → 如果是 slash 命令则处理，跳过后续
-//  2. _apply_channel_state(msg) → 注入 session_id / mode
-//  3. 根据 req_method 分支转发到 AgentServer
+// 对齐 Python _forward_loop (L2163-L2558) 的 11 步骤：
 //
-// 对齐 Python _forward_loop (L2163-L2556)
+//	步骤1:  handleChannelControl(msg)
+//	步骤2:  ApplyChannelState(msg)
+//	步骤3:  Gateway hook: UserPromptSubmit（预留 TODO）
+//	步骤4:  CHAT_ANSWER 分支
+//	步骤5:  CHAT_CANCEL 分支
+//	步骤6:  Inbound Pipeline（预留 TODO）
+//	步骤7:  resolveInboundReferences(msg)
+//	步骤8:  prepareAgentDispatchMessage(ctx, msg)
+//	步骤9:  before_chat_request hook（预留 TODO）
+//	步骤10: stream / non-stream 分发
+//	步骤11: 异常 → buildErrorOutMessage → publishRobotMessages
 func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 	logger.Info(logComponent).Msg("入站转发循环已启动")
 	defer logger.Info(logComponent).Msg("入站转发循环已退出")
@@ -50,191 +58,506 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 			if msg == nil {
 				continue
 			}
-			mh.processInbound(ctx, msg)
+			mh.processForwardMessage(ctx, msg)
 		}
 	}
 }
 
-// processInbound 处理单条入站消息
-func (mh *MessageHandler) processInbound(ctx context.Context, msg *schema.Message) {
-	// 1. 尝试处理 slash 命令（仅受控渠道）
+// processForwardMessage 处理单条入站消息，对齐 Python _forward_loop 主体逻辑。
+func (mh *MessageHandler) processForwardMessage(ctx context.Context, msg *schema.Message) {
+	// 步骤1: 处理 slash 命令（仅受控渠道）
 	if mh.handleChannelControl(msg) {
-		return // 已作为控制指令处理
+		return
 	}
 
-	// 2. 注入渠道状态（session_id / mode）
+	// 步骤2: 注入渠道状态（session_id / mode）
 	mh.ApplyChannelState(msg)
 
-	// 3. 根据请求方法转发
-	switch msg.ReqMethod {
-	case schema.ReqMethodChatSend:
-		mh.handleChatSend(ctx, msg)
-	case schema.ReqMethodChatCancel:
-		mh.handleChatCancel(ctx, msg)
-	case schema.ReqMethodChatResume:
-		mh.handleChatResume(ctx, msg)
-	case schema.ReqMethodChatAnswer:
+	// TODO: 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
+	// Python: if self._gateway_hook_handler:
+	//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
+
+	// 步骤4: CHAT_ANSWER 分支
+	if msg.ReqMethod == schema.ReqMethodChatAnswer {
 		mh.handleChatUserAnswer(ctx, msg)
-	default:
-		// 其他方法直接转发
-		mh.forwardToAgent(ctx, msg)
-	}
-}
-
-// handleChatSend 处理 chat.send 请求
-//
-// 对齐 Python _forward_loop 中 CHAT_SEND 的 @file 解析 + @agent-xxx 提及逻辑
-func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Message) {
-	// 解析 @file 引用和 @agent-xxx 提及（对齐 Python L2449-L2495）
-	if len(msg.Params) > 0 {
-		params := make(map[string]any)
-		if json.Unmarshal(msg.Params, &params) == nil {
-			// 提取 content（对齐 Python: msg.params.get("query") or msg.params.get("content") or ""）
-			var content string
-			if q, ok := params["query"].(string); ok && q != "" {
-				content = q
-			} else if c, ok := params["content"].(string); ok && c != "" {
-				content = c
-			}
-
-			// 提取 cwd（对齐 Python: msg.metadata.get("cwd")）
-			var cwd string
-			if msg.Metadata != nil {
-				if c, ok := msg.Metadata["cwd"].(string); ok {
-					cwd = c
-				}
-			}
-
-			enriched := content
-
-			// 解析 structured attachments 或 @file 引用
-			if attachments, ok := params["attachments"]; ok && attachments != nil {
-				enriched = ResolveStructuredAttachments(content, attachments, cwd)
-			} else if content != "" && strings.Contains(content, "@") {
-				enriched = ResolveAtFileReferences(content, cwd, 0)
-			}
-
-			// 解析 @agent-xxx 提及
-			agentMentions := ExtractAgentMentions(content)
-			if len(agentMentions) > 0 {
-				hintParts := make([]string, 0, len(agentMentions))
-				for _, agentName := range agentMentions {
-					hintParts = append(hintParts,
-						"用户表达了调用智能体 \""+agentName+"\" 的意图。请按需调用该智能体，并向其传递所需的上下文。",
-					)
-				}
-				agentHint := strings.Join(hintParts, "\n")
-				enriched = enriched + "\n\n<system-reminder>\n" + agentHint + "\n</system-reminder>"
-				logger.Info(logComponent).
-					Str("event_type", "agent_mentions_detected").
-					Strs("agent_mentions", agentMentions).
-					Msg("检测到 Agent 提及")
-			}
-
-			// 如果内容被修改，回写 params
-			if enriched != content {
-				params["query"] = enriched
-				if _, hasContent := params["content"]; hasContent {
-					params["content"] = enriched
-				}
-				if updatedParams, err := json.Marshal(params); err == nil {
-					msg.Params = updatedParams
-				}
-				logger.Info(logComponent).
-					Str("event_type", "at_file_or_mention_resolved").
-					Str("msg_id", msg.ID).
-					Msg("chat.send 中 @file 引用或 @agent 提及已解析")
-			}
-		}
-	}
-
-	mh.forwardToAgent(ctx, msg)
-}
-
-// handleChatCancel 处理 chat.cancel/interrupt 请求
-//
-// 根据 intent 参数分为四路分支（对齐 Python L2241-L2437）：
-//  1. supplement（有 new_input）：取消旧流式任务 → 发 supplement 通知 → 发 supplement intent → 入队新 chat.send
-//  2. cancel：取消当前任务（CancelAgentWorkForSession）
-//  3. pause/resume：转发到 AgentServer → 发 interrupt_result 通知
-//  4. 默认：与 cancel 同
-func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Message) {
-	// 解析 params
-	params := make(map[string]any)
-	if len(msg.Params) > 0 {
-		_ = json.Unmarshal(msg.Params, &params)
-	}
-
-	newInput, _ := params["new_input"].(string)
-	hasNewInput := strings.TrimSpace(newInput) != ""
-	intent, _ := params["intent"].(string)
-	if intent == "" {
-		intent = "cancel"
-	}
-
-	if hasNewInput {
-		// supplement 路径
-		mh.handleSupplement(ctx, msg, newInput, params)
 		return
 	}
 
-	switch intent {
-	case "cancel":
-		mh.CancelAgentWorkForSession(ctx, msg.SessionID, "cancel")
-	case "pause", "resume":
-		mh.handlePauseResume(ctx, msg, intent)
-	default:
-		mh.CancelAgentWorkForSession(ctx, msg.SessionID, intent)
+	// 步骤5: CHAT_CANCEL 分支
+	if msg.ReqMethod == schema.ReqMethodChatCancel {
+		mh.handleChatCancel(ctx, msg)
+		return
 	}
-}
 
-// handleChatResume 处理 chat.resume 请求
-func (mh *MessageHandler) handleChatResume(ctx context.Context, msg *schema.Message) {
-	mh.forwardToAgent(ctx, msg)
-}
+	// TODO: 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
+	// Python: if self._inbound_pipeline is not None and msg.req_method == ReqMethod.CHAT_SEND:
+	//     should_forward = await self._inbound_pipeline.apply(msg)
+	//     if not should_forward: continue
 
-// handleChatUserAnswer 处理 chat.user_answer 请求
-func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.Message) {
-	mh.forwardToAgent(ctx, msg)
-}
+	// 步骤7: Resolve @file/@agent（仅 CHAT_SEND）
+	if msg.ReqMethod == schema.ReqMethodChatSend {
+		mh.resolveInboundReferences(msg)
+	}
 
-// forwardToAgent 转发消息到 AgentServer
-func (mh *MessageHandler) forwardToAgent(ctx context.Context, msg *schema.Message) {
-	if mh.agentClient == nil {
+	// 步骤8: 准备 Agent 派发消息
+	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+
+	// TODO: 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
+	// Python: await self._trigger_before_chat_request_hook(agent_msg)
+
+	// 步骤10: stream / non-stream 分发
+	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
 		logger.Warn(logComponent).
 			Str("event_type", "forward_no_agent_client").
-			Str("msg_id", msg.ID).
-			Msg("AgentClient 为空，无法转发")
-		return
-	}
-
-	if !mh.agentClient.IsConnected() {
-		logger.Warn(logComponent).
-			Str("event_type", "forward_agent_client_not_connected").
 			Str("msg_id", msg.ID).
 			Msg("AgentClient 未连接，无法转发")
 		return
 	}
 
-	// 消息转为 E2A 信封
-	envelope := e2a.MessageToE2AOrFallback(msg)
+	env := e2a.MessageToE2AOrFallback(agentMsg)
+	streamRid := env.RequestID
+	if streamRid == "" {
+		streamRid = msg.ID
+	}
 
-	// 根据是否流式选择处理方式
-	if msg.IsStream {
-		go mh.processStream(ctx, msg, envelope)
+	if env.IsStream {
+		// 流式分发
+		emitProcessingStatus := mh.shouldEmitProcessingStatusForStream(msg)
+		if emitProcessingStatus {
+			mh.sendProcessingStatus(streamRid, msg.SessionID, msg.ChannelID, true)
+		}
+		mh.registerStreamTask(streamRid, msg.SessionID, msg.Metadata, nil)
+		mh.streamEmitsProcessingStatus[streamRid] = emitProcessingStatus
+		mh.streamModes[streamRid] = mh.extractModeFromParams(msg)
+		go mh.processStream(ctx, msg, env, emitProcessingStatus)
+
+		logger.Info(logComponent).
+			Str("event_type", "stream_task_started").
+			Str("request_id", streamRid).
+			Str("channel_id", msg.ChannelID).
+			Int("concurrent_tasks", len(mh.streamTasks)).
+			Msg("Stream 任务已启动（后台运行）")
+	} else if mh.nonStreamRPCMayRunParallel(env) {
+		// 非流式并行
+		go mh.processNonStreamRequest(ctx, msg, env)
+		logger.Info(logComponent).
+			Str("event_type", "non_stream_parallel").
+			Str("request_id", streamRid).
+			Str("method", env.Method).
+			Msg("非流式 RPC 已后台执行")
 	} else {
-		go mh.processNonStreamRequest(ctx, msg, envelope)
+		// 非流式串行
+		if _, err := mh.processNonStreamRequest(ctx, msg, env); err != nil {
+			// 步骤11: 异常处理
+			errMsg := mh.buildErrorOutMessage(msg, err)
+			mh.PublishRobotMessages(errMsg)
+		}
 	}
 }
 
-// processStream 流式处理：发送请求并持续读取响应 chunk
+// handleChatUserAnswer 处理 chat.user_answer 请求。
 //
-// 对齐 Python process_stream
-func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) {
+// 对齐 Python _forward_loop 步骤4 (L2200-2239)：
+// 非流式处理 + evolution 审批判断。
+// **不调 forwardToAgent**，方法内完整处理。
+func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.Message) {
+	// 检查 AgentClient 可用性
+	if mh.agentClient == nil || !mh.agentClient.IsConnected() {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_answer_no_agent_client").
+			Str("msg_id", msg.ID).
+			Msg("AgentClient 未连接，无法处理 chat.answer")
+		return
+	}
+
+	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+	env := e2a.MessageToE2AOrFallback(agentMsg)
+	env.IsStream = false
+
+	resp, _ := mh.processNonStreamRequest(ctx, msg, env)
+
+	// 检查是否为 evolution 审批回答
+	answerRequestID := ""
+	if len(msg.Params) > 0 {
+		var paramsMap map[string]any
+		if err := json.Unmarshal(msg.Params, &paramsMap); err == nil {
+			if rid, ok := paramsMap["request_id"]; ok {
+				answerRequestID = fmt.Sprintf("%v", rid)
+			}
+		}
+	}
+
+	if IsEvolutionApprovalRequestID(answerRequestID) {
+		resolved := false
+		if resp != nil && resp.Payload != nil {
+			if r, ok := resp.Payload["resolved"]; ok {
+				if b, isBool := r.(bool); isBool && b {
+					resolved = true
+				}
+			}
+		}
+
+		if resolved {
+			queuedPayload := mh.finishEvolutionApprovalIfCurrent(msg.SessionID, answerRequestID)
+			queuedInput := ""
+			if queuedPayload != nil {
+				if s, ok := queuedPayload["new_input"].(string); ok {
+					queuedInput = strings.TrimSpace(s)
+				}
+			}
+			var queuedAttachments []map[string]any
+			if queuedPayload != nil {
+				if a, ok := queuedPayload["attachments"]; ok {
+					switch v := a.(type) {
+					case []map[string]any:
+						queuedAttachments = v
+					case []any:
+						for _, item := range v {
+							if m, isMap := item.(map[string]any); isMap {
+								queuedAttachments = append(queuedAttachments, m)
+							}
+						}
+					}
+				}
+			}
+
+			if queuedInput != "" {
+				originalRequest := mh.getSessionLastUserQuery(msg.SessionID)
+				queuedMsg := BuildQueuedChatSendMessage(msg, queuedInput, queuedAttachments, originalRequest)
+				mh.PublishUserMessagesNowait(queuedMsg)
+				logger.Info(logComponent).
+					Str("event_type", "evolution_approval_dispatched").
+					Str("id", queuedMsg.ID).
+					Str("session_id", msg.SessionID).
+					Msg("evolution approval answered (resolved), queued supplement dispatched")
+			}
+		} else {
+			logger.Info(logComponent).
+				Str("event_type", "evolution_approval_not_resolved").
+				Str("id", msg.ID).
+				Str("session_id", msg.SessionID).
+				Str("request_id", answerRequestID).
+				Msg("evolution approval answered but not resolved")
+		}
+	}
+}
+
+// handleChatCancel 处理 chat.cancel/interrupt 请求。
+//
+// 对齐 Python _forward_loop 步骤5 (L2241-2437)：
+// supplement / pause / resume / cancel 三个子分支。
+func (mh *MessageHandler) handleChatCancel(ctx context.Context, msg *schema.Message) {
+	logger.Info(logComponent).
+		Str("event_type", "interrupt_request").
+		Str("id", msg.ID).
+		Str("channel_id", msg.ChannelID).
+		Msg("收到中断请求")
+
+	// 解析参数
+	var paramsMap map[string]any
+	if len(msg.Params) > 0 {
+		_ = json.Unmarshal(msg.Params, &paramsMap)
+	}
+	if paramsMap == nil {
+		paramsMap = make(map[string]any)
+	}
+
+	newInput, _ := paramsMap["new_input"].(string)
+	hasNewInput := strings.TrimSpace(newInput) != ""
+	var supplementAttachments []map[string]any
+	if rawAtt, ok := paramsMap["attachments"]; ok {
+		switch v := rawAtt.(type) {
+		case []map[string]any:
+			supplementAttachments = v
+		case []any:
+			for _, item := range v {
+				if m, isMap := item.(map[string]any); isMap {
+					supplementAttachments = append(supplementAttachments, m)
+				}
+			}
+		}
+	}
+	intent, _ := paramsMap["intent"].(string)
+	if intent == "" {
+		intent = "cancel"
+	}
+
+	if hasNewInput {
+		// supplement 分支：有新输入
+		mh.handleSupplement(ctx, msg, newInput, supplementAttachments, paramsMap)
+		return
+	}
+
+	if intent == "cancel" {
+		// cancel 分支
+		mh.CancelAgentWorkForSession(ctx, msg, msg.SessionID, true)
+		return
+	}
+
+	if intent == "pause" || intent == "resume" {
+		// pause/resume 分支
+		mh.handlePauseResume(ctx, msg, intent)
+		return
+	}
+
+	// 其他 intent 按取消处理
+	mh.CancelAgentWorkForSession(ctx, msg, msg.SessionID, true)
+}
+
+// handleSupplement 处理 supplement 分支（有新输入的 CHAT_CANCEL）。
+//
+// 对齐 Python _forward_loop L2254-2403。
+func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Message, newInput string, attachments []map[string]any, paramsMap map[string]any) {
+	sessionID := msg.SessionID
+
+	// 检查 evolution 状态
+	if mh.isSessionEvolutionInProgress(sessionID) ||
+		(sessionID != "" && func() bool {
+			mh.evolutionMu.RLock()
+			defer mh.evolutionMu.RUnlock()
+			_, exists := mh.pendingEvolutionApproval[sessionID]
+			return exists
+		}()) {
+		mh.queueSupplementInput(sessionID, strings.TrimSpace(newInput), attachments)
+		logger.Info(logComponent).
+			Str("event_type", "supplement_queued_evolution").
+			Str("session_id", sessionID).
+			Msg("evolution phase pending, queue supplement input")
+		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "已加入队列，等待演进完成", true, nil)
+		return
+	}
+
+	// 1. 取消 gateway 侧当前 session 相关的流式任务
+	requestIDs := mh.collectStreamTasksForSession(sessionID)
+	for _, reqID := range requestIDs {
+		mh.cancelStreamTask(reqID)
+		logger.Info(logComponent).
+			Str("event_type", "supplement_cancel_stream").
+			Str("request_id", reqID).
+			Str("session_id", sessionID).
+			Msg("supplement: 取消流式任务")
+	}
+
+	// 2. 通知前端 supplement
+	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "", true, nil)
+
+	// 3. 发送 supplement intent 到 AgentServer（取消任务但保留 todo）
+	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+	runtimeParams := mh.extractRuntimeParams(msg, paramsMap)
+
+	supplementParams := map[string]any{
+		"intent":     "supplement",
+		"session_id": agentMsg.SessionID,
+	}
+	for k, v := range runtimeParams {
+		supplementParams[k] = v
+	}
+
+	supplementEnv := e2a.E2AFromAgentFields(
+		fmt.Sprintf("supplement_%x", time.Now().UnixMilli()),
+		e2a.WithFieldChannelID(msg.ChannelID),
+		e2a.WithFieldSessionID(agentMsg.SessionID),
+		e2a.WithFieldReqMethod(string(schema.ReqMethodChatCancel)),
+		e2a.WithFieldParams(supplementParams),
+		e2a.WithFieldIsStream(false),
+		e2a.WithFieldTimestamp(float64(time.Now().UnixMilli())/1000.0),
+		e2a.WithFieldMetadata(msg.Metadata),
+	)
+
+	if mh.agentClient != nil && mh.agentClient.IsConnected() {
+		resp, err := mh.agentClient.SendRequest(ctx, supplementEnv)
+		if err == nil && resp != nil {
+			payload := resp.Payload
+			if payload == nil {
+				payload = make(map[string]any)
+			}
+			mh.sendCancelledToolResults(msg.ChannelID, sessionID, payload, msg.Metadata)
+		}
+	}
+
+	// 4. 入队新任务
+	originalRequest := mh.getSessionLastUserQuery(sessionID)
+	queuedMsg := BuildQueuedChatSendMessage(msg, strings.TrimSpace(newInput), attachments, originalRequest)
+	// 注入 runtime_params 到新消息的 params
+	if len(runtimeParams) > 0 {
+		var newParams map[string]any
+		if err := json.Unmarshal(queuedMsg.Params, &newParams); err == nil {
+			for k, v := range runtimeParams {
+				if _, exists := newParams[k]; !exists {
+					newParams[k] = v
+				}
+			}
+			if updated, err := json.Marshal(newParams); err == nil {
+				queuedMsg.Params = json.RawMessage(updated)
+			}
+		}
+	}
+	// 注入 model_name
+	if modelName, ok := paramsMap["model_name"]; ok && modelName != nil {
+		var newParams map[string]any
+		if err := json.Unmarshal(queuedMsg.Params, &newParams); err == nil {
+			newParams["model_name"] = modelName
+			if updated, err := json.Marshal(newParams); err == nil {
+				queuedMsg.Params = json.RawMessage(updated)
+			}
+		}
+	}
+
+	mh.PublishUserMessagesNowait(queuedMsg)
+	logger.Info(logComponent).
+		Str("event_type", "supplement_new_task_enqueued").
+		Str("id", queuedMsg.ID).
+		Str("session_id", sessionID).
+		Msg("supplement: 旧任务已取消，新任务已入队")
+}
+
+// handlePauseResume 处理 pause/resume 分支。
+//
+// 对齐 Python _forward_loop L2408-2435。
+func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Message, intent string) {
+	agentMsg := mh.PrepareAgentDispatchMessage(ctx, msg)
+
+	// 确保 mode 信息存在，否则从 channelStates 注入
+	if len(agentMsg.Params) > 0 {
+		var paramsMap map[string]any
+		if err := json.Unmarshal(agentMsg.Params, &paramsMap); err == nil {
+			if _, hasMode := paramsMap["mode"]; !hasMode {
+				state := mh.GetOrCreateChannelState(msg)
+				paramsMap["mode"] = ChannelModeString(state.Mode)
+				if updated, err := json.Marshal(paramsMap); err == nil {
+					agentMsg.Params = json.RawMessage(updated)
+				}
+			}
+		}
+	}
+
+	env := e2a.MessageToE2AOrFallback(agentMsg)
+	// fire-and-forget
+	go mh.sendInterruptToAgent(ctx, env.RequestID, msg.SessionID, intent)
+
+	// 检查当前 session 是否有活跃流式任务
+	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)
+	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, &hasActiveTask)
+}
+
+// resolveInboundReferences 解析入站消息中的 @file/@agent 引用。
+//
+// 对齐 Python _forward_loop 步骤7 (L2450-2495)：
+// 仅对 CHAT_SEND 生效。
+func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
+	if msg.ReqMethod != schema.ReqMethodChatSend || len(msg.Params) == 0 {
+		return
+	}
+
+	var paramsMap map[string]any
+	if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
+		return
+	}
+
+	content := ""
+	if q, ok := paramsMap["query"]; ok {
+		if s, isStr := q.(string); isStr {
+			content = s
+		}
+	}
+	if content == "" {
+		if c, ok := paramsMap["content"]; ok {
+			if s, isStr := c.(string); isStr {
+				content = s
+			}
+		}
+	}
+	if content == "" {
+		return
+	}
+
+	// 获取 cwd
+	cwd := ""
+	if msg.Metadata != nil {
+		if c, ok := msg.Metadata["cwd"]; ok {
+			if s, isStr := c.(string); isStr {
+				cwd = s
+			}
+		}
+	}
+
+	enriched := content
+
+	// 解析 @file 引用
+	attachments, hasAttachments := paramsMap["attachments"]
+	if hasAttachments && attachments != nil {
+		// 转换 attachments 为 []map[string]any
+		var attList []map[string]any
+		switch v := attachments.(type) {
+		case []map[string]any:
+			attList = v
+		case []any:
+			for _, item := range v {
+				if m, isMap := item.(map[string]any); isMap {
+					attList = append(attList, m)
+				}
+			}
+		}
+		if len(attList) > 0 {
+			enriched = ResolveStructuredAttachments(content, attList, cwd)
+		}
+	} else if strings.Contains(content, "@") {
+		enriched = ResolveAtFileReferences(content, cwd, 0)
+	}
+
+	// 解析 @agent-xxx 提及
+	agentMentions := ExtractAgentMentions(content)
+	if len(agentMentions) > 0 {
+		var hintParts []string
+		for _, agentName := range agentMentions {
+			hintParts = append(hintParts,
+				fmt.Sprintf("用户表达了调用智能体 \"%s\" 的意图。请按需调用该智能体，并向其传递所需的上下文。", agentName),
+			)
+		}
+		agentHint := strings.Join(hintParts, "\n")
+		enriched = enriched + "\n\n<system-reminder>\n" + agentHint + "\n</system-reminder>"
+		logger.Info(logComponent).
+			Str("event_type", "agent_mentions_detected").
+			Strs("mentions", agentMentions).
+			Msg("Agent mentions detected")
+	}
+
+	// 如果内容被修改，回写 params
+	if enriched != content {
+		paramsMap["query"] = enriched
+		if _, hasContent := paramsMap["content"]; hasContent {
+			paramsMap["content"] = enriched
+		}
+		if updated, err := json.Marshal(paramsMap); err == nil {
+			msg.Params = json.RawMessage(updated)
+		}
+		logger.Info(logComponent).
+			Str("event_type", "inbound_references_resolved").
+			Str("id", msg.ID).
+			Msg("attachments/agent-mentions resolved in chat.send")
+	}
+}
+
+// processStream 流式处理：发送请求并持续读取响应 chunk。
+//
+// 对齐 Python process_stream (L2559-2648)：
+// 新增 emitProcessingStatus 参数、hasProcessingStatusFalse 追踪、
+// evolution chunk 处理、cancelled final、processing_status=false 通知。
+func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope, emitProcessingStatus bool) {
 	requestID := envelope.RequestID
+	channelID := msg.ChannelID
+	sessionID := msg.SessionID
+	requestMetadata := msg.Metadata
+
 	streamCtx, streamCancel := context.WithCancel(ctx)
-	mh.registerStreamTask(requestID, msg.SessionID, msg.Metadata, streamCancel)
-	defer mh.unregisterStreamTask(requestID)
+	// 更新 streamTasks 的 cancel func
+	mh.streamMu.Lock()
+	mh.streamTasks[requestID] = streamCancel
+	mh.streamMu.Unlock()
+
+	// 追踪状态（供 defer 使用）
+	streamState := &streamFinalState{}
+	defer mh.streamFinalCleanup(requestID, sessionID, emitProcessingStatus, streamState)
 
 	// 通过 AgentClient 发送流式请求
 	chunkCh, err := mh.agentClient.SendRequestStream(streamCtx, envelope)
@@ -251,9 +574,16 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 	for {
 		select {
 		case <-streamCtx.Done():
+			streamState.cancelled = true
+			mh.publishStreamCancelledFinal(requestID, channelID, sessionID, requestMetadata)
 			return
 		case chunk, ok := <-chunkCh:
 			if !ok {
+				// 流正常结束
+				logger.Info(logComponent).
+					Str("event_type", "stream_completed").
+					Str("request_id", requestID).
+					Msg("Stream 正常完成")
 				return
 			}
 			if chunk == nil {
@@ -262,7 +592,25 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 
 			// 跳过终止哨兵
 			if IsTerminalStreamChunk(chunk) {
-				return
+				logger.Debug(logComponent).
+					Str("event_type", "stream_terminal_chunk").
+					Str("request_id", chunk.RequestID).
+					Msg("跳过终止 chunk")
+				continue
+			}
+
+			// evolution chunk 处理
+			mh.handleEvolutionChunk(chunk, sessionID, requestMetadata)
+
+			// 追踪 processing_status=false
+			if chunk.Payload != nil {
+				if eventType, ok := chunk.Payload["event_type"].(string); ok {
+					if eventType == string(schema.EventTypeChatProcessingStatus) {
+						if isProcessing, ok := chunk.Payload["is_processing"].(bool); ok && !isProcessing {
+							streamState.hasProcessingStatusFalse = true
+						}
+					}
+				}
 			}
 
 			// Agent 响应块转为消息再推送到机器人消息列表
@@ -273,10 +621,49 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 	}
 }
 
-// processNonStreamRequest 非流式处理：发送请求并等待完整响应
+// streamFinalState 流式任务结束状态追踪（供 defer 使用）
+type streamFinalState struct {
+	cancelled                  bool
+	hasProcessingStatusFalse   bool
+}
+
+// streamFinalCleanup 流式任务结束后执行 finally 清理逻辑。
 //
-// 对齐 Python _process_non_stream_request
-func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) {
+// 对齐 Python process_stream finally 块 (L2618-2648)。
+func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
+	// 清理状态
+	mh.streamMu.Lock()
+	delete(mh.streamTasks, requestID)
+	delete(mh.streamSessions, requestID)
+	delete(mh.streamMetadata, requestID)
+	delete(mh.streamEmitsProcessingStatus, requestID)
+	delete(mh.streamModes, requestID)
+	mh.streamMu.Unlock()
+
+	// evolution 清理：如果 session 不再有任何流式任务，清除 in_progress
+	if sessionID != "" && !mh.hasActiveStreamTaskForSession(sessionID) {
+		mh.clearSessionEvolutionInProgress(sessionID)
+	}
+
+	// 通知前端处理完成（只有当 AgentServer 没有发送过 processing_status=false 时才发送）
+	if emitProcessingStatus && !state.cancelled && !state.hasProcessingStatusFalse {
+		// 检查该 session_id 是否还有活跃的 emitsProcessingStatus 任务
+		sessionHasActiveTasks := mh.hasActiveEmitProcessingStatusTaskForSession(sessionID)
+		if !sessionHasActiveTasks {
+			mh.sendProcessingStatus(requestID, sessionID, "", false)
+			logger.Info(logComponent).
+				Str("event_type", "processing_status_false").
+				Str("session_id", sessionID).
+				Msg("该 session 流式任务已完成，已发送 is_processing=false")
+		}
+	}
+}
+
+// processNonStreamRequest 非流式处理：发送请求并等待完整响应。
+//
+// 对齐 Python _process_non_stream_request (L2134-2159)：
+// 返回值改为 (*schema.AgentResponse, error)，供 handleChatUserAnswer 使用。
+func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *schema.Message, envelope *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
 	requestID := envelope.RequestID
 
 	// 通过 AgentClient 发送非流式请求
@@ -287,12 +674,22 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 			Err(err).
 			Str("request_id", requestID).
 			Msg("非流式请求失败")
-		return
+		errMsg := mh.buildErrorOutMessage(msg, err)
+		mh.PublishRobotMessages(errMsg)
+		return nil, err
 	}
 
 	// Agent 响应转为消息再推送到机器人消息列表
 	outMsg := ResponseToMessage(resp, msg.SessionID, msg.Metadata)
 	mh.PublishRobotMessages(outMsg)
+
+	logger.Info(logComponent).
+		Str("event_type", "non_stream_response").
+		Str("request_id", resp.RequestID).
+		Str("channel_id", resp.ChannelID).
+		Msg("Agent 响应已写入 robot_messages")
+
+	return resp, nil
 }
 
 // registerStreamTask 注册流式任务
@@ -330,193 +727,58 @@ func (mh *MessageHandler) getStreamSessionID(requestID string) string {
 	return mh.streamSessions[requestID]
 }
 
-// handleSupplement 处理 supplement 路径（有 new_input）。
-//
-// 对齐 Python L2281-L2399：
-// 1. 取消该 session 关联的流式任务
-// 2. 发送 supplement interrupt_result 通知
-// 3. 发送 supplement intent 到 AgentServer（取消任务但保留 todo）
-// 4. 入队新的 chat.send 消息
-func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Message, newInput string, params map[string]any) {
-	sessionID := msg.SessionID
-
-	// 1. 取消该 session 关联的流式任务
-	requestIDs := mh.collectStreamTasksForSession(sessionID)
-	for _, reqID := range requestIDs {
-		mh.cancelStreamTask(reqID)
-	}
-
-	// 2. 通知前端 supplement（对齐 Python _send_interrupt_result_notification）
-	mh.sendInterruptResultNotification(sessionID, "supplement")
-
-	// 3. 发送 supplement intent 到 AgentServer
-	if mh.agentClient != nil && mh.agentClient.IsConnected() {
-		// 提取 runtime_params（cwd, trusted_dirs, mode）
-		runtimeParams := make(map[string]any)
-		for _, key := range []string{"cwd", "trusted_dirs", "mode"} {
-			if v, ok := params[key]; ok && v != nil {
-				runtimeParams[key] = v
-			}
+// hasActiveStreamTaskForSession 检查指定 session 是否有活跃流式任务
+func (mh *MessageHandler) hasActiveStreamTaskForSession(sessionID string) bool {
+	mh.streamMu.RLock()
+	defer mh.streamMu.RUnlock()
+	for _, sid := range mh.streamSessions {
+		if sid == sessionID {
+			return true
 		}
-		// 从 metadata 补充 cwd
-		if _, hasCwd := runtimeParams["cwd"]; !hasCwd && msg.Metadata != nil {
-			if cwd, ok := msg.Metadata["cwd"].(string); ok && cwd != "" {
-				runtimeParams["cwd"] = cwd
-			}
-		}
-		// 注入 mode 信息
-		if _, hasMode := runtimeParams["mode"]; !hasMode {
-			mode := mh.getChannelStateMode(msg.ChannelID, sessionID)
-			if mode != "" {
-				runtimeParams["mode"] = mode
-			}
-		}
-
-		supplementParams := map[string]any{
-			"intent":     "supplement",
-			"session_id": sessionID,
-		}
-		for k, v := range runtimeParams {
-			supplementParams[k] = v
-		}
-
-		supplementParamsJSON, _ := json.Marshal(supplementParams)
-		supplementMsg := schema.NewReqMessage(msg.ChannelID, sessionID, schema.ReqMethodChatCancel,
-			supplementParamsJSON,
-			schema.WithSessionID(sessionID),
-		)
-		envelope := e2a.MessageToE2AOrFallback(supplementMsg)
-		envelope.IsStream = false
-
-		// 非流式发送 supplement intent，等响应后丢弃
-		go func() {
-			resp, err := mh.agentClient.SendRequest(ctx, envelope)
-			if err != nil {
-				logger.Warn(logComponent).
-					Str("event_type", "supplement_send_error").
-					Err(err).
-					Str("session_id", sessionID).
-					Msg("supplement intent 发送失败(忽略)")
-				return
-			}
-			logger.Info(logComponent).
-				Str("event_type", "supplement_response_discarded").
-				Str("request_id", resp.RequestID).
-				Bool("ok", resp.OK).
-				Msg("supplement intent 响应(已丢弃)")
-		}()
 	}
-
-	// 4. 入队新的 chat.send 消息
-	originalRequest := mh.GetSessionLastUserQuery(sessionID)
-
-	// 构建 supplement continuation query
-	continuationQuery := buildSupplementContinuationQuery(newInput, originalRequest)
-
-	supInput := strings.TrimSpace(newInput)
-	newParams := map[string]any{
-		"query":            continuationQuery,
-		"supplement_input": supInput,
-		"original_request": originalRequest,
-		"session_id":       sessionID,
-		"is_supplement":    true,
-	}
-	// 注入 model_name（如有）
-	if modelName, ok := params["model_name"].(string); ok && modelName != "" {
-		newParams["model_name"] = modelName
-	}
-	// 注入 attachments（如有）
-	if attachments, ok := params["attachments"]; ok && attachments != nil {
-		newParams["attachments"] = attachments
-	}
-	newParamsJSON, _ := json.Marshal(newParams)
-
-	newMsg := schema.NewReqMessage(msg.ChannelID, sessionID, schema.ReqMethodChatSend,
-		newParamsJSON,
-		schema.WithSessionID(sessionID),
-	)
-	newMsg.IsStream = true
-	if msg.Metadata != nil {
-		newMsg.Metadata = msg.Metadata
-	}
-
-	// 入队
-	mh.PublishUserMessagesNowait(newMsg)
-	logger.Info(logComponent).
-		Str("event_type", "supplement_new_task_queued").
-		Str("new_msg_id", newMsg.ID).
-		Str("session_id", sessionID).
-		Msg("supplement: 旧任务已取消，新任务已入队")
+	return false
 }
 
-// handlePauseResume 处理 pause/resume 路径。
-//
-// 对齐 Python L2408-L2435：
-// 1. 转发到 AgentServer（不取消流式任务）
-// 2. 发送 interrupt_result 通知
-func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Message, intent string) {
-	// 转发到 AgentServer
-	mh.forwardToAgent(ctx, msg)
-
-	// 检查当前 session 是否有活跃的流式任务
-	hasActiveTask := false
-	requestIDs := mh.collectStreamTasksForSession(msg.SessionID)
-	if len(requestIDs) > 0 {
-		hasActiveTask = true
-	}
-
-	// 发送 interrupt_result 通知（对齐 Python _send_interrupt_result_notification）
-	mh.sendInterruptResultNotification(msg.SessionID, intent)
-
-	if hasActiveTask {
-		logger.Debug(logComponent).
-			Str("event_type", "pause_resume_with_active_task").
-			Str("intent", intent).
-			Str("session_id", msg.SessionID).
-			Msg("pause/resume: session 有活跃的流式任务")
-	}
-}
-
-// buildSupplementContinuationQuery 构建补充请求的 continuation query。
-//
-// 一比一对照 Python _build_supplement_continuation_query。
-func buildSupplementContinuationQuery(newInput, originalRequest string) string {
-	trimmed := strings.TrimSpace(newInput)
-	original := strings.TrimSpace(originalRequest)
-
-	var originalSection string
-	if original != "" {
-		if len(original) > 8000 {
-			original = original[:8000]
+// hasActiveEmitProcessingStatusTaskForSession 检查指定 session 是否有活跃的 emitsProcessingStatus 任务
+func (mh *MessageHandler) hasActiveEmitProcessingStatusTaskForSession(sessionID string) bool {
+	mh.streamMu.RLock()
+	defer mh.streamMu.RUnlock()
+	for rid, sid := range mh.streamSessions {
+		if sid == sessionID {
+			if emits, ok := mh.streamEmitsProcessingStatus[rid]; ok && emits {
+				return true
+			}
 		}
-		originalSection = fmt.Sprintf("\n\n原始任务请求如下，请以它作为继续执行 todo 时的上下文，尤其要保留其中的文件路径、目录、约束和目标：\n%s", original)
 	}
-
-	return "用户在当前任务执行中追加了补充/调整请求：\n" +
-		fmt.Sprintf("%s\n\n", trimmed) +
-		"请先处理这个补充/调整请求，然后检查并继续执行当前会话 todo 列表中仍未完成的 " +
-		"in_progress 或 pending 任务。不要因为补充请求本身处理完成就询问用户下一步；" +
-		"只有在确认 todo 列表没有未完成任务时，才可以总结或询问后续方向。\n\n" +
-		"注意：追加补充请求会中断上一轮流式输出，用户界面上上一轮正在输出的任务结果可能只展示了一部分。" +
-		"如果补充请求发生时某个 todo 正在输出结果，或者 todo 状态已经前进但该任务结果可能没有完整展示，" +
-		"继续执行时请先补全或简要重述这个被中断任务的完整结果，再推进后续 todo；" +
-		"不要仅因为 todo 状态已经变为 completed 就跳过用户尚未完整看到的任务结果。" +
-		originalSection
+	return false
 }
 
-// getChannelStateMode 从渠道状态中获取当前 mode。
-func (mh *MessageHandler) getChannelStateMode(channelID, sessionID string) string {
-	mh.statesMu.RLock()
-	defer mh.statesMu.RUnlock()
+// extractRuntimeParams 从消息中提取运行时参数（cwd, trusted_dirs, mode）。
+//
+// 供 supplement 分支构造 supplementParams 使用。
+func (mh *MessageHandler) extractRuntimeParams(msg *schema.Message, paramsMap map[string]any) map[string]any {
+	runtimeParams := make(map[string]any)
 
-	// 先尝试 channelKey（channelID + sessionID 组合键）
-	key := channelID + ":" + sessionID
-	if state, ok := mh.channelStates[key]; ok && state != nil {
-		return ChannelModeString(state.Mode)
+	for _, key := range []string{"cwd", "trusted_dirs", "mode"} {
+		if value, ok := paramsMap[key]; ok && value != nil {
+			runtimeParams[key] = value
+		}
 	}
-	// 回退到 channelID 键
-	if state, ok := mh.channelStates[channelID]; ok && state != nil {
-		return ChannelModeString(state.Mode)
+
+	// 从 metadata 中补充 cwd
+	if _, hasCwd := runtimeParams["cwd"]; !hasCwd {
+		if msg.Metadata != nil {
+			if cwd, ok := msg.Metadata["cwd"].(string); ok && strings.TrimSpace(cwd) != "" {
+				runtimeParams["cwd"] = strings.TrimSpace(cwd)
+			}
+		}
 	}
-	return ""
+
+	// 从 channelStates 补充 mode
+	if _, hasMode := runtimeParams["mode"]; !hasMode {
+		state := mh.GetOrCreateChannelState(msg)
+		runtimeParams["mode"] = ChannelModeString(state.Mode)
+	}
+
+	return runtimeParams
 }
