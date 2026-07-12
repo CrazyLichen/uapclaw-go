@@ -34,11 +34,14 @@ type UapClaw struct {
 	// sessionManager 会话任务队列管理器。
 	sessionManager *SessionManager
 
-	// skilldevService SkillDev 服务（懒初始化）。
+	// skilldevService SkillDev 服务（懒初始化，ensureSkillDevService 时创建）。
 	skilldevService *skilldev.SkillDevService
 
 	// adapterMu 保护 adapter 字段的并发访问。
 	adapterMu sync.Mutex
+
+	// skilldevMu 保护 skilldevService 字段的并发访问。
+	skilldevMu sync.Mutex
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -447,6 +450,24 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	return a, nil
 }
 
+// ensureSkillDevService 确保 SkillDevService 已初始化，幂等。
+//
+// 对齐 Python：JiuWenClaw 中 _skilldev_service 在首次使用时懒初始化。
+func (uc *UapClaw) ensureSkillDevService() (*skilldev.SkillDevService, error) {
+	uc.skilldevMu.Lock()
+	defer uc.skilldevMu.Unlock()
+	if uc.skilldevService != nil {
+		return uc.skilldevService, nil
+	}
+	// 构造默认 SkillDevDeps（零值依赖，各字段在 SkillDevDeps 内部懒加载）
+	deps := &skilldev.SkillDevDeps{}
+	svc := skilldev.NewSkillDevService(deps)
+	uc.skilldevService = svc
+	logger.Info(logComponent).
+		Msg("UapClaw SkillDevService 已懒初始化")
+	return svc, nil
+}
+
 // adapterModeForRequest 从请求参数中提取 adapter mode。
 // 对齐 Python _adapter_mode_for_request：strip+lower + team.plan→code + code.*→code。
 func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
@@ -559,10 +580,11 @@ func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.Ag
 	if !skill.IsSkillDevMethod(request.ReqMethod) {
 		return nil, nil
 	}
-	if uc.skilldevService == nil {
-		return nil, nil
+	svc, err := uc.ensureSkillDevService()
+	if err != nil {
+		return nil, err
 	}
-	events, err := uc.skilldevService.Handle(ctx, request)
+	events, err := svc.Handle(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -605,13 +627,17 @@ func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.Age
 
 // handleSkillDevStreamRequest 处理 skilldev.* 流式请求。
 func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
-	if uc.skilldevService == nil {
+	svc, err := uc.ensureSkillDevService()
+	if err != nil {
 		ch := make(chan *schema.AgentResponseChunk, 1)
+		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
+			map[string]any{"event_type": "skilldev.error", "error": err.Error()},
+		)
 		ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 		close(ch)
 		return ch, nil
 	}
-	events, err := uc.skilldevService.Handle(ctx, request)
+	events, err := svc.Handle(ctx, request)
 	if err != nil {
 		ch := make(chan *schema.AgentResponseChunk, 1)
 		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
