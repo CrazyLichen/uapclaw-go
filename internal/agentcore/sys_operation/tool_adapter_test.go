@@ -439,40 +439,6 @@ func TestGetToolIDPrefix_其他类型(t *testing.T) {
 	assert.Equal(t, "", adapter.GetToolIDPrefix(nil))
 }
 
-// ──────────────────────────── dispatchShellMethod 新方法 ────────────────────────────
-
-// TestDispatchShellMethod_WriteStdin 测试 write_stdin 分发
-func TestDispatchShellMethod_WriteStdin(t *testing.T) {
-	shellOp := &mockShellOperation{}
-	ctx := context.Background()
-	res, err := dispatchShellMethod(shellOp, ctx, "write_stdin", map[string]any{
-		"session_id": "sess1",
-		"data":       "hello",
-	})
-	assert.NoError(t, err)
-	assert.NotNil(t, res)
-}
-
-// TestDispatchShellMethod_KillProcess 测试 kill_process 分发
-func TestDispatchShellMethod_KillProcess(t *testing.T) {
-	shellOp := &mockShellOperation{}
-	ctx := context.Background()
-	res, err := dispatchShellMethod(shellOp, ctx, "kill_process", map[string]any{
-		"session_id": "sess1",
-	})
-	assert.NoError(t, err)
-	assert.NotNil(t, res)
-}
-
-// TestDispatchShellMethod_ListProcesses 测试 list_processes 分发
-func TestDispatchShellMethod_ListProcesses(t *testing.T) {
-	shellOp := &mockShellOperation{}
-	ctx := context.Background()
-	res, err := dispatchShellMethod(shellOp, ctx, "list_processes", map[string]any{})
-	assert.NoError(t, err)
-	assert.NotNil(t, res)
-}
-
 // TestDispatchOperationMethod_空Op 测试操作方法空子操作
 func TestDispatchOperationMethod_空Op(t *testing.T) {
 	instance := &mockSysOperation{

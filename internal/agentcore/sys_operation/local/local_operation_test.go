@@ -80,20 +80,20 @@ func TestOperationUtils_DeleteTmpFile(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 }
 
-// ──────────────────────────── ShellOperation ────────────────────────────
+// ──────────────────────────── LocalShellOperation ────────────────────────────
 
-// TestNewShellOperation 测试创建 Shell 操作实例
-func TestNewShellOperation(t *testing.T) {
-	op := NewShellOperation(nil)
+// TestNewLocalShellOperation 测试创建 Shell 操作实例
+func TestNewLocalShellOperation(t *testing.T) {
+	op := NewLocalShellOperation(nil)
 	assert.NotNil(t, op)
-	shellOp, ok := op.(*ShellOperation)
+	shellOp, ok := op.(*LocalShellOperation)
 	assert.True(t, ok)
 	assert.NotNil(t, shellOp)
 }
 
-// TestShellOperation_ListTools 测试 Shell 操作 ListTools 返回 3 个 ToolCard
-func TestShellOperation_ListTools(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_ListTools 测试 Shell 操作 ListTools 返回 3 个 ToolCard
+func TestLocalShellOperation_ListTools(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	cards := shellOp.ListTools()
 	assert.Len(t, cards, 3)
 
@@ -124,9 +124,9 @@ func TestShellOperation_ListTools(t *testing.T) {
 	assert.True(t, hasGrace, "execute_cmd_background 应有 grace 参数")
 }
 
-// TestShellOperation_ExecuteCmd_简单命令 测试 ExecuteCmd 执行简单命令
-func TestShellOperation_ExecuteCmd_简单命令(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_ExecuteCmd_简单命令 测试 ExecuteCmd 执行简单命令
+func TestLocalShellOperation_ExecuteCmd_简单命令(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	ctx := context.Background()
 
 	res, err := shellOp.ExecuteCmd(ctx, "echo hello", sys_operation.WithShellTimeout(10))
@@ -135,9 +135,9 @@ func TestShellOperation_ExecuteCmd_简单命令(t *testing.T) {
 	assert.NotNil(t, res.Data)
 }
 
-// TestShellOperation_ExecuteCmd_危险命令 测试 ExecuteCmd 拒绝危险命令
-func TestShellOperation_ExecuteCmd_危险命令(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_ExecuteCmd_危险命令 测试 ExecuteCmd 拒绝危险命令
+func TestLocalShellOperation_ExecuteCmd_危险命令(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	ctx := context.Background()
 
 	res, err := shellOp.ExecuteCmd(ctx, "rm -rf /", sys_operation.WithShellTimeout(10))
@@ -148,9 +148,9 @@ func TestShellOperation_ExecuteCmd_危险命令(t *testing.T) {
 	}
 }
 
-// TestShellOperation_checkCommandSafety 测试命令安全检查
-func TestShellOperation_checkCommandSafety(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_checkCommandSafety 测试命令安全检查
+func TestLocalShellOperation_checkCommandSafety(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 
 	assert.Equal(t, "", shellOp.checkCommandSafety("ls -la"))
 	assert.Equal(t, "", shellOp.checkCommandSafety("echo hello"))
@@ -161,9 +161,9 @@ func TestShellOperation_checkCommandSafety(t *testing.T) {
 	assert.NotEqual(t, "", shellOp.checkCommandSafety("mkfs /dev/sda1"))
 }
 
-// TestShellOperation_detectAndMitigateTUI 测试 TUI 检测
-func TestShellOperation_detectAndMitigateTUI(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_detectAndMitigateTUI 测试 TUI 检测
+func TestLocalShellOperation_detectAndMitigateTUI(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	env := map[string]string{"HOME": "/tmp"}
 
 	mitigated, _ := shellOp.detectAndMitigateTUI("vim", env)
@@ -173,9 +173,9 @@ func TestShellOperation_detectAndMitigateTUI(t *testing.T) {
 	assert.False(t, mitigated)
 }
 
-// TestShellOperation_ExecuteCmdBackground 测试后台执行命令
-func TestShellOperation_ExecuteCmdBackground(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_ExecuteCmdBackground 测试后台执行命令
+func TestLocalShellOperation_ExecuteCmdBackground(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	ctx := context.Background()
 
 	res, err := shellOp.ExecuteCmdBackground(ctx, "echo hello_bg", sys_operation.WithShellTimeout(10))
@@ -186,9 +186,9 @@ func TestShellOperation_ExecuteCmdBackground(t *testing.T) {
 	}
 }
 
-// TestShellOperation_ExecuteCmdStream 测试流式执行命令
-func TestShellOperation_ExecuteCmdStream(t *testing.T) {
-	shellOp := NewShellOperation(nil).(*ShellOperation)
+// TestLocalShellOperation_ExecuteCmdStream 测试流式执行命令
+func TestLocalShellOperation_ExecuteCmdStream(t *testing.T) {
+	shellOp := NewLocalShellOperation(nil).(*LocalShellOperation)
 	ctx := context.Background()
 
 	ch, err := shellOp.ExecuteCmdStream(ctx, "echo hello_stream", sys_operation.WithShellTimeout(10))
@@ -211,17 +211,17 @@ done:
 	assert.NotEmpty(t, chunks)
 }
 
-// ──────────────────────────── FsOperation ────────────────────────────
+// ──────────────────────────── LocalFsOperation ────────────────────────────
 
-// TestNewFsOperation 测试创建 FS 操作实例
-func TestNewFsOperation(t *testing.T) {
-	op := NewFsOperation(nil)
+// TestNewLocalFsOperation 测试创建 FS 操作实例
+func TestNewLocalFsOperation(t *testing.T) {
+	op := NewLocalFsOperation(nil)
 	assert.NotNil(t, op)
 }
 
-// TestFsOperation_ListTools 测试 FS 操作 ListTools 返回 10 个 ToolCard
-func TestFsOperation_ListTools(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_ListTools 测试 FS 操作 ListTools 返回 10 个 ToolCard
+func TestLocalFsOperation_ListTools(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	cards := fsOp.ListTools()
 	assert.Len(t, cards, 10)
 
@@ -249,9 +249,9 @@ func TestFsOperation_ListTools(t *testing.T) {
 	assert.Len(t, cards[9].InputParams, 3, "search_files 应有 3 个输入参数")
 }
 
-// TestFsOperation_WriteFile_ReadFile 测试文件写入和读取
-func TestFsOperation_WriteFile_ReadFile(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_WriteFile_ReadFile 测试文件写入和读取
+func TestLocalFsOperation_WriteFile_ReadFile(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -268,9 +268,9 @@ func TestFsOperation_WriteFile_ReadFile(t *testing.T) {
 	}
 }
 
-// TestFsOperation_ListFiles 测试列出文件
-func TestFsOperation_ListFiles(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_ListFiles 测试列出文件
+func TestLocalFsOperation_ListFiles(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -282,9 +282,9 @@ func TestFsOperation_ListFiles(t *testing.T) {
 	assert.Equal(t, 0, res.Code)
 }
 
-// TestFsOperation_ListDirectories 测试列出目录
-func TestFsOperation_ListDirectories(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_ListDirectories 测试列出目录
+func TestLocalFsOperation_ListDirectories(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -296,9 +296,9 @@ func TestFsOperation_ListDirectories(t *testing.T) {
 	assert.Equal(t, 0, res.Code)
 }
 
-// TestFsOperation_SearchFiles 测试搜索文件
-func TestFsOperation_SearchFiles(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_SearchFiles 测试搜索文件
+func TestLocalFsOperation_SearchFiles(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -310,9 +310,9 @@ func TestFsOperation_SearchFiles(t *testing.T) {
 	assert.Equal(t, 0, res.Code)
 }
 
-// TestFsOperation_ReadFile_不存在 测试读取不存在的文件
-func TestFsOperation_ReadFile_不存在(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_ReadFile_不存在 测试读取不存在的文件
+func TestLocalFsOperation_ReadFile_不存在(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 
 	res, err := fsOp.ReadFile(ctx, "/tmp/nonexistent_file_12345.txt")
@@ -323,9 +323,9 @@ func TestFsOperation_ReadFile_不存在(t *testing.T) {
 	}
 }
 
-// TestFsOperation_WriteFile_Append 测试追加写入
-func TestFsOperation_WriteFile_Append(t *testing.T) {
-	fsOp := NewFsOperation(nil).(*FsOperation)
+// TestLocalFsOperation_WriteFile_Append 测试追加写入
+func TestLocalFsOperation_WriteFile_Append(t *testing.T) {
+	fsOp := NewLocalFsOperation(nil).(*LocalFsOperation)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "append.txt")
@@ -344,17 +344,17 @@ func TestFsOperation_WriteFile_Append(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── CodeOperation ────────────────────────────
+// ──────────────────────────── LocalCodeOperation ────────────────────────────
 
-// TestNewCodeOperation 测试创建 Code 操作实例
-func TestNewCodeOperation(t *testing.T) {
-	op := NewCodeOperation(nil)
+// TestNewLocalCodeOperation 测试创建 Code 操作实例
+func TestNewLocalCodeOperation(t *testing.T) {
+	op := NewLocalCodeOperation(nil)
 	assert.NotNil(t, op)
 }
 
-// TestCodeOperation_ListTools 测试 Code 操作 ListTools 返回 2 个 ToolCard
-func TestCodeOperation_ListTools(t *testing.T) {
-	codeOp := NewCodeOperation(nil).(*CodeOperation)
+// TestLocalCodeOperation_ListTools 测试 Code 操作 ListTools 返回 2 个 ToolCard
+func TestLocalCodeOperation_ListTools(t *testing.T) {
+	codeOp := NewLocalCodeOperation(nil).(*LocalCodeOperation)
 	cards := codeOp.ListTools()
 	assert.Len(t, cards, 2)
 
@@ -375,13 +375,13 @@ func TestCodeOperation_ListTools(t *testing.T) {
 	assert.NotEmpty(t, langParam.Enum, "language 参数应有枚举约束")
 }
 
-// TestCodeOperation_ExecuteCode_简单Python 测试执行简单 Python 代码
-func TestCodeOperation_ExecuteCode_简单Python(t *testing.T) {
+// TestLocalCodeOperation_ExecuteCode_简单Python 测试执行简单 Python 代码
+func TestLocalCodeOperation_ExecuteCode_简单Python(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/python3"); os.IsNotExist(err) {
 		t.Skip("python3 not available")
 	}
 
-	codeOp := NewCodeOperation(nil).(*CodeOperation)
+	codeOp := NewLocalCodeOperation(nil).(*LocalCodeOperation)
 	ctx := context.Background()
 
 	res, err := codeOp.ExecuteCode(ctx, "print('hello from python')", sys_operation.WithCodeLanguage("python"), sys_operation.WithCodeTimeout(10))

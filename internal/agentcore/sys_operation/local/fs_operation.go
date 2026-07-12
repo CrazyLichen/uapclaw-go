@@ -20,9 +20,9 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// FsOperation 本地文件系统操作。
+// LocalFsOperation 本地文件系统操作。
 // 对齐 Python local/fs_operation.py FsOperation。
-type FsOperation struct {
+type LocalFsOperation struct {
 	sysop.BaseFsOperation
 }
 
@@ -34,18 +34,18 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var _ sysop.FsOperation = (*FsOperation)(nil)
+var _ sysop.FsOperation = (*LocalFsOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewFsOperation 创建本地文件系统操作实例（工厂函数，供 OperationRegistry 调用）。
-func NewFsOperation(runConfig any) sysop.SysSubOperation {
-	return &FsOperation{}
+// NewLocalFsOperation 创建本地文件系统操作实例（工厂函数，供 OperationRegistry 调用）。
+func NewLocalFsOperation(runConfig any) sysop.SysSubOperation {
+	return &LocalFsOperation{}
 }
 
 // ReadFile 读取文件。
 // 对齐 Python FsOperation.read_file。
-func (f *FsOperation) ReadFile(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ReadFileResult, error) {
+func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ReadFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	methodName := "read_file"
 
@@ -129,7 +129,7 @@ func (f *FsOperation) ReadFile(ctx context.Context, path string, opts ...sysop.F
 
 // ReadFileStream 流式读取文件。
 // 对齐 Python FsOperation.read_file_stream。
-func (f *FsOperation) ReadFileStream(ctx context.Context, path string, opts ...sysop.FsOption) (<-chan result.ReadFileStreamResult, error) {
+func (f *LocalFsOperation) ReadFileStream(ctx context.Context, path string, opts ...sysop.FsOption) (<-chan result.ReadFileStreamResult, error) {
 	ch := make(chan result.ReadFileStreamResult, 64)
 
 	o := sysop.NewFsOptions(opts...)
@@ -182,7 +182,7 @@ func (f *FsOperation) ReadFileStream(ctx context.Context, path string, opts ...s
 
 // WriteFile 写入文件。
 // 对齐 Python FsOperation.write_file：prepend_newline/append_newline/encoding/permissions。
-func (f *FsOperation) WriteFile(ctx context.Context, path string, content string, opts ...sysop.FsOption) (*result.WriteFileResult, error) {
+func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content string, opts ...sysop.FsOption) (*result.WriteFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	methodName := "write_file"
 
@@ -286,7 +286,7 @@ func (f *FsOperation) WriteFile(ctx context.Context, path string, content string
 
 // UploadFile 上传文件（本地模式 = 文件拷贝）。
 // 对齐 Python FsOperation.upload_file。
-func (f *FsOperation) UploadFile(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (*result.UploadFileResult, error) {
+func (f *LocalFsOperation) UploadFile(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (*result.UploadFileResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
 	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
@@ -321,7 +321,7 @@ func (f *FsOperation) UploadFile(ctx context.Context, localPath string, targetPa
 
 // UploadFileStream 流式上传文件（本地模式 = 分块拷贝）。
 // 对齐 Python FsOperation.upload_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
-func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (<-chan result.UploadFileStreamResult, error) {
+func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath string, targetPath string, opts ...sysop.FsOption) (<-chan result.UploadFileStreamResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	ch := make(chan result.UploadFileStreamResult, 16)
 
@@ -419,7 +419,7 @@ func (f *FsOperation) UploadFileStream(ctx context.Context, localPath string, ta
 }
 
 // DownloadFile 下载文件（本地模式 = 文件拷贝）
-func (f *FsOperation) DownloadFile(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (*result.DownloadFileResult, error) {
+func (f *LocalFsOperation) DownloadFile(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (*result.DownloadFileResult, error) {
 	resolvedSource, err := f.resolvePath(sourcePath, false)
 	if err != nil {
 		return nil, err
@@ -446,7 +446,7 @@ func (f *FsOperation) DownloadFile(ctx context.Context, sourcePath string, local
 
 // DownloadFileStream 流式下载文件（本地模式 = 分块拷贝）。
 // 对齐 Python FsOperation.download_file_stream：使用 peek-ahead 模式读取分块，is_last_chunk 标记。
-func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (<-chan result.DownloadFileStreamResult, error) {
+func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath string, localPath string, opts ...sysop.FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	ch := make(chan result.DownloadFileStreamResult, 16)
 
@@ -549,14 +549,14 @@ func (f *FsOperation) DownloadFileStream(ctx context.Context, sourcePath string,
 
 // ListFiles 列出目录下文件。
 // 对齐 Python FsOperation.list_files。
-func (f *FsOperation) ListFiles(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListFilesResult, error) {
+func (f *LocalFsOperation) ListFiles(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListFilesResult, error) {
 	o := sysop.NewFsOptions(opts...)
 	return f.listItems(ctx, path, false, o)
 }
 
 // ListDirectories 列出目录下子目录。
 // 对齐 Python FsOperation.list_directories。
-func (f *FsOperation) ListDirectories(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListDirsResult, error) {
+func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opts ...sysop.FsOption) (*result.ListDirsResult, error) {
 	o := sysop.NewFsOptions(opts...)
 
 	resolvedPath, err := f.resolvePath(path, false)
@@ -579,7 +579,7 @@ func (f *FsOperation) ListDirectories(ctx context.Context, path string, opts ...
 
 // SearchFiles 搜索文件。
 // 对齐 Python FsOperation.search_files。
-func (f *FsOperation) SearchFiles(ctx context.Context, path string, pattern string, opts ...sysop.FsOption) (*result.SearchFilesResult, error) {
+func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern string, opts ...sysop.FsOption) (*result.SearchFilesResult, error) {
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
 		return nil, err
@@ -618,7 +618,7 @@ func (f *FsOperation) SearchFiles(ctx context.Context, path string, pattern stri
 // 对齐 Python BaseFsOperation.list_tools：read_file, read_file_stream, write_file,
 // 对齐 Python 方法：upload_file, upload_file_stream, download_file, download_file_stream,
 // list_files, list_directories, search_files。
-func (f *FsOperation) ListTools() []*tool.ToolCard {
+func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 	readFileParams := []*schema.Param{
 		{Name: "path", Description: "Full or relative path to the file to read (required).", Type: schema.ParamTypeString, Required: true},
 		{Name: "mode", Description: `Reading mode - "text" (line-based, default) or "bytes" (raw bytes).`, Type: schema.ParamTypeString, Default: "text",
@@ -766,7 +766,7 @@ func (f *FsOperation) ListTools() []*tool.ToolCard {
 
 // resolvePath 解析路径，基于 CWD 解析相对路径。
 // 对齐 Python FsOperation._resolve_path。
-func (f *FsOperation) resolvePath(path string, createParent bool) (string, error) {
+func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("path 不能为空")
 	}
@@ -797,7 +797,7 @@ func (f *FsOperation) resolvePath(path string, createParent bool) (string, error
 }
 
 // listItems 列出文件/目录项
-func (f *FsOperation) listItems(ctx context.Context, path string, dirsOnly bool, o *sysop.FsOptions) (*result.ListFilesResult, error) {
+func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly bool, o *sysop.FsOptions) (*result.ListFilesResult, error) {
 	resolvedPath, err := f.resolvePath(path, false)
 	if err != nil {
 		return nil, err
@@ -817,7 +817,7 @@ func (f *FsOperation) listItems(ctx context.Context, path string, dirsOnly bool,
 }
 
 // walkDir 遍历目录
-func (f *FsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions) []result.FileSystemItem {
+func (f *LocalFsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions) []result.FileSystemItem {
 	var items []result.FileSystemItem
 
 	entries, err := os.ReadDir(basePath)
@@ -870,7 +870,7 @@ func (f *FsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions
 }
 
 // createFSItem 创建 FileSystemItem
-func (f *FsOperation) createFSItem(path string, info os.FileInfo) result.FileSystemItem {
+func (f *LocalFsOperation) createFSItem(path string, info os.FileInfo) result.FileSystemItem {
 	var fileType *string
 	if !info.IsDir() {
 		ext := filepath.Ext(path)
@@ -887,7 +887,7 @@ func (f *FsOperation) createFSItem(path string, info os.FileInfo) result.FileSys
 }
 
 // sortItems 排序
-func (f *FsOperation) sortItems(items []result.FileSystemItem, sortBy string, descending bool) {
+func (f *LocalFsOperation) sortItems(items []result.FileSystemItem, sortBy string, descending bool) {
 	sort.Slice(items, func(i, j int) bool {
 		var less bool
 		switch sortBy {
@@ -908,7 +908,7 @@ func (f *FsOperation) sortItems(items []result.FileSystemItem, sortBy string, de
 }
 
 // createErrorResult 创建错误结果
-func (f *FsOperation) createErrorResult(methodName string, errMsg string, startTime time.Time) *result.ReadFileResult {
+func (f *LocalFsOperation) createErrorResult(methodName string, errMsg string, startTime time.Time) *result.ReadFileResult {
 	logger.Error(fsLogComponent).Str("method_name", methodName).Str("error_msg", errMsg).Msg("文件操作失败")
 	return &result.ReadFileResult{
 		BaseResult: result.BuildOperationErrorResult(
@@ -979,6 +979,6 @@ func init() {
 		Name:        "fs",
 		Mode:        sysop.OperationModeLocal,
 		Description: "local fs operation",
-		NewFunc:     NewFsOperation,
+		NewFunc:     NewLocalFsOperation,
 	})
 }

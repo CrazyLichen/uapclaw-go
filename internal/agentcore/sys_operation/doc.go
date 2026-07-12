@@ -9,8 +9,8 @@
 //	sys_operation/
 //	├── doc.go                       # 包文档
 //	├── sys_operation.go             # SysOperation 接口 + BaseSysOperation + LocalSysOperation + NewSysOperation 工厂
-//	├── sys_operation_card.go        # SysOperationCard + LocalWorkConfig + SandboxGatewayConfig + ContainerScope
-//	├── config.go                    # OperationMode/OperationMode 枚举 + 全局配置
+//	├── sys_operation_card.go        # SysOperationCard + ToolIdProxy + generateIsolationKeyTemplate
+//	├── config.go                    # LocalWorkConfig + SandboxIsolationConfig + SandboxLauncherConfig + PreDeployLauncherConfig + SandboxGatewayConfig + GatewayStoreConfig/Config + SandboxCreateRequest + GatewayInvokeRequest + OperationMode/ContainerScope 枚举
 //	├── base.go                      # BaseOperation 基础结构体
 //	├── fs.go                        # FsOperation 接口 + BaseFsOperation + FsOptions
 //	├── shell.go                     # ShellOperation 接口 + BaseShellOperation + ShellOptions + ShellType
@@ -22,12 +22,13 @@
 //	├── tool_adapter.go              # SysOperationToolAdapter + ExtractTools + GetToolIDPrefix
 //	├── cwd/                         # CWD 状态管理（三层 CWD 模型 + context 传播）
 //	├── result/                      # 操作结果类型（BaseResult/ExecuteCmdResult/ReadFileResult/...）
+//	├── sandbox/                     # 沙箱执行模式（占位，随 9.34/9.36/9.37 实现）
 //	└── local/                       # 本地实现
 //	    ├── doc.go                   # 子包文档
-//	    ├── shell_operation.go       # ShellOperation 本地实现
+//	    ├── shell_operation.go       # LocalShellOperation 本地实现
 //	    ├── shell_helpers.go         # Shell 辅助函数（PowerShell/POSIX/Windows 检测与归一化）
-//	    ├── fs_operation.go          # FsOperation 本地实现
-//	    ├── code_operation.go        # CodeOperation 本地实现
+//	    ├── fs_operation.go          # LocalFsOperation 本地实现
+//	    ├── code_operation.go        # LocalCodeOperation 本地实现
 //	    └── utils.go                 # 公共工具（AsyncProcessHandler/OperationUtils/...）
 //
 // 对应 Python 代码：openjiuwen/core/sys_operation/

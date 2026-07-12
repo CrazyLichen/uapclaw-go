@@ -24,13 +24,14 @@ func TestNewLocalWorkConfig(t *testing.T) {
 // ──────────────────────────── NewSandboxGatewayConfig ────────────────────────────
 
 // TestNewSandboxGatewayConfig 测试沙箱网关配置默认值
-// 对齐 Python SandboxGatewayConfig：gateway_url, launcher_type, sandbox_type, timeout。
+// 对齐 Python SandboxGatewayConfig：isolation, launcher_config, timeout_seconds。
 func TestNewSandboxGatewayConfig(t *testing.T) {
 	cfg := NewSandboxGatewayConfig()
-	assert.Equal(t, "http://localhost:8080", cfg.GatewayURL, "GatewayURL 默认应对齐 Python")
-	assert.Equal(t, "pre_deploy", cfg.LauncherType, "LauncherType 默认应对齐 Python")
-	assert.Equal(t, "aio", cfg.SandboxType, "SandboxType 默认应对齐 Python")
-	assert.Equal(t, 300.0, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 300.0，对齐 Python")
+	require.NotNil(t, cfg.LauncherConfig, "LauncherConfig 不应为 nil")
+	assert.Equal(t, "pre_deploy", cfg.LauncherConfig.LauncherType, "LauncherType 默认应对齐 Python")
+	assert.Equal(t, "mock", cfg.LauncherConfig.SandboxType, "SandboxType 默认应对齐 Python")
+	assert.Equal(t, 30.0, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 30.0，对齐 Python")
+	assert.Equal(t, ContainerScopeSession, cfg.Isolation.ContainerScope, "ContainerScope 默认应对齐 Python SESSION")
 }
 
 // ──────────────────────────── NewSysOperationCard ────────────────────────────

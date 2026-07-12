@@ -19,9 +19,9 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// CodeOperation 本地代码执行。
+// LocalCodeOperation 本地代码执行。
 // 对齐 Python local/code_operation.py CodeOperation。
-type CodeOperation struct {
+type LocalCodeOperation struct {
 	sysop.BaseCodeOperation
 }
 
@@ -39,19 +39,19 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-var _ sysop.CodeOperation = (*CodeOperation)(nil)
+var _ sysop.CodeOperation = (*LocalCodeOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewCodeOperation 创建本地代码执行实例（工厂函数，供 OperationRegistry 调用）。
-func NewCodeOperation(runConfig any) sysop.SysSubOperation {
-	return &CodeOperation{}
+// NewLocalCodeOperation 创建本地代码执行实例（工厂函数，供 OperationRegistry 调用）。
+func NewLocalCodeOperation(runConfig any) sysop.SysSubOperation {
+	return &LocalCodeOperation{}
 }
 
 // ExecuteCode 执行代码。
 // 对齐 Python CodeOperation.execute_code：参数校验 → 语言支持检查 →
 // buildSubprocessCmd → 环境变量 → 子进程执行 → FileNotFoundError 处理 → 结果构造 → 日志记录。
-func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sysop.CodeOption) (*result.ExecuteCodeResult, error) {
+func (c *LocalCodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sysop.CodeOption) (*result.ExecuteCodeResult, error) {
 	o := sysop.NewCodeOptions(opts...)
 	methodName := "execute_code"
 
@@ -149,7 +149,7 @@ func (c *CodeOperation) ExecuteCode(ctx context.Context, code string, opts ...sy
 
 // ExecuteCodeStream 流式执行代码。
 // 对齐 Python CodeOperation.execute_code_stream。
-func (c *CodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts ...sysop.CodeOption) (<-chan result.ExecuteCodeStreamResult, error) {
+func (c *LocalCodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts ...sysop.CodeOption) (<-chan result.ExecuteCodeStreamResult, error) {
 	ch := make(chan result.ExecuteCodeStreamResult, 64)
 
 	o := sysop.NewCodeOptions(opts...)
@@ -219,7 +219,7 @@ func (c *CodeOperation) ExecuteCodeStream(ctx context.Context, code string, opts
 // ListTools 返回代码执行的工具卡片列表（硬编码）。
 // description 严格使用 Python 方法英文 docstring 原文，不翻译。
 // 对齐 Python BaseCodeOperation.list_tools：execute_code, execute_code_stream。
-func (c *CodeOperation) ListTools() []*tool.ToolCard {
+func (c *LocalCodeOperation) ListTools() []*tool.ToolCard {
 	executeCodeParams := []*schema.Param{
 		{Name: "code", Description: "Non-empty string containing the source code to execute (required positional argument).", Type: schema.ParamTypeString, Required: true},
 		{Name: "language", Description: `Programming language of the code. Strict type constraint to 'python' or 'javascript'.`, Type: schema.ParamTypeString, Default: "python",
@@ -255,7 +255,7 @@ func (c *CodeOperation) ListTools() []*tool.ToolCard {
 // buildSubprocessCmd 构建代码执行子进程命令。
 // 对齐 Python CodeOperation 的 supportLanguageConfigDict + buildSubprocessCmd。
 // 修改点：命令长度限制对齐 Python（8000/100000），Python 加 -u 参数，force_file 支持。
-func (c *CodeOperation) buildSubprocessCmd(code string, language string, forceFile bool) ([]string, string, error) {
+func (c *LocalCodeOperation) buildSubprocessCmd(code string, language string, forceFile bool) ([]string, string, error) {
 	cmdLimit := getDefaultCmdLimit()
 
 	switch language {
@@ -285,7 +285,7 @@ func (c *CodeOperation) buildSubprocessCmd(code string, language string, forceFi
 
 // prepareCodeEnv 准备代码执行环境变量。
 // 对齐 Python 中的 PYTHONIOENCODING/PYTHONUTF8/NODE_DISABLE_COLORS。
-func (c *CodeOperation) prepareCodeEnv(customEnv map[string]string, language string) []string {
+func (c *LocalCodeOperation) prepareCodeEnv(customEnv map[string]string, language string) []string {
 	env := os.Environ()
 
 	// 语言特定环境变量
@@ -320,6 +320,6 @@ func init() {
 		Name:        "code",
 		Mode:        sysop.OperationModeLocal,
 		Description: "local code operation",
-		NewFunc:     NewCodeOperation,
+		NewFunc:     NewLocalCodeOperation,
 	})
 }

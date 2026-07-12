@@ -194,27 +194,6 @@ func dispatchShellMethod(shellOp ShellOperation, ctx context.Context, methodName
 			return nil, err
 		}
 		return structToMap(r), nil
-	case "write_stdin":
-		sessionID, _ := params["session_id"].(string)
-		data, _ := params["data"].(string)
-		r, err := shellOp.WriteStdin(ctx, sessionID, data)
-		if err != nil {
-			return nil, err
-		}
-		return structToMap(r), nil
-	case "kill_process":
-		sessionID, _ := params["session_id"].(string)
-		r, err := shellOp.KillProcess(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		return structToMap(r), nil
-	case "list_processes":
-		r, err := shellOp.ListProcesses(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return structToMap(r), nil
 	default:
 		return nil, fmt.Errorf("未知的 shell 方法: %s", methodName)
 	}

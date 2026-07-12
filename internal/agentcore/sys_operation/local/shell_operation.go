@@ -41,9 +41,9 @@ type TUICommandPattern struct {
 	AutoEnv map[string]string
 }
 
-// ShellOperation 本地 Shell 操作。
+// LocalShellOperation 本地 Shell 操作。
 // 对齐 Python local/shell_operation.py ShellOperation。
-type ShellOperation struct {
+type LocalShellOperation struct {
 	sysop.BaseShellOperation
 	// dangerousPatterns 危险命令正则
 	dangerousPatterns []DangerousPattern
@@ -64,14 +64,14 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 ShellOperation 满足 ShellOperation 接口
-var _ sysop.ShellOperation = (*ShellOperation)(nil)
+// 编译时验证 LocalShellOperation 满足 ShellOperation 接口
+var _ sysop.ShellOperation = (*LocalShellOperation)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewShellOperation 创建本地 Shell 操作实例（工厂函数，供 OperationRegistry 调用）。
-func NewShellOperation(runConfig any) sysop.SysSubOperation {
-	op := &ShellOperation{}
+// NewLocalShellOperation 创建本地 Shell 操作实例（工厂函数，供 OperationRegistry 调用）。
+func NewLocalShellOperation(runConfig any) sysop.SysSubOperation {
+	op := &LocalShellOperation{}
 	op.initPatterns()
 	return op
 }
@@ -79,7 +79,7 @@ func NewShellOperation(runConfig any) sysop.SysSubOperation {
 // ExecuteCmd 执行 Shell 命令。
 // 对齐 Python ShellOperation.execute_cmd：参数校验 → 安全检查 → 超时上限 →
 // 环境变量准备 → TUI 检测 → 子进程创建 → Shell 进程注册 → 执行 → 注销 → 结果构造。
-func (s *ShellOperation) ExecuteCmd(ctx context.Context, command string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
 	o := sysop.NewShellOptions(opts...)
 	methodName := "execute_cmd"
 
@@ -200,7 +200,7 @@ func (s *ShellOperation) ExecuteCmd(ctx context.Context, command string, opts ..
 
 // ExecuteCmdStream 流式执行 Shell 命令。
 // 对齐 Python ShellOperation.execute_cmd_stream。
-func (s *ShellOperation) ExecuteCmdStream(ctx context.Context, command string, opts ...sysop.ShellOption) (<-chan result.ExecuteCmdStreamResult, error) {
+func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command string, opts ...sysop.ShellOption) (<-chan result.ExecuteCmdStreamResult, error) {
 	o := sysop.NewShellOptions(opts...)
 	ch := make(chan result.ExecuteCmdStreamResult, 64)
 
@@ -292,7 +292,7 @@ func (s *ShellOperation) ExecuteCmdStream(ctx context.Context, command string, o
 
 // ExecuteCmdBackground 后台执行 Shell 命令。
 // 对齐 Python ShellOperation.execute_cmd_background。
-func (s *ShellOperation) ExecuteCmdBackground(ctx context.Context, command string, opts ...sysop.ShellOption) (*result.ExecuteCmdBackgroundResult, error) {
+func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command string, opts ...sysop.ShellOption) (*result.ExecuteCmdBackgroundResult, error) {
 	o := sysop.NewShellOptions(opts...)
 	methodName := "execute_cmd_background"
 
@@ -357,7 +357,7 @@ func (s *ShellOperation) ExecuteCmdBackground(ctx context.Context, command strin
 // ListTools 返回 Shell 操作的工具卡片列表（硬编码）。
 // description 严格使用 Python 方法英文 docstring 原文，不翻译。
 // 对齐 Python BaseShellOperation.list_tools：execute_cmd, execute_cmd_stream, execute_cmd_background。
-func (s *ShellOperation) ListTools() []*tool.ToolCard {
+func (s *LocalShellOperation) ListTools() []*tool.ToolCard {
 	return []*tool.ToolCard{
 		tool.NewToolCard(
 			"execute_cmd",
@@ -405,7 +405,7 @@ func (s *ShellOperation) ListTools() []*tool.ToolCard {
 
 // WriteStdin 向后台进程写入标准输入。
 // 对齐 Python ShellOperation.write_stdin：通过 ShellProcessRegistry 查找进程并写入 stdin。
-func (s *ShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+func (s *LocalShellOperation) WriteStdin(ctx context.Context, sessionID string, data string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
 	if sessionID == "" {
 		return &result.ExecuteCmdResult{
 			BaseResult: result.BuildOperationErrorResult(
@@ -421,7 +421,7 @@ func (s *ShellOperation) WriteStdin(ctx context.Context, sessionID string, data 
 
 // KillProcess 终止指定后台进程。
 // 对齐 Python ShellOperation.kill_process：通过 ShellProcessRegistry 查找并终止进程。
-func (s *ShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+func (s *LocalShellOperation) KillProcess(ctx context.Context, sessionID string, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
 	if sessionID == "" {
 		return &result.ExecuteCmdResult{
 			BaseResult: result.BuildOperationErrorResult(
@@ -441,7 +441,7 @@ func (s *ShellOperation) KillProcess(ctx context.Context, sessionID string, opts
 
 // ListProcesses 列出所有后台进程。
 // 对齐 Python ShellOperation.list_processes：返回 ShellProcessRegistry 中当前所有进程信息。
-func (s *ShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
+func (s *LocalShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
 	// 当前实现：ShellProcessRegistry 未暴露列举接口，返回空列表。
 	return &result.ExecuteCmdResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "ListProcesses not fully implemented"},
@@ -452,7 +452,7 @@ func (s *ShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellO
 
 // initPatterns 初始化危险模式和 TUI 模式。
 // 对齐 Python ShellOperation._DANGEROUS_PATTERNS 和 _TUI_COMMAND_PATTERNS。
-func (s *ShellOperation) initPatterns() {
+func (s *LocalShellOperation) initPatterns() {
 	s.dangerousPatterns = []DangerousPattern{
 		{regexp.MustCompile(`\brm\s+-rf\b`), "rm -rf"},
 		{regexp.MustCompile(`\bdel\s+/[a-z]*[fsq][a-z]*\b`), "del /f /s /q"},
@@ -480,7 +480,7 @@ func (s *ShellOperation) initPatterns() {
 
 // checkCommandSafety 检查命令安全性。返回匹配的标签，空字符串表示安全。
 // 对齐 Python ShellOperation._check_command_safety。
-func (s *ShellOperation) checkCommandSafety(command string) string {
+func (s *LocalShellOperation) checkCommandSafety(command string) string {
 	for _, dp := range s.dangerousPatterns {
 		if dp.Pattern.MatchString(command) {
 			return dp.Label
@@ -491,7 +491,7 @@ func (s *ShellOperation) checkCommandSafety(command string) string {
 
 // detectAndMitigateTUI 检测 TUI/PTY 依赖命令并注入缓解环境变量。
 // 对齐 Python ShellOperation._detect_and_mitigate_tui。
-func (s *ShellOperation) detectAndMitigateTUI(command string, execEnv map[string]string) (bool, string) {
+func (s *LocalShellOperation) detectAndMitigateTUI(command string, execEnv map[string]string) (bool, string) {
 	if v := os.Getenv("JW_TUI_DETECTION_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "0", "false", "no", "off":
@@ -516,7 +516,7 @@ func (s *ShellOperation) detectAndMitigateTUI(command string, execEnv map[string
 // resolveExecutionPlan 解析命令执行计划。
 // 对齐 Python ShellOperation._resolve_execution_plan。
 // 返回 args 列表：useShell=true 时为 [shellName, "-c", command]；useShell=false 时为 [executable, arg1, ...]。
-func (s *ShellOperation) resolveExecutionPlan(command string, shellType sysop.ShellType) (args []string, useShell bool, shellName string) {
+func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sysop.ShellType) (args []string, useShell bool, shellName string) {
 	isWindows := runtime.GOOS == "windows"
 
 	// 尝试解包 PowerShell -Command 包装
@@ -610,6 +610,6 @@ func init() {
 		Name:        "shell",
 		Mode:        sysop.OperationModeLocal,
 		Description: "local shell operation",
-		NewFunc:     NewShellOperation,
+		NewFunc:     NewLocalShellOperation,
 	})
 }

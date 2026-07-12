@@ -1,6 +1,7 @@
 package sys_operation
 
 import (
+	"fmt"
 	"sync"
 
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
@@ -57,16 +58,20 @@ var _ SysOperation = (*LocalSysOperation)(nil)
 // NewSysOperation 系统操作工厂函数，根据 card.Mode 决定构造类型。
 // 对齐 Python SysOperation(card) 构造函数的 mode 分支：
 //   - OperationModeLocal → NewLocalSysOperation
-//   - OperationModeSandbox → NewLocalSysOperation（sandbox 预留，当前 fallback）
-func NewSysOperation(card *SysOperationCard) SysOperation {
+//   - OperationModeSandbox → 校验 GatewayConfig 后 NewLocalSysOperation（sandbox 预留，当前 fallback）
+func NewSysOperation(card *SysOperationCard) (SysOperation, error) {
 	if card == nil {
 		card = NewSysOperationCard()
 	}
 	if card.Mode == OperationModeSandbox {
+		// 对齐 Python _validate_sandbox_gateway_config：校验 launcher_config 必填字段
+		if err := validateSandboxGatewayConfig(card.GatewayConfig); err != nil {
+			return nil, fmt.Errorf("sandbox 模式配置校验失败: %w", err)
+		}
 		// sandbox 模式预留，当前 fallback 到 local
-		return NewLocalSysOperation(card)
+		return NewLocalSysOperation(card), nil
 	}
-	return NewLocalSysOperation(card)
+	return NewLocalSysOperation(card), nil
 }
 
 // NewLocalSysOperation 创建本地系统操作实例。
@@ -145,6 +150,27 @@ func (b *BaseSysOperation) Code() CodeOperation { return nil }
 func (b *BaseSysOperation) IsolationKeyTemplate() string { return "" }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// validateSandboxGatewayConfig 校验沙箱网关配置。
+// 对齐 Python SysOperation._validate_sandbox_gateway_config：
+//  - launcher_config 不能为 nil
+//  - launcher_type 不能为空
+//  - sandbox_type 不能为空
+func validateSandboxGatewayConfig(config *SandboxGatewayConfig) error {
+	if config == nil {
+		return fmt.Errorf("sandbox 模式需要 gateway_config")
+	}
+	if config.LauncherConfig == nil {
+		return fmt.Errorf("sandbox 模式需要 launcher_config")
+	}
+	if config.LauncherConfig.LauncherType == "" {
+		return fmt.Errorf("sandbox 模式需要 launcher_type")
+	}
+	if config.LauncherConfig.SandboxType == "" {
+		return fmt.Errorf("sandbox 模式需要 sandbox_type")
+	}
+	return nil
+}
 
 // getOperation 通用 lazy 实例化，从 OperationRegistry 查 OperationDef，调用 NewFunc 创建实例。
 // 对齐 Python SysOperation._get_operation：
