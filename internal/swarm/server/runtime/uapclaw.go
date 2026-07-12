@@ -57,6 +57,18 @@ func NewUapClaw() *UapClaw {
 //
 // 对齐 Python: JiuWenClaw.process_message(request)
 func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 对齐 Python logger.info：请求日志
+	sessionIDForLog := ""
+	if request.SessionID != nil {
+		sessionIDForLog = *request.SessionID
+	}
+	logger.Info(logComponent).
+		Str("event_type", "process_message").
+		Str("request_id", request.RequestID).
+		Str("channel_id", request.ChannelID).
+		Str("session_id", sessionIDForLog).
+		Msg("处理非流式请求")
+
 	// 1. CANCEL 分支 → 委托 ProcessInterrupt
 	if request.ReqMethod == schema.ReqMethodChatCancel {
 		return uc.ProcessInterrupt(ctx, request)
@@ -95,10 +107,19 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	// 8. 常规对话
 	sessionID := normalizeSessionID(uc.extractSessionID(request))
 
-	// 记录 user 历史
+	// 记录 user 历史，对齐 Python：补传 mode 和 channel_metadata
+	userMode := ""
+	if p := parseRequestParams(request); p != nil {
+		if m, ok := p["mode"].(string); ok {
+			userMode = m
+		}
+	}
+	if userMode == "" {
+		userMode = "unknown"
+	}
 	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
-		"", nil, nil, "")
+		"", nil, request.Metadata, userMode)
 
 	// 构建 inputs
 	inputs, _, _ := uc.BuildInputs(request)
@@ -123,9 +144,19 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 	// 记录 assistant 历史
 	if resp.OK {
 		content := uc.extractResponseContent(resp)
+		// 对齐 Python：补传 extra 和 mode
+		assistantMode := ""
+		if p := parseRequestParams(request); p != nil {
+			if m, ok := p["mode"].(string); ok {
+				assistantMode = m
+			}
+		}
+		if assistantMode == "" {
+			assistantMode = "unknown"
+		}
 		AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 			"assistant", content, float64(time.Now().UnixMilli())/1000,
-			"chat.final", nil, nil, "")
+			"chat.final", nil, nil, assistantMode)
 	}
 
 	// ⤵️ 10.3.2: cloud memory after-chat hook
@@ -137,6 +168,18 @@ func (uc *UapClaw) ProcessMessage(ctx context.Context, request *schema.AgentRequ
 //
 // 对齐 Python: JiuWenClaw.process_message_stream(request)
 func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
+	// 对齐 Python logger.info：流式请求日志
+	sessionIDForLog := ""
+	if request.SessionID != nil {
+		sessionIDForLog = *request.SessionID
+	}
+	logger.Info(logComponent).
+		Str("event_type", "process_message_stream").
+		Str("request_id", request.RequestID).
+		Str("channel_id", request.ChannelID).
+		Str("session_id", sessionIDForLog).
+		Msg("处理流式请求")
+
 	// 1. SkillDev 流式分支
 	if skill.IsSkillDevMethod(request.ReqMethod) {
 		return uc.handleSkillDevStreamRequest(ctx, request)
@@ -200,9 +243,19 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 				if payload := chunk.Payload; payload != nil {
 					if eventType, _ := payload["event_type"].(string); eventType != "" {
 						if shouldRecordHistory(eventType) {
+							// 对齐 Python：补传 mode
+							streamMode := ""
+							if p := parseRequestParams(request); p != nil {
+								if m, ok := p["mode"].(string); ok {
+									streamMode = m
+								}
+							}
+							if streamMode == "" {
+								streamMode = "unknown"
+							}
 							AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
-								eventType, nil, nil, "")
+								eventType, nil, nil, streamMode)
 						}
 						switch eventType {
 						case "chat.final":
@@ -395,11 +448,21 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 }
 
 // adapterModeForRequest 从请求参数中提取 adapter mode。
+// 对齐 Python _adapter_mode_for_request：strip+lower + team.plan→code + code.*→code。
 func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 	params := parseRequestParams(request)
 	if modeVal, ok := params["mode"]; ok {
 		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
-			parts := strings.SplitN(modeStr, ".", 2)
+			modeText := strings.TrimSpace(strings.ToLower(modeStr))
+			// team.plan → code
+			if modeText == "team.plan" {
+				return "code"
+			}
+			// code.* → code
+			if strings.HasPrefix(modeText, "code.") {
+				return "code"
+			}
+			parts := strings.SplitN(modeText, ".", 2)
 			return parts[0]
 		}
 	}

@@ -261,6 +261,10 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 
 	// 2. 解析 mode
 	mode, subMode := applyResolvedModeToRequest(request)
+	// 对齐 Python: auto_harness 模式等同于 agent 模式
+	if mode == "auto_harness" {
+		mode = "agent"
+	}
 	projectDir := resolveRequestProjectDir(request)
 
 	// 3. 获取 Agent
@@ -315,6 +319,10 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 
 	// 3. 解析 mode + 获取 Agent
 	mode, subMode := applyResolvedModeToRequest(request)
+	// 对齐 Python: auto_harness 模式等同于 agent 模式
+	if mode == "auto_harness" {
+		mode = "agent"
+	}
 	projectDir := resolveRequestProjectDir(request)
 
 	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
@@ -533,56 +541,160 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 	}
 }
 
-// applyResolvedModeToRequest 从 params["mode"] 解析 mode 和 subMode。
+// applyResolvedModeToRequest 从 params["mode"] 解析 mode、subMode 和 canonicalMode。
 //
-// 格式 "code.normal" → mode="code", subMode="normal"，默认 "agent.plan"。
+// 完整对齐 Python resolve_agent_request_mode + _apply_resolved_mode_to_request：
+//  1. strip + lower 输入
+//  2. 空值默认 "agent.plan"
+//  3. team.plan → mode="code", subMode="team"
+//  4. team subMode 白名单 {nil, "plan"}
+//  5. code subMode 白名单 {"plan", "normal", "team"}
+//  6. canonicalMode 回写到 request.Params["mode"]
 func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode string) {
-	mode, subMode = defaultMode, defaultSubMode
 	if request.Params == nil {
+		mode, subMode = "agent", "plan"
 		return
 	}
 
 	var params map[string]any
 	if err := json.Unmarshal(request.Params, &params); err != nil {
+		mode, subMode = "agent", "plan"
 		return
 	}
 
-	modeVal, ok := params["mode"]
-	if !ok {
-		return
+	// 读取并规范化 mode 文本
+	modeText := ""
+	if modeVal, ok := params["mode"]; ok {
+		if s, ok := modeVal.(string); ok {
+			modeText = strings.TrimSpace(strings.ToLower(s))
+		}
 	}
-	modeStr, ok := modeVal.(string)
-	if !ok || modeStr == "" {
-		return
+	if modeText == "" {
+		modeText = "agent.plan"
 	}
 
-	parts := strings.SplitN(modeStr, ".", 2)
+	// 按 "." 拆分
+	parts := strings.SplitN(modeText, ".", 2)
 	mode = parts[0]
-	if len(parts) > 1 {
-		subMode = parts[1]
+	if mode == "" {
+		mode = "agent"
 	}
+
+	// team 分支：对齐 Python L199-206
+	if mode == "team" {
+		if len(parts) > 1 && parts[1] != "" {
+			subMode = parts[1]
+		}
+		// team subMode 白名单：仅允许 nil 和 "plan"
+		if subMode != "" && subMode != "plan" {
+			subMode = ""
+		}
+		canonicalMode := mode
+		if subMode != "" {
+			canonicalMode = mode + "." + subMode
+		}
+		// team.plan → code 模式，subMode="team"
+		if subMode == "plan" {
+			mode = "code"
+			subMode = "team"
+		}
+		// 回写 canonicalMode
+		writeCanonicalMode(params, canonicalMode, request)
+		return
+	}
+
+	// 非 team 分支：对齐 Python L208-216
+	defaultSubModes := map[string]string{
+		"agent": "plan",
+		"code":  "normal",
+	}
+	if len(parts) > 1 && parts[1] != "" {
+		subMode = parts[1]
+	} else {
+		if def, ok := defaultSubModes[mode]; ok {
+			subMode = def
+		}
+	}
+	// code subMode 白名单
+	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
+		subMode = "normal"
+	}
+	// canonicalMode
+	canonicalMode := mode
+	if subMode != "" {
+		canonicalMode = mode + "." + subMode
+	}
+	// 回写 canonicalMode
+	writeCanonicalMode(params, canonicalMode, request)
 	return
 }
 
-// resolveRequestProjectDir 从 params["workspace_dir"] 或 metadata["workspace_dir"] 读取项目目录。
+// writeCanonicalMode 将解析后的 canonicalMode 回写到 request.Params["mode"]。
+// 对齐 Python: request.params["mode"] = canonical_mode。
+func writeCanonicalMode(params map[string]any, canonicalMode string, request *schema.AgentRequest) {
+	params["mode"] = canonicalMode
+	if updated, err := json.Marshal(params); err == nil {
+		request.Params = json.RawMessage(updated)
+	}
+}
+
+// resolveRequestProjectDir 从请求中读取项目目录，对齐 Python 5 级 fallback：
+//
+//	1. params["project_dir"]
+//	2. metadata["project_dir"]
+//	3. params["cwd"]
+//	4. metadata["cwd"]
+//	5. params["trusted_dirs"][0]
 func resolveRequestProjectDir(request *schema.AgentRequest) string {
-	// 优先从 params 读取
+	var params map[string]any
 	if request.Params != nil {
-		var params map[string]any
-		if err := json.Unmarshal(request.Params, &params); err == nil {
-			if v, ok := params["workspace_dir"]; ok {
-				if s, ok := v.(string); ok && s != "" {
-					return s
-				}
+		_ = json.Unmarshal(request.Params, &params)
+	}
+
+	// 1. params["project_dir"]
+	if v, ok := params["project_dir"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+
+	// 2. metadata["project_dir"]
+	if request.Metadata != nil {
+		if v, ok := request.Metadata["project_dir"]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
 			}
 		}
 	}
 
-	// 其次从 metadata 读取
+	// 3. params["cwd"]
+	if v, ok := params["cwd"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+
+	// 4. metadata["cwd"]
 	if request.Metadata != nil {
-		if v, ok := request.Metadata["workspace_dir"]; ok {
+		if v, ok := request.Metadata["cwd"]; ok {
 			if s, ok := v.(string); ok && s != "" {
 				return s
+			}
+		}
+	}
+
+	// 5. params["trusted_dirs"][0]
+	if v, ok := params["trusted_dirs"]; ok {
+		switch dirs := v.(type) {
+		case []any:
+			if len(dirs) > 0 {
+				if s, ok := dirs[0].(string); ok && s != "" {
+					return s
+				}
+			}
+		case []string:
+			if len(dirs) > 0 && dirs[0] != "" {
+				return dirs[0]
 			}
 		}
 	}
