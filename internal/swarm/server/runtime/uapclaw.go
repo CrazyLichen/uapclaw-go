@@ -446,6 +446,8 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	if setter, ok := a.(interface{ SetSkillManager(*skill.SkillManager) }); ok {
 		setter.SetSkillManager(uc.skillManager)
 	}
+	// ⤵️ G33: 调用 uc.skillManager.SetSkillnetInstallCompleteHook(uc.CreateInstance) 注入 hook
+	// ⤵️ G34: 启动 dreaming 后台任务（adapter.TryStartDreaming）
 	uc.adapter = a
 	logger.Info(logComponent).
 		Str("sdk", adapter.ResolveSDKChoice()).

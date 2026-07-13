@@ -24,6 +24,20 @@ const (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleInitialize 处理 initialize 请求。返回默认 capabilities。
+//
+// 对齐 Python: AgentWsServer._handle_initialize(ws, request, send_lock)
+//
+// Python 完整步骤：
+//  1. 解析 params.clientCapabilities
+//  2. 构建 extra_config（含 protocol_version、client_capabilities）
+//  3. ACP channel 特殊处理（_set_ws_acp_client_capabilities）
+//  4. 调用 agent_manager.initialize() 获取 capabilities
+//  5. Fallback 到 ACP_DEFAULT_CAPABILITIES
+//  6. 返回 capabilities
+//
+// 当前仅返回空 capabilities + protocol_version，待后续补齐：
+//   ⤵️ ACP 章节：解析 clientCapabilities、ACP channel 处理
+//   ⤵️ AgentManager 章节：agentManager.initialize() 调用、ACP_DEFAULT_CAPABILITIES fallback
 func (s *AgentServer) handleInitialize(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
