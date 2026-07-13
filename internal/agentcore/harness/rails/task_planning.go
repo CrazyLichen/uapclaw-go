@@ -22,32 +22,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// modelSwitcher 模型切换能力接口
 type modelSwitcher interface {
 	SetLLM(model *llm.Model)
 	GetLLM() (*llm.Model, error)
 }
 
-// deepStateLoader DeepAgent 状态加载能力接口
 type deepStateLoader interface {
 	LoadState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState
 }
 
-// TaskPlanningOption TaskPlanningRail 构造选项函数。
-type TaskPlanningOption func(*TaskPlanningRail)
-
-// TaskPlanningRail 任务规划 Rail，注册 todo 工具并提供 7 个钩子。
-//
-// 负责五件事：
-//  1. Init:               注册 todo 工具（todo_create/list/get/modify）
-//  2. BeforeModelCall:    注入 todo 提示词节 + 模型切换
-//  3. AfterToolCall:      刷新 todos 缓存 + 进度提醒
-//  4. AfterModelCall:     累计 token 使用量
-//  5. AfterTaskIteration: 从 TaskPlan 同步 todo 状态
-//  6. AfterInvoke:        日志汇总 + 清理缓存
-//  7. Uninit:             注销 todo 工具
-//
-// 对齐 Python: TaskPlanningRail (openjiuwen/harness/rails/task_planning_rail.py)
 type TaskPlanningRail struct {
 	DeepAgentRail
 	// tools 已注册的 todo 工具列表
@@ -76,6 +59,10 @@ type TaskPlanningRail struct {
 	agentID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type TaskPlanningOption func(*TaskPlanningRail)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -86,20 +73,16 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 TaskPlanningRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskPlanningRail)(nil)
 
-// taskPlanLogComponent 日志组件标识
 var taskPlanLogComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WithEnableProgressRepeat 设置是否注入周期性进度提醒。
 func WithEnableProgressRepeat(enable bool) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.enableProgressRepeat = enable }
 }
 
-// WithListToolCallInterval 设置进度提醒的工具调用间隔次数。
 func WithListToolCallInterval(n int) TaskPlanningOption {
 	return func(r *TaskPlanningRail) {
 		if n < 1 {
@@ -109,26 +92,18 @@ func WithListToolCallInterval(n int) TaskPlanningOption {
 	}
 }
 
-// WithModelSelection 设置模型选择映射。
 func WithModelSelection(m map[*llm.Model]string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.modelSelection = m }
 }
 
-// WithLanguage 设置语言。
 func WithLanguage(lang string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.language = lang }
 }
 
-// WithAgentID 设置 Agent 标识。
 func WithAgentID(id string) TaskPlanningOption {
 	return func(r *TaskPlanningRail) { r.agentID = id }
 }
 
-// NewTaskPlanningRail 创建 TaskPlanningRail 实例。
-//
-// 默认无参创建，与 Python TaskPlanningRail() 对齐。
-// 用户通过 opts 传入策略参数。
-// 对齐 Python: TaskPlanningRail.__init__()
 func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	r := &TaskPlanningRail{
 		DeepAgentRail:        *NewDeepAgentRail(),
@@ -154,9 +129,6 @@ func NewTaskPlanningRail(opts ...TaskPlanningOption) *TaskPlanningRail {
 	return r
 }
 
-// Init 注册 todo 工具到 Agent。
-//
-// 对齐 Python: TaskPlanningRail.init() L77-133
 func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 	// 对齐 Python L87-92: 检查 agent 是 DeepAgent 且有 ability_manager
 	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
@@ -263,9 +235,6 @@ func (r *TaskPlanningRail) Init(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
-// Uninit 从 Agent 注销 todo 工具。
-//
-// 对齐 Python: TaskPlanningRail.uninit() L135-149
 func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	// 对齐 Python L138-139: 移除 todo 提示词节
 	if sb := agent.SystemPromptBuilder(); sb != nil {
@@ -307,9 +276,6 @@ func (r *TaskPlanningRail) Uninit(agent agentinterfaces.BaseAgent) error {
 	return nil
 }
 
-// BeforeModelCall 在每次 LLM 调用前注入 todo 提示词节和切换模型。
-//
-// 对齐 Python: TaskPlanningRail.before_model_call() L153-184
 func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L155-156: system_prompt_builder 为 nil 时整体 return
 	sb := cbc.Agent().SystemPromptBuilder()
@@ -376,9 +342,6 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 	return nil
 }
 
-// AfterToolCall 工具调用后刷新 todos 缓存和注入进度提醒。
-//
-// 对齐 Python: TaskPlanningRail.after_tool_call() L187-242
 func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.todoTool == nil {
 		return nil
@@ -442,15 +405,16 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	prompt := sections.BuildProgressReminderUserPrompt(tasksStr, inProgressTask, lang)
 
 	// 对齐 Python L240-242: 向上下文注入 UserMessage
+	// Python: messages = ctx.context.get_messages(); messages.append(UserMessage); ctx.context.set_messages(messages)
+	// 使用 GetMessages+append+SetMessages 而非 AddMessages，对齐 Python 纯数据操作不触发处理器链
 	userMsg := llmschema.NewUserMessage(prompt)
-	_, _ = modelCtx.AddMessages(ctx, userMsg)
+	messages, _ := modelCtx.GetMessages(0, true)
+	messages = append(messages, userMsg)
+	modelCtx.SetMessages(messages, true)
 
 	return nil
 }
 
-// AfterModelCall 在 LLM 调用后累计 token 使用量。
-//
-// 对齐 Python: TaskPlanningRail.after_model_call() L244-262
 func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L246-249: 获取当前模型
 	switcher, ok := cbc.Agent().(modelSwitcher)
@@ -494,17 +458,11 @@ func (r *TaskPlanningRail) AfterModelCall(_ context.Context, cbc *agentinterface
 	return nil
 }
 
-// AfterTaskIteration 从 TaskPlan 同步 todo 状态到持久化文件。
-//
-// 对齐 Python: TaskPlanningRail.after_task_iteration() L288-317 + _sync_todos_from_plan() L319-399
 func (r *TaskPlanningRail) AfterTaskIteration(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	r.syncTodosFromPlan(ctx, cbc)
 	return nil
 }
 
-// AfterInvoke 日志汇总 token 使用量并清理缓存。
-//
-// 对齐 Python: TaskPlanningRail.after_invoke() L264-286
 func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	// 对齐 Python L266-269: 日志汇总 token 使用量
 	for modelID, record := range r.usageRecords {
@@ -538,9 +496,6 @@ func (r *TaskPlanningRail) AfterInvoke(_ context.Context, cbc *agentinterfaces.A
 	return nil
 }
 
-// GetCallbacks 覆盖基类回调映射，声明 TaskPlanningRail 的 7 个钩子。
-//
-// 对齐 Python: TaskPlanningRail 隐式覆盖 init/uninit/before_model_call/after_tool_call/after_model_call/after_task_iteration/after_invoke
 func (r *TaskPlanningRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -567,9 +522,6 @@ func (r *TaskPlanningRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getInProgressModelID 查找 in_progress 任务的 selected_model_id。
-//
-// 对齐 Python: TaskPlanningRail._get_in_progress_model_id() L294-317
 func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) string {
 	sess := cbc.Session()
 	if sess == nil {
@@ -600,9 +552,6 @@ func (r *TaskPlanningRail) getInProgressModelID(ctx context.Context, cbc *agenti
 	return ""
 }
 
-// formatTaskContent 格式化 todos 为可读的任务内容和进度描述。
-//
-// 返回 (tasks, in_progress_task)，对齐 Python: TaskPlanningRail._format_task_content() L382-401
 func (r *TaskPlanningRail) formatTaskContent(todos []hschema.TodoItem) (string, string) {
 	var lines []string
 	inProgressStr := ""
@@ -616,9 +565,6 @@ func (r *TaskPlanningRail) formatTaskContent(todos []hschema.TodoItem) (string, 
 	return strings.Join(lines, "\n"), inProgressStr
 }
 
-// syncTodosFromPlan 从 TaskPlan 同步 todo 状态到持久化文件。
-//
-// 对齐 Python: TaskPlanningRail._sync_todos_from_plan() L319-399
 func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinterfaces.AgentCallbackContext) {
 	sess := cbc.Session()
 	if sess == nil {
@@ -693,9 +639,6 @@ func (r *TaskPlanningRail) syncTodosFromPlan(ctx context.Context, cbc *agentinte
 		Msg("TaskPlanningRail 已从 TaskPlan 同步 todos")
 }
 
-// buildModelSelectionString 将 modelSelection 映射格式化为模型列表字符串。
-//
-// 对齐 Python: build_model_selection_prompt() 中 model_list_lines 构建逻辑
 func (r *TaskPlanningRail) buildModelSelectionString() string {
 	if len(r.modelSelection) == 0 {
 		return ""
