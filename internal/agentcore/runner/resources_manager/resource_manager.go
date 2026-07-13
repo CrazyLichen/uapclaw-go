@@ -667,6 +667,12 @@ func (m *ResourceMgr) GetSysOperation(sysOperationIDs []string, opts ...Resource
 	return instances, nil
 }
 
+// GetSysOperationByIsolationKey 按隔离键模板查找已注册的 SysOperation。
+// 对齐 Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
+func (m *ResourceMgr) GetSysOperationByIsolationKey(key string) (sysop.SysOperation, error) {
+	return m.registry.SysOperation().GetSysOperationByIsolationKey(key)
+}
+
 // GetSysOpToolCards 获取系统操作的工具卡片。
 //
 // 对应 Python: ResourceManager.get_sys_op_tool_cards(sys_operation_id, operation_name=, tool_name=)

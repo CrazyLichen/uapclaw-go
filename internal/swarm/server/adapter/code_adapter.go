@@ -189,7 +189,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	//              编码专有护栏：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
 	//              ConfirmInterruptRail, FileSystemRail
-	// 步骤 17: ⤵️ 10.3.7-11: _create_sys_operation()
+	// 步骤 17: _create_sys_operation() — 委托 DeepAdapter.CreateInstance
 	// 步骤 18: ⤵️ agentcore.DeepAgent: _build_configured_subagents(model, config, configBase)
 	//              固定: explore_agent + plan_agent
 	//              按配置: code_agent + browser_agent

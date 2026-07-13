@@ -123,3 +123,24 @@ func (m *SysOperationMgr) GetSysOperation(sysOperationID string) (sysop.SysOpera
 
 	return instance, nil
 }
+
+// GetSysOperationByIsolationKey 按隔离键模板查找已注册的 SysOperation。
+// 对齐 Python: SysOperationMgr._sandbox_key_owner_map[key] → get_sys_operation(op_id)
+func (m *SysOperationMgr) GetSysOperationByIsolationKey(key string) (sysop.SysOperation, error) {
+	if key == "" {
+		return nil, fmt.Errorf("隔离键模板为空")
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	opID, ok := m.sandboxKeyOwnerMap[key]
+	if !ok {
+		return nil, fmt.Errorf("未找到隔离键 %q 对应的 SysOperation", key)
+	}
+	instance := m.sysOperations.Get(opID)
+	if instance == nil {
+		return nil, fmt.Errorf("隔离键 %q 对应的 SysOperationID=%s 不存在", key, opID)
+	}
+	return instance, nil
+}

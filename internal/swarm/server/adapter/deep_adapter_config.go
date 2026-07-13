@@ -261,26 +261,27 @@ func (d *DeepAdapter) resolvePromptLanguage() string {
 // 根据配置决定使用 local 或 sandbox 模式，
 // 通过 sysop_builder 构建卡片和实例。
 func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOperation, *sysop.SysOperationCard) {
-	// 解析操作模式：默认 local
-	// ⤵️ 10.3.7-11: 从 configBase["sys_operation"]["mode"] 解析
-	mode := sysop.OperationModeLocal
-	if sysOpSection, ok := configBase["sys_operation"].(map[string]any); ok {
-		if m, ok := sysOpSection["mode"].(string); ok {
-			mode = sysop.FromOperationModeString(m)
-		}
-	}
+	mode := sysop_builder.ResolveOperationMode(configBase)
 
 	var card *sysop.SysOperationCard
 	switch mode {
 	case sysop.OperationModeSandbox:
-		// ⤵️ 10.3.7-11: 沙箱模式
-		card = sysop_builder.CreateSandboxSysOpCard(d.projectDir, d.workspaceDir, d.isCodeAgent)
+		sandboxURL, sandboxType, runtime := d.getSandboxRuntime(configBase)
+		filesRuntime, _ := runtime["files"].(map[string]any)
+		excludedCommands := d.getStrSliceFromRuntime(runtime, "excluded_commands")
+		card = sysop_builder.CreateSandboxSysOpCard(
+			sandboxURL, sandboxType,
+			filesRuntime, excludedCommands,
+			d.getIntPtrFromRuntime(runtime, "idle_ttl_seconds"),
+			d.getIntPtrFromRuntime(runtime, "idle_check_interval"),
+			d.resolveProjectDirForSandbox(),
+			d.isCodeAgent,
+		)
 	default:
-		// 本地模式
-		card = sysop_builder.CreateLocalSysOpCard(d.projectDir, d.workspaceDir, d.isCodeAgent)
+		card = sysop_builder.CreateLocalSysOpCard()
 	}
 
-	// 从卡片创建 SysOperation 实例
+	// 从卡片创建 SysOperation 实例（含隔离复用 + ResourceMgr 注册）
 	instance := sysop_builder.CreateSysOperationFromCard(card)
 
 	d.sysOperation = instance
@@ -291,4 +292,74 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOp
 		Msg("createSysOperation 完成")
 
 	return instance, card
+}
+
+// resolveProjectDirForSandbox 解析沙箱挂载用的项目目录。
+// 对齐 Python: _resolve_project_dir_for_sandbox()
+func (d *DeepAdapter) resolveProjectDirForSandbox() string {
+	if d.projectDir != "" {
+		return d.projectDir
+	}
+	return ""
+}
+
+// getSandboxRuntime 从配置获取沙箱运行时参数。
+// 对齐 Python: get_sandbox_runtime() + get_config()["sandbox"]
+func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ string, runtime map[string]any) {
+	sandbox, _ := configBase["sandbox"].(map[string]any)
+	if sandbox == nil {
+		sandbox = make(map[string]any)
+	}
+	url, _ = sandbox["url"].(string)
+	typ, _ = sandbox["type"].(string)
+	runtime = sandbox
+	return
+}
+
+// getStrSliceFromRuntime 从运行时 map 中获取 []string 值。
+func (d *DeepAdapter) getStrSliceFromRuntime(runtime map[string]any, key string) []string {
+	if runtime == nil {
+		return nil
+	}
+	v, ok := runtime[key]
+	if !ok {
+		return nil
+	}
+	switch s := v.(type) {
+	case []string:
+		return s
+	case []any:
+		result := make([]string, 0, len(s))
+		for _, item := range s {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+// getIntPtrFromRuntime 从运行时 map 中获取 *int 值。
+func (d *DeepAdapter) getIntPtrFromRuntime(runtime map[string]any, key string) *int {
+	if runtime == nil {
+		return nil
+	}
+	v, ok := runtime[key]
+	if !ok {
+		return nil
+	}
+	switch n := v.(type) {
+	case int:
+		return &n
+	case int64:
+		i := int(n)
+		return &i
+	case float64:
+		i := int(n)
+		return &i
+	default:
+		return nil
+	}
 }

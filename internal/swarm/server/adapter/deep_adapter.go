@@ -391,7 +391,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	railsList := d.buildAgentRails(config, configBase, mode)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
-	// ⤵️ 10.3.7-11: _create_sys_operation() — 需要完整 sysop_builder
+	sysOp, _ := d.createSysOperation(configBase)
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
 	// ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
@@ -422,7 +422,9 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 	}
 	// 步骤 17 回填：SysOperation
-	// ⤵️ 10.3.7-11: params.SysOperation = sysOperation
+	if sysOp != nil {
+		params.SysOperation = sysOp
+	}
 
 	agent, createErr := harness.CreateDeepAgent(ctx, params)
 	if createErr != nil {
