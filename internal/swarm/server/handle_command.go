@@ -84,32 +84,111 @@ func (s *AgentServer) handleCommandChrome(_ context.Context, request *schema.Age
 	), nil
 }
 
-// handleCommandCompact 处理 command.compact 请求。stub：返回 compressed=false。
-func (s *AgentServer) handleCommandCompact(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// handleCommandCompact 处理 command.compact 请求。
+// 对齐 Python: _handle_command_compact() → agent.compress_context(session_id, return_state=True)
+func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	sessionID := "default"
+	if request.SessionID != nil {
+		sessionID = *request.SessionID
+	}
+	mode, subMode := applyResolvedModeToRequest(request)
+	if mode == "auto_harness" {
+		mode = "agent"
+	}
+	projectDir := resolveRequestProjectDir(request)
+
+	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandCompact: 获取 Agent 失败")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": err.Error()}),
+		), err
+	}
+
+	resultData, err := agent.CompressContext(ctx, sessionID)
+	if err != nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": err.Error()}),
+		), err
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{
-			"ok":         true,
-			"compressed": false,
-		}),
+		schema.WithResponseOK(true),
+		schema.WithPayload(resultData),
 	), nil
 }
 
-// handleCommandContext 处理 command.context 请求。stub：返回 usage=0, limit=0。
-func (s *AgentServer) handleCommandContext(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// handleCommandContext 处理 command.context 请求。
+// 对齐 Python: _handle_command_context() → agent.get_context_usage(session_id)
+func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	sessionID := "default"
+	if request.SessionID != nil {
+		sessionID = *request.SessionID
+	}
+	mode, subMode := applyResolvedModeToRequest(request)
+	if mode == "auto_harness" {
+		mode = "agent"
+	}
+	projectDir := resolveRequestProjectDir(request)
+
+	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandContext: 获取 Agent 失败")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": err.Error()}),
+		), err
+	}
+
+	resultData, err := agent.GetContextUsage(ctx, sessionID)
+	if err != nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"error": err.Error()}),
+		), err
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{
-			"usage": 0,
-			"limit": 0,
-		}),
+		schema.WithResponseOK(true),
+		schema.WithPayload(resultData),
 	), nil
 }
 
-// handleCommandRecap 处理 command.recap 请求。stub：返回空回顾。
-func (s *AgentServer) handleCommandRecap(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// handleCommandRecap 处理 command.recap 请求。
+// 对齐 Python: _handle_command_recap() → agent.generate_recap(session_id)
+func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	sessionID := "default"
+	if request.SessionID != nil {
+		sessionID = *request.SessionID
+	}
+	mode, subMode := applyResolvedModeToRequest(request)
+	if mode == "auto_harness" {
+		mode = "agent"
+	}
+	projectDir := resolveRequestProjectDir(request)
+
+	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandRecap: 获取 Agent 失败")
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"status": "failed", "error": err.Error()}),
+		), err
+	}
+
+	resultData, err := agent.GenerateRecap(ctx, sessionID)
+	if err != nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithPayload(map[string]any{"status": "failed", "error": err.Error()}),
+		), err
+	}
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{
-			"recap": "",
-		}),
+		schema.WithResponseOK(true),
+		schema.WithPayload(resultData),
 	), nil
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -29,12 +30,22 @@ type fakeAdapter struct {
 	userAnswerResp  *schema.AgentResponse
 	userAnswerErr   error
 	instanceCreated bool
+	// ContextCompressor mock 返回值
+	compressResult   map[string]any
+	compressErr      error
+	contextUsage     map[string]any
+	contextUsageErr  error
+	recapResult      map[string]any
+	recapErr         error
 }
 
 func newFakeAdapter() *fakeAdapter {
 	return &fakeAdapter{
 		processResp:   schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true), schema.WithPayload(map[string]any{"content": "mock response"})),
 		interruptResp: schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true)),
+		compressResult: map[string]any{"ok": true, "compressed": false},
+		contextUsage:  map[string]any{"usage": 0, "limit": 0},
+		recapResult:   map[string]any{"status": "ok", "summary": "mock recap"},
 	}
 }
 
@@ -61,6 +72,17 @@ func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 	return f.heartbeatResp, f.heartbeatErr
 }
 func (f *fakeAdapter) Cleanup() error { return nil }
+
+// ContextCompressor 接口实现
+func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
+	return f.compressResult, f.compressErr
+}
+func (f *fakeAdapter) GetContextUsage(_ context.Context, _ string) (map[string]any, error) {
+	return f.contextUsage, f.contextUsageErr
+}
+func (f *fakeAdapter) GenerateRecap(_ context.Context, _ string) (map[string]any, error) {
+	return f.recapResult, f.recapErr
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -207,23 +229,29 @@ func TestUapClaw_CancelInflightWork(t *testing.T) {
 
 func TestUapClaw_GetContextUsage(t *testing.T) {
 	uc := NewUapClaw()
-	result, err := uc.GetContextUsage("sess-1")
+	fa := newFakeAdapter()
+	uc.adapter = fa
+	result, err := uc.GetContextUsage(context.Background(), "sess-1")
 	require.NoError(t, err)
 	assert.Equal(t, 0, result["usage"])
 }
 
 func TestUapClaw_CompressContext(t *testing.T) {
 	uc := NewUapClaw()
-	result, err := uc.CompressContext("sess-1")
+	fa := newFakeAdapter()
+	uc.adapter = fa
+	result, err := uc.CompressContext(context.Background(), "sess-1")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
 }
 
 func TestUapClaw_GenerateRecap(t *testing.T) {
 	uc := NewUapClaw()
-	result, err := uc.GenerateRecap("sess-1")
+	fa := newFakeAdapter()
+	uc.adapter = fa
+	result, err := uc.GenerateRecap(context.Background(), "sess-1")
 	require.NoError(t, err)
-	assert.Equal(t, "", result["recap"])
+	assert.Equal(t, "ok", result["status"])
 }
 
 func TestUapClaw_SwitchMode(t *testing.T) {

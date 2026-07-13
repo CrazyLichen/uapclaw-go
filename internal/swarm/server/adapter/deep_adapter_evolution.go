@@ -108,7 +108,7 @@ func (d *DeepAdapter) GenerateRecap(ctx context.Context, sessionID string) (map[
 	}
 
 	// 构建 recap 提示词
-	prompt := buildRecapPrompt(nil)
+	prompt := buildRecapPrompt("")
 
 	// 调用模型生成摘要
 	summaryText, err := d.callModelForRecap(ctx, messages, prompt)
@@ -148,10 +148,19 @@ func (d *DeepAdapter) isApprovalEvent(requestID string) bool {
 }
 
 // buildRecapPrompt 构建 recap 提示词。
-// 对齐 Python: recap_prompts.build_recap_prompt(memory=None)
-func buildRecapPrompt(memory any) string {
-	// 对齐 Python: 固定提示词模板
-	return `请根据以下对话历史，用 1-3 句话总结本次对话的关键内容和结论。只输出总结内容，不要附加任何其他说明。`
+// 对齐 Python: recap_prompts.build_recap_prompt(memory: str | None) -> str
+// memory 为空字符串时等同 Python 的 memory=None（不拼接 memory 前缀块）。
+func buildRecapPrompt(memory string) string {
+	memoryBlock := ""
+	if memory != "" {
+		memoryBlock = "Session memory (broader context):\n" + memory + "\n\n"
+	}
+	return memoryBlock +
+		"The user is requesting a quick recap of the current session. " +
+		"Write exactly 1-3 short sentences. " +
+		"Start by stating the high-level task — what they are building or debugging, not implementation details. " +
+		"Next: the concrete next step. " +
+		"Skip status reports and commit recaps."
 }
 
 // handleEvolutionApproval 处理演进审批。
@@ -238,7 +247,10 @@ func (d *DeepAdapter) callModelForRecap(ctx context.Context, messages []map[stri
 	recapMessages = append(recapMessages, llmschema.NewUserMessage(prompt))
 
 	// 调用模型，对齐 Python: model.invoke(messages, max_tokens=300, temperature=0)
-	result, err := d.model.Invoke(ctx, model_clients.NewMessagesParam(recapMessages...))
+	result, err := d.model.Invoke(ctx, model_clients.NewMessagesParam(recapMessages...),
+		model_clients.WithInvokeMaxTokens(300),
+		model_clients.WithInvokeTemperature(0),
+	)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("callModelForRecap 模型调用失败")
 		return "", err

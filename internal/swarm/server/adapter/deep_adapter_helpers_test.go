@@ -3,6 +3,7 @@ package adapter
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
@@ -143,6 +144,37 @@ func TestDeepAdapter_GenerateRecap_无实例(t *testing.T) {
 	}
 	if result == nil || result["status"] != "no_turn" {
 		t.Errorf("GenerateRecap 无实例应返回 {status: no_turn}, got %v", result)
+	}
+}
+
+// TestBuildRecapPrompt_空memory 测试 memory 为空字符串时不拼接前缀。
+func TestBuildRecapPrompt_空memory(t *testing.T) {
+	result := buildRecapPrompt("")
+	if result == "" {
+		t.Error("buildRecapPrompt 返回不应为空")
+	}
+	if strings.HasPrefix(result, "Session memory") {
+		t.Error("空 memory 不应包含 Session memory 前缀块")
+	}
+	if !strings.Contains(result, "quick recap") {
+		t.Error("prompt 应包含 'quick recap' 指令")
+	}
+	if !strings.Contains(result, "1-3 short sentences") {
+		t.Error("prompt 应包含 '1-3 short sentences' 指令")
+	}
+}
+
+// TestBuildRecapPrompt_有memory 测试 memory 非空时拼接前缀块。
+func TestBuildRecapPrompt_有memory(t *testing.T) {
+	result := buildRecapPrompt("user is building a CLI tool")
+	if !strings.Contains(result, "Session memory (broader context):") {
+		t.Error("非空 memory 应包含 'Session memory (broader context):' 前缀")
+	}
+	if !strings.Contains(result, "user is building a CLI tool") {
+		t.Error("prompt 应包含传入的 memory 内容")
+	}
+	if !strings.Contains(result, "quick recap") {
+		t.Error("prompt 应包含英文指令模板")
 	}
 }
 

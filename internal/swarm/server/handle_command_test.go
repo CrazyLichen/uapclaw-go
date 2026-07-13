@@ -43,7 +43,8 @@ func TestHandleCommandStatus(t *testing.T) {
 	}
 }
 
-// TestHandleCommandCompact 验证 command.compact 返回 compressed=false。
+// TestHandleCommandCompact 验证 command.compact 返回正常响应。
+// 连接 adapter 后，未初始化的 DeepAdapter 返回 {result: "noop"}。
 func TestHandleCommandCompact(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodCommandCompact, json.RawMessage(`{}`))
@@ -55,12 +56,13 @@ func TestHandleCommandCompact(t *testing.T) {
 	if !resp.OK {
 		t.Error("resp.OK 应为 true")
 	}
-	if compressed, ok := resp.Payload["compressed"]; !ok || compressed != false {
-		t.Errorf("payload.compressed 应为 false, 实际: %v", compressed)
+	if _, ok := resp.Payload["result"]; !ok {
+		t.Error("payload 应包含 result 字段")
 	}
 }
 
-// TestHandleCommandContext 验证 command.context 返回 usage=0, limit=0。
+// TestHandleCommandContext 验证 command.context 返回正常响应。
+// 连接 adapter 后，未初始化的 DeepAdapter 返回 nil, nil，payload 为 nil。
 func TestHandleCommandContext(t *testing.T) {
 	s, _ := newTestServer()
 	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodCommandContext, json.RawMessage(`{}`))
@@ -69,11 +71,26 @@ func TestHandleCommandContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleCommandContext 返回错误: %v", err)
 	}
-	if usage, ok := resp.Payload["usage"]; !ok || usage != 0 {
-		t.Errorf("payload.usage 应为 0, 实际: %v", usage)
+	if !resp.OK {
+		t.Error("resp.OK 应为 true")
 	}
-	if limit, ok := resp.Payload["limit"]; !ok || limit != 0 {
-		t.Errorf("payload.limit 应为 0, 实际: %v", limit)
+}
+
+// TestHandleCommandRecap 验证 command.recap 返回正常响应。
+// 连接 adapter 后，未初始化的 DeepAdapter 返回 {status: "no_turn"}。
+func TestHandleCommandRecap(t *testing.T) {
+	s, _ := newTestServer()
+	req := schema.NewAgentRequest("req-1", "web", schema.ReqMethodCommandRecap, json.RawMessage(`{}`))
+
+	resp, err := s.handleCommandRecap(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleCommandRecap 返回错误: %v", err)
+	}
+	if !resp.OK {
+		t.Error("resp.OK 应为 true")
+	}
+	if status, ok := resp.Payload["status"]; !ok || status != "no_turn" {
+		t.Errorf("payload.status 应为 no_turn, 实际: %v", status)
 	}
 }
 

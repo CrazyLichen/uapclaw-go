@@ -335,21 +335,47 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 }
 
 // GetContextUsage 获取上下文使用量。
-// ⤵️ 10.3.2: 需要从 adapter 获取 DeepAgent 实例后调用 GetContextUsage
-func (uc *UapClaw) GetContextUsage(_ string) (map[string]any, error) {
-	return map[string]any{"usage": 0, "limit": 0}, nil
+// 对齐 Python: JiuWenClaw.get_context_usage(session_id) → adapter.GetContextUsage
+func (uc *UapClaw) GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error) {
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return map[string]any{"usage": 0, "limit": 0}, err
+	}
+	cc, ok := a.(adapter.ContextCompressor)
+	if !ok {
+		return map[string]any{"usage": 0, "limit": 0}, nil
+	}
+	return cc.GetContextUsage(ctx, sessionID)
 }
 
 // CompressContext 压缩上下文。
-// ⤵️ 10.3.2: 需要调用 DeepAgent 的压缩逻辑
-func (uc *UapClaw) CompressContext(_ string) (map[string]any, error) {
-	return map[string]any{"ok": true, "compressed": false}, nil
+// 对齐 Python: JiuWenClaw.compress_context(session_id, return_state=True) → adapter.CompressContext
+func (uc *UapClaw) CompressContext(ctx context.Context, sessionID string) (map[string]any, error) {
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return map[string]any{"ok": false, "compressed": false}, err
+	}
+	cc, ok := a.(adapter.ContextCompressor)
+	if !ok {
+		return map[string]any{"ok": false, "compressed": false}, nil
+	}
+	// session=nil 安全：DeepAdapter.CompressContext 内部通过 WithCompressSessionID 传递 sessionID，
+	// contextEngine 做 sess → opt.SessionID → defaultSessionID 三层 fallback。
+	return cc.CompressContext(ctx, sessionID, nil, true)
 }
 
 // GenerateRecap 生成会话回顾。
-// ⤵️ 10.3.2: 需要调用 DeepAgent 的回顾逻辑
-func (uc *UapClaw) GenerateRecap(_ string) (map[string]any, error) {
-	return map[string]any{"recap": ""}, nil
+// 对齐 Python: JiuWenClaw.generate_recap(session_id) → adapter.GenerateRecap
+func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[string]any, error) {
+	a, err := uc.ensureAdapter("agent")
+	if err != nil {
+		return map[string]any{"status": "failed", "error": err.Error()}, err
+	}
+	cc, ok := a.(adapter.ContextCompressor)
+	if !ok {
+		return map[string]any{"status": "failed", "error": "adapter 未实现 ContextCompressor"}, nil
+	}
+	return cc.GenerateRecap(ctx, sessionID)
 }
 
 // SwitchMode 切换运行模式。
