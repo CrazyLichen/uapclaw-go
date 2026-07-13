@@ -85,7 +85,7 @@ func TestSubcommands(t *testing.T) {
 
 // TestServeCmd_Execute 验证 serve 子命令执行输出
 func TestServeCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"serve"})
 		if err := rootCmd.Execute(); err != nil {
@@ -100,7 +100,7 @@ func TestServeCmd_Execute(t *testing.T) {
 
 // TestRunCmd_Execute 验证 run 子命令执行输出
 func TestRunCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"run"})
 		if err := rootCmd.Execute(); err != nil {
@@ -137,16 +137,16 @@ func TestRunCmd_Info(t *testing.T) {
 	}
 }
 
-// captureStdout 捕获 os.Stdout 输出（fmt.Println 写入 os.Stdout，不经过 cobra SetOut）
-func captureStdout(t *testing.T, fn func()) string {
+// captureStderr 捕获 os.Stderr 输出（fmt.Fprintf(os.Stderr) 写入 os.Stderr）
+func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
-	old := os.Stdout
+	old := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("创建 pipe 失败: %v", err)
 	}
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
 
 	fn()
 	_ = w.Close()

@@ -79,7 +79,7 @@ func newChatCmd() *cobra.Command {
 进程内 Gateway 通过 ChannelTransport 与 AgentServer 通信。
 内部流程：REPL → Gateway → E2A编码 → Go channel → E2A解码 → AgentServer → agentcore`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("chat 模式尚未实现（领域十）")
+			fmt.Fprintf(os.Stderr, "chat 模式尚未实现（领域十）\n")
 		},
 	}
 	// 预解析 --dotenv/--name，确保 UAPCLAW_DATA_DIR 在 workspace 路径函数首次调用前就位
@@ -96,7 +96,7 @@ func newServeCmd() *cobra.Command {
 提供 RESTful 接口和 SSE 流式响应。
 进程内 Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("serve 模式尚未实现（领域十）")
+			fmt.Fprintf(os.Stderr, "serve 模式尚未实现（领域十）\n")
 		},
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
@@ -133,22 +133,23 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	defer cancel()
 
 	// CLI flags 覆写环境变量（优先于配置文件）
+	// 注意：此时 logger 尚未初始化，使用 fmt.Fprintf(os.Stderr) 输出错误。
 	host, _ := cmd.Flags().GetString("host")
 	port, _ := cmd.Flags().GetInt("port")
 	if host != "" {
 		if err := os.Setenv("UAPCLAW_GATEWAY_HOST", host); err != nil {
-			logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_GATEWAY_HOST").Msg("设置环境变量失败")
+			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_HOST 失败: %v\n", err)
 		}
 	}
 	if port > 0 {
 		if err := os.Setenv("UAPCLAW_GATEWAY_PORT", fmt.Sprintf("%d", port)); err != nil {
-			logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_GATEWAY_PORT").Msg("设置环境变量失败")
+			fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_GATEWAY_PORT 失败: %v\n", err)
 		}
 	}
 
 	// 设置启动命令环境变量（对齐 Python: os.environ["JIUWENSWARM_START_CMD"] = "uapclaw app"）
 	if err := os.Setenv("UAPCLAW_START_CMD", "uapclaw app"); err != nil {
-		logger.Error(logger.ComponentGateway).Err(err).Str("key", "UAPCLAW_START_CMD").Msg("设置环境变量失败")
+		fmt.Fprintf(os.Stderr, "设置环境变量 UAPCLAW_START_CMD 失败: %v\n", err)
 	}
 
 	// 2. workspace 自动初始化（等价 Python: prepare_workspace(overwrite=False)）
@@ -157,6 +158,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 			Overwrite: false,
 			Language:  "zh",
 		}); err != nil {
+			fmt.Fprintf(os.Stderr, "初始化工作区失败: %v\n", err)
 			return fmt.Errorf("初始化工作区失败: %w", err)
 		}
 	}
@@ -165,6 +167,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	//    尽早初始化，让后续步骤的日志能正确输出到文件。
 	//    WithConfigFile() 自己读 config.yaml 的 logging 段，不依赖 Config 对象。
 	if err := logger.Setup(logger.WithConfigFile()); err != nil {
+		fmt.Fprintf(os.Stderr, "初始化日志系统失败: %v\n", err)
 		return fmt.Errorf("初始化日志系统失败: %w", err)
 	}
 
@@ -172,6 +175,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	envFile := workspace.EnvFile()
 	if _, err := os.Stat(envFile); err == nil {
 		if err := dotenv.Load(envFile); err != nil {
+			logger.Error(logger.ComponentGateway).Err(err).Str("env_file", envFile).Msg("加载 .env 文件失败")
 			return fmt.Errorf("加载 .env 文件失败: %w", err)
 		}
 	}
@@ -179,9 +183,11 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 5. 完整配置加载（等价 Python: get_config()）
 	cfg, err := config.New("", config.WithNormalize(config.NormalizeConfig))
 	if err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Msg("创建配置失败")
 		return fmt.Errorf("创建配置失败: %w", err)
 	}
 	if _, err := cfg.Load(); err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Msg("加载配置文件失败")
 		return fmt.Errorf("加载配置文件失败: %w", err)
 	}
 
@@ -204,6 +210,7 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
 	gs, err := gateway.NewGatewayServer(cfg, agentClient)
 	if err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Msg("创建 GatewayServer 失败")
 		return fmt.Errorf("创建 GatewayServer 失败: %w", err)
 	}
 
@@ -213,12 +220,14 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 
 	// 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）
 	if err := agentServer.Start(ctx); err != nil {
+		logger.Error(logger.ComponentAgentServer).Err(err).Msg("启动 AgentServer 失败")
 		return fmt.Errorf("启动 AgentServer 失败: %w", err)
 	}
 
 	// 启动 GatewayServer（HTTP + WebSocket）
 	// WebChannel.HandleWebSocket 会等待 AgentServer.WaitServerReady 后再发 connection.ack
 	if err := gs.Start(ctx); err != nil {
+		logger.Error(logger.ComponentGateway).Err(err).Msg("启动 GatewayServer 失败")
 		return fmt.Errorf("启动 GatewayServer 失败: %w", err)
 	}
 
@@ -241,7 +250,7 @@ func newAgentServerCmd() *cobra.Command {
 		Long: `仅启动 AgentServer（WebSocket 服务端），独立进程部署。
 监听 WS 端口，等待外部 Gateway 通过 WebSocketTransport + E2A 协议连入。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("agentserver 模式尚未实现（领域十）")
+			fmt.Fprintf(os.Stderr, "agentserver 模式尚未实现（领域十）\n")
 		},
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
@@ -256,7 +265,7 @@ func newGatewayCmd() *cobra.Command {
 		Long: `仅启动 Gateway（IM 渠道网关），独立进程部署。
 通过 WebSocketTransport + E2A 协议连接外部 AgentServer。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("gateway 模式尚未实现（领域十一）")
+			fmt.Fprintf(os.Stderr, "gateway 模式尚未实现（领域十一）\n")
 		},
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
@@ -271,7 +280,7 @@ func newWebCmd() *cobra.Command {
 		Long: `启动 Web UI 服务，Web 作为 Channel 接入 Gateway。
 进程内 Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("web 模式尚未实现（领域十）")
+			fmt.Fprintf(os.Stderr, "web 模式尚未实现（领域十）\n")
 		},
 	}
 	cmd.PreRunE = makeDotenvPreRunE()
@@ -285,7 +294,7 @@ func newInitCmd() *cobra.Command {
 		Short: "初始化工作区",
 		Long:  `初始化 ~/.uapclaw 工作区，创建默认配置和目录结构。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("init 命令尚未实现（领域一 1.7）")
+			fmt.Fprintf(os.Stderr, "init 命令尚未实现（领域一 1.7）\n")
 		},
 	}
 }
@@ -299,7 +308,7 @@ func newAcpCmd() *cobra.Command {
 适用于 IDE 集成等场景。
 进程内 Gateway 通过 ChannelTransport 与 AgentServer 通信。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("acp 模式尚未实现（领域十）")
+			fmt.Fprintf(os.Stderr, "acp 模式尚未实现（领域十）\n")
 		},
 	}
 	cmd.PreRunE = makeDotenvPreRunE()

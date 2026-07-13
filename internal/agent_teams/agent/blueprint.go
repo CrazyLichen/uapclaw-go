@@ -12,15 +12,15 @@ import (
 // 对齐 Python: TeamAgentBlueprint (openjiuwen/agent_teams/agent/blueprint.py)
 type TeamAgentBlueprint struct {
 	// Card Agent 身份卡片
-	Card *agentschema.AgentCard
+	Card *agentschema.AgentCard `json:"card,omitempty"`
 	// Spec 团队 Agent 规格
-	Spec atschema.TeamAgentSpec
+	Spec atschema.TeamAgentSpec `json:"spec"`
 	// Ctx 运行时上下文
-	Ctx atschema.TeamRuntimeContext
+	Ctx atschema.TeamRuntimeContext `json:"ctx"`
 	// RolePolicy 角色策略
-	RolePolicy string
+	RolePolicy string `json:"role_policy,omitempty"`
 	// Language 语言偏好
-	Language string
+	Language string `json:"language,omitempty"`
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -31,10 +31,13 @@ func (b *TeamAgentBlueprint) Role() atschema.TeamRole {
 	return b.Ctx.Role
 }
 
-// MemberName 返回成员名。
-// 对齐 Python: TeamAgentBlueprint.member_name property
-func (b *TeamAgentBlueprint) MemberName() string {
-	return b.Ctx.MemberName
+// MemberName 返回成员名，nil 表示未设置。
+// 对齐 Python: TeamAgentBlueprint.member_name property → Optional[str]
+func (b *TeamAgentBlueprint) MemberName() *string {
+	if b.Ctx.MemberName == "" {
+		return nil
+	}
+	return &b.Ctx.MemberName
 }
 
 // Lifecycle 返回生命周期模式。
@@ -44,7 +47,7 @@ func (b *TeamAgentBlueprint) Lifecycle() atschema.TeamLifecycle {
 }
 
 // TeamSpec 返回团队规格。
-// 对齐 Python: TeamAgentBlueprint.team_spec property
+// 对齐 Python: TeamAgentBlueprint.team_spec property → Optional[TeamSpec]
 func (b *TeamAgentBlueprint) TeamSpec() *atschema.TeamSpec {
 	return b.Ctx.TeamSpec
 }

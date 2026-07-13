@@ -85,7 +85,7 @@ func TestSubcommands(t *testing.T) {
 
 // TestChatCmd_Execute 验证 chat 子命令执行输出
 func TestChatCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"chat"})
 		if err := rootCmd.Execute(); err != nil {
@@ -100,7 +100,7 @@ func TestChatCmd_Execute(t *testing.T) {
 
 // TestServeCmd_Execute 验证 serve 子命令执行输出
 func TestServeCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"serve"})
 		if err := rootCmd.Execute(); err != nil {
@@ -115,7 +115,7 @@ func TestServeCmd_Execute(t *testing.T) {
 
 // TestAgentServerCmd_Execute 验证 agentserver 子命令执行输出
 func TestAgentServerCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"agentserver"})
 		if err := rootCmd.Execute(); err != nil {
@@ -130,9 +130,8 @@ func TestAgentServerCmd_Execute(t *testing.T) {
 
 // TestGatewayCmd_Execute 验证 gateway 子命令执行输出
 func TestGatewayCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
-		rootCmd.SetArgs([]string{"chat"})
 		rootCmd.SetArgs([]string{"gateway"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("执行 gateway 失败: %v", err)
@@ -146,7 +145,7 @@ func TestGatewayCmd_Execute(t *testing.T) {
 
 // TestWebCmd_Execute 验证 web 子命令执行输出
 func TestWebCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"web"})
 		if err := rootCmd.Execute(); err != nil {
@@ -161,7 +160,7 @@ func TestWebCmd_Execute(t *testing.T) {
 
 // TestInitCmd_Execute 验证 init 子命令执行输出
 func TestInitCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"init"})
 		if err := rootCmd.Execute(); err != nil {
@@ -176,7 +175,7 @@ func TestInitCmd_Execute(t *testing.T) {
 
 // TestAcpCmd_Execute 验证 acp 子命令执行输出
 func TestAcpCmd_Execute(t *testing.T) {
-	buf := captureStdout(t, func() {
+	buf := captureStderr(t, func() {
 		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"acp"})
 		if err := rootCmd.Execute(); err != nil {
@@ -263,16 +262,16 @@ func TestSubcommandsHavePreRunE(t *testing.T) {
 	}
 }
 
-// captureStdout 捕获 os.Stdout 输出（fmt.Println 写入 os.Stdout，不经过 cobra SetOut）
-func captureStdout(t *testing.T, fn func()) string {
+// captureStderr 捕获 os.Stderr 输出（fmt.Fprintf(os.Stderr) 写入 os.Stderr）
+func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
-	old := os.Stdout
+	old := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("创建 pipe 失败: %v", err)
 	}
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
 
 	fn()
 	_ = w.Close()

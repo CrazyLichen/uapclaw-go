@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
@@ -39,7 +40,7 @@ func newServeCmd() *cobra.Command {
 		Short: "启动沙箱 HTTP API 服务",
 		Long:  `启动沙箱 HTTP API 服务，提供沙箱管理、代理和策略接口。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("serve 模式尚未实现（领域十二）")
+			fmt.Fprintf(os.Stderr, "serve 模式尚未实现（领域十二）\n")
 		},
 	}
 }
@@ -51,7 +52,7 @@ func newRunCmd() *cobra.Command {
 		Short: "在沙箱中运行指定命令",
 		Long:  `在沙箱隔离环境中运行指定命令，受策略引擎约束。`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("run 模式尚未实现（领域十二）")
+			fmt.Fprintf(os.Stderr, "run 模式尚未实现（领域十二）\n")
 		},
 	}
 }
