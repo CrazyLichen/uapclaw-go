@@ -415,7 +415,7 @@ func normalizeFSEntry(entry any, defaultPermissions string) map[string]any {
 		if path == "" || path == "<nil>" {
 			return nil
 		}
-		perm, _ := v["permissions"]
+		perm := v["permissions"]
 		permStr := fmt.Sprintf("%v", perm)
 		if permStr == "" || permStr == "<nil>" {
 			permStr = defaultPermissions

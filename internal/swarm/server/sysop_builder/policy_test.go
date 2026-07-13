@@ -207,7 +207,7 @@ func TestBuildFilesystemPolicy_非CodeAgent_忽略项目目录(t *testing.T) {
 	require.NotNil(t, policy)
 
 	fsPolicy := policy["filesystem_policy"].(map[string]any)
-	bindMountsRaw, _ := fsPolicy["bind_mounts"]
+	bindMountsRaw := fsPolicy["bind_mounts"]
 	if bindMountsRaw != nil {
 		bindMounts := bindMountsRaw.([]map[string]any)
 		absDir, _ := filepath.Abs(dir)
