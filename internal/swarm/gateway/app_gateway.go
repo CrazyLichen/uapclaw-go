@@ -153,11 +153,24 @@ func (s *GatewayServer) Start(ctx context.Context) error {
 	}
 
 	// 启动 AgentClient 接收循环（对齐 Python connect 启动 _message_receiver_loop）
+	// 使用 connectWithRetry 带重试连接，对齐 Python _connect_with_retry
 	if s.agentClient != nil {
-		if err := s.agentClient.Connect(ctx); err != nil {
+		maxRetries := 20
+		if v := os.Getenv("AGENT_CONNECT_RETRY"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				maxRetries = n
+			}
+		}
+		retryInterval := 3 * time.Second
+		if v := os.Getenv("AGENT_CONNECT_RETRY_INTERVAL"); v != "" {
+			if d, err := strconv.ParseFloat(v, 64); err == nil && d > 0 {
+				retryInterval = time.Duration(d * float64(time.Second))
+			}
+		}
+		if err := connectWithRetry(ctx, s.agentClient, maxRetries, retryInterval); err != nil {
 			logger.Error(logComponentAppGateway).
 				Err(err).
-				Msg("启动 AgentClient 接收循环失败")
+				Msg("连接 AgentServer 失败")
 		}
 	}
 
@@ -377,6 +390,42 @@ func zerologMiddleware(next http.Handler) http.Handler {
 			Dur("duration", duration).
 			Msg("HTTP 请求")
 	})
+}
+
+// connectWithRetry 带重试的连接逻辑，对齐 Python _connect_with_retry。
+//
+// 循环 maxRetries 次，每次调用 client.Connect(ctx)：
+//   - 成功则 return nil
+//   - 失败则 Warn 日志 + time.Sleep(retryInterval)
+//   - 超过最大次数则 Error 日志 + return 最后一次 error
+func connectWithRetry(ctx context.Context, client *routing.AgentClient, maxRetries int, retryInterval time.Duration) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := client.Connect(ctx); err != nil {
+			lastErr = err
+			if attempt >= maxRetries {
+				logger.Error(logComponentAppGateway).
+					Err(err).
+					Int("attempt", attempt).
+					Int("max_retries", maxRetries).
+					Msg("连接 AgentServer 失败，已达最大重试次数")
+				return lastErr
+			}
+			logger.Warn(logComponentAppGateway).
+				Err(err).
+				Int("attempt", attempt).
+				Int("max_retries", maxRetries).
+				Dur("retry_interval", retryInterval).
+				Msg("连接 AgentServer 失败，即将重试")
+			time.Sleep(retryInterval)
+			continue
+		}
+		logger.Info(logComponentAppGateway).
+			Int("attempt", attempt).
+			Msg("已连接 AgentServer")
+		return nil
+	}
+	return lastErr
 }
 
 // defaultHost 从配置获取默认监听地址。

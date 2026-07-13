@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ func (s *GatewayServer) OnConfigSaved() web.OnConfigSavedFunc {
 //  2. 构造 agent.reload_config E2A 请求
 //  3. 检查 reload 响应
 //  4. 条件发 browser.runtime_restart
-//  5. 异常兜底（当前仅 warn，后续补充 _schedule_restart）
+//  5. 异常兜底：调用 scheduleRestart 退出进程，由外部 supervisor 重启
 func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[string]any, configPayload map[string]any) error {
 	// 步骤1：本地缓存更新（对齐 Python: set_or_update_server_config）
 	// 当前 WebSocket client 是空操作，接口预留
@@ -70,10 +71,11 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 
 	resp, err := s.agentClient.SendRequest(reloadCtx, envelope)
 	if err != nil {
-		// 步骤5（异常兜底）
+		// 步骤5（异常兜底）：发送失败，调度进程重启
 		logger.Warn(logComponentAppGateway).
 			Err(err).
 			Msg("agent.reload_config 发送失败")
+		scheduleRestart("agent.reload_config 发送失败")
 		return err
 	}
 
@@ -99,6 +101,8 @@ func (s *GatewayServer) onConfigSavedImpl(updatedKeys []string, envUpdates map[s
 			Bool("ok", resp.OK).
 			Interface("payload", errPayload).
 			Msg("agent.reload_config 响应非 OK")
+		// 非 ValidationError 的拒绝，调度进程重启
+		scheduleRestart(fmt.Sprintf("AgentServer 拒绝配置重载: %v", errPayload))
 		return fmt.Errorf("AgentServer 拒绝配置重载: %v", errPayload)
 	}
 
@@ -128,4 +132,16 @@ func isValidationError(errStr string) bool {
 	return strings.Contains(errStr, "ValidationError") ||
 		strings.Contains(errStr, "validation error") ||
 		strings.Contains(errStr, "Field required")
+}
+
+// scheduleRestart 调度进程重启，对齐 Python _schedule_restart。
+//
+// 当配置重载发送失败或 AgentServer 拒绝（非 ValidationError）时，
+// 记录原因并退出进程，由外部 supervisor（systemd/docker）重启。
+func scheduleRestart(reason string) {
+	logger.Warn(logComponentAppGateway).
+		Str("reason", reason).
+		Int("pid", os.Getpid()).
+		Msg("调度进程重启，退出进程")
+	os.Exit(1)
 }
