@@ -13,8 +13,8 @@ package agent
 type TeamAgentState struct {
 	// TeamSession 团队会话（⤵️ 回填: 9.59 — AgentTeamSession 类型）
 	TeamSession any
-	// TeamMember 当前成员句柄（⤵️ 回填: 9.55 — TeamMember 类型，自引用通过 any）
-	TeamMember any
+	// TeamMember 当前成员句柄
+	TeamMember *TeamMember
 	// PendingUserQuery 待处理的用户查询
 	PendingUserQuery string
 	// EventListeners 已注册的事件监听器

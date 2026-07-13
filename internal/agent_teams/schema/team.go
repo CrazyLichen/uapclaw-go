@@ -71,8 +71,8 @@ type TeamRuntimeContext struct {
 	MessagerConfig any
 	// DBConfig 数据库配置（⤵️ 回填: 9.65 — DatabaseConfig 类型）
 	DBConfig any
-	// MemberModel 分配给此成员的模型配置（⤵️ 回填: 9.57 — TeamModelConfig 类型）
-	MemberModel any
+	// MemberModel 分配给此成员的模型配置
+	MemberModel *TeamModelConfig
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

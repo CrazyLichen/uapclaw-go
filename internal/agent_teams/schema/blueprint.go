@@ -1,6 +1,22 @@
 package schema
 
+import (
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// TeamModelConfig 可序列化的团队模型配置。
+// 对齐 Python: TeamModelConfig (openjiuwen/agent_teams/schema/deep_agent_spec.py)
+//
+// 用于团队角色级别的模型配置，包含客户端配置和请求配置。
+type TeamModelConfig struct {
+	// ModelClientConfig 模型客户端配置
+	ModelClientConfig llmschema.ModelClientConfig
+	// ModelRequestConfig 模型请求配置（可选）
+	ModelRequestConfig *llmschema.ModelRequestConfig
+}
 
 // LeaderSpec Leader 身份规格。
 // 对齐 Python: LeaderSpec (openjiuwen/agent_teams/schema/blueprint.py)
@@ -35,12 +51,12 @@ type StorageSpec struct {
 
 // DeepAgentSpec 单角色 DeepAgent 规格。
 // 对齐 Python: DeepAgentSpec (openjiuwen/agent_teams/schema/deep_agent_spec.py)
-// ⤵️ 回填: 9.57 — DeepAgentSpec 完整字段，当前仅保留最小集
+// ⤵️ 回填: 9.57 — DeepAgentSpec 完整字段（system_prompt/tools/mcps/subagents/rails/workspace 等），当前仅保留最小集
 type DeepAgentSpec struct {
-	// Card Agent 身份卡片（⤵️ 回填: 9.57 — AgentCard 类型）
-	Card any
-	// Model 模型配置（⤵️ 回填: 9.57 — ModelClientConfig 类型）
-	Model any
+	// Card Agent 身份卡片
+	Card *agentschema.AgentCard
+	// Model 团队模型配置
+	Model *TeamModelConfig
 	// Language 语言偏好
 	Language string
 }
