@@ -165,8 +165,11 @@ func TestCodeAdapter_CompressContext_委托(t *testing.T) {
 	c := NewCodeAdapter()
 	ctx := t.Context()
 	result, err := c.CompressContext(ctx, "s1", nil, false)
-	if result != nil || err != nil {
-		t.Errorf("CompressContext 占位实现应返回 nil, nil")
+	if err != nil {
+		t.Errorf("CompressContext 无实例应返回 nil error, got %v", err)
+	}
+	if result == nil || result["result"] != "noop" {
+		t.Errorf("CompressContext 无实例应返回 {result: noop}, got %v", result)
 	}
 }
 
@@ -185,8 +188,11 @@ func TestCodeAdapter_GenerateRecap_委托(t *testing.T) {
 	c := NewCodeAdapter()
 	ctx := t.Context()
 	result, err := c.GenerateRecap(ctx, "s1")
-	if result != nil || err != nil {
-		t.Errorf("GenerateRecap 占位实现应返回 nil, nil")
+	if err != nil {
+		t.Errorf("GenerateRecap 无实例应返回 nil error, got %v", err)
+	}
+	if result == nil || result["status"] != "no_turn" {
+		t.Errorf("GenerateRecap 无实例应返回 {status: no_turn}, got %v", result)
 	}
 }
 

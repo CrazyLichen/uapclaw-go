@@ -2003,13 +2003,13 @@ func TestReActAgent_callModel_基本调用(t *testing.T) {
 	assert.NotNil(t, msg)
 }
 
-// ──────────────────────────── 新增测试：SwitchModel ────────────────────────────
+// ──────────────────────────── 新增测试：SetLLM 同步 config ────────────────────────────
 
-// TestReActAgent_SwitchModel 验证 SwitchModel 同时切换 LLM 和同步 Config.ModelNameVal
-func TestReActAgent_SwitchModel(t *testing.T) {
+// TestReActAgent_SetLLM_同步Config 验证 SetLLM 同时切换 LLM 和同步 Config 字段
+func TestReActAgent_SetLLM_同步Config(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		agentschema.WithAgentName("switch_model"),
-		agentschema.WithAgentDescription("SwitchModel 测试"),
+		agentschema.WithAgentName("set_llm"),
+		agentschema.WithAgentDescription("SetLLM 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("old-model"),
@@ -2022,26 +2022,29 @@ func TestReActAgent_SwitchModel(t *testing.T) {
 	newModel, err := llm.NewModel(clientCfg, modelCfg)
 	assert.NoError(t, err)
 
-	agent.SwitchModel(newModel)
+	agent.SetLLM(newModel)
 
 	got, err := agent.GetLLM()
 	assert.NoError(t, err)
 	assert.Equal(t, newModel, got)
 	assert.Equal(t, "new-model", config.ModelNameVal)
+	// 同步 ModelClientConfig 和 ModelRequestConfig
+	assert.Equal(t, clientCfg, config.ModelClientConfig)
+	assert.Equal(t, modelCfg, config.ModelRequestConfig)
 }
 
-// TestReActAgent_SwitchModel_nilModel 验证 SwitchModel 传入 nil 时不 panic
-func TestReActAgent_SwitchModel_nilModel(t *testing.T) {
+// TestReActAgent_SetLLM_nilModel 验证 SetLLM 传入 nil 时不 panic
+func TestReActAgent_SetLLM_nilModel(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		agentschema.WithAgentName("switch_nil"),
-		agentschema.WithAgentDescription("SwitchModel nil 测试"),
+		agentschema.WithAgentName("set_llm_nil"),
+		agentschema.WithAgentDescription("SetLLM nil 测试"),
 	)
 	config := saconfig.NewReActAgentConfig(
 		saconfig.WithModelName("old-model"),
 	)
 	agent := NewReActAgent(card, config)
 
-	agent.SwitchModel(nil)
+	agent.SetLLM(nil)
 
 	// LLM 被设为 nil，GetLLM 返回错误
 	got, err := agent.GetLLM()
@@ -2051,11 +2054,11 @@ func TestReActAgent_SwitchModel_nilModel(t *testing.T) {
 	assert.Equal(t, "old-model", config.ModelNameVal)
 }
 
-// TestReActAgent_SwitchModel_nilConfig 验证 SwitchModel 在 nil config 时不 panic
-func TestReActAgent_SwitchModel_nilConfig(t *testing.T) {
+// TestReActAgent_SetLLM_nilConfig 验证 SetLLM 在 nil config 时不 panic
+func TestReActAgent_SetLLM_nilConfig(t *testing.T) {
 	card := agentschema.NewAgentCard(
-		agentschema.WithAgentName("switch_nocfg"),
-		agentschema.WithAgentDescription("SwitchModel nil config 测试"),
+		agentschema.WithAgentName("set_llm_nocfg"),
+		agentschema.WithAgentDescription("SetLLM nil config 测试"),
 	)
 	agent := NewReActAgent(card, nil)
 
@@ -2066,7 +2069,7 @@ func TestReActAgent_SwitchModel_nilConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 不 panic
-	agent.SwitchModel(newModel)
+	agent.SetLLM(newModel)
 
 	got, err := agent.GetLLM()
 	assert.NoError(t, err)

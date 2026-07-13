@@ -5,7 +5,11 @@ import (
 	"os"
 	"strings"
 
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -74,11 +78,59 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 // buildConfiguredSubagents 构建子代理规格。
 // 对齐 Python: _build_configured_subagents() (line 878-970)
-// ⤵️ agentcore: 需要完整的 subagent builder
-func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]any, bool) {
-	// ⤵️ agentcore: 实现 _build_configured_subagents
-	// 对齐 Python: configured_subagents, should_add_general_agent = self._build_configured_subagents(model, config, config_base)
-	return nil, false
+//
+// 根据 config 中 subagents 段的启用状态，调用各 builder 构建配置。
+// 返回 (subagentSpecs, shouldAddGeneralAgent)。
+func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
+	var specs []hschema.SubagentSpec
+
+	// 对齐 Python: 按 subagents 配置段依次构建
+	// explore 和 plan 默认启用，其余按配置
+
+	if d.isSubagentEnabled(config, "explore") {
+		cfg := subagents.BuildExploreAgentConfig(d.model, config, configBase)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	if d.isSubagentEnabled(config, "plan") {
+		cfg := subagents.BuildPlanAgentConfig(d.model, config, configBase)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	if d.isSubagentEnabled(config, "research") {
+		cfg := subagents.BuildResearchAgentConfig(d.model, config, configBase)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	if d.isSubagentEnabled(config, "code") {
+		cfg := subagents.BuildCodeAgentConfig(d.model, config, configBase)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	if d.isSubagentEnabled(config, "browser") {
+		cfg := subagents.BuildBrowserAgentConfig(d.model, config, configBase)
+		if cfg != nil {
+			specs = append(specs, cfg)
+		}
+	}
+
+	// shouldAddGeneralAgent: 当 subMode=="plan" 或 mode 以 "agent" 开头时为 true
+	shouldAddGeneralAgent := (d.subMode == "plan") || (d.mode != "" && strings.HasPrefix(d.mode, "agent"))
+
+	logger.Info(logComponent).
+		Int("subagent_count", len(specs)).
+		Bool("should_add_general_agent", shouldAddGeneralAgent).
+		Msg("buildConfiguredSubagents 完成")
+
+	return specs, shouldAddGeneralAgent
 }
 
 // isSubagentEnabled 检查配置中子代理是否启用。
@@ -201,4 +253,42 @@ func (d *DeepAdapter) resolvePromptLanguage() string {
 		}
 	}
 	return d.resolveRuntimeLanguage()
+}
+
+// createSysOperation 创建系统操作实例。
+// 对齐 Python: _create_sys_operation() (line 2262-2320)
+//
+// 根据配置决定使用 local 或 sandbox 模式，
+// 通过 sysop_builder 构建卡片和实例。
+func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOperation, *sysop.SysOperationCard) {
+	// 解析操作模式：默认 local
+	// ⤵️ 10.3.7-11: 从 configBase["sys_operation"]["mode"] 解析
+	mode := sysop.OperationModeLocal
+	if sysOpSection, ok := configBase["sys_operation"].(map[string]any); ok {
+		if m, ok := sysOpSection["mode"].(string); ok {
+			mode = sysop.FromOperationModeString(m)
+		}
+	}
+
+	var card *sysop.SysOperationCard
+	switch mode {
+	case sysop.OperationModeSandbox:
+		// ⤵️ 10.3.7-11: 沙箱模式
+		card = sysop_builder.CreateSandboxSysOpCard(d.projectDir, d.workspaceDir, d.isCodeAgent)
+	default:
+		// 本地模式
+		card = sysop_builder.CreateLocalSysOpCard(d.projectDir, d.workspaceDir, d.isCodeAgent)
+	}
+
+	// 从卡片创建 SysOperation 实例
+	instance := sysop_builder.CreateSysOperationFromCard(card)
+
+	d.sysOperation = instance
+	d.sysOperationCard = card
+
+	logger.Info(logComponent).
+		Str("mode", mode.String()).
+		Msg("createSysOperation 完成")
+
+	return instance, card
 }

@@ -38,8 +38,8 @@ import (
 // fakeModelSwitcherAgent 同时实现 BaseAgent + modelSwitcher + deepStateLoader
 type fakeModelSwitcherAgent struct {
 	fakeBaseAgent
-	// switchModelCalls 记录 SwitchModel 调用
-	switchModelCalls []*llm.Model
+	// setLLMCalls 记录 SetLLM 调用
+	setLLMCalls []*llm.Model
 	// currentLLM GetLLM 返回值
 	currentLLM *llm.Model
 	// currentLLMErr GetLLM 返回错误
@@ -54,9 +54,9 @@ func newFakeModelSwitcherAgent() *fakeModelSwitcherAgent {
 	}
 }
 
-// SwitchModel 实现 modelSwitcher 接口
-func (f *fakeModelSwitcherAgent) SwitchModel(model *llm.Model) {
-	f.switchModelCalls = append(f.switchModelCalls, model)
+// SetLLM 实现 modelSwitcher 接口
+func (f *fakeModelSwitcherAgent) SetLLM(model *llm.Model) {
+	f.setLLMCalls = append(f.setLLMCalls, model)
 }
 
 // GetLLM 实现 modelSwitcher 接口
@@ -411,7 +411,7 @@ func TestTaskPlanningRail_BeforeModelCall_注入提示词(t *testing.T) {
 	assert.True(t, builder.HasSection(sections.SectionTodo))
 }
 
-// TestTaskPlanningRail_BeforeModelCall_模型切换 验证 mock modelSwitcher，SwitchModel 被调用
+// TestTaskPlanningRail_BeforeModelCall_模型切换 验证 mock modelSwitcher，SetLLM 被调用
 func TestTaskPlanningRail_BeforeModelCall_模型切换(t *testing.T) {
 	t.Parallel()
 
@@ -435,8 +435,8 @@ func TestTaskPlanningRail_BeforeModelCall_模型切换(t *testing.T) {
 	// defaultLLM 应被捕获
 	assert.NotNil(t, r.defaultLLM)
 	// 在无 in_progress 任务时，应切换到 defaultLLM
-	require.Len(t, agent.switchModelCalls, 1)
-	assert.Equal(t, defaultModel, agent.switchModelCalls[0])
+	require.Len(t, agent.setLLMCalls, 1)
+	assert.Equal(t, defaultModel, agent.setLLMCalls[0])
 }
 
 // TestTaskPlanningRail_BeforeModelCall_无模型选择 验证 modelSelection 为空时跳过切换
@@ -453,7 +453,7 @@ func TestTaskPlanningRail_BeforeModelCall_无模型选择(t *testing.T) {
 	err := r.BeforeModelCall(context.Background(), cbc)
 	require.NoError(t, err)
 	// 不应有模型切换调用
-	assert.Empty(t, agent.switchModelCalls)
+	assert.Empty(t, agent.setLLMCalls)
 }
 
 // TestTaskPlanningRail_BeforeModelCall_断言失败 验证 agent 不满足 modelSwitcher 时记录日志
@@ -1223,8 +1223,8 @@ func TestTaskPlanningRail_BeforeModelCall_按InProgressModelID切换(t *testing.
 
 	err := r.BeforeModelCall(context.Background(), cbc)
 	require.NoError(t, err)
-	require.Len(t, agent.switchModelCalls, 1)
-	assert.Equal(t, targetModel, agent.switchModelCalls[0])
+	require.Len(t, agent.setLLMCalls, 1)
+	assert.Equal(t, targetModel, agent.setLLMCalls[0])
 }
 
 // TestTaskPlanningRail_BeforeModelCall_首次捕获DefaultLLM 验证首次调用捕获 defaultLLM

@@ -336,11 +336,14 @@ func TestResolvePromptLanguage_全部回退(t *testing.T) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// TestBuildConfiguredSubagents_占位 测试占位实现返回 nil, false。
-func TestBuildConfiguredSubagents_占位(t *testing.T) {
+// TestBuildConfiguredSubagents_无配置 测试无配置时返回空列表。
+func TestBuildConfiguredSubagents_无配置(t *testing.T) {
 	d := NewDeepAdapter()
 	subagents, shouldAdd := d.buildConfiguredSubagents(nil, nil)
-	if subagents != nil || shouldAdd != false {
-		t.Errorf("buildConfiguredSubagents 占位实现应返回 nil, false")
+	// 无配置时不应添加 general_agent
+	if shouldAdd != false {
+		t.Errorf("buildConfiguredSubagents 无配置时 shouldAdd 应为 false")
 	}
+	// subagents 可能为空或包含默认子 Agent（explore/plan）
+	_ = subagents
 }

@@ -180,7 +180,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	// 步骤 12: model = d.createModel(configBase) — 不传多模态配置
 	c.deep.model = c.deep.createModel(configBase)
 
-	// ⤵️ A2X: 步骤 13 _try_init_a2x_client(configBase)
+	// ⤵️ A2X / 11.10: 步骤 13 _try_init_a2x_client(configBase)
 	// 步骤 14: ⤵️ agentcore.DeepAgent: agentCard = AgentCard{name, id}
 	// 步骤 15: ⤵️ agentcore.DeepAgent: _get_tool_cards("jiuwenswarm") — 编码 tools
 	// 步骤 16: ⤵️ 10.6.3-10: _build_agent_rails(config, configBase, mode="code")
@@ -206,7 +206,12 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	c.deep.registeredMCPServerIDs = make(map[string]bool)
 	c.deep.registeredMCPServers = make(map[string]any)
 
-	// 步骤 23: ⤵️ agentcore MCP: _register_mcp_servers_from_config(configBase, tag="code")
+	// 步骤 23: _register_mcp_servers_from_config(configBase, tag="code")
+	// 对齐 Python: await self._register_mcp_servers_from_config(config_base, tag="code")
+	if regErr := c.deep.registerMcpServersFromConfig(ctx, configBase, "code"); regErr != nil {
+		logger.Warn(logComponent).Err(regErr).Msg("MCP 服务注册(code 模式)失败，继续执行")
+	}
+
 	// 步骤 24: ⤵️ 10.6.3-10: load_user_rails()
 
 	// 存储 mode/subMode

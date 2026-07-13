@@ -174,16 +174,16 @@ type DeepAdapter struct {
 	// ⤵️ 10.3.19-20
 	skillManager interface{}
 	// a2xClient A2X 客户端
-	// ⤵️ A2X
+	// ⤵️ A2X / 11.10
 	a2xClient interface{}
 	// a2xConfig A2X 配置
-	// ⤵️ A2X
+	// ⤵️ A2X / 11.10
 	a2xConfig map[string]any
 	// a2xBlankServiceID A2X blank 服务 ID
-	// ⤵️ A2X
+	// ⤵️ A2X / 11.10
 	a2xBlankServiceID string
 	// a2xBlankDataset A2X blank 数据集
-	// ⤵️ A2X
+	// ⤵️ A2X / 11.10
 	a2xBlankDataset string
 	// cronRuntime Cron 运行时桥接
 	// ⤵️ 11.10
@@ -372,7 +372,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.model = d.createModel(configBase)
 
 	// 步骤 13: _try_init_a2x_client(configBase)
-	// ⤵️ A2X: A2X 客户端初始化
+	// ⤵️ A2X / 11.10: A2X 客户端初始化
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
 	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
@@ -442,7 +442,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	d.seedRuntimeCwd(ctx, initCwd)
 
 	// 步骤 22: _sync_a2x_runtime_state()
-	// ⤵️ A2X: A2X 运行时状态同步
+	// ⤵️ A2X / 11.10: A2X 运行时状态同步
 
 	// 步骤 23: d.registeredMCPServerIDs.clear()
 	d.registeredMCPServerIDs = make(map[string]bool)
@@ -540,8 +540,8 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	d.model = d.createModel(configBase)
 
 	// 步骤 7.5: A2X 重载 + 状态同步
-	// ⤵️ A2X: _try_init_a2x_client(configBase, reload=True)
-	// ⤵️ A2X: _sync_a2x_runtime_state()
+	// ⤵️ A2X / 11.10: _try_init_a2x_client(configBase, reload=True)
+	// ⤵️ A2X / 11.10: _sync_a2x_runtime_state()
 
 	// 步骤 8: _get_current_agent_rails(config, configBase)
 	// 对齐 Python: rails_list = self._get_current_agent_rails(config, config_base)
@@ -643,9 +643,13 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 	// 步骤 10-11: 权限上下文设置
 	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
 
-	// 步骤 12-13: 模型选择
-	_ = d.resolveModelForRequest(req)
-	// ⤵️ agentcore.DeepAgent: _apply_model_to_react_agent(resolvedModel)
+	// 步骤 12-13: 模型选择 + 应用到 ReActAgent
+	resolvedModel := d.resolveModelForRequest(req)
+	if resolvedModel != nil && d.instance != nil {
+		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
+			reactAgent.SetLLM(resolvedModel)
+		}
+	}
 
 	// 步骤 14: mark_session_active
 	d.markSessionActive(sessionID)
@@ -778,9 +782,13 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 	// 步骤 11-12: 权限上下文设置
 	// ⤵️ 10.1.8: token_cid = TOOL_PERMISSION_CHANNEL_ID.set(...); token_perm = setup_permission_context(request)
 
-	// 步骤 13-14: 模型选择
-	_ = d.resolveModelForRequest(req)
-	// ⤵️ agentcore.DeepAgent: _apply_model_to_react_agent(resolvedModel)
+	// 步骤 13-14: 模型选择 + 应用到 ReActAgent
+	resolvedModelStream := d.resolveModelForRequest(req)
+	if resolvedModelStream != nil && d.instance != nil {
+		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
+			reactAgent.SetLLM(resolvedModelStream)
+		}
+	}
 
 	// 步骤 15: mark_session_active
 	d.markSessionActive(sessionID)
@@ -979,7 +987,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 			d.instance.Abort(ctx)
 		}
 		d.unmarkSessionActive(normalizedSID)
-		// ⤵️ 10.6.3-10: _cancel_scheduler_running_tasks()
+		// ⤵️ 11.10: _cancel_scheduler_running_tasks()
 		// ⤵️ 10.6.3-10: _cancel_pending_todos(sessionID)
 		interruptMsg = "执行已取消"
 		logger.Info(logComponent).Str("intent", "cancel").Msg("中断: cancel 处理")
@@ -1024,13 +1032,13 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 	// 步骤 5-7: 按 request_id 前缀分发
 	switch {
 	case strings.HasPrefix(requestID, "team_skill_evolve_"):
-		// ⤵️ 10.3.7-11: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
+		// ⤵️ 10.6.3-10 / 10.3.7-11: handle_team_skill_evolve_approval(requestID, answers, sessionID, channelID)
 		resolved = false
 	case strings.HasPrefix(requestID, "evolve_simplify_"):
-		// ⤵️ 10.3.7-11: _handle_governance_approval(requestID, answers, "simplify")
+		// ⤵️ 10.6.3-10 / 10.3.7-11: _handle_governance_approval(requestID, answers, "simplify")
 		resolved = false
 	case strings.HasPrefix(requestID, "skill_evolve_"):
-		// ⤵️ 10.3.7-11: _handle_evolution_approval(requestID, answers)
+		// ⤵️ 10.6.3-10 / 10.3.7-11: _handle_evolution_approval(requestID, answers)
 		resolved = false
 	}
 
@@ -1268,7 +1276,6 @@ func EnsurePersistentCheckpointer() error {
 // 后续将检查点器绑定到 DeepAgent 实例的步骤需等 DeepAgent 实现后回填。
 func (d *DeepAdapter) setCheckpoint() error {
 	return EnsurePersistentCheckpointer()
-	// ⤵️ agentcore.DeepAgent: 将 checkpointer 绑定到 d.instance（DeepAgent）的 session 上
 }
 
 // buildModelFromEntry 根据单个模型条目的 model_client_config / model_config_obj 构建 Model 实例。
@@ -1728,8 +1735,9 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 
 // buildAgentIdentityPrompt 构建 Agent 身份提示词。
 // 对齐 Python: build_agent_identity_prompt(language=self._resolve_prompt_language())
+// ⤵️ 10.6.1-2: 等 Prompt Builder 实现后回填
 func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
-	// ⤵️ agentcore: 完整的 agent_identity_prompt 构建
+	// ⤵️ 10.6.1-2: 完整的 agent_identity_prompt 构建
 	return ""
 }
 

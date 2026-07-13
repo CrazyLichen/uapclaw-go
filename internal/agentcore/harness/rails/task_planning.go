@@ -366,7 +366,7 @@ func (r *TaskPlanningRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 
 	// 对齐 Python L180-185: 切换模型
 	if targetModel != nil {
-		switcher.SwitchModel(targetModel)
+		switcher.SetLLM(targetModel)
 		logger.Debug(taskPlanLogComponent).
 			Str("event_type", "task_planning_model_switched").
 			Str("selected_model_id", selectedModelID).

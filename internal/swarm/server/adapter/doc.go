@@ -20,13 +20,13 @@
 //	├── deep_adapter_rails.go     # ~20 个 rail builder + buildAgentRails + updateRailsForMode
 //	├── deep_adapter_mcp.go       # MCP 管理 6 方法
 //	├── deep_adapter_a2x.go       # A2X 客户端 5 方法 + Cron 上下文 2 方法（⤵️）
-//	├── deep_adapter_tools.go     # Tool 同步 + 多模态配置
+//	├── deep_adapter_tools.go     # Tool 同步 5 方法 + 多模态配置 + ToolCards 构建 + 工具名常量
 //	├── deep_adapter_slash.go     # Slash 命令 5 个 + governance approval（⤵️）
 //	├── deep_adapter_evolution.go # EvolutionWatcher + ContextCompressor + Recap（⤵️）
 //	├── deep_adapter_team.go      # TeamSkillApproval + team 分流（⤵️）
 //	├── deep_adapter_stream.go    # parseStreamChunk 15+ 种 chunk + usage 累加器
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
-//	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent
+//	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
 //	├── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //	├── interface_test.go         # 接口编译期检查测试
 //	├── factory_test.go           # 工厂函数单元测试

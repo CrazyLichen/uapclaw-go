@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -109,13 +110,16 @@ func TestDeepAdapter_TryStopDreaming_已启动(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_CompressContext_占位 测试占位实现返回 nil, nil。
-func TestDeepAdapter_CompressContext_占位(t *testing.T) {
+// TestDeepAdapter_CompressContext_无实例 测试 instance 为 nil 时返回 noop。
+func TestDeepAdapter_CompressContext_无实例(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 	result, err := d.CompressContext(ctx, "s1", nil, false)
-	if result != nil || err != nil {
-		t.Errorf("CompressContext 占位实现应返回 nil, nil")
+	if err != nil {
+		t.Errorf("CompressContext 无实例应返回 nil error, got %v", err)
+	}
+	if result == nil || result["result"] != "noop" {
+		t.Errorf("CompressContext 无实例应返回 {result: noop}, got %v", result)
 	}
 }
 
@@ -129,13 +133,16 @@ func TestDeepAdapter_GetContextUsage_无实例(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_GenerateRecap_占位 测试占位实现返回 nil, nil。
-func TestDeepAdapter_GenerateRecap_占位(t *testing.T) {
+// TestDeepAdapter_GenerateRecap_无实例 测试 instance 为 nil 时返回 no_turn。
+func TestDeepAdapter_GenerateRecap_无实例(t *testing.T) {
 	d := NewDeepAdapter()
 	ctx := t.Context()
 	result, err := d.GenerateRecap(ctx, "s1")
-	if result != nil || err != nil {
-		t.Errorf("GenerateRecap 占位实现应返回 nil, nil")
+	if err != nil {
+		t.Errorf("GenerateRecap 无实例应返回 nil error, got %v", err)
+	}
+	if result == nil || result["status"] != "no_turn" {
+		t.Errorf("GenerateRecap 无实例应返回 {status: no_turn}, got %v", result)
 	}
 }
 
@@ -894,27 +901,28 @@ func TestSyncPaidSearchToolForRuntime(t *testing.T) {
 // TestPrioritizePaidSearchToolCard 测试付费搜索工具优先排序。
 func TestPrioritizePaidSearchToolCard(t *testing.T) {
 	d := NewDeepAdapter()
-	cards := []any{"a", "b"}
+	var cards []*tool.ToolCard
 	result := d.prioritizePaidSearchToolCard(cards)
-	if len(result) != 2 {
-		t.Errorf("prioritizePaidSearchToolCard 返回 %d 项，want 2", len(result))
+	if len(result) != 0 {
+		t.Errorf("prioritizePaidSearchToolCard 返回 %d 项，want 0", len(result))
 	}
 }
 
 // TestPruneToolCards 测试工具卡片裁剪。
 func TestPruneToolCards(t *testing.T) {
 	d := NewDeepAdapter()
-	cards := []any{"a", "b"}
-	result := d.pruneToolCards(cards, "agent.plan")
-	if len(result) != 2 {
-		t.Errorf("pruneToolCards 返回 %d 项，want 2", len(result))
+	var cards []*tool.ToolCard
+	namesToRemove := map[string]bool{"test": true}
+	result := d.pruneToolCards(cards, namesToRemove)
+	if len(result) != 0 {
+		t.Errorf("pruneToolCards 返回 %d 项，want 0", len(result))
 	}
 }
 
 // TestAppendToolCard 测试工具卡片追加。
 func TestAppendToolCard(t *testing.T) {
 	d := NewDeepAdapter()
-	d.appendToolCard([]any{"a"})
+	d.appendToolCard(nil)
 }
 
 // TestRemoveRegisteredTools 测试工具移除。
@@ -1090,10 +1098,10 @@ func TestDeepAdapter_Evolution占位函数(t *testing.T) {
 	if d.handleEvolutionApproval("req1", nil) != false {
 		t.Error("handleEvolutionApproval 占位应返回 false")
 	}
-	if msgs, err := d.getRecentMessages("s1"); msgs != nil || err != nil {
-		t.Errorf("getRecentMessages 占位应返回 nil, nil")
+	if msgs := d.getRecentMessages("s1"); msgs != nil {
+		t.Errorf("getRecentMessages 占位应返回 nil")
 	}
-	if msg, err := d.callModelForRecap(ctx, nil); msg != "" || err != nil {
+	if msg, err := d.callModelForRecap(ctx, nil, ""); msg != "" || err != nil {
 		t.Errorf("callModelForRecap 占位应返回 '', nil")
 	}
 	if count, err := d.countFullContextTokens(ctx, "s1"); count != 0 || err != nil {
