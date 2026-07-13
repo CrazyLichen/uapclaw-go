@@ -24,7 +24,7 @@ import (
 
 // modelSwitcher 模型切换能力接口
 type modelSwitcher interface {
-	SwitchModel(model *llm.Model)
+	SetLLM(model *llm.Model)
 	GetLLM() (*llm.Model, error)
 }
 
