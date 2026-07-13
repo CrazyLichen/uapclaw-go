@@ -278,9 +278,7 @@ func (r *AgentModeRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.
 	}
 
 	// 对齐 Python L176-182: 构建 plan 模式提示词节
-	enterStatus := r.buildEnterPlanModeStatus(planFilePath, planExists)
-	planFileInfo := r.buildPlanFileInfo(planFilePath, planExists)
-	section := sections.BuildPlanModeSection(enterStatus, planFileInfo, r.language)
+	section := sections.BuildPlanModeSection(planFilePath, planExists, r.language)
 
 	// 对齐 Python L183: 添加节
 	if r.systemPromptBuilder != nil {
@@ -848,48 +846,6 @@ func (r *AgentModeRail) languageIsCN() bool {
 		return true
 	}
 	return r.systemPromptBuilder.Language() == "cn"
-}
-
-// buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
-//
-// 对齐 Python: _build_enter_plan_mode_status() L200-223 + L309
-// 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
-func (r *AgentModeRail) buildEnterPlanModeStatus(planFilePath string, planExists bool) string {
-	if r.languageIsCN() {
-		if planFilePath != "" {
-			// 对齐 Python L309: 中文分支不含 Plan 文件路径（路径由 _build_plan_file_info 单独返回）
-			return "enter_plan_mode 已调用完成。请继续工作流。"
-		}
-		return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
-	}
-	// 英文
-	if planFilePath != "" {
-		return "enter_plan_mode has been called. Proceed with the workflow."
-	}
-	return "You have NOT called enter_plan_mode yet. Call it NOW as your first action."
-}
-
-// buildPlanFileInfo 构建 plan 文件信息描述。
-//
-// 对齐 Python: _build_plan_file_info() L226-257
-// 三状态分支 + 提示词一比一复刻 Python（含 edit_file/write_file 工具名引用）
-func (r *AgentModeRail) buildPlanFileInfo(planFilePath string, planExists bool) string {
-	if planFilePath == "" {
-		if r.languageIsCN() {
-			return "尚无 plan 文件。请先调用 enter_plan_mode 创建。"
-		}
-		return "No plan file yet. Call enter_plan_mode first to create one."
-	}
-	if planExists {
-		if r.languageIsCN() {
-			return fmt.Sprintf("计划文件已存在于 %s。你可以使用 edit_file 工具读取并增量编辑它。", planFilePath)
-		}
-		return fmt.Sprintf("A plan file already exists at %s. You can read it and make incremental edits using the edit_file tool.", planFilePath)
-	}
-	if r.languageIsCN() {
-		return fmt.Sprintf("计划文件尚不存在。你应该使用 write_file 工具在 %s 创建计划。", planFilePath)
-	}
-	return fmt.Sprintf("No plan file exists yet. You should create your plan at %s using the write_file tool.", planFilePath)
 }
 
 // filterHiddenTools 从 ModelCallInputs.Tools 中过滤掉指定名称集合的工具。

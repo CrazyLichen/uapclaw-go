@@ -929,46 +929,46 @@ func TestLanguageIsCN(t *testing.T) {
 	assert.False(t, r.languageIsCN())
 }
 
-// TestBuildEnterPlanModeStatus 验证构建 enter_plan_mode 状态描述
-func TestBuildEnterPlanModeStatus(t *testing.T) {
+// TestBuildPlanModeSection_中文 验证中文 BuildPlanModeSection 输出包含对应文本
+func TestBuildPlanModeSection_中文(t *testing.T) {
 	t.Parallel()
-
-	r := NewAgentModeRail(nil)
-	// 中文：builder 为 nil 时默认中文
-	r.systemPromptBuilder = nil
 
 	// 路径已设置（enter_plan_mode 已调用）
-	s := r.buildEnterPlanModeStatus("/tmp/plan.md", true)
-	assert.Contains(t, s, "enter_plan_mode")
-	assert.Contains(t, s, "工作流")
+	s := sections.BuildPlanModeSection("/tmp/plan.md", true, "cn")
+	assert.Contains(t, s.Content["cn"], "enter_plan_mode")
+	assert.Contains(t, s.Content["cn"], "工作流")
+	assert.Contains(t, s.Content["cn"], "/tmp/plan.md")
+	assert.Contains(t, s.Content["cn"], "edit_file")
 
 	// 路径未设置（enter_plan_mode 未调用）
-	s2 := r.buildEnterPlanModeStatus("", false)
-	assert.Contains(t, s2, "enter_plan_mode")
-}
-
-// TestBuildPlanFileInfo 验证构建 plan 文件信息描述
-func TestBuildPlanFileInfo(t *testing.T) {
-	t.Parallel()
-
-	r := NewAgentModeRail(nil)
-	// 中文：builder 为 nil 时默认中文
-	r.systemPromptBuilder = nil
-
-	// 路径为空（未调用 enter_plan_mode）
-	s := r.buildPlanFileInfo("", false)
-	assert.Contains(t, s, "plan 文件")
-	assert.Contains(t, s, "enter_plan_mode")
-
-	// 路径存在
-	s2 := r.buildPlanFileInfo("/tmp/plan.md", true)
-	assert.Contains(t, s2, "/tmp/plan.md")
-	assert.Contains(t, s2, "edit_file")
+	s2 := sections.BuildPlanModeSection("", false, "cn")
+	assert.Contains(t, s2.Content["cn"], "enter_plan_mode")
 
 	// 路径不存在
-	s3 := r.buildPlanFileInfo("/tmp/plan.md", false)
-	assert.Contains(t, s3, "/tmp/plan.md")
-	assert.Contains(t, s3, "write_file")
+	s3 := sections.BuildPlanModeSection("/tmp/plan.md", false, "cn")
+	assert.Contains(t, s3.Content["cn"], "/tmp/plan.md")
+	assert.Contains(t, s3.Content["cn"], "write_file")
+}
+
+// TestBuildPlanModeSection_英文 验证英文 BuildPlanModeSection 输出包含对应文本
+func TestBuildPlanModeSection_英文(t *testing.T) {
+	t.Parallel()
+
+	// 路径已设置（enter_plan_mode 已调用）
+	s := sections.BuildPlanModeSection("/tmp/plan.md", true, "en")
+	assert.Contains(t, s.Content["en"], "enter_plan_mode")
+	assert.Contains(t, s.Content["en"], "workflow")
+	assert.Contains(t, s.Content["en"], "/tmp/plan.md")
+	assert.Contains(t, s.Content["en"], "edit_file")
+
+	// 路径未设置（enter_plan_mode 未调用）
+	s2 := sections.BuildPlanModeSection("", false, "en")
+	assert.Contains(t, s2.Content["en"], "enter_plan_mode")
+
+	// 路径不存在
+	s3 := sections.BuildPlanModeSection("/tmp/plan.md", false, "en")
+	assert.Contains(t, s3.Content["en"], "/tmp/plan.md")
+	assert.Contains(t, s3.Content["en"], "write_file")
 }
 
 // TestParseToolArgs 验证工具参数解析
@@ -1409,54 +1409,6 @@ type fakeSubagentSpec struct {
 }
 
 func (f *fakeSubagentSpec) SpecName() string { return f.name }
-
-// --- 英文路径测试 ---
-
-// TestBuildEnterPlanModeStatus_英文 验证英文构建 enter_plan_mode 状态描述
-func TestBuildEnterPlanModeStatus_英文(t *testing.T) {
-	t.Parallel()
-
-	r := NewAgentModeRail(nil)
-	agent := newFakeDeepAgentForAgentMode()
-	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
-	r.systemPromptBuilder = builder
-	builder.SetLanguage("en")
-
-	// 路径已设置（enter_plan_mode 已调用）
-	s := r.buildEnterPlanModeStatus("/tmp/plan.md", true)
-	assert.Contains(t, s, "enter_plan_mode")
-	assert.Contains(t, s, "workflow")
-
-	// 路径未设置（enter_plan_mode 未调用）
-	s2 := r.buildEnterPlanModeStatus("", false)
-	assert.Contains(t, s2, "enter_plan_mode")
-}
-
-// TestBuildPlanFileInfo_英文 验证英文构建 plan 文件信息描述
-func TestBuildPlanFileInfo_英文(t *testing.T) {
-	t.Parallel()
-
-	r := NewAgentModeRail(nil)
-	agent := newFakeDeepAgentForAgentMode()
-	builder := agent.SystemPromptBuilder().(*saprompt.SystemPromptBuilder)
-	r.systemPromptBuilder = builder
-	builder.SetLanguage("en")
-
-	// 路径为空（未调用 enter_plan_mode）
-	s := r.buildPlanFileInfo("", false)
-	assert.Contains(t, s, "plan file")
-	assert.Contains(t, s, "enter_plan_mode")
-
-	// 路径存在
-	s2 := r.buildPlanFileInfo("/tmp/plan.md", true)
-	assert.Contains(t, s2, "/tmp/plan.md")
-	assert.Contains(t, s2, "edit_file")
-
-	// 路径不存在
-	s3 := r.buildPlanFileInfo("/tmp/plan.md", false)
-	assert.Contains(t, s3, "/tmp/plan.md")
-	assert.Contains(t, s3, "write_file")
-}
 
 // --- rejectTool 边界测试 ---
 

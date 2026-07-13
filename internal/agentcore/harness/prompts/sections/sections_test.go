@@ -337,7 +337,7 @@ func TestBuildSessionToolsSection_基本验证(t *testing.T) {
 
 // TestBuildPlanModeSection_基本验证 测试计划模式节基本属性
 func TestBuildPlanModeSection_基本验证(t *testing.T) {
-	s := BuildPlanModeSection("status info", "file info", "cn")
+	s := BuildPlanModeSection("/tmp/plan.md", true, "cn")
 	if s.Name != SectionModeInstructions {
 		t.Errorf("Name = %q, want %q", s.Name, SectionModeInstructions)
 	}
@@ -348,18 +348,16 @@ func TestBuildPlanModeSection_基本验证(t *testing.T) {
 
 // TestBuildPlanModeSection_替换占位符 测试计划模式节替换占位符
 func TestBuildPlanModeSection_替换占位符(t *testing.T) {
-	s := BuildPlanModeSection("enter_status_value", "plan_file_value", "cn")
-	if !strings.Contains(s.Content["cn"], "enter_status_value") {
-		t.Error("Content[cn] 应包含替换后的 enter_plan_mode_status")
-	}
-	if !strings.Contains(s.Content["cn"], "plan_file_value") {
-		t.Error("Content[cn] 应包含替换后的 plan_file_info")
-	}
+	s := BuildPlanModeSection("/tmp/plan.md", true, "cn")
+	// enter_plan_mode_status 和 plan_file_info 已被内部函数生成并替换
 	if strings.Contains(s.Content["cn"], "{enter_plan_mode_status}") {
 		t.Error("Content[cn] 不应包含未替换的 {enter_plan_mode_status}")
 	}
 	if strings.Contains(s.Content["cn"], "{plan_file_info}") {
 		t.Error("Content[cn] 不应包含未替换的 {plan_file_info}")
+	}
+	if !strings.Contains(s.Content["cn"], "/tmp/plan.md") {
+		t.Error("Content[cn] 应包含计划文件路径")
 	}
 }
 
@@ -594,12 +592,15 @@ func TestBuildContextSection_每日记忆(t *testing.T) {
 
 // TestBuildPlanModeSection_英文 测试计划模式节英文
 func TestBuildPlanModeSection_英文(t *testing.T) {
-	s := BuildPlanModeSection("status", "file info", "en")
+	s := BuildPlanModeSection("/tmp/plan.md", false, "en")
 	if s.Content["en"] == "" {
 		t.Error("Content[en] 不应为空")
 	}
 	if !strings.Contains(s.Content["en"], "Plan mode is active") {
 		t.Error("EN 版本应包含 'Plan mode is active'")
+	}
+	if !strings.Contains(s.Content["en"], "/tmp/plan.md") {
+		t.Error("EN 版本应包含计划文件路径")
 	}
 }
 

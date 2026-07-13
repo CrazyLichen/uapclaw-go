@@ -1,6 +1,7 @@
 package sections
 
 import (
+	"fmt"
 	"strings"
 
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
@@ -166,10 +167,14 @@ IMPORTANT: PLEASE STRICTLY FOLLOW THE PLAN WORKFLOW.
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildPlanModeSection 构建计划模式节（Priority 85）
+// BuildPlanModeSection 构建计划模式节（Priority 85）。
 //
-// enterStatus 为 enter_plan_mode 的状态描述；planFileInfo 为 plan 文件信息描述。
-func BuildPlanModeSection(enterStatus string, planFileInfo string, lang string) saprompt.PromptSection {
+// 内聚 buildEnterPlanModeStatus 和 buildPlanFileInfo 逻辑，对齐 Python 的内聚结构。
+// planFilePath 为计划文件路径；planExists 为计划文件是否存在；lang 为语言。
+func BuildPlanModeSection(planFilePath string, planExists bool, lang string) saprompt.PromptSection {
+	enterStatus := buildEnterPlanModeStatus(planFilePath, lang)
+	planFileInfo := buildPlanFileInfo(planFilePath, planExists, lang)
+
 	var template string
 	if lang == "en" {
 		template = planModePromptEN
@@ -185,4 +190,48 @@ func BuildPlanModeSection(enterStatus string, planFileInfo string, lang string) 
 		Content:  map[string]string{lang: content},
 		Priority: 85,
 	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// buildEnterPlanModeStatus 构建 enter_plan_mode 状态描述。
+//
+// 对齐 Python: _build_enter_plan_mode_status() L200-223 + L309
+// 三状态分支：planFilePath 是否非空判断 enter_plan_mode 是否已调用
+func buildEnterPlanModeStatus(planFilePath string, lang string) string {
+	if lang == "en" {
+		if planFilePath != "" {
+			return "enter_plan_mode has been called. Proceed with the workflow."
+		}
+		return "You have NOT called enter_plan_mode yet. Call it NOW as your first action."
+	}
+	// 中文
+	if planFilePath != "" {
+		// 对齐 Python L309: 中文分支不含 Plan 文件路径（路径由 _build_plan_file_info 单独返回）
+		return "enter_plan_mode 已调用完成。请继续工作流。"
+	}
+	return "你尚未调用 enter_plan_mode。请立即调用它作为你的第一个操作。"
+}
+
+// buildPlanFileInfo 构建 plan 文件信息描述。
+//
+// 对齐 Python: _build_plan_file_info() L226-257
+// 三状态分支 + 提示词一比一复刻 Python（含 edit_file/write_file 工具名引用）
+func buildPlanFileInfo(planFilePath string, planExists bool, lang string) string {
+	if planFilePath == "" {
+		if lang == "en" {
+			return "No plan file yet. Call enter_plan_mode first to create one."
+		}
+		return "尚无 plan 文件。请先调用 enter_plan_mode 创建。"
+	}
+	if planExists {
+		if lang == "en" {
+			return fmt.Sprintf("A plan file already exists at %s. You can read it and make incremental edits using the edit_file tool.", planFilePath)
+		}
+		return fmt.Sprintf("计划文件已存在于 %s。你可以使用 edit_file 工具读取并增量编辑它。", planFilePath)
+	}
+	if lang == "en" {
+		return fmt.Sprintf("No plan file exists yet. You should create your plan at %s using the write_file tool.", planFilePath)
+	}
+	return fmt.Sprintf("计划文件尚不存在。你应该使用 write_file 工具在 %s 创建计划。", planFilePath)
 }
