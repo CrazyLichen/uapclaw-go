@@ -36,13 +36,21 @@ func (a *ReActAgent) SetPromptBuilder(pb *prompts.SystemPromptBuilder) {
 	a.promptBuilder = pb
 }
 
-// SetLLM 设置预构建的 LLM 模型实例（跳过延迟初始化）。
-// 对齐 Python: agent.set_llm(model)
+// SetLLM 设置预构建的 LLM 模型实例并同步配置字段。
+// 对齐 Python: agent.set_llm(model) + config.model_name/model_client_config/model_config_obj 同步。
 // 注意：Configure() 会重置 llmOnce，
 // DeepAgent 需在每次调用 Configure 后重新调用此方法确保注入生效。
 func (a *ReActAgent) SetLLM(m *llm.Model) {
 	a.llm = m
 	a.llmOnce = sync.Once{}
+	// 同步 config 中的模型相关字段，对齐 Python _apply_model_to_react_agent
+	if a.config != nil && m != nil {
+		if m.ModelConfig != nil {
+			a.config.ModelNameVal = m.ModelConfig.ModelName
+		}
+		a.config.ModelClientConfig = m.ClientConfig
+		a.config.ModelRequestConfig = m.ModelConfig
+	}
 }
 
 // GetLLM 返回 LLM 模型实例（延迟初始化）。
@@ -50,16 +58,6 @@ func (a *ReActAgent) SetLLM(m *llm.Model) {
 // 导出版本，供 DeepAgent 等外部消费者调用。
 func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 	return a.getLLM()
-}
-
-// SwitchModel 切换模型并同步配置。
-// 对齐 Python: ctx.agent.set_llm(target_model) + ctx.agent.config.model_name = target_model.model_config.model_name
-// 封装 SetLLM + Config.ModelNameVal 同步，供 TaskPlanningRail 通过 modelSwitcher 最小接口调用。
-func (a *ReActAgent) SwitchModel(model *llm.Model) {
-	a.SetLLM(model)
-	if a.config != nil && model != nil && model.ModelConfig != nil {
-		a.config.ModelNameVal = model.ModelConfig.ModelName
-	}
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
