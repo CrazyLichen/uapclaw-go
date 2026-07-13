@@ -35,7 +35,6 @@ var ForwardReqMethods = map[string]bool{
 	"session.switch":                 true,
 	"acp.tool_response":              true,
 	"team.delete":                    true,
-	"session.delete":                 true,
 	"chat.send":                      true,
 	"chat.interrupt":                 true,
 	"chat.resume":                    true,

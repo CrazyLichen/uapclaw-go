@@ -583,12 +583,22 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 		}
 
 		if err != nil {
-			// 异常兜底默认值（对齐 Python except Exception 时 payload.setdefault）
-			result["context_engine_enabled"] = "false"
-			result["kv_cache_affinity_enabled"] = "false"
-			result["permissions_enabled"] = "false"
-			result["memory_forbidden_enabled"] = "false"
-			result["memory_forbidden_description"] = map[string]any{}
+			// 异常兜底默认值（对齐 Python except Exception 时 payload.setdefault，仅当键不存在时设置）
+			if _, ok := result["context_engine_enabled"]; !ok {
+				result["context_engine_enabled"] = "false"
+			}
+			if _, ok := result["kv_cache_affinity_enabled"]; !ok {
+				result["kv_cache_affinity_enabled"] = "false"
+			}
+			if _, ok := result["permissions_enabled"]; !ok {
+				result["permissions_enabled"] = "false"
+			}
+			if _, ok := result["memory_forbidden_enabled"]; !ok {
+				result["memory_forbidden_enabled"] = "false"
+			}
+			if _, ok := result["memory_forbidden_description"]; !ok {
+				result["memory_forbidden_description"] = ""
+			}
 		} else {
 			// 上下文引擎启用
 			result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
@@ -601,28 +611,32 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 			// 记忆禁止描述：返回 dict（对齐 Python getConfigAny 而非 getConfigString）
 			result["memory_forbidden_description"] = getConfigAny(cfg, "memory.forbidden_memory_definition.description", map[string]any{})
 		}
-		// skill_create: 环境变量优先，fallback config.yaml
-		if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
-			result["skill_create"] = normalizeTruthy(envVal)
-		} else if err == nil {
-			result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
-		} else {
-			result["skill_create"] = "false"
+		// skill_create: 环境变量优先，fallback config.yaml（setdefault 语义：仅当键不存在时设置）
+		if _, ok := result["skill_create"]; !ok {
+			if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
+				result["skill_create"] = normalizeTruthy(envVal)
+			} else if err == nil {
+				result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
+			} else {
+				result["skill_create"] = "false"
+			}
 		}
-		// evolution_auto_scan: 环境变量优先，fallback config.yaml
-		if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
-			result["evolution_auto_scan"] = normalizeTruthy(envVal)
-		} else if err == nil {
-			result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
-		} else {
-			result["evolution_auto_scan"] = "false"
+		// evolution_auto_scan: 环境变量优先，fallback config.yaml（setdefault 语义：仅当键不存在时设置）
+		if _, ok := result["evolution_auto_scan"]; !ok {
+			if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
+				result["evolution_auto_scan"] = normalizeTruthy(envVal)
+			} else if err == nil {
+				result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
+			} else {
+				result["evolution_auto_scan"] = "false"
+			}
 		}
 
-		// 默认值填充（仅当环境变量为空时）
-		if result["free_search_ddg_enabled"] == "" {
+		// 默认值填充（setdefault 语义：仅当键不存在或为空时）
+		if v, ok := result["free_search_ddg_enabled"]; !ok || v == "" {
 			result["free_search_ddg_enabled"] = "false"
 		}
-		if result["free_search_bing_enabled"] == "" {
+		if v, ok := result["free_search_bing_enabled"]; !ok || v == "" {
 			result["free_search_bing_enabled"] = "false"
 		}
 
@@ -686,7 +700,6 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPC
 		}
 
 		return map[string]any{
-			"ok":                      true,
 			"updated":                 updatedParamKeys,
 			"applied_without_restart": appliedWithoutRestart,
 		}, nil
@@ -707,7 +720,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 
 		envUpdates := make(map[string]string)
 		yamlUpdated := make([]string, 0)
-		modelsCount := 0
+		var modelsCount any // nil by default, 对齐 Python: null
 
 		// models 子载荷
 		var newModels []map[string]any
@@ -908,7 +921,8 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 	sessionsDir := workspace.AgentSessionsDir()
 
 	// 解析分页参数（对齐 Python L1264-1271）
-	limit := -1 // -1 表示不限
+	// Python 默认 limit=20，clamp: limit = max(1, min(limit, 200))
+	limit := 20
 	offset := 0
 	if params != nil {
 		if v, ok := params["limit"]; ok {
@@ -927,6 +941,13 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 				offset = int(ov)
 			}
 		}
+	}
+	// clamp: limit = max(1, min(limit, 200))
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 200 {
+		limit = 200
 	}
 
 	entries, err := os.ReadDir(sessionsDir)
@@ -968,7 +989,7 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 		offset = total
 	}
 	sessions = sessions[offset:]
-	if limit >= 0 && limit < len(sessions) {
+	if limit < len(sessions) {
 		sessions = sessions[:limit]
 	}
 
@@ -1022,7 +1043,7 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 		return nil, fmt.Errorf("写入 metadata.json 失败: %w", err)
 	}
 
-	return map[string]any{"session_id": sessionID, "ok": true}, nil
+	return map[string]any{"session_id": sessionID}, nil
 }
 
 // handleSessionDelete 处理 session.delete 请求。
@@ -1166,6 +1187,9 @@ func handleModelsValidate() RPCHandlerFunc {
 		if model == "" {
 			return map[string]any{"ok": false, "error": "model is required", "code": WsErrBadRequest}, nil
 		}
+		if modelProvider == "" {
+			return map[string]any{"ok": false, "error": "model_provider is required", "code": WsErrBadRequest}, nil
+		}
 
 		// 校验 model_provider 在可用列表中
 		if modelProvider != "" && !isAvailableProvider(modelProvider) {
@@ -1176,8 +1200,8 @@ func handleModelsValidate() RPCHandlerFunc {
 		apiBase = strings.TrimSuffix(apiBase, "/chat/completions")
 		apiBase = strings.TrimRight(apiBase, "/")
 
-		// verify_ssl
-		verifySSL := true
+		// verify_ssl（对齐 Python: bool(item.get("verify_ssl", False))，默认 false）
+		verifySSL := false
 		if v, ok := params["verify_ssl"].(bool); ok {
 			verifySSL = v
 		}

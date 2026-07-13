@@ -168,8 +168,8 @@ func TestBuildModelsDefaultsFromFrontend_正常(t *testing.T) {
 	assert.Equal(t, "gpt-4", mcc["model_name"])
 	assert.Equal(t, "OpenAI", mcc["client_provider"])
 	assert.Equal(t, "https://api.openai.com/v1", mcc["api_base"])
-	// verify_ssl 默认 true
-	assert.Equal(t, true, mcc["verify_ssl"])
+	// verify_ssl 默认 false（对齐 Python: bool(item.get("verify_ssl", False))）
+	assert.Equal(t, false, mcc["verify_ssl"])
 
 	mco, ok := result[0]["model_config_obj"].(map[string]any)
 	assert.True(t, ok)

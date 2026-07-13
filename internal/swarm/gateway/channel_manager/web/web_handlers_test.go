@@ -157,7 +157,10 @@ func TestHandleConfigSet(t *testing.T) {
 		"model":          "gpt-4",
 	}, "sess_test")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	// config.set 响应不再包含 "ok"（对齐 Python: payload 中无 ok）
+	assert.NotContains(t, result, "ok")
+	assert.Contains(t, result, "updated")
+	assert.Contains(t, result, "applied_without_restart")
 
 	// 验证环境变量已更新
 	assert.Equal(t, "OpenAI", os.Getenv("MODEL_PROVIDER"))
@@ -209,7 +212,8 @@ func TestHandleSessionCreate(t *testing.T) {
 		"title":      "test-session",
 	}, "")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	// session.create 响应不再包含 "ok"（对齐 Python: payload 中无 ok）
+	assert.NotContains(t, result, "ok")
 	sessionID, ok := result["session_id"].(string)
 	require.True(t, ok)
 	assert.Equal(t, "test-create-session", sessionID)
@@ -478,7 +482,8 @@ func TestHandleSessionCreate_含全部字段(t *testing.T) {
 		"mode":       "BUILD",
 	}, "")
 	require.NoError(t, err)
-	assert.True(t, result["ok"].(bool))
+	// session.create 响应不再包含 "ok"（对齐 Python: payload 中无 ok）
+	assert.NotContains(t, result, "ok")
 }
 
 func TestHandleSessionDelete_不存在的会话(t *testing.T) {

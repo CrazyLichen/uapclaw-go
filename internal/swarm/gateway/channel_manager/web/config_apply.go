@@ -469,7 +469,7 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 			isDefault = isTruthy(d)
 		}
 
-		verifySSL := true
+		verifySSL := false
 		if v, ok := itemMap["verify_ssl"].(bool); ok {
 			verifySSL = v
 		}
