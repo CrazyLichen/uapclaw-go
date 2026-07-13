@@ -36,8 +36,9 @@ const (
 //  6. 返回 capabilities
 //
 // 当前仅返回空 capabilities + protocol_version，待后续补齐：
-//   ⤵️ ACP 章节：解析 clientCapabilities、ACP channel 处理
-//   ⤵️ AgentManager 章节：agentManager.initialize() 调用、ACP_DEFAULT_CAPABILITIES fallback
+//
+//	⤵️ ACP 章节：解析 clientCapabilities、ACP channel 处理
+//	⤵️ AgentManager 章节：agentManager.initialize() 调用、ACP_DEFAULT_CAPABILITIES fallback
 func (s *AgentServer) handleInitialize(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{

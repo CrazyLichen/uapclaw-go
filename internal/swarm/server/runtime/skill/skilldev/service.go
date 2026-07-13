@@ -249,7 +249,7 @@ func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any,
 			})), nil
 		}
 		return singleChunkChannel(schema.NewAgentResponseChunk(requestID, channelID, map[string]any{
-			"ok":   true,
+			"ok":    true,
 			"tasks": taskIDs,
 		})), nil
 	}

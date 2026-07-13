@@ -31,21 +31,21 @@ type fakeAdapter struct {
 	userAnswerErr   error
 	instanceCreated bool
 	// ContextCompressor mock 返回值
-	compressResult   map[string]any
-	compressErr      error
-	contextUsage     map[string]any
-	contextUsageErr  error
-	recapResult      map[string]any
-	recapErr         error
+	compressResult  map[string]any
+	compressErr     error
+	contextUsage    map[string]any
+	contextUsageErr error
+	recapResult     map[string]any
+	recapErr        error
 }
 
 func newFakeAdapter() *fakeAdapter {
 	return &fakeAdapter{
-		processResp:   schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true), schema.WithPayload(map[string]any{"content": "mock response"})),
-		interruptResp: schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true)),
+		processResp:    schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true), schema.WithPayload(map[string]any{"content": "mock response"})),
+		interruptResp:  schema.NewAgentResponse("fake", "fake", schema.WithResponseOK(true)),
 		compressResult: map[string]any{"ok": true, "compressed": false},
-		contextUsage:  map[string]any{"usage": 0, "limit": 0},
-		recapResult:   map[string]any{"status": "ok", "summary": "mock recap"},
+		contextUsage:   map[string]any{"usage": 0, "limit": 0},
+		recapResult:    map[string]any{"status": "ok", "summary": "mock recap"},
 	}
 }
 

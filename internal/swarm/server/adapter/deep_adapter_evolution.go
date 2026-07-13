@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	ceinterface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -63,7 +63,7 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 		totalTokens, _ := d.countFullContextTokens(ctx, sessionID)
 		stats := modelCtx.Statistic()
 		response["stats"] = map[string]any{
-			"total_messages":    stats.TotalMessages,
+			"total_messages":   stats.TotalMessages,
 			"total_tokens":     totalTokens,
 			"raw_total_tokens": rawTotalTokens,
 		}

@@ -22,8 +22,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -1767,10 +1767,10 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 //
 // Python 执行步骤：
 //
-//	1. resolved_language = resolve_language(language)
-//	2. builder = SystemPromptBuilder(language=resolved_language)
-//	3. builder.add_section(_identity_prompt(resolved_language))
-//	4. return builder.build()
+//  1. resolved_language = resolve_language(language)
+//  2. builder = SystemPromptBuilder(language=resolved_language)
+//  3. builder.add_section(_identity_prompt(resolved_language))
+//  4. return builder.build()
 func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
 	// 步骤 1: 对齐 Python: resolved_language = resolve_language(language)
 	resolvedLanguage := prompts.ResolveLanguage(language)

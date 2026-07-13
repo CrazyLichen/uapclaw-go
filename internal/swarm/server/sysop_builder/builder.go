@@ -1,8 +1,8 @@
 package sysop_builder
 
 import (
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -118,7 +118,12 @@ func CreateSandboxSysOpCard(
 	logger.Info(logComponent).
 		Str("base_url", sandboxURL).
 		Str("sandbox_type", sandboxType).
-		Int("idle_ttl", func() int { if idleTTLSecs != nil { return *idleTTLSecs }; return -1 }()).
+		Int("idle_ttl", func() int {
+			if idleTTLSecs != nil {
+				return *idleTTLSecs
+			}
+			return -1
+		}()).
 		Int("excluded_commands", len(excludedCmds)).
 		Int("bind_mounts", bindMountsCount).
 		Str("policy_mode", "append").

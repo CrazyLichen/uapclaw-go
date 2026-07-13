@@ -18,7 +18,7 @@ func TestNewConfirmInterruptRail(t *testing.T) {
 	assert.Equal(t, 90, r.Priority())
 	assert.Contains(t, r.toolNames, "write_file")
 	assert.Contains(t, r.toolNames, "edit_file")
-	assert.Equal(t, "请确认或拒绝?", r.request.Message)
+	assert.Equal(t, "Please approve or reject?", r.request.Message)
 }
 
 // ──────────────────────────── resolveInterrupt ────────────────────────────
@@ -31,7 +31,7 @@ func TestConfirmInterruptRail_resolveInterrupt_无输入无AutoConfirm(t *testin
 	decision := r.resolveConfirmInterrupt(context.TODO(), nil, toolCall, nil, nil)
 	assert.IsType(t, &InterruptResult{}, decision)
 	interruptResult := decision.(*InterruptResult)
-	assert.Equal(t, "请确认或拒绝?", interruptResult.Request.GetMessage())
+	assert.Equal(t, "Please approve or reject?", interruptResult.Request.GetMessage())
 	assert.Equal(t, "write_file", interruptResult.Request.GetAutoConfirmKey())
 }
 

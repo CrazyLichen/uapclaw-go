@@ -76,8 +76,8 @@ func (d *DeepAdapter) syncToolGroup(toolGroup string, configBase map[string]any)
 
 	// 步骤 1: 从配置解析该工具组应启用的工具
 	// ⤵️ 9.38-49: 根据 toolGroup 解析 configBase 中的工具配置
-	var toolInstancesToAdd []tool.Tool      // ResourceMgr.AddTool 需要 tool.Tool
-	var toolCardsToAdd []*tool.ToolCard     // AbilityManager.Add 需要 schema.Ability（*ToolCard 实现）
+	var toolInstancesToAdd []tool.Tool  // ResourceMgr.AddTool 需要 tool.Tool
+	var toolCardsToAdd []*tool.ToolCard // AbilityManager.Add 需要 schema.Ability（*ToolCard 实现）
 	var toolIDsToRemove []string
 	_ = toolInstancesToAdd // ⤵️ 9.38-49: 从 configBase 解析待添加的工具实例
 	_ = toolCardsToAdd     // ⤵️ 9.38-49: 从 configBase 解析待添加的工具卡片
@@ -426,6 +426,7 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 //  7. 图片生成工具 (generate_image)
 //  8. 小艺手机端工具 (28个 xiaoyi_phone_tools)
 //  9. SkillToolkit (SkillToolkit.get_tools)
+//
 // 10. acp_chat (acp_agents 配置检查)
 func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	var toolCards []*tool.ToolCard

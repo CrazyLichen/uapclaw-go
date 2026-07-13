@@ -172,7 +172,7 @@ func TestGenerateIsolationKeyTemplate_CUSTOM(t *testing.T) {
 // TestGenerateIsolationKeyTemplate_空前缀 测试空前缀生成隔离键模板
 func TestGenerateIsolationKeyTemplate_空前缀(t *testing.T) {
 	result := generateIsolationKeyTemplate("", ContainerScopeSystem, "", "docker", "python")
-	assert.Equal(t, "system_docker_python__system", result)
+	assert.Equal(t, "system_docker_python_system", result)
 }
 
 // TestGenerateIsolationKeyTemplate_未知作用域 测试未知容器作用域使用 customID

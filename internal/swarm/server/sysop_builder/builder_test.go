@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── CreateLocalSysOpCard 测试 ────────────────────────────
