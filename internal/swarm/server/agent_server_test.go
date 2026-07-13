@@ -41,12 +41,10 @@ func TestAgentServer_Start_发送ConnectionAck(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 在后台启动 AgentServer
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = s.Start(ctx)
-	}()
+	// Start() 现在是非阻塞的
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
 
 	// 从 RecvCh 读取 connection.ack
 	recvCh, err := transport.Recv()
@@ -71,8 +69,9 @@ func TestAgentServer_Start_发送ConnectionAck(t *testing.T) {
 	}
 
 	// 停止 AgentServer
-	cancel()
-	<-done
+	if err := s.Stop(); err != nil {
+		t.Errorf("Stop 失败: %v", err)
+	}
 }
 
 // TestAgentServer_Stop 测试启动后 Stop 不报错。
@@ -82,12 +81,10 @@ func TestAgentServer_Stop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 启动 AgentServer
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = s.Start(ctx)
-	}()
+	// Start() 非阻塞
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
 
 	// 等待 connection.ack 确认启动完成
 	recvCh, err := s.transport.Recv()
@@ -112,9 +109,6 @@ func TestAgentServer_Stop(t *testing.T) {
 	if running {
 		t.Error("停止后 running 应为 false")
 	}
-
-	cancel()
-	<-done
 }
 
 // TestAgentServer_StreamTaskTracking 测试流式任务的注册和取消。
@@ -171,12 +165,10 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 启动 AgentServer
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = s.Start(ctx)
-	}()
+	// Start() 非阻塞
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
 
 	// 等待 connection.ack 确认启动完成
 	recvCh, err := transport.Recv()
@@ -220,6 +212,8 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 		t.Error("超时：未收到响应")
 	}
 
-	cancel()
-	<-done
+	// 停止 AgentServer
+	if err := s.Stop(); err != nil {
+		t.Errorf("Stop 失败: %v", err)
+	}
 }
