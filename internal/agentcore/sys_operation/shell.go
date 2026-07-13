@@ -53,15 +53,15 @@ type ShellOptions struct {
 	Grace float64
 }
 
-// BaseShellOperation ShellOperation 的空操作桩实现
 type BaseShellOperation struct {
 	BaseOperation
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ShellType Shell 类型枚举
 type ShellType int
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// ShellTypeAuto 自动检测
@@ -78,7 +78,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// String 返回 Shell 类型的字符串表示
 func (s ShellType) String() string {
 	switch s {
 	case ShellTypeAuto:
@@ -96,8 +95,6 @@ func (s ShellType) String() string {
 	}
 }
 
-// ParseShellType 将字符串解析为 ShellType。
-// 对齐 Python ShellType.from_str。
 func ParseShellType(s string) ShellType {
 	switch s {
 	case "auto":
@@ -115,7 +112,6 @@ func ParseShellType(s string) ShellType {
 	}
 }
 
-// NewShellOptions 从选项列表构造 ShellOptions
 func NewShellOptions(opts ...ShellOption) *ShellOptions {
 	o := &ShellOptions{Timeout: 300, Grace: 3.0}
 	for _, opt := range opts {
@@ -124,27 +120,22 @@ func NewShellOptions(opts ...ShellOption) *ShellOptions {
 	return o
 }
 
-// WithShellCwd 设置 Shell 操作工作目录
 func WithShellCwd(cwd string) ShellOption {
 	return func(o *ShellOptions) { o.Cwd = cwd }
 }
 
-// WithShellTimeout 设置 Shell 操作超时时间
 func WithShellTimeout(timeout int) ShellOption {
 	return func(o *ShellOptions) { o.Timeout = timeout }
 }
 
-// WithShellEnvironment 设置 Shell 操作环境变量
 func WithShellEnvironment(env map[string]string) ShellOption {
 	return func(o *ShellOptions) { o.Environment = env }
 }
 
-// WithShellType 设置 Shell 类型
 func WithShellType(st ShellType) ShellOption {
 	return func(o *ShellOptions) { o.ShellType = st }
 }
 
-// WithShellOptions 设置扩展配置选项
 func WithShellOptions(options map[string]any) ShellOption {
 	return func(o *ShellOptions) { o.Options = options }
 }
@@ -159,30 +150,24 @@ func (b *BaseShellOperation) ExecuteCmd(_ context.Context, _ string, _ ...ShellO
 	return nil, fmt.Errorf("未实现: ExecuteCmd")
 }
 
-// ExecuteCmdStream 流式执行命令（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ExecuteCmdStream(_ context.Context, _ string, _ ...ShellOption) (<-chan result.ExecuteCmdStreamResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCmdStream")
 }
 
-// ExecuteCmdBackground 后台执行命令（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ExecuteCmdBackground(_ context.Context, _ string, _ ...ShellOption) (*result.ExecuteCmdBackgroundResult, error) {
 	return nil, fmt.Errorf("未实现: ExecuteCmdBackground")
 }
 
-// ListTools 返回工具卡片列表（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ListTools() []*tool.ToolCard { return nil }
 
-// WriteStdin 向后台进程写入标准输入（BaseShellOperation 空实现）
 func (b *BaseShellOperation) WriteStdin(_ context.Context, _ string, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: WriteStdin")
 }
 
-// KillProcess 终止指定后台进程（BaseShellOperation 空实现）
 func (b *BaseShellOperation) KillProcess(_ context.Context, _ string, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: KillProcess")
 }
 
-// ListProcesses 列出所有后台进程（BaseShellOperation 空实现）
 func (b *BaseShellOperation) ListProcesses(_ context.Context, _ ...ShellOption) (*result.ExecuteCmdResult, error) {
 	return nil, fmt.Errorf("未实现: ListProcesses")
 }

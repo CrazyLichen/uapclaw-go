@@ -12,6 +12,15 @@ import (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// collectChunks 从 chunk channel 收集所有 chunk 到切片。
+func collectChunks(chunkCh <-chan *schema.AgentResponseChunk) []*schema.AgentResponseChunk {
+	var chunks []*schema.AgentResponseChunk
+	for chunk := range chunkCh {
+		chunks = append(chunks, chunk)
+	}
+	return chunks
+}
+
 // TestService_Handle_Dispatch 测试 Handle 方法分发。
 func TestService_Handle_Dispatch(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -27,15 +36,16 @@ func TestService_Handle_Dispatch(t *testing.T) {
 		ChannelID: "ch-1",
 		ReqMethod: schema.ReqMethod("unknown.method"),
 	}
-	results, err := svc.Handle(context.Background(), req)
+	chunkCh, err := svc.Handle(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Handle 返回错误: %v", err)
 	}
-	if len(results) == 0 {
-		t.Fatal("期望有结果，实际为空")
+	chunks := collectChunks(chunkCh)
+	if len(chunks) == 0 {
+		t.Fatal("期望有 chunk，实际为空")
 	}
-	if results[0]["event_type"] != "skilldev.error" {
-		t.Errorf("期望 event_type skilldev.error, 实际: %v", results[0]["event_type"])
+	if chunks[0].Payload["event_type"] != "skilldev.error" {
+		t.Errorf("期望 event_type skilldev.error, 实际: %v", chunks[0].Payload["event_type"])
 	}
 }
 
@@ -57,19 +67,20 @@ func TestService_Handle_Status_ListTasks(t *testing.T) {
 
 	// 不传 task_id → 返回任务列表
 	params := map[string]any{}
-	results, err := svc.handleStatus(context.Background(), params, "req-1", "ch-1")
+	chunkCh, err := svc.handleStatus(context.Background(), params, "req-1", "ch-1")
 	if err != nil {
 		t.Fatalf("handleStatus 返回错误: %v", err)
 	}
-	if len(results) == 0 {
-		t.Fatal("期望有结果，实际为空")
+	chunks := collectChunks(chunkCh)
+	if len(chunks) == 0 {
+		t.Fatal("期望有 chunk，实际为空")
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
-	tasks, ok := results[0]["tasks"].([]string)
+	tasks, ok := chunks[0].Payload["tasks"].([]string)
 	if !ok {
-		t.Fatalf("tasks 类型错误: %T", results[0]["tasks"])
+		t.Fatalf("tasks 类型错误: %T", chunks[0].Payload["tasks"])
 	}
 	if len(tasks) != 1 || tasks[0] != "task-1" {
 		t.Errorf("期望 tasks=[task-1], 实际: %v", tasks)
@@ -94,15 +105,16 @@ func TestService_Handle_Status_SingleTask(t *testing.T) {
 
 	// 传 task_id → 返回单个任务状态
 	params := map[string]any{"task_id": "task-2"}
-	results, err := svc.handleStatus(context.Background(), params, "req-2", "ch-2")
+	chunkCh, err := svc.handleStatus(context.Background(), params, "req-2", "ch-2")
 	if err != nil {
 		t.Fatalf("handleStatus 返回错误: %v", err)
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
-	if results[0]["stage"] != "generate" {
-		t.Errorf("期望 stage=generate, 实际: %v", results[0]["stage"])
+	if chunks[0].Payload["stage"] != "generate" {
+		t.Errorf("期望 stage=generate, 实际: %v", chunks[0].Payload["stage"])
 	}
 }
 
@@ -116,12 +128,13 @@ func TestService_Handle_Status_TaskNotFound(t *testing.T) {
 	svc := NewSkillDevService(deps)
 
 	params := map[string]any{"task_id": "nonexistent"}
-	results, err := svc.handleStatus(context.Background(), params, "req-3", "ch-3")
+	chunkCh, err := svc.handleStatus(context.Background(), params, "req-3", "ch-3")
 	if err != nil {
 		t.Fatalf("handleStatus 返回错误: %v", err)
 	}
-	if results[0]["ok"] != false {
-		t.Errorf("期望 ok=false, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != false {
+		t.Errorf("期望 ok=false, 实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -135,12 +148,13 @@ func TestService_Handle_Cancel(t *testing.T) {
 	svc := NewSkillDevService(deps)
 
 	params := map[string]any{"task_id": "cancel-1"}
-	results, err := svc.handleCancel(context.Background(), params, "req-4", "ch-4")
+	chunkCh, err := svc.handleCancel(context.Background(), params, "req-4", "ch-4")
 	if err != nil {
 		t.Fatalf("handleCancel 返回错误: %v", err)
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -163,16 +177,17 @@ func TestService_Handle_FileList(t *testing.T) {
 	}
 
 	params := map[string]any{"task_id": "task-files"}
-	results, err := svc.handleFileList(context.Background(), params, "req-5", "ch-5")
+	chunkCh, err := svc.handleFileList(context.Background(), params, "req-5", "ch-5")
 	if err != nil {
 		t.Fatalf("handleFileList 返回错误: %v", err)
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
-	tree, ok := results[0]["tree"].([]map[string]any)
+	tree, ok := chunks[0].Payload["tree"].([]map[string]any)
 	if !ok {
-		t.Fatalf("tree 类型错误: %T", results[0]["tree"])
+		t.Fatalf("tree 类型错误: %T", chunks[0].Payload["tree"])
 	}
 	if len(tree) == 0 {
 		t.Error("期望文件树非空")
@@ -189,12 +204,13 @@ func TestService_Handle_FileList_NoTaskID(t *testing.T) {
 	svc := NewSkillDevService(deps)
 
 	params := map[string]any{}
-	results, err := svc.handleFileList(context.Background(), params, "req-6", "ch-6")
+	chunkCh, err := svc.handleFileList(context.Background(), params, "req-6", "ch-6")
 	if err != nil {
 		t.Fatalf("handleFileList 返回错误: %v", err)
 	}
-	if results[0]["ok"] != false {
-		t.Errorf("期望 ok=false, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != false {
+		t.Errorf("期望 ok=false, 实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -217,15 +233,16 @@ func TestService_Handle_FileRead(t *testing.T) {
 	}
 
 	params := map[string]any{"task_id": "task-read", "path": "SKILL.md"}
-	results, err := svc.handleFileRead(context.Background(), params, "req-7", "ch-7")
+	chunkCh, err := svc.handleFileRead(context.Background(), params, "req-7", "ch-7")
 	if err != nil {
 		t.Fatalf("handleFileRead 返回错误: %v", err)
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
-	if results[0]["content"] != "# Test Content" {
-		t.Errorf("期望 content='# Test Content', 实际: %v", results[0]["content"])
+	if chunks[0].Payload["content"] != "# Test Content" {
+		t.Errorf("期望 content='# Test Content', 实际: %v", chunks[0].Payload["content"])
 	}
 }
 
@@ -246,12 +263,13 @@ func TestService_Handle_FileRead_PathTraversal(t *testing.T) {
 
 	// 尝试路径越界
 	params := map[string]any{"task_id": "task-traversal", "path": "../../etc/passwd"}
-	results, err := svc.handleFileRead(context.Background(), params, "req-8", "ch-8")
+	chunkCh, err := svc.handleFileRead(context.Background(), params, "req-8", "ch-8")
 	if err != nil {
 		t.Fatalf("handleFileRead 返回错误: %v", err)
 	}
-	if results[0]["ok"] != false {
-		t.Errorf("期望 ok=false（路径越界），实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != false {
+		t.Errorf("期望 ok=false（路径越界），实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -279,15 +297,16 @@ func TestService_Handle_Status_WithReqMethod(t *testing.T) {
 		ReqMethod: schema.ReqMethodSkilldevStatus,
 		Params:    paramsJSON,
 	}
-	results, err := svc.Handle(context.Background(), req)
+	chunkCh, err := svc.Handle(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Handle 返回错误: %v", err)
 	}
-	if len(results) == 0 {
-		t.Fatal("期望有结果")
+	chunks := collectChunks(chunkCh)
+	if len(chunks) == 0 {
+		t.Fatal("期望有 chunk")
 	}
-	if results[0]["ok"] != true {
-		t.Errorf("期望 ok=true, 实际: %v", results[0]["ok"])
+	if chunks[0].Payload["ok"] != true {
+		t.Errorf("期望 ok=true, 实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -308,12 +327,13 @@ func TestService_Download_NoZip(t *testing.T) {
 	}
 
 	params := map[string]any{"task_id": "task-nozip"}
-	results, err := svc.handleDownload(context.Background(), params, "req-10", "ch-10")
+	chunkCh, err := svc.handleDownload(context.Background(), params, "req-10", "ch-10")
 	if err != nil {
 		t.Fatalf("handleDownload 返回错误: %v", err)
 	}
-	if results[0]["ok"] != false {
-		t.Errorf("期望 ok=false（未打包），实际: %v", results[0]["ok"])
+	chunks := collectChunks(chunkCh)
+	if chunks[0].Payload["ok"] != false {
+		t.Errorf("期望 ok=false（未打包），实际: %v", chunks[0].Payload["ok"])
 	}
 }
 
@@ -374,8 +394,8 @@ func TestBuildFileTree(t *testing.T) {
 	}
 }
 
-// TestEventToPayload 测试事件转负载。
-func TestEventToPayload(t *testing.T) {
+// TestEventToChunk 测试事件转 chunk。
+func TestEventToChunk(t *testing.T) {
 	evt := SkillDevEvent{
 		EventType: SkillDevEventTypeStageChanged,
 		Payload: map[string]any{
@@ -385,25 +405,28 @@ func TestEventToPayload(t *testing.T) {
 		TaskID: "t1",
 	}
 
-	payload := eventToPayload(evt)
-	if payload["event_type"] != "skilldev.stage_changed" {
-		t.Errorf("期望 event_type=skilldev.stage_changed, 实际: %v", payload["event_type"])
+	chunk := eventToChunk(evt, "req-1", "ch-1")
+	if chunk.Payload["event_type"] != "skilldev.stage_changed" {
+		t.Errorf("期望 event_type=skilldev.stage_changed, 实际: %v", chunk.Payload["event_type"])
 	}
-	if payload["stage"] != "init" {
-		t.Errorf("期望 stage=init, 实际: %v", payload["stage"])
+	if chunk.Payload["stage"] != "init" {
+		t.Errorf("期望 stage=init, 实际: %v", chunk.Payload["stage"])
+	}
+	if chunk.RequestID != "req-1" {
+		t.Errorf("期望 request_id=req-1, 实际: %s", chunk.RequestID)
 	}
 }
 
 // TestErrorChunk 测试错误分块构造。
 func TestErrorChunk(t *testing.T) {
 	chunk := errorChunk("req-1", "ch-1", "测试错误")
-	if chunk["event_type"] != "skilldev.error" {
-		t.Errorf("期望 event_type=skilldev.error, 实际: %v", chunk["event_type"])
+	if chunk.Payload["event_type"] != "skilldev.error" {
+		t.Errorf("期望 event_type=skilldev.error, 实际: %v", chunk.Payload["event_type"])
 	}
-	if chunk["error"] != "测试错误" {
-		t.Errorf("期望 error=测试错误, 实际: %v", chunk["error"])
+	if chunk.Payload["error"] != "测试错误" {
+		t.Errorf("期望 error=测试错误, 实际: %v", chunk.Payload["error"])
 	}
-	if chunk["is_complete"] != true {
-		t.Errorf("期望 is_complete=true, 实际: %v", chunk["is_complete"])
+	if !chunk.IsComplete {
+		t.Errorf("期望 IsComplete=true, 实际: %v", chunk.IsComplete)
 	}
 }

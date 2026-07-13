@@ -24,6 +24,15 @@ func (h *fakeStageHandler) Execute(_ context.Context, _ *SkillDevContext) (*Stag
 	return &StageResult{NextStage: h.nextStage}, h.err
 }
 
+// collectEvents 从事件 channel 收集所有事件到切片。
+func collectEvents(eventCh <-chan SkillDevEvent) []SkillDevEvent {
+	var events []SkillDevEvent
+	for evt := range eventCh {
+		events = append(events, evt)
+	}
+	return events
+}
+
 // TestPipeline_Run_InitToPlanConfirm 测试 Pipeline 从 INIT 执行到 PLAN_CONFIRM 挂起点。
 func TestPipeline_Run_InitToPlanConfirm(t *testing.T) {
 	// 使用 fake handler 替换 INIT 和 PLAN 阶段
@@ -46,10 +55,12 @@ func TestPipeline_Run_InitToPlanConfirm(t *testing.T) {
 	state := NewSkillDevState("test-task-1")
 	pipeline := NewSkillDevPipeline("test-task-1", state, deps)
 
-	events, err := pipeline.Run(context.Background())
+	eventCh, err := pipeline.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run 返回错误: %v", err)
 	}
+
+	events := collectEvents(eventCh)
 
 	// 应在 PlanConfirm 挂起点暂停
 	if state.Stage != SkillDevStagePlanConfirm {
@@ -127,13 +138,15 @@ func TestPipeline_Resume_FromPlanConfirm(t *testing.T) {
 
 	pipeline := NewSkillDevPipeline("test-task-2", state, deps)
 
-	events, err := pipeline.Resume(context.Background(), map[string]any{
+	eventCh, err := pipeline.Resume(context.Background(), map[string]any{
 		"action": "confirm",
 		"plan":   plan,
 	})
 	if err != nil {
 		t.Fatalf("Resume 返回错误: %v", err)
 	}
+
+	events := collectEvents(eventCh)
 
 	// Resume 后：PlanConfirm → OnResume → nextStage=Generate
 	// Generate → Validate → TestDesign → Review(挂起点)
@@ -192,7 +205,8 @@ func TestPipeline_Run_ErrorHandling(t *testing.T) {
 	state := NewSkillDevState("test-task-4")
 	pipeline := NewSkillDevPipeline("test-task-4", state, deps)
 
-	events, _ := pipeline.Run(context.Background())
+	eventCh, _ := pipeline.Run(context.Background())
+	events := collectEvents(eventCh)
 
 	// 应进入 ERROR 阶段
 	if state.Stage != SkillDevStageError {
@@ -229,9 +243,21 @@ func TestPipeline_Run_UnknownHandler(t *testing.T) {
 
 	pipeline := NewSkillDevPipeline("test-task-5", state, deps)
 
-	_, err := pipeline.Run(context.Background())
-	if err == nil {
-		t.Error("期望未知阶段返回错误，实际返回 nil")
+	eventCh, err := pipeline.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run 返回错误: %v", err)
+	}
+
+	// 未知阶段：goroutine 应通过 channel 发送 ERROR 事件后 close
+	events := collectEvents(eventCh)
+	hasError := false
+	for _, evt := range events {
+		if evt.EventType == SkillDevEventTypeError {
+			hasError = true
+		}
+	}
+	if !hasError {
+		t.Error("期望收到 ERROR 事件（未知阶段），实际未收到")
 	}
 }
 
@@ -239,18 +265,18 @@ func TestPipeline_Run_UnknownHandler(t *testing.T) {
 func TestPipeline_emit(t *testing.T) {
 	pipeline := &SkillDevPipeline{
 		TaskID: "test-emit",
-		events: make([]SkillDevEvent, 0),
 	}
 
-	pipeline.emit(SkillDevEventTypeStageChanged, map[string]any{
+	eventCh := make(chan SkillDevEvent, 1)
+	pipeline.emit(eventCh, SkillDevEventTypeStageChanged, map[string]any{
 		"stage": "init",
 	})
 
-	if len(pipeline.events) != 1 {
-		t.Fatalf("期望 1 个事件，实际: %d", len(pipeline.events))
+	if len(eventCh) != 1 {
+		t.Fatalf("期望 1 个事件，实际: %d", len(eventCh))
 	}
 
-	evt := pipeline.events[0]
+	evt := <-eventCh
 	if evt.EventType != SkillDevEventTypeStageChanged {
 		t.Errorf("期望事件类型 stage_changed, 实际: %s", evt.EventType)
 	}

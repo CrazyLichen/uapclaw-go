@@ -589,6 +589,8 @@ func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.Agen
 }
 
 // handleSkillDevRequest 处理 skilldev.* 请求（非流式）。
+//
+// 消费 chunk channel，收集所有 payload 后打包为 AgentResponse。
 func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if !skill.IsSkillDevMethod(request.ReqMethod) {
 		return nil, nil
@@ -597,11 +599,15 @@ func (uc *UapClaw) handleSkillDevRequest(ctx context.Context, request *schema.Ag
 	if err != nil {
 		return nil, err
 	}
-	events, err := svc.Handle(ctx, request)
+	chunkCh, err := svc.Handle(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	// 将事件列表打包为响应
+	// 收集所有 chunk 的 payload
+	var events []map[string]any
+	for chunk := range chunkCh {
+		events = append(events, chunk.Payload)
+	}
 	payload := map[string]any{
 		"ok":     true,
 		"events": events,
@@ -639,6 +645,8 @@ func (uc *UapClaw) handlePluginsRequest(ctx context.Context, request *schema.Age
 }
 
 // handleSkillDevStreamRequest 处理 skilldev.* 流式请求。
+//
+// Handle 现在直接返回 chunk channel，此处只需追加终止哨兵。
 func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	svc, err := uc.ensureSkillDevService()
 	if err != nil {
@@ -650,7 +658,8 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 		close(ch)
 		return ch, nil
 	}
-	events, err := svc.Handle(ctx, request)
+	// Handle 现在直接返回 chunk channel
+	chunkCh, err := svc.Handle(ctx, request)
 	if err != nil {
 		ch := make(chan *schema.AgentResponseChunk, 1)
 		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
@@ -660,11 +669,14 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 		close(ch)
 		return ch, nil
 	}
-	ch := make(chan *schema.AgentResponseChunk, len(events)+1)
-	for _, evt := range events {
-		ch <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID, evt)
-	}
-	ch <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
-	close(ch)
-	return ch, nil
+	// 包装：追加终止哨兵
+	resultCh := make(chan *schema.AgentResponseChunk, 64)
+	go func() {
+		defer close(resultCh)
+		for chunk := range chunkCh {
+			resultCh <- chunk
+		}
+		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
+	}()
+	return resultCh, nil
 }

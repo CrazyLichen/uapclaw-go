@@ -28,8 +28,6 @@ type SkillDevPipeline struct {
 	State *SkillDevState
 	// deps 外部依赖
 	deps *SkillDevDeps
-	// events 事件收集切片（替代 Python asyncio.Queue）
-	events []SkillDevEvent
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -60,117 +58,135 @@ func NewSkillDevPipeline(taskID string, state *SkillDevState, deps *SkillDevDeps
 		TaskID: taskID,
 		State:  state,
 		deps:   deps,
-		events: make([]SkillDevEvent, 0),
 	}
 }
 
 // Run 从当前阶段开始执行，直到遇到挂起点或终态。
 //
+// 返回只读事件 channel，调用方逐个读取事件。
+// Pipeline goroutine 结束后自动 close channel。
+//
 // 对齐 Python: SkillDevPipeline.run() → AsyncIterator[SkillDevEvent]
-// Go 中改为返回 ([]SkillDevEvent, error)，因为 Go 没有 yield。
-func (p *SkillDevPipeline) Run(ctx context.Context) ([]SkillDevEvent, error) {
-	iterations := 0
-	for p.State.Stage != SkillDevStageCompleted && p.State.Stage != SkillDevStageError {
-		iterations++
-		if iterations > maxPipelineIterations {
-			errMsg := fmt.Sprintf("Pipeline 超过最大迭代次数 %d，可能存在无限循环", maxPipelineIterations)
-			p.State.Stage = SkillDevStageError
-			p.State.Error = &errMsg
-			p.emit(SkillDevEventTypeError, map[string]any{"message": errMsg})
-			_ = p.checkpoint()
-			break
-		}
-		// 命中挂起点：推送确认请求 → checkpoint → 暂停
-		if suspension, ok := SuspensionPoints[p.State.Stage]; ok {
-			p.emit(SkillDevEventTypeTodosUpdate, map[string]any{
+func (p *SkillDevPipeline) Run(ctx context.Context) (<-chan SkillDevEvent, error) {
+	eventCh := make(chan SkillDevEvent, 64)
+
+	go func() {
+		defer close(eventCh)
+
+		iterations := 0
+		for p.State.Stage != SkillDevStageCompleted && p.State.Stage != SkillDevStageError {
+			iterations++
+			if iterations > maxPipelineIterations {
+				errMsg := fmt.Sprintf("Pipeline 超过最大迭代次数 %d，可能存在无限循环", maxPipelineIterations)
+				p.State.Stage = SkillDevStageError
+				p.State.Error = &errMsg
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{"message": errMsg})
+				_ = p.checkpoint()
+				break
+			}
+			// 命中挂起点：推送确认请求 → checkpoint → 暂停
+			if suspension, ok := SuspensionPoints[p.State.Stage]; ok {
+				p.emit(eventCh, SkillDevEventTypeTodosUpdate, map[string]any{
+					"todos": ComputeTodos(p.State.Stage, &p.State.Mode),
+				})
+				p.emit(eventCh, SkillDevEventTypeConfirmRequest, map[string]any{
+					"confirm_type": suspension.ConfirmType,
+					"title":        suspension.Title,
+					"message":      suspension.Message,
+					"data":         suspension.ExtractData(p.State),
+					"actions":      suspension.Actions,
+				})
+				if err := p.checkpoint(); err != nil {
+					p.emit(eventCh, SkillDevEventTypeError, map[string]any{
+						"message": fmt.Sprintf("checkpoint 失败: %s", err),
+					})
+					return
+				}
+				break
+			}
+
+			// 执行当前阶段
+			handler, ok := stageHandlers[p.State.Stage]
+			if !ok {
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{
+					"message": fmt.Sprintf("阶段 %s 没有对应的处理器", p.State.Stage),
+				})
+				return
+			}
+
+			workspace, err := p.deps.WorkspaceProvider.EnsureLocal(p.TaskID)
+			if err != nil {
+				p.State.Stage = SkillDevStageError
+				errMsg := fmt.Sprintf("确保工作区失败: %s", err.Error())
+				p.State.Error = &errMsg
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{"message": errMsg})
+				_ = p.checkpoint()
+				return
+			}
+
+			stageEventCh := make(chan SkillDevEvent, 64)
+			sctx := NewSkillDevContext(p.TaskID, p.deps, p.State, workspace, stageEventCh)
+
+			p.emit(eventCh, SkillDevEventTypeStageChanged, map[string]any{
+				"stage":     string(p.State.Stage),
+				"iteration": p.State.Iteration,
+			})
+			p.emit(eventCh, SkillDevEventTypeTodosUpdate, map[string]any{
 				"todos": ComputeTodos(p.State.Stage, &p.State.Mode),
 			})
-			p.emit(SkillDevEventTypeConfirmRequest, map[string]any{
-				"confirm_type": suspension.ConfirmType,
-				"title":        suspension.Title,
-				"message":      suspension.Message,
-				"data":         suspension.ExtractData(p.State),
-				"actions":      suspension.Actions,
-			})
+
+			// 启动事件转发 goroutine，将 Context 的事件转发到 Pipeline 的 eventCh
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for evt := range stageEventCh {
+					eventCh <- evt
+				}
+			}()
+
+			result, execErr := handler.Execute(ctx, sctx)
+
+			// 关闭 stageEventCh，等待转发 goroutine 结束
+			close(stageEventCh)
+			<-done
+
+			if execErr != nil {
+				logger.Error(logComponent).
+					Str("task_id", p.TaskID).
+					Str("stage", string(p.State.Stage)).
+					Err(execErr).
+					Msg("[Pipeline] 阶段执行失败")
+				p.State.Stage = SkillDevStageError
+				errMsg := execErr.Error()
+				p.State.Error = &errMsg
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{"message": errMsg})
+				_ = p.checkpoint()
+				break
+			}
+
+			p.State.Stage = result.NextStage
 			if err := p.checkpoint(); err != nil {
-				return p.events, fmt.Errorf("checkpoint 失败: %w", err)
+				p.emit(eventCh, SkillDevEventTypeError, map[string]any{
+					"message": fmt.Sprintf("checkpoint 失败: %s", err),
+				})
+				return
 			}
-			break
 		}
+	}()
 
-		// 执行当前阶段
-		handler, ok := stageHandlers[p.State.Stage]
-		if !ok {
-			return p.events, fmt.Errorf("阶段 %s 没有对应的处理器", p.State.Stage)
-		}
-
-		workspace, err := p.deps.WorkspaceProvider.EnsureLocal(p.TaskID)
-		if err != nil {
-			p.State.Stage = SkillDevStageError
-			errMsg := fmt.Sprintf("确保工作区失败: %s", err.Error())
-			p.State.Error = &errMsg
-			p.emit(SkillDevEventTypeError, map[string]any{"message": errMsg})
-			_ = p.checkpoint()
-			return p.events, err
-		}
-
-		eventCh := make(chan SkillDevEvent, 64)
-		sctx := NewSkillDevContext(p.TaskID, p.deps, p.State, workspace, eventCh)
-
-		p.emit(SkillDevEventTypeStageChanged, map[string]any{
-			"stage":     string(p.State.Stage),
-			"iteration": p.State.Iteration,
-		})
-		p.emit(SkillDevEventTypeTodosUpdate, map[string]any{
-			"todos": ComputeTodos(p.State.Stage, &p.State.Mode),
-		})
-
-		// 启动事件转发 goroutine，将 Context 的事件收集到 Pipeline
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			for evt := range eventCh {
-				p.events = append(p.events, evt)
-			}
-		}()
-
-		result, execErr := handler.Execute(ctx, sctx)
-
-		// 关闭 eventCh，等待转发 goroutine 结束
-		close(eventCh)
-		<-done
-
-		if execErr != nil {
-			logger.Error(logComponent).
-				Str("task_id", p.TaskID).
-				Str("stage", string(p.State.Stage)).
-				Err(execErr).
-				Msg("[Pipeline] 阶段执行失败")
-			p.State.Stage = SkillDevStageError
-			errMsg := execErr.Error()
-			p.State.Error = &errMsg
-			p.emit(SkillDevEventTypeError, map[string]any{"message": errMsg})
-			_ = p.checkpoint()
-			break
-		}
-
-		p.State.Stage = result.NextStage
-		if err := p.checkpoint(); err != nil {
-			return p.events, fmt.Errorf("checkpoint 失败: %w", err)
-		}
-	}
-
-	return p.events, nil
+	return eventCh, nil
 }
 
 // Resume 从挂起点恢复执行。
 //
+// 返回只读事件 channel，调用方逐个读取事件。
+//
 // 对齐 Python: SkillDevPipeline.resume(data) → AsyncIterator[SkillDevEvent]
-// Go 中改为返回 ([]SkillDevEvent, error)。
-func (p *SkillDevPipeline) Resume(ctx context.Context, data map[string]any) ([]SkillDevEvent, error) {
+func (p *SkillDevPipeline) Resume(ctx context.Context, data map[string]any) (<-chan SkillDevEvent, error) {
 	currentStage := p.State.Stage
 	suspension, ok := SuspensionPoints[currentStage]
 	if !ok {
+		// 非挂起点，返回错误（不启动 goroutine，不创建 channel）
 		return nil, fmt.Errorf("阶段 %s 不是挂起点，无法调用 Resume()", currentStage)
 	}
 
@@ -186,20 +202,20 @@ func (p *SkillDevPipeline) Resume(ctx context.Context, data map[string]any) ([]S
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// emit 向事件切片追加一个事件。
+// emit 向事件 channel 发送一个事件。
 //
 // 对齐 Python: SkillDevPipeline._emit()
-func (p *SkillDevPipeline) emit(eventType SkillDevEventType, payload map[string]any) {
+func (p *SkillDevPipeline) emit(eventCh chan<- SkillDevEvent, eventType SkillDevEventType, payload map[string]any) {
 	merged := make(map[string]any, len(payload)+1)
 	merged["task_id"] = p.TaskID
 	for k, v := range payload {
 		merged[k] = v
 	}
-	p.events = append(p.events, SkillDevEvent{
+	eventCh <- SkillDevEvent{
 		EventType: eventType,
 		Payload:   merged,
 		TaskID:    p.TaskID,
-	})
+	}
 }
 
 // checkpoint 阶段边界：持久化状态 + 同步工作区文件。
