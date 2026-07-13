@@ -2,6 +2,7 @@ package skill
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1558,8 +1559,14 @@ func copyDir(src, dst string) error {
 
 // generateUUID 生成 UUID
 func generateUUID() string {
-	// 简单实现：使用时间戳 + 随机数
-	return fmt.Sprintf("%x", time.Now().UnixNano())
+	// 对齐 Python: uuid.uuid4()，使用 crypto/rand 生成标准 UUIDv4 格式
+	var uuid [16]byte
+	_, _ = rand.Read(uuid[:])
+	// 设置版本 4 和变体位
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
 }
 
 // envInt 从环境变量读取整数，带默认值

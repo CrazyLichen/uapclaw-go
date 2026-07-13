@@ -675,7 +675,7 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPC
 		}
 
 		// 步骤1-5: applyConfigPayload 统一处理
-		envUpdates, yamlUpdated, err := ApplyConfigPayload(params)
+		envUpdates, yamlUpdated, err := ApplyConfigPayload(params, nil)
 		if err != nil {
 			// 区分 BadRequest 和 InternalError
 			if _, ok := err.(*ConfigBadRequest); ok {
@@ -756,7 +756,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 
 		// 应用 config 子载荷
 		if len(configParams) > 0 {
-			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams)
+			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams, nil)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil

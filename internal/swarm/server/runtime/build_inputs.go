@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -72,6 +73,22 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 
 	files, _ := params["files"].(map[string]any)
 	finalQuery = BuildUserPrompt(query, files, channel, language, trustedDirs, metadata)
+
+	// 对齐 Python：interaction_context 存在时记录 debug 日志
+	if metadata != nil {
+		if ctx, ok := metadata["interaction_context"]; ok {
+			if ctxStr, ok := ctx.(string); ok && strings.TrimSpace(ctxStr) != "" {
+				truncated := query
+				if len(truncated) > 2000 {
+					truncated = truncated[:2000]
+				}
+				logger.Info(logComponent).
+					Str("event_type", "build_inputs_debug").
+					Str("query", truncated).
+					Msg("[_build_inputs][DEBUG] interaction_context 存在")
+			}
+		}
+	}
 
 	// 7. 组装 inputs 字典
 	sessionIDStr := ""

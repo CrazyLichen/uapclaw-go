@@ -58,7 +58,7 @@ func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 	r := &ConfirmInterruptRail{
 		BaseInterruptRail: *NewBaseInterruptRail(toolNames...),
 		request: ConfirmRequest{
-			Message:       "请确认或拒绝?",
+			Message:       "Please approve or reject?",
 			PayloadSchema: confirmPayloadSchema(),
 		},
 	}

@@ -86,8 +86,20 @@ func (e *ConfigInternalError) Error() string { return e.Message }
 // 返回值：
 //   - envUpdates: 本次变更的环境变量增量
 //   - yamlUpdated: 本次变更的 YAML 键列表
-func ApplyConfigPayload(params map[string]any) (envUpdates map[string]string, yamlUpdated []string, err error) {
-	// TODO(⤵️ 加密): 对齐 Python _encrypt_config_params，加密 api_key/token 字段
+func ApplyConfigPayload(params map[string]any, crypto CryptoProvider) (envUpdates map[string]string, yamlUpdated []string, err error) {
+	// 对齐 Python _encrypt_config_params (L692-699):
+	// 遍历 params，key 名包含 api_key 或 token 时加密
+	if crypto != nil {
+		for key, val := range params {
+			kl := strings.ToLower(key)
+			if strings.Contains(kl, "api_key") || strings.Contains(kl, "token") {
+				if strVal, ok := val.(string); ok && strVal != "" {
+					params[key] = crypto.Encrypt(strVal)
+				}
+			}
+		}
+	}
+
 	envUpdates = make(map[string]string)
 	yamlUpdated = make([]string, 0)
 
@@ -192,12 +204,21 @@ func NotifyConfigSavedOnce(
 	// 获取最新配置快照
 	configPayload := getConfigSnapshot()
 
-	// 合并变更键（对齐 Python: set(env_updates.keys()) | set(yaml_updated)）
+	// 合并变更键（对齐 Python: set(env_updates.keys()) | set(yaml_updated)，使用 map 去重）
+	seen := make(map[string]struct{}, len(envUpdates)+len(yamlUpdated))
 	updatedKeys := make([]string, 0, len(envUpdates)+len(yamlUpdated))
 	for k := range envUpdates {
-		updatedKeys = append(updatedKeys, k)
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			updatedKeys = append(updatedKeys, k)
+		}
 	}
-	updatedKeys = append(updatedKeys, yamlUpdated...)
+	for _, k := range yamlUpdated {
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			updatedKeys = append(updatedKeys, k)
+		}
+	}
 
 	// envUpdates 转 map[string]any
 	envUpdatesAny := make(map[string]any, len(envUpdates))

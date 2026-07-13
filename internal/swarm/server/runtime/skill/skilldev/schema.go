@@ -8,11 +8,12 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SkillDevEvent Pipeline 内部事件，最终被序列化为 AgentResponseChunk 推送给前端。
 type SkillDevEvent struct {
 	// EventType 事件类型
 	EventType SkillDevEventType `json:"event_type"`
@@ -22,7 +23,6 @@ type SkillDevEvent struct {
 	TaskID string `json:"task_id"`
 }
 
-// SkillDevState Pipeline 运行时状态，在请求执行期间驻内存，在阶段边界通过 StateStore checkpoint。
 type SkillDevState struct {
 	// TaskID 任务标识
 	TaskID string `json:"task_id"`
@@ -67,7 +67,6 @@ type SkillDevState struct {
 	Error *string `json:"error"`
 }
 
-// SuspensionAction 挂起点按钮动作
 type SuspensionAction struct {
 	// ID 动作标识
 	ID string `json:"id"`
@@ -77,15 +76,6 @@ type SuspensionAction struct {
 	Style string `json:"style"`
 }
 
-// SuspensionConfig 挂起点的声明式配置。
-//
-// Pipeline 到达挂起点时：
-// 1. 推送 CONFIRM_REQUEST 事件（前端据此弹出确认框）
-// 2. Checkpoint 当前状态并暂停
-//
-// 恢复时（前端通过 skilldev.respond 统一入口）：
-// 1. 调用 on_resume 更新状态
-// 2. 跳转到 next_stage
 type SuspensionConfig struct {
 	// ConfirmType 标识确认类型（前端用于区分弹框样式）
 	ConfirmType string `json:"confirm_type"`
@@ -105,7 +95,6 @@ type SuspensionConfig struct {
 	NextStageFunc func(data map[string]any) SkillDevStage
 }
 
-// StageGroup 一组后端阶段的展示配置。
 type StageGroup struct {
 	// ID 分组标识
 	ID string `json:"id"`
@@ -117,7 +106,6 @@ type StageGroup struct {
 	Modes map[SkillDevTaskMode]bool
 }
 
-// EvalCase 单个测试用例。
 type EvalCase struct {
 	// ID 用例标识
 	ID int `json:"id"`
@@ -131,7 +119,6 @@ type EvalCase struct {
 	Expectations []string `json:"expectations"`
 }
 
-// EvalSet 完整的测试集。
 type EvalSet struct {
 	// SkillName 技能名称
 	SkillName string `json:"skill_name"`
@@ -139,7 +126,6 @@ type EvalSet struct {
 	Evals []EvalCase `json:"evals"`
 }
 
-// GradingExpectation 单条 assertion 的评分结果。
 type GradingExpectation struct {
 	// Text 断言原文
 	Text string `json:"text"`
@@ -149,7 +135,6 @@ type GradingExpectation struct {
 	Evidence string `json:"evidence"`
 }
 
-// GradingResult 单次运行的评分结果（grading.json）。
 type GradingResult struct {
 	// Expectations 评分详情列表
 	Expectations []GradingExpectation `json:"expectations"`
@@ -161,7 +146,6 @@ type GradingResult struct {
 	FailedCount int `json:"failed_count"`
 }
 
-// RunTiming 单次运行的耗时数据（timing.json）。
 type RunTiming struct {
 	// TotalTokens 总 token 数
 	TotalTokens int `json:"total_tokens"`
@@ -171,7 +155,6 @@ type RunTiming struct {
 	TotalDurationSeconds float64 `json:"total_duration_seconds"`
 }
 
-// MetricStats 某指标的统计摘要。
 type MetricStats struct {
 	// Mean 均值
 	Mean float64 `json:"mean"`
@@ -183,7 +166,6 @@ type MetricStats struct {
 	Max float64 `json:"max"`
 }
 
-// BenchmarkRun benchmark.json 中的一条 run 记录。
 type BenchmarkRun struct {
 	// EvalID 用例标识
 	EvalID int `json:"eval_id"`
@@ -203,7 +185,6 @@ type BenchmarkRun struct {
 	Expectations []map[string]any `json:"expectations"`
 }
 
-// Benchmark 完整的 benchmark 结果。
 type Benchmark struct {
 	// SkillName 技能名称
 	SkillName string `json:"skill_name"`
@@ -217,7 +198,6 @@ type Benchmark struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// TriggerEvalQuery 描述优化阶段的单个触发测试查询。
 type TriggerEvalQuery struct {
 	// Query 查询文本
 	Query string `json:"query"`
@@ -225,7 +205,6 @@ type TriggerEvalQuery struct {
 	ShouldTrigger bool `json:"should_trigger"`
 }
 
-// DescOptimizeIteration 描述优化的单轮迭代结果。
 type DescOptimizeIteration struct {
 	// Iteration 迭代号
 	Iteration int `json:"iteration"`
@@ -243,14 +222,13 @@ type DescOptimizeIteration struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// SkillDevStage SkillDev Pipeline 的所有阶段。
-//
-// 流程：INIT → PLAN → PLAN_CONFIRM(挂起) → GENERATE → VALIDATE
-//
-//	→ TEST_DESIGN → TEST_RUN → EVALUATE → REVIEW(挂起)
-//	→ IMPROVE → (回到 TEST_RUN 迭代)
-//	→ PACKAGE → DESC_OPTIMIZE_CONFIRM(挂起) → DESC_OPTIMIZE → COMPLETED
 type SkillDevStage string
+
+type SkillDevTaskMode string
+
+type SkillDevEventType string
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// SkillDevStageInit 初始化
@@ -285,9 +263,6 @@ const (
 	SkillDevStageError SkillDevStage = "error"
 )
 
-// SkillDevTaskMode 任务入口模式（由请求参数自动判断）。
-type SkillDevTaskMode string
-
 const (
 	// SkillDevTaskModeCreate 纯 query 创建
 	SkillDevTaskModeCreate SkillDevTaskMode = "create"
@@ -296,12 +271,6 @@ const (
 	// SkillDevTaskModeModify 修改/升级已有 skill
 	SkillDevTaskModeModify SkillDevTaskMode = "modify"
 )
-
-// SkillDevEventType Pipeline 向前端推送的事件类型。
-//
-// 设计原则：后端推的每个事件，前端都应能直接映射到一个 UI 动作，
-// 而非让前端猜测语义。
-type SkillDevEventType string
 
 const (
 	// SkillDevEventTypeStageChanged 阶段切换（内部标识）
@@ -327,8 +296,6 @@ const (
 	// SkillDevEventTypeDescOptReady 描述优化 before/after
 	SkillDevEventTypeDescOptReady SkillDevEventType = "skilldev.desc_opt_ready"
 )
-
-// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// SkillNameMaxLen SKILL 名称最大长度
@@ -453,7 +420,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewSkillDevState 创建新的 SkillDevState 实例，初始化默认值。
 func NewSkillDevState(taskID string) *SkillDevState {
 	now := nowISO()
 	return &SkillDevState{
@@ -478,12 +444,10 @@ func NewSkillDevState(taskID string) *SkillDevState {
 	}
 }
 
-// Touch 更新 updated_at 时间戳。
 func (s *SkillDevState) Touch() {
 	s.UpdatedAt = nowISO()
 }
 
-// ToCheckpointDict 序列化为可持久化的字典（用于 StateStore）。
 func (s *SkillDevState) ToCheckpointDict() map[string]any {
 	return map[string]any{
 		"task_id":              s.TaskID,
@@ -507,7 +471,6 @@ func (s *SkillDevState) ToCheckpointDict() map[string]any {
 	}
 }
 
-// FromCheckpointDict 从持久化字典恢复状态。
 func FromCheckpointDict(data map[string]any) *SkillDevState {
 	state := &SkillDevState{
 		TaskID:    getStr(data, "task_id"),
@@ -534,7 +497,6 @@ func FromCheckpointDict(data map[string]any) *SkillDevState {
 	return state
 }
 
-// ToStatusDict 序列化为前端可展示的状态摘要。
 func (s *SkillDevState) ToStatusDict() map[string]any {
 	return map[string]any{
 		"task_id":      s.TaskID,
@@ -549,7 +511,6 @@ func (s *SkillDevState) ToStatusDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 EvalCase 为字典。
 func (e *EvalCase) ToDict() map[string]any {
 	return map[string]any{
 		"id":              e.ID,
@@ -560,7 +521,6 @@ func (e *EvalCase) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 EvalSet 为字典。
 func (es *EvalSet) ToDict() map[string]any {
 	evals := make([]map[string]any, len(es.Evals))
 	for i, e := range es.Evals {
@@ -572,7 +532,6 @@ func (es *EvalSet) ToDict() map[string]any {
 	}
 }
 
-// NewEvalSetFromDict 从字典恢复 EvalSet。
 func NewEvalSetFromDict(data map[string]any) *EvalSet {
 	skillName, _ := data["skill_name"].(string)
 	evalsData, _ := data["evals"].([]any)
@@ -601,7 +560,6 @@ func NewEvalSetFromDict(data map[string]any) *EvalSet {
 	return &EvalSet{SkillName: skillName, Evals: evals}
 }
 
-// ToDict 序列化 GradingResult 为字典。
 func (g *GradingResult) ToDict() map[string]any {
 	expectations := make([]map[string]any, len(g.Expectations))
 	for i, e := range g.Expectations {
@@ -622,7 +580,6 @@ func (g *GradingResult) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 RunTiming 为字典。
 func (rt *RunTiming) ToDict() map[string]any {
 	return map[string]any{
 		"total_tokens":           rt.TotalTokens,
@@ -631,7 +588,6 @@ func (rt *RunTiming) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 MetricStats 为字典。
 func (ms *MetricStats) ToDict() map[string]any {
 	return map[string]any{
 		"mean":   ms.Mean,
@@ -641,7 +597,6 @@ func (ms *MetricStats) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 BenchmarkRun 为字典。
 func (br *BenchmarkRun) ToDict() map[string]any {
 	return map[string]any{
 		"eval_id":       br.EvalID,
@@ -657,7 +612,6 @@ func (br *BenchmarkRun) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 Benchmark 为字典。
 func (b *Benchmark) ToDict() map[string]any {
 	runs := make([]map[string]any, len(b.Runs))
 	for i, r := range b.Runs {
@@ -674,7 +628,6 @@ func (b *Benchmark) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 TriggerEvalQuery 为字典。
 func (t *TriggerEvalQuery) ToDict() map[string]any {
 	return map[string]any{
 		"query":          t.Query,
@@ -682,7 +635,6 @@ func (t *TriggerEvalQuery) ToDict() map[string]any {
 	}
 }
 
-// ToDict 序列化 DescOptimizeIteration 为字典。
 func (d *DescOptimizeIteration) ToDict() map[string]any {
 	result := map[string]any{
 		"iteration":    d.Iteration,
@@ -697,9 +649,6 @@ func (d *DescOptimizeIteration) ToDict() map[string]any {
 	return result
 }
 
-// ComputeTodos 根据当前阶段和任务模式，计算面向用户的 Todo 列表。
-//
-// 后端是步骤定义的唯一权威来源。前端只做渲染。
 func ComputeTodos(currentStage SkillDevStage, mode *SkillDevTaskMode) []map[string]string {
 	groups := stageGroups
 	if mode != nil {
@@ -744,7 +693,6 @@ func ComputeTodos(currentStage SkillDevStage, mode *SkillDevTaskMode) []map[stri
 	return result
 }
 
-// GenerateTaskID 生成唯一 task_id，格式：sd_{timestamp}_{random}。
 func GenerateTaskID() string {
 	ts := time.Now().Unix()
 	b := make([]byte, 4)
@@ -753,7 +701,6 @@ func GenerateTaskID() string {
 	return fmt.Sprintf("sd_%d_%s", ts, randStr)
 }
 
-// DetermineTaskMode 根据请求参数自动判断任务模式。
 func DetermineTaskMode(params map[string]any) SkillDevTaskMode {
 	if _, ok := params["existing_skill"]; ok {
 		return SkillDevTaskModeModify
@@ -764,7 +711,6 @@ func DetermineTaskMode(params map[string]any) SkillDevTaskMode {
 	return SkillDevTaskModeCreate
 }
 
-// CalcStats 计算一组 float64 的统计摘要（均值、标准差、最小值、最大值）。
 func CalcStats(values []float64) MetricStats {
 	n := len(values)
 	if n == 0 {
@@ -797,8 +743,14 @@ func CalcStats(values []float64) MetricStats {
 	}
 }
 
-// GetNextStage 获取 SuspensionConfig 的下一阶段（支持固定值和动态函数）。
 func (sc *SuspensionConfig) GetNextStage(data map[string]any) SkillDevStage {
+	// 互斥校验：NextStage 和 NextStageFunc 不应同时设置
+	if sc.NextStageFunc != nil && sc.NextStage != "" {
+		logger.Warn(logComponent).
+			Str("event_type", "suspension_config_conflict").
+			Str("next_stage", string(sc.NextStage)).
+			Msg("SuspensionConfig 同时设置了 NextStage 和 NextStageFunc，优先使用 NextStageFunc")
+	}
 	if sc.NextStageFunc != nil {
 		return sc.NextStageFunc(data)
 	}
@@ -807,17 +759,14 @@ func (sc *SuspensionConfig) GetNextStage(data map[string]any) SkillDevStage {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// nowISO 返回当前 UTC 时间的 ISO 8601 字符串。
 func nowISO() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05Z")
 }
 
-// planExtractData PLAN_CONFIRM 挂起点的 extract_data 实现。
 func planExtractData(state *SkillDevState) map[string]any {
 	return map[string]any{"plan": state.Plan}
 }
 
-// planConfirmOnResume PLAN_CONFIRM 挂起点的 on_resume 实现。
 func planConfirmOnResume(state *SkillDevState, data map[string]any) {
 	if _, ok := data["plan"]; ok {
 		state.Plan = getNilMap(data, "plan")
@@ -826,7 +775,6 @@ func planConfirmOnResume(state *SkillDevState, data map[string]any) {
 	state.PlanConfirmedAt = &now
 }
 
-// reviewExtractData REVIEW 挂起点的 extract_data 实现。
 func reviewExtractData(state *SkillDevState) map[string]any {
 	evalResults := state.EvalResults
 	if evalResults == nil {
@@ -839,7 +787,6 @@ func reviewExtractData(state *SkillDevState) map[string]any {
 	}
 }
 
-// reviewOnResume REVIEW 挂起点的 on_resume 实现。
 func reviewOnResume(state *SkillDevState, data map[string]any) {
 	if feedback, ok := data["feedback"]; ok {
 		state.FeedbackHistory = append(state.FeedbackHistory, map[string]any{
@@ -849,7 +796,6 @@ func reviewOnResume(state *SkillDevState, data map[string]any) {
 	}
 }
 
-// reviewNextStage REVIEW 挂起点的 next_stage 动态函数。
 func reviewNextStage(data map[string]any) SkillDevStage {
 	action, _ := data["action"].(string)
 	if action == "" {
@@ -861,7 +807,6 @@ func reviewNextStage(data map[string]any) SkillDevStage {
 	return SkillDevStagePackage
 }
 
-// descOptExtractData DESC_OPTIMIZE_CONFIRM 挂起点的 extract_data 实现。
 func descOptExtractData(state *SkillDevState) map[string]any {
 	plan := state.Plan
 	if plan == nil {
@@ -871,12 +816,10 @@ func descOptExtractData(state *SkillDevState) map[string]any {
 	return map[string]any{"current_description": desc}
 }
 
-// descOptimizeConfirmOnResume DESC_OPTIMIZE_CONFIRM 挂起点的 on_resume 实现。
 func descOptimizeConfirmOnResume(_ *SkillDevState, _ map[string]any) {
 	// 无操作，对齐 Python pass
 }
 
-// descOptimizeConfirmNextStage DESC_OPTIMIZE_CONFIRM 挂起点的 next_stage 动态函数。
 func descOptimizeConfirmNextStage(data map[string]any) SkillDevStage {
 	action, _ := data["action"].(string)
 	if action == "" {
@@ -888,13 +831,11 @@ func descOptimizeConfirmNextStage(data map[string]any) SkillDevStage {
 	return SkillDevStageCompleted
 }
 
-// getStr 从 map 中获取字符串值。
 func getStr(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }
 
-// getStrDefault 从 map 中获取字符串值，不存在则返回默认值。
 func getStrDefault(m map[string]any, key, defaultVal string) string {
 	v, ok := m[key].(string)
 	if !ok {
@@ -903,7 +844,6 @@ func getStrDefault(m map[string]any, key, defaultVal string) string {
 	return v
 }
 
-// getIntDefault 从 map 中获取整数值，不存在则返回默认值。
 func getIntDefault(m map[string]any, key string, defaultVal int) int {
 	v, ok := m[key]
 	if !ok {
@@ -912,7 +852,6 @@ func getIntDefault(m map[string]any, key string, defaultVal int) int {
 	return toInt(v)
 }
 
-// toInt 将 any 转为 int（支持 float64/json.Number 等常见反序列化类型）。
 func toInt(v any) int {
 	switch n := v.(type) {
 	case int:
@@ -932,7 +871,6 @@ func toInt(v any) int {
 	}
 }
 
-// getMapDefault 从 map 中获取 map[string]any，不存在则返回空 map。
 func getMapDefault(m map[string]any, key string) map[string]any {
 	v, ok := m[key].(map[string]any)
 	if !ok {
@@ -941,7 +879,6 @@ func getMapDefault(m map[string]any, key string) map[string]any {
 	return v
 }
 
-// getNilMap 从 map 中获取 map[string]any，不存在则返回 nil。
 func getNilMap(m map[string]any, key string) map[string]any {
 	v, ok := m[key].(map[string]any)
 	if !ok {
@@ -950,7 +887,6 @@ func getNilMap(m map[string]any, key string) map[string]any {
 	return v
 }
 
-// getStrSliceDefault 从 map 中获取 []string，不存在则返回空切片。
 func getStrSliceDefault(m map[string]any, key string) []string {
 	v, ok := m[key].([]any)
 	if !ok {
@@ -959,7 +895,6 @@ func getStrSliceDefault(m map[string]any, key string) []string {
 	return toStringSlice(v)
 }
 
-// toStringSlice 将 []any 转为 []string。
 func toStringSlice(v []any) []string {
 	result := make([]string, 0, len(v))
 	for _, item := range v {
@@ -970,7 +905,6 @@ func toStringSlice(v []any) []string {
 	return result
 }
 
-// getMapSliceDefault 从 map 中获取 []map[string]any，不存在则返回空切片。
 func getMapSliceDefault(m map[string]any, key string) []map[string]any {
 	v, ok := m[key].([]any)
 	if !ok {
@@ -985,7 +919,6 @@ func getMapSliceDefault(m map[string]any, key string) []map[string]any {
 	return result
 }
 
-// getNilStr 从 map 中获取 *string（可空字符串），不存在或为 nil 则返回 nil。
 func getNilStr(m map[string]any, key string) *string {
 	v, ok := m[key]
 	if !ok || v == nil {

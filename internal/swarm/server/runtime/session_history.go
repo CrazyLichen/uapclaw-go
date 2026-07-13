@@ -2,12 +2,15 @@ package runtime
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -93,6 +96,59 @@ func AppendHistoryRecord(sessionID, requestID, channelID, role, content string,
 		// 队列满时退化为同步写，避免丢失记录
 		writeHistoryItem(sid, item)
 	}
+}
+
+// AppendCompactHistoryRecords 写入 context compact 的 boundary + summary 记录。
+//
+// 对齐 Python: append_compact_history_records(session_id, request_id, channel_id, summary, timestamp, trigger, stats, mode)
+func AppendCompactHistoryRecords(sessionID, requestID, channelID, summary string,
+	timestamp float64, trigger string, stats map[string]any, mode string) {
+	// 1. 写入 context.compact_boundary 记录
+	metadata := map[string]any{
+		"compact_metadata": map[string]any{
+			"trigger": trigger,
+		},
+	}
+	if stats != nil {
+		cm := metadata["compact_metadata"].(map[string]any)
+		for k, v := range stats {
+			cm[k] = v
+		}
+	}
+	AppendHistoryRecord(sessionID, requestID, channelID, "assistant",
+		"Conversation compacted", timestamp, "context.compact_boundary",
+		metadata, nil, mode)
+
+	// 2. 如果 summary 非空，写入 context.compact_summary 记录
+	cleanSummary := strings.TrimSpace(summary)
+	if cleanSummary == "" {
+		return
+	}
+	summaryMetadata := map[string]any{}
+	for k, v := range metadata {
+		summaryMetadata[k] = v
+	}
+	summaryMetadata["is_compact_summary"] = true
+	summaryMetadata["transcript_only"] = true
+	AppendHistoryRecord(sessionID, requestID, channelID, "assistant",
+		cleanSummary, timestamp+0.001, "context.compact_summary",
+		summaryMetadata, nil, mode)
+}
+
+// AppendCompactHistoryFromPayload 从 payload 中提取 compact 信息并写入 history。
+//
+// 对齐 Python: _append_compact_history_from_payload(payload, session_id, request_id, channel_id, mode)
+func AppendCompactHistoryFromPayload(payload map[string]any, sessionID, requestID, channelID, mode string) {
+	summaryText := ""
+	if s, ok := payload["compact_summary"]; ok {
+		summaryText = strings.TrimSpace(fmt.Sprint(s))
+	}
+	if summaryText == "" || !isSuccessfulCompactionPayload(payload) {
+		return
+	}
+	AppendCompactHistoryRecords(sessionID, requestID, channelID,
+		summaryText, schema.NowTimestamp(), "auto",
+		compactStatsFromPayload(payload), mode)
 }
 
 // ReadHistoryRecords 读取指定 session 的全部 history 记录。
@@ -214,4 +270,31 @@ func normalizeSessionID(sessionID string) string {
 		return "default"
 	}
 	return sid
+}
+
+// isSuccessfulCompactionPayload 判断 payload 是否表示成功的压缩。
+//
+// 对齐 Python: _is_successful_compaction_payload(payload)
+func isSuccessfulCompactionPayload(payload map[string]any) bool {
+	if v, ok := payload["error"]; ok && v != nil {
+		return false
+	}
+	status := ""
+	if s, ok := payload["status"]; ok {
+		status = strings.TrimSpace(strings.ToLower(fmt.Sprint(s)))
+	}
+	return status != "error" && status != "failed" && status != "skipped"
+}
+
+// compactStatsFromPayload 从 payload 中提取压缩统计字段。
+//
+// 对齐 Python: _compact_stats_from_payload(payload)
+func compactStatsFromPayload(payload map[string]any) map[string]any {
+	stats := make(map[string]any)
+	for _, key := range []string{"status", "phase", "processor", "model", "before", "after", "saved", "duration_ms"} {
+		if v, ok := payload[key]; ok {
+			stats[key] = v
+		}
+	}
+	return stats
 }

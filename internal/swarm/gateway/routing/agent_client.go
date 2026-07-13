@@ -3,6 +3,7 @@ package routing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -215,7 +216,9 @@ func (ac *AgentClient) WaitServerReady(ctx context.Context) bool {
 //
 // 对齐 Python: WebSocketAgentServerClient.send_request(envelope)
 func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelope) (*schema.AgentResponse, error) {
-	ac.ensureConnected()
+	if err := ac.ensureConnected(); err != nil {
+		return nil, err
+	}
 
 	// 强制非流式（对齐 Python envelope.is_stream = False）
 	envelope.IsStream = false
@@ -290,7 +293,9 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 //
 // 对齐 Python: WebSocketAgentServerClient.send_request_stream(envelope)
 func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AEnvelope) (<-chan *schema.AgentResponseChunk, error) {
-	ac.ensureConnected()
+	if err := ac.ensureConnected(); err != nil {
+		return nil, err
+	}
 
 	// 强制流式（对齐 Python envelope.is_stream = True）
 	envelope.IsStream = true
@@ -551,13 +556,14 @@ func (ac *AgentClient) delayedCleanupCancelledRequestID(rid string) {
 // ensureConnected 检查是否已连接。
 //
 // 对齐 Python: WebSocketAgentServerClient._ensure_connected()
-func (ac *AgentClient) ensureConnected() {
+func (ac *AgentClient) ensureConnected() error {
 	ac.runningMu.RLock()
 	r := ac.running
 	ac.runningMu.RUnlock()
 	if !r {
-		panic("AgentClient 未连接 AgentServer，请先调用 Connect()")
+		return errors.New("AgentClient 未连接 AgentServer，请先调用 Connect()")
 	}
+	return nil
 }
 
 // streamReceiver 流式响应接收 goroutine。

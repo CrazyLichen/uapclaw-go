@@ -101,7 +101,17 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 		return content
 	}
 
-	return interactionPrefix + prompt + string(contextJSON)
+	finalPrompt := interactionPrefix + prompt + string(contextJSON)
+
+	// 对齐 Python：interaction_prefix 存在时记录 debug 日志
+	if interactionPrefix != "" {
+		logger.Info(logComponent).
+			Str("event_type", "build_user_prompt_debug").
+			Str("final_prompt", finalPrompt).
+			Msg("[build_user_prompt][DEBUG] interaction_context 存在，最终 prompt")
+	}
+
+	return finalPrompt
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

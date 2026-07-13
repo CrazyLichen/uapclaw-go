@@ -201,10 +201,19 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 	// ⤵️ 10.3.2: Team 模式判断（isTeamMode / isAutoHarnessResume）
 	// ⤵️ 10.3.2: Team 模式使用原始 query（不经过 BuildUserPrompt 包装）
 
-	// 4. 记录 user 历史
+	// 4. 记录 user 历史，对齐 Python：mode 取 request.params["mode"]，空时设为 "unknown"
+	userMode := ""
+	if p := parseRequestParams(request); p != nil {
+		if m, ok := p["mode"].(string); ok {
+			userMode = m
+		}
+	}
+	if userMode == "" {
+		userMode = "unknown"
+	}
 	AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 		"user", uc.extractQuery(request), float64(time.Now().UnixMilli())/1000,
-		"", nil, nil, "")
+		"", nil, nil, userMode)
 
 	// 5. 构建 inputs
 	inputs, _, _ := uc.BuildInputs(request)
@@ -224,6 +233,19 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 			if streamErr == context.Canceled || streamErr == context.DeadlineExceeded {
 				return
 			}
+			// 对齐 Python: append_history_record(event_type="chat.error", ...)
+			errMode := ""
+			if p := parseRequestParams(request); p != nil {
+				if m, ok := p["mode"].(string); ok {
+					errMode = m
+				}
+			}
+			if errMode == "" {
+				errMode = "unknown"
+			}
+			AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
+				"assistant", streamErr.Error(), float64(time.Now().UnixMilli())/1000,
+				"chat.error", nil, nil, errMode)
 			outCh <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
 				map[string]any{"event_type": "chat.error", "error": streamErr.Error()},
 			)
@@ -260,9 +282,36 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 							if streamMode == "" {
 								streamMode = "unknown"
 							}
+							// 对齐 Python: team.message 展开 event 字段到 extra
+							var extraFields map[string]any
+							if eventType == "team.message" {
+								if event, ok := payload["event"]; ok {
+									if eventData, ok := event.(map[string]any); ok {
+										extraFields = make(map[string]any)
+										for k, v := range eventData {
+											if k != "type" && k != "timestamp" && k != "content" {
+												extraFields[k] = v
+											}
+										}
+									}
+								}
+							}
 							AppendHistoryRecord(sessionID, request.RequestID, request.ChannelID,
 								"assistant", extractChunkContent(payload), float64(time.Now().UnixMilli())/1000,
-								eventType, nil, nil, streamMode)
+								eventType, extraFields, nil, streamMode)
+						}
+						// 对齐 Python: context_compression_state 事件写入 compact history
+						if eventType == "context_compression_state" {
+							compMode := ""
+							if p := parseRequestParams(request); p != nil {
+								if m, ok := p["mode"].(string); ok {
+									compMode = m
+								}
+							}
+							if compMode == "" {
+								compMode = "unknown"
+							}
+							AppendCompactHistoryFromPayload(payload, sessionID, request.RequestID, request.ChannelID, compMode)
 						}
 						switch eventType {
 						case "chat.final":
@@ -576,8 +625,13 @@ func extractChunkContent(payload map[string]any) string {
 }
 
 // shouldRecordHistory 判断 event_type 是否需要记录到 history。
+// 对齐 Python: should_record = et.startswith("chat.") or et == "team.message"
 func shouldRecordHistory(eventType string) bool {
-	return strings.HasPrefix(eventType, "chat.")
+	if strings.HasPrefix(eventType, "chat.") {
+		return true
+	}
+	// 对齐 Python: team.message 也记录 history
+	return eventType == "team.message"
 }
 
 // handleSkillsRequest 处理 skills.* 请求。

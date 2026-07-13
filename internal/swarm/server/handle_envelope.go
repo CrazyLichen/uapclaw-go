@@ -60,7 +60,8 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		s.injectACPCapabilities(request, envelope)
 	}
 
-	// 3. before_chat_request hook（暂不实现，后续补充）
+	// 3. before_chat_request hook
+	// ⤵️ Extension 章节：实现 _trigger_before_chat_request_hook，对 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 触发
 
 	// 4. 按 request.ReqMethod switch 分发
 	var resp *schema.AgentResponse
@@ -89,7 +90,19 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleTeamHistoryGet(ctx, request)
 	// History
 	case schema.ReqMethodHistoryGet:
-		resp, err = s.handleHistoryGet(ctx, request)
+		if request.IsStream {
+			chunks, chunkErr := s.handleHistoryGetStream(ctx, request)
+			if chunkErr != nil {
+				err = chunkErr
+			} else {
+				for i, chunk := range chunks {
+					s.writeChunk(request.RequestID, request.ChannelID, chunk, i+1, true)
+				}
+				resp = nil // 流式已通过 writeChunk 发送
+			}
+		} else {
+			resp, err = s.handleHistoryGet(ctx, request)
+		}
 	// Command
 	case schema.ReqMethodCommandAddDir:
 		resp, err = s.handleCommandAddDir(ctx, request)
@@ -398,15 +411,18 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	}
 
 	// 1. 取消流式 goroutine（对齐 Python：仅 cancel/supplement 时取消流式任务，pause/resume 不取消）
-	intent := "cancel"
+	// 提取 intent，对齐 Python agent_ws_server.py L983-1001: if intent in ("cancel", "supplement"): stream_task.cancel()
+	// intent 为空时保持向后兼容，默认取消
+	intent := ""
 	var params map[string]any
 	if request.Params != nil {
-		_ = json.Unmarshal(request.Params, &params)
+		if json.Unmarshal(request.Params, &params) == nil {
+			if i, ok := params["intent"].(string); ok {
+				intent = i
+			}
+		}
 	}
-	if i, ok := params["intent"].(string); ok && i != "" {
-		intent = i
-	}
-	if intent == "cancel" || intent == "supplement" {
+	if intent == "cancel" || intent == "supplement" || intent == "" {
 		s.cancelStreamTask(sessionID)
 	}
 
