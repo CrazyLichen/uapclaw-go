@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -11,7 +12,7 @@ import (
 // findTeamSkillRail 查找 TeamSkillEvolutionRail。
 // 对齐 Python: _find_team_skill_rail() (line 3651-3670)
 // ⤵️ 10.6.3-10: 依赖 TeamSkillEvolutionRail
-func (d *DeepAdapter) findTeamSkillRail() interface{} {
+func (d *DeepAdapter) findTeamSkillRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 在 instance.rails 中查找 TeamSkillEvolutionRail
 	return nil
 }

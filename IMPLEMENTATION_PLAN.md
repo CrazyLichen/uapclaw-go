@@ -565,12 +565,12 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.18 | ✅ | SysOperationRail | 系统操作管理 | `openjiuwen/harness/rails/` |
 | 9.19-24 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(☐)/Memory(☐)/Evolution(☐) Rails | `openjiuwen/harness/rails/` |
 | **9.x 子 Agent** | — | | | |
-| 9.25 | ☐ | ResearchAgent | 研究子 Agent | `openjiuwen/harness/subagents/` |
-| 9.26 | ☐ | BrowserAgent | 浏览器子 Agent | `openjiuwen/harness/subagents/` |
-| 9.27 | ☐ | CodeAgent | 编码子 Agent | `openjiuwen/harness/subagents/` |
-| 9.28 | ☐ | PlanAgent | 规划子 Agent | `openjiuwen/harness/subagents/` |
+| 9.25 | 🔄 | ResearchAgent | 研究子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
+| 9.26 | 🔄 | BrowserAgent | 浏览器子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
+| 9.27 | 🔄 | CodeAgent | 编码子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
+| 9.28 | 🔄 | PlanAgent | 规划子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
 | 9.29 | ☐ | VerificationAgent | 验证子 Agent | `openjiuwen/harness/subagents/` |
-| 9.30 | ☐ | ExploreAgent | 探索子 Agent | `openjiuwen/harness/subagents/` |
+| 9.30 | 🔄 | ExploreAgent | 探索子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
 | 9.31 | ☐ | MobileGUIAgent | 移动端 GUI Agent | `openjiuwen/harness/subagents/` |
 | **9.x 系统操作** | — | | | |
 | 9.32 | ✅ | SysOperation 接口 | 系统操作抽象 | `openjiuwen/core/sys_operation/` |
@@ -650,8 +650,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.1 | ✅ | AgentWebSocketServer | WS 服务端，~56 个 RPC 方法分发（对齐 Python，JiuWenClaw/AgentManager 已 stub） | `jiuwenswarm/server/agent_ws_server.py` |
 | 10.3.2 | 🔄 | JiuWenClaw 门面 | SDK 路由，会话队列，流式包装，中断处理 | `jiuwenswarm/server/runtime/agent_adapter/interface.py` |
 | 10.3.3 | ✅ | AgentAdapter 接口与工厂 | AgentAdapter ABC，`create_adapter()` | `jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py` |
-| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；✅ 已回填 seedRuntimeCwd（对齐 Python _seed_runtime_cwd，步骤 21 CWD 种子 + ProcessMessage 请求级 CWD 注入）；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
-| 10.3.7-11 | ☐ | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers/RecapPrompts/SysOpBuilder | `jiuwenswarm/server/runtime/agent_adapter/` |
+| 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；✅ 已回填 seedRuntimeCwd；✅ SetLLM统一模型切换(删SwitchModel)；✅ CompressContext+GenerateRecap直接实现(ContextEngine in-memory)；✅ ToolSync5方法直接实现；✅ SlashCommand/evolve分发骨架；✅ subagents骨架(9.25-29)；✅ sysop_builder骨架；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
+| 10.3.7-11 | 🔄 | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers/RecapPrompts(已提前实现)/SysOpBuilder(骨架已建) | `jiuwenswarm/server/runtime/agent_adapter/` |
 | 10.3.12 | 🔄 | AgentManager | 多实例管理（按通道/模式），当前为 stub | `jiuwenswarm/server/runtime/agent_manager.py` |
 | 10.3.13 | ☐ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |
 | 10.3.14 | ☐ | TenantAgentPool | 多租户 Agent 池化 | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
@@ -663,7 +663,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.4.1 | ☐ | 🔥 CLI 聊天模式 | 内置 REPL 交互，直接连接 AgentServer，流式输出 | `jiuwenswarm/channels/acp/app_acp.py` (参考) · 新实现 |
 | 10.4.2 | ☐ | 🔥 HTTP API | RESTful + SSE 流式 | 新实现 |
 | 10.4.3 | ☐ | ACP Stdio | 标准输入输出 JSON-RPC 协议 | `jiuwenswarm/acp/cli.py` · `stdio_client.py` |
-| 10.4.4 | ☐ | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
+| 10.4.4 | 🔄 | Slash 命令处理 | `/mode`/`/new`/`/sandbox`/`/model` 等；/evolve 系列分发骨架已在 adapter 实现 | `jiuwenswarm/gateway/message_handler/command_parser/slash_command.py` |
 | 10.4.5 | ☐ | ACP Subprocess Env | 子进程环境设置 | `jiuwenswarm/acp/subprocess_env.py` |
 | **10.5 扩展系统** | — | | | |
 | 10.5.1-10 | ☐ | 扩展框架 | BaseExtension/Registry/Manager/Hooks/Loader/Types | `jiuwenswarm/extensions/` |

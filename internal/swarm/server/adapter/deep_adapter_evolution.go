@@ -23,7 +23,7 @@ const recentMessageWindow = 30
 // 对齐 Python: compress_context() (line 5380-5570)
 // 编排薄层：获取 context_engine → 调 CompressContext → 统计 token → 返回结果。
 // 不依赖 SessionHistory JSONL，数据来自内存中的 ContextEngine。
-func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error) {
+func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error) {
 	if d.instance == nil {
 		return map[string]any{"result": "noop"}, nil
 	}
@@ -46,13 +46,7 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 	rawTotalTokens, _ := d.countFullContextTokens(ctx, sessionID)
 
 	// 执行压缩
-	var sess sessioninterfaces.SessionFacade
-	if session != nil {
-		if s, ok := session.(sessioninterfaces.SessionFacade); ok {
-			sess = s
-		}
-	}
-	compactResult, err := contextEngine.CompressContext(ctx, "default_context", sess,
+	compactResult, err := contextEngine.CompressContext(ctx, "default_context", session,
 		ceinterface.WithCompressSessionID(sessionID),
 	)
 	if err != nil {

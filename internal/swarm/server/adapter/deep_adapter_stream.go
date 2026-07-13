@@ -156,20 +156,16 @@ func (d *DeepAdapter) parseStreamChunk(output *stream.OutputSchema, usage *usage
 
 // accumulateUsage 累加 usage 信息。
 // 对齐 Python: usage_accumulator 的累加逻辑 (line 4580-4610)
-func (d *DeepAdapter) accumulateUsage(usage *usageAccumulator, payload any) {
+func (d *DeepAdapter) accumulateUsage(usage *usageAccumulator, payload map[string]any) {
 	if payload == nil || usage == nil {
 		return
 	}
-	m, ok := payload.(map[string]any)
-	if !ok {
-		return
-	}
-	usage.InputTokens += extractIntFromPayload(m, "input_tokens")
-	usage.OutputTokens += extractIntFromPayload(m, "output_tokens")
-	usage.TotalTokens += extractIntFromPayload(m, "total_tokens")
-	usage.InputCost += extractFloatFromPayload(m, "input_cost")
-	usage.OutputCost += extractFloatFromPayload(m, "output_cost")
-	usage.TotalCost += extractFloatFromPayload(m, "total_cost")
+	usage.InputTokens += extractIntFromPayload(payload, "input_tokens")
+	usage.OutputTokens += extractIntFromPayload(payload, "output_tokens")
+	usage.TotalTokens += extractIntFromPayload(payload, "total_tokens")
+	usage.InputCost += extractFloatFromPayload(payload, "input_cost")
+	usage.OutputCost += extractFloatFromPayload(payload, "output_cost")
+	usage.TotalCost += extractFloatFromPayload(payload, "total_cost")
 }
 
 // extractStringFromPayload 从 payload 提取字符串值。

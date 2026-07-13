@@ -21,6 +21,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/dotenv"
@@ -91,36 +93,36 @@ type DeepAdapter struct {
 	filesystemRail *rails.SysOperationRail
 	// skillRail 技能使用护栏
 	// ⤵️ 10.6.3-10: SkillUseRail
-	skillRail interface{}
+	skillRail sainterfaces.AgentRail
 	// streamEventRail 流事件护栏
 	// ⤵️ 10.6.3-10: JiuClawStreamEventRail
-	streamEventRail interface{}
+	streamEventRail sainterfaces.AgentRail
 	// taskPlanningRail 任务规划护栏
 	taskPlanningRail *rails.TaskPlanningRail
 	// contextAssembleRail 上下文组装护栏
 	// ⤵️ 10.6.3-10: ContextAssembleRail
-	contextAssembleRail interface{}
+	contextAssembleRail sainterfaces.AgentRail
 	// contextAssembleMode 当前上下文组装模式（"agent.plan" / "agent.fast"）
 	// ⤵️ 10.6.3-10: 按模式切换
 	contextAssembleMode string
 	// contextProcessorRail 上下文处理护栏
 	// ⤵️ 10.6.3-10: ContextProcessorRail
-	contextProcessorRail interface{}
+	contextProcessorRail sainterfaces.AgentRail
 	// runtimePromptRail 运行时提示词护栏
 	// ⤵️ 10.6.3-10: RuntimePromptRail
-	runtimePromptRail interface{}
+	runtimePromptRail sainterfaces.AgentRail
 	// responsePromptRail 响应提示词护栏
 	// ⤵️ 10.6.3-10: ResponsePromptRail
-	responsePromptRail interface{}
+	responsePromptRail sainterfaces.AgentRail
 	// securityRail 安全护栏
 	// ⤵️ 10.6.3-10: SecurityRail
-	securityRail interface{}
+	securityRail sainterfaces.AgentRail
 	// memoryRail 记忆护栏
 	// ⤵️ 10.6.3-10: MemoryRail
-	memoryRail interface{}
+	memoryRail sainterfaces.AgentRail
 	// externalMemoryRail 外接记忆护栏
 	// ⤵️ 10.6.3-10: 外部记忆 rail
-	externalMemoryRail interface{}
+	externalMemoryRail sainterfaces.AgentRail
 	// externalMemoryRailRegistered 外接记忆护栏是否已注册
 	// ⤵️ 10.6.3-10: 防止重复注册
 	externalMemoryRailRegistered bool
@@ -129,31 +131,31 @@ type DeepAdapter struct {
 	heartbeatRail *rails.HeartbeatRail
 	// skillEvolutionRail 技能演进护栏
 	// ⤵️ 10.6.3-10: SkillEvolutionRail
-	skillEvolutionRail interface{}
+	skillEvolutionRail sainterfaces.AgentRail
 	// skillCreateRail 技能创建护栏
 	// ⤵️ 10.6.3-10: SkillCreateRail
-	skillCreateRail interface{}
+	skillCreateRail sainterfaces.AgentRail
 	// subagentRail 子代理护栏
 	// ⤵️ 10.6.3-10: SubagentRail
-	subagentRail interface{}
+	subagentRail sainterfaces.AgentRail
 	// permissionRail 权限护栏
 	// ⤵️ 10.6.3-10: PermissionInterruptRail
-	permissionRail interface{}
+	permissionRail sainterfaces.AgentRail
 	// avatarRail 头像护栏
 	// ⤵️ 10.6.3-10: AvatarRail
-	avatarRail interface{}
+	avatarRail sainterfaces.AgentRail
 
 	// ─── 运行时 ───
 
 	// toolCards 工具卡片列表
 	// ⤵️ agentcore.DeepAgent（工具卡片依赖 agent 实例）
-	toolCards interface{}
+	toolCards []*tool.ToolCard
 	// sysOperation 系统操作实例
 	// ⤵️ 10.3.7-11 sysop_builder
-	sysOperation interface{}
+	sysOperation sysop.SysOperation
 	// sysOperationCard 系统操作卡片
 	// ⤵️ 10.3.7-11 sysop_builder
-	sysOperationCard interface{}
+	sysOperationCard *sysop.SysOperationCard
 	// visionModelConfig 视觉模型配置
 	visionModelConfig *hschema.VisionModelConfig
 	// visionToolsRegistered 视觉工具是否已注册
@@ -839,7 +841,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 			}
 
 			chunkType := output.Type
-			payload := output.Payload
+			payload, _ := output.Payload.(map[string]any)
 
 			switch chunkType {
 			case "llm_usage":
@@ -1743,7 +1745,7 @@ func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。
 // 对齐 Python: _make_deep_agent_config(model, config, agent_card, tool_cards, rails)
-func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards any, railsList []any) *hschema.DeepAgentConfig {
+func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]any, card *agentschema.AgentCard, toolCards []*tool.ToolCard, railsList []sainterfaces.AgentRail) *hschema.DeepAgentConfig {
 	return &hschema.DeepAgentConfig{
 		Model:          model,
 		Card:           card,
@@ -1757,49 +1759,34 @@ func (d *DeepAdapter) makeDeepAgentConfig(model *llm.Model, config map[string]an
 
 // getCurrentAgentRails 获取当前 Agent Rails（热重载时使用）。
 // 对齐 Python: _get_current_agent_rails(config, config_base)
-func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []any {
-	railsInterfaces := d.buildAgentRails(config, configBase, d.mode)
-	result := make([]any, len(railsInterfaces))
-	for i, r := range railsInterfaces {
-		result[i] = r
-	}
-	return result
+func (d *DeepAdapter) getCurrentAgentRails(config map[string]any, configBase map[string]any) []sainterfaces.AgentRail {
+	return d.buildAgentRails(config, configBase, d.mode)
 }
 
 // extractTextContent 从 payload 提取文本内容。
-func extractTextContent(payload any) string {
+func extractTextContent(payload map[string]any) string {
 	if payload == nil {
 		return ""
 	}
-	if m, ok := payload.(map[string]any); ok {
-		if v, ok := m["content"].(string); ok {
-			return v
-		}
-		if v, ok := m["text"].(string); ok {
-			return v
-		}
+	if v, ok := payload["content"].(string); ok {
+		return v
 	}
-	if s, ok := payload.(string); ok {
-		return s
+	if v, ok := payload["text"].(string); ok {
+		return v
 	}
 	return ""
 }
 
 // extractReasoningContent 从 payload 提取推理内容。
-func extractReasoningContent(payload any) string {
+func extractReasoningContent(payload map[string]any) string {
 	if payload == nil {
 		return ""
 	}
-	if m, ok := payload.(map[string]any); ok {
-		if v, ok := m["content"].(string); ok {
-			return v
-		}
-		if v, ok := m["reasoning"].(string); ok {
-			return v
-		}
+	if v, ok := payload["content"].(string); ok {
+		return v
 	}
-	if s, ok := payload.(string); ok {
-		return s
+	if v, ok := payload["reasoning"].(string); ok {
+		return v
 	}
 	return ""
 }

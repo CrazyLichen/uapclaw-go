@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -58,7 +59,7 @@ type AgentAdapter interface {
 type ContextCompressor interface {
 	// CompressContext 触发上下文压缩。
 	// 对应 Python: JiuWenClawDeepAdapter.compress_context() (line 5380-5570)
-	CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error)
+	CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error)
 	// GetContextUsage 获取上下文窗口占用率。
 	// 对应 Python: JiuWenClawDeepAdapter.get_context_usage() (line 5572-5588)
 	GetContextUsage(ctx context.Context, sessionID string) (map[string]any, error)

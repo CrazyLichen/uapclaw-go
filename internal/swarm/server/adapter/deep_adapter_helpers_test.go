@@ -420,7 +420,7 @@ func TestGetCurrentAgentRails(t *testing.T) {
 func TestExtractTextContent(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload any
+		payload map[string]any
 		want    string
 	}{
 		{"nil", nil, ""},
@@ -428,8 +428,6 @@ func TestExtractTextContent(t *testing.T) {
 		{"map_text", map[string]any{"text": "world"}, "world"},
 		{"map_content优先", map[string]any{"content": "hello", "text": "world"}, "hello"},
 		{"map无匹配", map[string]any{"other": "val"}, ""},
-		{"字符串", "direct", "direct"},
-		{"其他类型", 123, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -444,14 +442,13 @@ func TestExtractTextContent(t *testing.T) {
 func TestExtractReasoningContent(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload any
+		payload map[string]any
 		want    string
 	}{
 		{"nil", nil, ""},
 		{"map_content", map[string]any{"content": "reason"}, "reason"},
 		{"map_reasoning", map[string]any{"reasoning": "think"}, "think"},
 		{"map_content优先", map[string]any{"content": "reason", "reasoning": "think"}, "reason"},
-		{"字符串", "direct", "direct"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

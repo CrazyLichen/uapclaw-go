@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	cfgPkg "github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
@@ -33,19 +35,19 @@ type CodeAdapter struct {
 
 	// lspRail LSP 护栏
 	// ⤵️ 10.6.3-10: LspRail
-	lspRail interface{}
+	lspRail sainterfaces.AgentRail
 	// projectMemoryRail 项目记忆护栏
 	// ⤵️ 10.6.3-10: ProjectMemoryRail
-	projectMemoryRail interface{}
+	projectMemoryRail sainterfaces.AgentRail
 	// codingMemoryRail 编码记忆护栏
 	// ⤵️ 10.6.3-10: CodingMemoryRail
-	codingMemoryRail interface{}
+	codingMemoryRail sainterfaces.AgentRail
 	// worktreeRail 工作树护栏
 	// ⤵️ 10.6.3-10: WorktreeRail
-	worktreeRail interface{}
+	worktreeRail sainterfaces.AgentRail
 	// codeAgentRail 编码 Agent 护栏（管理 /agents 创建的自定义 agent）
 	// ⤵️ 10.3.7-11: CodeAgentRail
-	codeAgentRail interface{}
+	codeAgentRail sainterfaces.AgentRail
 
 	// ─── Code 模式配置 ───
 
@@ -265,7 +267,7 @@ func (c *CodeAdapter) Cleanup() error {
 // ──────────────────────────── 可选接口委托 ────────────────────────────
 
 // CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。
-func (c *CodeAdapter) CompressContext(ctx context.Context, sessionID string, session any, returnState bool) (map[string]any, error) {
+func (c *CodeAdapter) CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error) {
 	return c.deep.CompressContext(ctx, sessionID, session, returnState)
 }
 

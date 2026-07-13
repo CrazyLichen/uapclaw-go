@@ -143,12 +143,7 @@ func (d *DeepAdapter) appendToolCard(cards []*tool.ToolCard) {
 	}
 
 	// 获取当前 toolCards 列表
-	var current []*tool.ToolCard
-	if d.toolCards != nil {
-		if tc, ok := d.toolCards.([]*tool.ToolCard); ok {
-			current = tc
-		}
-	}
+	current := d.toolCards
 
 	// 去重：收集已有名称
 	existing := make(map[string]bool, len(current))
@@ -427,9 +422,7 @@ func (d *DeepAdapter) buildToolCards(agentID string, configBase map[string]any, 
 
 	// 去重追加已有的 toolCards
 	if d.toolCards != nil {
-		if tc, ok := d.toolCards.([]*tool.ToolCard); ok {
-			cards = append(cards, tc...)
-		}
+		cards = append(cards, d.toolCards...)
 	}
 
 	// 优先付费搜索

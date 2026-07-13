@@ -68,98 +68,98 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	skill := d.buildSkillRail()
 	if skill != nil {
 		d.skillRail = skill
-		// ⤵️ 10.6.3-10: railsList = append(railsList, skill.(sainterfaces.AgentRail))
+		railsList = append(railsList, skill)
 	}
 
 	// 步骤 8: skillEvolutionRail
 	evolve := d.buildSkillEvolutionRail()
 	if evolve != nil {
 		d.skillEvolutionRail = evolve
-		// ⤵️ 10.6.3-10: railsList = append(railsList, evolve.(sainterfaces.AgentRail))
+		railsList = append(railsList, evolve)
 	}
 
 	// 步骤 9: skillCreateRail
 	create := d.buildSkillCreateRail()
 	if create != nil {
 		d.skillCreateRail = create
-		// ⤵️ 10.6.3-10: railsList = append(railsList, create.(sainterfaces.AgentRail))
+		railsList = append(railsList, create)
 	}
 
 	// 步骤 10: streamEventRail
 	se := d.buildStreamEventRail()
 	if se != nil {
 		d.streamEventRail = se
-		// ⤵️ 10.6.3-10: railsList = append(railsList, se.(sainterfaces.AgentRail))
+		railsList = append(railsList, se)
 	}
 
 	// 步骤 11: subagentRail
 	sa := d.buildSubagentRail()
 	if sa != nil {
 		d.subagentRail = sa
-		// ⤵️ 10.6.3-10: railsList = append(railsList, sa.(sainterfaces.AgentRail))
+		railsList = append(railsList, sa)
 	}
 
 	// 步骤 12: securityRail
 	sec := d.buildSecurityRail(configBase)
 	if sec != nil {
 		d.securityRail = sec
-		// ⤵️ 10.6.3-10: railsList = append(railsList, sec.(sainterfaces.AgentRail))
+		railsList = append(railsList, sec)
 	}
 
 	// 步骤 13: memoryRail
 	mem := d.buildMemoryRail()
 	if mem != nil {
 		d.memoryRail = mem
-		// ⤵️ 10.6.3-10: railsList = append(railsList, mem.(sainterfaces.AgentRail))
+		railsList = append(railsList, mem)
 	}
 
 	// 步骤 14: externalMemoryRail
 	emem := d.buildExternalMemoryRail()
 	if emem != nil {
 		d.externalMemoryRail = emem
-		// ⤵️ 10.6.3-10: railsList = append(railsList, emem.(sainterfaces.AgentRail))
+		railsList = append(railsList, emem)
 	}
 
 	// 步骤 15: avatarRail
 	av := d.buildAvatarRail()
 	if av != nil {
 		d.avatarRail = av
-		// ⤵️ 10.6.3-10: railsList = append(railsList, av.(sainterfaces.AgentRail))
+		railsList = append(railsList, av)
 	}
 
 	// 步骤 16: runtimePromptRail
 	rp := d.buildRuntimePromptRail()
 	if rp != nil {
 		d.runtimePromptRail = rp
-		// ⤵️ 10.6.3-10: railsList = append(railsList, rp.(sainterfaces.AgentRail))
+		railsList = append(railsList, rp)
 	}
 
 	// 步骤 17: responsePromptRail
 	resp := d.buildResponsePromptRail()
 	if resp != nil {
 		d.responsePromptRail = resp
-		// ⤵️ 10.6.3-10: railsList = append(railsList, resp.(sainterfaces.AgentRail))
+		railsList = append(railsList, resp)
 	}
 
 	// 步骤 18: contextAssembleRail
 	ca := d.buildContextAssembleRail(mode)
 	if ca != nil {
 		d.contextAssembleRail = ca
-		// ⤵️ 10.6.3-10: railsList = append(railsList, ca.(sainterfaces.AgentRail))
+		railsList = append(railsList, ca)
 	}
 
 	// 步骤 19: contextProcessorRail
 	cp := d.buildContextProcessorRail()
 	if cp != nil {
 		d.contextProcessorRail = cp
-		// ⤵️ 10.6.3-10: railsList = append(railsList, cp.(sainterfaces.AgentRail))
+		railsList = append(railsList, cp)
 	}
 
 	// 步骤 20: permissionRail
 	perm := d.buildPermissionRail(configBase)
 	if perm != nil {
 		d.permissionRail = perm
-		// ⤵️ 10.6.3-10: railsList = append(railsList, perm.(sainterfaces.AgentRail))
+		railsList = append(railsList, perm)
 	}
 
 	logger.Info(logComponent).
@@ -214,7 +214,7 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 // buildSkillRail 构建技能使用护栏。
 // ⤵️ 10.6.3-10: SkillUseRail
 // 对齐 Python: _build_skill_rail() (line 1916-1960)
-func (d *DeepAdapter) buildSkillRail() interface{} {
+func (d *DeepAdapter) buildSkillRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SkillUseRail
 	return nil
 }
@@ -222,7 +222,7 @@ func (d *DeepAdapter) buildSkillRail() interface{} {
 // buildSkillEvolutionRail 构建技能演进护栏。
 // ⤵️ 10.6.3-10: SkillEvolutionRail
 // 对齐 Python: _build_skill_evolution_rail() (line 1961-2010)
-func (d *DeepAdapter) buildSkillEvolutionRail() interface{} {
+func (d *DeepAdapter) buildSkillEvolutionRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SkillEvolutionRail
 	return nil
 }
@@ -230,7 +230,7 @@ func (d *DeepAdapter) buildSkillEvolutionRail() interface{} {
 // buildSkillCreateRail 构建技能创建护栏。
 // ⤵️ 10.6.3-10: SkillCreateRail
 // 对齐 Python: _build_skill_create_rail() (line 2011-2050)
-func (d *DeepAdapter) buildSkillCreateRail() interface{} {
+func (d *DeepAdapter) buildSkillCreateRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SkillCreateRail
 	return nil
 }
@@ -238,7 +238,7 @@ func (d *DeepAdapter) buildSkillCreateRail() interface{} {
 // buildStreamEventRail 构建流事件护栏。
 // ⤵️ 10.6.3-10: JiuClawStreamEventRail
 // 对齐 Python: _build_stream_event_rail() (line 2051-2080)
-func (d *DeepAdapter) buildStreamEventRail() interface{} {
+func (d *DeepAdapter) buildStreamEventRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 JiuClawStreamEventRail
 	return nil
 }
@@ -246,7 +246,7 @@ func (d *DeepAdapter) buildStreamEventRail() interface{} {
 // buildSubagentRail 构建子代理护栏。
 // ⤵️ 10.6.3-10: SubagentRail
 // 对齐 Python: _build_subagent_rail() (line 2081-2100)
-func (d *DeepAdapter) buildSubagentRail() interface{} {
+func (d *DeepAdapter) buildSubagentRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SubagentRail
 	return nil
 }
@@ -254,7 +254,7 @@ func (d *DeepAdapter) buildSubagentRail() interface{} {
 // buildSecurityRail 构建安全护栏。
 // ⤵️ 10.6.3-10: SecurityRail
 // 对齐 Python: _build_security_rail() (line 2101-2115)
-func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) interface{} {
+func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 SecurityRail
 	return nil
 }
@@ -262,7 +262,7 @@ func (d *DeepAdapter) buildSecurityRail(configBase map[string]any) interface{} {
 // buildMemoryRail 构建记忆护栏。
 // ⤵️ 10.6.3-10: MemoryRail
 // 对齐 Python: _build_memory_rail() (line 2116-2130)
-func (d *DeepAdapter) buildMemoryRail() interface{} {
+func (d *DeepAdapter) buildMemoryRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 MemoryRail
 	return nil
 }
@@ -270,7 +270,7 @@ func (d *DeepAdapter) buildMemoryRail() interface{} {
 // buildExternalMemoryRail 构建外接记忆护栏。
 // ⤵️ 10.6.3-10: ExternalMemoryRail
 // 对齐 Python: _build_external_memory_rail() (line 2131-2145)
-func (d *DeepAdapter) buildExternalMemoryRail() interface{} {
+func (d *DeepAdapter) buildExternalMemoryRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ExternalMemoryRail
 	return nil
 }
@@ -278,7 +278,7 @@ func (d *DeepAdapter) buildExternalMemoryRail() interface{} {
 // buildAvatarRail 构建头像护栏。
 // ⤵️ 10.6.3-10: AvatarRail
 // 对齐 Python: _build_avatar_rail() (line 2146-2155)
-func (d *DeepAdapter) buildAvatarRail() interface{} {
+func (d *DeepAdapter) buildAvatarRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 AvatarRail
 	return nil
 }
@@ -286,7 +286,7 @@ func (d *DeepAdapter) buildAvatarRail() interface{} {
 // buildRuntimePromptRail 构建运行时提示词护栏。
 // ⤵️ 10.6.3-10: RuntimePromptRail
 // 对齐 Python: _build_runtime_prompt_rail() (line 2156-2170)
-func (d *DeepAdapter) buildRuntimePromptRail() interface{} {
+func (d *DeepAdapter) buildRuntimePromptRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 RuntimePromptRail
 	return nil
 }
@@ -294,7 +294,7 @@ func (d *DeepAdapter) buildRuntimePromptRail() interface{} {
 // buildResponsePromptRail 构建响应提示词护栏。
 // ⤵️ 10.6.3-10: ResponsePromptRail
 // 对齐 Python: _build_response_prompt_rail() (line 2171-2180)
-func (d *DeepAdapter) buildResponsePromptRail() interface{} {
+func (d *DeepAdapter) buildResponsePromptRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ResponsePromptRail
 	return nil
 }
@@ -302,7 +302,7 @@ func (d *DeepAdapter) buildResponsePromptRail() interface{} {
 // buildContextAssembleRail 构建上下文组装护栏。
 // ⤵️ 10.6.3-10: ContextAssembleRail
 // 对齐 Python: _build_context_assemble_rail() (line 2181-2195)
-func (d *DeepAdapter) buildContextAssembleRail(mode string) interface{} {
+func (d *DeepAdapter) buildContextAssembleRail(mode string) sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ContextAssembleRail
 	d.contextAssembleMode = mode
 	return nil
@@ -311,7 +311,7 @@ func (d *DeepAdapter) buildContextAssembleRail(mode string) interface{} {
 // buildContextProcessorRail 构建上下文处理护栏。
 // ⤵️ 10.6.3-10: ContextProcessorRail
 // 对齐 Python: _build_context_processor_rail() (line 2196-2212)
-func (d *DeepAdapter) buildContextProcessorRail() interface{} {
+func (d *DeepAdapter) buildContextProcessorRail() sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 ContextProcessorRail
 	return nil
 }
@@ -319,7 +319,7 @@ func (d *DeepAdapter) buildContextProcessorRail() interface{} {
 // buildPermissionRail 构建权限护栏。
 // ⤵️ 10.6.3-10: PermissionInterruptRail
 // 对齐 Python: _build_permission_rail() (line 2213-2250)
-func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) interface{} {
+func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterfaces.AgentRail {
 	// ⤵️ 10.6.3-10: 实现 PermissionInterruptRail
 	return nil
 }
