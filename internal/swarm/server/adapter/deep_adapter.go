@@ -1195,7 +1195,7 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// ensurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
+// EnsurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
 //
 // 对应 Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
 //
@@ -1207,7 +1207,7 @@ func isDir(path string) bool {
 //  4. 获取 checkpoint_dir，构造 SQLite 路径
 //  5. 通过 CheckpointerFactory.Create 创建 persistence 实例
 //  6. SetDefaultCheckpointer 设为全局默认
-func ensurePersistentCheckpointer() error {
+func EnsurePersistentCheckpointer() error {
 	if persistentCheckpointerReady {
 		return nil
 	}
@@ -1267,7 +1267,7 @@ func ensurePersistentCheckpointer() error {
 // Go 中 ensurePersistentCheckpointer 已同步化（SQLite 打开无需异步），
 // 后续将检查点器绑定到 DeepAgent 实例的步骤需等 DeepAgent 实现后回填。
 func (d *DeepAdapter) setCheckpoint() error {
-	return ensurePersistentCheckpointer()
+	return EnsurePersistentCheckpointer()
 	// ⤵️ agentcore.DeepAgent: 将 checkpointer 绑定到 d.instance（DeepAgent）的 session 上
 }
 
