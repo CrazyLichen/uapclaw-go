@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,8 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/encoding"
+	textencoding "golang.org/x/text/encoding/ianaindex"
+
 	tool "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/cwd"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -58,6 +63,32 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	o := sysop.NewFsOptions(opts...)
 	methodName := "read_file"
 
+	// 互斥参数校验，对齐 Python validate_mutually_exclusive + validate_binary_mode
+	if o.Tail > 0 && o.Head > 0 {
+		return nil, exception.BuildError(
+			exception.StatusSysOperationFsExecutionError,
+			exception.WithMsg("head and tail are mutually exclusive"),
+		)
+	}
+	if o.Tail > 0 && (o.LineRange[0] > 0 || o.LineRange[1] > 0) {
+		return nil, exception.BuildError(
+			exception.StatusSysOperationFsExecutionError,
+			exception.WithMsg("tail and line_range are mutually exclusive"),
+		)
+	}
+	if o.Head > 0 && (o.LineRange[0] > 0 || o.LineRange[1] > 0) {
+		return nil, exception.BuildError(
+			exception.StatusSysOperationFsExecutionError,
+			exception.WithMsg("head and line_range are mutually exclusive"),
+		)
+	}
+	if o.Mode == "bytes" && (o.Head > 0 || o.Tail > 0 || o.LineRange[0] > 0 || o.LineRange[1] > 0) {
+		return nil, exception.BuildError(
+			exception.StatusSysOperationFsExecutionError,
+			exception.WithMsg("bytes mode does not support head/tail/line_range"),
+		)
+	}
+
 	startTime := time.Now()
 	logger.Info(fsLogComponent).Str("method_name", methodName).Str("path", path).Msg("开始读取文件")
 
@@ -96,10 +127,12 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 			}
 			textContent = strings.Join(lines, "\n")
 		} else if o.Tail > 0 {
-			if o.Tail < len(lines) {
-				lines = lines[len(lines)-o.Tail:]
-			}
-			textContent = strings.Join(lines, "\n")
+		// 对齐 Python _read_tail: 反向 seek 读取，避免大文件 OOM
+		tailLines, tailErr := readTail(resolvedPath, o.Tail)
+		if tailErr != nil {
+			return f.createErrorResult(methodName, fmt.Sprintf("tail read failed: %s", tailErr), startTime), nil
+		}
+		textContent = strings.Join(tailLines, "\n")
 		} else if o.LineRange[0] > 0 && o.LineRange[1] > 0 {
 			start := o.LineRange[0] - 1 // 1-indexed to 0-indexed
 			end := o.LineRange[1]
@@ -205,6 +238,15 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 		}, nil
 	}
 
+	// 跨进程文件锁，对齐 Python _file_lock(data_path)
+	lock, lockErr := AcquireFileLock(resolvedPath, fileLockDefaultTimeout)
+	if lockErr != nil {
+		return &result.WriteFileResult{
+			BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), lockErr.Error()),
+		}, nil
+	}
+	defer func() { _ = ReleaseFileLock(lock) }()
+
 	// 不存在时检查
 	if !o.CreateIfNotExist {
 		if _, statErr := os.Stat(resolvedPath); os.IsNotExist(statErr) {
@@ -233,8 +275,24 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 		if enc == "utf-8" {
 			dataBytes = []byte(txt)
 		} else {
-			// 非 UTF-8 编码：使用 golang.org/x/text 或简单 fallback
-			dataBytes = []byte(txt) // 简化：Go 标准库仅支持 UTF-8，其他编码需要额外包
+			// 非 UTF-8 编码：使用 golang.org/x/text/encoding 转换，对齐 Python txt.encode(encoding)
+			encoder := getEncoder(enc)
+			if encoder != nil {
+				encodedBytes, encErr := encoder.Bytes([]byte(txt))
+				if encErr != nil {
+					return &result.WriteFileResult{
+						BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(),
+							fmt.Sprintf("编码转换失败(%s): %v", enc, encErr)),
+					}, nil
+				}
+				dataBytes = encodedBytes
+			} else {
+				// 不支持的编码，fallback 到 UTF-8
+				logger.Warn(fsLogComponent).
+					Str("encoding", enc).
+					Msg("不支持的编码，fallback 到 UTF-8")
+				dataBytes = []byte(txt)
+			}
 		}
 	} else {
 		dataBytes = []byte(content)
@@ -573,7 +631,7 @@ func (f *LocalFsOperation) ListDirectories(ctx context.Context, path string, opt
 		return nil, err
 	}
 
-	items := f.walkDir(resolvedPath, true, o)
+	items := f.walkDir(resolvedPath, true, o, 1)
 
 	return &result.ListDirsResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -609,6 +667,25 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// 对齐 Python: exclude_set = set(); for pat in exclude_patterns: exclude_set.update(set(base.rglob(pat)))
+	o := sysop.NewFsOptions(opts...)
+	if len(o.ExcludePatterns) > 0 {
+		filtered := matched[:0]
+		for _, p := range matched {
+			excluded := false
+			for _, ep := range o.ExcludePatterns {
+				if matchedEp, _ := filepath.Match(ep, filepath.Base(p.Path)); matchedEp {
+					excluded = true
+					break
+				}
+			}
+			if !excluded {
+				filtered = append(filtered, p)
+			}
+		}
+		matched = filtered
 	}
 
 	return &result.SearchFilesResult{
@@ -773,6 +850,93 @@ func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// getEncoder 根据编码名称获取 encoder。
+// 对齐 Python codecs.lookup(encoding)。
+func getEncoder(encName string) *encoding.Encoder {
+	e, err := textencoding.MIME.Encoding(encName)
+	if err != nil || e == nil {
+		return nil
+	}
+	return e.NewEncoder()
+}
+
+// readTail 从文件末尾反向读取最后 tail 行。
+// 对齐 Python _read_tail(file_path, tail, encoding) (L1461-1532):
+// 从文件末尾反向 seek 读取，避免大文件全文加载导致 OOM
+func readTail(filePath string, tail int) ([]string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	const chunkSize = 8192 // 对齐 Python TAIL_CHUNK_SIZE
+
+	// 获取文件大小
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	fileSize := fi.Size()
+	if fileSize == 0 {
+		return nil, nil
+	}
+
+	// 反向逐块读取
+	var lines []string
+	offset := fileSize
+	buf := make([]byte, chunkSize)
+	leftover := "" // 上一个块末尾的不完整行
+
+	for offset > 0 && len(lines) < tail {
+		readSize := int64(chunkSize)
+		if offset < readSize {
+			readSize = offset
+		}
+		offset -= readSize
+
+		_, err := f.Seek(offset, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
+
+		n, err := f.Read(buf[:readSize])
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		chunk := string(buf[:n]) + leftover
+		chunkLines := strings.Split(chunk, "\n")
+
+		// 第一个元素可能是不完整行（除非在文件开头）
+		if offset == 0 {
+			leftover = ""
+			lines = append(chunkLines, lines...)
+		} else {
+			leftover = chunkLines[0]
+			// 从后往前添加行
+			for i := len(chunkLines) - 1; i >= 1 && len(lines) < tail; i-- {
+				lines = append([]string{chunkLines[i]}, lines...)
+			}
+		}
+	}
+
+	// 过滤空行
+	var result []string
+	for _, l := range lines {
+		if l != "" {
+			result = append(result, l)
+		}
+	}
+
+	// 只取最后 tail 行
+	if len(result) > tail {
+		result = result[len(result)-tail:]
+	}
+
+	return result, nil
+}
+
 // resolvePath 解析路径，基于 CWD 解析相对路径。
 // 对齐 Python FsOperation._resolve_path。
 // 对齐 Python：restrict_to_sandbox=True 时校验路径是否在 sandbox_root 范围内。
@@ -800,8 +964,15 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 	if f.runConfig != nil && f.runConfig.RestrictToSandbox {
 		sandboxRoots := f.runConfig.SandboxRoot
 		if len(sandboxRoots) == 0 {
-			// fallback 到 CWD
-			sandboxRoots = []string{base}
+			// 对齐 Python: roots = [p for p in (get_workspace(), get_project_root()) if p]
+			sandboxRoots = []string{}
+			ctx := context.Background()
+			if ws := cwd.GetWorkspace(ctx); ws != "" {
+				sandboxRoots = append(sandboxRoots, ws)
+			}
+			if pr := cwd.GetProjectRoot(ctx); pr != "" {
+				sandboxRoots = append(sandboxRoots, pr)
+			}
 		}
 		allowed := false
 		for _, root := range sandboxRoots {
@@ -833,7 +1004,7 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 		return nil, err
 	}
 
-	items := f.walkDir(resolvedPath, dirsOnly, o)
+	items := f.walkDir(resolvedPath, dirsOnly, o, 1)
 
 	return &result.ListFilesResult{
 		BaseResult: result.BaseResult{Code: 0, Message: "success"},
@@ -847,8 +1018,13 @@ func (f *LocalFsOperation) listItems(ctx context.Context, path string, dirsOnly 
 }
 
 // walkDir 遍历目录
-func (f *LocalFsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions) []result.FileSystemItem {
+func (f *LocalFsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOptions, depth int) []result.FileSystemItem {
 	var items []result.FileSystemItem
+
+	// 对齐 Python: max_depth 递归深度限制
+	if o.MaxDepth > 0 && depth > o.MaxDepth {
+		return items
+	}
 
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
@@ -888,7 +1064,7 @@ func (f *LocalFsOperation) walkDir(basePath string, dirsOnly bool, o *sysop.FsOp
 
 		// 递归
 		if o.Recursive && entry.IsDir() {
-			subItems := f.walkDir(fullPath, dirsOnly, o)
+			subItems := f.walkDir(fullPath, dirsOnly, o, depth+1)
 			items = append(items, subItems...)
 		}
 	}

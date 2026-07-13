@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -170,8 +171,8 @@ func (d *DeepAdapter) writeRuntimeState(key string, value string) {
 // skillIncludeToolsForProfile 检查当前 profile 下 skill 是否包含工具。
 // 对齐 Python: _skill_include_tools_for_profile() (line 722-726)
 // 逻辑：ACP tool profile 下不包含工具；否则取决于 filesystemRail 是否为 nil。
-func (d *DeepAdapter) skillIncludeToolsForProfile(configBase map[string]any) bool {
-	if d.isAcpToolProfile(configBase) {
+func (d *DeepAdapter) skillIncludeToolsForProfile(instanceOverrides map[string]any) bool {
+	if d.isAcpToolProfile(instanceOverrides) {
 		return false
 	}
 	return d.filesystemRail == nil
@@ -209,28 +210,32 @@ func (d *DeepAdapter) resolveModelName() string {
 }
 
 // isAcpToolProfile 检查是否为 ACP Tool profile。
-// 对齐 Python: _is_acp_tool_profile()
-func (d *DeepAdapter) isAcpToolProfile(configBase map[string]any) bool {
-	modelsSection, _ := configBase["models"].(map[string]any)
-	if modelsSection == nil {
+// 对齐 Python: _is_acp_tool_profile(config) (L709-716)
+// 优先检查 tool_profile，fallback 检查 channel_id，值为 "acp"
+func (d *DeepAdapter) isAcpToolProfile(instanceOverrides map[string]any) bool {
+	if instanceOverrides == nil {
 		return false
 	}
-	defaults, _ := modelsSection["defaults"].([]any)
-	for _, entry := range defaults {
-		if m, ok := entry.(map[string]any); ok {
-			if profile, ok := m["profile"].(string); ok && profile == "acp_tool" {
-				return true
-			}
+	// 优先检查 tool_profile
+	if tp, ok := instanceOverrides["tool_profile"]; ok {
+		s := strings.TrimSpace(strings.ToLower(fmt.Sprint(tp)))
+		if s != "" {
+			return s == "acp"
 		}
+	}
+	// fallback 检查 channel_id
+	if cid, ok := instanceOverrides["channel_id"]; ok {
+		s := strings.TrimSpace(strings.ToLower(fmt.Sprint(cid)))
+		return s == "acp"
 	}
 	return false
 }
 
 // filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
 // 对齐 Python: _filesystem_rail_enabled_for_profile()
-func (d *DeepAdapter) filesystemRailEnabledForProfile(configBase map[string]any) bool {
+func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[string]any) bool {
 	// 对齐 Python: 默认 true，除非 isAcpToolProfile
-	return !d.isAcpToolProfile(configBase)
+	return !d.isAcpToolProfile(instanceOverrides)
 }
 
 // resolveRuntimeLanguage 解析运行时语言。

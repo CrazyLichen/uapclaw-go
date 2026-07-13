@@ -18,11 +18,22 @@ const preserveFileSharingMode = "mount"
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateLocalSysOpCard 创建本地模式 SysOperationCard。
-// 对齐 Python: create_local_sysop_card()
+// 对齐 Python: create_local_sysop_card() (sysop_builder.py L770-776)
+//
+// Python 实现：
+//
+//	return SysOperationCard(
+//	    mode=OperationMode.LOCAL,
+//	    work_config=LocalWorkConfig(shell_allowlist=None),
+//	)
+//
+// shell_allowlist=None 表示允许所有命令，Go 中 nil []string 等价。
 func CreateLocalSysOpCard() *sysop.SysOperationCard {
 	card := sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeLocal),
-		sysop.WithSysOpWorkConfig(sysop.NewLocalWorkConfig()),
+		sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{
+			ShellAllowlist: nil, // 对齐 Python: shell_allowlist=None，允许所有命令
+		}),
 	)
 
 	logger.Info(logComponent).Msg("本地 SysOperationCard 已创建")
@@ -36,6 +47,8 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 //	excluded_commands, idle_ttl_seconds, idle_check_interval, project_dir, is_code_agent)
 //
 // 失败时返回 nil（Python 返回 None），异常被捕获记 warning。
+// Python 实现中 work_config 同样使用 LocalWorkConfig(shell_allowlist=None)，
+// 安全边界由沙箱自身保证。
 func CreateSandboxSysOpCard(
 	sandboxURL string,
 	sandboxType string,
@@ -60,11 +73,11 @@ func CreateSandboxSysOpCard(
 		excludedCmds = excludedCommands
 	}
 	extraParams := map[string]any{
-		"policy":                    policy,
-		"policy_mode":               "append",
-		"excluded_commands":         excludedCmds,
+		"policy":                     policy,
+		"policy_mode":                "append",
+		"excluded_commands":          excludedCmds,
 		"preserve_file_sharing_mode": preserveFileSharingMode,
-		"preserve_files_upload":     uploadList,
+		"preserve_files_upload":      uploadList,
 	}
 	// idle_check_interval 走 extraParams 而非 launcher_config 独立字段
 	if idleCheckInterval != nil {
@@ -85,7 +98,9 @@ func CreateSandboxSysOpCard(
 	// 构建 SysOperationCard
 	card := sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeSandbox),
-		sysop.WithSysOpWorkConfig(sysop.NewLocalWorkConfig()),
+		sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{
+			ShellAllowlist: nil, // 对齐 Python: shell_allowlist=None，安全边界由沙箱保证
+		}),
 		sysop.WithSysOpGatewayConfig(gatewayConfig),
 	)
 

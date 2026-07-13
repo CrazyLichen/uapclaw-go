@@ -20,8 +20,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// StreamEvent 流式事件。
-// 对齐 Python StreamEvent：type, data, exit_code, timestamp。
 type StreamEvent struct {
 	// Type 事件类型
 	Type StreamEventType
@@ -33,8 +31,6 @@ type StreamEvent struct {
 	Timestamp time.Time
 }
 
-// InvokeData 一次性执行结果。
-// 对齐 Python InvokeData：stdout, stderr, exit_code, exception。
 type InvokeData struct {
 	// Stdout 标准输出
 	Stdout string
@@ -46,8 +42,6 @@ type InvokeData struct {
 	Exception error
 }
 
-// AsyncProcessHandler 异步进程处理器。
-// 对齐 Python AsyncProcessHandler：process, chunk_size, encoding, overall_timeout, is_executed。
 type AsyncProcessHandler struct {
 	// cmd 子进程命令
 	cmd *exec.Cmd
@@ -61,8 +55,6 @@ type AsyncProcessHandler struct {
 	mu sync.Mutex
 }
 
-// OperationUtils 操作工具类。
-// 对齐 Python OperationUtils：prepare_environment, create_handler, create_tmp_file, delete_tmp_file。
 type OperationUtils struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -82,6 +74,7 @@ const (
 	StreamEventTypeError
 )
 
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -95,12 +88,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// safePathPattern 安全路径模式
 var safePathPattern = regexp.MustCompile(`[^\w.-]`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// String 返回 StreamEventType 的字符串表示
 func (t StreamEventType) String() string {
 	switch t {
 	case StreamEventTypeStdout:
@@ -116,8 +107,6 @@ func (t StreamEventType) String() string {
 	}
 }
 
-// NewAsyncProcessHandler 创建异步进程处理器。
-// 对齐 Python OperationUtils.create_handler。
 func NewAsyncProcessHandler(cmd *exec.Cmd, chunkSize int, encoding string, timeout int) *AsyncProcessHandler {
 	if chunkSize <= 0 {
 		chunkSize = defaultChunkSize
@@ -133,8 +122,6 @@ func NewAsyncProcessHandler(cmd *exec.Cmd, chunkSize int, encoding string, timeo
 	}
 }
 
-// Invoke 一次性执行，收集完整输出。
-// 对齐 Python AsyncProcessHandler.invoke：drain stdout+stderr，超时 kill 进程树。
 func (h *AsyncProcessHandler) Invoke(ctx context.Context) (*InvokeData, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -391,8 +378,6 @@ func (h *AsyncProcessHandler) Stream(ctx context.Context) (<-chan StreamEvent, e
 	return ch, nil
 }
 
-// Background 后台执行，等待 grace 秒检测早期失败。
-// 对齐 Python AsyncProcessHandler.background：启动 + grace 检测。
 func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -456,16 +441,12 @@ func (h *AsyncProcessHandler) Background(grace float64) (pid int, err error) {
 	return pid, nil
 }
 
-// KillProcessTree 终止进程树。
-// 对齐 Python _kill_process_tree。
 func (h *AsyncProcessHandler) KillProcessTree() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.killProcessTree()
 }
 
-// PrepareEnvironment 合并环境变量。
-// 对齐 Python OperationUtils.prepare_environment：合并 os.Environ + custom。
 func (OperationUtils) PrepareEnvironment(customEnv map[string]string) map[string]string {
 	env := make(map[string]string)
 	for _, e := range os.Environ() {
@@ -479,8 +460,6 @@ func (OperationUtils) PrepareEnvironment(customEnv map[string]string) map[string
 	return env
 }
 
-// CreateTmpFile 创建临时文件。
-// 对齐 Python OperationUtils.create_tmp_file。
 func (OperationUtils) CreateTmpFile(content string, suffix string) (string, error) {
 	tmpFile, err := os.CreateTemp("", "sys_op_*"+suffix)
 	if err != nil {
@@ -495,14 +474,10 @@ func (OperationUtils) CreateTmpFile(content string, suffix string) (string, erro
 	return tmpFile.Name(), nil
 }
 
-// DeleteTmpFile 删除临时文件。
-// 对齐 Python OperationUtils.delete_tmp_file。
 func (OperationUtils) DeleteTmpFile(path string) error {
 	return os.Remove(path)
 }
 
-// ResolveCwd 解析 CWD：显式参数 → context CWD → os.Getenv("PWD")。
-// 对齐 Python _resolve_cwd。
 func ResolveCwd(cwdPath string) string {
 	if cwdPath != "" {
 		if !filepath.IsAbs(cwdPath) {
@@ -516,8 +491,6 @@ func ResolveCwd(cwdPath string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// setProcessGroup 设置进程组隔离（POSIX：start_new_session）。
-// 对齐 Python _create_subprocess 中 start_new_session=True。
 func (h *AsyncProcessHandler) setProcessGroup() {
 	if h.cmd.SysProcAttr == nil {
 		h.cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -525,7 +498,6 @@ func (h *AsyncProcessHandler) setProcessGroup() {
 	h.cmd.SysProcAttr.Setpgid = true
 }
 
-// killProcessTree 终止进程组
 func (h *AsyncProcessHandler) killProcessTree() {
 	if h.cmd.Process == nil {
 		return
@@ -537,7 +509,6 @@ func (h *AsyncProcessHandler) killProcessTree() {
 	_ = syscall.Kill(-pid, syscall.SIGKILL)
 }
 
-// waitProcess 等待进程完成，支持 context 取消
 func (h *AsyncProcessHandler) waitProcess(ctx context.Context) error {
 	done := make(chan error, 1)
 	go func() {
@@ -553,7 +524,6 @@ func (h *AsyncProcessHandler) waitProcess(ctx context.Context) error {
 	}
 }
 
-// readPipe 从管道读取全部内容
 func readPipe(r io.Reader, encoding string) <-chan string {
 	ch := make(chan string, 64)
 	go func() {

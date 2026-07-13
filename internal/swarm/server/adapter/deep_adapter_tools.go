@@ -410,34 +410,205 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 	return true
 }
 
-// buildToolCards 构建 ToolCards 列表。
-// 对齐 Python: _get_tool_cards(agent_card_id) (line 1381-1440)
+// getToolCards 获取工具卡片列表。
+// 对齐 Python: _get_tool_cards(agent_id) (interface_deep.py L2355-2512)
 //
-// 根据当前模式构造工具卡片列表，按优先级排序。
-// ⤵️ 9.38-49 Harness 工具集: 具体工具卡片构造待回填
-func (d *DeepAdapter) buildToolCards(agentID string, configBase map[string]any, mode string) []*tool.ToolCard {
-	// ⤵️ 9.38-49: 根据 agentID 和 mode 构造完整的 ToolCard 列表
-	// 包含：基础工具 + 搜索工具 + 多模态工具 + MCP 工具 + 自定义工具
-	var cards []*tool.ToolCard
+// 注意：此方法只负责非 SysOperation 工具（wiki/web_search/vision/audio/video/image_gen/xiaoyi/skill/acp_chat）。
+// fs/shell/code 工具由 SysOperationRail 在 CreateDeepAgent 内部自动注册。
+//
+// Python 步骤对照：
+//  1. wiki 工具 (wiki_ingest, wiki_query, wiki_lint)
+//  2. 付费搜索工具 (WebPaidSearchTool)
+//  3. 免费搜索工具 (WebFreeSearchTool, WebFetchWebpageTool)
+//  4. 视觉工具 (create_vision_tools)
+//  5. 音频工具 (_iter_runtime_audio_tools)
+//  6. 视频工具 (video_understanding)
+//  7. 图片生成工具 (generate_image)
+//  8. 小艺手机端工具 (28个 xiaoyi_phone_tools)
+//  9. SkillToolkit (SkillToolkit.get_tools)
+// 10. acp_chat (acp_agents 配置检查)
+func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
+	var toolCards []*tool.ToolCard
 
-	// 去重追加已有的 toolCards
-	if d.toolCards != nil {
-		cards = append(cards, d.toolCards...)
+	// ── 步骤 1: wiki 工具 ──
+	// Python:
+	//   for wtool in [wiki_ingest, wiki_query, wiki_lint]:
+	//       if not Runner.resource_mgr.get_tool(wtool.card.id):
+	//           Runner.resource_mgr.add_tool(wtool)
+	//       tool_cards.append(wtool.card)
+	// ⤵️ 9.38-49: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
+	// for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
+	//     if rm.GetTool([]string{wtool.Card().ID}) == nil {
+	//         _ = rm.AddTool(wtool)
+	//     }
+	//     toolCards = append(toolCards, wtool.Card())
+	// }
+
+	// ── 步骤 2: 付费搜索工具 ──
+	// Python:
+	//   if is_paid_search_enabled():
+	//       self._paid_search_tool = WebPaidSearchTool(language=..., agent_id=agent_id)
+	//       Runner.resource_mgr.add_tool(self._paid_search_tool)
+	//       tool_cards.append(self._paid_search_tool.card)
+	//       self._paid_search_registered = True
+	// ⤵️ 9.38-49: WebPaidSearchTool + is_paid_search_enabled() 尚未实现
+	// if isPaidSearchEnabled() {
+	//     paidSearchTool := NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
+	//     _ = rm.AddTool(paidSearchTool)
+	//     toolCards = append(toolCards, paidSearchTool.Card())
+	//     d.paidSearchTool = paidSearchTool
+	//     d.paidSearchRegistered = true
+	// }
+
+	// ── 步骤 3: 免费搜索工具 ──
+	// Python:
+	//   for tool_cls in [WebFreeSearchTool, WebFetchWebpageTool]:
+	//       tool_instance = tool_cls(agent_id=agent_id)
+	//       Runner.resource_mgr.add_tool(tool_instance)
+	//       tool_cards.append(tool_instance.card)
+	// ⤵️ 9.38-49: WebFreeSearchTool / WebFetchWebpageTool 尚未实现
+	// for _, toolCls := range []func(string) tool.Tool{NewWebFreeSearchTool, NewWebFetchWebpageTool} {
+	//     toolInst := toolCls(agentID)
+	//     _ = rm.AddTool(toolInst)
+	//     toolCards = append(toolCards, toolInst.Card())
+	// }
+
+	// ── 步骤 4: 视觉工具 ──
+	// Python:
+	//   if self._vision_model_config is not None:
+	//       for tool in create_vision_tools(language=..., vision_model_config=..., agent_id=...):
+	//           Runner.resource_mgr.add_tool(tool)
+	//           tool_cards.append(tool.card)
+	//           self._vision_tools.append(tool)
+	//       self._vision_tools_registered = bool(self._vision_tools)
+	if d.visionModelConfig != nil {
+		// ⤵️ 9.38-49: create_vision_tools() 尚未实现
+		// visionTools := createVisionTools(d.resolveRuntimeLanguage(), d.visionModelConfig, agentID)
+		// for _, t := range visionTools {
+		//     _ = rm.AddTool(t)
+		//     toolCards = append(toolCards, t.Card())
+		// }
+		// d.visionTools = visionTools
+		// d.visionToolsRegistered = len(visionTools) > 0
+		logger.Info(logComponent).Msg("getToolCards: 视觉模型配置已就绪，等待 9.38-49 回填 create_vision_tools")
 	}
 
-	// 优先付费搜索
-	cards = d.prioritizePaidSearchToolCard(cards)
+	// ── 步骤 5: 音频工具 ──
+	// Python:
+	//   self._audio_tools = self._iter_runtime_audio_tools(agent_id)
+	//   for tool in self._audio_tools:
+	//       Runner.resource_mgr.add_tool(tool)
+	//       tool_cards.append(tool.card)
+	//   self._audio_tools_registered = bool(self._audio_tools)
+	if d.audioModelConfig != nil {
+		// ⤵️ 9.38-49: _iter_runtime_audio_tools() 尚未实现
+		// audioTools := d.iterRuntimeAudioTools(agentID)
+		// for _, t := range audioTools {
+		//     _ = rm.AddTool(t)
+		//     toolCards = append(toolCards, t.Card())
+		// }
+		// d.audioTools = audioTools
+		// d.audioToolsRegistered = len(audioTools) > 0
+		logger.Info(logComponent).Msg("getToolCards: 音频模型配置已就绪，等待 9.38-49 回填 _iter_runtime_audio_tools")
+	}
 
-	// 裁剪：按模式移除不应存在的工具
-	// ⤵️ 9.38-49: 按 mode 裁剪工具卡片
+	// ── 步骤 6: 视频工具 ──
+	// Python:
+	//   if self._video_model_config:
+	//       Runner.resource_mgr.add_tool(video_understanding)
+	//       tool_cards.append(video_understanding.card)
+	//       self._video_tool_registered = True
+	if d.videoToolRegistered {
+		// ⤵️ 9.38-49: video_understanding 工具实例尚未实现
+		// _ = rm.AddTool(videoUnderstanding)
+		// toolCards = append(toolCards, videoUnderstanding.Card())
+		logger.Info(logComponent).Msg("getToolCards: 视频工具配置已就绪，等待 9.38-49 回填 video_understanding")
+	}
+
+	// ── 步骤 7: 图片生成工具 ──
+	// Python:
+	//   if self._image_gen_model_config:
+	//       Runner.resource_mgr.add_tool(generate_image)
+	//       tool_cards.append(generate_image.card)
+	//       self._image_gen_tool_registered = True
+	if d.imageGenToolRegistered {
+		// ⤵️ 9.38-49: generate_image 工具实例尚未实现
+		// _ = rm.AddTool(generateImage)
+		// toolCards = append(toolCards, generateImage.Card())
+		logger.Info(logComponent).Msg("getToolCards: 图片生成工具配置已就绪，等待 9.38-49 回填 generate_image")
+	}
+
+	// ── 步骤 8: 小艺手机端工具 ──
+	// Python:
+	//   xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
+	//   if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
+	//       _xiaoyi_tools = [get_user_location, create_note, search_notes, ...]
+	//       for xt in _xiaoyi_tools:
+	//           Runner.resource_mgr.add_tool(xt)
+	//           tool_cards.append(xt.card)
+	//       self._xiaoyi_phone_tools_registered = True
+	// ⤵️ 9.38-49: 小艺手机端工具类 (28个) 尚未实现
+	// xiaoyiEnabled := false
+	// if channels, ok := configBase["channels"].(map[string]any); ok {
+	//     if xiaoyi, ok := channels["xiaoyi"].(map[string]any); ok {
+	//         if v, ok := xiaoyi["phone_tools_enabled"].(bool); ok {
+	//             xiaoyiEnabled = v
+	//         }
+	//     }
+	// }
+	// if xiaoyiEnabled && !d.xiaoyiPhoneToolsRegistered {
+	//     xiaoyiTools := []tool.Tool{getUserLocation, createNote, searchNotes, ...}
+	//     for _, xt := range xiaoyiTools {
+	//         _ = rm.AddTool(xt)
+	//         toolCards = append(toolCards, xt.Card())
+	//     }
+	//     d.xiaoyiPhoneToolsRegistered = true
+	// }
+
+	// ── 步骤 9: SkillToolkit ──
+	// Python:
+	//   skill_toolkit = SkillToolkit(manager=self._skill_manager)
+	//   for tool in skill_toolkit.get_tools():
+	//       if not Runner.resource_mgr.get_tool(tool.card.id):
+	//           Runner.resource_mgr.add_tool(tool)
+	//       tool_cards.append(tool.card)
+	if d.skillManager != nil {
+		// ⤵️ 9.38-49: SkillToolkit 工具尚未实现
+		// skillToolkit := NewSkillToolkit(d.skillManager)
+		// for _, t := range skillToolkit.GetTools() {
+		//     if rm.GetTool([]string{t.Card().ID}) == nil {
+		//         _ = rm.AddTool(t)
+		//     }
+		//     toolCards = append(toolCards, t.Card())
+		// }
+		logger.Info(logComponent).Msg("getToolCards: SkillManager 已就绪，等待 9.38-49 回填 SkillToolkit")
+	}
+
+	// ── 步骤 10: acp_chat ──
+	// Python:
+	//   acp_cfg = get_config().get("acp_agents")
+	//   if isinstance(acp_cfg, dict) and acp_cfg:
+	//       if not Runner.resource_mgr.get_tool(acp_chat.card.id):
+	//           Runner.resource_mgr.add_tool(acp_chat)
+	//       tool_cards.append(acp_chat.card)
+	// ⤵️ 9.38-49: acp_chat 工具尚未实现
+	// acpCfg, _ := configBase["acp_agents"].(map[string]any)
+	// if len(acpCfg) > 0 {
+	//     if rm.GetTool([]string{acpChat.Card().ID}) == nil {
+	//         _ = rm.AddTool(acpChat)
+	//     }
+	//     toolCards = append(toolCards, acpChat.Card())
+	// }
+
+	// 优先付费搜索
+	toolCards = d.prioritizePaidSearchToolCard(toolCards)
 
 	logger.Info(logComponent).
 		Str("agent_id", agentID).
-		Str("mode", mode).
-		Int("tool_count", len(cards)).
-		Msg("buildToolCards 完成（待 9.38-49 回填具体工具）")
+		Int("tool_count", len(toolCards)).
+		Msg("getToolCards 完成")
 
-	return cards
+	return toolCards
 }
 
 // ──────────────────────────── AbilityManager 辅助 ────────────────────────────

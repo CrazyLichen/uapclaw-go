@@ -25,6 +25,43 @@ func TestBuildIdentitySection_基本验证(t *testing.T) {
 	}
 }
 
+// TestBuildIdentitySection_对齐Python 测试身份节对齐 Python _identity_prompt 关键内容
+func TestBuildIdentitySection_对齐Python(t *testing.T) {
+	s := BuildIdentitySection()
+	// 中文版应包含 Python _identity_prompt 的关键段落
+	for _, keyword := range []string{
+		"JiuwenSwarm",
+		"你的家",
+		"配置信息",
+		"运行环境",
+		"输出文件放置规范",
+		"文件发送",
+		"send_file_to_user",
+	} {
+		if !strings.Contains(s.Content["cn"], keyword) {
+			t.Errorf("Content[cn] 应包含 %q（对齐 Python _identity_prompt）", keyword)
+		}
+	}
+	// 英文版应包含 Python _identity_prompt 的关键段落
+	for _, keyword := range []string{
+		"JiuwenSwarm",
+		"Your Home",
+		"Configuration",
+		"Runtime Environment",
+		"Output File Placement",
+		"Sending Files",
+		"send_file_to_user",
+	} {
+		if !strings.Contains(s.Content["en"], keyword) {
+			t.Errorf("Content[en] 应包含 %q（对齐 Python _identity_prompt）", keyword)
+		}
+	}
+	// 应包含目录变量（非空占位）
+	if strings.Contains(s.Content["cn"], "{config_dir}") {
+		t.Error("Content[cn] 不应包含未替换的 {config_dir} 占位符")
+	}
+}
+
 // TestBuildSafetySection_基本验证 测试安全节基本属性
 func TestBuildSafetySection_基本验证(t *testing.T) {
 	s := BuildSafetySection()

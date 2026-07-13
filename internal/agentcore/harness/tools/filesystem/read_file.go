@@ -25,8 +25,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ReadFileInput 读取文件工具的输入参数。
-// 对齐 Python: ReadFileTool invoke inputs (filesystem.py L698)
 type ReadFileInput struct {
 	// FilePath 文件路径（必需）
 	FilePath string `json:"file_path"`
@@ -72,8 +70,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewReadFileTool 创建 ReadFileTool 实例。
-// 对齐 Python: ReadFileTool (filesystem.py L273)
 func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, enableImageMultimodal bool) tool.Tool {
 	card, _ := tools.BuildToolCard("read_file", "ReadFileTool", language, nil, agentID)
 
@@ -219,8 +215,6 @@ func NewReadFileTool(op sys_operation.SysOperation, language, agentID string, en
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// readText 读取文本文件。
-// 对齐 Python: ReadFileTool._read_text (filesystem.py L454-495)
 func readText(ctx context.Context, op sys_operation.SysOperation, filePath string, offset, limit int, applySizeCap bool) (map[string]any, error) {
 	// 将 offset/limit 转为行号 start/end
 	// 对齐 Python L460-461
@@ -284,8 +278,6 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	return map[string]any{"content": rendered}, nil
 }
 
-// readNotebook 读取 Jupyter Notebook 文件。
-// 对齐 Python: ReadFileTool._read_notebook (filesystem.py L497-545)
 func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath string) (map[string]any, error) {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil {
@@ -374,9 +366,6 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	return map[string]any{"content": content}, nil
 }
 
-// readPDF 读取 PDF 文件。
-// 对齐 Python: ReadFileTool._read_pdf (filesystem.py L547-583)
-// 使用 github.com/ledongthuc/pdf 作为 pdfplumber 等价库
 func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string, pages string) (map[string]any, error) {
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
@@ -483,9 +472,6 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	return map[string]any{"content": content}, nil
 }
 
-// readImage 读取图片文件。
-// 对齐 Python: ReadFileTool._read_image (filesystem.py L604-692)
-// 实现缩略图、token 预算检查、图片压缩三级降级策略
 func readImage(ctx context.Context, op sys_operation.SysOperation, filePath string, enableImageMultimodal bool) (map[string]any, error) {
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
@@ -614,8 +600,6 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}, nil
 }
 
-// recordReadState 记录文件读取状态到注册表。
-// 对齐 Python: ReadFileTool._record_read_state (filesystem.py L428-448)
 func recordReadState(ctx context.Context, op sys_operation.SysOperation, filePath string, mtimeNS, sizeBytes int64, isPartial bool, renderedLineCount int) {
 	if mtimeNS == 0 || !isTextReadForEdit(filePath) {
 		return
@@ -651,8 +635,6 @@ func recordReadState(ctx context.Context, op sys_operation.SysOperation, filePat
 	SetFileReadState(filePath, state)
 }
 
-// parsePDFPageRange 解析 PDF 页码范围字符串。
-// 对齐 Python: ReadFileTool._parse_pdf_page_range (filesystem.py L329-354)
 func parsePDFPageRange(pages string, totalPages int) []int {
 	if pages == "" {
 		if totalPages > 0 {
@@ -702,8 +684,6 @@ func parsePDFPageRange(pages string, totalPages int) []int {
 	return []int{start, end}
 }
 
-// estimateTokens 粗估 token 数量（~4 UTF-8 字符/token）。
-// 对齐 Python: ReadFileTool._estimate_tokens (filesystem.py L393-395)
 func estimateTokens(text string) int {
 	charCount := utf8.RuneCountInString(text)
 	if charCount/4 < 1 {
@@ -712,8 +692,6 @@ func estimateTokens(text string) int {
 	return charCount / 4
 }
 
-// isTextReadForEdit 判断文件是否为可编辑文本（非图片、非 PDF、非 Notebook）。
-// 对齐 Python: ReadFileTool._is_text_read_for_edit (filesystem.py L401-406)
 func isTextReadForEdit(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	return !ImageExtensions[ext] && ext != ".pdf" && ext != ".ipynb"
@@ -744,8 +722,6 @@ func readRawTextForEditState(ctx context.Context, op sys_operation.SysOperation,
 	}
 }
 
-// extractNotebookString 从 Notebook cell 中提取字符串字段（source 等）。
-// 对齐 Python: "".join(cell.get("source", []))
 func extractNotebookString(cell map[string]json.RawMessage, key string) string {
 	raw, ok := cell[key]
 	if !ok {
@@ -767,8 +743,6 @@ func extractNotebookString(cell map[string]json.RawMessage, key string) string {
 	return ""
 }
 
-// extractOutputText 从 Notebook cell output 中提取文本。
-// 对齐 Python L529-542
 func extractOutputText(out map[string]json.RawMessage) string {
 	// "text" 字段
 	if textRaw, ok := out["text"]; ok {
@@ -815,9 +789,6 @@ func extractOutputText(out map[string]json.RawMessage) string {
 	return ""
 }
 
-// estimateImageTokens 估算图片 base64 编码后的 token 数量。
-// 对齐 Python: max(1, int(len(base64.b64encode(resized)) * 0.125))
-// 即 base64 字节数 / 8
 func estimateImageTokens(data []byte) int {
 	encodedLen := base64.StdEncoding.EncodedLen(len(data))
 	tokens := encodedLen / 8
@@ -827,8 +798,6 @@ func estimateImageTokens(data []byte) int {
 	return tokens
 }
 
-// thumbnailImage 将图片缩放到指定最大尺寸内，保持宽高比。
-// 对齐 Python: img.thumbnail((maxW, maxH))
 func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
 	bounds := img.Bounds()
 	w := bounds.Dx()
@@ -860,7 +829,6 @@ func thumbnailImage(img image.Image, maxW, maxH int) image.Image {
 	return imageResize(img, newW, newH)
 }
 
-// imageResize 简单的最近邻缩放实现
 func imageResize(img image.Image, newW, newH int) image.Image {
 	srcBounds := img.Bounds()
 	srcW := srcBounds.Dx()
@@ -877,8 +845,6 @@ func imageResize(img image.Image, newW, newH int) image.Image {
 	return dst
 }
 
-// compressImageBytes 压缩图片到指定尺寸和质量，输出 JPEG。
-// 对齐 Python: _compress_image_bytes(raw, size=(w, h), quality=q)
 func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	img, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
@@ -911,8 +877,6 @@ func compressImageBytes(raw []byte, maxW, maxH, quality int) []byte {
 	return buf.Bytes()
 }
 
-// encodeImage 将图片编码为指定格式的字节切片。
-// 对齐 Python: img.save(out, format=detected_format.upper())
 func encodeImage(img image.Image, format string) ([]byte, error) {
 	var buf bytes.Buffer
 	switch strings.ToLower(format) {
@@ -929,8 +893,6 @@ func encodeImage(img image.Image, format string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// detectImageFormat 从文件头字节检测图片格式。
-// 对齐 Python: img.format
 func detectImageFormat(raw []byte, ext string) string {
 	// 从文件头魔数检测
 	if len(raw) >= 8 {

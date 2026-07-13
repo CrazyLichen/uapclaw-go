@@ -32,7 +32,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 3: filesystemRail — 文件系统（非 ACP 模式启用）
-	if d.filesystemRailEnabledForProfile(configBase) {
+	if d.filesystemRailEnabledForProfile(d.instanceOverrides) {
 		readOnly := mode == "agent.plan"
 		fs := d.buildFilesystemRail(readOnly)
 		if fs != nil {

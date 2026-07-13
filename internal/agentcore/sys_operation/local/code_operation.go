@@ -252,6 +252,15 @@ func (c *LocalCodeOperation) ListTools() []*tool.ToolCard {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// resolvePythonExecutable 解析 Python 可执行文件路径。
+// 对齐 Python sys.executable：优先读取 PYTHON_EXECUTABLE 环境变量，fallback 到 python3。
+func resolvePythonExecutable() string {
+	if exe := os.Getenv("PYTHON_EXECUTABLE"); exe != "" {
+		return exe
+	}
+	return "python3"
+}
+
 // buildSubprocessCmd 构建代码执行子进程命令。
 // 对齐 Python CodeOperation 的 supportLanguageConfigDict + buildSubprocessCmd。
 // 修改点：命令长度限制对齐 Python（8000/100000），Python 加 -u 参数，force_file 支持。
@@ -261,14 +270,15 @@ func (c *LocalCodeOperation) buildSubprocessCmd(code string, language string, fo
 	switch language {
 	case "python", "python3":
 		// Python 执行加 -u 参数（unbuffered），对齐 Python _SUPPORT_LANGUAGE_CONFIG_DICT
+		pythonExe := resolvePythonExecutable()
 		if !forceFile && len(code) <= cmdLimit {
-			return []string{"python3", "-u", "-c", code}, "", nil
+			return []string{pythonExe, "-u", "-c", code}, "", nil
 		}
 		tmpFile, err := (&OperationUtils{}).CreateTmpFile(code, ".py")
 		if err != nil {
 			return nil, "", err
 		}
-		return []string{"python3", "-u", tmpFile}, tmpFile, nil
+		return []string{pythonExe, "-u", tmpFile}, tmpFile, nil
 	case "javascript", "node":
 		if !forceFile && len(code) <= cmdLimit {
 			return []string{"node", "-e", code}, "", nil

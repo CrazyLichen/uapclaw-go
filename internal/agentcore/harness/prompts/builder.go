@@ -12,10 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SystemPromptBuilder harness 扩展版系统提示词构建器，
-// 在 single_agent/prompts 基础上增加 PromptMode 模式过滤。
-//
-// 对应 Python: SystemPromptBuilder (openjiuwen/harness/prompts/builder.py)
 type SystemPromptBuilder struct {
 	*saprompt.SystemPromptBuilder
 	// mode 提示词模式
@@ -51,9 +47,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewSystemPromptBuilder 创建 harness 扩展版系统提示词构建器。
-//
-// 对应 Python: SystemPromptBuilder(language, mode)
 func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPromptBuilder {
 	// 按 PromptMode 创建基础构建器（对齐 Python: harness/prompts/builder.py）
 	var base *saprompt.SystemPromptBuilder
@@ -83,13 +76,6 @@ func NewSystemPromptBuilder(language string, mode hschema.PromptMode) *SystemPro
 	}
 }
 
-// Build 按模式过滤节并拼接为完整系统提示词。
-//
-// NONE 模式仅渲染 identity 节；
-// MINIMAL 模式仅渲染 MinimalSections 中的节；
-// FULL 模式委托给基础构建器。
-//
-// 对应 Python: SystemPromptBuilder.build()
 func (b *SystemPromptBuilder) Build() string {
 	switch b.mode {
 	case hschema.PromptModeNone:
@@ -110,18 +96,10 @@ func (b *SystemPromptBuilder) Build() string {
 	}
 }
 
-// BuildReport 生成当前构建器状态的诊断报告。
-//
-// 对应 Python: SystemPromptBuilder.build_report()
 func (b *SystemPromptBuilder) BuildReport() *PromptReport {
 	return NewPromptReport(b)
 }
 
-// ResolveLanguage 按优先级解析提示词语言：
-// 配置参数 > AGENT_PROMPT_LANGUAGE 环境变量 > DefaultLanguage。
-// 不在 SupportedLanguages 中的值回退到下一优先级。
-//
-// 对应 Python: resolve_language()
 func ResolveLanguage(configLanguage string) string {
 	if configLanguage != "" && isSupportedLanguage(configLanguage) {
 		return configLanguage

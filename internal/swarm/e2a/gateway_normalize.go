@@ -11,17 +11,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentFieldOption E2AFromAgentFields 的可选配置函数。
-type AgentFieldOption func(map[string]any)
-
-// responseNormConfig 响应规范化内部配置。
 type responseNormConfig struct {
 	timestamp string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ResponseNormOption 响应规范化可选配置函数。
+type AgentFieldOption func(map[string]any)
+
 type ResponseNormOption func(*responseNormConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -39,13 +36,10 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent 日志组件
 var logComponent = logger.ComponentChannel
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// MessageToLegacyAgentDict 从 Message 生成与历史 WebSocket 一致的 dict（用于兜底 legacy_agent_request）。
-// 对应 Python: message_to_legacy_agent_dict(msg)
 func MessageToLegacyAgentDict(msg *schema.Message) map[string]any {
 	rmVal := reqMethodToString(msg.ReqMethod)
 
@@ -76,8 +70,6 @@ func MessageToLegacyAgentDict(msg *schema.Message) map[string]any {
 	return out
 }
 
-// BuildFallbackE2A 规范化失败时仍发 E2A 形状：在 channel_context 内携带 legacy 快照。
-// 对应 Python: build_fallback_e2a(legacy)
 func BuildFallbackE2A(legacy map[string]any) *E2AEnvelope {
 	legacy = legacyPayloadWithinLimit(copyMap(legacy))
 
@@ -109,8 +101,6 @@ func BuildFallbackE2A(legacy map[string]any) *E2AEnvelope {
 	return env
 }
 
-// MessageToE2A Message → E2AEnvelope（不经兜底）。
-// 对应 Python: message_to_e2a(msg)
 func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 	params := map[string]any{}
 	if msg.Params != nil {
@@ -175,8 +165,6 @@ func MessageToE2A(msg *schema.Message) (*E2AEnvelope, error) {
 	return EnvelopeFromMap(d), nil
 }
 
-// MessageToE2AOrFallback Message → E2A；失败或校验不通过则 BuildFallbackE2A。
-// 对应 Python: message_to_e2a_or_fallback(msg)
 func MessageToE2AOrFallback(msg *schema.Message) *E2AEnvelope {
 	env, err := MessageToE2A(msg)
 	if err != nil {
@@ -214,43 +202,34 @@ func MessageToE2AOrFallback(msg *schema.Message) *E2AEnvelope {
 	return env
 }
 
-// WithFieldChannelID 设置 channel_id。
 func WithFieldChannelID(v string) AgentFieldOption {
 	return func(d map[string]any) { d["channel_id"] = v }
 }
 
-// WithFieldSessionID 设置 session_id。
 func WithFieldSessionID(v string) AgentFieldOption {
 	return func(d map[string]any) { d["session_id"] = v }
 }
 
-// WithFieldReqMethod 设置 req_method。
 func WithFieldReqMethod(v string) AgentFieldOption {
 	return func(d map[string]any) { d["method"] = v }
 }
 
-// WithFieldParams 设置 params。
 func WithFieldParams(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["params"] = v }
 }
 
-// WithFieldIsStream 设置 is_stream。
 func WithFieldIsStream(v bool) AgentFieldOption {
 	return func(d map[string]any) { d["is_stream"] = v }
 }
 
-// WithFieldTimestamp 设置 timestamp。
 func WithFieldTimestamp(v float64) AgentFieldOption {
 	return func(d map[string]any) { d["timestamp"] = v }
 }
 
-// WithFieldMetadata 设置 metadata。
 func WithFieldMetadata(v map[string]any) AgentFieldOption {
 	return func(d map[string]any) { d["metadata"] = v }
 }
 
-// E2AFromAgentFields 由与 AgentRequest 相同的字段构造 E2A（heartbeat / cron / app 管理请求等）。
-// 对应 Python: e2a_from_agent_fields(...)
 func E2AFromAgentFields(requestID string, opts ...AgentFieldOption) *E2AEnvelope {
 	d := map[string]any{
 		"request_id": requestID,
@@ -273,8 +252,6 @@ func E2AFromAgentFields(requestID string, opts ...AgentFieldOption) *E2AEnvelope
 	return EnvelopeFromMap(d)
 }
 
-// ChannelContextForChannelReply 供流式 chunk 回传到 Channel：去掉内部 _jiuwenswarm，保留 trace 与业务 metadata。
-// 对应 Python: channel_context_for_channel_reply(env)
 func ChannelContextForChannelReply(env *E2AEnvelope) map[string]any {
 	ctx := make(map[string]any)
 	if env.ChannelContext != nil {
@@ -289,16 +266,10 @@ func ChannelContextForChannelReply(env *E2AEnvelope) map[string]any {
 	return ctx
 }
 
-// WithNormTimestamp 设置响应规范化时间戳。
 func WithNormTimestamp(ts string) ResponseNormOption {
 	return func(c *responseNormConfig) { c.timestamp = ts }
 }
 
-// E2AResponseFromAgentResponse 将 AgentResponse 规范为 E2AResponse。
-//
-// 非流式完整响应恒为 is_final=true、sequence 默认 0。
-//
-// 对应 Python: e2a_response_from_agent_response(resp, ...)
 func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string, sequence int, opts ...ResponseNormOption) *E2AResponse {
 	cfg := &responseNormConfig{}
 	for _, opt := range opts {
@@ -375,13 +346,6 @@ func E2AResponseFromAgentResponse(resp *schema.AgentResponse, responseID string,
 	}
 }
 
-// E2AResponseFromAgentChunk 将 AgentResponseChunk 规范为 E2AResponse。
-//
-// 中间帧：e2a.chunk，status=in_progress，is_final=false。
-// 终止帧：payload == {"is_complete":true} → e2a.complete。
-// chat.delta：按 source_chunk_type 映射 body.delta_kind（llm_reasoning → reasoning）。
-//
-// 对应 Python: e2a_response_from_agent_chunk(chunk, ...)
 func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID string, sequence int, isStream bool, opts ...ResponseNormOption) *E2AResponse {
 	cfg := &responseNormConfig{}
 	for _, opt := range opts {
@@ -516,11 +480,6 @@ func E2AResponseFromAgentChunk(chunk *schema.AgentResponseChunk, responseID stri
 	}
 }
 
-// E2AResponseToAgentResponse E2AResponse → 非流式 AgentResponse。
-//
-// 仅处理网关 unary 常见 response_kind：e2a.complete、e2a.error；其它 kind 返回 error。
-//
-// 对应 Python: e2a_response_to_agent_response(e2a)
 func E2AResponseToAgentResponse(e2a *E2AResponse) (*schema.AgentResponse, error) {
 	rid := e2a.RequestID
 	ch := e2a.Channel
@@ -746,7 +705,6 @@ func E2AResponseToAgentChunk(e2a *E2AResponse) (*schema.AgentResponseChunk, erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// reqMethodToString 将 ReqMethod 转为字符串，空值返回 nil。
 func reqMethodToString(rm schema.ReqMethod) any {
 	if rm == "" {
 		return nil
@@ -754,8 +712,6 @@ func reqMethodToString(rm schema.ReqMethod) any {
 	return string(rm)
 }
 
-// legacyPayloadWithinLimit legacy JSON 超过 512KB 时裁剪 params。
-// 对应 Python: _legacy_payload_within_limit(legacy)
 func legacyPayloadWithinLimit(legacy map[string]any) map[string]any {
 	raw, err := json.Marshal(legacy)
 	if err != nil {
@@ -783,7 +739,6 @@ func legacyPayloadWithinLimit(legacy map[string]any) map[string]any {
 	return slim
 }
 
-// isTerminalPayload 判断 payload 是否为终止哨兵 {"is_complete": true}。
 func isTerminalPayload(pl map[string]any) bool {
 	if len(pl) != 1 {
 		return false
@@ -796,8 +751,6 @@ func isTerminalPayload(pl map[string]any) bool {
 	return ok && b
 }
 
-// emptyCompleteMarker 判断 e2a.complete body 是否表示空终止帧。
-// 对应 Python: _empty_complete_marker(b, r)
 func emptyCompleteMarker(body map[string]any, res any) bool {
 	// body 等于 {"result": {}} 判断
 	if len(body) == 1 {
@@ -823,7 +776,6 @@ func emptyCompleteMarker(body map[string]any, res any) bool {
 	return len(keys) == 1 && keys[0] == "result"
 }
 
-// copyMap 深拷贝 map[string]any（仅一层）。
 func copyMap(m map[string]any) map[string]any {
 	result := make(map[string]any, len(m))
 	for k, v := range m {
@@ -832,7 +784,6 @@ func copyMap(m map[string]any) map[string]any {
 	return result
 }
 
-// toBool 将任意值转为 bool（对齐 Python bool() 语义）。
 func toBool(v any) bool {
 	if v == nil {
 		return false

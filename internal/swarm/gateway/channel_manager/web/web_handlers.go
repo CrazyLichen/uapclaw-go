@@ -237,7 +237,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 
 	// ─── 本地实现方法 ───
 	d.Register("config.get", handleConfigGet(cryptoProv))
-	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved))
+	d.Register("config.set", handleConfigSet(sendEvent, onConfigSaved, cryptoProv))
 	d.Register("models.list", handleModelsList(cryptoProv))
 	d.Register("channel.get", handleChannelGet(channelMgr))
 	d.Register("session.list", handleSessionList)
@@ -248,7 +248,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("history.get", handleHistoryGet())
 
 	// ─── config 辅助方法 ───
-	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved))
+	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved, cryptoProv))
 	d.Register("config.validate_model", stubHandler("config.validate_model", map[string]any{"ok": true}))
 
 	// ─── models 辅助方法 ───
@@ -668,14 +668,14 @@ func normalizeTruthy(val string) string {
 //
 // 完整实现：参数映射→provider校验→YAML键写入→agents/team写入→os.Setenv+.env持久化→回包→触发热重载。
 // 对齐 Python: _config_set (app_web_handlers.py L870-895)。
-func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPCHandlerFunc {
+func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return nil, fmt.Errorf("params 不能为空")
 		}
 
 		// 步骤1-5: applyConfigPayload 统一处理
-		envUpdates, yamlUpdated, err := ApplyConfigPayload(params, nil)
+		envUpdates, yamlUpdated, err := ApplyConfigPayload(params, cryptoProv)
 		if err != nil {
 			// 区分 BadRequest 和 InternalError
 			if _, ok := err.(*ConfigBadRequest); ok {
@@ -712,7 +712,7 @@ func handleConfigSet(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPC
 // 对齐 Python: _config_save_all (app_web_handlers.py L1086-1151)。
 //
 // 支持子载荷：config、models、agents、team。
-func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc) RPCHandlerFunc {
+func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		if params == nil {
 			return map[string]any{"ok": false, "error": "params must be object", "code": WsErrBadRequest}, nil
@@ -726,7 +726,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 		var newModels []map[string]any
 		if modelsVal, ok := params["models"]; ok && modelsVal != nil {
 			// 将 []any 转为 []map[string]any
-			parsed, err := buildModelsDefaultsFromFrontend(modelsVal, nil)
+			parsed, err := buildModelsDefaultsFromFrontend(modelsVal, cryptoProv)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
@@ -756,7 +756,7 @@ func handleConfigSaveAll(sendEvent EventSender, onConfigSaved OnConfigSavedFunc)
 
 		// 应用 config 子载荷
 		if len(configParams) > 0 {
-			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams, nil)
+			appliedEnv, appliedYAML, err := ApplyConfigPayload(configParams, cryptoProv)
 			if err != nil {
 				if _, ok := err.(*ConfigBadRequest); ok {
 					return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil

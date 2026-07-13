@@ -37,9 +37,11 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 	cancelMsg := mh.buildCancelMessage(msg, oldSessionID)
 
 	// 4. 发送中断请求到 AgentServer，等待响应
+	// 对齐 Python: 即使网关侧已无活跃流式拉取任务，也必须通知 AgentServer
+	// 否则仅断开 CLI WebSocket 无法停止已派发的工作
 	var resp *schema.AgentResponse
 	var respErr error
-	if mh.agentClient != nil && mh.agentClient.IsConnected() && len(requestIDs) > 0 {
+	if mh.agentClient != nil && mh.agentClient.IsConnected() {
 		cancelEnv := e2a.MessageToE2AOrFallback(cancelMsg)
 		cancelEnv.IsStream = false
 		resp, respErr = mh.agentClient.SendRequest(ctx, cancelEnv)

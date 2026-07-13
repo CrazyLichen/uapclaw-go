@@ -13,9 +13,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PromptEntry Prompt 批量添加条目
-//
-// 对应 Python: (template_id, PromptTemplate) 元组
 type PromptEntry struct {
 	// ID 模板标识
 	ID string
@@ -23,9 +20,6 @@ type PromptEntry struct {
 	Template *prompt.PromptTemplate
 }
 
-// WorkflowEntry Workflow 批量添加条目
-//
-// 对应 Python: (workflow_id, WorkflowProvider) 元组
 type WorkflowEntry struct {
 	// ID 工作流标识
 	ID string
@@ -33,9 +27,6 @@ type WorkflowEntry struct {
 	Provider WorkflowProvider
 }
 
-// ModelEntry Model 批量添加条目
-//
-// 对应 Python: (model_id, ModelProvider) 元组
 type ModelEntry struct {
 	// ID 模型标识
 	ID string
@@ -43,9 +34,6 @@ type ModelEntry struct {
 	Provider ModelProvider
 }
 
-// AgentEntry Agent 批量添加条目
-//
-// 对应 Python: (AgentCard, AgentProvider) 元组
 type AgentEntry struct {
 	// Card Agent 身份元数据
 	Card *agentschema.AgentCard
@@ -53,9 +41,6 @@ type AgentEntry struct {
 	Provider AgentProvider
 }
 
-// AgentTeamEntry AgentTeam 批量添加条目。
-//
-// 对应 Python: (TeamCard, AgentTeamProvider) 元组
 type AgentTeamEntry struct {
 	// Card 团队身份元数据
 	Card maschema.TeamCardInterface
@@ -65,10 +50,19 @@ type AgentTeamEntry struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// TagMatchStrategy 标签匹配策略
-//
-// 对应 Python: TagMatchStrategy (openjiuwen/core/runner/resources_manager/base.py)
 type TagMatchStrategy int
+
+type TagUpdateStrategy int
+
+type Tag = string
+
+type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
+
+type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error)
+
+type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// TagMatchAll 全匹配策略：资源必须包含所有指定标签
@@ -77,11 +71,6 @@ const (
 	TagMatchAny
 )
 
-// TagUpdateStrategy 标签更新策略
-//
-// 对应 Python: TagUpdateStrategy (openjiuwen/core/runner/resources_manager/base.py)
-type TagUpdateStrategy int
-
 const (
 	// TagUpdateMerge 合并策略：新标签与已有标签合并
 	TagUpdateMerge TagUpdateStrategy = iota
@@ -89,28 +78,6 @@ const (
 	TagUpdateReplace
 )
 
-// Tag 标签类型
-//
-// 对应 Python: Tag = str (openjiuwen/core/runner/resources_manager/base.py)
-type Tag = string
-
-// AgentProvider Agent 资源提供者函数，接受 AgentCard 返回 BaseAgent 实例。
-// 用于延迟加载，注册时传入工厂函数而非实际实例。
-//
-// 对应 Python: AgentProvider = Callable[[AgentCard], Awaitable[BaseAgent]] | Callable[[AgentCard], BaseAgent]
-type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
-
-// WorkflowProvider Workflow 资源提供者函数，接受 WorkflowCard 返回 Workflow 实例。
-//
-// 对应 Python: WorkflowProvider = Callable[[WorkflowCard], Awaitable[Workflow]] | Callable[[WorkflowCard], Workflow]
-type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error)
-
-// ModelProvider Model 资源提供者函数，接受 modelID 返回 BaseModelClient 实例。
-//
-// 对应 Python: ModelProvider = Callable[[...], Awaitable[BaseModel]] | Callable[[...], BaseModel]
-type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
-
-// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// TagAll 匹配所有资源的特殊标签
 	//

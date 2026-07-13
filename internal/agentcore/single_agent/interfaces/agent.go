@@ -14,13 +14,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentConfig Agent 配置接口，所有 Agent 配置必须实现。
-//
-// 定义所有 Agent 子类共有的配置访问方法，
-// ReActAgentConfig、ControllerAgentConfig 等具体配置均实现此接口。
-// 包含模型名称、内存作用域、上下文引擎配置、模型客户端配置四个核心访问方法。
-//
-// 对应 Python: BaseAgent.config 属性（无类型约束，子类各自持有具体 config 类型）
 type AgentConfig interface {
 	// ModelName 返回模型名称
 	ModelName() string
@@ -34,7 +27,6 @@ type AgentConfig interface {
 	Validate() error
 }
 
-// AgentOptions Agent 调用选项。
 type AgentOptions struct {
 	// Session 会话实例（可选）
 	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
@@ -44,17 +36,6 @@ type AgentOptions struct {
 	StreamModes []stream.StreamMode
 }
 
-// AgentOption Agent 调用选项函数。
-type AgentOption func(*AgentOptions)
-
-// BaseAgent Agent 执行的核心行为契约。
-//
-// 对应 Python: openjiuwen/core/single_agent/base.py (BaseAgent)
-//
-// 设计原则：
-//   - Card 是必填项（定义 Agent 是什么）
-//   - Config 是可选项（定义 Agent 怎么运行）
-//   - 所有子类（ReActAgent/ControllerAgent）实现此接口
 type BaseAgent interface {
 	// ── 核心三方法 ──
 
@@ -109,19 +90,20 @@ type BaseAgent interface {
 	UnregisterRail(ctx context.Context, rail AgentRail) error
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type AgentOption func(*AgentOptions)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WithSession 设置会话实例。
 func WithSession(sess sessioninterfaces.SessionFacade) AgentOption {
 	return func(o *AgentOptions) { o.Session = sess }
 }
 
-// WithStreamModes 设置流式输出模式。
 func WithStreamModes(modes []stream.StreamMode) AgentOption {
 	return func(o *AgentOptions) { o.StreamModes = modes }
 }
 
-// NewAgentOptions 从选项列表构建 AgentOptions。
 func NewAgentOptions(opts ...AgentOption) *AgentOptions {
 	o := &AgentOptions{}
 	for _, opt := range opts {

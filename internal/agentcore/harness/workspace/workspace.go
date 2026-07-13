@@ -15,9 +15,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// Workspace 工作空间定义，管理 DeepAgent 的目录和文件布局。
-//
-// 对应 Python: openjiuwen/harness/workspace/workspace.py (Workspace)
 type Workspace struct {
 	// RootPath 工作空间根路径
 	RootPath string `json:"root_path" yaml:"root_path"`
@@ -29,10 +26,11 @@ type Workspace struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// WorkspaceNode 工作空间标准目录节点名称枚举，提供类型安全的标准目录访问。
-//
-// 对应 Python: WorkspaceNode(Enum)
 type WorkspaceNode string
+
+type DirectoryNode = map[string]any
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// WorkspaceNodeAGENT_MD 基础配置和能力
@@ -67,8 +65,6 @@ const (
 	WorkspaceNodeWorktreeLinks WorkspaceNode = ".worktree"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
@@ -81,14 +77,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// DirectoryNode 目录节点类型，表示工作空间中的一个目录或文件定义。
-//
-// 对应 Python: DirectoryNode = Dict[str, Any]
-type DirectoryNode = map[string]any
-
-// defaultWorkspaceSchemaCN 中文默认工作空间模式
-//
-// 对应 Python: DEFAULT_WORKSPACE_SCHEMA
 var defaultWorkspaceSchemaCN = []DirectoryNode{
 	{
 		"name":            "AGENT.md",
@@ -207,9 +195,6 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 	},
 }
 
-// defaultWorkspaceSchemaEN 英文默认工作空间模式
-//
-// 对应 Python: DEFAULT_WORKSPACE_SCHEMA_EN
 var defaultWorkspaceSchemaEN = []DirectoryNode{
 	{
 		"name":            "AGENT.md",
@@ -315,12 +300,6 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewWorkspace 创建新的工作空间实例。
-//
-// 如果 directories 为空，则根据 language 填充默认模式；
-// 如果用户提供的 directories 缺少默认模式中的节点，会自动补全。
-//
-// 对应 Python: Workspace.__post_init__
 func NewWorkspace(rootPath string, language string) *Workspace {
 	w := &Workspace{
 		RootPath:    rootPath,
@@ -365,12 +344,6 @@ func NewWorkspace(rootPath string, language string) *Workspace {
 	return w
 }
 
-// GetDirectory 递归查找指定名称的目录节点，返回其 path 字段。
-//
-// 先在用户提供的 directories 中查找，找不到则在默认模式中查找。
-// name 可以为 string 或 WorkspaceNode 类型。
-//
-// 对应 Python: Workspace.get_directory
 func (w *Workspace) GetDirectory(name any) string {
 	nameStr := resolveName(name)
 
@@ -389,12 +362,6 @@ func (w *Workspace) GetDirectory(name any) string {
 	return ""
 }
 
-// SetDirectory 添加或更新顶层目录节点。
-//
-// 接受单个 DirectoryNode 或 []DirectoryNode，每个节点会校验；
-// 如果同名节点已存在则替换，否则追加。
-//
-// 对应 Python: Workspace.set_directory
 func (w *Workspace) SetDirectory(nodes any) error {
 	var nodeList []DirectoryNode
 
@@ -429,12 +396,6 @@ func (w *Workspace) SetDirectory(nodes any) error {
 	return nil
 }
 
-// GetNodePath 返回顶层节点的完整文件系统路径。
-//
-// 仅查找顶层节点（directories 的直接子节点），不支持嵌套节点。
-// 返回 nil 表示未找到。
-//
-// 对应 Python: Workspace.get_node_path
 func (w *Workspace) GetNodePath(node any) *string {
 	nameStr := resolveName(node)
 
@@ -452,68 +413,36 @@ func (w *Workspace) GetNodePath(node any) *string {
 	return nil
 }
 
-// GetDefaultDirectory 返回指定语言的默认目录模式深拷贝。
-//
-// 对应 Python: Workspace.get_default_directory
 func GetDefaultDirectory(language string) []DirectoryNode {
 	return getWorkspaceSchema(language)
 }
 
-// LinkTeam 创建 .team/{name} 符号链接，指向 targetPath。
-//
-// 对应 Python: Workspace.link_team
 func (w *Workspace) LinkTeam(name, targetPath string) error {
 	return w.createLink(TeamLinksDir, name, targetPath)
 }
 
-// UnlinkTeam 删除 .team/{name} 符号链接。
-//
-// 对应 Python: Workspace.unlink_team
 func (w *Workspace) UnlinkTeam(name string) error {
 	return w.removeLink(TeamLinksDir, name)
 }
 
-// LinkWorktree 创建 .worktree/{name} 符号链接，指向 targetPath。
-//
-// 对应 Python: Workspace.link_worktree
 func (w *Workspace) LinkWorktree(name, targetPath string) error {
 	return w.createLink(WorktreeLinksDir, name, targetPath)
 }
 
-// UnlinkWorktree 删除 .worktree/{name} 符号链接。
-//
-// 对应 Python: Workspace.unlink_worktree
 func (w *Workspace) UnlinkWorktree(name string) error {
 	return w.removeLink(WorktreeLinksDir, name)
 }
 
-// ListTeamLinks 列出 .team/ 目录中所有符号链接名称。
-//
-// 对应 Python: Workspace.list_team_links
 func (w *Workspace) ListTeamLinks() []string {
 	return w.listLinks(TeamLinksDir)
 }
 
-// ListWorktreeLinks 列出 .worktree/ 目录中所有符号链接名称。
-//
-// 对应 Python: Workspace.list_worktree_links
 func (w *Workspace) ListWorktreeLinks() []string {
 	return w.listLinks(WorktreeLinksDir)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// validateDirectoryNode 校验单个目录节点的格式和字段。
-//
-// 校验规则：
-//   - name: 非空字符串，不含路径分隔符
-//   - path: 若提供必须为字符串
-//   - description: 若提供必须为字符串
-//   - is_file: 若提供必须为 bool
-//   - default_content: 若提供必须为字符串
-//   - children: 若提供必须为列表，递归校验每个子节点
-//
-// 对应 Python: _validate_directory_node
 func validateDirectoryNode(node DirectoryNode) error {
 	if node == nil {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
@@ -574,9 +503,6 @@ func validateDirectoryNode(node DirectoryNode) error {
 	return nil
 }
 
-// getWorkspaceSchema 根据语言返回默认工作空间模式的深拷贝。
-//
-// 对应 Python: get_workspace_schema
 func getWorkspaceSchema(language string) []DirectoryNode {
 	if language == "en" {
 		return deepCopyNodes(defaultWorkspaceSchemaEN)
@@ -584,9 +510,6 @@ func getWorkspaceSchema(language string) []DirectoryNode {
 	return deepCopyNodes(defaultWorkspaceSchemaCN)
 }
 
-// resolveName 将 any 类型的名称解析为字符串。
-//
-// 支持 string 和 WorkspaceNode 类型。
 func resolveName(name any) string {
 	switch v := name.(type) {
 	case WorkspaceNode:
@@ -598,7 +521,6 @@ func resolveName(name any) string {
 	}
 }
 
-// findInNodes 在节点列表中递归查找指定名称的目录节点，返回其 path 字段。
 func findInNodes(name string, nodes []DirectoryNode) *string {
 	for _, node := range nodes {
 		if nodeName, ok := node["name"].(string); ok && nodeName == name {
@@ -619,8 +541,6 @@ func findInNodes(name string, nodes []DirectoryNode) *string {
 	return nil
 }
 
-// deepCopyNode 对单个 DirectoryNode 进行深拷贝，避免共享引用。
-// 使用 JSON 序列化/反序列化实现深拷贝，并规范化子节点类型。
 func deepCopyNode(node DirectoryNode) DirectoryNode {
 	data, err := json.Marshal(node)
 	if err != nil {
@@ -633,7 +553,6 @@ func deepCopyNode(node DirectoryNode) DirectoryNode {
 	return normalizeNode(raw)
 }
 
-// deepCopyNodes 对 DirectoryNode 列表进行深拷贝。
 func deepCopyNodes(nodes []DirectoryNode) []DirectoryNode {
 	result := make([]DirectoryNode, len(nodes))
 	for i, node := range nodes {
@@ -642,8 +561,6 @@ func deepCopyNodes(nodes []DirectoryNode) []DirectoryNode {
 	return result
 }
 
-// toDirectoryNodeSlice 将 any 类型的 children 转换为 []DirectoryNode。
-// 支持 []DirectoryNode 和 []any（JSON 反序列化结果）两种类型。
 func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 	switch v := children.(type) {
 	case []DirectoryNode:
@@ -665,7 +582,6 @@ func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 	}
 }
 
-// normalizeNode 递归规范化节点，将 []any 类型的 children 转换为 []DirectoryNode。
 func normalizeNode(node map[string]any) DirectoryNode {
 	result := DirectoryNode{}
 	for k, v := range node {
@@ -686,9 +602,6 @@ func normalizeNode(node map[string]any) DirectoryNode {
 	return result
 }
 
-// ensureLinkDir 创建链接子目录（mkdir -p），返回目录完整路径。
-//
-// 对应 Python: Workspace._ensure_link_dir
 func (w *Workspace) ensureLinkDir(dir string) (string, error) {
 	fullDir := filepath.Join(w.RootPath, dir)
 	if err := os.MkdirAll(fullDir, 0o755); err != nil {
@@ -697,9 +610,6 @@ func (w *Workspace) ensureLinkDir(dir string) (string, error) {
 	return fullDir, nil
 }
 
-// createDirectoryLink 创建目录符号链接，Windows 上回退到 junction。
-//
-// 对应 Python: Workspace._create_directory_link
 func createDirectoryLink(linkPath, targetPath string) error {
 	if runtime.GOOS == "windows" {
 		return createWindowsJunction(linkPath, targetPath)
@@ -707,9 +617,6 @@ func createDirectoryLink(linkPath, targetPath string) error {
 	return os.Symlink(targetPath, linkPath)
 }
 
-// createWindowsJunction 在 Windows 上通过 mklink /J 创建目录 junction。
-//
-// 对应 Python: Workspace._create_windows_junction
 func createWindowsJunction(linkPath, targetPath string) error {
 	// Windows junction 通过 syscall 或外部命令实现
 	// 此处简化处理：先尝试 symlink，失败则返回错误
@@ -719,16 +626,10 @@ func createWindowsJunction(linkPath, targetPath string) error {
 	return nil
 }
 
-// removeDirectoryLink 删除目录符号链接或 junction。
-//
-// 对应 Python: Workspace._remove_directory_link
 func removeDirectoryLink(linkPath string) error {
 	return os.Remove(linkPath)
 }
 
-// isDirectoryLink 检查路径是否为符号链接。
-//
-// 对应 Python: Workspace._is_directory_link
 func isDirectoryLink(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -737,7 +638,6 @@ func isDirectoryLink(path string) bool {
 	return info.Mode()&os.ModeSymlink != 0
 }
 
-// createLink 在指定子目录下创建符号链接的内部实现。
 func (w *Workspace) createLink(subdir, name, targetPath string) error {
 	linkDir, err := w.ensureLinkDir(subdir)
 	if err != nil {
@@ -766,7 +666,6 @@ func (w *Workspace) createLink(subdir, name, targetPath string) error {
 	return nil
 }
 
-// removeLink 在指定子目录下删除符号链接的内部实现。
 func (w *Workspace) removeLink(subdir, name string) error {
 	linkPath := filepath.Join(w.RootPath, subdir, name)
 
@@ -791,7 +690,6 @@ func (w *Workspace) removeLink(subdir, name string) error {
 	return nil
 }
 
-// listLinks 列出指定子目录中所有符号链接名称。
 func (w *Workspace) listLinks(subdir string) []string {
 	linkDir := filepath.Join(w.RootPath, subdir)
 	entries, err := os.ReadDir(linkDir)

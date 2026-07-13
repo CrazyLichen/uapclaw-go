@@ -12,7 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ResolvedSection 解析后的内联（非文件）提示词段，用于 add_section()
 type ResolvedSection struct {
 	// Name 段名称
 	Name string
@@ -22,7 +21,6 @@ type ResolvedSection struct {
 	Content map[string]string
 }
 
-// ResolvedFileSection 解析后的文件型提示词段，内容将写入 workspace/{filename}
 type ResolvedFileSection struct {
 	// Filename 文件名，如 "AGENT.md"
 	Filename string
@@ -30,7 +28,6 @@ type ResolvedFileSection struct {
 	Content map[string]string
 }
 
-// ResolvedHarnessConfig HarnessConfigLoader.Load() 的输出
 type ResolvedHarnessConfig struct {
 	// Config 解析后的 HarnessConfig（已校验）
 	Config *HarnessConfig
@@ -44,17 +41,14 @@ type ResolvedHarnessConfig struct {
 	SourcePath string
 }
 
-// HarnessConfigLoader 加载、校验和解析 harness_config.yaml 文件
 type HarnessConfigLoader struct{}
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// Load 加载并解析 path，返回 ResolvedHarnessConfig。
-//
-// 参数：
-//   - path: harness_config.yaml 文件路径
-//   - params: 模板渲染参数，注入 {{ var }} 占位符
-//   - workspaceRoot: 覆盖 workspace_root 占位符，默认为配置文件所在目录
 func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoot ...string) (*ResolvedHarnessConfig, error) {
 	absPath, err := absPath(path)
 	if err != nil {
@@ -150,8 +144,6 @@ func (HarnessConfigLoader) Load(path string, params map[string]any, workspaceRoo
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// normalizeContent 将段内容规范化为 {lang: text} 字典。
-// 若为 string，在 "cn" 和 "en" 键下复制同一文本；若为 map，拷贝；若为 nil，返回空。
 func normalizeContent(content any) map[string]string {
 	if content == nil {
 		return map[string]string{}
@@ -178,15 +170,6 @@ func normalizeContent(content any) map[string]string {
 	}
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// varPlaceholderRegexp 匹配 {{ var }} 占位符
-var varPlaceholderRegexp = regexp.MustCompile(`\{\{\s*(\w+)\s*\}\}`)
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// renderTemplate 使用 text/template 渲染文本中的 {{ var }} 占位符。
-// 先将 {{ var }} 转为 {{ .Var }} 格式，再执行模板。
 func renderTemplate(text string, params map[string]any) (string, error) {
 	if text == "" || !varPlaceholderRegexp.MatchString(text) {
 		return text, nil
@@ -215,7 +198,6 @@ func renderTemplate(text string, params map[string]any) (string, error) {
 	return buf.String(), nil
 }
 
-// simpleSubstitute 使用正则替换进行简单模板渲染（回退方案）
 func simpleSubstitute(text string, params map[string]any) string {
 	return varPlaceholderRegexp.ReplaceAllStringFunc(text, func(match string) string {
 		submatch := varPlaceholderRegexp.FindStringSubmatch(match)
@@ -230,7 +212,6 @@ func simpleSubstitute(text string, params map[string]any) string {
 	})
 }
 
-// capitalize 将字符串首字母大写
 func capitalize(s string) string {
 	if s == "" {
 		return s
@@ -242,7 +223,6 @@ func capitalize(s string) string {
 	return string(c) + s[1:]
 }
 
-// absPath 返回文件的绝对路径
 func absPath(path string) (string, error) {
 	if len(path) > 0 && path[0] == '/' {
 		return path, nil
@@ -254,7 +234,6 @@ func absPath(path string) (string, error) {
 	return wd + "/" + path, nil
 }
 
-// dirOf 返回路径的目录部分
 func dirOf(path string) string {
 	for i := len(path) - 1; i >= 0; i-- {
 		if path[i] == '/' {

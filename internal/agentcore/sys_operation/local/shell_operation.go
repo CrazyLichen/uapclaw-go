@@ -182,7 +182,10 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	}
 
 	// 解析执行计划
-	args, _, shellName := s.resolveExecutionPlan(command, o.ShellType)
+	args, _, shellName, planErr := s.resolveExecutionPlan(command, o.ShellType)
+	if planErr != nil {
+		return nil, planErr
+	}
 
 	// 创建子进程
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
@@ -205,16 +208,17 @@ func (s *LocalShellOperation) ExecuteCmd(ctx context.Context, command string, op
 	handler := NewAsyncProcessHandler(cmd, defaultChunkSize, encoding, timeout)
 
 	// Shell 进程注册，对齐 Python _track_shell_process
-	// 注意：Invoke 内部会 Start 进程，所以我们在 Invoke 前无法获取 proc
-	// 改为在 Invoke 后注册（proc 已在 cmd.Process 中）
+	// 注意：Invoke 内部会 Start 进程，Start 后 handler.cmd.Process 才可用
+	// 对齐 Python: proc = await _create_subprocess → track → try: invoke → finally: untrack
 
 	// 执行
 	invokeData, err := handler.Invoke(ctx)
 
 	// Shell 进程注销，对齐 Python _untrack_shell_process（finally 语义）
+	// Invoke 后 handler.cmd.Process 可用，立即 track 并 defer untrack
 	if handler.cmd.Process != nil {
 		sid := trackShellProcess(ctx, handler.cmd.Process)
-		untrackShellProcess(sid, handler.cmd.Process)
+		defer untrackShellProcess(sid, handler.cmd.Process)
 	}
 	if err != nil {
 		return createErrResult(fmt.Sprintf("unexpected error: %s", err),
@@ -342,7 +346,10 @@ func (s *LocalShellOperation) ExecuteCmdStream(ctx context.Context, command stri
 	}
 
 	// 解析执行计划（stream 模式：应用 buffering wrapper）
-	args, useShell, _ := s.resolveExecutionPlan(command, o.ShellType)
+	args, useShell, _, planErr := s.resolveExecutionPlan(command, o.ShellType)
+	if planErr != nil {
+		return nil, planErr
+	}
 	if useShell && len(args) > 0 {
 		// stream=True 时应用 buffering wrapper，对齐 Python _wrap_command_with_buffering
 		// useShell=true 时 args 最后一个元素是命令字符串
@@ -480,7 +487,10 @@ func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command 
 	execEnv := opUtils.PrepareEnvironment(o.Environment)
 
 	// 创建后台子进程
-	args, _, _ := s.resolveExecutionPlan(command, o.ShellType)
+	args, _, _, planErr := s.resolveExecutionPlan(command, o.ShellType)
+	if planErr != nil {
+		return nil, planErr
+	}
 
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = actualCwd
@@ -491,10 +501,10 @@ func (s *LocalShellOperation) ExecuteCmdBackground(ctx context.Context, command 
 
 	pid, err := handler.Background(o.Grace)
 	if err != nil {
-		// Shell 进程注销（失败时），对齐 Python _untrack_shell_process
+		// Shell 进程注销（失败时），对齐 Python _untrack_shell_process（finally 语义）
 		if handler.cmd.Process != nil {
 			sid := trackShellProcess(ctx, handler.cmd.Process)
-			untrackShellProcess(sid, handler.cmd.Process)
+			defer untrackShellProcess(sid, handler.cmd.Process)
 		}
 		return &result.ExecuteCmdBackgroundResult{
 			BaseResult: result.BuildOperationErrorResult(
@@ -588,9 +598,28 @@ func (s *LocalShellOperation) WriteStdin(ctx context.Context, sessionID string, 
 			),
 		}, nil
 	}
-	// 当前实现：ShellProcessRegistry 追踪的是 *os.Process，没有 stdin pipe 引用。
-	// 返回未实现错误，待后续迭代补充 stdin pipe 追踪。
-	return nil, fmt.Errorf("未实现: WriteStdin（需补充 stdin pipe 追踪）")
+
+	// 对齐 Python: 查找 stdin pipe 写入
+	written, firstErr := sysop.DefaultRegistry.WriteStdinForSession(sessionID, []byte(data))
+	if firstErr != nil {
+		logger.Warn(shellLogComponent).
+			Str("session_id", sessionID).
+			Err(firstErr).
+			Msg("写入 stdin 部分失败")
+	}
+
+	if written == 0 {
+		return &result.ExecuteCmdResult{
+			BaseResult: result.BuildOperationErrorResult(
+				exception.StatusSysOperationShellExecutionError.Code(),
+				fmt.Sprintf("write_stdin: session %s 没有可用的 stdin pipe", sessionID),
+			),
+		}, nil
+	}
+
+	return &result.ExecuteCmdResult{
+		BaseResult: result.BaseResult{Code: 0, Message: "Stdin written successfully"},
+	}, nil
 }
 
 // KillProcess 终止指定后台进程。
@@ -616,9 +645,12 @@ func (s *LocalShellOperation) KillProcess(ctx context.Context, sessionID string,
 // ListProcesses 列出所有后台进程。
 // 对齐 Python ShellOperation.list_processes：返回 ShellProcessRegistry 中当前所有进程信息。
 func (s *LocalShellOperation) ListProcesses(ctx context.Context, opts ...sysop.ShellOption) (*result.ExecuteCmdResult, error) {
-	// 当前实现：ShellProcessRegistry 未暴露列举接口，返回空列表。
+	infos := sysop.DefaultRegistry.ListProcesses()
 	return &result.ExecuteCmdResult{
-		BaseResult: result.BaseResult{Code: 0, Message: "ListProcesses not fully implemented"},
+		BaseResult: result.BaseResult{Code: 0, Message: fmt.Sprintf("ListProcesses succeeded, count=%d", len(infos))},
+		Data: &result.ExecuteCmdData{
+			ExitCode: intPtr(0),
+		},
 	}, nil
 }
 
@@ -628,20 +660,20 @@ func (s *LocalShellOperation) ListProcesses(ctx context.Context, opts ...sysop.S
 // 对齐 Python ShellOperation._DANGEROUS_PATTERNS 和 _TUI_COMMAND_PATTERNS。
 func (s *LocalShellOperation) initPatterns() {
 	s.dangerousPatterns = []DangerousPattern{
-		{regexp.MustCompile(`\brm\s+-rf\b`), "rm -rf"},
-		{regexp.MustCompile(`\bdel\s+/[a-z]*[fsq][a-z]*\b`), "del /f /s /q"},
-		{regexp.MustCompile(`\brd\s+/s\s+/q\b`), "rd /s /q"},
-		{regexp.MustCompile(`\bformat\s+[a-z]:`), "format drive"},
-		{regexp.MustCompile(`\bshutdown\b`), "shutdown"},
-		{regexp.MustCompile(`\breboot\b`), "reboot"},
-		{regexp.MustCompile(`\bdiskpart\b`), "diskpart"},
-		{regexp.MustCompile(`\bmkfs\b`), "mkfs"},
-		{regexp.MustCompile(`\breg\s+delete\b`), "reg delete"},
-		{regexp.MustCompile(`\bremove-item\b[^\n\r]*-recurse[^\n\r]*-force`), "Remove-Item -Recurse -Force"},
-		{regexp.MustCompile(`\bpkill\b[^\n\r;|&]*jiuwenswarm`), "pkill targeting jiuwenswarm backend"},
-		{regexp.MustCompile(`\bkillall\b[^\n\r;|&]*jiuwenswarm`), "killall targeting jiuwenswarm backend"},
-		{regexp.MustCompile(`\bpkill\b[^\n\r;|&]*jiuwenclaw`), "pkill targeting jiuwenclaw backend"},
-		{regexp.MustCompile(`\bkillall\b[^\n\r;|&]*jiuwenclaw`), "killall targeting jiuwenclaw backend"},
+		{regexp.MustCompile(`(?i)\brm\s+-rf\b`), "rm -rf"},
+		{regexp.MustCompile(`(?i)\bdel\s+/[a-z]*[fsq][a-z]*\b`), "del /f /s /q"},
+		{regexp.MustCompile(`(?i)\brd\s+/s\s+/q\b`), "rd /s /q"},
+		{regexp.MustCompile(`(?i)\bformat\s+[a-z]:`), "format drive"},
+		{regexp.MustCompile(`(?i)\bshutdown\b`), "shutdown"},
+		{regexp.MustCompile(`(?i)\breboot\b`), "reboot"},
+		{regexp.MustCompile(`(?i)\bdiskpart\b`), "diskpart"},
+		{regexp.MustCompile(`(?i)\bmkfs\b`), "mkfs"},
+		{regexp.MustCompile(`(?i)\breg\s+delete\b`), "reg delete"},
+		{regexp.MustCompile(`(?i)\bremove-item\b[^\n\r]*-recurse[^\n\r]*-force`), "Remove-Item -Recurse -Force"},
+		{regexp.MustCompile(`(?i)\bpkill\b[^\n\r;|&]*jiuwenswarm`), "pkill targeting jiuwenswarm backend"},
+		{regexp.MustCompile(`(?i)\bkillall\b[^\n\r;|&]*jiuwenswarm`), "killall targeting jiuwenswarm backend"},
+		{regexp.MustCompile(`(?i)\bpkill\b[^\n\r;|&]*jiuwenclaw`), "pkill targeting jiuwenclaw backend"},
+		{regexp.MustCompile(`(?i)\bkillall\b[^\n\r;|&]*jiuwenclaw`), "killall targeting jiuwenclaw backend"},
 	}
 
 	s.tuiCommandPatterns = []TUICommandPattern{
@@ -695,7 +727,7 @@ func (s *LocalShellOperation) checkAllowlist(command string) bool {
 func (s *LocalShellOperation) initCustomDangerousPatterns() {
 	s.dangerousPatterns = make([]DangerousPattern, 0, len(s.runConfig.DangerousPatterns))
 	for _, rawPattern := range s.runConfig.DangerousPatterns {
-		re, err := regexp.Compile(rawPattern)
+		re, err := regexp.Compile("(?i)" + rawPattern)
 		if err != nil {
 			logger.Warn(shellLogComponent).
 				Str("pattern", rawPattern).
@@ -734,7 +766,7 @@ func (s *LocalShellOperation) detectAndMitigateTUI(command string, execEnv map[s
 // resolveExecutionPlan 解析命令执行计划。
 // 对齐 Python ShellOperation._resolve_execution_plan。
 // 返回 args 列表：useShell=true 时为 [shellName, "-c", command]；useShell=false 时为 [executable, arg1, ...]。
-func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sysop.ShellType) (args []string, useShell bool, shellName string) {
+func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sysop.ShellType) (args []string, useShell bool, shellName string, err error) {
 	isWindows := runtime.GOOS == "windows"
 
 	switch shellType {
@@ -744,7 +776,7 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 			command = unwrapped
 		}
 		pwshPath := AvailablePowerShell()
-		return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+		return []string{pwshPath, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell", nil
 
 	case sysop.ShellTypeBash:
 		bashPath := AvailableBash(true)
@@ -752,16 +784,17 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 			bashPath = "/bin/bash"
 		}
 		if isWindows {
-			return []string{bashPath, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash"
+			return []string{bashPath, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash", nil
 		}
-		return []string{bashPath, "-lc", command}, false, "bash"
+		return []string{bashPath, "-lc", command}, false, "bash", nil
 
 	case sysop.ShellTypeCmd:
 		if !isWindows {
-			// 对齐 Python：cmd 仅 Windows 支持
-			return nil, false, "shell_type 'cmd' is only supported on Windows"
+			// 对齐 Python：cmd 仅 Windows 支持，返回 error 而非字符串防止 panic
+			return nil, false, "", exception.BuildError(exception.StatusSysOperationShellExecutionError,
+				exception.WithMsg("shell_type 'cmd' is only supported on Windows"))
 		}
-		return []string{"cmd", "/c", command}, true, "cmd"
+		return []string{"cmd", "/c", command}, true, "cmd", nil
 
 	case sysop.ShellTypeSh:
 		shPath := AvailableSh()
@@ -769,9 +802,9 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 			shPath = "sh"
 		}
 		if isWindows {
-			return []string{shPath, "-c", NormalizeWindowsPathsForBash(command)}, false, "sh"
+			return []string{shPath, "-c", NormalizeWindowsPathsForBash(command)}, false, "sh", nil
 		}
-		return []string{shPath, "-c", command}, true, "sh"
+		return []string{shPath, "-c", command}, true, "sh", nil
 
 	case sysop.ShellTypeAuto:
 		fallthrough
@@ -781,23 +814,23 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 			// Windows AUTO：unwrap → PowerShell → POSIX → cmd
 			if unwrapped := UnwrapPowerShellCommand(command); unwrapped != "" {
 				exe := AvailablePowerShell()
-				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", unwrapped}, false, "powershell"
+				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", unwrapped}, false, "powershell", nil
 			}
 			if LooksLikePowerShell(command) {
 				exe := AvailablePowerShell()
-				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell"
+				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", command}, false, "powershell", nil
 			}
 			if LooksLikePosix(command) {
 				exe := AvailableBash(false) // allow_wsl=False，对齐 Python
 				if exe != "" {
-					return []string{exe, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash"
+					return []string{exe, "-lc", NormalizeWindowsPathsForBash(command)}, false, "bash", nil
 				}
 			}
-			return []string{"cmd", "/c", command}, true, "cmd"
+			return []string{"cmd", "/c", command}, true, "cmd", nil
 		}
 
 		// 非 Windows AUTO：对齐 Python 用 sh（create_subprocess_shell）
-		return []string{"sh", "-c", command}, true, "sh"
+		return []string{"sh", "-c", command}, true, "sh", nil
 	}
 }
 

@@ -11,11 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// SessionManager Session 任务管理器。
-//
-// 管理多 session 并发执行，同 session 内任务按先进后出顺序执行。
-//
-// 对应 Python: jiuwenswarm/server/runtime/session/session_manager.py (SessionManager)
 type SessionManager struct {
 	// mu 保护以下所有 map 的并发访问
 	mu sync.Mutex
@@ -31,7 +26,6 @@ type SessionManager struct {
 	sessionSignals map[string]chan struct{}
 }
 
-// priorityItem 优先级队列项。
 type priorityItem struct {
 	// priority 优先级（数值越小越先出队）
 	priority int
@@ -39,12 +33,6 @@ type priorityItem struct {
 	task func(context.Context) (any, error)
 }
 
-// priorityHeap 优先级堆，实现 heap.Interface。
-//
-// 按 priority 升序排列，Pop 取最小值（LIFO：新任务 priority 更小，先出队）。
-type priorityHeap []*priorityItem
-
-// taskResult 任务执行结果，用于 SubmitAndWait 的 channel 桥接。
 type taskResult struct {
 	// value 任务返回值
 	value any
@@ -52,16 +40,16 @@ type taskResult struct {
 	err error
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type priorityHeap []*priorityItem
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent 日志组件
 var logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewSessionManager 创建 SessionManager 实例。
 func NewSessionManager() *SessionManager {
 	return &SessionManager{
 		sessionTasks:      make(map[string]context.CancelFunc),
@@ -72,9 +60,6 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-// GetSessionID 获取 session_id，空串返回 "default"。
-//
-// 对应 Python: SessionManager.get_session_id(session_id)
 func GetSessionID(sessionID string) string {
 	if sessionID == "" {
 		return "default"
@@ -82,9 +67,6 @@ func GetSessionID(sessionID string) string {
 	return sessionID
 }
 
-// CancelSessionTask 取消指定 session 的非流式任务。
-//
-// 对应 Python: SessionManager.cancel_session_task(session_id, log_msg_prefix, wait_timeout)
 func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID string, logPrefix string, waitTimeout *time.Duration) error {
 	sm.mu.Lock()
 	cancelFn, ok := sm.sessionTasks[sessionID]
@@ -114,9 +96,6 @@ func (sm *SessionManager) CancelSessionTask(ctx context.Context, sessionID strin
 	return nil
 }
 
-// CancelAllSessionTasks 取消所有 session 的非流式任务。
-//
-// 对应 Python: SessionManager.cancel_all_session_tasks(log_msg_prefix)
 func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix string) error {
 	sm.mu.Lock()
 	sessionIDs := make([]string, 0, len(sm.sessionTasks))
@@ -131,9 +110,6 @@ func (sm *SessionManager) CancelAllSessionTasks(ctx context.Context, logPrefix s
 	return nil
 }
 
-// EnsureSessionProcessor 确保 session 的任务处理器在运行（LIFO 队列消费者）。
-//
-// 对应 Python: SessionManager.ensure_session_processor(session_id)
 func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -162,9 +138,6 @@ func (sm *SessionManager) EnsureSessionProcessor(_ context.Context, sessionID st
 	return nil
 }
 
-// SubmitTask 提交任务到 session 队列（不等待结果）。
-//
-// 对应 Python: SessionManager.submit_task(session_id, task_func)
 func (sm *SessionManager) SubmitTask(ctx context.Context, sessionID string, taskFunc func(context.Context) (any, error)) error {
 	if err := sm.EnsureSessionProcessor(ctx, sessionID); err != nil {
 		return err
@@ -186,9 +159,6 @@ func (sm *SessionManager) SubmitTask(ctx context.Context, sessionID string, task
 	return nil
 }
 
-// SubmitAndWait 提交任务到 session 队列并等待结果。
-//
-// 对应 Python: SessionManager.submit_and_wait(session_id, task_func)
 func (sm *SessionManager) SubmitAndWait(ctx context.Context, sessionID string, taskFunc func(context.Context) (any, error)) (any, error) {
 	if err := sm.EnsureSessionProcessor(ctx, sessionID); err != nil {
 		return nil, err
@@ -224,18 +194,12 @@ func (sm *SessionManager) SubmitAndWait(ctx context.Context, sessionID string, t
 	}
 }
 
-// GetCurrentTask 获取当前 session 正在执行的任务的 cancel 函数。
-//
-// 对应 Python: SessionManager.get_current_task(session_id)
 func (sm *SessionManager) GetCurrentTask(sessionID string) context.CancelFunc {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	return sm.sessionTasks[sessionID]
 }
 
-// HasActiveProcessor 检查 session 是否有活跃的处理器。
-//
-// 对应 Python: SessionManager.has_active_processor(session_id)
 func (sm *SessionManager) HasActiveProcessor(sessionID string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -243,9 +207,6 @@ func (sm *SessionManager) HasActiveProcessor(sessionID string) bool {
 	return ok
 }
 
-// HasActiveTasks 是否有活跃的 session 任务（供 dreaming busy_checker 使用）。
-//
-// 对应 Python: SessionManager.has_active_tasks()
 func (sm *SessionManager) HasActiveTasks() bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -257,13 +218,27 @@ func (sm *SessionManager) HasActiveTasks() bool {
 	return false
 }
 
+func (h priorityHeap) Len() int { return len(h) }
+
+func (h priorityHeap) Less(i, j int) bool { return h[i].priority < h[j].priority }
+
+func (h priorityHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *priorityHeap) Push(x any) {
+	*h = append(*h, x.(*priorityItem))
+}
+
+func (h *priorityHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil // 避免内存泄漏
+	*h = old[:n-1]
+	return item
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// processSessionQueue 处理 session 任务队列（先进后出执行，新任务优先）。
-//
-// 对应 Python: SessionManager.ensure_session_processor 中的 process_session_queue 闭包
-//
-// sigCh 由 EnsureSessionProcessor 创建并传入，避免 goroutine 直接读 map 引发 data race。
 func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID string, sigCh chan struct{}) {
 	for {
 		// 等待新任务信号或取消
@@ -306,7 +281,6 @@ func (sm *SessionManager) processSessionQueue(ctx context.Context, sessionID str
 	}
 }
 
-// cleanupSession 清理 session 的所有运行时状态。
 func (sm *SessionManager) cleanupSession(sessionID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -318,23 +292,4 @@ func (sm *SessionManager) cleanupSession(sessionID string) {
 	delete(sm.sessionSignals, sessionID)
 
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("Session 任务处理器已关闭")
-}
-
-// --- priorityHeap 实现 heap.Interface ---
-
-func (h priorityHeap) Len() int           { return len(h) }
-func (h priorityHeap) Less(i, j int) bool { return h[i].priority < h[j].priority }
-func (h priorityHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-
-func (h *priorityHeap) Push(x any) {
-	*h = append(*h, x.(*priorityItem))
-}
-
-func (h *priorityHeap) Pop() any {
-	old := *h
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil // 避免内存泄漏
-	*h = old[:n-1]
-	return item
 }

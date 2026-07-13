@@ -21,7 +21,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// RouteStrategy 路由策略接口，定义如何从多个部署端点中选择一个。
 type RouteStrategy interface {
 	// Select 从健康的部署端点中选择一个。
 	// modelName 用于按模型名筛选匹配的端点。
@@ -29,9 +28,6 @@ type RouteStrategy interface {
 	Select(deployments []*Deployment, modelName string, ctx *RoutingContext) (*Deployment, error)
 }
 
-// RoutingContext 路由上下文，携带请求级别的路由信息。
-//
-// 对应 Python: intelli_router.core.context.RoutingContext
 type RoutingContext struct {
 	// SessionID 会话标识，用于 Session 亲和性路由。
 	// 同一个 SessionID 优先路由到之前用过的 deployment（软亲和性）。
@@ -40,13 +36,6 @@ type RoutingContext struct {
 	Kwargs map[string]any
 }
 
-// Deployment 单个部署端点的运行时模型。
-//
-// 对应 Python: intelli_router.Deployment + intelli_router.LocalRouterState
-// 包含配置信息和运行时状态（健康度、延迟、统计等）。
-//
-// 延迟冷启动：avgLatency 默认为 +inf（等价 Python float('inf')），
-// 表示该端点从未被调用过、无延迟数据。首次 RecordSuccess 后更新为实际延迟。
 type Deployment struct {
 	// ID 部署端点唯一标识
 	ID string
@@ -76,25 +65,11 @@ type Deployment struct {
 	cooldownUntil       time.Time // 冷却结束时间
 }
 
-// sessionEntry Session 亲和性映射条目。
 type sessionEntry struct {
 	deploymentID string
 	lastUsed     time.Time
 }
 
-// ReliableRouter 智能路由器。
-//
-// 对应 Python: intelli_router.ReliableRouter
-//
-// 核心能力：
-//   - 多部署端点管理（含 model 索引）
-//   - 路由策略（simple-shuffle / round-robin / lowest-latency / adaptive）
-//   - 自动重试（失败时切换到下一个 deployment）
-//   - 状态管理（健康/cooldown/延迟/失败计数）
-//   - Session 亲和性（同一个 session 优先路由到同一个 deployment）
-//   - 健康检查（后台定期检查端点可用性，加速恢复不健康端点）
-//   - 动态更新部署列表
-//   - 缓存共享（相同配置共享同一个 router 实例）
 type ReliableRouter struct {
 	deployments    []*Deployment
 	strategy       RouteStrategy
@@ -113,9 +88,6 @@ type ReliableRouter struct {
 	healthChecker *HealthChecker
 }
 
-// HealthCheckResult 健康检查结果。
-//
-// 对应 Python: intelli_router.health.checker.HealthCheckResult
 type HealthCheckResult struct {
 	DeploymentID string
 	IsHealthy    bool
@@ -124,10 +96,6 @@ type HealthCheckResult struct {
 	Timestamp    time.Time
 }
 
-// HealthChecker 健康检查器。
-//
-// 对应 Python: intelli_router.health.checker.SDKHealthChecker
-// 后台定期检查端点可用性，加速恢复不健康的端点。
 type HealthChecker struct {
 	deployments      []*Deployment
 	checkInterval    time.Duration
@@ -139,43 +107,17 @@ type HealthChecker struct {
 	mu               sync.RWMutex
 }
 
-// SimpleShuffleStrategy 随机打乱策略。
-//
-// 对应 Python: strategy="simple-shuffle"
-// 将健康的端点列表随机打乱，返回第一个。
 type SimpleShuffleStrategy struct{}
 
-// RoundRobinStrategy 轮询策略。
-//
-// 对应 Python: strategy="round-robin"
-// 原子递增计数器，取模轮询健康端点。
 type RoundRobinStrategy struct {
 	counter uint64
 }
 
-// LowestLatencyStrategy 最低延迟优先策略。
-//
-// 对应 Python: strategy="lowest-latency" (intelli_router.strategy.lowest_latency)
-//
-// 选择历史平均延迟最低的健康端点。未被调用过的端点 avgLatency=+inf，
-// 不会被选为"最低延迟"，但通过 exploration_ratio（默认 0.1）随机探索来积累延迟数据。
-//
-// 决策流程：
-//  1. 以 exploration_ratio 概率随机选择一个端点（探索）
-//  2. 否则选择 avgLatency 最低的端点（利用）
 type LowestLatencyStrategy struct {
 	// ExplorationRatio 探索比率（默认 0.1，即 10% 请求用于探索新端点）
 	ExplorationRatio float64
 }
 
-// AdaptiveStrategy 自适应路由策略。
-//
-// 对应 Python: strategy="adaptive"
-// 多因子加权评分 + Session 亲和性：
-//
-//	score = w_health * health_score + w_token * token_score + w_rpm * rpm_score + w_latency * latency_score
-//
-// (1-exploration_ratio) 选最高分 + exploration_ratio 随机探索
 type AdaptiveStrategy struct {
 	// TokenThreshold token 用量阈值
 	TokenThreshold float64
@@ -196,12 +138,10 @@ type AdaptiveStrategy struct {
 	sessionCleanupInterval float64 // Session 清理间隔（秒），默认 60
 }
 
-// bytesReaderImpl bytesReader 辅助实现，将 []byte 转为 io.Reader。
 type bytesReaderImpl struct{ data []byte }
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-// 默认策略参数
 const (
 	defaultTokenThreshold     = 1000.0
 	defaultRPMThreshold       = 10.0
@@ -216,21 +156,16 @@ const (
 	defaultHealthCheckTimeout = 5.0    // 健康检查超时(秒)
 )
 
-// logComponent intellirouter 包日志组件标识。
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// routerCache 路由器缓存，相同配置共享同一个 ReliableRouter 实例。
-// 对应 Python: _router_cache
 var routerCache map[string]*ReliableRouter
 
-// routerCacheLock 路由器缓存锁。
 var routerCacheLock sync.RWMutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewDeployment 从 DeploymentConfig 创建 Deployment 运行时实例。
 func NewDeployment(config DeploymentConfig) *Deployment {
 	return &Deployment{
 		ID:         config.ID,
@@ -247,23 +182,18 @@ func NewDeployment(config DeploymentConfig) *Deployment {
 	}
 }
 
-// IsHealthy 返回部署端点是否健康。
 func (d *Deployment) IsHealthy() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.healthy
 }
 
-// GetAvgLatency 返回平均延迟（毫秒）。
-//
-// 未被调用过的端点返回 math.Inf(1)（+inf），等价 Python float('inf')。
 func (d *Deployment) GetAvgLatency() float64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.avgLatency
 }
 
-// GetStats 返回端点统计信息。
 func (d *Deployment) GetStats() map[string]any {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -292,10 +222,6 @@ func (d *Deployment) GetStats() map[string]any {
 	}
 }
 
-// RecordSuccess 记录成功调用，更新延迟等指标。
-//
-// 对应 Python: LocalRouterState.on_success()
-// 成功后：重置连续失败计数、恢复健康状态、更新 EMA 延迟。
 func (d *Deployment) RecordSuccess(latency time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -317,11 +243,6 @@ func (d *Deployment) RecordSuccess(latency time.Duration) {
 	d.healthy = true
 }
 
-// RecordFailure 记录失败调用，进入 cooldown + backoff 机制。
-//
-// 对应 Python: LocalRouterState.on_failure()
-// 冷却时长按连续失败次数递增：第1次 60s，第2次 120s，第3次 180s ...
-// 冷却期间该端点被视为不健康，冷却结束后自动恢复。
 func (d *Deployment) RecordFailure() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -335,18 +256,12 @@ func (d *Deployment) RecordFailure() {
 	)
 }
 
-// IsCoolingDown 返回端点是否在冷却期。
-//
-// 冷却期结束后自动恢复为健康状态。
 func (d *Deployment) IsCoolingDown() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return time.Now().Before(d.cooldownUntil)
 }
 
-// ──── HealthChecker ────
-
-// NewHealthChecker 创建健康检查器。
 func NewHealthChecker(deployments []*Deployment, checkInterval, checkTimeout float64) *HealthChecker {
 	if checkInterval <= 0 {
 		checkInterval = 300.0 // 默认 5 分钟
@@ -362,7 +277,6 @@ func NewHealthChecker(deployments []*Deployment, checkInterval, checkTimeout flo
 	}
 }
 
-// Start 启动后台健康检查。
 func (h *HealthChecker) Start() {
 	if h.running.Load() {
 		return
@@ -373,7 +287,6 @@ func (h *HealthChecker) Start() {
 	go h.backgroundLoop(ctx)
 }
 
-// Stop 停止后台健康检查。
 func (h *HealthChecker) Stop() {
 	if !h.running.Load() {
 		return
@@ -384,9 +297,6 @@ func (h *HealthChecker) Stop() {
 	}
 }
 
-// CheckAll 并发检查所有部署端点。
-//
-// 对应 Python: SDKHealthChecker.check_all_deployments()
 func (h *HealthChecker) CheckAll() map[string]HealthCheckResult {
 	results := make(map[string]HealthCheckResult)
 	var wg sync.WaitGroup
@@ -420,7 +330,6 @@ func (h *HealthChecker) CheckAll() map[string]HealthCheckResult {
 	return results
 }
 
-// GetLastResults 获取最近一次健康检查结果。
 func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -432,9 +341,6 @@ func (h *HealthChecker) GetLastResults() map[string]HealthCheckResult {
 	return result
 }
 
-// ──── ReliableRouter ────
-
-// NewReliableRouter 创建智能路由器。
 func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	// 创建 Deployment 运行时实例
 	deployments := make([]*Deployment, 0, len(config.Deployments))
@@ -470,18 +376,12 @@ func NewReliableRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	return router
 }
 
-// GetDeploymentsForModel 获取指定模型的所有部署。
-//
-// 对应 Python: BaseRouter.get_deployments_for_model()
 func (r *ReliableRouter) GetDeploymentsForModel(model string) []*Deployment {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.modelIndices[model]
 }
 
-// GetModelList 获取所有模型名列表。
-//
-// 对应 Python: BaseRouter.get_model_list()
 func (r *ReliableRouter) GetModelList() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -492,22 +392,10 @@ func (r *ReliableRouter) GetModelList() []string {
 	return list
 }
 
-// SelectDeployment 根据策略选择一个部署端点。
-//
-// 仅从匹配 modelName 且可用（健康 + 未冷却）的端点中选择。
-// 冷却期超时后自动恢复为健康状态（对齐 Python _get_available_deployments）。
-//
-// 对应 Python: ReliableRouter._get_available_deployments() + strategy.select_deployment()
 func (r *ReliableRouter) SelectDeployment(modelName string) (*Deployment, error) {
 	return r.SelectDeploymentWithContext(modelName, nil)
 }
 
-// SelectDeploymentWithContext 根据策略选择一个部署端点（带路由上下文）。
-//
-// 上下文中的 SessionID 用于 Session 亲和性路由。
-// 决策流程（对齐 Python AdaptiveStrategy.select_deployment）：
-//  1. Session 亲和性检查（软亲和性）—— 如命中则直接返回
-//  2. 策略选择（探索 + 利用）
 func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *RoutingContext) (*Deployment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -562,14 +450,10 @@ func (r *ReliableRouter) SelectDeploymentWithContext(modelName string, ctx *Rout
 	return r.strategy.Select(available, modelName, ctx)
 }
 
-// RecordSuccess 记录成功调用，并更新 Session 亲和性映射。
 func (r *ReliableRouter) RecordSuccess(dep *Deployment, latency time.Duration) {
 	dep.RecordSuccess(latency)
 }
 
-// RecordSuccessWithSession 记录成功调用，并更新 Session 亲和性映射。
-//
-// 对应 Python: AdaptiveStrategy._update_session_mapping()
 func (r *ReliableRouter) RecordSuccessWithSession(dep *Deployment, latency time.Duration, sessionID string) {
 	dep.RecordSuccess(latency)
 	if sessionID != "" {
@@ -577,15 +461,10 @@ func (r *ReliableRouter) RecordSuccessWithSession(dep *Deployment, latency time.
 	}
 }
 
-// RecordFailure 记录失败调用。
 func (r *ReliableRouter) RecordFailure(dep *Deployment) {
 	dep.RecordFailure()
 }
 
-// UpdateDeployments 动态更新部署列表。
-//
-// 对应 Python: ReliableRouter.update_deployments()
-// 重建 model 索引，更新健康检查器的部署列表。
 func (r *ReliableRouter) UpdateDeployments(newDeployments []*Deployment) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -604,7 +483,6 @@ func (r *ReliableRouter) UpdateDeployments(newDeployments []*Deployment) {
 		Msg("ReliableRouter deployments updated.")
 }
 
-// GetStats 获取路由器统计信息。
 func (r *ReliableRouter) GetStats() map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -637,7 +515,6 @@ func (r *ReliableRouter) GetStats() map[string]any {
 	return stats
 }
 
-// GetHealthCheckResults 获取最近一次健康检查结果（如启用）。
 func (r *ReliableRouter) GetHealthCheckResults() map[string]HealthCheckResult {
 	if r.healthChecker == nil {
 		return nil
@@ -645,17 +522,12 @@ func (r *ReliableRouter) GetHealthCheckResults() map[string]HealthCheckResult {
 	return r.healthChecker.GetLastResults()
 }
 
-// StopHealthChecker 停止健康检查器。
 func (r *ReliableRouter) StopHealthChecker() {
 	if r.healthChecker != nil {
 		r.healthChecker.Stop()
 	}
 }
 
-// GetOrCreateRouter 获取或创建路由器（缓存共享）。
-//
-// 对应 Python: IntelliRouterModelClient._get_or_create_router()
-// 使用 double-check locking 确保线程安全。
 func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	key := makeRouterKey(config)
 
@@ -681,9 +553,6 @@ func GetOrCreateRouter(config *IntelliRouterClientConfig) *ReliableRouter {
 	return router
 }
 
-// ──── SimpleShuffleStrategy ────
-
-// Select 随机打乱后选第一个。
 func (s *SimpleShuffleStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -703,9 +572,6 @@ func (s *SimpleShuffleStrategy) Select(deployments []*Deployment, _ string, _ *R
 	return shuffled[0], nil
 }
 
-// ──── RoundRobinStrategy ────
-
-// Select 轮询选择下一个。
 func (s *RoundRobinStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -718,17 +584,6 @@ func (s *RoundRobinStrategy) Select(deployments []*Deployment, _ string, _ *Rout
 	return deployments[idx%uint64(len(deployments))], nil
 }
 
-// ──── LowestLatencyStrategy ────
-
-// Select 选择延迟最低的端点。
-//
-// 对应 Python: LowestLatencyStrategy.select_deployment()
-// 决策流程：
-//  1. 以 exploration_ratio 概率随机选择一个端点（探索）
-//  2. 否则选择 avgLatency 最低的端点（利用）
-//
-// 未被调用过的端点 avgLatency=+inf，不会被选为"最低延迟"，
-// 但通过 exploration_ratio 随机探索来积累延迟数据。
 func (s *LowestLatencyStrategy) Select(deployments []*Deployment, _ string, _ *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -765,9 +620,6 @@ func (s *LowestLatencyStrategy) Select(deployments []*Deployment, _ string, _ *R
 	return best, nil
 }
 
-// ──── AdaptiveStrategy ────
-
-// NewAdaptiveStrategy 从 strategy_kwargs 创建自适应策略。
 func NewAdaptiveStrategy(kwargs map[string]any) *AdaptiveStrategy {
 	s := &AdaptiveStrategy{
 		TokenThreshold:         defaultTokenThreshold,
@@ -807,13 +659,6 @@ func NewAdaptiveStrategy(kwargs map[string]any) *AdaptiveStrategy {
 	return s
 }
 
-// Select 自适应选择：Session 亲和性 → 探索 → 评分选择。
-//
-// 对应 Python: AdaptiveStrategy.select_deployment()
-// 决策流程：
-//  1. Session 亲和性检查（软亲和性）
-//  2. 以 exploration_ratio 概率随机选择（探索）
-//  3. 计算加权评分，选最高分（利用）
 func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *RoutingContext) (*Deployment, error) {
 	if len(deployments) == 0 {
 		return nil, exception.NewBaseError(
@@ -859,17 +704,6 @@ func (s *AdaptiveStrategy) Select(deployments []*Deployment, _ string, ctx *Rout
 	return scores[0].dep, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// bytesReader 辅助函数，将 []byte 转为 io.Reader。
-func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
-
-// withBytes 设置读取的数据并返回自身。
-func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
-	return &bytesReaderImpl{data: data}
-}
-
-// Read 实现 io.Reader 接口。
 func (b *bytesReaderImpl) Read(p []byte) (int, error) {
 	if len(b.data) == 0 {
 		return 0, io.EOF
@@ -879,10 +713,14 @@ func (b *bytesReaderImpl) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// checkDeployment 检查单个部署端点健康状态。
-//
-// 对应 Python: SDKHealthChecker.check_deployment()
-// 发送一个最小化 completion 请求（ping 消息 + max_tokens=1）。
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+func bytesReader(b []byte) io.Reader { return (*bytesReaderImpl)(nil).withBytes(b) }
+
+func (b *bytesReaderImpl) withBytes(data []byte) *bytesReaderImpl {
+	return &bytesReaderImpl{data: data}
+}
+
 func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
 	result := HealthCheckResult{
 		DeploymentID: dep.ID,
@@ -939,7 +777,6 @@ func (h *HealthChecker) checkDeployment(dep *Deployment) HealthCheckResult {
 	return result
 }
 
-// backgroundLoop 后台健康检查循环。
 func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 	// 首次立即检查一次
 	h.CheckAll()
@@ -957,7 +794,6 @@ func (h *HealthChecker) backgroundLoop(ctx context.Context) {
 	}
 }
 
-// buildModelIndices 构建 model 索引（对齐 Python BaseRouter._build_model_indices）。
 func (r *ReliableRouter) buildModelIndices() {
 	r.modelIndices = make(map[string][]*Deployment)
 	for _, dep := range r.deployments {
@@ -965,11 +801,6 @@ func (r *ReliableRouter) buildModelIndices() {
 	}
 }
 
-// ──── Session 亲和性 ────
-
-// getSessionAffinityDeployment 获取 session 对应的亲和性 deployment。
-//
-// 对应 Python: AdaptiveStrategy._get_session_affinity_deployment()
 func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, available []*Deployment) *Deployment {
 	if sessionID == "" {
 		return nil
@@ -1009,9 +840,6 @@ func (r *ReliableRouter) getSessionAffinityDeployment(sessionID string, availabl
 	return nil
 }
 
-// updateSessionMapping 更新 session 到 deployment 的映射。
-//
-// 对应 Python: AdaptiveStrategy._update_session_mapping()
 func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
 	if sessionID == "" {
 		return
@@ -1032,9 +860,6 @@ func (r *ReliableRouter) updateSessionMapping(sessionID, deploymentID string) {
 	}
 }
 
-// cleanupExpiredSessions 清理过期的 session 映射。
-//
-// 对应 Python: AdaptiveStrategy._cleanup_expired_sessions()
 func (r *ReliableRouter) cleanupExpiredSessions() {
 	now := time.Now()
 	for sid, entry := range r.sessionMap {
@@ -1044,12 +869,6 @@ func (r *ReliableRouter) cleanupExpiredSessions() {
 	}
 }
 
-// calculateScore 计算单个端点的自适应加权评分。
-//
-// 对应 Python: AdaptiveStrategy._calculate_score()
-// 延迟冷启动：avgLatency=+inf（无数据）时 latencyScore=0.0，
-// 等价 Python 中 avg_latency=float('inf') → latency_score=max(0, 1-inf)=0.0。
-// 配合 exploration_ratio 随机探索来积累延迟数据。
 func (s *AdaptiveStrategy) calculateScore(dep *Deployment) float64 {
 	dep.mu.RLock()
 	defer dep.mu.RUnlock()
@@ -1100,7 +919,6 @@ func init() {
 	routerCache = make(map[string]*ReliableRouter)
 }
 
-// createStrategy 根据策略名称创建路由策略实例。
 func createStrategy(strategyName string, kwargs map[string]any) RouteStrategy {
 	switch strategyName {
 	case "round-robin":
@@ -1120,9 +938,6 @@ func createStrategy(strategyName string, kwargs map[string]any) RouteStrategy {
 	}
 }
 
-// makeRouterKey 生成确定性缓存 key（MD5 哈希）。
-//
-// 对应 Python: IntelliRouterModelClient._make_router_key()
 func makeRouterKey(config *IntelliRouterClientConfig) string {
 	// 序列化 deployments
 	depIDs := make([]string, 0, len(config.Deployments))
@@ -1149,7 +964,6 @@ func makeRouterKey(config *IntelliRouterClientConfig) string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(raw)))
 }
 
-// getFloatFromAny 从 any 类型中提取 float64 值。
 func getFloatFromAny(v any) (float64, bool) {
 	if v == nil {
 		return 0, false

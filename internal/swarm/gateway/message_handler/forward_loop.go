@@ -188,7 +188,15 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 	env := e2a.MessageToE2AOrFallback(agentMsg)
 	env.IsStream = false
 
-	resp, _ := mh.processNonStreamRequest(ctx, msg, env)
+	resp, err := mh.processNonStreamRequest(ctx, msg, env)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "chat_answer_process_failed").
+			Str("msg_id", msg.ID).
+			Err(err).
+			Msg("processNonStreamRequest 失败，跳过 evolution 审批")
+		return
+	}
 
 	// 检查是否为 evolution 审批回答
 	answerRequestID := ""

@@ -62,9 +62,6 @@ func (a *ReActAgent) GetLLM() (*llm.Model, error) {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// initContext 初始化上下文引擎。
-//
-// 对应 Python: ReActAgent._init_context()
 func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.SessionFacade) (ceinterface.ModelContext, error) {
 	if a.contextEngine == nil {
 		return nil, nil
@@ -99,7 +96,6 @@ func (a *ReActAgent) initContext(ctx context.Context, sess sessioninterfaces.Ses
 	return modelCtx, nil
 }
 
-// getLLM 获取 LLM 实例（延迟初始化）。
 func (a *ReActAgent) getLLM() (*llm.Model, error) {
 	if a.llm != nil {
 		return a.llm, nil
@@ -130,7 +126,6 @@ func (a *ReActAgent) getLLM() (*llm.Model, error) {
 	return a.llm, nil
 }
 
-// getTools 获取工具列表。
 func (a *ReActAgent) getTools(ctx context.Context) ([]cschema.ToolInfoInterface, error) {
 	am := a.getAbilityManager()
 	if am == nil {
@@ -148,7 +143,6 @@ func (a *ReActAgent) getAbilityManager() interfaces.AbilityManagerInterface {
 	return a.abilityManager
 }
 
-// saveContexts 保存上下文。
 func (a *ReActAgent) saveContexts(ctx context.Context, sess sessioninterfaces.SessionFacade) {
 	if a.contextEngine == nil || sess == nil {
 		return

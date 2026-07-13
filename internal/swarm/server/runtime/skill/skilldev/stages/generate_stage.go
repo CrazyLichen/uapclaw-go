@@ -16,6 +16,14 @@ import (
 // GenerateStageHandler GENERATE 阶段：Agent 按 plan 生成完整 skill 文件集。
 type GenerateStageHandler struct{}
 
+// generationItem 文件生成项（文件路径 + 角色描述）。
+type generationItem struct {
+	// FilePath 文件路径
+	FilePath string
+	// Role 角色描述
+	Role string
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // GenerateSystemPrompt GENERATE 阶段 Agent 系统 Prompt。
@@ -118,14 +126,6 @@ func (h *GenerateStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDe
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// generationItem 文件生成项（文件路径 + 角色描述）。
-type generationItem struct {
-	// FilePath 文件路径
-	FilePath string
-	// Role 角色描述
-	Role string
-}
 
 // resolveGenerationOrder 确定文件生成顺序：SKILL.md 优先，scripts/ 其次，其余最后。
 func (h *GenerateStageHandler) resolveGenerationOrder(plan map[string]any) []generationItem {

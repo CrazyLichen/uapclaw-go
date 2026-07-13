@@ -16,18 +16,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TaskCompletionOption TaskCompletionRail 构造选项函数。
-type TaskCompletionOption func(*TaskCompletionRail)
-
-// TaskCompletionRail 任务完成检测 Rail。
-//
-// 负责三件事：
-//  1. BeforeModelCall:        向系统提示词注入 <promise> 完成信号节
-//  2. BeforeTaskIteration:    首轮迭代时将 taskInstruction 模板应用到查询
-//  3. AfterTaskIteration:     检测输出中的 <promise>...</promise> 标签，通知 CompletionPromiseEvaluator
-//
-// 仅当 enable_task_loop=True 时生效。
-// 对齐 Python: TaskCompletionRail (openjiuwen/harness/rails/task_completion_rail.py)
 type TaskCompletionRail struct {
 	DeepAgentRail
 	// taskInstruction 带 {query} 占位符的格式模板，首轮迭代时应用到查询
@@ -46,6 +34,10 @@ type TaskCompletionRail struct {
 	extraEvaluators []task_loop.StopConditionEvaluator
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type TaskCompletionOption func(*TaskCompletionRail)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -56,29 +48,22 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 TaskCompletionRail 满足 AgentRail 接口
 var _ agentinterfaces.AgentRail = (*TaskCompletionRail)(nil)
 
-// taskCompLogComponent 日志组件标识
 var taskCompLogComponent = logger.ComponentAgentCore
 
-// promiseTagPattern 匹配 <promise>...</promise> 标签的正则
-// 对齐 Python: PROMISE_TAG_PATTERN = re.compile(r"<promise>\s*(.*?)\s*</promise>", re.DOTALL | re.IGNORECASE)
 var promiseTagPattern = regexp.MustCompile(`(?i)(?s)<promise>\s*(.*?)\s*</promise>`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WithTaskInstruction 设置任务指令模板。
 func WithTaskInstruction(template string) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.taskInstruction = template }
 }
 
-// WithCompletionPromise 设置完成承诺令牌。
 func WithCompletionPromise(promise string) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.completionPromise = promise }
 }
 
-// WithRequiredConfirmations 设置连续确认次数。
 func WithRequiredConfirmations(n int) TaskCompletionOption {
 	return func(r *TaskCompletionRail) {
 		if n < 1 {
@@ -88,31 +73,22 @@ func WithRequiredConfirmations(n int) TaskCompletionOption {
 	}
 }
 
-// WithAllowPromiseDetails 设置是否允许 promise 块含详情。
 func WithAllowPromiseDetails(allow bool) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.allowPromiseDetails = allow }
 }
 
-// WithMaxRounds 设置外层循环最大轮数。
 func WithMaxRounds(n int) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.maxRounds = n }
 }
 
-// WithTimeoutSeconds 设置墙钟超时秒数。
 func WithTimeoutSeconds(sec float64) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.timeoutSeconds = sec }
 }
 
-// WithExtraEvaluators 设置额外自定义评估器。
 func WithExtraEvaluators(evaluators ...task_loop.StopConditionEvaluator) TaskCompletionOption {
 	return func(r *TaskCompletionRail) { r.extraEvaluators = evaluators }
 }
 
-// NewTaskCompletionRail 创建 TaskCompletionRail 实例。
-//
-// 默认无参创建，与 Python TaskCompletionRail() 对齐。
-// 用户通过 opts 传入策略参数。
-// 对齐 Python: TaskCompletionRail.__init__()
 func NewTaskCompletionRail(opts ...TaskCompletionOption) *TaskCompletionRail {
 	r := &TaskCompletionRail{
 		DeepAgentRail:         *NewDeepAgentRail(),
@@ -125,11 +101,6 @@ func NewTaskCompletionRail(opts ...TaskCompletionOption) *TaskCompletionRail {
 	return r
 }
 
-// BuildEvaluators 根据Rail参数构建评估器链。
-//
-// 内置评估器顺序：MaxRounds → Timeout → CompletionPromise，
-// 然后追加用户传入的额外评估器。
-// 对齐 Python: TaskCompletionRail.build_evaluators()
 func (r *TaskCompletionRail) BuildEvaluators() []task_loop.StopConditionEvaluator {
 	var result []task_loop.StopConditionEvaluator
 	if r.maxRounds > 0 {
@@ -147,9 +118,6 @@ func (r *TaskCompletionRail) BuildEvaluators() []task_loop.StopConditionEvaluato
 	return result
 }
 
-// BeforeModelCall 在每次 LLM 调用前注入完成信号提示词节。
-//
-// 对齐 Python: TaskCompletionRail.before_model_call()
 func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.completionPromise == "" {
 		return nil
@@ -171,10 +139,6 @@ func (r *TaskCompletionRail) BeforeModelCall(_ context.Context, cbc *agentinterf
 	return nil
 }
 
-// BeforeTaskIteration 在首轮迭代时将 taskInstruction 模板应用到查询。
-//
-// 仅在第一轮（非 follow-up）迭代时格式化查询。
-// 对齐 Python: TaskCompletionRail.before_task_iteration()
 func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.taskInstruction == "" {
 		return nil
@@ -200,10 +164,6 @@ func (r *TaskCompletionRail) BeforeTaskIteration(_ context.Context, cbc *agentin
 	return nil
 }
 
-// AfterTaskIteration 在迭代完成后检测输出中的 promise 标签。
-//
-// 匹配成功则通知 CompletionPromiseEvaluator，使外层循环在下一轮停止。
-// 对齐 Python: TaskCompletionRail.after_task_iteration()
 func (r *TaskCompletionRail) AfterTaskIteration(_ context.Context, cbc *agentinterfaces.AgentCallbackContext) error {
 	if r.completionPromise == "" {
 		return nil
@@ -241,9 +201,6 @@ func (r *TaskCompletionRail) AfterTaskIteration(_ context.Context, cbc *agentint
 	return nil
 }
 
-// GetCallbacks 覆盖基类回调映射，增加 BeforeModelCall + BeforeTaskIteration + AfterTaskIteration。
-//
-// 对齐 Python: TaskCompletionRail 隐式覆盖 before_model_call + before_task_iteration + after_task_iteration
 func (r *TaskCompletionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEvent]cb.PerAgentCallbackFunc {
 	callbacks := r.DeepAgentRail.GetCallbacks()
 
@@ -260,9 +217,6 @@ func (r *TaskCompletionRail) GetCallbacks() map[agentinterfaces.AgentCallbackEve
 	return callbacks
 }
 
-// ExtractPromiseBlock 用正则提取 <promise>...</promise> 内容。
-// 导出供测试使用。
-// 对齐 Python: extract_promise_block(text)
 func ExtractPromiseBlock(text string) string {
 	if text == "" {
 		return ""
@@ -274,9 +228,6 @@ func ExtractPromiseBlock(text string) string {
 	return strings.TrimSpace(match[1])
 }
 
-// PromiseMatches 判断 promise 块首行是否以期望令牌开头。
-// 导出供测试使用。
-// 对齐 Python: promise_matches(block, expected)
 func PromiseMatches(block string, expected string) bool {
 	if block == "" || expected == "" {
 		return false
@@ -307,14 +258,10 @@ func PromiseMatches(block string, expected string) bool {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// normalizePromiseText 折叠空白字符用于 promise 比较。
-// 对齐 Python: _normalize(text)
 func normalizePromiseText(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
-// extractOutput 从 TaskIterationInputs.Result["output"] 提取输出文本。
-// 对齐 Python: TaskCompletionRail._extract_output(ctx)
 func extractOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	inputs, ok := cbc.Inputs().(*agentinterfaces.TaskIterationInputs)
 	if !ok || inputs == nil {
@@ -335,8 +282,6 @@ func extractOutput(cbc *agentinterfaces.AgentCallbackContext) string {
 	return s
 }
 
-// notifyEvaluator 获取 LoopCoordinator → CompletionPromiseEvaluator → NotifyFulfilled。
-// 对齐 Python: TaskCompletionRail._notify_evaluator(ctx, text)
 func notifyEvaluator(cbc *agentinterfaces.AgentCallbackContext, text string) {
 	agent := cbc.Agent()
 

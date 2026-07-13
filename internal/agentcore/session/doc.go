@@ -104,7 +104,7 @@
 // 核心类型/接口索引：
 //
 //	InnerSession        — 会话基类接口，所有会话类型的核心抽象
-//	BaseSession         — Deprecated alias of InnerSession
+//	BaseSession         — 已废弃的 InnerSession 别名
 //	SessionFacade       — 门面会话共有接口，Agent/Node/Router 门面的统一抽象
 //	ProxySession         — 代理会话，将调用委托给内部 stub
 //	Session              — Agent 公开会话，用户面向 API

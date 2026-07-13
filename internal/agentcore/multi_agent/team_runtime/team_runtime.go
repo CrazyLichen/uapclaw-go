@@ -18,9 +18,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// RuntimeConfig 团队运行时配置。
-//
-// 对应 Python: RuntimeConfig (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
 type RuntimeConfig struct {
 	// TeamID 团队标识
 	TeamID string
@@ -30,15 +27,6 @@ type RuntimeConfig struct {
 	P2PTimeout float64
 }
 
-// TeamRuntime 团队运行时编排入口，聚合消息总线、订阅管理和 Agent 注册。
-//
-// 职责：
-//   - Agent 注册/注销（存储 AgentCard + wrapProvider 注入 RuntimeBindable + 注册到 Runner.resource_mgr）
-//   - 消息通信（Send/Publish/Subscribe 委托 messageBus）
-//   - 会话管理（BindTeamSession/UnbindTeamSession）
-//   - 生命周期（Start/Stop/CleanupSession）
-//
-// 对应 Python: TeamRuntime (openjiuwen/core/multi_agent/team_runtime/team_runtime.py)
 type TeamRuntime struct {
 	// config 运行时配置
 	config RuntimeConfig
@@ -60,10 +48,12 @@ type TeamRuntime struct {
 	startMu sync.Mutex
 }
 
-// RuntimeConfigOption 团队运行时配置选项函数类型
+// ──────────────────────────── 枚举 ────────────────────────────
+
 type RuntimeConfigOption func(*RuntimeConfig)
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// defaultP2PTimeout 默认 P2P 超时秒数
 	defaultP2PTimeout = 1800.0
@@ -73,7 +63,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewRuntimeConfig 创建团队运行时配置，设置默认值。
 func NewRuntimeConfig(opts ...RuntimeConfigOption) *RuntimeConfig {
 	cfg := &RuntimeConfig{
 		TeamID:     defaultRuntimeTeamID,
@@ -94,17 +83,14 @@ func NewRuntimeConfig(opts ...RuntimeConfigOption) *RuntimeConfig {
 	return cfg
 }
 
-// WithRuntimeTeamID 设置团队标识选项。
 func WithRuntimeTeamID(teamID string) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.TeamID = teamID }
 }
 
-// WithRuntimeMessageBus 设置消息总线配置选项。
 func WithRuntimeMessageBus(busConfig *MessageBusConfig) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.MessageBus = busConfig }
 }
 
-// WithRuntimeP2PTimeout 设置 P2P 超时选项。
 func WithRuntimeP2PTimeout(timeout float64) RuntimeConfigOption {
 	return func(c *RuntimeConfig) { c.P2PTimeout = timeout }
 }
@@ -140,9 +126,6 @@ func NewTeamRuntime(config RuntimeConfig) *TeamRuntime {
 	return tr
 }
 
-// Start 启动团队运行时，初始化并启动消息总线。
-//
-// 对应 Python: TeamRuntime.start()
 func (tr *TeamRuntime) Start(ctx context.Context) error {
 	if tr.running.Load() {
 		return nil
@@ -167,9 +150,6 @@ func (tr *TeamRuntime) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop 停止团队运行时，停止消息总线。
-//
-// 对齐 Python: TeamRuntime.stop() — 先检查 if not self._running: return
 func (tr *TeamRuntime) Stop(ctx context.Context) error {
 	// 幂等检查，对齐 Python L127-128: if not self._running: return
 	if !tr.running.Load() {
@@ -197,9 +177,6 @@ func (tr *TeamRuntime) Stop(ctx context.Context) error {
 	return nil
 }
 
-// CleanupSession 清理会话，委托消息总线清理。
-//
-// 对应 Python: TeamRuntime.cleanup_session(session_id)
 func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) error {
 	if tr.messageBus != nil {
 		return tr.messageBus.CleanupSession(ctx, sessionID)
@@ -207,14 +184,6 @@ func (tr *TeamRuntime) CleanupSession(ctx context.Context, sessionID string) err
 	return nil
 }
 
-// RegisterAgent 注册 Agent，存储 AgentCard 并包装 provider 注入 RuntimeBindable。
-//
-// 流程：
-//  1. 存储 AgentCard 到 agentCards
-//  2. 调用 wrapProvider 包装 provider（自动注入 BindRuntime）
-//  3. 注册到 ResourceMgr（如果已设置）
-//
-// 对应 Python: TeamRuntime.register_agent(card, provider)
 func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.AgentCard, provider resources_manager.AgentProvider) error {
 	agentID := card.ID
 
@@ -259,9 +228,6 @@ func (tr *TeamRuntime) RegisterAgent(ctx context.Context, card *agentschema.Agen
 	return nil
 }
 
-// UnregisterAgent 注销 Agent，移除 AgentCard 和所有订阅。
-//
-// 对应 Python: TeamRuntime.unregister_agent(agent_id)
 func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*agentschema.AgentCard, error) {
 	tr.mu.Lock()
 	card, ok := tr.agentCards[agentID]
@@ -286,9 +252,6 @@ func (tr *TeamRuntime) UnregisterAgent(ctx context.Context, agentID string) (*ag
 	return card, nil
 }
 
-// HasAgent 判断 Agent 是否已注册。
-//
-// 对应 Python: TeamRuntime.has_agent(agent_id)
 func (tr *TeamRuntime) HasAgent(agentID string) bool {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -296,9 +259,6 @@ func (tr *TeamRuntime) HasAgent(agentID string) bool {
 	return ok
 }
 
-// GetAgentCard 获取 Agent 卡片。
-//
-// 对应 Python: TeamRuntime.get_agent_card(agent_id)
 func (tr *TeamRuntime) GetAgentCard(agentID string) (*agentschema.AgentCard, error) {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -310,9 +270,6 @@ func (tr *TeamRuntime) GetAgentCard(agentID string) (*agentschema.AgentCard, err
 	return card, nil
 }
 
-// ListAgents 列出所有 Agent ID。
-//
-// 对应 Python: TeamRuntime.list_agents()
 func (tr *TeamRuntime) ListAgents() []string {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -324,18 +281,12 @@ func (tr *TeamRuntime) ListAgents() []string {
 	return agents
 }
 
-// GetAgentCount 获取 Agent 数量。
-//
-// 对应 Python: TeamRuntime.get_agent_count()
 func (tr *TeamRuntime) GetAgentCount() int {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 	return len(tr.agentCards)
 }
 
-// Send P2P 发送消息，校验参数后委托消息总线。
-//
-// 对应 Python: TeamRuntime.send(message, recipient, sender, opts)
 func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, sender string, opts ...maschema.TeamOption) (any, error) {
 	// 对齐 Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
@@ -375,9 +326,6 @@ func (tr *TeamRuntime) Send(ctx context.Context, message any, recipient string, 
 	return tr.messageBus.Send(ctx, message, recipient, sender, sessionID, timeout)
 }
 
-// Publish Pub-Sub 发布消息，校验参数后委托消息总线。
-//
-// 对应 Python: TeamRuntime.publish(message, topic_id, sender, opts)
 func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string, sender string, opts ...maschema.TeamOption) error {
 	// 对齐 Python: await self._ensure_started()
 	if err := tr.ensureStarted(ctx); err != nil {
@@ -408,9 +356,6 @@ func (tr *TeamRuntime) Publish(ctx context.Context, message any, topicID string,
 	return tr.messageBus.Publish(ctx, message, topicID, sender, sessionID)
 }
 
-// Subscribe 订阅主题，委托消息总线。
-//
-// 对应 Python: TeamRuntime.subscribe(agent_id, topic)
 func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic string) error {
 	// 对齐 Python: if not agent_id: raise ...
 	if agentID == "" {
@@ -430,9 +375,6 @@ func (tr *TeamRuntime) Subscribe(ctx context.Context, agentID string, topic stri
 	return nil
 }
 
-// Unsubscribe 取消订阅，委托消息总线。
-//
-// 对应 Python: TeamRuntime.unsubscribe(agent_id, topic)
 func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic string) error {
 	// 对齐 Python: if not agent_id: raise ...
 	if agentID == "" {
@@ -452,9 +394,6 @@ func (tr *TeamRuntime) Unsubscribe(ctx context.Context, agentID string, topic st
 	return nil
 }
 
-// BindTeamSession 绑定团队会话。
-//
-// 对应 Python: TeamRuntime.bind_team_session(session)
 func (tr *TeamRuntime) BindTeamSession(sess *session.AgentTeamSession) {
 	if sess == nil {
 		return
@@ -464,27 +403,18 @@ func (tr *TeamRuntime) BindTeamSession(sess *session.AgentTeamSession) {
 	tr.activeTeamSessions[sess.GetSessionID()] = sess
 }
 
-// UnbindTeamSession 解绑团队会话。
-//
-// 对应 Python: TeamRuntime.unbind_team_session(session_id)
 func (tr *TeamRuntime) UnbindTeamSession(sessionID string) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	delete(tr.activeTeamSessions, sessionID)
 }
 
-// GetTeamSession 获取团队会话。
-//
-// 对应 Python: TeamRuntime.get_team_session(session_id)
 func (tr *TeamRuntime) GetTeamSession(sessionID string) *session.AgentTeamSession {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
 	return tr.activeTeamSessions[sessionID]
 }
 
-// ListSubscriptions 列出订阅信息，委托消息总线。
-//
-// 对应 Python: TeamRuntime.list_subscriptions(agent_id)
 func (tr *TeamRuntime) ListSubscriptions(agentID string) any {
 	if tr.messageBus != nil {
 		return tr.messageBus.ListSubscriptions(agentID)
@@ -492,9 +422,6 @@ func (tr *TeamRuntime) ListSubscriptions(agentID string) any {
 	return nil
 }
 
-// GetSubscriptionCount 获取总订阅数，委托消息总线。
-//
-// 对应 Python: TeamRuntime.get_subscription_count()
 func (tr *TeamRuntime) GetSubscriptionCount() int {
 	if tr.messageBus != nil {
 		return tr.messageBus.GetSubscriptionCount()
@@ -502,22 +429,18 @@ func (tr *TeamRuntime) GetSubscriptionCount() int {
 	return 0
 }
 
-// P2PTimeout 获取 P2P 超时秒数。
 func (tr *TeamRuntime) P2PTimeout() float64 {
 	return tr.p2pTimeout
 }
 
-// SetP2PTimeout 设置 P2P 超时秒数。
 func (tr *TeamRuntime) SetP2PTimeout(timeout float64) {
 	tr.p2pTimeout = timeout
 }
 
-// GetP2PTimeout 获取 P2P 超时秒数。
 func (tr *TeamRuntime) GetP2PTimeout() float64 {
 	return tr.p2pTimeout
 }
 
-// IsRunning 返回运行时是否已启动。
 func (tr *TeamRuntime) IsRunning() bool {
 	return tr.running.Load()
 }
@@ -555,9 +478,6 @@ func isResourceAlreadyExistsError(err error) bool {
 	return false
 }
 
-// wrapProvider 包装 Agent provider，在 Agent 创建后自动注入 RuntimeBindable。
-//
-// 对应 Python: TeamRuntime._wrap_provider(provider, agent_id)
 func (tr *TeamRuntime) wrapProvider(provider resources_manager.AgentProvider, agentID string) resources_manager.AgentProvider {
 	return func(ctx context.Context, card *agentschema.AgentCard) (agentinterfaces.BaseAgent, error) {
 		agent, err := provider(ctx, card)

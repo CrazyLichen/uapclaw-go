@@ -7,7 +7,7 @@
 // 接口与 Python 的对应关系：
 //   - SessionFacade      → Python agent.Session 和 node.Session 的共有方法集
 //   - InnerSession      → Python BaseSession(ABC)，所有会话类型的基类
-//   - BaseSession       → Deprecated alias of InnerSession
+//   - BaseSession       → 已废弃的 InnerSession 别名
 //   - Checkpointer       → Python Checkpointer(ABC)，检查点器接口
 //   - Storage            → Python Storage(ABC)，状态存储接口
 //   - AgentIDProvider    → Python hasattr(session, "agent_id") 检测

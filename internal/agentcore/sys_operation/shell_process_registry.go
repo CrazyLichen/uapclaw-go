@@ -2,6 +2,7 @@ package sys_operation
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -12,12 +13,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ShellProcessRegistry 会话级别的 Shell 子进程注册表，追踪在途进程以支持用户中断时批量终止。
 type ShellProcessRegistry struct {
 	// mu 互斥锁，保护 processes 和 cancelledSessions
 	mu sync.Mutex
 	// processes sessionID → 进程集合
 	processes map[string]map[*os.Process]struct{}
+	// stdinPipes sessionID → 进程 → stdin pipe
+	stdinPipes map[string]map[*os.Process]io.Writer
 	// cancelledSessions 已取消的会话集合
 	cancelledSessions map[string]struct{}
 }
@@ -35,25 +37,22 @@ const (
 	forceKillWait = 1 * time.Second
 )
 
-// logComponent 日志组件常量，对齐 Python 的 sys_operation_logger
 const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// DefaultRegistry 全局 Shell 进程注册表实例
 var DefaultRegistry = NewShellProcessRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewShellProcessRegistry 创建空的 Shell 进程注册表。
 func NewShellProcessRegistry() *ShellProcessRegistry {
 	return &ShellProcessRegistry{
 		processes:         make(map[string]map[*os.Process]struct{}),
+		stdinPipes:        make(map[string]map[*os.Process]io.Writer),
 		cancelledSessions: make(map[string]struct{}),
 	}
 }
 
-// Register 按 sessionID 注册 Shell 进程。空 sessionID 或 nil proc 时忽略。
 func (r *ShellProcessRegistry) Register(sessionID string, proc *os.Process) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || proc == nil {
@@ -69,7 +68,6 @@ func (r *ShellProcessRegistry) Register(sessionID string, proc *os.Process) {
 	bucket[proc] = struct{}{}
 }
 
-// Unregister 从注册表注销 Shell 进程。桶空后自动清理 key。
 func (r *ShellProcessRegistry) Unregister(sessionID string, proc *os.Process) {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" || proc == nil {
@@ -87,7 +85,113 @@ func (r *ShellProcessRegistry) Unregister(sessionID string, proc *os.Process) {
 	}
 }
 
-// KillSession 终止指定会话的所有 Shell 进程，标记会话为已取消，返回杀掉的进程数量。
+// RegisterWithStdin 注册进程同时保存 stdin pipe 引用。
+// 对齐 Python ShellProcessRegistry.track + stdin pipe 追踪。
+func (r *ShellProcessRegistry) RegisterWithStdin(sessionID string, proc *os.Process, stdin io.Writer) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" || proc == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	bucket, ok := r.processes[sid]
+	if !ok {
+		bucket = make(map[*os.Process]struct{})
+		r.processes[sid] = bucket
+	}
+	bucket[proc] = struct{}{}
+	if stdin != nil {
+		pipes, ok := r.stdinPipes[sid]
+		if !ok {
+			pipes = make(map[*os.Process]io.Writer)
+			r.stdinPipes[sid] = pipes
+		}
+		pipes[proc] = stdin
+	}
+}
+
+// GetStdinPipe 获取指定 session 和进程的 stdin pipe。
+func (r *ShellProcessRegistry) GetStdinPipe(sessionID string, proc *os.Process) io.Writer {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" || proc == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	pipes, ok := r.stdinPipes[sid]
+	if !ok {
+		return nil
+	}
+	return pipes[proc]
+}
+
+// ProcessInfo 进程信息
+type ProcessInfo struct {
+	// SessionID 会话标识
+	SessionID string
+	// PID 进程 ID
+	PID int
+}
+
+// ListProcesses 返回所有已注册进程信息。
+// 对齐 Python ShellProcessRegistry.list_processes。
+func (r *ShellProcessRegistry) ListProcesses() []ProcessInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result []ProcessInfo
+	for sid, procs := range r.processes {
+		for proc := range procs {
+			result = append(result, ProcessInfo{
+				SessionID: sid,
+				PID:       proc.Pid,
+			})
+		}
+	}
+	return result
+}
+
+// WriteStdinForSession 向指定 session 的所有进程写入 stdin。
+// 对齐 Python ShellProcessRegistry.write_stdin：遍历 stdinPipes 写入。
+// 返回成功写入的进程数和第一个遇到的错误。
+func (r *ShellProcessRegistry) WriteStdinForSession(sessionID string, data []byte) (int, error) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return 0, nil
+	}
+	r.mu.Lock()
+	procs, ok := r.processes[sid]
+	if !ok {
+		r.mu.Unlock()
+		return 0, nil
+	}
+	pipes := r.stdinPipes[sid]
+	// 复制引用以避免持锁时间过长
+	procList := make([]*os.Process, 0, len(procs))
+	pipeMap := make(map[*os.Process]io.Writer)
+	for proc := range procs {
+		procList = append(procList, proc)
+		if pipes != nil {
+			pipeMap[proc] = pipes[proc]
+		}
+	}
+	r.mu.Unlock()
+
+	written := 0
+	var firstErr error
+	for _, proc := range procList {
+		if stdin, ok := pipeMap[proc]; ok && stdin != nil {
+			if _, err := stdin.Write(data); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else {
+				written++
+			}
+		}
+	}
+	return written, firstErr
+}
+
 func (r *ShellProcessRegistry) KillSession(sessionID string) int {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -111,7 +215,6 @@ func (r *ShellProcessRegistry) KillSession(sessionID string) int {
 	return killed
 }
 
-// KillSessionTree 终止指定会话及其子会话（前缀 {sessionID}_* 匹配）的所有 Shell 进程。
 func (r *ShellProcessRegistry) KillSessionTree(sessionID string) int {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -152,7 +255,6 @@ func (r *ShellProcessRegistry) KillSessionTree(sessionID string) int {
 	return killed
 }
 
-// ConsumeCancelled 检查并消费会话的取消标记（一次性）。返回该会话是否已被取消。
 func (r *ShellProcessRegistry) ConsumeCancelled(sessionID string) bool {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
@@ -187,27 +289,22 @@ func TerminateShellProcess(proc *os.Process) bool {
 	return terminateShellProcessPlatform(proc)
 }
 
-// RegisterShellProcess 向全局注册表注册 Shell 进程。⤵️ 9.33 回填：LocalShellOperation 调用
 func RegisterShellProcess(sessionID string, proc *os.Process) {
 	DefaultRegistry.Register(sessionID, proc)
 }
 
-// UnregisterShellProcess 从全局注册表注销 Shell 进程。⤵️ 9.33 回填：LocalShellOperation 调用
 func UnregisterShellProcess(sessionID string, proc *os.Process) {
 	DefaultRegistry.Unregister(sessionID, proc)
 }
 
-// KillShellProcessesForSession 终止指定会话的所有 Shell 进程
 func KillShellProcessesForSession(sessionID string) int {
 	return DefaultRegistry.KillSession(sessionID)
 }
 
-// KillShellProcessesForSessionTree 终止指定会话及其子会话的所有 Shell 进程
 func KillShellProcessesForSessionTree(sessionID string) int {
 	return DefaultRegistry.KillSessionTree(sessionID)
 }
 
-// ConsumeShellSessionCancelled 检查并消费会话取消标记
 func ConsumeShellSessionCancelled(sessionID string) bool {
 	return DefaultRegistry.ConsumeCancelled(sessionID)
 }
@@ -218,8 +315,6 @@ func SetShellSessionID(ctx context.Context, sessionID string) context.Context {
 	return context.WithValue(ctx, shellSessionIDKey{}, sessionID)
 }
 
-// GetShellSessionID 从 context 获取 session ID。
-// 对齐 Python get_shell_session_id。
 func GetShellSessionID(ctx context.Context) string {
 	if v, ok := ctx.Value(shellSessionIDKey{}).(string); ok {
 		return v

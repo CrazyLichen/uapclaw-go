@@ -22,11 +22,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// BackgroundTask 后台任务句柄，支持优雅停止。
-//
-// 对应 Python: BackgroundTask
-// 基于 context.WithCancel 的轻量级后台 goroutine 生命周期管理。
-// 适用于简单的后台任务场景，无需完整的状态机追踪。
 type BackgroundTask struct {
 	name   string
 	group  string
@@ -37,11 +32,6 @@ type BackgroundTask struct {
 	mu     sync.Mutex
 }
 
-// Task 受管理的异步任务，带状态机和元数据。
-//
-// 对应 Python: Task (task_manager/task.py)
-// 支持完整的状态机：PENDING → RUNNING → COMPLETED/FAILED/CANCELLED/TIMEOUT。
-// 可配置超时、分组、父任务关联、元数据等。
 type Task struct {
 	ID           string
 	Name         string
@@ -64,24 +54,17 @@ type Task struct {
 	mu     sync.RWMutex
 }
 
-// TaskManager 任务管理器，统一管理所有异步任务。
-//
-// 对应 Python: TaskManager (task_manager/manager.py)
-// 提供任务的创建、取消、分组管理、等待等功能。
-// 使用 Singleton 模式，全局唯一实例。
 type TaskManager struct {
 	registry map[string]*Task
 	mu       sync.RWMutex
 }
 
-// TaskResult 任务等待结果。
 type TaskResult struct {
 	TaskID string
 	Result any
 	Err    error
 }
 
-// taskConfig 任务配置，由 Functional Options 设置。
 type taskConfig struct {
 	name     string
 	group    string
@@ -92,8 +75,11 @@ type taskConfig struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// TaskStatus 任务状态。
 type TaskStatus int
+
+type TaskOption func(*taskConfig)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// TaskPending 待执行。
@@ -110,27 +96,20 @@ const (
 	TaskTimeout
 )
 
-// TaskOption 任务选项。
-type TaskOption func(*taskConfig)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// taskManagerSingleton 全局 TaskManager 单例持有器。
 var taskManagerSingleton Singleton[TaskManager]
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// WithTaskName 设置任务名称。
 func WithTaskName(name string) TaskOption {
 	return func(c *taskConfig) { c.name = name }
 }
 
-// IsTerminal 判断是否为终态。
 func (s TaskStatus) IsTerminal() bool {
 	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout
 }
 
-// String 返回状态名称。
 func (s TaskStatus) String() string {
 	switch s {
 	case TaskPending:
@@ -150,30 +129,22 @@ func (s TaskStatus) String() string {
 	}
 }
 
-// WithTaskGroup 设置任务分组。
 func WithTaskGroup(group string) TaskOption {
 	return func(c *taskConfig) { c.group = group }
 }
 
-// WithTaskTimeout 设置任务超时。
 func WithTaskTimeout(timeout time.Duration) TaskOption {
 	return func(c *taskConfig) { c.timeout = timeout }
 }
 
-// WithTaskMetadata 设置任务元数据。
 func WithTaskMetadata(md map[string]any) TaskOption {
 	return func(c *taskConfig) { c.metadata = md }
 }
 
-// WithTaskParentID 设置父任务 ID。
 func WithTaskParentID(id string) TaskOption {
 	return func(c *taskConfig) { c.parentID = id }
 }
 
-// NewBackgroundTask 创建后台任务。
-//
-// fn 为任务执行函数，通过 ctx 实现取消语义。
-// 创建后需调用 Start 启动。
 func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *BackgroundTask {
 	return &BackgroundTask{
 		name:  name,
@@ -183,7 +154,6 @@ func NewBackgroundTask(name, group string, fn func(ctx context.Context) error) *
 	}
 }
 
-// Start 启动后台任务。
 func (t *BackgroundTask) Start(ctx context.Context) {
 	ctx, t.cancel = context.WithCancel(ctx)
 
@@ -197,7 +167,6 @@ func (t *BackgroundTask) Start(ctx context.Context) {
 	}()
 }
 
-// Stop 优雅停止（发送取消信号并等待完成或超时）。
 func (t *BackgroundTask) Stop(timeout time.Duration) error {
 	if t.cancel != nil {
 		t.cancel()
@@ -214,7 +183,6 @@ func (t *BackgroundTask) Stop(timeout time.Duration) error {
 	}
 }
 
-// Wait 等待任务完成，返回任务错误（如有）。
 func (t *BackgroundTask) Wait() error {
 	<-t.done
 	t.mu.Lock()
@@ -222,25 +190,20 @@ func (t *BackgroundTask) Wait() error {
 	return t.err
 }
 
-// Done 返回只读 channel，任务结束时关闭。
 func (t *BackgroundTask) Done() <-chan struct{} {
 	return t.done
 }
 
-// Name 返回任务名称。
 func (t *BackgroundTask) Name() string { return t.name }
 
-// Group 返回任务分组。
 func (t *BackgroundTask) Group() string { return t.group }
 
-// IsTerminal 判断任务是否为终态。
 func (t *Task) IsTerminal() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.Status.IsTerminal()
 }
 
-// DisplayName 返回任务显示名称。
 func (t *Task) DisplayName() string {
 	if t.Name != "" {
 		return t.Name
@@ -251,7 +214,6 @@ func (t *Task) DisplayName() string {
 	return t.ID
 }
 
-// Wait 等待任务完成，返回结果或错误。
 func (t *Task) Wait() (any, error) {
 	<-t.done
 	t.mu.RLock()
@@ -259,7 +221,6 @@ func (t *Task) Wait() (any, error) {
 	return t.Result, t.Err
 }
 
-// GetTaskManager 获取全局 TaskManager 单例。
 func GetTaskManager() *TaskManager {
 	return taskManagerSingleton.Get(func() *TaskManager {
 		return &TaskManager{
@@ -268,11 +229,6 @@ func GetTaskManager() *TaskManager {
 	})
 }
 
-// CreateTask 创建并启动受管理的异步任务。
-//
-// 对应 Python: TaskManager.create_task()
-// fn 为任务执行函数，返回结果和错误。
-// 通过 TaskOption 配置名称、分组、超时等。
 func (m *TaskManager) CreateTask(ctx context.Context, fn func(ctx context.Context) (any, error), opts ...TaskOption) (*Task, error) {
 	cfg := &taskConfig{}
 	for _, opt := range opts {
@@ -312,9 +268,6 @@ func (m *TaskManager) CreateTask(ctx context.Context, fn func(ctx context.Contex
 	return task, nil
 }
 
-// Cancel 取消指定任务。
-//
-// 对应 Python: Task.cancel()
 func (m *TaskManager) Cancel(taskID string, reason string) bool {
 	m.mu.RLock()
 	task, ok := m.registry[taskID]
@@ -339,10 +292,6 @@ func (m *TaskManager) Cancel(taskID string, reason string) bool {
 	return true
 }
 
-// CancelGroup 取消指定分组的所有任务。
-//
-// 对应 Python: TaskManager.cancel_group()
-// 返回被取消的任务数量。
 func (m *TaskManager) CancelGroup(group string, reason string) int {
 	m.mu.RLock()
 	var tasks []*Task
@@ -362,9 +311,6 @@ func (m *TaskManager) CancelGroup(group string, reason string) int {
 	return count
 }
 
-// CancelAll 取消所有运行中的任务。
-//
-// 对应 Python: TaskManager.cancel_all()
 func (m *TaskManager) CancelAll(reason string) int {
 	m.mu.RLock()
 	var taskIDs []string
@@ -384,7 +330,6 @@ func (m *TaskManager) CancelAll(reason string) int {
 	return count
 }
 
-// Get 获取指定任务。
 func (m *TaskManager) Get(taskID string) (*Task, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -392,9 +337,6 @@ func (m *TaskManager) Get(taskID string) (*Task, bool) {
 	return task, ok
 }
 
-// WaitGroup 等待指定分组的所有任务完成。
-//
-// 对应 Python: TaskManager.wait_group()
 func (m *TaskManager) WaitGroup(ctx context.Context, group string) []TaskResult {
 	m.mu.RLock()
 	var tasks []*Task
@@ -423,9 +365,6 @@ func (m *TaskManager) WaitGroup(ctx context.Context, group string) []TaskResult 
 	return results
 }
 
-// WaitAll 等待所有任务完成。
-//
-// 对应 Python: TaskManager.wait_all()
 func (m *TaskManager) WaitAll(ctx context.Context) []TaskResult {
 	m.mu.RLock()
 	tasks := make([]*Task, 0, len(m.registry))
@@ -452,9 +391,6 @@ func (m *TaskManager) WaitAll(ctx context.Context) []TaskResult {
 	return results
 }
 
-// RemoveCompleted 清理已完成的任务。
-//
-// 对应 Python: TaskManager.remove_completed()
 func (m *TaskManager) RemoveCompleted() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -469,9 +405,6 @@ func (m *TaskManager) RemoveCompleted() int {
 	return count
 }
 
-// CascadeCancel 级联取消：取消指定任务及其所有子任务。
-//
-// 对应 Python: TaskManager.cascade_cancel()
 func (m *TaskManager) CascadeCancel(taskID string, reason string) int {
 	m.mu.RLock()
 	var children []*Task
@@ -496,9 +429,6 @@ func (m *TaskManager) CascadeCancel(taskID string, reason string) int {
 	return count
 }
 
-// GetTaskTree 获取任务树的字符串表示。
-//
-// 对应 Python: TaskManager.get_task_tree()
 func (m *TaskManager) GetTaskTree(taskID string) string {
 	var lines []string
 	m.buildTreeRecursive(taskID, &lines, 0)
@@ -514,7 +444,6 @@ func (m *TaskManager) GetTaskTree(taskID string) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// executeTask 执行任务的核心逻辑，管理状态机转换。
 func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx context.Context) (any, error)) {
 	task.mu.Lock()
 	task.Status = TaskRunning
@@ -585,7 +514,6 @@ func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx c
 	close(task.done)
 }
 
-// buildTreeRecursive 递归构建任务树。
 func (m *TaskManager) buildTreeRecursive(taskID string, lines *[]string, indent int) {
 	m.mu.RLock()
 	task, ok := m.registry[taskID]

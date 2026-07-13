@@ -173,5 +173,12 @@ func generateIsolationKeyTemplate(isolationPrefix string, containerScope Contain
 		isolationPrefix,
 		identity,
 	}
-	return strings.Join(parts, "_")
+	// 对齐 Python: 过滤空部分，避免连续下划线
+	var filtered []string
+	for _, p := range parts {
+		if p != "" {
+			filtered = append(filtered, p)
+		}
+	}
+	return strings.Join(filtered, "_")
 }

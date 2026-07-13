@@ -8,7 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// Ability 四类能力的统一接口，ToolCard/WorkflowCard/AgentCard/McpServerConfig 均实现此接口。
 type Ability interface {
 	// AbilityName 返回能力名称
 	AbilityName() string
@@ -18,16 +17,6 @@ type Ability interface {
 	AbilityKind() AbilityKind
 }
 
-// CardInterface 通用卡片只读接口，所有 Card 类型均实现此接口。
-//
-// BaseCard/WorkflowCard/AgentCard/ToolCard/McpToolCard/TeamCard/EventDrivenTeamCard 均满足。
-// 替代各处 *BaseCard 的只读消费场景（idToCard 缓存、日志格式化、类型判断等）。
-//
-// 不包含 ToolInfo()：McpToolCard.ToolInfo() 返回 *McpToolInfo（非 *ToolInfo），
-// 签名不兼容。ToolInfo 通过具体 Card 类型直接调用获取。
-// 重构后 ToolInfo() 返回 ToolInfoInterface，子类可返回不同的实现类型。
-//
-// 对应 Python: BaseCard 基类（Python 继承天然满足此接口的方法）。
 type CardInterface interface {
 	// GetID 返回唯一标识符
 	GetID() string
@@ -39,13 +28,6 @@ type CardInterface interface {
 	String() string
 }
 
-// BaseCard 数字名片基类，所有 Card 类型均嵌入此结构体。
-//
-// 子类包括：ToolCard、AgentCard、WorkflowCard、TeamCard、SysOperationCard。
-// BaseCard 提供统一身份标识和 LLM function calling 所需的元信息。
-// AgentCard 已迁移至 single_agent/schema/ 包。
-//
-// 对应 Python: openjiuwen/core/common/schema/card.py (BaseCard)
 type BaseCard struct {
 	// ID 唯一标识符，构造时自动生成 32 位 UUID hex（无连字符）
 	ID string `json:"id"`
@@ -55,9 +37,6 @@ type BaseCard struct {
 	Description string `json:"description"`
 }
 
-// WorkflowCard 工作流配置卡片，嵌入 BaseCard，增加版本号和输入参数定义。
-//
-// 对应 Python: openjiuwen/core/workflow/base.py (WorkflowCard)
 type WorkflowCard struct {
 	BaseCard
 	// Version 工作流版本号
@@ -68,8 +47,11 @@ type WorkflowCard struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// AbilityKind 能力类型枚举，标识四类 Ability 的类型。
 type AbilityKind int
+
+type CardOption func(*BaseCard)
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// AbilityKindTool 工具能力
@@ -82,20 +64,14 @@ const (
 	AbilityKindMcpServer
 )
 
-// CardOption BaseCard 构造选项函数。
-type CardOption func(*BaseCard)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 编译时验证 BaseCard 满足 CardInterface。
 var _ CardInterface = (*BaseCard)(nil)
 
-// 编译时验证 WorkflowCard 满足 CardInterface。
 var _ CardInterface = (*WorkflowCard)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// String 实现 fmt.Stringer 接口。
 func (k AbilityKind) String() string {
 	switch k {
 	case AbilityKindTool:
@@ -111,24 +87,18 @@ func (k AbilityKind) String() string {
 	}
 }
 
-// WithName 设置 Card 名称。
 func WithName(name string) CardOption {
 	return func(c *BaseCard) { c.Name = name }
 }
 
-// WithDescription 设置 Card 描述。
 func WithDescription(desc string) CardOption {
 	return func(c *BaseCard) { c.Description = desc }
 }
 
-// WithID 设置 Card ID（覆盖自动生成的 UUID）。
 func WithID(id string) CardOption {
 	return func(c *BaseCard) { c.ID = id }
 }
 
-// NewBaseCard 创建 BaseCard 实例，默认自动生成 32 位 UUID hex 作为 ID。
-//
-// 对应 Python: BaseCard(id=uuid4().hex, name="", description="")
 func NewBaseCard(opts ...CardOption) *BaseCard {
 	card := &BaseCard{
 		ID: uuid.New().String(), // 生成 UUID（含连字符，下面去除）
@@ -142,48 +112,30 @@ func NewBaseCard(opts ...CardOption) *BaseCard {
 	return card
 }
 
-// ToolInfo 返回工具描述信息，供 LLM function calling 消费。
-// BaseCard 默认返回 nil，子类（如 ToolCard、AgentCard）应覆写此方法。
-//
-// 对应 Python: BaseCard.tool_info() — Python 中为空实现（...），子类各自覆写
 func (c *BaseCard) ToolInfo() ToolInfoInterface {
 	return nil
 }
 
-// GetID 返回唯一标识符。
 func (c *BaseCard) GetID() string { return c.ID }
 
-// GetName 返回名称。
 func (c *BaseCard) GetName() string { return c.Name }
 
-// GetDescription 返回描述信息。
 func (c *BaseCard) GetDescription() string { return c.Description }
 
-// String 实现 fmt.Stringer 接口，返回简洁的身份描述。
-//
-// 对应 Python: BaseCard.to_str()
 func (c *BaseCard) String() string {
 	return fmt.Sprintf("id=%s,name=%s", c.ID, c.Name)
 }
 
-// GoString 实现 fmt.GoStringer 接口，用于 %#v 格式化。
 func (c *BaseCard) GoString() string {
 	return fmt.Sprintf("BaseCard{ID:%q, Name:%q, Description:%q}", c.ID, c.Name, c.Description)
 }
 
-// NewWorkflowCard 创建 WorkflowCard 实例。
-//
-// 对应 Python: WorkflowCard(name=..., description=..., version=..., input_params=...)
 func NewWorkflowCard(opts ...CardOption) *WorkflowCard {
 	return &WorkflowCard{
 		BaseCard: *NewBaseCard(opts...),
 	}
 }
 
-// ToolInfo 返回工具描述信息，供 LLM function calling 消费。
-// WorkflowCard 的 InputParams 直接作为 JSON Schema parameters。
-//
-// 对应 Python: WorkflowCard.tool_info()
 func (c *WorkflowCard) ToolInfo() ToolInfoInterface {
 	params := c.InputParams
 	if params == nil {
@@ -192,19 +144,14 @@ func (c *WorkflowCard) ToolInfo() ToolInfoInterface {
 	return NewToolInfo(c.Name, c.Description, params)
 }
 
-// AbilityName 实现 Ability 接口。
 func (c *WorkflowCard) AbilityName() string { return c.Name }
 
-// AbilityID 实现 Ability 接口。
 func (c *WorkflowCard) AbilityID() string { return c.ID }
 
-// AbilityKind 实现 Ability 接口。
 func (c *WorkflowCard) AbilityKind() AbilityKind { return AbilityKindWorkflow }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// formatUUIDHex 将 UUID 字符串中的连字符去除，返回 32 位 hex。
-// 例如 "550e8400-e29b-41d4-a716-446655440000" → "550e8400e29b41d4a716446655440000"
 func formatUUIDHex(id string) string {
 	result := make([]byte, 0, 32)
 	for i := 0; i < len(id); i++ {

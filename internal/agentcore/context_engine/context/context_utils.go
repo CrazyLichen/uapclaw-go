@@ -14,6 +14,7 @@ import (
 )
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// ContextMessageIDKey 消息元数据中 ID 的键名
 	ContextMessageIDKey = "context_message_id"
@@ -23,7 +24,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// ModelDefaultContextWindowTokens 各模型的默认上下文窗口大小映射表
 var ModelDefaultContextWindowTokens = map[string]int{
 	"glm-5":             200000,
 	"glm-4-long":        200000,
@@ -52,9 +52,6 @@ var ModelDefaultContextWindowTokens = map[string]int{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ValidateMessages 运行时消息类型校验，确保消息不为 nil 且类型正确。
-//
-// 对应 Python: ContextUtils.validate_messages()
 func ValidateMessages(messages []llm_schema.BaseMessage) error {
 	for i, msg := range messages {
 		if msg == nil {
@@ -66,9 +63,6 @@ func ValidateMessages(messages []llm_schema.BaseMessage) error {
 	return nil
 }
 
-// EnsureContextMessageIDs 确保每条消息都有 context_message_id 元数据，缺失时自动生成 UUID。
-//
-// 对应 Python: ContextUtils.ensure_context_message_ids()
 func EnsureContextMessageIDs(messages []llm_schema.BaseMessage) []llm_schema.BaseMessage {
 	for _, msg := range messages {
 		metadata := msg.GetMetadata()
@@ -83,9 +77,6 @@ func EnsureContextMessageIDs(messages []llm_schema.BaseMessage) []llm_schema.Bas
 	return messages
 }
 
-// ValidateAndFixContextWindow 校验并修复上下文窗口，移除开头连续的 ToolMessage。
-//
-// 对应 Python: ContextUtils.validate_and_fix_context_window()
 func ValidateAndFixContextWindow(window *iface.ContextWindow) {
 	messages := window.ContextMessages
 	if len(messages) == 0 {
@@ -110,11 +101,6 @@ func ValidateAndFixContextWindow(window *iface.ContextWindow) {
 	}
 }
 
-// ResolveContextMax 解析最大上下文 token 数，按优先级查找。
-//
-// 优先级：fallback > custom映射 > 内置映射 > 默认值200000
-//
-// 对应 Python: ContextUtils.resolve_context_max()
 func ResolveContextMax(modelName string, fallbackContextWindowTokens int, modelContextWindowTokens map[string]int) int {
 	// 优先级 1：fallback > 0 直接返回
 	if fallbackContextWindowTokens > 0 {
@@ -139,18 +125,11 @@ func ResolveContextMax(modelName string, fallbackContextWindowTokens int, modelC
 	return DefaultContextMaxTokens
 }
 
-// IsCompressionProcessor 判断处理器是否为压缩类型。
-//
-// 对应 Python: ContextUtils.is_compression_processor()
 func IsCompressionProcessor(p iface.ContextProcessor) bool {
 	processorType := strings.ToLower(p.ProcessorType())
 	return strings.Contains(processorType, "compressor") || strings.Contains(processorType, "compact")
 }
 
-// FormatReloadedMessages 将重新加载的消息格式化为可读字符串。
-//
-// 序列化消息全部字段（对齐 Python model_dump()），使用英文输出。
-// 对应 Python: ContextUtils.format_reloaded_messages()
 func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMessage) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "reload messages with handle=%s:\n", offloadHandle)
@@ -231,7 +210,6 @@ func FindMessageIndexByContextMessageID(messages []llm_schema.BaseMessage, id st
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// messageToMap 将消息转换为 map，对齐 Python model_dump() 输出全部字段。
 func messageToMap(msg llm_schema.BaseMessage) map[string]any {
 	result := map[string]any{
 		"role":    msg.GetRole().String(),

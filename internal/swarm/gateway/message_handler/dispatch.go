@@ -35,7 +35,7 @@ func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Messag
 // nonStreamRPCMayRunParallel 判断非流式 RPC 是否可以并行执行，避免慢 RPC 阻塞队列。
 //
 // 对齐 Python _non_stream_rpc_may_run_parallel (L1837-1865)：
-// chat.send / chat.cancel / chat.resume 必须串行，其他非流式 RPC 可并行。
+// chat.send / chat.cancel / chat.resume / chat.user_answer 必须串行，其他非流式 RPC 可并行。
 func (mh *MessageHandler) nonStreamRPCMayRunParallel(env *e2a.E2AEnvelope) bool {
 	if env.IsStream {
 		return false
@@ -43,7 +43,8 @@ func (mh *MessageHandler) nonStreamRPCMayRunParallel(env *e2a.E2AEnvelope) bool 
 	method := strings.ToLower(env.Method)
 	return method != string(schema.ReqMethodChatSend) &&
 		method != string(schema.ReqMethodChatCancel) &&
-		method != "chat.resume"
+		method != "chat.resume" &&
+		method != string(schema.ReqMethodChatAnswer)
 }
 
 // extractModeFromParams 从消息 params 中提取 mode 字段。

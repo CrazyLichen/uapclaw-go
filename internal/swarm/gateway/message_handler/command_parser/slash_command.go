@@ -8,7 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ParsedChannelControl 受控通道用户整行文本解析结果（与 message_handler 原语义一致）
 type ParsedChannelControl struct {
 	// Action 解析结果动作
 	Action ParsedControlAction
@@ -24,7 +23,6 @@ type ParsedChannelControl struct {
 	RewindPendingTurn int
 }
 
-// SlashCommandEntry 第一批命令注册表条目
 type SlashCommandEntry struct {
 	// ID 命令标识
 	ID string
@@ -40,8 +38,15 @@ type SlashCommandEntry struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// GatewaySlashCommand Gateway 当前支持解析的受控通道 slash 指令（A 类）
 type GatewaySlashCommand int
+
+type ModeSubcommand int
+
+type SwitchSubcommand int
+
+type ParsedControlAction int
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// SlashNewSession 新建会话
@@ -59,9 +64,6 @@ const (
 	// SlashRewind 回退
 	SlashRewind
 )
-
-// ModeSubcommand /mode 支持的子命令
-type ModeSubcommand int
 
 const (
 	// ModeAgent 代理模式
@@ -82,9 +84,6 @@ const (
 	ModeCodeTeam
 )
 
-// SwitchSubcommand /switch 支持的子命令
-type SwitchSubcommand int
-
 const (
 	// SwitchPlan 规划
 	SwitchPlan SwitchSubcommand = iota
@@ -95,9 +94,6 @@ const (
 	// SwitchTeam 团队
 	SwitchTeam
 )
-
-// ParsedControlAction parseChannelControlText 的判定结果
-type ParsedControlAction int
 
 const (
 	// ActionNone 无控制动作
@@ -128,11 +124,8 @@ const (
 	ActionRewindCancel
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// GatewaySlashCommand 的字符串值
 var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashNewSession: "/new_session",
 	SlashMode:       "/mode",
@@ -143,7 +136,6 @@ var gatewaySlashCommandStrings = map[GatewaySlashCommand]string{
 	SlashRewind:     "/rewind",
 }
 
-// ModeSubcommand 的字符串值
 var modeSubcommandStrings = map[ModeSubcommand]string{
 	ModeAgent:      "agent",
 	ModeCode:       "code",
@@ -155,7 +147,6 @@ var modeSubcommandStrings = map[ModeSubcommand]string{
 	ModeCodeTeam:   "code.team",
 }
 
-// SwitchSubcommand 的字符串值
 var switchSubcommandStrings = map[SwitchSubcommand]string{
 	SwitchPlan:   "plan",
 	SwitchFast:   "fast",
@@ -163,27 +154,20 @@ var switchSubcommandStrings = map[SwitchSubcommand]string{
 	SwitchTeam:   "team",
 }
 
-// ValidModeLines 合法的 /mode 整行文本集合
 var ValidModeLines = buildValidModeLines()
 
-// ValidModeSubcommands 合法的 /mode 子命令值切片
 var ValidModeSubcommands = buildModeSubcommandValues()
 
-// ValidSwitchLines 合法的 /switch 整行文本集合
 var ValidSwitchLines = buildValidSwitchLines()
 
-// ValidSwitchSubcommands 合法的 /switch 子命令值切片
 var ValidSwitchSubcommands = buildSwitchSubcommandValues()
 
-// ControlMessageTexts 合法控制消息全集（用于 IM 入站管线跳过 LLM 改写等）
 var ControlMessageTexts = buildControlMessageTexts()
 
-// FirstBatchRegistry 第一批命令注册表
 var FirstBatchRegistry = buildFirstBatchRegistry()
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// GatewaySlashCommandString 返回 GatewaySlashCommand 的字符串值
 func GatewaySlashCommandString(cmd GatewaySlashCommand) string {
 	if s, ok := gatewaySlashCommandStrings[cmd]; ok {
 		return s
@@ -191,7 +175,6 @@ func GatewaySlashCommandString(cmd GatewaySlashCommand) string {
 	return ""
 }
 
-// ModeSubcommandString 返回 ModeSubcommand 的字符串值
 func ModeSubcommandString(sub ModeSubcommand) string {
 	if s, ok := modeSubcommandStrings[sub]; ok {
 		return s
@@ -199,7 +182,6 @@ func ModeSubcommandString(sub ModeSubcommand) string {
 	return ""
 }
 
-// SwitchSubcommandString 返回 SwitchSubcommand 的字符串值
 func SwitchSubcommandString(sub SwitchSubcommand) string {
 	if s, ok := switchSubcommandStrings[sub]; ok {
 		return s
@@ -207,17 +189,6 @@ func SwitchSubcommandString(sub SwitchSubcommand) string {
 	return ""
 }
 
-// ParseChannelControlText 解析单条用户文本是否为 /new_session、/mode、/switch、/skills list、/branch、/rewind 控制指令。
-//
-//   - 含换行则视为非控制（与原 _handle_channel_control 一致）。
-//   - /new_session 仅整行精确匹配为合法；带后缀为非法但仍为控制指令。
-//   - /mode 仅白名单整行合法；支持 agent|code|team 及四个直达模式值；其它以 /mode 开头且单行非法。
-//   - /switch 仅白名单整行合法；其它以 /switch 开头且单行非法。
-//   - /skills list 仅整行精确匹配（/skills 本身不再触发）。
-//   - /branch [name] 合法；name 为可选自定义分支标题。
-//   - /rewind [N] 合法；N 为可选回退轮次编号（正整数）；无参数或非整数参数为非法。
-//   - /rewind confirm N 确认执行之前发起的 /rewind N。
-//   - /rewind cancel 取消之前发起的 /rewind N。
 func ParseChannelControlText(text string) ParsedChannelControl {
 	if text == "" {
 		return ParsedChannelControl{Action: ActionNone}
@@ -314,9 +285,6 @@ func ParseChannelControlText(text string) ParsedChannelControl {
 	return ParsedChannelControl{Action: ActionNone}
 }
 
-// IsControlLikeForIMBatching 飞书/企微等：控制类消息不走合并窗口
-//
-// 单条文本、且为已知控制句、或以 /mode / /switch / /new_session / /branch / /rewind 为前缀时返回 true。
 func IsControlLikeForIMBatching(text string) bool {
 	if text == "" {
 		return false
@@ -354,7 +322,6 @@ func IsControlLikeForIMBatching(text string) bool {
 	return false
 }
 
-// FormatSkillsListForNotice 将 skills.list 响应 payload 格式化为适合 IM 的纯文本
 func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 	if maxItems <= 0 {
 		maxItems = 50
@@ -432,12 +399,10 @@ func FormatSkillsListForNotice(payload map[string]any, maxItems int) string {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// normalizeSpaces 折叠连续空白为单个空格
 func normalizeSpaces(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// buildValidModeLines 构建合法 /mode 整行文本集合
 func buildValidModeLines() map[string]bool {
 	result := make(map[string]bool)
 	for _, sub := range allModeSubcommands() {
@@ -446,12 +411,10 @@ func buildValidModeLines() map[string]bool {
 	return result
 }
 
-// buildModeSubcommandValues 构建合法 /mode 子命令值切片
 func buildModeSubcommandValues() []string {
 	return allModeSubcommands()
 }
 
-// buildValidSwitchLines 构建合法 /switch 整行文本集合
 func buildValidSwitchLines() map[string]bool {
 	result := make(map[string]bool)
 	for _, sub := range allSwitchSubcommands() {
@@ -460,12 +423,10 @@ func buildValidSwitchLines() map[string]bool {
 	return result
 }
 
-// buildSwitchSubcommandValues 构建合法 /switch 子命令值切片
 func buildSwitchSubcommandValues() []string {
 	return allSwitchSubcommands()
 }
 
-// buildControlMessageTexts 构建合法控制消息全集
 func buildControlMessageTexts() map[string]bool {
 	result := make(map[string]bool)
 	result["/new_session"] = true
@@ -481,7 +442,6 @@ func buildControlMessageTexts() map[string]bool {
 	return result
 }
 
-// buildFirstBatchRegistry 构建第一批命令注册表
 func buildFirstBatchRegistry() []SlashCommandEntry {
 	return []SlashCommandEntry{
 		{
@@ -557,7 +517,6 @@ func buildFirstBatchRegistry() []SlashCommandEntry {
 	}
 }
 
-// allModeSubcommands 返回所有 ModeSubcommand 的字符串值
 func allModeSubcommands() []string {
 	result := make([]string, 0, len(modeSubcommandStrings))
 	for _, v := range modeSubcommandStrings {
@@ -566,7 +525,6 @@ func allModeSubcommands() []string {
 	return result
 }
 
-// allSwitchSubcommands 返回所有 SwitchSubcommand 的字符串值
 func allSwitchSubcommands() []string {
 	result := make([]string, 0, len(switchSubcommandStrings))
 	for _, v := range switchSubcommandStrings {

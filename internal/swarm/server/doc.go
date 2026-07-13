@@ -13,7 +13,7 @@
 //	├── handle_session.go      # Session 管理 handler（list/create/delete/rename/switch/rewind/fork）
 //	├── handle_command.go      # Command 系列 handler（add_dir/chrome/compact/context/recap/diff/model/mcp/sandbox/resume/session/status）
 //	├── handle_team.go         # Team handler（delete/snapshot/history_get）
-//	├── handle_history.go      # History handler（history_get 含分页）
+//	├── handle_history.go      # History handler（history_get 非流式/流式、过滤、分页）
 //	├── handle_permissions.go  # Permissions handler（tools/rules/approval_overrides 二次分发）
 //	├── handle_agents.go       # Agents handler（list/get/create/update/delete/enable/disable/tools_list）
 //	├── handle_extensions.go   # Extensions + Hooks handler（list/import/delete/toggle/hooks_list）

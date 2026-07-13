@@ -14,6 +14,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
@@ -29,6 +31,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -174,7 +177,7 @@ type DeepAdapter struct {
 	imageGenToolRegistered bool
 	// skillManager 技能管理器
 	// ⤵️ 10.3.19-20
-	skillManager interface{}
+	skillManager *skill.SkillManager
 	// a2xClient A2X 客户端
 	// ⤵️ A2X / 11.10
 	a2xClient interface{}
@@ -229,6 +232,12 @@ var persistentCheckpointerReady bool
 var persistentCheckpointerLock sync.Mutex
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetSkillManager 设置技能管理器。
+// 对齐 Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
+func (d *DeepAdapter) SetSkillManager(skillMgr *skill.SkillManager) {
+	d.skillManager = skillMgr
+}
 
 // NewDeepAdapter 创建 DeepAdapter 实例。
 //
@@ -383,18 +392,21 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		agentschema.WithAgentID("jiuwenswarm"),
 	)
 
-	// 步骤 15: tool_cards = _get_tool_cards(agent_card.id)
-	// ⤵️ agentcore: _get_tool_cards 需要实例化后获取，暂用空列表
-	var toolCards []*tool.ToolCard // ⤵️ agentcore: _get_tool_cards(agentCard.ID)
+	// 步骤 15: tool_cards = await self._get_tool_cards(agent_card.id)
+	// 对齐 Python: tool_cards = await self._get_tool_cards(agent_card.id)
+	toolCards := d.getToolCards(agentCard.ID)
 
 	// 步骤 16: rails_list = _build_agent_rails(config, configBase, mode=mode)
 	railsList := d.buildAgentRails(config, configBase, mode)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
-	sysOp, _ := d.createSysOperation(configBase)
+	// 对齐 Python: sys_operation = self._create_sys_operation()
+	sysOpInstance, _ := d.createSysOperation(configBase)
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
 	// ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
+	// 依赖 build_research_agent_config / build_browser_agent_config / _load_custom_subagents 等 builder 函数
+	// 当前使用简化逻辑，仅判断 should_add_general_agent
 	shouldEnableGeneralAgent := (subMode == "plan") || (mode != "" && strings.HasPrefix(mode, "agent"))
 
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
@@ -422,9 +434,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
 	}
 	// 步骤 17 回填：SysOperation
-	if sysOp != nil {
-		params.SysOperation = sysOp
-	}
+	params.SysOperation = sysOpInstance
 
 	agent, createErr := harness.CreateDeepAgent(ctx, params)
 	if createErr != nil {
@@ -555,8 +565,10 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// ⤵️ agentcore: _sync_multimodal_tools_for_runtime()
 	// ⤵️ agentcore: _sync_paid_search_tool_for_runtime()
 
-	// 步骤 9: _get_tool_cards("jiuwenswarm")
-	// ⤵️ agentcore: _get_tool_cards("jiuwenswarm") — 需要实例化后获取
+	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
+	// 对齐 Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
+	newToolCards := d.getToolCards("jiuwenswarm")
+	_ = newToolCards // ⤵️ 10.6.3-10: configure(tools=new_tool_cards) 待回填
 
 	// 步骤 10: _update_permission_rail(configBase)
 	// ⤵️ 10.6.3-10: _update_permission_rail(configBase)
@@ -1002,13 +1014,26 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 
 	// 步骤 11: 构造响应
 	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})
+	payload := map[string]any{
+		"event_type": "chat.interrupt_result",
+		"intent":     intent,
+		"success":    true,
+		"message":    interruptMsg,
+	}
+
+	// 对齐 Python: payload["new_input"] = new_input（如果存在）
+	if newInput != nil {
+		payload["new_input"] = newInput
+	}
+
+	// ⤵️ 10.6.3-10: todos 和 cancelled_tools 依赖 StreamEventRail 实现
+	// if d.streamEventRail != nil {
+	//     payload["todos"] = ...
+	//     payload["cancelled_tools"] = ...
+	// }
+
 	return schema.NewAgentResponse(req.RequestID, req.ChannelID,
-		schema.WithPayload(map[string]any{
-			"event_type": "chat.interrupt_result",
-			"intent":     intent,
-			"success":    true,
-			"message":    interruptMsg,
-		}),
+		schema.WithPayload(payload),
 	), nil
 }
 
@@ -1738,11 +1763,27 @@ func (d *DeepAdapter) resolvePromptMode(configBase map[string]any) hschema.Promp
 }
 
 // buildAgentIdentityPrompt 构建 Agent 身份提示词。
-// 对齐 Python: build_agent_identity_prompt(language=self._resolve_prompt_language())
-// ⤵️ 10.6.1-2: 等 Prompt Builder 实现后回填
+// 对齐 Python: build_agent_identity_prompt(language=self._resolve_prompt_language()) (prompt_builder.py L248-259)
+//
+// Python 执行步骤：
+//
+//	1. resolved_language = resolve_language(language)
+//	2. builder = SystemPromptBuilder(language=resolved_language)
+//	3. builder.add_section(_identity_prompt(resolved_language))
+//	4. return builder.build()
 func (d *DeepAdapter) buildAgentIdentityPrompt(language string) string {
-	// ⤵️ 10.6.1-2: 完整的 agent_identity_prompt 构建
-	return ""
+	// 步骤 1: 对齐 Python: resolved_language = resolve_language(language)
+	resolvedLanguage := prompts.ResolveLanguage(language)
+
+	// 步骤 2: 对齐 Python: builder = SystemPromptBuilder(language=resolved_language)
+	// 使用 PromptModeNone，因为 build_agent_identity_prompt 只包含 identity 节
+	builder := prompts.NewSystemPromptBuilder(resolvedLanguage, hschema.PromptModeNone)
+
+	// 步骤 3: 对齐 Python: builder.add_section(_identity_prompt(resolved_language))
+	builder.AddSection(sections.BuildIdentitySection())
+
+	// 步骤 4: 对齐 Python: return builder.build()
+	return builder.Build()
 }
 
 // makeDeepAgentConfig 构造 DeepAgentConfig 用于热重载。

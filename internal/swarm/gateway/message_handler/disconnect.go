@@ -2,6 +2,7 @@ package message_handler
 
 import (
 	"context"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
@@ -19,29 +20,37 @@ func (mh *MessageHandler) CancelAgentSessionsOnDisconnect(ctx context.Context, s
 		return
 	}
 
+	// 对齐 Python cancel_agent_sessions_on_disconnect (L530-573):
+	// seen set 去重，避免重复取消同一 session
+	seen := make(map[string]struct{})
 	for _, key := range sessionKeys {
 		channelID := key[0]
 		sessionID := key[1]
-		if sessionID == "" {
+		sid := strings.TrimSpace(sessionID)
+		if sid == "" {
 			continue
 		}
+		if _, ok := seen[sid]; ok {
+			continue // 对齐 Python: sid in seen → continue
+		}
+		seen[sid] = struct{}{}
 
 		// 构造 cancel 消息（注入 channel mode）
 		cancelMsg := &schema.Message{
-			ID:        sessionID,
+			ID:        sid,
 			Type:      schema.MessageTypeReq,
 			ChannelID: channelID,
-			SessionID: sessionID,
+			SessionID: sid,
 			ReqMethod: schema.ReqMethodChatCancel,
 			OK:        true,
 		}
 
-		mh.CancelAgentWorkForSession(ctx, cancelMsg, sessionID, true)
+		mh.CancelAgentWorkForSession(ctx, cancelMsg, sid, true)
 
 		logger.Info(logComponent).
 			Str("event_type", "session_cancelled_on_disconnect").
 			Str("channel_id", channelID).
-			Str("session_id", sessionID).
+			Str("session_id", sid).
 			Msg("断连取消 session 任务")
 	}
 }

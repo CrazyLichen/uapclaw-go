@@ -13,7 +13,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// eventHistoryEntry 事件历史记录条目
 type eventHistoryEntry struct {
 	// Event 事件名
 	Event string
@@ -23,31 +22,6 @@ type eventHistoryEntry struct {
 	Data any
 }
 
-// CallbackFramework 回调框架，事件注册与触发的核心结构。
-//
-// 统一管理 LLM、Tool、Session 和自定义事件的注册与触发。
-// 2.14 节仅实现最小子集：OnLLM/OffLLM/TriggerLLM、OnTool/OffTool/TriggerTool。
-// 5.3 节扩展：OnSession/OffSession/TriggerSession。
-// SW-31/32/33 扩展：OnCustom/OffCustom/OffAllCustom/TriggerCustom，支持动态事件名。
-// 完整能力（过滤器/熔断器/链式执行/transform_io）在 6.24 节实现。
-//
-// 设计差异（Python decorator vs Go 调用处直接触发）：
-//   - Python 的 emit_before/emit_after/emit_around/on_wrap/wrap 是装饰器模式，
-//     用 @语法隐式包装函数调用前后触发事件。
-//   - Go 不实现装饰器，事件触发逻辑直接扩展到各自的调用处
-//     （如 LLM 调用处显式调用 TriggerLLM，Tool 调用处显式调用 TriggerTool）。
-//   - Python 的 transform_io 装饰器同理，Go 用 RegisterLLMTransformIO + TransformLLMIOInput/Output
-//     方法级 API 在调用处显式调用，不使用装饰器包装。
-//
-// 对应 Python: openjiuwen/core/runner/callback/framework.py (AsyncCallbackFramework)
-// 命名区别：Go 为同步调用（无 async/await），去掉 Async 前缀。
-//
-// 自定义事件域与 LLM/Tool/Session 域的设计差异：
-//   - LLM/Tool/Session 域使用预定义枚举事件名和固定数据结构，适合框架内部生命周期事件
-//   - 自定义域使用自由字符串事件名和 map[string]any 数据，对应 Python 的 trigger(event, **kwargs)
-//   - Python 的 AsyncCallbackFramework 只有一个 _callbacks: Dict[str, List]，
-//     所有事件（包括 "abc-123write_stream" 这类动态事件名）共用同一注册表。
-//     Go 将其拆分为四个独立 map，自定义域承载动态事件名场景。
 type CallbackFramework struct {
 	// mu 并发读写锁
 	mu sync.RWMutex
@@ -109,7 +83,6 @@ type CallbackFramework struct {
 	enableMetrics bool
 }
 
-// llmTransformIOEntry LLM 层 TransformIO 注册条目
 type llmTransformIOEntry struct {
 	// inputFn 输入变换函数
 	inputFn TransformLLMIOInputFunc
@@ -117,7 +90,6 @@ type llmTransformIOEntry struct {
 	outputFn TransformLLMIOOutputFunc
 }
 
-// agentTransformIOEntry Agent 层 TransformIO 注册条目
 type agentTransformIOEntry struct {
 	// inputFn 输入变换函数
 	inputFn TransformAgentIOInputFunc
@@ -125,7 +97,6 @@ type agentTransformIOEntry struct {
 	outputFn TransformAgentIOOutputFunc
 }
 
-// toolTransformIOEntry Tool 层 TransformIO 注册条目
 type toolTransformIOEntry struct {
 	// inputFn 输入变换函数
 	inputFn TransformToolIOInputFunc
@@ -135,11 +106,21 @@ type toolTransformIOEntry struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// HookFunc 生命周期钩子函数类型
 type HookFunc func(ctx context.Context, event string, data any)
 
-// triggerStrategy 回调触发执行策略。
 type triggerStrategy int
+
+type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
+
+type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
+
+type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
+
+type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
+
+type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// strategyCollect 收集所有返回值，不中断（观测型）
@@ -148,30 +129,6 @@ const (
 	strategyAbortOnError
 )
 
-// LLMCallbackFunc LLM 回调函数类型。
-//
-// 回调函数接收 context 和事件数据，用于监听 LLM 调用生命周期事件。
-// 回调函数应为只读的（不应修改传入的数据），变换型回调在 6.24 节实现。
-type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
-
-// ToolCallbackFunc 工具回调函数类型。
-type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
-
-// SessionCallbackFunc Session 回调函数类型。
-type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
-
-// CustomCallbackFunc 自定义事件回调函数类型。
-//
-// 对应 Python: AsyncCallbackFramework.on(event, callback) 中的 callback。
-// Python 的回调通过 **kwargs 接收参数，Go 使用 map[string]any 传递。
-// 事件名由调用方自由构造（如 sessionID + "write_stream"），
-// 不受预定义枚举约束，适合 per-session 隔离等动态场景。
-type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
-
-// ContextCallbackFunc 上下文事件回调函数类型。
-type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
-
-// ──────────────────────────── 常量 ────────────────────────────
 const (
 	// maxEventHistory 事件历史记录最大条数
 	maxEventHistory = 1000
@@ -179,7 +136,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewCallbackFramework 创建回调框架实例。
 func NewCallbackFramework() *CallbackFramework {
 	fw := &CallbackFramework{
 		llmCallbacks:         make(map[LLMCallEventType][]*CallbackInfo[LLMCallbackFunc]),
@@ -209,11 +165,6 @@ func NewCallbackFramework() *CallbackFramework {
 	return fw
 }
 
-// OnLLM 注册 LLM 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行（Priority 降序，相同 Priority 按 CreatedAt 升序）。
-//
-// 对应 Python: AsyncCallbackFramework.on(event, callback)
 func (fw *CallbackFramework) OnLLM(event LLMCallEventType, fn LLMCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[LLMCallbackFunc]{
@@ -236,12 +187,6 @@ func (fw *CallbackFramework) OnLLM(event LLMCallEventType, fn LLMCallbackFunc, o
 	sortCallbacks(fw.llmCallbacks[event])
 }
 
-// OffLLM 注销 LLM 事件回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffLLM(event LLMCallEventType, fn LLMCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -259,11 +204,6 @@ func (fw *CallbackFramework) OffLLM(event LLMCallEventType, fn LLMCallbackFunc) 
 	}
 }
 
-// TriggerLLM 触发 LLM 事件，按优先级顺序调用所有回调，返回所有回调结果。
-//
-// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
-//
-// 对应 Python: AsyncCallbackFramework.trigger(event, *args, **kwargs) → List[Any]
 func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -279,7 +219,6 @@ func (fw *CallbackFramework) TriggerLLM(ctx context.Context, data *LLMCallEventD
 	return results
 }
 
-// OnTool 注册 Tool 事件回调函数。
 func (fw *CallbackFramework) OnTool(event ToolCallEventType, fn ToolCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[ToolCallbackFunc]{
@@ -302,12 +241,6 @@ func (fw *CallbackFramework) OnTool(event ToolCallEventType, fn ToolCallbackFunc
 	sortCallbacks(fw.toolCallbacks[event])
 }
 
-// OffTool 注销 Tool 事件回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffTool(event ToolCallEventType, fn ToolCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -325,7 +258,6 @@ func (fw *CallbackFramework) OffTool(event ToolCallEventType, fn ToolCallbackFun
 	}
 }
 
-// TriggerTool 触发 Tool 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -341,7 +273,6 @@ func (fw *CallbackFramework) TriggerTool(ctx context.Context, data *ToolCallEven
 	return results
 }
 
-// OnSession 注册 Session 事件回调函数。
 func (fw *CallbackFramework) OnSession(event SessionCallEventType, fn SessionCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[SessionCallbackFunc]{
@@ -364,12 +295,6 @@ func (fw *CallbackFramework) OnSession(event SessionCallEventType, fn SessionCal
 	sortCallbacks(fw.sessionCallbacks[event])
 }
 
-// OffSession 注销 Session 事件回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffSession(event SessionCallEventType, fn SessionCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -387,7 +312,6 @@ func (fw *CallbackFramework) OffSession(event SessionCallEventType, fn SessionCa
 	}
 }
 
-// TriggerSession 触发 Session 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -403,12 +327,6 @@ func (fw *CallbackFramework) TriggerSession(ctx context.Context, data *SessionCa
 	return results
 }
 
-// OnCustom 注册自定义事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
-// 事件名为自由字符串，不受预定义枚举约束。
-//
-// 对应 Python: AsyncCallbackFramework.on(event, callback)
 func (fw *CallbackFramework) OnCustom(event string, fn CustomCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[CustomCallbackFunc]{
@@ -431,12 +349,6 @@ func (fw *CallbackFramework) OnCustom(event string, fn CustomCallbackFunc, opts 
 	sortCallbacks(fw.customCallbacks[event])
 }
 
-// OffCustom 注销自定义事件的单个回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -454,17 +366,6 @@ func (fw *CallbackFramework) OffCustom(event string, fn CustomCallbackFunc) {
 	}
 }
 
-// OffAllCustom 注销指定自定义事件的全部回调。
-//
-// 清除该事件名下的所有回调函数，常用于 session 结束时清理 per-session 回调。
-// 与 OffCustom 不同：OffCustom 按指针移除单个回调，OffAllCustom 清除整个事件。
-//
-// 对应 Python: AsyncCallbackFramework.unregister_event(event)
-// OffAllCustom 注销自定义事件的所有回调，同时清理关联的过滤器、链、钩子和熔断器。
-//
-// 对应 Python: AsyncCallbackFramework.unregister_event(event)
-// Python 逻辑：清理 callbacks + callback_filters + circuit_breakers + chains + hooks + filters。
-// Go 之前只删除 callbacks，现已对齐 Python 全量清理。
 func (fw *CallbackFramework) OffAllCustom(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -484,12 +385,6 @@ func (fw *CallbackFramework) OffAllCustom(event string) {
 	}
 }
 
-// TriggerCustom 触发自定义事件，按优先级顺序调用所有回调，返回所有回调结果。
-//
-// 若 ctx 为 nil，直接返回 nil。
-// data 通过 map[string]any 传递，对应 Python 的 **kwargs。
-//
-// 对应 Python: await trigger(event, **kwargs)
 func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, data map[string]any) []any {
 	if ctx == nil {
 		return nil
@@ -505,18 +400,12 @@ func (fw *CallbackFramework) TriggerCustom(ctx context.Context, event string, da
 	return results
 }
 
-// GetCallbacksForTest 返回指定 LLM 事件的回调列表，仅供测试使用。
 func (fw *CallbackFramework) GetCallbacksForTest(event LLMCallEventType) []*CallbackInfo[LLMCallbackFunc] {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
 	return fw.llmCallbacks[event]
 }
 
-// OnContext 注册上下文事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
-//
-// 对应 Python: AsyncCallbackFramework.on(event, callback)
 func (fw *CallbackFramework) OnContext(event ContextCallEventType, fn ContextCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[ContextCallbackFunc]{
@@ -539,12 +428,6 @@ func (fw *CallbackFramework) OnContext(event ContextCallEventType, fn ContextCal
 	sortCallbacks(fw.contextCallbacks[event])
 }
 
-// OffContext 注销上下文事件回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffContext(event ContextCallEventType, fn ContextCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -562,11 +445,6 @@ func (fw *CallbackFramework) OffContext(event ContextCallEventType, fn ContextCa
 	}
 }
 
-// TriggerContext 触发上下文事件，按优先级顺序调用所有回调，返回所有回调结果。
-//
-// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
-//
-// 对应 Python: AsyncCallbackFramework.trigger(event, **kwargs) → List[Any]
 func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCallEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -582,11 +460,6 @@ func (fw *CallbackFramework) TriggerContext(ctx context.Context, data *ContextCa
 	return results
 }
 
-// OnGlobalAgent 注册 Agent 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
-//
-// 对应 Python: AsyncCallbackFramework.on(event, callback)
 func (fw *CallbackFramework) OnGlobalAgent(event GlobalAgentEventType, fn GlobalAgentCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[GlobalAgentCallbackFunc]{
@@ -609,12 +482,6 @@ func (fw *CallbackFramework) OnGlobalAgent(event GlobalAgentEventType, fn Global
 	sortCallbacks(fw.globalAgentCallbacks[event])
 }
 
-// OffGlobalAgent 注销 Agent 事件回调函数。
-//
-// 移除指定事件中与 fn 匹配的回调（按 info.Callback 的指针匹配）。
-// 若事件下无匹配回调，不做任何操作。
-//
-// 对应 Python: AsyncCallbackFramework.unregister(event, callback)
 func (fw *CallbackFramework) OffGlobalAgent(event GlobalAgentEventType, fn GlobalAgentCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -632,11 +499,6 @@ func (fw *CallbackFramework) OffGlobalAgent(event GlobalAgentEventType, fn Globa
 	}
 }
 
-// TriggerGlobalAgent 触发 Agent 事件，按优先级顺序调用所有回调，返回所有回调结果。
-//
-// 若 ctx 为 nil 或 data 为 nil，直接返回 nil。
-//
-// 对应 Python: AsyncCallbackFramework.trigger(event, **kwargs) → List[Any]
 func (fw *CallbackFramework) TriggerGlobalAgent(ctx context.Context, data *GlobalAgentEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -652,10 +514,6 @@ func (fw *CallbackFramework) TriggerGlobalAgent(ctx context.Context, data *Globa
 	return results
 }
 
-// OnPerAgent 注册实例级 PerAgent 回调。
-//
-// event 格式为 "{agentID}_{event}"（如 "agent1_before_model_call"），由 AgentCallbackManager 构造。
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnPerAgent(event string, fn PerAgentCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[PerAgentCallbackFunc]{
@@ -678,7 +536,6 @@ func (fw *CallbackFramework) OnPerAgent(event string, fn PerAgentCallbackFunc, o
 	sortCallbacks(fw.perAgentCallbacks[event])
 }
 
-// OffPerAgent 注销指定事件上的单个 PerAgent 回调（按 info.Callback 的指针匹配）。
 func (fw *CallbackFramework) OffPerAgent(event string, fn PerAgentCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -696,10 +553,6 @@ func (fw *CallbackFramework) OffPerAgent(event string, fn PerAgentCallbackFunc) 
 	}
 }
 
-// OffAllPerAgent 清除指定事件上的所有 PerAgent 回调。
-// OffAllPerAgent 注销 PerAgent 事件的所有回调，同时清理关联的过滤器、链、钩子和熔断器。
-//
-// 对应 Python: AsyncCallbackFramework.unregister_event(event)
 func (fw *CallbackFramework) OffAllPerAgent(event string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -719,10 +572,6 @@ func (fw *CallbackFramework) OffAllPerAgent(event string) {
 	}
 }
 
-// TriggerPerAgent 触发指定事件的所有 PerAgent 回调，按优先级顺序执行。
-//
-// agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext。
-// 任一回调返回 error 时停止后续执行并返回该 error。
 func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, agentCallbackContext any) error {
 	if ctx == nil {
 		return nil
@@ -738,7 +587,6 @@ func (fw *CallbackFramework) TriggerPerAgent(ctx context.Context, event string, 
 	return err
 }
 
-// HasPerAgentHooks 检查指定事件是否有已注册的 PerAgent 回调。
 func (fw *CallbackFramework) HasPerAgentHooks(event string) bool {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -746,11 +594,6 @@ func (fw *CallbackFramework) HasPerAgentHooks(event string) bool {
 	return ok && len(callbacks) > 0
 }
 
-// RegisterLLMTransformIO 注册 LLM 层 IO 变换回调。
-//
-// 对齐 Python: CallbackFramework.transform_io 注册机制。
-// inputFn 在 emit_before 前对输入做变换，outputFn 在 emit_after 前对输出做变换。
-// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
 func (fw *CallbackFramework) RegisterLLMTransformIO(
 	inputEvent LLMCallEventType,
 	outputEvent LLMCallEventType,
@@ -767,10 +610,6 @@ func (fw *CallbackFramework) RegisterLLMTransformIO(
 	fw.llmTransformIO[outputEvent] = entry
 }
 
-// TransformLLMIOInput 应用 LLM 层输入变换。
-//
-// 如果没有注册变换回调，返回原始输入（透传）。
-// 对齐 Python: transform_io 的 input_fn 在 emit_before 前执行。
 func (fw *CallbackFramework) TransformLLMIOInput(ctx context.Context, event LLMCallEventType, input any) any {
 	fw.mu.RLock()
 	entry, ok := fw.llmTransformIO[event]
@@ -781,10 +620,6 @@ func (fw *CallbackFramework) TransformLLMIOInput(ctx context.Context, event LLMC
 	return entry.inputFn(ctx, event, input)
 }
 
-// TransformLLMIOOutput 应用 LLM 层输出变换。
-//
-// 如果没有注册变换回调，返回原始输出（透传）。
-// 对齐 Python: transform_io 的 output_fn 在 emit_after 前执行。
 func (fw *CallbackFramework) TransformLLMIOOutput(ctx context.Context, event LLMCallEventType, output any) any {
 	fw.mu.RLock()
 	entry, ok := fw.llmTransformIO[event]
@@ -795,10 +630,6 @@ func (fw *CallbackFramework) TransformLLMIOOutput(ctx context.Context, event LLM
 	return entry.outputFn(ctx, event, output)
 }
 
-// RegisterAgentTransformIO 注册 Agent 层 IO 变换回调。
-//
-// 对齐 Python: CallbackFramework.transform_io 注册机制。
-// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
 func (fw *CallbackFramework) RegisterAgentTransformIO(
 	inputEvent GlobalAgentEventType,
 	outputEvent GlobalAgentEventType,
@@ -815,9 +646,6 @@ func (fw *CallbackFramework) RegisterAgentTransformIO(
 	fw.agentTransformIO[outputEvent] = entry
 }
 
-// TransformAgentIOInput 应用 Agent 层输入变换。
-//
-// 如果没有注册变换回调，返回原始输入（透传）。
 func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event GlobalAgentEventType, input any) any {
 	fw.mu.RLock()
 	entry, ok := fw.agentTransformIO[event]
@@ -828,9 +656,6 @@ func (fw *CallbackFramework) TransformAgentIOInput(ctx context.Context, event Gl
 	return entry.inputFn(ctx, event, input)
 }
 
-// TransformAgentIOOutput 应用 Agent 层输出变换。
-//
-// 如果没有注册变换回调，返回原始输出（透传）。
 func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event GlobalAgentEventType, output any) any {
 	fw.mu.RLock()
 	entry, ok := fw.agentTransformIO[event]
@@ -841,11 +666,6 @@ func (fw *CallbackFramework) TransformAgentIOOutput(ctx context.Context, event G
 	return entry.outputFn(ctx, event, output)
 }
 
-// RegisterToolTransformIO 注册 Tool 层 IO 变换回调。
-//
-// 对齐 Python: CallbackFramework.transform_io 注册机制。
-// inputFn 在 emit_before 前对输入做变换，outputFn 在 emit_after 前对输出做变换。
-// 同时用 inputEvent 和 outputEvent 作为 key 注册，确保通过任一事件都能查到 entry。
 func (fw *CallbackFramework) RegisterToolTransformIO(
 	inputEvent ToolCallEventType,
 	outputEvent ToolCallEventType,
@@ -862,10 +682,6 @@ func (fw *CallbackFramework) RegisterToolTransformIO(
 	fw.toolTransformIO[outputEvent] = entry
 }
 
-// TransformToolIOInput 应用 Tool 层输入变换。
-//
-// 如果没有注册变换回调，返回原始输入（透传）。
-// 对齐 Python: transform_io 的 input_fn 在 emit_before 前执行。
 func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any {
 	fw.mu.RLock()
 	entry, ok := fw.toolTransformIO[event]
@@ -876,10 +692,6 @@ func (fw *CallbackFramework) TransformToolIOInput(ctx context.Context, event Too
 	return entry.inputFn(ctx, event, input)
 }
 
-// TransformToolIOOutput 应用 Tool 层输出变换。
-//
-// 如果没有注册变换回调，返回原始输出（透传）。
-// 对齐 Python: transform_io 的 output_fn 在 emit_after 前执行。
 func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any {
 	fw.mu.RLock()
 	entry, ok := fw.toolTransformIO[event]
@@ -890,9 +702,6 @@ func (fw *CallbackFramework) TransformToolIOOutput(ctx context.Context, event To
 	return entry.outputFn(ctx, event, output)
 }
 
-// OnWorkflow 注册 Workflow 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[WorkflowCallbackFunc]{
@@ -915,7 +724,6 @@ func (fw *CallbackFramework) OnWorkflow(event WorkflowEventType, fn WorkflowCall
 	sortCallbacks(fw.workflowCallbacks[event])
 }
 
-// OffWorkflow 注销 Workflow 事件回调函数。
 func (fw *CallbackFramework) OffWorkflow(event WorkflowEventType, fn WorkflowCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -933,7 +741,6 @@ func (fw *CallbackFramework) OffWorkflow(event WorkflowEventType, fn WorkflowCal
 	}
 }
 
-// TriggerWorkflow 触发 Workflow 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerWorkflow(ctx context.Context, data *WorkflowEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -949,9 +756,6 @@ func (fw *CallbackFramework) TriggerWorkflow(ctx context.Context, data *Workflow
 	return results
 }
 
-// OnAgentTeam 注册 AgentTeam 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[AgentTeamCallbackFunc]{
@@ -974,7 +778,6 @@ func (fw *CallbackFramework) OnAgentTeam(event AgentTeamEventType, fn AgentTeamC
 	sortCallbacks(fw.agentTeamCallbacks[event])
 }
 
-// OffAgentTeam 注销 AgentTeam 事件回调函数。
 func (fw *CallbackFramework) OffAgentTeam(event AgentTeamEventType, fn AgentTeamCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -992,7 +795,6 @@ func (fw *CallbackFramework) OffAgentTeam(event AgentTeamEventType, fn AgentTeam
 	}
 }
 
-// TriggerAgentTeam 触发 AgentTeam 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerAgentTeam(ctx context.Context, data *AgentTeamEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -1008,9 +810,6 @@ func (fw *CallbackFramework) TriggerAgentTeam(ctx context.Context, data *AgentTe
 	return results
 }
 
-// OnRetrieval 注册 Retrieval 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[RetrievalCallbackFunc]{
@@ -1033,7 +832,6 @@ func (fw *CallbackFramework) OnRetrieval(event RetrievalEventType, fn RetrievalC
 	sortCallbacks(fw.retrievalCallbacks[event])
 }
 
-// OffRetrieval 注销 Retrieval 事件回调函数。
 func (fw *CallbackFramework) OffRetrieval(event RetrievalEventType, fn RetrievalCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1051,7 +849,6 @@ func (fw *CallbackFramework) OffRetrieval(event RetrievalEventType, fn Retrieval
 	}
 }
 
-// TriggerRetrieval 触发 Retrieval 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerRetrieval(ctx context.Context, data *RetrievalEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -1067,9 +864,6 @@ func (fw *CallbackFramework) TriggerRetrieval(ctx context.Context, data *Retriev
 	return results
 }
 
-// OnMemory 注册 Memory 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnMemory(event MemoryEventType, fn MemoryCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[MemoryCallbackFunc]{
@@ -1092,7 +886,6 @@ func (fw *CallbackFramework) OnMemory(event MemoryEventType, fn MemoryCallbackFu
 	sortCallbacks(fw.memoryCallbacks[event])
 }
 
-// OffMemory 注销 Memory 事件回调函数。
 func (fw *CallbackFramework) OffMemory(event MemoryEventType, fn MemoryCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1110,7 +903,6 @@ func (fw *CallbackFramework) OffMemory(event MemoryEventType, fn MemoryCallbackF
 	}
 }
 
-// TriggerMemory 触发 Memory 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerMemory(ctx context.Context, data *MemoryEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -1126,9 +918,6 @@ func (fw *CallbackFramework) TriggerMemory(ctx context.Context, data *MemoryEven
 	return results
 }
 
-// OnTaskManager 注册 TaskManager 事件回调函数。
-//
-// 同一事件可注册多个回调，按优先级排序执行。
 func (fw *CallbackFramework) OnTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc, opts ...CallbackOption) {
 	cfg := applyCallbackOptions(opts...)
 	info := &CallbackInfo[TaskManagerCallbackFunc]{
@@ -1151,7 +940,6 @@ func (fw *CallbackFramework) OnTaskManager(event TaskManagerEventType, fn TaskMa
 	sortCallbacks(fw.taskManagerCallbacks[event])
 }
 
-// OffTaskManager 注销 TaskManager 事件回调函数。
 func (fw *CallbackFramework) OffTaskManager(event TaskManagerEventType, fn TaskManagerCallbackFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1169,7 +957,6 @@ func (fw *CallbackFramework) OffTaskManager(event TaskManagerEventType, fn TaskM
 	}
 }
 
-// TriggerTaskManager 触发 TaskManager 事件，按优先级顺序调用所有回调，返回所有回调结果。
 func (fw *CallbackFramework) TriggerTaskManager(ctx context.Context, data *TaskManagerEventData) []any {
 	if ctx == nil || data == nil {
 		return nil
@@ -1185,25 +972,18 @@ func (fw *CallbackFramework) TriggerTaskManager(ctx context.Context, data *TaskM
 	return results
 }
 
-// AddFilter 添加事件级过滤器
 func (fw *CallbackFramework) AddFilter(event string, filter EventFilter) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.filters[event] = append(fw.filters[event], filter)
 }
 
-// AddGlobalFilter 添加全局过滤器
 func (fw *CallbackFramework) AddGlobalFilter(filter EventFilter) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.globalFilters = append(fw.globalFilters, filter)
 }
 
-// AddCircuitBreaker 添加熔断器，同时将熔断器注册为事件过滤器。
-//
-// 对应 Python: AsyncCallbackFramework.add_circuit_breaker(event, callback, ...)
-// Python 逻辑：创建 CircuitBreakerFilter 后同时调用 self.add_filter(event, breaker)，
-// 使熔断器在触发流程中生效。Go 之前遗漏了 add_filter 调用，现已对齐。
 func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failureThreshold int, timeout float64) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1214,7 +994,6 @@ func (fw *CallbackFramework) AddCircuitBreaker(event, callbackName string, failu
 	fw.filters[event] = append(fw.filters[event], breaker)
 }
 
-// AddHook 添加生命周期钩子
 func (fw *CallbackFramework) AddHook(event string, hookType HookType, hook HookFunc) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1224,7 +1003,6 @@ func (fw *CallbackFramework) AddHook(event string, hookType HookType, hook HookF
 	fw.hooks[event][hookType] = append(fw.hooks[event][hookType], hook)
 }
 
-// TriggerChain 链式触发
 func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, data any) *ChainResult {
 	fw.mu.RLock()
 	chain, ok := fw.chains[event]
@@ -1241,9 +1019,6 @@ func (fw *CallbackFramework) TriggerChain(ctx context.Context, event string, dat
 	return chain.Execute(ctx, cctx)
 }
 
-// TriggerParallel 并发触发，使用 errgroup 并行执行所有回调。
-//
-// 对应 Python: AsyncCallbackFramework.trigger_parallel(event, *args, **kwargs)
 func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, data map[string]any) []any {
 	fw.mu.RLock()
 	callbacks := fw.customCallbacks[event]
@@ -1323,17 +1098,6 @@ func (fw *CallbackFramework) TriggerParallel(ctx context.Context, event string, 
 	return results
 }
 
-// TriggerUntil 触发回调直到条件满足。
-//
-// 按优先级顺序遍历注册在 event 上的回调，对每个回调依次执行：
-//  1. 跳过 enabled=false 或 callbackType="transform" 的回调
-//  2. 应用过滤器管线（全局→事件→回调级），STOP 终止循环，SKIP 跳过当前回调，MODIFY 使用修改后数据
-//  3. 执行回调
-//  4. 检查 condition(result)，满足则处理 once 后返回 result
-//  5. 不满足则处理 once 后继续下一个回调
-//  6. 异常时记录 ERROR 钩子并继续
-//
-// 对应 Python: AsyncCallbackFramework.trigger_until(event, condition, *args, **kwargs)
 func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, condition func(any) bool, data map[string]any) any {
 	fw.mu.RLock()
 	callbacks := fw.customCallbacks[event]
@@ -1389,7 +1153,6 @@ func (fw *CallbackFramework) TriggerUntil(ctx context.Context, event string, con
 	return nil
 }
 
-// TriggerWithTimeout 带总超时的触发
 func (fw *CallbackFramework) TriggerWithTimeout(ctx context.Context, event string, timeout float64, data map[string]any) ([]any, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout*float64(time.Second)))
 	defer cancel()
@@ -1403,7 +1166,6 @@ func (fw *CallbackFramework) TriggerWithTimeout(ctx context.Context, event strin
 	)
 }
 
-// GetMetrics 查询指标
 func (fw *CallbackFramework) GetMetrics(event, callbackName string) *CallbackMetrics {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1411,14 +1173,12 @@ func (fw *CallbackFramework) GetMetrics(event, callbackName string) *CallbackMet
 	return fw.metrics[key]
 }
 
-// ResetMetrics 重置指标
 func (fw *CallbackFramework) ResetMetrics() {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.metrics = make(map[string]*CallbackMetrics)
 }
 
-// GetSlowCallbacks 查询慢回调
 func (fw *CallbackFramework) GetSlowCallbacks(threshold float64) map[string]*CallbackMetrics {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1431,23 +1191,18 @@ func (fw *CallbackFramework) GetSlowCallbacks(threshold float64) map[string]*Cal
 	return result
 }
 
-// EnableMetrics 开关指标记录
 func (fw *CallbackFramework) EnableMetrics(enabled bool) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.enableMetrics = enabled
 }
 
-// EnableEventHistory 开关事件历史
 func (fw *CallbackFramework) EnableEventHistory(enabled bool) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	fw.enableEventHistory = enabled
 }
 
-// GetEventHistory 获取事件历史记录，支持按事件名和时间过滤。
-//
-// 对应 Python: AsyncCallbackFramework.get_event_history(event=None, since=None)
 func (fw *CallbackFramework) GetEventHistory(event string, since time.Time) []eventHistoryEntry {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1465,9 +1220,6 @@ func (fw *CallbackFramework) GetEventHistory(event string, since time.Time) []ev
 	return result
 }
 
-// ReplayEvents 回放历史事件，对每条历史记录重新触发。
-//
-// 对应 Python: AsyncCallbackFramework.replay_events(since=None)
 func (fw *CallbackFramework) ReplayEvents(ctx context.Context, since time.Time) {
 	history := fw.GetEventHistory("", since)
 	for _, entry := range history {
@@ -1479,7 +1231,6 @@ func (fw *CallbackFramework) ReplayEvents(ctx context.Context, since time.Time) 
 	}
 }
 
-// GetStatistics 框架统计信息
 func (fw *CallbackFramework) GetStatistics() map[string]any {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1509,9 +1260,6 @@ func (fw *CallbackFramework) GetStatistics() map[string]any {
 	}
 }
 
-// TriggerDelayed 延迟触发事件。
-//
-// 对应 Python: AsyncCallbackFramework.trigger_delayed(event, delay, *args, **kwargs)
 func (fw *CallbackFramework) TriggerDelayed(ctx context.Context, event string, data map[string]any, delay time.Duration) {
 	go func() {
 		time.Sleep(delay)
@@ -1519,9 +1267,6 @@ func (fw *CallbackFramework) TriggerDelayed(ctx context.Context, event string, d
 	}()
 }
 
-// UnregisterNamespace 注销指定命名空间下的所有回调。
-//
-// 对应 Python: AsyncCallbackFramework.unregister_namespace(namespace)
 func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1562,9 +1307,6 @@ func (fw *CallbackFramework) UnregisterNamespace(namespace string) {
 	}
 }
 
-// UnregisterByTags 注销包含任一指定标签的所有回调。
-//
-// 对应 Python: AsyncCallbackFramework.unregister_by_tags(event, tags)
 func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1591,9 +1333,6 @@ func (fw *CallbackFramework) UnregisterByTags(event string, tags []string) {
 	}
 }
 
-// ListEvents 列出所有已注册事件名。
-//
-// 对应 Python: AsyncCallbackFramework.list_events(namespace=None)
 func (fw *CallbackFramework) ListEvents(namespace string) []string {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1614,9 +1353,6 @@ func (fw *CallbackFramework) ListEvents(namespace string) []string {
 	return result
 }
 
-// ListCallbacks 列出指定事件的回调信息。
-//
-// 对应 Python: AsyncCallbackFramework.list_callbacks(event)
 func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
 	fw.mu.RLock()
 	defer fw.mu.RUnlock()
@@ -1636,9 +1372,6 @@ func (fw *CallbackFramework) ListCallbacks(event string) []map[string]any {
 	return result
 }
 
-// OnChain 注册链式回调，自动创建 CallbackChain。
-//
-// 对应 Python: AsyncCallbackFramework.on_chain(event, rollback_handler=, error_handler=)
 func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler any) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -1649,22 +1382,6 @@ func (fw *CallbackFramework) OnChain(event string, rollbackHandler, errorHandler
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ⤵️ 预留：trigger_stream / trigger_generator 需要基于 channel 的流式触发模式。
-// Python 中 trigger_stream 对异步输入流的每一项触发事件，trigger_generator 聚合异步生成器输出。
-// Go 等价实现需使用 channel 模式，等有实际流式调用场景时再实现。
-// 对应 Python: AsyncCallbackFramework.trigger_stream() / trigger_generator()
-
-// triggerCallbacks 泛型触发核心逻辑（包级独立函数，因 Go 不支持方法类型参数）。
-//
-// 参数：
-//   - callbacksMap: 事件→回调列表的映射
-//   - event: 事件键（枚举或字符串）
-//   - data: 事件数据
-//   - ctx: 上下文
-//   - mu: 并发读写锁
-//   - strategy: 执行策略（strategyCollect 或 strategyAbortOnError）
-//   - execute: 执行单个回调的闭包，返回 (result, error)
-//   - fw: 框架实例，用于访问钩子/过滤器/指标/熔断器
 func triggerCallbacks[F any, E comparable, D any](
 	callbacksMap map[E][]*CallbackInfo[F],
 	event E,
@@ -1858,7 +1575,6 @@ func triggerCallbacks[F any, E comparable, D any](
 	return results, nil
 }
 
-// executeHooks 执行生命周期钩子
 func (fw *CallbackFramework) executeHooks(ctx context.Context, event string, hookType HookType, data any) {
 	fw.mu.RLock()
 	hookTypes, ok := fw.hooks[event]
@@ -1881,7 +1597,6 @@ func (fw *CallbackFramework) executeHooks(ctx context.Context, event string, hoo
 	}
 }
 
-// applyFilters 应用三级过滤器管线（全局 → 事件 → 回调级）
 func (fw *CallbackFramework) applyFilters(ctx context.Context, event string, info any, data any) FilterResult {
 	callbackName := getCallbackNameFromAny(info)
 
@@ -1922,7 +1637,6 @@ func (fw *CallbackFramework) applyFilters(ctx context.Context, event string, inf
 	return FilterResult{Action: FilterActionContinue}
 }
 
-// updateMetrics 更新执行指标
 func (fw *CallbackFramework) updateMetrics(key string, executionTime float64, isError bool) {
 	fw.mu.Lock()
 	m, ok := fw.metrics[key]
@@ -1934,17 +1648,14 @@ func (fw *CallbackFramework) updateMetrics(key string, executionTime float64, is
 	m.Update(executionTime, isError)
 }
 
-// getCallbackName 从 CallbackInfo 获取回调函数名（用于指标 key）
 func getCallbackName[F any](info *CallbackInfo[F]) string {
 	return fmt.Sprintf("%T", info.Callback)
 }
 
-// getCallbackNameFromAny 从任意 CallbackInfo 获取回调函数名
 func getCallbackNameFromAny(info any) string {
 	return fmt.Sprintf("%T", info)
 }
 
-// splitCircuitBreakerKey 拆分熔断器键为 event 和 callbackName
 func splitCircuitBreakerKey(key string) [2]string {
 	for i := len(key) - 1; i >= 0; i-- {
 		if key[i] == ':' {

@@ -38,11 +38,6 @@ type FsOperation interface {
 	ListTools() []*tool.ToolCard
 }
 
-// FsOption 文件系统操作选项函数
-type FsOption func(*FsOptions)
-
-// FsOptions 文件系统操作选项。
-// 对齐 Python 所有 fs 方法签名的参数并集。
 type FsOptions struct {
 	// Mode 读取/写入模式：text / bytes
 	Mode string
@@ -96,10 +91,13 @@ type FsOptions struct {
 	Options map[string]any
 }
 
-// BaseFsOperation FsOperation 的空操作桩实现
 type BaseFsOperation struct {
 	BaseOperation
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type FsOption func(*FsOptions)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -122,7 +120,6 @@ const (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewFsOptions 从选项列表构造 FsOptions
 func NewFsOptions(opts ...FsOption) *FsOptions {
 	o := &FsOptions{
 		Mode:             "text",
@@ -139,160 +136,128 @@ func NewFsOptions(opts ...FsOption) *FsOptions {
 	return o
 }
 
-// WithFsMode 设置文件系统操作读取模式
 func WithFsMode(mode string) FsOption {
 	return func(o *FsOptions) { o.Mode = mode }
 }
 
-// WithFsHead 设置文件系统操作头部行数
 func WithFsHead(head int) FsOption {
 	return func(o *FsOptions) { o.Head = head }
 }
 
-// WithFsTail 设置文件系统操作尾部行数
 func WithFsTail(tail int) FsOption {
 	return func(o *FsOptions) { o.Tail = tail }
 }
 
-// WithFsEncoding 设置文件系统操作编码
 func WithFsEncoding(encoding string) FsOption {
 	return func(o *FsOptions) { o.Encoding = encoding }
 }
 
-// WithFsChunkSize 设置块大小
 func WithFsChunkSize(chunkSize int) FsOption {
 	return func(o *FsOptions) { o.ChunkSize = chunkSize }
 }
 
-// WithFsLineRange 设置行范围
 func WithFsLineRange(start, end int) FsOption {
 	return func(o *FsOptions) { o.LineRange = [2]int{start, end} }
 }
 
-// WithFsPrependNewline 设置写入前添加换行符
 func WithFsPrependNewline(v bool) FsOption {
 	return func(o *FsOptions) { o.PrependNewline = &v }
 }
 
-// WithFsAppendNewline 设置写入后添加换行符
 func WithFsAppendNewline(v bool) FsOption {
 	return func(o *FsOptions) { o.AppendNewline = &v }
 }
 
-// WithFsAppend 设置追加写入
 func WithFsAppend(append bool) FsOption {
 	return func(o *FsOptions) { o.Append = append }
 }
 
-// WithFsCreateIfNotExist 设置不存在时自动创建
 func WithFsCreateIfNotExist(create bool) FsOption {
 	return func(o *FsOptions) { o.CreateIfNotExist = create }
 }
 
-// WithFsPermissions 设置文件权限
 func WithFsPermissions(perm string) FsOption {
 	return func(o *FsOptions) { o.Permissions = perm }
 }
 
-// WithFsOverwrite 设置覆盖已存在文件
 func WithFsOverwrite(overwrite bool) FsOption {
 	return func(o *FsOptions) { o.Overwrite = overwrite }
 }
 
-// WithFsCreateParentDirs 设置自动创建父目录
 func WithFsCreateParentDirs(create bool) FsOption {
 	return func(o *FsOptions) { o.CreateParentDirs = create }
 }
 
-// WithFsPreservePerms 设置保留文件权限
 func WithFsPreservePerms(preserve bool) FsOption {
 	return func(o *FsOptions) { o.PreservePerms = preserve }
 }
 
-// WithFsRecursive 设置递归遍历
 func WithFsRecursive(recursive bool) FsOption {
 	return func(o *FsOptions) { o.Recursive = recursive }
 }
 
-// WithFsMaxDepth 设置最大递归深度
 func WithFsMaxDepth(maxDepth int) FsOption {
 	return func(o *FsOptions) { o.MaxDepth = maxDepth }
 }
 
-// WithFsSortBy 设置排序字段
 func WithFsSortBy(sortBy string) FsOption {
 	return func(o *FsOptions) { o.SortBy = sortBy }
 }
 
-// WithFsSortDescending 设置降序排序
 func WithFsSortDescending(desc bool) FsOption {
 	return func(o *FsOptions) { o.SortDescending = desc }
 }
 
-// WithFsFileTypes 设置文件类型过滤
 func WithFsFileTypes(fileTypes []string) FsOption {
 	return func(o *FsOptions) { o.FileTypes = fileTypes }
 }
 
-// WithFsExcludePatterns 设置排除模式
 func WithFsExcludePatterns(patterns []string) FsOption {
 	return func(o *FsOptions) { o.ExcludePatterns = patterns }
 }
 
-// WithFsOptions 设置扩展配置选项
 func WithFsOptions(options map[string]any) FsOption {
 	return func(o *FsOptions) { o.Options = options }
 }
 
-// ReadFile 读取文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) ReadFile(_ context.Context, _ string, _ ...FsOption) (*result.ReadFileResult, error) {
 	return nil, fmt.Errorf("未实现: ReadFile")
 }
 
-// ReadFileStream 流式读取文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) ReadFileStream(_ context.Context, _ string, _ ...FsOption) (<-chan result.ReadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: ReadFileStream")
 }
 
-// WriteFile 写入文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) WriteFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.WriteFileResult, error) {
 	return nil, fmt.Errorf("未实现: WriteFile")
 }
 
-// UploadFile 上传文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) UploadFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.UploadFileResult, error) {
 	return nil, fmt.Errorf("未实现: UploadFile")
 }
 
-// UploadFileStream 流式上传文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) UploadFileStream(_ context.Context, _ string, _ string, _ ...FsOption) (<-chan result.UploadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: UploadFileStream")
 }
 
-// DownloadFile 下载文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ ...FsOption) (*result.DownloadFileResult, error) {
 	return nil, fmt.Errorf("未实现: DownloadFile")
 }
 
-// DownloadFileStream 流式下载文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	return nil, fmt.Errorf("未实现: DownloadFileStream")
 }
 
-// ListFiles 列出文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) ListFiles(_ context.Context, _ string, _ ...FsOption) (*result.ListFilesResult, error) {
 	return nil, fmt.Errorf("未实现: ListFiles")
 }
 
-// ListDirectories 列出目录（BaseFsOperation 空实现）
 func (b *BaseFsOperation) ListDirectories(_ context.Context, _ string, _ ...FsOption) (*result.ListDirsResult, error) {
 	return nil, fmt.Errorf("未实现: ListDirectories")
 }
 
-// SearchFiles 搜索文件（BaseFsOperation 空实现）
 func (b *BaseFsOperation) SearchFiles(_ context.Context, _ string, _ string, _ ...FsOption) (*result.SearchFilesResult, error) {
 	return nil, fmt.Errorf("未实现: SearchFiles")
 }
 
-// ListTools 返回工具卡片列表（BaseFsOperation 空实现）
 func (b *BaseFsOperation) ListTools() []*tool.ToolCard { return nil }
