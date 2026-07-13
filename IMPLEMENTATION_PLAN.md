@@ -604,7 +604,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **9.x 自演化系统** | — | | | |
 | 9.70a | ☐ | Operator 基础接口 | Operator 抽象接口（operator_id/get_tunables/get_state/load_state/set_parameter/apply_update）+ LLMCallOperator + ToolCallOperator + MemoryCallOperator + SkillExperienceOperator | `openjiuwen/core/operator/` |
 | 9.70b | ☐ | Dataset + Constant | Case/EvaluatedCase/CaseLoader + TuneConstant 默认超参 | `openjiuwen/agent_evolving/dataset/` · `constant.py` |
-| 9.70 | ☐ | Trainer | 训练器（离线演化编排：evaluate→update→writeback 循环 + 断点续训 + 早停） | `openjiuwen/agent_evolving/trainer/` |
+| 9.70 | ✅ | Trainer | 训练器（离线演化编排：evaluate→update→writeback 循环 + 断点续训 + 早停）纯接口桩骨架，依赖 any 占位 | `openjiuwen/agent_evolving/trainer/` |
 | 9.70c | ☐ | Updater Protocol | Updater 协议接口（bind/requires_forward_data/update/process/get_state/load_state）+ SingleDimUpdater + MultiDimUpdater | `openjiuwen/agent_evolving/updater/` |
 | 9.71 | ☐ | BaseEvaluator | 评估器 + MetricEvaluator + DefaultEvaluator + metrics（ExactMatch/LLMAsJudge）+ evaluator_pipeline | `openjiuwen/agent_evolving/evaluator/` |
 | 9.72a | ☐ | InstructionOptimizer | 指令优化器（LLM prompt 文本梯度优化） | `openjiuwen/agent_evolving/optimizer/llm_call/` |
