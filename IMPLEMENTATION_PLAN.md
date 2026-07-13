@@ -563,7 +563,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.16 | ✅ | McpRail | MCP 工具管理 | `openjiuwen/harness/rails/` |
 | 9.17 | ☐ | LSPRail | LSP 集成 | `openjiuwen/harness/lsp/` |
 | 9.18 | ✅ | SysOperationRail | 系统操作管理 | `openjiuwen/harness/rails/` |
-| 9.19-24 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(☐)/Memory(☐)/Evolution(☐) Rails | `openjiuwen/harness/rails/` |
+| 9.19-23 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(☐)/Memory(☐) Rails | `openjiuwen/harness/rails/` |
+| 9.24 | ☐ | EvolutionRail | SkillEvolutionRail（after_invoke 触发在线自演化）/ EvolutionRail 基类 / ContextEvolutionRail / TrajectoryRail / ApprovalRuntime / SkillEvolutionSharing / TeamSkillEvolutionRail | `openjiuwen/harness/rails/evolution/` |
 | **9.x 子 Agent** | — | | | |
 | 9.25 | 🔄 | ResearchAgent | 研究子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
 | 9.26 | 🔄 | BrowserAgent | 浏览器子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
@@ -601,12 +602,22 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.67 | ☐ | Team Observability | OpenTelemetry 集成 | `openjiuwen/agent_teams/observability/` |
 | 9.68-69 | ☐ | Team Rails / Prompts | 团队级 Rails / 提示词 | `openjiuwen/agent_teams/rails/` · `prompts/` |
 | **9.x 自演化系统** | — | | | |
-| 9.70 | ☐ | Trainer | 训练器 | `openjiuwen/agent_evolving/trainer/` |
-| 9.71 | ☐ | BaseEvaluator | 评估器 | `openjiuwen/agent_evolving/evaluator/` |
-| 9.72 | ☐ | InstructionOptimizer | 指令优化器 | `openjiuwen/agent_evolving/optimizer/` |
-| 9.73 | ☐ | SignalDetector | 信号检测 | `openjiuwen/agent_evolving/signal/` |
+| 9.70a | ☐ | Operator 基础接口 | Operator 抽象接口（operator_id/get_tunables/get_state/load_state/set_parameter/apply_update）+ LLMCallOperator + ToolCallOperator + MemoryCallOperator + SkillExperienceOperator | `openjiuwen/core/operator/` |
+| 9.70b | ☐ | Dataset + Constant | Case/EvaluatedCase/CaseLoader + TuneConstant 默认超参 | `openjiuwen/agent_evolving/dataset/` · `constant.py` |
+| 9.70 | ☐ | Trainer | 训练器（离线演化编排：evaluate→update→writeback 循环 + 断点续训 + 早停） | `openjiuwen/agent_evolving/trainer/` |
+| 9.70c | ☐ | Updater Protocol | Updater 协议接口（bind/requires_forward_data/update/process/get_state/load_state）+ SingleDimUpdater + MultiDimUpdater | `openjiuwen/agent_evolving/updater/` |
+| 9.71 | ☐ | BaseEvaluator | 评估器 + MetricEvaluator + DefaultEvaluator + metrics（ExactMatch/LLMAsJudge）+ evaluator_pipeline | `openjiuwen/agent_evolving/evaluator/` |
+| 9.72a | ☐ | InstructionOptimizer | 指令优化器（LLM prompt 文本梯度优化） | `openjiuwen/agent_evolving/optimizer/llm_call/` |
+| 9.72b | ☐ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
+| 9.72c | ☐ | MemoryOptimizer | 记忆参数优化器 | `openjiuwen/agent_evolving/optimizer/memory_call/` |
+| 9.72d | ☐ | SkillExperienceOptimizer | 技能经验优化器（LLM 生成经验草稿→EvolutionRecord）+ TeamSkillExperienceOptimizer | `openjiuwen/agent_evolving/optimizer/skill_call/` |
+| 9.72e | ☐ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
+| 9.73 | ☐ | SignalDetector | 信号检测（ConversationSignalDetector/from_evaluated_case/团队信号） | `openjiuwen/agent_evolving/signal/` |
 | 9.74-76 | ☐ | RL 子系统 | OfflineRL/OnlineRL/RewardRegistry | `openjiuwen/agent_evolving/agent_rl/` |
-| 9.77-80 | ☐ | 演化支撑 | Trajectory/EvolveCheckpoint/Experience/UpdateExecution | `openjiuwen/agent_evolving/trajectory/` · `checkpointing/` · `experience/` · `update_execution.py` |
+| 9.77 | ☐ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator） | `openjiuwen/agent_evolving/trajectory/` |
+| 9.78 | ☐ | EvolveCheckpoint | CheckpointManager 协议 + DefaultCheckpointManager + EvolveCheckpoint 状态 + FileCheckpointStore + EvolutionStore（技能文件系统IO）+ StoreArchive/StoreProjection/StoreRecords/SkillPackage | `openjiuwen/agent_evolving/checkpointing/` |
+| 9.79 | ☐ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
+| 9.80 | ☐ | UpdateExecution + Types | UpdateValue/ApplyResult/normalize_updates + execute_updates/apply_updates/summarize_apply_results + protocols 常量 | `openjiuwen/agent_evolving/update_execution.py` · `types.py` · `protocols.py` |
 | **9.x 扩展系统** | — | | | |
 | 9.81 | ☐ | A2A 扩展 | A2AServer/A2AClient/A2ARemoteClient/A2AServerAdapter | `openjiuwen/extensions/a2a/` |
 | 9.82 | ☐ | Context Evolver | 自演化上下文（轨迹分析） | `openjiuwen/extensions/context_evolver/` |
