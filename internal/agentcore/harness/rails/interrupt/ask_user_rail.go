@@ -183,7 +183,17 @@ func (r *AskUserRail) resolveAskUserInterrupt(
 	toolCall *llmschema.ToolCall,
 	userInput any,
 	_ map[string]any,
-) InterruptDecision {
+) (decision InterruptDecision) {
+	// 对齐 Python try/except Exception：异常时回退到 interrupt
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Warn(askUserRailLogComponent).
+				Str("event_type", "ask_user_rail_resolve_interrupt").
+				Msgf("解析用户输入异常，回退到 interrupt: %v", rec)
+			decision = r.Interrupt(r.buildAskRequest(toolCall))
+		}
+	}()
+
 	// 无用户输入 → 中断
 	if userInput == nil {
 		return r.Interrupt(r.buildAskRequest(toolCall))

@@ -406,7 +406,9 @@ func (cm *ChannelManager) notifyCronDeliveryError(originalMsg *schema.Message, d
 		ChannelID: "web",
 		SessionID: originalMsg.SessionID,
 		Params:    json.RawMessage(`{}`),
+		Timestamp: schema.NowTimestamp(),
 		OK:        false,
+		EventType: schema.EventTypeChatError,
 		Payload: map[string]any{
 			"event_type": "chat.error",
 			"error":      errorText,

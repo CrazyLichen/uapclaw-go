@@ -220,6 +220,10 @@ func (uc *UapClaw) ProcessMessageStream(ctx context.Context, request *schema.Age
 		defer close(streamDone)
 		chunkCh, streamErr := a.ProcessMessageStreamImpl(ctx, request, inputs)
 		if streamErr != nil {
+			// 对齐 Python except asyncio.CancelledError：取消不作为错误
+			if streamErr == context.Canceled || streamErr == context.DeadlineExceeded {
+				return
+			}
 			outCh <- schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
 				map[string]any{"event_type": "chat.error", "error": streamErr.Error()},
 			)
@@ -552,6 +556,15 @@ func shouldRecordHistory(eventType string) bool {
 func (uc *UapClaw) handleSkillsRequest(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	if uc.skillManager == nil {
 		return nil, nil
+	}
+	// 对齐 Python：有 pending 的 skillnet_install 时，阻止其他 skills 操作
+	if uc.skillManager.HasPendingSkillnetInstall() {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithResponseOK(false),
+			schema.WithResponsePayload(map[string]any{
+				"error": "有 SkillNet 安装正在进行中，请等待完成后再操作",
+			}),
+		), nil
 	}
 	handler, ok := skill.SkillRoutes[request.ReqMethod]
 	if !ok {

@@ -397,8 +397,18 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 		sessionID = *request.SessionID
 	}
 
-	// 1. 取消流式 goroutine
-	s.cancelStreamTask(sessionID)
+	// 1. 取消流式 goroutine（对齐 Python：仅 cancel/supplement 时取消流式任务，pause/resume 不取消）
+	intent := "cancel"
+	var params map[string]any
+	if request.Params != nil {
+		_ = json.Unmarshal(request.Params, &params)
+	}
+	if i, ok := params["intent"].(string); ok && i != "" {
+		intent = i
+	}
+	if intent == "cancel" || intent == "supplement" {
+		s.cancelStreamTask(sessionID)
+	}
 
 	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
 	mode, subMode := applyResolvedModeToRequest(request)

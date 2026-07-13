@@ -100,6 +100,20 @@ func (sm *SkillManager) SetSkillnetInstallCompleteHook(hook func(ctx context.Con
 	sm.skillnetInstallCompleteHook = hook
 }
 
+// HasPendingSkillnetInstall 检查是否有 pending 的 SkillNet 安装任务。
+//
+// 对齐 Python: SkillManager 中检查 _skillnet_install_jobs 是否有 pending 状态的任务
+func (sm *SkillManager) HasPendingSkillnetInstall() bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	for _, job := range sm.skillnetInstallJobs {
+		if toString(job["status"]) == "pending" {
+			return true
+		}
+	}
+	return false
+}
+
 // HandleSkillsList 返回所有可用 skill（本地 + marketplace 中未安装的）
 // 对应 Python: SkillManager.handle_skills_list(params)
 func (sm *SkillManager) HandleSkillsList(ctx context.Context, params map[string]any) (map[string]any, error) {
@@ -1163,6 +1177,10 @@ func (sm *SkillManager) addLocalSkill(skill map[string]any) {
 // normalizePlugin 规范化插件记录
 // 对应 Python: SkillManager._normalize_plugin(p)
 func (sm *SkillManager) normalizePlugin(p map[string]any) map[string]any {
+	// 对齐 Python _normalize_plugin：补全 enabled 字段
+	if _, ok := p["enabled"]; !ok {
+		p["enabled"] = true
+	}
 	return p
 }
 
@@ -1405,7 +1423,12 @@ func (sm *SkillManager) findSkillInDir(dir, name, marketplaceName string) (map[s
 				meta["is_builtin"] = false
 				meta["is_builtin_source"] = false
 			} else {
-				meta["source"] = sm.resolveSkillSource(name)
+				source := sm.resolveSkillSource(name)
+				meta["source"] = source
+				// 对齐 Python：根据 source 判断 is_builtin/is_builtin_source
+				isBuiltin := source == "builtin"
+				meta["is_builtin"] = isBuiltin
+				meta["is_builtin_source"] = isBuiltin
 			}
 			meta["has_evolutions"] = fileExists(filepath.Join(childPath, evolutionFilename))
 			meta["enabled"] = GetSkillEnabled(sm.state, name)

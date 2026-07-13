@@ -35,6 +35,10 @@ type SkillDevService struct {
 	mu sync.Mutex
 	// skilldevDeps 懒初始化的依赖（可为 nil，首次使用时通过 GetSkillDevDeps 初始化）
 	skilldevDeps *SkillDevDeps
+	// methodDispatch method → handler 映射，避免 if/elif 链。
+	//
+	// 对齐 Python: _METHOD_DISPATCH
+	methodDispatch map[schema.ReqMethod]methodHandler
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -44,11 +48,6 @@ type methodHandler func(ctx context.Context, params map[string]any, requestID st
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// methodDispatch method → handler 映射，避免 if/elif 链。
-//
-// 对齐 Python: _METHOD_DISPATCH
-var methodDispatch = map[schema.ReqMethod]methodHandler{}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillDevService 创建新的 SkillDevService 实例。
@@ -57,7 +56,7 @@ func NewSkillDevService(deps *SkillDevDeps) *SkillDevService {
 		deps: deps,
 	}
 	// 初始化方法分发表（需引用 svc 的方法）
-	methodDispatch = map[schema.ReqMethod]methodHandler{
+	svc.methodDispatch = map[schema.ReqMethod]methodHandler{
 		schema.ReqMethodSkilldevStart:    svc.handleStart,
 		schema.ReqMethodSkilldevRespond:  svc.handleRespond,
 		schema.ReqMethodSkilldevStatus:   svc.handleStatus,
@@ -93,7 +92,7 @@ func (s *SkillDevService) SetSkillDevDeps(deps *SkillDevDeps) {
 // 对齐 Python: SkillDevService.handle(request) → AsyncIterator[AgentResponseChunk]
 // Go 中改为返回 ([]map[string]any, error)（事件列表）。
 func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentRequest) ([]map[string]any, error) {
-	handler, ok := methodDispatch[request.ReqMethod]
+	handler, ok := s.methodDispatch[request.ReqMethod]
 	if !ok {
 		return []map[string]any{
 			errorChunk(request.RequestID, request.ChannelID, fmt.Sprintf("未知 method: %s", request.ReqMethod)),
@@ -159,10 +158,9 @@ func (s *SkillDevService) handleStart(ctx context.Context, params map[string]any
 
 	// 推送 suspended 事件
 	results = append(results, map[string]any{
-		"event_type":  "skilldev.suspended",
-		"task_id":     taskID,
-		"stage":       string(state.Stage),
-		"is_complete": true,
+		"event_type": "skilldev.suspended",
+		"task_id":    taskID,
+		"stage":      string(state.Stage),
 	})
 
 	return results, nil
@@ -213,10 +211,9 @@ func (s *SkillDevService) handleRespond(ctx context.Context, params map[string]a
 		finalEventType = "skilldev.completed"
 	}
 	results = append(results, map[string]any{
-		"event_type":  finalEventType,
-		"task_id":     taskID,
-		"stage":       string(state.Stage),
-		"is_complete": true,
+		"event_type": finalEventType,
+		"task_id":    taskID,
+		"stage":      string(state.Stage),
 	})
 
 	return results, nil
@@ -235,37 +232,33 @@ func (s *SkillDevService) handleStatus(_ context.Context, params map[string]any,
 		taskIDs, err := deps.StateStore.ListTasks()
 		if err != nil {
 			return []map[string]any{{
-				"ok":          false,
-				"error":       fmt.Sprintf("列出任务失败: %s", err),
-				"is_complete": true,
+				"ok":    false,
+				"error": fmt.Sprintf("列出任务失败: %s", err),
 			}}, nil
 		}
 		return []map[string]any{{
-			"ok":          true,
-			"tasks":       taskIDs,
-			"is_complete": true,
+			"ok":   true,
+			"tasks": taskIDs,
 		}}, nil
 	}
 
 	state, err := deps.StateStore.LoadState(taskID)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("加载状态失败: %s", err),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("加载状态失败: %s", err),
 		}}, nil
 	}
 
 	if state == nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("任务 %s 不存在", taskID),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("任务 %s 不存在", taskID),
 		}}, nil
 	}
 
 	statusDict := state.ToStatusDict()
-	result := map[string]any{"ok": true, "is_complete": true}
+	result := map[string]any{"ok": true}
 	for k, v := range statusDict {
 		result[k] = v
 	}
@@ -280,43 +273,38 @@ func (s *SkillDevService) handleDownload(_ context.Context, params map[string]an
 	taskID, _ := params["task_id"].(string)
 	if taskID == "" {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "缺少 task_id 参数",
-			"is_complete": true,
+			"ok":    false,
+			"error": "缺少 task_id 参数",
 		}}, nil
 	}
 
 	state, err := deps.StateStore.LoadState(taskID)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("加载状态失败: %s", err),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("加载状态失败: %s", err),
 		}}, nil
 	}
 	if state == nil || state.ZipPath == nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("任务 %s 尚未完成打包", taskID),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("任务 %s 尚未完成打包", taskID),
 		}}, nil
 	}
 
 	zipPath := *state.ZipPath
 	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "产物文件不存在",
-			"is_complete": true,
+			"ok":    false,
+			"error": "产物文件不存在",
 		}}, nil
 	}
 
 	raw, err := os.ReadFile(zipPath)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("读取产物失败: %s", err),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("读取产物失败: %s", err),
 		}}, nil
 	}
 	contentB64 := base64.StdEncoding.EncodeToString(raw)
@@ -326,7 +314,6 @@ func (s *SkillDevService) handleDownload(_ context.Context, params map[string]an
 		"filename":       filepath.Base(zipPath),
 		"content_base64": contentB64,
 		"size_bytes":     state.ZipSize,
-		"is_complete":    true,
 	}}, nil
 }
 
@@ -340,9 +327,8 @@ func (s *SkillDevService) handleCancel(_ context.Context, params map[string]any,
 		Str("task_id", taskID).
 		Msg("[SkillDevService] cancel 尚未实现")
 	return []map[string]any{{
-		"ok":          true,
-		"message":     "取消请求已接收（实现待完善）",
-		"is_complete": true,
+		"ok":      true,
+		"message": "取消请求已接收（实现待完善）",
 	}}, nil
 }
 
@@ -354,9 +340,8 @@ func (s *SkillDevService) handleFileList(_ context.Context, params map[string]an
 	taskID, _ := params["task_id"].(string)
 	if taskID == "" {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "缺少 task_id 参数",
-			"is_complete": true,
+			"ok":    false,
+			"error": "缺少 task_id 参数",
 		}}, nil
 	}
 
@@ -365,17 +350,15 @@ func (s *SkillDevService) handleFileList(_ context.Context, params map[string]an
 
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
 		return []map[string]any{{
-			"ok":          true,
-			"tree":        []any{},
-			"is_complete": true,
+			"ok":   true,
+			"tree": []any{},
 		}}, nil
 	}
 
 	tree := buildFileTree(skillDir, skillDir)
 	return []map[string]any{{
-		"ok":          true,
-		"tree":        tree,
-		"is_complete": true,
+		"ok":   true,
+		"tree": tree,
 	}}, nil
 }
 
@@ -388,9 +371,8 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 	filePath, _ := params["path"].(string)
 	if taskID == "" || filePath == "" {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "缺少 task_id 或 path 参数",
-			"is_complete": true,
+			"ok":    false,
+			"error": "缺少 task_id 或 path 参数",
 		}}, nil
 	}
 
@@ -402,42 +384,37 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 	resolvedPath, err := filepath.Abs(fullPath)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "路径解析失败",
-			"is_complete": true,
+			"ok":    false,
+			"error": "路径解析失败",
 		}}, nil
 	}
 	resolvedSkillDir, err := filepath.Abs(skillDir)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "工作区路径解析失败",
-			"is_complete": true,
+			"ok":    false,
+			"error": "工作区路径解析失败",
 		}}, nil
 	}
 	if !strings.HasPrefix(resolvedPath, resolvedSkillDir) {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       "路径非法：不能访问工作区外的文件",
-			"is_complete": true,
+			"ok":    false,
+			"error": "路径非法：不能访问工作区外的文件",
 		}}, nil
 	}
 
 	info, err := os.Stat(resolvedPath)
 	if err != nil || info.IsDir() {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("文件不存在: %s", filePath),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("文件不存在: %s", filePath),
 		}}, nil
 	}
 
 	data, err := os.ReadFile(resolvedPath)
 	if err != nil {
 		return []map[string]any{{
-			"ok":          false,
-			"error":       fmt.Sprintf("读取文件失败: %s", err),
-			"is_complete": true,
+			"ok":    false,
+			"error": fmt.Sprintf("读取文件失败: %s", err),
 		}}, nil
 	}
 
@@ -448,10 +425,9 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 	}
 
 	return []map[string]any{{
-		"ok":          true,
-		"path":        filePath,
-		"content":     content,
-		"is_complete": true,
+		"ok":      true,
+		"path":    filePath,
+		"content": content,
 	}}, nil
 }
 
@@ -473,11 +449,10 @@ func eventToPayload(evt SkillDevEvent) map[string]any {
 // 对齐 Python: SkillDevService._error_chunk()
 func errorChunk(requestID string, channelID string, message string) map[string]any {
 	return map[string]any{
-		"event_type":  "skilldev.error",
-		"error":       message,
-		"request_id":  requestID,
-		"channel_id":  channelID,
-		"is_complete": true,
+		"event_type": "skilldev.error",
+		"error":      message,
+		"request_id": requestID,
+		"channel_id": channelID,
 	}
 }
 

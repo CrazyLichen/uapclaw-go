@@ -34,6 +34,9 @@ type SkillDevPipeline struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// maxPipelineIterations Pipeline 最大迭代次数，防止无限循环
+const maxPipelineIterations = 20
+
 // stageHandlers 阶段→Handler 映射，对应 Python STAGE_HANDLERS。
 //
 // PLAN_CONFIRM / REVIEW / DESC_OPTIMIZE_CONFIRM 是挂起点，
@@ -66,7 +69,17 @@ func NewSkillDevPipeline(taskID string, state *SkillDevState, deps *SkillDevDeps
 // 对齐 Python: SkillDevPipeline.run() → AsyncIterator[SkillDevEvent]
 // Go 中改为返回 ([]SkillDevEvent, error)，因为 Go 没有 yield。
 func (p *SkillDevPipeline) Run(ctx context.Context) ([]SkillDevEvent, error) {
+	iterations := 0
 	for p.State.Stage != SkillDevStageCompleted && p.State.Stage != SkillDevStageError {
+		iterations++
+		if iterations > maxPipelineIterations {
+			errMsg := fmt.Sprintf("Pipeline 超过最大迭代次数 %d，可能存在无限循环", maxPipelineIterations)
+			p.State.Stage = SkillDevStageError
+			p.State.Error = &errMsg
+			p.emit(SkillDevEventTypeError, map[string]any{"message": errMsg})
+			_ = p.checkpoint()
+			break
+		}
 		// 命中挂起点：推送确认请求 → checkpoint → 暂停
 		if suspension, ok := SuspensionPoints[p.State.Stage]; ok {
 			p.emit(SkillDevEventTypeTodosUpdate, map[string]any{
