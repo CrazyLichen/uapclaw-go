@@ -339,10 +339,22 @@ func replaceTeamsInConfig(params map[string]any) error {
 	// team 数据
 	teamData, hasTeam := params["team"]
 	if hasTeam {
-		// 空数组：删除 modes.team
+		// 空数组：删除 modes.team（对齐 Python replace_teams_in_config L1017-1021）
 		if teamList, ok := teamData.([]any); ok && len(teamList) == 0 {
-			// TODO(⤵️ 配置): 实现 cfg.Delete("modes.team") 或等价逻辑
-			logger.Info(logComponentConfigApply).Msg("modes.team 空数组，待实现删除逻辑")
+			data, err := cfg.Load()
+			if err != nil {
+				return fmt.Errorf("加载配置失败: %w", err)
+			}
+			// 对齐 Python: if "modes" in data and isinstance(data["modes"], dict) and "team" in data["modes"]: del data["modes"]["team"]
+			if modes, ok := data["modes"].(map[string]any); ok {
+				if _, hasTeamKey := modes["team"]; hasTeamKey {
+					delete(modes, "team")
+					if err := cfg.Save(data); err != nil {
+						return fmt.Errorf("保存配置失败（删除 modes.team）: %w", err)
+					}
+					logger.Info(logComponentConfigApply).Msg("modes.team 空数组，已删除配置节点")
+				}
+			}
 			return nil
 		}
 		// 非空数组：写入 modes.team

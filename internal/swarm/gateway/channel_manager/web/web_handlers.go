@@ -37,21 +37,41 @@ type RPCDispatcher struct {
 	mu sync.RWMutex
 }
 
+// MessageHandler 消息处理器接口。
+//
+// 用于 connection.ack 等消息的推送，对齐 Python MessageHandler.publish_robot_messages。
+type MessageHandler interface {
+	// PublishRobotMessages 通过消息管道推送机器人消息
+	PublishRobotMessages(ctx context.Context, msg *schema.Message) error
+}
+
 // WebHandlersBindParams WebHandlers 绑定参数。
 //
 // 对齐 Python WebHandlersBindParams (app_web_handlers.py L512-522)，
-// 将 channel、agent_client、channel_manager、回调等统一注入。
+// 将 channel、agent_client、message_handler、channel_manager、回调等统一注入。
 type WebHandlersBindParams struct {
 	// Channel Web 通道实例
 	Channel *WebChannel
 	// AgentClient AgentServer 客户端，可为 nil
 	AgentClient *routing.AgentClient
+	// MessageHandler 消息处理器，用于 ack 优先路径，可为 nil
+	// 对齐 Python: bind.message_handler，优先用 mh.publish_robot_messages 发 ack
+	MessageHandler MessageHandler
 	// ChannelManager 通道管理器，可为 nil
 	ChannelManager *cm.ChannelManager
 	// OnConfigSaved 配置保存回调
 	OnConfigSaved OnConfigSavedFunc
 	// CryptoProvider 加密/解密提供者，可为 nil
 	CryptoProvider CryptoProvider
+	// HeartbeatService 心跳服务，可为 nil
+	// ⤵️ 11.15: GatewayHeartbeatService，注入后处理 heartbeat.get_conf / heartbeat.set_conf
+	HeartbeatService any
+	// CronController 定时任务控制器，可为 nil
+	// ⤵️ 11.16: CronController，注入后处理 schedule.* 方法
+	CronController any
+	// UpdaterService 更新服务，可为 nil
+	// ⤵️ 11.17: UpdaterService，注入后处理 update.* 方法
+	UpdaterService any
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -198,6 +218,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	var cryptoProv CryptoProvider
 	var channelMgr *cm.ChannelManager
 	var agentClient *routing.AgentClient
+	var messageHandler MessageHandler
 	var channel *WebChannel
 	if bind != nil {
 		if bind.Channel != nil {
@@ -208,6 +229,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		cryptoProv = bind.CryptoProvider
 		channelMgr = bind.ChannelManager
 		agentClient = bind.AgentClient
+		messageHandler = bind.MessageHandler
 	}
 
 	// ─── 本地实现方法 ───
@@ -400,13 +422,14 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	if channel != nil {
 		ch := channel // 捕获循环变量
 		ac := agentClient
+		mh := messageHandler
 		ch.OnConnect(func(_ *websocket.Conn) error {
 			// AgentClient 未就绪时跳过 ack（对齐 Python: 仅 debug 日志，不断开连接）
 			if ac == nil || !ac.ServerReady() {
 				logger.Debug(logComponent).Msg("AgentClient 未就绪，跳过 connection.ack")
 				return nil
 			}
-			// 构造 connection.ack 消息并通过 Channel.Send 推送（对齐 Python _on_connect）
+			// 构造 connection.ack 消息（对齐 Python _on_connect）
 			sid := MakeSessionID()
 			ackMsg := &schema.Message{
 				ID:        "ack-" + sid,
@@ -423,10 +446,16 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 				},
 				Timestamp: float64(time.Now().UnixMilli()) / 1000.0,
 			}
-			if err := ch.Send(context.Background(), ackMsg); err != nil {
-				logger.Warn(logComponent).
-					Err(err).
-					Msg("发送 connection.ack 失败")
+			// 对齐 Python L592-596: 优先用 mh.publish_robot_messages，否则 fallback channel.send
+			if mh != nil {
+				if err := mh.PublishRobotMessages(context.Background(), ackMsg); err != nil {
+					logger.Warn(logComponent).Err(err).Msg("MessageHandler.PublishRobotMessages 发送 connection.ack 失败，fallback channel.Send")
+					_ = ch.Send(context.Background(), ackMsg)
+				}
+			} else {
+				if err := ch.Send(context.Background(), ackMsg); err != nil {
+					logger.Warn(logComponent).Err(err).Msg("发送 connection.ack 失败")
+				}
 			}
 			return nil
 		})
@@ -492,6 +521,22 @@ func MakeSessionID() string {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// strOrEmpty 将任意值转为字符串，nil 或无效值返回空串。
+// 对齐 Python: str(val) or ""。
+func strOrEmpty(val any) string {
+	if val == nil {
+		return ""
+	}
+	if s, ok := val.(string); ok {
+		return s
+	}
+	s := fmt.Sprintf("%v", val)
+	if s == "<nil>" {
+		return ""
+	}
+	return s
+}
 
 // stubHandler 返回固定 stub 响应的处理函数。
 //
@@ -774,16 +819,18 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 				if v, ok := mcc["client_provider"].(string); ok {
 					flat["model_provider"] = v
 				}
-				if v, ok := mcc["timeout"]; ok {
-					flat["timeout"] = v
-				}
 			}
 
 			// 从 model_config_obj 提取
 			if mco, ok := itemMap["model_config_obj"].(map[string]any); ok {
-				if v, ok := mco["temperature"]; ok {
-					flat["temperature"] = v
+				// 对齐 Python: mco.get("temperature", 0.95)
+				temperature := 0.95
+				if v, ok := mco["temperature"]; ok && v != nil {
+					if f, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+						temperature = f
+					}
 				}
+				flat["temperature"] = temperature
 			}
 
 			// 顶层字段
@@ -794,17 +841,18 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 				flat["alias"] = v
 			}
 
-			// active_model: 第一个模型名称（对齐 Python）
-			if idx == 0 {
-				if name, ok := flat["model_name"].(string); ok {
-					flat["active_model"] = name
-				}
-			}
-
 			result = append(result, flat)
 		}
 
-		return map[string]any{"models": result}, nil
+		// active_model: 列表首位的模型名称（对齐 Python L1049）
+		activeModel := ""
+		if len(result) > 0 {
+			if name, ok := result[0]["model_name"].(string); ok {
+				activeModel = name
+			}
+		}
+
+		return map[string]any{"models": result, "active_model": activeModel}, nil
 	}
 }
 
@@ -918,9 +966,10 @@ func handleSessionCreate(_ context.Context, params map[string]any, _ string) (ma
 
 // handleSessionDelete 处理 session.delete 请求。
 //
-// 先尝试转发到 AgentServer，Agent 不可用且 team 模式返回 AGENT_UNAVAILABLE。
-// 检查目录存在后删除。
-// 对齐 Python: session_delete_handler。
+// 对齐 Python _session_delete (app_web_handlers.py L1294-1354)：
+//  1. AgentClient 可用 → 转发到 AgentServer → 成功则直接返回结果
+//  2. 转发失败 → fallback 本地删除
+//  3. AgentClient 不可用 → 本地删除（team 模式返回 AGENT_UNAVAILABLE）
 func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 		sessionID, _ := params["session_id"].(string)
@@ -928,25 +977,49 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 			return map[string]any{"ok": false, "error": "session_id is required", "code": WsErrBadRequest}, nil
 		}
 
-		// 先尝试转发到 AgentServer（对齐 Python: 优先通过 AgentClient 转发）
+		// 优先转发到 AgentServer（对齐 Python L1313-1336）
 		if agentClient != nil && agentClient.ServerReady() {
-			// 构造 E2A envelope 转发 session.delete 请求
 			envelope := buildSessionDeleteEnvelope(sessionID, params)
 			if envelope != nil {
-				_, _ = agentClient.SendRequest(context.Background(), envelope)
-				// 转发后继续本地删除（对齐 Python 行为）
+				resp, err := agentClient.SendRequest(context.Background(), envelope)
+				if err == nil && resp != nil {
+					// 转发成功：直接返回 AgentServer 的响应（对齐 Python L1324-1327）
+					if resp.OK {
+						payload := resp.Payload
+						if payload == nil {
+							payload = map[string]any{}
+						}
+						return payload, nil
+					}
+					// 转发返回失败（对齐 Python L1328-1335）
+					payload := resp.Payload
+					if payload == nil {
+						payload = map[string]any{}
+					}
+					errMsg := "session.delete failed"
+					if v, ok := payload["error"].(string); ok && v != "" {
+						errMsg = v
+					}
+					code := ""
+					if v, ok := payload["code"].(string); ok {
+						code = v
+					}
+					return map[string]any{"ok": false, "error": errMsg, "code": code}, nil
+				}
+				// 转发异常：fallback 本地删除（对齐 Python L1337-1338）
+				logger.Warn(logComponent).Err(err).Msg("session.delete 转发 AgentServer 失败，fallback 本地删除")
 			}
 		}
 
+		// 本地删除（对齐 Python L1340-：AgentClient 不可用或转发失败时）
 		sessionsDir := workspace.AgentSessionsDir()
 		sessionDir := filepath.Join(sessionsDir, sessionID)
 
-		// 检查目录是否存在（对齐 Python: NOT_FOUND）
 		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
-			// 判断是否 team 模式 → AGENT_UNAVAILABLE
+			// 判断是否 team 模式 → AGENT_UNAVAILABLE（对齐 Python L1341-1348）
 			mode, _ := params["mode"].(string)
 			if mode == "team" && (agentClient == nil || !agentClient.ServerReady()) {
-				return map[string]any{"ok": false, "error": "agent unavailable for team session", "code": WsErrAgentUnavailable}, nil
+				return map[string]any{"ok": false, "error": "team session delete requires agent server", "code": WsErrAgentUnavailable}, nil
 			}
 			return map[string]any{"ok": false, "error": "session not found", "code": WsErrNotFound}, nil
 		}
@@ -1062,99 +1135,205 @@ func getConfigAny(cfg map[string]any, key string, defaultVal any) any {
 //
 // 对齐 Python _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)。
 // 遍历最多 10 个 team，提取 team_{idx}_* 前缀字段和 agent 详情。
+// flattenTeamConfig 展平 modes.team 配置为前端 config panel 格式。
+//
+// 对齐 Python _flatten_modes_team_for_config_panel (app_web_handlers.py L380-482)：
+//   - teams_raw 为 dict（key=team_name, value=team_spec），最多 10 个 team
+//   - 每个 team 展平 team_0_name/lifecycle/teammate_mode/spawn_mode 等字段
+//   - leader 信息 + agent_key 推导（缺省时用 "{team_name}_leader"）
+//   - teammate 从 agents.teammate 取（不是 teammates 数组）
+//   - predefined_members JSON 序列化
+//   - agent 详情从 agent_specs dict 按 agent_key 匹配（不是按位置）
+//   - agent 输出格式：agent_name_{idx}/agent_model_{idx}/agent_skills_{idx} 等
 func flattenTeamConfig(cfg map[string]any, result map[string]any) {
-	team := getConfigAny(cfg, "modes.team", nil)
-	if team == nil {
-		return
+	// 读取 modes.team
+	modes := getConfigAny(cfg, "modes", nil)
+	var teamsRaw map[string]any
+	if m, ok := modes.(map[string]any); ok {
+		if t, ok := m["team"].(map[string]any); ok {
+			teamsRaw = t
+		}
 	}
-	teamList, ok := team.([]any)
-	if !ok {
+	if teamsRaw == nil {
 		return
 	}
 
 	// 读取 web_config_panel.agent_team_agents 用于 agent 详情补充
-	agentTeamAgents := getConfigAny(cfg, "web_config_panel.agent_team_agents", nil)
-	var agentList []map[string]any
-	if agentTeamAgents != nil {
-		if raw, ok := agentTeamAgents.([]any); ok {
-			for _, item := range raw {
-				if m, ok := item.(map[string]any); ok {
-					agentList = append(agentList, m)
+	// 对齐 Python L390-396
+	agentSpecs := make(map[string]map[string]any)
+	panelCfg := getConfigAny(cfg, "web_config_panel", nil)
+	if panel, ok := panelCfg.(map[string]any); ok {
+		if registry, ok := panel["agent_team_agents"].(map[string]any); ok {
+			for agentKey, spec := range registry {
+				if s, ok := spec.(map[string]any); ok {
+					agentSpecs[agentKey] = s
 				}
 			}
 		}
 	}
 
-	for idx := 0; idx < maxTeamsConfigPanel && idx < len(teamList); idx++ {
-		teamItem, ok := teamList[idx].(map[string]any)
+	// addAgent 辅助函数：将 agent_key 加入 agentSpecs（如果尚未存在）
+	// 对齐 Python L398-403
+	addAgent := func(agentKey string, spec any) string {
+		if agentKey == "" {
+			return ""
+		}
+		if s, ok := spec.(map[string]any); ok {
+			if _, exists := agentSpecs[agentKey]; !exists {
+				agentSpecs[agentKey] = s
+			}
+		}
+		return agentKey
+	}
+
+	// modelNameFromSpec 辅助函数：从 agent spec 中提取 model name
+	// 对齐 Python L405-417
+	modelNameFromSpec := func(spec map[string]any) string {
+		modelCfg, _ := spec["model"].(map[string]any)
+		if modelCfg == nil {
+			return ""
+		}
+		if v := modelCfg["model"]; v != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		if requestCfg, ok := modelCfg["model_request_config"].(map[string]any); ok {
+			if v := requestCfg["model"]; v != nil {
+				return fmt.Sprintf("%v", v)
+			}
+		}
+		if clientCfg, ok := modelCfg["model_client_config"].(map[string]any); ok {
+			if v := clientCfg["model_name"]; v != nil {
+				return fmt.Sprintf("%v", v)
+			}
+		}
+		return ""
+	}
+
+	// 遍历 teams（dict，key=team_name，value=team_spec）
+	// 对齐 Python L419-470
+	teamIdx := 0
+	for teamName, teamSpecRaw := range teamsRaw {
+		if teamIdx >= maxTeamsConfigPanel {
+			break
+		}
+		teamSpec, ok := teamSpecRaw.(map[string]any)
 		if !ok {
 			continue
 		}
-		prefix := fmt.Sprintf("team_%d", idx)
+		prefix := fmt.Sprintf("team_%d_", teamIdx)
 
 		// 基础字段
-		if v, ok := teamItem["name"].(string); ok {
-			result[prefix+"_name"] = v
+		name := strOrEmpty(teamSpec["team_name"])
+		if name == "" {
+			name = teamName
 		}
-		if v, ok := teamItem["lifecycle"].(string); ok {
-			result[prefix+"_lifecycle"] = v
-		}
-		if v, ok := teamItem["teammate_mode"].(string); ok {
-			result[prefix+"_teammate_mode"] = v
-		}
-		if v, ok := teamItem["spawn_mode"].(string); ok {
-			result[prefix+"_spawn_mode"] = v
+		result[prefix+"name"] = name
+		result[prefix+"lifecycle"] = strOrEmpty(teamSpec["lifecycle"])
+		result[prefix+"teammate_mode"] = strOrEmpty(teamSpec["teammate_mode"])
+		result[prefix+"spawn_mode"] = strOrEmpty(teamSpec["spawn_mode"])
+
+		// agents 字典
+		agents, _ := teamSpec["agents"].(map[string]any)
+		if agents == nil {
+			agents = make(map[string]any)
 		}
 
-		// leader 信息
-		if leader, ok := teamItem["leader"].(map[string]any); ok {
-			if v, ok := leader["member_name"].(string); ok {
-				result[prefix+"_leader_member_name"] = v
+		// leader 信息（对齐 Python L432-439）
+		if leader, ok := teamSpec["leader"].(map[string]any); ok {
+			for _, key := range []string{"member_name", "display_name", "persona"} {
+				result[prefix+"leader_"+key] = strOrEmpty(leader[key])
 			}
-			if v, ok := leader["display_name"].(string); ok {
-				result[prefix+"_leader_display_name"] = v
+			leaderKey := strOrEmpty(leader["agent_key"])
+			if leaderKey == "" {
+				leaderKey = teamName + "_leader"
 			}
-			if v, ok := leader["persona"].(string); ok {
-				result[prefix+"_leader_persona"] = v
-			}
-			if v, ok := leader["agent_key"].(string); ok {
-				result[prefix+"_leader_agent_key"] = v
-			}
+			result[prefix+"leader_agent_key"] = addAgent(leaderKey, agents["leader"])
 		}
 
-		// teammate 信息
-		if teammates, ok := teamItem["teammates"].([]any); ok && len(teammates) > 0 {
-			// 提取第一个 teammate 的 agent_key
-			if first, ok := teammates[0].(map[string]any); ok {
-				if v, ok := first["agent_key"].(string); ok {
-					result[prefix+"_teammate_agent_key"] = v
+		// teammate 信息（对齐 Python L441-449）
+		// 从 agents.teammate 取，不是从 teammates 数组
+		if teammateSpec, ok := agents["teammate"].(map[string]any); ok {
+			teammateKey := ""
+			if teammate, ok := teamSpec["teammate"].(map[string]any); ok {
+				teammateKey = strOrEmpty(teammate["agent_key"])
+			}
+			if teammateKey == "" {
+				teammateKey = teamName + "_teammate"
+			}
+			result[prefix+"teammate_agent_key"] = addAgent(teammateKey, teammateSpec)
+		} else {
+			result[prefix+"teammate_agent_key"] = ""
+		}
+
+		// predefined_members JSON 序列化（对齐 Python L451-470）
+		membersOut := []map[string]string{}
+		if members, ok := teamSpec["predefined_members"].([]any); ok {
+			for _, memberRaw := range members {
+				member, ok := memberRaw.(map[string]any)
+				if !ok {
+					continue
 				}
+				memberName := strOrEmpty(member["member_name"])
+				agentKey := strOrEmpty(member["agent_key"])
+				if agentKey == "" {
+					if memberName != "" {
+						agentKey = teamName + "_" + memberName
+					}
+				}
+				if agentKey != "" {
+					addAgent(agentKey, agents[memberName])
+				}
+				membersOut = append(membersOut, map[string]string{
+					"member_name":  memberName,
+					"display_name": strOrEmpty(member["display_name"]),
+					"persona":      strOrEmpty(member["persona"]),
+					"prompt_hint":  strOrEmpty(member["prompt_hint"]),
+					"agent_key":    agentKey,
+				})
 			}
+		}
+		if membersJSON, err := json.Marshal(membersOut); err == nil {
+			result[prefix+"predefined_members"] = string(membersJSON)
 		}
 
-		// predefined_members: JSON 序列化
-		if pm, ok := teamItem["predefined_members"]; ok && pm != nil {
-			if pmBytes, err := json.Marshal(pm); err == nil {
-				result[prefix+"_predefined_members"] = string(pmBytes)
-			}
-		}
+		teamIdx++
+	}
 
-		// agent 详情（从 web_config_panel.agent_team_agents 提取）
-		if idx < len(agentList) {
-			agent := agentList[idx]
-			if v, ok := agent["model"].(string); ok {
-				result[prefix+"_model"] = v
+	// agent 详情（对齐 Python L472-480）
+	agentIdx := 0
+	for agentKey, spec := range agentSpecs {
+		if agentIdx >= maxTeamsConfigPanel {
+			break
+		}
+		result[fmt.Sprintf("agent_name_%d", agentIdx)] = agentKey
+		result[fmt.Sprintf("agent_model_%d", agentIdx)] = modelNameFromSpec(spec)
+		// skills: 逗号分隔
+		skillsStr := ""
+		if skills, ok := spec["skills"].([]any); ok {
+			parts := make([]string, 0, len(skills))
+			for _, s := range skills {
+				parts = append(parts, fmt.Sprintf("%v", s))
 			}
-			if v, ok := agent["skills"]; ok {
-				result[prefix+"_skills"] = v
-			}
-			if v, ok := agent["max_iterations"]; ok {
-				result[prefix+"_max_iterations"] = v
-			}
-			if v, ok := agent["completion_timeout"]; ok {
-				result[prefix+"_completion_timeout"] = v
+			skillsStr = strings.Join(parts, ",")
+		}
+		result[fmt.Sprintf("agent_skills_%d", agentIdx)] = skillsStr
+		// max_iterations 默认 200（对齐 Python）
+		maxIter := 200
+		if v, ok := spec["max_iterations"]; ok && v != nil {
+			if n, err := strconv.Atoi(fmt.Sprintf("%v", v)); err == nil {
+				maxIter = n
 			}
 		}
+		result[fmt.Sprintf("agent_max_iterations_%d", agentIdx)] = strconv.Itoa(maxIter)
+		// completion_timeout 默认 600（对齐 Python）
+		timeout := 600
+		if v, ok := spec["completion_timeout"]; ok && v != nil {
+			if n, err := strconv.Atoi(fmt.Sprintf("%v", v)); err == nil {
+				timeout = n
+			}
+		}
+		result[fmt.Sprintf("agent_completion_timeout_%d", agentIdx)] = strconv.Itoa(timeout)
+		agentIdx++
 	}
 }
 

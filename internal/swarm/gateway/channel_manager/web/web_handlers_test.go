@@ -567,31 +567,30 @@ func TestFlattenTeamConfig_无team(t *testing.T) {
 func TestFlattenTeamConfig_有team(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			"team": []any{
-				map[string]any{
-					"name":          "team1",
-					"lifecycle":     "async",
+			// 对齐 Python: modes.team 为 dict（key=team_name, value=team_spec）
+			"team": map[string]any{
+				"my_team": map[string]any{
+					"team_name":    "team1",
+					"lifecycle":    "async",
 					"teammate_mode": "route",
-					"spawn_mode":    "droplet",
+					"spawn_mode":   "droplet",
 					"leader": map[string]any{
 						"member_name":  "leader1",
 						"display_name": "Leader",
 						"persona":      "test",
 						"agent_key":    "key1",
 					},
-					"teammates": []any{
-						map[string]any{"agent_key": "tm_key1"},
+					"agents": map[string]any{
+						"teammate": map[string]any{
+							"model": map[string]any{
+								"model_client_config": map[string]any{
+									"model_name": "gpt-4",
+								},
+							},
+							"max_iterations":     10,
+							"completion_timeout": 300,
+						},
 					},
-				},
-			},
-		},
-		"web_config_panel": map[string]any{
-			"agent_team_agents": []any{
-				map[string]any{
-					"model":              "gpt-4",
-					"skills":             []any{},
-					"max_iterations":     10,
-					"completion_timeout": 300,
 				},
 			},
 		},
@@ -605,18 +604,29 @@ func TestFlattenTeamConfig_有team(t *testing.T) {
 	assert.Equal(t, "leader1", result["team_0_leader_member_name"])
 	assert.Equal(t, "Leader", result["team_0_leader_display_name"])
 	assert.Equal(t, "key1", result["team_0_leader_agent_key"])
-	assert.Equal(t, "tm_key1", result["team_0_teammate_agent_key"])
-	assert.Equal(t, "gpt-4", result["team_0_model"])
-	assert.Equal(t, 10, result["team_0_max_iterations"])
+	// teammate 从 agents.teammate 取，agent_key 推导为 team_name_teammate
+	assert.Equal(t, "my_team_teammate", result["team_0_teammate_agent_key"])
+	// agent 详情输出格式对齐 Python: agent_name_0/agent_model_0
+	assert.Equal(t, "my_team_teammate", result["agent_name_0"])
+	assert.Equal(t, "gpt-4", result["agent_model_0"])
 }
 
 func TestFlattenTeamConfig_predefinedMembers(t *testing.T) {
 	cfg := map[string]any{
 		"modes": map[string]any{
-			"team": []any{
-				map[string]any{
-					"name":               "team1",
-					"predefined_members": []any{map[string]any{"name": "agent1"}},
+			// 对齐 Python: modes.team 为 dict
+			"team": map[string]any{
+				"my_team": map[string]any{
+					"team_name": "team1",
+					"predefined_members": []any{
+						map[string]any{
+							"member_name":  "agent1",
+							"display_name": "Agent 1",
+							"persona":      "",
+							"prompt_hint":  "",
+							"agent_key":    "my_team_agent1",
+						},
+					},
 				},
 			},
 		},
