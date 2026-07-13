@@ -11,14 +11,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
 // TestNewMessageHandler_完整初始化 测试完整初始化
 func TestNewMessageHandler_完整初始化(t *testing.T) {
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
 	mh := NewMessageHandler(agentClient)
 
@@ -276,7 +276,7 @@ func TestCancelAllStreamTasks(t *testing.T) {
 
 // createTestMessageHandlerWithTransport 创建带 AgentClient 的测试 MessageHandler
 func createTestMessageHandlerWithTransport() *MessageHandler {
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
 	return NewMessageHandler(agentClient)
 }

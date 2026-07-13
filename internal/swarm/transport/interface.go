@@ -12,7 +12,7 @@ import "context"
 // 由 AgentClient 的 receiverLoop 做应用层区分。
 //
 // 无论进程内还是跨进程，Gateway 与 AgentServer 之间统一经过此接口：
-//   - 进程内：ChannelTransport（Go channel，在 server/gateway_push 包实现）
+//   - 进程内：ChannelTransport（Go channel，在本包实现）
 //   - 跨进程：WebSocketTransport（WebSocket，后续实现）
 //
 // 对应 Python: jiuwenswarm/server/gateway_push/transport.py (GatewayPushTransport)

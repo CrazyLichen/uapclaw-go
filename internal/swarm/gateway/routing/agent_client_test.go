@@ -9,7 +9,6 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -36,15 +35,15 @@ func (m *mockTransport) Close() error {
 }
 
 // newTestAgentClientWithTransport 创建测试用 AgentClient 和 ChannelTransport。
-func newTestAgentClientWithTransport() (*AgentClient, *gateway_push.ChannelTransport) {
-	chTransport := gateway_push.NewChannelTransport()
+func newTestAgentClientWithTransport() (*AgentClient, *transport.ChannelTransport) {
+	chTransport := transport.NewChannelTransport()
 	agentClient := NewAgentClient(chTransport)
 	return agentClient, chTransport
 }
 
 // TestNewAgentClient 创建 AgentClient 实例
 func TestNewAgentClient(t *testing.T) {
-	chTransport := gateway_push.NewChannelTransport()
+	chTransport := transport.NewChannelTransport()
 	ac := NewAgentClient(chTransport)
 	if ac == nil {
 		t.Fatal("NewAgentClient() 返回 nil，期望非 nil")
@@ -441,7 +440,7 @@ func TestAgentClient_Connect_重连先Disconnect(t *testing.T) {
 	ac.Disconnect()
 	time.Sleep(100 * time.Millisecond)
 
-	newTransport := gateway_push.NewChannelTransport()
+	newTransport := transport.NewChannelTransport()
 	ac.transport = newTransport
 
 	go func() {

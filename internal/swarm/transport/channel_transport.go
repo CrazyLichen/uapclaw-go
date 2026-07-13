@@ -1,4 +1,4 @@
-package gateway_push
+package transport
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 //
 // 对齐 Python WebSocket 单连接模型：所有消息（请求/响应/推送/事件）走同一 recvCh。
 // 适用场景：chat/serve/acp/app 等单进程模式，Gateway 和 AgentServer 运行在同一进程内。
+// 将来跨进程模式使用 WebSocketTransport（也在本包中实现）。
 //
 // 对应 Python: jiuwenswarm/server/gateway_push/transport.py (进程内路径)
 type ChannelTransport struct {
@@ -38,8 +39,8 @@ const (
 	defaultRecvBufferSize = 128
 )
 
-// logComponent 日志组件
-const logComponent = logger.ComponentAgentServer
+// logComponentCh 日志组件
+const logComponentCh = logger.ComponentCommon
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -47,6 +48,9 @@ var (
 	// ErrTransportClosed 传输通道已关闭
 	ErrTransportClosed = errors.New("传输通道已关闭")
 )
+
+// 接口合规：ChannelTransport 实现 AgentTransport
+var _ AgentTransport = (*ChannelTransport)(nil)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -67,7 +71,7 @@ func NewChannelTransportWithBuffer(sendBuf, recvBuf int) *ChannelTransport {
 		sendCh: make(chan []byte, sendBuf),
 		recvCh: make(chan []byte, recvBuf),
 	}
-	logger.Info(logComponent).
+	logger.Info(logComponentCh).
 		Str("event_type", "channel_transport_created").
 		Int("send_buf", sendBuf).
 		Int("recv_buf", recvBuf).
@@ -80,7 +84,7 @@ func (t *ChannelTransport) Send(ctx context.Context, data []byte) error {
 	t.mu.Lock()
 	if t.closed {
 		t.mu.Unlock()
-		logger.Warn(logComponent).
+		logger.Warn(logComponentCh).
 			Str("event_type", "channel_transport_send_closed").
 			Msg("发送失败：传输已关闭")
 		return ErrTransportClosed
@@ -89,13 +93,13 @@ func (t *ChannelTransport) Send(ctx context.Context, data []byte) error {
 
 	select {
 	case t.sendCh <- data:
-		logger.Debug(logComponent).
+		logger.Debug(logComponentCh).
 			Str("event_type", "channel_transport_send").
 			Int("bytes", len(data)).
 			Msg("JSON 字节已发送")
 		return nil
 	case <-ctx.Done():
-		logger.Warn(logComponent).
+		logger.Warn(logComponentCh).
 			Str("event_type", "channel_transport_send_cancelled").
 			Err(ctx.Err()).
 			Msg("发送失败：上下文已取消")
@@ -108,7 +112,7 @@ func (t *ChannelTransport) Recv() (<-chan []byte, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
-		logger.Warn(logComponent).
+		logger.Warn(logComponentCh).
 			Str("event_type", "channel_transport_recv_closed").
 			Msg("接收失败：传输已关闭")
 		return nil, ErrTransportClosed
@@ -126,7 +130,7 @@ func (t *ChannelTransport) Close() error {
 	t.closed = true
 	close(t.sendCh)
 	close(t.recvCh)
-	logger.Info(logComponent).
+	logger.Info(logComponentCh).
 		Str("event_type", "channel_transport_closed").
 		Msg("ChannelTransport 已关闭")
 	return nil

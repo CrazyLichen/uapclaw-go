@@ -23,7 +23,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -193,13 +193,13 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	// 单体架构中只需初始化一次，等扩展系统实现后回填
 
 	// 创建 ChannelTransport（进程内传输）
-	transport := gateway_push.NewChannelTransport()
+	chTransport := transport.NewChannelTransport()
 
 	// 创建 AgentClient（对齐 Python WebSocketAgentServerClient）
-	agentClient := routing.NewAgentClient(transport)
+	agentClient := routing.NewAgentClient(chTransport)
 
 	// 创建 AgentServer（对齐 Python AgentWebSocketServer，单进程内与 Gateway 共存）
-	agentServer := server.NewAgentServer(cfg, transport)
+	agentServer := server.NewAgentServer(cfg, chTransport)
 
 	// 创建 GatewayServer（AgentClient 会等待 AgentServer 就绪后发送 connection.ack）
 	gs, err := gateway.NewGatewayServer(cfg, agentClient)

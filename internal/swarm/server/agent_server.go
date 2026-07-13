@@ -9,9 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
-	transportpkg "github.com/uapclaw/uapclaw-go/internal/swarm/transport"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -26,7 +25,7 @@ type AgentServer struct {
 	// config 配置实例
 	config *config.Config
 	// transport 进程内传输通道
-	transport *gateway_push.ChannelTransport
+	transport *transport.ChannelTransport
 	// agentManager Agent 实例管理器
 	agentManager *runtime.AgentManager
 	// sessionStreamTasks 流式任务的取消函数映射（sessionID → CancelFunc）
@@ -53,7 +52,7 @@ const logComponent = logger.ComponentAgentServer
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentServer 创建 AgentServer 实例。
-func NewAgentServer(cfg *config.Config, transport *gateway_push.ChannelTransport) *AgentServer {
+func NewAgentServer(cfg *config.Config, transport *transport.ChannelTransport) *AgentServer {
 	return &AgentServer{
 		config:             cfg,
 		transport:          transport,
@@ -88,7 +87,7 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	logger.Info(logComponent).Msg("AgentManager 已初始化")
 
 	// 发送 connection.ack 事件帧（对齐 Python AgentWebSocketServer._connection_handler 首帧）
-	ackFrame := transportpkg.BuildConnectionAckFrame()
+	ackFrame := transport.BuildConnectionAckFrame()
 	ackData, err := json.Marshal(ackFrame)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("编码 connection.ack 失败")
@@ -134,7 +133,7 @@ func (s *AgentServer) AgentManager() *runtime.AgentManager {
 }
 
 // Transport 返回 ChannelTransport 实例，供 handler 写入 RecvCh。
-func (s *AgentServer) Transport() *gateway_push.ChannelTransport {
+func (s *AgentServer) Transport() *transport.ChannelTransport {
 	return s.transport
 }
 

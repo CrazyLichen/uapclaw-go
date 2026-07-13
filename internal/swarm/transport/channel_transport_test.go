@@ -1,11 +1,9 @@
-package gateway_push
+package transport
 
 import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -180,7 +178,7 @@ func TestChannelTransport_Close_重复关闭不报错(t *testing.T) {
 // TestChannelTransport_实现AgentTransport接口 测试 ChannelTransport 实现 AgentTransport 接口
 func TestChannelTransport_实现AgentTransport接口(t *testing.T) {
 	// 编译期接口断言
-	var _ transport.AgentTransport = (*ChannelTransport)(nil)
+	var _ AgentTransport = (*ChannelTransport)(nil)
 }
 
 // TestChannelTransport_完整收发流程 测试完整收发流程

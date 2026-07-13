@@ -9,7 +9,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 )
 
@@ -26,9 +26,9 @@ import (
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // newTestServer 创建测试用 AgentServer（含 AgentManager）。
-func newTestServer() (*AgentServer, *gateway_push.ChannelTransport) {
+func newTestServer() (*AgentServer, *transport.ChannelTransport) {
 	cfg, _ := config.New("")
-	transport := gateway_push.NewChannelTransportWithBuffer(16, 128)
+	transport := transport.NewChannelTransportWithBuffer(16, 128)
 	server := NewAgentServer(cfg, transport)
 	// 手动初始化 AgentManager，跳过 Start() 的阻塞循环
 	server.agentManager = runtime.NewAgentManager()

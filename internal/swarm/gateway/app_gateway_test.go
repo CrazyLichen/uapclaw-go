@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/routing"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // newTestGatewayServer 创建测试用 GatewayServer
@@ -20,7 +20,7 @@ func newTestGatewayServer(t *testing.T) *GatewayServer {
 	t.Helper()
 	cfg, err := config.New("")
 	require.NoError(t, err)
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	agentClient := routing.NewAgentClient(transport)
 	gs, err := NewGatewayServer(cfg, agentClient)
 	require.NoError(t, err)

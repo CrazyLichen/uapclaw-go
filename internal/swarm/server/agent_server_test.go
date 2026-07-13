@@ -8,7 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/server/gateway_push"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -16,7 +16,7 @@ import (
 // newTestAgentServer 创建测试用 AgentServer 实例。
 func newTestAgentServer() *AgentServer {
 	cfg, _ := config.New("")
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	return NewAgentServer(cfg, transport)
 }
 
@@ -35,7 +35,7 @@ func TestNewAgentServer(t *testing.T) {
 // TestAgentServer_Start_发送ConnectionAck 测试启动后 recvCh 收到 connection.ack 事件帧 JSON。
 func TestAgentServer_Start_发送ConnectionAck(t *testing.T) {
 	cfg, _ := config.New("")
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	s := NewAgentServer(cfg, transport)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,7 +165,7 @@ func TestAgentServer_StreamTaskTracking(t *testing.T) {
 // TestAgentServer_ConsumeEnvelope 测试消费循环能处理信封并写入响应。
 func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 	cfg, _ := config.New("")
-	transport := gateway_push.NewChannelTransport()
+	transport := transport.NewChannelTransport()
 	s := NewAgentServer(cfg, transport)
 
 	ctx, cancel := context.WithCancel(context.Background())

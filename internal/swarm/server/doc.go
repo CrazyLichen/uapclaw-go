@@ -1,6 +1,6 @@
 // Package server 提供 Agent 核心服务，对齐 Python AgentWebSocketServer，适配单进程 ChannelTransport 模式。
 //
-// 从 ChannelTransport.SendCh() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
+// 从 transport.AgentTransport.Recv() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
 // 主分发逻辑在 handleEnvelope 中，按 ReqMethod switch 分发到具体 handler。
 //
@@ -22,7 +22,6 @@
 //	├── handle_config.go       # Config handler（cache_clear/reload_config）
 //	├── handle_initialize.go   # Initialize + ACP handler（initialize/acp_tool_response）
 //	├── adapter/               # Agent 适配器（Code/Deep/Factory）
-//	├── gateway_push/          # 进程内传输（ChannelTransport）
 //	└── runtime/               # Agent 运行时（AgentManager/UapClaw/SessionManager）
 //
 // 对应 Python 代码：jiuwenswarm/server/agent_server.py
