@@ -6,6 +6,5 @@
 //
 //	constants/
 //	├── doc.go            # 包文档
-//	├── constants.go      # 常量定义
-//	└── constants_test.go # 常量测试
+//	└── constants.go      # 常量定义
 package constants

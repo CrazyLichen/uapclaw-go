@@ -7,11 +7,11 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/memory"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/team_workspace"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -28,8 +28,8 @@ type TeamModelConfig struct {
 // WorkspaceSpec 工作空间规格占位类型。
 // ⤵️ 回填: 9.57
 type WorkspaceSpec struct {
-	RootPath  string `json:"root_path"`
-	Language  string `json:"language"`
+	RootPath   string `json:"root_path"`
+	Language   string `json:"language"`
 	StableBase bool   `json:"stable_base"`
 }
 
@@ -90,31 +90,31 @@ type SubAgentSpec struct {
 // DeepAgentSpec 单角色 DeepAgent 规格。
 // 对齐 Python: DeepAgentSpec
 type DeepAgentSpec struct {
-	Model                   *TeamModelConfig         `json:"model,omitempty"`
-	Card                    *agentschema.AgentCard   `json:"card,omitempty"`
-	SystemPrompt            string                   `json:"system_prompt,omitempty"`
-	Tools                   []any                    `json:"tools,omitempty"`
-	Mcps                    []any                    `json:"mcps,omitempty"`
-	Subagents               []any                    `json:"subagents,omitempty"`
-	Rails                   []any                    `json:"rails,omitempty"`
-	EnableTaskLoop          bool                     `json:"enable_task_loop"`
-	EnableAsyncSubagent     bool                     `json:"enable_async_subagent"`
-	AddGeneralPurposeAgent  bool                     `json:"add_general_purpose_agent"`
-	MaxIterations           int                      `json:"max_iterations"`
-	Workspace               *WorkspaceSpec           `json:"workspace,omitempty"`
-	Skills                  []string                 `json:"skills,omitempty"`
-	EnableSkillDiscovery    bool                     `json:"enable_skill_discovery"`
-	SysOperation            *SysOperationSpec        `json:"sys_operation,omitempty"`
-	Language                string                   `json:"language,omitempty"`
-	PromptMode              string                   `json:"prompt_mode,omitempty"`
-	VisionModel             *VisionModelSpec         `json:"vision_model,omitempty"`
-	AudioModel              *AudioModelSpec          `json:"audio_model,omitempty"`
-	EnableTaskPlanning      bool                     `json:"enable_task_planning"`
-	RestrictToSandbox       bool                     `json:"restrict_to_sandbox"`
-	AutoCreateWorkspace     bool                     `json:"auto_create_workspace"`
-	CompletionTimeout       float64                  `json:"completion_timeout"`
-	ProgressiveTool         *ProgressiveToolSpec     `json:"progressive_tool,omitempty"`
-	ApprovalRequiredTools   []string                 `json:"approval_required_tools,omitempty"`
+	Model                  *TeamModelConfig       `json:"model,omitempty"`
+	Card                   *agentschema.AgentCard `json:"card,omitempty"`
+	SystemPrompt           string                 `json:"system_prompt,omitempty"`
+	Tools                  []any                  `json:"tools,omitempty"`
+	Mcps                   []any                  `json:"mcps,omitempty"`
+	Subagents              []any                  `json:"subagents,omitempty"`
+	Rails                  []any                  `json:"rails,omitempty"`
+	EnableTaskLoop         bool                   `json:"enable_task_loop"`
+	EnableAsyncSubagent    bool                   `json:"enable_async_subagent"`
+	AddGeneralPurposeAgent bool                   `json:"add_general_purpose_agent"`
+	MaxIterations          int                    `json:"max_iterations"`
+	Workspace              *WorkspaceSpec         `json:"workspace,omitempty"`
+	Skills                 []string               `json:"skills,omitempty"`
+	EnableSkillDiscovery   bool                   `json:"enable_skill_discovery"`
+	SysOperation           *SysOperationSpec      `json:"sys_operation,omitempty"`
+	Language               string                 `json:"language,omitempty"`
+	PromptMode             string                 `json:"prompt_mode,omitempty"`
+	VisionModel            *VisionModelSpec       `json:"vision_model,omitempty"`
+	AudioModel             *AudioModelSpec        `json:"audio_model,omitempty"`
+	EnableTaskPlanning     bool                   `json:"enable_task_planning"`
+	RestrictToSandbox      bool                   `json:"restrict_to_sandbox"`
+	AutoCreateWorkspace    bool                   `json:"auto_create_workspace"`
+	CompletionTimeout      float64                `json:"completion_timeout"`
+	ProgressiveTool        *ProgressiveToolSpec   `json:"progressive_tool,omitempty"`
+	ApprovalRequiredTools  []string               `json:"approval_required_tools,omitempty"`
 }
 
 // LeaderSpec Leader 身份规格。
@@ -139,29 +139,35 @@ type StorageSpec struct {
 
 // TeamAgentSpec 构造 TeamAgent 的完整 JSON 可序列化规格。
 type TeamAgentSpec struct {
-	Agents                       map[string]DeepAgentSpec                `json:"agents"`
-	TeamName                     string                                  `json:"team_name"`
-	Lifecycle                    TeamLifecycle                           `json:"lifecycle"`
-	EnableTeamPlan               bool                                    `json:"enable_team_plan"`
-	TeammateMode                 MemberMode                              `json:"teammate_mode"`
-	SpawnMode                    string                                  `json:"spawn_mode"`
-	Leader                       LeaderSpec                              `json:"leader"`
-	PredefinedMembers            []TeamMemberSpec                        `json:"predefined_members"`
-	ModelPool                    any                                     `json:"model_pool,omitempty"`
-	ModelRouter                  any                                     `json:"model_router,omitempty"`
-	ModelPoolStrategy            string                                  `json:"model_pool_strategy"`
-	TeamMode                     string                                  `json:"team_mode,omitempty"`
-	Transport                    *TransportSpec                          `json:"transport,omitempty"`
-	Storage                      *StorageSpec                            `json:"storage,omitempty"`
-	Worktree                     *worktree.WorktreeConfig                `json:"worktree,omitempty"`
-	Workspace                    *team_workspace.TeamWorkspaceConfig     `json:"workspace,omitempty"`
-	Metadata                     map[string]any                          `json:"metadata,omitempty"`
-	EnableHITT                   bool                                    `json:"enable_hitt"`
-	ExposeHumanAgentsToTeammates bool                                    `json:"expose_human_agents_to_teammates"`
-	Language                     string                                  `json:"language,omitempty"`
-	AgentCustomizer              any                                     `json:"-"`
-	Memory                       *memory.TeamMemoryConfig                `json:"memory,omitempty"`
+	Agents                       map[string]DeepAgentSpec            `json:"agents"`
+	TeamName                     string                              `json:"team_name"`
+	Lifecycle                    TeamLifecycle                       `json:"lifecycle"`
+	EnableTeamPlan               bool                                `json:"enable_team_plan"`
+	TeammateMode                 MemberMode                          `json:"teammate_mode"`
+	SpawnMode                    string                              `json:"spawn_mode"`
+	Leader                       LeaderSpec                          `json:"leader"`
+	PredefinedMembers            []TeamMemberSpec                    `json:"predefined_members"`
+	ModelPool                    any                                 `json:"model_pool,omitempty"`
+	ModelRouter                  any                                 `json:"model_router,omitempty"`
+	ModelPoolStrategy            string                              `json:"model_pool_strategy"`
+	TeamMode                     string                              `json:"team_mode,omitempty"`
+	Transport                    *TransportSpec                      `json:"transport,omitempty"`
+	Storage                      *StorageSpec                        `json:"storage,omitempty"`
+	Worktree                     *worktree.WorktreeConfig            `json:"worktree,omitempty"`
+	Workspace                    *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
+	Metadata                     map[string]any                      `json:"metadata,omitempty"`
+	EnableHITT                   bool                                `json:"enable_hitt"`
+	ExposeHumanAgentsToTeammates bool                                `json:"expose_human_agents_to_teammates"`
+	Language                     string                              `json:"language,omitempty"`
+	AgentCustomizer              any                                 `json:"-"`
+	Memory                       *memory.TeamMemoryConfig            `json:"memory,omitempty"`
 }
+
+// TransportBuilder 传输层构建器函数类型。
+type TransportBuilder func(params map[string]any) (messager.MessagerTransportConfig, error)
+
+// StorageBuilder 存储层构建器函数类型。
+type StorageBuilder func(params map[string]any) (any, error)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -176,12 +182,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// TransportBuilder 传输层构建器函数类型。
-type TransportBuilder func(params map[string]any) (messager.MessagerTransportConfig, error)
-
-// StorageBuilder 存储层构建器函数类型。
-type StorageBuilder func(params map[string]any) (any, error)
 
 // NewTeamModelConfig 创建默认 TeamModelConfig。
 func NewTeamModelConfig() TeamModelConfig {
@@ -275,6 +275,17 @@ func (s *TeamAgentSpec) ResolveDBConfig() any {
 // Build 构建 TeamAgent。⤵️ 回填: 9.57
 func (s *TeamAgentSpec) Build() (any, error) { return nil, nil }
 
+// ValidateLeaderModelResolved 校验 Leader 模型是否已解析。
+func ValidateLeaderModelResolved(leaderAgent DeepAgentSpec, leaderMemberModel *TeamModelConfig, teamSpec TeamSpec) error {
+	if teamSpec.ModelPool == nil {
+		return nil
+	}
+	if leaderMemberModel != nil || leaderAgent.Model != nil {
+		return nil
+	}
+	return fmt.Errorf("Leader 没有模型配置。当 model_pool 已配置时，Leader 必须通过 model_pool 分配或在 agents[\"leader\"].model 中显式指定模型")
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // validatePoolRouterExclusive 校验 model_pool 和 model_router 互斥。
@@ -321,17 +332,6 @@ func (s *TeamAgentSpec) validateHittConsistency() error {
 		}
 	}
 	return nil
-}
-
-// ValidateLeaderModelResolved 校验 Leader 模型是否已解析。
-func ValidateLeaderModelResolved(leaderAgent DeepAgentSpec, leaderMemberModel *TeamModelConfig, teamSpec TeamSpec) error {
-	if teamSpec.ModelPool == nil {
-		return nil
-	}
-	if leaderMemberModel != nil || leaderAgent.Model != nil {
-		return nil
-	}
-	return fmt.Errorf("Leader 没有模型配置。当 model_pool 已配置时，Leader 必须通过 model_pool 分配或在 agents[\"leader\"].model 中显式指定模型")
 }
 
 // ensureBuiltinInfraRegistered 初始化内置基础设施注册表。

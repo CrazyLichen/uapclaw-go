@@ -86,7 +86,7 @@ const (
 	TaskStatusBlocked TaskStatus = "blocked"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // MemberTransitions MemberStatus 状态转换表。
 // 对齐 Python: MEMBER_TRANSITIONS
@@ -156,22 +156,22 @@ var ExecutionTransitions = map[ExecutionStatus][]ExecutionStatus{
 	ExecutionStatusCancelling: {
 		ExecutionStatusCancelled, ExecutionStatusFailed, ExecutionStatusTimedOut,
 	},
-	ExecutionStatusCancelled:    {ExecutionStatusIdle},
-	ExecutionStatusCompleting:   {ExecutionStatusCompleted, ExecutionStatusFailed, ExecutionStatusTimedOut},
-	ExecutionStatusCompleted:    {ExecutionStatusIdle},
-	ExecutionStatusFailed:       {ExecutionStatusIdle},
-	ExecutionStatusTimedOut:     {ExecutionStatusIdle},
+	ExecutionStatusCancelled:  {ExecutionStatusIdle},
+	ExecutionStatusCompleting: {ExecutionStatusCompleted, ExecutionStatusFailed, ExecutionStatusTimedOut},
+	ExecutionStatusCompleted:  {ExecutionStatusIdle},
+	ExecutionStatusFailed:     {ExecutionStatusIdle},
+	ExecutionStatusTimedOut:   {ExecutionStatusIdle},
 }
 
 // TaskTransitions TaskStatus 状态转换表。
 // 对齐 Python: TASK_TRANSITIONS
 var TaskTransitions = map[TaskStatus][]TaskStatus{
-	TaskStatusPending: {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
-	TaskStatusClaimed: {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
+	TaskStatusPending:      {TaskStatusClaimed, TaskStatusBlocked, TaskStatusCancelled},
+	TaskStatusClaimed:      {TaskStatusPlanApproved, TaskStatusCompleted, TaskStatusCancelled, TaskStatusBlocked, TaskStatusPending},
 	TaskStatusPlanApproved: {TaskStatusCompleted, TaskStatusPending, TaskStatusCancelled},
-	TaskStatusBlocked: {TaskStatusPending, TaskStatusCancelled},
-	TaskStatusCompleted: {},
-	TaskStatusCancelled: {},
+	TaskStatusBlocked:      {TaskStatusPending, TaskStatusCancelled},
+	TaskStatusCompleted:    {},
+	TaskStatusCancelled:    {},
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

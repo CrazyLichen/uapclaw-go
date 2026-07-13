@@ -555,7 +555,7 @@ func extractPureTextPayload(msg *schema.Message, eventName string) map[string]an
 				payload["content"] = errVal
 			}
 		}
-		// role + member_name
+		// 角色 + 成员名
 		if role, ok := msg.Payload["role"]; ok {
 			payload["role"] = role
 		}

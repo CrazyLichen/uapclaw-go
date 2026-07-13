@@ -88,19 +88,19 @@ func TestWorktreeLifecyclePolicy_枚举值(t *testing.T) {
 // TestWorktreeSession_JSON序列化 测试 WorktreeSession JSON 序列化往返
 func TestWorktreeSession_JSON序列化(t *testing.T) {
 	original := WorktreeSession{
-		OriginalCWD:      "/home/user/project",
-		WorktreePath:     "/tmp/worktree-abc",
-		WorktreeName:     "worktree-abc",
-		WorktreeBranch:   "feature-x",
-		OriginalBranch:   "main",
+		OriginalCWD:        "/home/user/project",
+		WorktreePath:       "/tmp/worktree-abc",
+		WorktreeName:       "worktree-abc",
+		WorktreeBranch:     "feature-x",
+		OriginalBranch:     "main",
 		OriginalHeadCommit: "abc123",
-		MemberName:       "agent-1",
-		TeamName:         "team-a",
-		HookBased:        true,
-		LifecyclePolicy:  WorktreeLifecyclePolicyDurable,
-		TeamLifecycle:    "active",
+		MemberName:         "agent-1",
+		TeamName:           "team-a",
+		HookBased:          true,
+		LifecyclePolicy:    WorktreeLifecyclePolicyDurable,
+		TeamLifecycle:      "active",
 		CreationDurationMs: 150.5,
-		UsedSparsePaths:  false,
+		UsedSparsePaths:    false,
 	}
 
 	data, err := json.Marshal(original)

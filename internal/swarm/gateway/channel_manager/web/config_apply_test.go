@@ -216,7 +216,7 @@ func TestApplyConfigPayload_正常环境变量(t *testing.T) {
 	envUpdates, _, err := ApplyConfigPayload(map[string]any{
 		"model_provider": "OpenAI",
 		"model":          "gpt-4",
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Contains(t, envUpdates, "MODEL_PROVIDER")
 	assert.Equal(t, "OpenAI", envUpdates["MODEL_PROVIDER"])
@@ -229,7 +229,7 @@ func TestApplyConfigPayload_正常环境变量(t *testing.T) {
 func TestApplyConfigPayload_无效Provider(t *testing.T) {
 	_, _, err := ApplyConfigPayload(map[string]any{
 		"model_provider": "BadProvider",
-	})
+	}, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Model provider must in")
 }
@@ -242,13 +242,13 @@ func TestApplyConfigPayload_nil值(t *testing.T) {
 
 	envUpdates, _, err := ApplyConfigPayload(map[string]any{
 		"model": nil,
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "", envUpdates["MODEL_NAME"])
 }
 
 func TestApplyConfigPayload_空params(t *testing.T) {
-	envUpdates, yamlUpdated, err := ApplyConfigPayload(map[string]any{})
+	envUpdates, yamlUpdated, err := ApplyConfigPayload(map[string]any{}, nil)
 	require.NoError(t, err)
 	assert.Empty(t, envUpdates)
 	assert.Empty(t, yamlUpdated)

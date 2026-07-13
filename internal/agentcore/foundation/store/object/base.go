@@ -34,10 +34,10 @@ type BaseObjectStorage interface {
 // ObjectStorageConfig 对象存储配置
 //
 // 字段为空时自动从环境变量读取：
-//   - Server → OBS_SERVER
-//   - AccessKeyID → OBS_ACCESS_KEY_ID
-//   - SecretAccessKey → OBS_SECRET_ACCESS_KEY
-//   - RegionName → OBS_REGION
+//   - Server → OBS_SERVER（服务器端点）
+//   - AccessKeyID → OBS_ACCESS_KEY_ID（访问密钥 ID）
+//   - SecretAccessKey → OBS_SECRET_ACCESS_KEY（秘密访问密钥）
+//   - RegionName → OBS_REGION（区域名称）
 //
 // 优先级：结构体字段 > 环境变量
 type ObjectStorageConfig struct {

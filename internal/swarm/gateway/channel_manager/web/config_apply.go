@@ -296,6 +296,34 @@ func ProcessFiles(params map[string]any) map[string]any {
 	return params
 }
 
+// GetDefaultModels 从 config.yaml 读取 models.defaults 并返回解析环境变量后的列表。
+// 对齐 Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
+func GetDefaultModels() []map[string]any {
+	cfg, err := config.New("")
+	if err != nil {
+		return nil
+	}
+	cfgData, err := cfg.Load()
+	if err != nil {
+		return nil
+	}
+	rawVal := getConfigAny(cfgData, "models.defaults", nil)
+	if rawVal == nil {
+		return nil
+	}
+	rawList, ok := rawVal.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(rawList))
+	for _, item := range rawList {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // isAvailableProvider 检查 provider 是否在可用列表中。
@@ -845,34 +873,6 @@ func inferIsDefault(models []map[string]any) []map[string]any {
 // loadRawModelsDefaults 从 config.yaml 加载原始 models.defaults 列表。
 func loadRawModelsDefaults() []map[string]any {
 	cfgData := getConfigSnapshot()
-	rawVal := getConfigAny(cfgData, "models.defaults", nil)
-	if rawVal == nil {
-		return nil
-	}
-	rawList, ok := rawVal.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(rawList))
-	for _, item := range rawList {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
-// GetDefaultModels 从 config.yaml 读取 models.defaults 并返回解析环境变量后的列表。
-// 对齐 Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
-func GetDefaultModels() []map[string]any {
-	cfg, err := config.New("")
-	if err != nil {
-		return nil
-	}
-	cfgData, err := cfg.Load()
-	if err != nil {
-		return nil
-	}
 	rawVal := getConfigAny(cfgData, "models.defaults", nil)
 	if rawVal == nil {
 		return nil

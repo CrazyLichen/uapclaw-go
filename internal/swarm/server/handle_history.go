@@ -28,12 +28,12 @@ const (
 var (
 	// restorableAssistantEventTypes 可恢复的助手事件类型集合，对齐 Python _HISTORY_RESTORABLE_ASSISTANT_EVENT_TYPES
 	restorableAssistantEventTypes = map[string]bool{
-		"chat.final":              true,
-		"chat.tool_call":          true,
-		"chat.tool_result":        true,
-		"chat.usage_summary":      true,
-		"chat.file":               true,
-		"team.message":            true,
+		"chat.final":               true,
+		"chat.tool_call":           true,
+		"chat.tool_result":         true,
+		"chat.usage_summary":       true,
+		"chat.file":                true,
+		"team.message":             true,
 		"context.compact_boundary": true,
 		"context.compact_summary":  true,
 	}

@@ -89,7 +89,7 @@ func TestModelPoolEntry_ToTeamModelConfig_MetadataMerge(t *testing.T) {
 	entry := NewModelPoolEntry("gpt-4", "key-1", "https://api.openai.com/v1", "OpenAI",
 		WithMetadata(map[string]any{
 			"client": map[string]any{
-				"timeout":    30.0,
+				"timeout":     30.0,
 				"max_retries": 5,
 				"verify_ssl":  false,
 				"ssl_cert":    "/path/to/cert.pem",
@@ -221,7 +221,7 @@ func TestModelPoolEntry_ToTeamModelConfig_空Metadata(t *testing.T) {
 func TestModelRouterConfig_Validate_正常(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{"gpt-4", "claude-3"},
 	}
@@ -234,7 +234,7 @@ func TestModelRouterConfig_Validate_正常(t *testing.T) {
 func TestModelRouterConfig_Validate_空白(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{"gpt-4", "", "  "},
 	}
@@ -251,7 +251,7 @@ func TestModelRouterConfig_Validate_空白(t *testing.T) {
 func TestModelRouterConfig_Validate_重复(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{"gpt-4", "claude-3", "gpt-4"},
 	}
@@ -268,7 +268,7 @@ func TestModelRouterConfig_Validate_重复(t *testing.T) {
 func TestModelRouterConfig_Validate_空列表(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{},
 	}
@@ -282,7 +282,7 @@ func TestModelRouterConfig_Validate_空列表(t *testing.T) {
 func TestModelRouterConfig_ToPoolEntries(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{"gpt-4", "claude-3"},
 		Metadata:    map[string]any{"weight": 1.0},
@@ -377,7 +377,7 @@ func TestInheritPoolIDs_部分匹配(t *testing.T) {
 		*NewModelPoolEntry("claude-3", "key-2", "https://api.anthropic.com", "Anthropic", WithModelID("id-2")),
 	}
 	newPool := []ModelPoolEntry{
-		*NewModelPoolEntry("gpt-4", "key-1", "https://api.openai.com/v1", "OpenAI", WithModelID("new-id-1")),   // 匹配
+		*NewModelPoolEntry("gpt-4", "key-1", "https://api.openai.com/v1", "OpenAI", WithModelID("new-id-1")),        // 匹配
 		*NewModelPoolEntry("qwen", "key-3", "https://dashscope.aliyuncs.com", "DashScope", WithModelID("new-id-2")), // 不匹配
 	}
 
@@ -496,7 +496,7 @@ func TestModelPoolEntry_ToTeamModelConfig_Metadata中同名键被覆盖(t *testi
 func TestModelRouterConfig_ToPoolEntries_无Metadata(t *testing.T) {
 	r := &ModelRouterConfig{
 		APIBaseURL:  "https://openrouter.ai/v1",
-		APIKey:     "key-1",
+		APIKey:      "key-1",
 		APIProvider: "OpenRouter",
 		ModelNames:  []string{"gpt-4"},
 	}

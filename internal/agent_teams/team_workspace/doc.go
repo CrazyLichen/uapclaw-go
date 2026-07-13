@@ -8,8 +8,7 @@
 //
 //	team_workspace/
 //	├── doc.go           # 包文档
-//	├── models.go        # 核心数据结构与枚举定义
-//	└── models_test.go   # 模型单元测试
+//	└── models.go        # 核心数据结构与枚举定义
 //
 // 对应 Python 代码：openjiuwen/agent_teams/team_workspace/models.py
 package team_workspace

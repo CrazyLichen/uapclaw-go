@@ -10,8 +10,7 @@
 //
 //	reranker/
 //	├── doc.go              # 包文档
-//	├── base.go             # BaseReranker 接口 + RerankerConfig + Document + RerankOption
-//	└── base_test.go        # 单元测试
+//	└── base.go             # BaseReranker 接口 + RerankerConfig + Document + RerankOption
 //
 // 对应 Python 代码：
 //

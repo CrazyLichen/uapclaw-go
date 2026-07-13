@@ -7,8 +7,7 @@
 //
 //	database/
 //	├── doc.go           # 包文档
-//	├── config.go        # DatabaseConfig 等配置结构体与构造函数
-//	└── config_test.go   # 配置相关测试
+//	└── config.go        # DatabaseConfig 等配置结构体与构造函数
 //
 // 对应 Python 代码：openjiuwen/agent_teams/tools/database/
 package database

@@ -61,8 +61,8 @@ func ResolveSDKChoice() string {
 // 路由规则：
 //   - sdk="harness" + mode="code" → CodeAdapter
 //   - sdk="harness" + 其余 mode → DeepAdapter
-//   - sdk="pi" → error（尚未实现）
-//   - 未知 sdk → error
+//   - sdk="pi" → 错误（尚未实现）
+//   - 未知 sdk → 错误
 func CreateAdapter(sdk string, mode string) (AgentAdapter, error) {
 	sdkName := sdk
 	if sdkName == "" {

@@ -21,8 +21,7 @@
 //	├── doc.go           # 包文档
 //	├── origin.go        # 核心校验逻辑（OriginChecker 结构体 + 方法）
 //	├── gorilla.go       # gorilla/websocket Upgrader.CheckOrigin 适配器
-//	├── nethttp.go       # net/http 中间件适配器
-//	└── origin_test.go   # 单元测试
+//	└── nethttp.go       # net/http 中间件适配器
 //
 // 对应 Python 代码：jiuwenswarm/common/security/ws_origin.py
 package wsorigin

@@ -10,8 +10,7 @@
 //
 //	path/
 //	├── doc.go         # 包文档
-//	├── paths.go       # 路径解析与回退逻辑、18个路径辅助函数
-//	└── paths_test.go  # 路径计算测试
+//	└── paths.go       # 路径解析与回退逻辑、18个路径辅助函数
 //
 // 对应 Python 代码：jiuwenswarm/common/utils.py（路径管理、_resolve_paths、prepare_workspace）
 package path

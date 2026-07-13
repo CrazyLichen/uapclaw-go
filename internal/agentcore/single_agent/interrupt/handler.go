@@ -341,9 +341,9 @@ func BuildInterruptResult(payloads []PayloadEntry) map[string]any {
 //
 // 对齐 Python: _collect_interrupts(results, tool_calls)
 // 返回:
-//   - interruptedTools: outerID → ToolInterruptEntry
-//   - payloads: []PayloadEntry
-//   - autoConfirmMapping: innerID → autoConfirmKey
+//   - interruptedTools: outerID → ToolInterruptEntry（中断工具条目）
+//   - payloads: []PayloadEntry（负载条目列表）
+//   - autoConfirmMapping: innerID → autoConfirmKey（自动确认映射）
 func (h *ToolInterruptHandler) collectInterrupts(
 	results []saschema.ExecuteResult,
 	toolCalls []*llmschema.ToolCall,

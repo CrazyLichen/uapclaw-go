@@ -106,4 +106,3 @@ func NewWorktreeConfig() WorktreeConfig {
 		LifecyclePolicy:       WorktreeLifecyclePolicyAuto,
 	}
 }
-

@@ -103,7 +103,7 @@ type RPCHandlerFunc func(ctx context.Context, params map[string]any, sessionID s
 // EventSender 事件推送回调，用于向 WebSocket 客户端推送事件帧。
 type EventSender func(event string, payload map[string]any)
 
-// ──────────────────────────── 常数 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// WsErrBadRequest 请求参数错误
@@ -921,7 +921,7 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 	sessionsDir := workspace.AgentSessionsDir()
 
 	// 解析分页参数（对齐 Python L1264-1271）
-	// Python 默认 limit=20，clamp: limit = max(1, min(limit, 200))
+	// Python 默认 limit=20，截断限制：limit = max(1, min(limit, 200))
 	limit := 20
 	offset := 0
 	if params != nil {
@@ -942,7 +942,7 @@ func handleSessionList(_ context.Context, params map[string]any, _ string) (map[
 			}
 		}
 	}
-	// clamp: limit = max(1, min(limit, 200))
+	// 截断限制：limit = max(1, min(limit, 200))
 	if limit < 1 {
 		limit = 1
 	}
@@ -1219,8 +1219,8 @@ func handleModelsValidate() RPCHandlerFunc {
 		// 尝试 max_tokens=1 验证
 		maxTokens1 := 1
 		modelConfig := &llmSchema.ModelRequestConfig{
-			ModelName:  model,
-			MaxTokens:  &maxTokens1,
+			ModelName:   model,
+			MaxTokens:   &maxTokens1,
 			Temperature: 0,
 		}
 

@@ -55,6 +55,9 @@ type Trainer struct {
 	checkpointManager any
 }
 
+// TrainerOption Trainer 构造选项函数。
+type TrainerOption func(*Trainer)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -82,7 +85,7 @@ func NewTrainer(opts ...TrainerOption) *Trainer {
 		numParallel:            defaultNumParallel,
 		earlyStopScore:         defaultEarlyStopScore,
 		checkpointEveryNEpochs: defaultCheckpointEveryNEpochs,
-		checkpointOnImprove:   defaultCheckpointOnImprove,
+		checkpointOnImprove:    defaultCheckpointOnImprove,
 		callbacks:              NewCallbacks(),
 	}
 	for _, opt := range opts {
@@ -163,21 +166,6 @@ func (t *Trainer) SetCallbacks(callbacks *Callbacks) {
 	t.callbacks = callbacks
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// meanScore 计算评估用例的平均分数。
-//
-// 对应 Python: Trainer._mean_score(evaluated)
-func meanScore(_ any) float64 {
-	// TODO: 依赖 9.70b EvaluatedCase 填充后实现
-	return 0
-}
-
-// ──────────────────────────── TrainerOption 函数选项 ────────────────────────────
-
-// TrainerOption Trainer 构造选项函数。
-type TrainerOption func(*Trainer)
-
 // WithUpdater 设置更新生成器。
 // 依赖 9.70c Updater Protocol，暂用 any 占位。
 func WithUpdater(updater any) TrainerOption {
@@ -242,4 +230,14 @@ func WithResumeFrom(path string) TrainerOption {
 // 依赖 9.78，暂用 any 占位。
 func WithCheckpointManager(manager any) TrainerOption {
 	return func(t *Trainer) { t.checkpointManager = manager }
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// meanScore 计算评估用例的平均分数。
+//
+// 对应 Python: Trainer._mean_score(evaluated)
+func meanScore(_ any) float64 {
+	// TODO: 依赖 9.70b EvaluatedCase 填充后实现
+	return 0
 }

@@ -7,8 +7,7 @@
 //
 //	command_parser/
 //	├── doc.go              # 包文档
-//	├── slash_command.go    # Slash 命令解析器
-//	└── slash_command_test.go # 解析器测试
+//	└── slash_command.go    # Slash 命令解析器
 //
 // 对应 Python 代码：jiuwenswarm/gateway/message_handler/command_parser/
 package command_parser

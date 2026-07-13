@@ -10,6 +10,20 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// policyBuilder filesystem policy 构建器，封装可变状态。
+// 对齐 Python: build_filesystem_policy 内部的闭包状态
+type policyBuilder struct {
+	allowFiles       []map[string]any
+	allowDirs        []map[string]any
+	bindMounts       []map[string]any
+	uploadList       []map[string]string
+	writablePaths    []string
+	readWritePromote []string
+	readOnlyPromote  []string
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // envSandboxProjectDir 沙箱项目目录环境变量。
@@ -168,18 +182,6 @@ func BuildFilesystemPolicy(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// policyBuilder filesystem policy 构建器，封装可变状态。
-// 对齐 Python: build_filesystem_policy 内部的闭包状态
-type policyBuilder struct {
-	allowFiles       []map[string]any
-	allowDirs        []map[string]any
-	bindMounts       []map[string]any
-	uploadList       []map[string]string
-	writablePaths    []string
-	readWritePromote []string
-	readOnlyPromote  []string
-}
 
 // recordRWBind 注册 rw bind mount。
 // 对齐 Python: _record_rw_bind(host_path, sandbox_path, *, is_dir, permissions)

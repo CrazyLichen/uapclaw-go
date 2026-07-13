@@ -11,9 +11,7 @@
 //	├── doc.go                 # 包文档
 //	├── interface.go           # AgentTransport 接口定义
 //	├── channel_transport.go   # ChannelTransport 进程内实现
-//	├── wire.go                # Wire 编码工具（对齐 Python gateway_push/wire.py + agent_client.py）
-//	├── wire_test.go           # Wire 编码测试
-//	└── channel_transport_test.go # ChannelTransport 测试
+//	└── wire.go                # Wire 编码工具（对齐 Python gateway_push/wire.py + agent_client.py）
 //
 // 对应 Python 代码：jiuwenswarm/server/gateway_push/transport.py (进程内路径) + wire.py + agent_client.py
 package transport

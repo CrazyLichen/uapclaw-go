@@ -127,12 +127,12 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 			}
 			textContent = strings.Join(lines, "\n")
 		} else if o.Tail > 0 {
-		// 对齐 Python _read_tail: 反向 seek 读取，避免大文件 OOM
-		tailLines, tailErr := readTail(resolvedPath, o.Tail)
-		if tailErr != nil {
-			return f.createErrorResult(methodName, fmt.Sprintf("tail read failed: %s", tailErr), startTime), nil
-		}
-		textContent = strings.Join(tailLines, "\n")
+			// 对齐 Python _read_tail: 反向 seek 读取，避免大文件 OOM
+			tailLines, tailErr := readTail(resolvedPath, o.Tail)
+			if tailErr != nil {
+				return f.createErrorResult(methodName, fmt.Sprintf("tail read failed: %s", tailErr), startTime), nil
+			}
+			textContent = strings.Join(tailLines, "\n")
 		} else if o.LineRange[0] > 0 && o.LineRange[1] > 0 {
 			start := o.LineRange[0] - 1 // 1-indexed to 0-indexed
 			end := o.LineRange[1]

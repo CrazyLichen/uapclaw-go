@@ -9,8 +9,7 @@
 //	trainer/
 //	├── doc.go           # 包文档
 //	├── trainer.go       # Trainer 结构体 + 方法桩 + TrainerOption
-//	├── progress.go      # Progress + Callbacks 结构体
-//	└── trainer_test.go  # 测试占位
+//	└── progress.go      # Progress + Callbacks 结构体
 //
 // 对应 Python 代码：openjiuwen/agent_evolving/trainer/
 package trainer

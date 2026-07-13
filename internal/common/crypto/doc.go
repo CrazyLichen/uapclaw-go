@@ -18,8 +18,7 @@
 //	├── doc.go           # 包文档
 //	├── aes_gcm.go       # AES-256-GCM 加解密实现
 //	├── registry.go      # 加密算法注册表（并发安全）
-//	├── crypto.go        # CryptoProvider 接口 + 全局管理 + AesGcmProvider
-//	└── crypto_test.go   # 单元测试
+//	└── crypto.go        # CryptoProvider 接口 + 全局管理 + AesGcmProvider
 //
 // 对应 Python 代码：
 //   - openjiuwen/core/common/security/crypt_utils.py  (BaseCrypt, AesGcmCrypt, CryptUtils)

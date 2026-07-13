@@ -8,8 +8,7 @@
 //
 //	s3/
 //	├── doc.go     # 包文档
-//	├── s3.go      # S3Client 实现（NewS3Client + 6 个接口方法）
-//	└── s3_test.go # S3Client 单元测试（httptest 模拟）
+//	└── s3.go      # S3Client 实现（NewS3Client + 6 个接口方法）
 //
 // 对应 Python 代码：openjiuwen/core/foundation/store/object/aioboto_storage_client.py
 package s3

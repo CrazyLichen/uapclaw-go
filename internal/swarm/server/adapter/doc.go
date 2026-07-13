@@ -27,11 +27,7 @@
 //	├── deep_adapter_stream.go    # parseStreamChunk 15+ 种 chunk + usage 累加器
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
-//	├── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
-//	├── interface_test.go         # 接口编译期检查测试
-//	├── factory_test.go           # 工厂函数单元测试
-//	├── deep_adapter_test.go      # DeepAdapter 单元测试
-//	└── code_adapter_test.go      # CodeAdapter 单元测试
+//	└── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/interface_deep.py
 package adapter

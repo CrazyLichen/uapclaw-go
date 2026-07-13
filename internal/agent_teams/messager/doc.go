@@ -8,8 +8,7 @@
 //
 //	messager/
 //	├── doc.go           # 包文档
-//	├── base.go          # MessagerTransportConfig 等配置结构体与构建函数
-//	└── base_test.go     # 配置相关测试
+//	└── base.go          # MessagerTransportConfig 等配置结构体与构建函数
 //
 // 对应 Python 代码：openjiuwen/agent_teams/messager/base.py
 package messager

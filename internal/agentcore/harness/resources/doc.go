@@ -8,8 +8,7 @@
 //	resources/
 //	├── doc.go              # 包文档
 //	├── resources.go        # 规则结构体定义与解析函数
-//	├── builtin_rules.yaml  # 内置参数级安全规则定义
-//	└── resources_test.go   # 资源加载与解析测试
+//	└── builtin_rules.yaml  # 内置参数级安全规则定义
 //
 // 对应 Python 代码：openjiuwen/harness/resources/
 package resources

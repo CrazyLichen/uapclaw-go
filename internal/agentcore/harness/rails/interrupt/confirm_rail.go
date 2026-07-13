@@ -71,8 +71,8 @@ func NewConfirmInterruptRail(toolNames ...string) *ConfirmInterruptRail {
 
 // resolveConfirmInterrupt ConfirmInterruptRail 的中断解析逻辑。
 //
-// auto_confirm → Approve；无输入 → Interrupt；
-// approved → Approve；!approved → Reject(feedback)。
+// auto_confirm → Approve（自动批准）；无输入 → Interrupt（中断）；
+// approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）。
 //
 // 对齐 Python: ConfirmInterruptRail.resolve_interrupt(ctx, tool_call, user_input, auto_confirm_config)
 func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
@@ -107,7 +107,7 @@ func (r *ConfirmInterruptRail) resolveConfirmInterrupt(
 		})
 	}
 
-	// approved → Approve; !approved → Reject(feedback)
+	// approved → Approve（批准）；!approved → Reject(feedback)（拒绝并附带反馈）
 	if payload.Approved {
 		return r.Approve("")
 	}

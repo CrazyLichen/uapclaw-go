@@ -9,8 +9,7 @@
 //
 //	migrator/
 //	├── doc.go                     # 包文档
-//	├── memory_meta_manager.go     # MemoryMetaManager schema 版本管理器
-//	└── memory_meta_manager_test.go
+//	└── memory_meta_manager.go     # MemoryMetaManager schema 版本管理器
 //
 // 对应 Python 代码：
 //

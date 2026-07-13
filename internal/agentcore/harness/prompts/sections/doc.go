@@ -23,8 +23,7 @@
 //	├── task_tool.go             # 任务工具节
 //	├── task_completion.go       # 完成信号节
 //	├── todo.go                  # 待办节
-//	├── reload.go                # 上下文压缩节
-//	└── sections_test.go        # 测试
+//	└── reload.go                # 上下文压缩节
 //
 // 对应 Python 代码：openjiuwen/harness/prompts/sections/
 package sections

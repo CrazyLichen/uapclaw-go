@@ -8,11 +8,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
-// logComponent 日志组件标识
-const logComponent = logger.ComponentCommon
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // TeamMember 团队成员状态管理。
@@ -35,6 +30,11 @@ type TeamMember struct {
 	// Desc 人设描述
 	Desc string
 }
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// logComponent 日志组件标识
+const logComponent = logger.ComponentCommon
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

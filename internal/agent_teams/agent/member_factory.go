@@ -29,9 +29,9 @@ func CreateMemberHandle(
 		return nil
 	}
 	return &TeamMember{
-		MemberName: memberName,
+		MemberName:  memberName,
 		DisplayName: memberName,
-		AgentCard:  agentCard,
-		Desc:       blueprint.Ctx.Persona,
+		AgentCard:   agentCard,
+		Desc:        blueprint.Ctx.Persona,
 	}
 }

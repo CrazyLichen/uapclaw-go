@@ -14,8 +14,7 @@
 //	├── template_soul.go          # SOUL.md 中英文模板
 //	├── template_heartbeat.go     # HEARTBEAT.md 中英文模板
 //	├── template_session_memory.go # session_memory.md 中英文模板
-//	├── template_memory.go        # MEMORY.md 中英文模板
-//	└── workspace_content_test.go # 单元测试
+//	└── template_memory.go        # MEMORY.md 中英文模板
 //
 // 对应 Python 代码：openjiuwen/harness/prompts/workspace_content/
 package workspace_content

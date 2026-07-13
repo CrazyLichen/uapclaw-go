@@ -21,7 +21,7 @@ const DefaultLeaderMemberName string = "team_leader"
 //
 // human_agent 仅在 enable_hitt=True 时由运行时注入，手动声明保留名会被拒绝。
 var ReservedMemberNames = map[string]bool{
-	HumanAgentMemberName:     true,
-	UserPseudoMemberName:     true,
+	HumanAgentMemberName:    true,
+	UserPseudoMemberName:    true,
 	DefaultLeaderMemberName: true,
 }

@@ -151,7 +151,7 @@ func TestHandleConfigGet(t *testing.T) {
 
 func TestHandleConfigSet(t *testing.T) {
 	// 测试 handleConfigSet 逻辑（onConfigSaved 为 nil，跳过热重载）
-	handler := handleConfigSet(nil, nil)
+	handler := handleConfigSet(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"model_provider": "OpenAI",
 		"model":          "gpt-4",
@@ -339,7 +339,7 @@ func TestConfigEnvMap_条目数(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_params为空(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
@@ -347,7 +347,7 @@ func TestHandleConfigSaveAll_params为空(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
@@ -359,7 +359,7 @@ func TestHandleConfigSaveAll_仅config子载荷(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_config非对象(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": "not an object",
 	}, "")
@@ -369,7 +369,7 @@ func TestHandleConfigSaveAll_config非对象(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_models无效类型(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"models": "not a list",
 	}, "")
@@ -401,7 +401,7 @@ func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"config": map[string]any{
 			"model_provider": "OpenAI",
@@ -415,7 +415,7 @@ func TestHandleConfigSaveAll_含agents和team(t *testing.T) {
 }
 
 func TestHandleConfigSaveAll_空params对象(t *testing.T) {
-	handler := handleConfigSaveAll(nil, nil)
+	handler := handleConfigSaveAll(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{}, "")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
@@ -526,14 +526,14 @@ func TestHandleSessionDelete_team模式Agent不可用(t *testing.T) {
 }
 
 func TestHandleConfigSet_params为空(t *testing.T) {
-	handler := handleConfigSet(nil, nil)
+	handler := handleConfigSet(nil, nil, nil)
 	result, err := handler(context.Background(), nil, "")
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
 
 func TestHandleConfigSet_无效Provider(t *testing.T) {
-	handler := handleConfigSet(nil, nil)
+	handler := handleConfigSet(nil, nil, nil)
 	result, err := handler(context.Background(), map[string]any{
 		"model_provider": "InvalidProvider",
 	}, "")
@@ -587,10 +587,10 @@ func TestFlattenTeamConfig_有team(t *testing.T) {
 			// 对齐 Python: modes.team 为 dict（key=team_name, value=team_spec）
 			"team": map[string]any{
 				"my_team": map[string]any{
-					"team_name":    "team1",
-					"lifecycle":    "async",
+					"team_name":     "team1",
+					"lifecycle":     "async",
 					"teammate_mode": "route",
-					"spawn_mode":   "droplet",
+					"spawn_mode":    "droplet",
 					"leader": map[string]any{
 						"member_name":  "leader1",
 						"display_name": "Leader",

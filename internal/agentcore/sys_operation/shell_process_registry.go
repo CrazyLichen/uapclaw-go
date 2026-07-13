@@ -28,6 +28,14 @@ type ShellProcessRegistry struct {
 // 对齐 Python _shell_session_id: contextvars.ContextVar。
 type shellSessionIDKey struct{}
 
+// ProcessInfo 进程信息
+type ProcessInfo struct {
+	// SessionID 会话标识
+	SessionID string
+	// PID 进程 ID
+	PID int
+}
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -123,14 +131,6 @@ func (r *ShellProcessRegistry) GetStdinPipe(sessionID string, proc *os.Process) 
 		return nil
 	}
 	return pipes[proc]
-}
-
-// ProcessInfo 进程信息
-type ProcessInfo struct {
-	// SessionID 会话标识
-	SessionID string
-	// PID 进程 ID
-	PID int
 }
 
 // ListProcesses 返回所有已注册进程信息。

@@ -64,13 +64,13 @@ type DeploymentConfig struct {
 // 对应 Python: IntelliRouterClientConfig.from_model_client_config(config)
 //
 // Extra 字段命名约定：intelli_router_{field_name}
-//   - intelli_router_deployments → Deployments
-//   - intelli_router_strategy → Strategy
-//   - intelli_router_num_retries → NumRetries
-//   - intelli_router_timeout → Timeout
-//   - intelli_router_strategy_kwargs → StrategyKwargs
-//   - intelli_router_enable_health_check → EnableHealthCheck
-//   - intelli_router_health_check_interval → HealthCheckInterval
+//   - intelli_router_deployments → Deployments（部署列表）
+//   - intelli_router_strategy → Strategy（路由策略）
+//   - intelli_router_num_retries → NumRetries（重试次数）
+//   - intelli_router_timeout → Timeout（超时时间）
+//   - intelli_router_strategy_kwargs → StrategyKwargs（策略参数）
+//   - intelli_router_enable_health_check → EnableHealthCheck（启用健康检查）
+//   - intelli_router_health_check_interval → HealthCheckInterval（健康检查间隔）
 func FromModelClientConfig(config *llmschema.ModelClientConfig) *IntelliRouterClientConfig {
 	extra := config.Extra
 	if extra == nil {

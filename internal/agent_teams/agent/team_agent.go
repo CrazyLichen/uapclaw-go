@@ -95,7 +95,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Properties — 委托给 configurator
+// 属性 — 委托给 configurator
 // ──────────────────────────────────────────────────────────────
 
 // Blueprint 返回静态装配蓝图，configure() 前为 nil。
@@ -354,7 +354,7 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 }
 
 // ──────────────────────────────────────────────────────────────
-// BaseAgent 核心方法: Configure / Invoke / Stream
+// BaseAgent 核心方法：Configure / Invoke / Stream
 // ──────────────────────────────────────────────────────────────
 
 // Configure 配置 TeamAgent。

@@ -20,12 +20,6 @@
 //	├── reloader.go       # fsnotify 热重载：Reloader/OnReload/Start/Stop
 //	├── merge.go          # 配置迁移：DeepMerge/MigrateFromTemplate
 //	├── doc.go            # 包文档
-//	├── config_test.go    # 核心配置测试
-//	├── envvar_test.go    # 环境变量解析测试
-//	├── normalize_test.go # 配置后处理测试
-//	├── sections_test.go  # 分段方法测试
-//	├── reloader_test.go  # 热重载测试
-//	├── merge_test.go     # 迁移合并测试
 //	└── testdata/         # 测试数据
 //	    ├── config.yaml       # 示例配置
 //	    ├── envvar_config.yaml # 环境变量测试配置

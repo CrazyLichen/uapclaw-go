@@ -85,11 +85,11 @@ type ModelPoolEntryOption func(*ModelPoolEntry)
 // 对应 Python: ModelPoolEntry(model_name=..., api_key=..., api_base_url=..., api_provider=...)
 func NewModelPoolEntry(modelName, apiKey, apiBaseURL, apiProvider string, opts ...ModelPoolEntryOption) *ModelPoolEntry {
 	entry := &ModelPoolEntry{
-		ModelName:  modelName,
-		APIKey:     apiKey,
-		APIBaseURL: apiBaseURL,
+		ModelName:   modelName,
+		APIKey:      apiKey,
+		APIBaseURL:  apiBaseURL,
 		APIProvider: apiProvider,
-		ModelID:    uuid.New().String(),
+		ModelID:     uuid.New().String(),
 	}
 	for _, opt := range opts {
 		opt(entry)
@@ -206,12 +206,12 @@ func (r *ModelRouterConfig) ToPoolEntries() []ModelPoolEntry {
 	entries := make([]ModelPoolEntry, 0, len(r.ModelNames))
 	for _, name := range r.ModelNames {
 		entry := ModelPoolEntry{
-			ModelName:  name,
-			APIKey:     r.APIKey,
-			APIBaseURL: r.APIBaseURL,
+			ModelName:   name,
+			APIKey:      r.APIKey,
+			APIBaseURL:  r.APIBaseURL,
 			APIProvider: r.APIProvider,
-			ModelID:    uuid.New().String(),
-			Metadata:   deepCopyMap(r.Metadata),
+			ModelID:     uuid.New().String(),
+			Metadata:    deepCopyMap(r.Metadata),
 		}
 		entries = append(entries, entry)
 	}
@@ -267,8 +267,8 @@ func InheritPoolIDs(currentPool, newPool []ModelPoolEntry) []ModelPoolEntry {
 func entrySignature(entry ModelPoolEntry) string {
 	// 构建排除 model_id 的 map
 	sig := map[string]any{
-		"model_name":  entry.ModelName,
-		"api_key":     entry.APIKey,
+		"model_name":   entry.ModelName,
+		"api_key":      entry.APIKey,
 		"api_base_url": entry.APIBaseURL,
 		"api_provider": entry.APIProvider,
 	}

@@ -60,8 +60,8 @@ type DeepAdapter struct {
 	workspaceDir string
 	// isCodeAgent 是否编码 Agent 形态（Deep=false, Code=true）
 	// 单点 source-of-truth，决定沙箱"主写入根"：
-	//   - code-agent → project_dir
-	//   - deep-agent → workspace_dir
+	//   - code-agent → project_dir（工程目录）
+	//   - deep-agent → workspace_dir（工作区目录）
 	isCodeAgent bool
 	// mode 当前运行模式（agent.plan / agent.fast / code 等）
 	mode string
@@ -1182,56 +1182,6 @@ func (d *DeepAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	logger.Info(logComponent).Msg("DeepAdapter AbortOnGatewayDisconnect 完成")
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// seedRuntimeCwd 从请求/运行时 CWD 种子 CwdState。
-// 对齐 Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)
-//
-// 解析优先级：
-//   - runtimeCwd：传入的 cwd 参数
-//   - → d.projectDir：项目目录
-//   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
-//
-// workspace_root = workspaceDir or projectDir or os.Getwd()
-func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
-	// workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
-	workspaceRoot := d.workspaceDir
-	if workspaceRoot == "" {
-		workspaceRoot = d.projectDir
-	}
-	if workspaceRoot == "" {
-		workspaceRoot, _ = os.Getwd()
-	}
-
-	// runtime_cwd = str(cwd or "").strip()
-	runtimeCwd := strings.TrimSpace(cwdArg)
-	// if not runtime_cwd or not os.path.isdir(runtime_cwd):
-	if runtimeCwd == "" || !isDir(runtimeCwd) {
-		runtimeCwd = strings.TrimSpace(d.projectDir)
-	}
-	if runtimeCwd == "" || !isDir(runtimeCwd) {
-		runtimeCwd = workspaceRoot
-	}
-
-	// init_cwd(runtime_cwd, workspace=workspace_root)
-	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
-	ctx = cwd.WithCwdState(ctx, cwdState)
-
-	logger.Info(logComponent).
-		Str("runtime_cwd", runtimeCwd).
-		Str("workspace_root", workspaceRoot).
-		Msg("CWD 已从 runtime 种子初始化")
-
-	return ctx
-}
-
-// isDir 检查路径是否为有效目录。
-// 对齐 Python: os.path.isdir(path)
-func isDir(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
-}
-
 // EnsurePersistentCheckpointer 确保进程级默认检查点器使用 SQLite 持久化。
 //
 // 对应 Python: interface_deep.py ensure_persistent_checkpointer() (line 393-424)
@@ -1290,6 +1240,56 @@ func EnsurePersistentCheckpointer() error {
 		Msg("持久化检查点器已就绪")
 
 	return nil
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// seedRuntimeCwd 从请求/运行时 CWD 种子 CwdState。
+// 对齐 Python: JiuWenClawDeepAdapter._seed_runtime_cwd(cwd) (interface_deep.py:3098-3106)
+//
+// 解析优先级：
+//   - runtimeCwd：传入的 cwd 参数
+//   - → d.projectDir：项目目录
+//   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
+//
+// workspace_root = workspaceDir or projectDir or os.Getwd()
+func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
+	// workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
+	workspaceRoot := d.workspaceDir
+	if workspaceRoot == "" {
+		workspaceRoot = d.projectDir
+	}
+	if workspaceRoot == "" {
+		workspaceRoot, _ = os.Getwd()
+	}
+
+	// runtime_cwd = str(cwd or "").strip()
+	runtimeCwd := strings.TrimSpace(cwdArg)
+	// if not runtime_cwd or not os.path.isdir(runtime_cwd):
+	if runtimeCwd == "" || !isDir(runtimeCwd) {
+		runtimeCwd = strings.TrimSpace(d.projectDir)
+	}
+	if runtimeCwd == "" || !isDir(runtimeCwd) {
+		runtimeCwd = workspaceRoot
+	}
+
+	// init_cwd(runtime_cwd, workspace=workspace_root)
+	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
+	ctx = cwd.WithCwdState(ctx, cwdState)
+
+	logger.Info(logComponent).
+		Str("runtime_cwd", runtimeCwd).
+		Str("workspace_root", workspaceRoot).
+		Msg("CWD 已从 runtime 种子初始化")
+
+	return ctx
+}
+
+// isDir 检查路径是否为有效目录。
+// 对齐 Python: os.path.isdir(path)
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // setCheckpoint 设置持久化检查点。

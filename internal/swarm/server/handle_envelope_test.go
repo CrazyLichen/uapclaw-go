@@ -9,8 +9,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

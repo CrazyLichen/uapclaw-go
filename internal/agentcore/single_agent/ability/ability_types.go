@@ -121,9 +121,9 @@ func BuildToolMessageContent(result any) string {
 // 用于降级路径（cbc==nil）和 railedExecuteSingleToolCall 的异常处理。
 //
 // 转换规则：
-//   - ToolInterruptException → Result=tie, ToolMsg=nil
-//   - AbilityExecutionError  → Result=err, ToolMsg=aee.ToolMessage
-//   - 其他 error             → Result=err, ToolMsg=兜底构建
+//   - ToolInterruptException → Result=tie（平局）, ToolMsg=nil
+//   - AbilityExecutionError  → Result=err（错误）, ToolMsg=aee.ToolMessage
+//   - 其他 error             → Result=err（错误）, ToolMsg=兜底构建
 func errorToExecuteResult(err error, toolCallID string) saschema.ExecuteResult {
 	var tie *saschema.ToolInterruptException
 	if errors.As(err, &tie) {

@@ -65,9 +65,9 @@ func TestMessagerPeerConfig(t *testing.T) {
 // TestSubscriptionHandle 验证订阅句柄字段赋值
 func TestSubscriptionHandle(t *testing.T) {
 	handle := SubscriptionHandle{
-		SubscriptionID: "sub-1",
-		Topic:          "team:default:broadcast",
-		AgentID:        "agent-1",
+		SubscriptionID:  "sub-1",
+		Topic:           "team:default:broadcast",
+		AgentID:         "agent-1",
 		BackendMetadata: map[string]any{"channel": "ch1"},
 	}
 

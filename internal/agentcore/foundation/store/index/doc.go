@@ -11,9 +11,7 @@
 //	index/
 //	├── doc.go           # 包文档
 //	├── base.go          # StorageCodec + MemoryDoc + MemorySearchResult + UserScope + BaseMemoryIndex + MemoryIndexBase
-//	├── base_test.go     # 基类单元测试
-//	├── simple.go        # SimpleMemoryIndex 简单记忆索引实现
-//	└── simple_test.go   # SimpleMemoryIndex 单元测试
+//	└── simple.go        # SimpleMemoryIndex 简单记忆索引实现
 //
 // 对应 Python 代码：
 //

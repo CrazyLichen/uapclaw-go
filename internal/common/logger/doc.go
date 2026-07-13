@@ -32,8 +32,7 @@
 //	├── levels.go        # LogLevel 枚举、LoggingLevels 结构体、级别解析
 //	├── sanitizer.go     # 敏感数据脱敏（4 层正则 + 7 种模式 + SanitizerWriter）
 //	├── rotation.go      # RotationConfig + MutexWriter（包装 lumberjack）
-//	├── component.go     # Component 枚举
-//	└── *_test.go        # 单元测试
+//	└── component.go     # Component 枚举
 //
 // 对应 Python 代码：jiuwenswarm/common/utils.py (logging setup)
 package logger

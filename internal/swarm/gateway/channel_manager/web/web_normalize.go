@@ -198,7 +198,7 @@ func NormalizeGatewayMessage(msg *schema.Message) *schema.Message {
 		}
 	}
 
-	// resume → cancel + intent=resume
+	// resume 转换为 cancel + intent=resume
 	if reqMethod == schema.ReqMethodChatResume {
 		reqMethod = schema.ReqMethodChatCancel
 		if _, hasIntent := params["intent"]; !hasIntent {

@@ -811,7 +811,7 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 	default:
 		// 自动检测逻辑，严格对齐 Python _resolve_execution_plan 的 auto 分支
 		if isWindows {
-			// Windows AUTO：unwrap → PowerShell → POSIX → cmd
+			// Windows AUTO：解包 → PowerShell → POSIX → cmd 逐级降级
 			if unwrapped := UnwrapPowerShellCommand(command); unwrapped != "" {
 				exe := AvailablePowerShell()
 				return []string{exe, "-NoProfile", "-NonInteractive", "-Command", unwrapped}, false, "powershell", nil
@@ -898,8 +898,8 @@ func getLangEncoding(encoding string) string {
 
 // wrapCommandWithBuffering 用 OS 特定的缓冲包装器包装命令（仅在 stream 模式下使用）。
 // 对齐 Python ShellOperation._BUFFERING_WRAPPERS：
-// - Linux: stdbuf -oL -eL /bin/sh -c <quoted_cmd>
-// - macOS: script -q /dev/null /bin/sh -c <quoted_cmd>
+// - Linux: stdbuf -oL -eL /bin/sh -c <quoted_cmd>（行缓冲包装）
+// - macOS: script -q /dev/null /bin/sh -c <quoted_cmd>（伪终端包装）
 // - Windows: 不包装
 func wrapCommandWithBuffering(command string) string {
 	switch runtime.GOOS {

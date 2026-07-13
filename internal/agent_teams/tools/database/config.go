@@ -1,21 +1,5 @@
 package database
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// DatabaseType 数据库类型枚举
-type DatabaseType string
-
-const (
-	// DatabaseTypeSQLite SQLite 数据库
-	DatabaseTypeSQLite DatabaseType = "sqlite"
-	// DatabaseTypePostgreSQL PostgreSQL 数据库
-	DatabaseTypePostgreSQL DatabaseType = "postgresql"
-	// DatabaseTypeMySQL MySQL 数据库
-	DatabaseTypeMySQL DatabaseType = "mysql"
-	// DatabaseTypeMemory 内存数据库
-	DatabaseTypeMemory DatabaseType = "memory"
-)
-
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // DatabaseConfig 数据库配置，对齐 Python DatabaseConfig
@@ -37,6 +21,22 @@ type MemoryDatabaseConfig struct {
 	// ConnectionString 连接字符串
 	ConnectionString string `json:"connection_string"`
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// DatabaseType 数据库类型枚举
+type DatabaseType string
+
+const (
+	// DatabaseTypeSQLite SQLite 数据库
+	DatabaseTypeSQLite DatabaseType = "sqlite"
+	// DatabaseTypePostgreSQL PostgreSQL 数据库
+	DatabaseTypePostgreSQL DatabaseType = "postgresql"
+	// DatabaseTypeMySQL MySQL 数据库
+	DatabaseTypeMySQL DatabaseType = "mysql"
+	// DatabaseTypeMemory 内存数据库
+	DatabaseTypeMemory DatabaseType = "memory"
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

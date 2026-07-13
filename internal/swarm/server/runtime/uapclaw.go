@@ -556,11 +556,11 @@ func (uc *UapClaw) adapterModeForRequest(request *schema.AgentRequest) string {
 	if modeVal, ok := params["mode"]; ok {
 		if modeStr, ok := modeVal.(string); ok && modeStr != "" {
 			modeText := strings.TrimSpace(strings.ToLower(modeStr))
-			// team.plan → code
+			// team.plan 映射为 code 模式
 			if modeText == "team.plan" {
 				return "code"
 			}
-			// code.* → code
+			// code.* 映射为 code 模式
 			if strings.HasPrefix(modeText, "code.") {
 				return "code"
 			}

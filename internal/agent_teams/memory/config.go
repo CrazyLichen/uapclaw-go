@@ -31,12 +31,12 @@ type TeamMemoryConfig struct {
 // shared_memory=true, member_memory_prompt_mode="proactive", timezone_offset_hours=8.0
 func NewTeamMemoryConfig() TeamMemoryConfig {
 	return TeamMemoryConfig{
-		Enabled:                 false,
-		Scenario:                "general",
-		AutoExtract:             true,
-		SharedMemory:            true,
-		MemberMemoryPromptMode:  "proactive",
-		TimezoneOffsetHours:     8.0,
+		Enabled:                false,
+		Scenario:               "general",
+		AutoExtract:            true,
+		SharedMemory:           true,
+		MemberMemoryPromptMode: "proactive",
+		TimezoneOffsetHours:    8.0,
 	}
 }
 
