@@ -116,7 +116,7 @@ func BuildFilesystemPolicy(
 
 	// 处理 files.allow
 	// 对齐 Python: for entry in files_runtime.get("allow") or []:
-	allowEntries, _ := filesRuntime["allow"]
+	allowEntries := filesRuntime["allow"]
 	if allowList, ok := toSlice(allowEntries); ok {
 		for _, entry := range allowList {
 			normalized := normalizeFSEntry(entry, "0666")
@@ -154,7 +154,7 @@ func BuildFilesystemPolicy(
 
 	// 处理 files.deny
 	// 对齐 Python: for entry in files_runtime.get("deny") or []:
-	denyEntries, _ := filesRuntime["deny"]
+	denyEntries := filesRuntime["deny"]
 	if denyList, ok := toSlice(denyEntries); ok {
 		for _, entry := range denyList {
 			normalized := normalizeFSEntry(entry, "0000")
@@ -389,7 +389,7 @@ func ensureIntrinsicFile(path string) bool {
 			Msg("确保固有文件失败：创建文件失败")
 		return false
 	}
-	f.Close()
+	_ = f.Close()
 	logger.Info(logComponent).
 		Str("path", path).
 		Msg("创建空固有文件")
@@ -410,7 +410,7 @@ func normalizeFSEntry(entry any, defaultPermissions string) map[string]any {
 		}
 		return map[string]any{"path": path, "permissions": defaultPermissions}
 	case map[string]any:
-		rawPath, _ := v["path"]
+		rawPath := v["path"]
 		path := strings.TrimSpace(fmt.Sprintf("%v", rawPath))
 		if path == "" || path == "<nil>" {
 			return nil

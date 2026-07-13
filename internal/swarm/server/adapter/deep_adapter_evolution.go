@@ -293,10 +293,7 @@ func (d *DeepAdapter) countFullContextTokens(ctx context.Context, sessionID stri
 	}
 
 	// 获取模型名称用于 token 计数
-	modelName := ""
-	if reactAgent.Config() != nil {
-		modelName = reactAgent.Config().ModelName()
-	}
+	modelName := reactAgent.Config().ModelName()
 
 	// 计算 system prompt token 数
 	totalTokens := 0

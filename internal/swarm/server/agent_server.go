@@ -94,8 +94,9 @@ func (s *AgentServer) Start(ctx context.Context) error {
 
 	ctx, s.cancel = context.WithCancel(ctx)
 	go func() {
-		s.runErr = s.run(ctx)
+		err := s.run(ctx)
 		s.runningMu.Lock()
+		s.runErr = err
 		s.running = false
 		s.runningMu.Unlock()
 	}()
@@ -136,7 +137,10 @@ func (s *AgentServer) Stop() error {
 	<-s.stopCh
 
 	logger.Info(logComponent).Msg("AgentServer 已停止")
-	return s.runErr
+	s.runningMu.RLock()
+	err := s.runErr
+	s.runningMu.RUnlock()
+	return err
 }
 
 // AgentManager 返回 AgentManager 实例，供 handler 使用。

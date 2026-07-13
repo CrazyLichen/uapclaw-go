@@ -261,12 +261,14 @@ func (d *DeepAdapter) syncMultimodalToolsForRuntime() {
 
 	// 视频工具同步
 	if d.videoToolRegistered {
-		// ⤵️ 9.38-49: 确保视频工具已注册
+		// TODO: ⤵️ 9.38-49: 确保视频工具已注册
+		_ = d.videoToolRegistered
 	}
 
 	// 图片生成工具同步
 	if d.imageGenToolRegistered {
-		// ⤵️ 9.38-49: 确保图片生成工具已注册
+		// TODO: ⤵️ 9.38-49: 确保图片生成工具已注册
+		_ = d.imageGenToolRegistered
 	}
 }
 

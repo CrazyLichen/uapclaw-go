@@ -283,7 +283,7 @@ func ValidateLeaderModelResolved(leaderAgent DeepAgentSpec, leaderMemberModel *T
 	if leaderMemberModel != nil || leaderAgent.Model != nil {
 		return nil
 	}
-	return fmt.Errorf("Leader 没有模型配置。当 model_pool 已配置时，Leader 必须通过 model_pool 分配或在 agents[\"leader\"].model 中显式指定模型")
+	return fmt.Errorf("leader 没有模型配置。当 model_pool 已配置时，Leader 必须通过 model_pool 分配或在 agents[\"leader\"].model 中显式指定模型")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -307,7 +307,7 @@ func (s *TeamAgentSpec) defaultTransportForSpawnMode() {
 func (s *TeamAgentSpec) validateReservedNames() error {
 	if s.Leader.MemberName == agentteams.HumanAgentMemberName ||
 		s.Leader.MemberName == agentteams.UserPseudoMemberName {
-		return fmt.Errorf("Leader 不能使用保留名 %q", s.Leader.MemberName)
+		return fmt.Errorf("leader 不能使用保留名 %q", s.Leader.MemberName)
 	}
 	for _, m := range s.PredefinedMembers {
 		if !agentteams.ReservedMemberNames[m.MemberName] {

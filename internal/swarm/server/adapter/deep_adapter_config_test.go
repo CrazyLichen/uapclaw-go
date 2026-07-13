@@ -153,11 +153,7 @@ func TestResolveModelName_空名称(t *testing.T) {
 func TestIsAcpToolProfile_acpTool配置(t *testing.T) {
 	d := NewDeepAdapter()
 	configBase := map[string]any{
-		"models": map[string]any{
-			"defaults": []any{
-				map[string]any{"profile": "acp_tool"},
-			},
-		},
+		"tool_profile": "acp",
 	}
 	if !d.isAcpToolProfile(configBase) {
 		t.Error("应检测到 acp_tool profile")
@@ -194,11 +190,7 @@ func TestIsAcpToolProfile_无models段(t *testing.T) {
 func TestSkillIncludeToolsForProfile_acpTool(t *testing.T) {
 	d := NewDeepAdapter()
 	configBase := map[string]any{
-		"models": map[string]any{
-			"defaults": []any{
-				map[string]any{"profile": "acp_tool"},
-			},
-		},
+		"tool_profile": "acp",
 	}
 	if d.skillIncludeToolsForProfile(configBase) {
 		t.Error("ACP profile 下 skill 不应包含工具")

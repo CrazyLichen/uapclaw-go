@@ -868,7 +868,7 @@ func readTail(filePath string, tail int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	const chunkSize = 8192 // 对齐 Python TAIL_CHUNK_SIZE
 
