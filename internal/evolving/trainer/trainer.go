@@ -35,6 +35,16 @@ type Trainer struct {
 	// earlyStopScore 早停分数阈值。
 	// 对应 Python: _early_stop_score, 默认 TuneConstant.default_early_stop_score=1.0
 	earlyStopScore float64
+	// checkpointDir 检查点目录。非空启用检查点保存。
+	// 9.78 填充时由此字段创建 FileCheckpointStore(checkpointDir) 赋给 checkpointStore。
+	// 对应 Python: checkpoint_dir
+	checkpointDir string
+	// checkpointEveryNEpochs 每 N 个 epoch 保存一次检查点。
+	// 对应 Python: checkpoint_every_n_epochs, 默认 1
+	checkpointEveryNEpochs int
+	// checkpointOnImprove 验证分数提升时是否保存检查点。
+	// 对应 Python: checkpoint_on_improve, 默认 true
+	checkpointOnImprove bool
 	// checkpointStore 检查点存储。
 	// 依赖 9.78 EvolveCheckpoint，暂用 any 占位，填充后替换为 evolving/checkpointing.FileStore
 	checkpointStore any
@@ -54,8 +64,10 @@ const (
 	defaultNumParallel = 1
 	// 默认早停分数，对应 Python TuneConstant.default_early_stop_score=1.0
 	defaultEarlyStopScore = 1.0
-	// 默认迭代次数，对应 Python TuneConstant.default_iteration_num=3
-	defaultNumIterations = 3
+	// 默认每 N epoch 保存检查点，对应 Python checkpoint_every_n_epochs=1
+	defaultCheckpointEveryNEpochs = 1
+	// 默认验证提升时保存检查点，对应 Python checkpoint_on_improve=True
+	defaultCheckpointOnImprove = true
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -67,9 +79,11 @@ const (
 // 对应 Python: Trainer.__init__(updater, evaluator, extractor, callbacks, ...)
 func NewTrainer(opts ...TrainerOption) *Trainer {
 	t := &Trainer{
-		numParallel:    defaultNumParallel,
-		earlyStopScore: defaultEarlyStopScore,
-		callbacks:      NewCallbacks(),
+		numParallel:            defaultNumParallel,
+		earlyStopScore:         defaultEarlyStopScore,
+		checkpointEveryNEpochs: defaultCheckpointEveryNEpochs,
+		checkpointOnImprove:   defaultCheckpointOnImprove,
+		callbacks:              NewCallbacks(),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -199,14 +213,23 @@ func WithEarlyStopScore(score float64) TrainerOption {
 	return func(t *Trainer) { t.earlyStopScore = score }
 }
 
-// WithCheckpointDir 设置检查点目录（启用检查点保存）。
+// WithCheckpointDir 设置检查点目录（非空启用检查点保存）。
+// 9.78 填充时由此字段创建 FileCheckpointStore(dir) 赋给 checkpointStore。
 // 对应 Python: checkpoint_dir, None 表示禁用。
 func WithCheckpointDir(dir string) TrainerOption {
-	return func(t *Trainer) {
-		// checkpointStore 将在依赖 9.78 填充时由 FileCheckpointStore(dir) 创建
-		// 当前仅记录配置，不做实际创建
-		_ = dir
-	}
+	return func(t *Trainer) { t.checkpointDir = dir }
+}
+
+// WithCheckpointEveryNEpochs 设置每 N 个 epoch 保存一次检查点。
+// 对应 Python: checkpoint_every_n_epochs, 默认 1。
+func WithCheckpointEveryNEpochs(n int) TrainerOption {
+	return func(t *Trainer) { t.checkpointEveryNEpochs = n }
+}
+
+// WithCheckpointOnImprove 设置验证分数提升时是否保存检查点。
+// 对应 Python: checkpoint_on_improve, 默认 true。
+func WithCheckpointOnImprove(b bool) TrainerOption {
+	return func(t *Trainer) { t.checkpointOnImprove = b }
 }
 
 // WithResumeFrom 设置恢复检查点路径。

@@ -1,5 +1,7 @@
 package trainer
 
+import "iter"
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // Progress 训练进度追踪，记录 epoch、batch、分数等信息。
@@ -48,6 +50,13 @@ type Callbacks struct {
 	OnTrainEpochEnd any
 }
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// 默认迭代次数，对应 Python TuneConstant.default_iteration_num=3
+	defaultNumIterations = 3
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProgress 创建默认 Progress 实例。
@@ -57,7 +66,7 @@ func NewProgress() *Progress {
 	return &Progress{
 		StartEpoch:   0,
 		CurrentEpoch: 0,
-		MaxEpoch:     3, // TuneConstant.default_iteration_num
+		MaxEpoch:     defaultNumIterations,
 		MaxBatchIter: 1,
 	}
 }
@@ -72,4 +81,44 @@ func NewProgressWithMaxEpoch(maxEpoch int) *Progress {
 // NewCallbacks 创建默认 Callbacks 实例（所有回调为 nil）。
 func NewCallbacks() *Callbacks {
 	return &Callbacks{}
+}
+
+// RunEpoch 迭代 epoch 编号，从 StartEpoch+1 到 MaxEpoch。
+//
+// 每步更新 CurrentEpoch 并 yield 当前 epoch 编号。
+// 若迭代中断（break/return），CurrentEpoch 保持最后设置的值；
+// 若自然结束但 CurrentEpoch < MaxEpoch，强制设为 MaxEpoch。
+//
+// 对应 Python: Progress.run_epoch() -> Generator[int, None, None]
+func (p *Progress) RunEpoch() iter.Seq[int] {
+	return func(yield func(int) bool) {
+		start := p.StartEpoch + 1
+		for epoch := start; epoch <= p.MaxEpoch; epoch++ {
+			p.CurrentEpoch = epoch
+			if !yield(epoch) {
+				return
+			}
+		}
+		if p.CurrentEpoch < p.MaxEpoch {
+			p.CurrentEpoch = p.MaxEpoch
+		}
+	}
+}
+
+// RunBatch 迭代 batch 步骤，从 0 到 MaxBatchIter-1。
+//
+// 每步更新 CurrentBatchIter 并 yield 当前步编号。
+// 开始前重置 BestBatchScore 为 0。
+//
+// 对应 Python: Progress.run_batch() -> Generator[int, None, None]
+func (p *Progress) RunBatch() iter.Seq[int] {
+	return func(yield func(int) bool) {
+		p.BestBatchScore = 0
+		for batchIter := range p.MaxBatchIter {
+			p.CurrentBatchIter = batchIter
+			if !yield(batchIter) {
+				return
+			}
+		}
+	}
 }
