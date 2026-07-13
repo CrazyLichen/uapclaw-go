@@ -211,14 +211,10 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 		Str("version", version.Version).
 		Msg("uapclaw app 启动中")
 
-	// 先启动 AgentServer（goroutine），它会 Init AgentManager → 标记 serverReady → 进入消费循环
-	go func() {
-		if err := agentServer.Start(ctx); err != nil {
-			logger.Error(logger.ComponentAgentServer).
-				Err(err).
-				Msg("AgentServer 启动失败")
-		}
-	}()
+	// 启动 AgentServer（非阻塞，内部起 goroutine 运行主循环）
+	if err := agentServer.Start(ctx); err != nil {
+		return fmt.Errorf("启动 AgentServer 失败: %w", err)
+	}
 
 	// 启动 GatewayServer（HTTP + WebSocket）
 	// WebChannel.HandleWebSocket 会等待 AgentServer.WaitServerReady 后再发 connection.ack
@@ -230,8 +226,10 @@ func runAppCmd(cmd *cobra.Command, _ []string) error {
 	<-ctx.Done()
 	logger.Info(logger.ComponentGateway).Msg("收到退出信号，正在关闭...")
 
-	// 停止顺序：AgentServer（取消流式任务 + 清理）→ GatewayServer（HTTP 优雅关闭）
-	_ = agentServer.Stop()
+	// 停止顺序：AgentServer（取消任务 + 清理 + 等主循环退出）→ GatewayServer（HTTP 优雅关闭）
+	if err := agentServer.Stop(); err != nil {
+		logger.Error(logger.ComponentAgentServer).Err(err).Msg("AgentServer 停止失败")
+	}
 	return gs.Stop()
 }
 
