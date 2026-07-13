@@ -15,17 +15,18 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，适配单进程 ChannelTransport 模式。
+// AgentServer Agent 核心服务，对齐 Python AgentWebSocketServer，通过 AgentTransport 接口通信。
 //
-// 从 ChannelTransport.SendCh() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
+// 从 transport.Recv() 消费 E2AEnvelope，每个请求独立 goroutine 处理。
 // 流式任务通过 sessionStreamTasks 追踪，支持按会话取消。
+// 支持 ChannelTransport（进程内）和将来的 WebSocketTransport（跨进程）。
 //
 // 对齐 Python: jiuwenswarm/server/agent_server.py (AgentWebSocketServer)
 type AgentServer struct {
 	// config 配置实例
 	config *config.Config
-	// transport 进程内传输通道
-	transport *transport.ChannelTransport
+	// transport 传输通道（AgentTransport 接口，支持 ChannelTransport 和将来的 WebSocketTransport）
+	transport transport.AgentTransport
 	// agentManager Agent 实例管理器
 	agentManager *runtime.AgentManager
 	// sessionStreamTasks 流式任务的取消函数映射（sessionID → CancelFunc）
@@ -52,7 +53,7 @@ const logComponent = logger.ComponentAgentServer
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentServer 创建 AgentServer 实例。
-func NewAgentServer(cfg *config.Config, transport *transport.ChannelTransport) *AgentServer {
+func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *AgentServer {
 	return &AgentServer{
 		config:             cfg,
 		transport:          transport,
@@ -92,12 +93,8 @@ func (s *AgentServer) Start(ctx context.Context) error {
 	if err != nil {
 		logger.Error(logComponent).Err(err).Msg("编码 connection.ack 失败")
 	} else {
-		select {
-		case s.transport.RecvCh() <- ackData:
-			logger.Info(logComponent).Msg("AgentServer 已就绪（connection.ack 已发送）")
-		default:
-			logger.Warn(logComponent).Msg("RecvCh 已满，connection.ack 发送失败")
-		}
+		s.sendToGateway(ackData)
+		logger.Info(logComponent).Msg("AgentServer 已就绪（connection.ack 已发送）")
 	}
 
 	// 进入消费循环（阻塞直到 ctx 取消）
@@ -132,23 +129,35 @@ func (s *AgentServer) AgentManager() *runtime.AgentManager {
 	return s.agentManager
 }
 
-// Transport 返回 ChannelTransport 实例，供 handler 写入 RecvCh。
-func (s *AgentServer) Transport() *transport.ChannelTransport {
+// Transport 返回传输通道实例，供 handler 写入响应。
+func (s *AgentServer) Transport() transport.AgentTransport {
 	return s.transport
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// startConsumeLoop 从 transport.SendCh() 持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。
+// startConsumeLoop 从传输通道持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。
 // 阻塞直到 ctx 取消或通道关闭。
+// ChannelTransport 模式下通过 SendCh() 读取（Gateway→AgentServer 方向），
+// 将来 WebSocketTransport 模式下通过 Recv() 读取。
 func (s *AgentServer) startConsumeLoop(ctx context.Context) {
-	sendCh := s.transport.SendCh()
+	var recvCh <-chan []byte
+	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
+		recvCh = ct.SendCh()
+	} else {
+		var err error
+		recvCh, err = s.transport.Recv()
+		if err != nil {
+			logger.Error(logComponent).Err(err).Msg("获取接收通道失败")
+			return
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info(logComponent).Msg("AgentServer 消费循环退出（上下文取消）")
 			return
-		case data, ok := <-sendCh:
+		case data, ok := <-recvCh:
 			if !ok {
 				logger.Info(logComponent).Msg("AgentServer 消费循环退出（通道已关闭）")
 				return
@@ -207,4 +216,23 @@ func (s *AgentServer) cancelAllStreamTasks() {
 			Msg("流式任务已取消")
 	}
 	s.sessionStreamTasks = make(map[string]context.CancelFunc)
+}
+
+// sendToGateway 通过传输通道发送数据到 Gateway 侧。
+// 对齐 Python AgentWebSocketServer 中 ws.send(json_str) 写响应。
+// ChannelTransport 模式下通过 RecvCh() 写入（AgentServer→Gateway 方向），
+// 将来 WebSocketTransport 模式下直接调用 Send()。
+func (s *AgentServer) sendToGateway(data []byte) {
+	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
+		select {
+		case ct.RecvCh() <- data:
+		default:
+			logger.Warn(logComponent).Msg("RecvCh 已满，丢弃数据")
+		}
+		return
+	}
+	// 将来 WebSocketTransport 走 Send 路径
+	if err := s.transport.Send(context.Background(), data); err != nil {
+		logger.Warn(logComponent).Err(err).Msg("发送到 Gateway 失败")
+	}
 }

@@ -462,7 +462,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	s.writeResponse(request.RequestID, request.ChannelID, resp)
 }
 
-// writeResponse 构造 E2AResponse wire 写入 RecvCh。
+// writeResponse 构造 E2AResponse wire 通过 sendToGateway 发送。
 func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.AgentResponse) {
 	wire := e2a.EncodeAgentResponseForWire(resp, requestID, 0)
 	data, err := json.Marshal(wire)
@@ -470,16 +470,10 @@ func (s *AgentServer) writeResponse(requestID, channelID string, resp *schema.Ag
 		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("响应 JSON 编码失败")
 		return
 	}
-	select {
-	case s.transport.RecvCh() <- data:
-	default:
-		logger.Warn(logComponent).
-			Str("request_id", requestID).
-			Msg("RecvCh 已满，丢弃响应")
-	}
+	s.sendToGateway(data)
 }
 
-// writeChunk 构造 E2AResponse chunk wire 写入 RecvCh。
+// writeChunk 构造 E2AResponse chunk wire 通过 sendToGateway 发送。
 func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.AgentResponseChunk, sequence int, isStream bool) {
 	wire := e2a.EncodeAgentChunkForWire(chunk, requestID, sequence, isStream)
 	data, err := json.Marshal(wire)
@@ -487,17 +481,10 @@ func (s *AgentServer) writeChunk(requestID, channelID string, chunk *schema.Agen
 		logger.Error(logComponent).Err(err).Str("request_id", requestID).Int("sequence", sequence).Msg("流式块 JSON 编码失败")
 		return
 	}
-	select {
-	case s.transport.RecvCh() <- data:
-	default:
-		logger.Warn(logComponent).
-			Str("request_id", requestID).
-			Int("sequence", sequence).
-			Msg("RecvCh 已满，丢弃流式块")
-	}
+	s.sendToGateway(data)
 }
 
-// sendKeepalive 构造 keepalive chunk 写入 RecvCh。
+// sendKeepalive 构造 keepalive chunk 通过 sendToGateway 发送。
 func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 	chunk := schema.NewAgentResponseChunk(requestID, channelID,
 		map[string]any{
@@ -510,13 +497,7 @@ func (s *AgentServer) sendKeepalive(requestID, channelID string) {
 		logger.Error(logComponent).Err(err).Str("request_id", requestID).Msg("keepalive JSON 编码失败")
 		return
 	}
-	select {
-	case s.transport.RecvCh() <- data:
-	default:
-		logger.Warn(logComponent).
-			Str("request_id", requestID).
-			Msg("RecvCh 已满，丢弃 keepalive")
-	}
+	s.sendToGateway(data)
 }
 
 // runKeepalive 运行心跳 goroutine，每 keepaliveInterval 发送一次 keepalive。
