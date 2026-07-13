@@ -184,6 +184,8 @@ func NotifyConfigSavedOnce(
 		return
 	}
 	if onConfigSaved == nil {
+		// ⤵️ 对齐 Python: _clear_agent_config_cache(agent_client)
+		logger.Debug(logComponentConfigApply).Msg("onConfigSaved 为 nil，待实现 clearAgentConfigCache")
 		return
 	}
 
@@ -467,6 +469,11 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 			isDefault = isTruthy(d)
 		}
 
+		verifySSL := true
+		if v, ok := itemMap["verify_ssl"].(bool); ok {
+			verifySSL = v
+		}
+
 		entry := map[string]any{
 			"model_client_config": map[string]any{
 				"model_name":      modelName,
@@ -474,6 +481,7 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 				"api_key":         apiKey,
 				"client_provider": modelProvider,
 				"timeout":         timeout,
+				"verify_ssl":      verifySSL,
 			},
 			"model_config_obj": map[string]any{
 				"temperature": temperature,
@@ -511,7 +519,9 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 	}
 
 	// 合并原始 YAML 条目（对齐 Python _merge_models_for_replace_all）
-	merged := mergeModelsForReplaceAll(parsed, crypto)
+	rawDefaults := loadRawModelsDefaults()
+	resolvedDefaults := GetDefaultModels()
+	merged := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, crypto)
 
 	// 推断 is_default（对齐 Python _infer_is_default）
 	merged = inferIsDefault(merged)
@@ -646,11 +656,10 @@ func valuesMatch(parsedVal, resolvedVal any) bool {
 //
 // 对每个前端条目：
 //   - 有 origin_index 指向已有原始条目：深拷贝原始条目，仅覆写与解析快照不同的字段
+//   - 比较时用 resolvedDefaults[oi] 与前端值比较，匹配时保留 rawDefaults[oi] 的值
 //   - api_key 变更时加密，未变更时保留原始值
 //   - 新条目（无 origin_index）：加密 api_key 后原样存入
-func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []map[string]any {
-	// 读取原始 YAML 中的 models.defaults
-	rawModels := loadRawModelsDefaults()
+func mergeModelsForReplaceAll(parsed []map[string]any, rawDefaults []map[string]any, resolvedDefaults []map[string]any, crypto CryptoProvider) []map[string]any {
 
 	result := make([]map[string]any, 0, len(parsed))
 
@@ -683,7 +692,7 @@ func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []
 			}
 		}
 
-		if oi < 0 || oi >= len(rawModels) {
+		if oi < 0 || oi >= len(rawDefaults) {
 			// origin_index 越界，当作新条目处理
 			newEntry := deepCopyMap(entry)
 			if crypto != nil {
@@ -698,16 +707,33 @@ func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []
 		}
 
 		// 深拷贝原始条目（保留占位符、custom_headers 等未暴露字段）
-		merged := deepCopyMap(rawModels[oi])
+		merged := deepCopyMap(rawDefaults[oi])
+
+		// 获取解析后的默认条目（用于与前端值比较）
+		var resolvedEntry map[string]any
+		if oi < len(resolvedDefaults) {
+			resolvedEntry = resolvedDefaults[oi]
+		}
 
 		// 前端解析后的快照（即 entry 中的解析值）
-		// 仅覆写与原始快照不同的字段
+		// 用 resolvedDefaults 与前端值比较，匹配时保留 rawDefaults 的值
 		if frontMCC, ok := entry["model_client_config"].(map[string]any); ok {
 			if mergedMCC, ok := merged["model_client_config"].(map[string]any); ok {
+				// 获取解析后的 model_client_config
+				var resolvedMCC map[string]any
+				if resolvedEntry != nil {
+					resolvedMCC, _ = resolvedEntry["model_client_config"].(map[string]any)
+				}
 				for k, parsedVal := range frontMCC {
-					rawVal := mergedMCC[k]
-					if !valuesMatch(parsedVal, rawVal) {
-						// 字段值不同，覆写
+					// 用 resolvedDefaults 的值比较，而非 rawDefaults
+					resolvedVal := mergedMCC[k] // 默认 fallback 到 raw
+					if resolvedMCC != nil {
+						if rv, ok := resolvedMCC[k]; ok {
+							resolvedVal = rv
+						}
+					}
+					if !valuesMatch(parsedVal, resolvedVal) {
+						// 前端值与解析值不同，覆写
 						if k == "api_key" {
 							// api_key 特殊处理：加密后写入
 							if apiKeyStr, ok := parsedVal.(string); ok && apiKeyStr != "" && crypto != nil {
@@ -719,16 +745,26 @@ func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []
 							mergedMCC[k] = parsedVal
 						}
 					}
-					// 字段值相同，保留原始值（含占位符等）
+					// 前端值与解析值相同，保留原始值（含占位符等）
 				}
 			}
 		}
 
 		if frontMCO, ok := entry["model_config_obj"].(map[string]any); ok {
 			if mergedMCO, ok := merged["model_config_obj"].(map[string]any); ok {
+				// 获取解析后的 model_config_obj
+				var resolvedMCO map[string]any
+				if resolvedEntry != nil {
+					resolvedMCO, _ = resolvedEntry["model_config_obj"].(map[string]any)
+				}
 				for k, parsedVal := range frontMCO {
-					rawVal := mergedMCO[k]
-					if !valuesMatch(parsedVal, rawVal) {
+					resolvedVal := mergedMCO[k] // 默认 fallback 到 raw
+					if resolvedMCO != nil {
+						if rv, ok := resolvedMCO[k]; ok {
+							resolvedVal = rv
+						}
+					}
+					if !valuesMatch(parsedVal, resolvedVal) {
 						mergedMCO[k] = parsedVal
 					}
 				}
@@ -738,9 +774,15 @@ func mergeModelsForReplaceAll(parsed []map[string]any, crypto CryptoProvider) []
 		// 覆写顶层字段
 		for _, k := range []string{"is_default", "alias"} {
 			parsedVal, hasParsed := entry[k]
-			rawVal, hasRaw := merged[k]
+			resolvedVal, hasResolved := merged[k]
+			if resolvedEntry != nil {
+				if rv, ok := resolvedEntry[k]; ok {
+					resolvedVal = rv
+					hasResolved = true
+				}
+			}
 			if hasParsed {
-				if !hasRaw || !valuesMatch(parsedVal, rawVal) {
+				if !hasResolved || !valuesMatch(parsedVal, resolvedVal) {
 					merged[k] = parsedVal
 				}
 			}
@@ -782,6 +824,34 @@ func inferIsDefault(models []map[string]any) []map[string]any {
 // loadRawModelsDefaults 从 config.yaml 加载原始 models.defaults 列表。
 func loadRawModelsDefaults() []map[string]any {
 	cfgData := getConfigSnapshot()
+	rawVal := getConfigAny(cfgData, "models.defaults", nil)
+	if rawVal == nil {
+		return nil
+	}
+	rawList, ok := rawVal.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(rawList))
+	for _, item := range rawList {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// GetDefaultModels 从 config.yaml 读取 models.defaults 并返回解析环境变量后的列表。
+// 对齐 Python: cfg.load()["models"]["defaults"]（含环境变量展开）。
+func GetDefaultModels() []map[string]any {
+	cfg, err := config.New("")
+	if err != nil {
+		return nil
+	}
+	cfgData, err := cfg.Load()
+	if err != nil {
+		return nil
+	}
 	rawVal := getConfigAny(cfgData, "models.defaults", nil)
 	if rawVal == nil {
 		return nil

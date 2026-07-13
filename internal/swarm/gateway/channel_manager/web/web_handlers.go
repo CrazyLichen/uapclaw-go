@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmSchema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/common/version"
@@ -241,13 +244,16 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("session.create", handleSessionCreate)
 	d.Register("session.delete", handleSessionDelete(agentClient))
 
+	// ─── 历史辅助方法 ───
+	d.Register("history.get", handleHistoryGet())
+
 	// ─── config 辅助方法 ───
 	d.Register("config.save_all", handleConfigSaveAll(sendEvent, onConfigSaved))
 	d.Register("config.validate_model", stubHandler("config.validate_model", map[string]any{"ok": true}))
 
 	// ─── models 辅助方法 ───
-	d.Register("models.replace_all", stubHandler("models.replace_all", map[string]any{"ok": true}))
-	d.Register("models.validate", stubHandler("models.validate", map[string]any{"ok": true}))
+	d.Register("models.replace_all", handleModelsReplaceAll(onConfigSaved, cryptoProv))
+	d.Register("models.validate", handleModelsValidate())
 
 	// ─── session 辅助方法 ───
 	d.Register("session.switch", stubHandler("session.switch", map[string]any{"ok": true}))
@@ -342,8 +348,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		"team.delete":      {},
 		"team.snapshot":    {},
 		"team.history.get": {},
-		// 历史
-		"history.get": {},
+		// 历史：history.get 有本地 handler，不在 stub 中
 		// 浏览器
 		"browser.start": {},
 		// 技能
@@ -577,28 +582,41 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 				Msg("config.get 加载 config.yaml 失败，使用默认值")
 		}
 
-		// 上下文引擎启用
-		result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
-		// KV 缓存亲和启用
-		result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
-		// 权限启用
-		result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
+		if err != nil {
+			// 异常兜底默认值（对齐 Python except Exception 时 payload.setdefault）
+			result["context_engine_enabled"] = "false"
+			result["kv_cache_affinity_enabled"] = "false"
+			result["permissions_enabled"] = "false"
+			result["memory_forbidden_enabled"] = "false"
+			result["memory_forbidden_description"] = map[string]any{}
+		} else {
+			// 上下文引擎启用
+			result["context_engine_enabled"] = getConfigString(cfg, "react.context_engine_config.enabled", "false")
+			// KV 缓存亲和启用
+			result["kv_cache_affinity_enabled"] = getConfigString(cfg, "react.context_engine_config.enable_kv_cache_release", "false")
+			// 权限启用
+			result["permissions_enabled"] = getConfigString(cfg, "permissions.enabled", "false")
+			// 记忆禁止启用
+			result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
+			// 记忆禁止描述：返回 dict（对齐 Python getConfigAny 而非 getConfigString）
+			result["memory_forbidden_description"] = getConfigAny(cfg, "memory.forbidden_memory_definition.description", map[string]any{})
+		}
 		// skill_create: 环境变量优先，fallback config.yaml
 		if envVal := os.Getenv("SKILL_CREATE"); envVal != "" {
-			result["skill_create"] = envVal
-		} else {
+			result["skill_create"] = normalizeTruthy(envVal)
+		} else if err == nil {
 			result["skill_create"] = getConfigString(cfg, "react.evolution.skill_create", "false")
+		} else {
+			result["skill_create"] = "false"
 		}
 		// evolution_auto_scan: 环境变量优先，fallback config.yaml
 		if envVal := os.Getenv("EVOLUTION_AUTO_SCAN"); envVal != "" {
-			result["evolution_auto_scan"] = envVal
-		} else {
+			result["evolution_auto_scan"] = normalizeTruthy(envVal)
+		} else if err == nil {
 			result["evolution_auto_scan"] = getConfigString(cfg, "react.evolution.auto_scan", "false")
+		} else {
+			result["evolution_auto_scan"] = "false"
 		}
-		// 记忆禁止启用
-		result["memory_forbidden_enabled"] = getConfigString(cfg, "memory.forbidden_memory_definition.enabled", "false")
-		// 记忆禁止描述：返回 dict（对齐 Python getConfigAny 而非 getConfigString）
-		result["memory_forbidden_description"] = getConfigAny(cfg, "memory.forbidden_memory_definition.description", map[string]any{})
 
 		// 默认值填充（仅当环境变量为空时）
 		if result["free_search_ddg_enabled"] == "" {
@@ -620,6 +638,16 @@ func handleConfigGet(crypto CryptoProvider) RPCHandlerFunc {
 // 对齐 Python: 包含 "api_key" 或 "token" 的键视为敏感字段。
 func isSensitiveKey(key string) bool {
 	return strings.Contains(key, "api_key") || strings.Contains(key, "token")
+}
+
+// normalizeTruthy 对布尔型环境变量做 truthy 归一化。
+// 对齐 Python: val.lower() in ("true", "1", "yes") → "true"，否则 "false"。
+func normalizeTruthy(val string) string {
+	lower := strings.ToLower(strings.TrimSpace(val))
+	if lower == "true" || lower == "1" || lower == "yes" {
+		return "true"
+	}
+	return "false"
 }
 
 // handleConfigSet 处理 config.set 请求。
@@ -859,13 +887,13 @@ func handleModelsList(crypto CryptoProvider) RPCHandlerFunc {
 // handleChannelGet 处理 channel.get 请求。
 //
 // 从 ChannelManager 动态读取已启用的渠道列表。
-// 对齐 Python: channel_get_handler，读取 ChannelManager.enabled_channels。
+// 对齐 Python: channel_get_handler，返回数组 [{channel_id: cid}]。
 func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
 	return func(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
-		channels := make(map[string]any)
+		channels := make([]map[string]any, 0)
 		if channelMgr != nil {
 			for _, cid := range channelMgr.GetEnabledChannels() {
-				channels[cid] = map[string]any{"enabled": true}
+				channels = append(channels, map[string]any{"channel_id": cid})
 			}
 		}
 		return map[string]any{"channels": channels}, nil
@@ -875,13 +903,36 @@ func handleChannelGet(channelMgr *cm.ChannelManager) RPCHandlerFunc {
 // handleSessionList 处理 session.list 请求。
 //
 // 遍历会话目录，读取每个 session 的 metadata.json 返回列表。
-func handleSessionList(_ context.Context, _ map[string]any, _ string) (map[string]any, error) {
+// 支持分页：limit 和 offset 参数，对齐 Python (L1264-1293)。
+func handleSessionList(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
 	sessionsDir := workspace.AgentSessionsDir()
+
+	// 解析分页参数（对齐 Python L1264-1271）
+	limit := -1 // -1 表示不限
+	offset := 0
+	if params != nil {
+		if v, ok := params["limit"]; ok {
+			switch lv := v.(type) {
+			case int:
+				limit = lv
+			case float64:
+				limit = int(lv)
+			}
+		}
+		if v, ok := params["offset"]; ok {
+			switch ov := v.(type) {
+			case int:
+				offset = ov
+			case float64:
+				offset = int(ov)
+			}
+		}
+	}
 
 	entries, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]any{"sessions": []any{}}, nil
+			return map[string]any{"sessions": []any{}, "total": 0, "limit": limit, "offset": offset}, nil
 		}
 		return nil, fmt.Errorf("读取会话目录失败: %w", err)
 	}
@@ -911,7 +962,17 @@ func handleSessionList(_ context.Context, _ map[string]any, _ string) (map[strin
 		sessions = append(sessions, meta)
 	}
 
-	return map[string]any{"sessions": sessions}, nil
+	// 分页截取（对齐 Python L1286-1291）
+	total := len(sessions)
+	if offset > total {
+		offset = total
+	}
+	sessions = sessions[offset:]
+	if limit >= 0 && limit < len(sessions) {
+		sessions = sessions[:limit]
+	}
+
+	return map[string]any{"sessions": sessions, "total": total, "limit": limit, "offset": offset}, nil
 }
 
 // handleSessionCreate 处理 session.create 请求。
@@ -1017,18 +1078,178 @@ func handleSessionDelete(agentClient *routing.AgentClient) RPCHandlerFunc {
 
 		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
 			// 判断是否 team 模式 → AGENT_UNAVAILABLE（对齐 Python L1341-1348）
-			mode, _ := params["mode"].(string)
-			if mode == "team" && (agentClient == nil || !agentClient.ServerReady()) {
+			if agentClient == nil || !agentClient.ServerReady() {
 				return map[string]any{"ok": false, "error": "team session delete requires agent server", "code": WsErrAgentUnavailable}, nil
 			}
 			return map[string]any{"ok": false, "error": "session not found", "code": WsErrNotFound}, nil
+		}
+
+		// 读 metadata.json 判断 mode（对齐 Python: 从 metadata 读 mode 而非 params）
+		metaPath := filepath.Join(sessionDir, "metadata.json")
+		if data, err := os.ReadFile(metaPath); err == nil {
+			var meta map[string]any
+			if json.Unmarshal(data, &meta) == nil {
+				if m, ok := meta["mode"].(string); ok && strings.EqualFold(m, "team") {
+					if agentClient == nil || !agentClient.ServerReady() {
+						return map[string]any{"ok": false, "error": "team session delete requires agent server", "code": WsErrAgentUnavailable}, nil
+					}
+				}
+			}
 		}
 
 		if err := os.RemoveAll(sessionDir); err != nil {
 			return nil, fmt.Errorf("删除会话目录失败: %w", err)
 		}
 
-		return map[string]any{"ok": true}, nil
+		return map[string]any{"ok": true, "session_id": sessionID}, nil
+	}
+}
+
+// handleModelsReplaceAll 处理 models.replace_all 请求。
+//
+// 对齐 Python: _models_replace_all_handler (app_web_handlers.py L1058-1084)。
+func handleModelsReplaceAll(onConfigSaved OnConfigSavedFunc, cryptoProv CryptoProvider) RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return nil, fmt.Errorf("params 不能为空")
+		}
+
+		modelsVal, ok := params["models"]
+		if !ok || modelsVal == nil {
+			return map[string]any{"ok": false, "error": "models is required", "code": WsErrBadRequest}, nil
+		}
+
+		// 调用 buildModelsDefaultsFromFrontend（内部会调 merge + infer）
+		newModels, err := buildModelsDefaultsFromFrontend(modelsVal, cryptoProv)
+		if err != nil {
+			if _, ok := err.(*ConfigBadRequest); ok {
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrBadRequest}, nil
+			}
+			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+		}
+
+		// 写入 config: models.defaults
+		if err := updateDefaultModelsInConfig(newModels); err != nil {
+			logger.Warn(logComponent).Err(err).Msg("写入 models.defaults 失败")
+			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrInternalError}, nil
+		}
+
+		// 触发热重载（对齐 Python: _notify_config_saved_once(force=True)）
+		NotifyConfigSavedOnce(onConfigSaved, nil, []string{"models.defaults"}, true)
+
+		return map[string]any{"count": len(newModels)}, nil
+	}
+}
+
+// handleModelsValidate 处理 models.validate 请求。
+//
+// 对齐 Python: _config_validate_model (app_web_handlers.py L897-1019)。
+// 调用 LLM 验证 api_key 和 api_base 是否有效。
+func handleModelsValidate() RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, _ string) (map[string]any, error) {
+		if params == nil {
+			return map[string]any{"ok": false, "error": "params is required", "code": WsErrBadRequest}, nil
+		}
+
+		apiBase, _ := params["api_base"].(string)
+		apiKey, _ := params["api_key"].(string)
+		model, _ := params["model"].(string)
+		modelProvider, _ := params["model_provider"].(string)
+
+		// 校验必填字段
+		if apiBase == "" {
+			return map[string]any{"ok": false, "error": "api_base is required", "code": WsErrBadRequest}, nil
+		}
+		if apiKey == "" {
+			return map[string]any{"ok": false, "error": "api_key is required", "code": WsErrBadRequest}, nil
+		}
+		if model == "" {
+			return map[string]any{"ok": false, "error": "model is required", "code": WsErrBadRequest}, nil
+		}
+
+		// 校验 model_provider 在可用列表中
+		if modelProvider != "" && !isAvailableProvider(modelProvider) {
+			return map[string]any{"ok": false, "error": fmt.Sprintf("model_provider must be one of: %v", availableModelProviders), "code": WsErrBadRequest}, nil
+		}
+
+		// 清理 api_base（去掉末尾 /chat/completions 和 /）
+		apiBase = strings.TrimSuffix(apiBase, "/chat/completions")
+		apiBase = strings.TrimRight(apiBase, "/")
+
+		// verify_ssl
+		verifySSL := true
+		if v, ok := params["verify_ssl"].(bool); ok {
+			verifySSL = v
+		}
+
+		// 构造 LLM 配置
+		clientConfig := &llmSchema.ModelClientConfig{
+			ClientProvider: modelProvider,
+			APIKey:         apiKey,
+			APIBase:        apiBase,
+			Timeout:        60.0,
+			MaxRetries:     3,
+			VerifySSL:      verifySSL,
+		}
+
+		// 尝试 max_tokens=1 验证
+		maxTokens1 := 1
+		modelConfig := &llmSchema.ModelRequestConfig{
+			ModelName:  model,
+			MaxTokens:  &maxTokens1,
+			Temperature: 0,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		modelInst, err := llm.NewModel(clientConfig, modelConfig)
+		if err != nil {
+			logger.Warn(logComponent).Err(err).Str("model_provider", modelProvider).Msg("models.validate 创建模型失败")
+			return map[string]any{"ok": false, "error": err.Error(), "code": WsErrLLMError}, nil
+		}
+
+		messages := model_clients.NewMessagesParam(llmSchema.NewUserMessage("hi"))
+		resp, err := modelInst.Invoke(ctx, messages)
+		if err != nil {
+			// 失败重试 max_tokens=16
+			maxTokens16 := 16
+			modelConfig.MaxTokens = &maxTokens16
+			modelInst2, err2 := llm.NewModel(clientConfig, modelConfig)
+			if err2 != nil {
+				return map[string]any{"ok": false, "error": err2.Error(), "code": WsErrLLMError}, nil
+			}
+			resp, err = modelInst2.Invoke(ctx, messages)
+			if err != nil {
+				return map[string]any{"ok": false, "error": err.Error(), "code": WsErrLLMError}, nil
+			}
+		}
+
+		// 检查响应内容非空
+		if resp == nil || resp.Content.Text() == "" {
+			return map[string]any{"ok": false, "error": "empty response from model", "code": WsErrLLMError}, nil
+		}
+
+		return map[string]any{"ok": true, "model_provider": modelProvider}, nil
+	}
+}
+
+// handleHistoryGet 处理 history.get 本地请求。
+//
+// 返回 ack 响应，实际历史数据由 AgentServer 转发路径提供。
+// 对齐 Python (L1459-1466)。
+func handleHistoryGet() RPCHandlerFunc {
+	return func(_ context.Context, params map[string]any, sessionID string) (map[string]any, error) {
+		payload := map[string]any{"accepted": true, "session_id": sessionID}
+		if params != nil {
+			if sid, ok := params["session_id"].(string); ok && sid != "" {
+				payload["session_id"] = sid
+			}
+			if _, ok := params["page_idx"]; ok {
+				payload["page_idx"] = params["page_idx"]
+			}
+		}
+		return payload, nil
 	}
 }
 

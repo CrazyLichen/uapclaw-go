@@ -171,9 +171,9 @@ func TestHandleChannelGet(t *testing.T) {
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
 
-	channels, ok := result["channels"].(map[string]any)
+	channels, ok := result["channels"].([]map[string]any)
 	require.True(t, ok)
-	// 无 ChannelManager 时返回空 map
+	// 无 ChannelManager 时返回空数组
 	assert.Empty(t, channels)
 }
 
@@ -193,6 +193,9 @@ func TestHandleSessionList_空目录(t *testing.T) {
 	sessionList, ok := result["sessions"].([]map[string]any)
 	require.True(t, ok, "sessions 应为 []map[string]any 类型")
 	assert.Empty(t, sessionList)
+	assert.Contains(t, result, "total")
+	assert.Contains(t, result, "limit")
+	assert.Contains(t, result, "offset")
 }
 
 func TestHandleSessionCreate(t *testing.T) {
@@ -245,6 +248,7 @@ func TestHandleSessionDelete(t *testing.T) {
 	}, "")
 	require.NoError(t, err)
 	assert.True(t, result["ok"].(bool))
+	assert.Equal(t, sessionID, result["session_id"])
 
 	// 验证目录已删除
 	sessionsDir := workspace.AgentSessionsDir()
@@ -388,7 +392,7 @@ func TestHandleChannelGet_有ChannelManager(t *testing.T) {
 	handler := handleChannelGet(nil)
 	result, err := handler(context.Background(), nil, "")
 	require.NoError(t, err)
-	channels := result["channels"].(map[string]any)
+	channels := result["channels"].([]map[string]any)
 	assert.Empty(t, channels)
 }
 
@@ -483,13 +487,15 @@ func TestHandleSessionDelete_不存在的会话(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
+	// agentClient 为 nil 时，不存在的会话返回 AGENT_UNAVAILABLE
+	// （无法判断是否为 team 模式，对齐 Python 防御性逻辑）
 	handler := handleSessionDelete(nil)
 	result, err := handler(context.Background(), map[string]any{
 		"session_id": "nonexistent-session",
 	}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
-	assert.Equal(t, WsErrNotFound, result["code"])
+	assert.Equal(t, WsErrAgentUnavailable, result["code"])
 }
 
 func TestHandleSessionDelete_team模式Agent不可用(t *testing.T) {
@@ -498,10 +504,16 @@ func TestHandleSessionDelete_team模式Agent不可用(t *testing.T) {
 	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
 	workspace.SetUserHome(workspace.UserHomeDir())
 
+	// 创建带 team mode 的 metadata.json
+	sessionsDir := workspace.AgentSessionsDir()
+	sessDir := filepath.Join(sessionsDir, "team-session")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+	metaData, _ := json.Marshal(map[string]any{"mode": "team"})
+	require.NoError(t, os.WriteFile(filepath.Join(sessDir, "metadata.json"), metaData, 0o644))
+
 	handler := handleSessionDelete(nil)
 	result, err := handler(context.Background(), map[string]any{
 		"session_id": "team-session",
-		"mode":       "team",
 	}, "")
 	require.NoError(t, err)
 	assert.False(t, result["ok"].(bool))
@@ -699,6 +711,95 @@ func TestLoadAppConfig(t *testing.T) {
 	if err != nil {
 		assert.Empty(t, cfg)
 	}
+}
+
+func TestNormalizeTruthy(t *testing.T) {
+	assert.Equal(t, "true", normalizeTruthy("true"))
+	assert.Equal(t, "true", normalizeTruthy("True"))
+	assert.Equal(t, "true", normalizeTruthy("1"))
+	assert.Equal(t, "true", normalizeTruthy("yes"))
+	assert.Equal(t, "true", normalizeTruthy("YES"))
+	assert.Equal(t, "false", normalizeTruthy("false"))
+	assert.Equal(t, "false", normalizeTruthy("0"))
+	assert.Equal(t, "false", normalizeTruthy("no"))
+	assert.Equal(t, "false", normalizeTruthy(""))
+	assert.Equal(t, "false", normalizeTruthy("random"))
+}
+
+func TestHandleHistoryGet(t *testing.T) {
+	handler := handleHistoryGet()
+	result, err := handler(context.Background(), nil, "sess_1")
+	require.NoError(t, err)
+	assert.True(t, result["accepted"].(bool))
+	assert.Equal(t, "sess_1", result["session_id"])
+}
+
+func TestHandleHistoryGet_带参数(t *testing.T) {
+	handler := handleHistoryGet()
+	result, err := handler(context.Background(), map[string]any{
+		"session_id": "custom-sess",
+		"page_idx":   2,
+	}, "sess_1")
+	require.NoError(t, err)
+	assert.True(t, result["accepted"].(bool))
+	assert.Equal(t, "custom-sess", result["session_id"])
+	assert.Equal(t, 2, result["page_idx"])
+}
+
+func TestHandleSessionList_分页(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	workspace.SetUserHome(workspace.UserHomeDir())
+
+	sessionsDir := workspace.AgentSessionsDir()
+	require.NoError(t, os.MkdirAll(sessionsDir, 0o755))
+
+	// 创建 5 个会话目录
+	for i := 0; i < 5; i++ {
+		sessDir := filepath.Join(sessionsDir, fmt.Sprintf("sess-%d", i))
+		require.NoError(t, os.MkdirAll(sessDir, 0o755))
+		metaData, _ := json.Marshal(map[string]any{"title": fmt.Sprintf("会话%d", i)})
+		require.NoError(t, os.WriteFile(filepath.Join(sessDir, "metadata.json"), metaData, 0o644))
+	}
+
+	// 测试 limit=2, offset=1
+	result, err := handleSessionList(context.Background(), map[string]any{
+		"limit":  2,
+		"offset": 1,
+	}, "")
+	require.NoError(t, err)
+	sessionList := result["sessions"].([]map[string]any)
+	assert.Len(t, sessionList, 2)
+	assert.Equal(t, 5, result["total"])
+	assert.Equal(t, 2, result["limit"])
+	assert.Equal(t, 1, result["offset"])
+}
+
+func TestHandleModelsReplaceAll_缺models(t *testing.T) {
+	handler := handleModelsReplaceAll(nil, nil)
+	result, err := handler(context.Background(), map[string]any{}, "")
+	require.NoError(t, err)
+	assert.False(t, result["ok"].(bool))
+}
+
+func TestHandleModelsValidate_缺必填字段(t *testing.T) {
+	handler := handleModelsValidate()
+	result, err := handler(context.Background(), map[string]any{}, "")
+	require.NoError(t, err)
+	assert.False(t, result["ok"].(bool))
+	assert.Equal(t, WsErrBadRequest, result["code"])
+}
+
+func TestHandleModelsValidate_缺apiBase(t *testing.T) {
+	handler := handleModelsValidate()
+	result, err := handler(context.Background(), map[string]any{
+		"api_key": "key1",
+		"model":   "gpt-4",
+	}, "")
+	require.NoError(t, err)
+	assert.False(t, result["ok"].(bool))
+	assert.Equal(t, WsErrBadRequest, result["code"])
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

@@ -103,8 +103,10 @@ func TestNotifyConfigSavedOnce_有变更触发(t *testing.T) {
 }
 
 func TestNotifyConfigSavedOnce_nil回调不触发(t *testing.T) {
-	// nil 回调不应 panic
+	// nil 回调不应 panic，且 force=true 时打 debug 日志
 	NotifyConfigSavedOnce(nil, map[string]string{"KEY": "val"}, nil, false)
+	// force=true 时也会打日志而不 panic
+	NotifyConfigSavedOnce(nil, nil, nil, true)
 }
 
 func TestBuildModelsDefaultsFromFrontend_无效类型(t *testing.T) {
@@ -166,13 +168,44 @@ func TestBuildModelsDefaultsFromFrontend_正常(t *testing.T) {
 	assert.Equal(t, "gpt-4", mcc["model_name"])
 	assert.Equal(t, "OpenAI", mcc["client_provider"])
 	assert.Equal(t, "https://api.openai.com/v1", mcc["api_base"])
+	// verify_ssl 默认 true
+	assert.Equal(t, true, mcc["verify_ssl"])
 
 	mco, ok := result[0]["model_config_obj"].(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, 0.7, mco["temperature"])
 }
 
+func TestBuildModelsDefaultsFromFrontend_verifySslFalse(t *testing.T) {
+	result, err := buildModelsDefaultsFromFrontend([]any{
+		map[string]any{
+			"model_name":     "gpt-4",
+			"api_key":        "key1",
+			"model_provider": "OpenAI",
+			"verify_ssl":     false,
+		},
+	}, nil)
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+
+	mcc, ok := result[0]["model_client_config"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, false, mcc["verify_ssl"])
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// deepCopySliceOfMap 深拷贝 []map[string]any。
+func deepCopySliceOfMap(src []map[string]any) []map[string]any {
+	if src == nil {
+		return nil
+	}
+	dst := make([]map[string]any, len(src))
+	for i, m := range src {
+		dst[i] = deepCopyMap(m)
+	}
+	return dst
+}
 
 func TestApplyConfigPayload_正常环境变量(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -310,7 +343,7 @@ func TestMergeModelsForReplaceAll_新条目(t *testing.T) {
 			"is_default": true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil)
+	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -328,7 +361,7 @@ func TestMergeModelsForReplaceAll_有crypto(t *testing.T) {
 			"is_default": true,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, crypto)
+	result := mergeModelsForReplaceAll(parsed, nil, nil, crypto)
 	assert.Len(t, result, 1)
 	mcc, ok := result[0]["model_client_config"].(map[string]any)
 	assert.True(t, ok)
@@ -391,6 +424,13 @@ func TestLoadRawModelsDefaults(t *testing.T) {
 	_ = result
 }
 
+func TestGetDefaultModels(t *testing.T) {
+	// 无配置文件时返回 nil 或空列表
+	result := GetDefaultModels()
+	// 不会 panic
+	_ = result
+}
+
 func TestGetConfigSnapshot(t *testing.T) {
 	result := getConfigSnapshot()
 	// 不会 panic，返回 map
@@ -414,6 +454,20 @@ func TestNotifyConfigSavedOnce_回调返回错误(t *testing.T) {
 }
 
 func TestMergeModelsForReplaceAll_有originIndex匹配(t *testing.T) {
+	rawDefaults := []map[string]any{
+		{
+			"model_client_config": map[string]any{
+				"model_name":      "gpt-4",
+				"api_key":         "old_key",
+				"client_provider": "OpenAI",
+			},
+			"model_config_obj": map[string]any{
+				"temperature": 0.95,
+			},
+			"is_default": true,
+		},
+	}
+	resolvedDefaults := deepCopySliceOfMap(rawDefaults)
 	parsed := []map[string]any{
 		{
 			"model_client_config": map[string]any{
@@ -428,7 +482,7 @@ func TestMergeModelsForReplaceAll_有originIndex匹配(t *testing.T) {
 			"origin_index": 0,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil)
+	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -446,7 +500,7 @@ func TestMergeModelsForReplaceAll_originIndex越界(t *testing.T) {
 			"origin_index": 99,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil)
+	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
@@ -464,12 +518,25 @@ func TestMergeModelsForReplaceAll_originIndex非int(t *testing.T) {
 			"origin_index": "0",
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, nil)
+	result := mergeModelsForReplaceAll(parsed, nil, nil, nil)
 	assert.Len(t, result, 1)
 }
 
 func TestMergeModelsForReplaceAll_有crypto且originIndex(t *testing.T) {
 	crypto := &fakeCrypto{}
+	rawDefaults := []map[string]any{
+		{
+			"model_client_config": map[string]any{
+				"model_name": "gpt-4",
+				"api_key":    "old_enc_key",
+			},
+			"model_config_obj": map[string]any{
+				"temperature": 0.95,
+			},
+			"is_default": true,
+		},
+	}
+	resolvedDefaults := deepCopySliceOfMap(rawDefaults)
 	parsed := []map[string]any{
 		{
 			"model_client_config": map[string]any{
@@ -483,7 +550,7 @@ func TestMergeModelsForReplaceAll_有crypto且originIndex(t *testing.T) {
 			"origin_index": 0,
 		},
 	}
-	result := mergeModelsForReplaceAll(parsed, crypto)
+	result := mergeModelsForReplaceAll(parsed, rawDefaults, resolvedDefaults, crypto)
 	assert.Len(t, result, 1)
 }
 
