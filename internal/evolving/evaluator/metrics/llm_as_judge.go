@@ -125,22 +125,8 @@ func (m *LLMAsJudgeMetric) ComputeBatch(predictions, labels []any, opts ...Metri
 // parseResult 解析 LLM 评估结果，返回 1.0（通过）或 0.0（失败）。
 //
 // 对应 Python: LLMAsJudgeMetric._parse_result(response)
-func (m *LLMAsJudgeMetric) parseResult(response any) MetricResult {
-	// 从响应中提取文本内容
-	text := ""
-	switch v := response.(type) {
-	case *llmschema.AssistantMessage:
-		text = v.Content.Text()
-	case string:
-		text = v
-	default:
-		logger.Warn(metricLogComponent).
-			Str("event_type", "LLM_CALL_ERROR").
-			Str("method", "LLMAsJudgeMetric.parseResult").
-			Str("response_type", fmt.Sprintf("%T", response)).
-			Msg("不支持的响应类型")
-		return MetricResult{"llm_as_judge": 0.0}
-	}
+func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) MetricResult {
+	text := response.Content.Text()
 
 	parsed, err := m.parser.Parse(text)
 	if err != nil {
@@ -163,16 +149,16 @@ func (m *LLMAsJudgeMetric) parseResult(response any) MetricResult {
 	}
 
 	// 判断 result：true 或 "true" → 1.0，其余 → 0.0
-	if isPassResult(result) {
+	if IsPassResult(result) {
 		return MetricResult{"llm_as_judge": 1.0}
 	}
 	return MetricResult{"llm_as_judge": 0.0}
 }
 
-// isPassResult 判断评估结果是否通过。
+// IsPassResult 判断评估结果是否通过。
 //
 // 对应 Python: DefaultEvaluator._is_pass_result(result)
-func isPassResult(result any) bool {
+func IsPassResult(result any) bool {
 	if result == true {
 		return true
 	}

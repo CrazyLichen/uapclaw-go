@@ -1,7 +1,7 @@
 package metrics
 
 import (
-	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -11,6 +11,7 @@ import (
 //
 // 匹配返回 {"exact_match": 1.0}，不匹配返回 {"exact_match": 0.0}。
 // normalize=true 时先归一化（小写+去空格+合并连续空格）再比较。
+// 字符串类型走 normalize 后 == 比较，非字符串类型走 reflect.DeepEqual 深度比较。
 //
 // 对应 Python: openjiuwen/agent_evolving/evaluator/metrics/exact_match.py ExactMatchMetric
 type ExactMatchMetric struct {
@@ -40,23 +41,28 @@ func (m *ExactMatchMetric) HigherIsBetter() bool { return true }
 
 // Compute 计算精确匹配分数。
 //
+// 字符串类型：normalize=true 时归一化后比较，normalize=false 时原值比较。
+// 非字符串类型（map/dict/number 等）：使用 reflect.DeepEqual 深度比较。
+//
 // 对应 Python: ExactMatchMetric.compute(prediction, label)
 func (m *ExactMatchMetric) Compute(prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	_ = applyMetricOptions(opts...) // ExactMatch 不需要上下文
 
-	var predStr, labelStr string
-	if m.normalize {
-		predStr = normalizeExactMatch(prediction)
-		labelStr = normalizeExactMatch(label)
+	var score float64
+	// 字符串类型走 normalize 或原值比较
+	predStr, predIsStr := prediction.(string)
+	labelStr, labelIsStr := label.(string)
+	if predIsStr && labelIsStr {
+		if m.normalize {
+			score = boolToScore(normalizeExactMatch(predStr) == normalizeExactMatch(labelStr))
+		} else {
+			score = boolToScore(predStr == labelStr)
+		}
 	} else {
-		predStr = fmt.Sprintf("%v", prediction)
-		labelStr = fmt.Sprintf("%v", label)
+		// 非字符串类型走 reflect.DeepEqual 深度比较
+		score = boolToScore(reflect.DeepEqual(prediction, label))
 	}
 
-	score := 0.0
-	if predStr == labelStr {
-		score = 1.0
-	}
 	return MetricResult{"exact_match": score}, nil
 }
 
@@ -72,10 +78,18 @@ func WithNormalize(n bool) ExactMatchOption {
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// normalizeExactMatch 归一化输入：小写 + strip + 合并连续空格。
+// normalizeExactMatch 归一化字符串：小写 + strip + 合并连续空格。
 //
 // 对应 Python: ExactMatchMetric._normalize(input_data)
-func normalizeExactMatch(input any) string {
-	result := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", input)))
+func normalizeExactMatch(input string) string {
+	result := strings.TrimSpace(strings.ToLower(input))
 	return strings.Join(strings.Fields(result), " ")
+}
+
+// boolToScore 将 bool 映射为 1.0 或 0.0。
+func boolToScore(match bool) float64 {
+	if match {
+		return 1.0
+	}
+	return 0.0
 }

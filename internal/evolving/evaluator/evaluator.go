@@ -320,21 +320,10 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 //
 // 对应 Python: DefaultEvaluator._is_pass_result(result)
 func mapBoolToScore(result any) float64 {
-	if isPassResult(result) {
+	if metrics.IsPassResult(result) {
 		return 1.0
 	}
 	return 0.0
-}
-
-// isPassResult 判断评估结果是否通过。
-func isPassResult(result any) bool {
-	if result == true {
-		return true
-	}
-	if s, ok := result.(string); ok {
-		return s == "true" || s == "True" || s == "TRUE"
-	}
-	return false
 }
 
 // aggScore 聚合分数。

@@ -108,3 +108,53 @@ func TestExactMatchMetric_ComputeBatch(t *testing.T) {
 		t.Errorf("期望 results[1] exact_match=0.0, 实际=%f", results[1]["exact_match"])
 	}
 }
+
+// TestExactMatchMetric_map类型深度比较 测试 map 类型使用 reflect.DeepEqual
+func TestExactMatchMetric_map类型深度比较(t *testing.T) {
+	m := NewExactMatchMetric()
+
+	// 相同 map（key 顺序不同）— DeepEqual 应返回 true
+	pred := map[string]any{"answer": "2", "output": "1"}
+	label := map[string]any{"output": "1", "answer": "2"}
+	result, err := m.Compute(pred, label)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	if result["exact_match"] != 1.0 {
+		t.Errorf("期望 map 深度匹配 exact_match=1.0, 实际=%f", result["exact_match"])
+	}
+
+	// 不同 map
+	pred2 := map[string]any{"answer": "2"}
+	label2 := map[string]any{"answer": "3"}
+	result2, err := m.Compute(pred2, label2)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	if result2["exact_match"] != 0.0 {
+		t.Errorf("期望 map 不匹配 exact_match=0.0, 实际=%f", result2["exact_match"])
+	}
+}
+
+// TestExactMatchMetric_混合类型 测试字符串 vs 非字符串混合比较
+func TestExactMatchMetric_混合类型(t *testing.T) {
+	m := NewExactMatchMetric()
+
+	// 字符串 vs map — 类型不同，DeepEqual 返回 false
+	result, err := m.Compute("hello", map[string]any{"answer": "hello"})
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	if result["exact_match"] != 0.0 {
+		t.Errorf("期望不同类型不匹配 exact_match=0.0, 实际=%f", result["exact_match"])
+	}
+
+	// 数字比较
+	result2, err := m.Compute(42, 42)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	if result2["exact_match"] != 1.0 {
+		t.Errorf("期望数字匹配 exact_match=1.0, 实际=%f", result2["exact_match"])
+	}
+}

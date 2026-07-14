@@ -8,8 +8,8 @@ import (
 
 // metricContext 指标计算的上下文信息，通过 MetricOption 注入。
 type metricContext struct {
-	// question 查询上下文
-	question any
+	// question 查询上下文，对应 Python case.inputs
+	question map[string]any
 	// case_ 原始 Case
 	case_ *dataset.Case
 }
@@ -43,8 +43,8 @@ type Metric interface {
 // MetricOption 指标计算的可选参数函数。
 type MetricOption func(*metricContext)
 
-// WithQuestion 设置查询上下文。
-func WithQuestion(q any) MetricOption {
+// WithQuestion 设置查询上下文，对应 Python case.inputs。
+func WithQuestion(q map[string]any) MetricOption {
 	return func(mc *metricContext) { mc.question = q }
 }
 

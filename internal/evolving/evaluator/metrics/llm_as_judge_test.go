@@ -24,7 +24,7 @@ func TestLLMAsJudgeMetric_HigherIsBetter(t *testing.T) {
 	}
 }
 
-// TestIsPassResult 测试 isPassResult 判断逻辑
+// TestIsPassResult 测试 IsPassResult 判断逻辑
 // 对应 Python: DefaultEvaluator._is_pass_result(result)
 func TestIsPassResult(t *testing.T) {
 	tests := []struct {
@@ -42,9 +42,9 @@ func TestIsPassResult(t *testing.T) {
 		{nil, false},
 	}
 	for _, tt := range tests {
-		result := isPassResult(tt.input)
+		result := IsPassResult(tt.input)
 		if result != tt.expected {
-			t.Errorf("isPassResult(%v) = %v, 期望 %v", tt.input, result, tt.expected)
+			t.Errorf("IsPassResult(%v) = %v, 期望 %v", tt.input, result, tt.expected)
 		}
 	}
 }

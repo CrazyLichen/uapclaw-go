@@ -307,8 +307,8 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 		if params.Temperature == nil && e.ModelConfig.Temperature != 0 {
 			reqParams["temperature"] = e.ModelConfig.Temperature
 		}
-		if params.TopP == nil && e.ModelConfig.TopP != 0 {
-			reqParams["top_p"] = e.ModelConfig.TopP
+		if params.TopP == nil && e.ModelConfig.TopP != nil {
+			reqParams["top_p"] = *e.ModelConfig.TopP
 		}
 		if params.MaxTokens == nil && e.ModelConfig.MaxTokens != nil {
 			reqParams["max_tokens"] = *e.ModelConfig.MaxTokens

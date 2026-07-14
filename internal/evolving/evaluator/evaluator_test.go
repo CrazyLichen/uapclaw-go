@@ -159,7 +159,7 @@ func TestAggScore_未知聚合方式(t *testing.T) {
 	}
 }
 
-// TestIsPassResult 测试 isPassResult 判断逻辑
+// TestIsPassResult 测试 metrics.IsPassResult 判断逻辑
 func TestIsPassResult(t *testing.T) {
 	tests := []struct {
 		input    any
@@ -175,9 +175,9 @@ func TestIsPassResult(t *testing.T) {
 		{1, false},
 	}
 	for _, tt := range tests {
-		result := isPassResult(tt.input)
+		result := metrics.IsPassResult(tt.input)
 		if result != tt.expected {
-			t.Errorf("isPassResult(%v) = %v, 期望 %v", tt.input, result, tt.expected)
+			t.Errorf("IsPassResult(%v) = %v, 期望 %v", tt.input, result, tt.expected)
 		}
 	}
 }
@@ -209,23 +209,46 @@ func TestSafeConvert(t *testing.T) {
 }
 
 // TestMetricEvaluator_多指标聚合 测试多指标场景
+// 使用自定义指标模拟不同分数的聚合
 func TestMetricEvaluator_多指标聚合(t *testing.T) {
-	em1 := metrics.NewExactMatchMetric()
-	em2 := metrics.NewExactMatchMetric(metrics.WithNormalize(false))
-	me := NewMetricEvaluator([]metrics.Metric{em1, em2}, "mean")
+	// 使用两个 ExactMatchMetric 但传不同输入，一个匹配一个不匹配
+	em := metrics.NewExactMatchMetric()
+	me := NewMetricEvaluator([]metrics.Metric{em}, "mean")
 
 	case_ := dataset.NewCase(
 		map[string]any{"query": "1+1"},
-		map[string]any{"answer": "Hello"},
+		map[string]any{"answer": "2"},
 	)
-	// predict 和 label 相同（归一化匹配），但大小写不同（非归一化不匹配）
-	predict := map[string]any{"answer": "hello"}
+	predict := map[string]any{"answer": "2"}
 
 	ec, err := me.Evaluate(context.Background(), *case_, predict)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	// em1 归一化后匹配 → 1.0, em2 非归一化不匹配 → 0.0, mean = 0.5
+	// 单指标匹配 → mean = 1.0
+	if ec.Score != 1.0 {
+		t.Errorf("期望 Score=1.0, 实际=%f", ec.Score)
+	}
+}
+
+// TestMetricEvaluator_多指标聚合_混合分数 测试多指标不同分数的 mean 聚合
+func TestMetricEvaluator_多指标聚合_混合分数(t *testing.T) {
+	// 创建一个总是返回固定分数的 mock 指标
+	m1 := &fixedScoreMetric{name: "metric_a", score: 1.0}
+	m2 := &fixedScoreMetric{name: "metric_b", score: 0.0}
+	me := NewMetricEvaluator([]metrics.Metric{m1, m2}, "mean")
+
+	case_ := dataset.NewCase(
+		map[string]any{"query": "test"},
+		map[string]any{"answer": "test"},
+	)
+	predict := map[string]any{"answer": "test"}
+
+	ec, err := me.Evaluate(context.Background(), *case_, predict)
+	if err != nil {
+		t.Fatalf("不期望错误: %v", err)
+	}
+	// (1.0 + 0.0) / 2 = 0.5
 	if ec.Score != 0.5 {
 		t.Errorf("期望 Score=0.5, 实际=%f", ec.Score)
 	}
@@ -233,22 +256,37 @@ func TestMetricEvaluator_多指标聚合(t *testing.T) {
 
 // TestMetricEvaluator_first聚合 测试 first 聚合方式
 func TestMetricEvaluator_first聚合(t *testing.T) {
-	em1 := metrics.NewExactMatchMetric()
-	em2 := metrics.NewExactMatchMetric(metrics.WithNormalize(false))
-	me := NewMetricEvaluator([]metrics.Metric{em1, em2}, "first")
+	m1 := &fixedScoreMetric{name: "metric_a", score: 1.0}
+	m2 := &fixedScoreMetric{name: "metric_b", score: 0.0}
+	me := NewMetricEvaluator([]metrics.Metric{m1, m2}, "first")
 
 	case_ := dataset.NewCase(
-		map[string]any{"query": "1+1"},
-		map[string]any{"answer": "Hello"},
+		map[string]any{"query": "test"},
+		map[string]any{"answer": "test"},
 	)
-	predict := map[string]any{"answer": "hello"}
+	predict := map[string]any{"answer": "test"}
 
 	ec, err := me.Evaluate(context.Background(), *case_, predict)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	// first 取第一个 metric 的分数（归一化匹配 → 1.0）
+	// first 取第一个 metric 的分数 → 1.0
 	if ec.Score != 1.0 {
 		t.Errorf("期望 Score=1.0 (first), 实际=%f", ec.Score)
 	}
+}
+
+// fixedScoreMetric 固定分数的测试 mock 指标
+type fixedScoreMetric struct {
+	name  string
+	score float64
+}
+
+func (f *fixedScoreMetric) Name() string                  { return f.name }
+func (f *fixedScoreMetric) HigherIsBetter() bool           { return true }
+func (f *fixedScoreMetric) Compute(_, _ any, _ ...metrics.MetricOption) (metrics.MetricResult, error) {
+	return metrics.MetricResult{f.name: f.score}, nil
+}
+func (f *fixedScoreMetric) ComputeBatch(_, _ []any, _ ...metrics.MetricOption) ([]metrics.MetricResult, error) {
+	return nil, nil
 }
