@@ -173,8 +173,7 @@ type DeepAdapter struct {
 	// imageGenToolRegistered 图片生成工具是否已注册
 	// ⤵️ 10.6.24 多模态工具
 	imageGenToolRegistered bool
-	// skillManager 技能管理器
-	// ⤵️ 10.3.19-20
+	// skillManager 技能管理器（已回填 10.3.19-20）
 	skillManager *skill.SkillManager
 	// a2xClient A2X 客户端
 	// ⤵️ A2X / 11.10
@@ -214,9 +213,8 @@ type DeepAdapter struct {
 	// paidSearchRegistered 付费搜索是否已注册
 	// ⤵️ 10.6.24 PaidSearchTool
 	paidSearchRegistered bool
-	// paidSearchTool 付费搜索工具实例
-	// ⤵️ 10.6.24 PaidSearchTool
-	paidSearchTool interface{}
+	// paidSearchTool 付费搜索工具实例（类型已回填，具体实现 ⤵️ 10.6.24）
+	paidSearchTool tool.Tool
 }
 
 // ──────────────────────────── 全局变量 ────────────────────────────
