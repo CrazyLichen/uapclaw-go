@@ -21,9 +21,11 @@ type TeamMember struct {
 	DisplayName string
 	// AgentCard Agent 身份卡片
 	AgentCard *agentschema.AgentCard
-	// DB 团队数据库实例（⤵️ 回填: 9.65 — TeamDatabase 类型）
+	// DB 团队数据库实例
+	// TODO(#9.65): TeamDatabase 类型
 	DB any
-	// Messager 消息总线实例（⤵️ 回填: 9.65 — Messager 类型）
+	// Messager 消息总线实例
+	// TODO(#9.65): Messager 类型
 	Messager any
 	// Prompt 启动提示
 	Prompt string
@@ -41,14 +43,14 @@ const logComponent = logger.ComponentCommon
 // Status 获取当前成员状态。
 // 对齐 Python: TeamMember.status()
 func (m *TeamMember) Status(ctx context.Context) (atschema.MemberStatus, error) {
-	// ⤵️ 回填: 9.65 — 从 DB 读取成员状态
+	// TODO(#9.65): 从 DB 读取成员状态
 	return atschema.MemberStatusReady, nil
 }
 
 // ExecutionStatus 获取当前执行状态。
 // 对齐 Python: TeamMember.execution_status()
 func (m *TeamMember) ExecutionStatus(ctx context.Context) (atschema.ExecutionStatus, error) {
-	// ⤵️ 回填: 9.65 — 从 DB 读取执行状态
+	// TODO(#9.65): 从 DB 读取执行状态
 	return atschema.ExecutionStatusIdle, nil
 }
 
@@ -58,7 +60,7 @@ func (m *TeamMember) ExecutionStatus(ctx context.Context) (atschema.ExecutionSta
 // 当新状态等于当前状态时为空操作（跳过 DB 写入和状态变更事件）。
 // 成员行未注册时静默返回 false（Leader 的行在 BuildTeamTool 后才物化）。
 func (m *TeamMember) UpdateStatus(ctx context.Context, newStatus atschema.MemberStatus) (bool, error) {
-	// ⤵️ 回填: 9.65 — 读取旧状态 → 短路等值 → 写 DB → 发 MemberStatusChangedEvent
+	// TODO(#9.65): 读取旧状态 → 短路等值 → 写 DB → 发 MemberStatusChangedEvent
 	logger.Info(logComponent).Str("member_name", m.MemberName).
 		Str("new_status", string(newStatus)).Msg("TeamMember.UpdateStatus")
 	return true, nil
@@ -69,7 +71,7 @@ func (m *TeamMember) UpdateStatus(ctx context.Context, newStatus atschema.Member
 //
 // 成员行未注册时静默返回 false（同 UpdateStatus 语义）。
 func (m *TeamMember) UpdateExecutionStatus(ctx context.Context, newStatus atschema.ExecutionStatus) (bool, error) {
-	// ⤵️ 回填: 9.65 — 读取旧状态 → 写 DB → 发 MemberExecutionChangedEvent
+	// TODO(#9.65): 读取旧状态 → 写 DB → 发 MemberExecutionChangedEvent
 	logger.Info(logComponent).Str("member_name", m.MemberName).
 		Str("new_status", string(newStatus)).Msg("TeamMember.UpdateExecutionStatus")
 	return true, nil

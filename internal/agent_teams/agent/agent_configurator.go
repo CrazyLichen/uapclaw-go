@@ -425,14 +425,7 @@ func (c *AgentConfigurator) SetMessageManager(v any) { c.infra.MessageManager = 
 // Harness 返回 TeamHarness。
 // 对齐 Python: AgentConfigurator.harness property
 func (c *AgentConfigurator) Harness() *agentteams.TeamHarness {
-	if c.resources.Harness == nil {
-		return nil
-	}
-	h, ok := c.resources.Harness.(*agentteams.TeamHarness)
-	if !ok {
-		return nil
-	}
-	return h
+	return c.resources.Harness
 }
 
 // SetHarness 设置 TeamHarness。
