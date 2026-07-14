@@ -48,19 +48,31 @@ TeamAgent 启动
 ## 循环依赖分析
 
 Python 中 `harness.py` 位于 `agent_teams/` 根目录，`agent_configurator.py` 位于 `agent_teams/agent/`。
-Go 中 `agent_teams/agent/` 是 `package agent`，无法 import 父包 `package agent_teams`。
+Go 中对齐此结构：TeamHarness 放在 `agent_teams/` 根包（`agent_teams/harness.go`，package agent_teams），
+AgentConfigurator 放在 `agent_teams/agent/` 子包（`agent/agent_configurator.go`，package agent）。
 
-**解决方案**：TeamHarness 放在 `agent` 包下（`agent/harness.go`），与 AgentConfigurator 同包。
-Python 中 TeamHarness 和 AgentConfigurator 本来就在同一模块的不同文件中引用，
-Go 中放在同一包的不同文件，语义等价且无循环依赖。
+**依赖方向：**
 
-依赖方向：
 ```
-agent/agent_configurator.go → agentcore/harness/interfaces (DeepAgentInterface)
-agent/harness.go            → agentcore/harness/interfaces (DeepAgentInterface)
-agent/team_agent.go         → agent (同包，无 import)
+agent_teams/  (父包, package agent_teams)
+  ├── harness.go          ← TeamHarness
+  │
+  ↑ import by (子包可引用父包，Go 允许)
+  │
+  ├── agent/              ← AgentConfigurator → import agent_teams (父包) 拿 TeamHarness
+  │   ├── agent_configurator.go
+  │   └── payload.go
+  │
+  ↑ import by
+  │
+  ├── schema/             ← 已有 import agent_teams 的先例 (blueprint.go)
+  └── ...其他子包
 ```
-无循环。
+
+**无循环条件：** 父包 `agent_teams` 不 import 任何子包 → 无环 ✅
+
+已有先例：`schema/blueprint.go` 已经 import `agent_teams` 父包，
+证明子包引用父包是本项目的既定模式。
 
 ## 新增文件
 
@@ -68,20 +80,26 @@ agent/team_agent.go         → agent (同包，无 import)
 |------|------------|------|
 | `agent/agent_configurator.go` | `agent_configurator.py` | AgentConfigurator + resolveTeamMode |
 | `agent/payload.go` | `payload.py` | SpawnPayloadBuilder |
-| `agent/harness.go` | `harness.py` | TeamHarness + MountedRails + AgentCustomizer |
+| `agent_teams/harness.go` | `harness.py` | TeamHarness + MountedRails + AgentCustomizer |
 
 ## 修改文件
 
 | 文件 | 修改内容 |
 |------|---------|
 | `agent/team_agent.go` | 回填 configurator 字段类型 + 属性代理方法 + Configure() |
+| `agent/agent_configurator.go` | 添加 import `agent_teams` 父包（引用 TeamHarness） |
 | `agent/infra.go` | 更新注释格式：⤵️ → TODO(#9.xx) |
-| `agent/resources.go` | 更新注释格式：⤵️ → TODO(#9.xx) |
-| `agent/doc.go` | 添加 agent_configurator.go / payload.go / harness.go 条目 |
+| `agent/resources.go` | 更新注释格式：⤵️ → TODO(#9.xx)；Harness 字段类型改为 `*agentteams.TeamHarness` |
+| `agent/doc.go` | 添加 agent_configurator.go / payload.go 条目 |
+| `agent_teams/doc.go` | 添加 harness.go 条目 |
 
 ---
 
-## 1. agent_configurator.go 设计
+## 1. agent_configurator.go 设计（package agent）
+
+文件位置：`internal/agent_teams/agent/agent_configurator.go`（对齐 Python `agent_teams/agent/agent_configurator.py`）
+
+AgentConfigurator 需 import 父包 `agent_teams` 以引用 TeamHarness 类型。
 
 ### 结构体
 
@@ -131,9 +149,9 @@ func resolveTeamMode(spec atschema.TeamAgentSpec) string
 | 方法 | 对齐 Python | 实现策略 |
 |------|------------|---------|
 | `NewAgentConfigurator(card) *AgentConfigurator` | `__init__(card)` | ✅ 完整实现 |
-| `Configure(spec, ctx) *TeamHarness` | `configure(spec, ctx)` | 调 SetupInfra + SetupAgent |
+| `Configure(spec, ctx) *agentteams.TeamHarness` | `configure(spec, ctx)` | 调 SetupInfra + SetupAgent |
 | `SetupInfra(spec, ctx, ...SetupInfraOption)` | `setup_infra(spec, ctx, ...)` | 完整流程骨架 + TODO |
-| `SetupAgent(spec, ctx) *TeamHarness` | `setup_agent(spec, ctx)` | 完整流程骨架 + TODO |
+| `SetupAgent(spec, ctx) *agentteams.TeamHarness` | `setup_agent(spec, ctx)` | 完整流程骨架 + TODO |
 | `ResolveAgentSpec(spec, role, memberName) DeepAgentSpec` | `resolve_agent_spec(...)` | ✅ 完整实现（静态方法） |
 | `SetupTeamBackend(spec, ctx, messager, ...SetupTeamBackendOption) any` | `setup_team_backend(...)` | 骨架 + TODO(#9.58) |
 | `CreateWorkspaceManager(spec, ctx) any` | `create_workspace_manager(...)` | 骨架 + TODO(#9.66) |
@@ -162,7 +180,7 @@ func resolveTeamMode(spec atschema.TeamAgentSpec) string
 | `WorkspaceInitialized() bool` | `SetWorkspaceInitialized(v bool)` | infra.WorkspaceInitialized |
 | `TaskManager() any` | `SetTaskManager(v any)` | infra.TaskManager |
 | `MessageManager() any` | `SetMessageManager(v any)` | infra.MessageManager |
-| `Harness() *TeamHarness` | `SetHarness(v *TeamHarness)` | resources.Harness |
+| `Harness() *agentteams.TeamHarness` | `SetHarness(v *agentteams.TeamHarness)` | resources.Harness |
 | `WorktreeManager() any` | `SetWorktreeManager(v any)` | resources.WorktreeManager |
 | `MemoryManager() any` | `SetMemoryManager(v any)` | resources.MemoryManager |
 | `FirstIterGate() any` | `SetFirstIterGate(v any)` | resources.FirstIterGate |
@@ -228,7 +246,7 @@ func (c *AgentConfigurator) SetupInfra(
 func (c *AgentConfigurator) SetupAgent(
     spec atschema.TeamAgentSpec,
     ctx atschema.TeamRuntimeContext,
-) *TeamHarness {
+) *agentteams.TeamHarness {
     // 1. agentSpec = ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
     //    ✅ 可完整实现
 
@@ -330,7 +348,9 @@ func WithBackendOnTeamBuilt(cb any) SetupTeamBackendOption { ... }
 
 ---
 
-## 2. payload.go 设计
+## 2. payload.go 设计（package agent）
+
+文件位置：`internal/agent_teams/agent/payload.go`（对齐 Python `agent_teams/agent/payload.py`）
 
 ### 结构体
 
@@ -400,7 +420,9 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(
 
 ---
 
-## 3. harness.go 设计
+## 3. harness.go 设计（package agent_teams）
+
+文件位置：`internal/agent_teams/harness.go`（对齐 Python `agent_teams/harness.py`）
 
 ### 结构体
 
@@ -498,7 +520,7 @@ func TeamHarnessBuild(
     toolApprovalRail any,  // TODO(#9.68)
     teamPlanModeRail any,  // TODO(#9.68)
     initialPlanMode bool,
-) *TeamHarness {
+) *agentteams.TeamHarness {
     // 1. deepAgent = agentSpec.Build()
     //    TODO(#9.56): DeepAgentSpec.Build()
 
