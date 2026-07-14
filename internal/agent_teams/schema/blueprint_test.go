@@ -9,6 +9,7 @@ import (
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
@@ -122,8 +123,8 @@ func TestTeamAgentSpec_Validate_正常(t *testing.T) {
 // TestTeamAgentSpec_Validate_PoolRouter互斥 测试互斥
 func TestTeamAgentSpec_Validate_PoolRouter互斥(t *testing.T) {
 	s := NewTeamAgentSpec()
-	s.ModelPool = []map[string]any{{"model_name": "test"}}
-	s.ModelRouter = map[string]any{"api_base_url": "http://localhost"}
+	s.ModelPool = []models.ModelPoolEntry{{ModelName: "test"}}
+	s.ModelRouter = &models.ModelRouterConfig{APIBaseURL: "http://localhost"}
 	if err := (&s).Validate(); err == nil {
 		t.Error("期望互斥报错")
 	}
@@ -207,7 +208,7 @@ func TestTeamAgentSpec_ValidateHittConsistency_未启用(t *testing.T) {
 func TestTeamAgentSpec_ValidateLeaderModelResolved_有模型(t *testing.T) {
 	a := NewDeepAgentSpec()
 	a.Model = &TeamModelConfig{}
-	ts := TeamSpec{ModelPool: []map[string]any{{"model_name": "test"}}}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
 	if err := ValidateLeaderModelResolved(a, nil, ts); err != nil {
 		t.Errorf("报错: %v", err)
 	}
@@ -216,7 +217,7 @@ func TestTeamAgentSpec_ValidateLeaderModelResolved_有模型(t *testing.T) {
 // TestTeamAgentSpec_ValidateLeaderModelResolved_无模型 测试无模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_无模型(t *testing.T) {
 	a := NewDeepAgentSpec()
-	ts := TeamSpec{ModelPool: []map[string]any{{"model_name": "test"}}}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
 	if err := ValidateLeaderModelResolved(a, nil, ts); err == nil {
 		t.Error("期望报错")
 	}
@@ -226,7 +227,7 @@ func TestTeamAgentSpec_ValidateLeaderModelResolved_无模型(t *testing.T) {
 func TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型(t *testing.T) {
 	a := NewDeepAgentSpec()
 	m := &TeamModelConfig{}
-	ts := TeamSpec{ModelPool: []map[string]any{{"model_name": "test"}}}
+	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
 	if err := ValidateLeaderModelResolved(a, m, ts); err != nil {
 		t.Errorf("报错: %v", err)
 	}

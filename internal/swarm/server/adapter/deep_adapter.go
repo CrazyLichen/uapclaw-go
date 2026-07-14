@@ -406,10 +406,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	}
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
-	// ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
-	// 依赖 build_research_agent_config / build_browser_agent_config / _load_custom_subagents 等 builder 函数
-	// 当前使用简化逻辑，仅判断 should_add_general_agent
-	shouldEnableGeneralAgent := (subMode == "plan") || (mode != "" && strings.HasPrefix(mode, "agent"))
+	// 对齐 Python: _build_configured_subagents(model, config, configBase)
+	subagentSpecs, shouldEnableGeneralAgent := d.buildConfiguredSubagents(config, configBase)
 
 	// 步骤 19: 组装 CreateDeepAgentParams 并调用工厂
 	// 对齐 Python: self._instance = create_deep_agent(**common_kwargs, ...)
@@ -422,7 +420,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		SystemPrompt:           systemPrompt,
 		ToolCards:              toolCards,
 		Mcps:                   nil, // 对齐 Python: mcps 在 create_deep_agent 之后通过 _register_mcp_servers_from_config 单独注册
-		Subagents:              nil, // ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
+		Subagents:              subagentSpecs,
 		Rails:                  railsList,
 		EnableTaskLoop:         d.resolveEnableTaskLoop(config, configBase),
 		AddGeneralPurposeAgent: shouldEnableGeneralAgent,

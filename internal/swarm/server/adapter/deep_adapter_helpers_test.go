@@ -947,26 +947,31 @@ func TestSyncToolGroup(t *testing.T) {
 }
 
 // TestExtractEnabledMcpServerEntries 测试启用 MCP 条目提取。
+// 对齐 Python: configBase["mcp"]["servers"] 嵌套列表结构
 func TestExtractEnabledMcpServerEntries(t *testing.T) {
 	d := NewDeepAdapter()
 
-	t.Run("无mcp_servers段", func(t *testing.T) {
+	t.Run("无mcp段", func(t *testing.T) {
 		result := d.extractEnabledMcpServerEntries(map[string]any{})
 		if result != nil {
-			t.Errorf("无 mcp_servers 段应返回 nil，got %v", result)
+			t.Errorf("无 mcp 段应返回 nil，got %v", result)
 		}
 	})
 
 	t.Run("有启用的条目", func(t *testing.T) {
 		configBase := map[string]any{
-			"mcp_servers": map[string]any{
-				"server1": map[string]any{
-					"server_path": "/path/to/server1",
-					"enabled":     true,
-				},
-				"server2": map[string]any{
-					"server_path": "/path/to/server2",
-					"enabled":     false,
+			"mcp": map[string]any{
+				"servers": []map[string]any{
+					{
+						"name":        "server1",
+						"server_path": "/path/to/server1",
+						"enabled":     true,
+					},
+					{
+						"name":        "server2",
+						"server_path": "/path/to/server2",
+						"enabled":     false,
+					},
 				},
 			},
 		}
@@ -978,9 +983,12 @@ func TestExtractEnabledMcpServerEntries(t *testing.T) {
 
 	t.Run("默认启用", func(t *testing.T) {
 		configBase := map[string]any{
-			"mcp_servers": map[string]any{
-				"server1": map[string]any{
-					"server_path": "/path/to/server1",
+			"mcp": map[string]any{
+				"servers": []map[string]any{
+					{
+						"name":        "server1",
+						"server_path": "/path/to/server1",
+					},
 				},
 			},
 		}
@@ -992,9 +1000,12 @@ func TestExtractEnabledMcpServerEntries(t *testing.T) {
 
 	t.Run("自动补充name字段", func(t *testing.T) {
 		configBase := map[string]any{
-			"mcp_servers": map[string]any{
-				"my_server": map[string]any{
-					"server_path": "/path",
+			"mcp": map[string]any{
+				"servers": []map[string]any{
+					{
+						"name":        "my_server",
+						"server_path": "/path",
+					},
 				},
 			},
 		}
@@ -1004,6 +1015,24 @@ func TestExtractEnabledMcpServerEntries(t *testing.T) {
 		}
 		if result[0]["name"] != "my_server" {
 			t.Errorf("name = %v, want my_server", result[0]["name"])
+		}
+	})
+
+	t.Run("[]any格式(JSON反序列化)", func(t *testing.T) {
+		configBase := map[string]any{
+			"mcp": map[string]any{
+				"servers": []any{
+					map[string]any{
+						"name":        "server1",
+						"server_path": "/path/to/server1",
+						"enabled":     true,
+					},
+				},
+			},
+		}
+		result := d.extractEnabledMcpServerEntries(configBase)
+		if len(result) != 1 {
+			t.Errorf("[]any 格式应返回 1 个启用条目，got %d", len(result))
 		}
 	})
 }
