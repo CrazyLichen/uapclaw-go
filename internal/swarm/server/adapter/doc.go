@@ -27,6 +27,10 @@
 //	├── deep_adapter_stream.go    # parseStreamChunk 15+ 种 chunk + usage 累加器
 //	├── deep_adapter_dreaming.go  # DreamingController 接口实现（⤵️）
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
+//	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）
+//	│   ├── doc.go                # 包文档
+//	│   ├── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
+//	│   └── helpers_test.go       # 单元测试
 //	└── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/interface_deep.py
