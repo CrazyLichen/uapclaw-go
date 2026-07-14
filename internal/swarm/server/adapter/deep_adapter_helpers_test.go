@@ -178,26 +178,6 @@ func TestBuildRecapPrompt_有memory(t *testing.T) {
 	}
 }
 
-// TestDeepAdapter_IsApprovalEvent 测试审批事件前缀检查。
-func TestDeepAdapter_IsApprovalEvent(t *testing.T) {
-	d := NewDeepAdapter()
-	tests := []struct {
-		requestID string
-		want      bool
-	}{
-		{"skill_evolve_123", true},
-		{"evolve_simplify_456", true},
-		{"team_skill_evolve_789", true},
-		{"unknown_prefix", false},
-		{"", false},
-	}
-	for _, tt := range tests {
-		if got := d.isApprovalEvent(tt.requestID); got != tt.want {
-			t.Errorf("isApprovalEvent(%q) = %v, want %v", tt.requestID, got, tt.want)
-		}
-	}
-}
-
 // TestDeepAdapter_HandleSlashCommand_非斜杠命令 测试非斜杠命令返回 nil。
 func TestDeepAdapter_HandleSlashCommand_非斜杠命令(t *testing.T) {
 	d := NewDeepAdapter()

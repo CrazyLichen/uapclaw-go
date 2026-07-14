@@ -139,14 +139,6 @@ func (d *DeepAdapter) onEvolutionWatcherDone(sessionID string) {
 	logger.Info(logComponent).Str("session_id", sessionID).Msg("onEvolutionWatcherDone 等待 10.6.3-10 回填")
 }
 
-// isApprovalEvent 检查 request_id 是否为审批事件。
-// 对齐 Python: is_approval_event() — 检查前缀
-func (d *DeepAdapter) isApprovalEvent(requestID string) bool {
-	return strings.HasPrefix(requestID, "skill_evolve_") ||
-		strings.HasPrefix(requestID, "evolve_simplify_") ||
-		strings.HasPrefix(requestID, "team_skill_evolve_")
-}
-
 // buildRecapPrompt 构建 recap 提示词。
 // 对齐 Python: recap_prompts.build_recap_prompt(memory: str | None) -> str
 // memory 为空字符串时等同 Python 的 memory=None（不拼接 memory 前缀块）。
