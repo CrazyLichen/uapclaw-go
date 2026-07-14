@@ -1,4 +1,4 @@
-package evaluator
+package metrics
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
