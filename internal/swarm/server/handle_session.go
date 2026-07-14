@@ -10,9 +10,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -80,9 +82,20 @@ const (
 	metadataFileName = "metadata.json"
 	// heartbeatSessionPrefix 心跳会话前缀，不参与 session.list 展示
 	heartbeatSessionPrefix = "heartbeat_"
+	// deliveryContextKind 推送类型，对齐 Python _DELIVERY_KIND_SERVER_PUSH
+	deliveryContextKind = "server_push"
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// deliveryContextCache 内存缓存，解决异步写入时读取到陈旧数据的竞态
+	// 对齐 Python: _METADATA_CACHE
+	deliveryContextCache = make(map[string]map[string]any)
+	// deliveryContextMu 保护缓存的读写锁
+	// 对齐 Python: _CACHE_LOCK
+	deliveryContextMu sync.RWMutex
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -387,6 +400,160 @@ func (s *AgentServer) handleSessionFork(_ context.Context, request *schema.Agent
 	return notImplementedResponse(request)
 }
 
+// SetSessionDeliveryContext 刷新 session 级 delivery context，
+// 供异步 server_push 恢复路由上下文。
+//
+// 对齐 Python: set_session_delivery_context()
+func SetSessionDeliveryContext(
+	sessionID string,
+	channelID *string,
+	sourceRequestID *string,
+	routeMetadata map[string]any,
+	deliveryKind ...string,
+) map[string]any {
+	meta := readSessionMetadataWithCache(sessionID)
+	currentContextRaw, _ := meta["delivery_context"]
+	currentContext := map[string]any{}
+	if raw, ok := currentContextRaw.(map[string]any); ok {
+		currentContext = deepCopyMap(raw)
+	}
+
+	// 归一化 channel_id
+	normalizedChannelID := ""
+	if channelID != nil && strings.TrimSpace(*channelID) != "" {
+		normalizedChannelID = strings.TrimSpace(*channelID)
+	} else if cid, ok := currentContext["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+		normalizedChannelID = strings.TrimSpace(cid)
+	} else if cid, ok := meta["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+		normalizedChannelID = strings.TrimSpace(cid)
+	}
+
+	// 归一化 source_request_id
+	normalizedRequestID := ""
+	if sourceRequestID != nil && strings.TrimSpace(*sourceRequestID) != "" {
+		normalizedRequestID = strings.TrimSpace(*sourceRequestID)
+	} else if rid, ok := currentContext["source_request_id"].(string); ok {
+		normalizedRequestID = strings.TrimSpace(rid)
+	}
+
+	// 归一化 route_metadata
+	previousRouteMetadata, _ := currentContext["route_metadata"].(map[string]any)
+	var normalizedRouteMetadata map[string]any
+	if routeMetadata != nil && len(routeMetadata) > 0 {
+		normalizedRouteMetadata = deepCopyMap(routeMetadata)
+	} else if previousRouteMetadata != nil {
+		normalizedRouteMetadata = deepCopyMap(previousRouteMetadata)
+	}
+
+	if len(meta) == 0 {
+		meta = map[string]any{
+			"session_id":      sessionID,
+			"channel_id":      normalizedChannelID,
+			"user_id":         "",
+			"created_at":      currentTimestamp(),
+			"last_message_at": currentTimestamp(),
+			"title":           "",
+			"message_count":   0,
+			"mode":            "unknown",
+		}
+	} else {
+		if normalizedChannelID != "" {
+			meta["channel_id"] = normalizedChannelID
+		}
+		meta["last_message_at"] = currentTimestamp()
+	}
+
+	// 确定 delivery_kind
+	kind := deliveryContextKind
+	if len(deliveryKind) > 0 && strings.TrimSpace(deliveryKind[0]) != "" {
+		kind = strings.TrimSpace(deliveryKind[0])
+	}
+
+	deliveryContext := map[string]any{
+		"delivery_kind":      kind,
+		"session_id":         sessionID,
+		"channel_id":         normalizedChannelID,
+		"source_request_id":  normalizedRequestID,
+		"updated_at":         currentTimestamp(),
+	}
+	if normalizedRouteMetadata != nil {
+		deliveryContext["route_metadata"] = normalizedRouteMetadata
+	}
+
+	meta["delivery_context"] = deliveryContext
+
+	// 更新缓存并写入文件
+	deliveryContextMu.Lock()
+	deliveryContextCache[sessionID] = deepCopyMap(meta)
+	deliveryContextMu.Unlock()
+
+	writeSessionMetadata(GetSessionsDir(), sessionID, meta)
+
+	return deepCopyMap(deliveryContext)
+}
+
+// GetSessionDeliveryContext 读取 session 级 delivery context。
+//
+// 对齐 Python: get_session_delivery_context()
+func GetSessionDeliveryContext(sessionID string) map[string]any {
+	// 优先从内存缓存读取
+	deliveryContextMu.RLock()
+	if cached, ok := deliveryContextCache[sessionID]; ok {
+		deliveryContextMu.RUnlock()
+		if dc, ok := cached["delivery_context"].(map[string]any); ok {
+			return deepCopyMap(dc)
+		}
+		return nil
+	}
+	deliveryContextMu.RUnlock()
+
+	// 从 metadata.json 读取
+	meta := readSessionMetadata(GetSessionsDir(), sessionID)
+	context, ok := meta["delivery_context"]
+	if !ok {
+		return nil
+	}
+	dc, ok := context.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return deepCopyMap(dc)
+}
+
+// BuildServerPushMessage 基于 session delivery context 构造 server_push 消息。
+//
+// 对齐 Python: build_server_push_message()
+// 被 evolution_helpers 和其他推送场景调用。
+func BuildServerPushMessage(
+	sessionID, requestID string,
+	payload map[string]any,
+	fallbackChannelID ...string,
+) map[string]any {
+	deliveryCtx := GetSessionDeliveryContext(sessionID)
+	channelID := "default"
+	if deliveryCtx != nil {
+		if cid, ok := deliveryCtx["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+			channelID = strings.TrimSpace(cid)
+		}
+	}
+	if len(fallbackChannelID) > 0 && fallbackChannelID[0] != "" && channelID == "default" {
+		channelID = fallbackChannelID[0]
+	}
+
+	message := map[string]any{
+		"request_id": requestID,
+		"channel_id": channelID,
+		"session_id": sessionID,
+		"payload":    payload,
+	}
+	if deliveryCtx != nil {
+		if rm, ok := deliveryCtx["route_metadata"].(map[string]any); ok && len(rm) > 0 {
+			message["metadata"] = deepCopyMap(rm)
+		}
+	}
+	return message
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readSessionMetadata 读取会话元数据文件。
@@ -433,4 +600,43 @@ func makeSessionID() string {
 // currentTimestamp 返回当前 UTC 时间戳（秒），对齐 Python _current_timestamp。
 func currentTimestamp() float64 {
 	return float64(time.Now().UnixMilli()) / 1000.0
+}
+
+// readSessionMetadataWithCache 优先从内存缓存读取 metadata，否则从磁盘读取。
+// 对齐 Python _read_metadata 的缓存优先策略。
+func readSessionMetadataWithCache(sessionID string) map[string]any {
+	deliveryContextMu.RLock()
+	if cached, ok := deliveryContextCache[sessionID]; ok {
+		deliveryContextMu.RUnlock()
+		return deepCopyMap(cached)
+	}
+	deliveryContextMu.RUnlock()
+
+	return readSessionMetadata(GetSessionsDir(), sessionID)
+}
+
+// deepCopyMap 深拷贝 map，对齐 Python copy.deepcopy()。
+func deepCopyMap(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]any, len(src))
+	for k, v := range src {
+		switch val := v.(type) {
+		case map[string]any:
+			dst[k] = deepCopyMap(val)
+		default:
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
+// GetSessionsDir 返回全局会话目录路径。
+// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
+func GetSessionsDir() string {
+	if inst := GetInstance(); inst != nil {
+		return inst.sessionsDir
+	}
+	return workspace.AgentSessionsDir()
 }
