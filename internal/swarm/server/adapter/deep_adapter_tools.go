@@ -281,7 +281,7 @@ func (d *DeepAdapter) syncPaidSearchToolForRuntime() {
 	}
 
 	// ⤵️ 9.38-49: 根据 paidSearchRegistered 状态注册/注销付费搜索工具
-	// if d.paidSearchRegistered {
+	// 待实现：付费搜索注册检测 if d.paidSearchRegistered {
 	//     // 注册 paid_search 工具
 	// } else {
 	//     // 移除 paid_search 工具
@@ -382,11 +382,11 @@ func (d *DeepAdapter) buildAudioModelConfig(configBase map[string]any) *schema.A
 // ⤵️ 9.38-49 Harness 工具集: apply_video_model_config_from_yaml + dedicated_multimodal_model_configured
 func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) bool {
 	// ⤵️ 9.38-49: apply_video_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
-	// applyVideoModelConfigFromYAML(configBase)
+	// 待实现：应用视频模型配置 applyVideoModelConfigFromYAML(configBase)
 
 	// ⤵️ 9.38-49: dedicated_multimodal_model_configured(config_base, "video") — 检查 models.video 是否有独立 api_key
-	// if !dedicatedMultimodalModelConfigured(configBase, "video") {
-	// 	logger.Info(logComponent).Msg("skip video_understanding: models.video has no dedicated api_key in config.yaml")
+	// 待实现：检查视频模型是否已配置 if !dedicatedMultimodalModelConfigured(configBase, "video") {
+	// 	logger.Info(logComponent).Msg("跳过video_understanding: config.yaml中models.video无独立api_key")
 	// 	return false
 	// }
 
@@ -403,7 +403,7 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) bool {
 // ⤵️ 9.38-49 Harness 工具集: apply_image_gen_model_config_from_yaml
 func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 	// ⤵️ 9.38-49: apply_image_gen_model_config_from_yaml(configBase) — 将 YAML 配置映射到环境变量
-	// applyImageGenModelConfigFromYAML(configBase)
+	// 待实现：应用图像生成模型配置 applyImageGenModelConfigFromYAML(configBase)
 
 	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
 		logger.Info(logComponent).Msg("image_gen tool skipped: incomplete config (IMAGE_GEN_API_KEY not set)")
@@ -434,13 +434,13 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	var toolCards []*tool.ToolCard
 
 	// ── 步骤 1: wiki 工具 ──
-	// Python:
+	// 对齐 Python:
 	//   for wtool in [wiki_ingest, wiki_query, wiki_lint]:
 	//       if not Runner.resource_mgr.get_tool(wtool.card.id):
 	//           Runner.resource_mgr.add_tool(wtool)
 	//       tool_cards.append(wtool.card)
 	// ⤵️ 9.38-49: wiki_ingest / wiki_query / wiki_lint 工具类尚未实现
-	// for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
+	// 待实现：注册Wiki工具 for _, wtool := range []tool.Tool{wikiIngest, wikiQuery, wikiLint} {
 	//     if rm.GetTool([]string{wtool.Card().ID}) == nil {
 	//         _ = rm.AddTool(wtool)
 	//     }
@@ -448,14 +448,14 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// }
 
 	// ── 步骤 2: 付费搜索工具 ──
-	// Python:
+	// 对齐 Python:
 	//   if is_paid_search_enabled():
 	//       self._paid_search_tool = WebPaidSearchTool(language=..., agent_id=agent_id)
 	//       Runner.resource_mgr.add_tool(self._paid_search_tool)
 	//       tool_cards.append(self._paid_search_tool.card)
 	//       self._paid_search_registered = True
 	// ⤵️ 9.38-49: WebPaidSearchTool + is_paid_search_enabled() 尚未实现
-	// if isPaidSearchEnabled() {
+	// 待实现：付费搜索启用检测 if isPaidSearchEnabled() {
 	//     paidSearchTool := NewWebPaidSearchTool(d.resolveRuntimeLanguage(), agentID)
 	//     _ = rm.AddTool(paidSearchTool)
 	//     toolCards = append(toolCards, paidSearchTool.Card())
@@ -464,20 +464,20 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// }
 
 	// ── 步骤 3: 免费搜索工具 ──
-	// Python:
+	// 对齐 Python:
 	//   for tool_cls in [WebFreeSearchTool, WebFetchWebpageTool]:
 	//       tool_instance = tool_cls(agent_id=agent_id)
 	//       Runner.resource_mgr.add_tool(tool_instance)
 	//       tool_cards.append(tool_instance.card)
 	// ⤵️ 9.38-49: WebFreeSearchTool / WebFetchWebpageTool 尚未实现
-	// for _, toolCls := range []func(string) tool.Tool{NewWebFreeSearchTool, NewWebFetchWebpageTool} {
+	// 待实现：注册免费搜索和网页抓取工具 for _, toolCls := range []func(string) tool.Tool{NewWebFreeSearchTool, NewWebFetchWebpageTool} {
 	//     toolInst := toolCls(agentID)
 	//     _ = rm.AddTool(toolInst)
 	//     toolCards = append(toolCards, toolInst.Card())
 	// }
 
 	// ── 步骤 4: 视觉工具 ──
-	// Python:
+	// 对齐 Python:
 	//   if self._vision_model_config is not None:
 	//       for tool in create_vision_tools(language=..., vision_model_config=..., agent_id=...):
 	//           Runner.resource_mgr.add_tool(tool)
@@ -486,8 +486,8 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       self._vision_tools_registered = bool(self._vision_tools)
 	if d.visionModelConfig != nil {
 		// ⤵️ 9.38-49: create_vision_tools() 尚未实现
-		// visionTools := createVisionTools(d.resolveRuntimeLanguage(), d.visionModelConfig, agentID)
-		// for _, t := range visionTools {
+		// 待实现：创建视觉工具 visionTools := createVisionTools(d.resolveRuntimeLanguage(), d.visionModelConfig, agentID)
+		// 待实现：注册视觉工具到ResourceMgr for _, t := range visionTools {
 		//     _ = rm.AddTool(t)
 		//     toolCards = append(toolCards, t.Card())
 		// }
@@ -497,7 +497,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 5: 音频工具 ──
-	// Python:
+	// 对齐 Python:
 	//   self._audio_tools = self._iter_runtime_audio_tools(agent_id)
 	//   for tool in self._audio_tools:
 	//       Runner.resource_mgr.add_tool(tool)
@@ -505,8 +505,8 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//   self._audio_tools_registered = bool(self._audio_tools)
 	if d.audioModelConfig != nil {
 		// ⤵️ 9.38-49: _iter_runtime_audio_tools() 尚未实现
-		// audioTools := d.iterRuntimeAudioTools(agentID)
-		// for _, t := range audioTools {
+		// 待实现：迭代音频工具 audioTools := d.iterRuntimeAudioTools(agentID)
+		// 待实现：注册音频工具到ResourceMgr for _, t := range audioTools {
 		//     _ = rm.AddTool(t)
 		//     toolCards = append(toolCards, t.Card())
 		// }
@@ -516,33 +516,33 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 6: 视频工具 ──
-	// Python:
+	// 对齐 Python:
 	//   if self._video_model_config:
 	//       Runner.resource_mgr.add_tool(video_understanding)
 	//       tool_cards.append(video_understanding.card)
 	//       self._video_tool_registered = True
 	if d.videoToolRegistered {
 		// ⤵️ 9.38-49: video_understanding 工具实例尚未实现
-		// _ = rm.AddTool(videoUnderstanding)
+		// 待实现：注册视频理解工具 _ = rm.AddTool(videoUnderstanding)
 		// toolCards = append(toolCards, videoUnderstanding.Card())
 		logger.Info(logComponent).Msg("getToolCards: 视频工具配置已就绪，等待 9.38-49 回填 video_understanding")
 	}
 
 	// ── 步骤 7: 图片生成工具 ──
-	// Python:
+	// 对齐 Python:
 	//   if self._image_gen_model_config:
 	//       Runner.resource_mgr.add_tool(generate_image)
 	//       tool_cards.append(generate_image.card)
 	//       self._image_gen_tool_registered = True
 	if d.imageGenToolRegistered {
 		// ⤵️ 9.38-49: generate_image 工具实例尚未实现
-		// _ = rm.AddTool(generateImage)
+		// 待实现：注册图像生成工具 _ = rm.AddTool(generateImage)
 		// toolCards = append(toolCards, generateImage.Card())
 		logger.Info(logComponent).Msg("getToolCards: 图片生成工具配置已就绪，等待 9.38-49 回填 generate_image")
 	}
 
 	// ── 步骤 8: 小艺手机端工具 ──
-	// Python:
+	// 对齐 Python:
 	//   xiaoyi_phone_tools_enabled = config_base.get("channels", {}).get("xiaoyi", {}).get("phone_tools_enabled", False)
 	//   if xiaoyi_phone_tools_enabled and not self._xiaoyi_phone_tools_registered:
 	//       _xiaoyi_tools = [get_user_location, create_note, search_notes, ...]
@@ -551,7 +551,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//           tool_cards.append(xt.card)
 	//       self._xiaoyi_phone_tools_registered = True
 	// ⤵️ 9.38-49: 小艺手机端工具类 (28个) 尚未实现
-	// xiaoyiEnabled := false
+	// 待实现：检查小艺手机端工具是否启用 xiaoyiEnabled := false
 	// if channels, ok := configBase["channels"].(map[string]any); ok {
 	//     if xiaoyi, ok := channels["xiaoyi"].(map[string]any); ok {
 	//         if v, ok := xiaoyi["phone_tools_enabled"].(bool); ok {
@@ -569,7 +569,7 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	// }
 
 	// ── 步骤 9: SkillToolkit ──
-	// Python:
+	// 对齐 Python:
 	//   skill_toolkit = SkillToolkit(manager=self._skill_manager)
 	//   for tool in skill_toolkit.get_tools():
 	//       if not Runner.resource_mgr.get_tool(tool.card.id):
@@ -577,8 +577,8 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	//       tool_cards.append(tool.card)
 	if d.skillManager != nil {
 		// ⤵️ 9.38-49: SkillToolkit 工具尚未实现
-		// skillToolkit := NewSkillToolkit(d.skillManager)
-		// for _, t := range skillToolkit.GetTools() {
+		// 待实现：创建技能工具包 skillToolkit := NewSkillToolkit(d.skillManager)
+		// 待实现：注册技能工具 for _, t := range skillToolkit.GetTools() {
 		//     if rm.GetTool([]string{t.Card().ID}) == nil {
 		//         _ = rm.AddTool(t)
 		//     }
@@ -588,14 +588,14 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 	}
 
 	// ── 步骤 10: acp_chat ──
-	// Python:
+	// 对齐 Python:
 	//   acp_cfg = get_config().get("acp_agents")
 	//   if isinstance(acp_cfg, dict) and acp_cfg:
 	//       if not Runner.resource_mgr.get_tool(acp_chat.card.id):
 	//           Runner.resource_mgr.add_tool(acp_chat)
 	//       tool_cards.append(acp_chat.card)
 	// ⤵️ 9.38-49: acp_chat 工具尚未实现
-	// acpCfg, _ := configBase["acp_agents"].(map[string]any)
+	// 待实现：ACP配置检查 acpCfg, _ := configBase["acp_agents"].(map[string]any)
 	// if len(acpCfg) > 0 {
 	//     if rm.GetTool([]string{acpChat.Card().ID}) == nil {
 	//         _ = rm.AddTool(acpChat)

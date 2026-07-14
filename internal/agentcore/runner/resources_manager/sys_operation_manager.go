@@ -16,7 +16,7 @@ type SysOperationMgr struct {
 	// sysOperations 系统操作实例注册表
 	sysOperations *ThreadSafeDict[string, sysop.SysOperation]
 	// sandboxKeyOwnerMap 沙箱键模板到所有者 SysOperationID 的映射
-	// Python: _sandbox_key_owner_map: dict[str, str]
+	// 对齐 Python: 沙箱密钥归属映射
 	sandboxKeyOwnerMap map[string]string
 	// mu 读写锁
 	mu sync.RWMutex

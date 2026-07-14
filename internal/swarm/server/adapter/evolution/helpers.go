@@ -127,13 +127,13 @@ var (
 	}
 	// TeamEvolutionVisibleProgressStages 可见进度阶段集合
 	TeamEvolutionVisibleProgressStages = map[string]struct{}{
-		"generating":                        {},
-		"approval_required":                 {},
-		"completed":                         {},
-		TeamEvolutionNoopStage:              {},
-		TeamEvolutionNoopNoSkillStage:       {},
-		TeamEvolutionNoopNoSignalStage:      {},
-		TeamEvolutionNoopNoRecordsStage:     {},
+		"generating":                    {},
+		"approval_required":             {},
+		"completed":                     {},
+		TeamEvolutionNoopStage:          {},
+		TeamEvolutionNoopNoSkillStage:   {},
+		TeamEvolutionNoopNoSignalStage:  {},
+		TeamEvolutionNoopNoRecordsStage: {},
 	}
 
 	// sdkProgressStageMap SDK→显示阶段映射

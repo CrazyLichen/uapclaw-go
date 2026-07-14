@@ -17,7 +17,7 @@ import (
 // 当前实现为 identity return（直接返回 msg），ACP session alias 处理待后续回填。
 func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *schema.Message) *schema.Message {
 	// TODO: ACP session alias 处理（等 ACP 章节回填）
-	// Python: if msg.channel_id == _ACP_CHANNEL_ID:
+	// 对齐 Python: ACP渠道检测
 	//     msg = await self._ensure_acp_agent_session(msg)
 	return msg
 }

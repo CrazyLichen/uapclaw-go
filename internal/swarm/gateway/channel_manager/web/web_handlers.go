@@ -368,7 +368,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 		"skills.skillnet.install":        {"ok": true},
 		"skills.skillnet.install_status": {"status": "not_installed"},
 		"skills.skillnet.evaluate":       {},
-		// ClawHub
+		// ClawHub令牌
 		"skills.clawhub.get_token": {"token": ""},
 		"skills.clawhub.set_token": {"ok": true},
 		"skills.clawhub.search":    {"skills": []any{}},

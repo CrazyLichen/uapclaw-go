@@ -252,8 +252,8 @@ func (a *ReActAgent) WriteInvokeResultToStream(
 		}
 		// ⤵️ 6.12: Workflow 中断写入流（暂未实现）
 		// else 分支：workflowState := result["workflow_execution_state"]
-		// componentIDs := result["component_ids"]
-		// pendingID := componentIDs[0]
+		// 待实现：提取组件ID componentIDs := result["component_ids"]
+		// 待实现：获取待处理ID pendingID := componentIDs[0]
 		// 遍历 workflowState.result，写入 payload.id == pendingID 的 schema
 	} else {
 		// 正常 answer 结果

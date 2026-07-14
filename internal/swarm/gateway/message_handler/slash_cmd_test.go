@@ -270,8 +270,8 @@ func TestSwitchMode_模式家族映射(t *testing.T) {
 			state.Mode = tt.currentMode
 
 			parsed := command_parser.ParsedChannelControl{
-				Action:            command_parser.ActionSwitchOK,
-				SwitchSubcommand:  tt.switchCmd,
+				Action:           command_parser.ActionSwitchOK,
+				SwitchSubcommand: tt.switchCmd,
 			}
 			mh.modeChangeCancelAndNotice(msg, parsed)
 

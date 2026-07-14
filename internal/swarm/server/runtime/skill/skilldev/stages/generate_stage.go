@@ -174,8 +174,8 @@ func (h *GenerateStageHandler) resolveGenerationOrder(plan map[string]any) []gen
 // 待实现: 接入 create_stage_agent + 逐文件生成逻辑
 func (h *GenerateStageHandler) generateAllFiles(_ *skilldev.SkillDevContext, skillDir string, generationOrder []generationItem) []string {
 	// 待实现:
-	// agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
-	// for idx, item := range generationOrder {
+	// 待实现：创建生成Agent agent, err := sctx.CreateStageAgent("generate", GenerateSystemPrompt, []string{"file_read", "file_write"}, 30)
+	// 待实现：逐文件生成 for idx, item := range generationOrder {
 	//     os.MkdirAll(filepath.Dir(filepath.Join(skillDir, item.FilePath)), 0o755)
 	//     content := await generateSingleFile(agent, sctx, item.FilePath, item.Role)
 	//     os.WriteFile(filepath.Join(skillDir, item.FilePath), []byte(content), 0o644)

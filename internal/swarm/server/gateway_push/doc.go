@@ -11,8 +11,7 @@
 //
 //	gateway_push/
 //	├── doc.go            # 包文档
-//	├── transport.go      # GatewayPushTransport 接口 + ChannelPushTransport 实现
-//	└── transport_test.go # ChannelPushTransport 单元测试
+//	└── transport.go      # GatewayPushTransport 接口 + ChannelPushTransport 实现
 //
 // 对应 Python 代码：jiuwenswarm/server/gateway_push/
 package gateway_push

@@ -4,21 +4,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-var (
-	// LLMMetricTemplate LLM-as-Judge 评估提示词模板。
-	//
-	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_TEMPLATE
-	LLMMetricTemplate = prompt.NewPromptTemplate("llm_metric", llmMetricTemplateContent)
-
-	// LLMMetricRetryTemplate 评估结果解析失败时的重试模板。
-	//
-	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_RETRY_TEMPLATE
-	LLMMetricRetryTemplate = prompt.NewPromptTemplate("llm_metric_retry", llmMetricRetryTemplateContent)
-)
-
-// ──────────────────────────── 非导出变量 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
 // 一比一复刻 Python LLM_METRIC_TEMPLATE，占位符 {{variable}} 与 PromptTemplate 格式一致
 const llmMetricTemplateContent = `You are an answer verification expert responsible for checking the semantic and
@@ -91,3 +77,17 @@ Output JSON format:
 
 Please verify and return the result:
 `
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// LLMMetricTemplate LLM-as-Judge 评估提示词模板。
+	//
+	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_TEMPLATE
+	LLMMetricTemplate = prompt.NewPromptTemplate("llm_metric", llmMetricTemplateContent)
+
+	// LLMMetricRetryTemplate 评估结果解析失败时的重试模板。
+	//
+	// 对应 Python: openjiuwen/agent_evolving/evaluator/templates.py LLM_METRIC_RETRY_TEMPLATE
+	LLMMetricRetryTemplate = prompt.NewPromptTemplate("llm_metric_retry", llmMetricRetryTemplateContent)
+)

@@ -1926,7 +1926,7 @@ func (d *DeepAgent) runTaskLoopInvoke(ctx context.Context, cbc *agentinterfaces.
 	}
 
 	// 对齐 Python: last_result: Dict[str, Any] = {}
-	// async for result in _run_task_loop(): last_result = result
+	// 对齐 Python: 异步迭代任务循环获取最终结果
 	var lastResult map[string]any
 	for result := range loopCh {
 		lastResult = result
@@ -2172,7 +2172,7 @@ func (d *DeepAgent) runTaskLoopStream(ctx context.Context, invokeInputs *agentin
 		}
 
 		// 对齐 Python line 2184-2185:
-		// async for result in _run_task_loop(): _write_round_result_to_stream(result, session)
+		// 对齐 Python: 异步迭代任务循环写入流结果
 		for result := range loopCh {
 			d.writeRoundResultToStream(streamCtx, result, sessConcrete)
 		}
@@ -2621,7 +2621,9 @@ func (d *DeepAgent) ensureBuiltinToolResource(card *tool.ToolCard, config *hsche
 
 	// ⤵️ 9.1 回填：WebFreeSearchTool / WebPaidSearchTool Go 实现后补全
 	// 对齐 Python: tool_cls = WebPaidSearchTool if card.name == "paid_search" else WebFreeSearchTool
+	// 对齐 Python: 创建工具实例
 	// tool = tool_cls(language=resolve_language(config.language), card=card)
+	// 对齐 Python: 注册工具到资源管理器
 	// result = Runner.resource_mgr.add_tool(tool, tag=self.card.id)
 	logger.Debug(logComponent).Str("tool_name", card.Name).Msg("WebSearchTool Go 实现尚未完成，跳过工具注册")
 }

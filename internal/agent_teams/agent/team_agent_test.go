@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator

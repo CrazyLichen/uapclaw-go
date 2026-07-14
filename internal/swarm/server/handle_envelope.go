@@ -81,14 +81,14 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleSessionRewindAndRestore(ctx, request)
 	case schema.ReqMethodSessionRewindContext:
 		resp, err = s.handleSessionRewindContext(ctx, request)
-	// Team
+	// 团队
 	case schema.ReqMethodTeamDelete:
 		resp, err = s.handleTeamDelete(ctx, request)
 	case schema.ReqMethodTeamSnapshot:
 		resp, err = s.handleTeamSnapshot(ctx, request)
 	case schema.ReqMethodTeamHistoryGet:
 		resp, err = s.handleTeamHistoryGet(ctx, request)
-	// History
+	// 历史
 	case schema.ReqMethodHistoryGet:
 		if request.IsStream {
 			chunks, chunkErr := s.handleHistoryGetStream(ctx, request)
@@ -103,7 +103,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		} else {
 			resp, err = s.handleHistoryGet(ctx, request)
 		}
-	// Command
+	// 命令
 	case schema.ReqMethodCommandAddDir:
 		resp, err = s.handleCommandAddDir(ctx, request)
 	case schema.ReqMethodCommandChrome:
@@ -128,7 +128,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleCommandSession(ctx, request)
 	case schema.ReqMethodCommandStatus:
 		resp, err = s.handleCommandStatus(ctx, request)
-	// Browser
+	// 浏览器
 	case schema.ReqMethodBrowserStart:
 		resp, err = s.handleBrowserStart(ctx, request)
 	case schema.ReqMethodBrowserRuntimeRestart:
@@ -149,7 +149,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleExtensionsToggle(ctx, request)
 	case schema.ReqMethodHooksList:
 		resp, err = s.handleHooksList(ctx, request)
-	// Harness
+	// 编排器
 	case schema.ReqMethodHarnessPackagesGet:
 		resp, err = s.handleHarnessPackagesGet(ctx, request)
 	case schema.ReqMethodHarnessPackagesScan:
@@ -160,7 +160,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleHarnessPackagesDeactivate(ctx, request)
 	case schema.ReqMethodHarnessPackagesDelete:
 		resp, err = s.handleHarnessPackagesDelete(ctx, request)
-	// Schedule
+	// 调度
 	case schema.ReqMethodScheduleCheckConfig:
 		resp, err = s.handleScheduleCheckConfig(ctx, request)
 	case schema.ReqMethodScheduleUpdateConfig:
@@ -179,7 +179,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		resp, err = s.handleScheduleCancel(ctx, request)
 	case schema.ReqMethodScheduleDelete:
 		resp, err = s.handleScheduleDelete(ctx, request)
-	// Agents
+	// Agent管理
 	case schema.ReqMethodAgentsList:
 		resp, err = s.handleAgentsList(ctx, request)
 	case schema.ReqMethodAgentsGet:
@@ -626,7 +626,7 @@ func applyResolvedModeToRequest(request *schema.AgentRequest) (mode, subMode str
 	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
 		subMode = "normal"
 	}
-	// canonicalMode
+	// 规范化模式
 	canonicalMode := mode
 	if subMode != "" {
 		canonicalMode = mode + "." + subMode

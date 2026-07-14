@@ -222,4 +222,3 @@ func getRegisteredSysOpByIsolationKey(key string) sysop.SysOperation {
 	}
 	return instance
 }
-

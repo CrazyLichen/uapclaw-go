@@ -158,7 +158,7 @@ func NewSessionModelContext(
 		contextID,
 		func() sessioninterfaces.SessionFacade { return mc.sessionRef },
 		tokenCounter,
-		100, // historyLimit
+		100, // 历史限制
 	)
 
 	// 6. 条件创建 KVCacheManager
@@ -879,7 +879,7 @@ func (mc *SessionModelContext) statMessages(stat *iface.ContextStats, messages [
 
 	// 优先使用最后一条 AssistantMessage 的 usage_metadata.total_tokens
 	// 对齐 Python: usage_tokens = self._get_last_assistant_usage_tokens(messages)
-	// if usage_tokens is not None: stat.total_tokens = usage_tokens; return
+	// 对齐 Python: 如果usage_tokens不为空则直接设置总Token数
 	for i := len(messages) - 1; i >= 0; i-- {
 		if am, ok := messages[i].(*llm_schema.AssistantMessage); ok {
 			if am.UsageMetadata != nil && am.UsageMetadata.TotalTokens > 0 {

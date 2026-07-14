@@ -107,17 +107,16 @@ func (h *PlanStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDevCon
 // 待实现: 接入 create_stage_agent + Runner.run_agent，流式推送 AGENT_THINKING 事件
 func (h *PlanStageHandler) generatePlan(sctx *skilldev.SkillDevContext) (map[string]any, error) {
 	// 待实现:
-	// agent, err := sctx.CreateStageAgent("plan", PlanSystemPrompt, []string{"web_search"}, 15)
-	// messages := h.buildMessages(sctx)
-	// planText := ""
-	// async for chunk in agent.stream(messages):
-	//     sctx.Emit(skilldev.SkillDevEventTypeAgentThinking, map[string]any{"delta": chunk.Content})
-	//     planText += chunk.Content
-	// plan = parsePlanJSON(planText)
-	// if sctx.State.ExistingSkillMD != nil {
-	//     plan["diff_analysis"] = "待实现: 差量分析"
-	// }
-	// return plan
+	// 待实现：创建规划Agent agent, err := sctx.CreateStageAgent("plan", PlanSystemPrompt, []string{"web_search"}, 15)
+	// 待实现：构建消息 messages := h.buildMessages(sctx)
+	// 待实现：流式生成 planText := ""
+	// 待实现：流式推送 async for chunk in agent.stream(messages):
+	// 待实现：推送思考事件 sctx.Emit(skilldev.SkillDevEventTypeAgentThinking, map[string]any{"delta": chunk.Content})
+	// 待实现：拼接内容 planText += chunk.Content
+	// 待实现：解析计划 plan = parsePlanJSON(planText)
+	// 待实现：差量分析 if sctx.State.ExistingSkillMD != nil {
+	// 待实现：设置差量 plan["diff_analysis"] = "待实现: 差量分析"
+	// 待实现：返回计划 return plan
 
 	logger.Warn(logComponent).Msg("[PlanStage] generatePlan 尚未实现，返回占位 plan")
 	query := ""

@@ -103,7 +103,7 @@ func ValidateSkillMD(skillMDPath string) (bool, string) {
 		}
 	}
 
-	// description
+	// 技能描述
 	desc := strings.TrimSpace(frontmatter["description"])
 	if strings.Contains(desc, "<") || strings.Contains(desc, ">") {
 		return false, "description 不能包含尖括号 (< 或 >)"

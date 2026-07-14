@@ -405,7 +405,7 @@ func (r *TaskPlanningRail) AfterToolCall(ctx context.Context, cbc *agentinterfac
 	prompt := sections.BuildProgressReminderUserPrompt(tasksStr, inProgressTask, lang)
 
 	// 对齐 Python L240-242: 向上下文注入 UserMessage
-	// Python: messages = ctx.context.get_messages(); messages.append(UserMessage); ctx.context.set_messages(messages)
+	// 对齐 Python: 获取消息列表并追加用户消息
 	// 使用 GetMessages+append+SetMessages 而非 AddMessages，对齐 Python 纯数据操作不触发处理器链
 	userMsg := llmschema.NewUserMessage(prompt)
 	messages, _ := modelCtx.GetMessages(0, true)

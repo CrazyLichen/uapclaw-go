@@ -28,7 +28,7 @@ type TeamMemoryConfig struct {
 
 // NewTeamMemoryConfig 创建默认团队记忆配置。
 // 默认值：enabled=false, scenario="general", auto_extract=true,
-// shared_memory=true, member_memory_prompt_mode="proactive", timezone_offset_hours=8.0
+// 对齐 Python: shared_memory=true, member_memory_prompt_mode="proactive", timezone_offset_hours=8.0
 func NewTeamMemoryConfig() TeamMemoryConfig {
 	return TeamMemoryConfig{
 		Enabled:                false,

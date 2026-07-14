@@ -33,7 +33,7 @@ func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 	iterDir := filepath.Join(sctx.Workspace, "evals", fmt.Sprintf("iteration-%d", iteration))
 	_ = os.MkdirAll(iterDir, 0o755)
 
-	totalTasks := len(evalCases) * 2 // with_skill + baseline
+	totalTasks := len(evalCases) * 2 // 有技能 + 基线
 	sctx.Emit(skilldev.SkillDevEventTypeTestProgress, map[string]any{
 		"total":     totalTasks,
 		"completed": 0,
@@ -58,13 +58,13 @@ func (h *TestRunStageHandler) Execute(_ context.Context, sctx *skilldev.SkillDev
 // 待实现: 接入 SkillDevTestRunner，为每个用例创建 with_skill + baseline 子 Agent
 func (h *TestRunStageHandler) runAllEvals(sctx *skilldev.SkillDevContext, evalCases []any, iterDir string) []map[string]any {
 	// 待实现:
-	// tasks = []
-	// for case in evalCases:
-	//     caseDir := filepath.Join(iterDir, case["name"])
-	//     os.MkdirAll(caseDir, 0o755)
-	//     tasks.append(runSingleEval(sctx, case, caseDir))
-	// results := await asyncio.gather(*tasks, return_exceptions=True)
-	// return results
+	// 待实现：创建任务列表 tasks = []
+	// 待实现：遍历测试用例 for case in evalCases:
+	// 待实现：创建用例目录 caseDir := filepath.Join(iterDir, case["name"])
+	// 待实现：创建目录 os.MkdirAll(caseDir, 0o755)
+	// 待实现：添加任务 tasks.append(runSingleEval(sctx, case, caseDir))
+	// 待实现：并行执行 results := await asyncio.gather(*tasks, return_exceptions=True)
+	// 待实现：返回结果 return results
 
 	logger.Warn(logComponent).Msg("[TestRunStage] runAllEvals 尚未实现，写入占位结果")
 	results := make([]map[string]any, 0)

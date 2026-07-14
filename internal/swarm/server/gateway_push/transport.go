@@ -37,9 +37,14 @@ type ChannelPushTransport struct{}
 // logComponentPush 推送日志组件
 const logComponentPush = logger.ComponentAgentServer
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// 接口合规：ChannelPushTransport 实现 GatewayPushTransport
+var _ GatewayPushTransport = (*ChannelPushTransport)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// NewChannelPushTransport 创建 ChannelPushTransport 实例。
+// NewChannelPushTransport 创建 ChannelPushPushTransport 实例。
 func NewChannelPushTransport() *ChannelPushTransport {
 	return &ChannelPushTransport{}
 }
@@ -53,8 +58,3 @@ func (t *ChannelPushTransport) SendPush(ctx context.Context, msg map[string]any)
 	}
 	return s.SendPush(ctx, msg)
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// 接口合规：ChannelPushTransport 实现 GatewayPushTransport
-var _ GatewayPushTransport = (*ChannelPushTransport)(nil)

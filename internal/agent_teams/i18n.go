@@ -40,9 +40,9 @@ var (
 // 包含：blueprint.default_persona / team.* / dispatcher.* / hitt.* 全部条目
 var STRINGS = map[Language]map[string]string{
 	LanguageCN: {
-		// schema/blueprint.py
+		// 对齐 Python: schema/blueprint.py
 		"blueprint.default_persona": "天才项目管理专家",
-		// tools/team.py
+		// 对齐 Python: tools/team.py
 		"team.shutdown_request_content": "当前任务已全部完成，请结束流程",
 		"team.cancel_request_content":   "当前任务有变动，请停止执行当前任务，重新尝试认领合适任务",
 		// agent/dispatcher.py — 成员生命周期事件
@@ -80,9 +80,9 @@ var STRINGS = map[Language]map[string]string{
 		"hitt.msg_received_for_human":      "[转发给控制者的{msg_type}] message_id={message_id}, 来自: {sender}\n内容: {content}\n**这条消息已经原样转给控制者，不是要你回应的指令**。\n**严格禁止任何自主行为**：禁止主动回复发送方（包括调用 send_message）、禁止自主调用任何其它工具去回应或采取行动、禁止用纯文本输出表达意图或承诺。\n**保持静默**，等控制者在 Inbox 里明确指示你转告或回复时再调 send_message。",
 	},
 	LanguageEN: {
-		// schema/blueprint.py
+		// 对齐 Python: schema/blueprint.py
 		"blueprint.default_persona": "Genius project management expert",
-		// tools/team.py
+		// 对齐 Python: tools/team.py
 		"team.shutdown_request_content": "All tasks are complete. Please wrap up and exit.",
 		"team.cancel_request_content":   "The current task has changed. Stop executing it and try claiming a suitable task again.",
 		// agent/dispatcher.py — 成员生命周期事件

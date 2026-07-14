@@ -56,7 +56,7 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 		leaderMemberName = teamSpec.LeaderMemberName
 	}
 
-	// TODO(#9.65): memberTransport = b.BuildMemberMessagerConfig(ctx.MemberName)
+	// TODO(#9.65): 构建成员消息配置 memberTransport = b.BuildMemberMessagerConfig(ctx.MemberName)
 	// 当 MessagerTransportConfig 实现后，序列化为 map
 	var transport any = nil
 
@@ -85,10 +85,10 @@ func (b *SpawnPayloadBuilder) BuildSpawnPayload(ctx atschema.TeamRuntimeContext,
 // 对齐 Python: SpawnPayloadBuilder.build_member_context(member_spec)
 func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
 	return atschema.TeamRuntimeContext{
-		Role:           memberSpec.RoleType,
-		MemberName:     memberSpec.MemberName,
-		Persona:        memberSpec.Persona,
-		TeamSpec:       b.ctx.TeamSpec,
+		Role:       memberSpec.RoleType,
+		MemberName: memberSpec.MemberName,
+		Persona:    memberSpec.Persona,
+		TeamSpec:   b.ctx.TeamSpec,
 		MessagerConfig: func() *messager.MessagerTransportConfig {
 			if v := b.BuildMemberMessagerConfig(memberSpec.MemberName); v != nil {
 				if cfg, ok := v.(*messager.MessagerTransportConfig); ok {
@@ -97,7 +97,7 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 			}
 			return nil
 		}(),
-		DBConfig:       b.ctx.DBConfig,
+		DBConfig: b.ctx.DBConfig,
 	}
 }
 

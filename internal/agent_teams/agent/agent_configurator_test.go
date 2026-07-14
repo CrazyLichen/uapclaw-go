@@ -3,11 +3,11 @@ package agent_test
 import (
 	"testing"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/stretchr/testify/assert"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 // newTestCard 创建测试用 AgentCard

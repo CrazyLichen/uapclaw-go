@@ -393,7 +393,7 @@ func buildWorkspace(ws *workspace.Workspace, language string) *workspace.Workspa
 	if ws != nil {
 		return ws
 	}
-	// Python: workspace = Workspace(root_path="./", language=language)
+	// 对齐 Python: 创建工作空间
 	return workspace.NewWorkspace("./", language)
 }
 

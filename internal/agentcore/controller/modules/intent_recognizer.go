@@ -331,7 +331,7 @@ func (h *EventHandlerWithIntentRecognition) processContinueTaskIntent(ctx contex
 	}
 
 	// ⤵️ 6.23 ContextEngine.GetContext 回填：将依赖任务的上下文消息附加到 InputEvent
-	// Python: event.input_data.append(JsonDataFrame(data={context_id: context.get_messages() for context_id in context_ids}))
+	// 对齐 Python: 追加上下文消息到输入数据
 	// 当前简化处理：仅合并前置事件
 	_ = contextIDs // 预留：后续回填时使用 ContextEngine 获取上下文消息
 	previousEvents = append(previousEvents, inputEvent)

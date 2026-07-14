@@ -129,9 +129,9 @@ func (h *EvaluateStageHandler) gradeAllEvals(sctx *skilldev.SkillDevContext, ite
 			}
 
 			// 待实现: 实际调用 Agent 评分
-			// agent, err := sctx.CreateStageAgent("grader", GraderSystemPrompt, ...)
-			// transcript := os.ReadFile(filepath.Join(runDir, "transcript.md"))
-			// grading := await agent.grade(expectations, transcript, filepath.Join(runDir, "outputs"))
+			// 待实现：创建评分Agent agent, err := sctx.CreateStageAgent("grader", GraderSystemPrompt, ...)
+			// 待实现：读取评分记录 transcript := os.ReadFile(filepath.Join(runDir, "transcript.md"))
+			// 待实现：调用Agent评分 grading := await agent.grade(expectations, transcript, filepath.Join(runDir, "outputs"))
 
 			gradingExpectations := make([]skilldev.GradingExpectation, 0)
 			for _, exp := range expectations {
@@ -327,9 +327,9 @@ func (h *EvaluateStageHandler) aggregateBenchmark(sctx *skilldev.SkillDevContext
 // 待实现: 接入 create_stage_agent，用 AnalystSystemPrompt 调用 Agent
 func (h *EvaluateStageHandler) analyzePatterns(_ *skilldev.SkillDevContext, _ *skilldev.Benchmark) []string {
 	// 待实现: 实际调用 Agent
-	// agent, err := sctx.CreateStageAgent("analyst", AnalystSystemPrompt, ...)
-	// notes := await agent.analyze(json.dumps(benchmark.ToDict()))
-	// return json.loads(notes)
+	// 待实现：创建分析Agent agent, err := sctx.CreateStageAgent("analyst", AnalystSystemPrompt, ...)
+	// 待实现：调用Agent分析 notes := await agent.analyze(json.dumps(benchmark.ToDict()))
+	// 待实现：解析结果 return json.loads(notes)
 
 	logger.Warn(logComponent).Msg("[EvaluateStage] analyzePatterns 待接入 Agent")
 	return []string{"评测分析 Agent 尚未接入"}

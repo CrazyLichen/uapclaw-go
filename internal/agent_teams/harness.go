@@ -94,21 +94,20 @@ func BuildTeamHarness(
 	agentSpec any, // TODO(#9.56): DeepAgentSpec 类型
 	role string,
 	memberName string,
-	teamToolRail any, // TODO(#9.68)
-	teamPolicyRail any, // TODO(#9.68)
-	firstIterGate any, // TODO(#9.68)
-	teamWorkspaceRail any, // TODO(#9.66+#9.68)
-	toolApprovalRail any, // TODO(#9.68)
-	teamPlanModeRail any, // TODO(#9.68)
+	teamToolRail any, // TODO(#9.68): 团队工具Rail
+	teamPolicyRail any, // TODO(#9.68): 团队策略Rail
+	firstIterGate any, // TODO(#9.68): 首轮门控
+	teamWorkspaceRail any, // TODO(#9.66+#9.68): 团队工作空间Rail
+	toolApprovalRail any, // TODO(#9.68): 工具审批Rail
+	teamPlanModeRail any, // TODO(#9.68): 团队规划模式Rail
 	initialPlanMode bool,
 ) *TeamHarness {
-	// TODO(#9.56): deepAgent = agentSpec.Build()
-	// TODO(#9.68): deepAgent.AddRail(teamToolRail) + 急切初始化
-	// TODO(#9.68): deepAgent.AddRail(teamPolicyRail)
-	// TODO(#9.68): if firstIterGate != nil { deepAgent.AddRail(firstIterGate) }
-	// TODO(#9.66+#9.68): if teamWorkspaceRail != nil { deepAgent.AddRail(teamWorkspaceRail) }
-	// TODO(#9.68): if toolApprovalRail != nil { deepAgent.AddRail(toolApprovalRail) }
-	// TODO(#9.68): if teamPlanModeRail != nil { deepAgent.AddRail(teamPlanModeRail) }
+	// TODO(#9.56): 构建深度Agent deepAgent = agentSpec.Build()
+	// TODO(#9.68): 添加团队策略Rail deepAgent.AddRail(teamPolicyRail)
+	// TODO(#9.68): 首轮门控Rail deepAgent.AddRail(firstIterGate)
+	// TODO(#9.66+#9.68): 团队工作空间Rail deepAgent.AddRail(teamWorkspaceRail)
+	// TODO(#9.68): 工具审批Rail deepAgent.AddRail(toolApprovalRail)
+	// TODO(#9.68): 团队规划模式Rail deepAgent.AddRail(teamPlanModeRail)
 	rails := &MountedRails{
 		TeamTool:      teamToolRail,
 		TeamPolicy:    teamPolicyRail,

@@ -1,8 +1,8 @@
 package agent
 
 import (
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -167,11 +167,11 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	agentSpec := ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
 	// 2. 解析语言偏好
-	// TODO(#9.53): resolvedLanguage = resolveLanguage(agentSpec.Language)
+	// TODO(#9.53): 解析语言 resolvedLanguage = resolveLanguage(agentSpec.Language)
 	resolvedLanguage := agentSpec.Language
 
 	// 3. 构建 Blueprint
-	// TODO(#9.69): rolePolicy = rolePolicy(ctx.Role, resolvedLanguage)
+	// TODO(#9.69): 角色策略 rolePolicy = rolePolicy(ctx.Role, resolvedLanguage)
 	rolePolicyStr := ""
 	c.blueprint = &TeamAgentBlueprint{
 		Card:       c.card,
@@ -186,25 +186,25 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 5. MessagerConfig 调整 + CreateMessager
 	// TODO(#9.65): messagerConfig 节点 ID 调整 + CreateMessager(messagerConfig)
-	// c.SetMessager(createMessager(messagerConfig))
+	// 待实现：c.SetMessager(createMessager(messagerConfig))
 
 	// 6. Workspace Manager
 	if spec.Workspace != nil && spec.Workspace.Enabled {
 		_ = agentSpec // 避免 unused 警告
-		// TODO(#9.66): c.SetWorkspaceManager(c.CreateWorkspaceManager(spec, ctx))
+		// TODO(#9.66): 设置工作空间管理器 c.SetWorkspaceManager(c.CreateWorkspaceManager(spec, ctx))
 	}
 
 	// 7. Model Allocator（仅 leader）
 	if ctx.Role == atschema.TeamRoleLeader && c.ModelAllocator() == nil {
-		// TODO(#9.64): c.SetModelAllocator(BuildModelAllocator(spec, teamSpec))
+		// TODO(#9.64): 设置模型分配器 BuildModelAllocator(spec, teamSpec)
 	}
 
 	// 8. Team Backend
-	// TODO(#9.58): c.SetupTeamBackend(spec, ctx, messager, ...)
+	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
 
 	// 9. Worktree Manager（仅非 leader）
 	if ctx.Role != atschema.TeamRoleLeader && spec.Worktree != nil && spec.Worktree.Enabled {
-		// TODO(#9.66): c.SetWorktreeManager(c.CreateWorktreeManager(spec))
+		// TODO(#9.66): 设置工作树管理器 c.CreateWorktreeManager(spec)
 	}
 }
 
@@ -221,10 +221,10 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.66): workspace 管理器
 
 	// 4. teamBackend.RegisterCleanupPath
-	// TODO(#9.58): if teamBackend && wsSpec.RootPath
+	// TODO(#9.58): 团队后端工作空间路径 if teamBackend && wsSpec.RootPath
 
 	// 5. workspaceManager.MountIntoWorkspace
-	// TODO(#9.66): if workspaceManager && wsSpec.RootPath
+	// TODO(#9.66): 工作空间管理器路径 if workspaceManager && wsSpec.RootPath
 
 	// 6. modelConfig = ctx.MemberModel 或 agentSpec.Model
 	// 7. sysOperationSpec 构造（默认 LOCAL mode）
@@ -233,28 +233,28 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.56): DeepAgentSpec 深拷贝方法
 
 	// 9-14. 构造 Rails
-	// TODO(#9.68): teamToolRail, teamPolicyRail, firstIterGate, teamWorkspaceRail, toolApprovalRail, teamPlanModeRail
+	// TODO(#9.68): 团队工具和策略 Rail teamToolRail, teamPolicyRail, ...
 
 	// 15. TeamHarness.Build
 	harness := agentteams.BuildTeamHarness(
-		nil, // TODO(#9.56): buildSpec
+		nil, // TODO(#9.56): 构建规格
 		string(ctx.Role),
 		ctx.MemberName,
-		nil, // TODO(#9.68): teamToolRail
-		nil, // TODO(#9.68): teamPolicyRail
-		nil, // TODO(#9.68): firstIterGate
-		nil, // TODO(#9.66+#9.68): teamWorkspaceRail
-		nil, // TODO(#9.68): toolApprovalRail
-		nil, // TODO(#9.68): teamPlanModeRail
-		false, // TODO(#9.runtime): isTeamPlanEnabled(spec)
+		nil,   // TODO(#9.68): 团队工具Rail
+		nil,   // TODO(#9.68): 团队策略Rail
+		nil,   // TODO(#9.68): 首轮门控
+		nil,   // TODO(#9.66+#9.68): 团队工作空间Rail
+		nil,   // TODO(#9.68): 工具审批Rail
+		nil,   // TODO(#9.68): 团队规划模式Rail
+		false, // TODO(#9.runtime): 是否启用团队规划模式
 	)
 	c.SetHarness(harness)
 
 	// 16. Memory Manager
-	// TODO(#9.64): c.SetMemoryManager(c.BuildMemoryManager(spec, ctx, agentSpec, resolvedLanguage, ctx.MemberName))
+	// TODO(#9.64): 设置记忆管理器 c.SetMemoryManager(...)
 
 	// 17. AgentCustomizer
-	// TODO(#9.68): if spec.AgentCustomizer { harness.RunAgentCustomizer(spec.AgentCustomizer) }
+	// TODO(#9.68): 运行自定义配置器 if spec.AgentCustomizer { ... }
 
 	return harness
 }
@@ -268,7 +268,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	// TODO(#9.58): TeamBackend 构造和注册
+	// 待实现：TeamBackend 构造和注册
 	// teamName := (ctx.TeamSpec.TeamName if ctx.TeamSpec else nil) or "default"
 	// db = getSharedDB(ctx.DBConfig)
 	// teamBackend = TeamBackend{...}
@@ -310,7 +310,7 @@ func (c *AgentConfigurator) BuildMemoryManager(spec atschema.TeamAgentSpec, ctx 
 // UpdateModelPool 更新模型池。
 // 对齐 Python: AgentConfigurator.update_model_pool(new_pool)
 func (c *AgentConfigurator) UpdateModelPool(newPool any) {
-	// TODO(#9.64): inheritPoolIds + buildModelAllocator
+	// TODO(#9.64): 继承模型池ID + 构建模型分配器
 }
 
 // AttachModelAllocator 附加模型分配器。
@@ -326,7 +326,7 @@ func (c *AgentConfigurator) RestoreAllocatorState(state map[string]any) {
 	if c.ModelAllocator() == nil {
 		return
 	}
-	// TODO(#9.64): c.ModelAllocator().LoadStateDict(state)
+	// TODO(#9.64): 加载模型分配器状态 c.ModelAllocator().LoadStateDict(state)
 }
 
 // BuildSpawnPayload 构建生成载荷（代理到 SpawnPayloadBuilder）。

@@ -150,8 +150,8 @@ type TeamAgentSpec struct {
 	SpawnMode                    string                              `json:"spawn_mode"`
 	Leader                       LeaderSpec                          `json:"leader"`
 	PredefinedMembers            []TeamMemberSpec                    `json:"predefined_members"`
-	ModelPool                    []models.ModelPoolEntry              `json:"model_pool,omitempty"`
-	ModelRouter                  *models.ModelRouterConfig            `json:"model_router,omitempty"`
+	ModelPool                    []models.ModelPoolEntry             `json:"model_pool,omitempty"`
+	ModelRouter                  *models.ModelRouterConfig           `json:"model_router,omitempty"`
 	ModelPoolStrategy            string                              `json:"model_pool_strategy"`
 	TeamMode                     string                              `json:"team_mode,omitempty"`
 	Transport                    *TransportSpec                      `json:"transport,omitempty"`

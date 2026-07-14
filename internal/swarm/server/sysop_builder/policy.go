@@ -145,7 +145,7 @@ func BuildFilesystemPolicy(
 			}
 			b.recordRWBind(path, path, isDir, permStr)
 
-			// read_write promote
+			// 读写提升
 			if !containsString(b.readWritePromote, path) {
 				b.readWritePromote = append(b.readWritePromote, path)
 			}

@@ -684,8 +684,8 @@ func (s *graphSearcher) combinedRerank(ctx context.Context, query string, result
 		})
 
 		// 拼接内容，对齐 Python: [原始content, 分隔线, ...关联Relation的content]
-		// Python: content = [(original_content, -1), ("-" * 10, -1)] + content
-		// Python: ent["content"] = "\n - ".join(line for line, _ in content)
+		// 对齐 Python: 拼接原始内容和分隔线
+		// 对齐 Python: 换行拼接内容行
 		mentions := len(relatedContent)
 		if mentions > 0 {
 			var parts []string

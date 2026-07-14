@@ -368,7 +368,7 @@ func (uc *UapClaw) ProcessInterrupt(ctx context.Context, request *schema.AgentRe
 		return a.ProcessInterrupt(ctx, request)
 	}
 
-	// supplement
+	// 补充信息
 	if intent == "supplement" {
 		resp, err := a.ProcessInterrupt(ctx, request)
 		_ = uc.sessionManager.CancelSessionTask(ctx, sessionID, "interrupt(supplement)", nil)

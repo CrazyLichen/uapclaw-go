@@ -181,7 +181,7 @@ func (a *TeamAgent) Coordination() any {
 // 保留为测试和遗留调用者的公开访问器；
 // 新代码应通过 coordination 访问。
 func (a *TeamAgent) CoordinationLoop() any {
-	// TODO(#9.62): return coordination.event_bus
+	// TODO(#9.62): 返回协调事件总线 return coordination.event_bus
 	return nil
 }
 
@@ -399,9 +399,9 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) *TeamAgent {
 	// Phase 1: 基础设施搭建
 	a.configurator.SetupInfra(spec, runtimeCtx,
-		WithOnTeammateCreated(nil), // TODO(#9.55): a.onTeammateCreated
-		WithOnTeamCleaned(nil),     // TODO(#9.55): a.markTeamCleaned
-		WithOnTeamBuilt(nil),       // TODO(#9.55): a.markTeamBuilt
+		WithOnTeammateCreated(nil), // TODO(#9.55): 成员创建回调
+		WithOnTeamCleaned(nil),     // TODO(#9.55): 团队清理回调
+		WithOnTeamBuilt(nil),       // TODO(#9.55): 团队构建回调
 	)
 
 	// Phase 2: Agent 组装
@@ -417,8 +417,8 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 		)
 	}
 
-	// TODO(#9.62): coordination.setup(role=ctx.Role)
-	// TODO(#9.55): a.registerTeamCompletionCallbacks()
+	// TODO(#9.62): 设置协调角色 coordination.setup(role=ctx.Role)
+	// TODO(#9.55): 注册团队完成回调 a.registerTeamCompletionCallbacks()
 
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent.Configure")
@@ -429,9 +429,9 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // 对齐 Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
 	// TODO(#9.60+#9.62): 创建 stream_queue → 缓存 pending_user_query → coordination.start(session)
-	// TODO(#9.62): enqueue_user_input → enqueue_mailbox_after_first_iteration
+	// TODO(#9.62): 入队用户输入 → 首次迭代后入队邮箱
 	// TODO(#9.60): 从 stream_queue 读取直到 None sentinel
-	// TODO(#9.62): coordination.finalize_round()
+	// TODO(#9.62): 完成当前轮次 coordination.finalize_round()
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent.Invoke start")
@@ -451,21 +451,21 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 // Interact 向团队发送输入。
 // 对齐 Python: TeamAgent.interact(message)
 func (a *TeamAgent) Interact(ctx context.Context, message string) error {
-	// TODO(#9.62): coordination.enqueue_user_input(message)
+	// TODO(#9.62): 协调器入队用户输入 coordination.enqueue_user_input(message)
 	return nil
 }
 
 // Broadcast 广播用户侧公告。
 // 对齐 Python: TeamAgent.broadcast(content)
 func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) {
-	// TODO(#9.62): UserInbox(team_backend.message_manager).broadcast(content)
+	// TODO(#9.62): 用户收件箱广播 UserInbox(...).broadcast(content)
 	return nil, nil
 }
 
 // HumanAgentSay 以注册的 human_agent 成员身份发言。
 // 对齐 Python: TeamAgent.human_agent_say(content, to, sender)
 func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (any, error) {
-	// TODO(#9.62): HumanAgentInbox(team_backend, message_manager).send(content, to, sender)
+	// TODO(#9.62): 人类Agent收件箱发送 HumanAgentInbox(...).send(content, to, sender)
 	return nil, nil
 }
 
@@ -476,7 +476,7 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // DeliverInput 投递输入到 Agent。
 // 对齐 Python: TeamAgent.deliver_input(content, use_steer=True)
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
-	// TODO(#9.60): if running → steer/follow_up; if in_flight → queue; else → start_agent
+	// TODO(#9.60): 运行中→转向/跟进; 执行中→入队; 否则→启动Agent
 	return nil
 }
 
@@ -490,7 +490,7 @@ func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
 // FollowUp 追加输入。
 // 对齐 Python: TeamAgent.follow_up(content)
 func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
-	// TODO(#9.60): streamController.follow_up(content)
+	// TODO(#9.60): 流控制器跟进 streamController.follow_up(content)
 	return nil
 }
 
@@ -506,7 +506,7 @@ func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 // Steer 转向输入。
 // 对齐 Python: TeamAgent.steer(content)
 func (a *TeamAgent) Steer(ctx context.Context, content string) error {
-	// TODO(#9.60): streamController.steer(content)
+	// TODO(#9.60): 流控制器转向 streamController.steer(content)
 	return nil
 }
 
@@ -522,9 +522,9 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
 func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf requested")
-	// TODO(#9.60): streamController.cooperative_cancel()
-	// TODO(#9.60): team_member.update_status(SHUTDOWN)
-	// TODO(#9.62): closeStream()
+	// TODO(#9.60): 流控制器协作取消 streamController.cooperative_cancel()
+	// TODO(#9.60): 团队成员更新状态为关闭 team_member.update_status(SHUTDOWN)
+	// TODO(#9.62): 关闭流 closeStream()
 	return nil
 }
 
@@ -535,14 +535,14 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 	logger.Info(logComponent).Str("member_name", memberName).
 		Int("member_count", memberCount).Int("task_count", taskCount).
 		Msg("TeamAgent.ConcludeCompletedRound")
-	// TODO(#9.60): streamController.emit_completion_and_close(member_count, task_count)
+	// TODO(#9.60): 流控制器发送完成并关闭 streamController.emit_completion_and_close(...)
 	return nil
 }
 
 // DestroyTeam 销毁团队。
 // 对齐 Python: TeamAgent.destroy_team(force=True)
 func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
-	// TODO(#9.60+#9.62+#9.58): cancel_agent → stop_coordination → remove_self_from_pool → team_backend.force_clean_team
+	// TODO(#9.60+#9.62+#9.58): 取消Agent → 停止协调 → 从池中移除 → 强制清理团队
 	return false, nil
 }
 
@@ -553,21 +553,21 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 // StartCoordination 启动协调。
 // 对齐 Python: TeamAgent._start_coordination(session)
 func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
-	// TODO(#9.62): coordination.start(session)
+	// TODO(#9.62): 启动协调 coordination.start(session)
 	return nil
 }
 
 // PauseCoordination 暂停协调（不拆卸 Teammate 进程）。
 // 对齐 Python: TeamAgent.pause_coordination()
 func (a *TeamAgent) PauseCoordination(ctx context.Context) error {
-	// TODO(#9.62): coordination.pause()
+	// TODO(#9.62): 暂停协调 coordination.pause()
 	return nil
 }
 
 // StopCoordination 停止协调（关闭所有生成的 Teammate）。
 // 对齐 Python: TeamAgent.stop_coordination()
 func (a *TeamAgent) StopCoordination(ctx context.Context) error {
-	// TODO(#9.62): coordination.stop()
+	// TODO(#9.62): 停止协调 coordination.stop()
 	return nil
 }
 
@@ -578,21 +578,21 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 // SpawnTeammate 生成 Teammate。
 // 对齐 Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
 func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, session any, spawnConfig any) error {
-	// TODO(#9.58): spawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)
+	// TODO(#9.58): 生成管理器派生队友 spawnManager.spawn_teammate(...)
 	return nil
 }
 
 // AutoStartMember 启动单个 UNSTARTED 成员。
 // 对齐 Python: TeamAgent.auto_start_member(member_name)
 func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool {
-	// TODO(#9.58): team_backend.startup_member(member_name, on_created)
+	// TODO(#9.58): 团队后端启动成员 team_backend.startup_member(...)
 	return false
 }
 
 // AutoStartAll 启动所有 UNSTARTED 成员。
 // 对齐 Python: TeamAgent.auto_start_all()
 func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
-	// TODO(#9.58): team_backend.startup(on_created)
+	// TODO(#9.58): 团队后端启动 team_backend.startup(on_created)
 	return nil
 }
 
@@ -637,7 +637,7 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 // ResumeForNewSession 为新会话恢复。
 // 对齐 Python: TeamAgent.resume_for_new_session(session)
 func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error {
-	// TODO(#9.59): sessionManager.resume_for_new_session(session)
+	// TODO(#9.59): 会话管理器恢复新会话 sessionManager.resume_for_new_session(session)
 	return nil
 }
 
@@ -647,14 +647,14 @@ func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error 
 // 与 RecoverFromSession 不同，此方法复用当前 Agent，
 // 假定 session.pre_run() 已恢复检查点状态。
 func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) error {
-	// TODO(#9.59+#9.62): stop_coordination → sessionManager.recover_for_existing_session(session)
+	// TODO(#9.59+#9.62): 停止协调 → 会话管理器恢复已有会话 sessionManager.recover_for_existing_session(session)
 	return nil
 }
 
 // RecoverTeam 恢复团队。
 // 对齐 Python: TeamAgent.recover_team()
 func (a *TeamAgent) RecoverTeam(ctx context.Context) ([]string, error) {
-	// TODO(#9.61): recoveryManager.recover_team()
+	// TODO(#9.61): 恢复管理器恢复团队 recoveryManager.recover_team()
 	return nil, nil
 }
 
@@ -672,7 +672,7 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。
 // 对齐 Python: TeamAgent.persist_session_manifest(session)
 func (a *TeamAgent) PersistSessionManifest(session any) {
-	// TODO(#9.61): recoveryManager.persist_leader_config(session)
+	// TODO(#9.61): 持久化领导者配置 recoveryManager.persist_leader_config(session)
 }
 
 // UpdateModelPool 更新模型池。
@@ -681,7 +681,7 @@ func (a *TeamAgent) UpdateModelPool(newPool any) {
 	if a.configurator != nil {
 		a.configurator.UpdateModelPool(newPool)
 	}
-	// TODO(#9.61): recoveryManager.persist_leader_config
+	// TODO(#9.61): 持久化领导者配置 recoveryManager.persist_leader_config
 }
 
 // AttachModelAllocator 附加模型分配器。

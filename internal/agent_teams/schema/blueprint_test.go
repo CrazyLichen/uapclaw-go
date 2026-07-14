@@ -11,8 +11,8 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
 // TestNewTeamModelConfig 测试默认 TeamModelConfig 创建

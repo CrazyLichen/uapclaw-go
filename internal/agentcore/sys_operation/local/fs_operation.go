@@ -951,10 +951,10 @@ func (f *LocalFsOperation) resolvePath(path string, createParent bool) (string, 
 		path = filepath.Join(base, path)
 	}
 
-	// expanduser
+	// 展开用户目录
 	path = expandUser(path)
 
-	// resolve
+	// 解析路径
 	resolved, err := filepath.Abs(path)
 	if err != nil {
 		return "", err

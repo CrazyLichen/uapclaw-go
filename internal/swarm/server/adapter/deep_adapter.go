@@ -889,7 +889,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 				})
 
 			case "llm_reasoning":
-				// yield chat.reasoning
+				// 待实现：产出推理内容 yield chat.reasoning
 				reasoningContent := extractReasoningContent(payload)
 				accumulatedReasoning += reasoningContent
 				outCh <- schema.NewAgentResponseChunk(req.RequestID, req.ChannelID, map[string]any{
@@ -1044,7 +1044,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// ⤵️ 10.6.3-10: todos 和 cancelled_tools 依赖 StreamEventRail 实现
-	// if d.streamEventRail != nil {
+	// 待实现：流事件Rail处理 if d.streamEventRail != nil {
 	//     payload["todos"] = ...
 	//     payload["cancelled_tools"] = ...
 	// }
@@ -1273,9 +1273,9 @@ func EnsurePersistentCheckpointer() error {
 //   - → d.projectDir：项目目录
 //   - → workspaceRoot：workspaceDir 或 projectDir 或 os.Getwd()
 //
-// workspace_root = workspaceDir or projectDir or os.Getwd()
+// 对齐 Python: workspace_root = workspaceDir or projectDir or os.Getwd()
 func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context.Context {
-	// workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
+	// 对齐 Python: workspace_root = str(self._workspace_dir or self._project_dir or os.getcwd())
 	workspaceRoot := d.workspaceDir
 	if workspaceRoot == "" {
 		workspaceRoot = d.projectDir
@@ -1284,9 +1284,9 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 		workspaceRoot, _ = os.Getwd()
 	}
 
-	// runtime_cwd = str(cwd or "").strip()
+	// 对齐 Python: runtime_cwd = str(cwd or "").strip()
 	runtimeCwd := strings.TrimSpace(cwdArg)
-	// if not runtime_cwd or not os.path.isdir(runtime_cwd):
+	// 对齐 Python: 目录不存在检测
 	if runtimeCwd == "" || !isDir(runtimeCwd) {
 		runtimeCwd = strings.TrimSpace(d.projectDir)
 	}
@@ -1294,7 +1294,7 @@ func (d *DeepAdapter) seedRuntimeCwd(ctx context.Context, cwdArg string) context
 		runtimeCwd = workspaceRoot
 	}
 
-	// init_cwd(runtime_cwd, workspace=workspace_root)
+	// 对齐 Python: init_cwd(runtime_cwd, workspace=workspace_root)
 	cwdState := cwd.InitCwd(runtimeCwd, cwd.WithWorkspace(workspaceRoot))
 	ctx = cwd.WithCwdState(ctx, cwdState)
 

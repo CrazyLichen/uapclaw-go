@@ -3,10 +3,10 @@ package agent_test
 import (
 	"testing"
 
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
 )
 
 // TestNewSpawnPayloadBuilder 测试构造函数

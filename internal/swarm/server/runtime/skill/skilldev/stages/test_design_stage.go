@@ -113,9 +113,9 @@ func (h *TestDesignStageHandler) readSkillFiles(skillDir string) string {
 // 待实现: 接入 create_stage_agent + Runner.run_agent，解析输出 JSON
 func (h *TestDesignStageHandler) designEvals(sctx *skilldev.SkillDevContext, _ string) map[string]any {
 	// 待实现:
-	// agent, err := sctx.CreateStageAgent("test_design", strings.Replace(TestDesignSystemPrompt, "{count}", "3", 1), []string{}, 10)
-	// result := await Runner.run_agent(agent, {"skill_content": skillContent})
-	// return json.loads(result["output"])
+	// 待实现：创建测试设计Agent agent, err := sctx.CreateStageAgent("test_design", strings.Replace(TestDesignSystemPrompt, "{count}", "3", 1), []string{}, 10)
+	// 待实现：运行Agent result := await Runner.run_agent(agent, {"skill_content": skillContent})
+	// 待实现：解析输出结果 return json.loads(result["output"])
 
 	logger.Warn(logComponent).Msg("[TestDesignStage] designEvals 尚未实现，返回占位测试用例")
 	skillName := "skill"

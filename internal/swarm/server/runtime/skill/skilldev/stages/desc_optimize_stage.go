@@ -192,10 +192,10 @@ func filepathJoin(parts ...string) string {
 // 待实现: 接入 create_stage_agent
 func (h *DescOptimizeStageHandler) generateTriggerQueries(_ *skilldev.SkillDevContext, skillName, _ string) []skilldev.TriggerEvalQuery {
 	// 待实现:
-	// agent, err := sctx.CreateStageAgent("desc_opt_gen", prompt, ...)
-	// output := await agent.run(...)
-	// parsed := json.loads(output)
-	// return parsed
+	// 待实现：创建描述优化Agent agent, err := sctx.CreateStageAgent("desc_opt_gen", prompt, ...)
+	// 待实现：运行Agent output := await agent.run(...)
+	// 待实现：解析输出 parsed := json.loads(output)
+	// 待实现：返回结果 return parsed
 
 	logger.Warn(logComponent).Msg("[DescOptimize] generateTriggerQueries 待接入 Agent")
 	return []skilldev.TriggerEvalQuery{

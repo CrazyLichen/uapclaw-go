@@ -39,18 +39,18 @@ type TeamSpec struct {
 	Metadata         map[string]any `json:"metadata,omitempty"`
 	// ModelPool LLM 端点池
 	ModelPool         []models.ModelPoolEntry `json:"model_pool,omitempty"`
-	ModelPoolStrategy string `json:"model_pool_strategy,omitempty"`
+	ModelPoolStrategy string                  `json:"model_pool_strategy,omitempty"`
 }
 
 // TeamRuntimeContext 单个团队成员的轻量运行时上下文。
 type TeamRuntimeContext struct {
-	Role           TeamRole         `json:"role"`
-	MemberName     string           `json:"member_name"`
-	Persona        string           `json:"persona"`
-	TeamSpec       *TeamSpec        `json:"team_spec,omitempty"`
+	Role           TeamRole                          `json:"role"`
+	MemberName     string                            `json:"member_name"`
+	Persona        string                            `json:"persona"`
+	TeamSpec       *TeamSpec                         `json:"team_spec,omitempty"`
 	MessagerConfig *messager.MessagerTransportConfig `json:"messager_config,omitempty"`
-	DBConfig       database.DatabaseConfig            `json:"db_config,omitempty"`
-	MemberModel    *TeamModelConfig `json:"member_model,omitempty"`
+	DBConfig       database.DatabaseConfig           `json:"db_config,omitempty"`
+	MemberModel    *TeamModelConfig                  `json:"member_model,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

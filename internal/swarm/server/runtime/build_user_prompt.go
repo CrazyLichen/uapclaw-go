@@ -75,19 +75,19 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 		userMessageContext["type"] = channel
 	}
 
-	// files_updated_by_user
+	// 用户更新的文件
 	if channel != "cron" && channel != "heartbeat" {
 		if filesJSON, err := json.Marshal(files); err == nil {
 			userMessageContext["files_updated_by_user"] = string(filesJSON)
 		}
 	}
 
-	// skills_to_use
+	// 待使用的技能
 	if len(skillsToUse) > 0 {
 		userMessageContext["skills_to_use"] = skillsToUse
 	}
 
-	// trusted_dirs
+	// 受信目录
 	if len(trustedDirs) > 0 {
 		if dirsJSON, err := json.Marshal(trustedDirs); err == nil {
 			userMessageContext["trusted_dirs"] = string(dirsJSON)

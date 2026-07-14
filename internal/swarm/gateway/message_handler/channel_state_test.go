@@ -1,7 +1,6 @@
 package message_handler
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -252,7 +251,7 @@ func createTestMessageHandler() *MessageHandler {
 	return &MessageHandler{
 		userMessages:   make(chan *schema.Message, 256),
 		robotMessages:  make(chan *schema.Message, 256),
-		streamTasks:    make(map[string]context.CancelFunc),
+		streamTasks:    make(map[string]*streamTaskEntry),
 		streamSessions: make(map[string]string),
 		streamMetadata: make(map[string]map[string]any),
 		streamModes:    make(map[string]string),

@@ -282,8 +282,8 @@ type fixedScoreMetric struct {
 	score float64
 }
 
-func (f *fixedScoreMetric) Name() string                  { return f.name }
-func (f *fixedScoreMetric) HigherIsBetter() bool           { return true }
+func (f *fixedScoreMetric) Name() string         { return f.name }
+func (f *fixedScoreMetric) HigherIsBetter() bool { return true }
 func (f *fixedScoreMetric) Compute(_, _ any, _ ...metrics.MetricOption) (metrics.MetricResult, error) {
 	return metrics.MetricResult{f.name: f.score}, nil
 }

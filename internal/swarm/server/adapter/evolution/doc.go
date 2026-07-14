@@ -14,8 +14,7 @@
 //
 //	evolution/
 //	├── doc.go            # 包文档
-//	├── helpers.go        # 3 结构体 + 常量/变量 + ~22 导出函数 + 1 非导出函数
-//	└── helpers_test.go   # 单元测试
+//	└── helpers.go        # 3 结构体 + 常量/变量 + ~22 导出函数 + 1 非导出函数
 //
 // 对应 Python 代码：jiuwenswarm/server/runtime/agent_adapter/evolution_helpers.py
 package evolution

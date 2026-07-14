@@ -470,11 +470,11 @@ func SetSessionDeliveryContext(
 	}
 
 	deliveryContext := map[string]any{
-		"delivery_kind":      kind,
-		"session_id":         sessionID,
-		"channel_id":         normalizedChannelID,
-		"source_request_id":  normalizedRequestID,
-		"updated_at":         currentTimestamp(),
+		"delivery_kind":     kind,
+		"session_id":        sessionID,
+		"channel_id":        normalizedChannelID,
+		"source_request_id": normalizedRequestID,
+		"updated_at":        currentTimestamp(),
 	}
 	if normalizedRouteMetadata != nil {
 		deliveryContext["route_metadata"] = normalizedRouteMetadata
@@ -554,6 +554,15 @@ func BuildServerPushMessage(
 	return message
 }
 
+// GetSessionsDir 返回全局会话目录路径。
+// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
+func GetSessionsDir() string {
+	if inst := GetInstance(); inst != nil {
+		return inst.sessionsDir
+	}
+	return workspace.AgentSessionsDir()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // readSessionMetadata 读取会话元数据文件。
@@ -630,13 +639,4 @@ func deepCopyMap(src map[string]any) map[string]any {
 		}
 	}
 	return dst
-}
-
-// GetSessionsDir 返回全局会话目录路径。
-// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
-func GetSessionsDir() string {
-	if inst := GetInstance(); inst != nil {
-		return inst.sessionsDir
-	}
-	return workspace.AgentSessionsDir()
 }

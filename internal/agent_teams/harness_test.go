@@ -3,9 +3,9 @@ package agent_teams_test
 import (
 	"testing"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/stretchr/testify/assert"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
 // TestNewTeamHarness 测试 TeamHarness 构造函数

@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
@@ -69,8 +69,8 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 
 	// 步骤 6: rail/tool 模式切换
 	// ⤵️ 10.6.3-10: updateRailsForMode + updatePromptForMode
-	// d.updateRailsForMode(d.mode)
-	// d.updatePromptForMode(d.mode)
+	// 待实现：按模式更新Rails d.updateRailsForMode(d.mode)
+	// 待实现：按模式更新提示词 d.updatePromptForMode(d.mode)
 
 	logger.Info(logComponent).
 		Str("cwd", config.CWD).
@@ -349,4 +349,3 @@ func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ str
 	runtime = sandbox
 	return
 }
-
