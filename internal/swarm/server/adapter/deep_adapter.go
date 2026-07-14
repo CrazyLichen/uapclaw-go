@@ -81,7 +81,7 @@ type DeepAdapter struct {
 	// modelRequestConfig 模型请求配置
 	modelRequestConfig *llmschema.ModelRequestConfig
 	// instanceOverrides 实例覆盖配置
-	// ⤵️ 10.3.7-11: create_instance 传入的 config 字典
+	// ⤵️ 10.3.5 CreateInstance: create_instance 传入的 config 字典
 	instanceOverrides map[string]any
 	// modelCache 模型缓存（按模型名缓存已创建的 Model 实例）
 	modelCache map[string]*llm.Model
@@ -153,27 +153,25 @@ type DeepAdapter struct {
 	// toolCards 工具卡片列表
 	// ⤵️ agentcore.DeepAgent（工具卡片依赖 agent 实例）
 	toolCards []*tool.ToolCard
-	// sysOperation 系统操作实例
-	// ⤵️ 10.3.7-11 sysop_builder
+	// sysOperation 系统操作实例（已回填 10.3.7-11 SysOpBuilder）
 	sysOperation sysop.SysOperation
-	// sysOperationCard 系统操作卡片
-	// ⤵️ 10.3.7-11 sysop_builder
+	// sysOperationCard 系统操作卡片（已回填 10.3.7-11 SysOpBuilder）
 	sysOperationCard *sysop.SysOperationCard
 	// visionModelConfig 视觉模型配置
 	visionModelConfig *hschema.VisionModelConfig
 	// visionToolsRegistered 视觉工具是否已注册
-	// ⤵️ 10.3.7-11 多模态工具
+	// ⤵️ 10.6.24 多模态工具
 	visionToolsRegistered bool
 	// audioModelConfig 音频模型配置
 	audioModelConfig *hschema.AudioModelConfig
 	// audioToolsRegistered 音频工具是否已注册
-	// ⤵️ 10.3.7-11 多模态工具
+	// ⤵️ 10.6.24 多模态工具
 	audioToolsRegistered bool
 	// videoToolRegistered 视频工具是否已注册
-	// ⤵️ 10.3.7-11 多模态工具
+	// ⤵️ 10.6.24 多模态工具
 	videoToolRegistered bool
 	// imageGenToolRegistered 图片生成工具是否已注册
-	// ⤵️ 10.3.7-11 多模态工具
+	// ⤵️ 10.6.24 多模态工具
 	imageGenToolRegistered bool
 	// skillManager 技能管理器
 	// ⤵️ 10.3.19-20
@@ -194,7 +192,7 @@ type DeepAdapter struct {
 	// ⤵️ 11.10
 	cronRuntime interface{}
 	// evolutionWatchers evolution 观察任务集合
-	// ⤵️ 10.3.7-11
+	// ⤵️ 10.3.7-11 EvolutionHelpers
 	evolutionWatchers interface{}
 	// dreamingMode dreaming 模式
 	dreamingMode string
@@ -214,10 +212,10 @@ type DeepAdapter struct {
 	// isProactiveMemory 是否主动记忆
 	isProactiveMemory *bool
 	// paidSearchRegistered 付费搜索是否已注册
-	// ⤵️ 10.3.7-11
+	// ⤵️ 10.6.24 PaidSearchTool
 	paidSearchRegistered bool
 	// paidSearchTool 付费搜索工具实例
-	// ⤵️ 10.3.7-11
+	// ⤵️ 10.6.24 PaidSearchTool
 	paidSearchTool interface{}
 }
 
@@ -784,7 +782,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 
 	// 步骤 7: team 模式分流
 	// 对齐 Python: if mode in ("team", "team.plan", "code.team"): → team_helpers.process_team_message_stream
-	// ⤵️ 10.3.7-11: team 模式分流
+	// ⤵️ 10.3.7-11 TeamHelpers
 
 	// 步骤 8: auto_harness 分流
 	// ⤵️ 10.6.11-12: if mode == "auto_harness" → autoHarnessService.run()
@@ -1010,7 +1008,7 @@ func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentReq
 	}
 
 	// 步骤 10: 清理 evolution watchers
-	// ⤵️ 10.3.7-11: cancel evolution watcher tasks
+	// ⤵️ 10.3.7-11 EvolutionHelpers: cancel evolution watcher tasks
 
 	// 步骤 11: 构造响应
 	// 对齐 Python: AgentResponse(payload={"event_type": "chat.interrupt_result", "intent": intent, "success": True, ...})

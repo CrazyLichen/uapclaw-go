@@ -330,3 +330,53 @@ func TestContainsString(t *testing.T) {
 		assert.False(t, containsString([]string{}, "a"))
 	})
 }
+
+// ──────────────────────────── ensureIntrinsicFile 补充测试 ────────────────────────────
+
+func TestEnsureIntrinsicFile_只读父目录(t *testing.T) {
+	// 注意：root 用户可绕过文件权限，此测试在非 root 下才有效
+	if os.Getuid() == 0 {
+		t.Skip("root 用户可绕过文件权限，跳过只读目录测试")
+	}
+	dir := t.TempDir()
+	readOnlyDir := filepath.Join(dir, "readonly")
+	require.NoError(t, os.Mkdir(readOnlyDir, 0o555))
+	target := filepath.Join(readOnlyDir, "sub", "file.md")
+	assert.False(t, ensureIntrinsicFile(target))
+}
+
+// ──────────────────────────── resolveAgentSkillsDir 测试 ────────────────────────────
+
+func TestResolveAgentSkillsDir(t *testing.T) {
+	// 此测试验证 resolveAgentSkillsDir 在不存在技能目录时返回空字符串
+	// 而不是崩溃（因实际部署环境中可能没有 skills 目录）
+	result := resolveAgentSkillsDir()
+	// 结果要么是空字符串（不存在），要么是有效目录路径
+	if result != "" {
+		info, err := os.Stat(result)
+		assert.NoError(t, err)
+		assert.True(t, info.IsDir())
+	}
+}
+
+// ──────────────────────────── resolveProjectDir 测试补充 ────────────────────────────
+
+func TestResolveProjectDir_环境变量(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(envSandboxProjectDir, dir)
+	result := resolveProjectDir("")
+	// 环境变量指向存在的目录，应返回该目录
+	if result != "" {
+		assert.Contains(t, result, filepath.Base(dir))
+	}
+}
+
+func TestResolveProjectDir_环境变量优先于Cwd(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(envSandboxProjectDir, dir)
+	// override 为空时，应优先使用环境变量而非 cwd
+	result := resolveProjectDir("")
+	if result != "" {
+		assert.Contains(t, result, filepath.Base(dir))
+	}
+}

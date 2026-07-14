@@ -46,7 +46,7 @@ type CodeAdapter struct {
 	// ⤵️ 10.6.3-10: WorktreeRail
 	worktreeRail sainterfaces.AgentRail
 	// codeAgentRail 编码 Agent 护栏（管理 /agents 创建的自定义 agent）
-	// ⤵️ 10.3.7-11: CodeAgentRail
+	// ⤵️ 10.3.7-11 CodeAgentRail
 	codeAgentRail sainterfaces.AgentRail
 
 	// ─── Code 模式配置 ───
@@ -128,7 +128,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
-	// 步骤 4: ⤵️ 10.3.7-11: _refresh_multimodal_configs(configBase)
+	// 步骤 4: ⤵️ 10.6.24 多模态工具: _refresh_multimodal_configs(configBase)
 
 	// 步骤 5-6: 读取 react 配置段，缓存到 configCache（委托 DeepAdapter 步骤 7-8）
 	if reactRaw, ok := configBase["react"]; ok {
@@ -189,7 +189,12 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	//              编码专有护栏：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
 	//              ConfirmInterruptRail, FileSystemRail
-	// 步骤 17: _create_sys_operation() — 委托 DeepAdapter.CreateInstance
+	// 步骤 17: _create_sys_operation() — 调用 DeepAdapter.createSysOperation
+	// 对齐 Python: sys_operation = self._create_sys_operation()
+	sysOp, _ := c.deep.createSysOperation(configBase)
+	if sysOp != nil {
+		c.deep.sysOperation = sysOp
+	}
 	// 步骤 18: ⤵️ agentcore.DeepAgent: _build_configured_subagents(model, config, configBase)
 	//              固定: explore_agent + plan_agent
 	//              按配置: code_agent + browser_agent

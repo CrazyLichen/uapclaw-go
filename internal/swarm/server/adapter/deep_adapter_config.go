@@ -273,12 +273,50 @@ func (d *DeepAdapter) createSysOperation(configBase map[string]any) (sysop.SysOp
 	case sysop.OperationModeSandbox:
 		sandboxURL, sandboxType, runtime := d.getSandboxRuntime(configBase)
 		filesRuntime, _ := runtime["files"].(map[string]any)
-		excludedCommands := d.getStrSliceFromRuntime(runtime, "excluded_commands")
+
+		// excluded_commands: 配置层已规范化为 []string
+		var excludedCommands []string
+		if v, ok := runtime["excluded_commands"]; ok {
+			if s, ok := v.([]string); ok {
+				excludedCommands = s
+			} else {
+				logger.Warn(logComponent).
+					Str("key", "excluded_commands").
+					Str("actual_type", fmt.Sprintf("%T", v)).
+					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+			}
+		}
+
+		// idle_ttl_seconds / idle_check_interval: 配置层已规范化为 int
+		var idleTTLSecs *int
+		if v, ok := runtime["idle_ttl_seconds"]; ok {
+			if n, ok := v.(int); ok {
+				idleTTLSecs = &n
+			} else {
+				logger.Warn(logComponent).
+					Str("key", "idle_ttl_seconds").
+					Str("actual_type", fmt.Sprintf("%T", v)).
+					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+			}
+		}
+
+		var idleCheckInterval *int
+		if v, ok := runtime["idle_check_interval"]; ok {
+			if n, ok := v.(int); ok {
+				idleCheckInterval = &n
+			} else {
+				logger.Warn(logComponent).
+					Str("key", "idle_check_interval").
+					Str("actual_type", fmt.Sprintf("%T", v)).
+					Msg("sandbox runtime 字段类型断言失败，使用默认值")
+			}
+		}
+
 		card = sysop_builder.CreateSandboxSysOpCard(
 			sandboxURL, sandboxType,
 			filesRuntime, excludedCommands,
-			d.getIntPtrFromRuntime(runtime, "idle_ttl_seconds"),
-			d.getIntPtrFromRuntime(runtime, "idle_check_interval"),
+			idleTTLSecs,
+			idleCheckInterval,
 			d.resolveProjectDirForSandbox(),
 			d.isCodeAgent,
 		)
@@ -321,50 +359,3 @@ func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ str
 	return
 }
 
-// getStrSliceFromRuntime 从运行时 map 中获取 []string 值。
-func (d *DeepAdapter) getStrSliceFromRuntime(runtime map[string]any, key string) []string {
-	if runtime == nil {
-		return nil
-	}
-	v, ok := runtime[key]
-	if !ok {
-		return nil
-	}
-	switch s := v.(type) {
-	case []string:
-		return s
-	case []any:
-		result := make([]string, 0, len(s))
-		for _, item := range s {
-			if str, ok := item.(string); ok {
-				result = append(result, str)
-			}
-		}
-		return result
-	default:
-		return nil
-	}
-}
-
-// getIntPtrFromRuntime 从运行时 map 中获取 *int 值。
-func (d *DeepAdapter) getIntPtrFromRuntime(runtime map[string]any, key string) *int {
-	if runtime == nil {
-		return nil
-	}
-	v, ok := runtime[key]
-	if !ok {
-		return nil
-	}
-	switch n := v.(type) {
-	case int:
-		return &n
-	case int64:
-		i := int(n)
-		return &i
-	case float64:
-		i := int(n)
-		return &i
-	default:
-		return nil
-	}
-}

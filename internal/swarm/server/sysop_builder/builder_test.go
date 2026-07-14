@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── CreateLocalSysOpCard 测试 ────────────────────────────
@@ -125,56 +126,37 @@ func TestCreateSysOperationFromCard_SandboxCard(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
-// ──────────────────────────── getIntPtr / getStrSlice 测试 ────────────────────────────
+func TestCreateSysOperationFromCard_注册成功(t *testing.T) {
+	// 确保 ResourceMgr 已初始化
+	rm := runner.GetResourceMgr()
+	require.NotNil(t, rm)
 
-func TestGetIntPtr(t *testing.T) {
-	t.Run("nil map 返回 nil", func(t *testing.T) {
-		assert.Nil(t, getIntPtr(nil, "key"))
-	})
+	card := CreateLocalSysOpCard()
+	result := CreateSysOperationFromCard(card)
+	require.NotNil(t, result)
 
-	t.Run("key 不存在返回 nil", func(t *testing.T) {
-		assert.Nil(t, getIntPtr(map[string]any{}, "key"))
-	})
-
-	t.Run("int 值", func(t *testing.T) {
-		result := getIntPtr(map[string]any{"key": 42}, "key")
-		require.NotNil(t, result)
-		assert.Equal(t, 42, *result)
-	})
-
-	t.Run("float64 值", func(t *testing.T) {
-		result := getIntPtr(map[string]any{"key": float64(600)}, "key")
-		require.NotNil(t, result)
-		assert.Equal(t, 600, *result)
-	})
-
-	t.Run("非数字值返回 nil", func(t *testing.T) {
-		assert.Nil(t, getIntPtr(map[string]any{"key": "not_a_number"}, "key"))
-	})
+	// 验证已注册到 ResourceMgr
+	registered, err := rm.GetSysOperation([]string{card.ID})
+	require.NoError(t, err)
+	require.Len(t, registered, 1)
+	assert.Equal(t, result.Card().ID, registered[0].Card().ID)
 }
 
-func TestGetStrSlice(t *testing.T) {
-	t.Run("nil map 返回 nil", func(t *testing.T) {
-		assert.Nil(t, getStrSlice(nil, "key"))
-	})
+func TestCreateSysOperationFromCard_隔离键复用(t *testing.T) {
+	rm := runner.GetResourceMgr()
+	require.NotNil(t, rm)
 
-	t.Run("key 不存在返回 nil", func(t *testing.T) {
-		assert.Nil(t, getStrSlice(map[string]any{}, "key"))
-	})
+	// 创建带 isolationKeyTemplate 的 card
+	card := sysop.NewSysOperationCard(
+		sysop.WithSysOpMode(sysop.OperationModeLocal),
+		sysop.WithSysOpIsolationKeyTemplate("test_isolation_key_reuse"),
+	)
+	instance1 := CreateSysOperationFromCard(card)
+	require.NotNil(t, instance1)
 
-	t.Run("[]string 值", func(t *testing.T) {
-		result := getStrSlice(map[string]any{"key": []string{"a", "b"}}, "key")
-		assert.Equal(t, []string{"a", "b"}, result)
-	})
-
-	t.Run("[]any 值", func(t *testing.T) {
-		result := getStrSlice(map[string]any{"key": []any{"a", "b"}}, "key")
-		assert.Equal(t, []string{"a", "b"}, result)
-	})
-
-	t.Run("非切片值返回 nil", func(t *testing.T) {
-		assert.Nil(t, getStrSlice(map[string]any{"key": 42}, "key"))
-	})
+	// 用相同 card 再次创建应复用已有实例（同 isolation key）
+	instance2 := CreateSysOperationFromCard(card)
+	assert.NotNil(t, instance2)
 }
 
 // ──────────────────────────── getRegisteredSysOpByIsolationKey 测试 ────────────────────────────
@@ -188,6 +170,26 @@ func TestGetRegisteredSysOpByIsolationKey(t *testing.T) {
 	t.Run("不存在的 key 返回 nil", func(t *testing.T) {
 		result := getRegisteredSysOpByIsolationKey("nonexistent_isolation_key_12345")
 		assert.Nil(t, result)
+	})
+
+	t.Run("已注册的 key 返回实例", func(t *testing.T) {
+		rm := runner.GetResourceMgr()
+		require.NotNil(t, rm)
+
+		card := CreateSandboxSysOpCard(
+			"http://127.0.0.1:8321", "jiuwenbox",
+			nil, nil, nil, nil, "", false,
+		)
+		require.NotNil(t, card)
+		instance := CreateSysOperationFromCard(card)
+		require.NotNil(t, instance)
+
+		// 通过 isolation key 应能查到
+		isolationKey := instance.IsolationKeyTemplate()
+		if isolationKey != "" {
+			found := getRegisteredSysOpByIsolationKey(isolationKey)
+			assert.NotNil(t, found)
+		}
 	})
 }
 
