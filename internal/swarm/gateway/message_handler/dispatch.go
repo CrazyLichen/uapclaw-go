@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
-	"github.com/uapclaw/uapclaw-go/internal/swarm/gateway/channel_manager"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -26,10 +25,9 @@ func (mh *MessageHandler) prepareAgentDispatchMessage(_ context.Context, msg *sc
 // shouldEmitProcessingStatusForStream 判断是否需要为流式请求发送 processing_status 事件。
 //
 // 对齐 Python _should_emit_processing_status_for_stream (L1866-1890)：
-// web 渠道不发送（前端自行管理加载状态），其他渠道默认发送。
+// 仅 chat.send 请求发送 processing_status，其他请求不发送。
 func (mh *MessageHandler) shouldEmitProcessingStatusForStream(msg *schema.Message) bool {
-	channelType := mh.resolveControlChannelType(msg)
-	return string(channelType) != string(channel_manager.ChannelTypeWeb)
+	return msg.ReqMethod == schema.ReqMethodChatSend
 }
 
 // nonStreamRPCMayRunParallel 判断非流式 RPC 是否可以并行执行，避免慢 RPC 阻塞队列。

@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -12,6 +13,7 @@ import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/worktree"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	"github.com/uapclaw/uapclaw-go/internal/common/workspace"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -204,7 +206,7 @@ func NewLeaderSpec() LeaderSpec {
 	return LeaderSpec{
 		MemberName:  agentteams.DefaultLeaderMemberName,
 		DisplayName: "Team Leader",
-		Persona:     agentteams.T("blueput.default_persona"),
+		Persona:     agentteams.T("blueprint.default_persona"),
 	}
 }
 
@@ -262,14 +264,30 @@ func (s *TeamAgentSpec) Validate() error {
 	return nil
 }
 
-// ResolveDBConfig 解析数据库配置。⤵️ 回填: 9.66
+// ResolveDBConfig 解析数据库配置。
+// 对齐 Python: resolve_db_config()，当 db_type 为 sqlite 且 connection_string 为空时，
+// 自动填充为 getAgentTeamsHome()/team.db。
 func (s *TeamAgentSpec) ResolveDBConfig() any {
+	var dbCfg database.DatabaseConfig
 	if s.Storage != nil {
 		if cfg, err := s.Storage.Build(); err == nil {
-			return cfg
+			if dc, ok := cfg.(database.DatabaseConfig); ok {
+				dbCfg = dc
+			} else {
+				// 非 DatabaseConfig 类型（如 MemoryDatabaseConfig），直接返回
+				return cfg
+			}
+		} else {
+			dbCfg = database.NewDatabaseConfig()
 		}
+	} else {
+		dbCfg = database.NewDatabaseConfig()
 	}
-	return database.NewDatabaseConfig()
+	// SQLite 且 connection_string 为空时，自动填充默认路径
+	if dbCfg.DBType == database.DatabaseTypeSQLite && dbCfg.ConnectionString == "" {
+		dbCfg.ConnectionString = filepath.Join(workspace.AgentTeamsHomeDir(), "team.db")
+	}
+	return dbCfg
 }
 
 // Build 构建 TeamAgent。⤵️ 回填: 9.57

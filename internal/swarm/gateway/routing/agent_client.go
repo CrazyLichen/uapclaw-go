@@ -49,6 +49,8 @@ type AgentClient struct {
 	runningMu sync.RWMutex
 	// cancelFunc 接收循环取消函数
 	cancelFunc context.CancelFunc
+	// receiverWg 用于等待 receiverLoop goroutine 完全退出
+	receiverWg sync.WaitGroup
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -114,6 +116,7 @@ func (ac *AgentClient) Connect(ctx context.Context) error {
 	ac.runningMu.Lock()
 	ac.running = true
 	ac.runningMu.Unlock()
+	ac.receiverWg.Add(1)
 	go ac.receiverLoop(loopCtx)
 
 	logger.Info(logComponentRouting).
@@ -154,6 +157,9 @@ func (ac *AgentClient) Disconnect() {
 		ac.cancelFunc()
 		ac.cancelFunc = nil
 	}
+
+	// 等待 receiverLoop 完全退出（对齐 Python await self._receiver_task）
+	ac.receiverWg.Wait()
 
 	// 清理所有队列
 	ac.messageQueuesMu.Lock()
@@ -375,6 +381,8 @@ func (ac *AgentClient) SetOrUpdateServerConfig(config map[string]any, env map[st
 //
 // 对齐 Python: WebSocketAgentServerClient._message_receiver_loop()
 func (ac *AgentClient) receiverLoop(ctx context.Context) {
+	defer ac.receiverWg.Done()
+
 	recvCh, err := ac.transport.Recv()
 	if err != nil {
 		logger.Error(logComponentRouting).

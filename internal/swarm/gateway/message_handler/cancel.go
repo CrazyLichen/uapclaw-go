@@ -50,7 +50,18 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				Str("event_type", "cancel_send_error").
 				Err(respErr).
 				Str("session_id", oldSessionID).
-				Msg("AgentServer 中断请求失败(忽略)")
+				Msg("AgentServer 中断请求失败")
+
+			// 对齐 Python: SendRequest 异常时发送 success=false 并返回
+			if publishInterruptResult {
+				hasActiveTask := len(requestIDs) > 0
+				mh.sendInterruptResultNotification(
+					msg.ID, msg.ChannelID, oldSessionID,
+					"cancel", fmt.Sprintf("任务终止失败: %s", respErr.Error()),
+					false, &hasActiveTask,
+				)
+			}
+			return
 		}
 	}
 
@@ -76,7 +87,21 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				Msg("取消完成，静默模式不发布 interrupt_result")
 		} else {
 			// 非预期响应，发送失败通知
-			mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", "取消失败", false, nil)
+			// 对齐 Python: 从 payload 中提取 error 或 message 字段
+			errorMsg := "任务终止失败"
+			if errFromPayload, ok := resp.Payload["error"]; ok {
+				if s, isStr := errFromPayload.(string); isStr && s != "" {
+					errorMsg = s
+				}
+			}
+			if errorMsg == "任务终止失败" {
+				if msgFromPayload, ok := resp.Payload["message"]; ok {
+					if s, isStr := msgFromPayload.(string); isStr && s != "" {
+						errorMsg = s
+					}
+				}
+			}
+			mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", errorMsg, false, nil)
 		}
 	} else if publishInterruptResult {
 		// 无响应或响应无 payload，发送成功通知

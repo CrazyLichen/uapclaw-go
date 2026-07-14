@@ -8,6 +8,7 @@ import (
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
@@ -82,49 +83,36 @@ func (d *DeepAdapter) updateRuntimeConfig(ctx context.Context, config *runtimeCo
 //
 // 根据 config 中 subagents 段的启用状态，调用各 builder 构建配置。
 // 返回 (subagentSpecs, shouldAddGeneralAgent)。
+// 对齐 Python: _build_configured_subagents() — Deep 模式下只直接构建
+// research/browser/custom 子代理，explore/plan 通过 code_agent 间接注入
 func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase map[string]any) ([]hschema.SubagentSpec, bool) {
 	var specs []hschema.SubagentSpec
 
-	// 对齐 Python: 按 subagents 配置段依次构建
-	// explore 和 plan 默认启用，其余按配置
+	// 对齐 Python: 按 subagents 配置段构建
+	subagentsCfg, _ := config["subagents"].(map[string]any)
 
-	if d.isSubagentEnabled(config, "explore") {
-		cfg := subagents.BuildExploreAgentConfig(d.model, config, configBase)
-		if cfg != nil {
-			specs = append(specs, cfg)
-		}
-	}
+	// ── general_agent: 配置控制，需 enabled:true 才启用（默认禁用）──
+	shouldAddGeneralAgent := d.isSubagentExplicitlyEnabled(subagentsCfg, "general_agent")
 
-	if d.isSubagentEnabled(config, "plan") {
-		cfg := subagents.BuildPlanAgentConfig(d.model, config, configBase)
-		if cfg != nil {
-			specs = append(specs, cfg)
-		}
-	}
-
-	if d.isSubagentEnabled(config, "research") {
+	// ── research_agent: 配置控制，需 enabled:true 才启用（默认禁用）──
+	if d.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
 		cfg := subagents.BuildResearchAgentConfig(d.model, config, configBase)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
 	}
 
-	if d.isSubagentEnabled(config, "code") {
-		cfg := subagents.BuildCodeAgentConfig(d.model, config, configBase)
-		if cfg != nil {
-			specs = append(specs, cfg)
-		}
-	}
-
-	if d.isSubagentEnabled(config, "browser") {
+	// ── browser_agent: 由 browser_runtime_enabled 控制 ──
+	// TODO(#browser): 对齐 Python _browser_runtime_enabled() 检查
+	if d.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") {
 		cfg := subagents.BuildBrowserAgentConfig(d.model, config, configBase)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
 	}
 
-	// shouldAddGeneralAgent: 当 subMode=="plan" 或 mode 以 "agent" 开头时为 true
-	shouldAddGeneralAgent := (d.subMode == "plan") || (d.mode != "" && strings.HasPrefix(d.mode, "agent"))
+	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
+	// TODO(#custom-subagents): 对齐 Python _load_custom_subagents 加载 .jiuwenclaw/agents/*.md
 
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
@@ -134,30 +122,30 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	return specs, shouldAddGeneralAgent
 }
 
-// isSubagentEnabled 检查配置中子代理是否启用。
-// 对齐 Python: _is_subagent_enabled()
-func (d *DeepAdapter) isSubagentEnabled(config map[string]any, name string) bool {
-	subagents, _ := config["subagents"].(map[string]any)
-	if subagents == nil {
-		return d.isSubagentDefaultEnabled(name)
+// isSubagentExplicitlyEnabled 检查子代理是否通过配置显式启用。
+// 对齐 Python: _is_subagent_enabled() — 只有 enabled:true 才启用，默认禁用
+func (d *DeepAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, name string) bool {
+	if subagentsCfg == nil {
+		return false
 	}
-	if v, ok := subagents[name]; ok {
-		if b, ok := v.(bool); ok {
-			return b
+	v, ok := subagentsCfg[name]
+	if !ok {
+		return false
+	}
+	// 配置值为 bool 时直接返回
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	// 配置值为 dict 时检查 enabled 字段，对齐 Python: subagent_cfg.get("enabled", False)
+	if m, ok := v.(map[string]any); ok {
+		if enabled, ok := m["enabled"]; ok {
+			if b, ok := enabled.(bool); ok {
+				return b
+			}
 		}
+		return false
 	}
-	return d.isSubagentDefaultEnabled(name)
-}
-
-// isSubagentDefaultEnabled 检查子代理是否默认启用。
-// 对齐 Python: _is_subagent_default_enabled()
-func (d *DeepAdapter) isSubagentDefaultEnabled(name string) bool {
-	// 对齐 Python: 默认启用的子代理列表
-	defaultEnabled := map[string]bool{
-		"explore": true,
-		"plan":    true,
-	}
-	return defaultEnabled[name]
+	return false
 }
 
 // writeRuntimeState 将键值对写入运行时状态。
@@ -232,32 +220,35 @@ func (d *DeepAdapter) isAcpToolProfile(instanceOverrides map[string]any) bool {
 }
 
 // filesystemRailEnabledForProfile 检查当前 profile 是否启用文件系统护栏。
-// 对齐 Python: _filesystem_rail_enabled_for_profile()
+// 对齐 Python: _filesystem_rail_enabled_for_profile() — 读取 enable_filesystem_rail 配置，默认 true
 func (d *DeepAdapter) filesystemRailEnabledForProfile(instanceOverrides map[string]any) bool {
-	// 对齐 Python: 默认 true，除非 isAcpToolProfile
-	return !d.isAcpToolProfile(instanceOverrides)
+	if instanceOverrides != nil {
+		if v, ok := instanceOverrides["enable_filesystem_rail"]; ok {
+			if b, ok := v.(bool); ok {
+				return b
+			}
+		}
+	}
+	// 默认启用
+	return true
 }
 
-// resolveRuntimeLanguage 解析运行时语言。
-// 对齐 Python: _resolve_runtime_language()
+// resolveRuntimeLanguage 解析运行时语言（标准化后）。
+// 对齐 Python: _resolve_runtime_language() — 调用 resolve_language() 标准化
 func (d *DeepAdapter) resolveRuntimeLanguage() string {
-	if v, ok := d.configCache["language"]; ok {
+	return prompts.ResolveLanguage(d.resolvePromptLanguage())
+}
+
+// resolvePromptLanguage 解析提示词语言（原始配置值）。
+// 对齐 Python: _resolve_prompt_language() — 读取 preferred_language，默认 "zh"
+func (d *DeepAdapter) resolvePromptLanguage() string {
+	// 对齐 Python: config_base.get("preferred_language", "zh")
+	if v, ok := d.configCache["preferred_language"]; ok {
 		if s, ok := v.(string); ok && s != "" {
-			return s
+			return strings.TrimSpace(strings.ToLower(s))
 		}
 	}
 	return "zh"
-}
-
-// resolvePromptLanguage 解析提示词语言。
-// 对齐 Python: _resolve_prompt_language()
-func (d *DeepAdapter) resolvePromptLanguage() string {
-	if v, ok := d.configCache["prompt_language"]; ok {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
-	}
-	return d.resolveRuntimeLanguage()
 }
 
 // createSysOperation 创建系统操作实例。

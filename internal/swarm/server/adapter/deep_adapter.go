@@ -390,14 +390,20 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 
 	// 步骤 15: tool_cards = await self._get_tool_cards(agent_card.id)
 	// 对齐 Python: tool_cards = await self._get_tool_cards(agent_card.id)
+	// 对齐 Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
 	toolCards := d.getToolCards(agentCard.ID)
+	d.toolCards = toolCards
 
 	// 步骤 16: rails_list = _build_agent_rails(config, configBase, mode=mode)
 	railsList := d.buildAgentRails(config, configBase, mode)
 
 	// 步骤 17: sys_operation = _create_sys_operation()
 	// 对齐 Python: sys_operation = self._create_sys_operation()
+	// 对齐 Python: if sys_operation is None: raise RuntimeError (G7: nil 检查)
 	sysOpInstance, _ := d.createSysOperation(configBase)
+	if sysOpInstance == nil {
+		return fmt.Errorf("sys_operation is not available, maybe task is not running")
+	}
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)
 	// ⤵️ agentcore: _build_configured_subagents(model, config, configBase)
@@ -501,8 +507,13 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		return fmt.Errorf("DeepAdapter 未初始化，请先调用 CreateInstance()")
 	}
 
+	// 对齐 Python: clear_config_cache() + clear_memory_manager_cache()
+	// Go 无全局 config 缓存（Config.Load 每次从磁盘读取），无需 clear_config_cache
+	// ⤵️ G9 回填: MemoryIndexManager 实现后需在此处调用 clearMemoryManagerCache()
+
 	// 步骤 1: configBase 或 get_config()
 	// 对齐 Python: if config_base is None: config_base = get_config()
+	// 对齐 Python: else: config_base = resolve_env_vars(config_base) (G10)
 	if configBase == nil {
 		cfg, err := config.New("")
 		if err != nil {
@@ -512,6 +523,9 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 		if err != nil {
 			return fmt.Errorf("加载配置失败: %w", err)
 		}
+	} else {
+		// G10: 对齐 Python resolve_env_vars(config_base) — 外部传入的 configBase 也需要解析环境变量
+		configBase = config.ResolveEnvVars(configBase, nil).(map[string]any)
 	}
 
 	// 步骤 2: 应用环境变量覆盖
@@ -563,8 +577,9 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// 对齐 Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
+	// 对齐 Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
 	newToolCards := d.getToolCards("jiuwenswarm")
-	_ = newToolCards // ⤵️ 10.6.3-10: configure(tools=new_tool_cards) 待回填
+	d.toolCards = newToolCards
 
 	// 步骤 10: _update_permission_rail(configBase)
 	// ⤵️ 10.6.3-10: _update_permission_rail(configBase)
@@ -661,6 +676,10 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
 			reactAgent.SetLLM(resolvedModel)
 		}
+		// 对齐 Python: _apply_model_to_react_agent 中同步 adapter 字段
+		d.modelRequestConfig = resolvedModel.ModelConfig
+		d.modelClientConfig = resolvedModel.ClientConfig
+		d.model = resolvedModel
 	}
 
 	// 步骤 14: mark_session_active
@@ -800,6 +819,10 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 		if reactAgent := d.instance.ReactAgent(); reactAgent != nil {
 			reactAgent.SetLLM(resolvedModelStream)
 		}
+		// 对齐 Python: _apply_model_to_react_agent 中同步 adapter 字段
+		d.modelRequestConfig = resolvedModelStream.ModelConfig
+		d.modelClientConfig = resolvedModelStream.ClientConfig
+		d.model = resolvedModelStream
 	}
 
 	// 步骤 15: mark_session_active
@@ -1316,17 +1339,17 @@ func (d *DeepAdapter) buildModelFromEntry(mcc map[string]any, mco map[string]any
 			temperature = f
 		}
 	}
-	topP := 0.1
-	if v, ok := mco["top_p"]; ok {
-		if f, ok := v.(float64); ok {
-			topP = f
-		}
-	}
-	mConfig := llmschema.NewModelRequestConfig(
+	// 对齐 Python: 只在配置中有 top_p 时才设置，不设默认值
+	mConfigOpts := []llmschema.ModelRequestConfigOption{
 		llmschema.WithModelName(name),
 		llmschema.WithTemperature(temperature),
-		llmschema.WithTopP(topP),
-	)
+	}
+	if v, ok := mco["top_p"]; ok {
+		if f, ok := v.(float64); ok {
+			mConfigOpts = append(mConfigOpts, llmschema.WithTopP(f))
+		}
+	}
+	mConfig := llmschema.NewModelRequestConfig(mConfigOpts...)
 
 	// 构建 ModelClientConfig：从 mcc 提取字段
 	provider, _ := mcc["client_provider"].(string)

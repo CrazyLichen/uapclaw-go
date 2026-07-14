@@ -141,8 +141,8 @@ func TestModelPoolEntry_ToTeamModelConfig_MetadataMerge(t *testing.T) {
 	if reqCfg.Temperature != 0.5 {
 		t.Errorf("Temperature = %f, want 0.5", reqCfg.Temperature)
 	}
-	if reqCfg.TopP != 0.9 {
-		t.Errorf("TopP = %f, want 0.9", reqCfg.TopP)
+	if reqCfg.TopP == nil || *reqCfg.TopP != 0.9 {
+		t.Errorf("TopP = %v, want 0.9", reqCfg.TopP)
 	}
 	if reqCfg.MaxTokens == nil || *reqCfg.MaxTokens != 4096 {
 		t.Errorf("MaxTokens = %v, want 4096", reqCfg.MaxTokens)
@@ -212,8 +212,8 @@ func TestModelPoolEntry_ToTeamModelConfig_空Metadata(t *testing.T) {
 	if cfg.ModelRequestConfig.Temperature != 0.95 {
 		t.Errorf("Temperature = %f, want 0.95（默认）", cfg.ModelRequestConfig.Temperature)
 	}
-	if cfg.ModelRequestConfig.TopP != 0.1 {
-		t.Errorf("TopP = %f, want 0.1（默认）", cfg.ModelRequestConfig.TopP)
+	if cfg.ModelRequestConfig.TopP != nil {
+		t.Errorf("TopP = %v, want nil（未设置）", cfg.ModelRequestConfig.TopP)
 	}
 }
 

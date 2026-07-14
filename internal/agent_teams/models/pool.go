@@ -357,7 +357,7 @@ func buildModelRequestConfig(requestExtra map[string]any, modelName string) *llm
 	}
 	if v, ok := requestExtra["top_p"]; ok {
 		if f, ok := toFloat64(v); ok {
-			cfg.TopP = f
+			cfg.TopP = &f
 		}
 	}
 	if v, ok := requestExtra["max_tokens"]; ok {

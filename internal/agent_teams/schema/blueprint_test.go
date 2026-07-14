@@ -2,11 +2,15 @@ package schema
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -235,8 +239,14 @@ func TestTeamAgentSpec_ValidateLeaderModelResolved_无池(t *testing.T) {
 	}
 }
 
-// TestTeamAgentSpec_ResolveDBConfig_默认 测试默认 DB
+// TestTeamAgentSpec_ResolveDBConfig_默认 测试默认 DB，SQLite 时自动填充 connection_string
 func TestTeamAgentSpec_ResolveDBConfig_默认(t *testing.T) {
+	// 设置临时工作区以获取可预测路径
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	path.ResetCache()
+
 	s := NewTeamAgentSpec()
 	cfg := (&s).ResolveDBConfig()
 	dbCfg, ok := cfg.(database.DatabaseConfig)
@@ -245,6 +255,11 @@ func TestTeamAgentSpec_ResolveDBConfig_默认(t *testing.T) {
 	}
 	if dbCfg.DBType != database.DatabaseTypeSQLite {
 		t.Errorf("期望 sqlite, 实际=%q", dbCfg.DBType)
+	}
+	// SQLite 且 connection_string 为空时，应自动填充
+	expected := filepath.Join(tmpDir, "agent_teams", "team.db")
+	if dbCfg.ConnectionString != expected {
+		t.Errorf("期望 connection_string=%q, 实际=%q", expected, dbCfg.ConnectionString)
 	}
 }
 
@@ -259,6 +274,48 @@ func TestTeamAgentSpec_ResolveDBConfig_存储配置(t *testing.T) {
 	}
 	if memCfg.DBType != database.DatabaseTypeMemory {
 		t.Errorf("期望 memory, 实际=%q", memCfg.DBType)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_SQLite已有连接字符串 测试 SQLite 已有 connection_string 时不覆盖
+func TestTeamAgentSpec_ResolveDBConfig_SQLite已有连接字符串(t *testing.T) {
+	// 注册一个自定义 sqlite builder，预设 connection_string
+	customName := "sqlite_with_conn_test"
+	RegisterStorage(customName, func(_ map[string]any) (any, error) {
+		cfg := database.NewDatabaseConfig()
+		cfg.ConnectionString = "/custom/path/team.db"
+		return cfg, nil
+	})
+
+	s := NewTeamAgentSpec()
+	s.Storage = &StorageSpec{Type: customName}
+	cfg := (&s).ResolveDBConfig()
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	// 已有 connection_string，不应被覆盖
+	if dbCfg.ConnectionString != "/custom/path/team.db" {
+		t.Errorf("期望 connection_string 保持 /custom/path/team.db, 实际=%q", dbCfg.ConnectionString)
+	}
+}
+
+// TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径 测试 SQLite 自动填充路径正确性
+func TestTeamAgentSpec_ResolveDBConfig_SQLite自动填充路径(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("UAPCLAW_DATA_DIR", tmpDir)
+	defer func() { _ = os.Unsetenv("UAPCLAW_DATA_DIR") }()
+	path.ResetCache()
+
+	s := NewTeamAgentSpec()
+	cfg := (&s).ResolveDBConfig()
+	dbCfg, ok := cfg.(database.DatabaseConfig)
+	if !ok {
+		t.Fatal("期望 DatabaseConfig")
+	}
+	// 验证路径以 agent_teams/team.db 结尾
+	if !strings.HasSuffix(dbCfg.ConnectionString, "agent_teams"+string(filepath.Separator)+"team.db") {
+		t.Errorf("connection_string 应以 agent_teams/team.db 结尾, 实际=%q", dbCfg.ConnectionString)
 	}
 }
 

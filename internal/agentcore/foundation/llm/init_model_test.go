@@ -163,8 +163,8 @@ func TestInitModel_WithOptions(t *testing.T) {
 	if model.ModelConfig.Temperature != 0.5 {
 		t.Errorf("Temperature 期望 0.5，实际 %f", model.ModelConfig.Temperature)
 	}
-	if model.ModelConfig.TopP != 0.9 {
-		t.Errorf("TopP 期望 0.9，实际 %f", model.ModelConfig.TopP)
+	if model.ModelConfig.TopP == nil || *model.ModelConfig.TopP != 0.9 {
+		t.Errorf("TopP 期望 0.9，实际 %v", model.ModelConfig.TopP)
 	}
 	if model.ModelConfig.MaxTokens == nil || *model.ModelConfig.MaxTokens != 2048 {
 		t.Errorf("MaxTokens 期望 2048，实际 %v", model.ModelConfig.MaxTokens)

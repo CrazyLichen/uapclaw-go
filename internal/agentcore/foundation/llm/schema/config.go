@@ -44,8 +44,8 @@ type ModelRequestConfig struct {
 	ModelName string `json:"model"`
 	// Temperature 温度参数，控制输出随机性，默认 0.95
 	Temperature float64 `json:"temperature"`
-	// TopP Top-p 采样参数，默认 0.1
-	TopP float64 `json:"top_p"`
+	// TopP Top-p 采样参数（可选），对齐 Python: 不设置时为 nil，不传给模型
+	TopP *float64 `json:"top_p,omitempty"`
 	// MaxTokens 最大生成 token 数（可选）
 	MaxTokens *int `json:"max_tokens,omitempty"`
 	// Stop 停止序列（可选）
@@ -305,7 +305,7 @@ func WithTemperature(temp float64) ModelRequestConfigOption {
 }
 
 func WithTopP(topP float64) ModelRequestConfigOption {
-	return func(c *ModelRequestConfig) { c.TopP = topP }
+	return func(c *ModelRequestConfig) { c.TopP = &topP }
 }
 
 func WithMaxTokens(maxTokens int) ModelRequestConfigOption {
@@ -323,7 +323,6 @@ func WithRequestExtra(extra map[string]any) ModelRequestConfigOption {
 func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig {
 	cfg := &ModelRequestConfig{
 		Temperature: 0.95,
-		TopP:        0.1,
 	}
 	for _, opt := range opts {
 		opt(cfg)

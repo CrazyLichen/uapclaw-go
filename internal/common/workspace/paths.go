@@ -168,6 +168,12 @@ func DeepAgentUserMDPath() string {
 	return path.DeepAgentUserMDPath()
 }
 
+// AgentTeamsHomeDir 返回 Agent Teams 主目录：WorkspaceDir()/agent_teams。
+// 对齐 Python: get_agent_teams_home()
+func AgentTeamsHomeDir() string {
+	return path.AgentTeamsHomeDir()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // logFallbackIfNeeded 检查 path 包的回退状态并补日志。

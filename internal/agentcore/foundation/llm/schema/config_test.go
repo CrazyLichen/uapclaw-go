@@ -471,8 +471,8 @@ func TestNewModelRequestConfig(t *testing.T) {
 	if cfg.Temperature != 0.95 {
 		t.Errorf("Temperature = %f, want 0.95", cfg.Temperature)
 	}
-	if cfg.TopP != 0.1 {
-		t.Errorf("TopP = %f, want 0.1", cfg.TopP)
+	if cfg.TopP != nil {
+		t.Errorf("TopP = %v, want nil（未设置）", cfg.TopP)
 	}
 	if cfg.MaxTokens != nil {
 		t.Error("MaxTokens 默认应为 nil")
@@ -501,8 +501,8 @@ func TestNewModelRequestConfig_WithOptions(t *testing.T) {
 	if cfg.Temperature != 0.5 {
 		t.Errorf("Temperature = %f, want 0.5", cfg.Temperature)
 	}
-	if cfg.TopP != 0.9 {
-		t.Errorf("TopP = %f, want 0.9", cfg.TopP)
+	if cfg.TopP == nil || *cfg.TopP != 0.9 {
+		t.Errorf("TopP = %v, want 0.9", cfg.TopP)
 	}
 	if cfg.MaxTokens == nil || *cfg.MaxTokens != 1000 {
 		t.Errorf("MaxTokens = %v, want 1000", cfg.MaxTokens)
@@ -550,8 +550,8 @@ func TestModelRequestConfig_UnmarshalJSON_ModelAlias(t *testing.T) {
 	if cfg.Temperature != 0.7 {
 		t.Errorf("Temperature = %f, want 0.7", cfg.Temperature)
 	}
-	if cfg.TopP != 0.5 {
-		t.Errorf("TopP = %f, want 0.5", cfg.TopP)
+	if cfg.TopP == nil || *cfg.TopP != 0.5 {
+		t.Errorf("TopP = %v, want 0.5", cfg.TopP)
 	}
 }
 

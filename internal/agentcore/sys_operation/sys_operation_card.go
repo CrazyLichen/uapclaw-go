@@ -153,7 +153,8 @@ func WithSysOpIsolationKeyTemplate(tpl string) SysOperationCardOption {
 
 // generateIsolationKeyTemplate 生成隔离键模板，格式为 {containerScope}_{launcherType}_{sandboxType}_{prefix}_{identity}。
 // 其中 identity 取值：SYSTEM 时为 "system"，SESSION 时为 "{session_id}"，CUSTOM 时为 customID。
-func generateIsolationKeyTemplate(isolationPrefix string, containerScope ContainerScope, customID string, launcherType string, sandboxType string) string {
+// 当 containerScope 为 CUSTOM 且 customID 为空时返回错误。
+func generateIsolationKeyTemplate(isolationPrefix string, containerScope ContainerScope, customID string, launcherType string, sandboxType string) (string, error) {
 	var identity string
 	switch containerScope {
 	case ContainerScopeSystem:
@@ -161,6 +162,9 @@ func generateIsolationKeyTemplate(isolationPrefix string, containerScope Contain
 	case ContainerScopeSession:
 		identity = "{session_id}"
 	case ContainerScopeCustom:
+		if customID == "" {
+			return "", fmt.Errorf("container_scope is CUSTOM but custom_id is empty")
+		}
 		identity = customID
 	default:
 		identity = customID
@@ -180,5 +184,5 @@ func generateIsolationKeyTemplate(isolationPrefix string, containerScope Contain
 			filtered = append(filtered, p)
 		}
 	}
-	return strings.Join(filtered, "_")
+	return strings.Join(filtered, "_"), nil
 }

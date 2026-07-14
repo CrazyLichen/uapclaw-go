@@ -208,112 +208,99 @@ func TestSkillIncludeToolsForProfile_非acpTool(t *testing.T) {
 	}
 }
 
-// TestIsSubagentEnabled_配置中存在 测试配置中子代理开关。
-func TestIsSubagentEnabled_配置中存在(t *testing.T) {
+// TestIsSubagentExplicitlyEnabled_配置中存在 测试配置中子代理开关。
+// 对齐 Python: _is_subagent_enabled() — 只有 enabled:true 才启用
+func TestIsSubagentExplicitlyEnabled_配置中存在(t *testing.T) {
 	d := NewDeepAdapter()
-	config := map[string]any{
-		"subagents": map[string]any{
-			"explore": true,
-			"plan":    false,
-		},
+	cfg := map[string]any{
+		"research_agent": true,
+		"general_agent":  false,
 	}
-	if !d.isSubagentEnabled(config, "explore") {
-		t.Error("explore 应启用")
+	if !d.isSubagentExplicitlyEnabled(cfg, "research_agent") {
+		t.Error("research_agent 应启用")
 	}
-	if d.isSubagentEnabled(config, "plan") {
-		t.Error("plan 应禁用")
+	if d.isSubagentExplicitlyEnabled(cfg, "general_agent") {
+		t.Error("general_agent 应禁用")
 	}
 }
 
-// TestIsSubagentEnabled_配置中不存在 测试配置中不存在时使用默认值。
-func TestIsSubagentEnabled_配置中不存在(t *testing.T) {
+// TestIsSubagentExplicitlyEnabled_配置为dict 测试配置值为字典时检查 enabled 字段。
+func TestIsSubagentExplicitlyEnabled_配置为dict(t *testing.T) {
 	d := NewDeepAdapter()
-	config := map[string]any{
-		"subagents": map[string]any{},
+	cfg := map[string]any{
+		"research_agent": map[string]any{"enabled": true, "max_iterations": 20},
+		"general_agent":  map[string]any{"max_iterations": 10},
 	}
-	// 默认 explore 和 plan 启用
-	if !d.isSubagentEnabled(config, "explore") {
-		t.Error("explore 默认应启用")
+	if !d.isSubagentExplicitlyEnabled(cfg, "research_agent") {
+		t.Error("research_agent dict 中 enabled:true 应启用")
 	}
-	if !d.isSubagentEnabled(config, "plan") {
-		t.Error("plan 默认应启用")
+	if d.isSubagentExplicitlyEnabled(cfg, "general_agent") {
+		t.Error("general_agent dict 中无 enabled 应禁用（默认 false）")
 	}
 }
 
-// TestIsSubagentEnabled_无subagents段 测试无 subagents 段时使用默认值。
-func TestIsSubagentEnabled_无subagents段(t *testing.T) {
+// TestIsSubagentExplicitlyEnabled_配置中不存在 测试配置中不存在时默认禁用。
+func TestIsSubagentExplicitlyEnabled_配置中不存在(t *testing.T) {
 	d := NewDeepAdapter()
-	config := map[string]any{}
-	if !d.isSubagentEnabled(config, "explore") {
-		t.Error("无 subagents 段时 explore 默认应启用")
+	cfg := map[string]any{}
+	if d.isSubagentExplicitlyEnabled(cfg, "research_agent") {
+		t.Error("配置中不存在时默认禁用")
+	}
+	if d.isSubagentExplicitlyEnabled(nil, "research_agent") {
+		t.Error("nil 配置时默认禁用")
 	}
 }
 
-// TestIsSubagentDefaultEnabled 测试子代理默认启用列表。
-func TestIsSubagentDefaultEnabled(t *testing.T) {
-	d := NewDeepAdapter()
-	if !d.isSubagentDefaultEnabled("explore") {
-		t.Error("explore 默认启用")
-	}
-	if !d.isSubagentDefaultEnabled("plan") {
-		t.Error("plan 默认启用")
-	}
-	if d.isSubagentDefaultEnabled("browser") {
-		t.Error("browser 默认不启用")
-	}
-}
-
-// TestResolveRuntimeLanguage_有配置 测试 resolveRuntimeLanguage 有配置时返回。
+// TestResolveRuntimeLanguage_有配置 测试 resolveRuntimeLanguage 有配置时返回标准化值。
+// 对齐 Python: _resolve_runtime_language() 调用 resolve_language() 标准化
 func TestResolveRuntimeLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"language": "en"}
+	// preferred_language=en → ResolveLanguage("en") → "en"
+	d.configCache = map[string]any{"preferred_language": "en"}
 	if got := d.resolveRuntimeLanguage(); got != "en" {
 		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "en")
 	}
 }
 
 // TestResolveRuntimeLanguage_无配置 测试 resolveRuntimeLanguage 无配置时返回默认值。
+// 对齐 Python: resolve_language("zh") → "zh" 不在 SUPPORTED_LANGUAGES → 回退 "cn"
 func TestResolveRuntimeLanguage_无配置(t *testing.T) {
 	d := NewDeepAdapter()
 	d.configCache = map[string]any{}
-	if got := d.resolveRuntimeLanguage(); got != "zh" {
-		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "zh")
-	}
-}
-
-// TestResolveRuntimeLanguage_空字符串 测试 resolveRuntimeLanguage 空字符串时回退默认值。
-func TestResolveRuntimeLanguage_空字符串(t *testing.T) {
-	d := NewDeepAdapter()
-	d.configCache = map[string]any{"language": ""}
-	if got := d.resolveRuntimeLanguage(); got != "zh" {
-		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "zh")
+	if got := d.resolveRuntimeLanguage(); got != "cn" {
+		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "cn")
 	}
 }
 
 // TestResolveRuntimeLanguage_非字符串 测试 resolveRuntimeLanguage 非字符串时回退默认值。
 func TestResolveRuntimeLanguage_非字符串(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"language": 123}
-	if got := d.resolveRuntimeLanguage(); got != "zh" {
-		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "zh")
+	d.configCache = map[string]any{"preferred_language": 123}
+	if got := d.resolveRuntimeLanguage(); got != "cn" {
+		t.Errorf("resolveRuntimeLanguage() = %q, want %q", got, "cn")
 	}
 }
 
-// TestResolvePromptLanguage_有配置 测试 resolvePromptLanguage 有配置时返回。
+// TestResolvePromptLanguage_有配置 测试 resolvePromptLanguage 有配置时返回原始值。
+// 对齐 Python: _resolve_prompt_language() 读 preferred_language
 func TestResolvePromptLanguage_有配置(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"prompt_language": "en"}
+	d.configCache = map[string]any{"preferred_language": "en"}
 	if got := d.resolvePromptLanguage(); got != "en" {
 		t.Errorf("resolvePromptLanguage() = %q, want %q", got, "en")
 	}
 }
 
-// TestResolvePromptLanguage_回退到RuntimeLanguage 测试 resolvePromptLanguage 回退到 runtime language。
-func TestResolvePromptLanguage_回退到RuntimeLanguage(t *testing.T) {
+// TestResolvePromptLanguage_zh标准化 测试 resolvePromptLanguage 返回 "zh" 被 ResolveLanguage 标准化为 "cn"。
+func TestResolvePromptLanguage_zh标准化(t *testing.T) {
 	d := NewDeepAdapter()
-	d.configCache = map[string]any{"language": "en"}
-	if got := d.resolvePromptLanguage(); got != "en" {
-		t.Errorf("resolvePromptLanguage() = %q, want %q", got, "en")
+	d.configCache = map[string]any{"preferred_language": "zh"}
+	if got := d.resolvePromptLanguage(); got != "zh" {
+		t.Errorf("resolvePromptLanguage() = %q, want %q", got, "zh")
+	}
+	// resolveRuntimeLanguage 会标准化 "zh" → "cn"
+	if got := d.resolveRuntimeLanguage(); got != "cn" {
+		t.Errorf("resolveRuntimeLanguage() = %q, want %q (zh 标准化为 cn)", got, "cn")
 	}
 }
 

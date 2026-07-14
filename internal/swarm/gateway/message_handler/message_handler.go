@@ -3,6 +3,7 @@ package message_handler
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -287,8 +288,17 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 //
 // 对齐 Python _remember_user_query_context (L223-235)：
 // 记录 chat.send 的 query 上下文，供 supplement 构造 continuation query 使用。
+// 仅记录 chat.send 消息，跳过 is_supplement=True 的消息，query 截断到 8000 字符。
 func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
-	if msg == nil || msg.SessionID == "" {
+	if msg == nil {
+		return
+	}
+	// 对齐 Python _is_chat_send_message：仅记录 chat.send 消息
+	if msg.ReqMethod != schema.ReqMethodChatSend {
+		return
+	}
+	sessionID := strings.TrimSpace(msg.SessionID)
+	if sessionID == "" {
 		return
 	}
 	if len(msg.Params) == 0 {
@@ -296,6 +306,10 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 	}
 	var paramsMap map[string]any
 	if err := json.Unmarshal(msg.Params, &paramsMap); err != nil {
+		return
+	}
+	// 对齐 Python：跳过 is_supplement=True 的消息
+	if isSupplement, _ := paramsMap["is_supplement"].(bool); isSupplement {
 		return
 	}
 	query := ""
@@ -314,8 +328,12 @@ func (mh *MessageHandler) rememberUserQueryContext(msg *schema.Message) {
 	if query == "" {
 		return
 	}
+	// 对齐 Python：截断到 8000 字符
+	if len(query) > 8000 {
+		query = query[:8000]
+	}
 	mh.queryMu.Lock()
-	mh.sessionLastUserQuery[msg.SessionID] = query
+	mh.sessionLastUserQuery[sessionID] = query
 	mh.queryMu.Unlock()
 }
 

@@ -37,11 +37,11 @@ var (
 // STRINGS 双语字典。
 // 对齐 Python: STRINGS (openjiuwen/agent_teams/i18n.py)
 //
-// 包含：blueput.default_persona / team.* / dispatcher.* / hitt.* 全部条目
+// 包含：blueprint.default_persona / team.* / dispatcher.* / hitt.* 全部条目
 var STRINGS = map[Language]map[string]string{
 	LanguageCN: {
 		// schema/blueprint.py
-		"blueput.default_persona": "天才项目管理专家",
+		"blueprint.default_persona": "天才项目管理专家",
 		// tools/team.py
 		"team.shutdown_request_content": "当前任务已全部完成，请结束流程",
 		"team.cancel_request_content":   "当前任务有变动，请停止执行当前任务，重新尝试认领合适任务",
@@ -81,7 +81,7 @@ var STRINGS = map[Language]map[string]string{
 	},
 	LanguageEN: {
 		// schema/blueprint.py
-		"blueput.default_persona": "Genius project management expert",
+		"blueprint.default_persona": "Genius project management expert",
 		// tools/team.py
 		"team.shutdown_request_content": "All tasks are complete. Please wrap up and exit.",
 		"team.cancel_request_content":   "The current task has changed. Stop executing it and try claiming a suitable task again.",

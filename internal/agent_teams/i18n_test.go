@@ -11,10 +11,10 @@ func TestT_中文默认(t *testing.T) {
 		t.Fatalf("SetLanguage 失败: %v", err)
 	}
 
-	got := T("blueput.default_persona")
+	got := T("blueprint.default_persona")
 	want := "天才项目管理专家"
 	if got != want {
-		t.Errorf("T(\"blueput.default_persona\") = %q, want %q", got, want)
+		t.Errorf("T(\"blueprint.default_persona\") = %q, want %q", got, want)
 	}
 }
 
@@ -25,10 +25,10 @@ func TestT_英文切换(t *testing.T) {
 	}
 	defer SetLanguage(LanguageCN) // 恢复
 
-	got := T("blueput.default_persona")
+	got := T("blueprint.default_persona")
 	want := "Genius project management expert"
 	if got != want {
-		t.Errorf("T(\"blueput.default_persona\") = %q, want %q", got, want)
+		t.Errorf("T(\"blueprint.default_persona\") = %q, want %q", got, want)
 	}
 }
 

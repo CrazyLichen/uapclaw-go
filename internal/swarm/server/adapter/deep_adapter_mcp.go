@@ -128,35 +128,55 @@ func (d *DeepAdapter) buildMcpServerConfig(entry map[string]any) *mcptypes.McpSe
 
 // extractEnabledMcpServerEntries 从配置提取启用的 MCP 条目。
 // 对齐 Python: _extract_enabled_mcp_server_entries() (line 1021-1060)
+// 配置结构: configBase["mcp"]["servers"] — 嵌套两级，值为列表
 func (d *DeepAdapter) extractEnabledMcpServerEntries(configBase map[string]any) []map[string]any {
-	mcpSection, _ := configBase["mcp_servers"].(map[string]any)
-	if mcpSection == nil {
+	// 对齐 Python: mcp_cfg = config_base.get("mcp", {})
+	mcpCfg, _ := configBase["mcp"].(map[string]any)
+	if mcpCfg == nil {
 		return nil
 	}
 
+	// 对齐 Python: servers = mcp_cfg.get("servers", [])
+	serversRaw, ok := mcpCfg["servers"]
+	if !ok || serversRaw == nil {
+		return nil
+	}
+
+	// servers 是列表格式 []map[string]any（直接构建）或 []any（JSON 反序列化后）
 	var result []map[string]any
-	for name, entry := range mcpSection {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		// 检查 enabled 字段，默认 true
-		enabled := true
-		if v, ok := m["enabled"]; ok {
-			if b, ok := v.(bool); ok {
-				enabled = b
+
+	switch s := serversRaw.(type) {
+	case []map[string]any:
+		for _, entry := range s {
+			if d.isMcpServerEntryEnabled(entry) {
+				result = append(result, entry)
 			}
 		}
-		if !enabled {
-			continue
+	case []any:
+		for _, item := range s {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if d.isMcpServerEntryEnabled(entry) {
+				result = append(result, entry)
+			}
 		}
-		// 确保 name 字段存在
-		if _, ok := m["name"]; !ok {
-			m["name"] = name
-		}
-		result = append(result, m)
 	}
+
 	return result
+}
+
+// isMcpServerEntryEnabled 检查 MCP 服务器条目是否启用。
+// 对齐 Python: enabled 字段默认 true
+func (d *DeepAdapter) isMcpServerEntryEnabled(entry map[string]any) bool {
+	enabled := true
+	if v, ok := entry["enabled"]; ok {
+		if b, ok := v.(bool); ok {
+			enabled = b
+		}
+	}
+	return enabled
 }
 
 // registerMcpServer 注册 MCP 服务到 ResourceMgr。

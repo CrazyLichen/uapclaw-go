@@ -186,6 +186,10 @@ func TestExtractTextFromParams(t *testing.T) {
 		{"空JSON", json.RawMessage(`{}`), ""},
 		{"有content", json.RawMessage(`{"content":"/new_session"}`), "/new_session"},
 		{"content非字符串", json.RawMessage(`{"content":123}`), ""},
+		{"只有query", json.RawMessage(`{"query":"hello"}`), "hello"},
+		{"query优先于content", json.RawMessage(`{"query":"from_query","content":"from_content"}`), "from_query"},
+		{"query为空字符串时回退content", json.RawMessage(`{"query":"","content":"from_content"}`), "from_content"},
+		{"query为非字符串时回退content", json.RawMessage(`{"query":123,"content":"from_content"}`), "from_content"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -118,30 +118,58 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ comma
 // 对齐 Python _mode_change_cancel_and_notice (L593-613)：
 // 先取消当前会话任务（publishInterruptResult=false），再下发 mode 已变更提示。
 func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed command_parser.ParsedChannelControl) {
+	// 提前获取渠道状态（/switch 需要读取当前 mode）
+	state := mh.GetOrCreateChannelState(msg)
+
 	// 确定新模式
 	var newMode ChannelMode
 	switch parsed.Action {
 	case command_parser.ActionModeOK:
 		newMode = ParseChannelMode(parsed.ModeSubcommand)
 	case command_parser.ActionSwitchOK:
+		// 对齐 Python：根据当前 state.Mode 判断模式家族，再决定目标模式
+		currentMode := state.Mode
 		switch parsed.SwitchSubcommand {
 		case "plan":
-			newMode = ChannelModeAgentPlan
+			if currentMode == ChannelModeAgentPlan || currentMode == ChannelModeAgentFast {
+				newMode = ChannelModeAgentPlan
+			} else if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+				newMode = ChannelModeCodePlan
+			} else {
+				// 当前模式不在任何支持 /switch plan 的家族中，发送"非法指令"通知
+				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+				return
+			}
 		case "fast":
-			newMode = ChannelModeAgentFast
+			if currentMode == ChannelModeAgentPlan || currentMode == ChannelModeAgentFast {
+				newMode = ChannelModeAgentFast
+			} else {
+				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+				return
+			}
 		case "normal":
-			newMode = ChannelModeCodeNormal
+			if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+				newMode = ChannelModeCodeNormal
+			} else {
+				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+				return
+			}
 		case "team":
-			newMode = ChannelModeTeam
+			if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+				newMode = ChannelModeCodeTeam
+			} else {
+				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+				return
+			}
 		default:
-			newMode = ChannelModeAgentPlan
+			mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
+			return
 		}
 	default:
 		return
 	}
 
 	// 更新渠道状态
-	state := mh.GetOrCreateChannelState(msg)
 	oldMode := state.Mode
 	oldSID := state.SessionID
 	state.Mode = newMode
@@ -430,7 +458,9 @@ func (mh *MessageHandler) rewindSlashNotice(msg *schema.Message, parsed command_
 	}
 }
 
-// extractTextFromParams 从消息 params 中提取文本内容
+// extractTextFromParams 从消息 params 中提取文本内容。
+//
+// 对齐 Python：params.get("query") or params.get("content") or ""
 func extractTextFromParams(params json.RawMessage) string {
 	if len(params) == 0 {
 		return ""
@@ -438,6 +468,12 @@ func extractTextFromParams(params json.RawMessage) string {
 	var paramsMap map[string]any
 	if err := json.Unmarshal(params, &paramsMap); err != nil {
 		return ""
+	}
+	// 先检查 query 字段，再回退 content 字段
+	if query, ok := paramsMap["query"]; ok {
+		if s, isStr := query.(string); isStr && s != "" {
+			return s
+		}
 	}
 	if content, ok := paramsMap["content"]; ok {
 		if s, isStr := content.(string); isStr {

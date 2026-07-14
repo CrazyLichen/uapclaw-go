@@ -206,6 +206,7 @@ func TestPathHelpers(t *testing.T) {
 		{"DeepAgentSoulMDPath", DeepAgentSoulMDPath(), filepath.Join(tmpDir, "agent", "workspace", "SOUL.md")},
 		{"DeepAgentIdentityMDPath", DeepAgentIdentityMDPath(), filepath.Join(tmpDir, "agent", "workspace", "IDENTITY.md")},
 		{"DeepAgentUserMDPath", DeepAgentUserMDPath(), filepath.Join(tmpDir, "agent", "workspace", "USER.md")},
+		{"AgentTeamsHomeDir", AgentTeamsHomeDir(), filepath.Join(tmpDir, "agent_teams")},
 		{"AgentInteractionsDir", AgentInteractionsDir(), filepath.Join(tmpDir, "agent", "workspace", "interactions")},
 	}
 

@@ -368,9 +368,12 @@ func (wc *WebChannel) Send(_ context.Context, msg *schema.Message) error {
 	// 判断是否为 full-payload 事件
 	if isFullPayloadEvent(eventName) {
 		// full-payload：透传完整 payload
-		payload := msg.Payload
-		if payload == nil {
-			payload = make(map[string]any)
+		// 浅拷贝，避免修改原始 msg.Payload（对齐 Python {**msg.payload}）
+		payload := make(map[string]any)
+		if msg.Payload != nil {
+			for k, v := range msg.Payload {
+				payload[k] = v
+			}
 		}
 		// 确保 session_id 存在
 		if _, ok := payload["session_id"]; !ok {

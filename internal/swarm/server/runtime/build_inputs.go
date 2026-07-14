@@ -6,6 +6,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
 
@@ -40,14 +41,17 @@ func (uc *UapClaw) BuildInputs(request *schema.AgentRequest) (map[string]any, st
 	// 3. 提取基础字段
 	query, _ := params["query"].(string)
 	channel := extractChannelFromSessionID(request)
-	language := "zh"
+	// 对齐 Python: language = resolve_language(config_base.get("preferred_language", "zh"))
+	// 使用 prompts.ResolveLanguage 标准化，对齐 DeepAdapter.resolveRuntimeLanguage
+	rawLang := "zh"
 	if configBase != nil {
 		if lang, ok := configBase["preferred_language"]; ok {
 			if langStr, ok := lang.(string); ok && langStr != "" {
-				language = langStr
+				rawLang = langStr
 			}
 		}
 	}
+	language := prompts.ResolveLanguage(rawLang)
 
 	// 4. 提取 trusted_dirs
 	var trustedDirs []string

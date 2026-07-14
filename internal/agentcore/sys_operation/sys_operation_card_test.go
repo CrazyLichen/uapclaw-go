@@ -153,30 +153,43 @@ func TestToolIdProxy_ToolID(t *testing.T) {
 
 // TestGenerateIsolationKeyTemplate_SYSTEM 测试系统级容器生成隔离键模板
 func TestGenerateIsolationKeyTemplate_SYSTEM(t *testing.T) {
-	result := generateIsolationKeyTemplate("prefix1", ContainerScopeSystem, "", "docker", "python")
+	result, err := generateIsolationKeyTemplate("prefix1", ContainerScopeSystem, "", "docker", "python")
+	require.NoError(t, err)
 	assert.Equal(t, "system_docker_python_prefix1_system", result)
 }
 
 // TestGenerateIsolationKeyTemplate_SESSION 测试会话级容器生成隔离键模板
 func TestGenerateIsolationKeyTemplate_SESSION(t *testing.T) {
-	result := generateIsolationKeyTemplate("prefix2", ContainerScopeSession, "", "k8s", "node")
+	result, err := generateIsolationKeyTemplate("prefix2", ContainerScopeSession, "", "k8s", "node")
+	require.NoError(t, err)
 	assert.Equal(t, "session_k8s_node_prefix2_{session_id}", result)
 }
 
 // TestGenerateIsolationKeyTemplate_CUSTOM 测试自定义容器生成隔离键模板
 func TestGenerateIsolationKeyTemplate_CUSTOM(t *testing.T) {
-	result := generateIsolationKeyTemplate("prefix3", ContainerScopeCustom, "my_custom_id", "docker", "go")
+	result, err := generateIsolationKeyTemplate("prefix3", ContainerScopeCustom, "my_custom_id", "docker", "go")
+	require.NoError(t, err)
 	assert.Equal(t, "custom_docker_go_prefix3_my_custom_id", result)
+}
+
+// TestGenerateIsolationKeyTemplate_CUSTOM空customID 测试自定义容器作用域空 customID 返回错误
+// 对齐 Python: container_scope is CUSTOM but custom_id is None → raise ValueError
+func TestGenerateIsolationKeyTemplate_CUSTOM空customID(t *testing.T) {
+	_, err := generateIsolationKeyTemplate("prefix3", ContainerScopeCustom, "", "docker", "go")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "container_scope is CUSTOM but custom_id is empty")
 }
 
 // TestGenerateIsolationKeyTemplate_空前缀 测试空前缀生成隔离键模板
 func TestGenerateIsolationKeyTemplate_空前缀(t *testing.T) {
-	result := generateIsolationKeyTemplate("", ContainerScopeSystem, "", "docker", "python")
+	result, err := generateIsolationKeyTemplate("", ContainerScopeSystem, "", "docker", "python")
+	require.NoError(t, err)
 	assert.Equal(t, "system_docker_python_system", result)
 }
 
 // TestGenerateIsolationKeyTemplate_未知作用域 测试未知容器作用域使用 customID
 func TestGenerateIsolationKeyTemplate_未知作用域(t *testing.T) {
-	result := generateIsolationKeyTemplate("pfx", ContainerScope(99), "fallback_id", "docker", "sh")
+	result, err := generateIsolationKeyTemplate("pfx", ContainerScope(99), "fallback_id", "docker", "sh")
+	require.NoError(t, err)
 	assert.Equal(t, "unknown(99)_docker_sh_pfx_fallback_id", result)
 }

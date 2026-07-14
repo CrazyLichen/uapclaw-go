@@ -212,3 +212,75 @@ func TestSendChannelNotice(t *testing.T) {
 		t.Fatal("未收到通知")
 	}
 }
+
+// ──────────────────────────── 非导出函数测试 ────────────────────────────
+
+// TestSwitchMode_模式家族映射 测试 /switch 命令根据当前模式家族决定目标模式
+func TestSwitchMode_模式家族映射(t *testing.T) {
+	tests := []struct {
+		name        string
+		currentMode ChannelMode
+		switchCmd   string
+		wantMode    ChannelMode
+		wantInvalid bool
+	}{
+		// agent 家族 → /switch plan → agent.plan
+		{name: "agent_plan_切换plan", currentMode: ChannelModeAgentPlan, switchCmd: "plan", wantMode: ChannelModeAgentPlan},
+		{name: "agent_fast_切换plan", currentMode: ChannelModeAgentFast, switchCmd: "plan", wantMode: ChannelModeAgentPlan},
+		// code 家族 → /switch plan → code.plan
+		{name: "code_plan_切换plan", currentMode: ChannelModeCodePlan, switchCmd: "plan", wantMode: ChannelModeCodePlan},
+		{name: "code_normal_切换plan", currentMode: ChannelModeCodeNormal, switchCmd: "plan", wantMode: ChannelModeCodePlan},
+		{name: "code_team_切换plan", currentMode: ChannelModeCodeTeam, switchCmd: "plan", wantMode: ChannelModeCodePlan},
+		// agent 家族 → /switch fast → agent.fast
+		{name: "agent_plan_切换fast", currentMode: ChannelModeAgentPlan, switchCmd: "fast", wantMode: ChannelModeAgentFast},
+		{name: "agent_fast_切换fast", currentMode: ChannelModeAgentFast, switchCmd: "fast", wantMode: ChannelModeAgentFast},
+		// code 家族 /switch fast → 非法
+		{name: "code_normal_切换fast_非法", currentMode: ChannelModeCodeNormal, switchCmd: "fast", wantInvalid: true},
+		// code 家族 → /switch normal → code.normal
+		{name: "code_plan_切换normal", currentMode: ChannelModeCodePlan, switchCmd: "normal", wantMode: ChannelModeCodeNormal},
+		{name: "code_normal_切换normal", currentMode: ChannelModeCodeNormal, switchCmd: "normal", wantMode: ChannelModeCodeNormal},
+		{name: "code_team_切换normal", currentMode: ChannelModeCodeTeam, switchCmd: "normal", wantMode: ChannelModeCodeNormal},
+		// agent 家族 /switch normal → 非法
+		{name: "agent_plan_切换normal_非法", currentMode: ChannelModeAgentPlan, switchCmd: "normal", wantInvalid: true},
+		// code 家族 → /switch team → code.team
+		{name: "code_plan_切换team", currentMode: ChannelModeCodePlan, switchCmd: "team", wantMode: ChannelModeCodeTeam},
+		{name: "code_normal_切换team", currentMode: ChannelModeCodeNormal, switchCmd: "team", wantMode: ChannelModeCodeTeam},
+		{name: "code_team_切换team", currentMode: ChannelModeCodeTeam, switchCmd: "team", wantMode: ChannelModeCodeTeam},
+		// agent 家族 /switch team → 非法
+		{name: "agent_fast_切换team_非法", currentMode: ChannelModeAgentFast, switchCmd: "team", wantInvalid: true},
+		// team 模式 /switch fast → 非法
+		{name: "team_切换fast_非法", currentMode: ChannelModeTeam, switchCmd: "fast", wantInvalid: true},
+		// team 模式 /switch normal → 非法
+		{name: "team_切换normal_非法", currentMode: ChannelModeTeam, switchCmd: "normal", wantInvalid: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mh := createTestMessageHandlerWithTransport()
+			go func() {
+				for range mh.robotMessages {
+				}
+			}()
+
+			msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatSend,
+				json.RawMessage(`{"content":"/switch `+tt.switchCmd+`"}`))
+
+			// 设置当前模式
+			state := mh.GetOrCreateChannelState(msg)
+			state.Mode = tt.currentMode
+
+			parsed := command_parser.ParsedChannelControl{
+				Action:            command_parser.ActionSwitchOK,
+				SwitchSubcommand:  tt.switchCmd,
+			}
+			mh.modeChangeCancelAndNotice(msg, parsed)
+
+			if tt.wantInvalid {
+				// 非法指令时模式不应变更
+				assert.Equal(t, tt.currentMode, state.Mode, "非法切换时模式不应变更")
+			} else {
+				assert.Equal(t, tt.wantMode, state.Mode, "模式应变更为目标模式")
+			}
+		})
+	}
+}
