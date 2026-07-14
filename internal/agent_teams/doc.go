@@ -15,6 +15,7 @@
 //	├── constants.go        # 保留名常量
 //	├── context.go          # session_id contextvar
 //	├── i18n.go             # 多语言 i18n 支持
+//	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）
 //	├── interaction/        # ⤵️ 回填: 9.59 团队交互
