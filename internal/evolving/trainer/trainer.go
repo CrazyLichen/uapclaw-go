@@ -3,6 +3,8 @@ package trainer
 import (
 	"context"
 	"errors"
+
+	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -22,8 +24,8 @@ type Trainer struct {
 	// 依赖 9.70c Updater Protocol，暂用 any 占位，填充后替换为 evolving/updater.Updater
 	updater any
 	// evaluator 评估器。
-	// 依赖 9.71 BaseEvaluator，暂用 any 占位，填充后替换为 evolving/evaluator.BaseEvaluator
-	evaluator any
+	// 对应 Python: evolving/evaluator.BaseEvaluator
+	evaluator evaluator.BaseEvaluator
 	// extractor 轨迹提取器。
 	// 依赖 9.77 Trajectory，暂用 any 占位，填充后替换为 evolving/trajectory.Extractor
 	extractor any
@@ -173,9 +175,8 @@ func WithUpdater(updater any) TrainerOption {
 }
 
 // WithEvaluator 设置评估器。
-// 依赖 9.71 BaseEvaluator，暂用 any 占位。
-func WithEvaluator(evaluator any) TrainerOption {
-	return func(t *Trainer) { t.evaluator = evaluator }
+func WithEvaluator(e evaluator.BaseEvaluator) TrainerOption {
+	return func(t *Trainer) { t.evaluator = e }
 }
 
 // WithExtractor 设置轨迹提取器。
