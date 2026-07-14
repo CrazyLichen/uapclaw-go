@@ -15,6 +15,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// streamTaskEntry 流式任务条目，包含取消函数和退出等待。
+// 对齐 Python: asyncio.Task 的 cancel + gather 等待语义
+type streamTaskEntry struct {
+	// cancel 取消流式任务的 context.CancelFunc
+	cancel context.CancelFunc
+	// wg 用于等待流式处理 goroutine 完全退出
+	wg sync.WaitGroup
+}
+
 // OutboundPipeline 出站管道接口，对齐 Python _outbound_pipeline。
 //
 // 预留给 11.12 IM Pipeline 回填，当前未使用。
@@ -42,8 +51,8 @@ type MessageHandler struct {
 
 	// streamMu 流式任务锁
 	streamMu sync.RWMutex
-	// streamTasks 流式任务追踪：requestID → cancel
-	streamTasks map[string]context.CancelFunc
+	// streamTasks 流式任务追踪：requestID → streamTaskEntry
+	streamTasks map[string]*streamTaskEntry
 	// streamSessions 流式会话映射：requestID → sessionID
 	streamSessions map[string]string
 	// streamMetadata 流式元数据映射：requestID → metadata
@@ -109,7 +118,7 @@ func NewMessageHandler(agentClient *routing.AgentClient) *MessageHandler {
 		agentClient:                 agentClient,
 		userMessages:                make(chan *schema.Message, 256),
 		robotMessages:               make(chan *schema.Message, 256),
-		streamTasks:                 make(map[string]context.CancelFunc),
+		streamTasks:                 make(map[string]*streamTaskEntry),
 		streamSessions:              make(map[string]string),
 		streamMetadata:              make(map[string]map[string]any),
 		streamModes:                 make(map[string]string),
@@ -256,16 +265,16 @@ func (mh *MessageHandler) cancelAllStreamTasks() {
 	mh.streamMu.Lock()
 	defer mh.streamMu.Unlock()
 
-	for reqID, cancel := range mh.streamTasks {
-		if cancel != nil {
-			cancel()
+	for reqID, entry := range mh.streamTasks {
+		if entry != nil && entry.cancel != nil {
+			entry.cancel()
 		}
 		logger.Debug(logComponent).
 			Str("event_type", "stream_task_cancelled").
 			Str("request_id", reqID).
 			Msg("流式任务已取消")
 	}
-	mh.streamTasks = make(map[string]context.CancelFunc)
+	mh.streamTasks = make(map[string]*streamTaskEntry)
 	mh.streamSessions = make(map[string]string)
 	mh.streamMetadata = make(map[string]map[string]any)
 	mh.streamModes = make(map[string]string)

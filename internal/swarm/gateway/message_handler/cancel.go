@@ -136,7 +136,7 @@ func (mh *MessageHandler) collectStreamTasksForSession(sessionID string) []strin
 // cancelStreamTask 取消单个流式任务
 func (mh *MessageHandler) cancelStreamTask(requestID string) {
 	mh.streamMu.Lock()
-	cancel, exists := mh.streamTasks[requestID]
+	entry, exists := mh.streamTasks[requestID]
 	if exists {
 		delete(mh.streamTasks, requestID)
 		delete(mh.streamSessions, requestID)
@@ -145,12 +145,14 @@ func (mh *MessageHandler) cancelStreamTask(requestID string) {
 	}
 	mh.streamMu.Unlock()
 
-	if exists && cancel != nil {
-		cancel()
+	if exists && entry != nil && entry.cancel != nil {
+		entry.cancel()
+		// 对齐 Python: await asyncio.gather(*tasks) — 等待 goroutine 完全退出
+		entry.wg.Wait()
 		logger.Debug(logComponent).
 			Str("event_type", "stream_task_cancelled").
 			Str("request_id", requestID).
-			Msg("流式任务已取消")
+			Msg("流式任务已取消并等待退出")
 	}
 }
 
@@ -231,6 +233,32 @@ func (mh *MessageHandler) sendInterruptToAgent(ctx context.Context, msg *schema.
 			Str("event_type", "cancel_send_error").
 			Err(err).
 			Str("session_id", msg.SessionID).
+			Msg("AgentServer 中断请求失败(忽略)")
+		return
+	}
+	logger.Info(logComponent).
+		Str("event_type", "cancel_response_discarded").
+		Str("request_id", resp.RequestID).
+		Bool("ok", resp.OK).
+		Msg("AgentServer 中断响应(已丢弃)")
+}
+
+// sendInterruptToAgentWithEnvelope 使用预构建的 E2A 信封发送中断请求。
+// 对齐 Python: _send_interrupt_to_agent(env_interrupt) — 接收已包含 mode 注入的信封
+func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, envelope *e2a.E2AEnvelope, intent string) {
+	// 在 params 中注入 intent
+	if envelope.Params != nil {
+		envelope.Params["intent"] = intent
+	}
+
+	envelope.IsStream = false
+
+	resp, err := mh.agentClient.SendRequest(ctx, envelope)
+	if err != nil {
+		logger.Warn(logComponent).
+			Str("event_type", "cancel_send_error").
+			Err(err).
+			Str("session_id", envelope.SessionID).
 			Msg("AgentServer 中断请求失败(忽略)")
 		return
 	}

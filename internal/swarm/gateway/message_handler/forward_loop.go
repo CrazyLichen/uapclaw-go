@@ -144,7 +144,6 @@ func (mh *MessageHandler) handleChatSend(ctx context.Context, msg *schema.Messag
 		mh.streamEmitsProcessingStatus[streamRid] = emitProcessingStatus
 		mh.streamModes[streamRid] = mh.extractModeFromParams(msg)
 		go mh.processStream(ctx, msg, env, emitProcessingStatus)
-
 		logger.Info(logComponent).
 			Str("event_type", "stream_task_started").
 			Str("request_id", streamRid).
@@ -453,9 +452,10 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 		}
 	}
 
-	_ = e2a.MessageToE2AOrFallback(agentMsg)
-	// fire-and-forget：传入 msg 和 intent，sendInterruptToAgent 从 msg 提取 mode/trusted_dirs
-	go mh.sendInterruptToAgent(ctx, msg, intent)
+	// 对齐 Python: env_interrupt = message_to_e2a(agent_msg)
+	// 将 agentMsg（已注入 mode）转为 E2A 信封后传给 sendInterruptToAgent
+	envInterrupt := e2a.MessageToE2AOrFallback(agentMsg)
+	go mh.sendInterruptToAgentWithEnvelope(ctx, envInterrupt, intent)
 
 	// 检查当前 session 是否有活跃流式任务
 	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)
@@ -572,9 +572,11 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 	requestMetadata := msg.Metadata
 
 	streamCtx, streamCancel := context.WithCancel(ctx)
-	// 更新 streamTasks 的 cancel func
+	// 更新 streamTasks 的 entry（包含 cancel 和 wg）
+	entry := &streamTaskEntry{cancel: streamCancel}
+	entry.wg.Add(1)
 	mh.streamMu.Lock()
-	mh.streamTasks[requestID] = streamCancel
+	mh.streamTasks[requestID] = entry
 	mh.streamMu.Unlock()
 
 	// 追踪状态（供 defer 使用）
@@ -649,6 +651,10 @@ func (mh *MessageHandler) processStream(ctx context.Context, msg *schema.Message
 func (mh *MessageHandler) streamFinalCleanup(requestID, sessionID string, emitProcessingStatus bool, state *streamFinalState) {
 	// 清理状态
 	mh.streamMu.Lock()
+	// 对齐 Python: asyncio.gather 等待 — 通知 goroutine 已退出
+	if entry, ok := mh.streamTasks[requestID]; ok {
+		entry.wg.Done()
+	}
 	delete(mh.streamTasks, requestID)
 	delete(mh.streamSessions, requestID)
 	delete(mh.streamMetadata, requestID)
@@ -709,10 +715,10 @@ func (mh *MessageHandler) processNonStreamRequest(ctx context.Context, msg *sche
 }
 
 // registerStreamTask 注册流式任务
-func (mh *MessageHandler) registerStreamTask(requestID, sessionID string, metadata map[string]any, cancel context.CancelFunc) {
+func (mh *MessageHandler) registerStreamTask(requestID, sessionID string, metadata map[string]any, entry *streamTaskEntry) {
 	mh.streamMu.Lock()
 	defer mh.streamMu.Unlock()
-	mh.streamTasks[requestID] = cancel
+	mh.streamTasks[requestID] = entry
 	mh.streamSessions[requestID] = sessionID
 	if metadata != nil {
 		mh.streamMetadata[requestID] = metadata

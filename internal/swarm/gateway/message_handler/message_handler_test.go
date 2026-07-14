@@ -83,7 +83,10 @@ func TestCancelAgentWorkForSession_空Session(t *testing.T) {
 // TestCancelAgentWorkForSession_有流式任务 测试取消流式任务
 func TestCancelAgentWorkForSession_有流式任务(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	mh.registerStreamTask("req-1", "sess-1", nil, func() {})
+	entry := &streamTaskEntry{cancel: func() {}}
+	entry.wg.Add(1)
+	mh.registerStreamTask("req-1", "sess-1", nil, entry)
+	entry.wg.Done() // 模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
 
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
 	mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
@@ -126,7 +129,7 @@ func TestHandleChannelControl_非受控渠道(t *testing.T) {
 func TestRegisterStreamTask(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	metadata := map[string]any{"key": "value"}
-	mh.registerStreamTask("req-1", "sess-1", metadata, func() {})
+	mh.registerStreamTask("req-1", "sess-1", metadata, &streamTaskEntry{cancel: func() {}})
 
 	sid := mh.getStreamSessionID("req-1")
 	assert.Equal(t, "sess-1", sid)
