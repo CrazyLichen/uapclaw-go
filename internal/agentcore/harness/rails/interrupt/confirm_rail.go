@@ -179,23 +179,27 @@ func isAutoConfirmed(config map[string]any, key string) bool {
 }
 
 // confirmPayloadSchema 返回 ConfirmPayload 的 JSON Schema。
+// 严格对齐 Python Pydantic ConfirmPayload.model_json_schema() 输出。
 func confirmPayloadSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"approved": map[string]any{
-				"type":        "boolean",
-				"description": "是否批准",
+				"title": "Approved",
+				"type":  "boolean",
 			},
 			"feedback": map[string]any{
-				"type":        "string",
-				"description": "反馈信息",
+				"default": "",
+				"title":   "Feedback",
+				"type":    "string",
 			},
 			"auto_confirm": map[string]any{
-				"type":        "boolean",
-				"description": "是否自动确认（始终允许）",
+				"default": false,
+				"title":   "Auto Confirm",
+				"type":    "boolean",
 			},
 		},
 		"required": []string{"approved"},
+		"title":    "ConfirmPayload",
 	}
 }

@@ -263,12 +263,24 @@ func TestAskUserRail_buildAskRequest(t *testing.T) {
 // ──────────────────────────── AskUserPayload Schema ────────────────────────────
 
 // TestAskUserPayloadSchema 验证 AskUserPayload 的 JSON Schema
+// 严格对齐 Python Pydantic AskUserPayload.model_json_schema() 输出
 func TestAskUserPayloadSchema(t *testing.T) {
 	schema := askUserPayloadSchema()
 	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, "AskUserPayload", schema["title"])
+
 	props, ok := schema["properties"].(map[string]any)
 	assert.True(t, ok)
-	assert.Contains(t, props, "answers")
+
+	// answers 字段
+	answers, ok := props["answers"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "object", answers["type"])
+	assert.Equal(t, "Question text to answer mapping", answers["description"])
+	assert.Equal(t, "Answers", answers["title"])
+	additionalProps, ok := answers["additionalProperties"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "string", additionalProps["type"])
 }
 
 // ──────────────────────────── InterruptDecision 接口 ────────────────────────────

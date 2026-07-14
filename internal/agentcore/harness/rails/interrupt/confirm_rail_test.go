@@ -198,14 +198,39 @@ func TestConfirmInterruptRail_parseConfirmInput_ConfirmPayload(t *testing.T) {
 // ──────────────────────────── ConfirmPayload Schema ────────────────────────────
 
 // TestConfirmPayloadSchema 验证 ConfirmPayload 的 JSON Schema
+// 严格对齐 Python Pydantic ConfirmPayload.model_json_schema() 输出
 func TestConfirmPayloadSchema(t *testing.T) {
 	schema := confirmPayloadSchema()
 	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, "ConfirmPayload", schema["title"])
+
 	props, ok := schema["properties"].(map[string]any)
 	assert.True(t, ok)
-	assert.Contains(t, props, "approved")
-	assert.Contains(t, props, "feedback")
-	assert.Contains(t, props, "auto_confirm")
+
+	// approved 字段
+	approved, ok := props["approved"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "boolean", approved["type"])
+	assert.Equal(t, "Approved", approved["title"])
+
+	// feedback 字段
+	feedback, ok := props["feedback"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "string", feedback["type"])
+	assert.Equal(t, "Feedback", feedback["title"])
+	assert.Equal(t, "", feedback["default"])
+
+	// auto_confirm 字段
+	autoConfirm, ok := props["auto_confirm"].(map[string]any)
+	assert.True(t, ok)
+	assert.Equal(t, "boolean", autoConfirm["type"])
+	assert.Equal(t, "Auto Confirm", autoConfirm["title"])
+	assert.Equal(t, false, autoConfirm["default"])
+
+	// required
+	required, ok := schema["required"].([]string)
+	assert.True(t, ok)
+	assert.Equal(t, []string{"approved"}, required)
 }
 
 // ──────────────────────────── InterruptRequester 接口 ────────────────────────────

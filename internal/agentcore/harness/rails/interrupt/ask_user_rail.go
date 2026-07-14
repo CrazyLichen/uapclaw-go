@@ -325,18 +325,19 @@ func (r *AskUserRail) buildAskRequest(toolCall *llmschema.ToolCall) *AskUserRequ
 }
 
 // askUserPayloadSchema 返回 AskUserPayload 的 JSON Schema。
+// 严格对齐 Python Pydantic AskUserPayload.model_json_schema() 输出。
 func askUserPayloadSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"answers": map[string]any{
-				"type":        "object",
-				"description": "问题文本到回答的映射",
-				"additionalProperties": map[string]any{
-					"type": "string",
-				},
+				"type":                 "object",
+				"additionalProperties": map[string]any{"type": "string"},
+				"description":          "Question text to answer mapping",
+				"title":                "Answers",
 			},
 		},
+		"title": "AskUserPayload",
 	}
 }
 

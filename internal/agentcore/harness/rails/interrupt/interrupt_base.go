@@ -196,6 +196,9 @@ func (r *BaseInterruptRail) applyDecision(
 ) {
 	switch d := decision.(type) {
 	case *ApproveResult:
+		// 注意：Python 用 new_args is not None 判断（空字符串也会替换参数），
+		// Go 用 NewArgs != "" 判断（空字符串不替换）。
+		// 当前所有调用方都不传空字符串，行为一致。如需严格对齐，改为 *string。
 		if d.NewArgs != "" {
 			toolInputs.ToolArgs = d.NewArgs
 		}
