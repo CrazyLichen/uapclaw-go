@@ -589,7 +589,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | **9.x TeamAgent 应用层** | — | | | |
 | 9.55 | ☐ | TeamAgent | 生产级团队 Agent | `openjiuwen/agent_teams/agent/team_agent.py` |
 | 9.56 | ✅ | Blueprint | 团队蓝图定义 | `openjiuwen/agent_teams/agent/blueprint.py` |
-| 9.57 | ☐ | AgentConfigurator | Agent 配置器 | `openjiuwen/agent_teams/agent/` |
+| 9.57 | ✅ | AgentConfigurator | Agent 配置器（骨架+TODO占位） | `openjiuwen/agent_teams/agent/` |
 | 9.58 | ☐ | SpawnManager | 子进程管理 | `openjiuwen/agent_teams/spawn/` |
 | 9.59 | ☐ | SessionManager | 团队会话管理 | `openjiuwen/agent_teams/interaction/` |
 | 9.60 | ☐ | StreamController | 流式控制 | `openjiuwen/agent_teams/` |

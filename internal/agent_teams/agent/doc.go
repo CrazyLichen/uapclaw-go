@@ -14,14 +14,16 @@
 // 文件目录：
 //
 //	agent/
-//	├── doc.go              # 包文档
-//	├── blueprint.go        # TeamAgentBlueprint 不可变蓝图
-//	├── team_agent.go       # TeamAgent 主体
-//	├── state.go            # TeamAgentState 可变状态
-//	├── member.go           # TeamMember 成员状态管理
-//	├── member_factory.go   # CreateMemberHandle 工厂
-//	├── infra.go            # TeamInfra 进程级基础设施
-//	└── resources.go        # PrivateAgentResources 实例级资源
+//	├── doc.go                # 包文档
+//	├── blueprint.go          # TeamAgentBlueprint 不可变蓝图
+//	├── team_agent.go         # TeamAgent 主体
+//	├── state.go              # TeamAgentState 可变状态
+//	├── member.go             # TeamMember 成员状态管理
+//	├── member_factory.go     # CreateMemberHandle 工厂
+//	├── infra.go              # TeamInfra 进程级基础设施
+//	├── resources.go          # PrivateAgentResources 实例级资源
+//	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
+//	└── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/
 package agent

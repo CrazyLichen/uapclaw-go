@@ -11,7 +11,8 @@ package agent
 // （agent_teams.GetSessionID）。
 // 在 state 上缓存字符串会重新引入"双真实来源"问题。
 type TeamAgentState struct {
-	// TeamSession 团队会话（⤵️ 回填: 9.59 — AgentTeamSession 类型）
+	// TeamSession 团队会话
+	// TODO(#9.59): AgentTeamSession 类型
 	TeamSession any
 	// TeamMember 当前成员句柄
 	TeamMember *TeamMember

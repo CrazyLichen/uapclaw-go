@@ -23,8 +23,8 @@ func CreateMemberHandle(
 	infra *TeamInfra,
 	agentCard *agentschema.AgentCard,
 ) *TeamMember {
-	// ⤵️ 回填: 9.57 — infra.TeamBackend 为 nil 时返回 nil
-	// ⤵️ 回填: 9.57 — 从 infra.TeamBackend 获取 db/messager/team_name 构造 TeamMember
+	// TODO(#9.57): infra.TeamBackend 为 nil 时返回 nil
+	// TODO(#9.57): 从 infra.TeamBackend 获取 db/messager/team_name 构造 TeamMember
 	if infra.TeamBackend == nil {
 		return nil
 	}

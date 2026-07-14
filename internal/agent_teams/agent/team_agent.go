@@ -14,24 +14,25 @@
 // 文件目录：
 //
 //	agent/
-//	├── doc.go              # 包文档
-//	├── team_agent.go       # TeamAgent 主体（9.55）
-//	├── state.go            # TeamAgentState 可变状态（9.55）
-//	├── member.go           # TeamMember 成员状态管理（9.55）
-//	├── member_factory.go   # create_member_handle 工厂（9.55）
-//	├── blueprint.go        # TeamAgentBlueprint 不可变蓝图（9.55）
-//	├── infra.go            # TeamInfra 进程级基础设施（9.55）
-//	├── resources.go        # PrivateAgentResources 实例级资源（9.55）
-//	├── agent_configurator.go # ⤵️ 回填: 9.57 AgentConfigurator
-//	├── spawn_manager.go      # ⤵️ 回填: 9.58 SpawnManager
-//	├── session_manager.go    # ⤵️ 回填: 9.59 SessionManager
-//	├── stream_controller.go  # ⤵️ 回填: 9.60 StreamController
-//	├── recovery_manager.go   # ⤵️ 回填: 9.61 RecoveryManager
-//	└── coordination/         # ⤵️ 回填: 9.62-9.63 协调子系统
-//	    ├── kernel.go         # ⤵️ 回填: 9.62 CoordinationKernel
-//	    ├── event_bus.go      # ⤵️ 回填: 9.63 EventBus
-//	    ├── dispatcher.go     # ⤵️ 回填: 9.63 EventDispatcher
-//	    └── handlers/         # ⤵️ 回填: 9.63 事件处理器
+//	├── doc.go                # 包文档
+//	├── team_agent.go         # TeamAgent 主体（9.55）
+//	├── state.go              # TeamAgentState 可变状态（9.55）
+//	├── member.go             # TeamMember 成员状态管理（9.55）
+//	├── member_factory.go     # create_member_handle 工厂（9.55）
+//	├── blueprint.go          # TeamAgentBlueprint 不可变蓝图（9.55）
+//	├── infra.go              # TeamInfra 进程级基础设施（9.55）
+//	├── resources.go          # PrivateAgentResources 实例级资源（9.55）
+//	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
+//	├── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
+//	├── spawn_manager.go      # TODO(#9.58) SpawnManager
+//	├── session_manager.go    # TODO(#9.59) SessionManager
+//	├── stream_controller.go  # TODO(#9.60) StreamController
+//	├── recovery_manager.go   # TODO(#9.61) RecoveryManager
+//	└── coordination/         # TODO(#9.62-9.63) 协调子系统
+//	    ├── kernel.go         # TODO(#9.62) CoordinationKernel
+//	    ├── event_bus.go      # TODO(#9.63) EventBus
+//	    ├── dispatcher.go     # TODO(#9.63) EventDispatcher
+//	    └── handlers/         # TODO(#9.63) 事件处理器
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/
 package agent
@@ -39,6 +40,7 @@ package agent
 import (
 	"context"
 
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -58,21 +60,26 @@ import (
 type TeamAgent struct {
 	// card Agent 身份卡片
 	card *schema.AgentCard
-	// deepAgent 内层 DeepAgent 实例（⤵️ 回填: 9.57 — AgentConfigurator 构建后赋值）
+	// deepAgent 内层 DeepAgent 实例（TODO(#9.57): AgentConfigurator 构建后赋值）
 	deepAgent hinterfaces.DeepAgentInterface
-	// configurator Agent 配置器（⤵️ 回填: 9.57 — AgentConfigurator 类型）
-	configurator any
+	// configurator Agent 配置器
+	configurator *AgentConfigurator
 	// state 可变运行时状态
 	state *TeamAgentState
-	// spawnManager 子进程管理器（⤵️ 回填: 9.58 — SpawnManager 类型）
+	// spawnManager 子进程管理器
+	// TODO(#9.58): SpawnManager 类型
 	spawnManager any
-	// recoveryManager 恢复管理器（⤵️ 回填: 9.61 — RecoveryManager 类型）
+	// recoveryManager 恢复管理器
+	// TODO(#9.61): RecoveryManager 类型
 	recoveryManager any
-	// sessionManager 会话管理器（⤵️ 回填: 9.59 — SessionManager 类型）
+	// sessionManager 会话管理器
+	// TODO(#9.59): SessionManager 类型
 	sessionManager any
-	// streamController 流式控制器（⤵️ 回填: 9.60 — StreamController 类型）
+	// streamController 流式控制器
+	// TODO(#9.60): StreamController 类型
 	streamController any
-	// coordination 协调内核（⤵️ 回填: 9.62 — CoordinationKernel 类型）
+	// coordination 协调内核
+	// TODO(#9.62): CoordinationKernel 类型
 	coordination any
 }
 
@@ -82,15 +89,15 @@ type TeamAgent struct {
 // 对齐 Python: TeamAgent.__init__(card)
 func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	a := &TeamAgent{
-		card:  card,
-		state: NewTeamAgentState(),
+		card:         card,
+		state:        NewTeamAgentState(),
+		configurator: NewAgentConfigurator(card),
 	}
-	// ⤵️ 回填: 9.57 — 构建 AgentConfigurator(card)
-	// ⤵️ 回填: 9.58 — 构建 SpawnManager(state, configurator, teamAgentGetter)
-	// ⤵️ 回填: 9.61 — 构建 RecoveryManager(configurator, spawnManager)
-	// ⤵️ 回填: 9.59 — 构建 SessionManager(state, configurator, recoveryManager)
-	// ⤵️ 回填: 9.60 — 构建 StreamController(blueprintGetter, state, resources, ...)
-	// ⤵️ 回填: 9.62 — 构建 CoordinationKernel(self)
+	// TODO(#9.58): 构建 SpawnManager(state, configurator, teamAgentGetter)
+	// TODO(#9.61): 构建 RecoveryManager(configurator, spawnManager)
+	// TODO(#9.59): 构建 SessionManager(state, configurator, recoveryManager)
+	// TODO(#9.60): 构建 StreamController(blueprintGetter, state, resources, ...)
+	// TODO(#9.62): 构建 CoordinationKernel(self)
 	return a
 }
 
@@ -101,7 +108,9 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 // Blueprint 返回静态装配蓝图，configure() 前为 nil。
 // 对齐 Python: TeamAgent.blueprint property
 func (a *TeamAgent) Blueprint() *TeamAgentBlueprint {
-	// ⤵️ 回填: 9.57 — return configurator.blueprint
+	if a.configurator != nil {
+		return a.configurator.Blueprint()
+	}
 	return nil
 }
 
@@ -114,14 +123,18 @@ func (a *TeamAgent) State() *TeamAgentState {
 // Infra 返回每进程团队基础设施容器。
 // 对齐 Python: TeamAgent.infra property
 func (a *TeamAgent) Infra() *TeamInfra {
-	// ⤵️ 回填: 9.57 — return configurator.infra
+	if a.configurator != nil {
+		return a.configurator.Infra()
+	}
 	return nil
 }
 
 // Resources 返回每实例运行时资源容器。
 // 对齐 Python: TeamAgent.resources property
 func (a *TeamAgent) Resources() *PrivateAgentResources {
-	// ⤵️ 回填: 9.57 — return configurator.resources
+	if a.configurator != nil {
+		return a.configurator.Resources()
+	}
 	return nil
 }
 
@@ -130,29 +143,35 @@ func (a *TeamAgent) Resources() *PrivateAgentResources {
 //
 // 所有对 DeepAgent 运行时的访问（config、model、workspace、
 // rails、streaming）必须通过此对象。
-func (a *TeamAgent) Harness() any {
-	// ⤵️ 回填: 9.57 — return configurator.harness (TeamHarness 类型)
+func (a *TeamAgent) Harness() *agentteams.TeamHarness {
+	if a.configurator != nil {
+		return a.configurator.Harness()
+	}
 	return nil
 }
 
 // Spec 返回 TeamAgentSpec。
 // 对齐 Python: TeamAgent.spec property
 func (a *TeamAgent) Spec() *atschema.TeamAgentSpec {
-	// ⤵️ 回填: 9.57 — return configurator.spec
+	if a.configurator != nil {
+		return a.configurator.Spec()
+	}
 	return nil
 }
 
 // RuntimeContext 返回 TeamRuntimeContext。
 // 对齐 Python: TeamAgent.runtime_context property
 func (a *TeamAgent) RuntimeContext() *atschema.TeamRuntimeContext {
-	// ⤵️ 回填: 9.57 — return configurator.ctx
+	if a.configurator != nil {
+		return a.configurator.RuntimeContext()
+	}
 	return nil
 }
 
 // Coordination 返回协调内核。
 // 对齐 Python: TeamAgent.coordination property
 func (a *TeamAgent) Coordination() any {
-	// ⤵️ 回填: 9.62 — return coordination (CoordinationKernel 类型)
+	// TODO(#9.62): return coordination (CoordinationKernel 类型)
 	return a.coordination
 }
 
@@ -162,63 +181,77 @@ func (a *TeamAgent) Coordination() any {
 // 保留为测试和遗留调用者的公开访问器；
 // 新代码应通过 coordination 访问。
 func (a *TeamAgent) CoordinationLoop() any {
-	// ⤵️ 回填: 9.62 — return coordination.event_bus
+	// TODO(#9.62): return coordination.event_bus
 	return nil
 }
 
 // Role 返回团队角色。
 // 对齐 Python: TeamAgent.role property
 func (a *TeamAgent) Role() atschema.TeamRole {
-	// ⤵️ 回填: 9.57 — return configurator.role
+	if a.configurator != nil {
+		return a.configurator.Role()
+	}
 	return atschema.TeamRoleLeader
 }
 
 // Lifecycle 返回生命周期模式。
 // 对齐 Python: TeamAgent.lifecycle property
 func (a *TeamAgent) Lifecycle() string {
-	// ⤵️ 回填: 9.57 — return configurator.lifecycle
+	if a.configurator != nil {
+		return a.configurator.Lifecycle()
+	}
 	return ""
 }
 
 // TeamSpec 返回 TeamSpec。
 // 对齐 Python: TeamAgent.team_spec property
 func (a *TeamAgent) TeamSpec() *atschema.TeamSpec {
-	// ⤵️ 回填: 9.57 — return configurator.team_spec
+	if a.configurator != nil {
+		return a.configurator.TeamSpec()
+	}
 	return nil
 }
 
 // MemberName 返回成员名。
 // 对齐 Python: TeamAgent.member_name property
 func (a *TeamAgent) MemberName() string {
-	// ⤵️ 回填: 9.57 — return configurator.member_name
+	if a.configurator != nil {
+		return a.configurator.MemberName()
+	}
 	return ""
 }
 
 // MessageManager 返回消息管理器。
 // 对齐 Python: TeamAgent.message_manager property
 func (a *TeamAgent) MessageManager() any {
-	// ⤵️ 回填: 9.57 — return configurator.message_manager
+	if a.configurator != nil {
+		return a.configurator.MessageManager()
+	}
 	return nil
 }
 
 // TaskManager 返回任务管理器。
 // 对齐 Python: TeamAgent.task_manager property
 func (a *TeamAgent) TaskManager() any {
-	// ⤵️ 回填: 9.57 — return configurator.task_manager
+	if a.configurator != nil {
+		return a.configurator.TaskManager()
+	}
 	return nil
 }
 
 // TeamBackend 返回 TeamBackend。
 // 对齐 Python: TeamAgent.team_backend property
 func (a *TeamAgent) TeamBackend() any {
-	// ⤵️ 回填: 9.57 — return configurator.team_backend (TeamBackend 类型)
+	if a.configurator != nil {
+		return a.configurator.TeamBackend()
+	}
 	return nil
 }
 
 // SessionID 返回当前会话 ID（从 agent_teams contextvar 读取）。
 // 对齐 Python: TeamAgent.session_id property
 func (a *TeamAgent) SessionID(ctx context.Context) string {
-	// ⤵️ 回填: 9.59 — 从 agent_teams.GetSessionID(ctx) 读取
+	// TODO(#9.59): 从 agent_teams.GetSessionID(ctx) 读取
 	return ""
 }
 
@@ -267,7 +300,9 @@ func (a *TeamAgent) PendingUserQuery() string {
 // TeamName 返回团队名。
 // 对齐 Python: TeamAgent.team_name property
 func (a *TeamAgent) TeamName() string {
-	// ⤵️ 回填: 9.57 — return configurator.team_name
+	if a.configurator != nil {
+		return a.configurator.TeamName()
+	}
 	return ""
 }
 
@@ -276,21 +311,21 @@ func (a *TeamAgent) TeamName() string {
 //
 // Leader 从不持有 TeamMember 句柄，因此对 Leader 总返回 False。
 func (a *TeamAgent) IsShutdownRequested(ctx context.Context) (bool, error) {
-	// ⤵️ 回填: 9.60 — 检查 team_member.status() 是否为 SHUTDOWN_REQUESTED 或 SHUTDOWN
+	// TODO(#9.60): 检查 team_member.status() 是否为 SHUTDOWN_REQUESTED 或 SHUTDOWN
 	return false, nil
 }
 
 // UpdateStatus 更新成员状态到数据库。
 // 对齐 Python: TeamAgent.update_status(status)
 func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStatus) error {
-	// ⤵️ 回填: 9.60 — 委托 _updateStatus(status)
+	// TODO(#9.60): 委托 _updateStatus(status)
 	return nil
 }
 
 // PersistAllocatorState 持久化模型分配器状态到当前会话。
 // 对齐 Python: TeamAgent.persist_allocator_state()
 func (a *TeamAgent) PersistAllocatorState() {
-	// ⤵️ 回填: 9.64 — 委托 _persistAllocatorState()
+	// TODO(#9.64): 委托 _persistAllocatorState()
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -317,7 +352,7 @@ func (a *TeamAgent) RemoveEventListener(handler any) {
 // LookupHumanAgentRuntime 解析进程内生成的人类代理的活跃 TeamAgent。
 // 对齐 Python: TeamAgent.lookup_human_agent_runtime(member_name)
 func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
-	// ⤵️ 回填: 9.58 — 通过 team_backend.is_human_agent + spawn_manager.lookup_inprocess_agent 查找
+	// TODO(#9.58): 通过 team_backend.is_human_agent + spawn_manager.lookup_inprocess_agent 查找
 	return nil
 }
 
@@ -328,28 +363,30 @@ func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
 // IsAgentReady Agent 是否已就绪。
 // 对齐 Python: TeamAgent.is_agent_ready()
 func (a *TeamAgent) IsAgentReady() bool {
-	// ⤵️ 回填: 9.57 — return configurator.harness is not nil
+	if a.configurator != nil {
+		return a.configurator.Harness() != nil
+	}
 	return false
 }
 
 // IsAgentRunning Agent 是否正在运行。
 // 对齐 Python: TeamAgent.is_agent_running()
 func (a *TeamAgent) IsAgentRunning() bool {
-	// ⤵️ 回填: 9.60 — 委托 streamController.is_agent_running()
+	// TODO(#9.60): 委托 streamController.is_agent_running()
 	return false
 }
 
 // HasInFlightRound 是否有飞行中的轮次。
 // 对齐 Python: TeamAgent.has_in_flight_round()
 func (a *TeamAgent) HasInFlightRound() bool {
-	// ⤵️ 回填: 9.60 — 委托 streamController.has_in_flight_round()
+	// TODO(#9.60): 委托 streamController.has_in_flight_round()
 	return false
 }
 
 // HasPendingInterrupt 是否有待处理的中断。
 // 对齐 Python: TeamAgent.has_pending_interrupt()
 func (a *TeamAgent) HasPendingInterrupt() bool {
-	// ⤵️ 回填: 9.60 — 委托 streamController.has_pending_interrupt()
+	// TODO(#9.60): 委托 streamController.has_pending_interrupt()
 	return false
 }
 
@@ -360,7 +397,29 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 // Configure 配置 TeamAgent。
 // 对齐 Python: TeamAgent.configure(spec, context)
 func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, runtimeCtx atschema.TeamRuntimeContext) *TeamAgent {
-	// ⤵️ 回填: 9.57 — setupInfra(spec, context) + setupAgent(spec, context)
+	// Phase 1: 基础设施搭建
+	a.configurator.SetupInfra(spec, runtimeCtx,
+		WithOnTeammateCreated(nil), // TODO(#9.55): a.onTeammateCreated
+		WithOnTeamCleaned(nil),     // TODO(#9.55): a.markTeamCleaned
+		WithOnTeamBuilt(nil),       // TODO(#9.55): a.markTeamBuilt
+	)
+
+	// Phase 2: Agent 组装
+	a.configurator.SetupAgent(spec, runtimeCtx)
+
+	// 构建 TeamMember 句柄
+	if runtimeCtx.MemberName != "" {
+		a.state.TeamMember = CreateMemberHandle(
+			runtimeCtx.MemberName,
+			a.configurator.Blueprint(),
+			a.configurator.Infra(),
+			a.card,
+		)
+	}
+
+	// TODO(#9.62): coordination.setup(role=ctx.Role)
+	// TODO(#9.55): a.registerTeamCompletionCallbacks()
+
 	logger.Info(logComponent).Str("member_name", runtimeCtx.MemberName).
 		Str("role", string(runtimeCtx.Role)).Msg("TeamAgent.Configure")
 	return a
@@ -369,10 +428,10 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // Invoke 非流式调用 TeamAgent。
 // 对齐 Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
-	// ⤵️ 回填: 9.60+9.62 — 创建 stream_queue → 缓存 pending_user_query → coordination.start(session)
-	// ⤵️ 回填: 9.62 → enqueue_user_input → enqueue_mailbox_after_first_iteration
-	// ⤵️ 回填: 9.60 → 从 stream_queue 读取直到 None sentinel
-	// ⤵️ 回填: 9.62 → coordination.finalize_round()
+	// TODO(#9.60+#9.62): 创建 stream_queue → 缓存 pending_user_query → coordination.start(session)
+	// TODO(#9.62): enqueue_user_input → enqueue_mailbox_after_first_iteration
+	// TODO(#9.60): 从 stream_queue 读取直到 None sentinel
+	// TODO(#9.62): coordination.finalize_round()
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent.Invoke start")
@@ -382,7 +441,7 @@ func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...i
 // Stream 流式调用 TeamAgent。
 // 对齐 Python: TeamAgent.stream(inputs, session, stream_modes)
 func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
-	// ⤵️ 回填: 9.60+9.62 — 同 Invoke 但持续 yield chunk 直到 None sentinel
+	// TODO(#9.60+#9.62): 同 Invoke 但持续 yield chunk 直到 None sentinel
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent.Stream start")
@@ -392,21 +451,21 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 // Interact 向团队发送输入。
 // 对齐 Python: TeamAgent.interact(message)
 func (a *TeamAgent) Interact(ctx context.Context, message string) error {
-	// ⤵️ 回填: 9.62 — coordination.enqueue_user_input(message)
+	// TODO(#9.62): coordination.enqueue_user_input(message)
 	return nil
 }
 
 // Broadcast 广播用户侧公告。
 // 对齐 Python: TeamAgent.broadcast(content)
 func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) {
-	// ⤵️ 回填: 9.62 — UserInbox(team_backend.message_manager).broadcast(content)
+	// TODO(#9.62): UserInbox(team_backend.message_manager).broadcast(content)
 	return nil, nil
 }
 
 // HumanAgentSay 以注册的 human_agent 成员身份发言。
 // 对齐 Python: TeamAgent.human_agent_say(content, to, sender)
 func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (any, error) {
-	// ⤵️ 回填: 9.62 — HumanAgentInbox(team_backend, message_manager).send(content, to, sender)
+	// TODO(#9.62): HumanAgentInbox(team_backend, message_manager).send(content, to, sender)
 	return nil, nil
 }
 
@@ -417,21 +476,21 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // DeliverInput 投递输入到 Agent。
 // 对齐 Python: TeamAgent.deliver_input(content, use_steer=True)
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
-	// ⤵️ 回填: 9.60 — if running → steer/follow_up; if in_flight → queue; else → start_agent
+	// TODO(#9.60): if running → steer/follow_up; if in_flight → queue; else → start_agent
 	return nil
 }
 
 // StartAgent 启动 Agent。
 // 对齐 Python: TeamAgent.start_agent(content)
 func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
-	// ⤵️ 回填: 9.60 — 委托 _startAgent(content)
+	// TODO(#9.60): 委托 _startAgent(content)
 	return nil
 }
 
 // FollowUp 追加输入。
 // 对齐 Python: TeamAgent.follow_up(content)
 func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
-	// ⤵️ 回填: 9.60 — streamController.follow_up(content)
+	// TODO(#9.60): streamController.follow_up(content)
 	return nil
 }
 
@@ -440,21 +499,21 @@ func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
 func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 	memberName := a.MemberName()
 	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent requested")
-	// ⤵️ 回填: 9.60 — 委托 _cancelAgent()
+	// TODO(#9.60): 委托 _cancelAgent()
 	return nil
 }
 
 // Steer 转向输入。
 // 对齐 Python: TeamAgent.steer(content)
 func (a *TeamAgent) Steer(ctx context.Context, content string) error {
-	// ⤵️ 回填: 9.60 — streamController.steer(content)
+	// TODO(#9.60): streamController.steer(content)
 	return nil
 }
 
 // ResumeInterrupt 恢复中断。
 // 对齐 Python: TeamAgent.resume_interrupt(user_input)
 func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
-	// ⤵️ 回填: 9.60 — 验证中断 → 飞行中则排队 → 否则 start_agent
+	// TODO(#9.60): 验证中断 → 飞行中则排队 → 否则 start_agent
 	return nil
 }
 
@@ -463,9 +522,9 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
 func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf requested")
-	// ⤵️ 回填: 9.60 — streamController.cooperative_cancel()
-	// ⤵️ 回填: 9.60 — team_member.update_status(SHUTDOWN)
-	// ⤵️ 回填: 9.62 — closeStream()
+	// TODO(#9.60): streamController.cooperative_cancel()
+	// TODO(#9.60): team_member.update_status(SHUTDOWN)
+	// TODO(#9.62): closeStream()
 	return nil
 }
 
@@ -476,14 +535,14 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 	logger.Info(logComponent).Str("member_name", memberName).
 		Int("member_count", memberCount).Int("task_count", taskCount).
 		Msg("TeamAgent.ConcludeCompletedRound")
-	// ⤵️ 回填: 9.60 — streamController.emit_completion_and_close(member_count, task_count)
+	// TODO(#9.60): streamController.emit_completion_and_close(member_count, task_count)
 	return nil
 }
 
 // DestroyTeam 销毁团队。
 // 对齐 Python: TeamAgent.destroy_team(force=True)
 func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
-	// ⤵️ 回填: 9.60+9.62+9.58 — cancel_agent → stop_coordination → remove_self_from_pool → team_backend.force_clean_team
+	// TODO(#9.60+#9.62+#9.58): cancel_agent → stop_coordination → remove_self_from_pool → team_backend.force_clean_team
 	return false, nil
 }
 
@@ -494,21 +553,21 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 // StartCoordination 启动协调。
 // 对齐 Python: TeamAgent._start_coordination(session)
 func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
-	// ⤵️ 回填: 9.62 — coordination.start(session)
+	// TODO(#9.62): coordination.start(session)
 	return nil
 }
 
 // PauseCoordination 暂停协调（不拆卸 Teammate 进程）。
 // 对齐 Python: TeamAgent.pause_coordination()
 func (a *TeamAgent) PauseCoordination(ctx context.Context) error {
-	// ⤵️ 回填: 9.62 — coordination.pause()
+	// TODO(#9.62): coordination.pause()
 	return nil
 }
 
 // StopCoordination 停止协调（关闭所有生成的 Teammate）。
 // 对齐 Python: TeamAgent.stop_coordination()
 func (a *TeamAgent) StopCoordination(ctx context.Context) error {
-	// ⤵️ 回填: 9.62 — coordination.stop()
+	// TODO(#9.62): coordination.stop()
 	return nil
 }
 
@@ -519,49 +578,55 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 // SpawnTeammate 生成 Teammate。
 // 对齐 Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
 func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, session any, spawnConfig any) error {
-	// ⤵️ 回填: 9.58 — spawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)
+	// TODO(#9.58): spawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)
 	return nil
 }
 
 // AutoStartMember 启动单个 UNSTARTED 成员。
 // 对齐 Python: TeamAgent.auto_start_member(member_name)
 func (a *TeamAgent) AutoStartMember(ctx context.Context, memberName string) bool {
-	// ⤵️ 回填: 9.58 — team_backend.startup_member(member_name, on_created)
+	// TODO(#9.58): team_backend.startup_member(member_name, on_created)
 	return false
 }
 
 // AutoStartAll 启动所有 UNSTARTED 成员。
 // 对齐 Python: TeamAgent.auto_start_all()
 func (a *TeamAgent) AutoStartAll(ctx context.Context) []string {
-	// ⤵️ 回填: 9.58 — team_backend.startup(on_created)
+	// TODO(#9.58): team_backend.startup(on_created)
 	return nil
 }
 
 // BuildSpawnPayload 构建生成载荷。
 // 对齐 Python: TeamAgent.build_spawn_payload(ctx, initial_message)
 func (a *TeamAgent) BuildSpawnPayload(runtimeCtx atschema.TeamRuntimeContext, initialMessage string) map[string]any {
-	// ⤵️ 回填: 9.57 — configurator.build_spawn_payload(ctx, initial_message)
+	if a.configurator != nil {
+		return a.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
+	}
 	return nil
 }
 
 // BuildMemberContext 构建成员上下文。
 // 对齐 Python: TeamAgent.build_member_context(member_spec)
 func (a *TeamAgent) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atschema.TeamRuntimeContext {
-	// ⤵️ 回填: 9.57 — configurator.build_member_context(member_spec)
+	if a.configurator != nil {
+		return a.configurator.BuildMemberContext(memberSpec)
+	}
 	return atschema.TeamRuntimeContext{}
 }
 
 // BuildSpawnConfig 构建生成配置。
 // 对齐 Python: TeamAgent.build_spawn_config(ctx)
 func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) any {
-	// ⤵️ 回填: 9.57 — configurator.build_spawn_config(ctx)
+	if a.configurator != nil {
+		return a.configurator.BuildSpawnConfig(runtimeCtx)
+	}
 	return nil
 }
 
 // FromSpawnPayload 从生成载荷重构 TeamAgent。
 // 对齐 Python: TeamAgent.from_spawn_payload(payload)
 func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, error) {
-	// ⤵️ 回填: 9.57 — 解析 spec/context → 构造 card → NewTeamAgent → configure → refresh_human_agent_roster
+	// TODO(#9.57): 解析 spec/context → 构造 card → NewTeamAgent → configure → refresh_human_agent_roster
 	return nil, nil
 }
 
@@ -572,7 +637,7 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 // ResumeForNewSession 为新会话恢复。
 // 对齐 Python: TeamAgent.resume_for_new_session(session)
 func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error {
-	// ⤵️ 回填: 9.59 — sessionManager.resume_for_new_session(session)
+	// TODO(#9.59): sessionManager.resume_for_new_session(session)
 	return nil
 }
 
@@ -582,21 +647,21 @@ func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error 
 // 与 RecoverFromSession 不同，此方法复用当前 Agent，
 // 假定 session.pre_run() 已恢复检查点状态。
 func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) error {
-	// ⤵️ 回填: 9.59+9.62 — stop_coordination → sessionManager.recover_for_existing_session(session)
+	// TODO(#9.59+#9.62): stop_coordination → sessionManager.recover_for_existing_session(session)
 	return nil
 }
 
 // RecoverTeam 恢复团队。
 // 对齐 Python: TeamAgent.recover_team()
 func (a *TeamAgent) RecoverTeam(ctx context.Context) ([]string, error) {
-	// ⤵️ 回填: 9.61 — recoveryManager.recover_team()
+	// TODO(#9.61): recoveryManager.recover_team()
 	return nil, nil
 }
 
 // RecoverFromSession 从会话检查点重构 Leader TeamAgent。
 // 对齐 Python: TeamAgent.recover_from_session(session, team_name, runtime_spec)
 func RecoverFromSession(ctx context.Context, session any, teamName string, runtimeSpec *atschema.TeamAgentSpec) (*TeamAgent, error) {
-	// ⤵️ 回填: 9.61 — 从 session 读取 bucket → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
+	// TODO(#9.61): 从 session 读取 bucket → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
 	return nil, nil
 }
 
@@ -607,25 +672,32 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。
 // 对齐 Python: TeamAgent.persist_session_manifest(session)
 func (a *TeamAgent) PersistSessionManifest(session any) {
-	// ⤵️ 回填: 9.61 — recoveryManager.persist_leader_config(session)
+	// TODO(#9.61): recoveryManager.persist_leader_config(session)
 }
 
 // UpdateModelPool 更新模型池。
 // 对齐 Python: TeamAgent.update_model_pool(new_pool)
 func (a *TeamAgent) UpdateModelPool(newPool any) {
-	// ⤵️ 回填: 9.57+9.61 — configurator.update_model_pool → recoveryManager.persist_leader_config
+	if a.configurator != nil {
+		a.configurator.UpdateModelPool(newPool)
+	}
+	// TODO(#9.61): recoveryManager.persist_leader_config
 }
 
 // AttachModelAllocator 附加模型分配器。
 // 对齐 Python: TeamAgent.attach_model_allocator(allocator, leader_allocation)
 func (a *TeamAgent) AttachModelAllocator(allocator any, leaderAllocation any) {
-	// ⤵️ 回填: 9.57 — configurator.attach_model_allocator(allocator, leader_allocation)
+	if a.configurator != nil {
+		a.configurator.AttachModelAllocator(allocator, leaderAllocation)
+	}
 }
 
 // RestoreAllocatorState 恢复分配器状态。
 // 对齐 Python: TeamAgent.restore_allocator_state(state)
 func (a *TeamAgent) RestoreAllocatorState(state map[string]any) {
-	// ⤵️ 回填: 9.57 — configurator.restore_allocator_state(state)
+	if a.configurator != nil {
+		a.configurator.RestoreAllocatorState(state)
+	}
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -635,13 +707,21 @@ func (a *TeamAgent) RestoreAllocatorState(state map[string]any) {
 // RegisterRail 注册 Rail。
 // 对齐 Python: TeamAgent.register_rail(rail)
 func (a *TeamAgent) RegisterRail(ctx context.Context, rail any) (*TeamAgent, error) {
-	// ⤵️ 回填: 9.57 — harness.register_rail(rail)
+	if a.configurator != nil && a.configurator.Harness() != nil {
+		if err := a.configurator.Harness().RegisterRail(ctx, rail); err != nil {
+			return a, err
+		}
+	}
 	return a, nil
 }
 
 // UnregisterRail 注销 Rail。
 // 对齐 Python: TeamAgent.unregister_rail(rail)
 func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, error) {
-	// ⤵️ 回填: 9.57 — harness.unregister_rail(rail)
+	if a.configurator != nil && a.configurator.Harness() != nil {
+		if err := a.configurator.Harness().UnregisterRail(ctx, rail); err != nil {
+			return a, err
+		}
+	}
 	return a, nil
 }
