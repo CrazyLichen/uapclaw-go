@@ -186,7 +186,7 @@ func EventPayloadDict(evt any) map[string]any {
 	// 先尝试 evt.Payload 字段（结构体事件）
 	if evt != nil {
 		v := reflect.ValueOf(evt)
-		if v.Kind() == reflect.Ptr && !v.IsNil() {
+		if v.Kind() == reflect.Pointer && !v.IsNil() {
 			v = v.Elem()
 		}
 		if v.Kind() == reflect.Struct {
@@ -219,7 +219,7 @@ func EventType(evt any) string {
 	// 先尝试 evt.Type 字段
 	if evt != nil {
 		v := reflect.ValueOf(evt)
-		if v.Kind() == reflect.Ptr && !v.IsNil() {
+		if v.Kind() == reflect.Pointer && !v.IsNil() {
 			v = v.Elem()
 		}
 		if v.Kind() == reflect.Struct {
@@ -259,7 +259,7 @@ func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
 	// 尝试从 rail 读取 evolution_total_timeout_secs
 	var sdkTimeout any
 	v := reflect.ValueOf(rail)
-	if v.Kind() == reflect.Ptr && !v.IsNil() {
+	if v.Kind() == reflect.Pointer && !v.IsNil() {
 		v = v.Elem()
 	}
 	if v.Kind() == reflect.Struct {

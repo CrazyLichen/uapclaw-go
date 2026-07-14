@@ -412,7 +412,7 @@ func SetSessionDeliveryContext(
 	deliveryKind ...string,
 ) map[string]any {
 	meta := readSessionMetadataWithCache(sessionID)
-	currentContextRaw, _ := meta["delivery_context"]
+	currentContextRaw := meta["delivery_context"]
 	currentContext := map[string]any{}
 	if raw, ok := currentContextRaw.(map[string]any); ok {
 		currentContext = deepCopyMap(raw)
@@ -439,7 +439,7 @@ func SetSessionDeliveryContext(
 	// 归一化 route_metadata
 	previousRouteMetadata, _ := currentContext["route_metadata"].(map[string]any)
 	var normalizedRouteMetadata map[string]any
-	if routeMetadata != nil && len(routeMetadata) > 0 {
+	if len(routeMetadata) > 0 {
 		normalizedRouteMetadata = deepCopyMap(routeMetadata)
 	} else if previousRouteMetadata != nil {
 		normalizedRouteMetadata = deepCopyMap(previousRouteMetadata)
@@ -487,7 +487,9 @@ func SetSessionDeliveryContext(
 	deliveryContextCache[sessionID] = deepCopyMap(meta)
 	deliveryContextMu.Unlock()
 
-	writeSessionMetadata(GetSessionsDir(), sessionID, meta)
+	if err := writeSessionMetadata(GetSessionsDir(), sessionID, meta); err != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("写入会话元数据失败")
+	}
 
 	return deepCopyMap(deliveryContext)
 }

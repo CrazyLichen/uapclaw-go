@@ -131,33 +131,37 @@ func (mh *MessageHandler) modeChangeCancelAndNotice(msg *schema.Message, parsed 
 		currentMode := state.Mode
 		switch parsed.SwitchSubcommand {
 		case "plan":
-			if currentMode == ChannelModeAgentPlan || currentMode == ChannelModeAgentFast {
+			switch currentMode {
+			case ChannelModeAgentPlan, ChannelModeAgentFast:
 				newMode = ChannelModeAgentPlan
-			} else if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
 				newMode = ChannelModeCodePlan
-			} else {
+			default:
 				// 当前模式不在任何支持 /switch plan 的家族中，发送"非法指令"通知
 				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 				return
 			}
 		case "fast":
-			if currentMode == ChannelModeAgentPlan || currentMode == ChannelModeAgentFast {
+			switch currentMode {
+			case ChannelModeAgentPlan, ChannelModeAgentFast:
 				newMode = ChannelModeAgentFast
-			} else {
+			default:
 				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 				return
 			}
 		case "normal":
-			if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+			switch currentMode {
+			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
 				newMode = ChannelModeCodeNormal
-			} else {
+			default:
 				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 				return
 			}
 		case "team":
-			if currentMode == ChannelModeCodePlan || currentMode == ChannelModeCodeNormal || currentMode == ChannelModeCodeTeam {
+			switch currentMode {
+			case ChannelModeCodePlan, ChannelModeCodeNormal, ChannelModeCodeTeam:
 				newMode = ChannelModeCodeTeam
-			} else {
+			default:
 				mh.sendChannelNotice(msg, map[string]any{"content": "非法指令"})
 				return
 			}

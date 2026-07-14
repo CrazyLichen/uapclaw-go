@@ -35,7 +35,7 @@ func TestNewDefaultEvaluator_有效配置(t *testing.T) {
 		t.Fatalf("不期望错误: %v", err)
 	}
 	if e == nil {
-		t.Error("期望返回非 nil DefaultEvaluator")
+		t.Fatal("期望返回非 nil DefaultEvaluator")
 	}
 	if e.parser == nil {
 		t.Error("期望 parser 已初始化")

@@ -157,7 +157,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 		return ec, nil
 	}
 
-	result, _ := evaluatedResult["result"]
+	result := evaluatedResult["result"]
 	reason, _ := evaluatedResult["reason"].(string)
 
 	ec.SetScore(mapBoolToScore(result))

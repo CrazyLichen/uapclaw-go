@@ -195,17 +195,14 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	}
 
 	// 7. Model Allocator（仅 leader）
-	if ctx.Role == atschema.TeamRoleLeader && c.ModelAllocator() == nil {
-		// TODO(#9.64): 设置模型分配器 BuildModelAllocator(spec, teamSpec)
-	}
+	// TODO(#9.64): 设置模型分配器 BuildModelAllocator(spec, teamSpec)
+	_ = ctx.Role // 避免空分支警告，待实现后移除
 
 	// 8. Team Backend
 	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
 
 	// 9. Worktree Manager（仅非 leader）
-	if ctx.Role != atschema.TeamRoleLeader && spec.Worktree != nil && spec.Worktree.Enabled {
-		// TODO(#9.66): 设置工作树管理器 c.CreateWorktreeManager(spec)
-	}
+	// TODO(#9.66): 设置工作树管理器 c.CreateWorktreeManager(spec)
 }
 
 // SetupAgent Phase 2：构建 prompt，通过 TeamHarness 创建 DeepAgent，设置协调。

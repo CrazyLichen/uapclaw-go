@@ -76,7 +76,7 @@ func TestNewLLMAsJudgeMetric_有效配置(t *testing.T) {
 		t.Fatalf("不期望错误: %v", err)
 	}
 	if m == nil {
-		t.Error("期望返回非 nil LLMAsJudgeMetric")
+		t.Fatal("期望返回非 nil LLMAsJudgeMetric")
 	}
 	if m.parser == nil {
 		t.Error("期望 parser 已初始化")
