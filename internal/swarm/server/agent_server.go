@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
@@ -56,6 +58,13 @@ type AgentServer struct {
 const logComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// agentServerInstance AgentServer 单例实例
+	agentServerInstance *AgentServer
+	// agentServerOnce 保证单例只设置一次
+	agentServerOnce sync.Once
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -153,12 +162,56 @@ func (s *AgentServer) Transport() transport.AgentTransport {
 	return s.transport
 }
 
+// GetInstance 返回 AgentServer 单例实例。
+// 对齐 Python: AgentWebSocketServer.get_instance()
+func GetInstance() *AgentServer { return agentServerInstance }
+
+// ResetInstance 重置单例（仅用于测试）。
+// 对齐 Python: AgentWebSocketServer.reset_instance()
+func ResetInstance() {
+	agentServerInstance = nil
+	agentServerOnce = sync.Once{}
+}
+
+// SendPush AgentServer 主动向 Gateway 推送消息（高层方法）。
+//
+// 对齐 Python: AgentWebSocketServer.send_push(msg)
+// 内部流程：BuildServerPushWire(msg) → json.Marshal → sendToGateway(data)
+// 这是所有 server_push 场景的统一入口。
+func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
+	wire := transport.BuildServerPushWire(msg)
+	data, err := json.Marshal(wire)
+	if err != nil {
+		logger.Error(logComponent).Err(err).Msg("SendPush: wire 编码失败")
+		return fmt.Errorf("wire 编码失败: %w", err)
+	}
+	s.sendToGateway(data)
+
+	responseKind := ""
+	if rk, ok := msg["response_kind"].(string); ok {
+		responseKind = strings.TrimSpace(rk)
+	}
+	if responseKind != "" {
+		channelID, _ := msg["channel_id"].(string)
+		logger.Info(logComponent).
+			Str("channel_id", channelID).
+			Str("response_kind", responseKind).
+			Msg("SendPush response_kind wire 已发送")
+	}
+	return nil
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // run 执行 AgentServer 主循环（阻塞直到 ctx 取消）。
 // 按 Python AgentWebSocketServer.start() + app_agentserver.py _run() 顺序初始化。
 func (s *AgentServer) run(ctx context.Context) error {
 	defer close(s.stopCh)
+
+	// 设置单例
+	agentServerOnce.Do(func() {
+		agentServerInstance = s
+	})
 
 	// 1. 重置 harness 包状态到 native（对齐 Python agent_ws_server.py L440）
 	s.resetHarnessPackagesState()
