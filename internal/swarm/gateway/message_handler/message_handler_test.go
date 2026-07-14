@@ -156,9 +156,9 @@ func TestPublishRobotMessages(t *testing.T) {
 // TestCollectStreamTasksForSession 测试收集 session 的流式任务
 func TestCollectStreamTasksForSession(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
-	mh.registerStreamTask("req-1", "sess-1", nil, func() {})
-	mh.registerStreamTask("req-2", "sess-1", nil, func() {})
-	mh.registerStreamTask("req-3", "sess-2", nil, func() {})
+	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-2", "sess-1", nil, &streamTaskEntry{cancel: func() {}})
+	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
 
 	reqIDs := mh.collectStreamTasksForSession("sess-1")
 	assert.Len(t, reqIDs, 2)
@@ -269,8 +269,8 @@ func TestPublishUserMessagesNowait_正常写入(t *testing.T) {
 func TestCancelAllStreamTasks(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 	cancelled := false
-	mh.registerStreamTask("req-1", "sess-1", nil, func() { cancelled = true })
-	mh.registerStreamTask("req-2", "sess-2", nil, func() {})
+	mh.registerStreamTask("req-1", "sess-1", nil, &streamTaskEntry{cancel: func() { cancelled = true }})
+	mh.registerStreamTask("req-2", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
 
 	mh.cancelAllStreamTasks()
 

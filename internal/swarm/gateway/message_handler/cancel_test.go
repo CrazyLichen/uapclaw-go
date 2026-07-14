@@ -18,11 +18,17 @@ func TestCancelAgentWorkForSession_完整流程(t *testing.T) {
 	// 注册多个流式任务
 	cancelled1 := false
 	cancelled2 := false
-	mh.registerStreamTask("req-1", "sess-1", map[string]any{"key": "val"}, func() { cancelled1 = true })
-	mh.registerStreamTask("req-2", "sess-1", nil, func() { cancelled2 = true })
-	mh.registerStreamTask("req-3", "sess-2", nil, func() {})
+	entry1 := &streamTaskEntry{cancel: func() { cancelled1 = true }}
+	entry1.wg.Add(1)
+	entry2 := &streamTaskEntry{cancel: func() { cancelled2 = true }}
+	entry2.wg.Add(1)
+	mh.registerStreamTask("req-1", "sess-1", map[string]any{"key": "val"}, entry1)
+	mh.registerStreamTask("req-2", "sess-1", nil, entry2)
+	mh.registerStreamTask("req-3", "sess-2", nil, &streamTaskEntry{cancel: func() {}})
 
-	// 取消 sess-1 的任务
+	// 取消 sess-1 的任务前，模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
+	entry1.wg.Done()
+	entry2.wg.Done()
 	msg := schema.NewReqMessage("feishu_test", "sess-1", schema.ReqMethodChatCancel, json.RawMessage(`{}`))
 	mh.CancelAgentWorkForSession(context.Background(), msg, "sess-1", true)
 
@@ -42,7 +48,7 @@ func TestSendInterruptResultNotification(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	hasActive := true
-	mh.sendInterruptResultNotification("req-1", "feishu_test", "sess-1", "cancel", "任务已取消", true, &hasActive)
+	mh.sendInterruptResultNotification("req-1", "feishu_test", "sess-1", "cancel", "任务已取消", true, hasActive)
 
 	// 从 robotMessages 读取
 	select {
@@ -85,8 +91,12 @@ func TestCancelStreamTask(t *testing.T) {
 	mh := createTestMessageHandlerWithTransport()
 
 	cancelled := false
-	mh.registerStreamTask("req-1", "sess-1", nil, func() { cancelled = true })
+	entry := &streamTaskEntry{cancel: func() { cancelled = true }}
+	entry.wg.Add(1)
+	mh.registerStreamTask("req-1", "sess-1", nil, entry)
 
+	// 模拟 goroutine 退出，避免 cancelStreamTask 中 Wait 死锁
+	entry.wg.Done()
 	mh.cancelStreamTask("req-1")
 	assert.True(t, cancelled, "cancel 函数应被调用")
 

@@ -58,7 +58,7 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 				mh.sendInterruptResultNotification(
 					msg.ID, msg.ChannelID, oldSessionID,
 					"cancel", fmt.Sprintf("任务终止失败: %s", respErr.Error()),
-					false, &hasActiveTask,
+					false, hasActiveTask,
 				)
 			}
 			return
@@ -101,12 +101,12 @@ func (mh *MessageHandler) CancelAgentWorkForSession(ctx context.Context, msg *sc
 					}
 				}
 			}
-			mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", errorMsg, false, nil)
+			mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", errorMsg, false, false)
 		}
 	} else if publishInterruptResult {
 		// 无响应或响应无 payload，发送成功通知
 		hasActiveTask := len(requestIDs) > 0
-		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", "任务已取消", true, &hasActiveTask)
+		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, oldSessionID, "cancel", "任务已取消", true, hasActiveTask)
 	}
 }
 
@@ -274,7 +274,7 @@ func (mh *MessageHandler) sendInterruptToAgentWithEnvelope(ctx context.Context, 
 // 对齐 Python _send_interrupt_result_notification (L2693-L2748)：
 // 根据 intent 和 hasActiveTask 选择成功/失败消息模板，
 // 构造 CHAT_INTERRUPT_RESULT 事件发送到客户端。
-func (mh *MessageHandler) sendInterruptResultNotification(requestID, channelID, sessionID, intent string, message string, success bool, hasActiveTask *bool) {
+func (mh *MessageHandler) sendInterruptResultNotification(requestID, channelID, sessionID, intent string, message string, success bool, hasActiveTask bool) {
 	payload := map[string]any{
 		"event_type":      string(schema.EventTypeChatInterruptResult),
 		"intent":          intent,
@@ -347,21 +347,20 @@ func (mh *MessageHandler) sendStreamCancelledNotification(requestID, channelID, 
 
 // publishStreamCancelledFinal 发布流式取消的最终消息。
 //
-// 对齐 Python: 消息 type=res（非 event），携带 requestMetadata，
-// 消息 ID 使用 requestID。
+// 对齐 Python: type=event, payload 包含 event_type=chat.final + is_complete=True
 func (mh *MessageHandler) publishStreamCancelledFinal(requestID, channelID, sessionID string, requestMetadata map[string]any) {
 	msg := &schema.Message{
 		ID:        requestID,
-		Type:      schema.MessageTypeRes,
+		Type:      schema.MessageTypeEvent,
 		ChannelID: channelID,
 		SessionID: sessionID,
 		Timestamp: schema.NowTimestamp(),
 		OK:        true,
 		EventType: schema.EventTypeChatFinal,
 		Payload: map[string]any{
-			"content":      "",
-			"is_cancelled": true,
-			"session_id":   sessionID,
+			"event_type":  string(schema.EventTypeChatFinal),
+			"content":     "",
+			"is_complete": true,
 		},
 		Metadata:        requestMetadata,
 		EnableStreaming: true,

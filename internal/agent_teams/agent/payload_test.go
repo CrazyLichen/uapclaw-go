@@ -3,8 +3,9 @@ package agent_test
 import (
 	"testing"
 
-	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -83,7 +84,7 @@ func TestSpawnPayloadBuilder_BuildMemberContext(t *testing.T) {
 	ctx := atschema.TeamRuntimeContext{
 		Role:     atschema.TeamRoleLeader,
 		TeamSpec: teamSpec,
-		DBConfig: "mock_db_config",
+		DBConfig: database.NewDatabaseConfig(),
 	}
 	b := agent.NewSpawnPayloadBuilder(spec, ctx)
 
@@ -98,7 +99,7 @@ func TestSpawnPayloadBuilder_BuildMemberContext(t *testing.T) {
 	assert.Equal(t, "teammate_1", result.MemberName)
 	assert.Equal(t, "coder", result.Persona)
 	assert.Equal(t, teamSpec, result.TeamSpec)
-	assert.Equal(t, "mock_db_config", result.DBConfig)
+	assert.Equal(t, database.NewDatabaseConfig(), result.DBConfig)
 }
 
 // TestSpawnPayloadBuilder_BuildMemberMessagerConfig_未实现 测试返回 nil（TODO 占位）

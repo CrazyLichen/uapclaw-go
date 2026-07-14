@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 )
 
@@ -88,7 +89,14 @@ func (b *SpawnPayloadBuilder) BuildMemberContext(memberSpec atschema.TeamMemberS
 		MemberName:     memberSpec.MemberName,
 		Persona:        memberSpec.Persona,
 		TeamSpec:       b.ctx.TeamSpec,
-		MessagerConfig: b.BuildMemberMessagerConfig(memberSpec.MemberName),
+		MessagerConfig: func() *messager.MessagerTransportConfig {
+			if v := b.BuildMemberMessagerConfig(memberSpec.MemberName); v != nil {
+				if cfg, ok := v.(*messager.MessagerTransportConfig); ok {
+					return cfg
+				}
+			}
+			return nil
+		}(),
 		DBConfig:       b.ctx.DBConfig,
 	}
 }

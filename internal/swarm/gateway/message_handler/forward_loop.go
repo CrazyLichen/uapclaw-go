@@ -344,7 +344,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 			Str("event_type", "supplement_queued_evolution").
 			Str("session_id", sessionID).
 			Msg("evolution phase pending, queue supplement input")
-		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "已加入队列，等待演进完成", true, nil)
+		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "已加入队列，等待演进完成", true, false)
 		return
 	}
 
@@ -360,7 +360,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 	}
 
 	// 2. 通知前端 supplement
-	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "", true, nil)
+	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "", true, false)
 
 	// 3. 发送 supplement intent 到 AgentServer（取消任务但保留 todo）
 	agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
@@ -459,7 +459,7 @@ func (mh *MessageHandler) handlePauseResume(ctx context.Context, msg *schema.Mes
 
 	// 检查当前 session 是否有活跃流式任务
 	hasActiveTask := mh.hasActiveStreamTaskForSession(msg.SessionID)
-	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, &hasActiveTask)
+	mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, msg.SessionID, intent, "", true, hasActiveTask)
 }
 
 // resolveInboundReferences 解析入站消息中的 @file/@agent 引用。

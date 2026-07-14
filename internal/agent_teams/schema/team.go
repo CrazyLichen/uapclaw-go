@@ -1,5 +1,11 @@
 package schema
 
+import (
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/messager"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+)
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // MemberOpResult 团队成员操作结果。
@@ -31,8 +37,8 @@ type TeamSpec struct {
 	LeaderMemberName string         `json:"leader_member_name"`
 	Language         string         `json:"language,omitempty"`
 	Metadata         map[string]any `json:"metadata,omitempty"`
-	// ModelPool LLM 端点池（运行时为 []models.ModelPoolEntry）
-	ModelPool         any    `json:"model_pool,omitempty"`
+	// ModelPool LLM 端点池
+	ModelPool         []models.ModelPoolEntry `json:"model_pool,omitempty"`
 	ModelPoolStrategy string `json:"model_pool_strategy,omitempty"`
 }
 
@@ -42,8 +48,8 @@ type TeamRuntimeContext struct {
 	MemberName     string           `json:"member_name"`
 	Persona        string           `json:"persona"`
 	TeamSpec       *TeamSpec        `json:"team_spec,omitempty"`
-	MessagerConfig any              `json:"messager_config,omitempty"`
-	DBConfig       any              `json:"db_config,omitempty"`
+	MessagerConfig *messager.MessagerTransportConfig `json:"messager_config,omitempty"`
+	DBConfig       database.DatabaseConfig            `json:"db_config,omitempty"`
 	MemberModel    *TeamModelConfig `json:"member_model,omitempty"`
 }
 

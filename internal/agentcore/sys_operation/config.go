@@ -77,7 +77,7 @@ type SandboxGatewayConfig struct {
 	// 生产中 100% 使用 PreDeployLauncherConfig，Go 用具体类型代替 Python Union。
 	LauncherConfig *PreDeployLauncherConfig `yaml:"launcher_config" json:"launcher_config"`
 	// TimeoutSeconds 统一超时时间（秒），包含请求+就绪检测
-	TimeoutSeconds float64 `yaml:"timeout_seconds" json:"timeout_seconds"`
+	TimeoutSeconds int `yaml:"timeout_seconds" json:"timeout_seconds"`
 	// AuthHeaders 认证 HTTP 头
 	AuthHeaders map[string]string `yaml:"auth_headers" json:"auth_headers,omitempty"`
 	// AuthQueryParams 认证查询参数
@@ -193,7 +193,7 @@ func NewSandboxGatewayConfig() *SandboxGatewayConfig {
 	return &SandboxGatewayConfig{
 		Isolation:      NewSandboxIsolationConfig(),
 		LauncherConfig: NewPreDeployLauncherConfig(""),
-		TimeoutSeconds: 30.0,
+		TimeoutSeconds: 30,
 	}
 }
 

@@ -30,7 +30,7 @@ func TestNewSandboxGatewayConfig(t *testing.T) {
 	require.NotNil(t, cfg.LauncherConfig, "LauncherConfig 不应为 nil")
 	assert.Equal(t, "pre_deploy", cfg.LauncherConfig.LauncherType, "LauncherType 默认应对齐 Python")
 	assert.Equal(t, "aio", cfg.LauncherConfig.SandboxType, "SandboxType 默认应对齐 Python PreDeployLauncherConfig")
-	assert.Equal(t, 30.0, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 30.0，对齐 Python")
+	assert.Equal(t, 30, cfg.TimeoutSeconds, "TimeoutSeconds 默认应为 30，对齐 Python")
 	assert.Equal(t, ContainerScopeSession, cfg.Isolation.ContainerScope, "ContainerScope 默认应对齐 Python SESSION")
 }
 
@@ -71,10 +71,10 @@ func TestWithSysOpWorkConfig(t *testing.T) {
 // TestWithSysOpGatewayConfig 测试设置沙箱网关配置选项
 func TestWithSysOpGatewayConfig(t *testing.T) {
 	gwCfg := NewSandboxGatewayConfig()
-	gwCfg.TimeoutSeconds = 60.0
+	gwCfg.TimeoutSeconds = 60
 	card := NewSysOperationCard(WithSysOpGatewayConfig(gwCfg))
 	require.NotNil(t, card.GatewayConfig)
-	assert.Equal(t, 60.0, card.GatewayConfig.TimeoutSeconds)
+	assert.Equal(t, 60, card.GatewayConfig.TimeoutSeconds)
 }
 
 // TestWithSysOpIsolationKeyTemplate 测试设置隔离键模板选项

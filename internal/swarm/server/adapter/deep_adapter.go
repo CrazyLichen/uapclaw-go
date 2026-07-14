@@ -1132,7 +1132,11 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 			req.Params = updated
 		}
 	} else {
-		req.Params = json.RawMessage(`{"query":"` + heartbeatQuery + `"}`)
+		// 对齐 Python: 直接赋值 request.params["query"]，用 json.Marshal 避免注入风险
+		params := map[string]any{"query": heartbeatQuery}
+		if updated, err := json.Marshal(params); err == nil {
+			req.Params = updated
+		}
 	}
 
 	// 步骤 4: 日志
