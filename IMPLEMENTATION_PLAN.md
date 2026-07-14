@@ -662,7 +662,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.2 | 🔄 | JiuWenClaw 门面 | SDK 路由，会话队列，流式包装，中断处理 | `jiuwenswarm/server/runtime/agent_adapter/interface.py` |
 | 10.3.3 | ✅ | AgentAdapter 接口与工厂 | AgentAdapter ABC，`create_adapter()` | `jiuwenswarm/server/runtime/agent_adapter/agent_adapters.py` |
 | 10.3.4-6 | ✅ | 模式适配器 | Agent/Code/Deep 模式适配器；已回填 setCheckpoint/config/dotenv/Model/buildModel/HandleHeartbeat/query注入/模型校验/sessionActive/markSessionActive；✅ 已回填 seedRuntimeCwd；✅ SetLLM统一模型切换(删SwitchModel)；✅ CompressContext+GenerateRecap直接实现(ContextEngine in-memory)；✅ ToolSync5方法直接实现；✅ SlashCommand/evolve分发骨架；✅ subagents骨架(9.25-29)；✅ sysop_builder骨架；⤵️ 标记已精确修正指向（agentcore.DeepAgent/10.6.3-10 Swarm Rails/A2X/11.10 等） | `jiuwenswarm/server/runtime/agent_adapter/interface.py` · `interface_code.py` · `interface_deep.py` |
-| 10.3.7-11 | 🔄 | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers待实现/RecapPrompts✅/SysOpBuilder✅(一比一对齐Python:BuildFilesystemPolicy+CreateSandboxSysOpCard+CreateLocalSysOpCard+展示辅助+实例化注册)/handleCommandRecap✅+Compact✅+Context✅连接adapter/DeepAdapter.CreateInstance步骤17✅ | `jiuwenswarm/server/runtime/agent_adapter/` |
+| 10.3.7-11 | 🔄 | 适配器辅助 | CodeAgentRail/TeamHelpers/EvolutionHelpers✅/RecapPrompts✅/SysOpBuilder✅(一比一对齐Python:BuildFilesystemPolicy+CreateSandboxSysOpCard+CreateLocalSysOpCard+展示辅助+实例化注册)/handleCommandRecap✅+Compact✅+Context✅连接adapter/DeepAdapter.CreateInstance步骤17✅ | `jiuwenswarm/server/runtime/agent_adapter/` |
 | 10.3.12 | 🔄 | AgentManager | 多实例管理（按通道/模式），当前为 stub | `jiuwenswarm/server/runtime/agent_manager.py` |
 | 10.3.13 | ☐ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |
 | 10.3.14 | ☐ | TenantAgentPool | 多租户 Agent 池化 | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
