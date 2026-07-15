@@ -31,139 +31,223 @@ type TeamModelConfig struct {
 // WorkspaceSpec 工作空间规格占位类型。
 // ⤵️ 回填: 9.57
 type WorkspaceSpec struct {
-	RootPath   string `json:"root_path"`
-	Language   string `json:"language"`
-	StableBase bool   `json:"stable_base"`
+	// RootPath 工作空间根路径
+	RootPath string `json:"root_path"`
+	// Language 工作空间语言
+	Language string `json:"language"`
+	// StableBase 是否使用稳定基路径
+	StableBase bool `json:"stable_base"`
 }
 
 // VisionModelSpec 视觉模型规格占位类型。
 type VisionModelSpec struct {
-	APIKey     string `json:"api_key"`
-	BaseURL    string `json:"base_url"`
-	Model      string `json:"model"`
-	MaxRetries int    `json:"max_retries"`
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础 URL
+	BaseURL string `json:"base_url"`
+	// Model 模型名称
+	Model string `json:"model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
 }
 
 // AudioModelSpec 音频模型规格占位类型。
 type AudioModelSpec struct {
-	APIKey             string `json:"api_key"`
-	BaseURL            string `json:"base_url"`
+	// APIKey API 密钥
+	APIKey string `json:"api_key"`
+	// BaseURL API 基础 URL
+	BaseURL string `json:"base_url"`
+	// TranscriptionModel 转录模型名称
 	TranscriptionModel string `json:"transcription_model"`
-	QAModel            string `json:"qa_model"`
-	MaxRetries         int    `json:"max_retries"`
-	HTTPTimeout        int    `json:"http_timeout"`
-	MaxAudioBytes      int    `json:"max_audio_bytes"`
-	ACRAccessKey       string `json:"acr_access_key"`
-	ACRAccessSecret    string `json:"acr_access_secret"`
-	ACRBaseURL         string `json:"acr_base_url"`
+	// QAModel 问答模型名称
+	QAModel string `json:"qa_model"`
+	// MaxRetries 最大重试次数
+	MaxRetries int `json:"max_retries"`
+	// HTTPTimeout HTTP 超时时间（秒）
+	HTTPTimeout int `json:"http_timeout"`
+	// MaxAudioBytes 最大音频字节数
+	MaxAudioBytes int `json:"max_audio_bytes"`
+	// ACRAccessKey ACR 访问密钥
+	ACRAccessKey string `json:"acr_access_key"`
+	// ACRAccessSecret ACR 访问密钥秘密
+	ACRAccessSecret string `json:"acr_access_secret"`
+	// ACRBaseURL ACR 基础 URL
+	ACRBaseURL string `json:"acr_base_url"`
 }
 
 // ProgressiveToolSpec 渐进式工具规格占位类型。
 type ProgressiveToolSpec struct {
-	Enabled             bool     `json:"enabled"`
-	AlwaysVisibleTools  []string `json:"always_visible_tools,omitempty"`
+	// Enabled 是否启用渐进式工具
+	Enabled bool `json:"enabled"`
+	// AlwaysVisibleTools 始终可见的工具列表
+	AlwaysVisibleTools []string `json:"always_visible_tools,omitempty"`
+	// DefaultVisibleTools 默认可见的工具列表
 	DefaultVisibleTools []string `json:"default_visible_tools,omitempty"`
-	MaxLoadedTools      int      `json:"max_loaded_tools"`
+	// MaxLoadedTools 最大加载工具数
+	MaxLoadedTools int `json:"max_loaded_tools"`
 }
 
 // SysOperationSpec 系统操作规格占位类型。
 type SysOperationSpec struct {
-	ID   string `json:"id"`
+	// ID 操作标识
+	ID string `json:"id"`
+	// Mode 操作模式
 	Mode string `json:"mode"`
 }
 
 // RailSpec 约束规则规格占位类型。
 type RailSpec struct {
-	Type   string         `json:"type"`
+	// Type 规则类型
+	Type string `json:"type"`
+	// Params 规则参数
 	Params map[string]any `json:"params,omitempty"`
 }
 
 // BuiltinToolSpec 内置工具规格占位类型。
 type BuiltinToolSpec struct {
-	Type   string         `json:"type"`
+	// Type 工具类型
+	Type string `json:"type"`
+	// Params 工具参数
 	Params map[string]any `json:"params,omitempty"`
 }
 
 // SubAgentSpec 子代理规格占位类型。
 type SubAgentSpec struct {
-	AgentCard    any    `json:"agent_card"`
+	// AgentCard 代理身份卡片
+	AgentCard any `json:"agent_card"`
+	// SystemPrompt 系统提示词
 	SystemPrompt string `json:"system_prompt"`
 }
 
 // DeepAgentSpec 单角色 DeepAgent 规格。
 // 对齐 Python: DeepAgentSpec
 type DeepAgentSpec struct {
-	Model                  *TeamModelConfig       `json:"model,omitempty"`
-	Card                   *agentschema.AgentCard `json:"card,omitempty"`
-	SystemPrompt           string                 `json:"system_prompt,omitempty"`
-	Tools                  []any                  `json:"tools,omitempty"`
-	Mcps                   []any                  `json:"mcps,omitempty"`
-	Subagents              []any                  `json:"subagents,omitempty"`
-	Rails                  []any                  `json:"rails,omitempty"`
-	EnableTaskLoop         bool                   `json:"enable_task_loop"`
-	EnableAsyncSubagent    bool                   `json:"enable_async_subagent"`
-	AddGeneralPurposeAgent bool                   `json:"add_general_purpose_agent"`
-	MaxIterations          int                    `json:"max_iterations"`
-	Workspace              *WorkspaceSpec         `json:"workspace,omitempty"`
-	Skills                 []string               `json:"skills,omitempty"`
-	EnableSkillDiscovery   bool                   `json:"enable_skill_discovery"`
-	SysOperation           *SysOperationSpec      `json:"sys_operation,omitempty"`
-	Language               string                 `json:"language,omitempty"`
-	PromptMode             string                 `json:"prompt_mode,omitempty"`
-	VisionModel            *VisionModelSpec       `json:"vision_model,omitempty"`
-	AudioModel             *AudioModelSpec        `json:"audio_model,omitempty"`
-	EnableTaskPlanning     bool                   `json:"enable_task_planning"`
-	RestrictToSandbox      bool                   `json:"restrict_to_sandbox"`
-	AutoCreateWorkspace    bool                   `json:"auto_create_workspace"`
-	CompletionTimeout      float64                `json:"completion_timeout"`
-	ProgressiveTool        *ProgressiveToolSpec   `json:"progressive_tool,omitempty"`
-	ApprovalRequiredTools  []string               `json:"approval_required_tools,omitempty"`
+	// Model 模型配置
+	Model *TeamModelConfig `json:"model,omitempty"`
+	// Card 代理身份卡片
+	Card *agentschema.AgentCard `json:"card,omitempty"`
+	// SystemPrompt 系统提示词
+	SystemPrompt string `json:"system_prompt,omitempty"`
+	// Tools 工具列表
+	Tools []any `json:"tools,omitempty"`
+	// Mcps MCP 服务器列表
+	Mcps []any `json:"mcps,omitempty"`
+	// Subagents 子代理列表
+	Subagents []any `json:"subagents,omitempty"`
+	// Rails 约束规则列表
+	Rails []any `json:"rails,omitempty"`
+	// EnableTaskLoop 是否启用任务循环
+	EnableTaskLoop bool `json:"enable_task_loop"`
+	// EnableAsyncSubagent 是否启用异步子代理
+	EnableAsyncSubagent bool `json:"enable_async_subagent"`
+	// AddGeneralPurposeAgent 是否添加通用代理
+	AddGeneralPurposeAgent bool `json:"add_general_purpose_agent"`
+	// MaxIterations 最大迭代次数
+	MaxIterations int `json:"max_iterations"`
+	// Workspace 工作空间规格
+	Workspace *WorkspaceSpec `json:"workspace,omitempty"`
+	// Skills 技能列表
+	Skills []string `json:"skills,omitempty"`
+	// EnableSkillDiscovery 是否启用技能发现
+	EnableSkillDiscovery bool `json:"enable_skill_discovery"`
+	// SysOperation 系统操作规格
+	SysOperation *SysOperationSpec `json:"sys_operation,omitempty"`
+	// Language 语言偏好
+	Language string `json:"language,omitempty"`
+	// PromptMode 提示模式
+	PromptMode string `json:"prompt_mode,omitempty"`
+	// VisionModel 视觉模型规格
+	VisionModel *VisionModelSpec `json:"vision_model,omitempty"`
+	// AudioModel 音频模型规格
+	AudioModel *AudioModelSpec `json:"audio_model,omitempty"`
+	// EnableTaskPlanning 是否启用任务规划
+	EnableTaskPlanning bool `json:"enable_task_planning"`
+	// RestrictToSandbox 是否限制在沙箱内
+	RestrictToSandbox bool `json:"restrict_to_sandbox"`
+	// AutoCreateWorkspace 是否自动创建工作空间
+	AutoCreateWorkspace bool `json:"auto_create_workspace"`
+	// CompletionTimeout 完成超时时间（秒）
+	CompletionTimeout float64 `json:"completion_timeout"`
+	// ProgressiveTool 渐进式工具规格
+	ProgressiveTool *ProgressiveToolSpec `json:"progressive_tool,omitempty"`
+	// ApprovalRequiredTools 需审批的工具列表
+	ApprovalRequiredTools []string `json:"approval_required_tools,omitempty"`
 }
 
 // LeaderSpec Leader 身份规格。
 type LeaderSpec struct {
-	MemberName  string `json:"member_name"`
+	// MemberName 成员名
+	MemberName string `json:"member_name"`
+	// DisplayName 显示名
 	DisplayName string `json:"display_name"`
-	Persona     string `json:"persona"`
-	ModelName   string `json:"model_name,omitempty"`
+	// Persona 人设描述
+	Persona string `json:"persona"`
+	// ModelName 模型名称（可选）
+	ModelName string `json:"model_name,omitempty"`
 }
 
 // TransportSpec 可插拔传输层规格。
 type TransportSpec struct {
-	Type   string         `json:"type"`
+	// Type 传输类型
+	Type string `json:"type"`
+	// Params 传输参数
 	Params map[string]any `json:"params,omitempty"`
 }
 
 // StorageSpec 可插拔存储层规格。
 type StorageSpec struct {
-	Type   string         `json:"type"`
+	// Type 存储类型
+	Type string `json:"type"`
+	// Params 存储参数
 	Params map[string]any `json:"params,omitempty"`
 }
 
 // TeamAgentSpec 构造 TeamAgent 的完整 JSON 可序列化规格。
 type TeamAgentSpec struct {
-	Agents                       map[string]DeepAgentSpec            `json:"agents"`
-	TeamName                     string                              `json:"team_name"`
-	Lifecycle                    TeamLifecycle                       `json:"lifecycle"`
-	EnableTeamPlan               bool                                `json:"enable_team_plan"`
-	TeammateMode                 MemberMode                          `json:"teammate_mode"`
-	SpawnMode                    string                              `json:"spawn_mode"`
-	Leader                       LeaderSpec                          `json:"leader"`
-	PredefinedMembers            []TeamMemberSpec                    `json:"predefined_members"`
-	ModelPool                    []models.ModelPoolEntry             `json:"model_pool,omitempty"`
-	ModelRouter                  *models.ModelRouterConfig           `json:"model_router,omitempty"`
-	ModelPoolStrategy            string                              `json:"model_pool_strategy"`
-	TeamMode                     string                              `json:"team_mode,omitempty"`
-	Transport                    *TransportSpec                      `json:"transport,omitempty"`
-	Storage                      *StorageSpec                        `json:"storage,omitempty"`
-	Worktree                     *worktree.WorktreeConfig            `json:"worktree,omitempty"`
-	Workspace                    *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
-	Metadata                     map[string]any                      `json:"metadata,omitempty"`
-	EnableHITT                   bool                                `json:"enable_hitt"`
-	ExposeHumanAgentsToTeammates bool                                `json:"expose_human_agents_to_teammates"`
-	Language                     string                              `json:"language,omitempty"`
-	AgentCustomizer              any                                 `json:"-"`
-	Memory                       *memory.TeamMemoryConfig            `json:"memory,omitempty"`
+	// Agents 角色名到 DeepAgentSpec 的映射
+	Agents map[string]DeepAgentSpec `json:"agents"`
+	// TeamName 团队名
+	TeamName string `json:"team_name"`
+	// Lifecycle 生命周期模式
+	Lifecycle TeamLifecycle `json:"lifecycle"`
+	// EnableTeamPlan 是否启用团队计划模式
+	EnableTeamPlan bool `json:"enable_team_plan"`
+	// TeammateMode 队友交互模式
+	TeammateMode MemberMode `json:"teammate_mode"`
+	// SpawnMode 生成模式
+	SpawnMode string `json:"spawn_mode"`
+	// Leader Leader 规格
+	Leader LeaderSpec `json:"leader"`
+	// PredefinedMembers 预定义成员列表
+	PredefinedMembers []TeamMemberSpec `json:"predefined_members"`
+	// ModelPool LLM 端点池
+	ModelPool []models.ModelPoolEntry `json:"model_pool,omitempty"`
+	// ModelRouter 模型路由配置
+	ModelRouter *models.ModelRouterConfig `json:"model_router,omitempty"`
+	// ModelPoolStrategy 模型池分配策略
+	ModelPoolStrategy string `json:"model_pool_strategy"`
+	// TeamMode 团队模式（可选）
+	TeamMode string `json:"team_mode,omitempty"`
+	// Transport 传输层规格
+	Transport *TransportSpec `json:"transport,omitempty"`
+	// Storage 存储层规格
+	Storage *StorageSpec `json:"storage,omitempty"`
+	// Worktree 工作树配置
+	Worktree *worktree.WorktreeConfig `json:"worktree,omitempty"`
+	// Workspace 工作空间配置
+	Workspace *team_workspace.TeamWorkspaceConfig `json:"workspace,omitempty"`
+	// Metadata 元数据
+	Metadata map[string]any `json:"metadata,omitempty"`
+	// EnableHITT 是否启用 Human-in-the-Team
+	EnableHITT bool `json:"enable_hitt"`
+	// ExposeHumanAgentsToTeammates 是否向队友暴露人类代理
+	ExposeHumanAgentsToTeammates bool `json:"expose_human_agents_to_teammates"`
+	// Language 团队默认语言
+	Language string `json:"language,omitempty"`
+	// AgentCustomizer 用户自定义配置钩子
+	AgentCustomizer any `json:"-"`
+	// Memory 团队记忆配置
+	Memory *memory.TeamMemoryConfig `json:"memory,omitempty"`
 }
 
 // TransportBuilder 传输层构建器函数类型。

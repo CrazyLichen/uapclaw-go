@@ -65,6 +65,8 @@ type setupTeamBackendConfig struct {
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
 type SetupTeamBackendOption func(*setupTeamBackendConfig)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -143,8 +145,6 @@ func resolveTeamMode(spec atschema.TeamAgentSpec) string {
 	}
 	return "default"
 }
-
-// ──────────────────────────── 导出方法 ────────────────────────────
 
 // Configure 主入口：配置基础设施并构建 Harness。
 // 对齐 Python: AgentConfigurator.configure(spec, ctx)
@@ -361,10 +361,6 @@ func (c *AgentConfigurator) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) an
 	}
 	return c.spawnPayloadBuilder.BuildSpawnConfig(ctx)
 }
-
-// ──────────────────────────────────────────────────────────────
-// Properties — 代理到 infra / resources / blueprint
-// ──────────────────────────────────────────────────────────────
 
 // Infra 返回每进程团队基础设施容器。
 // 对齐 Python: AgentConfigurator.infra property

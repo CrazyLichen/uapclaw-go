@@ -124,6 +124,12 @@ type invokeResponse struct {
 	err error
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewQueueMessage 创建火忘消息。
@@ -147,7 +153,7 @@ func NewStreamQueueMessage(payload map[string]any) *StreamQueueMessage {
 	}
 }
 
-// ───────── QueueMessage 实现 QueueMessageBase ─────────
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // GetMessageID 实现 QueueMessageBase 接口。
 func (m *QueueMessage) GetMessageID() string { return m.MessageID }
@@ -169,8 +175,6 @@ func (m *QueueMessage) GetErrorMsg() string { return m.ErrorMsg }
 
 // SetErrorMsg 实现 QueueMessageBase 接口。
 func (m *QueueMessage) SetErrorMsg(msg string) { m.ErrorMsg = msg }
-
-// ───────── InvokeQueueMessage 实现 QueueMessageBase ─────────
 
 // GetMessageID 实现 QueueMessageBase 接口。
 func (m *InvokeQueueMessage) GetMessageID() string { return m.MessageID }
@@ -217,8 +221,6 @@ func (m *InvokeQueueMessage) CompleteResponse(result any, err error) {
 		// response channel 已有值，忽略重复完成
 	}
 }
-
-// ───────── StreamQueueMessage 实现 QueueMessageBase ─────────
 
 // GetMessageID 实现 QueueMessageBase 接口。
 func (m *StreamQueueMessage) GetMessageID() string { return m.MessageID }

@@ -17,6 +17,10 @@ type FileReadState struct {
 	Content string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // fileReadRegistry 全局文件读取状态注册表。
@@ -48,3 +52,5 @@ func SetFileReadState(path string, state *FileReadState) {
 func DeleteFileReadState(path string) {
 	fileReadRegistry.Delete(path)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

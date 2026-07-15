@@ -15,12 +15,18 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// offloadMessageHandle 卸载消息占位符格式，统一使用 handle+type 双字段
 	// filesystem 的 path 是内部实现细节，不暴露给 LLM，LLM 只需 handle 和 type 来调用 reload 工具
 	offloadMessageHandle = "[[OFFLOAD: handle=%s, type=%s]]"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

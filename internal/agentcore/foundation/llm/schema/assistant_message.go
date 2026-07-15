@@ -40,6 +40,8 @@ type AssistantMessage struct {
 // AssistantMessageOption AssistantMessage 构造选项函数。
 type AssistantMessageOption func(*AssistantMessage)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // FinishReasonNull 流式场景中表示尚未收到终止信号的标记值。
@@ -47,6 +49,8 @@ type AssistantMessageOption func(*AssistantMessage)
 // Python 端使用字符串 "null"（不是 None）作为默认值，流式合并时通过
 // finish_reason != "null" 判断是否收到终止信号。Go 端保持相同语义。
 const FinishReasonNull = "null"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -243,3 +247,5 @@ func (m *AssistantMessage) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

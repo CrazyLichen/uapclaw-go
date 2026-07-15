@@ -28,6 +28,10 @@ type ProxySession struct {
 // Deprecated: 使用 InnerSession
 type BaseSession = interfaces.InnerSession
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewProxySession 创建代理会话实例（stub 为 nil）。
@@ -80,3 +84,5 @@ func (p *ProxySession) ActorManager() any {
 func (p *ProxySession) Close() error {
 	return p.stub.Close()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

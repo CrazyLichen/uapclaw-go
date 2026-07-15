@@ -33,6 +33,10 @@ type NodeSessionFacade struct {
 	description string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时检查 *NodeSessionFacade 满足 SessionFacade 接口
@@ -246,3 +250,5 @@ func (f *NodeSessionFacade) GetEnv(key string, defaultValue ...any) any {
 func (f *NodeSessionFacade) GetNodeConfig() any {
 	return f.inner.NodeConfig()
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

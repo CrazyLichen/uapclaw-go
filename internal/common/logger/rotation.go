@@ -34,6 +34,8 @@ type mutexWriter struct {
 	wrapped io.Writer
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// defaultMaxSizeBytes 单文件最大字节数，20 MB。
@@ -43,6 +45,8 @@ const (
 	// 对应 Python: _LOG_FILE_BACKUP_COUNT
 	defaultMaxBackups = 20
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -108,3 +112,5 @@ func EnsureLogDir(filePath string) error {
 	dir := filepath.Dir(filePath)
 	return os.MkdirAll(dir, 0o755)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

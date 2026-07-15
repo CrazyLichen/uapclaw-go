@@ -25,6 +25,12 @@ type AgentStateCollection struct {
 	traceState map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewAgentStateCollection 创建 Agent 状态集合实例。
@@ -158,3 +164,5 @@ func (s *AgentStateCollection) GlobalState() *InMemoryStateLike {
 	defer s.mu.RUnlock()
 	return s.globalState
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

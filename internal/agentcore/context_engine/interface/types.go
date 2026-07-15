@@ -111,12 +111,17 @@ type ContextEngine interface {
 
 // ProcessorSpec 处理器规格，指定类型和配置。
 //
-// 对应 Python: (processor_type, processor_config) 元组
+// 对应 Python: (processor_type, processor_config) 元组。
+// ConfigOverrides 支持 dict 级别的部分覆盖（对齐 Python 中 (key, dict) 形式的 override），
+// 合并时将 dict 中的字段覆盖到 preset config 的对应字段上。
 type ProcessorSpec struct {
 	// Type 处理器类型标识
 	Type string
 	// Config 处理器配置
 	Config ProcessorConfig
+	// ConfigOverrides dict 级别的部分配置覆盖（snake_case 键名）
+	// 对齐 Python: _merge_config_with_overrides(base_config, overrides)
+	ConfigOverrides map[string]any
 }
 
 // ContextEngineOptions ContextEngine 构造器可选项

@@ -45,11 +45,15 @@ type S3Client struct {
 	uploader *manager.Uploader
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// logComponent 对象存储日志组件，agentcore 下的包应使用 ComponentAgentCore
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -410,3 +414,5 @@ func (c *S3Client) ListObjects(ctx context.Context, bucketName string, objectPre
 		Msg("列出对象成功")
 	return objects, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

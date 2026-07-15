@@ -10,6 +10,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // SpawnAgentConfig Spawn 基础配置。
 // 对齐 Python: SpawnAgentConfig (agent_config.py)
 type SpawnAgentConfig struct {
@@ -59,6 +61,8 @@ type SpawnConfig struct {
 // 对齐 Python: SpawnAgentKind (agent_config.py)
 type SpawnAgentKind string
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// SpawnAgentKindClassAgent 类 Agent 启动（通过 ResourceMgr 注册表查找）
@@ -81,6 +85,8 @@ const (
 	// ShutdownWaitPeriod 关闭后等待进程退出的宽限期
 	ShutdownWaitPeriod = 2 * time.Second
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

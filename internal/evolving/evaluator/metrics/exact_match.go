@@ -22,6 +22,12 @@ type ExactMatchMetric struct {
 // ExactMatchOption ExactMatchMetric 构造选项函数。
 type ExactMatchOption func(*ExactMatchMetric)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewExactMatchMetric 创建 ExactMatchMetric 实例，默认 normalize=true。

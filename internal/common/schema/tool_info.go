@@ -48,6 +48,12 @@ type McpToolInfo struct {
 	ServerName string `json:"server_name,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // GetType 实现 ToolInfoInterface 接口，返回类型标识。
@@ -92,3 +98,5 @@ func NewMcpToolInfo(name, description, serverName string, parameters map[string]
 		ServerName: serverName,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

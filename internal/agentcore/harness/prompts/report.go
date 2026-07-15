@@ -39,6 +39,8 @@ type PromptReport struct {
 	Language string `json:"language"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -49,6 +51,8 @@ const (
 	// 对应 Python: _EN_CHARS_PER_TOKEN = 4.0
 	enCharsPerToken = 4.0
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -133,3 +137,5 @@ func (r *PromptReport) Summary() string {
 		" chars=" + strconv.Itoa(r.TotalChars) +
 		" est_tokens≈" + strconv.Itoa(r.EstimatedTokens)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

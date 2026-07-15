@@ -50,8 +50,6 @@ type AgentAdapter interface {
 	Cleanup() error
 }
 
-// ──────────────────────────── 可选接口 ────────────────────────────
-
 // ContextCompressor 上下文压缩可选接口。
 // DeepAdapter 额外实现此接口，JiuWenClaw 门面通过类型断言调用。
 //
@@ -90,3 +88,13 @@ type GatewayDisconnectHandler interface {
 	// 对应 Python: JiuWenClawDeepAdapter.abort_on_gateway_disconnect() (line 3539-3578)
 	AbortOnGatewayDisconnect(ctx context.Context)
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

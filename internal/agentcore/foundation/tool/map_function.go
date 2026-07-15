@@ -21,6 +21,12 @@ type MapFunction struct {
 	streamFn func(ctx context.Context, inputs map[string]any) (<-chan map[string]any, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMapFunction 创建弱类型 map 函数工具（降级模式）。
@@ -151,3 +157,5 @@ func (f *MapFunction) Stream(ctx context.Context, inputs map[string]any, opts ..
 
 	return outCh, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

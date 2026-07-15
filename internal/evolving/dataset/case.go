@@ -41,6 +41,12 @@ type EvaluatedCase struct {
 // CaseOption Case 构造选项函数。
 type CaseOption func(*Case)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCase 创建 Case 实例，默认自动生成 CaseID。
@@ -115,3 +121,5 @@ func WithCaseTools(tools []schema.ToolInfo) CaseOption {
 func WithCaseID(id string) CaseOption {
 	return func(c *Case) { c.CaseID = id }
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

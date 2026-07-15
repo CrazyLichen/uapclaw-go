@@ -12,6 +12,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // 工具名称常量，对齐 Python tool_cards 中的工具名。
@@ -54,6 +58,10 @@ const (
 	// ToolNameAudioTranscription 音频转录工具
 	ToolNameAudioTranscription = "audio_transcription"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
@@ -613,8 +621,6 @@ func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {
 
 	return toolCards
 }
-
-// ──────────────────────────── AbilityManager 辅助 ────────────────────────────
 
 // getAbilityManager 获取当前实例的 AbilityManager。
 func (d *DeepAdapter) getAbilityManager() sainterfaces.AbilityManagerInterface {

@@ -70,6 +70,12 @@ type AudioGenerationResponseOption func(*AudioGenerationResponse)
 // VideoGenerationResponseOption VideoGenerationResponse 的函数式选项。
 type VideoGenerationResponseOption func(*VideoGenerationResponse)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithModel 设置生成响应使用的模型名称。
@@ -234,3 +240,5 @@ func NewVideoGenerationResponse(opts ...VideoGenerationResponseOption) *VideoGen
 	}
 	return resp
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

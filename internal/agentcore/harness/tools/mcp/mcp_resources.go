@@ -27,6 +27,10 @@ type ReadMcpResourceInput struct {
 	URI string `json:"uri"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // mcpResourcesLogComponent 日志组件标识
@@ -77,6 +81,8 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 	return invokeFn
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // NewReadMcpResourceTool 创建读取 MCP 服务器资源工具。
 //
 // 对齐 Python: ReadMcpResourceTool (openjiuwen/harness/tools/mcp_tools.py L42-67)
@@ -124,3 +130,5 @@ func NewReadMcpResourceTool(language string, agentID string) tool.Tool {
 	invokeFn, _ := tool.NewTool(fn, tool.WithToolCard(card))
 	return invokeFn
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

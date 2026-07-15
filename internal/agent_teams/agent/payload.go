@@ -27,6 +27,12 @@ type SpawnPayloadBuilder struct {
 	teammatePortCounter int
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSpawnPayloadBuilder 创建新的 SpawnPayloadBuilder 实例。
@@ -38,8 +44,6 @@ func NewSpawnPayloadBuilder(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntim
 		memberPortMap: make(map[string]int),
 	}
 }
-
-// ──────────────────────────── 导出方法 ────────────────────────────
 
 // BuildSpawnPayload 构建跨进程 spawn 载荷。
 // 对齐 Python: SpawnPayloadBuilder.build_spawn_payload(ctx, initial_message)

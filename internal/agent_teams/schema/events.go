@@ -374,6 +374,8 @@ const (
 	TeamEventWorkspaceLockResponse    = "workspace_lock_response"
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // BuildTopic 构建 topic 字符串。
@@ -391,3 +393,5 @@ func NewEventMessage(eventType string, payload map[string]any, senderID string) 
 		SenderID:  senderID,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

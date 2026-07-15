@@ -35,11 +35,15 @@ type sanitizerWriter struct {
 	sanitizer  *Sanitizer
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // SensitiveMask 敏感信息统一掩码值。
 // 对应 Python: _SENSITIVE_MASK
 const SensitiveMask = "******"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -158,3 +162,5 @@ func (w *sanitizerWriter) Write(p []byte) (n int, err error) {
 	sanitized := w.sanitizer.Sanitize(string(p))
 	return w.underlying.Write([]byte(sanitized))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

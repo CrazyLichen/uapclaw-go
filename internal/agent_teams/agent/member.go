@@ -33,10 +33,14 @@ type TeamMember struct {
 	Desc string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent 日志组件标识
 const logComponent = logger.ComponentCommon
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -76,3 +80,5 @@ func (m *TeamMember) UpdateExecutionStatus(ctx context.Context, newStatus atsche
 		Str("new_status", string(newStatus)).Msg("TeamMember.UpdateExecutionStatus")
 	return true, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

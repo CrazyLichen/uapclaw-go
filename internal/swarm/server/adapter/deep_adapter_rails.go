@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	cerails "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/context_engineer"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -149,11 +150,10 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	}
 
 	// 步骤 19: contextProcessorRail
+	// buildContextProcessorRail() 始终返回非 nil，无需 nil 检查
 	cp := d.buildContextProcessorRail()
-	if cp != nil {
-		d.contextProcessorRail = cp
-		railsList = append(railsList, cp)
-	}
+	d.contextProcessorRail = cp
+	railsList = append(railsList, cp)
 
 	// 步骤 20: permissionRail
 	perm := d.buildPermissionRail(configBase)
@@ -300,20 +300,16 @@ func (d *DeepAdapter) buildResponsePromptRail() sainterfaces.AgentRail {
 }
 
 // buildContextAssembleRail 构建上下文组装护栏。
-// ⤵️ 10.6.3-10: ContextAssembleRail
 // 对齐 Python: _build_context_assemble_rail() (line 2181-2195)
 func (d *DeepAdapter) buildContextAssembleRail(mode string) sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ContextAssembleRail
 	d.contextAssembleMode = mode
-	return nil
+	return cerails.NewContextAssembleRail()
 }
 
 // buildContextProcessorRail 构建上下文处理护栏。
-// ⤵️ 10.6.3-10: ContextProcessorRail
 // 对齐 Python: _build_context_processor_rail() (line 2196-2212)
 func (d *DeepAdapter) buildContextProcessorRail() sainterfaces.AgentRail {
-	// ⤵️ 10.6.3-10: 实现 ContextProcessorRail
-	return nil
+	return cerails.NewContextProcessorRail()
 }
 
 // buildPermissionRail 构建权限护栏。

@@ -95,6 +95,10 @@ const (
 	WorktreeLifecyclePolicyDurable WorktreeLifecyclePolicy = "durable"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorktreeConfig 创建默认 WorktreeConfig。
@@ -106,3 +110,5 @@ func NewWorktreeConfig() WorktreeConfig {
 		LifecyclePolicy:       WorktreeLifecyclePolicyAuto,
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

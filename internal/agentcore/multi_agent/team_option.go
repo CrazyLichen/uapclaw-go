@@ -6,6 +6,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithTeamSession 设置团队会话。
@@ -32,3 +40,5 @@ func WithTeamStreamModes(modes []stream.StreamMode) schema.TeamOption {
 func NewTeamOptions(opts ...schema.TeamOption) *schema.TeamOptions {
 	return schema.NewTeamOptions(opts...)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -24,6 +24,12 @@ type TeamMemoryConfig struct {
 	TeamMemoryDir string `json:"-"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamMemoryConfig 创建默认团队记忆配置。
@@ -45,3 +51,5 @@ func NewTeamMemoryConfig() TeamMemoryConfig {
 func ResolveEmbeddingConfig(_ *TeamMemoryConfig) any {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

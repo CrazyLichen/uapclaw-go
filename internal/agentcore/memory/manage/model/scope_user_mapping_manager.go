@@ -17,6 +17,12 @@ type ScopeUserMappingManager struct {
 	metaTable string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewScopeUserMappingManager 创建 ScopeUserMappingManager 实例。
@@ -70,3 +76,5 @@ func (m *ScopeUserMappingManager) GetByScopeID(ctx context.Context, scopeID stri
 	}
 	return results, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

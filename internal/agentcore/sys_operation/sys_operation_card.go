@@ -36,6 +36,12 @@ type ToolIdProxy struct {
 // SysOperationCardOption SysOperationCard 构造选项函数
 type SysOperationCardOption func(*SysOperationCard)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSysOperationCard 创建 SysOperationCard 实例，默认 Mode 为 OperationModeLocal。

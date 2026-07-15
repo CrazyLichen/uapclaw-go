@@ -51,6 +51,12 @@ type RemoveResult struct {
 	SessionMeta SessionMeta
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateNewSessionMeta 创建新的会话元数据，设置当前时间戳和默认值。
@@ -69,8 +75,6 @@ func CreateNewSessionMeta(sessionID string, dataContainerType string) SessionMet
 	}
 }
 
-// ──── SessionMeta 方法 ────
-
 // UpdateTimestamp 更新时间戳为当前时间
 func (m *SessionMeta) UpdateTimestamp() {
 	m.UpdatedAt = float64(time.Now().UnixMilli()) / 1000.0
@@ -80,8 +84,6 @@ func (m *SessionMeta) UpdateTimestamp() {
 func (m *SessionMeta) IncrementVersion() {
 	m.Version++
 }
-
-// ──── ScopeSessionsMeta 方法 ────
 
 // GetSession 根据 sessionID 获取会话元数据，未找到返回 nil
 func (m *ScopeSessionsMeta) GetSession(sessionID string) *SessionMeta {
@@ -180,3 +182,5 @@ func (m *ScopeSessionsMeta) IncrementSessionVersion(sessionID string) bool {
 	session.IncrementVersion()
 	return true
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

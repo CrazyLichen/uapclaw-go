@@ -99,7 +99,7 @@ type ContextCompressionState struct {
 	Error string `json:"error,omitempty"`
 }
 
-// CompressionStatus 压缩操作状态字面量类型。
+// ──────────────────────────── 枚举 ────────────────────────────
 //
 // 对应 Python: Literal["started", "completed", "noop", "skipped", "failed"]
 type CompressionStatus string
@@ -110,6 +110,7 @@ type CompressionStatus string
 type CompressionPhase string
 
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// CompressionStarted 压缩操作已启动
 	CompressionStarted CompressionStatus = "started"
@@ -137,3 +138,9 @@ const (
 //
 // 对应 Python: CONTEXT_COMPRESSION_STATE_TYPE = "context.compression_state"
 const ContextCompressionStateType = "context.compression_state"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

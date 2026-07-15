@@ -23,6 +23,12 @@ type TeamAgentBlueprint struct {
 	Language string `json:"language,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // Role 返回团队角色。
@@ -51,3 +57,5 @@ func (b *TeamAgentBlueprint) Lifecycle() atschema.TeamLifecycle {
 func (b *TeamAgentBlueprint) TeamSpec() *atschema.TeamSpec {
 	return b.Ctx.TeamSpec
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

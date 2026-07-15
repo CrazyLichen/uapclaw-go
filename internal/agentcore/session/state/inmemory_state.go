@@ -17,6 +17,12 @@ type InMemoryStateLike struct {
 	state map[string]any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInMemoryStateLike 创建内存状态实例
@@ -85,3 +91,5 @@ func (s *InMemoryStateLike) UpdateTrace(span any) {}
 
 // Dump 导出完整状态，委托 GetState
 func (s *InMemoryStateLike) Dump() map[string]any { return s.GetState() }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

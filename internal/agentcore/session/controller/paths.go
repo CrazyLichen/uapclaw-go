@@ -8,6 +8,12 @@ import "path/filepath"
 // 对应 Python: openjiuwen/core/session/session_controller/utils.py (SessionPaths)
 type SessionPaths struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // AgentDir 获取指定 Agent 的根目录路径
@@ -44,3 +50,5 @@ func (SessionPaths) DownstreamsDir(sessionDir string) string {
 func (SessionPaths) LinkFile(sessionDir, targetAgent, targetSession string) string {
 	return filepath.Join(sessionDir, "downstreams", targetAgent+"_"+targetSession+".link")
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

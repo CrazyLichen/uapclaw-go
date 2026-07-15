@@ -62,6 +62,10 @@ const (
 	ConflictStrategyLastWriteWins ConflictStrategy = "last_write_wins"
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamWorkspaceConfig 创建默认 TeamWorkspaceConfig。
@@ -99,3 +103,5 @@ func (l WorkspaceFileLock) IsExpired() bool {
 	}
 	return time.Now().UTC().After(acquired.Add(time.Duration(l.TimeoutSeconds) * time.Second))
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

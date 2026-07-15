@@ -54,6 +54,12 @@ type SubscriptionHandle struct {
 	BackendMetadata map[string]any `json:"backend_metadata,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMessagerTransportConfig 创建默认消息通信传输配置。
@@ -77,3 +83,5 @@ func CreateMessager(_ MessagerTransportConfig) (any, error) {
 	// ⤵️ 回填: 9.65 — 根据 backend 选择 InProcessMessager 或 PyZmqMessager
 	return nil, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

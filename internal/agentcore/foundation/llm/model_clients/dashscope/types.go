@@ -90,6 +90,8 @@ type VideoUsage struct {
 	Size string `json:"size,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // DashScope 默认 API 域名
@@ -129,3 +131,7 @@ var DashScopeLanguageTypes = []string{
 	"Chinese", "English", "German", "Italian", "Portuguese",
 	"Spanish", "Japanese", "Korean", "French", "Russian",
 }
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

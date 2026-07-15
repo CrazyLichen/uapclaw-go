@@ -10,6 +10,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 type CodeOperation interface {
 	// ExecuteCode 执行代码
 	ExecuteCode(ctx context.Context, code string, opts ...CodeOption) (*result.ExecuteCodeResult, error)

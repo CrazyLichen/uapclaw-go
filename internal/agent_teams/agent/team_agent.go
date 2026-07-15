@@ -83,6 +83,12 @@ type TeamAgent struct {
 	coordination any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamAgent 创建新的 TeamAgent 实例。
@@ -100,10 +106,6 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	// TODO(#9.62): 构建 CoordinationKernel(self)
 	return a
 }
-
-// ──────────────────────────────────────────────────────────────
-// 属性 — 委托给 configurator
-// ──────────────────────────────────────────────────────────────
 
 // Blueprint 返回静态装配蓝图，configure() 前为 nil。
 // 对齐 Python: TeamAgent.blueprint property
@@ -328,10 +330,6 @@ func (a *TeamAgent) PersistAllocatorState() {
 	// TODO(#9.64): 委托 _persistAllocatorState()
 }
 
-// ──────────────────────────────────────────────────────────────
-// 事件监听器
-// ──────────────────────────────────────────────────────────────
-
 // AddEventListener 添加事件监听器。
 // 对齐 Python: TeamAgent.add_event_listener(handler)
 func (a *TeamAgent) AddEventListener(handler any) {
@@ -355,10 +353,6 @@ func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
 	// TODO(#9.58): 通过 team_backend.is_human_agent + spawn_manager.lookup_inprocess_agent 查找
 	return nil
 }
-
-// ──────────────────────────────────────────────────────────────
-// 运行时状态查询
-// ──────────────────────────────────────────────────────────────
 
 // IsAgentReady Agent 是否已就绪。
 // 对齐 Python: TeamAgent.is_agent_ready()
@@ -389,10 +383,6 @@ func (a *TeamAgent) HasPendingInterrupt() bool {
 	// TODO(#9.60): 委托 streamController.has_pending_interrupt()
 	return false
 }
-
-// ──────────────────────────────────────────────────────────────
-// BaseAgent 核心方法：Configure / Invoke / Stream
-// ──────────────────────────────────────────────────────────────
 
 // Configure 配置 TeamAgent。
 // 对齐 Python: TeamAgent.configure(spec, context)
@@ -469,10 +459,6 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 	return nil, nil
 }
 
-// ──────────────────────────────────────────────────────────────
-// 运行时控制
-// ──────────────────────────────────────────────────────────────
-
 // DeliverInput 投递输入到 Agent。
 // 对齐 Python: TeamAgent.deliver_input(content, use_steer=True)
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
@@ -546,10 +532,6 @@ func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
 	return false, nil
 }
 
-// ──────────────────────────────────────────────────────────────
-// 协调生命周期（委托给 CoordinationKernel）
-// ──────────────────────────────────────────────────────────────
-
 // StartCoordination 启动协调。
 // 对齐 Python: TeamAgent._start_coordination(session)
 func (a *TeamAgent) StartCoordination(ctx context.Context, session any) error {
@@ -570,10 +552,6 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 	// TODO(#9.62): 停止协调 coordination.stop()
 	return nil
 }
-
-// ──────────────────────────────────────────────────────────────
-// 生成 / 克隆
-// ──────────────────────────────────────────────────────────────
 
 // SpawnTeammate 生成 Teammate。
 // 对齐 Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
@@ -630,10 +608,6 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 	return nil, nil
 }
 
-// ──────────────────────────────────────────────────────────────
-// 故障容错：恢复、重启
-// ──────────────────────────────────────────────────────────────
-
 // ResumeForNewSession 为新会话恢复。
 // 对齐 Python: TeamAgent.resume_for_new_session(session)
 func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error {
@@ -664,10 +638,6 @@ func RecoverFromSession(ctx context.Context, session any, teamName string, runti
 	// TODO(#9.61): 从 session 读取 bucket → 解析 spec/context → NewTeamAgent → configure → restore_allocator_state → set_session_id
 	return nil, nil
 }
-
-// ──────────────────────────────────────────────────────────────
-// Leader 配置持久化/恢复
-// ──────────────────────────────────────────────────────────────
 
 // PersistSessionManifest 持久化恢复和清理所需的最小会话清单。
 // 对齐 Python: TeamAgent.persist_session_manifest(session)
@@ -700,10 +670,6 @@ func (a *TeamAgent) RestoreAllocatorState(state map[string]any) {
 	}
 }
 
-// ──────────────────────────────────────────────────────────────
-// Rail / 回调代理（委托给内部 DeepAgent）
-// ──────────────────────────────────────────────────────────────
-
 // RegisterRail 注册 Rail。
 // 对齐 Python: TeamAgent.register_rail(rail)
 func (a *TeamAgent) RegisterRail(ctx context.Context, rail any) (*TeamAgent, error) {
@@ -725,3 +691,5 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, e
 	}
 	return a, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

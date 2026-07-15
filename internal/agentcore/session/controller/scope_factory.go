@@ -7,6 +7,12 @@ package controller
 // 对应 Python: openjiuwen/core/session/session_controller/scope_factory.py (SessionScopeFactory)
 type SessionScopeFactory struct{}
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateMain 创建仅含主域的会话作用域（无 Subject）。
@@ -42,3 +48,5 @@ func (SessionScopeFactory) CreateCustom(scope Scope, subject Subject) SessionSco
 func (SessionScopeFactory) FromString(keyStr string) (SessionScope, error) {
 	return ParseSessionScope(keyStr)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

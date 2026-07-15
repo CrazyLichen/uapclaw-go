@@ -36,11 +36,15 @@ type GaussDialector struct {
 	postgres.Dialector // 值嵌入；所有方法使用值接收者，与 postgres.Dialector 一致
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// gaussLogComponent 日志组件
 	gaussLogComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -126,3 +130,5 @@ func (dialector GaussDialector) Migrator(db *gorm.DB) gorm.Migrator {
 		},
 	}}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

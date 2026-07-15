@@ -24,6 +24,10 @@ type PlaywrightClient struct {
 	delegate   types.McpClient // SSE 或 Stdio 客户端
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：PlaywrightClient 实现 McpClient 接口
@@ -146,3 +150,5 @@ func (c *PlaywrightClient) ReadResource(ctx context.Context, uri string) ([]map[
 func (c *PlaywrightClient) Close() error {
 	return c.Disconnect(context.Background())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

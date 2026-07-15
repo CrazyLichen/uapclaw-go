@@ -22,6 +22,10 @@ type MCPTool struct {
 	mcpClient types.McpClient
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 重导出变量和函数
@@ -201,3 +205,5 @@ func (t *MCPTool) Invoke(ctx context.Context, inputs map[string]any, opts ...too
 func (t *MCPTool) Stream(_ context.Context, _ map[string]any, _ ...tool.ToolOption) (<-chan tool.StreamChunk, error) {
 	return nil, tool.NewErrStreamNotSupported(t.card.String())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

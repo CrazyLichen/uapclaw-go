@@ -75,6 +75,10 @@ type StreamChunk struct {
 // ToolOption 工具调用选项函数。
 type ToolOption func(*ToolCallOptions)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译时验证 ToolCard 满足 schema.CardInterface。
@@ -235,3 +239,5 @@ func (c *ToolCard) AbilityID() string { return c.ID }
 
 // AbilityKind 实现 schema.Ability 接口。
 func (c *ToolCard) AbilityKind() schema.AbilityKind { return schema.AbilityKindTool }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

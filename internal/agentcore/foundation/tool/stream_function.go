@@ -22,6 +22,12 @@ type StreamFunction[I any, O any] struct {
 	fn   func(context.Context, I, ...ToolOption) (<-chan O, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewStreamFunction 创建 Stream 模式的本地函数工具。
@@ -172,3 +178,5 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 
 	return outCh, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

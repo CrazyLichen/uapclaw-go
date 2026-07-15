@@ -27,6 +27,12 @@ type milvusClientAdapter struct {
 	client *milvusclient.Client
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 func (a *milvusClientAdapter) CreateCollection(ctx context.Context, option milvusclient.CreateCollectionOption, callOptions ...interface{}) error {
 	return a.client.CreateCollection(ctx, option)

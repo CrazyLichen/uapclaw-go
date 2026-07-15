@@ -96,6 +96,12 @@ type SubWorkflowSession struct {
 // WorkflowSessionOption WorkflowSession 构造选项函数类型
 type WorkflowSessionOption func(*WorkflowSession)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewWorkflowSession 创建内部 WorkflowSession 实例。

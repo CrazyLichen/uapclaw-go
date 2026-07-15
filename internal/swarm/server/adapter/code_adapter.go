@@ -264,12 +264,10 @@ func (c *CodeAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 	return c.deep.HandleHeartbeat(ctx, req)
 }
 
-// Cleanup 委托 DeepAdapter。
+// Cleanup 委托 DeepAdapter 清理适配器资源。
 func (c *CodeAdapter) Cleanup() error {
 	return c.deep.Cleanup()
 }
-
-// ──────────────────────────── 可选接口委托 ────────────────────────────
 
 // CompressContext 委托 DeepAdapter 的 ContextCompressor 接口。
 func (c *CodeAdapter) CompressContext(ctx context.Context, sessionID string, session sessioninterfaces.SessionFacade, returnState bool) (map[string]any, error) {
@@ -300,3 +298,11 @@ func (c *CodeAdapter) TryStopDreaming(ctx context.Context) error {
 func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	c.deep.AbortOnGatewayDisconnect(ctx)
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

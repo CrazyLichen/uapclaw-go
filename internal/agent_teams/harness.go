@@ -63,6 +63,12 @@ type TeamHarness struct {
 	activeAgentSession any
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamHarness 创建新的 TeamHarness 实例。
@@ -118,8 +124,6 @@ func BuildTeamHarness(
 	}
 	return NewTeamHarness(nil, rails, role, memberName, initialPlanMode)
 }
-
-// ──────────────────────────── 导出方法 ────────────────────────────
 
 // RunAgentCustomizer 调用用户自定义钩子。
 // 对齐 Python: TeamHarness.run_agent_customizer(customizer)
@@ -237,3 +241,5 @@ func (h *TeamHarness) RegisterMemberTools(memoryManager any) {}
 func (h *TeamHarness) InjectMemberMemory(ctx context.Context, memoryManager any, query string) error {
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

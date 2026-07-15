@@ -74,35 +74,31 @@ type SessionScopeKey struct {
 	SessionScope SessionScope
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
-// ──── MainScope 方法 ────
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // String 返回固定值 "main"
 func (MainScope) String() string { return "main" }
-
-// ──── DirectSubject 方法 ────
 
 // String 返回 "direct:{UserID}" 格式的字符串
 func (d DirectSubject) String() string {
 	return "direct:" + d.UserID
 }
 
-// ──── GroupSubject 方法 ────
-
 // String 返回 "group:{GroupID}" 格式的字符串
 func (g GroupSubject) String() string {
 	return "group:" + g.GroupID
 }
 
-// ──── GroupUserSubject 方法 ────
-
 // String 返回 "group:{GroupID}:user:{UserID}" 格式的字符串
 func (g GroupUserSubject) String() string {
 	return "group:" + g.GroupID + ":user:" + g.UserID
 }
-
-// ──── SessionScope 方法 ────
 
 // String 返回会话作用域的字符串表示。
 // 无 Subject 时返回 "{scope}"，有 Subject 时返回 "{scope}:{subject}"。
@@ -112,8 +108,6 @@ func (s SessionScope) String() string {
 	}
 	return s.Scope.String()
 }
-
-// ──── SessionScopeKey 方法 ────
 
 // String 返回全局唯一键的字符串表示，格式 "agent:{AgentID}:{SessionScope}"
 func (k SessionScopeKey) String() string {
@@ -195,3 +189,5 @@ func ParseSessionScopeKey(keyStr string) (SessionScopeKey, error) {
 	}
 	return SessionScopeKey{AgentID: agentID, SessionScope: sessionScope}, nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

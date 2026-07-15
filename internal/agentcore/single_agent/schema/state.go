@@ -6,6 +6,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // BaseInterruptionState 中断状态基类。
 //
 // 对应 Python: BaseInterruptionState(ai_message, iteration, original_query)
@@ -73,7 +75,10 @@ type InterruptionState struct {
 	PendingComponentID string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// InterruptionKey ReActAgent 中断状态键
 	InterruptionKey = "__react_agent_interruption__"
@@ -84,3 +89,9 @@ const (
 	// ResumeStartIterationKey 恢复时起始迭代键
 	ResumeStartIterationKey = "_resume_start_iteration"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -37,7 +37,9 @@ type WorkspaceProvider struct {
 	baseDir string
 }
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // workspaceSubDirs 工作区标准子目录
 var workspaceSubDirs = []string{"resources", "skill", "evals", "output"}
@@ -82,3 +84,5 @@ func (w *WorkspaceProvider) SyncToRemote(_ string) error {
 	// 待实现: 生产环境实现远程同步（S3 / OBS / NFS）
 	return nil
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

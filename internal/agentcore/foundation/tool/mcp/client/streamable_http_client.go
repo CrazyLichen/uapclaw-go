@@ -33,6 +33,10 @@ type StreamableHttpClient struct {
 	isConnected bool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 编译期检查：StreamableHttpClient 实现 McpClient 接口
@@ -419,3 +423,5 @@ func (c *StreamableHttpClient) ReadResource(ctx context.Context, uri string) ([]
 func (c *StreamableHttpClient) Close() error {
 	return c.Disconnect(context.Background())
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

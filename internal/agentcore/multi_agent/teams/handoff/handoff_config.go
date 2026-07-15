@@ -45,6 +45,12 @@ type HandoffTeamConfig struct {
 // HandoffOrchestrator 交接编排器，具体字段和方法在 handoff_orchestrator.go 中定义。
 // 此处仅做包内类型引用，HandoffConfig.TerminationCondition 需要引用此类型。
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewHandoffConfig 创建 HandoffConfig 实例，设置默认值。
@@ -65,3 +71,5 @@ func NewHandoffTeamConfig() *HandoffTeamConfig {
 		Handoff:    *NewHandoffConfig(),
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

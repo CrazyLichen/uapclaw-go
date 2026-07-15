@@ -137,7 +137,10 @@ type MessageAndMeta struct {
 	Metadata *MessageMetadata
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// DefaultMessageLimit GetMessages 默认返回条数，对齐 Python limit=10
 	DefaultMessageLimit = 10
@@ -146,3 +149,9 @@ const (
 	// DefaultMessageOrderDirection GetMessages 默认排序方向，对齐 Python order_direction="desc"
 	DefaultMessageOrderDirection = "desc"
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
