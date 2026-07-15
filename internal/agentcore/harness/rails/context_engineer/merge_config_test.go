@@ -21,9 +21,9 @@ func reflectPtrElem(ptr interface{}) reflect.Value {
 
 // testConfig 测试用 ProcessorConfig 实现
 type testConfig struct {
-	TokensThreshold int                        `json:"tokens_threshold"`
-	MessagesToKeep  int                        `json:"messages_to_keep"`
-	KeepLastRound   bool                       `json:"keep_last_round"`
+	TokensThreshold int                           `json:"tokens_threshold"`
+	MessagesToKeep  int                           `json:"messages_to_keep"`
+	KeepLastRound   bool                          `json:"keep_last_round"`
 	Model           *llmschema.ModelRequestConfig `json:"model"`
 	ModelClient     *llmschema.ModelClientConfig  `json:"model_client"`
 }
@@ -185,7 +185,7 @@ func TestMergeProcessors_基础合并(t *testing.T) {
 
 	overrides := []iface.ProcessorSpec{
 		{
-			Type:           "DialogueCompressor",
+			Type:            "DialogueCompressor",
 			ConfigOverrides: map[string]any{"tokens_threshold": 50000},
 		},
 	}
@@ -245,7 +245,7 @@ func TestMergeProcessors_无base时dict覆盖应panic(t *testing.T) {
 
 	overrides := []iface.ProcessorSpec{
 		{
-			Type:           "NewProcessor",
+			Type:            "NewProcessor",
 			ConfigOverrides: map[string]any{"tokens_threshold": 5000},
 		},
 	}

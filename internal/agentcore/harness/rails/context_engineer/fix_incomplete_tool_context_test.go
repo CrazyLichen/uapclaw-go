@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	tokeniface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	tooliface "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	tokeniface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/token"
-	tooliface "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
 
 // ──────────────────────────── Mock ────────────────────────────
@@ -48,17 +48,17 @@ func (m *mockModelContext) AddMessages(ctx context.Context, message llmschema.Ba
 func (m *mockModelContext) GetContextWindow(ctx context.Context, systemMessages []llmschema.BaseMessage, tools []cschema.ToolInfoInterface, windowSize int, dialogueRound int, opts ...iface.Option) (*iface.ContextWindow, error) {
 	return nil, nil
 }
-func (m *mockModelContext) Statistic() *iface.ContextStats { return nil }
-func (m *mockModelContext) SessionID() string              { return "test" }
-func (m *mockModelContext) ContextID() string              { return "test" }
-func (m *mockModelContext) TokenCounter() tokeniface.TokenCounter   { return nil }
-func (m *mockModelContext) ReloaderTool() tooliface.Tool             { return nil }
-func (m *mockModelContext) WorkspaceDir() string           { return "" }
-func (m *mockModelContext) SetSessionRef(sess sessioninterfaces.SessionFacade) {}
-func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade { return nil }
+func (m *mockModelContext) Statistic() *iface.ContextStats                                  { return nil }
+func (m *mockModelContext) SessionID() string                                               { return "test" }
+func (m *mockModelContext) ContextID() string                                               { return "test" }
+func (m *mockModelContext) TokenCounter() tokeniface.TokenCounter                           { return nil }
+func (m *mockModelContext) ReloaderTool() tooliface.Tool                                    { return nil }
+func (m *mockModelContext) WorkspaceDir() string                                            { return "" }
+func (m *mockModelContext) SetSessionRef(sess sessioninterfaces.SessionFacade)              {}
+func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade                  { return nil }
 func (m *mockModelContext) OffloadMessages(handle string, messages []llmschema.BaseMessage) {}
-func (m *mockModelContext) SaveState() map[string]any      { return nil }
-func (m *mockModelContext) LoadState(state map[string]any)  {}
+func (m *mockModelContext) SaveState() map[string]any                                       { return nil }
+func (m *mockModelContext) LoadState(state map[string]any)                                  {}
 func (m *mockModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (string, error) {
 	return "noop", nil
 }
@@ -69,14 +69,16 @@ var _ iface.ModelContext = (*mockModelContext)(nil)
 // mockMinimalSession 最小化 Session mock
 type mockMinimalSession struct{}
 
-func (m *mockMinimalSession) GetSessionID() string                                         { return "test" }
-func (m *mockMinimalSession) UpdateState(data map[string]any)                              {}
-func (m *mockMinimalSession) GetState(key sessstate.StateKey) (interface{}, error)         { return nil, nil }
-func (m *mockMinimalSession) DumpState() map[string]any                                    { return nil }
-func (m *mockMinimalSession) WriteStream(ctx context.Context, data interface{}) error      { return nil }
-func (m *mockMinimalSession) WriteCustomStream(ctx context.Context, data interface{}) error { return nil }
-func (m *mockMinimalSession) GetEnv(key string, defaultValue ...interface{}) interface{}   { return nil }
-func (m *mockMinimalSession) Interact(ctx context.Context, value interface{}) error        { return nil }
+func (m *mockMinimalSession) GetSessionID() string                                    { return "test" }
+func (m *mockMinimalSession) UpdateState(data map[string]any)                         {}
+func (m *mockMinimalSession) GetState(key sessstate.StateKey) (interface{}, error)    { return nil, nil }
+func (m *mockMinimalSession) DumpState() map[string]any                               { return nil }
+func (m *mockMinimalSession) WriteStream(ctx context.Context, data interface{}) error { return nil }
+func (m *mockMinimalSession) WriteCustomStream(ctx context.Context, data interface{}) error {
+	return nil
+}
+func (m *mockMinimalSession) GetEnv(key string, defaultValue ...interface{}) interface{} { return nil }
+func (m *mockMinimalSession) Interact(ctx context.Context, value interface{}) error      { return nil }
 
 var _ sessioninterfaces.SessionFacade = (*mockMinimalSession)(nil)
 

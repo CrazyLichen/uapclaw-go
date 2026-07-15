@@ -1,10 +1,10 @@
 package context_engineer
 
 import (
-	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── 常量 ────────────────────────────

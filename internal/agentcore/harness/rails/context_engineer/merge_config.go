@@ -112,8 +112,8 @@ func MergeProcessors(
 			baseOverrideKeys[baseSpec.Type] = true
 			mergedCfg := buildMergedConfig(baseSpec.Type, baseSpec.Config, overrideSpec, modelConfig, modelClientConfig)
 			result = append(result, iface.ProcessorSpec{
-				Type:           baseSpec.Type,
-				Config:         mergedCfg,
+				Type:            baseSpec.Type,
+				Config:          mergedCfg,
 				ConfigOverrides: overrideSpec.ConfigOverrides,
 			})
 		} else {
@@ -126,8 +126,8 @@ func MergeProcessors(
 		if !baseOverrideKeys[overrideSpec.Type] {
 			mergedCfg := buildMergedConfig(overrideSpec.Type, nil, overrideSpec, modelConfig, modelClientConfig)
 			result = append(result, iface.ProcessorSpec{
-				Type:           overrideSpec.Type,
-				Config:         mergedCfg,
+				Type:            overrideSpec.Type,
+				Config:          mergedCfg,
 				ConfigOverrides: overrideSpec.ConfigOverrides,
 			})
 		}

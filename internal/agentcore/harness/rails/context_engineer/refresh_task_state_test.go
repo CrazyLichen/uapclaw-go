@@ -4,17 +4,17 @@ import (
 	"context"
 	"testing"
 
-	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
 // ──────────────────────────── Mock ────────────────────────────
 
 // mockSessionFacade RefreshTaskStateRuntime 测试用 mock
 type mockSessionFacade struct {
-	states map[sessstate.StateKey]interface{}
+	states  map[sessstate.StateKey]interface{}
 	updated map[string]any
 }
 
@@ -34,11 +34,13 @@ func (m *mockSessionFacade) UpdateState(data map[string]any) {
 		m.updated[k] = v
 	}
 }
-func (m *mockSessionFacade) DumpState() map[string]any { return m.updated }
+func (m *mockSessionFacade) DumpState() map[string]any                               { return m.updated }
 func (m *mockSessionFacade) WriteStream(ctx context.Context, data interface{}) error { return nil }
-func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data interface{}) error { return nil }
+func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data interface{}) error {
+	return nil
+}
 func (m *mockSessionFacade) GetEnv(key string, defaultValue ...interface{}) interface{} { return nil }
-func (m *mockSessionFacade) Interact(ctx context.Context, value interface{}) error { return nil }
+func (m *mockSessionFacade) Interact(ctx context.Context, value interface{}) error      { return nil }
 
 // 确保 mock 实现了 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)
@@ -54,10 +56,10 @@ func TestRefreshTaskStateRuntime_nilSession(t *testing.T) {
 func TestRefreshTaskStateRuntime_从运行时属性读取(t *testing.T) {
 	sess := newMockSessionFacade()
 	runtimeState := &hschema.DeepAgentState{
-		Iteration:        5,
+		Iteration:          5,
 		StopConditionState: map[string]any{"iteration": 5},
-		PendingFollowUps: []string{"follow-up-1", "follow-up-2"},
-		PlanMode:         hschema.PlanModeState{Mode: "normal"},
+		PendingFollowUps:   []string{"follow-up-1", "follow-up-2"},
+		PlanMode:           hschema.PlanModeState{Mode: "normal"},
 	}
 	sess.states[sessstate.StringKey(sessionRuntimeAttr)] = runtimeState
 
@@ -117,7 +119,7 @@ func TestRefreshTaskStateRuntime_空状态不更新(t *testing.T) {
 func TestRefreshTaskStateRuntime_stopConditionState优先(t *testing.T) {
 	sess := newMockSessionFacade()
 	runtimeState := &hschema.DeepAgentState{
-		Iteration: 10, // 顶层 iteration
+		Iteration:          10,                             // 顶层 iteration
 		StopConditionState: map[string]any{"iteration": 7}, // stop_condition_state 中的 iteration 优先
 	}
 	sess.states[sessstate.StringKey(sessionRuntimeAttr)] = runtimeState
