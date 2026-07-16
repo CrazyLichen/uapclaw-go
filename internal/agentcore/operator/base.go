@@ -38,8 +38,8 @@ type TunableSpec struct {
 	Kind TunableKind
 	// Path 参数路径
 	Path string
-	// Constraint 可选约束
-	Constraint any
+	// Constraint 可选约束，形如 {"type": "dict"} 或 {"type": "int", "min": 0, "max": 5}
+	Constraint map[string]any
 }
 
 // ParameterUpdatedCallback 参数变更回调函数类型。

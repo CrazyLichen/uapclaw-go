@@ -58,10 +58,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// LLMCall 是 LLMCallOperator 的向后兼容别名。
-// 对应 Python: LLMCall = LLMCallOperator
-var LLMCall = LLMCallOperator{}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewLLMCallOperator 创建 LLMCallOperator 实例。

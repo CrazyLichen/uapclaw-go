@@ -38,10 +38,6 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// SkillCallOperator 是 SkillExperienceOperator 的向后兼容别名。
-// 对应 Python: SkillCallOperator = SkillExperienceOperator
-type SkillCallOperator = SkillExperienceOperator
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSkillExperienceOperator 创建 SkillExperienceOperator 实例。

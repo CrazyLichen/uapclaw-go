@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"fmt"
 	"maps"
 )
 
@@ -216,28 +215,10 @@ func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect Up
 // strPtr 返回字符串指针。
 func strPtr(s string) *string { return &s }
 
-// mapsClone 克隆 map（Go 1.26 兼容）。
-func mapsClone[K comparable, V any](m map[K]V) map[K]V {
-	return maps.Clone(m)
-}
-
 // MetadataClone 克隆 metadata map。
 func MetadataClone(m map[string]any) map[string]any {
 	if m == nil {
 		return map[string]any{}
 	}
-	return mapsClone(m)
-}
-
-// ensureMetadata 确保返回非 nil 的 metadata map。
-func ensureMetadata(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
-	}
-	return m
-}
-
-// fmtErr 格式化错误字符串。
-func fmtErr(format string, args ...any) string {
-	return fmt.Sprintf(format, args...)
+	return maps.Clone(m)
 }

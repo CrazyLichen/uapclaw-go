@@ -214,10 +214,10 @@ func TestSkillExperienceOperator_ApplyUpdate(t *testing.T) {
 	}
 }
 
-func TestSkillCallOperatorAlias(t *testing.T) {
-	// 验证类型别名
-	var op SkillCallOperator = *NewSkillExperienceOperator("test")
+func TestSkillExperienceOperator_TypeName(t *testing.T) {
+	// 验证原始类型名直接可用
+	op := NewSkillExperienceOperator("test")
 	if op.OperatorID() != "skill_experience_test" {
-		t.Errorf("alias type should work, got %q", op.OperatorID())
+		t.Errorf("operator type should work, got %q", op.OperatorID())
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
@@ -342,7 +343,13 @@ func WithCheckpointManager(manager any) TrainerOption {
 // meanScore 计算评估用例的平均分数。
 //
 // 对应 Python: Trainer._mean_score(evaluated)
-func meanScore(_ any) float64 {
-	// TODO: 依赖 9.70b EvaluatedCase 填充后实现
-	return 0
+func meanScore(cases []*dataset.EvaluatedCase) float64 {
+	if len(cases) == 0 {
+		return 0
+	}
+	var total float64
+	for _, c := range cases {
+		total += c.Score
+	}
+	return total / float64(len(cases))
 }
