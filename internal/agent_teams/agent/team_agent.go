@@ -67,8 +67,7 @@ type TeamAgent struct {
 	// state 可变运行时状态
 	state *TeamAgentState
 	// spawnManager 子进程管理器
-	// TODO(#9.58): SpawnManager 类型
-	spawnManager any
+	spawnManager *SpawnManager
 	// recoveryManager 恢复管理器
 	// TODO(#9.61): RecoveryManager 类型
 	recoveryManager any
@@ -99,12 +98,24 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 		state:        NewTeamAgentState(),
 		configurator: NewAgentConfigurator(card),
 	}
-	// TODO(#9.58): 构建 SpawnManager(state, configurator, teamAgentGetter)
+	// 构建 SpawnManager
+	a.spawnManager = NewSpawnManager(a.state, a.configurator, func() *TeamAgent { return a })
 	// TODO(#9.61): 构建 RecoveryManager(configurator, spawnManager)
 	// TODO(#9.59): 构建 SessionManager(state, configurator, recoveryManager)
 	// TODO(#9.60): 构建 StreamController(blueprintGetter, state, resources, ...)
 	// TODO(#9.62): 构建 CoordinationKernel(self)
 	return a
+}
+
+// ──────────────────────────────────────────────────────────────
+// 属性 — 委托给 configurator
+// ──────────────────────────────────────────────────────────────
+
+// AgentCard 返回 Agent 身份卡片。
+// 满足 spawn.SpawnableAgent 接口。
+// 对齐 Python: TeamAgent.card property
+func (a *TeamAgent) AgentCard() *schema.AgentCard {
+	return a.card
 }
 
 // Blueprint 返回静态装配蓝图，configure() 前为 nil。
@@ -272,7 +283,7 @@ func (a *TeamAgent) RecoveryManager() any {
 
 // SpawnManager 返回生成管理器。
 // 对齐 Python: TeamAgent.spawn_manager property
-func (a *TeamAgent) SpawnManager() any {
+func (a *TeamAgent) SpawnManager() *SpawnManager {
 	return a.spawnManager
 }
 
@@ -351,8 +362,19 @@ func (a *TeamAgent) RemoveEventListener(handler any) {
 // LookupHumanAgentRuntime 解析进程内生成的人类代理的活跃 TeamAgent。
 // 对齐 Python: TeamAgent.lookup_human_agent_runtime(member_name)
 func (a *TeamAgent) LookupHumanAgentRuntime(memberName string) *TeamAgent {
-	// TODO(#9.58): 通过 team_backend.is_human_agent + spawn_manager.lookup_inprocess_agent 查找
-	return nil
+	if a.spawnManager == nil {
+		return nil
+	}
+	agent := a.spawnManager.LookupInprocessAgent(memberName)
+	if agent == nil {
+		return nil
+	}
+	// 类型断言：SpawnableAgent → *TeamAgent
+	ta, ok := agent.(*TeamAgent)
+	if !ok {
+		return nil
+	}
+	return ta
 }
 
 // IsAgentReady Agent 是否已就绪。
@@ -556,8 +578,10 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 
 // SpawnTeammate 生成 Teammate。
 // 对齐 Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
-func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, session any, spawnConfig any) error {
-	// TODO(#9.58): 生成管理器派生队友 spawnManager.spawn_teammate(...)
+func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, sessionID string, spawnConfig any) error {
+	if a.spawnManager != nil {
+		return a.spawnManager.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnConfig)
+	}
 	return nil
 }
 

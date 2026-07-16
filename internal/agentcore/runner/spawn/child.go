@@ -314,7 +314,7 @@ func ExecuteAgent(
 	case SpawnAgentKindClassAgent:
 		return executeChildAgent(ctx, agentConfig, inputs, stdout, streaming, streamModes, childRunner, agentCreator)
 	case SpawnAgentKindTeamAgent:
-		return nil, fmt.Errorf("team_agent 模式尚未实现：依赖 9.x TeamAgent")
+		return nil, fmt.Errorf("team_agent 模式尚未实现：⤵️ 预留 TeamRunner（9.85）实现后回填")
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 启动方式: %s", agentConfig.AgentKind)
 	}

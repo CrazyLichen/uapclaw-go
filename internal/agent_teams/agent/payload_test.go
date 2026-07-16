@@ -3,10 +3,11 @@ package agent_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/agent"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/tools/database"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestNewSpawnPayloadBuilder 测试构造函数
@@ -110,10 +111,18 @@ func TestSpawnPayloadBuilder_BuildMemberMessagerConfig_未实现(t *testing.T) {
 	assert.Nil(t, b.BuildMemberMessagerConfig("t1"))
 }
 
-// TestSpawnPayloadBuilder_BuildSpawnConfig_未实现 测试返回 nil（TODO 占位）
-func TestSpawnPayloadBuilder_BuildSpawnConfig_未实现(t *testing.T) {
+// TestSpawnPayloadBuilder_BuildSpawnConfig 测试返回 SpawnAgentConfig
+func TestSpawnPayloadBuilder_BuildSpawnConfig(t *testing.T) {
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader}
 	b := agent.NewSpawnPayloadBuilder(spec, ctx)
-	assert.Nil(t, b.BuildSpawnConfig(ctx))
+
+	result := b.BuildSpawnConfig(ctx)
+	assert.NotNil(t, result, "BuildSpawnConfig 应返回非 nil 的 SpawnAgentConfig")
+
+	// 验证类型
+	cfg, ok := result.(runnerspawn.SpawnAgentConfig)
+	assert.True(t, ok, "BuildSpawnConfig 应返回 runnerspawn.SpawnAgentConfig 类型")
+	assert.Equal(t, runnerspawn.SpawnAgentKindTeamAgent, cfg.AgentKind)
+	assert.NotNil(t, cfg.Payload, "Payload 应非 nil")
 }

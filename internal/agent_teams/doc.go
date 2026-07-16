@@ -27,7 +27,12 @@
 //	├── rails/              # ⤵️ 回填: 9.68 团队级 Rails
 //	├── prompts/            # ⤵️ 回填: 9.69 团队提示词
 //	├── runtime/            # ⤵️ 回填: 9.62 团队运行时
-//	├── spawn/              # ⤵️ 回填: 9.58 生成器
+//	├── spawn/              # 进程内生成 + 共享资源（9.58）
+//	│   ├── doc.go          # 包文档
+//	│   ├── handle.go       # SpawnHandle 统一接口
+//	│   ├── inprocess_handle.go # InProcessSpawnHandle
+//	│   ├── inprocess_spawn.go  # InProcessSpawn + SpawnableAgent
+//	│   └── shared_resources.go # 进程级全局单例
 //	├── team_workspace/     # ⤵️ 回填: 9.66 团队工作空间
 //	├── tools/              # ⤵️ 回填: 9.58 团队工具（TeamBackend 等）
 //	└── cli/                # ⤵️ 回填: 9.54 CLI

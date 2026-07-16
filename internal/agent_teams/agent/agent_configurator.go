@@ -32,21 +32,17 @@ type AgentConfigurator struct {
 	// TODO(#9.64): Allocation 类型
 	leaderAllocation any
 	// onTeammateCreated 队友创建回调
-	// TODO(#9.58): 回调类型
-	onTeammateCreated any
+	onTeammateCreated func(memberName string)
 }
 
 // setupInfraConfig SetupInfra 可选参数配置
 type setupInfraConfig struct {
 	// onTeammateCreated 队友创建回调
-	// TODO(#9.58): 回调类型
-	onTeammateCreated any
+	onTeammateCreated func(memberName string)
 	// onTeamCleaned 团队清理回调
-	// TODO(#9.58): 回调类型
-	onTeamCleaned any
+	onTeamCleaned func(memberName string)
 	// onTeamBuilt 团队构建回调
-	// TODO(#9.58): 回调类型
-	onTeamBuilt any
+	onTeamBuilt func(memberName string)
 }
 
 // SetupInfraOption SetupInfra 的可选参数。
@@ -55,11 +51,9 @@ type SetupInfraOption func(*setupInfraConfig)
 // setupTeamBackendConfig SetupTeamBackend 可选参数配置
 type setupTeamBackendConfig struct {
 	// onTeamCleaned 团队清理回调
-	// TODO(#9.58): 回调类型
-	onTeamCleaned any
+	onTeamCleaned func(memberName string)
 	// onTeamBuilt 团队构建回调
-	// TODO(#9.58): 回调类型
-	onTeamBuilt any
+	onTeamBuilt func(memberName string)
 }
 
 // SetupTeamBackendOption SetupTeamBackend 的可选参数。
@@ -103,27 +97,27 @@ func ResolveAgentSpec(spec atschema.TeamAgentSpec, role atschema.TeamRole, membe
 }
 
 // WithOnTeammateCreated 设置队友创建回调。
-func WithOnTeammateCreated(cb any) SetupInfraOption {
+func WithOnTeammateCreated(cb func(memberName string)) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeammateCreated = cb }
 }
 
 // WithOnTeamCleaned 设置团队清理回调。
-func WithOnTeamCleaned(cb any) SetupInfraOption {
+func WithOnTeamCleaned(cb func(memberName string)) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeamCleaned = cb }
 }
 
 // WithOnTeamBuilt 设置团队构建回调。
-func WithOnTeamBuilt(cb any) SetupInfraOption {
+func WithOnTeamBuilt(cb func(memberName string)) SetupInfraOption {
 	return func(cfg *setupInfraConfig) { cfg.onTeamBuilt = cb }
 }
 
 // WithBackendOnTeamCleaned 设置团队清理回调。
-func WithBackendOnTeamCleaned(cb any) SetupTeamBackendOption {
+func WithBackendOnTeamCleaned(cb func(memberName string)) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamCleaned = cb }
 }
 
 // WithBackendOnTeamBuilt 设置团队构建回调。
-func WithBackendOnTeamBuilt(cb any) SetupTeamBackendOption {
+func WithBackendOnTeamBuilt(cb func(memberName string)) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamBuilt = cb }
 }
 

@@ -162,7 +162,7 @@ func TestTeamAgent_BuildSpawnConfig(t *testing.T) {
 	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader, MemberName: "leader_1"}
 	a.Configure(context.Background(), spec, ctx)
 
-	assert.Nil(t, a.BuildSpawnConfig(ctx)) // TODO(#9.58): 返回 nil
+	assert.NotNil(t, a.BuildSpawnConfig(ctx)) // 配置后返回 SpawnAgentConfig
 }
 
 // TestTeamAgent_AttachModelAllocator 测试代理到 configurator

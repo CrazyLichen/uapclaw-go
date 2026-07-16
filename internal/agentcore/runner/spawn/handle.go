@@ -323,6 +323,14 @@ func (h *SpawnedProcessHandle) ForceKill() error {
 	return nil
 }
 
+// SetOnUnhealthy 设置不健康回调（构造后注入）。
+// 对齐 Python: SpawnedProcessHandle.on_unhealthy 赋值
+func (h *SpawnedProcessHandle) SetOnUnhealthy(fn func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onUnhealthy = fn
+}
+
 // WaitForCompletion 等待子进程完成，返回退出码。
 // 对齐 Python: SpawnedProcessHandle.wait_for_completion()
 func (h *SpawnedProcessHandle) WaitForCompletion() (int, error) {
