@@ -103,12 +103,13 @@ func (op *MemoryCallOperator) GetTunables() map[string]operator.TunableSpec {
 //
 // 对应 Python: MemoryCallOperator.set_parameter(target, value)
 func (op *MemoryCallOperator) SetParameter(target string, value any) {
-	if target == TargetEnabled {
+	switch target {
+	case TargetEnabled:
 		op.enabled = toBool(value)
 		if op.onParameterUpdated != nil {
 			op.onParameterUpdated(TargetEnabled, op.enabled)
 		}
-	} else if target == TargetMaxRetries {
+	case TargetMaxRetries:
 		op.maxRetries = clampMaxRetries(toInt(value))
 		if op.onParameterUpdated != nil {
 			op.onParameterUpdated(TargetMaxRetries, op.maxRetries)
