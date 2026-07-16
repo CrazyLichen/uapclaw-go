@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -156,9 +158,23 @@ func (t *Trainer) Predict(_ context.Context, _ any, _ any) (any, any, error) {
 // ApplyUpdates 将 Updater 生成的更新应用到 Operator 注册表。
 //
 // 对应 Python: Trainer.apply_updates(operators, updates) — 静态方法
-// 依赖 9.70a Operator 接口的 set_parameter 方法。
-func (t *Trainer) ApplyUpdates(_, _ any) {
-	// TODO: 依赖 9.70a Operator 填充后实现
+// 遍历 updates 映射，对每个 Operator 调用 ApplyUpdate 应用结构化更新。
+func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.UpdateKey]schema.UpdateValue) []schema.ApplyResult {
+	var results []schema.ApplyResult
+	for key, update := range updates {
+		op, ok := operators[key.OperatorID()]
+		if !ok {
+			results = append(results, schema.ApplyResultWithErrors(
+				key.OperatorID(), key.Target(),
+				update.Mode, update.Effect, update.Payload,
+				"operator not found: "+key.OperatorID(),
+			))
+			continue
+		}
+		result := op.ApplyUpdate(key.Target(), update)
+		results = append(results, result)
+	}
+	return results
 }
 
 // SetCallbacks 设置训练生命周期回调。
