@@ -131,7 +131,7 @@ func TestCaseLoader_Split_先打乱(t *testing.T) {
 	}
 }
 
-// TestCaseLoader_ShuffleCases 测试打乱
+// TestCaseLoader_ShuffleCases 测试打乱（无 seed，不可复现）
 func TestCaseLoader_ShuffleCases(t *testing.T) {
 	cases := make([]Case, 100)
 	for i := range cases {
@@ -148,7 +148,7 @@ func TestCaseLoader_ShuffleCases(t *testing.T) {
 	if loader.Len() != 100 {
 		t.Errorf("期望 Len=100, 实际=%d", loader.Len())
 	}
-	// 高概率不会完全一致（100 个元素打乱后与原序列相同的概率极低）
+	// 高概率不会完全一致
 	sameCount := 0
 	for i := range original {
 		if original[i].CaseID == loader.Cases()[i].CaseID {
@@ -160,23 +160,43 @@ func TestCaseLoader_ShuffleCases(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── 非导出函数测试 ────────────────────────────
+// TestCaseLoader_ShuffleCases_可复现 测试带 seed 的 ShuffleCases 可复现
+func TestCaseLoader_ShuffleCases_可复现(t *testing.T) {
+	cases := make([]Case, 100)
+	for i := range cases {
+		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
+	}
 
-// TestShuffleCases_不修改原列表 测试 shuffleCases 返回副本
-func TestShuffleCases_不修改原列表(t *testing.T) {
+	loader1 := NewCaseLoader(cases)
+	loader2 := NewCaseLoader(cases)
+
+	loader1.ShuffleCases(42)
+	loader2.ShuffleCases(42)
+
+	// 相同 seed 应产生相同结果
+	for i := range loader1.Cases() {
+		if loader1.Cases()[i].CaseID != loader2.Cases()[i].CaseID {
+			t.Errorf("相同 seed 下 ShuffleCases[%d] 不一致: %s vs %s", i, loader1.Cases()[i].CaseID, loader2.Cases()[i].CaseID)
+			break
+		}
+	}
+}
+
+// TestCaseLoader_ShuffledCopy 测试 ShuffledCopy 不修改原列表
+func TestCaseLoader_ShuffledCopy(t *testing.T) {
 	cases := make([]Case, 10)
 	for i := range cases {
 		cases[i] = *NewCase(map[string]any{"q": i}, map[string]any{"a": i}, WithCaseID(fmt.Sprintf("case-%d", i)))
 	}
-	original := make([]Case, len(cases))
-	copy(original, cases)
+	loader := NewCaseLoader(cases)
+	original := loader.Cases()
 
-	_ = shuffleCases(cases, 0)
+	_ = loader.ShuffledCopy(0)
 
 	// 原列表应保持不变
-	for i := range cases {
-		if cases[i].CaseID != original[i].CaseID {
-			t.Error("shuffleCases 不应修改原列表")
+	for i := range loader.Cases() {
+		if loader.Cases()[i].CaseID != original[i].CaseID {
+			t.Error("ShuffledCopy 不应修改原列表")
 			break
 		}
 	}

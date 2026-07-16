@@ -7,7 +7,7 @@
 //
 // 文件目录：
 //
-//	schema/
+//	schema/             # Schema 类型定义
 //	├── doc.go               # 包文档
 //	├── team.go              # TeamRole/TeamSpec/TeamRuntimeContext 等团队级类型
 //	├── deep_agent_spec.go   # DeepAgentSpec/SubAgentSpec/TeamModelConfig 等单角色规格定义

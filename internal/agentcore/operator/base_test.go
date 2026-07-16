@@ -18,8 +18,8 @@ type mockOperator struct {
 	}
 }
 
-func (m *mockOperator) OperatorID() string                    { return m.operatorID }
-func (m *mockOperator) GetTunables() map[string]TunableSpec   { return map[string]TunableSpec{} }
+func (m *mockOperator) OperatorID() string                  { return m.operatorID }
+func (m *mockOperator) GetTunables() map[string]TunableSpec { return map[string]TunableSpec{} }
 func (m *mockOperator) GetState() map[string]any {
 	// 返回副本，避免 before/after 指向同一 map
 	result := make(map[string]any, len(m.state))

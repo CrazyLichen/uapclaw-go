@@ -45,11 +45,11 @@ const (
 // 扁平参数 → ModelClientConfig + ModelRequestConfig → NewModel
 //
 // 默认值对齐 Python：
-//   - temperature: 0.95
-//   - top_p: 0.1
-//   - timeout: 60.0
-//   - max_retries: 3
-//   - verify_ssl: false
+//   - temperature: 0.95（温度）
+//   - top_p: 0.1（核采样概率）
+//   - timeout: 60.0（超时时间秒）
+//   - max_retries: 3（最大重试次数）
+//   - verify_ssl: false（是否验证 SSL）
 //
 // 注意：verify_ssl 默认 false 与 ModelClientConfig 的默认 true 不同，
 // 这与 Python init_model() 的便利性设计一致（开发环境通常不需要 SSL 验证）。

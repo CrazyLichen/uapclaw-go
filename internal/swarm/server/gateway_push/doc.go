@@ -9,7 +9,7 @@
 //
 // 文件目录：
 //
-//	gateway_push/
+//	gateway_push/       # Gateway 推送传输
 //	├── doc.go            # 包文档
 //	└── transport.go      # GatewayPushTransport 接口 + ChannelPushTransport 实现
 //

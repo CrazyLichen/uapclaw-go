@@ -24,14 +24,14 @@
 //	├── resources.go          # PrivateAgentResources 实例级资源（9.55）
 //	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
 //	├── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
-//	├── spawn_manager.go      # TODO(#9.58) SpawnManager
-//	├── session_manager.go    # TODO(#9.59) SessionManager
-//	├── stream_controller.go  # TODO(#9.60) StreamController
-//	├── recovery_manager.go   # TODO(#9.61) RecoveryManager
+//	├── spawn_manager.go      # TODO(#9.58) 生成管理器
+//	├── session_manager.go    # TODO(#9.59) 会话管理器
+//	├── stream_controller.go  # TODO(#9.60) 流式控制器
+//	├── recovery_manager.go   # TODO(#9.61) 恢复管理器
 //	└── coordination/         # TODO(#9.62-9.63) 协调子系统
-//	    ├── kernel.go         # TODO(#9.62) CoordinationKernel
-//	    ├── event_bus.go      # TODO(#9.63) EventBus
-//	    ├── dispatcher.go     # TODO(#9.63) EventDispatcher
+//	    ├── kernel.go         # TODO(#9.62) 协调内核
+//	    ├── event_bus.go      # TODO(#9.63) 事件总线
+//	    ├── dispatcher.go     # TODO(#9.63) 事件分发器
 //	    └── handlers/         # TODO(#9.63) 事件处理器
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/

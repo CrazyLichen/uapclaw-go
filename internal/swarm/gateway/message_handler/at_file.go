@@ -177,11 +177,11 @@ func ExtractAgentMentions(content string) []string {
 // ResolveStructuredAttachments 解析结构化附件并内联文件内容。
 //
 // 对齐 Python _resolve_structured_attachments (L1513-1526)：
-//  1. normalized := normalizeStructuredAttachments(attachments, cwd)
-//  2. prefix := @"path1" @"path2" ...
-//  3. cleanedContent := stripAttachedMentions(content, normalized, cwd)
-//  4. mergedContent := prefix + " " + cleanedContent
-//  5. return ResolveAtFileReferences(mergedContent, cwd, 0)
+//  1. 归一化结构化附件
+//  2. 构建文件引用前缀
+//  3. 清除内容中的附件引用
+//  4. 合并前缀和内容
+//  5. 解析文件引用路径
 func ResolveStructuredAttachments(content string, attachments []map[string]any, cwd string) string {
 	normalized := normalizeStructuredAttachments(attachments, cwd)
 	if len(normalized) == 0 {

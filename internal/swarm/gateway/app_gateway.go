@@ -63,10 +63,10 @@ const shutdownTimeout = 5 * time.Second
 //
 // 初始化 MessageHandler、ChannelManager、WebChannel，组装 chi 路由。
 // 创建顺序对齐 Python app_gateway.py：
-//  1. MessageHandler(agent_client)
-//  2. ChannelManager(message_handler, config, on_config_updated)
-//  3. WebChannel(config, on_config_saved)
-//  4. register_channel_with_inbound(web_channel, web_norm_and_forward)
+//  1. 创建消息处理器
+//  2. 创建频道管理器
+//  3. 创建 Web 频道
+//  4. 注册频道入站回调
 func NewGatewayServer(cfg *config.Config, agentClient *routing.AgentClient) (*GatewayServer, error) {
 	// 从配置读取 Web 通道参数
 	webCfg := web.WebChannelConfig{

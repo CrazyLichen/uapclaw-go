@@ -60,7 +60,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		s.injectACPCapabilities(request, envelope)
 	}
 
-	// 3. before_chat_request hook
+	// 3. before_chat_request 钩子
 	// ⤵️ Extension 章节：实现 _trigger_before_chat_request_hook，对 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 触发
 
 	// 4. 按 request.ReqMethod switch 分发
@@ -553,7 +553,7 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 // 完整对齐 Python resolve_agent_request_mode + _apply_resolved_mode_to_request：
 //  1. strip + lower 输入
 //  2. 空值默认 "agent.plan"
-//  3. team.plan → mode="code", subMode="team"
+//  3. team.plan → mode="code", subMode="team"（团队规划模式）
 //  4. team subMode 白名单 {nil, "plan"}
 //  5. code subMode 白名单 {"plan", "normal", "team"}
 //  6. canonicalMode 回写到 request.Params["mode"]
@@ -647,25 +647,25 @@ func writeCanonicalMode(params map[string]any, canonicalMode string, request *sc
 
 // resolveRequestProjectDir 从请求中读取项目目录，对齐 Python 5 级 fallback：
 //
-//  1. params["project_dir"]
-//  2. metadata["project_dir"]
-//  3. params["cwd"]
-//  4. metadata["cwd"]
-//  5. params["trusted_dirs"][0]
+//  1. params["project_dir"]（参数中的项目目录）
+//  2. metadata["project_dir"]（元数据中的项目目录）
+//  3. params["cwd"]（参数中的工作目录）
+//  4. metadata["cwd"]（元数据中的工作目录）
+//  5. params["trusted_dirs"][0]（参数中的受信目录首项）
 func resolveRequestProjectDir(request *schema.AgentRequest) string {
 	var params map[string]any
 	if request.Params != nil {
 		_ = json.Unmarshal(request.Params, &params)
 	}
 
-	// 1. params["project_dir"]
+	// 1. params["project_dir"]（参数中的项目目录）
 	if v, ok := params["project_dir"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			return s
 		}
 	}
 
-	// 2. metadata["project_dir"]
+	// 2. metadata["project_dir"]（元数据中的项目目录）
 	if request.Metadata != nil {
 		if v, ok := request.Metadata["project_dir"]; ok {
 			if s, ok := v.(string); ok && s != "" {
@@ -674,14 +674,14 @@ func resolveRequestProjectDir(request *schema.AgentRequest) string {
 		}
 	}
 
-	// 3. params["cwd"]
+	// 3. params["cwd"]（参数中的工作目录）
 	if v, ok := params["cwd"]; ok {
 		if s, ok := v.(string); ok && s != "" {
 			return s
 		}
 	}
 
-	// 4. metadata["cwd"]
+	// 4. metadata["cwd"]（元数据中的工作目录）
 	if request.Metadata != nil {
 		if v, ok := request.Metadata["cwd"]; ok {
 			if s, ok := v.(string); ok && s != "" {
@@ -690,7 +690,7 @@ func resolveRequestProjectDir(request *schema.AgentRequest) string {
 		}
 	}
 
-	// 5. params["trusted_dirs"][0]
+	// 5. params["trusted_dirs"][0]（参数中的受信目录首项）
 	if v, ok := params["trusted_dirs"]; ok {
 		switch dirs := v.(type) {
 		case []any:

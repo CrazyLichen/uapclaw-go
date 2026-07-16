@@ -6,7 +6,7 @@
 //
 // 文件目录：
 //
-//	schema/
+//	schema/             # Schema 类型定义
 //	├── doc.go        # 包文档
 //	├── protocol.go   # 协议常量（一比一复刻 Python agent_evolving/protocols.py）
 //	└── update.go     # UpdateKey/UpdateMode/UpdateEffect/UpdateValue/ApplyResult/normalize

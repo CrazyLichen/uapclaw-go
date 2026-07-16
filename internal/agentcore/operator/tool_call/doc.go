@@ -5,7 +5,7 @@
 //
 // 文件目录：
 //
-//	tool_call/
+//	tool_call/          # 工具调用操作器
 //	├── doc.go                 # 子包文档
 //	└── tool_call_operator.go  # ToolCallOperator
 //

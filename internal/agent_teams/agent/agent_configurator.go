@@ -127,25 +127,6 @@ func WithBackendOnTeamBuilt(cb any) SetupTeamBackendOption {
 	return func(cfg *setupTeamBackendConfig) { cfg.onTeamBuilt = cb }
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// resolveTeamMode 解析团队模式。
-// 对齐 Python: _resolve_team_mode(spec)
-//
-// 如果 spec.TeamMode 已设置则直接返回；
-// 否则检查非人类预定义成员，存在时返回 "hybrid"，否则 "default"。
-func resolveTeamMode(spec atschema.TeamAgentSpec) string {
-	if spec.TeamMode != "" {
-		return spec.TeamMode
-	}
-	for _, m := range spec.PredefinedMembers {
-		if m.RoleType != atschema.TeamRoleHumanAgent {
-			return "hybrid"
-		}
-	}
-	return "default"
-}
-
 // Configure 主入口：配置基础设施并构建 Harness。
 // 对齐 Python: AgentConfigurator.configure(spec, ctx)
 func (c *AgentConfigurator) Configure(spec atschema.TeamAgentSpec, ctx atschema.TeamRuntimeContext) *agentteams.TeamHarness {
@@ -188,20 +169,20 @@ func (c *AgentConfigurator) SetupInfra(spec atschema.TeamAgentSpec, ctx atschema
 	// TODO(#9.65): messagerConfig 节点 ID 调整 + CreateMessager(messagerConfig)
 	// 待实现：c.SetMessager(createMessager(messagerConfig))
 
-	// 6. Workspace Manager
+	// 6. 工作空间管理器
 	if spec.Workspace != nil && spec.Workspace.Enabled {
 		_ = agentSpec // 避免 unused 警告
 		// TODO(#9.66): 设置工作空间管理器 c.SetWorkspaceManager(c.CreateWorkspaceManager(spec, ctx))
 	}
 
-	// 7. Model Allocator（仅 leader）
+	// 7. 模型分配器（仅 leader）
 	// TODO(#9.64): 设置模型分配器 BuildModelAllocator(spec, teamSpec)
 	_ = ctx.Role // 避免空分支警告，待实现后移除
 
-	// 8. Team Backend
+	// 8. 团队后端
 	// TODO(#9.58): 设置团队后端 c.SetupTeamBackend(spec, ctx, messager, ...)
 
-	// 9. Worktree Manager（仅非 leader）
+	// 9. 工作树管理器（仅非 leader）
 	// TODO(#9.66): 设置工作树管理器 c.CreateWorktreeManager(spec)
 }
 
@@ -211,16 +192,16 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 1. 解析 AgentSpec
 	_ = ResolveAgentSpec(spec, ctx.Role, ctx.MemberName)
 
-	// 2. resolvedLanguage
+	// 2. 解析语言
 	// TODO(#9.53): 从 blueprint 或 resolveLanguage 获取
 
 	// 3. workspace 路径解析 + symlink
 	// TODO(#9.66): workspace 管理器
 
-	// 4. teamBackend.RegisterCleanupPath
+	// 4. 团队后端注册清理路径
 	// TODO(#9.58): 团队后端工作空间路径 if teamBackend && wsSpec.RootPath
 
-	// 5. workspaceManager.MountIntoWorkspace
+	// 5. 工作空间管理器挂载路径
 	// TODO(#9.66): 工作空间管理器路径 if workspaceManager && wsSpec.RootPath
 
 	// 6. modelConfig = ctx.MemberModel 或 agentSpec.Model
@@ -232,7 +213,7 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	// 9-14. 构造 Rails
 	// TODO(#9.68): 团队工具和策略 Rail teamToolRail, teamPolicyRail, ...
 
-	// 15. TeamHarness.Build
+	// 15. 构建团队线束
 	harness := agentteams.BuildTeamHarness(
 		nil, // TODO(#9.56): 构建规格
 		string(ctx.Role),
@@ -247,10 +228,10 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 	)
 	c.SetHarness(harness)
 
-	// 16. Memory Manager
+	// 16. 记忆管理器
 	// TODO(#9.64): 设置记忆管理器 c.SetMemoryManager(...)
 
-	// 17. AgentCustomizer
+	// 17. 自定义配置器
 	// TODO(#9.68): 运行自定义配置器 if spec.AgentCustomizer { ... }
 
 	return harness
@@ -266,7 +247,7 @@ func (c *AgentConfigurator) SetupTeamBackend(spec atschema.TeamAgentSpec, ctx at
 		opt(cfg)
 	}
 	// 待实现：TeamBackend 构造和注册
-	// teamName := (ctx.TeamSpec.TeamName if ctx.TeamSpec else nil) or "default"
+	// teamName := (ctx.TeamSpec.TeamName 如果 ctx.TeamSpec 不为 nil) 或 "default"
 	// db = getSharedDB(ctx.DBConfig)
 	// teamBackend = TeamBackend{...}
 	// c.SetTeamBackend(teamBackend)
@@ -522,4 +503,23 @@ func (c *AgentConfigurator) TeamName() string {
 		return ""
 	}
 	return c.blueprint.Ctx.TeamSpec.TeamName
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// resolveTeamMode 解析团队模式。
+// 对齐 Python: _resolve_team_mode(spec)
+//
+// 如果 spec.TeamMode 已设置则直接返回；
+// 否则检查非人类预定义成员，存在时返回 "hybrid"，否则 "default"。
+func resolveTeamMode(spec atschema.TeamAgentSpec) string {
+	if spec.TeamMode != "" {
+		return spec.TeamMode
+	}
+	for _, m := range spec.PredefinedMembers {
+		if m.RoleType != atschema.TeamRoleHumanAgent {
+			return "hybrid"
+		}
+	}
+	return "default"
 }

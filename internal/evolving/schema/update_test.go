@@ -125,7 +125,7 @@ func TestNormalizeUpdateValue(t *testing.T) {
 
 func TestNormalizeUpdates(t *testing.T) {
 	updates := map[UpdateKey]any{
-		{"op1", "experiences"}: "record1",
+		{"op1", "experiences"}:   "record1",
 		{"op2", "system_prompt"}: "new_prompt",
 	}
 	result := NormalizeUpdates(updates)

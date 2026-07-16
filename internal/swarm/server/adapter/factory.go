@@ -30,7 +30,7 @@ var logComponent = logger.ComponentAgentServer
 //
 // 行为：
 //   - 未设置或空 → "harness"（默认）
-//   - "harness" → "harness"
+//   - "harness" → "harness"（线束模式映射）
 //   - "pi" → "pi"（预留，尚未实现）
 //   - 未知值 → 警告并回退 "harness"
 func ResolveSDKChoice() string {
@@ -59,7 +59,7 @@ func ResolveSDKChoice() string {
 //   - mode: 实例模式，"agent"（默认）或 "code"
 //
 // 路由规则：
-//   - sdk="harness" + mode="code" → CodeAdapter
+//   - sdk="harness" + mode="code" → CodeAdapter（代码适配器）
 //   - sdk="harness" + 其余 mode → DeepAdapter
 //   - sdk="pi" → 错误（尚未实现）
 //   - 未知 sdk → 错误

@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // BaseEvaluator 抽象评估器接口。
 //
@@ -28,8 +28,6 @@ type BaseEvaluator interface {
 	// BatchEvaluate 并行批量评估
 	BatchEvaluate(ctx context.Context, cases []dataset.Case, predicts []map[string]any, numParallel int) ([]*dataset.EvaluatedCase, error)
 }
-
-// ──────────────────────────── 结构体 ────────────────────────────
 
 // DefaultEvaluator 使用 LLM-as-Judge 评估模型输出一致性。
 //

@@ -56,13 +56,13 @@ func WithToolCard(card *ToolCard) ToolFuncOption {
 //
 // 使用示例：
 //
-//	// 最简写法：自动推断 I/O，自动提取 schema
+//	最简写法：自动推断 I/O，自动提取 schema
 //	fn, _ := NewTool(Search)
 //
 //	// 自定义名称和描述
 //	fn, _ := NewTool(Search, WithToolName("custom_search"), WithToolDescription("搜索工具"))
 //
-//	// 手动指定参数（覆盖自动提取）
+//	手动指定参数（覆盖自动提取）
 //	fn, _ := NewTool(Search, WithToolInputParams(params))
 func NewTool[I any, O any](fn func(context.Context, I, ...ToolOption) (O, error), opts ...ToolFuncOption) (*InvokeFunction[I, O], error) {
 	cfg := &toolFuncConfig{}
@@ -120,6 +120,7 @@ func NewTool[I any, O any](fn func(context.Context, I, ...ToolOption) (O, error)
 //
 // 使用示例：
 //
+//	创建流式搜索工具：
 //	fn, _ := NewStreamTool(StreamSearch, WithToolName("stream_search"))
 func NewStreamTool[I any, O any](fn func(context.Context, I, ...ToolOption) (<-chan O, error), opts ...ToolFuncOption) (*StreamFunction[I, O], error) {
 	cfg := &toolFuncConfig{}

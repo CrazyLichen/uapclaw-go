@@ -61,7 +61,7 @@ func NewMemoryCallOperator(opts ...MemoryCallOperatorOption) *MemoryCallOperator
 	op := &MemoryCallOperator{
 		operatorID: defaultMemoryOperatorID,
 		enabled:    true, // Python 默认 enabled=True
-		maxRetries: 0,   // Python 默认 max_retries=0
+		maxRetries: 0,    // Python 默认 max_retries=0
 	}
 
 	for _, opt := range opts {

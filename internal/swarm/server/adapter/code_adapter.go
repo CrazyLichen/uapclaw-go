@@ -57,6 +57,12 @@ type CodeAdapter struct {
 	forceEnglishRuntimePrompt bool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCodeAdapter 创建 CodeAdapter 实例。
@@ -76,10 +82,10 @@ func NewCodeAdapter() *CodeAdapter {
 // 对应 Python: JiuwenClawCodeAdapter.create_instance() (line 221-342)
 //
 // Python 执行步骤：
-//  1. await self.set_checkpoint()
-//  2. self._instance_overrides = dict(config or {})
-//  3. config_base = get_config()
-//  4. self._refresh_multimodal_configs(config_base)
+//  1. 设置检查点
+//  2. 合并实例覆盖配置
+//  3. 获取基础配置
+//  4. 刷新多模态配置
 //  5. config = config_base.get("react", {}).copy()
 //  6. self._config_cache = config.copy()
 //  7. self._agent_name = overrides.get("agent_name", config.get("agent_name", "main_agent"))
@@ -298,11 +304,3 @@ func (c *CodeAdapter) TryStopDreaming(ctx context.Context) error {
 func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	c.deep.AbortOnGatewayDisconnect(ctx)
 }
-
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

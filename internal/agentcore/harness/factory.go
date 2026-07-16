@@ -182,8 +182,6 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	return agent, nil
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // IsFreeSearchEnabled 检查是否至少启用一个免费搜索后端。
 // 对齐 Python: is_free_search_enabled() (web_tools.py line 444)
 func IsFreeSearchEnabled() bool {
@@ -545,7 +543,7 @@ func addDefaultRails(
 
 	// ConfirmInterruptRail — 不自动添加（需指定拦截的工具名列表）
 	// 由具体场景（如 CLI、SecurityRail）显式提供，例如：
-	//   agent.AddRail(interrupt.NewConfirmInterruptRail("write_file", "edit_file"))
+	//   agent.AddRail(interrupt.NewConfirmInterruptRail("write_file", "edit_file"))（添加确认中断 Rail）
 	// 或由 PermissionInterruptRail（SecurityRail 体系）内部继承复用
 
 	// SysOperationRail — 始终添加（系统操作工具注册）

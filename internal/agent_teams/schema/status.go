@@ -195,7 +195,6 @@ func IsValidMemberTransition(current, target MemberStatus) bool {
 	return false
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
 // IsValidExecutionTransition 检查 ExecutionStatus 状态转换是否合法。
 func IsValidExecutionTransition(current, target ExecutionStatus) bool {
 	allowed, ok := ExecutionTransitions[current]
@@ -210,7 +209,6 @@ func IsValidExecutionTransition(current, target ExecutionStatus) bool {
 	return false
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
 // IsValidTaskTransition 检查 TaskStatus 状态转换是否合法。
 func IsValidTaskTransition(current, target TaskStatus) bool {
 	allowed, ok := TaskTransitions[current]
@@ -224,5 +222,3 @@ func IsValidTaskTransition(current, target TaskStatus) bool {
 	}
 	return false
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -435,7 +435,7 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 //  6. 视频工具 (video_understanding)
 //  7. 图片生成工具 (generate_image)
 //  8. 小艺手机端工具 (28个 xiaoyi_phone_tools)
-//  9. SkillToolkit (SkillToolkit.get_tools)
+//  9. SkillToolkit（SkillToolkit.get_tools 获取技能工具）
 //
 // 10. acp_chat (acp_agents 配置检查)
 func (d *DeepAdapter) getToolCards(agentID string) []*tool.ToolCard {

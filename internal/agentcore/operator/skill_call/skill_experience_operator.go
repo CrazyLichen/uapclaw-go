@@ -122,16 +122,16 @@ func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.Up
 	stage := schema.LocalApplyCompleted
 
 	return schema.ApplyResult{
-		OperatorID: op.OperatorID(),
-		Target:     target,
-		Applied:    len(records) > 0,
-		Mode:       update.Mode,
-		Effect:     update.Effect,
-		Value:      update.Payload,
-		Records:    records,
-		ChangeType: update.ChangeType,
+		OperatorID:     op.OperatorID(),
+		Target:         target,
+		Applied:        len(records) > 0,
+		Mode:           update.Mode,
+		Effect:         update.Effect,
+		Value:          update.Payload,
+		Records:        records,
+		ChangeType:     update.ChangeType,
 		LifecycleStage: &stage,
-		Errors:     []string{},
+		Errors:         []string{},
 		Metadata: func() map[string]any {
 			m := schema.MetadataClone(update.Metadata)
 			m["skill_name"] = op.skillName

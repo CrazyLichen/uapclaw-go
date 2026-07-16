@@ -6,7 +6,7 @@
 //
 // 文件目录：
 //
-//	skill_call/
+//	skill_call/         # 技能调用操作器
 //	├── doc.go                          # 子包文档
 //	└── skill_experience_operator.go    # SkillExperienceOperator
 //

@@ -703,7 +703,7 @@ func (f *LocalFsOperation) SearchFiles(ctx context.Context, path string, pattern
 // description 严格使用 Python 方法英文 docstring 原文，不翻译。
 // 对齐 Python BaseFsOperation.list_tools：read_file, read_file_stream, write_file,
 // 对齐 Python 方法：upload_file, upload_file_stream, download_file, download_file_stream,
-// list_files, list_directories, search_files。
+// list_files, list_directories, search_files 等工具方法。
 func (f *LocalFsOperation) ListTools() []*tool.ToolCard {
 	readFileParams := []*schema.Param{
 		{Name: "path", Description: "Full or relative path to the file to read (required).", Type: schema.ParamTypeString, Required: true},

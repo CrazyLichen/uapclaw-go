@@ -79,8 +79,8 @@ func WithChunkLogprobs(logprobs any) AssistantMessageChunkOption {
 // NewAssistantMessageChunk 创建助手流式消息块。
 //
 // 默认值：
-//   - role: RoleTypeAssistant
-//   - finish_reason: "null"
+//   - role: RoleTypeAssistant（角色类型为助手）
+//   - finish_reason: "null"（结束原因为空）
 //   - content: 空文本
 //
 // 对应 Python: AssistantMessageChunk(role=..., content=..., ...)

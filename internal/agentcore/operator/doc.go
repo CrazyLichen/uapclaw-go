@@ -14,7 +14,7 @@
 //
 // 文件目录：
 //
-//	operator/
+//	operator/           # 操作器实现
 //	├── doc.go            # 包文档
 //	├── base.go           # Operator/PreviewableOperator 接口 + TunableSpec + DefaultApplyUpdate
 //	├── llm_call/

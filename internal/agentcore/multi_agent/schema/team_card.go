@@ -233,7 +233,7 @@ func (c *TeamCard) GetSubscriptions() map[string][]string { return nil }
 //
 // 对应 Python: EventDrivenTeamCard(id=uuid4().hex, name="", description="",
 //
-//	agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})
+//	agent_cards=[], topic="", version="1.0.0", tags=[], subscriptions={})（默认空值）
 func NewEventDrivenTeamCard(opts ...EventDrivenTeamCardOption) *EventDrivenTeamCard {
 	card := &EventDrivenTeamCard{
 		TeamCard: *NewTeamCard(),

@@ -61,7 +61,7 @@ func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoa
 	if len(seed) > 0 {
 		s = seed[0]
 	}
-	shuffled := shuffleCases(cl.cases, s)
+	shuffled := cl.ShuffledCopy(s)
 
 	cut := int(float64(len(shuffled)) * ratio)
 	trainCases := shuffled[:cut]
@@ -72,24 +72,33 @@ func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoa
 
 // ShuffleCases 随机打乱内部样本顺序。
 //
-// 对应 Python: shuffle_cases(cases)
-func (cl *CaseLoader) ShuffleCases() {
-	rand.Shuffle(len(cl.cases), func(i, j int) {
-		cl.cases[i], cl.cases[j] = cl.cases[j], cl.cases[i]
-	})
+// seed 为随机种子，传入则可复现（对齐 Python shuffle_cases(cases, seed)），
+// 不传则使用全局随机源（不可复现）。
+// 对应 Python: shuffle_cases(cases, seed=0)
+func (cl *CaseLoader) ShuffleCases(seed ...int64) {
+	if len(seed) > 0 {
+		rng := rand.New(rand.NewPCG(uint64(seed[0]), uint64(seed[0])))
+		rng.Shuffle(len(cl.cases), func(i, j int) {
+			cl.cases[i], cl.cases[j] = cl.cases[j], cl.cases[i]
+		})
+	} else {
+		rand.Shuffle(len(cl.cases), func(i, j int) {
+			cl.cases[i], cl.cases[j] = cl.cases[j], cl.cases[i]
+		})
+	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// shuffleCases 返回打乱后的副本（不修改原列表），使用指定种子保证可复现。
+// ShuffledCopy 返回打乱后的副本（不修改原列表），使用指定种子保证可复现。
 //
 // 对齐 Python: shuffle_cases(cases, seed=0) — random.Random(seed).shuffle(copy)
-func shuffleCases(cases []Case, seed int64) []Case {
-	shuffled := make([]Case, len(cases))
-	copy(shuffled, cases)
+func (cl *CaseLoader) ShuffledCopy(seed int64) []Case {
+	shuffled := make([]Case, len(cl.cases))
+	copy(shuffled, cl.cases)
 	rng := rand.New(rand.NewPCG(uint64(seed), uint64(seed)))
 	rng.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 	return shuffled
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

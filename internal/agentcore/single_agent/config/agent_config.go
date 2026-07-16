@@ -82,9 +82,9 @@ var _ interfaces.AgentConfig = (*ReActAgentConfig)(nil)
 // NewReActAgentConfig 创建 ReActAgentConfig 实例，所有字段使用默认值。
 //
 // 默认值：
-//   - ModelProvider: "openai"
-//   - MaxIterations: 5
-//   - LLMTopLogprobs: 1
+//   - ModelProvider: "openai"（模型提供者）
+//   - MaxIterations: 5（最大迭代次数）
+//   - LLMTopLogprobs: 1（LLM 返回 top logprobs 数量）
 //   - ContextEngineConfig: ceschema.NewContextEngineConfig() 并设置 MaxContextMessageNum=200, DefaultWindowRoundNum=10
 //
 // 对应 Python: ReActAgentConfig()
@@ -305,7 +305,7 @@ func (c *ReActAgentConfig) GetModelClientConfig() *llmschema.ModelClientConfig {
 //
 // 校验规则：
 //   - ModelNameVal 非空
-//   - MaxIterations > 0
+//   - MaxIterations > 0（最大迭代次数须大于 0）
 //   - LLMTopLogprobs 范围 [0, 20]
 //   - 子配置非 nil 时递归校验
 func (c *ReActAgentConfig) Validate() error {

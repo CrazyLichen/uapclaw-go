@@ -128,7 +128,7 @@ func (t *PromptTemplate) Format(keywords map[string]any) (*PromptTemplate, error
 //
 // 逻辑：
 //   - 空内容 → []
-//   - string → [UserMessage]
+//   - string → [UserMessage]（字符串转用户消息列表）
 //   - []schema.BaseMessage → 深拷贝后返回
 func (t *PromptTemplate) ToMessages() ([]schema.BaseMessage, error) {
 	if isNilOrEmpty(t.Content) {

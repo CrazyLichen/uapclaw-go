@@ -14,7 +14,7 @@
 //
 // 文件目录：
 //
-//	context_engineer/
+//	context_engineer/   # 上下文工程 Rail
 //	├── doc.go                       # 包文档
 //	├── merge_config.go              # 反射配置合并工具
 //	├── merge_config_test.go         # 配置合并测试

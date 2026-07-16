@@ -34,6 +34,7 @@ type StreamFunction[I any, O any] struct {
 //
 // 使用示例：
 //
+//	创建流式搜索工具：
 //	fn, _ := NewStreamFunction("stream_search", StreamSearch)
 func NewStreamFunction[I any, O any](name string, fn func(context.Context, I, ...ToolOption) (<-chan O, error), opts ...LocalFuncOption) (*StreamFunction[I, O], error) {
 	cfg := &localFuncConfig{}
@@ -133,7 +134,7 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 		})
 	}
 
-	// 2. map → struct
+	// 2. map → struct（映射转结构体）
 	jsonBytes, err := json.Marshal(inputs)
 	if err != nil {
 		return nil, exception.BuildError(

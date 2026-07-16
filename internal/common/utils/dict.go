@@ -38,7 +38,7 @@ type LeafNode struct {
 //
 // 示例：
 //
-//	CreateNestedDict("a.b", 1) → {"a": {"b": 1}}
+//	CreateNestedDict("a.b", 1) → {"a": {"b": 1}} 创建嵌套字典
 func CreateNestedDict(path string, value any, separator ...string) map[string]any {
 	sep := "."
 	if len(separator) > 0 {
@@ -89,8 +89,8 @@ func FlattenDict(data map[string]any) map[string]any {
 //
 // 示例：
 //
-//	ExtractLeafNodes({"a": [1, {"b": 2}]})
-//	→ [{Path: ["a", "[0]"], Value: 1}, {Path: ["a", "[1]", "b"], Value: 2}]
+//	ExtractLeafNodes({"a": [1, {"b": 2}]}) 提取叶子节点
+//	→ [{Path: ["a", "[0]"], Value: 1}, {Path: ["a", "[1]", "b"], Value: 2}] 收集所有末端值
 func ExtractLeafNodes(data any, currentPath ...string) []LeafNode {
 	if data == nil {
 		return nil

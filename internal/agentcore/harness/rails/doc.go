@@ -14,7 +14,7 @@
 //
 // 文件目录：
 //
-//	rails/
+//	rails/              # Rail 实现
 //	├── doc.go              # 包文档
 //	├── base.go             # DeepAgentRail 基类 + DeepAgentRailProvider 接口
 //	├── sys_operation.go    # SysOperationRail 系统操作工具注册（Init/Uninit + 幂等注册）

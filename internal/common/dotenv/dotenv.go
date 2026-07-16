@@ -25,7 +25,7 @@ const logComponent = logger.ComponentCommon
 // Parse 解析 .env 文件内容为 key-value 映射。
 //
 // 支持的格式：
-//   - KEY=VALUE
+//   - KEY=VALUE（键值对格式）
 //   - KEY="VALUE" / KEY='VALUE'（引号内的 # 不会被当作注释）
 //   - # 注释行
 //   - 空行跳过

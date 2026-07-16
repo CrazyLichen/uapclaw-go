@@ -629,7 +629,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 //  17. await self._update_runtime_config(runtimeConfig)
 //  18. result = await Runner.run_agent(agent=self._instance, inputs=inputs)
 //  19. except asyncio.CancelledError: ...
-//  20. finally: cleanup (unmark_session_active, reset context vars)
+//  20. finally: 清理（取消标记活跃会话、重置上下文变量）
 //  21. return AgentResponse from result
 func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (*schema.AgentResponse, error) {
 	// 步骤 1: 实例 nil 检查
@@ -759,9 +759,9 @@ func (d *DeepAdapter) ProcessMessageImpl(ctx context.Context, req *schema.AgentR
 //  16. try:
 //  17. await self._update_runtime_config(runtimeConfig)
 //  18. async for chunk in Runner.run_agent_streaming(agent=self._instance, inputs=inputs):
-//  19. yield chunk
+//  19. yield chunk 产出消息块
 //  20. except asyncio.CancelledError: ...
-//  21. finally: cleanup
+//  21. finally: 清理
 func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.AgentRequest, inputs map[string]any) (<-chan *schema.AgentResponseChunk, error) {
 	// 步骤 1: 实例 nil 检查
 	if d.instance == nil {
@@ -969,7 +969,7 @@ func (d *DeepAdapter) ProcessMessageStreamImpl(ctx context.Context, req *schema.
 //  7. elif intent == "resume": streamEventRail.resume(session_id)
 //  8. elif intent == "supplement": abort + optional instance.abort()
 //  9. elif intent == "cancel": abort + unmark_session_active
-//  10. cleanup evolution watchers
+//  10. 清理进化观察器
 //  11. return AgentResponse with interrupt_result
 func (d *DeepAdapter) ProcessInterrupt(ctx context.Context, req *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 步骤 1-2: 解析 intent 和 new_input
@@ -1102,7 +1102,7 @@ func (d *DeepAdapter) HandleUserAnswer(ctx context.Context, req *schema.AgentReq
 //  1. sid = str(request.session_id or "")
 //  2. if not sid.startswith("heartbeat"): return None
 //  3. request.params["query"] = "这是一次心跳请求任务..."
-//  4. log heartbeat query injected
+//  4. 记录心跳查询注入
 //  5. return None（继续正常流程，query 已注入）
 //
 // 返回 nil 表示非心跳请求或心跳已处理（query 已注入），上层应继续正常流程。

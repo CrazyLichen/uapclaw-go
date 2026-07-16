@@ -105,7 +105,7 @@ func (t *LifecycleTool) Invoke(ctx context.Context, inputs map[string]any, opts 
 //	执行时由外到内调用，实际顺序：
 //	  TransformIO(input) → emit_before(STREAM_INPUT) → STARTED → [执行]
 //	  → per-chunk: RESULT_RECEIVED(原始数据) → TransformIO(output) → STREAM_OUTPUT(变换后数据)
-//	  → Done: FINISHED
+//	  → Done: FINISHED（完成）
 //
 //	RESULT_RECEIVED 在内层 _lifecycle_stream 触发，拿到原始 chunk（未变换）；
 //	TransformIO/STREAM_OUTPUT 在外层处理，拿到变换后的数据。

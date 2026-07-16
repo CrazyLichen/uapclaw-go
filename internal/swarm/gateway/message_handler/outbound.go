@@ -19,7 +19,7 @@ import (
 //  5. cron 判断：chunk.Payload["event_type"] == "cron.response"
 //  6. 跳过终止 chunk
 //  7. evolution chunk 处理
-//  8. ChunkToMessage → PublishRobotMessages
+//  8. 消息块转完整消息 → 发布机器人消息
 func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	if wire == nil {
 		return

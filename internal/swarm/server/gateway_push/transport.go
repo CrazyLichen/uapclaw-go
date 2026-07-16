@@ -26,7 +26,7 @@ type GatewayPushTransport interface {
 // ChannelPushTransport 进程内推送实现，通过 AgentServer 单例发送。
 //
 // 对齐 Python: jiuwenswarm/server/gateway_push/transport.py
-// (WebSocketGatewayPushTransport)
+// （WebSocket 网关推送传输）
 //
 // Python 通过 AgentWebSocketServer.get_instance().send_push(msg) 推送，
 // Go 侧同样通过 server.GetInstance().SendPush(msg) 推送。

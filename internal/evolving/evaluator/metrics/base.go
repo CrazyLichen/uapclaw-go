@@ -31,7 +31,7 @@ type metricContext struct {
 // MetricOption 指标计算的可选参数函数。
 type MetricOption func(*metricContext)
 
-// ──────────────────────────── 类型别名 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // MetricResult 指标计算结果，统一用 map 表示。
 // 单指标：{"exact_match": 1.0}  多指标：{"precision": 0.8, "recall": 0.6}

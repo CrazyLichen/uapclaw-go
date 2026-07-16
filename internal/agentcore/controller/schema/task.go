@@ -92,7 +92,7 @@ func NewTask(sessionID, taskType string) *Task {
 //   - task_id 非空
 //   - session_id 非空
 //   - task_type 非空
-//   - priority >= 0
+//   - priority >= 0（优先级须大于等于 0）
 //   - parent_task_id 不能等于 task_id（自引用检查）
 //   - 状态为 failed 时 error_message 非空
 //   - 状态为 input-required 时 input_required_fields 非空

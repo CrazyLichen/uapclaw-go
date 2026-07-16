@@ -332,11 +332,11 @@ func (mc *SessionModelContext) AddMessages(ctx context.Context, message llm_sche
 //  1. 参数校验
 //  2. 获取锁
 //  3. enableReload → 追加 reloaderSystemPrompt
-//  4. getWindowMessages
-//  5. 遍历处理器：trigger + on_get_context_window
-//  6. ValidateAndFixContextWindow
+//  4. 获取窗口消息
+//  5. 遍历处理器：触发 + 执行上下文窗口处理
+//  6. 校验并修复上下文窗口
 //  7. kvCacheManager.Release（条件）
-//  8. statContextWindow
+//  8. 统计上下文窗口
 //  9. 触发 ContextRetrieved 事件
 //
 // 对应 Python: SessionModelContext.get_context_window()
@@ -421,7 +421,7 @@ func (mc *SessionModelContext) GetContextWindow(
 		}
 	}
 
-	// 6. ValidateAndFixContextWindow
+	// 6. 校验并修复上下文窗口
 	ValidateAndFixContextWindow(window)
 
 	// 7. kvCacheManager.Release（条件），Option 透传 model
@@ -435,7 +435,7 @@ func (mc *SessionModelContext) GetContextWindow(
 		}
 	}
 
-	// 8. statContextWindow
+	// 8. 统计上下文窗口
 	mc.statContextWindow(window)
 
 	// 9. 触发 ContextRetrieved 事件
@@ -541,7 +541,7 @@ func (mc *SessionModelContext) OffloadMessages(handle string, messages []llm_sch
 // SaveState 保存上下文状态为 map。
 //
 // 对齐 Python: SessionModelContext.save_state() 返回扁平字典
-// {"messages": ..., "offload_messages": ..., "processor_states": ..., "compression_history": ...}
+// 格式: {"messages": ..., "offload_messages": ..., "processor_states": ..., "compression_history": ...}
 func (mc *SessionModelContext) SaveState() map[string]any {
 	allMessages := mc.messageBuffer.GetBack(0, true)
 	offloadMessages := mc.offloadMessageBuffer.GetAll()

@@ -283,7 +283,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 
 	var toolInfos []schema.ToolInfoInterface
 
-	// 1. ToolCards → ToolInfo
+	// 1. ToolCards → ToolInfo（工具卡片转工具信息）
 	items := make([]toolItem, 0, len(am.tools))
 	for name, card := range am.tools {
 		items = append(items, toolItem{name: name, card: card})
@@ -312,7 +312,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 		}
 	}
 
-	// 2. WorkflowCards → ToolInfo
+	// 2. WorkflowCards → ToolInfo（工作流卡片转工具信息）
 	for name, wf := range am.workflows {
 		if len(names) > 0 {
 			found := false
@@ -331,7 +331,7 @@ func (am *AbilityManager) ListToolInfo(ctx context.Context, names []string, mcpS
 		}
 	}
 
-	// 3. AgentCards → ToolInfo
+	// 3. AgentCards → ToolInfo（Agent 卡片转工具信息）
 	for name, ag := range am.agents {
 		if len(names) > 0 {
 			found := false
@@ -687,7 +687,7 @@ func (am *AbilityManager) executeTool(
 // executeWorkflow 执行 Workflow 类型能力。
 //
 // 对齐 Python: AbilityManager._execute_single_tool_call (workflow 分支 L760-775)
-// + AbilityManager._run_workflow (L690-726)
+// 对齐 Python: AbilityManager._run_workflow (L690-726)
 // 完整步骤：
 //  1. 获取 WorkflowCard（L761-762）
 //  2. 从 ResourceManager 获取 workflow 实例（L763-764）

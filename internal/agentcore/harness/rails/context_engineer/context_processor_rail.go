@@ -290,7 +290,7 @@ func getSystemPromptBuilder(agent sainterfaces.BaseAgent) saprompt.SystemPromptB
 	return nil
 }
 
-// ──────────────────────────── 选项函数 ────────────────────────────
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ContextProcessorRailOption ContextProcessorRail 构造选项函数
 type ContextProcessorRailOption func(*ContextProcessorRail)

@@ -238,7 +238,7 @@ func (s *AgentServer) handleHistoryGetStream(_ context.Context, request *schema.
 		chunks = append(chunks, chunk)
 	}
 
-	// 6. done chunk
+	// 6. 完成消息块
 	doneChunk := schema.NewAgentResponseChunk(request.RequestID, request.ChannelID,
 		map[string]any{
 			"event_type":  "history.message",
