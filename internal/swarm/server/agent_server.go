@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -178,12 +177,26 @@ func ResetInstance() {
 // 对齐 Python: AgentWebSocketServer.send_push(msg)
 // 内部流程：BuildServerPushWire(msg) → json.Marshal → sendToGateway(data)
 // 这是所有 server_push 场景的统一入口。
+// Python 中所有异常仅 warn 不上抛（返回 None），Go 对齐此行为统一返回 nil。
 func (s *AgentServer) SendPush(ctx context.Context, msg map[string]any) error {
+	// 对齐 Python: if self._current_ws is None or self._current_send_lock is None
+	if s.transport == nil {
+		logger.Warn(logComponent).Msg("SendPush 失败: 无活跃 Gateway 连接")
+		return nil
+	}
+	// 对齐 Python: try/except Exception — 捕获 panic 防止整个 goroutine 崩溃
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).Any("error", r).Msg("SendPush 失败")
+		}
+	}()
+
 	wire := transport.BuildServerPushWire(msg)
 	data, err := json.Marshal(wire)
 	if err != nil {
-		logger.Error(logComponent).Err(err).Msg("SendPush: wire 编码失败")
-		return fmt.Errorf("wire 编码失败: %w", err)
+		// 对齐 Python: except Exception → warn + 静默返回
+		logger.Warn(logComponent).Err(err).Msg("SendPush: wire 编码失败")
+		return nil
 	}
 	s.sendToGateway(data)
 

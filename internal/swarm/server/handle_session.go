@@ -69,6 +69,10 @@ type sessionMetadata struct {
 	Mode string `json:"mode,omitempty"`
 	// TeamName 团队名称
 	TeamName string `json:"team_name,omitempty"`
+	// RoundID 轮次标识，对齐 Python init_session_metadata round_id=0
+	RoundID int `json:"round_id,omitempty"`
+	// ChannelMetadata 渠道元数据，对齐 Python channel_metadata
+	ChannelMetadata map[string]any `json:"channel_metadata,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -217,7 +221,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 		), nil
 	}
 
-	// metadata 不存在时初始化
+	// metadata 不存在时初始化，对齐 Python init_session_metadata
 	if meta == nil {
 		meta = map[string]any{
 			"session_id":      target,
@@ -227,6 +231,8 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 			"title":           "",
 			"message_count":   0,
 			"mode":            "unknown",
+			"team_name":       "",
+			"round_id":        0,
 		}
 	}
 
@@ -369,14 +375,18 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 
 	// 写入 metadata.json，对齐 Python init_session_metadata
 	ts := currentTimestamp()
+	// 对齐 Python: channel_id 从 request 提取，空值保持空串（Python 默认 channel_id=""）
+	channelID := request.ChannelID
 	meta := map[string]any{
 		"session_id":      sessionID,
-		"channel_id":      "",
+		"channel_id":      channelID,
 		"created_at":      ts,
 		"last_message_at": ts,
 		"title":           "",
 		"message_count":   0,
 		"mode":            "unknown",
+		"team_name":       "",
+		"round_id":        0,
 	}
 	if err := writeSessionMetadata(sessionsDir, sessionID, meta); err != nil {
 		logger.Error(logComponent).
@@ -445,6 +455,12 @@ func SetSessionDeliveryContext(
 		normalizedRouteMetadata = deepCopyMap(previousRouteMetadata)
 	}
 
+	// 对齐 Python: channel_metadata 仅在首次为空时补充写入（不覆盖）
+	channelMetadata, _ := routeMetadata["channel_metadata"].(map[string]any)
+	if channelMetadata != nil && meta["channel_metadata"] == nil {
+		meta["channel_metadata"] = deepCopyMap(channelMetadata)
+	}
+
 	if len(meta) == 0 {
 		meta = map[string]any{
 			"session_id":      sessionID,
@@ -455,6 +471,8 @@ func SetSessionDeliveryContext(
 			"title":           "",
 			"message_count":   0,
 			"mode":            "unknown",
+			"team_name":       "",
+			"round_id":        0,
 		}
 	} else {
 		if normalizedChannelID != "" {

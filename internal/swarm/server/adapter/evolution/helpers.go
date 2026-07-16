@@ -571,10 +571,9 @@ func TeamEvolutionEndUpdate(requestID string, terminal map[string]string) Evolut
 }
 
 // GroupEvolutionApprovals 审批分组。
-// 对齐 Python: group_evolution_approvals()
+// 对齐 Python: group_evolution_approvals() — 第二项始终返回 nil（Python 始终返回空列表 []）
 func GroupEvolutionApprovals(sessionID string, events []any, warnMissing ...WarnMissingRequestIDFunc) (map[string][]any, []string) {
 	grouped := make(map[string][]any)
-	var missing []string
 
 	for _, evt := range events {
 		if !IsEvolutionApprovalEvent(evt) {
@@ -582,16 +581,16 @@ func GroupEvolutionApprovals(sessionID string, events []any, warnMissing ...Warn
 		}
 		requestID := ExtractEvolutionRequestID(evt)
 		if requestID == nil {
+			// 对齐 Python: 仅调用 warn 回调，不收集到返回值中
 			if len(warnMissing) > 0 && warnMissing[0] != nil {
 				warnMissing[0](sessionID)
 			}
-			missing = append(missing, "")
 			continue
 		}
 		grouped[*requestID] = append(grouped[*requestID], evt)
 	}
 
-	return grouped, missing
+	return grouped, nil
 }
 
 // MakeTeamEvolutionCycleRequestID 生成 request_id。

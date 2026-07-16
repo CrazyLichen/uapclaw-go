@@ -630,8 +630,9 @@ func TestGroupEvolutionApprovals_missingRequestID(t *testing.T) {
 	if len(grouped) != 0 {
 		t.Errorf("GroupEvolutionApprovals() grouped = %d, 期望 0", len(grouped))
 	}
-	if len(missing) != 1 {
-		t.Errorf("missing = %d, 期望 1", len(missing))
+	// 对齐 Python: 第二项始终为 nil/空列表
+	if len(missing) != 0 {
+		t.Errorf("missing = %d, 期望 0", len(missing))
 	}
 	if !warnCalled {
 		t.Error("warnMissingRequestID 回调未被调用")

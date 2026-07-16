@@ -202,7 +202,8 @@ func (a *TeamAgent) Lifecycle() string {
 	if a.configurator != nil {
 		return a.configurator.Lifecycle()
 	}
-	return ""
+	// 对齐 Python: AgentConfigurator.lifecycle — spec 为 None 时返回 "temporary"
+	return "temporary"
 }
 
 // TeamSpec 返回 TeamSpec。

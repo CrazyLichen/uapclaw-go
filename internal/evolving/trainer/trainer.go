@@ -177,6 +177,94 @@ func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.Upd
 	return results
 }
 
+// SelectBestCandidateOnVal 在验证集上选择最优候选更新。
+//
+// 比较不同候选更新在验证集上的分数，返回最优更新的索引。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._select_best_candidate_on_val(candidates, agent, val_cases)
+func (t *Trainer) SelectBestCandidateOnVal(_ context.Context, _ any, _ any, _ any) (int, error) {
+	// TODO: 依赖 9.70a Operator + 9.71 Evaluator 填充后实现
+	return 0, errors.New("not implemented: Trainer.SelectBestCandidateOnVal")
+}
+
+// SnapshotOperatorsState 快照当前所有 Operator 的状态。
+//
+// 保存 Operator 注册表的深拷贝，用于更新后回滚。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._snapshot_operators_state(operators) — 静态方法
+func SnapshotOperatorsState(_ map[string]operator.Operator) any {
+	// TODO: 依赖 9.70a Operator 填充后实现
+	return nil
+}
+
+// RestoreOperatorsState 从快照恢复 Operator 注册表状态。
+//
+// 将之前快照的状态恢复到 Operator 注册表，用于更新失败时回滚。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._restore_operators_state(operators, snapshot) — 静态方法
+func RestoreOperatorsState(_ map[string]operator.Operator, _ any) error {
+	// TODO: 依赖 9.70a Operator 填充后实现
+	return errors.New("not implemented: RestoreOperatorsState")
+}
+
+// GetOperatorRegistry 从 Agent 获取 Operator 注册表。
+//
+// 调用 Agent 的 get_operators() 方法获取其关联的 Operator 映射。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._get_operator_registry(agent) — 静态方法
+func GetOperatorRegistry(_ any) (map[string]operator.Operator, error) {
+	// TODO: 依赖 9.70a Operator 填充后实现
+	return nil, errors.New("not implemented: GetOperatorRegistry")
+}
+
+// BindUpdater 将 Updater 绑定到 Agent 的 Operator 注册表。
+//
+// 在训练开始前调用，使 Updater 能访问和修改 Operator。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._bind_updater(updater, operators)
+func (t *Trainer) BindUpdater(_ any, _ map[string]operator.Operator) error {
+	// TODO: 依赖 9.70c Updater Protocol 填充后实现
+	return errors.New("not implemented: Trainer.BindUpdater")
+}
+
+// UpdaterRequiresForward 判断 Updater 是否需要前向推理结果。
+//
+// 某些 Updater（如基于梯度的）需要前向推理产生的轨迹数据，
+// 而另一些（如基于规则的）则不需要。当前为桩实现。
+//
+// 对应 Python: Trainer._updater_requires_forward(updater)
+func (t *Trainer) UpdaterRequiresForward(_ any) bool {
+	// TODO: 依赖 9.70c Updater Protocol 填充后实现
+	return false
+}
+
+// ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
+//
+// 读取 resumeFrom 指定的检查点，恢复 epoch、Operator 状态等。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._resume_if_needed(agent)
+func (t *Trainer) ResumeIfNeeded(_ context.Context, _ any) error {
+	// TODO: 依赖 9.78 EvolveCheckpoint 填充后实现
+	return errors.New("not implemented: Trainer.ResumeIfNeeded")
+}
+
+// SaveCheckpointIfNeeded 根据条件判断是否保存检查点。
+//
+// 当达到 checkpointEveryNEpochs 间隔或验证分数提升（checkpointOnImprove）时保存。
+// 当前为桩实现。
+//
+// 对应 Python: Trainer._save_checkpoint_if_needed(epoch, val_score, operators, improved)
+func (t *Trainer) SaveCheckpointIfNeeded(_ int, _ float64, _ map[string]operator.Operator, _ bool) error {
+	// TODO: 依赖 9.78 EvolveCheckpoint 填充后实现
+	return errors.New("not implemented: Trainer.SaveCheckpointIfNeeded")
+}
+
 // SetCallbacks 设置训练生命周期回调。
 //
 // 对应 Python: Trainer.set_callbacks(callbacks)

@@ -2,6 +2,8 @@ package agent_teams
 
 import (
 	"context"
+
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -66,6 +68,11 @@ type TeamHarness struct {
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// logComponent 日志组件标识
+	logComponent = logger.ComponentCommon
+)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
@@ -135,7 +142,15 @@ func (h *TeamHarness) RunAgentCustomizer(customizer AgentCustomizer) {
 	if customizer == nil {
 		return
 	}
-	// TODO(#9.logger): 添加 team_logger.Warn 记录异常
+	// 对齐 Python: try/except Exception — 吞掉 customizer 的 panic
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponent).
+				Str("member_name", h.memberName).
+				Any("error", r).
+				Msg("agent_customizer 失败")
+		}
+	}()
 	customizer(h.deepAgent, h.memberName, h.role)
 }
 

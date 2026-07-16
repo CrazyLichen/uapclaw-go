@@ -248,7 +248,7 @@ func resolveDisplayPath(raw string) string {
 	if text == "" {
 		return ""
 	}
-	resolved, err := filepath.Abs(text)
+	resolved, err := resolveSymlinkAbs(text)
 	if err != nil {
 		logger.Debug(logComponent).
 			Str("path", text).
