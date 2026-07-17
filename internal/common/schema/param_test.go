@@ -862,8 +862,8 @@ func TestParseJSONSchemaMap_属性缺type报错(t *testing.T) {
 	if err == nil {
 		t.Error("属性缺 type 应返回错误")
 	}
-	if err != nil && !containsStr(err.Error(), "missing required 'type' field") {
-		t.Errorf("错误信息应包含 'missing required type field'，实际: %v", err)
+	if err != nil && !containsStr(err.Error(), "缺少必填 'type' 字段") {
+		t.Errorf("错误信息应包含 '缺少必填 type 字段'，实际: %v", err)
 	}
 }
 

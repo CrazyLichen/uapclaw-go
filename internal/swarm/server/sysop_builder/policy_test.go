@@ -227,7 +227,7 @@ func TestBuildFilesystemPolicy_filesAllow不存在返回错误(t *testing.T) {
 
 	_, _, err := BuildFilesystemPolicy(filesRuntime, "", false)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "files.allow path does not exist")
+	assert.Contains(t, err.Error(), "files.allow 路径在主机上不存在")
 }
 
 func TestBuildFilesystemPolicy_filesDeny不存在返回错误(t *testing.T) {
@@ -237,7 +237,7 @@ func TestBuildFilesystemPolicy_filesDeny不存在返回错误(t *testing.T) {
 
 	_, _, err := BuildFilesystemPolicy(filesRuntime, "", false)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "files.deny path does not exist")
+	assert.Contains(t, err.Error(), "files.deny 路径在主机上不存在")
 }
 
 func TestBuildFilesystemPolicy_filesAllow和Deny混合(t *testing.T) {
