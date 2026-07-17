@@ -132,7 +132,7 @@ func BuildFilesystemPolicy(
 
 			// 校验 host 上存在
 			if _, statErr := os.Stat(path); statErr != nil {
-				return nil, nil, fmt.Errorf("sandbox files.allow path does not exist on host: %q", path)
+				return nil, nil, fmt.Errorf("沙箱 files.allow 路径在主机上不存在: %q", path)
 			}
 
 			isDir := false
@@ -170,7 +170,7 @@ func BuildFilesystemPolicy(
 
 			// 校验 host 上存在
 			if _, statErr := os.Stat(path); statErr != nil {
-				return nil, nil, fmt.Errorf("sandbox files.deny path does not exist on host: %q", path)
+				return nil, nil, fmt.Errorf("沙箱 files.deny 路径在主机上不存在: %q", path)
 			}
 
 			b.recordUserDenyBind(path, path)

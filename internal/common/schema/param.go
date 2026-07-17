@@ -368,7 +368,7 @@ func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
 	// 1. 校验顶层 type == "object"
 	typ, _ := schemaMap["type"].(string)
 	if typ != "object" {
-		return nil, fmt.Errorf("schema must have type 'object', got %q", typ)
+		return nil, fmt.Errorf("schema 类型必须为 'object'，实际为 %q", typ)
 	}
 
 	// 2. 提取 properties
@@ -399,7 +399,7 @@ func ParseJSONSchemaMap(schemaMap map[string]any) ([]*Param, error) {
 	for name, prop := range propsVal {
 		propMap, ok := prop.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("property %q is not a map", name)
+			return nil, fmt.Errorf("属性 %q 不是 map 类型", name)
 		}
 		p, err := parsePropertyToParam(name, propMap, requiredSet)
 		if err != nil {
@@ -582,7 +582,7 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 		var ok bool
 		paramType, ok = parseParamType(typeStr)
 		if !ok {
-			return nil, fmt.Errorf("property %q has unsupported type %q", name, typeStr)
+			return nil, fmt.Errorf("属性 %q 的类型 %q 不受支持", name, typeStr)
 		}
 	} else {
 		// 无 type 字段时，检查是否有组合 schema，默认使用 String 类型
@@ -593,7 +593,7 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 		} else if _, hasOneOf := prop["oneOf"]; hasOneOf {
 			paramType = ParamTypeString // oneOf 组合时的占位类型
 		} else {
-			return nil, fmt.Errorf("property %q missing required 'type' field", name)
+			return nil, fmt.Errorf("属性 %q 缺少必填 'type' 字段", name)
 		}
 	}
 
@@ -651,7 +651,7 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 		if items, ok := prop["items"].(map[string]any); ok {
 			item, err := parsePropertyToParam("item", items, nil)
 			if err != nil {
-				return nil, fmt.Errorf("property %q items: %w", name, err)
+				return nil, fmt.Errorf("属性 %q 的 items: %w", name, err)
 			}
 			p.Items = item
 		}
@@ -688,11 +688,11 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 			for propName, propDef := range nestedProps {
 				propMap, ok := propDef.(map[string]any)
 				if !ok {
-					return nil, fmt.Errorf("property %q.%q is not a map", name, propName)
+					return nil, fmt.Errorf("属性 %q.%q 不是 map 类型", name, propName)
 				}
 				nested, err := parsePropertyToParam(propName, propMap, nestedRequired)
 				if err != nil {
-					return nil, fmt.Errorf("property %q.%q: %w", name, propName, err)
+					return nil, fmt.Errorf("属性 %q.%q: %w", name, propName, err)
 				}
 				props = append(props, nested)
 			}
@@ -707,11 +707,11 @@ func parsePropertyToParam(name string, prop map[string]any, requiredSet map[stri
 			for i, sub := range subs {
 				subMap, ok := sub.(map[string]any)
 				if !ok {
-					return nil, fmt.Errorf("property %q %s[%d] is not a map", name, keyword, i)
+					return nil, fmt.Errorf("属性 %q %s[%d] 不是 map 类型", name, keyword, i)
 				}
 				sp, err := parsePropertyToParam(fmt.Sprintf("%s_%d", keyword, i), subMap, nil)
 				if err != nil {
-					return nil, fmt.Errorf("property %q %s[%d]: %w", name, keyword, i, err)
+					return nil, fmt.Errorf("属性 %q %s[%d]: %w", name, keyword, i, err)
 				}
 				subParams = append(subParams, sp)
 			}
