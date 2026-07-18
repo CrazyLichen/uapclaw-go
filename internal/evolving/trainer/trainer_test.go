@@ -526,3 +526,29 @@ func TestNormalizeUpdates_简单值(t *testing.T) {
 }
 
 // ──────────────────────────── 非导出函数测试 ────────────────────────────
+
+// TestUpdaterRequiresForward_无Updater 测试无 Updater 时 UpdaterRequiresForward 返回 true
+func TestUpdaterRequiresForward_无Updater(t *testing.T) {
+	trainer := NewTrainer()
+	if !trainer.UpdaterRequiresForward() {
+		t.Error("无 updater 时期望返回 true")
+	}
+}
+
+// TestSaveCheckpointIfNeeded_无Manager 测试无 CheckpointManager 时不执行保存
+func TestSaveCheckpointIfNeeded_无Manager(t *testing.T) {
+	trainer := NewTrainer()
+	err := trainer.SaveCheckpointIfNeeded(0, 0.5, nil, false)
+	if err != nil {
+		t.Errorf("期望 nil 错误, 实际=%v", err)
+	}
+}
+
+// TestResumeIfNeeded_无ResumeFrom 测试无 resumeFrom 时不执行恢复
+func TestResumeIfNeeded_无ResumeFrom(t *testing.T) {
+	trainer := NewTrainer()
+	err := trainer.ResumeIfNeeded(context.Background(), nil)
+	if err != nil {
+		t.Errorf("期望 nil 错误, 实际=%v", err)
+	}
+}

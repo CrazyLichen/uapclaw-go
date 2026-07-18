@@ -290,3 +290,31 @@ func (f *fixedScoreMetric) Compute(_ context.Context, _, _ any, _ ...metrics.Met
 func (f *fixedScoreMetric) ComputeBatch(_ context.Context, _, _ []any, _ ...metrics.MetricOption) ([]metrics.MetricResult, error) {
 	return nil, nil
 }
+
+// ──────────────────────────── 非导出函数测试 ────────────────────────────
+
+// TestFormatValue 测试 formatValue 各种类型
+func TestFormatValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+	}{
+		{"nil", nil, ""},
+		{"空字符串", "", ""},
+		{"字符串", "hello", "hello"},
+		{"空map", map[string]any{}, ""},
+		{"非空map", map[string]any{"a": 1}, `{"a":1}`},
+		{"空切片", []any{}, ""},
+		{"非空切片", []any{1, 2}, `[1,2]`},
+		{"整数", 42, "42"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("formatValue(%v) = %q, 期望 %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
