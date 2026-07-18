@@ -30,7 +30,7 @@ func TestBuildIdentitySection_对齐Python(t *testing.T) {
 	s := BuildIdentitySection()
 	// 中文版应包含 Python _identity_prompt 的关键段落
 	for _, keyword := range []string{
-		"JiuwenSwarm",
+		"UapClaw",
 		"你的家",
 		"配置信息",
 		"运行环境",
@@ -44,7 +44,7 @@ func TestBuildIdentitySection_对齐Python(t *testing.T) {
 	}
 	// 英文版应包含 Python _identity_prompt 的关键段落
 	for _, keyword := range []string{
-		"JiuwenSwarm",
+		"UapClaw",
 		"Your Home",
 		"Configuration",
 		"Runtime Environment",

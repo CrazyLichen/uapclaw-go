@@ -382,10 +382,10 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// ⤵️ A2X / 11.10: A2X 客户端初始化
 
 	// 步骤 14: agentCard = AgentCard(name=agent_name, id='jiuwenswarm')
-	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='jiuwenswarm')
+	// 对齐 Python: agent_card = AgentCard(name=self._agent_name, id='uapclaw')
 	agentCard := agentschema.NewAgentCard(
 		agentschema.WithAgentName(d.agentName),
-		agentschema.WithAgentID("jiuwenswarm"),
+		agentschema.WithAgentID("uapclaw"),
 	)
 
 	// 步骤 15: tool_cards = await self._get_tool_cards(agent_card.id)
@@ -578,7 +578,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// 步骤 9: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// 对齐 Python: new_tool_cards = await self._get_tool_cards("jiuwenswarm")
 	// 对齐 Python: self._tool_cards = tool_cards（G8: 存储到 adapter 字段）
-	newToolCards := d.getToolCards("jiuwenswarm")
+	newToolCards := d.getToolCards("uapclaw")
 	d.toolCards = newToolCards
 
 	// 步骤 10: _update_permission_rail(configBase)
@@ -588,7 +588,7 @@ func (d *DeepAdapter) ReloadAgentConfig(ctx context.Context, configBase map[stri
 	// 对齐 Python: deep_cfg = self._make_deep_agent_config(model=model, config=config, agent_card=agent_card, tool_cards=..., rails=rails_list); self._instance.configure(deep_cfg)
 	agentCard := agentschema.NewAgentCard(
 		agentschema.WithAgentName(d.agentName),
-		agentschema.WithAgentID("jiuwenswarm"),
+		agentschema.WithAgentID("uapclaw"),
 	)
 	deepCfg := d.makeDeepAgentConfig(d.model, config, agentCard, nil, railsList)
 	if cfgErr := d.instance.ConfigureDeepConfig(ctx, deepCfg); cfgErr != nil {
