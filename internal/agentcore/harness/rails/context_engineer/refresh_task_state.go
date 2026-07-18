@@ -67,25 +67,19 @@ func RefreshTaskStateRuntime(ctx *sainterfaces.AgentCallbackContext) {
 		pendingFollowUps = toStringSlice(pfu)
 	}
 
-	// 5. 提取 plan_mode
-	var planMode interface{}
-	if pm, ok := serialized["plan_mode"]; ok {
-		planMode = pm
-	}
-
-	// 6. 回写到 session 顶层状态
+	// 5. 回写到 session 顶层状态
 	sess.UpdateState(map[string]any{
 		"task_state":         serialized,
 		"iteration":          iteration,
 		"pending_follow_ups": pendingFollowUps,
-		"plan_mode":          planMode,
+		"plan_mode":          serialized["plan_mode"],
 	})
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // toInt 将 any 值转换为 int，对齐 Python: int(value or 0)
-func toInt(val interface{}) int {
+func toInt(val any) int {
 	switch v := val.(type) {
 	case int:
 		return v
@@ -99,7 +93,7 @@ func toInt(val interface{}) int {
 }
 
 // toStringSlice 将 any 值转换为 []string，对齐 Python: serialized.get("pending_follow_ups", [])
-func toStringSlice(val interface{}) []string {
+func toStringSlice(val any) []string {
 	switch v := val.(type) {
 	case []string:
 		return v

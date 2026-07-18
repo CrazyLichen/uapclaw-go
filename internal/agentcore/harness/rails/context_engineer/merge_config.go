@@ -240,7 +240,7 @@ func snakeToPascal(s string) string {
 }
 
 // setFieldValue 通过 reflect 设置字段值，处理类型兼容性。
-func setFieldValue(field reflect.Value, val interface{}) {
+func setFieldValue(field reflect.Value, val any) {
 	if !field.CanSet() {
 		return
 	}

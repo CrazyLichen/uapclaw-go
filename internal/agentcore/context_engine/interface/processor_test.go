@@ -57,6 +57,10 @@ func (f *fakeProcessorConfig) Validate() error {
 func (f *fakeProcessorConfig) SetModelDefaults(_ *llmschema.ModelRequestConfig, _ *llmschema.ModelClientConfig) {
 }
 
+func (f *fakeProcessorConfig) GetModel() *llmschema.ModelRequestConfig {
+	return nil
+}
+
 // TestWithSysOperation 验证 WithSysOperation 选项函数
 func TestWithSysOperation(t *testing.T) {
 	var op sys_operation.SysOperation = nil

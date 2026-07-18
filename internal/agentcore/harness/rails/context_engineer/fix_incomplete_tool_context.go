@@ -146,7 +146,7 @@ func EnsureJSONArguments(arguments string) string {
 	}
 
 	// 尝试解析为 JSON
-	var parsed interface{}
+	var parsed any
 	if err := json.Unmarshal([]byte(arguments), &parsed); err != nil {
 		logger.Warn(logger.ComponentAgentCore).
 			Str("event_type", "illegal_tool_call_arguments").
@@ -156,7 +156,7 @@ func EnsureJSONArguments(arguments string) string {
 	}
 
 	// 只接受 dict/object 类型
-	if _, ok := parsed.(map[string]interface{}); ok {
+	if _, ok := parsed.(map[string]any); ok {
 		return arguments
 	}
 

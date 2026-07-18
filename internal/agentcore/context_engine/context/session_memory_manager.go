@@ -307,6 +307,11 @@ func (c *SessionMemoryConfig) SetModelDefaults(model *llm_schema.ModelRequestCon
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *SessionMemoryConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // NewSessionMemoryDirectUpdater 创建 direct_replace 模式的会话记忆更新器。
 func NewSessionMemoryDirectUpdater(config SessionMemoryConfig) *SessionMemoryDirectUpdater {
 	return &SessionMemoryDirectUpdater{

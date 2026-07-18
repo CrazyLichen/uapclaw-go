@@ -524,6 +524,11 @@ func (c *CurrentRoundCompressorConfig) SetModelDefaults(model *llm_schema.ModelR
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *CurrentRoundCompressorConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // NewCurrentRoundCompressor 创建当轮增量压缩器实例。
 //
 // 对应 Python: CurrentRoundCompressor.__init__(config)

@@ -20,19 +20,19 @@ import (
 // 提供 states 和 updated 字段，支持 GetState/UpdateState 验证。
 // 同时满足 RefreshTaskStateRuntime 和 FixIncompleteToolContext 测试需求。
 type mockSessionFacade struct {
-	states  map[sessstate.StateKey]interface{}
+	states  map[sessstate.StateKey]any
 	updated map[string]any
 }
 
 func newMockSessionFacade() *mockSessionFacade {
 	return &mockSessionFacade{
-		states:  make(map[sessstate.StateKey]interface{}),
+		states:  make(map[sessstate.StateKey]any),
 		updated: make(map[string]any),
 	}
 }
 
 func (m *mockSessionFacade) GetSessionID() string { return "test-session" }
-func (m *mockSessionFacade) GetState(key sessstate.StateKey) (interface{}, error) {
+func (m *mockSessionFacade) GetState(key sessstate.StateKey) (any, error) {
 	return m.states[key], nil
 }
 func (m *mockSessionFacade) UpdateState(data map[string]any) {
@@ -41,12 +41,12 @@ func (m *mockSessionFacade) UpdateState(data map[string]any) {
 	}
 }
 func (m *mockSessionFacade) DumpState() map[string]any                               { return m.updated }
-func (m *mockSessionFacade) WriteStream(ctx context.Context, data interface{}) error { return nil }
-func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data interface{}) error {
+func (m *mockSessionFacade) WriteStream(ctx context.Context, data any) error { return nil }
+func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data any) error {
 	return nil
 }
-func (m *mockSessionFacade) GetEnv(key string, defaultValue ...interface{}) interface{} { return nil }
-func (m *mockSessionFacade) Interact(ctx context.Context, value interface{}) error      { return nil }
+func (m *mockSessionFacade) GetEnv(key string, defaultValue ...any) any { return nil }
+func (m *mockSessionFacade) Interact(ctx context.Context, value any) error      { return nil }
 
 // 确保 mock 实现了 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)

@@ -277,6 +277,11 @@ func (c *MessageSummaryOffloaderConfig) SetModelDefaults(model *llm_schema.Model
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *MessageSummaryOffloaderConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // ProcessorType 返回处理器类型标识。
 func (mso *MessageSummaryOffloader) ProcessorType() string { return "MessageSummaryOffloader" }
 

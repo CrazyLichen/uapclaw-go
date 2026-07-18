@@ -11,7 +11,7 @@ import (
 // ──────────────────────────── 测试辅助 ────────────────────────────
 
 // reflectPtrElem 获取指针指向的结构体 reflect.Value
-func reflectPtrElem(ptr interface{}) reflect.Value {
+func reflectPtrElem(ptr any) reflect.Value {
 	v := reflect.ValueOf(ptr)
 	if v.Kind() == reflect.Pointer {
 		return v.Elem()
@@ -37,6 +37,10 @@ func (c *testConfig) SetModelDefaults(model *llmschema.ModelRequestConfig, model
 	if c.ModelClient == nil && modelClient != nil {
 		c.ModelClient = modelClient
 	}
+}
+
+func (c *testConfig) GetModel() *llmschema.ModelRequestConfig {
+	return c.Model
 }
 
 // ──────────────────────────── snakeToPascal 测试 ────────────────────────────

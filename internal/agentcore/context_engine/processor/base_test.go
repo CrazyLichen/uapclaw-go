@@ -29,6 +29,8 @@ func (c *testConfig) Validate() error {
 
 func (c *testConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
 
+func (c *testConfig) GetModel() *llm_schema.ModelRequestConfig { return nil }
+
 // TestContextEvent_字段默认值 验证 ContextEvent 零值
 func TestContextEvent_字段默认值(t *testing.T) {
 	var e iface.ContextEvent

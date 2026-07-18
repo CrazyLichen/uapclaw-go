@@ -244,6 +244,11 @@ func (c *RoundLevelCompressorConfig) SetModelDefaults(model *llm_schema.ModelReq
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *RoundLevelCompressorConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // NewRoundLevelCompressor 创建轮级压缩器实例。
 //
 // 对应 Python: RoundLevelCompressor.__init__(config)

@@ -24,6 +24,10 @@ type ProcessorConfig interface {
 	// 无 Model/ModelClient 字段的 Config 实现空方法。
 	// 对齐 Python: hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None
 	SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig)
+	// GetModel 返回 Config 的 Model 字段。
+	// 无 Model 字段的 Config 返回 nil。
+	// 对齐 Python: getattr(config, "model", None)
+	GetModel() *llm_schema.ModelRequestConfig
 }
 
 // ContextProcessor 上下文处理器接口，所有处理器插件必须实现。

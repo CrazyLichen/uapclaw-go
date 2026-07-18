@@ -4,6 +4,7 @@ import (
 	"context"
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
@@ -39,11 +40,11 @@ type ContextProcessorRail struct {
 	// sessionMemoryEnabled 是否启用会话记忆
 	sessionMemoryEnabled bool
 	// sessionMemoryConfig 会话记忆配置
-	// ⤵️ TODO: 后续回填 — 等 session memory 集成时改为具体类型
-	sessionMemoryConfig interface{}
+	// ⤵️ TODO: 后续回填 — 等 session memory 集成时初始化
+	sessionMemoryConfig *cecontext.SessionMemoryConfig
 	// sessionMemoryMgr 会话记忆管理器
-	// ⤵️ TODO: 后续回填 — 等 session memory 集成时改为具体类型
-	sessionMemoryMgr interface{}
+	// ⤵️ TODO: 后续回填 — 等 session memory 集成时初始化
+	sessionMemoryMgr *cecontext.SessionMemoryManager
 	// systemPromptBuilder 系统提示词构建器引用
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
 	// allProcessors 合并后的完整处理器列表

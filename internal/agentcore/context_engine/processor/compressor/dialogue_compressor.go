@@ -245,6 +245,11 @@ func (c *DialogueCompressorConfig) SetModelDefaults(model *llm_schema.ModelReque
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *DialogueCompressorConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // ProcessorType 返回处理器类型标识。
 func (dc *DialogueCompressor) ProcessorType() string { return "DialogueCompressor" }
 

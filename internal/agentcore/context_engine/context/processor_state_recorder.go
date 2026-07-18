@@ -436,33 +436,35 @@ func resolveModelName(proc iface.ContextProcessor, trigger string, force bool) s
 	type configProvider interface {
 		Config() iface.ProcessorConfig
 	}
-	if cp, ok := proc.(configProvider); ok {
-		cfg := cp.Config()
-		if cfg != nil {
-			// 尝试 config 上的 ModelName() 方法
-			type modelNameProvider interface {
-				ModelName() string
-			}
-			if mp, ok := cfg.(modelNameProvider); ok {
-				if name := mp.ModelName(); name != "" {
-					return name
-				}
-			}
-			// 尝试从 config.model 上获取 model_name
-			type modelConfigProvider interface {
-				GetModel() any
-			}
-			if mcp, ok := cfg.(modelConfigProvider); ok {
-				if modelCfg := mcp.GetModel(); modelCfg != nil {
-					if mp, ok := modelCfg.(modelNameProvider); ok {
-						if name := mp.ModelName(); name != "" {
-							return name
-						}
-					}
-				}
-			}
+	cp, ok := proc.(configProvider)
+	if !ok {
+		return ""
+	}
+	cfg := cp.Config()
+	if cfg == nil {
+		return ""
+	}
+
+	// 1. 尝试从 config.Model 上获取 model_name
+	// 对齐 Python: model_config = getattr(config, "model", None)
+	modelCfg := cfg.GetModel()
+	if modelCfg != nil {
+		if modelCfg.ModelName != "" {
+			return modelCfg.ModelName
 		}
 	}
+
+	// 2. 回退：尝试 config 上的 ModelName() 方法
+	// 对齐 Python: for key in ("model_name", "model"): getattr(config, key, None)
+	type modelNameProvider interface {
+		ModelName() string
+	}
+	if mp, ok := cfg.(modelNameProvider); ok {
+		if name := mp.ModelName(); name != "" {
+			return name
+		}
+	}
+
 	return ""
 }
 

@@ -293,6 +293,11 @@ func (c *FullCompactProcessorConfig) SetModelDefaults(model *llm_schema.ModelReq
 	}
 }
 
+// GetModel 返回模型请求配置。
+func (c *FullCompactProcessorConfig) GetModel() *llm_schema.ModelRequestConfig {
+	return c.Model
+}
+
 // ProcessorType 返回处理器类型标识。
 func (fcp *FullCompactProcessor) ProcessorType() string {
 	return "FullCompactProcessor"
