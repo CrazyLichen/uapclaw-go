@@ -1,6 +1,8 @@
 package dataset
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
@@ -46,8 +48,8 @@ func TestNewEvaluatedCase(t *testing.T) {
 	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
 	answer := map[string]any{"output": "result"}
 	ec := NewEvaluatedCase(*c, answer)
-	if ec.Score != 0.0 {
-		t.Errorf("期望默认 Score=0.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 0.0 {
+		t.Errorf("期望默认 Score=0.0, 实际=%f", ec.GetScore())
 	}
 	if ec.Reason != "" {
 		t.Errorf("期望默认 Reason 为空, 实际=%s", ec.Reason)
@@ -66,18 +68,18 @@ func TestEvaluatedCase_SetScore_钳位(t *testing.T) {
 	ec := NewEvaluatedCase(*c, nil)
 
 	ec.SetScore(1.5)
-	if ec.Score != 1.0 {
-		t.Errorf("期望 Score 钳位到 1.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 1.0 {
+		t.Errorf("期望 Score 钳位到 1.0, 实际=%f", ec.GetScore())
 	}
 
 	ec.SetScore(-0.5)
-	if ec.Score != 0.0 {
-		t.Errorf("期望 Score 钳位到 0.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 0.0 {
+		t.Errorf("期望 Score 钳位到 0.0, 实际=%f", ec.GetScore())
 	}
 
 	ec.SetScore(0.7)
-	if ec.Score != 0.7 {
-		t.Errorf("期望 Score=0.7, 实际=%f", ec.Score)
+	if ec.GetScore() != 0.7 {
+		t.Errorf("期望 Score=0.7, 实际=%f", ec.GetScore())
 	}
 }
 
@@ -98,5 +100,41 @@ func TestEvaluatedCase_便捷属性(t *testing.T) {
 	}
 	if len(ec.GetTools()) != 1 {
 		t.Errorf("期望 GetTools 长度 1, 实际=%d", len(ec.GetTools()))
+	}
+}
+
+// TestEvaluatedCase_MarshalJSON 测试 JSON 序列化包含 score 字段
+func TestEvaluatedCase_MarshalJSON(t *testing.T) {
+	c := NewCase(map[string]any{"q": "1"}, map[string]any{"a": "2"})
+	ec := NewEvaluatedCase(*c, map[string]any{"output": "result"})
+	ec.SetScore(0.75)
+
+	data, err := json.Marshal(ec)
+	if err != nil {
+		t.Fatalf("Marshal 失败: %v", err)
+	}
+	// 验证 JSON 包含 "score" 键和正确值
+	if !strings.Contains(string(data), `"score":0.75`) {
+		t.Errorf("期望 JSON 包含 \"score\":0.75, 实际=%s", string(data))
+	}
+}
+
+// TestEvaluatedCase_UnmarshalJSON 测试 JSON 反序列化写入 score 并钳位
+func TestEvaluatedCase_UnmarshalJSON(t *testing.T) {
+	jsonStr := `{"case":{"inputs":{"q":"1"},"label":{"a":"2"},"case_id":"test-id"},"answer":{"output":"result"},"score":1.5,"reason":"test","per_metric":{"m1":0.8}}`
+
+	var ec EvaluatedCase
+	if err := json.Unmarshal([]byte(jsonStr), &ec); err != nil {
+		t.Fatalf("Unmarshal 失败: %v", err)
+	}
+	// score=1.5 应被钳位到 1.0
+	if ec.GetScore() != 1.0 {
+		t.Errorf("期望反序列化后 Score 钳位到 1.0, 实际=%f", ec.GetScore())
+	}
+	if ec.Reason != "test" {
+		t.Errorf("期望 Reason=test, 实际=%s", ec.Reason)
+	}
+	if ec.PerMetric["m1"] != 0.8 {
+		t.Errorf("期望 PerMetric[m1]=0.8, 实际=%f", ec.PerMetric["m1"])
 	}
 }

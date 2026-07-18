@@ -122,8 +122,8 @@ func TestBatchEvaluate_并行测试(t *testing.T) {
 	if results[0].GetScore() != 1.0 {
 		t.Errorf("期望 results[0].GetScore()=1.0, 实际=%f", results[0].GetScore())
 	}
-	if results[1].Score != 0.0 {
-		t.Errorf("期望 results[1].Score=0.0, 实际=%f", results[1].Score)
+	if results[1].GetScore() != 0.0 {
+		t.Errorf("期望 results[1].GetScore()=0.0, 实际=%f", results[1].GetScore())
 	}
 }
 
