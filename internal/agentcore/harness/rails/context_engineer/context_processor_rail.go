@@ -4,6 +4,8 @@ import (
 	"context"
 
 	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
@@ -36,9 +38,11 @@ type ContextProcessorRail struct {
 	userProcessors []ceiface.ProcessorSpec
 	// sessionMemoryEnabled 是否启用会话记忆
 	sessionMemoryEnabled bool
-	// sessionMemoryConfig 会话记忆配置（预留，后续回填）
+	// sessionMemoryConfig 会话记忆配置
+	// ⤵️ TODO: 后续回填 — 等 session memory 集成时改为具体类型
 	sessionMemoryConfig interface{}
-	// sessionMemoryMgr 会话记忆管理器（预留，后续回填）
+	// sessionMemoryMgr 会话记忆管理器
+	// ⤵️ TODO: 后续回填 — 等 session memory 集成时改为具体类型
 	sessionMemoryMgr interface{}
 	// systemPromptBuilder 系统提示词构建器引用
 	systemPromptBuilder saprompt.SystemPromptBuilderInterface
@@ -236,21 +240,70 @@ func (r *ContextProcessorRail) buildPresetProcessors(
 ) []ceiface.ProcessorSpec {
 	if r.sessionMemoryEnabled {
 		// session memory 启用时的预设
+		// 对齐 Python: ContextProcessorRail._build_preset_processors (session_memory=True)
 		return []ceiface.ProcessorSpec{
-			{Type: "ToolResultBudgetProcessor"},
-			{Type: "MicroCompactProcessor"},
-			{Type: "FullCompactProcessor"},
+			{
+				Type:   "ToolResultBudgetProcessor",
+				Config: &offloader.ToolResultBudgetProcessorConfig{},
+			},
+			{
+				Type:   "MicroCompactProcessor",
+				Config: &compressor.MicroCompactProcessorConfig{},
+			},
+			{
+				Type: "FullCompactProcessor",
+				Config: &compressor.FullCompactProcessorConfig{
+					Model:       modelConfig,
+					ModelClient: modelClientConfig,
+				},
+			},
 		}
 	}
 
 	// 默认预设（对齐 Python 非 session_memory 路径）
-	// 注意：Go 中 ProcessorConfig 的具体配置由 ContextEngine 的 registry 根据类型创建默认值
-	// 这里只指定 Type，Config 留空让 registry 填充默认配置
+	// 显式覆盖值严格对齐 Python _build_preset_processors 中的参数
 	return []ceiface.ProcessorSpec{
-		{Type: "MessageSummaryOffloader"},
-		{Type: "DialogueCompressor"},
-		{Type: "CurrentRoundCompressor"},
-		{Type: "RoundLevelCompressor"},
+		{
+			Type: "MessageSummaryOffloader",
+			Config: &offloader.MessageSummaryOffloaderConfig{
+				LargeMessageThreshold: 10000, // Python: large_message_threshold=10000 (覆盖默认1000)
+				OffloadMessageTypes:   []string{"tool"},
+				ProtectedToolNames:    []string{"read_file:*SKILL.md", "reload_original_context_messages"},
+				KeepLastRound:         false, // Python: keep_last_round=False (覆盖默认True)
+				Model:                 modelConfig,
+				ModelClient:           modelClientConfig,
+			},
+		},
+		{
+			Type: "DialogueCompressor",
+			Config: &compressor.DialogueCompressorConfig{
+				TokensThreshold:         100000, // Python: tokens_threshold=100000 (覆盖默认10000)
+				MessagesToKeep:          10,     // Python: messages_to_keep=10
+				KeepLastRound:           false,  // Python: keep_last_round=False (覆盖默认True)
+				CompressionTargetTokens: 1800,
+				Model:                   modelConfig,
+				ModelClient:             modelClientConfig,
+			},
+		},
+		{
+			Type: "CurrentRoundCompressor",
+			Config: &compressor.CurrentRoundCompressorConfig{
+				TokensThreshold: 100000,
+				MessagesToKeep:  3,
+				Model:           modelConfig,
+				ModelClient:     modelClientConfig,
+			},
+		},
+		{
+			Type: "RoundLevelCompressor",
+			Config: &compressor.RoundLevelCompressorConfig{
+				TriggerTotalTokens: 230000,
+				TargetTotalTokens:  160000,
+				KeepRecentMessages: 6, // Python: keep_recent_messages=6 (覆盖默认0)
+				Model:              modelConfig,
+				ModelClient:        modelClientConfig,
+			},
+		},
 	}
 }
 
