@@ -77,9 +77,9 @@ func TestTrajectory_ToMessages_只有LLM步骤(t *testing.T) {
 			{
 				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
-					Messages: []any{
-						map[string]any{"role": "user", "content": "hello"},
-					},
+					Messages: []map[string]any{
+					map[string]any{"role": "user", "content": "hello"},
+				},
 					Response: map[string]any{"role": "assistant", "content": "hi"},
 				},
 			},
@@ -104,7 +104,7 @@ func TestTrajectory_ToMessages_跳过工具步骤(t *testing.T) {
 		Steps: []*TrajectoryStep{
 			{Kind: StepKindTool, Detail: &ToolCallDetail{ToolName: "search"}},
 			{Kind: StepKindLLM, Detail: &LLMCallDetail{
-				Messages: []any{map[string]any{"role": "user", "content": "hi"}},
+				Messages: []map[string]any{map[string]any{"role": "user", "content": "hi"}},
 			}},
 		},
 	}
@@ -121,7 +121,7 @@ func TestTrajectory_ToMessages_nilResponse(t *testing.T) {
 		Steps: []*TrajectoryStep{
 			{
 				Kind:   StepKindLLM,
-				Detail: &LLMCallDetail{Messages: []any{map[string]any{"role": "user", "content": "hi"}}, Response: nil},
+				Detail: &LLMCallDetail{Messages: []map[string]any{map[string]any{"role": "user", "content": "hi"}}, Response: nil},
 			},
 		},
 	}

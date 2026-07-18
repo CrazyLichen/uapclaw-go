@@ -94,10 +94,33 @@ func TestApplyResult_Ok(t *testing.T) {
 
 func TestNormalizeUpdateValue(t *testing.T) {
 	t.Run("已是UpdateValue直接返回", func(t *testing.T) {
-		uv := UpdateValue{Payload: "test", Mode: UpdateModeAppend}
+		uv := UpdateValue{Payload: "test", Mode: UpdateModeAppend, Effect: UpdateEffectState}
 		result := NormalizeUpdateValue(uv, "")
 		if result.Mode != UpdateModeAppend {
 			t.Errorf("mode = %v, expected %v", result.Mode, UpdateModeAppend)
+		}
+	})
+	t.Run("UpdateValue零值回填", func(t *testing.T) {
+		uv := UpdateValue{Payload: "test"} // Mode 和 Effect 为零值 ""
+		result := NormalizeUpdateValue(uv, "")
+		if result.Mode != UpdateModeReplace {
+			t.Errorf("mode = %v, expected %v (零值应回填为 replace)", result.Mode, UpdateModeReplace)
+		}
+		if result.Effect != UpdateEffectState {
+			t.Errorf("effect = %v, expected %v (零值应回填为 state)", result.Effect, UpdateEffectState)
+		}
+		if result.Metadata == nil {
+			t.Error("metadata 不应为 nil (零值应回填为空 map)")
+		}
+	})
+	t.Run("UpdateValue仅Mode为零值回填", func(t *testing.T) {
+		uv := UpdateValue{Payload: "test", Effect: UpdateEffectPendingChange}
+		result := NormalizeUpdateValue(uv, "")
+		if result.Mode != UpdateModeReplace {
+			t.Errorf("mode = %v, expected %v (零值应回填为 replace)", result.Mode, UpdateModeReplace)
+		}
+		if result.Effect != UpdateEffectPendingChange {
+			t.Errorf("effect = %v, expected %v (非零值应保留)", result.Effect, UpdateEffectPendingChange)
 		}
 	})
 	t.Run("experiences目标", func(t *testing.T) {

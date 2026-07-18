@@ -360,7 +360,7 @@ func meanScore(cases []*dataset.EvaluatedCase) float64 {
 	}
 	var total float64
 	for _, c := range cases {
-		total += c.Score
+		total += c.GetScore()
 	}
 	return total / float64(len(cases))
 }

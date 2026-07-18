@@ -148,13 +148,25 @@ func (r ApplyResult) Ok() bool {
 // NormalizeUpdateValue 将遗留更新包装为结构化契约。
 //
 // 兼容规则：
-//   - 已是 UpdateValue → 直接返回
+//   - 已是 UpdateValue → 回填零值字段后返回
 //   - target 为 "experiences" → 追加 + 暂存变更
 //   - 其他 → 替换 + 状态
 //
 // 对应 Python: normalize_update_value(value, *, target)
 func NormalizeUpdateValue(value any, target string) UpdateValue {
 	if uv, ok := value.(UpdateValue); ok {
+		// 防御性回填：Go struct 零值中 Mode/Effect 为空字符串，
+		// Python dataclass 默认 mode="replace", effect="state"。
+		// 此处确保与 Python 行为一致。
+		if uv.Mode == "" {
+			uv.Mode = UpdateModeReplace
+		}
+		if uv.Effect == "" {
+			uv.Effect = UpdateEffectState
+		}
+		if uv.Metadata == nil {
+			uv.Metadata = map[string]any{}
+		}
 		return uv
 	}
 	if target == ExperiencesTarget {

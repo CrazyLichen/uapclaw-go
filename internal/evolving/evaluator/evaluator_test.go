@@ -58,8 +58,8 @@ func TestMetricEvaluator_Evaluate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	if ec.Score != 1.0 {
-		t.Errorf("期望 Score=1.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 1.0 {
+		t.Errorf("期望 Score=1.0, 实际=%f", ec.GetScore())
 	}
 	if ec.PerMetric["exact_match"] != 1.0 {
 		t.Errorf("期望 PerMetric[exact_match]=1.0, 实际=%f", ec.PerMetric["exact_match"])
@@ -81,8 +81,8 @@ func TestMetricEvaluator_Evaluate_不匹配(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	if ec.Score != 0.0 {
-		t.Errorf("期望 Score=0.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 0.0 {
+		t.Errorf("期望 Score=0.0, 实际=%f", ec.GetScore())
 	}
 }
 
@@ -119,8 +119,8 @@ func TestBatchEvaluate_并行测试(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("期望 2 个结果, 实际=%d", len(results))
 	}
-	if results[0].Score != 1.0 {
-		t.Errorf("期望 results[0].Score=1.0, 实际=%f", results[0].Score)
+	if results[0].GetScore() != 1.0 {
+		t.Errorf("期望 results[0].GetScore()=1.0, 实际=%f", results[0].GetScore())
 	}
 	if results[1].Score != 0.0 {
 		t.Errorf("期望 results[1].Score=0.0, 实际=%f", results[1].Score)
@@ -226,8 +226,8 @@ func TestMetricEvaluator_多指标聚合(t *testing.T) {
 		t.Fatalf("不期望错误: %v", err)
 	}
 	// 单指标匹配 → mean = 1.0
-	if ec.Score != 1.0 {
-		t.Errorf("期望 Score=1.0, 实际=%f", ec.Score)
+	if ec.GetScore() != 1.0 {
+		t.Errorf("期望 Score=1.0, 实际=%f", ec.GetScore())
 	}
 }
 
@@ -249,8 +249,8 @@ func TestMetricEvaluator_多指标聚合_混合分数(t *testing.T) {
 		t.Fatalf("不期望错误: %v", err)
 	}
 	// (1.0 + 0.0) / 2 = 0.5
-	if ec.Score != 0.5 {
-		t.Errorf("期望 Score=0.5, 实际=%f", ec.Score)
+	if ec.GetScore() != 0.5 {
+		t.Errorf("期望 Score=0.5, 实际=%f", ec.GetScore())
 	}
 }
 
@@ -271,8 +271,8 @@ func TestMetricEvaluator_first聚合(t *testing.T) {
 		t.Fatalf("不期望错误: %v", err)
 	}
 	// first 取第一个 metric 的分数 → 1.0
-	if ec.Score != 1.0 {
-		t.Errorf("期望 Score=1.0 (first), 实际=%f", ec.Score)
+	if ec.GetScore() != 1.0 {
+		t.Errorf("期望 Score=1.0 (first), 实际=%f", ec.GetScore())
 	}
 }
 

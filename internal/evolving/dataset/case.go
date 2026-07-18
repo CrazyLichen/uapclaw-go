@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,15 +26,16 @@ type Case struct {
 
 // EvaluatedCase 评估后的样本，包含模型输出和评分。
 //
-// Score 钳位到 [0, 1] 范围。
+// score 通过 SetScore 设置时自动钳位到 [0, 1] 范围，外部必须通过 GetScore/SetScore 访问。
+// 自定义 MarshalJSON/UnmarshalJSON 确保 score 在 JSON 中以 "score" 键序列化。
 // 对应 Python: openjiuwen/agent_evolving/dataset/case.py EvaluatedCase
 type EvaluatedCase struct {
 	// Case 原始样本
 	Case Case `json:"case"`
 	// Answer 模型输出/预测结果
 	Answer map[string]any `json:"answer,omitempty"`
-	// Score 综合评分，范围 [0, 1]
-	Score float64 `json:"score"`
+	// score 综合评分，范围 [0, 1]（非导出，必须通过 GetScore/SetScore 访问）
+	score float64
 	// Reason 评分原因或错误分析
 	Reason string `json:"reason"`
 	// PerMetric 各指标独立评分（MetricEvaluator 使用）
@@ -73,8 +75,15 @@ func NewEvaluatedCase(case_ Case, answer map[string]any) *EvaluatedCase {
 	return &EvaluatedCase{
 		Case:   case_,
 		Answer: answer,
-		Score:  0.0,
+		score:  0.0,
 	}
+}
+
+// GetScore 返回综合评分（范围 [0, 1]）。
+//
+// 对应 Python: EvaluatedCase.score 属性
+func (ec *EvaluatedCase) GetScore() float64 {
+	return ec.score
 }
 
 // SetScore 设置评分，自动钳位到 [0, 1]。
@@ -87,7 +96,7 @@ func (ec *EvaluatedCase) SetScore(score float64) {
 	if score < 0.0 {
 		score = 0.0
 	}
-	ec.Score = score
+	ec.score = score
 }
 
 // GetInputs 返回原始样本的输入数据。
@@ -122,6 +131,35 @@ func WithCaseTools(tools []schema.ToolInfo) CaseOption {
 // WithCaseID 设置 Case 的唯一标识。
 func WithCaseID(id string) CaseOption {
 	return func(c *Case) { c.CaseID = id }
+}
+
+// MarshalJSON 自定义 JSON 序列化，确保非导出 score 字段以 "score" 键输出。
+func (ec EvaluatedCase) MarshalJSON() ([]byte, error) {
+	// 使用别名避免递归调用 MarshalJSON
+	type alias EvaluatedCase
+	return json.Marshal(&struct {
+		Score float64 `json:"score"`
+		*alias
+	}{
+		Score: ec.score,
+		alias: (*alias)(&ec),
+	})
+}
+
+// UnmarshalJSON 自定义 JSON 反序列化，将 "score" 键写入非导出字段并钳位。
+func (ec *EvaluatedCase) UnmarshalJSON(data []byte) error {
+	type alias EvaluatedCase
+	aux := &struct {
+		Score float64 `json:"score"`
+		*alias
+	}{
+		alias: (*alias)(ec),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	ec.SetScore(aux.Score) // 通过 SetScore 钳位
+	return nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

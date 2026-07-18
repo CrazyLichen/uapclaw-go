@@ -19,10 +19,10 @@ type StepDetail interface {
 type LLMCallDetail struct {
 	// Model 模型名称
 	Model string
-	// Messages 消息列表（原始消息对象，经 JSONSafe 处理后为可序列化形式）
-	Messages []any
-	// Response 模型响应（可选）
-	Response any
+	// Messages 消息列表（字典形式，外部存入时通过 MessageToDict 转换）
+	Messages []map[string]any
+	// Response 模型响应（字典形式，nil 表示无响应）
+	Response map[string]any
 	// Tools 工具定义列表（可选）
 	Tools []map[string]any
 	// Usage 使用量信息（可选）
@@ -37,10 +37,10 @@ type LLMCallDetail struct {
 type ToolCallDetail struct {
 	// ToolName 工具名称
 	ToolName string
-	// CallArgs 调用参数（可选）
-	CallArgs any
-	// CallResult 调用结果（可选）
-	CallResult any
+	// CallArgs 调用参数（JSON dict 形式，可选）
+	CallArgs map[string]any
+	// CallResult 调用结果（JSON dict 形式，可选）
+	CallResult map[string]any
 	// ToolDescription 工具描述（可选）
 	ToolDescription string
 	// ToolSchema 工具 JSON Schema（可选）
@@ -134,10 +134,12 @@ func (d *LLMCallDetail) StepKind() StepKind { return StepKindLLM }
 // StepKind 返回 StepKindTool，实现 StepDetail 接口。
 func (d *ToolCallDetail) StepKind() StepKind { return StepKindTool }
 
-// ToMessages 返回 LLM 步骤中记录的消息类字典列表。
+// ToMessages 返回 LLM 步骤中记录的消息字典列表。
 //
 // 遍历所有 kind=llm 且 detail 为 LLMCallDetail 的步骤，
-// 提取 messages 和 response，通过 MessageToDict 标准化为字典。
+// 提取 messages 和 response。
+// Messages 已是字典形式（外部存入时已转换），直接追加；
+// Response 同为字典形式，检查是否含 role 或 content 键后追加。
 //
 // 对齐 Python:
 //
@@ -160,15 +162,16 @@ func (t *Trajectory) ToMessages() []map[string]any {
 		if !ok {
 			continue
 		}
+		// Messages 已是 []map[string]any，直接追加
 		for _, msg := range llmDetail.Messages {
-			messages = append(messages, MessageToDict(msg))
+			messages = append(messages, msg)
 		}
+		// Response 已是 map[string]any，检查是否含 role 或 content 键
 		if llmDetail.Response != nil {
-			responseMsg := MessageToDict(llmDetail.Response)
-			if _, hasRole := responseMsg["role"]; hasRole {
-				messages = append(messages, responseMsg)
-			} else if _, hasContent := responseMsg["content"]; hasContent {
-				messages = append(messages, responseMsg)
+			if _, hasRole := llmDetail.Response["role"]; hasRole {
+				messages = append(messages, llmDetail.Response)
+			} else if _, hasContent := llmDetail.Response["content"]; hasContent {
+				messages = append(messages, llmDetail.Response)
 			}
 		}
 	}

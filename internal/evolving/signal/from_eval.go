@@ -10,17 +10,17 @@ import (
 
 // FromEvaluatedCase 将离线评估结果转换为演化信号。
 //
-// 当 scoreThreshold 非空且 case.Score >= threshold 时返回 nil（不产生信号）；
+// 当 scoreThreshold 非空且 case.GetScore() >= threshold 时返回 nil（不产生信号）；
 // 否则根据分数判断 signal_type：score==0 → "low_score"，其他 → "evaluated"。
 //
 // 对应 Python: openjiuwen/agent_evolving/signal/from_eval.py from_evaluated_case
 func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThreshold *float64) *EvolutionSignal {
-	if scoreThreshold != nil && case_.Score >= *scoreThreshold {
+	if scoreThreshold != nil && case_.GetScore() >= *scoreThreshold {
 		return nil
 	}
 
 	signalType := "evaluated"
-	if case_.Score == 0 {
+	if case_.GetScore() == 0 {
 		signalType = "low_score"
 	}
 
@@ -34,14 +34,14 @@ func FromEvaluatedCase(case_ *dataset.EvaluatedCase, operatorID string, scoreThr
 		"label":    fmt.Sprintf("%v", case_.GetLabel()),
 		"answer":   fmt.Sprintf("%v", case_.Answer),
 		"reason":   case_.Reason,
-		"score":    case_.Score,
+		"score":    case_.GetScore(),
 		"source":   "offline_evaluation",
 	}
 
 	return &EvolutionSignal{
 		SignalType: signalType,
 		Section:    "Troubleshooting",
-		Excerpt:    fmt.Sprintf("score=%.2f", case_.Score),
+		Excerpt:    fmt.Sprintf("score=%.2f", case_.GetScore()),
 		SkillName:  skillName,
 		Context:    context,
 	}

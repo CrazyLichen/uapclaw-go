@@ -60,13 +60,15 @@ func ExecuteUpdates(
 		results = append(results, op.ApplyUpdate(key.Target(), update))
 	}
 
-	// 3. 为 nil 值更新生成错误结果
+	// 3. 为 nil 值更新生成错误结果（对齐 Python ApplyResult 默认值）
 	for key, value := range updates {
 		if value == nil {
 			results = append(results, schema.ApplyResult{
 				OperatorID: key.OperatorID(),
 				Target:     key.Target(),
 				Applied:    false,
+				Mode:       schema.UpdateModeReplace,
+				Effect:     schema.UpdateEffectState,
 				Records:    []any{},
 				Errors:     []string{"update value is nil"},
 			})
