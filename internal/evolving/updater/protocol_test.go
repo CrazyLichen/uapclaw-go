@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // mockUpdater 用于验证 Updater 接口兼容性
@@ -32,12 +33,12 @@ func (m *mockUpdater) RequiresForwardData() bool {
 	return m.requireForward
 }
 
-func (m *mockUpdater) Update(ctx context.Context, trajectories []any, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (m *mockUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
 	m.updateCalled = true
 	return map[schema.UpdateKey]any{}, nil
 }
 
-func (m *mockUpdater) Process(ctx context.Context, trajectories []any, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (m *mockUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
 	m.processCalled = true
 	m.lastSignals = signals
 	m.lastConfig = config

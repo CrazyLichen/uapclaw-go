@@ -7,6 +7,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -39,14 +40,10 @@ type Updater interface {
 	RequiresForwardData() bool
 
 	// Update 离线兼容入口，将 evaluated_cases 转换为 signals 后调用 Process。
-	//
-	// trajectories 参数类型为 []any，9.77 Trajectory 实现后替换为 []trajectory.Trajectory。⤵️
-	Update(ctx context.Context, trajectories []any, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error)
+	Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error)
 
 	// Process 信号优先入口，直接消费 EvolutionSignal 列表。
-	//
-	// trajectories 参数类型为 []any，9.77 Trajectory 实现后替换为 []trajectory.Trajectory。⤵️
-	Process(ctx context.Context, trajectories []any, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error)
+	Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error)
 
 	// GetState 获取 Updater 可序列化状态（用于检查点保存）。
 	GetState() map[string]any
