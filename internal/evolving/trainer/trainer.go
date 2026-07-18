@@ -8,6 +8,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
+	updaterpkg "github.com/uapclaw/uapclaw-go/internal/evolving/updater"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -24,8 +25,8 @@ import (
 // 对应 Python: openjiuwen/agent_evolving/trainer/trainer.py Trainer
 type Trainer struct {
 	// updater 更新生成器。
-	// 依赖 9.70c Updater Protocol，暂用 any 占位，填充后替换为 evolving/updater.Updater
-	updater any
+	// 对应 Python: evolving/updater/protocol.py Updater
+	updater updaterpkg.Updater
 	// evaluator 评估器。
 	// 对应 Python: evolving/evaluator.BaseEvaluator
 	evaluator evaluator.BaseEvaluator
@@ -225,23 +226,28 @@ func GetOperatorRegistry(_ any) (map[string]operator.Operator, error) {
 // BindUpdater 将 Updater 绑定到 Agent 的 Operator 注册表。
 //
 // 在训练开始前调用，使 Updater 能访问和修改 Operator。
-// 当前为桩实现。
+// 返回绑定的 Operator 数量；0 触发软退出。
 //
 // 对应 Python: Trainer._bind_updater(updater, operators)
-func (t *Trainer) BindUpdater(_ any, _ map[string]operator.Operator) error {
-	// TODO: 依赖 9.70c Updater Protocol 填充后实现
-	return errors.New("not implemented: Trainer.BindUpdater")
+func (t *Trainer) BindUpdater(operators map[string]operator.Operator, config map[string]any) int {
+	if t.updater == nil {
+		return 0
+	}
+	return t.updater.Bind(operators, nil, config)
 }
 
 // UpdaterRequiresForward 判断 Updater 是否需要前向推理结果。
 //
 // 某些 Updater（如基于梯度的）需要前向推理产生的轨迹数据，
-// 而另一些（如基于规则的）则不需要。当前为桩实现。
+// 而另一些（如基于规则的）则不需要。
+// 当 Updater 为 nil 时默认返回 true（兼容旧行为）。
 //
 // 对应 Python: Trainer._updater_requires_forward(updater)
-func (t *Trainer) UpdaterRequiresForward(_ any) bool {
-	// TODO: 依赖 9.70c Updater Protocol 填充后实现
-	return false
+func (t *Trainer) UpdaterRequiresForward() bool {
+	if t.updater == nil {
+		return true
+	}
+	return t.updater.RequiresForwardData()
 }
 
 // ResumeIfNeeded 如果配置了恢复路径，从检查点恢复训练状态。
@@ -274,9 +280,8 @@ func (t *Trainer) SetCallbacks(callbacks *Callbacks) {
 }
 
 // WithUpdater 设置更新生成器。
-// 依赖 9.70c Updater Protocol，暂用 any 占位。
-func WithUpdater(updater any) TrainerOption {
-	return func(t *Trainer) { t.updater = updater }
+func WithUpdater(u updaterpkg.Updater) TrainerOption {
+	return func(t *Trainer) { t.updater = u }
 }
 
 // WithEvaluator 设置评估器。
