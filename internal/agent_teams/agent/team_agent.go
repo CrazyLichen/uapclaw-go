@@ -73,8 +73,7 @@ type TeamAgent struct {
 	// TODO(#9.61): RecoveryManager 类型
 	recoveryManager any
 	// sessionManager 会话管理器
-	// TODO(#9.59): SessionManager 类型
-	sessionManager any
+	sessionManager *SessionManager
 	// streamController 流式控制器
 	// TODO(#9.60): StreamController 类型
 	streamController any
@@ -102,7 +101,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	// 构建 SpawnManager
 	a.spawnManager = NewSpawnManager(a.state, a.configurator, func() *TeamAgent { return a })
 	// TODO(#9.61): 构建 RecoveryManager(configurator, spawnManager)
-	// TODO(#9.59): 构建 SessionManager(state, configurator, recoveryManager)
+	a.sessionManager = NewSessionManager(a.state, a.configurator, a.recoveryManager)
 	// TODO(#9.60): 构建 StreamController(blueprintGetter, state, resources, ...)
 	// TODO(#9.62): 构建 CoordinationKernel(self)
 	return a
@@ -264,15 +263,14 @@ func (a *TeamAgent) TeamBackend() any {
 }
 
 // SessionID 返回当前会话 ID（从 agent_teams contextvar 读取）。
-// 对齐 Python: TeamAgent.session_id property
+// 对齐 Python: TeamAgent.session_id property → get_session_id()
 func (a *TeamAgent) SessionID(ctx context.Context) string {
-	// TODO(#9.59): 从 agent_teams.GetSessionID(ctx) 读取
-	return ""
+	return agentteams.GetSessionID(ctx)
 }
 
 // SessionManager 返回会话管理器。
 // 对齐 Python: TeamAgent.session_manager property
-func (a *TeamAgent) SessionManager() any {
+func (a *TeamAgent) SessionManager() *SessionManager {
 	return a.sessionManager
 }
 
@@ -636,9 +634,12 @@ func FromSpawnPayload(ctx context.Context, payload map[string]any) (*TeamAgent, 
 
 // ResumeForNewSession 为新会话恢复。
 // 对齐 Python: TeamAgent.resume_for_new_session(session)
-func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error {
-	// TODO(#9.59): 会话管理器恢复新会话 sessionManager.resume_for_new_session(session)
-	return nil
+// 返回新的 context.Context（含 session_id），调用方必须用于后续传播。
+func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) (context.Context, error) {
+	if a.sessionManager != nil {
+		return a.sessionManager.ResumeForNewSession(ctx, session)
+	}
+	return ctx, nil
 }
 
 // RecoverForExistingSession 恢复已有会话检查点。
@@ -646,9 +647,12 @@ func (a *TeamAgent) ResumeForNewSession(ctx context.Context, session any) error 
 //
 // 与 RecoverFromSession 不同，此方法复用当前 Agent，
 // 假定 session.pre_run() 已恢复检查点状态。
-func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) error {
-	// TODO(#9.59+#9.62): 停止协调 → 会话管理器恢复已有会话 sessionManager.recover_for_existing_session(session)
-	return nil
+// 返回新的 context.Context（含 session_id），调用方必须用于后续传播。
+func (a *TeamAgent) RecoverForExistingSession(ctx context.Context, session any) (context.Context, error) {
+	if a.sessionManager != nil {
+		return a.sessionManager.RecoverForExistingSession(ctx, session)
+	}
+	return ctx, nil
 }
 
 // RecoverTeam 恢复团队。
