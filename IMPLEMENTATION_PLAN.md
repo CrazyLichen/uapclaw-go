@@ -611,10 +611,10 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.72b | ☐ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
 | 9.72c | ☐ | MemoryOptimizer | 记忆参数优化器 | `openjiuwen/agent_evolving/optimizer/memory_call/` |
 | 9.72d | ☐ | SkillExperienceOptimizer | 技能经验优化器（LLM 生成经验草稿→EvolutionRecord）+ TeamSkillExperienceOptimizer | `openjiuwen/agent_evolving/optimizer/skill_call/` |
-| 9.72e | ☐ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
+| 9.72e | ✅ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
 | 9.73 | ☐ | SignalDetector | 信号检测（ConversationSignalDetector/from_evaluated_case/团队信号） | `openjiuwen/agent_evolving/signal/` |
 | 9.74-76 | ☐ | RL 子系统 | OfflineRL/OnlineRL/RewardRegistry | `openjiuwen/agent_evolving/agent_rl/` |
-| 9.77 | ☐ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator） | `openjiuwen/agent_evolving/trajectory/` |
+| 9.77 | ✅ | Trajectory | 轨迹类型 + Builder + Extractor + Aggregator + Store + Registry（TrajectorySink/Source + InMemoryTrajectoryRegistry + TeamTrajectoryAggregator） | `openjiuwen/agent_evolving/trajectory/` |
 | 9.78 | ☐ | EvolveCheckpoint | CheckpointManager 协议 + DefaultCheckpointManager + EvolveCheckpoint 状态 + FileCheckpointStore + EvolutionStore（技能文件系统IO）+ StoreArchive/StoreProjection/StoreRecords/SkillPackage | `openjiuwen/agent_evolving/checkpointing/` |
 | 9.79 | ☐ | Experience | 在线经验生命周期：OnlineEvolutionOrchestrator + ExperienceManager（stage/approve/reject）+ ExperienceScorer + ExperienceTracker + PendingChange/EvolutionContext/OnlineEvolutionResult | `openjiuwen/agent_evolving/experience/` |
 | 9.80 | ☐ | UpdateExecution + Types | UpdateValue/ApplyResult/normalize_updates + execute_updates/apply_updates/summarize_apply_results + protocols 常量 | `openjiuwen/agent_evolving/update_execution.py` · `types.py` · `protocols.py` |

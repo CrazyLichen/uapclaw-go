@@ -12,10 +12,12 @@
 //
 // 子包：
 //
-//	dataset/    # 数据集加载与用例管理
-//	evaluator/  # 评估器与评估指标
-//	schema/     # 进化协议与数据结构
-//	trainer/    # 训练执行器与进度管理
+//	dataset/     # 数据集加载与用例管理
+//	evaluator/   # 评估器与评估指标
+//	optimizer/   # 维度优化器基类 + LLM 弹性重试
+//	schema/      # 进化协议与数据结构
+//	trainer/     # 训练执行器与进度管理
+//	trajectory/  # 执行轨迹数据类型
 //
 // 对应 Python 代码：openjiuwen/core/evolving/
 package evolving
