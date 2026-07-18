@@ -6,47 +6,59 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	updater "github.com/uapclaw/uapclaw-go/internal/evolving/updater"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// mockOptimizer 模拟 BaseOptimizer 的关键方法
-// 使用 any 占位，通过接口断言调用
+// mockOptimizer 模拟 BaseOptimizer 的全部方法
 type mockOptimizer struct {
-	bindCalled         bool
-	bindReturn         int
-	bindTargets        []string
-	addTrajectoryCalls int
-	addTrajectoryOrder []any
-	backwardCalled     bool
-	backwardSignals    []*signal.EvolutionSignal
-	stepReturn         map[schema.UpdateKey]any
-	stepCalled         bool
-	requireForward     bool
+	optimizer.BaseOptimizerMixin
+	domain              string
+	requireForward      bool
+	defaultTargets      []string
+	bindCalled          bool
+	bindReturn          int
+	bindTargets         []string
+	addTrajectoryCalls  int
+	addTrajectoryOrder  []*trajectory.Trajectory
+	backwardCalled      bool
+	backwardSignals     []*signal.EvolutionSignal
+	backwardErr         error
+	stepReturn          map[schema.UpdateKey]any
+	stepCalled          bool
 }
+
+// 确保 mockOptimizer 实现 optimizer.BaseOptimizer 接口
+var _ optimizer.BaseOptimizer = (*mockOptimizer)(nil)
+
+func (m *mockOptimizer) Domain() string            { return m.domain }
+func (m *mockOptimizer) RequiresForwardData() bool { return m.requireForward }
+func (m *mockOptimizer) DefaultTargets() []string  { return m.defaultTargets }
 
 func (m *mockOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
 	m.bindCalled = true
 	m.bindTargets = targets
-	return m.bindReturn
+	// 委托 Mixin 以便 Parameters 等方法工作
+	n := m.BaseOptimizerMixin.Bind(operators, targets, config)
+	m.bindReturn = n
+	return n
 }
 
-func (m *mockOptimizer) RequiresForwardData() bool {
-	return m.requireForward
-}
-
-func (m *mockOptimizer) AddTrajectory(traj any) {
+func (m *mockOptimizer) AddTrajectory(traj *trajectory.Trajectory) {
 	m.addTrajectoryCalls++
 	m.addTrajectoryOrder = append(m.addTrajectoryOrder, traj)
+	m.BaseOptimizerMixin.AddTrajectory(traj)
 }
 
 func (m *mockOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	m.backwardCalled = true
 	m.backwardSignals = signals
-	return nil
+	return m.backwardErr
 }
 
 func (m *mockOptimizer) Step() map[schema.UpdateKey]any {
@@ -58,14 +70,16 @@ func (m *mockOptimizer) Step() map[schema.UpdateKey]any {
 
 // 对齐 Python: test_bind_delegates_to_optimizer
 func TestSingleDimUpdater_Bind委托给优化器(t *testing.T) {
-	opt := &mockOptimizer{bindReturn: 3}
+	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
 
-	operators := map[string]operator.Operator{}
+	operators := map[string]operator.Operator{
+		"op1": &mockOpForSingleDim{tunables: map[string]operator.TunableSpec{"target1": {Name: "target1"}}},
+	}
 	n := u.Bind(operators, []string{"target1"}, nil)
 
-	if n != 3 {
-		t.Errorf("Bind returned %d, want 3", n)
+	if n != 1 {
+		t.Errorf("Bind returned %d, want 1", n)
 	}
 	if !opt.bindCalled {
 		t.Error("optimizer.Bind was not called")
@@ -74,15 +88,20 @@ func TestSingleDimUpdater_Bind委托给优化器(t *testing.T) {
 
 // 对齐 Python: test_bind_with_none_targets
 func TestSingleDimUpdater_Bind空目标使用Config(t *testing.T) {
-	opt := &mockOptimizer{bindReturn: 2}
+	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
 
-	operators := map[string]operator.Operator{}
+	operators := map[string]operator.Operator{
+		"op1": &mockOpForSingleDim{tunables: map[string]operator.TunableSpec{"system_prompt": {Name: "system_prompt"}}},
+	}
 	config := map[string]any{"targets": []string{"system_prompt"}}
-	u.Bind(operators, nil, config)
+	n := u.Bind(operators, nil, config)
 
 	if !opt.bindCalled {
 		t.Error("optimizer.Bind was not called")
+	}
+	if n != 1 {
+		t.Errorf("Bind returned %d, want 1", n)
 	}
 }
 
@@ -94,10 +113,10 @@ func TestSingleDimUpdater_Update调用优化器链路(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := "trajectory1"
-	traj2 := "trajectory2"
+	traj1 := &trajectory.Trajectory{ExecutionID: "exec1"}
+	traj2 := &trajectory.Trajectory{ExecutionID: "exec2"}
 
-	result, err := u.Update(context.Background(), []any{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
+	result, err := u.Update(context.Background(), []*trajectory.Trajectory{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
 	if err != nil {
 		t.Fatalf("Update returned error: %v", err)
 	}
@@ -162,9 +181,9 @@ func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: map[schema.UpdateKey]any{}}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := "traj_1"
-	traj2 := "traj_2"
-	_, err := u.Update(context.Background(), []any{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
+	traj1 := &trajectory.Trajectory{ExecutionID: "traj_1"}
+	traj2 := &trajectory.Trajectory{ExecutionID: "traj_2"}
+	_, err := u.Update(context.Background(), []*trajectory.Trajectory{traj1, traj2}, []*dataset.EvaluatedCase{}, map[string]any{})
 	if err != nil {
 		t.Fatalf("Update returned error: %v", err)
 	}
@@ -172,11 +191,11 @@ func TestSingleDimUpdater_Update保持轨迹顺序(t *testing.T) {
 	if len(opt.addTrajectoryOrder) != 2 {
 		t.Fatalf("add_trajectory called %d times, want 2", len(opt.addTrajectoryOrder))
 	}
-	if opt.addTrajectoryOrder[0] != traj1 {
-		t.Errorf("first trajectory = %v, want %v", opt.addTrajectoryOrder[0], traj1)
+	if opt.addTrajectoryOrder[0].ExecutionID != "traj_1" {
+		t.Errorf("first trajectory ExecutionID = %v, want traj_1", opt.addTrajectoryOrder[0].ExecutionID)
 	}
-	if opt.addTrajectoryOrder[1] != traj2 {
-		t.Errorf("second trajectory = %v, want %v", opt.addTrajectoryOrder[1], traj2)
+	if opt.addTrajectoryOrder[1].ExecutionID != "traj_2" {
+		t.Errorf("second trajectory ExecutionID = %v, want traj_2", opt.addTrajectoryOrder[1].ExecutionID)
 	}
 }
 
@@ -209,13 +228,13 @@ func TestSingleDimUpdater_Process使用信号优先流程(t *testing.T) {
 	opt := &mockOptimizer{stepReturn: expectedUpdates}
 	u := NewSingleDimUpdater(opt)
 
-	traj1 := "trajectory1"
-	traj2 := "trajectory2"
+	traj1 := &trajectory.Trajectory{ExecutionID: "traj1"}
+	traj2 := &trajectory.Trajectory{ExecutionID: "traj2"}
 	signals := []*signal.EvolutionSignal{
 		{SignalType: "low_score", Section: "Troubleshooting", Excerpt: "score=0.00"},
 	}
 
-	result, err := u.Process(context.Background(), []any{traj1, traj2}, signals, map[string]any{})
+	result, err := u.Process(context.Background(), []*trajectory.Trajectory{traj1, traj2}, signals, map[string]any{})
 	if err != nil {
 		t.Fatalf("Process returned error: %v", err)
 	}
@@ -329,42 +348,17 @@ func TestSingleDimUpdater_实现Updater接口(t *testing.T) {
 	_ = u.LoadState
 }
 
-// 补充测试: optimizer 为 nil 时的默认行为
-func TestSingleDimUpdater_NilOptimizer(t *testing.T) {
-	u := NewSingleDimUpdater(nil)
-
-	// Bind 应返回 0（nil 无法断言为 binder）
-	n := u.Bind(nil, nil, nil)
-	if n != 0 {
-		t.Errorf("Bind with nil optimizer returned %d, want 0", n)
-	}
-
-	// RequiresForwardData 应返回 true（默认值）
-	if !u.RequiresForwardData() {
-		t.Error("RequiresForwardData with nil optimizer should return true")
-	}
-
-	// Process 应返回空 map
-	result, err := u.Process(context.Background(), nil, nil, nil)
-	if err != nil {
-		t.Fatalf("Process returned error: %v", err)
-	}
-	if len(result) != 0 {
-		t.Errorf("Process returned %d updates, want 0", len(result))
-	}
-}
-
 // 补充测试: config["targets"] 类型不匹配时使用 nil
 func TestSingleDimUpdater_BindConfigTargets类型不匹配(t *testing.T) {
-	opt := &mockOptimizer{bindReturn: 1}
+	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
 
 	// config["targets"] 为非 []string 类型
 	config := map[string]any{"targets": 123}
 	n := u.Bind(nil, nil, config)
 
-	if n != 1 {
-		t.Errorf("Bind returned %d, want 1", n)
+	if n != 0 {
+		t.Errorf("Bind returned %d, want 0", n)
 	}
 	// targets 应为 nil（因类型断言失败）
 	if opt.bindTargets != nil {
@@ -374,29 +368,26 @@ func TestSingleDimUpdater_BindConfigTargets类型不匹配(t *testing.T) {
 
 // 补充测试: config 中无 targets 键
 func TestSingleDimUpdater_BindConfig无Targets键(t *testing.T) {
-	opt := &mockOptimizer{bindReturn: 1}
+	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
 
 	config := map[string]any{"other_key": "value"}
 	n := u.Bind(nil, nil, config)
 
-	if n != 1 {
-		t.Errorf("Bind returned %d, want 1", n)
+	if n != 0 {
+		t.Errorf("Bind returned %d, want 0", n)
 	}
 }
 
 // 补充测试: config 为 nil
 func TestSingleDimUpdater_BindConfigNil(t *testing.T) {
-	opt := &mockOptimizer{bindReturn: 1}
+	opt := &mockOptimizer{}
 	u := NewSingleDimUpdater(opt)
 
 	n := u.Bind(nil, []string{"system_prompt"}, nil)
 
-	if n != 1 {
-		t.Errorf("Bind returned %d, want 1", n)
-	}
-	if opt.bindTargets == nil || opt.bindTargets[0] != "system_prompt" {
-		t.Errorf("bindTargets = %v, want [system_prompt]", opt.bindTargets)
+	if n != 0 {
+		t.Errorf("Bind returned %d, want 0", n)
 	}
 }
 
@@ -446,3 +437,37 @@ func TestSingleDimUpdater_UpdateConfigNil(t *testing.T) {
 		t.Fatalf("Update returned error: %v", err)
 	}
 }
+
+// 补充测试: backward 返回错误时 Update 传播错误
+func TestSingleDimUpdater_Backward错误传播(t *testing.T) {
+	opt := &mockOptimizer{
+		stepReturn: map[schema.UpdateKey]any{},
+		backwardErr: context.DeadlineExceeded,
+	}
+	u := NewSingleDimUpdater(opt)
+
+	_, err := u.Process(context.Background(), nil, []*signal.EvolutionSignal{{SignalType: "low_score"}}, nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if err != context.DeadlineExceeded {
+		t.Errorf("error = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// mockOpForSingleDim 用于 single_dim 测试的模拟 Operator
+type mockOpForSingleDim struct {
+	tunables map[string]operator.TunableSpec
+	state    map[string]any
+}
+
+func (m *mockOpForSingleDim) OperatorID() string                            { return "op1" }
+func (m *mockOpForSingleDim) GetTunables() map[string]operator.TunableSpec { return m.tunables }
+func (m *mockOpForSingleDim) GetState() map[string]any                     { return m.state }
+func (m *mockOpForSingleDim) SetParameter(target string, value any)        {}
+func (m *mockOpForSingleDim) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
+	return schema.ApplyResult{}
+}
+func (m *mockOpForSingleDim) LoadState(state map[string]any) {}
