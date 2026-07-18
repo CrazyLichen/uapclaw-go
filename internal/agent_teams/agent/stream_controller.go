@@ -65,6 +65,9 @@ type StreamController struct {
 	pendingInputs []any
 	// chunkObservers 分块观察者列表（SpawnManager 注册，用于 Teammate chunk 转发到 Leader）
 	chunkObservers []ChunkObserver
+	// testStreamOneRound 测试注入：覆盖 streamOneRound 返回值。
+	// 仅用于测试，生产代码为 nil。
+	testStreamOneRound streamOneRoundFunc
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -566,6 +569,13 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 		return nil, ""
 	}
 
+	return sc.processChunkChannel(ctx, chunkCh)
+}
+
+// processChunkChannel 从 chunk 通道读取并处理分块。
+// 对齐 Python: StreamController._stream_one_round 中 for chunk in chunk_iterator 循环
+// 提取为独立方法便于测试。
+func (sc *StreamController) processChunkChannel(ctx context.Context, chunkCh <-chan streambase.Schema) (errorCode *int, errorText string) {
 	errorSeen := false
 	for chunk := range chunkCh {
 		if chunk == nil {
@@ -601,10 +611,24 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 // runRetryingStream 带重试的流式执行。
 // 对齐 Python: StreamController._run_retrying_stream(initial_query)
 func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery any) error {
+	roundFn := sc.streamOneRound
+	if sc.testStreamOneRound != nil {
+		roundFn = sc.testStreamOneRound
+	}
+	return sc.runRetryingStreamWithRound(ctx, initialQuery, roundFn)
+}
+
+// streamOneRoundFunc 单轮流式执行函数签名。
+type streamOneRoundFunc func(ctx context.Context, query any) (errorCode *int, errorText string)
+
+// runRetryingStreamWithRound 带重试的流式执行，可注入 streamOneRound 实现。
+// 对齐 Python: StreamController._run_retrying_stream(initial_query)
+// 提取为独立方法便于测试注入不同 round 行为。
+func (sc *StreamController) runRetryingStreamWithRound(ctx context.Context, initialQuery any, roundFn streamOneRoundFunc) error {
 	currentQuery := initialQuery
 	attempt := 0
 	for {
-		errorCode, errorText := sc.streamOneRound(ctx, currentQuery)
+		errorCode, errorText := roundFn(ctx, currentQuery)
 		if errorCode == nil {
 			return nil
 		}
