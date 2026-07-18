@@ -609,7 +609,7 @@ func TestDeepAgent_SaveState_持久化到会话(t *testing.T) {
 	d.SaveState(sess, &newState)
 
 	// 验证运行时缓存
-	data, err := sess.GetState(sessstate.StringKey("_deep_agent_runtime_state"))
+	data, err := sess.GetState(sessstate.StringKey(schema.SessionRuntimeAttr))
 	if err != nil {
 		t.Fatalf("GetState 返回错误: %v", err)
 	}
@@ -636,13 +636,13 @@ func TestDeepAgent_ClearState_仅清除运行时(t *testing.T) {
 	d.ClearState(sess, false)
 
 	// 运行时缓存应被清除
-	data, _ := sess.GetState(sessstate.StringKey("_deep_agent_runtime_state"))
+	data, _ := sess.GetState(sessstate.StringKey(schema.SessionRuntimeAttr))
 	if data != nil {
 		t.Error("ClearState(false) 后运行时缓存应被清除")
 	}
 
 	// 持久化状态应保留
-	persisted, _ := sess.GetState(sessstate.StringKey("deep_agent_state"))
+	persisted, _ := sess.GetState(sessstate.StringKey(schema.SessionStateKey))
 	if persisted == nil {
 		t.Error("ClearState(false) 后持久化状态应保留")
 	}
@@ -658,7 +658,7 @@ func TestDeepAgent_ClearState_连同持久化(t *testing.T) {
 	d.ClearState(sess, true)
 
 	// 持久化状态也应被清除
-	persisted, _ := sess.GetState(sessstate.StringKey("deep_agent_state"))
+	persisted, _ := sess.GetState(sessstate.StringKey(schema.SessionStateKey))
 	if persisted != nil {
 		t.Error("ClearState(true) 后持久化状态应被清除")
 	}
@@ -1776,7 +1776,7 @@ func TestDeepAgent_saveState_NilState(t *testing.T) {
 	d.SaveState(sess, nil)
 
 	// 验证运行时缓存仍有效
-	data, _ := sess.GetState(sessstate.StringKey("_deep_agent_runtime_state"))
+	data, _ := sess.GetState(sessstate.StringKey(schema.SessionRuntimeAttr))
 	if data == nil {
 		t.Fatal("SaveState(nil) 后运行时缓存应为非 nil")
 	}
