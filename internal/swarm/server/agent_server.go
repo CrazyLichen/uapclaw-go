@@ -31,6 +31,9 @@ type AgentServer struct {
 	transport transport.AgentTransport
 	// agentManager Agent 实例管理器
 	agentManager *runtime.AgentManager
+	// agentConfigService Agent 配置 CRUD 服务
+	// 对齐 Python: self._agent_config_service = AgentConfigService(workspace_dir)
+	agentConfigService *runtime.AgentConfigService
 	// sessionStreamTasks 流式任务的取消函数映射（sessionID → CancelFunc）
 	sessionStreamTasks map[string]context.CancelFunc
 	// sessionStreamTasksMu 保护 sessionStreamTasks 的读写锁
@@ -69,9 +72,13 @@ var (
 
 // NewAgentServer 创建 AgentServer 实例。
 func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *AgentServer {
+	// 对齐 Python: AgentConfigService(workspace_dir)
+	// Python 默认 Path.cwd()，Go 使用 workspace.WorkspaceDir()
+	agentConfigService := runtime.NewAgentConfigService(workspace.WorkspaceDir())
 	return &AgentServer{
 		config:             cfg,
 		transport:          transport,
+		agentConfigService: agentConfigService,
 		sessionStreamTasks: make(map[string]context.CancelFunc),
 		sessionsDir:        workspace.AgentSessionsDir(),
 		stopCh:             make(chan struct{}),

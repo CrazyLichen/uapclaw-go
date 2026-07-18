@@ -89,6 +89,9 @@ type DeepAdapter struct {
 	modelNameToKeys map[string][]string
 	// defaultModelName 默认模型名称
 	defaultModelName string
+	// configLister 自定义 agent 配置列表接口（避免 adapter↔runtime 循环依赖）
+	// 对齐 Python: AgentConfigService
+	configLister AgentConfigLister
 
 	// ─── ⤵️ 10.6.3-10: Rails ───
 
@@ -233,6 +236,12 @@ var persistentCheckpointerLock sync.Mutex
 // 对齐 Python: def set_skill_manager(self, skill_manager: SkillManager) -> None: self._skill_manager = skill_manager
 func (d *DeepAdapter) SetSkillManager(skillMgr *skill.SkillManager) {
 	d.skillManager = skillMgr
+}
+
+// SetConfigLister 设置自定义 agent 配置列表接口。
+// 对齐 Python: AgentConfigService 依赖注入
+func (d *DeepAdapter) SetConfigLister(lister AgentConfigLister) {
+	d.configLister = lister
 }
 
 // NewDeepAdapter 创建 DeepAdapter 实例。

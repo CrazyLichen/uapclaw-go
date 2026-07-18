@@ -31,6 +31,9 @@ type UapClaw struct {
 	// skillManager 技能管理器（server 层）。
 	skillManager *skill.SkillManager
 
+	// agentConfigService Agent 配置 CRUD 服务。
+	agentConfigService *AgentConfigService
+
 	// sessionManager 会话任务队列管理器。
 	sessionManager *SessionManager
 
@@ -57,8 +60,9 @@ type UapClaw struct {
 // 对齐 Python: JiuWenClaw.__init__()
 func NewUapClaw() *UapClaw {
 	return &UapClaw{
-		sessionManager: NewSessionManager(),
-		skillManager:   skill.NewSkillManager(workspace.AgentWorkspaceDir()),
+		sessionManager:    NewSessionManager(),
+		skillManager:     skill.NewSkillManager(workspace.AgentWorkspaceDir()),
+		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 	}
 }
 
@@ -527,6 +531,10 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 	if setter, ok := a.(interface{ SetSkillManager(*skill.SkillManager) }); ok {
 		setter.SetSkillManager(uc.skillManager)
 	}
+	// 若 adapter 有 SetConfigLister 方法，注入 agentConfigService 桥接
+	if setter, ok := a.(interface{ SetConfigLister(adapter.AgentConfigLister) }); ok {
+		setter.SetConfigLister(&agentConfigListerBridge{svc: uc.agentConfigService})
+	}
 	// ⤵️ G33: 调用 uc.skillManager.SetSkillnetInstallCompleteHook(uc.CreateInstance) 注入 hook
 	// ⤵️ G34: 启动 dreaming 后台任务（adapter.TryStartDreaming）
 	uc.adapter = a
@@ -767,4 +775,34 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 	}()
 	return resultCh, nil
+}
+
+// ──────────────────────────── 桥接类型 ────────────────────────────
+
+// agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
+// 避免 adapter 直接导入 runtime 包造成循环依赖。
+type agentConfigListerBridge struct {
+	svc *AgentConfigService
+}
+
+// ListCustomAgents 实现 adapter.AgentConfigLister 接口。
+func (b *agentConfigListerBridge) ListCustomAgents() []*adapter.AgentDefinition {
+	customAgents := b.svc.ListCustomAgents()
+	result := make([]*adapter.AgentDefinition, len(customAgents))
+	for i, a := range customAgents {
+		result[i] = &adapter.AgentDefinition{
+			Name:            a.Name,
+			Description:     a.Description,
+			Prompt:          a.Prompt,
+			Source:          a.Source,
+			FilePath:        a.FilePath,
+			Model:           a.Model,
+			Tools:           a.Tools,
+			DisallowedTools: a.DisallowedTools,
+			Skills:          a.Skills,
+			MaxIterations:   a.MaxIterations,
+			WhenToUse:       a.WhenToUse,
+		}
+	}
+	return result
 }

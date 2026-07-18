@@ -6,15 +6,52 @@ import (
 	"os"
 	"strings"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
+
+// AgentDefinition Agent 定义数据模型（与 runtime.AgentDefinition 对齐）。
+// 定义在 adapter 包中以避免 adapter↔runtime 循环依赖。
+// 对齐 Python: AgentDefinition dataclass
+type AgentDefinition struct {
+	// Name 名称
+	Name string
+	// Description 描述
+	Description string
+	// Prompt 系统提示词
+	Prompt string
+	// Source 来源
+	Source string
+	// FilePath 文件路径
+	FilePath string
+	// Model 模型名称
+	Model string
+	// Tools 允许的工具列表
+	Tools []string
+	// DisallowedTools 禁止的工具列表
+	DisallowedTools []string
+	// Skills 预加载 skill
+	Skills []string
+	// MaxIterations 最大迭代次数
+	MaxIterations *int
+	// WhenToUse 调度描述
+	WhenToUse string
+}
+
+// AgentConfigLister Agent 配置列表接口（避免 adapter↔runtime 循环依赖）。
+// 对齐 Python: AgentConfigService.list_agents()
+type AgentConfigLister interface {
+	// ListCustomAgents 列出自定义 agent（非 builtin）
+	ListCustomAgents() []*AgentDefinition
+}
 
 // runtimeConfig 运行时配置。
 // 对齐 Python: _RuntimeConfig (line 3098-3106)
@@ -120,7 +157,11 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	}
 
 	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
-	// TODO(#custom-subagents): 对齐 Python _load_custom_subagents 加载 .jiuwenclaw/agents/*.md
+	// 对齐 Python: custom_specs = _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
+	customSpecs := d.loadCustomSubagents(subagentsCfg)
+	for _, spec := range customSpecs {
+		specs = append(specs, spec)
+	}
 
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
@@ -154,6 +195,100 @@ func (d *DeepAdapter) isSubagentExplicitlyEnabled(subagentsCfg map[string]any, n
 		return false
 	}
 	return false
+}
+
+// loadCustomSubagents 从 AgentConfigService 加载自定义 agent 并转换为 SubagentSpec 列表。
+// 对齐 Python: _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
+//
+// 仅加载 enabled:true 的自定义 agent（非 builtin）。
+func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema.SubagentSpec {
+	// 对齐 Python: agent_service = AgentConfigService(workspace_dir)
+	// 通过 d.configLister 获取自定义 agent 列表（依赖注入，避免循环依赖）
+	if d.configLister == nil {
+		return nil
+	}
+	customAgents := d.configLister.ListCustomAgents()
+
+	var result []hschema.SubagentSpec
+	// 对齐 Python: for agent_def in agent_service.list_agents():
+	for _, agentDef := range customAgents {
+		// 对齐 Python: if agent_def.source == "builtin": continue
+		// （ListCustomAgents 已过滤 builtin）
+
+		// 对齐 Python: subagent_cfg = subagents_cfg.get(agent_def.name)
+		// 只有显式 enabled: true 才加载
+		if !d.isSubagentExplicitlyEnabled(subagentsCfg, agentDef.Name) {
+			continue
+		}
+
+		// 对齐 Python: custom_spec = _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
+		spec := agentDefToSubagentConfig(agentDef, d.model, d.modelCache)
+		if spec != nil {
+			result = append(result, spec)
+			logger.Info(logComponent).
+				Str("agent_name", agentDef.Name).
+				Str("source", agentDef.Source).
+				Msg("loaded custom agent")
+		}
+	}
+	return result
+}
+
+// agentDefToSubagentConfig 将 AgentDefinition 转换为 SubAgentConfig。
+// 对齐 Python: _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
+func agentDefToSubagentConfig(agentDef *AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model) *hschema.SubAgentConfig {
+	// 步骤 1: 解析模型
+	// 对齐 Python: resolved_model = model; if agent_def.model and isinstance(model_cache, dict): resolved_model = model_cache.get(agent_def.model, model)
+	resolvedModel := model
+	if agentDef.Model != "" && modelCache != nil {
+		if cached, ok := modelCache[agentDef.Model]; ok {
+			resolvedModel = cached
+		}
+	}
+
+	// 步骤 2: 构建工具列表
+	// 对齐 Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
+	// if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
+	tools := agentDef.Tools
+	if len(tools) == 0 {
+		tools = []string{"*"}
+	}
+	if len(agentDef.DisallowedTools) > 0 && !(len(tools) == 1 && tools[0] == "*") {
+		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
+		for _, t := range agentDef.DisallowedTools {
+			disallowedSet[t] = true
+		}
+		filtered := make([]string, 0, len(tools))
+		for _, t := range tools {
+			if !disallowedSet[t] {
+				filtered = append(filtered, t)
+			}
+		}
+		tools = filtered
+	}
+
+	// 步骤 3: 构建 AgentCard
+	card := agentschema.NewAgentCard(
+		agentschema.WithAgentName(agentDef.Name),
+		agentschema.WithAgentID(agentDef.Name),
+		agentschema.WithAgentDescription(agentDef.Description),
+	)
+
+	// 步骤 4: 构建 SubAgentConfig
+	maxIter := 0
+	if agentDef.MaxIterations != nil {
+		maxIter = *agentDef.MaxIterations
+	}
+
+	return &hschema.SubAgentConfig{
+		AgentCard:      card,
+		SystemPrompt:   agentDef.Prompt,
+		Model:          resolvedModel,
+		Skills:         agentDef.Skills,
+		MaxIterations:  maxIter,
+		EnableTaskLoop: true,
+		FactoryName:    "custom_" + agentDef.Name,
+	}
 }
 
 // writeRuntimeState 将键值对写入运行时状态。
