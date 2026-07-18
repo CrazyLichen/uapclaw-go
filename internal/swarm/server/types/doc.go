@@ -10,5 +10,6 @@
 //
 //	types/
 //	├── doc.go               # 包文档
-//	└── agent_definition.go  # AgentDefinition + AgentSource + BuiltinAgents
+//	├── agent_definition.go  # AgentDefinition + AgentSource + BuiltinAgents
+//	└── agent_tools.go       # DisallowedForSubagents + ToolGroups 共享常量（10.3.7）
 package types

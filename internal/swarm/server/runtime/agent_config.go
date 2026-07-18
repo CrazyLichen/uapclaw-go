@@ -402,16 +402,18 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 	}
 
 	// 步骤 2: 构建分组列表
-	// 对齐 Python: groups = list(TOOL_GROUPS.keys())
-	groups := []string{"核心", "搜索", "代码智能", "高级", "可视化"}
+	// ⤴️ 10.3.7-11: 对齐 Python: groups = list(TOOL_GROUPS.keys())
+	// 从 types.ToolGroups 共享常量获取
+	groups := make([]string, 0, len(types.ToolGroups))
+	for group := range types.ToolGroups {
+		groups = append(groups, group)
+	}
+	sort.Strings(groups)
 
 	// 步骤 3: 子 agent 禁用工具列表
-	// ⤵️ 10.3.7-11: 对齐 Python: DISALLOWED_FOR_SUBAGENTS
-	// 等 code_agent_rail 实现后从 DISALLOWED_FOR_SUBAGENTS 动态获取
-	disallowedForSubagents := []string{
-		"Agent", "task", "enter_plan_mode", "exit_plan_mode",
-		"ask_user_question", "task_stop", "switch_mode",
-	}
+	// ⤴️ 10.3.7-11: 对齐 Python: DISALLOWED_FOR_SUBAGENTS
+	// 从 types.DisallowedForSubagents 共享常量获取
+	disallowedForSubagents := types.DisallowedForSubagents
 
 	return &AvailableToolsResult{
 		Tools:                  tools,

@@ -195,6 +195,14 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	//              编码专有护栏：LspRail, ProjectMemoryRail, CodingMemoryRail,
 	//              CodeAgentRail, WorktreeRail, AgentModeRail, StructuredAskUserRail,
 	//              ConfirmInterruptRail, FileSystemRail
+	// ⤴️ 10.3.7-11 CodeAgentRail: Code 模式专有护栏，管理 /agents 创建的自定义 Agent
+	codeAgentRail := c.buildCodeAgentRail()
+	if codeAgentRail != nil {
+		c.codeAgentRail = codeAgentRail
+		// rail 将在 CreateDeepAgent 时通过 params.Rails 传入
+		logger.Info(logComponent).Msg("CodeAgentRail created")
+	}
+
 	// 步骤 17: _create_sys_operation() — 调用 DeepAdapter.createSysOperation
 	// 对齐 Python: sys_operation = self._create_sys_operation()
 	sysOp, _ := c.deep.createSysOperation(configBase)
@@ -308,4 +316,15 @@ func (c *CodeAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 // AbortOnGatewayDisconnect 委托 DeepAdapter 的 GatewayDisconnectHandler 接口。
 func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	c.deep.AbortOnGatewayDisconnect(ctx)
+}
+
+// buildCodeAgentRail 构建 CodeAgentRail。
+// 对齐 Python: JiuwenClawCodeAdapter._build_code_agent_rail() (interface_code.py L826-834)
+//
+// 仅当 configLister 可用时创建 CodeAgentRail，否则返回 nil。
+func (c *CodeAdapter) buildCodeAgentRail() *CodeAgentRail {
+	if c.deep.configLister == nil {
+		return nil
+	}
+	return NewCodeAgentRail(c.deep.workspaceDir, c.deep.configLister)
 }

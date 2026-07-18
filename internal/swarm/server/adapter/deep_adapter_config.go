@@ -126,10 +126,10 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── browser_agent: 由 browser_runtime_enabled 控制 ──
 	// TODO(#browser): 对齐 Python _browser_runtime_enabled() 检查
 	if d.isSubagentExplicitlyEnabled(subagentsCfg, "browser_agent") {
-		cfg := subagents.BuildBrowserAgentConfig(d.model, config, configBase)
-		if cfg != nil {
-			specs = append(specs, cfg)
-		}
+		// ⤵️ browser_agent: BuildBrowserAgentConfig 签名已变更，需要 SubagentCreateParams
+		// 暂时跳过，等 browser 功能实现时回填
+		// cfg := subagents.BuildBrowserAgentConfig(d.model, &hschema.SubagentCreateParams{})
+		_ = subagents.BuildBrowserAgentConfig
 	}
 
 	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
