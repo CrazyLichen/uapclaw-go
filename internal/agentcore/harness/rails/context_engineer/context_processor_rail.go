@@ -106,7 +106,7 @@ func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
 
 	// 获取 systemPromptBuilder 引用
 	// 对齐 Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
-	r.systemPromptBuilder = getSystemPromptBuilder(agent)
+	r.systemPromptBuilder = agent.SystemPromptBuilder()
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "context_processor_rail_init").
@@ -293,21 +293,4 @@ func getReactAgentConfig(agent sainterfaces.BaseAgent) *saconfig.ReActAgentConfi
 		return nil
 	}
 	return reactCfg
-}
-
-// getSystemPromptBuilder 从 BaseAgent 获取 SystemPromptBuilder。
-//
-// 对齐 Python: self._system_prompt_builder = getattr(agent, "system_prompt_builder", None)
-// Go 中 BaseAgent 接口没有直接暴露 system_prompt_builder，
-// 但 DeepAgent 在 Init(agent) 时传入的 agent 实际上是 DeepAgent 自身，
-// 它有 SystemPromptBuilder() 方法。
-func getSystemPromptBuilder(agent sainterfaces.BaseAgent) saprompt.SystemPromptBuilderInterface {
-	// 尝试通过类型断言获取 SystemPromptBuilder
-	type promptBuilderProvider interface {
-		SystemPromptBuilder() saprompt.SystemPromptBuilderInterface
-	}
-	if provider, ok := agent.(promptBuilderProvider); ok {
-		return provider.SystemPromptBuilder()
-	}
-	return nil
 }

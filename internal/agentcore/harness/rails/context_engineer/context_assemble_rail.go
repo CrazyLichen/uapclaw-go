@@ -54,7 +54,7 @@ func NewContextAssembleRail() *ContextAssembleRail {
 //
 // 对齐 Python: ContextAssembleRail.init(agent)
 func (r *ContextAssembleRail) Init(agent sainterfaces.BaseAgent) error {
-	r.systemPromptBuilder = getSystemPromptBuilder(agent)
+	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	r.abilityManager = agent.AbilityManager()
 
 	logger.Info(logger.ComponentAgentCore).
