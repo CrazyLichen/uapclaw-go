@@ -39,10 +39,12 @@ package agent
 
 import (
 	"context"
+	"fmt"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
@@ -75,8 +77,7 @@ type TeamAgent struct {
 	// sessionManager 会话管理器
 	sessionManager *SessionManager
 	// streamController 流式控制器
-	// TODO(#9.60): StreamController 类型
-	streamController any
+	streamController *StreamController
 	// coordination 协调内核
 	// TODO(#9.62): CoordinationKernel 类型
 	coordination any
@@ -102,7 +103,14 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	a.spawnManager = NewSpawnManager(a.state, a.configurator, func() *TeamAgent { return a })
 	// TODO(#9.61): 构建 RecoveryManager(configurator, spawnManager)
 	a.sessionManager = NewSessionManager(a.state, a.configurator, a.recoveryManager)
-	// TODO(#9.60): 构建 StreamController(blueprintGetter, state, resources, ...)
+	a.streamController = NewStreamController(
+		a.configurator.Blueprint,
+		a.state,
+		a.configurator.Resources(),
+		a.UpdateStatus,
+		a.updateExecution,
+		// ⤵️ 待 9.62 CoordinationKernel 章节回填：WithWakeMailbox / WithRequestCompletionPoll
+	)
 	// TODO(#9.62): 构建 CoordinationKernel(self)
 	return a
 }
@@ -288,7 +296,7 @@ func (a *TeamAgent) SpawnManager() *SpawnManager {
 
 // StreamController 返回流式控制器。
 // 对齐 Python: TeamAgent.stream_controller property
-func (a *TeamAgent) StreamController() any {
+func (a *TeamAgent) StreamController() *StreamController {
 	return a.streamController
 }
 
@@ -324,14 +332,16 @@ func (a *TeamAgent) TeamName() string {
 //
 // Leader 从不持有 TeamMember 句柄，因此对 Leader 总返回 False。
 func (a *TeamAgent) IsShutdownRequested(ctx context.Context) (bool, error) {
-	// TODO(#9.60): 检查 team_member.status() 是否为 SHUTDOWN_REQUESTED 或 SHUTDOWN
+	// ⤵️ 待 TeamMember 状态管理回填：检查 team_member.status() 是否为 SHUTDOWN_REQUESTED 或 SHUTDOWN
 	return false, nil
 }
 
 // UpdateStatus 更新成员状态到数据库。
 // 对齐 Python: TeamAgent.update_status(status)
 func (a *TeamAgent) UpdateStatus(ctx context.Context, status atschema.MemberStatus) error {
-	// TODO(#9.60): 委托 _updateStatus(status)
+	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
+	logger.Debug(logComponent).Str("member_name", a.MemberName()).
+		Str("member_status", string(status)).Msg("UpdateStatus")
 	return nil
 }
 
@@ -388,21 +398,27 @@ func (a *TeamAgent) IsAgentReady() bool {
 // IsAgentRunning Agent 是否正在运行。
 // 对齐 Python: TeamAgent.is_agent_running()
 func (a *TeamAgent) IsAgentRunning() bool {
-	// TODO(#9.60): 委托 streamController.is_agent_running()
+	if a.streamController != nil {
+		return a.streamController.IsAgentRunning()
+	}
 	return false
 }
 
 // HasInFlightRound 是否有飞行中的轮次。
 // 对齐 Python: TeamAgent.has_in_flight_round()
 func (a *TeamAgent) HasInFlightRound() bool {
-	// TODO(#9.60): 委托 streamController.has_in_flight_round()
+	if a.streamController != nil {
+		return a.streamController.HasInFlightRound()
+	}
 	return false
 }
 
 // HasPendingInterrupt 是否有待处理的中断。
 // 对齐 Python: TeamAgent.has_pending_interrupt()
 func (a *TeamAgent) HasPendingInterrupt() bool {
-	// TODO(#9.60): 委托 streamController.has_pending_interrupt()
+	if a.streamController != nil {
+		return a.streamController.HasPendingInterrupt()
+	}
 	return false
 }
 
@@ -440,23 +456,30 @@ func (a *TeamAgent) Configure(ctx context.Context, spec atschema.TeamAgentSpec, 
 // Invoke 非流式调用 TeamAgent。
 // 对齐 Python: TeamAgent.invoke(inputs, session)
 func (a *TeamAgent) Invoke(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (map[string]any, error) {
-	// TODO(#9.60+#9.62): 创建 stream_queue → 缓存 pending_user_query → coordination.start(session)
-	// TODO(#9.62): 入队用户输入 → 首次迭代后入队邮箱
-	// TODO(#9.60): 从 stream_queue 读取直到 None sentinel
-	// TODO(#9.62): 完成当前轮次 coordination.finalize_round()
+	// TODO(#9.62): coordination.start(session) + 入队用户输入
+	// 9.60: 创建 streamQueue
+	if a.streamController != nil {
+		a.streamController.streamQueue = make(chan stream.Schema, 64)
+	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent.Invoke start")
+	// TODO(#9.62): 从 streamQueue 读取直到 nil sentinel → coordination.finalize_round()
 	return nil, nil
 }
 
 // Stream 流式调用 TeamAgent。
 // 对齐 Python: TeamAgent.stream(inputs, session, stream_modes)
 func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...interfaces.AgentOption) (any, error) {
-	// TODO(#9.60+#9.62): 同 Invoke 但持续 yield chunk 直到 None sentinel
+	// TODO(#9.62): coordination.start(session) + 入队用户输入
+	// 9.60: 创建 streamQueue
+	if a.streamController != nil {
+		a.streamController.streamQueue = make(chan stream.Schema, 64)
+	}
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).
 		Str("role", string(a.Role())).Msg("TeamAgent.Stream start")
+	// TODO(#9.62): 从 streamQueue 持续读取直到 nil sentinel
 	return nil, nil
 }
 
@@ -484,21 +507,38 @@ func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string
 // DeliverInput 投递输入到 Agent。
 // 对齐 Python: TeamAgent.deliver_input(content, use_steer=True)
 func (a *TeamAgent) DeliverInput(ctx context.Context, content any, useSteer bool) error {
-	// TODO(#9.60): 运行中→转向/跟进; 执行中→入队; 否则→启动Agent
-	return nil
+	if a.streamController == nil {
+		return nil
+	}
+	// 对齐 Python: 运行中→steer/follow-up; 飞行中→入队; 否则→启动Agent
+	if a.streamController.IsAgentRunning() {
+		if useSteer {
+			return a.streamController.Steer(ctx, fmt.Sprintf("%v", content))
+		}
+		return a.streamController.FollowUp(ctx, fmt.Sprintf("%v", content))
+	}
+	if a.streamController.HasInFlightRound() {
+		a.streamController.pendingInputs = append(a.streamController.pendingInputs, content)
+		return nil
+	}
+	return a.streamController.StartRound(ctx, content)
 }
 
 // StartAgent 启动 Agent。
 // 对齐 Python: TeamAgent.start_agent(content)
 func (a *TeamAgent) StartAgent(ctx context.Context, content string) error {
-	// TODO(#9.60): 委托 _startAgent(content)
+	if a.streamController != nil {
+		return a.streamController.StartRound(ctx, content)
+	}
 	return nil
 }
 
 // FollowUp 追加输入。
 // 对齐 Python: TeamAgent.follow_up(content)
 func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
-	// TODO(#9.60): 流控制器跟进 streamController.follow_up(content)
+	if a.streamController != nil {
+		return a.streamController.FollowUp(ctx, content)
+	}
 	return nil
 }
 
@@ -507,22 +547,36 @@ func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
 func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 	memberName := a.MemberName()
 	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent requested")
-	// TODO(#9.60): 委托 _cancelAgent()
+	if a.streamController != nil {
+		return a.streamController.CancelAgent(ctx)
+	}
 	return nil
 }
 
 // Steer 转向输入。
 // 对齐 Python: TeamAgent.steer(content)
 func (a *TeamAgent) Steer(ctx context.Context, content string) error {
-	// TODO(#9.60): 流控制器转向 streamController.steer(content)
+	if a.streamController != nil {
+		return a.streamController.Steer(ctx, content)
+	}
 	return nil
 }
 
 // ResumeInterrupt 恢复中断。
 // 对齐 Python: TeamAgent.resume_interrupt(user_input)
 func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
-	// TODO(#9.60): 验证中断 → 飞行中则排队 → 否则 start_agent
-	return nil
+	if a.streamController == nil {
+		return nil
+	}
+	// 对齐 Python: 验证中断 → 飞行中则排队 → 否则 start_agent
+	if !a.streamController.IsValidInterruptResume(userInput) {
+		return nil
+	}
+	if a.streamController.HasInFlightRound() {
+		a.streamController.pendingInterruptResumes = append(a.streamController.pendingInterruptResumes, userInput)
+		return nil
+	}
+	return a.streamController.StartRound(ctx, userInput)
 }
 
 // ShutdownSelf 请求自身关闭。
@@ -530,9 +584,12 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
 func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	memberName := a.MemberName()
 	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf requested")
-	// TODO(#9.60): 流控制器协作取消 streamController.cooperative_cancel()
-	// TODO(#9.60): 团队成员更新状态为关闭 team_member.update_status(SHUTDOWN)
-	// TODO(#9.62): 关闭流 closeStream()
+	// 对齐 Python: streamController.cooperative_cancel()
+	if a.streamController != nil {
+		_ = a.streamController.CooperativeCancel(ctx)
+	}
+	// 对齐 Python: team_member.update_status(SHUTDOWN)
+	// ⤵️ 待 TeamMember 状态管理回填
 	return nil
 }
 
@@ -543,14 +600,20 @@ func (a *TeamAgent) ConcludeCompletedRound(ctx context.Context, memberCount, tas
 	logger.Info(logComponent).Str("member_name", memberName).
 		Int("member_count", memberCount).Int("task_count", taskCount).
 		Msg("TeamAgent.ConcludeCompletedRound")
-	// TODO(#9.60): 流控制器发送完成并关闭 streamController.emit_completion_and_close(...)
+	if a.streamController != nil {
+		a.streamController.EmitCompletionAndClose(memberCount, taskCount)
+	}
 	return nil
 }
 
 // DestroyTeam 销毁团队。
 // 对齐 Python: TeamAgent.destroy_team(force=True)
 func (a *TeamAgent) DestroyTeam(ctx context.Context, force bool) (bool, error) {
-	// TODO(#9.60+#9.62+#9.58): 取消Agent → 停止协调 → 从池中移除 → 强制清理团队
+	// 9.60: 取消Agent
+	if a.streamController != nil {
+		_ = a.streamController.CancelAgent(ctx)
+	}
+	// TODO(#9.62+#9.58): 停止协调 → 从池中移除 → 强制清理团队
 	return false, nil
 }
 
@@ -723,3 +786,12 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, e
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// updateExecution 更新执行状态。
+// 对齐 Python: TeamAgent._update_execution(status)
+func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.ExecutionStatus) error {
+	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
+	logger.Debug(logComponent).Str("member_name", a.MemberName()).
+		Str("execution_status", string(status)).Msg("updateExecution")
+	return nil
+}
