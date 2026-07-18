@@ -124,6 +124,19 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+var (
+	// CrossMemberMetaKeys 跨成员元数据键集合。
+	// 用于判断 Trajectory 是否处于团队协作成员上下文。
+	//
+	// 对应 Python: openjiuwen/agent_evolving/trajectory/aggregator.py
+	// CROSS_MEMBER_META_KEYS = frozenset({"invoke_id", "parent_invoke_id", "child_invokes"})
+	CrossMemberMetaKeys = map[string]bool{
+		"invoke_id":        true,
+		"parent_invoke_id": true,
+		"child_invokes":    true,
+	}
+)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

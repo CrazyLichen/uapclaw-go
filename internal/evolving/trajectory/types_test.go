@@ -169,3 +169,20 @@ func TestCostInfo_用法(t *testing.T) {
 		t.Errorf("output_tokens = %d, want 50", cost["output_tokens"])
 	}
 }
+
+// TestCrossMemberMetaKeys_包含预期键 验证跨成员元数据键集合
+func TestCrossMemberMetaKeys_包含预期键(t *testing.T) {
+	expectedKeys := []string{"invoke_id", "parent_invoke_id", "child_invokes"}
+	for _, key := range expectedKeys {
+		if !CrossMemberMetaKeys[key] {
+			t.Errorf("CrossMemberMetaKeys missing key %q", key)
+		}
+	}
+}
+
+// TestCrossMemberMetaKeys_不包含无关键 验证不包含非跨成员键
+func TestCrossMemberMetaKeys_不包含无关键(t *testing.T) {
+	if CrossMemberMetaKeys["member_id"] {
+		t.Errorf("CrossMemberMetaKeys should not contain %q", "member_id")
+	}
+}
