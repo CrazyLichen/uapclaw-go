@@ -28,7 +28,7 @@ type InProcessSpawnHandle struct {
 	// agentRef 进程内 Agent 引用（对齐 Python agent_ref: Any）
 	agentRef SpawnableAgent
 	// chunkForward chunk 转发观察者引用，cleanup 时可确定性断开
-	// ⤵️ 预留：StreamController（9.60）实现后回填类型
+	// ⤴️ 9.60 已回填，因循环依赖保留 any 类型桥接，实际值为 agent.ChunkObserver
 	chunkForward any
 	// onUnhealthy 不健康回调
 	onUnhealthy func()
@@ -204,13 +204,13 @@ func (h *InProcessSpawnHandle) AgentRef() SpawnableAgent {
 }
 
 // ChunkForward 返回 chunk 转发观察者引用。
-// ⤵️ 预留：StreamController（9.60）实现后回填
+// ⤴️ 9.60 已回填
 func (h *InProcessSpawnHandle) ChunkForward() any {
 	return h.chunkForward
 }
 
 // SetChunkForward 设置 chunk 转发观察者引用。
-// ⤵️ 预留：StreamController（9.60）实现后回填
+// ⤴️ 9.60 已回填
 func (h *InProcessSpawnHandle) SetChunkForward(v any) {
 	h.chunkForward = v
 }

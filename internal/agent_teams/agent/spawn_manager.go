@@ -8,9 +8,10 @@ import (
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	streambase "github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -349,8 +350,7 @@ func (m *SpawnManager) spawnInprocess(
 	}
 
 	// 接入 chunk 转发观察者
-	// ⤵️ 预留：StreamController（9.60）实现后回填
-	// m.wireInprocessChunkForward(handle)
+	m.wireInprocessChunkForward(handle)
 
 	return handle, nil
 }
@@ -390,4 +390,35 @@ func (m *SpawnManager) spawnSubprocess(
 	}
 
 	return handle, nil
+}
+
+// wireInprocessChunkForward 接入 chunk 转发观察者。
+// 对齐 Python: SpawnManager._wire_inprocess_chunk_forward(handle)
+func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHandle) {
+	agentRef := handle.AgentRef()
+	ta, ok := agentRef.(*TeamAgent)
+	if !ok {
+		return
+	}
+	teammateSC := ta.StreamController()
+	if teammateSC == nil {
+		return
+	}
+	leaderSC := m.getTeamAgent().StreamController()
+	if leaderSC == nil {
+		return
+	}
+	// 对齐 Python: 创建转发回调 teammate chunk → leader streamQueue
+	var forwardCb ChunkObserver
+	forwardCb = func(ctx context.Context, chunk streambase.Schema) error {
+		if leaderSC.streamQueue != nil {
+			select {
+			case leaderSC.streamQueue <- chunk:
+			default:
+			}
+		}
+		return nil
+	}
+	teammateSC.AddChunkObserver(forwardCb)
+	handle.SetChunkForward(forwardCb)
 }
