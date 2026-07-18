@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
 
 // TestNewTeamAgent_配置器 测试 NewTeamAgent 构造时创建 AgentConfigurator
@@ -154,15 +155,17 @@ func TestTeamAgent_BuildSpawnConfig(t *testing.T) {
 	card := agentschema.NewAgentCard()
 	a := NewTeamAgent(card)
 
-	// 配置前
-	assert.Nil(t, a.BuildSpawnConfig(atschema.TeamRuntimeContext{}))
+	// 配置前：返回零值 SpawnAgentConfig
+	cfg := a.BuildSpawnConfig(atschema.TeamRuntimeContext{})
+	assert.Equal(t, runnerspawn.SpawnAgentKind(""), cfg.AgentKind, "配置前 AgentKind 应为空")
 
 	// 配置后
 	spec := atschema.NewTeamAgentSpec()
 	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader, MemberName: "leader_1"}
 	a.Configure(context.Background(), spec, ctx)
 
-	assert.NotNil(t, a.BuildSpawnConfig(ctx)) // 配置后返回 SpawnAgentConfig
+	cfg = a.BuildSpawnConfig(ctx)
+	assert.Equal(t, runnerspawn.SpawnAgentKindTeamAgent, cfg.AgentKind, "配置后 AgentKind 应为 team_agent")
 }
 
 // TestTeamAgent_AttachModelAllocator 测试代理到 configurator

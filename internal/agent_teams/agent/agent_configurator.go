@@ -4,6 +4,7 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -330,9 +331,9 @@ func (c *AgentConfigurator) BuildMemberMessagerConfig(memberName string) any {
 
 // BuildSpawnConfig 构建生成配置（代理到 SpawnPayloadBuilder）。
 // 对齐 Python: AgentConfigurator.build_spawn_config(ctx)
-func (c *AgentConfigurator) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) any {
+func (c *AgentConfigurator) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	if c.spawnPayloadBuilder == nil {
-		return nil
+		return runnerspawn.SpawnAgentConfig{}
 	}
 	return c.spawnPayloadBuilder.BuildSpawnConfig(ctx)
 }

@@ -45,6 +45,7 @@ import (
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -301,7 +302,7 @@ func (a *TeamAgent) EventListeners() []any {
 
 // TeamMemberHandle 返回此 Agent 的 TeamMember 句柄（可能为 nil）。
 // 对齐 Python: TeamAgent.team_member property
-func (a *TeamAgent) TeamMemberHandle() any {
+func (a *TeamAgent) TeamMemberHandle() *TeamMember {
 	return a.state.TeamMember
 }
 
@@ -578,9 +579,9 @@ func (a *TeamAgent) StopCoordination(ctx context.Context) error {
 
 // SpawnTeammate 生成 Teammate。
 // 对齐 Python: TeamAgent.spawn_teammate(ctx, initial_message, session, spawn_config)
-func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, sessionID string, spawnConfig any) error {
+func (a *TeamAgent) SpawnTeammate(ctx context.Context, runtimeCtx atschema.TeamRuntimeContext, initialMessage string, sessionID string, spawnCfg *runnerspawn.SpawnConfig) error {
 	if a.spawnManager != nil {
-		return a.spawnManager.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnConfig)
+		return a.spawnManager.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
 	}
 	return nil
 }
@@ -619,11 +620,11 @@ func (a *TeamAgent) BuildMemberContext(memberSpec atschema.TeamMemberSpec) atsch
 
 // BuildSpawnConfig 构建生成配置。
 // 对齐 Python: TeamAgent.build_spawn_config(ctx)
-func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) any {
+func (a *TeamAgent) BuildSpawnConfig(runtimeCtx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	if a.configurator != nil {
 		return a.configurator.BuildSpawnConfig(runtimeCtx)
 	}
-	return nil
+	return runnerspawn.SpawnAgentConfig{}
 }
 
 // FromSpawnPayload 从生成载荷重构 TeamAgent。

@@ -117,12 +117,7 @@ func TestSpawnPayloadBuilder_BuildSpawnConfig(t *testing.T) {
 	ctx := atschema.TeamRuntimeContext{Role: atschema.TeamRoleLeader}
 	b := agent.NewSpawnPayloadBuilder(spec, ctx)
 
-	result := b.BuildSpawnConfig(ctx)
-	assert.NotNil(t, result, "BuildSpawnConfig 应返回非 nil 的 SpawnAgentConfig")
-
-	// 验证类型
-	cfg, ok := result.(runnerspawn.SpawnAgentConfig)
-	assert.True(t, ok, "BuildSpawnConfig 应返回 runnerspawn.SpawnAgentConfig 类型")
+	cfg := b.BuildSpawnConfig(ctx)
 	assert.Equal(t, runnerspawn.SpawnAgentKindTeamAgent, cfg.AgentKind)
 	assert.NotNil(t, cfg.Payload, "Payload 应非 nil")
 }

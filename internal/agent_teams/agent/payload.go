@@ -116,7 +116,7 @@ func (b *SpawnPayloadBuilder) BuildMemberMessagerConfig(memberName string) any {
 
 // BuildSpawnConfig 构建 SpawnAgentConfig。
 // 对齐 Python: SpawnPayloadBuilder.build_spawn_config(ctx)
-func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) any {
+func (b *SpawnPayloadBuilder) BuildSpawnConfig(ctx atschema.TeamRuntimeContext) runnerspawn.SpawnAgentConfig {
 	return runnerspawn.SpawnAgentConfig{
 		AgentKind: runnerspawn.SpawnAgentKindTeamAgent,
 		Payload:   b.BuildSpawnPayload(ctx, ""),

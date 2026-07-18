@@ -78,7 +78,7 @@ func (m *SpawnManager) SpawnTeammate(
 	runtimeCtx atschema.TeamRuntimeContext,
 	initialMessage string,
 	sessionID string,
-	spawnCfg any,
+	spawnCfg *runnerspawn.SpawnConfig,
 ) error {
 	memberName := runtimeCtx.MemberName
 	spawnMode := "process" // 默认 subprocess
@@ -362,7 +362,7 @@ func (m *SpawnManager) spawnSubprocess(
 	runtimeCtx atschema.TeamRuntimeContext,
 	initialMessage string,
 	sessionID string,
-	spawnCfg any,
+	spawnCfg *runnerspawn.SpawnConfig,
 ) (spawn.SpawnHandle, error) {
 	// 构建载荷
 	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
@@ -371,11 +371,7 @@ func (m *SpawnManager) spawnSubprocess(
 	}
 
 	// 构建配置
-	agentConfigAny := m.configurator.BuildSpawnConfig(runtimeCtx)
-	agentConfig, ok := agentConfigAny.(runnerspawn.SpawnAgentConfig)
-	if !ok {
-		return nil, fmt.Errorf("BuildSpawnConfig 返回类型不是 SpawnAgentConfig")
-	}
+	agentConfig := m.configurator.BuildSpawnConfig(runtimeCtx)
 
 	inputs := map[string]any{"query": initialMessage}
 	if initialMessage == "" {
@@ -384,7 +380,11 @@ func (m *SpawnManager) spawnSubprocess(
 
 	// 调用 Runner.SpawnAgent
 	// 对齐 Python: Runner.spawn_agent()
-	handle, err := runner.SpawnAgent(ctx, agentConfig, inputs, nil, nil)
+	var spawnOpts []runnerspawn.SpawnConfig
+	if spawnCfg != nil {
+		spawnOpts = append(spawnOpts, *spawnCfg)
+	}
+	handle, err := runner.SpawnAgent(ctx, agentConfig, inputs, nil, nil, spawnOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("子进程生成失败: %w", err)
 	}
