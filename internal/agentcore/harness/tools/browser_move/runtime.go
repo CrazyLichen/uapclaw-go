@@ -316,7 +316,7 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 
 	raw = unwrapMCPTextResult(raw)
 	parsed := ExtractJSONObject(raw)
-	if parsed == nil || len(parsed) == 0 {
+	if len(parsed) == 0 {
 		return map[string]any{
 			"ok":          false,
 			"error":       "Could not parse browser_probe_interactives result JSON",
@@ -383,7 +383,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 
 	raw = unwrapMCPTextResult(raw)
 	parsed := ExtractJSONObject(raw)
-	if parsed == nil || len(parsed) == 0 {
+	if len(parsed) == 0 {
 		return map[string]any{
 			"ok":          false,
 			"error":       "Could not parse browser_probe_cards result JSON",

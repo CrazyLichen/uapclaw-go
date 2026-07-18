@@ -118,7 +118,7 @@ func TestNewConversationSignalDetector_WithExistingSkills(t *testing.T) {
 
 func TestSignalDetector_类型别名(t *testing.T) {
 	var _ SignalDetector = ConversationSignalDetector{}
-	var d *SignalDetector = NewConversationSignalDetector()
+	d := NewConversationSignalDetector()
 	_ = d
 }
 

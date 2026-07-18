@@ -977,9 +977,7 @@ func TestTeamDetectUserIntent_无LLM时返回nil(t *testing.T) {
 	// llm 为 nil，调用 InvokeTextWithRetry 会 panic 或返回 error
 	// 这个测试验证不会 panic
 	defer func() {
-		if r := recover(); r != nil {
-			// 预期可能 panic，因为 llm 为 nil
-		}
+		_ = recover() // 预期可能 panic，因为 llm 为 nil
 	}()
 	messages := []map[string]any{
 		{"role": "user", "content": "改进协作"},

@@ -365,10 +365,12 @@ func (m *SpawnManager) spawnSubprocess(
 	spawnCfg *runnerspawn.SpawnConfig,
 ) (spawn.SpawnHandle, error) {
 	// 构建载荷
+	// ⤵️ 待回填：payload 需要传入 SpawnAgent 调用
 	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
 	if payload == nil {
 		payload = make(map[string]any)
 	}
+	_ = payload
 
 	// 构建配置
 	agentConfig := m.configurator.BuildSpawnConfig(runtimeCtx)
@@ -409,8 +411,7 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 		return
 	}
 	// 对齐 Python: 创建转发回调 teammate chunk → leader streamQueue
-	var forwardCb atschema.ChunkObserver
-	forwardCb = func(ctx context.Context, chunk streambase.Schema) error {
+	forwardCb := func(ctx context.Context, chunk streambase.Schema) error {
 		if leaderSC.streamQueue != nil {
 			select {
 			case leaderSC.streamQueue <- chunk:

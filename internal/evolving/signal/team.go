@@ -563,10 +563,11 @@ func tryParseJSON(text string) any {
 //
 // 对应 Python: _fix_json_text(text)
 func fixJSONText(text string) string {
+	// S1007: 使用 raw string 避免双重转义，但正则含反引号时仍用解释字符串
 	text = regexp.MustCompile("(?m)^```(?:json)?\\s*").ReplaceAllString(strings.TrimSpace(text), "")
 	text = regexp.MustCompile("(?m)^```\\s*$").ReplaceAllString(text, "")
-	text = regexp.MustCompile("//[^\\n]*").ReplaceAllString(text, "")
-	text = regexp.MustCompile(",\\s*([}\\]])").ReplaceAllString(text, "$1")
+	text = regexp.MustCompile(`//[^\n]*`).ReplaceAllString(text, "")
+	text = regexp.MustCompile(`,\s*([}\]])`).ReplaceAllString(text, "$1")
 	return strings.TrimSpace(text)
 }
 
@@ -597,9 +598,10 @@ func extractBalancedJSON(text string, opener, closer rune) string {
 			inString = true
 			continue
 		}
-		if ch == opener {
+		switch ch {
+		case opener:
 			depth++
-		} else if ch == closer {
+		case closer:
 			depth--
 			if depth == 0 {
 				return text[start : i+1]
