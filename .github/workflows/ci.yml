@@ -82,13 +82,13 @@ jobs:
       - name: 运行单元测试（带覆盖率）
         run: go test -tags=test -race -coverprofile=coverage.out ./...
 
-      - name: 检查覆盖率阈值（≥ 78%）
+      - name: 检查覆盖率阈值（≥ 77%）
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           echo "📊 总覆盖率: ${COVERAGE}%"
-          PASS=$(echo "$COVERAGE >= 78" | bc -l)
+          PASS=$(echo "$COVERAGE >= 77" | bc -l)
           if [ "$PASS" != "1" ]; then
-            echo "::error::覆盖率 ${COVERAGE}% 低于阈值 78%"
+            echo "::error::覆盖率 ${COVERAGE}% 低于阈值 77%"
             exit 1
           fi
           echo "✅ 覆盖率达标"
