@@ -6,20 +6,37 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 	updater "github.com/uapclaw/uapclaw-go/internal/evolving/updater"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// mockDomainOptimizer 模拟域优化器
+// mockDomainOptimizer 模拟域优化器，实现 optimizer.BaseOptimizer 接口
 type mockDomainOptimizer struct {
+	optimizer.BaseOptimizerMixin
+	domain         string
 	requireForward bool
+	defaultTargets []string
 }
 
-func (m *mockDomainOptimizer) RequiresForwardData() bool {
-	return m.requireForward
+// 确保 mockDomainOptimizer 实现 optimizer.BaseOptimizer 接口
+var _ optimizer.BaseOptimizer = (*mockDomainOptimizer)(nil)
+
+func (m *mockDomainOptimizer) Domain() string            { return m.domain }
+func (m *mockDomainOptimizer) RequiresForwardData() bool { return m.requireForward }
+func (m *mockDomainOptimizer) DefaultTargets() []string  { return m.defaultTargets }
+func (m *mockDomainOptimizer) Backward(_ context.Context, _ []*signal.EvolutionSignal) error {
+	return nil
 }
+func (m *mockDomainOptimizer) Step() map[schema.UpdateKey]any {
+	return nil
+}
+
+// ──────────────────────────── 导出函数 ────────────────────────────
 
 // 对齐 Python: test_process_accepts_signals_directly
 func TestMultiDimUpdater_Process直接接受信号(t *testing.T) {
@@ -47,7 +64,7 @@ func TestMultiDimUpdater_Update适配EvaluatedCases到Process(t *testing.T) {
 		map[string]any{"q": "question"},
 		map[string]any{"a": "answer"},
 	)
-	ec := dataset.NewEvaluatedCase(*case_, map[string]any{"output": "pred"}, )
+	ec := dataset.NewEvaluatedCase(*case_, map[string]any{"output": "pred"})
 	ec.SetScore(0.0)
 	ec.Reason = "reason"
 
@@ -122,7 +139,7 @@ func TestMultiDimUpdater_Update多个EvaluatedCases按序转换(t *testing.T) {
 
 // 额外测试: RequiresForwardData 相关
 func TestMultiDimUpdater_RequiresForwardData_全部不需要(t *testing.T) {
-	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]any{
+	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]optimizer.BaseOptimizer{
 		"llm":  &mockDomainOptimizer{requireForward: false},
 		"tool": &mockDomainOptimizer{requireForward: false},
 	}))
@@ -133,7 +150,7 @@ func TestMultiDimUpdater_RequiresForwardData_全部不需要(t *testing.T) {
 }
 
 func TestMultiDimUpdater_RequiresForwardData_有需要前向的(t *testing.T) {
-	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]any{
+	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]optimizer.BaseOptimizer{
 		"llm":    &mockDomainOptimizer{requireForward: true},
 		"tool":   &mockDomainOptimizer{requireForward: false},
 		"memory": &mockDomainOptimizer{requireForward: false},
@@ -175,9 +192,9 @@ func TestMultiDimUpdater_LoadState无操作(t *testing.T) {
 }
 
 func TestMultiDimUpdater_DomainOptimizers(t *testing.T) {
-	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]any{
-		"llm":  &mockDomainOptimizer{requireForward: false},
-		"tool": &mockDomainOptimizer{requireForward: true},
+	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]optimizer.BaseOptimizer{
+		"llm":  &mockDomainOptimizer{domain: "llm", requireForward: false},
+		"tool": &mockDomainOptimizer{domain: "tool", requireForward: true},
 	}))
 
 	opts := u.DomainOptimizers()
@@ -213,5 +230,35 @@ func TestMultiDimUpdater_Bind签名对齐(t *testing.T) {
 	n := u.Bind(operators, []string{"system_prompt"}, map[string]any{})
 	if n != 0 {
 		t.Errorf("Bind returned %d, want 0", n)
+	}
+}
+
+// 验证 DomainOptimizers 返回副本（修改不影响内部）
+func TestMultiDimUpdater_DomainOptimizers副本(t *testing.T) {
+	u := NewMultiDimUpdater(WithDomainOptimizers(map[string]optimizer.BaseOptimizer{
+		"llm": &mockDomainOptimizer{domain: "llm"},
+	}))
+
+	opts := u.DomainOptimizers()
+	delete(opts, "llm")
+
+	// 内部不受影响
+	inner := u.DomainOptimizers()
+	if _, ok := inner["llm"]; !ok {
+		t.Error("modifying DomainOptimizers() copy should not affect internal state")
+	}
+}
+
+// 验证 Process 接受 trajectory 参数
+func TestMultiDimUpdater_Process接受Trajectory(t *testing.T) {
+	u := NewMultiDimUpdater()
+	traj := &trajectory.Trajectory{ExecutionID: "exec1"}
+
+	result, err := u.Process(context.Background(), []*trajectory.Trajectory{traj}, nil, nil)
+	if err != nil {
+		t.Fatalf("Process returned error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("Process returned %d updates, want 0", len(result))
 	}
 }

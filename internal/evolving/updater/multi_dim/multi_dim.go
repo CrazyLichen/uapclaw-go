@@ -2,13 +2,13 @@ package multi_dim
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
-	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
+	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -21,16 +21,13 @@ import (
 // 同一 workflow 可有多个 LLMCall/ToolCall/MemoryCall，但同一 domain 内
 // 所有 Operator 由同一 optimizer 管理，避免冲突。
 //
-// domainOptimizers 值类型当前为 any，9.72e 实现后替换为 BaseOptimizer。⤵️
-//
 // 当前 bind/process/get_state/load_state 为默认实现（返回零值），
 // 后续具体子类实现时重写。
 //
 // 对应 Python: openjiuwen/agent_evolving/updater/multi_dim.py MultiDimUpdater
 type MultiDimUpdater struct {
-	// domainOptimizers domain → optimizer 映射。
-	// ⤵️ 9.72e 时替换 any 为 BaseOptimizer 接口
-	domainOptimizers map[string]any
+	// domainOptimizers domain → optimizer 映射
+	domainOptimizers map[string]optimizer.BaseOptimizer
 }
 
 // MultiDimUpdaterOption MultiDimUpdater 构造选项函数。
@@ -42,9 +39,6 @@ type MultiDimUpdaterOption func(*MultiDimUpdater)
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent MultiDimUpdater 包日志组件常量
-const logComponent = logger.ComponentAgentCore
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewMultiDimUpdater 创建 MultiDimUpdater 实例。
@@ -52,7 +46,7 @@ const logComponent = logger.ComponentAgentCore
 // 对应 Python: MultiDimUpdater(domain_optimizers={...})
 func NewMultiDimUpdater(opts ...MultiDimUpdaterOption) *MultiDimUpdater {
 	u := &MultiDimUpdater{
-		domainOptimizers: map[string]any{},
+		domainOptimizers: map[string]optimizer.BaseOptimizer{},
 	}
 	for _, opt := range opts {
 		opt(u)
@@ -62,7 +56,7 @@ func NewMultiDimUpdater(opts ...MultiDimUpdaterOption) *MultiDimUpdater {
 
 // WithDomainOptimizers 设置域优化器映射。
 // 对应 Python: MultiDimUpdater(domain_optimizers={...})
-func WithDomainOptimizers(optimizers map[string]any) MultiDimUpdaterOption {
+func WithDomainOptimizers(optimizers map[string]optimizer.BaseOptimizer) MultiDimUpdaterOption {
 	return func(u *MultiDimUpdater) {
 		if optimizers != nil {
 			u.domainOptimizers = optimizers
@@ -71,8 +65,8 @@ func WithDomainOptimizers(optimizers map[string]any) MultiDimUpdaterOption {
 }
 
 // DomainOptimizers 返回当前域优化器映射（只读副本）。
-func (u *MultiDimUpdater) DomainOptimizers() map[string]any {
-	result := make(map[string]any, len(u.domainOptimizers))
+func (u *MultiDimUpdater) DomainOptimizers() map[string]optimizer.BaseOptimizer {
+	result := make(map[string]optimizer.BaseOptimizer, len(u.domainOptimizers))
 	for k, v := range u.domainOptimizers {
 		result[k] = v
 	}
@@ -88,8 +82,7 @@ func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets [
 }
 
 // RequiresForwardData 检查是否有任何域优化器需要前向推理数据。
-// 如果任意优化器的 requires_forward_data 返回 true，则返回 true。
-// 子类可重写此方法实现自定义逻辑。
+// 如果任意优化器的 RequiresForwardData 返回 true，则返回 true。
 //
 // 对齐 Python:
 //
@@ -101,21 +94,9 @@ func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets [
 //
 // 对应 Python: MultiDimUpdater.requires_forward_data()
 func (u *MultiDimUpdater) RequiresForwardData() bool {
-	for domain, opt := range u.domainOptimizers {
-		type requirer interface {
-			RequiresForwardData() bool
-		}
-		if r, ok := opt.(requirer); ok {
-			if r.RequiresForwardData() {
-				return true
-			}
-		} else {
-			logger.Warn(logComponent).
-				Str("method", "RequiresForwardData").
-				Str("assertion", "requirer").
-				Str("domain", domain).
-				Str("actual_type", fmt.Sprintf("%T", opt)).
-				Msg("域优化器类型断言失败，跳过；9.72e 回填后消除⤵️")
+	for _, opt := range u.domainOptimizers {
+		if opt.RequiresForwardData() {
+			return true
 		}
 	}
 	return false
@@ -125,7 +106,7 @@ func (u *MultiDimUpdater) RequiresForwardData() bool {
 // 当前默认实现返回空 map，后续具体子类重写。
 //
 // 对应 Python: MultiDimUpdater.process(trajectories, signals, config) — @abstractmethod
-func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []any, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []*trajectory.Trajectory, signals []*signal.EvolutionSignal, config map[string]any) (map[schema.UpdateKey]any, error) {
 	return map[schema.UpdateKey]any{}, nil
 }
 
@@ -142,7 +123,7 @@ func (u *MultiDimUpdater) Process(ctx context.Context, trajectories []any, signa
 //	return await self.process(trajectories, signals, config)
 //
 // 对应 Python: MultiDimUpdater.update(trajectories, evaluated_cases, config)
-func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []any, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
+func (u *MultiDimUpdater) Update(ctx context.Context, trajectories []*trajectory.Trajectory, evaluatedCases []*dataset.EvaluatedCase, config map[string]any) (map[schema.UpdateKey]any, error) {
 	// 从 config 中提取 score_threshold
 	// 对齐 Python: score_threshold = config.get("score_threshold")
 	var scoreThreshold *float64
