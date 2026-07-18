@@ -9,7 +9,7 @@ import (
 
 // ToolCallOperator 工具描述参数句柄。
 //
-// 管理 tool_description 参数（map[tool_name]description_str）。
+// 管理 tool_description 参数（map[tool_name]description）。
 // 参数变更通过 onParameterUpdated 回调推送给消费者。
 //
 // 更新入口：
@@ -20,8 +20,8 @@ import (
 type ToolCallOperator struct {
 	// operatorID 操作器标识
 	operatorID string
-	// descriptions 工具描述字典 map[tool_name]description_str
-	descriptions map[string]string
+	// descriptions 工具描述字典 map[tool_name]description
+	descriptions map[string]any
 	// onParameterUpdated 参数变更回调
 	onParameterUpdated operator.ParameterUpdatedCallback
 }
@@ -49,7 +49,7 @@ const (
 func NewToolCallOperator(operatorID string, opts ...ToolCallOperatorOption) *ToolCallOperator {
 	op := &ToolCallOperator{
 		operatorID:   operatorID,
-		descriptions: make(map[string]string),
+		descriptions: make(map[string]any),
 	}
 
 	for _, opt := range opts {
@@ -87,29 +87,21 @@ func (op *ToolCallOperator) GetTunables() map[string]operator.TunableSpec {
 
 // SetParameter 设置可调参数值（工具描述）。
 // 仅接受 target="tool_description" 且 value 为 map 类型。
+// 直接赋值，不做类型转换，对齐 Python value.copy() 行为。
 //
 // 对应 Python: ToolCallOperator.set_parameter(target, value)
 func (op *ToolCallOperator) SetParameter(target string, value any) {
 	if target != TargetToolDescription {
 		return
 	}
-	descMap, ok := value.(map[string]string)
+	descMap, ok := value.(map[string]any)
 	if !ok {
-		// 尝试 map[string]any → map[string]string
-		if anyMap, ok := value.(map[string]any); ok {
-			descMap = make(map[string]string, len(anyMap))
-			for k, v := range anyMap {
-				descMap[k] = toString(v)
-			}
-		} else {
-			return
-		}
+		return
 	}
-
-	op.descriptions = cloneMap(descMap)
+	op.descriptions = cloneAnyMap(descMap)
 
 	if op.onParameterUpdated != nil {
-		op.onParameterUpdated(target, cloneMap(op.descriptions))
+		op.onParameterUpdated(target, cloneAnyMap(op.descriptions))
 	}
 }
 
@@ -118,30 +110,23 @@ func (op *ToolCallOperator) SetParameter(target string, value any) {
 // 对应 Python: ToolCallOperator.get_state()
 func (op *ToolCallOperator) GetState() map[string]any {
 	return map[string]any{
-		TargetToolDescription: cloneMap(op.descriptions),
+		TargetToolDescription: cloneAnyMap(op.descriptions),
 	}
 }
 
 // LoadState 从检查点恢复状态。
 // 触发 onParameterUpdated 回调。
+// 直接赋值，不做类型转换，对齐 Python state["tool_description"].copy() 行为。
 //
 // 对应 Python: ToolCallOperator.load_state(state)
 func (op *ToolCallOperator) LoadState(state map[string]any) {
 	if td, ok := state[TargetToolDescription]; ok {
-		switch v := td.(type) {
-		case map[string]string:
-			op.descriptions = cloneMap(v)
-		case map[string]any:
-			op.descriptions = make(map[string]string, len(v))
-			for k, val := range v {
-				op.descriptions[k] = toString(val)
-			}
-		default:
-			return
-		}
+		if descMap, ok := td.(map[string]any); ok {
+			op.descriptions = cloneAnyMap(descMap)
 
-		if op.onParameterUpdated != nil {
-			op.onParameterUpdated(TargetToolDescription, cloneMap(op.descriptions))
+			if op.onParameterUpdated != nil {
+				op.onParameterUpdated(TargetToolDescription, cloneAnyMap(op.descriptions))
+			}
 		}
 	}
 }
@@ -155,10 +140,10 @@ func (op *ToolCallOperator) ApplyUpdate(target string, update schema.UpdateValue
 }
 
 // WithDescriptions 设置初始工具描述选项。
-func WithDescriptions(descriptions map[string]string) ToolCallOperatorOption {
+func WithDescriptions(descriptions map[string]any) ToolCallOperatorOption {
 	return func(op *ToolCallOperator) {
 		if descriptions != nil {
-			op.descriptions = cloneMap(descriptions)
+			op.descriptions = cloneAnyMap(descriptions)
 		}
 	}
 }
@@ -170,22 +155,14 @@ func WithToolCallOnParameterUpdated(cb operator.ParameterUpdatedCallback) ToolCa
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// cloneMap 克隆 map[string]string。
-func cloneMap(m map[string]string) map[string]string {
+// cloneAnyMap 克隆 map[string]any。
+func cloneAnyMap(m map[string]any) map[string]any {
 	if m == nil {
-		return map[string]string{}
+		return map[string]any{}
 	}
-	result := make(map[string]string, len(m))
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		result[k] = v
 	}
 	return result
-}
-
-// toString 将 any 转为字符串。
-func toString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
 }

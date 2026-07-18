@@ -315,7 +315,7 @@ func TestHandleSessionCreate_自动生成ID(t *testing.T) {
 		t.Error("resp.OK 应为 true")
 	}
 
-	sessionID, ok := resp.Payload["sessionId"].(string)
+	sessionID, ok := resp.Payload["session_id"].(string)
 	if !ok || sessionID == "" {
 		t.Error("sessionId 不应为空")
 	}
@@ -339,8 +339,8 @@ func TestHandleSessionCreate_指定ID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleSessionCreate 返回错误: %v", err)
 	}
-	if resp.Payload["sessionId"] != "my_custom_id" {
-		t.Errorf("sessionId = %q, 期望 %q", resp.Payload["sessionId"], "my_custom_id")
+	if resp.Payload["session_id"] != "my_custom_id" {
+		t.Errorf("sessionId = %q, 期望 %q", resp.Payload["session_id"], "my_custom_id")
 	}
 
 	// 验证目录和 metadata.json 已创建

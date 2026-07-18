@@ -437,9 +437,16 @@ func (uc *UapClaw) GenerateRecap(ctx context.Context, sessionID string) (map[str
 	return cc.GenerateRecap(ctx, sessionID)
 }
 
-// SwitchMode 切换运行模式。
-// ⤵️ 10.3.2: 完整实现需要 DeepAdapter 支撑（session 持久化 + switch_mode + load_state）
-func (uc *UapClaw) SwitchMode(_, _ string) error { return nil }
+// SwitchMode 切换运行模式，执行完整的 session 生命周期。
+// 流程：preRun → switchMode → loadState → updateState → postRun
+//
+// 对应 Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
+func (uc *UapClaw) SwitchMode(ctx context.Context, sessionID, subMode string) error {
+	if uc.adapter == nil {
+		return nil
+	}
+	return uc.adapter.SwitchMode(ctx, sessionID, subMode)
+}
 
 // CreateInstance 创建 Agent 实例。
 //

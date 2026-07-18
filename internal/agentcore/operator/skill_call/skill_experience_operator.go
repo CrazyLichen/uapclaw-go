@@ -30,12 +30,6 @@ type SkillExperienceOperatorOption func(*SkillExperienceOperator)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
-const (
-	// experiencesTarget 经验目标名，一比一复刻 Python protocols.EXPERIENCES_TARGET。
-	// 对应 Python: EXPERIENCES_TARGET = "experiences"
-	experiencesTarget = "experiences"
-)
-
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -68,8 +62,8 @@ func (op *SkillExperienceOperator) OperatorID() string {
 // 对应 Python: SkillExperienceOperator.get_tunables()
 func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec {
 	return map[string]operator.TunableSpec{
-		experiencesTarget: {
-			Name:       experiencesTarget,
+		schema.ExperiencesTarget: {
+			Name:       schema.ExperiencesTarget,
 			Kind:       operator.TunableKindSkillExperience,
 			Path:       "content",
 			Constraint: map[string]any{"type": "record"},
@@ -82,7 +76,7 @@ func (op *SkillExperienceOperator) GetTunables() map[string]operator.TunableSpec
 //
 // 对应 Python: SkillExperienceOperator.set_parameter(target, value)
 func (op *SkillExperienceOperator) SetParameter(target string, value any) {
-	if target != experiencesTarget || value == nil {
+	if target != schema.ExperiencesTarget || value == nil {
 		return
 	}
 	items := toSlice(value)
@@ -98,10 +92,11 @@ func (op *SkillExperienceOperator) SetParameter(target string, value any) {
 //
 // 对应 Python: SkillExperienceOperator.preview_update(target, update)
 func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
-	if target != experiencesTarget {
+	if target != schema.ExperiencesTarget {
 		return schema.ApplyResultWithErrors(
 			op.OperatorID(), target,
 			update.Mode, update.Effect, update.Payload,
+			update.ChangeType, update.Metadata,
 			fmt.Sprintf("unsupported target for SkillExperienceOperator: %s", target),
 		)
 	}
@@ -111,6 +106,7 @@ func (op *SkillExperienceOperator) PreviewUpdate(target string, update schema.Up
 		return schema.ApplyResultWithErrors(
 			op.OperatorID(), target,
 			update.Mode, update.Effect, update.Payload,
+			update.ChangeType, update.Metadata,
 			fmt.Sprintf(
 				"unsupported update mode/effect for SkillExperienceOperator: %s/%s",
 				update.Mode, update.Effect,

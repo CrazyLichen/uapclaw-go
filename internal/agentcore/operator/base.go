@@ -117,6 +117,7 @@ func DefaultApplyUpdate(op Operator, target string, update schema.UpdateValue) s
 		return schema.ApplyResultWithErrors(
 			op.OperatorID(), target,
 			update.Mode, update.Effect, update.Payload,
+			update.ChangeType, update.Metadata,
 			"unsupported update mode/effect for compatibility operator: "+string(update.Mode)+"/"+string(update.Effect),
 		)
 	}

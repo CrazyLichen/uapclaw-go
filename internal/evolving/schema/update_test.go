@@ -155,12 +155,19 @@ func TestNewApplyResult(t *testing.T) {
 }
 
 func TestApplyResultWithErrors(t *testing.T) {
-	r := ApplyResultWithErrors("op1", "target1", UpdateModeAppend, UpdateEffectPendingChange, "val", "err1", "err2")
+	ct := "skill_experience_entry"
+	r := ApplyResultWithErrors("op1", "target1", UpdateModeAppend, UpdateEffectPendingChange, "val", &ct, map[string]any{"key": "value"}, "err1", "err2")
 	if r.Applied {
 		t.Error("applied should be false")
 	}
 	if len(r.Errors) != 2 {
 		t.Errorf("errors count = %d, expected 2", len(r.Errors))
+	}
+	if r.ChangeType == nil || *r.ChangeType != "skill_experience_entry" {
+		t.Errorf("changeType = %v, expected skill_experience_entry", r.ChangeType)
+	}
+	if r.Metadata["key"] != "value" {
+		t.Errorf("metadata key = %v, expected value", r.Metadata["key"])
 	}
 }
 

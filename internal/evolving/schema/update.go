@@ -195,8 +195,10 @@ func NewApplyResult(operatorID, target string, applied bool, mode UpdateMode, ef
 	}
 }
 
-// ApplyResultWithErrors 创建带错误的 ApplyResult。
-func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect UpdateEffect, value any, errs ...string) ApplyResult {
+// ApplyResultWithErrors 创建带错误的 ApplyResult，包含 ChangeType 和 Metadata。
+//
+// 对应 Python: ApplyResult(applied=False, change_type=..., metadata=dict(...), errors=[...])
+func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect UpdateEffect, value any, changeType *string, metadata map[string]any, errs ...string) ApplyResult {
 	return ApplyResult{
 		OperatorID: operatorID,
 		Target:     target,
@@ -204,9 +206,10 @@ func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect Up
 		Mode:       mode,
 		Effect:     effect,
 		Value:      value,
+		ChangeType: changeType,
 		Records:    []any{},
 		Errors:     errs,
-		Metadata:   map[string]any{},
+		Metadata:   MetadataClone(metadata),
 	}
 }
 

@@ -284,9 +284,9 @@ type fixedScoreMetric struct {
 
 func (f *fixedScoreMetric) Name() string         { return f.name }
 func (f *fixedScoreMetric) HigherIsBetter() bool { return true }
-func (f *fixedScoreMetric) Compute(_, _ any, _ ...metrics.MetricOption) (metrics.MetricResult, error) {
+func (f *fixedScoreMetric) Compute(_ context.Context, _, _ any, _ ...metrics.MetricOption) (metrics.MetricResult, error) {
 	return metrics.MetricResult{f.name: f.score}, nil
 }
-func (f *fixedScoreMetric) ComputeBatch(_, _ []any, _ ...metrics.MetricOption) ([]metrics.MetricResult, error) {
+func (f *fixedScoreMetric) ComputeBatch(_ context.Context, _, _ []any, _ ...metrics.MetricOption) ([]metrics.MetricResult, error) {
 	return nil, nil
 }

@@ -17,7 +17,7 @@ func TestNewSkillExperienceOperator(t *testing.T) {
 func TestSkillExperienceOperator_GetTunables(t *testing.T) {
 	op := NewSkillExperienceOperator("my_skill")
 	tunables := op.GetTunables()
-	spec, ok := tunables[experiencesTarget]
+	spec, ok := tunables[schema.ExperiencesTarget]
 	if !ok {
 		t.Fatal("experiences tunable missing")
 	}
@@ -36,7 +36,7 @@ func TestSkillExperienceOperator_SetParameter(t *testing.T) {
 			capturedValue = value
 		})
 		op := NewSkillExperienceOperator("my_skill", WithSkillOnParameterUpdated(cb))
-		op.SetParameter(experiencesTarget, []any{"record1"})
+		op.SetParameter(schema.ExperiencesTarget, []any{"record1"})
 		if capturedValue == nil {
 			t.Error("callback should have been called")
 		}
@@ -56,7 +56,7 @@ func TestSkillExperienceOperator_SetParameter(t *testing.T) {
 		called := false
 		cb := operator.ParameterUpdatedCallback(func(string, any) { called = true })
 		op := NewSkillExperienceOperator("my_skill", WithSkillOnParameterUpdated(cb))
-		op.SetParameter(experiencesTarget, nil)
+		op.SetParameter(schema.ExperiencesTarget, nil)
 		if called {
 			t.Error("callback should not be called for nil value")
 		}
@@ -68,7 +68,7 @@ func TestSkillExperienceOperator_SetParameter(t *testing.T) {
 			capturedValue = value
 		})
 		op := NewSkillExperienceOperator("my_skill", WithSkillOnParameterUpdated(cb))
-		op.SetParameter(experiencesTarget, "single_item")
+		op.SetParameter(schema.ExperiencesTarget, "single_item")
 		items, ok := capturedValue.([]any)
 		if !ok {
 			t.Fatal("captured value should be []any")
@@ -86,7 +86,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateMode(schema.UpdateModeAppend),
 			schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if !result.Applied {
 			t.Error("should be applied")
 		}
@@ -110,7 +110,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateMode(schema.UpdateModeMerge),
 			schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if !result.Applied {
 			t.Error("should be applied for merge+pending_change")
 		}
@@ -137,7 +137,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateMode(schema.UpdateModeReplace),
 			schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if result.Applied {
 			t.Error("should not be applied for replace mode")
 		}
@@ -149,7 +149,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateMode(schema.UpdateModeAppend),
 			schema.WithUpdateEffect(schema.UpdateEffectState),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if result.Applied {
 			t.Error("should not be applied for state effect")
 		}
@@ -161,7 +161,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateMode(schema.UpdateModeAppend),
 			schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if result.Applied {
 			t.Error("should not be applied for empty records")
 		}
@@ -174,7 +174,7 @@ func TestSkillExperienceOperator_PreviewUpdate(t *testing.T) {
 			schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 			schema.WithUpdateMetadata(map[string]any{"custom_key": "custom_value"}),
 		)
-		result := op.PreviewUpdate(experiencesTarget, update)
+		result := op.PreviewUpdate(schema.ExperiencesTarget, update)
 		if result.Metadata["custom_key"] != "custom_value" {
 			t.Error("custom metadata should be preserved")
 		}
@@ -205,7 +205,7 @@ func TestSkillExperienceOperator_ApplyUpdate(t *testing.T) {
 		schema.WithUpdateMode(schema.UpdateModeAppend),
 		schema.WithUpdateEffect(schema.UpdateEffectPendingChange),
 	)
-	result := op.ApplyUpdate(experiencesTarget, update)
+	result := op.ApplyUpdate(schema.ExperiencesTarget, update)
 	if !result.Applied {
 		t.Error("ApplyUpdate should route to PreviewUpdate and be applied")
 	}

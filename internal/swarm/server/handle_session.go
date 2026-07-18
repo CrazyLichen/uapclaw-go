@@ -401,7 +401,7 @@ func (s *AgentServer) handleSessionCreate(_ context.Context, request *schema.Age
 		Msg("会话已创建")
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{"sessionId": sessionID}),
+		schema.WithPayload(map[string]any{"session_id": sessionID}),
 	), nil
 }
 

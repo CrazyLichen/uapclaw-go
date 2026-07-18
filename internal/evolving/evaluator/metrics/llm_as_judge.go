@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -85,9 +86,9 @@ func (m *LLMAsJudgeMetric) Compute(ctx context.Context, prediction, label any, o
 
 	// 格式化模板
 	formatted, err := m.template.Format(map[string]any{
-		"question":        fmt.Sprintf("%v", mc.question),
-		"expected_answer": fmt.Sprintf("%v", label),
-		"model_answer":    fmt.Sprintf("%v", prediction),
+		"question":        formatValue(mc.question),
+		"expected_answer": formatValue(label),
+		"model_answer":    formatValue(prediction),
 	})
 	if err != nil {
 		logger.Warn(metricLogComponent).Err(err).Msg("格式化 LLM 评估模板失败")
@@ -167,4 +168,33 @@ func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) Met
 		return MetricResult{"llm_as_judge": 1.0}
 	}
 	return MetricResult{"llm_as_judge": 0.0}
+}
+
+// formatValue 将任意值序列化为字符串，用于 LLM 模板填充。
+// nil 或零值 → 空字符串，非空 → JSON 序列化。
+// 对齐 Python 的 str(value or "") 语义。
+func formatValue(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return ""
+		}
+		return val
+	case map[string]any:
+		if len(val) == 0 {
+			return ""
+		}
+	case []any:
+		if len(val) == 0 {
+			return ""
+		}
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(data)
 }

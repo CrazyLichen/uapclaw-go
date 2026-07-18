@@ -55,8 +55,8 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 		return
 	}
 
-	// 2. ACP channel 特殊处理：注入 client_capabilities 到 metadata
-	if request.ChannelID == acpChannelID {
+	// 2. ACP channel 特殊处理：注入 client_capabilities 到 metadata（排除 INITIALIZE 方法）
+	if request.ChannelID == acpChannelID && request.ReqMethod != schema.ReqMethodInitialize {
 		s.injectACPCapabilities(request, envelope)
 	}
 
@@ -293,9 +293,13 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 		return
 	}
 
-	// 4. code 模式 switchMode（stub，不报错）
-	if mode == "code" {
-		_ = agent.SwitchMode(mode, subMode)
+	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
+	if mode == "code" && subMode != "team" {
+		sid := ""
+		if request.SessionID != nil {
+			sid = *request.SessionID
+		}
+		_ = agent.SwitchMode(ctx, sid, subMode)
 	}
 
 	// 5. 调用 Agent
@@ -350,9 +354,13 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 		return
 	}
 
-	// 4. code 模式 switchMode
-	if mode == "code" {
-		_ = agent.SwitchMode(mode, subMode)
+	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
+	if mode == "code" && subMode != "team" {
+		sid := ""
+		if request.SessionID != nil {
+			sid = *request.SessionID
+		}
+		_ = agent.SwitchMode(ctx, sid, subMode)
 	}
 
 	// 5. 启动心跳 goroutine
@@ -427,7 +435,8 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 	}
 
 	// 2. 获取 Agent（三级 fallback，对齐 Python _handle_cancel）
-	mode, subMode := applyResolvedModeToRequest(request)
+	// 主流路径：纯读取 mode（不修改 request），对齐 Python request.params.get("mode", "") + resolve_agent_request_mode
+	mode, subMode := resolveMode(request)
 	projectDir := resolveRequestProjectDir(request)
 
 	var agent *runtime.UapClaw
@@ -447,12 +456,14 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 			Msg("cancel: 按 mode 未找到已有 agent，尝试不限 mode 查找")
 	}
 
-	// 第3级：fallback 创建（阻塞），对齐 Python get_agent 兜底
+	// 第3级：fallback 创建（阻塞），对齐 Python _apply_resolved_mode_to_request 兜底
+	// 此时才调用 applyResolvedModeToRequest（会回写 request.Params）
 	if agent == nil {
 		logger.Warn(logComponent).
 			Str("request_id", request.RequestID).
 			Str("channel_id", request.ChannelID).
 			Msg("cancel: 未找到已有 agent，fallback 创建")
+		mode, subMode = applyResolvedModeToRequest(request)
 		var err error
 		agent, err = s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
 		if err != nil {
@@ -546,6 +557,57 @@ func (s *AgentServer) runKeepalive(ctx context.Context, requestID, channelID str
 			timer.Reset(keepaliveInterval)
 		}
 	}
+}
+
+// resolveMode 从 request 中纯读取并解析 mode/subMode，不修改 request。
+// 对齐 Python: resolve_agent_request_mode(mode_param)
+func resolveMode(request *schema.AgentRequest) (mode, subMode string) {
+	if request.Params == nil {
+		return "agent", "plan"
+	}
+	var params map[string]any
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		return "agent", "plan"
+	}
+	modeText := ""
+	if modeVal, ok := params["mode"]; ok {
+		if s, ok := modeVal.(string); ok {
+			modeText = strings.TrimSpace(strings.ToLower(s))
+		}
+	}
+	if modeText == "" {
+		modeText = "agent.plan"
+	}
+	parts := strings.SplitN(modeText, ".", 2)
+	mode = parts[0]
+	if mode == "" {
+		mode = "agent"
+	}
+	defaultSubModes := map[string]string{
+		"agent": "plan",
+		"code":  "normal",
+	}
+	if len(parts) > 1 && parts[1] != "" {
+		subMode = parts[1]
+	} else {
+		if def, ok := defaultSubModes[mode]; ok {
+			subMode = def
+		}
+	}
+	// team 分支
+	if mode == "team" {
+		if subMode == "plan" {
+			mode = "code"
+			subMode = "team"
+		} else {
+			subMode = ""
+		}
+	}
+	// code subMode 白名单
+	if mode == "code" && subMode != "plan" && subMode != "normal" && subMode != "team" {
+		subMode = "normal"
+	}
+	return
 }
 
 // applyResolvedModeToRequest 从 params["mode"] 解析 mode、subMode 和 canonicalMode。
@@ -724,15 +786,26 @@ func (s *AgentServer) writeErrorResponse(requestID, channelID, errMsg, code stri
 }
 
 // injectACPCapabilities 为 ACP 通道注入 client_capabilities 到 metadata。
+// 使用 setdefault 语义：不覆盖已有 client_capabilities 值。
+//
+// 对应 Python: jiuwenswarm/server/agent_ws_server.py:803-810
+// ⤵️ 10.3.12: 补充 agent_manager.get_client_capabilities("acp") fallback
 func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelope *e2a.E2AEnvelope) {
 	if request.Metadata == nil {
 		request.Metadata = make(map[string]any)
 	}
+	// setdefault 语义：已有 client_capabilities 则不覆盖
+	if _, exists := request.Metadata["client_capabilities"]; exists {
+		return
+	}
 	if envelope.Params != nil {
 		if caps, ok := envelope.Params["client_capabilities"]; ok {
 			request.Metadata["client_capabilities"] = caps
+			return
 		}
 	}
+	// ⤵️ 10.3.12: fallback 到 agent_manager.get_client_capabilities("acp")
+	// 待 AgentManager 完整实现后补充
 }
 
 // notImplementedResponse 返回 NOT_IMPLEMENTED 错误响应（供 stub handler 使用）。

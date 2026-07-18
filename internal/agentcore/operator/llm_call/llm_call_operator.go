@@ -1,11 +1,13 @@
 package llm_call
 
 import (
+	"encoding/json"
 	"fmt"
 
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
-	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
+	evolvingschema "github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -62,11 +64,14 @@ const (
 
 // NewLLMCallOperator 创建 LLMCallOperator 实例。
 //
-// 对应 Python: LLMCallOperator.__init__(system_prompt, user_prompt, ...)
-func NewLLMCallOperator(systemPrompt, userPrompt string, opts ...LLMCallOperatorOption) *LLMCallOperator {
+// systemPrompt 和 userPrompt 为消息列表，支持多消息格式 prompt。
+// 对应 Python: LLMCallOperator.__init__(system_prompt: str | List[Dict], user_prompt: str | List[Dict], ...)
+func NewLLMCallOperator(systemPrompt, userPrompt []llmschema.BaseMessage, opts ...LLMCallOperatorOption) *LLMCallOperator {
 	// userPrompt 为空时使用默认模板
-	if userPrompt == "" {
-		userPrompt = defaultUserPrompt
+	if len(userPrompt) == 0 {
+		userPrompt = []llmschema.BaseMessage{
+			llmschema.NewUserMessage(defaultUserPrompt),
+		}
 	}
 
 	op := &LLMCallOperator{
@@ -169,7 +174,7 @@ func (op *LLMCallOperator) LoadState(state map[string]any) {
 // 使用 DefaultApplyUpdate 提供的默认兼容行为。
 //
 // 对应 Python: Operator.apply_update 默认实现
-func (op *LLMCallOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
+func (op *LLMCallOperator) ApplyUpdate(target string, update evolvingschema.UpdateValue) evolvingschema.ApplyResult {
 	return operator.DefaultApplyUpdate(op, target, update)
 }
 
@@ -223,15 +228,27 @@ func WithLLMCallOnParameterUpdated(cb operator.ParameterUpdatedCallback) LLMCall
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// promptContent 将 value 转为 prompt 内容字符串。
+// promptContent 将任意值转为 PromptTemplate 可接受的内容。
+// string 直接返回，[]any/[]map[string]any 保留原始结构，其他类型 JSON 序列化。
 // 对应 Python: content = value if isinstance(value, (str, list)) else str(value)
-func promptContent(value any) string {
+func promptContent(value any) any {
 	switch v := value.(type) {
 	case string:
 		return v
+	case []llmschema.BaseMessage:
+		return v
 	case []any:
-		return fmt.Sprintf("%v", v)
+		return v
+	case []map[string]any:
+		return v
 	default:
-		return fmt.Sprintf("%v", v)
+		if v == nil {
+			return ""
+		}
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return string(data)
 	}
 }

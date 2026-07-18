@@ -72,6 +72,7 @@ func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest)
 	return f.heartbeatResp, f.heartbeatErr
 }
 func (f *fakeAdapter) Cleanup() error { return nil }
+func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
 
 // ContextCompressor 接口实现
 func (f *fakeAdapter) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ bool) (map[string]any, error) {
@@ -256,7 +257,7 @@ func TestUapClaw_GenerateRecap(t *testing.T) {
 
 func TestUapClaw_SwitchMode(t *testing.T) {
 	uc := NewUapClaw()
-	err := uc.SwitchMode("sess-1", "code.normal")
+	err := uc.SwitchMode(context.Background(), "sess-1", "code.normal")
 	assert.NoError(t, err)
 }
 

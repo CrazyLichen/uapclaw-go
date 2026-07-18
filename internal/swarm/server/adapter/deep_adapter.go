@@ -20,6 +20,7 @@ import (
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/checkpointer"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -1164,6 +1165,39 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //
 // Python 执行步骤：
 //  1. await self._close_a2x_client()
+// SwitchMode 切换运行模式，执行完整的 session 生命周期。
+// 流程：preRun → switchMode → loadState → updateState → postRun
+//
+// 对应 Python: jiuwenswarm/server/agent_ws_server.py:1145-1154
+func (d *DeepAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
+	if d.instance == nil {
+		return nil
+	}
+	card := d.instance.Card()
+	if card == nil {
+		return nil
+	}
+
+	// 创建 session 并执行生命周期
+	sess := session.CreateAgentSession(sessionID, card, nil)
+	if err := sess.PreRun(ctx); err != nil {
+		return fmt.Errorf("SwitchMode PreRun 失败: %w", err)
+	}
+
+	d.instance.SwitchMode(sess, subMode)
+	state := d.instance.LoadState(sess)
+
+	sess.UpdateState(map[string]any{
+		hschema.SessionStateKey: state.ToSessionDict(),
+	})
+
+	if err := sess.PostRun(ctx); err != nil {
+		return fmt.Errorf("SwitchMode PostRun 失败: %w", err)
+	}
+
+	return nil
+}
+
 func (d *DeepAdapter) Cleanup() error {
 	// 步骤 1: 关闭 a2x 客户端
 	_ = d.closeA2xClient()

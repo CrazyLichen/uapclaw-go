@@ -47,6 +47,10 @@ func (s *stubAdapter) Cleanup() error {
 	return nil
 }
 
+func (s *stubAdapter) SwitchMode(_ context.Context, _, _ string) error {
+	return nil
+}
+
 // TestAgentAdapter_编译期接口检查 验证 stubAdapter 满足 AgentAdapter 接口。
 func TestAgentAdapter_编译期接口检查(t *testing.T) {
 	// 此测试的目的是编译期检查：var _ AgentAdapter = (*stubAdapter)(nil)

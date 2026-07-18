@@ -173,6 +173,7 @@ func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.Upd
 			results = append(results, schema.ApplyResultWithErrors(
 				key.OperatorID(), key.Target(),
 				update.Mode, update.Effect, update.Payload,
+				update.ChangeType, update.Metadata,
 				"operator not found: "+key.OperatorID(),
 			))
 			continue

@@ -7,8 +7,9 @@
 // 文件目录：
 //
 //	evolving/
-//	├── doc.go           # 包文档
-//	└── constant.go      # 进化流程全局常量
+//	├── doc.go                # 包文档
+//	├── constant.go           # 进化流程全局常量
+//	└── update_execution.go   # 更新执行函数（ExecuteUpdates/ApplyUpdates/SummarizeApplyResults）
 //
 // 子包：
 //

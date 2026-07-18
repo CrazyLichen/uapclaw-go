@@ -300,6 +300,11 @@ func (c *CodeAdapter) TryStopDreaming(ctx context.Context) error {
 	return c.deep.TryStopDreaming(ctx)
 }
 
+// SwitchMode 委托 DeepAdapter 的模式切换（含 session 生命周期）。
+func (c *CodeAdapter) SwitchMode(ctx context.Context, sessionID, subMode string) error {
+	return c.deep.SwitchMode(ctx, sessionID, subMode)
+}
+
 // AbortOnGatewayDisconnect 委托 DeepAdapter 的 GatewayDisconnectHandler 接口。
 func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	c.deep.AbortOnGatewayDisconnect(ctx)

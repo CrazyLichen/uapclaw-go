@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -117,9 +118,9 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 
 	// 格式化模板
 	formatted, err := d.metricTemplate.Format(map[string]any{
-		"question":        fmt.Sprintf("%v", case_.Inputs),
-		"expected_answer": fmt.Sprintf("%v", case_.Label),
-		"model_answer":    fmt.Sprintf("%v", predict),
+		"question":        formatValue(case_.Inputs),
+		"expected_answer": formatValue(case_.Label),
+		"model_answer":    formatValue(predict),
 	})
 	if err != nil {
 		ec.Reason = "格式化评估模板失败"
@@ -281,9 +282,9 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 		Msg("首次解析评估结果失败，尝试重试模板")
 
 	retryFormatted, err := metrics.LLMMetricRetryTemplate.Format(map[string]any{
-		"question":                     fmt.Sprintf("%v", case_.Inputs),
-		"expected_answer":              fmt.Sprintf("%v", case_.Label),
-		"model_answer":                 fmt.Sprintf("%v", predict),
+		"question":                     formatValue(case_.Inputs),
+		"expected_answer":              formatValue(case_.Label),
+		"model_answer":                 formatValue(predict),
 		"nonstandard_evaluated_result": response,
 	})
 	if err != nil {
@@ -388,4 +389,33 @@ func validateBatchArgs(casesLen, predictsLen, numParallel int) (int, error) {
 		numParallel = casesLen
 	}
 	return numParallel, nil
+}
+
+// formatValue 将任意值序列化为字符串，用于 LLM 模板填充。
+// nil 或零值 → 空字符串，非空 → JSON 序列化。
+// 对齐 Python 的 str(value or "") 语义。
+func formatValue(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return ""
+		}
+		return val
+	case map[string]any:
+		if len(val) == 0 {
+			return ""
+		}
+	case []any:
+		if len(val) == 0 {
+			return ""
+		}
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(data)
 }
