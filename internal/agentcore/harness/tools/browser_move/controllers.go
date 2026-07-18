@@ -420,7 +420,7 @@ func normalizeActionName(name string) string {
 // registerPingAction 注册 ping 动作。
 // 对齐 Python: register_builtin_actions 中 ping (L694-701)
 func (c *ActionController) registerPingAction() {
-	c.RegisterAction("ping", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
+	_ = c.RegisterAction("ping", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		return ActionResult{
 			"ok":         true,
 			"pong":       true,
@@ -439,7 +439,7 @@ func (c *ActionController) registerPingAction() {
 // registerEchoAction 注册 echo 动作。
 // 对齐 Python: register_builtin_actions 中 echo (L703-715)
 func (c *ActionController) registerEchoAction() {
-	c.RegisterAction("echo", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
+	_ = c.RegisterAction("echo", func(_ context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		text := ""
 		if t, ok := kwargs["text"]; ok {
 			text = fmt.Sprintf("%v", t)
@@ -497,7 +497,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 		return runner(ctx, taskText, sessionID, requestID, timeoutS)
 	}
 
-	c.RegisterAction("browser_task", handler, true)
+	_ = c.RegisterAction("browser_task", handler, true)
 	// 对齐 Python: 提示词逐字符复制
 	c.RegisterActionSpec("browser_task", ActionSpec{
 		Summary:   "Runs a free-form browser task through runtime.run_browser_task.",
@@ -508,7 +508,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 		},
 	})
 
-	c.RegisterAction("run_browser_task", handler, true)
+	_ = c.RegisterAction("run_browser_task", handler, true)
 	// 对齐 Python: 提示词逐字符复制
 	c.RegisterActionSpec("run_browser_task", ActionSpec{
 		Summary:   "Alias of browser_task.",
@@ -523,7 +523,7 @@ func (c *ActionController) registerBrowserTaskAction() {
 // registerBrowserGetElementCoordinatesAction 注册坐标解析动作。
 // 对齐 Python: register_builtin_actions 中 browser_get_element_coordinates (L758-869)
 func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
-	c.RegisterAction("browser_get_element_coordinates", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
+	_ = c.RegisterAction("browser_get_element_coordinates", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		payload := buildDragPayload(kwargs)
 		if !hasSourceSelector(payload) && !hasCoordinateInputs(payload) {
 			return ActionResult{
@@ -636,7 +636,7 @@ func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 // registerBrowserDragAndDropAction 注册拖拽动作。
 // 对齐 Python: register_builtin_actions 中 browser_drag_and_drop (L907-1029)
 func (c *ActionController) registerBrowserDragAndDropAction() {
-	c.RegisterAction("browser_drag_and_drop", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
+	_ = c.RegisterAction("browser_drag_and_drop", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		payload := buildDragPayload(kwargs)
 		if !hasSelectorInputs(payload) && !hasCoordinateInputs(payload) {
 			return ActionResult{
@@ -758,7 +758,7 @@ func (c *ActionController) registerBrowserDragAndDropAction() {
 // registerBrowserSetInputFilesAction 注册文件上传动作。
 // 对齐 Python: register_builtin_actions 中 browser_set_input_files (L1031-1109)
 func (c *ActionController) registerBrowserSetInputFilesAction() {
-	c.RegisterAction("browser_set_input_files", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
+	_ = c.RegisterAction("browser_set_input_files", func(ctx context.Context, sessionID string, requestID string, kwargs map[string]any) ActionResult {
 		effectiveSelector := `input[type="file"]`
 		if s, ok := kwargs["selector"]; ok {
 			sStr := strings.TrimSpace(fmt.Sprintf("%v", s))
@@ -918,7 +918,7 @@ func (c *ActionController) registerBrowserSetInputFilesAction() {
 // registerListUploadFilesAction 注册列出上传文件动作。
 // 对齐 Python: register_builtin_actions 中 list_upload_files (L871-905)
 func (c *ActionController) registerListUploadFilesAction() {
-	c.RegisterAction("list_upload_files", func(_ context.Context, sessionID string, requestID string, _ map[string]any) ActionResult {
+	_ = c.RegisterAction("list_upload_files", func(_ context.Context, sessionID string, requestID string, _ map[string]any) ActionResult {
 		uploadRoot := resolveUploadRoot()
 		if uploadRoot == "" {
 			return ActionResult{

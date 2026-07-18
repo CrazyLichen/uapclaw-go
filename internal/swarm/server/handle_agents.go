@@ -429,7 +429,7 @@ func (s *AgentServer) handleAgentsToolsList(_ context.Context, request *schema.A
 	// 将结构体转为 map[string]any 用于 Payload
 	data, _ := json.Marshal(result)
 	var payload map[string]any
-	json.Unmarshal(data, &payload)
+	_ = json.Unmarshal(data, &payload)
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(payload),
@@ -512,6 +512,6 @@ func (s *AgentServer) resolveModel() *llm.Model {
 func agentDefinitionToMap(a *types.AgentDefinition) map[string]any {
 	data, _ := json.Marshal(a)
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	_ = json.Unmarshal(data, &m)
 	return m
 }
