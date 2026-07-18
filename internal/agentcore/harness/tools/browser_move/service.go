@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 )
@@ -35,8 +36,8 @@ type BrowserService struct {
 	started bool
 	// managedDriver 托管浏览器驱动，⤵️ 9.38-49 回填
 	managedDriver any
-	// browserAgent Worker Agent 实例，Layer 3 回填
-	browserAgent any
+	// browserAgent Worker Agent 实例
+	browserAgent *agents.ReActAgent
 
 	// mu 读写锁，保护内部状态
 	mu sync.RWMutex

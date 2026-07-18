@@ -1,10 +1,14 @@
 package browser_move
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -22,27 +26,20 @@ type BrowserWorkerConfig struct {
 	// ModelName 模型名称
 	ModelName string
 	// MCPCfg MCP 服务器配置
-	MCPCfg any // ⤵️ 9.38-49 McpServerConfig
+	MCPCfg *mcptypes.McpServerConfig
 	// MaxSteps 最大步数
 	MaxSteps int
 	// ScreenshotSubdir 截图子目录
 	ScreenshotSubdir string
 	// ArtifactsSubdir 产物子目录
 	ArtifactsSubdir string
-	// ToolResultObserver 工具结果观察者
-	ToolResultObserver any // ⤵️ 9.38-49 ToolResultObserver 回调
+	// ToolResultObserver 工具结果观察者回调
+	ToolResultObserver ToolResultObserverFunc
 }
 
-// BrowserWorkerAgent 浏览器 Worker Agent（占位结构，⤵️ 9.38-49 完整实现 ReActAgent）。
-//
-// 对齐 Python: ReActAgent (agents.py L352)
-// 当前仅作为类型占位，后续章节回填完整 ReActAgent 配置
-type BrowserWorkerAgent struct {
-	// Config 配置
-	Config *BrowserWorkerConfig
-	// SystemPrompt 系统提示词
-	SystemPrompt string
-}
+// ToolResultObserverFunc 工具结果观察者回调函数类型。
+// 对齐 Python: ToolResultObserver callback
+type ToolResultObserverFunc func(ctx context.Context, toolName string, result any) error
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -126,24 +123,26 @@ func BuildBrowserWorkerSystemPrompt(screenshotSubdir string, artifactsSubdir str
 //
 // 对齐 Python: build_browser_worker_agent (agents.py L301-355)
 // 当前为占位实现，⤵️ 9.38-49 完整实现 ReActAgent 配置
-func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*BrowserWorkerAgent, error) {
+func BuildBrowserWorkerAgent(config *BrowserWorkerConfig) (*agents.ReActAgent, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is required")
 	}
 
-	systemPrompt := BuildBrowserWorkerSystemPrompt(
+	_ = BuildBrowserWorkerSystemPrompt(
 		config.ScreenshotSubdir,
 		config.ArtifactsSubdir,
 	)
 
 	// ⤵️ 9.38-49 完整实现 ReActAgent 配置
-	// 当前仅创建占位结构
-	agent := &BrowserWorkerAgent{
-		Config:       config,
-		SystemPrompt: systemPrompt,
-	}
-
-	return agent, nil
+	// 当前仅返回 nil，待后续章节回填完整的 ReActAgent 构建逻辑
+	// 对齐 Python:
+	//   agent = ReActAgent(
+	//       model_client=model_client,
+	//       system_prompt=system_prompt,
+	//       max_steps=max_steps,
+	//       ...
+	//   )
+	return nil, fmt.Errorf("BuildBrowserWorkerAgent: ReActAgent 完整配置待 9.38-49 回填")
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

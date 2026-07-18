@@ -15,13 +15,21 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// BrowserRuntime 浏览器运行时接口，提供 RunBrowserTask 方法。
+//
+// 对齐 Python: ActionController.bind_runtime 中隐含的运行时协议
+type BrowserRuntime interface {
+	// RunBrowserTask 执行浏览器任务
+	RunBrowserTask(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) (map[string]any, error)
+}
+
 // BaseController 基础控制器接口，定义动作调度器的抽象契约。
 //
 // 对齐 Python: BaseController (controllers/base.py L11-69)
 type BaseController interface {
 	// BindRuntime 绑定运行时对象，供运行时支持的动作使用。
 	// 对齐 Python: BaseController.bind_runtime
-	BindRuntime(runtime any) error
+	BindRuntime(runtime BrowserRuntime) error
 
 	// BindRuntimeRunner 绑定运行时运行器。
 	// 对齐 Python: BaseController.bind_runtime_runner
@@ -132,16 +140,19 @@ func (c *ActionController) CodeExecutor() CodeExecutorFunc {
 // BindRuntime 绑定运行时对象。
 //
 // 对齐 Python: ActionController.bind_runtime
-func (c *ActionController) BindRuntime(runtime any) error {
-	runBrowserTask, ok := runtime.(interface {
-		RunBrowserTask(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult
-	})
-	if !ok {
-		return fmt.Errorf("runtime must expose a RunBrowserTask(...) method")
-	}
-
+func (c *ActionController) BindRuntime(runtime BrowserRuntime) error {
 	runner := func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult {
-		return runBrowserTask.RunBrowserTask(ctx, task, sessionID, requestID, timeoutS)
+		result, err := runtime.RunBrowserTask(ctx, task, sessionID, requestID, timeoutS)
+		if err != nil {
+			return ActionResult{
+				"ok":    false,
+				"error": err.Error(),
+			}
+		}
+		if result == nil {
+			return ActionResult{"ok": false, "error": "empty result"}
+		}
+		return result
 	}
 	c.BindRuntimeRunner(runner)
 	return nil

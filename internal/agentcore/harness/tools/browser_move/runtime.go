@@ -24,16 +24,16 @@ type BrowserAgentRuntime struct {
 	service *BrowserService
 	// codeExecutor JavaScript 代码执行器
 	codeExecutor CodeExecutorFunc
-	// controller 动作控制器，⤵️ 9.38-49 回填
-	controller any
-	// browserCustomActionTool 自定义动作工具，Layer 3 回填
-	browserCustomActionTool any
-	// browserListActionsTool 列表动作工具，Layer 3 回填
-	browserListActionsTool any
-	// browserProbeInteractivesTool 交互探测工具，Layer 3 回填
-	browserProbeInteractivesTool any
-	// browserProbeCardsTool 卡片探测工具，Layer 3 回填
-	browserProbeCardsTool any
+	// controller 动作控制器
+	controller *ActionController
+	// browserCustomActionTool 自定义动作工具
+	browserCustomActionTool *BrowserCustomActionTool
+	// browserListActionsTool 列表动作工具
+	browserListActionsTool *BrowserListActionsTool
+	// browserProbeInteractivesTool 交互探测工具
+	browserProbeInteractivesTool *BrowserProbeInteractivesTool
+	// browserProbeCardsTool 卡片探测工具
+	browserProbeCardsTool *BrowserProbeCardsTool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -83,27 +83,27 @@ func (r *BrowserAgentRuntime) CodeExecutor() CodeExecutorFunc {
 }
 
 // Controller 返回动作控制器。
-func (r *BrowserAgentRuntime) Controller() any {
+func (r *BrowserAgentRuntime) Controller() *ActionController {
 	return r.controller
 }
 
 // BrowserCustomActionTool 返回自定义动作工具。
-func (r *BrowserAgentRuntime) BrowserCustomActionTool() any {
+func (r *BrowserAgentRuntime) BrowserCustomActionTool() *BrowserCustomActionTool {
 	return r.browserCustomActionTool
 }
 
 // BrowserListActionsTool 返回列表动作工具。
-func (r *BrowserAgentRuntime) BrowserListActionsTool() any {
+func (r *BrowserAgentRuntime) BrowserListActionsTool() *BrowserListActionsTool {
 	return r.browserListActionsTool
 }
 
 // BrowserProbeInteractivesTool 返回交互探测工具。
-func (r *BrowserAgentRuntime) BrowserProbeInteractivesTool() any {
+func (r *BrowserAgentRuntime) BrowserProbeInteractivesTool() *BrowserProbeInteractivesTool {
 	return r.browserProbeInteractivesTool
 }
 
 // BrowserProbeCardsTool 返回卡片探测工具。
-func (r *BrowserAgentRuntime) BrowserProbeCardsTool() any {
+func (r *BrowserAgentRuntime) BrowserProbeCardsTool() *BrowserProbeCardsTool {
 	return r.browserProbeCardsTool
 }
 
@@ -194,7 +194,6 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO: ⤵️ 9.38-49 回填
 	// 对齐 Python:
 	//   from .runtime_tools import (
 	//       BrowserCustomActionTool, BrowserListActionsTool,
@@ -204,6 +203,13 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	//   self._browser_list_actions_tool = BrowserListActionsTool(self, language="en")
 	//   self._browser_probe_interactives_tool = BrowserProbeInteractivesTool(self, language="en")
 	//   self._browser_probe_cards_tool = BrowserProbeCardsTool(self, language="en")
+	r.browserCustomActionTool = NewBrowserCustomActionTool(r)
+	r.browserListActionsTool = NewBrowserListActionsTool(r)
+	r.browserProbeInteractivesTool = NewBrowserProbeInteractivesTool(r)
+	r.browserProbeCardsTool = NewBrowserProbeCardsTool(r)
+
+	// TODO: ⤵️ 9.38-49 回填 _register_runtime_tool + ability_manager.add
+	// 对齐 Python:
 	//   self._register_runtime_tool(self._browser_custom_action_tool, tool_name="browser_custom_action")
 	//   self._register_runtime_tool(self._browser_list_actions_tool, tool_name="browser_list_custom_actions")
 	//   self._register_runtime_tool(self._browser_probe_interactives_tool, tool_name="browser_probe_interactives")
@@ -216,7 +222,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 
 	logger.Debug(logComponentBR).
 		Str("event_type", "browser_runtime_started").
-		Msg("浏览器运行时已启动（runtime tools 待回填）")
+		Msg("浏览器运行时已启动（runtime tools 已注册，register_runtime_tool 待回填）")
 
 	return nil
 }
@@ -244,7 +250,6 @@ func (r *BrowserAgentRuntime) RunCustomAction(
 	action, sessionID, requestID string,
 	params map[string]any,
 ) map[string]any {
-	// TODO: ⤵️ 9.38-49 回填
 	// 对齐 Python:
 	//   await self.ensure_runtime_ready()
 	//   self._controller.bind_runtime(self)
@@ -258,10 +263,14 @@ func (r *BrowserAgentRuntime) RunCustomAction(
 			"error": "controller_not_initialized",
 		}
 	}
-	return map[string]any{
-		"ok":    false,
-		"error": fmt.Sprintf("controller not yet implemented, action=%s", action),
+
+	// 绑定运行时和代码执行器
+	_ = r.controller.BindRuntime(r)
+	if r.codeExecutor != nil {
+		r.controller.BindCodeExecutor(r.codeExecutor)
 	}
+
+	return r.controller.RunAction(context.Background(), action, sessionID, requestID, params)
 }
 
 // ProbeInteractives 返回当前页面上可见/高价值交互元素的紧凑信息。
@@ -408,9 +417,13 @@ func (r *BrowserAgentRuntime) ProbeCards(
 //
 // 对齐 Python: BrowserAgentRuntime.list_actions
 func (r *BrowserAgentRuntime) ListActions() map[string]any {
-	// TODO: ⤵️ 9.38-49 回填 controller.list_actions / controller.describe_actions
-	// 对齐 Python:
-	//   return {"ok": True, "actions": self._controller.list_actions(), "details": self._controller.describe_actions()}
+	if r.controller != nil {
+		return map[string]any{
+			"ok":      true,
+			"actions": r.controller.ListActions(),
+			"details": r.controller.DescribeActions(),
+		}
+	}
 	return map[string]any{
 		"ok":      true,
 		"actions": []string{},
