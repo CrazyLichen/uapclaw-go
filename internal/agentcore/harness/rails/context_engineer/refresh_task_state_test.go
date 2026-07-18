@@ -61,7 +61,7 @@ func TestRefreshTaskStateRuntime_从运行时属性读取(t *testing.T) {
 		PendingFollowUps:   []string{"follow-up-1", "follow-up-2"},
 		PlanMode:           hschema.PlanModeState{Mode: "normal"},
 	}
-	sess.states[sessstate.StringKey(sessionRuntimeAttr)] = runtimeState
+	sess.states[sessstate.StringKey(hschema.SessionRuntimeAttr)] = runtimeState
 
 	ctx := &sainterfaces.AgentCallbackContext{}
 	// 通过反射设置 session 字段（私有字段）
@@ -90,7 +90,7 @@ func TestRefreshTaskStateRuntime_从持久化状态读取(t *testing.T) {
 		"pending_follow_ups": []string{"follow-up"},
 		"plan_mode":          map[string]any{"mode": "plan"},
 	}
-	sess.states[sessstate.StringKey(sessionStateKey)] = persistedState
+	sess.states[sessstate.StringKey(hschema.SessionStateKey)] = persistedState
 
 	ctx := &sainterfaces.AgentCallbackContext{}
 	setCallbackSession(ctx, sess)
@@ -122,7 +122,7 @@ func TestRefreshTaskStateRuntime_stopConditionState优先(t *testing.T) {
 		Iteration:          10,                             // 顶层 iteration
 		StopConditionState: map[string]any{"iteration": 7}, // stop_condition_state 中的 iteration 优先
 	}
-	sess.states[sessstate.StringKey(sessionRuntimeAttr)] = runtimeState
+	sess.states[sessstate.StringKey(hschema.SessionRuntimeAttr)] = runtimeState
 
 	ctx := &sainterfaces.AgentCallbackContext{}
 	setCallbackSession(ctx, sess)

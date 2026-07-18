@@ -125,14 +125,6 @@ const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 
-	// sessionRuntimeAttr 会话运行时属性键
-	// 对齐 Python: _SESSION_RUNTIME_ATTR = "_deep_agent_runtime_state"
-	sessionRuntimeAttr = "_deep_agent_runtime_state"
-
-	// sessionStateKey 会话状态持久化键
-	// 对齐 Python: _SESSION_STATE_KEY = "deep_agent_state"
-	sessionStateKey = "deep_agent_state"
-
 	// defaultAutoInvokeDelay 自动 invoke 延迟秒数
 	// 对齐 Python: schedule_auto_invoke_on_spawn_done delay=0.5
 	defaultAutoInvokeDelay = 0.5
@@ -517,7 +509,7 @@ func (d *DeepAgent) LoadState(sess sessioninterfaces.SessionFacade) *hschema.Dee
 		return state
 	}
 	// 从持久化状态加载
-	data, err := sess.GetState(sessstate.StringKey(sessionStateKey))
+	data, err := sess.GetState(sessstate.StringKey(hschema.SessionStateKey))
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Msg("LoadState: GetState 失败，使用默认状态")
 	}
@@ -2502,7 +2494,7 @@ func (d *DeepAgent) cancelStreamProcess() {
 // 对齐 Python: DeepAgent._read_runtime_state(session) (line 1758)
 func (d *DeepAgent) readRuntimeState(sess sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	// 通过 GetState 读取运行时属性
-	data, err := sess.GetState(sessstate.StringKey(sessionRuntimeAttr))
+	data, err := sess.GetState(sessstate.StringKey(hschema.SessionRuntimeAttr))
 	if err != nil || data == nil {
 		return nil
 	}
@@ -2516,13 +2508,13 @@ func (d *DeepAgent) readRuntimeState(sess sessioninterfaces.SessionFacade) *hsch
 // writeRuntimeState 将运行时状态写入会话缓存。
 // 对齐 Python: DeepAgent._write_runtime_state(session, state) (line 1776)
 func (d *DeepAgent) writeRuntimeState(sess sessioninterfaces.SessionFacade, state *hschema.DeepAgentState) {
-	sess.UpdateState(map[string]any{sessionRuntimeAttr: state})
+	sess.UpdateState(map[string]any{hschema.SessionRuntimeAttr: state})
 }
 
 // clearRuntimeState 从会话清除运行时状态缓存。
 // 对齐 Python: DeepAgent._clear_runtime_state(session) (line 1784)
 func (d *DeepAgent) clearRuntimeState(sess sessioninterfaces.SessionFacade) {
-	sess.UpdateState(map[string]any{sessionRuntimeAttr: nil})
+	sess.UpdateState(map[string]any{hschema.SessionRuntimeAttr: nil})
 }
 
 // saveState 持久化 DeepAgent 状态到会话。
@@ -2536,7 +2528,7 @@ func (d *DeepAgent) saveState(sess sessioninterfaces.SessionFacade, state *hsche
 		return
 	}
 	d.writeRuntimeState(sess, target)
-	sess.UpdateState(map[string]any{sessionStateKey: target.ToSessionDict()})
+	sess.UpdateState(map[string]any{hschema.SessionStateKey: target.ToSessionDict()})
 }
 
 // clearState 清除 DeepAgent 运行时缓存。
@@ -2544,7 +2536,7 @@ func (d *DeepAgent) saveState(sess sessioninterfaces.SessionFacade, state *hsche
 func (d *DeepAgent) clearState(sess sessioninterfaces.SessionFacade, clearPersisted bool) {
 	d.clearRuntimeState(sess)
 	if clearPersisted {
-		sess.UpdateState(map[string]any{sessionStateKey: nil})
+		sess.UpdateState(map[string]any{hschema.SessionStateKey: nil})
 	}
 }
 
