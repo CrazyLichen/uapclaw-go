@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,19 +84,19 @@ func TestParseLLMGenerationResponse_WhitespaceTrimmed(t *testing.T) {
 
 // TestGenerateAgentWithLLM_NilModel 测试 nil model 返回 nil
 func TestGenerateAgentWithLLM_NilModel(t *testing.T) {
-	result := GenerateAgentWithLLM(nil, nil, "test", "desc")
+	result := GenerateAgentWithLLM(context.TODO(), nil, "test", "desc")
 	assert.Nil(t, result)
 }
 
 // TestGenerateAgentWithLLM_EmptyName 测试空名称返回 nil
 func TestGenerateAgentWithLLM_EmptyName(t *testing.T) {
-	result := GenerateAgentWithLLM(nil, nil, "", "desc")
+	result := GenerateAgentWithLLM(context.TODO(), nil, "", "desc")
 	assert.Nil(t, result)
 }
 
 // TestGenerateAgentWithLLM_EmptyDescription 测试空描述返回 nil
 func TestGenerateAgentWithLLM_EmptyDescription(t *testing.T) {
-	result := GenerateAgentWithLLM(nil, nil, "test", "")
+	result := GenerateAgentWithLLM(context.TODO(), nil, "test", "")
 	assert.Nil(t, result)
 }
 

@@ -313,7 +313,7 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 		return nil, fmt.Errorf("不能修改内置 agent: %s", name)
 	}
 	if agent.FilePath == "" {
-		return nil, fmt.Errorf("Agent 无文件路径: %s", name)
+		return nil, fmt.Errorf("agent 无文件路径: %s", name)
 	}
 
 	// 步骤 2: 应用更新参数
@@ -648,7 +648,7 @@ func formatAgentFile(def *types.AgentDefinition) string {
 		frontmatter["model"] = def.Model
 	}
 	// 对齐 Python: if agent.tools and agent.tools != ["*"]: frontmatter["tools"] = agent.tools
-	if len(def.Tools) > 0 && !(len(def.Tools) == 1 && def.Tools[0] == "*") {
+	if len(def.Tools) > 0 && (len(def.Tools) != 1 || def.Tools[0] != "*") {
 		frontmatter["tools"] = def.Tools
 	}
 	if def.Color != "" {
