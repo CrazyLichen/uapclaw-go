@@ -2454,7 +2454,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		EnableAsyncSubagent:    false,
 		AddGeneralPurposeAgent: false,
 		EnablePlanMode:         subCfg.EnablePlanMode,
-		RestrictToWorkDir:      subCfg.RestrictToWorkDir,
+		RestrictToWorkDir:      &subCfg.RestrictToWorkDir,
 	}
 }
 

@@ -88,9 +88,12 @@ func BuildResearchAgentConfig(model *llm.Model, params *hschema.SubagentCreatePa
 	cfg.FactoryName = ResearchAgentFactoryName
 	cfg.FactoryKwargs = nil
 	cfg.EnablePlanMode = params.EnablePlanMode
-	// RestrictToWorkDir：保持 NewSubAgentConfig() 的默认值 true
+	// RestrictToWorkDir：params 为 *bool 指针，nil 表示未设置（保持 NewSubAgentConfig 默认 true），
+	// 非 nil 则使用用户显式指定的值
 	// 对齐 Python: build_research_agent_config 不传 restrict_to_work_dir，使用 SubAgentConfig 默认值
-	// 注意：不使用 params.RestrictToWorkDir 覆盖，因为 bool 零值 false 无法区分"未设置"和"显式设为 false"
+	if params.RestrictToWorkDir != nil {
+		cfg.RestrictToWorkDir = *params.RestrictToWorkDir
+	}
 
 	return cfg
 }

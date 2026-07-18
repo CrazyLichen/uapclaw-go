@@ -158,8 +158,10 @@ type SubagentCreateParams struct {
 	AddGeneralPurposeAgent bool
 	// EnablePlanMode 是否启用规划模式
 	EnablePlanMode bool
-	// RestrictToWorkDir 是否限制在工作目录
-	RestrictToWorkDir bool
+	// RestrictToWorkDir 是否限制在工作目录。
+	// 使用 *bool 指针以区分"未设置"(nil)和"显式设为 false"。
+	// 对齐 Python: restrict_to_work_dir 默认 True，但只有显式传参时才覆盖。
+	RestrictToWorkDir *bool
 }
 
 // DeepAgentConfig DeepAgent 运行时配置中枢

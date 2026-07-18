@@ -74,9 +74,19 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		Language:            language,
 		PromptMode:          params.PromptMode,
 		EnableTaskPlanning:  params.EnablePlanMode,
-	// RestrictToWorkDir：对齐 Python 的默认行为，ResearchAgent 默认限制在工作目录
-	// Python create_research_agent 不传 restrict_to_work_dir，SubAgentConfig 默认 True
-	// Go 的 bool 零值无法区分"未设置"和"显式设为 false"，这里默认 true
-	RestrictToWorkDir:   true,
+		// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为），
+		// 非 nil 时使用用户显式指定的值
+		RestrictToWorkDir:   restrictToWorkDirValue(params.RestrictToWorkDir, true),
 	})
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// restrictToWorkDirValue 从 *bool 指针解析出有效的 RestrictToWorkDir 值。
+// p 为 nil 时返回 defaultVal，非 nil 时返回 *p。
+func restrictToWorkDirValue(p *bool, defaultVal bool) bool {
+	if p == nil {
+		return defaultVal
+	}
+	return *p
 }

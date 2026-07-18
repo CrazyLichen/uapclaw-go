@@ -221,6 +221,15 @@ func ResetFreeSearchRuntimeFlags() {
 // 对齐 Python: _normalize_tools(tools: List[Tool | ToolCard])
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// boolFromPtr 从 *bool 指针解析出 bool 值。
+// p 为 nil 时返回 defaultVal，非 nil 时返回 *p。
+func boolFromPtr(p *bool, defaultVal bool) bool {
+	if p == nil {
+		return defaultVal
+	}
+	return *p
+}
+
 func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
 	// 纯 ToolCard 直接加入 normalizedCards
 	for _, tc := range toolCards {
@@ -638,7 +647,7 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		Language:               kwargs.Language,
 		PromptMode:             kwargs.PromptMode,
 		EnableTaskPlanning:     kwargs.EnablePlanMode,
-		RestrictToWorkDir:      kwargs.RestrictToWorkDir,
+		RestrictToWorkDir:      boolFromPtr(kwargs.RestrictToWorkDir, true),
 		EnableAsyncSubagent:    kwargs.EnableAsyncSubagent,
 		AddGeneralPurposeAgent: kwargs.AddGeneralPurposeAgent,
 	}

@@ -100,3 +100,36 @@ func TestDefaultResearchAgentDescription(t *testing.T) {
 	// 未知语言回退到 cn
 	assert.Contains(t, DefaultResearchAgentDescription("fr"), "研究调查")
 }
+
+// TestBuildResearchAgentConfig_RestrictToWorkDir_nil保持默认 测试 RestrictToWorkDir 为 nil 时保持默认 true
+func TestBuildResearchAgentConfig_RestrictToWorkDir_nil保持默认(t *testing.T) {
+	model := &llm.Model{}
+	params := &hschema.SubagentCreateParams{} // RestrictToWorkDir 为 nil
+
+	cfg := BuildResearchAgentConfig(model, params)
+
+	// nil 表示未设置，保持 NewSubAgentConfig 默认 true
+	assert.True(t, cfg.RestrictToWorkDir, "RestrictToWorkDir 为 nil 时应保持默认 true")
+}
+
+// TestBuildResearchAgentConfig_RestrictToWorkDir_显式true 测试显式设置为 true
+func TestBuildResearchAgentConfig_RestrictToWorkDir_显式true(t *testing.T) {
+	model := &llm.Model{}
+	restrictTrue := true
+	params := &hschema.SubagentCreateParams{RestrictToWorkDir: &restrictTrue}
+
+	cfg := BuildResearchAgentConfig(model, params)
+
+	assert.True(t, cfg.RestrictToWorkDir, "显式设置 true 时应为 true")
+}
+
+// TestBuildResearchAgentConfig_RestrictToWorkDir_显式false 测试显式设置为 false
+func TestBuildResearchAgentConfig_RestrictToWorkDir_显式false(t *testing.T) {
+	model := &llm.Model{}
+	restrictFalse := false
+	params := &hschema.SubagentCreateParams{RestrictToWorkDir: &restrictFalse}
+
+	cfg := BuildResearchAgentConfig(model, params)
+
+	assert.False(t, cfg.RestrictToWorkDir, "显式设置 false 时应为 false")
+}
