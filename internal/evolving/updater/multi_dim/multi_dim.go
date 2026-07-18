@@ -2,8 +2,10 @@ package multi_dim
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
@@ -39,6 +41,9 @@ type MultiDimUpdaterOption func(*MultiDimUpdater)
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent MultiDimUpdater 包日志组件常量
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -96,7 +101,7 @@ func (u *MultiDimUpdater) Bind(operators map[string]operator.Operator, targets [
 //
 // 对应 Python: MultiDimUpdater.requires_forward_data()
 func (u *MultiDimUpdater) RequiresForwardData() bool {
-	for _, opt := range u.domainOptimizers {
+	for domain, opt := range u.domainOptimizers {
 		type requirer interface {
 			RequiresForwardData() bool
 		}
@@ -104,6 +109,13 @@ func (u *MultiDimUpdater) RequiresForwardData() bool {
 			if r.RequiresForwardData() {
 				return true
 			}
+		} else {
+			logger.Warn(logComponent).
+				Str("method", "RequiresForwardData").
+				Str("assertion", "requirer").
+				Str("domain", domain).
+				Str("actual_type", fmt.Sprintf("%T", opt)).
+				Msg("域优化器类型断言失败，跳过；9.72e 回填后消除⤵️")
 		}
 	}
 	return false

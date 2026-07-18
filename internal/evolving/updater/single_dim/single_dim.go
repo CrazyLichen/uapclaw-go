@@ -2,8 +2,10 @@ package single_dim
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
@@ -30,6 +32,9 @@ type SingleDimUpdater struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent SingleDimUpdater 包日志组件常量
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -66,6 +71,11 @@ func (u *SingleDimUpdater) Bind(operators map[string]operator.Operator, targets 
 	if b, ok := u.opt.(binder); ok {
 		return b.Bind(operators, effectiveTargets, config)
 	}
+	logger.Warn(logComponent).
+		Str("method", "Bind").
+		Str("assertion", "binder").
+		Str("actual_type", fmt.Sprintf("%T", u.opt)).
+		Msg("优化器类型断言失败，返回默认值 0；9.72e 回填后消除⤵️")
 	return 0
 }
 
@@ -79,6 +89,11 @@ func (u *SingleDimUpdater) RequiresForwardData() bool {
 	if r, ok := u.opt.(requirer); ok {
 		return r.RequiresForwardData()
 	}
+	logger.Warn(logComponent).
+		Str("method", "RequiresForwardData").
+		Str("assertion", "requirer").
+		Str("actual_type", fmt.Sprintf("%T", u.opt)).
+		Msg("优化器类型断言失败，返回默认值 true；9.72e 回填后消除⤵️")
 	return true
 }
 
@@ -95,6 +110,13 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []any, sign
 		for _, traj := range trajectories {
 			a.AddTrajectory(traj)
 		}
+	} else {
+		logger.Warn(logComponent).
+			Str("method", "Process").
+			Str("assertion", "trajectoryAdder").
+			Str("actual_type", fmt.Sprintf("%T", u.opt)).
+			Int("trajectory_count", len(trajectories)).
+			Msg("优化器类型断言失败，跳过轨迹写入；9.72e 回填后消除⤵️")
 	}
 
 	// 执行 backward
@@ -106,6 +128,13 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []any, sign
 		if err := b.Backward(ctx, signals); err != nil {
 			return nil, err
 		}
+	} else {
+		logger.Warn(logComponent).
+			Str("method", "Process").
+			Str("assertion", "backwarder").
+			Str("actual_type", fmt.Sprintf("%T", u.opt)).
+			Int("signal_count", len(signals)).
+			Msg("优化器类型断言失败，跳过 backward；9.72e 回填后消除⤵️")
 	}
 
 	// 执行 step
@@ -116,7 +145,11 @@ func (u *SingleDimUpdater) Process(ctx context.Context, trajectories []any, sign
 	if s, ok := u.opt.(stepper); ok {
 		return s.Step(), nil
 	}
-
+	logger.Warn(logComponent).
+		Str("method", "Process").
+		Str("assertion", "stepper").
+		Str("actual_type", fmt.Sprintf("%T", u.opt)).
+		Msg("优化器类型断言失败，返回空更新映射；9.72e 回填后消除⤵️")
 	return map[schema.UpdateKey]any{}, nil
 }
 
