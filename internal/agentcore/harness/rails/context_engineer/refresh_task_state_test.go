@@ -1,51 +1,14 @@
 package context_engineer
 
 import (
-	"context"
 	"testing"
 
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	sessstate "github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
-// ──────────────────────────── Mock ────────────────────────────
-
-// mockSessionFacade RefreshTaskStateRuntime 测试用 mock
-type mockSessionFacade struct {
-	states  map[sessstate.StateKey]interface{}
-	updated map[string]any
-}
-
-func newMockSessionFacade() *mockSessionFacade {
-	return &mockSessionFacade{
-		states:  make(map[sessstate.StateKey]interface{}),
-		updated: make(map[string]any),
-	}
-}
-
-func (m *mockSessionFacade) GetSessionID() string { return "test-session" }
-func (m *mockSessionFacade) GetState(key sessstate.StateKey) (interface{}, error) {
-	return m.states[key], nil
-}
-func (m *mockSessionFacade) UpdateState(data map[string]any) {
-	for k, v := range data {
-		m.updated[k] = v
-	}
-}
-func (m *mockSessionFacade) DumpState() map[string]any                               { return m.updated }
-func (m *mockSessionFacade) WriteStream(ctx context.Context, data interface{}) error { return nil }
-func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data interface{}) error {
-	return nil
-}
-func (m *mockSessionFacade) GetEnv(key string, defaultValue ...interface{}) interface{} { return nil }
-func (m *mockSessionFacade) Interact(ctx context.Context, value interface{}) error      { return nil }
-
-// 确保 mock 实现了 SessionFacade 接口
-var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)
-
-// ──────────────────────────── 测试 ────────────────────────────
+// ──────────────────────────── RefreshTaskStateRuntime 测试 ────────────────────────────
 
 func TestRefreshTaskStateRuntime_nilSession(t *testing.T) {
 	ctx := &sainterfaces.AgentCallbackContext{}
@@ -133,14 +96,4 @@ func TestRefreshTaskStateRuntime_stopConditionState优先(t *testing.T) {
 	if sess.updated["iteration"] != 7 {
 		t.Errorf("iteration = %v, want 7 (from stop_condition_state)", sess.updated["iteration"])
 	}
-}
-
-// ──────────────────────────── 辅助 ────────────────────────────
-
-// setCallbackSession 使用反射设置 AgentCallbackContext 的私有 session 字段
-func setCallbackSession(ctx *sainterfaces.AgentCallbackContext, sess sessioninterfaces.SessionFacade) {
-	// AgentCallbackContext 有 SetSession 吗？检查一下
-	// 没有公开的 SetSession 方法，需要使用构造函数
-	// 使用 NewAgentCallbackContext 重建
-	*ctx = *sainterfaces.NewAgentCallbackContext(nil, nil, sess)
 }

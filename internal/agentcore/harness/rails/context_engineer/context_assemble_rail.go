@@ -3,6 +3,7 @@ package context_engineer
 import (
 	"context"
 
+	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
@@ -15,7 +16,7 @@ import (
 
 // ContextAssembleRail 上下文组装护栏，注入工作空间目录结构和上下文文件到系统提示词。
 //
-// 在 Init 中捕获 system_prompt_builder 和 ability_manager 引用。
+// 在 Init 中捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
 // 在 BeforeModelCall 中构建并注入 workspace/context/tools 节到系统提示词构建器。
 //
 // 对齐 Python: ContextAssembleRail (openjiuwen/harness/rails/context_engineer/context_assemble_rail.py)
@@ -50,12 +51,24 @@ func NewContextAssembleRail() *ContextAssembleRail {
 	return r
 }
 
-// Init Rail 初始化钩子：捕获 system_prompt_builder 和 ability_manager 引用。
+// Init Rail 初始化钩子：捕获 system_prompt_builder、ability_manager、SysOperation 和 Workspace 引用。
 //
 // 对齐 Python: ContextAssembleRail.init(agent)
 func (r *ContextAssembleRail) Init(agent sainterfaces.BaseAgent) error {
 	r.systemPromptBuilder = agent.SystemPromptBuilder()
 	r.abilityManager = agent.AbilityManager()
+
+	// 对齐 Python: DeepAgentRail.set_sys_operation / set_workspace
+	// 同 HeartbeatRail 模式：类型断言到 DeepAgentInterface
+	deepAgent, ok := agent.(hinterfaces.DeepAgentInterface)
+	if ok && deepAgent.DeepConfig() != nil {
+		if r.SysOperation() == nil && deepAgent.DeepConfig().SysOperation != nil {
+			r.SetSysOperation(deepAgent.DeepConfig().SysOperation)
+		}
+		if r.Workspace() == nil && deepAgent.DeepConfig().Workspace != nil {
+			r.SetWorkspace(deepAgent.DeepConfig().Workspace)
+		}
+	}
 
 	logger.Info(logger.ComponentAgentCore).
 		Str("event_type", "context_assemble_rail_init").
@@ -71,6 +84,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 	if r.systemPromptBuilder != nil {
 		r.systemPromptBuilder.RemoveSection(sections.SectionWorkspace)
 		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}
 
 	logger.Info(logger.ComponentAgentCore).
@@ -83,7 +97,7 @@ func (r *ContextAssembleRail) Uninit(_ sainterfaces.BaseAgent) error {
 // BeforeModelCall LLM 调用前：注入工作空间目录结构和上下文文件到系统提示词。
 //
 // 对齐 Python: ContextAssembleRail.before_model_call(ctx)
-func (r *ContextAssembleRail) BeforeModelCall(_ context.Context, cbc *sainterfaces.AgentCallbackContext) error {
+func (r *ContextAssembleRail) BeforeModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	if r.systemPromptBuilder == nil {
 		return nil
 	}
@@ -134,18 +148,37 @@ func (r *ContextAssembleRail) BeforeModelCall(_ context.Context, cbc *sainterfac
 
 	// 构建上下文节
 	// 对齐 Python: context_section = await _build_context(self.sys_operation, workspace, lang, include_daily_memory=not is_heartbeat)
-	// Go 中需要通过 SysOperation 的 Fs() 读取上下文文件
-	// TODO: 后续实现 ReadContextFiles 或由 DeepAdapter 在 Init 时提供回调
+	// 对齐 Python: ctx.extra.get("run_kind") == RunKind.HEARTBEAT
 	isHeartbeat := false
 	if cbc != nil && cbc.Extra() != nil {
-		if runKind, ok := cbc.Extra()["run_kind"]; ok {
-			isHeartbeat = runKind == sainterfaces.RunKindHeartbeat
+		if runKind, ok := cbc.Extra()["run_kind"].(string); ok {
+			isHeartbeat = runKind == string(sainterfaces.RunKindHeartbeat)
 		}
 	}
 
-	// 暂不注入上下文节（需要 ReadContextFiles 支持）
-	// 后续回填时通过 FsOperation 读取 workspace 中的上下文文件
-	_ = isHeartbeat
+	sysOp := r.SysOperation()
+	if sysOp != nil {
+		files := sections.ReadContextFiles(ctx, sysOp.Fs(), ws)
+
+		// 读取每日记忆
+		includeDailyMemory := !isHeartbeat
+		if includeDailyMemory {
+			dailyContent, dateStr := sections.ReadDailyMemory(ctx, sysOp.Fs(), ws, "")
+			if dailyContent != "" {
+				files["daily_memory"] = dailyContent
+				files["daily_memory_date"] = dateStr
+			}
+		}
+
+		if len(files) > 0 {
+			contextSection := sections.BuildContextSection(files, lang)
+			r.systemPromptBuilder.AddSection(contextSection)
+		} else {
+			r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+		}
+	} else {
+		r.systemPromptBuilder.RemoveSection(sections.SectionContext)
+	}
 
 	// 注入节到系统提示词构建器
 	r.systemPromptBuilder.AddSection(workspaceSection)
@@ -155,8 +188,6 @@ func (r *ContextAssembleRail) BeforeModelCall(_ context.Context, cbc *sainterfac
 	} else {
 		r.systemPromptBuilder.RemoveSection(sections.SectionTools)
 	}
-
-	// TODO: 后续回填 context section 注入
 
 	return nil
 }

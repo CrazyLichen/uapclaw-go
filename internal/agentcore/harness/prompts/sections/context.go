@@ -1,13 +1,17 @@
 package sections
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	wscontent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/workspace_content"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
+	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -424,6 +428,99 @@ func BuildContextSection(files map[string]string, lang string) saprompt.PromptSe
 		Content:  map[string]string{lang: sb.String()},
 		Priority: 80,
 	}
+}
+
+// ReadContextFiles 从工作空间读取上下文配置文件内容。
+//
+// 遍历 wscontent.ContextFiles 列表，通过 fsOp.ReadFile 读取每个文件。
+// 对 MEMORY.md 特殊处理：从 WorkspaceNodeMemory 目录下读取。
+// 过滤掉空模板文件（IsUnfilledTemplate）。
+//
+// 对齐 Python: _read_context_file(sys_operation, workspace, file_key)
+func ReadContextFiles(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace) map[string]string {
+	if fsOp == nil || ws == nil {
+		return nil
+	}
+
+	files := make(map[string]string)
+	for _, fileKey := range wscontent.ContextFiles {
+		var fullPath string
+		if fileKey == "MEMORY.md" {
+			// 对齐 Python: memory_dir = workspace.get_node_path(WorkspaceNode.MEMORY)
+			// full_path = memory_dir / WorkspaceNode.MEMORY_MD.value
+			memoryDir := ws.GetNodePath(hworkspace.WorkspaceNodeMemory)
+			if memoryDir == nil {
+				continue
+			}
+			fullPath = *memoryDir + "/" + fileKey
+		} else {
+			nodePath := ws.GetNodePath(hworkspace.WorkspaceNode(fileKey))
+			if nodePath == nil {
+				continue
+			}
+			fullPath = *nodePath
+		}
+
+		result, err := fsOp.ReadFile(ctx, fullPath)
+		if err != nil || result == nil || result.Data == nil || result.Data.Content == "" {
+			continue
+		}
+		if IsUnfilledTemplate(result.Data.Content) {
+			continue
+		}
+		files[fileKey] = result.Data.Content
+	}
+	return files
+}
+
+// ReadDailyMemory 读取当日每日记忆文件内容。
+//
+// 返回 (content, dateStr)，如果当日文件不存在则返回 ("", "")。
+//
+// 对齐 Python: _read_daily_memory(sys_operation, workspace, timezone)
+func ReadDailyMemory(ctx context.Context, fsOp sysop.FsOperation, ws *hworkspace.Workspace, timezone string) (string, string) {
+	if fsOp == nil || ws == nil {
+		return "", ""
+	}
+
+	if timezone == "" {
+		timezone = "Asia/Shanghai"
+	}
+
+	memoryDir := ws.GetNodePath(hworkspace.WorkspaceNodeMemory)
+	if memoryDir == nil {
+		return "", ""
+	}
+
+	dailyMemoryDir := *memoryDir + "/" + string(hworkspace.WorkspaceNodeDailyMemory)
+
+	listResult, err := fsOp.ListFiles(ctx, dailyMemoryDir)
+	if err != nil || listResult == nil || listResult.Data == nil || len(listResult.Data.ListItems) == 0 {
+		return "", ""
+	}
+
+	tz, _ := time.LoadLocation(timezone)
+	date := time.Now().In(tz).Format("2006-01-02")
+	todayFile := date + ".md"
+
+	found := false
+	for _, item := range listResult.Data.ListItems {
+		if item.Name == todayFile {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", ""
+	}
+
+	fullPath := dailyMemoryDir + "/" + todayFile
+	result, err := fsOp.ReadFile(ctx, fullPath)
+	if err != nil || result == nil || result.Data == nil || result.Data.Content == "" {
+		return "", ""
+	}
+
+	return result.Data.Content, date
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
