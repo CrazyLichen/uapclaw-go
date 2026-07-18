@@ -32,13 +32,19 @@ type TeamOutputSchema struct {
 // NewTeamOutputSchema 从普通 OutputSchema 构建带标签的团队 chunk。
 // 对齐 Python: TeamOutputSchema.from_output(base, source_member=..., role=...)
 //
-// 返回新实例；原始 base 不会被修改，DeepAgent 内部保留其对象标识。
-func NewTeamOutputSchema(base stream.OutputSchema, sourceMember *string, role *TeamRole) TeamOutputSchema {
-	return TeamOutputSchema{
+// 返回新实例指针；原始 base 不会被修改，DeepAgent 内部保留其对象标识。
+func NewTeamOutputSchema(base stream.OutputSchema, sourceMember *string, role *TeamRole) *TeamOutputSchema {
+	return &TeamOutputSchema{
 		OutputSchema: base,
 		SourceMember: sourceMember,
 		Role:         role,
 	}
 }
+
+// SchemaType 实现 stream.Schema 接口。
+func (s *TeamOutputSchema) SchemaType() string { return s.Type }
+
+// Validate 实现 stream.Schema 接口。
+func (s *TeamOutputSchema) Validate() error { return s.OutputSchema.Validate() }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
