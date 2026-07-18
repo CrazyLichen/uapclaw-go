@@ -117,7 +117,7 @@ func TestNewConversationSignalDetector_WithExistingSkills(t *testing.T) {
 // ──────────────────────────── SignalDetector 类型别名 ────────────────────────────
 
 func TestSignalDetector_类型别名(t *testing.T) {
-	var _ SignalDetector = ConversationSignalDetector{}
+	var _ SignalDetector = ConversationSignalDetector{} //nolint:staticcheck // 接口合规性检查需要显式类型
 	d := NewConversationSignalDetector()
 	_ = d
 }

@@ -446,7 +446,7 @@ func (t *Trainer) SelectBestCandidateOnVal(
 
 	baseState := SnapshotOperatorsState(operators)
 
-	var bestScore float64 = math.Inf(-1)
+	var bestScore = math.Inf(-1)
 	var bestEvaluated []*dataset.EvaluatedCase
 	var bestState map[string]map[string]any
 

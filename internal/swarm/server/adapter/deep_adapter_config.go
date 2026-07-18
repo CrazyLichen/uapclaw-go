@@ -135,9 +135,7 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 	// ── 自定义 agent: 对齐 Python _load_custom_subagents ──
 	// 对齐 Python: custom_specs = _load_custom_subagents(workspace_dir, subagents_cfg, model, workspace, ...)
 	customSpecs := d.loadCustomSubagents(subagentsCfg)
-	for _, spec := range customSpecs {
-		specs = append(specs, spec)
-	}
+	specs = append(specs, customSpecs...)
 
 	logger.Info(logComponent).
 		Int("subagent_count", len(specs)).
@@ -229,18 +227,17 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 	if len(tools) == 0 {
 		tools = []string{"*"}
 	}
-	if len(agentDef.DisallowedTools) > 0 && !(len(tools) == 1 && tools[0] == "*") {
+	if len(agentDef.DisallowedTools) > 0 && (len(tools) != 1 || tools[0] != "*") {
 		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
 		for _, t := range agentDef.DisallowedTools {
 			disallowedSet[t] = true
 		}
-		filtered := make([]string, 0, len(tools))
+		tools = make([]string, 0, len(tools))
 		for _, t := range tools {
 			if !disallowedSet[t] {
-				filtered = append(filtered, t)
+				tools = append(tools, t)
 			}
 		}
-		tools = filtered
 	}
 
 	// 步骤 3: 构建 AgentCard

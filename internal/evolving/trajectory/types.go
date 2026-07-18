@@ -176,9 +176,7 @@ func (t *Trajectory) ToMessages() []map[string]any {
 			continue
 		}
 		// Messages 已是 []map[string]any，直接追加
-		for _, msg := range llmDetail.Messages {
-			messages = append(messages, msg)
-		}
+		messages = append(messages, llmDetail.Messages...)
 		// Response 已是 map[string]any，检查是否含 role 或 content 键
 		if llmDetail.Response != nil {
 			if _, hasRole := llmDetail.Response["role"]; hasRole {

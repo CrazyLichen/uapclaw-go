@@ -260,7 +260,7 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	}
 	// 如果有 disallowed_tools 且 allowedTools 不是 ["*"]，先过滤掉 disallowed
 	// 对齐 Python: if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
-	if len(agentDef.DisallowedTools) > 0 && !(len(allowedTools) == 1 && allowedTools[0] == "*") {
+	if len(agentDef.DisallowedTools) > 0 && (len(allowedTools) != 1 || allowedTools[0] != "*") {
 		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
 		for _, t := range agentDef.DisallowedTools {
 			disallowedSet[t] = true

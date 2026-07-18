@@ -239,7 +239,7 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 	// 对齐 Python: name = params.name.strip(); if not re.match(r'^[a-zA-Z0-9_-]{3,50}$', name): raise ValueError(...)
 	name := strings.TrimSpace(params.Name)
 	if !agentNamePattern.MatchString(name) {
-		return nil, fmt.Errorf("Agent 名称格式无效: '%s'。要求 3-50 字符，仅允许字母、数字、连字符、下划线", name)
+		return nil, fmt.Errorf("agent 名称格式无效: '%s'。要求 3-50 字符，仅允许字母、数字、连字符、下划线", name)
 	}
 
 	// 步骤 2: 检查是否覆盖内置 agent
@@ -307,7 +307,7 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 	// 对齐 Python: agent = self.get_agent(name)
 	agent := s.GetAgent(name)
 	if agent == nil {
-		return nil, fmt.Errorf("Agent 不存在: %s", name)
+		return nil, fmt.Errorf("agent 不存在: %s", name)
 	}
 	if agent.Source == types.AgentSourceBuiltin {
 		return nil, fmt.Errorf("不能修改内置 agent: %s", name)
