@@ -14,6 +14,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/adapter"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime/skill/skilldev"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -788,28 +789,12 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 
 // agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
 // 避免 adapter 直接导入 runtime 包造成循环依赖。
+// 使用 types.AgentDefinition 共享类型，无需逐字段拷贝。
 type agentConfigListerBridge struct {
 	svc *AgentConfigService
 }
 
 // ListCustomAgents 实现 adapter.AgentConfigLister 接口。
-func (b *agentConfigListerBridge) ListCustomAgents() []*adapter.AgentDefinition {
-	customAgents := b.svc.ListCustomAgents()
-	result := make([]*adapter.AgentDefinition, len(customAgents))
-	for i, a := range customAgents {
-		result[i] = &adapter.AgentDefinition{
-			Name:            a.Name,
-			Description:     a.Description,
-			Prompt:          a.Prompt,
-			Source:          a.Source,
-			FilePath:        a.FilePath,
-			Model:           a.Model,
-			Tools:           a.Tools,
-			DisallowedTools: a.DisallowedTools,
-			Skills:          a.Skills,
-			MaxIterations:   a.MaxIterations,
-			WhenToUse:       a.WhenToUse,
-		}
-	}
-	return result
+func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {
+	return b.svc.ListCustomAgents()
 }

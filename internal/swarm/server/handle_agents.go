@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -232,9 +233,9 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 
 	// 步骤 2: 创建 agent
 	// 对齐 Python: agent = service.create_agent(p)
-	location := runtime.AgentSource(params.Location)
+	location := params.Location
 	if location == "" {
-		location = runtime.AgentSourceLocal
+		location = types.AgentSourceLocal
 	}
 	createParams := &runtime.CreateAgentParams{
 		Name:            params.Name,
@@ -425,8 +426,13 @@ func (s *AgentServer) handleAgentsToolsList(_ context.Context, request *schema.A
 	svc := s.getAgentConfigService("")
 	result := svc.ListAvailableTools()
 
+	// 将结构体转为 map[string]any 用于 Payload
+	data, _ := json.Marshal(result)
+	var payload map[string]any
+	json.Unmarshal(data, &payload)
+
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(result),
+		schema.WithPayload(payload),
 	), nil
 }
 
@@ -466,7 +472,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 			}),
 		), nil
 	}
-	if agent.Source == runtime.AgentSourceBuiltin {
+	if agent.Source == types.AgentSourceBuiltin {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
@@ -503,48 +509,9 @@ func (s *AgentServer) resolveModel() *llm.Model {
 }
 
 // agentDefinitionToMap 将 AgentDefinition 转换为 map[string]any 用于 JSON 响应。
-func agentDefinitionToMap(a *runtime.AgentDefinition) map[string]any {
-	m := map[string]any{
-		"name":        a.Name,
-		"description": a.Description,
-		"source":      string(a.Source),
-		"tools":       a.Tools,
-	}
-	if a.Prompt != "" {
-		m["prompt"] = a.Prompt
-	}
-	if a.FilePath != "" {
-		m["file_path"] = a.FilePath
-	}
-	if a.Model != "" {
-		m["model"] = a.Model
-	}
-	if a.Color != "" {
-		m["color"] = a.Color
-	}
-	if a.PermissionMode != "" {
-		m["permission_mode"] = a.PermissionMode
-	}
-	if a.MemoryScope != "" {
-		m["memory_scope"] = a.MemoryScope
-	}
-	if a.ShadowedBy != "" {
-		m["shadowed_by"] = string(a.ShadowedBy)
-	}
-	if a.Enabled != nil {
-		m["enabled"] = *a.Enabled
-	}
-	if a.WhenToUse != "" {
-		m["when_to_use"] = a.WhenToUse
-	}
-	if a.MaxIterations != nil {
-		m["max_iterations"] = *a.MaxIterations
-	}
-	if len(a.DisallowedTools) > 0 {
-		m["disallowed_tools"] = a.DisallowedTools
-	}
-	if len(a.Skills) > 0 {
-		m["skills"] = a.Skills
-	}
+func agentDefinitionToMap(a *types.AgentDefinition) map[string]any {
+	data, _ := json.Marshal(a)
+	var m map[string]any
+	json.Unmarshal(data, &m)
 	return m
 }

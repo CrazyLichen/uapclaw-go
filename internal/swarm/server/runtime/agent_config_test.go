@@ -7,26 +7,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
 )
 
 // ──────────────────────────── 测试用例 ────────────────────────────
 
 // TestAgentSource_Constants 测试 AgentSource 常量值
 func TestAgentSource_Constants(t *testing.T) {
-	assert.Equal(t, AgentSource("builtin"), AgentSourceBuiltin)
-	assert.Equal(t, AgentSource("user"), AgentSourceUser)
-	assert.Equal(t, AgentSource("project"), AgentSourceProject)
-	assert.Equal(t, AgentSource("local"), AgentSourceLocal)
+	assert.Equal(t, "builtin", types.AgentSourceBuiltin)
+	assert.Equal(t, "user", types.AgentSourceUser)
+	assert.Equal(t, "project", types.AgentSourceProject)
+	assert.Equal(t, "local", types.AgentSourceLocal)
 }
 
 // TestBuiltinAgents 测试内置 Agent 定义
 func TestBuiltinAgents(t *testing.T) {
-	require.Len(t, BuiltinAgents, 3, "应有 3 个内置 agent")
+	require.Len(t, types.BuiltinAgents, 3, "应有 3 个内置 agent")
 
-	names := make([]string, len(BuiltinAgents))
-	for i, a := range BuiltinAgents {
+	names := make([]string, len(types.BuiltinAgents))
+	for i, a := range types.BuiltinAgents {
 		names[i] = a.Name
-		assert.Equal(t, AgentSourceBuiltin, a.Source)
+		assert.Equal(t, types.AgentSourceBuiltin, a.Source)
 		assert.NotEmpty(t, a.Description)
 		assert.NotEmpty(t, a.Prompt)
 		assert.NotEmpty(t, a.Tools)
@@ -39,15 +40,15 @@ func TestBuiltinAgents(t *testing.T) {
 // TestCopyBuiltinAgents 测试深拷贝内置 agent 列表
 func TestCopyBuiltinAgents(t *testing.T) {
 	copied := copyBuiltinAgents()
-	require.Len(t, copied, len(BuiltinAgents))
+	require.Len(t, copied, len(types.BuiltinAgents))
 
 	// 修改拷贝不影响原始
 	copied[0].Name = "modified"
-	assert.Equal(t, "general-purpose", BuiltinAgents[0].Name, "原始列表不应被修改")
+	assert.Equal(t, "general-purpose", types.BuiltinAgents[0].Name, "原始列表不应被修改")
 
 	// 修改 tools 切片不影响原始
 	copied[0].Tools[0] = "modified-tool"
-	assert.Equal(t, []string{"*"}, BuiltinAgents[0].Tools, "原始 tools 不应被修改")
+	assert.Equal(t, []string{"*"}, types.BuiltinAgents[0].Tools, "原始 tools 不应被修改")
 }
 
 // TestNewAgentConfigService 测试创建 AgentConfigService
@@ -79,12 +80,26 @@ func TestAgentConfigService_DirPaths(t *testing.T) {
 func TestAgentConfigService_ResolveLocationDir(t *testing.T) {
 	svc := NewAgentConfigService("/workspace")
 
-	assert.Equal(t, svc.userAgentsDir(), svc.resolveLocationDir(AgentSourceUser))
-	assert.Equal(t, svc.projectAgentsDir(), svc.resolveLocationDir(AgentSourceProject))
-	assert.Equal(t, svc.localAgentsDir(), svc.resolveLocationDir(AgentSourceLocal))
-	// 默认回退到 local
-	assert.Equal(t, svc.localAgentsDir(), svc.resolveLocationDir(AgentSourceBuiltin))
-	assert.Equal(t, svc.localAgentsDir(), svc.resolveLocationDir(AgentSource("unknown")))
+	dir, err := svc.resolveLocationDir(types.AgentSourceUser)
+	assert.NoError(t, err)
+	assert.Equal(t, svc.userAgentsDir(), dir)
+
+	dir, err = svc.resolveLocationDir(types.AgentSourceProject)
+	assert.NoError(t, err)
+	assert.Equal(t, svc.projectAgentsDir(), dir)
+
+	dir, err = svc.resolveLocationDir(types.AgentSourceLocal)
+	assert.NoError(t, err)
+	assert.Equal(t, svc.localAgentsDir(), dir)
+
+	// 无效 location 应返回 error，对齐 Python: raise ValueError
+	_, err = svc.resolveLocationDir(types.AgentSourceBuiltin)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "无效的 location")
+
+	_, err = svc.resolveLocationDir("unknown")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "无效的 location")
 }
 
 // TestParseAgentFile_Valid 测试解析有效的 agent 文件
@@ -95,14 +110,14 @@ func TestParseAgentFile_Valid(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 
 	assert.Equal(t, "my-agent", agent.Name)
 	assert.Equal(t, "测试 agent", agent.Description)
 	assert.Equal(t, "你是测试 agent。", agent.Prompt)
-	assert.Equal(t, AgentSourceLocal, agent.Source)
+	assert.Equal(t, types.AgentSourceLocal, agent.Source)
 	assert.Equal(t, filePath, agent.FilePath)
 	assert.Equal(t, "qwen-max", agent.Model)
 	assert.Equal(t, []string{"Read", "Bash"}, agent.Tools)
@@ -119,7 +134,7 @@ func TestParseAgentFile_NoFrontmatter(t *testing.T) {
 	err := os.WriteFile(filePath, []byte("just plain text"), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	assert.NoError(t, err)
 	assert.Nil(t, agent)
 }
@@ -131,7 +146,7 @@ func TestParseAgentFile_MissingDelimiter(t *testing.T) {
 	err := os.WriteFile(filePath, []byte("---\nname: test\n"), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	assert.NoError(t, err)
 	assert.Nil(t, agent)
 }
@@ -144,7 +159,7 @@ func TestParseAgentFile_NoName(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	assert.NoError(t, err)
 	assert.Nil(t, agent)
 }
@@ -157,7 +172,7 @@ func TestParseAgentFile_DefaultTools(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 	assert.Equal(t, []string{"*"}, agent.Tools)
@@ -171,7 +186,7 @@ func TestParseAgentFile_MaxIterations(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 	require.NotNil(t, agent.MaxIterations)
@@ -186,26 +201,26 @@ func TestParseAgentFile_Skills(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(content), 0o644)
 	require.NoError(t, err)
 
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 	assert.Equal(t, []string{"commit", "review"}, agent.Skills)
 }
 
-// TestFormatAgentFile_CreateAgentParams 测试从 CreateAgentParams 生成文件内容
-func TestFormatAgentFile_CreateAgentParams(t *testing.T) {
-	params := &CreateAgentParams{
+// TestFormatAgentFile_基本字段 测试从 AgentDefinition 生成文件内容
+func TestFormatAgentFile_基本字段(t *testing.T) {
+	def := &types.AgentDefinition{
 		Name:        "test-agent",
 		Description: "测试描述",
 		Prompt:      "你是一个测试 agent。",
-		Location:    AgentSourceLocal,
+		Source:      types.AgentSourceLocal,
 		Tools:       []string{"Read", "Bash"},
 		WhenToUse:   "当需要测试时",
 		Model:       "qwen-max",
 		Color:       "green",
 	}
 
-	content := formatAgentFile(params)
+	content := formatAgentFile(def)
 	assert.Contains(t, content, "---")
 	assert.Contains(t, content, "name: test-agent")
 	assert.Contains(t, content, "description: 测试描述")
@@ -217,21 +232,21 @@ func TestFormatAgentFile_CreateAgentParams(t *testing.T) {
 
 // TestFormatAgentFile_DefaultToolsOmitted 测试 tools=["*"] 不写入 frontmatter
 func TestFormatAgentFile_DefaultToolsOmitted(t *testing.T) {
-	params := &CreateAgentParams{
+	def := &types.AgentDefinition{
 		Name:        "default-tools",
 		Description: "默认工具",
 		Prompt:      "prompt",
 		Tools:       []string{"*"},
 	}
 
-	content := formatAgentFile(params)
+	content := formatAgentFile(def)
 	assert.NotContains(t, content, "tools:")
 }
 
-// TestFormatAgentFile_AgentDefinition 测试从 AgentDefinition 生成文件内容
-func TestFormatAgentFile_AgentDefinition(t *testing.T) {
+// TestFormatAgentFile_完整字段 测试从 AgentDefinition 生成含全部可选字段的内容
+func TestFormatAgentFile_完整字段(t *testing.T) {
 	maxIter := 10
-	def := &AgentDefinition{
+	def := &types.AgentDefinition{
 		Name:            "def-agent",
 		Description:     "定义描述",
 		Prompt:          "prompt 内容",
@@ -254,7 +269,7 @@ func TestFormatAgentFile_AgentDefinition(t *testing.T) {
 
 // TestApplyUpdateParams 测试更新参数应用
 func TestApplyUpdateParams(t *testing.T) {
-	agent := &AgentDefinition{
+	agent := &types.AgentDefinition{
 		Name:        "test",
 		Description: "原始描述",
 		Prompt:      "原始 prompt",
@@ -281,7 +296,7 @@ func TestApplyUpdateParams(t *testing.T) {
 
 // TestApplyUpdateParams_PartialUpdate 测试部分更新
 func TestApplyUpdateParams_PartialUpdate(t *testing.T) {
-	agent := &AgentDefinition{
+	agent := &types.AgentDefinition{
 		Name:        "test",
 		Description: "原始描述",
 		Prompt:      "原始 prompt",
@@ -309,7 +324,7 @@ func TestAgentConfigService_CreateAgent(t *testing.T) {
 		Name:        "my-custom-agent",
 		Description: "自定义测试 agent",
 		Prompt:      "你是一个自定义 agent。",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 		Tools:       []string{"Read", "Bash", "Grep"},
 	}
 
@@ -318,7 +333,7 @@ func TestAgentConfigService_CreateAgent(t *testing.T) {
 	assert.Equal(t, "my-custom-agent", agent.Name)
 	assert.Equal(t, "自定义测试 agent", agent.Description)
 	assert.Equal(t, "你是一个自定义 agent。", agent.Prompt)
-	assert.Equal(t, AgentSourceLocal, agent.Source)
+	assert.Equal(t, types.AgentSourceLocal, agent.Source)
 	assert.Equal(t, []string{"Read", "Bash", "Grep"}, agent.Tools)
 	assert.NotEmpty(t, agent.FilePath)
 
@@ -349,7 +364,7 @@ func TestAgentConfigService_CreateAgent_InvalidName(t *testing.T) {
 				Name:        tt.agentName,
 				Description: "描述",
 				Prompt:      "prompt",
-				Location:    AgentSourceLocal,
+				Location:    types.AgentSourceLocal,
 			}
 			_, err := svc.CreateAgent(params)
 			assert.Error(t, err)
@@ -379,7 +394,7 @@ func TestAgentConfigService_CreateAgent_ValidName(t *testing.T) {
 				Name:        tt.agentName,
 				Description: "描述",
 				Prompt:      "prompt",
-				Location:    AgentSourceLocal,
+				Location:    types.AgentSourceLocal,
 			}
 			_, err := svc.CreateAgent(params)
 			assert.NoError(t, err)
@@ -396,7 +411,7 @@ func TestAgentConfigService_CreateAgent_OverrideBuiltin(t *testing.T) {
 		Name:        "general-purpose",
 		Description: "试图覆盖内置",
 		Prompt:      "prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 
 	_, err := svc.CreateAgent(params)
@@ -413,7 +428,7 @@ func TestAgentConfigService_CreateAgent_DefaultTools(t *testing.T) {
 		Name:        "no-tools-agent",
 		Description: "没有指定 tools",
 		Prompt:      "prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 
 	agent, err := svc.CreateAgent(params)
@@ -432,7 +447,7 @@ func TestAgentConfigService_ListAgents_BuiltinOnly(t *testing.T) {
 	// 验证所有内置 agent 都存在
 	builtinNames := make(map[string]bool)
 	for _, a := range agents {
-		if a.Source == AgentSourceBuiltin {
+		if a.Source == types.AgentSourceBuiltin {
 			builtinNames[a.Name] = true
 		}
 	}
@@ -451,7 +466,7 @@ func TestAgentConfigService_ListAgents_WithCustomAgents(t *testing.T) {
 		Name:        "custom-1",
 		Description: "自定义 agent 1",
 		Prompt:      "prompt 1",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 	_, err := svc.CreateAgent(params)
 	require.NoError(t, err)
@@ -461,7 +476,7 @@ func TestAgentConfigService_ListAgents_WithCustomAgents(t *testing.T) {
 	for _, a := range agents {
 		if a.Name == "custom-1" {
 			customFound = true
-			assert.Equal(t, AgentSourceLocal, a.Source)
+			assert.Equal(t, types.AgentSourceLocal, a.Source)
 			assert.Empty(t, a.ShadowedBy)
 		}
 	}
@@ -489,12 +504,12 @@ func TestAgentConfigService_ListAgents_Shadowing(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(projectDir, "test-shadow.md"), []byte(content2), 0o644))
 
 	agents := svc.ListAgents()
-	var localAgent, projectAgent *AgentDefinition
+	var localAgent, projectAgent *types.AgentDefinition
 	for _, a := range agents {
-		if a.Name == "test-shadow" && a.Source == AgentSourceLocal {
+		if a.Name == "test-shadow" && a.Source == types.AgentSourceLocal {
 			localAgent = a
 		}
-		if a.Name == "test-shadow" && a.Source == AgentSourceProject {
+		if a.Name == "test-shadow" && a.Source == types.AgentSourceProject {
 			projectAgent = a
 		}
 	}
@@ -502,7 +517,7 @@ func TestAgentConfigService_ListAgents_Shadowing(t *testing.T) {
 	require.NotNil(t, projectAgent)
 
 	// local 被 project 覆盖
-	assert.Equal(t, AgentSourceProject, localAgent.ShadowedBy)
+	assert.Equal(t, types.AgentSourceProject, localAgent.ShadowedBy)
 	assert.Empty(t, projectAgent.ShadowedBy)
 }
 
@@ -515,7 +530,7 @@ func TestAgentConfigService_GetAgent(t *testing.T) {
 	agent := svc.GetAgent("general-purpose")
 	require.NotNil(t, agent)
 	assert.Equal(t, "general-purpose", agent.Name)
-	assert.Equal(t, AgentSourceBuiltin, agent.Source)
+	assert.Equal(t, types.AgentSourceBuiltin, agent.Source)
 	assert.Empty(t, agent.ShadowedBy)
 
 	// 获取不存在的 agent
@@ -533,7 +548,7 @@ func TestAgentConfigService_UpdateAgent(t *testing.T) {
 		Name:        "update-test",
 		Description: "原始描述",
 		Prompt:      "原始 prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 	_, err := svc.CreateAgent(createParams)
 	require.NoError(t, err)
@@ -587,7 +602,7 @@ func TestAgentConfigService_DeleteAgent(t *testing.T) {
 		Name:        "delete-test",
 		Description: "待删除",
 		Prompt:      "prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 	created, err := svc.CreateAgent(createParams)
 	require.NoError(t, err)
@@ -635,16 +650,14 @@ func TestAgentConfigService_ListAvailableTools(t *testing.T) {
 	svc := NewAgentConfigService("/tmp")
 	result := svc.ListAvailableTools()
 
-	tools, ok := result["tools"].([]map[string]any)
-	require.True(t, ok)
-	assert.GreaterOrEqual(t, len(tools), 10, "应至少有 10 个工具")
-
-	groups, ok := result["groups"].([]string)
-	require.True(t, ok)
-	assert.Contains(t, groups, "文件")
-	assert.Contains(t, groups, "搜索")
-	assert.Contains(t, groups, "高级")
-	assert.Contains(t, groups, "多模态")
+	assert.GreaterOrEqual(t, len(result.Tools), 10, "应至少有 10 个工具")
+	assert.Contains(t, result.Groups, "核心")
+	assert.Contains(t, result.Groups, "搜索")
+	assert.Contains(t, result.Groups, "代码智能")
+	assert.Contains(t, result.Groups, "高级")
+	assert.Contains(t, result.Groups, "可视化")
+	assert.NotEmpty(t, result.DisallowedForSubagents, "应包含 disallowed_for_subagents")
+	assert.Contains(t, result.DisallowedForSubagents, "Agent")
 }
 
 // TestAgentConfigService_LoadFromDir 测试从目录加载 agent
@@ -669,14 +682,14 @@ func TestAgentConfigService_LoadFromDir(t *testing.T) {
 	// 写入非 md 文件
 	require.NoError(t, os.WriteFile(filepath.Join(agentsDir, "notes.txt"), []byte("text file"), 0o644))
 
-	agents := svc.loadFromDir(agentsDir, AgentSourceLocal)
+	agents := svc.loadFromDir(agentsDir, types.AgentSourceLocal)
 	assert.Len(t, agents, 2, "应只加载 2 个有效 agent")
 }
 
 // TestAgentConfigService_LoadFromDir_NonExistent 测试加载不存在的目录
 func TestAgentConfigService_LoadFromDir_NonExistent(t *testing.T) {
 	svc := NewAgentConfigService("/non/existent/path")
-	agents := svc.loadFromDir("/non/existent/path", AgentSourceLocal)
+	agents := svc.loadFromDir("/non/existent/path", types.AgentSourceLocal)
 	assert.Nil(t, agents)
 }
 
@@ -685,21 +698,21 @@ func TestParseAgentFile_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
 
 	// 创建并写入
-	params := &CreateAgentParams{
+	def := &types.AgentDefinition{
 		Name:        "round-trip",
 		Description: "往返测试",
 		Prompt:      "测试 prompt",
-		Location:    AgentSourceLocal,
+		Source:      types.AgentSourceLocal,
 		Tools:       []string{"Read", "Grep"},
 		WhenToUse:   "当需要往返测试时",
 		Model:       "qwen-max",
 	}
-	content := formatAgentFile(params)
+	content := formatAgentFile(def)
 	filePath := filepath.Join(dir, "round-trip.md")
 	require.NoError(t, os.WriteFile(filePath, []byte(content), 0o644))
 
 	// 解析回来
-	agent, err := parseAgentFile(filePath, AgentSourceLocal)
+	agent, err := parseAgentFile(filePath, types.AgentSourceLocal)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 
@@ -756,7 +769,7 @@ func TestAgentConfigService_CreateAndRetrieve(t *testing.T) {
 		Name:        "full-flow",
 		Description: "完整流程测试",
 		Prompt:      "你是完整流程 agent。",
-		Location:    AgentSourceProject,
+		Location:    types.AgentSourceProject,
 		Tools:       []string{"Read", "Bash"},
 		WhenToUse:   "当需要完整流程测试时",
 		Model:       "deepseek-chat",
@@ -788,7 +801,7 @@ func TestAgentConfigService_CreateAndUpdateAndDelete(t *testing.T) {
 		Name:        "crud-agent",
 		Description: "初始描述",
 		Prompt:      "初始 prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 	_, err := svc.CreateAgent(params)
 	require.NoError(t, err)
@@ -827,17 +840,18 @@ func TestAgentConfigService_ListAgents_SortOrder(t *testing.T) {
 	svc := NewAgentConfigService(dir)
 
 	// 创建不同来源的 agent
-	for _, loc := range []AgentSource{AgentSourceLocal, AgentSourceProject, AgentSourceUser} {
-		targetDir := svc.resolveLocationDir(loc)
+	for _, loc := range []string{types.AgentSourceLocal, types.AgentSourceProject, types.AgentSourceUser} {
+		targetDir, err := svc.resolveLocationDir(loc)
+		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(targetDir, 0o755))
-		content := "---\nname: " + string(loc) + "-agent\ndescription: " + string(loc) + " agent\n---\n\nprompt\n"
-		require.NoError(t, os.WriteFile(filepath.Join(targetDir, string(loc)+"-agent.md"), []byte(content), 0o644))
+		content := "---\nname: " + loc + "-agent\ndescription: " + loc + " agent\n---\n\nprompt\n"
+		require.NoError(t, os.WriteFile(filepath.Join(targetDir, loc+"-agent.md"), []byte(content), 0o644))
 	}
 
 	agents := svc.ListAgents()
 
 	// 按来源分组统计
-	sourceOrder := map[AgentSource]int{AgentSourceBuiltin: 0, AgentSourceLocal: 1, AgentSourceUser: 2, AgentSourceProject: 3}
+	sourceOrder := map[string]int{types.AgentSourceBuiltin: 0, types.AgentSourceLocal: 1, types.AgentSourceUser: 2, types.AgentSourceProject: 3}
 	for i := 1; i < len(agents); i++ {
 		assert.LessOrEqual(t, sourceOrder[agents[i-1].Source], sourceOrder[agents[i].Source],
 			"agents 应按 source 排序: builtin < local < user < project")
@@ -853,7 +867,7 @@ func TestAgentConfigService_CreateAgent_NameTrimSpace(t *testing.T) {
 		Name:        "  valid-name  ",
 		Description: "描述",
 		Prompt:      "prompt",
-		Location:    AgentSourceLocal,
+		Location:    types.AgentSourceLocal,
 	}
 
 	agent, err := svc.CreateAgent(params)

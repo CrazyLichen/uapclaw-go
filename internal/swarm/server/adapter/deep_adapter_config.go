@@ -14,44 +14,18 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/types"
+
 	"github.com/uapclaw/uapclaw-go/internal/swarm/server/sysop_builder"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// AgentDefinition Agent 定义数据模型（与 runtime.AgentDefinition 对齐）。
-// 定义在 adapter 包中以避免 adapter↔runtime 循环依赖。
-// 对齐 Python: AgentDefinition dataclass
-type AgentDefinition struct {
-	// Name 名称
-	Name string
-	// Description 描述
-	Description string
-	// Prompt 系统提示词
-	Prompt string
-	// Source 来源
-	Source string
-	// FilePath 文件路径
-	FilePath string
-	// Model 模型名称
-	Model string
-	// Tools 允许的工具列表
-	Tools []string
-	// DisallowedTools 禁止的工具列表
-	DisallowedTools []string
-	// Skills 预加载 skill
-	Skills []string
-	// MaxIterations 最大迭代次数
-	MaxIterations *int
-	// WhenToUse 调度描述
-	WhenToUse string
-}
-
 // AgentConfigLister Agent 配置列表接口（避免 adapter↔runtime 循环依赖）。
 // 对齐 Python: AgentConfigService.list_agents()
 type AgentConfigLister interface {
 	// ListCustomAgents 列出自定义 agent（非 builtin）
-	ListCustomAgents() []*AgentDefinition
+	ListCustomAgents() []*types.AgentDefinition
 }
 
 // runtimeConfig 运行时配置。
@@ -238,7 +212,7 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 
 // agentDefToSubagentConfig 将 AgentDefinition 转换为 SubAgentConfig。
 // 对齐 Python: _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
-func agentDefToSubagentConfig(agentDef *AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model) *hschema.SubAgentConfig {
+func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model) *hschema.SubAgentConfig {
 	// 步骤 1: 解析模型
 	// 对齐 Python: resolved_model = model; if agent_def.model and isinstance(model_cache, dict): resolved_model = model_cache.get(agent_def.model, model)
 	resolvedModel := model
