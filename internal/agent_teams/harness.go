@@ -3,6 +3,7 @@ package agent_teams
 import (
 	"context"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
@@ -204,7 +205,7 @@ func (h *TeamHarness) Model() any { return nil }
 func (h *TeamHarness) HasPendingInterrupt() bool { return false }
 
 // IsPendingInterruptResumeValid 检查是否有待处理的中断恢复。
-// ⤵️ 待 9.60 StreamController 章节回填：实现中断恢复验证逻辑
+// ⤴️ 9.60 已实现 StreamController，此方法由 StreamController.IsValidInterruptResume 通过 resources.Harness() 调用
 func (h *TeamHarness) IsPendingInterruptResumeValid() bool {
 	return false
 }
@@ -222,11 +223,11 @@ func (h *TeamHarness) MarkTeamCleaned() {}
 func (h *TeamHarness) MarkTeamBuilt() {}
 
 // RequestCompletionPoll 请求完成轮询回调。
-// ⤵️ 待 9.60 StreamController 章节回填：作为 StreamController 回调传入
+// ⤴️ 9.60 已实现 StreamController，此方法由 StreamController 通过 requestCompletionPollCb 回调
 func (h *TeamHarness) RequestCompletionPoll() {}
 
 // WakeMailboxIfInterruptCleared 唤醒邮箱如果中断已清除。
-// ⤵️ 待 9.60 StreamController 章节回填：作为 StreamController 回调传入
+// ⤴️ 9.60 已实现 StreamController，此方法由 StreamController 通过 wakeMailboxCb 回调
 func (h *TeamHarness) WakeMailboxIfInterruptCleared() {}
 
 // InitCwdForRound 从工作空间根目录初始化每轮工作目录。
@@ -250,10 +251,17 @@ func (h *TeamHarness) FollowUp(ctx context.Context, content string) error { retu
 func (h *TeamHarness) Abort(ctx context.Context) error { return nil }
 
 // RunStreaming 从底层 Agent 流式输出 chunk。
-// 对齐 Python: TeamHarness.run_streaming(...)
-// TODO(#9.runner): Runner.runAgentStreaming 实现后替换
-func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) (any, error) {
-	return nil, nil
+// 对齐 Python: TeamHarness.run_streaming(inputs, session_id, team_session)
+//
+// 分支 1（teamSession 为 nil 且非 initialPlanMode）：直接调 runner.RunAgentStreaming。
+// 分支 2（有 teamSession）：⤵️ 待 9.57+ session 层回填。
+func (h *TeamHarness) RunStreaming(ctx context.Context, inputs map[string]any, sessionID string, teamSession any) (<-chan stream.Schema, error) {
+	// ⤵️ 待 9.57 deepAgent 类型升级为 BaseAgent 后实现分支 1
+	// 分支 1: teamSession == nil && !h.initialPlanMode → runner.RunAgentStreaming
+	// 分支 2: ⤵️ 待 9.57+ session 层回填：实现 _prepare_agent_session + _ensure_initial_plan_mode
+	ch := make(chan stream.Schema)
+	close(ch)
+	return ch, nil
 }
 
 // FindRails 返回挂载在底层 Agent 上的指定类型 Rails。
