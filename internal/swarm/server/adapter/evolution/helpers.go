@@ -3,7 +3,6 @@ package evolution
 import (
 	"context"
 	"math"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -181,28 +180,10 @@ type WarnMissingRequestIDFunc func(sessionID string)
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // EventPayloadDict 提取事件 payload 为 map。
-// 对齐 Python: event_payload_dict()
+// 对齐 Python: event_payload_dict() — 仅处理 map[string]any 类型事件，
+// 当前事件来源（drain_pending_approval_events）始终返回 dict。
+// 保留 evt any 签名以兼容未来 SkillEvolutionRail 实现后的具体类型扩展。
 func EventPayloadDict(evt any) map[string]any {
-	// 先尝试 evt.Payload 字段（结构体事件）
-	if evt != nil {
-		v := reflect.ValueOf(evt)
-		if v.Kind() == reflect.Pointer && !v.IsNil() {
-			v = v.Elem()
-		}
-		if v.Kind() == reflect.Struct {
-			f := v.FieldByName("Payload")
-			if f.IsValid() {
-				if m, ok := f.Interface().(map[string]any); ok {
-					result := make(map[string]any, len(m))
-					for k, v := range m {
-						result[k] = v
-					}
-					return result
-				}
-			}
-		}
-	}
-	// dict 类型事件
 	if m, ok := evt.(map[string]any); ok {
 		result := make(map[string]any, len(m))
 		for k, v := range m {
@@ -214,24 +195,9 @@ func EventPayloadDict(evt any) map[string]any {
 }
 
 // EventType 提取事件类型字符串。
-// 对齐 Python: event_type()
+// 对齐 Python: event_type() — 仅从 map[string]any 的 event_type 字段提取，
+// 不再使用 reflect 访问 struct.Type 字段（过度对齐 Python hasattr 防御性代码）。
 func EventType(evt any) string {
-	// 先尝试 evt.Type 字段
-	if evt != nil {
-		v := reflect.ValueOf(evt)
-		if v.Kind() == reflect.Pointer && !v.IsNil() {
-			v = v.Elem()
-		}
-		if v.Kind() == reflect.Struct {
-			f := v.FieldByName("Type")
-			if f.IsValid() {
-				if s, ok := f.Interface().(string); ok && s != "" {
-					return s
-				}
-			}
-		}
-	}
-	// 从 payload 中取 event_type
 	payload := EventPayloadDict(evt)
 	if t, ok := payload["event_type"].(string); ok {
 		return t
@@ -240,7 +206,8 @@ func EventType(evt any) string {
 }
 
 // ResolveEvolutionEventTimeoutSec 解析演进事件超时时间。
-// 对齐 Python: resolve_evolution_event_timeout_sec()
+// 对齐 Python: resolve_evolution_event_timeout_sec() — 仅从 map[string]any 读取，
+// 不再使用 reflect 访问 struct 字段（过度对齐 Python hasattr 防御性代码）。
 func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
 	fallback := TeamEvolutionEventTimeoutSec
 	grace := TeamEvolutionEventTimeoutGraceSec
@@ -256,18 +223,9 @@ func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
 		return fallback
 	}
 
-	// 尝试从 rail 读取 evolution_total_timeout_secs
+	// 从 map[string]any 中读取 evolution_total_timeout_secs
 	var sdkTimeout any
-	v := reflect.ValueOf(rail)
-	if v.Kind() == reflect.Pointer && !v.IsNil() {
-		v = v.Elem()
-	}
-	if v.Kind() == reflect.Struct {
-		f := v.FieldByName("EvolutionTotalTimeoutSecs")
-		if f.IsValid() {
-			sdkTimeout = f.Interface()
-		}
-	} else if m, ok := rail.(map[string]any); ok {
+	if m, ok := rail.(map[string]any); ok {
 		sdkTimeout = m["evolution_total_timeout_secs"]
 	}
 

@@ -47,15 +47,11 @@ func TestEventPayloadDict_nil(t *testing.T) {
 	}
 }
 
-// TestEventPayloadDict_struct 测试从结构体事件提取 payload。
-func TestEventPayloadDict_struct(t *testing.T) {
-	type testEvent struct {
-		Payload map[string]any
-	}
-	evt := &testEvent{Payload: map[string]any{"event_type": "test"}}
-	result := EventPayloadDict(evt)
-	if result["event_type"] != "test" {
-		t.Errorf("EventPayloadDict(struct) = %v, 期望 event_type=test", result)
+// TestEventPayloadDict_nonMap 测试非 map 事件返回空 map。
+func TestEventPayloadDict_nonMap(t *testing.T) {
+	result := EventPayloadDict("not a map")
+	if len(result) != 0 {
+		t.Errorf("EventPayloadDict(nonMap) = %v, 期望空 map", result)
 	}
 }
 
@@ -70,24 +66,20 @@ func TestEventType_map(t *testing.T) {
 	}
 }
 
-// TestEventType_struct 测试从结构体中提取 Type 字段。
-func TestEventType_struct(t *testing.T) {
-	type testEvent struct {
-		Type string
-	}
-	evt := &testEvent{Type: "chat.answer"}
-	result := EventType(evt)
-	if result != "chat.answer" {
-		t.Errorf("EventType(struct) = %q, 期望 %q", result, "chat.answer")
-	}
-}
-
 // TestEventType_empty 测试空事件类型。
 func TestEventType_empty(t *testing.T) {
 	evt := map[string]any{"other_key": "value"}
 	result := EventType(evt)
 	if result != "" {
 		t.Errorf("EventType(empty) = %q, 期望空字符串", result)
+	}
+}
+
+// TestEventType_nonMap 测试非 map 事件返回空字符串。
+func TestEventType_nonMap(t *testing.T) {
+	result := EventType(42)
+	if result != "" {
+		t.Errorf("EventType(nonMap) = %q, 期望空字符串", result)
 	}
 }
 
@@ -130,6 +122,15 @@ func TestResolveEvolutionEventTimeoutSec_invalidTimeout(t *testing.T) {
 	}
 }
 
+// TestResolveEvolutionEventTimeoutSec_nonMapRail 测试非 map rail 使用默认值。
+func TestResolveEvolutionEventTimeoutSec_nonMapRail(t *testing.T) {
+	result := ResolveEvolutionEventTimeoutSec("not a map")
+	expected := TeamEvolutionEventTimeoutSec
+	if result != expected {
+		t.Errorf("ResolveEvolutionEventTimeoutSec(nonMap) = %f, 期望 %f", result, expected)
+	}
+}
+
 // ──────────────────────────── IsEvolutionApprovalEvent 测试 ────────────────────────────
 
 // TestIsEvolutionApprovalEvent_true 测试审批事件返回 true。
@@ -148,14 +149,11 @@ func TestIsEvolutionApprovalEvent_false(t *testing.T) {
 	}
 }
 
-// TestIsEvolutionApprovalEvent_structType 测试结构体事件的 Type 字段。
+// TestIsEvolutionApprovalEvent_structType 测试 map 中的 event_type 审批事件。
 func TestIsEvolutionApprovalEvent_structType(t *testing.T) {
-	type testEvent struct {
-		Type string
-	}
-	evt := &testEvent{Type: "chat.ask_user_question"}
+	evt := map[string]any{"event_type": "chat.ask_user_question"}
 	if !IsEvolutionApprovalEvent(evt) {
-		t.Error("IsEvolutionApprovalEvent(struct chat.ask_user_question) 应为 true")
+		t.Error("IsEvolutionApprovalEvent(map chat.ask_user_question) 应为 true")
 	}
 }
 
