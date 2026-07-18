@@ -13,12 +13,12 @@
 //	agent_teams/
 //	├── doc.go              # 包文档
 //	├── constants.go        # 保留名常量
-//	├── context.go          # session_id contextvar
+//	├── context.go          # SessionState 可变容器 + session_id context 传播（9.59）
 //	├── i18n.go             # 多语言 i18n 支持
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）
-//	├── interaction/        # ⤵️ 回填: 9.59 团队交互
+//	├── interaction/        # ⤵️ 回填: 后续独立章节（payload/router/UserInbox/HumanAgentInbox）
 //	├── memory/             # ⤵️ 回填: 9.64 团队记忆
 //	├── messager/           # ⤵️ 回填: 9.65 团队消息总线
 //	├── models/             # ⤵️ 回填: 9.64 模型池/分配器

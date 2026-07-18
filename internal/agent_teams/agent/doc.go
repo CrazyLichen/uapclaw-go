@@ -23,7 +23,11 @@
 //	├── infra.go              # TeamInfra 进程级基础设施
 //	├── resources.go          # PrivateAgentResources 实例级资源
 //	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
-//	└── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
+//	├── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
+//	├── spawn_manager.go      # SpawnManager 子进程管理（9.58）
+//	├── session_manager.go    # SessionManager 会话三态管理（9.59）
+//	├── stream_controller.go  # TODO(#9.60) 流式控制器
+//	└── recovery_manager.go   # TODO(#9.61) 恢复管理器
 //
 // 对应 Python 代码：openjiuwen/agent_teams/agent/
 package agent
