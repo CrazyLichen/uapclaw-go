@@ -622,7 +622,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 	case "code_agent":
 		return nil, fmt.Errorf("code_agent 工厂尚未实现，⤵️ 9.27 回填")
 	case "research_agent":
-		return nil, fmt.Errorf("research_agent 工厂尚未实现，⤵️ 9.25 回填")
+		return CreateResearchAgent(ctx, kwargs)
 	case "mobile_gui_agent", "mobile_agent":
 		return nil, fmt.Errorf("mobile_gui_agent 工厂尚未实现，⤵️ 9.31 回填")
 	default:

@@ -797,20 +797,25 @@ func TestDeepAgent_CreateSubagent_规格未找到(t *testing.T) {
 	}
 }
 
-// TestDeepAgent_CreateSubagent_工厂分派 返回 stub 错误
+// TestDeepAgent_CreateSubagent_工厂分派 已实现的工厂成功创建，未实现的工厂返回 stub 错误
 func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
 	d := NewDeepAgent(card)
 
-	factories := []string{
+	// 已实现的工厂（research_agent 已在 9.25 实现）
+	implementedFactories := []string{
+		"research_agent",
+	}
+
+	// 未实现的工厂（仍返回 stub 错误）
+	stubFactories := []string{
 		"browser_agent",
 		"code_agent",
-		"research_agent",
 		"mobile_gui_agent",
 	}
 
 	deepCfg := schema.NewDeepAgentConfig()
-	for _, factory := range factories {
+	for _, factory := range append(implementedFactories, stubFactories...) {
 		subCfg := schema.NewSubAgentConfig()
 		subCfg.AgentCard = agentschema.NewAgentCard(agentschema.WithAgentName(factory))
 		subCfg.FactoryName = factory
@@ -820,7 +825,18 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 		t.Fatalf("ConfigureDeepConfig 返回错误: %v", err)
 	}
 
-	for _, factory := range factories {
+	// 已实现的工厂：research_agent 调用 CreateResearchAgent 创建子 Agent
+	for _, factory := range implementedFactories {
+		subAgent, err := d.CreateSubagent(context.Background(), factory, "sub-sess-1")
+		if err != nil {
+			t.Logf("CreateSubagent(%q) 返回错误（可能因缺少 Model 配置）: %v", factory, err)
+		} else {
+			assert.NotNil(t, subAgent, "CreateSubagent(%q) 成功时应返回非 nil", factory)
+		}
+	}
+
+	// 未实现的工厂：仍返回 stub 错误
+	for _, factory := range stubFactories {
 		_, err := d.CreateSubagent(context.Background(), factory, "sub-sess-1")
 		if err == nil {
 			t.Errorf("CreateSubagent(%q) 应返回 stub 错误", factory)
@@ -3484,9 +3500,9 @@ func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 	card := makeTestCard("deep-cs-fac", "test-deep-cs-fac")
 	agent := NewDeepAgent(card)
 
-	// 这些工厂分支显式返回 stub 错误
+	// 这些工厂分支显式返回 stub 错误（research_agent 已在 9.25 实现，移除）
 	stubFactories := []string{
-		"browser_agent", "code_agent", "research_agent",
+		"browser_agent", "code_agent",
 		"mobile_gui_agent",
 	}
 

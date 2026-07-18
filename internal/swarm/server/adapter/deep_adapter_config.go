@@ -141,7 +141,8 @@ func (d *DeepAdapter) buildConfiguredSubagents(config map[string]any, configBase
 
 	// ── research_agent: 配置控制，需 enabled:true 才启用（默认禁用）──
 	if d.isSubagentExplicitlyEnabled(subagentsCfg, "research_agent") {
-		cfg := subagents.BuildResearchAgentConfig(d.model, config, configBase)
+		params := d.buildResearchSubagentParams(config, configBase)
+		cfg := subagents.BuildResearchAgentConfig(d.model, params)
 		if cfg != nil {
 			specs = append(specs, cfg)
 		}
@@ -491,4 +492,53 @@ func (d *DeepAdapter) getSandboxRuntime(configBase map[string]any) (url, typ str
 	typ, _ = sandbox["type"].(string)
 	runtime = sandbox
 	return
+}
+
+// buildResearchSubagentParams 从配置映射构建 research 子代理的 SubagentCreateParams。
+// 对齐 Python: _build_configured_subagents 中对 build_research_agent_config 的调用
+//
+// adapter 层负责从 map[string]any 解析出类型安全的 SubagentCreateParams，
+// 然后传入 subagents.BuildResearchAgentConfig(model, params)。
+func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configBase map[string]any) *hschema.SubagentCreateParams {
+	// 对齐 Python: resolved_language = self._resolve_runtime_language()
+	resolvedLanguage := d.resolveRuntimeLanguage()
+
+	// 对齐 Python: max_iterations=parse_int(
+	//   research_agent_cfg.get("max_iterations"),
+	//   react_cfg.get("max_iterations", 15),
+	// )
+	maxIterations := 0
+	subagentsCfg, _ := config["subagents"].(map[string]any)
+	if subagentsCfg != nil {
+		if researchCfg, ok := subagentsCfg["research_agent"]; ok {
+			if m, ok := researchCfg.(map[string]any); ok {
+				if v, ok := m["max_iterations"]; ok {
+					switch n := v.(type) {
+					case int:
+						maxIterations = n
+					case float64:
+						maxIterations = int(n)
+					}
+				}
+			}
+		}
+	}
+	if maxIterations == 0 {
+		if v, ok := config["max_iterations"]; ok {
+			switch n := v.(type) {
+			case int:
+				maxIterations = n
+			case float64:
+				maxIterations = int(n)
+			}
+		}
+	}
+	if maxIterations == 0 {
+		maxIterations = 15
+	}
+
+	return &hschema.SubagentCreateParams{
+		Language:      resolvedLanguage,
+		MaxIterations: maxIterations,
+	}
 }
