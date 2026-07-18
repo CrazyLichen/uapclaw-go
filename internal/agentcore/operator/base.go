@@ -1,6 +1,8 @@
 package operator
 
 import (
+	"reflect"
+
 	"github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 )
 
@@ -193,7 +195,8 @@ func valueEqual(a, b any) bool {
 		}
 		return true
 	}
-	return a == b
+	// 使用 reflect.DeepEqual 进行安全比较，避免不可比较类型（切片、map）导致 panic
+	return reflect.DeepEqual(a, b)
 }
 
 // mapStrStrEqual 比较 map[string]string 是否相等。
