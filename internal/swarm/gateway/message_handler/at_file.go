@@ -11,16 +11,20 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// defaultInlineFileSizeLimit 默认内联文件大小限制（128KB）
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
-// defaultInlineFileSizeLimit 默认内联文件大小限制（128KB）
 const defaultInlineFileSizeLimit = 128 * 1024
-
-// ──────────────────────────── 全局变量 ────────────────────────────
 
 // atFilePattern 匹配 @path 或 @"quoted path" 的正则
 // 对齐 Python re.compile(r'(?P<prefix>(?:^|(?<=\s)))@(?:"(?P<quoted>[^"]+)"|(?P<plain>[^\s#]+))(?:#[^#\s]*)?')
 // 使用 regexp2 支持 lookbehind (?<=\s)，命名组用 .NET 语法 (?<name>...) 而非 Python (?P<name>...)
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var atFilePattern = regexp2.MustCompile(
 	`(?<prefix>(?:^|(?<=\s)))@(?:"(?<quoted>[^"]+)"|(?<plain>[^\s#]+))(?:#[^#\s]*)?`,
 	0,
@@ -32,8 +36,6 @@ var agentMentionQuotedPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@"(
 // agentMentionPlainPattern 匹配 @agent-<type> 格式
 var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<name>agent-[\w:.@-]+)`, 0)
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // ResolveAtFileReferences 解析 content 中的 @path 引用并内联文件文本。
 //
 // 支持形式：
@@ -42,6 +44,8 @@ var agentMentionPlainPattern = regexp2.MustCompile(`(?<prefix>(?:^|(?<=\s)))@(?<
 //   - @path#L10-20 — 行范围后缀（当前忽略，读取整个文件）
 //
 // 对齐 Python resolve_at_file_references
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func ResolveAtFileReferences(content string, cwd string, maxFileSize int) string {
 	if content == "" {
 		return content
@@ -207,11 +211,11 @@ func ResolveStructuredAttachments(content string, attachments []map[string]any, 
 	return ResolveAtFileReferences(mergedContent, cwd, 0)
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // resolveReferencePath 解析引用路径（相对/绝对/~/）
 //
 // 对齐 Python _resolve_reference_path (L1438-1444)。
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 func resolveReferencePath(rawPath, cwd string) string {
 	if strings.HasPrefix(rawPath, "~/") {
 		home, _ := os.UserHomeDir()

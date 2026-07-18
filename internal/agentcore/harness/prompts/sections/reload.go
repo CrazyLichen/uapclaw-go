@@ -2,6 +2,10 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -27,9 +31,9 @@ const (
 	reloadSectionName = "offload"
 )
 
+// BuildReloadSection 构建上下文压缩节（Priority 90）
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildReloadSection 构建上下文压缩节（Priority 90）
 func BuildReloadSection(lang string) saprompt.PromptSection {
 	var hint string
 	if lang == "en" {

@@ -162,14 +162,14 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 			Msg("LoadTodos 读取文件失败")
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
-			exception.WithParam("reason", fmt.Sprintf("Todo file not found: %s", filePath)),
+			exception.WithParam("reason", fmt.Sprintf("Todo 文件未找到: %s", filePath)),
 		)
 	}
 	if result == nil || result.Data == nil || result.Data.Content == "" {
 		// 对齐 Python L123-127: 空内容视为文件不存在
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
-			exception.WithParam("reason", fmt.Sprintf("Todo file is empty: %s", filePath)),
+			exception.WithParam("reason", fmt.Sprintf("Todo 文件为空: %s", filePath)),
 		)
 	}
 
@@ -181,7 +181,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 			Msg("LoadTodos JSON 解码失败")
 		return nil, exception.BuildError(
 			exception.StatusToolTodosLoadFailed,
-			exception.WithParam("reason", fmt.Sprintf("json decode failed: %s", err.Error())),
+			exception.WithParam("reason", fmt.Sprintf("JSON 解码失败: %s", err.Error())),
 		)
 	}
 
@@ -208,7 +208,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 			Msg("SaveTodos JSON 编码失败")
 		return exception.BuildError(
 			exception.StatusToolTodosSaveFailed,
-			exception.WithParam("reason", fmt.Sprintf("json encode failed: %s", err.Error())),
+			exception.WithParam("reason", fmt.Sprintf("JSON 编码失败: %s", err.Error())),
 		)
 	}
 
@@ -220,7 +220,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 			Msg("SaveTodos 写入文件失败")
 		return exception.BuildError(
 			exception.StatusToolTodosSaveFailed,
-			exception.WithParam("reason", fmt.Sprintf("write file failed: %s", err.Error())),
+			exception.WithParam("reason", fmt.Sprintf("写入文件失败: %s", err.Error())),
 		)
 	}
 	return nil
@@ -248,7 +248,7 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 		if len(input.Tasks) == 0 {
 			return nil, exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", "tasks is required and must not be empty"),
+				exception.WithParam("reason", "tasks 为必填项且不能为空"),
 			)
 		}
 
@@ -263,25 +263,25 @@ func NewTodoCreateTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			if task.Content == "" {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("task %s: content is required", task.ID)),
+					exception.WithParam("reason", fmt.Sprintf("任务 %s: content 为必填项", task.ID)),
 				)
 			}
 			if task.ActiveForm == "" {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("task %s: activeForm is required", task.ID)),
+					exception.WithParam("reason", fmt.Sprintf("任务 %s: activeForm 为必填项", task.ID)),
 				)
 			}
 			if task.Description == "" {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("task %s: description is required", task.ID)),
+					exception.WithParam("reason", fmt.Sprintf("任务 %s: description 为必填项", task.ID)),
 				)
 			}
 			if _, exists := idSet[task.ID]; exists {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", fmt.Sprintf("duplicate task id: %s", task.ID)),
+					exception.WithParam("reason", fmt.Sprintf("重复的任务 ID: %s", task.ID)),
 				)
 			}
 			idSet[task.ID] = struct{}{}
@@ -396,7 +396,7 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 		if input.ID == "" {
 			return nil, exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", "id is required"),
+				exception.WithParam("reason", "id 为必填项"),
 			)
 		}
 
@@ -421,7 +421,7 @@ func NewTodoGetTool(todoTool TodoTool, language, agentID string) tool.Tool {
 
 		return nil, exception.BuildError(
 			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", fmt.Sprintf("todo item with id %s not found", input.ID)),
+			exception.WithParam("reason", fmt.Sprintf("ID 为 %s 的 Todo 项未找到", input.ID)),
 		)
 	}
 
@@ -467,7 +467,7 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			if input.TodoData == nil {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", "todo_data is required for insert_after action"),
+					exception.WithParam("reason", "insert_after 操作需要 todo_data"),
 				)
 			}
 			updatedTodos, msg, err = todoModifyInsertAfter(todos, input.TodoData.TargetID, input.TodoData.Items)
@@ -475,14 +475,14 @@ func NewTodoModifyTool(todoTool TodoTool, language, agentID string) tool.Tool {
 			if input.TodoData == nil {
 				return nil, exception.BuildError(
 					exception.StatusToolTodosValidationInvalid,
-					exception.WithParam("reason", "todo_data is required for insert_before action"),
+					exception.WithParam("reason", "insert_before 操作需要 todo_data"),
 				)
 			}
 			updatedTodos, msg, err = todoModifyInsertBefore(todos, input.TodoData.TargetID, input.TodoData.Items)
 		default:
 			return nil, exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("unsupported action: %s", input.Action)),
+				exception.WithParam("reason", fmt.Sprintf("不支持的操作: %s", input.Action)),
 			)
 		}
 
@@ -543,7 +543,7 @@ func extractSessionID(opts []tool.ToolOption) (string, error) {
 	if session == nil {
 		return "", exception.BuildError(
 			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", "Session ID is required"),
+			exception.WithParam("reason", "Session ID 为必填项"),
 		)
 	}
 	sessionID := ""
@@ -553,7 +553,7 @@ func extractSessionID(opts []tool.ToolOption) (string, error) {
 	if sessionID == "" {
 		return "", exception.BuildError(
 			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", "Session ID is required"),
+			exception.WithParam("reason", "Session ID 为必填项"),
 		)
 	}
 	return sessionID, nil
@@ -608,7 +608,7 @@ func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hsc
 	if len(updates) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "todos is required for update action"),
+			exception.WithParam("reason", "update 操作需要 todos"),
 		)
 	}
 
@@ -642,7 +642,7 @@ func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hsc
 		if id == "" {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", "each update item must have an id field"),
+				exception.WithParam("reason", "每个更新项必须包含 id 字段"),
 			)
 		}
 		found := false
@@ -663,7 +663,7 @@ func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hsc
 					if err != nil {
 						return nil, "", exception.BuildError(
 							exception.StatusToolTodosValidationInvalid,
-							exception.WithParam("reason", fmt.Sprintf("invalid status %q for task %s", status, id)),
+							exception.WithParam("reason", fmt.Sprintf("任务 %s 的状态无效: %q", id, status)),
 						)
 					}
 					todos[i].Status = parsed
@@ -677,7 +677,7 @@ func todoModifyUpdate(todos []hschema.TodoItem, updates []map[string]any) ([]hsc
 		if !found {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("todo item with id %s not found", id)),
+				exception.WithParam("reason", fmt.Sprintf("ID 为 %s 的 Todo 项未找到", id)),
 			)
 		}
 		updatedCount++
@@ -691,7 +691,7 @@ func todoModifyDelete(todos []hschema.TodoItem, ids []string) ([]hschema.TodoIte
 	if len(ids) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "ids is required for delete action"),
+			exception.WithParam("reason", "delete 操作需要 ids"),
 		)
 	}
 	deleteSet := make(map[string]struct{}, len(ids))
@@ -721,7 +721,7 @@ func todoModifyCancel(todos []hschema.TodoItem, ids []string) ([]hschema.TodoIte
 	if len(ids) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "ids is required for cancel action"),
+			exception.WithParam("reason", "cancel 操作需要 ids"),
 		)
 	}
 	cancelledCount := 0
@@ -749,7 +749,7 @@ func todoModifyAppend(todos []hschema.TodoItem, newItems []map[string]any) ([]hs
 	if len(newItems) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "todos is required for append action"),
+			exception.WithParam("reason", "append 操作需要 todos"),
 		)
 	}
 	// 校验新任务
@@ -777,7 +777,7 @@ func todoModifyAppend(todos []hschema.TodoItem, newItems []map[string]any) ([]hs
 		if _, exists := existingIDs[id]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("Batch append failed: Task with ID '%s' is duplicated", id)),
+				exception.WithParam("reason", fmt.Sprintf("批量追加失败: 任务 ID '%s' 重复", id)),
 			)
 		}
 		existingIDs[id] = struct{}{}
@@ -797,13 +797,13 @@ func todoModifyInsertAfter(todos []hschema.TodoItem, targetID string, items []ma
 	if targetID == "" {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "target_id is required for insert_after action"),
+			exception.WithParam("reason", "insert_after 操作需要 target_id"),
 		)
 	}
 	if len(items) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "items is required for insert_after action"),
+			exception.WithParam("reason", "insert_after 操作需要 items"),
 		)
 	}
 
@@ -837,7 +837,7 @@ func todoModifyInsertAfter(todos []hschema.TodoItem, targetID string, items []ma
 		if _, exists := existingIDs[id]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("Insert failed: Task with ID '%s' already exists", id)),
+				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", id)),
 			)
 		}
 		existingIDs[id] = struct{}{}
@@ -854,7 +854,7 @@ func todoModifyInsertAfter(todos []hschema.TodoItem, targetID string, items []ma
 	if targetIdx == -1 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", fmt.Sprintf("target task %s not found", targetID)),
+			exception.WithParam("reason", fmt.Sprintf("目标任务 %s 未找到", targetID)),
 		)
 	}
 
@@ -876,13 +876,13 @@ func todoModifyInsertBefore(todos []hschema.TodoItem, targetID string, items []m
 	if targetID == "" {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "target_id is required for insert_before action"),
+			exception.WithParam("reason", "insert_before 操作需要 target_id"),
 		)
 	}
 	if len(items) == 0 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "items is required for insert_before action"),
+			exception.WithParam("reason", "insert_before 操作需要 items"),
 		)
 	}
 
@@ -916,7 +916,7 @@ func todoModifyInsertBefore(todos []hschema.TodoItem, targetID string, items []m
 		if _, exists := existingIDs[id]; exists {
 			return nil, "", exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("Insert failed: Task with ID '%s' already exists", id)),
+				exception.WithParam("reason", fmt.Sprintf("插入失败: 任务 ID '%s' 已存在", id)),
 			)
 		}
 		existingIDs[id] = struct{}{}
@@ -933,7 +933,7 @@ func todoModifyInsertBefore(todos []hschema.TodoItem, targetID string, items []m
 	if targetIdx == -1 {
 		return nil, "", exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", fmt.Sprintf("target task %s not found", targetID)),
+			exception.WithParam("reason", fmt.Sprintf("目标任务 %s 未找到", targetID)),
 		)
 	}
 
@@ -983,7 +983,7 @@ func validateSingleInProgress(existingTodos []hschema.TodoItem, newInProgressIDs
 	if total > 1 {
 		return exception.BuildError(
 			exception.StatusToolTodosValidationInvalid,
-			exception.WithParam("reason", "only one task can be in_progress at a time"),
+			exception.WithParam("reason", "同一时间只能有一个 in_progress 任务"),
 		)
 	}
 	return nil
@@ -1004,13 +1004,13 @@ func validateTargetTaskStatus(todos []hschema.TodoItem, targetID string, allowed
 			}
 			return exception.BuildError(
 				exception.StatusToolTodosValidationInvalid,
-				exception.WithParam("reason", fmt.Sprintf("target task %s status is %s, must be %v", targetID, item.Status.String(), allowedStrs)),
+				exception.WithParam("reason", fmt.Sprintf("目标任务 %s 状态为 %s, 必须为 %v", targetID, item.Status.String(), allowedStrs)),
 			)
 		}
 	}
 	return exception.BuildError(
 		exception.StatusToolTodosValidationInvalid,
-		exception.WithParam("reason", fmt.Sprintf("target task %s not found", targetID)),
+		exception.WithParam("reason", fmt.Sprintf("目标任务 %s 未找到", targetID)),
 	)
 }
 

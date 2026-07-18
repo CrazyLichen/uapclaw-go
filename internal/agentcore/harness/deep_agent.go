@@ -1005,7 +1005,7 @@ func (d *DeepAgent) CreateNewContextEngine(ctx context.Context, sessionID string
 
 	if reactAgent == nil {
 		return "", exception.BuildError(exception.StatusDeepagentRuntimeError,
-			exception.WithMsg("DeepAgent not configured. Call configure() first."))
+			exception.WithMsg("DeepAgent 未配置，请先调用 configure()"))
 	}
 
 	// 对齐 Python: new_session_id = session_id or str(uuid.uuid4())
@@ -1092,7 +1092,7 @@ func (d *DeepAgent) resolveContextSessionID(sessionID string) (string, error) {
 		return loopSess.GetSessionID(), nil
 	}
 	return "", exception.BuildError(exception.StatusDeepagentContextParamError,
-		exception.WithMsg("session_id is required when no context is bound."))
+		exception.WithMsg("未绑定上下文时 session_id 为必填项"))
 }
 
 // getContextOrError 获取内部 ReAct 上下文，不存在则返回错误。
@@ -1104,7 +1104,7 @@ func (d *DeepAgent) getContextOrError(sessionID string, contextID string) (ceint
 
 	if reactAgent == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
-			exception.WithMsg("DeepAgent not configured. Call configure() first."))
+			exception.WithMsg("DeepAgent 未配置，请先调用 configure()"))
 	}
 
 	resolvedSessionID, err := d.resolveContextSessionID(sessionID)
@@ -1115,7 +1115,7 @@ func (d *DeepAgent) getContextOrError(sessionID string, contextID string) (ceint
 	ce := reactAgent.ContextEngine()
 	if ce == nil {
 		return nil, exception.BuildError(exception.StatusDeepagentRuntimeError,
-			exception.WithMsg("ContextEngine not available. Call ensureInitialized() first."))
+			exception.WithMsg("ContextEngine 不可用，请先调用 ensureInitialized()"))
 	}
 
 	mc := ce.GetContext(contextID, resolvedSessionID)

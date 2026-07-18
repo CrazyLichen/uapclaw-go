@@ -2,6 +2,10 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -51,9 +55,9 @@ Principles:
 `
 )
 
+// BuildTaskToolSection 构建任务工具节（Priority 85）
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildTaskToolSection 构建任务工具节（Priority 85）
 func BuildTaskToolSection(lang string) saprompt.PromptSection {
 	var content string
 	if lang == "en" {

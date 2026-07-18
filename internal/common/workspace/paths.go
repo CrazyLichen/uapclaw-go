@@ -8,9 +8,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/utils/path"
 )
 
+// 重导出 path 包常量，保持 workspace 外部 API 不变。
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
-// 重导出 path 包常量，保持 workspace 外部 API 不变。
 const (
 	// EnvHome 自定义用户主目录环境变量。
 	EnvHome = path.EnvHome
@@ -31,9 +35,9 @@ var (
 	fallbackLogged bool
 )
 
+// UserHomeDir 获取用户主目录。
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// UserHomeDir 获取用户主目录。
 func UserHomeDir() string {
 	return path.UserHomeDir()
 }
@@ -174,11 +178,11 @@ func AgentTeamsHomeDir() string {
 	return path.AgentTeamsHomeDir()
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // logFallbackIfNeeded 检查 path 包的回退状态并补日志。
 //
 // path 包是纯计算不含日志，workspace 负责在回退时输出日志。
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 func logFallbackIfNeeded() {
 	if fallbackLogged {
 		return

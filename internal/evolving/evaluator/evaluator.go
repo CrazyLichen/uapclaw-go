@@ -122,14 +122,14 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 		"model_answer":    fmt.Sprintf("%v", predict),
 	})
 	if err != nil {
-		ec.Reason = "Failed to format evaluation template"
+		ec.Reason = "格式化评估模板失败"
 		return ec, nil
 	}
 
 	// 转为消息列表
 	msgs, err := formatted.ToMessages()
 	if err != nil {
-		ec.Reason = "Failed to convert template to messages"
+		ec.Reason = "将模板转换为消息列表失败"
 		return ec, nil
 	}
 
@@ -141,7 +141,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 			Str("method", "DefaultEvaluator.Evaluate").
 			Err(err).
 			Msg("LLM 调用失败")
-		ec.Reason = "Failed to evaluate case due to model error"
+		ec.Reason = "因模型错误导致评估样本失败"
 		return ec, nil
 	}
 
@@ -151,7 +151,7 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 	// 解析评估结果
 	evaluatedResult := d.extractEvaluateResult(ctx, responseText, case_, predict)
 	if evaluatedResult == nil {
-		ec.Reason = "Failed to evaluate case due to parsing error"
+		ec.Reason = "因解析错误导致评估样本失败"
 		return ec, nil
 	}
 
@@ -364,7 +364,7 @@ func validateBatchArgs(casesLen, predictsLen, numParallel int) error {
 		return exception.NewBaseError(
 			exception.StatusToolchainEvaluatorExecutionError,
 			exception.WithMsg(fmt.Sprintf(
-				"length of cases: %d does not equal with length of predicts: %d",
+				"样本数量 %d 与预测数量 %d 不一致",
 				casesLen, predictsLen,
 			)),
 		)

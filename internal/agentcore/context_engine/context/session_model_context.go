@@ -484,7 +484,7 @@ func (mc *SessionModelContext) ReloaderTool() tool.Tool {
 	reloadFn := func(ctx context.Context, input reloaderToolInput, _ ...tool.ToolOption) (string, error) {
 		reloadedMessages := mc.offloadMessageBuffer.Reload(input.OffloadHandle, input.OffloadType)
 		if len(reloadedMessages) == 0 {
-			return fmt.Sprintf("Failed to reload messages with offload_handle=%s and offload_type=%s", input.OffloadHandle, input.OffloadType), nil
+			return fmt.Sprintf("重新加载消息失败，offload_handle=%s, offload_type=%s", input.OffloadHandle, input.OffloadType), nil
 		}
 		return FormatReloadedMessages(input.OffloadHandle, reloadedMessages), nil
 	}

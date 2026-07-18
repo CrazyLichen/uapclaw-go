@@ -6,6 +6,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -236,12 +240,12 @@ When operating today's session logs file, please use ` + "`{today_date}.md`" + `
 `
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildMemorySection 构建记忆节
 //
 // mode 支持 "proactive"、"inactive"、"read_only"。
 // todayDate 为当前日期字符串（格式 YYYY-MM-DD），仅在 proactive 模式下使用。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildMemorySection(mode string, todayDate string, lang string) saprompt.PromptSection {
 	var parts []string
 

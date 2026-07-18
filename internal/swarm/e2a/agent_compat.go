@@ -36,7 +36,7 @@ func E2AToAgentRequest(env *E2AEnvelope) (*schema.AgentRequest, error) {
 		if internalMap, ok := internal.(map[string]any); ok {
 			if failed, ok := internalMap[e2aFallbackFailedKey]; ok {
 				if b, ok := failed.(bool); ok && b {
-					return nil, fmt.Errorf("e2a_to_agent_request called on fallback envelope; use legacy path")
+					return nil, fmt.Errorf("e2a_to_agent_request 在回退信封上调用；请使用 legacy 路径")
 				}
 			}
 		}

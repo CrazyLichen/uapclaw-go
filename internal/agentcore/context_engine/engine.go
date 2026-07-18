@@ -195,7 +195,7 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 	if mc == nil {
 		return "", exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("cannot find context '"+contextID+"' in session '"+sessionID+"'"),
+			exception.WithMsg("在会话 '"+sessionID+"' 中找不到上下文 '"+contextID+"'"),
 		)
 	}
 

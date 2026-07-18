@@ -46,6 +46,11 @@ type ContextProcessorRail struct {
 	allProcessors []ceiface.ProcessorSpec
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ContextProcessorRailOption ContextProcessorRail 构造选项函数
+type ContextProcessorRailOption func(*ContextProcessorRail)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -53,6 +58,8 @@ const (
 	// 对齐 Python: ContextProcessorRail.priority = 85
 	contextProcessorRailPriority = 85
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -202,6 +209,21 @@ func (r *ContextProcessorRail) GetCallbacks() map[sainterfaces.AgentCallbackEven
 	return callbacks
 }
 
+// WithPreset 设置是否启用预设默认处理器
+func WithPreset(preset bool) ContextProcessorRailOption {
+	return func(r *ContextProcessorRail) { r.preset = preset }
+}
+
+// WithUserProcessors 设置用户自定义处理器规格列表
+func WithUserProcessors(procs []ceiface.ProcessorSpec) ContextProcessorRailOption {
+	return func(r *ContextProcessorRail) { r.userProcessors = procs }
+}
+
+// WithSessionMemoryEnabled 设置是否启用会话记忆
+func WithSessionMemoryEnabled(enabled bool) ContextProcessorRailOption {
+	return func(r *ContextProcessorRail) { r.sessionMemoryEnabled = enabled }
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildPresetProcessors 构建预设默认处理器列表。
@@ -288,24 +310,4 @@ func getSystemPromptBuilder(agent sainterfaces.BaseAgent) saprompt.SystemPromptB
 		return provider.SystemPromptBuilder()
 	}
 	return nil
-}
-
-// ──────────────────────────── 导出函数 ────────────────────────────
-
-// ContextProcessorRailOption ContextProcessorRail 构造选项函数
-type ContextProcessorRailOption func(*ContextProcessorRail)
-
-// WithPreset 设置是否启用预设默认处理器
-func WithPreset(preset bool) ContextProcessorRailOption {
-	return func(r *ContextProcessorRail) { r.preset = preset }
-}
-
-// WithUserProcessors 设置用户自定义处理器规格列表
-func WithUserProcessors(procs []ceiface.ProcessorSpec) ContextProcessorRailOption {
-	return func(r *ContextProcessorRail) { r.userProcessors = procs }
-}
-
-// WithSessionMemoryEnabled 设置是否启用会话记忆
-func WithSessionMemoryEnabled(enabled bool) ContextProcessorRailOption {
-	return func(r *ContextProcessorRail) { r.sessionMemoryEnabled = enabled }
 }

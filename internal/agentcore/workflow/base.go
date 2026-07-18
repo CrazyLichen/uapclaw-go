@@ -12,7 +12,7 @@ type WorkflowOutput struct {
 	State WorkflowExecutionState
 }
 
-// ──────────────────────────── 枚 ────────────────────────────
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // WorkflowExecutionState 工作流执行状态。
 //

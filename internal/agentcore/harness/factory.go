@@ -28,6 +28,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -52,8 +56,6 @@ var (
 	}
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // CreateDeepAgent 创建并配置 DeepAgent 实例。
 //
 // 按以下 10 步流程组装，对齐 Python create_deep_agent()：
@@ -70,6 +72,8 @@ var (
 // 10. Rail 注册 (显式 + 默认自动添加)
 //
 // 对应 Python: openjiuwen/harness/factory.py create_deep_agent()
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) (*DeepAgent, error) {
 	// ── 步骤 1：默认 AgentCard ──
 	// 对齐 Python: factory.py L219-223
@@ -208,11 +212,11 @@ func ResetFreeSearchRuntimeFlags() {
 	_ = os.Setenv(freeSearchBingEnabledEnv, "false")
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // normalizeTools 将 ToolCard 列表和 Tool 实例列表统一规范化，
 // 合并为 ToolCard 列表和 Tool 实例列表，同时过滤被禁用的 free_search 工具。
 // 对齐 Python: _normalize_tools(tools: List[Tool | ToolCard])
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
 	// 纯 ToolCard 直接加入 normalizedCards
 	for _, tc := range toolCards {

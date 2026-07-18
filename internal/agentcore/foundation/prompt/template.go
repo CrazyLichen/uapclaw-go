@@ -146,7 +146,7 @@ func (t *PromptTemplate) ToMessages() ([]schema.BaseMessage, error) {
 			if msg == nil {
 				return nil, exception.NewBaseError(
 					exception.StatusPromptTemplateInvalid,
-					exception.WithMsg("prompt template type must be in str or list[BaseMessage]"),
+					exception.WithMsg("提示词模板类型必须为 str 或 list[BaseMessage]"),
 				)
 			}
 		}
@@ -156,7 +156,7 @@ func (t *PromptTemplate) ToMessages() ([]schema.BaseMessage, error) {
 	default:
 		return nil, exception.NewBaseError(
 			exception.StatusPromptTemplateInvalid,
-			exception.WithMsg(fmt.Sprintf("prompt template type must be in str or list[BaseMessage], got %T", t.Content)),
+			exception.WithMsg(fmt.Sprintf("提示词模板类型必须为 str 或 list[BaseMessage]，实际类型: %T", t.Content)),
 		)
 	}
 }

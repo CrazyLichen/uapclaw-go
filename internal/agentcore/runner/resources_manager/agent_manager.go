@@ -11,12 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // AgentMgr Agent 资源管理器，嵌入 AbstractManager 复用 provider 注册/获取/注销能力。
 //
 // 对应 Python: AgentMgr (openjiuwen/core/runner/resources_manager/agent_manager.py)
@@ -55,13 +49,13 @@ func (m *AgentMgr) AddAgent(agentID string, provider AgentProvider) error {
 	if agentID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "agent"),
-			exception.WithParam("reason", "agent id is empty"),
+			exception.WithParam("reason", "Agent ID 为空"),
 		)
 	}
 	if provider == nil {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
 			exception.WithParam("resource_type", "agent"),
-			exception.WithParam("reason", "agent provider is nil"),
+			exception.WithParam("reason", "Agent 提供者为 nil"),
 		)
 	}
 

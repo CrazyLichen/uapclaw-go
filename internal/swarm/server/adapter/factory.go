@@ -8,6 +8,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -17,12 +21,10 @@ const (
 	defaultSDK = "harness"
 )
 
+// logComponent 日志组件
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// logComponent 日志组件
 var logComponent = logger.ComponentAgentServer
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // ResolveSDKChoice 从环境变量解析 SDK 选择。
 //
@@ -33,6 +35,8 @@ var logComponent = logger.ComponentAgentServer
 //   - "harness" → "harness"（线束模式映射）
 //   - "pi" → "pi"（预留，尚未实现）
 //   - 未知值 → 警告并回退 "harness"
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func ResolveSDKChoice() string {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(sdkEnvVar)))
 	if raw == "" {
@@ -81,5 +85,3 @@ func CreateAdapter(sdk string, mode string) (AgentAdapter, error) {
 		return nil, fmt.Errorf("未知 SDK %q，支持: harness, pi (预留)", sdkName)
 	}
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────

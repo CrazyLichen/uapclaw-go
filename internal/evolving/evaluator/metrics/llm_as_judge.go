@@ -120,6 +120,19 @@ func (m *LLMAsJudgeMetric) ComputeBatch(predictions, labels []any, opts ...Metri
 	return DefaultComputeBatch(m, predictions, labels, opts...)
 }
 
+// IsPassResult 判断评估结果是否通过。
+//
+// 对应 Python: DefaultEvaluator._is_pass_result(result)
+func IsPassResult(result any) bool {
+	if result == true {
+		return true
+	}
+	if s, ok := result.(string); ok {
+		return s == "true" || s == "True" || s == "TRUE"
+	}
+	return false
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // parseResult 解析 LLM 评估结果，返回 1.0（通过）或 0.0（失败）。
@@ -153,17 +166,4 @@ func (m *LLMAsJudgeMetric) parseResult(response *llmschema.AssistantMessage) Met
 		return MetricResult{"llm_as_judge": 1.0}
 	}
 	return MetricResult{"llm_as_judge": 0.0}
-}
-
-// IsPassResult 判断评估结果是否通过。
-//
-// 对应 Python: DefaultEvaluator._is_pass_result(result)
-func IsPassResult(result any) bool {
-	if result == true {
-		return true
-	}
-	if s, ok := result.(string); ok {
-		return s == "true" || s == "True" || s == "TRUE"
-	}
-	return false
 }

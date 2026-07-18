@@ -7,10 +7,14 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
-
 // 注意：Python 源码中模板使用反引号包裹工具名（如 `HEARTBEAT_OK`），
 // Go 双引号字符串中反引号无法直接表达，因此使用 \u0060 转义。
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	heartbeatSystemPromptCN = "\n" +
 		"## 心跳检测\n" +
@@ -58,11 +62,11 @@ var (
 	_ = regexp.MustCompile(`<!--.*?-->`)
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildHeartbeatSection 构建心跳节（Priority 80）
 //
 // heartbeatContent 为 HEARTBEAT.md 文件的原始内容（可为空）。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildHeartbeatSection(heartbeatContent string, lang string) saprompt.PromptSection {
 	var template string
 	if lang == "en" {
@@ -83,9 +87,9 @@ func BuildHeartbeatSection(heartbeatContent string, lang string) saprompt.Prompt
 	}
 }
 
+// cleanHeartbeatContent 清理 HEARTBEAT.md 内容：移除 HTML 注释和空行
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// cleanHeartbeatContent 清理 HEARTBEAT.md 内容：移除 HTML 注释和空行
 func cleanHeartbeatContent(content string) string {
 	if content == "" {
 		return ""

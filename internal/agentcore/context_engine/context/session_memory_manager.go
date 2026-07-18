@@ -297,6 +297,16 @@ func (c SessionMemoryConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置。
+func (c *SessionMemoryConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil && model != nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil && modelClient != nil {
+		c.ModelClient = modelClient
+	}
+}
+
 // NewSessionMemoryDirectUpdater 创建 direct_replace 模式的会话记忆更新器。
 func NewSessionMemoryDirectUpdater(config SessionMemoryConfig) *SessionMemoryDirectUpdater {
 	return &SessionMemoryDirectUpdater{

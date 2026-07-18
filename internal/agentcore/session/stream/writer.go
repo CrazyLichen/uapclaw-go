@@ -109,7 +109,7 @@ func (w *outputWriter) WriteInteraction(outputType string, index int, payload an
 func writeStream(emitter *StreamEmitter, ctx context.Context, schema Schema) error {
 	if schema == nil {
 		return exception.NewBaseError(exception.StatusStreamWriterWriteStreamValidationError,
-			exception.WithMsg("stream data is nil"),
+			exception.WithMsg("流数据为 nil"),
 		)
 	}
 

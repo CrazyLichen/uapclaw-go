@@ -80,6 +80,9 @@ func (c *MicroCompactProcessorConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置（无 Model/ModelClient 字段，空实现）。
+func (c *MicroCompactProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+
 // NewMicroCompactProcessor 创建微压缩处理器实例。
 func NewMicroCompactProcessor(config *MicroCompactProcessorConfig) (*MicroCompactProcessor, error) {
 	if err := config.Validate(); err != nil {

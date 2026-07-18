@@ -6,6 +6,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -143,11 +147,11 @@ The system automatically detects semantic conflicts with existing memories:
 `
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildCodingMemorySection 构建编码记忆节（Priority 85）
 //
 // memoryDir 为记忆目录路径；readOnly 为是否只读模式。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildCodingMemorySection(memoryDir string, readOnly bool, lang string) saprompt.PromptSection {
 	var template string
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llm_schema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
@@ -25,6 +26,8 @@ func (c *testConfig) Validate() error {
 	}
 	return nil
 }
+
+func (c *testConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
 
 // TestContextEvent_字段默认值 验证 ContextEvent 零值
 func TestContextEvent_字段默认值(t *testing.T) {

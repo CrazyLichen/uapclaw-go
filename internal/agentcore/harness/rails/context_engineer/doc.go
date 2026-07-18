@@ -15,15 +15,12 @@
 // 文件目录：
 //
 //	context_engineer/   # 上下文工程 Rail
-//	├── doc.go                       # 包文档
-//	├── merge_config.go              # 反射配置合并工具
-//	├── merge_config_test.go         # 配置合并测试
-//	├── refresh_task_state.go        # 任务状态刷新
-//	├── refresh_task_state_test.go   # 任务状态刷新测试
-//	├── fix_incomplete_tool_context.go     # 不完整工具上下文修复
-//	├── fix_incomplete_tool_context_test.go # 工具上下文修复测试
-//	├── context_processor_rail.go    # ContextProcessorRail 实现
-//	├── context_assemble_rail.go     # ContextAssembleRail 实现
+//	├── doc.go                            # 包文档
+//	├── merge_config.go                   # 反射配置合并工具
+//	├── refresh_task_state.go             # 任务状态刷新
+//	├── fix_incomplete_tool_context.go    # 不完整工具上下文修复
+//	├── context_processor_rail.go         # ContextProcessorRail 实现
+//	├── context_assemble_rail.go          # ContextAssembleRail 实现
 //
 // 对应 Python 代码：openjiuwen/harness/rails/context_engineer/
 package context_engineer

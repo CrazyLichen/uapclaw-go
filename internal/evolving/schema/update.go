@@ -210,11 +210,6 @@ func ApplyResultWithErrors(operatorID, target string, mode UpdateMode, effect Up
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// strPtr 返回字符串指针。
-func strPtr(s string) *string { return &s }
-
 // MetadataClone 克隆 metadata map。
 func MetadataClone(m map[string]any) map[string]any {
 	if m == nil {
@@ -222,3 +217,8 @@ func MetadataClone(m map[string]any) map[string]any {
 	}
 	return maps.Clone(m)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// strPtr 返回字符串指针。
+func strPtr(s string) *string { return &s }

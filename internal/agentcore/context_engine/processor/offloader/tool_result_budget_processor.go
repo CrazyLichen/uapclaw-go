@@ -135,6 +135,9 @@ func (c *ToolResultBudgetProcessorConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置（无 Model/ModelClient 字段，空实现）。
+func (c *ToolResultBudgetProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+
 // TriggerAddMessages 判断是否需要介入消息添加。
 //
 // 触发条件：存在轮次内工具结果 Token 总数超过预算。

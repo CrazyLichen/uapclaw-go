@@ -10,12 +10,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
+// CodeOperation 代码操作接口
 type CodeOperation interface {
 	// ExecuteCode 执行代码
 	ExecuteCode(ctx context.Context, code string, opts ...CodeOption) (*result.ExecuteCodeResult, error)
@@ -25,6 +20,7 @@ type CodeOperation interface {
 	ListTools() []*tool.ToolCard
 }
 
+// CodeOptions 代码执行选项
 type CodeOptions struct {
 	// Language 编程语言
 	Language string
@@ -38,13 +34,19 @@ type CodeOptions struct {
 	Options map[string]any
 }
 
+// BaseCodeOperation 代码操作基类
 type BaseCodeOperation struct {
 	BaseOperation
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// CodeOption 代码执行选项函数
 type CodeOption func(*CodeOptions)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

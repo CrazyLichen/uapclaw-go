@@ -249,7 +249,7 @@ func (ac *AgentClient) SendRequest(ctx context.Context, envelope *e2a.E2AEnvelop
 	ac.messageQueuesMu.Lock()
 	if _, exists := ac.messageQueues[rid]; exists {
 		ac.messageQueuesMu.Unlock()
-		return nil, fmt.Errorf("duplicate in-flight request_id=%s; refusing to register queue", rid)
+		return nil, fmt.Errorf("重复的进行中请求 request_id=%s；拒绝注册队列", rid)
 	}
 	queue := make(chan map[string]any, messageQueueBufferSize)
 	ac.messageQueues[rid] = queue
@@ -326,7 +326,7 @@ func (ac *AgentClient) SendRequestStream(ctx context.Context, envelope *e2a.E2AE
 	ac.messageQueuesMu.Lock()
 	if _, exists := ac.messageQueues[rid]; exists {
 		ac.messageQueuesMu.Unlock()
-		return nil, fmt.Errorf("duplicate in-flight request_id=%s; refusing to register queue", rid)
+		return nil, fmt.Errorf("重复的进行中请求 request_id=%s；拒绝注册队列", rid)
 	}
 	queue := make(chan map[string]any, messageQueueBufferSize)
 	ac.messageQueues[rid] = queue

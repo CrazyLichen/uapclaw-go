@@ -355,8 +355,6 @@ func stripHandoffMessages(messages []any) []any {
 	return cleaned
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // getTargetAgent 懒初始化目标 Agent。
 //
 // 对应 Python: ContainerAgent._get_target_agent()

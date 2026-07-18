@@ -514,6 +514,16 @@ func (c *CurrentRoundCompressorConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置。
+func (c *CurrentRoundCompressorConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil && model != nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil && modelClient != nil {
+		c.ModelClient = modelClient
+	}
+}
+
 // NewCurrentRoundCompressor 创建当轮增量压缩器实例。
 //
 // 对应 Python: CurrentRoundCompressor.__init__(config)
@@ -630,7 +640,7 @@ func (crc *CurrentRoundCompressor) OnAddMessages(ctx context.Context, mc iface.M
 		}
 		return nil, messagesToAdd, exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("compress messages failed"),
+			exception.WithMsg("压缩消息失败"),
 			exception.WithCause(err),
 		)
 	}

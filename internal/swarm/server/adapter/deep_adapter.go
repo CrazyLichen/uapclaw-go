@@ -402,7 +402,7 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 	// 对齐 Python: if sys_operation is None: raise RuntimeError (G7: nil 检查)
 	sysOpInstance, _ := d.createSysOperation(configBase)
 	if sysOpInstance == nil {
-		return fmt.Errorf("sys_operation is not available, maybe task is not running")
+		return fmt.Errorf("sys_operation 不可用，可能任务未在运行")
 	}
 
 	// 步骤 18: configured_subagents, should_add_general_agent = _build_configured_subagents(...)

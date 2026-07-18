@@ -283,6 +283,16 @@ func (c *FullCompactProcessorConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置。
+func (c *FullCompactProcessorConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil && model != nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil && modelClient != nil {
+		c.ModelClient = modelClient
+	}
+}
+
 // ProcessorType 返回处理器类型标识。
 func (fcp *FullCompactProcessor) ProcessorType() string {
 	return "FullCompactProcessor"

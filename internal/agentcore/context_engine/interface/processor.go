@@ -19,6 +19,11 @@ import (
 type ProcessorConfig interface {
 	// Validate 校验配置参数
 	Validate() error
+	// SetModelDefaults 设置模型配置默认值。
+	// 当 Config 的 Model/ModelClient 字段为 nil 时，用传入的参数回填。
+	// 无 Model/ModelClient 字段的 Config 实现空方法。
+	// 对齐 Python: hasattr(merged_cfg, "model") and getattr(merged_cfg, "model", None) is None
+	SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig)
 }
 
 // ContextProcessor 上下文处理器接口，所有处理器插件必须实现。

@@ -4,6 +4,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -62,11 +66,11 @@ No skill was selected for this task. When skill information is available, read t
 `
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildSkillsSection 构建技能节
 //
 // mode 支持 "all"、"auto_list"、"no_skill"；skillLines 仅在 all 模式下使用。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildSkillsSection(mode string, skillPaths []string, lang string) saprompt.PromptSection {
 	var content string
 
@@ -121,9 +125,9 @@ func GetListSkillSystemPrompt(lang string) string {
 	return skillRailListSkillSystemPromptCN
 }
 
+// buildSkillLinesText 从技能路径列表构建技能行文本
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// buildSkillLinesText 从技能路径列表构建技能行文本
 func buildSkillLinesText(skillPaths []string) string {
 	if len(skillPaths) == 0 {
 		return ""

@@ -6,6 +6,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -165,14 +169,14 @@ All tasks will be executed using the Agent's default model.
 `
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildTodoSection 构建待办节（Priority 90）。
 //
 // 返回 *PromptSection，对齐 Python build_todo_section 返回 Optional[PromptSection]。
 // 当无内容可注入时返回 nil，调用方应判断 nil 并调用 RemoveSection。
 // modelSelection 为预构建的模型列表字符串（可为空）。
 // 若非空则追加模型选择提示词，否则追加"无模型选择"提示词。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildTodoSection(modelSelection string, lang string) *saprompt.PromptSection {
 	var content string
 	if lang == "en" {

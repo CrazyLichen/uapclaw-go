@@ -114,6 +114,9 @@ func (c *MessageOffloaderConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置（无 Model/ModelClient 字段，空实现）。
+func (c *MessageOffloaderConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+
 // ProcessorType 返回处理器类型标识。
 func (mo *MessageOffloader) ProcessorType() string { return "MessageOffloader" }
 

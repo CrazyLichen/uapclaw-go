@@ -234,6 +234,16 @@ func (c *RoundLevelCompressorConfig) Validate() error {
 	return nil
 }
 
+// SetModelDefaults 设置默认模型配置。
+func (c *RoundLevelCompressorConfig) SetModelDefaults(model *llm_schema.ModelRequestConfig, modelClient *llm_schema.ModelClientConfig) {
+	if c.Model == nil && model != nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil && modelClient != nil {
+		c.ModelClient = modelClient
+	}
+}
+
 // NewRoundLevelCompressor 创建轮级压缩器实例。
 //
 // 对应 Python: RoundLevelCompressor.__init__(config)
@@ -334,7 +344,7 @@ func (rlc *RoundLevelCompressor) OnAddMessages(ctx context.Context, mc iface.Mod
 		}
 		return nil, messagesToAdd, exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("round level compression failed"),
+			exception.WithMsg("轮次级别压缩失败"),
 			exception.WithCause(err),
 		)
 	}
@@ -379,13 +389,13 @@ func (rlc *RoundLevelCompressor) OnGetContextWindow(ctx context.Context, mc ifac
 		if isModelCallFailedError(err) {
 			return nil, cw, exception.NewBaseError(
 				exception.StatusModelCallFailed,
-				exception.WithMsg("round level compression failed: model call failed"),
+				exception.WithMsg("轮次级别压缩失败：模型调用失败"),
 				exception.WithCause(err),
 			)
 		}
 		return nil, cw, exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("round level compression failed"),
+			exception.WithMsg("轮次级别压缩失败"),
 			exception.WithCause(err),
 		)
 	}

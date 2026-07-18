@@ -243,7 +243,7 @@ func ValidateArgs(schema map[string]any, args map[string]any) error {
 		propSchemaRaw, known := props[key]
 		if !known {
 			if !additional {
-				return fmt.Errorf("unexpected property %q", key)
+				return fmt.Errorf("意外的属性 %q", key)
 			}
 			continue
 		}
@@ -323,7 +323,7 @@ func checkRequired(schema map[string]any, args map[string]any) error {
 
 	for _, field := range required {
 		if _, present := args[field]; !present {
-			return fmt.Errorf("missing required property %q", field)
+			return fmt.Errorf("缺少必需属性 %q", field)
 		}
 	}
 	return nil
@@ -353,34 +353,34 @@ func checkType(key string, val any, propSchema map[string]any) error {
 	switch typeName {
 	case "string":
 		if _, ok := val.(string); !ok {
-			return fmt.Errorf("property %q: expected string, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 string 类型，实际类型 %T", key, val)
 		}
 	case "integer":
 		switch v := val.(type) {
 		case float64:
 			if v != math.Trunc(v) {
-				return fmt.Errorf("property %q: expected integer, got float64 with fractional part", key)
+				return fmt.Errorf("属性 %q: 期望 integer 类型，但 float64 包含小数部分", key)
 			}
 		case int, int64:
 			// 类型匹配，无需处理
 		default:
-			return fmt.Errorf("property %q: expected integer, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 integer 类型，实际类型 %T", key, val)
 		}
 	case "number":
 		switch val.(type) {
 		case float64, int, int64:
 			// 类型匹配，无需处理
 		default:
-			return fmt.Errorf("property %q: expected number, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 number 类型，实际类型 %T", key, val)
 		}
 	case "boolean":
 		if _, ok := val.(bool); !ok {
-			return fmt.Errorf("property %q: expected boolean, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 boolean 类型，实际类型 %T", key, val)
 		}
 	case "array":
 		arr, ok := val.([]any)
 		if !ok {
-			return fmt.Errorf("property %q: expected array, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 array 类型，实际类型 %T", key, val)
 		}
 		if err := checkArrayItems(key, arr, propSchema); err != nil {
 			return err
@@ -388,7 +388,7 @@ func checkType(key string, val any, propSchema map[string]any) error {
 	case "object":
 		obj, ok := val.(map[string]any)
 		if !ok {
-			return fmt.Errorf("property %q: expected object, got %T", key, val)
+			return fmt.Errorf("属性 %q: 期望 object 类型，实际类型 %T", key, val)
 		}
 		if err := ValidateArgs(propSchema, obj); err != nil {
 			return fmt.Errorf("property %q: %w", key, err)
@@ -447,5 +447,5 @@ func checkEnum(key string, val any, propSchema map[string]any) error {
 		return nil
 	}
 
-	return fmt.Errorf("property %q: value %v is not in enum", key, val)
+	return fmt.Errorf("属性 %q: 值 %v 不在枚举范围内", key, val)
 }

@@ -140,7 +140,7 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 		return nil, exception.BuildError(
 			exception.StatusToolLocalFunctionExecutionError,
 			exception.WithParam("method", "stream"),
-			exception.WithParam("reason", "marshal inputs failed"),
+			exception.WithParam("reason", "序列化输入参数失败"),
 		)
 	}
 	var input I
@@ -148,7 +148,7 @@ func (f *StreamFunction[I, O]) Stream(ctx context.Context, inputs map[string]any
 		return nil, exception.BuildError(
 			exception.StatusToolLocalFunctionExecutionError,
 			exception.WithParam("method", "stream"),
-			exception.WithParam("reason", "unmarshal inputs to struct failed"),
+			exception.WithParam("reason", "反序列化输入参数到结构体失败"),
 		)
 	}
 

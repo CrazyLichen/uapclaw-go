@@ -9,18 +9,20 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // 端口类型到环境变量名的映射。
 // 对应 Python: jiuwenswarm/instance_manager/bootstrap.py port_env_mapping
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var portEnvMapping = map[string]string{
 	"agent_server": "AGENT_SERVER_PORT",
 	"web":          "WEB_PORT",
 	"gateway":      "GATEWAY_PORT",
 	"frontend":     "FRONTEND_PORT",
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // CreateBootstrapEnv 为实例创建 bootstrap .env 文件。
 //
@@ -30,6 +32,8 @@ var portEnvMapping = map[string]string{
 //   - 各端口变量：AGENT_SERVER_PORT, WEB_PORT, GATEWAY_PORT, FRONTEND_PORT
 //
 // 对应 Python: jiuwenswarm/instance_manager/bootstrap.py create_bootstrap_env(config)
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func CreateBootstrapEnv(config *InstanceConfig) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("config 不能为 nil")

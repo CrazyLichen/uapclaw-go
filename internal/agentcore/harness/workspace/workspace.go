@@ -372,7 +372,7 @@ func (w *Workspace) SetDirectory(nodes any) error {
 		nodeList = v
 	default:
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
-			exception.WithMsg("set_directory expects a directory node (map) or list of nodes."))
+			exception.WithMsg("set_directory 期望目录节点（map）或节点列表"))
 	}
 
 	for _, node := range nodeList {
@@ -446,13 +446,13 @@ func (w *Workspace) ListWorktreeLinks() []string {
 func validateDirectoryNode(node DirectoryNode) error {
 	if node == nil {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
-			exception.WithMsg("Each directory entry must be a map."))
+			exception.WithMsg("每个目录项必须是 map 类型"))
 	}
 
 	name, nameOk := node["name"].(string)
 	if !nameOk || name == "" {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
-			exception.WithMsg("Directory `name` must be a non-empty string."))
+			exception.WithMsg("目录 name 必须是非空字符串"))
 	}
 	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
@@ -462,28 +462,28 @@ func validateDirectoryNode(node DirectoryNode) error {
 	if path, ok := node["path"]; ok && path != nil {
 		if _, strOk := path.(string); !strOk {
 			return exception.BuildError(exception.StatusDeepagentConfigParamError,
-				exception.WithMsg("Directory `path` must be a string when provided."))
+				exception.WithMsg("目录 path 提供时必须为字符串"))
 		}
 	}
 
 	if desc, ok := node["description"]; ok && desc != nil {
 		if _, strOk := desc.(string); !strOk {
 			return exception.BuildError(exception.StatusDeepagentConfigParamError,
-				exception.WithMsg("Directory `description` must be a string when provided."))
+				exception.WithMsg("目录 description 提供时必须为字符串"))
 		}
 	}
 
 	if isFile, ok := node["is_file"]; ok && isFile != nil {
 		if _, boolOk := isFile.(bool); !boolOk {
 			return exception.BuildError(exception.StatusDeepagentConfigParamError,
-				exception.WithMsg("`is_file` must be a bool when provided."))
+				exception.WithMsg("is_file 提供时必须为布尔值"))
 		}
 	}
 
 	if defaultContent, ok := node["default_content"]; ok && defaultContent != nil {
 		if _, strOk := defaultContent.(string); !strOk {
 			return exception.BuildError(exception.StatusDeepagentConfigParamError,
-				exception.WithMsg("`default_content` must be a string when provided."))
+				exception.WithMsg("default_content 提供时必须为字符串"))
 		}
 	}
 
@@ -491,7 +491,7 @@ func validateDirectoryNode(node DirectoryNode) error {
 		childrenList, err := toDirectoryNodeSlice(children)
 		if err != nil {
 			return exception.BuildError(exception.StatusDeepagentConfigParamError,
-				exception.WithMsg("Directory `children` must be a list when provided."))
+				exception.WithMsg("目录 children 提供时必须为列表"))
 		}
 		for _, child := range childrenList {
 			if err := validateDirectoryNode(child); err != nil {

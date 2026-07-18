@@ -24,10 +24,10 @@ const (
 	stateFileName = "skills_state.json"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json
 // 对应 Python: state_utils.get_state_file()
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func GetStateFile() string {
 	return filepath.Join(getAgentSkillsDir(), stateFileName)
 }
@@ -248,12 +248,10 @@ func FilterVisibleSkillNames(names []string) []string {
 	return visible
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // getAgentSkillsDir 返回 Agent 技能目录路径
 // 对应 Python: jiuwenswarm.common.utils.get_agent_skills_dir()
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 func getAgentSkillsDir() string {
 	return workspace.AgentSkillsDir()
 }

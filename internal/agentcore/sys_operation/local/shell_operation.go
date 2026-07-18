@@ -792,7 +792,7 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 		if !isWindows {
 			// 对齐 Python：cmd 仅 Windows 支持，返回 error 而非字符串防止 panic
 			return nil, false, "", exception.BuildError(exception.StatusSysOperationShellExecutionError,
-				exception.WithMsg("shell_type 'cmd' is only supported on Windows"))
+				exception.WithMsg("shell_type 'cmd' 仅在 Windows 上受支持"))
 		}
 		return []string{"cmd", "/c", command}, true, "cmd", nil
 

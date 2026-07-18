@@ -16,6 +16,10 @@ import (
 
 // powershellTokens PowerShell 检测令牌。
 // 对齐 Python _POWERSHELL_TOKENS。
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 var powershellTokens = []string{
 	"powershell ", "powershell.exe ", "pwsh ", "pwsh.exe ",
 	"get-childitem", "set-location", "remove-item", "test-path",

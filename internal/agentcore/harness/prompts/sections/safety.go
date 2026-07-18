@@ -2,6 +2,10 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -28,9 +32,9 @@ const (
 `
 )
 
+// BuildSafetySection 构建安全节
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildSafetySection 构建安全节
 func BuildSafetySection() saprompt.PromptSection {
 	return saprompt.PromptSection{
 		Name:     SectionSafety,

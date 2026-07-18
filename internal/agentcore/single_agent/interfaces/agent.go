@@ -14,12 +14,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
+// AgentConfig Agent 配置接口
 type AgentConfig interface {
 	// ModelName 返回模型名称
 	ModelName() string
@@ -33,6 +28,7 @@ type AgentConfig interface {
 	Validate() error
 }
 
+// AgentOptions Agent 调用选项
 type AgentOptions struct {
 	// Session 会话实例（可选）
 	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
@@ -42,6 +38,7 @@ type AgentOptions struct {
 	StreamModes []stream.StreamMode
 }
 
+// BaseAgent 基础 Agent 接口
 type BaseAgent interface {
 	// ── 核心三方法 ──
 
@@ -98,7 +95,12 @@ type BaseAgent interface {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// AgentOption Agent 调用选项函数
 type AgentOption func(*AgentOptions)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

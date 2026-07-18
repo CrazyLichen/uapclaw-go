@@ -179,7 +179,7 @@ func (t *BackgroundTask) Stop(timeout time.Duration) error {
 	case <-t.done:
 		return t.err
 	case <-timer.C:
-		return fmt.Errorf("background task %q stop timed out after %v", t.name, timeout)
+		return fmt.Errorf("后台任务 %q 停止超时，超时时间: %v", t.name, timeout)
 	}
 }
 
@@ -254,7 +254,7 @@ func (m *TaskManager) CreateTask(ctx context.Context, fn func(ctx context.Contex
 	m.mu.Lock()
 	if _, exists := m.registry[taskID]; exists {
 		m.mu.Unlock()
-		return nil, fmt.Errorf("task %s already exists", taskID)
+		return nil, fmt.Errorf("任务 %s 已存在", taskID)
 	}
 	m.registry[taskID] = task
 	m.mu.Unlock()
@@ -497,7 +497,7 @@ func (m *TaskManager) executeTask(ctx context.Context, task *Task, fn func(ctx c
 	// 优先检查 context 状态（超时/取消比函数返回值更有权威性）
 	if execCtx.Err() == context.DeadlineExceeded {
 		task.Status = TaskTimeout
-		task.Err = fmt.Errorf("task timeout after %v", task.Timeout)
+		task.Err = fmt.Errorf("任务超时，超时时间: %v", task.Timeout)
 	} else if ctx.Err() == context.Canceled || execCtx.Err() == context.Canceled {
 		task.Status = TaskCancelled
 		if task.CancelReason == "" {

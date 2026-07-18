@@ -6,6 +6,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -25,11 +29,11 @@ const (
 	completionSignalPriority = 85
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildCompletionSignalSection 构建完成信号节（Priority 85）
 //
 // promise 为完成信号令牌。
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildCompletionSignalSection(promise string, lang string) saprompt.PromptSection {
 	var template string
 	if lang == "en" {

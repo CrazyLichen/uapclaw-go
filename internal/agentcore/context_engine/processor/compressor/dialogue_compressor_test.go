@@ -102,6 +102,7 @@ type testConfig struct {
 
 func (c *testConfig) ProcessorType() string { return c.Name }
 func (c *testConfig) Validate() error       { return nil }
+func (c *testConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
 
 // validDialogueCompressorConfig 创建合法的 DialogueCompressorConfig
 func validDialogueCompressorConfig() *DialogueCompressorConfig {

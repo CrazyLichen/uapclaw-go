@@ -7,6 +7,10 @@ import (
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -19,8 +23,6 @@ const (
 	sessionStateKey = "deep_agent_state"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // RefreshTaskStateRuntime 同步运行时状态到会话顶层状态。
 //
 // 从 session 的 _deep_agent_runtime_state 属性中读取 DeepAgentState，
@@ -28,6 +30,8 @@ const (
 //
 // 对齐 Python: ContextProcessorRail._refresh_task_state_runtime(ctx)
 // 调用时机：beforeModelCall / afterModelCall / afterToolCall / onModelException
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func RefreshTaskStateRuntime(ctx *sainterfaces.AgentCallbackContext) {
 	sess := ctx.Session()
 	if sess == nil {
@@ -87,9 +91,9 @@ func RefreshTaskStateRuntime(ctx *sainterfaces.AgentCallbackContext) {
 	})
 }
 
+// toInt 将 any 值转换为 int，对齐 Python: int(value or 0)
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// toInt 将 any 值转换为 int，对齐 Python: int(value or 0)
 func toInt(val interface{}) int {
 	switch v := val.(type) {
 	case int:

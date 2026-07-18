@@ -89,7 +89,7 @@ func ParseAgentServerWireUnary(data map[string]any) (*schema.AgentResponse, erro
 					return rawDictToAgentResponse(legacyMap), nil
 				}
 			}
-			return nil, fmt.Errorf("parse_agent_server_wire_unary: %w", err)
+			return nil, fmt.Errorf("解析 agent_server_wire_unary 失败: %w", err)
 		}
 
 		logger.Debug(logComponent).
@@ -148,7 +148,7 @@ func ParseAgentServerWireChunk(data map[string]any) (*schema.AgentResponseChunk,
 					return rawDictToAgentChunk(legacyMap), nil
 				}
 			}
-			return nil, fmt.Errorf("parse_agent_server_wire_chunk: %w", err)
+			return nil, fmt.Errorf("解析 agent_server_wire_chunk 失败: %w", err)
 		}
 
 		logger.Debug(logComponent).

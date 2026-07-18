@@ -7,6 +7,10 @@ import (
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -77,9 +81,9 @@ var (
 	progressiveToolRulesContentEN = progressiveToolRulesHeaderEN + progressiveToolRulesBodyEN
 )
 
+// BuildNavigationSection 构建工具导航节（Priority 70）
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildNavigationSection 构建工具导航节（Priority 70）
 func BuildNavigationSection(entries []string, lang string) saprompt.PromptSection {
 	var header string
 	if lang == "en" {

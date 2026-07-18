@@ -2,11 +2,15 @@ package gateway
 
 import "os"
 
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // configSetEnvMap 配置键到环境变量的映射。
 // 对齐 Python: _CONFIG_SET_ENV_MAP (app_web_handlers.py L310-367)
 // 启动时和热重载时，收集这些环境变量的当前值传给 AgentServer。
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 var configSetEnvMap = map[string]string{
 	// 默认模型（主对话）
 	"model_provider": "MODEL_PROVIDER",
@@ -86,10 +90,10 @@ var browserRuntimeKeys = map[string]bool{
 	"VISION_API_KEY":    true,
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // BuildEnvMap 收集 configSetEnvMap 中各环境变量的当前值。
 // 对齐 Python: {env_key: os.getenv(env_key) for env_key in _CONFIG_SET_ENV_MAP.values()}
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func BuildEnvMap() map[string]any {
 	env := make(map[string]any, len(configSetEnvMap))
 	for _, envKey := range configSetEnvMap {

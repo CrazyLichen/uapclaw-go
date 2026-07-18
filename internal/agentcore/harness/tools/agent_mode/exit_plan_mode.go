@@ -11,9 +11,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// 对齐 Python L140-162: exit_plan_mode 中英文消息
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 对齐 Python L140-162: exit_plan_mode 中英文消息
 var (
 	exitPlanEmptyMsg = map[string]string{
 		"cn": "规划模式已结束。你现在可以结束本轮。\n计划文件：{plan_path}",
@@ -25,11 +29,11 @@ var (
 	}
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewExitPlanModeTool 创建 exit_plan_mode 工具实例。
 //
 // 对齐 Python: ExitPlanModeTool.__init__() L326-348 + invoke() L350-378
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func NewExitPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)
 	card, _ := tools.BuildToolCard("exit_plan_mode", "exit_plan_mode", lang, nil, agentID)

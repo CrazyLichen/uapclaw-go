@@ -67,25 +67,25 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	if o.Tail > 0 && o.Head > 0 {
 		return nil, exception.BuildError(
 			exception.StatusSysOperationFsExecutionError,
-			exception.WithMsg("head and tail are mutually exclusive"),
+			exception.WithMsg("head 和 tail 互斥，不能同时使用"),
 		)
 	}
 	if o.Tail > 0 && (o.LineRange[0] > 0 || o.LineRange[1] > 0) {
 		return nil, exception.BuildError(
 			exception.StatusSysOperationFsExecutionError,
-			exception.WithMsg("tail and line_range are mutually exclusive"),
+			exception.WithMsg("tail 和 line_range 互斥，不能同时使用"),
 		)
 	}
 	if o.Head > 0 && (o.LineRange[0] > 0 || o.LineRange[1] > 0) {
 		return nil, exception.BuildError(
 			exception.StatusSysOperationFsExecutionError,
-			exception.WithMsg("head and line_range are mutually exclusive"),
+			exception.WithMsg("head 和 line_range 互斥，不能同时使用"),
 		)
 	}
 	if o.Mode == "bytes" && (o.Head > 0 || o.Tail > 0 || o.LineRange[0] > 0 || o.LineRange[1] > 0) {
 		return nil, exception.BuildError(
 			exception.StatusSysOperationFsExecutionError,
-			exception.WithMsg("bytes mode does not support head/tail/line_range"),
+			exception.WithMsg("bytes 模式不支持 head/tail/line_range 参数"),
 		)
 	}
 
@@ -100,10 +100,10 @@ func (f *LocalFsOperation) ReadFile(ctx context.Context, path string, opts ...sy
 	// 检查文件是否存在
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
-		return f.createErrorResult(methodName, fmt.Sprintf("File not found: %s", resolvedPath), startTime), nil
+		return f.createErrorResult(methodName, fmt.Sprintf("文件未找到: %s", resolvedPath), startTime), nil
 	}
 	if info.IsDir() {
-		return f.createErrorResult(methodName, fmt.Sprintf("Path is a directory: %s", resolvedPath), startTime), nil
+		return f.createErrorResult(methodName, fmt.Sprintf("路径是目录: %s", resolvedPath), startTime), nil
 	}
 
 	// 读取文件内容
@@ -251,7 +251,7 @@ func (f *LocalFsOperation) WriteFile(ctx context.Context, path string, content s
 	if !o.CreateIfNotExist {
 		if _, statErr := os.Stat(resolvedPath); os.IsNotExist(statErr) {
 			return &result.WriteFileResult{
-				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("File does not exist: %s", resolvedPath)),
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("文件不存在: %s", resolvedPath)),
 			}, nil
 		}
 	}
@@ -395,7 +395,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 	resolvedLocal, err := filepath.Abs(localPath)
 	if err != nil {
 		close(ch)
-		return ch, fmt.Errorf("resolve local path failed: %w", err)
+		return ch, fmt.Errorf("解析本地路径失败: %w", err)
 	}
 
 	resolvedTarget, err := f.resolvePath(targetPath, o.CreateParentDirs)
@@ -411,7 +411,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 		srcFile, err := os.Open(resolvedLocal)
 		if err != nil {
 			ch <- result.UploadFileStreamResult{
-				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Source not found: %s", resolvedLocal)),
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("源文件未找到: %s", resolvedLocal)),
 			}
 			return
 		}
@@ -419,7 +419,7 @@ func (f *LocalFsOperation) UploadFileStream(ctx context.Context, localPath strin
 		// 检查目标存在
 		if _, statErr := os.Stat(resolvedTarget); statErr == nil && !o.Overwrite {
 			ch <- result.UploadFileStreamResult{
-				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Target exists: %s", resolvedTarget)),
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("目标文件已存在: %s", resolvedTarget)),
 			}
 			return
 		}
@@ -520,7 +520,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 	resolvedSource, err := f.resolvePath(sourcePath, false)
 	if err != nil {
 		close(ch)
-		return ch, fmt.Errorf("resolve source path failed: %w", err)
+		return ch, fmt.Errorf("解析源路径失败: %w", err)
 	}
 
 	go func() {
@@ -530,7 +530,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 		srcFile, err := os.Open(resolvedSource)
 		if err != nil {
 			ch <- result.DownloadFileStreamResult{
-				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Source not found: %s", resolvedSource)),
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("源文件未找到: %s", resolvedSource)),
 			}
 			return
 		}
@@ -538,7 +538,7 @@ func (f *LocalFsOperation) DownloadFileStream(ctx context.Context, sourcePath st
 		// 检查目标存在
 		if _, statErr := os.Stat(localPath); statErr == nil && !o.Overwrite {
 			ch <- result.DownloadFileStreamResult{
-				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("Destination exists: %s", localPath)),
+				BaseResult: result.BuildOperationErrorResult(exception.StatusSysOperationFsExecutionError.Code(), fmt.Sprintf("目标路径已存在: %s", localPath)),
 			}
 			return
 		}

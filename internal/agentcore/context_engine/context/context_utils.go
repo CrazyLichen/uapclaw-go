@@ -13,6 +13,10 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -147,8 +151,6 @@ func FormatReloadedMessages(offloadHandle string, messages []llm_schema.BaseMess
 	}
 	return sb.String()
 }
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // FindLastNDialogueRound 找到倒数第 n 轮对话的起始消息索引。
 //

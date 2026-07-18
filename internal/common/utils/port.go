@@ -128,7 +128,7 @@ func WaitForPIDExit(ctx context.Context, pid int) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("process %d did not exit within deadline: %w", pid, ctx.Err())
+			return fmt.Errorf("进程 %d 未在截止时间内退出: %w", pid, ctx.Err())
 		case <-ticker.C:
 			if !processExists(pid) {
 				// 进程不存在

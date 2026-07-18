@@ -50,7 +50,7 @@ func (cl *CaseLoader) Len() int {
 // 对齐 Python: CaseLoader.split(ratio, seed=0) — 内部先 shuffle_cases 再分割。
 func (cl *CaseLoader) Split(ratio float64, seed ...int64) (*CaseLoader, *CaseLoader, error) {
 	if ratio < 0.0 || ratio > 1.0 {
-		return nil, nil, fmt.Errorf("ratio must be in [0.0, 1.0], got %f", ratio)
+		return nil, nil, fmt.Errorf("ratio 必须在 [0.0, 1.0] 范围内，当前值: %f", ratio)
 	}
 	if len(cl.cases) == 0 {
 		return NewCaseLoader(nil), NewCaseLoader(nil), nil

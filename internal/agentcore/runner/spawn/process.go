@@ -13,7 +13,12 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
+
 const (
 	// EnvSpawnProcess 子进程标识环境变量
 	EnvSpawnProcess = "UAPCLAW_SPAWN_PROCESS"
@@ -23,10 +28,10 @@ const (
 	SpawnChildSubCommand = "spawn-child"
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // SpawnProcess 创建子进程运行 Agent，返回 SpawnedProcessHandle。
 // 对齐 Python: spawn_process() (process_manager.py)
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func SpawnProcess(
 	ctx context.Context,
 	agentConfig SpawnAgentConfig,
@@ -108,9 +113,9 @@ func SpawnProcess(
 	return handle, nil
 }
 
+// getSelfExecutable 获取当前主二进制的路径，用于启动子进程。
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// getSelfExecutable 获取当前主二进制的路径，用于启动子进程。
 func getSelfExecutable() (string, error) {
 	return os.Executable()
 }

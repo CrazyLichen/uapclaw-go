@@ -12,9 +12,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// 对齐 Python L114-138: enter_plan_mode 中英文消息
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// 对齐 Python L114-138: enter_plan_mode 中英文消息
 var (
 	enterPlanExistsMsg = map[string]string{
 		"cn": "计划文件已存在，路径：{plan_path}\n你可以阅读计划文件然后做增量修改。请按照提示词中的Plan工作流继续制定计划，初始理解-方案设计-审查-撰写计划-结束规划。\n",
@@ -26,11 +30,11 @@ var (
 	}
 )
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 // NewEnterPlanModeTool 创建 enter_plan_mode 工具实例。
 //
 // 对齐 Python: EnterPlanModeTool.__init__() L262-286 + invoke() L288-320
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 func NewEnterPlanModeTool(agent hinterfaces.DeepAgentInterface, language, agentID string) tool.Tool {
 	lang := normalizeLanguage(language)
 	card, _ := tools.BuildToolCard("enter_plan_mode", "enter_plan_mode", lang, nil, agentID)

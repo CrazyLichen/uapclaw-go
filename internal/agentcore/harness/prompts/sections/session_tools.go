@@ -2,6 +2,10 @@ package sections
 
 import saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -49,9 +53,9 @@ and ask them to wait for subsequent system notifications or the next round of in
 `
 )
 
+// BuildSessionToolsSection 构建会话工具节（Priority 85）
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// BuildSessionToolsSection 构建会话工具节（Priority 85）
 func BuildSessionToolsSection(lang string) saprompt.PromptSection {
 	var content string
 	if lang == "en" {

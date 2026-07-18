@@ -1491,16 +1491,16 @@ func (sm *SkillManager) gitGetCommit(dir string) string {
 func safePathName(value any, label string) (string, error) {
 	raw := trimSpace(toString(value))
 	if raw == "" {
-		return "", fmt.Errorf("invalid %s name", label)
+		return "", fmt.Errorf("无效的 %s 名称", label)
 	}
 	if raw == "." || raw == ".." {
-		return "", fmt.Errorf("invalid %s name: %s", label, raw)
+		return "", fmt.Errorf("无效的 %s 名称: %s", label, raw)
 	}
 	if strings.Contains(raw, "/") || strings.Contains(raw, "\\") {
-		return "", fmt.Errorf("invalid %s name: %s", label, raw)
+		return "", fmt.Errorf("无效的 %s 名称: %s", label, raw)
 	}
 	if filepath.IsAbs(raw) {
-		return "", fmt.Errorf("invalid %s name: %s", label, raw)
+		return "", fmt.Errorf("无效的 %s 名称: %s", label, raw)
 	}
 	return raw, nil
 }
