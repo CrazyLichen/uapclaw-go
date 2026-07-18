@@ -22,6 +22,9 @@ const (
 	// DefaultGuardrailMaxFailures 默认守护护栏最大失败数
 	// 对齐 Python: DEFAULT_GUARDRAIL_MAX_FAILURES
 	DefaultGuardrailMaxFailures = 2
+	// DefaultGuardrailRetryOnce 默认守护护栏是否重试一次
+	// 对齐 Python: DEFAULT_GUARDRAIL_RETRY_ONCE
+	DefaultGuardrailRetryOnce = true
 	// DefaultPlaywrightMCPCommand 默认 Playwright MCP 命令
 	// 对齐 Python: DEFAULT_PLAYWRIGHT_MCP_COMMAND
 	DefaultPlaywrightMCPCommand = "npx"
