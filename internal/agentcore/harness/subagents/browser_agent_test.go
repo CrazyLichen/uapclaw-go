@@ -3,12 +3,12 @@ package subagents
 import (
 	"testing"
 
-	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	bm "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/browser_move"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	bm "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/browser_move"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

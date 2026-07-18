@@ -277,7 +277,7 @@ func SplitShellSegments(command string) []string {
 				i += 2
 				continue
 			}
-			// |, ;, \n, \r
+			// 管道符、分号、换行符、回车符
 			if char == '|' || char == ';' || char == '\n' || char == '\r' {
 				segment := strings.TrimSpace(current.String())
 				if segment != "" {

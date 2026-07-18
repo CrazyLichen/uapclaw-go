@@ -7,14 +7,14 @@ import (
 // TestNewBrowserTaskProgressStateFromDict_正常数据 测试从包含 last_page 子对象的完整字典构造
 func TestNewBrowserTaskProgressStateFromDict_正常数据(t *testing.T) {
 	data := map[string]any{
-		"request_id":   "req-001",
-		"status":       "in_progress",
-		"completed_steps":    []any{"step1", "step2"},
-		"remaining_steps":    []any{"step3"},
-		"next_step":          "step3",
-		"completion_evidence": []any{"ev1"},
+		"request_id":           "req-001",
+		"status":               "in_progress",
+		"completed_steps":      []any{"step1", "step2"},
+		"remaining_steps":      []any{"step3"},
+		"next_step":            "step3",
+		"completion_evidence":  []any{"ev1"},
 		"missing_requirements": []any{"req1"},
-		"recent_tool_steps":  []any{"tool1", "tool2"},
+		"recent_tool_steps":    []any{"tool1", "tool2"},
 		"last_page": map[string]any{
 			"url":   "https://example.com",
 			"title": "Example",
@@ -132,12 +132,12 @@ func TestBrowserTaskProgressState_IsEmpty_初始状态(t *testing.T) {
 // TestBrowserTaskProgressState_IsEmpty_有完成步骤 测试有 completed_steps 时非空
 func TestBrowserTaskProgressState_IsEmpty_有完成步骤(t *testing.T) {
 	state := &BrowserTaskProgressState{
-		Status:          "unknown",
-		CompletedSteps:  []string{"step1"},
-		RemainingSteps:  []string{},
-		CompletionEvidence: []string{},
+		Status:              "unknown",
+		CompletedSteps:      []string{"step1"},
+		RemainingSteps:      []string{},
+		CompletionEvidence:  []string{},
 		MissingRequirements: []string{},
-		RecentToolSteps: []string{},
+		RecentToolSteps:     []string{},
 	}
 	if state.IsEmpty() {
 		t.Error("有 completed_steps 时 IsEmpty() 应为 false")

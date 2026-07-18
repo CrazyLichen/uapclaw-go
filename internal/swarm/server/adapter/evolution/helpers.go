@@ -161,6 +161,8 @@ var (
 	}
 )
 
+// ──────────────────────────── 结构体（函数类型） ────────────────────────────
+
 // BuildPushMessageFunc 构建 server_push 消息的函数类型。
 // 对齐 Python: build_server_push_message 回调参数
 type BuildPushMessageFunc func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any
@@ -209,11 +211,12 @@ func EventType(evt any) string {
 // 对齐 Python: resolve_evolution_event_timeout_sec() — 仅从 map[string]any 读取，
 // 不再使用 reflect 访问 struct 字段（过度对齐 Python hasattr 防御性代码）。
 func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
+	// 对齐 Python: fallback_sec is None 检查 — Go 用 variadic + 长度判断区分"未提供"与"提供了0"
 	fallback := TeamEvolutionEventTimeoutSec
 	grace := TeamEvolutionEventTimeoutGraceSec
 
-	if len(opts) > 0 && opts[0] > 0 {
-		fallback = opts[0]
+	if len(opts) > 0 {
+		fallback = opts[0] // 对齐 Python: fallback_sec is not None → 使用传入值（含 0.0）
 	}
 	if len(opts) > 1 && opts[1] >= 0 {
 		grace = opts[1]

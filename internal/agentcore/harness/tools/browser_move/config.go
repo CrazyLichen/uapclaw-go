@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -60,10 +60,10 @@ func BuildBrowserGuardrails() *BrowserRunGuardrails {
 	minOne := 1
 	minZero := 0
 	return &BrowserRunGuardrails{
-		MaxSteps:     ResolveIntEnv([]string{"BROWSER_GUARDRAIL_MAX_STEPS"}, DefaultGuardrailMaxSteps, &minOne),
-		MaxFailures:  ResolveIntEnv([]string{"BROWSER_GUARDRAIL_MAX_FAILURES"}, DefaultGuardrailMaxFailures, &minZero),
-		TimeoutS:     ResolveBrowserTimeoutS(),
-		RetryOnce:    ResolveBoolEnv([]string{"BROWSER_GUARDRAIL_RETRY_ONCE"}, DefaultGuardrailRetryOnce),
+		MaxSteps:              ResolveIntEnv([]string{"BROWSER_GUARDRAIL_MAX_STEPS"}, DefaultGuardrailMaxSteps, &minOne),
+		MaxFailures:           ResolveIntEnv([]string{"BROWSER_GUARDRAIL_MAX_FAILURES"}, DefaultGuardrailMaxFailures, &minZero),
+		TimeoutS:              ResolveBrowserTimeoutS(),
+		RetryOnce:             ResolveBoolEnv([]string{"BROWSER_GUARDRAIL_RETRY_ONCE"}, DefaultGuardrailRetryOnce),
 		ResumeOnMaxIterations: ResolveBoolEnv([]string{"BROWSER_GUARDRAIL_RESUME_ON_MAX_ITERATIONS"}, false),
 	}
 }

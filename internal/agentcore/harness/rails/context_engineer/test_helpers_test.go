@@ -40,13 +40,13 @@ func (m *mockSessionFacade) UpdateState(data map[string]any) {
 		m.updated[k] = v
 	}
 }
-func (m *mockSessionFacade) DumpState() map[string]any                               { return m.updated }
+func (m *mockSessionFacade) DumpState() map[string]any                       { return m.updated }
 func (m *mockSessionFacade) WriteStream(ctx context.Context, data any) error { return nil }
 func (m *mockSessionFacade) WriteCustomStream(ctx context.Context, data any) error {
 	return nil
 }
-func (m *mockSessionFacade) GetEnv(key string, defaultValue ...any) any { return nil }
-func (m *mockSessionFacade) Interact(ctx context.Context, value any) error      { return nil }
+func (m *mockSessionFacade) GetEnv(key string, defaultValue ...any) any    { return nil }
+func (m *mockSessionFacade) Interact(ctx context.Context, value any) error { return nil }
 
 // 确保 mock 实现了 SessionFacade 接口
 var _ sessioninterfaces.SessionFacade = (*mockSessionFacade)(nil)

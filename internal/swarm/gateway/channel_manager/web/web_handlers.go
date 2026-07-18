@@ -290,7 +290,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("updater.cancel", updaterStub)
 	d.Register("updater.get_status", updaterStub)
 
-	// ─── hooks ───
+	// ─── 钩子 ───
 	d.Register("hooks.list", stubHandler("hooks.list", map[string]any{"hooks": []any{}}))
 
 	// ─── 权限 ───
@@ -317,7 +317,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("channel.wechat.get_login_ui", stubHandler("channel.wechat.get_login_ui", map[string]any{}))
 	d.Register("channel.wechat.unbind", stubHandler("channel.wechat.unbind", map[string]any{}))
 
-	// ─── cron ───
+	// ─── 定时任务 ───
 	cronListStub := stubHandler("cron", map[string]any{"jobs": []any{}})
 	cronOkStub := stubHandler("cron", map[string]any{"ok": true})
 	d.Register("cron.job.list", cronListStub)
@@ -329,7 +329,7 @@ func RegisterWebHandlers(bind *WebHandlersBindParams) *RPCDispatcher {
 	d.Register("cron.job.run", cronOkStub)
 	d.Register("cron.job.status", stubHandler("cron", map[string]any{}))
 
-	// ─── harness ───
+	// ─── 运行时 ───
 	harnessListStub := stubHandler("harness", map[string]any{"packages": []any{}})
 	harnessOkStub := stubHandler("harness", map[string]any{"ok": true})
 	d.Register("harness.list", harnessListStub)

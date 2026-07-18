@@ -399,7 +399,7 @@ func (d *DeepAdapter) buildVideoModelConfig(configBase map[string]any) bool {
 	// }
 
 	if os.Getenv("VIDEO_API_KEY") == "" {
-		logger.Info(logComponent).Msg("video tools skipped: incomplete config (VIDEO_API_KEY not set)")
+		logger.Info(logComponent).Msg("视频工具跳过: 配置不完整 (VIDEO_API_KEY 未设置)")
 		return false
 	}
 	return true
@@ -414,7 +414,7 @@ func (d *DeepAdapter) buildImageGenModelConfig(configBase map[string]any) bool {
 	// 待实现：应用图像生成模型配置 applyImageGenModelConfigFromYAML(configBase)
 
 	if os.Getenv("IMAGE_GEN_API_KEY") == "" {
-		logger.Info(logComponent).Msg("image_gen tool skipped: incomplete config (IMAGE_GEN_API_KEY not set)")
+		logger.Info(logComponent).Msg("图片生成工具跳过: 配置不完整 (IMAGE_GEN_API_KEY 未设置)")
 		return false
 	}
 	return true

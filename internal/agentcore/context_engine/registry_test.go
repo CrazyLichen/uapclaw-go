@@ -15,7 +15,8 @@ type mockProcessorConfig struct{}
 
 func (m *mockProcessorConfig) Validate() error { return nil }
 
-func (m *mockProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+func (m *mockProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {
+}
 
 func (m *mockProcessorConfig) GetModel() *llm_schema.ModelRequestConfig { return nil }
 

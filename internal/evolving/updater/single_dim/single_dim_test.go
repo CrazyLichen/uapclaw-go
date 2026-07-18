@@ -18,19 +18,19 @@ import (
 // mockOptimizer 模拟 BaseOptimizer 的全部方法
 type mockOptimizer struct {
 	optimizer.BaseOptimizerMixin
-	domain              string
-	requireForward      bool
-	defaultTargets      []string
-	bindCalled          bool
-	bindReturn          int
-	bindTargets         []string
-	addTrajectoryCalls  int
-	addTrajectoryOrder  []*trajectory.Trajectory
-	backwardCalled      bool
-	backwardSignals     []*signal.EvolutionSignal
-	backwardErr         error
-	stepReturn          map[schema.UpdateKey]any
-	stepCalled          bool
+	domain             string
+	requireForward     bool
+	defaultTargets     []string
+	bindCalled         bool
+	bindReturn         int
+	bindTargets        []string
+	addTrajectoryCalls int
+	addTrajectoryOrder []*trajectory.Trajectory
+	backwardCalled     bool
+	backwardSignals    []*signal.EvolutionSignal
+	backwardErr        error
+	stepReturn         map[schema.UpdateKey]any
+	stepCalled         bool
 }
 
 // 确保 mockOptimizer 实现 optimizer.BaseOptimizer 接口
@@ -441,7 +441,7 @@ func TestSingleDimUpdater_UpdateConfigNil(t *testing.T) {
 // 补充测试: backward 返回错误时 Update 传播错误
 func TestSingleDimUpdater_Backward错误传播(t *testing.T) {
 	opt := &mockOptimizer{
-		stepReturn: map[schema.UpdateKey]any{},
+		stepReturn:  map[schema.UpdateKey]any{},
 		backwardErr: context.DeadlineExceeded,
 	}
 	u := NewSingleDimUpdater(opt)
@@ -463,7 +463,7 @@ type mockOpForSingleDim struct {
 	state    map[string]any
 }
 
-func (m *mockOpForSingleDim) OperatorID() string                            { return "op1" }
+func (m *mockOpForSingleDim) OperatorID() string                           { return "op1" }
 func (m *mockOpForSingleDim) GetTunables() map[string]operator.TunableSpec { return m.tunables }
 func (m *mockOpForSingleDim) GetState() map[string]any                     { return m.state }
 func (m *mockOpForSingleDim) SetParameter(target string, value any)        {}

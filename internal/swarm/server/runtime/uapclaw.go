@@ -61,8 +61,8 @@ type UapClaw struct {
 // 对齐 Python: JiuWenClaw.__init__()
 func NewUapClaw() *UapClaw {
 	return &UapClaw{
-		sessionManager:    NewSessionManager(),
-		skillManager:     skill.NewSkillManager(workspace.AgentWorkspaceDir()),
+		sessionManager:     NewSessionManager(),
+		skillManager:       skill.NewSkillManager(workspace.AgentWorkspaceDir()),
 		agentConfigService: NewAgentConfigService(workspace.WorkspaceDir()),
 	}
 }
@@ -540,7 +540,9 @@ func (uc *UapClaw) ensureAdapter(mode string) (adapter.AgentAdapter, error) {
 		setter.SetSkillManager(uc.skillManager)
 	}
 	// 若 adapter 有 SetConfigLister 方法，注入 agentConfigService 桥接
-	if setter, ok := a.(interface{ SetConfigLister(adapter.AgentConfigLister) }); ok {
+	if setter, ok := a.(interface {
+		SetConfigLister(adapter.AgentConfigLister)
+	}); ok {
 		setter.SetConfigLister(&agentConfigListerBridge{svc: uc.agentConfigService})
 	}
 	// ⤵️ G33: 调用 uc.skillManager.SetSkillnetInstallCompleteHook(uc.CreateInstance) 注入 hook

@@ -62,13 +62,13 @@ const logComponent = logger.ComponentAgentCore
 // 注意：Python 使用 (?!...) 负向前瞻排除 "error = None"，
 // Go regexp 不支持该语法，改为匹配 error 后在 matchFailureKeyword 中过滤。
 var failureKeywords = regexp.MustCompile(
-	`(?i)error|exception|traceback|failed|failure|timeout|timed out`+
-		`|errno|connectionerror|oserror|valueerror|typeerror`+
-		`|错误|异常|失败|超时`+
-		`|no such file|permission denied|access denied`+
-		`|command not found|not recognized`+
-		`|module not found`+
-		`|econnrefused|econnreset|enoent|enotfound`+
+	`(?i)error|exception|traceback|failed|failure|timeout|timed out` +
+		`|errno|connectionerror|oserror|valueerror|typeerror` +
+		`|错误|异常|失败|超时` +
+		`|no such file|permission denied|access denied` +
+		`|command not found|not recognized` +
+		`|module not found` +
+		`|econnrefused|econnreset|enoent|enotfound` +
 		`|npm err!`,
 )
 
@@ -175,10 +175,10 @@ var collaborationSignalTypes = map[string]bool{
 //
 // 对应 Python: _COLLABORATION_FAILURE_PATTERN
 var collaborationFailurePattern = regexp.MustCompile(
-	`member.*failed|member.*error|member.*timeout`+
-		`|invoke.*exception|spawn.*failed`+
-		`|task.*error|task.*timeout`+
-		`|collaboration.*failed`+
+	`member.*failed|member.*error|member.*timeout` +
+		`|invoke.*exception|spawn.*failed` +
+		`|task.*error|task.*timeout` +
+		`|collaboration.*failed` +
 		`|协作.*失败|成员.*异常|任务.*超时`,
 )
 
@@ -883,7 +883,7 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 
 		activeSkill := d.resolveActiveSkillForStep(step, traj.Steps, skillReadHistory)
 
-		// 1. send_message
+		// 1. send_message（发送消息）
 		if toolName == "send_message" {
 			callArgs := argsToJSON(toolDetail.CallArgs)
 			toMember := d.extractToMember(callArgs)
@@ -899,7 +899,7 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 			}
 		}
 
-		// 2. claim_task
+		// 2. claim_task（认领任务）
 		if toolName == "claim_task" {
 			callArgs := argsToJSON(toolDetail.CallArgs)
 			taskID := d.extractTaskID(callArgs)
@@ -915,7 +915,7 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 			}
 		}
 
-		// 3. view_task
+		// 3. view_task（查看任务）
 		if toolName == "view_task" {
 			signals = append(signals, MakeEvolutionSignal(
 				"collaboration_view", "Collaboration",

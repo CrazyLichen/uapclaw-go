@@ -24,9 +24,9 @@
 //	├── resources.go          # PrivateAgentResources 实例级资源（9.55）
 //	├── agent_configurator.go # AgentConfigurator Agent 配置器（9.57）
 //	├── payload.go            # SpawnPayloadBuilder 跨进程载荷构造器（9.57）
-//	├── spawn_manager.go      # TODO(#9.58) 生成管理器
-//	├── session_manager.go    # TODO(#9.59) 会话管理器
-//	├── stream_controller.go  # TODO(#9.60) 流式控制器
+//	├── spawn_manager.go      # SpawnManager 子进程管理（9.58）
+//	├── session_manager.go    # SessionManager 会话三态管理（9.59）
+//	├── stream_controller.go  # StreamController 流式控制器（9.60）
 //	├── recovery_manager.go   # TODO(#9.61) 恢复管理器
 //	└── coordination/         # TODO(#9.62-9.63) 协调子系统
 //	    ├── kernel.go         # TODO(#9.62) 协调内核
@@ -44,10 +44,10 @@ import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 

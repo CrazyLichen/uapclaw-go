@@ -3,14 +3,22 @@ package harness
 import (
 	"context"
 
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hpromts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -68,19 +76,19 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		Model:              params.Model,
 		Card:               card,
 		SystemPrompt:       systemPrompt,
-		ToolCards:           params.Tools,
-		ToolInstances:       params.ToolInstances,
-		Mcps:                params.Mcps,
-		Rails:               finalRails,
-		EnableTaskLoop:      params.EnableTaskLoop,
-		MaxIterations:       maxIterations,
-		Workspace:           params.Workspace,
-		Skills:              params.Skills,
-		Backend:             params.Backend,
-		SysOperation:        params.SysOperation,
-		Language:            language,
-		PromptMode:          params.PromptMode,
-		EnableTaskPlanning:  params.EnablePlanMode,
-		RestrictToWorkDir:   &restrictToWorkDir,
+		ToolCards:          params.Tools,
+		ToolInstances:      params.ToolInstances,
+		Mcps:               params.Mcps,
+		Rails:              finalRails,
+		EnableTaskLoop:     params.EnableTaskLoop,
+		MaxIterations:      maxIterations,
+		Workspace:          params.Workspace,
+		Skills:             params.Skills,
+		Backend:            params.Backend,
+		SysOperation:       params.SysOperation,
+		Language:           language,
+		PromptMode:         params.PromptMode,
+		EnableTaskPlanning: params.EnablePlanMode,
+		RestrictToWorkDir:  &restrictToWorkDir,
 	})
 }

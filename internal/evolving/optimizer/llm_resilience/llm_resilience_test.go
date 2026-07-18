@@ -382,9 +382,9 @@ func TestInvokeTextWithRetry_空响应耗尽(t *testing.T) {
 // TestIsTimeoutLike_各分支 验证超时判断的三个分支
 func TestIsTimeoutLike_各分支(t *testing.T) {
 	tests := []struct {
-		name  string
-		err   error
-		want  bool
+		name string
+		err  error
+		want bool
 	}{
 		{"nil", nil, false},
 		{"DeadlineExceeded", context.DeadlineExceeded, true},
@@ -428,9 +428,9 @@ func TestSleepBeforeRetry_退避计算(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			policy := LLMInvokePolicy{
-				TotalBudgetSecs:  30,
-				BackoffBaseSecs:  tt.backoffBase,
-				MaxAttempts:       5,
+				TotalBudgetSecs:    30,
+				BackoffBaseSecs:    tt.backoffBase,
+				MaxAttempts:        5,
 				AttemptTimeoutSecs: 10,
 			}
 			startedAt := time.Now()
@@ -461,9 +461,9 @@ func TestSleepBeforeRetry_退避计算(t *testing.T) {
 // TestSleepBeforeRetry_上下文取消 验证上下文取消时立即返回
 func TestSleepBeforeRetry_上下文取消(t *testing.T) {
 	policy := LLMInvokePolicy{
-		TotalBudgetSecs:  30,
-		BackoffBaseSecs:  10, // 很长的退避
-		MaxAttempts:       5,
+		TotalBudgetSecs:    30,
+		BackoffBaseSecs:    10, // 很长的退避
+		MaxAttempts:        5,
 		AttemptTimeoutSecs: 10,
 	}
 	startedAt := time.Now()

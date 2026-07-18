@@ -7,7 +7,7 @@ import (
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
-// ──────────────────────────── 接口 ────────────────────────────
+// ──────────────────────────── 结构体 ────────────────────────────
 
 // SpawnHandle 统一 inprocess 和 subprocess 的操作接口。
 // 不含回调设置——回调在构造句柄时注入。

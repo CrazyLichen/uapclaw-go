@@ -194,7 +194,7 @@ func (s *AgentServer) handleSessionRename(_ context.Context, request *schema.Age
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "session_id is required",
+				"error": "session_id 不能为空",
 				"code":  "BAD_REQUEST",
 			}),
 		), nil
@@ -301,7 +301,7 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "session_id is required",
+				"error": "session_id 不能为空",
 				"code":  "BAD_REQUEST",
 			}),
 		), nil

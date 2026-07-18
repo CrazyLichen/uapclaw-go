@@ -40,6 +40,8 @@ type SpawnManager struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -69,8 +71,6 @@ func NewSpawnManager(
 		recoveryCancel: make(map[string]context.CancelFunc),
 	}
 }
-
-// ──────────────────────────── 导出方法 ────────────────────────────
 
 // SpawnTeammate 生成 teammate，根据 spawn_mode 选择 inprocess 或 subprocess。
 // 对齐 Python: SpawnManager.spawn_teammate(ctx, initial_message, session, spawn_config)

@@ -189,4 +189,3 @@ func TestMakeSignalFingerprint_截断长excerpt(t *testing.T) {
 		t.Errorf("fingerprint[3] length = %d, want 200", len(fp[3]))
 	}
 }
-

@@ -183,9 +183,9 @@ func ExecuteWithConcurrency(
 // ParseEmbeddingResponse 通用 HTTP 响应解析。
 //
 // 支持三种格式：
-//   - {"embedding": [...]} / {"embedding": [[...], [...]]}
-//   - {"embeddings": [[...], [...]]}
-//   - {"data": [{"embedding": [...]}, ...]}
+//   - {"embedding": [...]} / {"embedding": [[...], [...]]}（单/多向量）
+//   - {"embeddings": [[...], [...]]}（多向量）
+//   - {"data": [{"embedding": [...]}, ...]}（OpenAI 格式）
 func ParseEmbeddingResponse(body []byte) ([][]float64, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {

@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 )
 
 // helper: 清理环境变量

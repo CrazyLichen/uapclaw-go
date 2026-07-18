@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	"github.com/stretchr/testify/assert"
+	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 )
 
 // mockSession 用于测试的 mock session 对象

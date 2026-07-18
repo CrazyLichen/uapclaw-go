@@ -136,7 +136,8 @@ func (c *ToolResultBudgetProcessorConfig) Validate() error {
 }
 
 // SetModelDefaults 设置默认模型配置（无 Model/ModelClient 字段，空实现）。
-func (c *ToolResultBudgetProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+func (c *ToolResultBudgetProcessorConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {
+}
 
 // GetModel 返回模型请求配置（本 Config 无 Model 字段，始终返回 nil）。
 func (c *ToolResultBudgetProcessorConfig) GetModel() *llm_schema.ModelRequestConfig {

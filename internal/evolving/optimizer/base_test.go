@@ -19,7 +19,7 @@ type mockOperator struct {
 	state      map[string]any
 }
 
-func (m *mockOperator) OperatorID() string                            { return m.operatorID }
+func (m *mockOperator) OperatorID() string                           { return m.operatorID }
 func (m *mockOperator) GetTunables() map[string]operator.TunableSpec { return m.tunables }
 func (m *mockOperator) GetState() map[string]any                     { return m.state }
 func (m *mockOperator) SetParameter(target string, value any)        {}
@@ -284,11 +284,11 @@ type stubOptimizer struct {
 	BaseOptimizerMixin
 }
 
-func (s *stubOptimizer) Domain() string                                               { return "stub" }
-func (s *stubOptimizer) RequiresForwardData() bool                                    { return true }
-func (s *stubOptimizer) DefaultTargets() []string                                     { return nil }
+func (s *stubOptimizer) Domain() string                                                { return "stub" }
+func (s *stubOptimizer) RequiresForwardData() bool                                     { return true }
+func (s *stubOptimizer) DefaultTargets() []string                                      { return nil }
 func (s *stubOptimizer) Backward(_ context.Context, _ []*signal.EvolutionSignal) error { return nil }
-func (s *stubOptimizer) Step() map[schema.UpdateKey]any                               { return nil }
+func (s *stubOptimizer) Step() map[schema.UpdateKey]any                                { return nil }
 
 // TestBaseOptimizer_接口完整性 编译期验证 stubOptimizer 实现 BaseOptimizer
 func TestBaseOptimizer_接口完整性(t *testing.T) {

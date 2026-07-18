@@ -314,9 +314,9 @@ func TestRailOrEmpty(t *testing.T) {
 func TestBrowserProgressTagRE(t *testing.T) {
 	// 验证正则匹配
 	tests := []struct {
-		input    string
-		matches  bool
-		jsonStr  string
+		input   string
+		matches bool
+		jsonStr string
 	}{
 		{
 			`<browser_progress>{"status":"completed"}</browser_progress>`,

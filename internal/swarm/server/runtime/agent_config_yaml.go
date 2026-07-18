@@ -10,6 +10,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // UpsertSubagentInConfig 在 react.subagents.<name> 中添加或更新 agent 启用状态。
@@ -38,7 +46,7 @@ func upsertSubagentInConfigAt(name string, enabled bool, configPath string) erro
 	// 对齐 Python: target = str(name or "").strip(); if not target: raise ValueError(...)
 	target := strings.TrimSpace(name)
 	if target == "" {
-		return fmt.Errorf("subagent name is required")
+		return fmt.Errorf("subagent 名称不能为空")
 	}
 
 	// 步骤 2: 读取配置文件
@@ -83,7 +91,7 @@ func removeSubagentFromConfigAt(name string, configPath string) (bool, error) {
 	// 对齐 Python: target = str(name or "").strip(); if not target: raise ValueError(...)
 	target := strings.TrimSpace(name)
 	if target == "" {
-		return false, fmt.Errorf("subagent name is required")
+		return false, fmt.Errorf("subagent 名称不能为空")
 	}
 
 	// 步骤 2: 读取配置文件

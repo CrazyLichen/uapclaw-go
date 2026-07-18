@@ -53,7 +53,7 @@ func (p *BaseProcessor) CurrentCompressionUsage() map[string]any {
 //
 // 提取结果映射：
 //
-//	calls=1, input_tokens, output_tokens, total_tokens, cache_tokens,
+//	calls=1（调用次数）, input_tokens（输入令牌）, output_tokens（输出令牌）, total_tokens（总令牌）, cache_tokens（缓存令牌）,
 //	输入成本、输出成本、总成本、模型名称、详情=[data]
 //
 // 对应 Python: ContextProcessor._extract_usage_metadata(response)

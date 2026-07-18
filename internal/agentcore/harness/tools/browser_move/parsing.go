@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // unsupportedSchemaKeys OpenAI 兼容 API 不支持的 schema 关键字
 // 对齐 Python: _UNSUPPORTED_SCHEMA_KEYS
@@ -38,7 +38,7 @@ func ExtractJSONObject(text any) map[string]any {
 	}
 
 	// 对齐 Python: Playwright 特殊标记处理
-	// ### Result ... ### Ran Playwright code
+	// ### 结果 ... ### 执行 Playwright 代码
 	markerResult := "### Result"
 	markerRan := "### Ran Playwright code"
 	if strings.Contains(raw, markerResult) && strings.Contains(raw, markerRan) {
@@ -141,7 +141,7 @@ func SanitizeJSONSchema(schema any) any {
 		}
 	}
 
-	// null type → "object"
+	// null 类型 → "object"
 	if t, ok := cleaned["type"]; ok && t == nil {
 		cleaned["type"] = "object"
 	}

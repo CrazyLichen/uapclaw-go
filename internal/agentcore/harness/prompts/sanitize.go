@@ -15,12 +15,13 @@ var (
 	injectionPattern = regexp.MustCompile(`[<>\{\}\[\]` + "`" + `\$]|\.{3,}|\\n|\\r`)
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // SanitizePath 清洗用户可控的路径字符串。
 //
 // 移除可能用于提示词注入的特殊字符，保留正常路径分隔符。
 //
 // 对应 Python: sanitize_path(path)
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 func SanitizePath(path string) string {
 	return injectionPattern.ReplaceAllString(path, "")

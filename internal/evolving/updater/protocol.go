@@ -26,7 +26,7 @@ import (
 //
 // Trainer 不关心实现细节，只通过此接口获取更新映射：
 //
-//	(trajectories, evaluated_cases) -> update mapping 或 candidate set
+//	(trajectories, evaluated_cases) → 更新映射或候选集
 //
 // 对应 Python: openjiuwen/agent_evolving/updater/protocol.py Updater(Protocol)
 type Updater interface {
@@ -35,7 +35,7 @@ type Updater interface {
 	Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int
 
 	// RequiresForwardData 判断此 Updater 是否需要框架执行前向推理。
-	// 返回 False 的黑盒优化器（如 tool_optimizer）在内部生成/执行/评估，
+	// 返回 false 的黑盒优化器（如 tool_optimizer）在内部生成/执行/评估，
 	// 不依赖框架的前向推理数据。
 	RequiresForwardData() bool
 

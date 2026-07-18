@@ -442,8 +442,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		VisionModelConfig:      d.visionModelConfig,
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
-		AutoCreateWorkspace:    false,                                              // 对齐 Python: 硬编码 false
-		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0),  // 对齐 Python: config.get("completion_timeout", 3600.0)
+		AutoCreateWorkspace:    false,                                             // 对齐 Python: 硬编码 false
+		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0), // 对齐 Python: config.get("completion_timeout", 3600.0)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -1165,6 +1165,7 @@ func (d *DeepAdapter) HandleHeartbeat(ctx context.Context, req *schema.AgentRequ
 //
 // Python 执行步骤：
 //  1. await self._close_a2x_client()
+//
 // SwitchMode 切换运行模式，执行完整的 session 生命周期。
 // 流程：preRun → switchMode → loadState → updateState → postRun
 //

@@ -78,8 +78,8 @@ func TestTrajectory_ToMessages_只有LLM步骤(t *testing.T) {
 				Kind: StepKindLLM,
 				Detail: &LLMCallDetail{
 					Messages: []map[string]any{
-					map[string]any{"role": "user", "content": "hello"},
-				},
+						map[string]any{"role": "user", "content": "hello"},
+					},
 					Response: map[string]any{"role": "assistant", "content": "hi"},
 				},
 			},

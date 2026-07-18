@@ -14,11 +14,11 @@ type fakeOperator struct {
 	operatorID string
 }
 
-func (f *fakeOperator) OperatorID() string                          { return f.operatorID }
+func (f *fakeOperator) OperatorID() string                           { return f.operatorID }
 func (f *fakeOperator) GetTunables() map[string]operator.TunableSpec { return nil }
-func (f *fakeOperator) GetState() map[string]any                    { return nil }
-func (f *fakeOperator) SetParameter(target string, value any)       {}
-func (f *fakeOperator) LoadState(state map[string]any)             {}
+func (f *fakeOperator) GetState() map[string]any                     { return nil }
+func (f *fakeOperator) SetParameter(target string, value any)        {}
+func (f *fakeOperator) LoadState(state map[string]any)               {}
 func (f *fakeOperator) ApplyUpdate(target string, update schema.UpdateValue) schema.ApplyResult {
 	return schema.ApplyResult{
 		OperatorID: f.operatorID,

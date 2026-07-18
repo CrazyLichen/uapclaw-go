@@ -812,7 +812,7 @@ func TestGetTeamTrajectoryIssues_Context中issues为非list类型(t *testing.T) 
 func TestGetTeamTrajectoryIssues_Context中issues为mapStringAny(t *testing.T) {
 	sig := &EvolutionSignal{
 		SignalType: "test",
-		Context:    map[string]any{teamTrajectoryIssuesKey: []any{
+		Context: map[string]any{teamTrajectoryIssuesKey: []any{
 			map[string]any{"issue_type": "test"},
 		}},
 	}

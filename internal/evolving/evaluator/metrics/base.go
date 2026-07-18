@@ -41,6 +41,10 @@ type MetricOption func(*metricContext)
 // 对应 Python: MetricResult = Union[float, Dict[str, float]]
 type MetricResult = map[string]float64
 
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // WithQuestion 设置查询上下文，对应 Python case.inputs。

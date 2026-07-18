@@ -24,10 +24,10 @@ const (
 	stateFileName = "skills_state.json"
 )
 
-// GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json
-// 对应 Python: state_utils.get_state_file()
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// GetStateFile 返回技能状态文件路径：getAgentSkillsDir()/skills_state.json
+// 对应 Python: state_utils.get_state_file()
 func GetStateFile() string {
 	return filepath.Join(getAgentSkillsDir(), stateFileName)
 }

@@ -3,15 +3,23 @@ package harness
 import (
 	"context"
 
-	bm "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/browser_move"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
 	hpromts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
-	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
-	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	bm "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/browser_move"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
+
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

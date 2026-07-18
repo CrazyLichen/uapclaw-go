@@ -72,11 +72,11 @@ type BaseController interface {
 //
 // 对齐 Python: ActionController (controllers/action.py L70-268)
 type ActionController struct {
-	actions      map[string]ActionHandler
-	actionSpecs  map[string]ActionSpec
+	actions       map[string]ActionHandler
+	actionSpecs   map[string]ActionSpec
 	runtimeRunner RuntimeRunner
 	codeExecutor  CodeExecutorFunc
-	mu           sync.Mutex
+	mu            sync.Mutex
 }
 
 // ActionHandler 动作处理器函数类型。
@@ -86,10 +86,6 @@ type ActionHandler func(ctx context.Context, sessionID string, requestID string,
 // RuntimeRunner 运行时运行器函数类型。
 // 对齐 Python: RuntimeRunner
 type RuntimeRunner func(ctx context.Context, task string, sessionID string, requestID string, timeoutS *int) ActionResult
-
-// ActionResult 动作执行结果。
-// 对齐 Python: ActionResult = dict[str, Any]
-type ActionResult = map[string]any
 
 // ActionSpec 动作元数据。
 //
@@ -103,13 +99,19 @@ type ActionSpec struct {
 	Params map[string]string `json:"params"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ActionResult 动作执行结果。
+// 对齐 Python: ActionResult = dict[str, Any]
+type ActionResult = map[string]any
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // recursiveBrowserActions 禁止递归调用的浏览器动作集合。
 // 对齐 Python: _RECURSIVE_BROWSER_ACTIONS
 var recursiveBrowserActions = map[string]bool{
-	"browser_task":      true,
-	"run_browser_task":  true,
+	"browser_task":     true,
+	"run_browser_task": true,
 }
 
 // browserWorkerActionCtxKey 上下文键，标记是否在 browser worker 动作中执行
@@ -391,14 +393,6 @@ func (c *ActionController) RegisterBuiltinActions() {
 	c.registerListUploadFilesAction()
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// normalizeActionName 规范化动作名称。
-// 对齐 Python: _normalize_action_name
-func normalizeActionName(name string) string {
-	return strings.TrimSpace(strings.ToLower(name))
-}
-
 // IsBrowserWorkerAction 检查上下文中是否在 browser worker 动作中执行。
 // 对齐 Python: _ctx_browser_worker_action.get()
 func IsBrowserWorkerAction(ctx context.Context) bool {
@@ -413,6 +407,14 @@ func IsBrowserWorkerAction(ctx context.Context) bool {
 // 对齐 Python: browser_worker_action_context
 func WithBrowserWorkerAction(ctx context.Context) context.Context {
 	return context.WithValue(ctx, browserWorkerActionKey{}, true)
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// normalizeActionName 规范化动作名称。
+// 对齐 Python: _normalize_action_name
+func normalizeActionName(name string) string {
+	return strings.TrimSpace(strings.ToLower(name))
 }
 
 // registerPingAction 注册 ping 动作。
@@ -552,8 +554,8 @@ func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 					preview = preview[:400]
 				}
 				return ActionResult{
-					"ok":         false,
-					"error":      "Could not parse coordinate result JSON from browser_run_code output",
+					"ok":          false,
+					"error":       "Could not parse coordinate result JSON from browser_run_code output",
 					"raw_preview": preview,
 				}
 			}
@@ -618,14 +620,14 @@ func (c *ActionController) registerBrowserGetElementCoordinatesAction() {
 		Summary:   "Resolves source/target screen coordinates by selectors or explicit coordinates.",
 		WhenToUse: "Use when you need coordinates for one element (element_source only) or two (source + target). element_target is optional.",
 		Params: map[string]string{
-			"url":                          "string: optional URL to open before resolving coordinates",
-			"element_source":               "string: source selector/text alias (required for selector mode)",
-			"element_target":               "string: target selector/text alias (optional)",
-			"coord_source_x":               "int: source x coordinate",
-			"coord_source_y":               "int: source y coordinate",
-			"coord_target_x":               "int: target x coordinate",
-			"coord_target_y":               "int: target y coordinate",
-			"source/target":                "string aliases for element_source/element_target",
+			"url":                                 "string: optional URL to open before resolving coordinates",
+			"element_source":                      "string: source selector/text alias (required for selector mode)",
+			"element_target":                      "string: target selector/text alias (optional)",
+			"coord_source_x":                      "int: source x coordinate",
+			"coord_source_y":                      "int: source y coordinate",
+			"coord_target_x":                      "int: target x coordinate",
+			"coord_target_y":                      "int: target y coordinate",
+			"source/target":                       "string aliases for element_source/element_target",
 			"source_x/source_y/target_x/target_y": "int aliases for coord_* fields",
 		},
 	})
@@ -666,8 +668,8 @@ func (c *ActionController) registerBrowserDragAndDropAction() {
 					preview = preview[:400]
 				}
 				return ActionResult{
-					"ok":         false,
-					"error":      "Could not parse drag result JSON from browser_run_code output",
+					"ok":          false,
+					"error":       "Could not parse drag result JSON from browser_run_code output",
 					"raw_preview": preview,
 				}
 			}
@@ -738,16 +740,16 @@ func (c *ActionController) registerBrowserDragAndDropAction() {
 		Summary:   "Performs drag-and-drop using selectors or explicit coordinates.",
 		WhenToUse: "Use for drag-and-drop tasks instead of generic browser_run_task text-only instructions.",
 		Params: map[string]string{
-			"url":                          "string: optional URL to open before drag-and-drop",
-			"element_source":               "string: source selector/text alias",
-			"element_target":               "string: target selector/text alias",
-			"coord_source_x":               "int: source x coordinate",
-			"coord_source_y":               "int: source y coordinate",
-			"coord_target_x":               "int: target x coordinate",
-			"coord_target_y":               "int: target y coordinate",
-			"steps":                        "int: optional drag interpolation steps",
-			"delay_ms":                     "int: optional delay between drag steps",
-			"source/target":                "string aliases for element_source/element_target",
+			"url":                                 "string: optional URL to open before drag-and-drop",
+			"element_source":                      "string: source selector/text alias",
+			"element_target":                      "string: target selector/text alias",
+			"coord_source_x":                      "int: source x coordinate",
+			"coord_source_y":                      "int: source y coordinate",
+			"coord_target_x":                      "int: target x coordinate",
+			"coord_target_y":                      "int: target y coordinate",
+			"steps":                               "int: optional drag interpolation steps",
+			"delay_ms":                            "int: optional delay between drag steps",
+			"source/target":                       "string aliases for element_source/element_target",
 			"source_x/source_y/target_x/target_y": "int aliases for coord_* fields",
 		},
 	})
@@ -809,8 +811,8 @@ func (c *ActionController) registerBrowserSetInputFilesAction() {
 					preview = preview[:400]
 				}
 				return ActionResult{
-					"ok":         false,
-					"error":      "Could not parse set_input_files result JSON from browser_run_code output",
+					"ok":          false,
+					"error":       "Could not parse set_input_files result JSON from browser_run_code output",
 					"raw_preview": preview,
 				}
 			}
@@ -1005,15 +1007,15 @@ func buildDragPayload(kwargs map[string]any) map[string]any {
 	}
 
 	return map[string]any{
-		"url":             getStr(kwargs, "url"),
-		"element_source":  sourceSelector,
-		"element_target":  targetSelector,
-		"coord_source_x":  sx,
-		"coord_source_y":  sy,
-		"coord_target_x":  tx,
-		"coord_target_y":  ty,
-		"steps":           toIntPtrOrNone(kwargs, "steps"),
-		"delay_ms":        toIntPtrOrNone(kwargs, "delay_ms"),
+		"url":            getStr(kwargs, "url"),
+		"element_source": sourceSelector,
+		"element_target": targetSelector,
+		"coord_source_x": sx,
+		"coord_source_y": sy,
+		"coord_target_x": tx,
+		"coord_target_y": ty,
+		"steps":          toIntPtrOrNone(kwargs, "steps"),
+		"delay_ms":       toIntPtrOrNone(kwargs, "delay_ms"),
 	}
 }
 

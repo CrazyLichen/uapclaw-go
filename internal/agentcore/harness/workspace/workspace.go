@@ -15,6 +15,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// Workspace 工作空间
 type Workspace struct {
 	// RootPath 工作空间根路径
 	RootPath string `json:"root_path" yaml:"root_path"`
@@ -26,8 +27,10 @@ type Workspace struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// WorkspaceNode 工作空间节点类型
 type WorkspaceNode string
 
+// DirectoryNode 目录节点类型
 type DirectoryNode = map[string]any
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -77,6 +80,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// defaultWorkspaceSchemaCN 中文默认工作空间模式
 var defaultWorkspaceSchemaCN = []DirectoryNode{
 	{
 		"name":            "AGENT.md",
@@ -195,6 +199,7 @@ var defaultWorkspaceSchemaCN = []DirectoryNode{
 	},
 }
 
+// defaultWorkspaceSchemaEN 英文默认工作空间模式
 var defaultWorkspaceSchemaEN = []DirectoryNode{
 	{
 		"name":            "AGENT.md",
@@ -300,6 +305,7 @@ var defaultWorkspaceSchemaEN = []DirectoryNode{
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// NewWorkspace 创建新的工作空间实例
 func NewWorkspace(rootPath string, language string) *Workspace {
 	w := &Workspace{
 		RootPath:    rootPath,
@@ -344,6 +350,7 @@ func NewWorkspace(rootPath string, language string) *Workspace {
 	return w
 }
 
+// GetDirectory 获取指定目录节点
 func (w *Workspace) GetDirectory(name any) string {
 	nameStr := resolveName(name)
 
@@ -362,6 +369,7 @@ func (w *Workspace) GetDirectory(name any) string {
 	return ""
 }
 
+// SetDirectory 设置指定目录节点
 func (w *Workspace) SetDirectory(nodes any) error {
 	var nodeList []DirectoryNode
 
@@ -396,6 +404,7 @@ func (w *Workspace) SetDirectory(nodes any) error {
 	return nil
 }
 
+// GetNodePath 获取节点路径
 func (w *Workspace) GetNodePath(node any) *string {
 	nameStr := resolveName(node)
 
@@ -413,36 +422,44 @@ func (w *Workspace) GetNodePath(node any) *string {
 	return nil
 }
 
+// GetDefaultDirectory 获取默认目录
 func GetDefaultDirectory(language string) []DirectoryNode {
 	return getWorkspaceSchema(language)
 }
 
+// LinkTeam 关联团队
 func (w *Workspace) LinkTeam(name, targetPath string) error {
 	return w.createLink(TeamLinksDir, name, targetPath)
 }
 
+// UnlinkTeam 取消关联团队
 func (w *Workspace) UnlinkTeam(name string) error {
 	return w.removeLink(TeamLinksDir, name)
 }
 
+// LinkWorktree 关联工作树
 func (w *Workspace) LinkWorktree(name, targetPath string) error {
 	return w.createLink(WorktreeLinksDir, name, targetPath)
 }
 
+// UnlinkWorktree 取消关联工作树
 func (w *Workspace) UnlinkWorktree(name string) error {
 	return w.removeLink(WorktreeLinksDir, name)
 }
 
+// ListTeamLinks 列出关联的团队
 func (w *Workspace) ListTeamLinks() []string {
 	return w.listLinks(TeamLinksDir)
 }
 
+// ListWorktreeLinks 列出关联的工作树
 func (w *Workspace) ListWorktreeLinks() []string {
 	return w.listLinks(WorktreeLinksDir)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// validateDirectoryNode 校验目录节点
 func validateDirectoryNode(node DirectoryNode) error {
 	if node == nil {
 		return exception.BuildError(exception.StatusDeepagentConfigParamError,
@@ -503,6 +520,7 @@ func validateDirectoryNode(node DirectoryNode) error {
 	return nil
 }
 
+// getWorkspaceSchema 获取工作空间模式
 func getWorkspaceSchema(language string) []DirectoryNode {
 	if language == "en" {
 		return deepCopyNodes(defaultWorkspaceSchemaEN)
@@ -510,6 +528,7 @@ func getWorkspaceSchema(language string) []DirectoryNode {
 	return deepCopyNodes(defaultWorkspaceSchemaCN)
 }
 
+// resolveName 解析节点名称
 func resolveName(name any) string {
 	switch v := name.(type) {
 	case WorkspaceNode:
@@ -521,6 +540,7 @@ func resolveName(name any) string {
 	}
 }
 
+// findInNodes 在节点列表中查找节点
 func findInNodes(name string, nodes []DirectoryNode) *string {
 	for _, node := range nodes {
 		if nodeName, ok := node["name"].(string); ok && nodeName == name {
@@ -541,6 +561,7 @@ func findInNodes(name string, nodes []DirectoryNode) *string {
 	return nil
 }
 
+// deepCopyNode 深拷贝单个节点
 func deepCopyNode(node DirectoryNode) DirectoryNode {
 	data, err := json.Marshal(node)
 	if err != nil {
@@ -553,6 +574,7 @@ func deepCopyNode(node DirectoryNode) DirectoryNode {
 	return normalizeNode(raw)
 }
 
+// deepCopyNodes 深拷贝节点列表
 func deepCopyNodes(nodes []DirectoryNode) []DirectoryNode {
 	result := make([]DirectoryNode, len(nodes))
 	for i, node := range nodes {
@@ -561,6 +583,7 @@ func deepCopyNodes(nodes []DirectoryNode) []DirectoryNode {
 	return result
 }
 
+// toDirectoryNodeSlice 将 children 转换为 DirectoryNode 切片
 func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 	switch v := children.(type) {
 	case []DirectoryNode:
@@ -582,6 +605,7 @@ func toDirectoryNodeSlice(children any) ([]DirectoryNode, error) {
 	}
 }
 
+// normalizeNode 规范化节点
 func normalizeNode(node map[string]any) DirectoryNode {
 	result := DirectoryNode{}
 	for k, v := range node {
@@ -602,6 +626,7 @@ func normalizeNode(node map[string]any) DirectoryNode {
 	return result
 }
 
+// ensureLinkDir 确保链接目录存在
 func (w *Workspace) ensureLinkDir(dir string) (string, error) {
 	fullDir := filepath.Join(w.RootPath, dir)
 	if err := os.MkdirAll(fullDir, 0o755); err != nil {
@@ -610,6 +635,7 @@ func (w *Workspace) ensureLinkDir(dir string) (string, error) {
 	return fullDir, nil
 }
 
+// createDirectoryLink 创建目录链接
 func createDirectoryLink(linkPath, targetPath string) error {
 	if runtime.GOOS == "windows" {
 		return createWindowsJunction(linkPath, targetPath)
@@ -617,6 +643,7 @@ func createDirectoryLink(linkPath, targetPath string) error {
 	return os.Symlink(targetPath, linkPath)
 }
 
+// createWindowsJunction 创建 Windows 目录链接
 func createWindowsJunction(linkPath, targetPath string) error {
 	// Windows junction 通过 syscall 或外部命令实现
 	// 此处简化处理：先尝试 symlink，失败则返回错误
@@ -626,10 +653,12 @@ func createWindowsJunction(linkPath, targetPath string) error {
 	return nil
 }
 
+// removeDirectoryLink 移除目录链接
 func removeDirectoryLink(linkPath string) error {
 	return os.Remove(linkPath)
 }
 
+// isDirectoryLink 判断路径是否为目录链接
 func isDirectoryLink(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -638,6 +667,7 @@ func isDirectoryLink(path string) bool {
 	return info.Mode()&os.ModeSymlink != 0
 }
 
+// createLink 创建链接
 func (w *Workspace) createLink(subdir, name, targetPath string) error {
 	linkDir, err := w.ensureLinkDir(subdir)
 	if err != nil {
@@ -666,6 +696,7 @@ func (w *Workspace) createLink(subdir, name, targetPath string) error {
 	return nil
 }
 
+// removeLink 移除链接
 func (w *Workspace) removeLink(subdir, name string) error {
 	linkPath := filepath.Join(w.RootPath, subdir, name)
 
@@ -690,6 +721,7 @@ func (w *Workspace) removeLink(subdir, name string) error {
 	return nil
 }
 
+// listLinks 列出链接
 func (w *Workspace) listLinks(subdir string) []string {
 	linkDir := filepath.Join(w.RootPath, subdir)
 	entries, err := os.ReadDir(linkDir)

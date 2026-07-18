@@ -181,7 +181,7 @@ func (s *AgentServer) handleAgentsGet(_ context.Context, request *schema.AgentRe
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "agent name is required",
+				"error": "agent 名称不能为空",
 			}),
 		), nil
 	}
@@ -275,9 +275,9 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"agent":       agentDefinitionToMap(agent),
-			"generated":   generated,
-			"applied":     applied,
+			"agent":        agentDefinitionToMap(agent),
+			"generated":    generated,
+			"applied":      applied,
 			"reload_error": reloadError,
 		}),
 	), nil
@@ -301,7 +301,7 @@ func (s *AgentServer) handleAgentsUpdate(_ context.Context, request *schema.Agen
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "agent name is required",
+				"error": "agent 名称不能为空",
 			}),
 		), nil
 	}
@@ -370,7 +370,7 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "agent name is required",
+				"error": "agent 名称不能为空",
 			}),
 		), nil
 	}
@@ -454,7 +454,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
-				"error": "agent name is required",
+				"error": "agent 名称不能为空",
 			}),
 		), nil
 	}
@@ -493,10 +493,10 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
-			"name":          name,
-			"enabled":       enabled,
-			"applied":       applied,
-			"reload_error":  reloadError,
+			"name":         name,
+			"enabled":      enabled,
+			"applied":      applied,
+			"reload_error": reloadError,
 		}),
 	), nil
 }

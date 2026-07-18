@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -20,14 +20,16 @@ type stubSpawnHandle struct {
 	healthy   bool
 }
 
-func (h *stubSpawnHandle) ProcessID() string                                         { return h.processID }
-func (h *stubSpawnHandle) IsAlive() bool                                             { return h.alive }
-func (h *stubSpawnHandle) IsHealthy() bool                                           { return h.healthy }
-func (h *stubSpawnHandle) Shutdown(_ context.Context, _ ...time.Duration) (bool, error) { return true, nil }
-func (h *stubSpawnHandle) ForceKill() error                                          { return nil }
-func (h *stubSpawnHandle) WaitForCompletion() (int, error)                           { return 0, nil }
+func (h *stubSpawnHandle) ProcessID() string { return h.processID }
+func (h *stubSpawnHandle) IsAlive() bool     { return h.alive }
+func (h *stubSpawnHandle) IsHealthy() bool   { return h.healthy }
+func (h *stubSpawnHandle) Shutdown(_ context.Context, _ ...time.Duration) (bool, error) {
+	return true, nil
+}
+func (h *stubSpawnHandle) ForceKill() error                                             { return nil }
+func (h *stubSpawnHandle) WaitForCompletion() (int, error)                              { return 0, nil }
 func (h *stubSpawnHandle) StartHealthCheck(_ context.Context, _ ...time.Duration) error { return nil }
-func (h *stubSpawnHandle) StopHealthCheck() error                                    { return nil }
+func (h *stubSpawnHandle) StopHealthCheck() error                                       { return nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -90,7 +90,7 @@ func TestUpsertSubagentInConfigAt_CreateMissingSections(t *testing.T) {
 func TestUpsertSubagentInConfigAt_EmptyName(t *testing.T) {
 	err := upsertSubagentInConfigAt("", true, "/tmp/config.yaml")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "required")
+	assert.Contains(t, err.Error(), "不能为空")
 
 	err = upsertSubagentInConfigAt("   ", true, "/tmp/config.yaml")
 	assert.Error(t, err)

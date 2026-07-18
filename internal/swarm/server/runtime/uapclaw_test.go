@@ -71,7 +71,7 @@ func (f *fakeAdapter) HandleUserAnswer(_ context.Context, _ *schema.AgentRequest
 func (f *fakeAdapter) HandleHeartbeat(_ context.Context, _ *schema.AgentRequest) (*schema.AgentResponse, error) {
 	return f.heartbeatResp, f.heartbeatErr
 }
-func (f *fakeAdapter) Cleanup() error { return nil }
+func (f *fakeAdapter) Cleanup() error                                  { return nil }
 func (f *fakeAdapter) SwitchMode(_ context.Context, _, _ string) error { return nil }
 
 // ContextCompressor 接口实现

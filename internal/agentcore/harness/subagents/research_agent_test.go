@@ -3,11 +3,11 @@ package subagents
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────

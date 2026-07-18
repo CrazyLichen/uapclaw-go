@@ -39,12 +39,16 @@ type SessionManager struct {
 	sessionState *agentteams.SessionState
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// sessionMgrLogComponent 日志组件
 	sessionMgrLogComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

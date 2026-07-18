@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 	kv "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/store/kv"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -82,16 +82,16 @@ func NewBrowserService(
 		cancelStore = kv.NewInMemoryKVStore()
 	}
 	return &BrowserService{
-		Provider:               provider,
-		APIKey:                 apiKey,
-		APIBase:                apiBase,
-		ModelName:              modelName,
-		MCPCfg:                 mcpCfg,
-		Guardrails:             guardrails,
-		cancelStore:            cancelStore,
-		sessions:               make(map[string]struct{}),
-		locksPerSession:        make(map[string]*sync.Mutex),
-		progressBySession:      make(map[string]*BrowserTaskProgressState),
+		Provider:                provider,
+		APIKey:                  apiKey,
+		APIBase:                 apiBase,
+		ModelName:               modelName,
+		MCPCfg:                  mcpCfg,
+		Guardrails:              guardrails,
+		cancelStore:             cancelStore,
+		sessions:                make(map[string]struct{}),
+		locksPerSession:         make(map[string]*sync.Mutex),
+		progressBySession:       make(map[string]*BrowserTaskProgressState),
 		failureContextBySession: make(map[string]string),
 	}
 }
@@ -269,14 +269,14 @@ func ShouldTreatAsCompleted(parsed map[string]any) bool {
 func NormalizeProgressStatus(value any) string {
 	normalized := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", value)))
 	aliases := map[string]string{
-		"complete":     "completed",
-		"completed":    "completed",
-		"done":         "completed",
-		"partial":      "partial",
-		"in_progress":  "partial",
-		"in-progress":  "partial",
-		"blocked":      "blocked",
-		"failed":       "failed",
+		"complete":    "completed",
+		"completed":   "completed",
+		"done":        "completed",
+		"partial":     "partial",
+		"in_progress": "partial",
+		"in-progress": "partial",
+		"blocked":     "blocked",
+		"failed":      "failed",
 	}
 	if result, ok := aliases[normalized]; ok {
 		return result
@@ -449,16 +449,16 @@ func (s *BrowserService) RunTask(
 		_ = s.ClearCancel(ctx, sid, rid)
 		_ = s.ClearCancel(ctx, sid, "")
 		return map[string]any{
-			"ok":             false,
-			"session_id":     sid,
-			"request_id":     rid,
-			"final":          "",
-			"page":           map[string]any{"url": "", "title": ""},
-			"screenshot":     nil,
-			"error":          "cancelled_by_frontend",
-			"attempt":        0,
+			"ok":              false,
+			"session_id":      sid,
+			"request_id":      rid,
+			"final":           "",
+			"page":            map[string]any{"url": "", "title": ""},
+			"screenshot":      nil,
+			"error":           "cancelled_by_frontend",
+			"attempt":         0,
 			"failure_summary": nil,
-			"progress_state": nil,
+			"progress_state":  nil,
 		}, nil
 	}
 
@@ -487,16 +487,16 @@ func (s *BrowserService) RunTask(
 				_ = s.ClearCancel(ctx, sid, rid)
 				_ = s.ClearCancel(ctx, sid, "")
 				return map[string]any{
-					"ok":             false,
-					"session_id":     sid,
-					"request_id":     rid,
-					"final":          "",
-					"page":           map[string]any{"url": "", "title": ""},
-					"screenshot":     nil,
-					"error":          "cancelled_by_frontend",
-					"attempt":        attemptIdx,
+					"ok":              false,
+					"session_id":      sid,
+					"request_id":      rid,
+					"final":           "",
+					"page":            map[string]any{"url": "", "title": ""},
+					"screenshot":      nil,
+					"error":           "cancelled_by_frontend",
+					"attempt":         attemptIdx,
 					"failure_summary": nil,
-					"progress_state": nil,
+					"progress_state":  nil,
 				}, nil
 			}
 

@@ -84,11 +84,11 @@ func TestBuildBrowserWorkerSystemPrompt_关键指令(t *testing.T) {
 // TestBuildBrowserWorkerAgent_待回填 测试 BuildBrowserWorkerAgent 当前返回错误（待回填）
 func TestBuildBrowserWorkerAgent_待回填(t *testing.T) {
 	config := &BrowserWorkerConfig{
-		Provider:   "openai",
-		APIKey:     "test-key",
-		APIBase:    "https://api.openai.com/v1",
-		ModelName:  "gpt-4o",
-		MaxSteps:   15,
+		Provider:  "openai",
+		APIKey:    "test-key",
+		APIBase:   "https://api.openai.com/v1",
+		ModelName: "gpt-4o",
+		MaxSteps:  15,
 	}
 
 	_, err := BuildBrowserWorkerAgent(config)

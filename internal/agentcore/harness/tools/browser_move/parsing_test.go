@@ -86,10 +86,10 @@ func TestSanitizeJSONSchema_折叠anyOfnullable(t *testing.T) {
 
 func TestSanitizeJSONSchema_移除不支持关键字(t *testing.T) {
 	input := map[string]any{
-		"$schema":     "http://json-schema.org/draft-07/schema#",
-		"$id":         "test-id",
-		"type":        "object",
-		"properties":  map[string]any{},
+		"$schema":    "http://json-schema.org/draft-07/schema#",
+		"$id":        "test-id",
+		"type":       "object",
+		"properties": map[string]any{},
 	}
 	result := SanitizeJSONSchema(input)
 	resultMap, ok := result.(map[string]any)
@@ -126,7 +126,7 @@ func TestSanitizeJSONSchema_递归properties(t *testing.T) {
 		"type": "object",
 		"properties": map[string]any{
 			"name": map[string]any{
-				"type": "string",
+				"type":    "string",
 				"$schema": "should-be-removed",
 			},
 		},

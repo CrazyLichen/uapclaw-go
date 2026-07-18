@@ -27,7 +27,8 @@ func (c *testConfig) Validate() error {
 	return nil
 }
 
-func (c *testConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {}
+func (c *testConfig) SetModelDefaults(_ *llm_schema.ModelRequestConfig, _ *llm_schema.ModelClientConfig) {
+}
 
 func (c *testConfig) GetModel() *llm_schema.ModelRequestConfig { return nil }
 

@@ -54,10 +54,10 @@ type BaseOptimizerMixin struct {
 // BaseOptimizer 维度优化器的公共接口。
 //
 // 定义优化器的生命周期：
-//   1. Bind() — 过滤并绑定可优化的 Operator，返回匹配数量
-//   2. AddTrajectory() — 缓存 Trajectory 供 backward 查询
-//   3. Backward() — 从信号计算梯度
-//   4. Step() — 从梯度生成更新映射，由 Trainer.apply_updates 统一应用
+//  1. Bind() — 过滤并绑定可优化的 Operator，返回匹配数量
+//  2. AddTrajectory() — 缓存 Trajectory 供 backward 查询
+//  3. Backward() — 从信号计算梯度
+//  4. Step() — 从梯度生成更新映射，由 Trainer.apply_updates 统一应用
 //
 // 对应 Python: BaseOptimizer
 type BaseOptimizer interface {

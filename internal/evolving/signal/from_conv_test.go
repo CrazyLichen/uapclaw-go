@@ -1524,4 +1524,3 @@ func TestDetectTrajectorySignals_仅Trajectory(t *testing.T) {
 		t.Logf("Got %d signals (may be expected)", len(signals))
 	}
 }
-

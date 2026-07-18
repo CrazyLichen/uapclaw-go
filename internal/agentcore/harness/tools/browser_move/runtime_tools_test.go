@@ -274,9 +274,9 @@ func TestParseInt(t *testing.T) {
 
 func TestParseBool(t *testing.T) {
 	tests := []struct {
-		input       any
-		defaultVal  bool
-		expected    bool
+		input      any
+		defaultVal bool
+		expected   bool
 	}{
 		{true, true, true},
 		{false, true, false},

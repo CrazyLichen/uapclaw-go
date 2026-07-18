@@ -46,12 +46,12 @@ type BrowserTaskProgressState struct {
 func NewBrowserTaskProgressStateFromDict(data map[string]any) *BrowserTaskProgressState {
 	if data == nil {
 		return &BrowserTaskProgressState{
-			Status:           "unknown",
-			CompletedSteps:   []string{},
-			RemainingSteps:   []string{},
-			CompletionEvidence: []string{},
+			Status:              "unknown",
+			CompletedSteps:      []string{},
+			RemainingSteps:      []string{},
+			CompletionEvidence:  []string{},
 			MissingRequirements: []string{},
-			RecentToolSteps:  []string{},
+			RecentToolSteps:     []string{},
 		}
 	}
 
@@ -101,20 +101,20 @@ func (s *BrowserTaskProgressState) IsEmpty() bool {
 // 对齐 Python: BrowserTaskProgressState.to_dict
 func (s *BrowserTaskProgressState) ToDict() map[string]any {
 	result := map[string]any{
-		"status":              s.Status,
-		"completed_steps":     copySlice(s.CompletedSteps),
-		"remaining_steps":     copySlice(s.RemainingSteps),
-		"next_step":           nilIfEmpty(s.NextStep),
-		"completion_evidence": copySlice(s.CompletionEvidence),
+		"status":               s.Status,
+		"completed_steps":      copySlice(s.CompletedSteps),
+		"remaining_steps":      copySlice(s.RemainingSteps),
+		"next_step":            nilIfEmpty(s.NextStep),
+		"completion_evidence":  copySlice(s.CompletionEvidence),
 		"missing_requirements": copySlice(s.MissingRequirements),
-		"recent_tool_steps":   copySlice(s.RecentToolSteps),
+		"recent_tool_steps":    copySlice(s.RecentToolSteps),
 		"last_page": map[string]any{
 			"url":   s.LastPageURL,
 			"title": s.LastPageTitle,
 		},
-		"last_screenshot":    s.LastScreenshot,
-		"last_worker_final":  nilIfEmpty(s.LastWorkerFinal),
-		"request_id":         nilIfEmpty(s.RequestID),
+		"last_screenshot":   s.LastScreenshot,
+		"last_worker_final": nilIfEmpty(s.LastWorkerFinal),
+		"request_id":        nilIfEmpty(s.RequestID),
 	}
 	return result
 }

@@ -3,8 +3,8 @@ package context_engineer
 import (
 	"context"
 
-	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	cecontext "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/context"
+	ceiface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/compressor"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/processor/offloader"
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"

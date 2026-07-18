@@ -18,32 +18,6 @@ func (k UpdateKey) OperatorID() string { return k[0] }
 // Target 返回 UpdateKey 的 target 部分。
 func (k UpdateKey) Target() string { return k[1] }
 
-// UpdateMode 更新模式。
-//
-// 对应 Python: UpdateMode = Literal["replace", "append", "merge"]
-type UpdateMode string
-
-const (
-	// UpdateModeReplace 替换模式。
-	UpdateModeReplace UpdateMode = ReplaceMode // "replace"
-	// UpdateModeAppend 追加模式。
-	UpdateModeAppend UpdateMode = AppendMode // "append"
-	// UpdateModeMerge 合并模式。
-	UpdateModeMerge UpdateMode = MergeMode // "merge"
-)
-
-// UpdateEffect 更新效果。
-//
-// 对应 Python: UpdateEffect = Literal["state", "pending_change"]
-type UpdateEffect string
-
-const (
-	// UpdateEffectState 直接状态更新效果。
-	UpdateEffectState UpdateEffect = StateEffect // "state"
-	// UpdateEffectPendingChange 暂存变更效果。
-	UpdateEffectPendingChange UpdateEffect = PendingChangeEffect // "pending_change"
-)
-
 // UpdateValue 结构化更新契约，在线和离线应用路径共享。
 //
 // 对应 Python: openjiuwen/agent_evolving/types.py UpdateValue
@@ -61,49 +35,6 @@ type UpdateValue struct {
 	ChangeType *string
 	// Metadata 扩展元数据
 	Metadata map[string]any
-}
-
-// NewUpdateValue 创建 UpdateValue 实例，设置默认 Mode=replace, Effect=state。
-//
-// 对应 Python: UpdateValue(payload, mode=REPLACE_MODE, effect=STATE_EFFECT, ...)
-func NewUpdateValue(payload any, opts ...UpdateValueOption) UpdateValue {
-	uv := UpdateValue{
-		Payload:  payload,
-		Mode:     UpdateModeReplace,
-		Effect:   UpdateEffectState,
-		Metadata: map[string]any{},
-	}
-	for _, opt := range opts {
-		opt(&uv)
-	}
-	return uv
-}
-
-// UpdateValueOption UpdateValue 构造选项函数。
-type UpdateValueOption func(*UpdateValue)
-
-// WithUpdateMode 设置更新模式选项。
-func WithUpdateMode(mode UpdateMode) UpdateValueOption {
-	return func(uv *UpdateValue) { uv.Mode = mode }
-}
-
-// WithUpdateEffect 设置更新效果选项。
-func WithUpdateEffect(effect UpdateEffect) UpdateValueOption {
-	return func(uv *UpdateValue) { uv.Effect = effect }
-}
-
-// WithChangeType 设置变更类型选项。
-func WithChangeType(changeType string) UpdateValueOption {
-	return func(uv *UpdateValue) { uv.ChangeType = &changeType }
-}
-
-// WithUpdateMetadata 设置扩展元数据选项。
-func WithUpdateMetadata(metadata map[string]any) UpdateValueOption {
-	return func(uv *UpdateValue) {
-		if metadata != nil {
-			uv.Metadata = metadata
-		}
-	}
 }
 
 // ApplyResult 单个归一化更新应用到一个演化目标的结果。
@@ -143,7 +74,82 @@ func (r ApplyResult) Ok() bool {
 	return r.Applied && len(r.Errors) == 0
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// UpdateMode 更新模式。
+//
+// 对应 Python: UpdateMode = Literal["replace", "append", "merge"]
+type UpdateMode string
+
+// UpdateEffect 更新效果。
+//
+// 对应 Python: UpdateEffect = Literal["state", "pending_change"]
+type UpdateEffect string
+
+// UpdateValueOption UpdateValue 构造选项函数。
+type UpdateValueOption func(*UpdateValue)
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+const (
+	// UpdateModeReplace 替换模式。
+	UpdateModeReplace UpdateMode = ReplaceMode // "replace"
+	// UpdateModeAppend 追加模式。
+	UpdateModeAppend UpdateMode = AppendMode // "append"
+	// UpdateModeMerge 合并模式。
+	UpdateModeMerge UpdateMode = MergeMode // "merge"
+)
+
+const (
+	// UpdateEffectState 直接状态更新效果。
+	UpdateEffectState UpdateEffect = StateEffect // "state"
+	// UpdateEffectPendingChange 暂存变更效果。
+	UpdateEffectPendingChange UpdateEffect = PendingChangeEffect // "pending_change"
+)
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// NewUpdateValue 创建 UpdateValue 实例，设置默认 Mode=replace, Effect=state。
+//
+// 对应 Python: UpdateValue(payload, mode=REPLACE_MODE, effect=STATE_EFFECT, ...)
+func NewUpdateValue(payload any, opts ...UpdateValueOption) UpdateValue {
+	uv := UpdateValue{
+		Payload:  payload,
+		Mode:     UpdateModeReplace,
+		Effect:   UpdateEffectState,
+		Metadata: map[string]any{},
+	}
+	for _, opt := range opts {
+		opt(&uv)
+	}
+	return uv
+}
+
+// WithUpdateMode 设置更新模式选项。
+func WithUpdateMode(mode UpdateMode) UpdateValueOption {
+	return func(uv *UpdateValue) { uv.Mode = mode }
+}
+
+// WithUpdateEffect 设置更新效果选项。
+func WithUpdateEffect(effect UpdateEffect) UpdateValueOption {
+	return func(uv *UpdateValue) { uv.Effect = effect }
+}
+
+// WithChangeType 设置变更类型选项。
+func WithChangeType(changeType string) UpdateValueOption {
+	return func(uv *UpdateValue) { uv.ChangeType = &changeType }
+}
+
+// WithUpdateMetadata 设置扩展元数据选项。
+func WithUpdateMetadata(metadata map[string]any) UpdateValueOption {
+	return func(uv *UpdateValue) {
+		if metadata != nil {
+			uv.Metadata = metadata
+		}
+	}
+}
 
 // NormalizeUpdateValue 将遗留更新包装为结构化契约。
 //

@@ -82,7 +82,7 @@ type StreamParsedResult struct {
 // 使用方式：
 //
 //	type OpenAIModelClient struct {
-//	    BaseClientEmbed
+//	    BaseClientEmbed（嵌入基础客户端）
 //	    // ... OpenAI 特有字段
 //	}
 type BaseClientEmbed struct {

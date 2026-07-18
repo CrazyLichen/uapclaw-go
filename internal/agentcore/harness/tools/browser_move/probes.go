@@ -480,7 +480,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
           return simple;
         }
       } catch (_) {
-        // Fall through to a full nth-of-type path when a selector cannot be tested.
+        // 当选择器无法测试时，回退到完整的 nth-of-type 路径。
       }
 
       const path = [];
@@ -565,7 +565,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
           const found = root.querySelector(selector);
           if (found) return found;
         } catch (_) {
-          // Ignore invalid browser-specific selector handling.
+          // 忽略无效的浏览器特定选择器处理。
         }
       }
       return null;
@@ -872,7 +872,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
       const preview = String(data.text_preview || '').trim();
       const buttons = Array.isArray(data.buttons) ? data.buttons : [];
 
-      // Allow quote/article-style cards that do not have price/rating/image.
+      // 允许没有价格/评分/图片的引用/文章样式卡片。
       return (
         score >= 30 &&
         preview.length >= 80 &&
@@ -934,7 +934,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
             result.push(node);
           }
         } catch (_) {
-          // Ignore invalid selectors.
+          // 忽略无效选择器。
         }
       }
 
@@ -1132,7 +1132,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
       if (item.data.has_image) score += 8;
       if (item.top >= 0 && item.top <= window.innerHeight) score += 8;
 
-      // Penalize very large containers because they are often grids/sections, not cards.
+      // 对超大容器进行惩罚，因为它们通常是网格/区域，而非卡片。
       const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
       if (item.area > viewportArea * 0.45) score -= 40;
 
@@ -1163,7 +1163,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
     const selectable = scored.filter((item) => {
       if (looksLikePageChrome(item.data)) return false;
 
-      // If we already have rich listing-like candidates, remove weak nav-like entries.
+      // 如果已有丰富的列表类候选，则移除弱导航类条目。
       if (!hasRichCandidates) return true;
 
       return Boolean(
@@ -1183,8 +1183,7 @@ func BuildCardProbeJS(maxCards int, viewportOnly bool, includeButtons bool, quer
       });
 
       if (conflictsWithExisting) {
-        // Prefer the candidate with more extracted fields. If tied, prefer the smaller
-        // repeated card-like container over a large section/grid wrapper.
+        // 优先选择提取字段更多的候选。若字段数相同，则优先选择较小的重复卡片式容器，而非大型区域/网格包装器。
         const itemBetter =
           item.fieldCount > conflictsWithExisting.fieldCount ||
           (

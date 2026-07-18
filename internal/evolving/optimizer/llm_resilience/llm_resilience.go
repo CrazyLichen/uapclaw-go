@@ -382,7 +382,7 @@ func WithIsResultUsable(fn func(string) bool) InvokeRetryOption {
 // isTimeoutLike 判断错误是否为超时类型。
 //
 // 检测规则（对齐 Python _is_timeout_like）：
-//  1. context.DeadlineExceeded
+//  1. context.DeadlineExceeded（上下文超时）
 //  2. 错误类型名包含 "timeout"
 //  3. 错误消息包含 "timeout" 或 "timed out"
 //
@@ -408,7 +408,7 @@ func isTimeoutLike(err error) bool {
 // sleepBeforeRetry 指数退避等待。
 //
 // 对齐 Python: _sleep_before_retry()
-//   - backoff = backoff_base * 2^(attempt-1)
+//   - 退避时间 = backoff_base * 2^(attempt-1)
 //   - 取 min(backoff, remaining_budget)
 //   - 如果 backoff_base <= 0 或 remaining_budget <= 0，跳过
 func sleepBeforeRetry(ctx context.Context, policy LLMInvokePolicy, startedAt time.Time, attempt int) error {
@@ -460,10 +460,10 @@ func raiseLLMResilienceError(
 	}
 
 	details := map[string]any{
-		"reason":       reason,
-		"attempts":     attempts,
+		"reason":        reason,
+		"attempts":      attempts,
 		"last_response": lastResponse,
-		"last_error":   errorString(lastError),
+		"last_error":    errorString(lastError),
 	}
 
 	return exception.NewBaseError(

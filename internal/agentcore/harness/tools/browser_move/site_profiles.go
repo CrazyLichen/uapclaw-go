@@ -141,15 +141,15 @@ var chromeSelectorFragments = []string{
 // chromeTitles 页面 chrome 标题集合。
 // 对齐 Python: _CHROME_TITLES (site_profiles.py L71-81)
 var chromeTitles = map[string]bool{
-	"fresh & fast":    true,
-	"sell":            true,
-	"best sellers":    true,
+	"fresh & fast":     true,
+	"sell":             true,
+	"best sellers":     true,
 	"customer service": true,
-	"today's deals":   true,
-	"new releases":    true,
-	"help":            true,
-	"login":           true,
-	"sign in":         true,
+	"today's deals":    true,
+	"new releases":     true,
+	"help":             true,
+	"login":            true,
+	"sign in":          true,
 }
 
 // selectorCacheSingleton 全局选择器缓存单例
@@ -324,11 +324,11 @@ func (c *BrowserSelectorCache) RecordCardProbeResult(result map[string]any) {
 	selectors := map[string][]string{
 		"card_container_selectors": {},
 		"title_selectors":          {},
-		"price_selectors":         {},
-		"rating_selectors":        {},
-		"availability_selectors":  {},
-		"primary_link_selectors":  {},
-		"button_selectors":        {},
+		"price_selectors":          {},
+		"rating_selectors":         {},
+		"availability_selectors":   {},
+		"primary_link_selectors":   {},
+		"button_selectors":         {},
 	}
 
 	limit := len(cacheableCards)

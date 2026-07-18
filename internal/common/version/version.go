@@ -9,7 +9,7 @@
 //	  -X github.com/uapclaw/uapclaw-go/internal/common/version.Version=0.2.0 \
 //	  -X github.com/uapclaw/uapclaw-go/internal/common/version.GitCommit=abc1234 \
 //	  -X github.com/uapclaw/uapclaw-go/internal/common/version.BuildDate=2025-07-12T00:00:00Z" \
-//	  -o bin/uapclaw ./cmd/uapclaw/
+//	  -o bin/uapclaw ./cmd/uapclaw/（输出二进制文件）
 package version
 
 import (
@@ -40,7 +40,7 @@ var (
 //
 // 格式示例：
 //
-//	uapclaw 0.1.0-dev (commit: abc1234, built: 2025-07-12, go1.23, linux/amd64)
+//	uapclaw 0.1.0-dev (commit: abc1234, built: 2025-07-12, go1.23, linux/amd64) 版本输出示例
 //
 // 如果 GitCommit 或 BuildDate 未通过 ldflags 注入，则显示 "unknown"。
 // ──────────────────────────── 导出函数 ────────────────────────────

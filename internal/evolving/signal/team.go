@@ -337,7 +337,7 @@ func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues [
 		WithSource("passive_trajectory"),
 		WithContext(map[string]any{
 			teamTrajectoryIssuesKey: issues,
-			teamSkillContentKey:    skillContent,
+			teamSkillContentKey:     skillContent,
 		}),
 	)
 }

@@ -906,7 +906,7 @@ func (crc *CurrentRoundCompressor) MergeSummaryBlocks(ctx context.Context, mc if
 // WrapCurrentRoundMemoryBlock 将摘要包装为协议化记忆块格式。
 //
 // 包含 8 个元数据头部：processor、type、scope、type_note、authority、
-// instruction_status、strategy_status、tool_action_state_status、conflict_priority。
+// instruction_status（指令状态）、strategy_status（策略状态）、tool_action_state_status（工具动作状态）、conflict_priority（冲突优先级）。
 //
 // 对应 Python: CurrentRoundCompressor._wrap_memory_block()
 func (crc *CurrentRoundCompressor) WrapCurrentRoundMemoryBlock(summary string) string {

@@ -19,7 +19,7 @@ type BrowserProfile struct {
 	Name string `json:"name"`
 	// DriverType 驱动类型（默认 "remote"）
 	DriverType string `json:"driver_type"`
-	// CDPURL Chrome DevTools Protocol URL
+	// CDPURL Chrome DevTools 协议地址
 	CDPURL string `json:"cdp_url"`
 	// BrowserBinary 浏览器可执行文件路径
 	BrowserBinary string `json:"browser_binary"`

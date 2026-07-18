@@ -436,12 +436,12 @@ func (r *BrowserAgentRuntime) ListActions() map[string]any {
 // 对齐 Python: BrowserAgentRuntime.runtime_health
 func (r *BrowserAgentRuntime) RuntimeHealth() map[string]any {
 	return map[string]any{
-		"ok":               r.service.connectionHealthy,
-		"started":          r.service.started,
+		"ok":                r.service.connectionHealthy,
+		"started":           r.service.started,
 		"last_heartbeat_ok": r.service.lastHeartbeatOK,
-		"provider":         r.service.Provider,
-		"api_base":         r.service.APIBase,
-		"model_name":       r.service.ModelName,
+		"provider":          r.service.Provider,
+		"api_base":          r.service.APIBase,
+		"model_name":        r.service.ModelName,
 	}
 }
 

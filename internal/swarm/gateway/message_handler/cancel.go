@@ -397,7 +397,7 @@ func (mh *MessageHandler) buildErrorOutMessage(msg *schema.Message, err error) *
 //
 // 对齐 Python _build_tool_result_message (L2790-L2818)：
 // id 格式: tool_result_{timestamp:x}_{random_hex}，
-// type=event, event_type=CHAT_TOOL_RESULT，
+// type=event, event_type=CHAT_TOOL_RESULT（聊天工具结果），
 // payload 含 tool_result 字典（tool_name/tool_call_id/result/status）。
 func (mh *MessageHandler) buildToolResultMessage(channelID, sessionID string, toolInfo map[string]any, metadata map[string]any) *schema.Message {
 	id := fmt.Sprintf("tool_result_%x_%s", time.Now().UnixMilli(), generateRandomHex(3))

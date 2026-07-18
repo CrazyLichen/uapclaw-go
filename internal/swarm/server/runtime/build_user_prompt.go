@@ -10,7 +10,6 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
-// skillsUseRegex /skills use 斜杠命令匹配正则。
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -19,6 +18,7 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// skillsUseRegex /skills use 斜杠命令匹配正则。
 var skillsUseRegex = regexp.MustCompile(`^/skills use\s+(?P<skill_names>[^,]+)\s*,\s*(?P<query>.*)$`)
 
 // BuildUserPrompt 将用户 query 包装为结构化 JSON prompt。

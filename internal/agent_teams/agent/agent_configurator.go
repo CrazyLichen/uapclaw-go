@@ -3,8 +3,8 @@ package agent
 import (
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
-	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────

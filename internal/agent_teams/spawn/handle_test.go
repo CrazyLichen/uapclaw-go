@@ -3,8 +3,8 @@ package spawn_test
 import (
 	"testing"
 
-	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 	"github.com/uapclaw/uapclaw-go/internal/agent_teams/spawn"
+	runnerspawn "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/spawn"
 )
 
 // TestSpawnHandle_SpawnedProcessHandle满足接口 验证 SpawnedProcessHandle 满足 SpawnHandle 接口。

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sync"
 	"time"
 
 	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
@@ -25,6 +26,8 @@ import (
 //   - 协作取消（cooperativeCancel: 两阶段关闭）
 //   - 重试逻辑（错误码 181001 最多重试 10 次）
 type StreamController struct {
+	// mu 保护并发访问的字段（cancelRequested, pendingInputs, pendingInterruptResumes, streamingActive）
+	mu sync.Mutex
 	// getBlueprint 蓝图获取器（延迟获取，configure 后才有值）
 	getBlueprint func() *TeamAgentBlueprint
 	// state 共享可变状态
@@ -157,6 +160,8 @@ func (sc *StreamController) RemoveChunkObserver(cb atschema.ChunkObserver) {
 // IsAgentRunning Agent 是否正在运行（流式输出中）。
 // 对齐 Python: StreamController.is_agent_running()
 func (sc *StreamController) IsAgentRunning() bool {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.streamingActive
 }
 
@@ -298,8 +303,10 @@ func (sc *StreamController) EmitCompletionAndClose(memberCount, taskCount int) {
 // 对齐 Python: StreamController.drain_agent_task()
 // 清除 pendingInputs + pendingInterruptResumes，然后 CancelAgent
 func (sc *StreamController) DrainAgentTask(ctx context.Context) error {
+	sc.mu.Lock()
 	sc.pendingInputs = nil
 	sc.pendingInterruptResumes = nil
+	sc.mu.Unlock()
 	return sc.CancelAgent(ctx)
 }
 
@@ -311,12 +318,14 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 	if !sc.HasInFlightRound() {
 		return nil
 	}
+	sc.mu.Lock()
 	sc.cancelRequested = true
+	sc.mu.Unlock()
 	harness := sc.resources.Harness
 	if harness != nil {
 		if err := harness.Abort(ctx); err != nil {
 			logger.Debug(scLogComponent).Str("member_name", sc.memberName()).
-				Err(err).Msg("harness.Abort failed")
+				Err(err).Msg("harness.Abort 失败")
 		}
 	}
 	// 等待 goroutine 自然完成或超时
@@ -404,7 +413,7 @@ func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged stream
 					logger.Error(scLogComponent).
 						Str("member_name", sc.memberName()).
 						Any("panic", r).
-						Msg("chunk observer panicked; detaching")
+						Msg("chunk 观察者 panic; 已分离")
 					sc.RemoveChunkObserver(ob)
 				}
 			}()
@@ -412,7 +421,7 @@ func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged stream
 				logger.Error(scLogComponent).
 					Str("member_name", sc.memberName()).
 					Err(err).
-					Msg("chunk observer raised; detaching")
+					Msg("chunk 观察者异常; 已分离")
 				sc.RemoveChunkObserver(ob)
 			}
 		}()
@@ -441,7 +450,7 @@ func (sc *StreamController) startRound(ctx context.Context, content any) {
 func (sc *StreamController) logRoundPanic() {
 	if r := recover(); r != nil {
 		logger.Error(scLogComponent).Str("member_name", sc.memberName()).
-			Any("panic", r).Msg("_run_one_round goroutine panicked")
+			Any("panic", r).Msg("_run_one_round 协程 panic")
 	}
 }
 
@@ -449,7 +458,9 @@ func (sc *StreamController) logRoundPanic() {
 // 对齐 Python: StreamController._run_one_round(message)
 func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 	// 重置取消标记（对齐 Python: self._cancel_requested = False）
+	sc.mu.Lock()
 	sc.cancelRequested = false
+	sc.mu.Unlock()
 	// ⤵️ 待 9.62 CoordinationKernel 章节回填：set_member_id 上下文变量
 
 	harness := sc.resources.Harness
@@ -475,13 +486,21 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 			}
 
 			// 对齐 Python: elif not cancelled and not _cancel_requested:
-			if !cancelled && !sc.cancelRequested {
+			sc.mu.Lock()
+			shouldContinue := !cancelled && !sc.cancelRequested
+			sc.mu.Unlock()
+			if shouldContinue {
 				nextResume := sc.dequeueValidInterruptResume()
+				sc.mu.Lock()
+				hasPending := len(sc.pendingInputs) > 0 && sc.streamQueue != nil
+				sc.mu.Unlock()
 				if nextResume != nil && sc.streamQueue != nil {
 					sc.startRound(ctx, nextResume)
-				} else if len(sc.pendingInputs) > 0 && sc.streamQueue != nil {
+				} else if hasPending {
+					sc.mu.Lock()
 					drained := sc.pendingInputs
 					sc.pendingInputs = nil
+					sc.mu.Unlock()
 					combined := sc.combinePendingInputs(drained)
 					sc.startRound(ctx, combined)
 				} else {
@@ -522,16 +541,20 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 
 	err := sc.runRetryingStream(ctx, message)
 
+	sc.mu.Lock()
+	isCancelRequested := sc.cancelRequested
+	sc.mu.Unlock()
+
 	if err != nil {
-		if sc.cancelRequested {
+		if isCancelRequested {
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCancelled)
 		} else {
 			logger.Error(scLogComponent).Err(err).Str("member_name", sc.memberName()).
-				Msg("DeepAgent round error")
+				Msg("DeepAgent 循环错误")
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusFailed)
 		}
 	} else {
-		if sc.cancelRequested {
+		if isCancelRequested {
 			// 对齐 Python: if self._cancel_requested: CANCELLED
 			_ = sc.updateExecution(ctx, atschema.ExecutionStatusCancelled)
 		} else {
@@ -546,8 +569,14 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 // 对齐 Python: StreamController._stream_one_round(query)
 // 返回 nil 表示成功，返回 (errorCode, errorText) 表示检测到 task_failed
 func (sc *StreamController) streamOneRound(ctx context.Context, query any) (errorCode *int, errorText string) {
+	sc.mu.Lock()
 	sc.streamingActive = true
-	defer func() { sc.streamingActive = false }()
+	sc.mu.Unlock()
+	defer func() {
+		sc.mu.Lock()
+		sc.streamingActive = false
+		sc.mu.Unlock()
+	}()
 
 	harness := sc.resources.Harness
 	if harness == nil {
@@ -609,13 +638,13 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 			attempt++
 			logger.Warn(scLogComponent).Int("error_code", code).
 				Int("attempt", attempt).Int("max_attempts", maxRetryAttempts).
-				Str("error_text", errorText).Msg("DeepAgent round transient error")
+				Str("error_text", errorText).Msg("DeepAgent 循环瞬态错误")
 			currentQuery = retryQuery
 			continue
 		}
 		logger.Error(scLogComponent).Int("error_code", code).
 			Int("attempts", attempt).Str("error_text", errorText).
-			Msg("DeepAgent round failed")
+			Msg("DeepAgent 循环失败")
 		return fmt.Errorf("streaming task failed after %d retries, last error code=%d: %s",
 			attempt, code, errorText)
 	}
@@ -625,6 +654,8 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 // 对齐 Python: StreamController._dequeue_valid_interrupt_resume()
 // ⤵️ 待 Interaction 层实现后回填具体类型
 func (sc *StreamController) dequeueValidInterruptResume() any {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	for len(sc.pendingInterruptResumes) > 0 {
 		candidate := sc.pendingInterruptResumes[0]
 		sc.pendingInterruptResumes = sc.pendingInterruptResumes[1:]

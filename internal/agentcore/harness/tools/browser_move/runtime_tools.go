@@ -67,6 +67,11 @@ type BrowserRuntimeHealthTool struct {
 	runtime *BrowserAgentRuntime
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// json_number 兼容 json.Number 类型
+type json_number = interface{ Int64() (int64, error) }
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -456,6 +461,3 @@ func clampInt(v, minVal, maxVal int) int {
 	}
 	return v
 }
-
-// json_number 兼容 json.Number 类型
-type json_number = interface{ Int64() (int64, error) }

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -863,9 +864,12 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 	sc.resources.Harness = &agentteams.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
+	var mu sync.Mutex
 	execStatuses := []atschema.ExecutionStatus{}
 	sc.updateExecution = func(ctx context.Context, status atschema.ExecutionStatus) error {
+		mu.Lock()
 		execStatuses = append(execStatuses, status)
+		mu.Unlock()
 		return nil
 	}
 
@@ -881,7 +885,16 @@ func TestStreamController_CancelAgent_有飞行轮次(t *testing.T) {
 		t.Errorf("CancelAgent 不应返回错误: %v", err)
 	}
 
+	// 等待轮次完成，确保 goroutine 中所有 updateExecution 调用都已完成
+	select {
+	case <-sc.roundDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("轮次超时未完成")
+	}
+
 	// 验证状态转换
+	mu.Lock()
+	defer mu.Unlock()
 	foundCancelRequested := false
 	foundCancelling := false
 	for _, s := range execStatuses {
@@ -1143,6 +1156,14 @@ func TestStreamController_DrainAgentTask_有飞行轮次(t *testing.T) {
 	if err != nil {
 		t.Errorf("DrainAgentTask 不应返回错误: %v", err)
 	}
+
+	// 等待轮次完成，避免与 goroutine 并发访问字段
+	select {
+	case <-sc.roundDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("轮次超时未完成")
+	}
+
 	if len(sc.pendingInputs) != 0 {
 		t.Error("pendingInputs 应被清除")
 	}

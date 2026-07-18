@@ -174,10 +174,10 @@ func TestLooksLikePageChrome(t *testing.T) {
 // TestCardQualityScore 测试卡片质量评分
 func TestCardQualityScore(t *testing.T) {
 	tests := []struct {
-		name        string
-		card        map[string]any
-		minScore    int
-		maxScore    int
+		name     string
+		card     map[string]any
+		minScore int
+		maxScore int
 	}{
 		{
 			"chrome卡片评分为0",
@@ -384,28 +384,28 @@ func TestBrowserSelectorCache_RecordCardProbeResult(t *testing.T) {
 		"url": "https://books.toscrape.com/catalogue/category/books_1/index.html",
 		"cards": []any{
 			map[string]any{
-				"selector_hint":          "article.product_pod",
-				"title_selector_hint":    "h3 a",
-				"title":                  "A Long Book Title Here",
-				"text_preview":           "This is a very long preview text that exceeds eighty characters for caching eligibility",
-				"primary_link":           true,
-				"price":                  "£10.99",
-				"rating":                 "4",
-				"has_image":              true,
-				"availability":           "In Stock",
-				"buttons":                []any{},
+				"selector_hint":       "article.product_pod",
+				"title_selector_hint": "h3 a",
+				"title":               "A Long Book Title Here",
+				"text_preview":        "This is a very long preview text that exceeds eighty characters for caching eligibility",
+				"primary_link":        true,
+				"price":               "£10.99",
+				"rating":              "4",
+				"has_image":           true,
+				"availability":        "In Stock",
+				"buttons":             []any{},
 			},
 			map[string]any{
-				"selector_hint":          "article.product_pod",
-				"title_selector_hint":    "h3 a",
-				"title":                  "Another Long Book Title Here",
-				"text_preview":           "Another very long preview text that exceeds eighty characters for caching eligibility",
-				"primary_link":           true,
-				"price":                  "£15.99",
-				"rating":                 "3",
-				"has_image":              true,
-				"availability":           "In Stock",
-				"buttons":                []any{},
+				"selector_hint":       "article.product_pod",
+				"title_selector_hint": "h3 a",
+				"title":               "Another Long Book Title Here",
+				"text_preview":        "Another very long preview text that exceeds eighty characters for caching eligibility",
+				"primary_link":        true,
+				"price":               "£15.99",
+				"rating":              "3",
+				"has_image":           true,
+				"availability":        "In Stock",
+				"buttons":             []any{},
 			},
 		},
 	}
@@ -516,8 +516,8 @@ func TestBrowserSelectorCache_记录上限(t *testing.T) {
 	// 插入超过上限的记录
 	for i := 0; i < selectorCacheMaxRecords+10; i++ {
 		result := map[string]any{
-			"ok":  true,
-			"url": "https://example.com/items/" + string(rune('a'+i%26)) + "/details",
+			"ok":    true,
+			"url":   "https://example.com/items/" + string(rune('a'+i%26)) + "/details",
 			"cards": []any{card, card},
 		}
 		cache.RecordCardProbeResult(result)

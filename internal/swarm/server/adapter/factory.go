@@ -21,9 +21,9 @@ const (
 	defaultSDK = "harness"
 )
 
-// logComponent 日志组件
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// logComponent 日志组件
 var logComponent = logger.ComponentAgentServer
 
 // ResolveSDKChoice 从环境变量解析 SDK 选择。

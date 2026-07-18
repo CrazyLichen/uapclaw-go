@@ -39,6 +39,8 @@ type InProcessSpawnHandle struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -65,8 +67,6 @@ func NewInProcessSpawnHandle(
 		agentRef:  agentRef,
 	}
 }
-
-// ──────────────────────────── 导出方法 ────────────────────────────
 
 // ProcessID 返回进程唯一标识。
 func (h *InProcessSpawnHandle) ProcessID() string {

@@ -67,8 +67,8 @@ var displayToInternal = map[string]string{
 	"WebSearch": "web_search", "WebFetch": "web_fetch",
 	"ImageOCR": "image_ocr", "VisionQA": "visual_question_answering",
 	"AudioTranscribe": "audio_transcription",
-	"AudioQA": "audio_question_answering",
-	"AudioMetadata": "audio_metadata",
+	"AudioQA":         "audio_question_answering",
+	"AudioMetadata":   "audio_metadata",
 }
 
 // toolGroups 工具分组（用于 Agent 定义 UI）。
