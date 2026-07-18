@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	iface "github.com/uapclaw/uapclaw-go/internal/agentcore/context_engine/interface"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
@@ -92,8 +93,8 @@ func MergeConfigWithOverrides(baseConfig iface.ProcessorConfig, overrides map[st
 func MergeProcessors(
 	base []iface.ProcessorSpec,
 	overrides []iface.ProcessorSpec,
-	modelConfig any,
-	modelClientConfig any,
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
 ) []iface.ProcessorSpec {
 	// 构建 override map
 	overrideMap := make(map[string]iface.ProcessorSpec, len(overrides))
@@ -145,8 +146,8 @@ func buildMergedConfig(
 	key string,
 	baseCfg iface.ProcessorConfig,
 	overrideSpec iface.ProcessorSpec,
-	modelConfig any,
-	modelClientConfig any,
+	modelConfig *llmschema.ModelRequestConfig,
+	modelClientConfig *llmschema.ModelClientConfig,
 ) iface.ProcessorConfig {
 	var mergedCfg iface.ProcessorConfig
 
@@ -189,28 +190,8 @@ func buildMergedConfig(
 //	    merged_cfg.model = model_config
 //	if hasattr(merged_cfg, "model_client") and getattr(merged_cfg, "model_client", None) is None:
 //	    merged_cfg.model_client = model_client_config
-func fillModelDefaults(cfg iface.ProcessorConfig, modelConfig any, modelClientConfig any) {
-	v := reflect.ValueOf(cfg)
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return
-	}
-
-	// 回填 Model 字段
-	if modelConfig != nil {
-		if f := v.FieldByName("Model"); f.IsValid() && f.CanSet() && f.IsNil() {
-			setFieldValue(f, modelConfig)
-		}
-	}
-
-	// 回填 ModelClient 字段
-	if modelClientConfig != nil {
-		if f := v.FieldByName("ModelClient"); f.IsValid() && f.CanSet() && f.IsNil() {
-			setFieldValue(f, modelClientConfig)
-		}
-	}
+func fillModelDefaults(cfg iface.ProcessorConfig, modelConfig *llmschema.ModelRequestConfig, modelClientConfig *llmschema.ModelClientConfig) {
+	cfg.SetModelDefaults(modelConfig, modelClientConfig)
 }
 
 // deepCopyConfig 对 ProcessorConfig 做深拷贝。

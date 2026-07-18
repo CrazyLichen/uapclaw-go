@@ -30,6 +30,15 @@ type testConfig struct {
 
 func (c *testConfig) Validate() error { return nil }
 
+func (c *testConfig) SetModelDefaults(model *llmschema.ModelRequestConfig, modelClient *llmschema.ModelClientConfig) {
+	if c.Model == nil && model != nil {
+		c.Model = model
+	}
+	if c.ModelClient == nil && modelClient != nil {
+		c.ModelClient = modelClient
+	}
+}
+
 // ──────────────────────────── snakeToPascal 测试 ────────────────────────────
 
 func TestSnakeToPascal(t *testing.T) {
