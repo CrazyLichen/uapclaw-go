@@ -15,11 +15,11 @@
 //	├── runtime.go          # BrowserAgentRuntime 运行时内核
 //	├── browser_rail.go     # BrowserRuntimeRail 进度追踪 Rail
 //	├── runtime_tools.go    # 7 个运行时辅助工具
-//	├── probes.go           # JavaScript 探测代码生成
-//	├── controllers.go      # BaseController + ActionController
-//	├── agents.go           # Worker Agent 构建器
-//	├── profiles.go         # BrowserProfile + BrowserProfileStore
-//	└── site_profiles.go    # 站点配置文件和选择器缓存
+//	├── probes.go           # JavaScript 探测代码生成（BuildInteractiveProbeJS / BuildCardProbeJS）
+//	├── controllers.go      # BaseController 接口 + ActionController 注册/调度 + 内置动作
+//	├── agents.go           # Browser Worker Agent 构建器 + 系统提示词
+//	├── profiles.go         # BrowserProfile + BrowserProfileStore JSON 配置存储
+//	└── site_profiles.go    # 站点配置文件和选择器缓存（⤵️ 9.38-49 回填）
 //
 // 对应 Python 代码：openjiuwen/harness/tools/browser_move/
 package browser_move

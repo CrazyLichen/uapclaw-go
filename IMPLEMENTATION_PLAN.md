@@ -567,7 +567,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.24 | ☐ | EvolutionRail | SkillEvolutionRail（after_invoke 触发在线自演化）/ EvolutionRail 基类 / ContextEvolutionRail / TrajectoryRail / ApprovalRuntime / SkillEvolutionSharing / TeamSkillEvolutionRail | `openjiuwen/harness/rails/evolution/` |
 | **9.x 子 Agent** | — | | | |
 | 9.25 | ✅ | ResearchAgent | 研究子 Agent（BuildResearchAgentConfig + CreateResearchAgent，默认 SysOperationRail） | `openjiuwen/harness/subagents/` |
-| 9.26 | 🔄 | BrowserAgent | 浏览器子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
+| 9.26 | ✅ | BrowserAgent | ✅ Layer1 配置层（env/config/progress/service）；✅ Layer2 运行时核心（runtime/browser_rail/runtime_tools/browser_agent_factory）；✅ Layer3 探测与控制（profiles/probes/controllers/agents）；⤵️ 9.38-49 回填 Playwright MCP 工具集 | `openjiuwen/harness/subagents/` · `tools/browser_move/` |
 | 9.27 | 🔄 | CodeAgent | 编码子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
 | 9.28 | 🔄 | PlanAgent | 规划子 Agent（骨架已建，⤵️ 9.38-49） | `openjiuwen/harness/subagents/` |
 | 9.29 | ☐ | VerificationAgent | 验证子 Agent | `openjiuwen/harness/subagents/` |
