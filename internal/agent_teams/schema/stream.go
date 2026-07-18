@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"context"
+
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
 )
 
@@ -28,6 +30,11 @@ type TeamOutputSchema struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// ChunkObserver 分块观察者回调。
+// 对齐 Python: ChunkObserver = Callable[[OutputSchema], Awaitable[None]]
+// 每个分块标注来源成员后触发，用于 SpawnManager 将 Teammate chunk 转发到 Leader 的 streamQueue。
+type ChunkObserver func(ctx context.Context, chunk stream.Schema) error
 
 // NewTeamOutputSchema 从普通 OutputSchema 构建带标签的团队 chunk。
 // 对齐 Python: TeamOutputSchema.from_output(base, source_member=..., role=...)

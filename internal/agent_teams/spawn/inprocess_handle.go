@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	atschema "github.com/uapclaw/uapclaw-go/internal/agent_teams/schema"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
@@ -28,8 +29,8 @@ type InProcessSpawnHandle struct {
 	// agentRef 进程内 Agent 引用（对齐 Python agent_ref: Any）
 	agentRef SpawnableAgent
 	// chunkForward chunk 转发观察者引用，cleanup 时可确定性断开
-	// ⤴️ 9.60 已回填，因循环依赖保留 any 类型桥接，实际值为 agent.ChunkObserver
-	chunkForward any
+	// ⤴️ 9.60 已回填，类型为 atschema.ChunkObserver（从 schema 包引用，避免循环依赖）
+	chunkForward atschema.ChunkObserver
 	// onUnhealthy 不健康回调
 	onUnhealthy func()
 	// shutdownRequested 是否已请求关闭
@@ -205,13 +206,13 @@ func (h *InProcessSpawnHandle) AgentRef() SpawnableAgent {
 
 // ChunkForward 返回 chunk 转发观察者引用。
 // ⤴️ 9.60 已回填
-func (h *InProcessSpawnHandle) ChunkForward() any {
+func (h *InProcessSpawnHandle) ChunkForward() atschema.ChunkObserver {
 	return h.chunkForward
 }
 
 // SetChunkForward 设置 chunk 转发观察者引用。
 // ⤴️ 9.60 已回填
-func (h *InProcessSpawnHandle) SetChunkForward(v any) {
+func (h *InProcessSpawnHandle) SetChunkForward(v atschema.ChunkObserver) {
 	h.chunkForward = v
 }
 

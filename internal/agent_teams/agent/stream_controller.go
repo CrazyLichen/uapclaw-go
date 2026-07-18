@@ -14,11 +14,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ChunkObserver 分块观察者回调。
-// 对齐 Python: ChunkObserver = Callable[[OutputSchema], Awaitable[None]]
-// 每个分块标注来源成员后触发，用于 SpawnManager 将 Teammate chunk 转发到 Leader 的 streamQueue。
-type ChunkObserver func(ctx context.Context, chunk streambase.Schema) error
-
 // StreamController 管理轮次生命周期、流式分块处理、输入投递、中断处理和重试逻辑。
 // 对齐 Python: StreamController (openjiuwen/agent_teams/agent/stream_controller.py)
 //
@@ -64,10 +59,7 @@ type StreamController struct {
 	// pendingInputs 待处理的输入队列（轮次结束后自动消费）
 	pendingInputs []any
 	// chunkObservers 分块观察者列表（SpawnManager 注册，用于 Teammate chunk 转发到 Leader）
-	chunkObservers []ChunkObserver
-	// testStreamOneRound 测试注入：覆盖 streamOneRound 返回值。
-	// 仅用于测试，生产代码为 nil。
-	testStreamOneRound streamOneRoundFunc
+	chunkObservers []atschema.ChunkObserver
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -145,13 +137,13 @@ func NewStreamController(
 // AddChunkObserver 注册分块观察者。
 // 对齐 Python: StreamController.add_chunk_observer(cb)
 // 观察者在分块标注来源成员并写入 streamQueue 之后触发。
-func (sc *StreamController) AddChunkObserver(cb ChunkObserver) {
+func (sc *StreamController) AddChunkObserver(cb atschema.ChunkObserver) {
 	sc.chunkObservers = append(sc.chunkObservers, cb)
 }
 
 // RemoveChunkObserver 移除分块观察者（幂等）。
 // 对齐 Python: StreamController.remove_chunk_observer(cb)
-func (sc *StreamController) RemoveChunkObserver(cb ChunkObserver) {
+func (sc *StreamController) RemoveChunkObserver(cb atschema.ChunkObserver) {
 	for i, ob := range sc.chunkObservers {
 		// 比较函数指针地址（对齐 Python list.remove 按引用比较）
 		if reflect.ValueOf(ob).Pointer() == reflect.ValueOf(cb).Pointer() {
@@ -201,7 +193,7 @@ func (sc *StreamController) IsValidInterruptResume(userInput any) bool {
 	if harness == nil {
 		return false
 	}
-	return harness.IsPendingInterruptResumeValid()
+	return harness.IsPendingInterruptResumeValid(userInput)
 }
 
 // StartRound 启动一个新轮次。
@@ -569,13 +561,7 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 		return nil, ""
 	}
 
-	return sc.processChunkChannel(ctx, chunkCh)
-}
-
-// processChunkChannel 从 chunk 通道读取并处理分块。
-// 对齐 Python: StreamController._stream_one_round 中 for chunk in chunk_iterator 循环
-// 提取为独立方法便于测试。
-func (sc *StreamController) processChunkChannel(ctx context.Context, chunkCh <-chan streambase.Schema) (errorCode *int, errorText string) {
+	// 对齐 Python: async for chunk in harness.run_streaming(...)
 	errorSeen := false
 	for chunk := range chunkCh {
 		if chunk == nil {
@@ -611,24 +597,10 @@ func (sc *StreamController) processChunkChannel(ctx context.Context, chunkCh <-c
 // runRetryingStream 带重试的流式执行。
 // 对齐 Python: StreamController._run_retrying_stream(initial_query)
 func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery any) error {
-	roundFn := sc.streamOneRound
-	if sc.testStreamOneRound != nil {
-		roundFn = sc.testStreamOneRound
-	}
-	return sc.runRetryingStreamWithRound(ctx, initialQuery, roundFn)
-}
-
-// streamOneRoundFunc 单轮流式执行函数签名。
-type streamOneRoundFunc func(ctx context.Context, query any) (errorCode *int, errorText string)
-
-// runRetryingStreamWithRound 带重试的流式执行，可注入 streamOneRound 实现。
-// 对齐 Python: StreamController._run_retrying_stream(initial_query)
-// 提取为独立方法便于测试注入不同 round 行为。
-func (sc *StreamController) runRetryingStreamWithRound(ctx context.Context, initialQuery any, roundFn streamOneRoundFunc) error {
 	currentQuery := initialQuery
 	attempt := 0
 	for {
-		errorCode, errorText := roundFn(ctx, currentQuery)
+		errorCode, errorText := sc.streamOneRound(ctx, currentQuery)
 		if errorCode == nil {
 			return nil
 		}

@@ -409,7 +409,7 @@ func (m *SpawnManager) wireInprocessChunkForward(handle *spawn.InProcessSpawnHan
 		return
 	}
 	// 对齐 Python: 创建转发回调 teammate chunk → leader streamQueue
-	var forwardCb ChunkObserver
+	var forwardCb atschema.ChunkObserver
 	forwardCb = func(ctx context.Context, chunk streambase.Schema) error {
 		if leaderSC.streamQueue != nil {
 			select {

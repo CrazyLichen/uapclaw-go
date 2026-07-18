@@ -204,9 +204,11 @@ func (h *TeamHarness) Model() any { return nil }
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) HasPendingInterrupt() bool { return false }
 
-// IsPendingInterruptResumeValid 检查是否有待处理的中断恢复。
-// ⤴️ 9.60 已实现 StreamController，此方法由 StreamController.IsValidInterruptResume 通过 resources.Harness() 调用
-func (h *TeamHarness) IsPendingInterruptResumeValid() bool {
+// IsPendingInterruptResumeValid 检查给定用户输入是否为有效中断恢复。
+// 对齐 Python: TeamHarness.is_pending_interrupt_resume_valid(user_input)
+// ⤴️ 9.60 已实现 StreamController，此方法由 StreamController.IsValidInterruptResume 通过 resources.Harness 调用
+// TODO(#9.57): deepAgent 类型升级后实现具体逻辑
+func (h *TeamHarness) IsPendingInterruptResumeValid(userInput any) bool {
 	return false
 }
 
