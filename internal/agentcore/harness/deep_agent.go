@@ -2434,6 +2434,9 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		promptMode = cfg.PromptMode
 	}
 
+	// RestrictToWorkDir：创建独立指针，避免取 subCfg 字段地址（悬空风险）
+	restrictToWorkDir := subCfg.RestrictToWorkDir
+
 	return &hschema.SubagentCreateParams{
 		Model:                  model,
 		Card:                   subCfg.AgentCard,
@@ -2454,7 +2457,7 @@ func (d *DeepAgent) buildSubagentCreateKwargs(subCfg *hschema.SubAgentConfig, su
 		EnableAsyncSubagent:    false,
 		AddGeneralPurposeAgent: false,
 		EnablePlanMode:         subCfg.EnablePlanMode,
-		RestrictToWorkDir:      &subCfg.RestrictToWorkDir,
+		RestrictToWorkDir:      &restrictToWorkDir,
 	}
 }
 

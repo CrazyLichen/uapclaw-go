@@ -10,6 +10,7 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	hworkspace "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
@@ -540,5 +541,8 @@ func (d *DeepAdapter) buildResearchSubagentParams(config map[string]any, configB
 	return &hschema.SubagentCreateParams{
 		Language:      resolvedLanguage,
 		MaxIterations: maxIterations,
+		// 对齐 Python: workspace=self._workspace_dir or "./"
+		// DeepAdapter.workspaceDir 在初始化时已解析，默认为 workspace.AgentRootDir()
+		Workspace: hworkspace.NewWorkspace(d.workspaceDir, resolvedLanguage),
 	}
 }

@@ -175,8 +175,11 @@ func (b HarnessConfigBuilder) Build(resolved *ResolvedHarnessConfig, model *llm.
 		Skills:            skills,
 		SysOperation:      sysOperation,
 		Language:          resolvedLanguage,
-		RestrictToWorkDir: true,
 	}
+
+	// RestrictToWorkDir 默认 true，对齐 Python: restrict_to_work_dir: bool = True
+	restrictToWorkDir := true
+	result.RestrictToWorkDir = &restrictToWorkDir
 
 	// 将解析出的 ToolCard 传递给 ToolCards，供 CreateDeepAgent 注册到 AbilityManager
 	if len(tools) > 0 {

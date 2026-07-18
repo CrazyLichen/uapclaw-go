@@ -296,7 +296,7 @@ func TestHarnessConfigBuilder_Build(t *testing.T) {
 	// 验证基本字段映射
 	assert.Equal(t, "cn", result.Language)
 	assert.Equal(t, 15, result.MaxIterations)
-	assert.True(t, result.RestrictToWorkDir)
+	assert.True(t, *result.RestrictToWorkDir)
 }
 
 // TestCreateSysOperation 测试 createSysOperation 实现

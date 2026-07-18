@@ -221,15 +221,6 @@ func ResetFreeSearchRuntimeFlags() {
 // 对齐 Python: _normalize_tools(tools: List[Tool | ToolCard])
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// boolFromPtr 从 *bool 指针解析出 bool 值。
-// p 为 nil 时返回 defaultVal，非 nil 时返回 *p。
-func boolFromPtr(p *bool, defaultVal bool) bool {
-	if p == nil {
-		return defaultVal
-	}
-	return *p
-}
-
 func normalizeTools(toolCards []*tool.ToolCard, toolInstances []tool.Tool) (normalizedCards []*tool.ToolCard, mergedInstances []tool.Tool) {
 	// 纯 ToolCard 直接加入 normalizedCards
 	for _, tc := range toolCards {
@@ -416,9 +407,15 @@ func buildWorkspace(ws *workspace.Workspace, language string) *workspace.Workspa
 // 调用方未提供时，自动创建默认 SysOperationCard（LocalWorkConfig 模式）并注册到 resource_mgr。
 //
 // 对齐 Python: factory.py L267-281 sys_operation 构建
-func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, restrictToWorkDir bool) (sysop.SysOperation, error) {
+func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, restrictToWorkDir *bool) (sysop.SysOperation, error) {
 	if sysOp != nil {
 		return sysOp, nil
+	}
+
+	// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为）
+	restrictVal := true
+	if restrictToWorkDir != nil {
+		restrictVal = *restrictToWorkDir
 	}
 
 	// 构建 SysOperationCard
@@ -433,7 +430,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 	sysopCard := sysop.NewSysOperationCard(
 		sysop.WithSysOpMode(sysop.OperationModeLocal),
 		sysop.WithSysOpWorkConfig(&sysop.LocalWorkConfig{
-			RestrictToSandbox: restrictToWorkDir,
+			RestrictToSandbox: restrictVal,
 		}),
 	)
 	sysopCard.ID = sysopID
@@ -441,7 +438,7 @@ func buildSysOperation(card *agentschema.AgentCard, sysOp sysop.SysOperation, re
 	logger.Info(logComponent).
 		Str("sysop_id", sysopID).
 		Str("mode", sysop.OperationModeLocal.String()).
-		Bool("restrict_to_work_dir", restrictToWorkDir).
+		Bool("restrict_to_work_dir", restrictVal).
 		Msg("已创建默认 SysOperationCard")
 
 	// 注册到全局资源管理器
@@ -647,7 +644,7 @@ func buildCreateParamsFromSubagentKwargs(kwargs *hschema.SubagentCreateParams) h
 		Language:               kwargs.Language,
 		PromptMode:             kwargs.PromptMode,
 		EnableTaskPlanning:     kwargs.EnablePlanMode,
-		RestrictToWorkDir:      boolFromPtr(kwargs.RestrictToWorkDir, true),
+		RestrictToWorkDir:      kwargs.RestrictToWorkDir,
 		EnableAsyncSubagent:    kwargs.EnableAsyncSubagent,
 		AddGeneralPurposeAgent: kwargs.AddGeneralPurposeAgent,
 	}

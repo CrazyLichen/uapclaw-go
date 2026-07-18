@@ -238,7 +238,7 @@ func TestBuildWorkspace_已有实例(t *testing.T) {
 func TestBuildSysOperation_提供时直接使用(t *testing.T) {
 	provided := &sysop.BaseSysOperation{}
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test"))
-	result, err := buildSysOperation(card, provided, false)
+	result, err := buildSysOperation(card, provided, nil)
 	require.NoError(t, err)
 	assert.Same(t, provided, result)
 }
@@ -249,7 +249,7 @@ func TestBuildSysOperation_未提供时创建默认(t *testing.T) {
 	ensureResourceMgr()
 
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test_agent"))
-	result, err := buildSysOperation(card, nil, false)
+	result, err := buildSysOperation(card, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	// 返回的是 LocalSysOperation 实例

@@ -3,7 +3,7 @@ package harness
 import (
 	"context"
 
-	hprompts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	hpromts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
@@ -21,7 +21,7 @@ import (
 // Full override rule：如果用户传了 rails，则使用用户的，否则默认注入 [SysOperationRail()]。
 // 对齐 Python: final_rails = rails if rails is not None else [SysOperationRail()]
 func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
-	language := hprompts.ResolveLanguage(params.Language)
+	language := hpromts.ResolveLanguage(params.Language)
 
 	// Full override rule：用户传了 rails 就用用户的，否则默认注入 SysOperationRail
 	// 对齐 Python: create_research_agent 中 final_rails = rails if rails is not None else [SysOperationRail()]
@@ -55,6 +55,13 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		maxIterations = 15
 	}
 
+	// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为）
+	// 对齐 Python: create_research_agent 不传 restrict_to_work_dir，SubAgentConfig 默认 True
+	restrictToWorkDir := true
+	if params.RestrictToWorkDir != nil {
+		restrictToWorkDir = *params.RestrictToWorkDir
+	}
+
 	// 转换为 CreateDeepAgentParams 并调用工厂
 	// 对齐 Python: return create_deep_agent(model=model, card=final_card, ...)
 	return CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
@@ -74,19 +81,6 @@ func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreatePara
 		Language:            language,
 		PromptMode:          params.PromptMode,
 		EnableTaskPlanning:  params.EnablePlanMode,
-		// RestrictToWorkDir：*bool 指针，nil 时默认 true（对齐 Python 默认行为），
-		// 非 nil 时使用用户显式指定的值
-		RestrictToWorkDir:   restrictToWorkDirValue(params.RestrictToWorkDir, true),
+		RestrictToWorkDir:   &restrictToWorkDir,
 	})
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
-// restrictToWorkDirValue 从 *bool 指针解析出有效的 RestrictToWorkDir 值。
-// p 为 nil 时返回 defaultVal，非 nil 时返回 *p。
-func restrictToWorkDirValue(p *bool, defaultVal bool) bool {
-	if p == nil {
-		return defaultVal
-	}
-	return *p
 }
