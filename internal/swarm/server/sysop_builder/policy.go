@@ -130,15 +130,12 @@ func BuildFilesystemPolicy(
 			}
 			normalized["path"] = path
 
-			// 校验 host 上存在
-			if _, statErr := os.Stat(path); statErr != nil {
+			// 校验 host 上存在并判断是否目录
+			info, statErr := os.Stat(path)
+			if statErr != nil {
 				return nil, nil, fmt.Errorf("沙箱 files.allow 路径在主机上不存在: %q", path)
 			}
-
-			isDir := false
-			if info, err := os.Stat(path); err == nil && info.IsDir() {
-				isDir = true
-			}
+			isDir := info.IsDir()
 			permStr := "0666"
 			if p, ok := normalized["permissions"].(string); ok && p != "" {
 				permStr = p
@@ -278,14 +275,14 @@ func collectIntrinsicTargets() (rwFiles, rwDirs, roFiles []string) {
 		}
 		resolved, err := filepath.EvalSymlinks(raw)
 		if err != nil {
-			logger.Warn(logComponent).
+			logger.Debug(logComponent).
 				Str("path", raw).
 				Err(err).
 				Msg("固有 ro 文件路径解析失败，跳过")
 			continue
 		}
 		if _, statErr := os.Stat(resolved); statErr != nil {
-			logger.Warn(logComponent).
+			logger.Debug(logComponent).
 				Str("path", resolved).
 				Msg("固有 ro 文件不存在于 host，跳过沙箱 bind 列表")
 			continue
@@ -411,14 +408,19 @@ func normalizeFSEntry(entry any, defaultPermissions string) map[string]any {
 		return map[string]any{"path": path, "permissions": defaultPermissions}
 	case map[string]any:
 		rawPath := v["path"]
+		if rawPath == nil {
+			return nil
+		}
 		path := strings.TrimSpace(fmt.Sprintf("%v", rawPath))
-		if path == "" || path == "<nil>" {
+		if path == "" {
 			return nil
 		}
 		perm := v["permissions"]
-		permStr := fmt.Sprintf("%v", perm)
-		if permStr == "" || permStr == "<nil>" {
-			permStr = defaultPermissions
+		permStr := defaultPermissions
+		if perm != nil {
+			if s, ok := perm.(string); ok && s != "" {
+				permStr = s
+			}
 		}
 		return map[string]any{"path": path, "permissions": permStr}
 	default:

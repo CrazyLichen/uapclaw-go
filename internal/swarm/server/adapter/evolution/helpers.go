@@ -641,6 +641,14 @@ func PushEvolutionProgress(
 	parseChunk ParseStreamChunkFunc,
 	buildMsgFn BuildPushMessageFunc,
 ) error {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Warn(logComponentEvolution).
+				Str("event_type", "EVOLUTION_PUSH_RECOVERED").
+				Any("recover", r).
+				Msg("PushEvolutionProgress panic 已恢复")
+		}
+	}()
 	for _, evt := range events {
 		if IsEvolutionApprovalEvent(evt) || IsEvolutionOutcomeEvent(evt) || TeamEvolutionTerminalProgress(evt) != nil {
 			continue

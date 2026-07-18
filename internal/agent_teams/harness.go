@@ -203,6 +203,32 @@ func (h *TeamHarness) Model() any { return nil }
 // TODO(#9.57): deepAgent 类型升级后实现
 func (h *TeamHarness) HasPendingInterrupt() bool { return false }
 
+// IsPendingInterruptResumeValid 检查是否有待处理的中断恢复。
+// ⤵️ 待 9.60 StreamController 章节回填：实现中断恢复验证逻辑
+func (h *TeamHarness) IsPendingInterruptResumeValid() bool {
+	return false
+}
+
+// PersistTeamDBState 持久化团队数据库状态。
+// ⤵️ 待 9.56 Manager 章节回填：实现锁存标志 + 持久化 DB 状态
+func (h *TeamHarness) PersistTeamDBState() {}
+
+// MarkTeamCleaned 标记团队已清理。
+// ⤵️ 待 9.56 Manager 章节回填：实现清理标志持久化
+func (h *TeamHarness) MarkTeamCleaned() {}
+
+// MarkTeamBuilt 标记团队已构建。
+// ⤵️ 待 9.56 Manager 章节回填：实现构建标志持久化
+func (h *TeamHarness) MarkTeamBuilt() {}
+
+// RequestCompletionPoll 请求完成轮询回调。
+// ⤵️ 待 9.60 StreamController 章节回填：作为 StreamController 回调传入
+func (h *TeamHarness) RequestCompletionPoll() {}
+
+// WakeMailboxIfInterruptCleared 唤醒邮箱如果中断已清除。
+// ⤵️ 待 9.60 StreamController 章节回填：作为 StreamController 回调传入
+func (h *TeamHarness) WakeMailboxIfInterruptCleared() {}
+
 // InitCwdForRound 从工作空间根目录初始化每轮工作目录。
 // 对齐 Python: TeamHarness.init_cwd_for_round()
 // TODO(#9.57+9.35): 实现

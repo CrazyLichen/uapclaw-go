@@ -432,6 +432,8 @@ func (d *DeepAdapter) CreateInstance(ctx context.Context, configMap map[string]a
 		VisionModelConfig:      d.visionModelConfig,
 		AudioModelConfig:       d.audioModelConfig,
 		EnableTaskPlanning:     d.resolveEnableTaskPlanning(config, configBase),
+		AutoCreateWorkspace:    false,                                              // 对齐 Python: 硬编码 false
+		CompletionTimeout:      paramsFloat(config, "completion_timeout", 3600.0),  // 对齐 Python: config.get("completion_timeout", 3600.0)
 	}
 	// 步骤 17 回填：SysOperation
 	params.SysOperation = sysOpInstance
@@ -1741,6 +1743,16 @@ func paramsInt(params map[string]any, key string, defaultVal int) int {
 	default:
 		return defaultVal
 	}
+}
+
+// paramsFloat 从配置映射中获取浮点数值，不存在时返回默认值
+func paramsFloat(m map[string]any, key string, defaultVal float64) float64 {
+	if v, ok := m[key]; ok {
+		if f, ok := v.(float64); ok {
+			return f
+		}
+	}
+	return defaultVal
 }
 
 // resolveEnableTaskLoop 解析是否启用任务循环。

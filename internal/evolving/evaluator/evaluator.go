@@ -169,7 +169,8 @@ func (d *DefaultEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, pre
 //
 // 对应 Python: BaseEvaluator.batch_evaluate(cases, predicts, num_parallel)
 func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Case, predicts []map[string]any, numParallel int) ([]*dataset.EvaluatedCase, error) {
-	if err := validateBatchArgs(len(cases), len(predicts), numParallel); err != nil {
+	numParallel, err := validateBatchArgs(len(cases), len(predicts), numParallel)
+	if err != nil {
 		return nil, err
 	}
 
@@ -198,13 +199,13 @@ func (d *DefaultEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Ca
 // Evaluate 使用多指标聚合评估单个样本。
 //
 // 对应 Python: MetricEvaluator.evaluate(case, predict)
-func (m *MetricEvaluator) Evaluate(_ context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
+func (m *MetricEvaluator) Evaluate(ctx context.Context, case_ dataset.Case, predict map[string]any) (*dataset.EvaluatedCase, error) {
 	ec := dataset.NewEvaluatedCase(case_, predict)
 	perMetric := make(map[string]float64)
 	var scores []float64
 
 	for _, metric := range m.metrics {
-		result, err := metric.Compute(predict, case_.Label, metrics.WithQuestion(case_.Inputs), metrics.WithCase(case_))
+		result, err := metric.Compute(ctx, predict, case_.Label, metrics.WithQuestion(case_.Inputs), metrics.WithCase(case_))
 		if err != nil {
 			logger.Warn(logComponent).
 				Str("metric_name", metric.Name()).
@@ -228,7 +229,8 @@ func (m *MetricEvaluator) Evaluate(_ context.Context, case_ dataset.Case, predic
 
 // BatchEvaluate 并行批量评估。
 func (m *MetricEvaluator) BatchEvaluate(ctx context.Context, cases []dataset.Case, predicts []map[string]any, numParallel int) ([]*dataset.EvaluatedCase, error) {
-	if err := validateBatchArgs(len(cases), len(predicts), numParallel); err != nil {
+	numParallel, err := validateBatchArgs(len(cases), len(predicts), numParallel)
+	if err != nil {
 		return nil, err
 	}
 
@@ -309,7 +311,11 @@ func (d *DefaultEvaluator) extractEvaluateResult(ctx context.Context, response s
 		return nil
 	}
 	if data, ok := retryParsed.(map[string]any); ok {
-		return data
+		if _, hasResult := data["result"]; hasResult {
+			if _, hasReason := data["reason"]; hasReason {
+				return data
+			}
+		}
 	}
 	return nil
 }
@@ -358,10 +364,10 @@ func safeConvert(num float64) float64 {
 	return num
 }
 
-// validateBatchArgs 校验批量评估参数。
-func validateBatchArgs(casesLen, predictsLen, numParallel int) error {
+// validateBatchArgs 校验批量评估参数，返回调整后的 numParallel。
+func validateBatchArgs(casesLen, predictsLen, numParallel int) (int, error) {
 	if casesLen != predictsLen {
-		return exception.NewBaseError(
+		return numParallel, exception.NewBaseError(
 			exception.StatusToolchainEvaluatorExecutionError,
 			exception.WithMsg(fmt.Sprintf(
 				"样本数量 %d 与预测数量 %d 不一致",
@@ -369,5 +375,17 @@ func validateBatchArgs(casesLen, predictsLen, numParallel int) error {
 			)),
 		)
 	}
-	return nil
+	if numParallel < 1 || numParallel > 20 {
+		return numParallel, exception.NewBaseError(
+			exception.StatusToolchainEvaluatorExecutionError,
+			exception.WithMsg(fmt.Sprintf(
+				"numParallel %d 超出范围 [1, 20]",
+				numParallel,
+			)),
+		)
+	}
+	if numParallel > casesLen {
+		numParallel = casesLen
+	}
+	return numParallel, nil
 }

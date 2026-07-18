@@ -1,6 +1,9 @@
 package metrics
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // ──────────────────────────── 导出函数测试 ────────────────────────────
 
@@ -25,7 +28,7 @@ func TestExactMatchMetric_匹配(t *testing.T) {
 	m := NewExactMatchMetric()
 
 	// 完全匹配
-	result, err := m.Compute("hello", "hello")
+	result, err := m.Compute(context.Background(), "hello", "hello")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -34,7 +37,7 @@ func TestExactMatchMetric_匹配(t *testing.T) {
 	}
 
 	// 大小写不同，归一化后匹配
-	result, err = m.Compute("Hello World", "hello world")
+	result, err = m.Compute(context.Background(), "Hello World", "hello world")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -43,7 +46,7 @@ func TestExactMatchMetric_匹配(t *testing.T) {
 	}
 
 	// 多余空格，归一化后匹配
-	result, err = m.Compute("  hello   world  ", "hello world")
+	result, err = m.Compute(context.Background(), "  hello   world  ", "hello world")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -56,7 +59,7 @@ func TestExactMatchMetric_匹配(t *testing.T) {
 func TestExactMatchMetric_不匹配(t *testing.T) {
 	m := NewExactMatchMetric()
 
-	result, err := m.Compute("hello", "world")
+	result, err := m.Compute(context.Background(), "hello", "world")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -70,7 +73,7 @@ func TestExactMatchMetric_非归一化(t *testing.T) {
 	m := NewExactMatchMetric(WithNormalize(false))
 
 	// 大小写不同，非归一化不匹配
-	result, err := m.Compute("Hello", "hello")
+	result, err := m.Compute(context.Background(), "Hello", "hello")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -79,7 +82,7 @@ func TestExactMatchMetric_非归一化(t *testing.T) {
 	}
 
 	// 完全匹配
-	result, err = m.Compute("hello", "hello")
+	result, err = m.Compute(context.Background(), "hello", "hello")
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -94,7 +97,7 @@ func TestExactMatchMetric_ComputeBatch(t *testing.T) {
 	predictions := []any{"hello", "world"}
 	labels := []any{"hello", "foo"}
 
-	results, err := m.ComputeBatch(predictions, labels)
+	results, err := m.ComputeBatch(context.Background(), predictions, labels)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -116,7 +119,7 @@ func TestExactMatchMetric_map类型深度比较(t *testing.T) {
 	// 相同 map（key 顺序不同）— DeepEqual 应返回 true
 	pred := map[string]any{"answer": "2", "output": "1"}
 	label := map[string]any{"output": "1", "answer": "2"}
-	result, err := m.Compute(pred, label)
+	result, err := m.Compute(context.Background(), pred, label)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -127,7 +130,7 @@ func TestExactMatchMetric_map类型深度比较(t *testing.T) {
 	// 不同 map
 	pred2 := map[string]any{"answer": "2"}
 	label2 := map[string]any{"answer": "3"}
-	result2, err := m.Compute(pred2, label2)
+	result2, err := m.Compute(context.Background(), pred2, label2)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -141,7 +144,7 @@ func TestExactMatchMetric_混合类型(t *testing.T) {
 	m := NewExactMatchMetric()
 
 	// 字符串 vs map — 类型不同，DeepEqual 返回 false
-	result, err := m.Compute("hello", map[string]any{"answer": "hello"})
+	result, err := m.Compute(context.Background(), "hello", map[string]any{"answer": "hello"})
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
@@ -150,7 +153,7 @@ func TestExactMatchMetric_混合类型(t *testing.T) {
 	}
 
 	// 数字比较
-	result2, err := m.Compute(42, 42)
+	result2, err := m.Compute(context.Background(), 42, 42)
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}

@@ -2,6 +2,8 @@ package schema
 
 import (
 	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
+	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
@@ -115,48 +117,36 @@ type BuiltinToolSpec struct {
 // 对齐 Python: SubAgentSpec
 type SubAgentSpec struct {
 	// AgentCard 代理身份卡片
-	AgentCard any `json:"agent_card"`
+	AgentCard *agentschema.AgentCard `json:"agent_card"`
 	// SystemPrompt 系统提示词
 	SystemPrompt string `json:"system_prompt"`
-	// Tools 工具列表
-	// 对齐 Python: tools: list[ToolCard | BuiltinToolSpec] = []
-	Tools any `json:"tools"`
+	// ToolCards 工具卡片列表
+	ToolCards []*tool.ToolCard `json:"tool_cards,omitempty"`
+	// BuiltinTools 内置工具声明列表
+	BuiltinTools []BuiltinToolSpec `json:"builtin_tools,omitempty"`
 	// Mcps MCP 服务器列表
-	// 对齐 Python: mcps: list[McpServerConfig] = []
-	Mcps any `json:"mcps"`
+	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
 	// Model 模型配置
-	// 对齐 Python: model: Optional[TeamModelConfig] = None
 	Model *TeamModelConfig `json:"model,omitempty"`
 	// Rails 约束规则列表
-	// 对齐 Python: rails: Optional[list[RailSpec]] = None
-	// ⤵️ 回填: RailSpec 类型就绪后替换 any
-	Rails any `json:"rails,omitempty"`
+	Rails []RailSpec `json:"rails,omitempty"`
 	// Skills 技能列表
-	// 对齐 Python: skills: Optional[list[str]] = None
 	Skills []string `json:"skills,omitempty"`
 	// Workspace 工作空间规格
-	// 对齐 Python: workspace: Optional[WorkspaceSpec] = None
 	Workspace *WorkspaceSpec `json:"workspace,omitempty"`
 	// SysOperation 系统操作规格
-	// 对齐 Python: sys_operation: Optional[SysOperationSpec] = None
 	SysOperation *SysOperationSpec `json:"sys_operation,omitempty"`
 	// Language 语言偏好
-	// 对齐 Python: language: Optional[str] = None
 	Language string `json:"language,omitempty"`
 	// PromptMode 提示模式
-	// 对齐 Python: prompt_mode: Optional[str] = None
 	PromptMode string `json:"prompt_mode,omitempty"`
 	// EnableTaskLoop 是否启用任务循环
-	// 对齐 Python: enable_task_loop: bool = False
 	EnableTaskLoop bool `json:"enable_task_loop"`
 	// MaxIterations 最大迭代次数
-	// 对齐 Python: max_iterations: Optional[int] = None
 	MaxIterations *int `json:"max_iterations,omitempty"`
 	// FactoryName 工厂名称
-	// 对齐 Python: factory_name: Optional[str] = None
 	FactoryName string `json:"factory_name,omitempty"`
 	// FactoryKwargs 工厂参数
-	// 对齐 Python: factory_kwargs: dict[str, Any] = {}
 	FactoryKwargs map[string]any `json:"factory_kwargs"`
 }
 
@@ -169,14 +159,16 @@ type DeepAgentSpec struct {
 	Card *agentschema.AgentCard `json:"card,omitempty"`
 	// SystemPrompt 系统提示词
 	SystemPrompt string `json:"system_prompt,omitempty"`
-	// Tools 工具列表
-	Tools []any `json:"tools,omitempty"`
+	// ToolCards 工具卡片列表
+	ToolCards []*tool.ToolCard `json:"tool_cards,omitempty"`
+	// BuiltinTools 内置工具声明列表
+	BuiltinTools []BuiltinToolSpec `json:"builtin_tools,omitempty"`
 	// Mcps MCP 服务器列表
-	Mcps []any `json:"mcps,omitempty"`
+	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
 	// Subagents 子代理列表
-	Subagents []any `json:"subagents,omitempty"`
+	Subagents []SubAgentSpec `json:"subagents,omitempty"`
 	// Rails 约束规则列表
-	Rails []any `json:"rails,omitempty"`
+	Rails []RailSpec `json:"rails,omitempty"`
 	// EnableTaskLoop 是否启用任务循环
 	EnableTaskLoop bool `json:"enable_task_loop"`
 	// EnableAsyncSubagent 是否启用异步子代理

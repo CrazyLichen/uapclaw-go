@@ -544,9 +544,15 @@ func extractPureTextPayload(msg *schema.Message, eventName string) map[string]an
 	if msg.Payload != nil {
 		// content 提取 + error fallback（对齐 Python L374-376）
 		if content, ok := msg.Payload["content"]; ok {
-			contentStr := fmt.Sprintf("%v", content)
-			if contentStr != "" && contentStr != "<nil>" {
-				payload["content"] = content
+			if content != nil {
+				contentStr := fmt.Sprintf("%v", content)
+				if contentStr != "" {
+					payload["content"] = content
+				} else if !msg.OK {
+					if errVal, ok := msg.Payload["error"]; ok {
+						payload["content"] = errVal
+					}
+				}
 			} else if !msg.OK {
 				if errVal, ok := msg.Payload["error"]; ok {
 					payload["content"] = errVal

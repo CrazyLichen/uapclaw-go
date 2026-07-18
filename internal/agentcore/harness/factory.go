@@ -150,6 +150,10 @@ func CreateDeepAgent(ctx context.Context, params hconfig.CreateDeepAgentParams) 
 	config.DefaultMode = params.DefaultMode
 	config.EnablePlanMode = params.EnableTaskPlanning
 	config.ModelSelection = params.ModelSelection
+	config.AutoCreateWorkspace = params.AutoCreateWorkspace
+	if params.CompletionTimeout > 0 {
+		config.CompletionTimeout = params.CompletionTimeout
+	}
 
 	// ── 步骤 8：DeepAgent 实例化 ──
 	// 对齐 Python: factory.py L356-357

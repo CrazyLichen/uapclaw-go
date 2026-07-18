@@ -1,6 +1,8 @@
 package dataset
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -56,7 +58,7 @@ func NewCase(inputs, label map[string]any, opts ...CaseOption) *Case {
 	c := &Case{
 		Inputs: inputs,
 		Label:  label,
-		CaseID: uuid.New().String(),
+		CaseID: strings.ReplaceAll(uuid.New().String(), "-", ""),
 	}
 	for _, opt := range opts {
 		opt(c)

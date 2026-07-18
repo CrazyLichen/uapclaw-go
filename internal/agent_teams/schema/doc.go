@@ -14,6 +14,7 @@
 //	├── blueprint.go         # TeamAgentSpec/LeaderSpec/TransportSpec 等团队规格与校验
 //	├── status.go            # 成员/任务状态枚举与状态转换表
 //	├── events.go            # 事件类型与事件消息 Schema
+//	├── stream.go            # TeamOutputSchema 团队流式输出 Schema
 //	└── task.go              # 任务视图响应类型（TaskOpResult/TaskDetail/NewTaskSpec 等）
 //
 // 对应 Python 代码：openjiuwen/agent_teams/schema/

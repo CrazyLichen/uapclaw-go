@@ -537,6 +537,7 @@ func strOrEmpty(val any) string {
 		return s
 	}
 	s := fmt.Sprintf("%v", val)
+	// Go 的 fmt.Sprintf("%v", nil指针) 会产生 "<nil>" 字符串，需要额外过滤
 	if s == "<nil>" {
 		return ""
 	}

@@ -2,6 +2,16 @@ package database
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// DBConfigProvider 数据库配置提供者接口。
+// 对齐 Python: DatabaseConfig | MemoryDatabaseConfig 联合类型，
+// 两种配置通过此接口统一访问。
+type DBConfigProvider interface {
+	// GetDBType 返回数据库类型
+	GetDBType() DatabaseType
+	// GetConnectionString 返回连接字符串
+	GetConnectionString() string
+}
+
 // DatabaseConfig 数据库配置，对齐 Python DatabaseConfig
 type DatabaseConfig struct {
 	// DBType 数据库类型
@@ -61,5 +71,17 @@ func NewMemoryDatabaseConfig() MemoryDatabaseConfig {
 		DBType: DatabaseTypeMemory,
 	}
 }
+
+// GetDBType 返回数据库类型。实现 DBConfigProvider 接口。
+func (c DatabaseConfig) GetDBType() DatabaseType { return c.DBType }
+
+// GetConnectionString 返回连接字符串。实现 DBConfigProvider 接口。
+func (c DatabaseConfig) GetConnectionString() string { return c.ConnectionString }
+
+// GetDBType 返回数据库类型。实现 DBConfigProvider 接口。
+func (c MemoryDatabaseConfig) GetDBType() DatabaseType { return c.DBType }
+
+// GetConnectionString 返回连接字符串。实现 DBConfigProvider 接口。
+func (c MemoryDatabaseConfig) GetConnectionString() string { return c.ConnectionString }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

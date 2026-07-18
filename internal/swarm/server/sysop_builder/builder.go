@@ -42,7 +42,7 @@ func CreateLocalSysOpCard() *sysop.SysOperationCard {
 		}),
 	)
 
-	logger.Info(logComponent).Msg("本地 SysOperationCard 已创建")
+	logger.Info(logComponent).Str("mode", "LOCAL").Msg("本地 SysOperationCard 已创建")
 
 	return card
 }
@@ -121,6 +121,10 @@ func CreateSandboxSysOpCard(
 			bindMountsCount = len(bmSlice)
 		}
 	}
+	idleCheckVal := -1
+	if idleCheckInterval != nil {
+		idleCheckVal = *idleCheckInterval
+	}
 	logger.Info(logComponent).
 		Str("base_url", sandboxURL).
 		Str("sandbox_type", sandboxType).
@@ -130,8 +134,43 @@ func CreateSandboxSysOpCard(
 			}
 			return -1
 		}()).
+		Int("idle_check_interval", idleCheckVal).
+		Str("preserve_file_sharing_mode", preserveFileSharingMode).
 		Int("excluded_commands", len(excludedCmds)).
+		Int("filesystem_policy.files", func() int {
+			if f, ok := fsPolicy["files"]; ok {
+				if s, ok := f.([]map[string]any); ok {
+					return len(s)
+				}
+			}
+			return 0
+		}()).
+		Int("filesystem_policy.directories", func() int {
+			if d, ok := fsPolicy["directories"]; ok {
+				if s, ok := d.([]map[string]any); ok {
+					return len(s)
+				}
+			}
+			return 0
+		}()).
 		Int("bind_mounts", bindMountsCount).
+		Int("filesystem_policy.read_write", func() int {
+			if rw, ok := fsPolicy["read_write"]; ok {
+				if s, ok := rw.([]string); ok {
+					return len(s)
+				}
+			}
+			return 0
+		}()).
+		Int("filesystem_policy.read_only", func() int {
+			if ro, ok := fsPolicy["read_only"]; ok {
+				if s, ok := ro.([]string); ok {
+					return len(s)
+				}
+			}
+			return 0
+		}()).
+		Int("preserve_files_upload", len(uploadList)).
 		Str("policy_mode", "append").
 		Msg("沙箱 SysOperationCard 已创建")
 

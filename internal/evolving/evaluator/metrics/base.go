@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"context"
+
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 )
 
@@ -15,9 +17,9 @@ type Metric interface {
 	// HigherIsBetter 是否越高越好，默认 true
 	HigherIsBetter() bool
 	// Compute 计算单个样本的指标分数
-	Compute(prediction, label any, opts ...MetricOption) (MetricResult, error)
+	Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error)
 	// ComputeBatch 批量计算指标分数
-	ComputeBatch(predictions, labels []any, opts ...MetricOption) ([]MetricResult, error)
+	ComputeBatch(ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error)
 }
 
 // metricContext 指标计算的上下文信息，通过 MetricOption 注入。
@@ -54,10 +56,10 @@ func WithCase(c dataset.Case) MetricOption {
 // DefaultComputeBatch 默认批量计算实现：逐个调用 Compute。
 //
 // 对应 Python: Metric.compute_batch() 默认实现
-func DefaultComputeBatch(m Metric, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
+func DefaultComputeBatch(m Metric, ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
 	results := make([]MetricResult, len(predictions))
 	for i := range predictions {
-		result, err := m.Compute(predictions[i], labels[i], opts...)
+		result, err := m.Compute(ctx, predictions[i], labels[i], opts...)
 		if err != nil {
 			return nil, err
 		}

@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
@@ -79,7 +80,7 @@ func (m *LLMAsJudgeMetric) HigherIsBetter() bool { return true }
 // Compute 使用 LLM-as-Judge 计算语义一致性分数。
 //
 // 对应 Python: LLMAsJudgeMetric.compute(prediction, label, question=None)
-func (m *LLMAsJudgeMetric) Compute(prediction, label any, opts ...MetricOption) (MetricResult, error) {
+func (m *LLMAsJudgeMetric) Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	mc := applyMetricOptions(opts...)
 
 	// 格式化模板
@@ -101,7 +102,7 @@ func (m *LLMAsJudgeMetric) Compute(prediction, label any, opts ...MetricOption) 
 	}
 
 	// 调用 LLM
-	response, err := m.model.Invoke(context.Background(), model_clients.NewMessagesParam(messages...))
+	response, err := m.model.Invoke(ctx, model_clients.NewMessagesParam(messages...))
 	if err != nil {
 		logger.Warn(metricLogComponent).
 			Str("event_type", "LLM_CALL_ERROR").
@@ -116,8 +117,8 @@ func (m *LLMAsJudgeMetric) Compute(prediction, label any, opts ...MetricOption) 
 }
 
 // ComputeBatch 批量计算语义一致性分数。
-func (m *LLMAsJudgeMetric) ComputeBatch(predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
-	return DefaultComputeBatch(m, predictions, labels, opts...)
+func (m *LLMAsJudgeMetric) ComputeBatch(ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
+	return DefaultComputeBatch(m, ctx, predictions, labels, opts...)
 }
 
 // IsPassResult 判断评估结果是否通过。
@@ -128,7 +129,7 @@ func IsPassResult(result any) bool {
 		return true
 	}
 	if s, ok := result.(string); ok {
-		return s == "true" || s == "True" || s == "TRUE"
+		return strings.EqualFold(strings.TrimSpace(s), "true")
 	}
 	return false
 }

@@ -556,7 +556,7 @@ func BuildServerPushMessage(
 			channelID = strings.TrimSpace(cid)
 		}
 	}
-	if len(fallbackChannelID) > 0 && fallbackChannelID[0] != "" && channelID == "default" {
+	if len(fallbackChannelID) > 0 && fallbackChannelID[0] != "" && (channelID == "default" || channelID == "") {
 		channelID = fallbackChannelID[0]
 	}
 

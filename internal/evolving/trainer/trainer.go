@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/dataset"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/evaluator"
@@ -80,6 +81,9 @@ const (
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// logComponent Trainer 包日志组件常量
+const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -314,6 +318,7 @@ func WithEarlyStopScore(score float64) TrainerOption {
 
 // WithCheckpointDir 设置检查点目录（非空启用检查点保存）。
 // 9.78 填充时由此字段创建 FileCheckpointStore(dir) 赋给 checkpointStore。
+// ⤵️ 待具体章节回填：延迟初始化策略，当前仅存储路径
 // 对应 Python: checkpoint_dir, None 表示禁用。
 func WithCheckpointDir(dir string) TrainerOption {
 	return func(t *Trainer) { t.checkpointDir = dir }

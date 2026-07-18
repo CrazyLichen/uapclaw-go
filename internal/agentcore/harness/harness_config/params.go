@@ -72,4 +72,8 @@ type CreateDeepAgentParams struct {
 	ModelSelection []hschema.ModelSelectionEntry
 	// EnableSkillDiscovery 启用技能发现
 	EnableSkillDiscovery bool
+	// AutoCreateWorkspace 是否自动创建工作空间
+	AutoCreateWorkspace bool
+	// CompletionTimeout 完成超时时间（秒）
+	CompletionTimeout float64
 }

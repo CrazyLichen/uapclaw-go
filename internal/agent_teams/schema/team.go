@@ -71,7 +71,7 @@ type TeamRuntimeContext struct {
 	// MessagerConfig 消息传输配置（可选）
 	MessagerConfig *messager.MessagerTransportConfig `json:"messager_config,omitempty"`
 	// DBConfig 数据库配置
-	DBConfig database.DatabaseConfig `json:"db_config,omitempty"`
+	DBConfig database.DBConfigProvider `json:"db_config,omitempty"`
 	// MemberModel 成员模型配置（可选）
 	MemberModel *TeamModelConfig `json:"member_model,omitempty"`
 }

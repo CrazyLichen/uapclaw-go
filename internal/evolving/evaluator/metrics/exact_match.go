@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"reflect"
 	"strings"
 )
@@ -51,7 +52,7 @@ func (m *ExactMatchMetric) HigherIsBetter() bool { return true }
 // 非字符串类型（map/dict/number 等）：使用 reflect.DeepEqual 深度比较。
 //
 // 对应 Python: ExactMatchMetric.compute(prediction, label)
-func (m *ExactMatchMetric) Compute(prediction, label any, opts ...MetricOption) (MetricResult, error) {
+func (m *ExactMatchMetric) Compute(ctx context.Context, prediction, label any, opts ...MetricOption) (MetricResult, error) {
 	_ = applyMetricOptions(opts...) // ExactMatch 不需要上下文
 
 	var score float64
@@ -73,8 +74,8 @@ func (m *ExactMatchMetric) Compute(prediction, label any, opts ...MetricOption) 
 }
 
 // ComputeBatch 批量计算精确匹配分数。
-func (m *ExactMatchMetric) ComputeBatch(predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
-	return DefaultComputeBatch(m, predictions, labels, opts...)
+func (m *ExactMatchMetric) ComputeBatch(ctx context.Context, predictions, labels []any, opts ...MetricOption) ([]MetricResult, error) {
+	return DefaultComputeBatch(m, ctx, predictions, labels, opts...)
 }
 
 // WithNormalize 设置是否归一化。

@@ -463,14 +463,22 @@ func buildModelsDefaultsFromFrontend(rawModels any, crypto CryptoProvider) ([]ma
 			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d] must be object", idx)}
 		}
 
-		modelName := strings.TrimSpace(fmt.Sprintf("%v", itemMap["model_name"]))
-		if modelName == "" || modelName == "<nil>" {
+		modelNameRaw, hasModelName := itemMap["model_name"]
+		if !hasModelName || modelNameRaw == nil {
+			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
+		}
+		modelName := strings.TrimSpace(fmt.Sprintf("%v", modelNameRaw))
+		if modelName == "" {
 			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].model_name is required", idx)}
 		}
 
-		apiKey := strings.TrimSpace(fmt.Sprintf("%v", itemMap["api_key"]))
+		apiKeyRaw, hasAPIKey := itemMap["api_key"]
 		originIndex := itemMap["origin_index"] // 可为 nil
-		if (apiKey == "" || apiKey == "<nil>") && originIndex == nil {
+		apiKey := ""
+		if hasAPIKey && apiKeyRaw != nil {
+			apiKey = strings.TrimSpace(fmt.Sprintf("%v", apiKeyRaw))
+		}
+		if apiKey == "" && originIndex == nil {
 			return nil, &ConfigBadRequest{Message: fmt.Sprintf("models[%d].api_key is required", idx)}
 		}
 
