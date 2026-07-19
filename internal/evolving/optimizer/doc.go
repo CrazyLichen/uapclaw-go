@@ -14,6 +14,22 @@
 //	│   ├── base.go           # LLMCallOptimizerBase 嵌入结构体
 //	│   ├── instruction_optimizer.go # InstructionOptimizer 核心实现
 //	│   └── templates.go      # PromptTemplate 模板常量
+//	├── tool_call/            # 工具描述优化器（两阶段 Beam Search）
+//	│   ├── doc.go            # 包文档
+//	│   ├── base.go           # ToolOptimizerBase 核心
+//	│   ├── format.go         # ParseJSON / FormatPromptLlama
+//	│   ├── schema_extractor.go # ExtractSchema
+//	│   ├── default_configs.go  # DefaultConfigEg / DefaultConfigDesc
+//	│   ├── rits.go           # InvokeWithVerify 薄包装
+//	│   ├── beam_search.go    # BeamSearch + TreeNode
+//	│   ├── api_wrapper.go    # SimpleAPIWrapper / SimpleAPIWrapperFromCallable
+//	│   ├── api_wrapper_mcp.go # MakeSyncMCPCaller（integration tag）
+//	│   ├── base_method.go    # BaseMethod + ProduceAnswerFromAPICall
+//	│   ├── eval.go           # SimpleEval 评估器
+//	│   ├── example_method.go # APICallToExampleMethod
+//	│   ├── description_method.go # ToolDescriptionMethod
+//	│   ├── reviewer.go       # ToolDescriptionReviewer
+//	│   └── pipeline.go       # CustomizedPipeline
 //	└── llm_resilience/       # LLM 弹性重试策略
 //	    ├── doc.go            # 包文档
 //	    └── llm_resilience.go # LLMInvokePolicy + InvokeTextWithRetry

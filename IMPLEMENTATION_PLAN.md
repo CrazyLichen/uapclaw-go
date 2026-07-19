@@ -608,7 +608,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.70c | ✅ | Updater Protocol | Updater 协议接口（bind/requires_forward_data/update/process/get_state/load_state）+ SingleDimUpdater + MultiDimUpdater | `openjiuwen/agent_evolving/updater/` |
 | 9.71 | ✅ | BaseEvaluator | 评估器 + MetricEvaluator + DefaultEvaluator + metrics（ExactMatch/LLMAsJudge）+ evaluator_pipeline（⤵️ 仅占位） | `openjiuwen/agent_evolving/evaluator/` |
 | 9.72a | ✅ | InstructionOptimizer | 指令优化器（LLM prompt 文本梯度优化） | `openjiuwen/agent_evolving/optimizer/llm_call/` |
-| 9.72b | ☐ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
+| 9.72b | ✅ | ToolOptimizer | 工具描述优化器（beam_search/schema_extractor/customized_reviewer） | `openjiuwen/agent_evolving/optimizer/tool_call/` |
 | 9.72c | ☐ | MemoryOptimizer | 记忆参数优化器 | `openjiuwen/agent_evolving/optimizer/memory_call/` |
 | 9.72d | ☐ | SkillExperienceOptimizer | 技能经验优化器（LLM 生成经验草稿→EvolutionRecord）+ TeamSkillExperienceOptimizer | `openjiuwen/agent_evolving/optimizer/skill_call/` |
 | 9.72e | ✅ | BaseOptimizer + LLMResilience | 优化器基类（backward/step 骨架）+ LLM 调用重试策略 | `openjiuwen/agent_evolving/optimizer/base.py` · `llm_resilience.py` |
