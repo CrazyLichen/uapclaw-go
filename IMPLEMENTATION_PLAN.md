@@ -591,8 +591,8 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.56 | ✅ | Blueprint | 团队蓝图定义 | `openjiuwen/agent_teams/agent/blueprint.py` |
 | 9.57 | ✅ | AgentConfigurator | Agent 配置器（骨架+TODO占位） | `openjiuwen/agent_teams/agent/` |
 | 9.58 | ✅ | SpawnManager | 子进程管理（InProcessSpawnHandle+InProcessSpawn+SharedResources+SpawnManager+回调类型+BuildSpawnConfig） | `openjiuwen/agent_teams/spawn/` |
-| 9.59 | ✅ | SessionManager | 会话三态管理（SessionState可变容器+SessionManager+6处回填）；⤵️ Interaction 层延后 | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` |
-| 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ Interaction 层回填类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
+| 9.59 | ✅ | SessionManager + Interaction 层 | 会话三态管理 + Interaction 层（payload/router/UserInbox/HumanAgentInbox + runtime gate/pool/manager.interact）；⤵️ 9.55 回填 TeamAgent 类型依赖；覆盖率 interaction 92.8%、runtime 87.9% | `openjiuwen/agent_teams/agent/session_manager.py` · `agent_teams/context.py` · `agent_teams/interaction/` · `agent_teams/runtime/` |
+| 9.60 | ✅ | StreamController | 流式控制器（结构体+构造函数+26方法+常量+回填team_agent/spawn_manager/inprocess_handle）；⤵️ 9.55 回填 pendingInterruptResumes 类型 | `openjiuwen/agent_teams/agent/stream_controller.py` |
 | 9.61 | ☐ | RecoveryManager | 恢复管理 | `openjiuwen/agent_teams/` |
 | 9.62 | ☐ | CoordinationKernel | 协调内核 | `openjiuwen/agent_teams/` |
 | 9.63 | ☐ | EventBus / Dispatcher | 事件总线与分发 | `openjiuwen/agent_teams/` |
