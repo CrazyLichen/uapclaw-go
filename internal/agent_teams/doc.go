@@ -18,7 +18,12 @@
 //	├── harness.go          # TeamHarness 团队适配层（9.57）
 //	├── agent/              # TeamAgent 核心实现（9.55）
 //	├── schema/             # 团队级 Schema 定义（9.55）
-//	├── interaction/        # ⤵️ 回填: 后续独立章节（payload/router/UserInbox/HumanAgentInbox）
+//	├── interaction/        # 外部交互层（9.59b）
+//	│   ├── doc.go          # 包文档
+//	│   ├── payload.go      # 载荷类型（GodViewMessage/OperatorMessage/HumanAgentMessage/InteractPayload/DeliverResult）
+//	│   ├── router.go       # 输入解析器（ParseInteractStr/ParseMention/ResolveTargets/DeliverDirect）
+//	│   ├── user_inbox.go   # 用户侧收件箱（UserInbox）
+//	│   └── human_agent_inbox.go # Human-Agent 收件箱（HumanAgentInbox + 错误类型）
 //	├── memory/             # ⤵️ 回填: 9.64 团队记忆
 //	├── messager/           # ⤵️ 回填: 9.65 团队消息总线
 //	├── models/             # ⤵️ 回填: 9.64 模型池/分配器
@@ -26,7 +31,11 @@
 //	├── observability/      # ⤵️ 回填: 9.67 OpenTelemetry
 //	├── rails/              # ⤵️ 回填: 9.68 团队级 Rails
 //	├── prompts/            # ⤵️ 回填: 9.69 团队提示词
-//	├── runtime/            # ⤵️ 回填: 9.62 团队运行时
+//	├── runtime/            # 团队运行时管理（9.59b）
+//	│   ├── doc.go          # 包文档
+//	│   ├── gate.go         # InteractGate 并发门控
+//	│   ├── pool.go         # ActiveTeam/ActiveTeamInfo/TeamRuntimePool
+//	│   └── manager.go      # TeamRuntimeManager（interact 完整 + 生命周期 stub）
 //	├── spawn/              # 进程内生成 + 共享资源（9.58）
 //	│   ├── doc.go          # 包文档
 //	│   ├── handle.go       # SpawnHandle 统一接口

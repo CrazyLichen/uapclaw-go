@@ -57,7 +57,8 @@ type StreamController struct {
 	// cancelRequested 当前轮次是否被协作取消
 	cancelRequested bool
 	// pendingInterruptResumes 待处理的中断恢复输入
-	// ⤵️ 待 Interaction 层实现后回填类型：当前用 any 占位
+	// ⤵️ 待 9.55 TeamAgent 完善后回填具体类型（可能为 *interaction.InteractPayload 或 *sessioninteraction.InteractiveInput）
+	// 已实现 Interaction 层（9.59b），类型定义在 interaction 包中
 	pendingInterruptResumes []any
 	// pendingInputs 待处理的输入队列（轮次结束后自动消费）
 	pendingInputs []any
@@ -583,7 +584,8 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 		return nil, ""
 	}
 
-	// ⤵️ 待 Interaction 层回填：sessionID 和 teamSession 从 state 读取
+	// ⤵️ 待 9.55 TeamAgent 完善后回填 sessionID 和 teamSession
+	// 已实现 Interaction 层（9.59b），sessionID 可从 SessionState 读取
 	inputMap := map[string]any{"query": query}
 	chunkCh, err := harness.RunStreaming(ctx, inputMap, "", nil)
 	if err != nil {
@@ -652,7 +654,7 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 
 // dequeueValidInterruptResume 弹出有效中断恢复。
 // 对齐 Python: StreamController._dequeue_valid_interrupt_resume()
-// ⤵️ 待 Interaction 层实现后回填具体类型
+// ⤵️ 待 9.55 TeamAgent 完善后回填具体类型（interaction 包已实现）
 func (sc *StreamController) dequeueValidInterruptResume() any {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

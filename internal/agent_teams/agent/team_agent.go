@@ -485,22 +485,43 @@ func (a *TeamAgent) Stream(ctx context.Context, inputs map[string]any, opts ...i
 
 // Interact 向团队发送输入。
 // 对齐 Python: TeamAgent.interact(message)
+//
+// Python 执行步骤：
+//  1. self._coordination.enqueue_user_input(message)
+//
+// 可委托路径：runtime.TeamRuntimeManager.Interact(ctx, message, teamName, sessionID)
+// ⤵️ 待 9.55 TeamAgent 完善后注入 TeamRuntimeManager 并实现
 func (a *TeamAgent) Interact(ctx context.Context, message string) error {
-	// TODO(#9.62): 协调器入队用户输入 coordination.enqueue_user_input(message)
+	// ⤵️ 待 9.55 回填: 委托 runtimeManager.Interact(ctx, message, teamName, sessionID)
 	return nil
 }
 
 // Broadcast 广播用户侧公告。
 // 对齐 Python: TeamAgent.broadcast(content)
+//
+// Python 执行步骤：
+//  1. inbox = UserInbox(self.team_backend.message_manager)
+//  2. return await inbox.broadcast(content)
+//
+// 可委托路径：interaction.UserInbox.Broadcast(content)
+// ⤵️ 待 9.55 TeamAgent 完善后注入 UserInbox 并实现
 func (a *TeamAgent) Broadcast(ctx context.Context, content string) (any, error) {
-	// TODO(#9.62): 用户收件箱广播 UserInbox(...).broadcast(content)
+	// ⤵️ 待 9.55 回填: 委托 userInbox.Broadcast(content)
 	return nil, nil
 }
 
 // HumanAgentSay 以注册的 human_agent 成员身份发言。
 // 对齐 Python: TeamAgent.human_agent_say(content, to, sender)
+//
+// Python 执行步骤：
+//  1. inbox = HumanAgentInbox(self.team_backend, self.team_backend.message_manager,
+//     agent_lookup=self.lookup_human_agent_runtime)
+//  2. return await inbox.send(body=content, to=to, sender=sender)
+//
+// 可委托路径：interaction.HumanAgentInbox.Send(content, &to, &sender)
+// ⤵️ 待 9.55 TeamAgent 完善后注入 HumanAgentInbox 并实现
 func (a *TeamAgent) HumanAgentSay(ctx context.Context, content string, to string, sender string) (any, error) {
-	// TODO(#9.62): 人类Agent收件箱发送 HumanAgentInbox(...).send(content, to, sender)
+	// ⤵️ 待 9.55 回填: 委托 humanAgentInbox.Send(content, &to, &sender)
 	return nil, nil
 }
 
