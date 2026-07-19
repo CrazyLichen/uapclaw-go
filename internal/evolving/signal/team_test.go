@@ -359,13 +359,6 @@ func TestNormalizeIssue_基本(t *testing.T) {
 	}
 }
 
-func TestNormalizeIssue_非map类型返回nil(t *testing.T) {
-	result := normalizeIssue("not a map")
-	if result != nil {
-		t.Errorf("normalizeIssue should return nil for non-map, got %v", result)
-	}
-}
-
 func TestNormalizeIssue_默认值(t *testing.T) {
 	item := map[string]any{}
 	result := normalizeIssue(item)
@@ -768,22 +761,6 @@ func TestMakeTeamTrajectorySignal_完整验证(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── tryParseJSON 测试 ────────────────────────────
-
-func TestTryParseJSON_有效JSON(t *testing.T) {
-	result := tryParseJSON(`{"key": "value"}`)
-	if result == nil {
-		t.Error("tryParseJSON should return non-nil for valid JSON")
-	}
-}
-
-func TestTryParseJSON_无效JSON(t *testing.T) {
-	result := tryParseJSON("not json")
-	if result != nil {
-		t.Errorf("tryParseJSON should return nil for invalid JSON, got %v", result)
-	}
-}
-
 // ──────────────────────────── llm.Model 类型验证 ────────────────────────────
 
 func TestLlmModel类型存在(t *testing.T) {
@@ -816,7 +793,20 @@ func TestGetTeamTrajectoryIssues_Context中issues为mapStringAny(t *testing.T) {
 			map[string]any{"issue_type": "test"},
 		}},
 	}
-	// 当 issues 是 []any 包含 map[string]any 时，应正确转换为 []map[string]string
+	// 当 issues 是 []any 包含 map[string]any 时，不匹配 []map[string]string，返回 nil
+	result := GetTeamTrajectoryIssues(sig)
+	if result != nil {
+		t.Errorf("expected nil for non-[]map[string]string issues, got %v", result)
+	}
+}
+
+func TestGetTeamTrajectoryIssues_Context中issues为正确的mapStringString(t *testing.T) {
+	sig := &EvolutionSignal{
+		SignalType: "test",
+		Context: map[string]any{teamTrajectoryIssuesKey: []map[string]string{
+			{"issue_type": "test", "severity": "high"},
+		}},
+	}
 	result := GetTeamTrajectoryIssues(sig)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 issue, got %d", len(result))
@@ -936,12 +926,12 @@ func TestNewTeamSignalDetector_英文语言(t *testing.T) {
 
 // ──────────────────────────── GetTeamTrajectoryIssues 补充测试 ────────────────────────────
 
-func TestGetTeamTrajectoryIssues_mapStringAny转换(t *testing.T) {
+func TestGetTeamTrajectoryIssues_mapStringString直接存(t *testing.T) {
 	sig := &EvolutionSignal{
 		SignalType: "test",
 		Context: map[string]any{
-			teamTrajectoryIssuesKey: []any{
-				map[string]any{"issue_type": "coordination", "severity": "high"},
+			teamTrajectoryIssuesKey: []map[string]string{
+				{"issue_type": "coordination", "severity": "high"},
 			},
 		},
 	}
@@ -1075,5 +1065,64 @@ func TestParseTeamModelJSON_轨迹问题LLM输出(t *testing.T) {
 	}
 	if item["severity"] != "high" {
 		t.Errorf("severity = %v, want high", item["severity"])
+	}
+}
+
+// ──────────────────────────── DetectTrajectorySignals 非 LLM 测试 ────────────────────────────
+
+func TestDetectTrajectorySignals_无问题(t *testing.T) {
+	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
+	d := NewTeamSignalDetector(nil, "test-model", "cn", &policy, nil)
+	traj := &trajectory.Trajectory{
+		Steps: []*trajectory.TrajectoryStep{
+			{Kind: trajectory.StepKindTool, Detail: &trajectory.ToolCallDetail{
+				ToolName:   "some_tool",
+				CallArgs:   map[string]any{"x": 1},
+				CallResult: map[string]any{"ok": true},
+			}},
+		},
+	}
+	// LLM 为 nil，调用会失败
+	signals, err := d.DetectTrajectorySignals(context.Background(), traj, "test_skill", "skill content")
+	// 期望返回错误（LLM 为 nil）或空结果
+	_ = signals
+	_ = err
+}
+
+func TestDetectTrajectoryIssues_LLM为nil(t *testing.T) {
+	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
+	d := NewTeamSignalDetector(nil, "test-model", "cn", &policy, nil)
+	traj := &trajectory.Trajectory{
+		Steps: []*trajectory.TrajectoryStep{},
+	}
+	issues, err := d.DetectTrajectoryIssues(context.Background(), traj, "skill content")
+	_ = issues
+	_ = err
+}
+
+func TestTeamDetectUserIntent_空消息(t *testing.T) {
+	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
+	d := NewTeamSignalDetector(nil, "test-model", "cn", nil, &policy)
+	result, err := d.DetectUserIntent(context.Background(), []map[string]any{}, "skill content")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil for empty messages, got %v", result)
+	}
+}
+
+func TestTeamDetectUserIntent_无用户消息(t *testing.T) {
+	policy := llm_resilience.LLMInvokePolicy{MaxAttempts: 1}
+	d := NewTeamSignalDetector(nil, "test-model", "cn", nil, &policy)
+	messages := []map[string]any{
+		{"role": "assistant", "content": "hello"},
+	}
+	result, err := d.DetectUserIntent(context.Background(), messages, "skill content")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil for no user messages, got %v", result)
 	}
 }

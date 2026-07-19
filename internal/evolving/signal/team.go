@@ -325,10 +325,6 @@ func MakeTeamUserIntentSignal(skillName, userIntent string) *EvolutionSignal {
 //
 // 对应 Python: make_team_trajectory_signal(skill_name, skill_content, trajectory_issues)
 func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues []map[string]string) *EvolutionSignal {
-	issues := make([]any, len(trajectoryIssues))
-	for i, item := range trajectoryIssues {
-		issues[i] = item
-	}
 	return MakeEvolutionSignal(
 		string(TeamSignalTypeTrajectoryIssue),
 		"",
@@ -336,8 +332,8 @@ func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues [
 		WithSkillName(skillName),
 		WithSource("passive_trajectory"),
 		WithContext(map[string]any{
-			teamTrajectoryIssuesKey: issues,
-			teamSkillContentKey:     skillContent,
+			teamTrajectoryIssuesKey: trajectoryIssues,
+			teamSkillContentKey:    skillContent,
 		}),
 	)
 }
@@ -354,24 +350,11 @@ func GetTeamTrajectoryIssues(sig *EvolutionSignal) []map[string]string {
 	if !ok {
 		return nil
 	}
-	slice, ok := issues.([]any)
+	slice, ok := issues.([]map[string]string)
 	if !ok {
 		return nil
 	}
-	var result []map[string]string
-	for _, item := range slice {
-		if m, ok := item.(map[string]any); ok {
-			entry := make(map[string]string)
-			for k, v := range m {
-				entry[k] = fmt.Sprintf("%v", v)
-			}
-			result = append(result, entry)
-		}
-		if m, ok := item.(map[string]string); ok {
-			result = append(result, m)
-		}
-	}
-	return result
+	return slice
 }
 
 // GetTeamSignalSkillContent 从信号中读取关联的团队技能内容。
@@ -535,7 +518,11 @@ func (d *TeamSignalDetector) DetectTrajectoryIssues(
 
 	var issues []map[string]string
 	for _, item := range list {
-		normalized := normalizeIssue(item)
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		normalized := normalizeIssue(m)
 		if normalized == nil {
 			continue
 		}
@@ -547,17 +534,6 @@ func (d *TeamSignalDetector) DetectTrajectoryIssues(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// tryParseJSON 尝试解析 JSON 字符串。
-//
-// 对应 Python: _try_parse_json(text)
-func tryParseJSON(text string) any {
-	var data any
-	if err := json.Unmarshal([]byte(text), &data); err != nil {
-		return nil
-	}
-	return data
-}
 
 // fixJSONText 对常见 LLM JSON 格式问题做轻量修复。
 //
@@ -671,22 +647,18 @@ func extractRolesSummary(teamSkillContent string) string {
 // normalizeIssue 规范化轨迹问题项。
 //
 // 对应 Python: TeamSignalDetector._normalize_issue(item)
-func normalizeIssue(item any) map[string]string {
-	m, ok := item.(map[string]any)
-	if !ok {
-		return nil
-	}
+func normalizeIssue(item map[string]any) map[string]string {
 	severity := "medium"
-	if v, exists := m["severity"]; exists && v != nil {
+	if v, exists := item["severity"]; exists && v != nil {
 		s := fmt.Sprintf("%v", v)
 		if s == "low" || s == "medium" || s == "high" {
 			severity = s
 		}
 	}
 	return map[string]string{
-		"issue_type":    stringOrDefault(m, "issue_type", "unknown"),
-		"description":   stringOrDefault(m, "description", ""),
-		"affected_role": stringOrDefault(m, "affected_role", ""),
+		"issue_type":    stringOrDefault(item, "issue_type", "unknown"),
+		"description":   stringOrDefault(item, "description", ""),
+		"affected_role": stringOrDefault(item, "affected_role", ""),
 		"severity":      severity,
 	}
 }

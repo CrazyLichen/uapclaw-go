@@ -173,26 +173,6 @@ func TestDetect_从消息检测执行失败(t *testing.T) {
 	}
 }
 
-func TestDetect_从轨迹检测(t *testing.T) {
-	d := newDetector()
-	traj := makeTrajectory(nil,
-		makeLLMStep([]map[string]any{
-			makeMsg("user", "do something"),
-		}),
-		makeToolStep("bash", "tc1", nil, map[string]any{"error": "failed"}, nil),
-	)
-	signals := d.Detect(traj)
-	_ = signals
-}
-
-func TestDetect_不支持的输入类型(t *testing.T) {
-	d := newDetector()
-	signals := d.Detect("invalid input")
-	if len(signals) != 0 {
-		t.Errorf("expected 0 signals for unsupported input, got %d", len(signals))
-	}
-}
-
 // ──────────────────────────── DetectTrajectorySignals ────────────────────────────
 
 func TestDetectTrajectorySignals_预转换消息(t *testing.T) {
@@ -449,7 +429,7 @@ func TestResolveActiveSkill_精确索引(t *testing.T) {
 
 func TestDetectSkillFromToolCalls_SKILLMD路径(t *testing.T) {
 	d := newDetector("my_skill")
-	toolCalls := []any{
+	toolCalls := []map[string]any{
 		makeToolCallDict("tc1", "read_file", `/skills/my_skill/SKILL.md`),
 	}
 	result := d.detectSkillFromToolCalls(toolCalls)
@@ -461,7 +441,7 @@ func TestDetectSkillFromToolCalls_SKILLMD路径(t *testing.T) {
 func TestDetectSkillFromToolCalls_skillTool参数(t *testing.T) {
 	d := newDetector("target_skill")
 	args, _ := json.Marshal(map[string]any{"skill_name": "target_skill"})
-	toolCalls := []any{
+	toolCalls := []map[string]any{
 		makeToolCallDict("tc1", "skill_tool", string(args)),
 	}
 	result := d.detectSkillFromToolCalls(toolCalls)
@@ -472,7 +452,7 @@ func TestDetectSkillFromToolCalls_skillTool参数(t *testing.T) {
 
 func TestDetectSkillFromToolCalls_不在已有技能中(t *testing.T) {
 	d := newDetector("skill_a")
-	toolCalls := []any{
+	toolCalls := []map[string]any{
 		makeToolCallDict("tc1", "read_file", `/skills/unknown_skill/SKILL.md`),
 	}
 	result := d.detectSkillFromToolCalls(toolCalls)
@@ -483,7 +463,7 @@ func TestDetectSkillFromToolCalls_不在已有技能中(t *testing.T) {
 
 func TestDetectSkillFromToolCalls_空技能集合不过滤(t *testing.T) {
 	d := newDetector()
-	toolCalls := []any{
+	toolCalls := []map[string]any{
 		makeToolCallDict("tc1", "read_file", `/skills/any_skill/SKILL.md`),
 	}
 	result := d.detectSkillFromToolCalls(toolCalls)
@@ -667,6 +647,15 @@ func TestExtractCodeFromArgs_无效JSON(t *testing.T) {
 	}
 }
 
+func TestExtractCodeFromArgs_nil参数(t *testing.T) {
+	d := newDetector()
+	tc := map[string]any{"id": "tc1", "name": "bash"} // 无 arguments 键
+	result := d.extractCodeFromArgs(tc)
+	if result != "" {
+		t.Errorf("expected empty for nil args, got %q", result)
+	}
+}
+
 // ──────────────────────────── DetectUserIntent ────────────────────────────
 
 func TestDetectUserIntent_无LLM走降级(t *testing.T) {
@@ -717,7 +706,7 @@ func TestDetectUserIntent_无法推断技能(t *testing.T) {
 	}
 }
 
-func TestDetectUserIntent_从轨迹(t *testing.T) {
+func TestDetectUserIntent_从轨迹转换(t *testing.T) {
 	d := newDetector("my_skill")
 	traj := makeTrajectory(nil,
 		makeLLMStep([]map[string]any{
@@ -729,7 +718,9 @@ func TestDetectUserIntent_从轨迹(t *testing.T) {
 			makeMsg("user", "不对，应该这样做"),
 		}),
 	)
-	signals, err := d.DetectUserIntent(context.Background(), traj)
+	// 从轨迹转换为消息列表后调用
+	converted := d.ConvertTrajectoryToMessages(traj)
+	signals, err := d.DetectUserIntent(context.Background(), converted)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1036,7 +1027,7 @@ func TestDeduplicate_空列表(t *testing.T) {
 
 func TestGetField_存在(t *testing.T) {
 	obj := map[string]any{"key": "value"}
-	result := getField(obj, "key", "default")
+	result := getField[string](obj, "key", "default")
 	if result != "value" {
 		t.Errorf("expected value, got %v", result)
 	}
@@ -1044,16 +1035,59 @@ func TestGetField_存在(t *testing.T) {
 
 func TestGetField_不存在(t *testing.T) {
 	obj := map[string]any{"key": "value"}
-	result := getField(obj, "missing", "default")
+	result := getField[string](obj, "missing", "default")
 	if result != "default" {
 		t.Errorf("expected default, got %v", result)
 	}
 }
 
 func TestGetField_nil对象(t *testing.T) {
-	result := getField(nil, "key", "default")
+	result := getField[string](nil, "key", "default")
 	if result != "default" {
 		t.Errorf("expected default, got %v", result)
+	}
+}
+
+// ──────────────────────────── getToolCalls ────────────────────────────
+
+func TestGetToolCalls_nil(t *testing.T) {
+	result := getToolCalls(nil)
+	if result != nil {
+		t.Errorf("expected nil, got %v", result)
+	}
+}
+
+func TestGetToolCalls_MapSlice(t *testing.T) {
+	msg := map[string]any{
+		"tool_calls": []map[string]any{{"id": "tc1"}},
+	}
+	result := getToolCalls(msg)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 element, got %d", len(result))
+	}
+	if result[0]["id"] != "tc1" {
+		t.Errorf("unexpected result: %v", result)
+	}
+}
+
+func TestGetToolCalls_AnySlice(t *testing.T) {
+	msg := map[string]any{
+		"tool_calls": []any{map[string]any{"id": "tc1"}},
+	}
+	result := getToolCalls(msg)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 element, got %d", len(result))
+	}
+	if result[0]["id"] != "tc1" {
+		t.Errorf("unexpected result: %v", result)
+	}
+}
+
+func TestGetToolCalls_OtherType(t *testing.T) {
+	msg := map[string]any{"tool_calls": "not a slice"}
+	result := getToolCalls(msg)
+	if result != nil {
+		t.Errorf("expected nil for non-slice, got %v", result)
 	}
 }
 
@@ -1082,6 +1116,12 @@ func TestResponseToText_nil(t *testing.T) {
 	if result != "" {
 		t.Errorf("expected empty, got %q", result)
 	}
+}
+
+func TestResponseToText_AssistantMessage(t *testing.T) {
+	am := &llmschema.AssistantMessage{}
+	result := responseToText(am)
+	_ = result // 验证不会 panic
 }
 
 // ──────────────────────────── 正则常量验证 ────────────────────────────
@@ -1296,46 +1336,6 @@ func TestConversationSignalDetector_执行失败和脚本成功共存(t *testing
 	}
 }
 
-// ──────────────────────────── responseToText 补充测试 ────────────────────────────
-
-func TestResponseToText_map格式(t *testing.T) {
-	m := map[string]any{"content": "hello from map"}
-	result := responseToText(m)
-	if result != "hello from map" {
-		t.Errorf("responseToText(map) = %q, want %q", result, "hello from map")
-	}
-}
-
-func TestResponseToText_mapText键(t *testing.T) {
-	m := map[string]any{"text": "text value"}
-	result := responseToText(m)
-	if result != "text value" {
-		t.Errorf("responseToText(map with text) = %q, want %q", result, "text value")
-	}
-}
-
-func TestResponseToText_map无内容键(t *testing.T) {
-	m := map[string]any{"other": "value"}
-	result := responseToText(m)
-	if result != "" {
-		t.Errorf("responseToText(map without content/text) = %q, want empty", result)
-	}
-}
-
-func TestResponseToText_AssistantMessage(t *testing.T) {
-	am := &llmschema.AssistantMessage{}
-	// AssistantMessage 返回其 Content 的 String()
-	result := responseToText(am)
-	_ = result // 验证不会 panic
-}
-
-func TestResponseToText_其他类型(t *testing.T) {
-	result := responseToText(42)
-	if result != "42" {
-		t.Errorf("responseToText(42) = %q, want %q", result, "42")
-	}
-}
-
 // ──────────────────────────── findFailureKeywordIndex 补充测试 ────────────────────────────
 
 func TestFindFailureKeywordIndex_正常匹配(t *testing.T) {
@@ -1389,7 +1389,6 @@ func TestDetectUserIntent_LLM调用失败走降级(t *testing.T) {
 			t.Errorf("SignalType = %q, want %q", signals[0].SignalType, "user_intent")
 		}
 	}
-	// 如果 LLM 调用失败且 fallback 也没匹配，返回 nil 也是合理的
 }
 
 func TestDetectUserIntent_有LLM但无纠正(t *testing.T) {
@@ -1412,38 +1411,7 @@ func TestDetectUserIntent_有LLM但无纠正(t *testing.T) {
 	}
 }
 
-// ──────────────────────────── extractCodeFromArgs 补充测试 ────────────────────────────
-
-func TestExtractCodeFromArgs_长代码提取(t *testing.T) {
-	d := newDetector()
-	longCode := strings.Repeat("print('hello world')\n", 3) // 75 chars
-	args, _ := json.Marshal(map[string]any{"code": longCode})
-	tc := makeToolCallDict("tc1", "bash", string(args))
-	result := d.extractCodeFromArgs(tc)
-	if result != longCode {
-		t.Errorf("expected long code, got %q", result)
-	}
-}
-
-func TestExtractCodeFromArgs_command键(t *testing.T) {
-	d := newDetector()
-	longCmd := "echo hello world && echo this is a long command that exceeds twenty characters"
-	args, _ := json.Marshal(map[string]any{"command": longCmd})
-	tc := makeToolCallDict("tc1", "bash", string(args))
-	result := d.extractCodeFromArgs(tc)
-	if result != longCmd {
-		t.Errorf("expected command content, got %q", result)
-	}
-}
-
-func TestExtractCodeFromArgs_nil参数(t *testing.T) {
-	d := newDetector()
-	tc := map[string]any{"id": "tc1", "name": "bash"} // 无 arguments 键
-	result := d.extractCodeFromArgs(tc)
-	if result != "" {
-		t.Errorf("expected empty for nil args, got %q", result)
-	}
-}
+// ──────────────────────────── 辅助函数测试 ────────────────────────────
 
 func TestMatchFailureKeyword_ErrorEqualsNone不匹配(t *testing.T) {
 	if matchFailureKeyword("error = None") {
@@ -1468,31 +1436,6 @@ func TestArgsToJSON_Normal(t *testing.T) {
 	result := argsToJSON(map[string]any{"key": "value"})
 	if !strings.Contains(result, "key") {
 		t.Errorf("expected JSON with key, got %q", result)
-	}
-}
-
-func TestToToolCallSlice_Nil(t *testing.T) {
-	result := toToolCallSlice(nil)
-	if result != nil {
-		t.Errorf("expected nil, got %v", result)
-	}
-}
-
-func TestToToolCallSlice_MapSlice(t *testing.T) {
-	input := []map[string]any{{"id": "tc1"}}
-	result := toToolCallSlice(input)
-	if len(result) != 1 {
-		t.Fatalf("expected 1 element, got %d", len(result))
-	}
-	if m, ok := result[0].(map[string]any); !ok || m["id"] != "tc1" {
-		t.Errorf("unexpected result: %v", result)
-	}
-}
-
-func TestToToolCallSlice_OtherType(t *testing.T) {
-	result := toToolCallSlice("not a slice")
-	if result != nil {
-		t.Errorf("expected nil for non-slice, got %v", result)
 	}
 }
 
@@ -1522,5 +1465,29 @@ func TestDetectTrajectorySignals_仅Trajectory(t *testing.T) {
 	// 没有错误内容，不应产生信号
 	if len(signals) > 0 {
 		t.Logf("Got %d signals (may be expected)", len(signals))
+	}
+}
+
+// ──────────────────────────── extractCodeFromArgs 长代码提取测试 ────────────────────────────
+
+func TestExtractCodeFromArgs_长代码提取(t *testing.T) {
+	d := newDetector()
+	longCode := strings.Repeat("print('hello world')\n", 3) // 75 chars
+	args, _ := json.Marshal(map[string]any{"code": longCode})
+	tc := makeToolCallDict("tc1", "bash", string(args))
+	result := d.extractCodeFromArgs(tc)
+	if result != longCode {
+		t.Errorf("expected long code, got %q", result)
+	}
+}
+
+func TestExtractCodeFromArgs_command键(t *testing.T) {
+	d := newDetector()
+	longCmd := "echo hello world && echo this is a long command that exceeds twenty characters"
+	args, _ := json.Marshal(map[string]any{"command": longCmd})
+	tc := makeToolCallDict("tc1", "bash", string(args))
+	result := d.extractCodeFromArgs(tc)
+	if result != longCmd {
+		t.Errorf("expected command content, got %q", result)
 	}
 }

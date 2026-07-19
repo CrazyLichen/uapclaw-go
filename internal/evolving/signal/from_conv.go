@@ -62,13 +62,13 @@ const logComponent = logger.ComponentAgentCore
 // 注意：Python 使用 (?!...) 负向前瞻排除 "error = None"，
 // Go regexp 不支持该语法，改为匹配 error 后在 matchFailureKeyword 中过滤。
 var failureKeywords = regexp.MustCompile(
-	`(?i)error|exception|traceback|failed|failure|timeout|timed out` +
-		`|errno|connectionerror|oserror|valueerror|typeerror` +
-		`|错误|异常|失败|超时` +
-		`|no such file|permission denied|access denied` +
-		`|command not found|not recognized` +
-		`|module not found` +
-		`|econnrefused|econnreset|enoent|enotfound` +
+	`(?i)error|exception|traceback|failed|failure|timeout|timed out`+
+		`|errno|connectionerror|oserror|valueerror|typeerror`+
+		`|错误|异常|失败|超时`+
+		`|no such file|permission denied|access denied`+
+		`|command not found|not recognized`+
+		`|module not found`+
+		`|econnrefused|econnreset|enoent|enotfound`+
 		`|npm err!`,
 )
 
@@ -175,10 +175,10 @@ var collaborationSignalTypes = map[string]bool{
 //
 // 对应 Python: _COLLABORATION_FAILURE_PATTERN
 var collaborationFailurePattern = regexp.MustCompile(
-	`member.*failed|member.*error|member.*timeout` +
-		`|invoke.*exception|spawn.*failed` +
-		`|task.*error|task.*timeout` +
-		`|collaboration.*failed` +
+	`member.*failed|member.*error|member.*timeout`+
+		`|invoke.*exception|spawn.*failed`+
+		`|task.*error|task.*timeout`+
+		`|collaboration.*failed`+
 		`|协作.*失败|成员.*异常|任务.*超时`,
 )
 
@@ -222,23 +222,11 @@ func (d *ConversationSignalDetector) BindLLM(llm *llm.Model, model, language str
 	return d
 }
 
-// Detect 从 Trajectory 或消息列表中检测演化信号，返回去重后的 EvolutionSignal 列表。
+// Detect 从消息列表中检测演化信号，返回去重后的 EvolutionSignal 列表。
 //
 // 对应 Python: ConversationSignalDetector.detect(trajectory_or_messages)
-func (d *ConversationSignalDetector) Detect(trajectoryOrMessages any) []*EvolutionSignal {
-	var signals []*EvolutionSignal
-
-	switch v := trajectoryOrMessages.(type) {
-	case *trajectory.Trajectory:
-		messages := d.ConvertTrajectoryToMessages(v)
-		signals = append(signals, d.detectFromMessages(messages)...)
-		signals = append(signals, d.detectCollaborationSignals(v)...)
-	default:
-		if msgs, ok := toMessageList(trajectoryOrMessages); ok {
-			signals = append(signals, d.detectFromMessages(msgs)...)
-		}
-	}
-
+func (d *ConversationSignalDetector) Detect(msgs []map[string]any) []*EvolutionSignal {
+	signals := d.detectFromMessages(msgs)
 	return d.deduplicate(signals)
 }
 
@@ -259,7 +247,11 @@ func (d *ConversationSignalDetector) DetectTrajectorySignals(
 	if traj == nil {
 		return nil
 	}
-	return d.Detect(traj)
+	// 无消息时，从轨迹转换
+	converted := d.ConvertTrajectoryToMessages(traj)
+	signals := d.detectFromMessages(converted)
+	signals = append(signals, d.detectCollaborationSignals(traj)...)
+	return d.deduplicate(signals)
 }
 
 // DetectUserMessageFeedback 使用 LLM 判断用户消息是否为被动纠正，返回 user_correction 信号。
@@ -267,9 +259,9 @@ func (d *ConversationSignalDetector) DetectTrajectorySignals(
 // 对应 Python: ConversationSignalDetector.detect_user_message_feedback(trajectory_or_messages)
 func (d *ConversationSignalDetector) DetectUserMessageFeedback(
 	ctx context.Context,
-	trajectoryOrMessages any,
+	msgs []map[string]any,
 ) []*EvolutionSignal {
-	signals, _ := d.DetectUserIntent(ctx, trajectoryOrMessages)
+	signals, _ := d.DetectUserIntent(ctx, msgs)
 	var result []*EvolutionSignal
 	for _, sig := range signals {
 		result = append(result, MakeEvolutionSignal(
@@ -288,23 +280,13 @@ func (d *ConversationSignalDetector) DetectUserMessageFeedback(
 // 对应 Python: ConversationSignalDetector.detect_user_intent(trajectory_or_messages)
 func (d *ConversationSignalDetector) DetectUserIntent(
 	ctx context.Context,
-	trajectoryOrMessages any,
+	msgs []map[string]any,
 ) ([]*EvolutionSignal, error) {
-	var messages []map[string]any
-	switch v := trajectoryOrMessages.(type) {
-	case *trajectory.Trajectory:
-		messages = d.ConvertTrajectoryToMessages(v)
-	default:
-		if msgs, ok := toMessageList(trajectoryOrMessages); ok {
-			messages = msgs
-		}
-	}
-
 	// 提取最近 5 条用户消息
 	var userMessages []string
-	for _, msg := range messages {
-		role := fmt.Sprintf("%v", getField(msg, "role", ""))
-		content := strings.TrimSpace(fmt.Sprintf("%v", getField(msg, "content", "")))
+	for _, msg := range msgs {
+		role := getField[string](msg, "role", "")
+		content := strings.TrimSpace(getField[string](msg, "content", ""))
 		if role == "user" && content != "" {
 			userMessages = append(userMessages, content)
 		}
@@ -316,7 +298,7 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 		return nil, nil
 	}
 
-	skillName := d.inferSkillFromMessages(messages)
+	skillName := d.inferSkillFromMessages(msgs)
 	if skillName == "" {
 		return nil, nil
 	}
@@ -398,11 +380,10 @@ func (d *ConversationSignalDetector) ConvertTrajectoryToMessages(traj *trajector
 			}
 			for _, msg := range llmDetail.Messages {
 				messages = append(messages, msg)
-				toolCalls := getField(msg, "tool_calls", []any{})
-				if tcSlice := toToolCallSlice(toolCalls); len(tcSlice) > 0 {
+				if tcSlice := getToolCalls(msg); len(tcSlice) > 0 {
 					for _, tc := range tcSlice {
-						tcID := fmt.Sprintf("%v", getField(tc, "id", ""))
-						tcName := fmt.Sprintf("%v", getField(tc, "name", ""))
+						tcID := getField[string](tc, "id", "")
+						tcName := getField[string](tc, "name", "")
 						if tcID != "" && tcName != "" {
 							toolCallIDToName[tcID] = tcName
 						}
@@ -489,12 +470,52 @@ func findFailureKeywordIndex(content string) []int {
 // 用于验证 "error" 后面是否跟着 "= None"。
 var errorEqualsNoneOnlyStart = regexp.MustCompile(`(?i)^\s*=\s*None`)
 
-// toMessageList 尝试将 any 转换为 []map[string]any 消息列表。
-func toMessageList(v any) ([]map[string]any, bool) {
-	if msgs, ok := v.([]map[string]any); ok {
-		return msgs, true
+// getField 泛型字典字段读取，从 map[string]any 中读取指定键的值。
+// 如果键不存在或值为 nil，返回 defaultVal。
+//
+// 对应 Python: _get_field(obj, key, default)
+func getField[T any](m map[string]any, key string, defaultVal T) T {
+	if m == nil {
+		return defaultVal
 	}
-	return nil, false
+	v, ok := m[key]
+	if !ok || v == nil {
+		return defaultVal
+	}
+	if typed, ok := v.(T); ok {
+		return typed
+	}
+	return defaultVal
+}
+
+// getToolCalls 从消息中提取 tool_calls 列表，统一返回 []map[string]any。
+// 消息中的 tool_calls 可能是 []any（JSON 反序列化）或 []map[string]any（手动构造）。
+func getToolCalls(m map[string]any) []map[string]any {
+	if m == nil {
+		return nil
+	}
+	v, ok := m["tool_calls"]
+	if !ok || v == nil {
+		return nil
+	}
+
+	// 直接是 []map[string]any
+	if tcSlice, ok := v.([]map[string]any); ok {
+		return tcSlice
+	}
+
+	// JSON 反序列化的 []any，每个元素是 map[string]any
+	if anySlice, ok := v.([]any); ok {
+		result := make([]map[string]any, 0, len(anySlice))
+		for _, item := range anySlice {
+			if m, ok := item.(map[string]any); ok {
+				result = append(result, m)
+			}
+		}
+		return result
+	}
+
+	return nil
 }
 
 // argsToJSON 将 map[string]any 转换为 JSON 字符串，用于 extractToMember/extractTaskID。
@@ -509,37 +530,14 @@ func argsToJSON(args map[string]any) string {
 	return string(data)
 }
 
-// toToolCallSlice 将 tool_calls 字段值转换为 []any 切片。
-// 消息中的 tool_calls 可能是 []any 或 []map[string]any 类型。
-func toToolCallSlice(v any) []any {
-	if v == nil {
-		return nil
-	}
-	if slice, ok := v.([]any); ok {
-		return slice
-	}
-	// 处理 []map[string]any 类型
-	if mSlice, ok := v.([]map[string]any); ok {
-		result := make([]any, len(mSlice))
-		for i, m := range mSlice {
-			result[i] = m
-		}
-		return result
-	}
-	return nil
-}
-
-// getField 统一从 dict 读取字段值。
+// responseToText 将 LLM 响应转换为纯文本。
 //
-// 对应 Python: _get_field(obj, key, default)
-func getField(obj any, key string, defaultVal any) any {
-	if m, ok := obj.(map[string]any); ok {
-		if v, exists := m[key]; exists {
-			return v
-		}
-		return defaultVal
+// 对应 Python: _response_to_text(response)
+func responseToText(resp *llmschema.AssistantMessage) string {
+	if resp == nil {
+		return ""
 	}
-	return defaultVal
+	return resp.GetContent().String()
 }
 
 // extractAroundMatch 返回匹配位置前后的摘录。
@@ -557,28 +555,6 @@ func extractAroundMatch(content string, matchStart, matchEnd, before, after int)
 	return content[start:end]
 }
 
-// responseToText 将常见 LLM 响应格式转换为纯文本。
-//
-// 对应 Python: _response_to_text(response)
-func responseToText(response any) string {
-	if response == nil {
-		return ""
-	}
-	if am, ok := response.(*llmschema.AssistantMessage); ok && am != nil {
-		return am.GetContent().String()
-	}
-	if m, ok := response.(map[string]any); ok {
-		if v, exists := m["content"]; exists && v != nil {
-			return fmt.Sprintf("%v", v)
-		}
-		if v, exists := m["text"]; exists && v != nil {
-			return fmt.Sprintf("%v", v)
-		}
-		return ""
-	}
-	return fmt.Sprintf("%v", response)
-}
-
 // detectFromMessages 扫描消息列表，返回检测到的信号。
 //
 // 对应 Python: ConversationSignalDetector._detect_from_messages(messages)
@@ -589,18 +565,17 @@ func (d *ConversationSignalDetector) detectFromMessages(messages []map[string]an
 	toolCallIDToName := map[string]string{}
 
 	for msgIdx, msg := range messages {
-		role := fmt.Sprintf("%v", getField(msg, "role", ""))
-		content := fmt.Sprintf("%v", getField(msg, "content", ""))
-		toolCalls := getField(msg, "tool_calls", []any{})
+		role := getField[string](msg, "role", "")
+		content := getField[string](msg, "content", "")
 
 		if role == "assistant" {
-			if tcSlice := toToolCallSlice(toolCalls); len(tcSlice) > 0 {
+			if tcSlice := getToolCalls(msg); len(tcSlice) > 0 {
 				if detected := d.detectSkillFromToolCalls(tcSlice); detected != "" {
 					skillReadHistory = append(skillReadHistory, skillReadEntry{msgIdx, detected})
 				}
 				for _, tc := range tcSlice {
-					tcID := fmt.Sprintf("%v", getField(tc, "id", ""))
-					tcName := fmt.Sprintf("%v", getField(tc, "name", ""))
+					tcID := getField[string](tc, "id", "")
+					tcName := getField[string](tc, "name", "")
 					if tcID != "" && tcName != "" {
 						toolCallIDToName[tcID] = tcName
 					}
@@ -696,10 +671,10 @@ func (d *ConversationSignalDetector) resolveActiveSkill(msgIdx int, history []sk
 // detectSkillFromToolCalls 从工具调用中检测 SKILL.md 读取的技能名称。
 //
 // 对应 Python: ConversationSignalDetector._detect_skill_from_tool_calls(tool_calls)
-func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []any) string {
+func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []map[string]any) string {
 	for _, tc := range toolCalls {
-		name := strings.ToLower(fmt.Sprintf("%v", getField(tc, "name", "")))
-		arguments := fmt.Sprintf("%v", getField(tc, "arguments", ""))
+		name := strings.ToLower(getField[string](tc, "name", ""))
+		arguments := getField[string](tc, "arguments", "")
 
 		var skillName string
 
@@ -708,17 +683,18 @@ func (d *ConversationSignalDetector) detectSkillFromToolCalls(toolCalls []any) s
 			skillName = matched[1]
 		} else if name == "skill_tool" {
 			// 尝试解析 arguments
-			var argsDict map[string]any
-			if rawArgs := getField(tc, "arguments", ""); rawArgs != nil {
+			rawArgs := tc["arguments"]
+			if rawArgs != nil {
+				var argsDict map[string]any
 				if argsStr, ok := rawArgs.(string); ok {
 					_ = json.Unmarshal([]byte(argsStr), &argsDict)
 				} else if m, ok := rawArgs.(map[string]any); ok {
 					argsDict = m
 				}
-			}
-			if argsDict != nil {
-				if v, ok := argsDict["skill_name"]; ok && v != nil {
-					skillName = fmt.Sprintf("%v", v)
+				if argsDict != nil {
+					if v, ok := argsDict["skill_name"]; ok && v != nil {
+						skillName = fmt.Sprintf("%v", v)
+					}
 				}
 			}
 		}
@@ -756,10 +732,9 @@ func (d *ConversationSignalDetector) isSkillMDReadTool(name string) bool {
 func (d *ConversationSignalDetector) inferSkillFromMessages(messages []map[string]any) string {
 	var skillReadHistory []skillReadEntry
 	for msgIdx, msg := range messages {
-		role := fmt.Sprintf("%v", getField(msg, "role", ""))
-		toolCalls := getField(msg, "tool_calls", []any{})
+		role := getField[string](msg, "role", "")
 		if role == "assistant" {
-			if tcSlice := toToolCallSlice(toolCalls); len(tcSlice) > 0 {
+			if tcSlice := getToolCalls(msg); len(tcSlice) > 0 {
 				if detected := d.detectSkillFromToolCalls(tcSlice); detected != "" {
 					skillReadHistory = append(skillReadHistory, skillReadEntry{msgIdx, detected})
 				}
@@ -772,8 +747,8 @@ func (d *ConversationSignalDetector) inferSkillFromMessages(messages []map[strin
 // extractCodeFromArgs 从代码执行工具调用中提取内联代码或命令内容。
 //
 // 对应 Python: ConversationSignalDetector._extract_code_from_args(tool_call)
-func (d *ConversationSignalDetector) extractCodeFromArgs(toolCall any) string {
-	rawArgs := getField(toolCall, "arguments", "")
+func (d *ConversationSignalDetector) extractCodeFromArgs(toolCall map[string]any) string {
+	rawArgs := toolCall["arguments"]
 	if rawArgs == nil {
 		return ""
 	}
@@ -856,8 +831,7 @@ func (d *ConversationSignalDetector) detectCollaborationSignals(traj *trajectory
 				continue
 			}
 			for _, msg := range llmDetail.Messages {
-				toolCalls := getField(msg, "tool_calls", []any{})
-				if tcSlice := toToolCallSlice(toolCalls); len(tcSlice) > 0 {
+				if tcSlice := getToolCalls(msg); len(tcSlice) > 0 {
 					if detected := d.detectSkillFromToolCalls(tcSlice); detected != "" {
 						skillReadHistory = append(skillReadHistory, skillReadEntry{idx, detected})
 					}
