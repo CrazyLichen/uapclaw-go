@@ -28,33 +28,6 @@ func (m *mockPushTransport) SendPush(_ context.Context, msg map[string]any) erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// ──────────────────────────── EventPayloadDict 测试 ────────────────────────────
-
-// TestEventPayloadDict 测试从 map 事件提取 payload。
-func TestEventPayloadDict(t *testing.T) {
-	evt := map[string]any{"key": "value", "stage": "generating"}
-	result := EventPayloadDict(evt)
-	if result["key"] != "value" || result["stage"] != "generating" {
-		t.Errorf("EventPayloadDict(map) = %v, 期望包含 key=value, stage=generating", result)
-	}
-}
-
-// TestEventPayloadDict_nil 测试 nil 事件。
-func TestEventPayloadDict_nil(t *testing.T) {
-	result := EventPayloadDict(nil)
-	if len(result) != 0 {
-		t.Errorf("EventPayloadDict(nil) = %v, 期望空 map", result)
-	}
-}
-
-// TestEventPayloadDict_nonMap 测试非 map 事件返回空 map。
-func TestEventPayloadDict_nonMap(t *testing.T) {
-	result := EventPayloadDict("not a map")
-	if len(result) != 0 {
-		t.Errorf("EventPayloadDict(nonMap) = %v, 期望空 map", result)
-	}
-}
-
 // ──────────────────────────── EventType 测试 ────────────────────────────
 
 // TestEventType_map 测试从 map 中提取 event_type。
@@ -75,11 +48,11 @@ func TestEventType_empty(t *testing.T) {
 	}
 }
 
-// TestEventType_nonMap 测试非 map 事件返回空字符串。
-func TestEventType_nonMap(t *testing.T) {
-	result := EventType(42)
+// TestEventType_nil 测试 nil 事件返回空字符串。
+func TestEventType_nil(t *testing.T) {
+	result := EventType(nil)
 	if result != "" {
-		t.Errorf("EventType(nonMap) = %q, 期望空字符串", result)
+		t.Errorf("EventType(nil) = %q, 期望空字符串", result)
 	}
 }
 
@@ -122,12 +95,22 @@ func TestResolveEvolutionEventTimeoutSec_invalidTimeout(t *testing.T) {
 	}
 }
 
-// TestResolveEvolutionEventTimeoutSec_nonMapRail 测试非 map rail 使用默认值。
-func TestResolveEvolutionEventTimeoutSec_nonMapRail(t *testing.T) {
-	result := ResolveEvolutionEventTimeoutSec("not a map")
+// TestResolveEvolutionEventTimeoutSec_emptyMap 测试空 map rail 使用默认值。
+func TestResolveEvolutionEventTimeoutSec_emptyMap(t *testing.T) {
+	rail := map[string]any{}
+	result := ResolveEvolutionEventTimeoutSec(rail)
 	expected := TeamEvolutionEventTimeoutSec
 	if result != expected {
-		t.Errorf("ResolveEvolutionEventTimeoutSec(nonMap) = %f, 期望 %f", result, expected)
+		t.Errorf("ResolveEvolutionEventTimeoutSec(emptyMap) = %f, 期望 %f", result, expected)
+	}
+}
+
+// TestResolveEvolutionEventTimeoutSec_fallbackZero 测试 fallback=0.0 不被忽略。
+// 对齐 Python: fallback_sec is not None → 使用传入值（含 0.0）
+func TestResolveEvolutionEventTimeoutSec_fallbackZero(t *testing.T) {
+	result := ResolveEvolutionEventTimeoutSec(nil, 0.0)
+	if result != 0.0 {
+		t.Errorf("ResolveEvolutionEventTimeoutSec(fallback=0) = %f, 期望 0.0", result)
 	}
 }
 
@@ -146,14 +129,6 @@ func TestIsEvolutionApprovalEvent_false(t *testing.T) {
 	evt := map[string]any{"event_type": "chat.answer"}
 	if IsEvolutionApprovalEvent(evt) {
 		t.Error("IsEvolutionApprovalEvent(chat.answer) 应为 false")
-	}
-}
-
-// TestIsEvolutionApprovalEvent_structType 测试 map 中的 event_type 审批事件。
-func TestIsEvolutionApprovalEvent_structType(t *testing.T) {
-	evt := map[string]any{"event_type": "chat.ask_user_question"}
-	if !IsEvolutionApprovalEvent(evt) {
-		t.Error("IsEvolutionApprovalEvent(map chat.ask_user_question) 应为 true")
 	}
 }
 
@@ -251,6 +226,14 @@ func TestEvolutionOutcomeFromEvent_default(t *testing.T) {
 	result := EvolutionOutcomeFromEvent(evt)
 	if result["status"] != "completed" {
 		t.Errorf("EvolutionOutcomeFromEvent(default) = %v, 期望 status=completed", result)
+	}
+}
+
+// TestEvolutionOutcomeFromEvent_nil 测试 nil 事件返回默认值。
+func TestEvolutionOutcomeFromEvent_nil(t *testing.T) {
+	result := EvolutionOutcomeFromEvent(nil)
+	if result["status"] != "completed" {
+		t.Errorf("EvolutionOutcomeFromEvent(nil) = %v, 期望 status=completed", result)
 	}
 }
 
@@ -375,13 +358,13 @@ func TestEvolutionProgressStatusFromEvent_terminal(t *testing.T) {
 
 // TestVisibleEvolutionProgressFromEvents 测试过滤可见进度。
 func TestVisibleEvolutionProgressFromEvents(t *testing.T) {
-	events := []any{
-		map[string]any{
+	events := []map[string]any{
+		{
 			"_evolution_meta": map[string]any{"event_kind": "progress"},
 			"stage":           "generating_updates",
 			"message":         "Generating",
 		},
-		map[string]any{
+		{
 			"_evolution_meta": map[string]any{"event_kind": "progress"},
 			"stage":           "cancelled",
 			"message":         "Cancelled",
@@ -518,14 +501,14 @@ func TestTeamEvolutionTerminalProgress_endStatus(t *testing.T) {
 
 // TestTerminalProgressFromEvents 测试从事件列表提取终结进度。
 func TestTerminalProgressFromEvents(t *testing.T) {
-	events := []any{
-		map[string]any{
+	events := []map[string]any{
+		{
 			"_evolution_meta": map[string]any{"event_kind": "progress"},
 			"stage":           "completed",
 			"message":         "Done",
 			"request_id":      "req-1",
 		},
-		map[string]any{
+		{
 			"stage":   "generating",
 			"message": "Working",
 		},
@@ -598,11 +581,11 @@ func TestTeamEvolutionEndUpdate_normal(t *testing.T) {
 
 // TestGroupEvolutionApprovals_basic 测试基本分组。
 func TestGroupEvolutionApprovals_basic(t *testing.T) {
-	events := []any{
-		map[string]any{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_1"},
-		map[string]any{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_1"},
-		map[string]any{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_2"},
-		map[string]any{"event_type": "chat.answer"},
+	events := []map[string]any{
+		{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_1"},
+		{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_1"},
+		{"event_type": "chat.ask_user_question", "request_id": "skill_evolve_2"},
+		{"event_type": "chat.answer"},
 	}
 	grouped, missing := GroupEvolutionApprovals("sess-1", events)
 	if len(grouped) != 2 {
@@ -621,8 +604,8 @@ func TestGroupEvolutionApprovals_missingRequestID(t *testing.T) {
 	warnCalled := false
 	warnFn := func(sessionID string) { warnCalled = true }
 
-	events := []any{
-		map[string]any{"event_type": "chat.ask_user_question"},
+	events := []map[string]any{
+		{"event_type": "chat.ask_user_question"},
 	}
 	grouped, missing := GroupEvolutionApprovals("sess-1", events, warnFn)
 	if len(grouped) != 0 {
@@ -744,17 +727,14 @@ func TestBroadcastEvolutionProgress(t *testing.T) {
 	broadcastFn := func(channelID *string, sessionID string, parsed map[string]any) {
 		broadcasted = append(broadcasted, parsed)
 	}
-	parseFn := func(evt any) map[string]any {
-		if m, ok := evt.(map[string]any); ok {
-			return m
-		}
-		return nil
+	parseFn := func(evt map[string]any) map[string]any {
+		return evt
 	}
 
-	events := []any{
-		map[string]any{"event_type": "chat.answer", "data": "stream1"},
-		map[string]any{"event_type": "chat.ask_user_question"}, // 应跳过
-		map[string]any{"data": "stream2"},
+	events := []map[string]any{
+		{"event_type": "chat.answer", "data": "stream1"},
+		{"event_type": "chat.ask_user_question"}, // 应跳过
+		{"data": "stream2"},
 	}
 	chID := "ch-1"
 	err := BroadcastEvolutionProgress(t.Context(), &chID, "sess-1", events, parseFn, broadcastFn)
@@ -776,19 +756,16 @@ func TestPushEvolutionProgress(t *testing.T) {
 		ChannelID: "ch-1",
 		SessionID: "sess-1",
 	}
-	parseFn := func(evt any) map[string]any {
-		if m, ok := evt.(map[string]any); ok {
-			return m
-		}
-		return nil
+	parseFn := func(evt map[string]any) map[string]any {
+		return evt
 	}
 	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
 		return map[string]any{"session_id": sessionID, "payload": payload}
 	}
 
-	events := []any{
-		map[string]any{"data": "chunk1"},
-		map[string]any{"event_type": "chat.ask_user_question"}, // 应跳过
+	events := []map[string]any{
+		{"data": "chunk1"},
+		{"event_type": "chat.ask_user_question"}, // 应跳过
 	}
 	err := PushEvolutionProgress(t.Context(), pushCtx, "req-1", events, parseFn, buildMsgFn)
 	if err != nil {
@@ -807,12 +784,12 @@ func TestPushEvolutionProgress_nilChunk(t *testing.T) {
 		ChannelID: "ch-1",
 		SessionID: "sess-1",
 	}
-	parseFn := func(evt any) map[string]any { return nil }
+	parseFn := func(evt map[string]any) map[string]any { return nil }
 	buildMsgFn := func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any {
 		return payload
 	}
 
-	events := []any{map[string]any{"data": "chunk"}}
+	events := []map[string]any{{"data": "chunk"}}
 	err := PushEvolutionProgress(t.Context(), pushCtx, "req-1", events, parseFn, buildMsgFn)
 	if err != nil {
 		t.Errorf("PushEvolutionProgress() 返回错误: %v", err)

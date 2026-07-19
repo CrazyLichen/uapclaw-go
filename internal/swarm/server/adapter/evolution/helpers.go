@@ -169,7 +169,7 @@ type BuildPushMessageFunc func(sessionID, requestID, fallbackChannelID string, p
 
 // ParseStreamChunkFunc 解析流式 chunk 的函数类型。
 // 对齐 Python: parse_stream_chunk 回调参数
-type ParseStreamChunkFunc func(evt any) map[string]any
+type ParseStreamChunkFunc func(evt map[string]any) map[string]any
 
 // BroadcastEventFunc 广播事件的函数类型。
 // 对齐 Python: broadcast_event 回调参数
@@ -181,36 +181,19 @@ type WarnMissingRequestIDFunc func(sessionID string)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// EventPayloadDict 提取事件 payload 为 map。
-// 对齐 Python: event_payload_dict() — 仅处理 map[string]any 类型事件，
-// 当前事件来源（drain_pending_approval_events）始终返回 dict。
-// 保留 evt any 签名以兼容未来 SkillEvolutionRail 实现后的具体类型扩展。
-func EventPayloadDict(evt any) map[string]any {
-	if m, ok := evt.(map[string]any); ok {
-		result := make(map[string]any, len(m))
-		for k, v := range m {
-			result[k] = v
-		}
-		return result
-	}
-	return map[string]any{}
-}
-
 // EventType 提取事件类型字符串。
-// 对齐 Python: event_type() — 仅从 map[string]any 的 event_type 字段提取，
-// 不再使用 reflect 访问 struct.Type 字段（过度对齐 Python hasattr 防御性代码）。
-func EventType(evt any) string {
-	payload := EventPayloadDict(evt)
-	if t, ok := payload["event_type"].(string); ok {
+// 对齐 Python: event_type() — 从 map[string]any 的 event_type 字段提取。
+// Go 统一使用 map[string]any 表示事件，不再用 any + reflect 对齐 Python hasattr。
+func EventType(evt map[string]any) string {
+	if t, ok := evt["event_type"].(string); ok {
 		return t
 	}
 	return ""
 }
 
 // ResolveEvolutionEventTimeoutSec 解析演进事件超时时间。
-// 对齐 Python: resolve_evolution_event_timeout_sec() — 仅从 map[string]any 读取，
-// 不再使用 reflect 访问 struct 字段（过度对齐 Python hasattr 防御性代码）。
-func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
+// 对齐 Python: resolve_evolution_event_timeout_sec()
+func ResolveEvolutionEventTimeoutSec(rail map[string]any, opts ...float64) float64 {
 	// 对齐 Python: fallback_sec is None 检查 — Go 用 variadic + 长度判断区分"未提供"与"提供了0"
 	fallback := TeamEvolutionEventTimeoutSec
 	grace := TeamEvolutionEventTimeoutGraceSec
@@ -226,12 +209,7 @@ func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
 		return fallback
 	}
 
-	// 从 map[string]any 中读取 evolution_total_timeout_secs
-	var sdkTimeout any
-	if m, ok := rail.(map[string]any); ok {
-		sdkTimeout = m["evolution_total_timeout_secs"]
-	}
-
+	sdkTimeout := rail["evolution_total_timeout_secs"]
 	if sdkTimeout == nil {
 		return fallback
 	}
@@ -245,12 +223,11 @@ func ResolveEvolutionEventTimeoutSec(rail any, opts ...float64) float64 {
 
 // IsEvolutionApprovalEvent 判断是否为演进审批事件（检查 event_type）。
 // 对齐 Python: is_evolution_approval_event()
-func IsEvolutionApprovalEvent(evt any) bool {
+func IsEvolutionApprovalEvent(evt map[string]any) bool {
 	if EventType(evt) == "chat.ask_user_question" {
 		return true
 	}
-	payload := EventPayloadDict(evt)
-	if t, ok := payload["event_type"].(string); ok && t == "chat.ask_user_question" {
+	if t, ok := evt["event_type"].(string); ok && t == "chat.ask_user_question" {
 		return true
 	}
 	return false
@@ -258,9 +235,8 @@ func IsEvolutionApprovalEvent(evt any) bool {
 
 // EvolutionEventKind 判断事件类别（approval/outcome/progress/stream）。
 // 对齐 Python: evolution_event_kind()
-func EvolutionEventKind(evt any) string {
-	payload := EventPayloadDict(evt)
-	if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
+func EvolutionEventKind(evt map[string]any) string {
+	if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
 		if kind, ok := meta["event_kind"].(string); ok && strings.TrimSpace(kind) != "" {
 			return kind
 		}
@@ -273,26 +249,25 @@ func EvolutionEventKind(evt any) string {
 
 // IsEvolutionOutcomeEvent 判断是否为演进结果事件。
 // 对齐 Python: is_evolution_outcome_event()
-func IsEvolutionOutcomeEvent(evt any) bool {
+func IsEvolutionOutcomeEvent(evt map[string]any) bool {
 	return EvolutionEventKind(evt) == "outcome"
 }
 
 // EvolutionOutcomeFromEvent 提取演进结果。
 // 对齐 Python: evolution_outcome_from_event()
-func EvolutionOutcomeFromEvent(evt any) map[string]string {
-	payload := EventPayloadDict(evt)
-	if payload == nil {
+func EvolutionOutcomeFromEvent(evt map[string]any) map[string]string {
+	if evt == nil {
 		return map[string]string{"status": "completed", "message": ""}
 	}
 
-	meta, _ := payload["_evolution_meta"].(map[string]any)
+	meta, _ := evt["_evolution_meta"].(map[string]any)
 	var metaStatus any
 	if meta != nil {
 		metaStatus = meta["status"]
 	}
 
 	status := "completed"
-	if s, ok := payload["status"].(string); ok && strings.TrimSpace(s) != "" {
+	if s, ok := evt["status"].(string); ok && strings.TrimSpace(s) != "" {
 		status = strings.TrimSpace(strings.ToLower(s))
 	} else if ms, ok := metaStatus.(string); ok && strings.TrimSpace(ms) != "" {
 		status = strings.TrimSpace(strings.ToLower(ms))
@@ -302,9 +277,9 @@ func EvolutionOutcomeFromEvent(evt any) map[string]string {
 	}
 
 	message := ""
-	if m, ok := payload["message"].(string); ok {
+	if m, ok := evt["message"].(string); ok {
 		message = m
-	} else if c, ok := payload["content"].(string); ok {
+	} else if c, ok := evt["content"].(string); ok {
 		message = c
 	}
 
@@ -313,11 +288,10 @@ func EvolutionOutcomeFromEvent(evt any) map[string]string {
 
 // ExtractEvolutionRequestID 从事件中提取 request_id。
 // 对齐 Python: extract_evolution_request_id()
-func ExtractEvolutionRequestID(evt any) *string {
-	payload := EventPayloadDict(evt)
-	requestID := payload["request_id"]
+func ExtractEvolutionRequestID(evt map[string]any) *string {
+	requestID := evt["request_id"]
 	if requestID == nil {
-		if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
+		if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
 			requestID = meta["request_id"]
 		}
 	}
@@ -332,9 +306,8 @@ func ExtractEvolutionRequestID(evt any) *string {
 
 // EvolutionProgressStatusFromEvent 提取进度状态。
 // 对齐 Python: evolution_progress_status_from_event()
-func EvolutionProgressStatusFromEvent(evt any) *EvolutionProgressStatus {
-	payload := EventPayloadDict(evt)
-	meta, ok := payload["_evolution_meta"].(map[string]any)
+func EvolutionProgressStatusFromEvent(evt map[string]any) *EvolutionProgressStatus {
+	meta, ok := evt["_evolution_meta"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -344,12 +317,12 @@ func EvolutionProgressStatusFromEvent(evt any) *EvolutionProgressStatus {
 		return nil
 	}
 
-	rawStage := strings.TrimSpace(strings.ToLower(strFromAny(payload["stage"], meta["stage"])))
+	rawStage := strings.TrimSpace(strings.ToLower(strFromAny(evt["stage"], meta["stage"])))
 	if rawStage == "" {
 		return nil
 	}
 
-	message := strings.TrimSpace(strFromAny(payload["message"], payload["content"]))
+	message := strings.TrimSpace(strFromAny(evt["message"], evt["content"]))
 	noopStage := noopStageFromMessage(strings.ToLower(message))
 
 	stage := rawStage
@@ -372,7 +345,7 @@ func EvolutionProgressStatusFromEvent(evt any) *EvolutionProgressStatus {
 
 // VisibleEvolutionProgressFromEvents 过滤可见进度。
 // 对齐 Python: visible_evolution_progress_from_events()
-func VisibleEvolutionProgressFromEvents(events []any) []EvolutionProgressStatus {
+func VisibleEvolutionProgressFromEvents(events []map[string]any) []EvolutionProgressStatus {
 	var result []EvolutionProgressStatus
 	for _, evt := range events {
 		progress := EvolutionProgressStatusFromEvent(evt)
@@ -409,7 +382,7 @@ func TerminalStage(terminal map[string]string) string {
 
 // TerminalProgressFromEvents 提取终结进度。
 // 对齐 Python: terminal_progress_from_events()
-func TerminalProgressFromEvents(events []any) []TerminalProgressItem {
+func TerminalProgressFromEvents(events []map[string]any) []TerminalProgressItem {
 	var result []TerminalProgressItem
 	for _, evt := range events {
 		terminal := TeamEvolutionTerminalProgress(evt)
@@ -426,8 +399,7 @@ func TerminalProgressFromEvents(events []any) []TerminalProgressItem {
 
 // TeamEvolutionTerminalProgress 判断终结进度。
 // 对齐 Python: team_evolution_terminal_progress()
-func TeamEvolutionTerminalProgress(evt any) map[string]string {
-	payload := EventPayloadDict(evt)
+func TeamEvolutionTerminalProgress(evt map[string]any) map[string]string {
 	progress := EvolutionProgressStatusFromEvent(evt)
 
 	// 隐藏终结阶段
@@ -439,7 +411,7 @@ func TeamEvolutionTerminalProgress(evt any) map[string]string {
 		}
 	}
 
-	message := strFromAny(payload["message"], payload["content"])
+	message := strFromAny(evt["message"], evt["content"])
 	messageLower := strings.ToLower(message)
 	noopStage := noopStageFromMessage(messageLower)
 	if noopStage != nil {
@@ -466,15 +438,15 @@ func TeamEvolutionTerminalProgress(evt any) map[string]string {
 	}
 
 	// 从 meta 中提取状态
-	meta, _ := payload["_evolution_meta"].(map[string]any)
+	meta, _ := evt["_evolution_meta"].(map[string]any)
 	var metaStatus, metaStage any
 	if meta != nil {
 		metaStatus = meta["status"]
 		metaStage = meta["stage"]
 	}
 
-	status := strings.TrimSpace(strings.ToLower(strFromAny(payload["status"], metaStatus)))
-	stage := strings.TrimSpace(strings.ToLower(strFromAny(payload["stage"], metaStage)))
+	status := strings.TrimSpace(strings.ToLower(strFromAny(evt["status"], metaStatus)))
+	stage := strings.TrimSpace(strings.ToLower(strFromAny(evt["stage"], metaStage)))
 
 	if status == "end" || stage == "completed" || stage == "failed" || stage == "timed_out" {
 		return map[string]string{
@@ -533,8 +505,8 @@ func TeamEvolutionEndUpdate(requestID string, terminal map[string]string) Evolut
 
 // GroupEvolutionApprovals 审批分组。
 // 对齐 Python: group_evolution_approvals() — 第二项始终返回 nil（Python 始终返回空列表 []）
-func GroupEvolutionApprovals(sessionID string, events []any, warnMissing ...WarnMissingRequestIDFunc) (map[string][]any, []string) {
-	grouped := make(map[string][]any)
+func GroupEvolutionApprovals(sessionID string, events []map[string]any, warnMissing ...WarnMissingRequestIDFunc) (map[string][]map[string]any, []string) {
+	grouped := make(map[string][]map[string]any)
 
 	for _, evt := range events {
 		if !IsEvolutionApprovalEvent(evt) {
@@ -594,21 +566,20 @@ func PushEvolutionEvent(
 	ctx context.Context,
 	pushCtx *EvolutionPushContext,
 	requestID string,
-	evt any,
+	evt map[string]any,
 	buildMsgFn BuildPushMessageFunc,
 ) error {
-	payload := EventPayloadDict(evt)
 	evtType := EventType(evt)
 	if evtType != "" {
-		if _, ok := payload["event_type"]; !ok {
-			payload["event_type"] = evtType
+		if _, ok := evt["event_type"]; !ok {
+			evt["event_type"] = evtType
 		}
 	}
-	if _, ok := payload["request_id"]; !ok {
-		payload["request_id"] = requestID
+	if _, ok := evt["request_id"]; !ok {
+		evt["request_id"] = requestID
 	}
 
-	msg := buildMsgFn(pushCtx.SessionID, requestID, pushCtx.ChannelID, payload)
+	msg := buildMsgFn(pushCtx.SessionID, requestID, pushCtx.ChannelID, evt)
 	return pushCtx.Transport.SendPush(ctx, msg)
 }
 
@@ -618,7 +589,7 @@ func BroadcastEvolutionProgress(
 	ctx context.Context,
 	channelID *string,
 	sessionID string,
-	events []any,
+	events []map[string]any,
 	parseChunk ParseStreamChunkFunc,
 	broadcastEvent BroadcastEventFunc,
 ) error {
@@ -640,7 +611,7 @@ func PushEvolutionProgress(
 	ctx context.Context,
 	pushCtx *EvolutionPushContext,
 	requestID string,
-	events []any,
+	events []map[string]any,
 	parseChunk ParseStreamChunkFunc,
 	buildMsgFn BuildPushMessageFunc,
 ) error {
