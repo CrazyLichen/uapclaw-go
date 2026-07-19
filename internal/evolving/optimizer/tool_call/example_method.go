@@ -96,9 +96,9 @@ func (m *APICallToExampleMethod) Step(
 		Str("tool_for_opt", fmt.Sprintf("%v", toolForOpt)).
 		Msg("Tool_for_opt")
 
-	// 1. Rejection sampling:
-	// for initial loop, generate candidate api call, run tool, and determine
-	// if there are any errors
+	// 1. 拒绝采样：
+	// 在初始循环中，生成候选 API 调用、运行工具，并判断
+	// 是否存在错误
 	numInitLoop := getConfigInt(m.config, "num_init_loop")
 	if numInitLoop <= 0 {
 		numInitLoop = 1
@@ -163,9 +163,9 @@ func (m *APICallToExampleMethod) Step(
 		break
 	}
 
-	// 2. Q/A generation and refinement:
-	// For n_refine steps, generate question/answer from valid api call
-	// Evaluate and update by batch self-reflection
+	// 2. 问答生成与精炼：
+	// 在 n_refine 步中，从有效的 API 调用生成问答
+	// 通过批量自反思评估并更新
 	numRefineSteps := getConfigInt(m.config, "num_refine_steps")
 	if numRefineSteps <= 0 {
 		numRefineSteps = 1
@@ -236,8 +236,8 @@ func (m *APICallToExampleMethod) Step(
 		}
 	}
 
-	// 3. Evaluate newly generated example with downstream LLM -- for
-	// selecting difficult examples
+	// 3. 使用下游 LLM 评估新生成的示例——用于
+	// 筛选困难示例
 	scoreEvalWeight := getConfigFloat(m.config, "score_eval_weight")
 	var evalScore float64
 

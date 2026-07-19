@@ -83,6 +83,20 @@ type EvalError struct {
 	ErrorMsg string `json:"error_msg"`
 }
 
+// ExampleTuple 示例元组 (instruction, fn_call, fn_output, answer)。
+//
+// 对齐 Python: examples: List[Tuple[str, Any, str, str]]
+type ExampleTuple struct {
+	// Instruction 指令
+	Instruction string
+	// FnCall 函数调用
+	FnCall map[string]any
+	// FnOutput 函数输出
+	FnOutput string
+	// Answer 回答
+	Answer string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -173,20 +187,6 @@ func (e *SimpleEval) Eval(
 		OutputEffectiveness: mean(allOutputScores) * 100.0,
 		Results:            allResults,
 	}
-}
-
-// ExampleTuple 示例元组 (instruction, fn_call, fn_output, answer)。
-//
-// 对齐 Python: examples: List[Tuple[str, Any, str, str]]
-type ExampleTuple struct {
-	// Instruction 指令
-	Instruction string
-	// FnCall 函数调用
-	FnCall map[string]any
-	// FnOutput 函数输出
-	FnOutput string
-	// Answer 回答
-	Answer string
 }
 
 // EvaluateFunctionCallAccuracy 评估函数调用准确性。

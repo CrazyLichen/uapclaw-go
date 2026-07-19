@@ -78,6 +78,8 @@ type MessageSummaryOffloader struct {
 // MessageSummaryOffloaderOption 摘要卸载器构造选项
 type MessageSummaryOffloaderOption func(*MessageSummaryOffloader)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 const (
 	// msoDefaultTokensThreshold 默认 Token 触发阈值

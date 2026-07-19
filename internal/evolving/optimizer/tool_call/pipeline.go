@@ -12,11 +12,27 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// invalidStageError 无效阶段错误。
+type invalidStageError struct {
+	stage string
+}
+
+type pipelineError struct {
+	msg string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+var (
+	// errFnCallPathNotImplemented fn_call_path 未实现错误
+	errFnCallPathNotImplemented = &pipelineError{msg: "config based api wrapper is not implemented yet"}
+	// errToolCallableRequired 缺少 tool_callable 错误
+	errToolCallableRequired = &pipelineError{msg: "Either config or tool_callable must be provided."}
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -142,23 +158,8 @@ func CustomizedPipeline(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// invalidStageError 无效阶段错误。
-type invalidStageError struct {
-	stage string
-}
-
 func (e *invalidStageError) Error() string {
 	return "wrong stage: " + e.stage
-}
-
-// pipeline 错误变量
-var (
-	errFnCallPathNotImplemented = &pipelineError{msg: "config based api wrapper is not implemented yet"}
-	errToolCallableRequired     = &pipelineError{msg: "Either config or tool_callable must be provided."}
-)
-
-type pipelineError struct {
-	msg string
 }
 
 func (e *pipelineError) Error() string {

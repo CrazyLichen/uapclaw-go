@@ -64,9 +64,6 @@ type ToolInterruptHandler struct {
 // 实际赋值在 ReActAgent.reactLoop 中，指向 ReActAgent.executeToolCalls。
 // 返回 []saschema.ExecuteResult（替代原 []any），提供类型安全。
 type ExecuteToolCallFunc func(
-
-	// ──────────────────────────── 常量 ────────────────────────────
-
 	ctx context.Context,
 	cbc *interfaces.AgentCallbackContext,
 	toolCalls []*llmschema.ToolCall,
@@ -74,12 +71,16 @@ type ExecuteToolCallFunc func(
 	modelCtx ceinterface.ModelContext,
 ) ([]saschema.ExecuteResult, error)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// logComponent 日志组件标识
 	logComponent = logger.ComponentAgentCore
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -90,6 +90,8 @@ type SessionMemoryManager struct {
 	tasks   map[string]context.CancelFunc
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // sessionMemoryStateKey 会话记忆运行时状态键
@@ -260,8 +262,6 @@ You ONLY update the actual content that comes AFTER these two preserved lines.
 The italic description lines starting and ending with underscores are part of
 the template structure, NOT content to be edited or removed.
 `
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSessionMemoryConfig 创建默认会话记忆配置。
 //

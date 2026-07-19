@@ -40,6 +40,8 @@ type VerificationRail struct {
 // VerificationRailOption 配置选项函数
 type VerificationRailOption func(*VerificationRail)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (

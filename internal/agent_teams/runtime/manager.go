@@ -59,8 +59,8 @@ func (m *TeamRuntimeManager) Pool() *TeamRuntimePool {
 //     a. payloads = await self._resolve_recipients(entry.agent, payloads)
 //     b. last_result = DeliverResult.success(None)
 //     c. for entry_payload in payloads:
-//        - last_result = await self._dispatch_payload(entry.agent, entry_payload)
-//        - if not last_result.ok: return last_result
+//     - last_result = await self._dispatch_payload(entry.agent, entry_payload)
+//     - if not last_result.ok: return last_result
 //     d. return last_result
 //  9. finally: await entry.interact_gate.consume_done(ticket)
 //
@@ -203,8 +203,8 @@ func (m *TeamRuntimeManager) resolveEntry(teamName string, sessionID string) *Ac
 //
 // Python 步骤：
 //  1. if entry.agent.has_pending_interrupt():
-//  2.   await entry.agent.resume_interrupt(payload)
-//  3.   return DeliverResult.success(None)
+//  2. await entry.agent.resume_interrupt(payload)
+//  3. return DeliverResult.success(None)
 //  4. return DeliverResult.failure("unsupported_interactive_input")
 func (m *TeamRuntimeManager) handleInteractiveInput(entry *ActiveTeam, input *sessioninteraction.InteractiveInput) (*interaction.DeliverResult, error) {
 	// ⤵️ 待 9.55 回填: 完整实现

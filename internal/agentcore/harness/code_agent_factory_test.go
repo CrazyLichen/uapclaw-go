@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	llm "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )

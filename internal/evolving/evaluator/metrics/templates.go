@@ -4,13 +4,13 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
 )
 
-// 一比一复刻 Python LLM_METRIC_TEMPLATE，占位符 {{variable}} 与 PromptTemplate 格式一致
-//
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
+
+// 一比一复刻 Python LLM_METRIC_TEMPLATE，占位符 {{variable}} 与 PromptTemplate 格式一致
 
 const llmMetricTemplateContent = `You are an answer verification expert responsible for checking the semantic and
 conclusion consistency between the given model response and the expected answer.

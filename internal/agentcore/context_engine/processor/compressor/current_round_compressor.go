@@ -87,6 +87,8 @@ type CurrentRoundCompressor struct {
 // CurrentRoundCompressorOption CurrentRoundCompressor 构造选项函数。
 type CurrentRoundCompressorOption func(*CurrentRoundCompressor)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // currentRoundMemoryBlockMarker 当轮记忆块标记
@@ -462,8 +464,6 @@ Your task is to merge them into one shorter, stable memory block while preservin
 
 Output plain text only.
 `
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。
 //

@@ -31,10 +31,6 @@ var invokeWithVerifyImpl func(
 	verifyFn VerifyFunc,
 ) (any, error)
 
-func init() {
-	invokeWithVerifyImpl = invokeWithVerifyDefault
-}
-
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // VerifyFunc 验证+解析函数类型。
@@ -175,3 +171,7 @@ func InvokeFunctionCall(
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+func init() {
+	invokeWithVerifyImpl = invokeWithVerifyDefault
+}

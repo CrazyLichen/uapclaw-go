@@ -11,14 +11,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/controller/modules"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/stream"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 
-	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
-	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	cb "github.com/uapclaw/uapclaw-go/internal/agentcore/runner/callback"
 	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/agents"
 )
@@ -51,10 +51,12 @@ func (f *fakeBaseAgentForTest) Invoke(_ context.Context, _ map[string]any, _ ...
 func (f *fakeBaseAgentForTest) Stream(_ context.Context, _ map[string]any, _ ...agentinterfaces.AgentOption) (<-chan stream.Schema, error) {
 	return nil, nil
 }
-func (f *fakeBaseAgentForTest) Card() *agentschema.AgentCard { return f.card }
+func (f *fakeBaseAgentForTest) Card() *agentschema.AgentCard                            { return f.card }
 func (f *fakeBaseAgentForTest) Config() agentinterfaces.AgentConfig                     { return nil }
 func (f *fakeBaseAgentForTest) AbilityManager() agentinterfaces.AbilityManagerInterface { return nil }
-func (f *fakeBaseAgentForTest) CallbackManager() *agentinterfaces.AgentCallbackManager  { return f.cbMgr }
+func (f *fakeBaseAgentForTest) CallbackManager() *agentinterfaces.AgentCallbackManager {
+	return f.cbMgr
+}
 func (f *fakeBaseAgentForTest) SystemPromptBuilder() saprompt.SystemPromptBuilderInterface {
 	if f.builder == nil {
 		return nil
@@ -83,17 +85,17 @@ func newFakeDeepAgentForTest() *fakeDeepAgentForTest {
 	}
 }
 
-func (f *fakeDeepAgentForTest) ReactAgent() *agents.ReActAgent                           { return nil }
-func (f *fakeDeepAgentForTest) LoopCoordinator() hinterfaces.LoopCoordinatorInterface   { return nil }
-func (f *fakeDeepAgentForTest) LoopController() controller.ControllerInterface          { return nil }
-func (f *fakeDeepAgentForTest) EventHandler() modules.EventHandler                      { return nil }
+func (f *fakeDeepAgentForTest) ReactAgent() *agents.ReActAgent                        { return nil }
+func (f *fakeDeepAgentForTest) LoopCoordinator() hinterfaces.LoopCoordinatorInterface { return nil }
+func (f *fakeDeepAgentForTest) LoopController() controller.ControllerInterface        { return nil }
+func (f *fakeDeepAgentForTest) EventHandler() modules.EventHandler                    { return nil }
 func (f *fakeDeepAgentForTest) LoadState(_ sessioninterfaces.SessionFacade) *hschema.DeepAgentState {
 	return nil
 }
 func (f *fakeDeepAgentForTest) DeepConfig() *hschema.DeepAgentConfig { return f.deepConfig }
-func (f *fakeDeepAgentForTest) IsInvokeActive() bool                  { return false }
-func (f *fakeDeepAgentForTest) IsAutoInvokeScheduled() bool           { return false }
-func (f *fakeDeepAgentForTest) SetAutoInvokeScheduled(_ bool)         {}
+func (f *fakeDeepAgentForTest) IsInvokeActive() bool                 { return false }
+func (f *fakeDeepAgentForTest) IsAutoInvokeScheduled() bool          { return false }
+func (f *fakeDeepAgentForTest) SetAutoInvokeScheduled(_ bool)        {}
 func (f *fakeDeepAgentForTest) ScheduleAutoInvokeOnSpawnDone(_ context.Context, _ string, _ float64) error {
 	return nil
 }

@@ -95,6 +95,8 @@ type DialogueCompressor struct {
 // DialogueCompressorOption DialogueCompressor 构造选项函数。
 type DialogueCompressorOption func(*DialogueCompressor)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // dialogueMemoryBlockMarker 对话记忆块标记
@@ -150,8 +152,6 @@ Never drop higher-priority information to preserve lower-priority details.
 ## OUTPUT RULES
 
 - Target length for each block summary: <= {compression_target_tokens} tokens.
-
-// ──────────────────────────── 导出函数 ────────────────────────────
 
 - Each block is a finished historical ReAct block, not ongoing work.
 - Preserve both ` + "`User Requirements`" + ` and ` + "`Final Result`" + ` explicitly in each summary when they exist.

@@ -116,6 +116,8 @@ type FullCompactStateReinjector struct {
 // FullCompactProcessorOption FullCompactProcessor 构造选项函数。
 type FullCompactProcessorOption func(*FullCompactProcessor)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // baseCompactPrompt 全量压缩提示词，与 Python BASE_COMPACT_PROMPT 对齐

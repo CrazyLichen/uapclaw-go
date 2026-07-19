@@ -81,6 +81,8 @@ type reloaderToolInput struct {
 	OffloadType string `json:"offload_type" jsonschema:"description=The storage backend used when the content was offloaded. Must be one of: in_memory (session cache, handle is UUID), filesystem (disk file, handle is file path)."`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 // reloaderSystemPrompt reload 工具的系统提示词，告知 LLM 如何使用 reloader_tool。
@@ -94,6 +96,8 @@ feel free to call reload_original_context_messages:
 - Do not guess or make up the missing content
 
 Storage types: "in_memory" (session cache), "filesystem" (disk file).`
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

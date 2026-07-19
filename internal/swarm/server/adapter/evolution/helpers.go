@@ -58,6 +58,22 @@ type TerminalProgressItem struct {
 	Terminal map[string]string
 }
 
+// BuildPushMessageFunc 构建 server_push 消息的函数类型。
+// 对齐 Python: build_server_push_message 回调参数
+type BuildPushMessageFunc func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any
+
+// ParseStreamChunkFunc 解析流式 chunk 的函数类型。
+// 对齐 Python: parse_stream_chunk 回调参数
+type ParseStreamChunkFunc func(evt map[string]any) map[string]any
+
+// BroadcastEventFunc 广播事件的函数类型。
+// 对齐 Python: broadcast_event 回调参数
+type BroadcastEventFunc func(channelID *string, sessionID string, parsed map[string]any)
+
+// WarnMissingRequestIDFunc 缺少 request_id 时的警告回调。
+// 对齐 Python: group_evolution_approvals 的 warn_missing_request_id 参数
+type WarnMissingRequestIDFunc func(sessionID string)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -160,24 +176,6 @@ var (
 		"timed_out":     {},
 	}
 )
-
-// ──────────────────────────── 结构体（函数类型） ────────────────────────────
-
-// BuildPushMessageFunc 构建 server_push 消息的函数类型。
-// 对齐 Python: build_server_push_message 回调参数
-type BuildPushMessageFunc func(sessionID, requestID, fallbackChannelID string, payload map[string]any) map[string]any
-
-// ParseStreamChunkFunc 解析流式 chunk 的函数类型。
-// 对齐 Python: parse_stream_chunk 回调参数
-type ParseStreamChunkFunc func(evt map[string]any) map[string]any
-
-// BroadcastEventFunc 广播事件的函数类型。
-// 对齐 Python: broadcast_event 回调参数
-type BroadcastEventFunc func(channelID *string, sessionID string, parsed map[string]any)
-
-// WarnMissingRequestIDFunc 缺少 request_id 时的警告回调。
-// 对齐 Python: group_evolution_approvals 的 warn_missing_request_id 参数
-type WarnMissingRequestIDFunc func(sessionID string)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/interfaces"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	hsubagent "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/tools/subagent"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
@@ -36,6 +36,8 @@ type SubagentRail struct {
 // SubagentRailOption 配置选项函数
 type SubagentRailOption func(*SubagentRail)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -60,7 +62,7 @@ var knownAgentTools = map[string]string{
 // 对齐 Python: SubagentRail(enable_async_subagent=False)
 func NewSubagentRail(opts ...SubagentRailOption) *SubagentRail {
 	r := &SubagentRail{
-		DeepAgentRail:      *rails.NewDeepAgentRail(),
+		DeepAgentRail:       *rails.NewDeepAgentRail(),
 		enableAsyncSubagent: false,
 	}
 	r.WithPriority(subagentRailPriority)

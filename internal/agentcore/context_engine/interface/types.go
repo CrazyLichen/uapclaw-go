@@ -234,6 +234,10 @@ type CompressContextOption func(*CompressContextOptions)
 // ClearContextOption ClearContext 方法选项函数
 type ClearContextOption func(*ClearContextOptions)
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // 确保 contextID 参数可用（避免未使用导入编译错误）

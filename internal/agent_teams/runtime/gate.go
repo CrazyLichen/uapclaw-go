@@ -84,10 +84,10 @@ func (g *InteractGate) Inflight() int {
 //
 // Python 执行步骤：
 //  1. async with self._lock:
-//  2.   if self._closed.is_set(): return None
-//  3.   self._inflight += 1
-//  4.   self._drained.clear()
-//  5.   return AdmissionTicket(gate=self)
+//  2. if self._closed.is_set(): return None
+//  3. self._inflight += 1
+//  4. self._drained.clear()
+//  5. return AdmissionTicket(gate=self)
 //
 // 门控已关闭时返回 nil；否则 inflight++ 并返回绑定到本门控的票据。
 func (g *InteractGate) Admit() *AdmissionTicket {
@@ -110,9 +110,9 @@ func (g *InteractGate) Admit() *AdmissionTicket {
 // Python 执行步骤：
 //  1. if ticket.gate is not self: return
 //  2. async with self._lock:
-//  3.   if self._inflight <= 0: return
-//  4.   self._inflight -= 1
-//  5.   if self._inflight == 0: self._drained.set()
+//  3. if self._inflight <= 0: return
+//  4. self._inflight -= 1
+//  5. if self._inflight == 0: self._drained.set()
 //
 // 来自不同门控的票据被静默忽略。
 // inflight 递减到 0 时关闭 drained 通道发出排空信号。
@@ -140,9 +140,9 @@ func (g *InteractGate) ConsumeDone(ticket *AdmissionTicket) {
 //
 // Python 执行步骤：
 //  1. async with self._lock:
-//  2.   self._closed.set()
-//  3.   if self._inflight == 0:
-//  4.     self._drained.set(); return
+//  2. self._closed.set()
+//  3. if self._inflight == 0:
+//  4. self._drained.set(); return
 //  5. await self._drained.wait()
 //
 // Go 增加 ctx 参数支持超时/取消（Python 的 asyncio.wait 无超时保护）。
@@ -180,9 +180,9 @@ func (g *InteractGate) CloseAndDrain(ctx context.Context) error {
 //
 // Python 执行步骤：
 //  1. async with self._lock:
-//  2.   self._closed.clear()
-//  3.   self._inflight = 0
-//  4.   self._drained.set()
+//  2. self._closed.clear()
+//  3. self._inflight = 0
+//  4. self._drained.set()
 func (g *InteractGate) Reset() {
 	g.mu.Lock()
 	defer g.mu.Unlock()

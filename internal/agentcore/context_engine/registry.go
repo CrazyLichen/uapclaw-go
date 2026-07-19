@@ -11,6 +11,8 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 var (
@@ -20,14 +22,14 @@ var (
 	processorFactoriesMu sync.RWMutex
 )
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // RegisterProcessorFactory 注册处理器工厂函数。
 //
 // 各处理器在 init() 函数中调用此函数将自己注册到全局注册表，
 // 5.30 ContextEngine 门面实现时通过 GetProcessorFactory 获取工厂创建实例。
 //
 // 对应 Python: @ContextEngine.register_processor() 装饰器
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 func RegisterProcessorFactory(processorType string, factory iface.ProcessorFactory) {
 	processorFactoriesMu.Lock()
 	defer processorFactoriesMu.Unlock()

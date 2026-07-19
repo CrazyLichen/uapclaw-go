@@ -36,6 +36,9 @@ type ToolOptimizerBase struct {
 	model *llm.Model
 }
 
+// ToolOptimizerBaseOption ToolOptimizerBase 构造选项函数。
+type ToolOptimizerBaseOption func(*ToolOptimizerBase)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -284,9 +287,6 @@ func (b *ToolOptimizerBase) Parameters() map[string]*optimizer.TextualParameter 
 func (b *ToolOptimizerBase) SelectSignals(signals []*signal.EvolutionSignal) []*signal.EvolutionSignal {
 	return b.BaseOptimizerMixin.SelectSignals(signals)
 }
-
-// ToolOptimizerBaseOption ToolOptimizerBase 构造选项函数。
-type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 
 // WithMaxTurns 设置最大迭代轮数。
 func WithMaxTurns(n int) ToolOptimizerBaseOption {

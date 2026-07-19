@@ -313,6 +313,7 @@ func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, to
 					Msg("串行扩展单步失败")
 				continue
 			}
+			node.Children = append(node.Children, newNode)
 			newBeamList = append(newBeamList, newNode)
 		}
 	}
@@ -325,8 +326,9 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 	// 计算总任务数
 	totalTasks := len(beamList) * bs.expandNum
 	type expandResult struct {
-		node *TreeNode
-		err  error
+		parent *TreeNode
+		node   *TreeNode
+		err    error
 	}
 	ch := make(chan expandResult, totalTasks)
 
@@ -348,7 +350,7 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 						Int("expand_index", expandIdx).
 						Msg("并行扩展单步失败")
 				}
-				ch <- expandResult{node: newNode, err: err}
+				ch <- expandResult{parent: n, node: newNode, err: err}
 			}(node, j)
 		}
 	}
@@ -359,12 +361,13 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 		close(ch)
 	}()
 
-	// 收集结果
+	// 收集结果，统一设置父子关系（避免 DATA RACE）
 	var newBeamList []*TreeNode
 	for res := range ch {
 		if res.err != nil {
 			continue
 		}
+		res.parent.Children = append(res.parent.Children, res.node)
 		newBeamList = append(newBeamList, res.node)
 	}
 	return newBeamList, nil
@@ -372,6 +375,7 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 
 // expandSingleStep 扩展单步。
 // 对齐 Python: expand_single_step
+// 注意：并行调用时不能修改 node.Children，由调用方统一设置父子关系。
 func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool map[string]any, examples any, depth int) (*TreeNode, error) {
 	var newNode *TreeNode
 	for i := 0; i < bs.numRetry; i++ {
@@ -384,7 +388,6 @@ func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool
 		}
 		newNode = newTreeNode(data, score, output, node.History)
 		newNode.Parent = node
-		node.Children = append(node.Children, newNode)
 		break
 	}
 	if newNode == nil {
