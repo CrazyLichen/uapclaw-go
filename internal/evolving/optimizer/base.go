@@ -214,6 +214,34 @@ func (m *BaseOptimizerMixin) Parameters() map[string]*TextualParameter {
 	return result
 }
 
+// Operators 返回绑定的 Operator 映射（副本）。
+func (m *BaseOptimizerMixin) Operators() map[string]operator.Operator {
+	result := make(map[string]operator.Operator, len(m.operators))
+	for k, v := range m.operators {
+		result[k] = v
+	}
+	return result
+}
+
+// Targets 返回优化目标列表（副本）。
+func (m *BaseOptimizerMixin) Targets() []string {
+	result := make([]string, len(m.targets))
+	copy(result, m.targets)
+	return result
+}
+
+// SelectedSignals 返回选中的信号列表（副本）。
+func (m *BaseOptimizerMixin) SelectedSignals() []*signal.EvolutionSignal {
+	result := make([]*signal.EvolutionSignal, len(m.selectedSignals))
+	copy(result, m.selectedSignals)
+	return result
+}
+
+// SetSelectedSignals 设置选中的信号列表。
+func (m *BaseOptimizerMixin) SetSelectedSignals(signals []*signal.EvolutionSignal) {
+	m.selectedSignals = signals
+}
+
 // SelectSignals 选择此优化器可消费的信号。默认保留全部信号。
 //
 // 对齐 Python:

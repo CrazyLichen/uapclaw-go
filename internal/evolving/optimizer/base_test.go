@@ -294,3 +294,63 @@ func (s *stubOptimizer) Step() map[schema.UpdateKey]any                         
 func TestBaseOptimizer_接口完整性(t *testing.T) {
 	var _ BaseOptimizer = &stubOptimizer{}
 }
+
+// BaseOptimizerMixin 新增访问方法测试
+func TestBaseOptimizerMixin_Operators(t *testing.T) {
+	m := &BaseOptimizerMixin{}
+	ops := map[string]operator.Operator{
+		"op1": &mockOperator{
+			operatorID: "op1",
+			tunables:   map[string]operator.TunableSpec{"system_prompt": {Name: "system_prompt"}},
+		},
+	}
+	m.Bind(ops, []string{"system_prompt"}, nil)
+
+	result := m.Operators()
+	if len(result) != 1 {
+		t.Errorf("Operators() returned %d, want 1", len(result))
+	}
+	if _, ok := result["op1"]; !ok {
+		t.Error("Operators() should contain op1")
+	}
+	// 修改副本不应影响原始
+	delete(result, "op1")
+	if _, ok := m.Operators()["op1"]; !ok {
+		t.Error("modifying Operators() copy should not affect original")
+	}
+}
+
+func TestBaseOptimizerMixin_Targets(t *testing.T) {
+	m := &BaseOptimizerMixin{}
+	ops := map[string]operator.Operator{
+		"op1": &mockOperator{
+			operatorID: "op1",
+			tunables:   map[string]operator.TunableSpec{"system_prompt": {Name: "system_prompt"}},
+		},
+	}
+	m.Bind(ops, []string{"system_prompt", "user_prompt"}, nil)
+
+	result := m.Targets()
+	if len(result) != 2 || result[0] != "system_prompt" || result[1] != "user_prompt" {
+		t.Errorf("Targets() = %v, want [system_prompt, user_prompt]", result)
+	}
+}
+
+func TestBaseOptimizerMixin_SelectedSignals(t *testing.T) {
+	m := &BaseOptimizerMixin{}
+	sig1 := &signal.EvolutionSignal{SignalType: "low_score"}
+	sig2 := &signal.EvolutionSignal{SignalType: "error"}
+
+	m.SetSelectedSignals([]*signal.EvolutionSignal{sig1, sig2})
+	result := m.SelectedSignals()
+	if len(result) != 2 {
+		t.Errorf("SelectedSignals() returned %d, want 2", len(result))
+	}
+
+	// nil 情况
+	m.SetSelectedSignals(nil)
+	result = m.SelectedSignals()
+	if len(result) != 0 {
+		t.Errorf("SelectedSignals() after nil should be empty, got %d", len(result))
+	}
+}

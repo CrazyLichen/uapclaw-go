@@ -9,13 +9,14 @@
 //	evolving/
 //	├── doc.go                # 包文档
 //	├── constant.go           # 进化流程全局常量
+//	├── utils.go              # 辅助函数（GetContentStringFromTemplate）
 //	└── update_execution.go   # 更新执行函数（ExecuteUpdates/ApplyUpdates/SummarizeApplyResults）
 //
 // 子包：
 //
 //	dataset/     # 数据集加载与用例管理
 //	evaluator/   # 评估器与评估指标
-//	optimizer/   # 维度优化器基类 + LLM 弹性重试
+//	optimizer/   # 维度优化器基类 + LLM 弹性重试 + LLM 提示词优化器
 //	schema/      # 进化协议与数据结构
 //	trainer/     # 训练执行器与进度管理
 //	trajectory/  # 执行轨迹数据类型

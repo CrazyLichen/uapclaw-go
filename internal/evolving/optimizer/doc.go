@@ -9,6 +9,11 @@
 //	optimizer/
 //	├── doc.go                # 包文档
 //	├── base.go               # BaseOptimizer 接口 + BaseOptimizerMixin + TextualParameter
+//	├── llm_call/             # LLM 维度提示词优化器
+//	│   ├── doc.go            # 包文档
+//	│   ├── base.go           # LLMCallOptimizerBase 嵌入结构体
+//	│   ├── instruction_optimizer.go # InstructionOptimizer 核心实现
+//	│   └── templates.go      # PromptTemplate 模板常量
 //	└── llm_resilience/       # LLM 弹性重试策略
 //	    ├── doc.go            # 包文档
 //	    └── llm_resilience.go # LLMInvokePolicy + InvokeTextWithRetry
