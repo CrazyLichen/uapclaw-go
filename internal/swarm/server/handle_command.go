@@ -97,7 +97,7 @@ func (s *AgentServer) handleCommandCompact(ctx context.Context, request *schema.
 	}
 	projectDir := resolveRequestProjectDir(request)
 
-	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandCompact: 获取 Agent 失败")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -133,7 +133,7 @@ func (s *AgentServer) handleCommandContext(ctx context.Context, request *schema.
 	}
 	projectDir := resolveRequestProjectDir(request)
 
-	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandContext: 获取 Agent 失败")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -169,7 +169,7 @@ func (s *AgentServer) handleCommandRecap(ctx context.Context, request *schema.Ag
 	}
 	projectDir := resolveRequestProjectDir(request)
 
-	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
 		logger.Error(logComponent).Err(err).Str("request_id", request.RequestID).Msg("handleCommandRecap: 获取 Agent 失败")
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,

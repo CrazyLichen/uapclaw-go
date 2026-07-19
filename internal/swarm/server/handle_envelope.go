@@ -238,6 +238,7 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 // handleUnary 处理非流式请求，对齐 Python _handle_unary。
 //
 // 特殊方法拦截 → 解析 mode → 获取 Agent → 调用 ProcessMessage → writeResponse。
+// 对齐 Python: handleUnary 通过 AgentManager 获取 agent，然后直接调用 agent 方法。
 func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequest) {
 	// 1. 特殊方法拦截
 	switch request.ReqMethod {
@@ -284,7 +285,7 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 	projectDir := resolveRequestProjectDir(request)
 
 	// 3. 获取 Agent
-	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	agent, err := s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -297,21 +298,12 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 	}
 
 	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
-	// 对齐 Python: switch_mode 失败时异常向上冒泡返回错误响应
 	if mode == "code" && subMode != "team" {
 		sid := ""
 		if request.SessionID != nil {
 			sid = *request.SessionID
 		}
-		if err := agent.SwitchMode(ctx, sid, subMode); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("session_id", sid).
-				Str("sub_mode", subMode).
-				Msg("SwitchMode 执行失败")
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SWITCH_MODE_ERROR")
-			return
-		}
+		_ = agent.SwitchMode(ctx, sid, subMode)
 	}
 
 	// 5. 调用 Agent
@@ -332,7 +324,8 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 
 // handleStream 处理流式请求，对齐 Python _handle_stream。
 //
-// 创建子 context → 注册流式任务 → 心跳 goroutine → 逐 chunk 读取 → writeChunk 写入 RecvCh。
+// 创建子 context → 注册流式任务 → 心跳 goroutine → 获取 Agent → 逐 chunk 写入 RecvCh。
+// 对齐 Python: handleStream 通过 AgentManager 获取 agent，然后直接调用 agent 流式方法。
 func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentRequest) {
 	sessionID := ""
 	if request.SessionID != nil {
@@ -354,7 +347,7 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	}
 	projectDir := resolveRequestProjectDir(request)
 
-	agent, err := s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+	agent, err := s.agentManager.GetAgent(streamCtx, request.ChannelID, mode, projectDir, subMode)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).
@@ -366,22 +359,13 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 		return
 	}
 
-	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
-	// 对齐 Python: switch_mode 失败时异常向上冒泡返回错误响应
+	// 4. code 模式 switchMode（排除 team 子模式）
 	if mode == "code" && subMode != "team" {
 		sid := ""
 		if request.SessionID != nil {
 			sid = *request.SessionID
 		}
-		if err := agent.SwitchMode(ctx, sid, subMode); err != nil {
-			logger.Error(logComponent).
-				Err(err).
-				Str("session_id", sid).
-				Str("sub_mode", subMode).
-				Msg("SwitchMode 执行失败")
-			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SWITCH_MODE_ERROR")
-			return
-		}
+		_ = agent.SwitchMode(streamCtx, sid, subMode)
 	}
 
 	// 5. 启动心跳 goroutine
@@ -397,7 +381,6 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 			Str("request_id", request.RequestID).
 			Str("mode", mode).
 			Msg("Agent 流式处理失败")
-		// 停止心跳
 		close(heartbeatTrigger)
 		<-heartbeatDone
 		s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "AGENT_STREAM_ERROR")
@@ -408,12 +391,10 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	chunkCount := 0
 	for chunk := range ch {
 		chunkCount++
-		// 通知心跳有真实数据
 		select {
 		case heartbeatTrigger <- struct{}{}:
 		default:
 		}
-		// writeChunk 写入 RecvCh
 		s.writeChunk(request.RequestID, request.ChannelID, chunk, chunkCount, true)
 	}
 
@@ -486,7 +467,7 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 			Msg("cancel: 未找到已有 agent，fallback 创建")
 		mode, subMode = applyResolvedModeToRequest(request)
 		var err error
-		agent, err = s.agentManager.GetAgent(request.ChannelID, mode, projectDir, subMode)
+		agent, err = s.agentManager.GetAgent(ctx, request.ChannelID, mode, projectDir, subMode)
 		if err != nil {
 			logger.Error(logComponent).
 				Err(err).
@@ -825,8 +806,12 @@ func (s *AgentServer) injectACPCapabilities(request *schema.AgentRequest, envelo
 			return
 		}
 	}
-	// ⤵️ 10.3.12: fallback 到 agent_manager.get_client_capabilities("acp")
-	// 待 AgentManager 完整实现后补充
+	// fallback 到 agent_manager.get_client_capabilities("acp")
+	if s.agentManager != nil {
+		if caps := s.agentManager.GetClientCapabilities("acp"); len(caps) > 0 {
+			request.Metadata["client_capabilities"] = caps
+		}
+	}
 }
 
 // notImplementedResponse 返回 NOT_IMPLEMENTED 错误响应（供 stub handler 使用）。

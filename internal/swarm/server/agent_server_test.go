@@ -8,6 +8,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/common/config"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/e2a"
+	"github.com/uapclaw/uapclaw-go/internal/swarm/server/runtime"
 	"github.com/uapclaw/uapclaw-go/internal/swarm/transport"
 )
 
@@ -161,6 +162,10 @@ func TestAgentServer_ConsumeEnvelope(t *testing.T) {
 	cfg, _ := config.New("")
 	transport := transport.NewChannelTransport()
 	s := NewAgentServer(cfg, transport)
+	// 注入 mock Agent 工厂，避免 createAgent → CreateInstance → LLM nil panic
+	s.SetAgentFactoryForTest(func(config map[string]any, mode, subMode string) (*runtime.UapClaw, error) {
+		return runtime.NewUapClaw(), nil
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

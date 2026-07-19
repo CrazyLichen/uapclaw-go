@@ -25,13 +25,19 @@ import (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// newTestServer 创建测试用 AgentServer（含 AgentManager）。
+// newTestServer 创建测试用 AgentServer（含 AgentManager + mock Agent 工厂）。
 func newTestServer() (*AgentServer, *transport.ChannelTransport) {
 	cfg, _ := config.New("")
 	transport := transport.NewChannelTransportWithBuffer(16, 128)
 	server := NewAgentServer(cfg, transport)
 	// 手动初始化 AgentManager，跳过 Start() 的阻塞循环
-	server.agentManager = runtime.NewAgentManager()
+	am := runtime.NewAgentManager()
+	// 注入 mock Agent 工厂，避免 createAgent → CreateInstance → LLM nil panic
+	// mock 工厂创建一个未初始化的 UapClaw（adapter 为 nil），ProcessMessage 会走 sessionManager 队列路径
+	am.SetAgentFactory(func(config map[string]any, mode, subMode string) (*runtime.UapClaw, error) {
+		return runtime.NewUapClaw(), nil
+	})
+	server.agentManager = am
 	return server, transport
 }
 

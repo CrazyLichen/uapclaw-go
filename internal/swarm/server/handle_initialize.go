@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -10,7 +11,7 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
-// ──────────────────────────── 常量 ────────────────────────────
+// ──────────────────────────── 常数 ────────────────────────────
 
 const (
 	// protocolVersion 协议版本
@@ -23,28 +24,56 @@ const (
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
-// handleInitialize 处理 initialize 请求。返回默认 capabilities。
+// handleInitialize 处理 initialize 请求。
 //
 // 对齐 Python: AgentWsServer._handle_initialize(ws, request, send_lock)
 //
-// Python 完整步骤：
-//  1. 解析 params.clientCapabilities
-//  2. 构建 extra_config（含 protocol_version、client_capabilities）
-//  3. ACP channel 特殊处理（_set_ws_acp_client_capabilities）
-//  4. 调用 agent_manager.initialize() 获取 capabilities
-//  5. Fallback 到 ACP_DEFAULT_CAPABILITIES
-//  6. 返回 capabilities
-//
-// 当前仅返回空 capabilities + protocol_version，待后续补齐：
-//
-//	⤵️ ACP 章节：解析 clientCapabilities、ACP channel 处理
-//	⤵️ AgentManager 章节：agentManager.initialize() 调用、ACP_DEFAULT_CAPABILITIES fallback
-func (s *AgentServer) handleInitialize(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+// 步骤：
+//  1. 构建 extra_config（含 protocol_version、client_capabilities）
+//  2. 调用 AgentManager.Initialize() 获取 capabilities
+//  3. 非 ACP 通道返回 nil → fallback 到默认 capabilities
+//  4. ACP 通道返回 capabilities（⤵️ 等 ACP 实现）
+func (s *AgentServer) handleInitialize(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+	// 1. 构建 extra_config（对齐 Python agent_ws_server.py L563-572）
+	extraConfig := make(map[string]any)
+	extraConfig["protocol_version"] = protocolVersion
+
+	// 从 params 解析 clientCapabilities
+	if len(request.Params) > 0 {
+		var params map[string]any
+		if err := json.Unmarshal(request.Params, &params); err == nil {
+			if caps, ok := params["clientCapabilities"]; ok {
+				extraConfig["client_capabilities"] = caps
+			}
+		}
+	}
+
+	// 2. 调用 AgentManager.Initialize
+	caps, err := s.agentManager.Initialize(ctx, request.ChannelID, extraConfig)
+	if err != nil {
+		// 初始化失败 → fallback 到默认 capabilities
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(map[string]any{
+				"capabilities":     map[string]any{},
+				"protocol_version": protocolVersion,
+			}),
+		), nil
+	}
+
+	// 3. 非 ACP 通道返回 nil → fallback 到默认 capabilities
+	if caps == nil {
+		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
+			schema.WithPayload(map[string]any{
+				"capabilities":     map[string]any{},
+				"protocol_version": protocolVersion,
+			}),
+		), nil
+	}
+
+	// 4. ACP 通道返回 capabilities（⤵️ 等 ACP 实现后 Initialize 会返回非 nil）
+	caps["protocol_version"] = protocolVersion
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
-		schema.WithPayload(map[string]any{
-			"capabilities":     map[string]any{},
-			"protocol_version": protocolVersion,
-		}),
+		schema.WithPayload(caps),
 	), nil
 }
 

@@ -50,6 +50,8 @@ type AgentServer struct {
 	stopCh chan struct{}
 	// runErr run() 的返回错误
 	runErr error
+	// agentFactoryOverride Agent 创建工厂覆盖（测试注入 mock，避免 createAgent 触发真实 LLM 初始化）
+	agentFactoryOverride runtime.AgentFactory
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -88,6 +90,12 @@ func NewAgentServer(cfg *config.Config, transport transport.AgentTransport) *Age
 // SetSessionsDir 设置会话目录路径（供测试注入）。
 func (s *AgentServer) SetSessionsDir(dir string) {
 	s.sessionsDir = dir
+}
+
+// SetAgentFactoryForTest 设置 Agent 创建工厂覆盖（仅测试用）。
+// 必须在 Start() 之前调用，run() 初始化 AgentManager 后会应用此覆盖。
+func (s *AgentServer) SetAgentFactoryForTest(factory runtime.AgentFactory) {
+	s.agentFactoryOverride = factory
 }
 
 // SessionsDir 返回会话目录路径。
@@ -244,6 +252,10 @@ func (s *AgentServer) run(ctx context.Context) error {
 
 	// 3. 初始化 AgentManager
 	s.agentManager = runtime.NewAgentManager()
+	// 应用测试工厂覆盖（如有）
+	if s.agentFactoryOverride != nil {
+		s.agentManager.SetAgentFactory(s.agentFactoryOverride)
+	}
 	logger.Info(logComponent).Msg("AgentManager 已初始化")
 
 	// 4. 发送 connection.ack 事件帧（对齐 Python AgentWebSocketServer._connection_handler 首帧）
@@ -405,15 +417,11 @@ func (s *AgentServer) startTeammateBootstrapDaemon(ctx context.Context) {
 
 // cancelAllInflightWork 取消所有进行中的任务。
 // 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work()
-// TODO(⤵️ AgentManager): 等 AgentManager inflight work 追踪实现后回填
-//
-// Python 实现逻辑（agent_manager.py cancel_all_inflight_work）：
-//   - 遍历 self._inflight_work（dict[str, asyncio.Task]），对每个 task 调用 task.cancel()
-//   - 等待所有 task 完成（asyncio.gather(*tasks, return_exceptions=True)）
-//   - 清空 self._inflight_work
-//   - 记录日志：cancelled_count=len(tasks)
 func (s *AgentServer) cancelAllInflightWork() {
-	// 未实现：等 AgentManager 完整实现后回填
+	if s.agentManager == nil {
+		return
+	}
+	_ = s.agentManager.CancelAllInflightWork(context.Background())
 }
 
 // stopScheduler 停止调度器。

@@ -35,7 +35,7 @@ func (s *AgentServer) handleConfigCacheClear(_ context.Context, request *schema.
 // handleAgentReloadConfig 处理 agent.reload_config 请求。
 // 从 request.Params 提取 config 和 env，调用 AgentManager.ReloadAgentsConfig。
 // 对齐 Python: _handle_agent_reload_config (agent_ws_server.py L4147-4171)
-func (s *AgentServer) handleAgentReloadConfig(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
+func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var configPayload map[string]any
 	var envOverrides map[string]any
 
@@ -55,7 +55,7 @@ func (s *AgentServer) handleAgentReloadConfig(_ context.Context, request *schema
 		}
 	}
 
-	if err := s.agentManager.ReloadAgentsConfig(configPayload, envOverrides); err != nil {
+	if err := s.agentManager.ReloadAgentsConfig(ctx, configPayload, envOverrides); err != nil {
 		return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 			schema.WithResponseOK(false),
 			schema.WithPayload(map[string]any{
