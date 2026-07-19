@@ -395,6 +395,12 @@ func (s *AgentServer) startTeammateBootstrapDaemon(ctx context.Context) {
 // cancelAllInflightWork 取消所有进行中的任务。
 // 对齐 Python: jiuwenswarm/server/runtime/agent_manager.py cancel_all_inflight_work()
 // TODO(⤵️ AgentManager): 等 AgentManager inflight work 追踪实现后回填
+//
+// Python 实现逻辑（agent_manager.py cancel_all_inflight_work）：
+//   - 遍历 self._inflight_work（dict[str, asyncio.Task]），对每个 task 调用 task.cancel()
+//   - 等待所有 task 完成（asyncio.gather(*tasks, return_exceptions=True)）
+//   - 清空 self._inflight_work
+//   - 记录日志：cancelled_count=len(tasks)
 func (s *AgentServer) cancelAllInflightWork() {
 	// 未实现：等 AgentManager 完整实现后回填
 }
@@ -402,6 +408,11 @@ func (s *AgentServer) cancelAllInflightWork() {
 // stopScheduler 停止调度器。
 // 对齐 Python: jiuwenswarm/server/agent_ws_server.py _stop_scheduler()
 // TODO(⤵️ Scheduler): 等调度器实现后回填
+//
+// Python 实现逻辑（agent_ws_server.py _stop_scheduler）：
+//   - 调用 self._scheduler.stop()（Scheduler.stop 内部取消所有定时任务 + 等待当前执行完成）
+//   - 设置 self._scheduler = None
+//   - 记录日志："scheduler stopped"
 func (s *AgentServer) stopScheduler() {
 	// 未实现：等调度器实现后回填
 }
@@ -409,6 +420,13 @@ func (s *AgentServer) stopScheduler() {
 // cancelAllTeamStreamTasks 取消所有 team 流式任务。
 // 对齐 Python: jiuwenswarm/agents/harness/team/ cancel_all_team_stream_tasks_across_managers()
 // TODO(⤵️ Team): 等 Team 流式任务管理实现后回填
+//
+// Python 实现逻辑（team/ cancel_all_team_stream_tasks_across_managers）：
+//   - 遍历所有 TeamManager 实例
+//   - 对每个 TeamManager 调用 cancel_all_team_stream_tasks(reason="server_shutdown")
+//   - 每个 TeamManager 内部：遍历 _stream_tasks（dict[str, asyncio.Task]），逐个 cancel
+//   - 等待所有 stream task 完成（asyncio.gather + return_exceptions=True）
+//   - 清空 _stream_tasks
 func (s *AgentServer) cancelAllTeamStreamTasks() {
 	// 未实现：等 Team 功能实现后回填
 }

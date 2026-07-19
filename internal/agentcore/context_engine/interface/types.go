@@ -41,9 +41,9 @@ type ModelContext interface {
 	// opts 透传给处理器，对齐 Python: clear_messages(**kwargs)
 	ClearMessages(ctx context.Context, withHistory bool, opts ...Option) error
 	// AddMessages 添加消息
-	// message 接受 BaseMessage（单条）或 []BaseMessage（列表）
+	// messages 接受 []BaseMessage 消息列表，对齐 Python: add_messages(message: BaseMessage | List[BaseMessage])
 	// opts 透传给处理器，对齐 Python: add_messages(messages, **kwargs)
-	AddMessages(ctx context.Context, message llm_schema.BaseMessage, opts ...Option) ([]llm_schema.BaseMessage, error)
+	AddMessages(ctx context.Context, messages []llm_schema.BaseMessage, opts ...Option) ([]llm_schema.BaseMessage, error)
 	// GetContextWindow 构建上下文窗口供模型推理使用
 	// windowSize ≤ 0 使用默认值；dialogueRound ≤ 0 使用默认值
 	// opts 透传给处理器，对齐 Python: get_context_window(..., **kwargs)
@@ -85,9 +85,9 @@ type ModelContext interface {
 	LoadState(state map[string]any)
 	// CompressContext 主动压缩上下文
 	//
-	// 返回 "busy"/"compressed"/"noop"。
+	// 返回 CompressContextResult，包含结果标识和可选的压缩状态。
 	// 对应 Python: SessionModelContext.compress_context()
-	CompressContext(ctx context.Context, opts ...CompressContextOption) (string, error)
+	CompressContext(ctx context.Context, opts ...CompressContextOption) (*CompressContextResult, error)
 }
 
 // ContextEngine 上下文引擎门面接口。
@@ -101,8 +101,8 @@ type ContextEngine interface {
 	CreateContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CreateContextOption) (ModelContext, error)
 	// GetContext 获取上下文（不存在返回 nil）
 	GetContext(contextID string, sessionID string) ModelContext
-	// CompressContext 主动压缩上下文，返回 "busy"/"compressed"/"noop"
-	CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CompressContextOption) (string, error)
+	// CompressContext 主动压缩上下文，返回 CompressContextResult
+	CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...CompressContextOption) (*CompressContextResult, error)
 	// ClearContext 清空上下文（三种粒度：全清/按session/按context+session）
 	ClearContext(ctx context.Context, opts ...ClearContextOption) error
 	// SaveContexts 批量持久化上下文状态，返回 contextID → state 映射
@@ -152,6 +152,20 @@ type CompressContextOptions struct {
 	ModelName string
 	// SessionID 显式 session_id fallback，对齐 Python compress_context(session_id=...)
 	SessionID string
+	// ReturnState 是否返回压缩状态详情，对齐 Python compress_context(return_state=True)
+	ReturnState bool
+}
+
+// CompressContextResult CompressContext 返回值，对齐 Python compress_context(return_state=True) 的返回结构。
+//
+// 对应 Python: {"result": result, "state": state, "compact_summary": compact_summary}
+type CompressContextResult struct {
+	// Result 压缩结果标识："busy"/"compressed"/"noop"
+	Result string
+	// State 压缩状态详情（仅 ReturnState=true 时填充）
+	State map[string]any
+	// CompactSummary 压缩摘要（从 state 中提取）
+	CompactSummary string
 }
 
 // ClearContextOptions ClearContext 方法可选项
@@ -270,6 +284,11 @@ func WithModelName(name string) CompressContextOption {
 // WithCompressSessionID 设置显式 session_id fallback，对齐 Python compress_context(session_id=...)
 func WithCompressSessionID(sid string) CompressContextOption {
 	return func(o *CompressContextOptions) { o.SessionID = sid }
+}
+
+// WithReturnState 设置是否返回压缩状态详情，对齐 Python compress_context(return_state=True)
+func WithReturnState(returnState bool) CompressContextOption {
+	return func(o *CompressContextOptions) { o.ReturnState = returnState }
 }
 
 // WithSessionID 设置会话 ID（用于 ClearContext）

@@ -207,6 +207,10 @@ func (c *AgentConfigurator) SetupAgent(spec atschema.TeamAgentSpec, ctx atschema
 
 	// 9-14. 构造 Rails
 	// TODO(#9.68): 团队工具和策略 Rail teamToolRail, teamPolicyRail, ...
+	// ⚠️ 回填时必须调用 resolveTeamMode(spec)：
+	//   - 构造 TeamToolRail 时: exclude_tools = {"spawn_member"} if resolveTeamMode(spec) == "predefined" else None
+	//   - 构造 TeamPolicyRail 时: team_mode = resolveTeamMode(spec)
+	// 对齐 Python: agent_configurator.py 第 354 行和第 378 行
 
 	// 15. 构建团队线束
 	harness := agentteams.BuildTeamHarness(

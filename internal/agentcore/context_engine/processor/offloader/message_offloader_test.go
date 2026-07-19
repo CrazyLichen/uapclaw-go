@@ -531,7 +531,7 @@ func (f *fakeModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage {
 func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
 	return nil
 }
-func (f *fakeModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
+func (f *fakeModelContext) AddMessages(_ context.Context, _ []llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
@@ -549,8 +549,8 @@ func (f *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade      
 func (f *fakeModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContext) SaveState() map[string]any                            { return nil }
 func (f *fakeModelContext) LoadState(_ map[string]any)                           {}
-func (f *fakeModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
-	return "", nil
+func (f *fakeModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }
 
 // 实现 token.TokenCounter 接口

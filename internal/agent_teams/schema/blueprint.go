@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	agentteams "github.com/uapclaw/uapclaw-go/internal/agent_teams"
@@ -213,14 +214,67 @@ func (s *TeamAgentSpec) ResolveDBConfig() any {
 func (s *TeamAgentSpec) Build() (any, error) { return nil, nil }
 
 // ValidateLeaderModelResolved 校验 Leader 模型是否已解析。
-func ValidateLeaderModelResolved(leaderAgent DeepAgentSpec, leaderMemberModel *TeamModelConfig, teamSpec TeamSpec) error {
+//
+// 一比一复刻 Python: openjiuwen/agent_teams/schema/blueprint.py _validate_leader_model_resolved
+func ValidateLeaderModelResolved(spec TeamAgentSpec, leaderMemberModel *TeamModelConfig, teamSpec TeamSpec) error {
+	// 获取 leader 的 DeepAgentSpec
+	var leaderAgent *DeepAgentSpec
+	if spec.Agents != nil {
+		if la, ok := spec.Agents["leader"]; ok {
+			leaderAgent = &la
+		}
+	}
+	if leaderMemberModel != nil || (leaderAgent != nil && leaderAgent.Model != nil) {
+		return nil
+	}
 	if teamSpec.ModelPool == nil {
 		return nil
 	}
-	if leaderMemberModel != nil || leaderAgent.Model != nil {
-		return nil
+
+	availableNames := make([]string, 0)
+	nameSet := make(map[string]bool)
+	for _, entry := range teamSpec.ModelPool {
+		if !nameSet[entry.ModelName] {
+			nameSet[entry.ModelName] = true
+			availableNames = append(availableNames, entry.ModelName)
+		}
 	}
-	return fmt.Errorf("leader 没有模型配置。当 model_pool 已配置时，Leader 必须通过 model_pool 分配或在 agents[\"leader\"].model 中显式指定模型")
+	sort.Strings(availableNames)
+
+	strategy := teamSpec.ModelPoolStrategy
+	leaderName := spec.Leader.ModelName
+
+	var cause string
+	if leaderName != "" && !nameSet[leaderName] {
+		scope := "pool"
+		if strategy == "router" {
+			scope = "router"
+		}
+		cause = fmt.Sprintf("leader.model_name='%s' is not present in the %s (available names: %v)", leaderName, scope, availableNames)
+	} else if strategy == "by_model_name" {
+		cause = "model_pool_strategy='by_model_name' requires leader.model_name to be set to one of the pool names"
+	} else {
+		cause = "the allocator did not produce a model for the leader"
+	}
+
+	var tail string
+	if strategy == "router" {
+		tail = fmt.Sprintf(
+			"(1) leave leader.model_name unset to fall back on the router's first declared name, "+
+				"(2) set leader.model_name to one of %v, "+
+				"(3) provide an explicit agents['leader'].model in the spec",
+			availableNames,
+		)
+	} else {
+		tail = fmt.Sprintf(
+			"(1) set leader.model_name to one of %v, "+
+				"(2) provide an explicit agents['leader'].model in the spec, "+
+				"(3) switch model_pool_strategy to 'round_robin' (always allocates)",
+			availableNames,
+		)
+	}
+
+	return fmt.Errorf("%s; resolve by either: %s", cause, tail)
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

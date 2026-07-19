@@ -537,7 +537,7 @@ func (f *fakeModelContextForMicro) PopMessages(_ int, _ bool) []llm_schema.BaseM
 func (f *fakeModelContextForMicro) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
 	return nil
 }
-func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
+func (f *fakeModelContextForMicro) AddMessages(_ context.Context, _ []llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (f *fakeModelContextForMicro) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage,
@@ -555,6 +555,6 @@ func (f *fakeModelContextForMicro) GetSessionRef() sessioninterfaces.SessionFaca
 func (f *fakeModelContextForMicro) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (f *fakeModelContextForMicro) SaveState() map[string]any                            { return nil }
 func (f *fakeModelContextForMicro) LoadState(_ map[string]any)                           {}
-func (f *fakeModelContextForMicro) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
-	return "", nil
+func (f *fakeModelContextForMicro) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }

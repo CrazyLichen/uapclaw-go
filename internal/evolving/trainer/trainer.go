@@ -402,25 +402,18 @@ func (t *Trainer) Predict(
 
 // ApplyUpdates 将 Updater 生成的更新应用到 Operator 注册表。
 //
-// 对应 Python: Trainer.apply_updates(operators, updates) — 静态方法
-// 遍历 updates 映射，对每个 Operator 调用 ApplyUpdate 应用结构化更新。
-func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.UpdateKey]schema.UpdateValue) []schema.ApplyResult {
-	var results []schema.ApplyResult
+// 对齐 Python: Trainer.apply_updates(operators, updates) — 静态方法
+// 遍历 updates 映射，对每个 Operator 直接调用 SetParameter 设置参数值。
+// 注意：此方法与 update_execution.ApplyUpdates 不同——后者走 ApplyUpdate 路径
+// 返回 ApplyResult 列表，而此处直接调用 SetParameter，对齐 Python Trainer 行为。
+func ApplyUpdates(operators map[string]operator.Operator, updates map[schema.UpdateKey]schema.UpdateValue) {
 	for key, update := range updates {
 		op, ok := operators[key.OperatorID()]
-		if !ok {
-			results = append(results, schema.ApplyResultWithErrors(
-				key.OperatorID(), key.Target(),
-				update.Mode, update.Effect, update.Payload,
-				update.ChangeType, update.Metadata,
-				"operator not found: "+key.OperatorID(),
-			))
+		if !ok || update.Payload == nil {
 			continue
 		}
-		result := op.ApplyUpdate(key.Target(), update)
-		results = append(results, result)
+		op.SetParameter(key.Target(), update.Payload)
 	}
-	return results
 }
 
 // SelectBestCandidateOnVal 在验证集上选择最优候选更新。

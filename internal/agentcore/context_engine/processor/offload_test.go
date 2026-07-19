@@ -34,7 +34,7 @@ func (m *mockModelContext) PopMessages(_ int, _ bool) []llm_schema.BaseMessage {
 func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
 	return nil
 }
-func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
+func (m *mockModelContext) AddMessages(_ context.Context, _ []llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []common_schema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
@@ -51,8 +51,8 @@ func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade      
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any                            { return nil }
 func (m *mockModelContext) LoadState(_ map[string]any)                           {}
-func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
-	return "", nil
+func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }
 
 // TestOffloadMessages_in_memory模式正常 验证 in_memory 模式正常流程

@@ -74,8 +74,8 @@ func (m *mockContextEngine) CreateContext(_ context.Context, _ string, _ session
 	return nil, nil
 }
 func (m *mockContextEngine) GetContext(_ string, _ string) iface.ModelContext { return nil }
-func (m *mockContextEngine) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...iface.CompressContextOption) (string, error) {
-	return "", nil
+func (m *mockContextEngine) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }
 func (m *mockContextEngine) ClearContext(_ context.Context, _ ...iface.ClearContextOption) error {
 	return nil

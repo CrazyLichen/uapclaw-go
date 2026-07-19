@@ -1078,7 +1078,7 @@ func (m *mockModelContextForCountTokens) PopMessages(_ int, _ bool) []llm_schema
 func (m *mockModelContextForCountTokens) ClearMessages(_ context.Context, _ bool, _ ...iface.Option) error {
 	return nil
 }
-func (m *mockModelContextForCountTokens) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
+func (m *mockModelContextForCountTokens) AddMessages(_ context.Context, _ []llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return nil, nil
 }
 func (m *mockModelContextForCountTokens) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []commonschema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
@@ -1099,8 +1099,8 @@ func (m *mockModelContextForCountTokens) GetSessionRef() sessioninterfaces.Sessi
 func (m *mockModelContextForCountTokens) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContextForCountTokens) SaveState() map[string]any                            { return nil }
 func (m *mockModelContextForCountTokens) LoadState(_ map[string]any)                           {}
-func (m *mockModelContextForCountTokens) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
-	return "", nil
+func (m *mockModelContextForCountTokens) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }
 
 // TestCountTokens_有TokenCounter 测试有 tokenCounter 时使用计数器

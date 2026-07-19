@@ -54,6 +54,7 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 	// 执行压缩
 	compactResult, err := contextEngine.CompressContext(ctx, "default_context", session,
 		ceinterface.WithCompressSessionID(sessionID),
+		ceinterface.WithReturnState(returnState),
 	)
 	if err != nil {
 		logger.Warn(logComponent).Err(err).Str("session_id", sessionID).Msg("CompressContext 压缩失败")
@@ -61,8 +62,15 @@ func (d *DeepAdapter) CompressContext(ctx context.Context, sessionID string, ses
 	}
 
 	// 对齐 Python: 解析压缩结果
-	result := compactResult
+	result := compactResult.Result
 	response := map[string]any{"result": result}
+
+	if returnState && compactResult.State != nil {
+		response["state"] = compactResult.State
+		if compactResult.CompactSummary != "" {
+			response["compact_summary"] = compactResult.CompactSummary
+		}
+	}
 
 	if result == "compressed" {
 		// 压缩后重新统计 token

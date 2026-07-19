@@ -88,6 +88,8 @@ const (
 	heartbeatSessionPrefix = "heartbeat_"
 	// deliveryContextKind 推送类型，对齐 Python _DELIVERY_KIND_SERVER_PUSH
 	deliveryContextKind = "server_push"
+	// metadataQueueSize 异步写入队列大小，对齐 Python _METADATA_QUEUE maxsize=5000
+	metadataQueueSize = 5000
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
@@ -99,7 +101,17 @@ var (
 	// deliveryContextMu 保护缓存的读写锁
 	// 对齐 Python: _CACHE_LOCK
 	deliveryContextMu sync.RWMutex
+	// metadataQueue 异步写入队列，对齐 Python _METADATA_QUEUE
+	metadataQueue chan metadataWriteItem
+	// metadataQueueOnce 确保 worker 只启动一次
+	metadataQueueOnce sync.Once
 )
+
+// metadataWriteItem 异步写入队列条目
+type metadataWriteItem struct {
+	sessionID string
+	metadata  map[string]any
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -317,6 +329,11 @@ func (s *AgentServer) handleSessionDelete(_ context.Context, request *schema.Age
 			Msg("删除会话目录失败")
 		return nil, fmt.Errorf("删除会话目录失败: %w", err)
 	}
+
+	// 清理内存缓存，对齐 Python remove_session_metadata_cache()
+	deliveryContextMu.Lock()
+	delete(deliveryContextCache, params.SessionID)
+	deliveryContextMu.Unlock()
 
 	logger.Info(logComponent).
 		Str("session_id", params.SessionID).
@@ -659,4 +676,210 @@ func deepCopyMap(src map[string]any) map[string]any {
 		}
 	}
 	return dst
+}
+
+// incrementSessionRoundCount 递增并持久化 session 的 round_id，返回递增后的值。
+//
+// 对齐 Python: jiuwenswarm/server/runtime/session/session_metadata.py increment_session_round_count()
+// 调用点：等 processTeamMessageStream（10.3.7-11）回填时添加调用
+func incrementSessionRoundCount(sessionsDir, sessionID string) (int, error) {
+	meta := readSessionMetadataWithCache(sessionID)
+	if meta == nil {
+		meta = make(map[string]any)
+	}
+	currentRound := 0
+	if v, ok := meta["round_id"]; ok {
+		switch n := v.(type) {
+		case int:
+			currentRound = n
+		case float64:
+			currentRound = int(n)
+		case json.Number:
+			if i, err := n.Int64(); err == nil {
+				currentRound = int(i)
+			}
+		}
+	}
+	newRound := currentRound + 1
+	meta["round_id"] = newRound
+	meta["last_message_at"] = currentTimestamp()
+
+	// 更新缓存
+	deliveryContextMu.Lock()
+	deliveryContextCache[sessionID] = deepCopyMap(meta)
+	deliveryContextMu.Unlock()
+
+	if err := writeSessionMetadata(sessionsDir, sessionID, meta); err != nil {
+		return 0, err
+	}
+	return newRound, nil
+}
+
+// ensureMetadataWorker 确保 metadata 异步写入 worker 已启动。
+// 对齐 Python: _ensure_worker_started()，懒启动后台 goroutine
+func ensureMetadataWorker() {
+	metadataQueueOnce.Do(func() {
+		metadataQueue = make(chan metadataWriteItem, metadataQueueSize)
+		go metadataWriteWorker()
+	})
+}
+
+// metadataWriteWorker 异步写入 worker，消费队列并写入磁盘。
+// 对齐 Python: _worker() 后台线程
+func metadataWriteWorker() {
+	for item := range metadataQueue {
+		if err := writeSessionMetadata(GetSessionsDir(), item.sessionID, item.metadata); err != nil {
+			logger.Warn(logComponent).
+				Str("session_id", item.sessionID).
+				Err(err).
+				Msg("metadata 异步写入失败")
+		}
+	}
+}
+
+// enqueueMetadataWrite 将写入操作放入异步队列，队列满时退化为同步写。
+// 对齐 Python: _enqueue_write()
+func enqueueMetadataWrite(sessionID string, metadata map[string]any) {
+	// 先更新缓存，确保后续读取能看到最新状态
+	deliveryContextMu.Lock()
+	deliveryContextCache[sessionID] = deepCopyMap(metadata)
+	deliveryContextMu.Unlock()
+
+	ensureMetadataWorker()
+	select {
+	case metadataQueue <- metadataWriteItem{sessionID: sessionID, metadata: metadata}:
+	default:
+		// 队列满，退化为同步写入
+		logger.Warn(logComponent).
+			Str("session_id", sessionID).
+			Msg("metadata 写入队列已满，退化为同步写入")
+		_ = writeSessionMetadata(GetSessionsDir(), sessionID, metadata)
+	}
+}
+
+// SessionMetadataUpdate 会话元数据增量更新参数。
+//
+// 对齐 Python: jiuwenswarm/server/runtime/session/session_metadata.py update_session_metadata()
+type SessionMetadataUpdate struct {
+	// SessionID 会话标识（必填）
+	SessionID string
+	// ChannelID 渠道标识
+	ChannelID *string
+	// UserID 用户标识
+	UserID *string
+	// Title 标题（nil=不修改，非空=设置，空串=忽略防御意外覆盖）
+	Title *string
+	// ClearTitle 显式清除标题
+	ClearTitle bool
+	// IncrementMessageCount 递增消息计数
+	IncrementMessageCount bool
+	// SetMessageCount 直接设置消息计数
+	SetMessageCount *int
+	// UserContent 用户消息内容，用于自动生成标题
+	// ⤵️ 11.x: 等自动标题生成功能实现后回填
+	UserContent *string
+	// ChannelMetadata 渠道元数据（首次补充写入，不覆盖）
+	ChannelMetadata map[string]any
+	// Mode 模式
+	Mode *string
+	// TeamName 团队名称
+	TeamName *string
+}
+
+// updateSessionMetadata 更新会话元数据（异步写入，不阻塞调用方）。
+//
+// 对齐 Python: update_session_metadata()
+// title 语义（保持历史防御契约）：
+//   - title=nil  → 不修改（默认）
+//   - title="x"  → 设置为 "x"
+//   - title=""   → 忽略（防御意外空值覆盖已有标题）
+//   - 若需显式清除标题，请设置 ClearTitle=true
+func updateSessionMetadata(update SessionMetadataUpdate) {
+	metadata := readSessionMetadataWithCache(update.SessionID)
+
+	if metadata == nil {
+		// 元数据不存在，创建新的（外部渠道隐式创建 session 的兜底）
+		autoTitle := ""
+		// ⤵️ 11.x: 等自动标题生成功能实现后回填 autoTitle 逻辑
+		_ = autoTitle
+
+		metadata = map[string]any{
+			"session_id":      update.SessionID,
+			"channel_id":      derefStr(update.ChannelID, ""),
+			"user_id":         derefStr(update.UserID, ""),
+			"created_at":      currentTimestamp(),
+			"last_message_at": currentTimestamp(),
+			"title":           derefStr(update.Title, autoTitle),
+			"message_count":   1,
+			"mode":            derefStr(update.Mode, "unknown"),
+			"team_name":       derefStr(update.TeamName, ""),
+			"round_id":        0,
+		}
+		if update.IncrementMessageCount {
+			metadata["message_count"] = 1
+		} else {
+			metadata["message_count"] = 0
+		}
+		if update.ChannelMetadata != nil {
+			metadata["channel_metadata"] = update.ChannelMetadata
+		}
+	} else {
+		// 更新现有元数据
+		if update.ChannelID != nil {
+			metadata["channel_id"] = *update.ChannelID
+		}
+		if update.UserID != nil {
+			metadata["user_id"] = *update.UserID
+		}
+		if update.Mode != nil {
+			metadata["mode"] = *update.Mode
+		}
+		if update.TeamName != nil {
+			metadata["team_name"] = *update.TeamName
+		}
+		// 显式清除优先级高于 title 入参
+		if update.ClearTitle {
+			metadata["title"] = ""
+		} else if update.Title != nil && *update.Title != "" {
+			metadata["title"] = *update.Title
+		}
+		if update.IncrementMessageCount {
+			count := 0
+			if v, ok := metadata["message_count"]; ok {
+				switch n := v.(type) {
+				case int:
+					count = n
+				case float64:
+					count = int(n)
+				}
+			}
+			metadata["message_count"] = count + 1
+		}
+		if update.SetMessageCount != nil {
+			metadata["message_count"] = *update.SetMessageCount
+		}
+
+		// ⤵️ 11.x: 等自动标题生成功能实现后回填
+		// if !metadata["title"].(string) && update.UserContent != nil { metadata["title"] = autoTitle(...) }
+
+		// channel_metadata 仅在首次为空时补充写入（不覆盖）
+		if update.ChannelMetadata != nil {
+			if _, ok := metadata["channel_metadata"]; !ok {
+				metadata["channel_metadata"] = update.ChannelMetadata
+			}
+		}
+
+		// 总是更新最后消息时间
+		metadata["last_message_at"] = currentTimestamp()
+	}
+
+	enqueueMetadataWrite(update.SessionID, metadata)
+}
+
+// derefStr 解引用字符串指针，nil 时返回 fallback
+func derefStr(s *string, fallback string) string {
+	if s != nil {
+		return *s
+	}
+	return fallback
 }

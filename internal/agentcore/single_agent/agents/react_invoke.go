@@ -414,7 +414,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 			// 对齐 Python: _extract_user_text(user_input)
 			plainText := curInputs.Query.PlainText()
 			if plainText != "" && modelCtx != nil {
-				_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage(plainText))
+				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage(plainText)})
 			}
 		}
 
@@ -600,7 +600,7 @@ func (a *ReActAgent) reactLoop(
 		// steering 注入
 		if steeringMsgs := cbc.DrainSteering(); len(steeringMsgs) > 0 && modelCtx != nil {
 			for _, msg := range steeringMsgs {
-				_, _ = modelCtx.AddMessages(ctx, llmschema.NewUserMessage("[STEERING] "+msg))
+				_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{llmschema.NewUserMessage("[STEERING] " + msg)})
 			}
 		}
 
@@ -618,7 +618,7 @@ func (a *ReActAgent) reactLoop(
 		}
 
 		if aiMsg != nil && modelCtx != nil {
-			_, _ = modelCtx.AddMessages(ctx, aiMsg)
+			_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{aiMsg})
 		}
 
 		// 无工具调用
@@ -712,14 +712,14 @@ func (a *ReActAgent) executeToolCalls(
 
 	for _, r := range results {
 		if r.ToolMsg != nil && modelCtx != nil {
-			_, _ = modelCtx.AddMessages(ctx, r.ToolMsg)
+			_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{r.ToolMsg})
 		}
 	}
 
 	// 对齐 Python L866-870: 多模态工具结果写入上下文
 	multimodalMsg := a.buildMultimodalToolResultsMessage(results)
 	if multimodalMsg != nil && modelCtx != nil {
-		_, _ = modelCtx.AddMessages(ctx, multimodalMsg)
+		_, _ = modelCtx.AddMessages(ctx, []llmschema.BaseMessage{multimodalMsg})
 	}
 
 	return results, nil

@@ -206,36 +206,35 @@ func TestTeamAgentSpec_ValidateHittConsistency_未启用(t *testing.T) {
 
 // TestTeamAgentSpec_ValidateLeaderModelResolved_有模型 测试有模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_有模型(t *testing.T) {
-	a := NewDeepAgentSpec()
-	a.Model = &TeamModelConfig{}
+	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {Model: &TeamModelConfig{}}}}
 	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
-	if err := ValidateLeaderModelResolved(a, nil, ts); err != nil {
+	if err := ValidateLeaderModelResolved(spec, nil, ts); err != nil {
 		t.Errorf("报错: %v", err)
 	}
 }
 
 // TestTeamAgentSpec_ValidateLeaderModelResolved_无模型 测试无模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_无模型(t *testing.T) {
-	a := NewDeepAgentSpec()
+	spec := TeamAgentSpec{Leader: LeaderSpec{}, Agents: map[string]DeepAgentSpec{"leader": {}}}
 	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
-	if err := ValidateLeaderModelResolved(a, nil, ts); err == nil {
+	if err := ValidateLeaderModelResolved(spec, nil, ts); err == nil {
 		t.Error("期望报错")
 	}
 }
 
 // TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型 测试分配模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型(t *testing.T) {
-	a := NewDeepAgentSpec()
+	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {}}}
 	m := &TeamModelConfig{}
 	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
-	if err := ValidateLeaderModelResolved(a, m, ts); err != nil {
+	if err := ValidateLeaderModelResolved(spec, m, ts); err != nil {
 		t.Errorf("报错: %v", err)
 	}
 }
 
 // TestTeamAgentSpec_ValidateLeaderModelResolved_无池 测试无池
 func TestTeamAgentSpec_ValidateLeaderModelResolved_无池(t *testing.T) {
-	if err := ValidateLeaderModelResolved(NewDeepAgentSpec(), nil, TeamSpec{}); err != nil {
+	if err := ValidateLeaderModelResolved(TeamAgentSpec{}, nil, TeamSpec{}); err != nil {
 		t.Errorf("报错: %v", err)
 	}
 }

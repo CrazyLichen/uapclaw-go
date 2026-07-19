@@ -162,8 +162,8 @@ func (f *fakeModelContext) PopMessages(_ int, _ bool) []llmschema.BaseMessage { 
 func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...ceinterface.Option) error {
 	return nil
 }
-func (f *fakeModelContext) AddMessages(_ context.Context, message llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
-	f.addMessagesCalls = append(f.addMessagesCalls, message)
+func (f *fakeModelContext) AddMessages(_ context.Context, messages []llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
+	f.addMessagesCalls = append(f.addMessagesCalls, messages...)
 	return nil, nil
 }
 func (f *fakeModelContext) GetContextWindow(_ context.Context, _ []llmschema.BaseMessage, _ []cschema2.ToolInfoInterface, _, _ int, _ ...ceinterface.Option) (*ceinterface.ContextWindow, error) {
@@ -180,8 +180,8 @@ func (f *fakeModelContext) GetSessionRef() sessioninterfaces.SessionFacade      
 func (f *fakeModelContext) OffloadMessages(_ string, _ []llmschema.BaseMessage) {}
 func (f *fakeModelContext) SaveState() map[string]any                           { return nil }
 func (f *fakeModelContext) LoadState(_ map[string]any)                          {}
-func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (string, error) {
-	return "", nil
+func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
+	return &ceinterface.CompressContextResult{Result: ""}, nil
 }
 
 // fakeSession 简单的 SessionFacade mock

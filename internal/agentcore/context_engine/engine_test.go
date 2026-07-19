@@ -36,7 +36,7 @@ func (m *mockModelContext) ClearMessages(_ context.Context, _ bool, _ ...iface.O
 	m.messages = nil
 	return nil
 }
-func (m *mockModelContext) AddMessages(_ context.Context, _ llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
+func (m *mockModelContext) AddMessages(_ context.Context, _ []llm_schema.BaseMessage, _ ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	return m.messages, nil
 }
 func (m *mockModelContext) GetContextWindow(_ context.Context, _ []llm_schema.BaseMessage, _ []common_schema.ToolInfoInterface, _ int, _ int, _ ...iface.Option) (*iface.ContextWindow, error) {
@@ -53,8 +53,8 @@ func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade      
 func (m *mockModelContext) OffloadMessages(_ string, _ []llm_schema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any                            { return m.saveState }
 func (m *mockModelContext) LoadState(_ map[string]any)                           {}
-func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (string, error) {
-	return compressResultNoop, nil
+func (m *mockModelContext) CompressContext(_ context.Context, _ ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: compressResultNoop}, nil
 }
 
 func TestNewContextEngine_默认配置(t *testing.T) {
@@ -227,8 +227,8 @@ func TestContextEngine_CompressContext_正常压缩(t *testing.T) {
 	if err != nil {
 		t.Fatalf("不期望错误: %v", err)
 	}
-	if result != compressResultNoop {
-		t.Fatalf("期望 %q, 实际 %q", compressResultNoop, result)
+	if result.Result != compressResultNoop {
+		t.Fatalf("期望 %q, 实际 %q", compressResultNoop, result.Result)
 	}
 }
 

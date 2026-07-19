@@ -61,7 +61,10 @@ func (s *AgentServer) handleEnvelope(ctx context.Context, envelope *e2a.E2AEnvel
 	}
 
 	// 3. before_chat_request 钩子
-	// ⤵️ Extension 章节：实现 _trigger_before_chat_request_hook，对 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 触发
+	// ⤵️ 11.13 Extension 章节：实现 _trigger_before_chat_request_hook
+	// 对齐 Python: agent_ws_server.py _trigger_before_chat_request_hook()
+	// 当 req_method 为 CHAT_SEND/CHAT_RESUME/CHAT_ANSWER 时触发
+	// 实现：构建 AgentServerChatHookContext，调用 ExtensionRegistry.trigger(BEFORE_CHAT_REQUEST, ctx)
 
 	// 4. 按 request.ReqMethod switch 分发
 	var resp *schema.AgentResponse
@@ -294,12 +297,21 @@ func (s *AgentServer) handleUnary(ctx context.Context, request *schema.AgentRequ
 	}
 
 	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
+	// 对齐 Python: switch_mode 失败时异常向上冒泡返回错误响应
 	if mode == "code" && subMode != "team" {
 		sid := ""
 		if request.SessionID != nil {
 			sid = *request.SessionID
 		}
-		_ = agent.SwitchMode(ctx, sid, subMode)
+		if err := agent.SwitchMode(ctx, sid, subMode); err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("session_id", sid).
+				Str("sub_mode", subMode).
+				Msg("SwitchMode 执行失败")
+			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SWITCH_MODE_ERROR")
+			return
+		}
 	}
 
 	// 5. 调用 Agent
@@ -355,12 +367,21 @@ func (s *AgentServer) handleStream(ctx context.Context, request *schema.AgentReq
 	}
 
 	// 4. code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
+	// 对齐 Python: switch_mode 失败时异常向上冒泡返回错误响应
 	if mode == "code" && subMode != "team" {
 		sid := ""
 		if request.SessionID != nil {
 			sid = *request.SessionID
 		}
-		_ = agent.SwitchMode(ctx, sid, subMode)
+		if err := agent.SwitchMode(ctx, sid, subMode); err != nil {
+			logger.Error(logComponent).
+				Err(err).
+				Str("session_id", sid).
+				Str("sub_mode", subMode).
+				Msg("SwitchMode 执行失败")
+			s.writeErrorResponse(request.RequestID, request.ChannelID, err.Error(), "SWITCH_MODE_ERROR")
+			return
+		}
 	}
 
 	// 5. 启动心跳 goroutine
@@ -476,8 +497,8 @@ func (s *AgentServer) handleCancel(ctx context.Context, request *schema.AgentReq
 		}
 	}
 
-	// 3. 调用 ProcessInterrupt
-	resp, err := agent.ProcessInterrupt(ctx, request)
+	// 3. 调用 ProcessMessage（对齐 Python: agent.process_message(request) → CHAT_CANCEL 分支 → _process_interrupt）
+	resp, err := agent.ProcessMessage(ctx, request)
 	if err != nil {
 		logger.Error(logComponent).
 			Err(err).

@@ -283,9 +283,7 @@ func (mc *SessionModelContext) ClearMessages(ctx context.Context, withHistory bo
 //   - 正常路径：processorLock.Lock() → runAddProcessors → 入队 → Unlock
 //
 // 对应 Python: SessionModelContext.add_messages()
-func (mc *SessionModelContext) AddMessages(ctx context.Context, message llm_schema.BaseMessage, opts ...iface.Option) ([]llm_schema.BaseMessage, error) {
-	// 将单条消息包装为列表
-	messages := []llm_schema.BaseMessage{message}
+func (mc *SessionModelContext) AddMessages(ctx context.Context, messages []llm_schema.BaseMessage, opts ...iface.Option) ([]llm_schema.BaseMessage, error) {
 	EnsureContextMessageIDs(messages)
 
 	locked := false
@@ -387,6 +385,7 @@ func (mc *SessionModelContext) GetContextWindow(
 	window.Tools = tools
 
 	// 5. 遍历处理器：trigger + on_get_context_window
+	// 对齐 Python: get_context_window 中处理器循环的状态事件发射
 	for _, proc := range mc.processors {
 		triggered, err := proc.TriggerGetContextWindow(ctx, mc, *window, opts...)
 		if err != nil {
@@ -402,6 +401,27 @@ func (mc *SessionModelContext) GetContextWindow(
 			continue
 		}
 
+		// 记录处理前状态
+		operationID := uuid.New().String()
+		startTime := time.Now()
+		beforeMessages := window.ContextMessages
+		contextMax := mc.resolveContextMax(opts...)
+
+		// ① 发射 started 状态
+		// 对齐 Python: status="started", phase="get_context_window", trigger="passive"
+		mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+			OperationID:    operationID,
+			Status:         ceschema.CompressionStarted,
+			Phase:          ceschema.PhaseGetContextWindow,
+			Trigger:        "passive",
+			Processor:      proc,
+			Reason:         "processor_triggered",
+			BeforeMessages: beforeMessages,
+			StartedAt:      startTime,
+			Force:          false,
+			ContextMax:     contextMax,
+		}))
+
 		event, newWindow, err := proc.OnGetContextWindow(ctx, mc, *window, opts...)
 		if err != nil {
 			logger.Error(logComponent).
@@ -410,14 +430,61 @@ func (mc *SessionModelContext) GetContextWindow(
 				Str("context_id", mc.contextID).
 				Err(err).
 				Msg("处理器执行失败")
+
+			// ② 发射 failed 状态
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:    operationID,
+				Status:         ceschema.CompressionFailed,
+				Phase:          ceschema.PhaseGetContextWindow,
+				Trigger:        "passive",
+				Processor:      proc,
+				Reason:         "processor_error",
+				BeforeMessages: beforeMessages,
+				AfterMessages:  window.ContextMessages,
+				StartedAt:      startTime,
+				EndedAt:        time.Now(),
+				Error:          err.Error(),
+				ContextMax:     contextMax,
+			}))
 			continue
 		}
 
 		window = &newWindow
 
-		// 记录处理器事件
+		// ③ 发射 completed 或 noop 状态
+		// 对齐 Python: status = "completed" if event is not None else "noop"
 		if event != nil {
-			mc.stateRecorder.recordFromEvent(event)
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:      operationID,
+				Status:           ceschema.CompressionCompleted,
+				Phase:            ceschema.PhaseGetContextWindow,
+				Trigger:          "passive",
+				Processor:        proc,
+				Reason:           "processor_completed",
+				BeforeMessages:   beforeMessages,
+				AfterMessages:    window.ContextMessages,
+				StartedAt:        startTime,
+				EndedAt:          time.Now(),
+				MessagesToModify: event.MessagesToModify,
+				CompactSummary:   event.CompactSummary,
+				Force:            false,
+				ContextMax:       contextMax,
+			}))
+		} else {
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:    operationID,
+				Status:         ceschema.CompressionNoop,
+				Phase:          ceschema.PhaseGetContextWindow,
+				Trigger:        "passive",
+				Processor:      proc,
+				Reason:         "processor_noop",
+				BeforeMessages: beforeMessages,
+				AfterMessages:  window.ContextMessages,
+				StartedAt:      startTime,
+				EndedAt:        time.Now(),
+				Force:          false,
+				ContextMax:     contextMax,
+			}))
 		}
 	}
 
@@ -628,14 +695,14 @@ func (mc *SessionModelContext) LoadState(state map[string]any) {
 //
 // 返回 "busy"/"compressed"/"noop"。
 // 对应 Python: SessionModelContext.compress_context()
-func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (string, error) {
+func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
 	// 尝试非阻塞获取锁
 	if !mc.processorLock.TryLock() {
 		logger.Warn(logComponent).
 			Str("event_type", "CONTEXT_COMPRESS_BUSY").
 			Str("context_id", mc.contextID).
 			Msg("上下文压缩忙，跳过")
-		return "busy", nil
+		return mc.buildActiveCompressionResult("busy", opts...), nil
 	}
 
 	mc.activeCompressionInProgress.Store(true)
@@ -652,7 +719,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 			Str("event_type", "CONTEXT_COMPRESS_NOOP").
 			Str("context_id", mc.contextID).
 			Msg("无压缩处理器，跳过主动压缩")
-		return "noop", nil
+		return mc.buildActiveCompressionResult("noop", opts...), nil
 	}
 
 	// 执行处理器（force=true, phase=active_compress）
@@ -664,7 +731,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 			Str("event_type", "CONTEXT_COMPRESS_ERROR").
 			Str("context_id", mc.contextID).
 			Msg("主动压缩执行处理器失败")
-		return "error", err
+		return &iface.CompressContextResult{Result: "error"}, err
 	}
 
 	mc.activeCompressionInProgress.Store(false)
@@ -675,7 +742,7 @@ func (mc *SessionModelContext) CompressContext(ctx context.Context, opts ...ifac
 		Str("context_id", mc.contextID).
 		Msg("主动压缩完成")
 
-	return "compressed", nil
+	return mc.buildActiveCompressionResult("compressed", opts...), nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
@@ -726,6 +793,21 @@ func (mc *SessionModelContext) runAddProcessors(
 		operationID := uuid.New().String()
 		startTime := time.Now()
 
+		// ① 发射 started 状态
+		// 对齐 Python: status="started", 在处理器执行前发射
+		mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+			OperationID:    operationID,
+			Status:         ceschema.CompressionStarted,
+			Phase:          phase,
+			Trigger:        "add_messages",
+			Processor:      proc,
+			Reason:         "processor_triggered",
+			BeforeMessages: beforeMessages,
+			StartedAt:      startTime,
+			Force:          force,
+			ContextMax:     mc.resolveContextMax(opts...),
+		}))
+
 		// 执行处理器
 		event, newMessages, err := proc.OnAddMessages(ctx, mc, messages, opts...)
 		if err != nil {
@@ -743,7 +825,9 @@ func (mc *SessionModelContext) runAddProcessors(
 				Phase:          phase,
 				Trigger:        "add_messages",
 				Processor:      proc,
+				Reason:         "processor_error",
 				BeforeMessages: beforeMessages,
+				AfterMessages:  mc.messageBuffer.GetBack(0, true),
 				Force:          force,
 				StartedAt:      startTime,
 				EndedAt:        time.Now(),
@@ -759,18 +843,19 @@ func (mc *SessionModelContext) runAddProcessors(
 		}
 
 		// 记录处理器事件和状态
+		afterMessages := mc.messageBuffer.GetBack(0, true)
+		if len(messages) > 0 {
+			afterMessages = append(afterMessages, messages...)
+		}
 		if event != nil {
-			afterMessages := mc.messageBuffer.GetBack(0, true)
-			if len(messages) > 0 {
-				afterMessages = append(afterMessages, messages...)
-			}
+			// ② 发射 completed 状态
 			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
 				OperationID:      operationID,
 				Status:           ceschema.CompressionCompleted,
 				Phase:            phase,
 				Trigger:          "add_messages",
 				Processor:        proc,
-				Reason:           "处理器执行成功",
+				Reason:           "processor_completed",
 				BeforeMessages:   beforeMessages,
 				AfterMessages:    afterMessages,
 				Force:            force,
@@ -779,6 +864,22 @@ func (mc *SessionModelContext) runAddProcessors(
 				MessagesToModify: event.MessagesToModify,
 				CompactSummary:   event.CompactSummary,
 				ContextMax:       mc.resolveContextMax(opts...),
+			}))
+		} else {
+			// ③ 发射 noop 状态（处理器触发但未返回事件）
+			mc.stateRecorder.Emit(ctx, mc.stateRecorder.BuildState(ProcessorStateInput{
+				OperationID:    operationID,
+				Status:         ceschema.CompressionNoop,
+				Phase:          phase,
+				Trigger:        "add_messages",
+				Processor:      proc,
+				Reason:         "processor_noop",
+				BeforeMessages: beforeMessages,
+				AfterMessages:  afterMessages,
+				Force:          force,
+				StartedAt:      startTime,
+				EndedAt:        time.Now(),
+				ContextMax:     mc.resolveContextMax(opts...),
 			}))
 		}
 	}
@@ -1023,6 +1124,40 @@ func (mc *SessionModelContext) getModelFromSession() *llm.Model {
 	// Session 不直接持有 Model，返回 nil
 	// 实际 Model 通过 Processor 的 option 传入
 	return nil
+}
+
+// buildActiveCompressionResult 构建主动压缩结果，对齐 Python _build_active_compression_result。
+//
+// 当 ReturnState=true 时，从 stateRecorder 历史记录中选取最终的压缩状态，
+// 提取 state 和 compact_summary；否则只返回 result 字符串。
+func (mc *SessionModelContext) buildActiveCompressionResult(result string, opts ...iface.CompressContextOption) *iface.CompressContextResult {
+	compOpts := iface.NewCompressContextOptions(opts...)
+	r := &iface.CompressContextResult{Result: result}
+
+	if compOpts.ReturnState {
+		// 对齐 Python: _select_active_compression_result_state
+		// 从历史记录中选取最后一个 status=completed 且有 compact_summary 的状态
+		history := mc.stateRecorder.History()
+		for i := len(history) - 1; i >= 0; i-- {
+			state := history[i]
+			if status, _ := state["status"].(string); status == "completed" {
+				if cs, _ := state["compact_summary"].(string); cs != "" {
+					r.State = state
+					r.CompactSummary = cs
+					return r
+				}
+			}
+		}
+		// 没有找到 completed+compact_summary，取最后一条
+		if len(history) > 0 {
+			r.State = history[len(history)-1]
+			if cs, _ := r.State["compact_summary"].(string); cs != "" {
+				r.CompactSummary = cs
+			}
+		}
+	}
+
+	return r
 }
 
 // recordFromEvent 从 ContextEvent 记录简要信息到日志。

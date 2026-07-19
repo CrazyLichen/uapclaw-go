@@ -180,7 +180,7 @@ func (ce *contextEngine) GetContext(contextID string, sessionID string) iface.Mo
 // 对应 Python: ContextEngine.compress_context()
 // Python 在调用 context.compress_context() 时透传 self._sys_operation 和 **kwargs，
 // Go 通过 CompressContextOption 传入 SysOperation 和 ModelName 等可选参数。
-func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CompressContextOption) (string, error) {
+func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, sess sessioninterfaces.SessionFacade, opts ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
 	// 三层 fallback：sess → SessionID 选项 → defaultSessionID，对齐 Python
 	sessionID := defaultSessionID
 	opt := iface.NewCompressContextOptions(opts...)
@@ -193,7 +193,7 @@ func (ce *contextEngine) CompressContext(ctx context.Context, contextID string, 
 	contextID = processContextID(contextID)
 	mc := ce.GetContext(contextID, sessionID)
 	if mc == nil {
-		return "", exception.NewBaseError(
+		return nil, exception.NewBaseError(
 			exception.StatusContextExecutionError,
 			exception.WithMsg("在会话 '"+sessionID+"' 中找不到上下文 '"+contextID+"'"),
 		)

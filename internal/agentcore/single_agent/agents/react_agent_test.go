@@ -1199,8 +1199,8 @@ func (f *fakeContextEngine) GetContext(_ string, _ string) ceinterface.ModelCont
 	return f.modelCtx
 }
 
-func (f *fakeContextEngine) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CompressContextOption) (string, error) {
-	return "noop", nil
+func (f *fakeContextEngine) CompressContext(_ context.Context, _ string, _ sessioninterfaces.SessionFacade, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
+	return &ceinterface.CompressContextResult{Result: ""}, nil
 }
 
 func (f *fakeContextEngine) ClearContext(_ context.Context, _ ...ceinterface.ClearContextOption) error {
@@ -1231,8 +1231,8 @@ func (f *fakeModelContext) ClearMessages(_ context.Context, _ bool, _ ...ceinter
 	return nil
 }
 
-func (f *fakeModelContext) AddMessages(_ context.Context, msg llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
-	f.messages = append(f.messages, msg)
+func (f *fakeModelContext) AddMessages(_ context.Context, messages []llmschema.BaseMessage, _ ...ceinterface.Option) ([]llmschema.BaseMessage, error) {
+	f.messages = append(f.messages, messages...)
 	return f.messages, nil
 }
 
@@ -1268,8 +1268,8 @@ func (f *fakeModelContext) SaveState() map[string]any { return nil }
 
 func (f *fakeModelContext) LoadState(_ map[string]any) {}
 
-func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (string, error) {
-	return "noop", nil
+func (f *fakeModelContext) CompressContext(_ context.Context, _ ...ceinterface.CompressContextOption) (*ceinterface.CompressContextResult, error) {
+	return &ceinterface.CompressContextResult{Result: ""}, nil
 }
 
 // fakeSessionFacade 方法实现

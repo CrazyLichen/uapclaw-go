@@ -76,8 +76,8 @@ func (m *mockModelContext) ClearMessages(ctx context.Context, withHistory bool, 
 	m.messages = nil
 	return nil
 }
-func (m *mockModelContext) AddMessages(ctx context.Context, message llmschema.BaseMessage, opts ...iface.Option) ([]llmschema.BaseMessage, error) {
-	m.messages = append(m.messages, message)
+func (m *mockModelContext) AddMessages(ctx context.Context, messages []llmschema.BaseMessage, opts ...iface.Option) ([]llmschema.BaseMessage, error) {
+	m.messages = append(m.messages, messages...)
 	return m.messages, nil
 }
 func (m *mockModelContext) GetContextWindow(ctx context.Context, systemMessages []llmschema.BaseMessage, tools []cschema.ToolInfoInterface, windowSize int, dialogueRound int, opts ...iface.Option) (*iface.ContextWindow, error) {
@@ -94,8 +94,8 @@ func (m *mockModelContext) GetSessionRef() sessioninterfaces.SessionFacade      
 func (m *mockModelContext) OffloadMessages(handle string, messages []llmschema.BaseMessage) {}
 func (m *mockModelContext) SaveState() map[string]any                                       { return nil }
 func (m *mockModelContext) LoadState(state map[string]any)                                  {}
-func (m *mockModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (string, error) {
-	return "noop", nil
+func (m *mockModelContext) CompressContext(ctx context.Context, opts ...iface.CompressContextOption) (*iface.CompressContextResult, error) {
+	return &iface.CompressContextResult{Result: ""}, nil
 }
 
 // 确保 mock 实现了 ModelContext 接口

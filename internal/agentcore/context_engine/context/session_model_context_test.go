@@ -450,7 +450,7 @@ func TestSessionModelContext_AddMessages(t *testing.T) {
 	t.Run("基本添加", func(t *testing.T) {
 		mc := newTestSessionModelContext()
 		msg := llm_schema.NewUserMessage("测试消息")
-		result, err := mc.AddMessages(context.Background(), msg)
+		result, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{msg})
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
@@ -473,7 +473,7 @@ func TestSessionModelContext_AddMessages(t *testing.T) {
 			defer close(done)
 			// AddMessages 在快速路径下仅入队
 			msg := llm_schema.NewUserMessage("快速路径消息")
-			result, err := mc.AddMessages(context.Background(), msg)
+			result, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{msg})
 			if err != nil {
 				t.Errorf("快速路径期望无错误, 实际=%v", err)
 			}
@@ -652,7 +652,7 @@ func TestSessionModelContext_CompressContext(t *testing.T) {
 		resultCh := make(chan string)
 		go func() {
 			result, _ := mc.CompressContext(context.Background())
-			resultCh <- result
+			resultCh <- result.Result
 		}()
 
 		result := <-resultCh
@@ -669,8 +669,8 @@ func TestSessionModelContext_CompressContext(t *testing.T) {
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
-		if result != "noop" {
-			t.Errorf("期望无压缩处理器时返回 noop, 实际=%s", result)
+		if result.Result != "noop" {
+			t.Errorf("期望无压缩处理器时返回 noop, 实际=%s", result.Result)
 		}
 	})
 
@@ -685,8 +685,8 @@ func TestSessionModelContext_CompressContext(t *testing.T) {
 		if err != nil {
 			t.Errorf("期望无错误, 实际=%v", err)
 		}
-		if result != "compressed" {
-			t.Errorf("期望有压缩处理器时返回 compressed, 实际=%s", result)
+		if result.Result != "compressed" {
+			t.Errorf("期望有压缩处理器时返回 compressed, 实际=%s", result.Result)
 		}
 	})
 }
@@ -1434,7 +1434,7 @@ func TestAddMessages_压缩进行中获取锁(t *testing.T) {
 	mc.activeCompressionInProgress.Store(true)
 	// 不锁住 processorLock，TryLock 应成功
 	msg := llm_schema.NewUserMessage("测试")
-	result, err := mc.AddMessages(context.Background(), msg)
+	result, err := mc.AddMessages(context.Background(), []llm_schema.BaseMessage{msg})
 	if err != nil {
 		t.Errorf("期望无错误，实际: %v", err)
 	}

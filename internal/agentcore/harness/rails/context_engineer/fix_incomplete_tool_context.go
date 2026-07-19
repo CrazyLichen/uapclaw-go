@@ -71,7 +71,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 	flushPendingTools := func() {
 		// 先回写缓存的 ToolMessage
 		for _, toolMsg := range toolMessageCache {
-			_, _ = mc.AddMessages(ctx, toolMsg)
+			_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{toolMsg})
 		}
 		toolMessageCache = make(map[string]*llmschema.ToolMessage)
 
@@ -81,7 +81,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 				tc.ToolCallID,
 				fmt.Sprintf("[Tool execution interrupted] Tool %s was interrupted by user during execution, no result available.", tc.ToolName),
 			)
-			_, _ = mc.AddMessages(ctx, placeholderMsg)
+			_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{placeholderMsg})
 		}
 		toolIDCache = nil
 	}
@@ -98,7 +98,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 				flushPendingTools()
 			}
 			// 回写 AssistantMessage
-			_, _ = mc.AddMessages(ctx, m)
+			_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{m})
 			// 入队其 tool_calls
 			if len(m.ToolCalls) > 0 {
 				for _, tc := range m.ToolCalls {
@@ -114,10 +114,10 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 		case *llmschema.ToolMessage:
 			if len(toolIDCache) == 0 {
 				// 没有待配对的 tool_call，直接回写
-				_, _ = mc.AddMessages(ctx, m)
+				_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{m})
 			} else if m.ToolCallID == toolIDCache[0].ToolCallID {
 				// 匹配队列头部的 tool_call
-				_, _ = mc.AddMessages(ctx, m)
+				_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{m})
 				toolIDCache = toolIDCache[1:]
 			} else {
 				// 不匹配，暂存到 cache
@@ -132,7 +132,7 @@ func FixIncompleteToolContext(ctx context.Context, cbc *sainterfaces.AgentCallba
 					Msg("Fixed incomplete tool context with placeholder messages")
 				flushPendingTools()
 			}
-			_, _ = mc.AddMessages(ctx, m)
+			_, _ = mc.AddMessages(ctx, []llmschema.BaseMessage{m})
 		}
 	}
 
