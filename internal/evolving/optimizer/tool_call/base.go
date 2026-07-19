@@ -117,16 +117,16 @@ func (b *ToolOptimizerBase) RequiresForwardData() bool {
 //
 // 对齐 Python: ToolOptimizerBase.optimize_tool(tool, tool_callable)
 //
-//	1. 保存原始描述 original_desc = tool["description"]
-//	2. for i in range(self.max_turns):
-//	     if i > 0: tool["description"] = 最新描述
-//	     # Stage 1 - Example
-//	     result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
-//	     # Stage 2 - Description
-//	     result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
-//	3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
-//	4. 格式化：ToolDescriptionReviewer.Format(schema, processed)
-//	5. 返回 final_desc
+//  1. 保存原始描述 original_desc = tool["description"]
+//  2. for i in range(self.max_turns):
+//     if i > 0: tool["description"] = 最新描述
+//     # Stage 1 - Example
+//     result_example = customized_pipeline("example", tool, tool_callable=tool_callable, config=self.config_eg)
+//     # Stage 2 - Description
+//     result_desc = customized_pipeline("description", tool, tool_callable=tool_callable, config=self.config_desc)
+//  3. 最终审查：ToolDescriptionReviewer.Process(output_desc, ori_tool, ["clean","cross_check","translate"])
+//  4. 格式化：ToolDescriptionReviewer.Format(schema, processed)
+//  5. 返回 final_desc
 func (b *ToolOptimizerBase) OptimizeTool(
 	ctx context.Context,
 	tool map[string]any,

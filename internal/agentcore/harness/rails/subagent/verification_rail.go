@@ -194,10 +194,10 @@ func (r *VerificationRail) BeforeModelCall(ctx context.Context, cbc *agentinterf
 // BeforeToolCall 工具调用前执行白名单检查和工作空间范围守卫。
 //
 // 两个守卫按顺序运行：
-// 1. 白名单 — 拒绝不在 VERIFICATION_ALLOWED_TOOLS 中的工具
-// 2. 工作空间范围 — 对于接受文件系统路径的工具，
-//    拒绝解析后路径超出配置工作空间根目录的调用，
-//    提供清晰的说明而非让 SysOperation 层弹出晦涩的"Access denied"错误
+//  1. 白名单 — 拒绝不在 VERIFICATION_ALLOWED_TOOLS 中的工具
+//  2. 工作空间范围 — 对于接受文件系统路径的工具，
+//     拒绝解析后路径超出配置工作空间根目录的调用，
+//     提供清晰的说明而非让 SysOperation 层弹出晦涩的"Access denied"错误
 //
 // 对齐 Python: VerificationRail.before_tool_call(ctx)
 // Python L165-233

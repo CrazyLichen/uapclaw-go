@@ -60,7 +60,8 @@ func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量。
 //
 // 对齐 Python: BaseOptimizer.bind(operators, targets, **config)
-//   self._targets = list(targets or self.default_targets())
+//
+//	self._targets = list(targets or self.default_targets())
 func (o *InstructionOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
 	// 对齐 Python: targets or self.default_targets()
 	if len(targets) == 0 {
@@ -98,9 +99,9 @@ func (o *InstructionOptimizer) Parameters() map[string]*optimizer.TextualParamet
 //   - 或者 context.score == 0
 func (o *InstructionOptimizer) SelectSignals(signals []*signal.EvolutionSignal) []*signal.EvolutionSignal {
 	failureTypes := map[string]bool{
-		"execution_failure":    true,
-		"low_score":           true,
-		"user_correction":     true,
+		"execution_failure":     true,
+		"low_score":             true,
+		"user_correction":       true,
 		"collaboration_failure": true,
 	}
 
@@ -125,9 +126,10 @@ func (o *InstructionOptimizer) SelectSignals(signals []*signal.EvolutionSignal) 
 // Backward 反向传播：从信号计算梯度并预计算优化后 prompt。
 //
 // 对齐 Python: BaseOptimizer.backward(signals)
-//   self._validate_parameters()
-//   self._selected_signals = self._select_signals(signals)
-//   try: await self._backward(signals)
+//
+//	self._validate_parameters()
+//	self._selected_signals = self._select_signals(signals)
+//	try: await self._backward(signals)
 func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.EvolutionSignal) error {
 	o.ValidateParameters()
 
@@ -148,10 +150,11 @@ func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.E
 // Step 生成更新映射，由 Trainer.apply_updates 统一应用。
 //
 // 对齐 Python: BaseOptimizer.step()
-//   self._validate_parameters()
-//   try: updates = self._step()
-//   self.clear_trajectories()
-//   return updates or {}
+//
+//	self._validate_parameters()
+//	try: updates = self._step()
+//	self.clear_trajectories()
+//	return updates or {}
 func (o *InstructionOptimizer) Step() map[schema.UpdateKey]any {
 	o.ValidateParameters()
 	updates := o.step()
@@ -277,13 +280,14 @@ func (o *InstructionOptimizer) backward(ctx context.Context, selectedSignals []*
 // step 返回预计算的优化后 prompt 映射。
 //
 // 对齐 Python: InstructionOptimizer._step()
-//   updates = {}
-//   for op_id, param in self._parameters.items():
-//       sys_val = param.get_gradient("system_prompt_optimized")
-//       usr_val = param.get_gradient("user_prompt_optimized")
-//       if sys_val: updates[(op_id, "system_prompt")] = sys_val
-//       if usr_val: updates[(op_id, "user_prompt")] = usr_val
-//   return updates if updates else None
+//
+//	updates = {}
+//	for op_id, param in self._parameters.items():
+//	    sys_val = param.get_gradient("system_prompt_optimized")
+//	    usr_val = param.get_gradient("user_prompt_optimized")
+//	    if sys_val: updates[(op_id, "system_prompt")] = sys_val
+//	    if usr_val: updates[(op_id, "user_prompt")] = usr_val
+//	return updates if updates else None
 func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 	updates := make(map[schema.UpdateKey]any)
 	params := o.BaseOptimizerMixin.Parameters()
@@ -303,11 +307,12 @@ func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 // generateTextualGradient 使用 LLM 分析为什么当前 prompt 失败。
 //
 // 对齐 Python: InstructionOptimizer._generate_textual_gradient(op)
-//   system_tpl = self._get_prompt_template(op, "system_prompt")
-//   user_tpl = self._get_prompt_template(op, "user_prompt")
-//   messages = CREATE_PROMPT_TEXTUAL_GRADIENT_TEMPLATE.format({...}).to_messages()
-//   raw_response = (await self._model.invoke(messages)).content
-//   return raw_response if isinstance(raw_response, str) else str(raw_response)
+//
+//	system_tpl = self._get_prompt_template(op, "system_prompt")
+//	user_tpl = self._get_prompt_template(op, "user_prompt")
+//	messages = CREATE_PROMPT_TEXTUAL_GRADIENT_TEMPLATE.format({...}).to_messages()
+//	raw_response = (await self._model.invoke(messages)).content
+//	return raw_response if isinstance(raw_response, str) else str(raw_response)
 func (o *InstructionOptimizer) generateTextualGradient(ctx context.Context, op operator.Operator) (string, error) {
 	sysTpl := o.getPromptTemplate(op, "system_prompt")
 	usrTpl := o.getPromptTemplate(op, "user_prompt")
@@ -334,8 +339,9 @@ func (o *InstructionOptimizer) generateTextualGradient(ctx context.Context, op o
 // invokeLLM 调用 LLM 并返回字符串内容。
 //
 // 对齐 Python: InstructionOptimizer._invoke_llm(messages)
-//   raw = (await self._model.invoke(messages)).content
-//   return raw if isinstance(raw, str) else str(raw)
+//
+//	raw = (await self._model.invoke(messages)).content
+//	return raw if isinstance(raw, str) else str(raw)
 func (o *InstructionOptimizer) invokeLLM(ctx context.Context, messages []llmschema.BaseMessage) (string, error) {
 	msgsParam := model_clients.NewMessagesParam(messages...)
 	response, err := o.model.Invoke(ctx, msgsParam)
@@ -348,16 +354,17 @@ func (o *InstructionOptimizer) invokeLLM(ctx context.Context, messages []llmsche
 // optimizeBoth 联合优化 system 和 user prompt。
 //
 // 对齐 Python: InstructionOptimizer._optimize_both(op, param)
-//   system_tpl = self._get_prompt_template(op, "system_prompt")
-//   user_tpl = self._get_prompt_template(op, "user_prompt")
-//   gradient = param.get_gradient("system_prompt") or ""
-//   messages = PROMPT_INSTRUCTION_OPTIMIZE_BOTH_TEMPLATE.format({...}).to_messages()
-//   raw_response = await self._invoke_llm(messages)
-//   sys_prompt = self._extract_tag(raw_response, "SYSTEM_PROMPT_OPTIMIZED")
-//   usr_prompt = self._extract_tag(raw_response, "USER_PROMPT_OPTIMIZED")
-//   sys_prompt = await self._restore_placeholders(...) if sys_prompt else None
-//   usr_prompt = await self._restore_placeholders(...) if usr_prompt else None
-//   return sys_prompt, usr_prompt
+//
+//	system_tpl = self._get_prompt_template(op, "system_prompt")
+//	user_tpl = self._get_prompt_template(op, "user_prompt")
+//	gradient = param.get_gradient("system_prompt") or ""
+//	messages = PROMPT_INSTRUCTION_OPTIMIZE_BOTH_TEMPLATE.format({...}).to_messages()
+//	raw_response = await self._invoke_llm(messages)
+//	sys_prompt = self._extract_tag(raw_response, "SYSTEM_PROMPT_OPTIMIZED")
+//	usr_prompt = self._extract_tag(raw_response, "USER_PROMPT_OPTIMIZED")
+//	sys_prompt = await self._restore_placeholders(...) if sys_prompt else None
+//	usr_prompt = await self._restore_placeholders(...) if usr_prompt else None
+//	return sys_prompt, usr_prompt
 func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Operator, param *optimizer.TextualParameter) (string, string, error) {
 	sysTpl := o.getPromptTemplate(op, "system_prompt")
 	usrTpl := o.getPromptTemplate(op, "user_prompt")
@@ -424,14 +431,15 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 // optimizeSingle 单独优化一个 prompt。
 //
 // 对齐 Python: InstructionOptimizer._optimize_single(op, param, prompt_type)
-//   target_tpl = self._get_prompt_template(op, prompt_type)
-//   gradient = param.get_gradient(prompt_type) or ""
-//   messages = PROMPT_INSTRUCTION_OPTIMIZE_TEMPLATE.format({...}).to_messages()
-//   raw_response = await self._invoke_llm(messages)
-//   optimized = self._extract_tag(raw_response, "PROMPT_OPTIMIZED")
-//   if optimized:
-//       optimized = await self._restore_placeholders(...)
-//   return optimized
+//
+//	target_tpl = self._get_prompt_template(op, prompt_type)
+//	gradient = param.get_gradient(prompt_type) or ""
+//	messages = PROMPT_INSTRUCTION_OPTIMIZE_TEMPLATE.format({...}).to_messages()
+//	raw_response = await self._invoke_llm(messages)
+//	optimized = self._extract_tag(raw_response, "PROMPT_OPTIMIZED")
+//	if optimized:
+//	    optimized = await self._restore_placeholders(...)
+//	return optimized
 func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.Operator, param *optimizer.TextualParameter, promptType string) (string, error) {
 	targetTpl := o.getPromptTemplate(op, promptType)
 
@@ -485,19 +493,20 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 // formatBadCases 格式化选中的失败信号为 LLM 提示词文本。
 //
 // 对齐 Python: InstructionOptimizer._format_bad_cases()
-//   parts = []
-//   for signal in self._selected_signals:
-//       ctx = signal.context or {}
-//       formatted = CREATE_BAD_CASE_TEMPLATE.format({
-//           "question": ctx.get("question", ""),
-//           "label": ctx.get("label", ""),
-//           "answer": ctx.get("answer", ""),
-//           "reason": ctx.get("reason", ""),
-//       })
-//       content = formatted.content
-//       if isinstance(content, str): parts.append(content)
-//       elif content: parts.append(str(content))
-//   return "".join(parts)
+//
+//	parts = []
+//	for signal in self._selected_signals:
+//	    ctx = signal.context or {}
+//	    formatted = CREATE_BAD_CASE_TEMPLATE.format({
+//	        "question": ctx.get("question", ""),
+//	        "label": ctx.get("label", ""),
+//	        "answer": ctx.get("answer", ""),
+//	        "reason": ctx.get("reason", ""),
+//	    })
+//	    content = formatted.content
+//	    if isinstance(content, str): parts.append(content)
+//	    elif content: parts.append(str(content))
+//	return "".join(parts)
 func (o *InstructionOptimizer) formatBadCases() string {
 	selectedSignals := o.BaseOptimizerMixin.SelectedSignals()
 	var parts []string
@@ -637,11 +646,12 @@ func (o *InstructionOptimizer) restorePlaceholders(ctx context.Context, original
 // extractTag 提取 XML 标签内容。
 //
 // 对齐 Python: InstructionOptimizer._extract_tag(response, tag)
-//   pattern = rf"<{tag}>(.*?)</{tag}>"
-//   match = re.search(pattern, response, re.DOTALL)
-//   if not match: return None
-//   content = match.group(1)
-//   return content.replace("<prompt_base>", "").replace("</prompt_base>", "")
+//
+//	pattern = rf"<{tag}>(.*?)</{tag}>"
+//	match = re.search(pattern, response, re.DOTALL)
+//	if not match: return None
+//	content = match.group(1)
+//	return content.replace("<prompt_base>", "").replace("</prompt_base>", "")
 func extractTag(response, tag string) string {
 	pattern := regexp.MustCompile(fmt.Sprintf(`(?s)<%s>(.*?)</%s>`, regexp.QuoteMeta(tag), regexp.QuoteMeta(tag)))
 	match := pattern.FindStringSubmatch(response)
@@ -657,8 +667,9 @@ func extractTag(response, tag string) string {
 // appendMissingPlaceholders 手动追加缺失的占位符。
 //
 // 对齐 Python:
-//   placeholder_text = "\n".join(f"{{{{{ph}}}}}" for ph in still_missing)
-//   raw = str(raw) + "\n" + placeholder_text
+//
+//	placeholder_text = "\n".join(f"{{{{{ph}}}}}" for ph in still_missing)
+//	raw = str(raw) + "\n" + placeholder_text
 func appendMissingPlaceholders(prompt string, missing []string) string {
 	var lines []string
 	for _, ph := range missing {

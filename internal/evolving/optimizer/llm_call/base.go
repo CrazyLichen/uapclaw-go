@@ -54,7 +54,8 @@ func (b *LLMCallOptimizerBase) RequiresForwardData() bool {
 // 不在 tunables 中即视为冻结（operator 未暴露该参数）。
 //
 // 对应 Python: LLMCallOptimizerBase._is_target_frozen(op, target)
-//   return target not in op.get_tunables()
+//
+//	return target not in op.get_tunables()
 func (b *LLMCallOptimizerBase) isTargetFrozen(op operator.Operator, target string) bool {
 	tunables := op.GetTunables()
 	_, exists := tunables[target]
@@ -64,9 +65,10 @@ func (b *LLMCallOptimizerBase) isTargetFrozen(op operator.Operator, target strin
 // getPromptTemplate 从 op.GetState() 获取 target 内容，构建 PromptTemplate。
 //
 // 对齐 Python: LLMCallOptimizerBase._get_prompt_template(op, target)
-//   state = op.get_state()
-//   content = state.get(target, "")
-//   return PromptTemplate(content=content)
+//
+//	state = op.get_state()
+//	content = state.get(target, "")
+//	return PromptTemplate(content=content)
 //
 // Python 不做类型判断，直接将 content 传给 PromptTemplate。
 // 类型校验由 PromptTemplate 内部的 ToMessages()/deepCopyContent() 等方法负责。

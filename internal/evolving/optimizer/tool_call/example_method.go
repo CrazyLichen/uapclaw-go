@@ -66,11 +66,11 @@ func NewAPICallToExampleMethod(
 //
 // 对齐 Python: APICallToExampleMethod.step(tool, prev_outputs, it)
 //
-//	1. 获取原始描述
-//	2. 拒绝采样循环（num_init_loop 次）：生成 API 调用 → 执行 → 批判
-//	3. Q/A 生成和精炼循环（num_refine_steps 次）：生成指令 → 生成回答 → 批判指令 → 批量反思
-//	4. 评估：使用 evalFn 评估
-//	5. 返回 (output, instructions, score)
+//  1. 获取原始描述
+//  2. 拒绝采样循环（num_init_loop 次）：生成 API 调用 → 执行 → 批判
+//  3. Q/A 生成和精炼循环（num_refine_steps 次）：生成指令 → 生成回答 → 批判指令 → 批量反思
+//  4. 评估：使用 evalFn 评估
+//  5. 返回 (output, instructions, score)
 func (m *APICallToExampleMethod) Step(
 	ctx context.Context,
 	tool map[string]any,

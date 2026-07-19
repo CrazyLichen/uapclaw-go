@@ -420,17 +420,17 @@ func TestAgentManager_Cleanup(t *testing.T) {
 
 func TestResolveModeFromRequest(t *testing.T) {
 	tests := []struct {
-		name      string
-		params    string
-		wantMode  string
-		wantSub   string
+		name     string
+		params   string
+		wantMode string
+		wantSub  string
 	}{
 		{"nil params", "", "agent", ""},
-		{"empty json", `{}`, "agent", "plan"},  // mode 为空时默认 "agent.plan"
+		{"empty json", `{}`, "agent", "plan"}, // mode 为空时默认 "agent.plan"
 		{"agent.plan", `{"mode": "agent.plan"}`, "agent", "plan"},
 		{"code.normal", `{"mode": "code.normal"}`, "code", "normal"},
 		{"code only", `{"mode": "code"}`, "code", ""},
-		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"},  // 空 mode 默认 "agent.plan"
+		{"empty mode defaults to agent.plan", `{"mode": ""}`, "agent", "plan"}, // 空 mode 默认 "agent.plan"
 	}
 
 	for _, tt := range tests {

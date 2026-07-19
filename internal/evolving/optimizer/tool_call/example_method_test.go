@@ -416,7 +416,7 @@ func TestGenerateInstructionFromAPICall_有前驱输出(t *testing.T) {
 
 	fnCall := map[string]any{"name": "search", "arguments": map[string]any{"q": "x"}}
 	prevOutput := map[string]any{
-		"instructions":      []string{"a"},
+		"instructions":     []string{"a"},
 		"scores":           []float64{1},
 		"batch_reflection": "b",
 	}

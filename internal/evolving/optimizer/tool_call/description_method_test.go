@@ -90,7 +90,7 @@ func TestToolDescriptionMethod_LoadExamples(t *testing.T) {
 	allOutputs := []any{
 		[]any{
 			map[string]any{
-				"fn_call":     map[string]any{"name": "test_function", "arguments": map[string]any{"param1": "value1"}},
+				"fn_call":      map[string]any{"name": "test_function", "arguments": map[string]any{"param1": "value1"}},
 				"tool_results": "tool result output",
 				"instructions": []any{"test instruction"},
 				"answers":      []any{"test answer"},
@@ -230,7 +230,7 @@ func TestToolDescriptionMethod_GetNegativeExamples(t *testing.T) {
 	m := &ToolDescriptionMethod{
 		BaseMethod: BaseMethod{
 			config: map[string]any{
-				"neg_ex_input_path":    negPath,
+				"neg_ex_input_path":     negPath,
 				"num_examples_for_desc": 3,
 			},
 		},
@@ -277,8 +277,8 @@ func TestToolDescriptionMethod_GetNegativeExamples_回退到示例目录(t *test
 	m := &ToolDescriptionMethod{
 		BaseMethod: BaseMethod{
 			config: map[string]any{
-				"neg_ex_input_path":    "/nonexistent/neg_examples.json",
-				"examples_dir":         tmpDir,
+				"neg_ex_input_path":     "/nonexistent/neg_examples.json",
+				"examples_dir":          tmpDir,
 				"num_examples_for_desc": 3,
 			},
 		},

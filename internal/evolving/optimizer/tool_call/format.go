@@ -20,10 +20,10 @@ import (
 //
 // 对齐 Python: parse_json(output, header=None)
 //
-//	1. 如果指定 header，先尝试查找 '{"<header>":' 或 '{\n"<header>":'
-//	2. 否则查找 '{\n' 或 '{'
-//	3. 提取第一个 '{' 到最后一个 '}' 之间的内容
-//	4. 尝试 json.Unmarshal，失败时尝试单引号→双引号修复
+//  1. 如果指定 header，先尝试查找 '{"<header>":' 或 '{\n"<header>":'
+//  2. 否则查找 '{\n' 或 '{'
+//  3. 提取第一个 '{' 到最后一个 '}' 之间的内容
+//  4. 尝试 json.Unmarshal，失败时尝试单引号→双引号修复
 func ParseJSON(output string, header ...string) map[string]any {
 	// 对齐 Python: json_idx = -1
 	jsonIdx := -1
@@ -77,7 +77,8 @@ func ParseJSON(output string, header ...string) map[string]any {
 // 当前实现为直接拼接 system + user prompt（对齐 Python）。
 //
 // 对齐 Python: format_prompt_llama(system_prompt, user_prompt)
-//   return system_prompt + user_prompt
+//
+//	return system_prompt + user_prompt
 func FormatPromptLlama(systemPrompt, userPrompt string) string {
 	return systemPrompt + userPrompt
 }

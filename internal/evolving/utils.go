@@ -21,7 +21,8 @@ import (
 // 调用模板的 ToMessages() 获取消息列表，拼接所有消息的文本内容，用换行符连接。
 //
 // 对应 Python: TuneUtils.get_content_string_from_template(template)
-//   "\n".join(msg.content for msg in template.to_messages())
+//
+//	"\n".join(msg.content for msg in template.to_messages())
 func GetContentStringFromTemplate(tpl *prompt.PromptTemplate) string {
 	messages, err := tpl.ToMessages()
 	if err != nil || len(messages) == 0 {

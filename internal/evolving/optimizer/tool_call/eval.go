@@ -181,11 +181,11 @@ func (e *SimpleEval) Eval(
 
 	// 对齐 Python: np.mean(all_scores) * 100.0, np.std(all_scores) * 100.0
 	return &EvalResult{
-		ScoreAvg:           mean(allScores) * 100.0,
-		ScoreStd:           std(allScores) * 100.0,
-		FnCallAccuracy:     mean(allFnCallScores) * 100.0,
+		ScoreAvg:            mean(allScores) * 100.0,
+		ScoreStd:            std(allScores) * 100.0,
+		FnCallAccuracy:      mean(allFnCallScores) * 100.0,
 		OutputEffectiveness: mean(allOutputScores) * 100.0,
-		Results:            allResults,
+		Results:             allResults,
 	}
 }
 
@@ -193,9 +193,9 @@ func (e *SimpleEval) Eval(
 //
 // 对齐 Python: SimpleEval._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 //
-//	- 函数名匹配权重 0.3
-//	- 参数匹配权重 0.7（按参数数量均分）
-//	- 返回 0~1 之间的分数
+//   - 函数名匹配权重 0.3
+//   - 参数匹配权重 0.7（按参数数量均分）
+//   - 返回 0~1 之间的分数
 func EvaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any) float64 {
 	score := 0.0
 	maxScore := 0.0
@@ -309,13 +309,13 @@ func (e *SimpleEval) evaluateSingleExample(
 ) EvalItemResult {
 	// 对齐 Python: 构造 example dict（后续步骤会使用）
 	_ = map[string]any{
-		"tool":              tool,
-		"description":       description,
-		"instruction":       example.Instruction,
-		"expected_fn_call":  example.FnCall,
-		"expected_output":   example.FnOutput,
-		"answer":            example.Answer,
-		"example_id":        exampleID,
+		"tool":             tool,
+		"description":      description,
+		"instruction":      example.Instruction,
+		"expected_fn_call": example.FnCall,
+		"expected_output":  example.FnOutput,
+		"answer":           example.Answer,
+		"example_id":       exampleID,
 	}
 
 	// 对齐 Python: generated_fn_call = self._generate_function_call(tool, description, instruction)

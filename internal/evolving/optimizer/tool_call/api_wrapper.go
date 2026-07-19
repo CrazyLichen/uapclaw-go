@@ -48,10 +48,10 @@ func NewSimpleAPIWrapperFromCallable(callable APIWrapperFunc, name string) *Simp
 //
 // 对齐 Python: SimpleAPIWrapperFromCallable.__call__(tool, tool_input)
 //
-//	1. 记录调用日志
-//	2. 查找已注册的函数，未找到时返回错误（状态码 12）
-//	3. 调用函数成功时返回 {'response': output}（状态码 0）
-//	4. 调用函数异常时返回 {'error': ..., 'response': ''}（状态码 12）
+//  1. 记录调用日志
+//  2. 查找已注册的函数，未找到时返回错误（状态码 12）
+//  3. 调用函数成功时返回 {'response': output}（状态码 0）
+//  4. 调用函数异常时返回 {'error': ..., 'response': ”}（状态码 12）
 func (w *SimpleAPIWrapperFromCallable) Call(tool map[string]any, toolInput map[string]any) (string, int) {
 	// 对齐 Python: logger.info(f"=== Trying to execute tool: {tool}, tool_input: {tool_input} ===")
 	toolName := ""

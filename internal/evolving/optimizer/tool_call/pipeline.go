@@ -41,11 +41,11 @@ var (
 //
 // 对齐 Python: customized_pipeline(stage, tool, config, tool_callable=None)
 //
-//	1. 创建 SimpleAPIWrapperFromCallable
-//	2. 创建 SimpleEval
-//	3. 根据 stage 创建 APICallToExampleMethod 或 ToolDescriptionMethod
-//	4. 创建 BeamSearch 并调用 Search
-//	5. 保存结果到 JSON 文件
+//  1. 创建 SimpleAPIWrapperFromCallable
+//  2. 创建 SimpleEval
+//  3. 根据 stage 创建 APICallToExampleMethod 或 ToolDescriptionMethod
+//  4. 创建 BeamSearch 并调用 Search
+//  5. 保存结果到 JSON 文件
 func CustomizedPipeline(
 	ctx context.Context,
 	stage string,

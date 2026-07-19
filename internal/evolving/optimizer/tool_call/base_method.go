@@ -60,9 +60,9 @@ func NewBaseMethod(config map[string]any, model *llm.Model) *BaseMethod {
 //
 // 对齐 Python: BaseMethod.produce_answer_from_api_call(instruction, doc_str, api_response)
 //
-//	1. 构建提示词（一比一复刻 Python 原文）
-//	2. 使用 InvokeWithVerify 调用 LLM
-//	3. 验证输出包含 "answer" 字段
+//  1. 构建提示词（一比一复刻 Python 原文）
+//  2. 使用 InvokeWithVerify 调用 LLM
+//  3. 验证输出包含 "answer" 字段
 func (m *BaseMethod) ProduceAnswerFromAPICall(
 	ctx context.Context,
 	instruction string,
@@ -107,10 +107,10 @@ You must strictly follow the output format. You can begin your task now.`,
 
 	// 对齐 Python: get_rits_response(config['gen_model_id'], prompt, config['llm_api_key'], verify_output, max_attempts=15, ...)
 	policy := llm_resilience.LLMInvokePolicy{
-		MaxAttempts:      15,
-		TotalBudgetSecs:  300,
+		MaxAttempts:        15,
+		TotalBudgetSecs:    300,
 		AttemptTimeoutSecs: 60,
-		BackoffBaseSecs:  1.0,
+		BackoffBaseSecs:    1.0,
 	}
 
 	modelName := getConfigString(m.config, "gen_model_id")

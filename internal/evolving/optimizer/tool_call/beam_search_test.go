@@ -26,7 +26,7 @@ func (m *mockBeamSearchMethod) Step(ctx context.Context, tool map[string]any, ex
 	if m.stepFunc != nil {
 		return m.stepFunc(ctx, tool, examples, prevOutputs, it)
 	}
-	return fmt.Sprintf("output-%d", it), fmt.Sprintf("data-%d", it), float64((it+1)*10), nil
+	return fmt.Sprintf("output-%d", it), fmt.Sprintf("data-%d", it), float64((it + 1) * 10), nil
 }
 
 // GetExamples 实现 BeamSearchMethod 接口
@@ -164,8 +164,8 @@ func TestTreeNode_父子关系(t *testing.T) {
 
 // TestTreeNode_History继承 测试 History 正确继承并追加
 func TestTreeNode_History继承(t *testing.T) {
-	root := newTreeNode("d0", 50.0, "r0", nil)           // History: [r0]
-	child := newTreeNode("d1", 60.0, "r1", root.History)  // History: [r0, r1]
+	root := newTreeNode("d0", 50.0, "r0", nil)                 // History: [r0]
+	child := newTreeNode("d1", 60.0, "r1", root.History)       // History: [r0, r1]
 	grandChild := newTreeNode("d2", 70.0, "r2", child.History) // History: [r0, r1, r2]
 
 	if len(root.History) != 1 {
@@ -657,7 +657,7 @@ func TestSearch_并发安全(t *testing.T) {
 		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
 			// 模拟一些处理延迟
 			time.Sleep(time.Millisecond)
-			return "output", "data", float64(it*10+50), nil
+			return "output", "data", float64(it*10 + 50), nil
 		},
 	}
 

@@ -118,10 +118,10 @@ func TestProcess_步骤顺序验证(t *testing.T) {
 
 	// 通过测试已知步骤名验证 Process 的步骤分派逻辑
 	tests := []struct {
-		name          string
-		steps         []string
-		expectErr     bool
-		errContains   string
+		name        string
+		steps       []string
+		expectErr   bool
+		errContains string
 	}{
 		{
 			name:      "空步骤列表",
@@ -129,9 +129,9 @@ func TestProcess_步骤顺序验证(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:      "未知步骤",
-			steps:     []string{"unknown_step"},
-			expectErr: true,
+			name:        "未知步骤",
+			steps:       []string{"unknown_step"},
+			expectErr:   true,
 			errContains: "Unknown processing step: unknown_step",
 		},
 		{

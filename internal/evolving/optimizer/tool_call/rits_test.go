@@ -11,7 +11,7 @@ import (
 // TestInvokeWithVerify_无VerifyFunc 测试不带验证函数时吞异常行为
 func TestInvokeWithVerify_无VerifyFunc(t *testing.T) {
 	policy := llm_resilience.LLMInvokePolicy{
-		MaxAttempts:         1,
+		MaxAttempts:        1,
 		TotalBudgetSecs:    1,
 		AttemptTimeoutSecs: 1,
 	}
@@ -33,7 +33,7 @@ func TestInvokeWithVerify_无VerifyFunc(t *testing.T) {
 // TestInvokeWithVerify_VerifyFunc失败 测试验证函数失败时的行为
 func TestInvokeWithVerify_VerifyFunc失败(t *testing.T) {
 	policy := llm_resilience.LLMInvokePolicy{
-		MaxAttempts:         1,
+		MaxAttempts:        1,
 		TotalBudgetSecs:    1,
 		AttemptTimeoutSecs: 1,
 	}
@@ -56,7 +56,7 @@ func TestInvokeWithVerify_VerifyFunc失败(t *testing.T) {
 // TestInvokeText_无Model 测试简单调用（无 model）
 func TestInvokeText_无Model(t *testing.T) {
 	policy := llm_resilience.LLMInvokePolicy{
-		MaxAttempts:         1,
+		MaxAttempts:        1,
 		TotalBudgetSecs:    1,
 		AttemptTimeoutSecs: 1,
 	}

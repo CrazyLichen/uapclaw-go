@@ -390,14 +390,14 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 
 	if len(examples) > 0 {
 		userPrompt += (
-			// 对齐 Python: 一比一复刻
-			"\nPreviously, the given tool was used in solving instructions " +
-				"by a tool assistant with the following function descriptions:\n")
+		// 对齐 Python: 一比一复刻
+		"\nPreviously, the given tool was used in solving instructions " +
+			"by a tool assistant with the following function descriptions:\n")
 		userPrompt += (
-			// 对齐 Python: 一比一复刻
-			"Here are the instructions the assistant " +
-				"tried to solve with this tool description, with " +
-				"their corresponding answers and errors produced by the assistant: ")
+		// 对齐 Python: 一比一复刻
+		"Here are the instructions the assistant " +
+			"tried to solve with this tool description, with " +
+			"their corresponding answers and errors produced by the assistant: ")
 
 		for i, ex := range examples {
 			fnOutput := ex.FnOutput
@@ -473,9 +473,9 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 
 	if len(examplesMap) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
 		userPrompt += (
-			// 对齐 Python: 一比一复刻
-			"\nPreviously, the given tool was used in solving instructions " +
-				"by a tool assistant with the following function descriptions:\n")
+		// 对齐 Python: 一比一复刻
+		"\nPreviously, the given tool was used in solving instructions " +
+			"by a tool assistant with the following function descriptions:\n")
 
 		numFeedbackSteps := getConfigInt(m.config, "num_feedback_steps")
 		reversedOutputs := descReverseAnySlice(prevOutputs)
@@ -904,16 +904,16 @@ func descResultsToMap(r *EvalResult) map[string]any {
 			}
 		}
 		resultsSlice[i] = map[string]any{
-			"instruction":                 item.Instruction,
-			"expected_fn_call":            item.ExpectedFnCall,
-			"generated_fn_call":           item.GeneratedFnCall,
-			"fn_call_score":               item.FnCallScore,
-			"execution_result":            item.ExecutionResult,
-			"execution_error":             item.ExecutionError,
-			"output_effectiveness_score":  item.OutputEffectivenessScore,
-			"weighted_score":              item.WeightedScore,
-			"answer":                      item.Answer,
-			"errors":                      errorsSlice,
+			"instruction":                item.Instruction,
+			"expected_fn_call":           item.ExpectedFnCall,
+			"generated_fn_call":          item.GeneratedFnCall,
+			"fn_call_score":              item.FnCallScore,
+			"execution_result":           item.ExecutionResult,
+			"execution_error":            item.ExecutionError,
+			"output_effectiveness_score": item.OutputEffectivenessScore,
+			"weighted_score":             item.WeightedScore,
+			"answer":                     item.Answer,
+			"errors":                     errorsSlice,
 		}
 	}
 	return map[string]any{

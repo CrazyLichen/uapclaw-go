@@ -3,8 +3,8 @@ package subagent
 import (
 	"context"
 
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	hsections "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/sections"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	agentinterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
 	saprompt "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/prompts"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
