@@ -429,7 +429,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 
 		if fnName, ok := fn["name"].(string); ok && fnName != functionName {
 			return nil, fmt.Errorf(
-				"output function '%s' is inconsistent with the given function '%s'. You must only use the given function %s!",
+				"output function '%s' is inconsistent with the given function '%s', you must only use the given function %s",
 				fnName, functionName, functionName,
 			)
 		}
@@ -516,11 +516,11 @@ You can begin your task now.`
 		outputJSON := ParseJSON(output)
 
 		if _, ok := outputJSON["analysis"]; !ok {
-			return nil, fmt.Errorf(`No "analysis" found in output`)
+			return nil, fmt.Errorf(`no "analysis" found in output`)
 		}
 
 		if _, ok := outputJSON["err_code"]; !ok {
-			return nil, fmt.Errorf(`No "err_code" found in output`)
+			return nil, fmt.Errorf(`no "err_code" found in output`)
 		}
 
 		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
@@ -634,7 +634,7 @@ instructions for this function call, which were rated and analyzed:
 		outputJSON := ParseJSON(output, "instruction")
 
 		if _, ok := outputJSON["instruction"]; !ok {
-			return nil, fmt.Errorf(`No "instruction" found in output`)
+			return nil, fmt.Errorf(`no "instruction" found in output`)
 		}
 
 		instruction, _ := outputJSON["instruction"].(string)
@@ -696,7 +696,7 @@ conditions is met (for instruction only):
 		userPrompt += `; or (9) instruction does include the corresponding API key when an API key is required`
 	}
 
-	userPrompt += fmt.Sprintf(`. An instruction that satisfies any of these conditions
+	userPrompt += `. An instruction that satisfies any of these conditions
 is a bad instruction and should be scored a 1.
 
 2. If the answer is a sorry message, not a positive/straight
@@ -723,7 +723,7 @@ Finally, organize your output in the following JSON format:
 You must strictly follow the output format. Your reasoning
 should not be longer than 200 words. You must also strictly
 follow the scoring rules, and remember that the score must
-be a number between 1 and 3. You can begin your task now.`)
+be a number between 1 and 3. You can begin your task now.`
 
 	prompt := FormatPromptLlama("", userPrompt)
 
@@ -736,11 +736,11 @@ be a number between 1 and 3. You can begin your task now.`)
 		}
 
 		if _, ok := outputJSON["analysis"]; !ok {
-			return nil, fmt.Errorf(`incorrect output format, "analysis" required.`)
+			return nil, fmt.Errorf(`incorrect output format, "analysis" required`)
 		}
 
 		if _, ok := outputJSON["score"]; !ok {
-			return nil, fmt.Errorf(`incorrect output format, "score" required.`)
+			return nil, fmt.Errorf(`incorrect output format, "score" required`)
 		}
 
 		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
