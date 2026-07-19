@@ -40,8 +40,8 @@ func TestTextualParameter_梯度操作(t *testing.T) {
 	if p.GetGradient("system_prompt") != "improved prompt" {
 		t.Error("gradient mismatch")
 	}
-	if p.GetGradient("nonexistent") != nil {
-		t.Error("nonexistent gradient should be nil")
+	if p.GetGradient("nonexistent") != "" {
+		t.Error("nonexistent gradient should be empty string")
 	}
 }
 

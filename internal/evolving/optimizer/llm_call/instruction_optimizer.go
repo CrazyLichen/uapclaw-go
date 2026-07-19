@@ -59,8 +59,13 @@ func NewInstructionOptimizer(model *llm.Model) *InstructionOptimizer {
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量。
 //
-// 对应 Python: BaseOptimizer.bind(operators, targets, **config)
+// 对齐 Python: BaseOptimizer.bind(operators, targets, **config)
+//   self._targets = list(targets or self.default_targets())
 func (o *InstructionOptimizer) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
+	// 对齐 Python: targets or self.default_targets()
+	if len(targets) == 0 {
+		targets = o.DefaultTargets()
+	}
 	return o.BaseOptimizerMixin.Bind(operators, targets, config)
 }
 
@@ -180,8 +185,9 @@ func (o *InstructionOptimizer) backward(ctx context.Context, selectedSignals []*
 
 		// 对齐 Python: param.set_gradient("system_prompt_optimized", None)
 		//             param.set_gradient("user_prompt_optimized", None)
-		param.SetGradient("system_prompt_optimized", nil)
-		param.SetGradient("user_prompt_optimized", nil)
+		// 空字符串 "" 等同于 Python 的 None 语义
+		param.SetGradient("system_prompt_optimized", "")
+		param.SetGradient("user_prompt_optimized", "")
 
 		// 对齐 Python: if not self._selected_signals: continue
 		if len(selectedSignals) == 0 {
@@ -283,15 +289,11 @@ func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 	params := o.BaseOptimizerMixin.Parameters()
 
 	for opID, param := range params {
-		if sysVal := param.GetGradient("system_prompt_optimized"); sysVal != nil {
-			if s, ok := sysVal.(string); ok && s != "" {
-				updates[schema.UpdateKey{opID, "system_prompt"}] = s
-			}
+		if sysVal := param.GetGradient("system_prompt_optimized"); sysVal != "" {
+			updates[schema.UpdateKey{opID, "system_prompt"}] = sysVal
 		}
-		if usrVal := param.GetGradient("user_prompt_optimized"); usrVal != nil {
-			if s, ok := usrVal.(string); ok && s != "" {
-				updates[schema.UpdateKey{opID, "user_prompt"}] = s
-			}
+		if usrVal := param.GetGradient("user_prompt_optimized"); usrVal != "" {
+			updates[schema.UpdateKey{opID, "user_prompt"}] = usrVal
 		}
 	}
 
@@ -361,7 +363,7 @@ func (o *InstructionOptimizer) optimizeBoth(ctx context.Context, op operator.Ope
 	usrTpl := o.getPromptTemplate(op, "user_prompt")
 
 	// 对齐 Python: gradient = param.get_gradient("system_prompt") or ""
-	gradient, _ := param.GetGradient("system_prompt").(string)
+	gradient := param.GetGradient("system_prompt")
 
 	keywords := map[string]any{
 		"system_prompt":            evolving.GetContentStringFromTemplate(sysTpl),
@@ -434,7 +436,7 @@ func (o *InstructionOptimizer) optimizeSingle(ctx context.Context, op operator.O
 	targetTpl := o.getPromptTemplate(op, promptType)
 
 	// 对齐 Python: gradient = param.get_gradient(prompt_type) or ""
-	gradient, _ := param.GetGradient(promptType).(string)
+	gradient := param.GetGradient(promptType)
 
 	keywords := map[string]any{
 		"prompt_instruction":       evolving.GetContentStringFromTemplate(targetTpl),

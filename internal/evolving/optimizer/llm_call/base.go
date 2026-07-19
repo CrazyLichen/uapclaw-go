@@ -2,7 +2,6 @@ package llm_call
 
 import (
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/prompt"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
 )
@@ -64,22 +63,17 @@ func (b *LLMCallOptimizerBase) isTargetFrozen(op operator.Operator, target strin
 
 // getPromptTemplate 从 op.GetState() 获取 target 内容，构建 PromptTemplate。
 //
-// 对应 Python: LLMCallOptimizerBase._get_prompt_template(op, target)
+// 对齐 Python: LLMCallOptimizerBase._get_prompt_template(op, target)
 //   state = op.get_state()
 //   content = state.get(target, "")
 //   return PromptTemplate(content=content)
+//
+// Python 不做类型判断，直接将 content 传给 PromptTemplate。
+// 类型校验由 PromptTemplate 内部的 ToMessages()/deepCopyContent() 等方法负责。
 func (b *LLMCallOptimizerBase) getPromptTemplate(op operator.Operator, target string) *prompt.PromptTemplate {
 	state := op.GetState()
 	if v, ok := state[target]; ok {
-		switch cv := v.(type) {
-		case string:
-			return prompt.NewPromptTemplate("", cv)
-		case []llmschema.BaseMessage:
-			return prompt.NewPromptTemplate("", cv)
-		default:
-			// 其他类型：尝试作为原始内容创建模板
-			return prompt.NewPromptTemplate("", v)
-		}
+		return prompt.NewPromptTemplate("", v)
 	}
 	return prompt.NewPromptTemplate("", "")
 }

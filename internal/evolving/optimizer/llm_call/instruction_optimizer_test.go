@@ -138,6 +138,28 @@ func TestInstructionOptimizer_Bind(t *testing.T) {
 			t.Errorf("Bind() = %d, expected 1", count)
 		}
 	})
+
+	t.Run("targets为nil时回退到DefaultTargets", func(t *testing.T) {
+		count := opt.Bind(operators, nil, nil)
+		if count != 1 {
+			t.Errorf("Bind() with nil targets = %d, expected 1", count)
+		}
+		targets := opt.BaseOptimizerMixin.Targets()
+		if len(targets) != 2 || targets[0] != "system_prompt" || targets[1] != "user_prompt" {
+			t.Errorf("Targets() = %v, want [system_prompt, user_prompt]", targets)
+		}
+	})
+
+	t.Run("targets为空切片时回退到DefaultTargets", func(t *testing.T) {
+		count := opt.Bind(operators, []string{}, nil)
+		if count != 1 {
+			t.Errorf("Bind() with empty targets = %d, expected 1", count)
+		}
+		targets := opt.BaseOptimizerMixin.Targets()
+		if len(targets) != 2 || targets[0] != "system_prompt" || targets[1] != "user_prompt" {
+			t.Errorf("Targets() = %v, want [system_prompt, user_prompt]", targets)
+		}
+	})
 }
 
 func TestExtractTag(t *testing.T) {
