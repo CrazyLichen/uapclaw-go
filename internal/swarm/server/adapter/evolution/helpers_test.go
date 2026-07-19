@@ -28,6 +28,25 @@ func (m *mockPushTransport) SendPush(_ context.Context, msg map[string]any) erro
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// ──────────────────────────── EventPayloadDict 测试 ────────────────────────────
+
+// TestEventPayloadDict 测试从 map 事件提取 payload。
+func TestEventPayloadDict(t *testing.T) {
+	evt := map[string]any{"key": "value", "stage": "generating"}
+	result := EventPayloadDict(evt)
+	if result["key"] != "value" || result["stage"] != "generating" {
+		t.Errorf("EventPayloadDict(map) = %v, 期望包含 key=value, stage=generating", result)
+	}
+}
+
+// TestEventPayloadDict_nil 测试 nil 事件。
+func TestEventPayloadDict_nil(t *testing.T) {
+	result := EventPayloadDict(nil)
+	if len(result) != 0 {
+		t.Errorf("EventPayloadDict(nil) = %v, 期望空 map", result)
+	}
+}
+
 // ──────────────────────────── EventType 测试 ────────────────────────────
 
 // TestEventType_map 测试从 map 中提取 event_type。

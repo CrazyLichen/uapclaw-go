@@ -1,22 +1,13 @@
 package schema
 
 import (
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agent_teams/models"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	mcptypes "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool/mcp/types"
 	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
 )
 
 // ──────────────────────────── 结构体 ────────────────────────────
-
-// TeamModelConfig 可序列化的团队模型配置。
-// 对齐 Python: TeamModelConfig (openjiuwen/agent_teams/schema/deep_agent_spec.py)
-type TeamModelConfig struct {
-	// ModelClientConfig 模型客户端配置
-	ModelClientConfig llmschema.ModelClientConfig `json:"model_client_config"`
-	// ModelRequestConfig 模型请求配置（可选）
-	ModelRequestConfig *llmschema.ModelRequestConfig `json:"model_request_config,omitempty"`
-}
 
 // WorkspaceSpec 工作空间规格占位类型。
 // ⤵️ 回填: 9.57
@@ -127,7 +118,7 @@ type SubAgentSpec struct {
 	// Mcps MCP 服务器列表
 	Mcps []*mcptypes.McpServerConfig `json:"mcps,omitempty"`
 	// Model 模型配置
-	Model *TeamModelConfig `json:"model,omitempty"`
+	Model *models.TeamModelConfig `json:"model,omitempty"`
 	// Rails 约束规则列表
 	Rails []RailSpec `json:"rails,omitempty"`
 	// Skills 技能列表
@@ -154,7 +145,7 @@ type SubAgentSpec struct {
 // 对齐 Python: DeepAgentSpec
 type DeepAgentSpec struct {
 	// Model 模型配置
-	Model *TeamModelConfig `json:"model,omitempty"`
+	Model *models.TeamModelConfig `json:"model,omitempty"`
 	// Card 代理身份卡片
 	Card *agentschema.AgentCard `json:"card,omitempty"`
 	// SystemPrompt 系统提示词
@@ -214,17 +205,6 @@ type DeepAgentSpec struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// NewTeamModelConfig 创建默认 TeamModelConfig。
-func NewTeamModelConfig() TeamModelConfig {
-	return TeamModelConfig{
-		ModelClientConfig:  *llmschema.NewModelClientConfig("", "", ""),
-		ModelRequestConfig: llmschema.NewModelRequestConfig(),
-	}
-}
-
-// Build 构建团队模型配置。⤵️ 回填: 9.57
-func (c TeamModelConfig) Build() (any, error) { return nil, nil }
 
 // NewDeepAgentSpec 创建默认 DeepAgentSpec。
 func NewDeepAgentSpec() DeepAgentSpec {

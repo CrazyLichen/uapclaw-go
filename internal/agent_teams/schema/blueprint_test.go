@@ -17,7 +17,7 @@ import (
 
 // TestNewTeamModelConfig 测试默认 TeamModelConfig 创建
 func TestNewTeamModelConfig(t *testing.T) {
-	cfg := NewTeamModelConfig()
+	cfg := models.NewTeamModelConfig()
 	if cfg.ModelRequestConfig == nil {
 		t.Error("ModelRequestConfig 不应为 nil")
 	}
@@ -28,7 +28,7 @@ func TestNewTeamModelConfig(t *testing.T) {
 
 // TestTeamModelConfig_Build_留桩 测试 Build 留桩
 func TestTeamModelConfig_Build_留桩(t *testing.T) {
-	r, err := NewTeamModelConfig().Build()
+	r, err := models.NewTeamModelConfig().Build()
 	if r != nil || err != nil {
 		t.Errorf("期望 (nil, nil), 实际=(%v, %v)", r, err)
 	}
@@ -206,7 +206,7 @@ func TestTeamAgentSpec_ValidateHittConsistency_未启用(t *testing.T) {
 
 // TestTeamAgentSpec_ValidateLeaderModelResolved_有模型 测试有模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_有模型(t *testing.T) {
-	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {Model: &TeamModelConfig{}}}}
+	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {Model: &models.TeamModelConfig{}}}}
 	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
 	if err := ValidateLeaderModelResolved(spec, nil, ts); err != nil {
 		t.Errorf("报错: %v", err)
@@ -225,7 +225,7 @@ func TestTeamAgentSpec_ValidateLeaderModelResolved_无模型(t *testing.T) {
 // TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型 测试分配模型
 func TestTeamAgentSpec_ValidateLeaderModelResolved_分配模型(t *testing.T) {
 	spec := TeamAgentSpec{Agents: map[string]DeepAgentSpec{"leader": {}}}
-	m := &TeamModelConfig{}
+	m := &models.TeamModelConfig{}
 	ts := TeamSpec{ModelPool: []models.ModelPoolEntry{{ModelName: "test"}}}
 	if err := ValidateLeaderModelResolved(spec, m, ts); err != nil {
 		t.Errorf("报错: %v", err)

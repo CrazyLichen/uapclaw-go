@@ -73,7 +73,7 @@ type TeamRuntimeContext struct {
 	// DBConfig 数据库配置
 	DBConfig database.DBConfigProvider `json:"db_config,omitempty"`
 	// MemberModel 成员模型配置（可选）
-	MemberModel *TeamModelConfig `json:"member_model,omitempty"`
+	MemberModel *models.TeamModelConfig `json:"member_model,omitempty"`
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

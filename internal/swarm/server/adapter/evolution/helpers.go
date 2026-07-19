@@ -181,20 +181,34 @@ type WarnMissingRequestIDFunc func(sessionID string)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// EventPayloadDict 提取事件 payload 为 map。
+// 对齐 Python: event_payload_dict() — 当前事件来源始终返回 dict。
+func EventPayloadDict(evt map[string]any) map[string]any {
+	if evt == nil {
+		return map[string]any{}
+	}
+	result := make(map[string]any, len(evt))
+	for k, v := range evt {
+		result[k] = v
+	}
+	return result
+}
+
 // EventType 提取事件类型字符串。
-// 对齐 Python: event_type() — 从 map[string]any 的 event_type 字段提取。
-// Go 统一使用 map[string]any 表示事件，不再用 any + reflect 对齐 Python hasattr。
+// 对齐 Python: event_type() — 仅从 map[string]any 的 event_type 字段提取，
+// 不再使用 reflect 访问 struct.Type 字段（过度对齐 Python hasattr 防御性代码）。
 func EventType(evt map[string]any) string {
-	if t, ok := evt["event_type"].(string); ok {
+	payload := EventPayloadDict(evt)
+	if t, ok := payload["event_type"].(string); ok {
 		return t
 	}
 	return ""
 }
 
 // ResolveEvolutionEventTimeoutSec 解析演进事件超时时间。
-// 对齐 Python: resolve_evolution_event_timeout_sec()
+// 对齐 Python: resolve_evolution_event_timeout_sec() — 仅从 map[string]any 读取，
+// 不再使用 reflect 访问 struct 字段（过度对齐 Python hasattr 防御性代码）。
 func ResolveEvolutionEventTimeoutSec(rail map[string]any, opts ...float64) float64 {
-	// 对齐 Python: fallback_sec is None 检查 — Go 用 variadic + 长度判断区分"未提供"与"提供了0"
 	fallback := TeamEvolutionEventTimeoutSec
 	grace := TeamEvolutionEventTimeoutGraceSec
 
@@ -224,19 +238,14 @@ func ResolveEvolutionEventTimeoutSec(rail map[string]any, opts ...float64) float
 // IsEvolutionApprovalEvent 判断是否为演进审批事件（检查 event_type）。
 // 对齐 Python: is_evolution_approval_event()
 func IsEvolutionApprovalEvent(evt map[string]any) bool {
-	if EventType(evt) == "chat.ask_user_question" {
-		return true
-	}
-	if t, ok := evt["event_type"].(string); ok && t == "chat.ask_user_question" {
-		return true
-	}
-	return false
+	return EventType(evt) == "chat.ask_user_question"
 }
 
 // EvolutionEventKind 判断事件类别（approval/outcome/progress/stream）。
 // 对齐 Python: evolution_event_kind()
 func EvolutionEventKind(evt map[string]any) string {
-	if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
+	payload := EventPayloadDict(evt)
+	if meta, ok := payload["_evolution_meta"].(map[string]any); ok {
 		if kind, ok := meta["event_kind"].(string); ok && strings.TrimSpace(kind) != "" {
 			return kind
 		}
@@ -256,7 +265,8 @@ func IsEvolutionOutcomeEvent(evt map[string]any) bool {
 // EvolutionOutcomeFromEvent 提取演进结果。
 // 对齐 Python: evolution_outcome_from_event()
 func EvolutionOutcomeFromEvent(evt map[string]any) map[string]string {
-	if evt == nil {
+	payload := EventPayloadDict(evt)
+	if payload == nil {
 		return map[string]string{"status": "completed", "message": ""}
 	}
 
@@ -289,7 +299,8 @@ func EvolutionOutcomeFromEvent(evt map[string]any) map[string]string {
 // ExtractEvolutionRequestID 从事件中提取 request_id。
 // 对齐 Python: extract_evolution_request_id()
 func ExtractEvolutionRequestID(evt map[string]any) *string {
-	requestID := evt["request_id"]
+	payload := EventPayloadDict(evt)
+	requestID := payload["request_id"]
 	if requestID == nil {
 		if meta, ok := evt["_evolution_meta"].(map[string]any); ok {
 			requestID = meta["request_id"]
@@ -307,7 +318,8 @@ func ExtractEvolutionRequestID(evt map[string]any) *string {
 // EvolutionProgressStatusFromEvent 提取进度状态。
 // 对齐 Python: evolution_progress_status_from_event()
 func EvolutionProgressStatusFromEvent(evt map[string]any) *EvolutionProgressStatus {
-	meta, ok := evt["_evolution_meta"].(map[string]any)
+	payload := EventPayloadDict(evt)
+	meta, ok := payload["_evolution_meta"].(map[string]any)
 	if !ok {
 		return nil
 	}

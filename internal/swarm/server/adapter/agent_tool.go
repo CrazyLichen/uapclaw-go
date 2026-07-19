@@ -149,7 +149,13 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		// 异步执行
 		// 对齐 Python: asyncio.create_task(self._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session))
 		// 返回: {"status": "async_launched", "agent_id": subagent_type, "prompt": prompt}
-		go t.runAsync(ctx, subAgent, prompt, subSessionID, subagentType, callOpts.Session)
+		var parentSess sessioninterfaces.SessionFacade
+		if callOpts.Session != nil {
+			if s, ok := callOpts.Session.(sessioninterfaces.SessionFacade); ok {
+				parentSess = s
+			}
+		}
+		go t.runAsync(ctx, subAgent, prompt, subSessionID, subagentType, parentSess)
 		return map[string]any{
 			"status":   "async_launched",
 			"agent_id": subagentType,
@@ -343,7 +349,7 @@ func (t *AgentTool) runAsync(
 	ctx context.Context,
 	subAgent hinterfaces.DeepAgentInterface,
 	prompt, subSessionID, subagentType string,
-	parentSession any,
+	parentSession sessioninterfaces.SessionFacade,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -359,9 +365,7 @@ func (t *AgentTool) runAsync(
 	if parentSession != nil {
 		// 对齐 Python: session=parent_session
 		// 将 parentSession 传递给子 Agent，使其流式输出能通过 GatewayPushTransport 推送
-		if sess, ok := parentSession.(sessioninterfaces.SessionFacade); ok {
-			opts = append(opts, sainterfaces.WithSession(sess))
-		}
+		opts = append(opts, sainterfaces.WithSession(parentSession))
 	}
 
 	_, err := subAgent.Invoke(ctx, map[string]any{

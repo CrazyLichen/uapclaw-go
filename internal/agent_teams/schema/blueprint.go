@@ -214,9 +214,8 @@ func (s *TeamAgentSpec) ResolveDBConfig() any {
 func (s *TeamAgentSpec) Build() (any, error) { return nil, nil }
 
 // ValidateLeaderModelResolved 校验 Leader 模型是否已解析。
-//
 // 一比一复刻 Python: openjiuwen/agent_teams/schema/blueprint.py _validate_leader_model_resolved
-func ValidateLeaderModelResolved(spec TeamAgentSpec, leaderMemberModel *TeamModelConfig, teamSpec TeamSpec) error {
+func ValidateLeaderModelResolved(spec TeamAgentSpec, leaderMemberModel *models.TeamModelConfig, teamSpec TeamSpec) error {
 	// 获取 leader 的 DeepAgentSpec
 	var leaderAgent *DeepAgentSpec
 	if spec.Agents != nil {

@@ -270,8 +270,16 @@ func (s *AgentServer) run(ctx context.Context) error {
 
 // startConsumeLoop 从传输通道持续读取 JSON 字节并反序列化为 E2AEnvelope 分发处理。
 // 阻塞直到 ctx 取消或通道关闭。
-// ChannelTransport 模式下通过 SendCh() 读取（Gateway→AgentServer 方向），
-// 将来 WebSocketTransport 模式下通过 Recv() 读取。
+//
+// 当前 ChannelTransport 的 Send/Recv 接口方法是从 Gateway 视角设计的：
+//   - Send(data) 写入 sendCh（Gateway→AgentServer）
+//   - Recv() 返回 recvCh 的读取端（AgentServer→Gateway）
+//
+// AgentServer 作为被动方，需要反方向使用：
+//   - 读取请求：从 sendCh 读取（通过 ChannelTransport.SendCh()）
+//   - 写入响应：向 recvCh 写入（通过 ChannelTransport.RecvCh()）
+//
+// TODO(Transport): AgentTransport 接口增加服务端方法后消除类型断言。
 func (s *AgentServer) startConsumeLoop(ctx context.Context) {
 	var recvCh <-chan []byte
 	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
@@ -352,8 +360,11 @@ func (s *AgentServer) cancelAllStreamTasks() {
 
 // sendToGateway 通过传输通道发送数据到 Gateway 侧。
 // 对齐 Python AgentWebSocketServer 中 ws.send(json_str) 写响应。
-// ChannelTransport 模式下通过 RecvCh() 写入（AgentServer→Gateway 方向），
-// 将来 WebSocketTransport 模式下直接调用 Send()。
+//
+// 同 startConsumeLoop，AgentServer 需要反方向使用通道：
+//   - 写入响应：向 recvCh 写入（通过 ChannelTransport.RecvCh()）
+//
+// TODO(Transport): AgentTransport 接口增加服务端方法后消除类型断言。
 func (s *AgentServer) sendToGateway(data []byte) {
 	if ct, ok := s.transport.(*transport.ChannelTransport); ok {
 		select {
