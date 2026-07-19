@@ -802,15 +802,15 @@ func TestDeepAgent_CreateSubagent_工厂分派(t *testing.T) {
 	card := agentschema.NewAgentCard(agentschema.WithAgentName("test-deep"))
 	d := NewDeepAgent(card)
 
-	// 已实现的工厂（research_agent 已在 9.25 实现，browser_agent 已在 9.26 实现）
+	// 已实现的工厂（research_agent 9.25、browser_agent 9.26、code_agent 9.27）
 	implementedFactories := []string{
 		"research_agent",
 		"browser_agent",
+		"code_agent",
 	}
 
 	// 未实现的工厂（仍返回 stub 错误）
 	stubFactories := []string{
-		"code_agent",
 		"mobile_gui_agent",
 	}
 
@@ -3500,9 +3500,8 @@ func TestDeepAgent_CreateSubagent_工厂未实现(t *testing.T) {
 	card := makeTestCard("deep-cs-fac", "test-deep-cs-fac")
 	agent := NewDeepAgent(card)
 
-	// 这些工厂分支显式返回 stub 错误（research_agent 已在 9.25 实现，browser_agent 已在 9.26 实现，移除）
+	// 这些工厂分支显式返回 stub 错误（research_agent 9.25、browser_agent 9.26、code_agent 9.27 已实现，移除）
 	stubFactories := []string{
-		"code_agent",
 		"mobile_gui_agent",
 	}
 

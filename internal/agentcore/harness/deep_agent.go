@@ -620,7 +620,7 @@ func (d *DeepAgent) CreateSubagent(ctx context.Context, subagentType string, sub
 	case "browser_agent", "browser_runtime":
 		return CreateBrowserAgent(ctx, kwargs)
 	case "code_agent":
-		return nil, fmt.Errorf("code_agent 工厂尚未实现，⤵️ 9.27 回填")
+		return CreateCodeAgent(ctx, kwargs)
 	case "research_agent":
 		return CreateResearchAgent(ctx, kwargs)
 	case "mobile_gui_agent", "mobile_agent":
