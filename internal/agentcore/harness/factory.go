@@ -18,6 +18,7 @@ import (
 	hpromptstools "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts/tools"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/interrupt"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails/subagent"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/workspace"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/runner"
@@ -359,7 +360,10 @@ func injectGeneralPurposeSubagent(
 	gpRails := make([]agentinterfaces.AgentRail, 0, len(agentRails))
 	hasSysOpRail := false
 	for _, r := range agentRails {
-		// ⤵️ SubagentRail 类型断言待回填：SubagentRail 尚未实现，暂不过滤
+		// 过滤掉 SubagentRail，避免通用子代理继承子代理委派能力
+		if _, ok := r.(*subagent.SubagentRail); ok {
+			continue
+		}
 		if _, ok := r.(*rails.SysOperationRail); ok {
 			hasSysOpRail = true
 		}
@@ -601,13 +605,22 @@ func addDefaultRails(
 	}
 
 	// SubagentRail — 仅当有 subagents 时添加
-	if len(effectiveSubagents) > 0 && !alreadyProvidedByType(userProvidedTypes, nil) {
-		// ⤵️ 9.8-9.24 回填：SubagentRail 具体实例化（含 enable_async_subagent）
-		agent.AddRail(agentinterfaces.NewBaseRail())
+	if len(effectiveSubagents) > 0 && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&subagent.SubagentRail{})) {
+		subRail := subagent.NewSubagentRail(
+			subagent.WithEnableAsyncSubagent(params.EnableAsyncSubagent),
+		)
+		agent.AddRail(subRail)
 		logger.Debug(logComponent).
 			Bool("enable_async_subagent", params.EnableAsyncSubagent).
 			Int("subagent_count", len(effectiveSubagents)).
-			Msg("已添加默认 SubagentRail 占位，⤵️ 9.8-9.24 回填")
+			Msg("已添加 SubagentRail")
+	}
+
+	// VerificationContractRail — 仅当配置了 verification_agent 时注入到父 Agent
+	// 对齐 Python: create_deep_agent 中动态添加 VerificationContractRail
+	if hasVerificationAgent(effectiveSubagents) && !alreadyProvidedByType(userProvidedTypes, reflect.TypeOf(&subagent.VerificationContractRail{})) {
+		agent.AddRail(subagent.NewVerificationContractRail())
+		logger.Debug(logComponent).Msg("已添加 VerificationContractRail（检测到 verification_agent）")
 	}
 }
 
@@ -618,6 +631,17 @@ func alreadyProvidedByType(typeMap map[reflect.Type]bool, target reflect.Type) b
 		return typeMap[target]
 	}
 	// 字符串名称回退：当前未实现
+	return false
+}
+
+// hasVerificationAgent 检查子代理列表中是否包含 verification_agent。
+// 对齐 Python: create_deep_agent 中根据 subagents 动态注入 VerificationContractRail
+func hasVerificationAgent(subagents []hschema.SubagentSpec) bool {
+	for _, s := range subagents {
+		if cfg, ok := s.(*hschema.SubAgentConfig); ok && cfg.AgentCard != nil && cfg.AgentCard.GetName() == "verification_agent" {
+			return true
+		}
+	}
 	return false
 }
 

@@ -563,14 +563,14 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 9.16 | ✅ | McpRail | MCP 工具管理 | `openjiuwen/harness/rails/` |
 | 9.17 | ☐ | LSPRail | LSP 集成 | `openjiuwen/harness/lsp/` |
 | 9.18 | ✅ | SysOperationRail | 系统操作管理 | `openjiuwen/harness/rails/` |
-| 9.19-23 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(✅)/Memory(☐) Rails | `openjiuwen/harness/rails/` |
+| 9.19-23 | ☐ | 其他 Rails | Security(☐)/Interrupt(✅)/Skill(☐)/ContextEngine(✅)/Memory(☐)/Verification(⤴️9.29✅)/Subagent(⤴️9.29✅) Rails | `openjiuwen/harness/rails/` |
 | 9.24 | ☐ | EvolutionRail | SkillEvolutionRail（after_invoke 触发在线自演化）/ EvolutionRail 基类 / ContextEvolutionRail / TrajectoryRail / ApprovalRuntime / SkillEvolutionSharing / TeamSkillEvolutionRail | `openjiuwen/harness/rails/evolution/` |
 | **9.x 子 Agent** | — | | | |
 | 9.25 | ✅ | ResearchAgent | 研究子 Agent（BuildResearchAgentConfig + CreateResearchAgent，默认 SysOperationRail） | `openjiuwen/harness/subagents/` |
 | 9.26 | ✅ | BrowserAgent | ✅ Layer1 配置层（env/config/progress/service）；✅ Layer2 运行时核心（runtime/browser_rail/runtime_tools/browser_agent_factory）；✅ Layer3 探测与控制（profiles/probes/controllers/agents）；⤵️ 9.38-49 回填 Playwright MCP 工具集 | `openjiuwen/harness/subagents/` · `tools/browser_move/` |
 | 9.27 | ✅ | CodeAgent | 编码子 Agent（BuildCodeAgentConfig + CreateCodeAgent + injectBuiltinPlanAgents + mergeRailsWithRequired + 4 必需 Rails 去重合并 + EnableTaskPlanning=true + RestrictToWorkDir=false；⤵️ 9.19-23 CodingMemoryRail 回填） | `openjiuwen/harness/subagents/` |
 | 9.28 | ✅ | PlanAgent | 规划子 Agent（✅ BuildPlanAgentConfig + CreatePlanAgent 工厂 + 双语提示词一比一复刻 + SysOperationRail(WithReadOnly) 双重约束 + RestrictToWorkDir=false + MaxIterations=25 + 不设 FactoryName 走通用路径 + 11 个单元测试）；⤵️ 9.68-69 team.plan 特化（TeamPlanModeRail / apply_team_plan_agent_prompt） | `openjiuwen/harness/subagents/` |
-| 9.29 | ☐ | VerificationAgent | 验证子 Agent | `openjiuwen/harness/subagents/` |
+| 9.29 | ✅ | VerificationAgent | ✅ BuildVerificationAgentConfig + 双语提示词一比一复刻 + SysOperationRail() + VerificationRail() + MaxIterations=40 + 不设 FactoryName 走通用路径 + RestrictToWorkDir=false；⤴️ 9.19-23 回填 VerificationRail + VerificationContractRail + SubagentRail | `openjiuwen/harness/subagents/` · `harness/rails/subagent/` |
 | 9.30 | ✅ | ExploreAgent | 探索子 Agent（✅ BuildExploreAgentConfig + CreateExploreAgent 工厂 + 双语提示词一比一复刻 + SysOperationRail(WithReadOnly(true)) 统一只读 + 不设 FactoryName 走通用路径 + RestrictToWorkDir=false + MaxIterations=15 + 11 个单元测试） | `openjiuwen/harness/subagents/` |
 | 9.31 | ☐ | MobileGUIAgent | 移动端 GUI Agent | `openjiuwen/harness/subagents/` |
 | **9.x 系统操作** | — | | | |

@@ -11,6 +11,7 @@
 //   - SysOperationRail：系统操作护栏 Rail（注册文件系统、Shell 和代码工具到 ResourceMgr + AbilityManager）
 //   - interrupt 子包：中断-恢复（HITL）Rail 实现（BaseInterruptRail/AskUserRail/ConfirmInterruptRail）
 //   - context_engineer 子包：上下文引擎护栏（ContextProcessorRail/ContextAssembleRail）
+//   - subagent 子包：子代理委派和验证约束（SubagentRail/VerificationRail/VerificationContractRail）
 //
 // 文件目录：
 //
@@ -36,6 +37,11 @@
 //	    ├── fix_incomplete_tool_context.go     # 不完整工具上下文修复
 //	    ├── context_processor_rail.go    # ContextProcessorRail 实现
 //	    └── context_assemble_rail.go     # ContextAssembleRail 实现
+//	└── subagent/          # 子代理委派和验证约束 Rail 子包
+//	    ├── doc.go                        # 包文档
+//	    ├── subagent_rail.go              # SubagentRail 子代理委派 Rail
+//	    ├── verification_rail.go          # VerificationRail 验证代理约束 Rail
+//	    └── verification_contract_rail.go # VerificationContractRail 验证门控契约 Rail
 //
 // 对应 Python 代码：openjiuwen/harness/rails/
 package rails
