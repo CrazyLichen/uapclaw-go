@@ -21,7 +21,7 @@ func TestBuildPlanAgentConfig_默认配置(t *testing.T) {
 
 	require.NotNil(t, cfg)
 	assert.Equal(t, "plan_agent", cfg.AgentCard.GetName())
-	assert.Equal(t, "plan_agent", cfg.FactoryName)
+	assert.Empty(t, cfg.FactoryName, "PlanAgent 不设 FactoryName（对齐 Python：走通用路径）")
 	assert.Equal(t, 25, cfg.MaxIterations)
 	assert.False(t, cfg.EnableTaskLoop)
 	assert.False(t, cfg.RestrictToWorkDir, "PlanAgent RestrictToWorkDir 默认应为 false")

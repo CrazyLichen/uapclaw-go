@@ -1,0 +1,86 @@
+package harness
+
+import (
+	"context"
+
+	hconfig "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/harness_config"
+	hpromts "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/rails"
+	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
+	sainterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/interfaces"
+	agentschema "github.com/uapclaw/uapclaw-go/internal/agentcore/single_agent/schema"
+)
+
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// CreateExploreAgent 创建并配置 ExploreAgent DeepAgent 实例。
+// 对齐 Python: create_explore_agent(model, card=..., system_prompt=..., ...)
+//
+// 预定义 ExploreAgent 配备 SysOperationRail(WithReadOnly(true))，用户可自由覆盖配置。
+// Full override rule：如果用户传了 rails，则使用用户的，否则默认注入 [SysOperationRail(WithReadOnly(true))]。
+// Go 统一增强：Python build 用 read_only=True、create 用无参数，Go 两个工厂统一 read_only=True
+func CreateExploreAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
+	language := hpromts.ResolveLanguage(params.Language)
+
+	// Full override rule：用户传了 rails 就用用户的，否则默认注入 SysOperationRail(WithReadOnly(true))
+	// Go 统一增强：与 PlanAgent 一致，默认双重只读保障（提示词 + Rail）
+	finalRails := params.Rails
+	if finalRails == nil {
+		finalRails = []sainterfaces.AgentRail{rails.NewSysOperationRail(rails.WithReadOnly(true))}
+	}
+
+	// 默认 AgentCard
+	// 对齐 Python: card or AgentCard(name="explore_agent", description=DEFAULT_EXPLORE_AGENT_DESCRIPTION.get(...))
+	card := params.Card
+	if card == nil {
+		desc := subagents.DefaultExploreAgentDescription(language)
+		card = agentschema.NewAgentCard(
+			agentschema.WithAgentName(subagents.ExploreAgentFactoryName),
+			agentschema.WithAgentDescription(desc),
+		)
+	}
+
+	// 默认 SystemPrompt
+	// 对齐 Python: system_prompt or _build_explore_system_prompt(language=resolved_language)
+	systemPrompt := params.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = subagents.DefaultExploreAgentSystemPrompt(language)
+	}
+
+	// 默认 MaxIterations
+	// 对齐 Python: max_iterations=15
+	maxIterations := params.MaxIterations
+	if maxIterations == 0 {
+		maxIterations = 15
+	}
+
+	// RestrictToWorkDir：ExploreAgent 默认 false
+	// 对齐 Python: restrict_to_work_dir=False
+	restrictToWorkDir := false
+	if params.RestrictToWorkDir != nil {
+		restrictToWorkDir = *params.RestrictToWorkDir
+	}
+
+	// 转换为 CreateDeepAgentParams 并调用工厂
+	// 对齐 Python: return create_deep_agent(model=model, card=final_card, ...)
+	return CreateDeepAgent(ctx, hconfig.CreateDeepAgentParams{
+		Model:              params.Model,
+		Card:               card,
+		SystemPrompt:       systemPrompt,
+		ToolCards:          params.Tools,
+		ToolInstances:      params.ToolInstances,
+		Mcps:               params.Mcps,
+		Rails:              finalRails,
+		EnableTaskLoop:     params.EnableTaskLoop,
+		MaxIterations:      maxIterations,
+		Workspace:          params.Workspace,
+		Skills:             params.Skills,
+		Backend:            params.Backend,
+		SysOperation:       params.SysOperation,
+		Language:           language,
+		PromptMode:         params.PromptMode,
+		EnableTaskPlanning: params.EnablePlanMode,
+		RestrictToWorkDir:  &restrictToWorkDir,
+	})
+}

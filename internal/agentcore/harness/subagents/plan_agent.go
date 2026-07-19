@@ -131,7 +131,8 @@ func BuildPlanAgentConfig(model *llm.Model, params *hschema.SubagentCreateParams
 		cfg.MaxIterations = 25
 	}
 
-	cfg.FactoryName = PlanAgentFactoryName
+	// 不设 FactoryName（对齐 Python：plan_agent 不设 factory_name，走通用路径）
+	cfg.FactoryName = ""
 	cfg.FactoryKwargs = nil
 	cfg.EnablePlanMode = params.EnablePlanMode
 
