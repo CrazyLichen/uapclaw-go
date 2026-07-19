@@ -44,6 +44,11 @@ linters:
         linters:
           - staticcheck
         text: "SA1019"
+      # 嵌入字段的同名委托方法必须显式使用 BaseOptimizerMixin 选择器，
+      # 否则会导致无限递归（方法自调用），因此排除 QF1008
+      - linters:
+          - staticcheck
+        text: "QF1008"
 
 issues:
   # 不限制每类 linter 报告的问题数量

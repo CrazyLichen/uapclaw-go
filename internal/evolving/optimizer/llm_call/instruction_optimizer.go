@@ -135,7 +135,7 @@ func (o *InstructionOptimizer) Backward(ctx context.Context, signals []*signal.E
 
 	// 对齐 Python: self._selected_signals = self._select_signals(signals)
 	selected := o.SelectSignals(signals)
-	o.BaseOptimizerMixin.SetSelectedSignals(selected)
+	o.SetSelectedSignals(selected)
 
 	if err := o.backward(ctx, selected); err != nil {
 		return exception.NewBaseError(
@@ -290,7 +290,7 @@ func (o *InstructionOptimizer) backward(ctx context.Context, selectedSignals []*
 //	return updates if updates else None
 func (o *InstructionOptimizer) step() map[schema.UpdateKey]any {
 	updates := make(map[schema.UpdateKey]any)
-	params := o.BaseOptimizerMixin.Parameters()
+	params := o.Parameters()
 
 	for opID, param := range params {
 		if sysVal := param.GetGradient("system_prompt_optimized"); sysVal != "" {

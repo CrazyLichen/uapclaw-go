@@ -413,7 +413,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 		fn := ParseJSON(output)
 
 		if len(fn) == 0 {
-			return nil, fmt.Errorf("Output must be a dict")
+			return nil, fmt.Errorf("output must be a dict")
 		}
 
 		if _, ok := fn["name"]; !ok {
@@ -429,7 +429,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 
 		if fnName, ok := fn["name"].(string); ok && fnName != functionName {
 			return nil, fmt.Errorf(
-				"Output function '%s' is inconsistent with the given function '%s'. You must only use the given function %s!",
+				"output function '%s' is inconsistent with the given function '%s'. You must only use the given function %s!",
 				fnName, functionName, functionName,
 			)
 		}

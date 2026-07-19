@@ -256,11 +256,7 @@ func CompareParameterValues(actual, expected any) bool {
 	// 对齐 Python: Try string comparison
 	actStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", actual)))
 	expStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", expected)))
-	if actStr == expStr {
-		return true
-	}
-
-	return false
+	return actStr == expStr
 }
 
 // SimpleOutputComparison 简单输出比较（兜底）。

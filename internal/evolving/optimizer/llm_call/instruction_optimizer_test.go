@@ -144,7 +144,7 @@ func TestInstructionOptimizer_Bind(t *testing.T) {
 		if count != 1 {
 			t.Errorf("Bind() with nil targets = %d, expected 1", count)
 		}
-		targets := opt.BaseOptimizerMixin.Targets()
+		targets := opt.Targets()
 		if len(targets) != 2 || targets[0] != "system_prompt" || targets[1] != "user_prompt" {
 			t.Errorf("Targets() = %v, want [system_prompt, user_prompt]", targets)
 		}
@@ -155,7 +155,7 @@ func TestInstructionOptimizer_Bind(t *testing.T) {
 		if count != 1 {
 			t.Errorf("Bind() with empty targets = %d, expected 1", count)
 		}
-		targets := opt.BaseOptimizerMixin.Targets()
+		targets := opt.Targets()
 		if len(targets) != 2 || targets[0] != "system_prompt" || targets[1] != "user_prompt" {
 			t.Errorf("Targets() = %v, want [system_prompt, user_prompt]", targets)
 		}

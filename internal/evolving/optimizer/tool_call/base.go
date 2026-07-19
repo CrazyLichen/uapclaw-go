@@ -172,6 +172,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			// 对齐 Python: 不中断，继续
 		} else {
 			resultExamples = append(resultExamples, resultExample...)
+			_ = resultExamples // 对齐 Python：结果记录用于调试，暂不消费
 			logger.Info(logComponent).
 				Str("method", "OptimizeTool").
 				Int("iteration", i).
