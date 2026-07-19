@@ -12,6 +12,8 @@
 //	├── deep_agent.go                # DeepAgent 结构体及全部方法实现
 //	├── factory.go                   # CreateDeepAgent 工厂函数及辅助函数
 //	├── research_agent_factory.go    # CreateResearchAgent 工厂函数（9.25）
+//	├── browser_agent_factory.go     # CreateBrowserAgent 工厂函数（9.26）
+//	├── code_agent_factory.go        # CreateCodeAgent 工厂函数（9.27）
 //	├── plan_agent_factory.go        # CreatePlanAgent 工厂函数（9.28）
 //	├── explore_agent_factory.go     # CreateExploreAgent 工厂函数（9.30）
 //	└── registry.go                  # HarnessConfig 注册表、发现机制与 Load 创建
