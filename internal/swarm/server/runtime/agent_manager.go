@@ -40,7 +40,8 @@ type AgentManager struct {
 
 	// latestEnvOverrides 最近一次 env 覆盖
 	// 对齐 Python: self._latest_env_overrides
-	latestEnvOverrides map[string]any
+	// 收窄为 map[string]string：Python 中 dict[str, Any]，但所有 value 均作为 os.environ 字符串使用
+	latestEnvOverrides map[string]string
 
 	// createAgentFactory 创建 Agent 的工厂函数（默认 NewUapClaw + CreateInstance，测试可注入 mock）。
 	createAgentFactory AgentFactory
@@ -95,7 +96,7 @@ func NewAgentManager() *AgentManager {
 		agents:                      make(map[string]map[string]*agentEntry),
 		agentCreateParams:           make(map[string]map[string]*agentCreateParamsEntry),
 		clientCapabilitiesByChannel: make(map[string]map[string]any),
-		latestEnvOverrides:          make(map[string]any),
+		latestEnvOverrides:          make(map[string]string),
 		createAgentFactory:          defaultAgentFactory,
 	}
 }
@@ -278,6 +279,7 @@ func (am *AgentManager) GetClientCapabilities(channelID string) map[string]any {
 
 // ProcessMessage 处理非流式请求。
 // 对齐 Python: AgentManager.process_message(request)
+// 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	// 对齐 Python L439-456: 从 request 解析 channel_id/mode/workspace_dir → get_agent → agent.process_message
 	channelID := request.ChannelID
@@ -295,20 +297,12 @@ func (am *AgentManager) ProcessMessage(ctx context.Context, request *schema.Agen
 		return nil, fmt.Errorf("[AgentManager] No agent available for channel %s: %w", channelID, err)
 	}
 
-	// code 模式 switchMode（排除 team 子模式，对齐 Python sub_mode != "team"）
-	if mode == "code" && subMode != "team" {
-		sid := ""
-		if request.SessionID != nil {
-			sid = *request.SessionID
-		}
-		_ = agent.SwitchMode(ctx, sid, subMode)
-	}
-
 	return agent.ProcessMessage(ctx, request)
 }
 
 // ProcessMessageStream 处理流式请求。
 // 对齐 Python: AgentManager.process_message_stream(request)
+// 供 TenantAgentPool 使用，不含 SwitchMode（SwitchMode 在 _handle_unary/_handle_stream 中）。
 func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schema.AgentRequest) (<-chan *schema.AgentResponseChunk, error) {
 	// 对齐 Python L468-487: 同 process_message 但流式
 	channelID := request.ChannelID
@@ -325,37 +319,24 @@ func (am *AgentManager) ProcessMessageStream(ctx context.Context, request *schem
 		return nil, fmt.Errorf("[AgentManager] No agent available for channel %s: %w", channelID, err)
 	}
 
-	// code 模式 switchMode（排除 team 子模式）
-	if mode == "code" && subMode != "team" {
-		sid := ""
-		if request.SessionID != nil {
-			sid = *request.SessionID
-		}
-		_ = agent.SwitchMode(ctx, sid, subMode)
-	}
-
 	return agent.ProcessMessageStream(ctx, request)
 }
 
 // ReloadAgentsConfig 重载 Agent 配置。
 // 对齐 Python AgentManager.reload_agents_config (agent_manager.py L308-340)。
-func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]any) error {
+func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload map[string]any, envOverrides map[string]string) error {
 	// 对齐 Python L310-316: 1. 保存最新 env overrides + 注入 os.environ
 	if envOverrides != nil {
 		am.mu.Lock()
-		am.latestEnvOverrides = copyMap(envOverrides)
+		am.latestEnvOverrides = copyStringMap(envOverrides)
 		am.mu.Unlock()
 	}
 
 	for key, val := range envOverrides {
-		s, ok := val.(string)
-		if !ok && val != nil {
-			s = fmt.Sprintf("%v", val)
-		}
-		if val == nil || s == "" {
+		if val == "" {
 			_ = os.Unsetenv(key)
 		} else {
-			_ = os.Setenv(key, s)
+			_ = os.Setenv(key, val)
 		}
 	}
 
@@ -373,7 +354,9 @@ func (am *AgentManager) ReloadAgentsConfig(ctx context.Context, configPayload ma
 	for chKey, chAgents := range agentsSnapshot {
 		for _, entry := range chAgents {
 			// 对齐 Python L327-330: await agent.reload_agent_config(config_base=config, env_overrides=env)
-			if err := entry.agent.ReloadAgentConfig(configPayload, envOverrides); err != nil {
+			// 将 map[string]string 转为 map[string]any 以匹配 adapter 接口签名
+			envAny := stringMapToAny(envOverrides)
+			if err := entry.agent.ReloadAgentConfig(configPayload, envAny); err != nil {
 				// 对齐 Python: 不中断，仅 warn
 				logger.Warn(amLogComponent).
 					Err(err).
@@ -527,14 +510,10 @@ func (am *AgentManager) createAgent(ctx context.Context, channelKey, mode string
 	am.mu.RUnlock()
 
 	for key, val := range envOverrides {
-		s, ok := val.(string)
-		if !ok && val != nil {
-			s = fmt.Sprintf("%v", val)
-		}
-		if val == nil || s == "" {
+		if val == "" {
 			_ = os.Unsetenv(key)
 		} else {
-			_ = os.Setenv(key, s)
+			_ = os.Setenv(key, val)
 		}
 	}
 
@@ -667,6 +646,31 @@ func makeAgentCacheKey(mode, subMode, projectDir string) string {
 
 // copyMap 深拷贝 map[string]any（仅一层）。
 func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
+// copyStringMap 深拷贝 map[string]string。
+func copyStringMap(m map[string]string) map[string]string {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
+// stringMapToAny 将 map[string]string 转为 map[string]any，
+// 用于适配 adapter 接口中 map[string]any 的参数签名。
+func stringMapToAny(m map[string]string) map[string]any {
 	if m == nil {
 		return nil
 	}

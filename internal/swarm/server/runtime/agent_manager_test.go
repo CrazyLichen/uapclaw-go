@@ -267,7 +267,7 @@ func TestAgentManager_ReloadAgentsConfig(t *testing.T) {
 func TestReloadAgentsConfig_环境变量注入(t *testing.T) {
 	am := NewAgentManager()
 
-	envOverrides := map[string]any{
+	envOverrides := map[string]string{
 		"MODEL_PROVIDER": "openai",
 		"MODEL_NAME":     "gpt-4",
 	}
@@ -288,7 +288,7 @@ func TestReloadAgentsConfig_空字符串Unsetenv(t *testing.T) {
 	defer func() { _ = os.Unsetenv("TEST_RELOAD_KEY") }()
 
 	am := NewAgentManager()
-	envOverrides := map[string]any{
+	envOverrides := map[string]string{
 		"TEST_RELOAD_KEY": "",
 	}
 
@@ -303,8 +303,9 @@ func TestReloadAgentsConfig_nil值Unsetenv(t *testing.T) {
 	defer func() { _ = os.Unsetenv("TEST_RELOAD_NIL") }()
 
 	am := NewAgentManager()
-	envOverrides := map[string]any{
-		"TEST_RELOAD_NIL": nil,
+	// map[string]string 中无法表示 nil，空字符串等效于 unset
+	envOverrides := map[string]string{
+		"TEST_RELOAD_NIL": "",
 	}
 
 	err := am.ReloadAgentsConfig(context.Background(), nil, envOverrides)
@@ -315,7 +316,7 @@ func TestReloadAgentsConfig_nil值Unsetenv(t *testing.T) {
 
 func TestReloadAgentsConfig_保存latestEnvOverrides(t *testing.T) {
 	am := NewAgentManager()
-	envOverrides := map[string]any{
+	envOverrides := map[string]string{
 		"TEST_KEY": "test_value",
 	}
 

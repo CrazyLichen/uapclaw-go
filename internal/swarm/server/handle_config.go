@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/swarm/schema"
 )
@@ -37,7 +38,7 @@ func (s *AgentServer) handleConfigCacheClear(_ context.Context, request *schema.
 // 对齐 Python: _handle_agent_reload_config (agent_ws_server.py L4147-4171)
 func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
 	var configPayload map[string]any
-	var envOverrides map[string]any
+	var envOverrides map[string]string
 
 	if len(request.Params) > 0 {
 		var params map[string]any
@@ -49,7 +50,7 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 			}
 			if e, ok := params["env"]; ok {
 				if m, ok := e.(map[string]any); ok {
-					envOverrides = m
+					envOverrides = anyMapToStringMap(m)
 				}
 			}
 		}
@@ -69,4 +70,25 @@ func (s *AgentServer) handleAgentReloadConfig(ctx context.Context, request *sche
 			"reloaded": true,
 		}),
 	), nil
+}
+
+// anyMapToStringMap 将 map[string]any 转为 map[string]string，
+// 用于从 JSON 反序列化的 env 参数适配 AgentManager.ReloadAgentsConfig 的 string 类型签名。
+func anyMapToStringMap(m map[string]any) map[string]string {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]string, len(m))
+	for k, v := range m {
+		if v == nil {
+			result[k] = ""
+			continue
+		}
+		if s, ok := v.(string); ok {
+			result[k] = s
+		} else {
+			result[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return result
 }
