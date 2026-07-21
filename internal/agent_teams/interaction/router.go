@@ -20,13 +20,12 @@ var (
 	// mentionRe @target body 正则
 	// 对齐 Python: _MENTION_RE = re.compile(r"^@(\S+)\s+([\s\S]+)$")
 	mentionRe = regexp.MustCompile(`^@(\S+)\s+([\s\S]+)$`)
-	// humanAgentPrefixRe $name 前缀正则（第一步：匹配 $name 后跟空格）
+	// humanAgentPrefixRe $name 前缀宽松正则
 	// 对齐 Python: _HUMAN_AGENT_PREFIX_RE = re.compile(r"^\$([^\s@]+)(?:\s+|(?=@))([\s\S]*)$")
-	// Go regexp 不支持 lookahead，拆成两步：
-	//   1. humanAgentPrefixSpaceRe 匹配 "$name " 格式
-	//   2. humanAgentPrefixAtRe 匹配 "$name@" 格式
-	humanAgentPrefixSpaceRe = regexp.MustCompile(`^\$([^\s@]+)\s+([\s\S]*)$`)
-	humanAgentPrefixAtRe    = regexp.MustCompile(`^\$([^\s@]+)@([\s\S]*)$`)
+	// Go regexp 不支持 lookahead (?=@)，改用宽松正则匹配 $name + 剩余文本，
+	// 然后在 ParseInteractStr 中手动验证剩余文本首字符符合 \s+|(?=@) 语义。
+	// 这样 @ 字符保留在 rest 中，后续 recipientRe 循环能正确提取接收者。
+	humanAgentPrefixRe = regexp.MustCompile(`^\$([^\s@]+)([\s\S]*)$`)
 	// recipientRe @name 后续匹配正则
 	// 对齐 Python: _RECIPIENT_RE = re.compile(r"^@(\S+)\s+")
 	recipientRe = regexp.MustCompile(`^@(\S+)\s+`)
@@ -91,18 +90,23 @@ func ParseInteractStr(body string) []InteractPayload {
 		rest = trimLeadingSpaces(rest)
 	} else {
 		// 对齐 Python: match = _HUMAN_AGENT_PREFIX_RE.match(rest)
-		// Go 不支持 lookahead，拆成两步尝试
-		match := humanAgentPrefixSpaceRe.FindStringSubmatch(rest)
-		if match == nil {
-			match = humanAgentPrefixAtRe.FindStringSubmatch(rest)
-		}
+		// Go 不支持 lookahead (?=@)，用宽松正则 + 手动验证
+		match := humanAgentPrefixRe.FindStringSubmatch(rest)
 		if match != nil {
-			sender = match[1]
-			rest = match[2]
-			rest = trimLeadingSpaces(rest)
-			isHumanAgent = true
+			after := match[2]
+			// 对齐 Python (?:\s+|(?=@)) 语义：
+			// after 为空 → $name 无后续，不符合（需 \s+ 或 @）
+			// after[0] 为空白 → 匹配 \s+ 分支
+			// after[0] 为 '@' → 匹配 (?=@) 分支，@ 不消耗，保留在 rest 中
+			if len(after) > 0 && (after[0] == ' ' || after[0] == '\t' || after[0] == '\n' || after[0] == '\r' || after[0] == '@') {
+				sender = match[1]
+				rest = after
+				rest = trimLeadingSpaces(rest)
+				isHumanAgent = true
+			}
+			// else: $name 后无空格也无 @，回退到 god-view，rest 保持完整
 		}
-		// else: 无识别前缀 → 视为 "# " 默认；rest 保持完整
+		// else: 无 $ 前缀 → 视为 "# " 默认；rest 保持完整
 	}
 
 	// ---- 接收者 ----

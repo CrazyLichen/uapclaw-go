@@ -176,6 +176,95 @@ func TestParseInteractStr_美元前缀广播(t *testing.T) {
 	}
 }
 
+// 对齐 Python: test_human_agent_no_space_before_at_splits_sender_and_recipient
+// $alice@dev-1 ping me — @ 紧贴 $name，无空格，仍正确拆分
+func TestParseInteractStr_美元前缀无空格at拆分(t *testing.T) {
+	result := ParseInteractStr("$alice@dev-1 ping me")
+	if len(result) != 1 {
+		t.Fatalf("len = %d, want 1", len(result))
+	}
+	msg, ok := result[0].(*HumanAgentMessage)
+	if !ok {
+		t.Fatal("应为 HumanAgentMessage")
+	}
+	if msg.Sender() != "alice" {
+		t.Errorf("Sender = %v, want alice", msg.Sender())
+	}
+	if msg.Target() == nil || *msg.Target() != "dev-1" {
+		t.Errorf("Target = %v, want dev-1", msg.Target())
+	}
+	if msg.Body() != "ping me" {
+		t.Errorf("Body = %v, want ping me", msg.Body())
+	}
+}
+
+// 对齐 Python: test_human_agent_at_in_sender_name_is_rejected
+// $player-6@player-3 汇报当前进展 — 含中划线名称 + 无空格 @
+func TestParseInteractStr_美元前缀含中划线名称无空格at(t *testing.T) {
+	result := ParseInteractStr("$player-6@player-3 汇报当前进展")
+	if len(result) != 1 {
+		t.Fatalf("len = %d, want 1", len(result))
+	}
+	msg, ok := result[0].(*HumanAgentMessage)
+	if !ok {
+		t.Fatal("应为 HumanAgentMessage")
+	}
+	if msg.Sender() != "player-6" {
+		t.Errorf("Sender = %v, want player-6", msg.Sender())
+	}
+	if msg.Target() == nil || *msg.Target() != "player-3" {
+		t.Errorf("Target = %v, want player-3", msg.Target())
+	}
+	if msg.Body() != "汇报当前进展" {
+		t.Errorf("Body = %v, want 汇报当前进展", msg.Body())
+	}
+}
+
+// 对齐 Python: test_human_agent_no_space_multi_recipient
+// $alice@m1 @m2 sync — 无空格 @ 后接多个 recipient
+func TestParseInteractStr_美元前缀无空格at多接收者(t *testing.T) {
+	result := ParseInteractStr("$alice@m1 @m2 sync")
+	if len(result) != 2 {
+		t.Fatalf("len = %d, want 2", len(result))
+	}
+	msg1, ok := result[0].(*HumanAgentMessage)
+	if !ok {
+		t.Fatal("result[0] 应为 HumanAgentMessage")
+	}
+	if msg1.Sender() != "alice" {
+		t.Errorf("result[0] Sender = %v, want alice", msg1.Sender())
+	}
+	if msg1.Target() == nil || *msg1.Target() != "m1" {
+		t.Errorf("result[0] Target = %v, want m1", msg1.Target())
+	}
+	msg2, ok := result[1].(*HumanAgentMessage)
+	if !ok {
+		t.Fatal("result[1] 应为 HumanAgentMessage")
+	}
+	if msg2.Sender() != "alice" {
+		t.Errorf("result[1] Sender = %v, want alice", msg2.Sender())
+	}
+	if msg2.Target() == nil || *msg2.Target() != "m2" {
+		t.Errorf("result[1] Target = %v, want m2", msg2.Target())
+	}
+}
+
+// 对齐 Python: test_dollar_without_body_falls_back_to_god_view
+// $alice 无后续内容，回退到 god-view
+func TestParseInteractStr_美元前缀无后续回退GodView(t *testing.T) {
+	result := ParseInteractStr("$alice")
+	if len(result) != 1 {
+		t.Fatalf("len = %d, want 1", len(result))
+	}
+	msg, ok := result[0].(*GodViewMessage)
+	if !ok {
+		t.Fatal("应为 GodViewMessage")
+	}
+	if msg.Body() != "$alice" {
+		t.Errorf("Body = %v, want $alice", msg.Body())
+	}
+}
+
 func TestParseInteractStr_井号加at成员(t *testing.T) {
 	result := ParseInteractStr("# @alice hello")
 	if len(result) != 1 {
