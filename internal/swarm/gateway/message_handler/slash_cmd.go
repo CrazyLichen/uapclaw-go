@@ -111,7 +111,7 @@ func (mh *MessageHandler) newSessionCancelAndNotice(msg *schema.Message, _ comma
 	// 先更新 state（对齐 Python：先更新 state.session_id 再 cancel）
 	state.SessionID = newSID
 
-	// TODO: SessionMap 集成 + triggerSessionStartHook（等 11.7 + 11.13 回填）
+	// TODO(#11.7+#11.13): SessionMap 集成 + triggerSessionStartHook（等 11.7 + 11.13 回填）
 
 	// 异步取消旧会话（静默模式：publishInterruptResult=false）
 	if oldSID != "" {

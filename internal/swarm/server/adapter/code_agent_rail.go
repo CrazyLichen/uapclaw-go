@@ -48,13 +48,6 @@ const (
 // 引用 types.DisallowedForSubagents 切片构建 map，避免硬编码重复
 var disallowedForSubagents map[string]bool
 
-func init() {
-	disallowedForSubagents = make(map[string]bool, len(types.DisallowedForSubagents))
-	for _, name := range types.DisallowedForSubagents {
-		disallowedForSubagents[name] = true
-	}
-}
-
 // displayToInternal 显示名→内部名映射。
 // 对齐 Python: _DISPLAY_TO_INTERNAL (code_agent_rail.py L48-66)
 //
@@ -229,6 +222,14 @@ func (r *CodeAgentRail) Reload(agent sainterfaces.BaseAgent) error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// init 初始化禁止传递给子 Agent 的工具名集合
+func init() {
+	disallowedForSubagents = make(map[string]bool, len(types.DisallowedForSubagents))
+	for _, name := range types.DisallowedForSubagents {
+		disallowedForSubagents[name] = true
+	}
+}
 
 // loadCustomAgents 从 AgentConfigService 加载启用的自定义 Agent。
 // 对齐 Python: CodeAgentRail._load_custom_agents() (code_agent_rail.py L413-425)

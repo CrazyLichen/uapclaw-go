@@ -31,16 +31,16 @@ type MCPTool struct {
 // 重导出变量和函数
 var (
 	// WithServerID 设置服务器标识。
-	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	WithServerID = types.WithServerID
 	// NewMcpServerConfig 创建 MCP 服务器配置。
-	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpServerConfig = types.NewMcpServerConfig
 	// WithMcpToolCardServerID 设置 MCP 工具卡片的服务器标识。
-	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	WithMcpToolCardServerID = types.WithMcpToolCardServerID
 	// NewMcpToolCard 创建 MCP 工具卡片。
-	// TODO: 考虑移除 reexport，让调用者直接使用 types 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 types 包
 	NewMcpToolCard = types.NewMcpToolCard
 )
 

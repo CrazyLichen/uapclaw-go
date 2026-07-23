@@ -375,7 +375,7 @@ func (p *ToolResultBudgetProcessor) shrinkRoundToBudget(ctx context.Context, mes
 //  2. 不是已卸载消息
 //  3. IsText() 纯文本内容
 //  4. 非白名单工具消息
-//  5. size > LargeMessageThreshold
+//  5. size > LargeMessageThreshold（消息大小超过大消息阈值）
 //
 // 对应 Python: ToolResultBudgetProcessor._should_offload_message()
 func (p *ToolResultBudgetProcessor) shouldOffloadMessage(message llm_schema.BaseMessage, contextMessages []llm_schema.BaseMessage, mc iface.ModelContext) bool {

@@ -12,13 +12,18 @@ import (
 	sysop "github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 )
 
-// ──────────────────────────── PowerShell 检测 ────────────────────────────
+// PowerShell 检测
 
 // powershellTokens PowerShell 检测令牌。
 // 对齐 Python _POWERSHELL_TOKENS。
+
 // ──────────────────────────── 结构体 ────────────────────────────
 
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 var powershellTokens = []string{
 	"powershell ", "powershell.exe ", "pwsh ", "pwsh.exe ",
@@ -44,7 +49,7 @@ var powershellCommandArgPattern = regexp.MustCompile(`(?is)(?:^|\s)-(?:command|c
 // 对齐 Python _POWERSHELL_CANDIDATES。
 var powershellCandidates = []string{"pwsh", "powershell", "powershell.exe"}
 
-// ──────────────────────────── POSIX 检测 ────────────────────────────
+// POSIX 检测
 
 // posixCommands POSIX 命令集合。
 // 对齐 Python _POSIX_COMMANDS。
@@ -56,7 +61,7 @@ var posixCommands = map[string]bool{
 	"wc": true, "du": true, "df": true, "pwd": true, "which": true, "mkdir": true,
 }
 
-// ──────────────────────────── Windows 路径模式 ────────────────────────────
+// Windows 路径模式
 
 // Go 的 regexp 使用 RE2 语法，不支持 Python 的 (?P=quote) 反向引用和 (?<!...) lookbehind。
 // 因此 Windows 路径归一化使用手动扫描实现，而非正则。

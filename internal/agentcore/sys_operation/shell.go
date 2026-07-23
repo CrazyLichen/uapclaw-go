@@ -53,6 +53,7 @@ type ShellOptions struct {
 	Grace float64
 }
 
+// BaseShellOperation 基础 Shell 操作实现。
 type BaseShellOperation struct {
 	BaseOperation
 }

@@ -68,6 +68,9 @@ type StreamController struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// StreamControllerOption 流式控制器可选配置
+type StreamControllerOption func(*StreamController)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -99,9 +102,6 @@ var (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// StreamControllerOption 流式控制器可选配置
-type StreamControllerOption func(*StreamController)
 
 // WithWakeMailbox 设置中断清除后的邮箱唤醒回调
 func WithWakeMailbox(cb func(ctx context.Context) error) StreamControllerOption {

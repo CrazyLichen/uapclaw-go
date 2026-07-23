@@ -190,7 +190,7 @@ func Setup(opts ...Option) error {
 	return setupErr
 }
 
-// ──── 组件级日志函数 ────
+// 组件级日志函数
 
 // Info 输出 Info 级别日志。
 // 使用方式：logger.Info(logger.ComponentCommon).Str("key", "val").Msg("消息")

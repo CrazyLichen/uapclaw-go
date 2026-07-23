@@ -81,7 +81,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 			// 步骤2: 注入渠道状态（session_id / mode）
 			mh.ApplyChannelState(msg)
 
-			// TODO: 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
+			// TODO(#11.13): 步骤3 - Gateway hook: UserPromptSubmit（等 11.13 Gateway Hook 回填）
 			// 对齐 Python: 网关钩子处理器检测
 			//     await self._gateway_hook_handler.on_user_prompt_submit(session_id, prompt_text)
 
@@ -97,7 +97,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 				continue
 			}
 
-			// TODO: 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
+			// TODO(#11.12): 步骤6 - Inbound Pipeline（数字分身入站过滤）（等 11.12 IM Pipeline 回填）
 			// 对齐 Python: 入站管道处理
 			//     should_forward = await self._inbound_pipeline.apply(msg)
 			//     if not should_forward: continue
@@ -110,7 +110,7 @@ func (mh *MessageHandler) forwardLoop(ctx context.Context) {
 			// 步骤8: 准备 Agent 派发消息
 			agentMsg := mh.prepareAgentDispatchMessage(ctx, msg)
 
-			// TODO: 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
+			// TODO(#11.13): 步骤9 - before_chat_request hook（等 11.13 Gateway Hook 回填）
 			// 对齐 Python: 触发聊天前钩子
 
 			// 步骤10: chat.send 分发

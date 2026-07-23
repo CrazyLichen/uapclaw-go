@@ -8,6 +8,18 @@ package schema
 // 对齐 Python: MemberStatus (openjiuwen/agent_teams/schema/status.py)
 type MemberStatus string
 
+// ExecutionStatus 任务执行状态枚举。
+// 对齐 Python: ExecutionStatus
+type ExecutionStatus string
+
+// MemberMode 成员与任务交互模式。
+// 对齐 Python: MemberMode
+type MemberMode string
+
+// TaskStatus 团队任务状态枚举。
+// 对齐 Python: TaskStatus
+type TaskStatus string
+
 const (
 	// MemberStatusUnstarted 成员已创建但尚未启动
 	MemberStatusUnstarted MemberStatus = "unstarted"
@@ -30,10 +42,6 @@ const (
 	// MemberStatusError 成员处于错误状态
 	MemberStatusError MemberStatus = "error"
 )
-
-// ExecutionStatus 任务执行状态枚举。
-// 对齐 Python: ExecutionStatus
-type ExecutionStatus string
 
 const (
 	// ExecutionStatusIdle 未执行任何任务
@@ -58,20 +66,12 @@ const (
 	ExecutionStatusTimedOut ExecutionStatus = "timed_out"
 )
 
-// MemberMode 成员与任务交互模式。
-// 对齐 Python: MemberMode
-type MemberMode string
-
 const (
 	// MemberModeBuildMode 成员可直接认领并完成任务（默认）
 	MemberModeBuildMode MemberMode = "build_mode"
 	// MemberModePlanMode 成员需 Leader 审批后才能完成任务
 	MemberModePlanMode MemberMode = "plan_mode"
 )
-
-// TaskStatus 团队任务状态枚举。
-// 对齐 Python: TaskStatus
-type TaskStatus string
 
 const (
 	// TaskStatusPending 任务等待被认领

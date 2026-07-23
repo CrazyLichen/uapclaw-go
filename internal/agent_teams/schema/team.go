@@ -81,15 +81,15 @@ type TeamRuntimeContext struct {
 // TeamLifecycle 团队生命周期模式。
 type TeamLifecycle string
 
+// TeamRole 团队角色枚举。
+type TeamRole string
+
 const (
 	// TeamLifecycleTemporary 临时团队
 	TeamLifecycleTemporary TeamLifecycle = "temporary"
 	// TeamLifecyclePersistent 持久团队
 	TeamLifecyclePersistent TeamLifecycle = "persistent"
 )
-
-// TeamRole 团队角色枚举。
-type TeamRole string
 
 const (
 	// TeamRoleLeader Leader 角色

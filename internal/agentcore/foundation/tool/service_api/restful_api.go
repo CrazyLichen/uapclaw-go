@@ -106,7 +106,7 @@ func WithRestfulApiCardPaths(paths map[string]any) RestfulApiCardOption {
 }
 
 // WithRestfulApiCardTimeout 设置超时秒数。
-// TODO: 此处未做范围校验，依赖 NewRestfulApiCard 构造函数中的范围校验（Python 限定 1.0-300.0）。
+// TODO(#通用): 此处未做范围校验，依赖 NewRestfulApiCard 构造函数中的范围校验（Python 限定 1.0-300.0）。
 // 考虑在此处也增加范围校验，使错误更早暴露。
 func WithRestfulApiCardTimeout(timeout float64) RestfulApiCardOption {
 	return func(c *RestfulApiCard) { c.Timeout = timeout }
@@ -581,7 +581,7 @@ func (r *RestfulApi) formatResponse(resp *http.Response, maxResponseBytes int) (
 // 简化版：使用 net/url 解析。SSRF 防护等安全特性 ⤵️ 预留回填点
 // （等 common/security/url_utils.go 迁移后回填）。
 //
-// TODO: 后续需添加 SSRF 防护，包括：私有 IP 过滤（127.0.0.0/8、10.0.0.0/8、
+// TODO(#通用): 后续需添加 SSRF 防护，包括：私有 IP 过滤（127.0.0.0/8、10.0.0.0/8、
 // 172.16.0.0/12、192.168.0.0/16）、域名白名单、DNS 重绑定防护等。
 // 对应 Python: UrlUtils.check_url_is_valid() 中的 SSRF 检查逻辑。
 func validateURL(rawURL string) error {

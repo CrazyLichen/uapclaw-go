@@ -93,10 +93,10 @@ func CheckBashInjection(command string) (bool, string) {
 // CheckPowerShellInjection 检测 PowerShell 注入。
 // 对齐 Python: check_injection (powershell/_security.py L28-33)
 // 检测 4 种模式:
-// 1. Invoke-Expression / iex
-// 2. powershell/pwsh -EncodedCommand
+// 1. Invoke-Expression / iex（调用表达式）
+// 2. powershell/pwsh -EncodedCommand（编码命令执行）
 // 3. & ( 或 & $（动态调用运算符）
-// 4. [ScriptBlock]::Create(
+// 4. [ScriptBlock]::Create(（脚本块创建）
 func CheckPowerShellInjection(command string) (bool, string) {
 	if psInvokeExprRe.MatchString(command) {
 		return true, "PowerShell injection detected: Invoke-Expression"

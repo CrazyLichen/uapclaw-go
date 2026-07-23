@@ -14,6 +14,12 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// VerifyFunc 验证+解析函数类型。
+// 接收 LLM 输出文本，返回解析后的对象；验证失败时返回 error 触发重试。
+//
+// 对齐 Python: verify_fn(output) — 成功返回解析后对象，失败抛异常触发 tenacity 重试
+type VerifyFunc func(string) (any, error)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -32,12 +38,6 @@ var invokeWithVerifyImpl func(
 ) (any, error)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// VerifyFunc 验证+解析函数类型。
-// 接收 LLM 输出文本，返回解析后的对象；验证失败时返回 error 触发重试。
-//
-// 对齐 Python: verify_fn(output) — 成功返回解析后对象，失败抛异常触发 tenacity 重试
-type VerifyFunc func(string) (any, error)
 
 // InvokeWithVerify 带验证的 LLM 文本调用。
 // 复用 llm_resilience.InvokeTextWithRetry，将 Python 的 verify_fn 适配为
@@ -62,47 +62,6 @@ func InvokeWithVerify(
 	verifyFn VerifyFunc,
 ) (any, error) {
 	return invokeWithVerifyImpl(ctx, model, modelName, prompt, policy, verifyFn)
-}
-
-// invokeWithVerifyDefault InvokeWithVerify 的默认实现。
-func invokeWithVerifyDefault(
-	ctx context.Context,
-	model *llm.Model,
-	modelName string,
-	prompt string,
-	policy llm_resilience.LLMInvokePolicy,
-	verifyFn VerifyFunc,
-) (any, error) {
-	var cachedResult any
-
-	isResultUsable := func(text string) bool {
-		if verifyFn == nil {
-			return true
-		}
-		result, err := verifyFn(text)
-		if err != nil {
-			return false
-		}
-		cachedResult = result
-		return true
-	}
-
-	raw, err := llm_resilience.InvokeTextWithRetry(
-		ctx, model, modelName, prompt, policy,
-		llm_resilience.WithIsResultUsable(isResultUsable),
-	)
-	if err != nil {
-		// 对齐 Python get_rits_response: return {'error': f"Cannot complete LLM call. Error: {e}"}
-		return map[string]any{
-			"error": fmt.Sprintf("Cannot complete LLM call. Error: %v", err),
-		}, nil
-	}
-
-	if verifyFn == nil {
-		return raw, nil
-	}
-
-	return cachedResult, nil
 }
 
 // InvokeText 简单 LLM 文本调用（无 verify_fn）。
@@ -145,13 +104,13 @@ func InvokeFunctionCall(
 		model_clients.WithTools(toolInfo),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("function calling failed: %w", err)
+		return nil, fmt.Errorf("函数调用失败: %w", err)
 	}
 
 	// 对齐 Python: api_response.tool_calls
 	toolCalls := response.ToolCalls
 	if len(toolCalls) == 0 {
-		return nil, fmt.Errorf("LLM did not generate any tool calls")
+		return nil, fmt.Errorf("LLM 未生成任何工具调用")
 	}
 
 	// 对齐 Python: fn_args = api_response.tool_calls[0].arguments
@@ -172,6 +131,48 @@ func InvokeFunctionCall(
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
+// invokeWithVerifyDefault InvokeWithVerify 的默认实现。
+func invokeWithVerifyDefault(
+	ctx context.Context,
+	model *llm.Model,
+	modelName string,
+	prompt string,
+	policy llm_resilience.LLMInvokePolicy,
+	verifyFn VerifyFunc,
+) (any, error) {
+	var cachedResult any
+
+	isResultUsable := func(text string) bool {
+		if verifyFn == nil {
+			return true
+		}
+		result, err := verifyFn(text)
+		if err != nil {
+			return false
+		}
+		cachedResult = result
+		return true
+	}
+
+	raw, err := llm_resilience.InvokeTextWithRetry(
+		ctx, model, modelName, prompt, policy,
+		llm_resilience.WithIsResultUsable(isResultUsable),
+	)
+	if err != nil {
+		// 对齐 Python get_rits_response: return {'error': f"Cannot complete LLM call. Error: {e}"}
+		return map[string]any{
+			"error": fmt.Sprintf("无法完成 LLM 调用，错误: %v", err),
+		}, nil
+	}
+
+	if verifyFn == nil {
+		return raw, nil
+	}
+
+	return cachedResult, nil
+}
+
+// init 初始化默认实现
 func init() {
 	invokeWithVerifyImpl = invokeWithVerifyDefault
 }

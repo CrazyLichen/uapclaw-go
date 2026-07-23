@@ -47,6 +47,15 @@ type InteractGate struct {
 	mu sync.Mutex
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
+// gateLogComponent 日志组件
+var gateLogComponent = logger.ComponentChannel
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInteractGate 创建新门控。
@@ -170,7 +179,7 @@ func (g *InteractGate) CloseAndDrain(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		logger.Warn(gateLogComponent).Err(ctx.Err()).
-			Msg("CloseAndDrain cancelled while waiting for inflight to drain")
+			Msg("CloseAndDrain 在等待飞行中载荷排空时被取消")
 		return ctx.Err()
 	}
 }
@@ -203,6 +212,3 @@ func (g *InteractGate) Reset() {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// gateLogComponent 日志组件
-var gateLogComponent = logger.ComponentChannel

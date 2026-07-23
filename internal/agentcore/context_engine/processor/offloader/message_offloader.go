@@ -97,8 +97,8 @@ func NewMessageOffloader(config *MessageOffloaderConfig) (*MessageOffloader, err
 // Validate 校验消息卸载器配置。
 //
 // 交叉校验：
-//   - TrimSize < LargeMessageThreshold
-//   - MessagesToKeep < MessagesThreshold（两者均非 nil 时）
+//   - TrimSize < LargeMessageThreshold（裁剪尺寸小于大消息阈值）
+//   - MessagesToKeep < MessagesThreshold（两者均非 nil 时，保留消息数小于消息阈值）
 //
 // 对应 Python: MessageOffloader._validate_config()
 func (c *MessageOffloaderConfig) Validate() error {

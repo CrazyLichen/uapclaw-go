@@ -7,4 +7,6 @@
 //	tools/
 //	├── doc.go           # 包文档
 //	└── database/        # 数据库工具子包
+//
+// 对应 Python 代码：无（Go 特有团队工具集）
 package tools

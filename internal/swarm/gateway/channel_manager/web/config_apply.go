@@ -17,6 +17,16 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// CryptoProvider 加密/解密提供者接口。
+//
+// 对齐 Python ExtensionRegistry.get_crypto_provider()。
+type CryptoProvider interface {
+	// Encrypt 加密明文
+	Encrypt(plaintext string) string
+	// Decrypt 解密密文
+	Decrypt(ciphertext string) string
+}
+
 // ConfigBadRequest 配置请求参数错误。
 // 对齐 Python: _ConfigBadRequest(ValueError)。
 type ConfigBadRequest struct {
@@ -29,16 +39,6 @@ type ConfigBadRequest struct {
 type ConfigInternalError struct {
 	// Message 错误信息
 	Message string
-}
-
-// CryptoProvider 加密/解密提供者接口。
-//
-// 对齐 Python ExtensionRegistry.get_crypto_provider()。
-type CryptoProvider interface {
-	// Encrypt 加密明文
-	Encrypt(plaintext string) string
-	// Decrypt 解密密文
-	Decrypt(ciphertext string) string
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

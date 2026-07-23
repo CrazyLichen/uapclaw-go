@@ -13,6 +13,14 @@ import (
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 )
 
+// ──────────────────────────── 结构体 ────────────────────────────
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // MakeSyncMCPCaller 创建同步 MCP 调用函数。
@@ -37,9 +45,9 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 				Str("url", url).
 				Str("name", name).
 				Err(err).
-				Msg("failed to create MCP client")
+				Msg("创建 MCP 客户端失败")
 			result, _ := json.Marshal(map[string]string{
-				"error":    fmt.Sprintf("request invalid, error: %v", err),
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
 				"response": "",
 			})
 			return string(result), 12
@@ -51,9 +59,9 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 				Str("method", "MakeSyncMCPCaller").
 				Str("url", url).
 				Err(err).
-				Msg("failed to connect MCP server")
+				Msg("连接 MCP 服务器失败")
 			result, _ := json.Marshal(map[string]string{
-				"error":    fmt.Sprintf("request invalid, error: %v", err),
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
 				"response": "",
 			})
 			return string(result), 12
@@ -81,9 +89,9 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 						Str("method", "MakeSyncMCPCaller").
 						Str("tool_name", toolName).
 						Err(jsonErr).
-						Msg("failed to parse arguments string as JSON")
+						Msg("将参数字符串解析为 JSON 失败")
 					result, _ := json.Marshal(map[string]string{
-						"error":    fmt.Sprintf("request invalid, error: failed to parse arguments: %v", jsonErr),
+						"error":    fmt.Sprintf("请求无效，解析参数失败: %v", jsonErr),
 						"response": "",
 					})
 					return string(result), 12
@@ -98,9 +106,9 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 				Str("method", "MakeSyncMCPCaller").
 				Str("tool_name", toolName).
 				Err(err).
-				Msg("failed to call MCP tool")
+				Msg("调用 MCP 工具失败")
 			result, _ := json.Marshal(map[string]string{
-				"error":    fmt.Sprintf("request invalid, error: %v", err),
+				"error":    fmt.Sprintf("请求无效，错误: %v", err),
 				"response": "",
 			})
 			return string(result), 12
@@ -114,3 +122,5 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc {
 		return string(result), 0
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

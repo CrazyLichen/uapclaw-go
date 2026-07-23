@@ -468,10 +468,10 @@ Output plain text only.
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。
 //
 // 默认值与 Python 对齐：
-//   - TokensThreshold=100000, MessagesToKeep=3
-//   - MinSelectedTokensForCompression=20000, CompressionTargetTokens=4000
-//   - SummaryMergeTargetTokens=4000, AccumulatedSummaryTokenLimit=20000
-//   - SummaryMergeMinBlocks=3, PriorContextWindowSize=10
+//   - TokensThreshold=100000（令牌阈值），MessagesToKeep=3（保留消息数）
+//   - MinSelectedTokensForCompression=20000（压缩最小选中令牌数），CompressionTargetTokens=4000（压缩目标令牌数）
+//   - SummaryMergeTargetTokens=4000（摘要合并目标令牌数），AccumulatedSummaryTokenLimit=20000（累计摘要令牌上限）
+//   - SummaryMergeMinBlocks=3（摘要合并最小块数），PriorContextWindowSize=10（前文窗口大小）
 func NewCurrentRoundCompressorConfig() *CurrentRoundCompressorConfig {
 	return &CurrentRoundCompressorConfig{
 		TokensThreshold:                 100000,

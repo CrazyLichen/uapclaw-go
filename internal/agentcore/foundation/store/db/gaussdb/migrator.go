@@ -24,7 +24,7 @@ import (
 // （如查询 pg_type.typcollation 或 pg_enum），应在此处覆写
 // ColumnTypes() 方法进行改写。
 //
-// TODO: 当 GORM postgres Migrator 引入 GaussDB 不兼容的 SQL 时，在此处覆写相关方法
+// TODO(#通用): 当 GORM postgres Migrator 引入 GaussDB 不兼容的 SQL 时，在此处覆写相关方法
 type GaussMigrator struct {
 	postgres.Migrator
 }

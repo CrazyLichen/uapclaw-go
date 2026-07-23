@@ -12,12 +12,6 @@ import (
 // 对应 Python: UpdateKey = Tuple[str, str] (agent_evolving/trajectory/types.py)
 type UpdateKey [2]string
 
-// OperatorID 返回 UpdateKey 的 operatorID 部分。
-func (k UpdateKey) OperatorID() string { return k[0] }
-
-// Target 返回 UpdateKey 的 target 部分。
-func (k UpdateKey) Target() string { return k[1] }
-
 // UpdateValue 结构化更新契约，在线和离线应用路径共享。
 //
 // 对应 Python: openjiuwen/agent_evolving/types.py UpdateValue
@@ -67,12 +61,8 @@ type ApplyResult struct {
 	Metadata map[string]any
 }
 
-// Ok 返回应用结果是否成功（已应用且无错误）。
-//
-// 对应 Python: ApplyResult.ok property
-func (r ApplyResult) Ok() bool {
-	return r.Applied && len(r.Errors) == 0
-}
+// UpdateValueOption UpdateValue 构造选项函数。
+type UpdateValueOption func(*UpdateValue)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
@@ -85,9 +75,6 @@ type UpdateMode string
 //
 // 对应 Python: UpdateEffect = Literal["state", "pending_change"]
 type UpdateEffect string
-
-// UpdateValueOption UpdateValue 构造选项函数。
-type UpdateValueOption func(*UpdateValue)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -110,6 +97,19 @@ const (
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
+
+// OperatorID 返回 UpdateKey 的 operatorID 部分。
+func (k UpdateKey) OperatorID() string { return k[0] }
+
+// Target 返回 UpdateKey 的 target 部分。
+func (k UpdateKey) Target() string { return k[1] }
+
+// Ok 返回应用结果是否成功（已应用且无错误）。
+//
+// 对应 Python: ApplyResult.ok property
+func (r ApplyResult) Ok() bool {
+	return r.Applied && len(r.Errors) == 0
+}
 
 // NewUpdateValue 创建 UpdateValue 实例，设置默认 Mode=replace, Effect=state。
 //

@@ -153,8 +153,6 @@ func NewStreamQueueMessage(payload map[string]any) *StreamQueueMessage {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // GetMessageID 实现 QueueMessageBase 接口。
 func (m *QueueMessage) GetMessageID() string { return m.MessageID }
 
@@ -263,3 +261,5 @@ func (m *StreamQueueMessage) CompleteResponse(result any, err error) {
 		// response channel 已有值，忽略重复完成
 	}
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

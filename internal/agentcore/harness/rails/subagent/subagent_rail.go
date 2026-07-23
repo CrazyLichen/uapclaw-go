@@ -55,6 +55,9 @@ var knownAgentTools = map[string]string{
 	"plan_agent":    "bash, glob, grep, list_files, read_file",
 }
 
+// 编译时接口检查
+var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewSubagentRail 创建 SubagentRail 实例。
@@ -232,6 +235,3 @@ func (r *SubagentRail) extractAgentTools(spec hschema.SubagentSpec, agentName st
 	// 对齐 Python: return "All tools"
 	return "All tools"
 }
-
-// compile-time check
-var _ agentinterfaces.AgentRail = (*SubagentRail)(nil)

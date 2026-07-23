@@ -206,6 +206,58 @@ type GlobalAgentEventData struct {
 	Extra map[string]any
 }
 
+// TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
+// 接收事件名和原始输入，返回变换后的输入。
+// 对齐 Python: transform_io 的 input_fn（LLM_STREAM_INPUT / LLM_INVOKE_INPUT）
+type TransformLLMIOInputFunc func(ctx context.Context, event LLMCallEventType, input any) any
+
+// TransformLLMIOOutputFunc LLM 层输出变换回调函数类型。
+// 接收事件名和原始输出，返回变换后的输出。
+// 对齐 Python: transform_io 的 output_fn（LLM_STREAM_OUTPUT / LLM_INVOKE_OUTPUT）
+type TransformLLMIOOutputFunc func(ctx context.Context, event LLMCallEventType, output any) any
+
+// TransformAgentIOInputFunc Agent 层输入变换回调函数类型。
+// 对齐 Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
+type TransformAgentIOInputFunc func(ctx context.Context, event GlobalAgentEventType, input any) any
+
+// TransformAgentIOOutputFunc Agent 层输出变换回调函数类型。
+// 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
+type TransformAgentIOOutputFunc func(ctx context.Context, event GlobalAgentEventType, output any) any
+
+// TransformToolIOInputFunc Tool 层输入变换回调函数类型。
+// 接收事件名和原始输入，返回变换后的输入。
+// 对齐 Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
+type TransformToolIOInputFunc func(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any
+
+// TransformToolIOOutputFunc Tool 层输出变换回调函数类型。
+// 接收事件名和原始输出，返回变换后的输出。
+// 对齐 Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
+type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any
+
+// GlobalAgentCallbackFunc Agent 回调函数类型。
+type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventData) any
+
+// PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
+// agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext，回调内需类型断言。
+//
+// 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
+type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
+
+// WorkflowCallbackFunc Workflow 回调函数类型。
+type WorkflowCallbackFunc func(ctx context.Context, data *WorkflowEventData) any
+
+// AgentTeamCallbackFunc Agent 协作回调函数类型。
+type AgentTeamCallbackFunc func(ctx context.Context, data *AgentTeamEventData) any
+
+// RetrievalCallbackFunc 检索回调函数类型。
+type RetrievalCallbackFunc func(ctx context.Context, data *RetrievalEventData) any
+
+// MemoryCallbackFunc 记忆回调函数类型。
+type MemoryCallbackFunc func(ctx context.Context, data *MemoryEventData) any
+
+// TaskManagerCallbackFunc 任务管理回调函数类型。
+type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventData) any
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // LLMCallEventType LLM 调用事件类型。
@@ -266,58 +318,6 @@ type MemoryEventType string
 //
 // 对应 Python: openjiuwen/core/runner/callback/events.py (TaskManagerEvents)
 type TaskManagerEventType string
-
-// TransformLLMIOInputFunc LLM 层输入变换回调函数类型。
-// 接收事件名和原始输入，返回变换后的输入。
-// 对齐 Python: transform_io 的 input_fn（LLM_STREAM_INPUT / LLM_INVOKE_INPUT）
-type TransformLLMIOInputFunc func(ctx context.Context, event LLMCallEventType, input any) any
-
-// TransformLLMIOOutputFunc LLM 层输出变换回调函数类型。
-// 接收事件名和原始输出，返回变换后的输出。
-// 对齐 Python: transform_io 的 output_fn（LLM_STREAM_OUTPUT / LLM_INVOKE_OUTPUT）
-type TransformLLMIOOutputFunc func(ctx context.Context, event LLMCallEventType, output any) any
-
-// TransformAgentIOInputFunc Agent 层输入变换回调函数类型。
-// 对齐 Python: transform_io 的 input_fn（AGENT_STREAM_INPUT / AGENT_INVOKE_INPUT）
-type TransformAgentIOInputFunc func(ctx context.Context, event GlobalAgentEventType, input any) any
-
-// TransformAgentIOOutputFunc Agent 层输出变换回调函数类型。
-// 对齐 Python: transform_io 的 output_fn（AGENT_STREAM_OUTPUT / AGENT_INVOKE_OUTPUT）
-type TransformAgentIOOutputFunc func(ctx context.Context, event GlobalAgentEventType, output any) any
-
-// TransformToolIOInputFunc Tool 层输入变换回调函数类型。
-// 接收事件名和原始输入，返回变换后的输入。
-// 对齐 Python: transform_io 的 input_fn（TOOL_STREAM_INPUT / TOOL_INVOKE_INPUT）
-type TransformToolIOInputFunc func(ctx context.Context, event ToolCallEventType, input map[string]any) map[string]any
-
-// TransformToolIOOutputFunc Tool 层输出变换回调函数类型。
-// 接收事件名和原始输出，返回变换后的输出。
-// 对齐 Python: transform_io 的 output_fn（TOOL_STREAM_OUTPUT / TOOL_INVOKE_OUTPUT）
-type TransformToolIOOutputFunc func(ctx context.Context, event ToolCallEventType, output map[string]any) map[string]any
-
-// GlobalAgentCallbackFunc Agent 回调函数类型。
-type GlobalAgentCallbackFunc func(ctx context.Context, data *GlobalAgentEventData) any
-
-// PerAgentCallbackFunc 实例级 PerAgent 回调函数类型。
-// agentCallbackContext 实际类型为 *interfaces.AgentCallbackContext，回调内需类型断言。
-//
-// 对应 Python: AnyAgentCallback = Union[AgentCallback, SyncAgentCallback]
-type PerAgentCallbackFunc func(ctx context.Context, agentCallbackContext any) error
-
-// WorkflowCallbackFunc Workflow 回调函数类型。
-type WorkflowCallbackFunc func(ctx context.Context, data *WorkflowEventData) any
-
-// AgentTeamCallbackFunc Agent 协作回调函数类型。
-type AgentTeamCallbackFunc func(ctx context.Context, data *AgentTeamEventData) any
-
-// RetrievalCallbackFunc 检索回调函数类型。
-type RetrievalCallbackFunc func(ctx context.Context, data *RetrievalEventData) any
-
-// MemoryCallbackFunc 记忆回调函数类型。
-type MemoryCallbackFunc func(ctx context.Context, data *MemoryEventData) any
-
-// TaskManagerCallbackFunc 任务管理回调函数类型。
-type TaskManagerCallbackFunc func(ctx context.Context, data *TaskManagerEventData) any
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (

@@ -29,7 +29,7 @@ import (
 // 对齐 Python: openjiuwen/harness/subagents/browser_agent.py (L195-262)
 //
 // 预定义 BrowserAgent 配备 BrowserRuntimeRail + 运行时工具集，用户可自由覆盖配置。
-// Full override rule：如果用户传了 rails，则使用用户的，否则默认注入 [BrowserRuntimeRail()]。
+// 完整覆盖规则：如果用户传了 rails，则使用用户的，否则默认注入 [BrowserRuntimeRail()]。
 func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
 	language := hpromts.ResolveLanguage(params.Language)
 
@@ -57,7 +57,7 @@ func CreateBrowserAgent(ctx context.Context, params *hschema.SubagentCreateParam
 		allToolInstances = append(allToolInstances, params.ToolInstances...)
 	}
 
-	// Full override rule：用户传了 rails 就用用户的，否则默认注入 BrowserRuntimeRail
+	// 完整覆盖规则：用户传了 rails 就用用户的，否则默认注入 BrowserRuntimeRail
 	// 对齐 Python: final_rails = rails if rails is not None else [BrowserRuntimeRail(runtime)]
 	finalRails := params.Rails
 	if finalRails == nil {

@@ -40,6 +40,8 @@ type MarkdownContent struct {
 	Lists []string `json:"lists"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // MarkdownElementType Markdown 元素类型常量。
 //
 // 对应 Python: MarkdownElementType

@@ -13,45 +13,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TextualParameter operator_id 的梯度容器，存储 target→梯度值和可选描述。
-// 不再持有 Operator 引用。
-//
-// 对应 Python: TextualParameter
-type TextualParameter struct {
-	// OperatorID 所属 Operator 标识
-	OperatorID string
-	// Gradients 梯度映射 target → gradient value (string)
-	// 空字符串 "" 表示 nil（未设置/已清除），对齐 Python 的 None 语义
-	Gradients map[string]string
-	// Description 可选描述
-	Description string
-}
-
-// BaseOptimizerMixin 优化器公共逻辑嵌入结构体。
-//
-// 子优化器嵌入此结构体，获得公共字段和辅助方法（Bind/AddTrajectory/ValidateParameters 等），
-// 然后自己实现 BaseOptimizer 接口的全部方法。
-//
-// 典型子优化器实现模式：
-//   - Domain()/RequiresForwardData()/DefaultTargets() — 返回维度常量
-//   - Bind() — 委托 o.BaseOptimizerMixin.Bind()
-//   - AddTrajectory()/GetTrajectories()/ClearTrajectories() — 委托 Mixin
-//   - Backward() — 调用 Mixin.ValidateParameters() + SelectSignals() + 子类逻辑 + 错误包装
-//   - Step() — 调用 Mixin.ValidateParameters() + 子类逻辑 + ClearTrajectories()
-//   - Parameters()/SelectSignals() — 委托 Mixin
-type BaseOptimizerMixin struct {
-	// operators 绑定的 Operator 映射
-	operators map[string]operator.Operator
-	// parameters 梯度容器映射
-	parameters map[string]*TextualParameter
-	// targets 优化目标列表
-	targets []string
-	// trajectories 缓存的执行轨迹列表
-	trajectories []*trajectory.Trajectory
-	// selectedSignals 选中的演化信号列表
-	selectedSignals []*signal.EvolutionSignal
-}
-
 // BaseOptimizer 维度优化器的公共接口。
 //
 // 定义优化器的生命周期：
@@ -97,6 +58,45 @@ type BaseOptimizer interface {
 	// SelectSignals 选择此优化器可消费的信号。
 	// 默认保留全部信号，失败驱动语义的优化器应显式覆盖此方法。
 	SelectSignals(signals []*signal.EvolutionSignal) []*signal.EvolutionSignal
+}
+
+// TextualParameter operator_id 的梯度容器，存储 target→梯度值和可选描述。
+// 不再持有 Operator 引用。
+//
+// 对应 Python: TextualParameter
+type TextualParameter struct {
+	// OperatorID 所属 Operator 标识
+	OperatorID string
+	// Gradients 梯度映射 target → gradient value (string)
+	// 空字符串 "" 表示 nil（未设置/已清除），对齐 Python 的 None 语义
+	Gradients map[string]string
+	// Description 可选描述
+	Description string
+}
+
+// BaseOptimizerMixin 优化器公共逻辑嵌入结构体。
+//
+// 子优化器嵌入此结构体，获得公共字段和辅助方法（Bind/AddTrajectory/ValidateParameters 等），
+// 然后自己实现 BaseOptimizer 接口的全部方法。
+//
+// 典型子优化器实现模式：
+//   - Domain()/RequiresForwardData()/DefaultTargets() — 返回维度常量
+//   - Bind() — 委托 o.BaseOptimizerMixin.Bind()
+//   - AddTrajectory()/GetTrajectories()/ClearTrajectories() — 委托 Mixin
+//   - Backward() — 调用 Mixin.ValidateParameters() + SelectSignals() + 子类逻辑 + 错误包装
+//   - Step() — 调用 Mixin.ValidateParameters() + 子类逻辑 + ClearTrajectories()
+//   - Parameters()/SelectSignals() — 委托 Mixin
+type BaseOptimizerMixin struct {
+	// operators 绑定的 Operator 映射
+	operators map[string]operator.Operator
+	// parameters 梯度容器映射
+	parameters map[string]*TextualParameter
+	// targets 优化目标列表
+	targets []string
+	// trajectories 缓存的执行轨迹列表
+	trajectories []*trajectory.Trajectory
+	// selectedSignals 选中的演化信号列表
+	selectedSignals []*signal.EvolutionSignal
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -273,8 +273,6 @@ func (m *BaseOptimizerMixin) ValidateParameters() {
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // FilterOperators 过滤暴露任何 target 的 Operator。对不匹配的记录警告，不中断。
 //
 // 对齐 Python:
@@ -311,3 +309,5 @@ func FilterOperators(operators map[string]operator.Operator, targets []string) m
 	}
 	return out
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

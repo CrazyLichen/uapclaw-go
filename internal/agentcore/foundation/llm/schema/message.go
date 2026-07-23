@@ -69,11 +69,11 @@ type SystemMessage struct {
 	DefaultMessage
 }
 
+type MessageOption func(*DefaultMessage)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 type RoleType int
-
-type MessageOption func(*DefaultMessage)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

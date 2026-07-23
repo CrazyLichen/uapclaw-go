@@ -41,17 +41,17 @@ type evolutionSignalConfig struct {
 // 对应 Python: openjiuwen/agent_evolving/signal/base.py EvolutionCategory(str, Enum)
 type EvolutionCategory string
 
+// EvolutionTarget 演化目标层枚举，标识技能经验作用的目标层。
+//
+// 对应 Python: openjiuwen/agent_evolving/signal/base.py EvolutionTarget(str, Enum)
+type EvolutionTarget string
+
 const (
 	// EvolutionCategorySkillExperience 技能经验
 	EvolutionCategorySkillExperience EvolutionCategory = "skill_experience"
 	// EvolutionCategoryNewSkill 新技能
 	EvolutionCategoryNewSkill EvolutionCategory = "new_skill"
 )
-
-// EvolutionTarget 演化目标层枚举，标识技能经验作用的目标层。
-//
-// 对应 Python: openjiuwen/agent_evolving/signal/base.py EvolutionTarget(str, Enum)
-type EvolutionTarget string
 
 const (
 	// EvolutionTargetDescription 描述层

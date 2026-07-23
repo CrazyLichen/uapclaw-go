@@ -29,8 +29,7 @@
 //	├── deep_adapter_config.go    # RuntimeConfig + Profile/Prompt/Subagent + createSysOperation
 //	├── evolution/                # Evolution 事件分类/状态提取/推送辅助（10.3.9）
 //	│   ├── doc.go                # 包文档
-//	│   ├── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
-//	│   └── helpers_test.go       # 单元测试
+//	│   └── helpers.go            # 3 结构体 + 常量/变量 + ~22 导出函数
 //	├── agent_tool.go             # AgentTool 自定义 Agent 调度工具（10.3.7）
 //	├── code_agent_rail.go        # CodeAgentRail Code 模式自定义 Agent 护栏 + 常量 + 辅助函数（10.3.7）
 //	└── code_adapter.go           # CodeAdapter Code 模式适配器 + 可选接口委托

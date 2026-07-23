@@ -117,7 +117,7 @@ func NewSimpleEval(
 ) *SimpleEval {
 	// 对齐 Python: if abs(fn_call_weight + output_effectiveness_weight - 1.0) > 1e-6: raise ValueError
 	if math.Abs(fnCallWeight+outputEffectivenessWeight-1.0) > 1e-6 {
-		panic(fmt.Sprintf("fn_call_weight and output_effectiveness_weight must sum to 1.0, got %f+%f=%f",
+		panic(fmt.Sprintf("fn_call_weight 和 output_effectiveness_weight 之和必须为 1.0，得到 %f+%f=%f",
 			fnCallWeight, outputEffectivenessWeight, fnCallWeight+outputEffectivenessWeight))
 	}
 	return &SimpleEval{
@@ -200,18 +200,18 @@ func EvaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any
 	score := 0.0
 	maxScore := 0.0
 
-	// 对齐 Python: Check function name (30% weight)
+	// 对齐 Python: 检查函数名（30% 权重）
 	maxScore += 0.3
 	if generatedFnCall["name"] == expectedFnCall["name"] {
 		score += 0.3
 	}
 
-	// 对齐 Python: Check parameters (70% weight)
+	// 对齐 Python: 检查参数（70% 权重）
 	genParams := getArgsMap(generatedFnCall)
 	expParams := getArgsMap(expectedFnCall)
 
 	if len(expParams) == 0 && len(genParams) == 0 {
-		// 对齐 Python: Both empty parameters
+		// 对齐 Python: 两个参数都为空
 		score += 0.7
 		maxScore += 0.7
 	} else if len(expParams) > 0 {
@@ -244,7 +244,7 @@ func CompareParameterValues(actual, expected any) bool {
 		return true
 	}
 
-	// 对齐 Python: Try numeric comparison
+	// 对齐 Python: 尝试数值比较
 	if isNumeric(actual) && isNumeric(expected) {
 		actFloat := toFloat(actual)
 		expFloat := toFloat(expected)
@@ -253,7 +253,7 @@ func CompareParameterValues(actual, expected any) bool {
 		}
 	}
 
-	// 对齐 Python: Try string comparison
+	// 对齐 Python: 尝试字符串比较
 	actStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", actual)))
 	expStr := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", expected)))
 	return actStr == expStr
@@ -321,7 +321,7 @@ func (e *SimpleEval) evaluateSingleExample(
 			Str("method", "evaluateSingleExample").
 			Int("example_id", exampleID).
 			Err(err).
-			Msg("Error generating function call")
+			Msg("生成函数调用出错")
 		return EvalItemResult{
 			Instruction:              example.Instruction,
 			ExpectedFnCall:           example.FnCall,
@@ -343,7 +343,7 @@ func (e *SimpleEval) evaluateSingleExample(
 	// 对齐 Python: fn_call_score = self._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 	fnCallScore := EvaluateFunctionCallAccuracy(generatedFnCall, example.FnCall)
 
-	// 对齐 Python: Execute the generated function call
+	// 对齐 Python: 执行生成的函数调用
 	var executionResult any
 	var executionError any
 	var errors []EvalError
@@ -373,11 +373,11 @@ func (e *SimpleEval) evaluateSingleExample(
 	} else {
 		logger.Error(logComponent).
 			Str("method", "evaluateSingleExample").
-			Msg("Missing required input: api_wrapper")
+			Msg("缺少必需输入: api_wrapper")
 		errors = append(errors, EvalError{
 			FunctionName: getToolName(tool),
 			Arguments:    map[string]any{},
-			ErrorMsg:     "Missing required input: api_wrapper",
+			ErrorMsg:     "缺少必需输入: api_wrapper",
 		})
 	}
 
@@ -413,7 +413,7 @@ func (e *SimpleEval) generateFunctionCall(
 	instruction string,
 ) (map[string]any, error) {
 	if e.model == nil {
-		return nil, fmt.Errorf("model is nil")
+		return nil, fmt.Errorf("model 为 nil")
 	}
 
 	// 对齐 Python: tool schema 处理
@@ -499,7 +499,7 @@ Respond with only a number between 0 and 100. Do not include explainations.
 		logger.Error(logComponent).
 			Str("method", "evaluateOutputEffectiveness").
 			Err(err).
-			Msg("Error evaluating output effectiveness")
+			Msg("评估输出有效性出错")
 		return SimpleOutputComparison(executionResult, expectedAnswer)
 	}
 

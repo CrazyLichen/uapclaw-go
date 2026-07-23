@@ -127,7 +127,7 @@ func (r *ContextProcessorRail) Init(agent sainterfaces.BaseAgent) error {
 // 对齐 Python: ContextProcessorRail.uninit(agent)
 func (r *ContextProcessorRail) Uninit(agent sainterfaces.BaseAgent) error {
 	// 关闭会话记忆管理器（预留）
-	// TODO: 后续回填 session memory manager shutdown
+	// TODO(#通用): 后续回填 session memory manager shutdown
 
 	config := getReactAgentConfig(agent)
 	if config != nil {
@@ -168,8 +168,8 @@ func (r *ContextProcessorRail) BeforeModelCall(ctx context.Context, cbc *sainter
 // 对齐 Python: ContextProcessorRail.after_model_call(ctx)
 func (r *ContextProcessorRail) AfterModelCall(ctx context.Context, cbc *sainterfaces.AgentCallbackContext) error {
 	RefreshTaskStateRuntime(cbc)
-	// TODO: 后续回填 session memory update_inherited_system_prompt
-	// TODO: 后续回填 session memory maybe_schedule_update
+	// TODO(#通用): 后续回填 session memory update_inherited_system_prompt
+	// TODO(#通用): 后续回填 session memory maybe_schedule_update
 	return nil
 }
 

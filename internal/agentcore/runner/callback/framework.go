@@ -104,21 +104,27 @@ type toolTransformIOEntry struct {
 	outputFn TransformToolIOOutputFunc
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
+// HookFunc 钩子函数类型。
 type HookFunc func(ctx context.Context, event string, data any)
 
-type triggerStrategy int
-
+// LLMCallbackFunc LLM 回调函数类型。
 type LLMCallbackFunc func(ctx context.Context, data *LLMCallEventData) any
 
+// ToolCallbackFunc 工具回调函数类型。
 type ToolCallbackFunc func(ctx context.Context, data *ToolCallEventData) any
 
+// SessionCallbackFunc 会话回调函数类型。
 type SessionCallbackFunc func(ctx context.Context, data *SessionCallEventData) any
 
+// CustomCallbackFunc 自定义回调函数类型。
 type CustomCallbackFunc func(ctx context.Context, data map[string]any) any
 
+// ContextCallbackFunc 上下文回调函数类型。
 type ContextCallbackFunc func(ctx context.Context, data *ContextCallEventData) any
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type triggerStrategy int
 
 // ──────────────────────────── 常量 ────────────────────────────
 

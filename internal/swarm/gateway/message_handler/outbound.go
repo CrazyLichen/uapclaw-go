@@ -72,7 +72,7 @@ func (mh *MessageHandler) handleAgentServerPush(wire map[string]any) {
 	}
 	busMetadata := MergeAgentMetadata(requestMetadata, respMetadata)
 
-	// TODO: ACP session_id 解析（等 ACP 章节回填）
+	// TODO(#ACP): ACP session_id 解析（等 ACP 章节回填）
 	// 对齐 Python: ACP渠道检测
 	//     session_id = self._resolve_acp_external_session_id(session_id, bus_metadata)
 

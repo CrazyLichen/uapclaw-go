@@ -332,7 +332,7 @@ func ClearShellSessionID(ctx context.Context) context.Context {
 // ResolveShellSessionID 解析 session ID：先从 context 取，再 fallback 到 trace_id。
 // 对齐 Python resolve_shell_session_id：先从 contextvars 取，fallback 到 get_session_id()。
 //
-// TODO: 补充 fallback 到 trace_id 的逻辑。Python 在 shell_session_id 为空时，
+// TODO(#通用): 补充 fallback 到 trace_id 的逻辑。Python 在 shell_session_id 为空时，
 // 会从 logging.utils.get_session_id() 获取 trace_id 并排除 "default_trace_id" 哨兵值。
 // Go 侧等 logger 包实现 GetTraceID(context.Context) 后，在此处补充等价 fallback：
 //
@@ -345,7 +345,7 @@ func ResolveShellSessionID(ctx context.Context) string {
 	if sid != "" {
 		return sid
 	}
-	// TODO: fallback 到 trace_id（等 logger 包实现 GetTraceID 后补充）
+	// TODO(#通用): fallback 到 trace_id（等 logger 包实现 GetTraceID 后补充）
 	return ""
 }
 

@@ -12,7 +12,7 @@ package agent
 // 在 state 上缓存字符串会重新引入"双真实来源"问题。
 type TeamAgentState struct {
 	// TeamSession 团队会话
-	// TODO: 定义 AgentTeamSession 接口后替换 any
+	// TODO(#9.59): 定义 AgentTeamSession 接口后替换 any
 	TeamSession any
 	// TeamMember 当前成员句柄
 	TeamMember *TeamMember

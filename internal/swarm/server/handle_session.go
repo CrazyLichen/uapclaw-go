@@ -75,6 +75,41 @@ type sessionMetadata struct {
 	ChannelMetadata map[string]any `json:"channel_metadata,omitempty"`
 }
 
+// metadataWriteItem 异步写入队列条目
+type metadataWriteItem struct {
+	sessionID string
+	metadata  map[string]any
+}
+
+// SessionMetadataUpdate 会话元数据增量更新参数。
+//
+// 对齐 Python: jiuwenswarm/server/runtime/session/session_metadata.py update_session_metadata()
+type SessionMetadataUpdate struct {
+	// SessionID 会话标识（必填）
+	SessionID string
+	// ChannelID 渠道标识
+	ChannelID *string
+	// UserID 用户标识
+	UserID *string
+	// Title 标题（nil=不修改，非空=设置，空串=忽略防御意外覆盖）
+	Title *string
+	// ClearTitle 显式清除标题
+	ClearTitle bool
+	// IncrementMessageCount 递增消息计数
+	IncrementMessageCount bool
+	// SetMessageCount 直接设置消息计数
+	SetMessageCount *int
+	// UserContent 用户消息内容，用于自动生成标题
+	// ⤵️ 11.x: 等自动标题生成功能实现后回填
+	UserContent *string
+	// ChannelMetadata 渠道元数据（首次补充写入，不覆盖）
+	ChannelMetadata map[string]any
+	// Mode 模式
+	Mode *string
+	// TeamName 团队名称
+	TeamName *string
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -107,13 +142,182 @@ var (
 	metadataQueueOnce sync.Once
 )
 
-// metadataWriteItem 异步写入队列条目
-type metadataWriteItem struct {
-	sessionID string
-	metadata  map[string]any
+// ──────────────────────────── 导出函数 ────────────────────────────
+
+// SetSessionDeliveryContext 刷新 session 级 delivery context，
+// 供异步 server_push 恢复路由上下文。
+//
+// 对齐 Python: set_session_delivery_context()
+func SetSessionDeliveryContext(
+	sessionID string,
+	channelID *string,
+	sourceRequestID *string,
+	routeMetadata map[string]any,
+	deliveryKind ...string,
+) map[string]any {
+	meta := readSessionMetadataWithCache(sessionID)
+	currentContextRaw := meta["delivery_context"]
+	currentContext := map[string]any{}
+	if raw, ok := currentContextRaw.(map[string]any); ok {
+		currentContext = deepCopyMap(raw)
+	}
+
+	// 归一化 channel_id
+	normalizedChannelID := ""
+	if channelID != nil && strings.TrimSpace(*channelID) != "" {
+		normalizedChannelID = strings.TrimSpace(*channelID)
+	} else if cid, ok := currentContext["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+		normalizedChannelID = strings.TrimSpace(cid)
+	} else if cid, ok := meta["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+		normalizedChannelID = strings.TrimSpace(cid)
+	}
+
+	// 归一化 source_request_id
+	normalizedRequestID := ""
+	if sourceRequestID != nil && strings.TrimSpace(*sourceRequestID) != "" {
+		normalizedRequestID = strings.TrimSpace(*sourceRequestID)
+	} else if rid, ok := currentContext["source_request_id"].(string); ok {
+		normalizedRequestID = strings.TrimSpace(rid)
+	}
+
+	// 归一化 route_metadata
+	previousRouteMetadata, _ := currentContext["route_metadata"].(map[string]any)
+	var normalizedRouteMetadata map[string]any
+	if len(routeMetadata) > 0 {
+		normalizedRouteMetadata = deepCopyMap(routeMetadata)
+	} else if previousRouteMetadata != nil {
+		normalizedRouteMetadata = deepCopyMap(previousRouteMetadata)
+	}
+
+	// 对齐 Python: channel_metadata 仅在首次为空时补充写入（不覆盖）
+	channelMetadata, _ := routeMetadata["channel_metadata"].(map[string]any)
+	if channelMetadata != nil && meta["channel_metadata"] == nil {
+		meta["channel_metadata"] = deepCopyMap(channelMetadata)
+	}
+
+	if len(meta) == 0 {
+		meta = map[string]any{
+			"session_id":      sessionID,
+			"channel_id":      normalizedChannelID,
+			"user_id":         "",
+			"created_at":      currentTimestamp(),
+			"last_message_at": currentTimestamp(),
+			"title":           "",
+			"message_count":   0,
+			"mode":            "unknown",
+			"team_name":       "",
+			"round_id":        0,
+		}
+	} else {
+		if normalizedChannelID != "" {
+			meta["channel_id"] = normalizedChannelID
+		}
+		meta["last_message_at"] = currentTimestamp()
+	}
+
+	// 确定 delivery_kind
+	kind := deliveryContextKind
+	if len(deliveryKind) > 0 && strings.TrimSpace(deliveryKind[0]) != "" {
+		kind = strings.TrimSpace(deliveryKind[0])
+	}
+
+	deliveryContext := map[string]any{
+		"delivery_kind":     kind,
+		"session_id":        sessionID,
+		"channel_id":        normalizedChannelID,
+		"source_request_id": normalizedRequestID,
+		"updated_at":        currentTimestamp(),
+	}
+	if normalizedRouteMetadata != nil {
+		deliveryContext["route_metadata"] = normalizedRouteMetadata
+	}
+
+	meta["delivery_context"] = deliveryContext
+
+	// 更新缓存并写入文件
+	deliveryContextMu.Lock()
+	deliveryContextCache[sessionID] = deepCopyMap(meta)
+	deliveryContextMu.Unlock()
+
+	if err := writeSessionMetadata(GetSessionsDir(), sessionID, meta); err != nil {
+		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("写入会话元数据失败")
+	}
+
+	return deepCopyMap(deliveryContext)
 }
 
-// ──────────────────────────── 导出函数 ────────────────────────────
+// GetSessionDeliveryContext 读取 session 级 delivery context。
+//
+// 对齐 Python: get_session_delivery_context()
+func GetSessionDeliveryContext(sessionID string) map[string]any {
+	// 优先从内存缓存读取
+	deliveryContextMu.RLock()
+	if cached, ok := deliveryContextCache[sessionID]; ok {
+		deliveryContextMu.RUnlock()
+		if dc, ok := cached["delivery_context"].(map[string]any); ok {
+			return deepCopyMap(dc)
+		}
+		return nil
+	}
+	deliveryContextMu.RUnlock()
+
+	// 从 metadata.json 读取
+	meta := readSessionMetadata(GetSessionsDir(), sessionID)
+	context, ok := meta["delivery_context"]
+	if !ok {
+		return nil
+	}
+	dc, ok := context.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return deepCopyMap(dc)
+}
+
+// BuildServerPushMessage 基于 session delivery context 构造 server_push 消息。
+//
+// 对齐 Python: build_server_push_message()
+// 被 evolution_helpers 和其他推送场景调用。
+func BuildServerPushMessage(
+	sessionID, requestID string,
+	payload map[string]any,
+	fallbackChannelID ...string,
+) map[string]any {
+	deliveryCtx := GetSessionDeliveryContext(sessionID)
+	channelID := "default"
+	if deliveryCtx != nil {
+		if cid, ok := deliveryCtx["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
+			channelID = strings.TrimSpace(cid)
+		}
+	}
+	if len(fallbackChannelID) > 0 && fallbackChannelID[0] != "" && (channelID == "default" || channelID == "") {
+		channelID = fallbackChannelID[0]
+	}
+
+	message := map[string]any{
+		"request_id": requestID,
+		"channel_id": channelID,
+		"session_id": sessionID,
+		"payload":    payload,
+	}
+	if deliveryCtx != nil {
+		if rm, ok := deliveryCtx["route_metadata"].(map[string]any); ok && len(rm) > 0 {
+			message["metadata"] = deepCopyMap(rm)
+		}
+	}
+	return message
+}
+
+// GetSessionsDir 返回全局会话目录路径。
+// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
+func GetSessionsDir() string {
+	if inst := GetInstance(); inst != nil {
+		return inst.sessionsDir
+	}
+	return workspace.AgentSessionsDir()
+}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // handleSessionList 处理 session.list 请求，对齐 Python _handle_session_list。
 //
@@ -427,181 +631,6 @@ func (s *AgentServer) handleSessionFork(_ context.Context, request *schema.Agent
 	return notImplementedResponse(request)
 }
 
-// SetSessionDeliveryContext 刷新 session 级 delivery context，
-// 供异步 server_push 恢复路由上下文。
-//
-// 对齐 Python: set_session_delivery_context()
-func SetSessionDeliveryContext(
-	sessionID string,
-	channelID *string,
-	sourceRequestID *string,
-	routeMetadata map[string]any,
-	deliveryKind ...string,
-) map[string]any {
-	meta := readSessionMetadataWithCache(sessionID)
-	currentContextRaw := meta["delivery_context"]
-	currentContext := map[string]any{}
-	if raw, ok := currentContextRaw.(map[string]any); ok {
-		currentContext = deepCopyMap(raw)
-	}
-
-	// 归一化 channel_id
-	normalizedChannelID := ""
-	if channelID != nil && strings.TrimSpace(*channelID) != "" {
-		normalizedChannelID = strings.TrimSpace(*channelID)
-	} else if cid, ok := currentContext["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
-		normalizedChannelID = strings.TrimSpace(cid)
-	} else if cid, ok := meta["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
-		normalizedChannelID = strings.TrimSpace(cid)
-	}
-
-	// 归一化 source_request_id
-	normalizedRequestID := ""
-	if sourceRequestID != nil && strings.TrimSpace(*sourceRequestID) != "" {
-		normalizedRequestID = strings.TrimSpace(*sourceRequestID)
-	} else if rid, ok := currentContext["source_request_id"].(string); ok {
-		normalizedRequestID = strings.TrimSpace(rid)
-	}
-
-	// 归一化 route_metadata
-	previousRouteMetadata, _ := currentContext["route_metadata"].(map[string]any)
-	var normalizedRouteMetadata map[string]any
-	if len(routeMetadata) > 0 {
-		normalizedRouteMetadata = deepCopyMap(routeMetadata)
-	} else if previousRouteMetadata != nil {
-		normalizedRouteMetadata = deepCopyMap(previousRouteMetadata)
-	}
-
-	// 对齐 Python: channel_metadata 仅在首次为空时补充写入（不覆盖）
-	channelMetadata, _ := routeMetadata["channel_metadata"].(map[string]any)
-	if channelMetadata != nil && meta["channel_metadata"] == nil {
-		meta["channel_metadata"] = deepCopyMap(channelMetadata)
-	}
-
-	if len(meta) == 0 {
-		meta = map[string]any{
-			"session_id":      sessionID,
-			"channel_id":      normalizedChannelID,
-			"user_id":         "",
-			"created_at":      currentTimestamp(),
-			"last_message_at": currentTimestamp(),
-			"title":           "",
-			"message_count":   0,
-			"mode":            "unknown",
-			"team_name":       "",
-			"round_id":        0,
-		}
-	} else {
-		if normalizedChannelID != "" {
-			meta["channel_id"] = normalizedChannelID
-		}
-		meta["last_message_at"] = currentTimestamp()
-	}
-
-	// 确定 delivery_kind
-	kind := deliveryContextKind
-	if len(deliveryKind) > 0 && strings.TrimSpace(deliveryKind[0]) != "" {
-		kind = strings.TrimSpace(deliveryKind[0])
-	}
-
-	deliveryContext := map[string]any{
-		"delivery_kind":     kind,
-		"session_id":        sessionID,
-		"channel_id":        normalizedChannelID,
-		"source_request_id": normalizedRequestID,
-		"updated_at":        currentTimestamp(),
-	}
-	if normalizedRouteMetadata != nil {
-		deliveryContext["route_metadata"] = normalizedRouteMetadata
-	}
-
-	meta["delivery_context"] = deliveryContext
-
-	// 更新缓存并写入文件
-	deliveryContextMu.Lock()
-	deliveryContextCache[sessionID] = deepCopyMap(meta)
-	deliveryContextMu.Unlock()
-
-	if err := writeSessionMetadata(GetSessionsDir(), sessionID, meta); err != nil {
-		logger.Warn(logComponent).Str("session_id", sessionID).Err(err).Msg("写入会话元数据失败")
-	}
-
-	return deepCopyMap(deliveryContext)
-}
-
-// GetSessionDeliveryContext 读取 session 级 delivery context。
-//
-// 对齐 Python: get_session_delivery_context()
-func GetSessionDeliveryContext(sessionID string) map[string]any {
-	// 优先从内存缓存读取
-	deliveryContextMu.RLock()
-	if cached, ok := deliveryContextCache[sessionID]; ok {
-		deliveryContextMu.RUnlock()
-		if dc, ok := cached["delivery_context"].(map[string]any); ok {
-			return deepCopyMap(dc)
-		}
-		return nil
-	}
-	deliveryContextMu.RUnlock()
-
-	// 从 metadata.json 读取
-	meta := readSessionMetadata(GetSessionsDir(), sessionID)
-	context, ok := meta["delivery_context"]
-	if !ok {
-		return nil
-	}
-	dc, ok := context.(map[string]any)
-	if !ok {
-		return nil
-	}
-	return deepCopyMap(dc)
-}
-
-// BuildServerPushMessage 基于 session delivery context 构造 server_push 消息。
-//
-// 对齐 Python: build_server_push_message()
-// 被 evolution_helpers 和其他推送场景调用。
-func BuildServerPushMessage(
-	sessionID, requestID string,
-	payload map[string]any,
-	fallbackChannelID ...string,
-) map[string]any {
-	deliveryCtx := GetSessionDeliveryContext(sessionID)
-	channelID := "default"
-	if deliveryCtx != nil {
-		if cid, ok := deliveryCtx["channel_id"].(string); ok && strings.TrimSpace(cid) != "" {
-			channelID = strings.TrimSpace(cid)
-		}
-	}
-	if len(fallbackChannelID) > 0 && fallbackChannelID[0] != "" && (channelID == "default" || channelID == "") {
-		channelID = fallbackChannelID[0]
-	}
-
-	message := map[string]any{
-		"request_id": requestID,
-		"channel_id": channelID,
-		"session_id": sessionID,
-		"payload":    payload,
-	}
-	if deliveryCtx != nil {
-		if rm, ok := deliveryCtx["route_metadata"].(map[string]any); ok && len(rm) > 0 {
-			message["metadata"] = deepCopyMap(rm)
-		}
-	}
-	return message
-}
-
-// GetSessionsDir 返回全局会话目录路径。
-// 优先使用单例 AgentServer 的 sessionsDir，否则使用默认路径。
-func GetSessionsDir() string {
-	if inst := GetInstance(); inst != nil {
-		return inst.sessionsDir
-	}
-	return workspace.AgentSessionsDir()
-}
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // readSessionMetadata 读取会话元数据文件。
 //
 // 不产生副作用：session 目录不存在时返回 nil 而非创建目录，
@@ -755,35 +784,6 @@ func enqueueMetadataWrite(sessionID string, metadata map[string]any) {
 			Msg("metadata 写入队列已满，退化为同步写入")
 		_ = writeSessionMetadata(GetSessionsDir(), sessionID, metadata)
 	}
-}
-
-// SessionMetadataUpdate 会话元数据增量更新参数。
-//
-// 对齐 Python: jiuwenswarm/server/runtime/session/session_metadata.py update_session_metadata()
-type SessionMetadataUpdate struct {
-	// SessionID 会话标识（必填）
-	SessionID string
-	// ChannelID 渠道标识
-	ChannelID *string
-	// UserID 用户标识
-	UserID *string
-	// Title 标题（nil=不修改，非空=设置，空串=忽略防御意外覆盖）
-	Title *string
-	// ClearTitle 显式清除标题
-	ClearTitle bool
-	// IncrementMessageCount 递增消息计数
-	IncrementMessageCount bool
-	// SetMessageCount 直接设置消息计数
-	SetMessageCount *int
-	// UserContent 用户消息内容，用于自动生成标题
-	// ⤵️ 11.x: 等自动标题生成功能实现后回填
-	UserContent *string
-	// ChannelMetadata 渠道元数据（首次补充写入，不覆盖）
-	ChannelMetadata map[string]any
-	// Mode 模式
-	Mode *string
-	// TeamName 团队名称
-	TeamName *string
 }
 
 // updateSessionMetadata 更新会话元数据（异步写入，不阻塞调用方）。

@@ -38,7 +38,7 @@ func (s *AgentServer) handleTeamSnapshot(_ context.Context, request *schema.Agen
 
 // handleTeamHistoryGet 处理 team.history.get 请求。读 team history 记录（纯文件系统），返回空列表。
 func (s *AgentServer) handleTeamHistoryGet(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// TODO: 从文件系统读取 team history 记录
+	// TODO(#team-history): 从文件系统读取 team history 记录
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
 			"history": []any{},

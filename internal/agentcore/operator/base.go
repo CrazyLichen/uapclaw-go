@@ -8,48 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// TunableKind 可调参数类型。
-//
-// 对应 Python: TunableKind = str（约束靠文档，Go 用常量增强类型安全）
-type TunableKind string
-
-const (
-	// TunableKindPrompt 提示词类型。
-	TunableKindPrompt TunableKind = "prompt"
-	// TunableKindContinuous 连续值类型。
-	TunableKindContinuous TunableKind = "continuous"
-	// TunableKindDiscrete 离散值类型。
-	TunableKindDiscrete TunableKind = "discrete"
-	// TunableKindToolSelector 工具选择器类型。
-	TunableKindToolSelector TunableKind = "tool_selector"
-	// TunableKindMemorySelector 记忆选择器类型。
-	TunableKindMemorySelector TunableKind = "memory_selector"
-	// TunableKindSkillExperience 技能经验类型。
-	TunableKindSkillExperience TunableKind = "skill_experience"
-	// TunableKindText 文本类型（ToolCallOperator 使用）。
-	TunableKindText TunableKind = "text"
-)
-
-// TunableSpec 描述单个可调参数。
-//
-// 对应 Python: openjiuwen/core/operator/base.py TunableSpec
-type TunableSpec struct {
-	// Name 参数名称
-	Name string
-	// Kind 可调类型
-	Kind TunableKind
-	// Path 参数路径
-	Path string
-	// Constraint 可选约束，形如 {"type": "dict"} 或 {"type": "int", "min": 0, "max": 5}
-	Constraint map[string]any
-}
-
-// ParameterUpdatedCallback 参数变更回调函数类型。
-// 当 Operator 的参数被更新时触发，将变更推送给消费者（Agent/Rail）。
-//
-// 对应 Python: Callable[[str, Any], None]
-type ParameterUpdatedCallback func(target string, value any)
-
 // Operator 自演化参数句柄的基础接口。
 //
 // Operator 为演化框架提供统一接口：
@@ -97,7 +55,49 @@ type PreviewableOperator interface {
 	PreviewUpdate(target string, update schema.UpdateValue) schema.ApplyResult
 }
 
+// TunableSpec 描述单个可调参数。
+//
+// 对应 Python: openjiuwen/core/operator/base.py TunableSpec
+type TunableSpec struct {
+	// Name 参数名称
+	Name string
+	// Kind 可调类型
+	Kind TunableKind
+	// Path 参数路径
+	Path string
+	// Constraint 可选约束，形如 {"type": "dict"} 或 {"type": "int", "min": 0, "max": 5}
+	Constraint map[string]any
+}
+
+// ParameterUpdatedCallback 参数变更回调函数类型。
+// 当 Operator 的参数被更新时触发，将变更推送给消费者（Agent/Rail）。
+//
+// 对应 Python: Callable[[str, Any], None]
+type ParameterUpdatedCallback func(target string, value any)
+
 // ──────────────────────────── 枚举 ────────────────────────────
+
+// TunableKind 可调参数类型。
+//
+// 对应 Python: TunableKind = str（约束靠文档，Go 用常量增强类型安全）
+type TunableKind string
+
+const (
+	// TunableKindPrompt 提示词类型。
+	TunableKindPrompt TunableKind = "prompt"
+	// TunableKindContinuous 连续值类型。
+	TunableKindContinuous TunableKind = "continuous"
+	// TunableKindDiscrete 离散值类型。
+	TunableKindDiscrete TunableKind = "discrete"
+	// TunableKindToolSelector 工具选择器类型。
+	TunableKindToolSelector TunableKind = "tool_selector"
+	// TunableKindMemorySelector 记忆选择器类型。
+	TunableKindMemorySelector TunableKind = "memory_selector"
+	// TunableKindSkillExperience 技能经验类型。
+	TunableKindSkillExperience TunableKind = "skill_experience"
+	// TunableKindText 文本类型（ToolCallOperator 使用）。
+	TunableKindText TunableKind = "text"
+)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

@@ -48,19 +48,23 @@ type AgentTeamEntry struct {
 	Provider maschema.AgentTeamProvider
 }
 
+// AgentProvider Agent 提供者函数类型。
+type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
+
+// WorkflowProvider 工作流提供者函数类型。
+type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error)
+
+// ModelProvider 模型提供者函数类型。
+type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 type TagMatchStrategy int
 
 type TagUpdateStrategy int
 
+// Tag 标签类型别名。
 type Tag = string
-
-type AgentProvider func(ctx context.Context, card *agentschema.AgentCard) (interfaces.BaseAgent, error)
-
-type WorkflowProvider func(ctx context.Context, card *schema.WorkflowCard) (interfaces.Workflow, error)
-
-type ModelProvider func(ctx context.Context, modelID string) (model_clients.BaseModelClient, error)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

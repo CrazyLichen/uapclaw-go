@@ -139,8 +139,6 @@ var (
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // StepKind 返回 StepKindLLM，实现 StepDetail 接口。
 func (d *LLMCallDetail) StepKind() StepKind { return StepKindLLM }
 
@@ -188,3 +186,5 @@ func (t *Trajectory) ToMessages() []map[string]any {
 	}
 	return messages
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

@@ -132,7 +132,7 @@ func TestProcess_步骤顺序验证(t *testing.T) {
 			name:        "未知步骤",
 			steps:       []string{"unknown_step"},
 			expectErr:   true,
-			errContains: "unknown processing step: unknown_step",
+			errContains: "未知的处理步骤: unknown_step",
 		},
 		{
 			// InvokeWithVerify 吞没 LLM 错误，返回包含 "error" 键的 dict 而非 Go error
@@ -258,7 +258,7 @@ func TestProcess_未知步骤(t *testing.T) {
 
 	_, err := reviewer.Process(context.Background(), data, "ori", []string{"invalid_step"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown processing step: invalid_step")
+	assert.Contains(t, err.Error(), "未知的处理步骤: invalid_step")
 }
 
 // TestCleanAndDeduplicate_model为nil 验证 model 为 nil 时不返回 Go error（InvokeWithVerify 吞没错误）

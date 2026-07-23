@@ -44,17 +44,40 @@ type skillReadEntry struct {
 	skillName string
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // SignalDetector 向后兼容别名。
 //
 // 对应 Python: SignalDetector = ConversationSignalDetector
 type SignalDetector = ConversationSignalDetector
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // ──────────────────────────── 常量 ────────────────────────────
 
 // logComponent from_conv 包日志组件常量
 const logComponent = logger.ComponentAgentCore
+
+// userFeedbackPromptCN 中文用户反馈检测提示词。
+//
+// 对应 Python: _USER_FEEDBACK_PROMPT_CN（原文复刻，不翻译）
+const userFeedbackPromptCN = "判断以下用户消息是否包含对当前 skill 的被动纠正或可沉淀的改进反馈。\n" +
+	"只有当用户消息明确指出 agent 的理解、步骤、顺序或工具使用需要调整时，" +
+	"才认为值得转成演进信号。\n\n" +
+	"当前 skill：{skill_name}\n" +
+	"最近用户消息：{user_messages}\n\n" +
+	`输出 JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
+
+// userFeedbackPromptEN 英文用户反馈检测提示词。
+//
+// 对应 Python: _USER_FEEDBACK_PROMPT_EN（原文复刻，不翻译）
+const userFeedbackPromptEN = "Determine whether the following user messages contain passive corrective feedback " +
+	"or reusable improvement guidance for the current skill.\n" +
+	"Only treat the messages as an evolution signal when the user is clearly correcting " +
+	"the agent's understanding, ordering, steps, or tool usage.\n\n" +
+	"Current skill: {skill_name}\n" +
+	"Recent user messages: {user_messages}\n\n" +
+	`Output JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // failureKeywords 匹配执行失败关键词（中英文）。
 //
@@ -115,27 +138,6 @@ var skillMDPattern = regexp.MustCompile(`[/\\]+([^/\\]+)[/\\]+SKILL\.md`)
 // 对应 Python: _TOOL_SCHEMA_PATTERN
 var toolSchemaPattern = regexp.MustCompile(`\{'content': '---\\nname: [^\n]+\\ndescription:`)
 
-// userFeedbackPromptCN 中文用户反馈检测提示词。
-//
-// 对应 Python: _USER_FEEDBACK_PROMPT_CN（原文复刻，不翻译）
-const userFeedbackPromptCN = "判断以下用户消息是否包含对当前 skill 的被动纠正或可沉淀的改进反馈。\n" +
-	"只有当用户消息明确指出 agent 的理解、步骤、顺序或工具使用需要调整时，" +
-	"才认为值得转成演进信号。\n\n" +
-	"当前 skill：{skill_name}\n" +
-	"最近用户消息：{user_messages}\n\n" +
-	`输出 JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
-
-// userFeedbackPromptEN 英文用户反馈检测提示词。
-//
-// 对应 Python: _USER_FEEDBACK_PROMPT_EN（原文复刻，不翻译）
-const userFeedbackPromptEN = "Determine whether the following user messages contain passive corrective feedback " +
-	"or reusable improvement guidance for the current skill.\n" +
-	"Only treat the messages as an evolution signal when the user is clearly correcting " +
-	"the agent's understanding, ordering, steps, or tool usage.\n\n" +
-	"Current skill: {skill_name}\n" +
-	"Recent user messages: {user_messages}\n\n" +
-	`Output JSON: {{"is_feedback": true/false, "excerpt": "str"}}` + "\n"
-
 // dataFetchTools 数据获取工具集合。
 //
 // 对应 Python: _DATA_FETCH_TOOLS
@@ -182,7 +184,9 @@ var collaborationFailurePattern = regexp.MustCompile(
 		`|协作.*失败|成员.*异常|任务.*超时`,
 )
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// errorEqualsNoneOnlyStart 匹配以 "\s*=\s*None" 开头的字符串，
+// 用于验证 "error" 后面是否跟着 "= None"。
+var errorEqualsNoneOnlyStart = regexp.MustCompile(`(?i)^\s*=\s*None`)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -465,10 +469,6 @@ func findFailureKeywordIndex(content string) []int {
 	}
 	return failureKeywords.FindStringIndex(content)
 }
-
-// errorEqualsNoneOnlyStart 匹配以 "\s*=\s*None" 开头的字符串，
-// 用于验证 "error" 后面是否跟着 "= None"。
-var errorEqualsNoneOnlyStart = regexp.MustCompile(`(?i)^\s*=\s*None`)
 
 // getField 泛型字典字段读取，从 map[string]any 中读取指定键的值。
 // 如果键不存在或值为 nil，返回 defaultVal。

@@ -112,6 +112,9 @@ var (
 		"你自己的检查和注意事项不能替代验证代理的判决。"
 )
 
+// 编译时接口检查
+var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVerificationContractRail 创建 VerificationContractRail 实例。
@@ -170,6 +173,3 @@ func (r *VerificationContractRail) BeforeModelCall(ctx context.Context, cbc *age
 	logger.Debug(logger.ComponentAgentCore).Msg("[VerificationContractRail] 已注入验证契约 section")
 	return nil
 }
-
-// compile-time check
-var _ agentinterfaces.AgentRail = (*VerificationContractRail)(nil)

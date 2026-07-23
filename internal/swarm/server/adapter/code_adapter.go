@@ -200,7 +200,7 @@ func (c *CodeAdapter) CreateInstance(ctx context.Context, config map[string]any,
 	if codeAgentRail != nil {
 		c.codeAgentRail = codeAgentRail
 		// rail 将在 CreateDeepAgent 时通过 params.Rails 传入
-		logger.Info(logComponent).Msg("CodeAgentRail created")
+		logger.Info(logComponent).Msg("CodeAgentRail 已创建")
 	}
 
 	// 步骤 17: _create_sys_operation() — 调用 DeepAdapter.createSysOperation
@@ -317,6 +317,8 @@ func (c *CodeAdapter) SwitchMode(ctx context.Context, sessionID, subMode string)
 func (c *CodeAdapter) AbortOnGatewayDisconnect(ctx context.Context) {
 	c.deep.AbortOnGatewayDisconnect(ctx)
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // buildCodeAgentRail 构建 CodeAgentRail。
 // 对齐 Python: JiuwenClawCodeAdapter._build_code_agent_rail() (interface_code.py L826-834)

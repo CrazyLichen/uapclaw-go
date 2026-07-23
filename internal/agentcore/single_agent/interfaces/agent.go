@@ -28,16 +28,6 @@ type AgentConfig interface {
 	Validate() error
 }
 
-// AgentOptions Agent 调用选项
-type AgentOptions struct {
-	// Session 会话实例（可选）
-	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
-	Session sessioninterfaces.SessionFacade
-	// StreamModes 流式输出模式（可选）
-	// 对应 Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
-	StreamModes []stream.StreamMode
-}
-
 // BaseAgent 基础 Agent 接口
 type BaseAgent interface {
 	// ── 核心三方法 ──
@@ -91,6 +81,16 @@ type BaseAgent interface {
 	// UnregisterRail 注销 Rail。
 	// 对应 Python: BaseAgent.unregister_rail(rail)
 	UnregisterRail(ctx context.Context, rail AgentRail) error
+}
+
+// AgentOptions Agent 调用选项
+type AgentOptions struct {
+	// Session 会话实例（可选）
+	// 对应 Python: invoke(inputs, session) / stream(inputs, session, stream_modes) 的 session 参数
+	Session sessioninterfaces.SessionFacade
+	// StreamModes 流式输出模式（可选）
+	// 对应 Python: stream(inputs, session, stream_modes) 的 stream_modes 参数
+	StreamModes []stream.StreamMode
 }
 
 // ──────────────────────────── 枚举 ────────────────────────────

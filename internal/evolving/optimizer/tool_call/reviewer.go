@@ -330,7 +330,7 @@ func (r *ToolDescriptionReviewer) Process(
 			result, err = r.TranslateToChinese(ctx, result)
 		// 对齐 Python: else: raise ValueError(f"Unknown processing step: {step}")
 		default:
-			return nil, fmt.Errorf("unknown processing step: %s", step)
+			return nil, fmt.Errorf("未知的处理步骤: %s", step)
 		}
 		if err != nil {
 			return nil, err

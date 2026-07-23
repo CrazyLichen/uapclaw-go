@@ -35,6 +35,8 @@ const (
 	OperationModeSandbox OperationMode = 1
 )
 
+// ──────────────────────────── 常量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewBaseOperation 创建 BaseOperation 实例

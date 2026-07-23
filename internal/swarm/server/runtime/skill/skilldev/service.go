@@ -120,6 +120,8 @@ func (s *SkillDevService) Handle(ctx context.Context, request *schema.AgentReque
 	return handler(ctx, params, request.RequestID, request.ChannelID)
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // handleStart 发起新任务。
 //
 // 对齐 Python: SkillDevService._handle_start()
@@ -442,8 +444,6 @@ func (s *SkillDevService) handleFileRead(_ context.Context, params map[string]an
 		"content": content,
 	})), nil
 }
-
-// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // eventToChunk 将 SkillDevEvent 转换为 AgentResponseChunk。
 //

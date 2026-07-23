@@ -306,7 +306,7 @@ func NormalizeScreenshotValue(screenshot any) any {
 		strings.HasPrefix(lowered, "data:image/") {
 		return raw
 	}
-	// TODO: ⤵️ 9.38-49 回填：本地路径解析、截图文件夹拷贝、data URL 转换
+	// TODO(#9.38-49): ⤵️ 回填：本地路径解析、截图文件夹拷贝、data URL 转换
 	return raw
 }
 
@@ -371,21 +371,21 @@ func IsRetryableRuntimeResult(parsed map[string]any) bool {
 // EnsureRuntimeReady 确保浏览器运行时已就绪。
 //
 // 对齐 Python: BrowserService.ensure_runtime_ready
-// TODO: ⤵️ 9.38-49 回填 ManagedBrowserDriver 逻辑
+// TODO(#9.38-49): ⤵️ 回填 ManagedBrowserDriver 逻辑
 func (s *BrowserService) EnsureRuntimeReady(_ context.Context) error {
-	// TODO: ⤵️ 9.38-49 回填 ManagedBrowserDriver 逻辑
+	// TODO(#9.38-49): ⤵️ 回填 ManagedBrowserDriver 逻辑
 	return nil
 }
 
 // EnsureStarted 确保浏览器服务已启动（运行时就绪 + Worker Agent 已构建）。
 //
 // 对齐 Python: BrowserService.ensure_started
-// TODO: ⤵️ 9.38-49 回填 BuildBrowserWorkerAgent
+// TODO(#9.38-49): ⤵️ 回填 BuildBrowserWorkerAgent
 func (s *BrowserService) EnsureStarted(ctx context.Context) error {
 	if err := s.EnsureRuntimeReady(ctx); err != nil {
 		return err
 	}
-	// TODO: ⤵️ 9.38-49 回填 BuildBrowserWorkerAgent
+	// TODO(#9.38-49): ⤵️ 回填 BuildBrowserWorkerAgent
 	return nil
 }
 
@@ -512,7 +512,7 @@ func (s *BrowserService) RunTask(
 			// 传输层错误时尝试重启后重试
 			if IsRetryableTransportMessage(lastError) {
 				if attemptIdx < attempts {
-					// TODO: ⤵️ 9.38-49 回填 _restart 调用 ManagedBrowserDriver
+					// TODO(#9.38-49): ⤵️ 回填 _restart 调用 ManagedBrowserDriver
 					_ = s.restart(ctx)
 					continue
 				}
@@ -749,7 +749,7 @@ func (s *BrowserService) runTaskOnceWithTimeout(
 	task, sessionID, requestID string,
 	timeoutS int,
 ) (map[string]any, error) {
-	// TODO: ⤵️ 9.38-49 回填 Worker Agent 执行逻辑
+	// TODO(#9.38-49): ⤵️ 回填 Worker Agent 执行逻辑
 	// 对齐 Python: _run_task_once → Runner.run_agent
 	if s.browserAgent == nil {
 		return nil, fmt.Errorf("BrowserService is not started")
@@ -759,7 +759,7 @@ func (s *BrowserService) runTaskOnceWithTimeout(
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutS)*time.Second)
 	defer cancel()
 
-	// TODO: ⤵️ 9.38-49 回填实际 Agent 调用
+	// TODO(#9.38-49): ⤵️ 回填实际 Agent 调用
 	_ = timeoutCtx
 	return map[string]any{
 		"ok":    false,
@@ -771,9 +771,9 @@ func (s *BrowserService) runTaskOnceWithTimeout(
 
 // restart 重启浏览器服务。
 // 对齐 Python: BrowserService._restart
-// TODO: ⤵️ 9.38-49 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
+// TODO(#9.38-49): ⤵️ 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
 func (s *BrowserService) restart(_ context.Context) error {
-	// TODO: ⤵️ 9.38-49 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
+	// TODO(#9.38-49): ⤵️ 回填 _restartBrowserRuntime 调用 ManagedBrowserDriver
 	return nil
 }
 

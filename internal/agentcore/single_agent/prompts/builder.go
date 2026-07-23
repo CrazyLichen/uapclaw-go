@@ -8,18 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// PromptSection 系统提示词的单一节，支持多语言内容。
-//
-// 对应 Python: PromptSection (openjiuwen/core/single_agent/prompts/builder.py)
-type PromptSection struct {
-	// Name 节名称（同名称覆盖）
-	Name string
-	// Content 多语言内容映射：language → content
-	Content map[string]string
-	// Priority 优先级（数值越小越靠前）
-	Priority int
-}
-
 // SystemPromptBuilderInterface 系统提示词构建器最小接口。
 //
 // 供 Rail 等消费者通过 RailAgent 接口访问 SystemPromptBuilder，
@@ -38,6 +26,18 @@ type SystemPromptBuilderInterface interface {
 	GetSection(name string) *PromptSection
 	// HasSection 检查节是否存在
 	HasSection(name string) bool
+}
+
+// PromptSection 系统提示词的单一节，支持多语言内容。
+//
+// 对应 Python: PromptSection (openjiuwen/core/single_agent/prompts/builder.py)
+type PromptSection struct {
+	// Name 节名称（同名称覆盖）
+	Name string
+	// Content 多语言内容映射：language → content
+	Content map[string]string
+	// Priority 优先级（数值越小越靠前）
+	Priority int
 }
 
 // SystemPromptBuilder 基于节的系统提示词构建器。

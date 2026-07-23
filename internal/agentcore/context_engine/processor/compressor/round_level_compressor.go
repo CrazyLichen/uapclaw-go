@@ -181,11 +181,11 @@ Rules:
 // NewRoundLevelCompressorConfig 创建轮级压缩器默认配置。
 //
 // 默认值与 Python 对齐：
-//   - TriggerTotalTokens=230000, TargetTotalTokens=160000
-//   - KeepRecentMessages=0, CompressionCallMaxTokens=250000
-//   - FirstPassTargetTokens=30000, SecondPassTargetTokens=20000, ThirdPassTargetTokens=10000
-//   - TruncateHeadRatio=0.2, TruncatedMarker="...[TRUNCATED]..."
-//   - CompressionMarker="[ROUND_LEVEL_MEMORY_BLOCK]"
+//   - TriggerTotalTokens=230000（触发总令牌数），TargetTotalTokens=160000（目标总令牌数）
+//   - KeepRecentMessages=0（保留最近消息数），CompressionCallMaxTokens=250000（压缩调用最大令牌数）
+//   - FirstPassTargetTokens=30000（第一遍目标令牌数），SecondPassTargetTokens=20000（第二遍），ThirdPassTargetTokens=10000（第三遍）
+//   - TruncateHeadRatio=0.2（头部截断比例），TruncatedMarker="...[TRUNCATED]..."（截断标记）
+//   - CompressionMarker="[ROUND_LEVEL_MEMORY_BLOCK]"（压缩标记）
 func NewRoundLevelCompressorConfig() *RoundLevelCompressorConfig {
 	return &RoundLevelCompressorConfig{
 		TriggerTotalTokens:                230000,

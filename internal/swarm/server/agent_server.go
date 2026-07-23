@@ -392,7 +392,7 @@ func (s *AgentServer) sendToGateway(data []byte) {
 	}
 }
 
-// ──────────────────────────── TODO stub 方法（对齐 Python） ────────────────────────────
+// TODO(#stub): stub 方法（对齐 Python）
 
 // resetHarnessPackagesState 重置 harness 包状态到 native。
 // 对齐 Python: jiuwenswarm/agents/harness/common/auto_harness/service.py reset_harness_packages_state()

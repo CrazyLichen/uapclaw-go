@@ -60,13 +60,15 @@ type DataContainerFactory struct {
 	entries map[string]factoryEntry
 }
 
+// ContainerLoader 容器加载函数类型。
+type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
+
+// ContainerOption 容器选项函数类型。
+type ContainerOption func(DataContainer)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 type Permission int
-
-type ContainerLoader func(agentID, sessionID string, serialized any) (DataContainer, error)
-
-type ContainerOption func(DataContainer)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

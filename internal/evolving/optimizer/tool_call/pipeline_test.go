@@ -16,8 +16,8 @@ func TestCustomizedPipeline_无效阶段(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for invalid stage")
 	}
-	if err.Error() != "wrong stage: invalid" {
-		t.Errorf("error = %v, want 'wrong stage: invalid'", err)
+	if err.Error() != "无效阶段: invalid" {
+		t.Errorf("error = %v, want '无效阶段: invalid'", err)
 	}
 }
 

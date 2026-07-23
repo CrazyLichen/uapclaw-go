@@ -170,7 +170,7 @@ func (d *DeepAdapter) buildAgentRails(config map[string]any, configBase map[stri
 	return railsList
 }
 
-// ──────────────────────────── 已实现 Rail Builder ────────────────────────────
+// 已实现 Rail Builder
 
 // buildHeartbeatRail 构建心跳护栏。
 // 对齐 Python: _build_heartbeat_rail() (line 1632-1648)
@@ -209,7 +209,7 @@ func (d *DeepAdapter) buildProgressiveToolRail() *rails.ProgressiveToolRail {
 	return nil
 }
 
-// ──────────────────────────── 未实现 Rail Builder（⤵️ 10.6.3-10） ────────────────────────────
+// 未实现 Rail Builder（⤵️ 10.6.3-10）
 
 // buildSkillRail 构建技能使用护栏。
 // ⤵️ 10.6.3-10: SkillUseRail
@@ -320,7 +320,7 @@ func (d *DeepAdapter) buildPermissionRail(configBase map[string]any) sainterface
 	return nil
 }
 
-// ──────────────────────────── Rail 模式切换（⤵️ 10.6.3-10） ────────────────────────────
+// Rail 模式切换（⤵️ 10.6.3-10）
 
 // updateRailsForMode 按模式注册/注销 Rail。
 // 对齐 Python: _update_rails_for_mode() (line 2754-2896)

@@ -645,7 +645,7 @@ func (s *MilvusVectorStore) ListCollectionNames(ctx context.Context) ([]string, 
 //
 // 对应 Python: MilvusVectorStore.update_schema(collection_name, operations)
 func (s *MilvusVectorStore) UpdateSchema(ctx context.Context, collectionName string, operations []any, opts ...Option) error {
-	// TODO: ⤵️ 回填，待 7.22/7.23 实现后补全
+	// TODO(#回填): ⤵️ 回填，待 7.22/7.23 实现后补全
 	logger.Warn(logComponent).Str("collection_name", collectionName).Msg("UpdateSchema 尚未实现，待 7.22/7.23 回填")
 	return exception.BuildError(exception.StatusStoreVectorSchemaInvalid,
 		exception.WithParam("error_msg", "UpdateSchema is not yet implemented, pending 7.22/7.23"),

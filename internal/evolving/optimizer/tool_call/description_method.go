@@ -74,7 +74,7 @@ func (m *ToolDescriptionMethod) Step(
 		}
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
-			Msg("Current description - original description")
+			Msg("当前描述——原始描述")
 	} else {
 		// 对齐 Python: load negative ex
 		functionName := getToolName(tool)
@@ -87,7 +87,7 @@ func (m *ToolDescriptionMethod) Step(
 		outputMap = m.Generate(ctx, tool, examplesObtained, prevOutputs, it)
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
-			Msg("Current description - generated description")
+			Msg("当前描述——生成的描述")
 	}
 
 	// 对齐 Python: eval with pos ex
@@ -114,9 +114,9 @@ func (m *ToolDescriptionMethod) Generate(
 	prevOutputs []any,
 	it int,
 ) map[string]any {
-	logger.Info(logComponent).Msg("Generating desc")
+	logger.Info(logComponent).Msg("正在生成描述")
 	output := m.GenerateDescriptionFromDocumentation(ctx, tool, examples, prevOutputs)
-	logger.Info(logComponent).Msg("Generating desc finished")
+	logger.Info(logComponent).Msg("描述生成完成")
 	output["iteration"] = it
 	return output
 }
@@ -157,7 +157,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
         `, functionName, docStr)
 
 	if len(examples) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
-		// 对齐 Python: Separate positive and negative examples based on performance threshold
+		// 对齐 Python: 根据性能阈值区分正负例
 		positiveExamples := []map[string]any{}
 		negativeExamples := []map[string]any{}
 
@@ -178,7 +178,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 			}
 		}
 
-		// 对齐 Python: Add positive examples section
+		// 对齐 Python: 添加正例部分
 		if len(positiveExamples) > 0 {
 			userPrompt += "\n=== POSITIVE EXAMPLES (Good Performance) ===\n"
 			userPrompt += "The following tool descriptions achieved good performance:\n\n"
@@ -216,7 +216,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 			}
 		}
 
-		// 对齐 Python: Add negative examples section
+		// 对齐 Python: 添加负例部分
 		if len(negativeExamples) > 0 {
 			userPrompt += "\n=== NEGATIVE EXAMPLES (Poor Performance) ===\n"
 			userPrompt += "The following tool descriptions had poor performance:\n\n"
@@ -297,7 +297,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
         Documentation:
         %s`, functionName, docStr)
 
-	// 对齐 Python: examples is a dict with "examples" and "neg_examples"
+	// 对齐 Python: examples 是包含 "examples" 和 "neg_examples" 的字典
 	examplesMap, ok := examples.(map[string]any)
 	if !ok || len(examplesMap) == 0 {
 		prompt := FormatPromptLlama("", userPrompt)
@@ -311,7 +311,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	positiveExamples := descToExampleTuples(examplesMap["examples"])
 	negativeExamples := descToExampleTuples(examplesMap["neg_examples"])
 
-	// 对齐 Python: Add positive examples section
+	// 对齐 Python: 添加正例部分
 	if len(positiveExamples) > 0 {
 		userPrompt += "\n=== POSITIVE EXAMPLES (Good Performance) ===\n"
 		userPrompt += "The following examples achieved good performance:\n\n"
@@ -328,7 +328,7 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 		}
 	}
 
-	// 对齐 Python: Add negative examples section
+	// 对齐 Python: 添加负例部分
 	if len(negativeExamples) > 0 {
 		userPrompt += "\n=== NEGATIVE EXAMPLES (Poor Performance) ===\n"
 		userPrompt += "The following tool descriptions had poor performance:\n\n"
@@ -445,7 +445,7 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	examples any,
 	prevOutputs []any,
 ) map[string]any {
-	// 对齐 Python: td - MOD PROMPT TO ANALYZE NEGATIVE CASE
+	// 对齐 Python: td - 修改提示词以分析负例
 	examplesMap, _ := examples.(map[string]any)
 	var pos []ExampleTuple
 	if examplesMap != nil {
@@ -535,7 +535,7 @@ Return JSON following this exact schema structure (modify only description texts
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output, "description")
 		if _, ok := outputJSON["description"]; !ok {
-			return nil, fmt.Errorf("no \"description\" found in output")
+			return nil, fmt.Errorf("输出中未找到 \"description\"")
 		}
 		outputJSON["description"] = strings.TrimSpace(fmt.Sprintf("%v", outputJSON["description"]))
 		return outputJSON, nil
@@ -559,7 +559,7 @@ func (m *ToolDescriptionMethod) LoadExamples(examplesDir, functionName string, m
 	examplesPath := examplesDir + "/" + functionName + ".json"
 	logger.Info(logComponent).
 		Str("examples_path", examplesPath).
-		Msg("Trying to load examples")
+		Msg("正在尝试加载示例")
 
 	data, err := os.ReadFile(examplesPath)
 	if err != nil {
@@ -588,7 +588,7 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 	var allOutputs []any
 
 	if _, err := os.Stat(examplesPath); err == nil {
-		// 对齐 Python: load from provided path
+		// 对齐 Python: 从提供的路径加载
 		data, err := os.ReadFile(examplesPath)
 		if err != nil {
 			logger.Error(logComponent).Err(err).
@@ -603,10 +603,10 @@ func (m *ToolDescriptionMethod) GetNegativeExamples(functionName string) []Examp
 			return nil
 		}
 	} else {
-		// 对齐 Python: if not found, fallback to load from self play examples
+		// 对齐 Python: 如果未找到，回退到从自对弈示例加载
 		logger.Warn(logComponent).
 			Str("examples_path", examplesPath).
-			Msg("NO NEGATIVE FILE FOUND, FALLBACK TO LOAD GENERATED EXAMPLES")
+			Msg("未找到负例文件，回退到加载生成的示例")
 		examplesPath = getConfigString(m.config, "examples_dir") + "/" + functionName + ".json"
 		data, err := os.ReadFile(examplesPath)
 		if err != nil {
@@ -641,7 +641,7 @@ func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) stri
 	found := strings.Index(description, indicator)
 	if found != -1 {
 		description = description[found+len(indicator):]
-		// 对齐 Python: description[found + len(indicator): -1]
+		// 对齐 Python: 截取 indicator 之后到倒数第一个字符的内容
 		if len(description) > 0 {
 			description = description[:len(description)-1]
 		}
@@ -671,7 +671,7 @@ func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string
 		Int("example_count", len(examples)).
 		Str("function_name", functionName).
 		Interface("examples", examples).
-		Msg("Examples loaded for tool")
+		Msg("工具示例已加载")
 	return examples
 }
 
@@ -988,7 +988,7 @@ func descSelectNegativeExamples(allOutputs []any, maxNumExamples int) []ExampleT
 			if stepOutput == nil {
 				continue
 			}
-			// 对齐 Python: check all variables exist
+			// 对齐 Python: 检查所有变量是否存在
 			requiredKeys := []string{"instructions", "fn_call", "tool_results", "answers"}
 			allExist := true
 			for _, k := range requiredKeys {
@@ -1015,7 +1015,7 @@ func descSelectNegativeExamples(allOutputs []any, maxNumExamples int) []ExampleT
 				scoreSlice := descToSliceAny(scores)
 				if len(scoreSlice) > 0 {
 					score := descToFloat64(scoreSlice[len(scoreSlice)-1])
-					// 对齐 Python: SCORE THRESHOLD 1. <= score < 3.
+					// 对齐 Python: 分数阈值 1. <= score < 3.
 					if score >= 1.0 && score < 3.0 && descIsString(inst) && descIsString(ans) {
 						selectedExamples = append(selectedExamples, ExampleTuple{
 							Instruction: strings.TrimSpace(inst),

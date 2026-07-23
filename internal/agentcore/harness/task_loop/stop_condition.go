@@ -144,8 +144,6 @@ func NewCustomPredicateEvaluator(name string, predicate func(ctx StopEvaluationC
 	return &CustomPredicateEvaluator{name: name, predicate: predicate}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // ShouldStop 当 iteration >= maxRounds 时返回 true。
 func (e *MaxRoundsEvaluator) ShouldStop(ctx StopEvaluationContext) bool {
 	return ctx.Iteration >= e.maxRounds
@@ -319,6 +317,8 @@ func (e *CustomPredicateEvaluator) ImportState(_ map[string]any) {}
 
 // Reset 无状态评估器，无操作。
 func (e *CustomPredicateEvaluator) Reset() {}
+
+// ──────────────────────────── 非导出函数 ────────────────────────────
 
 // toBool 安全转换 any 到 bool。
 func toBool(v any) bool {

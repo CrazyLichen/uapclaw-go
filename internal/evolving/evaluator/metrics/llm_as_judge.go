@@ -36,7 +36,7 @@ type LLMAsJudgeMetric struct {
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
-	// logComponent 日志组件标识
+	// metricLogComponent 日志组件标识
 	metricLogComponent = logger.ComponentAgentCore
 )
 

@@ -99,6 +99,9 @@ type ActionSpec struct {
 	Params map[string]string `json:"params"`
 }
 
+// browserWorkerActionKey 上下文键，标记是否在 browser worker 动作中执行
+type browserWorkerActionKey struct{}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ActionResult 动作执行结果。
@@ -115,9 +118,6 @@ var recursiveBrowserActions = map[string]bool{
 	"browser_task":     true,
 	"run_browser_task": true,
 }
-
-// browserWorkerActionCtxKey 上下文键，标记是否在 browser worker 动作中执行
-type browserWorkerActionKey struct{}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

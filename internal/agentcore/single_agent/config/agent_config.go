@@ -12,10 +12,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
 // ReActAgentConfig ReAct Agent 配置，聚合模型、上下文、提示词等子配置。
 //
 // 对应 Python: openjiuwen/core/single_agent/agents/react_agent.py (ReActAgentConfig)
@@ -71,6 +67,10 @@ type ReActAgentConfigOption func(*ReActAgentConfig)
 
 // ModelClientExtraOption WithModelClient 复合 Option 的扩展参数函数
 type ModelClientExtraOption func(*modelClientExtra)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

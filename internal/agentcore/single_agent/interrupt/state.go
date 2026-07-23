@@ -14,15 +14,15 @@ import (
 
 const (
 	// InterruptionKey ReActAgent 中断状态键
-	// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 saschema 包
 	InterruptionKey = saschema.InterruptionKey
 	// ResumeStartIterationKey 恢复时起始迭代键
-	// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 saschema 包
 	ResumeStartIterationKey = saschema.ResumeStartIterationKey
 	// ResumeUserInputKey 恢复时用户输入的键
-	// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 saschema 包
 	ResumeUserInputKey = saschema.ResumeUserInputKey
 	// InterruptAutoConfirmKey 自动确认配置键
-	// TODO: 考虑移除 reexport，让调用者直接使用 saschema 包
+	// TODO(#通用): 考虑移除 reexport，让调用者直接使用 saschema 包
 	InterruptAutoConfirmKey = saschema.InterruptAutoConfirmKey
 )

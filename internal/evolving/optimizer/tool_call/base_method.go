@@ -96,7 +96,7 @@ You must strictly follow the output format. You can begin your task now.`,
 	verifyFn := func(output string) (any, error) {
 		outputJSON := ParseJSON(output, "answer")
 		if _, ok := outputJSON["answer"]; !ok {
-			return nil, fmt.Errorf("answer field is required")
+			return nil, fmt.Errorf("answer 字段是必需的")
 		}
 		if _, hasErr := outputJSON["error"]; hasErr {
 			return nil, fmt.Errorf("%v", outputJSON["error"])

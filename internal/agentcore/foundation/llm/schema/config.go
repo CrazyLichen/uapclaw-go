@@ -54,13 +54,13 @@ type ModelRequestConfig struct {
 	Extra map[string]any `json:"-"`
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-type ProviderType int
-
 type ModelClientConfigOption func(*ModelClientConfig)
 
 type ModelRequestConfigOption func(*ModelRequestConfig)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+type ProviderType int
 
 // ──────────────────────────── 常量 ────────────────────────────
 

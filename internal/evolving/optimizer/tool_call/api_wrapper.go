@@ -20,6 +20,11 @@ type SimpleAPIWrapperFromCallable struct {
 	fnCallName string
 }
 
+// APIWrapperFunc API 包装器函数类型。
+// 接收工具信息和输入参数，返回 JSON 响应字符串和状态码。
+// 状态码 0 表示成功，12 表示失败（对齐 Python __call__ 返回值）。
+type APIWrapperFunc func(tool map[string]any, toolInput map[string]any) (string, int)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -27,11 +32,6 @@ type SimpleAPIWrapperFromCallable struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// APIWrapperFunc API 包装器函数类型。
-// 接收工具信息和输入参数，返回 JSON 响应字符串和状态码。
-// 状态码 0 表示成功，12 表示失败（对齐 Python __call__ 返回值）。
-type APIWrapperFunc func(tool map[string]any, toolInput map[string]any) (string, int)
 
 // NewSimpleAPIWrapperFromCallable 创建基于可调用函数的 API 包装器。
 //
@@ -71,9 +71,9 @@ func (w *SimpleAPIWrapperFromCallable) Call(tool map[string]any, toolInput map[s
 			Str("method", "Call").
 			Str("tool_name", toolName).
 			Str("fn_call_name", w.fnCallName).
-			Msg("request invalid, no function found")
+			Msg("请求无效，未找到函数")
 		result, _ := json.Marshal(map[string]string{
-			"error":    fmt.Sprintf("request invalid, no function '%s' found", toolName),
+			"error":    fmt.Sprintf("请求无效，未找到函数 '%s'", toolName),
 			"response": "",
 		})
 		return string(result), 12

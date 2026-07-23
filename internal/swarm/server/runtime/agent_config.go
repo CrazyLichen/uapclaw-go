@@ -295,7 +295,7 @@ func (s *AgentConfigService) CreateAgent(params *CreateAgentParams) (*types.Agen
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", filePath).
-		Msg("Created agent")
+		Msg("已创建 Agent")
 
 	return def, nil
 }
@@ -332,7 +332,7 @@ func (s *AgentConfigService) UpdateAgent(name string, params *UpdateAgentParams)
 	logger.Info(logComponent).
 		Str("agent_name", name).
 		Str("file_path", agent.FilePath).
-		Msg("Updated agent")
+		Msg("已更新 Agent")
 
 	return agent, nil
 }
@@ -361,7 +361,7 @@ func (s *AgentConfigService) DeleteAgent(name string) (bool, error) {
 		logger.Info(logComponent).
 			Str("agent_name", name).
 			Str("file_path", agent.FilePath).
-			Msg("Deleted agent")
+			Msg("已删除 Agent")
 	}
 	return true, nil
 }

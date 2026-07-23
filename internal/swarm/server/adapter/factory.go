@@ -26,6 +26,8 @@ const (
 // logComponent 日志组件
 var logComponent = logger.ComponentAgentServer
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // ResolveSDKChoice 从环境变量解析 SDK 选择。
 //
 // 对应 Python: resolve_sdk_choice()
@@ -35,8 +37,6 @@ var logComponent = logger.ComponentAgentServer
 //   - "harness" → "harness"（线束模式映射）
 //   - "pi" → "pi"（预留，尚未实现）
 //   - 未知值 → 警告并回退 "harness"
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 func ResolveSDKChoice() string {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(sdkEnvVar)))
 	if raw == "" {

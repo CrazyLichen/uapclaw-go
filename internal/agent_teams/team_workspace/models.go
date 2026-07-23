@@ -42,16 +42,16 @@ type WorkspaceFileLock struct {
 // 对齐 Python: WorkspaceMode
 type WorkspaceMode string
 
+// ConflictStrategy 并发修改冲突策略。
+// 对齐 Python: ConflictStrategy
+type ConflictStrategy string
+
 const (
 	// WorkspaceModeLocal 本地模式
 	WorkspaceModeLocal WorkspaceMode = "local"
 	// WorkspaceModeDistributed 分布式模式
 	WorkspaceModeDistributed WorkspaceMode = "distributed"
 )
-
-// ConflictStrategy 并发修改冲突策略。
-// 对齐 Python: ConflictStrategy
-type ConflictStrategy string
 
 const (
 	// ConflictStrategyLock 文件级锁

@@ -59,7 +59,7 @@ func MergeConfigWithOverrides(baseConfig iface.ProcessorConfig, overrides map[st
 
 	// 遍历 overrides，设置匹配字段
 	for key, val := range overrides {
-		// snake_case → PascalCase
+		// snake_case 转 PascalCase（下划线命名转大驼峰命名）
 		goName := snakeToPascal(key)
 
 		idx, ok := fieldIndexMap[goName]

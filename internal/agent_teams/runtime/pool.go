@@ -33,7 +33,7 @@ type ActiveTeam struct {
 type ActiveTeamInfo struct {
 	// TeamName 团队名
 	TeamName string
-	// SessionID session ID
+	// SessionID 会话标识
 	SessionID string
 	// State 生命周期状态
 	State RuntimeState
@@ -68,6 +68,10 @@ const (
 	// 对齐 Python: RuntimeState.PAUSED
 	RuntimeStatePaused
 )
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -120,6 +120,9 @@ var (
 		"4. 阅读代码不等于验证。运行命令并展示实际输出。"
 )
 
+// 编译时接口检查
+var _ agentinterfaces.AgentRail = (*VerificationRail)(nil)
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewVerificationRail 创建 VerificationRail 实例。
@@ -336,6 +339,3 @@ func sortedBoolKeys(m map[string]bool) []string {
 	sort.Strings(keys)
 	return keys
 }
-
-// compile-time check
-var _ agentinterfaces.AgentRail = (*VerificationRail)(nil)

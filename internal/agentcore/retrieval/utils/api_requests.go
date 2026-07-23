@@ -28,6 +28,8 @@ type RetryConfig struct {
 	Task TaskName
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // TaskName 任务类型，决定错误码前缀。
 //
 // 对齐 Python: Literal["Reranker", "Embedding"]

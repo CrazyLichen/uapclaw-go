@@ -114,7 +114,7 @@ func (mh *MessageHandler) ApplyChannelState(msg *schema.Message) {
 //
 // 对齐 Python _get_or_create_channel_state (L278-299)：
 // 使用复合键 channelID:sessionID（对齐 Python _get_channel_state_key）。
-// TODO: SessionMap 集成（等 11.7 回填）。
+// TODO(#11.7): SessionMap 集成（等 11.7 回填）。
 func (mh *MessageHandler) GetOrCreateChannelState(msg *schema.Message) *ChannelControlState {
 	ch := msg.ChannelID
 	key := getChannelStateKey(ch, msg.SessionID)

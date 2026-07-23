@@ -52,11 +52,13 @@ type addFieldOptions struct {
 	dataID string
 }
 
-// ModalityKind 内容模态类型。
-type ModalityKind string
-
 // AddFieldOption AddField 可选参数函数
 type AddFieldOption func(*addFieldOptions)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ModalityKind 内容模态类型。
+type ModalityKind string
 
 // ──────────────────────────── 常量 ────────────────────────────
 const (

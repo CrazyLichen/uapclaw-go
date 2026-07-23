@@ -30,10 +30,12 @@ type SkillDevPipeline struct {
 	deps *SkillDevDeps
 }
 
-// ──────────────────────────── 全局变量 ────────────────────────────
+// ──────────────────────────── 常量 ────────────────────────────
 
 // maxPipelineIterations Pipeline 最大迭代次数，防止无限循环
 const maxPipelineIterations = 20
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // stageHandlers 阶段→Handler 映射，对应 Python STAGE_HANDLERS。
 //

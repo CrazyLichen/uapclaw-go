@@ -10,6 +10,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
+// 对齐 Python: AgentLookup = Callable[[str], Optional[TeamAgent]]
+// ⤵️ 待 9.55 回填: 返回 *TeamAgent
+type AgentLookup func(sender string) any
+
+// OnInbound 团队→用户通知回调。
+// 对齐 Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]
+type OnInbound func(event HumanAgentInboundEvent) error
+
 // HumanAgentNotEnabledError 团队未注册 human-agent 成员时抛出。
 // 对齐 Python: HumanAgentNotEnabledError (openjiuwen/agent_teams/interaction/human_agent_inbox.py)
 type HumanAgentNotEnabledError struct {
@@ -57,15 +66,6 @@ type HumanAgentInbox struct {
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// AgentLookup 解析 human-agent 成员名到活跃 TeamAgent 运行时。
-// 对齐 Python: AgentLookup = Callable[[str], Optional[TeamAgent]]
-// ⤵️ 待 9.55 回填: 返回 *TeamAgent
-type AgentLookup func(sender string) any
-
-// OnInbound 团队→用户通知回调。
-// 对齐 Python: OnInbound = Callable[[HumanAgentInboundEvent], Awaitable[None]]
-type OnInbound func(event HumanAgentInboundEvent) error
 
 // NewHumanAgentInbox 创建 Human-Agent 收件箱。
 // 对齐 Python: HumanAgentInbox.__init__(team, message_manager, *, agent_lookup, on_inbound)
@@ -127,7 +127,7 @@ func (h *HumanAgentInbox) GetOnInbound() OnInbound {
 	return h.onInbound
 }
 
-// Error 接口实现
+// Error 实现 error 接口
 func (e *HumanAgentNotEnabledError) Error() string {
 	if e.Message != "" {
 		return e.Message
@@ -135,7 +135,7 @@ func (e *HumanAgentNotEnabledError) Error() string {
 	return "no human-agent member is registered on this team"
 }
 
-// Error 接口实现
+// Error 实现 error 接口
 func (e *UnknownHumanAgentError) Error() string {
 	sorted := make([]string, len(e.Registered))
 	copy(sorted, e.Registered)

@@ -21,12 +21,16 @@ type TeamRuntimeManager struct {
 	pool *TeamRuntimePool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
 	// mgrLogComponent 日志组件
 	mgrLogComponent = logger.ComponentChannel
 )
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -131,8 +135,6 @@ func (m *TeamRuntimeManager) Interact(
 	}
 	return lastResult, nil
 }
-
-// ──────────── 生命周期 stub ────────────
 
 // Activate 激活团队。
 // ⤵️ 待 9.62 CoordinationKernel 章节回填

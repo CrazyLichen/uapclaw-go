@@ -9,4 +9,6 @@
 //	├── doc.go    # 包文档
 //	├── cmd.go    # 命令定义：newRootCmd / newServeCmd / newRunCmd
 //	└── main.go   # Execute() + main()（//go:build !test 隔离，不参与覆盖率）
+//
+// 对应 Python 代码：无（Go 特有 CLI 入口）
 package main

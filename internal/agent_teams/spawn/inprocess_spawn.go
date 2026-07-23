@@ -12,6 +12,11 @@ import (
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// AgentFactory 创建并配置 Agent 的工厂函数。
+// 对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)
+// 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
+type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -21,11 +26,6 @@ const (
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
-
-// AgentFactory 创建并配置 Agent 的工厂函数。
-// 对齐 Python: _TeamAgent(card) + teammate.configure(spec, ctx)
-// 由 SpawnManager 注入具体实现，封装 spec 解析 / card 构建 / 配置全流程。
-type AgentFactory func(runtimeCtx atschema.TeamRuntimeContext) (SpawnableAgent, error)
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。
 // 对齐 Python: inprocess_spawn(team_agent, ctx, initial_message, session_id)

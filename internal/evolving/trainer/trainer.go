@@ -97,12 +97,11 @@ const (
 	defaultCheckpointEveryNEpochs = 1
 	// 默认验证提升时保存检查点，对应 Python checkpoint_on_improve=True
 	defaultCheckpointOnImprove = true
+	// logComponent Trainer 包日志组件常量
+	logComponent = logger.ComponentAgentCore
 )
 
 // ──────────────────────────── 全局变量 ────────────────────────────
-
-// logComponent Trainer 包日志组件常量
-const logComponent = logger.ComponentAgentCore
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

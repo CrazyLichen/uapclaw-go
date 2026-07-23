@@ -11,6 +11,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// SessionManager 会话任务队列管理器，提供按 session 序列化执行、优先级排序和取消能力。
 type SessionManager struct {
 	// mu 保护以下所有 map 的并发访问
 	mu sync.Mutex
@@ -26,6 +27,7 @@ type SessionManager struct {
 	sessionSignals map[string]chan struct{}
 }
 
+// priorityItem 优先级队列项。
 type priorityItem struct {
 	// priority 优先级（数值越小越先出队）
 	priority int
@@ -33,6 +35,7 @@ type priorityItem struct {
 	task func(context.Context) (any, error)
 }
 
+// taskResult 任务执行结果。
 type taskResult struct {
 	// value 任务返回值
 	value any
@@ -42,7 +45,10 @@ type taskResult struct {
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// priorityHeap 基于 container/heap 的优先级队列（数值越小越先出队）。
 type priorityHeap []*priorityItem
+
+// ──────────────────────────── 常量 ────────────────────────────
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 

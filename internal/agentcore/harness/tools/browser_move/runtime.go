@@ -36,6 +36,8 @@ type BrowserAgentRuntime struct {
 	browserProbeCardsTool *BrowserProbeCardsTool
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // ──────────────────────────── 常量 ────────────────────────────
 
 const (
@@ -164,7 +166,7 @@ func (r *BrowserAgentRuntime) EnsureRuntimeReady(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO: ⤵️ 9.38-49 回填 _callPlaywrightRunCodeUnsafe 初始化
+	// TODO(#9.38-49): ⤵️ 回填 _callPlaywrightRunCodeUnsafe 初始化
 	// 对齐 Python:
 	//   async def _direct_code_executor(js_code):
 	//       return await self._call_playwright_run_code_unsafe(js_code)
@@ -208,7 +210,7 @@ func (r *BrowserAgentRuntime) EnsureStarted(ctx context.Context) error {
 	r.browserProbeInteractivesTool = NewBrowserProbeInteractivesTool(r)
 	r.browserProbeCardsTool = NewBrowserProbeCardsTool(r)
 
-	// TODO: ⤵️ 9.38-49 回填 _register_runtime_tool + ability_manager.add
+	// TODO(#9.38-49): ⤵️ 回填 _register_runtime_tool + ability_manager.add
 	// 对齐 Python:
 	//   self._register_runtime_tool(self._browser_custom_action_tool, tool_name="browser_custom_action")
 	//   self._register_runtime_tool(self._browser_list_actions_tool, tool_name="browser_list_custom_actions")
@@ -298,7 +300,7 @@ func (r *BrowserAgentRuntime) ProbeInteractives(
 		}
 	}
 
-	// TODO: ⤵️ 9.38-49 回填 buildInteractiveProbeJS
+	// TODO(#9.38-49): ⤵️ 回填 buildInteractiveProbeJS
 	// 对齐 Python:
 	//   js_code = build_interactive_probe_js(max_items=max_items, viewport_only=viewport_only, query=query)
 	//   raw = await self._code_executor(js_code)
@@ -362,7 +364,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 		}
 	}
 
-	// TODO: ⤵️ 9.38-49 回填 buildCardProbeJS + builtinSiteProfiles + getSelectorCache
+	// TODO(#9.38-49): ⤵️ 回填 buildCardProbeJS + builtinSiteProfiles + getSelectorCache
 	// 对齐 Python:
 	//   site_profiles = builtin_site_profiles()
 	//   selector_cache = get_selector_cache()
@@ -402,7 +404,7 @@ func (r *BrowserAgentRuntime) ProbeCards(
 		parsed["cards"] = []any{}
 	}
 
-	// TODO: ⤵️ 9.38-49 回填 selector cache 记录
+	// TODO(#9.38-49): ⤵️ 回填 selector cache 记录
 	// 对齐 Python:
 	//   if parsed.get("ok") and parsed.get("cards"):
 	//       try:

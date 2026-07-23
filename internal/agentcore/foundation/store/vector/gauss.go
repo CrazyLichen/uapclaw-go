@@ -58,6 +58,8 @@ type GaussVectorStore struct {
 	createPool func(ctx context.Context, connString string) (dbClient, error)
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
 // gaussDistanceMetric GaussDB 支持的距离度量
 type gaussDistanceMetric string
 

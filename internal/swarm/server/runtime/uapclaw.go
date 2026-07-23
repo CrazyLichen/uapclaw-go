@@ -48,6 +48,13 @@ type UapClaw struct {
 	skilldevMu sync.Mutex
 }
 
+// agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
+// 避免 adapter 直接导入 runtime 包造成循环依赖。
+// 使用 types.AgentDefinition 共享类型，无需逐字段拷贝。
+type agentConfigListerBridge struct {
+	svc *AgentConfigService
+}
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -522,6 +529,11 @@ func (uc *UapClaw) Cleanup() error {
 // 对齐 Python: JiuWenClaw.get_instance() → self._adapter._instance（返回 DeepAgent）
 func (uc *UapClaw) GetInstance() *harness.DeepAgent { return nil }
 
+// ListCustomAgents 实现 adapter.AgentConfigLister 接口。
+func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {
+	return b.svc.ListCustomAgents()
+}
+
 // ──────────────────────────── 非导出函数 ────────────────────────────
 
 // ensureAdapter 确保 SDK adapter 已初始化，幂等。
@@ -785,18 +797,4 @@ func (uc *UapClaw) handleSkillDevStreamRequest(ctx context.Context, request *sch
 		resultCh <- schema.NewTerminalChunk(request.RequestID, request.ChannelID)
 	}()
 	return resultCh, nil
-}
-
-// ──────────────────────────── 桥接类型 ────────────────────────────
-
-// agentConfigListerBridge 将 runtime.AgentConfigService 桥接到 adapter.AgentConfigLister 接口。
-// 避免 adapter 直接导入 runtime 包造成循环依赖。
-// 使用 types.AgentDefinition 共享类型，无需逐字段拷贝。
-type agentConfigListerBridge struct {
-	svc *AgentConfigService
-}
-
-// ListCustomAgents 实现 adapter.AgentConfigLister 接口。
-func (b *agentConfigListerBridge) ListCustomAgents() []*types.AgentDefinition {
-	return b.svc.ListCustomAgents()
 }

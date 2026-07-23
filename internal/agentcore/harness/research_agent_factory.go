@@ -26,12 +26,12 @@ import (
 // 对齐 Python: create_research_agent(model, card=..., system_prompt=..., ...)
 //
 // 预定义 ResearchAgent 配备 SysOperationRail，用户可自由覆盖配置。
-// Full override rule：如果用户传了 rails，则使用用户的，否则默认注入 [SysOperationRail()]。
+// 完整覆盖规则：如果用户传了 rails，则使用用户的，否则默认注入 [SysOperationRail()]。
 // 对齐 Python: final_rails = rails if rails is not None else [SysOperationRail()]
 func CreateResearchAgent(ctx context.Context, params *hschema.SubagentCreateParams) (*DeepAgent, error) {
 	language := hpromts.ResolveLanguage(params.Language)
 
-	// Full override rule：用户传了 rails 就用用户的，否则默认注入 SysOperationRail
+	// 完整覆盖规则：用户传了 rails 就用用户的，否则默认注入 SysOperationRail
 	// 对齐 Python: create_research_agent 中 final_rails = rails if rails is not None else [SysOperationRail()]
 	finalRails := params.Rails
 	if finalRails == nil {

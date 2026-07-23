@@ -17,7 +17,9 @@ type invalidStageError struct {
 	stage string
 }
 
+// pipelineError 流水线错误。
 type pipelineError struct {
+	// msg 错误消息
 	msg string
 }
 
@@ -29,9 +31,9 @@ type pipelineError struct {
 
 var (
 	// errFnCallPathNotImplemented fn_call_path 未实现错误
-	errFnCallPathNotImplemented = &pipelineError{msg: "config based api wrapper is not implemented yet"}
+	errFnCallPathNotImplemented = &pipelineError{msg: "基于配置的 API 包装器尚未实现"}
 	// errToolCallableRequired 缺少 tool_callable 错误
-	errToolCallableRequired = &pipelineError{msg: "Either config or tool_callable must be provided."}
+	errToolCallableRequired = &pipelineError{msg: "必须提供 config 或 tool_callable。"}
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -156,12 +158,14 @@ func CustomizedPipeline(
 	return result, nil
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
+// Error 返回无效阶段错误消息。
 func (e *invalidStageError) Error() string {
-	return "wrong stage: " + e.stage
+	return "无效阶段: " + e.stage
 }
 
+// Error 返回流水线错误消息。
 func (e *pipelineError) Error() string {
 	return e.msg
 }
+
+// ──────────────────────────── 非导出函数 ────────────────────────────

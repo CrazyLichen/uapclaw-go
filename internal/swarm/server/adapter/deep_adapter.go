@@ -1915,4 +1915,4 @@ func extractReasoningContent(payload map[string]any) string {
 	return ""
 }
 
-// ──────────────────────────── 占位函数（后续 Task 回填） ────────────────────────────
+// 占位函数（后续 Task 回填）

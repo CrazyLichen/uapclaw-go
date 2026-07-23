@@ -78,7 +78,7 @@ func (m *APICallToExampleMethod) Step(
 	prevOutputs []any,
 	it int,
 ) (output any, data any, score float64, err error) {
-	logger.Info(logComponent).Msg("Inside method, trying to step")
+	logger.Info(logComponent).Msg("在方法内部，尝试步进")
 
 	// 对齐 Python: prev_outputs = copy.copy(prev_outputs) if prev_outputs is not None else []
 	prevOutputsCopy := make([]any, len(prevOutputs))
@@ -88,13 +88,13 @@ func (m *APICallToExampleMethod) Step(
 	description := m.GetOriginalDescription(tool)
 	logger.Info(logComponent).
 		Str("description", description).
-		Msg("Original desc obtained")
+		Msg("获取原始描述")
 
 	// 对齐 Python: tool_for_opt = copy.deepcopy(tool)
 	toolForOpt := deepCopyMap(tool)
 	logger.Info(logComponent).
 		Str("tool_for_opt", fmt.Sprintf("%v", toolForOpt)).
-		Msg("Tool_for_opt")
+		Msg("待优化工具")
 
 	// 1. 拒绝采样：
 	// 在初始循环中，生成候选 API 调用、运行工具，并判断
@@ -111,13 +111,13 @@ func (m *APICallToExampleMethod) Step(
 		var err error
 		fnCall, err = m.GenerateAPICallFromDescription(ctx, toolForOpt, nil, 1, prevOutputsCopy)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Int("init_loop", i).Msg("GenerateAPICallFromDescription failed")
+			logger.Error(logComponent).Err(err).Int("init_loop", i).Msg("GenerateAPICallFromDescription 失败")
 			continue
 		}
-		logger.Info(logComponent).Msg("API call generation completed")
+		logger.Info(logComponent).Msg("API 调用生成完成")
 		logger.Info(logComponent).
 			Str("fn_call", fmt.Sprintf("%v", fnCall)).
-			Msg("API call params")
+			Msg("API 调用参数")
 
 		// 对齐 Python: tool_res, status_code = self.run_tool_with_api_call(tool_for_opt, fn_call)
 		var statusCode int
@@ -130,17 +130,17 @@ func (m *APICallToExampleMethod) Step(
 		}
 		logger.Info(logComponent).
 			Int("status_code", statusCode).
-			Msg("Run tool with api call completed")
+			Msg("工具 API 调用执行完成")
 
 		// 对齐 Python: api_analysis = self.critique_api_call(tool_for_opt, fn_call, tool_res)
 		apiAnalysis, err := m.CritiqueAPICall(ctx, toolForOpt, fnCall, toolRes)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("CritiqueAPICall failed")
+			logger.Error(logComponent).Err(err).Msg("CritiqueAPICall 失败")
 			continue
 		}
 		logger.Info(logComponent).
 			Str("results", fmt.Sprintf("%v", apiAnalysis)).
-			Msg("critique_api_call finished")
+			Msg("批判 API 调用完成")
 
 		// 对齐 Python: if api_analysis['err_code'] == -1:
 		errCode := toIntSafe(apiAnalysis["err_code"])
@@ -153,10 +153,10 @@ func (m *APICallToExampleMethod) Step(
 				fnCallJSON, _ := json.Marshal(fnCall)
 				logger.Info(logComponent).
 					Str("fn_call", string(fnCallJSON)).
-					Msg("verbose: bad fn_call")
+					Msg("详细日志: 错误的函数调用")
 				logger.Info(logComponent).
 					Str("analysis", fmt.Sprintf("%v", apiAnalysis["analysis"])).
-					Msg("verbose: api_reflection")
+					Msg("详细日志: API 反思")
 			}
 			continue
 		}
@@ -186,7 +186,7 @@ func (m *APICallToExampleMethod) Step(
 		// 对齐 Python: inst = self.generate_instruction_from_api_call(...)
 		inst, err := m.GenerateInstructionFromAPICall(ctx, toolForOpt, fnCall, toolRes, instOutput)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("GenerateInstructionFromAPICall failed")
+			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("GenerateInstructionFromAPICall 失败")
 			continue
 		}
 
@@ -200,7 +200,7 @@ func (m *APICallToExampleMethod) Step(
 		// 对齐 Python: inst_eval = self.critique_instruction(...)
 		instEval, err := m.CritiqueInstruction(ctx, toolForOpt, inst, fnCall, toolRes, ans)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("CritiqueInstruction failed")
+			logger.Error(logComponent).Err(err).Int("refine_step", nRefine).Msg("CritiqueInstruction 失败")
 			instEval = map[string]any{"analysis": "", "score": 1}
 		}
 
@@ -219,7 +219,7 @@ func (m *APICallToExampleMethod) Step(
 		// 对齐 Python: batch_refl = self.batch_reflection_with_scores(...)
 		batchRefl, err := m.BatchReflectionWithScores(ctx, toolForOpt, fnCall, feedbackInsts, feedbackScores, feedbackAnalyses)
 		if err != nil {
-			logger.Error(logComponent).Err(err).Msg("BatchReflectionWithScores failed")
+			logger.Error(logComponent).Err(err).Msg("BatchReflectionWithScores 失败")
 			batchRefl = ""
 		}
 		refls = append(refls, strings.TrimSpace(batchRefl))
@@ -242,7 +242,7 @@ func (m *APICallToExampleMethod) Step(
 	var evalScore float64
 
 	if scoreEvalWeight > 0 {
-		logger.Info(logComponent).Msg("Eval step: Using eval fn")
+		logger.Info(logComponent).Msg("评估步骤: 使用评估函数")
 		if len(insts) > 0 && len(answers) > 0 {
 			lastInst := strings.TrimSpace(insts[len(insts)-1])
 			lastAns := strings.TrimSpace(answers[len(answers)-1])
@@ -264,7 +264,7 @@ func (m *APICallToExampleMethod) Step(
 			evalScore = 1.0
 		}
 	} else {
-		logger.Info(logComponent).Msg("Eval step: hard coded eval_score as score_eval_weight=0")
+		logger.Info(logComponent).Msg("评估步骤: 硬编码 eval_score，因为 score_eval_weight=0")
 		evalScore = 1.0
 	}
 
@@ -413,23 +413,23 @@ You must strictly follow the output format, including "name", "arguments", and p
 		fn := ParseJSON(output)
 
 		if len(fn) == 0 {
-			return nil, fmt.Errorf("output must be a dict")
+			return nil, fmt.Errorf("输出必须是字典")
 		}
 
 		if _, ok := fn["name"]; !ok {
-			return nil, fmt.Errorf(`incorrect output format, "name" required for function`)
+			return nil, fmt.Errorf(`输出格式不正确，函数需要 "name"`)
 		}
 
 		if _, ok := fn["arguments"]; !ok {
 			return nil, fmt.Errorf(
-				`incorrect output format, "arguments" required for function %v`,
+				`输出格式不正确，函数 %v 需要 "arguments"`,
 				fn["name"],
 			)
 		}
 
 		if fnName, ok := fn["name"].(string); ok && fnName != functionName {
 			return nil, fmt.Errorf(
-				"output function '%s' is inconsistent with the given function '%s', you must only use the given function %s",
+				"输出函数 '%s' 与给定函数 '%s' 不一致，只能使用给定函数 %s",
 				fnName, functionName, functionName,
 			)
 		}
@@ -437,7 +437,7 @@ You must strictly follow the output format, including "name", "arguments", and p
 		return fn, nil
 	}
 
-	logger.Info(logComponent).Msg("Sending request to generate tool use examples")
+	logger.Info(logComponent).Msg("发送请求以生成工具使用示例")
 
 	policy := llm_resilience.LLMInvokePolicy{
 		MaxAttempts:        15,
@@ -516,11 +516,11 @@ You can begin your task now.`
 		outputJSON := ParseJSON(output)
 
 		if _, ok := outputJSON["analysis"]; !ok {
-			return nil, fmt.Errorf(`no "analysis" found in output`)
+			return nil, fmt.Errorf(`输出中未找到 "analysis"`)
 		}
 
 		if _, ok := outputJSON["err_code"]; !ok {
-			return nil, fmt.Errorf(`no "err_code" found in output`)
+			return nil, fmt.Errorf(`输出中未找到 "err_code"`)
 		}
 
 		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()
@@ -533,7 +533,7 @@ You can begin your task now.`
 		return outputJSON, nil
 	}
 
-	logger.Info(logComponent).Msg("Sending request to critique api")
+	logger.Info(logComponent).Msg("发送请求以批判 API")
 
 	policy := llm_resilience.LLMInvokePolicy{
 		MaxAttempts:        15,
@@ -634,7 +634,7 @@ instructions for this function call, which were rated and analyzed:
 		outputJSON := ParseJSON(output, "instruction")
 
 		if _, ok := outputJSON["instruction"]; !ok {
-			return nil, fmt.Errorf(`no "instruction" found in output`)
+			return nil, fmt.Errorf(`输出中未找到 "instruction"`)
 		}
 
 		instruction, _ := outputJSON["instruction"].(string)
@@ -732,15 +732,15 @@ be a number between 1 and 3. You can begin your task now.`
 		outputJSON := ParseJSON(output, "analysis")
 
 		if len(outputJSON) == 0 {
-			return nil, fmt.Errorf("incorrect output format (not a dict), you have to output Dict containing your analysis and rating")
+			return nil, fmt.Errorf("输出格式不正确（非字典），必须输出包含分析和评分的字典")
 		}
 
 		if _, ok := outputJSON["analysis"]; !ok {
-			return nil, fmt.Errorf(`incorrect output format, "analysis" required`)
+			return nil, fmt.Errorf(`输出格式不正确，需要 "analysis"`)
 		}
 
 		if _, ok := outputJSON["score"]; !ok {
-			return nil, fmt.Errorf(`incorrect output format, "score" required`)
+			return nil, fmt.Errorf(`输出格式不正确，需要 "score"`)
 		}
 
 		// 对齐 Python: output_json["analysis"] = str(output_json.get("analysis", "")).strip()

@@ -10,19 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// Allocation 模型分配结果。
-// 对齐 Python: Allocation (openjiuwen/agent_teams/models/allocator.py)
-//
-// 携带被选中的池条目以及持久化 DB 引用所需的位置信息。
-type Allocation struct {
-	// Entry 选中的池条目
-	Entry ModelPoolEntry
-	// GroupIndex 条目在同名组内的位置索引
-	GroupIndex int
-}
-
-// ──────────────────────────── 接口 ────────────────────────────
-
 // ModelAllocator 模型分配器接口。
 // 对齐 Python: ModelAllocator Protocol
 //
@@ -35,6 +22,17 @@ type ModelAllocator interface {
 	StateDict() map[string]any
 	// LoadStateDict 从先前的 StateDict 恢复计数器。
 	LoadStateDict(state map[string]any)
+}
+
+// Allocation 模型分配结果。
+// 对齐 Python: Allocation (openjiuwen/agent_teams/models/allocator.py)
+//
+// 携带被选中的池条目以及持久化 DB 引用所需的位置信息。
+type Allocation struct {
+	// Entry 选中的池条目
+	Entry ModelPoolEntry
+	// GroupIndex 条目在同名组内的位置索引
+	GroupIndex int
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────

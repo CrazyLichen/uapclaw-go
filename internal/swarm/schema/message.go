@@ -67,11 +67,12 @@ type Message struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// MessageOption 消息构造选项函数。
+type MessageOption func(*Message)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 type MessageType string
-
-type MessageOption func(*Message)
 
 // ──────────────────────────── 常量 ────────────────────────────
 

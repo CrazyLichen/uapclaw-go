@@ -79,7 +79,7 @@ func (s *AgentServer) handleInitialize(ctx context.Context, request *schema.Agen
 
 // handleACPToolResponse 处理 acp.tool_response 请求。stub：返回 ok=true。
 func (s *AgentServer) handleACPToolResponse(_ context.Context, request *schema.AgentRequest) (*schema.AgentResponse, error) {
-	// TODO: 实现 ACP 工具响应处理逻辑
+	// TODO(#ACP): 实现 ACP 工具响应处理逻辑
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
 		schema.WithPayload(map[string]any{
 			"ok": true,

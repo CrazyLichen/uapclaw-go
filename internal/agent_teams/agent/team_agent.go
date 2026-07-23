@@ -115,9 +115,7 @@ func NewTeamAgent(card *schema.AgentCard) *TeamAgent {
 	return a
 }
 
-// ──────────────────────────────────────────────────────────────
 // 属性 — 委托给 configurator
-// ──────────────────────────────────────────────────────────────
 
 // AgentCard 返回 Agent 身份卡片。
 // 满足 spawn.SpawnableAgent 接口。

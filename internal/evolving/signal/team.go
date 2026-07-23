@@ -80,15 +80,6 @@ const teamTrajectoryIssuesKey = "trajectory_issues"
 // teamSkillContentKey 技能内容在信号 context 中的键名。
 const teamSkillContentKey = "skill_content"
 
-// jsonBlockRE 匹配 JSON 代码块的正则。
-var jsonBlockRE = regexp.MustCompile("(?s)```(?:json)?\\s*\\n(.*?)```")
-
-// keyTools 协作关键工具集合。
-var keyTools = map[string]bool{
-	"spawn_member": true, "create_task": true, "build_team": true,
-	"view_task": true, "send_message": true,
-}
-
 // teamUserRequestPromptCN 中文团队用户请求检测提示词。
 //
 // 对应 Python: _TEAM_USER_REQUEST_PROMPT_CN（原文复刻，不翻译）
@@ -141,6 +132,15 @@ const teamTrajectoryIssuePromptEN = "Analyze the following execution trajectory 
 	"If no issues, output empty array [].\n"
 
 // ──────────────────────────── 全局变量 ────────────────────────────
+
+// jsonBlockRE 匹配 JSON 代码块的正则。
+var jsonBlockRE = regexp.MustCompile("(?s)```(?:json)?\\s*\\n(.*?)```")
+
+// keyTools 协作关键工具集合。
+var keyTools = map[string]bool{
+	"spawn_member": true, "create_task": true, "build_team": true,
+	"view_task": true, "send_message": true,
+}
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -328,7 +328,7 @@ func MakeTeamTrajectorySignal(skillName, skillContent string, trajectoryIssues [
 	return MakeEvolutionSignal(
 		string(TeamSignalTypeTrajectoryIssue),
 		"",
-		"Detected team skill trajectory issues requiring evolution.",
+		"检测到团队技能轨迹问题，需要进行进化。",
 		WithSkillName(skillName),
 		WithSource("passive_trajectory"),
 		WithContext(map[string]any{

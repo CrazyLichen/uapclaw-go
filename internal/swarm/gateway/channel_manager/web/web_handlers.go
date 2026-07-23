@@ -29,6 +29,14 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// MessageHandler 消息处理器接口。
+//
+// 用于 connection.ack 等消息的推送，对齐 Python MessageHandler.publish_robot_messages。
+type MessageHandler interface {
+	// PublishRobotMessages 通过消息管道推送机器人消息
+	PublishRobotMessages(ctx context.Context, msg *schema.Message) error
+}
+
 // RPCDispatcher RPC 方法注册与分发。
 //
 // 对齐 Python app_web_handlers.py 中的方法注册模式：
@@ -38,14 +46,6 @@ type RPCDispatcher struct {
 	handlers map[string]RPCHandlerFunc
 	// mu 保护 handlers 的并发访问
 	mu sync.RWMutex
-}
-
-// MessageHandler 消息处理器接口。
-//
-// 用于 connection.ack 等消息的推送，对齐 Python MessageHandler.publish_robot_messages。
-type MessageHandler interface {
-	// PublishRobotMessages 通过消息管道推送机器人消息
-	PublishRobotMessages(ctx context.Context, msg *schema.Message) error
 }
 
 // WebHandlersBindParams WebHandlers 绑定参数。

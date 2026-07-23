@@ -21,13 +21,13 @@ import (
 // skillsUseRegex /skills use 斜杠命令匹配正则。
 var skillsUseRegex = regexp.MustCompile(`^/skills use\s+(?P<skill_names>[^,]+)\s*,\s*(?P<query>.*)$`)
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // BuildUserPrompt 将用户 query 包装为结构化 JSON prompt。
 //
 // 返回格式: interactionPrefix + promptPrefix + json.dumps(userMessageContext)
 //
 // 对齐 Python: build_user_prompt(content, files, channel, language, *, trusted_dirs, metadata)
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 func BuildUserPrompt(content string, files map[string]any, channel string, language string,
 	trustedDirs []string, metadata map[string]any) string {
 	// 1. interaction_context 前缀
@@ -118,11 +118,11 @@ func BuildUserPrompt(content string, files map[string]any, channel string, langu
 	return finalPrompt
 }
 
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
 // handleSkillsUseSlashCommand 解析 /skills use 斜杠命令。
 //
 // 对齐 Python: _handle_skills_use_slash_command(query)
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 func handleSkillsUseSlashCommand(query string) (skillsToUse []string, newQuery string) {
 	stripped := strings.TrimSpace(query)
 	if !strings.HasPrefix(stripped, "/skills use") {

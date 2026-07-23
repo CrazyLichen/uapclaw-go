@@ -223,7 +223,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 	// 解析语言
 	lang := resolvePreferredLanguage(opt.Language, workspaceDir)
 
-	// ──── 复制 config.yaml ────
+	// 复制 config.yaml
 	configSrc := filepath.Join(resDir, "config.yaml")
 	configDestDir := filepath.Join(workspaceDir, "config")
 	if err := os.MkdirAll(configDestDir, 0o755); err != nil {
@@ -236,7 +236,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		}
 	}
 
-	// ──── 复制 .env.template → config/.env ────
+	// 复制 .env.template → config/.env
 	envSrc := filepath.Join(resDir, ".env.template")
 	envDest := filepath.Join(configDestDir, ".env")
 	if opt.Overwrite || !fileExists(envDest) {
@@ -245,13 +245,13 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		}
 	}
 
-	// ──── 创建 agent 目录结构 ────
+	// 创建 agent 目录结构
 	agentRoot := filepath.Join(workspaceDir, "agent")
 	_ = os.MkdirAll(filepath.Join(agentRoot, ".checkpoint"), 0o755)
 	_ = os.MkdirAll(filepath.Join(agentRoot, ".logs"), 0o755)
 	_ = os.MkdirAll(filepath.Join(agentRoot, "sessions"), 0o755)
 
-	// ──── 复制 DeepAgent workspace 模板 ────
+	// 复制 DeepAgent workspace 模板
 	deepAgentWorkspace := filepath.Join(agentRoot, "workspace")
 	templateWorkspace := filepath.Join(resDir, "agent", "workspace")
 
@@ -271,7 +271,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		_ = os.MkdirAll(deepAgentWorkspace, 0o755)
 	}
 
-	// ──── 复制 memory 模板 ────
+	// 复制 memory 模板
 	templateMemory := filepath.Join(templateWorkspace, "memory")
 	agentMemory := filepath.Join(deepAgentWorkspace, "memory")
 	if dirExists(templateMemory) {
@@ -287,7 +287,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		}
 	}
 
-	// ──── 复制多语言文件 ────
+	// 复制多语言文件
 	suffix := "_ZH"
 	if lang == "en" {
 		suffix = "_EN"
@@ -317,7 +317,7 @@ func Prepare(opt InitOption) (*CopyDiffResult, error) {
 		}
 	}
 
-	// ──── 设置 preferred_language 到 config ────
+	// 设置 preferred_language 到 config
 	setPreferredLanguage(configDest, lang)
 
 	return &cumulativeDiff, nil

@@ -168,7 +168,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Int("iteration", i).
 				Str("stage", "example").
 				Err(err).
-				Msg("Example stage failed")
+				Msg("示例阶段失败")
 			// 对齐 Python: 不中断，继续
 		} else {
 			resultExamples = append(resultExamples, resultExample...)
@@ -176,7 +176,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			logger.Info(logComponent).
 				Str("method", "OptimizeTool").
 				Int("iteration", i).
-				Msg("=== EXAMPLE STAGE FINISHED ===")
+				Msg("=== 示例阶段完成 ===")
 		}
 
 		// 对齐 Python: Stage 2 - Description
@@ -195,7 +195,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 
 	// 对齐 Python: description final reviewer
 	if len(resultDescs) == 0 {
-		return nil, fmt.Errorf("no description results generated")
+		return nil, fmt.Errorf("未生成描述结果")
 	}
 
 	// 对齐 Python: output_desc = result_descs[-1][-1][-1]["description"]
@@ -224,7 +224,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		logger.Error(logComponent).
 			Str("method", "OptimizeTool").
 			Err(err).
-			Msg("Description review failed")
+			Msg("描述审查失败")
 		return nil, err
 	}
 
@@ -237,7 +237,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 		logger.Error(logComponent).
 			Str("method", "OptimizeTool").
 			Err(err).
-			Msg("Description format failed")
+			Msg("描述格式化失败")
 		return nil, err
 	}
 

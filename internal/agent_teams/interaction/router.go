@@ -10,6 +10,13 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// MemberExistsCheck 成员存在性检查函数类型。
+// 对齐 Python: MemberExistsCheck = Callable[[str], Awaitable[bool]]
+//
+// 每个调用方决定查询来源——通常是闭包包裹
+// TeamBackend.get_member（或任何将名称映射到花名册行的等价物）。
+type MemberExistsCheck func(name string) (bool, error)
+
 // ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -35,13 +42,6 @@ var (
 	// routerLogComponent 日志组件
 	routerLogComponent = logger.ComponentChannel
 )
-
-// MemberExistsCheck 成员存在性检查函数类型。
-// 对齐 Python: MemberExistsCheck = Callable[[str], Awaitable[bool]]
-//
-// 每个调用方决定查询来源——通常是闭包包裹
-// TeamBackend.get_member（或任何将名称映射到花名册行的等价物）。
-type MemberExistsCheck func(name string) (bool, error)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
