@@ -254,20 +254,19 @@ func TestDetectTaskFailed(t *testing.T) {
 	tests := []struct {
 		name     string
 		chunk    streambase.Schema
-		wantCode *int
+		wantFail bool
+		wantCode int
 		wantText string
 	}{
 		{
 			name:     "非 OutputSchema",
 			chunk:    &streambase.TraceSchema{Type: "trace"},
-			wantCode: nil,
-			wantText: "",
+			wantFail: false,
 		},
 		{
 			name:     "Payload 为 nil",
 			chunk:    &streambase.OutputSchema{Type: "message", Index: 0},
-			wantCode: nil,
-			wantText: "",
+			wantFail: false,
 		},
 		{
 			name: "非 task_failed 类型",
@@ -276,8 +275,7 @@ func TestDetectTaskFailed(t *testing.T) {
 				Index:   0,
 				Payload: map[string]any{"type": "other"},
 			},
-			wantCode: nil,
-			wantText: "",
+			wantFail: false,
 		},
 		{
 			name: "task_failed 无错误码",
@@ -289,7 +287,8 @@ func TestDetectTaskFailed(t *testing.T) {
 					"data": []any{map[string]any{"text": "something went wrong"}},
 				},
 			},
-			wantCode: nil,
+			wantFail: true,
+			wantCode: 0,
 			wantText: "something went wrong",
 		},
 		{
@@ -302,21 +301,46 @@ func TestDetectTaskFailed(t *testing.T) {
 					"data": []any{map[string]any{"text": "[181001] rate limit exceeded"}},
 				},
 			},
-			wantCode: intPtr(181001),
+			wantFail: true,
+			wantCode: 181001,
 			wantText: "[181001] rate limit exceeded",
+		},
+		{
+			name: "task_failed 无 text",
+			chunk: &streambase.OutputSchema{
+				Type:  "message",
+				Index: 0,
+				Payload: map[string]any{
+					"type": "task_failed",
+					"data": []any{},
+				},
+			},
+			wantFail: true,
+			wantCode: 0,
+			wantText: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotCode, gotText := detectTaskFailed(tt.chunk)
-			if tt.wantCode == nil && gotCode != nil {
-				t.Errorf("gotCode = %v, 期望 nil", gotCode)
+			err := detectTaskFailed(tt.chunk)
+			if !tt.wantFail {
+				if err != nil {
+					t.Errorf("期望无错误，got %v", err)
+				}
+				return
 			}
-			if tt.wantCode != nil && (gotCode == nil || *gotCode != *tt.wantCode) {
-				t.Errorf("gotCode = %v, 期望 %v", gotCode, tt.wantCode)
+			if err == nil {
+				t.Fatal("期望 task_failed 错误，got nil")
 			}
-			if gotText != tt.wantText {
-				t.Errorf("gotText = %v, 期望 %v", gotText, tt.wantText)
+			taskErr, ok := err.(*taskFailedError)
+			if !ok {
+				t.Fatalf("期望 *taskFailedError，got %T", err)
+			}
+			if taskErr.Code() != tt.wantCode {
+				t.Errorf("Code() = %d, 期望 %d", taskErr.Code(), tt.wantCode)
+			}
+			if taskErr.Text() != tt.wantText {
+				t.Errorf("Text() = %v, 期望 %v", taskErr.Text(), tt.wantText)
 			}
 		})
 	}
@@ -683,12 +707,9 @@ func TestStreamController_runOneRound_teamCleaned(t *testing.T) {
 // TestStreamController_streamOneRound_无harness 测试 streamOneRound 无 harness。
 func TestStreamController_streamOneRound_无harness(t *testing.T) {
 	sc := newTestStreamController()
-	code, text := sc.streamOneRound(context.Background(), "test")
-	if code != nil {
-		t.Error("无 harness 时 code 应为 nil")
-	}
-	if text != "" {
-		t.Error("无 harness 时 text 应为空")
+	err := sc.streamOneRound(context.Background(), "test")
+	if err != nil {
+		t.Errorf("无 harness 时应返回 nil, got %v", err)
 	}
 }
 
@@ -698,12 +719,9 @@ func TestStreamController_streamOneRound_有harness(t *testing.T) {
 	sc.resources.Harness = &agentteams.TeamHarness{}
 	sc.streamQueue = make(chan streambase.Schema, 10)
 
-	code, text := sc.streamOneRound(context.Background(), "hello")
-	if code != nil {
-		t.Errorf("成功路径 code 应为 nil, got %v", code)
-	}
-	if text != "" {
-		t.Errorf("成功路径 text 应为空, got %v", text)
+	err := sc.streamOneRound(context.Background(), "hello")
+	if err != nil {
+		t.Errorf("成功路径应返回 nil, got %v", err)
 	}
 	// streamingActive 应已恢复为 false
 	if sc.streamingActive {

@@ -146,7 +146,7 @@ func (m *SpawnManager) LookupInprocessAgent(memberName string) spawn.SpawnableAg
 // CleanupTeammate 清理单个 teammate。
 // 对齐 Python: SpawnManager.cleanup_teammate(member_name)
 //
-// 先断开 chunk_forward 观察者，再 force_kill。
+// 先移除 chunk_forward 观察者，再断开 chunk_forward 引用，最后 force_kill。
 func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 	m.mu.Lock()
 	handle, ok := m.spawnedHandles[memberName]
@@ -159,8 +159,19 @@ func (m *SpawnManager) CleanupTeammate(ctx context.Context, memberName string) {
 		return
 	}
 
-	// 断开 chunk_forward 观察者（对齐 Python: handle.chunk_forward = None）
+	// 对齐 Python: agent_ref.stream_controller.remove_chunk_observer(forward)
+	// 先移除观察者，再断开引用
 	if inproc, ok := handle.(*spawn.InProcessSpawnHandle); ok {
+		forwardCb := inproc.ChunkForward()
+		if forwardCb != nil {
+			agentRef := inproc.AgentRef()
+			if ta, ok := agentRef.(*TeamAgent); ok {
+				teammateSC := ta.StreamController()
+				if teammateSC != nil {
+					teammateSC.RemoveChunkObserver(forwardCb)
+				}
+			}
+		}
 		inproc.SetChunkForward(nil)
 	}
 
@@ -189,8 +200,21 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	}
 
 	// 指数退避重试
+	// 对齐 Python: spawn_config = SpawnConfig(health_check_timeout=30, health_check_interval=50)
+	spawnCfg := &runnerspawn.SpawnConfig{
+		HealthCheckTimeout:  30 * time.Second,
+		HealthCheckInterval: 50 * time.Second,
+		ShutdownTimeout:     runnerspawn.DefaultShutdownTimeout,
+	}
+
+	// ⤵️ 待 #9.64 BuildContextFromDB 实现后回填：从 teammate 获取原始 prompt
+	// 对齐 Python: initial_message = teammate.prompt if teammate else None
+	// 对齐 Python: session = get_session_id() or None
+	initialMessage := ""  // ⤵️ 待回填：应传入 teammate.prompt
+	sessionID := ""       // ⤵️ 待回填：应传入 get_session_id()
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := m.SpawnTeammate(ctx, runtimeCtx, "", "", nil)
+		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)
 		if err == nil {
 			m.PublishRestartEvent(memberName, attempt)
 			logger.Info(spawnLogComponent).
@@ -272,24 +296,17 @@ func (m *SpawnManager) PublishRestartEvent(memberName string, restartCount int) 
 
 // ShutdownAllHandles 关闭所有已生成的句柄。
 // 对齐 Python: SpawnManager.shutdown_all_handles()
+// 对齐 Python: 通过 cleanup_teammate 统一清理，保证 chunk_forward 观察者正确移除
 func (m *SpawnManager) ShutdownAllHandles(ctx context.Context) {
 	m.mu.Lock()
-	handles := make(map[string]spawn.SpawnHandle)
-	for k, v := range m.spawnedHandles {
-		handles[k] = v
+	memberNames := make([]string, 0, len(m.spawnedHandles))
+	for name := range m.spawnedHandles {
+		memberNames = append(memberNames, name)
 	}
-	m.spawnedHandles = make(map[string]spawn.SpawnHandle)
 	m.mu.Unlock()
 
-	for memberName, handle := range handles {
-		// 断开 chunk_forward
-		if inproc, ok := handle.(*spawn.InProcessSpawnHandle); ok {
-			inproc.SetChunkForward(nil)
-		}
-		_ = handle.ForceKill()
-		logger.Info(spawnLogComponent).
-			Str("member_name", memberName).
-			Msg("已关闭 teammate 句柄")
+	for _, memberName := range memberNames {
+		m.CleanupTeammate(ctx, memberName)
 	}
 }
 
@@ -364,16 +381,15 @@ func (m *SpawnManager) spawnSubprocess(
 	sessionID string,
 	spawnCfg *runnerspawn.SpawnConfig,
 ) (spawn.SpawnHandle, error) {
-	// 构建载荷
-	// ⤵️ 待回填：payload 需要传入 SpawnAgent 调用
-	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
-	if payload == nil {
-		payload = make(map[string]any)
-	}
-	_ = payload
-
 	// 构建配置
 	agentConfig := m.configurator.BuildSpawnConfig(runtimeCtx)
+
+	// 对齐 Python: payload = build_spawn_payload(ctx, initial_message=initial_message)
+	// 用带 initialMessage 的 payload 覆盖 BuildSpawnConfig 中构建的空 payload
+	payload := m.configurator.BuildSpawnPayload(runtimeCtx, initialMessage)
+	if payload != nil {
+		agentConfig.Payload = payload
+	}
 
 	inputs := map[string]any{"query": initialMessage}
 	if initialMessage == "" {

@@ -122,7 +122,10 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	// 对齐 Python: parent_session_id = parent_session.get_session_id(); sub_session_id = self._build_sub_session_id(parent_session_id, subagent_type)
 	parentSessionID := "default"
 	if callOpts.Session != nil {
-		parentSessionID = callOpts.Session.GetSessionID()
+		// 对齐 Python: parent_session.get_session_id()
+		if sess, ok := callOpts.Session.(interface{ GetSessionID() string }); ok {
+			parentSessionID = sess.GetSessionID()
+		}
 	}
 	subSessionID := buildSubSessionID(parentSessionID, subagentType)
 
@@ -146,7 +149,13 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		// 异步执行
 		// 对齐 Python: asyncio.create_task(self._run_async(subagent, prompt, sub_session_id, subagent_type, parent_session))
 		// 返回: {"status": "async_launched", "agent_id": subagent_type, "prompt": prompt}
-		go t.runAsync(ctx, subAgent, prompt, subSessionID, subagentType, callOpts.Session)
+		var parentSess sessioninterfaces.SessionFacade
+		if callOpts.Session != nil {
+			if s, ok := callOpts.Session.(sessioninterfaces.SessionFacade); ok {
+				parentSess = s
+			}
+		}
+		go t.runAsync(ctx, subAgent, prompt, subSessionID, subagentType, parentSess)
 		return map[string]any{
 			"status":   "async_launched",
 			"agent_id": subagentType,
@@ -158,7 +167,9 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	// 对齐 Python: result = await subagent.invoke({"query": prompt, "conversation_id": sub_session_id}, session=parent_session)
 	var invokeOpts []sainterfaces.AgentOption
 	if callOpts.Session != nil {
-		invokeOpts = append(invokeOpts, sainterfaces.WithSession(callOpts.Session))
+		if sess, ok := callOpts.Session.(sessioninterfaces.SessionFacade); ok {
+			invokeOpts = append(invokeOpts, sainterfaces.WithSession(sess))
+		}
 	}
 	result, err := subAgent.Invoke(ctx, map[string]any{
 		"query":           prompt,
@@ -209,46 +220,26 @@ func (t *AgentTool) Stream(ctx context.Context, inputs map[string]any, opts ...t
 //  5. 构建 CreateDeepAgentParams（对齐 Python create_kwargs 字段映射）
 //  6. CreateDeepAgent(ctx, params)
 func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID string) (hinterfaces.DeepAgentInterface, error) {
-	// 步骤 1: 从父 Agent 获取 DeepConfig（必须实现 DeepAgentInterface）
-	// 对齐 Python: parent_config = getattr(self._parent_agent, "deep_config", None)
-	deepAgent, ok := t.parentAgent.(hinterfaces.DeepAgentInterface)
-	if !ok {
-		logger.Warn(logComponent).
-			Str("event_type", "agent_tool_parent_not_deep").
-			Str("subagent_type", agentDef.Name).
-			Msg("父 Agent 未实现 DeepAgentInterface，无法创建子 Agent")
-		return nil, fmt.Errorf("parent agent 未实现 DeepAgentInterface，无法创建子 Agent")
-	}
-	deepCfg := deepAgent.DeepConfig()
-	if deepCfg == nil {
-		logger.Warn(logComponent).
-			Str("event_type", "agent_tool_deep_config_nil").
-			Str("subagent_type", agentDef.Name).
-			Msg("父 Agent 的 DeepConfig 为 nil")
-		return nil, fmt.Errorf("parent agent 的 DeepConfig 为 nil，无法创建子 Agent")
-	}
-
+	// 步骤 1: 将 AgentDefinition 转换为 SubAgentConfig
+	// 对齐 Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
 	var model *llm.Model
+	var modelCache map[string]*llm.Model
 	var language string
 	var ws *hworkspace.Workspace
-	if deepCfg.Model != nil {
-		model = deepCfg.Model
+	if t.parentAgent != nil {
+		if deepAgent, ok := t.parentAgent.(hinterfaces.DeepAgentInterface); ok {
+			if deepCfg := deepAgent.DeepConfig(); deepCfg != nil {
+				model = deepCfg.Model
+				language = deepCfg.Language
+				if deepCfg.Workspace != nil {
+					ws = hworkspace.NewWorkspace(deepCfg.Workspace.RootPath, deepCfg.Language)
+				}
+			}
+		}
 	}
-	language = deepCfg.Language
-	if deepCfg.Workspace != nil {
-		ws = hworkspace.NewWorkspace(deepCfg.Workspace.RootPath, deepCfg.Language)
-	}
+	spec := agentDefToSubagentConfig(agentDef, model, modelCache, nil)
 
-	// 步骤 2: 将 AgentDefinition 转换为 SubAgentConfig
-	// 对齐 Python: spec = _agent_def_to_subagent_config(agent_def, parent_config.model, parent_config.workspace.root_path, model_cache)
-	var modelCache map[string]*llm.Model
-	// modelCache 从 DeepAdapter 获取，对齐 Python: getattr(self._parent_agent, "_model_cache", None)
-	// 注意：DeepAdapter.modelCache 是非导出字段，目前无法直接获取。
-	// TODO: 后续通过接口暴露 modelCache，或从 DeepAdapter 传入 AgentTool
-	_ = modelCache
-	spec := agentDefToSubagentConfig(agentDef, model, modelCache)
-
-	// 步骤 3: 从 parentAgent.ability_manager 获取 ToolCard 列表，过滤 disallowedForSubagents
+	// 步骤 2: 从 parentAgent.ability_manager 获取 ToolCard 列表，过滤 disallowedForSubagents
 	// 对齐 Python: all_tool_cards = [tc for tc in self._parent_agent.ability_manager.list()
 	//             if isinstance(tc, ToolCard) and tc.name not in DISALLOWED_FOR_SUBAGENTS]
 	var allToolCards []*tool.ToolCard
@@ -263,11 +254,12 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 		}
 	}
 
-	// 步骤 4: 按 Agent 定义的 tools 字段进一步过滤
+	// 步骤 3: 按 Agent 定义的 tools 字段进一步过滤
 	// 对齐 Python: parent_tool_cards = _filter_tool_cards(all_tool_cards,
 	//             allowed_tools=list(spec.tools) if spec.tools else ["*"], disallowed_tools=None)
-	// agentDefToSubagentConfig 中已将 disallowed_tools 合并进 tools 列表，
+	// 注意：_agent_def_to_subagent_config() 已将 disallowed_tools 合并进 spec.tools（Python 中是 []string），
 	// 所以这里的 disallowed_tools 传 nil。
+	// Go 中需要自己构建等价于 Python spec.tools 的字符串列表
 	allowedTools := agentDef.Tools
 	if len(allowedTools) == 0 {
 		allowedTools = []string{"*"}
@@ -276,13 +268,13 @@ func (t *AgentTool) createSubAgent(agentDef *types.AgentDefinition, subSessionID
 	// 对齐 Python: if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
 	if len(agentDef.DisallowedTools) > 0 && (len(allowedTools) != 1 || allowedTools[0] != "*") {
 		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
-		for _, dt := range agentDef.DisallowedTools {
-			disallowedSet[dt] = true
+		for _, t := range agentDef.DisallowedTools {
+			disallowedSet[t] = true
 		}
 		filtered := make([]string, 0, len(allowedTools))
-		for _, at := range allowedTools {
-			if !disallowedSet[at] {
-				filtered = append(filtered, at)
+		for _, t := range allowedTools {
+			if !disallowedSet[t] {
+				filtered = append(filtered, t)
 			}
 		}
 		allowedTools = filtered

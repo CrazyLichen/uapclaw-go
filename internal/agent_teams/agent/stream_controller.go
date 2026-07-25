@@ -26,7 +26,7 @@ import (
 //   - 协作取消（cooperativeCancel: 两阶段关闭）
 //   - 重试逻辑（错误码 181001 最多重试 10 次）
 type StreamController struct {
-	// mu 保护并发访问的字段（cancelRequested, pendingInputs, pendingInterruptResumes, streamingActive）
+	// mu 保护并发访问的字段（cancelRequested, pendingInputs, pendingInterruptResumes, streamingActive, chunkObservers）
 	mu sync.Mutex
 	// getBlueprint 蓝图获取器（延迟获取，configure 后才有值）
 	getBlueprint func() *TeamAgentBlueprint
@@ -70,6 +70,33 @@ type StreamController struct {
 
 // StreamControllerOption 流式控制器可选配置
 type StreamControllerOption func(*StreamController)
+
+// taskFailedError task_failed 错误，携带 errorCode 和 errorText。
+// 对齐 Python: _detect_task_failed 返回 Optional[Tuple[Optional[int], str]]
+type taskFailedError struct {
+	// code 错误码（0 表示无码）
+	code int
+	// text 错误文本
+	text string
+}
+
+// Error 实现 error 接口
+func (e *taskFailedError) Error() string {
+	if e.code != 0 {
+		return fmt.Sprintf("[%d] %s", e.code, e.text)
+	}
+	return e.text
+}
+
+// Code 返回错误码
+func (e *taskFailedError) Code() int {
+	return e.code
+}
+
+// Text 返回错误文本
+func (e *taskFailedError) Text() string {
+	return e.text
+}
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -142,12 +169,16 @@ func NewStreamController(
 // 对齐 Python: StreamController.add_chunk_observer(cb)
 // 观察者在分块标注来源成员并写入 streamQueue 之后触发。
 func (sc *StreamController) AddChunkObserver(cb atschema.ChunkObserver) {
+	sc.mu.Lock()
 	sc.chunkObservers = append(sc.chunkObservers, cb)
+	sc.mu.Unlock()
 }
 
 // RemoveChunkObserver 移除分块观察者（幂等）。
 // 对齐 Python: StreamController.remove_chunk_observer(cb)
 func (sc *StreamController) RemoveChunkObserver(cb atschema.ChunkObserver) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	for i, ob := range sc.chunkObservers {
 		// 比较函数指针地址（对齐 Python list.remove 按引用比较）
 		if reflect.ValueOf(ob).Pointer() == reflect.ValueOf(cb).Pointer() {
@@ -218,7 +249,7 @@ func (sc *StreamController) StartRound(ctx context.Context, content any) error {
 		}
 	}
 	logger.Info(scLogComponent).Str("member_name", sc.memberName()).
-		Str("preview", preview).Msg("start_agent")
+		Str("preview", preview).Msg("启动 Agent")
 
 	sc.startRound(ctx, content)
 	return nil
@@ -406,8 +437,15 @@ func (sc *StreamController) tagChunk(chunk streambase.Schema) streambase.Schema 
 
 // fanOutToObservers 扇出分块到观察者，异常时自动移除。
 // 对齐 Python: _chunk_observers 循环 + exception auto-detach
+// 对齐 Python: for ob in list(self._chunk_observers) — 先拷贝再迭代，避免迭代中修改
 func (sc *StreamController) fanOutToObservers(ctx context.Context, tagged streambase.Schema) {
-	for _, ob := range sc.chunkObservers {
+	// 对齐 Python: list(self._chunk_observers) — 先拷贝切片，迭代中使用拷贝
+	sc.mu.Lock()
+	observers := make([]atschema.ChunkObserver, len(sc.chunkObservers))
+	copy(observers, sc.chunkObservers)
+	sc.mu.Unlock()
+
+	for _, ob := range observers {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -481,7 +519,7 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 			// 对齐 Python: if self._state.team_cleaned: close_stream()
 			if sc.state.TeamCleaned {
 				logger.Info(scLogComponent).Str("member_name", sc.memberName()).
-					Msg("team_cleaned set; closing stream after round")
+					Msg("team_cleaned 已设置；轮次结束后关闭流")
 				sc.CloseStream()
 				return
 			}
@@ -506,9 +544,17 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 					sc.startRound(ctx, combined)
 				} else {
 					_ = sc.wakeMailboxIfInterruptCleared(ctx)
-					// ⤵️ 待 TeamMember 状态检查回填：检查 SHUTDOWN_REQUESTED → CloseStream()
 					// 对齐 Python: if team_member and await team_member.status() == MemberStatus.SHUTDOWN_REQUESTED: close_stream()
-					if sc.requestCompletionPollCb != nil {
+					// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
+					// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时不会触发
+					memberStatus := atschema.MemberStatusReady
+					if sc.state != nil && sc.state.TeamMember != nil {
+						status, _ := sc.state.TeamMember.Status(ctx)
+						memberStatus = status
+					}
+					if memberStatus == atschema.MemberStatusShutdownRequested {
+						sc.CloseStream()
+					} else if sc.requestCompletionPollCb != nil {
 						_ = sc.requestCompletionPollCb(ctx)
 					}
 				}
@@ -516,14 +562,26 @@ func (sc *StreamController) runOneRound(ctx context.Context, message any) {
 		}()
 
 		// 对齐 Python: await _execute_round(message)
-		// 检查 context 是否已取消
+		// 对齐 Python: CancelledError 只标记 cancelled，不设 ERROR
 		if ctx.Err() != nil {
 			cancelled = true
-			_ = sc.updateStatus(ctx, atschema.MemberStatusError)
+			// 对齐 Python: except asyncio.CancelledError: cancelled = True; raise
+			// 不设 MemberStatusError，取消不是错误
 			return
 		}
 		sc.executeRound(ctx, message)
-		_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
+		// 对齐 Python: if team_member is None or await team_member.status() != MemberStatus.SHUTDOWN_REQUESTED:
+		//     await self._update_status(MemberStatus.READY)
+		// ⤵️ 待 #9.65 TeamMember.Status() 实现后替换为真实状态检查
+		// 当前 TeamMember.Status() 是 stub（始终返回 READY），以下逻辑暂时始终走 true 分支
+		memberStatus := atschema.MemberStatusReady
+		if sc.state != nil && sc.state.TeamMember != nil {
+			status, _ := sc.state.TeamMember.Status(ctx)
+			memberStatus = status
+		}
+		if memberStatus != atschema.MemberStatusShutdownRequested {
+			_ = sc.updateStatus(ctx, atschema.MemberStatusReady)
+		}
 	}()
 }
 
@@ -568,8 +626,8 @@ func (sc *StreamController) executeRound(ctx context.Context, message any) {
 
 // streamOneRound 执行单轮流式读取。
 // 对齐 Python: StreamController._stream_one_round(query)
-// 返回 nil 表示成功，返回 (errorCode, errorText) 表示检测到 task_failed
-func (sc *StreamController) streamOneRound(ctx context.Context, query any) (errorCode *int, errorText string) {
+// 返回 nil 表示成功，返回 error 表示检测到 task_failed
+func (sc *StreamController) streamOneRound(ctx context.Context, query any) error {
 	sc.mu.Lock()
 	sc.streamingActive = true
 	sc.mu.Unlock()
@@ -581,7 +639,7 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 
 	harness := sc.resources.Harness
 	if harness == nil {
-		return nil, ""
+		return nil
 	}
 
 	// ⤵️ 待 9.55 TeamAgent 完善后回填 sessionID 和 teamSession
@@ -589,24 +647,23 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 	inputMap := map[string]any{"query": query}
 	chunkCh, err := harness.RunStreaming(ctx, inputMap, "", nil)
 	if err != nil {
-		return nil, ""
+		return nil
 	}
 
 	// 对齐 Python: async for chunk in harness.run_streaming(...)
-	errorSeen := false
+	var taskErr *taskFailedError
 	for chunk := range chunkCh {
 		if chunk == nil {
 			// nil sentinel，流关闭
 			break
 		}
-		if errorSeen {
+		if taskErr != nil {
 			continue
 		}
-		detectedCode, detectedText := detectTaskFailed(chunk)
-		if detectedCode != nil || detectedText != "" {
-			errorSeen = true
-			errorCode = detectedCode
-			errorText = detectedText
+		// 对齐 Python: detected = _detect_task_failed(chunk)
+		// 对齐 Python: if detected is not None: error_seen = True
+		if err := detectTaskFailed(chunk); err != nil {
+			taskErr = err.(*taskFailedError)
 			continue
 		}
 		tagged := sc.tagChunk(chunk)
@@ -614,15 +671,15 @@ func (sc *StreamController) streamOneRound(ctx context.Context, query any) (erro
 			select {
 			case sc.streamQueue <- tagged:
 			case <-ctx.Done():
-				return nil, ""
+				return nil
 			}
 		}
 		sc.fanOutToObservers(ctx, tagged)
 	}
-	if !errorSeen {
-		return nil, ""
+	if taskErr == nil {
+		return nil
 	}
-	return errorCode, errorText
+	return taskErr
 }
 
 // runRetryingStream 带重试的流式执行。
@@ -631,24 +688,31 @@ func (sc *StreamController) runRetryingStream(ctx context.Context, initialQuery 
 	currentQuery := initialQuery
 	attempt := 0
 	for {
-		errorCode, errorText := sc.streamOneRound(ctx, currentQuery)
-		if errorCode == nil {
+		roundErr := sc.streamOneRound(ctx, currentQuery)
+		// 对齐 Python: outcome = await self._stream_one_round(current_query)
+		// 对齐 Python: if outcome is None: return
+		if roundErr == nil {
 			return nil
 		}
-		code := *errorCode
+		taskErr, ok := roundErr.(*taskFailedError)
+		if !ok {
+			return roundErr
+		}
+		code := taskErr.Code()
+		text := taskErr.Text()
 		if isRetryableErrorCode(code) && attempt < maxRetryAttempts {
 			attempt++
 			logger.Warn(scLogComponent).Int("error_code", code).
 				Int("attempt", attempt).Int("max_attempts", maxRetryAttempts).
-				Str("error_text", errorText).Msg("DeepAgent 循环瞬态错误")
+				Str("error_text", text).Msg("DeepAgent 循环瞬态错误")
 			currentQuery = retryQuery
 			continue
 		}
 		logger.Error(scLogComponent).Int("error_code", code).
-			Int("attempts", attempt).Str("error_text", errorText).
+			Int("attempts", attempt).Str("error_text", text).
 			Msg("DeepAgent 循环失败")
 		return fmt.Errorf("streaming task failed after %d retries, last error code=%d: %s",
-			attempt, code, errorText)
+			attempt, code, text)
 	}
 }
 
@@ -702,24 +766,27 @@ func (sc *StreamController) combinePendingInputs(items []any) any {
 }
 
 // detectTaskFailed 检测 chunk 中的 task_failed 错误。
-// 对齐 Python: _detect_task_failed(chunk)
-func detectTaskFailed(chunk streambase.Schema) (errorCode *int, errorText string) {
+// 对齐 Python: _detect_task_failed(chunk) → Optional[Tuple[Optional[int], str]]
+// 返回 nil 表示不是 task_failed，返回 error 表示检测到 task_failed。
+// errorCode 和 errorText 信息携带在 error 中，供重试逻辑使用。
+func detectTaskFailed(chunk streambase.Schema) error {
 	outChunk, ok := chunk.(*streambase.OutputSchema)
 	if !ok {
-		return nil, ""
+		return nil
 	}
 	payload := outChunk.Payload
 	if payload == nil {
-		return nil, ""
+		return nil
 	}
 	payloadMap, ok := payload.(map[string]any)
 	if !ok {
-		return nil, ""
+		return nil
 	}
 	payloadType, _ := payloadMap["type"].(string)
 	if payloadType != taskFailedPayloadType {
-		return nil, ""
+		return nil
 	}
+	// 对齐 Python: 只要 type == "task_failed" 就是失败
 	data, _ := payloadMap["data"].([]any)
 	var text string
 	if len(data) > 0 {
@@ -728,13 +795,19 @@ func detectTaskFailed(chunk streambase.Schema) (errorCode *int, errorText string
 		}
 	}
 	match := errorCodePattern.FindStringSubmatch(text)
+	var code int
 	if len(match) > 1 {
-		code := 0
-		if _, err := fmt.Sscanf(match[1], "%d", &code); err == nil {
-			return &code, text
+		if _, err := fmt.Sscanf(match[1], "%d", &code); err != nil {
+			code = 0
 		}
 	}
-	return nil, text
+	// 记录日志，对齐 Python 的错误信息
+	logger.Debug(scLogComponent).
+		Int("error_code", code).
+		Str("error_text", text).
+		Msg("检测到 task_failed")
+
+	return &taskFailedError{code: code, text: text}
 }
 
 // isRetryableErrorCode 检查错误码是否可重试。

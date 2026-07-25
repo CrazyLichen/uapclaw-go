@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/prompts"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/harness/subagents"
@@ -196,13 +197,13 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 		}
 
 		// 对齐 Python: custom_spec = _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
-		spec := agentDefToSubagentConfig(agentDef, d.model, d.modelCache)
+		spec := agentDefToSubagentConfig(agentDef, d.model, d.modelCache, d.toolCards)
 		if spec != nil {
 			result = append(result, spec)
 			logger.Info(logComponent).
 				Str("agent_name", agentDef.Name).
 				Str("source", agentDef.Source).
-				Msg("loaded custom agent")
+				Msg("已加载自定义 Agent")
 		}
 	}
 	return result
@@ -210,7 +211,7 @@ func (d *DeepAdapter) loadCustomSubagents(subagentsCfg map[string]any) []hschema
 
 // agentDefToSubagentConfig 将 AgentDefinition 转换为 SubAgentConfig。
 // 对齐 Python: _agent_def_to_subagent_config(agent_def, model, workspace, model_cache)
-func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model) *hschema.SubAgentConfig {
+func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model, modelCache map[string]*llm.Model, allToolCards []*tool.ToolCard) *hschema.SubAgentConfig {
 	// 步骤 1: 解析模型
 	// 对齐 Python: resolved_model = model; if agent_def.model and isinstance(model_cache, dict): resolved_model = model_cache.get(agent_def.model, model)
 	resolvedModel := model
@@ -220,18 +221,43 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 		}
 	}
 
-	// 步骤 2: 构建 AgentCard
+	// 步骤 2: 构建工具列表
+	// 对齐 Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
+	// if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
+	tools := agentDef.Tools
+	if len(tools) == 0 {
+		tools = []string{"*"}
+	}
+	if len(agentDef.DisallowedTools) > 0 && (len(tools) != 1 || tools[0] != "*") {
+		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
+		for _, t := range agentDef.DisallowedTools {
+			disallowedSet[t] = true
+		}
+		filtered := make([]string, 0, len(tools))
+		for _, t := range tools {
+			if !disallowedSet[t] {
+				filtered = append(filtered, t)
+			}
+		}
+		tools = filtered
+	}
+
+	// 对齐 Python: tools=tools — 将字符串列表转为 []*tool.ToolCard
+	// Python 的 SubAgentConfig.tools 接受 List[Tool | ToolCard | str]
+	// Go 强类型，需要通过 filterToolCards 转换
+	var filteredToolCards []*tool.ToolCard
+	if len(allToolCards) > 0 {
+		filteredToolCards = filterToolCards(allToolCards, tools, agentDef.DisallowedTools)
+	}
+
+	// 步骤 3: 构建 AgentCard
 	card := agentschema.NewAgentCard(
 		agentschema.WithAgentName(agentDef.Name),
 		agentschema.WithAgentID(agentDef.Name),
 		agentschema.WithAgentDescription(agentDef.Description),
 	)
 
-	// 步骤 3: 构建 SubAgentConfig
-	// 注意：工具过滤（tools/disallowed_tools 合并）由调用方（createSubAgent）负责，
-	// 此处不再重复实现。对齐 Python 的 _agent_def_to_subagent_config 中虽然合并了
-	// disallowed_tools 到 spec.tools，但 Go 的 SubAgentConfig.Tools 是 []*tool.ToolCard
-	// 类型，无法直接存 []string，因此工具过滤在 createSubAgent 的 filterToolCards 中完成。
+	// 步骤 4: 构建 SubAgentConfig
 	maxIter := 0
 	if agentDef.MaxIterations != nil {
 		maxIter = *agentDef.MaxIterations
@@ -240,6 +266,7 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 	return &hschema.SubAgentConfig{
 		AgentCard:      card,
 		SystemPrompt:   agentDef.Prompt,
+		Tools:          filteredToolCards,
 		Model:          resolvedModel,
 		Skills:         agentDef.Skills,
 		MaxIterations:  maxIter,

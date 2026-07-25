@@ -427,19 +427,19 @@ func (s *AgentConfigService) ListAvailableTools() *AvailableToolsResult {
 // userAgentsDir 返回用户级 agent 目录：~/.uapclaw/agents/
 // 对齐 Python: _get_user_agents_dir() → get_user_workspace_dir() / "agents"
 func (s *AgentConfigService) userAgentsDir() string {
-	return filepath.Join(pathutil.UserHomeDir(), ".uapclaw", "agents")
+	return filepath.Join(pathutil.UserHomeDir(), pathutil.DefaultDir, "agents")
 }
 
 // projectAgentsDir 返回项目级 agent 目录：<workspace>/.uapclaw/agents/
 // 对齐 Python: _get_project_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents"
 func (s *AgentConfigService) projectAgentsDir() string {
-	return filepath.Join(s.workspaceDir, ".uapclaw", "agents")
+	return filepath.Join(s.workspaceDir, pathutil.DefaultDir, "agents")
 }
 
 // localAgentsDir 返回本地级 agent 目录：<workspace>/.uapclaw/agents-local/
 // 对齐 Python: _get_local_agents_dir() → self._workspace_dir / ".jiuwenswarm" / "agents-local"
 func (s *AgentConfigService) localAgentsDir() string {
-	return filepath.Join(s.workspaceDir, ".uapclaw", "agents-local")
+	return filepath.Join(s.workspaceDir, pathutil.DefaultDir, "agents-local")
 }
 
 // resolveLocationDir 根据位置参数返回对应目录。
