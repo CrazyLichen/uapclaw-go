@@ -11,12 +11,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // ToolAdapterEntry 工具适配条目。
 // 对齐 Python SysOperationToolAdapter.extract_tools 返回的 (tool_id, LocalFunction) 元组。
 type ToolAdapterEntry struct {
@@ -29,6 +23,12 @@ type ToolAdapterEntry struct {
 // SysOperationToolAdapter SysOperation → tool.Tool 适配器。
 // 对齐 Python SysOperationToolAdapter：extract_tools。
 type SysOperationToolAdapter struct{}
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

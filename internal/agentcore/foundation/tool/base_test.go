@@ -226,15 +226,15 @@ type mockSessionFacadeForBase struct {
 	id string
 }
 
-func (m *mockSessionFacadeForBase) GetSessionID() string                      { return m.id }
-func (m *mockSessionFacadeForBase) UpdateState(_ map[string]any)              {}
-func (m *mockSessionFacadeForBase) GetState(_ state.StateKey) (any, error)    { return nil, nil }
-func (m *mockSessionFacadeForBase) DumpState() map[string]any                 { return nil }
+func (m *mockSessionFacadeForBase) GetSessionID() string                       { return m.id }
+func (m *mockSessionFacadeForBase) UpdateState(_ map[string]any)               {}
+func (m *mockSessionFacadeForBase) GetState(_ state.StateKey) (any, error)     { return nil, nil }
+func (m *mockSessionFacadeForBase) DumpState() map[string]any                  { return nil }
 func (m *mockSessionFacadeForBase) WriteStream(_ context.Context, _ any) error { return nil }
 func (m *mockSessionFacadeForBase) WriteCustomStream(_ context.Context, _ any) error {
 	return nil
 }
-func (m *mockSessionFacadeForBase) GetEnv(_ string, _ ...any) any       { return nil }
+func (m *mockSessionFacadeForBase) GetEnv(_ string, _ ...any) any           { return nil }
 func (m *mockSessionFacadeForBase) Interact(_ context.Context, _ any) error { return nil }
 
 // 编译时验证 mock 实现 SessionFacade 接口

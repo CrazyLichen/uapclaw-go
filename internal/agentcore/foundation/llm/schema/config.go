@@ -10,12 +10,15 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ProviderValidator 服务商验证器接口。
+// 已注册返回规范化名称，未注册返回空字符串。
 type ProviderValidator interface {
 	// ValidateProvider 验证 provider 是否已注册。
 	// 已注册返回规范化名称，未注册返回空字符串。
 	ValidateProvider(provider string) string
 }
 
+// ModelClientConfig 模型客户端配置。
 type ModelClientConfig struct {
 	// ClientID 客户端唯一标识，用于 Runner 注册，默认自动生成 UUID
 	ClientID string `json:"client_id"`

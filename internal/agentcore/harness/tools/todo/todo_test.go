@@ -35,14 +35,14 @@ type mockSession struct {
 	sessionID string
 }
 
-func (m *mockSession) GetSessionID() string                        { return m.sessionID }
-func (m *mockSession) UpdateState(_ map[string]any)                {}
-func (m *mockSession) GetState(_ state.StateKey) (any, error)      { return nil, nil }
-func (m *mockSession) DumpState() map[string]any                   { return nil }
-func (m *mockSession) WriteStream(_ context.Context, _ any) error  { return nil }
+func (m *mockSession) GetSessionID() string                             { return m.sessionID }
+func (m *mockSession) UpdateState(_ map[string]any)                     {}
+func (m *mockSession) GetState(_ state.StateKey) (any, error)           { return nil, nil }
+func (m *mockSession) DumpState() map[string]any                        { return nil }
+func (m *mockSession) WriteStream(_ context.Context, _ any) error       { return nil }
 func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
-func (m *mockSession) GetEnv(_ string, _ ...any) any               { return nil }
-func (m *mockSession) Interact(_ context.Context, _ any) error     { return nil }
+func (m *mockSession) GetEnv(_ string, _ ...any) any                    { return nil }
+func (m *mockSession) Interact(_ context.Context, _ any) error          { return nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

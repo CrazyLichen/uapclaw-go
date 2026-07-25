@@ -72,11 +72,16 @@ type BaseController interface {
 //
 // 对齐 Python: ActionController (controllers/action.py L70-268)
 type ActionController struct {
-	actions       map[string]ActionHandler
-	actionSpecs   map[string]ActionSpec
+	// actions 动作处理器映射
+	actions map[string]ActionHandler
+	// actionSpecs 动作元数据映射
+	actionSpecs map[string]ActionSpec
+	// runtimeRunner 运行时运行器
 	runtimeRunner RuntimeRunner
-	codeExecutor  CodeExecutorFunc
-	mu            sync.Mutex
+	// codeExecutor 代码执行器
+	codeExecutor CodeExecutorFunc
+	// mu 互斥锁
+	mu sync.Mutex
 }
 
 // ActionHandler 动作处理器函数类型。
@@ -99,7 +104,7 @@ type ActionSpec struct {
 	Params map[string]string `json:"params"`
 }
 
-// browserWorkerActionKey 上下文键，标记是否在 browser worker 动作中执行
+// browserWorkerActionKey 浏览器 worker 动作上下文键
 type browserWorkerActionKey struct{}
 
 // ──────────────────────────── 枚举 ────────────────────────────
@@ -286,7 +291,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		Str("session_id", orEmpty(sid)).
 		Str("request_id", orEmpty(rid)).
 		Str("param_keys", orEmpty(paramKeys)).
-		Msg("start")
+		Msg("开始")
 
 	// 检查递归调用
 	if IsBrowserWorkerAction(ctx) && recursiveBrowserActions[actionName] {
@@ -298,7 +303,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 			Str("session_id", orEmpty(sid)).
 			Str("request_id", orEmpty(rid)).
 			Str("error", error).
-			Msg("blocked")
+			Msg("已阻塞")
 		return ActionResult{
 			"ok":         false,
 			"action":     actionName,
@@ -318,7 +323,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 			Str("action", actionName).
 			Str("session_id", orEmpty(sid)).
 			Str("request_id", orEmpty(rid)).
-			Msg("unknown action")
+			Msg("未知操作")
 		return ActionResult{
 			"ok":         false,
 			"action":     actionName,
@@ -360,7 +365,7 @@ func (c *ActionController) RunAction(ctx context.Context, action string, session
 		Str("session_id", orEmpty(sid)).
 		Str("request_id", orEmpty(rid)).
 		Bool("ok", _ok).
-		Msg("end")
+		Msg("结束")
 
 	return result
 }

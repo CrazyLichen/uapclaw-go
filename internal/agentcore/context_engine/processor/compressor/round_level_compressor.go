@@ -1567,7 +1567,7 @@ func (rlc *RoundLevelCompressor) countCompressionCallTokens(systemPrompt string,
 		logger.Warn(logger.ComponentAgentCore).
 			Str("processor_type", rlc.ProcessorType()).
 			Err(err).
-			Msg("compression token counting fallback")
+			Msg("压缩 token 计数降级")
 	}
 
 	total := 0

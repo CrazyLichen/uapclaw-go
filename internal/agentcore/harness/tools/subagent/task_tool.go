@@ -17,7 +17,9 @@ import (
 // TaskToolInput task_tool 工具输入参数。
 // 对齐 Python: TaskTool.invoke() L57-121
 type TaskToolInput struct {
-	SubagentType    string `json:"subagent_type"`
+	// SubagentType 子代理类型
+	SubagentType string `json:"subagent_type"`
+	// TaskDescription 任务描述
 	TaskDescription string `json:"task_description"`
 }
 

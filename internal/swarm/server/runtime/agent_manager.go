@@ -128,15 +128,6 @@ func (am *AgentManager) PreSetAgent(channelID, cacheKey string, agent *UapClaw, 
 	am.agents[channelKey][cacheKey] = entry
 }
 
-// defaultAgentFactory 默认 Agent 工厂：NewUapClaw + CreateInstance。
-func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw, error) {
-	agent := NewUapClaw()
-	if err := agent.CreateInstance(config, mode, subMode); err != nil {
-		return nil, fmt.Errorf("[AgentManager] 创建 Agent 实例失败: %w", err)
-	}
-	return agent, nil
-}
-
 // GetAgent 获取 Agent 实例，不存在则自动创建。
 // 对齐 Python AgentManager.get_agent：异步，自动创建。
 func (am *AgentManager) GetAgent(ctx context.Context, channelID, mode, projectDir, subMode string) (*UapClaw, error) {
@@ -500,6 +491,15 @@ func (am *AgentManager) Cleanup() error {
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
+
+// defaultAgentFactory 默认 Agent 工厂：NewUapClaw + CreateInstance。
+func defaultAgentFactory(config map[string]any, mode, subMode string) (*UapClaw, error) {
+	agent := NewUapClaw()
+	if err := agent.CreateInstance(config, mode, subMode); err != nil {
+		return nil, fmt.Errorf("[AgentManager] 创建 Agent 实例失败: %w", err)
+	}
+	return agent, nil
+}
 
 // createAgent 创建 Agent 实例。
 // 对齐 Python: AgentManager._create_agent

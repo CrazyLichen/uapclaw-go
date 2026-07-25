@@ -70,7 +70,7 @@ func NewModel(
 	if clientConfig == nil {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("model client config is none"),
+			exception.WithMsg("模型客户端配置为空"),
 		)
 	}
 

@@ -25,6 +25,8 @@ const (
 	defaultInitialMessage = "Join the team and wait for your first assignment."
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // InProcessSpawn 以进程内 goroutine 方式生成 teammate。

@@ -17,6 +17,12 @@ type TeamModelConfig struct {
 	ModelRequestConfig *llmschema.ModelRequestConfig `json:"model_request_config,omitempty"`
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewTeamModelConfig 创建默认 TeamModelConfig。

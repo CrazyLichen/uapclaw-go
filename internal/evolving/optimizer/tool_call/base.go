@@ -188,7 +188,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 				Int("iteration", i).
 				Str("stage", "description").
 				Err(err).
-				Msg("Description stage failed")
+				Msg("描述阶段失败")
 		} else {
 			resultDescs = append(resultDescs, resultDesc)
 		}

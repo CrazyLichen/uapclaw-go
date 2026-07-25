@@ -10,12 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// ──────────────────────────── 常量 ────────────────────────────
-
-// ──────────────────────────── 全局变量 ────────────────────────────
-
 // CallbackChain 顺序回调执行链，支持回滚、重试和错误处理。
 //
 // 对应 Python: openjiuwen/core/runner/callback/chain.py (CallbackChain)
@@ -46,6 +40,12 @@ type ChainRollbackHandler func(ctx context.Context, cctx *ChainContext) error
 //
 // 对应 Python: Callable (error handler)，返回 ChainAction 决定后续动作
 type ChainErrorHandler func(ctx context.Context, cctx *ChainContext, err error) (ChainAction, error)
+
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// ──────────────────────────── 全局变量 ────────────────────────────
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

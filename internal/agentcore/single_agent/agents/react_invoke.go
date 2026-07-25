@@ -535,7 +535,7 @@ func (a *ReActAgent) innerStream(
 		// 捕获 panic 防止 goroutine 崩溃
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Error(logComponent).Any("panic", r).Msg("streamProcess panic")
+				logger.Error(logComponent).Any("panic", r).Msg("streamProcess 发生 panic")
 				a.WriteInvokeResultToStream(ctx, map[string]any{
 					"output":      fmt.Sprintf("panic: %v", r),
 					"result_type": "error",

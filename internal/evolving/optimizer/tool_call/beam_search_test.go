@@ -497,13 +497,13 @@ func TestSearch_串行与并行结果一致(t *testing.T) {
 	serialMethod := &mockBeamSearchMethod{
 		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&serialCount, 1)
-			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10 + 50), nil
 		},
 	}
 	parallelMethod := &mockBeamSearchMethod{
 		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&parallelCount, 1)
-			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10 + 50), nil
 		},
 	}
 
@@ -662,7 +662,7 @@ func TestSearch_并发安全(t *testing.T) {
 		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			// 模拟一些处理延迟
 			time.Sleep(time.Millisecond)
-			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10 + 50), nil
 		},
 	}
 

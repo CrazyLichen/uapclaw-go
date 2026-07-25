@@ -354,14 +354,14 @@ func (ce *contextEngine) createProcessor(processorType string, config iface.Proc
 	if !ok {
 		return nil, exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("cannot find processor type '"+processorType+"'"),
+			exception.WithMsg("找不到处理器类型 '"+processorType+"'"),
 		)
 	}
 	p, err := factory(config)
 	if err != nil {
 		return nil, exception.NewBaseError(
 			exception.StatusContextExecutionError,
-			exception.WithMsg("init processor type '"+processorType+"' failed"),
+			exception.WithMsg("初始化处理器类型 '"+processorType+"' 失败"),
 			exception.WithCause(err),
 		)
 	}

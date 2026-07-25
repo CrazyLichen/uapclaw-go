@@ -66,11 +66,6 @@ type StreamController struct {
 	chunkObservers []atschema.ChunkObserver
 }
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
-// StreamControllerOption 流式控制器可选配置
-type StreamControllerOption func(*StreamController)
-
 // taskFailedError task_failed 错误，携带 errorCode 和 errorText。
 // 对齐 Python: _detect_task_failed 返回 Optional[Tuple[Optional[int], str]]
 type taskFailedError struct {
@@ -80,23 +75,10 @@ type taskFailedError struct {
 	text string
 }
 
-// Error 实现 error 接口
-func (e *taskFailedError) Error() string {
-	if e.code != 0 {
-		return fmt.Sprintf("[%d] %s", e.code, e.text)
-	}
-	return e.text
-}
+// ──────────────────────────── 枚举 ────────────────────────────
 
-// Code 返回错误码
-func (e *taskFailedError) Code() int {
-	return e.code
-}
-
-// Text 返回错误文本
-func (e *taskFailedError) Text() string {
-	return e.text
-}
+// StreamControllerOption 流式控制器可选配置
+type StreamControllerOption func(*StreamController)
 
 // ──────────────────────────── 常量 ────────────────────────────
 
@@ -375,6 +357,24 @@ func (sc *StreamController) CooperativeCancel(ctx context.Context) error {
 		}
 		return nil
 	}
+}
+
+// Error 实现 error 接口
+func (e *taskFailedError) Error() string {
+	if e.code != 0 {
+		return fmt.Sprintf("[%d] %s", e.code, e.text)
+	}
+	return e.text
+}
+
+// Code 返回错误码
+func (e *taskFailedError) Code() int {
+	return e.code
+}
+
+// Text 返回错误文本
+func (e *taskFailedError) Text() string {
+	return e.text
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

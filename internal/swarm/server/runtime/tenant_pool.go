@@ -31,14 +31,18 @@ type TenantAgentPool struct {
 	agentManager *AgentManager
 }
 
+// ──────────────────────────── 枚举 ────────────────────────────
+
+// ──────────────────────────── 常量 ────────────────────────────
+
+// tapLogComponent 日志组件
+const tapLogComponent = logger.ComponentAgentServer
+
 // ──────────────────────────── 全局变量 ────────────────────────────
 
 // tenantAgentPoolSingleton 全局 TenantAgentPool 单例持有器。
 // 对齐 Python: TenantAgentPool._instance
 var tenantAgentPoolSingleton utils.Singleton[TenantAgentPool]
-
-// tapLogComponent 日志组件
-const tapLogComponent = logger.ComponentAgentServer
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

@@ -149,13 +149,13 @@ func CreateModelClient(clientConfig *llmschema.ModelClientConfig, modelConfig *l
 	if clientConfig.ClientProvider == "" {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("model client config client_provider is none"),
+			exception.WithMsg("模型客户端配置 client_provider 为空"),
 		)
 	}
 	if clientConfig.ClientID == "" {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("model client config client_id is none"),
+			exception.WithMsg("模型客户端配置 client_id 为空"),
 		)
 	}
 

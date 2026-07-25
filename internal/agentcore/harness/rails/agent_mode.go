@@ -362,7 +362,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 			logger.Info(agentModeLogComponent).
 				Str("event_type", "reject_tool_not_in_allowed").
 				Str("tool_name", toolName).
-				Msg("reject tool call by not in allowed tools")
+				Msg("工具调用被拒绝：不在允许的工具列表中")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] 工具「%s」不在 plan 模式允许列表中。", toolName)
@@ -382,7 +382,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 			logger.Info(agentModeLogComponent).
 				Str("event_type", "reject_bash_git_write").
 				Str("command", command).
-				Msg("reject bash call: git write operation in plan mode")
+				Msg("bash 调用被拒绝：plan 模式下禁止 git 写操作")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] plan 模式下禁止执行 git 写操作（%q）。", command)
@@ -405,7 +405,7 @@ func (r *AgentModeRail) BeforeToolCall(_ context.Context, cbc *agentinterfaces.A
 				Str("tool_name", toolName).
 				Str("file_path", filePath).
 				Str("plan_path", planPath).
-				Msg("reject tool call by not in plan file")
+				Msg("工具调用被拒绝：不在计划文件中")
 			var msg string
 			if r.languageIsCN() {
 				msg = fmt.Sprintf("[AgentModeRail] 「%s」仅能用于计划文件（%s）。", toolName, planPath)
@@ -513,7 +513,7 @@ func (r *AgentModeRail) handleEnter(cbc *agentinterfaces.AgentCallbackContext) {
 	if planState.Mode != hschema.AgentModePlan.String() {
 		logger.Info(agentModeLogComponent).
 			Str("event_type", "reject_enter_not_plan_mode").
-			Msg("reject enter tool because of not plan mode")
+			Msg("工具进入被拒绝：当前非 plan 模式")
 		var msg string
 		if r.languageIsCN() {
 			msg = "[AgentModeRail] enter_plan_mode 只能在 plan 模式下被调用。请调用 switch_mode 工具切换到 plan 模式。"
@@ -623,7 +623,7 @@ func (r *AgentModeRail) registerTaskTool(agent agentinterfaces.BaseAgent) {
 	if existing {
 		logger.Info(agentModeLogComponent).
 			Str("event_type", "agent_mode_task_tool_exists").
-			Msg("task tool already registered, skip register")
+			Msg("任务工具已注册，跳过")
 		return
 	}
 
@@ -674,7 +674,7 @@ func (r *AgentModeRail) unregisterTaskTool(agent agentinterfaces.BaseAgent) {
 	if !r.ownsTaskTool || len(r.taskTools) == 0 {
 		logger.Info(agentModeLogComponent).
 			Str("event_type", "agent_mode_no_task_tool_to_unregister").
-			Msg("no task tool registered, skip unregister")
+			Msg("无已注册的任务工具，跳过注销")
 		return
 	}
 

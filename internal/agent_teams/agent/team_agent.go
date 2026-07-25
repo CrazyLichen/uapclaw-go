@@ -565,7 +565,7 @@ func (a *TeamAgent) FollowUp(ctx context.Context, content string) error {
 // 对齐 Python: TeamAgent.cancel_agent()
 func (a *TeamAgent) CancelAgent(ctx context.Context) error {
 	memberName := a.MemberName()
-	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent requested")
+	logger.Debug(logComponent).Str("member_name", memberName).Msg("TeamAgent.CancelAgent 已请求")
 	if a.streamController != nil {
 		return a.streamController.CancelAgent(ctx)
 	}
@@ -602,7 +602,7 @@ func (a *TeamAgent) ResumeInterrupt(ctx context.Context, userInput any) error {
 // 对齐 Python: TeamAgent.shutdown_self()
 func (a *TeamAgent) ShutdownSelf(ctx context.Context) error {
 	memberName := a.MemberName()
-	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf requested")
+	logger.Info(logComponent).Str("member_name", memberName).Msg("TeamAgent.ShutdownSelf 已请求")
 	// 对齐 Python: streamController.cooperative_cancel()
 	if a.streamController != nil {
 		_ = a.streamController.CooperativeCancel(ctx)
@@ -811,6 +811,6 @@ func (a *TeamAgent) UnregisterRail(ctx context.Context, rail any) (*TeamAgent, e
 func (a *TeamAgent) updateExecution(ctx context.Context, status atschema.ExecutionStatus) error {
 	// ⤵️ 待 9.55 完善后实现具体状态持久化逻辑
 	logger.Debug(logComponent).Str("member_name", a.MemberName()).
-		Str("execution_status", string(status)).Msg("updateExecution")
+		Str("execution_status", string(status)).Msg("更新执行状态")
 	return nil
 }

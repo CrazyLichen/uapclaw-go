@@ -333,7 +333,7 @@ func (d *ConversationSignalDetector) DetectUserIntent(
 		logger.Warn(logComponent).
 			Str("method", "DetectUserIntent").
 			Str("error", err.Error()).
-			Msg("[ConversationSignalDetector] user feedback detection failed")
+			Msg("[ConversationSignalDetector] 用户反馈检测失败")
 		return d.fallbackUserFeedbackSignals(userMessages, skillName), nil
 	}
 

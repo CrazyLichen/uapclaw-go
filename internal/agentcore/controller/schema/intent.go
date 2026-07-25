@@ -8,8 +8,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // Intent 意图，描述用户对任务的操作意图。
 //
 // 对应 Python: openjiuwen/core/controller/schema/intent.py (Intent)
@@ -38,6 +36,8 @@ type Intent struct {
 
 // IntentOption 意图可选配置函数。
 type IntentOption func(*Intent)
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // IntentType 意图类型枚举，定义所有支持的用户意图。
 //

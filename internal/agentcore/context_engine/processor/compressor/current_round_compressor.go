@@ -465,6 +465,8 @@ Your task is to merge them into one shorter, stable memory block while preservin
 Output plain text only.
 `
 
+// ──────────────────────────── 导出函数 ────────────────────────────
+
 // NewCurrentRoundCompressorConfig 创建当轮增量压缩器默认配置。
 //
 // 默认值与 Python 对齐：

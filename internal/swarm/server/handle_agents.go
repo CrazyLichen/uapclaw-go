@@ -270,7 +270,7 @@ func (s *AgentServer) handleAgentsCreate(_ context.Context, request *schema.Agen
 	if err := runtime.UpsertSubagentInConfig(agent.Name, true); err != nil {
 		applied = false
 		reloadError = err.Error()
-		logger.Warn(logComponent).Err(err).Str("agent_name", agent.Name).Msg("agents.create upsert config failed")
+		logger.Warn(logComponent).Err(err).Str("agent_name", agent.Name).Msg("agents.create 更新配置失败")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -396,7 +396,7 @@ func (s *AgentServer) handleAgentsDelete(_ context.Context, request *schema.Agen
 	if _, rmErr := runtime.RemoveSubagentFromConfig(name); rmErr != nil {
 		applied = false
 		reloadError = rmErr.Error()
-		logger.Warn(logComponent).Err(rmErr).Str("agent_name", name).Msg("agents.delete remove config failed")
+		logger.Warn(logComponent).Err(rmErr).Str("agent_name", name).Msg("agents.delete 删除配置失败")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,
@@ -488,7 +488,7 @@ func (s *AgentServer) handleAgentsSetEnabled(request *schema.AgentRequest, enabl
 	if err := runtime.UpsertSubagentInConfig(name, enabled); err != nil {
 		applied = false
 		reloadError = err.Error()
-		logger.Warn(logComponent).Err(err).Str("agent_name", name).Bool("enabled", enabled).Msg("agents set enabled failed")
+		logger.Warn(logComponent).Err(err).Str("agent_name", name).Bool("enabled", enabled).Msg("agents 设置启用状态失败")
 	}
 
 	return schema.NewAgentResponse(request.RequestID, request.ChannelID,

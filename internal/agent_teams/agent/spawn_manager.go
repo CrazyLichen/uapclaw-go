@@ -210,8 +210,8 @@ func (m *SpawnManager) RestartTeammate(ctx context.Context, memberName string, m
 	// ⤵️ 待 #9.64 BuildContextFromDB 实现后回填：从 teammate 获取原始 prompt
 	// 对齐 Python: initial_message = teammate.prompt if teammate else None
 	// 对齐 Python: session = get_session_id() or None
-	initialMessage := ""  // ⤵️ 待回填：应传入 teammate.prompt
-	sessionID := ""       // ⤵️ 待回填：应传入 get_session_id()
+	initialMessage := "" // ⤵️ 待回填：应传入 teammate.prompt
+	sessionID := ""      // ⤵️ 待回填：应传入 get_session_id()
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := m.SpawnTeammate(ctx, runtimeCtx, initialMessage, sessionID, spawnCfg)

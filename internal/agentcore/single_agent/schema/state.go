@@ -6,8 +6,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // BaseInterruptionState 中断状态基类。
 //
 // 对应 Python: BaseInterruptionState(ai_message, iteration, original_query)

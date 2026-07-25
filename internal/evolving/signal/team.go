@@ -162,7 +162,7 @@ func NewTeamSignalDetector(
 		policy = *userIntentLLMPolicy
 	}
 	if policy.MaxAttempts == 0 && policy.TotalBudgetSecs == 0 {
-		panic("TeamSignalDetector requires at least one LLM policy")
+		panic("TeamSignalDetector 至少需要一个 LLM 策略")
 	}
 
 	trajectoryPolicy := policy

@@ -50,6 +50,8 @@ const (
 	defaultShutdownTimeout = 10 * time.Second
 )
 
+// ──────────────────────────── 全局变量 ────────────────────────────
+
 // ──────────────────────────── 导出函数 ────────────────────────────
 
 // NewInProcessSpawnHandle 创建新的 InProcessSpawnHandle。

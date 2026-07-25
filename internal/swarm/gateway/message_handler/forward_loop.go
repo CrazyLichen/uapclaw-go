@@ -256,7 +256,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 					Str("event_type", "evolution_approval_dispatched").
 					Str("id", queuedMsg.ID).
 					Str("session_id", msg.SessionID).
-					Msg("evolution approval answered (resolved), queued supplement dispatched")
+					Msg("演进审批已回复（已解决），补充输入已入队")
 			}
 		} else {
 			logger.Info(logComponent).
@@ -264,7 +264,7 @@ func (mh *MessageHandler) handleChatUserAnswer(ctx context.Context, msg *schema.
 				Str("id", msg.ID).
 				Str("session_id", msg.SessionID).
 				Str("request_id", answerRequestID).
-				Msg("evolution approval answered but not resolved")
+				Msg("演进审批已回复但未解决")
 		}
 	}
 }
@@ -349,7 +349,7 @@ func (mh *MessageHandler) handleSupplement(ctx context.Context, msg *schema.Mess
 		logger.Info(logComponent).
 			Str("event_type", "supplement_queued_evolution").
 			Str("session_id", sessionID).
-			Msg("evolution phase pending, queue supplement input")
+			Msg("演进阶段挂起，补充输入入队")
 		mh.sendInterruptResultNotification(msg.ID, msg.ChannelID, sessionID, "supplement", "已加入队列，等待演进完成", true, false)
 		return
 	}
@@ -562,7 +562,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 		logger.Info(logComponent).
 			Str("event_type", "inbound_references_resolved").
 			Str("id", msg.ID).
-			Msg("attachments/agent-mentions resolved in chat.send")
+			Msg("chat.send 中已解析附件/Agent 提及")
 	}
 }
 

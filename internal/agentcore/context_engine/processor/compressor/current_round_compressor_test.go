@@ -1106,7 +1106,7 @@ func TestCurrentRoundCompressor_OnAddMessages_ModelCallFailed降级(t *testing.T
 	fakeClient := &crcFakeBaseModelClient{
 		invokeErr: exception.NewBaseError(
 			exception.StatusModelCallFailed,
-			exception.WithMsg("model call failed"),
+			exception.WithMsg("模型调用失败"),
 		),
 	}
 	crc := newCRCWithModel(cfg, fakeClient)

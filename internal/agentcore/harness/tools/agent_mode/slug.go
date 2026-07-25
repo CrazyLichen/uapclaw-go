@@ -21,6 +21,7 @@ import (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// adjectives 形容词列表，用于生成 slug。
 // 对齐 Python L26-48: 26 个形容词
 var adjectives = []string{
 	"ancient", "blazing", "calm", "daring", "eager",
@@ -30,6 +31,7 @@ var adjectives = []string{
 	"unique", "vivid", "warm", "xenial", "young", "zealous",
 }
 
+// verbs 动词列表，用于生成 slug。
 // 对齐 Python L34-40: 23 个动词
 var verbs = []string{
 	"brewing", "crafting", "designing", "exploring", "forging",
@@ -39,6 +41,7 @@ var verbs = []string{
 	"viewing", "writing", "yielding",
 }
 
+// nouns 名词列表，用于生成 slug。
 // 对齐 Python L43-48: 26 个名词
 var nouns = []string{
 	"anchor", "bridge", "cloud", "delta", "ember",

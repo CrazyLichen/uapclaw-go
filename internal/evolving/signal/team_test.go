@@ -40,8 +40,8 @@ func TestNewTeamSignalDetector_无策略时panic(t *testing.T) {
 			t.Error("expected panic when no policy provided")
 		}
 		msg, ok := r.(string)
-		if !ok || !strings.Contains(msg, "at least one LLM policy") {
-			t.Errorf("panic message = %v, want containing 'at least one LLM policy'", r)
+		if !ok || !strings.Contains(msg, "至少需要一个 LLM 策略") {
+			t.Errorf("panic message = %v, want containing '至少需要一个 LLM 策略'", r)
 		}
 	}()
 	NewTeamSignalDetector(nil, "test", "cn", nil, nil)

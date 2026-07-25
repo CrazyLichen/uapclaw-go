@@ -25,6 +25,8 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// ReadFileInput 读取文件工具的输入参数。
+// 对齐 Python: ReadFileTool invoke inputs (filesystem.py L282)
 type ReadFileInput struct {
 	// FilePath 文件路径（必需）
 	FilePath string `json:"file_path"`
@@ -43,6 +45,8 @@ type rawTextState struct {
 	content   string
 	lineCount int
 }
+
+// ──────────────────────────── 枚举 ────────────────────────────
 
 // ──────────────────────────── 常量 ────────────────────────────
 

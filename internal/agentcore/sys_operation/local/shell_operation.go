@@ -834,8 +834,6 @@ func (s *LocalShellOperation) resolveExecutionPlan(command string, shellType sys
 	}
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // envMapToSlice 环境变量 map → slice
 func envMapToSlice(env map[string]string) []string {
 	slice := make([]string, 0, len(env))

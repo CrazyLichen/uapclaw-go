@@ -176,7 +176,7 @@ func (e *BaseClientEmbed) ValidateConfig() error {
 	if e.ClientConfig.VerifySSL && e.ClientConfig.SSLCert == "" {
 		return exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("model client config ssl_cert is required when verify_ssl is true."),
+			exception.WithMsg("verify_ssl 为 true 时 ssl_cert 配置必填"),
 		)
 	}
 	return nil

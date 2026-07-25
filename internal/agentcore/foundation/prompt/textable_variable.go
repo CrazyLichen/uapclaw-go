@@ -95,7 +95,7 @@ func NewTextableVariable(text, name string, opts ...TextableOption) (*TextableVa
 		if len(placeholder) == 0 {
 			return nil, exception.NewBaseError(
 				exception.StatusPromptAssemblerVariableInitFailed,
-				exception.WithMsg("placeholders cannot be empty string"),
+				exception.WithMsg("占位符不能为空字符串"),
 			)
 		}
 		if _, ok := seen[placeholder]; !ok {

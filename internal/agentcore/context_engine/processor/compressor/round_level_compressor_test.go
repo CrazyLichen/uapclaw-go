@@ -1080,7 +1080,7 @@ func TestRoundLevelCompressor_OnAddMessages_ModelCallFailed降级(t *testing.T) 
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeErr: exception.NewBaseError(
 			exception.StatusModelCallFailed,
-			exception.WithMsg("model call failed"),
+			exception.WithMsg("模型调用失败"),
 		),
 	}
 	rlc := newRLCWithModel(cfg, fakeClient)
@@ -1519,7 +1519,7 @@ func TestRoundLevelCompressor_OnGetContextWindow_模型调用失败返回错误(
 	fakeClient := &rlcFakeBaseModelClient{
 		invokeErr: exception.NewBaseError(
 			exception.StatusModelCallFailed,
-			exception.WithMsg("model call failed"),
+			exception.WithMsg("模型调用失败"),
 		),
 	}
 	rlc := newRLCWithModel(cfg, fakeClient)
@@ -2121,7 +2121,7 @@ func TestRoundLevelCompressor_init工厂创建(t *testing.T) {
 	// 没有 ModelClient 配置，预期会返回错误，但这验证了工厂能正确接收配置类型
 	if err != nil {
 		// 工厂配置类型匹配但缺少 ModelClient → 报错，这是预期行为
-		if !strings.Contains(err.Error(), "model client config") && !strings.Contains(err.Error(), "Model") {
+		if !strings.Contains(err.Error(), "model client config") && !strings.Contains(err.Error(), "Model") && !strings.Contains(err.Error(), "模型客户端配置") {
 			t.Errorf("错误类型不符合预期，实际: %v", err)
 		}
 	} else if result != nil {

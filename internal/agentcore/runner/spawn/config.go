@@ -10,8 +10,6 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
-// ──────────────────────────── 枚举 ────────────────────────────
-
 // SpawnAgentConfig Spawn 基础配置。
 // 对齐 Python: SpawnAgentConfig (agent_config.py)
 type SpawnAgentConfig struct {

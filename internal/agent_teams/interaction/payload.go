@@ -147,8 +147,6 @@ func NewDeliverResultFailure(reason string) *DeliverResult {
 	return &DeliverResult{OK: false, Reason: &reason}
 }
 
-// InteractPayload 接口实现
-
 // Kind 返回载荷类型。
 func (g *GodViewMessage) Kind() PayloadKind { return PayloadKindGodView }
 
@@ -176,8 +174,6 @@ func (h *HumanAgentMessage) Sender() string { return h.sender }
 // Target 返回目标成员名。
 func (h *HumanAgentMessage) Target() *string { return h.target }
 
-// DeliverResult 方法
-
 // IsOK 判断投递是否成功。
 // 对齐 Python: DeliverResult.__bool__
 func (d *DeliverResult) IsOK() bool { return d.OK }
@@ -195,8 +191,6 @@ func (d *DeliverResult) String() string {
 	}
 	return "DeliverResult(ok=false)"
 }
-
-// PayloadKind 方法
 
 // String 返回载荷类型的可读名称。
 func (k PayloadKind) String() string {

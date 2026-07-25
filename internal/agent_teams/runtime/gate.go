@@ -53,8 +53,10 @@ type InteractGate struct {
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
-// gateLogComponent 日志组件
-var gateLogComponent = logger.ComponentChannel
+var (
+	// gateLogComponent 日志组件
+	gateLogComponent = logger.ComponentChannel
+)
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 

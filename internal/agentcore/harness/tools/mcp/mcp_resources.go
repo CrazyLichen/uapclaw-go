@@ -81,8 +81,6 @@ func NewListMcpResourcesTool(language string, agentID string) tool.Tool {
 	return invokeFn
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // NewReadMcpResourceTool 创建读取 MCP 服务器资源工具。
 //
 // 对齐 Python: ReadMcpResourceTool (openjiuwen/harness/tools/mcp_tools.py L42-67)

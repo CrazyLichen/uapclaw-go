@@ -259,14 +259,14 @@ func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk,
 				Str("event_type", "evolution_status_start").
 				Str("session_id", sessionID).
 				Str("request_id", chunk.RequestID).
-				Msg("evolution status start")
+				Msg("演进状态开始")
 		case "end":
 			mh.clearSessionEvolutionInProgress(sessionID)
 			logger.Info(logComponent).
 				Str("event_type", "evolution_status_end").
 				Str("session_id", sessionID).
 				Str("request_id", chunk.RequestID).
-				Msg("evolution status end")
+				Msg("演进状态结束")
 		}
 	}
 
@@ -279,7 +279,7 @@ func (mh *MessageHandler) handleEvolutionChunk(chunk *schema.AgentResponseChunk,
 			Str("event_type", "evolution_approval_detected").
 			Str("session_id", sessionID).
 			Str("request_id", approvalRequestID).
-			Msg("evolution approval detected")
+			Msg("检测到演进审批")
 	}
 }
 
