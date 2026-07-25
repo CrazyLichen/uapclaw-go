@@ -209,7 +209,7 @@ func TestTreeNode_HistoryCopy(t *testing.T) {
 	origHistory := []map[string]any{{"key": "a"}, {"key": "b"}}
 	node := newTreeNode([]string{"d"}, 50.0, mockResult("c"), origHistory)
 	// 修改原始 slice 结构不应影响 node.History（slice 层面独立）
-	origHistory = append(origHistory, map[string]any{"key": "new"})
+	_ = append(origHistory, map[string]any{"key": "new"})
 	if len(node.History) != 3 { // 历史 = [a, b, c(结果)]
 		t.Errorf("History len = %d, want 3 (should be independent from origHistory)", len(node.History))
 	}

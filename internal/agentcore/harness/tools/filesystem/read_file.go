@@ -403,9 +403,9 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 对齐 Python L558-564
 	if pages == "" && totalPages > pdfAtMentionInlineThreshold {
 		return nil, fmt.Errorf(
-			"This PDF has %d pages, which is too many to read at once. "+
+			"this PDF has %d pages, which is too many to read at once. "+
 				"Use the pages parameter to specify a range (e.g., pages='1-10'). "+
-				"Maximum %d pages per request.",
+				"Maximum %d pages per request",
 			totalPages, pdfMaxPagesPerRead,
 		)
 	}
@@ -423,7 +423,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	pageCount := endPg - startPg + 1
 	if pageCount > pdfMaxPagesPerRead {
 		return nil, fmt.Errorf(
-			"Requested %d pages exceeds the maximum of %d pages per read. Narrow the pages parameter range.",
+			"requested %d pages exceeds the maximum of %d pages per read. Narrow the pages parameter range",
 			pageCount, pdfMaxPagesPerRead,
 		)
 	}

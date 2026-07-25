@@ -151,9 +151,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		// 返回: {"status": "async_launched", "agent_id": subagent_type, "prompt": prompt}
 		var parentSess sessioninterfaces.SessionFacade
 		if callOpts.Session != nil {
-			if s, ok := callOpts.Session.(sessioninterfaces.SessionFacade); ok {
-				parentSess = s
-			}
+			parentSess = callOpts.Session
 		}
 		go t.runAsync(ctx, subAgent, prompt, subSessionID, subagentType, parentSess)
 		return map[string]any{
@@ -167,9 +165,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 	// 对齐 Python: result = await subagent.invoke({"query": prompt, "conversation_id": sub_session_id}, session=parent_session)
 	var invokeOpts []sainterfaces.AgentOption
 	if callOpts.Session != nil {
-		if sess, ok := callOpts.Session.(sessioninterfaces.SessionFacade); ok {
-			invokeOpts = append(invokeOpts, sainterfaces.WithSession(sess))
-		}
+		invokeOpts = append(invokeOpts, sainterfaces.WithSession(callOpts.Session))
 	}
 	result, err := subAgent.Invoke(ctx, map[string]any{
 		"query":           prompt,
