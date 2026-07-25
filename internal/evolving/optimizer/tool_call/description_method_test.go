@@ -324,25 +324,16 @@ func TestToolDescriptionMethod_Step_it0(t *testing.T) {
 		t.Fatalf("Step failed: %v", err)
 	}
 
-	outputMap, ok := output.(map[string]any)
-	if !ok {
-		t.Fatalf("expected output to be map[string]any, got %T", output)
+	if output["description"] != "A test function description" {
+		t.Errorf("expected description 'A test function description', got %v", output["description"])
 	}
 
-	if outputMap["description"] != "A test function description" {
-		t.Errorf("expected description 'A test function description', got %v", outputMap["description"])
+	if output["iteration"] != 0 {
+		t.Errorf("expected iteration 0, got %v", output["iteration"])
 	}
 
-	if outputMap["iteration"] != 0 {
-		t.Errorf("expected iteration 0, got %v", outputMap["iteration"])
-	}
-
-	descStr, ok := data.(string)
-	if !ok {
-		t.Fatalf("expected data to be string, got %T", data)
-	}
-	if descStr != "A test function description" {
-		t.Errorf("expected data 'A test function description', got %q", descStr)
+	if len(data) == 0 || data[0] != "A test function description" {
+		t.Errorf("expected data[0] 'A test function description', got %q", data)
 	}
 }
 

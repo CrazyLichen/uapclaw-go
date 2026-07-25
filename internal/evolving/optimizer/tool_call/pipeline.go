@@ -55,7 +55,7 @@ func CustomizedPipeline(
 	config map[string]any,
 	toolCallable APIWrapperFunc,
 	model *llm.Model,
-) ([][]any, error) {
+) ([][]map[string]any, error) {
 	// 对齐 Python: if "fn_call_path" in config: raise NotImplementedError
 	if _, ok := config["fn_call_path"]; ok {
 		return nil, errFnCallPathNotImplemented
@@ -130,7 +130,7 @@ func CustomizedPipeline(
 			// 对齐 Python: if Path(save_path).exists(): merge old results
 			mergedResult := result
 			if existingData, readErr := os.ReadFile(savePath); readErr == nil {
-				var oldResult [][]any
+				var oldResult [][]map[string]any
 				if jsonErr := json.Unmarshal(existingData, &oldResult); jsonErr == nil {
 					// 对齐 Python: result = json.load(f) + result
 					mergedResult = append(oldResult, result...)

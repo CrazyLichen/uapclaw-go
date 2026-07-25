@@ -52,16 +52,3 @@ func TestInvokeWithVerify_VerifyFunc失败(t *testing.T) {
 		t.Error("expected error key in result map")
 	}
 }
-
-// TestInvokeText_无Model 测试简单调用（无 model）
-func TestInvokeText_无Model(t *testing.T) {
-	policy := llm_resilience.LLMInvokePolicy{
-		MaxAttempts:        1,
-		TotalBudgetSecs:    1,
-		AttemptTimeoutSecs: 1,
-	}
-	_, err := InvokeText(context.Background(), nil, "test", "prompt", policy)
-	if err == nil {
-		t.Error("expected error for nil model")
-	}
-}

@@ -222,7 +222,7 @@ func TestToolDescriptionReviewer_Format签名验证(t *testing.T) {
 		},
 	}
 
-	_, err := reviewer.Format(context.Background(), schema, "测试描述", nil)
+	_, err := reviewer.Format(context.Background(), schema, "测试描述", "")
 	// model 为 nil 时 InvokeWithVerify 吞没错误，返回 error dict 而非 Go error
 	// 所以 err 为 nil，结果中包含 "error" 键
 	assert.NoError(t, err)

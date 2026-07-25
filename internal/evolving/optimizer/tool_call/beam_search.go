@@ -17,23 +17,23 @@ import (
 type BeamSearchMethod interface {
 	// Step 执行单步扩展，返回 output/data/score。
 	// 对齐 Python: method.step(tool, examples, prev_outputs, it)
-	Step(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (output any, data any, score float64, err error)
+	Step(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (output map[string]any, data []string, score float64, err error)
 	// GetExamples 获取工具的示例数据。
 	// 对齐 Python: method.get_examples(tool)
-	GetExamples(ctx context.Context, tool map[string]any) any
+	GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple
 }
 
 // TreeNode Beam Search 树节点。
 // 对齐 Python: TreeNode
 type TreeNode struct {
-	// Data 节点数据
-	Data any
+	// Data Step 的 data 返回值
+	Data []string
 	// Score 节点分数
 	Score float64
-	// Results 节点结果
-	Results any
-	// History 历史结果路径
-	History []any
+	// Results Step 的 output 返回值
+	Results map[string]any
+	// History Results 的累积路径
+	History []map[string]any
 	// Parent 父节点
 	Parent *TreeNode
 	// Children 子节点列表
@@ -191,11 +191,11 @@ func (n *TreeNode) String() string {
 
 // Search 执行 Beam Search，返回 top-K 节点的历史路径。
 // 对齐 Python: BeamSearch.search
-func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]any, error) {
+func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]map[string]any, error) {
 	startTime := time.Now()
 
 	// 获取示例
-	var examples any
+	var examples []ExampleTuple
 	if bs.method != nil {
 		examples = bs.method.GetExamples(ctx, tool)
 	}
@@ -257,8 +257,8 @@ func (bs *BeamSearch) Search(ctx context.Context, tool map[string]any) ([][]any,
 
 // newTreeNode 创建树节点。
 // 对齐 Python: TreeNode.__init__
-func newTreeNode(data any, score float64, results any, history []any) *TreeNode {
-	h := make([]any, len(history))
+func newTreeNode(data []string, score float64, results map[string]any, history []map[string]any) *TreeNode {
+	h := make([]map[string]any, len(history))
 	copy(h, history)
 	h = append(h, results)
 	return &TreeNode{
@@ -271,7 +271,7 @@ func newTreeNode(data any, score float64, results any, history []any) *TreeNode 
 
 // generateRoot 尝试生成根节点。
 // 对齐 Python: BeamSearch.search 中根节点生成循环
-func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, examples any) (*TreeNode, error) {
+func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, examples []ExampleTuple) (*TreeNode, error) {
 	for i := 0; i < bs.numRetry; i++ {
 		output, data, score, err := bs.method.Step(ctx, tool, examples, nil, 0)
 		if err != nil {
@@ -293,7 +293,7 @@ func (bs *BeamSearch) generateRoot(ctx context.Context, tool map[string]any, exa
 
 // expand 扩展当前 Beam 列表。
 // 对齐 Python: BeamSearch.expand
-func (bs *BeamSearch) expand(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples any, depth int) ([]*TreeNode, error) {
+func (bs *BeamSearch) expand(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples []ExampleTuple, depth int) ([]*TreeNode, error) {
 	if bs.numWorkers <= 1 {
 		return bs.expandSerial(ctx, beamList, tool, examples, depth)
 	}
@@ -301,7 +301,7 @@ func (bs *BeamSearch) expand(ctx context.Context, beamList []*TreeNode, tool map
 }
 
 // expandSerial 串行扩展。
-func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples any, depth int) ([]*TreeNode, error) {
+func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples []ExampleTuple, depth int) ([]*TreeNode, error) {
 	var newBeamList []*TreeNode
 	for _, node := range beamList {
 		for j := 0; j < bs.expandNum; j++ {
@@ -322,7 +322,7 @@ func (bs *BeamSearch) expandSerial(ctx context.Context, beamList []*TreeNode, to
 
 // expandParallel 并行扩展（goroutine + channel）。
 // 对齐 Python: ThreadPoolExecutor + as_completed
-func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples any, depth int) ([]*TreeNode, error) {
+func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, tool map[string]any, examples []ExampleTuple, depth int) ([]*TreeNode, error) {
 	// 计算总任务数
 	totalTasks := len(beamList) * bs.expandNum
 	type expandResult struct {
@@ -376,7 +376,7 @@ func (bs *BeamSearch) expandParallel(ctx context.Context, beamList []*TreeNode, 
 // expandSingleStep 扩展单步。
 // 对齐 Python: expand_single_step
 // 注意：并行调用时不能修改 node.Children，由调用方统一设置父子关系。
-func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool map[string]any, examples any, depth int) (*TreeNode, error) {
+func (bs *BeamSearch) expandSingleStep(ctx context.Context, node *TreeNode, tool map[string]any, examples []ExampleTuple, depth int) (*TreeNode, error) {
 	var newNode *TreeNode
 	for i := 0; i < bs.numRetry; i++ {
 		output, data, score, err := bs.method.Step(ctx, tool, examples, node.History, depth)
@@ -438,8 +438,8 @@ func (bs *BeamSearch) sortAndTakeTopK(nodes []*TreeNode, k int) []*TreeNode {
 }
 
 // historiesFromNodes 提取节点的历史路径。
-func historiesFromNodes(nodes []*TreeNode) [][]any {
-	result := make([][]any, len(nodes))
+func historiesFromNodes(nodes []*TreeNode) [][]map[string]any {
+	result := make([][]map[string]any, len(nodes))
 	for i, node := range nodes {
 		result[i] = node.History
 	}

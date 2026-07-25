@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
+	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
@@ -189,14 +191,16 @@ func (e *SimpleEval) Eval(
 	}
 }
 
-// EvaluateFunctionCallAccuracy 评估函数调用准确性。
+// ──────────────────────────── 非导出函数 ────────────────────────────
+
+// evaluateFunctionCallAccuracy 评估函数调用准确性。
 //
 // 对齐 Python: SimpleEval._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
 //
 //   - 函数名匹配权重 0.3
 //   - 参数匹配权重 0.7（按参数数量均分）
 //   - 返回 0~1 之间的分数
-func EvaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any) float64 {
+func (e *SimpleEval) evaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any) float64 {
 	score := 0.0
 	maxScore := 0.0
 
@@ -219,7 +223,7 @@ func EvaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any
 		for key, expectedValue := range expParams {
 			maxScore += 0.7 / float64(len(expParams))
 			if genValue, ok := genParams[key]; ok {
-				if CompareParameterValues(genValue, expectedValue) {
+				if e.compareParameterValues(genValue, expectedValue) {
 					paramScore += 0.7 / float64(len(expParams))
 				}
 			}
@@ -235,10 +239,10 @@ func EvaluateFunctionCallAccuracy(generatedFnCall, expectedFnCall map[string]any
 	return 0.0
 }
 
-// CompareParameterValues 比较参数值，支持类型容忍。
+// compareParameterValues 比较参数值，支持类型容忍。
 //
 // 对齐 Python: SimpleEval._compare_parameter_values(actual, expected)
-func CompareParameterValues(actual, expected any) bool {
+func (e *SimpleEval) compareParameterValues(actual, expected any) bool {
 	// 对齐 Python: if actual == expected: return True
 	if actual == expected {
 		return true
@@ -259,10 +263,10 @@ func CompareParameterValues(actual, expected any) bool {
 	return actStr == expStr
 }
 
-// SimpleOutputComparison 简单输出比较（兜底）。
+// simpleOutputComparison 简单输出比较（兜底）。
 //
 // 对齐 Python: SimpleEval._simple_output_comparison(execution_result, expected_answer)
-func SimpleOutputComparison(executionResult any, expectedAnswer string) float64 {
+func (e *SimpleEval) simpleOutputComparison(executionResult any, expectedAnswer string) float64 {
 	if executionResult == nil {
 		return 0.0
 	}
@@ -291,8 +295,6 @@ func SimpleOutputComparison(executionResult any, expectedAnswer string) float64 
 	return 0.3
 }
 
-// ──────────────────────────── 非导出函数 ────────────────────────────
-
 // evaluateSingleExample 评估单个示例。
 //
 // 对齐 Python: SimpleEval._evaluate_single_example(example)
@@ -303,17 +305,6 @@ func (e *SimpleEval) evaluateSingleExample(
 	example ExampleTuple,
 	exampleID int,
 ) EvalItemResult {
-	// 对齐 Python: 构造 example dict（后续步骤会使用）
-	_ = map[string]any{
-		"tool":             tool,
-		"description":      description,
-		"instruction":      example.Instruction,
-		"expected_fn_call": example.FnCall,
-		"expected_output":  example.FnOutput,
-		"answer":           example.Answer,
-		"example_id":       exampleID,
-	}
-
 	// 对齐 Python: generated_fn_call = self._generate_function_call(tool, description, instruction)
 	generatedFnCall, err := e.generateFunctionCall(ctx, tool, description, example.Instruction)
 	if err != nil {
@@ -341,7 +332,7 @@ func (e *SimpleEval) evaluateSingleExample(
 	}
 
 	// 对齐 Python: fn_call_score = self._evaluate_function_call_accuracy(generated_fn_call, expected_fn_call)
-	fnCallScore := EvaluateFunctionCallAccuracy(generatedFnCall, example.FnCall)
+	fnCallScore := e.evaluateFunctionCallAccuracy(generatedFnCall, example.FnCall)
 
 	// 对齐 Python: 执行生成的函数调用
 	var executionResult any
@@ -417,7 +408,7 @@ func (e *SimpleEval) generateFunctionCall(
 	}
 
 	// 对齐 Python: tool schema 处理
-	toolForCall := copyMap(tool)
+	toolForCall := deepCopyMap(tool)
 	if _, hasType := toolForCall["type"]; !hasType {
 		toolForCall["type"] = "function"
 	}
@@ -448,7 +439,37 @@ func (e *SimpleEval) generateFunctionCall(
 
 	// 对齐 Python: 使用 Function Calling
 	modelName := getConfigString(e.config, "eval_model_id")
-	return InvokeFunctionCall(ctx, e.model, modelName, instruction, toolInfo)
+	messages := model_clients.NewMessagesParam(
+		llmschema.NewUserMessage(instruction),
+	)
+	response, err := e.model.Invoke(ctx, messages,
+		model_clients.WithInvokeModel(modelName),
+		model_clients.WithTools(toolInfo),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("函数调用失败: %w", err)
+	}
+
+	// 对齐 Python: api_response.tool_calls
+	toolCalls := response.ToolCalls
+	if len(toolCalls) == 0 {
+		return nil, fmt.Errorf("LLM 未生成任何工具调用")
+	}
+
+	// 对齐 Python: fn_args = api_response.tool_calls[0].arguments
+	// 对齐 Python: function_name = api_response.tool_calls[0].name
+	tc := toolCalls[0]
+	var args map[string]any
+	if tc.Arguments != "" {
+		if jsonErr := json.Unmarshal([]byte(tc.Arguments), &args); jsonErr != nil {
+			args = map[string]any{}
+		}
+	}
+
+	return map[string]any{
+		"name":      tc.Name,
+		"arguments": args,
+	}, nil
 }
 
 // evaluateOutputEffectiveness 评估输出有效性。
@@ -494,20 +515,20 @@ Respond with only a number between 0 and 100. Do not include explainations.
 		BackoffBaseSecs:    1.0,
 	}
 
-	response, err := InvokeText(ctx, e.model, modelName, prompt, policy)
+	response, err := llm_resilience.InvokeTextWithRetry(ctx, e.model, modelName, prompt, policy)
 	if err != nil {
 		logger.Error(logComponent).
 			Str("method", "evaluateOutputEffectiveness").
 			Err(err).
 			Msg("评估输出有效性出错")
-		return SimpleOutputComparison(executionResult, expectedAnswer)
+		return e.simpleOutputComparison(executionResult, expectedAnswer)
 	}
 
 	// 对齐 Python: score = float(response.strip())
 	score := 0.0
 	response = strings.TrimSpace(response)
 	if _, parseErr := fmt.Sscanf(response, "%f", &score); parseErr != nil {
-		return SimpleOutputComparison(executionResult, expectedAnswer)
+		return e.simpleOutputComparison(executionResult, expectedAnswer)
 	}
 
 	// 对齐 Python: min(max(score, 0.0), 100.0) / 100.0
@@ -625,16 +646,4 @@ func getToolParameters(tool map[string]any) map[string]any {
 		return params
 	}
 	return map[string]any{}
-}
-
-// copyMap 深拷贝 map[string]any。
-func copyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
 }

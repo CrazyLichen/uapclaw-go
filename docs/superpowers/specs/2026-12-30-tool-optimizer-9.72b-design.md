@@ -57,7 +57,7 @@ internal/evolving/optimizer/tool_call/
 ├── format_test.go                  # ParseJSON / FormatPromptLlama 测试
 ├── beam_search.go                  # BeamSearch + TreeNode
 ├── beam_search_test.go             # BeamSearch 测试
-├── api_wrapper.go                  # SimpleAPIWrapper / SimpleAPIWrapperFromCallable / MakeSyncMCPCaller
+├── api_wrapper.go                  # SimpleAPIWrapperFromCallable / MakeSyncMCPCaller
 ├── api_wrapper_test.go             # API 封装测试
 ├── eval.go                         # SimpleEval
 ├── eval_test.go                    # SimpleEval 测试
@@ -110,6 +110,7 @@ type ToolOptimizerBase struct {
 | `OptimizeTool(ctx, tool, toolCallable) (map[string]any, error)` | `optimize_tool(tool, tool_callable)` | 核心入口：两阶段迭代优化 |
 | `Backward(ctx, signals) error` | `_backward(signals)` | 返回 nil（对齐 Python 空实现） |
 | `Step() map[schema.UpdateKey]any` | `_step()` | 返回空 map（对齐 Python 空实现） |
+| `Bind(operators map[string]operator.Operator, targets, config) int` | `bind(operators, targets, config)` | 过滤并绑定可优化的 Operator（待 9.70 回填） |
 
 **OptimizeTool 内部流程**（对齐 Python `optimize_tool`）：
 
@@ -155,9 +156,9 @@ type TreeNode struct {
 type BeamSearchMethod interface {
     // Step 执行一步搜索。
     // 返回 (output, data, score)
-    Step(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error)
+    Step(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error)
     // GetExamples 获取示例（可选）。
-    GetExamples(ctx context.Context, tool map[string]any) any
+    GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple
 }
 
 // BeamSearch Beam Search 搜索算法。
@@ -184,6 +185,8 @@ type BeamSearch struct {
     maxScore float64
     // topK 返回 top-k 结果
     topK int
+    // numRetry 重试次数
+    numRetry int
     // timeout 超时时间（秒）
     timeout float64
 }
@@ -195,7 +198,7 @@ type BeamSearch struct {
 |---------|------------|------|
 | `NewTreeNode(data, score, results, history)` | `TreeNode(data, score, results, history)` | 构造节点 |
 | `GetDepth() int` | `get_depth()` | 获取节点深度 |
-| `Search(ctx, tool) [][]any` | `search(tool)` | 执行搜索，返回 top-k 历史路径 |
+| `Search(ctx, tool) [][]map[string]any` | `search(tool)` | 执行搜索，返回 top-k 历史路径 |
 | `expand(beamList, tool, examples, depth)` | `expand(...)` | 展开节点（用 goroutine 并行） |
 | `prune(beamList)[]*TreeNode` | `prune(beamList)` | 按分数剪枝 |
 | `checkEarlyStop(beamList, maxScore, k) bool` | `check_early_stop(...)` | 早停检查 |
@@ -399,28 +402,18 @@ func CustomizedPipeline(
     config map[string]any,
     toolCallable APIWrapperFunc,
     model *llm.Model,
-) ([][]any, error)
+) ([][]map[string]any, error)
 ```
 
-### 3.9 api_wrapper.go — SimpleAPIWrapper / SimpleAPIWrapperFromCallable / MakeSyncMCPCaller
+### 3.9 api_wrapper.go — SimpleAPIWrapperFromCallable / MakeSyncMCPCaller
 
 ```go
-// SimpleAPIWrapper 简化版 API 调用封装（从文件加载函数）。
-//
-// 对应 Python: SimpleAPIWrapper
-type SimpleAPIWrapper struct {
-    // functions 已注册函数
-    functions map[string]any
-    // fnCallName 调用函数名
-    fnCallName string
-}
-
 // SimpleAPIWrapperFromCallable 从可调用对象创建 API 封装。
 //
 // 对应 Python: SimpleAPIWrapperFromCallable
 type SimpleAPIWrapperFromCallable struct {
-    // functions 已注册函数
-    functions map[string]any
+    // callable API 调用函数（比 Python 的 functions dict 更类型安全）
+    callable APIWrapperFunc
     // fnCallName 调用函数名
     fnCallName string
 }
@@ -442,6 +435,9 @@ func MakeSyncMCPCaller(url, name string) APIWrapperFunc
 ### 3.10 rits.go — InvokeWithVerify 薄包装
 
 ```go
+// VerifyFunc 验证+解析函数类型。
+type VerifyFunc func(string) (any, error)
+
 // InvokeWithVerify 带验证的 LLM 文本调用。
 // 复用 llm_resilience.InvokeTextWithRetry，将 Python 的 verify_fn 适配为
 // isResultUsable（验证文本合法性）+ parseResult（解析验证后的结果）两步。
@@ -453,7 +449,7 @@ func InvokeWithVerify(
     modelName string,
     prompt string,
     policy llm_resilience.LLMInvokePolicy,
-    verifyFn func(string) (any, error),  // 验证+解析函数
+    verifyFn VerifyFunc,
 ) (any, error)
 ```
 
@@ -461,6 +457,9 @@ func InvokeWithVerify(
 - `verifyFn(text) → (parsedResult, error)` 失败时 → 适配为 `isResultUsable` 返回 false，触发 llm_resilience 重试
 - 成功时 → 返回 `parsedResult`
 - 最多重试 `policy.MaxAttempts` 次
+
+**说明**：Python 中 Function Calling 逻辑内联在 `SimpleEval._generate_function_call()` 中，
+纯文本调用直接使用 `llm_resilience.InvokeTextWithRetry`，不提取为独立函数，对齐 Python 组织方式。
 
 ### 3.11 format.go — ParseJSON / FormatPromptLlama
 

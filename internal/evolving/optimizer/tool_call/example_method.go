@@ -24,7 +24,7 @@ type APICallToExampleMethod struct {
 	// evalFn 评估函数
 	evalFn *SimpleEval
 	// apiKeys API 密钥模板
-	apiKeys any
+	apiKeys []string
 	// nonOptParams 非优化参数
 	nonOptParams []string
 }
@@ -47,7 +47,7 @@ func NewAPICallToExampleMethod(
 	model *llm.Model,
 	apiCallFn APIWrapperFunc,
 	evalFn *SimpleEval,
-	apiKeys any,
+	apiKeys []string,
 	nonOptParams []string,
 ) *APICallToExampleMethod {
 	if nonOptParams == nil {
@@ -74,14 +74,14 @@ func NewAPICallToExampleMethod(
 func (m *APICallToExampleMethod) Step(
 	ctx context.Context,
 	tool map[string]any,
-	examples any,
-	prevOutputs []any,
+	examples []ExampleTuple,
+	prevOutputs []map[string]any,
 	it int,
-) (output any, data any, score float64, err error) {
+) (output map[string]any, data []string, score float64, err error) {
 	logger.Info(logComponent).Msg("在方法内部，尝试步进")
 
 	// 对齐 Python: prev_outputs = copy.copy(prev_outputs) if prev_outputs is not None else []
-	prevOutputsCopy := make([]any, len(prevOutputs))
+	prevOutputsCopy := make([]map[string]any, len(prevOutputs))
 	copy(prevOutputsCopy, prevOutputs)
 
 	// 对齐 Python: description = self.get_original_description(tool)
@@ -191,7 +191,7 @@ func (m *APICallToExampleMethod) Step(
 		}
 
 		// 对齐 Python: ans = self.produce_answer_from_api_call(inst, json.dumps(tool_for_opt), tool_res)
-		docStr := jsonStr(toolForOpt)
+		docStr := toJSON(toolForOpt)
 		ans, ansErr := m.ProduceAnswerFromAPICall(ctx, inst, docStr, toolRes)
 		if ansErr != nil {
 			ans = ""
@@ -288,7 +288,7 @@ func (m *APICallToExampleMethod) Step(
 // APICallToExampleMethod 不需要预加载示例，返回 nil。
 //
 // 对齐 Python: APICallToExampleMethod.get_examples(tool)
-func (m *APICallToExampleMethod) GetExamples(ctx context.Context, tool map[string]any) any {
+func (m *APICallToExampleMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	return nil
 }
 
@@ -300,10 +300,10 @@ func (m *APICallToExampleMethod) GenerateAPICallFromDescription(
 	tool map[string]any,
 	exampleCalls []string,
 	numGen int,
-	prevOutput []any,
+	prevOutput []map[string]any,
 ) (map[string]any, error) {
 	functionName, _ := tool["name"].(string)
-	docStr := jsonStr(tool)
+	docStr := toJSON(tool)
 
 	// 对齐 Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`A tool is an API.
@@ -328,7 +328,7 @@ Example use cases for this API tool are:
 	}
 
 	if m.apiKeys != nil {
-		apiKeysJSON := jsonStr(m.apiKeys)
+		apiKeysJSON := toJSON(m.apiKeys)
 		userPrompt += fmt.Sprintf(
 			"You have access to the following API keys:"+
 				" %s. You must use real API keys"+
@@ -372,15 +372,11 @@ You must strictly follow the output format, including "name", "arguments", and p
 	if len(prevOutput) > 0 {
 		userPrompt += "Previously you generated the following API calls for this "
 		userPrompt += fmt.Sprintf("function %s, which where then executed and critiqued:\n", functionName)
-		for i, out := range prevOutput {
-			outputMap, ok := out.(map[string]any)
-			if !ok {
-				continue
-			}
+		for i, outputMap := range prevOutput {
 			i1 := i + 1
 			if reflection, hasRefl := outputMap["api_reflection"]; hasRefl {
-				fnCallStr := jsonStr(outputMap["fn_call"])
-				toolResultsStr := jsonStr(outputMap["tool_results"])
+				fnCallStr := toJSON(outputMap["fn_call"])
+				toolResultsStr := toJSON(outputMap["tool_results"])
 				if len(toolResultsStr) > 512 {
 					toolResultsStr = toolResultsStr[:512]
 				}
@@ -390,8 +386,8 @@ You must strictly follow the output format, including "name", "arguments", and p
 					i1, fnCallStr, toolResultsStr, statusCode, reflection,
 				)
 			} else {
-				fnCallStr := jsonStr(outputMap["fn_call"])
-				toolResultsStr := jsonStr(outputMap["tool_results"])
+				fnCallStr := toJSON(outputMap["fn_call"])
+				toolResultsStr := toJSON(outputMap["tool_results"])
 				if len(toolResultsStr) > 512 {
 					toolResultsStr = toolResultsStr[:512]
 				}
@@ -467,8 +463,8 @@ func (m *APICallToExampleMethod) CritiqueAPICall(
 	fnResponse string,
 ) (map[string]any, error) {
 	functionName, _ := tool["name"].(string)
-	docStr := jsonStr(tool)
-	fnCallStr := jsonStr(fnCall)
+	docStr := toJSON(tool)
+	fnCallStr := toJSON(fnCall)
 
 	// 对齐 Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
@@ -564,8 +560,8 @@ func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
 	prevOutput map[string]any,
 ) (string, error) {
 	functionName, _ := tool["name"].(string)
-	docStr := jsonStr(tool)
-	fnCallStr := jsonStr(fnCall)
+	docStr := toJSON(tool)
+	fnCallStr := toJSON(fnCall)
 
 	// 对齐 Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
@@ -591,7 +587,7 @@ func (m *APICallToExampleMethod) GenerateInstructionFromAPICall(
 		docStr, functionName, fnCallStr, fnResponse, functionName)
 
 	if m.apiKeys != nil {
-		userPrompt += fmt.Sprintf(`13. The instruction should include which API key to use if an API key is required. You have access to the following API keys: %s.`, jsonStr(m.apiKeys))
+		userPrompt += fmt.Sprintf(`13. The instruction should include which API key to use if an API key is required. You have access to the following API keys: %s.`, toJSON(m.apiKeys))
 	}
 
 	userPrompt += `
@@ -670,7 +666,7 @@ func (m *APICallToExampleMethod) CritiqueInstruction(
 	fnResponse string,
 	answer string,
 ) (map[string]any, error) {
-	fnCallStr := jsonStr(fnCall)
+	fnCallStr := toJSON(fnCall)
 
 	// 对齐 Python: user_prompt 一比一复刻
 	userPrompt := fmt.Sprintf(`
@@ -784,8 +780,8 @@ func (m *APICallToExampleMethod) BatchReflectionWithScores(
 	analyses []string,
 ) (string, error) {
 	functionName, _ := tool["name"].(string)
-	docStr := jsonStr(tool)
-	fnCallStr := jsonStr(fnCall)
+	docStr := toJSON(tool)
+	fnCallStr := toJSON(fnCall)
 
 	lines := make([]string, 0, len(instructions))
 	for i, inst := range instructions {
@@ -878,16 +874,6 @@ func (m *APICallToExampleMethod) GetOriginalDescription(tool map[string]any) str
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────
-
-// jsonStr 将任意值序列化为 JSON 字符串。
-// 对齐 Python: json.dumps(obj, ensure_ascii=False)
-func jsonStr(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(b)
-}
 
 // deepCopyMap 深拷贝 map[string]any。
 // 对齐 Python: copy.deepcopy(tool)

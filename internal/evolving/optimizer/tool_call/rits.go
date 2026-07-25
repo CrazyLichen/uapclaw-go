@@ -2,13 +2,9 @@ package tool_call
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
-	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/model_clients"
-	llmschema "github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm/schema"
-	cschema "github.com/uapclaw/uapclaw-go/internal/common/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer/llm_resilience"
 )
 
@@ -62,71 +58,6 @@ func InvokeWithVerify(
 	verifyFn VerifyFunc,
 ) (any, error) {
 	return invokeWithVerifyImpl(ctx, model, modelName, prompt, policy, verifyFn)
-}
-
-// InvokeText 简单 LLM 文本调用（无 verify_fn）。
-// 内部直接调用 llm_resilience.InvokeTextWithRetry。
-//
-// 对齐 Python: rits_response(model_id, prompt, llm_api_key) 不带 verify_fn 的情况
-func InvokeText(
-	ctx context.Context,
-	model *llm.Model,
-	modelName string,
-	prompt string,
-	policy llm_resilience.LLMInvokePolicy,
-) (string, error) {
-	return llm_resilience.InvokeTextWithRetry(ctx, model, modelName, prompt, policy)
-}
-
-// InvokeFunctionCall 使用 LLM Function Calling 模式生成函数调用。
-// SimpleEval 专用，直接调用 model.Invoke + WithTools。
-//
-// 对齐 Python: SimpleEval._generate_function_call 中
-//
-//	api_response = anyio.run(lambda: client.invoke(
-//	    messages=[{"role": "user", "content": instruction}],
-//	    tools=[{"type": "function", "function": tool}],
-//	))
-//	fn_args = api_response.tool_calls[0].arguments
-//	function_name = api_response.tool_calls[0].name
-func InvokeFunctionCall(
-	ctx context.Context,
-	model *llm.Model,
-	modelName string,
-	instruction string,
-	toolInfo cschema.ToolInfoInterface,
-) (map[string]any, error) {
-	messages := model_clients.NewMessagesParam(
-		llmschema.NewUserMessage(instruction),
-	)
-	response, err := model.Invoke(ctx, messages,
-		model_clients.WithInvokeModel(modelName),
-		model_clients.WithTools(toolInfo),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("函数调用失败: %w", err)
-	}
-
-	// 对齐 Python: api_response.tool_calls
-	toolCalls := response.ToolCalls
-	if len(toolCalls) == 0 {
-		return nil, fmt.Errorf("LLM 未生成任何工具调用")
-	}
-
-	// 对齐 Python: fn_args = api_response.tool_calls[0].arguments
-	// 对齐 Python: function_name = api_response.tool_calls[0].name
-	tc := toolCalls[0]
-	var args map[string]any
-	if tc.Arguments != "" {
-		if jsonErr := json.Unmarshal([]byte(tc.Arguments), &args); jsonErr != nil {
-			args = map[string]any{}
-		}
-	}
-
-	return map[string]any{
-		"name":      tc.Name,
-		"arguments": args,
-	}, nil
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

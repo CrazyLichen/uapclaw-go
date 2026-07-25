@@ -13,28 +13,28 @@ import (
 // mockBeamSearchMethod 用于测试的模拟 BeamSearchMethod
 type mockBeamSearchMethod struct {
 	// stepFunc 自定义 Step 实现
-	stepFunc func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error)
+	stepFunc func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error)
 	// examplesFunc 自定义 GetExamples 实现
-	examplesFunc func(ctx context.Context, tool map[string]any) any
+	examplesFunc func(ctx context.Context, tool map[string]any) []ExampleTuple
 	// stepCalls 记录 Step 调用次数
 	stepCalls int64
 }
 
 // Step 实现 BeamSearchMethod 接口
-func (m *mockBeamSearchMethod) Step(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+func (m *mockBeamSearchMethod) Step(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 	atomic.AddInt64(&m.stepCalls, 1)
 	if m.stepFunc != nil {
 		return m.stepFunc(ctx, tool, examples, prevOutputs, it)
 	}
-	return fmt.Sprintf("output-%d", it), fmt.Sprintf("data-%d", it), float64((it + 1) * 10), nil
+	return map[string]any{"output": fmt.Sprintf("output-%d", it)}, []string{fmt.Sprintf("data-%d", it)}, float64((it + 1) * 10), nil
 }
 
 // GetExamples 实现 BeamSearchMethod 接口
-func (m *mockBeamSearchMethod) GetExamples(ctx context.Context, tool map[string]any) any {
+func (m *mockBeamSearchMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	if m.examplesFunc != nil {
 		return m.examplesFunc(ctx, tool)
 	}
-	return "mock-examples"
+	return nil
 }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -121,20 +121,25 @@ func TestNewBeamSearch_自定义选项(t *testing.T) {
 	}
 }
 
+// mockResult 构造模拟结果 map
+func mockResult(key string) map[string]any {
+	return map[string]any{"result": key}
+}
+
 // TestTreeNode_基本操作 测试 TreeNode 创建和基本操作
 func TestTreeNode_基本操作(t *testing.T) {
-	node := newTreeNode("root-data", 90.0, "root-result", nil)
-	if node.Data != "root-data" {
-		t.Errorf("Data = %v, want root-data", node.Data)
+	node := newTreeNode([]string{"root-data"}, 90.0, mockResult("root-result"), nil)
+	if fmt.Sprintf("%v", node.Data) != "[root-data]" {
+		t.Errorf("Data = %v, want [root-data]", node.Data)
 	}
 	if node.Score != 90.0 {
 		t.Errorf("Score = %v, want 90.0", node.Score)
 	}
-	if node.Results != "root-result" {
-		t.Errorf("Results = %v, want root-result", node.Results)
+	if node.Results["result"] != "root-result" {
+		t.Errorf("Results = %v, want result=root-result", node.Results)
 	}
-	if len(node.History) != 1 || node.History[0] != "root-result" {
-		t.Errorf("History = %v, want [root-result]", node.History)
+	if len(node.History) != 1 || node.History[0]["result"] != "root-result" {
+		t.Errorf("History = %v, want [{result:root-result}]", node.History)
 	}
 	if node.Parent != nil {
 		t.Errorf("Parent should be nil")
@@ -146,8 +151,8 @@ func TestTreeNode_基本操作(t *testing.T) {
 
 // TestTreeNode_父子关系 测试 TreeNode 父子关系和深度计算
 func TestTreeNode_父子关系(t *testing.T) {
-	root := newTreeNode("root", 80.0, "r0", nil)
-	child := newTreeNode("child", 90.0, "c0", root.History)
+	root := newTreeNode([]string{"root"}, 80.0, mockResult("r0"), nil)
+	child := newTreeNode([]string{"child"}, 90.0, mockResult("c0"), root.History)
 	child.Parent = root
 	root.Children = append(root.Children, child)
 
@@ -164,9 +169,9 @@ func TestTreeNode_父子关系(t *testing.T) {
 
 // TestTreeNode_History继承 测试 History 正确继承并追加
 func TestTreeNode_History继承(t *testing.T) {
-	root := newTreeNode("d0", 50.0, "r0", nil)                 // History: [r0]
-	child := newTreeNode("d1", 60.0, "r1", root.History)       // History: [r0, r1]
-	grandChild := newTreeNode("d2", 70.0, "r2", child.History) // History: [r0, r1, r2]
+	root := newTreeNode([]string{"d0"}, 50.0, mockResult("r0"), nil)                 // History: [r0]
+	child := newTreeNode([]string{"d1"}, 60.0, mockResult("r1"), root.History)       // History: [r0, r1]
+	grandChild := newTreeNode([]string{"d2"}, 70.0, mockResult("r2"), child.History) // History: [r0, r1, r2]
 
 	if len(root.History) != 1 {
 		t.Errorf("root History len = %d, want 1", len(root.History))
@@ -177,15 +182,15 @@ func TestTreeNode_History继承(t *testing.T) {
 	if len(grandChild.History) != 3 {
 		t.Errorf("grandChild History len = %d, want 3", len(grandChild.History))
 	}
-	if grandChild.History[0] != "r0" || grandChild.History[1] != "r1" || grandChild.History[2] != "r2" {
+	if grandChild.History[0]["result"] != "r0" || grandChild.History[1]["result"] != "r1" || grandChild.History[2]["result"] != "r2" {
 		t.Errorf("grandChild History = %v, want [r0 r1 r2]", grandChild.History)
 	}
 }
 
 // TestTreeNode_String 测试 TreeNode 字符串表示
 func TestTreeNode_String(t *testing.T) {
-	root := newTreeNode("d0", 80.0, "r0", nil)
-	child := newTreeNode("d1", 90.0, "r1", root.History)
+	root := newTreeNode([]string{"d0"}, 80.0, mockResult("r0"), nil)
+	child := newTreeNode([]string{"d1"}, 90.0, mockResult("r1"), root.History)
 	child.Parent = root
 	root.Children = append(root.Children, child)
 
@@ -199,14 +204,14 @@ func TestTreeNode_String(t *testing.T) {
 	}
 }
 
-// TestTreeNode_HistoryCopy 测试 History 是独立副本，修改不影响原始
+// TestTreeNode_HistoryCopy 测试 History slice 是独立副本，修改不影响原始
 func TestTreeNode_HistoryCopy(t *testing.T) {
-	origHistory := []any{"a", "b"}
-	node := newTreeNode("d", 50.0, "c", origHistory)
-	// 修改原始 slice 不应影响 node.History
-	origHistory[0] = "changed"
-	if node.History[0] == "changed" {
-		t.Error("History should be a copy, not a reference to the original")
+	origHistory := []map[string]any{{"key": "a"}, {"key": "b"}}
+	node := newTreeNode([]string{"d"}, 50.0, mockResult("c"), origHistory)
+	// 修改原始 slice 结构不应影响 node.History（slice 层面独立）
+	origHistory = append(origHistory, map[string]any{"key": "new"})
+	if len(node.History) != 3 { // 历史 = [a, b, c(结果)]
+		t.Errorf("History len = %d, want 3 (should be independent from origHistory)", len(node.History))
 	}
 }
 
@@ -243,8 +248,8 @@ func TestSearch_基本流程(t *testing.T) {
 func TestSearch_早停(t *testing.T) {
 	t.Run("根节点即达满分_结果为空", func(t *testing.T) {
 		m := &mockBeamSearchMethod{
-			stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
-				return "output", "data", 100.0, nil
+			stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
+				return map[string]any{"output": "ok"}, []string{"data"}, 100.0, nil
 			},
 		}
 		bs := NewBeamSearch(m,
@@ -267,12 +272,12 @@ func TestSearch_早停(t *testing.T) {
 
 	t.Run("扩展后触发早停", func(t *testing.T) {
 		m := &mockBeamSearchMethod{
-			stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+			stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 				// depth 0 返回低分，depth 1 返回满分
 				if it == 0 {
-					return "output", "data", 50.0, nil
+					return map[string]any{"output": "ok"}, []string{"data"}, 50.0, nil
 				}
-				return "output", "data", 100.0, nil
+				return map[string]any{"output": "ok"}, []string{"data"}, 100.0, nil
 			},
 		}
 		bs := NewBeamSearch(m,
@@ -298,9 +303,9 @@ func TestSearch_早停(t *testing.T) {
 func TestSearch_不早停(t *testing.T) {
 	callCount := int64(0)
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&callCount, 1)
-			return "output", "data", 100.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 100.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -325,11 +330,11 @@ func TestSearch_不早停(t *testing.T) {
 // TestSearch_根节点生成失败 测试根节点生成重试
 func TestSearch_根节点生成失败(t *testing.T) {
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			if it == 0 {
 				return nil, nil, -1, nil
 			}
-			return "output", "data", 50.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 50.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -350,12 +355,12 @@ func TestSearch_根节点生成失败(t *testing.T) {
 func TestSearch_根节点生成部分成功(t *testing.T) {
 	callCount := int64(0)
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			count := atomic.AddInt64(&callCount, 1)
 			if it == 0 && count <= 2 {
 				return nil, nil, -1, nil
 			}
-			return "output", "data", 80.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 80.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -376,12 +381,12 @@ func TestSearch_根节点生成部分成功(t *testing.T) {
 func TestSearch_根节点Step错误(t *testing.T) {
 	callCount := int64(0)
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			count := atomic.AddInt64(&callCount, 1)
 			if it == 0 && count <= 1 {
 				return nil, nil, 0, fmt.Errorf("transient error")
 			}
-			return "output", "data", 80.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 80.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -400,9 +405,9 @@ func TestSearch_根节点Step错误(t *testing.T) {
 // TestSearch_超时 测试超时机制
 func TestSearch_超时(t *testing.T) {
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			time.Sleep(100 * time.Millisecond)
-			return "output", "data", 50.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 50.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -433,10 +438,10 @@ func TestSearch_超时(t *testing.T) {
 // TestSearch_TopK 测试 Top-K 结果
 func TestSearch_TopK(t *testing.T) {
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			// 根据 prevOutputs 长度递增分数，模拟不同分数的节点
 			score := float64(len(prevOutputs)*10 + 50)
-			return fmt.Sprintf("output-%d-%d", it, len(prevOutputs)), fmt.Sprintf("data-%d", it), score, nil
+			return map[string]any{"output": fmt.Sprintf("output-%d-%d", it, len(prevOutputs))}, []string{fmt.Sprintf("data-%d", it)}, score, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -461,9 +466,9 @@ func TestSearch_TopK(t *testing.T) {
 func TestSearch_并行扩展(t *testing.T) {
 	callCount := int64(0)
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&callCount, 1)
-			return fmt.Sprintf("output-%d", atomic.LoadInt64(&callCount)), "data", 80.0, nil
+			return map[string]any{"output": fmt.Sprintf("output-%d", atomic.LoadInt64(&callCount))}, []string{"data"}, 80.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,
@@ -490,15 +495,15 @@ func TestSearch_串行与并行结果一致(t *testing.T) {
 	parallelCount := int64(0)
 
 	serialMethod := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&serialCount, 1)
-			return "output", "data", float64(it*10 + 50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
 		},
 	}
 	parallelMethod := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			atomic.AddInt64(&parallelCount, 1)
-			return "output", "data", float64(it*10 + 50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
 		},
 	}
 
@@ -543,7 +548,7 @@ func TestCheckEarlyStop(t *testing.T) {
 
 	// beam_list 不足 k 个
 	nodes := []*TreeNode{
-		newTreeNode("d1", 100.0, "r1", nil),
+		newTreeNode([]string{"d1"}, 100.0, mockResult("r1"), nil),
 	}
 	if bs.checkEarlyStop(nodes, 100.0, 2) {
 		t.Error("should not early stop when beam_list < k")
@@ -551,8 +556,8 @@ func TestCheckEarlyStop(t *testing.T) {
 
 	// 有节点分数不足
 	nodes = []*TreeNode{
-		newTreeNode("d1", 100.0, "r1", nil),
-		newTreeNode("d2", 90.0, "r2", nil),
+		newTreeNode([]string{"d1"}, 100.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 90.0, mockResult("r2"), nil),
 	}
 	if bs.checkEarlyStop(nodes, 100.0, 2) {
 		t.Error("should not early stop when some nodes < maxScore")
@@ -560,8 +565,8 @@ func TestCheckEarlyStop(t *testing.T) {
 
 	// 所有 top-k 节点分数达标
 	nodes = []*TreeNode{
-		newTreeNode("d1", 100.0, "r1", nil),
-		newTreeNode("d2", 100.0, "r2", nil),
+		newTreeNode([]string{"d1"}, 100.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 100.0, mockResult("r2"), nil),
 	}
 	if !bs.checkEarlyStop(nodes, 100.0, 2) {
 		t.Error("should early stop when all top-k nodes >= maxScore")
@@ -573,10 +578,10 @@ func TestPrune(t *testing.T) {
 	bs := NewBeamSearch(&mockBeamSearchMethod{}, WithBeamWidth(2))
 
 	nodes := []*TreeNode{
-		newTreeNode("d1", 50.0, "r1", nil),
-		newTreeNode("d2", 90.0, "r2", nil),
-		newTreeNode("d3", 70.0, "r3", nil),
-		newTreeNode("d4", 60.0, "r4", nil),
+		newTreeNode([]string{"d1"}, 50.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 90.0, mockResult("r2"), nil),
+		newTreeNode([]string{"d3"}, 70.0, mockResult("r3"), nil),
+		newTreeNode([]string{"d4"}, 60.0, mockResult("r4"), nil),
 	}
 
 	pruned := bs.prune(nodes)
@@ -597,8 +602,8 @@ func TestPrune_节点数不足BeamWidth(t *testing.T) {
 	bs := NewBeamSearch(&mockBeamSearchMethod{}, WithBeamWidth(10))
 
 	nodes := []*TreeNode{
-		newTreeNode("d1", 50.0, "r1", nil),
-		newTreeNode("d2", 90.0, "r2", nil),
+		newTreeNode([]string{"d1"}, 50.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 90.0, mockResult("r2"), nil),
 	}
 
 	pruned := bs.prune(nodes)
@@ -634,9 +639,9 @@ func TestSearch_过滤根节点(t *testing.T) {
 func TestSearch_GetExamples被调用(t *testing.T) {
 	examplesCalled := false
 	m := &mockBeamSearchMethod{
-		examplesFunc: func(ctx context.Context, tool map[string]any) any {
+		examplesFunc: func(ctx context.Context, tool map[string]any) []ExampleTuple {
 			examplesCalled = true
-			return "test-examples"
+			return nil
 		},
 	}
 	bs := NewBeamSearch(m, WithMaxDepth(1), WithEarlyStop(false))
@@ -654,10 +659,10 @@ func TestSearch_GetExamples被调用(t *testing.T) {
 // TestSearch_并发安全 测试并发扩展的安全性
 func TestSearch_并发安全(t *testing.T) {
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			// 模拟一些处理延迟
 			time.Sleep(time.Millisecond)
-			return "output", "data", float64(it*10 + 50), nil
+			return map[string]any{"output": "ok"}, []string{"data"}, float64(it*10+50), nil
 		},
 	}
 
@@ -681,20 +686,21 @@ func TestSearch_并发安全(t *testing.T) {
 
 // TestHistoriesFromNodes 测试从节点提取历史
 func TestHistoriesFromNodes(t *testing.T) {
+	prevMap := map[string]any{"key": "prev"}
 	nodes := []*TreeNode{
-		newTreeNode("d1", 50.0, "r1", nil),
-		newTreeNode("d2", 60.0, "r2", []any{"prev"}),
+		newTreeNode([]string{"d1"}, 50.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 60.0, mockResult("r2"), []map[string]any{prevMap}),
 	}
 
 	histories := historiesFromNodes(nodes)
 	if len(histories) != 2 {
 		t.Fatalf("len = %d, want 2", len(histories))
 	}
-	if len(histories[0]) != 1 || histories[0][0] != "r1" {
-		t.Errorf("histories[0] = %v, want [r1]", histories[0])
+	if len(histories[0]) != 1 || histories[0][0]["result"] != "r1" {
+		t.Errorf("histories[0] = %v, want [{result:r1}]", histories[0])
 	}
-	if len(histories[1]) != 2 || histories[1][0] != "prev" || histories[1][1] != "r2" {
-		t.Errorf("histories[1] = %v, want [prev r2]", histories[1])
+	if len(histories[1]) != 2 || histories[1][0]["key"] != "prev" || histories[1][1]["result"] != "r2" {
+		t.Errorf("histories[1] = %v, want [{key:prev} {result:r2}]", histories[1])
 	}
 }
 
@@ -703,10 +709,10 @@ func TestSortAndTakeTopK(t *testing.T) {
 	bs := NewBeamSearch(&mockBeamSearchMethod{})
 
 	nodes := []*TreeNode{
-		newTreeNode("d1", 30.0, "r1", nil),
-		newTreeNode("d2", 90.0, "r2", nil),
-		newTreeNode("d3", 50.0, "r3", nil),
-		newTreeNode("d4", 70.0, "r4", nil),
+		newTreeNode([]string{"d1"}, 30.0, mockResult("r1"), nil),
+		newTreeNode([]string{"d2"}, 90.0, mockResult("r2"), nil),
+		newTreeNode([]string{"d3"}, 50.0, mockResult("r3"), nil),
+		newTreeNode([]string{"d4"}, 70.0, mockResult("r4"), nil),
 	}
 
 	top := bs.sortAndTakeTopK(nodes, 2)
@@ -724,14 +730,14 @@ func TestSortAndTakeTopK(t *testing.T) {
 // TestSearch_Context取消 测试 context 取消时 Search 能正常处理
 func TestSearch_Context取消(t *testing.T) {
 	m := &mockBeamSearchMethod{
-		stepFunc: func(ctx context.Context, tool map[string]any, examples any, prevOutputs []any, it int) (any, any, float64, error) {
+		stepFunc: func(ctx context.Context, tool map[string]any, examples []ExampleTuple, prevOutputs []map[string]any, it int) (map[string]any, []string, float64, error) {
 			// 检查 context 是否已取消
 			select {
 			case <-ctx.Done():
 				return nil, nil, 0, ctx.Err()
 			default:
 			}
-			return "output", "data", 50.0, nil
+			return map[string]any{"output": "ok"}, []string{"data"}, 50.0, nil
 		},
 	}
 	bs := NewBeamSearch(m,

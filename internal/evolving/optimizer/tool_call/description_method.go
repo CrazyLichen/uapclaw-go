@@ -60,10 +60,10 @@ func NewToolDescriptionMethod(config map[string]any, model *llm.Model, evalFn *S
 func (m *ToolDescriptionMethod) Step(
 	ctx context.Context,
 	tool map[string]any,
-	examples any,
-	prevOutputs []any,
+	examples []ExampleTuple,
+	prevOutputs []map[string]any,
 	it int,
-) (output any, data any, score float64, err error) {
+) (output map[string]any, data []string, score float64, err error) {
 	var outputMap map[string]any
 
 	if it == 0 {
@@ -76,23 +76,15 @@ func (m *ToolDescriptionMethod) Step(
 			Str("output", fmt.Sprintf("%v", outputMap)).
 			Msg("当前描述——原始描述")
 	} else {
-		// 对齐 Python: load negative ex
-		functionName := getToolName(tool)
-		negExamples := m.GetNegativeExamples(functionName)
-		examplesObtained := map[string]any{
-			"neg_examples": negExamples,
-			"examples":     examples,
-		}
 		// 对齐 Python: improve with neg ex
-		outputMap = m.Generate(ctx, tool, examplesObtained, prevOutputs, it)
+		outputMap = m.Generate(ctx, tool, examples, prevOutputs, it)
 		logger.Info(logComponent).
 			Str("output", fmt.Sprintf("%v", outputMap)).
 			Msg("当前描述——生成的描述")
 	}
 
 	// 对齐 Python: eval with pos ex
-	exampleTuples := descToExampleTuples(examples)
-	results := m.EvalLoop(ctx, tool, toString(outputMap["description"]), exampleTuples, 1)
+	results := m.EvalLoop(ctx, tool, toString(outputMap["description"]), examples, 1)
 
 	// 对齐 Python: output = output | results
 	for k, v := range descResultsToMap(results) {
@@ -101,7 +93,7 @@ func (m *ToolDescriptionMethod) Step(
 
 	description := toString(outputMap["description"])
 	scoreAvg := descToFloat64(outputMap["score_avg"])
-	return outputMap, description, scoreAvg, nil
+	return outputMap, []string{description}, scoreAvg, nil
 }
 
 // Generate 生成增强描述。
@@ -110,8 +102,8 @@ func (m *ToolDescriptionMethod) Step(
 func (m *ToolDescriptionMethod) Generate(
 	ctx context.Context,
 	tool map[string]any,
-	examples any,
-	prevOutputs []any,
+	examples []ExampleTuple,
+	prevOutputs []map[string]any,
 	it int,
 ) map[string]any {
 	logger.Info(logComponent).Msg("正在生成描述")
@@ -284,7 +276,7 @@ func (m *ToolDescriptionMethod) CritiqueDescriptions(
 func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	ctx context.Context,
 	tool map[string]any,
-	examples any,
+	examples []ExampleTuple,
 	prevOutputs []map[string]any,
 ) (map[string]any, error) {
 	functionName := getToolName(tool)
@@ -297,9 +289,8 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
         Documentation:
         %s`, functionName, docStr)
 
-	// 对齐 Python: examples 是包含 "examples" 和 "neg_examples" 的字典
-	examplesMap, ok := examples.(map[string]any)
-	if !ok || len(examplesMap) == 0 {
+	// 对齐 Python: examples 是正例
+	if len(examples) == 0 {
 		prompt := FormatPromptLlama("", userPrompt)
 		verifyFn := func(output string) (any, error) {
 			return map[string]any{"analysis": strings.TrimSpace(output)}, nil
@@ -308,8 +299,8 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 		return descInvokeWithVerifyToMap(ctx, m.model, getConfigString(m.config, "eval_model_id"), prompt, policy, verifyFn)
 	}
 
-	positiveExamples := descToExampleTuples(examplesMap["examples"])
-	negativeExamples := descToExampleTuples(examplesMap["neg_examples"])
+	positiveExamples := examples
+	negExamples := m.GetNegativeExamples(functionName)
 
 	// 对齐 Python: 添加正例部分
 	if len(positiveExamples) > 0 {
@@ -329,11 +320,11 @@ func (m *ToolDescriptionMethod) CritiqueAllDescriptions(
 	}
 
 	// 对齐 Python: 添加负例部分
-	if len(negativeExamples) > 0 {
+	if len(negExamples) > 0 {
 		userPrompt += "\n=== NEGATIVE EXAMPLES (Poor Performance) ===\n"
 		userPrompt += "The following tool descriptions had poor performance:\n\n"
 
-		for i, ex := range negativeExamples {
+		for i, ex := range negExamples {
 			fnOutput := ex.FnOutput
 			userPrompt += fmt.Sprintf("%d. instruction=\"%s\", The ", i+1, ex.Instruction)
 			userPrompt += fmt.Sprintf("function call system generated: %s.", toJSON(ex.FnCall))
@@ -442,20 +433,15 @@ func (m *ToolDescriptionMethod) CritiqueNegativeExamples(
 func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 	ctx context.Context,
 	tool map[string]any,
-	examples any,
-	prevOutputs []any,
+	examples []ExampleTuple,
+	prevOutputs []map[string]any,
 ) map[string]any {
 	// 对齐 Python: td - 修改提示词以分析负例
-	examplesMap, _ := examples.(map[string]any)
-	var pos []ExampleTuple
-	if examplesMap != nil {
-		pos = descToExampleTuples(examplesMap["examples"])
-		// neg 在 CritiqueAllDescriptions 中通过 examples 整体传递
-	}
+	pos := examples
 
-	typedPrevOutputs := descToSliceOfMapsFromAny(prevOutputs)
+	typedPrevOutputs := prevOutputs
 	tmp, _ := m.CritiqueDescriptions(ctx, tool, pos, typedPrevOutputs)
-	tmpContrast, _ := m.CritiqueAllDescriptions(ctx, tool, examples, typedPrevOutputs)
+	tmpContrast, _ := m.CritiqueAllDescriptions(ctx, tool, pos, typedPrevOutputs)
 
 	analysis := toString(tmp["analysis"])
 	analysisContrast := toString(tmpContrast["analysis"])
@@ -471,21 +457,20 @@ func (m *ToolDescriptionMethod) GenerateDescriptionFromDocumentation(
 
         `, docStr)
 
-	if len(examplesMap) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
+	if len(pos) > 0 && prevOutputs != nil && len(prevOutputs) > 0 {
 		userPrompt += (
 		// 对齐 Python: 一比一复刻
 		"\nPreviously, the given tool was used in solving instructions " +
 			"by a tool assistant with the following function descriptions:\n")
 
 		numFeedbackSteps := getConfigInt(m.config, "num_feedback_steps")
-		reversedOutputs := descReverseAnySlice(prevOutputs)
+		reversedOutputs := descReverseSlice(prevOutputs)
 		if numFeedbackSteps > 0 && len(reversedOutputs) > numFeedbackSteps {
 			reversedOutputs = reversedOutputs[:numFeedbackSteps]
 		}
-		selectedOutputs := descReverseAnySlice(reversedOutputs)
+		selectedOutputs := descReverseSlice(reversedOutputs)
 
-		for _, outputAny := range selectedOutputs {
-			output := descToMap(outputAny)
+		for _, output := range selectedOutputs {
 			itVal := descToInt(output["iteration"])
 			if itVal == 0 {
 				userPrompt += "Original description: "
@@ -541,7 +526,7 @@ Return JSON following this exact schema structure (modify only description texts
 		return outputJSON, nil
 	}
 
-	policy := descDefaultPolicy15()
+	policy := descDefaultPolicy()
 	result, err := InvokeWithVerify(ctx, m.model, getConfigString(m.config, "gen_model_id"), prompt, policy, verifyFn)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
@@ -652,7 +637,7 @@ func (m *ToolDescriptionMethod) GetOriginalDescription(tool map[string]any) stri
 // GetExamples 获取工具的示例数据（BeamSearchMethod 接口方法）。
 //
 // 对齐 Python: ToolDescriptionMethod.get_examples(tool)
-func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string]any) any {
+func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string]any) []ExampleTuple {
 	functionName := getToolName(tool)
 	var examples []ExampleTuple
 	examplesDir := getConfigString(m.config, "examples_dir")
@@ -679,16 +664,6 @@ func (m *ToolDescriptionMethod) GetExamples(ctx context.Context, tool map[string
 
 // descDefaultPolicy 创建默认 LLM 调用策略（15 次尝试）。
 func descDefaultPolicy() llm_resilience.LLMInvokePolicy {
-	return llm_resilience.LLMInvokePolicy{
-		MaxAttempts:        15,
-		TotalBudgetSecs:    300,
-		AttemptTimeoutSecs: 60,
-		BackoffBaseSecs:    1.0,
-	}
-}
-
-// descDefaultPolicy15 创建 15 次尝试的 LLM 调用策略（generate 用）。
-func descDefaultPolicy15() llm_resilience.LLMInvokePolicy {
 	return llm_resilience.LLMInvokePolicy{
 		MaxAttempts:        15,
 		TotalBudgetSecs:    300,
@@ -792,17 +767,6 @@ func descToSliceOfMaps(v any) []map[string]any {
 	return nil
 }
 
-// descToSliceOfMapsFromAny 将 []any 转为 []map[string]any。
-func descToSliceOfMapsFromAny(v []any) []map[string]any {
-	result := make([]map[string]any, 0, len(v))
-	for _, item := range v {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
 // descToExampleTuples 将 any 转为 []ExampleTuple。
 // 支持从 []ExampleTuple 或 []any（每个元素为 []any: [instruction, fn_call, fn_output, answer]）转换。
 func descToExampleTuples(v any) []ExampleTuple {
@@ -854,16 +818,6 @@ func descTruncateString(s string, maxLen int) string {
 // descReverseSlice 反转 []map[string]any 切片。
 func descReverseSlice(s []map[string]any) []map[string]any {
 	result := make([]map[string]any, len(s))
-	copy(result, s)
-	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
-		result[i], result[j] = result[j], result[i]
-	}
-	return result
-}
-
-// descReverseAnySlice 反转 []any 切片。
-func descReverseAnySlice(s []any) []any {
-	result := make([]any, len(s))
 	copy(result, s)
 	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
 		result[i], result[j] = result[j], result[i]

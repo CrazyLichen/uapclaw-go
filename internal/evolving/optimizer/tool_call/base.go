@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/llm"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/operator"
 	"github.com/uapclaw/uapclaw-go/internal/common/logger"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/optimizer"
+	cschema "github.com/uapclaw/uapclaw-go/internal/evolving/schema"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/signal"
 	"github.com/uapclaw/uapclaw-go/internal/evolving/trajectory"
 )
@@ -62,8 +64,8 @@ type ToolOptimizerBaseOption func(*ToolOptimizerBase)
 //	self.config_desc['neg_ex_input_path'] = os.path.join(self.path_save_dir, f"{kwargs.get('tool_name','tool')}.json")
 func NewToolOptimizerBase(model *llm.Model, opts ...ToolOptimizerBaseOption) *ToolOptimizerBase {
 	// 对齐 Python: 使用默认配置
-	configEg := copyMap(DefaultConfigEg)
-	configDesc := copyMap(DefaultConfigDesc)
+	configEg := deepCopyMap(DefaultConfigEg)
+	configDesc := deepCopyMap(DefaultConfigDesc)
 
 	o := &ToolOptimizerBase{
 		maxTurns:    5,
@@ -135,8 +137,8 @@ func (b *ToolOptimizerBase) OptimizeTool(
 	// 对齐 Python: original_desc = tool["description"]
 	originalDesc, _ := tool["description"].(string)
 
-	var resultExamples [][]any
-	var resultDescs [][][]any
+	var resultExamples [][]map[string]any
+	var resultDescs [][][]map[string]any
 
 	// 对齐 Python: for i in range(self.max_turns):
 	for i := 0; i < b.maxTurns; i++ {
@@ -146,10 +148,9 @@ func (b *ToolOptimizerBase) OptimizeTool(
 			if len(lastDescBatch) > 0 {
 				lastNode := lastDescBatch[len(lastDescBatch)-1]
 				if len(lastNode) > 0 {
-					if lastStep, ok := lastNode[len(lastNode)-1].(map[string]any); ok {
-						if desc, ok := lastStep["description"].(string); ok {
-							tool["description"] = desc
-						}
+					lastStep := lastNode[len(lastNode)-1]
+					if desc, ok := lastStep["description"].(string); ok {
+						tool["description"] = desc
 					}
 				}
 			}
@@ -232,7 +233,7 @@ func (b *ToolOptimizerBase) OptimizeTool(
 	// Python 的 format 第二个参数是 description: str，但 processed 是 dict。
 	// 将 processed 序列化为 JSON 字符串作为 description 参数
 	processedDesc := toJSON(processed)
-	finalDesc, err := processor.Format(ctx, schema, processedDesc, nil)
+	finalDesc, err := processor.Format(ctx, schema, processedDesc, "")
 	if err != nil {
 		logger.Error(logComponent).
 			Str("method", "OptimizeTool").
@@ -254,12 +255,12 @@ func (b *ToolOptimizerBase) Backward(_ context.Context, _ []*signal.EvolutionSig
 // Step 生成更新映射。对齐 Python 空实现。
 //
 // 对齐 Python: def _step(self): updates = {}; for operator in self.operators.items(): return
-func (b *ToolOptimizerBase) Step() map[string]any {
-	return map[string]any{}
+func (b *ToolOptimizerBase) Step() map[cschema.UpdateKey]any {
+	return map[cschema.UpdateKey]any{}
 }
 
 // Bind 过滤并绑定可优化的 Operator，返回匹配数量。
-func (b *ToolOptimizerBase) Bind(operators map[string]any, targets []string, config map[string]any) int {
+func (b *ToolOptimizerBase) Bind(operators map[string]operator.Operator, targets []string, config map[string]any) int {
 	// ⤵️ 9.70: 等待 Trainer 实现后回填 Operator 类型转换
 	return 0
 }
@@ -319,7 +320,7 @@ func WithPathSaveDir(dir string) ToolOptimizerBaseOption {
 // extractLastDescription 从 resultDescs 中提取最终描述字符串。
 //
 // 对齐 Python: output_desc = result_descs[-1][-1][-1]["description"]
-func extractLastDescription(resultDescs [][][]any) string {
+func extractLastDescription(resultDescs [][][]map[string]any) string {
 	if len(resultDescs) == 0 {
 		return ""
 	}
@@ -331,10 +332,7 @@ func extractLastDescription(resultDescs [][][]any) string {
 	if len(lastNode) == 0 {
 		return ""
 	}
-	lastStep, ok := lastNode[len(lastNode)-1].(map[string]any)
-	if !ok {
-		return ""
-	}
+	lastStep := lastNode[len(lastNode)-1]
 	desc, _ := lastStep["description"].(string)
 	return desc
 }

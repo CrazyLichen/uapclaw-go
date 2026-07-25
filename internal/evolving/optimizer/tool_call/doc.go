@@ -18,7 +18,7 @@
 //	├── default_configs.go    # DefaultConfigEg / DefaultConfigDesc
 //	├── rits.go               # InvokeWithVerify 薄包装
 //	├── beam_search.go        # BeamSearch + TreeNode
-//	├── api_wrapper.go        # SimpleAPIWrapper / SimpleAPIWrapperFromCallable
+//	├── api_wrapper.go        # SimpleAPIWrapperFromCallable
 //	├── api_wrapper_mcp.go    # MakeSyncMCPCaller（integration build tag）
 //	├── base_method.go        # BaseMethod + ProduceAnswerFromAPICall
 //	├── eval.go               # SimpleEval

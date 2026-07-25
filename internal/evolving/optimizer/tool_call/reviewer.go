@@ -52,7 +52,7 @@ func (r *ToolDescriptionReviewer) Format(
 	ctx context.Context,
 	jsonSchema map[string]any,
 	description string,
-	example *string,
+	example string,
 ) (map[string]any, error) {
 	// 对齐 Python: prompt（中文版）— 一比一复刻
 	schemaJSON, _ := json.MarshalIndent(jsonSchema, "", "  ")

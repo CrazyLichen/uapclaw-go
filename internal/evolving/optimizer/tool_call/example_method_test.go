@@ -209,8 +209,8 @@ func TestGenerateAPICallFromDescription_有前驱输出(t *testing.T) {
 		return verifyFn(`{"name":"search","arguments":{"q":"test"}}`)
 	}
 
-	prevOutput := []any{
-		map[string]any{
+	prevOutput := []map[string]any{
+		{
 			"fn_call":      map[string]any{"name": "search", "arguments": map[string]any{"q": "old"}},
 			"tool_results": map[string]any{"ok": 1},
 			"status_code":  0,
@@ -621,22 +621,22 @@ func TestToIntSafe(t *testing.T) {
 	}
 }
 
-// TestJsonStr 测试 jsonStr 辅助函数。
-func TestJsonStr(t *testing.T) {
+// TestToJSON 测试 toJSON 辅助函数。
+func TestToJSON(t *testing.T) {
 	// 测试 map
-	result := jsonStr(map[string]any{"key": "value"})
+	result := toJSON(map[string]any{"key": "value"})
 	if result != `{"key":"value"}` {
 		t.Errorf("期望 '{\"key\":\"value\"}', 实际 '%s'", result)
 	}
 
 	// 测试字符串
-	result = jsonStr("hello")
+	result = toJSON("hello")
 	if result != `"hello"` {
 		t.Errorf("期望 '\"hello\"', 实际 '%s'", result)
 	}
 
 	// 测试整数
-	result = jsonStr(42)
+	result = toJSON(42)
 	if result != `42` {
 		t.Errorf("期望 '42', 实际 '%s'", result)
 	}
@@ -697,21 +697,15 @@ func TestStep_通过MockRits(t *testing.T) {
 		t.Fatalf("Step 失败: %v", err)
 	}
 
-	outputsMap, ok := outputs.(map[string]any)
-	if !ok {
-		t.Fatalf("期望 outputs 为 map[string]any, 实际 %T", outputs)
+	if outputs == nil {
+		t.Fatal("期望 outputs 非 nil")
 	}
 
-	instsSlice, ok := insts.([]string)
-	if !ok {
-		t.Fatalf("期望 insts 为 []string, 实际 %T", insts)
-	}
-
-	if len(instsSlice) == 0 {
+	if len(insts) == 0 {
 		t.Error("期望至少一条指令")
 	}
 
-	statusCode, _ := outputsMap["status_code"].(int)
+	statusCode, _ := outputs["status_code"].(int)
 	if statusCode != 0 {
 		t.Errorf("期望 status_code=0, 实际 %d", statusCode)
 	}
