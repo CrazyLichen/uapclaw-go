@@ -665,7 +665,7 @@ go test -cover -tags=!integration,!llm,!e2e ./...
 | 10.3.7-11 | 🔄 | 适配器辅助 | CodeAgentRail✅/TeamHelpers☐/EvolutionHelpers✅/RecapPrompts✅/SysOpBuilder✅(一比一对齐Python:BuildFilesystemPolicy+CreateSandboxSysOpCard+CreateLocalSysOpCard+展示辅助+实例化注册)/handleCommandRecap✅+Compact✅+Context✅连接adapter/DeepAdapter.CreateInstance步骤17✅ | `jiuwenswarm/server/runtime/agent_adapter/` |
 | 10.3.12 | ✅ | AgentManager | 多实例管理（按通道/模式），含 agentFactory 注入 | `jiuwenswarm/server/runtime/agent_manager.py` |
 | 10.3.13 | ✅ | AgentConfigService | Agent 配置 CRUD | `jiuwenswarm/server/runtime/agent_config_service.py` |
-| 10.3.14 | ☐ | TenantAgentPool | 多租户 Agent 池化 | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
+| 10.3.14 | ✅ | TenantAgentPool | 多租户 Agent 池化；✅ Singleton[T] 扩展 Reset（自动 Cleanup）；✅ GetInstance/ResetInstance/ProcessMessage/ProcessMessageStream/Cleanup 透传；对齐 Python tenant_agent_pool.py | `jiuwenswarm/server/runtime/tenant_agent_pool.py` |
 | 10.3.15-18 | 🔄 | 会话管理 | SessionManager(LIFO)✅ / SessionHistory(JSONL)☐ / SessionMetadata✅ / SessionRename✅ | `jiuwenswarm/server/runtime/session/` |
 | 10.3.19-20 | ✅ | 技能管理 | SkillManager(Server)/SkillDev 管道 | `jiuwenswarm/server/runtime/skill/` |
 | 10.3.21-22 | ✅ | GatewayPush | Transport/Wire 服务端推送 | `jiuwenswarm/server/gateway_push/` |

@@ -6,8 +6,17 @@
 package utils
 
 import (
+	"log"
 	"sync"
 )
+
+// ──────────────────────────── 接口 ────────────────────────────
+
+// resettable Reset 时可清理的接口。
+// 如果单例持有类型实现了该接口，Reset 时会自动调用其 Cleanup。
+type resettable interface {
+	Cleanup() error
+}
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
@@ -38,4 +47,20 @@ func (s *Singleton[T]) Get(factory func() *T) *T {
 		s.instance = factory()
 	})
 	return s.instance
+}
+
+// Reset 重置单例，使下次 Get 重新调用 factory 创建新实例。
+// 若当前实例实现了 resettable 接口，Reset 时会先调用其 Cleanup；
+// Cleanup 失败仅记日志不阻断重置流程。
+// 仅用于测试。
+func (s *Singleton[T]) Reset() {
+	if s.instance != nil {
+		if c, ok := any(s.instance).(resettable); ok {
+			if err := c.Cleanup(); err != nil {
+				log.Printf("[Singleton] Cleanup failed during Reset: %v", err)
+			}
+		}
+	}
+	s.once = sync.Once{}
+	s.instance = nil
 }

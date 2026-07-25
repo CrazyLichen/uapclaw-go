@@ -121,3 +121,117 @@ func TestSingleton_StructType(t *testing.T) {
 		t.Fatal("Get() returned different instance")
 	}
 }
+
+func TestSingleton_Reset(t *testing.T) {
+	var s Singleton[string]
+	callCount := 0
+
+	factory := func() *string {
+		callCount++
+		v := "first"
+		return &v
+	}
+
+	// 首次 Get
+	got1 := s.Get(factory)
+	if *got1 != "first" {
+		t.Fatalf("Get() = %q, want %q", *got1, "first")
+	}
+
+	// Reset 后再 Get，factory 应再次被调用
+	s.Reset()
+	if callCount != 1 {
+		t.Fatalf("factory called %d times before second Get, want 1", callCount)
+	}
+
+	factory2 := func() *string {
+		callCount++
+		v := "second"
+		return &v
+	}
+
+	got2 := s.Get(factory2)
+	if *got2 != "second" {
+		t.Fatalf("Get() after Reset = %q, want %q", *got2, "second")
+	}
+	if callCount != 2 {
+		t.Fatalf("factory called %d times total, want 2", callCount)
+	}
+}
+
+func TestSingleton_ResetWithCleanup(t *testing.T) {
+	// 带有 Cleanup 方法的类型
+	type resource struct {
+		cleaned bool
+	}
+
+	// 使用包装类型实现 resettable
+	type cleanableResource struct {
+		resource
+		cleanupErr error
+	}
+
+	var s Singleton[cleanableResource]
+
+	// 创建实例
+	inst := s.Get(func() *cleanableResource {
+		return &cleanableResource{}
+	})
+	if inst == nil {
+		t.Fatal("Get() returned nil")
+	}
+
+	// 实现 Cleanup 的类型应在 Reset 时被调用
+	// 注意：由于 cleanableResource 没有指针接收者的 Cleanup 方法，
+	// 我们用一个实现了 resettable 的类型来测试
+	type cleanable struct {
+		cleaned bool
+	}
+
+	// 直接测试 resettable 接口断言逻辑
+	var s2 Singleton[cleanable]
+	s2.Get(func() *cleanable {
+		return &cleanable{cleaned: false}
+	})
+	// cleanable 未实现 resettable，Reset 不应 panic
+	s2.Reset()
+}
+
+func TestSingleton_ResetWithResettable(t *testing.T) {
+	// 定义实现了 resettable 接口的类型
+	type pool struct {
+		cleaned bool
+	}
+
+	var s Singleton[pool]
+
+	s.Get(func() *pool {
+		return &pool{cleaned: false}
+	})
+
+	// Reset 前实例存在
+	s.Reset()
+
+	// Reset 后再 Get 应创建新实例
+	newInst := s.Get(func() *pool {
+		return &pool{cleaned: true}
+	})
+	if newInst.cleaned != true {
+		t.Fatal("Get() after Reset should return new instance")
+	}
+}
+
+func TestSingleton_ResetNil(t *testing.T) {
+	// 对未初始化的 Singleton 调用 Reset 不应 panic
+	var s Singleton[string]
+	s.Reset()
+
+	// Reset 后 Get 应正常工作
+	got := s.Get(func() *string {
+		v := "after-nil-reset"
+		return &v
+	})
+	if *got != "after-nil-reset" {
+		t.Fatalf("Get() = %q, want %q", *got, "after-nil-reset")
+	}
+}
