@@ -224,7 +224,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	// 调用 Fs().ReadFile 读取文件
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsLineRange(start, end))
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return nil, fmt.Errorf("Failed to read file: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -241,7 +241,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 		byteLen := len([]byte(content))
 		if byteLen > maxSizeBytes {
 			return nil, fmt.Errorf(
-				"file content (%d KB) exceeds maximum allowed size (%d KB). Use offset and limit parameters to read specific portions of the file",
+				"File content (%d KB) exceeds maximum allowed size (%d KB). Use offset and limit parameters to read specific portions of the file.",
 				byteLen/1024, maxSizeBytes/1024,
 			)
 		}
@@ -252,7 +252,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 	tokens := estimateTokens(content)
 	if tokens > maxTokens {
 		return nil, fmt.Errorf(
-			"file content (%d tokens) exceeds maximum allowed tokens (%d). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file",
+			"File content (%d tokens) exceeds maximum allowed tokens (%d). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
 			tokens, maxTokens,
 		)
 	}
@@ -281,7 +281,7 @@ func readText(ctx context.Context, op sys_operation.SysOperation, filePath strin
 func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath string) (map[string]any, error) {
 	res, err := op.Fs().ReadFile(ctx, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("读取 Notebook 失败: %w", err)
+		return nil, fmt.Errorf("Failed to read notebook: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -297,7 +297,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	byteLen := len([]byte(rawText))
 	if byteLen > maxSizeBytes {
 		return nil, fmt.Errorf(
-			"notebook content (%d KB) exceeds maximum allowed size (%d KB). Use Bash with jq to inspect specific cells:\n  cat \"%s\" | jq '.cells[:20]'        # First 20 cells\n  cat \"%s\" | jq '.cells | length'    # Count total cells",
+			"Notebook content (%d KB) exceeds maximum allowed size (%d KB). Use Bash with jq to inspect specific cells:\n  cat \"%s\" | jq '.cells[:20]'        # First 20 cells\n  cat \"%s\" | jq '.cells | length'    # Count total cells",
 			byteLen/1024, maxSizeBytes/1024, filePath, filePath,
 		)
 	}
@@ -307,7 +307,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	tokens := estimateTokens(rawText)
 	if tokens > maxTokens {
 		return nil, fmt.Errorf(
-			"notebook content (%d tokens) exceeds maximum allowed tokens (%d). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file",
+			"File content (%d tokens) exceeds maximum allowed tokens (%d). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
 			tokens, maxTokens,
 		)
 	}
@@ -316,7 +316,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 	// 对齐 Python L519-545
 	var notebook map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rawText), &notebook); err != nil {
-		return nil, fmt.Errorf("解析 Notebook JSON 失败: %w", err)
+		return nil, fmt.Errorf("Failed to parse notebook JSON: %w", err)
 	}
 
 	cellsRaw, hasCells := notebook["cells"]
@@ -326,7 +326,7 @@ func readNotebook(ctx context.Context, op sys_operation.SysOperation, filePath s
 
 	var cells []map[string]json.RawMessage
 	if err := json.Unmarshal(cellsRaw, &cells); err != nil {
-		return nil, fmt.Errorf("解析 Notebook cells 失败: %w", err)
+		return nil, fmt.Errorf("Failed to parse notebook cells: %w", err)
 	}
 
 	var blocks []string
@@ -370,7 +370,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
 	if err != nil {
-		return nil, fmt.Errorf("读取 PDF 失败: %w", err)
+		return nil, fmt.Errorf("Failed to read PDF: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -390,7 +390,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 打开 PDF
 	reader, err := pdf.NewReader(bytes.NewReader(rawBytes), int64(len(rawBytes)))
 	if err != nil {
-		return nil, fmt.Errorf("解析 PDF 失败: %w", err)
+		return nil, fmt.Errorf("Failed to parse PDF: %w", err)
 	}
 
 	totalPages := reader.NumPage()
@@ -399,9 +399,9 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 对齐 Python L558-564
 	if pages == "" && totalPages > pdfAtMentionInlineThreshold {
 		return nil, fmt.Errorf(
-			"this PDF has %d pages, which is too many to read at once. "+
+			"This PDF has %d pages, which is too many to read at once. "+
 				"Use the pages parameter to specify a range (e.g., pages='1-10'). "+
-				"Maximum %d pages per request",
+				"Maximum %d pages per request.",
 			totalPages, pdfMaxPagesPerRead,
 		)
 	}
@@ -410,7 +410,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	// 对齐 Python L566-569
 	parsed := parsePDFPageRange(pages, totalPages)
 	if parsed == nil {
-		return nil, fmt.Errorf("invalid or empty PDF page range: '%s'", pages)
+		return nil, fmt.Errorf("Invalid or empty PDF page range: '%s'", pages)
 	}
 	startPg, endPg := parsed[0], parsed[1]
 
@@ -419,7 +419,7 @@ func readPDF(ctx context.Context, op sys_operation.SysOperation, filePath string
 	pageCount := endPg - startPg + 1
 	if pageCount > pdfMaxPagesPerRead {
 		return nil, fmt.Errorf(
-			"requested %d pages exceeds the maximum of %d pages per read. Narrow the pages parameter range",
+			"Requested %d pages exceeds the maximum of %d pages per read. Narrow the pages parameter range.",
 			pageCount, pdfMaxPagesPerRead,
 		)
 	}
@@ -476,7 +476,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	// 以 bytes 模式读取
 	res, err := op.Fs().ReadFile(ctx, filePath, sys_operation.WithFsMode("bytes"))
 	if err != nil {
-		return nil, fmt.Errorf("读取图片失败: %w", err)
+		return nil, fmt.Errorf("Failed to read image: %w", err)
 	}
 	if !res.IsSuccess() {
 		return nil, fmt.Errorf("%s", res.Message)
@@ -494,7 +494,7 @@ func readImage(ctx context.Context, op sys_operation.SysOperation, filePath stri
 	}
 
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("image file is empty: %s", filePath)
+		return nil, fmt.Errorf("Image file is empty: %s", filePath)
 	}
 
 	ext := strings.ToLower(filepath.Ext(filePath))

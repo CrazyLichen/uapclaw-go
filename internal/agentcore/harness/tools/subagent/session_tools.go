@@ -154,7 +154,7 @@ func (t *SessionToolkit) Clear() {
 // NewSessionsListTool 创建查看子任务列表工具。
 // 对齐 Python: SessionsListTool.__init__
 func NewSessionsListTool(toolkit *SessionToolkit, language, agentID string) tool.Tool {
-	card, _ := tools.BuildToolCard("sessions_list", "sessions_list", language, nil, agentID)
+	card, _ := tools.BuildToolCard("sessions_list", "SessionsListTool", language, nil, agentID)
 
 	fn := func(_ context.Context, _ SessionsListInput, _ ...tool.ToolOption) (map[string]any, error) {
 		lines := make([]string, 0)
@@ -189,7 +189,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 	if availableAgents != "" {
 		formatArgs = map[string]string{"available_agents": availableAgents}
 	}
-	card, _ := tools.BuildToolCard("sessions_spawn", "sessions_spawn", language, formatArgs, agentID)
+	card, _ := tools.BuildToolCard("sessions_spawn", "SessionsSpawnTool", language, formatArgs, agentID)
 
 	fn := func(ctx context.Context, input SessionsSpawnInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 步骤 1：校验 enable_task_loop
@@ -197,7 +197,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		if dc == nil || !dc.EnableTaskLoop {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "会话 spawn 需要启用 task_loop"),
+				exception.WithParam("reason", "enable_task_loop is required for session spawn"),
 			)
 		}
 
@@ -206,14 +206,14 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		if loopCtrl == nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "loop_controller 不可用"),
+				exception.WithParam("reason", "loop_controller not available"),
 			)
 		}
 		tm := loopCtrl.TaskManager()
 		if tm == nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "task_manager 不可用"),
+				exception.WithParam("reason", "task loop handler/task_manager not available"),
 			)
 		}
 
@@ -223,7 +223,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		session := callOpts.Session
 		if session == nil {
 			return nil, exception.BuildError(exception.StatusToolSessionToolInvoked,
-				exception.WithParam("error_msg", "SessionsSpawnTool 需要有效的会话"))
+				exception.WithParam("error_msg", "SessionsSpawnTool requires a valid session in kwargs"))
 		}
 		parentSessionID := session.GetSessionID()
 		subSessionID := fmt.Sprintf("%s_sub_%s", parentSessionID, generateTokenHex(4))
@@ -244,7 +244,7 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		if err := tm.AddTask(ctx, coreTask); err != nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", fmt.Sprintf("添加任务失败: %s", err.Error())),
+				exception.WithParam("reason", fmt.Sprintf("Failed to add task: %s", err.Error())),
 			)
 		}
 
@@ -282,14 +282,14 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 // NewSessionsCancelTool 创建取消子代理任务工具。
 // 对齐 Python: SessionsCancelTool.__init__
 func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *SessionToolkit, language, agentID string) tool.Tool {
-	card, _ := tools.BuildToolCard("sessions_cancel", "sessions_cancel", language, nil, agentID)
+	card, _ := tools.BuildToolCard("sessions_cancel", "SessionsCancelTool", language, nil, agentID)
 
 	fn := func(ctx context.Context, input SessionsCancelInput, _ ...tool.ToolOption) (map[string]any, error) {
 		// 步骤 1：校验 task_id 非空（对齐 Python: if not task_id）
 		if input.TaskID == "" {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "task_id 为必填项"),
+				exception.WithParam("reason", "task_id is required"),
 			)
 		}
 
@@ -298,7 +298,7 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		if task == nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", fmt.Sprintf("任务 %s 未找到", input.TaskID)),
+				exception.WithParam("reason", fmt.Sprintf("Task %s not found", input.TaskID)),
 			)
 		}
 
@@ -307,14 +307,14 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		if loopCtrl == nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "loop_controller 不可用"),
+				exception.WithParam("reason", "loop_controller not available"),
 			)
 		}
 		scheduler := loopCtrl.TaskScheduler()
 		if scheduler == nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "task_scheduler 不可用"),
+				exception.WithParam("reason", "task_scheduler not available"),
 			)
 		}
 
@@ -323,7 +323,7 @@ func NewSessionsCancelTool(provider interfaces.DeepAgentInterface, toolkit *Sess
 		if cancelErr != nil {
 			return nil, exception.BuildError(
 				exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", fmt.Sprintf("取消任务失败: %s", cancelErr.Error())),
+				exception.WithParam("reason", fmt.Sprintf("Failed to cancel task: %s", cancelErr.Error())),
 			)
 		}
 		if !success {

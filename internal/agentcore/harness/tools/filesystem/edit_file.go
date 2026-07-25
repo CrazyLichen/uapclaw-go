@@ -51,6 +51,13 @@ func NewEditFileTool(op sys_operation.SysOperation, language, agentID string) to
 			}, nil
 		}
 
+		if input.NewString == "" {
+			return map[string]any{
+				"success": false,
+				"error":   "new_string is required",
+			}, nil
+		}
+
 		newStr := input.NewString
 		oldStr := input.OldString
 		replaceAll := input.ReplaceAll

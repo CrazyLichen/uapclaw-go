@@ -37,20 +37,20 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 	if language == "en" {
 		lang = "en"
 	}
-	card, _ := tools.BuildToolCard("task_tool", "task_tool", lang, map[string]string{
+	card, _ := tools.BuildToolCard("task_tool", "TaskTool", lang, map[string]string{
 		"available_agents": availableAgents,
 	}, agentID)
 
 	fn := func(ctx context.Context, input TaskToolInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 对齐 Python L87-91: 校验必填参数
 		if input.SubagentType == "" || input.TaskDescription == "" {
-			return nil, fmt.Errorf("subagent_type 和 task_description 都是必填参数")
+			return nil, fmt.Errorf("Both 'subagent_type' and 'task_description' are required")
 		}
 
 		// 提取 session
 		sess := extractTaskToolSession(opts)
 		if sess == nil {
-			return nil, fmt.Errorf("task_tool 需要 session")
+			return nil, fmt.Errorf("TaskTool requires a valid session in kwargs")
 		}
 
 		parentSessionID := sess.GetSessionID()
@@ -71,7 +71,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("subagent_type", input.SubagentType).
 				Err(err).
 				Msg("TaskTool 子代理创建失败")
-			return nil, fmt.Errorf("子代理 %s 创建失败: %w", input.SubagentType, err)
+			return nil, fmt.Errorf("Subagent %s creation failed: %w", input.SubagentType, err)
 		}
 
 		// 对齐 Python L111-115: 调用子代理
@@ -85,7 +85,7 @@ func NewTaskTool(parentAgent interfaces.DeepAgentInterface, availableAgents, lan
 				Str("subagent_type", input.SubagentType).
 				Err(err).
 				Msg("TaskTool 子代理执行失败")
-			return nil, fmt.Errorf("子代理 %s 执行失败: %w", input.SubagentType, err)
+			return nil, fmt.Errorf("Subagent %s execution failed: %w", input.SubagentType, err)
 		}
 
 		output := ""
@@ -117,7 +117,7 @@ func buildSubSessionID(parentSessionID, subagentType string) string {
 	if normalized == "browser_agent" || normalized == "verification_agent" {
 		return fmt.Sprintf("%s_sub_%s", parentSessionID, normalized)
 	}
-	return fmt.Sprintf("%s_sub_%s_%s", parentSessionID, normalized, generateTokenHex(8))
+	return fmt.Sprintf("%s_sub_%s_%s", parentSessionID, normalized, generateTokenHex(4))
 }
 
 // extractTaskToolSession 从 ToolOption 提取 SessionFacade。

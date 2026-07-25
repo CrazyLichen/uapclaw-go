@@ -52,6 +52,13 @@ func NewWriteFileTool(op sys_operation.SysOperation, language, agentID string) t
 			}, nil
 		}
 
+		if input.Content == "" {
+			return map[string]any{
+				"success": false,
+				"error":   "content is required",
+			}, nil
+		}
+
 		content := input.Content
 
 		// 内容大小检查

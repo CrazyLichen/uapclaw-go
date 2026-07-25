@@ -23,6 +23,8 @@ type CommandOutput struct {
 	Warning string
 	// MaxOutputChars 最大输出字符数
 	MaxOutputChars int
+	// IsPowerShell 是否为 PowerShell 输出
+	IsPowerShell bool
 }
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -46,6 +48,10 @@ var (
 	// outputDir 大输出持久化目录
 	// 对齐 Python: _OUTPUT_DIR (bash/_output.py L47)
 	outputDir = filepath.Join(os.TempDir(), "openjiuwen_bash_outputs")
+
+	// psOutputDir PowerShell 大输出持久化目录
+	// 对齐 Python: _OUTPUT_DIR (powershell/_output.py)
+	psOutputDir = filepath.Join(os.TempDir(), "openjiuwen_powershell_outputs")
 )
 
 // ──────────────────────────── 导出函数 ────────────────────────────
@@ -74,7 +80,7 @@ func RenderToolContent(output CommandOutput, isError bool) (string, bool) {
 	}
 
 	if output.MaxOutputChars > 0 && len(merged) > output.MaxOutputChars {
-		path, size := PersistLargeOutput(output.Stdout, output.Stderr)
+		path, size := PersistLargeOutput(output.Stdout, output.Stderr, output.IsPowerShell)
 		preview, hasMore := generatePreview(processed, previewSizeBytes)
 		processed = buildPersistedMessage(path, size, preview, hasMore)
 	}
@@ -90,9 +96,10 @@ func TruncateOutput(text string, maxChars int) string {
 
 // PersistLargeOutput 持久化大输出到临时文件。
 // 对齐 Python: persist_large_output (bash/_output.py L50-77)
-// 写入 /tmp/openjiuwen_bash_outputs/bash_{sha256[:12]}.txt
+// 写入 /tmp/openjiuwen_bash_outputs/bash_{sha256[:12]}.txt 或
+// /tmp/openjiuwen_powershell_outputs/powershell_{sha256[:12]}.txt
 // 返回文件路径和总字节数
-func PersistLargeOutput(stdout, stderr string) (string, int) {
+func PersistLargeOutput(stdout, stderr string, isPowerShell bool) (string, int) {
 	combined := stdout
 	if stderr != "" {
 		combined += "\n--- stderr ---\n" + stderr
@@ -101,10 +108,21 @@ func PersistLargeOutput(stdout, stderr string) (string, int) {
 	contentBytes := []byte(combined)
 	digest := fmt.Sprintf("%x", sha256.Sum256(contentBytes))[:12]
 
-	// 确保目录存在
-	_ = os.MkdirAll(outputDir, 0o755)
+	// 根据 shell 类型选择目录和前缀
+	var dir string
+	var prefix string
+	if isPowerShell {
+		dir = psOutputDir
+		prefix = "powershell_"
+	} else {
+		dir = outputDir
+		prefix = "bash_"
+	}
 
-	path := filepath.Join(outputDir, "bash_"+digest+".txt")
+	// 确保目录存在
+	_ = os.MkdirAll(dir, 0o755)
+
+	path := filepath.Join(dir, prefix+digest+".txt")
 
 	// 仅在文件不存在时写入
 	if _, err := os.Stat(path); os.IsNotExist(err) {
