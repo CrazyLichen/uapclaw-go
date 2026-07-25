@@ -29,7 +29,10 @@ type ApproveResult struct {
 }
 
 type RejectResult struct {
-	// ToolResult 预设的工具返回结果
+	// ToolResult 预设的工具返回结果。
+	//
+	// 实际值类型：string（如 "已拒绝"、用户反馈文本）。
+	// 传入 skipTool 后写入 inputs.ToolResult。
 	ToolResult any
 	// ToolMessage 可选，预设的工具返回消息
 	ToolMessage *llmschema.ToolMessage

@@ -195,7 +195,13 @@ type ToolCallInputs struct {
 	ToolName string
 	// ToolArgs 工具参数 JSON 字符串（before 钩子可改写）
 	ToolArgs string
-	// ToolResult 工具执行结果（调用完成后填充）
+	// ToolResult 工具执行结果。
+	//
+	// 两种语义（对齐 Python tool_result: Optional[Any]）：
+	//   1. 拦截预设值：before_tool_call 中 Rail 设置 _skip_tool=True 并预设 ToolResult，
+	//      此时值为 map[string]any{"error": errorMsg}
+	//   2. 工具执行结果：after_tool_call 中 ability_manager 填入 tool.invoke() 的原始返回值，
+	//      类型取决于工具实现，通常为 map[string]any
 	ToolResult any
 	// ToolMsg 工具返回消息（调用完成后填充）
 	ToolMsg *llmschema.ToolMessage
