@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -52,9 +53,9 @@ type ToolCallOptions struct {
 	// RaiseForStatus HTTP 错误是否抛异常（RestfulApi 使用）
 	RaiseForStatus bool
 	// Session 会话实例（对齐 Python kwargs["session"]）
-	// 使用 any 避免循环依赖：tool → session → controller → schema → tool。
-	// 实际类型为 *session.Session，调用方通过类型断言获取。
-	Session any
+	// 历史注释"使用 any 避免循环依赖：tool → session → controller → schema → tool"
+	// 已不适用——当前 session/interfaces 不依赖 foundation/tool，无循环依赖。
+	Session interfaces.SessionFacade
 }
 
 // StreamChunk 流式执行的返回块。
@@ -124,8 +125,7 @@ func WithRaiseForStatus(raise bool) ToolOption {
 }
 
 // WithToolSession 设置会话实例。
-// sess 实际类型为 *session.Session，用 any 避免循环依赖。
-func WithToolSession(sess any) ToolOption {
+func WithToolSession(sess interfaces.SessionFacade) ToolOption {
 	return func(o *ToolCallOptions) { o.Session = sess }
 }
 

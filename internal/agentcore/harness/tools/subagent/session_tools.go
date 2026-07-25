@@ -223,12 +223,9 @@ func NewSessionsSpawnTool(provider interfaces.DeepAgentInterface, toolkit *Sessi
 		session := callOpts.Session
 		if session == nil {
 			return nil, exception.BuildError(exception.StatusToolSessionToolInvoked,
-				exception.WithParam("reason", "SessionsSpawnTool 需要有效的会话"))
+				exception.WithParam("error_msg", "SessionsSpawnTool 需要有效的会话"))
 		}
-		parentSessionID := ""
-		if sess, ok := session.(interface{ GetSessionID() string }); ok {
-			parentSessionID = sess.GetSessionID()
-		}
+		parentSessionID := session.GetSessionID()
 		subSessionID := fmt.Sprintf("%s_sub_%s", parentSessionID, generateTokenHex(4))
 
 		// 步骤 4：添加任务到 TaskManager

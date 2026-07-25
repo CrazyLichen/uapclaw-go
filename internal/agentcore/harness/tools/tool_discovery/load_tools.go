@@ -39,12 +39,7 @@ func NewLoadToolsTool(
 	fn := func(ctx context.Context, input LoadToolsInput, opts ...tool.ToolOption) (map[string]any, error) {
 		// 获取会话
 		callOpts := tool.NewToolCallOptions(opts...)
-		var session interfaces.SessionFacade
-		if callOpts.Session != nil {
-			if sess, ok := callOpts.Session.(interfaces.SessionFacade); ok {
-				session = sess
-			}
-		}
+		session := callOpts.Session
 
 		// 调用加载回调
 		result, err := loadFn(ctx, session, input.ToolNames, input.Replace)

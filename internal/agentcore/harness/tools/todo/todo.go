@@ -543,17 +543,14 @@ func extractSessionID(opts []tool.ToolOption) (string, error) {
 	if session == nil {
 		return "", exception.BuildError(
 			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", "Session ID 为必填项"),
+			exception.WithParam("error_msg", "Session ID 为必填项"),
 		)
 	}
-	sessionID := ""
-	if sess, ok := session.(interface{ GetSessionID() string }); ok {
-		sessionID = sess.GetSessionID()
-	}
+	sessionID := session.GetSessionID()
 	if sessionID == "" {
 		return "", exception.BuildError(
 			exception.StatusToolTodosInvokeFailed,
-			exception.WithParam("reason", "Session ID 为必填项"),
+			exception.WithParam("error_msg", "Session ID 为必填项"),
 		)
 	}
 	return sessionID, nil

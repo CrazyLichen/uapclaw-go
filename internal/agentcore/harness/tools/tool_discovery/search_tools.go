@@ -84,15 +84,13 @@ func NewSearchToolsTool(
 		// 调用轨迹回调
 		callOpts := tool.NewToolCallOptions(opts...)
 		if traceFn != nil && callOpts.Session != nil {
-			if sess, ok := callOpts.Session.(interfaces.SessionFacade); ok {
-				traceFn(sess, map[string]any{
-					"action":       "search_tools",
-					"query":        input.Query,
-					"limit":        limit,
-					"detail_level": input.DetailLevel,
-					"match_count":  len(matches),
-				})
-			}
+			traceFn(callOpts.Session, map[string]any{
+				"action":       "search_tools",
+				"query":        input.Query,
+				"limit":        limit,
+				"detail_level": input.DetailLevel,
+				"match_count":  len(matches),
+			})
 		}
 
 		// 日志

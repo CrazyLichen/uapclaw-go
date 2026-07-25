@@ -220,34 +220,18 @@ func agentDefToSubagentConfig(agentDef *types.AgentDefinition, model *llm.Model,
 		}
 	}
 
-	// 步骤 2: 构建工具列表
-	// 对齐 Python: tools = list(agent_def.tools) if agent_def.tools else ["*"]
-	// if agent_def.disallowed_tools and tools != ["*"]: tools = [t for t in tools if t not in agent_def.disallowed_tools]
-	tools := agentDef.Tools
-	if len(tools) == 0 {
-		tools = []string{"*"}
-	}
-	if len(agentDef.DisallowedTools) > 0 && (len(tools) != 1 || tools[0] != "*") {
-		disallowedSet := make(map[string]bool, len(agentDef.DisallowedTools))
-		for _, t := range agentDef.DisallowedTools {
-			disallowedSet[t] = true
-		}
-		tools = make([]string, 0, len(tools))
-		for _, t := range tools {
-			if !disallowedSet[t] {
-				tools = append(tools, t)
-			}
-		}
-	}
-
-	// 步骤 3: 构建 AgentCard
+	// 步骤 2: 构建 AgentCard
 	card := agentschema.NewAgentCard(
 		agentschema.WithAgentName(agentDef.Name),
 		agentschema.WithAgentID(agentDef.Name),
 		agentschema.WithAgentDescription(agentDef.Description),
 	)
 
-	// 步骤 4: 构建 SubAgentConfig
+	// 步骤 3: 构建 SubAgentConfig
+	// 注意：工具过滤（tools/disallowed_tools 合并）由调用方（createSubAgent）负责，
+	// 此处不再重复实现。对齐 Python 的 _agent_def_to_subagent_config 中虽然合并了
+	// disallowed_tools 到 spec.tools，但 Go 的 SubAgentConfig.Tools 是 []*tool.ToolCard
+	// 类型，无法直接存 []string，因此工具过滤在 createSubAgent 的 filterToolCards 中完成。
 	maxIter := 0
 	if agentDef.MaxIterations != nil {
 		maxIter = *agentDef.MaxIterations

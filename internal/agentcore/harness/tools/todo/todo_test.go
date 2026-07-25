@@ -9,6 +9,7 @@ import (
 
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/foundation/tool"
 	hschema "github.com/uapclaw/uapclaw-go/internal/agentcore/harness/schema"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation"
 	"github.com/uapclaw/uapclaw-go/internal/agentcore/sys_operation/result"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
@@ -33,6 +34,15 @@ type mockSession struct {
 	// sessionID 会话标识
 	sessionID string
 }
+
+func (m *mockSession) GetSessionID() string                        { return m.sessionID }
+func (m *mockSession) UpdateState(_ map[string]any)                {}
+func (m *mockSession) GetState(_ state.StateKey) (any, error)      { return nil, nil }
+func (m *mockSession) DumpState() map[string]any                   { return nil }
+func (m *mockSession) WriteStream(_ context.Context, _ any) error  { return nil }
+func (m *mockSession) WriteCustomStream(_ context.Context, _ any) error { return nil }
+func (m *mockSession) GetEnv(_ string, _ ...any) any               { return nil }
+func (m *mockSession) Interact(_ context.Context, _ any) error     { return nil }
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
@@ -111,11 +121,6 @@ func (m *mockFsOperation) DownloadFile(_ context.Context, _ string, _ string, _ 
 // DownloadFileStream 实现 FsOperation 接口
 func (m *mockFsOperation) DownloadFileStream(_ context.Context, _ string, _ string, _ ...sys_operation.FsOption) (<-chan result.DownloadFileStreamResult, error) {
 	return nil, nil
-}
-
-// GetSessionID 实现 session 接口
-func (s *mockSession) GetSessionID() string {
-	return s.sessionID
 }
 
 // ──────────────────────────── 非导出函数 ────────────────────────────

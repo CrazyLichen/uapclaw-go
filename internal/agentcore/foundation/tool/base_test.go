@@ -1,9 +1,12 @@
 package tool
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	sessioninterfaces "github.com/uapclaw/uapclaw-go/internal/agentcore/session/interfaces"
+	"github.com/uapclaw/uapclaw-go/internal/agentcore/session/state"
 	"github.com/uapclaw/uapclaw-go/internal/common/exception"
 	"github.com/uapclaw/uapclaw-go/internal/common/schema"
 )
@@ -209,7 +212,7 @@ func TestToolCard_AbilityKind(t *testing.T) {
 
 // TestWithToolSession 验证 WithToolSession 选项函数
 func TestWithToolSession(t *testing.T) {
-	sess := "fake_session"
+	sess := &mockSessionFacadeForBase{id: "test-session"}
 	opt := WithToolSession(sess)
 	o := &ToolCallOptions{}
 	opt(o)
@@ -217,6 +220,25 @@ func TestWithToolSession(t *testing.T) {
 		t.Errorf("Session = %v, want %v", o.Session, sess)
 	}
 }
+
+// mockSessionFacadeForBase 基础测试用的 SessionFacade mock
+type mockSessionFacadeForBase struct {
+	id string
+}
+
+func (m *mockSessionFacadeForBase) GetSessionID() string                      { return m.id }
+func (m *mockSessionFacadeForBase) UpdateState(_ map[string]any)              {}
+func (m *mockSessionFacadeForBase) GetState(_ state.StateKey) (any, error)    { return nil, nil }
+func (m *mockSessionFacadeForBase) DumpState() map[string]any                 { return nil }
+func (m *mockSessionFacadeForBase) WriteStream(_ context.Context, _ any) error { return nil }
+func (m *mockSessionFacadeForBase) WriteCustomStream(_ context.Context, _ any) error {
+	return nil
+}
+func (m *mockSessionFacadeForBase) GetEnv(_ string, _ ...any) any       { return nil }
+func (m *mockSessionFacadeForBase) Interact(_ context.Context, _ any) error { return nil }
+
+// 编译时验证 mock 实现 SessionFacade 接口
+var _ sessioninterfaces.SessionFacade = (*mockSessionFacadeForBase)(nil)
 
 // TestNewToolCardWithID 验证 NewToolCardWithID 创建指定 ID 的 ToolCard
 func TestNewToolCardWithID(t *testing.T) {

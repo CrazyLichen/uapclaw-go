@@ -123,12 +123,5 @@ func buildSubSessionID(parentSessionID, subagentType string) string {
 // extractTaskToolSession 从 ToolOption 提取 SessionFacade。
 func extractTaskToolSession(opts []tool.ToolOption) sessioninterfaces.SessionFacade {
 	callOpts := tool.NewToolCallOptions(opts...)
-	session := callOpts.Session
-	if session == nil {
-		return nil
-	}
-	if sess, ok := session.(sessioninterfaces.SessionFacade); ok {
-		return sess
-	}
-	return nil
+	return callOpts.Session
 }

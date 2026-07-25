@@ -117,14 +117,7 @@ func formatPlanPath(planPath string) string {
 // extractSession 从 ToolOption 中提取 SessionFacade。
 func extractSession(opts []tool.ToolOption) sessioninterfaces.SessionFacade {
 	callOpts := tool.NewToolCallOptions(opts...)
-	session := callOpts.Session
-	if session == nil {
-		return nil
-	}
-	if sess, ok := session.(sessioninterfaces.SessionFacade); ok {
-		return sess
-	}
-	return nil
+	return callOpts.Session
 }
 
 // getWorkspaceRoot 从 DeepAgentInterface 获取工作区根路径。
