@@ -201,16 +201,16 @@ func (c *ActionController) ClearCodeExecutor() {
 func (c *ActionController) RegisterAction(name string, handler ActionHandler, overwrite bool) error {
 	actionName := normalizeActionName(name)
 	if actionName == "" {
-		return fmt.Errorf("action name must be non-empty")
+		return fmt.Errorf("动作名称不能为空")
 	}
 	if handler == nil {
-		return fmt.Errorf("handler must be non-nil")
+		return fmt.Errorf("处理器不能为 nil")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !overwrite {
 		if _, exists := c.actions[actionName]; exists {
-			return fmt.Errorf("action already exists: %s", actionName)
+			return fmt.Errorf("动作已存在: %s", actionName)
 		}
 	}
 	c.actions[actionName] = handler
@@ -1280,7 +1280,7 @@ func toIntOrNone(v any) (*int, error) {
 		i := int(n)
 		return &i, nil
 	default:
-		return nil, fmt.Errorf("cannot convert %T to int", v)
+		return nil, fmt.Errorf("无法将 %T 转换为 int", v)
 	}
 }
 

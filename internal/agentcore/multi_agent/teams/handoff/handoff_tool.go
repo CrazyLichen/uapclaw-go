@@ -52,12 +52,12 @@ func NewHandoffTool(targetID, targetDescription string) *HandoffTool {
 	inputParams := []*schema.Param{
 		schema.NewStringParam(
 			"reason",
-			"Reason for handoff to the target agent.",
+			"Reason for handoff: briefly explain why the task is being transferred.",
 			true,
 		),
 		schema.NewStringParam(
 			"message",
-			"Context information to pass to the target agent.",
+			"Context information passed to the next agent (optional).",
 			false,
 		),
 	}

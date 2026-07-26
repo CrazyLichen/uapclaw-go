@@ -196,7 +196,7 @@ func (t *TodoTool) LoadTodos(ctx context.Context, sessionID string) ([]hschema.T
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Int("item_count", len(items)).
-		Msg("Successfully loaded todo items")
+		Msg("LoadTodos 加载待办事项成功")
 	return items, nil
 }
 
@@ -234,7 +234,7 @@ func (t *TodoTool) SaveTodos(ctx context.Context, sessionID string, todos []hsch
 	logger.Info(logComponent).
 		Str("session_id", sessionID).
 		Int("item_count", len(todos)).
-		Msg("Successfully saved todo items")
+		Msg("SaveTodos 保存待办事项成功")
 	return nil
 }
 

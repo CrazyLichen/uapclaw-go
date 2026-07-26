@@ -152,7 +152,7 @@ func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExis
 		return nil, exception.BuildError(exception.StatusResourceTagRemoveResourceTagError,
 			exception.WithParam("resource_id", resourceID),
 			exception.WithParam("tags", fmt.Sprintf("%v", tags)),
-			exception.WithParam("reason", "Resource does not exist"),
+			exception.WithParam("reason", "资源不存在"),
 		)
 	}
 
@@ -170,7 +170,7 @@ func (m *TagMgr) RemoveResourceTags(resourceID string, tags []Tag, skipIfNotExis
 			return nil, exception.BuildError(exception.StatusResourceTagRemoveResourceTagError,
 				exception.WithParam("resource_id", resourceID),
 				exception.WithParam("tags", fmt.Sprintf("%v", nonExistent)),
-				exception.WithParam("reason", "Tag does not exist"),
+				exception.WithParam("reason", "标签不存在"),
 			)
 		}
 	}
@@ -199,7 +199,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 		return nil, exception.BuildError(exception.StatusResourceTagReplaceResourceTagError,
 			exception.WithParam("resource_id", resourceID),
 			exception.WithParam("tags", fmt.Sprintf("%v", tags)),
-			exception.WithParam("reason", "Resource does not exist"),
+			exception.WithParam("reason", "资源不存在"),
 		)
 	}
 
@@ -235,7 +235,7 @@ func (m *TagMgr) UpdateResourceTags(resourceID string, tags []Tag, strategy TagU
 		return nil, exception.BuildError(exception.StatusResourceTagReplaceResourceTagError,
 			exception.WithParam("resource_id", resourceID),
 			exception.WithParam("tags", fmt.Sprintf("%v", tags)),
-			exception.WithParam("reason", fmt.Sprintf("Unsupported strategy: %v", strategy)),
+			exception.WithParam("reason", fmt.Sprintf("不支持的策略: %v", strategy)),
 		)
 	}
 }
@@ -254,7 +254,7 @@ func (m *TagMgr) RemoveTag(tag Tag, skipIfNotExists bool) ([]string, error) {
 		}
 		return nil, exception.BuildError(exception.StatusResourceTagRemoveTagError,
 			exception.WithParam("tag", tag),
-			exception.WithParam("reason", "Tag does not exist"),
+			exception.WithParam("reason", "标签不存在"),
 		)
 	}
 
@@ -307,7 +307,7 @@ func (m *TagMgr) FindResourcesByTags(tags []Tag, strategy TagMatchStrategy, skip
 					return nil, exception.BuildError(exception.StatusResourceTagFindResourceError,
 						exception.WithParam("tag", fmt.Sprintf("%v", tags)),
 						exception.WithParam("strategy", strategy.String()),
-						exception.WithParam("reason", fmt.Sprintf("Tag '%s' does not exist", tag)),
+						exception.WithParam("reason", fmt.Sprintf("标签 '%s' 不存在", tag)),
 					)
 				}
 			} else {
@@ -329,7 +329,7 @@ func (m *TagMgr) FindResourcesByTags(tags []Tag, strategy TagMatchStrategy, skip
 		return nil, exception.BuildError(exception.StatusResourceTagFindResourceError,
 			exception.WithParam("tag", fmt.Sprintf("%v", tags)),
 			exception.WithParam("strategy", strategy.String()),
-			exception.WithParam("reason", "Unsupported tag match strategy"),
+			exception.WithParam("reason", "不支持的标签匹配策略"),
 		)
 	}
 }
@@ -692,7 +692,7 @@ func (m *TagMgr) findResourcesWithAllTags(requiredTags map[Tag]struct{}, skipIfN
 				return nil, exception.BuildError(exception.StatusResourceTagFindResourceError,
 					exception.WithParam("tag", fmt.Sprintf("%v", requiredTags)),
 					exception.WithParam("strategy", TagMatchAll.String()),
-					exception.WithParam("reason", fmt.Sprintf("Tag '%s' does not exist", tag)),
+					exception.WithParam("reason", fmt.Sprintf("标签 '%s' 不存在", tag)),
 				)
 			}
 		}

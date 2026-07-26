@@ -68,7 +68,7 @@ func (r *ClientRegistry) Register(name, clientType string, factory ClientFactory
 	if _, exists := r.factories[fullName]; exists {
 		logger.Warn(logComponent).
 			Str("full_name", fullName).
-			Msg("Client type already registered, skipping")
+			Msg("客户端类型已注册，跳过")
 		return
 	}
 
@@ -83,7 +83,7 @@ func (r *ClientRegistry) GetClient(name, clientType string, modelConfig *llmsche
 	if name == "" {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg("Client name cannot be empty"),
+			exception.WithMsg("客户端名称不能为空"),
 		)
 	}
 
@@ -100,7 +100,7 @@ func (r *ClientRegistry) GetClient(name, clientType string, modelConfig *llmsche
 			available := r.listClientsLocked()
 			return nil, exception.NewBaseError(
 				exception.NewStatusCode("MODEL_PROVIDER_INVALID", 181000, ""),
-				exception.WithMsg(fmt.Sprintf("Unsupported client_provider: '%s', Supported types: %v", name, available)),
+				exception.WithMsg(fmt.Sprintf("不支持的 client_provider: '%s'，支持的类型: %v", name, available)),
 			)
 		}
 	}
@@ -118,7 +118,7 @@ func (r *ClientRegistry) Unregister(name, clientType string) error {
 	if _, exists := r.factories[fullName]; !exists {
 		return exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg(fmt.Sprintf("Client type '%s' not registered", fullName)),
+			exception.WithMsg(fmt.Sprintf("客户端类型 '%s' 未注册", fullName)),
 		)
 	}
 

@@ -114,7 +114,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 		available := sortedKeys(t.customAgents)
 		return nil, exception.BuildError(
 			exception.StatusAgentToolNotFound,
-			exception.WithParam("error_msg", fmt.Sprintf("Agent type '%s' not found. Available custom agents: %v", subagentType, available)),
+			exception.WithParam("error_msg", fmt.Sprintf("Agent 类型 '%s' 未找到。可用的自定义 Agent: %v", subagentType, available)),
 		)
 	}
 
@@ -140,7 +140,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Msg("子 Agent 创建失败")
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("Custom agent '%s' creation failed: %v", subagentType, err)),
+			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 创建失败: %v", subagentType, err)),
 		)
 	}
 
@@ -179,7 +179,7 @@ func (t *AgentTool) Invoke(ctx context.Context, inputs map[string]any, opts ...t
 			Msg("子 Agent 执行失败")
 		return nil, exception.BuildError(
 			exception.StatusAgentToolExecutionError,
-			exception.WithParam("error_msg", fmt.Sprintf("Custom agent '%s' execution failed: %v", subagentType, err)),
+			exception.WithParam("error_msg", fmt.Sprintf("自定义 Agent '%s' 执行失败: %v", subagentType, err)),
 		)
 	}
 

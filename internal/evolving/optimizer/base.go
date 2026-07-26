@@ -67,7 +67,7 @@ type BaseOptimizer interface {
 type TextualParameter struct {
 	// OperatorID 所属 Operator 标识
 	OperatorID string
-	// Gradients 梯度映射 target → gradient value (string)
+	// Gradients 梯度映射 target → 梯度值（字符串）
 	// 空字符串 "" 表示 nil（未设置/已清除），对齐 Python 的 None 语义
 	Gradients map[string]string
 	// Description 可选描述

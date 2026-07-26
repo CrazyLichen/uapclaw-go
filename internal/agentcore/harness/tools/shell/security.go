@@ -39,19 +39,19 @@ var (
 		pattern *regexp.Regexp
 		warning string
 	}{
-		{regexp.MustCompile(`\bgit\s+reset\s+--hard\b`), "May discard uncommitted changes"},
-		{regexp.MustCompile(`\bgit\s+push\b[^\n]*(?:--force|-f)\b`), "May overwrite remote history"},
-		{regexp.MustCompile(`\bgit\s+clean\s+-[a-zA-Z]*f`), "May permanently delete untracked files"},
-		{regexp.MustCompile(`\bgit\s+checkout\s+--\s+\.`), "May discard all unstaged changes"},
-		{regexp.MustCompile(`\bgit\s+stash\s+(?:drop|clear)\b`), "May permanently discard stashed changes"},
-		{regexp.MustCompile(`\bgit\s+branch\s+-D\b`), "May force-delete a branch"},
-		{regexp.MustCompile(`\bgit\s+commit\s+--amend\b`), "May rewrite the last commit"},
-		{regexp.MustCompile(`\bgit\s+(?:push|commit|merge)\b[^\n]*--no-verify\b`), "May skip safety hooks"},
-		{regexp.MustCompile(`(?i)\bDROP\s+(?:TABLE|DATABASE)\b`), "May drop database objects"},
-		{regexp.MustCompile(`(?i)\bTRUNCATE\s+TABLE\b`), "May truncate database table"},
-		{regexp.MustCompile(`\bkubectl\s+delete\b`), "May delete Kubernetes resources"},
-		{regexp.MustCompile(`\bterraform\s+destroy\b`), "May destroy Terraform infrastructure"},
-		{regexp.MustCompile(`\bsudo\b`), "sudo may require a password in non-interactive mode; configure NOPASSWD or run as root"},
+		{regexp.MustCompile(`\bgit\s+reset\s+--hard\b`), "可能丢弃未提交的更改"},
+		{regexp.MustCompile(`\bgit\s+push\b[^\n]*(?:--force|-f)\b`), "可能覆盖远程历史"},
+		{regexp.MustCompile(`\bgit\s+clean\s+-[a-zA-Z]*f`), "可能永久删除未跟踪的文件"},
+		{regexp.MustCompile(`\bgit\s+checkout\s+--\s+\.`), "可能丢弃所有未暂存的更改"},
+		{regexp.MustCompile(`\bgit\s+stash\s+(?:drop|clear)\b`), "可能永久丢弃暂存的更改"},
+		{regexp.MustCompile(`\bgit\s+branch\s+-D\b`), "可能强制删除分支"},
+		{regexp.MustCompile(`\bgit\s+commit\s+--amend\b`), "可能重写最近一次提交"},
+		{regexp.MustCompile(`\bgit\s+(?:push|commit|merge)\b[^\n]*--no-verify\b`), "可能跳过安全钩子"},
+		{regexp.MustCompile(`(?i)\bDROP\s+(?:TABLE|DATABASE)\b`), "可能删除数据库对象"},
+		{regexp.MustCompile(`(?i)\bTRUNCATE\s+TABLE\b`), "可能截断数据库表"},
+		{regexp.MustCompile(`\bkubectl\s+delete\b`), "可能删除 Kubernetes 资源"},
+		{regexp.MustCompile(`\bterraform\s+destroy\b`), "可能销毁 Terraform 基础设施"},
+		{regexp.MustCompile(`\bsudo\b`), "sudo 在非交互模式下可能需要密码；请配置 NOPASSWD 或以 root 运行"},
 	}
 
 	// powershell 破坏性命令正则
@@ -60,14 +60,14 @@ var (
 		pattern *regexp.Regexp
 		warning string
 	}{
-		{regexp.MustCompile(`(?i)\bremove-item\b[^\n]*-(?:recurse|force)\b`), "May permanently remove files or directories"},
-		{regexp.MustCompile(`(?i)\bclear-content\b`), "May remove file contents"},
-		{regexp.MustCompile(`(?i)\bset-content\b`), "May overwrite file contents"},
-		{regexp.MustCompile(`(?i)\brename-item\b`), "May rename or replace files"},
-		{regexp.MustCompile(`(?i)\bmove-item\b`), "May move or overwrite files"},
-		{regexp.MustCompile(`\bgit\s+reset\s+--hard\b`), "May discard uncommitted changes"},
-		{regexp.MustCompile(`\bgit\s+push\b[^\n]*(?:--force|-f)\b`), "May overwrite remote history"},
-		{regexp.MustCompile(`\bgit\s+commit\s+--amend\b`), "May rewrite the last commit"},
+		{regexp.MustCompile(`(?i)\bremove-item\b[^\n]*-(?:recurse|force)\b`), "可能永久删除文件或目录"},
+		{regexp.MustCompile(`(?i)\bclear-content\b`), "可能删除文件内容"},
+		{regexp.MustCompile(`(?i)\bset-content\b`), "可能覆盖文件内容"},
+		{regexp.MustCompile(`(?i)\brename-item\b`), "可能重命名或替换文件"},
+		{regexp.MustCompile(`(?i)\bmove-item\b`), "可能移动或覆盖文件"},
+		{regexp.MustCompile(`\bgit\s+reset\s+--hard\b`), "可能丢弃未提交的更改"},
+		{regexp.MustCompile(`\bgit\s+push\b[^\n]*(?:--force|-f)\b`), "可能覆盖远程历史"},
+		{regexp.MustCompile(`\bgit\s+commit\s+--amend\b`), "可能重写最近一次提交"},
 	}
 )
 
@@ -81,13 +81,13 @@ var (
 // 3. 进程替换 <() 或 >()
 func CheckBashInjection(command string) (bool, string) {
 	if hasBacktickSubstitution(command) {
-		return true, "Shell injection detected: backtick command substitution"
+		return true, "检测到 Shell 注入：反引号命令替换"
 	}
 	if bashDollarParenRe.MatchString(command) {
-		return true, "Shell injection detected: $() command substitution"
+		return true, "检测到 Shell 注入：$() 命令替换"
 	}
 	if bashProcSubstRe.MatchString(command) {
-		return true, "Shell injection detected: process substitution <() or >()"
+		return true, "检测到 Shell 注入：进程替换 <() 或 >()"
 	}
 	return false, ""
 }
@@ -101,16 +101,16 @@ func CheckBashInjection(command string) (bool, string) {
 // 4. [ScriptBlock]::Create(（脚本块创建）
 func CheckPowerShellInjection(command string) (bool, string) {
 	if psInvokeExprRe.MatchString(command) {
-		return true, "PowerShell injection detected: Invoke-Expression"
+		return true, "检测到 PowerShell 注入：Invoke-Expression"
 	}
 	if psEncodedCmdRe.MatchString(command) {
-		return true, "PowerShell injection detected: nested encoded command"
+		return true, "检测到 PowerShell 注入：嵌套编码命令"
 	}
 	if psDynamicCallRe.MatchString(command) {
-		return true, "PowerShell injection detected: dynamic call operator"
+		return true, "检测到 PowerShell 注入：动态调用运算符"
 	}
 	if psScriptBlockRe.MatchString(command) {
-		return true, "PowerShell injection detected: dynamic ScriptBlock creation"
+		return true, "检测到 PowerShell 注入：动态 ScriptBlock 创建"
 	}
 	return false, ""
 }

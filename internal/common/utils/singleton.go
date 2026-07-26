@@ -12,7 +12,7 @@ import (
 
 // ──────────────────────────── 接口 ────────────────────────────
 
-// resettable Reset 时可清理的接口。
+// resettable 重置时可清理的接口。
 // 如果单例持有类型实现了该接口，Reset 时会自动调用其 Cleanup。
 type resettable interface {
 	Cleanup() error

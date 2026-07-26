@@ -122,7 +122,7 @@ func (s *BrowserService) SessionNew(sessionID string) string {
 func (s *BrowserService) RequestCancel(ctx context.Context, sessionID, requestID string) error {
 	sid := strings.TrimSpace(sessionID)
 	if sid == "" {
-		return fmt.Errorf("session_id is required for cancellation")
+		return fmt.Errorf("取消操作需要 session_id")
 	}
 	rid := strings.TrimSpace(requestID)
 	return s.cancelStore.Set(ctx, cancelKey(sid, rid), []byte("1"))

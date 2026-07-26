@@ -183,7 +183,7 @@ func formatValue(value any) string {
 		// 对应 Python: prompt_logger.info("Converting non-string value using str()...")
 		logger.Info(logger.ComponentAgentCore).
 			Str("placeholder", fmt.Sprintf("%v", value)).
-			Msg("Converting non-string value using str(). Please check if the style is describe.")
+			Msg("使用 str() 转换非字符串值，请检查格式是否正确。")
 		return fmt.Sprintf("%v", val)
 	}
 }

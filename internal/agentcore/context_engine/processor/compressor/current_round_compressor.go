@@ -431,8 +431,6 @@ Your task is to merge them into one shorter, stable memory block while preservin
 [Historical memory blocks]:
 {compressed_blocks}
 
-// ──────────────────────────── 导出函数 ────────────────────────────
-
 ---
 
 ## CONSOLIDATION RULES

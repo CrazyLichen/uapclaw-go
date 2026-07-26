@@ -164,13 +164,13 @@ func (e *BaseClientEmbed) ValidateConfig() error {
 	if e.ClientConfig.APIKey == "" {
 		return exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg(fmt.Sprintf("model client config api_key is required for %s.", clientName)),
+			exception.WithMsg(fmt.Sprintf("模型客户端配置 api_key 为必填项（%s）。", clientName)),
 		)
 	}
 	if e.ClientConfig.APIBase == "" {
 		return exception.NewBaseError(
 			exception.NewStatusCode("MODEL_SERVICE_CONFIG_ERROR", 181002, ""),
-			exception.WithMsg(fmt.Sprintf("model client config api_base is required for %s.", clientName)),
+			exception.WithMsg(fmt.Sprintf("模型客户端配置 api_base 为必填项（%s）。", clientName)),
 		)
 	}
 	if e.ClientConfig.VerifySSL && e.ClientConfig.SSLCert == "" {
@@ -217,7 +217,7 @@ func (e *BaseClientEmbed) ConvertMessagesToDict(messages MessagesParam) ([]map[s
 	if messages.IsEmpty() {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_INVOKE_PARAM_ERROR", 181004, ""),
-			exception.WithMsg("The message sent to the llm cannot be empty."),
+			exception.WithMsg("发送给 LLM 的消息不能为空。"),
 		)
 	}
 
@@ -291,7 +291,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 	if model == "" {
 		return nil, exception.NewBaseError(
 			exception.NewStatusCode("MODEL_CONFIG_ERROR", 181003, ""),
-			exception.WithMsg("The model cannot be None."),
+			exception.WithMsg("模型名称不能为空。"),
 		)
 	}
 
@@ -414,7 +414,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 			evt = evt.Any("stop", stop)
 		}
 		evt.Any("extra_params", extraParams).
-			Msg("Before request chat model, LLM request params ready.")
+			Msg("请求聊天模型前，LLM 请求参数已就绪。")
 	} else {
 		// 非敏感模式：记录 messages/tools
 		evt := logger.Info(logComponent).
@@ -438,7 +438,7 @@ func (e *BaseClientEmbed) BuildRequestParams(ctx context.Context, messagesDict [
 			evt = evt.Any("stop", stop)
 		}
 		evt.Any("extra_params", extraParams).
-			Msg("Before request chat model, LLM request params ready.")
+			Msg("请求聊天模型前，LLM 请求参数已就绪。")
 	}
 
 	return reqParams, nil

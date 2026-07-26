@@ -22,6 +22,7 @@ import (
 
 // ──────────────────────────── 结构体 ────────────────────────────
 
+// BackgroundTask 轻量后台任务句柄，管理 goroutine 生命周期。
 type BackgroundTask struct {
 	name   string
 	group  string
@@ -32,6 +33,8 @@ type BackgroundTask struct {
 	mu     sync.Mutex
 }
 
+// Task 任务数据模型，包含状态机和完整生命周期信息。
+// 对应 Python: Task 数据模型 + 状态机
 type Task struct {
 	ID           string
 	Name         string
@@ -49,22 +52,26 @@ type Task struct {
 	CancelledBy  string
 
 	// 内部字段
-	cancel context.CancelFunc
-	done   chan struct{}
-	mu     sync.RWMutex
+	cancel context.CancelFunc // 取消函数
+	done   chan struct{}      // 完成信号
+	mu     sync.RWMutex       // 保护字段的读写锁
 }
 
+// TaskManager 任务管理器单例，提供任务的创建、取消、查询等操作。
+// 对应 Python: TaskManager 单例
 type TaskManager struct {
 	registry map[string]*Task
 	mu       sync.RWMutex
 }
 
+// TaskResult 任务执行结果。
 type TaskResult struct {
 	TaskID string
 	Result any
 	Err    error
 }
 
+// taskConfig 任务配置，由 TaskOption 函数设置。
 type taskConfig struct {
 	name     string
 	group    string
@@ -78,6 +85,7 @@ type TaskOption func(*taskConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// TaskStatus 任务状态枚举。
 type TaskStatus int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -103,14 +111,17 @@ var taskManagerSingleton Singleton[TaskManager]
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// WithTaskName 设置任务名称选项。
 func WithTaskName(name string) TaskOption {
 	return func(c *taskConfig) { c.name = name }
 }
 
+// IsTerminal 判断任务状态是否为终态（已完成/失败/已取消/超时）。
 func (s TaskStatus) IsTerminal() bool {
 	return s == TaskCompleted || s == TaskFailed || s == TaskCancelled || s == TaskTimeout
 }
 
+// String 返回任务状态的字符串表示。
 func (s TaskStatus) String() string {
 	switch s {
 	case TaskPending:
@@ -130,14 +141,17 @@ func (s TaskStatus) String() string {
 	}
 }
 
+// WithTaskGroup 设置任务分组选项。
 func WithTaskGroup(group string) TaskOption {
 	return func(c *taskConfig) { c.group = group }
 }
 
+// WithTaskTimeout 设置任务超时选项。
 func WithTaskTimeout(timeout time.Duration) TaskOption {
 	return func(c *taskConfig) { c.timeout = timeout }
 }
 
+// WithTaskMetadata 设置任务元数据选项。
 func WithTaskMetadata(md map[string]any) TaskOption {
 	return func(c *taskConfig) { c.metadata = md }
 }

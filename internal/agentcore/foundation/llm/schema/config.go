@@ -42,6 +42,7 @@ type ModelClientConfig struct {
 	Extra map[string]any `json:"-"`
 }
 
+// ModelRequestConfig 模型请求配置。
 type ModelRequestConfig struct {
 	// ModelName 模型名称，如 "gpt-4"，JSON 键名为 "model"
 	ModelName string `json:"model"`
@@ -57,12 +58,15 @@ type ModelRequestConfig struct {
 	Extra map[string]any `json:"-"`
 }
 
+// ModelClientConfigOption 模型客户端配置可选参数函数。
 type ModelClientConfigOption func(*ModelClientConfig)
 
+// ModelRequestConfigOption 模型请求配置可选参数函数。
 type ModelRequestConfigOption func(*ModelRequestConfig)
 
 // ──────────────────────────── 枚举 ────────────────────────────
 
+// ProviderType 服务商类型枚举。
 type ProviderType int
 
 // ──────────────────────────── 常量 ────────────────────────────
@@ -86,6 +90,7 @@ const (
 
 // ──────────────────────────── 全局变量 ────────────────────────────
 
+// providerTypeStrings 服务商类型名称数组，按枚举值索引。
 var providerTypeStrings = [...]string{
 	"OpenAI",
 	"OpenRouter",
@@ -96,16 +101,21 @@ var providerTypeStrings = [...]string{
 	"intelli_router",
 }
 
+// modelClientConfigKnownKeys ModelClientConfig 已知 JSON 键名集合。
 var modelClientConfigKnownKeys map[string]struct{}
 
+// modelRequestConfigKnownKeys ModelRequestConfig 已知 JSON 键名集合。
 var modelRequestConfigKnownKeys map[string]struct{}
 
+// providerTypeMap 服务商名称到枚举值的映射表（精确匹配+小写匹配）。
 var providerTypeMap map[string]ProviderType
 
+// globalProviderValidator 全局服务商验证器。
 var globalProviderValidator ProviderValidator
 
 // ──────────────────────────── 导出函数 ────────────────────────────
 
+// String 返回服务商类型的字符串表示。
 func (p ProviderType) String() string {
 	if int(p) >= 0 && int(p) < len(providerTypeStrings) {
 		return providerTypeStrings[p]
@@ -113,10 +123,12 @@ func (p ProviderType) String() string {
 	return fmt.Sprintf("ProviderType(%d)", int(p))
 }
 
+// MarshalJSON 将 ProviderType 序列化为 JSON 字符串。
 func (p ProviderType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(p.String())
 }
 
+// UnmarshalJSON 将 JSON 字符串反序列化为 ProviderType。
 func (p *ProviderType) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -130,6 +142,7 @@ func (p *ProviderType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ParseProviderType 解析服务商类型字符串，支持精确匹配和大小写不敏感匹配。
 func ParseProviderType(s string) (ProviderType, bool) {
 	// 精确匹配
 	if pt, ok := providerTypeMap[s]; ok {
@@ -142,6 +155,7 @@ func ParseProviderType(s string) (ProviderType, bool) {
 	return 0, false
 }
 
+// ValidateAndNormalizeProvider 验证并规范化服务商名称，依次尝试枚举匹配、大小写不敏感匹配和全局验证器。
 func ValidateAndNormalizeProvider(provider string) string {
 	provider = strings.TrimSpace(provider)
 
@@ -166,38 +180,47 @@ func ValidateAndNormalizeProvider(provider string) string {
 	return provider
 }
 
+// SetProviderValidator 设置全局服务商验证器。
 func SetProviderValidator(v ProviderValidator) {
 	globalProviderValidator = v
 }
 
+// WithClientID 设置客户端唯一标识。
 func WithClientID(id string) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.ClientID = id }
 }
 
+// WithTimeout 设置请求超时时间（秒）。
 func WithTimeout(timeout float64) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.Timeout = timeout }
 }
 
+// WithMaxRetries 设置最大重试次数。
 func WithMaxRetries(maxRetries int) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.MaxRetries = maxRetries }
 }
 
+// WithVerifySSL 设置是否验证 SSL 证书。
 func WithVerifySSL(verify bool) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.VerifySSL = verify }
 }
 
+// WithSSLCert 设置 SSL 证书文件路径。
 func WithSSLCert(cert string) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.SSLCert = cert }
 }
 
+// WithCustomHeaders 设置自定义请求头。
 func WithCustomHeaders(headers map[string]string) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.CustomHeaders = headers }
 }
 
+// WithConfigExtra 设置客户端配置的额外字段。
 func WithConfigExtra(extra map[string]any) ModelClientConfigOption {
 	return func(c *ModelClientConfig) { c.Extra = extra }
 }
 
+// NewModelClientConfig 创建模型客户端配置，默认超时 60s、重试 3 次、验证 SSL。
 func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientConfigOption) *ModelClientConfig {
 	cfg := &ModelClientConfig{
 		ClientID:       uuid.New().String(),
@@ -214,6 +237,7 @@ func NewModelClientConfig(provider, apiKey, apiBase string, opts ...ModelClientC
 	return cfg
 }
 
+// Validate 校验模型客户端配置必填字段并规范化 provider。
 func (c *ModelClientConfig) Validate() error {
 	// 规范化 provider
 	c.ClientProvider = ValidateAndNormalizeProvider(c.ClientProvider)
@@ -233,6 +257,7 @@ func (c *ModelClientConfig) Validate() error {
 	return nil
 }
 
+// MarshalJSON 序列化 ModelClientConfig，合并 Extra 字段到 JSON 输出。
 func (c *ModelClientConfig) MarshalJSON() ([]byte, error) {
 	// 使用别名避免无限递归
 	type Alias ModelClientConfig
@@ -260,6 +285,7 @@ func (c *ModelClientConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(baseMap)
 }
 
+// UnmarshalJSON 反序列化 ModelClientConfig，拆分已知字段和 Extra 字段。
 func (c *ModelClientConfig) UnmarshalJSON(data []byte) error {
 	// 先解析为通用 map
 	var raw map[string]any
@@ -299,30 +325,37 @@ func (c *ModelClientConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// WithModelName 设置模型名称。
 func WithModelName(name string) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.ModelName = name }
 }
 
+// WithTemperature 设置温度参数。
 func WithTemperature(temp float64) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Temperature = temp }
 }
 
+// WithTopP 设置 Top-p 采样参数。
 func WithTopP(topP float64) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.TopP = &topP }
 }
 
+// WithMaxTokens 设置最大生成 token 数。
 func WithMaxTokens(maxTokens int) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.MaxTokens = &maxTokens }
 }
 
+// WithStop 设置停止序列。
 func WithStop(stop string) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Stop = &stop }
 }
 
+// WithRequestExtra 设置模型请求配置的额外字段。
 func WithRequestExtra(extra map[string]any) ModelRequestConfigOption {
 	return func(c *ModelRequestConfig) { c.Extra = extra }
 }
 
+// NewModelRequestConfig 创建模型请求配置，默认温度 0.95。
 func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig {
 	cfg := &ModelRequestConfig{
 		Temperature: 0.95,
@@ -333,6 +366,7 @@ func NewModelRequestConfig(opts ...ModelRequestConfigOption) *ModelRequestConfig
 	return cfg
 }
 
+// MarshalJSON 序列化 ModelRequestConfig，合并 Extra 字段到 JSON 输出。
 func (c *ModelRequestConfig) MarshalJSON() ([]byte, error) {
 	type Alias ModelRequestConfig
 	alias := (*Alias)(c)
@@ -356,6 +390,7 @@ func (c *ModelRequestConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(baseMap)
 }
 
+// UnmarshalJSON 反序列化 ModelRequestConfig，拆分已知字段和 Extra 字段。
 func (c *ModelRequestConfig) UnmarshalJSON(data []byte) error {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {

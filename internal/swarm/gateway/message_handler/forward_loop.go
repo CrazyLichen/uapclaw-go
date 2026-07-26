@@ -547,7 +547,7 @@ func (mh *MessageHandler) resolveInboundReferences(msg *schema.Message) {
 		logger.Info(logComponent).
 			Str("event_type", "agent_mentions_detected").
 			Strs("mentions", agentMentions).
-			Msg("Agent mentions detected")
+			Msg("检测到 Agent 提及")
 	}
 
 	// 如果内容被修改，回写 params

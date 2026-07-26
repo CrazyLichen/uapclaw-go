@@ -353,7 +353,7 @@ func (a *ReActAgent) invokeImpl(ctx context.Context, inputs map[string]any, opts
 		// 对齐 Python L1301-1302: 空 query 校验
 		// InteractiveInput（中断恢复）不校验 PlainText 是否为空
 		if curInputs.Query.PlainText() == "" && !curInputs.Query.IsInteractiveInput() {
-			return fmt.Errorf("input must contain 'query'")
+			return fmt.Errorf("输入必须包含 'query'")
 		}
 
 		// 加载 HITL 中断状态
@@ -671,7 +671,7 @@ func (a *ReActAgent) reactLoop(
 	if iterResult == nil {
 		// 对齐 Python for-else: max iterations 时执行 save_contexts
 		a.saveContexts(ctx, sess)
-		iterResult = map[string]any{"output": "Max iterations reached without completion", "result_type": "error"}
+		iterResult = map[string]any{"output": "达到最大迭代次数仍未完成", "result_type": "error"}
 	}
 
 	if invokeInputs, ok := cbc.Inputs().(*interfaces.InvokeInputs); ok {

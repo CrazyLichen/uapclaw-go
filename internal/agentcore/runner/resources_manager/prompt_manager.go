@@ -42,13 +42,13 @@ func (m *PromptMgr) AddPrompt(templateID string, template *prompt.PromptTemplate
 	if templateID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", "template id is empty"),
+			exception.WithParam("reason", "模板 ID 为空"),
 		)
 	}
 	if template == nil {
 		return exception.BuildError(exception.StatusResourceValueInvalid,
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", "prompt template is nil"),
+			exception.WithParam("reason", "Prompt 模板为 nil"),
 		)
 	}
 
@@ -88,7 +88,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 	if templateID == "" {
 		return nil, exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", "template id is empty"),
+			exception.WithParam("reason", "模板 ID 为空"),
 		)
 	}
 
@@ -97,7 +97,7 @@ func (m *PromptMgr) RemovePrompt(templateID string) (*prompt.PromptTemplate, err
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", templateID),
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", fmt.Sprintf("prompt template %s not found", templateID)),
+			exception.WithParam("reason", fmt.Sprintf("未找到 Prompt 模板 %s", templateID)),
 		)
 	}
 
@@ -116,7 +116,7 @@ func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error)
 	if templateID == "" {
 		return nil, exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", "template id is empty"),
+			exception.WithParam("reason", "模板 ID 为空"),
 		)
 	}
 
@@ -125,7 +125,7 @@ func (m *PromptMgr) GetPrompt(templateID string) (*prompt.PromptTemplate, error)
 		return nil, exception.BuildError(exception.StatusResourceGetError,
 			exception.WithParam("resource_id", templateID),
 			exception.WithParam("resource_type", "prompt"),
-			exception.WithParam("reason", fmt.Sprintf("prompt template %s not found", templateID)),
+			exception.WithParam("reason", fmt.Sprintf("未找到 Prompt 模板 %s", templateID)),
 		)
 	}
 

@@ -42,13 +42,13 @@ func (m *WorkflowMgr) AddWorkflow(workflowID string, provider WorkflowProvider) 
 	if workflowID == "" {
 		return exception.BuildError(exception.StatusResourceIDValueInvalid,
 			exception.WithParam("resource_type", "workflow"),
-			exception.WithParam("reason", "workflow id is empty"),
+			exception.WithParam("reason", "工作流 ID 为空"),
 		)
 	}
 	if provider == nil {
 		return exception.BuildError(exception.StatusResourceProviderInvalid,
 			exception.WithParam("resource_type", "workflow"),
-			exception.WithParam("reason", "workflow provider is nil"),
+			exception.WithParam("reason", "工作流提供者为 nil"),
 		)
 	}
 
